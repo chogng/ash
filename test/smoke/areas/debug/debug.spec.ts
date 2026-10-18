@@ -1,10 +1,28 @@
+import type { Locator } from '@playwright/test';
+import { DatabaseSync } from 'node:sqlite';
+import { readStorageEntries, seedStorageOnNextLoad } from '../../../automation/storage.js';
+import { StorageScope, StorageTarget } from '../../../../src/ash/platform/storage/common/storage.js';
 import type { PlaywrightApplication } from '../../../automation/playwrightDriver.js';
 import { pathToFileURL } from 'node:url';
-import { mkdir, readFile, unlink, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, realpath, unlink, writeFile } from 'node:fs/promises';
 import { createServer, type Socket } from 'node:net';
-import { join, sep } from 'node:path';
+import { join, resolve, sep } from 'node:path';
 import { expect, test, writeEditorExtensionFixture } from '../../../automation/test.js';
 import { Workbench } from '../../../automation/workbench.js';
+import { launchElectron } from '../../../automation/playwrightElectron.js';
+import { createSshFixture } from '../../../automation/ssh.js';
+import { developmentAshPackagePath } from '../../../../src/ash/platform/environment/node/developmentArtifacts.js';
+
+async function fillReplInput(input: Locator, text: string): Promise<void> {
+	await input.focus();
+	await input.press('ControlOrMeta+A');
+	await input.press('Backspace');
+	await input.page().keyboard.insertText(text);
+}
+
+async function expectReplInput(input: Locator, text: string): Promise<void> {
+	await expect.poll(async () => (await input.page().locator('.ash-debug-console-form .view-lines > .view-line .stanza-editor-line-text').allTextContents()).join('\n').replace(/\u00a0/g, ' ')).toBe(text);
+}
 
 // Exercise the production stdio transport with a deterministic DAP peer. The
 // peer records requests so UI assertions also prove which container was edited.
@@ -1259,29 +1277,25 @@ test('installed Debug child shares its parent console and stops both owned adapt
 		contributions: {
 			editorExtensions: [{
 				id: 'debug', runtime: 'javascript', entrypoint: 'extension.js', runtimeApiVersion: 1,
-				activationEvents: [{ type: 'onCommand', id: 'acme.debugSessions.start' }], capabilities: ['command', 'debugAdapter']
+				activationEvents: [{ type: 'onDebugType', debugType: 'session-options' }], capabilities: ['debugAdapter']
 			}]
 		},
 		permissions: [{ type: 'directory', access: 'read' }],
 	}));
 	await writeEditorExtensionFixture(root, `
-const vscode = require('vscode'); const { commands, debug, window } = vscode;
+const vscode = require('vscode'); const { debug, window } = vscode;
 exports.activate = function(context) {
  let parentId;
- async function client(operation) { return JSON.parse(await globalThis.__ashRequest(globalThis.__ashInvocation(), JSON.stringify(operation))); }
- context.subscriptions.push(commands.registerCommand('acme.debugSessions.start', async () => {
-  const configuration = name => ({ name, type:'session-options', request:'launch' });
-  await client({ operation:'startDebugging', folder:null, configuration:configuration('Parent'), options:{noDebug:true} });
-  parentId = (await client({operation:'listDebugSessions'})).activeSession;
-  await client({ operation:'startDebugging', folder:null, configuration:configuration('Child'), options:{parentSessionId:parentId,lifecycleManagedByParent:true,consoleMode:1} });
-  const result = await client({operation:'listDebugSessions'});
-  if (result.sessions.length !== 2 || result.sessions.some(session => session.workspaceFolder != null) || result.sessions[1].parentSessionId !== parentId || result.sessions[1].configuration.noDebug !== true) throw Error('Child options were not retained');
+ context.subscriptions.push(debug.onDidStartDebugSession(async session => {
+  if (session.configuration.name !== 'Parent') return;
+  parentId = session.id;
+  if (!await debug.startDebugging(undefined, {name:'Child',type:'session-options',request:'launch'}, {parentSession:session,lifecycleManagedByParent:true,consoleMode:vscode.DebugConsoleMode.MergeWithParent})) throw Error('Child startup failed');
   await window.showInformationMessage('DEBUG_HIERARCHY_READY');
  }));
  context.subscriptions.push(debug.registerDebugAdapterDescriptorFactory('session-options', {
   createDebugAdapterDescriptor(session) {
    const configuration = session.configuration;
-   if (configuration.noDebug !== true || configuration.name === 'Child' && session.parentSession?.id !== parentId) throw Error('Factory session options changed');
+   if (configuration.noDebug !== true || configuration.name === 'Child' && (session.parentSession?.id !== parentId || session.workspaceFolder !== undefined)) throw Error('Factory session options changed');
    const listeners = new Set(); let sequence = 0; let closed = false;
    function send(message) { for (const listener of listeners) listener({seq:sequence++,...message}); }
    return new vscode.DebugAdapterInlineImplementation({
@@ -1315,12 +1329,10 @@ exports.activate = function(context) {
 	const installed = await workbench.dialogs.expectMessage(application, 'Information', () => installation.getByRole('textbox').press('Enter'));
 	expect(installed.message).toContain('Installed acme/debug-session-options 1.0.0');
 	for (const button of ['Enable', 'Grant permissions']) {
-		await workbench.dialogs.confirm(application, 'Debug session options', button, async () => {
-			await workbench.quickaccess.runCommand('ash.extensions.manageLocal');
-			await page.getByRole('option').filter({ has: page.getByText('Debug session options', { exact: true }) }).click();
-		});
+		await manageDebugExtension(application, workbench, 'Debug session options', button);
 	}
-	await workbench.quickaccess.runCommand('acme.debugSessions.start');
+	await writeFile(join(directory, '.vscode', 'launch.json'), JSON.stringify({ version: '0.2.0', configurations: [{ name: 'Parent', type: 'session-options', request: 'launch', noDebug: true }] }));
+	await workbench.quickaccess.runCommand('workbench.action.debug.start');
 	await expect(page.locator('.ash-notification', { hasText: 'DEBUG_HIERARCHY_READY' })).toBeVisible();
 	await workbench.quickaccess.runCommand('workbench.debug.action.focusRepl');
 	const consoleSelection = page.locator('[data-view-id="workbench.panel.debugConsole"] select[aria-label="Debug Console session"]');
@@ -1331,12 +1343,12 @@ exports.activate = function(context) {
 	await expect(output).toContainText('Parent_OUTPUT');
 	await expect(output).toContainText('Child_OUTPUT');
 	const expression = page.getByRole('textbox', { name: 'Debug Console expression', exact: true });
-	await expression.fill('answer');
+	await fillReplInput(expression, 'answer');
 	await expression.press('Enter');
 	await expect(output).toContainText('Child_ANSWER');
 	await workbench.quickaccess.runCommand('workbench.action.debug.stop');
 	for (const name of ['Parent', 'Child']) await expect(page.locator('.ash-notification', { hasText: 'DEBUG_HIERARCHY_RELEASE:' + name })).toBeVisible();
-	await expect(expression).toBeDisabled();
+	await expect(expression).toHaveAttribute('aria-readonly', 'true');
 	await expect(output).toContainText('Child_ANSWER');
 });
 
@@ -1344,24 +1356,19 @@ test('installed adapter starts a DAP child and acknowledges its independent life
 	const directory = testWorkspace.directory;
 	const root = join(directory, 'debug-reverse-start');
 	await mkdir(join(root, '.ash-plugin'), { recursive: true });
-	await writeFile(join(root, '.ash-plugin', 'plugin.json'), JSON.stringify({ schemaVersion: 1, id: 'acme/debug-reverse', version: '1.0.0', displayName: 'Debug reverse request', compatibility: { ash: '>=0.1.0' }, contributions: { editorExtensions: [{ id: 'debug', runtime: 'javascript', entrypoint: 'extension.js', runtimeApiVersion: 1, activationEvents: [{ type: 'onCommand', id: 'acme.debugReverse.start' }], capabilities: ['command', 'debugAdapter'] }] }, permissions: [{ type: 'directory', access: 'read' }] }));
+	await writeFile(join(root, '.ash-plugin', 'plugin.json'), JSON.stringify({ schemaVersion: 1, id: 'acme/debug-reverse', version: '1.0.0', displayName: 'Debug reverse request', compatibility: { ash: '>=0.1.0' }, contributions: { editorExtensions: [{ id: 'debug', runtime: 'javascript', entrypoint: 'extension.js', runtimeApiVersion: 1, activationEvents: [{ type: 'onDebugType', debugType: 'reverse-start' }], capabilities: ['debugAdapter'] }] }, permissions: [{ type: 'directory', access: 'read' }] }));
 	await writeEditorExtensionFixture(root, `
-const vscode = require('vscode'); const { commands, debug, window } = vscode;
+const vscode = require('vscode'); const { debug, window } = vscode;
 exports.activate = function(context) {
- let parentId;
- async function client(operation) { return JSON.parse(await globalThis.__ashRequest(globalThis.__ashInvocation(), JSON.stringify(operation))); }
- context.subscriptions.push(commands.registerCommand('acme.debugReverse.start', async () => {
-  await client({operation:'startDebugging',folder:null,configuration:{name:'ReverseParent',type:'reverse-start',request:'launch'},options:{noDebug:true}});
- }), commands.registerCommand('acme.debugReverse.check', async () => {
-  const result = await client({operation:'listDebugSessions'});
-  if (result.sessions.length !== 1 || result.sessions[0].id !== parentId) throw Error('Stopping the child stopped its parent');
-  await window.showInformationMessage('DEBUG_REVERSE_PARENT_ALIVE');
- }));
+ let parentId; let childId;
  context.subscriptions.push(debug.registerDebugAdapterDescriptorFactory('reverse-start', {
   createDebugAdapterDescriptor(session) {
    const configuration = session.configuration;
    if (configuration.name === 'ReverseParent') parentId = session.id;
-   else if (configuration.name !== 'ReverseChild' || session.parentSession?.id !== parentId || session.workspaceFolder !== undefined) throw Error('Reverse child identity changed');
+   else {
+    if (configuration.name !== 'ReverseChild' || session.parentSession?.id !== parentId || session.workspaceFolder !== undefined) throw Error('Reverse child identity changed');
+    childId = session.id;
+   }
    const listeners = new Set(); let sequence = 0; let closed = false;
    function send(message) { for (const listener of listeners) listener({seq:sequence++,...message}); }
    return new vscode.DebugAdapterInlineImplementation({
@@ -1369,8 +1376,7 @@ exports.activate = function(context) {
     async handleMessage(request) {
      if (request.type === 'response') {
       if (request.command !== 'startDebugging' || request.request_seq !== 91 || request.success !== true || request.body !== undefined) throw Error('Invalid reverse response');
-      const result = await client({operation:'listDebugSessions'});
-      if (result.sessions.length !== 2 || result.sessions.find(session => session.id !== parentId).parentSessionId !== parentId) throw Error('Reverse child is missing');
+      if (!childId || childId === parentId) throw Error('Reverse child is missing');
       await window.showInformationMessage('DEBUG_REVERSE_READY');
       return;
      }
@@ -1404,12 +1410,10 @@ exports.activate = function(context) {
 	const installed = await workbench.dialogs.expectMessage(application, 'Information', () => installation.getByRole('textbox').press('Enter'));
 	expect(installed.message).toContain('Installed acme/debug-reverse 1.0.0');
 	for (const button of ['Enable', 'Grant permissions']) {
-		await workbench.dialogs.confirm(application, 'Debug reverse request', button, async () => {
-			await workbench.quickaccess.runCommand('ash.extensions.manageLocal');
-			await page.getByRole('option').filter({ has: page.getByText('Debug reverse request', { exact: true }) }).click();
-		});
+		await manageDebugExtension(application, workbench, 'Debug reverse request', button);
 	}
-	await workbench.quickaccess.runCommand('acme.debugReverse.start');
+	await writeFile(join(directory, '.vscode', 'launch.json'), JSON.stringify({ version: '0.2.0', configurations: [{ name: 'ReverseParent', type: 'reverse-start', request: 'launch', noDebug: true }] }));
+	await workbench.quickaccess.runCommand('workbench.action.debug.start');
 	await expect(page.locator('.ash-notification', { hasText: 'DEBUG_REVERSE_READY' })).toBeVisible();
 	await workbench.quickaccess.runCommand('workbench.debug.action.focusRepl');
 	const selection = page.getByRole('combobox', { name: 'Debug Console session', exact: true });
@@ -1418,16 +1422,17 @@ exports.activate = function(context) {
 	const output = page.getByRole('log', { name: 'Debug Console output', exact: true });
 	await expect(output).toContainText('ReverseChild_OUTPUT');
 	const expression = page.getByRole('textbox', { name: 'Debug Console expression', exact: true });
-	await expression.fill('answer');
+	await fillReplInput(expression, 'answer');
 	await expression.press('Enter');
 	await expect(output).toContainText('ReverseChild_ANSWER');
 	await workbench.quickaccess.runCommand('workbench.action.debug.stop');
 	await expect(page.locator('.ash-notification', { hasText: 'DEBUG_REVERSE_RELEASE:ReverseChild' })).toBeVisible();
-	await workbench.quickaccess.runCommand('acme.debugReverse.check');
-	await expect(page.locator('.ash-notification', { hasText: 'DEBUG_REVERSE_PARENT_ALIVE' })).toBeVisible();
+	await fillReplInput(expression, 'answer');
+	await expression.press('Enter');
+	await expect(output).toContainText('ReverseParent_ANSWER');
 	await workbench.quickaccess.runCommand('workbench.action.debug.stop');
 	await expect(page.locator('.ash-notification', { hasText: 'DEBUG_REVERSE_RELEASE:ReverseParent' })).toBeVisible();
-	await expect(expression).toBeDisabled();
+	await expect(expression).toHaveAttribute('aria-readonly', 'true');
 });
 
 
@@ -1435,7 +1440,7 @@ test('Debug provider undefined cancels and null opens the configuration in both 
 	const directory = testWorkspace.directory;
 	const root = join(directory, 'debug-cancellation');
 	await mkdir(join(root, '.ash-plugin'), { recursive: true });
-	await writeFile(join(root, '.ash-plugin', 'plugin.json'), JSON.stringify({ schemaVersion: 1, id: 'acme/debug-cancellation', version: '1.0.0', displayName: 'Debug cancellation', compatibility: { ash: '>=0.1.0' }, contributions: { editorExtensions: [{ id: 'debug', runtime: 'javascript', entrypoint: 'extension.js', runtimeApiVersion: 1, activationEvents: ['before.undefined', 'before.null', 'after.undefined', 'after.null', 'error', 'descriptor.undefined', 'descriptor.null'].map(name => ({ type: 'onCommand', id: 'acme.debugCancellation.' + name })), capabilities: ['command', 'debugAdapter'] }] }, permissions: [{ type: 'directory', access: 'read' }] }));
+	await writeFile(join(root, '.ash-plugin', 'plugin.json'), JSON.stringify({ schemaVersion: 1, id: 'acme/debug-cancellation', version: '1.0.0', displayName: 'Debug cancellation', compatibility: { ash: '>=0.1.0' }, contributions: { editorExtensions: [{ id: 'debug', runtime: 'javascript', entrypoint: 'extension.js', runtimeApiVersion: 1, activationEvents: [{ type: 'onDebugType', debugType: 'cancel-provider' }], capabilities: ['command', 'debugAdapter'] }] }, permissions: [{ type: 'directory', access: 'read' }] }));
 	await mkdir(join(root, 'defaults'));
 	await writeFile(join(root, 'defaults', 'package.json'), JSON.stringify({ name: 'empty-debug-defaults', publisher: 'acme', version: '1.0.0', contributes: { debuggers: [{ type: 'empty-descriptor', label: 'Empty descriptor', debugAdapter: { program: process.execPath, args: [join(directory, 'debug-adapter.cjs'), join(directory, 'debug-program.js'), join(directory, 'debug-requests.jsonl')] } }] } }));
 	const mustNotRun = join(directory, 'task-must-not-run');
@@ -1445,8 +1450,10 @@ test('Debug provider undefined cancels and null opens the configuration in both 
 	await writeEditorExtensionFixture(root, `
 const vscode = require('vscode'); const { commands, debug, window } = vscode;
 exports.activate = function(context) {
+ let retiredSession;
  context.subscriptions.push(debug.registerDebugAdapterDescriptorFactory('empty-descriptor', {
   createDebugAdapterDescriptor(session, executable) {
+   retiredSession = session;
    const configuration = session.configuration; const config = configuration;
    if (executable?.command !== ${JSON.stringify(process.execPath)}) throw Error('Default executable was not supplied');
    return config.outcome === 'null' ? null : undefined;
@@ -1456,14 +1463,13 @@ exports.activate = function(context) {
   context.subscriptions.push(commands.registerCommand('acme.debugCancellation.descriptor.' + outcome, async () => {
    let rejected = false;
    try {
-    await globalThis.__ashRequest(globalThis.__ashInvocation(), JSON.stringify({operation:'startDebugging',folder:${JSON.stringify(pathToFileURL(directory).toString())},configuration:{name:'Empty',type:'empty-descriptor',request:'launch',outcome}}));
+    await debug.startDebugging(vscode.workspace.workspaceFolders[0], {name:'Empty',type:'empty-descriptor',request:'launch',outcome});
    } catch (error) {
     if (error.code !== 'internal') throw error;
     rejected = true;
    }
    if (!rejected) throw Error('Empty descriptor was accepted');
-   const sessions = JSON.parse(await globalThis.__ashRequest(globalThis.__ashInvocation(), JSON.stringify({operation:'listDebugSessions'})));
-   if (sessions.sessions.length !== 0) throw Error('Prepared empty descriptor session survived');
+   if (debug.activeDebugSession) throw Error('Prepared empty descriptor session survived');
    await window.showInformationMessage('ASH_DEBUG_EMPTY_DESCRIPTOR_' + outcome);
   }));
  }
@@ -1474,22 +1480,23 @@ exports.activate = function(context) {
  for (const phase of ['before', 'after']) for (const outcome of ['undefined', 'null']) {
   const name = phase + '.' + outcome;
   context.subscriptions.push(commands.registerCommand('acme.debugCancellation.' + name, async () => {
-   const result = JSON.parse(await globalThis.__ashRequest(globalThis.__ashInvocation(), JSON.stringify({operation:'startDebugging',folder:${JSON.stringify(pathToFileURL(directory).toString())},configuration:{...${JSON.stringify(configuration)}, phase, outcome}})));
-   if (result.started !== false) throw Error('Canceled provider started a session');
+   const result = await debug.startDebugging(vscode.workspace.workspaceFolders[0], {...${JSON.stringify(configuration)}, phase, outcome});
+   if (result !== false) throw Error('Canceled provider started a session');
    await window.showInformationMessage('ASH_DEBUG_CANCEL_' + name);
   }));
  }
  context.subscriptions.push(commands.registerCommand('acme.debugCancellation.error', async () => {
   let rejected = false;
   try {
-   await globalThis.__ashRequest(globalThis.__ashInvocation(), JSON.stringify({operation:'startDebugging',folder:${JSON.stringify(pathToFileURL(directory).toString())},configuration:${JSON.stringify(configuration)},options:{parentSessionId:'retired-parent'}}));
+   await debug.startDebugging(vscode.workspace.workspaceFolders[0], ${JSON.stringify(configuration)}, {parentSession:retiredSession});
   } catch (error) {
-   if (error.code !== 'internal' || error.message !== 'editor service request failed') throw error;
+   if (!(error instanceof TypeError)) throw error;
    rejected = true;
   }
   if (!rejected) throw Error('A retired parent session was accepted');
   await window.showInformationMessage('ASH_DEBUG_ERROR_RECOVERED');
  }));
+ void window.showInformationMessage('ASH_DEBUG_CANCELLATION_ACTIVATED');
 }`, [{ type: 'empty-descriptor', label: 'Empty descriptor', debugAdapter: { program: process.execPath, args: [join(directory, 'debug-adapter.cjs'), join(directory, 'debug-program.js'), join(directory, 'debug-requests.jsonl')] } }, { type: 'cancel-provider', label: 'Cancellation provider' }]);
 	await workbench.quickaccess.runCommand('ash.extensions.installLocal');
 	const installation = workbench.page.getByRole('dialog', { name: 'Install extension from workspace', exact: true });
@@ -1497,13 +1504,14 @@ exports.activate = function(context) {
 	const installed = await workbench.dialogs.expectMessage(application, 'Information', () => installation.getByRole('textbox').press('Enter'));
 	expect(installed.message).toContain('Installed acme/debug-cancellation 1.0.0');
 	const manage = async (button: string): Promise<void> => {
-		await workbench.dialogs.confirm(application, 'Debug cancellation', button, async () => {
-			await workbench.quickaccess.runCommand('ash.extensions.manageLocal');
-			await workbench.page.getByRole('option').filter({ has: workbench.page.getByText('Debug cancellation', { exact: true }) }).click();
-		});
+		await manageDebugExtension(application, workbench, 'Debug cancellation', button);
 	};
 	await manage('Enable');
 	await manage('Grant permissions');
+	// Activate the declared Debug type before exercising its registered commands.
+	await writeFile(join(directory, '.vscode', 'launch.json'), JSON.stringify({ version: '0.2.0', configurations: [{ ...configuration, name: 'Debug smoke', phase: 'before', outcome: 'undefined' }] }));
+	await workbench.quickaccess.runCommand('workbench.action.debug.start');
+	await expect(workbench.page.locator('.ash-notification', { hasText: 'ASH_DEBUG_CANCELLATION_ACTIVATED' })).toBeVisible();
 	await workbench.quickaccess.open('debug-program.js');
 	await workbench.quickaccess.select('debug-program.js');
 	const group = workbench.editors.groupAt(0);
@@ -1610,3 +1618,257 @@ async function manageDebugExtension(application: PlaywrightApplication, workbenc
 		else await expect(editor.getByRole('button', { name: action === 'Grant permissions' ? 'Revoke permissions' : 'Grant permissions', exact: true })).toBeEnabled();
 	}
 }
+
+test('Debug workspace definitions migrate from Memento, survive reload and resume interrupted cleanup', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ application, workbench, testWorkspace, webAppServer, reloadWorkbench }) => {
+	const workspaceId = await workbench.page.evaluate(async () => {
+		const host = globalThis as unknown as { ashWebWorkbenchHost?: { workspace: { id: string; }; }; ash?: { ipcRenderer: { invoke(channel: string): Promise<{ id: string; }>; }; }; };
+		return host.ashWebWorkbenchHost?.workspace.id ?? (await host.ash!.ipcRenderer.invoke('ash:workspace:context:read')).id;
+	});
+	const identity = { scope: StorageScope.WORKSPACE, id: workspaceId };
+	const source = pathToFileURL(join(testWorkspace.directory, 'debug-program.js')).toString();
+	const legacy = JSON.stringify({ version: 1, breakpoints: [{ resource: source, lineNumber: 2, enabled: false, condition: 'answer > 0' }], watchExpressions: ['answer'], exceptionBreakpoints: {} });
+	const seed = () => seedStorageOnNextLoad(application, workbench.page, identity, { 'memento/debug.workspace': { value: legacy, target: StorageTarget.USER } });
+	const profile = webAppServer?.profileDirectory ?? ('windows' in application ? join(await application.evaluate(({ app }) => app.getPath('userData')), 'profile') : undefined);
+	if (!profile) throw new Error('Debug persistence acceptance requires its App Server profile');
+	const saved = (): { breakpoints: { id: string; enabled: boolean; condition?: string; }[]; watchExpressions: string[]; } | undefined => {
+		const database = new DatabaseSync(join(profile, 'state.sqlite3'), { readOnly: true });
+		try {
+			const record = database.prepare('SELECT document FROM debug_workspaces WHERE workspace_id = ?').get(workspaceId) as { document: string; } | undefined;
+			return record ? JSON.parse(record.document) : undefined;
+		} finally { database.close(); }
+	};
+	await seed();
+	({ application, workbench } = await reloadWorkbench());
+	const open = async () => {
+		const pane = workbench.page.locator('[data-view-id="workbench.view.debug"]');
+		const tab = workbench.page.getByRole('tab', { name: 'Run and Debug', exact: true }).first();
+		if (await tab.getAttribute('aria-selected') !== 'true' || !await pane.isVisible()) await tab.click();
+		await expect(pane).toBeVisible();
+		return pane;
+	};
+	let pane = await open();
+	await expect(pane.locator('.ash-debug-breakpoints > li').filter({ hasText: 'debug-program.js:2' })).toBeVisible();
+	await expect.poll(() => saved()?.watchExpressions).toEqual(['answer']);
+	await expect.poll(async () => (await readStorageEntries(application, workbench.page, identity))['memento/debug.workspace']).toBeUndefined();
+	expect(saved()?.breakpoints).toEqual([{ id: `${source}:2`, enabled: false, condition: 'answer > 0', resource: source, lineNumber: 2 }]);
+	await pane.getByRole('button', { name: 'Watch', exact: true }).hover();
+	await pane.getByRole('button', { name: 'Add watch expression', exact: true }).click();
+	await pane.getByRole('textbox', { name: 'Add watch expression', exact: true }).fill('answer + 1');
+	await pane.getByRole('textbox', { name: 'Add watch expression', exact: true }).press('Enter');
+	await expect.poll(() => saved()?.watchExpressions).toEqual(['answer', 'answer + 1']);
+	// Restore the original source to model a crash before legacy deletion.
+	await seed();
+	({ application, workbench } = await reloadWorkbench());
+	pane = await open();
+	await expect(pane.locator('.ash-debug-watch-value')).toHaveCount(2);
+	await expect.poll(async () => (await readStorageEntries(application, workbench.page, identity))['memento/debug.workspace']).toBeUndefined();
+	expect(saved()?.watchExpressions).toEqual(['answer', 'answer + 1']);
+	await pane.locator('.ash-debug-breakpoints > li').filter({ hasText: 'debug-program.js:2' }).getByRole('button', { name: 'Remove breakpoint', exact: true }).click();
+	await pane.locator('.ash-debug-watch-remove').first().click();
+	await pane.locator('.ash-debug-watch-remove').first().click();
+	await expect.poll(() => ({ points: saved()?.breakpoints, watches: saved()?.watchExpressions })).toEqual({ points: [], watches: [] });
+	({ application, workbench } = await reloadWorkbench());
+	pane = await open();
+	await expect(pane.locator('.ash-debug-breakpoints > li')).toHaveCount(0);
+	await expect(pane.locator('.ash-debug-watch-value')).toHaveCount(0);
+});
+
+test('Debug live exception filters and structured output are owned by Rust', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ workbench, testWorkspace }) => {
+	const directory = testWorkspace.directory;
+	const stopped = "event('stopped', { reason: 'breakpoint', threadId: 7, allThreadsStopped: true });";
+	const peer = adapter
+		.replace('supportsConfigurationDoneRequest: true,', "supportsConfigurationDoneRequest: true, exceptionBreakpointFilters: [{filter:'uncaught',label:'Uncaught',default:true},{filter:'caught',label:'Caught',default:false}],")
+		.replace('let success = true;', "let success = !(request.command === 'setExceptionBreakpoints' && args.filters.includes('caught'));")
+		.replace("message: 'Value must be numeric.'", "message: request.command === 'setExceptionBreakpoints' ? 'Filter refused.' : 'Value must be numeric.'")
+		.replace(stopped, stopped + String.raw`
+    event('output', {group:'startCollapsed',output:'RUST_GROUP\n'});
+    event('output', {category:'stderr',output:'RUST_OBJECT',variablesReference:20,source:{name:'debug-program.js',path:source},line:2,column:1,data:{owner:'rust'}});
+    event('output', {group:'end'});
+    event('output', {output:'part '});
+    event('output', {output:'line\n'});
+`);
+	await writeFile(join(directory, 'debug-adapter.cjs'), peer);
+	const page = workbench.page;
+	await workbench.quickaccess.runCommand('workbench.action.debug.start');
+	const pane = page.locator('[data-view-id="workbench.view.debug"]');
+	await expect(pane.getByRole('status')).toContainText('stopped');
+	const uncaught = pane.getByRole('checkbox', { name: 'Uncaught', exact: true });
+	const caught = pane.getByRole('checkbox', { name: 'Caught', exact: true });
+	const selections = async () => (await readFile(join(directory, 'debug-requests.jsonl'), 'utf8')).trim().split('\n').map(line => JSON.parse(line) as { command: string; arguments?: { filters?: string[]; }; }).filter(request => request.command === 'setExceptionBreakpoints');
+	await expect(uncaught).toBeChecked();
+	await uncaught.uncheck();
+	await expect.poll(async () => (await selections()).at(-1)?.arguments?.filters).toEqual([]);
+	await expect(uncaught).not.toBeChecked();
+	await caught.check();
+	await expect(pane.getByRole('status')).toContainText('Filter refused.');
+	await expect(caught).not.toBeChecked();
+	await expect(pane.getByRole('button', { name: 'Continue', exact: true })).toBeEnabled();
+	await uncaught.check();
+	await expect.poll(async () => (await selections()).at(-1)?.arguments?.filters).toEqual(['uncaught']);
+	await expect(uncaught).toBeChecked();
+	await workbench.quickaccess.runCommand('workbench.debug.action.focusRepl');
+	const output = page.getByRole('log', { name: 'Debug Console output', exact: true });
+	const tree = output.getByRole('tree', { name: 'Debug Console output', exact: true });
+	const group = output.getByRole('treeitem').filter({ hasText: 'RUST_GROUP' });
+	await expect(group).toBeVisible();
+	await group.locator('.ash-tree-twistie').click();
+	await expect(group).toHaveAttribute('aria-expanded', 'true');
+	await tree.press('ArrowLeft');
+	await expect(group).toHaveAttribute('aria-expanded', 'false');
+	await tree.press('ArrowRight');
+	const object = output.getByRole('treeitem').filter({ hasText: 'RUST_OBJECT' });
+	await object.locator('.ash-tree-twistie').click();
+	await expect(object).toHaveAttribute('aria-expanded', 'true');
+	await expect(output).toContainText('child: 1');
+	await expect(output).toContainText('"owner": "rust"');
+	const source = output.getByRole('button', { name: 'debug-program.js:2', exact: true });
+	await source.focus();
+	await source.press('Enter');
+	await workbench.editors.groupAt(0).editor.waitForEditorContents(content => content.includes('console.log(answer)'));
+	const partial = output.locator('.ash-repl-entry').filter({ hasText: /^part/ });
+	const line = output.locator('.ash-repl-entry').filter({ hasText: /^line/ });
+	expect(await partial.evaluate(element => element.getClientRects()[0].top)).toBe(await line.evaluate(element => element.getClientRects()[0].top));
+	await uncaught.uncheck();
+	await expect.poll(async () => (await selections()).at(-1)?.arguments?.filters).toEqual([]);
+	await workbench.quickaccess.runCommand('workbench.action.debug.stop');
+	await workbench.quickaccess.runCommand('workbench.action.debug.start');
+	await expect(pane.getByRole('status')).toContainText('stopped');
+	await expect(uncaught).not.toBeChecked();
+	await expect.poll(async () => (await selections()).at(-1)?.arguments?.filters).toEqual([]);
+	await workbench.quickaccess.runCommand('workbench.action.debug.stop');
+});
+
+test('Debug Console filters, workspace history and DAP completions use the production owners', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ workbench, testWorkspace, reloadWorkbench }) => {
+	const directory = testWorkspace.directory;
+	const peer = adapter
+		.replace('supportsConfigurationDoneRequest: true,', "supportsConfigurationDoneRequest: true, supportsCompletionsRequest: true, supportsCancelRequest: true, completionTriggerCharacters: ['.'],")
+		.replace("if (request.command === 'evaluate')", "if (request.command === 'completions') body = { targets: [{label:'answer',start:1,length:args.column-1},{label:'another',start:1,length:args.column-1}] };\n  if (request.command === 'evaluate')")
+		.replace("event('output', { category: 'console', output: 'ASH_DEBUG_READY\\n' });", "event('output', { category: 'console', output: 'ASH_DEBUG_READY\\n' }); event('output', {output:'ALPHA visible\\n'}); event('output', {output:'BETA hidden\\n'});");
+	await writeFile(join(directory, 'debug-adapter.cjs'), peer);
+	const requests = async () => (await readFile(join(directory, 'debug-requests.jsonl'), 'utf8')).trim().split('\n').map(line => JSON.parse(line) as { command: string; arguments?: { text?: string; expression?: string; column?: number; line?: number; frameId?: number; context?: string; }; });
+	const page = workbench.page;
+	await page.getByRole('tab', { name: 'Run and Debug', exact: true }).first().click();
+	await page.locator('[data-part="sidebar"]').getByRole('button', { name: 'Start Debugging', exact: true }).click();
+	const pane = page.locator('[data-view-id="workbench.view.debug"]');
+	await expect(pane.getByRole('status')).toContainText('stopped');
+	await pane.getByRole('button', { name: 'main debug-program.js:2', exact: true }).click();
+	await workbench.quickaccess.runCommand('workbench.debug.action.focusRepl');
+	const consolePane = page.locator('[data-view-id="workbench.panel.debugConsole"]');
+	const output = consolePane.getByRole('log', { name: 'Debug Console output', exact: true });
+	await expect(output).toContainText('ALPHA visible');
+	const filter = page.getByRole('textbox', { name: 'Filter Debug Console', exact: true });
+	await filter.fill('ALPHA, !hidden');
+	await filter.press('Enter');
+	await expect(output.getByRole('treeitem').filter({ hasText: 'ALPHA visible' })).toBeVisible();
+	await expect(output.getByRole('treeitem').filter({ hasText: 'BETA hidden' })).toBeHidden();
+	await filter.press('Escape');
+	await expect(output.getByRole('treeitem').filter({ hasText: 'BETA hidden' })).toBeVisible();
+	const input = consolePane.getByRole('textbox', { name: 'Debug Console expression', exact: true });
+	await fillReplInput(input, 'an');
+	await input.press('Control+Space');
+	const suggestions = consolePane.getByRole('listbox', { name: 'Debug Console suggestions', exact: true });
+	await expect(suggestions.getByRole('option')).toHaveCount(2);
+	await input.press('ArrowDown');
+	await input.press('Enter');
+	await expectReplInput(input, 'answer');
+	expect((await requests()).filter(request => request.command === 'evaluate' && request.arguments?.context === 'repl')).toEqual([]);
+	expect((await requests()).filter(request => request.command === 'completions').at(-1)?.arguments).toMatchObject({ text: 'an', column: 3, line: 1, frameId: 11 });
+	await input.press('Enter');
+	await expect(output).toContainText('42');
+	await expect.poll(async () => (await requests()).filter(request => request.command === 'evaluate' && request.arguments?.context === 'repl').at(-1)?.arguments?.frameId).toBe(11);
+	await fillReplInput(input, 'draft');
+	await input.press('ArrowUp');
+	await expectReplInput(input, 'answer');
+	await input.press('ArrowDown');
+	await expectReplInput(input, 'draft');
+	await workbench.quickaccess.runCommand('workbench.debug.panel.action.clearReplAction');
+	await expect(output.getByRole('treeitem')).toHaveCount(0);
+	await workbench.quickaccess.runCommand('workbench.action.debug.stop');
+	const resumed = await reloadWorkbench();
+	const restoredDebugPane = resumed.workbench.page.locator('[data-view-id="workbench.view.debug"]');
+	// The selected activity tab toggles a restored sidebar closed when clicked again.
+	if (!await restoredDebugPane.isVisible()) await resumed.workbench.page.getByRole('tab', { name: 'Run and Debug', exact: true }).first().click();
+	await expect(restoredDebugPane).toBeVisible();
+	await resumed.workbench.page.locator('[data-part="sidebar"]').getByRole('button', { name: 'Start Debugging', exact: true }).click();
+	await expect(restoredDebugPane.getByRole('status')).toContainText('stopped');
+	await restoredDebugPane.getByRole('button', { name: 'main debug-program.js:2', exact: true }).click();
+	await resumed.workbench.quickaccess.runCommand('workbench.debug.action.focusRepl');
+	const restoredInput = resumed.workbench.page.getByRole('textbox', { name: 'Debug Console expression', exact: true });
+	await restoredInput.press('ArrowUp');
+	await expectReplInput(restoredInput, 'answer');
+	const restoredFilter = resumed.workbench.page.getByRole('textbox', { name: 'Filter Debug Console', exact: true });
+	await restoredFilter.press('ArrowUp');
+	await expect(restoredFilter).toHaveValue('ALPHA, !hidden');
+	await fillReplInput(restoredInput, 'answer +');
+	await restoredInput.press('Shift+Enter');
+	await resumed.workbench.page.keyboard.insertText('😀an');
+	await restoredInput.press('Control+Space');
+	const restoredConsole = resumed.workbench.page.locator('[data-view-id="workbench.panel.debugConsole"]');
+	await expect(restoredConsole.getByRole('option', { name: 'answer', exact: true })).toBeVisible();
+	await restoredInput.press('ArrowDown');
+	await restoredInput.press('Enter');
+	await expectReplInput(restoredInput, 'answer +\nanswer');
+	const multiline = (await requests()).filter(request => request.command === 'completions').at(-1)?.arguments;
+	expect(multiline).toMatchObject({ text: 'answer +\n😀an', line: 2, column: 5, frameId: 11 });
+	await restoredInput.press('Enter');
+	await expect.poll(async () => (await requests()).filter(request => request.command === 'evaluate' && request.arguments?.context === 'repl').at(-1)?.arguments).toMatchObject({ expression: 'answer +\nanswer', frameId: 11 });
+	await resumed.workbench.quickaccess.runCommand('workbench.action.debug.stop');
+});
+
+// The disposable SSH host runs on this machine, but has a separate profile,
+// transport and backend process. This exercises Remote routing without relying
+// on a developer's SSH configuration or another machine's availability.
+test('SSH Desktop Debug routes inspection and multiline REPL through the remote Rust owner', { tag: ['@electron-app-server', '@darwin'] }, async ({ testWorkspace }, testInfo) => {
+	test.setTimeout(180_000);
+	const packageRoot = developmentAshPackagePath(process.env.ASH_SMOKE_DESKTOP_DIRECTORY ?? resolve('.'));
+	const fixture = await createSshFixture(join(packageRoot, 'bin/ash-app-server-daemon'));
+	const directory = testWorkspace.directory;
+	const ownership = join(directory, 'remote-debug-owner.json');
+	await writeFile(join(directory, 'debug-adapter.cjs'), `require('node:fs').writeFileSync(${JSON.stringify(ownership)}, JSON.stringify({ pid: process.pid, profile: process.env.ASH_HOME }));\n` + adapter);
+	let desktop: Awaited<ReturnType<typeof launchElectron>> | undefined;
+	try {
+		desktop = await launchElectron({
+			appServerMode: 'required', userDataDirectory: join(fixture.root, 'desktop'),
+			workspaceDirectory: directory, workspacePermissions: 'development', startupTimeout: 60_000,
+			extraArgs: [`--remote-ssh=${fixture.host}`],
+			environment: { ...process.env, ASH_SSH_PATH: fixture.ssh, ASH_REMOTE_ASH_PATH: join(packageRoot, 'bin/ash-remote-server') },
+		});
+		const { workbench } = desktop.driver;
+		const page = workbench.page;
+		await page.context().tracing.start({ screenshots: true, snapshots: true, sources: true });
+		await expect(page.locator('[data-statusbar-item-id="ash.status.remote"]')).toHaveAttribute('aria-label', `Remote connection to SSH host ${fixture.host} is ready`);
+		await workbench.quickaccess.runCommand('workbench.action.debug.start');
+		const pane = page.locator('[data-view-id="workbench.view.debug"]');
+		await expect(pane.getByRole('status')).toContainText('stopped');
+		await expect(pane.locator('.ash-debug-variables')).toContainText('answer = 42');
+		await expect(pane.locator('.ash-debug-variables')).toContainText('object = Object');
+		await pane.getByRole('button', { name: 'main debug-program.js:2', exact: true }).click();
+		const owner = JSON.parse(await readFile(ownership, 'utf8')) as { pid: number; profile: string; };
+		expect(await realpath(owner.profile)).toBe(await realpath(join(fixture.root, 'remote-profile')));
+		expect(() => process.kill(owner.pid, 0)).not.toThrow();
+		await workbench.quickaccess.runCommand('workbench.debug.action.focusRepl');
+		const input = page.getByRole('textbox', { name: 'Debug Console expression', exact: true });
+		await fillReplInput(input, 'answer +');
+		await input.press('Shift+Enter');
+		await page.keyboard.insertText('1');
+		await expectReplInput(input, 'answer +\n1');
+		await input.press('Enter');
+		await expect(page.getByRole('log', { name: 'Debug Console output', exact: true })).toContainText('42');
+		const requests = () => readFile(join(directory, 'debug-requests.jsonl'), 'utf8').then(text => text.trim().split('\n').map(line => JSON.parse(line) as { command: string; arguments?: { expression?: string; context?: string; frameId?: number; }; }));
+		await expect.poll(async () => (await requests()).filter(request => request.command === 'evaluate' && request.arguments?.context === 'repl').at(-1)?.arguments).toMatchObject({ expression: 'answer +\n1', frameId: 11 });
+		await workbench.quickaccess.runCommand('workbench.action.debug.stop');
+		await expect(input).toHaveAttribute('aria-readonly', 'true');
+		await expect.poll(() => { try { process.kill(owner.pid, 0); return false; } catch { return true; } }).toBe(true);
+		await testInfo.attach('remote-debug-owner', { body: JSON.stringify({ ...owner, adapterReclaimed: true, multilineFrame: 11 }), contentType: 'application/json' });
+	} finally {
+		try {
+			if (desktop) {
+				try {
+					const path = testInfo.outputPath('trace.zip');
+					await desktop.driver.workbench.page.context().tracing.stop({ path });
+					await testInfo.attach('trace', { path, contentType: 'application/zip' });
+				} finally { await desktop.close(); }
+			}
+		} finally { await fixture.close(); }
+	}
+});

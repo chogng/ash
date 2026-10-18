@@ -481,3 +481,44 @@ for (const change of ['document created', 'workspace replaced', 'view disposed']
 		}
 	});
 }
+
+
+test('Debug inspection panes follow a focused frame independently and retire delayed Watch errors', async () => {
+	const browser = new JSDOM('<!doctype html><body></body>');
+	const globals = installDomGlobals(browser);
+	const editor: IEditorService = { ...emptyEditorServiceState, openEditor: async () => { }, focusActiveEditor() { } };
+	try {
+		const { DebugViewPane } = await import('../../browser/debugViewPane.js');
+		using debug = new MockDebugService();
+		using support = new DebugViewTestServices();
+		using services = new InstantiationService(support.register(new ServiceCollection([IDebugService, debug], [IEditorService, editor], [IContextMenuService, contextMenus])));
+		using view = services.createInstance(DebugViewPane, browser.window.document.body, { id: 'debug.independent', title: 'Debug' });
+		const session = debug.sessions[0] as MockDebugSession;
+		const initialEvaluations: (number | undefined)[] = [];
+		const evaluateInitial = session.evaluateWatchExpressions.bind(session);
+		session.evaluateWatchExpressions = async (expressions, frameId) => { initialEvaluations.push(frameId); return evaluateInitial(expressions, frameId); };
+		debug.activate(session);
+		await waitFor(() => view.element.querySelectorAll('.ash-debug-variable').length === 2);
+		assert.deepEqual(initialEvaluations, [10]);
+		assert.deepEqual([...view.element.querySelectorAll('.ash-debug-section.ash-view-pane')].map(pane => (pane as HTMLElement).dataset.viewId), ['ash-debug-variables', 'ash-debug-watch', 'ash-debug-stack', 'ash-debug-breakpoints']);
+		const pending = new DeferredPromise<Awaited<ReturnType<MockDebugSession['evaluateWatchExpressions']>>>();
+		let oldWatchStarted = false;
+		session.evaluateWatchExpressions = async (expressions, frameId) => {
+			if (frameId === 99) { oldWatchStarted = true; return pending.p; }
+			return expressions.map(expression => ({ expression, result: { result: `frame ${frameId}`, variablesReference: 0 } }));
+		};
+		session.inspectFrame = async frameId => [{ scope: { name: `Frame ${frameId}`, variablesReference: 0, expensive: false }, variables: [] }];
+		debug.focusStackFrame({ id: 99, name: 'old', lineNumber: 1, columnNumber: 1 });
+		await waitFor(() => oldWatchStarted);
+		debug.focusStackFrame({ id: 0, name: 'current', lineNumber: 1, columnNumber: 1 });
+		await waitFor(() => /frame 0/.test(view.element.querySelector('.ash-debug-watch-value')?.textContent ?? ''));
+		assert.match(view.element.querySelector('.ash-debug-variable')?.textContent ?? '', /Frame 0/);
+		await pending.error(new Error('obsolete Watch failure'));
+		await new Promise<void>(resolve => setImmediate(resolve));
+		assert.doesNotMatch(view.element.querySelector('.ash-debug-status')?.textContent ?? '', /obsolete/);
+		assert.match(view.element.querySelector('.ash-debug-watch-value')?.textContent ?? '', /frame 0/);
+	} finally {
+		for (const name of globals) Reflect.deleteProperty(globalThis, name);
+		browser.window.close();
+	}
+});

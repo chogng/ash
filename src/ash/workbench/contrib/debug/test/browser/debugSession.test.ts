@@ -1,3 +1,5 @@
+import { CancellationToken, CancellationTokenSource } from '../../../../../base/common/cancellation.js';
+import { Position } from '../../../../../editor/common/core/position.js';
 import { ILabelService } from '../../../../../platform/label/common/label.js';
 import { LabelService } from '../../../../services/label/common/labelService.js';
 import { installDebugClientFixture } from '../common/debugClientFixture.js';
@@ -176,7 +178,7 @@ test("DebugSession handles zero-sequence DAP messages, clears breakpoints, and r
 	assert.deepEqual(processes.request("setBreakpoints").arguments, { source: { path: breakpointPath }, breakpoints: [{ line: 4 }] });
 	assert.deepEqual(processes.request("setExceptionBreakpoints").arguments, { filters: ["uncaught"] });
 	assert.deepEqual(updates, [{ id: "main:4", verified: true }]);
-	assert.deepEqual(session.capabilities, { supportsRestart: true, supportsTerminate: true, supportsSetVariable: true, supportsConditionalBreakpoints: true, supportsHitConditionalBreakpoints: true, supportsLogPoints: true, supportsFunctionBreakpoints: false, supportsDataBreakpoints: false, supportsInstructionBreakpoints: false, supportsDisassembleRequest: false, supportsSteppingGranularity: false, exceptionBreakpointFilters: [{ filter: "uncaught", label: "Uncaught Exceptions", default: true }, { filter: "caught", label: "Caught Exceptions", default: false }] });
+	assert.deepEqual(session.capabilities, { supportsRestart: true, supportsTerminate: true, supportsSetVariable: true, supportsConditionalBreakpoints: true, supportsHitConditionalBreakpoints: true, supportsLogPoints: true, supportsFunctionBreakpoints: false, supportsDataBreakpoints: false, supportsInstructionBreakpoints: false, supportsDisassembleRequest: false, supportsSteppingGranularity: false, supportsCompletionsRequest: true, supportsCancelRequest: true, completionTriggerCharacters: ['.'], exceptionBreakpointFilters: [{ filter: "uncaught", label: "Uncaught Exceptions", default: true }, { filter: "caught", label: "Caught Exceptions", default: false }] });
 	processes.event("output", { output: "adapter ready\n" });
 	await waitFor(() => session.output === "adapter ready\n");
 
@@ -531,6 +533,13 @@ test('DebugSession localizes a backend terminal snapshot during initialization',
 });
 
 class FakeDebugAdapterProcessService implements IDebugAdapterProcessService {
+	declare prepareSession: IDebugAdapterProcessService['prepareSession'];
+	declare reserveSession: IDebugAdapterProcessService['reserveSession'];
+	declare manageSession: IDebugAdapterProcessService['manageSession'];
+	declare readConsole: IDebugAdapterProcessService['readConsole'];
+	declare setExceptionBreakpoints: IDebugAdapterProcessService['setExceptionBreakpoints'];
+	declare readWorkspaceState: IDebugAdapterProcessService['readWorkspaceState'];
+	declare editWorkspaceState: IDebugAdapterProcessService['editWorkspaceState'];
 	declare setBreakpoints: IDebugAdapterProcessService['setBreakpoints'];
 	declare readBreakpoints: IDebugAdapterProcessService['readBreakpoints'];
 	declare startInspection: IDebugAdapterProcessService['startInspection'];
@@ -553,6 +562,10 @@ class FakeDebugAdapterProcessService implements IDebugAdapterProcessService {
 	holdBreakpoints = false;
 	heldBreakpointResponse: Record<string, unknown> | undefined;
 	disassemblyReply: Record<string, unknown> = { instructions: [{ address: '0x1000', instruction: 'mov r0, r1', instructionBytes: '90', symbol: 'main', location: { name: 'main.ts', path: '/srv/project/main.ts' }, line: 4, column: 1 }] };
+	completionCapabilities: Record<string, unknown> = { supportsCompletionsRequest: true, supportsCancelRequest: true, completionTriggerCharacters: ['.'] };
+	completionReply: unknown = { targets: [{ label: 'answer', text: 'answer(value)', start: 3, length: 2, selectionStart: 7, selectionLength: 5 }] };
+	holdCompletions = false;
+	private heldCompletionResponse: unknown;
 	dataInfoReply: Record<string, unknown> = { dataId: 'memory:counter', description: 'counter', canPersist: false, accessTypes: ['read', 'write', 'readWrite'] };
 	readonly onConnectionState = this.connectionEmitter.event;
 
@@ -566,21 +579,23 @@ class FakeDebugAdapterProcessService implements IDebugAdapterProcessService {
 		if (request.type !== "request") return;
 		const command = String(request.command);
 		if (command === "launch") this.event("initialized");
-		const body = command === "initialize" ? { supportsConfigurationDoneRequest: true, supportsRestartRequest: true, supportsTerminateRequest: true, supportsSetVariable: this.supportsSetVariable, supportsConditionalBreakpoints: this.supportsAdvancedBreakpoints, supportsHitConditionalBreakpoints: this.supportsAdvancedBreakpoints, supportsLogPoints: this.supportsAdvancedBreakpoints, supportsFunctionBreakpoints: this.supportsBreakpointFamilies, supportsDataBreakpoints: this.supportsBreakpointFamilies, supportsInstructionBreakpoints: this.supportsBreakpointFamilies, supportsDisassembleRequest: this.supportsDisassembly, supportsSteppingGranularity: this.supportsDisassembly, exceptionBreakpointFilters: [{ filter: "uncaught", label: "Uncaught Exceptions", default: true }, { filter: "caught", label: "Caught Exceptions" }] }
-			: command === "threads" ? { threads: [{ id: this.threadId, name: "main" }, { id: 8, name: "worker" }] }
-				: command === "stackTrace" ? { stackFrames: [{ id: this.frameId, name: "main", source: { name: "main.ts", path: this.stackFramePath }, line: 4, column: 1 }, { id: 12, name: "system", line: 0, column: 0 }] }
-					: command === "scopes" ? { scopes: [{ name: "Locals", variablesReference: 20 }] }
-						: command === "variables" ? { variables: [{ name: "answer", value: "42", type: "number", variablesReference: 0 }] }
-							: command === "setVariable" ? this.setVariableReply ?? { value: (request.arguments as Record<string, unknown>).value, type: "number" }
-								: command === "evaluate" ? { result: "42", type: "number", variablesReference: 0 }
-									: command === "source" ? { content: "const generated = true;", mimeType: "text/typescript" }
-										: command === "disassemble" ? this.disassemblyReply
-											: command === "dataBreakpointInfo" ? this.dataInfoReply
-												: ['setFunctionBreakpoints', 'setDataBreakpoints', 'setInstructionBreakpoints'].includes(command) ? { breakpoints: ((request.arguments as { breakpoints: unknown[]; }).breakpoints).map(() => ({ verified: true })) }
-													: command === "setBreakpoints" && Array.isArray((request.arguments as Record<string, unknown>)?.breakpoints) && ((request.arguments as Record<string, unknown>).breakpoints as unknown[]).length > 0 ? { breakpoints: [{ verified: true }] }
-														: {};
+		const body = command === "initialize" ? { ...this.completionCapabilities, supportsConfigurationDoneRequest: true, supportsRestartRequest: true, supportsTerminateRequest: true, supportsSetVariable: this.supportsSetVariable, supportsConditionalBreakpoints: this.supportsAdvancedBreakpoints, supportsHitConditionalBreakpoints: this.supportsAdvancedBreakpoints, supportsLogPoints: this.supportsAdvancedBreakpoints, supportsFunctionBreakpoints: this.supportsBreakpointFamilies, supportsDataBreakpoints: this.supportsBreakpointFamilies, supportsInstructionBreakpoints: this.supportsBreakpointFamilies, supportsDisassembleRequest: this.supportsDisassembly, supportsSteppingGranularity: this.supportsDisassembly, exceptionBreakpointFilters: [{ filter: "uncaught", label: "Uncaught Exceptions", default: true }, { filter: "caught", label: "Caught Exceptions" }] }
+			: command === "completions" ? this.completionReply
+				: command === "threads" ? { threads: [{ id: this.threadId, name: "main" }, { id: 8, name: "worker" }] }
+					: command === "stackTrace" ? { stackFrames: [{ id: this.frameId, name: "main", source: { name: "main.ts", path: this.stackFramePath }, line: 4, column: 1 }, { id: 12, name: "system", line: 0, column: 0 }] }
+						: command === "scopes" ? { scopes: [{ name: "Locals", variablesReference: 20 }] }
+							: command === "variables" ? { variables: [{ name: "answer", value: "42", type: "number", variablesReference: 0 }] }
+								: command === "setVariable" ? this.setVariableReply ?? { value: (request.arguments as Record<string, unknown>).value, type: "number" }
+									: command === "evaluate" ? { result: "42", type: "number", variablesReference: 0 }
+										: command === "source" ? { content: "const generated = true;", mimeType: "text/typescript" }
+											: command === "disassemble" ? this.disassemblyReply
+												: command === "dataBreakpointInfo" ? this.dataInfoReply
+													: ['setFunctionBreakpoints', 'setDataBreakpoints', 'setInstructionBreakpoints'].includes(command) ? { breakpoints: ((request.arguments as { breakpoints: unknown[]; }).breakpoints).map(() => ({ verified: true })) }
+														: command === "setBreakpoints" && Array.isArray((request.arguments as Record<string, unknown>)?.breakpoints) && ((request.arguments as Record<string, unknown>).breakpoints as unknown[]).length > 0 ? { breakpoints: [{ verified: true }] }
+															: {};
 		const response = { seq: 0, type: "response", request_seq: request.seq, success: true, command, body };
-		if (command === 'setBreakpoints' && this.holdBreakpoints) this.heldBreakpointResponse = response;
+		if (command === 'completions' && this.holdCompletions) this.heldCompletionResponse = response;
+		else if (command === 'setBreakpoints' && this.holdBreakpoints) this.heldBreakpointResponse = response;
 		else this.enqueue(response);
 	}
 
@@ -599,6 +614,7 @@ class FakeDebugAdapterProcessService implements IDebugAdapterProcessService {
 		this.enqueue(this.heldBreakpointResponse);
 		this.heldBreakpointResponse = undefined;
 	}
+	releaseCompletions(): void { assert.ok(this.heldCompletionResponse); this.enqueue(this.heldCompletionResponse); this.heldCompletionResponse = undefined; }
 	[Symbol.dispose](): void { this.dispose(); }
 
 	event(event: string, body?: unknown): void { this.enqueue({ seq: 0, type: "event", event, ...(body === undefined ? {} : { body }) }); }
@@ -718,3 +734,92 @@ for (const succeeds of [true, false]) {
 		} finally { await session.disconnect(); session.dispose(); }
 	});
 }
+
+
+suite('Debug Console completion session boundary', () => {
+	ensureNoDisposablesAreLeakedInTestSuite();
+
+	test('uses UTF-16 coordinates and frame zero without sending the routing thread as a DAP argument', async () => {
+		using processes = new FakeDebugAdapterProcessService();
+		const session = await startSession({ configuration: configuration(), processService: processes, breakpoints: () => [], workspace: URI.file('/workspace') });
+		try {
+			assert.deepEqual(session.capabilities.completionTriggerCharacters, ['.']);
+			const result = await session.completions(0, 0, '😀an', new Position(1, 5), CancellationToken.None);
+			assert.deepEqual(processes.request('completions').arguments, { text: '😀an', line: 1, column: 5, frameId: 0 });
+			assert.deepEqual(result, { body: processes.completionReply });
+			await assert.rejects(session.completions(0, 0, 'x', new Position(1, 3), CancellationToken.None), /position/);
+			assert.equal(processes.requests('completions').length, 1);
+		} finally { await session.disconnect(); }
+	});
+
+	test('rejects adapter edit and selection ranges before exposing them to the editor', async () => {
+		using processes = new FakeDebugAdapterProcessService();
+		const session = await startSession({ configuration: configuration(), processService: processes, breakpoints: () => [], workspace: URI.file('/workspace') });
+		try {
+			for (const item of [{ label: 'value', start: 0 }, { label: 'value', start: 1, length: 10 }, { label: 'value', selectionStart: 3, selectionLength: 3 }, { label: 'value', detail: 3 }]) {
+				processes.completionReply = { targets: [item] };
+				await assert.rejects(session.completions(undefined, 0, 'x', new Position(1, 2), CancellationToken.None), TypeError);
+			}
+		} finally { await session.disconnect(); }
+	});
+
+	test('validates completion edits against the requested line of a multiline UTF-16 expression', async () => {
+		using processes = new FakeDebugAdapterProcessService();
+		const session = await startSession({ configuration: configuration(), processService: processes, breakpoints: () => [], workspace: URI.file('/workspace') });
+		try {
+			const text = 'longer first line\r\n😀an\r\nlast';
+			processes.completionReply = { targets: [{ label: 'answer', start: 3, length: 2, text: 'answer\nnext', selectionStart: 7, selectionLength: 4 }] };
+			const result = await session.completions(0, 0, text, new Position(2, 5), CancellationToken.None);
+			assert.deepEqual(processes.request('completions').arguments, { text, line: 2, column: 5, frameId: 0 });
+			assert.deepEqual(result, { body: processes.completionReply });
+			processes.completionReply = { targets: [{ label: 'bad', start: 6 }] };
+			await assert.rejects(session.completions(0, 0, text, new Position(2, 5), CancellationToken.None), /range/);
+			await assert.rejects(session.completions(0, 0, text, new Position(2, 6), CancellationToken.None), /position/);
+		} finally { await session.disconnect(); }
+	});
+
+	test('cancellation returns promptly and maps to DAP cancel while draining the late completion', async () => {
+		using processes = new FakeDebugAdapterProcessService();
+		using cancellation = new CancellationTokenSource();
+		const session = await startSession({ configuration: configuration(), processService: processes, breakpoints: () => [], workspace: URI.file('/workspace') });
+		try {
+			processes.holdCompletions = true;
+			const completion = session.completions(undefined, 0, 'obj.', new Position(1, 5), cancellation.token);
+			await waitFor(() => processes.requests('completions').length === 1);
+			cancellation.cancel();
+			assert.equal(await completion, undefined);
+			await waitFor(() => processes.requests('cancel').length === 1);
+			assert.deepEqual(processes.request('cancel').arguments, { requestId: processes.request('completions').seq });
+			processes.releaseCompletions();
+		} finally { await session.disconnect(); }
+	});
+
+	test('ignores responses after inspection invalidation and thread selection changes', async () => {
+		using processes = new FakeDebugAdapterProcessService();
+		const session = await startSession({ configuration: configuration(), processService: processes, breakpoints: () => [], workspace: URI.file('/workspace') });
+		try {
+			processes.holdCompletions = true;
+			let pending = session.completions(undefined, 0, 'obj.', new Position(1, 5), CancellationToken.None);
+			await waitFor(() => processes.requests('completions').length === 1);
+			session.selectThread(8);
+			processes.releaseCompletions();
+			assert.equal(await pending, undefined);
+			pending = session.completions(undefined, 8, 'obj.', new Position(1, 5), CancellationToken.None);
+			await waitFor(() => processes.requests('completions').length === 2);
+			processes.event('continued', { threadId: 8 });
+			await waitFor(() => session.state === 'running');
+			processes.releaseCompletions();
+			assert.equal(await pending, undefined);
+		} finally { await session.disconnect(); }
+	});
+
+	test('unsupported adapters receive no completion request', async () => {
+		using processes = new FakeDebugAdapterProcessService();
+		processes.completionCapabilities = {};
+		const session = await startSession({ configuration: configuration(), processService: processes, breakpoints: () => [], workspace: URI.file('/workspace') });
+		try {
+			assert.equal(await session.completions(undefined, 0, '', new Position(1, 1), CancellationToken.None), undefined);
+			assert.deepEqual(processes.requests('completions'), []);
+		} finally { await session.disconnect(); }
+	});
+});

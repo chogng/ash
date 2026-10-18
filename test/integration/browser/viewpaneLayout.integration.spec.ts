@@ -56,8 +56,9 @@ test('Debug Console keeps its output and expression reachable after a wrapping e
 	page.on('pageerror', error => errors.push(error.message));
 	await page.goto('/viewpaneLayout.html?view=console');
 	const body = page.locator('.ash-debug-console');
-	const input = body.getByRole('textbox');
-	await input.fill('fixture');
+	const input = body.getByRole('textbox', { name: 'Debug Console expression', exact: true });
+	await input.focus();
+	await page.keyboard.insertText('fixture');
 	await input.press('Enter');
 	await expect(body.getByRole('status')).toContainText('Evaluation failed.');
 	await expect.poll(() => body.evaluate(element => element.scrollHeight - element.clientHeight)).toBeLessThanOrEqual(1);

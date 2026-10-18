@@ -4,9 +4,13 @@ The system-level ownership and current user-visible status are documented in [`d
 
 ## Current ownership and execution path
 
-This section describes the running Workbench implementation. Rust request ownership is already connected through `browser/rawDebugSession.ts`; the full manager migration and VS Code frontend alignment remain defined in [the system design](../../../../../docs/debugging.md#已确认的目标分层).
+This section describes the running Workbench implementation. The confirmed Rust domain migration and frontend ownership split are connected through the production paths described in [the system design](../../../../../docs/debugging.md).
 
-`common/debug.ts` is the canonical frontend contract. `browser/debugService.ts` implements `DebugService` and owns launch/compound configuration, source, function, data, and instruction breakpoints and workspace-persisted Watch expressions, exception-breakpoint selection, task orchestration, the active session, and the collection of concurrent sessions. `DebugSession` owns the Workbench facade, runtime-intent submission, read-only binding snapshots, thread/frame selection, URI/result conversion, output and host reverse-request callbacks. Rust owns initialization, normalized and incremental capabilities, execution state, initial exception-breakpoint configuration and in-flight inspection invalidation. Rust now also owns admitted runtime intents, source/family replacement order, DAP bindings/events and stack/frame/variables/Watch job orchestration. The editable workspace catalogue, exception selection and its Memento persistence still await durable migration. `common/debug.ts` also declares the REPL model contract; `DebugService` owns one `common/replModel.ts` model that subscribes before any UI is visible, retains bounded per-session DAP/REPL output, and keeps terminated sessions inspectable. The same contribution implementation validates `runInTerminal` and delegates presentation to `ITerminalService`. Its stable dependencies use constructor DI; the window registers its selected DAP process capability, including explicit unavailability. `IAdapterManager` is the shared registration contract; the injected `browser/debugAdapterManager.ts` implementation owns factories for the window and is shared by declarative packages, the Extension Host and Debug. Generic services import only the common contract.
+`common/debug.ts` is the canonical frontend contract. `browser/debugService.ts` owns launch/compound configuration, editor-facing breakpoint/Watch facades, Tasks and the concurrent session collection. `common/debugViewModel.ts` owns the window's selected session, thread and frame. `DebugSession` adapts read-only runtime/binding/console snapshots, converts URI/results and invokes host reverse-request callbacks.
+
+Rust owns request pairing, initialization, capabilities, execution state, acknowledged exception choices, breakpoint intent/binding order, inspection jobs, parent-child lifetime and bounded structured output. `DebugWorkspaceStore` owns durable workspace definitions and exception preferences. `common/debugStorage.ts` adapts revisioned snapshots/edits and one-way v1/v2 Memento migration. `common/replModel.ts` keeps only console selection, labels and revisioned read-only snapshots, including retained ended sessions; the backend decides retention.
+
+The window registers its selected DAP process capability, including explicit unavailability, through constructor DI. `IAdapterManager` is the shared registration contract; `browser/debugAdapterManager.ts` owns factories shared by declarative packages, the Extension Host and Debug. `runInTerminal` validates the request and delegates presentation to `ITerminalService`; neither the generic editor nor the renderer becomes a process owner.
 
 `RawDebugSession` calls the Rust client through the selected platform capability. Request IDs, response pairing and deadlines belong only to `ash-debug-client`; `ash-debug-manager` owns its transport resources and runtime state machine. Managed reads carry a revisioned session snapshot; the facade never derives execution state or capabilities from DAP events. Inline IO uses the same backend client. The ordered observation log supplies both tracker directions independently of request completion; shutdown admits retained observations before the stop hook.
 
@@ -36,7 +40,7 @@ DebugService.start / startDebugging / startCompound
   -> postDebugTask through ITaskService
 ```
 
-`DebugBreakpointDecorationProvider` is the only Debug-to-editor adapter. The editor owns a generic composable gutter contract and must not import Debug semantics. `DebugSession` also converts adapter source paths into URIs on the current local or Remote Workspace authority; `DebugViewPane` consumes that domain resource and never reinterprets a Remote path as local `file://`. Process lifetime, bounded DAP framing, trust retirement, and connection ownership remain backend responsibilities.
+`DebugBreakpointDecorationProvider` is the only Debug-to-editor adapter. The editor owns a generic composable gutter contract and must not import Debug semantics. `DebugSession` also converts adapter source paths into URIs on the current local or Remote Workspace authority; `CallStackView` consumes that domain resource and never reinterprets a Remote path as local `file://`. Process lifetime, bounded DAP framing, trust retirement, and connection ownership remain backend responsibilities.
 
 Console output is retained synchronously. Output-only change notifications are coalesced
 over 16 ms so a DAP burst does not rebuild the console for each message. Session changes
@@ -51,13 +55,37 @@ Each `.vscode/launch.json` configuration can declare an explicit `debugAdapter.p
 
 All remaining configuration properties are forwarded to the adapter after `Debugger.substituteVariables` resolves `${env:NAME}`, `${workspaceFolder}`, `${workspaceFolderBasename}`, `${command:...}`, and `${input:...}` through the shared `IConfigurationResolverService.resolveWithInteractionReplace`. Named folder selectors such as `${workspaceFolder:server}` use the current Workspace folder names. Resolution fails before task or adapter execution when a referenced folder is unavailable. The source configuration remains unchanged for restart; the executable, adapter arguments, launch arguments, and pre/post task references are resolved into a separate execution snapshot. A command or configured input variable is evaluated once per invocation and reevaluated when a new session starts. Inputs come from the selected folder’s `.vscode/launch.json` through FileService; launch arguments do not include the document’s input definitions. `promptString` and `pickString` reuse Quick Input; command inputs execute their declared command with `args`. Cancellation by Escape, workspace change, or resolver disposal closes the owned prompt and prevents startup. Cancellation prevents both pre-launch tasks and adapter creation; invalid resolved executables fail before either side effect. The value comes from the current Workspace URI: native filesystem syntax for `file:` and decoded POSIX syntax for Remote. Workbench-only `preLaunchTask` and `postDebugTask` fields are removed before the DAP launch/attach request. Compounds resolve configuration IDs, unique names, or `{ name, folder }` references and may request `stopAll` behavior. Every reference is validated before the compound pre-launch task runs.
 
-`DebugAdapterFactoryRegistry` accepts static executables and asynchronous `createDebugAdapterDescriptor` callbacks. Dynamic types remain discoverable without calling a provider or allocating a process. At dispatch, DebugService resolves configuration variables, then the Host-broker provider receives `{ configuration: { name, type, request, ...arguments }, session: { id, workspaceFolder }, dirId? }` and returns `{ program, arguments }`. MainThreadExtensionApi binds the callback to its admitted registration, activation generation and incarnation; replacement or disconnect revokes it. DebugService cancels all pending callbacks on workspace change or disposal. Removing a provider or factory cancels only callbacks bound to that registration; unrelated launches and configuration discovery retain their lifetime. A selected factory is checked again after the pre-launch task and before descriptor invocation, so a retired factory cannot start an adapter. Invalid descriptors prevent adapter startup. Descriptor callbacks run after the pre-launch task, so their result cannot prevent a build that has already completed. Restart resolves the descriptor again. The existing Rust DAP transport owner starts the resulting executable or connects to the returned server/pipe endpoint. The standard `DebugAdapterServer` and `DebugAdapterNamedPipeServer` classes map to this same path; connected descriptors keep executable fields absent. The Host RPC and standard facade share session handles and tracker delivery. Inline descriptors create an opaque SDK handle and bind finite send/read/close callbacks to the same prepared session. The session owns that IO before tracker startup and releases it on startup failure or cancellation; a late descriptor from a retired creation lifetime is closed. Remaining session options still require implementation.
+`DebugAdapterFactoryRegistry` accepts static executables and asynchronous `createDebugAdapterDescriptor` callbacks. Dynamic types remain discoverable without calling a provider or allocating a process. At dispatch, DebugService resolves configuration variables, then the Host-broker provider receives `{ configuration: { name, type, request, ...arguments }, session: { id, workspaceFolder }, dirId? }` and returns `{ program, arguments }`. MainThreadExtensionApi binds the callback to its admitted registration, activation generation and incarnation; replacement or disconnect revokes it. DebugService cancels all pending callbacks on workspace change or disposal. Removing a provider or factory cancels only callbacks bound to that registration; unrelated launches and configuration discovery retain their lifetime. A selected factory is checked again after the pre-launch task and before descriptor invocation, so a retired factory cannot start an adapter. Invalid descriptors prevent adapter startup. Descriptor callbacks run after the pre-launch task, so their result cannot prevent a build that has already completed. Restart resolves the descriptor again. The existing Rust DAP transport owner starts the resulting executable or connects to the returned server/pipe endpoint. The standard `DebugAdapterServer` and `DebugAdapterNamedPipeServer` classes map to this same path; connected descriptors keep executable fields absent. The Host RPC and standard facade share session handles and tracker delivery. Inline descriptors create an opaque SDK handle and bind finite send/read/close callbacks to the same prepared session. The session owns that IO before tracker startup and releases it on startup failure or cancellation; a late descriptor from a retired creation lifetime is closed. Session options beyond the documented supported contract remain outside this migration.
 
 The shared configuration resolver exposes non-interactive `resolveAsync` and interaction-capable `resolveWithInteractionReplace`. Command aliases use the resolver port, and commands receive the configuration after workspace-folder substitution. Root `windows`, `osx` and `linux` overrides select the execution host before references are collected; platform blocks are removed from the resolved copy, while the original remains available to providers and restart. Object keys and nested replacement values are resolved from the expression's invocation-local cache. Environment lookup batches current unresolved names on the authorized execution host; nested values can introduce another batch. Missing names become empty strings. Raw shell syntax remains data. Pending reads cancel on workspace change or disposal before command variables can execute. Configuration-target selection beyond folder files, contributed variables remain unimplemented; other placeholders remain unchanged. Web and Electron use the same typed backend query. Inherited values retain the backend environment allowlist policy.
 
 ## Durability and failure semantics
 
-DebugService validates and normalizes its persisted schema, updates the workspace object returned by `Memento.getMemento`, and calls `saveMemento` on the Storage save lifecycle. Memento owns scoped JSON storage and explicit reload; DebugService owns external-change handling and preserves pending local edits. It stores source and function breakpoints, data breakpoints explicitly marked `canPersist` by the adapter, Watch expressions, and per-adapter-type exception filters in workspace scope. Version 1 source-only state migrates to version 2. Durable points retain enabled state and conditions; source and function points retain log messages, and source points retain public IDs and columns. Data points retain their opaque `dataId`, supported access types, and adapter type. Session IDs and verification results are never stored. Nonpersistent data points and all instruction points belong to their originating session and are removed when it ends. Adapter verification state, call stacks, variables, Debug Console output, and live sessions are intentionally transient. Debug Console content is retained only for the current window (up to 20 sessions and 128,000 characters per session); it is not sent to generic Output. A workspace switch flushes the old Memento, restores the new workspace state, and terminates all previous sessions.
+`common/debugStorage.ts` owns the Workbench persistence boundary and one-way
+migration; `DebugService` owns session composition and the editor-facing facade.
+Definitions are owned and persisted by Rust `DebugWorkspaceStore` in the profile's
+`state.sqlite3` database, keyed by the Workbench Workspace ID, independently of
+session, directory or Project IDs. The frontend submits identity-based edits via
+`debug/workspace/read` and `debug/workspace/write` through the existing Debug
+capability and renderer protocol client. Source IDs/columns, enabled state,
+conditions, function log messages, persistent data metadata, ordered Watch
+expressions and exception selections survive reload. A revision conflict preserves
+the saved target and the local draft; it is reported instead of overwriting another
+window. Other windows read revisioned snapshots; no mutation is replayed after a
+lost connection. Shutdown joins pending writes before releasing the connection.
+
+The legacy `memento/debug.workspace` v1/v2 decoder runs only at workspace opening.
+Rust imports into an absent or equal target and records a digest in the same
+transaction. Workbench removes the exact source only after acknowledgement and only
+while its captured workspace remains current. Conflicting/invalid sources remain
+untouched. An interrupted cleanup can safely resume after newer Rust edits. Normal
+edits never write Memento or read it as a fallback. Queued edits retain their original
+workspace on a scope switch, and old replies cannot publish into the new facade.
+
+Verification, stack/variable/Watch values, live sessions, nonpersistent data points,
+instruction addresses and Console output remain transient. The session owns its
+addresses; releasing it removes them. Editor models, dirty buffers, Tasks, Terminal,
+configuration callbacks and UI selection retain their existing owners.
 
 The Breakpoints section edits expressions with F2 or its row action, and supports individual and bulk enable/disable and removal. Conditions and log messages are passed unchanged to DAP; their expression syntax belongs to the selected adapter. Unsupported breakpoint options produce an unverified point with a reason and are excluded from the adapter request. Each session serializes complete source and additional-family replacements, and discards verification replies for points edited or removed while a request was pending.
 
@@ -65,7 +93,7 @@ The Breakpoints section edits expressions with F2 or its row action, and support
 
 `DebugViewPaneContainer` in `browser/debugViewlet.ts` owns the container title actions. The Part asks its `getActionViewItem` for `StartDebugActionViewItem` from `browser/debugActionViewItems.ts`; that item presents Start and the searchable configuration dropdown without retaining another selected ID. `browser/media/debugViewlet.css` owns this presentation, and `browser/debugIcons.ts` registers its semantic icons. The shared start command and the configure command in `browser/debugCommands.ts` read the manager, so F5, the menu, the title launcher, and opening the selected folder's launch.json agree. The title launcher explicitly starts a new session; F5 retains Continue behavior for a paused session.
 
-`DebugViewPane` retains inspection, the unconfigured welcome, and active-session controls. `DebugConsoleViewPane` owns the Panel destination, session selector, clear action, accessible log, and REPL input. Keeping this presentation separate prevents DAP output from being mislabeled as an Output channel or mixed into Terminal PTY bytes.
+`DebugViewPane` composes the unconfigured welcome, session controls and four inspection panes. `VariablesView`, `WatchExpressionsView`, `CallStackView` and `BreakpointsView` own their controls, asynchronous inspection lifetimes and editing. `common/debugViewModel.ts` owns the window’s coherent session/thread/frame focus, exposed through `IDebugService.getViewModel()`. `Repl` owns the Panel destination, session selector, clear action, accessible output and REPL input. Keeping this presentation separate prevents DAP output from being mislabeled as an Output channel or mixed into Terminal PTY bytes.
 
 `DebugViewPane` locates the first stack frame when inspecting a stopped session with an available line and column. Variable and source requests run independently, so a source-opening failure does not hide variables. Inspection results belong to one stopped session and selection generation; continuing, switching sessions or frames, or disposing the view retires pending results.
 
@@ -87,7 +115,7 @@ Debug-specific behavior in the generic editor, direct process execution in the R
 
 ## Current limitations
 
-Function creation uses the Breakpoints toolbar. Data creation queries `dataBreakpointInfo` with the variable parent reference and selected frame, then offers only the adapter-supported read/write/readWrite access types. Instruction creation uses the selected frame instruction reference with an editable byte offset. The respective DAP replacement requests are capability-gated; session addresses are never sent to another session. Adapters use stdio processes, TCP servers, named pipes or inline implementations. Live session recovery and console history do not survive a restart. Declarative debugger discovery is supported, while arbitrary VS Code Debug extension APIs require the separately planned full Extension Host boundary.
+Function creation uses the Breakpoints toolbar. Data creation queries `dataBreakpointInfo` with the variable parent reference and selected frame, then offers only the adapter-supported read/write/readWrite access types. Instruction creation uses the selected frame instruction reference with an editable byte offset. The respective DAP replacement requests are capability-gated; session addresses are never sent to another session. Adapters use stdio processes, TCP servers, named pipes or inline implementations. Live session recovery is unavailable. Expression and filter histories survive window reloads in workspace UI storage; retained output belongs to the backend connection lifetime. Declarative debugger discovery is supported, while arbitrary VS Code Debug extension APIs require the separately planned full Extension Host boundary.
 
 Tasks and Debug share ConfigurationResolverService for environment, workspace, command/input, scalar configuration, user-home and selected-folder cwd variables. Paths and separators follow the execution host through PathService; nested command and configuration references resolve through the same expression. Active-file paths and metadata, selected text, and cursor line/column use one snapshot of the canonical Editor and CodeEditor owners before host reads or interaction. `${workspaceRoot}` and `${workspaceRootFolderName}` use the same Workspace resolution as their current equivalents. Debugger `variables` declarations map `${command:alias}` to their contributed command through the shared resolver. The selected debug type supplies the mapping after provider redirection; repeated aliases run once per start, restart reads the current catalog, and cancellation stops before pre-launch Tasks or adapter creation. Metadata-only debugger declarations retain mappings independently of adapter factories. Folderless `${cwd}` and editor installation paths still require additional execution context.
 
@@ -180,14 +208,16 @@ remain boundary errors.
 
 Debug startup saves through `IEditorService` and retained `EditorGroupView` panes before activation, providers or preLaunchTask. `debug.saveBeforeStart` selects no saves, file-backed saves, or file-backed saves plus active untitled Save As. A cancelled Save As, a dirty result, a save failure, or a workspace change prevents adapter launch. Child sessions do not repeat the parent save; extensions can use `suppressSaveBeforeStart`. The editor owns save participants and read-only recovery; Debug never writes dirty buffers directly.
 
-The current inspection chain is `DebugViewPane` → `IDebugSession.inspectStack`,
-`inspectFrame`, `evaluateWatchExpressions` (or child `variables`) → `RawDebugSession`
+The current inspection chain is `CallStackView` / `VariablesView` /
+`WatchExpressionsView` → `IDebugSession.inspectStack`, `inspectFrame`,
+`evaluateWatchExpressions` (or child `variables`) → `RawDebugSession`
 → platform domain capability → connection-owned App Server service → Rust manager.
 The view no longer sequences threads/stack/scopes/variables/evaluate requests.
 `common/debug.ts` remains the frontend contract; generated transport DTOs stay in
 the platform adapter. These are responsibility slices in the existing VS Code
-counterpart files, not a claim that the aggregate sidebar already matches every
-upstream view or public model API.
+counterpart files. The four inspection panes and window-owned ViewModel now
+close the production inspection call chain; this is not a claim of arbitrary
+debugger-extension compatibility.
 
 The Rust query checks `inspectionRevision` before issuing DAP, and fences both
 continuations and retained completions. Selection and editor focus are client-owned.
@@ -195,3 +225,54 @@ Breakpoint snapshots carry an edit version and pending/confirmed status. The fac
 cannot rebuild bindings or replay replacement requests; generic family request
 bypasses are refused by Rust. Adapter-originated catalogue changes are published
 only after the backend binding exists, preserving extension observer ordering.
+
+The Rust session registry owns live exception selection, prepared/runtime
+parent-child lifetimes and structured console retention. `debugService.ts` keeps
+Workbench launch/configuration/Task callbacks and canonical extension handles;
+`debugSession.ts` reads runtime facts and output snapshots. `rawDebugSession.ts`
+keeps typed calls and inline IO. A revoked admission cannot acquire a late adapter.
+
+The former `debugConsoleViewPane.ts` moved to `repl.ts` with user approval.
+`common/replModel.ts` selects consoles, reads the shared frame focus and caches backend revisions;
+`replViewer.ts` owns the async data source, row DOM/source controls and accessibility text;
+`media/repl.css` owns console styles. `browser/replFilter.ts` filters immutable
+backend entries, while the shared `workbench/browser/parts/views/viewFilter.ts`
+owns its input, history and count badge. Includes use case-insensitive ordered
+matching with comma alternatives; exclusions win. Matching descendants retain
+their group context. Visible content and accessible text follow filtering and
+disclosure state, without editing the Rust output log.
+
+Repl uses `HistoryNavigator` for bounded workspace expression history; the
+filter widget uses `HistoryInputBox`. The `debug.repl.history` and `debug.repl.filterHistory`
+keys are workspace MACHINE state, each limited to 100 values and validated at
+the persistence boundary. Clearing output preserves history and draft navigation.
+Completion consumes arrows before history; Enter/Tab insert, Escape dismisses,
+and accepting a suggestion does not evaluate it. The selected session/frame calls
+`IDebugSession.completions` through Rust request pairing. Cancellation and execution
+epochs prevent stale targets from reaching the input; DAP edit ranges use UTF-16.
+
+`Repl` extends the shared `FilterViewPane` in `viewPane.ts`. One filter widget
+moves between title and body without losing query, selection, focus or history.
+A real `CodeEditorWidget` and owned `TextModel` provide multiline input, selection,
+undo/redo, automatic height and first/last displayed-line history navigation.
+`getReplInput()` returns that editor. Shift+Enter inserts a line; Enter accepts a
+suggestion before evaluating. DAP edits are relative to the cursor’s model line.
+The existing `AsyncDataTree` owns output focus, expansion, stable row identity and
+lazy variable children; `ReplDataSource` reads immutable Rust entries and requests
+variables with their originating inspection revision. Accessible output reads
+visible tree elements independently of DOM rendering.
+
+The interaction slice follows existing Ash owners rather than upstream private
+implementation structure:
+
+| Corresponding file                                                         | Relationship at slice start | Production caller and responsibility                                                                                        |
+| -------------------------------------------------------------------------- | --------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| `browser/repl.ts`                                                          | Both repositories           | Debug contribution creates the pane; it owns input, selection, keyboard arbitration and visible content.                    |
+| `browser/replFilter.ts`                                                    | VS Code only                | Repl calls the pure filter against immutable Rust entries; it retains only query terms.                                     |
+| `workbench/browser/parts/views/viewFilter.ts`                              | VS Code only                | Repl creates FilterWidget through DI; it owns filter input, bounded history and the count badge.                            |
+| `workbench/browser/parts/views/media/views.css`                            | VS Code only                | FilterWidget imports its independent component styles.                                                                      |
+| `browser/media/repl.css`                                                   | Both repositories           | Repl owns the console layout and suggestions; all colors use registered Ash tokens.                                         |
+| `common/debug.ts`, `browser/debugSession.ts`, `browser/rawDebugSession.ts` | Both repositories           | Repl calls the typed session completion contract; the facade validates adapter items and delegates requests/cancel to Rust. |
+
+Input/filter histories are workspace UI state with no older source to migrate.
+The existing breakpoint/Watch Memento migration remains in `common/debugStorage.ts`.

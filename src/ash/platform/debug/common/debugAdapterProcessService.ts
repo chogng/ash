@@ -39,6 +39,8 @@ export interface IDebugAdapterProcessReadResult {
 	/** Present on managed reads; raw inline IO has no session model. */
 	readonly session?: DebugSessionSnapshot;
 	readonly breakpointRevision?: number;
+	readonly consoleRevision?: number;
+	readonly exceptions?: DebugExceptionsSnapshot;
 	readonly messages: readonly IDebugAdapterProcessMessage[];
 	readonly nextSequence: number;
 	readonly outputGap: boolean;
@@ -50,16 +52,25 @@ export interface IDebugAdapterProcessReadResult {
 
 /** Platform contract for connection-owned Rust DAP clients and their transports. */
 export interface IDebugAdapterProcessService {
+	readWorkspaceState(workspaceId: string, legacy?: DebugWorkspaceState): Promise<DebugWorkspaceResult>;
+	editWorkspaceState(workspaceId: string, revision: number, edits: readonly DebugWorkspaceEdit[]): Promise<DebugWorkspaceResult>;
+
+	prepareSession(id: string, noDebug: boolean | undefined): Promise<DebugSessionRelation>;
+	reserveSession(options: DebugSessionAdmission): Promise<DebugSessionRelation>;
+	manageSession(id: string, action: 'read' | 'route' | 'end'): Promise<DebugSessionRelation>;
+	readConsole(id: string, options?: { readonly clear?: boolean; readonly diagnostic?: string; }): Promise<DebugConsoleSnapshot>;
 	start(options: IDebugAdapterProcessStartOptions): Promise<string>;
 	send(sessionId: string, message: unknown): Promise<void>;
 	read(sessionId: string, afterSequence: number, maxMessages: number): Promise<IDebugAdapterProcessReadResult>;
 	close(sessionId: string): Promise<void>;
 	initializeSession(sessionId: string, options: DebugSessionInitializeOptions): Promise<void>;
-	completeConfiguration(sessionId: string, exceptionFilters: readonly string[]): Promise<void>;
+	completeConfiguration(sessionId: string, exceptionFilters: readonly string[] | undefined): Promise<void>;
+	setExceptionBreakpoints(sessionId: string, filters: readonly string[]): Promise<number>;
 	setBreakpoints(sessionId: string, version: number, intents: readonly DebugBreakpointIntent[]): Promise<void>;
 	readBreakpoints(sessionId: string): Promise<DebugBreakpointsSnapshot>;
 	startInspection(sessionId: string, query: DebugInspection, inspectionRevision: number): Promise<number | undefined>;
 	readInspection(sessionId: string, inspectionId: number): Promise<DebugInspectionResult>;
+	/** Returns the Rust-allocated DAP sequence for response polling and DAP cancel's requestId; scoped to this adapter session. */
 	startRequest(sessionId: string, command: string, args?: unknown): Promise<number>;
 	readResponse(sessionId: string, requestId: number): Promise<DebugAdapterResponseResult>;
 	acceptInput(sessionId: string, input: IDebugAdapterProcessReadResult): Promise<void>;
@@ -103,6 +114,9 @@ export interface DebugSessionSnapshot {
 		readonly supportsInstructionBreakpoints: boolean;
 		readonly supportsDisassembleRequest: boolean;
 		readonly supportsSteppingGranularity: boolean;
+		readonly supportsCompletionsRequest: boolean;
+		readonly supportsCancelRequest: boolean;
+		readonly completionTriggerCharacters: readonly string[];
 		readonly exceptionBreakpointFilters: readonly { readonly filter: string; readonly label: string; readonly description?: string; readonly default: boolean; }[];
 	};
 }
@@ -150,3 +164,68 @@ export type DebugInspectionValue =
 	| { readonly kind: 'variables'; readonly variables: readonly unknown[]; }
 	| { readonly kind: 'watch'; readonly values: readonly { readonly expression: string; readonly result: unknown; readonly error: string | null; }[]; };
 export type DebugInspectionResult = { readonly state: 'pending'; } | { readonly state: 'complete'; readonly value: DebugInspectionValue; } | { readonly state: 'failed'; readonly message: string; } | { readonly state: 'invalidated'; };
+
+/** Durable definitions have no adapter verification or session-owned address. */
+export interface DebugBreakpointDefinition {
+	readonly id: string;
+	readonly enabled: boolean;
+	readonly condition?: string;
+	readonly hitCondition?: string;
+	readonly logMessage?: string;
+}
+export interface DebugWorkspaceState {
+	readonly breakpoints: readonly (DebugBreakpointDefinition & { readonly resource: string; readonly lineNumber: number; readonly columnNumber?: number; })[];
+	readonly functionBreakpoints: readonly (DebugBreakpointDefinition & { readonly name: string; })[];
+	readonly dataBreakpoints: readonly (DebugBreakpointDefinition & { readonly dataId: string; readonly description: string; readonly adapterType: string; readonly accessType: 'read' | 'write' | 'readWrite'; readonly accessTypes: readonly ('read' | 'write' | 'readWrite')[]; })[];
+	readonly watchExpressions: readonly string[];
+	readonly exceptionBreakpoints: Readonly<Record<string, readonly string[]>>;
+}
+export interface DebugWorkspaceSnapshot { readonly revision: number; readonly state: DebugWorkspaceState; }
+export interface DebugWorkspaceResult { readonly status: 'current' | 'applied' | 'conflict'; readonly snapshot: DebugWorkspaceSnapshot; }
+export type DebugWorkspaceEdit =
+	| { readonly kind: 'clearBreakpoints'; }
+	| { readonly kind: 'setEnabled'; readonly enabled: boolean; }
+	| { readonly kind: 'source'; readonly point: DebugWorkspaceState['breakpoints'][number]; }
+	| { readonly kind: 'function'; readonly point: DebugWorkspaceState['functionBreakpoints'][number]; }
+	| { readonly kind: 'data'; readonly point: DebugWorkspaceState['dataBreakpoints'][number]; }
+	| { readonly kind: 'remove'; readonly ids: readonly string[]; }
+	| { readonly kind: 'addWatch' | 'removeWatch'; readonly expression: string; }
+	| { readonly kind: 'exceptions'; readonly adapterType: string; readonly filters: readonly string[]; };
+
+export interface DebugExceptionsSnapshot { readonly version: number; readonly appliedVersion: number; readonly appliedFilters: readonly string[]; readonly filters: readonly string[]; readonly error: string | null; }
+
+export interface DebugSessionAdmission {
+	readonly id: string;
+	readonly workspaceId: string;
+	readonly parentId: string | null;
+	readonly lifecycleManagedByParent: boolean;
+	readonly mergeConsole: boolean;
+	readonly noDebug: boolean | null;
+}
+export interface DebugSessionRelation {
+	readonly id: string;
+	readonly parentId: string | null;
+	readonly consoleId: string;
+	readonly consoleIds: readonly string[];
+	readonly consoleCatalogRevision: number;
+	readonly lifecycleTargetId: string;
+	readonly noDebug: boolean | null;
+	readonly ended: boolean;
+	readonly descendants: readonly string[];
+}
+export interface DebugConsoleEntry {
+	readonly id: number;
+	readonly sessionId: string;
+	readonly kind: 'output' | 'input' | 'evaluation' | 'group';
+	readonly output: string;
+	readonly category: string;
+	readonly parentId: number | null;
+	readonly collapsed: boolean;
+	readonly variablesReference: number | null;
+	readonly inspectionRevision?: number | null;
+	readonly source: unknown;
+	readonly line: number | null;
+	readonly column: number | null;
+	readonly data: unknown;
+}
+export interface DebugConsoleSnapshot { readonly revision: number; readonly entries: readonly DebugConsoleEntry[]; }

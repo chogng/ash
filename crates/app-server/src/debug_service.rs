@@ -14,7 +14,7 @@ use serde_json::Value;
 
 /// Adds App Server connection ownership to the backend-neutral DAP runtime.
 pub(crate) struct DebugAdapterService {
-    runtime: Runtime,
+    runtime: std::sync::Arc<Runtime>,
     owners: Mutex<HashMap<DebugSessionId, u64>>,
 }
 
@@ -25,7 +25,11 @@ impl DebugAdapterService {
         environment: HashMap<String, String>,
     ) -> Result<Self, DebugAdapterError> {
         Ok(Self {
-            runtime: Runtime::new(executable_configuration, process_execution, environment)?,
+            runtime: std::sync::Arc::new(Runtime::new(
+                executable_configuration,
+                process_execution,
+                environment,
+            )?),
             owners: Mutex::new(HashMap::new()),
         })
     }
@@ -123,10 +127,16 @@ impl DebugAdapterService {
         id: &str,
         options: ash_debug_manager::DebugInitialize,
         public_id: String,
+        registry: std::sync::Arc<ash_debug_manager::DebugSessions>,
     ) -> Result<(), DebugAdapterServiceError> {
         let id = self.owned_session(owner, id)?;
         self.runtime
             .set_public_id(&id, public_id)
+            .map_err(DebugAdapterServiceError::Runtime)?;
+        let no_debug = options.arguments.get("noDebug").and_then(Value::as_bool);
+        // Admission must succeed before any initialize request can reach the peer.
+        self.runtime
+            .attach(&id, registry, owner, no_debug)
             .map_err(DebugAdapterServiceError::Runtime)?;
         self.runtime
             .initialize(&id, options)
@@ -137,11 +147,23 @@ impl DebugAdapterService {
         &self,
         owner: u64,
         id: &str,
-        filters: Vec<String>,
+        filters: Option<Vec<String>>,
     ) -> Result<(), DebugAdapterServiceError> {
         let id = self.owned_session(owner, id)?;
         self.runtime
             .configure(&id, filters)
+            .map_err(DebugAdapterServiceError::Runtime)
+    }
+
+    pub(crate) fn set_exceptions(
+        &self,
+        owner: u64,
+        id: &str,
+        filters: Vec<String>,
+    ) -> Result<u64, DebugAdapterServiceError> {
+        let id = self.owned_session(owner, id)?;
+        self.runtime
+            .set_exceptions(&id, filters)
             .map_err(DebugAdapterServiceError::Runtime)
     }
 

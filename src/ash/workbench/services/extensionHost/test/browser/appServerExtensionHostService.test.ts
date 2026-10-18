@@ -1028,7 +1028,7 @@ class ProviderSink<TProvider> {
 	readonly onDidNewSession = Event.None;
 	readonly onDidEndSession = Event.None;
 	readonly onDidChangeSession = Event.None;
-	readonly onDidFocusStackFrame = Event.None;
+	getViewModel() { return { focusedSession: undefined, focusedThread: undefined, focusedStackFrame: undefined, onDidFocusStackFrame: Event.None, onDidFocusThread: Event.None }; }
 	readonly onDidChangeBreakpoints = Event.None;
 	readonly breakpoints = [];
 	readonly functionBreakpoints = [];

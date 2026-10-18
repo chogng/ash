@@ -1,0 +1,156 @@
+.ash-debug-console {
+	display: flex;
+	flex-direction: column;
+	min-height: 0;
+}
+
+.ash-debug-console-session {
+	flex: 0 0 auto;
+	margin: 4px 8px;
+	padding: 4px 6px;
+	color: inherit;
+	background: var(--ash-input-background);
+	border: var(--ash-strokeThickness) solid var(--ash-input-border);
+}
+
+.ash-debug-console-output {
+	flex: 1;
+	min-height: 60px;
+	margin: 0;
+	padding: 8px 12px;
+	overflow: auto;
+	color: var(--ash-editor-foreground);
+	font-family: var(--ash-font-family-monospace);
+	white-space: pre-wrap;
+	background: var(--ash-editor-background);
+}
+
+.ash-debug-console-output .ash-tree-row {
+	align-items: flex-start;
+	white-space: pre-wrap;
+	line-height: 1.5;
+}
+
+.ash-debug-console-output .ash-tree-contents {
+	flex: 1;
+	min-width: 0;
+	white-space: pre-wrap;
+}
+
+.ash-debug-console-form {
+	position: relative;
+	flex: 0 0 auto;
+	padding: 6px 8px;
+	border-top: var(--ash-strokeThickness) solid var(--ash-border);
+}
+
+.ash-repl-input {
+	box-sizing: border-box;
+	min-width: 0;
+	width: 100%;
+	background: var(--ash-input-background);
+	border: var(--ash-strokeThickness) solid var(--ash-input-border);
+}
+
+.ash-repl-input:focus-within {
+	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
+	outline-offset: -1px;
+}
+
+.ash-debug-console > .ash-view-filter {
+	flex: 0 0 auto;
+	margin: var(--ash-spacing-size40) var(--ash-spacing-size80);
+}
+
+.ash-repl-completions {
+	position: absolute;
+	bottom: 100%;
+	left: var(--ash-spacing-size80);
+	right: var(--ash-spacing-size80);
+	z-index: 2;
+	max-height: 240px;
+	overflow: auto;
+	color: var(--ash-editor-foreground);
+	background: var(--ash-editor-widgetBackground);
+	border: var(--ash-strokeThickness) solid var(--ash-widget-border);
+	box-shadow: 0 2px 8px var(--ash-widget-shadow);
+}
+
+.ash-repl-completions[hidden],
+.ash-repl-entry[hidden] {
+	display: none;
+}
+
+.ash-repl-completion {
+	display: flex;
+	justify-content: space-between;
+	gap: var(--ash-spacing-size80);
+	padding: var(--ash-spacing-size40) var(--ash-spacing-size80);
+	overflow-wrap: anywhere;
+	cursor: pointer;
+}
+
+.ash-repl-completion[aria-selected="true"] {
+	color: var(--ash-list-activeSelectionForeground);
+	background: var(--ash-list-activeSelectionBackground);
+	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
+	outline-offset: -1px;
+}
+
+.ash-repl-completion-detail {
+	color: var(--ash-description-foreground);
+}
+
+.ash-repl-completion[aria-selected="true"] .ash-repl-completion-detail {
+	color: inherit;
+}
+
+.hc-black .ash-repl-completions,
+.hc-light .ash-repl-completions {
+	box-shadow: none;
+	border-color: var(--ash-contrastBorder);
+}
+
+.ash-debug-console-session:focus-visible,
+.ash-debug-console-output:focus-visible {
+	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
+	outline-offset: -1px;
+}
+
+.ash-debug-console-status {
+	flex: 0 0 auto;
+	min-height: 0;
+	padding: 0 8px 4px;
+	color: var(--ash-error-foreground);
+	font-size: var(--ash-fontSize-label1);
+}
+
+.ash-repl-entry {
+	display: inline;
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
+}
+
+.ash-repl-entry[data-category="stderr"] {
+	color: var(--ash-error-foreground);
+}
+.ash-repl-children {
+	padding-inline-start: var(--ash-spacing-size160);
+}
+.ash-repl-children pre {
+	white-space: pre-wrap;
+	margin: 0;
+}
+.ash-repl-source {
+	color: var(--ash-accent-foreground);
+	background: transparent;
+	border: none;
+	font: inherit;
+	cursor: pointer;
+	text-decoration: underline;
+}
+.ash-repl-source:focus-visible,
+.ash-repl-entry summary:focus-visible {
+	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
+	outline-offset: -1px;
+}

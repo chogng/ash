@@ -309,7 +309,8 @@ export async function writeEditorExtensionFixture(root: string, source: string, 
 		publisher: plugin.id.split('/')[0], name: plugin.id.split('/')[1], version: plugin.version, main: 'extension.js', engines: { vscode: '^1.100.0' },
 		activationEvents: contribution.activationEvents.map((event: { type: string; id?: string; taskType?: string; debugType?: string; }) => event.type === 'startup' ? '*' : event.type === 'onCommand' ? 'onCommand:' + event.id : event.type === 'onTaskType' ? 'onTaskType:' + event.taskType : event.type === 'onDebugType' ? 'onDebugResolve:' + event.debugType : 'onDebug'),
 		contributes: {
-			commands: [...new Set(commands)].map(command => ({ command, title: command })),
+			// Visible titles differ from stable IDs so commands participate in the Command Palette.
+			commands: [...new Set(commands)].map(command => ({ command, title: 'Run ' + command })),
 			debuggers: debuggerDefaults ?? [...new Set([...types('registerDebugConfigurationProvider'), ...types('registerDebugAdapterDescriptorFactory')])].map(type => ({ type, label: type })),
 			taskDefinitions: types('registerTaskProvider').map(type => ({ type, required: [], properties: {} })),
 		},

@@ -15,9 +15,15 @@ import { INotificationService } from '../../../../platform/notification/common/n
 import type { IViewContentDescriptor, WorkbenchViewRegistry } from '../../../common/views.js';
 import { localize } from '../../../../nls.js';
 import type { IAction } from '../../../../base/common/actions.js';
+import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
+import { FilterWidget, type IFilterWidgetOptions } from './viewFilter.js';
 
 /** Runtime inputs supplied by a browser view container to every pane. */
 export type IViewPaneOptions = IPaneOptions;
+
+export interface IFilterViewPaneOptions extends IViewPaneOptions {
+	readonly filterOptions: IFilterWidgetOptions;
+}
 
 /** Optional title content and actions projected together into a hosting Part. */
 export interface PartTitleProjection {
@@ -151,6 +157,56 @@ export abstract class ViewPane extends Pane implements IView {
 		this.visibility.fire(visible);
 		if (this.isExpanded()) this.bodyVisibility.fire(visible);
 	}
+}
+
+/** Keeps one filter owner while moving its input between the title and body. */
+export abstract class FilterViewPane extends ViewPane {
+	readonly filterWidget: FilterWidget;
+	protected readonly filterContainer: HTMLElement;
+	private bodyDimension: { height: number; width: number; } | undefined;
+
+	constructor(container: HTMLElement, options: IFilterViewPaneOptions,
+		@IInstantiationService instantiationService: IInstantiationService,
+	) {
+		super(container, options);
+		this.element.classList.add('ash-filter-view-pane');
+		this.filterWidget = this._register(instantiationService.createInstance(FilterWidget, options.filterOptions));
+		this.filterContainer = h(container.ownerDocument, 'div');
+		this.filterContainer.className = 'ash-view-pane-filter-container';
+		this.contentElement.append(this.filterContainer);
+		this.filterContainer.append(this.filterWidget.element);
+		this._register(this.filterWidget.onDidAcceptFilterText(() => this.focusBodyContent()));
+	}
+
+	getFilterWidget(): FilterWidget { return this.filterWidget; }
+
+	shouldShowFilterInHeader(): boolean {
+		return this.bodyDimension !== undefined && (this.bodyDimension.width >= 600 || this.bodyDimension.height <= 100);
+	}
+
+	protected override layoutBody(height: number, width: number): void {
+		this.bodyDimension = { height, width };
+		const inHeader = this.shouldShowFilterInHeader();
+		const host = inHeader ? this.headerActionsElement : this.filterContainer;
+		const focused = this.filterWidget.hasFocus();
+		const moved = this.filterWidget.element.parentElement !== host;
+		if (moved) host.prepend(this.filterWidget.element);
+		this.filterContainer.hidden = inHeader;
+		this.filterWidget.element.classList.toggle('ash-view-filter-in-header', inHeader);
+		this.filterWidget.layout(inHeader ? Math.min(400, Math.max(0, width - 160)) : Math.max(0, width - 16));
+		// Reparenting can blur a focused input, including when its title is hosted by a Part.
+		if (focused && moved) this.filterWidget.focus();
+		this.layoutBodyContent(Math.max(0, height - (inHeader ? 0 : 44)), width);
+		if (moved) this.updateTitleArea();
+	}
+
+	override captureTitleActionsFocus(): (() => void) | undefined {
+		return this.filterWidget.hasFocus() ? () => this.filterWidget.focus() : super.captureTitleActionsFocus();
+	}
+
+	protected abstract layoutBodyContent(height: number, width: number): void;
+
+	protected focusBodyContent(): void { this.focus(); }
 }
 
 /** Owns welcome DOM and listeners for the pane that creates it. */

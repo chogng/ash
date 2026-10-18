@@ -1,7 +1,9 @@
-import type { IDebugAdapterProcessReadResult, DebugAdapterConnection } from '../../../../platform/debug/common/debugAdapterProcessService.js';
+import type { IDebugAdapterProcessReadResult, DebugAdapterConnection, DebugConsoleEntry } from '../../../../platform/debug/common/debugAdapterProcessService.js';
 import type { Event } from '../../../../base/common/event.js';
 import type { IDisposable } from '../../../../base/common/lifecycle.js';
 import type { URI } from '../../../../base/common/uri.js';
+import type { CancellationToken } from '../../../../base/common/cancellation.js';
+import type { Position } from '../../../../editor/common/core/position.js';
 import { createServiceIdentifier } from '../../../../platform/instantiation/common/instantiation.js';
 import { RawContextKey } from '../../../../platform/contextkey/common/contextkey.js';
 
@@ -278,6 +280,9 @@ export interface IDebugSessionCapabilities {
 	readonly supportsInstructionBreakpoints: boolean;
 	readonly supportsDisassembleRequest: boolean;
 	readonly supportsSteppingGranularity: boolean;
+	readonly supportsCompletionsRequest: boolean;
+	readonly supportsCancelRequest: boolean;
+	readonly completionTriggerCharacters: readonly string[];
 	readonly exceptionBreakpointFilters: readonly IDebugExceptionBreakpointFilter[];
 }
 
@@ -288,7 +293,7 @@ export enum DebugConsoleMode {
 	MergeWithParent = 1,
 }
 
-/** Session relationships stay with DebugService; extensions pass canonical handles. */
+/** Extensions pass canonical Workbench handles; Rust owns session relationships. */
 export interface IDebugSessionOptions {
 	readonly parentSession?: IDebugSession;
 	readonly lifecycleManagedByParent?: boolean;
@@ -313,6 +318,24 @@ export interface IDebugWatchResult {
 	readonly error?: string;
 }
 
+/** DAP completion coordinates use UTF-16. start is one-based like the request
+ * column; selection offsets are zero-based within text (or label when omitted). */
+export interface IDebugCompletionItem {
+	readonly label: string;
+	readonly text?: string;
+	readonly sortText?: string;
+	readonly detail?: string;
+	readonly type?: string;
+	readonly start?: number;
+	readonly length?: number;
+	readonly selectionStart?: number;
+	readonly selectionLength?: number;
+}
+
+export interface IDebugCompletionsResponse {
+	readonly body: { readonly targets: readonly IDebugCompletionItem[]; };
+}
+
 export interface IDebugSession extends IDisposable {
 	readonly id: string;
 	readonly name: string;
@@ -328,9 +351,17 @@ export interface IDebugSession extends IDisposable {
 	readonly reason?: string;
 	readonly threadId?: number;
 	readonly onDidChangeThread: Event<number | undefined>;
+	readonly exceptionBreakpoints: readonly string[];
+	readonly onDidChangeExceptionBreakpoints: Event<readonly string[]>;
 	readonly output: string;
 	readonly onDidChangeState: Event<DebugSessionState>;
-	readonly onDidOutput: Event<string>;
+	readonly onDidChangeReplElements: Event<void>;
+	readonly consoleSessionId: string;
+	readonly replElementsRevision: number;
+	readonly retainedConsoleSessionIds: readonly string[];
+	readonly consoleCatalogRevision: number;
+	getReplElements(): readonly DebugConsoleEntry[];
+	clearRepl(): Promise<void>;
 	readonly onDidCustomEvent: Event<{ readonly event: string; readonly body?: unknown; }>;
 	customRequest(command: string, args?: unknown): Promise<unknown>;
 	getDebugProtocolBreakpoint(breakpointId: string): unknown;
@@ -347,9 +378,10 @@ export interface IDebugSession extends IDisposable {
 	selectThread(threadId: number): void;
 	stackTrace(threadId?: number): Promise<readonly IDebugStackFrame[]>;
 	scopes(frameId: number): Promise<readonly IDebugScope[]>;
-	variables(reference: number): Promise<readonly IDebugVariable[]>;
+	variables(reference: number, inspectionRevision?: number): Promise<readonly IDebugVariable[]>;
 	setVariable(variablesReference: number, name: string, value: string): Promise<IDebugVariable>;
 	evaluate(expression: string, frameId: number | undefined, context: DebugEvaluateContext): Promise<IDebugEvaluateResult>;
+	completions(frameId: number | undefined, threadId: number, text: string, position: Position, token: CancellationToken): Promise<IDebugCompletionsResponse | undefined>;
 	source(source: IDebugSource): Promise<IDebugSourceContent>;
 	dataBreakpointInfo(name: string, variablesReference?: number, frameId?: number): Promise<IDataBreakpointInfoResponse>;
 	/** Byte offset and instruction offset use different DAP units. */
@@ -368,7 +400,16 @@ export interface IConfigurationManager {
 	getAllConfigurations(): readonly (IDebugConfiguration | IDebugCompound)[];
 }
 
-/** Code Workbench owner for launch configurations, breakpoints, and DAP session semantics. */
+/** Client inspection selection shared by the Debug views and Extension Host facade. */
+export interface IViewModel {
+	readonly focusedSession: IDebugSession | undefined;
+	readonly focusedThread: IDebugThread | undefined;
+	readonly focusedStackFrame: IDebugStackFrame | undefined;
+	readonly onDidFocusStackFrame: Event<{ stackFrame: IDebugStackFrame | undefined; explicit: boolean; session: IDebugSession | undefined; }>;
+	readonly onDidFocusThread: Event<{ thread: IDebugThread | undefined; explicit: boolean; session: IDebugSession | undefined; }>;
+}
+
+/** Code Workbench owner for launch, workspace facades and host interactions. */
 export interface IDebugService extends IDisposable {
 	getConfigurationManager(): IConfigurationManager;
 	/** Retained console output and evaluation, owned for the Debug service lifetime. */
@@ -385,8 +426,7 @@ export interface IDebugService extends IDisposable {
 	/** Includes the prepared session while its descriptor is being resolved. */
 	getSession(id: string): IDebugSession | undefined;
 	readonly session: IDebugSession | undefined;
-	readonly focusedStackFrame: IDebugStackFrame | undefined;
-	readonly onDidFocusStackFrame: Event<IDebugStackFrame | undefined>;
+	getViewModel(): IViewModel;
 	readonly onDidChangeConfigurations: Event<readonly IDebugConfiguration[]>;
 	readonly onDidChangeBreakpoints: Event<readonly DebugBreakpoint[]>;
 	readonly onDidChangeWatchExpressions: Event<readonly string[]>;
@@ -407,7 +447,7 @@ export interface IDebugService extends IDisposable {
 	startDebugging(configuration: IDebugConfiguration, options?: IDebugSessionOptions): Promise<IDebugSession>;
 	startCompound(compound: IDebugCompound): Promise<readonly IDebugSession[]>;
 	setActiveSession(session: IDebugSession): void;
-	focusStackFrame(frame: IDebugStackFrame | undefined): void;
+	focusStackFrame(frame: IDebugStackFrame | undefined, thread?: IDebugThread): void;
 	restart(session?: IDebugSession): Promise<IDebugSession>;
 	stop(session?: IDebugSession): Promise<void>;
 	stopAll(): Promise<void>;
@@ -485,6 +525,7 @@ export interface DebugAdapterFactoryRegistration extends IDisposable {
 }
 
 export interface IDebugConsoleSession {
+	readonly elements: readonly DebugConsoleEntry[];
 	readonly id: string;
 	readonly label: string;
 	readonly state: "starting" | "running" | "stopped" | "terminated" | "error";
@@ -498,7 +539,7 @@ export interface IReplModel extends IDisposable {
 	readonly activeSession: IDebugConsoleSession | undefined;
 	readonly onDidChange: Event<void>;
 	selectSession(id: string): void;
-	clear(sessionId?: string): void;
+	clear(sessionId?: string): void | Promise<void>;
 	evaluate(expression: string): Promise<void>;
 }
 

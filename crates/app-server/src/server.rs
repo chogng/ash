@@ -389,6 +389,8 @@ pub struct AppServer {
     app_tool_port: crate::tool_composition::ToolPort,
     app_tools_host: Arc<crate::app_tools_host::AppToolsHost>,
     env_state: EnvStateMode,
+    debug_workspaces: Option<Arc<ash_debug_manager::DebugWorkspaceStore>>,
+    debug_sessions: Arc<ash_debug_manager::DebugSessions>,
     pty_helper: Option<std::path::PathBuf>,
     codebase_models: Option<CodebaseModels>,
     provider_runtime: Option<Arc<ash_model_provider::ModelProviderRuntime>>,
@@ -1351,6 +1353,8 @@ impl AppServer {
             app_tool_port,
             app_tools_host,
             env_state: EnvStateMode::Unconfigured,
+            debug_workspaces: None,
+            debug_sessions: Arc::default(),
             pty_helper: None,
             codebase_models: None,
             provider_runtime: None,
@@ -1498,6 +1502,17 @@ impl AppServer {
             database_path,
         )?));
         Ok(server)
+    }
+
+    pub(crate) fn with_debug_workspace_store(
+        mut self,
+        path: &std::path::Path,
+    ) -> Result<Self, String> {
+        self.debug_workspaces = Some(Arc::new(
+            ash_debug_manager::DebugWorkspaceStore::open(path)
+                .map_err(|error| error.to_string())?,
+        ));
+        Ok(self)
     }
 
     pub(crate) fn with_local_projects(
@@ -1778,6 +1793,7 @@ impl AppServer {
         self.asset_processor
             .connection_closed(connection.connection_id);
         self.testing.close_owner(connection.connection_id);
+        self.debug_sessions.close_owner(connection.connection_id);
         for debug_adapters in self.configured_debug_adapter_services() {
             debug_adapters.close_owner(connection.connection_id);
         }
@@ -4517,6 +4533,12 @@ impl AppServer {
             Some(ClientMethod::TestingRelease) => self
                 .testing_processor()
                 .testing_release(connection, &request.params),
+            Some(ClientMethod::DebugWorkspaceRead) => {
+                self.debug_processor().debug_workspace_read(&request.params)
+            }
+            Some(ClientMethod::DebugWorkspaceWrite) => self
+                .debug_processor()
+                .debug_workspace_write(&request.params),
             Some(ClientMethod::DebugBreakpointsSet) => self
                 .debug_processor()
                 .debug_breakpoints_set(connection, &request.params),
@@ -4529,9 +4551,24 @@ impl AppServer {
             Some(ClientMethod::DebugInspectionRead) => self
                 .debug_processor()
                 .debug_inspection_read(connection, &request.params),
+            Some(ClientMethod::DebugSessionPrepare) => self
+                .debug_processor()
+                .debug_session_prepare(connection, &request.params),
+            Some(ClientMethod::DebugSessionReserve) => self
+                .debug_processor()
+                .debug_session_reserve(connection, &request.params),
+            Some(ClientMethod::DebugSessionLifecycle) => self
+                .debug_processor()
+                .debug_session_lifecycle(connection, &request.params),
+            Some(ClientMethod::DebugConsole) => self
+                .debug_processor()
+                .debug_console(connection, &request.params),
             Some(ClientMethod::DebugSessionInitialize) => self
                 .debug_processor()
                 .debug_session_initialize(connection, &request.params),
+            Some(ClientMethod::DebugExceptionsSet) => self
+                .debug_processor()
+                .debug_exceptions_set(connection, &request.params),
             Some(ClientMethod::DebugSessionConfigure) => self
                 .debug_processor()
                 .debug_session_configure(connection, &request.params),

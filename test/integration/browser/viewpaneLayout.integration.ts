@@ -32,8 +32,10 @@ import { ISessionsService } from '../../../src/ash/sessions/services/sessions/br
 import { type IChatService, type TurnChangeDetails } from '../../../src/ash/workbench/services/chat/common/chatService.js';
 import { IQuickInputService } from '../../../src/ash/platform/quickinput/common/quickInput.js';
 import { type IAccessibleViewService } from '../../../src/ash/platform/accessibility/browser/accessibleView.js';
-import { DebugConsoleViewPane } from '../../../src/ash/workbench/contrib/debug/browser/debugConsoleViewPane.js';
-import type { IDebugService } from '../../../src/ash/workbench/contrib/debug/common/debug.js';
+import { Repl } from '../../../src/ash/workbench/contrib/debug/browser/repl.js';
+import { registerCodeEditorServices } from '../../../src/ash/editor/test/browser/testCodeEditor.js';
+import { IDebugService } from '../../../src/ash/workbench/contrib/debug/common/debug.js';
+import { ViewModel } from '../../../src/ash/workbench/contrib/debug/common/debugViewModel.js';
 import '../../../src/ash/workbench/contrib/debug/browser/media/debug.css';
 import { ProblemsViewPane } from '../../../src/ash/workbench/contrib/problems/browser/problemsViewPane.js';
 import { BulkEditPane } from '../../../src/ash/workbench/contrib/bulkEdit/browser/preview/bulkEditPane.js';
@@ -79,6 +81,10 @@ changesServices.registerInstance(ISessionsService, { onDidChange: Event.None } a
 changesServices.registerInstance(ICommandService, { executeCommand: async () => [] } as unknown as ICommandService);
 changesServices.registerInstance(IQuickInputService, {} as IQuickInputService);
 const storage = resources.add(new BrowserStorageService({ ownerWindow: window, workspaceId: 'viewpane-layout', flushInterval: 0 }));
+const replServices = resources.add(new InstantiationService());
+replServices.registerInstance(IContextKeyService, contextKeys);
+registerCodeEditorServices(replServices);
+const debugViewModel = resources.add(new ViewModel());
 changesServices.registerInstance(IStorageService, storage);
 const changesViewState = resources.add(changesServices.createInstance(ChangesViewService));
 changesServices.registerInstance(IChangesViewService, changesViewState);
@@ -117,6 +123,14 @@ const clipboard = { writeText: async (text: string) => { copiedProblems.push(tex
 const markers = resources.add(new MarkerService());
 markers.changeAll('fixture', [{ resource: URI.file('/fixture/file.ts'), marker: { severity: MarkerSeverity.Error, message: 'Fixture problem', startLineNumber: 1, startColumn: 1, endLineNumber: 1, endColumn: 2 } }]);
 if (params.has('noProblems')) markers.changeAll('fixture', []);
+const replDebug = {
+	onDidChangeSession: Event.None, getViewModel: () => debugViewModel,
+	replModel: {
+		...Disposable.None, sessions: [], activeSession: { id: 'fixture', label: 'Fixture', state: 'stopped', elements: [{ id: 1, sessionId: 'fixture', kind: 'output', output: 'Fixture output', category: 'console', parentId: null, collapsed: false, variablesReference: null, source: null, line: null, column: null, data: null }], output: 'Fixture output', canEvaluate: true },
+		onDidChange: Event.None, selectSession: () => { }, clear: () => { }, evaluate: async () => { throw new Error('Evaluation failed. '.repeat(12)); },
+	}
+} as unknown as IDebugService;
+replServices.registerInstance(IDebugService, replDebug);
 const pane = resources.add(view === 'empty'
 	? new EmptyView(root, { id: 'fixture.empty', title: 'Files' }, {
 		pickFolderAndOpen: async () => { throw new Error('Folder opening failed. '.repeat(12)); },
@@ -142,12 +156,7 @@ const pane = resources.add(view === 'empty'
 							{ getOpenAriaHint: () => undefined } as unknown as IAccessibleViewService, changesServices, changesViewState,
 							{ openChangesEditor: async () => { throw new Error('Opening review editors is outside this layout fixture'); } } as unknown as ISessionChangesService, storage)
 						: view === 'console'
-							? new DebugConsoleViewPane(root, { id: 'fixture.console', title: 'Console' }, {
-								replModel: {
-									...Disposable.None, sessions: [], activeSession: { id: 'fixture', label: 'Fixture', state: 'stopped', output: 'Fixture output', canEvaluate: true },
-									onDidChange: Event.None, selectSession: () => { }, clear: () => { }, evaluate: async () => { throw new Error('Evaluation failed. '.repeat(12)); },
-								}
-							} as unknown as IDebugService)
+							? new Repl(root, { id: 'fixture.console', title: 'Console' }, replDebug, undefined!, undefined!, undefined!, { getOpenAriaHint: () => undefined } as never, storage, replServices, contextKeys)
 							: new SymphonyTasksView(root, { id: 'fixture.symphony', title: 'Symphony' }, symphony, configuration, contextKeys,
 								{ showOpenDialog: async () => { throw new Error('File picking is outside this fixture'); } } as unknown as IFileDialogService));
 const panes = resources.add(new PaneView(root));

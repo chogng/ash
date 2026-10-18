@@ -1990,6 +1990,9 @@ pub fn open_app_server_with_codebase_providers(
         )
         .map_err(OpenAppServerError)?;
     server = server
+        .with_debug_workspace_store(&database_path)
+        .map_err(OpenAppServerError)?;
+    server = server
         .with_local_projects(&database_path)
         .map_err(OpenAppServerError)?;
     if options.session_state_mode == SessionStateMode::Durable {

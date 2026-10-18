@@ -87,11 +87,9 @@
 
 ## Debug · TODO
 
-目标与所有权见 [调试系统](docs/debugging.md)。
+已确认的 Rust 领域迁移、Memento 单向迁移和前端职责拆分已实现，范围与验证记录见 [调试系统](docs/debugging.md)。
 
-- [ ] **后端前置 · Rust manager 领域状态**：当前会话运行意图/绑定、Watch 求值及检查链已在 Rust。继续迁移可编辑工作区断点/Watch 定义及原 Memento 数据、实时异常过滤器配置、父子生命周期与结构化输出；核对 Testing/扩展 API 消费者，保留保存、配置回调、Tasks/Terminal 的原 owner。
-- [ ] **可做 / 后端前置 · Debug Console 对齐**：从 `debug.contribution.ts` → `debugConsoleViewPane.ts` → `common/replModel.ts` 的真实入口对齐 `repl.ts`、`replFilter.ts`、`replViewer.ts` 职责；继续实现过滤、就绪的结构化输出、分组/对象展开/源码链接、历史与补全。当前 output 只保留文本；补 NLS、无障碍、焦点与窄布局验证。选中暂停会话的栈帧求值已接通，Repl/DebugService 的 82 项定向测试通过，包含 frameId=0、会话范围及合并子控制台路由。
-- [ ] **后端前置 / 验收 · 检查视图与跨端回归**：manager 端口就绪后，逐段对齐 Variables、Watch、Call Stack、Breakpoints 和 ViewModel。补新架构的真实 Desktop、Remote 路径、真实 LLDB 程序、父子会话及扩展停用/取消/崩溃回归；本轮 Browser 与确定性 adapter 结果不替代这些验收，历史跨机器记录也不证明新架构已通过。
+- [ ] **验收 · 真实 LLDB 程序**：本机 macOS Developer Mode 关闭。仓库要求测试不得触发 Developer Tools Access、密码或系统调试授权弹窗，本轮未启动真实 LLDB debuggee，也未修改系统安全设置。需要在已具备调试权限的环境验证 CodeLLDB／lldb-dap 的启动、断点、检查和停止；确定性 DAP、Desktop 和同机隔离 SSH 结果不替代此项。
 
 ## Terminal · TODO
 

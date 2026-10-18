@@ -112,6 +112,21 @@ impl super::config_operations::ConfigRequestProcessorContext for AppServer {
 }
 
 impl super::debug_operations::DebugRequestProcessorContext for AppServer {
+    fn debug_sessions(&self) -> std::sync::Arc<ash_debug_manager::DebugSessions> {
+        self.debug_sessions.clone()
+    }
+
+    fn debug_workspace_store(
+        &self,
+    ) -> Result<std::sync::Arc<ash_debug_manager::DebugWorkspaceStore>, super::RpcError> {
+        self.debug_workspaces.clone().ok_or_else(|| {
+            super::RpcError::new(
+                -32070,
+                ash_app_server_protocol::protocol::error::AppServerErrorName::DebugAdapterUnavailable,
+            )
+        })
+    }
+
     fn debug_adapter_service_for(
         &self,
         dir_id: Option<&str>,

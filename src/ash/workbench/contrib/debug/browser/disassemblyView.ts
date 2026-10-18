@@ -156,7 +156,7 @@ export class DisassemblyView extends EditorPane implements IEditorPane {
 				if (cell.column === 'instruction') { value = instruction.symbol ? `${instruction.instruction} — ${instruction.symbol}` : instruction.instruction; }
 				text.textContent = value;
 				template.hover.update(value);
-				const current = sameAddress(instruction.address, this.debug.focusedStackFrame?.instructionPointerReference);
+				const current = sameAddress(instruction.address, this.debug.getViewModel().focusedStackFrame?.instructionPointerReference);
 				text.classList.toggle('current', current);
 				if (cell.column === 'address') {
 					text.dataset.instructionAddress = instruction.address;
@@ -200,7 +200,7 @@ export class DisassemblyView extends EditorPane implements IEditorPane {
 		signal.addEventListener('abort', abort, { once: true });
 		this.inputResources.add(toDisposable(() => signal.removeEventListener('abort', abort)));
 		this.inputResources.add(this.debug.onDidChangeSession(() => { void this.refreshSession(); }));
-		this.inputResources.add(this.debug.onDidFocusStackFrame(frame => {
+		this.inputResources.add(this.debug.getViewModel().onDidFocusStackFrame(({ stackFrame: frame }) => {
 			if (!this.updatingFrame && frame?.instructionPointerReference && this.canInspect()) { void this.load(frame.instructionPointerReference, 0); }
 		}));
 		this.inputResources.add(this.debug.onDidChangeBreakpoints(() => this.table.rerender()));
@@ -252,10 +252,10 @@ export class DisassemblyView extends EditorPane implements IEditorPane {
 		this.memoryReference = undefined;
 		this.renderControls();
 		try {
-			const frames = this.debug.focusedStackFrame ? [this.debug.focusedStackFrame] : await session!.stackTrace();
+			const frames = this.debug.getViewModel().focusedStackFrame ? [this.debug.getViewModel().focusedStackFrame] : await session!.stackTrace();
 			if (!this.isCurrent(session!, generation)) { return; }
 			const reference = frames[0]?.instructionPointerReference;
-			if (!this.debug.focusedStackFrame && frames[0]) {
+			if (!this.debug.getViewModel().focusedStackFrame && frames[0]) {
 				// Publish the frame for other consumers without requesting this instruction window twice.
 				this.updatingFrame = true;
 				try { this.debug.focusStackFrame(frames[0]); } finally { this.updatingFrame = false; }
@@ -302,7 +302,7 @@ export class DisassemblyView extends EditorPane implements IEditorPane {
 	private isCurrent(session: IDebugSession, generation: number): boolean { return !this.isDisposed && this.canInspect() && this.debug.session === session && generation === this.generation; }
 	private selectedInstruction(): IDisassembledInstruction | undefined { const index = this.table.getFocus()[0]; return index === undefined ? undefined : this.instructions[index]; }
 	private instructionText(instruction: IDisassembledInstruction): string {
-		const current = sameAddress(instruction.address, this.debug.focusedStackFrame?.instructionPointerReference) ? localize('debug.disassemblyCurrent', 'Current instruction') + ': ' : '';
+		const current = sameAddress(instruction.address, this.debug.getViewModel().focusedStackFrame?.instructionPointerReference) ? localize('debug.disassemblyCurrent', 'Current instruction') + ': ' : '';
 		return `${current}${instruction.address} ${instruction.instructionBytes ?? ''} ${instruction.instruction}${instruction.symbol ? ` — ${instruction.symbol}` : ''}`;
 	}
 	private breakpointFor(instruction: IDisassembledInstruction): IInstructionBreakpoint | undefined {

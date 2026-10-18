@@ -52,6 +52,9 @@ pub struct DebugCapabilities {
     pub supports_instruction_breakpoints: bool,
     pub supports_disassemble_request: bool,
     pub supports_stepping_granularity: bool,
+    pub supports_completions_request: bool,
+    pub supports_cancel_request: bool,
+    pub completion_trigger_characters: Vec<String>,
     pub exception_breakpoint_filters: Vec<DebugExceptionFilter>,
 }
 
@@ -88,7 +91,8 @@ pub(super) struct Lifecycle {
     initialize_request: Option<u64>,
     launch_request: Option<u64>,
     configuration_request: Option<u64>,
-    exception_request: Option<u64>,
+    exception_request: Option<(u64, u64, Vec<String>)>,
+    pub exceptions: ash_debug_contract::DebugExceptionsSnapshot,
     inspections: HashMap<u64, u64>,
     initialized: bool,
     configured: bool,
@@ -121,6 +125,7 @@ impl Lifecycle {
             initialized_deadline: None,
             execution_requests: HashMap::new(),
             exception_request: None,
+            exceptions: Default::default(),
             inspections: HashMap::new(),
         }
     }
@@ -151,47 +156,74 @@ impl Lifecycle {
     pub fn configure(
         &mut self,
         client: &mut DebugClient,
-        filters: Vec<String>,
+        filters: Option<Vec<String>>,
     ) -> Result<Value, DebugClientError> {
         if self.snapshot.phase != DebugInitializationPhase::Configuring {
             return Err(DebugClientError::InvalidMessage);
         }
+        self.select_exceptions(filters)?;
+        let message = self.send_exceptions(client)?;
+        self.phase(DebugInitializationPhase::Launching);
+        Ok(message)
+    }
+
+    pub fn set_exceptions(&mut self, filters: Vec<String>) -> Result<u64, DebugClientError> {
+        if self.snapshot.phase != DebugInitializationPhase::Active {
+            return Err(DebugClientError::InvalidMessage);
+        }
+        self.select_exceptions(Some(filters))?;
+        Ok(self.exceptions.version)
+    }
+
+    fn select_exceptions(&mut self, filters: Option<Vec<String>>) -> Result<(), DebugClientError> {
         let supported = &self.snapshot.capabilities.exception_breakpoint_filters;
+        let filters = filters.unwrap_or_else(|| {
+            supported
+                .iter()
+                .filter(|filter| filter.default)
+                .map(|filter| filter.filter.clone())
+                .collect()
+        });
+        if filters.len() > 256
+            || filters
+                .iter()
+                .any(|filter| filter.len() > 256 || filter.contains('\0'))
+        {
+            return Err(DebugClientError::InvalidMessage);
+        }
         let mut selected = Vec::new();
-        if !self.no_debug {
-            let filters = if filters.is_empty() {
-                supported
-                    .iter()
-                    .filter(|filter| filter.default)
-                    .map(|filter| filter.filter.clone())
-                    .collect()
-            } else {
-                filters
-            };
-            for filter in filters {
-                let filter = filter.trim();
-                if filter.is_empty() {
-                    continue;
-                }
-                if !supported.iter().any(|candidate| candidate.filter == filter) {
-                    return Err(DebugClientError::InvalidMessage);
-                }
-                if !selected.iter().any(|candidate| candidate == filter) {
-                    selected.push(filter.to_owned());
-                }
+        for filter in filters {
+            let filter = filter.trim();
+            if filter.is_empty() {
+                continue;
+            }
+            if !self.no_debug && !supported.iter().any(|candidate| candidate.filter == filter) {
+                return Err(DebugClientError::InvalidMessage);
+            }
+            if !selected.iter().any(|candidate| candidate == filter) {
+                selected.push(filter.to_owned());
             }
         }
-        let (id, message) =
-            client.request("setExceptionBreakpoints", Some(json!({"filters":selected})))?;
-        self.phase(DebugInitializationPhase::Launching);
-        self.exception_request = Some(id);
+        self.exceptions.version += 1;
+        self.exceptions.filters = selected;
+        self.exceptions.error = None;
+        Ok(())
+    }
+
+    fn send_exceptions(&mut self, client: &mut DebugClient) -> Result<Value, DebugClientError> {
+        let (id, message) = client.request(
+            "setExceptionBreakpoints",
+            Some(json!({"filters": if self.no_debug { Vec::<String>::new() } else { self.exceptions.filters.clone() }})),
+        )?;
+        self.exception_request =
+            Some((id, self.exceptions.version, self.exceptions.filters.clone()));
         Ok(message)
     }
 
     pub fn requested(&mut self, id: u64, command: &str) {
         if matches!(
             command,
-            "stackTrace" | "scopes" | "variables" | "setVariable"
+            "stackTrace" | "scopes" | "variables" | "setVariable" | "completions"
         ) {
             self.inspections
                 .insert(id, self.snapshot.inspection_revision);
@@ -228,7 +260,8 @@ impl Lifecycle {
         }
         if matches!(
             command,
-            "setBreakpoints"
+            "setExceptionBreakpoints"
+                | "setBreakpoints"
                 | "setFunctionBreakpoints"
                 | "setDataBreakpoints"
                 | "setInstructionBreakpoints"
@@ -247,6 +280,8 @@ impl Lifecycle {
                     && self.snapshot.state == DebugExecutionState::Stopped
             }
             "disassemble" => capabilities.supports_disassemble_request,
+            "completions" => capabilities.supports_completions_request,
+            "cancel" => capabilities.supports_cancel_request,
             "dataBreakpointInfo" => capabilities.supports_data_breakpoints,
             "next" | "stepIn" | "stepOut" => {
                 arguments
@@ -350,19 +385,63 @@ impl Lifecycle {
                 self.fail("Debug Adapter did not emit the initialized event");
             }
         }
-        if let Some(id) = self.exception_request {
-            if self.completed(client, id)?.is_some() {
-                self.exception_request = None;
-                if self.capabilities.get("supportsConfigurationDoneRequest")
-                    == Some(&Value::Bool(true))
-                {
-                    let (id, message) = client.request("configurationDone", None)?;
-                    self.configuration_request = Some(id);
-                    outgoing.push(message);
-                } else {
-                    self.configured = true;
+        if let Some((id, version, _)) = self.exception_request.as_ref() {
+            let (id, version) = (*id, *version);
+            // A live rejection belongs to this edit, not to the session lifecycle.
+            let response = client.response(id)?;
+            if !matches!(response, DebugResponse::Pending) {
+                let (_, _, filters) = self
+                    .exception_request
+                    .take()
+                    .ok_or(DebugClientError::InvalidMessage)?;
+                match response {
+                    DebugResponse::Complete(value)
+                        if value.get("success") == Some(&Value::Bool(true)) =>
+                    {
+                        self.exceptions.applied_version = version;
+                        self.exceptions.applied_filters = filters;
+                        if version == self.exceptions.version {
+                            self.exceptions.error = None;
+                        }
+                    }
+                    DebugResponse::Complete(value) if version == self.exceptions.version => {
+                        self.exceptions.error = Some(
+                            value
+                                .get("message")
+                                .and_then(Value::as_str)
+                                .unwrap_or("Debug Adapter rejected exception filters")
+                                .to_owned(),
+                        )
+                    }
+                    DebugResponse::Failed(message) if version == self.exceptions.version => {
+                        self.exceptions.error = Some(message)
+                    }
+                    DebugResponse::Complete(_) | DebugResponse::Failed(_) => {}
+                    DebugResponse::Pending => unreachable!(),
+                }
+                if !self.configured && self.configuration_request.is_none() {
+                    if let Some(error) = self.exceptions.error.clone() {
+                        self.fail(&error);
+                        return Ok(outgoing);
+                    }
+                    if self.capabilities.get("supportsConfigurationDoneRequest")
+                        == Some(&Value::Bool(true))
+                    {
+                        let (id, message) = client.request("configurationDone", None)?;
+                        self.configuration_request = Some(id);
+                        outgoing.push(message);
+                    } else {
+                        self.configured = true;
+                    }
                 }
             }
+        }
+        if self.snapshot.phase == DebugInitializationPhase::Active
+            && self.exception_request.is_none()
+            && self.exceptions.applied_version < self.exceptions.version
+            && self.exceptions.error.is_none()
+        {
+            outgoing.push(self.send_exceptions(client)?);
         }
         if let Some(id) = self.configuration_request {
             if self.completed(client, id)?.is_some() {
@@ -423,10 +502,38 @@ impl Lifecycle {
                 "supportsInstructionBreakpoints",
                 "supportsDisassembleRequest",
                 "supportsSteppingGranularity",
+                "supportsCompletionsRequest",
+                "supportsCancelRequest",
+                "completionTriggerCharacters",
                 "exceptionBreakpointFilters",
             ] {
                 if let Some(value) = values.get(key) {
-                    let value = if key == "exceptionBreakpointFilters" {
+                    let value = if key == "completionTriggerCharacters" {
+                        match value {
+                            Value::Null => json!([]),
+                            Value::Array(characters) if characters.len() <= 32 => {
+                                let mut normalized = Vec::new();
+                                for character in characters {
+                                    let character = character
+                                        .as_str()
+                                        .filter(|text| {
+                                            !text.is_empty()
+                                                && text.len() <= 16
+                                                && !text.contains('\0')
+                                        })
+                                        .ok_or(DebugClientError::InvalidMessage)?;
+                                    if !normalized
+                                        .iter()
+                                        .any(|existing: &String| existing == character)
+                                    {
+                                        normalized.push(character.to_owned());
+                                    }
+                                }
+                                json!(normalized)
+                            }
+                            _ => return Err(DebugClientError::InvalidMessage),
+                        }
+                    } else if key == "exceptionBreakpointFilters" {
                         if value.to_string().len() > 64 * 1024 {
                             return Err(DebugClientError::InvalidMessage);
                         }
@@ -460,6 +567,18 @@ impl Lifecycle {
                 .collect::<Result<Vec<_>, DebugClientError>>()?,
             Some(_) => return Err(DebugClientError::InvalidMessage),
         };
+        let selected: Vec<_> = self
+            .exceptions
+            .filters
+            .iter()
+            .filter(|id| self.no_debug || filters.iter().any(|candidate| &candidate.filter == *id))
+            .cloned()
+            .collect();
+        if selected != self.exceptions.filters {
+            self.exceptions.filters = selected;
+            self.exceptions.version += 1;
+            self.exceptions.error = None;
+        }
         self.snapshot.capabilities = DebugCapabilities {
             supports_restart: flag("supportsRestartRequest"),
             supports_terminate: flag("supportsTerminateRequest")
@@ -473,6 +592,20 @@ impl Lifecycle {
             supports_instruction_breakpoints: flag("supportsInstructionBreakpoints"),
             supports_disassemble_request: flag("supportsDisassembleRequest"),
             supports_stepping_granularity: flag("supportsSteppingGranularity"),
+            supports_completions_request: flag("supportsCompletionsRequest"),
+            supports_cancel_request: flag("supportsCancelRequest"),
+            completion_trigger_characters: self
+                .capabilities
+                .get("completionTriggerCharacters")
+                .and_then(Value::as_array)
+                .map(|characters| {
+                    characters
+                        .iter()
+                        .filter_map(Value::as_str)
+                        .map(str::to_owned)
+                        .collect()
+                })
+                .unwrap_or_else(|| vec![".".to_owned()]),
             exception_breakpoint_filters: filters,
         };
         self.snapshot.revision += 1;

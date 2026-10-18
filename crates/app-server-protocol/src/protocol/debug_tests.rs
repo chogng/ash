@@ -66,3 +66,19 @@ fn runtime_intents_and_inspection_queries_have_closed_generated_shapes() {
     assert!(serde_json::from_value::<DebugInspectionStartParams>(json!({"sessionId":"s","inspectionRevision":3,"query":{"kind":"frame","frameId":1,"unknown":true}})).is_err());
     assert!(serde_json::from_value::<DebugBreakpointsSetParams>(json!({"sessionId":"s","version":1,"intents":[{"id":"bad","enabled":true,"location":{"kind":"data","dataId":"x","accessType":"execute","adapterType":"rust","canPersist":true}}]})).is_err());
 }
+
+#[test]
+fn initial_exception_selection_distinguishes_defaults_from_an_explicit_empty_selection() {
+    let omitted: super::DebugSessionConfigureParams =
+        serde_json::from_value(json!({"sessionId":"s"})).unwrap();
+    let cleared: super::DebugSessionConfigureParams =
+        serde_json::from_value(json!({"sessionId":"s","exceptionFilters":[]})).unwrap();
+    assert_eq!(omitted.exception_filters, None);
+    assert_eq!(cleared.exception_filters, Some(vec![]));
+    assert!(
+        serde_json::from_value::<super::DebugSessionLifecycleParams>(
+            json!({"id":"s","action":"delete"})
+        )
+        .is_err()
+    );
+}

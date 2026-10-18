@@ -165,7 +165,7 @@ notification contract，不能拥有隐藏业务接口。JSONL/stdio、WebSocket
 ```json
 {
   "serverInfo": { "name": "ash-app-server", "version": "0.1.0" },
-  "protocolVersion": { "major": 9 },
+  "protocolVersion": { "major": 10 },
   "schemaHash": "sha256:...",
   "capabilities": {
     "sessions": true,
@@ -1573,9 +1573,17 @@ Thread 保存普通 Coding Turn 的顾问选择策略；接受 Turn 时将解析
 
 ## DAP 会话与请求调度
 
+`debug/session/reserve` 在配置回调前接纳稳定客户端 ID、workspaceId、parentId、父级托管及控制台模式。身份隔离到发起 connection，跨目录共用 Rust 图，禁止跨工作区父子关系。`debug/session/prepare` 在 descriptor 回调前提交已解析的 noDebug，回调中启动的子会话因此继承最终配置。`debug/session/lifecycle` 的 read/route/end 返回关系、有效操作目标及撤销名单；end 直接撤销子树资源，准备中的节点不能绑定迟到资源。initialize 必须绑定已接纳且配置一致的 ID。关系中的 consoleIds 与 consoleCatalogRevision 是后端保留目录及其递增代次，前端据此释放过期显示缓存。
+
+`debug/session/exceptions/set` 返回领域 version；`debug/adapter/read.exceptions` 的 version/appliedVersion/filters/appliedFilters/error 分别表达最新请求及已确认选择。实时拒绝保留已确认状态且不结束会话，通用 request 拒绝 setExceptionBreakpoints。初始 configure 省略 exceptionFilters 才使用默认值，显式空数组保持清空；noDebug 向适配器发送空数组，仍保留已确认偏好用于后续调试及持久化。
+
+`debug/session/console` 用客户端 ID 读取共享控制台的修订和结构化条目；clear 在后端日志上执行，diagnostic 仅追加有界客户端诊断。`debug/adapter/read.consoleRevision` 提供变化游标。输出事件、stderr、REPL 输入及结果/错误统一入日志，保留类别、分组、对象引用、JSON 和源码位置。对象条目携带 inspectionRevision，展开沿 inspection/start 使用它，旧暂停不会发出新 DAP 查询。连接关闭删除会话图及日志，它们不进入工作区 SQLite 定义。
+
 `debug/adapter/start` 创建绑定连接和目录的 Rust manager 会话，选择 executable、TCP/pipe 或 `{ "type": "client" }` inline IO。返回的 `sessionId` 是不透明身份，不能当作进程 ID，也不能跨目录或连接使用。所有模式使用同一个 Rust DAP client。
 
 `debug/session/initialize` 接收 adapterId、launch/attach、已解析 arguments 与绑定客户端的 runInTerminal/startDebugging 能力，启动一次性的 Rust 初始化状态机，不等待 DAP 完成。`debug/adapter/read.session` 返回 revision、executionRevision、state、phase、reason、stoppedThreadId 和归一化 capabilities；调用方在 configuring 阶段提交现有断点，再以 `debug/session/configure` 提交 exceptionFilters。Rust 验证过滤器并选择默认值（noDebug 下清空），按能力发送 configurationDone，等待 launch/attach 后进入 active。重复初始化或配置，以及绕过状态机发送 initialize/launch/configurationDone，均被拒绝。
+
+`debug/workspace/read` 按 `workspaceId` 读取 profile 内的定义快照，可携带前端已解析的 v1/v2 Memento `legacy`。`debug/workspace/write` 提交期望 `revision` 与按稳定 ID 的 `edits`（source/function/data upsert、按 ID 或全部移除、全部启停、Watch 增删、异常选择）。Rust 领域 crate 在 SQLite 事务中校验、应用并保存；冲突返回 `status: conflict` 和当前快照，不覆盖目标。导入仅接受不存在或相同的目标，digest 回执与定义原子写入；中断清理后的旧源重试不会覆盖后续编辑。定义按 Workbench Workspace ID 隔离，独立于目录/Project/会话；会话关闭不清除定义。前端没有 Memento 双写或断线修改重放；关闭窗口等待未确认写入。Runtime 会话地址、验证结果与求值结果不进入此契约。
 
 `debug/session/breakpoints/set` 提交 `version` 与 source/function/data/instruction `intents`。Rust 接纳最新编辑版本、按源和家族串行替换，旧版本不会覆盖新版本，迟到回复只绑定仍相同的意图。`debug/session/breakpoints/read` 返回带 revision、appliedVersion、pending/verified/removed、可用范围和绑定的领域快照；`debug/adapter/read.breakpointRevision` 提供变化游标。跨会话地址及不支持能力由后端判断，通用 request 端口不允许绕过此 owner 发送四类 set 请求。
 
@@ -1585,9 +1593,11 @@ Thread 保存普通 Coding Turn 的顾问选择策略；接受 Turn 时将解析
 
 `debug/session/request` 接收 `sessionId`、`command`、可选 `arguments` 和目录身份，登记并发送请求，返回 `requestId`。省略 arguments 与显式 JSON null 保持区别。`debug/session/response` 接收同一会话与请求身份，返回 `pending`、`complete`（保留原 DAP response）或 `failed`；终态只消费一次。请求超时、适配器错误与连接关闭不会重放操作。响应读取可以驱动底层传输，不依赖控制台可见性。
 
+控制台补全复用上述请求端口，不增加第二份配对表。`read.session.capabilities` 的 supportsCompletionsRequest、supportsCancelRequest 和 completionTriggerCharacters 由 Rust 归一化；未提供触发字符时默认为 `.`，显式空数组保持为空。completions 与栈、变量一样受原检查代次约束，恢复执行或 invalidated 后迟到结果不可使用。requestId 是 Rust 分配的会话内 DAP 请求序号，既用于 response 查询，也可作为支持 DAP cancel 时的目标 requestId；取消本身分配独立序号，原响应仍由 Rust 排空，观察游标不能代替请求身份。客户端使用选中的帧和 UTF-16 位置请求候选，并在光标、输入、会话或焦点变化时撤销 UI 请求。
+
 `debug/adapter/read` 返回有界的双向观察页；每项 `direction` 为 `incoming` 或 `outgoing`，`sequence` 是观察游标，独立于 DAP seq。`debug/adapter/send` 现在只提交已登记的反向请求应答，其输出 seq 由 Rust 分配。inline 桥通过 `debug/session/input` 提交输入页并转发观察页中的 outgoing 消息；此端口拒绝为 executable/TCP/pipe 注入消息。关闭会话或发起连接后，后端释放 client 与 transport；inline 实现的释放另由绑定该扩展实例的客户端桥等待确认。
 
-这些改变包含发送端口的破坏性语义变化，protocol major 已升为 9，同时继续校验生成 schemaHash；旧后端包需要更新，不能连接后回退到旧 TS DAP 配对路径。领域所有权与剩余迁移范围见 [调试系统](debugging.md)。
+这些改变包含发送端口、接纳身份及输出快照的破坏性变化，protocol major 已升为 10，同时校验生成 schemaHash；旧后端包需要更新，不能回退到旧 TS DAP owner。领域所有权与剩余迁移范围见 [调试系统](debugging.md)。
 
 ## 素材入库与确切版本读取
 

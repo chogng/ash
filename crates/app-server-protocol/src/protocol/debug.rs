@@ -1,17 +1,26 @@
 use crate::JsonSchema;
 use crate::TS;
 pub use ash_debug_contract::DebugBreakpointBinding;
+pub use ash_debug_contract::DebugBreakpointDefinition;
 pub use ash_debug_contract::DebugBreakpointIntent;
 pub use ash_debug_contract::DebugBreakpointLocation;
 pub use ash_debug_contract::DebugBreakpointUnsupported;
 pub use ash_debug_contract::DebugBreakpointsSnapshot;
 pub use ash_debug_contract::DebugDataAccess;
+pub use ash_debug_contract::DebugDataBreakpoint;
+pub use ash_debug_contract::DebugFunctionBreakpoint;
 pub use ash_debug_contract::DebugInspection;
 pub use ash_debug_contract::DebugInspectionResult;
 pub use ash_debug_contract::DebugInspectionValue;
 pub use ash_debug_contract::DebugScopeVariables;
 pub use ash_debug_contract::DebugSourceAddress;
+pub use ash_debug_contract::DebugSourceBreakpoint;
 pub use ash_debug_contract::DebugWatchValue;
+pub use ash_debug_contract::DebugWorkspaceEdit;
+pub use ash_debug_contract::DebugWorkspaceResult;
+pub use ash_debug_contract::DebugWorkspaceSnapshot;
+pub use ash_debug_contract::DebugWorkspaceState;
+pub use ash_debug_contract::DebugWorkspaceStatus;
 use serde::Deserialize;
 use serde::Serialize;
 use serde_json::Value;
@@ -116,7 +125,10 @@ pub struct DebugAdapterMessageDto {
 #[serde(rename_all = "camelCase")]
 pub struct DebugAdapterReadResult {
     #[ts(type = "number")]
+    pub console_revision: u64,
+    #[ts(type = "number")]
     pub breakpoint_revision: u64,
+    pub exceptions: ash_debug_contract::DebugExceptionsSnapshot,
     pub session: DebugSessionSnapshotDto,
     pub messages: Vec<DebugAdapterMessageDto>,
     #[ts(type = "number")]
@@ -173,6 +185,8 @@ fn deserialize_arguments<'de, D: serde::Deserializer<'de>>(
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct DebugSessionRequestResult {
+    /// Rust-allocated DAP sequence in this adapter session. The same identity is
+    /// used for response polling and the DAP cancel request's requestId argument.
     #[ts(type = "number")]
     pub request_id: u64,
 }
@@ -305,6 +319,9 @@ pub struct DebugSessionCapabilitiesDto {
     pub supports_instruction_breakpoints: bool,
     pub supports_disassemble_request: bool,
     pub supports_stepping_granularity: bool,
+    pub supports_completions_request: bool,
+    pub supports_cancel_request: bool,
+    pub completion_trigger_characters: Vec<String>,
     pub exception_breakpoint_filters: Vec<DebugExceptionFilterDto>,
 }
 
@@ -329,7 +346,9 @@ pub struct DebugSessionConfigureParams {
     pub dir_id: Option<String>,
     pub session_id: String,
     #[schemars(length(max = 128))]
-    pub exception_filters: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub exception_filters: Option<Vec<String>>,
 }
 
 /// Replaces this session's runtime intent using a monotonically increasing client
@@ -382,4 +401,58 @@ pub struct DebugInspectionReadParams {
     pub session_id: String,
     #[ts(type = "number")]
     pub inspection_id: u64,
+}
+
+/// Reads the current workspace document and optionally imports a legacy Memento.
+#[derive(Clone, Debug, Deserialize, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct DebugWorkspaceReadParams {
+    #[schemars(length(min = 1, max = 4096))]
+    pub workspace_id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub legacy: Option<DebugWorkspaceState>,
+}
+
+/// Replaces definitions only when the caller's revision is still current.
+#[derive(Clone, Debug, Deserialize, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct DebugWorkspaceWriteParams {
+    #[schemars(length(min = 1, max = 4096))]
+    pub workspace_id: String,
+    pub revision: u32,
+    #[schemars(length(max = 16384))]
+    pub edits: Vec<DebugWorkspaceEdit>,
+}
+
+#[derive(Clone, Debug, Deserialize, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct DebugSessionLifecycleParams {
+    pub id: String,
+    pub action: ash_debug_contract::DebugSessionAction,
+}
+
+#[derive(Clone, Debug, Deserialize, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct DebugConsoleParams {
+    pub id: String,
+    pub clear: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    #[schemars(length(max = 65536))]
+    pub diagnostic: Option<String>,
+}
+
+#[derive(Clone, Debug, Deserialize, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct DebugExceptionsSetResult {
+    #[ts(type = "number")]
+    pub version: u64,
+}
+
+#[derive(Clone, Debug, Deserialize, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct DebugSessionPrepareParams {
+    pub id: String,
+    pub no_debug: Option<bool>,
 }

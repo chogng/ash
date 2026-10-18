@@ -1,4 +1,4 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Page, type Locator } from '@playwright/test';
 import { writeFile } from 'node:fs/promises';
 
 async function clickDebugHeaderAction(page: Page, section: 'stack' | 'breakpoints', name: string): Promise<void> {
@@ -173,7 +173,7 @@ test('debug console coalesces an output flood and preserves keyboard evaluation 
 	await page.goto('/debug.html?console');
 	const output = page.getByRole('log', { name: 'Debug Console output', exact: true });
 	const input = page.getByRole('textbox', { name: 'Debug Console expression', exact: true });
-	await input.fill('answer');
+	await fillRepl(page, input, 'answer');
 	await input.focus();
 	const cdp = await page.context().newCDPSession(page);
 	await cdp.send('Performance.enable');
@@ -200,7 +200,7 @@ test('debug console coalesces an output flood and preserves keyboard evaluation 
 		expect(measurement.output).toBe(Array.from({ length: 2000 }, (_, index) => `burst-${index}\n`).join(''));
 		expect(measurement.updates).toBeLessThan(5);
 		await expect(input).toBeFocused();
-		await expect(input).toHaveValue('answer');
+		await expect.poll(() => page.evaluate(() => window.ashDebugIntegration.consoleInput().value)).toBe('answer');
 		await input.press('Enter');
 		await expect(output).toContainText('42');
 		const clear = page.locator('[data-view-id="debug.console.integration"] [data-action-id="workbench.debug.panel.action.clearReplAction"] button');
@@ -605,4 +605,309 @@ test('variable edits expose validation, discard replies after resume, and locali
 	await page.evaluate(() => window.ashDebugIntegration.releaseAssignment());
 	await expect(page.locator('.ash-debug-frame, .ash-debug-variable')).toHaveCount(0);
 	await expect(page.getByRole('status')).toContainText('正在运行');
+});
+
+
+test('structured debug console groups expand objects and open source by keyboard without losing output focus', async ({ page }, testInfo) => {
+	await page.goto('/debug.html?console');
+	const output = page.getByRole('log', { name: 'Debug Console output', exact: true });
+	const input = page.getByRole('textbox', { name: 'Debug Console expression', exact: true });
+	await fillRepl(page, input, 'draft');
+	await input.focus();
+	await page.evaluate(() => window.ashDebugIntegration.structuredOutput());
+	await expect(input).toBeFocused();
+	await expect.poll(() => page.evaluate(() => window.ashDebugIntegration.consoleInput().value)).toBe('draft');
+	const tree = output.getByRole('tree');
+	const group = tree.getByRole('treeitem').filter({ hasText: 'Structured group' });
+	await expect(group).toBeVisible();
+	await expect(group).toHaveAttribute('aria-expanded', 'false');
+	await tree.focus();
+	await tree.press('Home');
+	await tree.press('ArrowRight');
+	const object = tree.getByRole('treeitem').filter({ hasText: 'Object output' });
+	await expect(object).toBeVisible();
+	await tree.press('ArrowRight');
+	await tree.press('ArrowRight');
+	const parent = tree.getByRole('treeitem').filter({ hasText: 'parent: Object' });
+	await expect(parent).toBeVisible();
+	await tree.press('ArrowRight');
+	await tree.press('ArrowRight');
+	await expect(output).toContainText('child: value');
+	const source = output.getByRole('button', { name: 'main.ts:2', exact: true });
+	await source.focus();
+	await source.press('Enter');
+	await expect.poll(() => page.evaluate(() => window.ashDebugIntegration.openedSources())).toContainEqual({ resource: 'file:///workspace/main.ts', readOnly: false, line: 2 });
+	await page.evaluate(() => window.ashDebugIntegration.theme('hcDark'));
+	await source.focus();
+	await expect(source).toHaveCSS('outline-style', 'solid');
+	await expect(source).toHaveCSS('outline-width', '1px');
+	await page.evaluate(() => window.ashDebugIntegration.burstOutput(100));
+	await expect(output).toContainText('burst-99');
+	await expect(source).toBeFocused();
+	await expect(group).toHaveAttribute('aria-expanded', 'true');
+	await page.evaluate(() => window.ashDebugIntegration.resize(240));
+	expect(await output.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
+	await page.screenshot({ path: testInfo.outputPath('structured-console.png') });
+	await source.focus();
+	await page.evaluate(() => window.ashDebugIntegration.selectConsoleSession('session-two'));
+	await expect(tree).toBeFocused();
+});
+
+test('structured console labels use the selected display language', async ({ page }) => {
+	await page.goto('/debug.html?console&locale=zh-cn');
+	await expect(page.getByRole('log', { name: '调试控制台输出', exact: true })).toBeVisible();
+	await expect(page.locator('.ash-repl-input .stanza-editor-placeholder-text')).toHaveText('计算表达式');
+});
+
+test('debug console tools filter alternatives and exclusions by keyboard while retaining group context', async ({ page }) => {
+	await page.goto('/debug.html?console');
+	const output = page.getByRole('log', { name: 'Debug Console output', exact: true });
+	const input = page.getByRole('textbox', { name: 'Debug Console expression', exact: true });
+	const filter = page.getByRole('textbox', { name: 'Filter Debug Console', exact: true });
+	await page.evaluate(() => window.ashDebugIntegration.consoleOutput());
+	const tree = output.getByRole('tree');
+	const group = tree.getByRole('treeitem').filter({ hasText: 'Build group' });
+	const alpha = output.locator('[data-entry-id="2"]');
+	const beta = output.locator('[data-entry-id="3"]');
+	const gamma = output.locator('[data-entry-id="4"]');
+	await expect(group).toBeVisible();
+	await expect(group).toHaveAttribute('aria-expanded', 'false');
+	await expect(alpha).toBeHidden();
+	await input.focus();
+	await input.press('Control+f');
+	await expect(filter).toBeFocused();
+	await filter.fill('alpha, gamma, !beta');
+	await expect(alpha).toBeVisible();
+	await expect(beta).toBeHidden();
+	await expect(gamma).toBeVisible();
+	await expect(group).toHaveAttribute('aria-expanded', 'true');
+	await expect(page.locator('.ash-view-filter-badge')).toHaveText('3 of 4');
+	expect(await page.evaluate(() => window.ashDebugIntegration.consoleStats())).toEqual({ total: 4, filtered: 3 });
+	expect((await page.evaluate(() => window.ashDebugIntegration.consoleAccessibility())).view).toBe('Build group\nAlpha success\nGamma outside\n');
+	await filter.fill('alpha, !Build');
+	await expect(group).toBeHidden();
+	await expect(alpha).toBeHidden();
+	expect(await page.evaluate(() => window.ashDebugIntegration.consoleStats())).toEqual({ total: 4, filtered: 0 });
+	await filter.fill('!beta');
+	await expect(alpha).toBeVisible();
+	await expect(beta).toBeHidden();
+	await filter.press('Escape');
+	await expect(filter).toHaveValue('');
+	await expect(group).toHaveAttribute('aria-expanded', 'false');
+	await expect(alpha).toBeHidden();
+	await expect(gamma).toBeVisible();
+	expect((await page.evaluate(() => window.ashDebugIntegration.consoleAccessibility())).view).toBe('Build group\nGamma outside\n');
+	await filter.press('Escape');
+	await expect(output.getByRole('tree')).toBeFocused();
+});
+
+test('debug console tools restore input drafts and persist independent input and filter histories by workspace', async ({ page }) => {
+	await page.goto('/debug.html?console');
+	const input = page.getByRole('textbox', { name: 'Debug Console expression', exact: true });
+	const filter = page.getByRole('textbox', { name: 'Filter Debug Console', exact: true });
+	for (const expression of ['first', 'second']) { await fillRepl(page, input, expression); await input.press('Enter'); }
+	await fillRepl(page, input, 'unsent draft');
+	await input.press('ArrowUp');
+	await expect.poll(() => page.evaluate(() => window.ashDebugIntegration.consoleInput().value)).toBe('second');
+	await input.press('ArrowUp');
+	await expect.poll(() => page.evaluate(() => window.ashDebugIntegration.consoleInput().value)).toBe('first');
+	await input.press('ArrowDown');
+	await expect.poll(() => page.evaluate(() => window.ashDebugIntegration.consoleInput().value)).toBe('second');
+	await input.press('ArrowDown');
+	await expect.poll(() => page.evaluate(() => window.ashDebugIntegration.consoleInput().value)).toBe('unsent draft');
+	await filter.fill('Alpha');
+	await filter.press('Enter');
+	await page.evaluate(() => window.ashDebugIntegration.recreateConsole());
+	await input.focus();
+	await input.press('ArrowUp');
+	await expect.poll(() => page.evaluate(() => window.ashDebugIntegration.consoleInput().value)).toBe('second');
+	await filter.focus();
+	await filter.press('ArrowUp');
+	await expect(filter).toHaveValue('Alpha');
+	await page.reload();
+	await input.focus();
+	await input.press('ArrowUp');
+	await expect.poll(() => page.evaluate(() => window.ashDebugIntegration.consoleInput().value)).toBe('second');
+	await filter.focus();
+	await filter.press('ArrowUp');
+	await expect(filter).toHaveValue('Alpha');
+	await page.evaluate(() => window.ashDebugIntegration.consoleWorkspace('other-debug-workspace'));
+	await fillRepl(page, input, '');
+	await input.press('ArrowUp');
+	await expect.poll(() => page.evaluate(() => window.ashDebugIntegration.consoleInput().value)).toBe('');
+	await filter.fill('');
+	await filter.press('ArrowUp');
+	await expect(filter).toHaveValue('');
+	await fillRepl(page, input, 'other');
+	await input.press('Enter');
+	await page.evaluate(() => window.ashDebugIntegration.consoleWorkspace('debug-console-integration'));
+	await input.focus();
+	await input.press('ArrowUp');
+	await expect.poll(() => page.evaluate(() => window.ashDebugIntegration.consoleInput().value)).toBe('second');
+	await filter.focus();
+	await filter.press('ArrowUp');
+	await expect(filter).toHaveValue('Alpha');
+});
+
+test('debug console tools complete in frame zero and preserve adapter replacement ranges and selections', async ({ page }) => {
+	await page.goto('/debug.html?console&console-tools');
+	const input = page.getByRole('textbox', { name: 'Debug Console expression', exact: true });
+	const suggestions = page.getByRole('listbox', { name: 'Debug Console suggestions', exact: true });
+	const output = page.getByRole('log', { name: 'Debug Console output', exact: true });
+	await page.evaluate(() => window.ashDebugIntegration.focusConsoleFrame(0));
+	await fillRepl(page, input, 'value');
+	await input.press('Control+Space');
+	await expect(suggestions.getByRole('option')).toHaveText(['alpha', 'beta']);
+	expect(await page.evaluate(() => window.ashDebugIntegration.completionRequests().at(-1))).toMatchObject({ sessionId: 'session-one', frameId: 0, threadId: 2, text: 'value', lineNumber: 1, column: 6 });
+	await input.press('ArrowDown');
+	await expect(suggestions.getByRole('option', { selected: true })).toHaveText('beta');
+	await input.press('ArrowUp');
+	await expect(suggestions.getByRole('option', { selected: true })).toHaveText('alpha');
+	await input.press('Enter');
+	await expect.poll(() => page.evaluate(() => window.ashDebugIntegration.consoleInput().value)).toBe('alpha');
+	await expect(input).toBeFocused();
+	await expect(output).toHaveText('');
+	await expect(suggestions).toBeHidden();
+	await fillRepl(page, input, 'value');
+	await input.press('Control+Space');
+	await expect(suggestions).toBeVisible();
+	await input.press('ArrowDown');
+	await input.press('Tab');
+	await expect.poll(() => page.evaluate(() => window.ashDebugIntegration.consoleInput().value)).toBe('beta');
+	await expect(input).toBeFocused();
+	await expect(output).toHaveText('');
+	await fillRepl(page, input, 'pre obj.pa tail');
+	await input.press('Home');
+	for (let index = 0; index < 10; index++) await input.press('ArrowRight');
+	await input.press('Control+Space');
+	await expect(suggestions.getByRole('option')).toHaveCount(3);
+	await input.press('ArrowDown');
+	await input.press('ArrowDown');
+	await input.press('Enter');
+	await expect.poll(() => page.evaluate(() => window.ashDebugIntegration.consoleInput().value)).toBe('pre obj.pair(value) tail');
+	expect(await page.evaluate(() => { const { start, end, selection } = window.ashDebugIntegration.consoleInput(); return { start, end, selection }; })).toEqual({ start: 13, end: 18, selection: 'value' });
+	await fillRepl(page, input, 'dismiss');
+	await input.press('Control+Space');
+	await expect(suggestions).toBeVisible();
+	await input.press('Escape');
+	await expect(suggestions).toBeHidden();
+	await expect.poll(() => page.evaluate(() => window.ashDebugIntegration.consoleInput().value)).toBe('dismiss');
+	await expect(output).toHaveText('');
+	await fillRepl(page, input, 'obj.');
+	await expect(suggestions).toBeVisible();
+	expect(await page.evaluate(() => window.ashDebugIntegration.completionRequests().at(-1)?.text)).toBe('obj.');
+});
+
+test('debug console tools discard late completions after input, caret, frame, session and focus changes', async ({ page }) => {
+	await page.goto('/debug.html?console&console-tools');
+	const input = page.getByRole('textbox', { name: 'Debug Console expression', exact: true });
+	const suggestions = page.getByRole('listbox', { name: 'Debug Console suggestions', exact: true });
+	for (const change of ['input', 'caret', 'frame', 'session', 'focus'] as const) {
+		await fillRepl(page, input, `held-${change}`);
+		await page.evaluate(() => window.ashDebugIntegration.holdCompletion());
+		await input.press('Control+Space');
+		await expect.poll(() => page.evaluate(() => window.ashDebugIntegration.completionRequests().at(-1)?.held)).toBe(true);
+		if (change === 'input') await fillRepl(page, input, 'changed!');
+		else if (change === 'caret') await input.press('ArrowLeft');
+		else if (change === 'frame') await page.evaluate(() => window.ashDebugIntegration.focusConsoleFrame(99));
+		else if (change === 'session') await page.evaluate(() => window.ashDebugIntegration.selectConsoleSession('session-two'));
+		else await page.getByRole('log', { name: 'Debug Console output', exact: true }).getByRole('tree').focus();
+		await expect.poll(() => page.evaluate(() => window.ashDebugIntegration.completionRequests().at(-1)?.cancelled)).toBe(true);
+		await page.evaluate(() => window.ashDebugIntegration.releaseCompletion());
+		await expect(suggestions.getByRole('option', { name: 'obsolete-result', exact: true })).toHaveCount(0);
+		await expect(suggestions).toBeHidden();
+		await expect(input).toHaveAttribute('aria-expanded', 'false');
+	}
+});
+
+test('debug console tools localize filter, history help and completion labels', async ({ page }) => {
+	await page.goto('/debug.html?console&console-tools&locale=zh-cn');
+	const input = page.getByRole('textbox', { name: '调试控制台表达式', exact: true });
+	const filter = page.getByRole('textbox', { name: '筛选调试控制台', exact: true });
+	await expect(filter).toHaveAttribute('placeholder', '筛选（文本、!排除）');
+	await input.focus();
+	await input.press('Control+f');
+	await expect(filter).toBeFocused();
+	const help = (await page.evaluate(() => window.ashDebugIntegration.consoleAccessibility())).help;
+	expect(help).toContain('按 Control+Space 请求建议');
+	expect(help).toContain('用逗号分隔替代条件');
+	await fillRepl(page, input, 'value');
+	await input.press('Control+Space');
+	const suggestions = page.getByRole('listbox', { name: '调试控制台建议', exact: true });
+	await expect(suggestions).toBeVisible();
+	await expect(input).toHaveAttribute('aria-expanded', 'true');
+	await input.press('Escape');
+	await expect(suggestions).toBeHidden();
+});
+
+test('debug console tools fit high contrast narrow panes without clipping focused inputs and suggestions', async ({ page }, testInfo) => {
+	await page.goto('/debug.html?console&console-tools');
+	await page.evaluate(() => window.ashDebugIntegration.resizeConsole(240));
+	const input = page.getByRole('textbox', { name: 'Debug Console expression', exact: true });
+	const filter = page.getByRole('textbox', { name: 'Filter Debug Console', exact: true });
+	await page.evaluate(() => window.ashDebugIntegration.consoleOutput());
+	await filter.fill('alpha');
+	const filterGeometry = await filter.evaluate(element => {
+		const bounds = element.getBoundingClientRect();
+		const pane = element.closest('.ash-view-pane')!.getBoundingClientRect();
+		return { left: bounds.left, right: bounds.right, paneLeft: pane.left, paneRight: pane.right };
+	});
+	expect(filterGeometry.left).toBeGreaterThanOrEqual(filterGeometry.paneLeft);
+	expect(filterGeometry.right).toBeLessThanOrEqual(filterGeometry.paneRight);
+	await fillRepl(page, input, 'value');
+	await input.press('Control+Space');
+	const suggestions = page.getByRole('listbox', { name: 'Debug Console suggestions', exact: true });
+	await expect(suggestions).toBeVisible();
+	for (const theme of ['hcDark', 'hcLight'] as const) {
+		await page.evaluate(name => window.ashDebugIntegration.theme(name), theme);
+		await expect(suggestions).toHaveCSS('box-shadow', 'none');
+		await expect(page.locator('.ash-repl-input')).toHaveCSS('outline-style', 'solid');
+		const geometry = await suggestions.evaluate(element => {
+			const pane = element.closest('.ash-view-pane')!;
+			const bounds = element.getBoundingClientRect();
+			const outer = pane.getBoundingClientRect();
+			const selected = element.querySelector('[aria-selected="true"]')!;
+			const style = getComputedStyle(selected);
+			return { left: bounds.left, right: bounds.right, outerLeft: outer.left, outerRight: outer.right, color: style.color, background: style.backgroundColor, border: getComputedStyle(element).borderColor, fits: pane.scrollWidth <= pane.clientWidth };
+		});
+		expect(geometry.left).toBeGreaterThanOrEqual(geometry.outerLeft);
+		expect(geometry.right).toBeLessThanOrEqual(geometry.outerRight);
+		expect(geometry.fits).toBe(true);
+		expect(geometry.color).not.toBe(geometry.background);
+		expect(geometry.border).not.toBe('rgba(0, 0, 0, 0)');
+	}
+	await page.screenshot({ path: testInfo.outputPath('debug-console-tools-hc.png') });
+});
+
+async function fillRepl(page: Page, input: Locator, text: string): Promise<void> {
+	await input.focus();
+	await input.press('ControlOrMeta+a');
+	await input.press('Backspace');
+	if (text) await page.keyboard.insertText(text);
+}
+
+test('debug console editor supports multiline editing, undo, UTF-16 completion coordinates and bounded layout', async ({ page }) => {
+	await page.goto('/debug.html?console&console-tools');
+	const input = page.getByRole('textbox', { name: 'Debug Console expression', exact: true });
+	await fillRepl(page, input, 'first');
+	const initial = await page.evaluate(() => window.ashDebugIntegration.consoleInput());
+	await input.press('Shift+Enter');
+	await page.keyboard.insertText('😀obj.');
+	await expect.poll(() => page.evaluate(() => window.ashDebugIntegration.consoleInput().value)).toBe('first\n😀obj.');
+	await expect.poll(() => page.evaluate(() => window.ashDebugIntegration.consoleInput().height)).toBeGreaterThan(initial.height);
+	await input.press('Control+Space');
+	await expect(page.getByRole('listbox', { name: 'Debug Console suggestions', exact: true })).toBeVisible();
+	const requests = await page.evaluate(() => window.ashDebugIntegration.completionRequests());
+	expect(requests.at(-1)).toMatchObject({ text: 'first\n😀obj.', lineNumber: 2, column: 7 });
+	await input.press('Escape');
+	await input.press('ControlOrMeta+z');
+	await expect.poll(() => page.evaluate(() => window.ashDebugIntegration.consoleInput().value)).toBe('first');
+	await fillRepl(page, input, Array.from({ length: 20 }, (_, index) => `line-${index}`).join('\n'));
+	await expect.poll(() => page.evaluate(() => window.ashDebugIntegration.consoleInput().lineCount)).toBe(20);
+	expect((await page.evaluate(() => window.ashDebugIntegration.consoleInput())).height).toBeLessThanOrEqual(204);
+	await page.evaluate(() => window.ashDebugIntegration.resizeConsole(240, 180));
+	await expect.poll(() => page.evaluate(() => window.ashDebugIntegration.consoleInput().height)).toBeLessThanOrEqual(44);
+	await input.press('Enter');
+	await expect.poll(() => page.evaluate(() => window.ashDebugIntegration.consoleInput().value)).toBe('');
+	await expect.poll(() => page.evaluate(() => window.ashDebugIntegration.consoleInput().height)).toBe(initial.height);
 });

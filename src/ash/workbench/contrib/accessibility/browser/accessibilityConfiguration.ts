@@ -471,3 +471,16 @@ Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfigurat
 		get description() { return localize('speech.language.description', 'Language used by Speech extensions for recognition and synthesis. Auto follows the display language when supported.'); },
 	},
 });
+
+Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfiguration({
+	key: AccessibilityVerbositySettingId.DebugConsole, defaultValue: true,
+	parse(value: unknown): boolean {
+		if (typeof value !== 'boolean') throw new TypeError(localize('debug.repl.verbosityInvalid', 'Debug Console accessibility verbosity must be a boolean.'));
+		return value;
+	},
+	setting: {
+		valueType: 'boolean',
+		get title() { return localize('debug.repl.verbosityTitle', 'Debug Console accessibility help'); },
+		get description() { return localize('debug.repl.verbosityDescription', 'Announce how to open accessibility help when the Debug Console receives focus.'); },
+	},
+});

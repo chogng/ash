@@ -14,7 +14,14 @@ ash-debug-adapter.workspace = true
 ash-debug-client.workspace = true
 ash-file-access.workspace = true
 serde_json.workspace = true
+ash-state.workspace = true
+rusqlite.workspace = true
+sha2.workspace = true
+url.workspace = true
 thiserror.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
 
 [lints]
 workspace = true

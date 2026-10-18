@@ -1,3 +1,6 @@
+import { DebugStorage } from '../../common/debugStorage.js';
+import { ILifecycleService } from '../../../../services/lifecycle/common/lifecycle.js';
+import { AbstractLifecycleService } from '../../../../services/lifecycle/common/lifecycleService.js';
 import { ILabelService } from '../../../../../platform/label/common/label.js';
 import { LabelService } from '../../../../services/label/common/labelService.js';
 import { installDebugClientFixture } from '../common/debugClientFixture.js';
@@ -40,7 +43,7 @@ import { createDisconnectedRendererApi } from '../../../../browser/rendererApi.j
 import { BrowserPathService } from '../../../../services/path/browser/pathService.js';
 import { IPathService } from '../../../../../platform/path/common/pathService.js';
 import { OperatingSystem } from '../../../../../base/common/platform.js';
-import { DebugConfigurationProviderTriggerKind, DebugConsoleMode, IDebugService, type DebugConfiguration, type IDebugConfiguration, SELECT_AND_START_ID, IAdapterManager, createStaticDebugAdapterFactory } from '../../common/debug.js';
+import { DebugConfigurationProviderTriggerKind, DebugConsoleMode, IDebugService, type DebugConfiguration, type IDebugConfiguration, type IDebugSession, SELECT_AND_START_ID, IAdapterManager, createStaticDebugAdapterFactory } from '../../common/debug.js';
 import '../../browser/debugActions.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
 import { createExtensionHostDebugAdapterFactory, createExtensionHostDebugAdapterTrackerFactory } from '../../../../api/browser/extensionHostWorkflowBridge.js';
@@ -127,9 +130,11 @@ test("DebugService persists workspace breakpoints and watch expressions", async 
 	first.toggleBreakpoint(resource, 7);
 	first.updateBreakpoint(first.breakpoints[0]!.id, { enabled: false, condition: 'value > 0', hitCondition: '>= 3', logMessage: ' value = {value} ' });
 	first.addWatchExpression("value + 1");
+	await first.refresh();
 	await storage.flush();
 
 	using second = createDebugService(resources, new FakeFileService(root), workspace, processes, {} as ITerminalService, storage, tasks, adapters);
+	await second.refresh();
 	assert.deepEqual(second.breakpoints, [{ id: `${resource.toString()}:7`, resource, lineNumber: 7, enabled: false, verified: false, condition: 'value > 0', hitCondition: '>= 3', logMessage: ' value = {value} ' }]);
 	assert.deepEqual(second.watchExpressions, ["value + 1"]);
 	second.setBreakpointsEnabled(true);
@@ -137,12 +142,14 @@ test("DebugService persists workspace breakpoints and watch expressions", async 
 	assert.deepEqual(second.breakpoints.map(point => ({ enabled: point.enabled, condition: point.condition, hitCondition: point.hitCondition, logMessage: point.logMessage })), [{ enabled: true, condition: undefined, hitCondition: undefined, logMessage: undefined }]);
 	assert.throws(() => second.updateBreakpoint(second.breakpoints[0]!.id, { condition: '\0' }), /no null characters/);
 	second.removeAllBreakpoints();
+	await second.refresh();
 	await storage.flush();
 	using third = createDebugService(resources, new FakeFileService(root), workspace, processes, {} as ITerminalService, storage, tasks, adapters);
+	await third.refresh();
 	assert.deepEqual(third.breakpoints, []);
 });
 
-test('DebugService reloads external state, preserves pending edits and releases storage listeners on disposal', async () => {
+test('DebugService reads Rust revisions and never resumes Memento writes after migration', async () => {
 	using storage = new TestStorageService();
 	using resources = new DisposableStore();
 	using tasks = new FakeTaskService();
@@ -150,19 +157,21 @@ test('DebugService reloads external state, preserves pending edits and releases 
 	using adapters = new AdapterManager();
 	const root = URI.file('/workspace');
 	using service = createDebugService(resources, new FakeFileService(root), workspaceService(root), processes, {} as ITerminalService, storage, tasks, adapters);
-	const externalState = (expression: string) => JSON.stringify({ version: 2, breakpoints: [], functionBreakpoints: [], dataBreakpoints: [], watchExpressions: [expression], exceptionBreakpoints: {} });
-	storage.storeExternal('memento/debug.workspace', externalState('remote'), StorageScope.WORKSPACE, StorageTarget.USER);
+	await service.refresh();
+	await processes.editWorkspaceState('workspace', 0, [{ kind: 'addWatch', expression: 'remote' }]);
+	await service.refresh();
 	assert.deepEqual(service.watchExpressions, ['remote']);
 	service.addWatchExpression('local');
-	storage.storeExternal('memento/debug.workspace', externalState('newer-remote'), StorageScope.WORKSPACE, StorageTarget.USER);
-	assert.deepEqual(service.watchExpressions, ['remote', 'local']);
+	await service.refresh();
+	const external = JSON.stringify({ version: 1, breakpoints: [], watchExpressions: ['obsolete'], exceptionBreakpoints: {} });
+	storage.storeExternal('memento/debug.workspace', external, StorageScope.WORKSPACE, StorageTarget.USER);
 	await storage.flush();
-	assert.deepEqual(JSON.parse(storage.get('memento/debug.workspace', StorageScope.WORKSPACE)!).watchExpressions, ['remote', 'local']);
+	assert.deepEqual(service.watchExpressions, ['remote', 'local']);
+	assert.deepEqual((await processes.readWorkspaceState('workspace')).snapshot.state.watchExpressions, ['remote', 'local']);
+	assert.equal(storage.get('memento/debug.workspace', StorageScope.WORKSPACE), external);
 	service.dispose();
-	storage.storeExternal('memento/debug.workspace', externalState('after-disposal'), StorageScope.WORKSPACE, StorageTarget.USER);
-	await storage.flush();
+	await processes.editWorkspaceState('workspace', 2, [{ kind: 'addWatch', expression: 'after-disposal' }]);
 	assert.deepEqual(service.watchExpressions, ['remote', 'local']);
-	assert.equal(storage.get('memento/debug.workspace', StorageScope.WORKSPACE), externalState('after-disposal'));
 });
 
 test('DebugService rejects persisted state with an invalid Debug schema', () => {
@@ -195,10 +204,10 @@ test('DebugService persists durable breakpoint families and retires session addr
 	processes.event('debug-1', 'stopped', { threadId: 1 });
 	await stopped;
 	const focusedFrames: unknown[] = [];
-	resources.add(service.onDidFocusStackFrame(frame => focusedFrames.push(frame)));
+	resources.add(service.getViewModel().onDidFocusStackFrame(({ stackFrame }) => focusedFrames.push(stackFrame)));
 	const focusedFrame = { id: 11, name: 'main', lineNumber: 4, columnNumber: 1, instructionPointerReference: '0x1000' };
 	service.focusStackFrame(focusedFrame);
-	assert.equal(service.focusedStackFrame, focusedFrame);
+	assert.equal(service.getViewModel().focusedStackFrame, focusedFrame);
 	const options = { sessionId: session.id, dataId: ' memory:counter ', description: '', accessTypes: ['read', 'write', 'readWrite'] as const, accessType: 'readWrite' as const, canPersist: true, condition: 'counter > 0' };
 	service.addDataBreakpoint(options);
 	service.addDataBreakpoint({ ...options, dataId: 'stack:counter', canPersist: false });
@@ -218,17 +227,19 @@ test('DebugService persists durable breakpoint families and retires session addr
 	});
 	assert.deepEqual(last('setInstructionBreakpoints'), { breakpoints: [{ instructionReference: '0x1000', offset: -4, hitCondition: '2' }] });
 	await service.stop(session);
-	assert.equal(service.focusedStackFrame, undefined);
+	assert.equal(service.getViewModel().focusedStackFrame, undefined);
 	assert.deepEqual(focusedFrames, [focusedFrame, undefined]);
 	assert.equal(service.dataBreakpoints.length, 1);
 	assert.equal(service.instructionBreakpoints.length, 0);
 	await storage.flush();
-	const stored = JSON.parse(storage.get('memento/debug.workspace', StorageScope.WORKSPACE)!);
-	assert.equal(stored.version, 2);
+	await service.refresh();
+	const stored = (await processes.readWorkspaceState("workspace")).snapshot.state;
+	assert.equal(storage.get("memento/debug.workspace", StorageScope.WORKSPACE), undefined);
 	assert.equal(stored.dataBreakpoints.length, 1);
-	assert.equal(stored.dataBreakpoints[0].sessionId, undefined);
-	assert.equal(stored.functionBreakpoints[0].verified, undefined);
+	assert.equal("sessionId" in stored.dataBreakpoints[0]!, false);
+	assert.equal("verified" in stored.functionBreakpoints[0]!, false);
 	using restored = createDebugService(resources, new FakeFileService(root), workspaceService(root), processes, {} as ITerminalService, storage, tasks, adapters);
+	await restored.refresh();
 	assert.equal(restored.functionBreakpoints[0]?.name, 'app::worker');
 	assert.equal(restored.functionBreakpoints[0]?.verified, false);
 	assert.equal(restored.dataBreakpoints[0]?.dataId, ' memory:counter ');
@@ -256,7 +267,9 @@ test('DebugService migrates source breakpoint storage without losing expressions
 	assert.deepEqual(service.watchExpressions, ['x']);
 	assert.deepEqual(service.functionBreakpoints, []);
 	await storage.flush();
-	assert.equal(JSON.parse(storage.get('memento/debug.workspace', StorageScope.WORKSPACE)!).version, 2);
+	await service.refresh();
+	assert.equal(storage.get("memento/debug.workspace", StorageScope.WORKSPACE), undefined);
+	assert.deepEqual((await processes.readWorkspaceState("workspace")).snapshot.state.watchExpressions, ["x"]);
 });
 
 test("DebugService starts compounds, runs launch lifecycle tasks, and owns multiple sessions", async () => {
@@ -361,6 +374,13 @@ class FakeTaskService extends Disposable implements ITaskService {
 }
 
 class FakeDebugAdapterProcessService implements IDebugAdapterProcessService {
+	declare prepareSession: IDebugAdapterProcessService['prepareSession'];
+	declare reserveSession: IDebugAdapterProcessService['reserveSession'];
+	declare manageSession: IDebugAdapterProcessService['manageSession'];
+	declare readConsole: IDebugAdapterProcessService['readConsole'];
+	declare setExceptionBreakpoints: IDebugAdapterProcessService['setExceptionBreakpoints'];
+	declare readWorkspaceState: IDebugAdapterProcessService['readWorkspaceState'];
+	declare editWorkspaceState: IDebugAdapterProcessService['editWorkspaceState'];
 	declare setBreakpoints: IDebugAdapterProcessService['setBreakpoints'];
 	declare readBreakpoints: IDebugAdapterProcessService['readBreakpoints'];
 	declare startInspection: IDebugAdapterProcessService['startInspection'];
@@ -521,7 +541,7 @@ function createDebugService(owner: DisposableStore, files: IFileSystemProvider, 
 	services.registerInstance(IEditorService, options?.editor ?? { ...emptyEditorServiceState, openEditor: async () => { }, focusActiveEditor() { } });
 	services.registerInstance(IEditorGroupsService, options?.groups ?? {} as IEditorGroupsService);
 	registerTerminalProfiles(services);
-	return services.createInstance(DebugService);
+	return createDebugServiceInstance(services);
 }
 
 test('DebugService rejects missing process registration and reports an explicitly unavailable host before launch', async () => {
@@ -669,6 +689,34 @@ test('DebugService rejects a missing folder before executing preLaunchTask or st
 	using service = createDebugService(resources, new FakeFileService(root), workspaceService(root), processes, {} as ITerminalService, new TestStorageService(), tasks, adapters);
 	await assert.rejects(service.startDebugging({ id: 'invalid', name: 'Invalid', type: 'example', request: 'launch', adapter: { program: '${workspaceFolder:Missing}/adapter', arguments: [] }, arguments: {}, preLaunchTask: 'build' }));
 	assert.deepEqual({ tasks: tasks.ran, adapters: processes.started }, { tasks: [], adapters: [] });
+});
+
+test('DebugService revokes a late admission after its workspace has changed', async () => {
+	using resources = new DisposableStore();
+	const root = URI.file('/workspace');
+	using workspace = new TestWorkspaceService({ id: 'workspace', uri: root });
+	using tasks = new FakeTaskService();
+	using processes = new FakeDebugAdapterProcessService();
+	using adapters = new AdapterManager();
+	const entered = new DeferredPromise<void>();
+	const finish = new DeferredPromise<void>();
+	const reserve = processes.reserveSession.bind(processes);
+	let admitted: string | undefined;
+	processes.reserveSession = async options => {
+		const relation = await reserve(options);
+		admitted = relation.id;
+		void entered.complete(undefined);
+		await finish.p;
+		return relation;
+	};
+	using service = createDebugService(resources, new FakeFileService(root), workspace, processes, {} as ITerminalService, new TestStorageService(), tasks, adapters);
+	const dispatch = assert.rejects(service.startDebugging({ id: 'changed', name: 'Changed', type: 'example', request: 'launch', adapter: { program: 'adapter', arguments: [] }, arguments: {}, preLaunchTask: 'build' }), isCancellationError);
+	await entered.p;
+	workspace.updateWorkspace({ id: 'replacement', uri: URI.file('/replacement') });
+	void finish.complete(undefined);
+	await dispatch;
+	assert.deepEqual({ tasks: tasks.ran, adapters: processes.started }, { tasks: [], adapters: [] });
+	assert.equal((await processes.manageSession(admitted!, 'read')).ended, true);
 });
 
 test('DebugService cancels dispatch when the workspace changes during preLaunchTask', async () => {
@@ -1444,7 +1492,7 @@ suite('Extension debug session lifecycle', () => {
 			services.registerInstance(IAdapterManager, resources.add(new AdapterManager()));
 			if (!services.has(IEditorService)) services.registerInstance(IEditorService, { ...emptyEditorServiceState, openEditor: async () => { }, focusActiveEditor() { } });
 			if (!services.has(IEditorGroupsService)) services.registerInstance(IEditorGroupsService, {} as IEditorGroupsService);
-			const debug = resources.add(services.createInstance(DebugService));
+			const debug = resources.add(createDebugServiceInstance(services));
 			await debug.refresh();
 			const entered = new DeferredPromise<void>();
 			const release = new DeferredPromise<void>();
@@ -1528,7 +1576,7 @@ suite('Extension debug session lifecycle', () => {
 				services.registerInstance(IAdapterManager, adapters);
 				if (!services.has(IEditorService)) services.registerInstance(IEditorService, { ...emptyEditorServiceState, openEditor: async () => { }, focusActiveEditor() { } });
 				if (!services.has(IEditorGroupsService)) services.registerInstance(IEditorGroupsService, {} as IEditorGroupsService);
-				const debug = resources.add(services.createInstance(DebugService));
+				const debug = resources.add(createDebugServiceInstance(services));
 				services.registerInstance(IDebugService, debug);
 				const consoleService = debug.replModel;
 				const events: { incarnation: number; value: Record<string, JsonValue>; }[] = [];
@@ -1642,10 +1690,12 @@ suite('Extension debug session lifecycle', () => {
 					await bridge.handle({ operation: 'addDebugBreakpoints', breakpoints: [sourcePoint, { kind: 'function', id: 'extension-function', name: 'main', enabled: true, logMessage: 'function hit' }] }, signal);
 					const point = debug.breakpoints[0]!;
 					assert.deepEqual({ id: point.id, resource: point.resource.toString(), line: point.lineNumber, column: point.columnNumber }, { id: sourcePoint.id, resource: sourcePoint.uri, line: 7, column: 4 });
+					await debug.refresh();
 					await services.get(IStorageService).flush();
 					if (!services.has(IEditorService)) services.registerInstance(IEditorService, { ...emptyEditorServiceState, openEditor: async () => { }, focusActiveEditor() { } });
 					if (!services.has(IEditorGroupsService)) services.registerInstance(IEditorGroupsService, {} as IEditorGroupsService);
-					using restored = services.createInstance(DebugService);
+					using restored = createDebugServiceInstance(services);
+					await restored.refresh();
 					assert.deepEqual(restored.breakpoints, debug.breakpoints);
 					assert.equal(restored.functionBreakpoints[0]!.logMessage, 'function hit');
 				}
@@ -1830,7 +1880,7 @@ test('installed inline descriptors use the real DAP session and await implementa
 	}, workspace)]));
 	if (!services.has(IEditorService)) services.registerInstance(IEditorService, { ...emptyEditorServiceState, openEditor: async () => { }, focusActiveEditor() { } });
 	if (!services.has(IEditorGroupsService)) services.registerInstance(IEditorGroupsService, {} as IEditorGroupsService);
-	const debug = resources.add(services.createInstance(DebugService));
+	const debug = resources.add(createDebugServiceInstance(services));
 	services.registerInstance(IDebugService, debug);
 	const identity = resources.add(new TestUriIdentityServices());
 	const uriIdentity = identity.get(IUriIdentityService);
@@ -1853,7 +1903,7 @@ test('installed inline descriptors use the real DAP session and await implementa
 	assert.equal(frame.threadId, 0);
 	debug.focusStackFrame(frame);
 	session.selectThread(-1);
-	assert.equal(debug.focusedStackFrame, undefined);
+	assert.equal(debug.getViewModel().focusedStackFrame, undefined);
 	const nextFrame = (await session.stackTrace(-1))[0]!;
 	debug.focusStackFrame(nextFrame);
 	peer.event(io, 'continued', { threadId: -1 });
@@ -1942,6 +1992,12 @@ test('extension debug session options retain parent identity, inherit noDebug, m
 		return null;
 	}, workspace)]));
 	const consoleService = debug.replModel;
+	const disposedPublications: string[] = [];
+	resources.add(debug.onDidChangeSession(selected => {
+		for (const published of new Set([...debug.sessions, ...(selected ? [selected] : [])])) {
+			if ((published as DebugSession).isDisposed) disposedPublications.push(published.name);
+		}
+	}));
 	using services = new InstantiationService(new ServiceCollection([IDebugService, debug], [IWorkspaceContextService, workspace], [IExtensionHostApi, createDisconnectedRendererApi().extensionHost]));
 	using bridge = services.createInstance(MainThreadDebugService, 5000, (error: unknown) => { throw error; });
 	debug.toggleBreakpoint(URI.file('/workspace/main.ts'), 3);
@@ -1997,6 +2053,7 @@ test('extension debug session options retain parent identity, inherit noDebug, m
 	consoleService.selectSession(parent.id);
 	await bridge.handle({ operation: 'stopDebugging', sessionId: child.id }, new AbortController().signal);
 	assert.deepEqual(debug.sessions, []);
+	assert.deepEqual(disposedPublications, []);
 	assert.equal(consoleService.sessions.find(console => console.id === parent.id)!.canEvaluate, false);
 	assert.match(consoleService.sessions.find(console => console.id === parent.id)!.output, /parent output\nchild output/);
 	using localization = toDisposable(resetNlsResolver);
@@ -2117,7 +2174,7 @@ suite('DAP reverse startDebugging through the real session owner', () => {
 			services.registerInstance(IAdapterManager, resources.add(new AdapterManager()));
 			if (!services.has(IEditorService)) services.registerInstance(IEditorService, { ...emptyEditorServiceState, openEditor: async () => { }, focusActiveEditor() { } });
 			if (!services.has(IEditorGroupsService)) services.registerInstance(IEditorGroupsService, {} as IEditorGroupsService);
-			const debug = resources.add(services.createInstance(DebugService));
+			const debug = resources.add(createDebugServiceInstance(services));
 			const ended: string[] = [];
 			resources.add(debug.onDidEndSession(session => ended.push(session.name)));
 			const reply = new DeferredPromise<Record<string, unknown>>();
@@ -2168,4 +2225,261 @@ suite('DAP reverse startDebugging through the real session owner', () => {
 			assert.equal(peer.requestsBySession.get('debug-1')!.find(request => request.command === 'initialize')!.arguments && (peer.requestsBySession.get('debug-1')!.find(request => request.command === 'initialize')!.arguments as Record<string, unknown>).supportsStartDebuggingRequest, true);
 		});
 	}
+});
+
+test('Debug workspace edits made before the first Rust snapshot preserve existing definitions', async () => {
+	using resources = new DisposableStore();
+	using storage = new TestStorageService();
+	using tasks = new FakeTaskService();
+	using processes = new FakeDebugAdapterProcessService();
+	using adapters = new AdapterManager();
+	const root = URI.file('/workspace');
+	await processes.editWorkspaceState('workspace', 0, [{ kind: 'addWatch', expression: 'already saved' }]);
+	using service = createDebugService(resources, new FakeFileService(root), workspaceService(root), processes, {} as ITerminalService, storage, tasks, adapters);
+	service.addWatchExpression('early edit');
+	service.toggleBreakpoint(URI.joinPath(root, 'main.ts'), 3);
+	await service.refresh();
+	assert.deepEqual(service.watchExpressions, ['already saved', 'early edit']);
+	const snapshot = (await processes.readWorkspaceState('workspace')).snapshot;
+	assert.deepEqual(snapshot.state.watchExpressions, service.watchExpressions);
+	assert.equal(snapshot.state.breakpoints[0]?.lineNumber, 3);
+	assert.equal(storage.get('memento/debug.workspace', StorageScope.WORKSPACE), undefined);
+});
+
+test('Debug workspace revision conflicts retain local drafts and preserve the other window save', async () => {
+	using resources = new DisposableStore();
+	using tasks = new FakeTaskService();
+	using processes = new FakeDebugAdapterProcessService();
+	using adapters = new AdapterManager();
+	const root = URI.file('/workspace');
+	using first = createDebugService(resources, new FakeFileService(root), workspaceService(root), processes, {} as ITerminalService, new TestStorageService(), tasks, adapters);
+	using second = createDebugService(resources, new FakeFileService(root), workspaceService(root), processes, {} as ITerminalService, new TestStorageService(), tasks, adapters);
+	await Promise.all([first.refresh(), second.refresh()]);
+	first.addWatchExpression('saved by first');
+	await first.refresh();
+	second.addWatchExpression('draft in second');
+	await assert.rejects(second.refresh(), /changed in another window/);
+	assert.deepEqual(second.watchExpressions, ['draft in second']);
+	assert.deepEqual((await processes.readWorkspaceState('workspace')).snapshot.state.watchExpressions, ['saved by first']);
+});
+
+test('Debug workspace migration preserves conflicting legacy data and reports the conflict in Chinese', async () => {
+	using resources = new DisposableStore();
+	using storage = new TestStorageService();
+	using tasks = new FakeTaskService();
+	using processes = new FakeDebugAdapterProcessService();
+	using adapters = new AdapterManager();
+	using localization = toDisposable(resetNlsResolver);
+	initializeTestLocalization('zh-CN');
+	const root = URI.file('/workspace');
+	const legacy = JSON.stringify({ version: 1, breakpoints: [], watchExpressions: ['legacy'], exceptionBreakpoints: {} });
+	storage.store('memento/debug.workspace', legacy, StorageScope.WORKSPACE, StorageTarget.USER);
+	await processes.editWorkspaceState('workspace', 0, [{ kind: 'addWatch', expression: 'saved' }]);
+	using service = createDebugService(resources, new FakeFileService(root), workspaceService(root), processes, {} as ITerminalService, storage, tasks, adapters);
+	await assert.rejects(service.refresh(), { message: '已有调试工作区定义与旧数据冲突。两份数据均已保留。' });
+	assert.equal(storage.get('memento/debug.workspace', StorageScope.WORKSPACE), legacy);
+	assert.deepEqual((await processes.readWorkspaceState('workspace')).snapshot.state.watchExpressions, ['saved']);
+});
+
+class DebugTestLifecycle extends AbstractLifecycleService { }
+function createDebugServiceInstance(services: InstantiationService): DebugService {
+	if (!services.has(ILifecycleService)) services.registerSingleton(ILifecycleService, () => services.createInstance(DebugTestLifecycle, undefined));
+	return services.createInstance(DebugService);
+}
+
+function debugStorageFixture(owner: DisposableStore, backend: IDebugAdapterProcessService, storage: IStorageService, workspace: IWorkspaceContextService) {
+	const services = owner.add(new InstantiationService(new ServiceCollection([IDebugAdapterProcessService, backend], [IStorageService, storage], [IWorkspaceContextService, workspace], [ILogService, new NullLoggerService()])));
+	services.registerSingleton(ILifecycleService, () => services.createInstance(DebugTestLifecycle, undefined));
+	return { client: owner.add(services.createInstance(DebugStorage)), lifecycle: services.get(ILifecycleService) };
+}
+
+test('Debug workspace shutdown waits for the Rust acknowledgement of pending edits', async () => {
+	using resources = new DisposableStore();
+	using storage = new TestStorageService();
+	using processes = new FakeDebugAdapterProcessService();
+	const { client, lifecycle } = debugStorageFixture(resources, processes, storage, workspaceService(URI.file('/workspace')));
+	await client.whenReady();
+	const entered = new DeferredPromise<void>();
+	const released = new DeferredPromise<void>();
+	const write = processes.editWorkspaceState.bind(processes);
+	processes.editWorkspaceState = async (...args) => { void entered.complete(undefined); await released.p; return write(...args); };
+	client.storeState({ ...client.state, watchExpressions: ['last edit'] });
+	await entered.p;
+	let closed = false;
+	const shutdown = lifecycle.shutdown('quit').then(() => { closed = true; });
+	try {
+		await Promise.resolve();
+		assert.equal(closed, false);
+	} finally { await released.complete(undefined); }
+	await shutdown;
+	assert.deepEqual((await processes.readWorkspaceState('workspace')).snapshot.state.watchExpressions, ['last edit']);
+});
+
+test('Debug workspace switching fences migration cleanup and queued writes to their captured workspace', async () => {
+	using resources = new DisposableStore();
+	using storage = new TestStorageService();
+	using processes = new FakeDebugAdapterProcessService();
+	using workspace = new TestWorkspaceService({ id: 'first', uri: URI.file('/first') });
+	const first = new DeferredPromise<void>();
+	const second = new DeferredPromise<void>();
+	const enteredFirst = new DeferredPromise<void>();
+	const enteredSecond = new DeferredPromise<void>();
+	const read = processes.readWorkspaceState.bind(processes);
+	processes.readWorkspaceState = async (id, legacy) => {
+		if (legacy) {
+			void (id === 'first' ? enteredFirst : enteredSecond).complete(undefined);
+			await (id === 'first' ? first : second).p;
+		}
+		return read(id, legacy);
+	};
+	const legacy = (value: string) => JSON.stringify({ version: 1, breakpoints: [], watchExpressions: [value], exceptionBreakpoints: {} });
+	storage.store('memento/debug.workspace', legacy('first'), StorageScope.WORKSPACE, StorageTarget.USER);
+	const { client } = debugStorageFixture(resources, processes, storage, workspace);
+	client.storeState({ ...client.state, watchExpressions: ['first', 'early edit'] });
+	const firstReady = client.whenReady();
+	await enteredFirst.p;
+	// The host switches the Storage scope before publishing the new Workspace.
+	storage.store('memento/debug.workspace', legacy('second'), StorageScope.WORKSPACE, StorageTarget.USER);
+	workspace.updateWorkspace({ id: 'second', uri: URI.file('/second') });
+	await enteredSecond.p;
+	await first.complete(undefined);
+	await firstReady;
+	assert.equal(storage.get('memento/debug.workspace', StorageScope.WORKSPACE), legacy('second'));
+	assert.deepEqual((await read('first')).snapshot.state.watchExpressions, ['first', 'early edit']);
+	await second.complete(undefined);
+	await client.whenReady();
+	assert.equal(storage.get('memento/debug.workspace', StorageScope.WORKSPACE), undefined);
+	assert.deepEqual(client.state.watchExpressions, ['second']);
+	assert.deepEqual((await read('second')).snapshot.state.watchExpressions, ['second']);
+});
+
+for (const action of ['disable', 'clear', 'remove'] as const) {
+	test(`Debug workspace ${action} applies in Rust before the first snapshot is displayed`, async () => {
+		using resources = new DisposableStore();
+		using tasks = new FakeTaskService();
+		using processes = new FakeDebugAdapterProcessService();
+		using adapters = new AdapterManager();
+		const root = URI.file('/workspace');
+		await processes.editWorkspaceState('workspace', 0, [{ kind: 'source', point: { id: 'saved', resource: URI.joinPath(root, 'main.ts').toString(), lineNumber: 2, enabled: true } }]);
+		using service = createDebugService(resources, new FakeFileService(root), workspaceService(root), processes, {} as ITerminalService, new TestStorageService(), tasks, adapters);
+		if (action === 'disable') service.setBreakpointsEnabled(false);
+		else if (action === 'clear') service.removeAllBreakpoints();
+		else service.removeBreakpoints(['saved']);
+		await service.refresh();
+		assert.deepEqual(service.breakpoints.map(point => ({ id: point.id, enabled: point.enabled })), action === 'disable' ? [{ id: 'saved', enabled: false }] : []);
+	});
+}
+
+test('Debug Memento migration keeps legacy relative URI parsing semantics', async () => {
+	using resources = new DisposableStore();
+	using storage = new TestStorageService();
+	using processes = new FakeDebugAdapterProcessService();
+	storage.store('memento/debug.workspace', JSON.stringify({ version: 1, breakpoints: [{ resource: 'main.ts', lineNumber: 2, enabled: false }], watchExpressions: [], exceptionBreakpoints: {} }), StorageScope.WORKSPACE, StorageTarget.USER);
+	const { client } = debugStorageFixture(resources, processes, storage, workspaceService(URI.file('/workspace')));
+	await client.whenReady();
+	const source = URI.parse('main.ts').toString();
+	assert.deepEqual((await processes.readWorkspaceState('workspace')).snapshot.state.breakpoints, [{ id: `${source}:2`, resource: source, lineNumber: 2, enabled: false }]);
+	assert.equal(storage.get('memento/debug.workspace', StorageScope.WORKSPACE), undefined);
+});
+
+test('Debug workspace snapshots never configure an adapter still disconnecting from the previous workspace', async () => {
+	using resources = new DisposableStore();
+	using storage = new TestStorageService();
+	using tasks = new FakeTaskService();
+	using processes = new FakeDebugAdapterProcessService();
+	using adapters = new AdapterManager();
+	const root = URI.file('/first');
+	using workspace = new TestWorkspaceService({ id: 'first', uri: root });
+	using service = createDebugService(resources, new FakeFileService(root), workspace, processes, {} as ITerminalService, storage, tasks, adapters);
+	service.toggleBreakpoint(URI.joinPath(root, 'main.ts'), 2);
+	await service.refresh();
+	await service.startDebugging(service.configurations[1]!);
+	await processes.editWorkspaceState('second', 0, [{ kind: 'source', point: { id: 'second', enabled: true, resource: 'file:///second/main.ts', lineNumber: 9 } }]);
+	const entered = new DeferredPromise<void>();
+	const release = new DeferredPromise<void>();
+	processes.requestHandler = request => {
+		if (request.command === 'disconnect') { void entered.complete(undefined); return release.p.then(() => ({})); }
+		return {};
+	};
+	const replacements = () => processes.requests.filter(request => request.command === 'setBreakpoints').length;
+	const before = replacements();
+	workspace.updateWorkspace({ id: 'second', uri: URI.file('/second') });
+	try {
+		await entered.p;
+		await service.refresh();
+		assert.equal(service.breakpoints[0]?.id, 'second');
+		assert.equal(replacements(), before);
+	} finally { await release.complete(undefined); await service.stopAll(); }
+});
+
+test('Rust parent revocation cancels a child configuration provider before descriptor preparation or Tasks', async () => {
+	using resources = new DisposableStore();
+	const root = URI.file('/workspace');
+	using tasks = new FakeTaskService();
+	using processes = new FakeDebugAdapterProcessService();
+	using adapters = new AdapterManager();
+	using debug = createDebugService(resources, new FakeFileService(root), workspaceService(root), processes, {} as ITerminalService, new TestStorageService(), tasks, adapters);
+	const parent = await debug.startDebugging({ id: 'parent', name: 'Parent', type: 'example', request: 'launch', adapter: { program: '/adapter', arguments: [] }, arguments: {} });
+	const entered = new DeferredPromise<AbortSignal>();
+	const pending = new DeferredPromise<DebugConfiguration>();
+	resources.add(debug.registerDebugConfigurationProviders([{
+		id: 'pending-child', type: 'child', triggerKind: DebugConfigurationProviderTriggerKind.Initial,
+		resolveDebugConfiguration: (_folder, _configuration, signal) => { void entered.complete(signal); return pending.p; },
+	}]));
+	const starting = assert.rejects(debug.startDebugging({ id: 'child', name: 'Child', type: 'child', request: 'launch', adapter: { program: '/adapter', arguments: [] }, preLaunchTask: 'build', arguments: {} }, { parentSession: parent }), isCancellationError);
+	const signal = await entered.p;
+	await debug.stop(parent);
+	await starting;
+	assert.equal(signal.aborted, true);
+	await pending.complete({ name: 'Late', type: 'child', request: 'launch', preLaunchTask: 'build' });
+	assert.deepEqual(tasks.ran, []);
+	assert.equal(processes.started.length, 1);
+	assert.deepEqual(debug.sessions, []);
+});
+
+test('a child started by a parent descriptor inherits the resolved Rust noDebug fact before runtime binding', async () => {
+	using resources = new DisposableStore();
+	const root = URI.file('/workspace');
+	using tasks = new FakeTaskService();
+	using processes = new FakeDebugAdapterProcessService();
+	using adapters = new AdapterManager();
+	using debug = createDebugService(resources, new FakeFileService(root), workspaceService(root), processes, {} as ITerminalService, new TestStorageService(), tasks, adapters);
+	resources.add(debug.registerDebugConfigurationProviders([{
+		id: 'parent', type: 'parent', triggerKind: DebugConfigurationProviderTriggerKind.Initial,
+		resolveDebugConfiguration: (_folder, configuration) => ({ ...configuration, noDebug: true }),
+	}]));
+	resources.add(adapters.registerFactories([{
+		type: 'parent', label: 'Parent', sourceId: 'host',
+		createDebugAdapterDescriptor: async (_configuration, _signal, parent) => {
+			const child = await debug.startDebugging({ id: 'child', name: 'Child', type: 'example', request: 'launch', adapter: { program: '/adapter', arguments: [] }, arguments: {} }, { parentSession: parent });
+			assert.equal(child.resolvedConfiguration?.arguments.noDebug, true);
+			return { program: '/adapter', arguments: [] };
+		},
+	}]));
+	const parent = await debug.startDebugging({ id: 'parent', name: 'Parent', type: 'parent', request: 'launch', arguments: {} });
+	assert.equal(parent.resolvedConfiguration?.arguments.noDebug, true);
+	await debug.stop(parent);
+	assert.deepEqual(debug.sessions, []);
+});
+
+
+test('Debug ViewModel publishes coherent session, thread and frame selections when identifiers are reused', async () => {
+	const { ViewModel } = await import('../../common/debugViewModel.js');
+	using model = new ViewModel();
+	const sessionA = { id: 'a' } as IDebugSession;
+	const sessionB = { id: 'b' } as IDebugSession;
+	const threadA = { id: 0, name: 'a-main' };
+	const threadB = { id: 0, name: 'b-main' };
+	const frame = { id: 0, name: 'main', lineNumber: 1, columnNumber: 1 };
+	const observed: unknown[] = [];
+	using listener = model.onDidFocusStackFrame(event => {
+		assert.equal(model.focusedStackFrame, event.stackFrame);
+		assert.equal(model.focusedSession, event.session);
+		observed.push([event.session?.id, model.focusedThread?.name, event.stackFrame?.id, event.explicit]);
+	});
+	model.setFocus(frame, threadA, sessionA, true);
+	model.setFocus(frame, threadA, sessionA, true);
+	model.setFocus(frame, threadB, sessionB, false);
+	model.setFocus(undefined, undefined, undefined, false);
+	assert.deepEqual(observed, [['a', 'a-main', 0, true], ['b', 'b-main', 0, false], [undefined, undefined, undefined, false]]);
 });

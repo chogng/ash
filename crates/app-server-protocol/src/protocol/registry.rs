@@ -147,6 +147,34 @@ use crate::protocol::backup::BackupWriteParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::common::TextDocumentsCapability;
 #[cfg(any(test, feature = "export"))]
+use crate::protocol::debug::DebugBreakpointDefinition;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::debug::DebugConsoleParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::debug::DebugDataBreakpoint;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::debug::DebugFunctionBreakpoint;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::debug::DebugSessionLifecycleParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::debug::DebugSessionPrepareParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::debug::DebugSourceBreakpoint;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::debug::DebugWorkspaceEdit;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::debug::DebugWorkspaceReadParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::debug::DebugWorkspaceResult;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::debug::DebugWorkspaceSnapshot;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::debug::DebugWorkspaceState;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::debug::DebugWorkspaceStatus;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::debug::DebugWorkspaceWriteParams;
+#[cfg(any(test, feature = "export"))]
 use crate::protocol::extension_host::ExtensionClientRequestParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::extension_packages::ExtensionsAddSourceParams;
@@ -215,6 +243,20 @@ use crate::protocol::text_document::TextDocumentReleaseParams;
 use crate::protocol::text_document::TextDocumentTurnFinished;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::text_document::TextDocumentTurnOutcome;
+#[cfg(any(test, feature = "export"))]
+use ash_debug_contract::DebugConsoleEntry;
+#[cfg(any(test, feature = "export"))]
+use ash_debug_contract::DebugConsoleEntryKind;
+#[cfg(any(test, feature = "export"))]
+use ash_debug_contract::DebugConsoleSnapshot;
+#[cfg(any(test, feature = "export"))]
+use ash_debug_contract::DebugExceptionsSnapshot;
+#[cfg(any(test, feature = "export"))]
+use ash_debug_contract::DebugSessionAction;
+#[cfg(any(test, feature = "export"))]
+use ash_debug_contract::DebugSessionAdmission;
+#[cfg(any(test, feature = "export"))]
+use ash_debug_contract::DebugSessionRelation;
 #[cfg(any(test, feature = "export"))]
 use ash_protocol::SymphonyControl;
 #[cfg(any(test, feature = "export"))]
@@ -784,6 +826,8 @@ use crate::protocol::debug::DebugBreakpointsSnapshot;
 use crate::protocol::debug::DebugDataAccess;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::debug::DebugExceptionFilterDto;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::debug::DebugExceptionsSetResult;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::debug::DebugExecutionStateDto;
 #[cfg(any(test, feature = "export"))]
@@ -5588,6 +5632,16 @@ client_methods! {
         response: DebugAdapterReadResult,
         serialization: None,
     },
+    DebugWorkspaceRead => "debug/workspace/read" {
+        params: DebugWorkspaceReadParams,
+        response: DebugWorkspaceResult,
+        serialization: None,
+    },
+    DebugWorkspaceWrite => "debug/workspace/write" {
+        params: DebugWorkspaceWriteParams,
+        response: DebugWorkspaceResult,
+        serialization: None,
+    },
     DebugBreakpointsSet => "debug/session/breakpoints/set" {
         params: DebugBreakpointsSetParams,
         response: (),
@@ -5608,9 +5662,34 @@ client_methods! {
         response: DebugInspectionResult,
         serialization: None,
     },
+    DebugSessionPrepare => "debug/session/prepare" {
+        params: DebugSessionPrepareParams,
+        response: DebugSessionRelation,
+        serialization: None,
+    },
+    DebugSessionReserve => "debug/session/reserve" {
+        params: DebugSessionAdmission,
+        response: DebugSessionRelation,
+        serialization: None,
+    },
+    DebugSessionLifecycle => "debug/session/lifecycle" {
+        params: DebugSessionLifecycleParams,
+        response: DebugSessionRelation,
+        serialization: None,
+    },
+    DebugConsole => "debug/session/console" {
+        params: DebugConsoleParams,
+        response: DebugConsoleSnapshot,
+        serialization: None,
+    },
     DebugSessionInitialize => "debug/session/initialize" {
         params: DebugSessionInitializeParams,
         response: (),
+        serialization: None,
+    },
+    DebugExceptionsSet => "debug/session/exceptions/set" {
+        params: DebugSessionConfigureParams,
+        response: DebugExceptionsSetResult,
         serialization: None,
     },
     DebugSessionConfigure => "debug/session/configure" {
@@ -7551,6 +7630,17 @@ typescript_bindings! {
     TestingOperationStatus,
     TestingSnapshot,
     TestingUpdate,
+    DebugWorkspaceState,
+    DebugWorkspaceEdit,
+    DebugWorkspaceSnapshot,
+    DebugWorkspaceStatus,
+    DebugWorkspaceResult,
+    DebugBreakpointDefinition,
+    DebugSourceBreakpoint,
+    DebugFunctionBreakpoint,
+    DebugDataBreakpoint,
+    DebugWorkspaceReadParams,
+    DebugWorkspaceWriteParams,
     DebugBreakpointsSetParams,
     DebugInspectionStartParams,
     DebugInspectionStartResult,
@@ -7568,7 +7658,18 @@ typescript_bindings! {
     DebugInspectionValue,
     DebugInspectionResult,
     DebugSessionInitializeParams,
+    DebugSessionLifecycleParams,
+    DebugConsoleParams,
+    DebugSessionAdmission,
+    DebugSessionPrepareParams,
+    DebugSessionRelation,
+    DebugConsoleSnapshot,
+    DebugConsoleEntry,
+    DebugConsoleEntryKind,
+    DebugExceptionsSnapshot,
+    DebugSessionAction,
     DebugSessionConfigureParams,
+    DebugExceptionsSetResult,
     DebugLaunchRequestDto,
     DebugExecutionStateDto,
     DebugInitializationPhaseDto,

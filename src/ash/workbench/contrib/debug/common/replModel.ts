@@ -1,26 +1,27 @@
+import type { DebugConsoleEntry } from "../../../../platform/debug/common/debugAdapterProcessService.js";
+import { localize } from '../../../../nls.js';
 import { Emitter } from "../../../../base/common/event.js";
 import { RunOnceScheduler } from '../../../../base/common/async.js';
 import { combinedDisposable, Disposable, type IDisposable, toDisposable } from "../../../../base/common/lifecycle.js";
-import { type IReplModel, type IDebugConsoleSession, DebugConsoleMode, type IDebugService, type IDebugSession } from "./debug.js";
+import { type IReplModel, type IDebugConsoleSession, type IDebugService, type IDebugSession } from "./debug.js";
 
 interface DebugConsoleRecord {
 	readonly id: string;
 	label: string;
 	state: IDebugConsoleSession["state"];
-	output: string;
+	elements: readonly DebugConsoleEntry[];
+	revision: number;
+	owner: IDebugSession;
 	session: IDebugSession | undefined;
 	readonly members: Map<string, { readonly session: IDebugSession; readonly listener: IDisposable; }>;
 }
-
-const MAXIMUM_CONSOLE_SESSIONS = 20;
-const MAXIMUM_CONSOLE_CHARACTERS = 128_000;
-
-/** Captures DAP output independently of whether the Debug Console panel is visible. */
+/** Keeps read-only Rust console snapshots and selection independently of panel visibility. */
 export class ReplModel extends Disposable implements IReplModel {
 	private readonly changeEmitter = this._register(new Emitter<void>());
 	private readonly outputNotification = this._register(new RunOnceScheduler(() => this.changeEmitter.fire(), 16));
 	private readonly records = new Map<string, DebugConsoleRecord>();
 	private activeSessionId: string | undefined;
+	private consoleCatalog: { readonly revision: number; readonly ids: readonly string[]; } | undefined;
 	readonly onDidChange = this.changeEmitter.event;
 
 	constructor(private readonly debug: IDebugService) {
@@ -44,39 +45,40 @@ export class ReplModel extends Disposable implements IReplModel {
 
 	selectSession(id: string): void {
 		const record = this.records.get(id);
-		if (!record) throw new Error("Debug Console session is no longer available");
+		if (!record) throw new Error(localize('debug.repl.unavailable', 'Debug Console session is no longer available'));
 		if (this.activeSessionId === id) return;
 		this.activeSessionId = id;
 		if (record.session) this.debug.setActiveSession(record.session);
 		this.changeEmitter.fire();
 	}
 
-	clear(sessionId: string | undefined = this.activeSessionId): void {
+	async clear(sessionId: string | undefined = this.activeSessionId): Promise<void> {
 		const record = sessionId ? this.records.get(sessionId) : undefined;
-		if (!record || !record.output) return;
-		record.output = "";
+		if (!record) return;
+		await record.owner.clearRepl();
+		if (this.isDisposed) return;
+		record.elements = record.owner.getReplElements();
+		record.revision = record.owner.replElementsRevision;
 		this.outputNotification.cancel();
 		this.changeEmitter.fire();
 	}
 
 	async evaluate(expression: string): Promise<void> {
 		const normalized = expression.trim();
-		if (!normalized || normalized.length > 32_768 || normalized.includes("\0")) throw new TypeError("Debug Console expression must contain 1 to 32768 characters");
+		if (!normalized || normalized.length > 32_768 || normalized.includes("\0")) throw new TypeError(localize('debug.repl.invalidExpression', 'Debug Console expression must contain 1 to 32768 characters'));
 		const record = this.activeSessionId ? this.records.get(this.activeSessionId) : undefined;
-		if (!record?.session) throw new Error("Debug Console requires an active session");
+		if (!record?.session) throw new Error(localize('debug.repl.activeRequired', 'Debug Console requires an active session'));
 		const session = record.session;
-		// Frame IDs are adapter-local and only valid while that session is paused.
-		// Read the selection at submission, before an asynchronous evaluation can
-		// overlap a frame change, resume, or selection of another console.
+		// Capture the selected frame at submission; frame IDs belong to one paused adapter session.
 		const frame = this.debug.session === session && session.state === 'stopped'
-			? this.debug.focusedStackFrame : undefined;
-		this.append(record, `> ${normalized}\n`);
-		try {
-			const result = await session.evaluate(normalized, frame?.id, "repl");
-			this.append(record, `${result.result}${result.type ? ` : ${result.type}` : ""}\n`);
-		} catch (error) {
-			this.append(record, `Error: ${message(error)}\n`);
+			? this.debug.getViewModel().focusedStackFrame : undefined;
+		await session.evaluate(normalized, frame?.id, "repl");
+		if (this.isDisposed) return;
+		if (session.replElementsRevision >= record.revision) {
+			record.elements = session.getReplElements();
+			record.revision = session.replElementsRevision;
 		}
+		this.changeEmitter.fire();
 	}
 
 	private synchronize(): void {
@@ -96,7 +98,7 @@ export class ReplModel extends Disposable implements IReplModel {
 			if (record.session) record.state = record.session.state;
 			else if (record.state !== 'error') record.state = 'terminated';
 		}
-		if (this.debug.session) this.activeSessionId = consoleOwner(this.debug.session).id;
+		if (this.debug.session) this.activeSessionId = this.debug.session.consoleSessionId;
 		else if (!this.activeSessionId || !this.records.has(this.activeSessionId)) this.activeSessionId = [...this.records.keys()].at(-1);
 		this.trimRecords();
 		this.outputNotification.cancel();
@@ -104,18 +106,33 @@ export class ReplModel extends Disposable implements IReplModel {
 	}
 
 	private ensureRecord(session: IDebugSession): DebugConsoleRecord {
-		const owner = consoleOwner(session);
-		let record = this.records.get(owner.id);
+		const owner = this.debug.sessions.find(candidate => candidate.id === session.consoleSessionId) ?? session;
+		let record = this.records.get(session.consoleSessionId);
 		if (!record) {
-			record = { id: owner.id, label: owner.name, state: owner.state, output: '', session, members: new Map() };
-			this.records.set(owner.id, record);
+			record = { id: session.consoleSessionId, label: owner.name, state: owner.state, elements: session.getReplElements(), revision: session.replElementsRevision, owner: session, session, members: new Map() };
+			this.records.set(record.id, record);
 		}
+		if (session.id === record.id) { record.owner = session; record.label = session.name; }
 		if (record.members.has(session.id)) return record;
-		// Each adapter contributes its retained output once, then only new events.
+		// A later-published parent may carry an older snapshot than its child.
+		// Fresh connection scopes use new session IDs even if their clock restarts.
+		if (!this.consoleCatalog || session.consoleCatalogRevision >= this.consoleCatalog.revision || !this.consoleCatalog.ids.includes(session.consoleSessionId)) {
+			this.consoleCatalog = { revision: session.consoleCatalogRevision, ids: session.retainedConsoleSessionIds };
+		}
+		// Shared-console snapshots replace the cache only in backend revision order.
 		// Listener ownership follows the emitting session even for a shared console.
 		const target = record;
-		this.append(target, session.output);
-		const output = session.onDidOutput(value => this.append(target, value));
+		if (session.replElementsRevision >= target.revision) {
+			target.revision = session.replElementsRevision;
+			target.elements = session.getReplElements();
+		}
+		const output = session.onDidChangeReplElements(() => {
+			if (session.replElementsRevision >= target.revision) {
+				target.revision = session.replElementsRevision;
+				target.elements = session.getReplElements();
+			}
+			if (!this.outputNotification.isScheduled()) this.outputNotification.schedule();
+		});
 		const state = session.onDidChangeState(() => this.synchronize());
 		const name = session.onDidChangeName(value => {
 			if (session.id === target.id) target.label = value;
@@ -125,39 +142,18 @@ export class ReplModel extends Disposable implements IReplModel {
 		return record;
 	}
 
-	private append(record: DebugConsoleRecord, value: string): void {
-		if (!value) return;
-		record.output = `${record.output}${value}`.slice(-MAXIMUM_CONSOLE_CHARACTERS);
-		// Retain output immediately, but publish a burst once. Do not postpone
-		// an already scheduled notification while the adapter keeps writing.
-		if (!this.outputNotification.isScheduled()) this.outputNotification.schedule();
-	}
-
 	private trimRecords(): void {
-		while (this.records.size > MAXIMUM_CONSOLE_SESSIONS) {
-			const candidate = [...this.records.values()].find(record => !record.session && record.id !== this.activeSessionId);
-			if (!candidate) return;
-			for (const member of candidate.members.values()) member.listener.dispose();
-			this.records.delete(candidate.id);
+		const ids = this.consoleCatalog?.ids;
+		if (!ids) return;
+		const retained = new Set(ids);
+		for (const [id, record] of this.records) {
+			if (record.session || retained.has(id)) continue;
+			for (const member of record.members.values()) member.listener.dispose();
+			this.records.delete(id);
 		}
 	}
 }
 
 function snapshot(record: DebugConsoleRecord): IDebugConsoleSession {
-	return Object.freeze({ id: record.id, label: record.label, state: record.state, output: record.output, canEvaluate: record.session !== undefined });
-}
-
-function message(error: unknown): string {
-	return error instanceof Error ? error.message : String(error);
-}
-
-
-function consoleOwner(session: IDebugSession): IDebugSession {
-	let owner = session;
-	const seen = new Set<IDebugSession>();
-	while (owner.parentSession && owner.sessionOptions?.consoleMode === DebugConsoleMode.MergeWithParent && !seen.has(owner)) {
-		seen.add(owner);
-		owner = owner.parentSession;
-	}
-	return owner;
+	return Object.freeze({ id: record.id, label: record.label, state: record.state, elements: record.elements, output: record.elements.map(entry => entry.output).join(''), canEvaluate: record.session !== undefined });
 }

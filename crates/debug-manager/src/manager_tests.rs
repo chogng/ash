@@ -17,7 +17,7 @@ use super::DebugManager;
 use super::DebugMessageDirection;
 use super::DebugResponse;
 
-fn manager() -> DebugManager {
+pub(super) fn manager() -> DebugManager {
     let authorization = |permission| {
         Grant::for_environment(
             Dir::open_local(std::env::temp_dir()).unwrap(),
@@ -303,7 +303,7 @@ fn initialization_gates_configuration_and_preserves_a_stop_before_launch_complet
         manager.read(&id, 0, 128).unwrap().session.phase,
         DebugInitializationPhase::Configuring
     );
-    manager.configure(&id, vec![]).unwrap();
+    manager.configure(&id, None).unwrap();
     assert!(manager.configure(&id, vec![]).is_err());
     let read = manager.read(&id, 0, 128).unwrap();
     let exception = &read.messages.last().unwrap().message;
@@ -358,7 +358,7 @@ fn dynamic_capabilities_merge_and_configuration_done_is_only_sent_when_negotiate
         ],
     );
     assert!(manager.configure(&id, vec!["unsupported".into()]).is_err());
-    manager.configure(&id, vec![]).unwrap();
+    manager.configure(&id, None).unwrap();
     feed(
         &manager,
         &id,
@@ -577,6 +577,7 @@ fn raw_requests_cannot_bypass_the_breakpoint_intent_owner() {
     let manager = manager();
     let id = manager.open_client_transport().unwrap();
     for command in [
+        "setExceptionBreakpoints",
         "setBreakpoints",
         "setFunctionBreakpoints",
         "setDataBreakpoints",
@@ -589,5 +590,123 @@ fn raw_requests_cannot_bypass_the_breakpoint_intent_owner() {
         );
     }
     assert!(manager.read(&id, 0, 128).unwrap().messages.is_empty());
+    manager.close(&id).unwrap();
+}
+
+#[test]
+fn an_output_object_retains_its_original_pause_epoch_and_cannot_query_a_later_stop() {
+    use ash_debug_contract::DebugSessionAdmission;
+    use std::sync::Arc;
+    let manager = Arc::new(manager());
+    let registry = Arc::new(crate::DebugSessions::default());
+    registry
+        .reserve(
+            1,
+            DebugSessionAdmission {
+                id: "public".into(),
+                workspace_id: "workspace".into(),
+                parent_id: None,
+                lifecycle_managed_by_parent: false,
+                merge_console: false,
+                no_debug: None,
+            },
+        )
+        .unwrap();
+    let id = manager.open_client_transport().unwrap();
+    manager.set_public_id(&id, "public".into()).unwrap();
+    manager.attach(&id, registry.clone(), 1, None).unwrap();
+    feed(
+        &manager,
+        &id,
+        vec![
+            json!({"seq":0,"type":"event","event":"stopped","body":{"threadId":1}}),
+            json!({"seq":0,"type":"event","event":"output","body":{"variablesReference":7}}),
+        ],
+    );
+    let output = registry.console(1, "public").unwrap();
+    let epoch = output.entries[0].inspection_revision.unwrap();
+    feed(
+        &manager,
+        &id,
+        vec![
+            json!({"seq":0,"type":"event","event":"continued"}),
+            json!({"seq":0,"type":"event","event":"stopped","body":{"threadId":1}}),
+        ],
+    );
+    assert_eq!(
+        manager
+            .inspect(
+                &id,
+                ash_debug_contract::DebugInspection::Variables {
+                    variables_reference: 7
+                },
+                epoch
+            )
+            .unwrap(),
+        None
+    );
+    assert!(
+        !manager
+            .read(&id, 0, 128)
+            .unwrap()
+            .messages
+            .iter()
+            .any(|entry| entry.message["command"] == "variables")
+    );
+}
+
+#[test]
+fn request_identity_is_the_session_dap_sequence_used_by_cancel() {
+    let manager = manager();
+    let id = manager.open_client_transport().unwrap();
+    feed(
+        &manager,
+        &id,
+        vec![
+            json!({"seq":0,"type":"event","event":"capabilities","body":{"capabilities":{"supportsCompletionsRequest":true,"supportsCancelRequest":true}}}),
+        ],
+    );
+    let completion = manager
+        .request(
+            &id,
+            "completions",
+            Some(json!({"text":"a.","line":1,"column":3,"frameId":0})),
+        )
+        .unwrap();
+    let cancellation = manager
+        .request(&id, "cancel", Some(json!({"requestId":completion})))
+        .unwrap();
+    let read = manager.read(&id, 0, 128).unwrap();
+    let outgoing: Vec<_> = read
+        .messages
+        .iter()
+        .filter(|entry| entry.direction == DebugMessageDirection::Outgoing)
+        .collect();
+    assert_eq!(outgoing[0].message["seq"], completion);
+    assert_eq!(outgoing[0].message["command"], "completions");
+    assert_eq!(outgoing[1].message["seq"], cancellation);
+    assert_ne!(completion, cancellation);
+    assert_eq!(
+        outgoing[1].message["arguments"]["requestId"],
+        outgoing[0].message["seq"]
+    );
+    // DAP cancellation is advisory: pair both responses independently even
+    // when the adapter finishes the original completion after acknowledging it.
+    feed(
+        &manager,
+        &id,
+        vec![
+            reply_message(cancellation, "cancel", json!({})),
+            reply_message(completion, "completions", json!({"targets":[]})),
+        ],
+    );
+    assert!(matches!(
+        manager.response(&id, cancellation).unwrap(),
+        DebugResponse::Complete(_)
+    ));
+    assert!(matches!(
+        manager.response(&id, completion).unwrap(),
+        DebugResponse::Complete(_)
+    ));
     manager.close(&id).unwrap();
 }

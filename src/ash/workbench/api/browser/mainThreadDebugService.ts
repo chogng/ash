@@ -53,7 +53,7 @@ export class MainThreadDebugService extends Disposable {
 			this.activeSessionId = session?.id;
 			this.emit({ type: 'active', session: session ? this.sessionSnapshot(session) : null });
 		}));
-		this._register(debug.onDidFocusStackFrame(() => this.emitStackItem()));
+		this._register(debug.getViewModel().onDidFocusStackFrame(() => this.emitStackItem()));
 		for (const session of debug.sessions) { this.observeSession(session); }
 	}
 
@@ -104,7 +104,7 @@ export class MainThreadDebugService extends Disposable {
 	private stackItemSnapshot(): JsonValue {
 		const session = this.debug.session;
 		if (!session || session.state !== 'stopped' || session.threadId === undefined) return null;
-		const frame = this.debug.focusedStackFrame;
+		const frame = this.debug.getViewModel().focusedStackFrame;
 		// A stack reply retains the thread that requested it. Selection can change before its frame is focused.
 		const frameId = frame && (frame.threadId === undefined || frame.threadId === session.threadId) ? frame.id : undefined;
 		return {

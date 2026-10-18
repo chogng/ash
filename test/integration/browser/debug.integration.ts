@@ -1,14 +1,22 @@
+import { registerCodeEditorServices } from '../../../src/ash/editor/test/browser/testCodeEditor.js';
 import { ICommandService } from '../../../src/ash/platform/commands/common/commands.js';
 import { registerTestComponentServices } from '../../../src/ash/workbench/test/common/testEditorServices.js';
 import type { IResourceEditorInput } from '../../../src/ash/workbench/common/editor.js';
 import { DeferredPromise } from '../../../src/ash/base/common/async.js';
-import { DisposableStore } from '../../../src/ash/base/common/lifecycle.js';
+import { DisposableStore, toDisposable } from '../../../src/ash/base/common/lifecycle.js';
+import { OpenFolderWorkspaceSupportContext } from '../../../src/ash/workbench/common/contextkeys.js';
 import { Event } from '../../../src/ash/base/common/event.js';
 import { StandaloneServices } from '../../../src/ash/editor/standalone/browser/standaloneServices.js';
 import { IConfigurationService } from '../../../src/ash/platform/configuration/common/configuration.js';
 import { IContextKeyService } from '../../../src/ash/platform/contextkey/browser/contextKeyService.js';
 import { IKeybindingService } from '../../../src/ash/platform/keybinding/common/keybinding.js';
 import { IAccessibleViewService } from '../../../src/ash/platform/accessibility/browser/accessibleView.js';
+import { AccessibleViewType } from '../../../src/ash/platform/accessibility/browser/accessibleView.js';
+import { AccessibleViewRegistry } from '../../../src/ash/platform/accessibility/browser/accessibleViewRegistry.js';
+import { IStorageService } from '../../../src/ash/platform/storage/common/storage.js';
+import { BrowserStorageService } from '../../../src/ash/workbench/services/storage/browser/storageService.js';
+import { IViewsService } from '../../../src/ash/workbench/services/views/common/viewsService.js';
+import type { IDebugCompletionItem, IDebugCompletionsResponse } from '../../../src/ash/workbench/contrib/debug/common/debug.js';
 import { DisassemblyView } from '../../../src/ash/workbench/contrib/debug/browser/disassemblyView.js';
 import { DISASSEMBLY_VIEW_ID, type IDisassembledInstruction, IDebugService, type IDebugVariable, type IDataBreakpointInfoResponse, type IDebugConfiguration, type IDebugCompound, START_DEBUG_COMMAND_ID } from '../../../src/ash/workbench/contrib/debug/common/debug.js';
 import { URI } from '../../../src/ash/base/common/uri.js';
@@ -23,7 +31,7 @@ import { formatNlsMessage, setNlsResolver } from '../../../src/ash/nls.js';
 import { IEditorService, type EditorOpenOptions } from '../../../src/ash/workbench/services/editor/common/editorService.js';
 import { productLanguagePackCatalogs } from '../../../src/ash/workbench/services/localization/common/localizationCatalogs.js';
 import { IThemeService } from '../../../src/ash/platform/theme/common/themeService.js';
-import { DebugConsoleViewPane } from '../../../src/ash/workbench/contrib/debug/browser/debugConsoleViewPane.js';
+import { Repl } from '../../../src/ash/workbench/contrib/debug/browser/repl.js';
 import { DebugViewTestServices, MockDebugService, MockDebugSession } from '../../../src/ash/workbench/contrib/debug/test/common/mockDebug.js';
 import '../../../src/ash/workbench/contrib/debug/browser/media/debug.css';
 import '../../../src/ash/base/browser/ui/styles.css';
@@ -43,6 +51,31 @@ const launchControls = new URLSearchParams(location.search).has('launch-controls
 const debug = store.add(new MockDebugService({ name: 'main.ts', resource }));
 if (launchControls) debug.compounds = [{ id: 'all', name: 'All', dirId: 'second', workspaceFolderName: 'Second', configurations: ['first', 'second'], stopAll: false }];
 const session = debug.sessions[0] as MockDebugSession;
+const completionRequests: Array<{ sessionId: string; frameId: number | undefined; threadId: number; text: string; lineNumber: number; column: number; cancelled: boolean; held: boolean; }> = [];
+let holdNextCompletion = false;
+let pendingCompletion: DeferredPromise<IDebugCompletionsResponse> | undefined;
+if (new URLSearchParams(location.search).has('console-tools')) {
+	for (const candidate of debug.sessions) {
+		Object.defineProperty(candidate, 'capabilities', { value: Object.freeze({ ...candidate.capabilities, supportsCompletionsRequest: true, supportsCancelRequest: true, completionTriggerCharacters: ['.'] }) });
+		candidate.completions = async (frameId, threadId, text, position, token) => {
+			const held = holdNextCompletion;
+			holdNextCompletion = false;
+			const request = { sessionId: candidate.id, frameId, threadId, text, lineNumber: position.lineNumber, column: position.column, cancelled: token.isCancellationRequested, held };
+			completionRequests.push(request);
+			const cancellation = token.onCancellationRequested(() => { request.cancelled = true; });
+			try {
+				if (held) return await pendingCompletion!.p;
+				const targets: IDebugCompletionItem[] = [
+					{ label: 'alpha', text: 'alpha', start: 1, length: text.length, sortText: '01' },
+					{ label: 'beta', text: 'beta', start: 1, length: text.length, sortText: '02' },
+				];
+				if (text === 'pre obj.pa tail') targets.push({ label: 'pair', text: 'pair(value)', start: 9, length: 2, selectionStart: 5, selectionLength: 5, sortText: '03', detail: 'pair with an argument' });
+				return { body: { targets } };
+			} finally { cancellation.dispose(); }
+		};
+	}
+	store.add(toDisposable(() => { if (pendingCompletion && !pendingCompletion.isSettled) void pendingCompletion.complete({ body: { targets: [] } }); }));
+}
 const launches: string[] = [];
 if (launchControls) {
 	const configuration = debug.configurations[0]!;
@@ -89,6 +122,11 @@ const editors: IEditorService = {
 	focusActiveEditor: () => editor.focus(),
 };
 const support = store.add(new DebugViewTestServices(new URLSearchParams(location.search).has('empty') ? { id: 'empty' } : { id: 'workspace', uri: URI.file('/workspace') }));
+// This test host implements Open Folder; advertise that capability
+// so the welcome action follows the same gate as a real Workbench host.
+const folderSupport = OpenFolderWorkspaceSupportContext.bindTo(StandaloneServices.get(IContextKeyService));
+folderSupport.set(true);
+store.add(toDisposable(() => folderSupport.reset()));
 if (launchControls) {
 	support.workspace.updateWorkspace({
 		id: 'multi', folders: [
@@ -105,6 +143,9 @@ const services = store.add(new InstantiationService(support.register(new Service
 	[IAccessibleViewService, { show: () => false, getOpenAriaHint: () => undefined, disableHint: async () => { }, showAccessibleViewHelp: () => { }, dispose() { }, [Symbol.dispose]() { } }],
 	[IContextMenuService, { onDidShowContextMenu: Event.None, onDidHideContextMenu: Event.None, showContextMenu() { }, hideContextMenu() { } }],
 ))));
+registerCodeEditorServices(services);
+const storage = store.add(new BrowserStorageService({ ownerWindow: window, workspaceId: new URLSearchParams(location.search).get('console-workspace') ?? 'debug-console-integration', flushInterval: 0 }));
+services.registerInstance(IStorageService, storage);
 const disassemblyContainer = document.createElement('div');
 document.body.append(disassemblyContainer);
 const disassembly = store.add(registerTestComponentServices(services).createInstance(DisassemblyView));
@@ -118,16 +159,65 @@ const { pane, part, container: debugContainer } = support.createContainer(servic
 pane.setVisible(true);
 if (!new URLSearchParams(location.search).has('welcome')) debug.activate(session);
 const debugConsole = debug.replModel;
-if (new URLSearchParams(location.search).has('console')) {
-	const container = document.createElement('div');
-	document.body.append(container);
-	const consolePane = store.add(new DebugConsoleViewPane(container, { id: 'debug.console.integration', title: 'Debug Console' }, debug));
+let consolePane: Repl | undefined;
+let consoleContainer: HTMLElement | undefined;
+function createConsole(): void {
+	consolePane?.dispose();
+	consoleContainer?.remove();
+	consoleContainer = document.createElement('div');
+	document.body.append(consoleContainer);
+	consolePane = services.createInstance(Repl, consoleContainer, { id: 'debug.console.integration', title: 'Debug Console' });
 	consolePane.setVisible(true);
+	consolePane.layout(360, 0, 640);
+}
+if (new URLSearchParams(location.search).has('console')) {
+	createConsole();
+	store.add(toDisposable(() => { consolePane?.dispose(); consoleContainer?.remove(); }));
 }
 let pendingAssignment: DeferredPromise<IDebugVariable> | undefined;
 let pendingDataInfo: DeferredPromise<IDataBreakpointInfoResponse> | undefined;
 
 window.ashDebugIntegration = {
+	consoleOutput: () => {
+		const group = session.replElementsRevision + 1;
+		session.emitConsoleEntry({ kind: 'group', output: 'Build group\n', collapsed: true });
+		session.emitConsoleEntry({ output: 'Alpha success\n', parentId: group });
+		session.emitConsoleEntry({ output: 'Beta failure\n', parentId: group });
+		session.emitConsoleEntry({ output: 'Gamma outside\n' });
+	},
+	consoleStats: () => consolePane!.getFilterStats(),
+	consoleInput: () => {
+		const editor = consolePane!.getReplInput();
+		const model = editor.getModel()!;
+		const selection = editor.getSelection()!;
+		return { value: editor.getValue(), start: model.getOffsetAt(selection.getStartPosition()), end: model.getOffsetAt(selection.getEndPosition()), selection: model.getValueInRange(selection), lineCount: model.getLineCount(), height: editor.getDomNode().getBoundingClientRect().height };
+	},
+	consoleAccessibility: () => {
+		const actualViews = services.get(IViewsService);
+		const getView = actualViews.getViewWithId.bind(actualViews);
+		actualViews.getViewWithId = () => consolePane as never;
+		try {
+			const content = (type: AccessibleViewType): string => {
+				const provider = AccessibleViewRegistry.getImplementations().find(item => item.name === `debug.repl.${type}`)!.getProvider(services)!;
+				try { return provider.provideContent(); } finally { provider.dispose(); }
+			};
+			return { help: content(AccessibleViewType.Help), view: content(AccessibleViewType.View) };
+		} finally { actualViews.getViewWithId = getView; }
+	},
+	recreateConsole: () => createConsole(),
+	consoleWorkspace: id => storage.switchWorkspace(id),
+	resizeConsole: (width, height = 360) => { consoleContainer!.style.width = `${width}px`; consolePane!.layout(height, 0, width); },
+	completionRequests: () => completionRequests,
+	holdCompletion: () => { holdNextCompletion = true; pendingCompletion = new DeferredPromise<IDebugCompletionsResponse>(); },
+	releaseCompletion: () => { const pending = pendingCompletion!; pendingCompletion = undefined; return pending.complete({ body: { targets: [{ label: 'obsolete-result' }] } }); },
+	focusConsoleFrame: id => debug.focusStackFrame({ id, threadId: 2, name: `frame-${id}`, source: { name: 'main.ts', resource }, lineNumber: 2, columnNumber: 1 }),
+	selectConsoleSession: id => debug.setActiveSession(debug.sessions.find(candidate => candidate.id === id)!),
+	structuredOutput: () => {
+		const group = session.replElementsRevision + 1;
+		session.emitConsoleEntry({ kind: 'group', output: 'Structured group', collapsed: true });
+		session.emitConsoleEntry({ output: 'Object output', variablesReference: 20, parentId: group, category: 'stderr', source: { name: 'main.ts', path: '/workspace/main.ts' }, line: 2, column: 1 });
+		session.emitConsoleEntry({ output: 'outside\n' });
+	},
 	burstOutput: count => {
 		const started = performance.now();
 		for (let index = 0; index < count; index++) session.emitOutput(`burst-${index}\n`);
@@ -180,6 +270,19 @@ window.addEventListener('pagehide', () => store.dispose(), { once: true });
 declare global {
 	interface Window {
 		ashDebugIntegration: {
+			consoleOutput(): void;
+			consoleInput(): { value: string; start: number; end: number; selection: string; lineCount: number; height: number; };
+			consoleStats(): { total: number; filtered: number; };
+			consoleAccessibility(): { help: string; view: string; };
+			recreateConsole(): void;
+			consoleWorkspace(id: string): void;
+			resizeConsole(width: number, height?: number): void;
+			completionRequests(): readonly { sessionId: string; frameId: number | undefined; threadId: number; text: string; lineNumber: number; column: number; cancelled: boolean; held: boolean; }[];
+			holdCompletion(): void;
+			releaseCompletion(): Promise<void>;
+			focusConsoleFrame(id: number): void;
+			selectConsoleSession(id: string): void;
+			structuredOutput(): void;
 			burstOutput(count: number): { duration: number; output: string | undefined; };
 			openedSources(): readonly unknown[];
 			launches(): readonly string[];

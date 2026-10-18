@@ -9,6 +9,9 @@ const empty: IDebugAdapterProcessReadResult = { messages: [], nextSequence: 0, o
 
 function backend(overrides: Partial<IDebugAdapterProcessService> = {}): IDebugAdapterProcessService {
 	return {
+		prepareSession: async () => { throw new Error('Not used by RawDebugSession'); },
+		reserveSession: async () => { throw new Error('Not used by RawDebugSession'); }, manageSession: async () => { throw new Error('Not used by RawDebugSession'); }, readConsole: async () => { throw new Error('Not used by RawDebugSession'); }, setExceptionBreakpoints: async () => 1,
+		readWorkspaceState: async () => { throw new Error('Not used by RawDebugSession'); }, editWorkspaceState: async () => { throw new Error('Not used by RawDebugSession'); },
 		start: async () => 'client', send: async () => { }, read: async () => empty, close: async () => { },
 		setBreakpoints: async () => { }, readBreakpoints: async () => ({ revision: 0, version: 0, appliedVersion: 0, bindings: [], error: null }), startInspection: async () => 1, readInspection: async () => ({ state: "pending" }), initializeSession: async () => { }, completeConfiguration: async () => { }, startRequest: async () => 1, readResponse: async () => ({ state: 'pending' }), acceptInput: async () => { },
 		getConnectionState: async () => 'ready', onConnectionState: Event.None, ...overrides,
@@ -105,4 +108,24 @@ test('RawDebugSession discards inspection completion returned after close', asyn
 	await session.close();
 	await complete.complete({ state: 'complete', value: { kind: 'variables', variables: [] } });
 	await rejected;
+});
+
+test('RawDebugSession never forwards a queued inline request after Rust revoked the session', async () => {
+	let sends = 0;
+	const processes = backend({
+		read: async () => ({
+			...empty,
+			session: {
+				revision: 1, executionRevision: 1, inspectionRevision: 1, state: 'terminated', phase: 'ended', reason: null, stoppedThreadId: null,
+				capabilities: { supportsRestart: false, supportsTerminate: false, supportsSetVariable: false, supportsConditionalBreakpoints: false, supportsHitConditionalBreakpoints: false, supportsLogPoints: false, supportsFunctionBreakpoints: false, supportsDataBreakpoints: false, supportsInstructionBreakpoints: false, supportsDisassembleRequest: false, supportsSteppingGranularity: false, supportsCompletionsRequest: false, supportsCancelRequest: false, completionTriggerCharacters: [], exceptionBreakpointFilters: [] }
+			},
+			messages: [{ sequence: 0, direction: 'outgoing', message: { seq: 1, type: 'request', command: 'launch' } }], nextSequence: 1,
+		})
+	});
+	const session = new RawDebugSession(processes, { read: async () => empty, send: async () => { sends++; }, close: async () => { } });
+	try {
+		await session.start({ arguments: [], connection: { type: 'client' } });
+		assert.equal((await session.read(0, 128)).session?.state, 'terminated');
+		assert.equal(sends, 0);
+	} finally { await session.close(); }
 });

@@ -1,3 +1,7 @@
+import { ILifecycleService } from '../../../../services/lifecycle/common/lifecycle.js';
+import { AbstractLifecycleService } from '../../../../services/lifecycle/common/lifecycleService.js';
+import { ILabelService } from '../../../../../platform/label/common/label.js';
+import { LabelService } from '../../../../services/label/common/labelService.js';
 import { installDebugClientFixture } from '../common/debugClientFixture.js';
 import { registerTestTerminalCreationServices } from '../../../../test/browser/workbenchTestServices.js';
 import { MergedEnvironmentVariableCollection } from '../../../../../platform/terminal/common/environmentVariableCollection.js';
@@ -10,8 +14,6 @@ import { CancellationError, isCancellationError } from '../../../../../base/comm
 import { type IDebugSession, IAdapterManager } from '../../common/debug.js';
 import { IEditorService } from '../../../../services/editor/common/editorService.js';
 import { IEditorGroupsService } from '../../../../services/editor/common/editorGroupsService.js';
-import { ILabelService } from '../../../../../platform/label/common/label.js';
-import { LabelService } from '../../../../services/label/common/labelService.js';
 import { emptyEditorServiceState } from '../../../../test/common/testEditorService.js';
 import { registerTestExtensionService } from '../../../../test/common/testExtensionServices.js';
 import { TestConfigurationService as WorkbenchConfigurationService } from '../../../../services/configuration/test/common/testServices.js';
@@ -309,8 +311,8 @@ async function launchWithTerminalRequest(terminals: ITerminalService, argumentsV
 	};
 	const services = resources.add(new InstantiationService(new ServiceCollection([IPathService, new SyncDescriptor(BrowserPathService)], [IRendererHostService, createDisconnectedRendererApi()], [IConfigurationService, options.configuration ?? new SyncDescriptor(WorkbenchConfigurationService)],
 		[IFileService, new SyncDescriptor(FileService)],
-		[IUriIdentityService, new SyncDescriptor(UriIdentityService)],
-		[ITerminalProcessService, terminalProcesses], [IWorkspaceContextService, workspace], [ILabelService, new SyncDescriptor(LabelService)], [IConfigurationResolverService, new SyncDescriptor(ConfigurationResolverService)],
+		[IUriIdentityService, new SyncDescriptor(UriIdentityService)], [ILabelService, new SyncDescriptor(LabelService)],
+		[ITerminalProcessService, terminalProcesses], [IWorkspaceContextService, workspace], [IConfigurationResolverService, new SyncDescriptor(ConfigurationResolverService)],
 		[IStorageService, storage],
 		[IDebugAdapterProcessService, processes],
 		[ITerminalService, terminals],
@@ -327,6 +329,7 @@ async function launchWithTerminalRequest(terminals: ITerminalService, argumentsV
 	services.registerSingleton(ITerminalProfileService, () => services.createInstance(TerminalProfileService));
 	services.registerInstance(IEnvironmentVariableService, { collections: new Map(), mergedCollection: new MergedEnvironmentVariableCollection(new Map()), onDidChangeCollections: Event.None, refreshCollections: async () => { }, set: () => { }, delete: () => { }, registerCollectionProvider: () => Disposable.None });
 	services.registerSingleton(ITerminalProfileResolverService, () => services.createInstance(BrowserTerminalProfileResolverService));
+	services.registerSingleton(ILifecycleService, () => services.createInstance(DebugTerminalLifecycle, undefined));
 	using service = services.createInstance(DebugService);
 	const session = await service.startDebugging({ id: 'debug-terminal', name: 'Terminal request', type: 'example', request: 'launch', adapter: { program: 'adapter', arguments: [] }, arguments: { cwd: URI.file('/workspace').fsPath } });
 	try {
@@ -363,3 +366,5 @@ test('activity-selected debug roots bind the adapter and integrated terminal to 
 	assert.deepEqual(adapterRoutes, ['two']);
 	assert.equal(created[0]?.dirId, 'two');
 });
+
+class DebugTerminalLifecycle extends AbstractLifecycleService { }

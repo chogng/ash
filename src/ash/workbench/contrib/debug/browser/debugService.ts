@@ -1,3 +1,5 @@
+import { ILifecycleService } from '../../../services/lifecycle/common/lifecycle.js';
+import { IStorageService } from "../../../../platform/storage/common/storage.js";
 import { ICommandService } from '../../../../platform/commands/common/commands.js';
 import { DEBUG_CONFIGURE_COMMAND_ID } from './debugCommands.js';
 import { IExtensionService } from '../../../services/extensions/common/extensionService.js';
@@ -5,6 +7,7 @@ import { IUriIdentityService } from '../../../../platform/uriIdentity/common/uri
 import { getUriFromSource } from '../common/debugSource.js';
 import { throwIfCancelled } from '../../../../base/common/cancellation.js';
 import { raceCancellationError } from '../../../../base/common/async.js';
+import { ViewModel } from '../common/debugViewModel.js';
 import { ReplModel } from '../common/replModel.js';
 import { registerWorkbenchServiceContribution } from '../../../browser/workbenchServiceContributions.js';
 import { IConfigurationResolverService } from '../../../services/configurationResolver/common/configurationResolver.js';
@@ -13,18 +16,16 @@ import { CancellationError } from '../../../../base/common/errors.js';
 import { Debugger } from '../common/debugger.js';
 import { localize } from '../../../../nls.js';
 import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
-import { CONTEXT_DEBUG_STATE, IAdapterManager, type IResolvedDebugConfiguration, type IDebugStackFrame, type DebugBreakpoint, type IBaseBreakpoint, type IDebugBreakpoint, type IDebugBreakpointUpdate, type IDebugCompound, type IDebugConfiguration, type IDataBreakpoint, type IDataBreakpointOptions, type IFunctionBreakpoint, type IFunctionBreakpointOptions, type IInstructionBreakpoint, type IInstructionBreakpointOptions, IDebugService, DebugConsoleMode, type IDebugSessionOptions, type IDebugSession, DebugConfigurationProviderTriggerKind, type DebugConfiguration, type IDebugConfigurationProvider, type DebugConfigurationProviderRegistration, type IDebugAdapterTracker, type IDebugAdapterTrackerFactory, type DebugAdapterTrackerFactoryRegistration } from '../common/debug.js';
+import { CONTEXT_DEBUG_STATE, IAdapterManager, type IResolvedDebugConfiguration, type IDebugStackFrame, type IDebugThread, type IViewModel, type DebugBreakpoint, type IBaseBreakpoint, type IDebugBreakpoint, type IDebugBreakpointUpdate, type IDebugCompound, type IDebugConfiguration, type IDataBreakpoint, type IDataBreakpointOptions, type IFunctionBreakpoint, type IFunctionBreakpointOptions, type IInstructionBreakpoint, type IInstructionBreakpointOptions, IDebugService, DebugConsoleMode, type IDebugSessionOptions, type IDebugSession, DebugConfigurationProviderTriggerKind, type DebugConfiguration, type IDebugConfigurationProvider, type DebugConfigurationProviderRegistration, type IDebugAdapterTracker, type IDebugAdapterTrackerFactory, type DebugAdapterTrackerFactoryRegistration } from '../common/debug.js';
 import { Emitter, type Event } from "../../../../base/common/event.js";
-import { type JsonValue } from "../../../../base/common/jsonValue.js";
 import { Disposable, DisposableStore, toDisposable } from "../../../../base/common/lifecycle.js";
 import { URI } from "../../../../base/common/uri.js";
 import { generateUuid } from "../../../../base/common/uuid.js";
-import { IDebugAdapterProcessService } from "../../../../platform/debug/common/debugAdapterProcessService.js";
+import { IDebugAdapterProcessService, type DebugWorkspaceEdit } from "../../../../platform/debug/common/debugAdapterProcessService.js";
 import { FileNotFoundError, IFileService } from "../../../../platform/files/common/files.js";
 import { ILogService } from "../../../../platform/log/common/log.js";
-import { IStorageService, StorageScope, StorageTarget } from "../../../../platform/storage/common/storage.js";
 import { IWorkspaceContextService } from "../../../../platform/workspace/common/workspace.js";
-import { Memento } from "../../../common/memento.js";
+import { DebugStorage, type PersistedDebugState } from "../common/debugStorage.js";
 import { ITaskService } from "../../tasks/common/taskService.js";
 import { waitForTask } from "../../tasks/common/tasks.js";
 import { ITerminalService } from "../../terminal/browser/terminal.js";
@@ -42,34 +43,14 @@ import { IEditorService } from '../../../services/editor/common/editorService.js
 import { IEditorGroupsService } from '../../../services/editor/common/editorGroupsService.js';
 import { Schemas } from '../../../../base/common/network.js';
 
-interface PersistedDebugState {
-	readonly version: 2;
-	readonly breakpoints: readonly PersistedBreakpoint[];
-	readonly functionBreakpoints: readonly IFunctionBreakpoint[];
-	readonly dataBreakpoints: readonly IDataBreakpoint[];
-	readonly watchExpressions: readonly string[];
-	readonly exceptionBreakpoints: Readonly<Record<string, readonly string[]>>;
-}
-
-interface PersistedBreakpoint {
-	readonly id?: string;
-	readonly columnNumber?: number;
-	readonly resource: string;
-	readonly lineNumber: number;
-	readonly enabled: boolean;
-	readonly condition?: string;
-	readonly hitCondition?: string;
-	readonly logMessage?: string;
-}
-
 interface DebugSessionRecord {
 	readonly session: DebugSession;
+	readonly workspaceGeneration: number;
+	readonly workspaceId: string;
 	readonly listener: DisposableStore;
 	readonly postDebugTask: string | undefined;
 	completion?: Promise<void>;
 }
-
-const EMPTY_STATE: PersistedDebugState = Object.freeze({ version: 2, breakpoints: Object.freeze([]), functionBreakpoints: Object.freeze([]), dataBreakpoints: Object.freeze([]), watchExpressions: Object.freeze([]), exceptionBreakpoints: Object.freeze({}) });
 
 /** Workspace Debug composition over generic DAP processes. */
 export class DebugService extends Disposable implements IDebugService {
@@ -83,10 +64,8 @@ export class DebugService extends Disposable implements IDebugService {
 	private readonly newSessionEmitter = this._register(new Emitter<IDebugSession>());
 	private readonly endSessionEmitter = this._register(new Emitter<IDebugSession>());
 	private readonly sessionEmitter = this._register(new Emitter<IDebugSession | undefined>());
-	private readonly focusedFrameEmitter = this._register(new Emitter<IDebugStackFrame | undefined>());
-	private currentFocusedStackFrame: IDebugStackFrame | undefined;
-	private readonly stateMemento: Memento<Record<string, JsonValue>>;
-	private stateDirty = false;
+	private readonly viewModel = this._register(new ViewModel());
+	private readonly debugStorage: DebugStorage;
 	private readonly sessionRecords = new Map<string, DebugSessionRecord>();
 	private currentBreakpoints: readonly IDebugBreakpoint[] = Object.freeze([]);
 	private currentFunctionBreakpoints: readonly IFunctionBreakpoint[] = Object.freeze([]);
@@ -94,10 +73,10 @@ export class DebugService extends Disposable implements IDebugService {
 	private currentInstructionBreakpoints: readonly IInstructionBreakpoint[] = Object.freeze([]);
 	private currentWatchExpressions: readonly string[] = Object.freeze([]);
 	private exceptionBreakpointsByType: Readonly<Record<string, readonly string[]>> = Object.freeze({});
-	private activeSessionId: string | undefined;
 	private refreshGeneration = 0;
 	private workspaceGeneration = 0;
 	private terminalGeneration = 0;
+	private readonly launchControllers = new Map<string, AbortController>();
 	private readonly pendingDescriptors = new Set<AbortController>();
 	private readonly descriptorOwners = new Map<AbortController, Set<object>>();
 	private readonly preparingSessions = new Map<string, IDebugSession>();
@@ -113,8 +92,7 @@ export class DebugService extends Disposable implements IDebugService {
 	readonly onWillNewSession = this.willSessionEmitter.event;
 	readonly onDidNewSession = this.newSessionEmitter.event;
 	readonly onDidEndSession = this.endSessionEmitter.event;
-	readonly onDidFocusStackFrame = this.focusedFrameEmitter.event;
-	get focusedStackFrame() { return this.currentFocusedStackFrame; }
+	getViewModel(): IViewModel { return this.viewModel; }
 
 	constructor(
 		@IFileService private readonly files: IFileService,
@@ -123,7 +101,6 @@ export class DebugService extends Disposable implements IDebugService {
 		@ITerminalService private readonly terminals: ITerminalService,
 		@ITerminalProfileResolverService private readonly terminalProfiles: ITerminalProfileResolverService,
 		@ITerminalProcessService private readonly terminalProcesses: ITerminalProcessService,
-		@IStorageService storage: IStorageService,
 		@ITaskService private readonly tasks: ITaskService,
 		@IAdapterManager private readonly adapters: IAdapterManager,
 		@ILogService private readonly logService: ILogService,
@@ -143,26 +120,9 @@ export class DebugService extends Disposable implements IDebugService {
 		const debugState = CONTEXT_DEBUG_STATE.bindTo(contextKeys);
 		this._register(this.onDidChangeSession(session => debugState.set(session?.state ?? 'inactive')));
 		this._register(toDisposable(() => debugState.reset()));
-		this.stateMemento = new Memento("debug.workspace", storage);
-		try {
-			this.restorePersistedState();
-		} catch (error) {
-			this.dispose();
-			throw error;
-		}
-		this._register(storage.onWillSaveState(() => {
-			if (this.stateDirty) {
-				this.stateMemento.saveMemento();
-				this.stateDirty = false;
-			}
-		}));
-		this.stateMemento.onDidChangeValue(StorageScope.WORKSPACE, this._store)(event => {
-			// Pending breakpoint edits belong to this session, not to another window's storage update.
-			if (event.external && !this.stateDirty) {
-				this.stateMemento.reloadMemento(StorageScope.WORKSPACE);
-				this.restorePersistedState();
-			}
-		});
+		try { this.debugStorage = this._register(instantiationService.createInstance(DebugStorage)); } catch (error) { this.dispose(); throw error; }
+		this.restoreState(this.debugStorage.state);
+		this._register(this.debugStorage.onDidChangeState(state => this.restoreState(state)));
 		this._register(files.onDidChangeFiles(event => { if (event.resources === undefined || event.resources.some(resource => /\/\.vscode\/launch\.json$/i.test(resource.path))) void this.refresh().catch(error => this.reportError(error)); }));
 		let previousFactories = adapters.factories;
 		this._register(adapters.onDidChange(factories => {
@@ -173,7 +133,7 @@ export class DebugService extends Disposable implements IDebugService {
 			this.configurationManager.setConfigurations(Object.freeze([]), Object.freeze([]));
 			void this.refresh().catch(error => this.reportError(error));
 		}));
-		this._register(workspace.onDidChangeWorkspace(() => { this.workspaceGeneration++; this.cancelPendingDescriptors(); this.refreshGeneration += 1; this.configurationManager.setConfigurations(Object.freeze([]), Object.freeze([])); void this.stopAll(); }));
+		this._register(workspace.onDidChangeWorkspace(() => { this.workspaceGeneration++; this.currentDataBreakpoints = Object.freeze(this.currentDataBreakpoints.filter(point => point.canPersist)); this.currentInstructionBreakpoints = Object.freeze([]); this.restoreState(this.debugStorage.state); this.cancelPendingDescriptors(); this.refreshGeneration += 1; this.configurationManager.setConfigurations(Object.freeze([]), Object.freeze([])); void this.stopAll(); }));
 		this._register(toDisposable(() => { this.cancelPendingDescriptors(); this.configurationProviders.clear(); this.trackerFactories.clear(); for (const session of this.preparingSessions.values()) { session.dispose(); } this.preparingSessions.clear(); for (const record of this.sessionRecords.values()) { record.listener.dispose(); record.session.dispose(); } this.sessionRecords.clear(); }));
 		this.replModel = this._register(new ReplModel(this));
 	}
@@ -186,10 +146,15 @@ export class DebugService extends Disposable implements IDebugService {
 	get dataBreakpoints() { return this.currentDataBreakpoints; }
 	get instructionBreakpoints() { return this.currentInstructionBreakpoints; }
 	get watchExpressions() { return this.currentWatchExpressions; }
-	get exceptionBreakpoints() { return this.exceptionBreakpointsForType(this.session?.configuration.type); }
+	get exceptionBreakpoints() { return this.session?.exceptionBreakpoints ?? Object.freeze([]); }
 	getSession(id: string): IDebugSession | undefined { return this.sessionRecords.get(id)?.session ?? this.preparingSessions.get(id); }
-	get sessions(): readonly IDebugSession[] { return Object.freeze([...this.sessionRecords.values()].map(record => record.session)); }
-	get session(): IDebugSession | undefined { return this.activeSessionId ? this.sessionRecords.get(this.activeSessionId)?.session : undefined; }
+	// Release retains canonical identities for extension callbacks, but disposed
+	// session emitters must never be advertised to views as subscribable sessions.
+	get sessions(): readonly IDebugSession[] { return Object.freeze([...this.sessionRecords.values()].map(record => record.session).filter(session => !session.isDisposed)); }
+	get session(): IDebugSession | undefined {
+		const session = this.viewModel.focusedSession ? this.sessionRecords.get(this.viewModel.focusedSession.id)?.session : undefined;
+		return session?.isDisposed ? undefined : session;
+	}
 
 	registerDebugAdapterTrackerFactories(factories: readonly IDebugAdapterTrackerFactory[]): DebugAdapterTrackerFactoryRegistration {
 		this.assertNotDisposed();
@@ -364,9 +329,10 @@ export class DebugService extends Disposable implements IDebugService {
 		return undefined;
 	}
 
-	private async resolveConfigurationProviders(configuration: IDebugConfiguration, folder: URI | undefined, substituted: boolean): Promise<IDebugConfiguration> {
+	private async resolveConfigurationProviders(configuration: IDebugConfiguration, folder: URI | undefined, substituted: boolean, signal: AbortSignal): Promise<IDebugConfiguration> {
 		let current = configuration;
 		const controller = new AbortController();
+		using cancellation = linkCancellation(signal, controller);
 		this.pendingDescriptors.add(controller);
 		try {
 			const seen = new Set<string>();
@@ -413,6 +379,8 @@ export class DebugService extends Disposable implements IDebugService {
 	}
 
 	async refresh(): Promise<readonly IDebugConfiguration[]> {
+		await this.debugStorage.whenReady();
+		await this.debugStorage.reload();
 		const generation = ++this.refreshGeneration;
 		const folders = this.workspace.getWorkspace().folders;
 		const multiRoot = folders.length > 1;
@@ -456,12 +424,38 @@ export class DebugService extends Disposable implements IDebugService {
 
 	async startDebugging(current: IDebugConfiguration, options: IDebugSessionOptions = {}): Promise<IDebugSession> {
 		const sessionOptions = this.normalizeSessionOptions(options);
-		const assertParent = (): void => {
-			if (sessionOptions.parentSession && this.getSession(sessionOptions.parentSession.id) !== sessionOptions.parentSession) throw new CancellationError();
-		};
-		const inheritedNoDebug = sessionOptions.noDebug ?? sessionOptions.parentSession?.resolvedConfiguration?.arguments.noDebug;
-		if (inheritedNoDebug !== undefined) current = Object.freeze({ ...current, arguments: Object.freeze({ ...current.arguments, noDebug: inheritedNoDebug }) });
 		if (!this.processes) throw new Error("This host does not provide the Code debug adapter capability");
+		const generation = this.workspaceGeneration;
+		const relation = await this.processes.reserveSession({
+			id: generateUuid(), workspaceId: this.workspace.getWorkspace().id, parentId: sessionOptions.parentSession?.id ?? null,
+			lifecycleManagedByParent: sessionOptions.lifecycleManagedByParent ?? false,
+			mergeConsole: sessionOptions.consoleMode === DebugConsoleMode.MergeWithParent,
+			noDebug: sessionOptions.noDebug ?? (sessionOptions.parentSession ? null : typeof current.arguments.noDebug === 'boolean' ? current.arguments.noDebug : null),
+		});
+		const controller = new AbortController();
+		this.launchControllers.set(relation.id, controller);
+		try {
+			if (this.isDisposed || generation !== this.workspaceGeneration) throw new CancellationError();
+			const launch = relation.noDebug === null ? current : Object.freeze({ ...current, arguments: Object.freeze({ ...current.arguments, noDebug: relation.noDebug }) });
+			return await this.startAdmittedDebugging(launch, sessionOptions, relation.id, controller.signal);
+		} catch (error) {
+			await this.processes.manageSession(relation.id, 'end').catch(() => { });
+			throw error;
+		} finally { this.launchControllers.delete(relation.id); }
+	}
+
+	private async startAdmittedDebugging(current: IDebugConfiguration, sessionOptions: IDebugSessionOptions, id: string, signal: AbortSignal): Promise<IDebugSession> {
+		const assertParent = (): void => {
+			throwIfCancelled(signal);
+			if (sessionOptions.parentSession && (this.getSession(sessionOptions.parentSession.id) !== sessionOptions.parentSession || ['terminated', 'error'].includes(sessionOptions.parentSession.state))) throw new CancellationError();
+		};
+		if (!this.processes) throw new Error("This host does not provide the Code debug adapter capability");
+		const assertAdmitted = async (): Promise<void> => {
+			assertParent();
+			if ((await this.processes!.manageSession(id, 'read')).ended) throw new CancellationError();
+			throwIfCancelled(signal);
+		};
+		await this.debugStorage.whenReady();
 		const activeResource = this.editors.activeEditor?.resource;
 		const folders = this.workspace.getWorkspace().folders;
 		const folder = current.dirId === null ? undefined : current.dirId
@@ -498,18 +492,25 @@ export class DebugService extends Disposable implements IDebugService {
 		// them from the canonical registry before substitution, not from discovery.
 		const launch = current.adapterExplicit === false
 			? { ...current, adapter: this.resolveDebugAdapter(current.type) ?? undefined } : current;
-		const providedConfiguration = await this.resolveConfigurationProviders(launch, root, false);
+		await assertAdmitted();
+		const providedConfiguration = await this.resolveConfigurationProviders(launch, root, false, signal);
 		if (generation !== this.workspaceGeneration || this.isDisposed) throw new CancellationError();
-		let resolvedConfiguration = await this.debugger.substituteVariables(folder, providedConfiguration);
+		let resolvedConfiguration;
+		try { resolvedConfiguration = await raceCancellationError(this.debugger.substituteVariables(folder, providedConfiguration), signal); }
+		catch (error) {
+			if (generation !== this.workspaceGeneration) throw new Error(localize('configurationResolver.workspaceChanged', 'The workspace changed while resolving the configuration. Run it again.'));
+			throw error;
+		}
 		if (generation !== this.workspaceGeneration || this.isDisposed) throw new Error(localize('configurationResolver.workspaceChanged', 'The workspace changed while resolving the configuration. Run it again.'));
 		if (!resolvedConfiguration) throw new CancellationError();
-		resolvedConfiguration = await this.resolveConfigurationProviders(resolvedConfiguration, root, true);
+		resolvedConfiguration = await this.resolveConfigurationProviders(resolvedConfiguration, root, true, signal);
 		if (generation !== this.workspaceGeneration || this.isDisposed) throw new CancellationError();
 		const factory = resolvedConfiguration.adapter && resolvedConfiguration.adapterExplicit !== false
 			? undefined : this.adapters.get(resolvedConfiguration.type);
 		if (!resolvedConfiguration.adapter && !factory?.createDebugAdapterDescriptor) throw new Error(`No Debug Adapter factory is available for '${resolvedConfiguration.type}'`);
 		assertParent();
-		await this.runTask(resolvedConfiguration.preLaunchTask, "preLaunchTask", current.dirId ?? undefined);
+		await assertAdmitted();
+		await this.runTask(resolvedConfiguration.preLaunchTask, "preLaunchTask", current.dirId ?? undefined, signal);
 		if (generation !== this.workspaceGeneration || this.isDisposed) throw new CancellationError();
 		if (factory && this.adapters.get(resolvedConfiguration.type) !== factory) throw new CancellationError();
 
@@ -517,7 +518,7 @@ export class DebugService extends Disposable implements IDebugService {
 		let initializingSession: IDebugSession | undefined;
 		const acceptsBreakpointEvents = (): boolean => !this.isDisposed && workspaceGeneration === this.workspaceGeneration && initializingSession !== undefined && !['terminated', 'error'].includes(initializingSession.state);
 		const session = await DebugSession.start({
-			configuration: current, sessionOptions,
+			id, admitted: true, configuration: current, sessionOptions,
 			processService: this.processes,
 			resolvedConfiguration: factory?.createDebugAdapterDescriptor ? { ...resolvedConfiguration, adapter: undefined } : resolvedConfiguration,
 			workspace: root, breakpoints: () => this.currentBreakpoints,
@@ -561,7 +562,7 @@ export class DebugService extends Disposable implements IDebugService {
 				this.breakpointsEmitter.fire(this.allBreakpoints());
 				this.persistState();
 			},
-			exceptionBreakpoints: () => this.exceptionBreakpointsForType(resolvedConfiguration.type),
+			exceptionBreakpoints: () => this.exceptionBreakpointsByType[resolvedConfiguration.type],
 			onWillStart: session => { assertParent(); initializingSession = session; this.preparingSessions.set(session.id, session); this.willSessionEmitter.fire(session); },
 			createDebugAdapterTrackers: session => this.createAdapterTrackers(session, generation),
 			createDebugAdapterDescriptor: factory?.createDebugAdapterDescriptor ? async session => {
@@ -594,6 +595,7 @@ export class DebugService extends Disposable implements IDebugService {
 			throw new CancellationError();
 		}
 		const listener = new DisposableStore();
+		listener.add(session.onDidChangeExceptionBreakpoints(() => { if (this.session === session) this.exceptionBreakpointsEmitter.fire(this.exceptionBreakpoints); }));
 		listener.add(session.onDidChangeName(() => this.sessionEmitter.fire(this.session)));
 		listener.add(session.onDidChangeThread(() => {
 			if (this.session === session) this.focusStackFrame(undefined);
@@ -603,9 +605,8 @@ export class DebugService extends Disposable implements IDebugService {
 			if (this.sessionRecords.has(session.id)) this.sessionEmitter.fire(this.session);
 			if (state === "terminated" || state === "error") queueMicrotask(() => { void this.finishSession(session); });
 		}));
-		this.sessionRecords.set(session.id, { session, listener, postDebugTask: resolvedConfiguration.postDebugTask });
-		this.activeSessionId = session.id;
-		this.focusStackFrame(undefined);
+		this.sessionRecords.set(session.id, { session, workspaceGeneration, workspaceId: this.workspace.getWorkspace().id, listener, postDebugTask: resolvedConfiguration.postDebugTask });
+		this.viewModel.setFocus(undefined, undefined, session, true);
 		this.newSessionEmitter.fire(session);
 		this.sessionEmitter.fire(session);
 		this.exceptionBreakpointsEmitter.fire(this.exceptionBreakpoints);
@@ -642,6 +643,7 @@ export class DebugService extends Disposable implements IDebugService {
 	}
 
 	private cancelPendingDescriptors(): void {
+		for (const controller of this.launchControllers.values()) controller.abort();
 		for (const controller of this.pendingDescriptors) controller.abort();
 		this.pendingDescriptors.clear();
 		this.descriptorOwners.clear();
@@ -685,24 +687,23 @@ export class DebugService extends Disposable implements IDebugService {
 
 	setActiveSession(session: IDebugSession): void {
 		if (!this.sessionRecords.has(session.id)) throw new Error("Debug session is no longer active");
-		if (this.activeSessionId === session.id) return;
-		this.activeSessionId = session.id;
-		this.focusStackFrame(undefined);
+		if (this.viewModel.focusedSession === session) return;
+		this.viewModel.setFocus(undefined, undefined, session, true);
 		this.sessionEmitter.fire(session);
 		this.exceptionBreakpointsEmitter.fire(this.exceptionBreakpoints);
 	}
 
-	focusStackFrame(frame: IDebugStackFrame | undefined): void {
-		if (frame && this.session?.state !== "stopped") { throw new Error("A stack frame requires the active paused session"); }
-		if (this.currentFocusedStackFrame?.id === frame?.id && this.currentFocusedStackFrame?.instructionPointerReference === frame?.instructionPointerReference) { return; }
-		this.currentFocusedStackFrame = frame;
-		this.focusedFrameEmitter.fire(frame);
+	focusStackFrame(frame: IDebugStackFrame | undefined, thread?: IDebugThread): void {
+		const session = this.session;
+		if (frame && session?.state !== 'stopped') throw new Error('A stack frame requires the active paused session');
+		this.viewModel.setFocus(frame, thread, session, true);
 	}
 
 	async restart(session: IDebugSession | undefined = this.session): Promise<IDebugSession> {
 		if (!session) throw new Error("There is no active debug session to restart");
 		if (!this.sessionRecords.has(session.id)) throw new Error("Debug session is no longer active");
-		if (session.parentSession && session.sessionOptions?.lifecycleManagedByParent) return this.restart(session.parentSession);
+		const target = await this.processes!.manageSession(session.id, 'route');
+		if (target.lifecycleTargetId !== session.id) return this.restart(this.getSession(target.lifecycleTargetId));
 		if (session.capabilities.supportsRestart) { await session.restart(); return session; }
 		const configuration = session.configuration;
 		await this.stop(session);
@@ -711,7 +712,8 @@ export class DebugService extends Disposable implements IDebugService {
 
 	async stop(session: IDebugSession | undefined = this.session): Promise<void> {
 		if (!session) return;
-		if (session.parentSession && session.sessionOptions?.lifecycleManagedByParent) return this.stop(session.parentSession);
+		const target = await this.processes!.manageSession(session.id, 'route');
+		if (target.lifecycleTargetId !== session.id) return this.stop(this.getSession(target.lifecycleTargetId));
 		const record = this.sessionRecords.get(session.id);
 		if (!record) {
 			if (this.preparingSessions.get(session.id) === session) {
@@ -763,7 +765,7 @@ export class DebugService extends Disposable implements IDebugService {
 		this.currentFunctionBreakpoints = Object.freeze(this.currentFunctionBreakpoints.filter(point => !removed.has(point.id)));
 		this.currentDataBreakpoints = Object.freeze(this.currentDataBreakpoints.filter(point => !removed.has(point.id)));
 		this.currentInstructionBreakpoints = Object.freeze(this.currentInstructionBreakpoints.filter(point => !removed.has(point.id)));
-		this.breakpointStateChanged();
+		this.breakpointStateChanged([{ kind: 'remove', ids: [...removed] }]);
 	}
 
 	toggleBreakpoint(resource: URI, lineNumber: number): void {
@@ -778,7 +780,7 @@ export class DebugService extends Disposable implements IDebugService {
 		this.currentFunctionBreakpoints = Object.freeze(this.currentFunctionBreakpoints.filter(breakpoint => breakpoint.id !== id));
 		this.currentDataBreakpoints = Object.freeze(this.currentDataBreakpoints.filter(breakpoint => breakpoint.id !== id));
 		this.currentInstructionBreakpoints = Object.freeze(this.currentInstructionBreakpoints.filter(breakpoint => breakpoint.id !== id));
-		this.breakpointStateChanged();
+		this.breakpointStateChanged([{ kind: 'remove', ids: [id] }]);
 	}
 
 	updateBreakpoint(id: string, update: IDebugBreakpointUpdate): void {
@@ -813,7 +815,7 @@ export class DebugService extends Disposable implements IDebugService {
 		this.currentFunctionBreakpoints = change(this.currentFunctionBreakpoints);
 		this.currentDataBreakpoints = change(this.currentDataBreakpoints);
 		this.currentInstructionBreakpoints = change(this.currentInstructionBreakpoints);
-		this.breakpointStateChanged();
+		this.breakpointStateChanged([{ kind: 'setEnabled', enabled }]);
 	}
 
 	removeAllBreakpoints(): void {
@@ -821,13 +823,13 @@ export class DebugService extends Disposable implements IDebugService {
 		this.currentFunctionBreakpoints = Object.freeze([]);
 		this.currentDataBreakpoints = Object.freeze([]);
 		this.currentInstructionBreakpoints = Object.freeze([]);
-		this.breakpointStateChanged();
+		this.breakpointStateChanged([{ kind: 'clearBreakpoints' }]);
 	}
 
-	private breakpointStateChanged(): void {
+	private breakpointStateChanged(commands: readonly DebugWorkspaceEdit[] = []): void {
 		this.breakpointsEmitter.fire(this.allBreakpoints());
-		this.persistState();
-		for (const session of this.sessions) void (session as DebugSession).syncBreakpoints().catch(error => this.reportError(error));
+		this.persistState(commands);
+		this.syncSessionBreakpoints();
 	}
 
 	addFunctionBreakpoint(options: IFunctionBreakpointOptions): void {
@@ -887,8 +889,10 @@ export class DebugService extends Disposable implements IDebugService {
 	async setExceptionBreakpoints(filters: readonly string[]): Promise<void> {
 		const session = this.session;
 		if (!session) throw new Error("Exception breakpoints require an active debug session");
+		const generation = this.workspaceGeneration;
 		await session.setExceptionBreakpoints(filters);
-		this.exceptionBreakpointsByType = Object.freeze({ ...this.exceptionBreakpointsByType, [session.configuration.type]: Object.freeze([...new Set(filters)]) });
+		if (this.isDisposed || generation !== this.workspaceGeneration) throw new CancellationError();
+		this.exceptionBreakpointsByType = Object.freeze({ ...this.exceptionBreakpointsByType, [session.configuration.type]: Object.freeze([...session.exceptionBreakpoints]) });
 		this.exceptionBreakpointsEmitter.fire(this.exceptionBreakpoints);
 		this.persistState();
 	}
@@ -929,9 +933,8 @@ export class DebugService extends Disposable implements IDebugService {
 		// cancellation until adapter, inline implementation and children finish.
 		this.sessionRecords.delete(session.id);
 		this.endSessionEmitter.fire(session);
-		if (this.activeSessionId === session.id) {
-			this.activeSessionId = this.sessions.at(-1)?.id;
-			this.focusStackFrame(undefined);
+		if (this.viewModel.focusedSession === session) {
+			this.viewModel.setFocus(undefined, undefined, this.sessions.at(-1), false);
 		}
 		this.sessionEmitter.fire(this.session);
 		this.exceptionBreakpointsEmitter.fire(this.exceptionBreakpoints);
@@ -940,21 +943,27 @@ export class DebugService extends Disposable implements IDebugService {
 	}
 
 	private async stopChildSessions(session: IDebugSession): Promise<void> {
-		const preparingChildren = [...this.preparingSessions.values()].filter(candidate => candidate.parentSession === session);
-		await Promise.allSettled(preparingChildren.map(async child => {
-			this.preparingSessions.delete(child.id);
-			this.descriptorControllers.get(child.id)?.abort();
-			try { await child.disconnect(); } finally { child.dispose(); await this.stopChildSessions(child); }
-		}));
-		const children = [...this.sessionRecords.values()].filter(candidate => candidate.session.parentSession === session);
-		await Promise.allSettled(children.map(async child => {
-			await child.session.disconnect();
-			// A state listener can remove the record before disconnect returns.
-			await (child.completion ?? this.finishSession(child.session));
+		if (!this.processes) return;
+		const relation = await this.processes.manageSession(session.id, 'end');
+		// Rust has already revoked resources across directories. Release only the
+		// editor/extension objects returned by its graph, without reconstructing it.
+		await Promise.allSettled(relation.descendants.map(async id => {
+			this.launchControllers.get(id)?.abort();
+			const preparing = this.preparingSessions.get(id);
+			if (preparing) {
+				this.preparingSessions.delete(id);
+				this.descriptorControllers.get(id)?.abort();
+				try { await preparing.disconnect(); } finally { preparing.dispose(); }
+			}
+			const record = this.sessionRecords.get(id);
+			if (record) {
+				await record.session.disconnect();
+				await (record.completion ?? this.finishSession(record.session));
+			}
 		}));
 	}
 
-	private async runTask(reference: string | undefined, role: string, dirId?: string): Promise<void> {
+	private async runTask(reference: string | undefined, role: string, dirId?: string, signal?: AbortSignal): Promise<void> {
 		if (!reference) return;
 		await this.tasks.refresh();
 		const matches = this.tasks.tasks.filter(task =>
@@ -964,9 +973,11 @@ export class DebugService extends Disposable implements IDebugService {
 		if (matches.length === 0) throw new Error(`Debug ${role} '${reference}' was not found`);
 		if (matches.length > 1) throw new Error(`Debug ${role} '${reference}' is ambiguous`);
 		const controller = new AbortController();
+		using cancellation = linkCancellation(signal, controller);
 		this.pendingDescriptors.add(controller);
 		let run: Awaited<ReturnType<ITaskService['run']>> | undefined;
 		try {
+			throwIfCancelled(controller.signal);
 			run = await this.tasks.run(matches[0]!, controller.signal);
 			const status = await waitForTask(run, controller.signal);
 			if (status !== 'succeeded' || run.hasErrors) throw new Error(`Debug ${role} '${reference}' ${run.hasErrors ? 'reported errors' : status}${run.exitCode === undefined ? '' : ` with exit code ${run.exitCode}`}`);
@@ -978,23 +989,27 @@ export class DebugService extends Disposable implements IDebugService {
 		}
 	}
 
-	private exceptionBreakpointsForType(type: string | undefined): readonly string[] {
-		return type ? this.exceptionBreakpointsByType[type] ?? Object.freeze([]) : Object.freeze([]);
-	}
-
 	private restoreState(state: Readonly<PersistedDebugState>): void {
 		this.currentBreakpoints = Object.freeze(state.breakpoints.map(value => Object.freeze({ ...createBreakpoint(URI.parse(value.resource), value.lineNumber, value.enabled), ...(value.id === undefined ? {} : { id: value.id }), ...(value.columnNumber === undefined ? {} : { columnNumber: value.columnNumber }), ...breakpointExpressions(value) })).sort(compareBreakpoints));
 		this.currentFunctionBreakpoints = Object.freeze(state.functionBreakpoints.map(point => Object.freeze({ ...point, verified: false })));
-		this.currentDataBreakpoints = Object.freeze(state.dataBreakpoints.map(point => Object.freeze({ ...point, verified: false })));
-		this.currentInstructionBreakpoints = Object.freeze([]);
+		this.currentDataBreakpoints = Object.freeze([...state.dataBreakpoints.map(point => Object.freeze({ ...point, verified: false })), ...this.currentDataBreakpoints.filter(point => !point.canPersist)]);
 		this.currentWatchExpressions = Object.freeze([...state.watchExpressions]);
 		this.exceptionBreakpointsByType = Object.freeze(Object.fromEntries(Object.entries(state.exceptionBreakpoints).map(([type, filters]) => [type, Object.freeze([...filters])])));
 		this.breakpointsEmitter.fire(this.allBreakpoints());
 		this.watchExpressionsEmitter.fire(this.currentWatchExpressions);
 		this.exceptionBreakpointsEmitter.fire(this.exceptionBreakpoints);
+		this.syncSessionBreakpoints();
 	}
 
-	private persistState(): void {
+	private syncSessionBreakpoints(): void {
+		for (const record of this.sessionRecords.values()) {
+			// A previous workspace's adapter can still be acknowledging disconnect
+			// when the new workspace publishes its first definitions snapshot.
+			if (record.workspaceGeneration === this.workspaceGeneration && record.workspaceId === this.workspace.getWorkspace().id) void record.session.syncBreakpoints().catch(error => this.reportError(error));
+		}
+	}
+
+	private persistState(commands: readonly DebugWorkspaceEdit[] = []): void {
 		const state: PersistedDebugState = {
 			version: 2,
 			breakpoints: this.currentBreakpoints.map(breakpoint => ({
@@ -1010,29 +1025,9 @@ export class DebugService extends Disposable implements IDebugService {
 			watchExpressions: this.currentWatchExpressions,
 			exceptionBreakpoints: this.exceptionBreakpointsByType,
 		};
-		const stored = this.stateMemento.getMemento(StorageScope.WORKSPACE, StorageTarget.USER);
-		const serialized = serializePersistedDebugState(state);
-		if (JSON.stringify(stored) !== JSON.stringify(serialized)) {
-			Object.assign(stored, serialized);
-			this.stateDirty = true;
-		}
+		this.debugStorage.storeState(state, commands);
 	}
 
-	private restorePersistedState(): void {
-		const stored = this.stateMemento.getMemento(StorageScope.WORKSPACE, StorageTarget.USER);
-		if (Object.keys(stored).length === 0) {
-			this.restoreState(EMPTY_STATE);
-			return;
-		}
-		const state = parsePersistedDebugState(stored);
-		const serialized = serializePersistedDebugState(state);
-		this.stateDirty = JSON.stringify(stored) !== JSON.stringify(serialized);
-		for (const key of Object.keys(stored)) {
-			delete stored[key];
-		}
-		Object.assign(stored, serialized);
-		this.restoreState(state);
-	}
 
 	private reportError(error: unknown): void {
 		this.logService.error("debug.service", "Debug service operation failed", error);
@@ -1079,106 +1074,9 @@ function resolveCompoundConfiguration(reference: IDebugCompound["configurations"
 	return matches[0]!;
 }
 
-function parsePersistedDebugState(value: unknown): PersistedDebugState {
-	if (!value || typeof value !== "object" || Array.isArray(value)) throw new TypeError("Debug workspace state must be an object");
-	const input = value as Record<string, unknown>;
-	if (input.version !== 1 && input.version !== 2) throw new TypeError("Debug workspace state version is unsupported");
-	if (!Array.isArray(input.breakpoints) || !Array.isArray(input.watchExpressions) || !input.exceptionBreakpoints || typeof input.exceptionBreakpoints !== "object" || Array.isArray(input.exceptionBreakpoints)) throw new TypeError("Debug workspace state is malformed");
-	const breakpoints = Object.freeze(input.breakpoints.map((candidate, index) => parsePersistedBreakpoint(candidate, index)));
-	const watchExpressions = Object.freeze(input.watchExpressions.map((candidate, index) => normalizePersistedString(candidate, `watchExpressions[${index}]`, 32_768)));
-	const exceptionBreakpoints = Object.freeze(Object.fromEntries(Object.entries(input.exceptionBreakpoints as Record<string, unknown>).map(([type, filters]) => {
-		if (!type || type.length > 128 || !Array.isArray(filters)) throw new TypeError("Debug exception breakpoint state is malformed");
-		return [type, Object.freeze(filters.map((filter, index) => normalizePersistedString(filter, `exceptionBreakpoints.${type}[${index}]`, 256)))];
-	})));
-	// Version 1 only stored source breakpoints. Write all subsequent saves as
-	// version 2; session-bound instruction and data identifiers never enter storage.
-	let functionBreakpoints: readonly IFunctionBreakpoint[] = Object.freeze([]);
-	let dataBreakpoints: readonly IDataBreakpoint[] = Object.freeze([]);
-	if (input.version === 2) {
-		if (!Array.isArray(input.functionBreakpoints) || !Array.isArray(input.dataBreakpoints)) throw new TypeError("Debug breakpoint state is malformed");
-		functionBreakpoints = Object.freeze(input.functionBreakpoints.map(parsePersistedFunctionBreakpoint));
-		dataBreakpoints = Object.freeze(input.dataBreakpoints.map(parsePersistedDataBreakpoint));
-	}
-	return Object.freeze({ version: 2, breakpoints, functionBreakpoints, dataBreakpoints, watchExpressions, exceptionBreakpoints });
-}
-
-function parsePersistedFunctionBreakpoint(value: unknown): IFunctionBreakpoint {
-	const point = parsePersistedBreakpointState(value);
-	if (point.input.logMessage !== undefined && typeof point.input.logMessage !== "string") { throw new TypeError("logMessage must be a string"); }
-	return Object.freeze({ ...point.state, kind: "function", name: normalizePersistedString(point.input.name, "function breakpoint name", 32_768), ...(point.input.logMessage === undefined ? {} : { logMessage: normalizeBreakpointExpression(point.input.logMessage, "logMessage") }) });
-}
-
-function parsePersistedDataBreakpoint(value: unknown): IDataBreakpoint {
-	const point = parsePersistedBreakpointState(value);
-	const input = point.input;
-	if (typeof input.description !== "string") throw new TypeError("Data breakpoint description must be a string");
-	if (input.canPersist !== true || !Array.isArray(input.accessTypes) || !input.accessTypes.every(type => type === "read" || type === "write" || type === "readWrite") || !input.accessTypes.includes(input.accessType)) throw new TypeError("Persistent data breakpoint is malformed");
-	return Object.freeze({
-		...point.state,
-		kind: "data",
-		dataId: normalizeBreakpointReference(input.dataId, "dataId"),
-		description: input.description,
-		adapterType: normalizePersistedString(input.adapterType, "adapterType", 256),
-		canPersist: true,
-		accessTypes: Object.freeze(input.accessTypes as IDataBreakpoint["accessTypes"]),
-		accessType: input.accessType as IDataBreakpoint["accessType"],
-	});
-}
-
-function parsePersistedBreakpointState(value: unknown): { input: Record<string, unknown>; state: IBaseBreakpoint; } {
-	if (!value || typeof value !== "object" || Array.isArray(value)) throw new TypeError("Breakpoint state must be an object");
-	const input = value as Record<string, unknown>;
-	if (typeof input.enabled !== "boolean") throw new TypeError("Breakpoint enabled state must be a boolean");
-	const expressions: { condition?: string; hitCondition?: string; } = {};
-	for (const field of ["condition", "hitCondition"] as const) {
-		if (input[field] === undefined) continue;
-		if (typeof input[field] !== "string") throw new TypeError(`${field} must be a string`);
-		expressions[field] = normalizeBreakpointExpression(input[field], field);
-	}
-	return { input, state: { id: normalizePersistedString(input.id, "id", 32768), enabled: input.enabled, verified: false, ...expressions } };
-}
-
-function parsePersistedBreakpoint(value: unknown, index: number): PersistedBreakpoint {
-	if (!value || typeof value !== "object" || Array.isArray(value)) throw new TypeError(`breakpoints[${index}] must be an object`);
-	const input = value as Record<string, unknown>;
-	const resource = normalizePersistedString(input.resource, `breakpoints[${index}].resource`, 16_384);
-	URI.parse(resource);
-	if (!Number.isSafeInteger(input.lineNumber) || (input.lineNumber as number) <= 0 || typeof input.enabled !== "boolean") throw new TypeError(`breakpoints[${index}] is malformed`);
-	const expressions: { condition?: string; hitCondition?: string; logMessage?: string; } = {};
-	for (const field of ["condition", "hitCondition", "logMessage"] as const) {
-		if (input[field] === undefined) continue;
-		if (typeof input[field] !== "string") throw new TypeError(`breakpoints[${index}].${field} must be a string`);
-		expressions[field] = normalizeBreakpointExpression(input[field], field);
-	}
-	if (input.columnNumber !== undefined && (!Number.isSafeInteger(input.columnNumber) || (input.columnNumber as number) < 1)) throw new TypeError('Debug breakpoint column must be a positive integer');
-	return Object.freeze({
-		resource, lineNumber: input.lineNumber as number, enabled: input.enabled,
-		...(input.id === undefined ? {} : { id: normalizePersistedString(input.id, 'breakpoint ID', 32768) }),
-		...(input.columnNumber === undefined ? {} : { columnNumber: input.columnNumber as number }),
-		...breakpointExpressions(expressions),
-	});
-}
-
 function normalizePersistedString(value: unknown, path: string, maximum: number): string {
-	if (typeof value !== "string" || !value.trim() || value.length > maximum || value.includes("\0")) throw new TypeError(`${path} must contain 1 to ${maximum} characters`);
+	if (typeof value !== 'string' || !value.trim() || value.length > maximum || value.includes('\0')) throw new TypeError(`${path} must contain 1 to ${maximum} characters`);
 	return value.trim();
-}
-
-function serializePersistedDebugState(state: PersistedDebugState): Record<string, JsonValue> {
-	const conditions = (point: IBaseBreakpoint): Record<string, JsonValue> => ({
-		id: point.id,
-		enabled: point.enabled,
-		...(point.condition === undefined ? {} : { condition: point.condition }),
-		...(point.hitCondition === undefined ? {} : { hitCondition: point.hitCondition }),
-	});
-	return {
-		version: state.version,
-		breakpoints: state.breakpoints.map(breakpoint => ({ ...(breakpoint.id === undefined ? {} : { id: breakpoint.id }), ...(breakpoint.columnNumber === undefined ? {} : { columnNumber: breakpoint.columnNumber }), resource: breakpoint.resource, lineNumber: breakpoint.lineNumber, enabled: breakpoint.enabled, ...breakpointExpressions(breakpoint) })),
-		functionBreakpoints: state.functionBreakpoints.map(point => ({ ...conditions(point), name: point.name, ...(point.logMessage === undefined ? {} : { logMessage: point.logMessage }) })),
-		dataBreakpoints: state.dataBreakpoints.map(point => ({ ...conditions(point), dataId: point.dataId, description: point.description, adapterType: point.adapterType, canPersist: true, accessType: point.accessType, accessTypes: [...point.accessTypes] })),
-		watchExpressions: state.watchExpressions,
-		exceptionBreakpoints: Object.fromEntries(Object.entries(state.exceptionBreakpoints).map(([type, filters]) => [type, filters])),
-	};
 }
 
 function normalizeBreakpointReference(value: unknown, field: string): string {
@@ -1332,7 +1230,7 @@ registerWorkbenchServiceContribution({
 	dependencies: [
 		IExtensionService, IFileService, IWorkspaceContextService, IDebugAdapterProcessService,
 		ITerminalService, ITerminalProfileResolverService, ITerminalProcessService,
-		IStorageService, ITaskService, IAdapterManager, ILogService, IConfigurationResolverService,
+		IStorageService, ILifecycleService, ITaskService, IAdapterManager, ILogService, IConfigurationResolverService,
 		IConfigurationService, IEditorService, IEditorGroupsService,
 	],
 	install: context => {
@@ -1340,3 +1238,10 @@ registerWorkbenchServiceContribution({
 		return service;
 	},
 });
+
+function linkCancellation(signal: AbortSignal | undefined, controller: AbortController) {
+	const cancel = () => controller.abort();
+	signal?.addEventListener('abort', cancel, { once: true });
+	if (signal?.aborted) cancel();
+	return toDisposable(() => signal?.removeEventListener('abort', cancel));
+}

@@ -1,3 +1,4 @@
+import { ViewModel } from '../../common/debugViewModel.js';
 import assert from "node:assert/strict";
 import { suite, test } from "mocha";
 import { Emitter, Event } from "../../../../../base/common/event.js";
@@ -33,7 +34,7 @@ suite('Debug Console output batching', () => {
 		} finally { mock.timers.reset(); }
 	});
 
-	test('ReplModel cancels pending output notifications on clear and disposal', () => {
+	test('ReplModel cancels pending output notifications on clear and disposal', async () => {
 		using debug = new FakeDebugService();
 		const consoleService = new ReplModel(debug as unknown as IDebugService);
 		const session = debug.addSession();
@@ -42,7 +43,7 @@ suite('Debug Console output batching', () => {
 		mock.timers.enable({ apis: ['setTimeout'] });
 		try {
 			session.emitOutput('before clear');
-			consoleService.clear();
+			await consoleService.clear();
 			assert.equal(consoleService.activeSession?.output, '');
 			assert.equal(notifications, 1);
 			session.emitOutput('before disposal');
@@ -70,7 +71,7 @@ test("ReplModel captures output while hidden, evaluates, and retains terminated 
 	assert.equal(consoleService.activeSession?.canEvaluate, false);
 	assert.match(consoleService.activeSession?.output ?? "", /adapter ready/);
 
-	consoleService.clear();
+	await consoleService.clear();
 	assert.equal(consoleService.activeSession?.output, "");
 });
 
@@ -79,9 +80,9 @@ test('ReplModel evaluates in the selected paused frame, including frame zero', a
 	using repl = new ReplModel(debug as unknown as IDebugService);
 	const session = debug.addSession();
 	session.state = 'stopped';
-	debug.focusedStackFrame = { id: 0, name: 'top', lineNumber: 1, columnNumber: 1 };
+	debug.getViewModel().setFocus({ id: 0, name: 'top', lineNumber: 1, columnNumber: 1 }, undefined, session, true);
 	await repl.evaluate('answer');
-	debug.focusedStackFrame = { id: 7, name: 'caller', lineNumber: 2, columnNumber: 1 };
+	debug.getViewModel().setFocus({ id: 7, name: 'caller', lineNumber: 2, columnNumber: 1 }, undefined, session, true);
 	await repl.evaluate('answer + 1');
 	assert.deepEqual(session.evaluations, [
 		{ expression: 'answer', frameId: 0, context: 'repl' },
@@ -93,11 +94,11 @@ test('ReplModel never sends a frame belonging to a running or different session'
 	using debug = new FakeDebugService();
 	using repl = new ReplModel(debug as unknown as IDebugService);
 	const first = debug.addSession();
-	debug.focusedStackFrame = { id: 7, name: 'old frame', lineNumber: 1, columnNumber: 1 };
+	debug.getViewModel().setFocus({ id: 7, name: 'old frame', lineNumber: 1, columnNumber: 1 }, undefined, first, true);
 	await repl.evaluate('running');
 	const second = debug.addSession();
 	second.state = 'stopped';
-	debug.focusedStackFrame = { id: 9, name: 'other adapter', lineNumber: 1, columnNumber: 1 };
+	debug.getViewModel().setFocus({ id: 9, name: 'other adapter', lineNumber: 1, columnNumber: 1 }, undefined, second, true);
 	// A retained console can still be rendered during a session-selection event.
 	// The focused frame must never escape its actual DebugService session.
 	debug.session = first;
@@ -107,11 +108,12 @@ test('ReplModel never sends a frame belonging to a running or different session'
 });
 
 class FakeDebugService extends Disposable {
+	private readonly viewModel = this._register(new ViewModel());
+	getViewModel(): ViewModel { return this.viewModel; }
 	private readonly sessionEmitter = this._register(new Emitter<IDebugSession | undefined>());
 	readonly onDidChangeSession = this.sessionEmitter.event;
 	sessions: readonly IDebugSession[] = Object.freeze([]);
 	session: IDebugSession | undefined;
-	focusedStackFrame: IDebugStackFrame | undefined;
 
 	addSession(): FakeDebugSession {
 		const session = this._register(new FakeDebugSession(`debug-${this.sessions.length + 1}`));
@@ -135,17 +137,20 @@ class FakeDebugService extends Disposable {
 
 class FakeDebugSession extends Disposable implements IDebugSession {
 	private readonly stateEmitter = this._register(new Emitter<DebugSessionState>());
-	private readonly outputEmitter = this._register(new Emitter<string>());
-	constructor(readonly id: string) { super(); }
-	readonly evaluations: { expression: string; frameId: number | undefined; context: DebugEvaluateContext; }[] = [];
+	private readonly outputEmitter = this._register(new Emitter<void>());
+	constructor(readonly id = "debug-1") { super(); }
+	consoleCatalogRevision = 1;
+	retainedIds: readonly string[] | undefined;
 	readonly configuration: IDebugConfiguration = Object.freeze({ id: "one", name: "One", type: "demo", request: "launch", adapter: Object.freeze({ program: "adapter", arguments: Object.freeze([]) }), arguments: Object.freeze({}) });
-	readonly capabilities = Object.freeze({ supportsRestart: true, supportsTerminate: true, supportsSetVariable: false, supportsConditionalBreakpoints: false, supportsHitConditionalBreakpoints: false, supportsLogPoints: false, supportsFunctionBreakpoints: false, supportsDataBreakpoints: false, supportsInstructionBreakpoints: false, supportsDisassembleRequest: false, supportsSteppingGranularity: false, exceptionBreakpointFilters: Object.freeze([]) });
+	readonly capabilities = Object.freeze({ supportsRestart: true, supportsTerminate: true, supportsSetVariable: false, supportsConditionalBreakpoints: false, supportsHitConditionalBreakpoints: false, supportsLogPoints: false, supportsFunctionBreakpoints: false, supportsDataBreakpoints: false, supportsInstructionBreakpoints: false, supportsDisassembleRequest: false, supportsSteppingGranularity: false, supportsCompletionsRequest: false, supportsCancelRequest: false, completionTriggerCharacters: [], exceptionBreakpointFilters: Object.freeze([]) });
 	state: DebugSessionState = "running";
 	readonly onDidChangeState = this.stateEmitter.event;
-	readonly onDidOutput = this.outputEmitter.event;
+	readonly onDidChangeReplElements = this.outputEmitter.event;
 	public readonly onDidCustomEvent = Event.None;
 	public readonly onDidChangeName = Event.None;
 	public readonly onDidChangeThread = Event.None;
+	readonly exceptionBreakpoints: readonly string[] = ['uncaught'];
+	readonly onDidChangeExceptionBreakpoints = Event.None;
 	public readonly name = "One";
 	public setName(): void { throw new Error("Renaming is unsupported in this fixture"); }
 	public async inspectStack() { return { threads: [], frames: [] }; }
@@ -153,13 +158,18 @@ class FakeDebugSession extends Disposable implements IDebugSession {
 	public async evaluateWatchExpressions() { return []; }
 	public getDebugProtocolBreakpoint(): undefined { return undefined; }
 	public async customRequest(): Promise<never> { throw new Error("Custom requests are unsupported in this fixture"); }
+	readonly evaluations: Array<{ expression: string; frameId: number | undefined; context: DebugEvaluateContext; }> = [];
 	private retainedOutput = "";
 	get output(): string { return this.retainedOutput; }
-	emitOutput(value: string): void { this.retainedOutput += value; this.outputEmitter.fire(value); }
-	async evaluate(expression: string, frameId: number | undefined, context: DebugEvaluateContext): Promise<IDebugEvaluateResult> {
-		this.evaluations.push({ expression, frameId, context });
-		return { result: "42", type: "number", variablesReference: 0 };
-	}
+	get consoleSessionId(): string { return this.id; }
+	get replElementsRevision(): number { return this.output.length; }
+	get retainedConsoleSessionIds(): readonly string[] { return this.retainedIds ?? [this.id]; }
+	getReplElements() { return this.output ? [{ id: 1, sessionId: this.id, kind: 'output' as const, output: this.output, category: 'console', parentId: null, collapsed: false, variablesReference: null, source: null, line: null, column: null, data: null }] : []; }
+	async clearRepl(): Promise<void> { this.retainedOutput = ''; this.outputEmitter.fire(); }
+
+	emitOutput(value: string): void { this.retainedOutput += value; this.outputEmitter.fire(); }
+	async completions() { return undefined; }
+	async evaluate(expression: string, frameId: number | undefined, context: DebugEvaluateContext): Promise<IDebugEvaluateResult> { this.evaluations.push({ expression, frameId, context }); this.emitOutput(`> ${expression}\n42 : number\n`); return { result: "42", type: "number", variablesReference: 0 }; }
 	async continue() { }
 	async pause() { }
 	async stepOver() { }
@@ -178,3 +188,41 @@ class FakeDebugSession extends Disposable implements IDebugSession {
 	async setExceptionBreakpoints() { }
 	async disconnect() { }
 }
+
+
+test('ReplModel evaluates in the selected stack frame including frame zero', async () => {
+	using debug = new FakeDebugService();
+	using model = new ReplModel(debug as unknown as IDebugService);
+	const session = debug.addSession();
+	session.state = 'stopped';
+	debug.getViewModel().setFocus({ id: 0, name: 'selected', lineNumber: 1, columnNumber: 1 }, undefined, session, true);
+	await model.evaluate(' answer ');
+	assert.deepEqual(session.evaluations, [{ expression: 'answer', frameId: 0, context: 'repl' }]);
+	assert.match(model.activeSession!.output, /> answer\n42 : number/);
+});
+
+test('ReplModel retains ended consoles when an earlier admission publishes after a newer one', () => {
+	using debug = new FakeDebugService();
+	using model = new ReplModel(debug as unknown as IDebugService);
+	using first = new FakeDebugSession('first');
+	using later = new FakeDebugSession('later');
+	using last = new FakeDebugSession('last');
+	using next = new FakeDebugSession('next');
+	first.consoleCatalogRevision = 1;
+	first.retainedIds = ['first'];
+	last.consoleCatalogRevision = 3;
+	last.retainedIds = ['first', 'later', 'last'];
+	later.consoleCatalogRevision = 2;
+	later.retainedIds = ['first', 'later'];
+	debug.sessions = [first]; debug.setActiveSession(first);
+	debug.sessions = [first, last]; debug.setActiveSession(last);
+	last.emitOutput('retained\n');
+	debug.sessions = [first]; debug.setActiveSession(first);
+	debug.sessions = [first, later]; debug.setActiveSession(later);
+	assert.deepEqual(model.sessions.map(session => session.id), ['first', 'last', 'later']);
+	assert.equal(model.sessions.find(session => session.id === 'last')!.output, 'retained\n');
+	next.consoleCatalogRevision = 4;
+	next.retainedIds = ['first', 'later', 'next'];
+	debug.sessions = [first, later, next]; debug.setActiveSession(next);
+	assert.deepEqual(model.sessions.map(session => session.id), ['first', 'later', 'next']);
+});

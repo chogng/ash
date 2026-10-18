@@ -1,4 +1,4 @@
-import type { DebugBreakpointIntent, DebugBreakpointBinding, DebugBreakpointUnsupported, DebugBreakpointsSnapshot, DebugInspection, DebugInspectionResult, DebugInspectionValue, DebugSessionSnapshot, IDebugAdapterProcessReadResult, IDebugAdapterProcessService } from '../../../../../platform/debug/common/debugAdapterProcessService.js';
+import type { DebugSessionRelation, DebugConsoleEntry, DebugConsoleSnapshot, DebugExceptionsSnapshot, DebugWorkspaceSnapshot, DebugWorkspaceState, DebugWorkspaceEdit, DebugBreakpointIntent, DebugBreakpointBinding, DebugBreakpointUnsupported, DebugBreakpointsSnapshot, DebugInspection, DebugInspectionResult, DebugInspectionValue, DebugSessionSnapshot, IDebugAdapterProcessReadResult, IDebugAdapterProcessService } from '../../../../../platform/debug/common/debugAdapterProcessService.js';
 
 type TransportFixture = Pick<IDebugAdapterProcessService, 'start' | 'send' | 'read' | 'close' | 'getConnectionState' | 'onConnectionState'>;
 type ManagedMessage = { sequence: number; direction: 'incoming' | 'outgoing'; message: unknown; };
@@ -10,9 +10,31 @@ export function installDebugClientFixture<T extends TransportFixture>(transport:
 	const send = transport.send.bind(transport);
 	const read = transport.read.bind(transport);
 	const close = transport.close.bind(transport);
-	const sessions = new Map<string, { nextRequest: number; rawCursor: number; client: boolean; messages: ManagedMessage[]; responses: Map<number, unknown>; status: IDebugAdapterProcessReadResult; closed?: boolean; publicId: string; noDebug?: boolean; bp: DebugBreakpointsSnapshot; sources: Map<string, DebugBreakpointIntent['location']>; bpQueue: Promise<void>; nextInspection: number; inspections: Map<number, { epoch: number; result: DebugInspectionResult; }>; epoch: number; runtime: DebugSessionSnapshot; requests: Map<number, { command: string; revision: number; }>; adapterId?: string; rawCapabilities: Record<string, unknown>; initialized: boolean; launch?: Promise<unknown>; }>();
+	const sessions = new Map<string, { nextRequest: number; rawCursor: number; client: boolean; messages: ManagedMessage[]; responses: Map<number, unknown>; status: IDebugAdapterProcessReadResult; closed?: boolean; publicId: string; noDebug?: boolean; bp: DebugBreakpointsSnapshot; sources: Map<string, DebugBreakpointIntent['location']>; bpQueue: Promise<void>; nextInspection: number; inspections: Map<number, { epoch: number; result: DebugInspectionResult; }>; epoch: number; runtime: DebugSessionSnapshot; requests: Map<number, { command: string; revision: number; repl?: boolean; }>; adapterId?: string; rawCapabilities: Record<string, unknown>; initialized: boolean; launch?: Promise<unknown>; }>();
 	const empty: IDebugAdapterProcessReadResult = { messages: [], nextSequence: 0, outputGap: false, stderr: '', exited: false, exitCode: null, protocolError: null };
 	const session = (id: string) => { const state = sessions.get(id); if (!state) throw new Error('Fixture session not found'); return state; };
+	const relations = new Map<string, DebugSessionRelation>();
+	let catalogRevision = 0;
+	const consoleIds = () => [...new Set([...relations.values()].map(value => value.consoleId))];
+	const consoles = new Map<string, DebugConsoleSnapshot>();
+	const exceptions = new Map<string, DebugExceptionsSnapshot>();
+	const consoleFor = (id: string): DebugConsoleSnapshot => consoles.get(relations.get(id)?.consoleId ?? id) ?? { revision: 0, entries: [] };
+	const append = (id: string, output: string, body: Partial<DebugConsoleEntry> = {}): void => {
+		const key = relations.get(id)?.consoleId ?? id;
+		const old = consoleFor(id);
+		const entry: DebugConsoleEntry = { id: old.revision + 1, sessionId: id, kind: 'output', output, category: 'console', parentId: null, collapsed: false, variablesReference: null, source: null, line: null, column: null, data: null, ...body };
+		consoles.set(key, { revision: old.revision + 1, entries: [...old.entries, entry].slice(-512) });
+	};
+	const end = (id: string): DebugSessionRelation => {
+		const value = relations.get(id);
+		if (!value) throw new Error('Fixture session admission not found');
+		const descendants = [...relations.values()].filter(candidate => candidate.parentId === id).flatMap(child => [...end(child.id).descendants, child.id]);
+		const result = { ...value, ended: true, descendants };
+		relations.set(id, result);
+		for (const [runtimeId, state] of sessions) if (descendants.includes(state.publicId) && state.runtime.phase !== 'ended') update(runtimeId, { state: 'terminated', phase: 'ended' });
+		return result;
+	};
+
 	const capabilities = (value: Record<string, unknown>): DebugSessionSnapshot['capabilities'] => ({
 		supportsRestart: value.supportsRestartRequest === true, supportsTerminate: value.supportsTerminateRequest === true || value.supportTerminateDebuggee === true,
 		supportsSetVariable: value.supportsSetVariable === true, supportsConditionalBreakpoints: value.supportsConditionalBreakpoints === true,
@@ -20,9 +42,11 @@ export function installDebugClientFixture<T extends TransportFixture>(transport:
 		supportsFunctionBreakpoints: value.supportsFunctionBreakpoints === true, supportsDataBreakpoints: value.supportsDataBreakpoints === true,
 		supportsInstructionBreakpoints: value.supportsInstructionBreakpoints === true, supportsDisassembleRequest: value.supportsDisassembleRequest === true,
 		supportsSteppingGranularity: value.supportsSteppingGranularity === true,
+		supportsCompletionsRequest: value.supportsCompletionsRequest === true, supportsCancelRequest: value.supportsCancelRequest === true,
+		completionTriggerCharacters: (value.completionTriggerCharacters as string[] | undefined) ?? ['.'],
 		exceptionBreakpointFilters: (value.exceptionBreakpointFilters as { filter: string; label: string; default?: boolean; }[] | undefined)?.map(value => ({ ...value, default: value.default === true })) ?? [],
 	});
-	const update = (id: string, patch: Partial<DebugSessionSnapshot>) => { const state = session(id); state.runtime = { ...state.runtime, ...patch, inspectionRevision: state.epoch, revision: state.runtime.revision + 1 }; };
+	const update = (id: string, patch: Partial<DebugSessionSnapshot>) => { const state = session(id); state.runtime = { ...state.runtime, ...patch, inspectionRevision: state.epoch, revision: state.runtime.revision + 1 }; if (patch.phase === 'ended' && relations.has(state.publicId) && !relations.get(state.publicId)!.ended) end(state.publicId); };
 	const accept = (id: string, input: IDebugAdapterProcessReadResult): void => {
 		const state = session(id);
 		for (const entry of input.messages) {
@@ -32,6 +56,7 @@ export function installDebugClientFixture<T extends TransportFixture>(transport:
 				if (['stopped', 'continued', 'invalidated'].includes(response.event ?? '')) state.epoch++;
 				if (response.event === 'invalidated') update(id, {});
 				if (response.event === 'breakpoint') acceptBreakpoint(id, (response.body ?? {}) as unknown as { reason: string; breakpoint: Record<string, unknown>; });
+				if (response.event === 'output') { const body = response.body as unknown as { output?: string; category?: string; variablesReference?: number; }; append(state.publicId, body?.output ?? '', body); }
 				if (response.event === 'initialized') state.initialized = true;
 				if (response.event === 'stopped') update(id, { state: 'stopped', reason: response.body?.reason ?? 'paused', stoppedThreadId: response.body?.threadId ?? null, executionRevision: state.runtime.executionRevision + 1 });
 				if (response.event === 'continued') update(id, { state: 'running', reason: null, executionRevision: state.runtime.executionRevision + 1 });
@@ -42,6 +67,10 @@ export function installDebugClientFixture<T extends TransportFixture>(transport:
 				state.responses.set(response.request_seq, response);
 				const request = state.requests.get(response.request_seq);
 				state.requests.delete(response.request_seq);
+				if (request?.repl) {
+					const value = response as unknown as { success: boolean; body?: { result?: string; type?: string; variablesReference?: number; }; message?: string; };
+					append(state.publicId, `${value.success ? (value.body?.result ?? '') + (value.body?.type ? ` : ${value.body.type}` : '') : value.message ?? 'Evaluation failed'}\n`, { kind: 'evaluation', category: value.success ? 'console' : 'stderr', variablesReference: value.body?.variablesReference ?? null });
+				}
 				if ((response as { success?: boolean; }).success && request) {
 					if (request.command === 'disconnect') update(id, { state: 'terminated', phase: 'ended' });
 					else if (['continue', 'next', 'stepIn', 'stepOut', 'restart'].includes(request.command) && request.revision === state.runtime.executionRevision) update(id, { state: 'running', reason: null, executionRevision: state.runtime.executionRevision + 1 });
@@ -58,7 +87,54 @@ export function installDebugClientFixture<T extends TransportFixture>(transport:
 		state.rawCursor = input.nextSequence;
 		accept(id, input);
 	};
+	const workspaces = new Map<string, { snapshot: DebugWorkspaceSnapshot; receipt?: string; }>();
+	const emptyWorkspace = (): DebugWorkspaceSnapshot => ({ revision: 0, state: { breakpoints: [], functionBreakpoints: [], dataBreakpoints: [], watchExpressions: [], exceptionBreakpoints: {} } });
 	const managed: IDebugAdapterProcessService = {
+		prepareSession: async (id, noDebug) => {
+			const relation = relations.get(id);
+			if (!relation || relation.ended) throw new Error('Fixture session admission ended');
+			const prepared = { ...relation, noDebug: noDebug ?? null, consoleCatalogRevision: catalogRevision, consoleIds: consoleIds() };
+			relations.set(id, prepared);
+			return prepared;
+		},
+		reserveSession: async options => {
+			const parent = options.parentId ? relations.get(options.parentId) : undefined;
+			if (options.parentId && (!parent || parent.ended)) throw new Error('Parent debug session ended');
+			const relation: DebugSessionRelation = { id: options.id, parentId: options.parentId, consoleId: options.mergeConsole && parent ? parent.consoleId : options.id, lifecycleTargetId: options.lifecycleManagedByParent && parent ? parent.lifecycleTargetId : options.id, noDebug: options.noDebug ?? parent?.noDebug ?? null, ended: false, descendants: [], consoleCatalogRevision: ++catalogRevision, consoleIds: [...new Set([...relations.values()].map(value => value.consoleId).concat(options.id))] };
+			relations.set(options.id, relation);
+			return relation;
+		},
+		manageSession: async (id, action) => {
+			if (action === 'end') return end(id);
+			const value = relations.get(id);
+			if (!value) throw new Error('Fixture session admission not found');
+			return { ...value, consoleCatalogRevision: catalogRevision, consoleIds: consoleIds() };
+		},
+		readConsole: async (id, options) => {
+			if (options?.clear) consoles.set(relations.get(id)?.consoleId ?? id, { revision: consoleFor(id).revision + 1, entries: [] });
+			if (options?.diagnostic) append(id, options.diagnostic);
+			return consoleFor(id);
+		},
+		readWorkspaceState: async (id, legacy) => {
+			let current = workspaces.get(id);
+			if (legacy) {
+				const receipt = JSON.stringify(legacy);
+				if (current?.receipt === receipt) return { status: 'current', snapshot: current.snapshot };
+				if (current && JSON.stringify(current.snapshot.state) !== receipt) return { status: 'conflict', snapshot: current.snapshot };
+				current = { snapshot: current?.snapshot ?? { revision: 1, state: structuredClone(legacy) }, receipt };
+				workspaces.set(id, current);
+			}
+			return { status: legacy ? 'applied' : 'current', snapshot: current?.snapshot ?? emptyWorkspace() };
+		},
+		editWorkspaceState: async (id, revision, edits) => {
+			const current = workspaces.get(id) ?? { snapshot: emptyWorkspace() };
+			if (current.snapshot.revision !== revision) return { status: 'conflict', snapshot: current.snapshot };
+			const state = structuredClone(current.snapshot.state) as { -readonly [K in keyof DebugWorkspaceState]: DebugWorkspaceState[K] };
+			for (const edit of edits) applyWorkspaceEdit(state, edit);
+			current.snapshot = { revision: revision + 1, state };
+			workspaces.set(id, current);
+			return { status: 'applied', snapshot: current.snapshot };
+		},
 		start: async options => {
 			const id = await start(options);
 			sessions.set(id, { nextRequest: 1, rawCursor: 0, client: options.connection?.type === 'client', messages: [], responses: new Map(), status: empty, publicId: id, bp: { revision: 0, version: 0, appliedVersion: 0, bindings: [], error: null }, sources: new Map(), bpQueue: Promise.resolve(), nextInspection: 1, inspections: new Map(), epoch: 0, requests: new Map(), rawCapabilities: {}, initialized: false, runtime: { revision: 0, executionRevision: 0, inspectionRevision: 0, state: 'starting', phase: 'uninitialized', reason: null, stoppedThreadId: null, capabilities: capabilities({}) } });
@@ -95,14 +171,24 @@ export function installDebugClientFixture<T extends TransportFixture>(transport:
 			update(id, { phase: 'launching' });
 			const task = async () => {
 				const filters = state.runtime.capabilities.exceptionBreakpointFilters;
-				const selected = state.noDebug ? [] : [...new Set((exceptionFilters.length ? exceptionFilters : filters.filter(filter => filter.default).map(filter => filter.filter)).map(filter => filter.trim()).filter(Boolean))];
-				if (selected.some(filter => !filters.some(candidate => candidate.filter === filter))) throw new Error('Invalid exception filter');
-				await request(id, 'setExceptionBreakpoints', { filters: selected });
+				const selected = [...new Set((exceptionFilters ?? filters.filter(filter => filter.default).map(filter => filter.filter)).map(filter => filter.trim()).filter(Boolean))];
+				if (!state.noDebug && selected.some(filter => !filters.some(candidate => candidate.filter === filter))) throw new Error('Invalid exception filter');
+				await request(id, 'setExceptionBreakpoints', { filters: state.noDebug ? [] : selected });
+				exceptions.set(id, { version: 1, appliedVersion: 1, appliedFilters: selected, filters: selected, error: null });
 				if (state.rawCapabilities.supportsConfigurationDoneRequest === true) await request(id, 'configurationDone');
 				await state.launch;
 				if (state.runtime.phase !== 'ended') update(id, { phase: 'active', ...(state.runtime.state === 'starting' ? { state: 'running' } : {}) });
 			};
 			void task().catch(error => update(id, { state: 'error', phase: 'ended', reason: String(error) }));
+		},
+		setExceptionBreakpoints: async (id, filters) => {
+			const state = session(id);
+			const selected = [...new Set(filters.map(filter => filter.trim()).filter(Boolean))];
+			if (!state.noDebug && selected.some(filter => !state.runtime.capabilities.exceptionBreakpointFilters.some(value => value.filter === filter))) throw new Error('Invalid exception filter');
+			await request(id, 'setExceptionBreakpoints', { filters: state.noDebug ? [] : selected });
+			const version = (exceptions.get(id)?.version ?? 0) + 1;
+			exceptions.set(id, { version, appliedVersion: version, appliedFilters: selected, filters: selected, error: null });
+			return version;
 		},
 		setBreakpoints: async (id, version, intents) => {
 			const state = session(id);
@@ -167,7 +253,9 @@ export function installDebugClientFixture<T extends TransportFixture>(transport:
 		startRequest: async (id, command, args) => {
 			const state = session(id);
 			const request = state.nextRequest++;
-			state.requests.set(request, { command, revision: state.runtime.executionRevision });
+			const repl = command === 'evaluate' && (args as { context?: string; } | undefined)?.context === 'repl';
+			state.requests.set(request, { command, revision: state.runtime.executionRevision, repl });
+			if (repl) append(state.publicId, `> ${(args as { expression: string; }).expression}\n`, { kind: 'input' });
 			await managed.send(id, { seq: request, type: 'request', command, ...(args === undefined ? {} : { arguments: args }) });
 			return request;
 		},
@@ -184,7 +272,7 @@ export function installDebugClientFixture<T extends TransportFixture>(transport:
 			await pump(id);
 			const state = session(id);
 			const messages = state.messages.slice(afterSequence, afterSequence + maxMessages);
-			const result = { ...state.status, session: state.runtime, breakpointRevision: state.bp.revision, messages, nextSequence: messages.at(-1)?.sequence !== undefined ? messages.at(-1)!.sequence + 1 : afterSequence };
+			const result = { ...state.status, session: state.runtime, consoleRevision: consoleFor(state.publicId).revision, exceptions: exceptions.get(id), breakpointRevision: state.bp.revision, messages, nextSequence: messages.at(-1)?.sequence !== undefined ? messages.at(-1)!.sequence + 1 : afterSequence };
 			state.status = { ...state.status, stderr: '' };
 			return result;
 		},
@@ -250,4 +338,19 @@ export function installDebugClientFixture<T extends TransportFixture>(transport:
 		return { kind: 'watch', values: await Promise.all(query.expressions.map(async expression => { try { return { expression, result: (await request(id, 'evaluate', { expression, context: 'watch', ...(query.frameId === undefined ? {} : { frameId: query.frameId }) })).body, error: null }; } catch (error) { return { expression, result: null, error: String(error) }; } })) };
 	};
 	return Object.assign(transport, managed);
+}
+
+function applyWorkspaceEdit(state: { -readonly [K in keyof DebugWorkspaceState]: DebugWorkspaceState[K] }, edit: DebugWorkspaceEdit): void {
+	if (edit.kind === 'clearBreakpoints') { state.breakpoints = []; state.functionBreakpoints = []; state.dataBreakpoints = []; }
+	else if (edit.kind === 'setEnabled') { state.breakpoints = state.breakpoints.map(point => ({ ...point, enabled: edit.enabled })); state.functionBreakpoints = state.functionBreakpoints.map(point => ({ ...point, enabled: edit.enabled })); state.dataBreakpoints = state.dataBreakpoints.map(point => ({ ...point, enabled: edit.enabled })); }
+	else if (edit.kind === 'source') state.breakpoints = [...state.breakpoints.filter(point => point.id !== edit.point.id), edit.point];
+	else if (edit.kind === 'function') state.functionBreakpoints = [...state.functionBreakpoints.filter(point => point.id !== edit.point.id), edit.point];
+	else if (edit.kind === 'data') state.dataBreakpoints = [...state.dataBreakpoints.filter(point => point.id !== edit.point.id), edit.point];
+	else if (edit.kind === 'remove') {
+		state.breakpoints = state.breakpoints.filter(point => !edit.ids.includes(point.id));
+		state.functionBreakpoints = state.functionBreakpoints.filter(point => !edit.ids.includes(point.id));
+		state.dataBreakpoints = state.dataBreakpoints.filter(point => !edit.ids.includes(point.id));
+	} else if (edit.kind === 'addWatch') state.watchExpressions = [...new Set([...state.watchExpressions, edit.expression])];
+	else if (edit.kind === 'removeWatch') state.watchExpressions = state.watchExpressions.filter(value => value !== edit.expression);
+	else if (edit.kind === 'exceptions') state.exceptionBreakpoints = { ...state.exceptionBreakpoints, [edit.adapterType]: [...edit.filters] };
 }

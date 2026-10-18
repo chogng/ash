@@ -4,6 +4,11 @@
 mod breakpoints;
 mod inspection;
 mod lifecycle;
+mod sessions;
+pub use sessions::DebugSessions;
+mod workspace;
+pub use workspace::DebugWorkspaceError;
+pub use workspace::DebugWorkspaceStore;
 
 use ash_debug_contract::DebugBreakpointIntent;
 use ash_debug_contract::DebugBreakpointsSnapshot;
@@ -85,6 +90,8 @@ pub struct DebugMessage {
 pub struct DebugRead {
     pub session: DebugSessionSnapshot,
     pub breakpoint_revision: u64,
+    pub exceptions: ash_debug_contract::DebugExceptionsSnapshot,
+    pub console_revision: u64,
     pub messages: Vec<DebugMessage>,
     pub next_sequence: u64,
     pub output_gap: bool,
@@ -104,6 +111,8 @@ struct Session {
     breakpoints: Breakpoints,
     inspections: Inspections,
     public_id: String,
+    registry: Option<(Arc<DebugSessions>, u64)>,
+    repl_requests: HashMap<u64, u64>,
     adapter_type: String,
     no_debug: bool,
     client: DebugClient,
@@ -181,6 +190,8 @@ impl DebugManager {
                 lifecycle: Lifecycle::new(),
                 breakpoints: Breakpoints::new(),
                 inspections: Inspections::new(),
+                registry: None,
+                repl_requests: Default::default(),
                 public_id: id.as_str().to_owned(),
                 adapter_type: String::new(),
                 no_debug: false,
@@ -197,6 +208,36 @@ impl DebugManager {
             })),
         );
         Ok(id)
+    }
+
+    /// Bind a directory-authorized runtime to an already admitted session.
+    pub fn attach(
+        self: &Arc<Self>,
+        id: &DebugSessionId,
+        registry: Arc<DebugSessions>,
+        owner: u64,
+        no_debug: Option<bool>,
+    ) -> Result<(), DebugManagerError> {
+        let session = self.session(id)?;
+        let mut session = lock(&session)?;
+        registry.bind(owner, &session.public_id, self, id.clone(), no_debug)?;
+        session.registry = Some((registry, owner));
+        Ok(())
+    }
+
+    fn end_from_parent(&self, id: &DebugSessionId) {
+        if let Ok(session) = self.session(id) {
+            if let Ok(mut session) = lock(&session) {
+                session
+                    .lifecycle
+                    .end(Some("Parent debug session ended".to_owned()));
+                session.client.close("Parent debug session ended");
+                session.exited = true;
+                if let Transport::Adapter(id) = &session.transport {
+                    let _ = self.runtime.close(id);
+                }
+            }
+        }
     }
 
     /// Binds the Workbench-facing identity without changing the backend handle.
@@ -304,7 +345,7 @@ impl DebugManager {
     pub fn configure(
         &self,
         id: &DebugSessionId,
-        filters: Vec<String>,
+        filters: impl Into<Option<Vec<String>>>,
     ) -> Result<(), DebugManagerError> {
         let session = self.session(id)?;
         let mut session = lock(&session)?;
@@ -312,9 +353,22 @@ impl DebugManager {
         let Session {
             lifecycle, client, ..
         } = &mut *session;
-        let message = lifecycle.configure(client, filters)?;
+        let message = lifecycle.configure(client, filters.into())?;
         self.send(&mut session, message)?;
         self.progress(&mut session)
+    }
+
+    pub fn set_exceptions(
+        &self,
+        id: &DebugSessionId,
+        filters: Vec<String>,
+    ) -> Result<u64, DebugManagerError> {
+        let session = self.session(id)?;
+        let mut session = lock(&session)?;
+        self.pump(&mut session)?;
+        let version = session.lifecycle.set_exceptions(filters)?;
+        self.progress(&mut session)?;
+        Ok(version)
     }
 
     fn progress(&self, session: &mut Session) -> Result<(), DebugManagerError> {
@@ -351,6 +405,11 @@ impl DebugManager {
             }
             Err(error) => session.fail(&error.to_string()),
         }
+        if session.lifecycle.ended() {
+            if let Some((registry, owner)) = &session.registry {
+                let _ = registry.end_observed(*owner, &session.public_id);
+            }
+        }
         Ok(())
     }
 
@@ -366,7 +425,26 @@ impl DebugManager {
         if !session.lifecycle.allows(command, &arguments) {
             return Err(DebugClientError::InvalidMessage.into());
         }
+        let repl = command == "evaluate"
+            && arguments
+                .as_ref()
+                .and_then(|value| value.get("context"))
+                .and_then(Value::as_str)
+                == Some("repl");
+        let expression = arguments
+            .as_ref()
+            .and_then(|value| value.get("expression"))
+            .and_then(Value::as_str)
+            .map(str::to_owned);
         let (request_id, message) = session.client.request(command, arguments)?;
+        if repl {
+            let epoch = session.lifecycle.inspection_epoch();
+            session.repl_requests.insert(request_id, epoch);
+            session.output(
+                ash_debug_contract::DebugConsoleEntryKind::Input,
+                &serde_json::json!({"output":format!("> {}\n", expression.unwrap_or_default())}),
+            );
+        }
         session.lifecycle.requested(request_id, command);
         self.send(&mut session, message)?;
         Ok(request_id)
@@ -381,6 +459,15 @@ impl DebugManager {
         let mut session = lock(&session)?;
         self.pump(&mut session)?;
         let response = session.client.response(request_id)?;
+        if let DebugResponse::Failed(message) = &response {
+            if let Some(epoch) = session.repl_requests.remove(&request_id) {
+                session.output_at(
+                    ash_debug_contract::DebugConsoleEntryKind::Evaluation,
+                    &serde_json::json!({"output":format!("{message}\n"),"category":"stderr"}),
+                    epoch,
+                );
+            }
+        }
         Ok(session.lifecycle.response(request_id, response))
     }
 
@@ -469,6 +556,12 @@ impl DebugManager {
         Ok(DebugRead {
             session: session.lifecycle.snapshot.clone(),
             breakpoint_revision: session.breakpoints.revision(),
+            exceptions: session.lifecycle.exceptions.clone(),
+            console_revision: session
+                .registry
+                .as_ref()
+                .and_then(|(registry, owner)| registry.revision(*owner, &session.public_id).ok())
+                .unwrap_or(0),
             messages,
             next_sequence,
             output_gap,
@@ -516,11 +609,66 @@ impl DebugManager {
                 session.fail(&error.to_string());
                 return Ok(());
             }
+            if entry.message.get("type").and_then(Value::as_str) == Some("event")
+                && entry.message.get("event").and_then(Value::as_str) == Some("output")
+            {
+                session.output(
+                    ash_debug_contract::DebugConsoleEntryKind::Output,
+                    &entry.message["body"],
+                );
+            }
+            if entry.message.get("type").and_then(Value::as_str) == Some("response") {
+                if let Some(id) = entry.message.get("request_seq").and_then(Value::as_u64) {
+                    if let Some(epoch) = session.repl_requests.remove(&id) {
+                        let mut body = entry
+                            .message
+                            .get("body")
+                            .and_then(Value::as_object)
+                            .cloned()
+                            .unwrap_or_default();
+                        let success = entry.message.get("success") == Some(&Value::Bool(true));
+                        let text = if success {
+                            body.get("result")
+                                .and_then(Value::as_str)
+                                .unwrap_or_default()
+                        } else {
+                            entry
+                                .message
+                                .get("message")
+                                .and_then(Value::as_str)
+                                .unwrap_or("Evaluation failed")
+                        };
+                        let annotation = if success {
+                            body.get("type")
+                                .and_then(Value::as_str)
+                                .map(|value| format!(" : {value}"))
+                                .unwrap_or_default()
+                        } else {
+                            String::new()
+                        };
+                        body.insert("output".to_owned(), format!("{text}{annotation}\n").into());
+                        if !success {
+                            body.insert("category".to_owned(), "stderr".into());
+                        }
+                        session.output_at(
+                            ash_debug_contract::DebugConsoleEntryKind::Evaluation,
+                            &Value::Object(body),
+                            epoch,
+                        );
+                    }
+                }
+            }
             session.observe(DebugMessageDirection::Incoming, entry.message);
             self.progress(session)?;
         }
         // Retain stderr even when request polling, rather than the view reader,
         // happened to collect this transport page.
+        if !input.stderr.is_empty() {
+            session.output(
+                ash_debug_contract::DebugConsoleEntryKind::Output,
+                &serde_json::json!({"output": input.stderr, "category":"stderr"}),
+            );
+        }
         for character in input.stderr.chars() {
             if session.stderr.len() + character.len_utf8() > MAX_STDERR_BYTES {
                 break;
@@ -552,6 +700,9 @@ impl DebugManager {
             .remove(id);
         if let Some(session) = session {
             let mut session = lock(&session)?;
+            if let Some((registry, owner)) = &session.registry {
+                let _ = registry.end_observed(*owner, &session.public_id);
+            }
             session.client.close("Debug session closed");
             session.exited = true;
             match &session.transport {
@@ -563,12 +714,23 @@ impl DebugManager {
     }
 
     pub fn terminate_all(&self) {
-        if let Ok(mut sessions) = self.sessions.lock() {
-            for (_, session) in sessions.drain() {
-                if let Ok(mut session) = session.lock() {
-                    session.client.close("Debug manager stopped");
-                    session.exited = true;
+        let sessions = self
+            .sessions
+            .lock()
+            .map(|mut sessions| {
+                sessions
+                    .drain()
+                    .map(|(_, session)| session)
+                    .collect::<Vec<_>>()
+            })
+            .unwrap_or_default();
+        for session in sessions {
+            if let Ok(mut session) = session.lock() {
+                if let Some((registry, owner)) = &session.registry {
+                    let _ = registry.end_observed(*owner, &session.public_id);
                 }
+                session.client.close("Debug manager stopped");
+                session.exited = true;
             }
         }
         self.runtime.terminate_all();
@@ -596,6 +758,16 @@ impl DebugManager {
 }
 
 impl Session {
+    fn output(&self, kind: ash_debug_contract::DebugConsoleEntryKind, body: &Value) {
+        self.output_at(kind, body, self.lifecycle.inspection_epoch());
+    }
+
+    fn output_at(&self, kind: ash_debug_contract::DebugConsoleEntryKind, body: &Value, epoch: u64) {
+        if let Some((registry, owner)) = &self.registry {
+            let _ = registry.append_output(*owner, &self.public_id, kind, body, epoch);
+        }
+    }
+
     fn observe(&mut self, direction: DebugMessageDirection, message: Value) {
         let bytes = message.to_string().len();
         let entry = DebugMessage {

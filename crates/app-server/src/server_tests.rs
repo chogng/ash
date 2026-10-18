@@ -9650,3 +9650,106 @@ fn disconnect_cancels_only_the_connections_pending_login() {
     assert_eq!(cancelled["result"]["status"], "cancelled");
     server.close_connection(second);
 }
+
+#[test]
+fn debug_workspace_rpc_shares_revisions_and_preserves_migration_across_connection_close() {
+    let root = tempfile::tempdir().unwrap();
+    let path = root.path().join("state.sqlite");
+    let server = server().with_debug_workspace_store(&path).unwrap();
+    let mut first = server.connection();
+    let mut second = server.connection();
+    initialize(&server, &mut first);
+    initialize(&server, &mut second);
+    let legacy = serde_json::json!({"breakpoints":[],"functionBreakpoints":[],"dataBreakpoints":[],"watchExpressions":["legacy"],"exceptionBreakpoints":{}});
+    let imported = call(
+        &server,
+        &mut first,
+        serde_json::json!({"jsonrpc":"2.0","id":2,"method":"debug/workspace/read","params":{"workspaceId":"workspace","legacy":legacy}}),
+    );
+    assert_eq!(imported["result"]["status"], "applied");
+    let edited = call(
+        &server,
+        &mut second,
+        serde_json::json!({"jsonrpc":"2.0","id":3,"method":"debug/workspace/write","params":{"workspaceId":"workspace","revision":1,"edits":[{"kind":"addWatch","expression":"new"}]}}),
+    );
+    assert_eq!(
+        edited["result"]["snapshot"]["state"]["watchExpressions"],
+        serde_json::json!(["legacy", "new"])
+    );
+    let conflict = call(
+        &server,
+        &mut first,
+        serde_json::json!({"jsonrpc":"2.0","id":4,"method":"debug/workspace/write","params":{"workspaceId":"workspace","revision":1,"edits":[{"kind":"removeWatch","expression":"legacy"}]}}),
+    );
+    assert_eq!(conflict["result"]["status"], "conflict");
+    assert_eq!(conflict["result"]["snapshot"], edited["result"]["snapshot"]);
+    drop(first);
+    let resumed = call(
+        &server,
+        &mut second,
+        serde_json::json!({"jsonrpc":"2.0","id":5,"method":"debug/workspace/read","params":{"workspaceId":"workspace","legacy":legacy}}),
+    );
+    assert_eq!(resumed["result"]["status"], "current");
+    assert_eq!(resumed["result"]["snapshot"], edited["result"]["snapshot"]);
+    let invalid = call(
+        &server,
+        &mut second,
+        serde_json::json!({"jsonrpc":"2.0","id":6,"method":"debug/workspace/write","params":{"workspaceId":"workspace","revision":2,"edits":[{"kind":"addWatch","expression":"\u{0}"}]}}),
+    );
+    assert_eq!(invalid["error"]["code"], -32602);
+}
+
+#[test]
+fn debug_session_graph_rpc_keeps_prepared_children_connection_owned_and_console_output_ephemeral() {
+    let server = server();
+    let mut owner = server.connection();
+    let mut other = server.connection();
+    initialize(&server, &mut owner);
+    initialize(&server, &mut other);
+    let mut sequence = 20;
+    let mut reserve = |id: &str, parent: serde_json::Value| {
+        sequence += 1;
+        serde_json::json!({"jsonrpc":"2.0","id":sequence,"method":"debug/session/reserve","params":{"id":id,"workspaceId":"workspace","parentId":parent,"lifecycleManagedByParent":true,"mergeConsole":true,"noDebug":null}})
+    };
+    let root = call(
+        &server,
+        &mut owner,
+        reserve("parent", serde_json::Value::Null),
+    );
+    assert!(root["error"].is_null(), "{root}");
+    let child = call(&server, &mut owner, reserve("child", "parent".into()));
+    assert!(child["error"].is_null(), "{child}");
+    assert_eq!(child["result"]["lifecycleTargetId"], "parent", "{child}");
+    assert_eq!(child["result"]["consoleId"], "parent");
+    let foreign = call(&server, &mut other, reserve("foreign", "parent".into()));
+    assert!(foreign["result"].is_null(), "{foreign}");
+    let output = call(
+        &server,
+        &mut owner,
+        serde_json::json!({"jsonrpc":"2.0","id":31,"method":"debug/session/console","params":{"id":"child","clear":false,"diagnostic":"marker\n"}}),
+    );
+    assert_eq!(output["result"]["entries"][0]["sessionId"], "child");
+    let ended = call(
+        &server,
+        &mut owner,
+        serde_json::json!({"jsonrpc":"2.0","id":32,"method":"debug/session/lifecycle","params":{"id":"parent","action":"end"}}),
+    );
+    assert_eq!(ended["result"]["descendants"], serde_json::json!(["child"]));
+    let late = call(&server, &mut owner, reserve("late", "child".into()));
+    assert!(late["result"].is_null(), "{late}");
+    let clear = call(
+        &server,
+        &mut owner,
+        serde_json::json!({"jsonrpc":"2.0","id":33,"method":"debug/session/console","params":{"id":"parent","clear":true}}),
+    );
+    assert_eq!(clear["result"]["entries"], serde_json::json!([]));
+    server.close_connection(owner);
+    let mut reconnected = server.connection();
+    initialize(&server, &mut reconnected);
+    let gone = call(
+        &server,
+        &mut reconnected,
+        serde_json::json!({"jsonrpc":"2.0","id":34,"method":"debug/session/console","params":{"id":"parent","clear":false}}),
+    );
+    assert!(gone["result"].is_null(), "{gone}");
+}

@@ -43,6 +43,12 @@ use super::result;
 /// Coordinates the existing owners needed by the debug adapter.
 /// This contract deliberately exposes no server object or unrestricted service registry.
 pub(super) trait DebugRequestProcessorContext: Send + Sync {
+    fn debug_sessions(&self) -> std::sync::Arc<ash_debug_manager::DebugSessions>;
+
+    fn debug_workspace_store(
+        &self,
+    ) -> Result<std::sync::Arc<ash_debug_manager::DebugWorkspaceStore>, RpcError>;
+
     fn debug_adapter_service_for(
         &self,
         dir_id: Option<&str>,
@@ -60,6 +66,116 @@ impl<'ctx, C: DebugRequestProcessorContext + ?Sized> DebugRequestProcessor<'ctx,
 }
 
 impl<'ctx, C: DebugRequestProcessorContext + ?Sized> DebugRequestProcessor<'ctx, C> {
+    pub(super) fn debug_session_prepare(
+        &self,
+        connection: &ConnectionState,
+        params: &Value,
+    ) -> Result<Value, RpcError> {
+        let params: ash_app_server_protocol::protocol::debug::DebugSessionPrepareParams =
+            decode(params)?;
+        result(
+            &self
+                .context
+                .debug_sessions()
+                .prepare(connection.connection_id, &params.id, params.no_debug)
+                .map_err(debug_manager_error)?,
+        )
+    }
+
+    pub(super) fn debug_session_reserve(
+        &self,
+        connection: &ConnectionState,
+        params: &Value,
+    ) -> Result<Value, RpcError> {
+        let options: ash_debug_contract::DebugSessionAdmission = decode(params)?;
+        result(
+            &self
+                .context
+                .debug_sessions()
+                .reserve(connection.connection_id, options)
+                .map_err(debug_manager_error)?,
+        )
+    }
+
+    pub(super) fn debug_session_lifecycle(
+        &self,
+        connection: &ConnectionState,
+        params: &Value,
+    ) -> Result<Value, RpcError> {
+        let params: ash_app_server_protocol::protocol::debug::DebugSessionLifecycleParams =
+            decode(params)?;
+        let registry = self.context.debug_sessions();
+        let relation = match params.action {
+            ash_debug_contract::DebugSessionAction::End => {
+                registry.end(connection.connection_id, &params.id)
+            }
+            ash_debug_contract::DebugSessionAction::Read
+            | ash_debug_contract::DebugSessionAction::Route => {
+                registry.read(connection.connection_id, &params.id)
+            }
+        }
+        .map_err(debug_manager_error)?;
+        result(&relation)
+    }
+
+    pub(super) fn debug_console(
+        &self,
+        connection: &ConnectionState,
+        params: &Value,
+    ) -> Result<Value, RpcError> {
+        let params: ash_app_server_protocol::protocol::debug::DebugConsoleParams = decode(params)?;
+        let registry = self.context.debug_sessions();
+        if params.clear {
+            registry
+                .clear_console(connection.connection_id, &params.id)
+                .map_err(debug_manager_error)?;
+        }
+        if let Some(text) = params.diagnostic {
+            if text.len() > 65_536 {
+                return Err(debug_manager_error(
+                    ash_debug_manager::DebugClientError::InvalidMessage.into(),
+                ));
+            }
+            registry
+                .append(
+                    connection.connection_id,
+                    &params.id,
+                    ash_debug_contract::DebugConsoleEntryKind::Output,
+                    &serde_json::json!({"output":text,"category":"console"}),
+                )
+                .map_err(debug_manager_error)?;
+        }
+        result(
+            &registry
+                .console(connection.connection_id, &params.id)
+                .map_err(debug_manager_error)?,
+        )
+    }
+
+    pub(super) fn debug_workspace_read(&self, params: &Value) -> Result<Value, RpcError> {
+        let params: ash_app_server_protocol::protocol::debug::DebugWorkspaceReadParams =
+            decode(params)?;
+        result(
+            &self
+                .context
+                .debug_workspace_store()?
+                .read(&params.workspace_id, params.legacy)
+                .map_err(workspace_error)?,
+        )
+    }
+
+    pub(super) fn debug_workspace_write(&self, params: &Value) -> Result<Value, RpcError> {
+        let params: ash_app_server_protocol::protocol::debug::DebugWorkspaceWriteParams =
+            decode(params)?;
+        result(
+            &self
+                .context
+                .debug_workspace_store()?
+                .write(&params.workspace_id, params.revision, params.edits)
+                .map_err(workspace_error)?,
+        )
+    }
+
     pub(super) fn debug_adapter_start(
         &self,
         connection: &ConnectionState,
@@ -141,7 +257,9 @@ impl<'ctx, C: DebugRequestProcessorContext + ?Sized> DebugRequestProcessor<'ctx,
             )
             .map_err(debug_service_error)?;
         result(&DebugAdapterReadResult {
+            console_revision: read.console_revision,
             breakpoint_revision: read.breakpoint_revision,
+            exceptions: read.exceptions,
             session: session_snapshot(read.session),
             messages: read
                 .messages
@@ -277,9 +395,28 @@ impl<'ctx, C: DebugRequestProcessorContext + ?Sized> DebugRequestProcessor<'ctx,
                     start_debugging: params.start_debugging,
                 },
                 params.public_id,
+                self.context.debug_sessions(),
             )
             .map_err(debug_service_error)?;
         result(&())
+    }
+
+    pub(super) fn debug_exceptions_set(
+        &self,
+        connection: &ConnectionState,
+        params: &Value,
+    ) -> Result<Value, RpcError> {
+        let params: DebugSessionConfigureParams = decode(params)?;
+        let version = self
+            .context
+            .debug_adapter_service_for(params.dir_id.as_deref())?
+            .set_exceptions(
+                connection.connection_id,
+                &params.session_id,
+                params.exception_filters.unwrap_or_default(),
+            )
+            .map_err(debug_service_error)?;
+        result(&ash_app_server_protocol::protocol::debug::DebugExceptionsSetResult { version })
     }
 
     pub(super) fn debug_session_configure(
@@ -466,6 +603,9 @@ fn session_snapshot(snapshot: ash_debug_manager::DebugSessionSnapshot) -> DebugS
             supports_instruction_breakpoints: capabilities.supports_instruction_breakpoints,
             supports_disassemble_request: capabilities.supports_disassemble_request,
             supports_stepping_granularity: capabilities.supports_stepping_granularity,
+            supports_completions_request: capabilities.supports_completions_request,
+            supports_cancel_request: capabilities.supports_cancel_request,
+            completion_trigger_characters: capabilities.completion_trigger_characters,
             exception_breakpoint_filters: capabilities
                 .exception_breakpoint_filters
                 .into_iter()
@@ -477,5 +617,16 @@ fn session_snapshot(snapshot: ash_debug_manager::DebugSessionSnapshot) -> DebugS
                 })
                 .collect(),
         },
+    }
+}
+
+fn workspace_error(error: ash_debug_manager::DebugWorkspaceError) -> RpcError {
+    match error {
+        ash_debug_manager::DebugWorkspaceError::Invalid => {
+            RpcError::new(-32602, AppServerErrorName::InvalidParams)
+        }
+        ash_debug_manager::DebugWorkspaceError::Storage(_) => {
+            RpcError::new(-32603, AppServerErrorName::InternalError)
+        }
     }
 }

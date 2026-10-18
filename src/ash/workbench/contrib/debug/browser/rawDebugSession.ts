@@ -1,6 +1,8 @@
 import { timeout } from '../../../../base/common/async.js';
 import { CancellationError } from '../../../../base/common/errors.js';
-import type { DebugBreakpointIntent, DebugInspection, DebugInspectionValue, DebugSessionInitializeOptions, IDebugAdapterProcessReadResult, IDebugAdapterProcessService, IDebugAdapterProcessStartOptions } from '../../../../platform/debug/common/debugAdapterProcessService.js';
+import type { CancellationToken } from '../../../../base/common/cancellation.js';
+import { DisposableStore, type IDisposable } from '../../../../base/common/lifecycle.js';
+import type { DebugExceptionsSnapshot, DebugBreakpointIntent, DebugInspection, DebugInspectionValue, DebugSessionInitializeOptions, IDebugAdapterProcessReadResult, IDebugAdapterProcessService, IDebugAdapterProcessStartOptions } from '../../../../platform/debug/common/debugAdapterProcessService.js';
 import type { InlineDebugAdapter } from '../common/debug.js';
 
 /** Workbench connection to one Rust-owned DAP client. Inline IO stays bound to
@@ -10,6 +12,7 @@ export class RawDebugSession {
 	private closed = false;
 	private inlineSequence = 0;
 	private closing: Promise<void> | undefined;
+	private readonly cancellations = new DisposableStore();
 
 	constructor(private readonly processes: IDebugAdapterProcessService, private readonly inline?: InlineDebugAdapter) { }
 
@@ -30,7 +33,21 @@ export class RawDebugSession {
 
 	initialize(options: DebugSessionInitializeOptions): Promise<void> { return this.processes.initializeSession(this.sessionId(), options); }
 
-	configurationDone(exceptionFilters: readonly string[]): Promise<void> { return this.processes.completeConfiguration(this.sessionId(), exceptionFilters); }
+	configurationDone(exceptionFilters: readonly string[] | undefined): Promise<void> { return this.processes.completeConfiguration(this.sessionId(), exceptionFilters); }
+
+	async setExceptionBreakpoints(filters: readonly string[]): Promise<DebugExceptionsSnapshot> {
+		const id = this.sessionId();
+		const version = await this.processes.setExceptionBreakpoints(id, filters);
+		while (!this.closed) {
+			const read = await this.processes.read(id, 0, 1);
+			const state = read.exceptions;
+			if (state && state.appliedVersion >= version) return state;
+			if (state && state.version >= version && state.error) throw new Error(state.error);
+			if (read.session?.phase === 'ended') throw new CancellationError();
+			await timeout(40);
+		}
+		throw new CancellationError();
+	}
 
 	setBreakpoints(version: number, intents: readonly DebugBreakpointIntent[]): Promise<void> { return this.processes.setBreakpoints(this.sessionId(), version, intents); }
 	readBreakpoints() { return this.processes.readBreakpoints(this.sessionId()); }
@@ -49,17 +66,30 @@ export class RawDebugSession {
 		throw new CancellationError();
 	}
 
-	async request(command: string, args?: unknown): Promise<unknown> {
+	async request(command: string, args?: unknown, token?: CancellationToken, supportsCancel = false): Promise<unknown> {
 		const id = this.sessionId();
+		if (token?.isCancellationRequested) throw new CancellationError();
 		const requestId = await this.processes.startRequest(id, command, args);
-		while (!this.closed) {
-			const response = await this.processes.readResponse(id, requestId);
-			if (this.closed) throw new CancellationError();
-			if (response.state === 'complete') return response.response;
-			if (response.state === 'failed') throw new Error(response.message);
-			await timeout(40);
+		if (this.closed) throw new CancellationError();
+		let cancellation: IDisposable | undefined;
+		const cancel = () => {
+			if (cancellation && this.cancellations.delete(cancellation)) cancellation.dispose();
+			if (supportsCancel && !this.closed) void this.request('cancel', { requestId }).catch(() => { /* Cancellation is advisory in DAP; the original response is still drained. */ });
+		};
+		if (token) cancellation = this.cancellations.add(token.onCancellationRequested(cancel));
+		try {
+			if (token?.isCancellationRequested) cancel();
+			while (!this.closed) {
+				const response = await this.processes.readResponse(id, requestId);
+				if (this.closed) throw new CancellationError();
+				if (response.state === 'complete') return response.response;
+				if (response.state === 'failed') throw new Error(response.message);
+				await timeout(40);
+			}
+			throw new CancellationError();
+		} finally {
+			if (cancellation && this.cancellations.delete(cancellation)) cancellation.dispose();
 		}
-		throw new CancellationError();
 	}
 
 	send(message: unknown): Promise<void> { return this.processes.send(this.sessionId(), message); }
@@ -77,7 +107,7 @@ export class RawDebugSession {
 		if (read.outputGap) throw new Error('Debug Adapter output exceeded the retained buffer');
 		if (this.inline) {
 			for (const entry of read.messages) {
-				if (entry.direction === 'outgoing') await this.inline.send(entry.message);
+				if (entry.direction === 'outgoing' && read.session?.phase !== 'ended') await this.inline.send(entry.message);
 			}
 		}
 		return read;
@@ -86,6 +116,7 @@ export class RawDebugSession {
 	close(): Promise<void> {
 		if (this.closing) return this.closing;
 		this.closed = true;
+		this.cancellations.dispose();
 		const id = this.id;
 		this.id = undefined;
 		return this.closing = Promise.resolve().then(async () => {

@@ -1,3 +1,5 @@
+import { ViewModel } from '../../common/debugViewModel.js';
+import type { DebugConsoleEntry } from '../../../../../platform/debug/common/debugAdapterProcessService.js';
 import { ConfigurationManager } from '../../browser/debugConfigurationManager.js';
 import { ReplModel } from '../../common/replModel.js';
 import { ICommandService } from '../../../../../platform/commands/common/commands.js';
@@ -63,10 +65,9 @@ export class MockDebugService extends Disposable implements IDebugService {
 	private readonly watchEmitter = this._register(new Emitter<readonly string[]>());
 	private readonly exceptionEmitter = this._register(new Emitter<readonly string[]>());
 	private readonly sessionEmitter = this._register(new Emitter<IDebugSession | undefined>());
-	private readonly frameEmitter = this._register(new Emitter<IDebugStackFrame | undefined>());
-	public readonly onDidFocusStackFrame = this.frameEmitter.event;
-	public focusedStackFrame: IDebugStackFrame | undefined;
-	public focusStackFrame(frame: IDebugStackFrame | undefined): void { this.focusedStackFrame = frame; this.frameEmitter.fire(frame); }
+	private readonly viewModel = this._register(new ViewModel());
+	public getViewModel(): ViewModel { return this.viewModel; }
+	public focusStackFrame(frame: IDebugStackFrame | undefined, thread?: IDebugThread): void { this.viewModel.setFocus(frame, thread, this.session, true); }
 	public getConfigurationManager(): ConfigurationManager { return this.configurationManager; }
 	public get configurations(): readonly IDebugConfiguration[] { return this.configurationManager.configurations; }
 	public set configurations(value: readonly IDebugConfiguration[]) { this.configurationManager.setConfigurations(value, this.compounds); }
@@ -182,20 +183,22 @@ export class MockDebugService extends Disposable implements IDebugService {
 
 export class MockDebugSession extends Disposable implements IDebugSession {
 	private readonly stateEmitter = this._register(new Emitter<DebugSessionState>());
-	private readonly outputEmitter = this._register(new Emitter<string>());
+	private readonly outputEmitter = this._register(new Emitter<void>());
 	private selectedThread = 1;
 	public readonly configuration: IDebugConfiguration;
-	public readonly capabilities = Object.freeze({ supportsRestart: true, supportsTerminate: true, supportsSetVariable: true, supportsConditionalBreakpoints: true, supportsHitConditionalBreakpoints: true, supportsLogPoints: true, supportsFunctionBreakpoints: true, supportsDataBreakpoints: true, supportsInstructionBreakpoints: true, supportsDisassembleRequest: true, supportsSteppingGranularity: true, exceptionBreakpointFilters: Object.freeze([{ filter: 'uncaught', label: 'Uncaught', default: true }, { filter: 'caught', label: 'Caught', default: false }]) });
+	public readonly capabilities = Object.freeze({ supportsRestart: true, supportsTerminate: true, supportsSetVariable: true, supportsConditionalBreakpoints: true, supportsHitConditionalBreakpoints: true, supportsLogPoints: true, supportsFunctionBreakpoints: true, supportsDataBreakpoints: true, supportsInstructionBreakpoints: true, supportsDisassembleRequest: true, supportsSteppingGranularity: true, supportsCompletionsRequest: false, supportsCancelRequest: false, completionTriggerCharacters: [], exceptionBreakpointFilters: Object.freeze([{ filter: 'uncaught', label: 'Uncaught', default: true }, { filter: 'caught', label: 'Caught', default: false }]) });
 	public state: DebugSessionState = 'stopped';
 	public readonly operations: string[] = [];
 	public readonly assignments: { reference: number; name: string; value: string; }[] = [];
 	public watchValue = '42';
 	public readonly reason = 'breakpoint';
 	public readonly onDidChangeState = this.stateEmitter.event;
-	public readonly onDidOutput = this.outputEmitter.event;
+	public readonly onDidChangeReplElements = this.outputEmitter.event;
 	public readonly onDidCustomEvent = Event.None;
 	public readonly onDidChangeName = Event.None;
 	public readonly onDidChangeThread = Event.None;
+	readonly exceptionBreakpoints: readonly string[] = ['uncaught'];
+	readonly onDidChangeExceptionBreakpoints = Event.None;
 	public get name(): string { return this.configuration.name; }
 	public setName(): void { throw new Error("Renaming is unsupported in this fixture"); }
 	public async inspectStack(threadId?: number) {
@@ -211,8 +214,21 @@ export class MockDebugSession extends Disposable implements IDebugSession {
 	}
 	public getDebugProtocolBreakpoint(): undefined { return undefined; }
 	public async customRequest(): Promise<never> { throw new Error("Custom requests are unsupported in this fixture"); }
-	public output = '';
-	public emitOutput(value: string): void { this.output += value; this.outputEmitter.fire(value); }
+	private consoleEntries: readonly DebugConsoleEntry[] = [];
+	private consoleRevision = 0;
+	get output(): string { return this.consoleEntries.map(entry => entry.output).join(''); }
+	get consoleSessionId(): string { return this.id; }
+	get replElementsRevision(): number { return this.consoleRevision; }
+	get retainedConsoleSessionIds(): readonly string[] { return [this.id]; }
+	readonly consoleCatalogRevision = 1;
+	getReplElements() { return this.consoleEntries; }
+	async clearRepl(): Promise<void> { this.consoleEntries = []; this.consoleRevision++; this.outputEmitter.fire(); }
+	public emitOutput(value: string): void { this.emitConsoleEntry({ output: value }); }
+	public emitConsoleEntry(entry: Partial<DebugConsoleEntry>): void {
+		this.consoleEntries = [...this.consoleEntries, { id: ++this.consoleRevision, sessionId: this.id, kind: 'output', output: '', category: 'console', parentId: null, collapsed: false, variablesReference: null, source: null, line: null, column: null, data: null, ...entry }];
+		this.outputEmitter.fire();
+	}
+
 	constructor(public readonly id: string, name: string, private readonly stackSource: IDebugSource) {
 		super();
 		this.configuration = configuration(name);
@@ -230,7 +246,9 @@ export class MockDebugSession extends Disposable implements IDebugSession {
 	public async scopes(_frameId?: number): Promise<readonly IDebugScope[]> { return Object.freeze([{ name: 'Locals', variablesReference: 20, expensive: false }]); }
 	public async variables(reference: number): Promise<readonly IDebugVariable[]> { return reference === 20 ? Object.freeze([{ name: 'parent', value: 'Object', variablesReference: 21 }]) : Object.freeze([{ name: 'child', value: 'value', variablesReference: 0 }]); }
 	public async setVariable(reference: number, name: string, value: string): Promise<IDebugVariable> { this.assignments.push({ reference, name, value }); this.watchValue = value; return { name, value, type: 'string', variablesReference: 0 }; }
-	public async evaluate(_expression: string, _frameId: number | undefined, _context: DebugEvaluateContext): Promise<IDebugEvaluateResult> { return { result: this.watchValue, type: 'number', variablesReference: 0 }; }
+	public async completions() { return undefined; }
+
+	public async evaluate(_expression: string, _frameId: number | undefined, _context: DebugEvaluateContext): Promise<IDebugEvaluateResult> { if (_context === 'repl') this.emitOutput(`> ${_expression}\n${this.watchValue} : number\n`); return { result: this.watchValue, type: 'number', variablesReference: 0 }; }
 	public async source(_source: IDebugSource): Promise<IDebugSourceContent> { return { content: 'const generated = true;', mimeType: 'text/typescript' }; }
 	public readonly dataInfoRequests: unknown[] = [];
 	public async dataBreakpointInfo(name: string, variablesReference?: number, frameId?: number): Promise<IDataBreakpointInfoResponse> {

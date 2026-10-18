@@ -300,10 +300,21 @@ export class ListView<T> extends Disposable {
 			this.element.style.height = contentHeight;
 		}
 		let previous: HTMLDivElement | undefined;
-		for (const row of rows) {
+		for (let index = 0; index < rows.length; index++) {
+			let row = rows[index]!;
 			const next = previous ? previous.nextSibling : this.element.firstChild;
 			if (row !== next) {
-				this.element.insertBefore(row, next);
+				if (row.parentElement !== this.element) {
+					// A streamed batch should enter the live list in one mutation. Leave
+					// attached rows in place so appending cannot blur their controls.
+					const additions = this.element.ownerDocument.createDocumentFragment();
+					additions.append(row);
+					while (index + 1 < rows.length && rows[index + 1]!.parentElement !== this.element) {
+						row = rows[++index]!;
+						additions.append(row);
+					}
+					this.element.insertBefore(additions, next);
+				} else this.element.insertBefore(row, next);
 			}
 			previous = row;
 		}

@@ -207,6 +207,28 @@ pub enum DebugInspectionResult {
     Invalidated,
 }
 
+mod workspace;
+pub use workspace::*;
+
 #[cfg(test)]
 #[path = "contract_tests.rs"]
 mod tests;
+
+/// The desired live exception selection and the last completed DAP application.
+#[derive(Clone, Debug, Default, Deserialize, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct DebugExceptionsSnapshot {
+    #[ts(type = "number")]
+    pub version: u64,
+    #[ts(type = "number")]
+    pub applied_version: u64,
+    /// Latest normalized preference. noDebug suppresses its wire application,
+    /// without erasing the choice saved for a later debugging launch.
+    pub filters: Vec<String>,
+    /// Preference confirmed by the latest successful configuration response.
+    pub applied_filters: Vec<String>,
+    pub error: Option<String>,
+}
+
+mod session;
+pub use session::*;

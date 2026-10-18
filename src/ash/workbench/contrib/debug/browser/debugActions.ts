@@ -58,7 +58,7 @@ registerAction2(class FocusDebugConsoleAction extends Action2 {
 
 registerAction2(class ClearDebugConsoleAction extends Action2 {
 	constructor() { super({ id: CLEAR_DEBUG_CONSOLE_COMMAND_ID, title: localize2({ bundle: 'ash.workbench', key: 'command.ClearDebugConsoleAction' }, "Clear Console"), f1: true }); }
-	override run(accessor: ServicesAccessor): void { accessor.get(IDebugService).replModel.clear(); }
+	override run(accessor: ServicesAccessor): void | Promise<void> { return accessor.get(IDebugService).replModel.clear(); }
 });
 
 for (const [id, title, keybinding, operation] of [

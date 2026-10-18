@@ -10,7 +10,7 @@ use serde::Serialize;
 use std::collections::BTreeMap;
 use std::fmt;
 
-pub const APP_SERVER_PROTOCOL_MAJOR: u32 = 9;
+pub const APP_SERVER_PROTOCOL_MAJOR: u32 = 10;
 // Same-product clients bind to the generated schema fingerprint, not a shared
 // counter for unrelated capability domains.
 pub const REQUIRED_SESSION_CAPABILITIES: &[CapabilityRequirement] = &[

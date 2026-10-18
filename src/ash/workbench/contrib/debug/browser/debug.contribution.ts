@@ -1,3 +1,4 @@
+import { IViewsService } from '../../../services/views/common/viewsService.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { registerWorkbenchContribution, WorkbenchPhase } from '../../../common/contributions.js';
 import { DebugTitleContribution } from './debugTitle.js';
@@ -8,7 +9,7 @@ import { ViewContainerLocation, type WorkbenchViewRegistry, WorkbenchViewContain
 import { BREAKPOINT_EDITOR_CONTRIBUTION_ID, CONTEXT_DISASSEMBLY_VIEW_FOCUS, DEBUG_CONSOLE_VIEW_ID, DEBUG_VIEW_ID, DISASSEMBLY_VIEW_ID } from "../common/debug.js";
 import { DebugViewPane } from "./debugViewPane.js";
 import { DebugViewPaneContainer } from './debugViewlet.js';
-import { DebugConsoleViewPane } from "./debugConsoleViewPane.js";
+import { Repl, getReplView } from "./repl.js";
 import { BreakpointEditorContribution } from "./breakpointEditorContribution.js";
 import { EditorContributionInstantiation, registerEditorContribution } from "../../../../editor/browser/editorExtensions.js";
 import { localize } from '../../../../nls.js';
@@ -71,11 +72,27 @@ for (const type of [AccessibleViewType.Help, AccessibleViewType.View]) {
 	});
 }
 
+for (const type of [AccessibleViewType.Help, AccessibleViewType.View]) {
+	AccessibleViewRegistry.register({
+		type, priority: 110, name: `debug.repl.${type}`,
+		getProvider: accessor => {
+			const view = getReplView(accessor.get(IViewsService));
+			const focused = view?.element.ownerDocument.activeElement as HTMLElement | null;
+			if (!view || !focused || !view.element.contains(focused)) return undefined;
+			const provider = new AccessibleContentProvider(AccessibleViewProviderId.Repl, { type },
+				() => type === AccessibleViewType.View ? view.getVisibleContent() : localize('debug.repl.help', 'Debug Console\nEnter an expression and press Enter to evaluate it in the selected session and stack frame. Press Shift+Enter to insert a new line. The expression editor supports selection, undo and redo. Use Tab to reach the session selector, output, groups, objects and source buttons. Use Up and Down in the output tree to navigate, and Right and Left to expand or collapse groups and objects. Press Enter on a source button to open its location. Use Up on the first line and Down on the last line to recall history and restore your draft. Press Control+Space to request suggestions; use Up and Down to select, Enter or Tab to insert, and Escape to dismiss without evaluating. Suggestions use the selected session, stack frame and cursor position. Press Control+F or Command+F to focus the filter. Separate alternatives with commas and prefix exclusions with !. Press Enter in the filter to save its history. Escape clears the filter, then returns to output. Clear Console removes retained output and keeps input history. Open Accessible View to read the filtered output as text. Press Escape to return to the console.'),
+				() => { if (focused.isConnected) focused.focus(); else view.focus(); }, AccessibilityVerbositySettingId.DebugConsole);
+			if (type === AccessibleViewType.View) provider.onDidChangeContent = view.onDidChangeContent;
+			return provider;
+		},
+	});
+}
+
 export function registerDebugView(registry: WorkbenchViewRegistry = ViewsRegistry): void {
 	registry.registerStaticViewContainer({ id: WorkbenchViewContainerId.Debug, title: "Run and Debug", localizationKey: { bundle: "ash.views", key: "runAndDebug" }, location: ViewContainerLocation.Sidebar, icon: Lxicon.debugAlt, order: 3, ctorDescriptor: new SyncDescriptor(DebugViewPaneContainer) });
 	registry.registerStaticViews(WorkbenchViewContainerId.Debug, [{ id: DEBUG_VIEW_ID, title: "Run and Debug", localizationKey: { bundle: "ash.views", key: "runAndDebug" }, order: 1, canToggleVisibility: false, ctorDescriptor: new SyncDescriptor(DebugViewPane) }]);
 	registry.registerStaticViewContainer({ id: WorkbenchViewContainerId.DebugConsole, title: "Debug Console", localizationKey: { bundle: "ash.views", key: "debugConsole" }, location: ViewContainerLocation.Panel, order: 2.75 });
-	registry.registerStaticViews(WorkbenchViewContainerId.DebugConsole, [{ id: DEBUG_CONSOLE_VIEW_ID, title: "Debug Console", localizationKey: { bundle: "ash.views", key: "debugConsole" }, order: 1, canToggleVisibility: false, ctorDescriptor: new SyncDescriptor(DebugConsoleViewPane) }]);
+	registry.registerStaticViews(WorkbenchViewContainerId.DebugConsole, [{ id: DEBUG_CONSOLE_VIEW_ID, title: "Debug Console", localizationKey: { bundle: "ash.views", key: "debugConsole" }, order: 1, canToggleVisibility: false, ctorDescriptor: new SyncDescriptor(Repl) }]);
 }
 
 registerDebugView();
