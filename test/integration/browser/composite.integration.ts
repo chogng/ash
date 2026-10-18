@@ -293,6 +293,7 @@ if (new URLSearchParams(location.search).has('problems')) {
 		resources.add(new BrowserContextViewService(document.body)), resources.add(new NotificationService()))));
 }
 const panel = resources.add(registerTestComponentServices(services).createInstance(PanelPart, document.body));
+resources.add(bindTestColorTheme(services.get(IThemeService), panel.domNode));
 if (new URLSearchParams(location.search).has('partWidth')) {
 	const host = h(document, 'section');
 	host.id = 'part-width-host';
@@ -476,6 +477,7 @@ if (new URLSearchParams(location.search).has('badges')) {
 		host.style.cssText = 'width:240px;height:100px';
 		document.body.append(host);
 		resources.add(toDisposable(() => host.remove()));
+		resources.add(bindTestColorTheme(editorServices.get(IThemeService), host));
 		const activity = resources.add(services.createInstance(ActivityService));
 		const bar = resources.add(new CompositeBar(host, {
 			presentation,
@@ -627,6 +629,7 @@ window.ashCompositeIntegration = {
 	setEditorTheme: id => {
 		const theme = [darkColorTheme, lightColorTheme, highContrastDarkColorTheme, highContrastLightColorTheme].find(theme => theme.id === id);
 		if (!theme) throw new Error(`Unknown editor test theme: ${id}`);
+		(services.get(IThemeService) as TestThemeService).setColorTheme(theme);
 		(editorServices.get(IThemeService) as TestThemeService).setColorTheme(theme);
 	},
 	openFileAliases: async target => {

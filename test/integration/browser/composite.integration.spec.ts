@@ -214,6 +214,8 @@ test('activity badges keep compact icons readable, center label counts and retai
 	const labelTab = page.locator('#badge-label [data-action-id="first"]');
 	for (const theme of ['ash-light', 'ash-dark', 'ash-high-contrast-dark', 'ash-high-contrast-light']) {
 		await page.evaluate(theme => window.ashCompositeIntegration.setEditorTheme(theme), theme);
+		await expect(page.locator('#badge-icon')).toHaveAttribute('data-color-theme', theme);
+		await expect(page.locator('#badge-label')).toHaveAttribute('data-color-theme', theme);
 		await page.evaluate(() => window.ashCompositeIntegration.setBadge(13));
 		await expect(badge).toHaveText('13');
 		await expect(tab).toHaveAttribute('aria-label', 'first container, 13 changes');
@@ -957,6 +959,7 @@ for (const locale of ['en', 'zh-CN']) {
 		expect(await sharedActions.locator('[data-action-id]').evaluateAll(elements => elements.map(element => element.getAttribute('data-action-id')))).toEqual(sharedActionIds);
 		for (const theme of ['ash-light', 'ash-dark', 'ash-high-contrast-light', 'ash-high-contrast-dark']) {
 			await page.evaluate(theme => window.ashCompositeIntegration.setEditorTheme(theme), theme);
+			await expect(panel).toHaveAttribute('data-color-theme', theme);
 			const separator = sharedActions.getByRole('separator');
 			await expect(separator).toBeVisible();
 			await expect(separator).toHaveAttribute('aria-orientation', 'vertical');

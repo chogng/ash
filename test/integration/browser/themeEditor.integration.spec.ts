@@ -722,7 +722,7 @@ test('shared Workbench editors, file tree, split groups and terminal stay in the
 	await expect(frame.getByRole('treeitem', { name: 'src/index.ts', exact: true })).toBeVisible();
 	await frame.getByRole('treeitem', { name: 'src/index.ts', exact: true }).dblclick();
 	await expect(frame.getByRole('textbox', { name: 'index.ts', exact: true })).toBeVisible();
-	const terminal = frame.getByRole('textbox', { name: 'Terminal input', exact: true });
+	const terminal = frame.getByRole('textbox', { name: /^Terminal input(?:\.|$)/u });
 	await terminal.focus();
 	await terminal.pressSequentially('echo preview_terminal');
 	await terminal.press('Enter');
@@ -829,7 +829,8 @@ for (const theme of ['ash-light', 'ash-dark']) {
 		await expect(frame.locator('#app')).toHaveAttribute('data-layout-style', 'modern');
 		await expect(frame.locator('.ash-workbench-titlebar')).toHaveCSS('height', '35px');
 		await expect(frame.locator('.ash-workbench-statusbar')).toHaveCSS('height', '32px');
-		await expect(frame.locator('.xterm-viewport')).toHaveCSS('background-color', theme === 'ash-light' ? 'rgb(255, 255, 255)' : 'rgb(30, 30, 30)');
+		// With terminal.background unset, the panel terminal follows panel.background.
+		await expect(frame.locator('.xterm-viewport')).toHaveCSS('background-color', theme === 'ash-light' ? 'rgb(248, 248, 248)' : 'rgb(37, 37, 38)');
 		await expect(frame.getByRole('tab', { name: 'Explorer', exact: true })).toBeVisible();
 		await frame.getByRole('button', { name: 'Hide Primary Side Bar', exact: true }).click();
 		await expect(frame.getByRole('region', { name: 'Primary sidebar', exact: true })).toBeHidden();
@@ -983,7 +984,7 @@ test('resizing the preview and toggling its panel delivers layout without observ
 		await popup.setViewportSize(iteration % 2 ? { width: 1600, height: 1000 } : { width: 1100, height: 760 });
 		await frame.getByRole('button', { name: 'Hide Panel', exact: true }).click();
 		await frame.getByRole('button', { name: 'Toggle Panel Visibility', exact: true }).click();
-		await expect(frame.getByRole('textbox', { name: 'Terminal input', exact: true })).toBeVisible();
+		await expect(frame.getByRole('textbox', { name: /^Terminal input(?:\.|$)/u })).toBeVisible();
 		await expect.poll(() => frame.locator('#app').evaluate(element => {
 			const window = element.ownerDocument.defaultView!;
 			return Math.abs(element.getBoundingClientRect().height - window.innerHeight);
