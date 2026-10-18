@@ -273,6 +273,7 @@ function githubError(error: AppServerRemoteError): Error {
 		case 'AccountAuthenticationRequired': return new GitHubError(GitHubErrorCode.AuthenticationRequired);
 		case 'GitHubPermissionDenied': return new GitHubError(GitHubErrorCode.PermissionDenied);
 		case 'GitHubRateLimited': return new GitHubError(GitHubErrorCode.RateLimited);
+		case 'GitHubManagedSettingsUpdateRequired': return new GitHubError(GitHubErrorCode.ManagedSettingsUpdateRequired);
 		case 'GitHubNotFound': return new GitHubError(GitHubErrorCode.NotFound);
 		case 'GitHubConflict': return new GitHubError(GitHubErrorCode.Conflict);
 		case 'GitHubTimedOut': return new GitHubError(GitHubErrorCode.TimedOut);

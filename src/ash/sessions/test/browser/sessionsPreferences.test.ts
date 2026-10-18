@@ -29,6 +29,7 @@ import { ITraceSettingsService } from '../../../platform/trace/common/traceSetti
 import { IFileDialogService } from '../../../platform/dialogs/common/dialogs.js';
 import { IAccountService } from '../../../platform/accounts/common/accountService.js';
 import { IGitHubService } from '../../../platform/github/common/githubService.js';
+import { IAccountPolicyService } from '../../../workbench/services/policies/common/accountPolicyService.js';
 import { IGitHubConnectionService } from '../../../workbench/services/accounts/common/gitHubConnectionService.js';
 import { GitHubReviewModel, IGitHubReviewModel } from '../../../workbench/contrib/github/browser/githubReviewModel.js';
 import '../../contrib/library/browser/library.contribution.js';
@@ -260,6 +261,7 @@ test('Sessions preferences reuses Workbench owners and preserves navigation, sea
 	});
 	services.registerInstance(IAccountService, { onDidChangeAccounts: Event.None, onDidCompleteLogin: Event.None, read: async () => ({ revision: 1n, accounts: [] }), startLogin: async () => { throw new Error('Not used'); }, cancelLogin: async () => { }, logout: async () => { } });
 	services.registerInstance(IGitHubService, { listAccounts: async () => [] } as unknown as IGitHubService);
+	services.registerInstance(IAccountPolicyService, { state: { phase: 'idle' }, onDidChangeState: Event.None, refresh: async () => { } });
 	services.registerInstance(IGitHubConnectionService, { isConnecting: false, connect: async () => { }, cancel: async () => { } });
 	using githubReview = services.createInstance(GitHubReviewModel);
 	services.registerInstance(IGitHubReviewModel, githubReview);

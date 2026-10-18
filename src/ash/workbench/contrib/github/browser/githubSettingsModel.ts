@@ -2,12 +2,13 @@ import { CancellationTokenSource } from '../../../../base/common/cancellation.js
 import { Emitter } from '../../../../base/common/event.js';
 import { Disposable, MutableDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { URI } from '../../../../base/common/uri.js';
-import { localize } from '../../../../nls.js';
+import { getNLSLanguage, localize } from '../../../../nls.js';
 import { IAccountService, type AccountState } from '../../../../platform/accounts/common/accountService.js';
-import { IGitHubService } from '../../../../platform/github/common/githubService.js';
+import { IGitHubService, GitHubErrorCode } from '../../../../platform/github/common/githubService.js';
 import { IOpenerService } from '../../../../platform/opener/common/opener.js';
 import { IGitHubConnectionService } from '../../../services/accounts/common/gitHubConnectionService.js';
 import { IEditorService } from '../../../services/editor/common/editorService.js';
+import { IAccountPolicyService } from '../../../services/policies/common/accountPolicyService.js';
 import { IAppServerRemoteAgentService } from '../../../services/remote/common/appServerRemoteAgentService.js';
 import type { SettingsSectionField, SettingsSectionModel } from '../../preferences/browser/settingsTreeModels.js';
 import { IGitHubReviewModel } from './githubReviewModel.js';
@@ -17,7 +18,7 @@ export class GitHubSettingsModel extends Disposable implements SettingsSectionMo
 	public readonly categoryId = 'github';
 	public get title(): string { return localize('github.settings.title', 'Codex review'); }
 	public get description(): string { return localize('github.settings.description', 'Use your existing accounts to request and read PR reviews. Confirm official Connector authorization and automatic review settings in Codex.'); }
-	public get help(): string { return localize('github.settings.help', 'GitHub and Codex review settings\nUse Tab to choose a GitHub account, enter owner/name, and check repository access. Browse pull requests opens the shared review editor. Ash reuses an existing Codex login for model access. GitHub repository access and official Connector authorization are separate. Manage official Connector opens GitHub; Manage automatic reviews opens Codex settings in your browser. Authorization and automatic review settings must be confirmed there. In the review editor, Request Codex review posts @codex review as your GitHub account. Refresh to read the resulting PR comments and review discussions. Escape closes accessibility help and returns focus.'); }
+	public get help(): string { return localize('github.settings.help', 'GitHub and Codex review settings\nUse Tab to choose a GitHub account, enter owner/name, and check repository access. Browse pull requests opens the shared review editor. Ash reuses an existing Codex login for model access. GitHub repository access and official Connector authorization are separate. Manage official Connector opens GitHub; Manage automatic reviews opens Codex settings in your browser. Authorization and automatic review settings must be confirmed there. In the review editor, Request Codex review posts @codex review as your GitHub account. Refresh to read the resulting PR comments and review discussions. Escape closes accessibility help and returns focus.') + '\n' + localize('github.settings.managedHelp', 'Refresh managed settings retrieves policy for the primary GitHub account, independently of the account selected for repository access. The status includes the last attempt, last successful refresh, and recovery guidance. While a refresh is running, the button is unavailable.'); }
 	private readonly changed = this._register(new Emitter<void>());
 	public readonly onDidChange = this.changed.event;
 	private readonly readOperation: MutableDisposable<CancellationTokenSource>;
@@ -38,6 +39,7 @@ export class GitHubSettingsModel extends Disposable implements SettingsSectionMo
 		@IEditorService private readonly editors: IEditorService,
 		@IOpenerService private readonly opener: IOpenerService,
 		@IAppServerRemoteAgentService remote: IAppServerRemoteAgentService,
+		@IAccountPolicyService private readonly policies: IAccountPolicyService,
 	) {
 		super();
 		this.readOperation = this._register(new MutableDisposable<CancellationTokenSource>());
@@ -50,6 +52,7 @@ export class GitHubSettingsModel extends Disposable implements SettingsSectionMo
 			if (this.isVisible) { this.changed.fire(); }
 		}));
 		this._register(accounts.onDidChangeAccounts(state => { this.invalidate(); this.accountState = state; if (this.isVisible) { this.changed.fire(); } }));
+		this._register(policies.onDidChangeState(() => { if (this.isVisible) this.changed.fire(); }));
 		this._register(remote.onDidChangeConnection(() => { this.accountState = undefined; this.invalidate(); if (this.isVisible) { void this.refresh(); } }));
 		this._register(remote.onDidChangeConnectionState(state => { if (state !== 'connected') { this.accountState = undefined; this.invalidate(); this.changed.fire(); } else if (this.isVisible) { void this.refresh(); } }));
 	}
@@ -64,6 +67,13 @@ export class GitHubSettingsModel extends Disposable implements SettingsSectionMo
 			{ id: 'account', kind: 'select', label: localize('github.settings.account', 'GitHub account'), value: this.review.selectedAccount?.id, options: this.review.accounts.map(account => ({ value: account.id, label: `${account.login}@${account.host}` })), enabled: !this.isBusy, setValue: value => this.review.selectAccount(value) },
 			{ id: 'repository', kind: 'text', label: localize('github.settings.repository', 'Repository (owner/name)'), value: this.repository, placeholder: 'owner/repo', enabled: !this.isBusy, setValue: value => { this.repository = value; this.invalidate(); this.changed.fire(); } },
 			{ id: 'refresh', kind: 'action', label: localize('github.settings.refresh', 'Refresh accounts'), enabled: !this.isBusy, run: () => this.refresh() },
+			{ id: 'managedStatus', kind: 'status', text: this.managedSettingsStatus() },
+			{
+				id: 'refreshManagedSettings', kind: 'action',
+				label: localize('github.settings.refreshManaged', 'Refresh managed settings'),
+				enabled: this.policies.state.phase !== 'refreshing' && this.accountState?.accounts.some(account => account.provider === 'github' && account.status === 'ready') === true,
+				run: () => this.policies.refresh(),
+			},
 			{ id: 'connect', kind: 'action', label: localize('github.settings.connect', 'Connect GitHub'), enabled: !this.isBusy && !this.connection.isConnecting, run: () => this.perform(async () => { await this.connection.connect(); await this.refresh(); }) },
 			{ id: 'check', kind: 'action', label: localize('github.settings.check', 'Check repository access'), enabled: !this.isBusy && this.review.selectedAccount?.status === 'ready' && !!this.accountState, run: () => this.checkRepository() },
 			{
@@ -78,6 +88,57 @@ export class GitHubSettingsModel extends Disposable implements SettingsSectionMo
 			{ id: 'automatic', kind: 'action', label: localize('github.settings.automatic', 'Manage automatic reviews'), enabled: true, run: () => this.perform(async () => { await this.opener.open(URI.parse('https://app.chatgpt.com/settings/code-review'), { openExternal: true }); }) },
 			{ id: 'status', kind: 'status', text: this.isBusy ? localize('github.settings.loading', 'Reading GitHub account and repository information…') : this.status },
 		];
+	}
+
+	private managedSettingsStatus(): string {
+		const state = this.policies.state;
+		const account = this.review.accounts.find(account => account.id === state.scope?.accountId && account.host === state.scope.host);
+		const identity = state.scope ? `${account?.login ?? state.scope.accountId}@${state.scope.host}` : localize('github.settings.primaryAccount', 'the primary GitHub account');
+		let message: string;
+		switch (state.phase) {
+			case 'idle':
+				message = localize('github.settings.managedIdle', 'Managed settings have not been fetched for the current account.');
+				break;
+			case 'refreshing':
+				message = localize('github.settings.managedRefreshing', 'Refreshing managed settings for {0}…', identity);
+				break;
+			case 'ready':
+				message = localize('github.settings.managedReady', 'Managed settings retrieved for {0}.', identity);
+				break;
+			case 'failed':
+				switch (state.failure) {
+					case GitHubErrorCode.AuthenticationRequired:
+						message = localize('github.settings.managedAuthentication', 'Reconnect GitHub, then refresh managed settings.');
+						break;
+					case GitHubErrorCode.PermissionDenied:
+						message = localize('github.settings.managedPermission', 'GitHub denied access to managed settings. Check account permissions with your administrator.');
+						break;
+					case GitHubErrorCode.RateLimited:
+						message = localize('github.settings.managedRateLimited', 'GitHub limited managed settings requests. Wait before retrying.');
+						break;
+					case GitHubErrorCode.ManagedSettingsUpdateRequired:
+						message = localize('github.settings.managedCompatibility', 'GitHub rejected this client’s compatibility for managed settings. Contact your administrator.');
+						break;
+					case 'invalidResponse':
+						message = localize('github.settings.managedInvalid', 'GitHub returned invalid managed settings. Retry or contact your administrator.');
+						break;
+					default:
+						message = localize('github.settings.managedFailed', 'Could not refresh managed settings. Check your connection and retry.');
+				}
+		}
+		const details = [message];
+		if (state.lastAttemptAt !== undefined) {
+			details.push(localize('github.settings.managedAttempt', 'Last attempt: {0}.', new Date(state.lastAttemptAt).toLocaleString(getNLSLanguage())));
+		}
+		if (state.lastSuccessAt !== undefined) {
+			details.push(localize('github.settings.managedSuccess', 'Last successful refresh: {0}.', new Date(state.lastSuccessAt).toLocaleString(getNLSLanguage())));
+		} else if (state.phase !== 'idle') {
+			details.push(localize('github.settings.managedNoSuccess', 'No successful refresh for this account.'));
+		}
+		if (state.phase === 'failed' && state.retainsPolicy) {
+			details.push(localize('github.settings.managedRetained', 'Previously accepted settings are retained.'));
+		}
+		return details.join(' ');
 	}
 
 	public setVisible(visible: boolean): void {

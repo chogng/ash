@@ -12,11 +12,13 @@ import { IEditorService } from '../../../../services/editor/common/editorService
 import { IAppServerRemoteAgentService } from '../../../../services/remote/common/appServerRemoteAgentService.js';
 import { GitHubReviewModel, IGitHubReviewModel } from '../../browser/githubReviewModel.js';
 import { GitHubSettingsModel } from '../../browser/githubSettingsModel.js';
+import { IAccountPolicyService } from '../../../../services/policies/common/accountPolicyService.js';
 
 for (const lifecycle of ['hide', 'dispose'] as const) {
 	test(`GitHub settings ${lifecycle} cancels the repository check and rejects its late result`, async () => {
 		using resources = new DisposableStore();
 		const services = resources.add(new InstantiationService());
+		services.registerInstance(IAccountPolicyService, { state: { phase: 'idle' }, onDidChangeState: Event.None, refresh: async () => { } });
 		let token: CancellationToken | undefined;
 		let release!: (repository: GitHubRepositoryInfo) => void;
 		services.registerInstance(IAccountService, { onDidChangeAccounts: Event.None, onDidCompleteLogin: Event.None, read: async () => ({ revision: 1n, accounts: [{ provider: 'github', accountId: 'alice', status: 'ready', credentialRevision: 1n }] }), startLogin: async () => { throw new Error('Not used'); }, cancelLogin: async () => { }, logout: async () => { } });

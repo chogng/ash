@@ -191,7 +191,8 @@ fn validate_status(response: &HttpResponse) -> Result<(), ReporterError> {
         crate::Error::PermissionDenied => ReporterError::PermissionDenied,
         crate::Error::RateLimited => ReporterError::RateLimited,
         crate::Error::InvalidInput(_) => ReporterError::InvalidInput,
-        crate::Error::NotFound
+        crate::Error::ManagedSettingsUpdateRequired
+        | crate::Error::NotFound
         | crate::Error::Conflict(_)
         | crate::Error::Unavailable(_)
         | crate::Error::TimedOut

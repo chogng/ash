@@ -12,7 +12,7 @@ import type { IConfigurationModel } from '../../platform/configuration/common/co
 import { ISecretStorageStatusService, ISecretStorageService, BaseSecretStorageService } from '../../platform/secrets/common/secrets.js';
 import { IPolicyService, NullPolicyService } from '../../platform/policy/common/policy.js';
 import { MultiplexPolicyService } from '../../platform/policy/common/multiplexPolicyService.js';
-import { AccountPolicyService } from '../services/policies/common/accountPolicyService.js';
+import { AccountPolicyService, IAccountPolicyService } from '../services/policies/common/accountPolicyService.js';
 import { IMessageHistoryService } from '../../platform/messageHistory/common/messageHistory.js';
 import { GlobalExtensionEnablementService } from '../../platform/extensionManagement/common/extensionEnablementService.js';
 import { IGlobalExtensionEnablementService } from '../../platform/extensionManagement/common/extensionManagement.js';
@@ -996,7 +996,8 @@ export class Workbench extends Disposable {
 		services.registerInstance(IHoverService, hoverService);
 		this._register(setHoverDelegate(hoverService));
 		const systemPolicies = hostServices.has(IPolicyService) ? hostServices.get(IPolicyService) : new NullPolicyService();
-		const accountPolicies = this._register(new AccountPolicyService(services.get(IAccountService), api.github, logService));
+		const accountPolicies = this._register(services.createInstance(AccountPolicyService));
+		services.registerInstance(IAccountPolicyService, accountPolicies);
 		const policies = this._register(new MultiplexPolicyService([systemPolicies, accountPolicies]));
 		services.registerInstance(IPolicyService, policies);
 		serviceContributionReady.push(configuration.initialize(fileService, policies, workingCopyService));

@@ -9,6 +9,8 @@ pub enum Error {
     AuthenticationRequired,
     PermissionDenied,
     RateLimited,
+    /// The managed-settings endpoint rejected this client's compatibility.
+    ManagedSettingsUpdateRequired,
     NotFound,
     Conflict(String),
     Unavailable(String),
@@ -32,6 +34,9 @@ impl std::fmt::Display for Error {
             }
             Self::PermissionDenied => formatter.write_str("GitHub permission is required"),
             Self::RateLimited => formatter.write_str("GitHub rate limit reached"),
+            Self::ManagedSettingsUpdateRequired => {
+                formatter.write_str("GitHub managed settings require a compatible client")
+            }
             Self::NotFound => formatter.write_str("GitHub resource was not found"),
             Self::TimedOut => formatter.write_str("GitHub request timed out"),
             Self::Cancelled => formatter.write_str("GitHub request cancelled"),

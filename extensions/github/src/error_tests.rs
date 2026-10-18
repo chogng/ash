@@ -15,6 +15,10 @@ fn http_refusals_preserve_categories_without_remote_error_text() {
         ),
         (429, Error::RateLimited),
         (
+            466,
+            Error::OperationFailed("GitHub request failed with HTTP 466".into()),
+        ),
+        (
             503,
             Error::OperationFailed("GitHub request failed with HTTP 503".into()),
         ),

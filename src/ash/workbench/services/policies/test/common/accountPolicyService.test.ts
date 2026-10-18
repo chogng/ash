@@ -1,17 +1,17 @@
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { Emitter, Event } from '../../../../../base/common/event.js';
-import type { AccountState, IAccountService } from '../../../../../platform/accounts/common/accountService.js';
+import { IAccountService, type AccountState } from '../../../../../platform/accounts/common/accountService.js';
 import { createDisconnectedGitHubService } from '../../../../../platform/github/browser/appServerGitHubService.js';
-import type { GitHubAccount, IGitHubService } from '../../../../../platform/github/common/githubService.js';
+import { GitHubError, GitHubErrorCode, IGitHubService, type GitHubAccount } from '../../../../../platform/github/common/githubService.js';
 import type { JsonValue } from '../../../../../base/common/jsonValue.js';
-import type { PolicyValue } from '../../../../../base/common/policy.js';
-import { NullLoggerService } from '../../../../../platform/log/common/log.js';
-import { AbstractPolicyService, type PolicyDefinition } from '../../../../../platform/policy/common/policy.js';
+import { ILogService, NullLoggerService } from '../../../../../platform/log/common/log.js';
+import { AbstractPolicyService, type PolicyDefinition, type PolicyValue } from '../../../../../platform/policy/common/policy.js';
 import { MultiplexPolicyService } from '../../../../../platform/policy/common/multiplexPolicyService.js';
 import { ConfigurationRegistry } from '../../../../../platform/configuration/common/configurationRegistry.js';
 import { PolicyConfiguration } from '../../../../../platform/configuration/common/configurations.js';
-import { AccountPolicyService } from '../../common/accountPolicyService.js';
+import { AccountPolicyService, type AccountPolicyRefreshState } from '../../common/accountPolicyService.js';
+import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { ConfigurationService } from '../../../../../platform/configuration/common/configurationService.js';
 import { TestConfigurationFiles } from '../../../configuration/test/common/testServices.js';
 import { UserDataProfileService } from '../../../userDataProfile/browser/userDataProfileService.js';
@@ -134,4 +134,173 @@ test('Copilot model policy reaches the real configuration and new-chat consumer,
 	await source.updatePolicyDefinitions({});
 	assert.equal(configuration.inspect('chat.defaultModel').policyValue, undefined);
 	assert.deepEqual(preferences.getDefaultNewChatModel(catalog), first);
+});
+
+test('Explicit refresh exposes cold failure, joins in-flight requests, retains old values and recovers on withdrawal', async () => {
+	using changes = new Emitter<AccountState>();
+	let calls = 0;
+	let raw: Readonly<Record<string, JsonValue>> | null | Error = new GitHubError(GitHubErrorCode.Unavailable);
+	let release: (() => void) | undefined;
+	let entered: (() => void) | undefined;
+	let gate: Promise<void> | undefined;
+	using source = new AccountPolicyService(accountServices(changes), githubServices(async () => {
+		calls++;
+		entered?.();
+		await gate;
+		if (raw instanceof Error) throw raw;
+		return raw;
+	}), log);
+	const states: AccountPolicyRefreshState[] = [];
+	using listener = source.onDidChangeState(state => states.push(state));
+	const state = (): AccountPolicyRefreshState => source.state;
+	assert.equal(state().phase, 'idle');
+	await source.updatePolicyDefinitions(binding);
+	assert.equal(state().phase, 'failed');
+	assert.equal(state().lastSuccessAt, undefined);
+	assert.equal(source.getPolicyValue('ManagedFeature'), undefined);
+
+	raw = { strictPluginOnlyCustomization: true };
+	gate = new Promise<void>(resolve => { release = resolve; });
+	const started = new Promise<void>(resolve => { entered = resolve; });
+	const retry = source.refresh();
+	await started;
+	assert.equal(state().phase, 'refreshing');
+	assert.equal(source.refresh(), retry);
+	assert.equal(calls, 2);
+	release!();
+	await retry;
+	assert.equal(state().phase, 'ready');
+	assert.equal(source.getPolicyValue('ManagedFeature'), true);
+	const success = state().lastSuccessAt;
+	assert.equal(typeof success, 'number');
+
+	raw = new GitHubError(GitHubErrorCode.ManagedSettingsUpdateRequired);
+	await source.refresh();
+	assert.deepEqual(state(), {
+		phase: 'failed', failure: GitHubErrorCode.ManagedSettingsUpdateRequired,
+		retainsPolicy: true,
+		scope: { accountId: 'first', host: 'github.com', credentialRevision: 1n },
+		lastAttemptAt: state().lastAttemptAt, lastSuccessAt: success,
+	});
+	assert.equal(source.getPolicyValue('ManagedFeature'), true);
+	raw = null;
+	await source.refresh();
+	assert.equal(state().phase, 'ready');
+	assert.equal(source.getPolicyValue('ManagedFeature'), undefined);
+	assert.ok(states.some(state => state.phase === 'failed' && state.lastSuccessAt === undefined));
+	assert.ok(states.some(state => state.phase === 'failed' && state.lastSuccessAt === success));
+});
+
+test('Refresh scope and success timestamps do not cross credential, host or account changes', async () => {
+	using changes = new Emitter<AccountState>();
+	let selected = account;
+	let raw: Readonly<Record<string, JsonValue>> | Error = { strictPluginOnlyCustomization: true };
+	using source = new AccountPolicyService(accountServices(changes), githubServices(async () => {
+		if (raw instanceof Error) throw raw;
+		return raw;
+	}, async () => [selected]), log);
+	await source.updatePolicyDefinitions(binding);
+	assert.equal(typeof source.state.lastSuccessAt, 'number');
+	raw = new GitHubError(GitHubErrorCode.AuthenticationRequired);
+	selected = { ...account, credentialRevision: 2n };
+	changes.fire({ revision: 2n, accounts: [{ provider: 'github', accountId: selected.id, status: 'ready', credentialRevision: 2n }] });
+	await source.refresh();
+	assert.equal(source.state.lastSuccessAt, undefined);
+	assert.equal(source.state.scope?.credentialRevision, 2n);
+	assert.equal(source.getPolicyValue('ManagedFeature'), true);
+	for (const next of [{ ...selected, host: 'enterprise.example' }, { ...selected, id: 'second' }]) {
+		selected = next;
+		await source.refresh();
+		assert.equal(source.state.lastSuccessAt, undefined);
+		assert.equal(source.state.scope?.host, next.host);
+		assert.equal(source.state.scope?.accountId, next.id);
+		assert.equal(source.getPolicyValue('ManagedFeature'), undefined);
+	}
+});
+
+test('Superseding account events complete the new refresh and disposed owners publish no late state', async () => {
+	using changes = new Emitter<AccountState>();
+	let selected = account;
+	let release!: () => void;
+	let entered!: () => void;
+	const started = new Promise<void>(resolve => { entered = resolve; });
+	const held = new Promise<void>(resolve => { release = resolve; });
+	let calls = 0;
+	using source = new AccountPolicyService(accountServices(changes), githubServices(async () => {
+		if (++calls === 1) { entered(); await held; }
+		return { strictPluginOnlyCustomization: selected.id === 'second' };
+	}, async () => [selected]), log);
+	let notifications = 0;
+	using listener = source.onDidChangeState(() => { notifications++; });
+	const initial = source.updatePolicyDefinitions(binding);
+	await started;
+	selected = { ...account, id: 'second' };
+	changes.fire({ revision: 2n, accounts: [{ provider: 'github', accountId: 'second', status: 'ready', credentialRevision: 1n }] });
+	release();
+	await initial;
+	assert.equal(calls, 2);
+	assert.equal(source.state.phase, 'ready');
+	assert.equal(source.state.scope?.accountId, 'second');
+	assert.equal(source.getPolicyValue('ManagedFeature'), true);
+	source.dispose();
+	const before = notifications;
+	await source.refresh();
+	changes.fire({ revision: 3n, accounts: [] });
+	assert.equal(notifications, before);
+});
+
+test('DI requires the provider and state observers can reenter refresh without duplicating requests', async () => {
+	using services = new InstantiationService();
+	using changes = new Emitter<AccountState>();
+	services.registerInstance(IAccountService, accountServices(changes));
+	services.registerInstance(ILogService, log);
+	assert.throws(() => services.createInstance(AccountPolicyService), /Unknown service.*githubService/);
+	let calls = 0;
+	services.registerInstance(IGitHubService, githubServices(async () => { calls++; return {}; }));
+	using source = services.createInstance(AccountPolicyService);
+	using listener = source.onDidChangeState(state => { if (state.phase === 'refreshing') void source.refresh(); });
+	await source.updatePolicyDefinitions(binding);
+	assert.equal(calls, 1);
+	assert.equal(source.state.phase, 'ready');
+});
+
+test('Disposal cancels an in-flight retry without publishing its late success', async () => {
+	using changes = new Emitter<AccountState>();
+	let release!: () => void;
+	let entered!: () => void;
+	const started = new Promise<void>(resolve => { entered = resolve; });
+	const gate = new Promise<void>(resolve => { release = resolve; });
+	let token: import('../../../../../base/common/cancellation.js').CancellationToken | undefined;
+	using source = new AccountPolicyService(accountServices(changes), githubServices(async (_id, cancellation) => {
+		token = cancellation;
+		entered();
+		await gate;
+		return { strictPluginOnlyCustomization: true };
+	}), log);
+	let notifications = 0;
+	using listener = source.onDidChangeState(() => { notifications++; });
+	const pending = source.updatePolicyDefinitions(binding);
+	await started;
+	source.dispose();
+	assert.equal(token?.isCancellationRequested, true);
+	const before = notifications;
+	release();
+	await pending;
+	assert.equal(notifications, before);
+	assert.equal(source.getPolicyValue('ManagedFeature'), undefined);
+});
+
+test('State observers can dispose the owner before a request starts', async () => {
+	using changes = new Emitter<AccountState>();
+	let calls = 0;
+	using source = new AccountPolicyService(accountServices(changes), githubServices(async () => {
+		calls++;
+		return { strictPluginOnlyCustomization: true };
+	}, async () => { calls++; return [account]; }), log);
+	using listener = source.onDidChangeState(state => {
+		if (state.phase === 'refreshing') source.dispose();
+	});
+	await source.updatePolicyDefinitions(binding);
+	assert.equal(calls, 0);
+	assert.equal(source.getPolicyValue('ManagedFeature'), undefined);
 });

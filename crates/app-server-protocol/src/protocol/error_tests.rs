@@ -51,6 +51,10 @@ fn github_errors_serialize_and_round_trip_without_product_reporter_names() {
             "GitHubPermissionDenied",
         ),
         (AppServerErrorName::GitHubRateLimited, "GitHubRateLimited"),
+        (
+            AppServerErrorName::GitHubManagedSettingsUpdateRequired,
+            "GitHubManagedSettingsUpdateRequired",
+        ),
         (AppServerErrorName::GitHubNotFound, "GitHubNotFound"),
         (AppServerErrorName::GitHubConflict, "GitHubConflict"),
         (AppServerErrorName::GitHubUnavailable, "GitHubUnavailable"),

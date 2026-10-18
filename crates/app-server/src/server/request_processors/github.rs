@@ -1123,6 +1123,9 @@ pub(super) fn github_error(error: github::Error) -> RpcError {
         Error::AuthenticationRequired => AppServerErrorName::AccountAuthenticationRequired,
         Error::PermissionDenied => AppServerErrorName::GitHubPermissionDenied,
         Error::RateLimited => AppServerErrorName::GitHubRateLimited,
+        Error::ManagedSettingsUpdateRequired => {
+            AppServerErrorName::GitHubManagedSettingsUpdateRequired
+        }
         Error::NotFound => AppServerErrorName::GitHubNotFound,
         Error::Conflict(_) => AppServerErrorName::GitHubConflict,
         Error::Unavailable(_) => AppServerErrorName::GitHubUnavailable,

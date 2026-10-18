@@ -171,6 +171,10 @@ Windows／macOS 的进程级 `SystemPolicyService` 每 2 秒检查变化，命�
 
 账户来源沿 primary grant → `IGitHubService.readManagedSettings(accountId)` → 可取消 App Server 请求 → `github/account/managedSettings` → 该账户的 GitHub client → `/copilot_internal/managed_settings`。协议只收账户及 operation ID，不收凭据或自定义 URL。HTTP 404／空对象撤回；权限、网络和非法输入保留同一账户的最后有效快照。登录切换取消旧请求，退出清空，迟到结果不能恢复旧账户策略；当前账户每分钟刷新。
 
+`AccountPolicyService` 同时通过 `IAccountPolicyService` 提供刷新状态与显式 `refresh()`；两者使用同一窗口实例，不增加账户或策略 owner。GitHub 设置显示主账户的刷新中／成功／失败、最近尝试和当前账户／host／凭据代次下的最近成功时间，并提供“刷新托管设置”。重复请求合并；失败保留旧值时明确显示，凭据代次变化不继承旧成功时间。该操作独立于仓库账户选择和“刷新账户”，状态由现有设置状态区域向辅助技术播报。
+
+仅 managed-settings 请求的 HTTP 466 映射为领域 `ManagedSettingsUpdateRequired` 和 RPC `GitHubManagedSettingsUpdateRequired`；不解析或转发错误正文及其他客户端的版本要求，也不触发 Ash 更新。它作为失败保留已有策略，成功或权威撤回后恢复状态。本链没有强制新鲜度或 AI 执行门禁；刷新失败不会写入 `chat.disableAIFeatures`。
+
 `AccountPolicyService` 只解释 registry 声明的映射。`ChatDefaultModel` 将顶层 `model` 或旧 `permissions.model` 映射到 `chat.defaultModel`；顶层非空字符串优先，空白视为缺省。实际选择仍由模型目录和聊天偏好服务负责。`ChatAIDisabled` 仅为系统策略，不伪造 Copilot 字段。`MultiplexPolicyService` 组合系统优先、账户其次；映射函数留在 renderer，Main 只传类型声明和策略值。
 
 ## 页面与公开契约的边界

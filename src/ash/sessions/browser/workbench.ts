@@ -279,7 +279,7 @@ import { IChatService } from "../../workbench/services/chat/common/chatService.j
 import { ConfigurationService } from '../services/configuration/browser/configurationService.js';
 import { IPolicyService, NullPolicyService } from '../../platform/policy/common/policy.js';
 import { MultiplexPolicyService } from '../../platform/policy/common/multiplexPolicyService.js';
-import { AccountPolicyService } from '../../workbench/services/policies/common/accountPolicyService.js';
+import { AccountPolicyService, IAccountPolicyService } from '../../workbench/services/policies/common/accountPolicyService.js';
 import type { ExtensionColorThemeService } from "../../workbench/services/extensions/browser/extensionColorThemeService.js";
 import type { BrowserStorageServiceOptions } from "../../workbench/services/storage/browser/storageService.js";
 import { IWorkbenchHostService } from "../../workbench/services/host/common/workbenchHostService.js";
@@ -582,7 +582,8 @@ export abstract class Workbench extends Disposable {
 		services.registerInstance(ILocalizationService, localization);
 		services.registerInstance(IAppServerRemoteAgentService, this._register(services.createInstance(AppServerRemoteAgentService, { remoteApi: options.api.remote })));
 		services.registerInstance(IGitHubService, options.api.github);
-		const accountPolicies = this._register(new AccountPolicyService(accountService, options.api.github, this.logService));
+		const accountPolicies = this._register(services.createInstance(AccountPolicyService));
+		services.registerInstance(IAccountPolicyService, accountPolicies);
 		const policies = this._register(new MultiplexPolicyService([systemPolicies, accountPolicies]));
 		services.registerInstance(IPolicyService, policies);
 		serviceContributionReady.push(configurationService.initialize(fileService, policies, workingCopies));

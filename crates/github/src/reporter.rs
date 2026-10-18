@@ -81,7 +81,8 @@ fn reporter_error(error: Error) -> ReporterError {
         Error::Unavailable(_) => ReporterError::Unavailable,
         Error::Cancelled => ReporterError::Cancelled,
         Error::SubmissionUncertain => ReporterError::SubmissionUncertain,
-        Error::NotFound
+        Error::ManagedSettingsUpdateRequired
+        | Error::NotFound
         | Error::Conflict(_)
         | Error::TimedOut
         | Error::InvalidResponse(_)

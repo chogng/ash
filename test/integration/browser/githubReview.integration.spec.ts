@@ -321,3 +321,54 @@ test('Chinese GitHub settings and PR review actions are translated', async ({ pa
 	await expect(page.getByRole('textbox', { name: '仓库（所有者/名称）', exact: true })).toBeVisible();
 	await expect(page.locator('.ash-settings-section')).toContainText('已有 Codex 登录可用于模型访问');
 });
+
+test('managed settings exposes retained policy and keyboard retry through the production protocol adapter', async ({ page }) => {
+	await page.goto('/githubReview.html?settings');
+	const section = page.locator('.ash-settings-section');
+	const refresh = page.getByRole('button', { name: 'Refresh managed settings', exact: true });
+	await expect(section).toContainText('Managed settings retrieved for Alice@github.com');
+	await expect(section).toContainText('Last successful refresh:');
+	await page.getByRole('combobox', { name: 'GitHub account', exact: true }).click();
+	await page.getByRole('option', { name: 'EnterpriseAlice@ghe.example', exact: true }).click();
+	await page.evaluate(() => {
+		window.ashGitHubReview.managedFailure('GitHubUnavailable');
+		window.ashGitHubReview.hold('github/account/managedSettings');
+	});
+	await refresh.focus();
+	await page.keyboard.press('Enter');
+	await expect(refresh).toBeDisabled();
+	await expect(section.getByRole('status').filter({ hasText: 'Refreshing managed settings' })).toHaveAttribute('aria-live', 'polite');
+	await page.evaluate(() => window.ashGitHubReview.release());
+	await expect(refresh).toBeEnabled();
+	await expect(section).toContainText('Could not refresh managed settings');
+	await expect(section).toContainText('Previously accepted settings are retained.');
+	await page.evaluate(() => window.ashGitHubReview.managedFailure(undefined));
+	await refresh.focus();
+	await page.keyboard.press('Enter');
+	await expect(section).toContainText('Managed settings retrieved for Alice@github.com');
+	await expect(section).not.toContainText('Previously accepted settings are retained.');
+	expect(await page.evaluate(() => window.ashGitHubReview.requests.filter(request => request.method === 'github/account/managedSettings').length)).toBe(3);
+	expect(await page.evaluate(() => window.ashGitHubReview.requests.filter(request => request.method === 'github/account/managedSettings').map(request => request.params.accountId))).toEqual(['alice', 'alice', 'alice']);
+});
+
+test('Chinese managed settings distinguishes first-fetch compatibility refusal and recovers without an update action', async ({ page }) => {
+	await page.goto('/githubReview.html?settings&zh&managedFailure=GitHubManagedSettingsUpdateRequired');
+	const section = page.locator('.ash-settings-section');
+	const refresh = page.getByRole('button', { name: '刷新托管设置', exact: true });
+	await expect(section).toContainText('GitHub 拒绝此客户端的托管设置兼容性');
+	await expect(section).toContainText('尚未成功刷新此账户的设置');
+	await expect(section).not.toContainText('最近成功刷新');
+	await page.evaluate(() => {
+		window.ashGitHubReview.theme('highContrast');
+		window.ashGitHubReview.managedFailure(undefined);
+	});
+	await refresh.focus();
+	await expect(refresh).toBeFocused();
+	expect(await refresh.evaluate(element => getComputedStyle(element).outlineStyle)).not.toBe('none');
+	await page.keyboard.press('Enter');
+	await expect(section).toContainText('已获取 Alice@github.com 的托管设置');
+	await expect(section).toContainText('最近成功刷新');
+	await refresh.focus();
+	expect(await page.evaluate(() => window.ashGitHubReview.accessibleContent('help' as import('../../../src/ash/platform/accessibility/browser/accessibleView.js').AccessibleViewType))).toContain('与用于访问仓库的所选账户无关');
+	expect(await page.evaluate(() => window.ashGitHubReview.accessibleContent('view' as import('../../../src/ash/platform/accessibility/browser/accessibleView.js').AccessibleViewType))).toContain('最近成功刷新');
+});

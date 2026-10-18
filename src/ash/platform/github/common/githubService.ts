@@ -12,6 +12,7 @@ export enum GitHubErrorCode {
 	AuthenticationRequired = 'authenticationRequired',
 	PermissionDenied = 'permissionDenied',
 	RateLimited = 'rateLimited',
+	ManagedSettingsUpdateRequired = 'managedSettingsUpdateRequired',
 	NotFound = 'notFound',
 	Conflict = 'conflict',
 	Unavailable = 'unavailable',

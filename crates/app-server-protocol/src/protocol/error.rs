@@ -99,6 +99,7 @@ pub enum AppServerErrorName {
     IssueOperationFailed,
     GitHubPermissionDenied,
     GitHubRateLimited,
+    GitHubManagedSettingsUpdateRequired,
     GitHubNotFound,
     GitHubConflict,
     GitHubUnavailable,

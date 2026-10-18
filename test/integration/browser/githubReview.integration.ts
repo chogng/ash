@@ -3,6 +3,8 @@ import type { ITextResourceStore } from '../../../src/ash/workbench/services/tex
 import { TestUriIdentityServices } from '../../../src/ash/platform/uriIdentity/test/common/uriIdentityTestServices.js';
 import { IOpenerService } from '../../../src/ash/platform/opener/common/opener.js';
 import { GitHubSettingsModel } from '../../../src/ash/workbench/contrib/github/browser/githubSettingsModel.js';
+import { AccountPolicyService, IAccountPolicyService } from '../../../src/ash/workbench/services/policies/common/accountPolicyService.js';
+import { ILogService, NullLoggerService } from '../../../src/ash/platform/log/common/log.js';
 import { SettingsSectionRenderer } from '../../../src/ash/workbench/contrib/preferences/browser/settingsSectionRenderer.js';
 import { AccessibleViewProviderId, AccessibilityVerbositySettingId } from '../../../src/ash/platform/accessibility/browser/accessibleView.js';
 import { IAppServerRemoteAgentService } from '../../../src/ash/workbench/services/remote/common/appServerRemoteAgentService.js';
@@ -55,6 +57,7 @@ const head = 'a'.repeat(40); const base = 'b'.repeat(40);
 const file = { filename: 'new.rs', previousFilename: 'old.rs', status: 'renamed', additions: 1, deletions: 1, changes: 2, patch: '@@ -1 +1 @@\n-old\n+new' };
 const comment = { id: 'comment-1', author: 'Alice', body: 'Please explain', url: 'https://github.com/team/repo/pull/7#discussion', canUpdate: true, canDelete: true };
 class ReviewTransport implements AppServerTransport {
+	public managedFailure: string | undefined;
 	private readonly listeners = new Map<string, Set<(payload: unknown) => void>>();
 	public readonly requests: Request[] = [];
 	public accountCatalog = [{ id: 'alice', host: 'github.com', login: 'Alice', status: 'ready', credentialRevision: '1' }, { id: 'ghe.example/42', host: 'ghe.example', login: 'EnterpriseAlice', status: 'ready', credentialRevision: '1' }];
@@ -84,6 +87,7 @@ class ReviewTransport implements AppServerTransport {
 	private dispatch(request: Request): void {
 		if (this.failure && (request.method === 'github/pullRequest/review' || request.method === 'github/comment/create')) { this.respond(request, undefined, this.failure); return; }
 		switch (request.method) {
+			case 'github/account/managedSettings': this.respond(request, { settings: { model: 'audit/model' } }, this.managedFailure); break;
 			case 'initialize': this.respond(request, createTestInitializeResult()); break;
 			case 'github/account/list': this.respond(request, { accounts: this.accountCatalog }); break;
 			case 'github/notifications/list': this.respond(request, { notifications: this.notificationReadAll ? [] : [{ id: String(request.params.page), title: request.params.page === 1 ? 'Review requested' : 'Issue mentioned', subjectType: 'PullRequest', unread: !this.notificationRead, reason: 'review_requested', updatedAt: 'now', repository: { host: request.params.accountId === 'alice' ? 'github.com' : 'ghe.example', owner: 'team', name: 'repo' }, url: 'https://github.com/team/repo/pull/7' }], nextPage: request.params.page === 1 ? 2 : null }); break;
@@ -132,6 +136,7 @@ setIconResolver(document, icon => getIconDefinition(icon));
 const theme = resources.add(new TestThemeService(darkColorTheme)); services.registerInstance(IThemeService, theme);
 resources.add(bindTestColorTheme(theme, document.body));
 const transport = new ReviewTransport(); const client = new AppServerProtocolClient(transport); resources.add(toDisposable(() => client.dispose())); await client.connect();
+transport.managedFailure = new URL(location.href).searchParams.get('managedFailure') ?? undefined;
 services.registerInstance(IGitHubService, new AppServerGitHubService(client));
 const localRepository = { id: 'local-repo', label: 'Local repo', path: '/workspace', root: URI.file('/workspace') };
 const gitRequests: { method: string; params: Record<string, unknown>; }[] = [];
@@ -147,6 +152,10 @@ const initialAccount: AccountState = { revision: 1n, accounts: [{ provider: 'git
 services.registerInstance(IAppServerRemoteAgentService, { connectionState: 'connected', connection: { kind: 'local', generation: 1 }, onDidChangeConnection: Event.None, onDidChangeConnectionState: Event.None, reconnect: async () => ({ kind: 'alreadyConnected' }), rollbackRuntime: async () => ({ kind: 'cancelled' }) });
 services.registerInstance(IAccountService, { onDidChangeAccounts: accounts.event, onDidCompleteLogin: Event.None, read: async () => initialAccount, startLogin: async () => { throw new Error('Not used'); }, cancelLogin: async () => { }, logout: async (provider, accountId) => { loggedOut.push({ provider, accountId }); transport.accountCatalog = transport.accountCatalog.filter(account => account.id !== accountId); accounts.fire({ revision: 2n, accounts: transport.accountCatalog.map(account => ({ provider: 'github', accountId: account.id, credentialRevision: BigInt(account.credentialRevision), status: 'ready' })) }); } });
 services.registerInstance(IGitHubConnectionService, { isConnecting: false, connect: async host => { browserHosts.push(host); }, cancel: async () => { } });
+services.registerInstance(ILogService, new NullLoggerService());
+const accountPolicies = resources.add(services.createInstance(AccountPolicyService));
+services.registerInstance(IAccountPolicyService, accountPolicies);
+await accountPolicies.updatePolicyDefinitions({ ChatDefaultModel: { type: 'string', managedSettings: { model: { type: 'string' } } } });
 services.registerInstance(IAccessibleViewService, { show: () => true, getOpenAriaHint: () => undefined, disableHint: async () => { }, showAccessibleViewHelp: () => { }, dispose() { }, [Symbol.dispose]() { } });
 services.registerInstance(ITextModelResourceService, resources.add(uriIdentityServices.createInstance(BrowserTextModelService, { onDidChange: Event.None, resolve: async request => ({ resource: request.resource, text: request.bootstrapText!, revision: undefined }), save: async () => { throw new Error('Review snapshots are read-only'); } } satisfies ITextResourceStore, {})));
 const dialogs = resources.add(new DialogService()); services.registerInstance(IDialogService, dialogs); services.registerInstance(IDialogsModel, dialogs.model); services.registerInstance(IWorkbenchDialogHandler, new BrowserDialogHandler(document.body));
@@ -182,13 +191,18 @@ function showSettings(): void {
 services.registerInstance(IPreferencesService, { openSettings: async () => { showSettings(); }, openUserSettings: async () => { }, openGlobalKeybindingSettings: async () => { } });
 const commands = resources.add(new CommandService(services));
 window.ashGitHubReview = {
+	managedFailure: kind => { transport.managedFailure = kind; },
 	external, settings: showSettings, requests: transport.requests, gitRequests, loggedOut, browserHosts, dirty: () => { dirty = true; }, open: () => commands.executeCommand('workbench.action.github.open'), close: () => { pane?.dispose(); pane = undefined; },
 	changeHead: () => { transport.commit = 'c'.repeat(40); }, fail: () => { transport.failure = 'GitHubSubmissionUncertain'; },
 	hold: method => { transport.heldMethod = method; }, release: () => transport.release(),
 	replaceAccount: () => accounts.fire({ revision: 2n, accounts: [{ provider: 'github', accountId: 'bob', credentialRevision: 2n, status: 'ready' }] }),
 	theme: name => theme.setColorTheme(name === 'light' ? lightColorTheme : highContrastDarkColorTheme),
-	accessibleContent: type => AccessibleViewRegistry.getImplementations().find(item => item.name === `githubEditor.${type}`)!.getProvider(services)!.provideContent(),
+	accessibleContent: type => {
+		const implementations = AccessibleViewRegistry.getImplementations();
+		const focusedSettings = implementations.find(item => item.type === type && item.name.startsWith('settingsSection-') && item.getProvider(services));
+		return (focusedSettings ?? implementations.find(item => item.name === `githubEditor.${type}`))!.getProvider(services)!.provideContent();
+	},
 };
 window.addEventListener('pagehide', () => { pane?.dispose(); resources.dispose(); }, { once: true });
 if (new URL(location.href).searchParams.has('settings')) { showSettings(); } else { await window.ashGitHubReview.open(); }
-declare global { interface Window { ashGitHubReview: { external: string[]; settings(): void; requests: Request[]; browserHosts: (string | undefined)[]; gitRequests: { method: string; params: Record<string, unknown>; }[]; loggedOut: { provider: string; accountId?: string; }[]; dirty(): void; open(): Promise<unknown>; close(): void; changeHead(): void; fail(): void; hold(method: string): void; release(): void; replaceAccount(): void; theme(name: 'light' | 'highContrast'): void; accessibleContent(type: AccessibleViewType): string; }; } }
+declare global { interface Window { ashGitHubReview: { managedFailure(kind: string | undefined): void; external: string[]; settings(): void; requests: Request[]; browserHosts: (string | undefined)[]; gitRequests: { method: string; params: Record<string, unknown>; }[]; loggedOut: { provider: string; accountId?: string; }[]; dirty(): void; open(): Promise<unknown>; close(): void; changeHead(): void; fail(): void; hold(method: string): void; release(): void; replaceAccount(): void; theme(name: 'light' | 'highContrast'): void; accessibleContent(type: AccessibleViewType): string; }; } }

@@ -196,6 +196,11 @@ impl GitHub {
             self.validate_authorization().map_err(Error::from)?;
             self.cancellation.check().map_err(|_| Error::Cancelled)?;
         }
+        // This refusal is specific to managed settings. Do not forward the error
+        // body or interpret another client's version as an Ash update requirement.
+        if endpoint == "copilot_internal/managed_settings" && response.status() == 466 {
+            return Err(Error::ManagedSettingsUpdateRequired);
+        }
         let headers = response.headers().to_vec();
         let data = decode_response(response, endpoint == "graphql", operation)?;
         Ok(ApiResponse { data, headers })

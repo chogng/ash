@@ -79,6 +79,11 @@ fn github_error_categories_are_independent_of_product_reporter_errors() {
             -32070,
         ),
         (
+            github::Error::ManagedSettingsUpdateRequired,
+            AppServerErrorName::GitHubManagedSettingsUpdateRequired,
+            -32070,
+        ),
+        (
             github::Error::Conflict("changed".into()),
             AppServerErrorName::GitHubConflict,
             -32070,
