@@ -31,7 +31,6 @@ AgentHost、Output、平台存储等工作树提交已经进入 main。旧工作
 
 - [ ] 并发开发：持久化状态与目录绑定已发布；专用 Runtime、调度、review/check 执行、RPC/UI 和 SCM 落地还需实现。当前 `/team develop` 明确返回 unavailable，没有伪装成已完成产品功能。
 - [ ] CI：根据最新 main 重现并处理 Python metadata/cache、Bazel zlib 地址、离线依赖获取和 V8 绑定问题。已有外部草案未应用，范围与验收入口见 [CI 交接](ci-project-todo.md)。
-- [ ] 跨平台 smoke：先取得原三文件补丁并核对哈希，再进行 Windows/macOS 与 Web 验收。原云端报告与逐项命令见 [smoke 交接](smoke-platform-handoff-todo.md)。
 - [ ] 调查完整浏览器集成中的 scrollbar 点击偶发失败，保留现有断言。
 
 ## 清理与恢复

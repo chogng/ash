@@ -43,6 +43,5 @@
 - [ ] Bazel：使用现有 patch 机制和官方固定 snapshot，保留原 SHA256 与 TLS 校验；由 Bazel 生成 lock，再以 `--lockfile_mode=error` 复核。
 - [ ] 在 Linux CI 真正执行 `//cli:tui-real-scenarios`，不能以本机 query 代替。
 - [ ] 根据最新 protocol 和 TUI 日志检查依赖准备与 V8 构建产物；保留依赖边界和产品断言。
-- [ ] 跨平台 smoke 另行接手，核对原补丁哈希后再应用与验收，见 [smoke 交接](smoke-platform-handoff-todo.md)。本地尚无已核验的原补丁字节。
 
 旧 57 文件格式批次因材料下载 HTTP 403 未取得字节，未重建或应用。上述未完成事项不影响已经保存的工作树恢复资料。

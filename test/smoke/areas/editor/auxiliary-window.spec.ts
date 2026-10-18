@@ -1,3 +1,4 @@
+import type { Page } from '@playwright/test';
 import { expect, test } from '../../../automation/test.js';
 import { waitForElectronWindowState } from '../../../automation/electronDriver.js';
 
@@ -78,13 +79,12 @@ test('detached editor window inherits workbench theme and accessibility state', 
 	const page = workbench.page;
 	await page.keyboard.press('ControlOrMeta+N');
 	await expect(workbench.editors.groupAt(0).tabs.last()).toContainText('Untitled');
+	// Only dirty editors return to the main window when the auxiliary window closes.
+	await workbench.editors.groupAt(0).editor.waitForEditorFocus();
+	await workbench.editors.groupAt(0).editor.waitForTypeInEditor('retained detached draft');
 
-	await page.keyboard.press('F1');
-	const command = page.locator('.ash-quick-pick').getByRole('combobox');
-	await command.fill('>Move to New Window');
-	await expect(page.locator('.ash-quick-pick-row-label', { hasText: 'Move to New Window' })).toBeVisible();
 	const popupPromise = page.context().waitForEvent('page');
-	await command.press('Enter');
+	await workbench.quickaccess.runCommand('workbench.action.moveEditorToNewWindow');
 	const popup = await popupPromise;
 	try {
 		const root = popup.locator('.ash-auxiliary-window-container');
@@ -118,11 +118,9 @@ test('detached editor window inherits workbench theme and accessibility state', 
 		await popup.evaluate(() => window.close());
 		await expect.poll(() => popup.isClosed()).toBe(true);
 		await expect(workbench.editors.groupAt(0).tabs.filter({ hasText: 'Untitled' })).toHaveCount(1);
-		await page.keyboard.press('F1');
-		const reopenCommand = page.locator('.ash-quick-pick').getByRole('combobox');
-		await reopenCommand.fill('>Move to New Window');
+		await workbench.editors.groupAt(0).editor.waitForEditorContents(text => text === 'retained detached draft');
 		const reopenedPromise = page.context().waitForEvent('page');
-		await reopenCommand.press('Enter');
+		await workbench.quickaccess.runCommand('workbench.action.moveEditorToNewWindow');
 		const reopened = await reopenedPromise;
 		try {
 			await expect(reopened.locator('.ash-auxiliary-window-container .ash-workbench-editor')).toBeVisible();
@@ -152,57 +150,59 @@ focusTest('detached editor windows participate in desktop window switching and c
 	};
 	await page.keyboard.press('ControlOrMeta+N');
 	await expect(workbench.editors.groupAt(0).tabs.last()).toContainText('Untitled');
-	await page.keyboard.press('F1');
-	const command = page.locator('.ash-quick-pick').getByRole('combobox');
-	await command.fill('>Move to New Window');
+	// Only dirty editors return to the main window when the auxiliary window closes.
+	await workbench.editors.groupAt(0).editor.waitForEditorFocus();
+	await workbench.editors.groupAt(0).editor.waitForTypeInEditor('retained detached draft');
 	const opened = page.context().waitForEvent('page');
-	await command.press('Enter');
+	await workbench.quickaccess.runCommand('workbench.action.moveEditorToNewWindow');
 	const popup = await opened;
+	let otherWindow: Page | undefined;
 	try {
 		await expect(popup.locator('.ash-auxiliary-window-container .ash-workbench-editor')).toBeVisible();
-		await expect(popup.getByRole('tab', { name: 'Untitled-1', exact: true })).toBeVisible();
+		await expect(popup.getByRole('tab', { name: 'Untitled-1, unsaved changes', exact: true })).toBeVisible();
 		await expect(workbench.editors.groupAt(0).tabs.filter({ hasText: 'Untitled' })).toHaveCount(0);
 		await waitForElectronWindowState(application, popup, { focused: true });
 		const title = await popup.title();
 		await focusMain();
-		await page.keyboard.press('F1');
-		await command.fill('>Switch Window...');
-		await command.press('Enter');
-		await expect(command).toHaveAttribute('placeholder', 'Select a window');
+		await workbench.quickaccess.runCommand('workbench.action.switchWindow');
+		await expect(workbench.quickaccess.input).toHaveAttribute('placeholder', 'Select a window');
 		await expect(page.locator('.ash-quick-pick-row-label')).toHaveCount(2);
 		await page.locator('.ash-quick-pick-row-label').filter({ hasText: title }).click();
 		await waitForElectronWindowState(application, popup, { focused: true });
 
 		await focusMain();
-		await page.keyboard.press('F1');
-		await command.fill('>Close Other Windows');
-		await command.press('Enter');
+		otherWindow = await workbench.openAgentsWindow('electron');
+		await focusMain();
+		await workbench.quickaccess.runCommand('workbench.action.closeOtherWindows');
+		await expect.poll(() => otherWindow!.isClosed()).toBe(true);
+		// Auxiliary editors belong to this Workbench, so closing other Workbenches keeps them.
+		expect(popup.isClosed()).toBe(false);
+		await workbench.quickaccess.runCommand('workbench.action.switchWindow');
+		await expect(page.locator('.ash-quick-pick-row-label')).toHaveCount(2);
+		await workbench.quickaccess.close();
+		await popup.evaluate(() => window.close());
 		await expect.poll(() => popup.isClosed()).toBe(true);
 		await expect(workbench.editors.groupAt(0).tabs.filter({ hasText: 'Untitled' })).toHaveCount(1);
-		await page.keyboard.press('F1');
-		await command.fill('>Switch Window...');
-		await command.press('Enter');
-		await expect(command).toHaveAttribute('placeholder', 'Select a window');
+		await workbench.editors.groupAt(0).editor.waitForEditorContents(text => text === 'retained detached draft');
+		await workbench.quickaccess.runCommand('workbench.action.switchWindow');
+		await expect(workbench.quickaccess.input).toHaveAttribute('placeholder', 'Select a window');
 		await expect(page.locator('.ash-quick-pick-row-label')).toHaveCount(1);
-		await command.press('Escape');
+		await workbench.quickaccess.close();
 	} finally {
+		if (otherWindow && !otherWindow.isClosed()) await otherWindow.close();
 		if (!popup.isClosed()) {
 			await popup.close();
 		}
 	}
 });
 
-test('detached window titlebar follows its own editor and reserves layout space', async ({ workbench }) => {
+test('detached window titlebar follows its own editor and reserves layout space', async ({ target, workbench }) => {
 	const page = workbench.page;
 	await page.keyboard.press('ControlOrMeta+N');
 	await workbench.editors.groupAt(0).editor.waitForEditorFocus();
 	await workbench.editors.groupAt(0).editor.waitForTypeInEditor('auxiliary compact fixture');
-	await page.keyboard.press('F1');
-	const command = page.locator('.ash-quick-pick').getByRole('combobox');
-	await command.fill('>Move to New Window');
-	await expect(page.locator('.ash-quick-pick-row-label', { hasText: 'Move to New Window' })).toBeVisible();
 	const popupPromise = page.context().waitForEvent('page');
-	await command.press('Enter');
+	await workbench.quickaccess.runCommand('workbench.action.moveEditorToNewWindow');
 	const popup = await popupPromise;
 	try {
 		const root = popup.locator('.ash-auxiliary-window-container');
@@ -254,16 +254,31 @@ test('detached window titlebar follows its own editor and reserves layout space'
 		expect(Math.abs(compactBottom - bounds.windowHeight)).toBeLessThanOrEqual(1);
 		await popup.screenshot({ path: test.info().outputPath('compact-window.png') });
 		const originalSize = await popup.evaluate(() => ({ width: window.outerWidth, height: window.outerHeight }));
+		const originalViewport = popup.viewportSize();
+		const narrowWidth = target.kind === 'browser' ? 320 : 500;
 		try {
-			await popup.evaluate(() => window.resizeTo(500, 530));
-			await expect.poll(() => popup.evaluate(() => window.innerWidth)).toBeLessThanOrEqual(500);
+			if (target.kind === 'browser') {
+				// Headless Chromium fixes the viewport independently of window.resizeTo.
+				await popup.setViewportSize({ width: narrowWidth, height: 530 });
+			} else {
+				await popup.evaluate(() => window.resizeTo(500, 530));
+			}
+			await expect.poll(() => popup.evaluate(() => window.innerWidth)).toBeLessThanOrEqual(narrowWidth);
 			await expect(compactTitle).toHaveAttribute('title', await popup.title());
 			await expect(compactTitle).toHaveCSS('text-overflow', 'ellipsis');
 			expect(await compactTitle.evaluate(element => element.scrollWidth > element.clientWidth)).toBe(true);
 		} finally {
-			await popup.evaluate(size => window.resizeTo(size.width, size.height), originalSize);
+			if (target.kind === 'browser') {
+				await popup.setViewportSize(originalViewport!);
+			} else {
+				await popup.evaluate(size => window.resizeTo(size.width, size.height), originalSize);
+			}
 		}
-		await expect.poll(() => popup.evaluate(() => window.outerWidth)).toBe(originalSize.width);
+		if (target.kind === 'browser') {
+			await expect.poll(() => popup.evaluate(() => window.innerWidth)).toBe(originalViewport!.width);
+		} else {
+			await expect.poll(() => popup.evaluate(() => window.outerWidth)).toBe(originalSize.width);
+		}
 		await disableCompact.focus();
 		await disableCompact.press('Enter');
 		await expect(enableCompact).toBeVisible();

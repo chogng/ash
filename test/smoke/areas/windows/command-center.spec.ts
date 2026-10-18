@@ -3,6 +3,18 @@ import { expect, test } from '../../../automation/test.js';
 
 test.use({ openWorkspace: false });
 
+// Expected titles follow the actual Desktop privilege; Browser has no OS suffix.
+const titleTest = test.extend<{ privilegeSuffix: string; }>({
+	privilegeSuffix: async ({ target, workbench }, use) => {
+		const isAdmin = target.kind === 'electron' && await workbench.page.evaluate(async () => {
+			const ipc = (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string): Promise<unknown>; }; }; }).ash.ipcRenderer;
+			return ipc.invoke('ash:native-host:is-admin');
+		});
+		expect(typeof isAdmin).toBe('boolean');
+		await use(isAdmin ? ` ${process.platform === 'win32' ? '[Administrator]' : '[Superuser]'}` : '');
+	},
+});
+
 test('desktop privileges reach the window title through the Main process', { tag: ['@electron-ui', '@electron-app-server'] }, async ({ application, target, workbench }) => {
 	const page = workbench.page;
 	const isAdmin = await page.evaluate(async () => {
@@ -20,17 +32,17 @@ test('desktop privileges reach the window title through the Main process', { tag
 	await expect(page.locator('.ash-notification', { hasText: 'Ash could not verify its desktop environment.' })).toHaveCount(0);
 });
 
-test('window title and command center follow the active editor and its dirty state', async ({ application, target, workbench }) => {
+titleTest('window title and command center follow the active editor and its dirty state', async ({ application, target, workbench, privilegeSuffix }) => {
 	const page = workbench.page;
 	const center = page.locator('.ash-titlebar-command-center-button');
-	await expect(page).toHaveTitle('Welcome — Ash Code');
+	await expect(page).toHaveTitle(`Welcome — Ash Code${privilegeSuffix}`);
 	await workbench.quickaccess.runCommand('workbench.action.files.newUntitledFile');
-	await expect(page).toHaveTitle('Untitled-1 — Ash Code');
+	await expect(page).toHaveTitle(`Untitled-1 — Ash Code${privilegeSuffix}`);
 	const editor = workbench.editors.groupAt(0).editor;
 	await editor.element.click({ position: { x: 100, y: 30 } });
 	await editor.waitForEditorFocus();
 	await editor.waitForTypeInEditor('title service');
-	const title = '● Untitled-1 — Ash Code';
+	const title = `● Untitled-1 — Ash Code${privilegeSuffix}`;
 	await expect(page).toHaveTitle(title);
 	await expect(center).toHaveAttribute('aria-description', title);
 	await page.mouse.move(0, 100);
@@ -38,14 +50,14 @@ test('window title and command center follow the active editor and its dirty sta
 	await expect(page.getByRole('tooltip')).toHaveText(title);
 	await page.mouse.move(0, 100);
 	if (target.kind === 'electron') {
-		await expect.poll(() => (application as ElectronApplication).evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().some(window => window.getTitle() === '● Untitled-1 — Ash Code'))).toBe(true);
+		await expect.poll(() => (application as ElectronApplication).evaluate(({ BrowserWindow }, expectedTitle) => BrowserWindow.getAllWindows().some(window => window.getTitle() === expectedTitle), title)).toBe(true);
 	}
 	await workbench.quickaccess.runCommand('workbench.action.files.newUntitledFile');
-	await expect(page).toHaveTitle('Untitled-2 — Ash Code');
-	await expect(center).toHaveAttribute('aria-description', 'Untitled-2 — Ash Code');
+	await expect(page).toHaveTitle(`Untitled-2 — Ash Code${privilegeSuffix}`);
+	await expect(center).toHaveAttribute('aria-description', `Untitled-2 — Ash Code${privilegeSuffix}`);
 });
 
-test('window title template and separator settings update the title and command center live', async ({ workbench }) => {
+titleTest('window title template and separator settings update the title and command center live', async ({ workbench, privilegeSuffix }) => {
 	const page = workbench.page;
 	await workbench.quickaccess.runCommand('workbench.action.files.newUntitledFile');
 	await workbench.settingsEditor.openUserSettingsUI();
@@ -55,15 +67,15 @@ test('window title template and separator settings update the title and command 
 	const template = settings.locator('[data-configuration-key="window.title"]');
 	await template.fill('${appName}${separator}${activeEditorShort}');
 	await template.press('Tab');
-	await expect(page).toHaveTitle('Ash Code — Untitled-1');
+	await expect(page).toHaveTitle(`Ash Code — Untitled-1${privilegeSuffix}`);
 	const separator = settings.locator('[data-configuration-key="window.titleSeparator"]');
 	await separator.fill(' | ');
 	await separator.press('Tab');
-	await expect(page).toHaveTitle('Ash Code | Untitled-1');
-	await expect(page.locator('.ash-titlebar-command-center-button')).toHaveAttribute('aria-description', 'Ash Code | Untitled-1');
+	await expect(page).toHaveTitle(`Ash Code | Untitled-1${privilegeSuffix}`);
+	await expect(page.locator('.ash-titlebar-command-center-button')).toHaveAttribute('aria-description', `Ash Code | Untitled-1${privilegeSuffix}`);
 	await settings.locator('.ash-modal-editor-close').click();
 	await workbench.quickaccess.runCommand('workbench.action.files.newUntitledFile');
-	await expect(page).toHaveTitle('Ash Code | Untitled-2');
+	await expect(page).toHaveTitle(`Ash Code | Untitled-2${privilegeSuffix}`);
 });
 
 test('activity bar badges stay over the icon and can be hidden independently through the menu', async ({ application, workbench }) => {
@@ -1531,12 +1543,15 @@ test('Quick Access scrolls its results within the list', async ({ workbench }) =
 	}).toPass({ timeout: 10_000 });
 });
 
-test('titlebar command center opens file search, switches to commands and restores focus', async ({ target, testWorkspace, workbench }) => {
+titleTest('titlebar command center opens file search, switches to commands and restores focus', async ({ application, target, testWorkspace, workbench, privilegeSuffix }) => {
 	const page = workbench.page;
-	await workbench.quickaccess.runCommand('workbench.action.selectTheme');
-	await page.locator('.ash-quick-pick').getByRole('combobox').fill('Ash Light');
-	await page.keyboard.press('Enter');
-	await expect(page.locator('.ash-quick-pick')).toHaveCount(0);
+	// UI-only hosts have bootstrap colors but no App Server extension theme catalog.
+	if (target.kind === 'electron') {
+		await (application as ElectronApplication).evaluate(({ nativeTheme }) => { nativeTheme.themeSource = 'light'; });
+	} else {
+		await page.emulateMedia({ colorScheme: 'light' });
+	}
+	await expect(page.locator('.ash-workbench')).toHaveAttribute('data-color-scheme', 'light');
 	const commandCenter = page.getByRole('button', { name: 'Search commands' });
 	await expect(commandCenter).toBeVisible();
 
@@ -1569,7 +1584,7 @@ test('titlebar command center opens file search, switches to commands and restor
 	await page.mouse.move(0, 100);
 	await commandCenter.hover();
 	await expect(commandCenter).toHaveCSS('background-color', 'rgb(235, 235, 235)');
-	await expect(page.getByRole('tooltip')).toHaveText(target.kind === 'browser' && target.appServerMode === 'required' ? `Welcome — ${testWorkspace.directory.split(/[\\/]/u).at(-1)} — Ash Code` : 'Welcome — Ash Code');
+	await expect(page.getByRole('tooltip')).toHaveText(target.kind === 'browser' && target.appServerMode === 'required' ? `Welcome — ${testWorkspace.directory.split(/[\\/]/u).at(-1)} — Ash Code` : `Welcome — Ash Code${privilegeSuffix}`);
 
 	await commandCenter.click();
 	await expect(commandCenter).toHaveAttribute('aria-expanded', 'true');
@@ -1577,7 +1592,7 @@ test('titlebar command center opens file search, switches to commands and restor
 	const picker = page.locator('.ash-quick-pick');
 	const query = picker.getByRole('combobox');
 	await expect(query).toBeFocused();
-	await expect(query).toHaveAttribute('placeholder', 'Search files by name');
+	await expect(query).toHaveAttribute('placeholder', 'Search files by name or enter an absolute path or ~/path');
 	await expect(page.locator('.ash-hover')).toHaveCount(0);
 	const initialPicker = await picker.elementHandle();
 	await query.fill('?');
@@ -1587,6 +1602,8 @@ test('titlebar command center opens file search, switches to commands and restor
 	await expect(query).toHaveAttribute('placeholder', 'Type the name of a symbol in the workspace');
 	await query.fill('?');
 	await expect(picker.locator('.ash-quick-pick-row-label', { hasText: '? Show Search Modes' })).toHaveCount(0);
+	await query.fill('?> Commands');
+	await expect(picker.getByRole('option')).toHaveCount(1);
 	await query.press('Enter');
 	await expect(query).toHaveValue('>');
 	await expect(query).toHaveAttribute('placeholder', 'Type the name of a command to run');

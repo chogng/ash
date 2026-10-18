@@ -94,7 +94,7 @@ for (const chatSurface of ['code', 'cowork'] as const) {
 			await page.goto('http://127.0.0.1:5195/');
 			await expect(page.locator('.stanza-editor-placeholder-text')).toHaveCount(1);
 			await page.evaluate(async ({ root, chatSurface }) => {
-				const moduleUrl = (path: string): string => `/@fs${root}/src/ash/${path}`;
+				const moduleUrl = (path: string): string => `/@fs/${root.replaceAll('\\', '/').replace(/^\//u, '')}/src/ash/${path}`;
 				const { DisposableStore, toDisposable } = await import(moduleUrl('base/common/lifecycle.ts'));
 				const { Emitter, Event } = await import(moduleUrl('base/common/event.ts'));
 				const { createTestEditorServices } = await import(moduleUrl('workbench/test/common/testEditorServices.ts'));
@@ -201,12 +201,15 @@ for (const chatSurface of ['code', 'cowork'] as const) {
 			await expect(menu).toHaveCount(0);
 			await host.locator('[data-item-id="advisor"] summary').click();
 			await expect(host.locator('[data-item-id="advisor"] details')).not.toHaveAttribute('open');
+			const transcript = host.locator(chatSurface === 'code' ? '.ash-chat-list-widget' : '.ash-cowork-list-widget');
+			// Use the scrollbar's keyboard path so its reading/following state sees the scroll.
+			await transcript.press('Home');
+			for (let line = 0; line < 3; line++) await transcript.press('ArrowDown');
+			await expect.poll(() => transcript.locator(':scope > .ash-scrollbar-viewport').evaluate(element => element.scrollTop)).toBe(120);
 			await page.evaluate(() => {
 				const evidence = globalThis.uiHotReloadEvidence;
 				evidence.editor.focus();
 				evidence.editor.setSelection({ startLineNumber: 1, startColumn: 2, endLineNumber: 1, endColumn: 7 });
-				const transcript = evidence.chat.element.querySelector<HTMLElement>('.ash-scrollbar-viewport')!;
-				transcript.scrollTop = 120;
 			});
 			for (const version of ['first', 'second']) {
 				await page.evaluate(focus => {
@@ -326,9 +329,10 @@ test('development DomWidget rebuilds chat tips twice while retaining draft, focu
 		await page.goto('http://127.0.0.1:5196/');
 		await expect(page.locator('.stanza-editor-placeholder-text')).toHaveCount(1);
 		await page.evaluate(async root => {
-			const moduleUrl = (path: string): string => `/@fs${root}/src/ash/${path}`;
+			const moduleUrl = (path: string): string => `/@fs/${root.replaceAll('\\', '/').replace(/^\//u, '')}/src/ash/${path}`;
 			const { DisposableStore } = await import(moduleUrl('base/common/lifecycle.ts'));
 			const { InstantiationService } = await import(moduleUrl('platform/instantiation/common/instantiationService.ts'));
+			const { registerCodeEditorServices } = await import(moduleUrl('editor/test/browser/testCodeEditor.ts'));
 			const { BrowserStorageService } = await import(moduleUrl('workbench/services/storage/browser/storageService.ts'));
 			const { IStorageService } = await import(moduleUrl('platform/storage/common/storage.ts'));
 			const { IChatTipService, ChatTipService } = await import(moduleUrl('workbench/contrib/chat/browser/chatTipService.ts'));
@@ -338,6 +342,7 @@ test('development DomWidget rebuilds chat tips twice while retaining draft, focu
 			const storage = scope.add(new BrowserStorageService({ ownerWindow: window, workspaceId: 'widget-hmr', backend: localStorage, flushInterval: 0 }));
 			services.registerInstance(IStorageService, storage);
 			services.registerInstance(IChatTipService, scope.add(services.createInstance(ChatTipService)));
+			registerCodeEditorServices(services);
 			const host = document.createElement('main');
 			host.id = 'widget-hot-reload-host';
 			document.body.append(host);

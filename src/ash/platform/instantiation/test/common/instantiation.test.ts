@@ -94,6 +94,22 @@ test('an unused delayed service is not constructed during scope disposal', () =>
 	assert.equal(created, 0);
 });
 
+test('repeated lookup and dependency validation leave resolved delayed proxies unconstructed', () => {
+	const IService = createDecorator<Service>('test.delayed.lookup');
+	const IConsumer = createDecorator<Consumer>('test.delayed.lookup.consumer');
+	let created = 0;
+	class Service { constructor() { created++; } }
+	class Consumer { constructor(@IService readonly service: Service) { } }
+	using services = new InstantiationService(new ServiceCollection(
+		[IService, new SyncDescriptor(Service, [], true)],
+		[IConsumer, new SyncDescriptor(Consumer)],
+	));
+	const service = services.get(IService);
+	assert.equal(services.get(IService), service);
+	assert.equal(services.get(IConsumer).service, service);
+	assert.equal(created, 0);
+});
+
 test('delayed cyclic owners stay lazy during repeated lookup and dependency validation', () => {
 	const IFirst = createDecorator<First>('test.delayed.cycle.first');
 	const ISecond = createDecorator<Second>('test.delayed.cycle.second');
@@ -119,6 +135,30 @@ test('delayed cyclic owners stay lazy during repeated lookup and dependency vali
 	assert.deepEqual(constructed, ['first']);
 	assert.equal(consumer.second.read(), first);
 	assert.deepEqual(constructed, ['first', 'second']);
+});
+
+test('delayed descriptor dependencies can retain each other without recursive construction', () => {
+	const IFirst = createDecorator<First>('test.delayed.peer.first');
+	const ISecond = createDecorator<Second>('test.delayed.peer.second');
+	const created: string[] = [];
+	class First {
+		readonly value = 'first';
+		constructor(@ISecond readonly peer: Second) { created.push('first'); }
+	}
+	class Second {
+		readonly value = 'second';
+		constructor(@IFirst readonly peer: First) { created.push('second'); }
+	}
+	using services = new InstantiationService(new ServiceCollection(
+		[IFirst, new SyncDescriptor(First, [], true)],
+		[ISecond, new SyncDescriptor(Second, [], true)],
+	));
+	const first = services.get(IFirst);
+	assert.equal(first.value, 'first');
+	assert.deepEqual(created, ['first']);
+	assert.equal(first.peer.value, 'second');
+	assert.equal(first.peer.peer, first);
+	assert.deepEqual(created, ['first', 'second']);
 });
 
 test('missing transitive dependencies of delayed services fail before a consumer is constructed', () => {

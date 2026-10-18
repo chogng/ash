@@ -5,6 +5,15 @@ import { IInstantiationService, _util, type ServiceIdentifier, type ServicesAcce
 import { ServiceCollection } from './serviceCollection.js';
 import { InstantiationType } from './extensions.js';
 
+// instanceof asks a proxy for its prototype, which would construct a delayed
+// service while checking registrations. Weak identity also works across scopes.
+const delayedServices = new WeakSet<object>();
+
+function isServiceDescriptor(value: unknown): value is SyncDescriptor<unknown> {
+	if (typeof value === 'object' && value !== null && delayedServices.has(value)) return false;
+	return value instanceof SyncDescriptor;
+}
+
 interface FactoryRegistration {
 	readonly factory: ServiceFactory<unknown>;
 	readonly transient: boolean;
@@ -72,7 +81,7 @@ export class InstantiationService extends Disposable implements IInstantiationSe
 	public getOptional<T>(id: ServiceIdentifier<T>): T | undefined {
 		this.assertNotDisposed();
 		const value = this.services.get(id);
-		if (!this.delayedServices.has(value as object) && value instanceof SyncDescriptor) {
+		if (!this.delayedServices.has(value as object) && isServiceDescriptor(value)) {
 			this.validateDependencies(value.ctor, new Set([id]));
 			return this.resolve(id, () => this.createInstance(value), false, value.supportsDelayedInstantiation) as T;
 		}
@@ -173,7 +182,7 @@ export class InstantiationService extends Disposable implements IInstantiationSe
 				throw new Error(`Unknown service: ${id}`);
 			}
 			const dependency = owner.services.get(id);
-			if (!owner.delayedServices.has(dependency as object) && dependency instanceof SyncDescriptor) {
+			if (!owner.delayedServices.has(dependency as object) && isServiceDescriptor(dependency)) {
 				owner.validateDependencies(dependency.ctor, visited);
 			}
 		}
@@ -237,7 +246,7 @@ export class InstantiationService extends Disposable implements IInstantiationSe
 			}
 			return instance;
 		};
-		return new Proxy({}, {
+		const proxy = new Proxy({}, {
 			get: (_target, property) => {
 				this.assertNotDisposed();
 				if (members.has(property)) {
@@ -278,5 +287,7 @@ export class InstantiationService extends Disposable implements IInstantiationSe
 			getPrototypeOf: () => Reflect.getPrototypeOf(initialize()),
 			has: (_target, property) => Reflect.has(initialize(), property),
 		});
+		delayedServices.add(proxy);
+		return proxy;
 	}
 }

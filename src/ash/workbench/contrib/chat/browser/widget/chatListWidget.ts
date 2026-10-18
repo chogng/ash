@@ -249,7 +249,8 @@ export class ChatListWidget extends DomWidget {
 	}
 
 	setVisible(visible: boolean): void {
-		if (this.visible === visible) return;
+		// A replacement can already be visible and still have a reading position to restore.
+		if (this.visible === visible && !(visible && this.pendingReadingPosition)) return;
 		if (!visible) {
 			for (const [, row] of this.renderedItems) row.reading.clear();
 			this.captureFollowState();
@@ -311,10 +312,12 @@ export class ChatListWidget extends DomWidget {
 			const part = this.renderedItems.get(id)?.toolPart;
 			if (part) part.domNode.open = expanded;
 		}
+		// Hide the replacement before installing saved state: hiding captures its current scroll.
+		this.setVisible(state.visible);
 		this.shouldFollow = state.shouldFollow;
 		// Hidden panes cannot measure their scroll range until their retained host is shown again.
 		this.pendingReadingPosition = { top: state.top, anchor: state.anchor };
-		this.setVisible(state.visible);
+		if (state.visible) this.setVisible(true);
 		if (state.focus) {
 			const row = this.renderedItems.get(state.focus.itemId);
 			const selector = state.focus.textInput ? textInputSelector : focusableSelector;
