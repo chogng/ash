@@ -480,7 +480,7 @@ def prepare_development_package(args: argparse.Namespace, *, root: Path = ROOT) 
             sha256(executable),
             source.archive_name,
             source.archive_sha256,
-            [source.directory / "COPYING"],
+            [source.directory / name for name in ("COPYING", "COPYING.LIB")],
             "vendored-source-build",
         )
     remote_release = (

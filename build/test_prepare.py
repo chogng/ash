@@ -320,8 +320,15 @@ class PrepareTests(unittest.TestCase):
             build.assert_not_called()
 
     def test_preparation_builds_one_backend_set_and_delegates_assembly(self) -> None:
+        self.assert_preparation_contract("x86_64-pc-windows-msvc")
+
+    def test_linux_preparation_preserves_both_bubblewrap_licenses(self) -> None:
+        self.assert_preparation_contract("x86_64-unknown-linux-gnu")
+
+    def assert_preparation_contract(self, target: str) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
+            spec = TARGETS[target]
             binaries = {}
             for name in (
                 "ash-package-store",
@@ -350,6 +357,14 @@ class PrepareTests(unittest.TestCase):
                 path = root / name
                 path.write_text(name)
                 binaries[name] = path
+            if spec.is_linux:
+                for name in ("ash-windows-sandbox", "ash-windows-sandbox-service"):
+                    binaries.pop(name)
+                binaries["bwrap"] = root / "bwrap"
+                binaries["bwrap"].write_text("bwrap")
+            source = prepare.load_vendored_source(
+                Path(__file__).resolve().parents[1] / "crates/vendor/bubblewrap"
+            )
             runtime = SimpleNamespace(
                 executable=root / "rg",
                 version="test",
@@ -360,7 +375,6 @@ class PrepareTests(unittest.TestCase):
             )
             runtime.executable.write_text("rg")
             args = prepare.parse_arguments([])
-            spec = TARGETS["x86_64-pc-windows-msvc"]
 
             def capability(output, *_):
                 output.mkdir(parents=True)
@@ -392,6 +406,7 @@ class PrepareTests(unittest.TestCase):
                 ),
                 patch.object(prepare, "resolve_ripgrep", return_value=runtime),
                 patch.object(prepare, "resolve_tgrep", return_value=runtime),
+                patch.object(prepare, "load_vendored_source", return_value=source),
                 patch.object(prepare, "package_input_digest", return_value="digest"),
                 patch.object(prepare, "reusable_package", return_value=None),
                 patch.object(
@@ -419,3 +434,13 @@ class PrepareTests(unittest.TestCase):
                 assemble.call_args.kwargs["voice_host_binary"],
             )
             self.assertIsNone(assemble.call_args.kwargs["media_package"])
+            bubblewrap = assemble.call_args.args[14]
+            if spec.is_linux:
+                self.assertEqual(binaries["bwrap"], bubblewrap.executable)
+                self.assertEqual("vendored-source-build", bubblewrap.source)
+                self.assertEqual(
+                    {source.directory / "COPYING", source.directory / "COPYING.LIB"},
+                    set(bubblewrap.license_files),
+                )
+            else:
+                self.assertIsNone(bubblewrap)
