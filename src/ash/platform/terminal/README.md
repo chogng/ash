@@ -31,7 +31,7 @@ Rust 领域服务拥有完整 Agent loop：模型调用、工具选择与调度�
 
 两个适配器消费同一个 `AppServerProtocolClient`。创建结果的 ready 信息来自 Rust；文本走 `terminal/write`，原始字节只在适配边界编码为 base64 后走 `terminal/writeBinary`，不经过 UTF-8 转换。普通与 SSH 读取都经过同一 DTO 转换入口，在适配边界把 base64 解码为原始 `Uint8Array`，把 nullable 退出码转为前端 `undefined`；多字节字符和控制字节不会经过逐块文本解码。重连租约管理复用该 client 的状态和代次，只恢复已有 PTY，不自行建立连接。Main 负责 connection acquisition、透明 relay、运行时更换通知和通用窗口级内存 SecretStorage，不解析 `terminal/*`，也不拥有终端会话状态。
 
-`terminalId` 与 `dirId` 一起定位对应后端资源；多根 Workspace 必须保留创建时的 `dirId`。Web 的 `connectionOwned` 进程随 connection 关闭而结束。Electron 本地与远程的 `reconnectable` 进程在连接断开后由同一后端保留 30 秒，成功 attach 会旋转 token；后端进程重启、租约过期或明确 runtime replacement 后不能恢复原 PTY。token 平时只归 Renderer 进程适配层；协调 reload 时通过窗口级内存 SecretStorage 短期交接，实际窗口关闭即清空，不写入普通工作区存储、设置或日志。屏幕和布局 checkpoint 由 Workbench 原 owner 保存，不能代替后端租约。
+`terminalId` 与 `dirId` 一起定位对应后端资源；多根 Workspace 必须保留创建时的 `dirId`。Web 的 `connectionOwned` 进程随 connection 关闭而结束。Electron 本地与远程的 `reconnectable` 进程在连接断开后由同一后端保留 30 秒，成功 attach 会旋转 token；后端进程重启、租约过期或明确 runtime replacement 后不能恢复原 PTY。token 平时只归 Renderer 进程适配层；协调 reload 时通过窗口级内存 SecretStorage 短期交接；跨窗口时先由 Rust 原子 detach 撤销源访问、旋转 token，再经 Main 内存交给指定同工作区／执行宿主窗口，目标失败可返回新 lease 回滚。实际窗口关闭清空内存凭据，不写入普通工作区存储、设置或日志。屏幕和布局 checkpoint 由 Workbench 原 owner 保存，不能代替后端租约。
 
 `common/terminal.ts` 导出 `ITerminalProcessService` 的 DI 标识。Workbench 与 Sessions 注册 `IRendererHost.terminal` 后，Terminal contribution 经容器注入进程服务与 Workspace。SSH 宿主直接使用拥有租约管理的服务对象。传输层使用 Ash 的创建与分页读取契约；`contrib/terminal/browser/terminalProcessManager.ts` 将其接为输出、命令和退出事件，拥有游标与解析等待。适配层与工作台之间的身份和顺序约束见 [Terminal 运行契约](../../../../docs/terminal.md#进程接入)。
 

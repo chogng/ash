@@ -1,4 +1,4 @@
-import type { ITerminalOutputSnapshot } from '../../terminal/common/terminal.js';
+import type { ITerminalOutputSnapshot, ITerminalReconnectLease } from '../../terminal/common/terminal.js';
 import type { TitleBarStyleConfiguration, IColorScheme, IWindowAlwaysOnTopChangedEvent, IAuxiliaryWindowState, IAuxiliaryWindowStateEvent } from '../../window/common/window.js';
 import { validateJsonValue, type JsonValue } from '../../../base/common/jsonValue.js';
 import type { SessionMode } from '../../agentHost/common/agent.js';
@@ -47,6 +47,11 @@ export const NATIVE_HOST_OPEN_WORKSPACE_CHANNEL =
 	"ash:native-host:open-workspace";
 export const NATIVE_HOST_OPEN_WINDOW_CHANNEL = 'ash:window:open';
 export const NATIVE_HOST_OPEN_AGENTS_WINDOW_CHANNEL = 'ash:native-host:open-agents-window';
+export const NATIVE_HOST_TERMINAL_MOVE_CHANNEL = 'ash:native-host:terminal-move';
+export const NATIVE_HOST_TERMINAL_TAKE_CHANNEL = 'ash:native-host:terminal-take';
+export const NATIVE_HOST_TERMINAL_COMPLETE_CHANNEL = 'ash:native-host:terminal-complete';
+export const NATIVE_HOST_TERMINAL_REQUEST_CHANNEL = 'ash:native-host:terminal-request';
+
 export const NATIVE_HOST_SET_WINDOW_THEME_CHANNEL =
 	"ash:native-host:set-window-theme";
 export const NATIVE_HOST_SET_WINDOW_DIMMED_CHANNEL =
@@ -146,6 +151,65 @@ export interface IOpenAgentsWindowOptions {
 	};
 }
 
+/** Ephemeral handoff payload; only Main memory and the two participating renderers retain it. */
+export interface ITerminalWindowTransfer {
+	readonly id: string;
+	/** Opaque serialized frontend screen/layout state, decoded by its Workbench owner. */
+	readonly state: string;
+	readonly lease: ITerminalReconnectLease;
+}
+
+export interface ITerminalWindowTransferResult {
+	readonly id: string;
+	readonly error?: string;
+	/** Rotated execution-owner lease returned only when a claimed transfer is rolled back. */
+	readonly lease?: ITerminalReconnectLease;
+}
+
+export function validateTerminalWindowTransfer(value: unknown): ITerminalWindowTransfer {
+	if (!isRecord(value) || Object.keys(value).sort().join(',') !== 'id,lease,state'
+		|| typeof value.id !== 'string' || value.id.length === 0 || value.id.length > 128 || value.id.includes('\0')
+		|| typeof value.state !== 'string' || value.state.length === 0 || value.state.length > 64 * 1024 * 1024
+		|| !isRecord(value.lease)) throw new TypeError('Invalid terminal transfer');
+	return { id: value.id, state: value.state, lease: validateTerminalTransferLease(value.lease) };
+}
+
+function validateTerminalTransferLease(value: unknown): ITerminalReconnectLease {
+	if (!isRecord(value) || Object.keys(value).some(key => !['terminalId', 'dirId', 'reconnectToken', 'reconnectGracePeriodMillis'].includes(key))
+		|| typeof value.terminalId !== 'string' || value.terminalId.length === 0 || value.terminalId.length > 1024 || value.terminalId.includes('\0')
+		|| value.dirId !== undefined && (typeof value.dirId !== 'string' || value.dirId.length === 0 || value.dirId.length > 4096 || value.dirId.includes('\0'))
+		|| typeof value.reconnectToken !== 'string' || !/^[0-9a-f]{64}$/.test(value.reconnectToken)
+		|| !Number.isSafeInteger(value.reconnectGracePeriodMillis) || (value.reconnectGracePeriodMillis as number) <= 0
+		|| (value.reconnectGracePeriodMillis as number) > 300_000) throw new TypeError('Invalid terminal transfer lease');
+	return {
+		terminalId: value.terminalId,
+		...(value.dirId === undefined ? {} : { dirId: value.dirId as string }),
+		reconnectToken: value.reconnectToken,
+		reconnectGracePeriodMillis: value.reconnectGracePeriodMillis as number,
+	};
+}
+
+export function validateTerminalWindowTransferMove(value: unknown): { readonly transfer: ITerminalWindowTransfer; readonly targetWindowId?: number; } {
+	if (!isRecord(value) || Object.keys(value).some(key => !['transfer', 'targetWindowId'].includes(key))
+		|| value.targetWindowId !== undefined && (!Number.isSafeInteger(value.targetWindowId) || (value.targetWindowId as number) <= 0)) throw new TypeError('Invalid terminal transfer target');
+	return {
+		transfer: validateTerminalWindowTransfer(value.transfer),
+		...(value.targetWindowId === undefined ? {} : { targetWindowId: value.targetWindowId as number }),
+	};
+}
+
+export function validateTerminalWindowTransferResult(value: unknown): ITerminalWindowTransferResult {
+	if (!isRecord(value) || Object.keys(value).some(key => !['id', 'error', 'lease'].includes(key))
+		|| typeof value.id !== 'string' || value.id.length === 0 || value.id.length > 128 || value.id.includes('\0')
+		|| value.error !== undefined && (typeof value.error !== 'string' || value.error.length === 0 || value.error.length > 2048)
+		|| value.lease !== undefined && value.error === undefined) throw new TypeError('Invalid terminal transfer result');
+	return {
+		id: value.id,
+		...(value.error === undefined ? {} : { error: value.error as string }),
+		...(value.lease === undefined ? {} : { lease: validateTerminalTransferLease(value.lease) }),
+	};
+}
+
 /** Window-scoped native capabilities exposed to an Electron renderer. */
 export interface INativeHostApi extends ICommonNativeHostService {
 	onDidSuspendOS(listener: () => void): DisposableHandle;
@@ -177,6 +241,10 @@ export interface INativeHostApi extends ICommonNativeHostService {
 	openWorkspace(root: string, forceNewWindow?: boolean): Promise<void>;
 	openWindow(options: IOpenEmptyWindowOptions): Promise<void>;
 	openAgentsWindow(options?: IOpenAgentsWindowOptions): Promise<void>;
+	moveTerminalToWindow(transfer: ITerminalWindowTransfer, targetWindowId?: number): Promise<ITerminalWindowTransferResult>;
+	takeTerminalTransfer(): Promise<ITerminalWindowTransfer | undefined>;
+	completeTerminalTransfer(result: ITerminalWindowTransferResult): Promise<void>;
+	onDidRequestTerminalTransfer(listener: () => void): DisposableHandle;
 	getAgentHostEditorState(): Promise<IAgentHostEditorState>;
 	updateAgentHostEditorState(update: AgentHostEditorUpdate): Promise<void>;
 	onDidChangeAgentHostEditorState(listener: (state: IAgentHostEditorState) => void): DisposableHandle;

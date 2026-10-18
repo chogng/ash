@@ -36,6 +36,7 @@ export const enum TerminalCommandId {
 	Rename = 'workbench.action.terminal.rename',
 	ChangeIcon = 'workbench.action.terminal.changeIcon',
 	MoveToEditor = 'workbench.action.terminal.moveToEditor',
+	MoveIntoNewWindow = 'workbench.action.terminal.moveIntoNewWindow',
 	MoveToTerminalPanel = 'workbench.action.terminal.moveToTerminalPanel',
 	New = 'workbench.action.terminal.new',
 	NewInNewWindow = 'workbench.action.terminal.newInNewWindow',

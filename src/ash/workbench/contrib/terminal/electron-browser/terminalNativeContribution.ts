@@ -1,29 +1,35 @@
-import { Disposable } from '../../../../base/common/lifecycle.js';
+import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { localize } from '../../../../nls.js';
 import { ILogService } from '../../../../platform/log/common/log.js';
 import type { IWorkbenchContribution } from '../../../common/contributions.js';
 import { ILifecycleService, LifecyclePhase, type ShutdownReason } from '../../../services/lifecycle/common/lifecycle.js';
-import { ITerminalService, ITerminalGroupService, type ITerminalInstance } from '../browser/terminal.js';
+import { TerminalTransferError, ITerminalService, ITerminalGroupService, type ITerminalInstance } from '../browser/terminal.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { IDialogService } from '../../../../platform/dialogs/common/dialogs.js';
-import { ProcessPropertyType, ITerminalProcessService } from '../../../../platform/terminal/common/terminal.js';
+import { ProcessPropertyType, ITerminalProcessService, TERMINAL_REVIVE_STATE_KEY } from '../../../../platform/terminal/common/terminal.js';
 import { ISecretStorageService } from '../../../../platform/secrets/common/secrets.js';
 import { IStorageService, StorageScope, StorageTarget } from '../../../../platform/storage/common/storage.js';
 import { IWorkspaceContextService } from '../../../../platform/workspace/common/workspace.js';
 import { generateUuid } from '../../../../base/common/uuid.js';
-import { parseTerminalReloadCredentials, parseTerminalReloadState, TerminalStorageKeys } from '../common/terminalStorageKeys.js';
+import { parseTerminalReloadCredentials, parseTerminalReloadState, parseTerminalReviveStateKey, TerminalStorageKeys } from '../common/terminalStorageKeys.js';
 import type { ITerminalReloadState } from '../../../services/terminal/common/terminal.js';
 import { terminalExecutionScope } from '../common/remote/terminal.js';
+import { INativeHostService } from '../../../common/services.js';
+import type { INativeHostApi } from '../../../../platform/native/common/nativeHost.js';
+import { isMacintosh } from '../../../../base/common/platform.js';
+import { CancellationError } from '../../../../base/common/errors.js';
 
 /** Desktop's leased PTYs must receive shutdown before the renderer's IPC lifetime ends. */
 export class TerminalNativeContribution extends Disposable implements IWorkbenchContribution {
 	static readonly ID = 'terminal.native';
 	private readonly prepared = new Set<ITerminalInstance>();
 	private checkpointKey: string | undefined;
+	private receivingTransfer: Promise<void> | undefined;
+	private transferRequested = false;
 
 	constructor(
 		@ITerminalService private readonly terminals: ITerminalService,
-		@ILifecycleService lifecycle: ILifecycleService,
+		@ILifecycleService private readonly lifecycle: ILifecycleService,
 		@ILogService private readonly log: ILogService,
 		@IConfigurationService private readonly configuration: IConfigurationService,
 		@IDialogService private readonly dialogs: IDialogService,
@@ -32,11 +38,12 @@ export class TerminalNativeContribution extends Disposable implements IWorkbench
 		@ISecretStorageService private readonly secrets: ISecretStorageService,
 		@IStorageService private readonly storage: IStorageService,
 		@IWorkspaceContextService private readonly workspace: IWorkspaceContextService,
+		@INativeHostService private readonly host: INativeHostApi,
 	) {
 		super();
 		this._register(lifecycle.onBeforeShutdown(event => event.veto(this.confirmShutdown(event.reason), TerminalNativeContribution.ID)));
 		this._register(lifecycle.onWillShutdown(event => event.join(
-			() => this.shouldPersist(event.reason) ? this.prepareReload() : this.closeTerminals(),
+			() => this.shouldPersist(event.reason) ? this.prepareReload() : this.prepareExit(event.reason),
 			localize('terminal.native.closing', 'Closing terminals'),
 			() => this.shouldPersist(event.reason) ? this.terminals.instances.every(instance => this.prepared.has(instance)) : this.terminals.instances.length === 0,
 		)));
@@ -50,13 +57,73 @@ export class TerminalNativeContribution extends Disposable implements IWorkbench
 		this._register(lifecycle.onDidShutdownError(() => {
 			for (const instance of this.prepared) instance.start();
 			this.prepared.clear();
-			void this.clearCheckpoint().catch(error => this.log.error('terminal', error));
+			void this.clearCheckpoint(true).catch(error => this.log.error('terminal', error));
 		}));
 		void this.restoreLayout(lifecycle).catch(error => this.log.error('terminal', localize('terminal.reload.failed', 'Could not restore terminal sessions after reload.'), error));
+		const transfers = this.host.onDidRequestTerminalTransfer(() => this.receiveTransfer());
+		this._register(toDisposable(() => transfers.dispose()));
+		this.receiveTransfer();
+	}
+
+	private receiveTransfer(): void {
+		if (this.isDisposed) return;
+		this.transferRequested = true;
+		if (this.receivingTransfer) return;
+		this.receivingTransfer = (async () => {
+			do {
+				this.transferRequested = false;
+				await this.acceptTransfer();
+			} while (this.transferRequested && !this.isDisposed);
+		})().catch(error => this.log.error('terminal', error)).finally(() => this.receivingTransfer = undefined);
+	}
+
+	private async acceptTransfer(): Promise<void> {
+		await this.terminals.whenConnected;
+		if (this.isDisposed) return;
+		const transfer = await this.host.takeTerminalTransfer();
+		if (!transfer) return;
+		let instance: ITerminalInstance | undefined;
+		try {
+			const state = parseTerminalReloadState(transfer.state);
+			const scope = terminalExecutionScope(this.workspace.getWorkspace());
+			if (state.kind || state.instances.length !== 1 || state.workspaceId !== scope.workspaceId || state.remoteAuthority !== scope.remoteAuthority) throw new Error('Terminal transfer belongs to another workspace or host');
+			instance = await this.terminals.importTerminalState(state.instances[0]!, transfer.lease);
+			// Startup restores editor focus after BlockRestore contributions run. Claim
+			// the destination's input only once that restore has finished.
+			await this.lifecycle.when(LifecyclePhase.Restored);
+			if (this.isDisposed || this.lifecycle.willShutdown) throw new CancellationError();
+			await this.groups.showPanel(true);
+			await this.host.focusWindow();
+			instance.start();
+			instance.xterm?.focus();
+		} catch (error) {
+			// Return the rotated credential if attachment succeeded before a later UI failure.
+			const lease = error instanceof TerminalTransferError ? error.rollbackLease
+				: instance ? await this.processes.detach?.(transfer.lease.terminalId).catch(() => undefined) : undefined;
+			if (instance) await instance.close().catch(() => {
+				this.log.error('terminal', localize('terminal.windowTransfer.targetFailed', 'Could not initialize the terminal in its destination window.'));
+			});
+			const message = (error instanceof Error ? error.message : String(error)).slice(0, 2048)
+				|| localize('terminal.windowTransfer.targetFailed', 'Could not initialize the terminal in its destination window.');
+			await this.host.completeTerminalTransfer({ id: transfer.id, error: message, ...(lease ? { lease } : {}) });
+			return;
+		}
+		// Once attached, this window is the process owner even if the sender disappears.
+		await this.host.completeTerminalTransfer({ id: transfer.id });
 	}
 
 	private shouldPersist(reason: ShutdownReason): boolean {
 		return reason === 'reload' && this.configuration.getValue<boolean>('terminal.integrated.enablePersistentSessions') !== false;
+	}
+
+	private async prepareExit(reason: ShutdownReason): Promise<void> {
+		const enabled = this.configuration.getValue<boolean>('terminal.integrated.enablePersistentSessions') !== false;
+		const policy = this.configuration.getValue<string>('terminal.integrated.persistentSessionReviveProcess') ?? 'onExit';
+		const lastWindowExit = reason === 'windowClose' && !isMacintosh && (await this.host.listWindows()).length === 1;
+		const revive = enabled && policy !== 'never' && (reason === 'quit' || lastWindowExit || policy === 'onExitAndWindowClose' && reason === 'windowClose');
+		if (revive) await this.prepareReload(true);
+		else { this.storage.remove(await this.reviveStateKey(), StorageScope.WORKSPACE); await this.storage.flush(); }
+		await this.closeTerminals();
 	}
 
 	private async confirmShutdown(reason: ShutdownReason): Promise<boolean> {
@@ -73,7 +140,7 @@ export class TerminalNativeContribution extends Disposable implements IWorkbench
 		})).confirmed;
 	}
 
-	private async prepareReload(): Promise<void> {
+	private async prepareReload(revive = false): Promise<void> {
 		await this.terminals.whenConnected;
 		const instances = [...this.terminals.instances];
 		const activeId = this.terminals.activeInstance?.instanceId;
@@ -83,26 +150,39 @@ export class TerminalNativeContribution extends Disposable implements IWorkbench
 		})?.instanceId;
 		const snapshots = [];
 		for (const instance of instances) {
-			if (instance.shellLaunchConfig?.customPtyImplementation) throw new Error(localize('terminal.reload.unsupported', 'This terminal cannot preserve its process across a window reload.'));
+			if (revive && (instance.isReadOnly || instance.state !== 'running' || !instance.revivalLaunch)) continue;
+			if (instance.shellLaunchConfig?.customPtyImplementation) {
+				if (revive) continue;
+				throw new Error(localize('terminal.reload.unsupported', 'This terminal cannot preserve its process across a window reload.'));
+			}
 			// Register before awaiting: even a failed checkpoint must resume this client.
 			this.prepared.add(instance);
-			snapshots.push(await instance.serializeState());
+			const snapshot = await instance.serializeState();
+			if (!revive || snapshot.launch) snapshots.push(snapshot);
 		}
-		const leases = await Promise.all(snapshots.map(async snapshot => {
+		const leases = revive ? [] : await Promise.all(snapshots.map(async snapshot => {
 			const lease = await this.processes.getReconnectLease?.(snapshot.process.terminalId);
 			if (!lease) throw new Error(localize('terminal.reload.leaseUnavailable', 'The terminal process cannot be reattached after reload.'));
 			return lease;
 		}));
 		const scope = terminalExecutionScope(this.workspace.getWorkspace());
+		const ids = new Set(snapshots.map(snapshot => snapshot.instanceId));
 		const state: ITerminalReloadState = {
-			version: 1, workspaceId: scope.workspaceId, remoteAuthority: scope.remoteAuthority, instances: snapshots, activeId, focusedId,
+			version: 1, ...(revive ? { kind: 'revive' as const } : {}), workspaceId: scope.workspaceId, remoteAuthority: scope.remoteAuthority, instances: snapshots,
+			activeId: activeId && ids.has(activeId) ? activeId : undefined, focusedId: focusedId && ids.has(focusedId) ? focusedId : undefined,
 			groups: this.groups.groups.map(group => {
 				const layout = group.getLayoutInfo(group === this.groups.activeGroup);
-				return { ids: layout.terminals.map(pane => pane.terminal), sizes: layout.terminals.map(pane => pane.relativeSize) };
-			}),
+				const panes = layout.terminals.filter(pane => ids.has(pane.terminal));
+				return { ids: panes.map(pane => pane.terminal), sizes: panes.map(pane => pane.relativeSize) };
+			}).filter(group => group.ids.length),
 		};
 		const text = JSON.stringify(state);
 		parseTerminalReloadState(text);
+		if (revive) {
+			this.storage.store(await this.reviveStateKey(), text, StorageScope.WORKSPACE, StorageTarget.MACHINE);
+			await this.storage.flush();
+			return;
+		}
 		this.checkpointKey ??= `${TerminalStorageKeys.Reload}.${generateUuid()}`;
 		this.storage.store(this.checkpointKey, text, StorageScope.WORKSPACE, StorageTarget.MACHINE);
 		await this.storage.flush();
@@ -113,12 +193,16 @@ export class TerminalNativeContribution extends Disposable implements IWorkbench
 		await this.terminals.whenConnected;
 		if (this.isDisposed) return;
 		const encoded = await this.secrets.get(TerminalStorageKeys.Reload);
-		if (!encoded) return;
-		const credentials = parseTerminalReloadCredentials(encoded);
-		this.checkpointKey = credentials.stateKey;
-		const text = this.storage.get(credentials.stateKey, StorageScope.WORKSPACE);
-		if (text && credentials.expiresAt >= Date.now()) {
+		const credentials = encoded ? parseTerminalReloadCredentials(encoded) : undefined;
+		this.checkpointKey = credentials?.stateKey;
+		const text = this.storage.get(credentials?.stateKey ?? await this.reviveStateKey(), StorageScope.WORKSPACE);
+		if (text && (!credentials || credentials.expiresAt >= Date.now())) {
 			const state = parseTerminalReloadState(text);
+			const scope = terminalExecutionScope(this.workspace.getWorkspace());
+			if (state.workspaceId !== scope.workspaceId || state.remoteAuthority !== scope.remoteAuthority) {
+				await this.clearCheckpoint(true);
+				return;
+			}
 			for (const layout of state.groups) {
 				const members = layout.ids.map(id => this.terminals.instances.find(instance => instance.instanceId === id)).filter((instance): instance is ITerminalInstance => !!instance);
 				this.groups.joinInstances(members);
@@ -139,13 +223,20 @@ export class TerminalNativeContribution extends Disposable implements IWorkbench
 			if (focused?.xterm?.element.isConnected && focused.xterm.element.getBoundingClientRect().width > 0) focused.xterm.focus();
 		}
 		await this.clearCheckpoint();
+		this.storage.remove(await this.reviveStateKey(), StorageScope.WORKSPACE);
+		await this.storage.flush();
 	}
 
-	private async clearCheckpoint(): Promise<void> {
+	private async reviveStateKey(): Promise<string> {
+		return parseTerminalReviveStateKey(await this.secrets.get(TERMINAL_REVIVE_STATE_KEY));
+	}
+
+	private async clearCheckpoint(clearRevive = false): Promise<void> {
 		const checkpointKey = this.checkpointKey;
 		this.checkpointKey = undefined;
 		await this.secrets.delete(TerminalStorageKeys.Reload);
 		if (checkpointKey) this.storage.remove(checkpointKey, StorageScope.WORKSPACE);
+		if (clearRevive) this.storage.remove(await this.reviveStateKey(), StorageScope.WORKSPACE);
 		await this.storage.flush();
 	}
 

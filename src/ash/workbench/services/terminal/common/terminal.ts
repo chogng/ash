@@ -1,4 +1,9 @@
-import type { ITerminalProcessCreation, ITerminalReconnectLease } from '../../../../platform/terminal/common/terminal.js';
+import type { ITerminalProcessCreation, ITerminalReconnectLease, ITerminalProcessCreateOptions } from '../../../../platform/terminal/common/terminal.js';
+
+/** Construction borrows a transferred process until its destination screen is ready. */
+export interface ITerminalProcessOwnership {
+	readonly canTerminate: boolean;
+}
 
 /** One immutable screen checkpoint, never a second live process or layout model. */
 export interface ITerminalSerializedState {
@@ -15,10 +20,15 @@ export interface ITerminalSerializedState {
 	readonly sequence: number;
 	readonly pendingUtf8: readonly number[];
 	readonly vt: string;
+	readonly cwd?: string;
+	/** Original interactive intent only, before host settings and extension collections.
+	 * Task commands, resolved host environment and pending input are never revived. */
+	readonly launch?: Readonly<Pick<ITerminalProcessCreateOptions, 'profile' | 'env' | 'strictEnv' | 'cwd'>>;
 }
 
 export interface ITerminalReloadState {
 	readonly version: 1;
+	readonly kind?: 'revive';
 	readonly workspaceId: string;
 	readonly remoteAuthority?: string;
 	readonly instances: readonly ITerminalSerializedState[];

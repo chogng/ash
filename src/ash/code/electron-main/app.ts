@@ -11,7 +11,7 @@ import { FilePolicyService } from '../../platform/policy/common/filePolicyServic
 import { PolicyChannel } from '../../platform/policy/common/policyIpc.js';
 import { randomUUID } from 'node:crypto';
 import { WebviewProtocolProvider } from '../../platform/webview/electron-main/webviewProtocolProvider.js';
-import { isAdmin } from '../../platform/native/electron-main/nativeHostMainService.js';
+import { isAdmin, TerminalWindowTransferHost } from '../../platform/native/electron-main/nativeHostMainService.js';
 import { ChecksumService, checksumChannel } from '../../platform/checksum/node/checksumService.js';
 import { ProcessMainService } from '../../platform/process/electron-main/processMainService.js';
 import { IGPUProcessMainService } from '../../platform/gpu/electron-main/gpuProcessMainService.js';
@@ -25,6 +25,7 @@ import { Server as MainProcessIPCServer } from '../../base/parts/ipc/electron-ma
 import { isRecord } from '../../base/common/types.js';
 import { Emitter, Event } from '../../base/common/event.js';
 import { BaseSecretStorageService } from '../../platform/secrets/common/secrets.js';
+import { TERMINAL_REVIVE_STATE_KEY } from '../../platform/terminal/common/terminal.js';
 import { OAuthCallbackHost } from "../../platform/connectors/electron-main/oauthCallbackHost.js";
 import { RendererWorkspaceHost } from "../../platform/workspaces/electron-main/rendererWorkspaceHost.js";
 import { AppServerBrowserHost } from "../../platform/agentHost/electron-main/appServerBrowserHost.js";
@@ -87,7 +88,7 @@ import { clearElectronApplicationMenu, createElectronMenubarHost, Menubar } from
 import { powerMonitorChannel, colorSchemeChannel, windowSplashIpcRoutes, nativeHostIpcRoutes, type INativeHostMainService } from "../../platform/native/electron-main/nativeHostIpc.js";
 import { UpdateMainService } from '../../platform/update/electron-main/updateMainService.js';
 import { UpdateChannel } from '../../platform/update/common/updateIpc.js';
-import { NATIVE_HOST_ACCESSIBILITY_SUPPORT_CHANGED_CHANNEL, validateOpenAgentsWindow, type INativeSystemWideKeybinding, type IOpenAgentsWindowOptions } from "../../platform/native/common/nativeHost.js";
+import { NATIVE_HOST_ACCESSIBILITY_SUPPORT_CHANGED_CHANNEL, NATIVE_HOST_TERMINAL_REQUEST_CHANNEL, validateOpenAgentsWindow, type INativeSystemWideKeybinding, type IOpenAgentsWindowOptions } from "../../platform/native/common/nativeHost.js";
 import { DialogMainService, IDialogMainService } from '../../platform/dialogs/electron-main/dialogMainService.js';
 import type { DialogRequest } from '../../platform/dialogs/common/dialogs.js';
 import { RETURN_TO_WORKBENCH_CHANNEL, validateReturnToWorkbench } from '../../sessions/common/windowNavigation.js';
@@ -184,6 +185,7 @@ interface RendererEntry {
 
 interface WorkbenchWindowRecord {
 	readonly id: number;
+	readonly windowSessionId: string;
 	readonly window: BrowserWindow;
 	readonly workspaceContext: WorkspaceContextMainService;
 	readonly supervisor: AppServerConnectionRelay;
@@ -213,7 +215,7 @@ class SessionsWindowRecord extends Disposable {
 }
 
 type WindowSessionEntry =
-	| { readonly kind: 'workbench'; readonly workspace: IAnyWorkspaceIdentifier; }
+	| { readonly kind: 'workbench'; readonly workspace: IAnyWorkspaceIdentifier; readonly windowSessionId?: string; }
 	| { readonly kind: 'sessions'; readonly workspace: IAnyWorkspaceIdentifier; };
 
 const AGENTS_WINDOW_KEY = 'agents';
@@ -249,6 +251,25 @@ export class AshApplication extends Disposable {
 
 	// Product resources follow platform-owned windows; this map does not select or reuse windows.
 	private readonly workbenchWindowData = new Map<number, WorkbenchWindowRecord>();
+	private readonly openingWindowSessionIds = new Set<string>();
+	private readonly terminalWindowTransfers = this._register(new TerminalWindowTransferHost({
+		getWindow: windowId => {
+			const record = this.workbenchWindowData.get(windowId);
+			if (!record || record.window.isDestroyed() || record.window.webContents.isDestroyed()) return undefined;
+			const workspace = record.workspaceContext.getWorkspace();
+			return {
+				workspaceId: workspace.id, remoteAuthority: getWorkspaceRemoteAuthority(workspace),
+				requestTransfer: () => this.windowsMainService.getWindowById(windowId)?.send(NATIVE_HOST_TERMINAL_REQUEST_CHANNEL),
+			};
+		},
+		openWindow: async sourceWindowId => {
+			const source = this.workbenchWindowData.get(sourceWindowId);
+			if (!source || !this.workspaces) throw new Error('Terminal source window is unavailable');
+			const target = await this.openWorkspace(source.workspaceContext.getWorkspace(), this.workspaces, true, randomUUID());
+			if (!target) throw new Error('Terminal target window could not be opened');
+			return target.id;
+		},
+	}));
 	private readonly sessionsWindow = this._register(new MutableDisposable<SessionsWindowRecord>());
 	private sessionsWindowOpenQueue: Promise<void> = Promise.resolve();
 	private readonly windowServices = this._register(new InstantiationService(new ServiceCollection([
@@ -396,7 +417,7 @@ export class AshApplication extends Disposable {
 		}, window => {
 			this.cancelQuit();
 			this.windowsMainService.failManagedWindowClose(window, 'Window close was vetoed');
-		}, this.stateService, app.getVersion()));
+		}, this.stateService, app.getVersion(), () => this.quitRequested ? 'quit' : 'windowClose'));
 		this.windowServices.registerInstance(IDialogMainService, this.dialogs);
 		this.windowServices.registerInstance(ILifecycleMainService, this.lifecycleMainService);
 		this.windowSessionStateHandler = new WindowSessionStateHandler(this.stateService, () => this.getOpenWindowSessions(), isWindowSessionEntry);
@@ -715,10 +736,11 @@ export class AshApplication extends Disposable {
 		const session = this.windowSessionStateHandler.readSession();
 		const configuredSetting = this.services.configuration.getValue(RESTORE_WINDOWS_SETTING);
 		const selection = this.windowsMainService.selectWindowsToRestore(session, configuredSetting, hasExplicitTarget, wasUpdated);
+		using restoration = this.windowSessionStateHandler.beginRestoration();
 		for (const entry of selection.windows) {
 			try {
 				if (entry.kind === 'workbench') {
-					await this.openWorkspace(entry.workspace, workspaces);
+					await this.openWorkspace(entry.workspace, workspaces, true, entry.windowSessionId);
 				} else {
 					await this.openSessionsWindow(entry.workspace, await workspaces.resolveWorkspace(entry.workspace));
 				}
@@ -729,7 +751,9 @@ export class AshApplication extends Disposable {
 		const active = selection.active;
 		if (active) {
 			if (active.kind === 'workbench') {
-				const window = this.windowsMainService.findWorkspace(active.workspace);
+				const window = active.windowSessionId
+					? [...this.workbenchWindowData.values()].find(record => record.windowSessionId === active.windowSessionId)?.window
+					: this.windowsMainService.findWorkspace(active.workspace);
 				if (window) this.windowsMainService.getWindowById(window.id)?.focus();
 			}
 			else {
@@ -1093,15 +1117,15 @@ export class AshApplication extends Disposable {
 		}
 	}
 
-	private async openWorkspace(workspace: IAnyWorkspaceIdentifier, workspaces: WorkspacesManagementMainService, forceNewWindow = false): Promise<WorkbenchWindowRecord | undefined> {
+	private async openWorkspace(workspace: IAnyWorkspaceIdentifier, workspaces: WorkspacesManagementMainService, forceNewWindow = false, windowSessionId?: string): Promise<WorkbenchWindowRecord | undefined> {
 		if (forceNewWindow) {
-			return this.performOpenWorkspace(workspace, workspaces, true);
+			return this.performOpenWorkspace(workspace, workspaces, true, windowSessionId);
 		}
 		const window = await this.windowsMainService.openWorkspace(workspace, async () => (await this.performOpenWorkspace(workspace, workspaces))?.window);
 		return window ? this.workbenchWindowData.get(window.id) : undefined;
 	}
 
-	private async performOpenWorkspace(workspace: IAnyWorkspaceIdentifier, workspaces: WorkspacesManagementMainService, forceNewWindow = false): Promise<WorkbenchWindowRecord | undefined> {
+	private async performOpenWorkspace(workspace: IAnyWorkspaceIdentifier, workspaces: WorkspacesManagementMainService, forceNewWindow = false, windowSessionId?: string): Promise<WorkbenchWindowRecord | undefined> {
 		const existingWindow = this.windowsMainService.findWorkspace(workspace);
 		const existing = existingWindow ? this.workbenchWindowData.get(existingWindow.id) : undefined;
 		if (existing && !forceNewWindow) {
@@ -1109,9 +1133,26 @@ export class AshApplication extends Disposable {
 			return existing;
 		}
 		const resources = new DisposableStore();
+		let reservedWindowSessionId: string | undefined;
 		try {
 			const resolvedWorkspace = await workspaces.resolveWorkspace(workspace);
 			if ('configPath' in workspace) workspace = { ...workspace, ...(getWorkspaceRemoteAuthority(resolvedWorkspace) ? { remoteAuthority: getWorkspaceRemoteAuthority(resolvedWorkspace) } : {}) };
+			// A closed window's checkpoint can outlive the open-window session list.
+			// Claim an unoccupied identity before opening yields to another launch.
+			const occupied = (id: string): boolean => this.openingWindowSessionIds.has(id) || [...this.workbenchWindowData.values()].some(record => record.windowSessionId === id);
+			if (!windowSessionId) {
+				const saved = this.windowSessionStateHandler.readSession()?.windows.find(entry => entry.kind === 'workbench' && entry.workspace.id === workspace.id && entry.windowSessionId && !occupied(entry.windowSessionId));
+				windowSessionId = saved?.kind === 'workbench' ? saved.windowSessionId : undefined;
+				if (!windowSessionId && this.storageMainService) {
+					const snapshot = await this.storageMainService.getItemsIfExists({ scope: StorageScope.WORKSPACE, id: workspace.id });
+					const key = Object.keys(snapshot?.entries ?? {}).find(key => /^terminal\.revive\.[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/u.test(key) && !occupied(key.slice('terminal.revive.'.length)));
+					windowSessionId = key?.slice('terminal.revive.'.length);
+				}
+			}
+			windowSessionId ??= randomUUID();
+			if (occupied(windowSessionId)) throw new Error('Window session is already open');
+			this.openingWindowSessionIds.add(windowSessionId);
+			reservedWindowSessionId = windowSessionId;
 			const workspaceContext = resources.add(new WorkspaceContextMainService(workspace, resolvedWorkspace));
 			const supervisor = resources.add(this.createAppServerConnectionRelay(workspace, resources));
 
@@ -1119,10 +1160,12 @@ export class AshApplication extends Disposable {
 				resources.dispose();
 				return undefined;
 			}
-			return await this.openWorkbenchWindow(workspaceContext, workspaces, supervisor, resources);
+			return await this.openWorkbenchWindow(workspaceContext, workspaces, supervisor, resources, windowSessionId);
 		} catch (error) {
 			resources.dispose();
 			throw error;
+		} finally {
+			if (reservedWindowSessionId) this.openingWindowSessionIds.delete(reservedWindowSessionId);
 		}
 	}
 
@@ -1315,6 +1358,7 @@ export class AshApplication extends Disposable {
 		workspaces: WorkspacesManagementMainService,
 		supervisor: AppServerConnectionRelay,
 		resources: DisposableStore,
+		windowSessionId: string,
 	): Promise<WorkbenchWindowRecord> {
 		const windowsStateHandler = this.createWindowsStateHandler(workspaceContext.getWorkspace());
 		const windowState = this.windowsMainService.getNewWindowState(windowsStateHandler, this.windowConfigurationValues(), this.lifecycleMainService.wasRestarted);
@@ -1341,6 +1385,7 @@ export class AshApplication extends Disposable {
 		const windowStateTracking = windowsStateHandler.trackWindow(window);
 		const record: WorkbenchWindowRecord = {
 			id: window.id,
+			windowSessionId,
 			window,
 			workspaceContext,
 			supervisor,
@@ -1361,7 +1406,7 @@ export class AshApplication extends Disposable {
 		resources.add(toDisposable(() => window.removeListener("focus", onFocus)));
 		window.once("closed", () => {
 			this.workbenchWindowData.delete(record.id);
-			this.windowSessionStateHandler.windowClosed({ kind: 'workbench', workspace: record.workspaceContext.getWorkspace() });
+			this.windowSessionStateHandler.windowClosed({ kind: 'workbench', workspace: record.workspaceContext.getWorkspace(), windowSessionId: record.windowSessionId });
 		});
 		this.windowSessionStateHandler.windowOpened();
 
@@ -1593,17 +1638,23 @@ export class AshApplication extends Disposable {
 
 	private windowHostOperations(window: BrowserWindow, windowDisposables: DisposableStore): Omit<INativeHostMainService, 'getTitleBarStyle' | 'openWorkspace' | 'openWindow' | 'openAgentsWindow' | 'syncSystemWideKeybindings'> {
 		const invitationContents = window.webContents;
-		const resetInvitation = (): void => this.agentsWindowInvitations.resetWindow(window.id);
-		windowDisposables.add(this.windowsMainService.getWindowById(window.id)!.onWillLoad(resetInvitation));
-		invitationContents.on('render-process-gone', resetInvitation);
+		const resetRendererState = (): void => {
+			this.agentsWindowInvitations.resetWindow(window.id);
+			this.terminalWindowTransfers.resetWindow(window.id);
+		};
+		windowDisposables.add(this.windowsMainService.getWindowById(window.id)!.onWillLoad(resetRendererState));
+		invitationContents.on('render-process-gone', resetRendererState);
 		windowDisposables.add(this.agentsWindowInvitations.onDidChange(state => {
 			this.windowsMainService.getWindowById(window.id)?.send(AGENT_HOST_EDITOR_STATE_CHANGED_CHANNEL, state);
 		}));
 		windowDisposables.add(toDisposable(() => {
-			invitationContents.off('render-process-gone', resetInvitation);
-			resetInvitation();
+			invitationContents.off('render-process-gone', resetRendererState);
+			resetRendererState();
 		}));
 		return {
+			moveTerminalToWindow: (transfer, targetWindowId) => this.terminalWindowTransfers.move(window.id, transfer, targetWindowId),
+			takeTerminalTransfer: () => this.terminalWindowTransfers.take(window.id),
+			completeTerminalTransfer: result => this.terminalWindowTransfers.complete(window.id, result),
 			getAgentHostEditorState: () => this.agentsWindowInvitations.getState(),
 			updateAgentHostEditorState: async update => {
 				// The router binds this closure to the sender; renderer payloads never choose a window ID.
@@ -1683,6 +1734,8 @@ export class AshApplication extends Disposable {
 	private createBrowserServices(window: BrowserWindow, workspaceContext: WorkspaceContextMainService, remotePortForwardingService: SshPortForwardingService, windowDisposables: DisposableStore, supervisor: AppServerConnectionRelay, contextMenu: ElectronContextMenu): InstantiationService {
 		const context = `window:${window.id}`;
 		const secrets = windowDisposables.add(new BaseSecretStorageService());
+		const windowSessionId = this.workbenchWindowData.get(window.id)?.windowSessionId;
+		if (windowSessionId) void secrets.set(TERMINAL_REVIVE_STATE_KEY, `terminal.revive.${windowSessionId}`).catch(error => this.logService.error('terminal', error));
 		this.secretChannels.set(context, ProxyChannel.fromService(secrets, windowDisposables));
 		windowDisposables.add(toDisposable(() => this.secretChannels.delete(context)));
 		this.windowPortForwarding.set(context, remotePortForwardingService);
@@ -2217,7 +2270,7 @@ export class AshApplication extends Disposable {
 		return [
 			...this.windowsMainService.getWindows().map(window => ({
 				id: window.id,
-				entry: { kind: 'workbench' as const, workspace: this.workbenchWindowData.get(window.id)!.workspaceContext.getWorkspace() },
+				entry: { kind: 'workbench' as const, workspace: this.workbenchWindowData.get(window.id)!.workspaceContext.getWorkspace(), windowSessionId: this.workbenchWindowData.get(window.id)!.windowSessionId },
 				focused: window.id === focusedWindowId,
 			})),
 			...(sessionsWindow && session ? [{ id: sessionsWindow.id, entry: { kind: 'sessions' as const, workspace: session.workspaceContext.getWorkspace() }, focused: sessionsWindow.id === focusedWindowId }] : []),

@@ -4,7 +4,7 @@ import { IUriIdentityService } from '../../../../platform/uriIdentity/common/uri
 import type { IAction } from '../../../../base/common/actions.js';
 import { localize } from '../../../../nls.js';
 import Severity from '../../../../base/common/severity.js';
-import { getEditorWorkingCopies, createEditorOpenError, isEditorOpenError, type IResourceEditorInput, type IEditorPane } from '../../../common/editor.js';
+import { getEditorWorkingCopies, createEditorOpenError, isEditorOpenError, type IResourceEditorInput, type IEditorIdentifier, type IEditorPane } from '../../../common/editor.js';
 import "./media/editorpart.css";
 import { isNonEmptyArray } from "../../../../base/common/arrays.js";
 import { basename } from "../../../../base/common/resources.js";
@@ -98,8 +98,8 @@ export interface IEditorPart extends IEditorStateSource, IDisposable {
 	activateEditorMru(offset: number): IEditorPane | undefined;
 	closeEditor(input: IResourceEditorInput): Promise<boolean>;
 	closeEditorIdentifier(identifier: EditorIdentifier): Promise<boolean>;
-	confirmCloseAllEditors(options?: EditorCloseAllOptions): Promise<boolean>;
-	closeAllEditors(options?: EditorCloseAllOptions): Promise<boolean>;
+	confirmCloseAllEditors(options?: EditorCloseAllOptions, closingEditors?: readonly IEditorIdentifier[]): Promise<boolean>;
+	closeAllEditors(options?: EditorCloseAllOptions, closingEditors?: readonly IEditorIdentifier[]): Promise<boolean>;
 	moveActiveEditorTo(target: IEditorPart): Promise<boolean>;
 	saveActiveEditor(): Promise<void>;
 	setContent(content: Element): Promise<void>;
@@ -237,7 +237,7 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 			documentCollaborationApi: options.documentCollaborationApi,
 			serverEvents: options.serverEvents,
 			workingCopyService: options.workingCopyService,
-			onWillCloseEditor: (group, input, pane, closingGroups) => this.confirmEditorClose(group, input, pane, closingGroups),
+			onWillCloseEditor: (group, input, pane, closingGroups, closingEditors) => this.confirmEditorClose(group, input, pane, closingGroups, closingEditors),
 			onOpenLocation: location => this.openEditor({ resource: location.resource }, { selection: location.selectionRange ?? location.range, selectionSource: TextEditorSelectionSource.JUMP }).then(() => undefined),
 			onApplyWorkspaceEdit: options.bulkEditService ? (edit, bulkOptions) => options.bulkEditService!.apply(edit, bulkOptions).then(result => result.isApplied) : undefined,
 			titleActions: options.titleActions,
@@ -387,10 +387,15 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 			this.removeGroupHost(host);
 			return true;
 		}
-		for (const input of [...host.group.inputs]) {
-			if (!await host.group.confirmCloseEditor(input, [host.group.id])) return false;
+		const closingEditors = host.group.inputs.map(editor => ({ editor, groupId: host.group.id }));
+		for (const { editor: input } of closingEditors) {
+			if (!await host.group.confirmCloseEditor(input, [host.group.id], closingEditors)) return false;
+		}
+		for (const { editor: input } of closingEditors) {
+			if (!await host.group.closeEditor(input, { skipConfirmation: true })) return false;
 		}
 		if (this.groupHosts.get(host.group.id) !== host) return true;
+		if (host.group.inputs.length) return false;
 		this.removeGroupHost(host);
 		return true;
 	}
@@ -701,18 +706,26 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 		return host && editor ? host.group.closeEditor(editor.input) : false;
 	}
 
-	async closeAllEditors(options: EditorCloseAllOptions = {}): Promise<boolean> {
-		if (!options.skipConfirmation && !await this.confirmCloseAllEditors(options)) return false;
+	async closeAllEditors(options: EditorCloseAllOptions = {}, closingEditors?: readonly IEditorIdentifier[]): Promise<boolean> {
 		const modalInput = this.modalEditor.activeInput;
 		const modalPane = this.modalEditor.activePane;
-		const inputsByGroup = this._groups.map(({ group }) => ({ group, inputs: [...group.inputs] }));
-		if (modalInput) {
+		const inputsByGroup = this._groups.map(({ group }) => ({
+			group,
+			inputs: [...group.inputs].filter(input => closingEditors
+				? closingEditors.some(candidate => candidate.groupId === group.id && candidate.editor === input)
+				: !options.excludeSticky || !group.isSticky(input)),
+		}));
+		closingEditors ??= [
+			...(modalInput ? [{ editor: modalInput, groupId: -1 }] : []),
+			...inputsByGroup.flatMap(({ group, inputs }) => inputs.map(editor => ({ editor, groupId: group.id }))),
+		];
+		if (!options.skipConfirmation && !await this.confirmCloseAllEditors(options, closingEditors)) return false;
+		if (modalInput && closingEditors.some(candidate => candidate.groupId === -1 && candidate.editor === modalInput)) {
 			this.modalEditor.closeEditor(modalInput);
 			this.editorChangeEmitter.fire(Object.freeze({ kind: "modalEditorChanged", visible: false, closedEditor: (options.reason ?? "close") === "close" && modalPane ? { input: modalInput, paneId: modalPane.id } : undefined }));
 		}
-		for (const { group } of inputsByGroup) {
-			for (const input of [...group.inputs]) {
-				if (options.excludeSticky && group.isSticky(input)) { continue; }
+		for (const { group, inputs } of inputsByGroup) {
+			for (const input of inputs) {
 				await group.closeEditor(input, { skipConfirmation: true, reason: options.reason ?? "close" });
 			}
 			if ((options.reason ?? 'close') === 'close') this.removeEmptyGroup(group);
@@ -720,15 +733,19 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 		return true;
 	}
 
-	async confirmCloseAllEditors(options: EditorCloseAllOptions = {}): Promise<boolean> {
+	async confirmCloseAllEditors(options: EditorCloseAllOptions = {}, closingEditors?: readonly IEditorIdentifier[]): Promise<boolean> {
 		const modalInput = this.modalEditor.activeInput;
 		const modalPane = this.modalEditor.activePane;
 		const inputsByGroup = this._groups.map(({ group }) => ({ group, inputs: [...group.inputs] }));
 		const closingGroups = inputsByGroup.map(({ group }) => group.id);
-		if (modalInput && modalPane && !await this.confirmEditorClose(undefined, modalInput, modalPane, closingGroups)) return false;
+		closingEditors ??= [
+			...(modalInput ? [{ editor: modalInput, groupId: -1 }] : []),
+			...inputsByGroup.flatMap(({ group, inputs }) => inputs.filter(input => !options.excludeSticky || !group.isSticky(input)).map(editor => ({ editor, groupId: group.id }))),
+		];
+		if (modalInput && modalPane && closingEditors.some(candidate => candidate.groupId === -1 && candidate.editor === modalInput) && !await this.confirmEditorClose(undefined, modalInput, modalPane, closingGroups, closingEditors)) return false;
 		for (const { group, inputs } of inputsByGroup) {
 			for (const input of inputs) {
-				if (options.excludeSticky && group.isSticky(input)) { continue; }
+				if (!closingEditors.some(candidate => candidate.groupId === group.id && candidate.editor === input)) { continue; }
 				// A retained sticky view still owns the document even when its other views close.
 				let confirmingGroups = closingGroups;
 				if (options.excludeSticky) {
@@ -737,7 +754,7 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 					)).map(candidate => candidate.group.id);
 					confirmingGroups = closingGroups.filter(id => !retainedGroups.includes(id));
 				}
-				if (!await group.confirmCloseEditor(input, confirmingGroups)) { return false; }
+				if (!await group.confirmCloseEditor(input, confirmingGroups, closingEditors)) { return false; }
 			}
 		}
 		return true;
@@ -876,9 +893,16 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 		return await this.closeEditor(input);
 	}
 
-	private async confirmEditorClose(group: IEditorGroupView | undefined, input: IResourceEditorInput, pane: IEditorPane, closingGroups: readonly EditorGroupId[] = []): Promise<boolean> {
+	private async confirmEditorClose(group: IEditorGroupView | undefined, input: IResourceEditorInput, pane: IEditorPane, closingGroups: readonly EditorGroupId[] = [], closingEditors: readonly IEditorIdentifier[] = [{ editor: input, groupId: group?.id ?? -1 }]): Promise<boolean> {
 		if (input.closeHandler?.showConfirm()) {
-			return await input.closeHandler.confirm([{ editor: input, groupId: group?.id ?? -1 }]) !== ConfirmResult.CANCEL;
+			const matches = (other: IResourceEditorInput): boolean => other.editorId === input.editorId && this.uriIdentity.extUri.isEqual(other.resource, input.resource);
+			// A custom resource remains live while any view is retained. Confirm once,
+			// at its final closing view, with the exact batch (including sticky exclusions).
+			if (this._groups.some(host => host.group.inputs.some(other => matches(other) && !closingEditors.some(candidate => candidate.groupId === host.group.id && candidate.editor === other)))) return true;
+			if (this.modalEditor.activeInput && matches(this.modalEditor.activeInput) && !closingEditors.some(candidate => candidate.groupId === -1 && candidate.editor === this.modalEditor.activeInput)) return true;
+			const last = [...closingEditors].reverse().find(candidate => matches(candidate.editor));
+			if (last && last.groupId !== (group?.id ?? -1)) return true;
+			return await input.closeHandler.confirm(closingEditors) !== ConfirmResult.CANCEL;
 		}
 		const copies = getEditorWorkingCopies(pane);
 		if (this.beforeCloseEditor) {
@@ -1120,9 +1144,10 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 		const retained = (options.preserveGroups ?? []).map(id => this.groupHosts.get(id)!);
 		const retainedLayout = retained.length ? filterWorkingSetLayout(this.editorGrid.serialize() as EditorWorkingSetLayout, new Set(retained.map(host => host.group.id))) : undefined;
 		const closing = this._groups.filter(host => !retained.includes(host));
+		const closingEditors = closing.flatMap(({ group }) => group.inputs.map(editor => ({ editor, groupId: group.id })));
 		for (const { group } of closing) {
 			for (const input of group.inputs) {
-				if (!await group.confirmCloseEditor(input, closing.map(host => host.group.id))) throw new CancellationError('Applying the editor working set was cancelled');
+				if (!await group.confirmCloseEditor(input, closing.map(host => host.group.id), closingEditors)) throw new CancellationError('Applying the editor working set was cancelled');
 			}
 		}
 		for (const { group } of closing) {

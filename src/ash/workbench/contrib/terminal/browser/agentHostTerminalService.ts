@@ -1,3 +1,4 @@
+import type { ITerminalProcessOwnership } from '../../../services/terminal/common/terminal.js';
 import type { Constructor } from '../../../../platform/instantiation/common/descriptors.js';
 import { IWorkspaceContextService } from '../../../../platform/workspace/common/workspace.js';
 import { terminalExecutionScope } from '../common/remote/terminal.js';
@@ -36,7 +37,7 @@ export class AgentHostTerminalService extends BaseTerminalBackend {
 		}));
 	}
 
-	async createProcess(options: ITerminalProcessCreateOptions, id: number, attached?: ITerminalProcessCreation): Promise<AgentHostPty> {
+	async createProcess(options: ITerminalProcessCreateOptions, id: number, attached?: ITerminalProcessCreation, ownership?: ITerminalProcessOwnership): Promise<AgentHostPty> {
 		if (this.isDisposed) throw new CancellationError();
 		const kind = terminalExecutionScope(this.workspace.getWorkspace()).remoteAuthority === undefined ? 'local' : 'remote';
 		const ctor = factories.get(kind);
@@ -46,16 +47,16 @@ export class AgentHostTerminalService extends BaseTerminalBackend {
 				backend = this._register(this.instantiation.createInstance(ctor));
 				this.backends.set(kind, backend);
 			}
-			return backend.createProcess(options, id, attached);
+			return backend.createProcess(options, id, attached, ownership);
 		}
 		const creation = attached ?? await this.processes.create(options);
 		if (this.isDisposed) {
-			await this.processes.close({ terminalId: creation.terminalId, ...(options.dirId === undefined ? {} : { dirId: options.dirId }) });
+			if (ownership?.canTerminate !== false) await this.processes.close({ terminalId: creation.terminalId, ...(options.dirId === undefined ? {} : { dirId: options.dirId }) });
 			throw new CancellationError();
 		}
 		const pty = this.instantiation.createInstance(AgentHostPty, id, creation, options.dirId, () => {
 			if (this.handles.get(id) === pty) this.handles.delete(id);
-		});
+		}, ownership);
 		this.handles.set(id, pty);
 		return pty;
 	}

@@ -1,21 +1,25 @@
+import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
+import { TerminalHasActiveInstanceContext } from '../common/terminalContextKey.js';
+import type { IContextKey } from '../../../../platform/contextkey/common/contextkey.js';
 import { CancellationError, onUnexpectedError } from '../../../../base/common/errors.js';
 import { Emitter, type Event } from "../../../../base/common/event.js";
 import { Disposable, DisposableMap } from '../../../../base/common/lifecycle.js';
 import { ITerminalProcessService, type TerminalProcessConnectionState } from "../../../../platform/terminal/common/terminal.js";
 import { IWorkspaceContextService } from "../../../../platform/workspace/common/workspace.js";
 import { IInstantiationService } from "../../../../platform/instantiation/common/instantiation.js";
-import { ITerminalEditorService, ITerminalGroupService, type ICreateTerminalOptions, type ITerminalCreateOptions, type ITerminalDimensions, type ITerminalInstance, type ITerminalProfile, type ITerminalService, type ITerminalLocationOptions } from './terminal.js';
+import { TerminalTransferError, ITerminalEditorService, ITerminalGroupService, type ICreateTerminalOptions, type ITerminalCreateOptions, type ITerminalDimensions, type ITerminalInstance, type ITerminalProfile, type ITerminalService, type ITerminalLocationOptions } from './terminal.js';
 import { TerminalInstance } from './terminalInstance.js';
 import { TerminalInstanceService } from './terminalInstanceService.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { IDialogService } from '../../../../platform/dialogs/common/dialogs.js';
-import { ProcessPropertyType, TerminalLocation } from '../../../../platform/terminal/common/terminal.js';
+import { ProcessPropertyType, TerminalLocation, TERMINAL_REVIVE_STATE_KEY } from '../../../../platform/terminal/common/terminal.js';
 import { localize } from '../../../../nls.js';
 import { ISecretStorageService } from '../../../../platform/secrets/common/secrets.js';
 import { IStorageService, StorageScope } from '../../../../platform/storage/common/storage.js';
-import { parseTerminalReloadCredentials, parseTerminalReloadState, TerminalStorageKeys } from '../common/terminalStorageKeys.js';
+import { parseTerminalReloadCredentials, parseTerminalReloadState, parseTerminalReviveStateKey, TerminalStorageKeys } from '../common/terminalStorageKeys.js';
 import { terminalExecutionScope, terminalExecutionScopesEqual } from '../common/remote/terminal.js';
-import { parseTerminalUri } from './terminalUri.js';
+import { getTerminalUri, parseTerminalUri } from './terminalUri.js';
+import { generateUuid } from '../../../../base/common/uuid.js';
 import { URI } from '../../../../base/common/uri.js';
 import { ITerminalProfileResolverService, ITerminalProfileService } from '../common/terminal.js';
 import { IEditorService } from '../../../services/editor/common/editorService.js';
@@ -25,6 +29,8 @@ import type { IWorkspaceFolder } from '../../../../platform/workspace/common/wor
 import type { IShellLaunchConfig } from '../../../../platform/terminal/common/terminal.js';
 import { TerminalCapability } from '../../../../platform/terminal/common/capabilities/capabilities.js';
 import { getRemoteAuthority } from '../../../../platform/remote/common/remoteHosts.js';
+import type { ITerminalSerializedState } from '../../../services/terminal/common/terminal.js';
+import type { ITerminalReconnectLease } from '../../../../platform/terminal/common/terminal.js';
 
 /** Browser Workbench owner of terminal instances and their process lifecycle. */
 export class TerminalService extends Disposable implements ITerminalService {
@@ -38,6 +44,7 @@ export class TerminalService extends Disposable implements ITerminalService {
 	private readonly _onDidChangeActiveInstance = this._register(new Emitter<ITerminalInstance | undefined>());
 	private readonly ownedInstances = this._register(new DisposableMap<string, TerminalInstance>());
 	private _activeInstance: TerminalInstance | undefined;
+	private readonly hasActiveInstanceContext: IContextKey<boolean>;
 	private readonly instanceFactory: TerminalInstanceService;
 	private get connectionState(): TerminalProcessConnectionState { return this.instanceFactory.backend.connectionState; }
 
@@ -57,8 +64,10 @@ export class TerminalService extends Disposable implements ITerminalService {
 		@ICommandService private readonly commands: ICommandService,
 		@ITerminalGroupService private readonly groups: ITerminalGroupService,
 		@ITerminalEditorService private readonly terminalEditors: ITerminalEditorService,
+		@IContextKeyService contextKeyService: IContextKeyService,
 	) {
 		super();
+		this.hasActiveInstanceContext = TerminalHasActiveInstanceContext.bindTo(contextKeyService);
 		this.processService = processService;
 		this.instanceFactory = this._register(instantiationService.createInstance(TerminalInstanceService));
 		this._register(this.instanceFactory.backend.onDidChangeConnectionState(state => this.setConnectionState(state)));
@@ -71,6 +80,7 @@ export class TerminalService extends Disposable implements ITerminalService {
 	protected override disposeCore(): void {
 		this._instances.length = 0;
 		this._activeInstance = undefined;
+		this.hasActiveInstanceContext.reset();
 		super.disposeCore();
 	}
 
@@ -108,7 +118,8 @@ export class TerminalService extends Disposable implements ITerminalService {
 				profile: undefined,
 			};
 		} else if (options.profile) {
-			// Tasks, Debug and extension execution already carry resolved host launch data.
+			// Tasks, Debug and low-level profile callers already carry resolved launch data.
+			// They may opt into revival only with a separate raw revivalLaunch intent.
 			launch = { ...options, dimensions, cwd: typeof options.cwd === 'string' ? options.cwd : options.cwd?.fsPath, config: undefined, profile: options.profile };
 		} else {
 			const folders = this.workspaceContext.getWorkspace().folders;
@@ -135,7 +146,11 @@ export class TerminalService extends Disposable implements ITerminalService {
 				const provider = this.profiles.getContributedProfileProvider(contributed.extensionIdentifier, contributed.id);
 				if (!provider) throw new Error(localize('terminal.profile.providerUnavailable', 'Terminal profile provider is unavailable: {0}', contributed.title));
 				const previous = new Set(this.instances);
-				const instanceId = await provider.createContributedTerminalProfile({ ...contributed.options, cwd: options.cwd ?? parent?.cwd ?? parent?.initialCwd ?? folder.uri });
+				const instanceId = await provider.createContributedTerminalProfile({
+					...contributed.options,
+					location: isEditorLocation(location) ? typeof location === 'object' ? location : TerminalLocation.Editor : undefined,
+					cwd: options.cwd ?? parent?.cwd ?? parent?.initialCwd ?? folder.uri,
+				});
 				const created = this.instances.find(instance => instance.instanceId === instanceId);
 				if (!created || previous.has(created)) throw new CancellationError();
 				return this.placeCreatedTerminal(created, location, parent, () => {
@@ -155,6 +170,17 @@ export class TerminalService extends Disposable implements ITerminalService {
 				}
 				shell.cwd ??= parent.initialCwd;
 			}
+			const inheritsResolvedEnvironment = !profile && parent && shell.env === parent.shellLaunchConfig?.env;
+			if (inheritsResolvedEnvironment && parent.revivalLaunch) {
+				// The parent env already contains collection mutations. Keep its shell
+				// command, but resolve the shared raw overrides only once for this split.
+				shell.env = parent.revivalLaunch.env;
+				shell.strictEnv = parent.revivalLaunch.strictEnv;
+			}
+			const rawEnvironment = shell.env;
+			const rawExecutable = shell.executable;
+			const rawArgs = shell.args;
+			const rawCwd = shell.cwd;
 			const os = this.processService.operatingSystem;
 			if (os === undefined) throw new Error(localize('terminal.profile.platformUnavailable', 'The terminal execution host is not ready.'));
 			await this.profileResolver.resolveShellLaunchConfig(shell, { os, remoteAuthority: getRemoteAuthority(folder.uri), workspaceFolder: folder });
@@ -165,6 +191,12 @@ export class TerminalService extends Disposable implements ITerminalService {
 				profile: profile?.isAutoDetected ? { type: 'profile', profileId: profile.profileId } : { type: 'custom', name: profile?.profileName ?? shell.name ?? localize('terminal.profile.shell', 'Shell'), path: typeof shell.executable === 'string' ? [shell.executable] : shell.executable!, args: shell.args ?? [] },
 				env: shell.env, strictEnv: shell.strictEnv, cwd: shell.cwd, icon: shell.icon, color: shell.color,
 				initialText: shell.initialText, waitOnExit: shell.waitOnExit,
+			};
+			launch = {
+				...launch, revivalLaunch: options.revivalLaunch ?? (inheritsResolvedEnvironment ? parent.revivalLaunch : {
+					profile: { type: 'custom', name: profile?.profileName ?? shell.name ?? localize('terminal.profile.shell', 'Shell'), path: typeof rawExecutable === 'string' ? [rawExecutable] : rawExecutable ?? (typeof shell.executable === 'string' ? [shell.executable] : shell.executable!), args: rawArgs ?? shell.args ?? [] },
+					env: rawEnvironment, strictEnv: shell.strictEnv, cwd: rawCwd,
+				})
 			};
 		}
 		assertCurrent();
@@ -188,12 +220,15 @@ export class TerminalService extends Disposable implements ITerminalService {
 
 	private async restoreTerminals(): Promise<void> {
 		const encoded = await this.secrets.get(TerminalStorageKeys.Reload);
-		if (!encoded || this.isDisposed) return;
-		const credentials = parseTerminalReloadCredentials(encoded);
-		if (credentials.expiresAt < Date.now()) return;
-		const text = this.storage.get(credentials.stateKey, StorageScope.WORKSPACE);
+		if (this.isDisposed || this.configuration.getValue<boolean>('terminal.integrated.enablePersistentSessions') === false) return;
+		const credentials = encoded ? parseTerminalReloadCredentials(encoded) : undefined;
+		if (credentials && credentials.expiresAt < Date.now()) return;
+		const text = this.storage.get(credentials?.stateKey ?? parseTerminalReviveStateKey(await this.secrets.get(TERMINAL_REVIVE_STATE_KEY)), StorageScope.WORKSPACE);
+		if (!text && !credentials) return;
 		if (!text) throw new Error('Terminal checkpoint is missing');
 		const state = parseTerminalReloadState(text);
+		const revive = !credentials && state.kind === 'revive';
+		if (!credentials && (!revive || this.configuration.getValue<string>('terminal.integrated.persistentSessionReviveProcess') === 'never')) return;
 		const scope = terminalExecutionScope(this.workspaceContext.getWorkspace());
 		if (scope.workspaceId !== state.workspaceId || scope.remoteAuthority !== state.remoteAuthority) throw new Error('Terminal checkpoint belongs to another workspace or host');
 		// Validate the complete checkpoint before any bearer credential attaches a process.
@@ -202,23 +237,90 @@ export class TerminalService extends Disposable implements ITerminalService {
 		}
 		// An empty window has no process to reattach, including hosts without a PTY backend.
 		if (state.instances.length === 0) return;
-		if (!this.processService.attach) throw new Error('Terminal attachment is unavailable');
+		if (!revive && !this.processService.attach) throw new Error('Terminal attachment is unavailable');
 		const screens: Promise<unknown>[] = [];
 		for (const snapshot of state.instances) {
 			if (this.isDisposed) throw new CancellationError();
-			const lease = credentials.leases.find(candidate => candidate.terminalId === snapshot.process.terminalId && candidate.dirId === snapshot.processDirId);
-			if (!lease) throw new Error('Terminal recovery credential is missing');
 			const dimensions = { rows: snapshot.rows, cols: snapshot.cols };
-			const process = await this.processService.attach(lease, dimensions, snapshot.process.profile);
-			if (process.ready.pid !== snapshot.process.ready.pid) throw new Error('Terminal process identity changed');
+			const lease = credentials?.leases.find(candidate => candidate.terminalId === snapshot.process.terminalId && candidate.dirId === snapshot.processDirId);
+			if (!revive && !lease) throw new Error('Terminal recovery credential is missing');
+			const liveLaunch = await this.resolveRevivalLaunch(snapshot);
+			const process = revive
+				? await this.processService.create({ ...liveLaunch!, dirId: snapshot.processDirId ?? snapshot.dirId, ...dimensions })
+				: await this.processService.attach!(lease!, dimensions, snapshot.process.profile);
+			if (this.isDisposed || !terminalExecutionScopesEqual(scope, terminalExecutionScope(this.workspaceContext.getWorkspace()))) {
+				await this.processService.close({ terminalId: process.terminalId, dirId: snapshot.processDirId ?? snapshot.dirId });
+				throw new CancellationError();
+			}
+			if (!revive && process.ready.pid !== snapshot.process.ready.pid) throw new Error('Terminal process identity changed');
+			const restored = revive ? { ...snapshot, process, sequence: 0, pendingUtf8: [] } : snapshot;
 			const instance = await this.createTerminalCore({
-				dirId: snapshot.dirId, dimensions, profile: { type: 'profile', profileId: snapshot.process.profile.profileId }, title: snapshot.customTitle ?? snapshot.title,
-				attachPersistentProcess: { state: snapshot, process }, deferStart: true
+				...liveLaunch, revivalLaunch: snapshot.launch, dirId: snapshot.dirId, dimensions, profile: liveLaunch?.profile ?? { type: 'profile', profileId: snapshot.process.profile.profileId }, title: snapshot.customTitle ?? snapshot.title,
+				attachPersistentProcess: { state: restored, process }, deferStart: true
 			});
 			screens.push(instance.xtermReadyPromise);
 		}
 		await Promise.all(screens);
 		this.setActiveInstance(this._instances.find(instance => instance.instanceId === state.activeId));
+	}
+
+	/** Rebuilds only the live environment; the persisted intent stays unchanged. */
+	private async resolveRevivalLaunch(snapshot: ITerminalSerializedState): Promise<ITerminalSerializedState['launch']> {
+		const intent = snapshot.launch;
+		if (!intent) return undefined;
+		const scope = terminalExecutionScope(this.workspaceContext.getWorkspace());
+		const folder = this.workspaceContext.getWorkspace().folders.find(folder => folder.id === snapshot.dirId)!;
+		// Discovery waits for execution-host readiness before reading its OS.
+		await this.profiles.refreshAvailableProfiles(folder.id);
+		const os = this.processService.operatingSystem;
+		if (os === undefined) throw new Error(localize('terminal.profile.platformUnavailable', 'The terminal execution host is not ready.'));
+		const selectedId = intent.profile.type === 'profile' ? intent.profile.profileId : undefined;
+		const selected = selectedId ? this.profiles.getAvailableProfiles(folder.id).find(profile => profile.profileId === selectedId) : undefined;
+		const shell: IShellLaunchConfig = {
+			executable: intent.profile.type === 'custom' ? intent.profile.path : selected?.path,
+			args: intent.profile.type === 'custom' ? intent.profile.args : selected?.args,
+			env: selected ? { ...selected.env, ...intent.env } : intent.env,
+			strictEnv: intent.strictEnv, cwd: snapshot.cwd ?? intent.cwd,
+		};
+		await this.profileResolver.resolveShellLaunchConfig(shell, { os, remoteAuthority: scope.remoteAuthority, workspaceFolder: folder });
+		if (this.isDisposed || !terminalExecutionScopesEqual(scope, terminalExecutionScope(this.workspaceContext.getWorkspace()))) throw new CancellationError();
+		return { profile: { type: 'custom', name: snapshot.title, path: typeof shell.executable === 'string' ? [shell.executable] : shell.executable!, args: shell.args ?? [] }, env: shell.env, strictEnv: shell.strictEnv, cwd: shell.cwd };
+	}
+
+	async importTerminalState(snapshot: ITerminalSerializedState, lease: ITerminalReconnectLease): Promise<ITerminalInstance> {
+		await this.whenConnected;
+		if (this.isDisposed || !this.processService.attach || !this.processService.detach) throw new CancellationError();
+		const scope = terminalExecutionScope(this.workspaceContext.getWorkspace());
+		if (parseTerminalUri(URI.parse(snapshot.resource)).instanceId !== snapshot.instanceId) throw new TypeError('Invalid terminal transfer identity');
+		if (!this.workspaceContext.getWorkspace().folders.some(folder => folder.id === snapshot.dirId) || lease.terminalId !== snapshot.process.terminalId || lease.dirId !== snapshot.processDirId) throw new Error('Terminal transfer belongs to another execution directory');
+		const dimensions = { cols: snapshot.cols, rows: snapshot.rows };
+		const liveLaunch = await this.resolveRevivalLaunch(snapshot);
+		const process = await this.processService.attach(lease, dimensions, snapshot.process.profile);
+		let instance: ITerminalInstance | undefined;
+		let adopted = false;
+		const ownership = { get canTerminate() { return adopted; } };
+		try {
+			if (process.ready.pid !== snapshot.process.ready.pid || this.isDisposed || !terminalExecutionScopesEqual(scope, terminalExecutionScope(this.workspaceContext.getWorkspace()))) throw new CancellationError();
+			// The destination owns its instance number. Preserve the screen, not the source editor identity.
+			const instanceId = Math.max(0, ...this.instances.map(instance => instance.instanceId)) + 1;
+			const state = { ...snapshot, instanceId, resource: getTerminalUri(generateUuid(), instanceId, snapshot.title).toString(), target: TerminalLocation.Panel };
+			instance = await this.createTerminalCore({ ...liveLaunch, revivalLaunch: snapshot.launch, dirId: snapshot.dirId, dimensions, profile: liveLaunch?.profile ?? { type: 'profile', profileId: snapshot.process.profile.profileId }, attachPersistentProcess: { state, process, ownership }, deferStart: true });
+			await instance.xtermReadyPromise;
+			if (this.isDisposed || !this.instances.includes(instance) || !terminalExecutionScopesEqual(scope, terminalExecutionScope(this.workspaceContext.getWorkspace()))) throw new CancellationError();
+			adopted = true;
+			return instance;
+		} catch {
+			// Construction/disposal only releases borrowed frontend handles. The PTY
+			// survives until this owner returns a new one-use lease to the source.
+			const rollbackLease = await this.processService.detach?.(process.terminalId).catch(() => undefined);
+			if (!rollbackLease) {
+				// The old token was consumed by attach. If detachment cannot return a
+				// replacement, no surviving frontend can reclaim this target-owned PTY.
+				await this.processService.close({ terminalId: process.terminalId, dirId: snapshot.processDirId }).catch(() => { });
+			}
+			if (instance) await instance.close().catch(onUnexpectedError);
+			throw new TerminalTransferError(rollbackLease);
+		}
 	}
 
 	private async createTerminalCore(options: ITerminalCreateOptions, target?: TerminalLocation, activate = true): Promise<ITerminalInstance> {
@@ -228,18 +330,23 @@ export class TerminalService extends Disposable implements ITerminalService {
 			onClosed: instance => this.removeInstance(instance),
 			onTitleChanged: () => { this.refreshInstanceTitles(); this._onDidChangeInstances.fire(); },
 		});
-		if (this.isDisposed) { await instance.close(); throw new CancellationError(); }
-		if (target !== undefined) instance.target = target;
-		this.ownedInstances.set(instance.id, instance);
-		this._instances.push(instance);
-		this.refreshInstanceTitles();
-		if (options.deferStart && this.connectionState !== 'ready') instance.loseConnection();
-		this._onDidCreateInstance.fire(instance);
-		if (this.isDisposed || !this._instances.includes(instance)) throw new CancellationError();
-		if (activate) this.setActiveInstance(instance);
-		if (!options.deferStart) instance.start();
-		this._onDidChangeInstances.fire();
-		return instance;
+		try {
+			if (this.isDisposed) throw new CancellationError();
+			if (target !== undefined) instance.target = target;
+			this.ownedInstances.set(instance.id, instance);
+			this._instances.push(instance);
+			this.refreshInstanceTitles();
+			if (options.deferStart && this.connectionState !== 'ready') instance.loseConnection();
+			this._onDidCreateInstance.fire(instance);
+			if (this.isDisposed || !this._instances.includes(instance)) throw new CancellationError();
+			if (activate) this.setActiveInstance(instance);
+			if (!options.deferStart) instance.start();
+			this._onDidChangeInstances.fire();
+			return instance;
+		} catch (error) {
+			await instance.close().catch(onUnexpectedError);
+			throw error;
+		}
 	}
 
 	async relaunchTerminal(instance: ITerminalInstance, dimensions: ITerminalDimensions): Promise<void> {
@@ -258,6 +365,7 @@ export class TerminalService extends Disposable implements ITerminalService {
 		}
 		if (this._activeInstance === instance) return;
 		this._activeInstance = instance as TerminalInstance | undefined;
+		this.hasActiveInstanceContext.set(instance !== undefined);
 		this._onDidChangeActiveInstance.fire(instance);
 	}
 
@@ -278,8 +386,8 @@ export class TerminalService extends Disposable implements ITerminalService {
 		await instance.close();
 	}
 
-	async safeDisposeTerminal(instance: ITerminalInstance): Promise<void> {
-		if (!this._instances.includes(instance as TerminalInstance)) return;
+	async confirmTerminalClose(instance: ITerminalInstance): Promise<boolean> {
+		if (!this._instances.includes(instance as TerminalInstance)) return true;
 		const policy = this.configuration.getValue<string>('terminal.integrated.confirmOnKill') ?? 'editor';
 		const confirm = policy === 'always' || policy === (instance.target === TerminalLocation.Editor ? 'editor' : 'panel');
 		if (confirm && await instance.refreshProperty(ProcessPropertyType.HasChildProcesses).catch(() => true)) {
@@ -288,9 +396,13 @@ export class TerminalService extends Disposable implements ITerminalService {
 				detail: localize('terminal.confirmKillDetail', 'Closing this terminal will stop its shell and child processes.'),
 				primaryButton: localize('terminal.terminate', 'Terminate'),
 			});
-			if (!result.confirmed) return;
+			if (!result.confirmed) return false;
 		}
-		await this.closeTerminal(instance);
+		return true;
+	}
+
+	async safeDisposeTerminal(instance: ITerminalInstance): Promise<void> {
+		if (await this.confirmTerminalClose(instance)) await this.closeTerminal(instance);
 	}
 
 	private removeInstance(instance: TerminalInstance): void {
@@ -302,6 +414,7 @@ export class TerminalService extends Disposable implements ITerminalService {
 		this.ownedInstances.deleteAndLeak(instance.id);
 		if (activeChanged) {
 			this._activeInstance = this._instances.at(-1);
+			this.hasActiveInstanceContext.set(this._activeInstance !== undefined);
 		}
 		this.refreshInstanceTitles();
 		this._onDidDisposeInstance.fire(instance);

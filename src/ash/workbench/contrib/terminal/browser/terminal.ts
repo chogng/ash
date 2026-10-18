@@ -1,3 +1,5 @@
+import type { ITerminalProcessOwnership } from '../../../services/terminal/common/terminal.js';
+import { localize } from '../../../../nls.js';
 import type { URI } from '../../../../base/common/uri.js';
 import type { Terminal } from '@xterm/xterm';
 import type { ISearchOptions, ISearchResultChangeEvent } from '@xterm/addon-search';
@@ -11,7 +13,7 @@ import type { ThemeIcon } from '../../../../base/common/themables.js';
 import type { ITerminalStatus } from '../common/terminal.js';
 import type { ITerminalCapabilityStore, ITerminalCommand } from '../../../../platform/terminal/common/capabilities/capabilities.js';
 import type { ITerminalSerializedState } from '../../../services/terminal/common/terminal.js';
-import type { ITerminalProcessCreation } from '../../../../platform/terminal/common/terminal.js';
+import type { ITerminalProcessCreation, ITerminalReconnectLease } from '../../../../platform/terminal/common/terminal.js';
 import type { ITerminalTabLayoutInfoById } from '../../../../platform/terminal/common/terminal.js';
 import type { IExtensionTerminalProfile, ITerminalProfile as IShellProfile } from '../../../../platform/terminal/common/terminal.js';
 import type { EditorGroupId } from '../../../services/editor/common/editorState.js';
@@ -84,6 +86,9 @@ export type ITerminalCreateOptions = {
 	readonly icon?: ThemeIcon;
 	readonly color?: string;
 	readonly env?: Readonly<Record<string, string | null>>;
+	/** Raw interactive intent, before host settings and environment collections. Resolved
+	 * profile callers opt in explicitly; execution launches are never revived. */
+	readonly revivalLaunch?: ITerminalSerializedState['launch'];
 	readonly strictEnv?: boolean;
 	readonly cwd?: string;
 	readonly execution?: TerminalProcessExecution;
@@ -91,7 +96,7 @@ export type ITerminalCreateOptions = {
 	readonly waitOnExit?: IShellLaunchConfig['waitOnExit'];
 	/** The caller subscribes to output and exit before opening a custom PTY or polling a process. */
 	readonly deferStart?: boolean;
-	readonly attachPersistentProcess?: { readonly state: ITerminalSerializedState; readonly process: ITerminalProcessCreation; };
+	readonly attachPersistentProcess?: { readonly state: ITerminalSerializedState; readonly process: ITerminalProcessCreation; readonly ownership?: ITerminalProcessOwnership; };
 } & (
 		| { readonly profile: ITerminalProfileSelection; readonly config?: never; }
 		| { readonly config: IShellLaunchConfig & Required<Pick<IShellLaunchConfig, 'customPtyImplementation'>>; readonly profile?: never; }
@@ -113,8 +118,19 @@ export interface TerminalEditorLocation {
 	readonly preserveFocus?: boolean;
 }
 
+/** A failed destination returns its rotated lease without placing credentials in diagnostics. */
+export class TerminalTransferError extends Error {
+	declare readonly rollbackLease: ITerminalReconnectLease | undefined;
+	constructor(lease: ITerminalReconnectLease | undefined) {
+		super(localize('terminal.windowTransfer.targetFailed', 'Could not initialize the terminal in its destination window.'));
+		this.name = 'TerminalTransferError';
+		Object.defineProperty(this, 'rollbackLease', { value: lease });
+	}
+}
+
 /** One interactive terminal independently of its transport representation. */
 export interface ITerminalInstance extends IDisposable {
+	readonly revivalLaunch?: ITerminalSerializedState['launch'];
 	readonly isReadOnly?: boolean;
 	readonly resource?: URI;
 	target?: TerminalLocation;
@@ -206,10 +222,12 @@ export interface ITerminalService extends IDisposable {
 	readonly onDidChangeActiveInstance: Event<ITerminalInstance | undefined>;
 
 	createTerminal(options?: ICreateTerminalOptions): Promise<ITerminalInstance>;
+	importTerminalState(state: ITerminalSerializedState, lease: ITerminalReconnectLease): Promise<ITerminalInstance>;
 	relaunchTerminal(instance: ITerminalInstance, dimensions: ITerminalDimensions): Promise<void>;
 	setActiveInstance(instance: ITerminalInstance | undefined): void;
 	moveTerminal(instance: ITerminalInstance, targetIndex: number): void;
 	closeTerminal(instance: ITerminalInstance): Promise<void>;
+	confirmTerminalClose(instance: ITerminalInstance): Promise<boolean>;
 	safeDisposeTerminal(instance: ITerminalInstance): Promise<void>;
 }
 

@@ -3,6 +3,7 @@ import { powerMonitorChannel } from '../../electron-main/nativeHostIpc.js';
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { Emitter } from '../../../../base/common/event.js';
+import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../base/test/common/utils.js';
 import { colorSchemeChannel } from '../../electron-main/nativeHostIpc.js';
 import type { IColorScheme } from '../../../window/common/window.js';
 import { WINDOW_ALWAYS_ON_TOP_CHANGED_CHANNEL, type IWindowAlwaysOnTopChangedEvent } from '../../../window/common/window.js';
@@ -15,6 +16,8 @@ import type { ISandboxGlobals } from '../../../../base/parts/sandbox/electron-br
 import type { IMainProcessService } from '../../../ipc/common/mainProcessService.js';
 import { DialogMainService } from '../../../dialogs/electron-main/dialogMainService.js';
 import { validateNativeDialogOperation, validateOpenDialogResult, validateSaveDialogResult, validateMessageBoxResult } from '../../common/nativeHost.js';
+
+ensureNoDisposablesAreLeakedInTestSuite();
 
 test('window frame reads use the creation value and reject renderer arguments', async () => {
 	const route = nativeHostIpcRoutes({ getTitleBarStyle: () => 'custom' } as INativeHostMainService).find(route => route.channel === 'ash:native-host:get-title-bar-style')!;
@@ -310,4 +313,108 @@ test('power monitor IPC observes only OS events and releases listeners with its 
 	assert.equal(monitor.listenerCount('resume'), 0);
 	monitor.emit('resume');
 	assert.deepEqual(received, ['sleep', 'wake']);
+});
+
+const terminalTransfer = {
+	id: 'handoff-1', state: '{"screen":"opaque"}',
+	lease: { terminalId: 'terminal-1', dirId: 'workspace-folder', reconnectToken: 'a'.repeat(64), reconnectGracePeriodMillis: 30_000 },
+};
+
+test('terminal handoff IPC validates bounded opaque payloads and excludes sender identities', async () => {
+	const { NATIVE_HOST_TERMINAL_MOVE_CHANNEL, NATIVE_HOST_TERMINAL_TAKE_CHANNEL, NATIVE_HOST_TERMINAL_COMPLETE_CHANNEL } = await import('../../common/nativeHost.js');
+	const received: unknown[] = [];
+	const routes = nativeHostIpcRoutes({
+		moveTerminalToWindow: async (...args) => { received.push(args); return { id: terminalTransfer.id }; },
+		takeTerminalTransfer: () => terminalTransfer,
+		completeTerminalTransfer: result => { received.push(result); },
+	} as INativeHostMainService);
+	const move = routes.find(route => route.channel === NATIVE_HOST_TERMINAL_MOVE_CHANNEL)!;
+	await move.invoke(move.validate({ transfer: terminalTransfer, targetWindowId: 8 }));
+	assert.deepEqual(received[0], [terminalTransfer, 8]);
+	for (const malformed of [
+		{ transfer: terminalTransfer, sourceWindowId: 4 },
+		{ transfer: terminalTransfer, targetWindowId: 0 },
+		{ transfer: { ...terminalTransfer, state: 'x'.repeat(64 * 1024 * 1024 + 1) } },
+		{ transfer: { ...terminalTransfer, lease: { ...terminalTransfer.lease, reconnectToken: 'secret' } } },
+		{ transfer: { ...terminalTransfer, lease: { ...terminalTransfer.lease, hostIdentity: 'other-host' } } },
+	]) assert.throws(() => move.validate(malformed), /Invalid terminal transfer/);
+	const take = routes.find(route => route.channel === NATIVE_HOST_TERMINAL_TAKE_CHANNEL)!;
+	assert.throws(() => take.validate({ windowId: 8 }), /no arguments/);
+	assert.deepEqual(await take.invoke(take.validate(undefined)), terminalTransfer);
+	const complete = routes.find(route => route.channel === NATIVE_HOST_TERMINAL_COMPLETE_CHANNEL)!;
+	assert.throws(() => complete.validate({ id: 'handoff-1', windowId: 8 }), /Invalid terminal transfer result/);
+	assert.throws(() => complete.validate({ id: 'handoff-1', lease: terminalTransfer.lease }), /Invalid terminal transfer result/);
+	assert.throws(() => complete.validate({ id: 'handoff-1', error: '' }), /Invalid terminal transfer result/);
+	await complete.invoke(complete.validate({ id: 'handoff-1' }));
+	assert.deepEqual(received[1], { id: 'handoff-1' });
+});
+
+test('terminal handoff is claimed once by its target and completion resolves only its source', async () => {
+	const { TerminalWindowTransferHost } = await import('../../electron-main/nativeHostMainService.js');
+	const requests: number[] = [];
+	const windows = new Map([1, 2, 3].map(id => [id, { workspaceId: 'workspace', remoteAuthority: undefined, requestTransfer: () => requests.push(id) }]));
+	using transfers = new TerminalWindowTransferHost({ getWindow: id => windows.get(id), openWindow: async () => 2 });
+	let completed = false;
+	const moving = transfers.move(1, terminalTransfer, 2).then(result => { completed = true; return result; });
+	assert.deepEqual(requests, [2]);
+	assert.equal(transfers.take(3), undefined);
+	assert.throws(() => transfers.complete(2, { id: terminalTransfer.id }), /not owned/);
+	assert.deepEqual(transfers.take(2), terminalTransfer);
+	assert.equal(transfers.take(2), undefined);
+	assert.equal(completed, false);
+	assert.throws(() => transfers.complete(3, { id: terminalTransfer.id }), /not owned/);
+	transfers.complete(2, { id: terminalTransfer.id });
+	assert.deepEqual(await moving, { id: terminalTransfer.id });
+	assert.equal(completed, true);
+	assert.throws(() => transfers.complete(2, { id: terminalTransfer.id }), /not owned/);
+});
+
+test('terminal handoff rejects different workspaces or execution hosts and fails on target closure', async () => {
+	const { TerminalWindowTransferHost } = await import('../../electron-main/nativeHostMainService.js');
+	const windows = new Map<number, { workspaceId: string; remoteAuthority: string | undefined; requestTransfer(): void; }>([
+		[1, { workspaceId: 'workspace', remoteAuthority: 'ssh+first', requestTransfer() { } }],
+		[2, { workspaceId: 'other-workspace', remoteAuthority: 'ssh+first', requestTransfer() { } }],
+		[3, { workspaceId: 'workspace', remoteAuthority: 'ssh+second', requestTransfer() { } }],
+		[4, { workspaceId: 'workspace', remoteAuthority: 'ssh+first', requestTransfer() { } }],
+	]);
+	using transfers = new TerminalWindowTransferHost({ getWindow: id => windows.get(id), openWindow: async () => 4 });
+	await assert.rejects(transfers.move(1, terminalTransfer, 2), /same workspace and execution host/);
+	await assert.rejects(transfers.move(1, terminalTransfer, 3), /same workspace and execution host/);
+	await assert.rejects(transfers.move(1, terminalTransfer, 1), /another window/);
+	const moving = transfers.move(1, terminalTransfer);
+	const rejected = assert.rejects(moving, /closed or reloaded/);
+	await Promise.resolve();
+	assert.deepEqual(transfers.take(4), terminalTransfer);
+	transfers.resetWindow(4);
+	await rejected;
+	assert.equal(transfers.take(4), undefined);
+});
+
+test('terminal handoff returns rollback leases and opening errors or expiry release pending credentials', async () => {
+	const { TerminalWindowTransferHost } = await import('../../electron-main/nativeHostMainService.js');
+	const window = { workspaceId: 'workspace', remoteAuthority: undefined, requestTransfer() { } };
+	using failedOpen = new TerminalWindowTransferHost({ getWindow: () => window, openWindow: async () => { throw new Error('open cancelled'); } });
+	await assert.rejects(failedOpen.move(1, terminalTransfer), /open cancelled/);
+	using transfers = new TerminalWindowTransferHost({ getWindow: () => window, openWindow: async () => 2 });
+	const moving = transfers.move(1, terminalTransfer, 2);
+	transfers.take(2);
+	const rotated = { ...terminalTransfer.lease, reconnectToken: 'b'.repeat(64) };
+	assert.throws(() => transfers.complete(2, { id: terminalTransfer.id, error: 'attach failed', lease: { ...rotated, terminalId: 'another-process' } }), /another process/);
+	transfers.complete(2, { id: terminalTransfer.id, error: 'attach failed', lease: rotated });
+	assert.deepEqual(await moving, { id: terminalTransfer.id, error: 'attach failed', lease: rotated });
+	const expiring = transfers.move(1, { ...terminalTransfer, lease: { ...terminalTransfer.lease, reconnectGracePeriodMillis: 1_001 } }, 2);
+	await assert.rejects(expiring, /timed out/);
+	assert.equal(transfers.take(2), undefined);
+});
+
+test('a claimed terminal handoff completes after the source window exits without rolling back its target', async () => {
+	const { TerminalWindowTransferHost } = await import('../../electron-main/nativeHostMainService.js');
+	const windows = new Map([1, 2].map(id => [id, { workspaceId: 'workspace', remoteAuthority: undefined, requestTransfer() { } }]));
+	using transfers = new TerminalWindowTransferHost({ getWindow: id => windows.get(id), openWindow: async () => 2 });
+	const moving = transfers.move(1, terminalTransfer, 2);
+	assert.deepEqual(transfers.take(2), terminalTransfer);
+	windows.delete(1);
+	transfers.resetWindow(1);
+	assert.doesNotThrow(() => transfers.complete(2, { id: terminalTransfer.id }));
+	await moving;
 });

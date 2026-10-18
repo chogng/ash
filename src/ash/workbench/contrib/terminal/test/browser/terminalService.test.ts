@@ -1,7 +1,20 @@
+import { IEnvironmentVariableService } from '../../common/environmentVariable.js';
+import { EnvironmentVariableService } from '../../common/environmentVariableService.js';
+import { IExtensionService } from '../../../../services/extensions/common/extensionService.js';
+import { ITerminalContributionService } from '../../common/terminal.js';
+import { IContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
+import { TerminalHasActiveInstanceContext } from '../../common/terminalContextKey.js';
+import { TerminalInstance } from '../../browser/terminalInstance.js';
+import { TerminalTransferError } from '../../browser/terminal.js';
+import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
+import { errorHandler, setUnexpectedErrorHandler } from '../../../../../base/common/errors.js';
+import { getTerminalUri } from '../../browser/terminalUri.js';
+import { parseTerminalReloadState } from '../../common/terminalStorageKeys.js';
+import type { ITerminalReloadState, ITerminalSerializedState } from '../../../../services/terminal/common/terminal.js';
 import { ISecretStorageService } from '../../../../../platform/secrets/common/secrets.js';
 import { IStorageService, StorageScope, StorageTarget } from '../../../../../platform/storage/common/storage.js';
 import { TerminalStorageKeys } from '../../common/terminalStorageKeys.js';
-import { TerminalLocation } from '../../../../../platform/terminal/common/terminal.js';
+import { TerminalLocation, TERMINAL_REVIVE_STATE_KEY } from '../../../../../platform/terminal/common/terminal.js';
 import { registerTestTerminalCreationServices } from '../../../../test/browser/workbenchTestServices.js';
 import { ShellEnvDetectionCapability } from '../../../../../platform/terminal/common/capabilities/shellEnvDetectionCapability.js';
 import { TerminalCapabilityStore, TerminalCapabilityStoreMultiplexer } from '../../../../../platform/terminal/common/capabilities/terminalCapabilityStore.js';
@@ -20,7 +33,7 @@ import assert from "node:assert/strict";
 import { suite, test } from "mocha";
 import { isCancellationError } from '../../../../../base/common/errors.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
-import { DisposableStore, toDisposable } from '../../../../../base/common/lifecycle.js';
+import { Disposable, DisposableStore, toDisposable } from '../../../../../base/common/lifecycle.js';
 import { URI } from "../../../../../base/common/uri.js";
 import { ITerminalProcessService, type ITerminalProcessCreateOptions, type ITerminalProcessReadResult, type TerminalProcessConnectionState } from "../../../../../platform/terminal/common/terminal.js";
 import { TerminalCapability } from '../../../../../platform/terminal/common/capabilities/capabilities.js';
@@ -63,6 +76,23 @@ test('creating an editor terminal with preserveFocus never changes the selected 
 	const foreground = await terminals.createTerminal({ profile: { type: 'default' }, location: TerminalLocation.Editor });
 	assert.equal(terminals.activeInstance, foreground);
 	assert.deepEqual(changes, [foreground]);
+});
+
+test('window active-terminal context remains true for editor terminals and resets after their final disposal', async () => {
+	using workspace = folderWorkspaceContext();
+	using services = terminalServices(new TestTerminalProcessService([]), workspace);
+	services.registerInstance(IEditorGroupsService, { groups: [], onDidChangeGroups: Event.None } as unknown as IEditorGroupsService);
+	const context = services.get(IContextKeyService);
+	const terminals = services.get(ITerminalService);
+	assert.equal(context.getValue(TerminalHasActiveInstanceContext.key), false);
+	const terminal = await terminals.createTerminal({ profile: { type: 'default' }, location: TerminalLocation.Editor, deferStart: true });
+	assert.equal(context.getValue(TerminalHasActiveInstanceContext.key), true);
+	terminals.setActiveInstance(undefined);
+	assert.equal(context.getValue(TerminalHasActiveInstanceContext.key), false);
+	terminals.setActiveInstance(terminal);
+	assert.equal(context.getValue(TerminalHasActiveInstanceContext.key), true);
+	await terminals.closeTerminal(terminal);
+	assert.equal(context.getValue(TerminalHasActiveInstanceContext.key), false);
 });
 
 test('the interrupt command reaches the Rust process port and preserves the terminal', async () => {
@@ -688,9 +718,10 @@ async function waitFor(condition: () => boolean, timeoutMillis = 1_000): Promise
 	}
 }
 
-function terminalServices(processService: ITerminalProcessService, workspace: IWorkspaceContextService, pathServiceFactory?: () => IPathService): InstantiationService {
+function terminalServices(processService: ITerminalProcessService, workspace: IWorkspaceContextService, pathServiceFactory?: () => IPathService, storage?: IStorageService): InstantiationService {
 	const services = new InstantiationService(new ServiceCollection([ITerminalProcessService, processService], [IWorkspaceContextService, workspace]));
 	if (pathServiceFactory) services.registerSingleton(IPathService, pathServiceFactory);
+	if (storage) services.registerInstance(IStorageService, storage);
 	registerTestTerminalCreationServices(services);
 	services.registerSingleton(ITerminalService, () => services.createInstance(TerminalService));
 	return services;
@@ -707,6 +738,52 @@ test('TerminalService rejects missing process and workspace registrations before
 
 suite('TerminalService lifecycle', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();
+
+	for (const phase of ['factory', 'constructor', 'membership', 'screen', 'detachment'] as const) test(`failed transfer ${phase} ${phase === 'detachment' ? 'releases its unrecoverable PTY' : 'returns a rotated lease while preserving its original PTY'}`, async () => {
+		const originalToken = 'a'.repeat(64);
+		const rotatedToken = 'b'.repeat(64);
+		const lease = { terminalId: 'transferred-process', dirId: 'workspace', reconnectToken: originalToken, reconnectGracePeriodMillis: 30_000 };
+		const process = { terminalId: lease.terminalId, ready: { pid: 321, cwd: '/workspace' }, profile: DEFAULT_PROFILE, connectionPersistence: 'reconnectable' as const };
+		const snapshots: ITerminalSerializedState = {
+			instanceId: 1, resource: 'vscode-terminal:/source/1', dirId: 'workspace', processDirId: 'workspace', process,
+			title: 'Shell', target: TerminalLocation.Panel, cols: 80, rows: 24, sequence: 0, pendingUtf8: [], vt: 'retained output',
+		};
+		const detached: string[] = [];
+		const processes = Object.assign(new TestTerminalProcessService([]), {
+			attach: async () => process,
+			detach: async (terminalId: string) => { detached.push(terminalId); if (phase === 'detachment') throw new Error('detachment failed'); return { ...lease, reconnectToken: rotatedToken }; },
+		});
+		using workspace = folderWorkspaceContext();
+		using services = terminalServices(processes, workspace, phase === 'factory' || phase === 'detachment' ? () => { throw new Error(`dependency failed with ${originalToken}`); } : undefined);
+		const terminals = services.get(ITerminalService);
+		if (phase === 'membership') terminals.setActiveInstance = () => { throw new Error('membership failed'); };
+		const screenDescriptor = Object.getOwnPropertyDescriptor(TerminalInstance.prototype, 'xtermReadyPromise')!;
+		const documentDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'document');
+		const attachToElement = TerminalInstance.prototype.attachToElement;
+		if (phase === 'constructor') {
+			Object.defineProperty(globalThis, 'document', { configurable: true, value: { createElement: () => ({}) } });
+			TerminalInstance.prototype.attachToElement = () => { throw new Error('screen constructor failed'); };
+		}
+		if (phase === 'screen') Object.defineProperty(TerminalInstance.prototype, 'xtermReadyPromise', { configurable: true, get: () => Promise.reject(new Error('screen failed')) });
+		try {
+			await assert.rejects(terminals.importTerminalState(snapshots, lease), error => {
+				assert.ok(error instanceof TerminalTransferError);
+				assert.equal(error.rollbackLease?.reconnectToken, phase === 'detachment' ? undefined : rotatedToken);
+				assert.equal(error.message.includes(originalToken), false);
+				assert.equal(JSON.stringify(error).includes(rotatedToken), false);
+				return true;
+			});
+			assert.deepEqual(detached, [lease.terminalId]);
+			assert.deepEqual(processes.closeCalls, phase === 'detachment' ? [lease.terminalId] : []);
+			assert.deepEqual(terminals.instances, []);
+			assert.equal(processes.createCalls.length, 0);
+		} finally {
+			Object.defineProperty(TerminalInstance.prototype, 'xtermReadyPromise', screenDescriptor);
+			TerminalInstance.prototype.attachToElement = attachToElement;
+			if (documentDescriptor) Object.defineProperty(globalThis, 'document', documentDescriptor);
+			else Reflect.deleteProperty(globalThis, 'document');
+		}
+	});
 
 	test('an instance construction failure releases its process before rejecting creation', async () => {
 		const processes = new TestTerminalProcessService([]);
@@ -2154,3 +2231,125 @@ test('terminal title and icon editing survive process replacement and reset thro
 	await terminals.closeTerminal(second);
 	assert.equal(first.title, 'cmd');
 });
+
+
+suite('TerminalService process revival after exit', () => {
+	ensureNoDisposablesAreLeakedInTestSuite();
+
+	test('revives a new shell from the saved profile, environment and current cwd without attaching or replaying task input', async () => {
+		const processes = new TestTerminalProcessService([], 'reconnectable');
+		using workspace = folderWorkspaceContext();
+		using services = revivalServices(processes, workspace);
+		const snapshot = reviveSnapshot(workspace);
+		services.get(IStorageService).store(TerminalStorageKeys.Revive, JSON.stringify(reviveState(workspace, snapshot)), StorageScope.WORKSPACE, StorageTarget.MACHINE);
+		const terminals = services.get(ITerminalService);
+		await terminals.whenConnected;
+		assert.equal((processes as ITerminalProcessService).attach, undefined);
+		assert.deepEqual(processes.createCalls, [{ ...snapshot.launch, profile: { type: 'custom', name: snapshot.title, path: ['cmd.exe'], args: ['-l'] }, env: { KEPT: 'value' }, cwd: snapshot.cwd, dirId: snapshot.dirId, rows: 40, cols: 120 }]);
+		assert.equal(terminals.instances.length, 1);
+		const instance = terminals.instances[0]!;
+		assert.notEqual(instance.processId, snapshot.process.ready.pid);
+		assert.equal(instance.instanceId, snapshot.instanceId);
+		assert.equal(terminals.activeInstance, instance);
+		assert.equal(instance.shellLaunchConfig?.strictEnv, true);
+		assert.deepEqual(instance.shellLaunchConfig?.env, { KEPT: 'value' });
+		assert.deepEqual(processes.writeCalls, []);
+		instance.start();
+		await waitFor(() => processes.readCursors.length > 0);
+		assert.equal(processes.readCursors[0], 0);
+		await instance.sendText('after-revive', false);
+		assert.deepEqual(processes.writeCalls, [{ terminalId: 'terminal-1', dirId: snapshot.dirId, data: 'after-revive' }]);
+	});
+
+	for (const [setting, value] of [['terminal.integrated.persistentSessionReviveProcess', 'never'], ['terminal.integrated.enablePersistentSessions', false]] as const) {
+		test(`${setting}=${value} does not launch a process from saved revival state`, async () => {
+			const processes = new TestTerminalProcessService([], 'reconnectable');
+			using workspace = folderWorkspaceContext();
+			using services = revivalServices(processes, workspace);
+			await services.get(IConfigurationService).updateValue(setting, value);
+			services.get(IStorageService).store(TerminalStorageKeys.Revive, JSON.stringify(reviveState(workspace, reviveSnapshot(workspace))), StorageScope.WORKSPACE, StorageTarget.MACHINE);
+			const terminals = services.get(ITerminalService);
+			await terminals.whenConnected;
+			assert.deepEqual(terminals.instances, []);
+			assert.deepEqual(processes.createCalls, []);
+		});
+	}
+
+	for (const corruption of ['workspace', 'host', 'identity', 'task', 'environment'] as const) {
+		test(`rejects the complete ${corruption} checkpoint before starting any shell`, async () => {
+			const processes = new TestTerminalProcessService([], 'reconnectable');
+			using workspace = folderWorkspaceContext();
+			using services = revivalServices(processes, workspace);
+			const snapshot = reviveSnapshot(workspace);
+			const changed = corruption === 'identity' ? { ...snapshot, resource: getTerminalUri('old-window', 99).toString() }
+				: corruption === 'task' ? { ...snapshot, launch: { ...snapshot.launch!, execution: { type: 'shell', commandLine: 'do-not-run' } } }
+					: corruption === 'environment' ? { ...snapshot, launch: { ...snapshot.launch!, env: { 'BAD=KEY': 'value' } } } : snapshot;
+			const state = { ...reviveState(workspace, changed), ...(corruption === 'workspace' ? { workspaceId: 'other-workspace' } : {}), ...(corruption === 'host' ? { remoteAuthority: 'ssh-remote+another-host' } : {}) };
+			services.get(IStorageService).store(TerminalStorageKeys.Revive, JSON.stringify(state), StorageScope.WORKSPACE, StorageTarget.MACHINE);
+			const errors: unknown[] = [];
+			const previous = errorHandler.getUnexpectedErrorHandler();
+			setUnexpectedErrorHandler(error => errors.push(error));
+			try {
+				const terminals = services.get(ITerminalService);
+				await terminals.whenConnected;
+				assert.equal(errors.length, 1);
+				assert.match(String((errors[0] as Error).cause), /another workspace or host|identity|revival/);
+				assert.deepEqual(terminals.instances, []);
+				assert.deepEqual(processes.createCalls, []);
+			} finally { setUnexpectedErrorHandler(previous); }
+		});
+	}
+
+	test('two windows in the same workspace restore only their own stable session checkpoint', async () => {
+		const firstProcesses = new TestTerminalProcessService([], 'reconnectable');
+		const secondProcesses = new TestTerminalProcessService([], 'reconnectable');
+		using workspace = folderWorkspaceContext();
+		using firstServices = revivalServices(firstProcesses, workspace);
+		const storage = firstServices.get(IStorageService);
+		using secondServices = revivalServices(secondProcesses, workspace, undefined, storage);
+		const firstKey = 'terminal.revive.11111111-1111-1111-1111-111111111111';
+		const secondKey = 'terminal.revive.22222222-2222-2222-2222-222222222222';
+		await firstServices.get(ISecretStorageService).set(TERMINAL_REVIVE_STATE_KEY, firstKey);
+		await secondServices.get(ISecretStorageService).set(TERMINAL_REVIVE_STATE_KEY, secondKey);
+		const first = { ...reviveSnapshot(workspace), cwd: '/workspace/window-one' };
+		const second = { ...reviveSnapshot(workspace), cwd: '/workspace/window-two' };
+		storage.store(firstKey, JSON.stringify(reviveState(workspace, first)), StorageScope.WORKSPACE, StorageTarget.MACHINE);
+		storage.store(secondKey, JSON.stringify(reviveState(workspace, second)), StorageScope.WORKSPACE, StorageTarget.MACHINE);
+		storage.store(TerminalStorageKeys.Revive, 'invalid legacy state must not override stable window identity', StorageScope.WORKSPACE, StorageTarget.MACHINE);
+		const firstTerminals = firstServices.get(ITerminalService);
+		const secondTerminals = secondServices.get(ITerminalService);
+		await Promise.all([firstTerminals.whenConnected, secondTerminals.whenConnected]);
+		assert.deepEqual(firstProcesses.createCalls.map(call => call.cwd), ['/workspace/window-one']);
+		assert.deepEqual(secondProcesses.createCalls.map(call => call.cwd), ['/workspace/window-two']);
+		assert.equal(firstTerminals.instances.length, 1);
+		assert.equal(secondTerminals.instances.length, 1);
+	});
+
+	test('a revival checkpoint without an interactive launch cannot replay a task', () => {
+		using workspace = folderWorkspaceContext();
+		const { launch: _launch, ...task } = reviveSnapshot(workspace);
+		assert.throws(() => parseTerminalReloadState(JSON.stringify(reviveState(workspace, task))), /Missing terminal revival launch/);
+	});
+});
+
+function revivalServices(...args: Parameters<typeof terminalServices>): InstantiationService {
+	const services = terminalServices(...args);
+	services.registerInstance(IExtensionService, { ...Disposable.None, getExtensionPointContributions: () => [], currentCatalog: { generation: 0, extensions: [], diagnostics: [] }, onDidChange: Event.None, activateByEvent: async () => { } } as unknown as IExtensionService);
+	services.registerInstance(ITerminalContributionService, { terminalProfiles: [], onDidChangeTerminalProfiles: Event.None, ...Disposable.None });
+	services.registerSingleton(IEnvironmentVariableService, () => services.createInstance(EnvironmentVariableService));
+	services.registerInstance(IConfigurationResolverService, { resolveWithEnvironment: async (_env, _folder, value) => value } as IConfigurationResolverService);
+	return services;
+}
+
+function reviveSnapshot(workspace: IWorkspaceContextService): ITerminalSerializedState {
+	return {
+		instanceId: 7, resource: getTerminalUri('saved-window', 7).toString(), dirId: workspace.getWorkspace().folders[0]!.id,
+		process: { terminalId: 'original-pty', ready: { pid: 321, cwd: '/original' }, profile: DEFAULT_PROFILE, connectionPersistence: 'reconnectable' },
+		title: 'Saved shell', target: TerminalLocation.Panel, cols: 120, rows: 40, sequence: 88, pendingUtf8: [0xe4, 0xb8], vt: 'retained-output', cwd: '/workspace/current',
+		launch: { profile: { type: 'custom', name: 'Saved profile', path: ['/bin/sh'], args: ['-l'] }, env: { KEPT: 'value', REMOVED: null }, strictEnv: true, cwd: '/original' },
+	};
+}
+
+function reviveState(workspace: IWorkspaceContextService, snapshot: ITerminalSerializedState): ITerminalReloadState {
+	return { version: 1, kind: 'revive', workspaceId: workspace.getWorkspace().id, instances: [snapshot], groups: [{ ids: [snapshot.instanceId], sizes: [1] }], activeId: snapshot.instanceId };
+}

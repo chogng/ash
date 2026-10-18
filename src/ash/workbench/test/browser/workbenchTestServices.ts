@@ -1,3 +1,4 @@
+import { IWorkbenchLayoutService, Position } from '../../services/layout/browser/layoutService.js';
 import { IDefaultLogLevelsService } from '../../services/log/common/defaultLogLevels.js';
 import { DEFAULT_LOG_LEVEL } from '../../../platform/log/common/log.js';
 import { emptyEditorServiceState } from '../common/testEditorService.js';
@@ -63,6 +64,7 @@ import type { IRendererHost } from '../../../platform/renderer/common/rendererHo
 
 /** Explicit window dependencies for fixtures that construct the real terminal owner. */
 export function registerTestTerminalLifecycleServices(services: InstantiationService): void {
+	if (!services.has(IContextKeyService)) services.registerSingleton(IContextKeyService, () => new ContextKeyService());
 	if (!services.has(IConfigurationService)) services.registerSingleton(IConfigurationService, () => new WorkbenchConfigurationService());
 	if (!services.has(IDialogService)) services.registerSingleton(IDialogService, () => services.createInstance(DialogService));
 	if (!services.has(ISecretStorageService)) services.registerSingleton(ISecretStorageService, () => new BaseSecretStorageService());
@@ -73,6 +75,9 @@ export function registerTestTerminalLifecycleServices(services: InstantiationSer
 /** Explicit dependencies for fixtures that instantiate the real terminal creation owner. */
 export function registerTestTerminalCreationServices(services: InstantiationService): void {
 	registerTestTerminalLifecycleServices(services);
+	if (!services.has(IWorkbenchLayoutService)) services.registerInstance(IWorkbenchLayoutService, {
+		getPanelPosition: () => Position.BOTTOM, onDidChangePanelPosition: Event.None,
+	} as unknown as IWorkbenchLayoutService);
 	if (!services.has(IPathService)) services.registerSingleton(IPathService, () => new BrowserPathService({ hasAppServer: true, appServer: { operatingSystem: services.get(ITerminalProcessService).operatingSystem } } as IRendererHost, services.get(IWorkspaceContextService)));
 	if (!services.has(ICommandService)) services.registerSingleton(ICommandService, () => new CommandService(services));
 	if (!services.has(IEditorService)) services.registerInstance(IEditorService, { ...emptyEditorServiceState, openEditor: async () => { }, focusActiveEditor() { }, save: async () => ({ success: true, editors: [] }), saveAll: async () => ({ success: true, editors: [] }) });

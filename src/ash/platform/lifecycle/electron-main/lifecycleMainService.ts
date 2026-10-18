@@ -5,7 +5,7 @@ import { isCancellationError } from '../../../base/common/errors.js';
 import type { IpcRoute } from '../../ipc/electron-main/trustedIpcRouter.js';
 import type { IStateService } from '../../state/node/state.js';
 import { createDecorator } from '../../instantiation/common/instantiation.js';
-import { WINDOW_CLOSE_RESPONSE_CHANNEL, WINDOW_PREPARE_CLOSE_CHANNEL, WINDOW_PREPARE_LOAD_CHANNEL, WINDOW_PREPARE_RELOAD_CHANNEL, validateWindowCloseResponse, type WindowCloseResponse } from '../../window/common/window.js';
+import { WINDOW_CLOSE_RESPONSE_CHANNEL, WINDOW_PREPARE_CLOSE_CHANNEL, WINDOW_PREPARE_QUIT_CHANNEL, WINDOW_PREPARE_LOAD_CHANNEL, WINDOW_PREPARE_RELOAD_CHANNEL, validateWindowCloseResponse, type WindowCloseResponse } from '../../window/common/window.js';
 
 interface WindowCloseState {
 	ready: boolean;
@@ -57,6 +57,7 @@ export class LifecycleMainService<TWindow extends ILifecycleWindow> extends Disp
 		private readonly reportCloseVeto: (window: TWindow) => void,
 		private readonly stateService: IStateService,
 		currentVersion: string,
+		private readonly getCloseReason: () => 'windowClose' | 'quit' = () => 'windowClose',
 	) {
 		super();
 		this.wasRestarted = stateService.getItem(LifecycleMainService.updateRestartStateKey) === currentVersion;
@@ -114,7 +115,7 @@ export class LifecycleMainService<TWindow extends ILifecycleWindow> extends Disp
 				clearPending();
 				this.reportFailure(window, 'The window did not respond to the close request.');
 			}, 30_000);
-			window.webContents.send(WINDOW_PREPARE_CLOSE_CHANNEL, token);
+			window.webContents.send(this.getCloseReason() === 'quit' ? WINDOW_PREPARE_QUIT_CHANNEL : WINDOW_PREPARE_CLOSE_CHANNEL, token);
 		};
 		const onRendererLoading = (): void => { state.ready = false; clearPending(); };
 		window.on('close', onClose);

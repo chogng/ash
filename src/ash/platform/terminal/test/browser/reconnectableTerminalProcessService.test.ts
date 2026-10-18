@@ -164,6 +164,23 @@ test('a replacement renderer attaches the original process and rotates its hando
 	await replacement.close({ terminalId: created.terminalId, dirId: 'folder' });
 });
 
+test('explicit handoff retires source access and cancellation can reattach the same process', async () => {
+	const supervisor = new TestSupervisor();
+	using source = new ReconnectableTerminalProcessService(supervisor as unknown as AppServerProtocolClient);
+	const created = await source.create({ dirId: 'folder', rows: 24, cols: 80, profile: { type: 'default' } });
+	const lease = await source.detach(created.terminalId);
+	assert.equal(lease.reconnectToken, THIRD_TOKEN);
+	assert.deepEqual(supervisor.requests.find(request => request.method === 'terminal/detach')?.params, { terminalId: created.terminalId, dirId: 'folder' });
+	const count = supervisor.requests.length;
+	await assert.rejects(source.write({ terminalId: created.terminalId, data: 'forbidden' }), /no longer recoverable/);
+	await source.close({ terminalId: created.terminalId });
+	assert.equal(supervisor.requests.length, count);
+	const restored = await source.attach(lease, { rows: 24, cols: 80 }, created.profile);
+	assert.equal(restored.ready.pid, created.ready.pid);
+	await source.close({ terminalId: created.terminalId, dirId: 'folder' });
+	assert.equal(supervisor.requests.at(-1)?.method, 'terminal/close');
+});
+
 test('display metadata preserves output ordering, nullable env values and per-process command identity', () => {
 	const result = decodeTerminalProcessReadResult({
 		terminalId: 'process-1', nextSequence: 3, outputGap: false,
@@ -407,6 +424,8 @@ class TestSupervisor {
 			case APP_SERVER_METHODS['terminal/processInfo'].method:
 				await this.processInfoReply;
 				return { ready: { pid: 1234, cwd: '/backend/workspace', shellType: this.shellType }, cwd: '/backend/current', rows: 40, cols: 120 };
+			case APP_SERVER_METHODS['terminal/detach'].method:
+				return { reconnectToken: THIRD_TOKEN, reconnectGracePeriodMillis: 30_000 };
 			case APP_SERVER_METHODS["terminal/attach"].method:
 				await this.attachReply;
 				if (this.attachFailures > 0) {

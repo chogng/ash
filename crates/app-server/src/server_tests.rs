@@ -1941,6 +1941,29 @@ fn reconnectable_terminal_detaches_rotates_its_token_and_rejects_replay() {
         30_000
     );
 
+    let offered = call(
+        &server,
+        &mut owner,
+        serde_json::json!({
+            "jsonrpc":"2.0", "id":3, "method":"terminal/detach",
+            "params":{"terminalId":terminal_id}
+        }),
+    );
+    let handoff_token = offered["result"]["reconnectToken"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    assert_ne!(handoff_token, first_token);
+    let retired = call(
+        &server,
+        &mut owner,
+        serde_json::json!({
+            "jsonrpc":"2.0", "id":4, "method":"terminal/write",
+            "params":{"terminalId":terminal_id,"data":"echo forbidden\n"}
+        }),
+    );
+    assert_eq!(retired["error"]["message"], "TerminalNotOwner");
+    let first_token = handoff_token;
     server.close_connection(owner);
     let mut replacement = server.connection();
     initialize(&server, &mut replacement);
@@ -1965,6 +1988,10 @@ fn reconnectable_terminal_detaches_rotates_its_token_and_rejects_replay() {
             "method":"terminal/attach",
             "params":{"terminalId":terminal_id,"reconnectToken":first_token,"rows":30,"cols":100}
         }),
+    );
+    assert_eq!(
+        attached["result"]["ready"]["pid"],
+        created["result"]["ready"]["pid"]
     );
     let second_token = attached["result"]["reconnect"]["reconnectToken"]
         .as_str()

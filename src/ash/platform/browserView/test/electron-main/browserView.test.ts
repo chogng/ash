@@ -630,6 +630,7 @@ export function fixture(storageOverride?: IApplicationStorageMainService, provid
 	const storage: IApplicationStorageMainService = storageOverride ?? {
 		onDidChangeStorage: Event.None, onWillSaveState: Event.None,
 		initialize: async () => { },
+		getItemsIfExists: async identity => snapshots.get(JSON.stringify(identity)),
 		getItems: async identity => {
 			const key = JSON.stringify(identity);
 			let snapshot = snapshots.get(key);

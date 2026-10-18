@@ -6,7 +6,7 @@ import { WorkbenchContextKeysHandler } from '../../browser/contextkeys.js';
 import type { IEditorGroup, IEditorGroupsService } from '../../services/editor/common/editorGroupsService.js';
 import type { IEditorService } from '../../services/editor/common/editorService.js';
 import type { EditorGroupState } from '../../services/editor/common/editorState.js';
-import type { IWorkbenchLayoutService } from '../../services/layout/browser/layoutService.js';
+import { Position, type IWorkbenchLayoutService } from '../../services/layout/browser/layoutService.js';
 import type { IWorkingCopyService } from '../../services/workingCopy/common/workingCopyService.js';
 import { emptyEditorServiceState } from './testEditorService.js';
 
@@ -110,6 +110,9 @@ const emptyLayoutService: IWorkbenchLayoutService = Object.freeze({
 	isAuxiliaryBarMaximized: () => false,
 	toggleMaximizedAuxiliaryBar: () => { },
 	setAuxiliaryBarMaximized: () => false,
+	onDidChangePanelPosition: Event.None,
+	getPanelPosition: () => Position.BOTTOM,
+	setPanelPosition: () => { },
 	isPanelMaximized: () => false,
 	toggleMaximizedPanel: () => { },
 	showPart: () => { },

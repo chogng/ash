@@ -275,6 +275,20 @@ impl<'ctx, C: TerminalRequestProcessorContext + ?Sized> TerminalRequestProcessor
         result(&())
     }
 
+    pub(super) fn terminal_detach(
+        &self,
+        connection: &ConnectionState,
+        params: &Value,
+    ) -> Result<Value, RpcError> {
+        let params: TerminalCloseParams = decode(params)?;
+        let lease = self
+            .context
+            .terminal_service_for(params.dir_id.as_deref())?
+            .detach(connection.connection_id, &params.terminal_id)
+            .map_err(terminal_error)?;
+        result(&lease_to_dto(lease))
+    }
+
     pub(super) fn terminal_attach(
         &self,
         connection: &ConnectionState,

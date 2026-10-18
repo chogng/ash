@@ -151,9 +151,34 @@ export class ReconnectableTerminalProcessService extends Disposable implements I
 		return { terminalId, ...workspaceFolder(record.dirId), reconnectToken: record.reconnectToken, reconnectGracePeriodMillis: record.reconnectGracePeriodMillis };
 	}
 
+	async detach(terminalId: string): Promise<ITerminalReconnectLease> {
+		const record = await this.ensureAttached(terminalId);
+		this.assertAttached(record);
+		// Block every source operation before dispatch. A failed detach restores the
+		// record, while a successful one retires it before exposing the credential.
+		record.closing = true;
+		let detached = false;
+		try {
+			const result = await this.supervisor.request(APP_SERVER_METHODS['terminal/detach'], { terminalId, ...workspaceFolder(record.dirId) });
+			detached = true;
+			this.assertAttached(record, true);
+			const lease = requireReconnectLease(result);
+			this.terminals.delete(terminalId);
+			this.handedOff.add(terminalId);
+			return { terminalId, ...workspaceFolder(record.dirId), ...lease };
+		} catch (error) {
+			if (this.terminals.get(terminalId) === record) {
+				if (detached) this.terminals.delete(terminalId);
+				else record.closing = false;
+			}
+			throw error;
+		}
+	}
+
 	async attach(lease: ITerminalReconnectLease, dimensions: { readonly rows: number; readonly cols: number; }, profile: ITerminalProcessProfile): Promise<ITerminalProcessCreation> {
 		if (this.isDisposed) throw new CancellationError();
 		if (this.terminals.has(lease.terminalId)) throw new Error('Terminal is already attached');
+		this.handedOff.delete(lease.terminalId);
 		const record: TerminalRecord = {
 			terminalId: lease.terminalId, dirId: lease.dirId,
 			reconnectToken: lease.reconnectToken, reconnectGracePeriodMillis: lease.reconnectGracePeriodMillis,

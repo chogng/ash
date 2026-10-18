@@ -1,11 +1,12 @@
+import { ContextKeyExpr } from '../../../../platform/contextkey/common/contextkey.js';
 import { IsAuxiliaryWindowContext } from '../../../common/contextkeys.js';
 import { localize2 } from '../../../../nls.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
 import { Action2, MenuId, MenusRegistry, registerAction2 } from '../../../../platform/actions/common/actions.js';
 import type { ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
-import { PanelMaximizedContext, PanelVisibleContext } from '../../../common/contextkeys.js';
+import { PanelMaximizedContext, PanelPositionContext, PanelVisibleContext } from '../../../common/contextkeys.js';
 import { ViewContainerLocation } from '../../../common/views.js';
-import { IWorkbenchLayoutService } from '../../../services/layout/browser/layoutService.js';
+import { IWorkbenchLayoutService, Position, positionToString } from '../../../services/layout/browser/layoutService.js';
 import { IPaneCompositePartService } from '../../../services/panecomposite/browser/panecomposite.js';
 
 export class TogglePanelAction extends Action2 {
@@ -122,3 +123,29 @@ MenusRegistry.appendMenuItem(MenuId.PanelTitle, {
 	group: 'navigation',
 	order: 50,
 });
+
+// All entry points mutate the window layout owner; terminal panes follow its position event.
+const panelPositionMenu = MenuId.for('PanelPositionMenu');
+MenusRegistry.appendMenuItem(MenuId.ViewContainerTitleContext, {
+	submenu: panelPositionMenu, title: localize2('positionPanel', 'Panel Position'),
+	when: ContextKeyExpr.equals('viewContainerLocation', 'panel'), group: '3_layout',
+});
+for (const [position, suffix, title] of [
+	[Position.LEFT, 'Left', localize2('positionPanelLeft', 'Move Panel Left')],
+	[Position.RIGHT, 'Right', localize2('positionPanelRight', 'Move Panel Right')],
+	[Position.TOP, 'Top', localize2('positionPanelTop', 'Move Panel to Top')],
+	[Position.BOTTOM, 'Bottom', localize2('positionPanelBottom', 'Move Panel to Bottom')],
+] as const) {
+	registerAction2(class extends Action2 {
+		constructor() {
+			super({
+				id: `workbench.action.positionPanel${suffix}`, title, f1: true,
+				toggled: PanelPositionContext.isEqualTo(positionToString(position)),
+				menu: { id: panelPositionMenu, group: 'position', order: position },
+			});
+		}
+		override run(accessor: ServicesAccessor): void {
+			accessor.get(IWorkbenchLayoutService).setPanelPosition(position);
+		}
+	});
+}

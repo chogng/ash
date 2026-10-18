@@ -16,6 +16,9 @@ import {
 	NATIVE_HOST_OPEN_WORKSPACE_CHANNEL,
 	NATIVE_HOST_OPEN_WINDOW_CHANNEL,
 	NATIVE_HOST_OPEN_AGENTS_WINDOW_CHANNEL,
+	NATIVE_HOST_TERMINAL_MOVE_CHANNEL, NATIVE_HOST_TERMINAL_TAKE_CHANNEL, NATIVE_HOST_TERMINAL_COMPLETE_CHANNEL,
+	validateTerminalWindowTransferMove, validateTerminalWindowTransferResult,
+	type ITerminalWindowTransfer, type ITerminalWindowTransferResult,
 	NATIVE_HOST_GET_ACCESSIBILITY_SUPPORT_CHANNEL,
 	NATIVE_HOST_SAVE_FILE_CHANNEL,
 	NATIVE_HOST_SET_WINDOW_THEME_CHANNEL,
@@ -62,6 +65,9 @@ export interface INativeHostMainService {
 	openWorkspace(root: string, forceNewWindow?: boolean): Promise<void>;
 	openWindow(options: IOpenEmptyWindowOptions): Promise<void>;
 	openAgentsWindow(options?: IOpenAgentsWindowOptions): Promise<void>;
+	moveTerminalToWindow(transfer: ITerminalWindowTransfer, targetWindowId?: number): Promise<ITerminalWindowTransferResult>;
+	takeTerminalTransfer(): ITerminalWindowTransfer | undefined;
+	completeTerminalTransfer(result: ITerminalWindowTransferResult): void;
 	getAgentHostEditorState(): IAgentHostEditorState;
 	updateAgentHostEditorState(update: AgentHostEditorUpdate): Promise<void>;
 	claimAgentsWindowInvitation(resource: URI): IAgentsWindowInvitation | undefined;
@@ -81,6 +87,21 @@ export function nativeHostIpcRoutes(
 	service: INativeHostMainService,
 ): readonly IpcRoute<unknown, unknown>[] {
 	return [
+
+		{
+			channel: NATIVE_HOST_TERMINAL_MOVE_CHANNEL,
+			validate: validateTerminalWindowTransferMove,
+			invoke: value => {
+				const { transfer, targetWindowId } = value as ReturnType<typeof validateTerminalWindowTransferMove>;
+				return service.moveTerminalToWindow(transfer, targetWindowId);
+			},
+		},
+		{
+			channel: NATIVE_HOST_TERMINAL_TAKE_CHANNEL,
+			validate: value => { if (value !== undefined) throw new TypeError('Terminal transfer reads accept no arguments'); return undefined; },
+			invoke: () => service.takeTerminalTransfer(),
+		},
+		{ channel: NATIVE_HOST_TERMINAL_COMPLETE_CHANNEL, validate: validateTerminalWindowTransferResult, invoke: value => service.completeTerminalTransfer(value as ITerminalWindowTransferResult) },
 		{
 			channel: AGENT_HOST_EDITOR_STATE_CHANNEL,
 			validate: value => { if (value !== undefined) throw new TypeError('Editor state reads accept no arguments'); return undefined; },

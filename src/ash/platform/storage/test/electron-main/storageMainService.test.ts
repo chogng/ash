@@ -14,6 +14,19 @@ suite('Desktop storage owner', () => {
 	const application: IStorageIdentity = { scope: StorageScope.APPLICATION, id: 'application' };
 	const entry = (value: string) => ({ value, target: StorageTarget.MACHINE });
 
+	test('inspecting restoration candidates does not create storage or consume its new-workspace defaults', async () => {
+		const directory = await mkdtemp(join(tmpdir(), 'ash-store-'));
+		try {
+			using storage = new StorageMainService(join(directory, 'state.json'));
+			await storage.initialize();
+			const workspace = { scope: StorageScope.WORKSPACE, id: 'new-workspace' };
+			assert.equal(await storage.getItemsIfExists(workspace), undefined);
+			assert.equal((await storage.getItems(workspace)).isNew, true);
+			await storage.updateItems(workspace, 'checkpoint', entry('saved'));
+			assert.equal((await storage.getItemsIfExists(workspace))?.entries.checkpoint?.value, 'saved');
+		} finally { await rm(directory, { recursive: true, force: true }); }
+	});
+
 	test('close captures participant writes before rejecting late mutations', async () => {
 		const directory = await mkdtemp(join(tmpdir(), 'ash-store-'));
 		try {

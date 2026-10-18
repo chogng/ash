@@ -59,6 +59,7 @@ export class TerminalInstanceService extends Disposable {
 				options.dimensions,
 				this.backend,
 				undefined,
+				undefined,
 			);
 			// Acquire the custom handle before this async factory yields. If its window
 			// closes before publication, disposing the instance must still release the host PTY.
@@ -80,6 +81,12 @@ export class TerminalInstanceService extends Disposable {
 			...(options.cwd === undefined ? {} : { cwd: options.cwd }),
 			...(execution === undefined ? {} : { execution }),
 		});
+		const intent = options.revivalLaunch ?? options.attachPersistentProcess?.state.launch;
+		const revivalLaunch = intent && !execution ? Object.freeze({
+			...intent,
+			profile: intent.profile.type === 'custom' ? Object.freeze({ ...intent.profile, path: Object.freeze([...intent.profile.path]), args: typeof intent.profile.args === 'string' ? intent.profile.args : Object.freeze([...intent.profile.args]) }) : Object.freeze({ ...intent.profile }),
+			env: intent.env === undefined ? undefined : Object.freeze({ ...intent.env }),
+		}) : undefined;
 		const restored = options.attachPersistentProcess?.state;
 		const instanceNumber = restored?.instanceId ?? this.nextInstanceId++;
 		this.nextInstanceId = Math.max(this.nextInstanceId, instanceNumber + 1);
@@ -92,7 +99,7 @@ export class TerminalInstanceService extends Disposable {
 			...(launch.cwd === undefined ? {} : { cwd: launch.cwd }),
 			...(launch.strictEnv === undefined ? {} : { strictEnv: launch.strictEnv }),
 			...(execution === undefined ? {} : { execution }),
-		}, instanceNumber, options.attachPersistentProcess?.process);
+		}, instanceNumber, options.attachPersistentProcess?.process, options.attachPersistentProcess?.ownership);
 		const created = child.creation;
 		// A completed backend request still owns a PTY even if its window has closed.
 		if (this.isDisposed) {
@@ -121,6 +128,7 @@ export class TerminalInstanceService extends Disposable {
 				options.dimensions,
 				this.backend,
 				restored,
+				revivalLaunch,
 			);
 			return instance;
 		} catch (error) {

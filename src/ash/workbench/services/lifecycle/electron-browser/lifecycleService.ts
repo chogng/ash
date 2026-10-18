@@ -3,7 +3,7 @@ import { localize } from '../../../../nls.js';
 import { invoke, subscribe } from '../../../../platform/ipc/electron-browser/rendererIpc.js';
 import { BrowserLifecycleService } from '../browser/lifecycleService.js';
 import { ShutdownVetoError, type ShutdownReason } from '../common/lifecycle.js';
-import { WINDOW_CLOSE_RESPONSE_CHANNEL, WINDOW_PREPARE_CLOSE_CHANNEL, WINDOW_PREPARE_LOAD_CHANNEL, WINDOW_PREPARE_RELOAD_CHANNEL } from '../../../../platform/window/common/window.js';
+import { WINDOW_CLOSE_RESPONSE_CHANNEL, WINDOW_PREPARE_CLOSE_CHANNEL, WINDOW_PREPARE_QUIT_CHANNEL, WINDOW_PREPARE_LOAD_CHANNEL, WINDOW_PREPARE_RELOAD_CHANNEL } from '../../../../platform/window/common/window.js';
 import { addDisposableListener } from '../../../../base/browser/dom.js';
 
 /** Coordinates Electron's close handshake with the renderer's shutdown join point. */
@@ -19,6 +19,7 @@ export class ElectronLifecycleService extends BrowserLifecycleService {
 			event.returnValue = false;
 		}));
 		const handleRequest = (token: number, reason: ShutdownReason): void => {
+			if (!Number.isSafeInteger(token) || token <= 0) throw new TypeError('Invalid window shutdown token');
 			const focusSource = document.activeElement;
 			if (reason !== 'reload') document.body.inert = true;
 			void (async () => {
@@ -44,6 +45,8 @@ export class ElectronLifecycleService extends BrowserLifecycleService {
 		};
 		const closeRequests = subscribe<number>(WINDOW_PREPARE_CLOSE_CHANNEL, token => handleRequest(token, 'windowClose'));
 		const subscription = this._register(toDisposable(() => closeRequests.dispose()));
+		const quitRequests = subscribe<number>(WINDOW_PREPARE_QUIT_CHANNEL, token => handleRequest(token, 'quit'));
+		this._register(toDisposable(() => quitRequests.dispose()));
 		const loadRequests = subscribe<number>(WINDOW_PREPARE_LOAD_CHANNEL, token => handleRequest(token, 'load'));
 		this._register(toDisposable(() => loadRequests.dispose()));
 		const reloadRequests = subscribe<number>(WINDOW_PREPARE_RELOAD_CHANNEL, token => handleRequest(token, 'reload'));

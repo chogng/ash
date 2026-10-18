@@ -10,7 +10,7 @@ import { BrowserLayoutService, type ILayoutOffsetInfo } from "../../platform/lay
 import { IStorageService, StorageScope, StorageTarget } from "../../platform/storage/common/storage.js";
 import { WorkbenchState } from "../../platform/workspace/common/workspace.js";
 import { ActivityBarPosition, WorkbenchConfiguration, type SideBarLocation, type WorkbenchLayoutStyle } from "../common/configuration.js";
-import { type IWorkbenchLayoutService, type WorkbenchPartId, type WorkbenchPartVisibilityChangeEvent, workbenchPartIds } from "../services/layout/browser/layoutService.js";
+import { Position, isHorizontal, positionFromString, positionToString, type IWorkbenchLayoutService, type WorkbenchPartId, type WorkbenchPartVisibilityChangeEvent, workbenchPartIds } from "../services/layout/browser/layoutService.js";
 import type { Part } from "./part.js";
 import { WorkbenchPartView } from "./workbenchPartView.js";
 import { IAuxiliaryWindowService, type IAuxiliaryWindow } from '../services/auxiliaryWindow/browser/auxiliaryWindowService.js';
@@ -26,6 +26,7 @@ const DEFAULT_SIDEBAR_WIDTH = 220;
 const DEFAULT_AUXILIARYBAR_WIDTH = 380;
 const DEFAULT_AGENT_SIDEBAR_WIDTH = 280;
 const DEFAULT_PANEL_HEIGHT = 200;
+const DEFAULT_PANEL_WIDTH = 300;
 const EDITOR_LAYOUT_PRIORITY = "high" as const;
 
 interface WorkbenchLayoutStyleMetrics {
@@ -74,6 +75,8 @@ export interface WorkbenchLayoutState {
 		readonly visible: boolean;
 	};
 	readonly panel: {
+		readonly position: Position;
+		readonly width: number;
 		readonly height: number;
 		readonly visible: boolean;
 	};
@@ -108,8 +111,13 @@ export class WorkbenchLayout
 	private layoutStyle: WorkbenchLayoutStyle;
 	private activityBarLocation: ActivityBarPosition;
 	private sideBarLocation: SideBarLocation;
-	// Maximization is transient; persistence and Grid rebuilds retain the user's restored Panel height.
-	private panelHeightBeforeMaximize: number | undefined;
+	private panelPosition: Position;
+	private panelRestoredWidth = DEFAULT_PANEL_WIDTH;
+	private panelRestoredHeight = DEFAULT_PANEL_HEIGHT;
+	private readonly panelPositionEmitter = this._register(new Emitter<string>());
+	readonly onDidChangePanelPosition = this.panelPositionEmitter.event;
+	// Maximization is transient; retain the restored size on the Panel's current axis.
+	private panelSizeBeforeMaximize: number | undefined;
 	// The ordinary layout remains the persistence source while maximization temporarily hides its Parts.
 	private auxiliaryBarRestoreState: { readonly layout: WorkbenchLayoutState; readonly editorVisible: boolean; } | undefined;
 	private readonly auxiliaryBarMaximizedEmitter = this._register(new Emitter<void>());
@@ -153,7 +161,11 @@ export class WorkbenchLayout
 		this._register(toDisposable(() => this.domNode.remove()));
 		this.initialDimension = resolveInitialDimension(container, options.initialDimension);
 		validateWorkbenchDefaultLayout(options.defaultLayout);
-		this.stateModel = new WorkbenchLayoutStateModel(storageService, options.workbenchState, options.defaultLayout);
+		this.stateModel = new WorkbenchLayoutStateModel(storageService, options.workbenchState, options.defaultLayout, positionFromString(configurationService.getValue(WorkbenchConfiguration.panelDefaultLocation)));
+		const panel = this.stateModel.state.panel;
+		this.panelPosition = panel.position;
+		this.panelRestoredWidth = panel.width;
+		this.panelRestoredHeight = panel.height;
 		// Input can arrive before Electron's document focus notification. Capture it
 		// at the window boundary before keybindings or titlebar actions choose a host.
 		for (const event of ['focus', 'keydown', 'pointerdown'] as const) {
@@ -247,6 +259,9 @@ export class WorkbenchLayout
 		});
 		this._register(this.storageService.onWillSaveState(() => this.saveState()));
 		this._register(this.configurationService.onDidChangeConfiguration(event => {
+			if (event.affectsConfiguration(WorkbenchConfiguration.panelDefaultLocation)) {
+				this.stateModel.defaultPanelPosition = positionFromString(this.configurationService.getValue(WorkbenchConfiguration.panelDefaultLocation));
+			}
 			if (event.affectsConfiguration(WorkbenchConfiguration.statusBarVisible)) {
 				this.grid.setViewVisible(this.view('statusbar'), this.configurationService.getValue<boolean>(WorkbenchConfiguration.statusBarVisible) !== false);
 			}
@@ -282,10 +297,30 @@ export class WorkbenchLayout
 		this.rebuildGrid();
 	}
 
-	private rebuildGrid(): void {
+	getPanelPosition(): Position { return this.panelPosition; }
+
+	setPanelPosition(position: Position): void {
+		this.showPart('panel');
+		if (this.panelPosition === position) return;
+		const state = this.state;
+		this.panelPosition = position;
+		if (this.panelSizeBeforeMaximize !== undefined) this.panelSizeBeforeMaximize = isHorizontal(position) ? state.panel.height : state.panel.width;
+		this.rebuildGrid({ ...state, panel: { ...state.panel, position } });
+		this.saveState();
+		this.panelPositionEmitter.fire(positionToString(position));
+	}
+
+	private panelDimension(size: number): Dimension {
+		const current = this.getPartSize('panel');
+		return isHorizontal(this.panelPosition) ? new Dimension(current.width, size) : new Dimension(size, current.height);
+	}
+
+	private rebuildGrid(restoredState?: WorkbenchLayoutState): void {
+		const focusedElement = this.domNode.ownerDocument.activeElement as HTMLElement | null;
+		const restoreFocus = focusedElement && this.domNode.contains(focusedElement);
 		const auxiliaryBarMaximized = this.isAuxiliaryBarMaximized();
 		if (auxiliaryBarMaximized) this.setAuxiliaryBarMaximized(false);
-		const state = this.state;
+		const state = restoredState ?? this.state;
 		const editorVisible = this.isPartVisible('editor');
 		const dimension = new Dimension(this.grid.width || getClientArea(this.domNode).width, this.grid.height || getClientArea(this.domNode).height);
 		this.gridChangeHandle.clear();
@@ -304,6 +339,8 @@ export class WorkbenchLayout
 		});
 		this.layout(dimension);
 		if (auxiliaryBarMaximized) this.setAuxiliaryBarMaximized(true);
+		// Rebuilding the topology reparents surviving Parts and otherwise blurs their inputs.
+		if (restoreFocus && focusedElement.isConnected) focusedElement.focus({ preventScroll: true });
 	}
 
 	/** Overlays can read offsets before Parts exist; the mounted Grid then owns titlebar geometry. */
@@ -330,6 +367,8 @@ export class WorkbenchLayout
 		const auxiliarybar = this.getPartSize("auxiliarybar");
 		const agentSidebar = this.getPartSize("agentSidebar");
 		const panel = this.getPartSize("panel");
+		if (isHorizontal(this.panelPosition)) this.panelRestoredHeight = this.panelSizeBeforeMaximize ?? panel.height;
+		else this.panelRestoredWidth = this.panelSizeBeforeMaximize ?? panel.width;
 		return {
 			version: 3,
 			sidebar: {
@@ -345,7 +384,9 @@ export class WorkbenchLayout
 				visible: this.isPartVisible("agentSidebar"),
 			},
 			panel: {
-				height: this.panelHeightBeforeMaximize ?? panel.height,
+				position: this.panelPosition,
+				width: this.panelRestoredWidth,
+				height: this.panelRestoredHeight,
 				visible: this.isPartVisible("panel"),
 			},
 		};
@@ -399,7 +440,7 @@ export class WorkbenchLayout
 				this.resizePart(partId, this.getPartSize(partId).with(restore.layout[partId].width));
 			}
 			if (restore.editorVisible) {
-				this.resizePart('panel', new Dimension(this.getPartSize('panel').width, restore.layout.panel.height));
+				this.resizePart('panel', this.panelDimension(isHorizontal(this.panelPosition) ? restore.layout.panel.height : restore.layout.panel.width));
 			}
 		}
 		this.auxiliaryBarMaximizedEmitter.fire();
@@ -425,11 +466,11 @@ export class WorkbenchLayout
 		}
 		const reopenMaximizedPanel = partIds.includes('panel') && !partIds.includes('editor') &&
 			!this.isPartVisible('panel') && this.stateModel.panelWasLastMaximized;
-		const panelHeight = partIds.includes('editor') ? this.panelHeightBeforeMaximize : undefined;
+		const panelSize = partIds.includes('editor') ? this.panelSizeBeforeMaximize : undefined;
 		this.updatePartsVisibility(partIds, true);
-		if (panelHeight !== undefined) {
-			this.resizePart('panel', new Dimension(this.getPartSize('panel').width, panelHeight));
-			this.panelHeightBeforeMaximize = undefined;
+		if (panelSize !== undefined) {
+			this.resizePart('panel', this.panelDimension(panelSize));
+			this.panelSizeBeforeMaximize = undefined;
 		}
 		if (reopenMaximizedPanel) {
 			this.hidePart('editor');
@@ -450,7 +491,8 @@ export class WorkbenchLayout
 			}
 		}
 		if (partIds.includes('editor') && this.isPartVisible('editor') && this.isPartVisible('panel')) {
-			this.panelHeightBeforeMaximize = this.getPartSize('panel').height;
+			const size = this.getPartSize('panel');
+			this.panelSizeBeforeMaximize = isHorizontal(this.panelPosition) ? size.height : size.width;
 		}
 		this.updatePartsVisibility(partIds, false);
 	}
@@ -474,10 +516,17 @@ export class WorkbenchLayout
 		if (this.isPanelMaximized()) {
 			this.toggleMaximizedPanel();
 		}
+		this.panelRestoredWidth = state.panel.width;
+		this.panelRestoredHeight = state.panel.height;
+		if (this.panelPosition !== state.panel.position) {
+			this.panelPosition = state.panel.position;
+			this.rebuildGrid(state);
+			this.panelPositionEmitter.fire(positionToString(this.panelPosition));
+		}
 		this.resizePart("sidebar", this.getPartSize("sidebar").with(state.sidebar.width));
 		this.resizePart("auxiliarybar", this.getPartSize("auxiliarybar").with(state.auxiliarybar.width));
 		this.resizePart("agentSidebar", this.getPartSize("agentSidebar").with(state.agentSidebar.width));
-		this.resizePart("panel", new Dimension(this.getPartSize("panel").width, state.panel.height));
+		this.resizePart("panel", this.panelDimension(isHorizontal(this.panelPosition) ? state.panel.height : state.panel.width));
 		this.updatePartsVisibility(["sidebar"], state.sidebar.visible);
 		this.updatePartsVisibility(["auxiliarybar"], state.auxiliarybar.visible);
 		this.updatePartsVisibility(["agentSidebar"], state.agentSidebar.visible);
@@ -544,17 +593,21 @@ export class WorkbenchLayout
 			bottom: 0,
 			left: this.sideBarLocation === 'right' ? metrics.windowLeftEdgeInset : metrics.partGutterHalf,
 		});
+		const panelLeft = panelVisible && this.panelPosition === Position.LEFT;
+		const panelRight = panelVisible && this.panelPosition === Position.RIGHT;
+		const panelTop = panelVisible && this.panelPosition === Position.TOP;
+		const panelBottom = panelVisible && this.panelPosition === Position.BOTTOM;
 		this.view("editor").setFrameInsets({
-			top: 0,
-			right: centralInsets.right,
-			bottom: panelVisible ? metrics.partGutterHalf : 0,
-			left: centralInsets.left,
+			top: panelTop ? metrics.partGutterHalf : 0,
+			right: panelRight ? metrics.partGutterHalf : centralInsets.right,
+			bottom: panelBottom ? metrics.partGutterHalf : 0,
+			left: panelLeft ? metrics.partGutterHalf : centralInsets.left,
 		});
 		this.view("panel").setFrameInsets({
-			top: panelVisible ? metrics.partGutterHalf : 0,
-			right: centralInsets.right,
-			bottom: 0,
-			left: centralInsets.left,
+			top: panelBottom ? metrics.partGutterHalf : 0,
+			right: panelLeft ? metrics.partGutterHalf : centralInsets.right,
+			bottom: panelTop ? metrics.partGutterHalf : 0,
+			left: panelRight ? metrics.partGutterHalf : centralInsets.left,
 		});
 	}
 
@@ -631,7 +684,7 @@ function createWorkbenchGridDescriptor(
 	const panelHeight = state.panel.height;
 	const editorHeight = Math.max(
 		0,
-		bodyHeight - (state.panel.visible ? panelHeight : 0),
+		bodyHeight - (state.panel.visible && isHorizontal(state.panel.position) ? panelHeight : 0),
 	);
 	const editorWidth = Math.max(
 		0,
@@ -648,10 +701,16 @@ function createWorkbenchGridDescriptor(
 		leaf('auxiliarybar', state.auxiliarybar.width, state.auxiliarybar.visible),
 		leaf('agentSidebar', state.agentSidebar.width, state.agentSidebar.visible),
 	];
-	const center: SerializedGridDescriptor = {
+	const horizontalPanel = isHorizontal(state.panel.position);
+	const editor = leaf('editor', horizontalPanel ? editorHeight : Math.max(0, editorWidth - (state.panel.visible ? state.panel.width : 0)), editorVisible, EDITOR_LAYOUT_PRIORITY);
+	const panel = leaf('panel', horizontalPanel ? panelHeight : state.panel.width, state.panel.visible);
+	const centralParts = state.panel.position === Position.TOP || state.panel.position === Position.LEFT ? [panel, editor] : [editor, panel];
+	// Side panels are siblings in the horizontal body. Nesting another horizontal
+	// branch would violate Grid's alternating-axis contract.
+	const center: SerializedGridDescriptor[] = horizontalPanel ? [{
 		type: 'branch', orientation: 'vertical', size: editorWidth, priority: EDITOR_LAYOUT_PRIORITY,
-		children: [leaf('editor', editorHeight, editorVisible, EDITOR_LAYOUT_PRIORITY), leaf('panel', panelHeight, state.panel.visible)],
-	};
+		children: centralParts,
+	}] : centralParts;
 	return {
 		type: "branch",
 		orientation: "vertical",
@@ -664,7 +723,7 @@ function createWorkbenchGridDescriptor(
 				orientation: "horizontal",
 				size: bodyHeight,
 				priority: EDITOR_LAYOUT_PRIORITY,
-				children: sideBarLocation === 'left' ? [...primary, center, ...secondary] : [...secondary.slice().reverse(), center, ...primary],
+				children: sideBarLocation === 'left' ? [...primary, ...center, ...secondary] : [...secondary.slice().reverse(), ...center, ...primary],
 			},
 			leaf("statusbar", statusbarHeight),
 		],
@@ -744,6 +803,8 @@ function createDefaultWorkbenchLayoutState(
 			visible: defaultPartVisibility(parts, "agentSidebar", false),
 		},
 		panel: {
+			position: Position.BOTTOM,
+			width: DEFAULT_PANEL_WIDTH,
 			height: DEFAULT_PANEL_HEIGHT,
 			visible: defaultPartVisibility(parts, "panel", true),
 		},
@@ -786,6 +847,12 @@ function parseWorkbenchLayoutState(value: unknown): WorkbenchLayoutState {
 	) {
 		throw new TypeError("Workbench layout state is invalid or unsupported");
 	}
+	if (isRecord(value.panel) && (
+		(value.panel.position !== undefined && !isPanelPosition(value.panel.position)) ||
+		(value.panel.width !== undefined && !isLayoutDimension(value.panel.width))
+	)) {
+		throw new TypeError("Workbench layout state is invalid or unsupported");
+	}
 	let panel: { readonly height: number; readonly visible: boolean; };
 	let agentSidebar: { readonly width: number; readonly visible: boolean; };
 	if (value.version === 1) {
@@ -816,6 +883,8 @@ function parseWorkbenchLayoutState(value: unknown): WorkbenchLayoutState {
 		},
 		agentSidebar,
 		panel: {
+			position: readPanelPosition(isRecord(value.panel) ? value.panel.position : undefined),
+			width: isRecord(value.panel) && isLayoutDimension(value.panel.width) ? value.panel.width : DEFAULT_PANEL_WIDTH,
 			height: panel.height,
 			visible: panel.visible,
 		},
@@ -828,6 +897,7 @@ class WorkbenchLayoutStateModel {
 		private readonly storageService: IStorageService,
 		public workbenchState: WorkbenchState,
 		private readonly defaultLayout: WorkbenchDefaultLayout | undefined,
+		public defaultPanelPosition: Position,
 	) { }
 
 	get panelWasLastMaximized(): boolean {
@@ -901,6 +971,8 @@ class WorkbenchLayoutStateModel {
 				),
 			},
 			panel: {
+				position: readPanelPosition(storage.getNumber(WorkbenchLayoutStorageKeys.PANEL_POSITION.key, WorkbenchLayoutStorageKeys.PANEL_POSITION.scope), this.defaultPanelPosition),
+				width: storedDimension(storage.getNumber(WorkbenchLayoutStorageKeys.PANEL_WIDTH.key, WorkbenchLayoutStorageKeys.PANEL_WIDTH.scope), defaults.panel.width),
 				height: storedDimension(
 					storage.getNumber(
 						WorkbenchLayoutStorageKeys.PANEL_HEIGHT.key,
@@ -940,6 +1012,8 @@ class WorkbenchLayoutStateModel {
 
 	save(state: WorkbenchLayoutState): void {
 		const storage = this.storageService;
+		storeLayoutValue(storage, WorkbenchLayoutStorageKeys.PANEL_POSITION, state.panel.position);
+		storeLayoutValue(storage, WorkbenchLayoutStorageKeys.PANEL_WIDTH, state.panel.width);
 		storeLayoutValue(
 			storage,
 			WorkbenchLayoutStorageKeys.SIDEBAR_WIDTH,
@@ -1020,6 +1094,8 @@ const WorkbenchLayoutStorageKeys = {
 		scope: StorageScope.WORKSPACE,
 		target: StorageTarget.MACHINE,
 	},
+	PANEL_POSITION: { key: 'workbench.layout.panel.position', scope: StorageScope.WORKSPACE, target: StorageTarget.MACHINE },
+	PANEL_WIDTH: { key: 'workbench.layout.panel.width', scope: StorageScope.PROFILE, target: StorageTarget.MACHINE },
 	PANEL_HEIGHT: {
 		key: "workbench.layout.panel.height",
 		scope: StorageScope.PROFILE,
@@ -1046,7 +1122,7 @@ function storeLayoutValue(
 }
 
 function storedDimension(value: number | undefined, fallback: number): number {
-	return value !== undefined && value >= 0 ? value : fallback;
+	return value !== undefined && Number.isFinite(value) && value >= 0 ? value : fallback;
 }
 
 function isHorizontalLayoutRegionState(
@@ -1071,4 +1147,12 @@ function isVerticalLayoutRegionState(
 
 function isLayoutDimension(value: unknown): value is number {
 	return typeof value === "number" && Number.isFinite(value) && value >= 0;
+}
+
+function isPanelPosition(value: unknown): value is Position {
+	return value === Position.LEFT || value === Position.RIGHT || value === Position.BOTTOM || value === Position.TOP;
+}
+
+function readPanelPosition(value: unknown, fallback = Position.BOTTOM): Position {
+	return isPanelPosition(value) ? value : fallback;
 }

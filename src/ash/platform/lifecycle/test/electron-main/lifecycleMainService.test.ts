@@ -4,7 +4,7 @@ import { DeferredPromise } from '../../../../base/common/async.js';
 import { throwIfCancelled } from '../../../../base/common/cancellation.js';
 import { isCancellationError } from '../../../../base/common/errors.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../base/test/common/utils.js';
-import { WINDOW_CLOSE_RESPONSE_CHANNEL, WINDOW_PREPARE_CLOSE_CHANNEL, WINDOW_PREPARE_LOAD_CHANNEL, WINDOW_PREPARE_RELOAD_CHANNEL } from '../../../window/common/window.js';
+import { WINDOW_CLOSE_RESPONSE_CHANNEL, WINDOW_PREPARE_CLOSE_CHANNEL, WINDOW_PREPARE_QUIT_CHANNEL, WINDOW_PREPARE_LOAD_CHANNEL, WINDOW_PREPARE_RELOAD_CHANNEL } from '../../../window/common/window.js';
 import type { IStateService } from '../../../state/node/state.js';
 import { LifecycleMainService, windowCloseResponseIpcRoute } from '../../electron-main/lifecycleMainService.js';
 
@@ -47,6 +47,21 @@ function createStateService(): IStateService {
 
 suite('LifecycleMainService', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();
+
+	test('application quit reaches the renderer as quit and a vetoed quit returns to ordinary window closing', () => {
+		let quitting = true;
+		const window = new TestWindow();
+		using service = new LifecycleMainService<TestWindow>(() => { }, () => { quitting = false; }, createStateService(), '1.0.0', () => quitting ? 'quit' : 'windowClose');
+		using registration = service.registerWindow(window);
+		service.respondToClose(window, { kind: 'ready' });
+		window.close();
+		assert.deepEqual(window.messages.at(-1), { channel: WINDOW_PREPARE_QUIT_CHANNEL, token: 1 });
+		service.respondToClose(window, { kind: 'vetoed', token: 1 });
+		window.close();
+		assert.deepEqual(window.messages.at(-1), { channel: WINDOW_PREPARE_CLOSE_CHANNEL, token: 2 });
+		service.respondToClose(window, { kind: 'complete', token: 2 });
+		assert.equal(window.destroyed, true);
+	});
 
 	test('a prevented reload retains the old renderer handshake after loading starts and can be canceled', async () => {
 		const window = new TestWindow();

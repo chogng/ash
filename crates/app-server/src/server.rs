@@ -4488,6 +4488,9 @@ impl AppServer {
             Some(ClientMethod::TerminalCreateInSessionDirectory) => self
                 .terminal_processor()
                 .terminal_create_in_session_directory(connection, &request.params),
+            Some(ClientMethod::TerminalDetach) => self
+                .terminal_processor()
+                .terminal_detach(connection, &request.params),
             Some(ClientMethod::TerminalAttach) => self
                 .terminal_processor()
                 .terminal_attach(connection, &request.params),

@@ -182,3 +182,106 @@ fn an_unverifiable_record_is_not_silently_removed() {
     assert!(remove_stale_process_record(&endpoint.pid).is_err());
     assert_eq!(read_process_record(&endpoint.pid).unwrap(), Some(record));
 }
+
+#[cfg(unix)]
+struct TerminationTestChild(std::process::Child);
+
+#[cfg(unix)]
+impl TerminationTestChild {
+    fn spawn() -> Self {
+        Self(
+            std::process::Command::new("sleep")
+                .arg("60")
+                .stdin(std::process::Stdio::null())
+                .stdout(std::process::Stdio::null())
+                .stderr(std::process::Stdio::null())
+                .spawn()
+                .unwrap(),
+        )
+    }
+
+    fn record(&self) -> super::ProcessRecord {
+        super::ProcessRecord {
+            pid: self.0.id(),
+            instance_id: "owned-termination-test".into(),
+            process_start_identity: super::process_start_identity(self.0.id()).unwrap(),
+            daemon_version: "test".into(),
+            executable_identity: None,
+        }
+    }
+}
+
+#[cfg(unix)]
+impl Drop for TerminationTestChild {
+    fn drop(&mut self) {
+        let _ = self.0.kill();
+        let _ = self.0.wait();
+    }
+}
+
+#[cfg(unix)]
+#[test]
+fn force_termination_accepts_a_child_that_exited_after_the_stop_poll() {
+    let mut child = TerminationTestChild(
+        std::process::Command::new("sh")
+            .args(["-c", "read -r unused"])
+            .stdin(std::process::Stdio::piped())
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .spawn()
+            .unwrap(),
+    );
+    let record = child.record();
+    assert!(super::record_is_active(&record).unwrap());
+    drop(child.0.stdin.take());
+    child.0.wait().unwrap();
+    // Reproduces the race deterministically: the poll observed the exact
+    // generation, but force termination observes its already-completed exit.
+    super::force_terminate(&record).unwrap();
+    super::force_terminate(&record).unwrap();
+}
+
+#[cfg(unix)]
+#[test]
+fn force_termination_rejects_a_stale_identity_without_killing_a_live_child() {
+    let mut child = TerminationTestChild::spawn();
+    let mut record = child.record();
+    record
+        .process_start_identity
+        .as_mut()
+        .unwrap()
+        .push_str("-stale");
+    assert_eq!(
+        super::force_terminate(&record).unwrap_err(),
+        "refusing to terminate a reused or stale daemon pid"
+    );
+    assert!(child.0.try_wait().unwrap().is_none());
+}
+
+#[cfg(unix)]
+#[test]
+fn force_termination_rejects_a_live_successor_pid_and_still_terminates_the_owned_generation() {
+    let mut original = TerminationTestChild::spawn();
+    let record = original.record();
+    // The Unix process-start contract has one-second timestamp precision.
+    std::thread::sleep(std::time::Duration::from_secs(1));
+    let mut successor = TerminationTestChild::spawn();
+    let successor_record = successor.record();
+    assert_ne!(
+        record.process_start_identity,
+        successor_record.process_start_identity
+    );
+    let stale = super::ProcessRecord {
+        pid: successor.0.id(),
+        ..record.clone()
+    };
+    assert_eq!(
+        super::force_terminate(&stale).unwrap_err(),
+        "refusing to terminate a reused or stale daemon pid"
+    );
+    assert!(successor.0.try_wait().unwrap().is_none());
+    assert!(original.0.try_wait().unwrap().is_none());
+    super::force_terminate(&record).unwrap();
+    assert!(!original.0.wait().unwrap().success());
+    assert!(successor.0.try_wait().unwrap().is_none());
+}

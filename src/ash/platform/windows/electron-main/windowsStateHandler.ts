@@ -374,6 +374,8 @@ export class WindowsStateHandler {
 export interface IWindowSessionEntry {
 	readonly kind: string;
 	readonly workspace: IAnyWorkspaceIdentifier;
+	/** Stable across process exits; Electron's numeric window ID is not persistent. */
+	readonly windowSessionId?: string;
 }
 
 export interface IWindowSession<TEntry extends IWindowSessionEntry> {
@@ -405,18 +407,23 @@ export class WindowSessionStateHandler<TEntry extends IWindowSessionEntry> {
 		if (!isRecord(value) || Object.keys(value).sort().join(',') !== 'active,version,windows' || value.version !== 1 || !Array.isArray(value.windows)) return undefined;
 		if (!Number.isSafeInteger(value.active) || (value.active as number) < 0 || (value.windows.length === 0 ? value.active !== 0 : (value.active as number) >= value.windows.length)) return undefined;
 		const windows: TEntry[] = [];
+		const sessionIds = new Set<string>();
 		for (const candidate of value.windows) {
 			if (!isRecord(candidate) || !isNonEmptyString(candidate.kind)) return undefined;
 			// Older records carried a product mode. Read their workspace, then omit that retired field when saving.
-			const keys = Object.keys(candidate).filter(key => key !== 'modeId').sort().join(',');
+			const keys = Object.keys(candidate).filter(key => key !== 'modeId' && key !== 'windowSessionId').sort().join(',');
 			if (keys !== 'kind,workspace') return undefined;
+			if (candidate.windowSessionId !== undefined) {
+				if (typeof candidate.windowSessionId !== 'string' || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/u.test(candidate.windowSessionId) || sessionIds.has(candidate.windowSessionId)) return undefined;
+				sessionIds.add(candidate.windowSessionId);
+			}
 			let workspace: IAnyWorkspaceIdentifier;
 			try {
 				workspace = parseWorkspaceIdentifier(candidate.workspace);
 			} catch {
 				return undefined;
 			}
-			const entry: IWindowSessionEntry = { kind: candidate.kind, workspace };
+			const entry: IWindowSessionEntry = { kind: candidate.kind, workspace, ...(candidate.windowSessionId ? { windowSessionId: candidate.windowSessionId as string } : {}) };
 			if (!this.isEntry(entry)) return undefined;
 			windows.push(entry);
 		}
@@ -425,7 +432,7 @@ export class WindowSessionStateHandler<TEntry extends IWindowSessionEntry> {
 
 	beginRestoration(): IDisposable {
 		this.restoring = true;
-		return toDisposable(() => { this.restoring = false; });
+		return toDisposable(() => { this.restoring = false; this.scheduleSave(); });
 	}
 
 	windowOpened(): void {
@@ -468,6 +475,7 @@ export class WindowSessionStateHandler<TEntry extends IWindowSessionEntry> {
 			windows: entries.map(entry => ({
 				kind: entry.kind,
 				workspace: serializeWorkspaceIdentifier(entry.workspace),
+				...(entry.windowSessionId ? { windowSessionId: entry.windowSessionId } : {}),
 			})),
 		});
 		await this.stateService.flush();

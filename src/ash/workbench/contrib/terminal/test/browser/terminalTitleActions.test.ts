@@ -37,7 +37,7 @@ import type { ITerminalInstance } from "../../browser/terminal.js";
 import { AppServerAvailableContext } from '../../../../common/contextkeys.js';
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
 import { TestConfigurationService } from '../../../../services/configuration/test/common/testServices.js';
-import { TerminalContextKeys } from '../../common/terminalContextKey.js';
+import { TerminalContextKeys, TerminalHasActiveInstanceContext } from '../../common/terminalContextKey.js';
 import { IKeybindingService } from '../../../../../platform/keybinding/common/keybinding.js';
 
 const browserEnvironment = new JSDOM("<!doctype html><body></body>");
@@ -108,6 +108,8 @@ test("Terminal profile menu launches the selected shell profile", async () => {
 	let clearCount = 0;
 	const dropdownCommands: string[] = [];
 	using contextKeyService = new ContextKeyService();
+	const windowActiveTerminal = TerminalHasActiveInstanceContext.bindTo(contextKeyService);
+	windowActiveTerminal.set(true);
 	const appServerAvailable = AppServerAvailableContext.bindTo(contextKeyService);
 	appServerAvailable.set(true);
 	using registryOwner = new InstantiationService();
@@ -133,6 +135,7 @@ test("Terminal profile menu launches the selected shell profile", async () => {
 	registryOwner.registerInstance(IConfigurationService, configuration);
 	registryOwner.registerInstance(IKeybindingService, { onDidUpdateKeybindings: Event.None, lookupKeybinding: () => undefined } as unknown as IKeybindingService);
 	using titleActions = registryOwner.createInstance(TerminalTitleActions, ownerDocument.body);
+	assert.equal(contextKeyService.getValue(TerminalHasActiveInstanceContext.key), true, 'An empty toolbar cannot clear the window-active editor terminal');
 
 	const commandPromptProfile = { profileId: "cmd", title: "Command Prompt", isDefault: true };
 	const powerShellProfile = { profileId: "pwsh", title: "PowerShell", isDefault: false };
@@ -191,6 +194,8 @@ test("Terminal profile menu launches the selected shell profile", async () => {
 	assert.equal(focusCount, 0, 'The title opens its instance menu instead of focusing the terminal');
 	assert.equal(activeTerminal.getAttribute('aria-expanded'), 'true');
 	assert.ok(shownProfileActions.find(action => action.id === TerminalCommandId.Rename));
+	assert.ok(shownProfileActions.find(action => action.id === TerminalCommandId.Split));
+	assert.equal(shownProfileActions.some(action => action.id === TerminalCommandId.Relaunch), false);
 	await shownProfileActions.find(action => action.id === TerminalCommandId.Focus)!.run();
 	assert.equal(focusCount, 1);
 	activeTerminal.dispatchEvent(new browserEnvironment.window.MouseEvent('click', { bubbles: true, altKey: true }));
@@ -265,6 +270,10 @@ test("Terminal profile menu launches the selected shell profile", async () => {
 	await powerShell.run();
 	await Promise.resolve();
 	assert.deepEqual(createdProfiles, [undefined, "pwsh"]);
+	titleActions.setActiveInstance(undefined, 'title');
+	assert.equal(contextKeyService.getValue(TerminalHasActiveInstanceContext.key), true);
+	titleActions.dispose();
+	assert.equal(contextKeyService.getValue(TerminalHasActiveInstanceContext.key), true, 'Disposing the toolbar resets only its local menu context');
 });
 
 
@@ -313,7 +322,7 @@ test('Terminal View lends its actual title toolbar to Panel and retains it throu
 		instances: [], activeInstance: undefined,
 		onDidCreateInstance: Event.None, onDidDisposeInstance: Event.None, onDidChangeInstances: Event.None, onDidChangeActiveInstance: Event.None,
 		createTerminal: async () => { throw new Error('Unexpected shell acquisition'); },
-		relaunchTerminal: async () => { }, setActiveInstance() { }, moveTerminal() { }, whenConnected: Promise.resolve(), safeDisposeTerminal: async () => { }, closeTerminal: async () => { },
+		relaunchTerminal: async () => { }, setActiveInstance() { }, moveTerminal() { }, whenConnected: Promise.resolve(), importTerminalState: async () => { throw new Error('Transfer is not used in this fixture'); }, confirmTerminalClose: async () => true, safeDisposeTerminal: async () => { }, closeTerminal: async () => { },
 		...toDisposable(() => { }),
 	});
 	services.registerInstance(IConfigurationService, resources.add(new WorkbenchConfigurationService()));
@@ -410,7 +419,7 @@ suite('Terminal context command lifecycle', () => {
 			onDidCreateInstance: Event.None, onDidDisposeInstance: Event.None, onDidChangeInstances: Event.None, onDidChangeActiveInstance: Event.None,
 			createTerminal: async () => { throw new Error('Unexpected creation'); },
 			setActiveInstance: instance => { active = instance; }, moveTerminal() { },
-			whenConnected: Promise.resolve(), safeDisposeTerminal: async instance => { effects.push(['close', instance.instanceId]); instances.splice(instances.indexOf(instance), 1); }, closeTerminal: async instance => { await instance.close(); },
+			whenConnected: Promise.resolve(), importTerminalState: async () => { throw new Error('Transfer is not used in this fixture'); }, confirmTerminalClose: async () => true, safeDisposeTerminal: async instance => { effects.push(['close', instance.instanceId]); instances.splice(instances.indexOf(instance), 1); }, closeTerminal: async instance => { await instance.close(); },
 			relaunchTerminal: async (instance, dimensions) => { effects.push(['relaunch', instance.instanceId, dimensions]); },
 		});
 		using commands = new CommandService(services);

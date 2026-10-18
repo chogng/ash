@@ -15,6 +15,7 @@ export const enum ActivityBarPosition {
 	HIDDEN = 'hidden',
 }
 export type SideBarLocation = 'left' | 'right';
+export type PanelLocation = 'left' | 'right' | 'top' | 'bottom';
 
 const configurationRegistry = Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration);
 
@@ -225,6 +226,28 @@ export const WorkbenchConfiguration = Object.freeze({
 			valueType: 'boolean',
 			get title() { return localize('workbench.activityBar.compact.title', 'Compact Activity Bar'); },
 			get description() { return localize('workbench.activityBar.compact.description', 'Use smaller Activity Bar items when the bar is on the side.'); },
+		},
+	}),
+	panelDefaultLocation: configurationRegistry.registerConfiguration<PanelLocation>({
+		key: 'workbench.panel.defaultLocation', defaultValue: 'bottom', scope: ConfigurationScope.WINDOW,
+		agentsWindow: { default: 'bottom', readOnly: true },
+		schema: { type: 'string', enum: ['left', 'right', 'top', 'bottom'] },
+		parse(value: unknown): PanelLocation {
+			if (value === 'left' || value === 'right' || value === 'top' || value === 'bottom') return value;
+			throw new TypeError(localize('workbench.panel.defaultLocation.invalid', 'Panel location must be left, right, top, or bottom.'));
+		},
+		setting: {
+			valueType: 'select',
+			get title() { return localize('workbench.panel.defaultLocation.title', 'Default Panel Position'); },
+			get description() { return localize('workbench.panel.defaultLocation.description', 'Choose where the panel opens in a new workspace. Existing workspaces retain their saved panel position.'); },
+			get options() {
+				return [
+					{ value: 'left', label: localize('workbench.panel.defaultLocation.left', 'Left') },
+					{ value: 'right', label: localize('workbench.panel.defaultLocation.right', 'Right') },
+					{ value: 'top', label: localize('workbench.panel.defaultLocation.top', 'Top') },
+					{ value: 'bottom', label: localize('workbench.panel.defaultLocation.bottom', 'Bottom') },
+				] as const;
+			},
 		},
 	}),
 	sideBarLocation: configurationRegistry.registerConfiguration<SideBarLocation>({

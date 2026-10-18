@@ -66,6 +66,115 @@ fn revoked_directory_terminates_detached_sessions_and_rejects_new_work() {
 }
 
 #[test]
+fn explicit_handoff_revokes_live_owner_preserves_pid_and_rotates_credentials() {
+    let root = tempfile::tempdir().unwrap();
+    let service = terminal_service_for(root.path());
+    let created = service
+        .create(1, terminal_request(TerminalLifecycle::Reconnectable))
+        .unwrap();
+    let identity = &created.terminal_id;
+    assert_eq!(service.detach(2, identity), Err(TerminalError::NotOwner));
+    let handoff = service.detach(1, identity).unwrap();
+    assert_ne!(
+        handoff.reconnect_token,
+        created.reconnect.unwrap().reconnect_token
+    );
+    assert_eq!(service.detach(1, identity), Err(TerminalError::NotOwner));
+    assert_eq!(
+        service.write(
+            1,
+            TerminalWriteRequest {
+                terminal_id: identity.clone(),
+                data: "echo forbidden\n".into(),
+            }
+        ),
+        Err(TerminalError::NotOwner)
+    );
+    assert_eq!(
+        service.read(
+            1,
+            TerminalReadRequest {
+                terminal_id: identity.clone(),
+                after_sequence: 0,
+                after_command_sequence: 0,
+                max_chunks: 1,
+            }
+        ),
+        Err(TerminalError::NotOwner)
+    );
+    assert_eq!(service.close(1, identity), Err(TerminalError::NotOwner));
+    // Closing the still-live source connection cannot kill the offered process.
+    service.close_owner(1);
+    let attached = service
+        .attach(
+            2,
+            TerminalAttachRequest {
+                terminal_id: identity.clone(),
+                reconnect_token: handoff.reconnect_token.clone(),
+                rows: 30,
+                cols: 100,
+            },
+        )
+        .unwrap();
+    assert_eq!(attached.ready.pid, created.ready.pid);
+    assert_ne!(attached.reconnect.reconnect_token, handoff.reconnect_token);
+    service.close_owner(2);
+    assert_eq!(
+        service.attach(
+            1,
+            TerminalAttachRequest {
+                terminal_id: identity.clone(),
+                reconnect_token: handoff.reconnect_token,
+                rows: 24,
+                cols: 80,
+            }
+        ),
+        Err(TerminalError::AttachRejected)
+    );
+    service
+        .attach(
+            2,
+            TerminalAttachRequest {
+                terminal_id: identity.clone(),
+                reconnect_token: attached.reconnect.reconnect_token,
+                rows: 24,
+                cols: 80,
+            },
+        )
+        .unwrap();
+    service.close(2, identity).unwrap();
+}
+
+#[test]
+fn cancelled_handoff_can_be_reclaimed_and_expired_handoff_is_terminated() {
+    let root = tempfile::tempdir().unwrap();
+    let service = terminal_service_for(root.path());
+    let created = service
+        .create(1, terminal_request(TerminalLifecycle::ConnectionOwned))
+        .unwrap();
+    let handoff = service.detach(1, &created.terminal_id).unwrap();
+    let restored = service
+        .attach(
+            1,
+            TerminalAttachRequest {
+                terminal_id: created.terminal_id.clone(),
+                reconnect_token: handoff.reconnect_token,
+                rows: 24,
+                cols: 80,
+            },
+        )
+        .unwrap();
+    assert_eq!(restored.ready.pid, created.ready.pid);
+    service.detach(1, &created.terminal_id).unwrap();
+    {
+        let mut sessions = service.sessions.lock().unwrap();
+        remove_expired_sessions(&mut sessions, Instant::now() + RECONNECT_GRACE_PERIOD);
+        assert!(sessions.is_empty());
+    }
+    assert_eq!(service.active_count(), 0);
+}
+
+#[test]
 fn output_preserves_binary_bytes_across_cursor_reads() {
     let mut state = TerminalState::default();
     push_output(&mut state, vec![0xff, 0, 0xe2]);

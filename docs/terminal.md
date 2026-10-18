@@ -84,13 +84,13 @@ ShellIntegrationAddon 消费已提交事件；`CwdDetectionCapability` 持有已
 
 ## 视图、分组与资源导航
 
-隐藏面板保留实例、PTY、屏幕、待提交输入、分屏比例与焦点。面板组由 `TerminalGroupService` 管理成员，`TerminalGroup` 使用横向 SplitView；列表从组模型派生行顺序、连接线与可访问位置描述。标签拖到另一标签之前／之后可加入该组或重排；拖到可见窗格左／右侧使用相同 `moveInstance` 操作，资源只匹配本窗口的存活实例。组内重排将比例与实例一起保留。Join or Reorder Terminals 提供同等键盘选择器，取消、切换实例或关闭后不应用过期结果。
+隐藏面板保留实例、PTY、屏幕、待提交输入、分屏比例与焦点。面板组由 `TerminalGroupService` 管理成员，`TerminalGroup` 按布局服务的 Panel 位置使用 SplitView：顶部／底部横向，左侧／右侧纵向；列表从组模型派生行顺序、连接线与可访问位置描述。标签拖到另一标签之前／之后可加入该组或重排；拖到可见窗格左／右侧使用相同 `moveInstance` 操作，资源只匹配本窗口的存活实例。组内重排将比例与实例一起保留。Join or Reorder Terminals 提供同等键盘选择器，取消、切换实例或关闭后不应用过期结果。
 
-`TerminalEditorService` 将同一个 TerminalInstance 移入或移出编辑区，编辑器 pane 只承载原 xterm。移动不复制屏幕或重建进程；关闭终端编辑器标签通过原编辑器关闭链释放实例。重命名和图标变化由实例保存，标签与编辑器通过原事件更新。
+`TerminalEditorService` 将同一个 TerminalInstance 移入或移出编辑区，编辑器 pane 只承载原 xterm。移动不复制屏幕或重建进程；同一终端可由多个编辑器组承载；关闭单个宿主保留原进程，最后一个宿主关闭后才释放实例。批量关闭先按准确关闭集合完成确认，取消不提前关闭任何进程。重命名和图标变化由实例保存，标签与编辑器通过原事件更新。
 
-标准终端创建和已有实例的编辑器展示尊重 `preserveFocus`：后台打开不改变活动终端，也不因编辑器选中事件重定向 Send Sequence；实际聚焦终端后才切换输入目的地。实例构造失败时，创建工厂先释放已取得的 PTY，再向调用方返回原错误。扩展 Profile provider 自行创建时的焦点契约及多组承载的关闭确认仍见 TODO。
+标准终端创建和已有实例的编辑器展示尊重 `preserveFocus`：后台打开不改变活动终端，也不因编辑器选中事件重定向 Send Sequence；实际聚焦终端后才切换输入目的地。实例构造失败时，创建工厂先释放已取得的 PTY，再向调用方返回原错误。扩展 Profile 的位置和后台创建意图从调用方经 provider 与 MainThread 传入实际创建入口；期间用户主动切换输入目标时，不恢复过期的活动项。
 
-编辑区 Split 捕获原终端所在组，通过编辑器组服务调用现有 EditorPart 的相邻组操作。新终端的创建同时携带原实例和准确的目标组，继续使用 TerminalService 的 cwd／Profile 解析；原 PTY 与屏幕不变。父实例代次失效时关闭迟到的新进程；创建失败只清理本次仍为空的目标组。Panel 位置与方向切换仍须由布局服务提供契约，不能从窗口宽高推断。
+编辑区 Split 捕获原终端所在组，通过编辑器组服务调用现有 EditorPart 的相邻组操作。新终端的创建同时携带原实例和准确的目标组，继续使用 TerminalService 的 cwd／Profile 解析；原 PTY 与屏幕不变。父实例代次失效时关闭迟到的新进程；创建失败只清理本次仍为空的目标组。Panel 四方向命令由 Workbench 布局服务移动真实 Grid；位置按工作区保存，横向高度与纵向宽度分别保存。方向和尺寸变化保留分屏比例、屏幕、焦点与 PTY。
 
 文件链接的点击和键盘选择共用 `TerminalLinkContribution` 与路径解析。解析器只产生候选，贡献使用命令所在行的 cwd、执行宿主的 `IPathService` 与原文件服务确认资源，再通过编辑器服务打开文件和行列位置。已确认的目录必须属于该终端 `dirId` 对应的工作区根，再通过原 Explorer View 和选择服务显示目录并接收焦点；链接不会添加工作区根或自动打开其他窗口。远端资源保留所属目录的 authority；文本位置从真实 buffer cells 换算，处理宽字符与自动换行。状态、工作区或实例失效会撤回尚在路径确认、View 打开阶段的结果，目录选择已经交给 Explorer 后由其原 owner 管理；终端不会在失效后追加焦点操作。
 
@@ -101,7 +101,7 @@ ShellIntegrationAddon 消费已提交事件；`CwdDetectionCapability` 持有已
 | 生命周期事件                                           | 资源行为                                                                       |
 | ------------------------------------------------------ | ------------------------------------------------------------------------------ |
 | 隐藏或再次显示面板                                     | 保留原进程和屏幕，仅改变可见性与焦点。                                         |
-| 关闭实例或终端编辑器标签                               | 按关闭策略检查真实子进程；取消保留原会话并恢复焦点，确认后释放进程与前端资源。 |
+| 关闭实例或最后一个终端编辑器宿主                       | 按关闭策略检查真实子进程；取消保留原会话并恢复焦点，确认后释放进程与前端资源。 |
 | Desktop 窗口 reload                                    | 协调输入、屏幕与后端租约交接，新 Renderer 附着同一 PTY。                       |
 | Web 连接关闭                                           | `connectionOwned` 进程随连接结束。                                             |
 | Desktop 连接中断                                       | 同一后端按 30 秒租约保留可重连进程，成功 attach 旋转 token。                   |
@@ -109,9 +109,13 @@ ShellIntegrationAddon 消费已提交事件；`CwdDetectionCapability` 持有已
 
 `confirmOnKill` 默认为 `editor`，`confirmOnExit` 默认为 `never`；设置及枚举值由原配置 schema 定义。子进程状态通过 Rust `terminal/processInfo` 查询，OS 无法确定时保守确认，取消关闭不停止进程、输出或待提交输入。
 
-Desktop 的 `enablePersistentSessions` 控制协调 reload。准备阶段等待输入队列与屏幕解析提交，保存输出游标、UTF-8 尾部、终端资源、VT 屏幕、组成员／比例及活动／焦点项。普通工作区存储保存 UI checkpoint，租约 token 通过窗口级内存 SecretStorage 短期交接；准备或其他生命周期 join 失败时撤销交接并恢复同一实例读写。
+Desktop 的 `enablePersistentSessions` 控制协调 reload 和退出恢复。准备阶段等待输入队列与屏幕解析提交，保存输出游标、UTF-8 尾部、终端资源、VT 屏幕、组成员／比例及活动／焦点项。普通工作区存储保存 UI checkpoint，租约 token 通过窗口级内存 SecretStorage 短期交接；准备或其他生命周期 join 失败时撤销交接并恢复同一实例读写。
 
 新 Renderer 按原执行目录与租约 attach 并验证 PID，恢复原字符网格与屏幕，等待布局和工作台恢复后续读，避免临时尺寸改写历史。实际窗口关闭清空内存凭据；扩展自供 PTY 没有恢复协议时阻止不安全的 reload，并反馈原因。
+
+`workbench.action.terminal.moveIntoNewWindow` 将捕获的终端移至同工作区和执行宿主的新窗口，也可指定已有窗口 ID。源端暂停输入与读取后，Rust 原子 detach 撤销源访问并旋转租约；Main 仅在内存中向指定真实窗口交付屏幕与凭据。目标校验、attach 原 PID 并建立可用屏幕后确认，源端再移除宿主。失败时返回当前有效租约，让源端恢复同一实例；凭据不进入窗口 URL 或持久存储。
+
+`terminal.integrated.persistentSessionReviveProcess` 默认为 `onExit`，也支持 `onExitAndWindowClose` 与 `never`。符合策略的退出先持久保存交互式终端输出、当前 cwd、原始启动意图和布局，再关闭原进程。快照不保存已合并的窗口临时环境；恢复时保留原启动 Profile 的命令、参数和环境覆盖，重新应用当前设置及环境集合，避免沿用旧窗口身份或重复修改 PATH。重新启动按原执行目录建立新 Shell，恢复屏幕、分组比例与活动项；不重跑任务或先前执行的命令，不续接旧 PID。扩展自供 PTY 不参加这种恢复。同工作区的多个原生窗口通过持久窗口身份使用不同 checkpoint；窗口会话恢复按身份重开，关闭后重新打开的工作区只领取未占用的恢复记录，避免相互覆盖和重复启动。
 
 ## 验证入口
 
@@ -125,23 +129,10 @@ Desktop 的 `enablePersistentSessions` 控制协调 reload。准备阶段等待�
 | 真实 Workbench、PTY 与焦点   | [terminal.spec.ts](../test/smoke/areas/windows/terminal.spec.ts)                                                                                                                                                                                                           |
 | 执行端进程、输出与释放       | [exec-server 终端实现及相邻测试](../crates/exec-server/src/terminal.rs)                                                                                                                                                                                                    |
 
-2026-10-18 在 Docker Linux ARM64、Bash 和启用 Chromium sandbox 的真实 Electron／App Server 上，6 项定向场景通过：字面路径执行与最近目录、英文／中文选中文本和当前行执行、文件链接鼠标／键盘打开、英文／中文 command 与页面 reload。reload 断言覆盖原 PTY／Shell PID、连续无缺口输出、分屏宽度、未提交输入、焦点、后续 Ctrl+C 与输入及 accessible view。默认编辑器剪贴板快捷键现限定编辑器文本焦点，避免 Linux Ctrl+C 在进入 PTY 前被全局 Copy 消费；菜单／直接命令与用户覆盖继续由原 owner 处理。日志 `.build/todo-linux-terminal-complete.log` 为 6 passed（59.3s），原生剪贴板补充场景为 2 passed。真实 OS 文件拖入、跨机器 SSH、Windows PowerShell 和应用退出后的 revive 不在该结果内。
-
-2026-10-18 本机 macOS Electron／App Server 的文件与目录链接场景通过 1 项（总计 14.4s），验证鼠标打开文件行列及工作区目录、键盘接受带空格路径、Explorer 目录选中与焦点、编辑器标签数量不增加，以及同一个终端实例继续执行命令；日志 `.build/todo-round2-terminal-electron.log`。链接单元测试 21 项通过，覆盖本地与远端资源的原 cwd／authority、目录边界和拒绝访问、关闭或重连时迟到 stat／View 结果、中文选择器与错误；日志 `.build/todo-round2-unit.log`。目录入口复用已有显式路径候选，不搜索普通输出单词，也不添加工作区外目录、搜索型链接或外部 provider；远端测试使用确定性服务，不能代替真实跨机器验收。
-
-目录行为同步写入现有终端无障碍帮助；英文／中文帮助与原输入同步、buffer tracker 共 4 项回归通过，日志 `.build/todo-round2-terminal-accessibility.log`。
-
-测试入口描述可重复检查的行为，不替代特定平台的实机结果。未完成动作与平台验收集中在 [Terminal TODO](../TODO.md#terminal--todo)，可选增强保留在[发展候选（未排期）](../TODO.md#发展候选未排期)。
-
-2026-10-18 在 macOS ARM64 复核 Terminal 全链路与已装载的 terminalContrib，对照本地 VS Code `72e9539ed6b` 的公开契约、生产调用与测试，未执行上游窗口配对。本轮验证如下：
-
-- 29 个终端领域单测文件累计 365 项通过。领域运行中 27 个文件的 209 项通过；另两个文件暴露新增测试的 DI 注册与 disposable 归属问题，修正后分别以原编译入口复验 Profile 60 项、实例服务 96 项通过。日志为 `.build/terminal-alignment-all-units.log`、`.build/terminal-alignment-profile-units.log`、`.build/terminal-alignment-service-units.log`。
-- Chromium 的 `terminal.integration.spec.ts` 全部 120 项通过，包含中英文 Profile 选择失效、后台编辑器焦点与输入目的地、Find、链接、历史、剪贴板和无障碍。首次加载失败来自 fixture 缺少链接贡献的视图与 Explorer 依赖，补齐原服务装配后通过；未延长断言。日志 `.build/terminal-alignment-browser-final.log`。
-- `pnpm run pretest:smoke:desktop` 的真实后端准备、正常 Desktop 构建与 automation 类型检查通过。实机面板输入／隐藏恢复通过，英文及中文 reload 的原 PID、输出、分屏、待提交输入与焦点断言在一次定向复验中全部通过。首次英文用例因 daemon 清理的身份保护退出 1，记录与剩余调查见 TODO，复验不视为 daemon 缺陷已修。日志 `.build/terminal-alignment-desktop-build.log`、`.build/terminal-alignment-desktop-smoke.log`、`.build/terminal-alignment-desktop-retry.log`。
-
-本轮未修改 Rust，也未重跑 Rust 单测；后端源码审计和本机实机结果不替代 Windows、Linux 或跨机器 SSH 验收。目录集合和样式核对不代替行为通过；尚未闭合的贡献与恢复能力继续按 TODO 的真实前置推进。
-
 ```sh
-just verify ash-exec-server --lib
+pnpm test:unit --runGlob '**/terminal*/**/*.test.js'
+pnpm test:browser:integration terminal.integration.spec.ts --project=chromium
+pnpm run smoketest test/smoke/areas/windows/terminal.spec.ts
+just verify ash-exec-server
 just test ash-app-server-runtime --lib terminal
 ```

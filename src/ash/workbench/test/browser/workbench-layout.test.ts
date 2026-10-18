@@ -52,7 +52,7 @@ const {
 } = await import("../../../workbench/browser/layout.js");
 const { createTestWorkbenchContextKeysHandler } = await import('../../../workbench/test/common/testWorkbenchContextKeys.js');
 const { ILayoutService } = await import("../../../platform/layout/browser/layoutService.js");
-const { IWorkbenchLayoutService, workbenchPartIds } = await import("../../../workbench/services/layout/browser/layoutService.js");
+const { IWorkbenchLayoutService, workbenchPartIds, Position } = await import("../../../workbench/services/layout/browser/layoutService.js");
 const { BrowserStorageService } = await import("../../../workbench/services/storage/browser/storageService.js");
 const paneStorageEnvironment = new JSDOM("<!doctype html><body></body>", { url: "https://ash-pane.test" });
 const paneStorage = new BrowserStorageService({ ownerWindow: browserEnvironment.window as unknown as Window, workspaceId: "window", backend: paneStorageEnvironment.window.localStorage, flushInterval: 0 });
@@ -123,6 +123,7 @@ type WorkbenchLayoutOptions =
 		readonly storageService?: import('../../../platform/storage/common/storage.js').IStorageService;
 		readonly layoutStyle?: import('../../../workbench/common/configuration.js').WorkbenchLayoutStyle;
 		readonly activityBarLocation?: import('../../../workbench/common/configuration.js').ActivityBarPosition;
+		readonly panelDefaultLocation?: import('../../../workbench/common/configuration.js').PanelLocation;
 		readonly sideBarLocation?: import('../../../workbench/common/configuration.js').SideBarLocation;
 	};
 type WorkbenchPartInstance =
@@ -188,7 +189,7 @@ function createLayoutHarness(
 	ownerDocument.body.append(container);
 	disposables.add(toDisposable(() => container.remove()));
 
-	const { storageService, layoutStyle, activityBarLocation, sideBarLocation, ...layoutOptions } = options;
+	const { storageService, layoutStyle, activityBarLocation, sideBarLocation, panelDefaultLocation, ...layoutOptions } = options;
 	const configuration = disposables.add(new InMemoryConfigurationService());
 	if (layoutStyle !== undefined) {
 		void configuration.updateValue(WorkbenchConfiguration.layoutStyle, layoutStyle);
@@ -199,6 +200,7 @@ function createLayoutHarness(
 	if (sideBarLocation !== undefined) {
 		void configuration.updateValue(WorkbenchConfiguration.sideBarLocation, sideBarLocation);
 	}
+	if (panelDefaultLocation !== undefined) void configuration.updateValue(WorkbenchConfiguration.panelDefaultLocation, panelDefaultLocation);
 	let storage = storageService;
 	if (!storage) {
 		const storageDom = new JSDOM('', { url: 'https://ash.test' });
@@ -597,7 +599,7 @@ test('maximized Panel survives configuration changes and restores its saved heig
 		editorVisible: harness.layout.isPartVisible('editor'),
 		contextMaximized: contextKeys.getValue('panelMaximized'),
 		savedPanel: harness.layout.state.panel,
-	}, { maximized: true, editorVisible: false, contextMaximized: true, savedPanel: { height: 180, visible: true } });
+	}, { maximized: true, editorVisible: false, contextMaximized: true, savedPanel: { position: Position.BOTTOM, width: 300, height: 180, visible: true } });
 
 	await commands.executeCommand('workbench.action.toggleMaximizedPanel');
 	assert.equal(harness.layout.getPartSize('panel').height, 180);
@@ -746,7 +748,7 @@ test("Workbench layout state is versioned and excludes topology", () => {
 		sidebar: { width: 250, visible: true },
 		auxiliarybar: { width: 380, visible: false },
 		agentSidebar: { width: 300, visible: true },
-		panel: { height: 180, visible: true },
+		panel: { position: Position.BOTTOM, width: 300, height: 180, visible: true },
 	});
 	assert.equal("children" in state, false);
 
@@ -2456,4 +2458,92 @@ test('auxiliary containers route Quick Input and context views through focus, re
 		popup.window.close();
 		dom.window.close();
 	}
+});
+
+test('Panel position commands rotate the actual Grid, retain focus and restore both axis sizes', async () => {
+	const dom = new JSDOM('<!doctype html><body></body>', { url: 'https://ash-panel-position.test' });
+	const harness = createLayoutHarness(dom.window.document, { defaultLayout: { parts: { panel: true, sidebar: false, auxiliarybar: false } } });
+	try {
+		harness.layout.layout(new Dimension(1_200, 900));
+		const panel = harness.container.querySelector<HTMLElement>("[data-part='panel']")!;
+		const input = dom.window.document.createElement('input');
+		panel.append(input);
+		const commands = harness.disposables.add(new CommandService(harness.services));
+		const context = harness.disposables.add(new ContextKeyService());
+		harness.disposables.add(createTestWorkbenchContextKeysHandler(context, { layoutService: harness.layout }));
+		const menus = new MenuService(commands, context);
+		const events: string[] = [];
+		harness.disposables.add(harness.layout.onDidChangePanelPosition(value => events.push(value)));
+		for (const [position, suffix, direction] of [[Position.LEFT, 'Left', 'right'], [Position.RIGHT, 'Right', 'left'], [Position.TOP, 'Top', 'down'], [Position.BOTTOM, 'Bottom', 'up']] as const) {
+			input.focus();
+			await commands.executeCommand(`workbench.action.positionPanel${suffix}`);
+			assert.equal(harness.layout.getPanelPosition(), position);
+			assert.equal(context.getValue('panelPosition'), suffix.toLowerCase());
+			assert.equal(menus.getMenuActions(MenuId.for('PanelPositionMenu')).flatMap(([, actions]) => actions).find(action => action.checked)?.id, `workbench.action.positionPanel${suffix}`);
+			// jsdom has no bounding boxes. Inspect the real Grid's emitted pane
+			// coordinates here; the Desktop scenario measures the rendered boxes.
+			const panelPane = panel.parentElement!.parentElement!;
+			const editorPane = harness.editor.domNode.parentElement!.parentElement!;
+			assert.equal(panelPane.parentElement, editorPane.parentElement);
+			const horizontal = direction === 'left' || direction === 'right';
+			const axis = horizontal ? 'left' : 'top';
+			const extent = horizontal ? 'width' : 'height';
+			assert.equal(panelPane.parentElement!.classList.contains(`ash-split-view-${horizontal ? 'horizontal' : 'vertical'}`), true);
+			const [leading, trailing] = direction === 'right' || direction === 'down' ? [panelPane, editorPane] : [editorPane, panelPane];
+			assert.equal(Number.parseFloat(leading!.style[axis]) + Number.parseFloat(leading!.style[extent]), Number.parseFloat(trailing!.style[axis]));
+			assert.equal(dom.window.document.activeElement, input);
+			const size = harness.layout.getPartSize('panel');
+			if (position === Position.LEFT || position === Position.RIGHT) assert.equal(size.width, 300);
+			else assert.equal(size.height, 200);
+			harness.layout.toggleMaximizedPanel();
+			harness.layout.toggleMaximizedPanel();
+			assert.deepEqual(harness.layout.getPartSize('panel'), size);
+		}
+		assert.deepEqual(events, ['left', 'right', 'top', 'bottom']);
+		harness.layout.hidePart('panel');
+		await commands.executeCommand('workbench.action.positionPanelBottom');
+		assert.equal(harness.layout.isPartVisible('panel'), true);
+		harness.layout.setPanelPosition(Position.LEFT);
+		harness.layout.resizePart('panel', new Dimension(420, harness.layout.getPartSize('panel').height));
+		harness.layout.setPanelPosition(Position.BOTTOM);
+		harness.layout.resizePart('panel', new Dimension(harness.layout.getPartSize('panel').width, 230));
+		harness.layout.setPanelPosition(Position.RIGHT);
+		assert.equal(harness.layout.getPartSize('panel').width, 420);
+		const state = harness.layout.state;
+		assert.equal(state.panel.height, 230);
+		assert.throws(() => harness.layout.restoreState({ ...state, panel: { ...state.panel, position: 99 } }), /invalid or unsupported/);
+		assert.throws(() => harness.layout.restoreState({ ...state, panel: { ...state.panel, width: Number.NaN } }), /invalid or unsupported/);
+		harness.layout.restoreState(state);
+		const restored = createLayoutHarness(dom.window.document, { storageService: harness.services.get(IStorageService) });
+		try {
+			restored.layout.layout(new Dimension(1_200, 900));
+			assert.equal(restored.layout.getPanelPosition(), Position.RIGHT);
+			assert.equal(restored.layout.getPartSize('panel').width, 420);
+			restored.layout.setPanelPosition(Position.TOP);
+			assert.equal(restored.layout.getPartSize('panel').height, 230);
+		} finally { restored.disposables.dispose(); }
+	} finally { harness.disposables.dispose(); dom.window.close(); }
+});
+
+test('Panel default setting applies to new workspaces while saved workspace position wins', async () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	const first = createLayoutHarness(dom.window.document, { panelDefaultLocation: 'left', defaultLayout: { parts: { panel: true } } });
+	try {
+		assert.equal(first.layout.getPanelPosition(), Position.LEFT);
+		await assert.rejects(first.configuration.updateValue(WorkbenchConfiguration.panelDefaultLocation, 'center'), /Panel location/);
+		first.layout.setPanelPosition(Position.RIGHT);
+		const storage = first.services.get(IStorageService) as InstanceType<typeof BrowserStorageService>;
+		const restored = createLayoutHarness(dom.window.document, { panelDefaultLocation: 'top', storageService: storage });
+		try {
+			assert.equal(restored.layout.getPanelPosition(), Position.RIGHT);
+			storage.switchWorkspace('new-panel-workspace');
+			restored.layout.restoreWorkspaceState();
+			assert.equal(restored.layout.getPanelPosition(), Position.TOP);
+			await restored.configuration.updateValue(WorkbenchConfiguration.panelDefaultLocation, 'left');
+			assert.equal(restored.layout.getPanelPosition(), Position.TOP);
+			storage.switchWorkspace('another-panel-workspace');
+			restored.layout.restoreWorkspaceState();
+			assert.equal(restored.layout.getPanelPosition(), Position.LEFT);
+		} finally { restored.disposables.dispose(); }
+	} finally { first.disposables.dispose(); dom.window.close(); }
 });

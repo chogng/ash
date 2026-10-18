@@ -1,3 +1,4 @@
+import { IWorkbenchLayoutService, Position } from '../../../src/ash/workbench/services/layout/browser/layoutService.js';
 import { ILabelService } from '../../../src/ash/platform/label/common/label.js';
 import { LabelService } from '../../../src/ash/workbench/services/label/common/labelService.js';
 import { InstantiationType } from '../../../src/ash/platform/instantiation/common/extensions.js';
@@ -77,7 +78,7 @@ import { IViewsService } from '../../../src/ash/workbench/services/views/common/
 import { IExplorerService } from '../../../src/ash/workbench/contrib/files/browser/files.js';
 import { ExplorerService } from '../../../src/ash/workbench/contrib/files/browser/explorerService.js';
 import { TERMINAL_VIEW_ID } from '../../../src/ash/workbench/contrib/terminal/common/terminal.js';
-import { IContextKeyService } from '../../../src/ash/platform/contextkey/browser/contextKeyService.js';
+import { ContextKeyService, IContextKeyService } from '../../../src/ash/platform/contextkey/browser/contextKeyService.js';
 import { IAccessibleViewService } from '../../../src/ash/platform/accessibility/browser/accessibleView.js';
 import { ITerminalService, type ITerminalDimensions, type ITerminalInstance } from '../../../src/ash/workbench/contrib/terminal/browser/terminal.js';
 import { GeneralShellType, ITerminalLogService, PosixShellType } from '../../../src/ash/platform/terminal/common/terminal.js';
@@ -100,7 +101,7 @@ import { TerminalCapability } from '../../../src/ash/platform/terminal/common/ca
 
 import { IClipboardService } from '../../../src/ash/platform/clipboard/common/clipboardService.js';
 import { BrowserClipboardService } from '../../../src/ash/platform/clipboard/browser/clipboardService.js';
-import { TerminalHasActiveInstanceContext } from '../../../src/ash/workbench/contrib/terminal/common/terminalContextKey.js';
+import { TerminalActiveInstanceStateContext, TerminalHasActiveInstanceContext } from '../../../src/ash/workbench/contrib/terminal/common/terminalContextKey.js';
 import { setNlsMessages } from '../../../src/ash/nls.js';
 import { productLanguagePackCatalogs } from '../../../src/ash/workbench/services/localization/common/localizationCatalogs.js';
 
@@ -401,6 +402,8 @@ if (new URLSearchParams(location.search).has('pane') || new URLSearchParams(loca
 			pane.setVisible(visible && selected);
 		};
 		const legacyTerminals: ITerminalService = {
+			importTerminalState: async () => { throw new Error('This fixture does not transfer terminals'); },
+			confirmTerminalClose: async () => true,
 			whenConnected: Promise.resolve(),
 			safeDisposeTerminal: async instance => { await terminals.closeTerminal(instance); },
 			...Disposable.None,
@@ -546,7 +549,8 @@ if (new URLSearchParams(location.search).has('pane') || new URLSearchParams(loca
 			const clear = instance.clearBuffer.bind(instance);
 			instance.clearBuffer = () => { cleared.push(instance.instanceId); clear(); };
 		}));
-		const pane = lifetime.add(new TerminalViewPane(root, { id: 'terminal', title: 'Terminal' }, terminals, Object.assign(lifetime.add(new BrowserLayoutService({ root })), {
+		const paneLayout = Object.assign(lifetime.add(new BrowserLayoutService({ root })), {
+			onDidChangePanelPosition: Event.None, getPanelPosition: () => Position.BOTTOM, setPanelPosition: () => { },
 			onDidChangePartVisibility: visibility.event,
 			onDidChangeAuxiliaryBarMaximized: Event.None, isAuxiliaryBarMaximized: () => false,
 			toggleMaximizedAuxiliaryBar: () => { }, setAuxiliaryBarMaximized: () => false,
@@ -562,7 +566,9 @@ if (new URLSearchParams(location.search).has('pane') || new URLSearchParams(loca
 			getPartSize: () => ({ width: 800, height: 400 }),
 			resizePart: () => { },
 			setLayoutStyle: () => { },
-		}), {
+		});
+		services.registerInstance(IWorkbenchLayoutService, paneLayout);
+		const pane = lifetime.add(new TerminalViewPane(root, { id: 'terminal', title: 'Terminal' }, terminals, paneLayout, {
 			onDidChangeWorkspace: workspaceChanged.event,
 			onDidChangeWorkspaceFolders: Event.None,
 			onDidChangeWorkbenchState: Event.None,
@@ -583,7 +589,11 @@ if (new URLSearchParams(location.search).has('pane') || new URLSearchParams(loca
 			launches: () => [...launches],
 			defaultProfile: () => profileService.getDefaultProfile()?.profileId,
 			operations: () => ({ cleared, closed, relaunched }),
-			menuActions: () => menu.getMenuActions(MenuId.TerminalInstanceContext).flatMap(([, actions]) => actions.map(action => action.label)),
+			menuActions: () => {
+				using menuContext = context.createScoped(root.ownerDocument.createElement('div'));
+				TerminalActiveInstanceStateContext.bindTo(menuContext).set(terminals.activeInstance?.state ?? 'none');
+				return menu.getMenuActions(MenuId.TerminalInstanceContext, undefined, menuContext).flatMap(([, actions]) => actions.map(action => action.label));
+			},
 			ids: () => instances.map(instance => instance.instanceId),
 			activate: id => terminals.setActiveInstance(instances.find(instance => instance.instanceId === id)),
 			activeId: () => terminals.activeInstance?.instanceId,
@@ -699,6 +709,7 @@ if (new URLSearchParams(location.search).has('assembly')) {
 			}),
 		};
 		const install = (container: import('../../../src/ash/platform/instantiation/common/instantiationService.js').InstantiationService): void => {
+			container.registerInstance(IContextKeyService, resources.add(new ContextKeyService()));
 			container.registerInstance(ICommandService, widgetServices.get(ICommandService));
 			container.registerInstance(IEditorService, widgetServices.get(IEditorService));
 			setupTerminalFixtureServices(container, resources, false);
@@ -1053,7 +1064,7 @@ if (new URLSearchParams(location.search).has('input')) {
 		getViewWithId: (id: string) => id === TERMINAL_VIEW_ID ? groupPane ?? null : null,
 	} as unknown as IViewsService);
 	setupTerminalFixtureServices(services, store);
-	if (clipboardFixture) {
+	if (clipboardFixture || new URLSearchParams(location.search).has('editor')) {
 		const dialogs = services.get(IDialogService) as DialogService;
 		store.add(new DialogHandlerContribution(dialogs.model, new BrowserDialogHandler(document.body)));
 	}
@@ -1071,7 +1082,6 @@ if (new URLSearchParams(location.search).has('input')) {
 	screen.setVisible(true);
 	screen.focus();
 	if (new URLSearchParams(location.search).has('find') || clipboardFixture || sequenceFixture || groupFixture) {
-		TerminalHasActiveInstanceContext.bindTo(services.get(IContextKeyService)).set(true);
 		const commands = store.add(new CommandService(services));
 		services.registerInstance(ICommandService, commands);
 		services.registerInstance(IAccessibleViewService, { getOpenAriaHint: () => undefined } as unknown as IAccessibleViewService);
@@ -1106,6 +1116,7 @@ if (new URLSearchParams(location.search).has('input')) {
 
 			services.registerInstance(IMenuService, new MenuService(commands, services.get(IContextKeyService)));
 			const layout = Object.assign(store.add(new BrowserLayoutService({ root })), {
+				onDidChangePanelPosition: Event.None, getPanelPosition: () => Position.BOTTOM, setPanelPosition: () => { },
 				onDidChangeAuxiliaryBarMaximized: Event.None, isAuxiliaryBarMaximized: () => false,
 				toggleMaximizedAuxiliaryBar: () => { }, setAuxiliaryBarMaximized: () => false,
 				onDidChangePartVisibility: Event.None, isPartVisible: () => true, hidePart: () => { }, hasFocus: () => false,
@@ -1117,7 +1128,7 @@ if (new URLSearchParams(location.search).has('input')) {
 			groupPane = store.add(services.createInstance(TerminalViewPane, root, { id: 'ash.terminal', title: 'Terminal' }));
 			groupPane.setVisible(true); groupPane.setExpanded(true); groupPane.layout(root.clientHeight, 0, root.clientWidth);
 			if (new URLSearchParams(location.search).has('editor')) {
-				// These cases cover host transfer and release; confirmation policy is covered by service tests.
+				// Individual scenarios enable the shared confirmation policy when testing close preflight.
 				await services.get(IConfigurationService).updateValue('terminal.integrated.confirmOnKill', 'never');
 				const [{ EditorPart }, { BrowserEditorService }, { IEditorService }, { IEditorGroupsService }, { TestUriIdentityServices }, { IUriIdentityService }] = await Promise.all([
 					import('../../../src/ash/workbench/browser/parts/editor/editorPart.js'),
@@ -1144,6 +1155,14 @@ if (new URLSearchParams(location.search).has('input')) {
 					import('../../../src/ash/workbench/contrib/terminal/browser/terminalEditorService.js'),
 				]);
 				window.ashTerminalEditorIntegration = {
+					activeContext: () => services.get(IContextKeyService).getValue<boolean>(TerminalHasActiveInstanceContext.key) === true,
+					copyToSide: async (sticky: boolean) => {
+						const input = editors.activeEditor!;
+						if (sticky) editors.activeGroup.stickEditor(input);
+						await editors.openEditor(input, { pinned: true }, 'sideGroup');
+					},
+					confirmClose: () => services.get(IConfigurationService).updateValue('terminal.integrated.confirmOnKill', 'editor'),
+					closeAll: (excludeSticky: boolean) => part.closeAllEditors({ excludeSticky }),
 					createBackground: async () => {
 						const instance = await terminals.createTerminal({ profile: { type: 'default' }, location: { preserveFocus: true } });
 						return instance.id;
@@ -1313,6 +1332,10 @@ declare global {
 			errors(): readonly string[];
 		};
 		ashTerminalEditorIntegration: {
+			activeContext(): boolean;
+			copyToSide(sticky: boolean): Promise<void>;
+			confirmClose(): Promise<void>;
+			closeAll(excludeSticky: boolean): Promise<boolean>;
 			createBackground(): Promise<string>;
 			revealBackground(id: string): Promise<void>;
 			groups(): { id: number; resources: string[]; }[];

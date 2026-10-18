@@ -1,3 +1,4 @@
+import { Position } from '../../../workbench/services/layout/browser/layoutService.js';
 import { IChatSpeechToTextService, ChatSpeechToTextService } from '../../../workbench/contrib/chat/browser/speechToText/chatSpeechToTextService.js';
 import { UserDataProfileService } from '../../../workbench/services/userDataProfile/browser/userDataProfileService.js';
 import { TestConfigurationFiles } from '../../../workbench/services/configuration/test/common/testServices.js';
@@ -203,6 +204,9 @@ class VisibleAuxiliarybarLayoutService extends BrowserLayoutService implements I
 	isAuxiliaryBarMaximized(): boolean { return false; }
 	toggleMaximizedAuxiliaryBar(): void { }
 	setAuxiliaryBarMaximized(): boolean { return false; }
+	readonly onDidChangePanelPosition = Event.None;
+	getPanelPosition(): Position { return Position.BOTTOM; }
+	setPanelPosition(): void { }
 	isPanelMaximized(): boolean { return false; }
 	toggleMaximizedPanel(): void { }
 	showPart(_partId: WorkbenchPartId): void { }

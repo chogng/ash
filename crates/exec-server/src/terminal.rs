@@ -403,6 +403,26 @@ impl TerminalService {
         })
     }
 
+    /// Revokes this connection's access while retaining the PTY for one short handoff.
+    /// Rotating the token also invalidates credentials captured before the transfer.
+    pub fn detach(
+        &self,
+        owner_connection_id: u64,
+        terminal_id: &str,
+    ) -> Result<TerminalReconnectLease, TerminalError> {
+        self.ensure_active()?;
+        let reconnect = new_reconnect_lease()?;
+        let mut sessions = self.owned_sessions(owner_connection_id, terminal_id)?;
+        let session = sessions
+            .get_mut(terminal_id)
+            .expect("terminal ownership was just validated");
+        session.reconnect_token = Some(reconnect.reconnect_token.clone());
+        session.owner = TerminalOwner::Detached {
+            expires_at: Instant::now() + RECONNECT_GRACE_PERIOD,
+        };
+        Ok(reconnect)
+    }
+
     pub fn attach(
         &self,
         owner_connection_id: u64,
@@ -427,6 +447,9 @@ impl TerminalService {
         {
             return Err(TerminalError::AttachRejected);
         }
+        // A service may host terminals created under different Session grants.
+        // The service grant cannot substitute for the process's own authorization.
+        validate_authorization(&session.authorization)?;
         session
             .process
             .resize(TerminalSize {
@@ -456,15 +479,11 @@ impl TerminalService {
         if params.data.is_empty() || params.data.len() > MAX_INPUT_BYTES {
             return Err(TerminalError::InvalidInput);
         }
-        let sessions = self.owned_sessions(owner_connection_id, &params.terminal_id)?;
-        let session = sessions
-            .get(&params.terminal_id)
-            .expect("terminal ownership was just validated");
-        let writer = session.process.writer_sender();
-        drop(sessions);
-        self.runtime
-            .block_on(writer.send(params.data.into_bytes()))
-            .map_err(|_| TerminalError::OperationFailed)
+        self.write_input(
+            owner_connection_id,
+            &params.terminal_id,
+            params.data.into_bytes(),
+        )
     }
 
     /// Raw input shares the PTY's bounded writer channel but never becomes shell command text.
@@ -477,16 +496,32 @@ impl TerminalService {
         if params.data.is_empty() || params.data.len() > MAX_INPUT_BYTES {
             return Err(TerminalError::InvalidInput);
         }
-        let sessions = self.owned_sessions(owner_connection_id, &params.terminal_id)?;
+        self.write_input(owner_connection_id, &params.terminal_id, params.data)
+    }
+
+    fn write_input(
+        &self,
+        owner_connection_id: u64,
+        terminal_id: &str,
+        data: Vec<u8>,
+    ) -> Result<(), TerminalError> {
+        let sessions = self.owned_sessions(owner_connection_id, terminal_id)?;
         let writer = sessions
-            .get(&params.terminal_id)
+            .get(terminal_id)
             .expect("terminal ownership was just validated")
             .process
             .writer_sender();
         drop(sessions);
-        self.runtime
-            .block_on(writer.send(params.data))
-            .map_err(|_| TerminalError::OperationFailed)
+        // Waiting for input capacity cannot block reads or a transfer. Once a slot
+        // is available, recheck ownership and admit input atomically with detach.
+        let permit = self
+            .runtime
+            .block_on(writer.reserve_owned())
+            .map_err(|_| TerminalError::OperationFailed)?;
+        let sessions = self.owned_sessions(owner_connection_id, terminal_id)?;
+        permit.send(data);
+        drop(sessions);
+        Ok(())
     }
 
     pub fn send_signal(
@@ -593,7 +628,7 @@ impl TerminalService {
             .expect("terminal ownership was just validated")
             .state
             .clone();
-        drop(sessions);
+        // Serialize the output acknowledgement with detach as well as reads.
         let mut state = state.lock().map_err(|_| TerminalError::Busy)?;
         if params.after_sequence > state.next_sequence {
             return Err(TerminalError::InvalidInput);

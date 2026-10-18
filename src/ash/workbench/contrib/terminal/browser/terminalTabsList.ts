@@ -12,7 +12,7 @@ import { IContextKeyService } from '../../../../platform/contextkey/browser/cont
 import { IContextMenuService } from '../../../../platform/contextview/browser/contextView.js';
 import { ICommandService } from '../../../../platform/commands/common/commands.js';
 import { colorCssVariable } from '../../../../platform/theme/common/colorUtils.js';
-import { TerminalActiveInstanceStateContext, TerminalHasActiveInstanceContext } from '../common/terminalContextKey.js';
+import { TerminalActiveInstanceStateContext } from '../common/terminalContextKey.js';
 import { ITerminalService, ITerminalGroupService, TerminalDataTransfers, type ITerminalInstance } from './terminal.js';
 import { InstanceContext, openContextMenu } from './terminalContextMenu.js';
 import { terminalProfileIcon } from './terminalIcon.js';
@@ -84,13 +84,11 @@ export class TerminalTabList extends TabList<ITerminalInstance> {
 			this.draggedTerminal = undefined;
 		}, true));
 		const scope = this._register(contextKeys.createScoped(this.element));
-		const hasInstance = TerminalHasActiveInstanceContext.bindTo(scope);
 		const state = TerminalActiveInstanceStateContext.bindTo(scope);
 		const menu = this._register(menuService.createMenu(MenuId.TerminalInstanceContext, scope));
 		const show = (target: HTMLElement, event: MouseEvent): void => {
 			const instance = this.terminals.instances.find(instance => `${instance.id}-tab` === target.id);
 			if (!instance) return;
-			hasInstance.set(true);
 			state.set(instance.state);
 			openContextMenu(parent.ownerDocument.defaultView!, event, instance, menu, this.contextMenu);
 			this.ownsMenu = true;

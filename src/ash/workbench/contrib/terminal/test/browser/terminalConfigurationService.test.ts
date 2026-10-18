@@ -7,7 +7,8 @@ import { CommandService } from '../../../../services/commands/common/commandServ
 import { registerTestTerminalCreationServices } from '../../../../test/browser/workbenchTestServices.js';
 import { IEnvironmentVariableService } from '../../common/environmentVariable.js';
 import { EnvironmentVariableService } from '../../common/environmentVariableService.js';
-import { IStorageService } from '../../../../../platform/storage/common/storage.js';
+import { ISecretStorageService } from '../../../../../platform/secrets/common/secrets.js';
+import { IStorageService, StorageScope, StorageTarget } from '../../../../../platform/storage/common/storage.js';
 import { ILogService, NullLoggerService } from '../../../../../platform/log/common/log.js';
 import { resetNlsResolver } from '../../../../../nls.js';
 import { initializeTestLocalization } from '../../../../services/localization/test/common/localizationTestUtils.js';
@@ -50,7 +51,7 @@ const shells = [
 	{ profileId: 'pwsh', title: 'PowerShell', isDefault: false },
 ];
 
-function createServices(owner: DisposableStore, useInstances = false, openEditor: IEditorService['openEditor'] = async () => { }) {
+function createServices(owner: DisposableStore, useInstances = false, openEditor: IEditorService['openEditor'] = async () => { }, checkpoint?: { state: string; credentials?: string; }) {
 	const services = owner.add(new InstantiationService());
 	services.registerInstance(ICommandService, owner.add(new CommandService(services)));
 	services.registerInstance(ILogService, new NullLoggerService());
@@ -100,6 +101,10 @@ function createServices(owner: DisposableStore, useInstances = false, openEditor
 	services.registerInstance(IEditorService, { activeEditor: undefined, onDidActiveEditorChange: Event.None, openEditor } as unknown as IEditorService);
 	services.registerInstance(IEditorGroupsService, { groups: [], onDidChangeGroups: Event.None } as unknown as IEditorGroupsService);
 	registerTestTerminalCreationServices(services);
+	if (checkpoint) {
+		services.get(IStorageService).store(checkpoint.credentials ? 'terminal.reload.11111111-1111-1111-1111-111111111111' : 'terminal.revive', checkpoint.state, StorageScope.WORKSPACE, StorageTarget.MACHINE);
+		if (checkpoint.credentials) void services.get(ISecretStorageService).set('terminal.reload', checkpoint.credentials);
+	}
 	services.registerInstance(ITerminalService, useInstances
 		? owner.add(services.createInstance(TerminalService))
 		: { ...Disposable.None } as unknown as ITerminalService);
@@ -641,6 +646,94 @@ suite('Terminal configuration and interactive profiles', () => {
 		assert.equal(services.get(ITerminalService).instances.length, 1);
 	});
 
+	test('splitting a named profile retains its original shell and raw environment after profile edits', async () => {
+		using owner = new DisposableStore();
+		const { services, configuration, profiles, launches } = createServices(owner, true);
+		await configuration.updateValue('terminal.integrated.profiles.windows', { Custom: { path: '/bin/custom', args: ['--login'], env: { CUSTOM: 'original', PATH: 'original-path' } } });
+		owner.add(services.get(IEnvironmentVariableService).registerCollectionProvider('transient-provider', async () => ({
+			persistent: false, map: new Map([['PATH', { variable: 'PATH', type: 3, value: 'prefix;' }]])
+		})));
+		const terminals = services.get(ITerminalService);
+		const parent = await terminals.createTerminal({ config: profiles.getAvailableProfiles().find(profile => profile.profileName === 'Custom')!, deferStart: true });
+		const original = launches.at(-1)!;
+		assert.deepEqual(parent.revivalLaunch?.profile, { type: 'custom', name: 'Custom', path: ['/bin/custom'], args: ['--login'] });
+		assert.deepEqual(parent.revivalLaunch?.env, { CUSTOM: 'original', PATH: 'original-path' });
+		await configuration.updateValue('terminal.integrated.profiles.windows', {});
+		await terminals.createTerminal({ config: parent.shellLaunchConfig, location: { parentTerminal: parent }, deferStart: true });
+		assert.deepEqual(launches.at(-1)!.profile, original.profile);
+		assert.deepEqual(launches.at(-1)!.env, original.env);
+		assert.equal(launches.at(-1)!.env?.PATH, 'prefix;original-path');
+	});
+
+	test('splitting a resolved low-level launch does not admit its runtime environment for persistence', async () => {
+		using owner = new DisposableStore();
+		const { services } = createServices(owner, true);
+		const terminals = services.get(ITerminalService);
+		const parent = await terminals.createTerminal({ profile: { type: 'custom', name: 'Resolved caller', path: ['/resolved-shell'], args: [] }, env: { RUNTIME_ONLY: 'resolved-value' }, deferStart: true });
+		assert.equal(parent.revivalLaunch, undefined);
+		const split = await terminals.createTerminal({ config: parent.shellLaunchConfig, location: { parentTerminal: parent }, deferStart: true });
+		assert.equal(split.revivalLaunch, undefined);
+	});
+
+	for (const mode of ['revive', 'reload', 'transfer'] as const) for (const strict of [false, true]) test(`${mode} retains raw intent and refreshes transient provider environment exactly once (strict=${strict})`, async () => {
+		using owner = new DisposableStore();
+		const first = createServices(owner, true);
+		const create = first.processes.create.bind(first.processes);
+		first.processes.create = async options => ({ ...await create(options), connectionPersistence: 'reconnectable' });
+		const raw = { USER_VALUE: '${env:PROFILE_VALUE}', PATH: 'caller', REMOVED: null };
+		owner.add(first.services.get(IEnvironmentVariableService).registerCollectionProvider('transient-provider', async () => ({
+			persistent: false, map: new Map([
+				['TRANSIENT_TOKEN', { variable: 'TRANSIENT_TOKEN', type: 1, value: 'original-window-token' }],
+				['PATH', { variable: 'PATH', type: 3, value: 'original-prefix;' }],
+			]),
+		})));
+		const terminal = await first.services.get(ITerminalService).createTerminal({ config: { executable: '/shell', env: raw, strictEnv: strict }, deferStart: true });
+		if (mode === 'revive') {
+			const split = await first.services.get(ITerminalService).createTerminal({ config: terminal.shellLaunchConfig, location: { parentTerminal: terminal }, deferStart: true });
+			assert.deepEqual(split.shellLaunchConfig!.env, terminal.shellLaunchConfig!.env, 'A split applies the current collection exactly once');
+			assert.deepEqual(split.revivalLaunch, terminal.revivalLaunch);
+		}
+
+		const screen = { raw: { options: { disableStdin: false }, cols: 80, rows: 24 }, getRangeAsVT: async () => 'saved output' };
+		Object.defineProperty(terminal, 'xtermReadyPromise', { value: Promise.resolve(screen) });
+		const snapshot = await terminal.serializeState();
+		assert.ok(snapshot.launch, 'The interactive config must retain a raw revival intent');
+		assert.deepEqual(snapshot.launch.env, raw);
+		const checkpoint = JSON.stringify({ version: 1, ...(mode === 'revive' ? { kind: 'revive' } : {}), workspaceId: first.workspace.getWorkspace().id, instances: [snapshot], groups: [] });
+		assert.equal(checkpoint.includes('original-window-token'), false);
+		assert.equal(checkpoint.includes('original-prefix;'), false);
+		const lease = { terminalId: snapshot.process.terminalId, dirId: snapshot.processDirId, reconnectToken: 'a'.repeat(64), reconnectGracePeriodMillis: 30000 };
+		const credentials = JSON.stringify({ stateKey: 'terminal.reload.11111111-1111-1111-1111-111111111111', expiresAt: Date.now() + 60000, leases: [lease] });
+		const second = createServices(owner, true, async () => { }, mode === 'transfer' ? undefined : { state: checkpoint, credentials: mode === 'reload' ? credentials : undefined });
+		Object.assign(second.processes, { attach: async () => snapshot.process, detach: async () => lease });
+		let refreshes = 0;
+		owner.add(second.services.get(IEnvironmentVariableService).registerCollectionProvider('transient-provider', async () => {
+			refreshes++;
+			return {
+				persistent: false, map: new Map([
+					['TRANSIENT_TOKEN', { variable: 'TRANSIENT_TOKEN', type: 1, value: 'new-window-token' }],
+					['PATH', { variable: 'PATH', type: 3, value: 'current-prefix;' }],
+				])
+			};
+		}));
+		await second.services.get(ITerminalService).whenConnected;
+		const restored = mode === 'transfer' ? await second.services.get(ITerminalService).importTerminalState(snapshot, lease) : second.services.get(ITerminalService).instances[0]!;
+		assert.ok(restored);
+		assert.equal(second.launches.length, mode === 'revive' ? 1 : 0, 'Only revival starts a new process');
+		const liveEnvironment = restored.shellLaunchConfig!.env!;
+		assert.equal(liveEnvironment.PATH, strict ? 'caller' : 'current-prefix;caller');
+		assert.equal(liveEnvironment.USER_VALUE, strict ? '${env:PROFILE_VALUE}' : 'environment value');
+		assert.equal(liveEnvironment.TRANSIENT_TOKEN, strict ? undefined : 'new-window-token');
+		assert.equal(refreshes, strict ? 0 : 1);
+		assert.deepEqual(restored.revivalLaunch!.env, raw);
+		restored.start();
+		await waitFor(() => restored.state === 'exited');
+		await second.services.get(ITerminalService).relaunchTerminal(restored, { rows: 24, cols: 80 });
+		assert.deepEqual(second.launches.at(-1)!.env, liveEnvironment);
+		await restored.reuseTerminal({ executable: '/replacement', env: { REUSED: 'literal' }, deferStart: true });
+		assert.equal(restored.revivalLaunch, undefined);
+	});
+
 	test('built-in runtime fingerprints bind terminal contributions by their admitted product identity', async () => {
 		using owner = new DisposableStore();
 		const { services, profiles, launches } = createServices(owner, true);
@@ -827,6 +920,42 @@ suite('Terminal configuration and interactive profiles', () => {
 			for (const pending of release) await pending.complete();
 			await Promise.allSettled(second ? [first, second] : [first]);
 		}
+	});
+
+	for (const custom of [false, true]) test(`background contributed ${custom ? 'PTY' : 'shell'} preserves the user's input target throughout provider creation`, async () => {
+		using owner = new DisposableStore();
+		const opened: unknown[] = [];
+		const { services, profiles } = createServices(owner, true, async (_input, options) => { opened.push(options); });
+		const terminals = services.get(ITerminalService);
+		const original = await terminals.createTerminal({ profile: { type: 'default' }, deferStart: true });
+		const digest = `sha256:${'a'.repeat(64)}`;
+		Object.assign(services.get(IExtensionService), { currentCatalog: { generation: 1, diagnostics: [], extensions: [{ id: 'acme.extension', packageSha256: digest }] } });
+		const requested = new DeferredPromise<void>();
+		const reply = new DeferredPromise<import('../../../../../platform/agentHost/common/extensionHostApi.js').JsonValue>();
+		const bridge = owner.add(services.createInstance(MainThreadTerminalService));
+		bridge.replaceProfiles([{
+			runtimeId: 'runtime', packageDigest: digest, profileId: 'background', title: 'Background extension',
+			invoke: async operation => {
+				if (operation === 'createTerminalProfile') { await requested.complete(); return reply.p; }
+				if (operation === 'closeTaskTerminal') return null;
+				return { events: [] };
+			},
+		}]);
+		const changes: (number | undefined)[] = [];
+		owner.add(terminals.onDidChangeActiveInstance(instance => changes.push(instance?.instanceId)));
+		const pending = terminals.createTerminal({ config: profiles.contributedProfiles[0]!, location: { preserveFocus: true } });
+		await requested.p;
+		assert.equal(terminals.activeInstance, original);
+		const selected = await terminals.createTerminal({ profile: { type: 'default' }, deferStart: true });
+		await reply.complete(custom ? { options: { name: 'Background PTY' }, pty: { ptyId: 'background-pty', acceptsInput: true } } : { options: { name: 'Background shell', shellPath: '/extension/shell' } });
+		const background = await pending;
+		assert.equal(background.target, TerminalLocation.Editor);
+		assert.equal(terminals.activeInstance, selected);
+		assert.deepEqual(changes, [selected.instanceId]);
+		assert.equal(opened.length, 2);
+		for (const options of opened) assert.equal((options as { preserveFocus?: boolean; }).preserveFocus, true);
+		await terminals.closeTerminal(background);
+		bridge.replaceProfiles([]);
 	});
 
 	for (const failure of ['workspace', 'wrongRoot'] as const) test(`contributed profile releases its created instance after ${failure} cancellation`, async () => {

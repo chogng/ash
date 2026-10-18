@@ -1,6 +1,8 @@
 import { SCREENSHOT_MAX_BYTES, SCREENSHOT_MAX_PIXELS, type DesktopScreenshot } from '../common/native.js';
 import type { BrowserWindow } from 'electron/main';
 import type { IRectangle } from '../../window/common/window.js';
+import { Disposable, toDisposable } from '../../../base/common/lifecycle.js';
+import type { ITerminalWindowTransfer, ITerminalWindowTransferResult } from '../common/nativeHost.js';
 import { VSBuffer } from '../../../base/common/buffer.js';
 
 /** Main owns the sender's capture target and converts CSS coordinates to window DIPs. */
@@ -53,4 +55,128 @@ export async function isAdmin(): Promise<boolean> {
 		return isElevated();
 	}
 	return process.geteuid!() === 0;
+}
+
+interface TerminalTransferWindow {
+	readonly workspaceId: string;
+	readonly remoteAuthority: string | undefined;
+	requestTransfer(): void;
+}
+
+interface PendingTerminalTransfer {
+	readonly transfer: ITerminalWindowTransfer;
+	readonly sourceWindowId: number;
+	readonly workspaceId: string;
+	readonly remoteAuthority: string | undefined;
+	targetWindowId: number | undefined;
+	claimed: boolean;
+	sourceReleased: boolean;
+	readonly timer: ReturnType<typeof setTimeout>;
+	readonly resolve: (result: ITerminalWindowTransferResult) => void;
+	readonly reject: (error: Error) => void;
+}
+
+/** Holds opaque terminal handoffs only for the lifetime of their two trusted windows. */
+export class TerminalWindowTransferHost extends Disposable {
+	private readonly pending = new Map<string, PendingTerminalTransfer>();
+
+	constructor(private readonly host: {
+		getWindow(windowId: number): TerminalTransferWindow | undefined;
+		openWindow(sourceWindowId: number): Promise<number>;
+	}) {
+		super();
+		this._register(toDisposable(() => {
+			for (const pending of [...this.pending.values()]) this.finish(pending, new Error('Terminal transfer host closed'));
+		}));
+	}
+
+	move(sourceWindowId: number, transfer: ITerminalWindowTransfer, targetWindowId?: number): Promise<ITerminalWindowTransferResult> {
+		const source = this.host.getWindow(sourceWindowId);
+		if (this.isDisposed || !source) return Promise.reject(new Error('Terminal source window is unavailable'));
+		const sourceBusy = [...this.pending.values()].some(pending => pending.sourceWindowId === sourceWindowId || pending.targetWindowId === sourceWindowId);
+		if (this.pending.has(transfer.id) || this.pending.size >= 16 || sourceBusy) return Promise.reject(new Error('Terminal transfer is already pending'));
+		if (targetWindowId === sourceWindowId) return Promise.reject(new Error('Terminal transfer requires another window'));
+		return new Promise<ITerminalWindowTransferResult>((resolve, reject) => {
+			const pending: PendingTerminalTransfer = {
+				transfer, sourceWindowId, workspaceId: source.workspaceId, remoteAuthority: source.remoteAuthority,
+				targetWindowId: undefined, claimed: false, sourceReleased: false, resolve, reject,
+				// Leave time for the source to reattach before the execution owner's lease expires.
+				timer: setTimeout(
+					() => this.finish(pending, new Error('Terminal transfer timed out')),
+					Math.max(0, Math.min(25_000, transfer.lease.reconnectGracePeriodMillis - 1_000)),
+				),
+			};
+			this.pending.set(transfer.id, pending);
+			void this.offer(pending, targetWindowId).catch(error => {
+				this.finish(pending, error instanceof Error ? error : new Error('Terminal target window could not be opened'));
+			});
+		});
+	}
+
+	take(targetWindowId: number): ITerminalWindowTransfer | undefined {
+		for (const pending of this.pending.values()) {
+			if (pending.targetWindowId !== targetWindowId || pending.claimed) continue;
+			if (!this.validWindows(pending)) {
+				this.finish(pending, new Error('Terminal transfer window changed'));
+				continue;
+			}
+			pending.claimed = true;
+			return pending.transfer;
+		}
+		return undefined;
+	}
+
+	complete(targetWindowId: number, result: ITerminalWindowTransferResult): void {
+		const pending = this.pending.get(result.id);
+		if (!pending || pending.targetWindowId !== targetWindowId || !pending.claimed) throw new Error('Terminal transfer is not owned by this window');
+		if (!this.validWindows(pending)) {
+			this.finish(pending, new Error('Terminal transfer window changed'));
+			throw new Error('Terminal transfer window changed');
+		}
+		if (result.lease && (result.lease.terminalId !== pending.transfer.lease.terminalId || result.lease.dirId !== pending.transfer.lease.dirId)) {
+			throw new Error('Terminal rollback lease belongs to another process');
+		}
+		this.finish(pending, result);
+	}
+
+	resetWindow(windowId: number): void {
+		for (const pending of [...this.pending.values()]) {
+			if (pending.targetWindowId === windowId || pending.sourceWindowId === windowId && !pending.claimed) {
+				this.finish(pending, new Error('Terminal transfer window closed or reloaded'));
+			} else if (pending.sourceWindowId === windowId) {
+				// Once claimed, only the target may finish. Source teardown must not
+				// turn a successful PTY attachment into a failed transfer/cleanup.
+				pending.sourceReleased = true;
+			}
+		}
+	}
+
+	private async offer(pending: PendingTerminalTransfer, selectedWindowId: number | undefined): Promise<void> {
+		const targetWindowId = selectedWindowId ?? await this.host.openWindow(pending.sourceWindowId);
+		if (this.pending.get(pending.transfer.id) !== pending) return;
+		const targetBusy = [...this.pending.values()].some(other => other !== pending && (other.sourceWindowId === targetWindowId || other.targetWindowId === targetWindowId));
+		if (targetBusy) throw new Error('Terminal target window already has a pending transfer');
+		pending.targetWindowId = targetWindowId;
+		if (targetWindowId === pending.sourceWindowId || !this.validWindows(pending)) {
+			throw new Error('Terminal transfer requires the same workspace and execution host');
+		}
+		this.host.getWindow(targetWindowId)!.requestTransfer();
+	}
+
+	private validWindows(pending: PendingTerminalTransfer): boolean {
+		const source = this.host.getWindow(pending.sourceWindowId);
+		const target = pending.targetWindowId === undefined ? undefined : this.host.getWindow(pending.targetWindowId);
+		const matches = (window: TerminalTransferWindow | undefined): boolean => !!window
+			&& window.workspaceId === pending.workspaceId
+			&& window.remoteAuthority === pending.remoteAuthority;
+		return matches(target) && (pending.sourceReleased && pending.claimed || matches(source));
+	}
+
+	private finish(pending: PendingTerminalTransfer, outcome: ITerminalWindowTransferResult | Error): void {
+		if (this.pending.get(pending.transfer.id) !== pending) return;
+		this.pending.delete(pending.transfer.id);
+		clearTimeout(pending.timer);
+		if (outcome instanceof Error) pending.reject(outcome);
+		else pending.resolve(outcome);
+	}
 }

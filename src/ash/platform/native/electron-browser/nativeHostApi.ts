@@ -9,6 +9,8 @@ import {
 	NATIVE_HOST_OPEN_WORKSPACE_CHANNEL,
 	NATIVE_HOST_OPEN_WINDOW_CHANNEL,
 	NATIVE_HOST_OPEN_AGENTS_WINDOW_CHANNEL,
+	NATIVE_HOST_TERMINAL_MOVE_CHANNEL, NATIVE_HOST_TERMINAL_TAKE_CHANNEL, NATIVE_HOST_TERMINAL_COMPLETE_CHANNEL, NATIVE_HOST_TERMINAL_REQUEST_CHANNEL,
+	validateTerminalWindowTransfer, validateTerminalWindowTransferResult,
 	NATIVE_HOST_SYNC_SYSTEM_WIDE_KEYBINDINGS_CHANNEL,
 	validateSystemWideKeybindingsResult,
 	NATIVE_HOST_PICK_FOLDER_CHANNEL,
@@ -83,6 +85,16 @@ export function createNativeHostApi(mainProcessService: IMainProcessService): IN
 		openWorkspace: (root, forceNewWindow) => invoke<void>(NATIVE_HOST_OPEN_WORKSPACE_CHANNEL, forceNewWindow ? { root, forceNewWindow } : root),
 		openWindow: options => invoke<void>(NATIVE_HOST_OPEN_WINDOW_CHANNEL, options),
 		openAgentsWindow: options => invoke<void>(NATIVE_HOST_OPEN_AGENTS_WINDOW_CHANNEL, options),
+		async moveTerminalToWindow(transfer, targetWindowId) {
+			const result = await invoke<unknown>(NATIVE_HOST_TERMINAL_MOVE_CHANNEL, { transfer, ...(targetWindowId === undefined ? {} : { targetWindowId }) });
+			return validateTerminalWindowTransferResult(result);
+		},
+		async takeTerminalTransfer() {
+			const value = await invoke<unknown>(NATIVE_HOST_TERMINAL_TAKE_CHANNEL);
+			return value === undefined ? undefined : validateTerminalWindowTransfer(value);
+		},
+		completeTerminalTransfer: result => invoke<void>(NATIVE_HOST_TERMINAL_COMPLETE_CHANNEL, result),
+		onDidRequestTerminalTransfer: listener => subscribe<void>(NATIVE_HOST_TERMINAL_REQUEST_CHANNEL, listener),
 		getAgentHostEditorState: async () => validateAgentHostEditorState(await invoke<unknown>(AGENT_HOST_EDITOR_STATE_CHANNEL)),
 		updateAgentHostEditorState: update => invoke<void>(AGENT_HOST_EDITOR_UPDATE_CHANNEL, update),
 		onDidChangeAgentHostEditorState: listener => subscribe<unknown>(AGENT_HOST_EDITOR_STATE_CHANGED_CHANNEL, value => listener(validateAgentHostEditorState(value))),

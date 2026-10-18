@@ -1,3 +1,4 @@
+import { Position } from '../../../../services/layout/browser/layoutService.js';
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { JSDOM } from 'jsdom';
@@ -34,6 +35,9 @@ class TestWorkbenchLayoutService extends BrowserLayoutService implements IWorkbe
 	isAuxiliaryBarMaximized(): boolean { return false; }
 	toggleMaximizedAuxiliaryBar(): void { }
 	setAuxiliaryBarMaximized(): boolean { return false; }
+	readonly onDidChangePanelPosition = Event.None;
+	getPanelPosition(): Position { return Position.BOTTOM; }
+	setPanelPosition(): void { }
 	isPanelMaximized(): boolean { return false; }
 	toggleMaximizedPanel(): void { }
 	showPart(): void { }

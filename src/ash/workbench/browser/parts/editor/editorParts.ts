@@ -1,4 +1,4 @@
-import type { IResourceEditorInput, IEditorPane } from '../../../common/editor.js';
+import type { IResourceEditorInput, IEditorPane, IEditorIdentifier } from '../../../common/editor.js';
 import type { IEditorPaneDescriptor } from '../../editor.js';
 import { addDisposableListener, getWindow } from "../../../../base/browser/dom.js";
 import type { IDimension } from "../../../../base/browser/dom.js";
@@ -345,15 +345,22 @@ export class EditorParts extends Disposable implements IEditorPartsService {
 		return part?.closeEditorIdentifier(identifier) ?? Promise.resolve(false);
 	}
 
-	async confirmCloseAllEditors(options: EditorCloseAllOptions = {}): Promise<boolean> {
-		for (const part of this.parts) if (!await part.confirmCloseAllEditors(options)) return false;
+	private getClosingEditors(options: EditorCloseAllOptions): IEditorIdentifier[] {
+		return this.parts.flatMap(part => [
+			...(part.isModalEditorVisible && part.activeInput ? [{ editor: part.activeInput, groupId: -1 }] : []),
+			...part.groups.flatMap(group => group.inputs.filter(input => !options.excludeSticky || !group.isSticky(input)).map(editor => ({ editor, groupId: group.id }))),
+		]);
+	}
+
+	async confirmCloseAllEditors(options: EditorCloseAllOptions = {}, closingEditors: readonly IEditorIdentifier[] = this.getClosingEditors(options)): Promise<boolean> {
+		for (const part of this.parts) if (!await part.confirmCloseAllEditors(options, closingEditors)) return false;
 		return true;
 	}
 
-	async closeAllEditors(options: EditorCloseAllOptions = {}): Promise<boolean> {
-		if (!options.skipConfirmation && !await this.confirmCloseAllEditors(options)) return false;
+	async closeAllEditors(options: EditorCloseAllOptions = {}, closingEditors: readonly IEditorIdentifier[] = this.getClosingEditors(options)): Promise<boolean> {
+		if (!options.skipConfirmation && !await this.confirmCloseAllEditors(options, closingEditors)) return false;
 		for (const part of this.parts) {
-			if (!await part.closeAllEditors({ ...options, skipConfirmation: true })) return false;
+			if (!await part.closeAllEditors({ ...options, skipConfirmation: true }, closingEditors)) return false;
 		}
 		if (options.reason === "reset") {
 			for (const part of [...this.auxiliary.keys()]) this.removeAuxiliaryPart(part);

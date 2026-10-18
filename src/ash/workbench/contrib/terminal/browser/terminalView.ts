@@ -336,6 +336,7 @@ export class TerminalTitleActions extends Disposable {
 	private readonly activeInstanceStateContext: IContextKey<string>;
 	private readonly inlineActionsContext: IContextKey<boolean>;
 	private readonly commandService: ICommandService;
+	private readonly contextKeyService: IContextKeyService;
 	private profiles: readonly ITerminalProfile[] = [];
 	private activeInstance: ITerminalInstance | undefined;
 	private singleGroup = true;
@@ -344,12 +345,15 @@ export class TerminalTitleActions extends Disposable {
 		container: HTMLElement,
 		@IMenuService private readonly menuService: IMenuService,
 		@IContextMenuService contextMenuService: IContextMenuService,
-		@IContextKeyService private readonly contextKeyService: IContextKeyService,
+		@IContextKeyService parentContext: IContextKeyService,
 		@ICommandService commandService: ICommandService,
 		@IConfigurationService private readonly configuration: IConfigurationService,
 		@IKeybindingService private readonly keybindings: IKeybindingService,
 	) {
 		super();
+		// Toolbar projections describe its panel instance, independently of the
+		// window-active editor terminal used by command palette preconditions.
+		const contextKeyService = this.contextKeyService = this._register(parentContext.createScoped(container));
 		this.commandService = commandService;
 		this.creatingContext = TerminalCreatingContext.bindTo(contextKeyService);
 		this.hasActiveInstanceContext = TerminalHasActiveInstanceContext.bindTo(contextKeyService);
@@ -376,6 +380,7 @@ export class TerminalTitleActions extends Disposable {
 			MenuId.TerminalTitle,
 			{
 				ariaLabel: localize('terminal.title.actions', "Terminal actions"),
+				contextKeyService,
 				highlightToggledItems: true,
 				menuOptions: { shouldForwardArgs: true },
 				actionViewItemProvider: (action) => this.createActionViewItem(action, contextMenuService),
@@ -425,7 +430,7 @@ export class TerminalTitleActions extends Disposable {
 		switch (action.id) {
 			case TerminalCommandId.Focus:
 				if (!this.activeInstance) return undefined;
-				return new ActiveTerminalActionViewItem(action, this.activeInstance, this.menuService, contextMenuService, this.commandService);
+				return new ActiveTerminalActionViewItem(action, this.activeInstance, this.menuService, contextMenuService, this.commandService, this.contextKeyService);
 			case TerminalCommandId.New:
 				return new NewTerminalActionViewItem(
 					action,
@@ -481,7 +486,7 @@ class NewTerminalActionViewItem extends DropdownWithPrimaryActionViewItem {
 }
 
 class ActiveTerminalActionViewItem extends LabelActionViewItem {
-	constructor(action: IAction, private readonly instance: ITerminalInstance, private readonly menuService: IMenuService, private readonly menus: IContextMenuService, private readonly commands: ICommandService) {
+	constructor(action: IAction, private readonly instance: ITerminalInstance, private readonly menuService: IMenuService, private readonly menus: IContextMenuService, private readonly commands: ICommandService, private readonly contextKeyService: IContextKeyService) {
 		const tooltip = instance.title === instance.profile.title
 			? localize('terminal.title.active', 'Active terminal: {0}', instance.title)
 			: localize('terminal.title.activeProfile', 'Active terminal: {0} ({1})', instance.title, instance.profile.title);
@@ -501,7 +506,7 @@ class ActiveTerminalActionViewItem extends LabelActionViewItem {
 		button.setAttribute('aria-haspopup', 'menu');
 		button.setAttribute('aria-expanded', 'false');
 		const open = () => {
-			using menu = this.menuService.createMenu(MenuId.TerminalInstanceContext);
+			using menu = this.menuService.createMenu(MenuId.TerminalInstanceContext, this.contextKeyService);
 			const actions = getFlatContextMenuActions(menu.getActions({ args: [new InstanceContext(this.instance)] }));
 			button.setAttribute('aria-expanded', 'true');
 			try {

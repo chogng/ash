@@ -474,8 +474,11 @@ pub(crate) fn force_terminate(record: &ProcessRecord) -> Result<(), String> {
     let Some(expected_start) = &record.process_start_identity else {
         return Err("managed daemon has no process start identity".into());
     };
-    if process_start_identity(record.pid)?.as_ref() != Some(expected_start) {
-        return Err("refusing to terminate a reused or stale daemon pid".into());
+    match process_start_identity(record.pid)?.as_ref() {
+        // The daemon may finish naturally between the stop poll and this check.
+        None => return Ok(()),
+        Some(actual) if actual == expected_start => {}
+        Some(_) => return Err("refusing to terminate a reused or stale daemon pid".into()),
     }
     let status = Command::new("kill")
         .arg("-KILL")
@@ -483,6 +486,11 @@ pub(crate) fn force_terminate(record: &ProcessRecord) -> Result<(), String> {
         .status()
         .map_err(io_error)?;
     if !status.success() {
+        // Natural exit can also win the race after identity verification but
+        // before kill runs. A live different generation must still be rejected.
+        if process_start_identity(record.pid)?.is_none() {
+            return Ok(());
+        }
         return Err(format!(
             "failed to force terminate Local App Server daemon {}",
             record.pid

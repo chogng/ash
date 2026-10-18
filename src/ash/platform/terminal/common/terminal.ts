@@ -9,6 +9,9 @@ import type { ILogger } from '../../log/common/log.js';
 export const ITerminalLogService = createServiceIdentifier<ITerminalLogService>('terminalLogService');
 export interface ITerminalLogService extends ILogger { }
 
+/** Main-selected checkpoint identity carried through the window's ephemeral credential channel. */
+export const TERMINAL_REVIVE_STATE_KEY = 'terminal.reviveStateKey';
+
 export const enum TerminalSettingPrefix {
 	AutomationProfile = 'terminal.integrated.automationProfile.',
 	DefaultProfile = 'terminal.integrated.defaultProfile.',
@@ -81,6 +84,7 @@ export interface ITerminalProfile extends ITerminalProcessProfile {
 }
 
 export interface ICreateContributedTerminalProfileOptions {
+	readonly location?: TerminalLocation | { readonly viewColumn?: number; readonly preserveFocus?: boolean; };
 	readonly cwd?: string | import('../../../base/common/uri.js').URI;
 	readonly icon?: ThemeIcon;
 	readonly color?: string;
@@ -242,6 +246,8 @@ export interface ITerminalProcessService {
 	getProcessInfo(options: ITerminalProcessCloseOptions): Promise<ITerminalProcessInfo>;
 	create(options: ITerminalProcessCreateOptions): Promise<ITerminalProcessCreation>;
 	getReconnectLease?(terminalId: string): Promise<ITerminalReconnectLease | undefined>;
+	/** Atomically releases this connection's access and issues a single-use handoff lease. */
+	detach?(terminalId: string): Promise<ITerminalReconnectLease>;
 	/** Called only after every reload shutdown participant has completed successfully. */
 	prepareForReload?(): void;
 	attach?(lease: ITerminalReconnectLease, dimensions: { readonly rows: number; readonly cols: number; }, profile: ITerminalProcessProfile): Promise<ITerminalProcessCreation>;

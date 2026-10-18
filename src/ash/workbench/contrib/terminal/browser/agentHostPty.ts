@@ -1,3 +1,4 @@
+import type { ITerminalProcessOwnership } from '../../../services/terminal/common/terminal.js';
 import { CancellationError, onUnexpectedError } from '../../../../base/common/errors.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { ITerminalProcessService, type IProcessDataEvent, type ITerminalProcessCreation } from '../../../../platform/terminal/common/terminal.js';
@@ -17,6 +18,7 @@ export class AgentHostPty extends BasePty<IProcessDataEvent> {
 		readonly creation: ITerminalProcessCreation,
 		private readonly dirId: string | undefined,
 		private readonly released: () => void,
+		private readonly ownership: ITerminalProcessOwnership | undefined,
 		@ITerminalProcessService private readonly processes: ITerminalProcessService,
 		@IInstantiationService instantiation: IInstantiationService,
 	) {
@@ -85,7 +87,10 @@ export class AgentHostPty extends BasePty<IProcessDataEvent> {
 	close(): Promise<void> {
 		if (this.closeTask) return this.closeTask;
 		this.stop();
-		this.closeTask = Promise.resolve().then(() => this.processes.close({ terminalId: this.creation.terminalId, ...(this.dirId === undefined ? {} : { dirId: this.dirId }) })).finally(() => {
+		this.closeTask = Promise.resolve().then(() => {
+			if (this.ownership?.canTerminate === false) return;
+			return this.processes.close({ terminalId: this.creation.terminalId, ...(this.dirId === undefined ? {} : { dirId: this.dirId }) });
+		}).finally(() => {
 			this.dispose();
 		});
 		return this.closeTask;

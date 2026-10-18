@@ -1029,6 +1029,9 @@ for (const transition of ['close', 'switch', 'disconnect'] as const) {
 		await page.goto('/terminal.html?input&clipboard');
 		await page.waitForFunction(() => Boolean(window.ashTerminalClipboardIntegration));
 		await expect.poll(() => page.evaluate(() => window.ashTerminalInputIntegration.snapshot())).toContain('retained screen');
+		// The fixture asks for device attributes. Its asynchronous reply must finish
+		// before clearing input observations for the paste cancellation assertion.
+		await expect.poll(() => page.evaluate(() => window.ashTerminalInputIntegration.writes)).toContain('\x1b[?1;2c');
 		await page.evaluate(() => { window.ashTerminalInputIntegration.clear(); window.ashTerminalClipboardIntegration.setText('old\ncommand'); window.ashTerminalClipboardIntegration.beginPaste(); });
 		await expect(page.getByRole('dialog')).toBeVisible();
 		if (transition === 'close') await page.evaluate(() => window.ashTerminalInputIntegration.close());
@@ -1910,6 +1913,57 @@ test('background terminal editor creation and reveal preserve panel focus and in
 	await page.evaluate(() => window.ashTerminalGroupsIntegration.command('workbench.action.terminal.sendSequence', { text: 'editor-target' }));
 	await expect.poll(() => page.evaluate(() => window.ashTerminalGroupsIntegration.writes().filter(write => write.data === 'editor-target'))).toEqual([{ terminalId: 'input-shell-2', data: 'editor-target' }]);
 	await page.evaluate(() => window.ashTerminalGroupsIntegration.dispose());
+});
+
+test('shared terminal editors confirm only the last closing host and cancellation retains the process', async ({ page }) => {
+	await page.goto('/terminal.html?input&groups&editor');
+	await page.waitForFunction(() => Boolean(window.ashTerminalEditorIntegration));
+	await page.evaluate(() => window.ashTerminalGroupsIntegration.command('workbench.action.terminal.moveToEditor'));
+	expect(await page.evaluate(() => window.ashTerminalEditorIntegration.activeContext())).toBe(true);
+	await page.evaluate(() => window.ashTerminalEditorIntegration.copyToSide(false));
+	await page.evaluate(() => window.ashTerminalEditorIntegration.confirmClose());
+	await page.evaluate(() => window.ashTerminalEditorIntegration.close());
+	await expect(page.getByRole('dialog')).toHaveCount(0);
+	expect(await page.evaluate(() => window.ashTerminalEditorIntegration.state())).toMatchObject({ instances: 1, editorTabs: 1 });
+	const cancelled = page.evaluate(() => window.ashTerminalEditorIntegration.close());
+	await expect(page.getByRole('dialog')).toContainText('Terminate the running processes');
+	await page.getByRole('button', { name: 'Cancel', exact: true }).click();
+	await cancelled;
+	expect(await page.evaluate(() => window.ashTerminalEditorIntegration.state())).toMatchObject({ instances: 1, editorTabs: 1 });
+	const accepted = page.evaluate(() => window.ashTerminalEditorIntegration.close());
+	await page.getByRole('button', { name: 'Terminate', exact: true }).click();
+	await accepted;
+	await expect.poll(() => page.evaluate(() => window.ashTerminalEditorIntegration.state())).toMatchObject({ instances: 0, editorTabs: 0 });
+	expect(await page.evaluate(() => window.ashTerminalEditorIntegration.activeContext())).toBe(false);
+});
+
+test('close all skips a retained sticky terminal host and confirms once when it finally closes', async ({ page }) => {
+	await page.goto('/terminal.html?input&groups&editor');
+	await page.waitForFunction(() => Boolean(window.ashTerminalEditorIntegration));
+	await page.evaluate(() => window.ashTerminalGroupsIntegration.command('workbench.action.terminal.moveToEditor'));
+	await page.evaluate(() => window.ashTerminalEditorIntegration.copyToSide(true));
+	await page.evaluate(() => window.ashTerminalEditorIntegration.confirmClose());
+	expect(await page.evaluate(() => window.ashTerminalEditorIntegration.closeAll(true))).toBe(true);
+	await expect(page.getByRole('dialog')).toHaveCount(0);
+	expect(await page.evaluate(() => window.ashTerminalEditorIntegration.state())).toMatchObject({ instances: 1, editorTabs: 1 });
+	const closing = page.evaluate(() => window.ashTerminalEditorIntegration.closeAll(false));
+	await page.getByRole('button', { name: 'Terminate', exact: true }).click();
+	expect(await closing).toBe(true);
+	await expect.poll(() => page.evaluate(() => window.ashTerminalEditorIntegration.state())).toMatchObject({ instances: 0, editorTabs: 0 });
+});
+
+test('cancelling a later terminal confirmation aborts close all without terminating accepted terminals', async ({ page }) => {
+	await page.goto('/terminal.html?input&groups&editor');
+	await page.waitForFunction(() => Boolean(window.ashTerminalEditorIntegration));
+	await page.evaluate(() => window.ashTerminalGroupsIntegration.command('workbench.action.terminal.moveToEditor'));
+	await page.evaluate(() => window.ashTerminalEditorIntegration.createBackground());
+	await page.evaluate(() => window.ashTerminalEditorIntegration.confirmClose());
+	const closing = page.evaluate(() => window.ashTerminalEditorIntegration.closeAll(false));
+	await page.getByRole('button', { name: 'Terminate', exact: true }).click();
+	await expect(page.getByRole('dialog')).toContainText('Terminate the running processes');
+	await page.getByRole('button', { name: 'Cancel', exact: true }).click();
+	expect(await closing).toBe(false);
+	expect(await page.evaluate(() => window.ashTerminalEditorIntegration.state())).toMatchObject({ instances: 2, editorTabs: 2 });
 });
 
 test('terminal editor restoration displays an unavailable resource without starting a shell', async ({ page }) => {

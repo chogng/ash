@@ -3,6 +3,7 @@ import { localize } from '../../../../nls.js';
 import { IStorageService } from '../../../../platform/storage/common/storage.js';
 import { IThemeService } from '../../../../platform/theme/common/themeService.js';
 import { TerminalLocation } from '../../../../platform/terminal/common/terminal.js';
+import { IEditorGroupsService } from '../../../services/editor/common/editorGroupsService.js';
 import { EditorPane } from '../../../browser/parts/editor/editorPane.js';
 import type { IResourceEditorInput } from '../../../common/editor.js';
 import { ITerminalService, ITerminalEditorService, type ITerminalInstance } from './terminal.js';
@@ -23,6 +24,7 @@ export class TerminalEditor extends EditorPane {
 		@ITerminalEditorService private readonly editorTerminals: ITerminalEditorService,
 		@IThemeService theme: IThemeService,
 		@IStorageService storage: IStorageService,
+		@IEditorGroupsService private readonly editorGroups: IEditorGroupsService,
 	) { super(TerminalEditorInput.ID, theme, storage); }
 
 	override create(parent: HTMLElement): void {
@@ -51,9 +53,11 @@ export class TerminalEditor extends EditorPane {
 		const terminals = this.terminals;
 		input.closeHandler = {
 			showConfirm: () => terminals.instances.includes(instance),
-			confirm: async () => {
-				await terminals.safeDisposeTerminal(instance);
-				return terminals.instances.includes(instance) ? ConfirmResult.CANCEL : ConfirmResult.DONT_SAVE;
+			confirm: async closingEditors => {
+				if (this.editorGroups.groups.some(group => group.inputs.some(other =>
+					other instanceof TerminalEditorInput && other.resource.path === input.resource.path && !closingEditors.some(candidate => candidate.groupId === group.id && candidate.editor === other),
+				))) return ConfirmResult.DONT_SAVE;
+				return await terminals.confirmTerminalClose(instance) ? ConfirmResult.DONT_SAVE : ConfirmResult.CANCEL;
 			},
 		};
 		this.instance = instance;

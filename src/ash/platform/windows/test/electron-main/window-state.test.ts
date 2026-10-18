@@ -114,6 +114,34 @@ test('window session state reads retired mode fields and saves only window kind 
 	});
 });
 
+test('window sessions retain distinct persistent identities for the same workspace and reject replayed identities', async () => {
+	const state = new TestStateService();
+	const ids = ['12345678-1234-1234-1234-123456789abc', '12345678-1234-1234-1234-123456789abd'];
+	const windows = ids.map((windowSessionId, index) => ({ id: index + 1, focused: index === 1, entry: { kind: 'workbench', workspace: folderWorkspace, windowSessionId } }));
+	const handler = new WindowSessionStateHandler(state, () => windows, (entry): entry is IWindowSessionEntry => entry.kind === 'workbench');
+	await handler.saveSession();
+	assert.deepEqual(handler.readSession(), { active: 1, windows: windows.map(window => window.entry) });
+	for (const invalid of [ids[0], '../other-window', 12]) {
+		state.setItem('windowSession', { version: 1, active: 0, windows: windows.map((window, index) => ({ ...window.entry, workspace: serializeWorkspaceIdentifier(folderWorkspace), windowSessionId: index ? invalid : ids[0] })) });
+		assert.equal(handler.readSession(), undefined);
+	}
+});
+
+test('leaving window restoration persists only windows that were actually restored', async () => {
+	const state = new TestStateService();
+	const entries: IWindowSessionEntry[] = [folderWorkspace, multiRootWorkspace].map(workspace => ({ kind: 'workbench', workspace }));
+	let windows = entries.map((entry, index) => ({ id: index + 1, entry, focused: index === 1 }));
+	const handler = new WindowSessionStateHandler(state, () => windows, (entry): entry is IWindowSessionEntry => entry.kind === 'workbench');
+	await handler.saveSession();
+	{
+		using restoration = handler.beginRestoration();
+		windows = [windows[0]!];
+		handler.windowOpened();
+		assert.equal(handler.readSession()?.windows.length, 2);
+	}
+	assert.deepEqual(handler.readSession(), { active: 0, windows: [entries[0]] });
+});
+
 class TestWindow implements IStatefulWindow {
 	private readonly listeners = new Map<Parameters<IStatefulWindow['on']>[0], Set<() => void>>();
 	fullscreen = false;

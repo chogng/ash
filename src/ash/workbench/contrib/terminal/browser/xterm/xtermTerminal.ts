@@ -57,6 +57,9 @@ export class XtermTerminal extends Disposable implements IXtermTerminal {
 	private readonly markNavigationAddon = this._register(new MarkNavigationAddon(() => this.instance.capabilities?.has(TerminalCapability.CommandDetection)
 		? this.decorationAddon.markers : this.capabilities.get(TerminalCapability.PartialCommandDetection)?.commands ?? this.decorationAddon.markers));
 	private visible = false;
+	private opened = false;
+	private readonly _onDidOpen = this._register(new Emitter<void>());
+	readonly onDidOpen = this._onDidOpen.event;
 	private readonly resizeDebouncer: TerminalResizeDebouncer = this._register(new TerminalResizeDebouncer(
 		() => this.visible,
 		() => this.terminal ? this : undefined,
@@ -125,7 +128,7 @@ export class XtermTerminal extends Disposable implements IXtermTerminal {
 		this._register(configuration.onConfigChanged(() => {
 			if (!this.terminal) return;
 			this.terminal.options = this.screenOptions();
-			updateTerminalFontRendering(this.terminal, this.configuration.config.fontRendering);
+			if (this.opened) updateTerminalFontRendering(this.terminal, this.configuration.config.fontRendering);
 			this.fit();
 		}));
 	}
@@ -171,8 +174,13 @@ export class XtermTerminal extends Disposable implements IXtermTerminal {
 		terminal.loadAddon(this.shellIntegrationAddon);
 		terminal.loadAddon(this.decorationAddon);
 		terminal.loadAddon(this.markNavigationAddon);
-		terminal.open(this.element);
-		updateTerminalFontRendering(terminal, this.configuration.config.fontRendering);
+		if (!restored) {
+			terminal.open(this.element);
+			this.opened = true;
+			updateTerminalFontRendering(terminal, this.configuration.config.fontRendering);
+			this._onDidOpen.fire();
+		}
+
 		const bell = terminal.onBell(() => { void this.signals.playSignal(AccessibilitySignal.terminalBell); });
 		this._register(toDisposable(() => bell.dispose()));
 		this.registerAlternateScrollMode(terminal);
@@ -239,6 +247,7 @@ export class XtermTerminal extends Disposable implements IXtermTerminal {
 
 	focus(): void {
 		if (!this.visible || this.isDisposed) return;
+		this.fit();
 		this.resizeDebouncer.flush();
 		this.focusSource = this.element.ownerDocument.activeElement;
 		this.terminal?.focus();
@@ -360,7 +369,16 @@ export class XtermTerminal extends Disposable implements IXtermTerminal {
 
 	fit(): void {
 		if (!this.visible || !this.fitAddon || this.isDisposed) return;
-		if (this.element.clientWidth <= 0 || this.element.clientHeight <= 0) return;
+		if (!this.element.isConnected || this.element.clientWidth <= 0 || this.element.clientHeight <= 0) return;
+		if (!this.opened) {
+			// Recovery may initialize the buffer in a detached, hidden container.
+			// Open only in the visible host so xterm's viewport and canvas dimensions
+			// are initialized together before the saved grid is resized.
+			this.raw.open(this.element);
+			this.opened = true;
+			updateTerminalFontRendering(this.raw, this.configuration.config.fontRendering);
+			this._onDidOpen.fire();
+		}
 		try {
 			const dimensions = this.fitAddon.proposeDimensions();
 			if (dimensions) void this.resizeDebouncer.resize(Math.min(512, dimensions.cols), Math.min(512, dimensions.rows), false).catch(onUnexpectedError);

@@ -31,7 +31,7 @@ import type { IEditorGroupView } from './editor.js';
 import { ActiveEditorContext, ActiveEditorFirstInGroupContext, ActiveEditorLastInGroupContext, ActiveEditorPinnedContext, ActiveEditorStickyContext, EditorGroupEditorsCountContext, MultipleEditorsSelectedInGroupContext, ResourceContext, ResourceLanguageIdContext, ResourceSchemeContext } from '../../../common/contextkeys.js';
 import type { TextResourceLanguageResolver } from "../../../../platform/language/common/textResourceLanguage.js";
 
-import { getEditorWorkingCopies, EditorInputCapabilities, EditorResourceAccessor, SideBySideEditor, isEditorPaneWithSelection, isResourceDiffEditorInput, type IResourceEditorInput, isEditorPaneWithStatus, type IEditorPane } from '../../../common/editor.js';
+import { getEditorWorkingCopies, EditorInputCapabilities, EditorResourceAccessor, SideBySideEditor, isEditorPaneWithSelection, isResourceDiffEditorInput, type IResourceEditorInput, type IEditorIdentifier, isEditorPaneWithStatus, type IEditorPane } from '../../../common/editor.js';
 import { isEditorPaneWithViewState } from "./editorWithViewState.js";
 import { EditorPanes, type EditorPaneInstance } from './editorPanes.js';
 import { extractExternalEditorInputs } from "./editorDropData.js";
@@ -83,7 +83,7 @@ export interface EditorGroupOptions {
 	readonly serverEvents?: IServerEventApi;
 	readonly workingCopyService?: IWorkingCopyService;
 	readonly onSave?: (group: IEditorGroupView, input: IResourceEditorInput, pane: IEditorPane) => Promise<IResourceEditorInput | undefined>;
-	readonly onWillCloseEditor?: (group: IEditorGroupView, input: IResourceEditorInput, pane: IEditorPane, closingGroups?: readonly EditorGroupId[]) => Promise<boolean>;
+	readonly onWillCloseEditor?: (group: IEditorGroupView, input: IResourceEditorInput, pane: IEditorPane, closingGroups?: readonly EditorGroupId[], closingEditors?: readonly IEditorIdentifier[]) => Promise<boolean>;
 	readonly onOpenLocation?: (location: LanguageLocation) => void | Promise<void>;
 	readonly onApplyWorkspaceEdit?: (edit: LanguageWorkspaceEdit, options?: IBulkEditOptions) => void | boolean | Promise<void | boolean>;
 	readonly titleActions?: EditorHeaderActions;
@@ -725,11 +725,11 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 		return !this.isDisposed && this.entry(input) === entry && !getEditorWorkingCopies(pane).some(copy => copy.isDirty) ? entry.input : undefined;
 	}
 
-	async confirmCloseEditor(input: IResourceEditorInput, closingGroups?: readonly EditorGroupId[]): Promise<boolean> {
+	async confirmCloseEditor(input: IResourceEditorInput, closingGroups?: readonly EditorGroupId[], closingEditors?: readonly IEditorIdentifier[]): Promise<boolean> {
 		const entry = this.entry(input);
 		if (!entry) return true;
 		// A clean file can still have unresolved save recovery; let the resource owner settle first.
-		if (this.onWillCloseEditor) return this.onWillCloseEditor(this, entry.input, entry.paneInstance.pane, closingGroups);
+		if (this.onWillCloseEditor) return this.onWillCloseEditor(this, entry.input, entry.paneInstance.pane, closingGroups, closingEditors);
 		return !getEditorWorkingCopies(entry.paneInstance.pane).some(copy => copy.isDirty);
 	}
 
@@ -828,7 +828,7 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 	async setContent(content: Element): Promise<boolean> {
 		const inputs = [...this.inputs];
 		for (const input of inputs) {
-			if (!await this.confirmCloseEditor(input, [this.id])) return false;
+			if (!await this.confirmCloseEditor(input, [this.id], inputs.map(editor => ({ editor, groupId: this.id })))) return false;
 		}
 		this.openSequence += 1;
 		this.cancelPendingOpen();

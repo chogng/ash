@@ -1825,6 +1825,89 @@ test('Close All Editors keeps dirty documents owned by a sticky view in another 
 	} finally { dom.window.close(); }
 });
 
+for (const action of ['tab', 'group', 'all', 'sticky', 'cancel'] as const) test(`custom close confirmation preserves shared resource ownership for ${action}`, async () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	try {
+		using registry = new EditorPaneRegistry();
+		using registration = registry.registerEditorPane(descriptor('test.sharedCustom', '.ts', () => new TestEditorPane('test.sharedCustom')));
+		const confirmations: import('../../../../../common/editor.js').IEditorIdentifier[][] = [];
+		const resource: IResourceEditorInput = {
+			resource: URI.file('/project/terminal.ts'), editorId: 'test.sharedCustom',
+			closeHandler: { showConfirm: () => true, confirm: async editors => { confirmations.push([...editors]); return action === 'cancel' ? ConfirmResult.CANCEL : ConfirmResult.DONT_SAVE; } },
+		};
+		using editor = createEditorPart(dom.window.document.body, { registry });
+		await editor.openEditor(resource, { pinned: true });
+		const first = editor.activeGroup;
+		await editor.openEditor(resource, { pinned: true }, 'sideGroup');
+		const second = editor.activeGroup;
+		if (action === 'sticky') first.stickEditor(resource);
+		if (action === 'tab') {
+			assert.equal(await second.closeEditor(resource), true);
+			assert.deepEqual(confirmations, []);
+			assert.equal(await first.closeEditor(resource), true);
+			assert.deepEqual(confirmations, [[{ editor: resource, groupId: first.id }]]);
+		} else if (action === 'group') {
+			assert.equal(await editor.removeGroup(second), true);
+			assert.deepEqual(confirmations, []);
+			assert.deepEqual(first.inputs, [resource]);
+		} else {
+			assert.equal(await editor.closeAllEditors({ excludeSticky: action === 'sticky' }), action !== 'cancel');
+			if (action === 'sticky') {
+				assert.deepEqual(confirmations, []);
+				assert.deepEqual(first.inputs, [resource]);
+			} else {
+				assert.deepEqual(confirmations, [[{ editor: resource, groupId: first.id }, { editor: resource, groupId: second.id }]]);
+				assert.equal(editor.groups.flatMap(group => group.inputs).length, action === 'cancel' ? 2 : 0);
+			}
+		}
+	} finally { dom.window.close(); }
+});
+
+test('close all leaves editors opened while confirmation is pending untouched', async () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	try {
+		using registry = new EditorPaneRegistry();
+		using registration = registry.registerEditorPane(descriptor('test.pendingClose', '.ts', () => new TestEditorPane('test.pendingClose')));
+		const pending = new DeferredPromise<ConfirmResult>();
+		const requested = new DeferredPromise<void>();
+		const first: IResourceEditorInput = { resource: URI.file('/project/first.ts'), closeHandler: { showConfirm: () => true, confirm: () => { void requested.complete(); return pending.p; } } };
+		const late = input('/project/late.ts');
+		using editor = createEditorPart(dom.window.document.body, { registry });
+		await editor.openEditor(first, { pinned: true });
+		const closing = editor.closeAllEditors();
+		await requested.p;
+		await editor.openEditor(late, { pinned: true });
+		await pending.complete(ConfirmResult.DONT_SAVE);
+		assert.equal(await closing, true);
+		assert.deepEqual(editor.activeGroup.inputs, [late]);
+	} finally { dom.window.close(); }
+});
+
+for (const cancel of [false, true]) test(`close all custom editors across auxiliary windows shares one exact confirmation batch (${cancel ? 'cancel' : 'accept'})`, async () => {
+	const dom = new JSDOM('<!doctype html><body></body>', { url: 'http://localhost' });
+	try {
+		using registry = new EditorPaneRegistry();
+		using registration = registry.registerEditorPane(descriptor('test.multiWindowCustom', '.ts', () => new TestEditorPane('test.multiWindowCustom')));
+		using main = createEditorPart(dom.window.document.body, { registry });
+		using windows = new TestAuxiliaryWindowService();
+		using storage = new BrowserStorageService({ ownerWindow: dom.window as unknown as Window, workspaceId: 'custom-close', flushInterval: 0 });
+		using parts = createEditorParts(main, windows, container => createAuxiliaryPart(container, registry), {
+			onDidChangeScreenReaderOptimized: Event.None, isScreenReaderOptimized: () => false,
+		} as unknown as IAccessibilityService, storage);
+		const confirmations: import('../../../../../common/editor.js').IEditorIdentifier[][] = [];
+		const resource: IResourceEditorInput = {
+			resource: URI.file('/project/shared-terminal.ts'), editorId: 'test.multiWindowCustom',
+			closeHandler: { showConfirm: () => true, confirm: async editors => { confirmations.push([...editors]); return cancel ? ConfirmResult.CANCEL : ConfirmResult.DONT_SAVE; } },
+		};
+		await main.openEditor(resource, { pinned: true });
+		const auxiliary = await parts.createAuxiliaryEditorPart();
+		await auxiliary.openEditor(resource, { pinned: true });
+		assert.equal(await parts.closeAllEditors(), !cancel);
+		assert.deepEqual(confirmations, [[{ editor: resource, groupId: main.activeGroup.id }, { editor: resource, groupId: auxiliary.activeGroup.id }]]);
+		assert.equal(parts.groups.flatMap(group => group.inputs).length, cancel ? 2 : 0);
+	} finally { dom.window.close(); }
+});
+
 test('EditorPart empty groups receive focus and a localized accessible label', async () => {
 	const dom = new JSDOM('<!doctype html><body><button>Explorer</button></body>');
 	try {

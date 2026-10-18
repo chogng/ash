@@ -363,6 +363,8 @@ class FakeFileService implements IFileSystemProvider {
 
 class FakeTerminalService extends Disposable implements ITerminalService {
 	readonly whenConnected = Promise.resolve();
+	async importTerminalState(): Promise<ITerminalInstance> { throw new Error('Tasks do not transfer terminal state'); }
+	async confirmTerminalClose() { return true; }
 	async safeDisposeTerminal(instance: ITerminalInstance) { await this.closeTerminal(instance); }
 	private readonly createEmitter = this._register(new Emitter<ITerminalInstance>());
 	readonly instances: FakeTerminalInstance[] = [];

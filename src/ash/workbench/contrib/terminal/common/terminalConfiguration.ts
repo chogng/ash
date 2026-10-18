@@ -91,7 +91,11 @@ properties[`${TERMINAL_CONFIG_SECTION}.confirmOnExit`] = {
 };
 properties[`${TERMINAL_CONFIG_SECTION}.enablePersistentSessions`] = {
 	type: 'boolean', default: true,
-	get description() { return localize('terminal.config.enablePersistentSessions', 'Preserve terminal processes, history and layout across window reloads.'); },
+	get description() { return localize('terminal.config.enablePersistentSessions', 'Preserve terminal sessions across window reloads and recreate them after eligible shutdowns.'); },
+};
+properties[`${TERMINAL_CONFIG_SECTION}.persistentSessionReviveProcess`] = {
+	type: 'string', enum: ['onExit', 'onExitAndWindowClose', 'never'], default: 'onExit',
+	get description() { return localize('terminal.config.reviveProcess', 'Recreate shells with their saved output, working directory and layout after application exit, after application exit and window close, or never. Running commands are not resumed.'); },
 };
 properties[TerminalSettingId.EnableMultiLinePasteWarning] = {
 	type: 'string', default: 'auto', enum: ['auto', 'always', 'never'],

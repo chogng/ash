@@ -16,6 +16,7 @@ export interface IApplicationStorageMainService extends IDisposable {
 	readonly onWillSaveState: Event<IWillSaveStateEvent>;
 	initialize(): Promise<void>;
 	getItems(identity: IStorageIdentity, legacy?: Readonly<Record<string, IStorageEntry>>): Promise<IStorageSnapshot>;
+	getItemsIfExists(identity: IStorageIdentity): Promise<IStorageSnapshot | undefined>;
 	updateItems(identity: IStorageIdentity, key: string, entry: IStorageEntry | null): Promise<IStorageSnapshot>;
 	cleanUpStorage(protectedWorkspaceIds: ReadonlySet<string>): Promise<void>;
 	use(identity: IStorageIdentity): IDisposable;
@@ -66,6 +67,11 @@ export class StorageMainService extends Disposable implements IApplicationStorag
 			}
 		});
 		return this.initializing;
+	}
+
+	/** Inspect restoration candidates without turning a new workspace into an existing one. */
+	public getItemsIfExists(identity: IStorageIdentity): Promise<IStorageSnapshot | undefined> {
+		return this.run(async () => this.storages.get(storageIdentityKey(identity)));
 	}
 
 	public getItems(identity: IStorageIdentity, legacy?: Readonly<Record<string, IStorageEntry>>): Promise<IStorageSnapshot> {

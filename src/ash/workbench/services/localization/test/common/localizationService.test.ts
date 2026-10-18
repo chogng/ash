@@ -60,6 +60,12 @@ suite('Workbench localization', () => {
 			commandActionLabel(localize2({ bundle: 'ash.actions', key: 'togglePanelVisibility' }, 'Toggle Panel Visibility')),
 			commandActionLabel(localize2({ bundle: 'ash.actions', key: 'focusPanel' }, 'Focus into Panel')),
 		], ['切换面板显示', '将焦点移入面板']);
+		assert.deepEqual([
+			localize('positionPanelLeft', ''), localize('positionPanelRight', ''),
+			localize('positionPanelTop', ''), localize('positionPanelBottom', ''),
+			localize('workbench.panel.defaultLocation.title', ''),
+		], ['将面板移到左侧', '将面板移到右侧', '将面板移到顶部', '将面板移到底部', '默认面板位置']);
+		assert.equal(localize('workbench.panel.defaultLocation.invalid', ''), '面板位置必须为左侧、右侧、顶部或底部。');
 		assert.match(localize('accessibility.editorPanel', ''), /将焦点移入面板[\s\S]*恢复编辑器区域/u);
 		assert.match(localize('accessibility.editorAuxiliaryBar', ''), /最大化辅助侧栏[\s\S]*保留会话和草稿/u);
 	});

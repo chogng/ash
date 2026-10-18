@@ -5547,6 +5547,11 @@ client_methods! {
         response: TerminalCreateResult,
         serialization: SessionExclusive,
     },
+    TerminalDetach => "terminal/detach" {
+        params: TerminalCloseParams,
+        response: TerminalReconnectLease,
+        serialization: None,
+    },
     TerminalAttach => "terminal/attach" {
         params: TerminalAttachParams,
         response: TerminalAttachResult,

@@ -16,7 +16,7 @@ interface RunningApplication {
 	diagnostics: Pick<WorkbenchDiagnostics, 'pageErrors' | 'consoleErrors' | 'errors'>;
 	deferRestart(): Promise<void>;
 	restartMessage(): Promise<string>;
-	reload(): Promise<{ application: PlaywrightApplication; workbench: Workbench; }>;
+	reload(reason?: 'windowClose' | 'quit'): Promise<{ application: PlaywrightApplication; workbench: Workbench; }>;
 	restart(): Promise<{ application: PlaywrightApplication; workbench: Workbench; }>;
 }
 
@@ -198,14 +198,17 @@ export const test = base.extend<PlaywrightFixtures>({
 				let generation = 0;
 				const running: RunningApplication = {
 					driver: current.driver, diagnostics,
-					reload: async () => {
+					reload: async (reason = 'windowClose') => {
 						await current.driver.workbench.page.context().tracing.stop();
-						const page = current.driver.workbench.page;
-						const closed = page.waitForEvent('close');
-						const window = await current.application.browserWindow(page);
-						await window.evaluate(window => window.close());
-						await closed;
-						await current.close();
+						if (reason === 'quit') await current.quit();
+						else {
+							const page = current.driver.workbench.page;
+							const closed = page.waitForEvent('close');
+							const window = await current.application.browserWindow(page);
+							await window.evaluate(window => window.close());
+							await closed;
+							await current.close();
+						}
 						current = await launchElectron(options);
 						generations.push(current.driver.diagnostics);
 						await captureRestartDialogs(current.application);

@@ -633,3 +633,259 @@ for (const locale of ['en', 'zh-CN'] as const) test.describe(`terminal close pro
 		}
 	});
 });
+
+test('terminal Panel position commands rotate real splits while preserving sizes, focus and shell processes', { tag: ['@electron-app-server'] }, async ({ workbench, driver, testWorkspace }, testInfo) => {
+	const page = workbench.page;
+	await driver.setWindowSize({ width: 1600, height: 1000 });
+	await workbench.terminal.show();
+	await page.locator('.ash-terminal-title-toolbar').getByRole('button', { name: 'Split Terminal', exact: true }).click();
+	const panes = page.locator('.ash-terminal-group-pane:visible');
+	await expect(panes).toHaveCount(2);
+	const ids = await panes.evaluateAll(nodes => nodes.map(node => (node as HTMLElement).dataset.instanceId));
+	const shellPids: string[] = [];
+	const recordShell = async (index: number, phase: string): Promise<string> => {
+		const file = `panel-process-${index}-${phase}.txt`;
+		const input = panes.nth(index).locator('.xterm-helper-textarea');
+		await input.focus();
+		await input.pressSequentially(`node -e "require('fs').writeFileSync('${file}',String(process.ppid))"`);
+		await input.press('Enter');
+		await expect.poll(() => readFile(join(testWorkspace.directory, file), 'utf8').catch(() => '')).toMatch(/^\d+$/u);
+		return readFile(join(testWorkspace.directory, file), 'utf8');
+	};
+	for (const index of [0, 1]) shellPids.push(await recordShell(index, 'before'));
+	const input = panes.nth(1).locator('.xterm-helper-textarea');
+	await input.focus();
+	await input.pressSequentially('node -e "console.log([\'PANEL\',');
+	const sash = page.locator('.ash-terminal-group:visible > .ash-sash').first();
+	await expect(sash).toBeVisible();
+	const sashBounds = (await sash.boundingBox())!;
+	await page.mouse.move(sashBounds.x + sashBounds.width / 2, sashBounds.y + sashBounds.height / 2);
+	await page.mouse.down();
+	await page.mouse.move(sashBounds.x + 55, sashBounds.y + sashBounds.height / 2, { steps: 6 });
+	await page.mouse.up();
+	await expect(input).toBeFocused();
+	const ratios = async (axis: 'width' | 'height'): Promise<number[]> => panes.evaluateAll((nodes, axis) => {
+		const sizes = nodes.map(node => node.getBoundingClientRect()[axis]);
+		const total = sizes.reduce((sum, size) => sum + size, 0);
+		return sizes.map(size => size / total);
+	}, axis);
+	const beforeRatios = await ratios('width');
+	for (const [position, axis] of [['Left', 'height'], ['Right', 'height'], ['Top', 'width'], ['Bottom', 'width']] as const) {
+		await workbench.quickaccess.runCommand(`workbench.action.positionPanel${position}`);
+		await expect(panes).toHaveCount(2);
+		await expect(page.locator(`.ash-terminal-group:visible.ash-split-view-${axis === 'width' ? 'horizontal' : 'vertical'}`)).toHaveCount(1);
+		await expect(input).toBeFocused();
+		await expect.poll(() => panes.evaluateAll(nodes => nodes.map(node => (node as HTMLElement).dataset.instanceId))).toEqual(ids);
+		await expect.poll(async () => Math.max(...(await ratios(axis)).map((ratio, index) => Math.abs(ratio - beforeRatios[index]!))), { message: `Panel ${position} must retain pane ratios ${JSON.stringify(beforeRatios)}` }).toBeLessThan(0.02);
+		await expect.poll(async () => {
+			const panel = (await page.locator('[data-part="panel"]').boundingBox())!;
+			const editor = (await page.locator('[data-part="editor"]').boundingBox())!;
+			switch (position) {
+				case 'Left': return Math.abs(panel.x + panel.width - editor.x) <= 8 && Math.abs(panel.y - editor.y) <= 4;
+				case 'Right': return Math.abs(editor.x + editor.width - panel.x) <= 8 && Math.abs(panel.y - editor.y) <= 4;
+				case 'Top': return Math.abs(panel.y + panel.height - editor.y) <= 8 && Math.abs(panel.x - editor.x) <= 4;
+				case 'Bottom': return Math.abs(editor.y + editor.height - panel.y) <= 8 && Math.abs(panel.x - editor.x) <= 4;
+			}
+		}).toBe(true);
+	}
+	await input.pressSequentially('\'READY\'].join(\'_\'))"');
+	await input.press('Enter');
+	await expect(panes.nth(1).locator('.xterm-rows > div').filter({ hasText: /^PANEL_READY\s*$/u })).toBeVisible();
+	for (const index of [0, 1]) expect(await recordShell(index, 'after')).toBe(shellPids[index]);
+	await page.screenshot({ path: testInfo.outputPath('terminal-panel-positions.png') });
+	expect(driver.diagnostics.errors).toEqual([]);
+});
+
+test('moving a terminal to a real desktop window retains its shell PID, cwd, output and pending input', { tag: ['@electron-app-server'] }, async ({ application, workbench, testWorkspace, driver }, testInfo) => {
+	test.skip(process.platform === 'win32', 'POSIX shell input fixture; Windows needs its host-specific pending-input acceptance.');
+	test.setTimeout(90000);
+	if (!('windows' in application)) throw new Error('The terminal window transfer requires Electron');
+	const { Workbench } = await import('../../../automation/workbench.js');
+	const source = workbench.page;
+	const directory = join(testWorkspace.directory, 'transfer working directory');
+	await mkdir(directory);
+	const quote = (value: string): string => "'" + value.replaceAll("'", "'\"'\"'") + "'";
+	await workbench.terminal.show();
+	await workbench.terminal.runCommand(`cd -- ${quote(directory)}`);
+	const beforeFile = join(directory, 'before.json');
+	await workbench.terminal.runCommand("node -e \"require('fs').writeFileSync('before.json',JSON.stringify({shell:process.ppid,cwd:process.cwd()}))\"");
+	await expect.poll(() => readFile(beforeFile, 'utf8').catch(() => '')).toMatch(/"shell":\d+/u);
+	const before = JSON.parse(await readFile(beforeFile, 'utf8')) as { shell: number; cwd: string; };
+	await workbench.terminal.runCommand("printf 'WINDOW_%s\\n' HISTORY");
+	await expect(workbench.terminal.activeInstance.locator('.xterm-rows > div').filter({ hasText: /^WINDOW_HISTORY\s*$/u })).toBeVisible();
+	await workbench.quickaccess.runCommand('workbench.action.terminal.moveToEditor');
+	const sourceInput = source.locator('.ash-terminal-editor .xterm-helper-textarea');
+	await expect(sourceInput).toBeFocused();
+	await sourceInput.pressSequentially("printf 'PENDING_%s\\n' ");
+	const opening = application.waitForEvent('window');
+	await workbench.quickaccess.runCommand('workbench.action.terminal.moveIntoNewWindow');
+	const target = await opening;
+	const peer = new Workbench(target);
+	try {
+		await peer.waitForReady();
+		await expect(peer.terminal.instances).toHaveCount(1);
+		await expect(source.locator('.ash-terminal-editor .xterm')).toHaveCount(0);
+		await expect(workbench.terminal.instances).toHaveCount(0);
+		const screen = peer.terminal.activeInstance;
+		await expect(screen.locator('.xterm-rows')).toContainText('WINDOW_HISTORY');
+		await expect(screen.locator('.xterm-rows')).toContainText('PENDING_');
+		const input = screen.locator('.xterm-helper-textarea');
+		await expect(input).toBeFocused();
+		process.kill(before.shell, 0);
+		await input.pressSequentially('RESUMED');
+		await input.press('Enter');
+		await expect(screen.locator('.xterm-rows > div').filter({ hasText: /^PENDING_RESUMED\s*$/u })).toBeVisible();
+		await peer.terminal.runCommand("node -e \"require('fs').writeFileSync('after.json',JSON.stringify({shell:process.ppid,cwd:process.cwd()}))\"");
+		const afterFile = join(directory, 'after.json');
+		await expect.poll(() => readFile(afterFile, 'utf8').catch(() => '')).toMatch(/"shell":\d+/u);
+		expect(JSON.parse(await readFile(afterFile, 'utf8'))).toEqual(before);
+		await target.screenshot({ path: testInfo.outputPath('terminal-window-transfer.png') });
+		await testInfo.attach('terminal-window-process-identity', { body: JSON.stringify(before), contentType: 'application/json' });
+		await target.locator('.ash-terminal-title-toolbar').getByRole('button', { name: 'Kill Terminal', exact: true }).click();
+		await expect(peer.terminal.instances).toHaveCount(0);
+		expect(driver.diagnostics.errors).toEqual([]);
+	} finally {
+		if (!target.isClosed()) await target.close();
+	}
+});
+
+for (const reason of ['quit', 'windowClose'] as const) test.describe(`terminal process revival after ${reason}`, () => {
+	test.use({ electronUserSettings: { 'terminal.integrated.persistentSessionReviveProcess': reason === 'quit' ? 'onExit' : 'onExitAndWindowClose' } });
+	test('restores output, cwd and split layout with fresh shells without replaying commands', { tag: ['@electron-app-server'] }, async ({ workbench, runningApplication, testWorkspace }, testInfo) => {
+		test.skip(process.platform === 'win32', 'POSIX shell acceptance; PowerShell is covered separately.');
+		test.setTimeout(90_000);
+		const directory = join(testWorkspace.directory, 'revived-cwd');
+		await mkdir(directory);
+		await writeFile(join(testWorkspace.directory, 'revive-fixture.cjs'), `const fs = require('fs'); const path = require('path'); const root = ${JSON.stringify(testWorkspace.directory)}; const id = process.argv[2]; const phase = process.argv[3]; fs.writeFileSync(path.join(root, id + '-' + phase + '.json'), JSON.stringify({ shell: process.ppid, pid: process.pid, cwd: process.cwd() })); if (phase === 'before') { fs.appendFileSync(path.join(root, 'executions.txt'), id + '\\n'); console.log('REVIVE_HISTORY:' + id); setInterval(() => {}, 1000); } else console.log('REVIVE_READY:' + id);`);
+		await workbench.terminal.show();
+		await workbench.page.locator('.ash-terminal-title-toolbar').getByRole('button', { name: 'Split Terminal', exact: true }).click();
+		const panes = workbench.page.locator('.ash-terminal-group-pane:visible');
+		await expect(panes).toHaveCount(2);
+		for (const index of [0, 1]) {
+			const input = panes.nth(index).locator('.xterm-helper-textarea');
+			await input.focus();
+			await input.pressSequentially('cd revived-cwd');
+			await input.press('Enter');
+			await input.pressSequentially(`node ../revive-fixture.cjs ${index} before`);
+			await input.press('Enter');
+			await expect(panes.nth(index).locator('.xterm-rows')).toContainText(`REVIVE_HISTORY:${index}`);
+		}
+		const sash = workbench.page.locator('.ash-terminal-group:visible > .ash-sash').first();
+		const bounds = (await sash.boundingBox())!;
+		await workbench.page.mouse.move(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2);
+		await workbench.page.mouse.down();
+		await workbench.page.mouse.move(bounds.x + 55, bounds.y + bounds.height / 2, { steps: 6 });
+		await workbench.page.mouse.up();
+		const ratio = await panes.evaluateAll(nodes => nodes[0]!.getBoundingClientRect().width / nodes.reduce((sum, node) => sum + node.getBoundingClientRect().width, 0));
+		const identities = await Promise.all([0, 1].map(async index => JSON.parse(await readFile(join(testWorkspace.directory, `${index}-before.json`), 'utf8')) as { shell: number; pid: number; cwd: string; }));
+		const executions = await readFile(join(testWorkspace.directory, 'executions.txt'), 'utf8');
+		const restored = (await runningApplication.reload(reason)).workbench;
+		const restoredPanes = restored.page.locator('.ash-terminal-group-pane:visible');
+		await expect(restoredPanes).toHaveCount(2);
+		await expect.poll(() => restoredPanes.evaluateAll(nodes => nodes[0]!.getBoundingClientRect().width / nodes.reduce((sum, node) => sum + node.getBoundingClientRect().width, 0))).toBeCloseTo(ratio, 2);
+		for (const index of [0, 1]) {
+			const pane = restoredPanes.nth(index);
+			await expect(pane.locator('.xterm-rows')).toContainText(`REVIVE_HISTORY:${index}`);
+			const input = pane.locator('.xterm-helper-textarea');
+			await input.focus();
+			await input.pressSequentially(`node ../revive-fixture.cjs ${index} after`);
+			await input.press('Enter');
+			await expect(pane.locator('.xterm-rows > div').filter({ hasText: new RegExp(`^REVIVE_READY:${index}\\s*$`, 'u') })).toBeVisible();
+			const after = JSON.parse(await readFile(join(testWorkspace.directory, `${index}-after.json`), 'utf8')) as { shell: number; cwd: string; };
+			expect(after.shell).not.toBe(identities[index]!.shell);
+			expect(after.cwd).toBe(directory);
+			await expect.poll(() => { try { process.kill(identities[index]!.pid, 0); return true; } catch { return false; } }).toBe(false);
+		}
+		expect(await readFile(join(testWorkspace.directory, 'executions.txt'), 'utf8')).toBe(executions);
+		await restored.page.screenshot({ path: testInfo.outputPath(`terminal-revive-${reason}.png`) });
+		expect(runningApplication.diagnostics.errors).toEqual([]);
+	});
+});
+
+test.describe('terminal revival keeps independent windows of the same workspace isolated', () => {
+	test.use({ electronUserSettings: { 'window.restoreWindows': 'preserve', 'terminal.integrated.persistentSessionReviveProcess': 'onExit' } });
+
+	test('quit restores both window histories, directories and split layouts with separate fresh shells', { tag: ['@electron-app-server'] }, async ({ application, workbench, runningApplication, testWorkspace }, testInfo) => {
+		test.skip(process.platform === 'win32', 'POSIX directory fixture; Windows needs its host-specific shell acceptance.');
+		test.setTimeout(120_000);
+		if (!('windows' in application)) throw new Error('Multi-window revival requires Electron');
+		const { Workbench } = await import('../../../automation/workbench.js');
+		const directoryA = join(testWorkspace.directory, 'window-a-cwd');
+		const directoryB = join(testWorkspace.directory, 'window-b-cwd');
+		await mkdir(directoryA);
+		await mkdir(directoryB);
+		await writeFile(join(testWorkspace.directory, 'multiwindow-revive.cjs'), `const fs = require('fs'); const path = require('path'); const root = ${JSON.stringify(testWorkspace.directory)}; const id = process.argv[2]; const phase = process.argv[3]; fs.writeFileSync(path.join(root,id+'-'+phase+'.json'),JSON.stringify({shell:process.ppid,cwd:process.cwd()})); if(phase==='before') fs.appendFileSync(path.join(root,'window-executions.txt'),id+'\\n'); console.log((phase==='before'?'MW_HISTORY:':'MW_READY:')+id);`);
+		await workbench.terminal.show();
+		const opening = application.waitForEvent('window');
+		await workbench.quickaccess.runCommand('workbench.action.terminal.moveIntoNewWindow');
+		const peer = new Workbench(await opening);
+		await peer.waitForReady();
+		await expect(workbench.terminal.instances).toHaveCount(0);
+		await expect(peer.terminal.instances).toHaveCount(1);
+		await workbench.quickaccess.runCommand('workbench.action.terminal.new');
+		await workbench.page.locator('.ash-terminal-title-toolbar').getByRole('button', { name: 'Split Terminal', exact: true }).click();
+		const panesA = workbench.page.locator('.ash-terminal-group-pane:visible');
+		const panesB = peer.page.locator('.ash-terminal-group-pane:visible');
+		await expect(panesA).toHaveCount(2);
+		await expect(panesB).toHaveCount(1);
+		const quote = (value: string): string => "'" + value.replaceAll("'", "'\"'\"'") + "'";
+		for (const { pane, id, cwd } of [{ pane: panesA.nth(0), id: 'A0', cwd: directoryA }, { pane: panesA.nth(1), id: 'A1', cwd: directoryA }, { pane: panesB.nth(0), id: 'B0', cwd: directoryB }]) {
+			const input = pane.locator('.xterm-helper-textarea');
+			await input.focus();
+			await input.pressSequentially(`cd -- ${quote(cwd)}`);
+			await input.press('Enter');
+			await input.pressSequentially(`node ../multiwindow-revive.cjs ${id} before`);
+			await input.press('Enter');
+			await expect(pane.locator('.xterm-rows')).toContainText(`MW_HISTORY:${id}`);
+		}
+		const sash = workbench.page.locator('.ash-terminal-group:visible > .ash-sash').first();
+		const bounds = (await sash.boundingBox())!;
+		await workbench.page.mouse.move(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2);
+		await workbench.page.mouse.down();
+		await workbench.page.mouse.move(bounds.x + 55, bounds.y + bounds.height / 2, { steps: 6 });
+		await workbench.page.mouse.up();
+		const ratio = await panesA.evaluateAll(nodes => nodes[0]!.getBoundingClientRect().width / nodes.reduce((sum, node) => sum + node.getBoundingClientRect().width, 0));
+		const identities = new Map(await Promise.all(['A0', 'A1', 'B0'].map(async id => [id, JSON.parse(await readFile(join(testWorkspace.directory, `${id}-before.json`), 'utf8')) as { shell: number; cwd: string; }] as const)));
+		const executions = await readFile(join(testWorkspace.directory, 'window-executions.txt'), 'utf8');
+		const restored = await runningApplication.reload('quit');
+		if (!('windows' in restored.application)) throw new Error('Desktop revival returned a browser application');
+		const desktop = restored.application;
+		await expect.poll(() => desktop.windows().length).toBe(2);
+		const windows = desktop.windows().map(page => new Workbench(page));
+		await Promise.all(windows.map(window => window.waitForReady()));
+		await expect.poll(async () => (await Promise.all(windows.map(async window => {
+			const text = (await window.page.locator('.ash-terminal-instance .xterm-rows').allTextContents()).join('\n');
+			return text.includes('MW_HISTORY:A0') ? 'A' : text.includes('MW_HISTORY:B0') ? 'B' : 'loading';
+		}))).sort()).toEqual(['A', 'B']);
+		const contents = await Promise.all(windows.map(async window => (await window.page.locator('.ash-terminal-instance .xterm-rows').allTextContents()).join('\n')));
+		const a = windows[contents.findIndex(text => text.includes('MW_HISTORY:A0'))]!;
+		const b = windows[contents.findIndex(text => text.includes('MW_HISTORY:B0'))]!;
+		expect(a).toBeDefined();
+		expect(b).toBeDefined();
+		expect(a).not.toBe(b);
+		await expect(a.terminal.instances).toHaveCount(2);
+		await expect(b.terminal.instances).toHaveCount(1);
+		await expect(a.page.locator('.ash-terminal-group-pane:visible')).toHaveCount(2);
+		await expect(b.page.locator('.ash-terminal-group-pane:visible')).toHaveCount(1);
+		await expect(a.page.locator('.ash-terminal-group:visible')).toHaveCount(1);
+		await expect(b.page.locator('.ash-terminal-group:visible')).toHaveCount(1);
+		expect((await a.page.locator('.xterm-rows').allTextContents()).join('\n')).not.toContain('MW_HISTORY:B0');
+		expect((await b.page.locator('.xterm-rows').allTextContents()).join('\n')).not.toContain('MW_HISTORY:A');
+		const restoredPanesA = a.page.locator('.ash-terminal-group-pane:visible');
+		await expect.poll(() => restoredPanesA.evaluateAll(nodes => nodes[0]!.getBoundingClientRect().width / nodes.reduce((sum, node) => sum + node.getBoundingClientRect().width, 0))).toBeCloseTo(ratio, 1);
+		for (const { pane, id, cwd } of [{ pane: restoredPanesA.nth(0), id: 'A0', cwd: directoryA }, { pane: restoredPanesA.nth(1), id: 'A1', cwd: directoryA }, { pane: b.page.locator('.ash-terminal-group-pane:visible').nth(0), id: 'B0', cwd: directoryB }]) {
+			const input = pane.locator('.xterm-helper-textarea');
+			await input.focus();
+			await input.pressSequentially(`node ../multiwindow-revive.cjs ${id} after`);
+			await input.press('Enter');
+			await expect(pane.locator('.xterm-rows > div').filter({ hasText: new RegExp(`^MW_READY:${id}\\s*$`, 'u') })).toBeVisible();
+			const after = JSON.parse(await readFile(join(testWorkspace.directory, `${id}-after.json`), 'utf8')) as { shell: number; cwd: string; };
+			expect(after.shell).not.toBe(identities.get(id)!.shell);
+			expect(after.cwd).toBe(cwd);
+		}
+		expect(await readFile(join(testWorkspace.directory, 'window-executions.txt'), 'utf8')).toBe(executions);
+		await a.page.screenshot({ path: testInfo.outputPath('terminal-revive-window-a.png') });
+		await b.page.screenshot({ path: testInfo.outputPath('terminal-revive-window-b.png') });
+		expect(runningApplication.diagnostics.errors).toEqual([]);
+	});
+});

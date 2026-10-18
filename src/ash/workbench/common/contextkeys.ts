@@ -56,6 +56,7 @@ export const ActiveAgentSidebarContext = new RawContextKey<string>('activeAgentS
 export const PanelVisibleContext = new RawContextKey<boolean>('panelVisible', true);
 
 /** Whether the bottom panel currently occupies the central editor region. */
+export const PanelPositionContext = new RawContextKey<string>('panelPosition', 'bottom');
 export const PanelMaximizedContext = new RawContextKey<boolean>('panelMaximized', false);
 
 /** Identifier of the active bottom panel container. */

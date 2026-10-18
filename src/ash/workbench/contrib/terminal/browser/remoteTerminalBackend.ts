@@ -1,3 +1,4 @@
+import type { ITerminalProcessOwnership } from '../../../services/terminal/common/terminal.js';
 import { CancellationError } from '../../../../base/common/errors.js';
 import { toDisposable } from '../../../../base/common/lifecycle.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
@@ -22,16 +23,16 @@ export class RemoteTerminalBackend extends BaseTerminalBackend {
 		}));
 	}
 
-	async createProcess(options: ITerminalProcessCreateOptions, id: number, attached?: ITerminalProcessCreation): Promise<RemotePty> {
+	async createProcess(options: ITerminalProcessCreateOptions, id: number, attached?: ITerminalProcessCreation, ownership?: ITerminalProcessOwnership): Promise<RemotePty> {
 		if (this.isDisposed) throw new CancellationError();
-		const { creation, scope } = await this.channel.createProcess(options, attached);
+		const { creation, scope } = await this.channel.createProcess(options, attached, ownership);
 		if (this.isDisposed) {
-			await this.processes.close({ terminalId: creation.terminalId, ...(options.dirId === undefined ? {} : { dirId: options.dirId }) });
+			if (ownership?.canTerminate !== false) await this.processes.close({ terminalId: creation.terminalId, ...(options.dirId === undefined ? {} : { dirId: options.dirId }) });
 			throw new CancellationError();
 		}
 		const pty = this.instantiation.createInstance(RemotePty, id, creation, options.dirId, () => {
 			if (this.handles.get(id) === pty) this.handles.delete(id);
-		}, this.channel, scope);
+		}, this.channel, scope, ownership);
 		this.handles.set(id, pty);
 		return pty;
 	}

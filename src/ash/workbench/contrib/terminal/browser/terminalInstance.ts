@@ -5,7 +5,7 @@ import { getTerminalUri } from './terminalUri.js';
 import { URI } from '../../../../base/common/uri.js';
 import type { ITerminalSerializedState } from '../../../services/terminal/common/terminal.js';
 import { CancellationError, isCancellationError, onUnexpectedError } from '../../../../base/common/errors.js';
-import { Emitter, type Event } from '../../../../base/common/event.js';
+import { Emitter, Event } from '../../../../base/common/event.js';
 import { Disposable, DisposableMap, DisposableStore, MutableDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import {
 	TerminalLocation,
@@ -76,7 +76,7 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 	private pendingExit: { readonly code: number | undefined; } | undefined;
 	private readonly customLifetime = this._register(new MutableDisposable<DisposableStore>());
 	private customProcess: ITerminalChildProcess | undefined;
-	private readonly onClosed: () => void;
+	private readonly onClosed: (() => void) | undefined;
 	private readonly _onDidWriteData = this._register(new Emitter<IProcessDataEvent>({
 		onDidAddFirstListener: () => queueMicrotask(() => {
 			while (!this.isDisposed && this._onDidWriteData.hasListeners() && this.pendingOutput.length > 0) {
@@ -133,31 +133,39 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 		private dimensions: ITerminalDimensions,
 		private readonly backend: AgentHostTerminalService,
 		private restored: ITerminalSerializedState | undefined,
+		private _revivalLaunch: ITerminalSerializedState['launch'] = undefined,
 		@IInstantiationService private readonly instantiationService: IInstantiationService,
 		@IPathService private readonly paths: IPathService,
 		@IWorkspaceContextService private readonly workspace: IWorkspaceContextService,
 		@ITerminalProcessService private readonly processes: ITerminalProcessService,
 	) {
 		super();
-		this._register(this.capabilities.add(this.processCapabilities));
-		this.screenRecorder = this.createScreenRecorder();
 		this.shellProcessManager = child;
+		try {
+			this._register(this.capabilities.add(this.processCapabilities));
+			this.screenRecorder = this.createScreenRecorder();
 
-		this._profile = profile;
-		this._title = title;
-		this.resource = restored ? URI.parse(restored.resource) : getTerminalUri(generateUuid(), instanceNumber, title);
-		if (restored) {
-			this.hostTarget = restored.target;
-			child?.restoreState(restored);
+			this._profile = profile;
+			this._title = title;
+			this.resource = restored ? URI.parse(restored.resource) : getTerminalUri(generateUuid(), instanceNumber, title);
+			if (restored) {
+				this.hostTarget = restored.target;
+				child?.restoreState(restored);
+			}
+			this.writeInitialText();
+			// Creation listeners may send input before output polling starts. The ready
+			// process already exists, so its input owner must exist before publication too.
+			if (!custom) this.createShellProcessManager();
+			// Restored screens must exist even when the panel is hidden. Otherwise new
+			// process output would enter the startup recorder ahead of the saved VT buffer.
+			if (restored && typeof document !== 'undefined') this.attachToElement(document.createElement('div'));
+			this.onClosed = onClosed;
+		} catch (error) {
+			// A screen/contribution constructor can fail after acquiring disposable
+			// resources. Membership has not been published, so no close callback runs.
+			this.dispose();
+			throw error;
 		}
-		this.onClosed = onClosed;
-		this.writeInitialText();
-		// Creation listeners may send input before output polling starts. The ready
-		// process already exists, so its input owner must exist before publication too.
-		if (!custom) this.createShellProcessManager();
-		// Restored screens must exist even when the panel is hidden. Otherwise new
-		// process output would enter the startup recorder ahead of the saved VT buffer.
-		if (restored && typeof document !== 'undefined') this.attachToElement(document.createElement('div'));
 	}
 
 	protected override disposeCore(): void {
@@ -171,9 +179,11 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 		// or a readiness promise that resolved to its potentially large buffer.
 		this.screen = undefined;
 		this.screenInitialization = undefined;
-		this.onClosed();
+		this.onClosed?.();
 		super.disposeCore();
 	}
+
+	get revivalLaunch(): ITerminalSerializedState['launch'] { return this._revivalLaunch; }
 
 	get state(): TerminalInstanceState {
 		return this._state;
@@ -382,7 +392,13 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 			this._register(toDisposable(() => completedInput.dispose()));
 			const binary = screen.raw.onBinary(data => { void this.processBinary(data).catch(onUnexpectedError); });
 			this._register(toDisposable(() => binary.dispose()));
-			for (const [, contribution] of this.contributions) { contribution.xtermReady?.(screen); }
+			const contributionsReady = (): void => {
+				for (const [, contribution] of this.contributions) { contribution.xtermReady?.(screen); }
+			};
+			// Recovery needs the parsed buffer before its view is revealed. Features
+			// that bind the textarea become ready only after the renderer opens there.
+			if (screen.raw.element) contributionsReady();
+			else this._register(Event.once(screen.onDidOpen)(contributionsReady));
 			return screen;
 		});
 		// Loading can start in a background instance without a View awaiting it.
@@ -562,15 +578,19 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 		const child = this.shellProcessManager;
 		if (!child || this.closed || this.relaunchTask || this.connectionPersistence !== 'reconnectable') throw new Error(localize('terminal.reload.unsupported', 'This terminal cannot preserve its process across a window reload.'));
 		const checkpoint = await child.serializeState();
+		if (!this.screen && typeof document !== 'undefined') this.attachToElement(document.createElement('div'));
 		const screen = await this.xtermReadyPromise;
 		if (!screen) throw new Error(localize('terminal.reload.screenUnavailable', 'The terminal screen is unavailable for recovery.'));
 		this.frozen = true;
 		screen.raw.options.disableStdin = true;
 		const vt = await screen.getRangeAsVT();
+		const cwd = child.cwd ?? await child.getCwd().catch(() => this.initialCwd);
+		if (this.closed) throw new CancellationError();
 		return {
 			instanceId: this.instanceId, resource: this.resource.toString(), dirId: this.dirId, processDirId: this.processWorkspaceFolderId,
 			process: child.creation, title: this.title, customTitle: this.customTitle, target: this.target ?? TerminalLocation.Panel,
-			cols: screen.raw.cols, rows: screen.raw.rows, ...checkpoint, vt
+			cols: screen.raw.cols, rows: screen.raw.rows, ...checkpoint, vt, cwd,
+			launch: this.launch?.execution ? undefined : this._revivalLaunch,
 		};
 	}
 
@@ -670,6 +690,8 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 		}
 		try {
 			if (replacement) {
+				// Reuse supplies resolved execution data, without an admitted revival intent.
+				this._revivalLaunch = undefined;
 				this.shellLifetime.clear();
 				this.customLifetime.clear();
 				this.shellProcessManager = undefined;

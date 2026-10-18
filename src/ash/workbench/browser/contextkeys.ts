@@ -3,10 +3,10 @@ import type { IContextKey } from "../../platform/contextkey/common/contextkey.js
 import type { IContextKeyService } from "../../platform/contextkey/browser/contextKeyService.js";
 import { IsLinuxContext, IsMacContext, IsNativeContext, IsWebContext, IsWindowsContext } from '../../platform/contextkey/common/contextkeys.js';
 import { type IWorkspaceContextService, workbenchStateToString } from '../../platform/workspace/common/workspace.js';
-import { ActiveEditorGroupEmptyContext, ActiveEditorGroupIndexContext, ActiveEditorGroupLastContext, AgentSidebarVisibleContext, AuxiliaryBarMaximizedContext, AuxiliaryBarVisibleContext, BrowserLocalFolderSupportContext, DirtyWorkingCopiesContext, EditorAreaVisibleContext, EditorsVisibleContext, MultipleEditorGroupsContext, OpenFolderWorkspaceSupportContext, PanelMaximizedContext, PanelVisibleContext, SideBarVisibleContext, WorkbenchStateContext, WorkspaceFolderCountContext } from '../common/contextkeys.js';
+import { ActiveEditorGroupEmptyContext, ActiveEditorGroupIndexContext, ActiveEditorGroupLastContext, AgentSidebarVisibleContext, AuxiliaryBarMaximizedContext, AuxiliaryBarVisibleContext, BrowserLocalFolderSupportContext, DirtyWorkingCopiesContext, EditorAreaVisibleContext, EditorsVisibleContext, MultipleEditorGroupsContext, OpenFolderWorkspaceSupportContext, PanelMaximizedContext, PanelVisibleContext, PanelPositionContext, SideBarVisibleContext, WorkbenchStateContext, WorkspaceFolderCountContext } from '../common/contextkeys.js';
 import type { IEditorGroupsService } from '../services/editor/common/editorGroupsService.js';
 import type { IEditorService } from '../services/editor/common/editorService.js';
-import type { IWorkbenchLayoutService, WorkbenchPartId } from '../services/layout/browser/layoutService.js';
+import { positionToString, type IWorkbenchLayoutService, type WorkbenchPartId } from '../services/layout/browser/layoutService.js';
 import type { IWorkingCopyService } from '../services/workingCopy/common/workingCopyService.js';
 
 /** Projects window-wide service state into Workbench context keys. */
@@ -74,7 +74,7 @@ export class WorkbenchContextKeysHandler extends Disposable {
 	}
 
 	private bindLayoutKeys(contextKeyService: IContextKeyService, layoutService: IWorkbenchLayoutService): void {
-		const { visibilityKeys, panelMaximized, auxiliaryBarMaximized } = bufferContextKeyChanges(contextKeyService, () => ({
+		const { visibilityKeys, panelMaximized, panelPosition, auxiliaryBarMaximized } = bufferContextKeyChanges(contextKeyService, () => ({
 			visibilityKeys: new Map<WorkbenchPartId, IContextKey<boolean>>([
 				['sidebar', SideBarVisibleContext.bindTo(contextKeyService)],
 				['auxiliarybar', AuxiliaryBarVisibleContext.bindTo(contextKeyService)],
@@ -83,11 +83,13 @@ export class WorkbenchContextKeysHandler extends Disposable {
 				['editor', EditorAreaVisibleContext.bindTo(contextKeyService)],
 			]),
 			panelMaximized: PanelMaximizedContext.bindTo(contextKeyService),
+			panelPosition: PanelPositionContext.bindTo(contextKeyService),
 			auxiliaryBarMaximized: AuxiliaryBarMaximizedContext.bindTo(contextKeyService),
 		}));
 		const updateAll = (): void => contextKeyService.bufferChangeEvents(() => {
 			for (const [partId, key] of visibilityKeys) key.set(layoutService.isPartVisible(partId));
 			panelMaximized.set(layoutService.isPanelMaximized());
+			panelPosition.set(positionToString(layoutService.getPanelPosition()));
 			auxiliaryBarMaximized.set(layoutService.isAuxiliaryBarMaximized());
 		});
 		updateAll();
@@ -99,7 +101,8 @@ export class WorkbenchContextKeysHandler extends Disposable {
 			});
 		}));
 		this._register(layoutService.onDidChangeAuxiliaryBarMaximized(updateAll));
-		this._register(toDisposable(() => resetContextKeys(contextKeyService, [...visibilityKeys.values(), panelMaximized, auxiliaryBarMaximized])));
+		this._register(layoutService.onDidChangePanelPosition(updateAll));
+		this._register(toDisposable(() => resetContextKeys(contextKeyService, [...visibilityKeys.values(), panelMaximized, panelPosition, auxiliaryBarMaximized])));
 	}
 }
 

@@ -1,3 +1,4 @@
+import { IWorkbenchLayoutService, Position, positionToString } from '../../../../services/layout/browser/layoutService.js';
 import { IEnvironmentVariableService } from '../../common/environmentVariable.js';
 import { EnvironmentVariableService } from '../../common/environmentVariableService.js';
 import { IWorkspaceContextService } from '../../../../../platform/workspace/common/workspace.js';
@@ -73,7 +74,7 @@ test("Terminal instance list sash resizes the right column within its bounds", (
 		...Disposable.None, instances, activeInstance: instances[0], onDidCreateInstance: created.event,
 		onDidDisposeInstance: disposed.event, onDidChangeInstances: changed.event, onDidChangeActiveInstance: Event.None,
 		createTerminal: async () => { throw new Error('Unexpected creation'); },
-		relaunchTerminal: async () => { }, setActiveInstance() { }, moveTerminal() { }, whenConnected: Promise.resolve(), safeDisposeTerminal: async () => { }, closeTerminal: async () => { },
+		relaunchTerminal: async () => { }, setActiveInstance() { }, moveTerminal() { }, whenConnected: Promise.resolve(), importTerminalState: async () => { throw new Error('Transfer is not used in this fixture'); }, confirmTerminalClose: async () => true, safeDisposeTerminal: async () => { }, closeTerminal: async () => { },
 	};
 	using services = new InstantiationService();
 	using context = new ContextKeyService();
@@ -90,6 +91,11 @@ test("Terminal instance list sash resizes the right column within its bounds", (
 	});
 	registerTestComponentServices(services, dom.window.document);
 	services.registerInstance(IViewsService, { openView: async () => null } as unknown as IViewsService);
+	using positionChanged = new Emitter<string>();
+	let panelPosition = Position.BOTTOM;
+	services.registerInstance(IWorkbenchLayoutService, {
+		getPanelPosition: () => panelPosition, onDidChangePanelPosition: positionChanged.event,
+	} as unknown as IWorkbenchLayoutService);
 	using groups = services.createInstance(TerminalGroupService);
 	services.registerInstance(ITerminalGroupService, groups);
 	using layout = services.createInstance(TerminalTabbedView, parent);
@@ -139,6 +145,33 @@ test("Terminal instance list sash resizes the right column within its bounds", (
 	groups.joinInstances([instances[0]!, third]);
 	assert.deepEqual([...tabs.querySelectorAll('[role="tab"]')].map(row => row.id), ['one-tab', 'three-tab', 'two-tab']);
 	groups.joinInstances([instances[0]!, instances[1]!]);
+	const group = groups.activeGroup!;
+	group.attachToElement(layout.terminalContainer);
+	group.setVisible(true);
+	group.layout(500, 800);
+	group.resizePanes([2, 1, 1]);
+	const paneSizes = () => [...layout.element.querySelectorAll<HTMLElement>('.ash-terminal-group > .ash-split-view-pane')].map(pane => panelPosition === Position.BOTTOM || panelPosition === Position.TOP ? Number.parseFloat(pane.style.width) : Number.parseFloat(pane.style.height));
+	const relativeSizes = group.getLayoutInfo(true).terminals.map(terminal => terminal.relativeSize);
+	for (const position of [Position.LEFT, Position.RIGHT, Position.TOP, Position.BOTTOM]) {
+		panelPosition = position;
+		positionChanged.fire(positionToString(position));
+		// Enough height permits unequal vertical panes and demonstrates the axis follows position.
+		group.layout(500, 800);
+		assert.equal(layout.element.querySelector('.ash-terminal-group')?.classList.contains('ash-split-view-horizontal'), position === Position.TOP || position === Position.BOTTOM);
+		const actualSizes = group.getLayoutInfo(true).terminals.map(terminal => terminal.relativeSize);
+		assert.ok(actualSizes.every((size, index) => Math.abs(size - relativeSizes[index]!) < 0.01));
+		assert.ok(paneSizes().every(size => size > 0));
+		group.layout(600, 900);
+		assert.ok(group.getLayoutInfo(true).terminals.every((terminal, index) => Math.abs(terminal.relativeSize - relativeSizes[index]!) < 0.01));
+		group.layout(0, 0);
+		assert.ok(group.getLayoutInfo(true).terminals.every((terminal, index) => Math.abs(terminal.relativeSize - relativeSizes[index]!) < 0.01));
+		group.layout(100, 100);
+		group.layout(500, 800);
+		const rendered = paneSizes();
+		const renderedTotal = rendered.reduce((sum, size) => sum + size, 0);
+		assert.ok(rendered.every((size, index) => Math.abs(size / renderedTotal - relativeSizes[index]!) < 0.01));
+	}
+	layout.layout(1_000, 200);
 	assert.deepEqual([...tabs.querySelectorAll('.ash-terminal-group-branch')].map(branch => branch.textContent), ['┌', '├', '└']);
 	assert.equal(tabs.querySelector('[id="three-tab"]')?.getAttribute('aria-description'), 'Split 2 of 3 in terminal group 1');
 	groups.unsplitInstance(third);
