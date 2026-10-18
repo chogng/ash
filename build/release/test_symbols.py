@@ -33,12 +33,13 @@ from build.release.symbols import (
     digest,
     extract_archive,
 )
-from build.release.tools import run, tool
+from build.release.tools import check_build_tools, run, tool
 
 
 class ReleaseSymbolsTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
+        check_build_tools()
         cls.temporary = tempfile.TemporaryDirectory()
         cls.addClassCleanup(cls.temporary.cleanup)
         cls.root = Path(cls.temporary.name).resolve()

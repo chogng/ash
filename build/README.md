@@ -487,6 +487,11 @@ digest failure cleanup:
 python3 -B scripts/test-python.py
 ```
 
+Build test entrypoints check Rust and host symbol tools before starting any suite.
+Run `just check-build-tools` to inspect resolved paths. Windows also discovers the
+Visual Studio C++ Clang tools through `vswhere`; custom LLVM locations can use
+`ASH_LLVM_BIN`. See [environment setup](../docs/build.md#初始化) for platform requirements.
+
 Package fixtures own their protocol sources, generated artifacts and fingerprints
 in temporary directories. They exercise the production freshness checks without
 depending on the workspace's `.build/protocol` cache. Dependency exclusion and

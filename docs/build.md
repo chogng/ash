@@ -27,16 +27,16 @@
 
 安装下列工具后，使用对应目标架构的 **Visual Studio Developer PowerShell** 构建。已安装的 Ash 产品不依赖这些开发工具。
 
-| 工具                         | 安装要求                                                                                     |
-| ---------------------------- | -------------------------------------------------------------------------------------------- |
-| Visual Studio Build Tools    | 2022 / MSVC v143，选择“使用 C++ 的桌面开发”和 Windows SDK                                    |
-| Visual Studio English 语言包 | 在 Installer 中补装，避免中文链接器进度被 Rust 误报为 warning                                |
-| PowerShell 7                 | 支持 `-CommandWithArgs`；`just install` 可通过 winget 安装缺失的工具                         |
-| Python                       | `python` 命令指向满足仓库要求的版本                                                          |
-| uv                           | 安装 `scripts/pyproject.toml` 要求的版本并加入 PATH                                          |
-| Git、ripgrep、CMake          | 安装并加入 PATH                                                                              |
-| LLVM/Clang                   | LLVM 的 `bin` 加入 PATH；自定义安装路径时，设置 `LIBCLANG_PATH` 指向含 `libclang.dll` 的目录 |
-| Bazelisk（按需）             | 运行 Bazel 测试前，将 `BAZEL_SH` 设为 Git Bash 路径                                          |
+| 工具                         | 安装要求                                                                                                                                                                                |
+| ---------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Visual Studio Build Tools    | 2022 / MSVC v143，选择“使用 C++ 的桌面开发”和 Windows SDK                                                                                                                               |
+| Visual Studio English 语言包 | 在 Installer 中补装，避免中文链接器进度被 Rust 误报为 warning                                                                                                                           |
+| PowerShell 7                 | 支持 `-CommandWithArgs`；`just install` 可通过 winget 安装缺失的工具                                                                                                                    |
+| Python                       | `python` 命令指向满足仓库要求的版本                                                                                                                                                     |
+| uv                           | 安装 `scripts/pyproject.toml` 要求的版本并加入 PATH                                                                                                                                     |
+| Git、ripgrep、CMake          | 安装并加入 PATH                                                                                                                                                                         |
+| LLVM/Clang                   | Visual Studio Installer 中安装 C++ Clang tools，或安装完整 LLVM；符号测试需要 `llvm-pdbutil.exe`、`llvm-symbolizer.exe`。自定义安装路径时，`LIBCLANG_PATH` 指向含 `libclang.dll` 的目录 |
+| Bazelisk（按需）             | 运行 Bazel 测试前，将 `BAZEL_SH` 设为 Git Bash 路径                                                                                                                                     |
 
 无需全局设置 `CC`、`CXX`。Windows 桌面构建和平台验证在 Windows 上完成；Dev Container 用于 Linux 开发。
 
@@ -46,7 +46,9 @@ Windows x64 的 Cargo 链接默认使用 Rust 工具链自带的 `rust-lld`；MS
 
 1. 使用 [pnpm 独立安装方式](https://pnpm.io/installation/)，安装根 [`package.json`](../package.json) 的 `packageManager` 指定版本。仓库安装检查要求版本一致。
 2. 执行 `pnpm install`，安装 Node workspace 依赖。
-3. 执行 `just install`，获取 Cargo 依赖并通过 uv 同步 `scripts/uv.lock` 中固定的 Ruff 和 codespell 到 `scripts/.venv`。Windows 缺少 PowerShell 7 时，此步骤会安装它；随后重启终端和编辑器以更新 PATH。
+3. 执行 `just install`，先检查 Rust 和当前平台的符号工具，再获取 Cargo 依赖并通过 uv 同步 `scripts/uv.lock` 中固定的 Ruff 和 codespell 到 `scripts/.venv`。Windows 缺少 PowerShell 7 时，此步骤会安装它；随后重启终端和编辑器以更新 PATH。
+
+可单独运行 `just check-build-tools` 检查工具路径和可执行性；全量 `just test-python build` 和默认 Python 测试入口会在任何测试开始前执行同一预检，一次列出全部缺失或不可用的工具。Windows 自动发现 PATH、标准 LLVM 安装目录及 `vswhere` 返回的 Visual Studio LLVM 目录，按宿主架构选择工具，无需为了交叉编译改用目标架构工具。自定义 LLVM 可设置 `ASH_LLVM_BIN` 指向其 `bin`。Linux 符号测试需要 `llvm-nm`、`llvm-objcopy`、`llvm-strip`、`llvm-dwarfdump`、`llvm-symbolizer`（Debian/Ubuntu 可安装 `llvm`）；macOS 使用 Xcode 命令行工具，并检查 LLDB 的 Python 支持。
 
 直接执行 `node` 时使用 `.nvmrc` 指定版本；pnpm 脚本使用仓库固定的 Node。Just 和 Node 启动的 Python 构建工具优先使用初始化创建的 `scripts/.venv`。Node 入口可用 `PYTHON` 显式指定解释器，Just 可用 `just --set python <解释器路径> <命令>` 覆盖；尚未初始化时，Just 使用 Windows 的 `python` 或其他平台的 `python3`。
 
@@ -261,7 +263,7 @@ Electron 主进程/preload、单元测试与扩展测试的 JavaScript 编译，
 
 ### 第一阶段使用
 
-本地发布前设置编译身份和符号目录；`ASH_BUILD_ID` 必须为这次编译的新身份，不能在编译结束后才注入。Python 使用仓库虚拟环境的 3.11+ 解释器；Linux/Windows 需 LLVM 的 objcopy、strip、dwarfdump、pdbutil、symbolizer，dump 导入另外需要支持 Python 的 LLDB。工具可通过 `ASH_LLVM_BIN` 指定目录，macOS 可直接使用 Xcode 的 dwarfdump 和 atos。
+本地发布前设置编译身份和符号目录；`ASH_BUILD_ID` 必须为这次编译的新身份，不能在编译结束后才注入。Python 使用仓库虚拟环境的 3.11+ 解释器；先运行 `just check-build-tools` 验证宿主符号工具，各平台安装要求与 `ASH_LLVM_BIN` 用法见[初始化](#初始化)。dump 导入另外需要支持 Python 的 LLDB。
 
 ```sh
 export ASH_BUILD_COMMIT="$(git rev-parse HEAD)"

@@ -3,14 +3,53 @@
 from __future__ import annotations
 
 import os
+import platform
 import shutil
 import signal
 import subprocess
+import sys
 import tempfile
 import time
+from functools import cache
 from pathlib import Path
 
 MAX_OUTPUT = 8 * 1024 * 1024
+
+
+@cache
+def windows_llvm_directories() -> tuple[Path, ...]:
+    """Find host tools, including VS installations outside the default drive."""
+    directories = []
+    if program_files := os.environ.get("ProgramFiles"):
+        directories.append(Path(program_files) / "LLVM/bin")
+    installer = Path(os.environ.get("ProgramFiles(x86)", "C:/Program Files (x86)"))
+    vswhere = installer / "Microsoft Visual Studio/Installer/vswhere.exe"
+    if vswhere.is_file():
+        try:
+            result = subprocess.run(
+                [
+                    str(vswhere),
+                    "-products",
+                    "*",
+                    "-property",
+                    "installationPath",
+                    "-utf8",
+                ],
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                check=True,
+                timeout=10,
+            )
+        except (OSError, subprocess.SubprocessError):
+            # PATH and standalone LLVM remain usable if the VS inventory fails.
+            return tuple(directories)
+        host = "ARM64" if platform.machine().lower() in {"arm64", "aarch64"} else "x64"
+        for installation in result.stdout.splitlines():
+            if installation.strip():
+                root = Path(installation.strip()) / "VC/Tools/Llvm"
+                directories.extend((root / host / "bin", root / "bin"))
+    return tuple(directories)
 
 
 def tool(name: str) -> str:
@@ -23,11 +62,78 @@ def tool(name: str) -> str:
                 return str(path)
     if found := shutil.which(name):
         return found
+    if sys.platform == "win32":
+        for directory in windows_llvm_directories():
+            candidate = directory / (name + ".exe")
+            if candidate.is_file():
+                return str(candidate)
     if name == "llvm-dwarfdump" and shutil.which("dwarfdump"):
         return shutil.which("dwarfdump")
     raise RuntimeError(
         f"Required tool {name} missing; install LLVM or set ASH_LLVM_BIN"
     )
+
+
+def check_build_tools() -> dict[str, str]:
+    """Check the real symbol-test prerequisites before starting any test suite."""
+    names = ["rustc"]
+    if sys.platform == "win32":
+        names += ["llvm-pdbutil", "llvm-symbolizer"]
+    elif sys.platform == "darwin":
+        names += ["nm", "dsymutil", "strip", "llvm-dwarfdump", "lldb"]
+        # Match resolve_frame's supported Xcode fallback.
+        names += ["llvm-symbolizer" if _has_symbolizer() else "atos"]
+    else:
+        names += [
+            "llvm-nm",
+            "llvm-objcopy",
+            "llvm-strip",
+            "llvm-dwarfdump",
+            "llvm-symbolizer",
+        ]
+    resolved = {}
+    errors = []
+    for name in names:
+        try:
+            executable = tool(name)
+            if name == "rustc" or name.startswith("llvm-"):
+                # The rustup proxy may first provision rust-toolchain.toml's pin.
+                run([executable, "--version"], timeout=120 if name == "rustc" else 15)
+            if name == "lldb":
+                output = run(
+                    [
+                        executable,
+                        "--no-lldbinit",
+                        "--batch",
+                        "-o",
+                        "script print('ASH_LLDB_PYTHON_OK')",
+                    ],
+                    timeout=15,
+                )
+                if "\nASH_LLDB_PYTHON_OK" not in output:
+                    raise RuntimeError("LLDB requires Python scripting support")
+            resolved[name] = executable
+        except (OSError, RuntimeError) as error:
+            errors.append(f"{name}: {error}")
+    if errors:
+        raise RuntimeError(
+            "Build test prerequisites failed:\n  "
+            + "\n  ".join(errors)
+            + "\nInstall Rust and the host LLVM symbol tools (Windows: Visual Studio "
+            "Installer's C++ Clang tools or a complete LLVM distribution; macOS: "
+            "Xcode command line tools; Debian/Ubuntu: apt-get install llvm). "
+            "For a custom LLVM location set ASH_LLVM_BIN to its bin directory. "
+            "See docs/build.md, then rerun just check-build-tools."
+        )
+    return resolved
+
+
+def _has_symbolizer() -> bool:
+    try:
+        tool("llvm-symbolizer")
+        return True
+    except RuntimeError:
+        return False
 
 
 def run(command: list[str], *, timeout: float = 120) -> str:

@@ -29,6 +29,20 @@ def main(arguments: list[str] | None = None) -> int:
         )
     suites = args.suites or ("scripts", "build")
 
+    # Check before *any* suite: scripts can be selected before build.
+    if "build" in suites:
+        result = subprocess.run(
+            [
+                sys.executable,
+                "-B",
+                str(REPOSITORY_ROOT / "scripts/check_build_tools.py"),
+            ],
+            cwd=REPOSITORY_ROOT,
+            check=False,
+        )
+        if result.returncode != 0:
+            return result.returncode
+
     environment = os.environ.copy()
     python_paths = [str(REPOSITORY_ROOT)]
     if existing := environment.get("PYTHONPATH"):

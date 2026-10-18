@@ -52,6 +52,10 @@ spellcheck:
 install-python:
     {{ python }} -B scripts/install_python_tools.py
 
+# Validate Rust and host symbol tools before build tests or initial dependency fetches.
+check-build-tools:
+    {{ python }} -B scripts/check_build_tools.py
+
 # Run repository-owned Python tests, optionally selecting scripts, code, or build.
 test-python *args:
     {{ python }} -B scripts/test-python.py {{ recipe_args }}
@@ -200,6 +204,7 @@ code-package *args:
 [unix]
 install:
     rustup show active-toolchain
+    just check-build-tools
     cargo fetch
     just install-python
 
@@ -212,6 +217,8 @@ install:
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
     }
     rustup show active-toolchain
+    if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+    just check-build-tools
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
     cargo fetch
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
