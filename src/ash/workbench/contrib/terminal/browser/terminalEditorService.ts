@@ -4,7 +4,7 @@ import { onUnexpectedError } from '../../../../base/common/errors.js';
 import { TerminalLocation } from '../../../../platform/terminal/common/terminal.js';
 import { IEditorService } from '../../../services/editor/common/editorService.js';
 import { IEditorGroupsService } from '../../../services/editor/common/editorGroupsService.js';
-import { ITerminalService, type ITerminalEditorService, type ITerminalInstance } from '../../../services/terminal/browser/terminal.js';
+import { ITerminalService, type ITerminalEditorService, type ITerminalInstance } from './terminal.js';
 import { TerminalEditorInput } from './terminalEditorInput.js';
 import { getInstanceFromResource } from './terminalUri.js';
 
@@ -32,12 +32,12 @@ export class TerminalEditorService extends Disposable implements ITerminalEditor
 
 	getInstanceFromResource(resource: URI): ITerminalInstance | undefined { return getInstanceFromResource(this.terminals.instances, resource); }
 
-	async openEditor(instance: ITerminalInstance, editorOptions?: { readonly preserveFocus?: boolean; }): Promise<void> {
+	async openEditor(instance: ITerminalInstance, editorOptions?: import('./terminal.js').TerminalEditorLocation): Promise<void> {
 		if (!this.terminals.instances.includes(instance) || !instance.resource) return;
 		const previousTarget = instance.target;
 		instance.target = TerminalLocation.Editor;
 		try {
-			await this.editors.openEditor(new TerminalEditorInput(instance.resource, instance, this.terminals.onDidChangeInstances), { pinned: true, ignoreError: true, ...editorOptions });
+			await this.editors.openEditor(new TerminalEditorInput(instance.resource, instance, this.terminals.onDidChangeInstances), { pinned: true, ignoreError: true, preserveFocus: editorOptions?.preserveFocus }, editorOptions?.viewColumn === undefined ? undefined : { groupId: editorOptions.viewColumn });
 			if (this.terminals.instances.includes(instance)) this.terminals.setActiveInstance(instance);
 		} catch (error) {
 			if (this.terminals.instances.includes(instance)) instance.target = previousTarget;

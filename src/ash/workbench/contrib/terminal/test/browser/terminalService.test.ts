@@ -1,4 +1,5 @@
-import { registerTestTerminalLifecycleServices } from '../../../../test/browser/workbenchTestServices.js';
+import { TerminalLocation } from '../../../../../platform/terminal/common/terminal.js';
+import { registerTestTerminalCreationServices } from '../../../../test/browser/workbenchTestServices.js';
 import { ShellEnvDetectionCapability } from '../../../../../platform/terminal/common/capabilities/shellEnvDetectionCapability.js';
 import { TerminalCapabilityStore, TerminalCapabilityStoreMultiplexer } from '../../../../../platform/terminal/common/capabilities/terminalCapabilityStore.js';
 import { TerminalGroupService } from '../../browser/terminalGroupService.js';
@@ -26,7 +27,7 @@ import { TerminalProcessManager } from '../../browser/terminalProcessManager.js'
 import { AgentHostTerminalService } from '../../browser/agentHostTerminalService.js';
 import { BasePty } from '../../common/basePty.js';
 import { TerminalProcessExtHostProxy } from '../../browser/terminalProcessExtHostProxy.js';
-import { ITerminalService, type ITerminalInstance, type ITerminalCommandStatusEvent } from "../../../../services/terminal/browser/terminal.js";
+import { ITerminalService, type ITerminalInstance, type ITerminalCommandStatusEvent } from "../../browser/terminal.js";
 import { TestWorkspaceService } from "../../../../services/configuration/test/common/testServices.js";
 
 const DEFAULT_PROFILE = {
@@ -58,15 +59,13 @@ test("TerminalService keeps empty windows off the process API and enables a fold
 	using services = terminalServices(processService, workspace);
 	const service = services.get(ITerminalService);
 
-	await assert.rejects(service.getProfiles(), /TerminalUnavailable/);
 	await assert.rejects(service.createTerminal({ dimensions: { rows: 24, cols: 80 }, profile: { type: "default" } }), /TerminalUnavailable/);
 	assert.equal(processService.profileListCalls, 0);
 	assert.equal(processService.createCalls.length, 0);
 
 	workspace.updateWorkspace({ id: "workspace", uri: URI.file("/workspace") });
-	assert.deepEqual(await service.getProfiles(), [DEFAULT_PROFILE]);
 	await service.createTerminal({ dimensions: { rows: 24, cols: 80 }, profile: { type: "default" } });
-	assert.equal(processService.profileListCalls, 1);
+	assert.equal(processService.profileListCalls, 0);
 	assert.equal(processService.createCalls.length, 1);
 });
 
@@ -76,9 +75,7 @@ test('a single Session folder keeps its process route through creation and closi
 	using workspace = new TestWorkspaceService({ id: 'session', folders: [{ id: scope, uri: URI.file('/session-workspace'), name: 'session', index: 0 }] });
 	using services = terminalServices(processService, workspace);
 	const service = services.get(ITerminalService);
-	const originalList = processService.listProfiles.bind(processService);
-	processService.listProfiles = async (dirId?: string) => { assert.equal(dirId, scope); return originalList(); };
-	await service.getProfiles();
+
 	const instance = await service.createTerminal({ dimensions: { rows: 24, cols: 80 }, profile: { type: 'default' } });
 	assert.equal(processService.createCalls[0]?.dirId, scope);
 	workspace.updateWorkspace({ id: 'other', uri: URI.file('/other') });
@@ -574,7 +571,7 @@ async function waitFor(condition: () => boolean, timeoutMillis = 1_000): Promise
 
 function terminalServices(processService: ITerminalProcessService, workspace: IWorkspaceContextService): InstantiationService {
 	const services = new InstantiationService(new ServiceCollection([ITerminalProcessService, processService], [IWorkspaceContextService, workspace]));
-	registerTestTerminalLifecycleServices(services);
+	registerTestTerminalCreationServices(services);
 	services.registerSingleton(ITerminalService, () => services.createInstance(TerminalService));
 	return services;
 }
@@ -1673,8 +1670,7 @@ suite('Terminal Send Sequence', () => {
 		const workspace = owner.add(new TestWorkspaceService({ id: 'sequence', uri: URI.file('/workspace') }));
 		const services = owner.add(terminalServices(processes, workspace));
 		const terminals = services.get(ITerminalService);
-		const commands = owner.add(new CommandService(services));
-		services.registerInstance(ICommandService, commands);
+		const commands = services.get(ICommandService);
 		const resolver = { resolveAsync: async (_folder: unknown, value: unknown): Promise<unknown> => value };
 		services.registerInstance(IConfigurationResolverService, resolver as IConfigurationResolverService);
 		return { processes, workspace, services, terminals, commands, resolver };
@@ -1853,6 +1849,27 @@ suite('Terminal Send Sequence', () => {
 
 suite('TerminalService panel groups', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();
+
+	test('editor focus retains the most recent surviving panel group', async () => {
+		const processes = new TestTerminalProcessService([]);
+		using workspace = folderWorkspaceContext();
+		using services = terminalServices(processes, workspace);
+		services.registerInstance(IViewsService, { openView: async () => null } as unknown as IViewsService);
+		const terminals = services.get(ITerminalService);
+		using groups = services.createInstance(TerminalGroupService);
+		const first = await terminals.createTerminal({ dimensions: { rows: 24, cols: 80 }, profile: { type: 'default' } });
+		const second = await terminals.createTerminal({ dimensions: { rows: 24, cols: 80 }, profile: { type: 'default' } });
+		terminals.setActiveInstance(first);
+		const editor = await terminals.createTerminal({ dimensions: { rows: 24, cols: 80 }, profile: { type: 'default' } });
+		editor.target = TerminalLocation.Editor;
+		assert.equal(terminals.activeInstance, editor);
+		assert.equal(groups.activeGroup, groups.getGroupForInstance(first));
+		await terminals.closeTerminal(first);
+		assert.equal(groups.activeGroup, groups.getGroupForInstance(second));
+		await terminals.closeTerminal(second);
+		assert.equal(groups.activeGroup, undefined);
+		assert.equal(terminals.activeInstance, editor);
+	});
 
 	test('join and unsplit retain each original process and select panes through the instance owner', async () => {
 		const processes = new TestTerminalProcessService([]);

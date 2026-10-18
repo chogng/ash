@@ -36,19 +36,14 @@ import { DebugConsoleViewPane } from '../../../src/ash/workbench/contrib/debug/b
 import type { IDebugService } from '../../../src/ash/workbench/contrib/debug/common/debug.js';
 import '../../../src/ash/workbench/contrib/debug/browser/media/debug.css';
 import { ProblemsViewPane } from '../../../src/ash/workbench/contrib/problems/browser/problemsViewPane.js';
-import { TasksViewPane } from '../../../src/ash/workbench/contrib/tasks/browser/tasksViewPane.js';
 import { BulkEditPane } from '../../../src/ash/workbench/contrib/bulkEdit/browser/preview/bulkEditPane.js';
 import { TunnelPanel } from '../../../src/ash/workbench/contrib/remote/browser/tunnelView.js';
 import { MarkerSeverity } from '../../../src/ash/platform/markers/common/markers.js';
 import { MarkerService } from '../../../src/ash/platform/markers/common/markerService.js';
 import { URI } from '../../../src/ash/base/common/uri.js';
 import { InstantiationService } from '../../../src/ash/platform/instantiation/common/instantiationService.js';
-import { type ITaskService } from '../../../src/ash/workbench/contrib/tasks/common/taskService.js';
-import { type IViewsService } from '../../../src/ash/workbench/services/views/common/viewsService.js';
-import { type ITerminalService } from '../../../src/ash/workbench/services/terminal/browser/terminal.js';
 import { type ITunnelService } from '../../../src/ash/platform/tunnel/common/tunnel.js';
 import { type IAppServerRemoteAgentService } from '../../../src/ash/workbench/services/remote/common/appServerRemoteAgentService.js';
-import '../../../src/ash/workbench/contrib/tasks/browser/media/tasks.css';
 import '../../../src/ash/workbench/contrib/problems/browser/media/problems.css';
 import { EmptyView } from '../../../src/ash/workbench/contrib/files/browser/views/emptyView.js';
 import { ScmAgentReviewViewPane } from '../../../src/ash/workbench/contrib/scm/browser/scmAgentReviewViewPane.js';
@@ -132,35 +127,29 @@ const pane = resources.add(view === 'empty'
 			? new ProblemsViewPane(root, { id: 'fixture.problems', title: 'Problems' }, markers, editors, workspace, contextMenus, clipboard)
 			: view === 'bulk'
 				? new BulkEditPane(root, { id: 'fixture.bulk', title: 'Refactor Preview' }, configuration, editors, contextKeys, resources.add(new InstantiationService()))
-				: view === 'tasks'
-					? new TasksViewPane(root, { id: 'fixture.tasks', title: 'Tasks' }, {
-						...Disposable.None, tasks: [{ id: 'fixture', label: 'Fixture task', command: 'fixture', group: 'test', source: 'vscode' }], activeRuns: [], lastRun: undefined,
-						onDidChangeTasks: Event.None, onDidStartTask: Event.None, onDidChangeTaskRun: Event.None,
-						refresh: async () => { throw new Error('Task discovery failed. '.repeat(12)); },
-					} as unknown as ITaskService, {} as IViewsService, {} as ITerminalService)
-					: view === 'ports'
-						? new TunnelPanel(root, { id: 'fixture.ports', title: 'Ports' }, {
-							onTunnelOpened: Event.None, onTunnelClosed: Event.None, tunnels: Promise.reject(new Error('Port discovery failed. '.repeat(12))),
-						} as unknown as ITunnelService, {
-							connection: { kind: 'ssh', generation: 1, authority: 'ssh+fixture', host: 'fixture' }, connectionState: 'connected',
-							onDidChangeConnection: Event.None, onDidChangeConnectionState: Event.None,
-						} as unknown as IAppServerRemoteAgentService)
-						: view === 'changes'
-							? new ChangesViewPane(root, { id: 'fixture.changes', title: 'Changes' },
-								{ activeSelection: { kind: 'session', active: { threadId: 'fixture-thread', session: { sessionId: 'fixture' } } }, onDidChange: Event.None } as unknown as ISessionsService,
-								{ onDidUpdateTurnChanges: Event.None, onDidBecomeReady: Event.None, listTurnChanges: async () => [changes.summary], readTurnChange: async () => changes } as unknown as IChatService,
-								editors, configuration, contextKeys, notifications, {} as IQuickInputService,
-								{ getOpenAriaHint: () => undefined } as unknown as IAccessibleViewService, changesServices, changesViewState,
-								{ openChangesEditor: async () => { throw new Error('Opening review editors is outside this layout fixture'); } } as unknown as ISessionChangesService, storage)
-							: view === 'console'
-								? new DebugConsoleViewPane(root, { id: 'fixture.console', title: 'Console' }, {
-									replModel: {
-										...Disposable.None, sessions: [], activeSession: { id: 'fixture', label: 'Fixture', state: 'stopped', output: 'Fixture output', canEvaluate: true },
-										onDidChange: Event.None, selectSession: () => { }, clear: () => { }, evaluate: async () => { throw new Error('Evaluation failed. '.repeat(12)); },
-									}
-								} as unknown as IDebugService)
-								: new SymphonyTasksView(root, { id: 'fixture.symphony', title: 'Symphony' }, symphony, configuration, contextKeys,
-									{ showOpenDialog: async () => { throw new Error('File picking is outside this fixture'); } } as unknown as IFileDialogService));
+				: view === 'ports'
+					? new TunnelPanel(root, { id: 'fixture.ports', title: 'Ports' }, {
+						onTunnelOpened: Event.None, onTunnelClosed: Event.None, tunnels: Promise.reject(new Error('Port discovery failed. '.repeat(12))),
+					} as unknown as ITunnelService, {
+						connection: { kind: 'ssh', generation: 1, authority: 'ssh+fixture', host: 'fixture' }, connectionState: 'connected',
+						onDidChangeConnection: Event.None, onDidChangeConnectionState: Event.None,
+					} as unknown as IAppServerRemoteAgentService)
+					: view === 'changes'
+						? new ChangesViewPane(root, { id: 'fixture.changes', title: 'Changes' },
+							{ activeSelection: { kind: 'session', active: { threadId: 'fixture-thread', session: { sessionId: 'fixture' } } }, onDidChange: Event.None } as unknown as ISessionsService,
+							{ onDidUpdateTurnChanges: Event.None, onDidBecomeReady: Event.None, listTurnChanges: async () => [changes.summary], readTurnChange: async () => changes } as unknown as IChatService,
+							editors, configuration, contextKeys, notifications, {} as IQuickInputService,
+							{ getOpenAriaHint: () => undefined } as unknown as IAccessibleViewService, changesServices, changesViewState,
+							{ openChangesEditor: async () => { throw new Error('Opening review editors is outside this layout fixture'); } } as unknown as ISessionChangesService, storage)
+						: view === 'console'
+							? new DebugConsoleViewPane(root, { id: 'fixture.console', title: 'Console' }, {
+								replModel: {
+									...Disposable.None, sessions: [], activeSession: { id: 'fixture', label: 'Fixture', state: 'stopped', output: 'Fixture output', canEvaluate: true },
+									onDidChange: Event.None, selectSession: () => { }, clear: () => { }, evaluate: async () => { throw new Error('Evaluation failed. '.repeat(12)); },
+								}
+							} as unknown as IDebugService)
+							: new SymphonyTasksView(root, { id: 'fixture.symphony', title: 'Symphony' }, symphony, configuration, contextKeys,
+								{ showOpenDialog: async () => { throw new Error('File picking is outside this fixture'); } } as unknown as IFileDialogService));
 const panes = resources.add(new PaneView(root));
 panes.addPane(pane, 180);
 if (view !== 'symphony') {

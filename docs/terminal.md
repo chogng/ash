@@ -1,6 +1,6 @@
 # Terminal：职责与运行契约
 
-本文描述 Electron Desktop 与 Browser Workbench 集成终端的状态归属、调用链和生命周期。各层的模块职责见 [Platform Terminal](../src/ash/platform/terminal/README.md)、[共享服务契约](../src/ash/workbench/services/terminal/README.md)、[Workbench 实现](../src/ash/workbench/contrib/terminal/README.md) 与[独立贡献](../src/ash/workbench/contrib/terminalContrib/README.md)。
+本文描述 Electron Desktop 与 Browser Workbench 集成终端的状态归属、调用链和生命周期。各层的模块职责见 [Platform Terminal](../src/ash/platform/terminal/README.md)、[宿主服务与快照](../src/ash/workbench/services/terminal/README.md)、[Workbench 实现](../src/ash/workbench/contrib/terminal/README.md) 与[独立贡献](../src/ash/workbench/contrib/terminalContrib/README.md)。
 
 ## 状态与职责
 
@@ -10,7 +10,7 @@
 | Rust `app-server`                            | 协议校验与分发、执行目录授权、连接与终端资源的路由。                                                |
 | Electron Main                                | App Server 连接获取、透明 relay、运行时更换通知和窗口级内存 SecretStorage。                         |
 | `platform/terminal`                          | 前端进程契约与协议适配、原始字节转换、连接代次和租约交接。生成 DTO 终止于适配边界。                 |
-| `TerminalService`／`TerminalInstanceService` | 窗口实例集合、顺序与活动项；实例创建和不可变启动参数。                                              |
+| `TerminalService`／`TerminalInstanceService` | 窗口实例集合、创建意图与目录/profile 解析、位置选择和失败回收；实例工厂拥有不可变启动参数。         |
 | `TerminalInstance`／`TerminalProcessManager` | 每实例身份与生命周期、输入队列、读取游标、增量 UTF-8 解码、输入与尺寸确认、屏幕解析等待和取消。     |
 | `XtermTerminal` 与屏幕能力模型               | 每实例唯一的 ANSI／VT 屏幕、cells／cursor、选区、搜索、markers、装饰及已提交 Shell 元数据的显示。   |
 | `TerminalViewPane`／组与编辑器服务           | 面板可见性、组成员和几何、标签、焦点、屏幕附着，以及同一实例在面板与编辑区之间的移动。              |
@@ -20,13 +20,15 @@ Agent 执行、审批与终端呈现的详细边界以 [Platform Terminal 的前
 
 ## 进程接入
 
+新建终端的入口为命令 → `ITerminalService.createTerminal(ICreateTerminalOptions)` → TerminalService 的目录/profile 与位置解析 → TerminalInstanceService。面板只在首次显示且没有实例时发起一次创建；独立终端窗口和分屏不依赖 View 创建方法。
+
 真实 Shell 的输入链路为：用户操作／Tasks／Debug → `TerminalInstance` → `TerminalProcessManager` → `ITerminalProcessService` → Renderer protocol client → App Server → `exec-server` → PTY。Electron 连接经过 Main 的透明 relay，Browser 通过其 Web 连接访问后端；输出沿相反方向返回。
 
 宿主在 `IRendererHost.terminal` 提供进程服务，Workbench 与 Sessions 通过同一个 DI 标识消费。已连接 Web 使用 `AppServerTerminalProcessService`；Desktop 本地与远程使用 `ReconnectableTerminalProcessService`。无后端的 UI 环境通过 `DisconnectedTerminalProcessService` 明确拒绝进程操作。
 
 后端资源由 `terminalId` 与创建时的 `dirId` 共同定位；保留的多根工作区终端继续使用原目录路由。前端实例身份独立于 PID，重启 Shell 可以更换 PID。终端编辑器资源包含实例 incarnation，失效资源显示不可用，不根据旧身份自动启动新 Shell。
 
-宿主输出 PTY 和扩展自供 PTY 经共享服务契约接入同一个窗口实例集合。前者为只读输出，后者按 provider 实际提供的输入与尺寸能力接线；其创建通知和回调生命周期见[共享服务契约](../src/ash/workbench/services/terminal/README.md)。
+宿主输出 PTY 和扩展自供 PTY 经共享服务契约接入同一个窗口实例集合。前者为只读输出，后者按 provider 实际提供的输入与尺寸能力接线；其创建通知和回调生命周期见[宿主服务与快照](../src/ash/workbench/services/terminal/README.md)。
 
 ## 启动配置与扩展
 

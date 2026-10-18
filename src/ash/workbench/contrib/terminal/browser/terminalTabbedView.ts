@@ -5,7 +5,7 @@ import type { Event } from '../../../../base/common/event.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { TerminalTabList, TerminalTabsListSizes } from './terminalTabsList.js';
 import { localize } from '../../../../nls.js';
-import { ITerminalService } from '../../../services/terminal/browser/terminal.js';
+import { ITerminalService } from './terminal.js';
 import { SplitView, type ISplitViewView } from "../../../../base/browser/ui/splitview/splitview.js";
 import { h } from "../../../../base/browser/dom.js";
 import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";

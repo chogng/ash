@@ -2,7 +2,7 @@ import { localize } from '../../../../nls.js';
 import { InstantiationType, registerSingleton } from '../../../../platform/instantiation/common/extensions.js';
 import { ExtensionsRegistry } from '../../../services/extensions/common/extensionsRegistry.js';
 import type { ExtensionManifest } from '../../../services/extensions/common/extensionManifest.js';
-import { ITerminalContributionService } from '../../../services/terminal/common/terminal.js';
+import { ITerminalContributionService } from './terminal.js';
 import { isValidTerminalProfileContribution, TerminalContributionService } from './terminalExtensionPoints.js';
 
 ExtensionsRegistry.registerExtensionPoint<ExtensionManifest['contributes']['terminalProfiles']>({

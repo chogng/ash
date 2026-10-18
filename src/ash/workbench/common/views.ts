@@ -144,7 +144,6 @@ export const WorkbenchViewContainerId = Object.freeze({
 	Output: "ash.panel.output",
 	BulkEdit: "ash.panel.bulkEdit",
 	DebugConsole: "ash.panel.debugConsole",
-	Tasks: "ash.panel.tasks",
 	Terminal: "ash.panel.terminal",
 	Ports: "ash.panel.ports",
 	Testing: "ash.testing",

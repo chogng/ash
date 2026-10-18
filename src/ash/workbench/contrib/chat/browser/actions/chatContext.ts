@@ -2,7 +2,7 @@ import { IScreenshotService } from '../../../screenshot/common/screenshot.js';
 import { captureTerminalAttachment } from '../../../terminal/browser/chatTerminalCommandMirror.js';
 import { ILanguageModelToolsService, isToolSet } from '../../common/tools/languageModelToolsService.js';
 import { IViewsService } from '../../../../services/views/common/viewsService.js';
-import { ITerminalService, type ITerminalView } from '../../../../services/terminal/browser/terminal.js';
+import { ITerminalService, type ITerminalView } from '../../../terminal/browser/terminal.js';
 import { TERMINAL_VIEW_ID } from '../../../terminal/common/terminal.js';
 import { addDisposableListener } from '../../../../../base/browser/dom.js';
 import { CancellationTokenSource, type CancellationToken } from '../../../../../base/common/cancellation.js';

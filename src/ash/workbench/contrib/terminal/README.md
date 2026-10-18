@@ -1,6 +1,6 @@
 # Terminal 界面与贡献
 
-此目录拥有终端服务实现、窗口内实例管理及界面。跨领域服务契约由 [services/terminal](../../services/terminal/README.md) 拥有；Shell 进程和授权由 Rust 后端拥有，经 [platform/terminal](../../../platform/terminal/README.md) 的进程契约访问；contribution 不导入生成协议。
+此目录拥有终端服务实现、窗口内实例管理及界面。标准浏览器服务契约归 [browser/terminal.ts](browser/terminal.ts)，profile/provider/resolver 契约归 [common/terminal.ts](common/terminal.ts)；Shell 进程和授权由 Rust 后端拥有，经 [platform/terminal](../../../platform/terminal/README.md) 的进程契约访问；contribution 不导入生成协议。
 
 创建由 TerminalInstanceService 保存不可变启动参数，AgentHostTerminalService 按窗口执行目标选择 Local / Remote backend。各 backend 索引原 PTY 句柄；实例持有唯一释放 lease。RemoteTerminalChannelClient 只约束异步请求的 workspace generation 和 input host identity，平台继续唯一拥有真实 attachment/reconnect/ACK，Rust 继续拥有执行、nonce 和 Shell 历史。Desktop 与 Web 入口各自注册 resolver/backend；Desktop 的关闭保护与 reload 交接由 TerminalNativeContribution 接入原生命周期，真正退出时才等待实例关闭。
 
@@ -12,13 +12,13 @@ Attach to Chat 与原 Chat context picker 捕获 xterm 已解析输出、选择�
 | ---------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
 | `browser/terminal.contribution.ts`                         | 实例服务、View、编辑器与动作/菜单的注册入口；独立增强由 terminal.all.ts 装载                                |
 | `browser/terminalMainContribution.ts`                      | BlockRestore 时订阅宿主 PTY 创建通知，交给实例服务并显示 View                                               |
-| `browser/terminal.ts`                                      | contribution 内部屏幕配置服务契约；实例与 profile/resolver 契约归 services/terminal                         |
+| `browser/terminal.ts`                                      | 实例、ICreateTerminalOptions、组、TerminalEditorLocation、屏幕与配置服务契约                                |
 | `common/terminalConfiguration.ts`                          | 消费中的终端设置 schema、默认值、scope、settings UI 元数据；有效值和持久化属于配置系统                      |
 | `browser/terminalConfigurationService.ts`                  | 读取有效屏幕配置及编辑器字体继承，通知保留的 xterm 实时更新                                                 |
 | `browser/terminalProfileService.ts`                        | 合并执行端发现、自定义与扩展 profile；默认选择、provider 注册、按需激活和连接/工作区失效                    |
 | `browser/terminalProfileResolverService.ts`                | 解析执行端变量、argv/env/cwd、automation/agentHost 配置及图标；真实 executable 由后端确认                   |
 | `browser/terminalProfileQuickpick.ts`                      | 命令面板选择/取消与 USER 默认 profile 写入；不拥有 shell 执行定义                                           |
-| `browser/terminalService.ts`                               | 窗口实例列表、顺序与活动项；创建实例并维护列表生命周期                                                      |
+| `browser/terminalService.ts`                               | 窗口实例列表、创建意图解析、目录/profile 选择、分屏/编辑器定位与失败回收                                    |
 | `browser/terminalInstance.ts`                              | 每实例身份、关闭/复用、连接状态、宿主 PTY、原进程客户端及唯一 xterm 的生命周期；原始输入绑定与 sendText     |
 | `browser/terminalExtensions.ts`                            | 实例贡献注册元数据；实例通过自己的容器装配和释放贡献                                                        |
 | `browser/terminalProcessManager.ts`                        | Shell 输入队列、UTF-8 分块、二进制顺序、尺寸合并、输入/尺寸确认、增量读取、双游标、分页排空、解析等待与取消 |
@@ -53,7 +53,7 @@ Shell 进程管理器从平台契约消费原始字节和前端退出码，不�
 
 Tasks 通过 `ITerminalInstance.reuseTerminal` 在同一个实例与屏幕上替换进程。实例先停止旧读取并等待后端释放，再完整替换启动环境、目录和执行参数；旧读取回复不能写入新进程的屏幕或结束新任务。`IShellLaunchConfig.initialText` 归实例的显示队列拥有，在新进程输出前写入；Tasks 的命令回显使用这个端口，不经过进程观察事件。复用时连同缺省值完整替换初始文案，关闭 echo 不保留上一轮命令。创建期间关闭实例时，close 等待晚到进程的清理。`clearBuffer` 由实例调用自己的屏幕，并清除尚未显示的队列。任务系统仅持有可复用资格与预留状态，实例集合和活动选择仍由 TerminalService 唯一拥有。
 
-Workbench 与 Sessions 核心入口注册所选 `ITerminalProcessService`；共同加载的 Terminal contribution 声明依赖并经容器 `createInstance(TerminalService)` 创建窗口唯一实例服务。缺少进程或 Workspace 注册时，创建立即失败。Terminal View、Tasks、Debug、Testing View 和 voice 消费同一个公开实例契约；共享 services 不导入它。
+Workbench 与 Sessions 核心入口注册所选 `ITerminalProcessService`；共同加载的 Terminal contribution 声明依赖并经容器 `createInstance(TerminalService)` 创建窗口唯一实例服务。缺少进程或 Workspace 注册时，创建立即失败。Terminal View、Tasks、Debug、Testing View 和 voice 消费同一个公开实例契约；平台和共享 common 数据不反向导入它。
 
 | 行为         | 当前约定                                                                                                                                                                                                                                                |
 | ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -127,3 +127,11 @@ Rename 和 Change Icon 使用现有 Quick Input，目标关闭时取消。原实
 `common/basePty.ts` 提供当前实际消费的 string-output child-process 事件端口；`terminalProcessExtHostProxy.ts` 接原扩展 provider 的 opaque PTY，拥有轮询/输入队列和取消，不创建 Shell 或屏幕。MainThread 继续拥有 profile 注册与 extension incarnation，实际工厂直接创建此代理；旧内嵌 PTY 类已退出。插件响应在代理边界校验，typed 内部 payload 不重复校验；关闭后忽略晚到数据并只发一次释放请求。完整 Rust byte-stream child-process/replay/backend API 仍待补。
 
 平台 Common 接线已迁回真实能力模型：已提交 cwd 由 `CwdDetectionCapability` 唯一持有，实例标准能力存储登记该实现；装饰 addon 使用 `BufferMarkCapability` 管理同一屏幕 marker，仍自己拥有装饰渲染。扩展 PTY 文本流经 `TerminalDataBufferer`，初始输出、标题与退出保序；Shell 输出不进入这个定时缓冲器。启动配置 schema 和已消费的配置 key/prefix 由平台声明，环境合并仍属于本层的启动组合。
+
+## 创建入口与宿主差异
+
+命令直接调用 `ITerminalService.createTerminal(ICreateTerminalOptions)`。TerminalService 选择目录、刷新 profile、解析 Shell 并检查 workspace/父实例生命周期，再交给唯一实例工厂；View 只处理首次显示、进度、状态和焦点。Tasks 和 Debug 可传入已解析的执行参数，继续走同一实例工厂。Extension Host 桥校验扩展响应并持有其资源生命周期；Shell 配置和 cwd 交给 TerminalService 统一选择目录及解析，自供 PTY 也保留选定目录归属。编辑器目标在实例发布前确定；附着编辑器失败会回收新进程。
+
+无障碍视图通过 `BufferContentTracker` 读取当前 xterm buffer，将自动换行合并为逻辑文本行。`TextAreaSyncAddon` 在读屏模式下订阅现有 PromptInputModel，不重建输入状态；关闭能力或实例时释放订阅。
+
+上游 `electron-browser/terminalInstallActions.ts` 安装 VS Code/Copilot CLI，Ash Desktop 没有这个安装入口，且禁止依赖 CLI 产品宿主。上游 `common/scripts` 的 Shell 启动文件与 PowerShell 程序集也不属于 renderer：Ash 的注入、nonce 和启动文件生命周期由 `crates/exec-server/src/terminal/shell_integration.rs` 拥有。这些文件保持宿主差异，不在 TypeScript 中增加无调用方实现或二进制副本。

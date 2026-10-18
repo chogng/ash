@@ -2,7 +2,7 @@ import { CancellationTokenSource } from '../../../../base/common/cancellation.js
 import { Disposable, DisposableStore } from '../../../../base/common/lifecycle.js';
 import { localize } from '../../../../nls.js';
 import { IQuickInputService } from '../../../../platform/quickinput/common/quickInput.js';
-import { ITerminalService, type ITerminalEditingService, type ITerminalInstance } from '../../../services/terminal/browser/terminal.js';
+import { ITerminalService, type ITerminalEditingService, type ITerminalInstance } from './terminal.js';
 
 /** Owns the temporary rename interaction; the instance owns the resulting title. */
 export class TerminalEditingService extends Disposable implements ITerminalEditingService {

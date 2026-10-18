@@ -1,7 +1,7 @@
-import { registerTestTerminalLifecycleServices } from '../../../../test/browser/workbenchTestServices.js';
+import { registerTestTerminalCreationServices } from '../../../../test/browser/workbenchTestServices.js';
 import { MergedEnvironmentVariableCollection } from '../../../../../platform/terminal/common/environmentVariableCollection.js';
 import { IEnvironmentVariableService } from '../../../terminal/common/environmentVariable.js';
-import { ITerminalContributionService, ITerminalProfileResolverService, ITerminalProfileService } from '../../../../services/terminal/common/terminal.js';
+import { ITerminalContributionService, ITerminalProfileResolverService, ITerminalProfileService } from '../../../terminal/common/terminal.js';
 import { TerminalProfileService } from '../../../terminal/browser/terminalProfileService.js';
 import { BrowserTerminalProfileResolverService } from '../../../terminal/browser/terminalProfileResolverService.js';
 import { OperatingSystem } from '../../../../../base/common/platform.js';
@@ -46,7 +46,7 @@ import { IStorageService } from '../../../../../platform/storage/common/storage.
 import { IWorkspaceContextService } from '../../../../../platform/workspace/common/workspace.js';
 import { ILogService, NullLoggerService } from '../../../../../platform/log/common/log.js';
 import { ITaskService } from '../../../tasks/common/taskService.js';
-import { ITerminalService } from '../../../../services/terminal/browser/terminal.js';
+import { ITerminalService } from '../../../terminal/browser/terminal.js';
 import { DebugService } from '../../browser/debugService.js';
 import { AdapterManager } from '../../browser/debugAdapterManager.js';
 import { BrowserStorageService } from '../../../../services/storage/browser/storageService.js';
@@ -56,10 +56,9 @@ test('DAP runInTerminal creates an integrated PowerShell terminal with quoted ar
 	const writes: string[] = [];
 	const environments: unknown[] = [];
 	const terminals = {
-		getProfiles: async () => [{ profileId: 'powershell', title: 'PowerShell', isDefault: true }],
-		createTerminal: async (options: import('../../../../services/terminal/browser/terminal.js').ITerminalCreateOptions) => { environments.push(options.env); return { state: 'running', processId: 1234, sendText: async (value: string, shouldExecute: boolean) => { writes.push(value + (shouldExecute ? '\r' : '')); } }; },
+		createTerminal: async (options: import('../../../terminal/browser/terminal.js').ITerminalCreateOptions) => { environments.push(options.env); return { state: 'running', processId: 1234, sendText: async (value: string, shouldExecute: boolean) => { writes.push(value + (shouldExecute ? '\r' : '')); } }; },
 	} as unknown as ITerminalService;
-	const response = await launchWithTerminalRequest(terminals, { kind: 'integrated', title: 'Debug app', cwd: 'C:\\work tree', args: ['C:\\bin\\app.exe', 'a b', "don't"], env: { MODE: 'debug value', REMOVE_ME: null } });
+	const response = await launchWithTerminalRequest(terminals, { kind: 'integrated', title: 'Debug app', cwd: 'C:\\work tree', args: ['C:\\bin\\app.exe', 'a b', "don't"], env: { MODE: 'debug value', REMOVE_ME: null } }, { profiles: [{ profileId: 'powershell', title: 'PowerShell', isDefault: true }] });
 
 	assert.equal(response.success, true);
 	assert.deepEqual(response.body, { shellProcessId: 1234 });
@@ -96,7 +95,7 @@ suite('DAP terminal availability', () => {
 			};
 			const workspace = resources.add(new TestWorkspaceService({ id: 'test', uri: URI.file('/workspace') }));
 			const services = resources.add(new InstantiationService(new ServiceCollection([IPathService, new SyncDescriptor(BrowserPathService)], [IRendererHostService, createDisconnectedRendererApi()], [IConfigurationService, new SyncDescriptor(WorkbenchConfigurationService)], [ITerminalProcessService, processes], [IWorkspaceContextService, workspace])));
-			registerTestTerminalLifecycleServices(services);
+			registerTestTerminalCreationServices(services);
 			const terminals = resources.add(services.createInstance(TerminalService));
 			let finished = false;
 			const pending = launchWithTerminalRequest(terminals, { kind: 'integrated', args: ['app'] }, { terminalProcesses: processes }).then(response => { finished = true; return response; });
@@ -135,7 +134,7 @@ suite('DAP terminal availability', () => {
 			};
 			const workspace = resources.add(new TestWorkspaceService({ id: 'test', uri: URI.file('/workspace') }));
 			const services = resources.add(new InstantiationService(new ServiceCollection([IPathService, new SyncDescriptor(BrowserPathService)], [IRendererHostService, createDisconnectedRendererApi()], [IConfigurationService, new SyncDescriptor(WorkbenchConfigurationService)], [ITerminalProcessService, processes], [IWorkspaceContextService, workspace])));
-			registerTestTerminalLifecycleServices(services);
+			registerTestTerminalCreationServices(services);
 			const terminals = resources.add(services.createInstance(TerminalService));
 			const response = await launchWithTerminalRequest(terminals, { kind: 'integrated', args: ['app'] }, { terminalProcesses: processes });
 			assert.deepEqual({ success: response.success, message: response.message, calls, terminals: terminals.instances }, {
@@ -174,7 +173,7 @@ suite('DAP terminal launch policies through execution owners', () => {
 			resize: async () => { }, close: async options => { closes.push(options.terminalId); },
 		};
 		const services = owner.add(new InstantiationService(new ServiceCollection([IConfigurationService, configuration], [ITerminalProcessService, processes], [IWorkspaceContextService, workspace])));
-		registerTestTerminalLifecycleServices(services);
+		registerTestTerminalCreationServices(services);
 		const terminals = owner.add(services.createInstance(TerminalService));
 		const disposalListener = owner.add(terminals.onDidDisposeInstance(() => {
 			disposalListener.dispose();
@@ -270,7 +269,7 @@ suite('DAP terminal launch policies through execution owners', () => {
 	}
 });
 
-async function launchWithTerminalRequest(terminals: ITerminalService, argumentsValue: unknown, options: { terminalProcesses?: ITerminalProcessService; configuration?: IConfigurationService; workspace?: TestWorkspaceService; activeResource?: URI; adapterRoutes?: (string | undefined)[]; onReady?: (service: DebugService, session: IDebugSession) => Promise<void>; } = {}): Promise<Record<string, unknown>> {
+async function launchWithTerminalRequest(terminals: ITerminalService, argumentsValue: unknown, options: { profiles?: readonly { profileId: string; title: string; isDefault: boolean; }[]; terminalProcesses?: ITerminalProcessService; configuration?: IConfigurationService; workspace?: TestWorkspaceService; activeResource?: URI; adapterRoutes?: (string | undefined)[]; onReady?: (service: DebugService, session: IDebugSession) => Promise<void>; } = {}): Promise<Record<string, unknown>> {
 	using resources = new DisposableStore();
 	const adapters = resources.add(new AdapterManager());
 	let resolveResponse!: (response: Record<string, unknown>) => void;
@@ -302,7 +301,7 @@ async function launchWithTerminalRequest(terminals: ITerminalService, argumentsV
 	const terminalProcesses: ITerminalProcessService = options.terminalProcesses ?? {
 		operatingSystem: OperatingSystem.Linux, onConnectionState: Event.None, getConnectionState: async () => 'ready',
 		getProcessInfo: async () => ({ ready: { pid: 42, cwd: '/workspace' }, cwd: '/workspace', rows: 24, cols: 80 }),
-		getEnvironment: async () => ({}), listProfiles: () => terminals.getProfiles(), sendSignal: async () => { }, resolveProfile: resolveTerminalProfile,
+		getEnvironment: async () => ({}), listProfiles: async () => options.profiles ?? [{ profileId: 'shell', title: 'Shell', isDefault: true }], sendSignal: async () => { }, resolveProfile: resolveTerminalProfile,
 		create: unexpectedProcess, write: unexpectedProcess, resize: unexpectedProcess, read: unexpectedProcess, close: unexpectedProcess,
 	};
 	const services = resources.add(new InstantiationService(new ServiceCollection([IPathService, new SyncDescriptor(BrowserPathService)], [IRendererHostService, createDisconnectedRendererApi()], [IConfigurationService, options.configuration ?? new SyncDescriptor(WorkbenchConfigurationService)],
@@ -351,10 +350,10 @@ test('activity-selected debug roots bind the adapter and integrated terminal to 
 		]
 	});
 	const adapterRoutes: (string | undefined)[] = [];
-	const created: import('../../../../services/terminal/browser/terminal.js').ITerminalCreateOptions[] = [];
+	const created: import('../../../terminal/browser/terminal.js').ITerminalCreateOptions[] = [];
 	const terminals = {
 		getProfiles: async () => [{ profileId: 'shell', title: 'shell', isDefault: true }],
-		createTerminal: async (options: import('../../../../services/terminal/browser/terminal.js').ITerminalCreateOptions) => { created.push(options); return { state: 'running', processId: 1234, sendText: async () => { } }; },
+		createTerminal: async (options: import('../../../terminal/browser/terminal.js').ITerminalCreateOptions) => { created.push(options); return { state: 'running', processId: 1234, sendText: async () => { } }; },
 	} as unknown as ITerminalService;
 	const response = await launchWithTerminalRequest(terminals, { args: ['app'] }, { workspace, activeResource: URI.file('/second/main.rs'), adapterRoutes });
 	assert.equal(response.success, true);

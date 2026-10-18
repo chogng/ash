@@ -13,7 +13,7 @@ import { IEnvironmentVariableService } from '../common/environmentVariable.js';
 import { MergedEnvironmentVariableCollection } from '../../../../platform/terminal/common/environmentVariableCollection.js';
 import { sanitizeCwd, shouldUseEnvironmentVariableCollection } from '../../../../platform/terminal/common/terminalEnvironment.js';
 import { createTerminalEnvironment, mergeEnvironments } from '../common/terminalEnvironment.js';
-import { ITerminalProfileResolverService, ITerminalProfileService, type IShellLaunchConfigResolveOptions } from '../../../services/terminal/common/terminal.js';
+import { ITerminalProfileResolverService, ITerminalProfileService, type IShellLaunchConfigResolveOptions } from '../common/terminal.js';
 
 /** Resolves caller-owned launch data against one initialized execution host and workspace generation. */
 export abstract class BaseTerminalProfileResolverService extends Disposable implements ITerminalProfileResolverService {

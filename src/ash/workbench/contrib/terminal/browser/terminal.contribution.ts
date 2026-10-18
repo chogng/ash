@@ -1,3 +1,5 @@
+import { IEditorService } from '../../../services/editor/common/editorService.js';
+import { ICommandService } from '../../../../platform/commands/common/commands.js';
 import { TerminalEditingService } from './terminalEditingService.js';
 import { terminalStrings } from '../common/terminalStrings.js';
 import { registerEditorPane } from '../../../browser/editor.js';
@@ -18,11 +20,11 @@ import { TerminalLogService } from '../../../../platform/terminal/common/termina
 import { IWorkspaceContextService } from '../../../../platform/workspace/common/workspace.js';
 import { registerWorkbenchServiceContribution } from '../../../browser/workbenchServiceContributions.js';
 import { ITerminalConfigurationService } from './terminal.js';
-import { ITerminalService, ITerminalGroupService, ITerminalEditorService, ITerminalEditingService } from '../../../services/terminal/browser/terminal.js';
+import { ITerminalService, ITerminalGroupService, ITerminalEditorService, ITerminalEditingService } from './terminal.js';
 import { TerminalGroupService } from './terminalGroupService.js';
 import { setupTerminalCommands } from './terminalCommands.js';
 import { InstantiationType, registerSingleton } from '../../../../platform/instantiation/common/extensions.js';
-import { ITerminalContributionService, ITerminalProfileService } from '../../../services/terminal/common/terminal.js';
+import { ITerminalContributionService, ITerminalProfileService, ITerminalProfileResolverService } from '../common/terminal.js';
 import { IExtensionService } from '../../../services/extensions/common/extensionService.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { TerminalConfigurationService } from './terminalConfigurationService.js';
@@ -42,7 +44,7 @@ registerWorkbenchContribution(AgentHostOutputChannel.ID, WorkbenchPhase.BlockRes
 
 registerWorkbenchServiceContribution({
 	service: ITerminalService,
-	dependencies: [ITerminalProcessService, IWorkspaceContextService, IConfigurationService, IDialogService, ISecretStorageService, IStorageService],
+	dependencies: [ITerminalProcessService, IWorkspaceContextService, IConfigurationService, IDialogService, ISecretStorageService, IStorageService, ITerminalProfileService, ITerminalProfileResolverService, IEditorService, ICommandService],
 	install: context => context.register(context.container.createInstance(TerminalService)),
 });
 
@@ -57,7 +59,7 @@ registerSingleton(ITerminalLogService, TerminalLogService, InstantiationType.Del
 
 registerWorkbenchServiceContribution({
 	service: ITerminalProfileService,
-	dependencies: [ITerminalService, ITerminalProcessService, IConfigurationService, IWorkspaceContextService, IExtensionService, ITerminalContributionService],
+	dependencies: [ITerminalProcessService, IConfigurationService, IWorkspaceContextService, IExtensionService, ITerminalContributionService],
 	install: context => context.register(context.container.createInstance(TerminalProfileService)),
 });
 

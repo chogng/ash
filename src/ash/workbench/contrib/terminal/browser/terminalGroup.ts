@@ -3,7 +3,7 @@ import { SplitView } from '../../../../base/browser/ui/splitview/splitview.js';
 import { Emitter } from '../../../../base/common/event.js';
 import { Disposable, DisposableStore, MutableDisposable } from '../../../../base/common/lifecycle.js';
 import { localize } from '../../../../nls.js';
-import { ITerminalService, type ITerminalGroup, type ITerminalInstance } from '../../../services/terminal/browser/terminal.js';
+import { ITerminalService, type ITerminalGroup, type ITerminalInstance } from './terminal.js';
 import type { ITerminalTabLayoutInfoById } from '../../../../platform/terminal/common/terminal.js';
 
 /** Owns one panel group's panes. Moving a pane retains its instance, PTY and xterm buffer. */

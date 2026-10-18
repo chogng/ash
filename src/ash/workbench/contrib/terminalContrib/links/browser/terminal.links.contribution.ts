@@ -4,7 +4,7 @@ import type { ServicesAccessor } from '../../../../../platform/instantiation/com
 import { IViewsService } from '../../../../services/views/common/viewsService.js';
 import { TerminalViewPane } from '../../../terminal/browser/terminalView.js';
 import { TERMINAL_VIEW_ID } from '../../../terminal/common/terminal.js';
-import { ITerminalService } from '../../../../services/terminal/browser/terminal.js';
+import { ITerminalService } from '../../../terminal/browser/terminal.js';
 import { registerTerminalContribution } from '../../../terminal/browser/terminalExtensions.js';
 import { TerminalLinkContribution } from './terminalLinkContribution.js';
 import { KeyCode, KeyMod } from '../../../../../base/common/keyCodes.js';

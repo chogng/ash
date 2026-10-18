@@ -11,9 +11,6 @@ import { Event } from "../../../../../base/common/event.js";
 import { toDisposable } from "../../../../../base/common/lifecycle.js";
 import { IContextMenuService } from "../../../../../platform/contextview/browser/contextView.js";
 import { InstantiationService } from "../../../../../platform/instantiation/common/instantiationService.js";
-import type { ITaskService } from "../../../tasks/common/taskService.js";
-import type { ITerminalService } from "../../../../services/terminal/browser/terminal.js";
-import type { IViewsService } from "../../../../../workbench/services/views/common/viewsService.js";
 
 test("Output projects channel selection and active-channel clearing into the Panel title", async () => {
 	const browser = new JSDOM("<!doctype html><body></body>");
@@ -65,48 +62,6 @@ test("Output projects channel selection and active-channel clearing into the Pan
 	}
 });
 
-test("Tasks projects its refresh action into the Panel title", async () => {
-	const browser = new JSDOM("<!doctype html><body></body>");
-	const installedGlobals = installDomGlobals(browser);
-	browser.window.HTMLCanvasElement.prototype.getContext = () => null;
-	let refreshCount = 0;
-	const tasks = {
-		tasks: [],
-		runs: [], start: () => { throw new Error('Not used'); }, describe: async () => { throw new Error('Not used'); }, getRun: () => undefined, activeRuns: [],
-		lastRun: undefined,
-		onDidChangeTasks: Event.None,
-		onDidStartTask: Event.None,
-		onDidChangeTaskRun: Event.None,
-		registerTaskProvider: () => toDisposable(() => undefined),
-		registerTaskProviders: () => ({ replace() { }, dispose() { }, [Symbol.dispose]() { } }),
-		refresh: async () => { refreshCount += 1; return []; },
-		run: async () => { throw new Error("Task execution is not expected"); },
-		rerun: async () => undefined,
-		runProvidedTask: async () => { throw new Error('Provided task execution is not expected in this fixture'); },
-		terminate: async () => undefined,
-		dispose() { },
-		[Symbol.dispose]() { },
-	} as ITaskService;
-	const views = { openView: async () => null, focusView: async () => false, getViewWithId: () => null } as unknown as IViewsService;
-	const terminals = { instances: [] } as unknown as ITerminalService;
-	try {
-		const { TasksViewPane } = await import("../../../../../workbench/contrib/tasks/browser/tasksViewPane.js");
-		using pane = new TasksViewPane(browser.window.document.body, { id: "ash.tasks.test", title: "Tasks" }, tasks, views, terminals);
-		const titleActions = pane.partTitleProjection?.actions;
-		assert.ok(titleActions);
-		browser.window.document.body.append(pane.element, titleActions);
-		await waitFor(() => !titleActions.querySelector<HTMLButtonElement>("[data-action-id='ash.tasks.refresh'] button")?.disabled);
-		const refreshTasks = titleActions.querySelector<HTMLButtonElement>("[data-action-id='ash.tasks.refresh'] button");
-		assert.ok(refreshTasks);
-		assert.ok(refreshTasks.querySelector("svg.ash-icon"));
-		assert.equal(pane.element.querySelector(".ash-tasks-refresh"), null);
-		refreshTasks.click();
-		await waitFor(() => refreshCount === 2);
-	} finally {
-		installedGlobals.dispose();
-		browser.window.close();
-	}
-});
 
 async function waitFor(predicate: () => boolean): Promise<void> {
 	const deadline = Date.now() + 1_000;

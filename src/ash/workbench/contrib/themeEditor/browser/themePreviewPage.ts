@@ -17,7 +17,7 @@ import { IEditorService } from '../../../services/editor/common/editorService.js
 import { IWorkbenchThemeService } from '../../../services/themes/common/workbenchThemeService.js';
 import { InMemoryWorkingCopyBackupService } from '../../../services/workingCopy/common/workingCopyBackupService.js';
 import { BrowserURLService } from '../../../services/url/browser/urlService.js';
-import { ITerminalService, ITerminalGroupService } from '../../../services/terminal/browser/terminal.js';
+import { ITerminalService, ITerminalGroupService } from '../../terminal/browser/terminal.js';
 import { DisposableStore, toDisposable } from '../../../../base/common/lifecycle.js';
 import { createThemePreviewHost, connectThemePreview } from './themePreviewHost.js';
 import { IChatSessionNavigationService } from '../../../services/chat/common/chatSessionNavigationService.js';

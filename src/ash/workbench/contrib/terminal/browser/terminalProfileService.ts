@@ -10,8 +10,7 @@ import { ITerminalProcessService, TerminalSettingPrefix, type ITerminalProfile, 
 import { IWorkspaceContextService } from '../../../../platform/workspace/common/workspace.js';
 import { IExtensionService } from '../../../services/extensions/common/extensionService.js';
 import { TERMINAL_CONFIG_SECTION } from '../common/terminal.js';
-import { ITerminalContributionService, ITerminalProfileService, type IRegisterContributedProfileArgs, type ITerminalProfileProvider } from '../../../services/terminal/common/terminal.js';
-import { ITerminalService } from '../../../services/terminal/browser/terminal.js';
+import { ITerminalContributionService, ITerminalProfileService, type IRegisterContributedProfileArgs, type ITerminalProfileProvider } from '../common/terminal.js';
 import { registerTerminalDefaultProfileConfiguration } from '../../../../platform/terminal/common/terminalPlatformConfiguration.js';
 import { terminalIconsEqual, terminalProfileArgsMatch } from '../../../../platform/terminal/common/terminalProfiles.js';
 
@@ -31,7 +30,6 @@ export class TerminalProfileService extends Disposable implements ITerminalProfi
 	readonly onDidChangeAvailableProfiles = this.changed.event;
 
 	constructor(
-		@ITerminalService private readonly terminals: ITerminalService,
 		@ITerminalProcessService private readonly processes: ITerminalProcessService,
 		@IConfigurationService private readonly configuration: IConfigurationService,
 		@IWorkspaceContextService private readonly workspace: IWorkspaceContextService,
@@ -142,10 +140,10 @@ export class TerminalProfileService extends Disposable implements ITerminalProfi
 		if (existing) return existing;
 		const revision = this.revision;
 
-		const request = this.terminals.getProfiles(dirId).then(async profiles => {
+		const request = this.processes.listProfiles(dirId).then(async profiles => {
 			const resolved = await Promise.all(profiles.map(async profile => {
 				const result = await this.processes.resolveProfile({ type: 'profile', profileId: profile.profileId }, dirId);
-				return Object.freeze({ ...profile, profileName: profile.title, path: result.executable, args: (typeof result.args === 'string' ? result.args : Object.freeze([...result.args])), isAutoDetected: true });
+				return Object.freeze({ ...profile, icon: undefined, profileName: profile.title, path: result.executable, args: (typeof result.args === 'string' ? result.args : Object.freeze([...result.args])), isAutoDetected: true });
 			}));
 			if (this.isDisposed || revision !== this.revision) throw new CancellationError();
 			const previous = this.catalogs.get(dirId) ?? [];

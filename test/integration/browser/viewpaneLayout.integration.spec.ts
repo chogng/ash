@@ -65,7 +65,7 @@ test('Debug Console keeps its output and expression reachable after a wrapping e
 	expect(errors).toEqual([]);
 });
 
-for (const [view, content] of [['problems', '.ash-problems-results'], ['bulk', '.ash-bulk-edit-list'], ['tasks', '.ash-tasks-list'], ['ports', '.ash-remote-ports-list']]) {
+for (const [view, content] of [['problems', '.ash-problems-results'], ['bulk', '.ash-bulk-edit-list'], ['ports', '.ash-remote-ports-list']]) {
 	test(`${view} retains a usable list beside wrapping controls or discovery errors`, async ({ page }) => {
 		const errors: string[] = [];
 		page.on('pageerror', error => errors.push(error.message));

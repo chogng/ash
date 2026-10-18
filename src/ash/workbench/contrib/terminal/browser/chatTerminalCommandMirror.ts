@@ -6,7 +6,7 @@ import { Schemas } from '../../../../base/common/network.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { localize } from '../../../../nls.js';
 import type { ChatContextAttachment } from '../../../services/chat/common/chatContextService.js';
-import type { ITerminalInstance, ITerminalView } from '../../../services/terminal/browser/terminal.js';
+import type { ITerminalInstance, ITerminalView } from './terminal.js';
 import { DetachedTerminal } from './detachedTerminal.js';
 
 /** Capture after xterm parses queued writes; the resulting draft never rereads a live PTY. */

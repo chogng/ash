@@ -1,8 +1,8 @@
 import { IDebugService } from '../../contrib/debug/common/debug.js';
 import { ISpeechService } from '../../contrib/speech/common/speechService.js';
 // API composition waits for its contribution-owned bridges before starting package activation.
-import { ITerminalService } from '../../services/terminal/browser/terminal.js';
-import { ITerminalProfileService, ITerminalProfileResolverService } from '../../services/terminal/common/terminal.js';
+import { ITerminalService } from '../../contrib/terminal/browser/terminal.js';
+import { ITerminalProfileService, ITerminalProfileResolverService } from '../../contrib/terminal/common/terminal.js';
 import { IConfigurationService } from '../../../platform/configuration/common/configuration.js';
 import { IWorkspaceContextService } from '../../../platform/workspace/common/workspace.js';
 import { IExtensionService } from '../../services/extensions/common/extensionService.js';

@@ -1,5 +1,5 @@
 import { CommandsRegistry } from '../../../../platform/commands/common/commands.js';
-import { ITerminalGroupService } from '../../../services/terminal/browser/terminal.js';
+import { ITerminalGroupService } from './terminal.js';
 
 /** Index commands resolve groups through the invoking window, including split panes. */
 export function setupTerminalCommands(): void {

@@ -1,6 +1,8 @@
+import { InstantiationType } from '../../../../../platform/instantiation/common/extensions.js';
+import { registerTestTerminalCreationServices } from '../../../../test/browser/workbenchTestServices.js';
 import { MergedEnvironmentVariableCollection } from '../../../../../platform/terminal/common/environmentVariableCollection.js';
 import { IEnvironmentVariableService } from '../../../terminal/common/environmentVariable.js';
-import { ITerminalContributionService, ITerminalProfileResolverService, ITerminalProfileService } from '../../../../services/terminal/common/terminal.js';
+import { ITerminalContributionService, ITerminalProfileResolverService, ITerminalProfileService } from '../../../terminal/common/terminal.js';
 import { TestQuickInputService } from '../../../../../platform/quickinput/test/browser/testQuickInputService.js';
 import { TerminalProfileService } from '../../../terminal/browser/terminalProfileService.js';
 import { BrowserTerminalProfileResolverService } from '../../../terminal/browser/terminalProfileResolverService.js';
@@ -69,7 +71,7 @@ import { FileKind, FileNotFoundError, type IFileBytes, IFileService, type IFileS
 import { IStorageService, type IStorageValueChangeEvent, type IWillSaveStateEvent, StorageScope, StorageTarget, type StorageValue, WillSaveStateReason } from "../../../../../platform/storage/common/storage.js";
 import { IWorkspaceContextService } from "../../../../../platform/workspace/common/workspace.js";
 import { type ITaskRun, type IWorkspaceTask, type TaskProvider, type TaskProviderRegistration, type TaskRunStatus } from "../../../tasks/common/tasks.js";
-import { ITerminalService } from "../../../../services/terminal/browser/terminal.js";
+import { ITerminalService } from "../../../terminal/browser/terminal.js";
 import { AdapterManager } from "../../browser/debugAdapterManager.js";
 import { DebugService } from "../../browser/debugService.js";
 import { DebugSession } from "../../browser/debugSession.js";
@@ -465,9 +467,9 @@ function testPathService(workspace: IWorkspaceContextService, os = OperatingSyst
 
 function registerTerminalProfiles(services: InstantiationService): void {
 	services.registerInstance(ITerminalContributionService, { terminalProfiles: [], onDidChangeTerminalProfiles: Event.None, ...Disposable.None });
-	services.registerSingleton(ITerminalProfileService, () => services.createInstance(TerminalProfileService));
+	services.registerSingleton(ITerminalProfileService, () => services.createInstance(TerminalProfileService), { instantiation: InstantiationType.Delayed });
 	services.registerInstance(IEnvironmentVariableService, { collections: new Map(), mergedCollection: new MergedEnvironmentVariableCollection(new Map()), onDidChangeCollections: Event.None, refreshCollections: async () => { }, set: () => { }, delete: () => { }, registerCollectionProvider: () => Disposable.None });
-	services.registerSingleton(ITerminalProfileResolverService, () => services.createInstance(BrowserTerminalProfileResolverService));
+	services.registerSingleton(ITerminalProfileResolverService, () => services.createInstance(BrowserTerminalProfileResolverService), { instantiation: InstantiationType.Delayed });
 }
 
 async function resolveTerminalProfile(selection: import('../../../../../platform/terminal/common/terminal.js').TerminalProcessProfileSelection) {
@@ -487,7 +489,7 @@ function createDebugService(owner: DisposableStore, files: IFileSystemProvider, 
 		[IDebugAdapterProcessService, processes],
 		[ITerminalProcessService, {
 			operatingSystem: options?.executionOS ?? OperatingSystem.Linux, onConnectionState: Event.None,
-			getEnvironment: async () => ({ HOME: '/execution/home' }), listProfiles: () => terminals.getProfiles(), resolveProfile: resolveTerminalProfile,
+			getEnvironment: async () => ({ HOME: '/execution/home' }), listProfiles: async () => [{ profileId: 'shell', title: 'Shell', isDefault: true }], resolveProfile: resolveTerminalProfile,
 		}], [ITerminalService, terminals],
 		[IStorageService, storage],
 		[ITaskService, tasks],
@@ -1408,14 +1410,14 @@ suite('Extension debug session lifecycle', () => {
 			const workspace = services.get(IWorkspaceContextService) as TestWorkspaceService;
 			services.registerInstance(IFileService, resources.add(createTestFileService(new FakeFileService(root))));
 			services.registerInstance(IPathService, testPathService(workspace));
-			services.registerSingleton(ICommandService, () => new CommandService(services));
 			services.registerInstance(ILogService, new NullLoggerService());
 			services.registerInstance(IMarkerService, resources.add(new MarkerService()));
 			registerTestExtensionService(resources, services);
 			services.registerInstance(ITerminalProcessService, createDisconnectedRendererApi().terminal);
 			services.registerInstance(IConfigurationResolverService, resources.add(services.createInstance(ConfigurationResolverService)));
-			services.registerInstance(ITerminalService, resources.add(services.createInstance(TerminalService)));
 			registerTerminalProfiles(services);
+			registerTestTerminalCreationServices(services);
+			services.registerInstance(ITerminalService, resources.add(services.createInstance(TerminalService)));
 			registerTestWorkbenchInteractionServices(resources, services);
 			services.registerInstance(ITaskService, resources.add(services.createInstance(TaskService)));
 			const processes = resources.add(new FakeDebugAdapterProcessService());
@@ -1485,14 +1487,14 @@ suite('Extension debug session lifecycle', () => {
 				const workspace = services.get(IWorkspaceContextService);
 				services.registerInstance(IFileService, resources.add(createTestFileService(new FakeFileService(root))));
 				services.registerInstance(IPathService, testPathService(workspace));
-				services.registerSingleton(ICommandService, () => new CommandService(services));
 				services.registerInstance(ILogService, new NullLoggerService());
 				services.registerInstance(IMarkerService, resources.add(new MarkerService()));
 				registerTestExtensionService(resources, services);
 				services.registerInstance(ITerminalProcessService, createDisconnectedRendererApi().terminal);
 				services.registerInstance(IConfigurationResolverService, resources.add(services.createInstance(ConfigurationResolverService)));
-				services.registerInstance(ITerminalService, resources.add(services.createInstance(TerminalService)));
 				registerTerminalProfiles(services);
+				registerTestTerminalCreationServices(services);
+				services.registerInstance(ITerminalService, resources.add(services.createInstance(TerminalService)));
 				registerTestWorkbenchInteractionServices(resources, services);
 				services.registerInstance(ITaskService, resources.add(services.createInstance(TaskService)));
 				const processes = resources.add(new FakeDebugAdapterProcessService());
@@ -1771,14 +1773,14 @@ test('installed inline descriptors use the real DAP session and await implementa
 	const workspace = services.get(IWorkspaceContextService);
 	services.registerInstance(IFileService, resources.add(createTestFileService(new FakeFileService(root))));
 	services.registerInstance(IPathService, testPathService(workspace));
-	services.registerSingleton(ICommandService, () => new CommandService(services));
 	services.registerInstance(ILogService, new NullLoggerService());
 	services.registerInstance(IMarkerService, resources.add(new MarkerService()));
 	registerTestExtensionService(resources, services);
 	services.registerInstance(ITerminalProcessService, createDisconnectedRendererApi().terminal);
 	services.registerInstance(IConfigurationResolverService, resources.add(services.createInstance(ConfigurationResolverService)));
-	services.registerInstance(ITerminalService, resources.add(services.createInstance(TerminalService)));
 	registerTerminalProfiles(services);
+	registerTestTerminalCreationServices(services);
+	services.registerInstance(ITerminalService, resources.add(services.createInstance(TerminalService)));
 	registerTestWorkbenchInteractionServices(resources, services);
 	services.registerInstance(ITaskService, resources.add(services.createInstance(TaskService)));
 	const processes = resources.add(new FakeDebugAdapterProcessService());
@@ -2066,15 +2068,15 @@ suite('DAP reverse startDebugging through the real session owner', () => {
 			const workspace = services.get(IWorkspaceContextService);
 			services.registerInstance(IFileService, resources.add(createTestFileService(new FakeFileService(root))));
 			services.registerInstance(IPathService, testPathService(workspace));
-			services.registerSingleton(ICommandService, () => new CommandService(services));
 			services.registerInstance(ILogService, new NullLoggerService());
 			services.registerInstance(IMarkerService, resources.add(new MarkerService()));
 			registerTestExtensionService(resources, services);
 			registerTestWorkbenchInteractionServices(resources, services);
 			services.registerInstance(ITerminalProcessService, createDisconnectedRendererApi().terminal);
 			services.registerInstance(IConfigurationResolverService, resources.add(services.createInstance(ConfigurationResolverService)));
-			services.registerInstance(ITerminalService, resources.add(services.createInstance(TerminalService)));
 			registerTerminalProfiles(services);
+			registerTestTerminalCreationServices(services);
+			services.registerInstance(ITerminalService, resources.add(services.createInstance(TerminalService)));
 			services.registerInstance(ITaskService, resources.add(services.createInstance(TaskService)));
 			const peer = resources.add(new FakeDebugAdapterProcessService());
 			services.registerInstance(IDebugAdapterProcessService, peer);

@@ -5,7 +5,7 @@ import { InstantiationType, registerSingleton } from '../../../../platform/insta
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { registerWorkbenchContribution, WorkbenchPhase } from '../../../common/contributions.js';
 import { ITaskService } from '../../tasks/common/taskService.js';
-import { ITerminalService, type ITerminalInstance } from '../../../services/terminal/browser/terminal.js';
+import { ITerminalService, type ITerminalInstance } from '../../terminal/browser/terminal.js';
 import { IChatService } from '../../../services/chat/common/chatService.js';
 import { SaveAccessibilitySignal } from './saveAccessibilitySignal.js';
 import { AccessibilitySignalDebuggerContribution } from './accessibilitySignalDebuggerContribution.js';

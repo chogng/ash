@@ -8,7 +8,7 @@ import type { ServicesAccessor } from '../../../../../platform/instantiation/com
 import { IQuickInputService } from '../../../../../platform/quickinput/common/quickInput.js';
 import { IWorkspaceContextService } from '../../../../../platform/workspace/common/workspace.js';
 import { IConfigurationResolverService } from '../../../../services/configurationResolver/common/configurationResolver.js';
-import { ITerminalService } from '../../../../services/terminal/browser/terminal.js';
+import { ITerminalService } from '../../../terminal/browser/terminal.js';
 import { TerminalCommandId } from '../../../terminal/common/terminal.js';
 import { TerminalHasActiveInstanceContext } from '../../../terminal/common/terminalContextKey.js';
 

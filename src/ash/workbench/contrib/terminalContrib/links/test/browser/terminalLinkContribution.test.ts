@@ -20,7 +20,7 @@ import { IWorkspaceContextService } from '../../../../../../platform/workspace/c
 import { TerminalCapability } from '../../../../../../platform/terminal/common/capabilities/capabilities.js';
 import { IEditorService } from '../../../../../services/editor/common/editorService.js';
 import { TestWorkspaceService } from '../../../../../services/configuration/test/common/testServices.js';
-import type { ITerminalInstance, IXtermTerminal } from '../../../../../services/terminal/browser/terminal.js';
+import type { ITerminalInstance, IXtermTerminal } from '../../../../terminal/browser/terminal.js';
 import { ITerminalConfigurationService } from '../../../../terminal/browser/terminal.js';
 import { TerminalLinkContribution } from '../../browser/terminalLinkContribution.js';
 

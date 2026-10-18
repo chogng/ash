@@ -10,7 +10,7 @@ import { IInstantiationService, type ServicesAccessor } from '../../../../../pla
 import { ServiceCollection } from '../../../../../platform/instantiation/common/serviceCollection.js';
 import { KeybindingWeight } from '../../../../../platform/keybinding/common/keybindingsRegistry.js';
 import { IViewsService } from '../../../../services/views/common/viewsService.js';
-import { ITerminalService, type ITerminalContribution, type ITerminalInstance, type IXtermTerminal } from '../../../../services/terminal/browser/terminal.js';
+import { ITerminalService, type ITerminalContribution, type ITerminalInstance, type IXtermTerminal } from '../../../terminal/browser/terminal.js';
 import { registerTerminalContribution, type ITerminalContributionContext } from '../../../terminal/browser/terminalExtensions.js';
 
 import { TERMINAL_VIEW_ID } from '../../../terminal/common/terminal.js';

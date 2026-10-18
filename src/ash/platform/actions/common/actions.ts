@@ -110,6 +110,7 @@ export class MenuId {
 	static readonly PanelTitle = new MenuId("PanelTitle");
 	static readonly AuxiliaryBarTitle = new MenuId('AuxiliaryBarTitle');
 	static readonly TerminalTitle = new MenuId("TerminalTitle");
+	static readonly TerminalNewDropdownContext = new MenuId("TerminalNewDropdownContext");
 	static readonly TerminalInstanceContext = new MenuId('TerminalInstanceContext');
 	static readonly MenubarMainMenu = new MenuId("MenubarMainMenu");
 	static readonly MenubarFileMenu = new MenuId("MenubarFileMenu");

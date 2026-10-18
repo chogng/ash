@@ -12,10 +12,10 @@ import { Disposable, MutableDisposable, toDisposable } from '../../../../base/co
 import { Range } from '../../../../editor/common/core/range.js';
 import type { IAppToolsHost, TaskRunSummary, TaskCatalog } from '../../../services/appTools/browser/appTools.js';
 import { IAccessibilityService } from '../../../../platform/accessibility/common/accessibility.js';
-import { ITerminalService } from '../../../../workbench/services/terminal/browser/terminal.js';
+import { ITerminalService } from '../../../../workbench/contrib/terminal/browser/terminal.js';
 import { IViewsService } from '../../../../workbench/services/views/common/viewsService.js';
 import { TERMINAL_VIEW_ID } from '../../../../workbench/contrib/terminal/common/terminal.js';
-import { ITerminalProfileResolverService } from '../../../../workbench/services/terminal/common/terminal.js';
+import { ITerminalProfileResolverService } from '../../../../workbench/contrib/terminal/common/terminal.js';
 import { ITerminalProcessService, type IShellLaunchConfig } from '../../../../platform/terminal/common/terminal.js';
 import { IWorkspaceContextService, type IWorkspaceFolder } from '../../../../platform/workspace/common/workspace.js';
 import { IOpenerService } from '../../../../platform/opener/common/opener.js';

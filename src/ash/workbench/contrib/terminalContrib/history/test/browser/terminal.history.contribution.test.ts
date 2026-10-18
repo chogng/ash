@@ -8,7 +8,7 @@ import { CommandsRegistry } from '../../../../../../platform/commands/common/com
 import { IConfigurationService } from '../../../../../../platform/configuration/common/configuration.js';
 import { IQuickInputService, type IQuickPick, type IQuickPickItem, type IQuickPickSeparator } from '../../../../../../platform/quickinput/common/quickInput.js';
 import { IStorageService, StorageScope } from '../../../../../../platform/storage/common/storage.js';
-import { ITerminalService, type ITerminalCommandStatusEvent, type ITerminalInstance } from '../../../../../services/terminal/browser/terminal.js';
+import { ITerminalService, type ITerminalCommandStatusEvent, type ITerminalInstance } from '../../../../terminal/browser/terminal.js';
 import { TerminalExtensionsRegistry } from '../../../../terminal/browser/terminalExtensions.js';
 import { TestConfigurationService as WorkbenchConfigurationService } from '../../../../../services/configuration/test/common/testServices.js';
 import { BrowserStorageService } from '../../../../../../workbench/services/storage/browser/storageService.js';

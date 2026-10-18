@@ -8,7 +8,7 @@ import { TerminalCommand } from '../../../../../platform/terminal/common/capabil
 import { CwdDetectionCapability } from '../../../../../platform/terminal/common/capabilities/cwdDetectionCapability.js';
 import { TerminalCapabilityStore, TerminalCapabilityStoreMultiplexer } from '../../../../../platform/terminal/common/capabilities/terminalCapabilityStore.js';
 import type { IOutputChannel, IOutputService } from '../../../../services/output/common/output.js';
-import type { ITerminalInstance, ITerminalService } from '../../../../services/terminal/browser/terminal.js';
+import type { ITerminalInstance, ITerminalService } from '../../browser/terminal.js';
 import { createInstanceCapabilityEventMultiplexer } from '../../browser/terminalEvents.js';
 import { AgentHostOutputChannel } from '../../browser/agentHostOutputChannel.js';
 
@@ -21,7 +21,7 @@ function screenCommand(id: string): ITerminalCommand {
 
 function source(owner: DisposableStore, id: number) {
 	const changes = owner.add(new Emitter<void>());
-	const statuses = owner.add(new Emitter<import('../../../../services/terminal/browser/terminal.js').ITerminalCommandStatusEvent>());
+	const statuses = owner.add(new Emitter<import('../../browser/terminal.js').ITerminalCommandStatusEvent>());
 	const finished = owner.add(new Emitter<ITerminalCommand>());
 	let enabled = false;
 	let storageDisabled = false;

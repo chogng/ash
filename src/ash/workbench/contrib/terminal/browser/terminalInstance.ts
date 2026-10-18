@@ -20,7 +20,7 @@ import {
 	type TerminalProcessConnectionState,
 } from '../../../../platform/terminal/common/terminal.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
-import type { ITerminalCommandStatusEvent, ITerminalContribution, ITerminalDimensions, ITerminalInstance, ITerminalProfile, TerminalInstanceState } from '../../../services/terminal/browser/terminal.js';
+import type { ITerminalCommandStatusEvent, ITerminalContribution, ITerminalDimensions, ITerminalInstance, ITerminalProfile, TerminalInstanceState } from './terminal.js';
 import { TerminalExtensionsRegistry } from './terminalExtensions.js';
 import type { AgentHostPty } from './agentHostPty.js';
 import type { AgentHostTerminalService } from './agentHostTerminalService.js';

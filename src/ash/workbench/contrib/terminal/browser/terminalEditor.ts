@@ -5,7 +5,7 @@ import { IThemeService } from '../../../../platform/theme/common/themeService.js
 import { TerminalLocation } from '../../../../platform/terminal/common/terminal.js';
 import { EditorPane } from '../../../browser/parts/editor/editorPane.js';
 import type { IResourceEditorInput } from '../../../common/editor.js';
-import { ITerminalService, ITerminalEditorService, type ITerminalInstance } from '../../../services/terminal/browser/terminal.js';
+import { ITerminalService, ITerminalEditorService, type ITerminalInstance } from './terminal.js';
 import { TerminalEditorInput } from './terminalEditorInput.js';
 import './media/terminal.css';
 import { ConfirmResult } from '../../../../platform/dialogs/common/dialogs.js';
@@ -13,6 +13,7 @@ import { ConfirmResult } from '../../../../platform/dialogs/common/dialogs.js';
 /** Hosts the original xterm; disposing a pane releases its DOM lease, not its PTY. */
 export class TerminalEditor extends EditorPane {
 	readonly id = TerminalEditorInput.ID;
+	readonly prefersCompactTitlebar = true;
 	private element!: HTMLElement;
 	private instance: ITerminalInstance | undefined;
 	private visible = false;

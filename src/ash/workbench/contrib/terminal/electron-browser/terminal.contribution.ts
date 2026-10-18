@@ -2,7 +2,7 @@ import './localTerminalBackend.js';
 import { registerRemoteContributions } from './terminalRemote.js';
 import { ElectronTerminalProfileResolverService } from './terminalProfileResolverService.js';
 import { registerWorkbenchServiceContribution } from '../../../browser/workbenchServiceContributions.js';
-import { ITerminalProfileResolverService, ITerminalProfileService } from '../../../services/terminal/common/terminal.js';
+import { ITerminalProfileResolverService, ITerminalProfileService } from '../common/terminal.js';
 import { ITerminalProcessService } from '../../../../platform/terminal/common/terminal.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { IConfigurationResolverService } from '../../../services/configurationResolver/common/configurationResolver.js';

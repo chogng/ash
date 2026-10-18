@@ -1,6 +1,10 @@
+import { ITerminalGroupService } from '../../browser/terminal.js';
+import { IViewsService } from '../../../../services/views/common/viewsService.js';
+import { IEditorService } from '../../../../services/editor/common/editorService.js';
+import { IEditorGroupsService } from '../../../../services/editor/common/editorGroupsService.js';
 import { ICommandService } from '../../../../../platform/commands/common/commands.js';
 import { CommandService } from '../../../../services/commands/common/commandService.js';
-import { registerTestTerminalLifecycleServices } from '../../../../test/browser/workbenchTestServices.js';
+import { registerTestTerminalCreationServices } from '../../../../test/browser/workbenchTestServices.js';
 import { IEnvironmentVariableService } from '../../common/environmentVariable.js';
 import { EnvironmentVariableService } from '../../common/environmentVariableService.js';
 import { IStorageService } from '../../../../../platform/storage/common/storage.js';
@@ -9,7 +13,7 @@ import { resetNlsResolver } from '../../../../../nls.js';
 import { initializeTestLocalization } from '../../../../services/localization/test/common/localizationTestUtils.js';
 import { IExtensionService } from '../../../../services/extensions/common/extensionService.js';
 import { IConfigurationResolverService } from '../../../../services/configurationResolver/common/configurationResolver.js';
-import { ITerminalContributionService, ITerminalProfileResolverService, ITerminalProfileService } from '../../../../services/terminal/common/terminal.js';
+import { ITerminalContributionService, ITerminalProfileResolverService, ITerminalProfileService } from '../../common/terminal.js';
 import { BrowserTerminalProfileResolverService } from '../../browser/terminalProfileResolverService.js';
 import { MainThreadTerminalService } from '../../../../api/browser/mainThreadTerminalService.js';
 import assert from 'node:assert/strict';
@@ -17,6 +21,7 @@ import { suite, test } from 'mocha';
 import { Emitter, Event } from '../../../../../base/common/event.js';
 import { isCancellationError } from '../../../../../base/common/errors.js';
 import { Disposable, DisposableStore, toDisposable } from '../../../../../base/common/lifecycle.js';
+import { TerminalLocation } from '../../../../../platform/terminal/common/terminal.js';
 import { OperatingSystem } from '../../../../../base/common/platform.js';
 import { URI } from '../../../../../base/common/uri.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
@@ -29,7 +34,7 @@ import { IWorkspaceContextService } from '../../../../../platform/workspace/comm
 import { TestConfigurationService as WorkbenchConfigurationService } from '../../../../services/configuration/test/common/testServices.js';
 import { TestWorkspaceService } from '../../../../services/configuration/test/common/testServices.js';
 
-import { ITerminalService, type ITerminalProfile } from '../../../../services/terminal/browser/terminal.js';
+import { ITerminalService, type ITerminalProfile } from '../../browser/terminal.js';
 import { TerminalConfigurationService } from '../../browser/terminalConfigurationService.js';
 import '../../../codeEditor/common/editorConfiguration.js';
 import { TerminalProfileService } from '../../browser/terminalProfileService.js';
@@ -44,7 +49,7 @@ const shells = [
 	{ profileId: 'pwsh', title: 'PowerShell', isDefault: false },
 ];
 
-function createServices(owner: DisposableStore, useInstances = false) {
+function createServices(owner: DisposableStore, useInstances = false, openEditor: IEditorService['openEditor'] = async () => { }) {
 	const services = owner.add(new InstantiationService());
 	services.registerInstance(ICommandService, owner.add(new CommandService(services)));
 	services.registerInstance(ILogService, new NullLoggerService());
@@ -57,7 +62,7 @@ function createServices(owner: DisposableStore, useInstances = false) {
 	let read: () => Promise<readonly ITerminalProfile[]> = async () => shells;
 	const processes = {
 		operatingSystem: OperatingSystem.Windows as OperatingSystem | undefined, onConnectionState: connection.event,
-		listProfiles: async () => shells,
+		listProfiles: async () => { calls++; return read(); },
 		getEnvironment: async () => ({ HOME: '/execution/home', PATH: '/execution/bin', PROFILE_VALUE: 'environment value' }),
 		resolveProfile: async (selection: import('../../../../../platform/terminal/common/terminal.js').TerminalProcessProfileSelection) => ({
 			profile: selection.type === 'custom' ? { profileId: `custom:${selection.name}`, title: selection.name, isDefault: false } : shells.find(profile => selection.type === 'profile' && selection.profileId === profile.profileId) ?? shells[0]!,
@@ -87,13 +92,16 @@ function createServices(owner: DisposableStore, useInstances = false) {
 	services.registerInstance(IStorageService, { get: (key: string) => stored.get(key), store: (key: string, value: string) => { stored.set(key, value); } } as unknown as IStorageService);
 	services.registerInstance(ITerminalProcessService, processes);
 	services.registerInstance(IEnvironmentVariableService, owner.add(services.createInstance(EnvironmentVariableService)));
-	registerTestTerminalLifecycleServices(services);
-	services.registerInstance(ITerminalService, useInstances
-		? owner.add(services.createInstance(TerminalService))
-		: { ...Disposable.None, getProfiles: () => { calls++; return read(); } } as ITerminalService);
 	const profiles = owner.add(services.createInstance(TerminalProfileService));
 	services.registerInstance(ITerminalProfileService, profiles);
 	services.registerInstance(ITerminalProfileResolverService, owner.add(services.createInstance(BrowserTerminalProfileResolverService)));
+	services.registerInstance(IViewsService, { openView: async () => undefined } as unknown as IViewsService);
+	services.registerInstance(IEditorService, { activeEditor: undefined, onDidActiveEditorChange: Event.None, openEditor } as unknown as IEditorService);
+	services.registerInstance(IEditorGroupsService, { groups: [], onDidChangeGroups: Event.None } as unknown as IEditorGroupsService);
+	registerTestTerminalCreationServices(services);
+	services.registerInstance(ITerminalService, useInstances
+		? owner.add(services.createInstance(TerminalService))
+		: { ...Disposable.None } as unknown as ITerminalService);
 	return { services, configuration, profiles, processes, workspace, connection, launches, closed, calls: () => calls, setRead: (fn: typeof read) => { read = fn; } };
 }
 
@@ -696,7 +704,7 @@ suite('Terminal configuration and interactive profiles', () => {
 		const shell = { name: 'Original', executable: '/original/shell', args: ['original'], env: { ORIGINAL: 'value' } };
 		const pending = services.get(ITerminalProfileResolverService).resolveShellLaunchConfig(shell, { os: OperatingSystem.Windows, remoteAuthority: undefined });
 		const cancelled = assert.rejects(pending, isCancellationError);
-		await waitFor(() => Boolean(release));
+		while (!release) await new Promise(resolve => setTimeout(resolve, 0));
 		connection.fire('crashed'); release({ HOME: '/late' });
 		await cancelled;
 		assert.deepEqual(shell, { name: 'Original', executable: '/original/shell', args: ['original'], env: { ORIGINAL: 'value' } });
@@ -731,14 +739,14 @@ suite('Terminal configuration and interactive profiles', () => {
 		const { services, profiles } = createServices(owner);
 		const digest = `sha256:${'a'.repeat(64)}`;
 		Object.assign(services.get(IExtensionService), { currentCatalog: { generation: 1, diagnostics: [], extensions: [{ id: 'acme.extension', name: 'extension', publisher: 'acme', version: '1.0.0', displayName: 'Extension', sourceKind: 'user', manifestSha256: digest, packageSha256: digest }] } });
-		const launches: import('../../../../services/terminal/browser/terminal.js').ITerminalCreateOptions[] = [];
+		const launches: import('../../browser/terminal.js').ITerminalCreateOptions[] = [];
 		const writes: string[] = [];
 		const exits: (number | undefined)[] = [];
 		let child: import('../../../../../platform/terminal/common/terminal.js').ITerminalChildProcess | undefined;
 		Object.assign(services.get(ITerminalService), {
-			createTerminal: async (options: import('../../../../services/terminal/browser/terminal.js').ITerminalCreateOptions) => {
+			createTerminal: async (options: import('../../browser/terminal.js').ITerminalCreateOptions) => {
 				launches.push(options);
-				if (options.config) {
+				if (options.config?.customPtyImplementation) {
 					child = owner.add(options.config.customPtyImplementation(1, 80, 24));
 					owner.add(child.onProcessData(data => { assert(typeof data === 'string'); writes.push(data); })); owner.add(child.onProcessExit(code => exits.push(code)));
 					await child.start();
@@ -778,10 +786,49 @@ suite('Terminal configuration and interactive profiles', () => {
 			await child.start();
 			assert.equal(operations.filter(operation => operation === 'createTerminalProfile').length, 2);
 			assert.deepEqual(writes, ['synchronous open output', 'echo:typed', 'synchronous open output']);
-		} else assert.deepEqual(launches[0]!.profile, { type: 'custom', name: 'Extension shell', path: ['/extension/shell'], args: ['literal argument'] });
+		} else assert.deepEqual(launches[0]!.config, { name: 'Extension shell', executable: '/extension/shell', args: ['literal argument'], cwd: undefined, env: { PROFILE: 'value' }, strictEnv: undefined, icon: undefined, color: undefined });
 		bridge.replaceProfiles([]);
 		assert.equal(profiles.getContributedProfileProvider('acme.extension', 'test'), undefined);
 		if (custom) { assert.deepEqual(exits, [undefined, undefined]); assert.equal(operations.filter(operation => operation === 'closeTaskTerminal').length, 2); }
+	});
+
+	for (const custom of [false, true]) for (const uriCwd of [false, true]) test(`contributed ${custom ? 'PTY' : 'shell'} creation keeps its selected root from ${uriCwd ? 'URI' : 'path'} cwd through the shared owner`, async () => {
+		using owner = new DisposableStore();
+		const { services, workspace, profiles, launches } = createServices(owner, true);
+		const folders = [
+			{ id: 'one', name: 'one', uri: URI.file('/workspace'), index: 0 },
+			{ id: 'two', name: 'two', uri: URI.file('/second'), index: 1 },
+		];
+		workspace.updateWorkspace({ id: 'multi-root', configuration: URI.file('/team.ash-workspace'), folders });
+		const digest = `sha256:${'a'.repeat(64)}`;
+		Object.assign(services.get(IExtensionService), { currentCatalog: { generation: 1, diagnostics: [], extensions: [{ id: 'acme.extension', packageSha256: digest }] } });
+		const operations: string[] = [];
+		const bridge = owner.add(services.createInstance(MainThreadTerminalService));
+		bridge.replaceProfiles([{
+			runtimeId: 'runtime', packageDigest: digest, profileId: 'selected', title: 'Selected extension',
+			invoke: async (operation): Promise<import('../../../../../platform/agentHost/common/extensionHostApi.js').JsonValue> => {
+				operations.push(operation);
+				if (operation === 'createTerminalProfile') return custom
+					? { options: { name: 'Selected extension' }, pty: { ptyId: 'selected-pty', acceptsInput: true } }
+					: { options: { name: 'Selected extension', shellPath: '/extension/shell', env: { ROOT: '${workspaceFolder}' } } };
+				if (operation === 'closeTaskTerminal') return null;
+				return { events: [] };
+			},
+		}]);
+		const terminals = services.get(ITerminalService);
+		const instance = await terminals.createTerminal({ cwd: uriCwd ? folders[1]!.uri : folders[1]!.uri.fsPath, config: profiles.contributedProfiles[0]! });
+		assert.equal(instance.dirId, 'two');
+		assert.equal(terminals.instances.length, 1);
+		assert.equal(terminals.activeInstance, instance);
+		if (!custom) {
+			assert.equal(launches[0]!.dirId, 'two');
+			assert.equal(launches[0]!.env?.ROOT, '/second');
+			assert.equal(launches[0]!.cwd, '/second');
+		}
+		await terminals.closeTerminal(instance);
+		assert.deepEqual(terminals.instances, []);
+		bridge.replaceProfiles([]);
+		if (custom) await waitFor(() => operations.filter(operation => operation === 'closeTaskTerminal').length === 1);
 	});
 
 	for (const custom of [false, true]) test(`shared terminal contracts connect an extension ${custom ? 'PTY' : 'shell'} to the original instance and release owners`, async () => {
@@ -859,7 +906,7 @@ suite('Terminal configuration and interactive profiles', () => {
 			}
 		}]);
 		const cancelled = assert.rejects(profiles.getContributedProfileProvider('acme.extension', 'pty')!.createContributedTerminalProfile({}), isCancellationError);
-		await waitFor(() => Boolean(release));
+		while (!release) await new Promise(resolve => setTimeout(resolve, 0));
 		workspace.updateWorkspace({ id: 'replacement', uri: URI.file('/replacement') });
 		release({ options: { name: 'Late PTY' }, pty: { ptyId: 'pty.1', acceptsInput: true } });
 		await cancelled;
@@ -888,7 +935,7 @@ suite('Terminal configuration and interactive profiles', () => {
 			}
 		}]);
 		const cancelled = assert.rejects(profiles.getContributedProfileProvider('acme.extension', 'pty')!.createContributedTerminalProfile({}), isCancellationError);
-		await waitFor(() => Boolean(release));
+		while (!release) await new Promise(resolve => setTimeout(resolve, 0));
 		bridge.replaceProfiles([]);
 		await cancelled;
 		assert.equal(signal?.aborted, true);
@@ -897,4 +944,58 @@ suite('Terminal configuration and interactive profiles', () => {
 		assert.deepEqual(closed, [{ ptyId: 'pty.1' }]);
 	});
 
+});
+
+
+suite('Terminal creation owner', () => {
+	ensureNoDisposablesAreLeakedInTestSuite();
+
+	test('creates the default and explicit shell through the service without a View', async () => {
+		using owner = new DisposableStore();
+		const { services, launches } = createServices(owner, true);
+		const terminals = services.get(ITerminalService);
+		const first = await terminals.createTerminal({ deferStart: true });
+		const second = await terminals.createTerminal({ config: { executable: '/custom/shell', args: ['literal value'], env: { CUSTOM: 'value' } }, deferStart: true });
+		assert.equal(terminals.instances.length, 2);
+		assert.equal(first.xterm, undefined);
+		assert.equal(second.xterm, undefined);
+		assert.equal(launches.length, 2);
+		assert.deepEqual(launches[1]!.profile, { type: 'custom', name: 'Shell', path: ['/custom/shell'], args: ['literal value'] });
+		assert.equal(launches[1]!.env?.CUSTOM, 'value');
+	});
+
+	test('joins a split to the captured parent through the group owner', async () => {
+		using owner = new DisposableStore();
+		const { services } = createServices(owner, true);
+		const terminals = services.get(ITerminalService);
+		const parent = await terminals.createTerminal({ deferStart: true });
+		const child = await terminals.createTerminal({ location: { parentTerminal: Promise.resolve(parent) }, deferStart: true });
+		const group = services.get(ITerminalGroupService).getGroupForInstance(parent);
+		assert.deepEqual(group?.terminalInstances, [parent, child]);
+	});
+
+	test('cancels after profile discovery if the workspace scope changes without launching', async () => {
+		using owner = new DisposableStore();
+		const { services, workspace, setRead, launches } = createServices(owner, true);
+		let release!: (value: readonly ITerminalProfile[]) => void;
+		setRead(() => new Promise(resolve => { release ??= resolve; }));
+		const operation = services.get(ITerminalService).createTerminal();
+		while (!release) await new Promise(resolve => setTimeout(resolve, 0));
+		workspace.updateWorkspace({ id: 'changed', uri: URI.file('/another') });
+		release(shells);
+		await assert.rejects(operation, isCancellationError);
+		assert.equal(launches.length, 0);
+	});
+
+	test('publishes the editor target before listeners run and closes the process if editor open fails', async () => {
+		using owner = new DisposableStore();
+		const { services, closed } = createServices(owner, true, async () => { throw new Error('Editor failed'); });
+		const terminals = services.get(ITerminalService);
+		const targets: unknown[] = [];
+		owner.add(terminals.onDidCreateInstance(instance => targets.push(instance.target)));
+		await assert.rejects(terminals.createTerminal({ location: { viewColumn: 12 }, deferStart: true }), /Editor failed/);
+		assert.deepEqual(targets, [TerminalLocation.Editor]);
+		assert.equal(terminals.instances.length, 0);
+		assert.equal(closed.length, 1);
+	});
 });

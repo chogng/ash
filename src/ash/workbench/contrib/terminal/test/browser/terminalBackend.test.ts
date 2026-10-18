@@ -1,4 +1,4 @@
-import { registerTestTerminalLifecycleServices } from '../../../../test/browser/workbenchTestServices.js';
+import { registerTestTerminalCreationServices } from '../../../../test/browser/workbenchTestServices.js';
 import assert from 'node:assert/strict';
 import { suite, test } from 'mocha';
 import { DeferredPromise } from '../../../../../base/common/async.js';
@@ -13,7 +13,7 @@ import { IWorkspaceContextService } from '../../../../../platform/workspace/comm
 import { ITerminalProcessService, type ITerminalProcessCreation } from '../../../../../platform/terminal/common/terminal.js';
 import { TestWorkspaceService } from '../../../../services/configuration/test/common/testServices.js';
 import { TerminalService } from '../../browser/terminalService.js';
-import { ITerminalService, type ITerminalView } from '../../../../services/terminal/browser/terminal.js';
+import { ITerminalService, type ITerminalView } from '../../browser/terminal.js';
 import { IViewsService } from '../../../../services/views/common/viewsService.js';
 import { TerminalTabsChatEntry } from '../../browser/terminalTabsChatEntry.js';
 import type { ChatContextAttachment } from '../../../../services/chat/common/chatContextService.js';
@@ -43,7 +43,7 @@ function fixture(owner: DisposableStore, remote: boolean) {
 		},
 	} as unknown as ITerminalProcessService;
 	const services = owner.add(new InstantiationService(new ServiceCollection([ITerminalProcessService, processes], [IWorkspaceContextService, workspace])));
-	registerTestTerminalLifecycleServices(services);
+	registerTestTerminalCreationServices(services);
 	const terminals = owner.add(services.createInstance(TerminalService));
 	services.registerInstance(ITerminalService, terminals);
 	return {

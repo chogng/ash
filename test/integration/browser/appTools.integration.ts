@@ -1,10 +1,13 @@
+import { InstantiationType } from '../../../src/ash/platform/instantiation/common/extensions.js';
+import { ITerminalEditorService, ITerminalGroupService } from '../../../src/ash/workbench/contrib/terminal/browser/terminal.js';
+import { TerminalEditorService } from '../../../src/ash/workbench/contrib/terminal/browser/terminalEditorService.js';
+import { TerminalGroupService } from '../../../src/ash/workbench/contrib/terminal/browser/terminalGroupService.js';
 import { observableValue } from '../../../src/ash/base/common/observable.js';
 import type { ICustomViewService } from '../../../src/ash/sessions/services/customView/browser/customViewService.js';
 import type { IMenuService } from '../../../src/ash/platform/actions/common/actions.js';
 import { IEnvironmentVariableService } from '../../../src/ash/workbench/contrib/terminal/common/environmentVariable.js';
 import { EnvironmentVariableService } from '../../../src/ash/workbench/contrib/terminal/common/environmentVariableService.js';
 import { TaskService } from '../../../src/ash/workbench/contrib/tasks/browser/taskService.js';
-import { TasksViewPane } from '../../../src/ash/workbench/contrib/tasks/browser/tasksViewPane.js';
 import { IFileService, FileKind, FileNotFoundError } from '../../../src/ash/platform/files/common/files.js';
 import { ILogService, NullLoggerService } from '../../../src/ash/platform/log/common/log.js';
 import { IOutputService } from '../../../src/ash/workbench/services/output/common/output.js';
@@ -27,12 +30,15 @@ import { InstantiationService } from '../../../src/ash/platform/instantiation/co
 import { SessionsList } from '../../../src/ash/sessions/browser/parts/sidebar/sessionsList.js';
 import { BrowserStorageService } from '../../../src/ash/workbench/services/storage/browser/storageService.js';
 import { IStorageService } from '../../../src/ash/platform/storage/common/storage.js';
+import { IDialogService } from '../../../src/ash/platform/dialogs/common/dialogs.js';
+import { DialogService } from '../../../src/ash/workbench/services/dialogs/common/dialogService.js';
+import { ISecretStorageService, BaseSecretStorageService } from '../../../src/ash/platform/secrets/common/secrets.js';
 import { Emitter, Event } from '../../../src/ash/base/common/event.js';
 import { Disposable, DisposableStore, toDisposable } from '../../../src/ash/base/common/lifecycle.js';
 import { IEditorService } from '../../../src/ash/workbench/services/editor/common/editorService.js';
-import { ITerminalService } from '../../../src/ash/workbench/services/terminal/browser/terminal.js';
+import { ITerminalService } from '../../../src/ash/workbench/contrib/terminal/browser/terminal.js';
 import { TerminalService } from '../../../src/ash/workbench/contrib/terminal/browser/terminalService.js';
-import { ITerminalContributionService, ITerminalProfileResolverService, ITerminalProfileService } from '../../../src/ash/workbench/services/terminal/common/terminal.js';
+import { ITerminalContributionService, ITerminalProfileResolverService, ITerminalProfileService } from '../../../src/ash/workbench/contrib/terminal/common/terminal.js';
 import { TerminalProfileService } from '../../../src/ash/workbench/contrib/terminal/browser/terminalProfileService.js';
 import { BrowserTerminalProfileResolverService } from '../../../src/ash/workbench/contrib/terminal/browser/terminalProfileResolverService.js';
 import { ITerminalProcessService, type ITerminalProcessCreateOptions, type TerminalProcessProfileSelection } from '../../../src/ash/platform/terminal/common/terminal.js';
@@ -130,6 +136,8 @@ document.body.append(container);
 resources.add(new SessionsList(container, management, view, 'Tasks', 'New task', { onDidChange: Event.None, getSessionPullRequests: () => [], getSessionIssues: () => [], attachIssue: async () => { }, detachIssue: async () => { }, initialize: () => { }, attachPullRequest: async () => { }, detachPullRequest: async () => { } }, groups, listCustomViews, listMenus, listNotifications));
 const services = resources.add(new InstantiationService());
 services.registerInstance(IStorageService, storage);
+services.registerInstance(IDialogService, resources.add(new DialogService()));
+services.registerInstance(ISecretStorageService, resources.add(new BaseSecretStorageService()));
 const platform = new URL(location.href).searchParams.get('os') ?? 'linux';
 const workspace = resources.add(new TestWorkspaceService({ id: 'app-tools', uri: platform === 'windows' ? URI.from({ scheme: 'file', path: '/c:/workspace' }) : URI.file('/workspace') }));
 const configuration = resources.add(new WorkbenchConfigurationService());
@@ -188,6 +196,8 @@ services.registerSingleton(IEnvironmentVariableService, () => services.createIns
 services.registerSingleton(ITerminalProfileResolverService, () => services.createInstance(BrowserTerminalProfileResolverService));
 services.registerInstance(IEditorService, { openEditor: async (...args: unknown[]) => { opened.push(args); } } as unknown as IEditorService);
 services.registerInstance(IOpenerService, { open: async (resource: { toString(): string; }) => { openedUrls.push(resource.toString()); return true; } } as unknown as IOpenerService);
+services.registerSingleton(ITerminalGroupService, () => services.createInstance(TerminalGroupService), { instantiation: InstantiationType.Delayed });
+services.registerSingleton(ITerminalEditorService, () => services.createInstance(TerminalEditorService), { instantiation: InstantiationType.Delayed });
 const terminals = resources.add(services.createInstance(TerminalService));
 services.registerInstance(ITerminalService, terminals);
 services.registerInstance(IViewsService, { openView: async (id: string, focus: boolean | undefined) => { if (viewFailure) throw new Error('Terminal view unavailable'); terminalViews.push({ id, focus }); } } as unknown as IViewsService);
@@ -210,19 +220,20 @@ services.registerInstance(INotificationService, { warning() { }, error() { } } a
 
 const taskService = resources.add(services.createInstance(TaskService));
 services.registerInstance(ITaskService, taskService);
-if (new URL(location.href).searchParams.has('taskTools')) {
-	const taskContainer = document.createElement('section'); document.body.append(taskContainer);
-	const pane = resources.add(services.createInstance(TasksViewPane, taskContainer, { id: 'ash.tasks.integration', title: 'Tasks' }));
-	pane.setVisible(true);
-}
+
+const focusTarget = document.createElement('button');
+focusTarget.textContent = 'Editor focus target';
+document.body.append(focusTarget);
+
 const appTools = resources.add(new AppServerAppToolsHost(client, services.createInstance(AppToolsHost, document, undefined)));
 window.addEventListener('pagehide', () => resources.dispose(), { once: true });
 declare global {
 	interface Window {
 		ashAppToolsIntegration: {
 			finishTask(code: number): void; changeTask(): void;
+			readonly taskRuns: readonly { runId: string; terminalId: string; status: string; label: string; }[];
 			configureTasks(tasks: Record<string, unknown>[]): Promise<void>; runManualTask(label: string): Promise<string>; disconnectAppServer(): void;
-			readonly taskRuns: Array<{ runId: string; status: string; }>; readonly taskCancelRequests: number;
+			readonly taskCancelRequests: number;
 			call(operation: AppHostOperation): Promise<unknown>; readonly opened: unknown[]; readonly openedUrls: string[];
 			cancelLast(): void; releaseTerminal(): void; disposeHost(): void; readonly closedTerminals: string[]; readonly terminalPending: boolean;
 			configureTerminal(values: Record<string, unknown>): Promise<void>; automaticCreation(): void; holdProfile(): void; releaseProfile(): void;
@@ -238,7 +249,7 @@ window.ashAppToolsIntegration = {
 	configureTasks: async tasks => { taskSource = JSON.stringify({ version: '2.0.0', tasks }); await taskService.refresh(); },
 	runManualTask: async label => { const task = (await taskService.refresh()).find(task => task.label === label)!; return (await taskService.run(task)).runId; },
 	disconnectAppServer: () => transport.disconnect(),
-	get taskRuns() { return taskService.runs.map(run => ({ runId: run.runId, status: run.status })); },
+	get taskRuns() { return taskService.runs.map(run => ({ runId: run.runId, terminalId: run.terminalId, status: run.status, label: run.task.label })); },
 	get taskCancelRequests() { return transport.calls.filter(operation => operation.type === 'tasksCancel').length; },
 	call: operation => transport.call(operation), opened, openedUrls, cancelLast: () => transport.cancelLast(), releaseTerminal: () => releaseTerminal?.(),
 	disposeHost: () => appTools.dispose(), closedTerminals, get terminalPending() { return releaseTerminal !== undefined; },

@@ -1,3 +1,6 @@
+import { CancellationError, isCancellationError } from '../../../../../base/common/errors.js';
+import { IEditorPartsService } from '../../../../browser/parts/editor/editorParts.js';
+import { IPreferencesService } from '../../../../services/preferences/common/preferences.js';
 import '../../../../../editor/test/browser/testEditorDom.js';
 import assert from 'node:assert/strict';
 import { suite, test } from 'mocha';
@@ -11,7 +14,7 @@ import { TextModel } from '../../../../../editor/common/model/textModel.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { TerminalLocation } from '../../../../../platform/terminal/common/terminal.js';
 import { CommandService } from '../../../../services/commands/common/commandService.js';
-import { ITerminalEditorService, ITerminalGroupService, ITerminalService, type ITerminalInstance, type TerminalInstanceState } from '../../../../services/terminal/browser/terminal.js';
+import { ITerminalEditorService, ITerminalGroupService, ITerminalService, type ITerminalInstance, type TerminalInstanceState } from '../../browser/terminal.js';
 import { IViewsService } from '../../../../services/views/common/viewsService.js';
 import { registerTerminalActions } from '../../browser/terminalActions.js';
 import { TerminalCommandId } from '../../common/terminal.js';
@@ -52,6 +55,7 @@ class SelectionFixture extends Disposable {
 		this.services.registerInstance(ITerminalService, {
 			instances: this.instances,
 			get activeInstance() { return fixture.active; },
+			createTerminal: () => this.create(),
 		} as unknown as ITerminalService);
 		this.services.registerInstance(IViewsService, {
 			openView: async (id: string, focus: boolean) => {
@@ -108,13 +112,13 @@ suite('Terminal run selected text', () => {
 		assert.deepEqual(fixture.effects, []);
 	});
 
-	test('panel initialization reuses its first terminal instead of creating another', async () => {
+	test('creates through the service before revealing the panel', async () => {
 		using fixture = new SelectionFixture();
 		const terminal = new InputTerminal();
-		fixture.open = async () => { fixture.add(terminal); };
+		fixture.create = async () => { fixture.effects.push('create'); return fixture.add(terminal); };
 		await fixture.run();
 		assert.deepEqual(terminal.input, [['echo first  \necho second', true, true]]);
-		assert.deepEqual(fixture.effects, [['openView', 'ash.terminal', false], ['panel', false]]);
+		assert.deepEqual(fixture.effects, ['create', ['panel', false]]);
 	});
 
 	for (const kind of ['exited', 'read-only'] as const) {
@@ -181,4 +185,75 @@ suite('Terminal run selected text', () => {
 		assert.deepEqual(fixture.effects, [['editor', terminal.instance, { preserveFocus: true }]]);
 		assert.equal(terminal.input.length, 1);
 	});
+});
+
+
+suite('Terminal dropdown commands', () => {
+	ensureNoDisposablesAreLeakedInTestSuite();
+
+	test('settings opens the graphical editor filtered to terminal settings', async () => {
+		using services = new InstantiationService();
+		const requests: unknown[] = [];
+		services.registerInstance(IPreferencesService, { openSettings: async options => { requests.push(options); } } as IPreferencesService);
+		using commands = new CommandService(services);
+		await commands.executeCommand(TerminalCommandId.ConfigureTerminalSettings);
+		assert.deepEqual(requests, [{ jsonEditor: false, query: '@id:terminal.integrated.*' }]);
+	});
+
+	for (const initialized of [true, false]) {
+		test(`New Terminal creates before revealing a ${initialized ? 'populated' : 'hidden'} panel`, async () => {
+			using services = new InstantiationService();
+			const terminal = new InputTerminal().instance;
+			const instances: ITerminalInstance[] = initialized ? [new InputTerminal().instance] : [];
+			const effects: unknown[] = [];
+			services.registerInstance(ITerminalService, {
+				createTerminal: async () => { effects.push('create'); instances.push(terminal); return terminal; },
+				setActiveInstance: (instance: ITerminalInstance) => assert.equal(instance, terminal),
+			} as unknown as ITerminalService);
+			services.registerInstance(ITerminalGroupService, { showPanel: async (focus: boolean) => { effects.push(['panel', focus]); } } as ITerminalGroupService);
+			using commands = new CommandService(services);
+			await commands.executeCommand(TerminalCommandId.New);
+			assert.deepEqual(effects, ['create', ['panel', true]]);
+			assert.equal(instances.length, initialized ? 2 : 1);
+		});
+	}
+
+	for (const outcome of ['opened', 'canceled', 'failed', 'blocked', 'closed', 'focus-failed'] as const) {
+		test(`new terminal window ${outcome} keeps process and window lifetimes together`, async () => {
+			using services = new InstantiationService();
+			const effects: unknown[] = [];
+			const instances: ITerminalInstance[] = [];
+			const terminal = new InputTerminal().instance;
+			services.registerInstance(ITerminalService, {
+				instances, closeTerminal: async () => { effects.push('close terminal'); instances.length = 0; },
+				createTerminal: async (options: unknown) => {
+					effects.push(['create terminal', options]);
+					if (outcome === 'canceled' || outcome === 'closed') throw new CancellationError();
+					if (outcome === 'failed') throw new Error('editor failed');
+					instances.push(terminal);
+					return terminal;
+				},
+			} as unknown as ITerminalService);
+			services.registerInstance(IEditorPartsService, {
+				createAuxiliaryEditorPart: async () => {
+					effects.push('open window');
+					if (outcome === 'blocked') throw new Error('popup blocked');
+					return { domNode: { ownerDocument: { defaultView: { focus: () => { effects.push('focus window'); if (outcome === 'focus-failed') throw new Error('focus failed'); } } } }, activeGroup: { id: 12, focus: () => effects.push('focus auxiliary') } };
+				},
+				closeAuxiliaryEditorPart: async () => { effects.push('close window'); return true; },
+			} as unknown as IEditorPartsService);
+
+			using commands = new CommandService(services);
+			const operation = commands.executeCommand(TerminalCommandId.NewInNewWindow);
+			if (outcome === 'blocked' || outcome === 'failed') await assert.rejects(operation, outcome === 'blocked' ? /popup blocked/ : /editor failed/);
+			else if (outcome === 'canceled' || outcome === 'closed') await assert.rejects(operation, isCancellationError);
+			else if (outcome === 'focus-failed') await assert.rejects(operation, /focus failed/);
+			else await operation;
+			assert.deepEqual(effects, outcome === 'blocked' ? ['open window'] : [
+				'open window', ['create terminal', { location: { viewColumn: 12 } }],
+				...(outcome === 'opened' ? ['focus window', 'focus auxiliary'] : outcome === 'focus-failed' ? ['focus window', 'close terminal', 'close window'] : ['close window']),
+			]);
+			assert.equal(instances.length, outcome === 'opened' ? 1 : 0);
+		});
+	}
 });

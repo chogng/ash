@@ -92,9 +92,9 @@ test("Terminal and Tasks contracts cannot reach contribution implementations thr
 test("Terminal and Tasks domain service identifiers have one owner", () => {
 	const owners = new Map([
 		["ITaskService", "workbench/contrib/tasks/common/taskService.ts"],
-		["ITerminalService", "workbench/services/terminal/browser/terminal.ts"],
-		["ITerminalProfileService", "workbench/services/terminal/common/terminal.ts"],
-		["ITerminalProfileResolverService", "workbench/services/terminal/common/terminal.ts"],
+		["ITerminalService", "workbench/contrib/terminal/browser/terminal.ts"],
+		["ITerminalProfileService", "workbench/contrib/terminal/common/terminal.ts"],
+		["ITerminalProfileResolverService", "workbench/contrib/terminal/common/terminal.ts"],
 	]);
 	const declarations = new Map([...owners.keys()].map(name => [name, {
 		identifiers: [] as string[], contracts: [] as string[], reexports: [] as string[],

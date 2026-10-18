@@ -2,7 +2,7 @@ import type { Terminal, ITerminalAddon, IMarker, IDecoration } from '@xterm/xter
 import { Disposable, DisposableMap, DisposableStore, toDisposable } from '../../../../../base/common/lifecycle.js';
 import { TerminalCapability, type IBufferMarkCapability } from '../../../../../platform/terminal/common/capabilities/capabilities.js';
 import { TerminalCapabilityStore } from '../../../../../platform/terminal/common/capabilities/terminalCapabilityStore.js';
-import type { ITerminalCommandStatusEvent } from '../../../../services/terminal/browser/terminal.js';
+import type { ITerminalCommandStatusEvent } from '../terminal.js';
 import { getTerminalCommandDecorationTooltip, updateLayout } from './decorationStyles.js';
 import { terminalDecorationIncomplete, terminalDecorationSuccess, terminalDecorationError } from '../terminalIcons.js';
 import { appendIcon } from '../../../../../base/browser/ui/lxicons/lxicon.js';

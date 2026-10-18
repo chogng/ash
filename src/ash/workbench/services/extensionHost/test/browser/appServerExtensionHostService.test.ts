@@ -7,9 +7,9 @@ import '../../../../contrib/terminal/common/terminalExtensionPoints.contribution
 import { TerminalContributionService } from '../../../../contrib/terminal/common/terminalExtensionPoints.js';
 import { IEnvironmentVariableService } from '../../../../contrib/terminal/common/environmentVariable.js';
 import { EnvironmentVariableService } from '../../../../contrib/terminal/common/environmentVariableService.js';
-import { ITerminalContributionService, ITerminalProfileService, ITerminalProfileResolverService } from '../../../terminal/common/terminal.js';
+import { ITerminalContributionService, ITerminalProfileService, ITerminalProfileResolverService } from '../../../../contrib/terminal/common/terminal.js';
 import { quickInputServiceTestControls } from '../../../../../platform/quickinput/test/browser/testQuickInputService.js';
-import { ITerminalService } from '../../../terminal/browser/terminal.js';
+import { ITerminalService } from '../../../../contrib/terminal/browser/terminal.js';
 import { ITerminalProcessService } from '../../../../../platform/terminal/common/terminal.js';
 import { TerminalProfileService } from '../../../../contrib/terminal/browser/terminalProfileService.js';
 import { createEmptyTestLanguagePacks } from '../../../localization/test/common/localizationTestUtils.js';
@@ -85,9 +85,6 @@ import { IOutputService } from '../../../output/common/output.js';
 import { IEditorPart } from '../../../../browser/parts/editor/editorPart.js';
 import { MenuId, MenusRegistry } from '../../../../../platform/actions/common/actions.js';
 import { ICommandService } from '../../../../../platform/commands/common/commands.js';
-import { CommandService } from '../../../commands/common/commandService.js';
-import { INotificationService } from '../../../../../platform/notification/common/notification.js';
-import { NotificationService } from '../../../notification/common/notificationService.js';
 import { IBulkEditService } from '../../../../../editor/browser/services/bulkEditService.js';
 import { IQuickInputService } from '../../../../../platform/quickinput/common/quickInput.js';
 
@@ -1133,8 +1130,8 @@ function createServices(api: IExtensionHostApi, languages: ILanguageFeaturesServ
 	services.registerInstance(IAdapterManager, services.resources.add(new AdapterManager()));
 	services.registerInstance(IFileService, services.resources.add(new FileService()));
 	services.registerSingleton(IExtensionService, () => new TestExtensionService(extensionApi, services.get(IAdapterManager)));
-	services.registerInstance(ITerminalProcessService, { onConnectionState: Event.None } as ITerminalProcessService);
-	services.registerInstance(ITerminalService, { ...Disposable.None, getProfiles: async () => [] } as unknown as ITerminalService);
+	services.registerInstance(ITerminalProcessService, { onConnectionState: Event.None, listProfiles: async () => [] } as unknown as ITerminalProcessService);
+	services.registerInstance(ITerminalService, { ...Disposable.None } as unknown as ITerminalService);
 	services.registerSingleton(IEnvironmentVariableService, () => services.createInstance(EnvironmentVariableService));
 	services.registerSingleton(ITerminalContributionService, () => services.createInstance(TerminalContributionService));
 	services.registerSingleton(ITerminalProfileService, () => services.createInstance(TerminalProfileService));
@@ -1177,8 +1174,6 @@ function createServices(api: IExtensionHostApi, languages: ILanguageFeaturesServ
 	services.registerInstance(ITaskService, tasks as unknown as ITaskService);
 	services.registerInstance(IDebugService, debug as unknown as IDebugService);
 	services.registerInstance(ITestingService, tests as unknown as ITestingService);
-	services.registerSingleton(ICommandService, () => new CommandService(services));
-	services.registerSingleton(INotificationService, () => services.createInstance(NotificationService));
 	// These scenarios exercise registrations and provider calls, never edits or Quick Input UI.
 	services.registerInstance(IBulkEditService, {
 		_serviceBrand: undefined,

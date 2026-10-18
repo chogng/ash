@@ -7,10 +7,8 @@ import {
 	TerminalContextKeys,
 } from '../common/terminalContextKey.js';
 import { TerminalCommandId } from '../common/terminal.js';
-import { ITerminalProfileResolverService, ITerminalProfileService } from '../../../services/terminal/common/terminal.js';
+import { ITerminalProfileResolverService, ITerminalProfileService } from '../common/terminal.js';
 import { ITerminalProcessService, TerminalLocation, type IShellLaunchConfig } from '../../../../platform/terminal/common/terminal.js';
-import { TerminalCapability } from '../../../../platform/terminal/common/capabilities/capabilities.js';
-import { getRemoteAuthority } from '../../../../platform/remote/common/remoteHosts.js';
 import { terminalProfileIcon } from "./terminalIcon.js";
 import { type IContextKey } from "../../../../platform/contextkey/common/contextkey.js";
 import { ICommandService } from "../../../../platform/commands/common/commands.js";
@@ -32,21 +30,17 @@ import { Disposable, DisposableMap, toDisposable } from "../../../../base/common
 import { IMenuService, MenuId } from "../../../../platform/actions/common/actions.js";
 import { IContextKeyService } from "../../../../platform/contextkey/browser/contextKeyService.js";
 import { IContextMenuService } from "../../../../platform/contextview/browser/contextView.js";
+import { isCancellationError } from '../../../../base/common/errors.js';
 import { AppServerRemoteError } from "../../../../platform/agentHost/common/appServerError.js";
-import { IWorkspaceContextService, type IWorkspaceFolder } from "../../../../platform/workspace/common/workspace.js";
+import { IWorkspaceContextService } from "../../../../platform/workspace/common/workspace.js";
 import { ViewPane, type IViewPaneOptions, type PartTitleProjection } from "../../../browser/parts/views/viewPane.js";
 import { IWorkbenchLayoutService } from "../../../services/layout/browser/layoutService.js";
-import { type ITerminalDimensions, type ITerminalInstance, type ITerminalProfile, ITerminalService, ITerminalGroupService, type IXtermTerminal } from "../../../services/terminal/browser/terminal.js";
+import { type ITerminalInstance, type ITerminalProfile, ITerminalService, ITerminalGroupService, type IXtermTerminal } from "./terminal.js";
 
 import { TerminalTabbedView } from "./terminalTabbedView.js";
 import "./media/terminal.css";
 import { h, addDisposableListener, stopEvent } from "../../../../base/browser/dom.js";
 import { observeResize } from "../../../../base/browser/observer.js";
-import { IEditorService } from '../../../services/editor/common/editorService.js';
-import { PICK_WORKSPACE_FOLDER_COMMAND_ID } from '../../../browser/actions/workspaceCommands.js';
-import { TerminalProfileQuickpick } from './terminalProfileQuickpick.js';
-
-const DEFAULT_DIMENSIONS: ITerminalDimensions = { rows: 24, cols: 80 };
 
 /** Tabbed xterm panel whose persistent widgets preserve per-instance terminal state. */
 export class TerminalViewPane extends ViewPane {
@@ -67,13 +61,11 @@ export class TerminalViewPane extends ViewPane {
 		@ITerminalService terminalService: ITerminalService,
 		@IWorkbenchLayoutService private readonly layoutService: IWorkbenchLayoutService,
 		@IWorkspaceContextService private readonly workspaceContext: IWorkspaceContextService,
-		@IInstantiationService private readonly instantiation: IInstantiationService,
+		@IInstantiationService instantiation: IInstantiationService,
 		@ITerminalProfileService private readonly profileService: ITerminalProfileService,
 		@ITerminalProfileResolverService private readonly profileResolver: ITerminalProfileResolverService,
 		@ITerminalProcessService private readonly processes: ITerminalProcessService,
 		@ITerminalGroupService private readonly groups: ITerminalGroupService,
-		@IEditorService private readonly editors: IEditorService,
-		@ICommandService private readonly commands: ICommandService,
 	) {
 		super(container, options);
 		this.terminalService = terminalService;
@@ -148,10 +140,8 @@ export class TerminalViewPane extends ViewPane {
 	override focus(): void {
 		if (!this.isVisible() || this.isDisposed) return;
 		this.setExpanded(true);
-		if (!this.groups.activeGroup) {
-			const instance = this.groups.groups[0]?.activeInstance;
-			if (instance) this.terminalService.setActiveInstance(instance);
-		}
+		const instance = this.groups.activeGroup?.activeInstance;
+		if (instance) this.terminalService.setActiveInstance(instance);
 		super.focus();
 		this.focusSource = this.element.ownerDocument.activeElement;
 		this.updateInstances();
@@ -175,112 +165,29 @@ export class TerminalViewPane extends ViewPane {
 		try {
 			await this.terminalService.whenConnected;
 			if (this.terminalService.instances.length === 0) {
-				// Creation selects the directory before discovering its profiles.
-				await this.createTerminal(undefined, false);
+				// Profile readiness also drives the title menu. A hidden panel must
+				// stop here before handing a creation intent to the service.
+				const folders = this.workspaceContext.getWorkspace().folders;
+				if (folders.length === 1) await this.profileService.refreshAvailableProfiles(folders[0]!.id);
+				if (!this.isBodyVisible() || this.isDisposed) return;
+				this.titleActions.setCreating(true);
+				this.creating = this.terminalService.createTerminal();
+				try { await this.creating; }
+				finally {
+					this.creating = undefined;
+					if (!this.isDisposed) { this.titleActions.setCreating(false); this.updateInstances(); }
+				}
 			} else {
 				await this.profileService.refreshAvailableProfiles(this.terminalService.activeInstance?.dirId);
 			}
 			if (this.isDisposed) return;
 			this.updateProfiles();
-		} catch {
-			if (this.isDisposed) return;
+		} catch (error) {
+			if (this.isDisposed || isCancellationError(error)) return;
+			this.setStatus(terminalErrorMessage(error, "Terminal is unavailable"));
 			this.updateProfiles();
 		} finally {
 			this.initializing = false;
-		}
-	}
-
-	public createTerminal(profileId?: string | { readonly type: 'pick'; }, focus = true, parent?: ITerminalInstance): Promise<ITerminalInstance | undefined> {
-		// Panel initialization and commands must await the same acquisition and its
-		// exact instance, rather than reading a possibly changed active terminal.
-		return this.creating ??= this.createTerminalCore(profileId, focus, parent).finally(() => {
-			this.creating = undefined;
-			if (!this.isDisposed) {
-				this.titleActions.setCreating(false);
-				this.updateInstances();
-			}
-		});
-	}
-
-	private async createTerminalCore(profileId: string | { readonly type: 'pick'; } | undefined, focus: boolean, parent: ITerminalInstance | undefined): Promise<ITerminalInstance | undefined> {
-		if (this.isDisposed) return;
-		if (!this.hasWorkspaceFolder()) {
-			this.setStatus("Open a folder to use the terminal.");
-			return;
-		}
-		if (focus) {
-			if (this.isBodyVisible()) super.focus();
-			this.focusSource = this.element.ownerDocument.activeElement;
-		}
-		this.titleActions.setCreating(true);
-		this.setStatus(undefined);
-		try {
-			const folders = this.workspaceContext.getWorkspace().folders;
-			const activeResource = this.editors.activeEditor?.resource;
-			const folder = parent ? folders.find(folder => folder.id === parent.dirId)
-				: (activeResource && this.workspaceContext.getWorkspaceFolder(activeResource))
-				|| (folders.length === 1 ? folders[0] : await this.commands.executeCommand<IWorkspaceFolder | undefined>(PICK_WORKSPACE_FOLDER_COMMAND_ID, [{ placeHolder: localize('terminal.selectFolder', 'Select a workspace folder for the terminal.') }]));
-			if (!folder || this.isDisposed || !focus && !this.isBodyVisible()) return;
-			await this.profileService.refreshAvailableProfiles(folder.id);
-			if (this.isDisposed || !focus && !this.isBodyVisible()) return;
-			if (typeof profileId === 'object') {
-				using picker = this.instantiation.createInstance(TerminalProfileQuickpick);
-				profileId = await picker.showAndGetResult('createInstance', folder.id);
-				if (profileId === undefined || this.isDisposed) return;
-			}
-			if (profileId !== undefined && !this.profileService.getAvailableProfiles(folder.id).some(profile => profile.profileId === profileId)
-				&& !this.profileService.contributedProfiles.some(profile => `extension:${profile.extensionIdentifier}/${profile.id}` === profileId)) {
-				throw new TypeError(localize('terminal.profile.unknown', 'Unknown terminal profile: {0}', profileId));
-			}
-			const contributed = parent ? undefined : profileId === undefined ? await this.profileService.getContributedDefaultProfile({}) : this.profileService.contributedProfiles.find(profile => profileId === `extension:${profile.extensionIdentifier}/${profile.id}`);
-			if (contributed) {
-				const provider = this.profileService.getContributedProfileProvider(contributed.extensionIdentifier, contributed.id);
-				if (!provider) throw new Error(localize('terminal.profile.providerUnavailable', 'Terminal profile provider is unavailable: {0}', contributed.title));
-				const existing = new Set(this.terminalService.instances);
-				await provider.createContributedTerminalProfile({ ...contributed.options, cwd: folder.uri });
-				// Providers create through TerminalService and return no instance. Only a
-				// new active terminal in the selected folder can satisfy this acquisition.
-				const created = this.terminalService.activeInstance;
-				return created && !existing.has(created) && created.dirId === folder.id ? created : undefined;
-			}
-			const profile = profileId === undefined ? this.profileService.getDefaultProfile(undefined, folder.id) : this.profileService.getAvailableProfiles(folder.id).find(profile => profile.profileId === profileId);
-			const os = this.processes.operatingSystem;
-			if (os === undefined) throw new Error(localize('terminal.profile.platformUnavailable', 'The terminal execution host is not ready.'));
-			const shell: IShellLaunchConfig = parent?.shellLaunchConfig?.executable && profileId === parent.profile.profileId ? { ...parent.shellLaunchConfig }
-				: profile ? { name: profile.profileName, executable: profile.path, args: profile.args, env: profile.env, icon: profile.icon, color: profile.color } : {};
-			if (parent) {
-				shell.cwd = parent.cwd;
-				if (!shell.cwd) {
-					const query = parent.capabilities?.get(TerminalCapability.NaiveCwdDetection);
-					// Some execution hosts cannot inspect a process directory. Splitting
-					// still has the backend-confirmed launch directory as a fallback.
-					try { shell.cwd = await query?.getCwd(); } catch { shell.cwd = undefined; }
-				}
-				shell.cwd ??= parent.initialCwd;
-			}
-			await this.profileResolver.resolveShellLaunchConfig(shell, { os, remoteAuthority: getRemoteAuthority(folder.uri), workspaceFolder: folder });
-			if (this.isDisposed || !focus && !this.isBodyVisible()) return;
-			if (parent && (!this.terminalService.instances.includes(parent) || parent.state !== 'running')) return;
-			const created = await this.terminalService.createTerminal({
-				dirId: folder.id,
-				dimensions: this.activeItem()?.widget.dimensions() ?? DEFAULT_DIMENSIONS,
-				title: profile?.overrideName ? profile.profileName : undefined,
-				profile: profile?.isAutoDetected ? { type: 'profile', profileId: profile.profileId } : { type: 'custom', name: profile?.profileName ?? shell.name ?? localize('terminal.profile.shell', 'Shell'), path: typeof shell.executable === 'string' ? [shell.executable] : shell.executable!, args: shell.args ?? [] },
-				env: shell.env, ...(shell.strictEnv === undefined ? {} : { strictEnv: shell.strictEnv }), cwd: shell.cwd, icon: shell.icon, color: shell.color,
-			});
-			if (parent) {
-				if (this.isDisposed || !this.terminalService.instances.includes(parent) || parent.state !== 'running') {
-					await this.terminalService.closeTerminal(created);
-					return;
-				}
-				this.groups.joinInstances([parent, created]);
-			}
-			return created;
-		} catch (error) {
-			if (!this.isDisposed) {
-				this.focusSource = undefined;
-				this.setStatus(terminalErrorMessage(error, "Terminal is unavailable"));
-			}
 		}
 	}
 
@@ -540,13 +447,14 @@ export class TerminalTitleActions extends Disposable {
 		return Separator.join(
 			[
 				command(TerminalCommandId.New, action.label, action.enabled),
+				command(TerminalCommandId.NewInNewWindow, localize('terminal.newInNewWindow', 'New Terminal Window'), action.enabled),
 				command(TerminalCommandId.Split, localize('terminal.group.splitMenu', 'Split Terminal'), action.enabled && !!canSplit, instance && new InstanceContext(instance)),
 			],
 			this.profiles.map(profile => terminalProfileMenuAction(profile, profileId => this.createTerminalWithProfile(profileId))),
 			canSplit ? [new SubmenuAction('split.profile', localize('terminal.title.splitWithProfile', 'Split Terminal with Profile'),
-				this.profiles.filter(profile => !profile.profileId.startsWith('extension:')).map(profile => terminalProfileMenuAction(profile,
+				this.profiles.map(profile => terminalProfileMenuAction(profile,
 					profileId => this.commandService.executeCommand(TerminalCommandId.Split, new InstanceContext(instance), profileId), TerminalCommandId.Split)))] : [],
-			[command(TerminalCommandId.SelectDefaultProfile, localize('terminal.title.selectDefaultProfile', 'Select Default Profile'), action.enabled)],
+			...this.menuService.getMenuActions(MenuId.TerminalNewDropdownContext, { shouldForwardArgs: true }).map(([, actions]) => [...actions]),
 		);
 	}
 

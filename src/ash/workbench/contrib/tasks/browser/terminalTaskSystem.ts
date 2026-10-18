@@ -26,13 +26,13 @@ import { IConfigurationResolverService } from '../../../services/configurationRe
 import { ConfigurationResolverExpression, type Replacement, type IResolvedValue } from '../../../services/configurationResolver/common/configurationResolverExpression.js';
 import { type IOutputChannel, type OutputEntrySeverity } from '../../../services/output/common/output.js';
 import { readTaskOutput, ShellQuoting, type ITaskRun, type ITaskOutput, type IWorkspaceTask, type TaskRunStatus, type TaskPseudoterminal, type TaskShellExecution, type ShellQuotedString } from '../common/tasks.js';
-import { type ITerminalCreateOptions, type ITerminalCommandStatusEvent, type ITerminalInstance, type ITerminalProfileSelection, ITerminalGroupService, ITerminalService } from '../../../services/terminal/browser/terminal.js';
+import { type ITerminalCreateOptions, type ITerminalCommandStatusEvent, type ITerminalInstance, type ITerminalProfileSelection, ITerminalGroupService, ITerminalService } from '../../terminal/browser/terminal.js';
 import { parseShellExecution } from '../common/taskConfiguration.js';
 import { parseProblemMatchers, type ProblemMatcher } from '../common/problemMatcher.js';
 import { WatchingProblemCollector } from '../common/problemCollectors.js';
 import { IViewsService } from '../../../services/views/common/viewsService.js';
 import { TERMINAL_VIEW_ID } from '../../terminal/common/terminal.js';
-import { ITerminalProfileResolverService } from '../../../services/terminal/common/terminal.js';
+import { ITerminalProfileResolverService } from '../../terminal/common/terminal.js';
 import { WorkbenchViewContainerId } from '../../../common/views.js';
 
 interface TaskTerminal {

@@ -1,5 +1,5 @@
 import { localize } from '../../../../nls.js';
-import type { ITerminalInstance } from '../../../services/terminal/browser/terminal.js';
+import type { ITerminalInstance } from './terminal.js';
 import type { IEnvironmentVariableInfo } from '../common/environmentVariable.js';
 
 /** Reads execution identity from the instance; the hover never queries or changes a Shell. */

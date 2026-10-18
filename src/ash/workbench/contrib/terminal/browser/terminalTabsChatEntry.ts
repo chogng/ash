@@ -1,6 +1,6 @@
 import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { IViewsService } from '../../../services/views/common/viewsService.js';
-import { ITerminalService, type ITerminalInstance, type ITerminalView } from '../../../services/terminal/browser/terminal.js';
+import { ITerminalService, type ITerminalInstance, type ITerminalView } from './terminal.js';
 import type { IView } from '../../../common/views.js';
 import type { IChatContextTarget } from '../../../services/chat/common/chatContextService.js';
 import { CHAT_VIEW_ID } from '../../chat/common/chat.js';

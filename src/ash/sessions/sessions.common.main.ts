@@ -63,7 +63,7 @@ import '../workbench/contrib/mediaPreview/browser/mediaPreview.contribution.js';
 import '../workbench/contrib/multiDiffEditor/browser/multiDiffEditor.contribution.js';
 import { registerTerminalView } from '../workbench/contrib/terminal/browser/terminal.contribution.js';
 // Connected App tools use the same Task owner and Terminal execution services as Code.
-import { registerTasksView } from '../workbench/contrib/tasks/browser/tasks.contribution.js';
+import '../workbench/contrib/tasks/browser/task.contribution.js';
 import { registerOutputView } from '../workbench/contrib/output/browser/output.contribution.js';
 import { registerCollaborationViews } from '../workbench/contrib/collaboration/browser/collaboration.contribution.js';
 import { registerCallView } from '../workbench/contrib/call/browser/call.contribution.js';
@@ -88,7 +88,6 @@ for (const [id, title, icon, activeIcon, order] of [
 }
 
 registerTerminalView(SessionsViewRegistry);
-registerTasksView(SessionsViewRegistry);
 registerOutputView(SessionsViewRegistry);
 
 registerCollaborationViews(SessionsViewRegistry, accessor => accessor.get(ICommandService).executeCommand('sessions.open.collaboration'));

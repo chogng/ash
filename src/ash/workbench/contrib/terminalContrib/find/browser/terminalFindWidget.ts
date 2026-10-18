@@ -11,7 +11,7 @@ import { localize } from '../../../../../nls.js';
 import { AccessibilityVerbositySettingId, IAccessibleViewService } from '../../../../../platform/accessibility/browser/accessibleView.js';
 import { IAccessibilityService } from '../../../../../platform/accessibility/common/accessibility.js';
 import { IContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
-import type { ITerminalInstance, IXtermTerminal } from '../../../../services/terminal/browser/terminal.js';
+import type { ITerminalInstance, IXtermTerminal } from '../../../terminal/browser/terminal.js';
 
 import { TerminalContextKeys } from '../../../terminal/common/terminalContextKey.js';
 import './media/terminalFind.css';

@@ -5,16 +5,11 @@ import { CancellationError } from '../../../base/common/errors.js';
 import { Disposable, DisposableMap, DisposableStore, toDisposable, type IDisposable } from '../../../base/common/lifecycle.js';
 import { ThemeIcon } from '../../../base/common/themables.js';
 import { localize } from '../../../nls.js';
-import { ITerminalProcessService, type IShellLaunchConfig, type TerminalArguments } from '../../../platform/terminal/common/terminal.js';
-import { getRemoteAuthority } from '../../../platform/remote/common/remoteHosts.js';
-import { IWorkspaceContextService, type IWorkspaceFolder } from '../../../platform/workspace/common/workspace.js';
-import { URI } from '../../../base/common/uri.js';
-import { IEditorService } from '../../services/editor/common/editorService.js';
-import { ICommandService } from '../../../platform/commands/common/commands.js';
-import { PICK_WORKSPACE_FOLDER_COMMAND_ID } from '../../browser/actions/workspaceCommands.js';
+import type { IShellLaunchConfig, TerminalArguments } from '../../../platform/terminal/common/terminal.js';
+import { IWorkspaceContextService } from '../../../platform/workspace/common/workspace.js';
 import { IExtensionService } from '../../services/extensions/common/extensionService.js';
-import { ITerminalService, type ITerminalInstance } from '../../services/terminal/browser/terminal.js';
-import { ITerminalProfileResolverService, ITerminalProfileService } from '../../services/terminal/common/terminal.js';
+import { ITerminalService, type ITerminalInstance } from '../../contrib/terminal/browser/terminal.js';
+import { ITerminalProfileService } from '../../contrib/terminal/common/terminal.js';
 import type { ExtensionHostProviderInvoker } from './extensionHostLanguageBridge.js';
 import type { JsonValue } from '../../../platform/agentHost/common/extensionHostApi.js';
 import { IInstantiationService } from '../../../platform/instantiation/common/instantiation.js';
@@ -48,15 +43,12 @@ export class MainThreadTerminalService extends Disposable {
 
 	constructor(
 		@ITerminalProfileService private readonly profiles: ITerminalProfileService,
-		@ITerminalProfileResolverService private readonly resolver: ITerminalProfileResolverService,
 		@ITerminalService private readonly terminals: ITerminalService,
 		@IExtensionService private readonly extensions: IExtensionService,
-		@ITerminalProcessService private readonly processes: ITerminalProcessService,
 		@IWorkspaceContextService private readonly workspace: IWorkspaceContextService,
 		@IEnvironmentVariableService private readonly environmentVariables: IEnvironmentVariableService,
 		@IInstantiationService private readonly instantiation: IInstantiationService,
 		@ILogService private readonly log: ILogService,
-		@ICommandService private readonly commands: ICommandService,
 	) {
 		super();
 		this._register(workspace.onDidChangeWorkspace(() => this.workspaceGeneration++));
@@ -169,7 +161,7 @@ export class MainThreadTerminalService extends Disposable {
 							if (typeof pty.acceptsInput !== 'boolean') throw invalid();
 							let nextPtyId: string | undefined = id;
 							instance = await this.terminals.createTerminal({
-								dimensions: { cols: 80, rows: 24 }, config: {
+								cwd: presentation.cwd, dimensions: { cols: 80, rows: 24 }, config: {
 									name, icon, color, customPtyImplementation: (terminalId, cols, rows) => {
 										if (lifetime.isDisposed || generation !== this.workspaceGeneration) throw new CancellationError();
 										let registration: IDisposable | undefined;
@@ -187,8 +179,6 @@ export class MainThreadTerminalService extends Disposable {
 								}
 							});
 						} else {
-							const os = this.processes.operatingSystem;
-							if (os === undefined) throw new CancellationError();
 							const shell: IShellLaunchConfig = {
 								name, icon, color,
 								executable: options.shellPath === undefined ? undefined : text(options.shellPath, 32768),
@@ -197,24 +187,7 @@ export class MainThreadTerminalService extends Disposable {
 								env: environment(options.env),
 								strictEnv: options.strictEnv === undefined ? undefined : boolean(options.strictEnv),
 							};
-							const folders = this.workspace.getWorkspace().folders;
-							const cwdResource = shell.cwd && /^(?:\/|[a-z]:[\\/]|\\\\)/i.test(shell.cwd) ? URI.file(shell.cwd) : undefined;
-							const namedRoot = shell.cwd?.match(/^\$\{workspaceFolder:([^}]+)\}/)?.[1];
-							const activeResource = folders.length > 1 ? this.instantiation.get(IEditorService).activeEditor?.resource : undefined;
-							const folder = (cwdResource && this.workspace.getWorkspaceFolder(cwdResource))
-								|| (namedRoot && folders.filter(folder => folder.name === namedRoot).length === 1 && folders.find(folder => folder.name === namedRoot))
-								|| (activeResource && this.workspace.getWorkspaceFolder(activeResource))
-								|| (folders.length === 1 ? folders[0] : await this.commands.executeCommand<IWorkspaceFolder | undefined>(PICK_WORKSPACE_FOLDER_COMMAND_ID, [{ placeHolder: localize('terminal.selectFolder', 'Select a workspace folder for the terminal.') }]));
-							if (!folder) throw new CancellationError();
-							await this.resolver.resolveShellLaunchConfig(shell, { os, remoteAuthority: getRemoteAuthority(folder.uri), workspaceFolder: folder });
-							if (lifetime.isDisposed) throw new CancellationError();
-							instance = await this.terminals.createTerminal({
-								dirId: folder.id,
-								dimensions: { cols: 80, rows: 24 }, title: name,
-								profile: { type: 'custom', name, path: typeof shell.executable === 'string' ? [shell.executable] : shell.executable!, args: shell.args ?? [] },
-								env: shell.env, ...(shell.strictEnv === undefined ? {} : { strictEnv: shell.strictEnv }),
-								cwd: shell.cwd, icon: shell.icon, color: shell.color,
-							});
+							instance = await this.terminals.createTerminal({ config: shell, cwd: presentation.cwd, skipContributedProfileCheck: true });
 						}
 						if (lifetime.isDisposed || generation !== this.workspaceGeneration) {
 							await this.terminals.closeTerminal(instance);

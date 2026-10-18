@@ -2,7 +2,7 @@ import { terminalStrings } from '../common/terminalStrings.js';
 import type { Event } from '../../../../base/common/event.js';
 import type { URI } from '../../../../base/common/uri.js';
 import type { IResourceEditorInput } from '../../../common/editor.js';
-import type { ITerminalInstance } from '../../../services/terminal/browser/terminal.js';
+import type { ITerminalInstance } from './terminal.js';
 import { parseTerminalUri } from './terminalUri.js';
 import type { IEditorCloseHandler } from '../../../common/editor/editorInput.js';
 

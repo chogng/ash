@@ -10,7 +10,7 @@ import { KeybindingWeight } from '../../../../../platform/keybinding/common/keyb
 import { IStorageService } from '../../../../../platform/storage/common/storage.js';
 import { IQuickInputService, type IQuickPickItem } from '../../../../../platform/quickinput/common/quickInput.js';
 import { TerminalContextKeys, TerminalHasActiveInstanceContext } from '../../../terminal/common/terminalContextKey.js';
-import { ITerminalService, type ITerminalContribution } from '../../../../services/terminal/browser/terminal.js';
+import { ITerminalService, type ITerminalContribution } from '../../../terminal/browser/terminal.js';
 import { registerTerminalContribution, type ITerminalContributionContext } from '../../../terminal/browser/terminalExtensions.js';
 import { TerminalCommandHistory } from '../common/history.js';
 import { TerminalHistoryCommandId } from '../common/terminal.history.js';

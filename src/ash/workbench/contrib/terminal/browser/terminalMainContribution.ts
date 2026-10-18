@@ -3,7 +3,7 @@ import { onUnexpectedError } from '../../../../base/common/errors.js';
 import { IEmbedderTerminalService, type EmbedderTerminal } from '../../../services/terminal/common/embedderTerminalService.js';
 import { IViewsService } from '../../../services/views/common/viewsService.js';
 import type { IWorkbenchContribution } from '../../../common/contributions.js';
-import { ITerminalService } from '../../../services/terminal/browser/terminal.js';
+import { ITerminalService } from './terminal.js';
 import { TERMINAL_VIEW_ID } from '../common/terminal.js';
 
 /** Connects host terminal requests to the window's instance and view owners. */

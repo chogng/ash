@@ -18,7 +18,7 @@ import { Disposable, DisposableStore, MutableDisposable, toDisposable } from "..
 import { IThemeService } from "../../../../../platform/theme/common/themeService.js";
 import { onUnexpectedError } from "../../../../../base/common/errors.js";
 import { ITerminalConfigurationService } from "../terminal.js";
-import type { ITerminalDimensions, ITerminalScreenHost, IXtermTerminal } from "../../../../services/terminal/browser/terminal.js";
+import type { ITerminalDimensions, ITerminalScreenHost, IXtermTerminal } from "../terminal.js";
 import { h } from "../../../../../base/browser/dom.js";
 import { observeResize } from "../../../../../base/browser/observer.js";
 import { TerminalResizeDebouncer } from '../terminalResizeDebouncer.js';

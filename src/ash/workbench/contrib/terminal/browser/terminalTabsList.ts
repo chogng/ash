@@ -13,7 +13,7 @@ import { IContextMenuService } from '../../../../platform/contextview/browser/co
 import { ICommandService } from '../../../../platform/commands/common/commands.js';
 import { colorCssVariable } from '../../../../platform/theme/common/colorUtils.js';
 import { TerminalActiveInstanceStateContext, TerminalHasActiveInstanceContext } from '../common/terminalContextKey.js';
-import { ITerminalService, ITerminalGroupService, type ITerminalInstance } from '../../../services/terminal/browser/terminal.js';
+import { ITerminalService, ITerminalGroupService, type ITerminalInstance } from './terminal.js';
 import { InstanceContext, openContextMenu } from './terminalContextMenu.js';
 import { terminalProfileIcon } from './terminalIcon.js';
 import { IEnvironmentVariableService } from '../common/environmentVariable.js';

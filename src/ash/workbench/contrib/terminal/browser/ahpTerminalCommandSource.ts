@@ -4,7 +4,7 @@ import { Emitter } from '../../../../base/common/event.js';
 import { Disposable } from '../../../../base/common/lifecycle.js';
 import type { CancellationToken } from '../../../../base/common/cancellation.js';
 import type { ITerminalProcessReadResult, ITerminalProcessCommandStatusEvent } from '../../../../platform/terminal/common/terminal.js';
-import type { ITerminalCommandStatusEvent, ITerminalShellIntegration } from '../../../services/terminal/browser/terminal.js';
+import type { ITerminalCommandStatusEvent, ITerminalShellIntegration } from './terminal.js';
 
 /** Publishes Rust-owned command metadata only after the associated output is committed to the screen. */
 export class AhpTerminalCommandSource extends Disposable {

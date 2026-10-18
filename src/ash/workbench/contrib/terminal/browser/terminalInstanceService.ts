@@ -4,7 +4,7 @@ import { AgentHostTerminalService } from './agentHostTerminalService.js';
 import { IWorkspaceContextService } from '../../../../platform/workspace/common/workspace.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import type { TerminalProcessConnectionState } from '../../../../platform/terminal/common/terminal.js';
-import type { ITerminalCreateOptions, ITerminalProfile } from '../../../services/terminal/browser/terminal.js';
+import type { ITerminalCreateOptions, ITerminalProfile } from './terminal.js';
 import { TerminalInstance } from './terminalInstance.js';
 import { localize } from '../../../../nls.js';
 

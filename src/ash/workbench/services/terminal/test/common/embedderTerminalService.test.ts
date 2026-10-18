@@ -1,4 +1,4 @@
-import { registerTestTerminalLifecycleServices } from '../../../../test/browser/workbenchTestServices.js';
+import { registerTestTerminalCreationServices } from '../../../../test/browser/workbenchTestServices.js';
 import assert from 'node:assert/strict';
 import { suite, test } from 'mocha';
 import { Emitter, Event } from '../../../../../base/common/event.js';
@@ -11,7 +11,7 @@ import { ITerminalProcessService } from '../../../../../platform/terminal/common
 import { IWorkspaceContextService } from '../../../../../platform/workspace/common/workspace.js';
 import { TerminalService } from '../../../../contrib/terminal/browser/terminalService.js';
 import { TerminalMainContribution } from '../../../../contrib/terminal/browser/terminalMainContribution.js';
-import { ITerminalService, type ITerminalInstance } from '../../browser/terminal.js';
+import { ITerminalService, type ITerminalInstance } from '../../../../contrib/terminal/browser/terminal.js';
 import { TERMINAL_VIEW_ID } from '../../../../contrib/terminal/common/terminal.js';
 import { IViewsService } from '../../../views/common/viewsService.js';
 import { TestWorkspaceService } from '../../../configuration/test/common/testServices.js';
@@ -213,7 +213,7 @@ function createServices(owner: DisposableStore): { services: InstantiationServic
 		}],
 		[IViewsService, { openView: async (id: string) => { reveals.push(id); return null; } } as IViewsService],
 	)));
-	registerTestTerminalLifecycleServices(services);
+	registerTestTerminalCreationServices(services);
 	const terminals = owner.add(services.createInstance(TerminalService));
 	services.registerInstance(ITerminalService, terminals);
 	return { services, terminals, reveals };

@@ -1,7 +1,7 @@
 import { Disposable } from '../../../../../base/common/lifecycle.js';
 import { localize } from '../../../../../nls.js';
 import { AccessibleViewProviderId, AccessibleViewType, AccessibilityVerbositySettingId, type IAccessibleViewContentProvider } from '../../../../../platform/accessibility/browser/accessibleView.js';
-import type { ITerminalInstance } from '../../../../services/terminal/browser/terminal.js';
+import type { ITerminalInstance } from '../../../terminal/browser/terminal.js';
 
 export class TerminalAccessibilityHelpProvider extends Disposable implements IAccessibleViewContentProvider {
 	public readonly id = AccessibleViewProviderId.TerminalHelp;
@@ -26,7 +26,7 @@ export class TerminalAccessibilityHelpProvider extends Disposable implements IAc
 			localize('terminal.accessibility.editor', 'Terminal: Move Terminal into Editor Area moves the current terminal into an editor tab while retaining its process and output. Move Terminal into Panel returns it to the panel. Closing a terminal editor tab closes its process.'),
 			localize('terminal.accessibility.groups', 'Terminal: Split Terminal creates another shell beside the current terminal. Focus Next Pane and Focus Previous Pane move focus between the split terminals. The instance list keeps split terminals together and announces each pane’s position in its group. Their resize separator supports arrow keys. Unsplit Terminal moves the current pane to its own group while keeping its process and output.'),
 			localize('terminal.accessibility.tabsMenu', 'In the terminal instance list, arrow keys move focus and Enter activates a terminal. Shift+F10 opens the focused terminal menu. Its focus, clear, relaunch and kill actions apply to that terminal even if the active terminal changes. Escape closes the menu and restores focus.'),
-			localize('terminal.accessibility.titleToolbar', 'The terminal title opens its instance menu. Alt+click splits it; middle-click closes it. The New Terminal dropdown offers profiles, split actions and Select Default Profile. Use arrow keys to navigate the toolbar and menus; Escape closes a menu and restores focus.'),
+			localize('terminal.accessibility.titleToolbar', 'The terminal title opens its instance menu. Alt+click splits it; middle-click closes it. The New Terminal dropdown offers profiles, a new terminal window, split actions, terminal settings, Select Default Profile, Run Task and Configure Tasks. Task commands use quick pickers; their output stays in Terminal. Use arrow keys to navigate the toolbar and menus; Escape closes a menu and restores focus.'),
 			localize('terminal.accessibility.profiles', 'New Terminal with Profile opens a searchable list of discovered, configured and extension profiles. Use arrow keys and Enter to choose; Escape cancels. Select Default Profile applies to future terminals. Relaunch keeps the original shell configuration. Extension profiles activate their provider when selected.'),
 			localize('terminal.accessibility.taskGroups', 'Tasks with the same presentation.group open in split panes. Focus Next Pane and Focus Previous Pane navigate them. Manage Automatic Tasks enables or disables folder-open tasks in trusted workspaces; automatic tasks are disabled by default.'),
 			localize('terminal.accessibility.reuse', 'A completed task waits for a character key or Enter to close its terminal. Workbench shortcuts remain available. presentation.showReuseMessage controls the reuse notice. A new task terminal displays a close notice.'),

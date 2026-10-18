@@ -21,7 +21,7 @@ import { IMarkerService, MarkerSeverity } from '../../../../../platform/markers/
 import { MarkerService } from '../../../../../platform/markers/common/markerService.js';
 import { ICodeEditorService } from '../../../../../editor/browser/services/codeEditorService.js';
 import type { ICodeEditor } from '../../../../../editor/browser/editorBrowser.js';
-import { ITerminalService, type ITerminalInstance, type ITerminalCommandStatusEvent } from '../../../../services/terminal/browser/terminal.js';
+import { ITerminalService, type ITerminalInstance, type ITerminalCommandStatusEvent } from '../../../terminal/browser/terminal.js';
 import { ITaskService } from '../../../tasks/common/taskService.js';
 import { type ITaskRun } from '../../../tasks/common/tasks.js';
 

@@ -1,4 +1,5 @@
 import { Emitter, type Event } from '../../../../base/common/event.js';
+import { CancellationError } from '../../../../base/common/errors.js';
 import { Disposable, dispose, toDisposable } from '../../../../base/common/lifecycle.js';
 import { registerSingleton, InstantiationType } from '../../../../platform/instantiation/common/extensions.js';
 import { createServiceIdentifier } from '../../../../platform/instantiation/common/instantiation.js';
@@ -30,6 +31,7 @@ export interface IEmbedderTerminalPty {
 
 class EmbedderTerminalService extends Disposable implements IEmbedderTerminalService {
 	private readonly pending: IEmbedderTerminalOptions[] = [];
+	private readonly unclaimed = new Set<IEmbedderTerminalOptions>();
 	private readonly created = this._register(new Emitter<IShellLaunchConfig>({
 		onDidAddFirstListener: () => queueMicrotask(() => {
 			if (this.isDisposed || !this.created.hasListeners()) {
@@ -59,16 +61,25 @@ class EmbedderTerminalService extends Disposable implements IEmbedderTerminalSer
 	}
 
 	private publish(options: IEmbedderTerminalOptions): void {
+		// Publishing a request does not transfer ownership until an instance has
+		// acquired its process. Window shutdown may happen while creation awaits.
+		this.unclaimed.add(options);
 		this.created.fire({
 			name: options.name,
 			isFeatureTerminal: true,
-			customPtyImplementation: terminalId => new EmbedderTerminalProcess(terminalId, options.pty),
+			customPtyImplementation: terminalId => {
+				if (this.isDisposed) throw new CancellationError();
+				this.unclaimed.delete(options);
+				return new EmbedderTerminalProcess(terminalId, options.pty);
+			},
 		});
 	}
 
 	protected override disposeCore(): void {
+		const requests = [...this.pending.splice(0), ...this.unclaimed];
+		this.unclaimed.clear();
 		try {
-			dispose(this.pending.splice(0).map(options => toDisposable(() => options.pty.close())));
+			dispose(requests.map(options => toDisposable(() => options.pty.close())));
 		} finally {
 			super.disposeCore();
 		}

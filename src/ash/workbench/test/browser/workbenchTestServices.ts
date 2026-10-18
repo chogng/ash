@@ -1,3 +1,4 @@
+import { emptyEditorServiceState } from '../common/testEditorService.js';
 import { ICommandService } from '../../../platform/commands/common/commands.js';
 import { CommandService } from '../../services/commands/common/commandService.js';
 import { IProgressService } from '../../../platform/progress/common/progress.js';
@@ -45,6 +46,14 @@ import { BrowserFileSearchService } from '../../../platform/search/browser/brows
 import { ISecretStorageService, BaseSecretStorageService } from '../../../platform/secrets/common/secrets.js';
 import { IDialogService } from '../../../platform/dialogs/common/dialogs.js';
 import { DialogService } from '../../services/dialogs/common/dialogService.js';
+import { InstantiationType } from '../../../platform/instantiation/common/extensions.js';
+import { ITerminalProfileService, ITerminalProfileResolverService } from '../../contrib/terminal/common/terminal.js';
+import { ITerminalGroupService, ITerminalEditorService } from '../../contrib/terminal/browser/terminal.js';
+import { TerminalProfileService } from '../../contrib/terminal/browser/terminalProfileService.js';
+import { BrowserTerminalProfileResolverService } from '../../contrib/terminal/browser/terminalProfileResolverService.js';
+import { TerminalGroupService } from '../../contrib/terminal/browser/terminalGroupService.js';
+import { TerminalEditorService } from '../../contrib/terminal/browser/terminalEditorService.js';
+import { IEditorService } from '../../services/editor/common/editorService.js';
 
 /** Explicit window dependencies for fixtures that construct the real terminal owner. */
 export function registerTestTerminalLifecycleServices(services: InstantiationService): void {
@@ -52,6 +61,20 @@ export function registerTestTerminalLifecycleServices(services: InstantiationSer
 	if (!services.has(IDialogService)) services.registerSingleton(IDialogService, () => services.createInstance(DialogService));
 	if (!services.has(ISecretStorageService)) services.registerSingleton(ISecretStorageService, () => new BaseSecretStorageService());
 	if (!services.has(IStorageService)) services.registerSingleton(IStorageService, () => new TerminalTestStorage());
+
+}
+
+/** Explicit dependencies for fixtures that instantiate the real terminal creation owner. */
+export function registerTestTerminalCreationServices(services: InstantiationService): void {
+	registerTestTerminalLifecycleServices(services);
+	if (!services.has(ICommandService)) services.registerSingleton(ICommandService, () => new CommandService(services));
+	if (!services.has(IEditorService)) services.registerInstance(IEditorService, { ...emptyEditorServiceState, openEditor: async () => { }, focusActiveEditor() { }, save: async () => ({ success: true, editors: [] }), saveAll: async () => ({ success: true, editors: [] }) });
+	// Low-level lifecycle fixtures do not open UI. Keep the real creation services
+	// delayed, so scenarios that exercise them must supply their actual dependencies.
+	if (!services.has(ITerminalProfileService)) services.registerSingleton(ITerminalProfileService, () => services.createInstance(TerminalProfileService), { instantiation: InstantiationType.Delayed });
+	if (!services.has(ITerminalProfileResolverService)) services.registerSingleton(ITerminalProfileResolverService, () => services.createInstance(BrowserTerminalProfileResolverService), { instantiation: InstantiationType.Delayed });
+	if (!services.has(ITerminalGroupService)) services.registerSingleton(ITerminalGroupService, () => services.createInstance(TerminalGroupService), { instantiation: InstantiationType.Delayed });
+	if (!services.has(ITerminalEditorService)) services.registerSingleton(ITerminalEditorService, () => services.createInstance(TerminalEditorService), { instantiation: InstantiationType.Delayed });
 }
 
 class TerminalTestStorage extends BrowserStorageService {

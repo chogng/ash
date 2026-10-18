@@ -16,7 +16,7 @@ import { IMenuService } from '../../../../../platform/actions/common/actions.js'
 import { MenuService } from '../../../../../platform/actions/common/menuService.js';
 import { ICommandService } from '../../../../../platform/commands/common/commands.js';
 import { CommandService } from '../../../../services/commands/common/commandService.js';
-import { ITerminalService, ITerminalGroupService, type ITerminalInstance } from '../../../../services/terminal/browser/terminal.js';
+import { ITerminalService, ITerminalGroupService, type ITerminalInstance } from '../../browser/terminal.js';
 import { TerminalGroupService } from '../../browser/terminalGroupService.js';
 import { IViewsService } from '../../../../services/views/common/viewsService.js';
 import { Emitter, Event } from '../../../../../base/common/event.js';
@@ -72,7 +72,7 @@ test("Terminal instance list sash resizes the right column within its bounds", (
 	const terminals: ITerminalService = {
 		...Disposable.None, instances, activeInstance: instances[0], onDidCreateInstance: created.event,
 		onDidDisposeInstance: disposed.event, onDidChangeInstances: changed.event, onDidChangeActiveInstance: Event.None,
-		getProfiles: async () => [], createTerminal: async () => { throw new Error('Unexpected creation'); },
+		createTerminal: async () => { throw new Error('Unexpected creation'); },
 		relaunchTerminal: async () => { }, setActiveInstance() { }, moveTerminal() { }, whenConnected: Promise.resolve(), safeDisposeTerminal: async () => { }, closeTerminal: async () => { },
 	};
 	using services = new InstantiationService();

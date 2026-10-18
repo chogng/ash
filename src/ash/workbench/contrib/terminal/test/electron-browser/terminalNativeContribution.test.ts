@@ -1,4 +1,5 @@
-import { registerTestTerminalLifecycleServices } from '../../../../test/browser/workbenchTestServices.js';
+import { InstantiationType } from '../../../../../platform/instantiation/common/extensions.js';
+import { registerTestTerminalCreationServices } from '../../../../test/browser/workbenchTestServices.js';
 import assert from 'node:assert/strict';
 import { JSDOM } from 'jsdom';
 import { suite, test } from 'mocha';
@@ -16,7 +17,7 @@ import { IWorkspaceContextService } from '../../../../../platform/workspace/comm
 import { AbstractLifecycleService } from '../../../../services/lifecycle/common/lifecycleService.js';
 import { ILifecycleService, StartupKind } from '../../../../services/lifecycle/common/lifecycle.js';
 import { BrowserStorageService } from '../../../../services/storage/browser/storageService.js';
-import { ITerminalService, ITerminalGroupService } from '../../../../services/terminal/browser/terminal.js';
+import { ITerminalService, ITerminalGroupService } from '../../browser/terminal.js';
 import { IViewsService } from '../../../../services/views/common/viewsService.js';
 import { TerminalGroupService } from '../../browser/terminalGroupService.js';
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
@@ -57,11 +58,11 @@ function fixture(owner: DisposableStore, release: (id: string) => Promise<void>,
 	} as unknown as ITerminalProcessService);
 	const lifecycle = owner.add(new WindowLifecycle(StartupKind.NewWindow, log, storage));
 	services.registerInstance(ILifecycleService, lifecycle);
-	registerTestTerminalLifecycleServices(services);
+	services.registerSingleton(ITerminalGroupService, () => services.createInstance(TerminalGroupService), { instantiation: InstantiationType.Delayed });
+	registerTestTerminalCreationServices(services);
 	const terminals = owner.add(services.createInstance(TerminalService));
 	services.registerInstance(ITerminalService, terminals);
 	services.registerInstance(IViewsService, { openView: async () => null } as unknown as IViewsService);
-	services.registerInstance(ITerminalGroupService, owner.add(services.createInstance(TerminalGroupService)));
 	const contribution = owner.add(services.createInstance(TerminalNativeContribution));
 	const create = () => terminals.createTerminal({ dimensions: { cols: 80, rows: 24 }, profile: { type: 'default' }, deferStart: true });
 	return { terminals, lifecycle, contribution, create, closes, errors, services, writes };

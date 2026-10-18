@@ -61,8 +61,8 @@ import './contrib/codeActions/browser/codeActions.contribution.js';
 import './contrib/callHierarchy/browser/callHierarchy.contribution.js';
 import './contrib/typeHierarchy/browser/typeHierarchy.contribution.js';
 import './contrib/academic/browser/academicEditor.contribution.js';
-// Debug, testing and the extension host need tasks even when no Tasks view is loaded.
-import { registerTasksView } from './contrib/tasks/browser/tasks.contribution.js';
+// Task commands, Debug, Testing and the extension host share one task service.
+import './contrib/tasks/browser/task.contribution.js';
 import './contrib/debug/browser/debug.contribution.js';
 import './contrib/testing/browser/testing.contribution.js';
 import './api/browser/extensionHost.contribution.js';
@@ -74,7 +74,6 @@ import { AppServerSyntaxProviders } from './services/language/browser/appServerS
 import { IRendererHostService } from '../platform/renderer/common/rendererHost.js';
 import { Disposable } from '../base/common/lifecycle.js';
 
-registerTasksView();
 registerCollaborationViews();
 registerCallView();
 

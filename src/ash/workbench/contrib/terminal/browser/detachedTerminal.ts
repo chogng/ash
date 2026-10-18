@@ -2,7 +2,7 @@ import { localize } from '../../../../nls.js';
 import { Disposable } from '../../../../base/common/lifecycle.js';
 import { Event } from '../../../../base/common/event.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
-import type { ITerminalScreenHost } from '../../../services/terminal/browser/terminal.js';
+import type { ITerminalScreenHost } from './terminal.js';
 import { XtermTerminal } from './xterm/xtermTerminal.js';
 
 /** A passive screen with no process, terminal membership, or stdin destination. */

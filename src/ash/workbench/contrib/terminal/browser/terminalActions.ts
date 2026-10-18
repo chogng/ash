@@ -1,3 +1,6 @@
+import { getWindow } from '../../../../base/browser/dom.js';
+import { IEditorPartsService } from '../../../browser/parts/editor/editorParts.js';
+import { IPreferencesService } from '../../../services/preferences/common/preferences.js';
 import { TerminalChatCommandId } from '../terminalContribChatExports.js';
 import { TerminalTabsChatEntry } from './terminalTabsChatEntry.js';
 import { TerminalIconPicker } from './terminalIconPicker.js';
@@ -16,10 +19,10 @@ import { AppServerAvailableContext } from '../../../common/contextkeys.js';
 import { IViewsService } from '../../../services/views/common/viewsService.js';
 import { TerminalCommandId, TERMINAL_VIEW_ID } from '../common/terminal.js';
 import { TerminalContextKeys, TerminalHasActiveInstanceContext } from '../common/terminalContextKey.js';
-import { ITerminalProfileService } from '../../../services/terminal/common/terminal.js';
+import { ITerminalProfileService } from '../common/terminal.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { TerminalProfileQuickpick } from './terminalProfileQuickpick.js';
-import { ITerminalService, ITerminalGroupService, ITerminalEditorService, ITerminalEditingService, type ITerminalInstance } from '../../../services/terminal/browser/terminal.js';
+import { ITerminalService, ITerminalGroupService, ITerminalEditorService, ITerminalEditingService, type ITerminalInstance } from './terminal.js';
 import type { TerminalViewPane } from './terminalView.js';
 import { MarshalledId } from '../../../../base/common/marshallingIds.js';
 import { InstanceContext } from './terminalContextMenu.js';
@@ -51,31 +54,18 @@ export function registerTerminalActions(): void {
 			if (!text) return;
 
 			const terminals = accessor.get(ITerminalService);
-			const views = accessor.get(IViewsService);
+			const groups = accessor.get(ITerminalGroupService);
+			const terminalEditors = accessor.get(ITerminalEditorService);
 			let instance = terminals.activeInstance;
-			if (!instance || instance.isReadOnly || instance.state === 'exited') {
-				const previous = instance;
-				const existing = new Set(terminals.instances);
-				const view = await views.openView<TerminalViewPane>(TERMINAL_VIEW_ID, false);
-				if (!view) return;
-				const active = terminals.activeInstance;
-				if (active !== previous) {
-					// Opening the panel may already have created its first terminal. A switch
-					// to an existing instance instead retires this request.
-					if (!active || existing.has(active)) return;
-					instance = active;
-				} else {
-					instance = await view.createTerminal(undefined, false);
-				}
-			}
+			if (!instance || instance.isReadOnly || instance.state === 'exited') instance = await terminals.createTerminal();
 			if (!instance || !terminals.instances.includes(instance) || terminals.activeInstance !== instance
 				|| instance.isReadOnly || instance.state !== 'running') return;
 			await instance.sendText(text, true, true);
 			if (!terminals.instances.includes(instance) || terminals.activeInstance !== instance) return;
 			if (instance.target === TerminalLocation.Editor) {
-				await accessor.get(ITerminalEditorService).openEditor(instance, { preserveFocus: true });
+				await terminalEditors.openEditor(instance, { preserveFocus: true });
 			} else {
-				await accessor.get(ITerminalGroupService).showPanel(false);
+				await groups.showPanel(false);
 			}
 		}
 	});
@@ -164,7 +154,66 @@ export function registerTerminalActions(): void {
 		}
 	});
 
-	CommandsRegistry.register(TerminalCommandId.New, async accessor => { await terminalView(accessor).createTerminal(); });
+	registerAction2(class NewTerminalAction extends Action2 {
+		constructor() {
+			super({
+				id: TerminalCommandId.New, title: localize2('terminal.title.new', 'New Terminal'), f1: true,
+				precondition: AppServerAvailableContext.isEqualTo(true),
+				keybinding: {
+					primary: KeyMod.CtrlCmd | KeyMod.Shift | KeyCode.Backquote,
+					mac: { primary: KeyMod.WinCtrl | KeyMod.Shift | KeyCode.Backquote },
+					weight: KeybindingWeight.WorkbenchContrib,
+				},
+			});
+		}
+		override async run(accessor: ServicesAccessor): Promise<void> {
+			const terminals = accessor.get(ITerminalService);
+			const groups = accessor.get(ITerminalGroupService);
+			const instance = await terminals.createTerminal();
+			terminals.setActiveInstance(instance);
+			await groups.showPanel(true);
+		}
+	});
+	registerAction2(class NewTerminalWindowAction extends Action2 {
+		constructor() {
+			super({
+				id: TerminalCommandId.NewInNewWindow, title: localize2('terminal.newInNewWindow', 'New Terminal Window'), f1: true,
+				precondition: AppServerAvailableContext.isEqualTo(true),
+				keybinding: {
+					primary: KeyMod.CtrlCmd | KeyMod.Shift | KeyMod.Alt | KeyCode.Backquote,
+					mac: { primary: KeyMod.WinCtrl | KeyMod.Shift | KeyMod.Alt | KeyCode.Backquote },
+					weight: KeybindingWeight.WorkbenchContrib,
+				},
+			});
+		}
+		override async run(accessor: ServicesAccessor): Promise<void> {
+			const terminals = accessor.get(ITerminalService);
+			const parts = accessor.get(IEditorPartsService);
+			// Acquire the popup during the user gesture, then resolve its terminal.
+			const part = await parts.createAuxiliaryEditorPart();
+			let instance: ITerminalInstance | undefined;
+			try {
+				instance = await terminals.createTerminal({ location: { viewColumn: part.activeGroup.id } });
+				getWindow(part.domNode).focus();
+				part.activeGroup.focus();
+			} catch (error) {
+				try {
+					if (instance && terminals.instances.includes(instance)) await terminals.closeTerminal(instance);
+				} finally {
+					await parts.closeAuxiliaryEditorPart(part);
+				}
+				throw error;
+			}
+		}
+	});
+	registerAction2(class ConfigureTerminalSettingsAction extends Action2 {
+		constructor() {
+			super({ id: TerminalCommandId.ConfigureTerminalSettings, title: localize2('terminal.configureSettings', 'Configure Terminal Settings'), f1: true });
+		}
+		override run(accessor: ServicesAccessor): Promise<void> {
+			return accessor.get(IPreferencesService).openSettings({ jsonEditor: false, query: '@id:terminal.integrated.*' });
+		}
+	});
 	registerAction2(class SplitTerminalAction extends Action2 {
 		constructor() {
 			super({
@@ -180,11 +229,11 @@ export function registerTerminalActions(): void {
 		override async run(accessor: ServicesAccessor, context?: unknown, profileId?: unknown): Promise<void> {
 			const parent = resolveInstance(accessor, context);
 			if (!parent || parent.target === TerminalLocation.Editor || parent.state !== 'running' || parent.isReadOnly || parent.shellLaunchConfig?.customPtyImplementation) return;
-			if (profileId !== undefined && (typeof profileId !== 'string' || !accessor.get(ITerminalProfileService).availableProfiles.some(profile => profile.profileId === profileId))) {
-				throw new TypeError(localize('terminal.profile.unknown', 'Unknown terminal profile: {0}', String(profileId)));
-			}
-			await terminalView(accessor).createTerminal(typeof profileId === 'string' ? profileId : parent.profile.profileId, true, parent);
-			accessor.get(ITerminalService).activeInstance?.xterm?.focus();
+			const terminals = accessor.get(ITerminalService);
+			const profiles = accessor.get(ITerminalProfileService);
+			const config = profileId === undefined ? parent.shellLaunchConfig : resolveProfile(profiles, profileId, parent.dirId);
+			const created = await terminals.createTerminal({ config, location: { parentTerminal: parent } });
+			created?.xterm?.focus();
 		}
 	});
 	for (const [id, title, direction, key] of [
@@ -221,15 +270,18 @@ export function registerTerminalActions(): void {
 			super({ id: TerminalCommandId.NewWithProfile, title: localize2('terminal.profile.newCommand', 'Terminal: Create New Terminal With Profile'), f1: true, precondition: AppServerAvailableContext.isEqualTo(true) });
 		}
 		override async run(accessor: ServicesAccessor, profileId?: unknown): Promise<void> {
-			const view = terminalView(accessor);
+			const terminals = accessor.get(ITerminalService);
+			const profiles = accessor.get(ITerminalProfileService);
+			const groups = accessor.get(ITerminalGroupService);
 			if (profileId === undefined) {
-				await view.createTerminal({ type: 'pick' });
-				return;
+				using picker = accessor.get(IInstantiationService).createInstance(TerminalProfileQuickpick);
+				profileId = await picker.showAndGetResult('createInstance');
+				if (profileId === undefined) return;
 			}
-			if (typeof profileId !== 'string') {
-				throw new TypeError(localize('terminal.profile.unknown', 'Unknown terminal profile: {0}', String(profileId)));
-			}
-			await view.createTerminal(profileId);
+			const config = resolveProfile(profiles, profileId);
+			const instance = await terminals.createTerminal({ config });
+			terminals.setActiveInstance(instance);
+			await groups.showPanel(true);
 		}
 	});
 	registerAction2(class SelectDefaultProfileAction extends Action2 {
@@ -325,4 +377,11 @@ function terminalView(accessor: ServicesAccessor): TerminalViewPane {
 	const view = accessor.get(IViewsService).getViewWithId<TerminalViewPane>(TERMINAL_VIEW_ID);
 	if (!view) { throw new Error(localize('terminal.view.unavailable', 'The terminal view is unavailable')); }
 	return view;
+}
+
+function resolveProfile(profiles: ITerminalProfileService, profileId: unknown, dirId?: string) {
+	const profile = profiles.getAvailableProfiles(dirId).find(profile => profile.profileId === profileId)
+		?? profiles.contributedProfiles.find(profile => `extension:${profile.extensionIdentifier}/${profile.id}` === profileId);
+	if (!profile) throw new TypeError(localize('terminal.profile.unknown', 'Unknown terminal profile: {0}', String(profileId)));
+	return profile;
 }

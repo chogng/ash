@@ -9,6 +9,18 @@ import { TerminalCreatingContext, TerminalHasActiveInstanceContext, TerminalActi
 
 /** Registers terminal menus once for the renderer; enablement comes from each window's context. */
 export function setupTerminalMenus(): void {
+	for (const [id, title, group, order] of [
+		[TerminalCommandId.ConfigureTerminalSettings, localize2('terminal.configureSettings', 'Configure Terminal Settings'), '3_configure', 1],
+		[TerminalCommandId.SelectDefaultProfile, localize2('terminal.title.selectDefaultProfile', 'Select Default Profile'), '3_configure', 2],
+		['workbench.action.tasks.runTask', localize2('terminal.runTask', 'Run Task...'), '4_tasks', 1],
+		['workbench.action.tasks.configureTaskRunner', localize2('terminal.configureTasks', 'Configure Tasks...'), '4_tasks', 2],
+	] as const) {
+		MenusRegistry.appendMenuItem(MenuId.TerminalNewDropdownContext, {
+			command: { id, title, precondition: id !== TerminalCommandId.ConfigureTerminalSettings ? AppServerAvailableContext.isEqualTo(true) : undefined },
+			group, order,
+		});
+	}
+
 	for (const item of [
 		{ id: TerminalCommandId.Rename, title: localize2('terminal.rename.menu', 'Rename Terminal') },
 		{ id: TerminalCommandId.ChangeIcon, title: localize2('terminal.icon.title', 'Change Terminal Icon') },

@@ -1,6 +1,8 @@
 # Terminal services 边界
 
-此目录拥有跨领域 Terminal 服务契约：[common/terminal.ts](common/terminal.ts) 定义 profile/provider 与 resolver 端口，[browser/terminal.ts](browser/terminal.ts) 定义窗口实例、创建参数、事件与 `IXtermTerminal` 浏览器屏幕端口。Extension Host、Tasks、Debug、Agent 和终端功能消费同一份服务标识与契约；契约不导入 contribution 或具体 xterm 实现。服务实现、安装注册、实例列表和屏幕仍由 [Terminal contribution](../../contrib/terminal/README.md) 管理，Rust PTY 继续经平台进程服务访问。
+此目录保留宿主终端接入与跨宿主持久化数据。标准 Workbench 终端契约已归回 [contrib/terminal/browser/terminal.ts](../../contrib/terminal/browser/terminal.ts)（实例、创建意图、组、编辑器和屏幕）及 [contrib/terminal/common/terminal.ts](../../contrib/terminal/common/terminal.ts)（profile、provider、resolver 和状态）。Extension Host、Tasks、Debug、Agent 使用这些唯一契约；平台进程契约不反向依赖 Workbench。
+
+[common/terminal.ts](common/terminal.ts) 只定义 Ash 的不可变 reload checkpoint、凭据和屏幕快照数据，不拥有活跃实例、profile 目录或服务标识。实例与屏幕的状态 owner 仍位于 [Terminal contribution](../../contrib/terminal/README.md)。
 
 [embedderTerminalService.ts](common/embedderTerminalService.ts) 拥有宿主输出 PTY 的创建通知：宿主通过 `IEmbedderTerminalService.createTerminal` 发起创建；contribution 尚未订阅时保留请求，窗口释放时关闭未接入的 PTY。
 

@@ -1,16 +1,17 @@
 import { TerminalLocation } from '../../../../platform/terminal/common/terminal.js';
 import { Emitter } from '../../../../base/common/event.js';
-import { Disposable, DisposableMap, DisposableStore } from '../../../../base/common/lifecycle.js';
+import { Disposable, DisposableMap, DisposableStore, toDisposable } from '../../../../base/common/lifecycle.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { IViewsService } from '../../../services/views/common/viewsService.js';
-import { ITerminalService, type ITerminalGroup, type ITerminalGroupService, type ITerminalInstance } from '../../../services/terminal/browser/terminal.js';
+import { ITerminalService, type ITerminalGroup, type ITerminalGroupService, type ITerminalInstance } from './terminal.js';
 import { TERMINAL_VIEW_ID } from '../common/terminal.js';
 import { TerminalGroup } from './terminalGroup.js';
 
-/** Owns panel membership, deriving active selection from the window's TerminalService. */
+/** Owns panel membership and retains panel selection while an editor terminal has focus. */
 export class TerminalGroupService extends Disposable implements ITerminalGroupService {
 	private readonly instanceLifetimes = this._register(new DisposableMap<ITerminalInstance, DisposableStore>());
 	private readonly groupLifetimes = this._register(new DisposableMap<ITerminalGroup, DisposableStore>());
+	private readonly recentGroups: ITerminalGroup[] = [];
 	private readonly changed = this._register(new Emitter<void>());
 	readonly onDidChangeGroups = this.changed.event;
 
@@ -20,7 +21,10 @@ export class TerminalGroupService extends Disposable implements ITerminalGroupSe
 		@IViewsService private readonly views: IViewsService,
 	) {
 		super();
+		this._register(toDisposable(() => { this.recentGroups.length = 0; }));
 		for (const instance of terminals.instances) this.observeInstance(instance);
+		this.rememberActiveGroup();
+		this._register(terminals.onDidChangeActiveInstance(() => this.rememberActiveGroup()));
 		this._register(terminals.onDidCreateInstance(instance => this.observeInstance(instance)));
 		this._register(terminals.onDidDisposeInstance(instance => {
 			this.instanceLifetimes.deleteAndDispose(instance);
@@ -42,7 +46,8 @@ export class TerminalGroupService extends Disposable implements ITerminalGroupSe
 
 	get groups(): readonly ITerminalGroup[] { return [...this.groupLifetimes.keys()]; }
 	get activeGroup(): ITerminalGroup | undefined {
-		return this.terminals.activeInstance ? this.getGroupForInstance(this.terminals.activeInstance) : undefined;
+		const active = this.terminals.activeInstance;
+		return (active && this.getGroupForInstance(active)) ?? this.recentGroups[0] ?? this.groups[0];
 	}
 
 	createGroup(instance: ITerminalInstance): ITerminalGroup {
@@ -53,11 +58,25 @@ export class TerminalGroupService extends Disposable implements ITerminalGroupSe
 		const group = lifetime.add(this.instantiation.createInstance(TerminalGroup, instance));
 		this.groupLifetimes.set(group, lifetime);
 		lifetime.add(group.onInstancesChanged(() => {
-			if (!group.terminalInstances.length) this.groupLifetimes.deleteAndDispose(group);
+			if (!group.terminalInstances.length) {
+				const index = this.recentGroups.indexOf(group);
+				if (index >= 0) this.recentGroups.splice(index, 1);
+				this.groupLifetimes.deleteAndDispose(group);
+			}
+			this.rememberActiveGroup();
 			this.changed.fire();
 		}));
 		this.changed.fire();
 		return group;
+	}
+
+	private rememberActiveGroup(): void {
+		const active = this.terminals.activeInstance;
+		const group = active && this.getGroupForInstance(active);
+		if (!group) return;
+		const index = this.recentGroups.indexOf(group);
+		if (index >= 0) this.recentGroups.splice(index, 1);
+		this.recentGroups.unshift(group);
 	}
 
 	getGroupForInstance(instance: ITerminalInstance): ITerminalGroup | undefined {

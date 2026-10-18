@@ -16,7 +16,7 @@ import { IQuickInputService, type IQuickPickItem } from '../../../../../platform
 import { IWorkspaceContextService, type IWorkspaceFolder } from '../../../../../platform/workspace/common/workspace.js';
 import { TerminalCapability } from '../../../../../platform/terminal/common/capabilities/capabilities.js';
 import { IEditorService } from '../../../../services/editor/common/editorService.js';
-import type { ITerminalContribution, ITerminalInstance, IXtermTerminal } from '../../../../services/terminal/browser/terminal.js';
+import type { ITerminalContribution, ITerminalInstance, IXtermTerminal } from '../../../terminal/browser/terminal.js';
 import type { ITerminalContributionContext } from '../../../terminal/browser/terminalExtensions.js';
 import { ITerminalConfigurationService } from '../../../terminal/browser/terminal.js';
 import { TerminalHover } from '../../../terminal/browser/widgets/terminalHoverWidget.js';

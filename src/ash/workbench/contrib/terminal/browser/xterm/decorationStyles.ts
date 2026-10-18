@@ -1,5 +1,5 @@
 import { localize } from '../../../../../nls.js';
-import type { ITerminalCommandStatusEvent } from '../../../../services/terminal/browser/terminal.js';
+import type { ITerminalCommandStatusEvent } from '../terminal.js';
 import type { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
 
 /** Match VS Code's decoration box; the circle artwork occupies half its width. */

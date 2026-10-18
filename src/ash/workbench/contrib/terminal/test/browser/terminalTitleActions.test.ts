@@ -9,13 +9,13 @@ import { NullLocalTranscriptionService } from '../../../../services/localTranscr
 import { ILogService, NullLoggerService } from '../../../../../platform/log/common/log.js';
 import { IEnvironmentVariableService } from '../../common/environmentVariable.js';
 import { EnvironmentVariableService } from '../../common/environmentVariableService.js';
-import { ITerminalGroupService } from '../../../../services/terminal/browser/terminal.js';
+import { ITerminalGroupService } from '../../browser/terminal.js';
 import { TerminalGroupService } from '../../browser/terminalGroupService.js';
 import { IViewsService } from '../../../../services/views/common/viewsService.js';
 import { setIconResolver } from '../../../../../base/browser/ui/lxicons/lxicon.js';
 import { getIconDefinition } from '../../../../../platform/theme/common/iconRegistry.js';
 import { IExtensionService } from '../../../../services/extensions/common/extensionService.js';
-import { ITerminalContributionService, ITerminalProfileResolverService, ITerminalProfileService } from '../../../../services/terminal/common/terminal.js';
+import { ITerminalContributionService, ITerminalProfileResolverService, ITerminalProfileService } from '../../common/terminal.js';
 
 import { TerminalProfileService } from '../../browser/terminalProfileService.js';
 import { IEditorService } from '../../../../services/editor/common/editorService.js';
@@ -33,7 +33,7 @@ import { JSDOM } from "jsdom";
 import type { IAction } from "../../../../../base/common/actions.js";
 import { Event } from "../../../../../base/common/event.js";
 import { IContextMenuService } from "../../../../../platform/contextview/browser/contextView.js";
-import type { ITerminalInstance } from "../../../../services/terminal/browser/terminal.js";
+import type { ITerminalInstance } from "../../browser/terminal.js";
 import { AppServerAvailableContext } from '../../../../common/contextkeys.js';
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
 import { TestConfigurationService } from '../../../../services/configuration/test/common/testServices.js';
@@ -106,6 +106,7 @@ test("Terminal profile menu launches the selected shell profile", async () => {
 	let focusCount = 0;
 	let splitCount = 0;
 	let clearCount = 0;
+	const dropdownCommands: string[] = [];
 	using contextKeyService = new ContextKeyService();
 	const appServerAvailable = AppServerAvailableContext.bindTo(contextKeyService);
 	appServerAvailable.set(true);
@@ -113,6 +114,7 @@ test("Terminal profile menu launches the selected shell profile", async () => {
 	const registry = new CommandRegistry();
 	using registration = registry.registerMany([
 		{ id: TerminalCommandId.New, handler: () => { createdProfiles.push(undefined); } },
+		...['workbench.action.terminal.newInNewWindow', 'workbench.action.terminal.openSettings', 'workbench.action.tasks.runTask', 'workbench.action.tasks.configureTaskRunner'].map(id => ({ id, handler: () => { dropdownCommands.push(id); } })),
 		{ id: TerminalCommandId.NewWithProfile, handler: (_accessor, profileId) => { createdProfiles.push(String(profileId)); } },
 		{ id: TerminalCommandId.Focus, handler: () => focusCount++ },
 		{ id: TerminalCommandId.Relaunch, handler: () => { } },
@@ -243,6 +245,16 @@ test("Terminal profile menu launches the selected shell profile", async () => {
 	assert.equal(currentProfile.getAttribute("aria-expanded"), "true");
 	assert.equal(shownProfileAnchor, currentProfile);
 	assert.equal(ownerDocument.querySelector(".ash-quick-pick"), null);
+	assert.deepEqual(shownProfileActions.map(action => action.id), [
+		TerminalCommandId.New, TerminalCommandId.NewInNewWindow, TerminalCommandId.Split, 'ash.actions.separator',
+		`${TerminalCommandId.NewWithProfile}.cmd`, `${TerminalCommandId.NewWithProfile}.pwsh`, 'ash.actions.separator', 'split.profile', 'ash.actions.separator',
+		TerminalCommandId.ConfigureTerminalSettings, TerminalCommandId.SelectDefaultProfile, 'ash.actions.separator',
+		'workbench.action.tasks.runTask', 'workbench.action.tasks.configureTaskRunner',
+	]);
+	for (const id of [TerminalCommandId.NewInNewWindow, TerminalCommandId.ConfigureTerminalSettings, 'workbench.action.tasks.runTask', 'workbench.action.tasks.configureTaskRunner']) {
+		await shownProfileActions.find(action => action.id === id)!.run();
+	}
+	assert.deepEqual(dropdownCommands, [TerminalCommandId.NewInNewWindow, TerminalCommandId.ConfigureTerminalSettings, 'workbench.action.tasks.runTask', 'workbench.action.tasks.configureTaskRunner']);
 	const commandPrompt = shownProfileActions.find((action) => action.label.includes("Command Prompt"));
 	const powerShell = shownProfileActions.find((action) => action.label.includes("PowerShell"));
 	assert.ok(commandPrompt);
@@ -259,7 +271,7 @@ test("Terminal profile menu launches the selected shell profile", async () => {
 test('Terminal View lends its actual title toolbar to Panel and retains it through switching', async () => {
 	const { Disposable, DisposableStore, toDisposable } = await import('../../../../../base/common/lifecycle.js');
 	const { registerTestComponentServices } = await import('../../../../test/common/testEditorServices.js');
-	const { ITerminalService } = await import('../../../../services/terminal/browser/terminal.js');
+	const { ITerminalService } = await import('../../browser/terminal.js');
 	const { TerminalViewPane } = await import('../../browser/terminalView.js');
 	const { IWorkbenchLayoutService } = await import('../../../../services/layout/browser/layoutService.js');
 	const { TestWorkspaceService } = await import('../../../../services/configuration/test/common/testServices.js');
@@ -300,7 +312,7 @@ test('Terminal View lends its actual title toolbar to Panel and retains it throu
 	services.registerInstance(ITerminalService, {
 		instances: [], activeInstance: undefined,
 		onDidCreateInstance: Event.None, onDidDisposeInstance: Event.None, onDidChangeInstances: Event.None, onDidChangeActiveInstance: Event.None,
-		getProfiles: async () => [], createTerminal: async () => { throw new Error('Unexpected shell acquisition'); },
+		createTerminal: async () => { throw new Error('Unexpected shell acquisition'); },
 		relaunchTerminal: async () => { }, setActiveInstance() { }, moveTerminal() { }, whenConnected: Promise.resolve(), safeDisposeTerminal: async () => { }, closeTerminal: async () => { },
 		...toDisposable(() => { }),
 	});
@@ -375,7 +387,7 @@ suite('Terminal context command lifecycle', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();
 	test('Terminal context commands resolve captured and serialized identities through the current window', async () => {
 		const { InstanceContext } = await import('../../browser/terminalContextMenu.js');
-		const { ITerminalService } = await import('../../../../services/terminal/browser/terminal.js');
+		const { ITerminalService } = await import('../../browser/terminal.js');
 		const { Disposable } = await import('../../../../../base/common/lifecycle.js');
 		const effects: unknown[] = [];
 		const create = (instanceId: number) => ({
@@ -396,7 +408,7 @@ suite('Terminal context command lifecycle', () => {
 		services.registerInstance(ITerminalService, {
 			...Disposable.None, instances, get activeInstance() { return active; },
 			onDidCreateInstance: Event.None, onDidDisposeInstance: Event.None, onDidChangeInstances: Event.None, onDidChangeActiveInstance: Event.None,
-			getProfiles: async () => [], createTerminal: async () => { throw new Error('Unexpected creation'); },
+			createTerminal: async () => { throw new Error('Unexpected creation'); },
 			setActiveInstance: instance => { active = instance; }, moveTerminal() { },
 			whenConnected: Promise.resolve(), safeDisposeTerminal: async instance => { effects.push(['close', instance.instanceId]); instances.splice(instances.indexOf(instance), 1); }, closeTerminal: async instance => { await instance.close(); },
 			relaunchTerminal: async (instance, dimensions) => { effects.push(['relaunch', instance.instanceId, dimensions]); },

@@ -3,7 +3,7 @@ import { Disposable } from '../../../../base/common/lifecycle.js';
 import { ThemeIcon } from '../../../../base/common/themables.js';
 import type { IExtensionTerminalProfile } from '../../../../platform/terminal/common/terminal.js';
 import { IExtensionService, type ExtensionManifest } from '../../../services/extensions/common/extensionService.js';
-import type { ITerminalContributionService } from '../../../services/terminal/common/terminal.js';
+import type { ITerminalContributionService } from './terminal.js';
 
 type TerminalProfileContribution = ExtensionManifest['contributes']['terminalProfiles'][number];
 

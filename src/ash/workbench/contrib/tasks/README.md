@@ -4,13 +4,14 @@
 `common/tasks.ts` owns task models and execution contracts, `common/taskConfiguration.ts`
 owns configuration parsing, and `common/problemMatcher.ts` owns matcher definitions and registrations.
 The former `workbench/services/tasks` owner has been removed; all consumers import the canonical contribution contracts directly.
-`workbench/contrib/tasks/browser/taskService.ts` owns discovery and installs the
+`browser/abstractTaskService.ts` owns discovery, the catalog, providers and task commands.
+`browser/taskService.ts` selects the terminal execution system and installs the
 service through the Code-selected service registry. `TerminalTaskSystem` owns
 command resolution, run state, and Terminal execution. Both use constructor DI. The Terminal remains the
 sole frontend instance and output owner; Rust owns PTY processes.
 
 `ITaskRun.terminalId` identifies the UI instance without importing the Terminal
-contribution into a shared service contract. Tasks and Testing views resolve this
+contribution into a shared service contract. Task consumers and the Testing view resolve this
 identity through the Terminal service.
 
 Standard extensions can start built-in Tasks commands through `commands.executeCommand`.
@@ -63,17 +64,27 @@ Custom PTY completion waits for its brokered release acknowledgment and emits no
 | Symbol                | Responsibility                                                                                 | Must not own                                           |
 | --------------------- | ---------------------------------------------------------------------------------------------- | ------------------------------------------------------ |
 | `ITaskService`        | Enumerate current workspace tasks, start a selected task, terminate an active run              | PTY processes, shell rendering, editor state           |
-| `TaskService`         | Read task files through `IFileService`, own providers, catalog freshness and dependency graphs | PTY execution and terminal run state                   |
+| `AbstractTaskService` | Read task files through `IFileService`, own providers, catalog freshness and dependency graphs | PTY execution and terminal run state                   |
 | `TerminalTaskSystem`  | Resolve shell/process/custom execution, own run status and listeners                           | Task discovery and provider state                      |
 | `parseWorkspaceTasks` | Preserve `tasks.json` and declare unsupported execution settings                               | Variable expansion or command execution                |
 | `TaskRun`             | Bind the first terminal command identity to one run and retain its final status                | Terminal output buffering or shell integration parsing |
 
-The execution path is `Run Task` or `TasksViewPane` → `TaskService.run` →
+The execution path is `Run Task` → `TaskService.run` →
 `TerminalTaskSystem.run` → `IConfigurationResolverService.resolveWithInteractionReplace` →
 `ITerminalService.createTerminal` → a process spawn, custom PTY, or legacy terminal write. The task is
 never executed while discovering or parsing configuration. The Terminal and
 App Server continue to own workspace-root process isolation and command-status
 events.
+
+`Configure Tasks` uses the current catalog to select a task or create a configuration
+from a template. Task selection returns the current catalog object, even if a refresh
+replaces its options while the picker is open. A selected task routes to its workspace
+folder; template creation asks for a folder in a multi-root workspace. Existing
+`tasks.json` content is preserved, including comments, and conditional file creation
+protects a configuration written concurrently. New configurations contain the selected
+task definition or an npm, .NET, TypeScript or shell template and open in a pinned editor.
+Task and template pickers support keyboard selection and Escape; cancellation creates
+no file and starts no process. The template picker remains alive until user input settles.
 
 Discovery currently reads `.vscode/tasks.json` version `2.0.0`, including tasks
 whose execution settings are not supported, `package.json` scripts with lockfile-based npm/pnpm/yarn selection, and
@@ -185,10 +196,9 @@ configuration before resolving the selected task, so a watcher delay or a failed
 refresh retaining the last good catalog cannot execute old semantics. Removed or
 changed commands are rejected; unchanged commands use the latest capability
 validation. Unsupported execution reports a localized error and creates no run,
-terminal or process. A changed catalog clears the previous execution error in the
-Tasks view. Correcting the configuration allows a later retry. Run Task
-command failures appear through the existing notification service; Tasks view
-failures appear in its status region. Terminal success, failure, cancellation, disconnection, and exit are
+terminal or process. Correcting the configuration allows a later retry. Task command
+failures appear through the existing notification service. Terminal success, failure,
+cancellation, disconnection, and exit are
 projected into `ITaskRun`; terminating a run closes its terminal. Completed
 terminal instances remain visible until the user closes them so output is not
 discarded. Completed runs release their terminal listeners while retaining their
@@ -311,3 +321,5 @@ is rejected before terminal creation instead of receiving assumed POSIX quoting.
 Explicit full shell command lines remain the selected shell's input language.
 Configured split groups, like problem reveal policies, remain outside the standard
 extension TaskPresentationOptions API and survive edits to fetched Tasks.
+
+Tasks use `TaskQuickPick` for running and configuring the current catalog. There is no Tasks panel, view ID or panel stylesheet. Empty run catalogs route to Configure Tasks; missing configuration offers editable templates from `common/taskTemplates.ts`. Running tasks remain in Terminal, and Terminate Task selects among active runs. Run state, output and cancellation remain shared with Agent task tools.

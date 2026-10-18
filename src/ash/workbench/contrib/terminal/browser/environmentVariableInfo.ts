@@ -1,6 +1,6 @@
 import Severity from '../../../../base/common/severity.js';
 import { localize } from '../../../../nls.js';
-import type { ITerminalStatus } from '../../../services/terminal/common/terminal.js';
+import type { ITerminalStatus } from '../common/terminal.js';
 import type { IEnvironmentVariableCollectionWithPersistence, IEnvironmentVariableInfo } from '../common/environmentVariable.js';
 
 /** Read-only information about future launches, independent of a running process's environment. */

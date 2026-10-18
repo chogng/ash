@@ -4,7 +4,7 @@ import { Disposable, DisposableMap } from '../../../../base/common/lifecycle.js'
 import { ITerminalProcessService, type TerminalProcessConnectionState } from "../../../../platform/terminal/common/terminal.js";
 import { IWorkspaceContextService } from "../../../../platform/workspace/common/workspace.js";
 import { IInstantiationService } from "../../../../platform/instantiation/common/instantiation.js";
-import type { ITerminalCreateOptions, ITerminalDimensions, ITerminalInstance, ITerminalProfile, ITerminalService } from "../../../services/terminal/browser/terminal.js";
+import { ITerminalEditorService, ITerminalGroupService, type ICreateTerminalOptions, type ITerminalCreateOptions, type ITerminalDimensions, type ITerminalInstance, type ITerminalProfile, type ITerminalService, type ITerminalLocationOptions } from './terminal.js';
 import { TerminalInstance } from './terminalInstance.js';
 import { TerminalInstanceService } from './terminalInstanceService.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
@@ -17,6 +17,14 @@ import { parseTerminalReloadCredentials, parseTerminalReloadState, TerminalStora
 import { terminalExecutionScope, terminalExecutionScopesEqual } from '../common/remote/terminal.js';
 import { parseTerminalUri } from './terminalUri.js';
 import { URI } from '../../../../base/common/uri.js';
+import { ITerminalProfileResolverService, ITerminalProfileService } from '../common/terminal.js';
+import { IEditorService } from '../../../services/editor/common/editorService.js';
+import { ICommandService } from '../../../../platform/commands/common/commands.js';
+import { PICK_WORKSPACE_FOLDER_COMMAND_ID } from '../../../browser/actions/workspaceCommands.js';
+import type { IWorkspaceFolder } from '../../../../platform/workspace/common/workspace.js';
+import type { IShellLaunchConfig } from '../../../../platform/terminal/common/terminal.js';
+import { TerminalCapability } from '../../../../platform/terminal/common/capabilities/capabilities.js';
+import { getRemoteAuthority } from '../../../../platform/remote/common/remoteHosts.js';
 
 /** Browser Workbench owner of terminal instances and their process lifecycle. */
 export class TerminalService extends Disposable implements ITerminalService {
@@ -43,6 +51,12 @@ export class TerminalService extends Disposable implements ITerminalService {
 		@IDialogService private readonly dialogs: IDialogService,
 		@ISecretStorageService private readonly secrets: ISecretStorageService,
 		@IStorageService private readonly storage: IStorageService,
+		@ITerminalProfileService private readonly profiles: ITerminalProfileService,
+		@ITerminalProfileResolverService private readonly profileResolver: ITerminalProfileResolverService,
+		@IEditorService private readonly editors: IEditorService,
+		@ICommandService private readonly commands: ICommandService,
+		@ITerminalGroupService private readonly groups: ITerminalGroupService,
+		@ITerminalEditorService private readonly terminalEditors: ITerminalEditorService,
 	) {
 		super();
 		this.processService = processService;
@@ -68,18 +82,104 @@ export class TerminalService extends Disposable implements ITerminalService {
 		return this._activeInstance;
 	}
 
-	async getProfiles(dirId?: string): Promise<readonly ITerminalProfile[]> {
-		const folder = this.requireWorkspaceFolder(dirId);
-		return this.processService.listProfiles(folder.id);
+	async createTerminal(options: ICreateTerminalOptions = {}): Promise<ITerminalInstance> {
+		const scope = terminalExecutionScope(this.workspaceContext.getWorkspace());
+		if (!this.connected) {
+			await this.whenConnected;
+		}
+		const location = options.location;
+		const parent = typeof location === 'object' && 'parentTerminal' in location ? await location.parentTerminal
+			: typeof location === 'object' && 'splitActiveTerminal' in location && location.splitActiveTerminal ? this.activeInstance : undefined;
+		const assertCurrent = (): void => {
+			if (this.isDisposed || !terminalExecutionScopesEqual(scope, terminalExecutionScope(this.workspaceContext.getWorkspace()))
+				|| parent && (!this.instances.includes(parent) || parent.state !== 'running')) throw new CancellationError();
+		};
+		assertCurrent();
+		const dimensions = options.dimensions ?? parent?.xterm?.dimensions() ?? { rows: 24, cols: 80 };
+		const cwd = options.cwd ?? (options.config && 'cwd' in options.config ? options.config.cwd : undefined);
+		const cwdResource = URI.isUri(cwd) ? cwd : typeof cwd === 'string' && /^(?:\/|[a-z]:[\\/]|\\\\)/i.test(cwd) ? URI.file(cwd) : undefined;
+		let launch: ITerminalCreateOptions;
+		if (options.config && 'customPtyImplementation' in options.config && options.config.customPtyImplementation) {
+			launch = {
+				...options, dimensions,
+				dirId: options.dirId ?? (cwdResource ? this.workspaceContext.getWorkspaceFolder(cwdResource)?.id : undefined),
+				cwd: typeof options.cwd === 'string' ? options.cwd : options.cwd?.fsPath,
+				config: { ...options.config, customPtyImplementation: options.config.customPtyImplementation },
+				profile: undefined,
+			};
+		} else if (options.profile) {
+			// Tasks, Debug and extension execution already carry resolved host launch data.
+			launch = { ...options, dimensions, cwd: typeof options.cwd === 'string' ? options.cwd : options.cwd?.fsPath, config: undefined, profile: options.profile };
+		} else {
+			const folders = this.workspaceContext.getWorkspace().folders;
+			const namedRoot = typeof cwd === 'string' ? cwd.match(/^\$\{workspaceFolder:([^}]+)\}/)?.[1] : undefined;
+			const namedFolders = namedRoot ? folders.filter(folder => folder.name === namedRoot) : [];
+			const cwdFolder = (cwdResource && this.workspaceContext.getWorkspaceFolder(cwdResource))
+				|| (namedFolders.length === 1 ? namedFolders[0] : undefined);
+			const resource = this.editors.activeEditor?.resource;
+			const folder = parent ? folders.find(folder => folder.id === parent.dirId)
+				: options.dirId ? folders.find(folder => folder.id === options.dirId)
+					: cwdFolder || (resource && this.workspaceContext.getWorkspaceFolder(resource)) || (folders.length === 1 ? folders[0]
+						: folders.length ? await this.commands.executeCommand<IWorkspaceFolder | undefined>(PICK_WORKSPACE_FOLDER_COMMAND_ID, [{ placeHolder: localize('terminal.selectFolder', 'Select a workspace folder for the terminal.') }]) : undefined);
+			if (!folder) {
+				if (folders.length) throw new CancellationError();
+				this.requireWorkspaceFolder();
+				throw new CancellationError();
+			}
+			if (!this.profiles.getAvailableProfiles(folder.id).length) await this.profiles.refreshAvailableProfiles(folder.id);
+			assertCurrent();
+			const config = options.config;
+			const contributed = config && 'extensionIdentifier' in config ? config
+				: !config && !options.skipContributedProfileCheck ? await this.profiles.getContributedDefaultProfile({}) : undefined;
+			if (contributed) {
+				const provider = this.profiles.getContributedProfileProvider(contributed.extensionIdentifier, contributed.id);
+				if (!provider) throw new Error(localize('terminal.profile.providerUnavailable', 'Terminal profile provider is unavailable: {0}', contributed.title));
+				const previous = new Set(this.instances);
+				await provider.createContributedTerminalProfile({ ...contributed.options, cwd: options.cwd ?? parent?.cwd ?? parent?.initialCwd ?? folder.uri });
+				const created = this.activeInstance;
+				if (!created || previous.has(created) || created.dirId !== folder.id) throw new CancellationError();
+				return this.placeCreatedTerminal(created, location, parent, assertCurrent);
+			}
+			const profile = config && 'profileName' in config ? config : !config && !parent?.shellLaunchConfig?.executable ? this.profiles.getDefaultProfile(undefined, folder.id) : undefined;
+			const shell: IShellLaunchConfig = profile ? { name: profile.profileName, executable: profile.path, args: profile.args, env: profile.env, icon: profile.icon, color: profile.color }
+				: { ...(config as IShellLaunchConfig | undefined ?? parent?.shellLaunchConfig) };
+			if (options.cwd !== undefined) shell.cwd = typeof options.cwd === 'string' ? options.cwd : options.cwd.fsPath;
+			else if (parent) {
+				shell.cwd = parent.cwd;
+				if (!shell.cwd) {
+					try { shell.cwd = await parent.capabilities?.get(TerminalCapability.NaiveCwdDetection)?.getCwd(); }
+					catch { /* The backend-confirmed launch directory remains a valid fallback. */ }
+				}
+				shell.cwd ??= parent.initialCwd;
+			}
+			const os = this.processService.operatingSystem;
+			if (os === undefined) throw new Error(localize('terminal.profile.platformUnavailable', 'The terminal execution host is not ready.'));
+			await this.profileResolver.resolveShellLaunchConfig(shell, { os, remoteAuthority: getRemoteAuthority(folder.uri), workspaceFolder: folder });
+			assertCurrent();
+			launch = {
+				...options, config: undefined, dirId: folder.id, dimensions,
+				title: profile?.overrideName ? profile.profileName : shell.name,
+				profile: profile?.isAutoDetected ? { type: 'profile', profileId: profile.profileId } : { type: 'custom', name: profile?.profileName ?? shell.name ?? localize('terminal.profile.shell', 'Shell'), path: typeof shell.executable === 'string' ? [shell.executable] : shell.executable!, args: shell.args ?? [] },
+				env: shell.env, strictEnv: shell.strictEnv, cwd: shell.cwd, icon: shell.icon, color: shell.color,
+				initialText: shell.initialText, waitOnExit: shell.waitOnExit,
+			};
+		}
+		assertCurrent();
+		const instance = await this.createTerminalCore(launch, isEditorLocation(location) ? TerminalLocation.Editor : undefined);
+		return this.placeCreatedTerminal(instance, location, parent, assertCurrent);
 	}
 
-	async createTerminal(options: ITerminalCreateOptions): Promise<ITerminalInstance> {
-		if (!this.connected) {
-			const scope = terminalExecutionScope(this.workspaceContext.getWorkspace());
-			await this.whenConnected;
-			if (!terminalExecutionScopesEqual(scope, terminalExecutionScope(this.workspaceContext.getWorkspace()))) throw new CancellationError();
+	private async placeCreatedTerminal(instance: ITerminalInstance, location: ITerminalLocationOptions | undefined, parent: ITerminalInstance | undefined, assertCurrent: () => void): Promise<ITerminalInstance> {
+		try {
+			assertCurrent();
+			if (!this.instances.includes(instance)) throw new CancellationError();
+			if (isEditorLocation(location)) await this.terminalEditors.openEditor(instance, typeof location === 'object' ? location : undefined);
+			else if (parent) this.groups.joinInstances([parent, instance]);
+			return instance;
+		} catch (error) {
+			if (this.instances.includes(instance)) await this.closeTerminal(instance);
+			throw error;
 		}
-		return this.createTerminalCore(options);
 	}
 
 	private async restoreTerminals(): Promise<void> {
@@ -115,7 +215,7 @@ export class TerminalService extends Disposable implements ITerminalService {
 		this.setActiveInstance(this._instances.find(instance => instance.instanceId === state.activeId));
 	}
 
-	private async createTerminalCore(options: ITerminalCreateOptions): Promise<ITerminalInstance> {
+	private async createTerminalCore(options: ITerminalCreateOptions, target?: TerminalLocation): Promise<ITerminalInstance> {
 		if (this.isDisposed) throw new CancellationError();
 		const instance = await this.instanceFactory.createInstance(options, {
 			getConnectionState: () => this.connectionState,
@@ -123,6 +223,7 @@ export class TerminalService extends Disposable implements ITerminalService {
 			onTitleChanged: () => { this.refreshInstanceTitles(); this._onDidChangeInstances.fire(); },
 		});
 		if (this.isDisposed) { await instance.close(); throw new CancellationError(); }
+		if (target !== undefined) instance.target = target;
 		this.ownedInstances.set(instance.id, instance);
 		this._instances.push(instance);
 		this.refreshInstanceTitles();
@@ -250,4 +351,8 @@ function terminalProfileTitle(profile: ITerminalProfile): string {
 		return "cmd";
 	}
 	return profile.title;
+}
+
+function isEditorLocation(location: ITerminalLocationOptions | undefined): location is TerminalLocation.Editor | import('./terminal.js').TerminalEditorLocation {
+	return location === TerminalLocation.Editor || typeof location === 'object' && !('parentTerminal' in location) && !('splitActiveTerminal' in location);
 }

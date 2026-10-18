@@ -1,3 +1,9 @@
+import { Event } from '../../../../../base/common/event.js';
+import { TerminalEditorService } from '../../browser/terminalEditorService.js';
+import { ITerminalService, type ITerminalInstance } from '../../browser/terminal.js';
+import { IEditorService } from '../../../../services/editor/common/editorService.js';
+import { IEditorGroupsService } from '../../../../services/editor/common/editorGroupsService.js';
+import { TerminalLocation } from '../../../../../platform/terminal/common/terminal.js';
 import assert from 'node:assert/strict';
 import { suite, test } from 'mocha';
 import { URI } from '../../../../../base/common/uri.js';
@@ -31,5 +37,23 @@ suite('Terminal editor resource boundary', () => {
 		}
 		const serializer = new TerminalInputSerializer();
 		for (const value of [null, [], {}, { resource: 3 }, { resource: 'file:/session/1' }]) assert.throws(() => serializer.deserialize(value), TypeError);
+	});
+});
+
+
+suite('Terminal editor destination', () => {
+	test('the captured auxiliary group receives the same instance even when another group is active', async () => {
+		const instance = { resource: getTerminalUri('session', 1), target: TerminalLocation.Panel } as ITerminalInstance;
+		const requests: unknown[] = [];
+		const terminals = { instances: [instance], onDidDisposeInstance: Event.None, onDidChangeInstances: Event.None, setActiveInstance: (active: ITerminalInstance) => { assert.equal(active, instance); } } as unknown as ITerminalService;
+		const editors = { onDidActiveEditorChange: Event.None, openEditor: async (input, options, target) => { requests.push([input, options, target]); } } as IEditorService;
+		const groups = { groups: [], onDidChangeGroups: Event.None } as unknown as IEditorGroupsService;
+		using service = new TerminalEditorService(terminals, editors, groups);
+		await service.openEditor(instance, { viewColumn: 12 });
+		assert.equal(instance.target, TerminalLocation.Editor);
+		const [input, options, target] = requests[0] as [TerminalEditorInput, unknown, unknown];
+		assert.equal(input.terminalInstance, instance);
+		assert.deepEqual(options, { pinned: true, ignoreError: true, preserveFocus: undefined });
+		assert.deepEqual(target, { groupId: 12 });
 	});
 });

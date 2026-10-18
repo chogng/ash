@@ -4,9 +4,8 @@ import { localize } from '../../../../nls.js';
 import { ConfigurationTarget, IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { IQuickInputService, type IQuickPickItem } from '../../../../platform/quickinput/common/quickInput.js';
 import { TerminalSettingPrefix } from '../../../../platform/terminal/common/terminal.js';
-import { ITerminalProfileService } from '../../../services/terminal/common/terminal.js';
+import { ITerminalProfileService } from '../common/terminal.js';
 import { IWorkspaceContextService, type IWorkspaceFolder } from '../../../../platform/workspace/common/workspace.js';
-import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { IEditorService } from '../../../services/editor/common/editorService.js';
 import { CancellationTokenSource } from '../../../../base/common/cancellation.js';
 import { ICommandService } from '../../../../platform/commands/common/commands.js';
@@ -23,7 +22,7 @@ export class TerminalProfileQuickpick extends Disposable {
 		@IConfigurationService private readonly configuration: IConfigurationService,
 		@IQuickInputService private readonly quickInput: IQuickInputService,
 		@IWorkspaceContextService private readonly workspace: IWorkspaceContextService,
-		@IInstantiationService private readonly instantiation: IInstantiationService,
+		@IEditorService private readonly editors: IEditorService,
 		@ICommandService private readonly commands: ICommandService,
 	) {
 		super();
@@ -33,7 +32,7 @@ export class TerminalProfileQuickpick extends Disposable {
 	async showAndGetResult(type: 'setDefault' | 'createInstance', dirId?: string): Promise<string | undefined> {
 		const folders = this.workspace.getWorkspace().folders;
 		if (!dirId && folders.length > 1) {
-			const active = this.instantiation.get(IEditorService).activeEditor?.resource;
+			const active = this.editors.activeEditor?.resource;
 			const folder = (active && this.workspace.getWorkspaceFolder(active))
 				|| await this.commands.executeCommand<IWorkspaceFolder | undefined>(PICK_WORKSPACE_FOLDER_COMMAND_ID, [{ placeHolder: localize('terminal.selectFolder', 'Select a workspace folder for the terminal.') }, this.cancellation.token]);
 			if (!folder || this.isDisposed) return undefined;

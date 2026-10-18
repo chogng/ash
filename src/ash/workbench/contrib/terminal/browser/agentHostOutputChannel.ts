@@ -2,7 +2,7 @@ import { Disposable, DisposableMap, type IDisposable } from '../../../../base/co
 import { localize } from '../../../../nls.js';
 import type { IWorkbenchContribution } from '../../../common/contributions.js';
 import { IOutputService, type IOutputChannel } from '../../../services/output/common/output.js';
-import { ITerminalService, type ITerminalInstance } from '../../../services/terminal/browser/terminal.js';
+import { ITerminalService, type ITerminalInstance } from './terminal.js';
 
 /** A bounded diagnostic consumer of committed host events; Rust retains the command history. */
 export class AgentHostOutputChannel extends Disposable implements IWorkbenchContribution {

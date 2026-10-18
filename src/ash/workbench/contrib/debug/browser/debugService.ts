@@ -27,8 +27,8 @@ import { IWorkspaceContextService } from "../../../../platform/workspace/common/
 import { Memento } from "../../../common/memento.js";
 import { ITaskService } from "../../tasks/common/taskService.js";
 import { waitForTask } from "../../tasks/common/tasks.js";
-import { ITerminalService } from "../../../services/terminal/browser/terminal.js";
-import { ITerminalProfileResolverService, type IShellLaunchConfigResolveOptions } from '../../../services/terminal/common/terminal.js';
+import { ITerminalService } from "../../terminal/browser/terminal.js";
+import { ITerminalProfileResolverService, type IShellLaunchConfigResolveOptions } from '../../terminal/common/terminal.js';
 import { ITerminalProcessService, type IShellLaunchConfig } from '../../../../platform/terminal/common/terminal.js';
 import { escapeNonWindowsPath } from '../../../../platform/terminal/common/terminalEnvironment.js';
 import { GeneralShellType } from '../../../../platform/terminal/common/terminal.js';

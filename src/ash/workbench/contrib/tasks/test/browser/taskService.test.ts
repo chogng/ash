@@ -1,15 +1,16 @@
+import { InstantiationType } from '../../../../../platform/instantiation/common/extensions.js';
 import { IViewsService } from '../../../../services/views/common/viewsService.js';
 import { RunAutomaticTasks } from '../../browser/runAutomaticTasks.js';
 import { IWorkspaceTrustManagementService } from '../../../../../platform/workspace/common/workspaceTrust.js';
 import { TerminalGroupService } from '../../../terminal/browser/terminalGroupService.js';
-import { ITerminalGroupService } from '../../../../services/terminal/browser/terminal.js';
+import { ITerminalGroupService } from '../../../terminal/browser/terminal.js';
 import { formatMessageForTerminal } from '../../../../../platform/terminal/common/terminalStrings.js';
 import { MergedEnvironmentVariableCollection } from '../../../../../platform/terminal/common/environmentVariableCollection.js';
 import { IEnvironmentVariableService } from '../../../terminal/common/environmentVariable.js';
 import type { IQuickPick, IQuickPickItem } from '../../../../../platform/quickinput/common/quickInput.js';
 import { TestQuickInputService } from '../../../../../platform/quickinput/test/browser/testQuickInputService.js';
 import { ShellQuoting } from '../../common/tasks.js';
-import { ITerminalContributionService, ITerminalProfileResolverService, ITerminalProfileService } from '../../../../services/terminal/common/terminal.js';
+import { ITerminalContributionService, ITerminalProfileResolverService, ITerminalProfileService } from '../../../terminal/common/terminal.js';
 import { TerminalProfileService } from '../../../terminal/browser/terminalProfileService.js';
 import { BrowserTerminalProfileResolverService } from '../../../terminal/browser/terminalProfileResolverService.js';
 import { INotificationService } from '../../../../../platform/notification/common/notification.js';
@@ -40,7 +41,7 @@ import { createTestFileService } from '../../../../test/common/testEditorService
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { ILogService, NullLoggerService } from '../../../../../platform/log/common/log.js';
 import { ServiceCollection } from '../../../../../platform/instantiation/common/serviceCollection.js';
-import { registerTestTerminalLifecycleServices, registerTestWorkbenchInteractionServices, workbenchInstantiationService } from '../../../../test/browser/workbenchTestServices.js';
+import { registerTestTerminalCreationServices, registerTestWorkbenchInteractionServices, workbenchInstantiationService } from '../../../../test/browser/workbenchTestServices.js';
 import { DisposableStore, type IDisposable } from '../../../../../base/common/lifecycle.js';
 import { IOutputService } from '../../../../services/output/common/output.js';
 import assert from "node:assert/strict";
@@ -57,7 +58,7 @@ import { Disposable, toDisposable } from "../../../../../base/common/lifecycle.j
 import { URI } from "../../../../../base/common/uri.js";
 import { FileKind, FileNotFoundError, type IFileBytes, IFileService, type IFileStat, type IFileWriteResult } from "../../../../../platform/files/common/files.js";
 import { IWorkspaceContextService } from "../../../../../platform/workspace/common/workspace.js";
-import { type ITerminalCommandStatusEvent, type ITerminalCreateOptions, type ITerminalDimensions, type ITerminalInstance, type ITerminalProfile, ITerminalService, type TerminalInstanceState } from "../../../../services/terminal/browser/terminal.js";
+import { type ITerminalCommandStatusEvent, type ITerminalCreateOptions, type ITerminalDimensions, type ITerminalInstance, type ITerminalProfile, ITerminalService, type TerminalInstanceState } from "../../../terminal/browser/terminal.js";
 import { TaskService } from "../../browser/taskService.js";
 import '../../../accessibilitySignals/browser/accessibilitySignal.contribution.js';
 import { IAccessibilitySignalService } from '../../../../../platform/accessibilitySignal/browser/accessibilitySignalService.js';
@@ -366,7 +367,6 @@ class FakeTerminalService extends Disposable implements ITerminalService {
 	readonly onDidDisposeInstance = Event.None;
 	readonly onDidChangeInstances = Event.None;
 	readonly onDidChangeActiveInstance = Event.None;
-	async getProfiles(): Promise<readonly ITerminalProfile[]> { return [{ profileId: "command-prompt", title: "Command Prompt", isDefault: true }]; }
 	async createTerminal(options: ITerminalCreateOptions): Promise<ITerminalInstance> { const terminal = this._register(new FakeTerminalInstance(`terminal-${this.instances.length + 1}`, options.dirId ?? "folder", options.title ?? "Terminal")); terminal.execution = options.execution; this.instances.push(terminal); this.activeInstance = terminal; this.createEmitter.fire(terminal); return terminal; }
 	async relaunchTerminal() { }
 	setActiveInstance(instance: ITerminalInstance | undefined) { this.activeInstance = instance; }
@@ -426,11 +426,11 @@ function testPathService(workspace: IWorkspaceContextService, os = OperatingSyst
 }
 
 function registerTaskProfiles(services: InstantiationService): void {
-	services.registerSingleton(ITerminalGroupService, () => services.createInstance(TerminalGroupService));
+	services.registerSingleton(ITerminalGroupService, () => services.createInstance(TerminalGroupService), { instantiation: InstantiationType.Delayed });
 	services.registerInstance(ITerminalContributionService, { terminalProfiles: [], onDidChangeTerminalProfiles: Event.None, ...Disposable.None });
-	services.registerSingleton(ITerminalProfileService, () => services.createInstance(TerminalProfileService));
+	services.registerSingleton(ITerminalProfileService, () => services.createInstance(TerminalProfileService), { instantiation: InstantiationType.Delayed });
 	services.registerInstance(IEnvironmentVariableService, { collections: new Map(), mergedCollection: new MergedEnvironmentVariableCollection(new Map()), onDidChangeCollections: Event.None, refreshCollections: async () => { }, set: () => { }, delete: () => { }, registerCollectionProvider: () => Disposable.None });
-	services.registerSingleton(ITerminalProfileResolverService, () => services.createInstance(BrowserTerminalProfileResolverService));
+	services.registerSingleton(ITerminalProfileResolverService, () => services.createInstance(BrowserTerminalProfileResolverService), { instantiation: InstantiationType.Delayed });
 }
 
 async function resolveTaskProfile(selection: import('../../../../../platform/terminal/common/terminal.js').TerminalProcessProfileSelection) {
@@ -452,7 +452,7 @@ function taskServices(owner: DisposableStore, files: IFileSystemProvider, worksp
 			operatingSystem: os, onConnectionState: Event.None,
 			getProcessInfo: async () => ({ ready: { pid: 42, cwd: '/workspace' }, cwd: '/workspace', rows: 24, cols: 80 }),
 			getEnvironment: async () => ({ HOME: '/execution/home' }),
-			listProfiles: () => terminals.getProfiles(), sendSignal: async () => { }, resolveProfile: resolveTaskProfile,
+			listProfiles: async () => [{ profileId: "command-prompt", title: "Command Prompt", isDefault: true }], sendSignal: async () => { }, resolveProfile: resolveTaskProfile,
 		}],
 		[ITerminalService, terminals], [ILogService, new NullLoggerService()],
 	), owner);
@@ -498,9 +498,12 @@ suite('Task shell profiles through execution owners', () => {
 			resize: async () => { }, close: async options => { closes.push(options.terminalId); },
 		};
 		const services = parent.createChild(new ServiceCollection([ITerminalProcessService, processes]), owner);
+		registerTaskProfiles(services);
+
+		registerTestTerminalCreationServices(services);
+
 		const terminals = owner.add(services.createInstance(TerminalService));
 		services.registerInstance(ITerminalService, terminals);
-		registerTaskProfiles(services);
 		const tasks = owner.add(services.createInstance(TaskService));
 		const configuration = services.get(IConfigurationService);
 		const platform = os === OperatingSystem.Windows ? 'windows' : os === OperatingSystem.Macintosh ? 'osx' : 'linux';
@@ -1052,12 +1055,15 @@ suite('TaskService terminal availability', () => {
 				[IPathService, testPathService(workspace)], [ITerminalProcessService, processes], [IOutputService, output], [ILogService, new NullLoggerService()],
 			)));
 			services.registerSingleton(ICommandService, () => new CommandService(services));
-			registerTestTerminalLifecycleServices(services);
-			const terminals = resources.add(services.createInstance(TerminalService));
-			services.registerInstance(ITerminalService, terminals);
-			registerTaskProfiles(services);
+
 			registerTestExtensionService(resources, services);
 			registerTestWorkbenchInteractionServices(resources, services);
+			registerTaskProfiles(services);
+
+			registerTestTerminalCreationServices(services);
+
+			const terminals = resources.add(services.createInstance(TerminalService));
+			services.registerInstance(ITerminalService, terminals);
 			const tasks = resources.add(services.createInstance(TaskService));
 			resources.add(tasks.registerTaskProvider({ id: 'test', provideTasks: () => [{ id: 'check', label: 'Check', command: 'check', group: 'build' }] }));
 			await tasks.refresh();
@@ -1122,12 +1128,15 @@ suite('TaskService terminal availability', () => {
 				[ILogService, new NullLoggerService()],
 			)));
 			services.registerSingleton(ICommandService, () => new CommandService(services));
-			registerTestTerminalLifecycleServices(services);
-			const terminals = resources.add(services.createInstance(TerminalService));
-			services.registerInstance(ITerminalService, terminals);
-			registerTaskProfiles(services);
+
 			registerTestExtensionService(resources, services);
 			registerTestWorkbenchInteractionServices(resources, services);
+			registerTaskProfiles(services);
+
+			registerTestTerminalCreationServices(services);
+
+			const terminals = resources.add(services.createInstance(TerminalService));
+			services.registerInstance(ITerminalService, terminals);
 			const tasks = resources.add(services.createInstance(TaskService));
 			resources.add(tasks.registerTaskProvider({ id: 'test', provideTasks: () => [{ id: 'check', label: 'Check', command: 'check', group: 'build' }] }));
 			await tasks.refresh();
@@ -1156,7 +1165,6 @@ suite('Task terminal reuse policies', () => {
 		const document = { version: '2.0.0', tasks: ['First', 'Second'].map(label => ({ label, type: 'process', command: label.toLowerCase(), args: [], options: { cwd: `/workspace/${label.toLowerCase()}`, env: { TASK: label } }, presentation: { panel, ...presentation } })) };
 		services.registerInstance(IFileService, owner.add(createTestFileService(new FakeFileService(root, { '.vscode/tasks.json': JSON.stringify(document) }))));
 		services.registerInstance(IPathService, testPathService(workspace));
-		services.registerSingleton(ICommandService, () => new CommandService(services));
 		services.registerInstance(ILogService, new NullLoggerService());
 		services.registerInstance(IMarkerService, owner.add(new MarkerService()));
 		registerTestExtensionService(owner, services);
@@ -1183,9 +1191,12 @@ suite('Task terminal reuse policies', () => {
 			close: async options => { closed.push(options.terminalId); await closing.wait(options.terminalId); },
 		});
 		services.registerInstance(IConfigurationResolverService, owner.add(services.createInstance(ConfigurationResolverService)));
+		registerTaskProfiles(services);
+
+		registerTestTerminalCreationServices(services);
+
 		const terminals = owner.add(services.createInstance(TerminalService));
 		services.registerInstance(ITerminalService, terminals);
-		registerTaskProfiles(services);
 		const tasks = owner.add(services.createInstance(TaskService));
 		const finish = async (run: ITaskRun): Promise<void> => {
 			const id = `process-${run.processId! - 1000}`;
@@ -1700,11 +1711,12 @@ test('provider shell execution selects the execution host profile and cancellati
 	using workspace = new TestWorkspaceService({ id: 'workspace', uri: URI.file('/workspace') });
 	const entered = new DeferredPromise<void>();
 	const release = new DeferredPromise<readonly ITerminalProfile[]>();
-	terminals.getProfiles = () => { void entered.complete(undefined); return release.p; };
 	const creations: ITerminalCreateOptions[] = [];
 	const create = terminals.createTerminal.bind(terminals);
 	terminals.createTerminal = async options => { creations.push(options); return create(options); };
-	using service = taskServices(resources, new FakeFileService(URI.file('/workspace'), {}), workspace, terminals).createInstance(TaskService);
+	const services = taskServices(resources, new FakeFileService(URI.file('/workspace'), {}), workspace, terminals);
+	services.get(ITerminalProcessService).listProfiles = () => { void entered.complete(undefined); return release.p; };
+	using service = services.createInstance(TaskService);
 	using provider = service.registerTaskProvider(createExtensionHostTaskProvider('shell-host', async () => ({ tasks: [{ id: 'build', label: 'Build', group: 'build', execution: { type: 'shell', command: 'compiler', args: ['${env:HOME}/two words', { value: '$HOME', quoting: 2 }] } }] }), workspace));
 	const task = (await service.refresh())[0];
 	const abort = new AbortController();
@@ -1726,9 +1738,9 @@ test('an unknown task execution OS reports the selected locale and creates no te
 	initializeTestLocalization('zh-CN');
 	using resources = new DisposableStore();
 	using terminals = new FakeTerminalService();
-	terminals.getProfiles = async () => [];
 	using workspace = new TestWorkspaceService({ id: 'workspace', uri: URI.file('/workspace') });
 	const services = taskServices(resources, new FakeFileService(URI.file('/workspace'), { '.vscode/tasks.json': JSON.stringify({ version: '2.0.0', tasks: [{ label: 'Shell', command: 'compiler', args: ['file name'] }] }) }), workspace, terminals);
+	services.get(ITerminalProcessService).listProfiles = async () => [];
 	const paths = Object.create(services.get(IPathService)) as IPathService;
 	paths.getOperatingSystem = async () => undefined;
 	const dispatch = services.createChild(new ServiceCollection([IPathService, paths]), resources);
@@ -1860,9 +1872,10 @@ test('CustomExecution opens after task listeners, receives input and resize, and
 		resize: async () => { throw new Error('CustomExecution must not resize a backend shell'); },
 		close: async () => { throw new Error('CustomExecution must not close a backend shell'); },
 	}]), resources);
+	registerTaskProfiles(services);
+	registerTestTerminalCreationServices(services);
 	const terminals = resources.add(services.createInstance(TerminalService));
 	services.registerInstance(ITerminalService, terminals);
-	registerTaskProfiles(services);
 	using service = services.createInstance(TaskService);
 	using writes = new Emitter<string>();
 	using exits = new Emitter<number>();
@@ -1914,9 +1927,10 @@ test('Extension Host CustomExecution streams ordered events without a shell and 
 		resize: async () => { throw new Error('CustomExecution must not resize a backend shell'); },
 		close: async () => { throw new Error('CustomExecution must not close a backend shell'); },
 	}]), resources);
+	registerTaskProfiles(services);
+	registerTestTerminalCreationServices(services);
 	const terminals = resources.add(services.createInstance(TerminalService));
 	services.registerInstance(ITerminalService, terminals);
-	registerTaskProfiles(services);
 	using service = services.createInstance(TaskService);
 	const opened = new DeferredPromise<void>();
 	const input = new DeferredPromise<void>();
@@ -2043,7 +2057,6 @@ for (const placement of ['task', 'taskPlain', 'defaults', 'taskPlatform', 'defau
 		};
 		services.registerInstance(IFileService, resources.add(createTestFileService(new FakeFileService(root, { '.vscode/tasks.json': JSON.stringify(document) }))));
 		services.registerInstance(IPathService, new BrowserPathService({ ...createDisconnectedRendererApi(), hasAppServer: true, appServer: { ...createDisconnectedRendererApi().appServer, operatingSystem: OperatingSystem.Linux } }, workspace));
-		services.registerSingleton(ICommandService, () => new CommandService(services));
 		services.registerInstance(ILogService, new NullLoggerService());
 		services.registerInstance(IMarkerService, resources.add(new MarkerService()));
 		registerTestExtensionService(resources, services);
@@ -2063,8 +2076,9 @@ for (const placement of ['task', 'taskPlain', 'defaults', 'taskPlatform', 'defau
 			write: async () => { }, resize: async () => { }, close: async options => { closed.push(options.terminalId); },
 		});
 		services.registerInstance(IConfigurationResolverService, resources.add(services.createInstance(ConfigurationResolverService)));
-		services.registerInstance(ITerminalService, resources.add(services.createInstance(TerminalService)));
 		registerTaskProfiles(services);
+		registerTestTerminalCreationServices(services);
+		services.registerInstance(ITerminalService, resources.add(services.createInstance(TerminalService)));
 		const tasks = resources.add(services.createInstance(TaskService));
 		resources.add(tasks.registerTaskProvider({
 			id: 'builder', type: 'builder', provideTasks: () => placement === 'provided' ? [{ id: 'provided', label: 'TypeScript', group: 'build', definition: { type: 'builder', target: 'ts' }, presentation: { focus: false } }] : [],
@@ -2097,7 +2111,6 @@ suite('Extension task execution lifecycle', () => {
 				workspace.updateWorkspace({ id: 'workspace', folders: [{ id: 'workspace', uri: root, name: 'Workspace', index: 0 }, { id: 'second', uri: URI.file('/workspace/second'), name: 'Second', index: 1 }] });
 				services.registerInstance(IFileService, resources.add(createTestFileService(new FakeFileService(root, {}))));
 				services.registerInstance(IPathService, testPathService(workspace));
-				services.registerSingleton(ICommandService, () => new CommandService(services));
 				services.registerInstance(ILogService, new NullLoggerService());
 				services.registerInstance(IMarkerService, resources.add(new MarkerService()));
 				registerTestExtensionService(resources, services);
@@ -2122,8 +2135,9 @@ suite('Extension task execution lifecycle', () => {
 				};
 				services.registerInstance(ITerminalProcessService, processes);
 				services.registerInstance(IConfigurationResolverService, resources.add(services.createInstance(ConfigurationResolverService)));
-				services.registerInstance(ITerminalService, resources.add(services.createInstance(TerminalService)));
 				registerTaskProfiles(services);
+				registerTestTerminalCreationServices(services);
+				services.registerInstance(ITerminalService, resources.add(services.createInstance(TerminalService)));
 				const tasks = resources.add(services.createInstance(TaskService));
 				services.registerInstance(ITaskService, tasks);
 				resources.add(tasks.registerTaskProvider(createExtensionHostTaskProvider('builder', async (operation, payload): Promise<JsonValue> => {
@@ -2274,7 +2288,6 @@ suite('Task rerun variable policy through the execution owners', () => {
 				const files = resources.add(createTestFileService(new FakeFileService(root, documents)));
 				services.registerInstance(IFileService, files);
 				services.registerInstance(IPathService, testPathService(workspace));
-				services.registerSingleton(ICommandService, () => new CommandService(services));
 				services.registerInstance(ILogService, new NullLoggerService());
 				services.registerInstance(IMarkerService, resources.add(new MarkerService()));
 				registerTestExtensionService(resources, services);
@@ -2301,9 +2314,10 @@ suite('Task rerun variable policy through the execution owners', () => {
 					write: async () => { }, resize: async () => { }, close: async () => { },
 				});
 				services.registerInstance(IConfigurationResolverService, resources.add(services.createInstance(ConfigurationResolverService)));
+				registerTaskProfiles(services);
+				registerTestTerminalCreationServices(services);
 				const terminals = resources.add(services.createInstance(TerminalService));
 				services.registerInstance(ITerminalService, terminals);
-				registerTaskProfiles(services);
 				const tasks = resources.add(services.createInstance(TaskService));
 				const definitions: unknown[] = [];
 				const task = {
@@ -2380,7 +2394,6 @@ suite('Task instance limits through the execution owners', () => {
 				services.registerInstance(IFileService, files);
 				services.registerInstance(IPathService, testPathService(workspace));
 				services.registerInstance(ILogService, new NullLoggerService());
-				services.registerSingleton(ICommandService, () => new CommandService(services));
 				services.registerInstance(IMarkerService, resources.add(new MarkerService()));
 				registerTestExtensionService(resources, services);
 				const release = new DeferredPromise<void>();
@@ -2407,9 +2420,10 @@ suite('Task instance limits through the execution owners', () => {
 					write: async () => { }, resize: async () => { }, close: async () => { if (holdClose) await closeRelease.p; },
 				});
 				services.registerInstance(IConfigurationResolverService, resources.add(services.createInstance(ConfigurationResolverService)));
+				registerTaskProfiles(services);
+				registerTestTerminalCreationServices(services);
 				const terminals = resources.add(services.createInstance(TerminalService));
 				services.registerInstance(ITerminalService, terminals);
-				registerTaskProfiles(services);
 				const tasks = resources.add(services.createInstance(TaskService));
 				if (kind === 'custom') resources.add(tasks.registerTaskProvider({
 					id: 'instances', provideTasks: () => [{
@@ -2538,9 +2552,12 @@ suite('Task instance policies through the execution owners', () => {
 			write: async () => { }, resize: async () => { }, close: async options => { peer.closed.push(options.terminalId); await peer.close(options.terminalId); },
 		});
 		services.registerInstance(IConfigurationResolverService, owner.add(services.createInstance(ConfigurationResolverService)));
+		registerTaskProfiles(services);
+
+		registerTestTerminalCreationServices(services);
+
 		const terminals = owner.add(services.createInstance(TerminalService));
 		services.registerInstance(ITerminalService, terminals);
-		registerTaskProfiles(services);
 		const tasks = owner.add(services.createInstance(TaskService));
 		return { services, workspace, tasks, terminals, dom, quickInput, peer };
 	}

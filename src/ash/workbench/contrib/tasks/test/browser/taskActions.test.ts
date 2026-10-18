@@ -1,9 +1,15 @@
+import '../../browser/taskService.js';
+import { FileService } from '../../../../../platform/files/common/fileService.js';
+import { InMemoryFileSystemProvider } from '../../../../../platform/files/common/inMemoryFilesystemProvider.js';
+import { IFileService, FileSystemProviderError, FileSystemProviderErrorCode } from '../../../../../platform/files/common/files.js';
+import { ICommandService } from '../../../../../platform/commands/common/commands.js';
+import { CommandService } from '../../../../services/commands/common/commandService.js';
 import { quickInputServiceTestControls } from '../../../../../platform/quickinput/test/browser/testQuickInputService.js';
 import { QuickInputType, type IQuickPickDidAcceptEvent } from '../../../../../platform/quickinput/common/quickInput.js';
 import { Event as QuickPickTestEvent } from '../../../../../base/common/event.js';
 import assert from 'node:assert/strict';
 import { suite, test } from 'mocha';
-import '../../browser/taskActions.js';
+import '../../browser/abstractTaskService.js';
 import { DeferredPromise } from '../../../../../base/common/async.js';
 import { Emitter, Event } from '../../../../../base/common/event.js';
 import { Disposable } from '../../../../../base/common/lifecycle.js';
@@ -59,6 +65,7 @@ suite('Tasks command catalog and async service lifetime', () => {
 		for (const currentDefault of [true, '**/*.ts']) {
 			test(`${group} matches default globs only in the active folder with fallback ${currentDefault}`, async () => {
 				using services = new InstantiationService();
+				services.registerSingleton(ICommandService, () => new CommandService(services));
 				using picker = new Picker();
 				const firstFolder = { id: 'a', uri: URI.file('/workspace/a'), name: 'A', index: 0 };
 				const activeFolder = { id: 'b', uri: URI.file('/workspace/b'), name: 'B', index: 1 };
@@ -92,6 +99,7 @@ suite('Tasks command catalog and async service lifetime', () => {
 			using changes = new Emitter<readonly IWorkspaceTask[]>();
 			using picker = new Picker();
 			using services = new InstantiationService();
+			services.registerSingleton(ICommandService, () => new CommandService(services));
 			const previous: IWorkspaceTask = { id: 'old', label: 'Old task', command: 'old', source: 'vscode', group: 'other' };
 			const latest: IWorkspaceTask = { ...previous, id: 'new', label: 'Updated task', command: 'updated' };
 			let catalog: readonly IWorkspaceTask[] = [previous];
@@ -133,6 +141,116 @@ suite('Tasks command catalog and async service lifetime', () => {
 				changes.fire([previous]);
 				assert.deepEqual(picker.items.map(item => item.label), ['Updated task']);
 			} finally { picker.hide(); }
+		});
+	}
+});
+
+
+suite('Configure Tasks command', () => {
+	ensureNoDisposablesAreLeakedInTestSuite();
+
+	for (const cancel of [false, true]) {
+		test(`template picker survives asynchronous input and ${cancel ? 'cancels without writing' : 'creates the selected template'}`, async () => {
+			using services = new InstantiationService();
+			using files = new FileService();
+			using provider = new InMemoryFileSystemProvider();
+			using registration = files.registerProvider('file', provider);
+			using picker = new Picker();
+			const root = URI.file('/workspace');
+			using workspace = new TestWorkspaceService({
+				id: 'workspace', folders: [{ id: 'root', uri: root, name: 'Workspace', index: 0 }],
+			});
+			await files.createDirectory(root);
+			services.registerInstance(IWorkspaceContextService, workspace);
+			services.registerInstance(IFileService, files);
+			services.registerInstance(ITaskService, { tasks: [], refresh: async () => [], onDidChangeTasks: Event.None } as unknown as ITaskService);
+			services.registerInstance(IQuickInputService, { createQuickPick: () => picker } as unknown as IQuickInputService);
+			services.registerSingleton(ICommandService, () => new CommandService(services));
+			services.registerInstance(INotificationService, {} as INotificationService);
+			const opened: string[] = [];
+			services.registerInstance(IEditorService, { openEditor: async input => { opened.push(input.resource.toString()); } } as IEditorService);
+			const operation = services.get(ICommandService).executeCommand('workbench.action.tasks.configureTaskRunner');
+			try {
+				await picker.shown.p;
+				assert.equal(picker.isDisposed, false);
+				if (cancel) picker.hide();
+				else {
+					picker.selectedItems = [picker.items.find(item => !('type' in item && item.type === 'separator') && item.label === 'npm') as TaskItem];
+					picker.accepted.fire({ inBackground: false });
+				}
+			} finally {
+				// Settle the command even if a lifetime regression disposes its picker early.
+				if (!picker.isDisposed) picker.hide();
+			}
+			await operation;
+			assert.equal(picker.isDisposed, true);
+			const resource = URI.joinPath(root, '.vscode', 'tasks.json');
+			assert.deepEqual(opened, cancel ? [] : [resource.toString()]);
+			if (cancel) await assert.rejects(files.stat(resource));
+			else assert.deepEqual(JSON.parse((await files.readFile(resource)).content), {
+				version: '2.0.0', tasks: [{ label: 'build', type: 'shell', command: 'npm', args: ['run', 'build'], problemMatcher: [] }],
+			});
+		});
+	}
+
+	for (const scenario of ['new', 'existing', 'race', 'multi-root', 'cancel', 'no-folder', 'denied'] as const) {
+		test(`${scenario} opens only the selected configuration and preserves existing content`, async () => {
+			using services = new InstantiationService();
+			using files = new FileService();
+			using provider = new InMemoryFileSystemProvider();
+			using registration = files.registerProvider('file', provider);
+			const first = { id: 'a', uri: URI.file('/workspace/a'), name: 'A', index: 0 };
+			const second = { id: 'b', uri: URI.file('/workspace/b'), name: 'B', index: 1 };
+			using workspace = new TestWorkspaceService({ id: 'workspace', folders: scenario === 'no-folder' ? [] : scenario === 'multi-root' || scenario === 'cancel' ? [first, second] : [first] });
+			services.registerInstance(IWorkspaceContextService, workspace);
+			services.registerInstance(ITaskService, { tasks: [], refresh: async () => [], onDidChangeTasks: Event.None } as unknown as ITaskService);
+			services.registerInstance(IQuickInputService, {
+				createQuickPick: () => {
+					const picker = new Picker();
+					picker.show = () => { picker.selectedItems = [picker.items.at(-1) as TaskItem]; picker.accepted.fire({ inBackground: false }); };
+					return picker;
+				}
+			} as unknown as IQuickInputService);
+			services.registerInstance(IFileService, files);
+			const root = scenario === 'multi-root' ? second.uri : first.uri;
+			const resource = URI.joinPath(root, '.vscode', 'tasks.json');
+			await files.createDirectory(root);
+			const original = '{ // retain comments and user tasks\n "version": "2.0.0", "tasks": [{"label":"Existing"}] }';
+			if (scenario === 'existing') {
+				await files.createDirectory(URI.joinPath(root, '.vscode'));
+				await files.writeFile({ resource, content: original }, { create: true, overwrite: false });
+			}
+			if (scenario === 'race') {
+				const createDirectory = provider.createDirectory.bind(provider);
+				provider.createDirectory = async directory => {
+					const result = await createDirectory(directory);
+					if (directory.toString() === URI.joinPath(root, '.vscode').toString()) await provider.writeFile(resource, new TextEncoder().encode(original), { create: true, overwrite: false });
+					return result;
+				};
+			}
+			if (scenario === 'denied') provider.stat = async () => { throw new FileSystemProviderError('permission denied', FileSystemProviderErrorCode.NoPermissions); };
+			const opened: string[] = [];
+			const notices: string[] = [];
+			services.registerInstance(IEditorService, { openEditor: async input => { opened.push(input.resource.toString()); } } as IEditorService);
+			services.registerInstance(INotificationService, { info: message => { notices.push(String(message)); } } as INotificationService);
+			services.registerInstance(ICommandService, { executeCommand: async () => scenario === 'cancel' ? undefined : second } as unknown as ICommandService);
+			using commands = new CommandService(services);
+			const operation = commands.executeCommand('workbench.action.tasks.configureTaskRunner');
+			if (scenario === 'denied') {
+				await assert.rejects(operation, /permission denied/);
+				assert.deepEqual(opened, []);
+				return;
+			}
+			await operation;
+			if (scenario === 'no-folder' || scenario === 'cancel') {
+				assert.deepEqual(opened, []);
+				assert.equal(notices.length, scenario === 'no-folder' ? 1 : 0);
+			} else {
+				assert.deepEqual(opened, [resource.toString()]);
+				const content = (await files.readFile(resource)).content;
+				if (scenario === 'existing' || scenario === 'race') assert.equal(content, original);
+				else assert.deepEqual(JSON.parse(content), { version: '2.0.0', tasks: [{ label: 'example', type: 'shell', command: 'echo', args: ['Hello'], problemMatcher: [] }] });
+			}
 		});
 	}
 });
