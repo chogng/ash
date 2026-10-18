@@ -1,5 +1,13 @@
 import type { VSBuffer } from '../../../base/common/buffer.js';
 
+/** A Main-owned carrier lease, distinct from workspace and backend Session identities. */
+export type AppServerConnectionTarget = 'workspace' | 'local' | { readonly id: string; };
+
+export function appServerConnectionChannel(target: AppServerConnectionTarget): string {
+	return typeof target === 'object' ? `ash:app-server:host:${target.id}`
+		: target === 'local' ? 'ash:app-server:local' : 'ash:app-server';
+}
+
 export const WEB_APP_SERVER_PROTOCOL_VERSION = 1;
 export const WEB_APP_SERVER_CONNECT_EVENT = "ash:app-server:connect";
 export const WEB_APP_SERVER_CONNECTED_EVENT = "ash:app-server:connected";

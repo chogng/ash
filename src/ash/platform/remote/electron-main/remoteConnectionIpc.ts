@@ -1,3 +1,7 @@
+import { localize } from '../../../nls.js';
+import { canceled } from '../../../base/common/errors.js';
+import { Disposable, DisposableStore, toDisposable, type IDisposable } from '../../../base/common/lifecycle.js';
+import { REMOTE_AGENT_HOST_OPEN_CHANNEL, REMOTE_AGENT_HOST_CLOSE_CHANNEL } from '../common/remoteConnectionIpc.js';
 import { VSBuffer } from "../../../base/common/buffer.js";
 import type { IpcRoute } from "../../ipc/electron-main/trustedIpcRouter.js";
 import { nonEmptyString } from "../../ipc/electron-main/ipcValidation.js";
@@ -97,4 +101,73 @@ function boundedString(value: unknown, field: string, maximumBytes: number): str
 	const string = nonEmptyString(value, field);
 	if (VSBuffer.fromString(string).byteLength > maximumBytes) throw new Error(`${field} exceeds its maximum encoded length`);
 	return string;
+}
+
+/** Owns only this renderer document's carrier leases; the shared catalog remains backend-owned. */
+export class RemoteAgentHostConnectionPool extends Disposable {
+	private readonly leases = new Map<string, DisposableStore>();
+
+	constructor(
+		private readonly catalog: Pick<IRemoteConnectionApi, 'list'>,
+		private readonly createConnection: (connection: RemoteConnectionDefinition, id: string) => IDisposable,
+	) {
+		super();
+		this._register(toDisposable(() => this.reset()));
+	}
+
+	public routes(): readonly IpcRoute<unknown, unknown>[] {
+		return [{
+			channel: REMOTE_AGENT_HOST_OPEN_CHANNEL,
+			validate: value => {
+				const params = record(value, ['id', 'connection']);
+				return { id: connectionLeaseId(params.id), connection: connectionDefinition(params.connection) };
+			},
+			invoke: value => {
+				const request = value as { readonly id: string; readonly connection: RemoteConnectionDefinition; };
+				return this.open(request.id, request.connection);
+			},
+		}, {
+			channel: REMOTE_AGENT_HOST_CLOSE_CHANNEL,
+			validate: value => connectionLeaseId(record(value, ['id']).id),
+			invoke: value => this.close(value as string),
+		}];
+	}
+
+	private async open(id: string, expected: RemoteConnectionDefinition): Promise<void> {
+		this.assertNotDisposed();
+		if (this.leases.has(id)) { throw new Error(localize({ bundle: 'ash.workbench', key: 'agentHosts.duplicateLease' }, 'Agent host connection lease already exists')); }
+		if (this.leases.size >= 16) { throw new Error(localize({ bundle: 'ash.workbench', key: 'agentHosts.limit' }, 'Too many Agent host connections')); }
+		const resources = new DisposableStore();
+		// Register before the asynchronous catalog read so close/navigation retires setup too.
+		this.leases.set(id, resources);
+		try {
+			const actual = (await this.catalog.list()).find(connection => connection.name === expected.name);
+			if (this.isDisposed || this.leases.get(id) !== resources) { throw canceled(); }
+			if (!actual || actual.host !== expected.host || actual.workspace !== expected.workspace) {
+				throw new Error(localize({ bundle: 'ash.workbench', key: 'agentHosts.targetChanged' }, 'Saved Remote connection changed; select the target again'));
+			}
+			resources.add(this.createConnection(actual, id));
+		} catch (error) {
+			if (this.leases.get(id) === resources) { this.close(id); }
+			throw error;
+		}
+	}
+
+	private close(id: string): void {
+		const resources = this.leases.get(id);
+		this.leases.delete(id);
+		resources?.dispose();
+	}
+
+	/** A new document cannot acquire or release a predecessor's carriers. */
+	public reset(): void {
+		for (const id of this.leases.keys()) { this.close(id); }
+	}
+}
+
+function connectionLeaseId(value: unknown): string {
+	if (typeof value !== 'string' || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(value)) {
+		throw new TypeError('Invalid Agent host connection lease');
+	}
+	return value;
 }

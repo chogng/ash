@@ -1,3 +1,7 @@
+import { localize } from '../../nls.js';
+import { throwIfCancelled } from '../../base/common/cancellation.js';
+import { generateUuid } from '../../base/common/uuid.js';
+import { REMOTE_AGENT_HOST_OPEN_CHANNEL, REMOTE_AGENT_HOST_CLOSE_CHANNEL } from '../../platform/remote/common/remoteConnectionIpc.js';
 import { createSshRemoteWorkspaceUri } from '../../platform/remote/common/remote.js';
 import { AppServerChannelService } from "../../platform/collaboration/browser/appServerChannelService.js";
 import type { AppServerConnectionRecovery, AppServerProtocolClient } from '../../platform/agentHost/browser/appServerProtocolClient.js';
@@ -20,9 +24,9 @@ import { createRendererHost, type RendererCapabilityContribution } from '../brow
 import { ElectronRendererClipboardService } from '../../platform/clipboard/electron-browser/electronRendererClipboardService.js';
 import { createDisconnectedRendererApi } from '../browser/rendererApi.js';
 import { AppServerAutomationService } from '../../platform/agentHost/browser/appServerAutomationService.js';
-import { registerAppServerWorkspaceHost, initializeWorkspace } from '../../platform/workspaces/electron-browser/appServerWorkspaceHost.js';
+import { registerAppServerWorkspaceHost, initializeWorkspace, initializeWorkspaceDirectories } from '../../platform/workspaces/electron-browser/appServerWorkspaceHost.js';
 import { DisposableStore, toDisposable, type IDisposable } from '../../base/common/lifecycle.js';
-import type { IRendererHost } from '../../platform/renderer/common/rendererHost.js';
+import type { IRendererHost, IRendererAgentHost } from '../../platform/renderer/common/rendererHost.js';
 import { invoke } from '../../platform/ipc/electron-browser/rendererIpc.js';
 import { subscribe } from '../../platform/ipc/electron-browser/rendererIpc.js';
 import { ReconnectableTerminalProcessService } from '../../platform/terminal/browser/reconnectableTerminalProcessService.js';
@@ -55,12 +59,12 @@ import { createRemoteConnectionApi } from "../../platform/remote/electron-browse
 import { SSH_REMOTE_INITIALIZE_TIMEOUT_MS } from '../../platform/remote/common/remote.js';
 import type { IWorkspaceTrustRequestService } from '../../platform/workspace/common/workspaceTrust.js';
 import { InstantiationService } from '../../platform/instantiation/common/instantiationService.js';
-import { CancellationError } from '../../base/common/errors.js';
+import { isCancellationError, CancellationError } from '../../base/common/errors.js';
 
 export type ElectronRendererCapabilityContribution = (client: AppServerProtocolClient, appServer: Parameters<RendererCapabilityContribution>[1], localClient: AppServerProtocolClient) => ReturnType<RendererCapabilityContribution>;
 
 /** Composes Electron renderer capabilities from domain-owned IPC adapters. */
-export async function createElectronRendererApi(contributions: readonly ElectronRendererCapabilityContribution[], hostCapabilities: { readonly browser: boolean; readonly textDocuments?: boolean; readonly appTools?: boolean; }, workspaceTrust: IWorkspaceTrustRequestService, mainProcessService: IMainProcessService, resolveRemoteAuthority?: (api: IExtensionHostApi, factories: IRemoteSocketFactoryService, authority: string, attempt: number) => Promise<IAddress>, initializeRemoteExtensions?: (api: IExtensionHostApi, authority: string) => Promise<IExtensionHostApi>): Promise<AshElectronRendererApi & IDisposable> {
+export async function createElectronRendererApi(contributions: readonly ElectronRendererCapabilityContribution[], hostCapabilities: { readonly browser: boolean; readonly textDocuments?: boolean; readonly appTools?: boolean; readonly agentHosts?: boolean; }, workspaceTrust: IWorkspaceTrustRequestService, mainProcessService: IMainProcessService, resolveRemoteAuthority?: (api: IExtensionHostApi, factories: IRemoteSocketFactoryService, authority: string, attempt: number) => Promise<IAddress>, initializeRemoteExtensions?: (api: IExtensionHostApi, authority: string) => Promise<IExtensionHostApi>): Promise<AshElectronRendererApi & IDisposable> {
 	performance.mark('ash.rendererApi.start');
 	const resources = new DisposableStore();
 	const workspaceApi = createWorkspaceContextApi();
@@ -203,6 +207,58 @@ export async function createElectronRendererApi(contributions: readonly Electron
 			backend = createDisconnectedRendererApi();
 		}
 
+		const agentHosts: IRendererHost['agentHosts'] = hostCapabilities.agentHosts ? {
+			connect: async (target, signal): Promise<IRendererAgentHost> => {
+				throwIfCancelled(signal);
+				if (resources.isDisposed) { throw new CancellationError(); }
+				const id = generateUuid();
+				const hostResources = new DisposableStore();
+				// Install release before opening so cancellation can retire Main's pending catalog check.
+				const release = (): void => { resources.delete(hostResources); hostResources.dispose(); };
+				hostResources.add(toDisposable(() => { void invoke(REMOTE_AGENT_HOST_CLOSE_CHANNEL, { id }).catch(error => { if (!resources.isDisposed) connectionLogger.error('app-server', 'Agent host release failed', error); }); }));
+				signal.addEventListener('abort', release, { once: true });
+				hostResources.add(toDisposable(() => signal.removeEventListener('abort', release)));
+				resources.add(hostResources);
+				try {
+					await invoke(REMOTE_AGENT_HOST_OPEN_CHANNEL, { id, connection: target });
+					throwIfCancelled(signal);
+					if (hostResources.isDisposed) { throw new CancellationError(); }
+					const lease = hostResources.add(connectionServices.createInstance(LocalAgentHostServiceClient, {
+						clientName: 'ash-desktop-agents', connection: { id }, initializeTimeoutMs: SSH_REMOTE_INITIALIZE_TIMEOUT_MS,
+						capabilities: { agentInteractions: { version: 1, kinds: ['approval', 'permissions', 'userInput'] }, directoryGrantsHost: { version: 1 } },
+					}));
+					// Each scope observes device power, but keeps its own retry and protocol generation.
+					const suspend = nativeHost.onDidSuspendOS(() => lease.recovery.suspend());
+					const resume = nativeHost.onDidResumeOS(() => lease.recovery.resume());
+					hostResources.add(toDisposable(() => { suspend.dispose(); resume.dispose(); }));
+					const enabled = await lease.connect();
+					throwIfCancelled(signal);
+					if (!enabled) { throw new Error(localize({ bundle: 'ash.workbench', key: 'agentHosts.unavailable' }, 'Agent host connections are unavailable in this window.')); }
+					if (hostResources.isDisposed) { throw new CancellationError(); }
+					let api = createRendererHost(lease.client, {
+						externalOpener: { openExternal: value => invoke<boolean>('ash:host:openExternal', value) },
+						callbackHost: { listen: options => invoke('ash:oauth-callback:listen', options), wait: id => invoke('ash:oauth-callback:wait', { id }), close: id => invoke('ash:oauth-callback:close', { id }) },
+						clipboardService: new ElectronRendererClipboardService(),
+					}, [], target.host, lease.recovery);
+					hostResources.add(api.mcpServerManagement);
+					if (lease.client.capabilities?.contracts.automation?.version === 1) {
+						api = { ...api, automation: hostResources.add(new AppServerAutomationService(lease.client)) };
+					}
+					const initialize = (): Promise<void> => initializeWorkspaceDirectories(lease.client, workspaceTrust, api.workspaceTrust, [
+						{ id: `agent-host:${id}`, path: target.workspace, label: createSshRemoteWorkspaceUri(target.host, target.workspace).toString() },
+					]);
+					await initialize();
+					throwIfCancelled(signal);
+					if (hostResources.isDisposed) { throw new CancellationError(); }
+					hostResources.add(lease.onDidReconnect(() => { void initialize().catch(error => { if (!hostResources.isDisposed && !isCancellationError(error)) connectionLogger.error('app-server', 'Agent host directory recovery failed', error); }); }));
+					return { id, connection: target, api, dispose: release, [Symbol.dispose]: release };
+				} catch (error) {
+					release();
+					throw error;
+				}
+			},
+		} : undefined;
+
 		return {
 			...backend,
 			// Desktop supports the server-backed feature set even when its UI development host starts disconnected.
@@ -216,6 +272,7 @@ export async function createElectronRendererApi(contributions: readonly Electron
 			},
 			remote: createRemoteAgentApi(),
 			remoteConnections: createRemoteConnectionApi(),
+			agentHosts,
 			keyboardLayout: createNativeKeyboardLayoutApi(mainProcessService),
 			userKeyboardLayout: createUserKeyboardLayoutApi(mainProcessService),
 			nativeContextMenu: { popup: popupContextMenu, close: closeContextMenu },

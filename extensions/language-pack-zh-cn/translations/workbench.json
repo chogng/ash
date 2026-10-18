@@ -2166,6 +2166,16 @@
     "openEditors": "打开的编辑器"
   },
   "ash.workbench": {
+    "agentHosts.help": "通过命令面板或会话标题菜单中的“Agents：管理已连接宿主”，连接已保存的 SSH 宿主或断开所选宿主。在选择器中使用方向键移动、Enter 选择、Escape 取消。",
+    "agentHosts.conversationUnavailable": "此对话属于另一个 Agent 宿主。",
+    "agentHosts.duplicateLease": "Agent 宿主连接租约已存在",
+    "agentHosts.limit": "Agent 宿主连接数已达到上限",
+    "agentHosts.targetChanged": "已保存的远程连接发生变化，请重新选择目标",
+    "agentHosts.unavailable": "此窗口无法连接 Agent 宿主。",
+    "agentHosts.manage": "Agents：管理已连接宿主",
+    "agentHosts.add": "连接已保存的 SSH 宿主…",
+    "agentHosts.select": "连接宿主，或选择已连接宿主以断开连接",
+    "agentHosts.target": "选择要在此 Agents 窗口中连接的已保存 SSH 宿主",
     "remote.workspace.absolutePath": "远程工作区的绝对路径（例如 /srv/project 或 C:/work/project）",
     "diffView": "差异视图",
     "diffView.inline": "行内",

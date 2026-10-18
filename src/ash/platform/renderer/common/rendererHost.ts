@@ -1,3 +1,5 @@
+import type { IDisposable } from '../../../base/common/lifecycle.js';
+import type { RemoteConnectionDefinition } from '../../remote/common/remoteConnectionService.js';
 import type { ISecretStorageStatusService } from '../../secrets/common/secrets.js';
 import type { IMessageHistoryService } from '../../messageHistory/common/messageHistory.js';
 import type { IExtensionBackendApi } from '../../agentHost/common/extensionBackendApi.js';
@@ -77,6 +79,13 @@ export function mergeRendererHostCapabilities(capabilities: readonly RendererHos
 	return merged;
 }
 
+/** One independent backend connection. Disposing it releases its carrier, never its shared daemon. */
+export interface IRendererAgentHost extends IDisposable {
+	readonly id: string;
+	readonly connection: RemoteConnectionDefinition;
+	readonly api: IRendererHost;
+}
+
 /** Transport-neutral capability set supplied by a renderer host at startup. */
 export interface IRendererHost extends RendererHostCapabilities {
 	readonly workspaceConfigurationFiles?: IWorkspaceConfigurationFileApi;
@@ -105,6 +114,8 @@ export interface IRendererHost extends RendererHostCapabilities {
 	readonly remote?: IRemoteAgentApi;
 	/** Optional because web hosts cannot restart into a host-owned SSH connection. */
 	readonly remoteConnections?: IRemoteConnectionApi;
+	/** Additional backend scopes are available only in hosts with a multi-host window owner. */
+	readonly agentHosts?: { connect(connection: RemoteConnectionDefinition, signal: AbortSignal): Promise<IRendererAgentHost>; };
 	readonly session: IAgentSessionService;
 	readonly teams: ITeamApi;
 	readonly model: IAgentModelsService;

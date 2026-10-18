@@ -1,3 +1,4 @@
+import { appServerConnectionChannel, type AppServerConnectionTarget } from '../common/appServerTransport.js';
 import { Emitter } from '../../../base/common/event.js';
 import { Disposable, MutableDisposable, toDisposable, type IDisposable } from '../../../base/common/lifecycle.js';
 import { IInstantiationService } from '../../instantiation/common/instantiation.js';
@@ -12,7 +13,7 @@ import { AppServerMessagePortTransport } from './appServerMessagePortTransport.j
 
 let nextConnectionId = 0;
 
-/** Owns the window's local App Server lease; the Rust process remains owned by Main. */
+/** Owns one of the window's App Server leases; the Rust process remains owned by Main. */
 export class LocalAgentHostServiceClient extends Disposable {
 
 	private readonly carrier: AppServerMessagePortTransport;
@@ -27,13 +28,13 @@ export class LocalAgentHostServiceClient extends Disposable {
 	private hasInitialized = false;
 
 	constructor(
-		options: AppServerProtocolClientOptions & { readonly connection?: 'workspace' | 'local'; },
+		options: AppServerProtocolClientOptions & { readonly connection?: AppServerConnectionTarget; },
 		@IRemoteSocketFactoryService private readonly factories: IRemoteSocketFactoryService,
 		@IInstantiationService instantiationService: IInstantiationService,
 		@ILogService private readonly logService: ILogService,
 	) {
 		super();
-		this.channelPrefix = options.connection === 'local' ? 'ash:app-server:local' : 'ash:app-server';
+		this.channelPrefix = appServerConnectionChannel(options.connection ?? 'workspace');
 		// Main validates the runtime before transferring the port, including cold SSH deployment.
 		this.carrier = this._register(new AppServerMessagePortTransport(() => {
 			// Recovery owns rejection reporting and the bounded retry budget.
@@ -107,7 +108,7 @@ export class LocalAgentHostServiceClient extends Disposable {
 		await this.carrier.initialized();
 		this.assertNotDisposed();
 		performance.mark('ash.appServer.initialized');
-		this.logService.debug('app-server', 'Local App Server connection initialized');
+		this.logService.debug('app-server', 'App Server connection initialized');
 		if (this.hasInitialized) { this.reconnected.fire(); }
 		this.hasInitialized = true;
 	}

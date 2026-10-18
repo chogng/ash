@@ -37,14 +37,14 @@ suite('Local Agent Host connection service', () => {
 		ipcRenderer: {
 			send() { },
 			on: (channel, listener) => {
-				assert.ok(['ash:app-server:restart', 'ash:app-server:local:restart'].includes(channel));
+				assert.match(channel, /^ash:app-server(?::local|:host:[0-9a-f-]{36})?:restart$/);
 				restarts.add(listener);
 				return { dispose: () => { restarts.delete(listener); } };
 			},
 			invoke: async (channel, params) => {
 				if (channel.endsWith(':initialized')) { initialized++; return; }
 				if (channel.endsWith(':recover-runtime')) { repairs++; return true; }
-				assert.ok(['ash:app-server:acquire', 'ash:app-server:local:acquire'].includes(channel));
+				assert.match(channel, /^ash:app-server(?::local|:host:[0-9a-f-]{36})?:acquire$/);
 				acquisitions++;
 				await pendingAcquisition?.();
 				if (failAcquisition) { throw new Error('acquisition refused'); }
@@ -133,6 +133,28 @@ suite('Local Agent Host connection service', () => {
 			{ channel: 'ash:app-server:acquire', method: 'session/list' },
 		]);
 		assert.deepEqual(portChannels, ['ash:app-server:local:port', 'ash:app-server:port']);
+	});
+
+
+	test('additional hosts own independent protocol clients and retiring one leaves the other usable', async () => {
+		using services = new InstantiationService();
+		using logger = new LogService({ sinks: [] });
+		services.registerInstance(ILogService, logger);
+		services.registerSingleton(IRemoteSocketFactoryService, () => services.createInstance(RemoteSocketFactoryService));
+		const firstId = '00000000-0000-0000-0000-000000000001';
+		const secondId = '00000000-0000-0000-0000-000000000002';
+		using first = services.createInstance(Service, { clientName: 'host-a', connection: { id: firstId } });
+		using second = services.createInstance(Service, { clientName: 'host-b', connection: { id: secondId } });
+		await Promise.all([first.connect(), second.connect()]);
+		await first.client.request(APP_SERVER_METHODS['session/list'], {});
+		first.dispose();
+		await second.client.request(APP_SERVER_METHODS['session/list'], {});
+		assert.deepEqual(traffic.filter(item => item.method === 'session/list'), [
+			{ channel: `ash:app-server:host:${firstId}:acquire`, method: 'session/list' },
+			{ channel: `ash:app-server:host:${secondId}:acquire`, method: 'session/list' },
+		]);
+		assert.equal(second.client.state, 'ready');
+		assert.deepEqual(portChannels, [`ash:app-server:host:${firstId}:port`, `ash:app-server:host:${secondId}:port`]);
 	});
 
 	test('production assembly requires the connection log service', () => {

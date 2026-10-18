@@ -7,6 +7,7 @@ import type { AgentVoiceSource, AgentVoiceSelection, AgentVoiceSessionState, Age
 import { APP_SERVER_METHODS } from '../../../../../.build/protocol/typescript/index.js';
 import { createUuid } from '../../../base/common/uuid.js';
 import { canceled } from '../../../base/common/errors.js';
+import { throwIfCancelled } from '../../../base/common/cancellation.js';
 import { createAppServerResourceApi, readAppServerResource } from './appServerApi.js';
 import { Event } from '../../../base/common/event.js';
 import type { AgentSession, AgentExecutionNode, SessionResult, SessionThreadResult } from '../common/agent.js';
@@ -120,22 +121,33 @@ export function createDisconnectedAgentTurnService(unavailable: UnavailableOpera
 export function createAppServerAgentSessionService(connection: AppServerProtocolClient, sshHost?: string): IAgentSessionService {
 	return {
 		async invokeRuntime(providerId, request, signal) {
-			signal.throwIfAborted();
+			throwIfCancelled(signal);
 			if (connection.capabilities?.contracts.sessionRuntimes?.version !== 1) {
 				if (request.operation === 'probe') { return { type: 'availability', available: false }; }
 				throw new Error(localize({ bundle: 'ash.sessions', key: 'sessions.runtime.unavailable' }, 'Session runtime Providers are unavailable on this connection.'));
 			}
 			const operationId = createUuid();
 			const generation = connection.generation;
+			let retired = false;
+			using state = connection.onStateChange(value => {
+				if (value !== 'ready') retired = true;
+			});
+			const isCurrent = (): boolean => !retired && connection.state === 'ready' && connection.generation === generation;
+			const assertCurrent = (): void => {
+				throwIfCancelled(signal);
+				if (!isCurrent()) throw canceled();
+			};
+			assertCurrent();
 			const cancel = (): void => {
-				if (generation === connection.generation) {
+				// Runtime operations and cancellation belong to their admitting connection.
+				if (isCurrent()) {
 					void appServerRequest(connection, 'session/runtime/cancel', { operationId }).catch(() => { });
 				}
 			};
 			signal.addEventListener('abort', cancel, { once: true });
 			try {
 				const value = await connection.request(APP_SERVER_METHODS['session/runtime/invoke'], { operationId, providerId, request }, { timeoutMs: 600_000 });
-				signal.throwIfAborted();
+				assertCurrent();
 				// Transport decoding has validated this closed result; copy only the domain fields.
 				switch (value.type) {
 					case 'targets': return { type: value.type, targets: value.targets.map(target => ({ ...target })) };
@@ -144,7 +156,7 @@ export function createAppServerAgentSessionService(connection: AppServerProtocol
 					case 'target': return { type: value.type, target: { ...value.target } };
 				}
 			} catch (error) {
-				signal.throwIfAborted();
+				assertCurrent();
 				throw error;
 			} finally { signal.removeEventListener('abort', cancel); }
 		},

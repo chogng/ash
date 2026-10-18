@@ -1,5 +1,8 @@
 {
   "ash": {
+    "automations.hostedTitle": "{0} · {1}",
+    "automations.runsOn": "宿主：{0}，运行目录：{1}",
+    "automations.hostHelp": "计划来自多个宿主时，每张卡片都会标明宿主。请先选择“运行于”，再选择目录或对话。切换宿主会清空之前的目录和对话，列表只提供所选宿主的对话。",
     "sessions.chatgpt.activityOneStep": "1 个步骤",
     "sessions.chatgpt.activitySteps": "{0} 个步骤",
     "sessions.chatgpt.activityFailed": "执行过程 · 部分步骤失败",

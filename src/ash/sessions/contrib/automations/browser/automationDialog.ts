@@ -40,7 +40,7 @@ export class AutomationDialog extends Disposable {
 	private result: IAutomationDialogResult | undefined;
 
 	constructor(parent: HTMLElement, private readonly options: IShowAutomationDialogOptions,
-		providers: readonly IAutomationProviderDescriptor[], conversations: readonly { sessionId: string; threadId: string; title: string; }[],
+		providers: readonly IAutomationProviderDescriptor[], conversations: readonly { providerId?: string; sessionId: string; threadId: string; title: string; }[],
 		@IContextKeyService contexts: IContextKeyService,
 		@IAutomationService private readonly automations: IAutomationService,
 	) {
@@ -72,7 +72,6 @@ export class AutomationDialog extends Disposable {
 		this.form.append(advanced);
 		this.conversation = this.select(advanced, localize('automations.conversation', 'Conversation'), [
 			['new', localize('automations.newConversation', 'New conversation for each run')],
-			...conversations.map(item => [JSON.stringify({ type: 'continue', sessionId: item.sessionId, threadId: item.threadId }), item.title] as const),
 		]);
 		this.form.append(h(document, 'h3', {}, localize('automations.timingSection', 'When to run')));
 		this.schedule = this.select(this.form, localize('automations.schedule', 'Schedule'), [
@@ -112,6 +111,20 @@ export class AutomationDialog extends Disposable {
 		this.prompt.value = initial?.prompt ?? '';
 		this.directory.value = initial?.target?.directory ?? '';
 		this.provider.value = initial?.target?.providerId ?? providers[0]?.id ?? '';
+		const updateConversations = (): void => {
+			this.conversation.replaceChildren(this.option(localize('automations.newConversation', 'New conversation for each run'), 'new'));
+			for (const item of conversations) {
+				// A destination without an owner must never be offered on a different host.
+				if (item.providerId !== this.provider.value) { continue; }
+				this.conversation.append(this.option(item.title, JSON.stringify({ type: 'continue', sessionId: item.sessionId, threadId: item.threadId })));
+			}
+		};
+		updateConversations();
+		this._register(addDisposableListener(this.provider, 'change', () => {
+			// Changing hosts must not retain a directory or raw Session identity selected on the previous host.
+			this.directory.value = '';
+			updateConversations();
+		}));
 		if (initial?.target?.session.type === 'continue') {
 			advanced.open = true;
 			const value = JSON.stringify(initial.target.session);

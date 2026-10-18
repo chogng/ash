@@ -3,11 +3,80 @@ import { Emitter } from '../../../../base/common/event.js';
 import type { ServerNotification, ToolOutputArtifact } from '../../../../../../.build/protocol/typescript/index.js';
 import type { ThreadTranscriptUpdateEnvelope } from '../../common/agent.js';
 import assert from 'node:assert/strict';
-import { test } from 'mocha';
+import { suite, test } from 'mocha';
+import { DeferredPromise } from '../../../../base/common/async.js';
+import { isCancellationError } from '../../../../base/common/errors.js';
+import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../base/test/common/utils.js';
+import type { AppServerConnectionState } from '../../common/appServerApi.js';
 import { AppServerRemoteError } from '../../common/appServerError.js';
 import { AgentThreadHistoryConflictError } from '../../common/agentService.js';
 import type { AppServerProtocolClient } from '../../browser/appServerProtocolClient.js';
 import { createAppServerAgentThreadService, createAppServerAgentSessionService, createAppServerAgentTurnService } from '../../browser/appServerAgentService.js';
+
+suite('Session runtime connection ownership', () => {
+	ensureNoDisposablesAreLeakedInTestSuite();
+
+	for (const replacement of [false, true]) {
+		for (const abort of [false, true]) {
+			test(`retires a runtime result after ${replacement ? 'replacement' : 'close'} with cancellation ${abort}`, async () => {
+				using changed = new Emitter<AppServerConnectionState>();
+				const response = new DeferredPromise<unknown>();
+				const methods: string[] = [];
+				const connection = {
+					generation: 1,
+					state: 'ready' as AppServerConnectionState,
+					capabilities: { contracts: { sessionRuntimes: { version: 1 } } },
+					onStateChange: changed.event,
+					request: (definition: { method: string; }) => {
+						methods.push(definition.method);
+						return methods.length === 1 ? response.p : Promise.resolve({});
+					},
+				};
+				const api = createAppServerAgentSessionService(connection as unknown as AppServerProtocolClient);
+				const controller = new AbortController();
+				const pending = api.invokeRuntime!('ash.dev-containers', { operation: 'list' }, controller.signal);
+				const rejected = assert.rejects(pending, isCancellationError);
+				if (replacement) connection.generation++;
+				else connection.state = 'stopped';
+				changed.fire(connection.state);
+				if (abort) controller.abort();
+				await response.complete({ type: 'targets', targets: [] });
+				await rejected;
+				assert.deepEqual(methods, ['session/runtime/invoke']);
+				assert.equal(changed.hasListeners(), false);
+			});
+		}
+	}
+
+	test('cancelling the live runtime operation preserves its exact operation identity', async () => {
+		using changed = new Emitter<AppServerConnectionState>();
+		const response = new DeferredPromise<unknown>();
+		const requests: { method: string; params: unknown; }[] = [];
+		const connection = {
+			generation: 1,
+			state: 'ready',
+			capabilities: { contracts: { sessionRuntimes: { version: 1 } } },
+			onStateChange: changed.event,
+			request: (definition: { method: string; }, params: unknown) => {
+				requests.push({ method: definition.method, params });
+				return requests.length === 1 ? response.p : Promise.resolve({});
+			},
+		};
+		const api = createAppServerAgentSessionService(connection as unknown as AppServerProtocolClient);
+		const controller = new AbortController();
+		const pending = api.invokeRuntime!('ash.dev-containers', { operation: 'list' }, controller.signal);
+		const rejected = assert.rejects(pending, isCancellationError);
+		controller.abort();
+		await response.complete({ type: 'targets', targets: [] });
+		await rejected;
+		const operationId = (requests[0].params as { operationId: string; }).operationId;
+		assert.deepEqual(requests, [
+			{ method: 'session/runtime/invoke', params: { operationId, providerId: 'ash.dev-containers', request: { operation: 'list' } } },
+			{ method: 'session/runtime/cancel', params: { operationId } },
+		]);
+		assert.equal(changed.hasListeners(), false);
+	});
+});
 
 test('Thread history windows reach read and subscribe and retain detached pagination boundaries', async () => {
 	const requests: unknown[] = [];

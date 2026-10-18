@@ -25,11 +25,12 @@ export class SessionsProvidersService extends Disposable implements ISessionsPro
 	readonly onDidChangeProviders = this.changed.event;
 
 	registerProvider(provider: ISessionsProvider): IDisposable {
+		this.assertNotDisposed();
 		if (this.providers.has(provider.id)) throw new Error(`Duplicate Sessions provider: ${provider.id}`);
 		this.providers.set(provider.id, provider);
 		this.changed.fire({ added: [provider], removed: [] });
 		return toDisposable(() => {
-			if (this.providers.get(provider.id) !== provider) return;
+			if (this.isDisposed || this.providers.get(provider.id) !== provider) return;
 			this.providers.delete(provider.id);
 			this.changed.fire({ added: [], removed: [provider] });
 		});
@@ -38,6 +39,11 @@ export class SessionsProvidersService extends Disposable implements ISessionsPro
 	getProviders(): ISessionsProvider[] { return [...this.providers.values()].sort((a, b) => a.order - b.order); }
 
 	getProvider(providerId: string): ISessionsProvider | undefined { return this.providers.get(providerId); }
+
+	override dispose(): void {
+		super.dispose();
+		this.providers.clear();
+	}
 }
 
 registerSingleton(ISessionsProvidersService, SessionsProvidersService, InstantiationType.Delayed);

@@ -1,3 +1,4 @@
+import { LOCAL_AGENT_HOST_PROVIDER_ID } from '../common/agentHostSessionsProvider.js';
 import { localize } from '../../nls.js';
 import { Lxicon } from '../../base/common/lxicons.js';
 import { InstantiationType, registerSingleton } from '../../platform/instantiation/common/extensions.js';
@@ -44,16 +45,20 @@ class ChatSessionNavigationService implements IChatSessionNavigationServiceContr
 		return active ? { sessionId: active.session.sessionId, threadId: active.threadId } : undefined;
 	}
 
-	getConversations(): readonly { readonly sessionId: string; readonly threadId: string; readonly title: string; }[] {
+	getConversations(): readonly { readonly providerId: string; readonly sessionId: string; readonly threadId: string; readonly title: string; }[] {
 		return this.sessions.sessions.filter(session => session.status === 'active').flatMap(session =>
 			session.chats.filter(chat => chat.status === 'active').map(chat => ({
+				providerId: LOCAL_AGENT_HOST_PROVIDER_ID,
 				sessionId: session.sessionId,
 				threadId: chat.threadId,
 				title: `${session.title} · ${chat.title ?? 'Conversation'}`,
 			})));
 	}
 
-	async openConversation(sessionId: string, threadId: string): Promise<void> {
+	async openConversation(sessionId: string, threadId: string, providerId?: string): Promise<void> {
+		if (providerId !== undefined && providerId !== LOCAL_AGENT_HOST_PROVIDER_ID) {
+			throw new Error(localize({ bundle: 'ash.workbench', key: 'agentHosts.conversationUnavailable' }, 'This conversation belongs to another Agent host.'));
+		}
 		await this.sessions.openThread(sessionId, threadId);
 		const active = this.getActiveConversation();
 		if (active?.sessionId === sessionId && active.threadId === threadId) await this.views.focusView(CHAT_VIEW_ID);

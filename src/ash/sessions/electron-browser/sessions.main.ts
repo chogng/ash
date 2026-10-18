@@ -112,7 +112,7 @@ export async function main(profile: SessionsProfile): Promise<IDisposable> {
 		serviceCollection.set(IBrowserViewService, ProxyChannel.toService<IBrowserViewService>(mainProcessService.getChannel(ipcBrowserViewChannelName)));
 		logger = sessions.add(profileServices.createInstance(LoggerChannelClient));
 		serviceCollection.set(ILoggerService, logger);
-		api = await createElectronRendererApi([client => { documentClient = client; return {}; }, (_client, _appServer, localClient) => registerLocalTranscriptionService(transcriptionServices, localClient)], { browser: true, textDocuments: true, appTools: true }, permissionDialog, mainProcessService);
+		api = await createElectronRendererApi([client => { documentClient = client; return {}; }, (_client, _appServer, localClient) => registerLocalTranscriptionService(transcriptionServices, localClient)], { browser: true, textDocuments: true, appTools: true, agentHosts: true }, permissionDialog, mainProcessService);
 	}
 	catch (error) { sessions.dispose(); return showStartupError(error, text => invoke<void>('ash:host:writeClipboard', text)); }
 	try {

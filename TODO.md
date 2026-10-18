@@ -70,8 +70,8 @@
 
 文件关系与实施顺序见 [AgentHost 文件台账](agenthost-todo.md#当前文件台账--2026-10-18)。本次更新 2790 行清单及顶层导出／调用方，完成领域数据拆分、文件 Provider 迁移、重连策略和现有连接生命周期修复；验证范围见同文件，本节只保留未完成项。
 
-- [ ] **文件对齐 · 剩余连接／Workbench 契约**：继续核对真实消费者需要的宿主管理、多端点等契约。Remote 初始化退役与文件读取连接隔离已完成，见 [Remote 记录](agenthost-todo.md#远程扩展初始化退役--本轮完成)和[文件资源记录](agenthost-todo.md#文件资源退役与领域契约--本轮完成)。上游 `IAgentService`／`IAgentHostService` 与现有 Rust 执行契约尚未证明等价，不按同名文件计完成。
-- [ ] **文件对齐 · 剩余 Sessions／Chat／现有远程能力**：Automation 连接代次隔离、SSH 目录身份、远程 Windows URI、文件搜索连接退役及 Session 创建失败清理已闭环；继续沿 Code Chat 与仓库事实 owner 复核缺失契约，完整验证边界见 [AgentHost 实施台账](agenthost-todo.md)。上游 Node、state／meta 和生成协议分流至既有 Rust／可选 Provider，尚未逐文件证明等价；不覆盖正在进行的 Terminal 工作。
+- [ ] **文件对齐 · 剩余连接／Workbench 契约**：已接通保存 SSH 目标 → 独立 carrier／Renderer 领域 scope → Provider 注册，并加入宿主连接／断开入口；连接退役、目录授权及 Provider 路由的验证见 [多宿主连接记录](agenthost-todo.md#多宿主连接切片--连接与-provider-已接通)。仍需闭合统一宿主管理和多端点公开契约；上游 `IAgentService`／`IAgentHostService` 与 Rust 执行契约尚未证明等价，不按同名文件计完成。
+- [ ] **文件对齐 · 剩余 Sessions／Chat／现有远程能力**：独立 Provider 与 Automation 路由已实现；Automation 导航现在保留 Provider，切换宿主不再沿用旧目录／会话。`SessionsManagementService` 主模型仍只绑定一个 Provider，尚须实现跨宿主 Session 身份、统一主列表／分组、创建和选择，以及 Chat／模型／文件／仓库／权限的对应 scope 路由；完整范围见 [多宿主复核](agenthost-todo.md#多宿主范围复核--尚未完成)。当前其他宿主的对话导航会明确拒绝，禁止打开本机同名 ID；这不代表远端 Chat 已完成。Node、state／meta 和生成协议的既有 Rust／可选 Provider 分流仍待逐项证明；不覆盖正在进行的 Terminal 工作。
 - [ ] **新产品 · Cloud Sandbox**（用户决定先 TODO）：先确定服务端实例／仓库 producer、账号和凭证刷新、Session／文件权限及 Provider 归属，再实现连接、目录、模型和会话入口；当前没有对应生产 producer，具体路径见清单 `todo-by-user`。
 - [ ] **新产品 · Tunnel／WSL**（用户决定先 TODO）：分别确定网关／认证／重连／存储与 WSL runtime 启停／分发／authority 契约，再接既有 Remote owner；当前 SSH／Dev Container 不作为这些能力已实现的证据。
 - [ ] **新产品 · Mission Control**（用户决定先 TODO）：先确定后端控制与会话事实、认证／credential delegation、共享权限及 Provider 归属，再实现环境与会话入口；不预建镜像状态或转发类。

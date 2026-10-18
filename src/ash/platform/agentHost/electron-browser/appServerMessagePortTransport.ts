@@ -7,7 +7,7 @@ import { generateUuid } from '../../../base/common/uuid.js';
 import { invoke, subscribe } from '../../ipc/electron-browser/rendererIpc.js';
 import { VSBuffer } from '../../../base/common/buffer.js';
 import { Emitter } from '../../../base/common/event.js';
-import { getAppServerReadConsumption } from '../common/appServerTransport.js';
+import { appServerConnectionChannel, getAppServerReadConsumption, type AppServerConnectionTarget } from '../common/appServerTransport.js';
 import { SocketCloseEventType, type ISocket, type SocketCloseEvent, type SocketDiagnosticsEventType } from '../../../base/parts/ipc/common/ipc.net.js';
 
 /** Acquires and owns a renderer-exclusive MessagePort without interpreting protocol messages. */
@@ -18,14 +18,14 @@ export class AppServerMessagePortTransport extends Disposable {
 	private enabled: boolean | undefined;
 	private readonly acquisition = this._register(new MutableDisposable<IDisposable>());
 
-	constructor(private readonly restart: () => void, private readonly connection: 'workspace' | 'local' = 'workspace', private readonly acquisitionTimeoutMs = 10_000) {
+	constructor(private readonly restart: () => void, private readonly connection: AppServerConnectionTarget = 'workspace', private readonly acquisitionTimeoutMs = 10_000) {
 		super();
 		this._register(toDisposable(() => this.close()));
 		const subscription = subscribe(`${this.channelPrefix}:restart`, restart);
 		this._register(toDisposable(() => subscription.dispose()));
 	}
 
-	private get channelPrefix(): string { return this.connection === 'local' ? 'ash:app-server:local' : 'ash:app-server'; }
+	private get channelPrefix(): string { return appServerConnectionChannel(this.connection); }
 
 	public get connectionMetadata(): unknown {
 		return this.metadata;

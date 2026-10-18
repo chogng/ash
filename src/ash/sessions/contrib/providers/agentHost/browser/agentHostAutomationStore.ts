@@ -304,7 +304,7 @@ export class AgentHostAutomationStore extends Disposable implements ISessionsPro
 			id: this.identity(value.id),
 			automationId: this.identity(value.automationId),
 			providerId: this.providerId,
-			sessionResource: value.sessionId && value.threadId ? URI.from({ scheme: 'ash-session', path: `/${value.sessionId}/${value.threadId}` }) : undefined
+			sessionResource: value.sessionId && value.threadId ? URI.from({ scheme: 'ash-session', authority: encodeURIComponent(this.providerId), path: `/${encodeURIComponent(value.sessionId)}/${encodeURIComponent(value.threadId)}` }) : undefined
 		};
 	}
 

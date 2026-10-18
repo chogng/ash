@@ -1,7 +1,10 @@
 import { createSshRemoteWorkspaceUri } from '../../../remote/common/remote.js';
 import assert from 'node:assert/strict';
 import { suite, suiteSetup, suiteTeardown, test } from 'mocha';
-import { Event } from '../../../../base/common/event.js';
+import { DeferredPromise } from '../../../../base/common/async.js';
+import { isCancellationError } from '../../../../base/common/errors.js';
+import { toDisposable } from '../../../../base/common/lifecycle.js';
+import { Emitter, Event } from '../../../../base/common/event.js';
 import { URI } from '../../../../base/common/uri.js';
 import type { ISandboxGlobals } from '../../../../base/parts/sandbox/electron-browser/sandboxTypes.js';
 import type { AppServerProtocolClient } from '../../../agentHost/browser/appServerProtocolClient.js';
@@ -65,7 +68,7 @@ suite('workspace trust during directory opening', () => {
 	test('saved partial and empty grants are reused without prompting or widening capabilities', async () => {
 		const grants: WorkspaceTrustPermission[][] = [];
 		const requests: unknown[] = [];
-		const client = { request: async (method: { method: string; }, params: unknown) => { requests.push({ method: method.method, params }); return { dirs: [] }; } } as unknown as AppServerProtocolClient;
+		const client = { state: 'ready', generation: 1, onStateChange: Event.None, request: async (method: { method: string; }, params: unknown) => { requests.push({ method: method.method, params }); return { dirs: [] }; } } as unknown as AppServerProtocolClient;
 		const api = trustApi(new Map([['/partial', ['readFiles', 'executeCommands']], ['/empty', []]]), grants);
 		await host.initializeWorkspace(client, { requestWorkspaceTrust: async () => { throw new Error('Unexpected trust request'); } }, api, workspace(['/partial', '/empty']));
 		assert.deepEqual(grants, []);
@@ -84,7 +87,7 @@ suite('workspace trust during directory opening', () => {
 			const grants: WorkspaceTrustPermission[][] = [];
 			const requests: unknown[] = [];
 			const prompts: string[] = [];
-			const client = { request: async (_method: unknown, params: unknown) => { requests.push(params); return { dirs: [] }; } } as unknown as AppServerProtocolClient;
+			const client = { state: 'ready', generation: 1, onStateChange: Event.None, request: async (_method: unknown, params: unknown) => { requests.push(params); return { dirs: [] }; } } as unknown as AppServerProtocolClient;
 			await host.initializeWorkspace(client, { requestWorkspaceTrust: async path => { prompts.push(path); return choice; } }, trustApi(new Map(), grants), workspace(['/new']));
 			const permissions = choice === 'readOnly' ? READ_DIR_PERMISSIONS : DEVELOPMENT_DIR_PERMISSIONS;
 			assert.deepEqual(prompts, [URI.file('/new').fsPath]);
@@ -96,9 +99,66 @@ suite('workspace trust during directory opening', () => {
 		});
 	}
 
+	for (const stage of ['read', 'choice', 'grant', 'write'] as const) {
+		test(`directory setup cannot use a retired connection's ${stage} receipt`, async () => {
+			const entered = new DeferredPromise<void>();
+			const gate = new DeferredPromise<void>();
+			using changes = new Emitter<'ready' | 'stopped'>();
+			const grants: WorkspaceTrustPermission[][] = [];
+			const original = trustApi(new Map(), grants);
+			let writes = 0;
+			let prompts = 0;
+			let listeners = 0;
+			const wait = async (current: typeof stage): Promise<void> => {
+				if (stage === current) { void entered.complete(); await gate.p; }
+			};
+			const client = {
+				state: 'ready', generation: 1,
+				onStateChange: (listener: (state: 'ready' | 'stopped') => void) => {
+					listeners++;
+					const subscription = changes.event(listener);
+					return toDisposable(() => { subscription.dispose(); listeners--; });
+				},
+				request: async () => { writes++; await wait('write'); return { dirs: [] }; },
+			} as unknown as AppServerProtocolClient;
+			const setup = host.initializeWorkspaceDirectories(client, {
+				requestWorkspaceTrust: async () => { prompts++; await wait('choice'); return 'readOnly'; },
+			}, {
+				...original,
+				readDirectory: async path => { const value = await original.readDirectory(path); await wait('read'); return value; },
+				createGrant: async (path, permissions) => { const value = await original.createGrant(path, permissions); await wait('grant'); return value; },
+			}, [{ id: 'remote-root', path: '/srv/project' }]);
+			const rejected = assert.rejects(setup, isCancellationError);
+			await entered.p;
+			changes.fire('stopped');
+			changes.fire('ready');
+			await gate.complete();
+			await rejected;
+			assert.equal(prompts, stage === 'read' ? 0 : 1);
+			assert.equal(grants.length, stage === 'read' || stage === 'choice' ? 0 : 1);
+			assert.equal(writes, stage === 'write' ? 1 : 0);
+			assert.equal(listeners, 0);
+		});
+	}
+
+	test('remote directory prompts display the host while granting only the original server path', async () => {
+		const paths: string[] = [];
+		const labels: string[] = [];
+		const api = trustApi(new Map(), []);
+		const client = { state: 'ready', generation: 1, onStateChange: Event.None, request: async () => ({ dirs: [] }) } as unknown as AppServerProtocolClient;
+		await host.initializeWorkspaceDirectories(client, {
+			requestWorkspaceTrust: async label => { labels.push(label); return 'readOnly'; },
+		}, {
+			...api,
+			createGrant: (path, permissions) => { paths.push(path); return api.createGrant(path, permissions); },
+		}, [{ id: 'root', path: '/srv/project', label: 'server-a:/srv/project' }]);
+		assert.deepEqual(labels, ['server-a:/srv/project']);
+		assert.deepEqual(paths, ['/srv/project']);
+	});
+
 	test('cancelling a trust request does not create or persist a grant', async () => {
 		const grants: WorkspaceTrustPermission[][] = [];
-		const client = { request: async () => { throw new Error('Unexpected environment write'); } } as unknown as AppServerProtocolClient;
+		const client = { state: 'ready', generation: 1, onStateChange: Event.None, request: async () => { throw new Error('Unexpected environment write'); } } as unknown as AppServerProtocolClient;
 		await assert.rejects(host.initializeWorkspace(client, { requestWorkspaceTrust: async () => 'cancel' }, trustApi(new Map(), grants), workspace(['/new'])), /selection cancelled/);
 		assert.deepEqual(grants, []);
 	});
@@ -107,7 +167,7 @@ suite('workspace trust during directory opening', () => {
 		const grants: WorkspaceTrustPermission[][] = [];
 		const failure = new Error('Revision conflict');
 		let writes = 0;
-		const client = { request: async () => { writes++; throw failure; } } as unknown as AppServerProtocolClient;
+		const client = { state: 'ready', generation: 1, onStateChange: Event.None, request: async () => { writes++; throw failure; } } as unknown as AppServerProtocolClient;
 		await assert.rejects(host.initializeWorkspace(client, { requestWorkspaceTrust: async () => 'readOnly' }, trustApi(new Map(), grants), workspace(['/new'])), error => error === failure);
 		assert.equal(writes, 1);
 		assert.deepEqual(grants, [READ_DIR_PERMISSIONS]);
@@ -147,7 +207,7 @@ suite('workspace trust during directory opening', () => {
 		} finally { reply = undefined; }
 	});
 	test('Remote folder validation preserves the remote resource identity for dirty-owner checks', async () => {
-		const client = { request: async () => { throw new Error('must not mutate directories'); } } as unknown as AppServerProtocolClient;
+		const client = { state: 'ready', generation: 1, onStateChange: Event.None, request: async () => { throw new Error('must not mutate directories'); } } as unknown as AppServerProtocolClient;
 		using registration = host.registerAppServerWorkspaceHost(client, async () => { }, { requestWorkspaceTrust: async () => 'cancel' }, trustApi(new Map(), []), folders => {
 			assert.equal(folders[0]?.toString(), 'ash-remote://ssh+host/second');
 		}, path => createSshRemoteWorkspaceUri('host', path));
@@ -159,7 +219,7 @@ suite('workspace trust during directory opening', () => {
 	});
 
 	test('folder validation asks the editor owner without sending a backend directory mutation', async () => {
-		const client = { request: async () => { throw new Error('must not mutate directories'); } } as unknown as AppServerProtocolClient;
+		const client = { state: 'ready', generation: 1, onStateChange: Event.None, request: async () => { throw new Error('must not mutate directories'); } } as unknown as AppServerProtocolClient;
 		using registration = host.registerAppServerWorkspaceHost(client, async () => { }, { requestWorkspaceTrust: async () => 'cancel' }, trustApi(new Map(), []), folders => {
 			assert.equal(folders[0]?.fsPath, URI.file('/first').fsPath);
 			throw new Error('unsaved files');

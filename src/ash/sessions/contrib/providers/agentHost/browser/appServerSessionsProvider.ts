@@ -19,14 +19,16 @@ import { buildAgentHostChatWorkspace, buildAgentHostSessionWorkspace } from '../
 import { getSessionApplication } from '../../../../common/sessionApplication.js';
 
 export interface AppServerSessionsProviderHost {
+	readonly id?: string;
+	readonly label?: string;
 	readonly workspace: () => SessionWorkspaceSelection;
 	readonly selectWorkspace: (folders: readonly { readonly label: string; readonly target: SessionExecutionTarget; }[]) => Promise<SessionExecutionTarget | undefined>;
 }
 
 /** Adapts shared Agent execution records into Sessions product models. */
 export class AppServerSessionsProvider extends Disposable implements IAgentHostSessionsProvider {
-	public readonly id = LOCAL_AGENT_HOST_PROVIDER_ID;
-	public readonly label = localize('automations.localHost', 'Local Agent Host');
+	public readonly id: string;
+	public readonly label: string;
 	public readonly order = 0;
 	private automationStore: AgentHostAutomationStore | undefined;
 	public get automations(): AgentHostAutomationStore | undefined {
@@ -59,6 +61,8 @@ export class AppServerSessionsProvider extends Disposable implements IAgentHostS
 		@IInstantiationService private readonly instantiation: IInstantiationService,
 	) {
 		super();
+		this.id = host.id ?? LOCAL_AGENT_HOST_PROVIDER_ID;
+		this.label = host.label ?? localize('automations.localHost', 'Local Agent Host');
 		let observedState = false;
 		this.initialConnectionState = appServer.getConnectionState().then(state => {
 			if (!observedState && !this.isDisposed) this.connectionStatus.set(connectionStatus(state));

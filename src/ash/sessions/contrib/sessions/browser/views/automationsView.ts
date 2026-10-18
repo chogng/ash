@@ -254,6 +254,8 @@ export class AutomationsCardsWidget extends Disposable {
 	}
 
 	private updatePlans(plans: readonly IAutomationDescriptor[]): void {
+		const providers = this.automations.availableProviders.get();
+		const multipleHosts = new Set(plans.map(plan => plan.target.providerId)).size > 1;
 		const query = this.query.get().trim().toLocaleLowerCase();
 		const filter = this.filter.get();
 		for (const [id, card] of this.cards) if (!plans.some(plan => plan.id === id)) {
@@ -319,13 +321,17 @@ export class AutomationsCardsWidget extends Disposable {
 			}
 			card.title.label = plan.name;
 			card.title.setTitle(plan.name);
-			card.element.setAttribute('aria-label', plan.name);
+			const host = providers.find(provider => provider.id === plan.target.providerId)?.label ?? localize('automations.hostOffline', 'Host unavailable');
+			card.element.setAttribute('aria-label', multipleHosts ? localize('automations.hostedTitle', '{0} · {1}', plan.name, host) : plan.name);
 			card.state.textContent = plan.enabled ? localize('automations.enabled', 'Enabled') : localize('automations.paused', 'Paused');
 			card.element.dataset.enabled = String(plan.enabled);
-			card.element.hidden = (filter !== 'all' && plan.enabled !== (filter === 'enabled')) || ![plan.name, plan.prompt, plan.target.directory].some(value => value.toLocaleLowerCase().includes(query));
+			card.element.hidden = (filter !== 'all' && plan.enabled !== (filter === 'enabled')) || ![plan.name, plan.prompt, plan.target.directory, host].some(value => value.toLocaleLowerCase().includes(query));
 			card.prompt.textContent = plan.prompt;
 			card.schedule.textContent = this.scheduleLabel(plan.schedule);
-			card.directory.textContent = localize('automations.runsIn', 'Runs in {0}', plan.target.directory);
+			card.directory.textContent = multipleHosts
+				? localize('automations.runsOn', 'Runs on {0} in {1}', host, plan.target.directory)
+				: localize('automations.runsIn', 'Runs in {0}', plan.target.directory);
+			card.directory.title = card.directory.textContent;
 			card.detail.textContent = plan.nextRunAt === null ? localize('automations.noScheduledRun', 'No scheduled run') : localize('automations.nextRun', 'Next {0}', new Date(plan.nextRunAt).toLocaleString(getNLSLanguage()));
 			card.pause.label = plan.enabled ? localize('automations.pause', 'Pause') : localize('automations.enable', 'Enable');
 			const idle = !this.pending.has(plan.id);
@@ -337,6 +343,8 @@ export class AutomationsCardsWidget extends Disposable {
 	}
 
 	private updateRuns(runs: readonly IAutomationRun[]): void {
+		const providers = this.automations.availableProviders.get();
+		const multipleHosts = new Set(runs.map(run => run.providerId)).size > 1;
 		for (const [id, row] of this.rows) if (!runs.some(run => run.id === id)) {
 			row.lifetime.dispose();
 			this.rows.delete(id);
@@ -367,7 +375,7 @@ export class AutomationsCardsWidget extends Disposable {
 					label: localize('automations.openConversation', 'Open conversation'),
 					onClick: () => {
 						const current = this.automations.runs.get().find(item => item.id === run.id);
-						if (current?.sessionId && current.threadId) void this.perform(run.id, () => this.navigation.openConversation(current.sessionId!, current.threadId!));
+						if (current?.sessionId && current.threadId) void this.perform(run.id, () => this.navigation.openConversation(current.sessionId!, current.threadId!, current.providerId));
 					},
 				}));
 				const stop = lifetime.add(new Button(actions, {
@@ -383,9 +391,11 @@ export class AutomationsCardsWidget extends Disposable {
 				row = { lifetime, element, title, details, state, time, text, open, stop };
 				this.rows.set(run.id, row);
 			}
-			row.details.label = run.definition.name;
-			row.details.domNode.setAttribute('aria-label', localize('automations.viewRun', 'View run: {0}', run.definition.name));
-			row.details.setTitle(run.definition.name);
+			const host = providers.find(provider => provider.id === run.providerId)?.label ?? localize('automations.hostOffline', 'Host unavailable');
+			const title = multipleHosts ? localize('automations.hostedTitle', '{0} · {1}', run.definition.name, host) : run.definition.name;
+			row.details.label = title;
+			row.details.domNode.setAttribute('aria-label', localize('automations.viewRun', 'View run: {0}', title));
+			row.details.setTitle(title);
 			row.state.textContent = automationRunStatusLabel(run.status);
 			row.element.dataset.status = run.status;
 			row.time.dateTime = new Date(run.scheduledAt).toISOString();
@@ -598,7 +608,7 @@ export class AutomationsCardsWidget extends Disposable {
 				label: localize('automations.openConversation', 'Open conversation'),
 				onClick: () => {
 					const run = this.automations.runs.get().find(run => run.id === selected.id);
-					if (run?.sessionId && run.threadId) void this.perform(run.id, () => this.navigation.openConversation(run.sessionId!, run.threadId!));
+					if (run?.sessionId && run.threadId) void this.perform(run.id, () => this.navigation.openConversation(run.sessionId!, run.threadId!, run.providerId));
 				},
 			}));
 			const stop = lifetime.add(new Button(actions, {

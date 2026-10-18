@@ -1,3 +1,4 @@
+import './contrib/providers/remoteAgentHost/browser/remoteAgentHost.contribution.js';
 import '../workbench/contrib/screenshot/electron-browser/screenshot.contribution.js';
 import '../workbench/contrib/relauncher/browser/relauncher.contribution.js';
 import '../workbench/contrib/splash/electron-browser/splash.contribution.js';

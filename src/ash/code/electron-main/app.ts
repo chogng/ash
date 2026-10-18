@@ -1,3 +1,5 @@
+import type { AppServerConnectionTarget } from '../../platform/agentHost/common/appServerTransport.js';
+import { RemoteAgentHostConnectionPool } from '../../platform/remote/electron-main/remoteConnectionIpc.js';
 import { ScreenshotMainService } from '../../workbench/contrib/screenshot/electron-main/screenshotMainService.js';
 import { AshWorkbenchName } from '../common/application.js';
 import '../../platform/update/common/update.config.contribution.js';
@@ -112,7 +114,7 @@ import { RemoteConnectionProfiles } from "../../platform/remote/electron-main/re
 import { RemoteConnections } from "../../platform/remote/electron-main/remoteConnections.js";
 import { UnavailableRemoteConnectionApi, type IRemoteConnectionApi } from "../../platform/remote/common/remoteConnectionService.js";
 import type { RemoteConnectionDefinition } from "../../platform/remote/common/remoteConnectionService.js";
-import { createSshRemoteAuthority, getRemoteAuthority, isRemoteResource } from "../../platform/remote/common/remote.js";
+import { createSshRemoteAuthority, createSshRemoteWorkspaceUri, getRemoteAuthority, isRemoteResource } from "../../platform/remote/common/remote.js";
 import { remotePortForwardingChannel } from '../../platform/remote/electron-main/remotePortForwardingIpc.js';
 import { SshPortForwardingService } from "../../platform/remote/electron-main/sshPortForwardingService.js";
 import { createRemoteRuntimeInstallProgressLogger } from "../../platform/remote/electron-main/remoteRuntimeBootstrapMainService.js";
@@ -1145,12 +1147,12 @@ export class AshApplication extends Disposable {
 		resources: DisposableStore,
 		existing?: AppServerConnectionRelay,
 		role: 'workbench' | 'agents' = 'workbench',
-		connectionKind: 'workspace' | 'local' = 'workspace',
+		connectionKind: AppServerConnectionTarget = 'workspace',
 	): AppServerConnectionRelay {
 		if (this.appServerStartupMode === "disabled") {
 			return existing ?? new AppServerConnectionRelay({ enabled: false }, connectionKind);
 		}
-		const remote = role === 'workbench' && getWorkspaceRemoteAuthority(workspace)?.startsWith('ssh+') === true;
+		const remote = (role === 'workbench' || typeof connectionKind === 'object') && getWorkspaceRemoteAuthority(workspace)?.startsWith('ssh+') === true;
 		const connection = createAppServerDaemonLauncher({
 			packageLocation: { appPath: app.getAppPath(), expectedVersion: app.getVersion(), isPackaged: app.isPackaged, platform: process.platform, resourcesPath: process.resourcesPath },
 			sourceEnvironment: process.env,
@@ -1833,8 +1835,32 @@ export class AshApplication extends Disposable {
 						host: electronRemoteWindowMainHost(window, this.dialogs),
 						prepareForRuntimeReplacement: () => this.windowsMainService.getWindowById(window.id)?.send("ash:terminal:prepareReplacement"),
 					}));
+					const agentHostTarget = {
+						webContents: window.webContents,
+						allowedEntryUrls: new Set([normalizeEntryUrl(sessionsEntry.url)]),
+					};
+					const agentHosts = windowDisposables.add(new RemoteAgentHostConnectionPool(session.remoteConnections, (target, id) => {
+						const resources = new DisposableStore();
+						try {
+							const workspace = { id: `agent-host:${id}`, uri: createSshRemoteWorkspaceUri(target.host, target.workspace) };
+							const relay = resources.add(this.createAppServerConnectionRelay(workspace, resources, undefined, 'agents', { id }));
+							resources.add(this.trustedIpcRouter.register(agentHostTarget, relay.routes(window.webContents, () => ({ workspaceId: workspace.id, workspaceRoot: target.workspace }))));
+							return resources;
+						} catch (error) {
+							resources.dispose();
+							throw error;
+						}
+					}));
+					const retireAgentHosts = (): void => agentHosts.reset();
+					window.webContents.on('did-navigate', retireAgentHosts);
+					window.webContents.on('render-process-gone', retireAgentHosts);
+					windowDisposables.add(toDisposable(() => {
+						window.webContents.removeListener('did-navigate', retireAgentHosts);
+						window.webContents.removeListener('render-process-gone', retireAgentHosts);
+					}));
 					const ipcRoutes = [
 						...this.mainProcessIpcRoutes(window),
+						...agentHosts.routes(),
 						...sessionsRelay.routes(window.webContents, () => ({ workspaceId: AGENTS_WINDOW_KEY, workspaceRoot: this.profileRoot })),
 						...(localSessionsRelay?.routes(window.webContents, () => ({ workspaceId: AGENTS_WINDOW_KEY, workspaceRoot: this.profileRoot })) ?? []),
 						...rendererSystemHostRoutes(window, path => this.directoryPermissionPrompt(path), this.auxiliaryWindowsMainService),

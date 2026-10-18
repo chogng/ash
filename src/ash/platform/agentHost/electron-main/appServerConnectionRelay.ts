@@ -1,3 +1,4 @@
+import { appServerConnectionChannel, type AppServerConnectionTarget } from '../common/appServerTransport.js';
 import { AppServerProtocolIncompatibleError } from '../common/appServerProtocolCompatibility.js';
 import { MessageChannelMain } from 'electron/main';
 import type { WebContents } from 'electron/main';
@@ -32,13 +33,13 @@ export class AppServerConnectionRelay extends Disposable {
 	private acquiredNavigation = -1;
 	private startPromise: CancelablePromise<void> | undefined;
 
-	constructor(options: { readonly enabled: false; } | { readonly enabled: true; readonly processLauncher: IAppServerProcessLauncher; }, private readonly connection: 'workspace' | 'local' = 'workspace') {
+	constructor(options: { readonly enabled: false; } | { readonly enabled: true; readonly processLauncher: IAppServerProcessLauncher; }, private readonly connection: AppServerConnectionTarget = 'workspace') {
 		super();
 		this.connectionOptions = options;
 		this._register(toDisposable(() => this.startPromise?.cancel()));
 	}
 
-	private get channelPrefix(): string { return this.connection === 'local' ? 'ash:app-server:local' : 'ash:app-server'; }
+	private get channelPrefix(): string { return appServerConnectionChannel(this.connection); }
 
 	public get options(): { readonly enabled: false; } | { readonly enabled: true; readonly processLauncher: IAppServerProcessLauncher; } { return this.connectionOptions; }
 
@@ -124,12 +125,14 @@ export class AppServerConnectionRelay extends Disposable {
 	public routes(renderer: WebContents, metadata: () => { workspaceId: string; workspaceRoot: string; }): readonly IpcRoute<unknown, unknown>[] {
 		this.renderer = renderer;
 		const processLauncher = (): IAppServerProcessLauncher | undefined => this.options.enabled ? this.options.processLauncher : undefined;
-		const reset = (): void => { void this.stop(); };
+		const reset = (): void => { if (!this.isDisposed) { void this.stop(); } };
 		renderer.on('render-process-gone', reset);
 		// Initial navigation must keep the connection started before the window loaded.
 		// did-navigate commits a main-frame document; blocked attempts retain its connection.
 		let documentUrl: string | undefined;
 		const navigating = (_event: unknown, url: string): void => {
+			// A document-level owner can retire this relay earlier in the same event dispatch.
+			if (this.isDisposed) { return; }
 			const previousUrl = documentUrl;
 			documentUrl = url;
 			this.navigationGeneration++;

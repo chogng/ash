@@ -140,6 +140,7 @@ test('late run admission preserves its receipt without observing or stopping thr
 	await pending.complete(value.run);
 	const result = await dispatching;
 	assert.equal(result.run.sessionResource?.path, '/session/thread');
+	assert.equal(decodeURIComponent(result.run.sessionResource!.authority), result.run.providerId);
 	assert.deepEqual(value.reads, []);
 	assert.deepEqual(value.store.runs.get(), []);
 	await assert.rejects(result.whenCompleted);

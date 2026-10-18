@@ -4,12 +4,13 @@ import type { IOpenAgentsWindowOptions } from '../../../../platform/native/commo
 /** Conversation destinations exposed by the session owner to workbench contributions. */
 export interface IChatSessionNavigationService {
 	readonly revision: number;
-	getConversations(): readonly { readonly sessionId: string; readonly threadId: string; readonly title: string; }[];
+	getConversations(): readonly { readonly providerId?: string; readonly sessionId: string; readonly threadId: string; readonly title: string; }[];
 	/** Appends a feature handoff without sending or replacing the existing draft and attachments. */
 	appendToActiveDraft(text: string): void;
 	getActiveConversation(): { readonly sessionId: string; readonly threadId: string; } | undefined;
 	captureActiveDraft(): Promise<{ readonly draft: NonNullable<IOpenAgentsWindowOptions['draft']>; clear(): void; } | undefined>;
-	openConversation(sessionId: string, threadId: string): Promise<void>;
+	/** A supplied provider must be resolved before any host-local Session ID is used. */
+	openConversation(sessionId: string, threadId: string, providerId?: string): Promise<void>;
 	/** Starts voice through the visible Chat's controller, preserving its composer and submission policy. */
 	startVoiceConversation(): Promise<void>;
 }

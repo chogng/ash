@@ -1,3 +1,9 @@
+import { BrowserLayoutService } from '../../../src/ash/platform/layout/browser/layoutService.js';
+import { IQuickInputService } from '../../../src/ash/platform/quickinput/common/quickInput.js';
+import { QuickInputService } from '../../../src/ash/platform/quickinput/browser/quickInputService.js';
+import { createDisconnectedRendererApi } from '../../../src/ash/workbench/browser/rendererApi.js';
+import { IRemoteConnectionApi, IRemoteConnectionService, RemoteConnectionService } from '../../../src/ash/platform/remote/common/remoteConnectionService.js';
+import workbenchTranslations from '../../../extensions/language-pack-zh-cn/translations/workbench.json' with { type: 'json' };
 import type { IAction } from '../../../src/ash/base/common/actions.js';
 import { NotificationService } from '../../../src/ash/workbench/services/notification/common/notificationService.js';
 import '../../../src/ash/base/browser/ui/styles.css';
@@ -5,7 +11,7 @@ import '../../../src/ash/workbench/browser/media/style.css';
 import { setARIAContainer } from '../../../src/ash/base/browser/ui/aria/aria.js';
 import { addDisposableListener } from '../../../src/ash/base/browser/dom.js';
 import { Emitter } from '../../../src/ash/base/common/event.js';
-import { DisposableStore } from '../../../src/ash/base/common/lifecycle.js';
+import { DisposableStore, toDisposable } from '../../../src/ash/base/common/lifecycle.js';
 import { observableValue, autorun } from '../../../src/ash/base/common/observable.js';
 import { setNlsMessages } from '../../../src/ash/nls.js';
 import translations from '../../../extensions/language-pack-zh-cn/translations/sessions.json' with { type: 'json' };
@@ -49,7 +55,9 @@ import { AgentHostAutomationStore } from '../../../src/ash/sessions/contrib/prov
 const parameters = new URLSearchParams(location.search);
 
 if (parameters.get('locale') === 'zh-CN') {
-	setNlsMessages('zh-CN', translations);
+	const bundles: Record<string, Record<string, string>> = { ...translations };
+	for (const [bundle, messages] of Object.entries(workbenchTranslations)) { bundles[bundle] = { ...bundles[bundle], ...messages }; }
+	setNlsMessages('zh-CN', bundles);
 	document.documentElement.lang = 'zh-CN';
 }
 
@@ -78,7 +86,7 @@ services.registerInstance(IStorageService, resources.add(new BrowserStorageServi
 
 services.registerInstance(ILogService, new NullLoggerService());
 
-services.registerInstance(ILayoutService, { activeContainer: root } as ILayoutService);
+services.registerInstance(ILayoutService, parameters.has('hosts') ? resources.add(new BrowserLayoutService({ root })) : { activeContainer: root } as ILayoutService);
 
 const contexts = resources.add(new ContextKeyService());
 services.registerInstance(IContextKeyService, contexts);
@@ -210,7 +218,35 @@ const backend: IAutomationBackendService = {
 	},
 };
 
-services.registerInstance(IRendererHostService, { automation: parameters.get('available') === '0' ? undefined : backend } as unknown as IRendererHost);
+const hostChanges: string[] = [];
+const hostTargets = [
+	{ name: 'build-a', host: 'server-a', workspace: '/srv/project' },
+	{ name: 'build-b', host: 'server-b', workspace: '/srv/project' },
+];
+const disconnected = createDisconnectedRendererApi();
+const renderer: IRendererHost = parameters.has('hosts') ? {
+	...disconnected, automation: backend,
+	agentHosts: {
+		connect: async target => {
+			hostChanges.push(`open:${target.name}`);
+			return {
+				id: target.name, connection: target,
+				api: {
+					...disconnected,
+					appServer: { ...disconnected.appServer, getConnectionState: async () => 'ready' },
+					automation: {
+						...backend,
+						list: async () => [{ ...plans[0]!, definition: { ...plans[0]!.definition, title: 'Shared review' } }],
+						runs: async () => [],
+						delete: async id => { hostChanges.push(`delete:${target.name}:${id}`); },
+					},
+				},
+				...toDisposable(() => { hostChanges.push(`close:${target.name}`); }),
+			};
+		}
+	},
+} : { automation: parameters.get('available') === '0' ? undefined : backend } as unknown as IRendererHost;
+services.registerInstance(IRendererHostService, renderer);
 
 const registry = resources.add(new SessionsProvidersService());
 services.registerInstance(ISessionsProvidersService, registry);
@@ -264,12 +300,28 @@ await sessions.initialize();
 const opened: string[][] = [];
 
 services.registerInstance(IChatSessionNavigationService, {
-	getConversations: () => [],
-	openConversation: async (sessionId: string, threadId: string) => {
+	getConversations: () => [
+		{ providerId: 'host', sessionId: 'local-session', threadId: 'local-thread', title: 'Local conversation' },
+		{ sessionId: 'unowned-session', threadId: 'unowned-thread', title: 'Unknown host conversation' },
+	],
+	openConversation: async (sessionId: string, threadId: string, providerId?: string) => {
+		if (providerId !== undefined && providerId !== 'host') throw new Error('Wrong conversation host');
 		await sessions.openThread(sessionId, threadId);
 		opened.push([sessionId, threadId]);
 	}
 } as unknown as IChatSessionNavigationService);
+
+if (parameters.has('hosts')) {
+	services.registerInstance(IQuickInputService, resources.add(services.createInstance(QuickInputService)));
+	services.registerInstance(IRemoteConnectionApi, {
+		available: true, list: async () => hostTargets,
+		save: async value => value, update: async (_name, value) => value, remove: async () => undefined,
+		connect: async () => { throw new Error('The Agents host picker must retain this window'); },
+	});
+	services.registerInstance(IRemoteConnectionService, resources.add(services.createInstance(RemoteConnectionService)));
+	const { SSHAgentHostContribution } = await import('../../../src/ash/sessions/contrib/providers/remoteAgentHost/browser/sshAgentHost.contribution.js');
+	resources.add(services.createInstance(SSHAgentHostContribution));
+}
 
 const commands = resources.add(new CommandService(services));
 services.registerInstance(ICommandService, commands);
@@ -301,6 +353,7 @@ if (registered) await commands.executeCommand('sessionsView.manageAutomations');
 declare global {
 	interface Window {
 		ashAutomations: {
+			manageHosts(): Promise<unknown>; connectedHosts(): readonly string[]; hostChanges: readonly string[];
 			registered: boolean; workbenchRegistered: boolean; saved: AutomationDefinition[]; opened: string[][]; errors: string[];
 			notifications(): { message: string; closed: boolean; }[]; openNotification(): Promise<void>; refresh(): Promise<void>; rename(): Promise<void>;
 			selectDirectory(value: string): void; help(): { help: string; view: string; }; rejectSave(): void;
@@ -312,6 +365,9 @@ declare global {
 }
 
 window.ashAutomations = {
+	manageHosts: () => commands.executeCommand('sessions.action.manageAgentHosts'),
+	connectedHosts: () => registry.getProviders().map(provider => provider.label),
+	hostChanges,
 	registered,
 	workbenchRegistered: !!ViewsRegistry.getViewContainer('ash.automation'),
 	saved,

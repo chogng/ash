@@ -14,11 +14,11 @@
 | `workbench/services/agentHost/`                     | 0 / 0           | 13 / 0 / 11                    | 0                  |
 | `workbench/contrib/chat/` 中名称含 AgentHost 的路径 | 0 / 0           | 135 / 0 / 81                   | 0                  |
 | `sessions/contrib/providers/agentHost/`             | 5 / 1           | 43 / 0 / 29                    | 1                  |
-| `sessions/contrib/providers/remoteAgentHost/`       | 0 / 0           | 41 / 0 / 22                    | 0                  |
+| `sessions/contrib/providers/remoteAgentHost/`       | 2 / 1           | 41 / 0 / 22                    | 2                  |
 | 其他同名相邻路径                                    | 7 / 1           | 22 / 0 / 15                    | 6                  |
-| 合计                                                | 53 / 21         | 1078 / 891 / 763               | 14                 |
+| 合计                                                | 55 / 22         | 1078 / 891 / 763               | 16                 |
 
-清单共 2790 行：1064 个仅上游的手写生产文件、39 个仅 Ash 的生产文件、14 个双方同路径生产文件，另有 891 个生成文件和 782 个测试／fixture 源码。生成文件包括 888 个 `node/codex/protocol/generated/` 文件与 3 个协议生成文件，不属于前端手写文件补齐队列。
+清单共 2790 行：1062 个仅上游的手写生产文件、39 个仅 Ash 的生产文件、16 个双方同路径生产文件，另有 891 个生成文件和 782 个测试／fixture 源码。生成文件包括 888 个 `node/codex/protocol/generated/` 文件与 3 个协议生成文件，不属于前端手写文件补齐队列。
 
 `both` 只表示同路径存在；`pending-review` 表示尚未完成公开契约、owner 与行为复核，不能计为已对齐。`ownership-migrated` 表示本批唯一 owner 和调用方迁移完成，`verified-slice` 表示仅说明栏中的行为已验证，均不表示整份上游 API 等价。`todo-by-user` 表示用户决定先记 TODO 的新产品文件，当前有 59 个生产文件和 39 个测试；`reference-only` 用于其余生成物和测试，不表示对应能力已经实现或无需测试。直接引用数包括类型导入、再导出、字面量动态导入和模块 URL，不等于生产运行证明；例如 Worker 由 `appServerFrameDecoder.ts` 的 URL 创建，Sessions contribution 由两个 Code 启动入口动态加载，不能把没有静态 import 的文件判成无调用方。
 
@@ -102,6 +102,20 @@ Web 连接断开 → `connectWebRendererApi` 创建的 `AppServerConnectionRecov
 Session 创建切片的真实入口为新建 composer／SessionsManagement → 现有 `AppServerSessionsProvider.create` → Rust 原子创建 root → Provider 获取详情订阅 → 返回可交互 root。详情快照缺少已创建 root 或该 root 已归档时，Provider 释放当前 lease 并让相同 commandId 重试既有持久 Session；不删除成功创建的持久数据，也不新增订阅 owner。只修改既有 Ash Provider 和管理服务回归，没有新增 UI、导出或后端契约。
 
 验证：文件搜索最终记录 `.build/agenthost-completion-20261018/file-search-green.log`，38 项／5 文件通过，含连接关闭、替换、迟到结果和旧 cancel 隔离；Session 创建最终记录 `session-create-green.log`，142 项／4 文件通过，含缺失／归档 root、lease 释放、同 commandId 重试及真实入口回归。两片与 Remote 生命周期、文件资源和领域契约合并为本次本地提交范围；AgentHost 多端点／宿主管理契约、其他 Sessions／Chat 职责及真实跨平台验收仍保留在 TODO。
+
+### Session runtime 连接退役 · 本轮完成
+
+基线 `e87cb6f87`，开始时工作树干净，保留已提交的生命周期与 release 边界修复。本批既有容器入口沿 `DevContainerAgentHostService` → `IAgentSessionService.invokeRuntime` → `appServerAgentService.ts` → Rust admitted Session runtime Provider；只修改这一既有仅 Ash adapter 与 `platform/agentHost/test/browser/appServerAgentService.test.ts`，以及本台账与根 TODO。现有 cancel 只判断 generation，但 close 可在 generation 未改变时退休回执；list／probe／prepare 的迟到结果也缺少退休检查。使用查询自己的状态订阅约束结果与 cancel，不复制容器目录、状态或连接 registry，不改变 connector 归属或新增公开端口。回归核对 close／replacement 后迟到结果取消、旧 cancel 不跨连接，以及当前连接仍发送同 operationId 的 typed cancel。
+
+上述行为现已实现，取消统一通过前端 CancellationError 表达。新增 5 项回归先失败后通过；标准 `pnpm test:unit` 选择 Agent adapter、Dev Container service、RemoteExtensionHost、NativeExtensionService 共 37 项通过；Renderer 4,213 文件类型检查、两个源码／测试文件格式及 diff whitespace 检查通过。证据 `.build/agenthost-completion-20261018/runtime-{red,green,renderer-check}.log`。未改变 Rust Provider 执行、取消或持久化协议；当前其他编辑器与 Collab 改动不属于本批。
+
+### 多宿主范围复核 · 尚未完成
+
+用户要求继续完成根 TODO 的两条文件对齐任务，明确暂不扩入 Cloud Sandbox、Tunnel／WSL、Mission Control 和环境验收。对“同窗口多宿主”用户请求了产品对照并将建议交给执行者；先前建议暂不纳入，源码复核后修正为不能为清空 TODO 而排除这一缺口，用户随后以 `do` 授权实际实现；当前连接／Provider 切片已落地，完整多宿主管理尚未完成。
+
+只读证据：VS Code `2de8dcf8062` 的 `IAgentHostConnectionsService` 统一 ambient 与多个 remote，普通 Editor 与 Agents Window 的连接支持分别由 `EditorWindowRemoteAgentHostService`／`AgentsWindowRemoteAgentHostService` 约束；Zed `56934ec056` 的 `MultiWorkspace.find_or_create_workspace` 支持每个 Workspace 的独立 RemoteClient，`ProjectGroupKey` 同时包含 host 与 paths；Codex `822e58cc3d` 的公开仓库不能证明桌面 UI 的全部实现，官方 [Remote connections](https://learn.chatgpt.com/docs/remote-connections) 文档确认 SSH 远程项目及跨宿主会话交接。不能把“单工作区有明确执行宿主”与“一个窗口只能管理一个宿主”混为一谈。
+
+Ash 的 `SessionsProvidersService` 现已接入独立 SSH Provider，Automation 是当前可使用它们的生产消费者；`SessionsManagementService` 主模型仍由启动入口直接绑定单个 Provider，Chat／文件／模型服务也仍绑定主 Renderer host。连接与 scope 验证后，下一步必须沿“有宿主归属的 Session 身份 → registry 驱动的主模型 → 对应 Chat／模型／文件／仓库／权限 scope → 窗口显示／切换”深度闭合；不能新增无消费者的标准 AHP facade 或把原始 SessionId 当作跨宿主唯一身份。仓库事实仍由现有 Git/GitHub owner 持有，尚未将 Node/state/meta 文件逐项判为能力等价，两条根 TODO 保留。
 
 ### 本轮代码迁移与行为修复
 
@@ -355,3 +369,23 @@ Session.model 缺失仅表示目录没有模型事实，不能据此推断没有
 > 模块对齐先在云端核对现有能力、公开契约、真实调用链、唯一 owner 和近期上游行为，形成根目录 `<module>-todo.md`，写清基线、分批路径、依赖、产品验收与未决定事项；用户确认方案后，在指定本地 checkout 按批准批次实施并记录实际验证。云端审计不替代本地差异检查，不自动授权提交或推送。
 
 此段仅是建议，尚未写入公共指导文件。若本地已有本次流程或模板，合并为一条规则并保持其既有例外，不重复扩张为四份阶段产物。
+
+### 多宿主连接切片 · 连接与 Provider 已接通
+
+用户 `do` 授权落地多宿主。基线与既有改动保存在 `.build/agenthost-multihost-20261018/`。本切片的生产链为 Agents 窗口选择已保存 SSH 目标 → Renderer 独立领域能力 → Main 窗口级 carrier 租约 → 现有 SSH bootstrap／Rust daemon。新增连接不创建后端业务状态副本，不让 Main 解析协议。
+
+既有专属 owner 原地扩展：`platform/agentHost/common/appServerTransport.ts` 定义每连接 carrier 身份，`electron-browser/appServerMessagePortTransport.ts`／`localAgentHostService.ts` 与 `electron-main/appServerConnectionRelay.ts` 使用相同 channel 规则；`platform/remote/{common/remoteConnectionIpc.ts,electron-main/remoteConnectionIpc.ts}` 管理窗口临时租约，保存目标仍归原 Rust catalog；`code/electron-main/app.ts` 仅装配既有 launcher／relay；`platform/renderer/common/rendererHost.ts` 与 `workbench/electron-browser/rendererApi.ts` 装配独立领域能力。以上沿用已确认的 Ash transport／remote／Renderer 专属归属；无文件删除。
+
+实现说明：Main 临时表只持有本窗口的 carrier 资源，不保存会话；打开请求先登记可退休租约，再核对用户选中时的完整 catalog 目标，关闭、页面导航或窗口释放均退休该租约，迟到核对不得创建连接。Renderer 各连接各有 protocol client、恢复与 adapter。此切片不修改 DOM／布局，窗口 Provider／会话身份及 Chat／文件路由仍需后续闭环。行为验证覆盖两个独立 carrier、关闭期间的迟到打开、目标变更、重复 ID 与资源释放。
+
+窗口连接切片的真实消费者先接入已有 Provider 注册表和 Automation 聚合。新增上游同路径 `sessions/contrib/providers/remoteAgentHost/browser/remoteAgentHost.contribution.ts`，从 Desktop Sessions 入口加载；窗口 contribution 是 child service scope 的唯一 owner，Quick Pick 使用现有组件的键盘、ARIA 与主题能力，无新 DOM/CSS。既有 `AppServerSessionsProvider` 只增加每实例 id/label 数据，保留其目录、订阅与操作 owner；注册表借用 Provider，注销先于 scope 释放。测试落在上游同路径 `remoteAgentHost/test/browser/remoteAgentHost.contribution.test.ts`，从真实命令和 Quick Input 操作到注册表、领域 adapter 与 Automation 聚合，核对相同后端 ID 的路由与 disconnect。该窗口注册不代表 Sessions 主列表／Chat 路由已完成，根 TODO 仍保留。
+
+路径复核调整：保存 SSH 目标的窗口 scope 实现应归上游同路径 `remoteAgentHost/browser/sshAgentHost.contribution.ts`（`SSHAgentHostContribution`），而非通用 contribution。实现已收回此准确 owner，`remoteAgentHost.contribution.ts` 只保留真实的窗口 phase 注册；无别名、双实现或删除。连接键来自 Ash 既有 canonical catalog 的 host + workspace，内部资源 Map、取消与子容器按 Ash 生命周期独立实现，未沿用上游重连类图、存储或私有控制流。
+
+同一切片必须隔离 Automation 的后续消费者：真实入口已发现 run 的 raw Session ID 曾丢失 Provider 归属，表单也可能沿用上一宿主的目录／conversation。既有 `workbench/services/chat/common/chatSessionNavigationService.ts`、`sessions/browser/{workbench.ts,workbenchChat.contribution.ts}` 与 `automationsView.ts` 现传递并在真实导航 owner 检查 Provider；主模型尚不支持其他 Provider 时拒绝导航，禁止回落到本机同名 Session。`automationDialog.ts` 只显示所选 Provider 的 destination，切换宿主清空旧目录及 conversation；`AgentHostAutomationStore` 的 Session resource 同时包含 Provider authority。导航 owner 与 Provider 完整聚合仍是后续任务，本次保护不能当作远端 Chat 已实现。
+
+当前通过证据：9 份定向测试共 150 项通过，覆盖 carrier、窗口租约、目录授权退役、独立 Provider／Automation、跨 Provider 导航拒绝和原 Sessions 行为；日志 `final-targeted-unit.log`。标准 `test:unit:prepared` 的全测试编译和上述 9 文件／150 项定向运行最终通过，见 `final-standard-unit.log`。期间遇到并行改动中 `EditorPaneRegistry` 重复声明，先以原编译选项的精确入口集合验证；该声明随后由并行编辑消除，本批未修改该文件，并重新运行标准命令确认通过。真实 Chromium Automation 原有流程及新增双宿主键盘／中文／高对比度、目录与会话隔离场景见 `final-browser.log`；使用受控 backend，未作为实际多 SSH runtime 验收。证据均位于 `.build/agenthost-multihost-20261018/`。根两条文件任务仍未达到移除条件。
+
+交付边界：原有及新增 Chromium Automation 共 18 项通过，其中双宿主场景使用相同后端 ID 和相同任务名称，核对视觉／ARIA 宿主标识、可访问文本视图、中文帮助、键盘连接／断开、目录清理及错误宿主会话过滤。Renderer 4,219 文件与 Main 2,039 文件类型检查通过；当前 scoped formatter 与 `git diff --check` 通过。SSH scope 入口、同路径台账和翻译均已更新；无 Rust、Terminal、CLI/TUI 变更，无提交／发布。仍须继续统一 Session 身份与主模型、Chat／模型／文件／仓库／权限路由，不能把目前拒绝错误宿主的保护当作这些能力已实现。
+
+多宿主 Automation 同名条目现保留宿主名称并可按宿主搜索；复用既有卡片／运行行，不新增 CSS 或上游 DOM。已有 Activity Bar 帮助、Automation Help／Accessible View 与中文翻译同步说明连接命令、宿主选择及清空行为。最后的新增 Help／同名条目断言分别通过 `final-automation-unit.log`（19 项）和 `final-host-browser.log`（2 项），复用其余已通过的 carrier／Sessions／导航与浏览器验收结果。

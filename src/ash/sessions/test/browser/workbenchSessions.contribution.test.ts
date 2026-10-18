@@ -104,6 +104,18 @@ test('Open in Agents uses the visible untitled chat instead of an older active s
 	assert.equal(navigation.getActiveConversation(), undefined);
 });
 
+test('provider-qualified navigation never opens an equal host-local ID on the ambient host', async () => {
+	using services = new InstantiationService();
+	let opened = 0;
+	services.registerInstance(ISessionsManagementService, { openThread: async () => { opened++; } } as unknown as ISessionsManagementService);
+	services.registerInstance(IViewsService, {} as IViewsService);
+	const descriptor = getSingletonServiceDescriptors().find(([id]) => id === IChatSessionNavigationService)![1];
+	services.registerSingleton(IChatSessionNavigationService, () => services.createInstance(descriptor));
+	const navigation = services.get(IChatSessionNavigationService);
+	await assert.rejects(navigation.openConversation('same-session', 'same-thread', 'ssh-agent-host:other'), /another Agent host/);
+	assert.equal(opened, 0);
+});
+
 test('Sessions contributes Turn changes and commit actions to the shared multi-diff editor', async () => {
 	const summaries: TurnChangeSetSummary[] = [
 		{ changeSetId: 'one', sessionId: 'session', threadId: 'thread', turnId: 'turn-one', repositoryId: 'repo', targetBranch: 'main', statistics: { files: 1, additions: 1, deletions: 1 }, captureState: 'sealed', messageState: 'ready', commitState: 'idle', committedPaths: [], dependencies: [], externalDependencyPaths: [], warnings: [], conflictPaths: [], revision: 1 },
