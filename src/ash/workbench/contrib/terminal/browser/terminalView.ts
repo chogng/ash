@@ -57,7 +57,7 @@ export class TerminalViewPane extends ViewPane {
 	private readonly widgetsElement: HTMLDivElement;
 	private readonly items = this._register(new DisposableMap<ITerminalInstance, TerminalViewItem>());
 	private readonly voice: TerminalVoiceSession;
-	private creating = false;
+	private creating: Promise<ITerminalInstance | undefined> | undefined;
 	private initializing = false;
 	private focusSource: Element | null | undefined;
 
@@ -190,8 +190,20 @@ export class TerminalViewPane extends ViewPane {
 		}
 	}
 
-	public async createTerminal(profileId?: string | { readonly type: 'pick'; }, focus = true, parent?: ITerminalInstance): Promise<void> {
-		if (this.creating || this.isDisposed) return;
+	public createTerminal(profileId?: string | { readonly type: 'pick'; }, focus = true, parent?: ITerminalInstance): Promise<ITerminalInstance | undefined> {
+		// Panel initialization and commands must await the same acquisition and its
+		// exact instance, rather than reading a possibly changed active terminal.
+		return this.creating ??= this.createTerminalCore(profileId, focus, parent).finally(() => {
+			this.creating = undefined;
+			if (!this.isDisposed) {
+				this.titleActions.setCreating(false);
+				this.updateInstances();
+			}
+		});
+	}
+
+	private async createTerminalCore(profileId: string | { readonly type: 'pick'; } | undefined, focus: boolean, parent: ITerminalInstance | undefined): Promise<ITerminalInstance | undefined> {
+		if (this.isDisposed) return;
 		if (!this.hasWorkspaceFolder()) {
 			this.setStatus("Open a folder to use the terminal.");
 			return;
@@ -200,7 +212,6 @@ export class TerminalViewPane extends ViewPane {
 			if (this.isBodyVisible()) super.focus();
 			this.focusSource = this.element.ownerDocument.activeElement;
 		}
-		this.creating = true;
 		this.titleActions.setCreating(true);
 		this.setStatus(undefined);
 		try {
@@ -225,8 +236,12 @@ export class TerminalViewPane extends ViewPane {
 			if (contributed) {
 				const provider = this.profileService.getContributedProfileProvider(contributed.extensionIdentifier, contributed.id);
 				if (!provider) throw new Error(localize('terminal.profile.providerUnavailable', 'Terminal profile provider is unavailable: {0}', contributed.title));
+				const existing = new Set(this.terminalService.instances);
 				await provider.createContributedTerminalProfile({ ...contributed.options, cwd: folder.uri });
-				return;
+				// Providers create through TerminalService and return no instance. Only a
+				// new active terminal in the selected folder can satisfy this acquisition.
+				const created = this.terminalService.activeInstance;
+				return created && !existing.has(created) && created.dirId === folder.id ? created : undefined;
 			}
 			const profile = profileId === undefined ? this.profileService.getDefaultProfile(undefined, folder.id) : this.profileService.getAvailableProfiles(folder.id).find(profile => profile.profileId === profileId);
 			const os = this.processes.operatingSystem;
@@ -260,16 +275,11 @@ export class TerminalViewPane extends ViewPane {
 				}
 				this.groups.joinInstances([parent, created]);
 			}
+			return created;
 		} catch (error) {
 			if (!this.isDisposed) {
 				this.focusSource = undefined;
 				this.setStatus(terminalErrorMessage(error, "Terminal is unavailable"));
-			}
-		} finally {
-			this.creating = false;
-			if (!this.isDisposed) {
-				this.titleActions.setCreating(false);
-				this.updateInstances();
 			}
 		}
 	}

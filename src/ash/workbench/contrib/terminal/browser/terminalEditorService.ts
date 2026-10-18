@@ -32,12 +32,12 @@ export class TerminalEditorService extends Disposable implements ITerminalEditor
 
 	getInstanceFromResource(resource: URI): ITerminalInstance | undefined { return getInstanceFromResource(this.terminals.instances, resource); }
 
-	async openEditor(instance: ITerminalInstance): Promise<void> {
+	async openEditor(instance: ITerminalInstance, editorOptions?: { readonly preserveFocus?: boolean; }): Promise<void> {
 		if (!this.terminals.instances.includes(instance) || !instance.resource) return;
 		const previousTarget = instance.target;
 		instance.target = TerminalLocation.Editor;
 		try {
-			await this.editors.openEditor(new TerminalEditorInput(instance.resource, instance, this.terminals.onDidChangeInstances), { pinned: true, ignoreError: true });
+			await this.editors.openEditor(new TerminalEditorInput(instance.resource, instance, this.terminals.onDidChangeInstances), { pinned: true, ignoreError: true, ...editorOptions });
 			if (this.terminals.instances.includes(instance)) this.terminals.setActiveInstance(instance);
 		} catch (error) {
 			if (this.terminals.instances.includes(instance)) instance.target = previousTarget;

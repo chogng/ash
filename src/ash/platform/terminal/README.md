@@ -33,7 +33,7 @@ Rust 领域服务拥有完整 Agent loop：模型调用、工具选择与调度�
 
 `terminalId` 与 `dirId` 一起定位对应后端资源；多根 Workspace 必须保留创建时的 `dirId`。Web 的 `connectionOwned` 进程随 connection 关闭而结束。Electron 本地与远程的 `reconnectable` 进程在连接断开后由同一后端保留 30 秒，成功 attach 会旋转 token；后端进程重启、租约过期或明确 runtime replacement 后不能恢复原 PTY。token 平时只归 Renderer 进程适配层；协调 reload 时通过窗口级内存 SecretStorage 短期交接，实际窗口关闭即清空，不写入普通工作区存储、设置或日志。屏幕和布局 checkpoint 由 Workbench 原 owner 保存，不能代替后端租约。
 
-`common/terminal.ts` 导出 `ITerminalProcessService` 的 DI 标识。Workbench 与 Sessions 注册 `IRendererHost.terminal` 后，Terminal contribution 经容器注入进程服务与 Workspace。SSH 宿主不再把普通服务和租约管理的方法拼成另一份对象。三处适配器没有上游同职责的 Rust 协议或 Ash 宿主文件，用户已确认保留这些专属职责；通用 backend、child process 和 process manager 仍须在对应上游路径实现。传输层仍使用 Ash 的创建与分页读取契约；`contrib/terminal/browser/terminalProcessManager.ts` 将其接为输出、命令和退出事件，拥有游标与解析等待。完整 child process/backend API 尚未对齐，见 [Terminal 进程与屏幕契约](../../../../docs/terminal.md)。
+`common/terminal.ts` 导出 `ITerminalProcessService` 的 DI 标识。Workbench 与 Sessions 注册 `IRendererHost.terminal` 后，Terminal contribution 经容器注入进程服务与 Workspace。SSH 宿主直接使用拥有租约管理的服务对象。传输层使用 Ash 的创建与分页读取契约；`contrib/terminal/browser/terminalProcessManager.ts` 将其接为输出、命令和退出事件，拥有游标与解析等待。适配层与工作台之间的身份和顺序约束见 [Terminal 运行契约](../../../../docs/terminal.md#进程接入)。
 
 后端链路是 `app-server/src/server/terminal_operations.rs` → `exec-server/src/terminal.rs` → `utils/pty`；App Server 只校验和分发协议，`exec-server` 拥有交互进程，PTY 工具层拥有操作系统句柄、原始字节、尺寸和进程终止。协议及 decoder 由 `app-server-protocol` 生成，不能在此手改生成物。
 
@@ -43,13 +43,13 @@ Rust 领域服务拥有完整 Agent loop：模型调用、工具选择与调度�
 
 终端创建支持可选 `env`：字符串覆盖子进程环境，`null` 删除继承变量；最多 128 项，变量名最多 256 字符且不能包含 `=`/NUL，值最多 32768 字符且不能包含 NUL。Rust 在分配 PTY 前校验；应用于冻结环境的副本，后续终端不受影响。TerminalService 在首次创建前捕获调用方对象，TerminalInstance 重启复用同一快照。Tasks 和 DAP `runInTerminal` 共用此契约。
 
-平台文件完整清单与缺口见 [Platform Terminal 文件清单与接线](../../../../docs/terminal.md#platform-terminal-文件清单与接线)。Workbench 的文件清单完成不代表平台 API 完成。
+进程适配与实例、屏幕、窗口生命周期的协作见 [Terminal 职责与运行契约](../../../../docs/terminal.md)。
 
 扩展环境集合的边界解码由 `common/environmentVariableShared.ts` 拥有，callback 与持久化读取共用同一个入口。`common/environmentVariableCollection.ts` 提供 `MergedEnvironmentVariableCollection`，捕获启动时的独立快照并原子应用 Replace/Append/Prepend；标准 apply 接收 env/scope/resolver；调用方先补被修改键的 inherited 值，合并快照的 constructor 确定执行宿主大小写规则。Workbench EnvironmentVariableService 保留 provider 生命周期、同步与持久化，ProfileResolver 组合启动环境后交给原 Rust 创建请求；平台不反向导入 Workbench。
 
 启动配置 schema 由 `common/terminalPlatformConfiguration.ts` 的 `registerTerminalPlatformConfiguration()` 唯一注册，Workbench 入口仅调用它并注册自己的屏幕/增强设置。原键名、默认值、校验与配置存储保留；Node/Electron PTY host 不由前端建立，进程执行仍属于 Rust。
 
-Common 当前调用链与未完成契约见 [Common 基座台账](../../../../docs/terminal.md#common-已接通的行为)。`TerminalCapabilityStore` 登记真实实现，`CwdDetectionCapability` 拥有已提交目录，`BufferMarkCapability` 管理同一 xterm 屏幕的 markers；Rust 继续拥有命令解析、nonce 与 history。marker 契约采用 DOM 无关结构，Common 不引入 xterm 类型包的 DOM globals。
+能力模型的跨层状态归属见 [输出与命令状态](../../../../docs/terminal.md#输出与命令状态)。`TerminalCapabilityStore` 登记真实实现，`CwdDetectionCapability` 拥有已提交目录，`BufferMarkCapability` 管理同一 xterm 屏幕的 markers；Rust 继续拥有命令解析、nonce 与 history。marker 契约采用 DOM 无关结构，Common 不引入 xterm 类型包的 DOM globals。
 
 `TerminalDataBufferer` 接原扩展 PTY 的文本源，在初始 open、name、exit 和 shutdown 前排空。ProcessManager 仍唯一拥有 Shell 的读取游标、增量 UTF-8 解码、输入队列和解析等待；断线续读保留不完整字符前缀，输出 gap 重置状态，退出前排空尾部。普通/SSH 协议适配器继续保留原始读取字节和二进制输入。`afterSequence` 是屏幕完成解析后的消费确认；Rust 在未确认输出达到高水位时暂停读取 PTY channel，确认前进后恢复。最近历史仍有界，持久重播不包含在此机制内。
 

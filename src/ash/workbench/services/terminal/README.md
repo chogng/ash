@@ -8,8 +8,8 @@ Web 宿主从 [Web API](../../browser/web.api.ts) 返回的 `window.createTermin
 
 与本地 `../vscode/src/vs` 的 `services/terminal/common/embedderTerminalService.ts` 对应，宿主契约提供 `open`、`close`、输出、可选退出与改名。该契约没有输入和尺寸回调；界面按只读输出终端接入，复制、链接、清屏和关闭仍走现有界面。宿主 PTY 不要求 Workspace folder，也不随 Rust 连接状态改变。
 
-[平台契约](../../../platform/terminal/common/terminal.ts) 当前只补齐这条宿主输出链需要的 launch config、进程事件、标题属性和启动/关闭生命周期。Shell 的字节事件与解析 promise 已由 [TerminalProcessManager](../../contrib/terminal/browser/terminalProcessManager.ts) 接入 xterm，约束 Renderer 续读；完整 VS Code `ITerminalChildProcess` 的输入、signal、通用属性与服务器 flow control 尚未完成，不能将此输出链记为完整 Shell backend 对齐。真实 Shell 继续通过 [platform/terminal](../../../platform/terminal/README.md) 接入 Rust PTY 后端。
+[平台契约](../../../platform/terminal/common/terminal.ts) 定义进程创建、字节输入输出、信号、属性查询与生命周期端口。真实 Shell 经 [platform/terminal](../../../platform/terminal/README.md) 接入 Rust PTY；[TerminalProcessManager](../../contrib/terminal/browser/terminalProcessManager.ts) 将字节事件、输入确认、SIGINT 与屏幕解析等待接入实例，消费确认约束后端续读和输出保留。宿主输出 PTY 按自身的只读契约接入，不声明输入或尺寸能力。
 
-Tasks、Debug 的执行编排位于各自 contribution；共享层保留纯契约和配置解析。`ITaskRun` 只公开 `terminalId`，界面从 `ITerminalService.instances` 定位实例，避免共享契约反向依赖终端 contribution。处理记录见 [Terminal 进程与屏幕契约](../../../../../docs/terminal.md)。
+Tasks、Debug 的执行编排位于各自 contribution；共享层保留纯契约和配置解析。`ITaskRun` 只公开 `terminalId`，界面从 `ITerminalService.instances` 定位实例，避免共享契约反向依赖终端 contribution。跨层调用与生命周期见 [Terminal 职责与运行契约](../../../../../docs/terminal.md)。
 
 `ITerminalScreenHost` 限定 xterm 需要的事件和尺寸接口；原实例与无进程的 `DetachedTerminal` 都使用该端口。`ITerminalOutputSnapshot` 是平台终端的只读数据契约，Chat 的 draft/handoff 传递接受时的文字与列数；IPC 校验可选快照的字段、大小和尺寸，不从格式化 context 内容重建屏幕。capability store 从原已提交元数据读取 cwd/命令，无第二份 Shell 历史；具体 readonly capability 与实现仍属于其明确 owner。

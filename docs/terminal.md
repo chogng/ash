@@ -1,149 +1,106 @@
-# Terminal：进程、屏幕与恢复
+# Terminal：职责与运行契约
 
-## 职责边界
+本文描述 Electron Desktop 与 Browser Workbench 集成终端的状态归属、调用链和生命周期。各层的模块职责见 [Platform Terminal](../src/ash/platform/terminal/README.md)、[共享服务契约](../src/ash/workbench/services/terminal/README.md)、[Workbench 实现](../src/ash/workbench/contrib/terminal/README.md) 与[独立贡献](../src/ash/workbench/contrib/terminalContrib/README.md)。
 
-Agent loop 全部由 Rust 后端拥有。前端保留 Workbench 交互、屏幕模型和领域客户端，具体边界定义在 [Platform Terminal README](../src/ash/platform/terminal/README.md#前后端职责)。文件清单用来定位职责，不表示公开契约或行为完成率。
+## 状态与职责
 
-用户已确认：六个 `common/autoApprove/` 路径按后端审批 owner 的宿主差异处理；`common/localPtyChannel.ts` 按 Rust PTY transport 的宿主差异处理。这七项不创建前端空壳，也不计为已实现的 TypeScript 文件。审批行为的缺口回到 Rust action-policy / execpolicy / 工具执行链验证；PTY 行为的缺口回到 Rust terminal / utils-pty 验证。前端审批只展示后端请求、收集人类选择并回复，Rust 校验请求仍有效后执行。
+| Owner                                        | 拥有的状态与操作                                                                                    |
+| -------------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| Rust `exec-server`／`utils-pty`              | 真实 PTY、进程环境、输入与信号、退出、输出保留、重连租约，以及 Shell 命令、cwd 和来源可信度的判定。 |
+| Rust `app-server`                            | 协议校验与分发、执行目录授权、连接与终端资源的路由。                                                |
+| Electron Main                                | App Server 连接获取、透明 relay、运行时更换通知和窗口级内存 SecretStorage。                         |
+| `platform/terminal`                          | 前端进程契约与协议适配、原始字节转换、连接代次和租约交接。生成 DTO 终止于适配边界。                 |
+| `TerminalService`／`TerminalInstanceService` | 窗口实例集合、顺序与活动项；实例创建和不可变启动参数。                                              |
+| `TerminalInstance`／`TerminalProcessManager` | 每实例身份与生命周期、输入队列、读取游标、增量 UTF-8 解码、输入与尺寸确认、屏幕解析等待和取消。     |
+| `XtermTerminal` 与屏幕能力模型               | 每实例唯一的 ANSI／VT 屏幕、cells／cursor、选区、搜索、markers、装饰及已提交 Shell 元数据的显示。   |
+| `TerminalViewPane`／组与编辑器服务           | 面板可见性、组成员和几何、标签、焦点、屏幕附着，以及同一实例在面板与编辑区之间的移动。              |
+| `terminalContrib`                            | 按实例拥有查找、链接、剪贴板、历史选择、听写和无障碍交互的资源与释放。                              |
 
-三个平台 Browser 适配器沿用既有确认，仅补当前调用方需要的端口和元数据映射；迁移、收敛和删除仍后置。
+Agent 执行、审批与终端呈现的详细边界以 [Platform Terminal 的前后端职责](../src/ash/platform/terminal/README.md#前后端职责)为准。前端的命令标记、环境来源可信度和屏幕文字不授予执行权限。
 
-## 当前能力与验证范围
+## 进程接入
 
-本节比较当前 Ash 工作树与本地 VS Code `1e81fc75bb564738c29771d9b17c72e708a8211c` 的用户可观察能力。依据生产入口、配置消费者、状态 owner 和行为测试判断；同名文件存在不算完成，缺文件也不直接算缺功能。此处未对所有项目重新执行两端相同场景，不能作为完整兼容认证。
+真实 Shell 的输入链路为：用户操作／Tasks／Debug → `TerminalInstance` → `TerminalProcessManager` → `ITerminalProcessService` → Renderer protocol client → App Server → `exec-server` → PTY。Electron 连接经过 Main 的透明 relay，Browser 通过其 Web 连接访问后端；输出沿相反方向返回。
 
-### 已接通的用户能力
+宿主在 `IRendererHost.terminal` 提供进程服务，Workbench 与 Sessions 通过同一个 DI 标识消费。已连接 Web 使用 `AppServerTerminalProcessService`；Desktop 本地与远程使用 `ReconnectableTerminalProcessService`。无后端的 UI 环境通过 `DisconnectedTerminalProcessService` 明确拒绝进程操作。
 
-| 能力                              | 当前范围与证据                                                                                                                                                                                                         |
-| --------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Shell / PTY、输入输出、中断与关闭 | 有真实 PTY、原始键盘与 binary 输入、SIGINT、进程关闭。`terminalActions.ts` 的 Interrupt Active Command 已调用 `instance.sendSignal('SIGINT')`。此前 Desktop 场景验证了长命令中断、后续命令执行和关闭分屏后的进程清理。 |
-| 多终端、面板分屏与焦点            | 有独立实例、组、窗格切换、取消拆分、分隔线拖动、窗口 resize。此前场景覆盖多窗格运行、中断隔离、关闭后的焦点和存活进程。                                                                                                |
-| 隐藏面板再显示                    | 同一窗口存活期间保留 PTY、屏幕输出、待提交输入和分屏宽度，已有 Desktop 验证；不代表窗口重载或应用重启恢复。                                                                                                            |
-| 标签和命令状态显示                | 重命名、图标选择、标签排序、分屏图标、组连接线、命令标记和概览尺已有；最近一次英文、中文高对比度场景覆盖了组列表和失败标记。                                                                                           |
-| 编辑区终端                        | 有移入编辑区、移回面板和 `TerminalEditorService`；编辑区终端内继续执行 Split 尚未支持。                                                                                                                                |
-| Profiles、环境变量与扩展 PTY      | 有发现 / 自定义 / 默认 Profile、cwd / args / env / strictEnv、扩展 Profile provider、环境集合和自定义 PTY；Tasks / Debug 使用既有启动链。这里不宣称所有 VS Code 扩展 API 兼容。                                        |
-| 查找、复制粘贴、命令导航和历史    | 有滚动缓冲查找、正则 / 大小写 / 全词、文本复制粘贴、bracketed paste、前后命令导航、持久化最近命令列表。高级交互见下表。                                                                                                |
-| Chat 与可访问性                   | 有终端上下文附加到 Chat、可访问输出、帮助、键盘操作和 bell signal；终端内嵌 Chat UI 是另一项能力。                                                                                                                     |
-| 文件与行列链接                    | 相对 / 绝对 / 带空格路径的鼠标和键盘打开、原命令 cwd 与行列跳转已接入。英文与中文高对比度 Desktop 场景各 4/4，详见下方文件链接切片；真实 SSH 和 Windows runtime 尚未验收。                                             |
-| 端到端输出背压                    | 屏幕消费确认反向限制 PTY drainer，慢消费者不再提前丢弃未确认输出。6 万行字节校验、关闭清理、隔离及 Desktop 突发输出已验证，详见下方输出背压切片。                                                                      |
-| 窗口 reload 恢复                  | Desktop 本地与远程共用 reconnectable adapter；协调 reload 保存原进程身份、已提交屏幕、待提交输入、分屏比例和焦点，再 attach 原 PTY。macOS 英文 / 中文均通过命令重载与直接刷新连续两次恢复，详见下方实施切片。          |
-| 可取消的关闭保护                  | `confirmOnKill` / `confirmOnExit` 使用真实 OS 子进程状态；取消分屏或窗口关闭不停止进程、输出或输入，恢复原焦点。配置默认值与 VS Code 对应设置一致。                                                                    |
+后端资源由 `terminalId` 与创建时的 `dirId` 共同定位；保留的多根工作区终端继续使用原目录路由。前端实例身份独立于 PID，重启 Shell 可以更换 PID。终端编辑器资源包含实例 incarnation，失效资源显示不可用，不根据旧身份自动启动新 Shell。
 
-未完成能力按功能、优先级和验收范围统一维护在[Terminal TODO](../TODO.md#terminal--todo)。以下保留当前契约与已有验证。
+宿主输出 PTY 和扩展自供 PTY 经共享服务契约接入同一个窗口实例集合。前者为只读输出，后者按 provider 实际提供的输入与尺寸能力接线；其创建通知和回调生命周期见[共享服务契约](../src/ash/workbench/services/terminal/README.md)。
 
-## 关闭保护与窗口 reload
+## 启动配置与扩展
 
-关闭链：标题栏 / 标签 / 命令 / 编辑区关闭 → `safeDisposeTerminal` 或标准 editor close handler → Rust `terminal/processInfo.hasChildProcesses` → 原 DialogService。OS 无法确定子进程状态时保守确认，取消不停止原会话；窗口生命周期取消同时恢复原输入焦点。`terminal.integrated.confirmOnKill` 默认为 `editor`，可设 `never` / `editor` / `panel` / `always`；`confirmOnExit` 默认为 `never`，可设 `never` / `always` / `hasChildProcesses`。两项沿用窗口配置作用域；面板关闭保护需设为 `panel` 或 `always`。
+`TerminalProfileService` 合并执行端发现、自定义与扩展 Profile；`TerminalProfileResolverService` 解析执行端变量、Shell 参数、cwd、环境和图标，实际可执行文件由后端确认。多根工作区新建终端使用活动文件所属目录，无法确定时由用户选择；Split 继承原实例的目录与启动配置。
 
-Desktop `enablePersistentSessions` 默认开启。标准 Reload Window 命令和直接刷新都完成原生命周期握手后才导航；`beforeunload` 同步阻止未经协调的刷新。准备阶段等待输入队列和屏幕解析提交，保存输出游标、增量 UTF-8 尾部、原资源身份、xterm SerializeAddon 的 VT 屏幕、组成员 / 比例和活动 / 焦点项。普通工作区存储仅保存 UI checkpoint，租约 token 单独通过窗口级内存 SecretStorage 交接，实际窗口关闭即清空。所有 join 成功后才标记原客户端交接；准备或其他 join 失败则清除 checkpoint 并恢复同一实例读写。
+交互终端、Tasks／DAP 和 Agent 的打开终端请求分别采用交互、automation 和 agentHost Profile 策略，共用原实例创建链。Relaunch 复用首次启动的配置快照；任务终端复用则按新任务替换启动配置并等待旧 PTY 释放。
 
-新 Renderer 先按原执行目录和租约 attach 并验证 PID，再按原字符网格恢复屏幕；等待组布局与工作台恢复后才续读，避免临时单窗格宽度改写历史。隐藏面板也恢复原屏幕，保存焦点的可见窗格才重新取得输入焦点。成功 attach 旋转 token，连接断开后的原进程保留受同一后端 30 秒租约限制。应用彻底退出、后端重启和租约过期后的原进程续跑不在此范围；扩展自供 PTY 尚无恢复协议，启用持久会话时会阻止不安全的 reload 并报告原因。
+启动 schema 由平台唯一注册，屏幕与工作台设置由终端贡献注册，配置值及持久化归配置系统。扩展环境集合由 Workbench 管理生命周期与持久化，平台负责纯解码、快照和合并，resolver 将结果交给 Rust 创建请求。大小写、变量删除、`strictEnv` 和 Shell Integration 环境阶段的规则见 [Platform Terminal](../src/ash/platform/terminal/README.md)。
 
-macOS Desktop 烟雾覆盖英文与简体中文：取消分屏关闭、取消窗口关闭；两个长命令与第三窗格待提交输入；拖动后的三窗格宽度；连续命令重载和直接刷新；原 shell / 子进程 PID 不变，全部编号输出无缺口 / 重复；恢复后的 Ctrl+C、后续命令、可访问输出与焦点，以及最终关闭清理。完整终端集 15/15 通过，最终英文 / 中文关闭与 reload 专项 4/4，已有文件草稿的两次 reload 与显式保存回归 1/1。前端定向单测 136/136、exec-server 82/82、app-server-protocol 148/148；中文语言包与构建通过。当前未把这组 macOS 结果替代真实 SSH、Windows / Linux 或应用退出后 revive 的验收。
+扩展 Profile 的注册、激活、撤回和取消属于原 Extension Host 链。工作区或 provider 代次失效后，晚到的 PTY 由原关闭端口回收；实例关闭释放 provider 的引用，重启重新取得 handle。
 
-## 文件链接
+## 输入与命令
 
-生产链：终端输出中的路径点击 / 打开检测到的链接命令 → `TerminalLinkContribution` → `terminalLinkParsing.detectLinks` → 原命令行 cwd 与 `IPathService` / `IFileService` → `IEditorService.openEditor` 的资源和 selection。xterm 继续拥有 buffer / cells / markers，贡献只借用它们，不创建第二份屏幕或进程状态。
+xterm 的文本和原始字节输入经实例进入同一进程输入 owner。`sendText` 负责换行、执行用的 Enter 与 bracketed paste；原始键盘和二进制输入保留原有编码。输入和尺寸操作等待执行端或 provider 确认，关闭会拒绝排队及进行中的操作，迟到回复不能恢复已关闭的输入链。
 
-新增生产文件只有上游同路径的 `terminalContrib/links/browser/terminalLinkContribution.ts` 和 `terminalLinkParsing.ts`，都有上述生产调用方；原 URL provider、悬停和选择器从 `XtermTerminal` 迁入单一实例贡献，旧屏幕 / View 的链接端口退出。现有链接注册入口、终端配置说明、可访问性帮助、中文翻译和定向测试同批更新。文件服务决定可访问性和实际文件身份；终端路径解析不执行命令、读取 Shell 代码或绕过原文件服务。
+剪贴板贡献捕获发起实例和输入 generation，异步读取后核对活动项、连接及屏幕；切换回来也不会发送已失效的粘贴。没有文本选区时，Ctrl+C 继续发送给 Shell；Interrupt Active Command 通过执行宿主发送 SIGINT。
 
-此切片覆盖文件与位置导航；目录打开、工作区搜索型链接、外部 provider 和完整链接配置仍属于后续能力。真实 SSH 连接与 Windows runtime 仍需各自的验收环境，不能用 URI / 路径单测替代。
+最近命令选择器从终端历史 owner 读取按 Profile 保存的命令，只在用户明确接受后重跑。听写文字进入原实例输入链，由用户按 Enter 执行；切换实例、退出或隐藏面板取消录音。
 
-验证：完成全量测试编译后，文件链接、xterm 和原终端服务四个文件的定向单测 **101/101**。覆盖真实 xterm buffer 的宽字符 / 换行边界、引号位置规范化、执行宿主家目录、远端 authority、Windows 盘符、失效文件、异步关闭 / 重连，以及原输入确认、解析等待和实例生命周期。前端与自动化的全量类型检查通过。
+### 运行编辑器选区
 
-真实 Desktop 场景：英文 [report](../.build/ash-playwright-mcp/evidence/terminal-file-links-2026-10-17T18-06-53-688Z/report.html) 与中文高对比度 [report](../.build/ash-playwright-mcp/evidence/terminal-file-links-zh-2026-10-17T18-07-54-483Z/report.html) 各 **4/4**。截图已目视检查，均为独立合成工作区；保留原始 WebM 和 trace。当前缺少 ffmpeg / ffprobe，未生成字幕视频，也未独立探测视频编码与时长。
+`workbench.action.terminal.runSelectedText` 在异步目录／Profile 选择前捕获活动代码编辑器的文本。有选区时发送选中内容；没有选区时发送去掉首尾空白的当前行。没有模型或当前行为空时不创建 Shell。
 
-## 输出背压
+可输入的活动终端直接复用；只读或已退出的终端保留，并按原创建流程取得新终端。面板初始化与命令等待同一个创建 Promise，发送前核对具体实例的窗口成员、活动身份和运行状态。重连中的终端不接收本命令，也不自动再开 Shell。
 
-唯一执行 owner 仍是 Rust `exec-server`，前端 `TerminalProcessManager` 仍拥有解析等待与消费游标。下一次读取的 `afterSequence` 确认先前屏幕写入已完成；返回一页输出本身不算确认，回读旧游标不能撤回确认。没有新增协议 method、传输 DTO 或另一份屏幕 / 进程状态。
+文本经 `sendText(text, true, true)` 输入；该命令不承担运行当前文件所需的路径转换。面板显示保留代码编辑器焦点与选区；已有编辑区终端经 `TerminalEditorService` 用 `preserveFocus` 展示，保留其原位置。
 
-未确认数据达到 512 KiB 或 8192 块时，Rust drainer 异步等待确认，再通过原有有界 PTY channel 反向限制生产速度。最近 replay ring 保持约 1 MiB / 16384 块的上限；已确认的旧历史仍可被淘汰并报告 `outputGap`。每个 session 拥有其 drainer 的取消句柄，显式关闭、连接清理、全局关闭、租约过期和授权撤销都会取消等待，不占用其他终端的异步 worker。
+## 输出与命令状态
 
-验证：原实现的 6 万行 / 4.44 MB 慢消费者测试复现 `unconsumed terminal output was evicted`；修复后长度与 SHA-256 一致。`just verify ash-exec-server --lib` 的 check、test、rust-warnings 全部通过；Rust 库 **81/81**，新增场景验证暂停期间其他终端可用、原 PID 重新附着、确认后恢复、SIGINT，以及五条关闭路径中的进程退出与 drainer 释放。Desktop 烟雾测试 **11/11** 通过，包含 2 万行 / 1.56 MB 突发输出、800 ms 屏幕阻塞、全部行的内容和顺序、焦点恢复及后续命令。早期脚本的输出等待和断言成本问题已修正，未降低内容校验范围。
+Rust 输出字节与 typed Shell boundaries 共享顺序信息。协议适配层保留原始字节，`TerminalProcessManager` 唯一拥有增量 UTF-8 解码和读取游标；有屏幕时等待 xterm write callback，再发布相应命令事件和退出。没有屏幕的 Shell 不制造屏幕解析确认，稍后附着使用实例保留的有限显示回放。
 
-窗口 reload 恢复和有子进程时的可取消关闭保护由下方独立切片闭合；输出背压继续为冻结屏幕后等待续接的原 PTY 提供有界流控。
+`afterSequence` 确认此前屏幕写入已经解析完成，收到一页输出本身不构成确认。未确认输出达到 512 KiB 或 8192 块时，Rust drainer 等待消费确认，并通过有界 PTY channel 限制生产速度。最近 replay ring 约为 1 MiB／16384 块；旧历史淘汰由 `outputGap` 显式报告。关闭、连接清理、租约过期和授权撤销均取消相应 drainer 的等待。
 
-## Platform Terminal 文件清单与接线
+ShellIntegrationAddon 消费已提交事件；`CwdDetectionCapability` 持有已提交 cwd，命令能力模型关联屏幕 markers、输入和输出范围。gap、trim、clear、reuse 与禁止历史存储会撤回相应显示状态。实际 Shell 状态、nonce 和权威历史继续归 Rust；PartialCommandDetection 的回退 marker 只用于导航，不猜测命令文本或退出状态。
 
-只读参照 `../vscode/src/vs/platform/terminal`。生产 TS/CSS 排除 test：双方同路径 **25**、仅 Ash **3**、仅 VS Code **21**；Common 为 **25 / 32**，七个差异路径均已有上述归属决定。2026-10-17 对照 VS Code `1e81fc75bb564738c29771d9b17c72e708a8211c`，Workbench Terminal 为双方同路径 **89**、缺失 **1**、仅 Ash **0**；缺失项是 `electron-browser/terminalInstallActions.ts`，与命令概览标记和分屏组列表无关。这些数量只说明文件落位。
+命令概览装饰复用同一 marker 生命周期，主题变化更新颜色，失败状态显示在概览尺右侧。Find 搜索本实例已解析的屏幕和 scrollback；可访问输出从同一屏幕读取，关闭辅助视图后恢复原终端焦点。
 
-### 命令概览标记与分屏组列表
+## 视图、分组与资源导航
 
-截图中的概览尺和分屏连接线所需的生产文件均已存在，无需新增同名文件。缺口位于已有 owner 的行为接线：
+隐藏面板保留实例、PTY、屏幕、待提交输入、分屏比例与焦点。面板组由 `TerminalGroupService` 管理成员，`TerminalGroup` 使用横向 SplitView；列表从组模型派生行顺序、连接线与可访问位置描述。
 
-| 行为                 | 已有文件（相对 `src/ash/workbench/contrib/terminal/`）                                                                     | 接线                                                                                                                            |
-| -------------------- | -------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
-| 右侧命令状态概览     | `browser/xterm/decorationAddon.ts`、`browser/xterm/xtermTerminal.ts`、`common/terminalColorRegistry.ts`                    | 原 screen marker 同时注册概览装饰；屏幕启用概览尺，颜色跟随命令状态和主题，失败标记位于右侧。标记裁剪和释放仍由原生命周期拥有。 |
-| 分屏组连接线与连续行 | `browser/terminalTabsList.ts`、`browser/terminalGroupService.ts`、`browser/terminalGroup.ts`、`browser/media/terminal.css` | 列表消费已有组成员和窗格顺序，显示组首、中间、末尾连接线；取消拆分和关闭后从模型重新派生，单实例隐藏连接线。                    |
-| 分组可访问性         | `browser/terminalTabsList.ts`、`../terminalContrib/accessibility/browser/terminalAccessibilityHelp.ts`                     | 保留 TabList 的键盘和选择语义，装饰连接线不参与读屏，行描述提供组号和组内位置；帮助与中文翻译同步。                             |
+`TerminalEditorService` 将同一个 TerminalInstance 移入或移出编辑区，编辑器 pane 只承载原 xterm。移动不复制屏幕或重建进程；关闭终端编辑器标签通过原编辑器关闭链释放实例。重命名和图标变化由实例保存，标签与编辑器通过原事件更新。
 
-文件链接实施前，扩展到整个相关目录后的生产 TS/CSS 路径缺失数为：`workbench/contrib/terminal` **1**、`workbench/contrib/terminalContrib` **154**、`workbench/services/terminal` **0**、`platform/terminal` **21**。后者包含已确认由 Rust 拥有的 PTY 和审批职责；`terminalContrib` 还包含终端 Chat、Agent 工具、Sticky Scroll、Suggest 等独立能力。这份路径差异不能作为批量新增前端文件的实施清单。
+文件链接的点击和键盘选择共用 `TerminalLinkContribution` 与路径解析。解析器只产生候选，贡献使用命令所在行的 cwd、执行宿主的 `IPathService` 与原文件服务确认资源，再通过编辑器服务打开文件和行列位置。远端资源保留所属目录的 authority；文本位置从真实 buffer cells 换算，处理宽字符与自动换行。状态、工作区或实例失效会撤回过期打开结果。
 
-| 平台相对路径                                                       | 文件关系         | 当前职责、接线或缺口                                                                                                                                                                     |
-| ------------------------------------------------------------------ | ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `browser/appServerTerminalProcessService.ts`                       | 仅 Ash（已确认） | 已确认 Ash 专属；本地 Electron/已连接 Web 通过 Renderer protocol client 调用 Rust PTY。                                                                                                  |
-| `browser/disconnectedTerminalProcessService.ts`                    | 仅 Ash（已确认） | 已确认 Ash 专属；无 App Server 宿主时明确拒绝操作。                                                                                                                                      |
-| `browser/reconnectableTerminalProcessService.ts`                   | 仅 Ash（已确认） | 已确认 Ash 专属；Desktop 本地 / 远程 Renderer 的 lease/token/generation owner；协调 reload 短期交接租约；Main 提供通用窗口内存 SecretStorage、relay 与 runtime replacement 通知。        |
-| `common/autoApprove/autoApproveParseSafety.ts`                     | 仅 VS Code       | 已确认宿主差异：命令安全解析与自动审批归 Rust action-policy / execpolicy；不建立前端规则副本。                                                                                           |
-| `common/autoApprove/cmdDelayedExpansion.ts`                        | 仅 VS Code       | 已确认宿主差异：命令安全解析与自动审批归 Rust action-policy / execpolicy；不建立前端规则副本。                                                                                           |
-| `common/autoApprove/gitAutoApproveRules.ts`                        | 仅 VS Code       | 已确认宿主差异：命令安全解析与自动审批归 Rust action-policy / execpolicy；不建立前端规则副本。                                                                                           |
-| `common/autoApprove/powershellAutoApproveRules.ts`                 | 仅 VS Code       | 已确认宿主差异：命令安全解析与自动审批归 Rust action-policy / execpolicy；不建立前端规则副本。                                                                                           |
-| `common/autoApprove/sedFileWriteParser.ts`                         | 仅 VS Code       | 已确认宿主差异：命令安全解析与自动审批归 Rust action-policy / execpolicy；不建立前端规则副本。                                                                                           |
-| `common/autoApprove/sortAutoApproveRules.ts`                       | 仅 VS Code       | 已确认宿主差异：命令安全解析与自动审批归 Rust action-policy / execpolicy；不建立前端规则副本。                                                                                           |
-| `common/capabilities/bufferMarkCapability.ts`                      | 双方都有         | DecorationAddon 登记原 screen markers；创建、借用、替换、trim 与释放共用唯一模型。                                                                                                       |
-| `common/capabilities/capabilities.ts`                              | 双方都有         | 进程与屏幕 capability 的共同契约；命令执行与来源可信度来自 Rust，markers/input/output range 由 screen 拥有。                                                                             |
-| `common/capabilities/commandDetection/promptInputModel.ts`         | 双方都有         | 解析后的 cells/cursor 输入模型：Unicode、ghost、右提示、续行、interrupt 和序列化；无键盘编辑模拟或第二套 parser。                                                                        |
-| `common/capabilities/commandDetection/terminalCommand.ts`          | 双方都有         | 屏幕命令/partial command：真实 markers、时间/ID、输出范围与匹配、持久化可序列化坐标；不替代 Rust history。                                                                               |
-| `common/capabilities/commandDetectionCapability.ts`                | 双方都有         | 屏幕命令周期、当前输入/已提交执行状态、marker lifetimes、clear/gap/reuse 与 serialize/deserialize；backend 状态仍在原 source。                                                           |
-| `common/capabilities/cwdDetectionCapability.ts`                    | 双方都有         | 已提交 cwd/trust/访问目录集合；原 command source 更新，Rust 仍拥有实际 cwd 与 nonce 判定。                                                                                               |
-| `common/capabilities/naiveCwdDetectionCapability.ts`               | 双方都有         | Split 在无 shell cwd 时查询真实 processInfo；模型释放后丢弃迟到更新。                                                                                                                    |
-| `common/capabilities/partialCommandDetectionCapability.ts`         | 双方都有         | xterm 普通 buffer Enter 的回退导航 marker；erase/trim/屏幕释放退订，不猜测命令文本或状态。                                                                                               |
-| `common/capabilities/promptTypeDetectionCapability.ts`             | 双方都有         | Rust PromptType 经 output sequence commit 发布；仅显示身份；screen prompt input 由独立 PromptInputModel 消费实际 cells/cursor。                                                          |
-| `common/capabilities/shellEnvDetectionCapability.ts`               | 双方都有         | 原子 env 事务与累计 nonce 信任；未结束不发布，abort 撤回；Send Sequence 消费已提交且可信快照。                                                                                           |
-| `common/capabilities/terminalCapabilityStore.ts`                   | 双方都有         | 可变 store、专用事件与 multiplexer 已接 process/screen，lease 与优先级覆盖测试通过。                                                                                                     |
-| `common/environmentVariable.ts`                                    | 双方都有         | 标准 variable/scope/description/diff/apply 契约已接；process-creation / shell-integration phase options 已贯穿 SDK、resolver 与 Rust startup wrapper。                                   |
-| `common/environmentVariableCollection.ts`                          | 双方都有         | 启动时 immutable snapshot、scope 优先级、diff 和原子 apply，执行宿主大小写由 constructor 确定。                                                                                          |
-| `common/environmentVariableShared.ts`                              | 双方都有         | 扩展/持久化唯一解码与标准序列化；旧快照规范化、opaque scope key 与 URI 边界校验。                                                                                                        |
-| `common/localPtyChannel.ts`                                        | 仅 VS Code       | 已确认宿主差异：Renderer protocol client → Rust terminal dispatch → PTY；不建立 Node IPC channel。                                                                                       |
-| `common/requestStore.ts`                                           | 双方都有         | 原 extension profile bridge 的 callback 配对、超时、同步回复和释放；不共享或复制 transport request IDs。                                                                                 |
-| `common/terminal.ts`                                               | 双方都有         | 部分契约；实际服务由 Renderer host 提供，Workbench/Sessions 注册。child process 输入按真实 capability 接线；SIGINT 与消费确认驱动的服务器输出背压已接入；通用属性和持久恢复未完整接入。  |
-| `common/terminalDataBuffering.ts`                                  | 双方都有         | 扩展 PTY 的文本合并与 drain；Shell 输出仍由 Rust ring + 原 ProcessManager 分页/解析等待。                                                                                                |
-| `common/terminalEnvironment.ts`                                    | 双方都有         | Tasks/Debug literal shell path quoting 与 resolver sanitizeCwd；collapseTildePath 仍未接真实调用；strictEnv 已贯穿真实 Rust spawn。                                                      |
-| `common/terminalLogService.ts`                                     | 双方都有         | 终端日志 scope、当前 Workspace trace 标签、level/event 和原持久化 flush；Root 在 Workbench/Sessions 注册真实 logger factory。                                                            |
-| `common/terminalPlatformConfiguration.ts`                          | 双方都有         | 通用 launch schema 唯一注册，原 Workbench 入口调用；保留原配置键、默认与校验。                                                                                                           |
-| `common/terminalProcess.ts`                                        | 双方都有         | 真实 display replay 消费 ReplayEntry；完整 process details/config/layout 仍待接线。                                                                                                      |
-| `common/terminalProfiles.ts`                                       | 双方都有         | 动态 schema enums、args 比较和 ThemeIcon/URI icon 比较供 ProfileService 消费。                                                                                                           |
-| `common/terminalRecorder.ts`                                       | 双方都有         | 有限 screen display replay，保存 geometry、文本与 ordered metadata；不等同服务端持久恢复。                                                                                               |
-| `common/terminalStrings.ts`                                        | 双方都有         | Tasks 启动提示消费 ANSI formatMessageForTerminal，保留 NLS 文本与正确换行。                                                                                                              |
-| `common/xterm/shellIntegrationAddon.ts`                            | 双方都有         | 消费已提交的 Rust shell boundaries 并登记 screen command/env/mark 模型；无 TS OSC parser，nonce 与权威 history 留 Rust。                                                                 |
-| `electron-main/electronPtyHostStarter.ts`                          | 仅 VS Code       | 不启动 Electron PTY host；Desktop 通过既有连接层获取 Rust App Server。                                                                                                                   |
-| `node/childProcessMonitor.ts`                                      | 仅 VS Code       | 执行端职责由 crates/exec-server/src/terminal.rs、crates/exec-server/src/terminal/shell_integration.rs 与 crates/utils/pty 拥有；不引入 Node PTY 实现，也不据此声称该上游契约已完整支持。 |
-| `node/heartbeatService.ts`                                         | 仅 VS Code       | 执行端职责由 crates/exec-server/src/terminal.rs、crates/exec-server/src/terminal/shell_integration.rs 与 crates/utils/pty 拥有；不引入 Node PTY 实现，也不据此声称该上游契约已完整支持。 |
-| `node/nodePtyHostStarter.ts`                                       | 仅 VS Code       | 执行端职责由 crates/exec-server/src/terminal.rs、crates/exec-server/src/terminal/shell_integration.rs 与 crates/utils/pty 拥有；不引入 Node PTY 实现，也不据此声称该上游契约已完整支持。 |
-| `node/ptyHost.ts`                                                  | 仅 VS Code       | 执行端职责由 crates/exec-server/src/terminal.rs、crates/exec-server/src/terminal/shell_integration.rs 与 crates/utils/pty 拥有；不引入 Node PTY 实现，也不据此声称该上游契约已完整支持。 |
-| `node/ptyHostMain.ts`                                              | 仅 VS Code       | 执行端职责由 crates/exec-server/src/terminal.rs、crates/exec-server/src/terminal/shell_integration.rs 与 crates/utils/pty 拥有；不引入 Node PTY 实现，也不据此声称该上游契约已完整支持。 |
-| `node/ptyHostService.ts`                                           | 仅 VS Code       | 执行端职责由 crates/exec-server/src/terminal.rs、crates/exec-server/src/terminal/shell_integration.rs 与 crates/utils/pty 拥有；不引入 Node PTY 实现，也不据此声称该上游契约已完整支持。 |
-| `node/ptyService.ts`                                               | 仅 VS Code       | 执行端职责由 crates/exec-server/src/terminal.rs、crates/exec-server/src/terminal/shell_integration.rs 与 crates/utils/pty 拥有；不引入 Node PTY 实现，也不据此声称该上游契约已完整支持。 |
-| `node/terminalContrib/autoReplies/autoRepliesContribController.ts` | 仅 VS Code       | 未接入自动回复场景；当前无前端生产调用方。                                                                                                                                               |
-| `node/terminalContrib/autoReplies/terminalAutoResponder.ts`        | 仅 VS Code       | 未接入自动回复场景；当前无前端生产调用方。                                                                                                                                               |
-| `node/terminalEnvironment.ts`                                      | 仅 VS Code       | 执行端职责由 crates/exec-server/src/terminal.rs、crates/exec-server/src/terminal/shell_integration.rs 与 crates/utils/pty 拥有；不引入 Node PTY 实现，也不据此声称该上游契约已完整支持。 |
-| `node/terminalProcess.ts`                                          | 仅 VS Code       | 执行端职责由 crates/exec-server/src/terminal.rs、crates/exec-server/src/terminal/shell_integration.rs 与 crates/utils/pty 拥有；不引入 Node PTY 实现，也不据此声称该上游契约已完整支持。 |
-| `node/terminalProfiles.ts`                                         | 仅 VS Code       | 执行端职责由 crates/exec-server/src/terminal.rs、crates/exec-server/src/terminal/shell_integration.rs 与 crates/utils/pty 拥有；不引入 Node PTY 实现，也不据此声称该上游契约已完整支持。 |
-| `node/windowsShellHelper.ts`                                       | 仅 VS Code       | 执行端职责由 crates/exec-server/src/terminal.rs、crates/exec-server/src/terminal/shell_integration.rs 与 crates/utils/pty 拥有；不引入 Node PTY 实现，也不据此声称该上游契约已完整支持。 |
+附加终端到 Chat 时捕获已解析输出、选区及 Shell 元数据，交给原 draft。只读预览显示接受时的快照，源终端关闭或再次选择不改写已接受内容；预览没有 PTY 或输入目的地。
 
-## Common 已接通的行为
+## 关闭与恢复
 
-- 环境集合：扩展 SDK scoped view / options / descriptions → 平台唯一边界解码 → Workbench 集合持久化与快照 → scope/diff/原子 apply → ProfileResolver → Rust spawn。process-creation mutations 在启动前应用；shell-integration mutations 经标准 `VSCODE_ENV_REPLACE/PREPEND/APPEND` metadata 交给 Rust，在用户 RC 后按字面值应用，不执行插值或 eval。`strictEnv` 只采用显式字面环境，Rust 不解释该模式中的 metadata 字段。
-- Profiles 与配置：ProfileService 消费 args/icon 比较，动态 schema 消费 profile enums；平台唯一注册 launch schema。未知持久化 profile 保留现有 fallback。
-- 输出与屏幕：Rust 输出和 typed Shell boundaries 共享 sequence；适配器保留 bytes，ProcessManager 唯一增量解码并等待 xterm write commit。有限 TerminalRecorder 保存 geometry 与 metadata 顺序，不替代服务端输出保留或持久恢复。
-- 屏幕能力：ShellIntegrationAddon 消费已提交事件；CommandDetection / PromptInputModel / TerminalCommand 拥有 markers、输入、宽字符、ghost、右提示、续行和输出范围。gap、trim、clear、reuse 与 storage-disabled 撤回相应屏幕状态。Rust 继续拥有 OSC parser、nonce 判定、执行状态与权威 history。
-- cwd / PromptType / env：cwd 查询回到原 `terminal/processInfo`；PromptType 与实际 Shell 类型由 Rust producer 发布。Shell env 使用完整或增量事务，来源可信度来自 Rust；Send Sequence 消费已提交且可信的 env，否则使用原执行宿主环境。来源可信不授予执行权限。
-- 客户端输入：`ITerminalChildProcess.processBinary` 由真实输入 owner 消费；text-only/output-only provider 不声明该能力。扩展 PTY 输入和 resize 等待原 provider 确认，失败传回原调用方；关闭拒绝排队及进行中的输入，迟到回复不发布输出，正常确认可以同时报告退出。cwd 查询在关闭或执行宿主替换后撤回结果。
-- 日志与请求：TerminalLogService 使用 host logger scope、level/event 与真实 flush；RequestStore 关联 extension profile 的领域 callback/deadline，不复制协议 pending map。超时或撤回取消 provider，迟到 PTY 经原关闭端口回收。
-- Tasks / Debug：共用原 Rust 进程启动、literal shell path quoting 与配置环境；Tasks 消费标准 ANSI 提示格式。客户端 PTY API 和 provider 对象留在其原 owner，Agent 工具调度不进入前端。
+| 生命周期事件                                           | 资源行为                                                                       |
+| ------------------------------------------------------ | ------------------------------------------------------------------------------ |
+| 隐藏或再次显示面板                                     | 保留原进程和屏幕，仅改变可见性与焦点。                                         |
+| 关闭实例或终端编辑器标签                               | 按关闭策略检查真实子进程；取消保留原会话并恢复焦点，确认后释放进程与前端资源。 |
+| Desktop 窗口 reload                                    | 协调输入、屏幕与后端租约交接，新 Renderer 附着同一 PTY。                       |
+| Web 连接关闭                                           | `connectionOwned` 进程随连接结束。                                             |
+| Desktop 连接中断                                       | 同一后端按 30 秒租约保留可重连进程，成功 attach 旋转 token。                   |
+| 窗口实际退出、后端重启、租约过期或 runtime replacement | 窗口交接凭据清空或原 attachment 失效，不能据旧 checkpoint 续接原进程。         |
 
-## 验证边界
+`confirmOnKill` 默认为 `editor`，`confirmOnExit` 默认为 `never`；设置及枚举值由原配置 schema 定义。子进程状态通过 Rust `terminal/processInfo` 查询，OS 无法确定时保守确认，取消关闭不停止进程、输出或待提交输入。
 
-2026-10-17 macOS 最近一轮关闭／reload 验证：前端定向单测 136 项、Rust exec-server 82 项、app-server-protocol 148 项、Desktop 烟雾 15 项通过。文件链接此前的 101 项单测和英文／中文高对比度各 4 项 Desktop 场景仍按各自源码范围保留。Common 迁移曾通过正常 unit runner 的 137 项测试，以及 Chromium 原终端 3 场景和诊断／编辑器 6 场景。
+Desktop 的 `enablePersistentSessions` 控制协调 reload。准备阶段等待输入队列与屏幕解析提交，保存输出游标、UTF-8 尾部、终端资源、VT 屏幕、组成员／比例及活动／焦点项。普通工作区存储保存 UI checkpoint，租约 token 通过窗口级内存 SecretStorage 短期交接；准备或其他生命周期 join 失败时撤销交接并恢复同一实例读写。
 
-这些是历史验证结果，不能替代当前 HEAD、真实 SSH、Windows／Linux PTY、PowerShell／Fish 或应用退出后 revive 的验收。尚无消费者的通用 layout/process details、自动回复和其他公开端口不预建模块；后续按真实消费者补齐唯一 owner 与可观察结果。
+新 Renderer 按原执行目录与租约 attach 并验证 PID，恢复原字符网格与屏幕，等待布局和工作台恢复后续读，避免临时尺寸改写历史。实际窗口关闭清空内存凭据；扩展自供 PTY 没有恢复协议时阻止不安全的 reload，并反馈原因。
+
+## 验证入口
+
+| 契约                         | 主要测试入口                                                                                                                                                                                                                                                               |
+| ---------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 运行选区、实例输入与生命周期 | [terminalActions.test.ts](../src/ash/workbench/contrib/terminal/test/browser/terminalActions.test.ts)、[terminalService.test.ts](../src/ash/workbench/contrib/terminal/test/browser/terminalService.test.ts)                                                               |
+| Profile、环境与扩展创建      | [terminalConfigurationService.test.ts](../src/ash/workbench/contrib/terminal/test/browser/terminalConfigurationService.test.ts)                                                                                                                                            |
+| 屏幕、解析等待与命令装饰     | [xtermTerminal.test.ts](../src/ash/workbench/contrib/terminal/test/browser/xterm/xtermTerminal.test.ts)、[decorationAddon.test.ts](../src/ash/workbench/contrib/terminal/test/browser/xterm/decorationAddon.test.ts)                                                       |
+| 文件链接与异步打开           | [terminalLinkContribution.test.ts](../src/ash/workbench/contrib/terminalContrib/links/test/browser/terminalLinkContribution.test.ts)                                                                                                                                       |
+| 连接代次、租约与 reload      | [reconnectableTerminalProcessService.test.ts](../src/ash/platform/terminal/test/browser/reconnectableTerminalProcessService.test.ts)、[terminalNativeContribution.test.ts](../src/ash/workbench/contrib/terminal/test/electron-browser/terminalNativeContribution.test.ts) |
+| 真实 Workbench、PTY 与焦点   | [terminal.spec.ts](../test/smoke/areas/windows/terminal.spec.ts)                                                                                                                                                                                                           |
+| 执行端进程、输出与释放       | [exec-server 终端实现及相邻测试](../crates/exec-server/src/terminal.rs)                                                                                                                                                                                                    |
+
+测试入口描述可重复检查的行为，不替代特定平台的实机结果。未完成动作与平台验收集中在 [Terminal TODO](../TODO.md#terminal--todo)，可选增强保留在[发展候选（未排期）](../TODO.md#发展候选未排期)。

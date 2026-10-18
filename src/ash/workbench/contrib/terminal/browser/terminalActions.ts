@@ -23,10 +23,62 @@ import { ITerminalService, ITerminalGroupService, ITerminalEditorService, ITermi
 import type { TerminalViewPane } from './terminalView.js';
 import { MarshalledId } from '../../../../base/common/marshallingIds.js';
 import { InstanceContext } from './terminalContextMenu.js';
+import { ICodeEditorService } from '../../../../editor/browser/services/codeEditorService.js';
+import { EndOfLinePreference } from '../../../../editor/common/model.js';
 
 
 /** Command definitions use the invoking window's services, never a retained View callback. */
 export function registerTerminalActions(): void {
+	registerAction2(class RunSelectedTextTerminalAction extends Action2 {
+		constructor() {
+			super({
+				id: TerminalCommandId.RunSelectedText,
+				title: localize2('terminal.runSelectedText', 'Terminal: Run Selected Text in Active Terminal'),
+				f1: true,
+				precondition: AppServerAvailableContext.isEqualTo(true),
+			});
+		}
+
+		override async run(accessor: ServicesAccessor): Promise<void> {
+			const editor = accessor.get(ICodeEditorService).getActiveCodeEditor();
+			const model = editor?.getModel();
+			const selection = editor?.getSelection();
+			if (!model || !selection) return;
+			// Capture the request before folder/profile selection can yield to another edit.
+			const text = selection.isEmpty()
+				? model.getLineContent(selection.selectionStartLineNumber).trim()
+				: model.getValueInRange(selection, EndOfLinePreference.LF);
+			if (!text) return;
+
+			const terminals = accessor.get(ITerminalService);
+			const views = accessor.get(IViewsService);
+			let instance = terminals.activeInstance;
+			if (!instance || instance.isReadOnly || instance.state === 'exited') {
+				const previous = instance;
+				const existing = new Set(terminals.instances);
+				const view = await views.openView<TerminalViewPane>(TERMINAL_VIEW_ID, false);
+				if (!view) return;
+				const active = terminals.activeInstance;
+				if (active !== previous) {
+					// Opening the panel may already have created its first terminal. A switch
+					// to an existing instance instead retires this request.
+					if (!active || existing.has(active)) return;
+					instance = active;
+				} else {
+					instance = await view.createTerminal(undefined, false);
+				}
+			}
+			if (!instance || !terminals.instances.includes(instance) || terminals.activeInstance !== instance
+				|| instance.isReadOnly || instance.state !== 'running') return;
+			await instance.sendText(text, true, true);
+			if (!terminals.instances.includes(instance) || terminals.activeInstance !== instance) return;
+			if (instance.target === TerminalLocation.Editor) {
+				await accessor.get(ITerminalEditorService).openEditor(instance, { preserveFocus: true });
+			} else {
+				await accessor.get(ITerminalGroupService).showPanel(false);
+			}
+		}
+	});
 	registerAction2(class SendSignalTerminalAction extends Action2 {
 		constructor() { super({ id: TerminalCommandId.SendSignal, title: localize2('terminal.signal.command', 'Terminal: Interrupt Active Command'), f1: true, precondition: TerminalHasActiveInstanceContext.isEqualTo(true) }); }
 		override async run(accessor: ServicesAccessor): Promise<void> {
@@ -112,7 +164,7 @@ export function registerTerminalActions(): void {
 		}
 	});
 
-	CommandsRegistry.register(TerminalCommandId.New, accessor => terminalView(accessor).createTerminal());
+	CommandsRegistry.register(TerminalCommandId.New, async accessor => { await terminalView(accessor).createTerminal(); });
 	registerAction2(class SplitTerminalAction extends Action2 {
 		constructor() {
 			super({

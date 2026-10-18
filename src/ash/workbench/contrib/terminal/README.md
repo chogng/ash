@@ -2,8 +2,6 @@
 
 此目录拥有终端服务实现、窗口内实例管理及界面。跨领域服务契约由 [services/terminal](../../services/terminal/README.md) 拥有；Shell 进程和授权由 Rust 后端拥有，经 [platform/terminal](../../../platform/terminal/README.md) 的进程契约访问；contribution 不导入生成协议。
 
-当前目录生产 TS/CSS 清单 89 项与参照同路径，缺失 0；文件落位表示实际消费链已接通，并不表示上游所有增强或私有 API 都已实现。
-
 创建由 TerminalInstanceService 保存不可变启动参数，AgentHostTerminalService 按窗口执行目标选择 Local / Remote backend。各 backend 索引原 PTY 句柄；实例持有唯一释放 lease。RemoteTerminalChannelClient 只约束异步请求的 workspace generation 和 input host identity，平台继续唯一拥有真实 attachment/reconnect/ACK，Rust 继续拥有执行、nonce 和 Shell 历史。Desktop 与 Web 入口各自注册 resolver/backend；Desktop 的关闭保护与 reload 交接由 TerminalNativeContribution 接入原生命周期，真正退出时才等待实例关闭。
 
 扩展环境变量 collection 通过既有能力准入注册与撤销；EnvironmentVariableService 拥有工作区持久化和合并，resolver 在调用原 create 前准备实际 inherited environment。TerminalContributionService 从 ExtensionService 的已验证声明读 profile；全局 extension point registry 只存校验元数据。
@@ -49,7 +47,7 @@ Shell 进程管理器从平台契约消费原始字节和前端退出码，不�
 
 `terminalExtensions.ts` 注册实际实例贡献；实例 attach 创建唯一屏幕后通过自己的 DI 作用域装配贡献，屏幕就绪时调用 `xtermReady`，关闭实例统一释放。`TerminalFindContribution` 只承接实例上下文、控件与命令，`TerminalFindWidget` 持有查询和选项，`XtermTerminal.findNext/findPrevious` 持有按需加载的 SearchAddon、高亮与结果事件。关闭 Find 使等待加载的旧查询失效，不向 PTY 发送搜索输入；切换实例不共享查询、匹配或服务作用域。标准贡献的其他进程／布局 hook 仍待真实消费者，当前不创建空能力。
 
-完整文件对应关系、仅 Ash 文件及实施准入见 [Terminal 进程与屏幕契约](../../../../../docs/terminal.md)。本目录说明现有职责，不授权移动、删除或批量创建上游文件。
+跨层的状态归属、调用链与关闭／恢复边界见 [Terminal 职责与运行契约](../../../../../docs/terminal.md)。
 
 ## 实例与创建生命周期
 
@@ -125,8 +123,6 @@ Send Sequence 由 `terminalContrib/sendSequence` 的单一 contribution 入口�
 Rename 和 Change Icon 使用现有 Quick Input，目标关闭时取消。原实例保留用户 title/icon，列表与编辑器标签通过原 labels 事件更新，重启保留用户元数据。面板列表宽度由原 SplitView 决定，StorageService 按工作区保存；单实例隐藏和非法存储值不会造成失效布局。
 
 `decorationAddon.ts` 只拥有已提交命令事件的屏幕 marker/decoration；xterm 缓存淘汰标记时立即释放 UI listeners。`markNavigationAddon.ts` 只读取这些 marker，不建立第二份 Shell history；`decorationStyles.ts` 提供中英文 tooltip/ARIA 状态。屏幕样式由 `media/xterm.css` 拥有。`terminal.all.ts` 是 Desktop/Web 共用装载入口，核心与增强各自只注册一次。
-
-当前同路径生产 TS/CSS 为 51，仍缺 38。完整 backend/capability、环境变量集合和同步 InstanceService 未完成；准确清单与契约边界见 [对齐状态](../../../../../docs/terminal.md)。
 
 `common/basePty.ts` 提供当前实际消费的 string-output child-process 事件端口；`terminalProcessExtHostProxy.ts` 接原扩展 provider 的 opaque PTY，拥有轮询/输入队列和取消，不创建 Shell 或屏幕。MainThread 继续拥有 profile 注册与 extension incarnation，实际工厂直接创建此代理；旧内嵌 PTY 类已退出。插件响应在代理边界校验，typed 内部 payload 不重复校验；关闭后忽略晚到数据并只发一次释放请求。完整 Rust byte-stream child-process/replay/backend API 仍待补。
 

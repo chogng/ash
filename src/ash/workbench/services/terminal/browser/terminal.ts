@@ -236,7 +236,7 @@ export interface ITerminalStatusList {
 
 /** Editor operations for the same window-owned terminal instances. */
 export interface ITerminalEditorService {
-	openEditor(instance: ITerminalInstance): Promise<void>;
+	openEditor(instance: ITerminalInstance, editorOptions?: { readonly preserveFocus?: boolean; }): Promise<void>;
 	detachInstance(instance: ITerminalInstance): Promise<void>;
 	getInstanceFromResource(resource: URI): ITerminalInstance | undefined;
 }

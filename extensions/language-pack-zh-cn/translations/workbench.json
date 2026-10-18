@@ -1896,6 +1896,8 @@
     "terminal.chat.previewClose": "关闭终端预览",
     "terminal.chat.previewAccessibility": "已保存的终端输出：{0}\n此预览为只读，保留附加时捕获的输出。按 Escape 或选择“关闭终端预览”返回消息。\n\n{1}",
     "terminal.signal.command": "终端：中断活动命令",
+    "terminal.runSelectedText": "终端：在活动终端中运行选中文本",
+    "terminal.accessibility.runSelectedText": "在代码编辑器中，执行“终端：在活动终端中运行选中文本”会运行所选文本；没有选区时运行当前行。需要时会创建终端，并将焦点保留在代码编辑器中。",
     "terminal.signal.unsupported": "此终端宿主仅支持 SIGINT 信号。",
     "terminal.accessibility.interrupt": "“终端：中断活动命令”通过执行宿主向前台命令发送 SIGINT，不关闭终端。",
     "workbench.showOpenedEditors": "显示已打开的编辑器",

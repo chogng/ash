@@ -8,10 +8,10 @@
 
 Find 按实例持有查询和大小写、整词、正则选项，使用该实例屏幕的 SearchAddon 搜索解析后的内容与回滚缓冲区。结果数通过 live region 读出；Enter / Shift+Enter 和 F3 / Shift+F3 导航，macOS 还支持 Command+G / Command+Shift+G。Escape 清除搜索高亮并恢复终端焦点。隐藏面板或切换实例保留查询；关闭实例释放控件、插件、监听器与上下文。Find 帮助使用已有 `accessibility.verbosity.find` 设置，Alt+F1 打开帮助，关闭后恢复原控件焦点。
 
-links 和 voice 仍属于部分实现，不能代表上游完整 provider 或 API。目录链接、工作区搜索型链接、外部链接 provider、最近目录、Shell 历史导入、Quick Fix、Sticky Scroll、Suggest 等仍需从真实用户入口逐项接入。最近命令已由 history 贡献持久化并提供选择重跑。终端输出的帮助、Accessible View 和 verbosity 已由 accessibility 贡献装载；Find 与语音自身的帮助分别保留各自职责。
+history 贡献持久化最近命令并提供选择重跑。终端输出的帮助、Accessible View 和 verbosity 由 accessibility 贡献装载；Find 与语音自身的帮助分别保留各自职责。
 
 新增贡献之前必须确定下层公共能力、状态 owner 和释放边界。命令与配置由各自 `.contribution.ts` 注册；界面消费前端事件和类型，不导入 Rust DTO。命令检测中的屏幕位置归 xterm，Shell 命令完成状态归执行后端，不能让贡献自行从输出文字猜测 exit code 或重新执行命令。
 
-各目录的文件对应与后续能力见 [Terminal 进程与屏幕契约](../../../../../docs/terminal.md)。用户已批准将 `voice/browser/terminalVoice.css` 的样式迁回 `terminal/browser/media/terminalVoice.css`；听写会话仍在本目录。
+跨层生命周期见 [Terminal 职责与运行契约](../../../../../docs/terminal.md)，未完成动作和可选增强由 [Terminal TODO](../../../../../TODO.md#terminal--todo) 及[发展候选](../../../../../TODO.md#发展候选未排期)维护。听写样式归 `terminal/browser/media/terminalVoice.css`，听写会话归本目录。
 
 Clipboard 贡献按实例提供复制、复制并清除、粘贴命令；Linux 另提供 selection clipboard 粘贴。焦点选区键只影响终端复制快捷键，无选区 Ctrl+C 仍发送给 Shell。宿主剪贴板读取完成后再次检查实例、连接代次、活动项与屏幕可用性；切换回来也不会发送失效结果。粘贴使用 `sendText` 的换行、child paste mode 与输入确认，不复制输入队列。关闭实例释放监听和 DOM 上下文。HTML／资源粘贴、copy-on-selection、多行确认与 clipboard 配置仍未实现。

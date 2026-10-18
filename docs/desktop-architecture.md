@@ -1157,7 +1157,7 @@ PowerShell 使用 PSConsoleHostReadLine 在完整输入被接受后上报开始�
 创建、释放和移动均在列表、标题与活动项更新后发出 `onDidChangeInstances`。创建与重启开始读取前查询窗口当前连接状态，
 避免异步返回覆盖已发生的断线。Tasks 与 DAP 在发送命令前要求新实例处于 running；否则关闭自己创建的实例并报告启动失败，
 不在连接恢复后自动发送这次命令。
-platform 到 services 的装配缺口、对应目录与职责见 [Terminal 进程与屏幕契约](terminal.md)。
+终端 platform、共享服务与 Workbench 的装配和生命周期见 [Terminal 职责与运行契约](terminal.md)。
 
 ### 6.8 产品链接与 URL 回调
 

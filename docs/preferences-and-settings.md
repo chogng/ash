@@ -132,7 +132,7 @@ Windows／macOS 的进程级 `SystemPolicyService` 每 2 秒检查变化，命�
 
 Ash 当前 `SettingsEditor` 直接在模态组打开，没有把上游 Preferences 容器、pane registry 和全部公开 API 视为已实现。Preferences 支持 query／section、本地用户目标、JSON 选择和键定位；folder、焦点模式、编辑器组选项等仍需实际调用链。配置服务已支持 Workspace／Folder 不等于这些图形入口已齐全。
 
-`SettingsSearchQuery` 支持普通文本、ID、`@id:` 和 `@modified`；其他过滤条件不宣称兼容。显式保存默认标量或对象仍是用户覆盖，Reset 删除对应键并保留其他 JSONC；自有 binding 可提供 `isDefault()`。设置操作、状态、无障碍标签和失败文案使用 NLS，英文／中文已有回归。
+`SettingsSearchQuery` 支持普通文本、ID、`@id:`、`@modified`、`@tag:` 和 `@stable`。`@tag:` 可组合多个标签，`@stable` 排除 experimental／preview；搜索菜单已提供这些入口，`settings.test.ts` 有与文本、ID 和已修改过滤组合的用例。`@lang:` 与图形设置目标切换仍未接通；不能仅增加语言筛选文字而不绑定对应覆盖层。显式保存默认标量或对象仍是用户覆盖，Reset 删除对应键并保留其他 JSONC；自有 binding 可提供 `isDefault()`。设置操作、状态、无障碍标签和失败文案使用 NLS，英文／中文已有回归。
 
 `DefaultSettings` 收集产品和扩展 schema；registry 变化更新目录，扩展名称来自本地化 manifest。移除扩展保留已保存值。图形页、目录、控件继续归 Preferences；密钥、账号授权、模型发现和 Hook 执行保留各自领域 owner。剩余任务见 [Configuration / Preferences TODO](../TODO.md#configuration--preferences--todo)。
 

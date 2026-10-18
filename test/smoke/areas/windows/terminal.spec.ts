@@ -2,6 +2,66 @@ import { readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { expect, test } from '../../../automation/test.js';
 
+for (const locale of ['en', 'zh-CN'] as const) test.describe(`terminal run selected text (${locale})`, () => {
+	test.use({ electronUserSettings: { 'workbench.locale': locale } });
+
+	test('runs selected text and the current line in a real shell while retaining editor focus', { tag: ['@electron-app-server'] }, async ({ workbench, testWorkspace, driver }, testInfo) => {
+		const page = workbench.page;
+		const zh = locale === 'zh-CN';
+		const commandId = 'workbench.action.terminal.runSelectedText';
+		const title = zh ? '终端：在活动终端中运行选中文本' : 'Terminal: Run Selected Text in Active Terminal';
+		const output = join(testWorkspace.directory, 'selection-result.txt');
+		const contents = ['selected', 'current-line'].map(value =>
+			`node -e "require('fs').appendFileSync('selection-result.txt', '${value}\\n')"`
+		).join('\n');
+		await workbench.quickaccess.runCommand('workbench.action.files.newUntitledFile');
+		const editor = workbench.editors.groupAt(0).editor;
+		await editor.waitForEditorFocus();
+		await editor.input.evaluate((element, text) => {
+			const clipboardData = new DataTransfer();
+			clipboardData.setData('text/plain', text);
+			element.dispatchEvent(new ClipboardEvent('paste', { bubbles: true, cancelable: true, clipboardData }));
+		}, contents);
+		await editor.waitForEditorContents(text => text === contents);
+		await editor.input.press('ControlOrMeta+Home');
+		await editor.input.press('Shift+End');
+		await expect(workbench.terminal.instances).toHaveCount(0);
+		await workbench.quickaccess.open(`>${commandId}`);
+		const option = workbench.quickaccess.items.filter({ has: page.locator('.ash-quick-pick-row-description').getByText(commandId, { exact: true }) });
+		await expect(option.locator('.ash-quick-pick-row-label')).toHaveText(title);
+		await option.click();
+		await expect.poll(() => readFile(output, 'utf8').catch(() => '')).toBe('selected\n');
+		await expect(editor.input).toBeFocused();
+		await expect(workbench.terminal.instances).toHaveCount(1);
+		const pane = page.locator('.ash-terminal-group-pane:visible');
+		const terminalId = await pane.getAttribute('data-instance-id');
+		expect(terminalId).not.toBeNull();
+
+		await editor.input.press('ArrowRight');
+		await editor.input.press('ArrowDown');
+		await workbench.quickaccess.runCommand(commandId);
+		await expect.poll(() => readFile(output, 'utf8')).toBe('selected\ncurrent-line\n');
+		await expect(editor.input).toBeFocused();
+		await editor.input.press('ControlOrMeta+a');
+		await workbench.quickaccess.runCommand(commandId);
+		await expect.poll(() => readFile(output, 'utf8')).toBe('selected\ncurrent-line\nselected\ncurrent-line\n');
+		await expect(editor.input).toBeFocused();
+		await expect(workbench.terminal.instances).toHaveCount(1);
+		await expect(pane).toHaveAttribute('data-instance-id', terminalId!);
+
+		const terminalInput = workbench.terminal.instances.first().locator('.xterm-helper-textarea');
+		await terminalInput.focus();
+		await terminalInput.press('Alt+F1');
+		const help = page.locator('.ash-accessible-view-content');
+		await expect(help).toHaveValue(zh ? /没有选区时运行当前行/u : /the current line when nothing is selected/u);
+		await help.press('Escape');
+		await expect(terminalInput).toBeFocused();
+		await testInfo.attach(`selection-output-${locale}`, { body: await readFile(output), contentType: 'text/plain' });
+		await page.screenshot({ path: testInfo.outputPath(`terminal-run-selection-${locale}.png`) });
+		expect(driver.diagnostics.errors).toEqual([]);
+	});
+});
+
 test('terminal file links open compiler locations by click and keyboard without losing the shell', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ workbench, testWorkspace }) => {
 	const page = workbench.page;
 	const terminal = workbench.terminal;
