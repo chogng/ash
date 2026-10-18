@@ -1263,6 +1263,47 @@ test("ObjectTree keyboard expansion operates on model nodes", () => {
 	dom.window.close();
 });
 
+test('ObjectTree find preserves subsequence order, contiguous matching and Unicode labels', () => {
+	for (const matchType of ['fuzzy', 'contiguous'] as const) {
+		const dom = new JSDOM('<!doctype html><body></body>');
+		const nodes: TestNode[] = [
+			{ id: 'first', label: 'Alpha Tree', expanded: false },
+			{ id: 'second', label: 'Another Task', expanded: false },
+			{ id: 'emoji', label: '🌲 Trail', expanded: false },
+			{ id: 'other', label: 'Elsewhere', expanded: false },
+		];
+		const tree = new ObjectTree<TestNode>(dom.window.document.body, {
+			keyboardNavigationLabelProvider: { getKeyboardNavigationLabel: node => node.label },
+			findMode: 'filter',
+			findMatchType: matchType,
+			modelOptions: { identityProvider: { getId: node => node.id } },
+			renderElement: node => {
+				const label = h(dom.window.document, 'span');
+				label.textContent = node.label;
+				return label;
+			},
+		});
+		const visible = (): (string | undefined)[] => [...tree.element.querySelectorAll<HTMLElement>(':scope > .ash-tree-row')].map(row => row.dataset.treeId);
+		try {
+			tree.setChildren(nodes.map(element => ({ element })));
+			tree.setFindPattern('aT');
+			assert.deepEqual(visible(), matchType === 'fuzzy' ? ['first', 'second'] : []);
+			if (matchType === 'fuzzy') {
+				assert.equal(tree.findNext()?.id, 'second');
+				assert.equal(tree.findNext()?.id, 'first');
+			}
+			tree.setFindPattern('🌲');
+			assert.deepEqual(visible(), ['emoji']);
+			assert.equal(tree.element.querySelector('[data-tree-id="emoji"]')?.classList.contains('find-match'), true);
+			tree.clearFind();
+			assert.deepEqual(visible(), nodes.map(node => node.id));
+		} finally {
+			tree.dispose();
+			dom.window.close();
+		}
+	}
+});
+
 test("ObjectTree find filters with ancestors and supports dynamic heights and sticky rows", () => {
 	const dom = new JSDOM("<!doctype html><body></body>");
 	const group: TestNode = { id: "group", label: "Group", expanded: false };

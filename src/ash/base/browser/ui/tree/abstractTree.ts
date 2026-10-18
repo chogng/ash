@@ -13,6 +13,7 @@ import { Emitter, type Event } from "../../../common/event.js";
 import { Disposable, MutableDisposable, toDisposable, type IDisposable } from "../../../common/lifecycle.js";
 import { Lxicon } from "../../../common/lxicons.js";
 import { rot } from "../../../common/numbers.js";
+import { matchesContiguousSubString, matchesSubString } from "../../../common/filters.js";
 import type { AbstractTreeNode, TreeAcceptEvent, TreeActivateEvent, TreeCollapseRequestEvent, TreeDragAndDrop, TreeDragOverReaction, TreeFindMatchType, TreeFindMode, TreeFindResult, TreeFocusChangeEvent, TreeIndentGuides, TreeKeyboardNavigationLabelProvider, TreePointerEvent, TreePointerTarget, TreeSelectionChangeEvent, TreeSelectionPresentation, TreeTwistieState, TreeVisibleSplice } from "./tree.js";
 
 /** Styles supplied by the host for the tree-owned find surface and its child controls. */
@@ -681,7 +682,13 @@ class TreeFindController<T, TNode extends AbstractTreeNode<T>> {
 	private matchesNode(node: TNode): boolean {
 		const value = this.options.labelProvider.getKeyboardNavigationLabel(node.element);
 		const labels = typeof value === "string" ? [value] : value ?? [];
-		return labels.some((label) => this.options.matchType === "contiguous" ? label.toLocaleLowerCase().includes(this.pattern.toLocaleLowerCase()) : fuzzyMatch(this.pattern, label));
+		const pattern = this.pattern.toLocaleLowerCase();
+		return labels.some(label => {
+			const value = label.toLocaleLowerCase();
+			return (this.options.matchType === "contiguous"
+				? matchesContiguousSubString(pattern, value)
+				: matchesSubString(pattern, value)) !== null;
+		});
 	}
 }
 
@@ -692,15 +699,4 @@ function isDescendantOf<T, TNode extends AbstractTreeNode<T>>(candidate: TNode, 
 		parent = parent.parent;
 	}
 	return false;
-}
-
-function fuzzyMatch(pattern: string, label: string): boolean {
-	const needle = pattern.toLocaleLowerCase();
-	const haystack = label.toLocaleLowerCase();
-	let index = 0;
-	for (const character of haystack) {
-		if (character === needle[index]) index += 1;
-		if (index === needle.length) return true;
-	}
-	return needle.length === 0;
 }

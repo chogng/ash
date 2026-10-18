@@ -1,4 +1,5 @@
 import { isWindows } from '../../../../base/common/platform.js';
+import { compareFileNames } from '../../../../base/common/comparers.js';
 import { KeyCode, KeyMod } from '../../../../base/common/keyCodes.js';
 import { Range } from '../../../../editor/common/core/range.js';
 import { Action2, registerAction2 } from '../../../../platform/actions/common/actions.js';
@@ -14,7 +15,6 @@ import type { SearchView } from './searchView.js';
 import type { RenderableMatch, SearchFileMatch, SearchFolderMatch, SearchMatch } from './searchTreeModel/searchResult.js';
 
 const lineDelimiter = isWindows ? '\r\n' : '\n';
-const fileNames = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' });
 
 registerAction2(class CopyMatchCommandAction extends Action2 {
 	constructor() {
@@ -106,9 +106,8 @@ function compareResultFiles(a: SearchFileMatch, b: SearchFileMatch): number {
 		const leftFolder = index < left.length - 1;
 		const rightFolder = index < right.length - 1;
 		if (leftFolder !== rightFolder) { return leftFolder ? -1 : 1; }
-		const order = fileNames.compare(left[index]!, right[index]!);
+		const order = compareFileNames(left[index]!, right[index]!);
 		if (order) { return order; }
-		if (left[index] !== right[index]) { return left[index]! < right[index]! ? -1 : 1; }
 	}
 	return 0;
 }

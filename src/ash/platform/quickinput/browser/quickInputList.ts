@@ -1,4 +1,5 @@
 import { defaultKeybindingLabelStyles, defaultListStyles } from '../../theme/browser/defaultStyles.js';
+import { scoreFuzzy } from '../../../base/common/fuzzyScorer.js';
 import { List } from "../../../base/browser/ui/list/listWidget.js";
 import { KeybindingLabel } from "../../../base/browser/ui/keybindinglabel/keybindinglabel.js";
 import { setRole } from "../../../base/browser/ui/aria/aria.js";
@@ -415,8 +416,10 @@ function scoreItem(
 	);
 	let score = 0;
 	for (const token of tokens) {
-		const labelScore = scoreSubsequence(label, token);
-		const searchableScore = scoreSubsequence(searchable, token);
+		const [labelMatch] = scoreFuzzy(label, token, token, true);
+		const [searchableMatch] = scoreFuzzy(searchable, token, token, true);
+		const labelScore = labelMatch > 0 ? labelMatch - Math.max(0, label.length - token.length) / 100 : -1;
+		const searchableScore = searchableMatch > 0 ? searchableMatch - Math.max(0, searchable.length - token.length) / 100 : -1;
 		const tokenScore = labelScore >= 0
 			? Math.max(labelScore + 40, searchableScore)
 			: searchableScore;
@@ -424,23 +427,6 @@ function scoreItem(
 		score += tokenScore;
 	}
 	return score;
-}
-
-function scoreSubsequence(value: string, query: string): number {
-	let valueIndex = 0;
-	let score = 0;
-	let previousMatch = -2;
-	for (const character of query) {
-		const match = value.indexOf(character, valueIndex);
-		if (match < 0) return -1;
-		score += match === previousMatch + 1 ? 8 : 2;
-		if (match === 0 || /[\s._:/-]/.test(value[match - 1] ?? "")) {
-			score += 6;
-		}
-		previousMatch = match;
-		valueIndex = match + 1;
-	}
-	return score - Math.max(0, value.length - query.length) / 100;
 }
 
 function appendOptionalText(

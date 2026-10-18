@@ -339,6 +339,22 @@ for (const disposed of [false, true]) {
 	});
 }
 
+test('browser context menu action failures retain structured error messages', async () => {
+	using fixture = new BrowserMenuFixture();
+	using runner = new ActionRunner();
+	const selected = {
+		...action('Copy'),
+		run() { throw { detail: { exception: { message: 'Clipboard unavailable' } } }; },
+	};
+	fixture.menus.showContextMenu({
+		getAnchor: () => fixture.origin,
+		getActions: () => [selected],
+		actionRunner: runner,
+	});
+	await runner.run(selected);
+	assert.deepEqual(fixture.errors, ['Clipboard unavailable']);
+});
+
 test('a pending shared runner cannot hide a successor when another action starts', async () => {
 	using fixture = new BrowserMenuFixture();
 	using runner = new ActionRunner();

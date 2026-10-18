@@ -61,3 +61,20 @@ test('browser fuzzy discovery skips generated directories and stops cancelled sc
 	await assert.rejects(service.fuzzy(folder, { query: 'late', maxResults: 1 }, controller.signal), isCancellationError);
 	assert.deepEqual(visited, [folder.resource.path, folder.resource.path + '/src']);
 });
+
+test('browser fuzzy discovery uses strongest matches, all tokens and deterministic path ties', async () => {
+	const service = new BrowserFileSearchService({
+		async readDirectory(directory) {
+			return ['a--xb-two.ts', 'a---ab-two.ts', 'a---ab-one.ts', 'ab-other.ts'].map(name => ({ resource: URI.joinPath(directory, name), name, kind: FileKind.File }));
+		},
+	});
+	const result = await service.fuzzy(folder, { query: 'ab two', maxResults: 1 });
+	assert.deepEqual(result.matches.map(item => item.path), ['a---ab-two.ts']);
+	assert.equal(result.totalMatches, 2);
+	const tied = new BrowserFileSearchService({
+		async readDirectory(directory) {
+			return ['ab-z.ts', 'ab-a.ts'].map(name => ({ resource: URI.joinPath(directory, name), name, kind: FileKind.File }));
+		},
+	});
+	assert.deepEqual((await tied.fuzzy(folder, { query: 'ab', maxResults: 2 })).matches.map(item => item.path), ['ab-a.ts', 'ab-z.ts']);
+});

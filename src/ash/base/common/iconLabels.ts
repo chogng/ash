@@ -1,8 +1,4 @@
-/** A half-open range used to highlight a label or map a fuzzy match. */
-export interface IMatch {
-	start: number;
-	end: number;
-}
+import { matchesSubString, type IMatch } from './filters.js';
 
 export interface IParsedLabelWithIcons {
 	readonly text: string;
@@ -71,45 +67,17 @@ export function parseLabelWithIcons(input: string): IParsedLabelWithIcons {
 	return { text, iconOffsets };
 }
 
-/** A small subsequence matcher suitable for labels and tree filtering. */
-export function matchesFuzzy(
-	query: string,
-	target: string,
-	_enableSeparateSubstringMatching = false,
-): IMatch[] | null {
-	if (query.length === 0) return [];
-	const matches: IMatch[] = [];
-	let targetIndex = 0;
-	for (const queryCharacter of query) {
-		const lowerQueryCharacter = queryCharacter.toLocaleLowerCase();
-		let found = -1;
-		while (targetIndex < target.length) {
-			const candidateIndex = targetIndex;
-			targetIndex += 1;
-			if (target[candidateIndex]?.toLocaleLowerCase() === lowerQueryCharacter) {
-				found = candidateIndex;
-				break;
-			}
-		}
-		if (found < 0) return null;
-		const previous = matches.at(-1);
-		if (previous && previous.end === found) previous.end = found + 1;
-		else matches.push({ start: found, end: found + 1 });
-	}
-	return matches;
-}
-
 /** Fuzzy matches a label while ignoring source positions occupied by icons. */
 export function matchesFuzzyIconAware(
 	query: string,
 	target: IParsedLabelWithIcons,
-	enableSeparateSubstringMatching = false,
+	_enableSeparateSubstringMatching = false,
 ): IMatch[] | null {
 	const { text, iconOffsets } = target;
-	if (!iconOffsets || iconOffsets.length === 0) return matchesFuzzy(query, text, enableSeparateSubstringMatching);
+	if (!iconOffsets || iconOffsets.length === 0) return matchesSubString(query, text);
 
 	const leadingWhitespace = text.length - text.trimStart().length;
-	const matches = matchesFuzzy(query, text.trimStart(), enableSeparateSubstringMatching);
+	const matches = matchesSubString(query, text.trimStart());
 	if (!matches) return null;
 	for (const match of matches) {
 		const visibleIndex = match.start + leadingWhitespace;

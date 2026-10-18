@@ -1,4 +1,5 @@
 import { LinkedList } from '../../../base/common/linkedList.js';
+import { parse } from '../../../base/common/marshalling.js';
 import { AbstractDisposable, type IDisposable, toDisposable } from '../../../base/common/lifecycle.js';
 import { URI } from '../../../base/common/uri.js';
 import { CancellationToken } from '../../../base/common/cancellation.js';
@@ -92,7 +93,7 @@ export class OpenerService extends AbstractDisposable implements IOpenerService 
 			// URI components are already decoded; decoding again would corrupt literal percent sequences.
 			let args: unknown[] = [];
 			if (resource.query) {
-				const value: unknown = JSON.parse(resource.query);
+				const value = parse(resource.query);
 				args = Array.isArray(value) ? value : [value];
 			}
 			await this.commandService.executeCommand(id, ...args);

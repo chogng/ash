@@ -548,6 +548,17 @@ for (const disposed of [false, true]) {
 	});
 }
 
+test('a structured system action failure is reported with its message', async () => {
+	using fixture = new SystemMenuFixture();
+	const ended = fixture.show('Failure', undefined, {
+		...menuAction('Failure'),
+		run() { throw { message: 'Clipboard unavailable' }; },
+	});
+	fixture.popups[0].finish({ selectedId: 'action-1' });
+	await ended;
+	assert.deepEqual(fixture.notifications.model.getNotifications().map(item => item.message), ['Clipboard unavailable']);
+});
+
 test('a synchronous system action failure is reported exactly once', async () => {
 	using fixture = new SystemMenuFixture();
 	const ended = fixture.show('Failure', undefined, { ...menuAction('Failure'), run() { throw new Error('Synchronous fixture failure'); } });

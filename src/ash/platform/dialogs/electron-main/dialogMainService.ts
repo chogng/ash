@@ -3,6 +3,7 @@ import type { MessageBoxOptions, MessageBoxReturnValue, OpenDialogOptions, OpenD
 import { access } from 'node:fs/promises';
 import { hash } from '../../../base/common/hash.js';
 import { Disposable } from '../../../base/common/lifecycle.js';
+import { normalizeNFC } from '../../../base/common/normalization.js';
 import type { NativeDialogOperation } from '../../native/common/nativeHost.js';
 import { massageMessageBoxOptions } from './dialogMainUtils.js';
 import { createDecorator } from '../../instantiation/common/instantiation.js';
@@ -31,7 +32,7 @@ export class DialogMainService extends Disposable implements IDialogMainService 
 	private readonly active = new Map<number, Map<number, AbortController>>();
 	private readonly closedWindows = new WeakSet<BrowserWindow>();
 
-	constructor(private readonly api: ISystemDialogApi) { super(); }
+	constructor(private readonly api: ISystemDialogApi, private readonly platform: NodeJS.Platform = process.platform) { super(); }
 
 	async perform(window: BrowserWindow, operation: NativeDialogOperation): Promise<MessageBoxReturnValue | void> {
 		this.assertNotDisposed();
@@ -138,7 +139,7 @@ export class DialogMainService extends Disposable implements IDialogMainService 
 	private normalizePath(path: string): string;
 	private normalizePath(path: string | undefined): string | undefined;
 	private normalizePath(path: string | undefined): string | undefined {
-		return path && process.platform === 'darwin' ? path.normalize('NFC') : path;
+		return path && this.platform === 'darwin' ? normalizeNFC(path) : path;
 	}
 
 	protected override disposeCore(): void {

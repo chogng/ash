@@ -2,6 +2,7 @@ import { localize } from '../../../../nls.js';
 import { isRecord } from '../../../../base/common/types.js';
 import { escapeMarkdownSyntaxTokens } from '../../../../base/common/htmlContent.js';
 import { getMediaOrTextMime } from '../../../../base/common/mime.js';
+import { SSEParser } from '../../../../base/common/sseParser.js';
 export interface ChatGPTConversation { readonly id: string; readonly title: string; readonly pinned?: boolean; readonly projectId?: string; }
 export interface ChatGPTProject { readonly id: string; readonly title: string; }
 
@@ -461,8 +462,31 @@ export async function* decodeChatGPTStream(stream: ReadableStream<Uint8Array>, s
 	const reader = stream.getReader();
 	const cancel = (): void => { void reader.cancel().catch(() => { }); };
 	signal.addEventListener('abort', cancel, { once: true });
-	const decoder = new TextDecoder();
-	let buffer = '';
+	const events: string[] = [];
+	const parser = new SSEParser(event => events.push(event.data));
+	// Bound unfinished frames in UTF-8 bytes, including comments and unknown fields.
+	let frameBytes = 0;
+	let lineHasBytes = false;
+	let afterCarriageReturn = false;
+	const validateFrameSize = (bytes: Uint8Array): void => {
+		for (const byte of bytes) {
+			if (afterCarriageReturn && byte === 10) {
+				afterCarriageReturn = false;
+				// The LF belongs to the preceding CR delimiter, even across chunks.
+				if (frameBytes === 0) continue;
+				frameBytes++;
+			} else {
+				afterCarriageReturn = false;
+				frameBytes++;
+				if (byte === 10 || byte === 13) {
+					if (!lineHasBytes) frameBytes = 0;
+					lineHasBytes = false;
+					afterCarriageReturn = byte === 13;
+				} else { lineHasBytes = true; }
+			}
+			if (frameBytes > 4 * 1024 * 1024) { throw new Error(localize('sessions.chatgpt.invalidResponse', 'ChatGPT returned an unsupported response.')); }
+		}
+	};
 	let snapshot: Record<string, unknown> = {};
 	let previousPath = '';
 	let done = false;
@@ -470,31 +494,33 @@ export async function* decodeChatGPTStream(stream: ReadableStream<Uint8Array>, s
 		while (!done) {
 			signal.throwIfAborted();
 			const chunk = await reader.read();
-			buffer += decoder.decode(chunk.value, { stream: !chunk.done });
-			if (buffer.length > 4 * 1024 * 1024) { throw new Error(localize('sessions.chatgpt.invalidResponse', 'ChatGPT returned an unsupported response.')); }
-			let match: RegExpExecArray | null;
-			while ((match = /\r?\n\r?\n/u.exec(buffer))) {
-				const event = buffer.slice(0, match.index);
-				buffer = buffer.slice(match.index + match[0].length);
-				const data = event.split(/\r?\n/u).filter(line => line.startsWith('data:')).map(line => line.slice(5).trimStart()).join('\n');
-				if (!data) { continue; }
-				if (data === '[DONE]') { done = true; break; }
-				const value: unknown = JSON.parse(data);
-				if (!isRecord(value)) { continue; }
-				if (value.error) { throw new Error(localize('sessions.chatgpt.streamFailed', 'ChatGPT could not finish this reply. The message may already have been sent. Reload the conversation before trying again.')); }
-				if (typeof value.o === 'string') {
-					const patches = value.o === 'patch' && Array.isArray(value.v) ? value.v : [value];
-					for (const patch of patches) {
-						if (!isRecord(patch)) { continue; }
-						const path = typeof patch.p === 'string' ? patch.p : previousPath;
-						previousPath = path;
-						if (path === '' && (patch.o === 'add' || patch.o === 'replace') && isRecord(patch.v)) { snapshot = patch.v; }
-						else { applyDelta(snapshot, path, patch.o, patch.v); }
-					}
-				} else { snapshot = value; }
-				const conversationId = typeof snapshot.conversation_id === 'string' ? snapshot.conversation_id : undefined;
-				const message = readMessage(snapshot.message, conversationId);
-				if (message || conversationId) { yield { conversationId, message }; }
+			const bytes = chunk.value ?? new Uint8Array();
+			// Dispatch bounded batches so a large HTTP chunk cannot queue unbounded events.
+			for (let offset = 0; offset < bytes.length && !done; offset += 64 * 1024) {
+				const part = bytes.subarray(offset, offset + 64 * 1024);
+				validateFrameSize(part);
+				parser.feed(part);
+				for (const data of events) {
+					if (!data) { continue; }
+					if (data === '[DONE]') { done = true; break; }
+					const value: unknown = JSON.parse(data);
+					if (!isRecord(value)) { continue; }
+					if (value.error) { throw new Error(localize('sessions.chatgpt.streamFailed', 'ChatGPT could not finish this reply. The message may already have been sent. Reload the conversation before trying again.')); }
+					if (typeof value.o === 'string') {
+						const patches = value.o === 'patch' && Array.isArray(value.v) ? value.v : [value];
+						for (const patch of patches) {
+							if (!isRecord(patch)) { continue; }
+							const path = typeof patch.p === 'string' ? patch.p : previousPath;
+							previousPath = path;
+							if (path === '' && (patch.o === 'add' || patch.o === 'replace') && isRecord(patch.v)) { snapshot = patch.v; }
+							else { applyDelta(snapshot, path, patch.o, patch.v); }
+						}
+					} else { snapshot = value; }
+					const conversationId = typeof snapshot.conversation_id === 'string' ? snapshot.conversation_id : undefined;
+					const message = readMessage(snapshot.message, conversationId);
+					if (message || conversationId) { yield { conversationId, message }; }
+				}
+				events.length = 0;
 			}
 			if (chunk.done) {
 				if (!done) { throw new Error(localize('sessions.chatgpt.streamFailed', 'ChatGPT could not finish this reply. The message may already have been sent. Reload the conversation before trying again.')); }

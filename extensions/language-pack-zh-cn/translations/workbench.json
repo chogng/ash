@@ -1,5 +1,7 @@
 {
   "ash": {
+    "error.defaultMessage": "发生未知错误。请查阅日志了解详情。",
+    "error.moreErrors": "{0}（共 {1} 个错误）",
     "window.rendererGone": "窗口意外关闭。",
     "window.unresponsive": "窗口没有响应。",
     "window.recoveryDetail": "重新打开窗口以继续，或关闭窗口。",

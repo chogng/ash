@@ -334,6 +334,41 @@ suite('Bundled ChatGPT client', () => {
 		assert.equal(Reflect.get(Object.prototype, 'polluted'), undefined);
 	});
 
+	test('decodes CR-only frames in a large HTTP chunk and releases the reader after DONE', async () => {
+		const initial = { conversation_id: 'fixture', message: message('reply', 'assistant', '完整') };
+		const keepalive = `: ${' '.repeat(64 * 1024)}\r\r`;
+		const body = keepalive.repeat(65) + `data: ${JSON.stringify(initial)}\r\rdata: [DONE]\r\rdata: malformed\r\r`;
+		let cancelled = false;
+		const stream = new ReadableStream<Uint8Array>({
+			start(controller) { controller.enqueue(new TextEncoder().encode(body)); },
+			cancel() { cancelled = true; },
+		});
+		const output = await collect(decodeChatGPTStream(stream, signal()));
+		assert.equal(output[0]!.message!.text, '完整');
+		assert.equal(output.length, 1);
+		assert.equal(cancelled, true);
+		assert.equal(stream.locked, false);
+	});
+
+	test('limits unfinished UTF-8 frames including comments, unknown fields and multiple data lines', async () => {
+		for (const body of [
+			`:${'x'.repeat(4 * 1024 * 1024)}`,
+			`unknown: ${'x'.repeat(4 * 1024 * 1024)}`,
+			`data: ${'x'.repeat(64 * 1024)}\n`.repeat(65),
+			`data: ${'x'.repeat(32760)}\r\n`.repeat(128) + 'x',
+			`data: ${'🌲'.repeat(1024 * 1024)}`,
+		]) {
+			let cancelled = false;
+			const stream = new ReadableStream<Uint8Array>({
+				start(controller) { controller.enqueue(new TextEncoder().encode(body)); },
+				cancel() { cancelled = true; },
+			});
+			await assert.rejects(collect(decodeChatGPTStream(stream, signal())), /unsupported response/u);
+			assert.equal(cancelled, true);
+			assert.equal(stream.locked, false);
+		}
+	});
+
 	test('surfaces a truncated stream and cancels the reader on interruption', async () => {
 		const truncated = new ReadableStream<Uint8Array>({ start(controller) { controller.enqueue(new TextEncoder().encode('data: {}\n\n')); controller.close(); } });
 		await assert.rejects(collect(decodeChatGPTStream(truncated, signal())), /may already have been sent/u);

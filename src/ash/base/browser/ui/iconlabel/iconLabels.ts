@@ -1,5 +1,5 @@
 import type { Icon } from '../../../common/icon.js';
-import type { IMatch } from '../../../common/iconLabels.js';
+import type { IMatch } from '../../../common/filters.js';
 import { appendIcon, getRegisteredIcon } from '../lxicons/lxicon.js';
 import { h, text as createText } from '../../dom.js';
 

@@ -104,6 +104,23 @@ test('literal replacement preserves dollar tokens and optionally preserves match
 	assert.equal(fixture.store.text(resource), '$1 VALUE');
 });
 
+test('replacement preserves word casing through saving and undo', async () => {
+	using fixture = new BulkEditTestServices([[resource, 'api-CLIENT']]);
+	const result = results('api-CLIENT', [{ start: 0, end: 10 }]);
+	const applied = await new ReplaceService(fixture.models, fixture.service, fixture.workingCopies).replace(
+		result.files[0]!.matches,
+		{ ...query, text: 'api-client', patternKind: 'literal' },
+		'new-server',
+		{ ...options, preserveCase: true },
+	);
+	assert.equal(applied.isApplied, true);
+	assert.equal(fixture.store.text(resource), 'new-SERVER');
+	if (applied.isApplied) {
+		await applied.undo();
+	}
+	assert.equal(fixture.store.text(resource), 'api-CLIENT');
+});
+
 test('replacement retains an open dirty model on save failure and undo saves its restored text', async () => {
 	using fixture = new BulkEditTestServices([[resource, 'needle']]);
 	using reference = await fixture.models.acquire({ resource }, options.signal);

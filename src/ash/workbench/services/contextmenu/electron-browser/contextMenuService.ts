@@ -3,6 +3,7 @@ import { BrowserContextMenuService } from "../../../../platform/contextview/brow
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { isNode } from "../../../../base/browser/dom.js";
 import { Emitter } from "../../../../base/common/event.js";
+import { toErrorMessage } from '../../../../base/common/errorMessage.js';
 import {
 	Disposable,
 	DisposableMap,
@@ -293,10 +294,6 @@ function anchorPoint(
 
 function normalizeCoordinate(value: number): number {
 	return Math.max(-1_000_000, Math.min(1_000_000, value));
-}
-
-function toErrorMessage(error: unknown): string {
-	return error instanceof Error ? error.message : String(error);
 }
 
 /** Uses the chosen menu style while keeping menus clear of right-hand triggers. */

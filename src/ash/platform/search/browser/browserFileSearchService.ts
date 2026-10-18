@@ -1,4 +1,5 @@
 import { match } from '../../../base/common/glob.js';
+import { scoreFuzzy } from '../../../base/common/fuzzyScorer.js';
 import { CancellationError, illegalArgument } from '../../../base/common/errors.js';
 import type { URI } from '../../../base/common/uri.js';
 import { FileKind, IFileService } from '../../files/common/files.js';
@@ -75,16 +76,9 @@ function scorePath(path: string, tokens: readonly string[]): number | undefined 
 	const value = path.toLocaleLowerCase('en-US');
 	let score = -value.length / 100;
 	for (const token of tokens) {
-		let previous = -2;
-		let start = 0;
-		for (const character of token) {
-			const index = value.indexOf(character, start);
-			if (index < 0) { return undefined; }
-			score += index === previous + 1 ? 8 : 2;
-			if (index === 0 || /[._/ -]/.test(value[index - 1])) { score += 6; }
-			previous = index;
-			start = index + character.length;
-		}
+		const [tokenScore] = scoreFuzzy(value, token, token, true);
+		if (tokenScore === 0) return undefined;
+		score += tokenScore;
 	}
 	return score;
 }

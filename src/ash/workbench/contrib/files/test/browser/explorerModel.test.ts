@@ -83,6 +83,32 @@ test('Explorer applies exclusion conditions before nesting and reorders files wh
 	assert.ok((await source.getChildren(input)).some(item => item.name === '.git'));
 });
 
+test('Explorer preserves filename ties and configured case groups when loading directory children', async () => {
+	const root = URI.file('/project');
+	using workspace = new TestWorkspaceService({ id: 'project', uri: root });
+	using configuration = new TestConfigurationService();
+	const entries = ['file10.ts', 'file2.ts', 'file02.ts', 'File2.ts', 'alpha.ts', 'folder'].map(name => ({
+		resource: URI.joinPath(root, name),
+		name,
+		kind: name === 'folder' ? FileKind.Directory : FileKind.File,
+	}));
+	const files = { readDirectory: async () => entries } as unknown as IFileService;
+	using source = new ExplorerDataSource(new FileSorter(configuration), files, configuration, workspace);
+	const input = new ExplorerItem(root, 'project', FileKind.Directory);
+	const names = async () => (await source.getChildren(input)).map(item => item.name);
+
+	assert.deepEqual(await names(), ['folder', 'alpha.ts', 'File2.ts', 'file02.ts', 'file2.ts', 'file10.ts']);
+	await configuration.updateValue('explorer.sortOrderLexicographicOptions', LexicographicOptions.Upper);
+	assert.deepEqual(await names(), ['folder', 'File2.ts', 'alpha.ts', 'file02.ts', 'file2.ts', 'file10.ts']);
+	await configuration.updateValue('explorer.sortOrderLexicographicOptions', LexicographicOptions.Lower);
+	assert.deepEqual(await names(), ['folder', 'alpha.ts', 'file02.ts', 'file2.ts', 'file10.ts', 'File2.ts']);
+	await configuration.updateValue('explorer.sortOrderLexicographicOptions', LexicographicOptions.Unicode);
+	assert.deepEqual(await names(), ['folder', 'File2.ts', 'alpha.ts', 'file02.ts', 'file10.ts', 'file2.ts']);
+	await configuration.updateValue('explorer.sortOrderReverse', true);
+	assert.deepEqual(await names(), ['folder', 'file2.ts', 'file10.ts', 'file02.ts', 'alpha.ts', 'File2.ts']);
+	assert.deepEqual(entries.map(entry => entry.name), ['file10.ts', 'file2.ts', 'file02.ts', 'File2.ts', 'alpha.ts', 'folder']);
+});
+
 test('Explorer model groups generated files and keeps directories as separate roots', async () => {
 	const root = URI.file('C:\\project');
 	const entries = [

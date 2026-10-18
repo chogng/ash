@@ -123,3 +123,49 @@ test('opener service requires its command dependency at creation', () => {
 	services.registerInstance(ICodeEditorService, editorService());
 	assert.throws(() => services.createInstance(OpenerService), /commandService/);
 });
+
+test('allowed command links revive nested resources before the command handler uses URI operations', async () => {
+	using services = new InstantiationService();
+	services.registerInstance(ICodeEditorService, editorService());
+	services.registerSingleton(ICommandService, () => services.createInstance(StandaloneCommandService));
+	using opener = services.createInstance(OpenerService);
+	const resource = URI.parse('ash-remote://ssh+build/workspace/a%2Fb.ts?name=a%26b&literal=%2520#L3');
+	const opened: string[] = [];
+	using command = CommandsRegistry.register('test.opener.resource', (_accessor, value) => {
+		const revived = (value as { nested: { resource: URI; }; }).nested.resource;
+		assert.ok(revived instanceof URI);
+		opened.push(revived.with({ fragment: 'L4' }).toString());
+	});
+	const query = encodeURIComponent(JSON.stringify([{ nested: { resource } }]));
+	await opener.open(`command:test.opener.resource?${query}`, { allowCommands: ['test.opener.resource'] });
+	assert.deepEqual(opened, [resource.with({ fragment: 'L4' }).toString()]);
+});
+
+test('command URI payload failures cannot invoke handlers and permissions precede revival', async () => {
+	using services = new InstantiationService();
+	services.registerInstance(ICodeEditorService, editorService());
+	services.registerSingleton(ICommandService, () => services.createInstance(StandaloneCommandService));
+	using opener = services.createInstance(OpenerService);
+	let calls = 0;
+	using command = CommandsRegistry.register('test.opener.invalidResource', () => calls++);
+	const resource = URI.file('/workspace/expected.ts');
+	for (const value of [
+		{ $mid: 1, scheme: 'file', path: 3 },
+		{ ...resource.toJSON(), external: 'file:///workspace/other.ts' },
+		{ $mid: 1, scheme: 'https://attacker.invalid/', path: '/workspace' },
+		{ $mid: 1, scheme: 'https', path: '/workspace' },
+		{ $mid: 1, scheme: 'https', authority: 'example.test/other', path: '/workspace' },
+		{ $mid: 1, scheme: 'https', authority: 'example.test?query', path: '/workspace' },
+		{ $mid: 1, scheme: 'https', authority: 'example.test#fragment', path: '/workspace' },
+		{ $mid: 1, scheme: 'https', authority: 'example.test\\other', path: '/workspace' },
+	]) {
+		const target = `command:test.opener.invalidResource?${encodeURIComponent(JSON.stringify([value]))}`;
+		assert.equal(await opener.open(target, { allowCommands: false }), true);
+		assert.equal(await opener.open(target, { allowCommands: ['other'] }), true);
+		await assert.rejects(opener.open(target, { allowCommands: true }), TypeError);
+	}
+	assert.equal(calls, 0);
+	using validator = opener.registerValidator({ shouldOpen: async () => false });
+	assert.equal(await opener.open('command:test.opener.invalidResource?not-json', { allowCommands: true }), false);
+	assert.equal(calls, 0);
+});

@@ -1,4 +1,5 @@
 import { isMacintosh } from '../../../../../base/common/platform.js';
+import { compareFileNames, compareFileNamesUnicode } from '../../../../../base/common/comparers.js';
 import { basename, dirname, extUriBiasedIgnorePathCase } from '../../../../../base/common/resources.js';
 import { URI } from '../../../../../base/common/uri.js';
 import { IPathService } from '../../../../../platform/path/common/pathService.js';
@@ -137,15 +138,14 @@ export class FileSorter {
 		}
 		const lexical = this.configurationService.getValue<LexicographicOptions>('explorer.sortOrderLexicographicOptions') ?? LexicographicOptions.Default;
 		if (!result && lexical === LexicographicOptions.Unicode) {
-			result = left.name < right.name ? -1 : left.name > right.name ? 1 : 0;
+			result = compareFileNamesUnicode(left.name, right.name);
 		} else if (!result) {
 			if (lexical !== LexicographicOptions.Default) {
 				const leftUpper = /^\p{Lu}/u.test(left.name);
 				const rightUpper = /^\p{Lu}/u.test(right.name);
 				if (/^\p{L}/u.test(left.name) && /^\p{L}/u.test(right.name)) result = (Number(rightUpper) - Number(leftUpper)) * (lexical === LexicographicOptions.Lower ? -1 : 1);
 			}
-			if (!result) result = this.names.compare(left.name, right.name);
-			if (!result) result = left.name < right.name ? -1 : left.name > right.name ? 1 : 0;
+			if (!result) result = compareFileNames(left.name, right.name);
 		}
 		return this.configurationService.getValue<boolean>('explorer.sortOrderReverse') ? -result : result;
 	}

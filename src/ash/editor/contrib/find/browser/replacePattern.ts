@@ -1,3 +1,5 @@
+import { buildReplaceStringWithCasePreserved } from '../../../../base/common/search.js';
+
 /** One literal segment or numbered capture in a replacement expression. */
 export class ReplacePiece {
 	public static staticValue(value: string): ReplacePiece { return new ReplacePiece(value, -1, null); }
@@ -44,7 +46,7 @@ export class ReplacePattern {
 				result += applyCaseOperations(capture(matches, piece.matchIndex), piece.caseOps ?? []);
 			}
 		}
-		return preserveCase ? preserveLetterCase(matches?.[0] ?? '', result) : result;
+		return preserveCase ? buildReplaceStringWithCasePreserved(matches, result) : result;
 	}
 }
 
@@ -132,14 +134,4 @@ function applyCaseOperations(value: string, operations: readonly string[]): stri
 		if (operation === 'u' || operation === 'l') operationIndex++;
 	}
 	return result;
-}
-
-function preserveLetterCase(source: string, replacement: string): string {
-	if (!source) return replacement;
-	if (source === source.toUpperCase()) return replacement.toUpperCase();
-	if (source === source.toLowerCase()) return replacement.toLowerCase();
-	if (source[0] === source[0]?.toUpperCase() && source.slice(1) === source.slice(1).toLowerCase()) {
-		return replacement.charAt(0).toUpperCase() + replacement.slice(1).toLowerCase();
-	}
-	return replacement;
 }

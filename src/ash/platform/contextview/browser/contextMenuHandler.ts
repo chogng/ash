@@ -14,6 +14,7 @@ import {
 } from "../../../base/browser/ui/contextview/contextview.js";
 import { Menu } from "../../../base/browser/ui/menu/menu.js";
 import { ActionRunner, type IAction } from "../../../base/common/actions.js";
+import { toErrorMessage } from '../../../base/common/errorMessage.js';
 import { Disposable, DisposableMap, DisposableStore } from "../../../base/common/lifecycle.js";
 import type { IRectangle } from "../../../base/common/layout.js";
 import type { IKeybindingService } from "../../keybinding/common/keybinding.js";
@@ -184,8 +185,4 @@ function toContextViewAnchor(
 		height: 0,
 		targetWindow: anchor.targetWindow,
 	};
-}
-
-function toErrorMessage(error: unknown): string {
-	return error instanceof Error ? error.message : String(error);
 }

@@ -148,3 +148,23 @@ test('file dialog ignores a missing default path and releases its lock after com
 	await dialogs.showOpenDialog(options, window);
 	assert.deepEqual(defaults, [undefined, undefined]);
 });
+
+test('native file dialog results use canonical composition only on macOS', async () => {
+	const picked = '/tmp/re\u0301sume\u0301-①.txt';
+	for (const platform of ['darwin', 'linux', 'win32'] as const) {
+		const expected = platform === 'darwin' ? '/tmp/résumé-①.txt' : picked;
+		using dialogs = new DialogMainService(api(
+			undefined,
+			async () => ({ canceled: false, filePaths: [picked, ''] }),
+			async () => ({ canceled: false, filePath: picked }),
+		), platform);
+		assert.deepEqual(await dialogs.showOpenDialog({}), { canceled: false, filePaths: [expected, ''] }, platform);
+		assert.deepEqual(await dialogs.showSaveDialog({}), { canceled: false, filePath: expected }, platform);
+	}
+});
+
+test('canceled native file dialogs retain empty paths', async () => {
+	using dialogs = new DialogMainService(api(), 'darwin');
+	assert.deepEqual(await dialogs.showOpenDialog({}), { canceled: true, filePaths: [] });
+	assert.deepEqual(await dialogs.showSaveDialog({}), { canceled: true, filePath: '' });
+});
