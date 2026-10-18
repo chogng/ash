@@ -793,6 +793,11 @@ fn file_fuzzy_round_trips_unicode_and_declares_connection_cancellation() {
     let wire = serde_json::json!({"operationId":"fuzzy-query", "target":{"type":"session","sessionId":"session","path":"/workspace"}, "query":"中文 SRC", "maxResults":100});
     let params: FileFuzzyParams = serde_json::from_value(wire.clone()).unwrap();
     assert_eq!(serde_json::to_value(params).unwrap(), wire);
+    let mut filtered = wire.clone();
+    filtered["includePatterns"] = serde_json::json!(["src/**"]);
+    filtered["excludePatterns"] = serde_json::json!(["**/*.test.ts"]);
+    let params: FileFuzzyParams = serde_json::from_value(filtered.clone()).unwrap();
+    assert_eq!(serde_json::to_value(params).unwrap(), filtered);
     let method = definition("file/search/fuzzy");
     assert_eq!(method.serialization_scope(&wire).unwrap(), None);
     assert_eq!(
@@ -800,7 +805,7 @@ fn file_fuzzy_round_trips_unicode_and_declares_connection_cancellation() {
         Some("fuzzy-query")
     );
     let mut unexpected = wire;
-    unexpected["includePatterns"] = serde_json::json!(["*"]);
+    unexpected["unrecognizedFilter"] = serde_json::json!(["*"]);
     assert!(serde_json::from_value::<FileFuzzyParams>(unexpected).is_err());
     assert_eq!(
         definition("file/search/fuzzy/cancel")

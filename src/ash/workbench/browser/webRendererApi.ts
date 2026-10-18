@@ -1,4 +1,7 @@
+import { DisposableStore } from '../../base/common/lifecycle.js';
 import type { AppServerFrameDecoder } from '../../platform/agentHost/browser/appServerFrameDecoder.js';
+import { AgentHostResourceService } from '../services/agentHost/common/agentHostResourceService.js';
+import { registerAgentHostResourceHost } from '../../platform/agentHost/browser/agentHostResourceHost.js';
 import type { IAppServerConnectionRecovery } from '../../platform/agentHost/common/appServerApi.js';
 import { AppServerChannelService } from "../../platform/collaboration/browser/appServerChannelService.js";
 import { createAppServerSecretStorageStatusService } from '../../platform/secrets/browser/appServerSecretStorageStatusService.js';
@@ -86,7 +89,7 @@ export async function connectWebRendererApi(transport: AppServerTransport, conne
 		return {
 			api,
 			metadata: metadata!,
-			dispose: () => { recovery.dispose(); memories?.dispose(); memoryDiagnostics?.dispose(); automation?.dispose(); symphony?.dispose(); calls?.dispose(); channels?.dispose(); api.mcpServerManagement.dispose(); connection.dispose(); },
+			dispose: () => { recovery.dispose(); memories?.dispose(); memoryDiagnostics?.dispose(); automation?.dispose(); symphony?.dispose(); calls?.dispose(); channels?.dispose(); api.mcpServerManagement.dispose(); api.contextResourceHost?.dispose(); connection.dispose(); },
 		};
 	} catch (error) {
 		recovery.dispose();
@@ -100,58 +103,67 @@ export async function connectWebRendererApi(transport: AppServerTransport, conne
  * For a host-bound SSH client, domain paths retain that host while the wire uses server-local paths.
  */
 export function createRendererHost(connection: AppServerProtocolClient, connectorHostServices: BrowserConnectorHostServices, contributions: readonly RendererCapabilityContribution[], sshHost?: string, recovery?: IAppServerConnectionRecovery): IRendererHost {
-	const appServer = createAppServerAppServerApi(connection, recovery);
-	const resource = createAppServerResourceApi(connection);
-	const capabilities = mergeRendererHostCapabilities(contributions.map(contribution => contribution(connection, appServer)));
-	return {
-		appServer,
-		hasAppServer: true,
-		messageHistory: connection.capabilities?.contracts.messageHistory?.version === 1 ? new AppServerMessageHistoryService(connection) : undefined,
-		approvalEnvironment: connection.capabilities?.approvalEnvironment ? new AppServerApprovalEnvironmentService(connection) : undefined,
-		accounts: createAppServerAccountApi(connection, connectorHostServices),
-		session: createAppServerAgentSessionService(connection, sshHost),
-		teams: createAppServerTeamApi(connection),
-		model: createAppServerAgentModelsService(connection),
-		secretStorage: createAppServerSecretStorageStatusService(connection),
-		thread: createAppServerAgentThreadService(connection, sshHost),
-		turn: createAppServerAgentTurnService(connection),
-		turnChanges: createAppServerTurnChangesApi(connection),
-		skills: createAppServerSkillOperations(connection),
-		instructions: createAppServerInstructionService(connection),
-		documentCollaboration: createAppServerDocumentCollaborationApi(connection),
-		resource,
-		extensions: createAppServerExtensionApi(connection, resource),
-		extensionHost: createAppServerExtensionHostApi(connection),
-		extensionBackend: createExtensionBackendApi(connection),
-		fs: createAppServerFileApi(connection),
-		syntax: createAppServerSyntaxApi(connection),
-		language: createAppServerLanguageApi(connection),
-		languageServers: createAppServerLanguageServerService(connection),
-		fileSearch: createAppServerFileSearchApi(connection),
-		contentSearch: createAppServerContentSearchApi(connection),
-		contentSearchConfiguration: createAppServerContentSearchConfigurationApi(connection),
-		terminal: new AppServerTerminalProcessService(connection, appServer),
-		assets: new AppServerAssetService(connection),
-		testing: new AppServerTestExecutionService(connection),
-		...capabilities,
-		events: createAppServerServerEventApi(connection),
-		codebase: createAppServerCodebaseApi(connection),
-		codebaseSymbols: createAppServerCodebaseSymbolsApi(connection),
-		connectors: createAppServerConnectorApi(connection, connectorHostServices),
-		plugins: createAppServerPluginManagementApi(connection),
-		localGit: new AppServerLocalGitService(connection),
-		extensionManagement: createAppServerExtensionManagementApi(connection),
-		toolSearch: createAppServerToolSearchApi(connection),
-		workspaceTrust: createAppServerWorkspaceTrustApi(connection),
-		networkDiagnostics: createAppServerNetworkDiagnosticsApi(connection),
-		issueReporter: new AppServerIssueReporterService(connection),
-		github: new AppServerGitHubService(connection),
-		agentCapabilities: createAppServerAgentCapabilitiesApi(connection),
-		agentTools: createAppServerAgentToolsApi(connection),
-		mcpServerStatus: createAppServerMcpServerStatusApi(connection),
-		mcpServerManagement: new AppServerMcpServerManagementService(connection, connectorHostServices),
-		traceSettings: createAppServerTraceSettingsApi(connection),
-		executionSettings: createAppServerExecutionSettingsService(connection),
-		hooks: createAppServerHookOperations(connection),
-	};
+	const contextResourceHost = connection.capabilities?.contracts.hostResources?.version === 1 ? new DisposableStore() : undefined;
+	const snapshots = contextResourceHost?.add(new AgentHostResourceService());
+	try {
+		if (contextResourceHost && snapshots) { contextResourceHost.add(registerAgentHostResourceHost(connection, snapshots)); }
+		const appServer = createAppServerAppServerApi(connection, recovery);
+		const resource = createAppServerResourceApi(connection);
+		const capabilities = mergeRendererHostCapabilities(contributions.map(contribution => contribution(connection, appServer)));
+		return {
+			appServer,
+			contextResourceHost,
+			hasAppServer: true,
+			messageHistory: connection.capabilities?.contracts.messageHistory?.version === 1 ? new AppServerMessageHistoryService(connection) : undefined,
+			approvalEnvironment: connection.capabilities?.approvalEnvironment ? new AppServerApprovalEnvironmentService(connection) : undefined,
+			accounts: createAppServerAccountApi(connection, connectorHostServices),
+			session: createAppServerAgentSessionService(connection, sshHost),
+			teams: createAppServerTeamApi(connection),
+			model: createAppServerAgentModelsService(connection),
+			secretStorage: createAppServerSecretStorageStatusService(connection),
+			thread: createAppServerAgentThreadService(connection, sshHost, snapshots),
+			turn: createAppServerAgentTurnService(connection, snapshots),
+			turnChanges: createAppServerTurnChangesApi(connection),
+			skills: createAppServerSkillOperations(connection),
+			instructions: createAppServerInstructionService(connection),
+			documentCollaboration: createAppServerDocumentCollaborationApi(connection),
+			resource,
+			extensions: createAppServerExtensionApi(connection, resource),
+			extensionHost: createAppServerExtensionHostApi(connection),
+			extensionBackend: createExtensionBackendApi(connection),
+			fs: createAppServerFileApi(connection),
+			syntax: createAppServerSyntaxApi(connection),
+			language: createAppServerLanguageApi(connection),
+			languageServers: createAppServerLanguageServerService(connection),
+			fileSearch: createAppServerFileSearchApi(connection),
+			contentSearch: createAppServerContentSearchApi(connection),
+			contentSearchConfiguration: createAppServerContentSearchConfigurationApi(connection),
+			terminal: new AppServerTerminalProcessService(connection, appServer),
+			assets: new AppServerAssetService(connection),
+			testing: new AppServerTestExecutionService(connection),
+			...capabilities,
+			events: createAppServerServerEventApi(connection),
+			codebase: createAppServerCodebaseApi(connection),
+			codebaseSymbols: createAppServerCodebaseSymbolsApi(connection),
+			connectors: createAppServerConnectorApi(connection, connectorHostServices),
+			plugins: createAppServerPluginManagementApi(connection),
+			localGit: new AppServerLocalGitService(connection),
+			extensionManagement: createAppServerExtensionManagementApi(connection),
+			toolSearch: createAppServerToolSearchApi(connection),
+			workspaceTrust: createAppServerWorkspaceTrustApi(connection),
+			networkDiagnostics: createAppServerNetworkDiagnosticsApi(connection),
+			issueReporter: new AppServerIssueReporterService(connection),
+			github: new AppServerGitHubService(connection),
+			agentCapabilities: createAppServerAgentCapabilitiesApi(connection),
+			agentTools: createAppServerAgentToolsApi(connection),
+			mcpServerStatus: createAppServerMcpServerStatusApi(connection),
+			mcpServerManagement: new AppServerMcpServerManagementService(connection, connectorHostServices),
+			traceSettings: createAppServerTraceSettingsApi(connection),
+			executionSettings: createAppServerExecutionSettingsService(connection),
+			hooks: createAppServerHookOperations(connection),
+		};
+	} catch (error) {
+		contextResourceHost?.dispose();
+		throw error;
+	}
 }

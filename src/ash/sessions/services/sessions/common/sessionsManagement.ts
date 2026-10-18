@@ -26,7 +26,7 @@ export interface ISessionsManagementService {
 	openThread(sessionId: SessionId, threadId: ThreadId): Promise<void>;
 	selectThread(sessionId: SessionId, threadId: ThreadId): void;
 	interruptThread(sessionId: SessionId, threadId: ThreadId): Promise<void>;
-	createUntitledSession(title?: string, workspace?: SessionWorkspaceSelection): IUntitledChatSession;
+	createUntitledSession(title?: string, workspace?: SessionWorkspaceSelection, providerId?: string): IUntitledChatSession;
 	restoreUntitledSession(session: IUntitledChatSession): void;
 	selectUntitledSession(untitledSessionId: string): void;
 	discardUntitledSession(untitledSessionId: string): void;

@@ -1,3 +1,4 @@
+import { ISessionsProvidersService } from '../../../../services/sessions/browser/sessionsProvidersService.js';
 import { onUnexpectedError } from '../../../../../base/common/errors.js';
 import { Disposable } from '../../../../../base/common/lifecycle.js';
 import { InstantiationType, registerSingleton } from '../../../../../platform/instantiation/common/extensions.js';
@@ -12,14 +13,14 @@ import { IDevContainerAgentHostService } from '../../../../common/devContainerAg
 import { DevContainerAgentHostService } from '../../../../browser/devContainerAgentHostService.js';
 
 class WorkbenchSessionsManagementService extends SessionsManagementService {
-	constructor(@IWorkspaceContextService workspace: IWorkspaceContextService, @IInstantiationService instantiationService: IInstantiationService) {
+	constructor(@IWorkspaceContextService workspace: IWorkspaceContextService, @IInstantiationService instantiationService: IInstantiationService, @ISessionsProvidersService providers: ISessionsProvidersService) {
 		super(instantiationService.createInstance(AppServerSessionsProvider, {
 			workspace: () => selectionFromWorkspace(workspace.getWorkspace()),
 			selectWorkspace: async folders => {
 				using selection = instantiationService.createInstance(WorkspaceSelection);
 				return await selection.pick(folders);
 			},
-		} satisfies AppServerSessionsProviderHost));
+		} satisfies AppServerSessionsProviderHost), providers);
 	}
 }
 

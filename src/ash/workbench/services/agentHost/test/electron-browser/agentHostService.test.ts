@@ -6,7 +6,7 @@ import { setup, suite, suiteSetup, suiteTeardown, teardown, test } from 'mocha';
 import { DeferredPromise, TimeoutTimer } from '../../../../../base/common/async.js';
 import { VSBuffer } from '../../../../../base/common/buffer.js';
 import { Emitter, Event } from '../../../../../base/common/event.js';
-import { Disposable, DisposableTracker, installDisposableTracker, type IDisposable } from '../../../../../base/common/lifecycle.js';
+import { Disposable, DisposableTracker, installDisposableTracker, toDisposable, type IDisposable } from '../../../../../base/common/lifecycle.js';
 import { URI } from '../../../../../base/common/uri.js';
 import type { ISocket, SocketCloseEvent, SocketDiagnosticsEventType } from '../../../../../base/parts/ipc/common/ipc.net.js';
 import type { ISandboxGlobals } from '../../../../../base/parts/sandbox/electron-browser/sandboxTypes.js';
@@ -17,6 +17,7 @@ import { ILogService } from '../../../../../platform/log/common/log.js';
 import { LogService } from '../../../../../platform/log/common/logServiceImpl.js';
 import { ManagedRemoteConnection, RemoteConnectionType } from '../../../../../platform/remote/common/remoteAuthorityResolver.js';
 import { IRemoteSocketFactoryService, RemoteSocketFactoryService } from '../../../../../platform/remote/common/remoteSocketFactoryService.js';
+import { REMOTE_AGENT_HOST_CLOSE_CHANNEL, REMOTE_AGENT_HOST_OPEN_CHANNEL } from '../../../../../platform/remote/common/remoteConnectionIpc.js';
 import type { RemoteAgentConnection } from '../../../../../platform/remote/common/remoteAgentApi.js';
 import { resetNlsResolver, setNlsMessages } from '../../../../../nls.js';
 import { installEditorTestDom } from '../../../../../editor/test/browser/editorTestGlobals.js';
@@ -61,6 +62,9 @@ suite('Desktop Workbench Agent Host selection', () => {
 	let onInitialized: ((channel: string) => void) | undefined;
 	let onLog: ((entry: LogEntry) => void) | undefined;
 	let failDirectoryBinding: boolean;
+	let beforeHostOpen: (() => Promise<void>) | undefined;
+	const hostOpens: { id: string; connection: { name: string; host: string; workspace: string; }; }[] = [];
+	const hostCloses: string[] = [];
 	const directoryBindings: { readonly channel: string; readonly dirs: unknown; }[] = [];
 	let requestedWorkspace: URI;
 	let tracker: DisposableTracker;
@@ -76,6 +80,8 @@ suite('Desktop Workbench Agent Host selection', () => {
 				return { dispose: () => { subscriptions.delete(listener); listeners.delete(listener); if (listeners.size === 0) ipcListeners.delete(channel); } };
 			},
 			invoke: async (channel, payload) => {
+				if (channel === REMOTE_AGENT_HOST_OPEN_CHANNEL) { hostOpens.push(payload as typeof hostOpens[number]); await beforeHostOpen?.(); return; }
+				if (channel === REMOTE_AGENT_HOST_CLOSE_CHANNEL) { hostCloses.push((payload as { id: string; }).id); return; }
 				if (channel === 'ash:remote:connection') return windowConnection;
 				if (channel === 'ash:workspace:context:read') return { id: 'desktop', folders: [{ id: 'workspace-folder', uri: requestedWorkspace.toString(), name: 'Project', index: 0 }] };
 				if (channel.endsWith(':initialized')) { onInitialized?.(channel); return; }
@@ -131,6 +137,8 @@ suite('Desktop Workbench Agent Host selection', () => {
 		directoryBindings.length = 0;
 		onDirectoryBound = onInitialized = onLog = undefined;
 		failDirectoryBinding = false;
+		beforeHostOpen = undefined;
+		hostOpens.length = hostCloses.length = 0;
 		windowConnection = { kind: 'ssh', generation: 1, authority: 'ssh+host', host: 'host' };
 		requestedWorkspace = createSshRemoteWorkspaceUri('host', '/workspace');
 		disabled.clear();
@@ -181,6 +189,104 @@ suite('Desktop Workbench Agent Host selection', () => {
 		for (const listener of [...listeners]) listener(undefined);
 	}
 
+	test('the runtime registry shares one endpoint, isolates equal servers with different roots, and retires window scopes', async () => {
+		using renderer = await createRendererApi([], { browser: false, agentHosts: true }, { requestWorkspaceTrust: async () => { throw new Error('Saved grants need no prompt'); } }, mainProcess);
+		const registry = renderer.agentHosts!;
+		const first = { name: 'Build', host: 'build', workspace: '/repo' };
+		const nested = { name: 'Nested', host: 'build', workspace: '/repo/nested' };
+		const controller = new AbortController();
+		const pending = registry.connect(first, controller.signal);
+		assert.equal(registry.connections[0]!.state, 'starting');
+		assert.equal(registry.connections[0]!.host, undefined);
+		const shared = registry.connect({ ...first, name: 'Renamed' }, new AbortController().signal);
+		const host = await pending;
+		assert.equal(await shared, host);
+		controller.abort();
+		assert.equal(registry.connections.length, 1, 'completed acquisition is owned by the runtime rather than its caller signal');
+		const second = await registry.connect(nested, new AbortController().signal);
+		assert.notEqual(host.id, second.id);
+		assert.deepEqual(hostOpens.map(open => open.connection.workspace), ['/repo', '/repo/nested']);
+		assert.equal(registry.connections.every(entry => entry.state === 'ready'), true);
+		assert.deepEqual(directoryBindings.slice(1).map(entry => entry.dirs), [
+			[{ id: `agent-host:${host.id}`, path: '/repo', grant: { type: 'config' } }],
+			[{ id: `agent-host:${second.id}`, path: '/repo/nested', grant: { type: 'config' } }],
+		]);
+		registry.disconnect(host.id);
+		assert.deepEqual(registry.connections.map(entry => entry.id), [second.id]);
+		host.dispose();
+		assert.deepEqual(hostCloses, [host.id]);
+		renderer.dispose();
+		assert.equal(registry.connections.length, 0);
+		assert.deepEqual(hostCloses, [host.id, second.id]);
+	});
+
+	test('disconnecting a pending runtime endpoint rejects acquisition and its late Main result cannot publish a host', async () => {
+		using renderer = await createRendererApi([], { browser: false, agentHosts: true }, { requestWorkspaceTrust: async () => { throw new Error('Saved grants need no prompt'); } }, mainProcess);
+		const registry = renderer.agentHosts!;
+		const opening = new DeferredPromise<void>();
+		beforeHostOpen = () => opening.p;
+		const result = registry.connect({ name: 'Build', host: 'build', workspace: '/repo' }, new AbortController().signal);
+		const rejected = assert.rejects(result, { name: 'CancellationError' });
+		const id = registry.connections[0]!.id;
+		registry.disconnect(id);
+		await rejected;
+		assert.equal(registry.connections.length, 0);
+		await opening.complete();
+		await Promise.resolve();
+		assert.equal(registry.connections.length, 0);
+		assert.deepEqual(hostCloses, [id]);
+		assert.equal(acquired.some(channel => channel.includes(id)), false);
+	});
+
+	test('synchronous registry observers can retire a starting endpoint before Main acquisition', async () => {
+		using renderer = await createRendererApi([], { browser: false, agentHosts: true }, { requestWorkspaceTrust: async () => { throw new Error('Saved grants need no prompt'); } }, mainProcess);
+		const registry = renderer.agentHosts!;
+		using listener = registry.onDidChangeConnections(() => {
+			const first = registry.connections[0];
+			if (first) registry.disconnect(first.id);
+		});
+		await assert.rejects(registry.connect({ name: 'Build', host: 'build', workspace: '/repo' }, new AbortController().signal), { name: 'CancellationError' });
+		assert.equal(hostOpens.length, 0, 'a retired endpoint cannot send OPEN after its own CLOSE');
+		assert.equal(registry.connections.length, 0);
+	});
+
+	test('runtime reconnect waits for directory rebind, retains its domain scope, and reports failed restoration', async () => {
+		using renderer = await createRendererApi([], { browser: false, agentHosts: true }, { requestWorkspaceTrust: async () => { throw new Error('Saved grants need no prompt'); } }, mainProcess);
+		const registry = renderer.agentHosts!;
+		const host = await registry.connect({ name: 'Build', host: 'build', workspace: '/repo' }, new AbortController().signal);
+		const generation = host.api.appServer.connectionGeneration;
+		const states: string[] = [];
+		const subscription = host.api.appServer.onConnectionState(state => states.push(state));
+		using listener = toDisposable(() => subscription.dispose());
+		const count = directoryBindings.length;
+		await registry.reconnect(host.id);
+		assert.ok(host.api.appServer.connectionGeneration > generation);
+		assert.equal(directoryBindings.length, count + 1);
+		assert.deepEqual(directoryBindings.at(-1)!.dirs, [{ id: `agent-host:${host.id}`, path: '/repo', grant: { type: 'config' } }]);
+		assert.equal(registry.connections[0]!.host, host);
+		assert.equal(await host.api.appServer.getConnectionState(), 'ready');
+		assert.ok(states.includes('stopped'));
+		assert.ok(states.includes('starting'));
+		assert.ok(states.includes('initializing'));
+		assert.equal(states.at(-1), 'ready');
+		failDirectoryBinding = true;
+		await assert.rejects(host.api.appServer.recovery!.reconnect(), /restore rejected/);
+		assert.equal(host.api.appServer.recovery!.status, 'failed');
+		assert.equal(registry.connections[0]!.state, 'crashed');
+		assert.equal(registry.connections[0]!.host, host);
+		const unavailable = new DeferredPromise<void>();
+		using deadline = new TimeoutTimer(() => { void unavailable.error(new Error('Host carrier did not retire')); }, 5_000);
+		using recoveryChanged = host.api.appServer.recovery!.onDidChange(() => { if (host.api.appServer.recovery!.status === 'unavailable') void unavailable.complete(); });
+		ports.at(-1)!.port2.postMessage({ intentional: true });
+		await unavailable.p;
+		assert.equal(registry.connections[0]!.state, 'stopped', 'carrier state must override a previous directory restoration failure');
+		assert.equal(host.api.appServer.recovery!.status, 'unavailable');
+		assert.notEqual(host.api.appServer.recovery!.error, 'restore rejected');
+		failDirectoryBinding = false;
+		await registry.reconnect(host.id);
+		assert.equal(registry.connections[0]!.state, 'ready');
+	});
+
 	test('the production SSH renderer restores current workspace directories only after its execution carrier reconnects', async () => {
 		using renderer = await createRendererApi([], { browser: false }, { requestWorkspaceTrust: async () => { throw new Error('Saved grants need no prompt'); } }, mainProcess);
 		assert.deepEqual(directoryBindings, [{ channel: 'ash:app-server:acquire', dirs: [{ id: 'workspace-folder', path: '/workspace', grant: { type: 'config' } }] }]);
@@ -211,6 +317,8 @@ suite('Desktop Workbench Agent Host selection', () => {
 		assert.match(String(diagnostic.error), /PermissionRequired|restore rejected/);
 		assert.equal(directoryBindings.length, 2);
 		failDirectoryBinding = false;
+		beforeHostOpen = undefined;
+		hostOpens.length = hostCloses.length = 0;
 		const rebound = new DeferredPromise<void>();
 		onDirectoryBound = () => { void rebound.complete(); };
 		restart('ash:app-server:restart');

@@ -9,12 +9,16 @@ export interface FileSearchDirectory {
 export interface FileSearchQuery {
 	readonly includePatterns: readonly string[];
 	readonly excludePatterns: readonly string[];
+	/** Intersects the filename condition with includes before counting and limiting. */
+	readonly requiredPattern?: string;
 	readonly maxResults: number;
 }
 
 export interface FileFuzzyQuery {
 	readonly query: string;
 	readonly maxResults: number;
+	readonly includePatterns?: readonly string[];
+	readonly excludePatterns?: readonly string[];
 }
 
 export interface FileSearchResult {

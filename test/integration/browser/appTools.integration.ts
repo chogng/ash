@@ -136,7 +136,7 @@ const management = { sessions, state: 'ready' } as unknown as ISessionsManagemen
 const view = { activeSelection: undefined, visibleSelections: [], onDidChange: changes.event, openNewSession: () => { }, openSession: (sessionId: string) => opened.push(sessionId) } as unknown as ISessionsService;
 const container = document.createElement('main');
 document.body.append(container);
-resources.add(new SessionsList(container, management, view, 'Tasks', 'New task', { onDidChange: Event.None, getSessionPullRequests: () => [], getSessionIssues: () => [], attachIssue: async () => { }, detachIssue: async () => { }, initialize: () => { }, attachPullRequest: async () => { }, detachPullRequest: async () => { } }, groups, listCustomViews, listMenus, listNotifications));
+resources.add(new SessionsList(container, management, view, 'Tasks', 'New task', { onDidChange: Event.None, getSessionPullRequests: () => [], getSessionIssues: () => [], attachIssue: async () => { }, detachIssue: async () => { }, initialize: () => { }, attachPullRequest: async () => { }, detachPullRequest: async () => { } }, groups, listCustomViews, listMenus, listNotifications, { executeCommand: async () => { view.openNewSession(); }, onWillExecuteCommand: Event.None, onDidExecuteCommand: Event.None } as unknown as import('../../../src/ash/platform/commands/common/commands.js').ICommandService));
 const services = resources.add(new InstantiationService());
 services.registerInstance(IStorageService, storage);
 services.registerInstance(IDialogService, resources.add(new DialogService()));

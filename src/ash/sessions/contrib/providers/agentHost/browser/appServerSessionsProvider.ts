@@ -30,6 +30,7 @@ export class AppServerSessionsProvider extends Disposable implements IAgentHostS
 	public readonly id: string;
 	public readonly label: string;
 	public readonly order = 0;
+	public get instantiationService(): IInstantiationService { return this.instantiation; }
 	private automationStore: AgentHostAutomationStore | undefined;
 	public get automations(): AgentHostAutomationStore | undefined {
 		if (!this.rendererHost.automation) return undefined;

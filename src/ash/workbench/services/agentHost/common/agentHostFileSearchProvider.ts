@@ -45,6 +45,8 @@ export class AgentHostFileSearchProvider extends Disposable implements ISearchRe
 				return folder;
 			});
 			const candidates = new Map<string, { resource: URI; score: number; folderIndex: number; path: string; }>();
+			const includePatterns = Object.keys(query.includePattern ?? {}).filter(pattern => query.includePattern![pattern] === true);
+			const excludePatterns = Object.keys(query.excludePattern ?? {}).filter(pattern => query.excludePattern![pattern] === true);
 			let limitHit = false;
 			for (const folder of folders) {
 				if (controller.signal.aborted) { throw new CancellationError(); }
@@ -52,8 +54,8 @@ export class AgentHostFileSearchProvider extends Disposable implements ISearchRe
 				// Each root supplies its best candidates before applying the global result budget.
 				const maxResults = Math.min(5_000, limit + 1);
 				const pending = query.shouldGlobMatchFilePattern
-					? this.backend.glob(directory, { includePatterns: query.filePattern ? [query.filePattern] : [], excludePatterns: [], maxResults }, controller.signal)
-					: this.backend.fuzzy(directory, { query: query.filePattern ?? '', maxResults }, controller.signal);
+					? this.backend.glob(directory, { includePatterns: includePatterns.length ? includePatterns : query.filePattern ? [query.filePattern] : [], excludePatterns, ...(includePatterns.length && query.filePattern ? { requiredPattern: query.filePattern } : {}), maxResults }, controller.signal)
+					: this.backend.fuzzy(directory, { query: query.filePattern ?? '', ...(includePatterns.length ? { includePatterns } : {}), ...(excludePatterns.length ? { excludePatterns } : {}), maxResults }, controller.signal);
 				const found = await raceCancellationError(pending, controller.signal);
 				if (controller.signal.aborted) { throw new CancellationError(); }
 				limitHit ||= found.totalMatches > found.matches.length;

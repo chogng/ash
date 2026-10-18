@@ -12,8 +12,7 @@ import { IOpenerService } from '../../../../../platform/opener/common/opener.js'
 import { IChatService } from '../../../../services/chat/common/chatService.js';
 import { IChatSessionNavigationService } from '../../../../services/chat/common/chatSessionNavigationService.js';
 
-// Desktop and Web currently each expose one profile-owned App Server. SSH execution
-// targets belong to that server's Sessions; they are not separate chat connections.
+// Single-host owners retain the established local address namespace.
 const connectionAuthority = 'local';
 
 async function withConversation(chat: IChatService, appServer: IAppServerApi, sessionId: string, threadId: string, operation: () => Promise<void>): Promise<void> {
@@ -56,8 +55,13 @@ export class CopyChatSessionLinkAction extends Action2 {
 		const { sessionId, threadId } = selected;
 		const clipboard = accessor.get(IClipboardService);
 		const accessibility = accessor.get(IAccessibilityService);
-		await withConversation(accessor.get(IChatService), accessor.get(IAppServerApi), sessionId, threadId,
-			() => clipboard.writeText(buildOpenSessionLinkUri(sessionId, threadId, connectionAuthority).toString()));
+		if (navigation.prepareConversationLink) {
+			const address = await navigation.prepareConversationLink(sessionId, threadId);
+			await clipboard.writeText(buildOpenSessionLinkUri(address.sessionId, address.threadId, address.connectionAuthority).toString());
+		} else {
+			await withConversation(accessor.get(IChatService), accessor.get(IAppServerApi), sessionId, threadId,
+				() => clipboard.writeText(buildOpenSessionLinkUri(sessionId, threadId, connectionAuthority).toString()));
+		}
 		accessibility.status(localize('chat.sessionLink.copied', 'Conversation link copied to clipboard'));
 	}
 }
@@ -80,6 +84,11 @@ export class ChatSessionLinkOpener extends Disposable {
 		let link;
 		try { link = parseOpenSessionLinkUri(resource); }
 		catch { throw new Error(localize('chat.sessionLink.invalid', 'This conversation link is invalid.')); }
+		if (this.navigation.openConversationLink) {
+			await this.navigation.openConversationLink(link);
+			if (this.isDisposed) throw canceled();
+			return true;
+		}
 		if (link.connectionAuthority !== connectionAuthority) {
 			throw new Error(localize('chat.sessionLink.connection', 'The connection for this conversation link is unavailable.'));
 		}

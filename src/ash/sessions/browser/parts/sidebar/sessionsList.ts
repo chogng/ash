@@ -1,3 +1,5 @@
+import { ICommandService } from '../../../../platform/commands/common/commands.js';
+import { NEW_CHAT_COMMAND_ID } from '../../../../workbench/contrib/chat/common/chat.js';
 import { defaultButtonStyles } from '../../../../platform/theme/browser/defaultStyles.js';
 import type { ISessionGroupsService } from '../../../services/sessions/browser/sessionGroupsService.js';
 import "./media/sessionsControls.css";
@@ -46,6 +48,7 @@ export class SessionsList extends DomWidget {
 		@ICustomViewService private readonly customViews: ICustomViewService,
 		@IMenuService menus: IMenuService,
 		@INotificationService notifications: INotificationService,
+		@ICommandService commands: ICommandService,
 	) {
 		super();
 		const ownerDocument = container.ownerDocument;
@@ -80,7 +83,7 @@ export class SessionsList extends DomWidget {
 		this.domNode.append(this.navigation, this.heading, controls, this.list);
 		container.append(this.domNode);
 		this._register(toDisposable(() => this.domNode.remove()));
-		this._register(addDisposableListener(this.newSessionButton, "click", () => viewService.openNewSession(newSessionLabel)));
+		this._register(addDisposableListener(this.newSessionButton, "click", () => { void commands.executeCommand(NEW_CHAT_COMMAND_ID).catch(error => notifications.error(String(error))); }));
 		this._register(addDisposableListener(this.searchInput, 'input', () => this.render()));
 		this._register(viewService.onDidChange(() => this.render()));
 		this._register(github.onDidChange(() => this.render()));
@@ -158,7 +161,7 @@ export class SessionsList extends DomWidget {
 			present.add(key);
 		}
 		for (const session of this.sessionService.sessions) {
-			if (query && !session.title.toLocaleLowerCase().includes(query)) continue;
+			if (query && !`${session.title} ${session.providerLabel ?? ''}`.toLocaleLowerCase().includes(query)) continue;
 			const current = activeSelection?.kind === "session" && activeSelection.active.session.sessionId === session.sessionId ? activeSelection.active : undefined;
 			const thread = current
 				? session.chats.find(candidate => candidate.threadId === current.threadId && candidate.status === "active")
@@ -181,9 +184,26 @@ export class SessionsList extends DomWidget {
 			ordered.push(heading);
 			for (const id of members) { ordered.push(grouped.get(id)!); grouped.delete(id); }
 		}
-		ordered.push(...grouped.values());
+		const providerGroups = new Map<string, { label: string; items: HTMLElement[]; }>();
+		for (const session of this.sessionService.sessions) {
+			const item = grouped.get(session.sessionId);
+			if (!item) continue;
+			const key = `provider:${session.providerId ?? ''}`;
+			let group = providerGroups.get(key);
+			if (!group) { group = { label: session.providerLabel ?? localize('automations.localHost', 'Local Agent Host'), items: [] }; providerGroups.set(key, group); }
+			group.items.push(item);
+		}
+		for (const [id, group] of providerGroups) {
+			if (providerGroups.size > 1 && group.label) {
+				const heading = this.sectionHeadings.get(id) ?? h(ownerDocument, 'h3');
+				this.sectionHeadings.set(id, heading);
+				heading.textContent = group.label;
+				ordered.push(heading);
+			}
+			ordered.push(...group.items);
+		}
 		for (const id of this.sectionHeadings.keys()) {
-			if (!this.groups?.groups.some(group => group.sectionId === id)) this.sectionHeadings.delete(id);
+			if (!providerGroups.has(id) && !this.groups?.groups.some(group => group.sectionId === id)) this.sectionHeadings.delete(id);
 		}
 		for (const key of this.items.keys()) {
 			if (!present.has(key)) this.items.deleteAndDispose(key);

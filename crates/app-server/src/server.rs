@@ -3435,10 +3435,12 @@ impl AppServer {
             Some(ClientMethod::ExtensionItems) => {
                 self.queue_processor().extension_items(&request.params)
             }
-            Some(ClientMethod::QueueEdit) => self.queue_processor().queue_edit(&request.params),
-            Some(ClientMethod::QueueEnqueue) => {
-                self.queue_processor().queue_enqueue(&request.params)
-            }
+            Some(ClientMethod::QueueEdit) => self
+                .queue_processor()
+                .queue_edit(connection.connection_id, &request.params),
+            Some(ClientMethod::QueueEnqueue) => self
+                .queue_processor()
+                .queue_enqueue(connection.connection_id, &request.params),
             Some(ClientMethod::QueueList) => self.queue_processor().queue_list(&request.params),
             Some(ClientMethod::QueueCancel) => self.queue_processor().queue_cancel(&request.params),
             Some(
@@ -4268,6 +4270,9 @@ impl AppServer {
             Some(ClientMethod::GitIndexEdit) => {
                 self.git_processor().git_index_edit(&request.params)
             }
+            Some(ClientMethod::GitRepositoryContexts) => self
+                .git_processor()
+                .git_repository_contexts(&request.params, cancellation),
             Some(ClientMethod::GitRepositories) => self
                 .git_processor()
                 .git_repositories(connection, &request.params),

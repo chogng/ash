@@ -247,6 +247,8 @@ impl ServerCapabilities {
     }
 
     pub fn advertise_contracts(&mut self) {
+        self.contracts
+            .insert("hostResources".into(), CapabilityContract { version: 1 });
         // Only independently versioned optional contracts need entries here. Shared
         // protocol identity and boolean availability cover the other capabilities.
         if self.github {

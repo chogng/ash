@@ -255,6 +255,7 @@ export interface ChatInteractionOfferChange {
 }
 
 export interface RewriteChatRequestOptions {
+	readonly signal?: AbortSignal;
 	readonly sessionId: SessionId;
 	readonly threadId: ThreadId;
 	readonly turnId: string;

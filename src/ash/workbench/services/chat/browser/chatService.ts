@@ -182,6 +182,7 @@ export class ChatService extends Disposable implements IChatService {
 
 	async rewriteRequest(options: RewriteChatRequestOptions): Promise<{ readonly sessionId: SessionId; readonly threadId: ThreadId; }> {
 		this.assertAIEnabled();
+		this.requireSubmissionOwner(options);
 		const epoch = this.connectionEpoch;
 		const { thread } = await this.readThread(options.sessionId, options.threadId);
 		const turn = thread.turns.find(turn => turn.turnId === options.turnId);
@@ -205,10 +206,11 @@ export class ChatService extends Disposable implements IChatService {
 		}
 		if (this.isDisposed || epoch !== this.connectionEpoch) throw canceled();
 		this.assertAIEnabled();
+		this.requireSubmissionOwner(options);
 		const result = await this.threadApi.rewrite({
 			sessionId: options.sessionId, threadId: options.threadId, beforeTurnId: options.turnId,
 			commandId: options.commandId, title: thread.title, input,
-		});
+		}, options.signal);
 		if (this.isDisposed || epoch !== this.connectionEpoch) throw canceled();
 		return result;
 	}
@@ -302,7 +304,7 @@ export class ChatService extends Disposable implements IChatService {
 		this.requireSubmissionOwner(options);
 		const epoch = this.connectionEpoch;
 		const input = turnInput(options);
-		const started = await this.turnApi.start({ commandId: options.commandId ?? commandId("turn"), sessionId: options.sessionId, threadId: options.threadId, expectedSequence: options.expectedSequence, mode: options.mode, approvalMode: options.approvalMode, model: options.model, reasoningEffort: options.reasoningEffort, input });
+		const started = await this.turnApi.start({ commandId: options.commandId ?? commandId("turn"), sessionId: options.sessionId, threadId: options.threadId, expectedSequence: options.expectedSequence, mode: options.mode, approvalMode: options.approvalMode, model: options.model, reasoningEffort: options.reasoningEffort, input }, options.signal);
 		if (options.isNewSession && !this.isDisposed && epoch === this.connectionEpoch) {
 			const title = Array.from(options.text.trim().replace(/\s+/gu, ' ')).slice(0, 80).join('');
 			if (title) {
@@ -326,7 +328,7 @@ export class ChatService extends Disposable implements IChatService {
 		if (this.isDisposed || epoch !== this.connectionEpoch || generation !== this.appServerApi.connectionGeneration) throw canceled();
 		this.assertAIEnabled();
 		this.requireSubmissionOwner(options);
-		await this.turnApi.enqueue({ commandId: options.commandId ?? commandId("queued-turn"), sessionId: options.sessionId, threadId: options.threadId, mode: options.mode, model: options.model, reasoningEffort: options.reasoningEffort, input: turnInput(options), approvalMode });
+		await this.turnApi.enqueue({ commandId: options.commandId ?? commandId("queued-turn"), sessionId: options.sessionId, threadId: options.threadId, mode: options.mode, model: options.model, reasoningEffort: options.reasoningEffort, input: turnInput(options), approvalMode }, options.signal);
 		if (!this.isDisposed && epoch === this.connectionEpoch) this.submitted.fire({ sessionId: options.sessionId, threadId: options.threadId, isNewSession: false, requestSequence: options.expectedSequence });
 	}
 
@@ -380,7 +382,7 @@ export class ChatService extends Disposable implements IChatService {
 				...(options.contexts ?? []).map(toContextInput),
 				...(options.text.trim() ? [{ type: "text" as const, text: options.text }] : []),
 			],
-		});
+		}, options.signal);
 		if (!this.isDisposed && epoch === this.connectionEpoch) this.submitted.fire({ sessionId: options.sessionId, threadId: options.threadId, isNewSession: false, requestSequence: options.expectedSequence });
 	}
 

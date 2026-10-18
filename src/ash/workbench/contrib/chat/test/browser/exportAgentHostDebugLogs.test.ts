@@ -4,7 +4,8 @@ import { suite, test } from 'mocha';
 import { JSDOM } from 'jsdom';
 import { DeferredPromise } from '../../../../../base/common/async.js';
 import { Emitter } from '../../../../../base/common/event.js';
-import { Disposable } from '../../../../../base/common/lifecycle.js';
+import { Disposable, toDisposable } from '../../../../../base/common/lifecycle.js';
+import { canceled } from '../../../../../base/common/errors.js';
 import { resetNlsResolver } from '../../../../../nls.js';
 import { registerAction2, MenuId, MenusRegistry, isMenuItem } from '../../../../../platform/actions/common/actions.js';
 import { IAppServerApi, type AppServerConnectionState } from '../../../../../platform/agentHost/common/appServerApi.js';
@@ -14,7 +15,7 @@ import { ILayoutService } from '../../../../../platform/layout/browser/layoutSer
 import { ILoggerService, NullLoggerService, type ILogFile, type ILogFileReadResult, type ILogFileService } from '../../../../../platform/log/common/log.js';
 import { INotificationService, type NotificationMessage } from '../../../../../platform/notification/common/notification.js';
 import { IProgressService } from '../../../../../platform/progress/common/progress.js';
-import { IChatSessionNavigationService } from '../../../../services/chat/common/chatSessionNavigationService.js';
+import { IChatSessionNavigationService, type IChatSessionConnection } from '../../../../services/chat/common/chatSessionNavigationService.js';
 import { CommandService } from '../../../../services/commands/common/commandService.js';
 import { initializeTestLocalization } from '../../../../services/localization/test/common/localizationTestUtils.js';
 import { IOutputService, type IOutputChannel } from '../../../../services/output/common/output.js';
@@ -26,6 +27,12 @@ class ExportFixture extends Disposable {
 	readonly dom = new JSDOM('<!doctype html><body></body>');
 	readonly services = this._register(new InstantiationService());
 	readonly states = this._register(new Emitter<AppServerConnectionState>());
+	readonly remoteStates = this._register(new Emitter<AppServerConnectionState>());
+	remoteGeneration = 7;
+	remoteListeners = 0;
+	retired = false;
+	capture: ((sessionId: string) => IChatSessionConnection) | undefined;
+	readonly capturedSessions: string[] = [];
 	readonly downloads: Blob[] = [];
 	readonly names: string[] = [];
 	readonly notifications: { severity: string; message: string; }[] = [];
@@ -67,6 +74,7 @@ class ExportFixture extends Disposable {
 		this.services.registerInstance(ILoggerService, Object.assign(new NullLoggerService(), { files: persistentLogs ? logs : undefined }));
 		this.services.registerInstance(IChatSessionNavigationService, {
 			getActiveConversation: () => this.active,
+			get captureConnection() { return fixture.capture; },
 		} as IChatSessionNavigationService);
 		this.services.registerInstance(IOutputService, { get channels() { return fixture.channels; } } as unknown as IOutputService);
 		this.services.registerInstance(IChatDebugService, {
@@ -107,6 +115,20 @@ class ExportFixture extends Disposable {
 		this.dom.window.HTMLAnchorElement.prototype.click = function () { fixture.names.push(this.download); };
 		this._register(registerAction2(ExportAgentHostDebugLogsAction));
 		this.commands = this._register(new CommandService(this.services));
+	}
+
+	useSessionConnection(): void {
+		this.capture = sessionId => {
+			this.capturedSessions.push(sessionId);
+			const generation = this.remoteGeneration;
+			let changed = false;
+			this.remoteListeners++;
+			const listener = this.remoteStates.event(() => { changed = true; });
+			return Object.assign(toDisposable(() => { listener.dispose(); this.remoteListeners--; }), {
+				generation,
+				assertCurrent: async () => { if (changed || this.retired || generation !== this.remoteGeneration) throw canceled(); },
+			});
+		};
 	}
 
 	run(): Promise<void> { return this.commands.executeCommand(ExportAgentHostDebugLogsAction.ID); }
@@ -327,6 +349,63 @@ suite('Export Agent Host debug logs', () => {
 		assert.deepEqual(JSON.parse(files.get('manifest.json')!).issues.map((issue: { source: string; }) => issue.source), ['sessionTrace', 'sessionDiagnostics']);
 		assert.equal(fixture.notifications[0].severity, 'warning');
 		assert.equal(fixture.listeners, 0);
+	});
+
+	test('an export captured by a remote Session ignores an unrelated primary reconnection', async () => {
+		using fixture = new ExportFixture();
+		fixture.active = { sessionId: 'remote-qualified', threadId: 'remote-thread' };
+		fixture.useSessionConnection();
+		const entered = new DeferredPromise<void>();
+		const page = new DeferredPromise<AgentTracePage>();
+		fixture.trace = async () => { await entered.complete(); return page.p; };
+		const operation = fixture.run();
+		await entered.p;
+		fixture.generation++;
+		fixture.states.fire('restarting');
+		await page.complete({ trace: { formatVersion: 3, sessionId: 'remote-qualified', threads: [], historyPrefixes: [] }, cursors: {}, hasMore: false });
+		await operation;
+		const files = await unzip(fixture.downloads[0]);
+		assert.ok(files.has('session/trace-1.json'));
+		assert.deepEqual(fixture.capturedSessions, ['remote-qualified']);
+		assert.deepEqual(fixture.hostSessions, ['remote-qualified']);
+		assert.deepEqual(fixture.diagnosticSessions, ['remote-qualified']);
+		assert.equal(JSON.parse(files.get('manifest.json')!).connectionGeneration, 7);
+		assert.equal(fixture.listeners, 0);
+		assert.equal(fixture.remoteListeners, 0);
+	});
+
+	for (const transition of ['reconnect', 'retire'] as const) {
+		test(`a captured Session ${transition} rejects late evidence while keeping local client logs`, async () => {
+			using fixture = new ExportFixture();
+			fixture.useSessionConnection();
+			const entered = new DeferredPromise<void>();
+			const page = new DeferredPromise<AgentTracePage>();
+			fixture.trace = async () => { await entered.complete(); return page.p; };
+			const operation = fixture.run();
+			await entered.p;
+			if (transition === 'reconnect') { fixture.remoteGeneration++; fixture.remoteStates.fire('starting'); }
+			else fixture.retired = true;
+			await page.complete({ trace: { formatVersion: 3, sessionId: 'selected', threads: [], historyPrefixes: [] }, cursors: {}, hasMore: false });
+			await operation;
+			const files = await unzip(fixture.downloads[0]);
+			assert.ok(files.has('logs/1.log'));
+			assert.equal(files.has('session/trace-1.json'), false);
+			assert.deepEqual(fixture.diagnosticSessions, []);
+			assert.equal(fixture.listeners, 0);
+			assert.equal(fixture.remoteListeners, 0);
+		});
+	}
+
+	test('an unavailable Session connection produces partial client logs without falling back to the primary backend', async () => {
+		using fixture = new ExportFixture();
+		fixture.capture = () => { throw canceled(); };
+		await fixture.run();
+		const files = await unzip(fixture.downloads[0]);
+		assert.ok(files.has('logs/1.log'));
+		assert.deepEqual(fixture.hostSessions, []);
+		assert.deepEqual(fixture.traceSessions, []);
+		assert.equal(fixture.listeners, 0);
+		assert.equal(JSON.parse(files.get('manifest.json')!).connectionGeneration, undefined);
 	});
 
 	test('records source failures, bounded tails and pagination limits without failing the whole bundle', async () => {

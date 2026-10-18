@@ -4,7 +4,7 @@ import { localize } from "../../../../nls.js";
 
 const configurationRegistry = Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration);
 
-/** Typed defaults owned by the Workbench content-search surface. */
+/** Typed defaults shared by Workbench path and content searches. */
 export const ContentSearchConfiguration = Object.freeze({
 	showLineNumbers: configurationRegistry.registerConfiguration<boolean>({
 		key: "search.showLineNumbers",

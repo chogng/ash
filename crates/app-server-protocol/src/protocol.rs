@@ -30,6 +30,7 @@ pub mod fs;
 pub mod git;
 pub mod github;
 pub mod goal;
+pub mod host_resource;
 pub mod ide;
 pub mod initialize;
 pub mod instructions;

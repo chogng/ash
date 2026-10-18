@@ -104,6 +104,13 @@ impl fmt::Debug for PathSearchHandle {
 #[derive(Debug, Default)]
 pub struct Service;
 
+/// Path constraints applied to discovery before candidates are scored or limited.
+#[derive(Default)]
+pub struct PathFilters {
+    pub include_patterns: Vec<String>,
+    pub exclude_patterns: Vec<String>,
+}
+
 impl Service {
     /// Discovers and ranks current disk paths within the caller's authorization lifetime.
     pub fn fuzzy(
@@ -111,6 +118,24 @@ impl Service {
         root: PathBuf,
         query: &str,
         max_results: usize,
+        cancellation: &CancellationToken,
+    ) -> Result<PathSearchSnapshot, Error> {
+        self.fuzzy_filtered(
+            root,
+            query,
+            max_results,
+            &PathFilters::default(),
+            cancellation,
+        )
+    }
+
+    /// Searches the complete eligible path set, retaining only the best bounded matches.
+    pub fn fuzzy_filtered(
+        &self,
+        root: PathBuf,
+        query: &str,
+        max_results: usize,
+        filters: &PathFilters,
         cancellation: &CancellationToken,
     ) -> Result<PathSearchSnapshot, Error> {
         if query.len() > 1024 || query.contains('\0') || !(1..=5000).contains(&max_results) {
@@ -138,6 +163,11 @@ impl Service {
         }
         let walker_cancellation = cancellation.clone();
         let mut builder = path_walker(&root, 1);
+        builder.overrides(glob::path_overrides(
+            &root,
+            &filters.include_patterns,
+            &filters.exclude_patterns,
+        )?);
         // Observe cancellation on ignored entries too, before a filtered iterator can advance.
         builder.filter_entry(move |entry| {
             !walker_cancellation.is_cancelled()

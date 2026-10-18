@@ -1,14 +1,13 @@
 import type { WorkspaceTrustPermission } from '../../../../platform/workspace/common/workspaceTrust.js';
 import { ILocalizationService } from '../../../../workbench/services/localization/common/localizationService.js';
 import { Emitter } from '../../../../base/common/event.js';
-import { Disposable } from '../../../../base/common/lifecycle.js';
+import { Disposable, DisposableStore, toDisposable } from '../../../../base/common/lifecycle.js';
 import { localize } from '../../../../nls.js';
-import { IAgentCapabilitiesService } from '../../../../platform/agentCapabilities/common/agentCapabilitiesService.js';
-import { IWorkspaceTrustApi, workspaceTrustPermissionNames, type WorkspaceTrustSnapshot } from '../../../../platform/workspace/common/workspaceTrust.js';
+import { workspaceTrustPermissionNames, type WorkspaceTrustSnapshot } from '../../../../platform/workspace/common/workspaceTrust.js';
 import { IDialogService } from '../../../../platform/dialogs/common/dialogs.js';
-import { IAgentExecutionSettingsService, type ExecutionSettings, type ExecutionSettingsSnapshot } from '../../../../platform/agentHost/common/agentExecutionSettingsService.js';
+import { type ExecutionSettings, type ExecutionSettingsSnapshot } from '../../../../platform/agentHost/common/agentExecutionSettingsService.js';
 import { approvalModeDefinition, approvalModeDefinitions } from '../../../../platform/agentHost/common/approvalModes.js';
-import { IAppServerRemoteAgentService } from '../../../../workbench/services/remote/common/appServerRemoteAgentService.js';
+import { ISessionProviderScopeService, type ISessionProviderScope } from '../../../browser/agentHost/sessionProviderScopeService.js';
 import type { SettingsSectionField, SettingsSectionModel } from '../../../../workbench/contrib/preferences/browser/settingsTreeModels.js';
 
 const readPermissions: readonly WorkspaceTrustPermission[] = ['readFiles', 'watchFiles', 'browseFiles', 'searchFiles', 'inspectRepository'];
@@ -20,7 +19,7 @@ export class ExecutionSettingsModel extends Disposable implements SettingsSectio
 	readonly categoryId = 'execution-permissions';
 	get title(): string { return localize({ bundle: 'ash.settings', key: 'execution.title' }, 'Execution and permissions'); }
 	get description(): string { return localize({ bundle: 'ash.settings', key: 'execution.description' }, 'Defaults for ordinary chats and Symphony. Directory grants control which host directories tools can access.'); }
-	get help(): string { return localize({ bundle: 'ash.settings', key: 'execution.help' }, 'Execution and permissions settings\nUse Tab to choose the default approval mode, command file access and command network access, then Save execution defaults. New chats and workflows without an explicit approval mode inherit this default. Conversation choices and workflow approval settings override it. Command defaults apply after backend reload to newly prepared commands; running commands are not stopped. Approval or configured execution rules may permit broader command access. Directory grants remain required. Managed network rules still apply. On a trusted desktop host, enter an absolute directory path, choose its file and command permissions and Save directory permissions. Other directory capabilities are preserved. Select a saved directory to review or revoke its grant. Revocation blocks subsequent operations after backend reload; it does not stop already running commands. Web connections can show execution defaults but cannot grant host directory access. Refresh discards drafts. Changes elsewhere require refreshing before saving. Closing settings releases listeners and ignores late results. Escape closes this help and returns focus.'); }
+	get help(): string { return localize({ bundle: 'ash.settings', key: 'execution.help' }, 'Execution and permissions settings\nUse Tab to choose the default approval mode, command file access and command network access, then Save execution defaults. New chats and workflows without an explicit approval mode inherit this default. Conversation choices and workflow approval settings override it. Command defaults apply after backend reload to newly prepared commands; running commands are not stopped. Approval or configured execution rules may permit broader command access. Directory grants remain required. Managed network rules still apply. On a trusted desktop host, enter an absolute directory path, choose its file and command permissions and Save directory permissions. Other directory capabilities are preserved. Select a saved directory to review or revoke its grant. Revocation blocks subsequent operations after backend reload; it does not stop already running commands. Web connections can show execution defaults but cannot grant host directory access. Refresh or switching session hosts discards drafts. Changes elsewhere require refreshing before saving. Closing settings releases listeners and ignores late results. Escape closes this help and returns focus.'); }
 	private readonly changed = this._register(new Emitter<void>());
 	readonly onDidChange = this.changed.event;
 	private snapshot: ExecutionSettingsSnapshot | undefined;
@@ -37,16 +36,38 @@ export class ExecutionSettingsModel extends Disposable implements SettingsSectio
 	private generation = 0;
 	private savedText = '';
 	private message = '';
+	private scope: ISessionProviderScope | undefined;
+	private connected = false;
+	private readonly hostListeners = this._register(new DisposableStore());
 
 	constructor(
-		@IAgentExecutionSettingsService private readonly execution: IAgentExecutionSettingsService,
-		@IWorkspaceTrustApi private readonly workspaceTrust: IWorkspaceTrustApi,
-		@IAgentCapabilitiesService private readonly capabilities: IAgentCapabilitiesService,
-		@IAppServerRemoteAgentService private readonly remote: IAppServerRemoteAgentService,
+		@ISessionProviderScopeService private readonly scopes: ISessionProviderScopeService,
 		@IDialogService private readonly dialogs: IDialogService,
 		@ILocalizationService private readonly localization: ILocalizationService,
 	) {
 		super();
+		this._register(scopes.onDidChange(() => this.bindHost()));
+		this._register(scopes.onDidChangeScopes(() => this.bindHost()));
+		this.bindHost();
+	}
+
+	private resetHostState(): void {
+		this.generation++; this.snapshot = undefined; this.directories = undefined; this.dirty = false; this.directoryDirty = false;
+		this.stale = false; this.busy = false; this.refreshRequested = false; this.message = ''; this.savedText = ''; this.path = '';
+		this.draft = { approvalMode: 'manual', commandFileAccess: 'directoryWrite', commandNetworkAccess: 'denied' };
+	}
+
+	private bindHost(): void {
+		let scope: ISessionProviderScope | undefined;
+		try { scope = this.scopes.getScope(); scope.assertCurrent(); } catch { }
+		if (scope === this.scope) return;
+		this.hostListeners.clear();
+		this.scope = scope;
+		this.connected = false;
+		this.resetHostState();
+		this.changed.fire();
+		if (!scope) return;
+		const host = scope.services.host;
 		const changed = (): void => {
 			if (!this.visible) return;
 			if (this.busy) { this.refreshRequested = true; return; }
@@ -56,18 +77,25 @@ export class ExecutionSettingsModel extends Disposable implements SettingsSectio
 				this.changed.fire();
 			} else { void this.refresh(); }
 		};
-		this._register(execution.onDidChange(changed));
-		this._register(workspaceTrust.onDidChangeTrust(changed));
-		const connectionChanged = (): void => {
-			this.generation++; this.snapshot = undefined; this.directories = undefined; this.dirty = false; this.directoryDirty = false; this.stale = false; this.busy = false; this.refreshRequested = false; this.message = ''; this.savedText = ''; this.path = '';
-			if (this.visible) void this.refresh();
+		this.hostListeners.add(host.executionSettings.onDidChange(changed));
+		this.hostListeners.add(host.workspaceTrust.onDidChangeTrust(changed));
+		let revision = 0;
+		const connectionChanged = (ready: boolean): void => {
+			this.connected = ready;
+			this.resetHostState();
+			if (this.visible && ready) void this.refresh();
+			else this.changed.fire();
 		};
-		this._register(remote.onDidChangeConnection(connectionChanged));
-		this._register(remote.onDidChangeConnectionState(connectionChanged));
+		const connection = host.appServer.onConnectionState(state => { revision++; connectionChanged(state === 'ready'); });
+		this.hostListeners.add(toDisposable(() => connection.dispose()));
+		const initial = revision;
+		void host.appServer.getConnectionState().then(state => {
+			if (!this.isDisposed && this.scope === scope && revision === initial) connectionChanged(state === 'ready');
+		}, () => { if (!this.isDisposed && this.scope === scope && revision === initial) connectionChanged(false); });
 	}
 
 	get fields(): readonly SettingsSectionField[] {
-		const editable = !!this.snapshot && !this.busy && this.remote.connectionState === 'connected';
+		const editable = !!this.snapshot && !this.busy && this.connected;
 		const directoryEditable = editable && !!this.directories;
 		return [
 			{ id: 'approval', kind: 'select', label: localize({ bundle: 'ash.settings', key: 'execution.approval' }, 'Default approval mode'), value: this.draft.approvalMode, options: approvalModeDefinitions.map(mode => ({ value: mode.id, label: localize(mode.label.key, mode.label.text) })), enabled: editable, setValue: value => { const mode = approvalModeDefinitions.find(mode => mode.id === value); if (mode) this.edit({ ...this.draft, approvalMode: mode.id }); } },
@@ -97,7 +125,10 @@ export class ExecutionSettingsModel extends Disposable implements SettingsSectio
 	}
 
 	private edit(draft: ExecutionSettings): void { this.draft = draft; this.dirty = true; this.changed.fire(); }
-	private current(generation: number): boolean { return !this.isDisposed && this.visible && generation === this.generation; }
+	private current(generation: number): boolean {
+		if (this.isDisposed || !this.visible || generation !== this.generation || !this.scope) return false;
+		try { this.scope.assertCurrent(); return true; } catch { return false; }
+	}
 	private selectDirectory(path: string): void {
 		this.path = path;
 		const permissions = this.directories?.entries.find(entry => entry.path === path)?.permissions ?? [];
@@ -114,15 +145,17 @@ export class ExecutionSettingsModel extends Disposable implements SettingsSectio
 		return entry ? localize({ bundle: 'ash.settings', key: 'execution.directoryCurrent' }, 'Saved capabilities: {0}', entry.permissions.map(permission => this.localization.translate('ash.settings', `capabilities.permission.${permission}`, workspaceTrustPermissionNames[permission])).join(', ')) : localize({ bundle: 'ash.settings', key: 'execution.directoryNew' }, 'No saved grant selected. Enter a directory to grant file and command access.');
 	}
 	private async refresh(preserveDrafts = false): Promise<void> {
-		if (!this.visible || this.remote.connectionState !== 'connected') { this.changed.fire(); return; }
+		if (!this.visible || !this.connected || !this.scope) { this.changed.fire(); return; }
+		const host = this.scope.services.host;
 		const generation = ++this.generation;
 		this.busy = true; this.message = ''; this.changed.fire();
 		try {
 			// A notification may follow an already captured config snapshot; publish only after rereading it.
 			while (this.current(generation)) {
 				this.refreshRequested = false;
-				const [snapshot, catalog] = await Promise.all([this.execution.read(), this.capabilities.read()]);
-				const directories = catalog.directoryGrantsReadable ? await this.workspaceTrust.listDirectories() : undefined;
+				const [snapshot, catalog] = await Promise.all([host.executionSettings.read(), host.agentCapabilities.read()]);
+				if (!this.current(generation)) return;
+				const directories = catalog.directoryGrantsReadable ? await host.workspaceTrust.listDirectories() : undefined;
 				if (!this.current(generation)) return;
 				if (this.refreshRequested) continue;
 				const draft = this.draft; const dirty = this.dirty; const directoryDirty = this.directoryDirty;
@@ -141,7 +174,8 @@ export class ExecutionSettingsModel extends Disposable implements SettingsSectio
 		} finally { if (this.current(generation)) { this.busy = false; this.changed.fire(); } }
 	}
 	private async saveDefaults(): Promise<void> {
-		if (!this.snapshot || this.busy || this.stale || !this.dirty) return;
+		if (!this.snapshot || this.busy || this.stale || !this.dirty || !this.scope || !this.connected) return;
+		const scope = this.scope;
 		const generation = ++this.generation;
 		const snapshot = this.snapshot; const draft = this.draft;
 		this.busy = true; this.changed.fire();
@@ -150,25 +184,30 @@ export class ExecutionSettingsModel extends Disposable implements SettingsSectio
 				const result = await this.dialogs.confirm({ message: localize({ bundle: 'ash.settings', key: 'execution.confirmBypass' }, 'Skip most approvals by default?'), detail: localize({ bundle: 'ash.settings', key: 'execution.confirmBypassDetail' }, 'New chats and workflows may change files and perform external actions without asking. Directory and network access limits still apply.'), primaryButton: localize({ bundle: 'ash.settings', key: 'execution.save' }, 'Save execution defaults') });
 				if (!this.current(generation) || !result.confirmed) return;
 			}
-			await this.execution.configure(draft, snapshot.revision);
+			if (!this.current(generation)) return;
+			scope.assertCurrent();
+			await scope.services.host.executionSettings.configure(draft, snapshot.revision);
 			if (this.current(generation)) { this.dirty = false; await this.refresh(true); }
 		} catch (error) { if (this.current(generation)) this.saveFailed(error); }
 		finally { if (this.current(generation)) { this.busy = false; this.changed.fire(); } }
 	}
 	private async saveDirectory(revoke: boolean): Promise<void> {
-		if (!this.directories || this.busy || this.stale) return;
+		if (!this.directories || this.busy || this.stale || !this.scope || !this.connected) return;
+		const scope = this.scope;
+		const workspaceTrust = scope.services.host.workspaceTrust;
 		const generation = ++this.generation;
 		const directories = this.directories; const path = this.path.trim();
 		this.busy = true; this.changed.fire();
 		try {
-			const resolved = await this.workspaceTrust.readDirectory(path);
+			const resolved = await workspaceTrust.readDirectory(path);
 			if (!this.current(generation)) return;
+			scope.assertCurrent();
 			const entry = directories.entries.find(entry => entry.dir === resolved.dir);
-			if (revoke) { if (entry) await this.workspaceTrust.forgetDirectory(entry.dir, directories.revision); }
+			if (revoke) { if (entry) await workspaceTrust.forgetDirectory(entry.dir, directories.revision); }
 			else {
 				const preset = this.access === 'commands' ? commandPermissions : this.access === 'write' ? writePermissions : readPermissions;
 				const retained = entry?.permissions.filter(permission => !commandPermissions.includes(permission)) ?? [];
-				await this.workspaceTrust.setDirectoryPermissions(path, [...preset, ...retained], directories.revision);
+				await workspaceTrust.setDirectoryPermissions(path, [...preset, ...retained], directories.revision);
 			}
 			if (this.current(generation)) {
 				this.directoryDirty = false;

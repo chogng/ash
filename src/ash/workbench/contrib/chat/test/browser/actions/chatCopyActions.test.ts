@@ -52,16 +52,18 @@ suite('Conversation links', () => {
 		} as IAppServerApi);
 		services.registerInstance(IChatService, { readThread: (sessionId, threadId) => read(sessionId, threadId) } as IChatService);
 		services.registerInstance(IClipboardService, { writeText: async value => { copied.push(value); } } as IClipboardService);
-		services.registerInstance(IChatSessionNavigationService, {
+		const navigation = {
 			getActiveConversation: () => active,
 			openConversation: async (sessionId, threadId) => { opened.push({ sessionId, threadId }); },
-		} as IChatSessionNavigationService);
+		} as IChatSessionNavigationService;
+		services.registerInstance(IChatSessionNavigationService, navigation);
 		services.registerInstance(IOpenerService, {
 			registerOpener: opener => { registered = opener; return toDisposable(() => { registered = undefined; }); },
 		} as IOpenerService);
 		lifetime.add(services.createInstance(ChatSessionLinkOpener));
 		return {
 			copied, opened, announcements,
+			routeWith: (prepare: NonNullable<IChatSessionNavigationService['prepareConversationLink']>, open: NonNullable<IChatSessionNavigationService['openConversationLink']>) => { navigation.prepareConversationLink = prepare; navigation.openConversationLink = open; },
 			title: (container: HTMLElement, showContextMenu: (menu: IContextMenuDelegate) => void) => {
 				const commands = lifetime.add(new CommandService(services));
 				const keys = lifetime.add(new ContextKeyService());
@@ -146,6 +148,24 @@ suite('Conversation links', () => {
 		f.readWith(async (sessionId, threadId) => ({ thread: { sessionId, threadId } }));
 		assert.equal(await f.open(URI.parse(f.copied[0]!)), true);
 		assert.deepEqual(f.opened, [{ sessionId: 'chosen', threadId: 'peer/%?#' }]);
+	});
+
+	test('multi-host copy and open delegate raw coordinates to their owner without reading the ambient connection', async () => {
+		using lifetime = new DisposableStore();
+		const f = fixture(lifetime);
+		const qualified = 'qualified:' + 'workspace/'.repeat(50);
+		f.select({ sessionId: qualified, threadId: 'qualified-thread' });
+		f.readWith(async () => { assert.fail('the ambient backend cannot validate another host'); });
+		const address = { sessionId: 'backend-session', threadId: 'backend-thread', connectionAuthority: 'opaque-provider' };
+		const opened: unknown[] = [];
+		f.routeWith(async (sessionId, threadId) => {
+			assert.deepEqual({ sessionId, threadId }, { sessionId: qualified, threadId: 'qualified-thread' });
+			return address;
+		}, async value => { opened.push(value); });
+		await f.copy();
+		assert.deepEqual(parseOpenSessionLinkUri(URI.parse(f.copied[0]!)), address);
+		assert.equal(await f.open(URI.parse(f.copied[0]!)), true);
+		assert.deepEqual(opened, [address]);
 	});
 
 	test('rejects a different connection, malformed links, unavailable identities and draft copies', async () => {

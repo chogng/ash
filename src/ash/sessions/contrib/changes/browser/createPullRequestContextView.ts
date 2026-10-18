@@ -4,15 +4,14 @@ import { CancellationTokenSource } from '../../../../base/common/cancellation.js
 import { Disposable, DisposableStore, MutableDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { extUriBiasedIgnorePathCase } from '../../../../base/common/resources.js';
 import { localize } from '../../../../nls.js';
-import { IAccountService } from '../../../../platform/accounts/common/accountService.js';
-import { ICommandService } from '../../../../platform/commands/common/commands.js';
 import { IContextViewService } from '../../../../platform/contextview/browser/contextView.js';
-import { GitHubError, GitHubMergeMethod, IGitHubService, type GitHubRepository } from '../../../../platform/github/common/githubService.js';
+import { GitHubError, GitHubMergeMethod, type GitHubRepository } from '../../../../platform/github/common/githubService.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { INotificationService } from '../../../../platform/notification/common/notification.js';
 import { IQuickInputService, type IQuickPickItem } from '../../../../platform/quickinput/common/quickInput.js';
 import { sessionWorkspaceUri } from '../../../common/sessionWorkspace.js';
-import { readLocalRepositories } from '../../../../workbench/contrib/github/common/localRepository.js';
+import { URI } from '../../../../base/common/uri.js';
+import { ISessionProviderScopeService, type ISessionProviderScope } from '../../../browser/agentHost/sessionProviderScopeService.js';
 import { ISessionsService } from '../../../services/sessions/browser/sessionsService.js';
 import type { ISessionPullRequestCreation, ISessionPullRequestOptions, SessionPullRequestMergeMethod } from '../common/pullRequestCreation.js';
 import { CreatePullRequestChatRequest } from './createPullRequestChatRequest.js';
@@ -24,21 +23,28 @@ export class CreatePullRequestContextView extends Disposable {
 	private readonly pending = this._register(new CancellationTokenSource());
 	private readonly pickers = this._register(new DisposableStore());
 	private readonly owner: string | undefined;
+	private readonly scope: ISessionProviderScope | undefined;
 
 	constructor(
 		@IInstantiationService private readonly instantiation: IInstantiationService,
 		@IContextViewService private readonly contextViews: IContextViewService,
 		@ISessionsService private readonly sessions: ISessionsService,
-		@ICommandService private readonly commands: ICommandService,
 		@IQuickInputService private readonly input: IQuickInputService,
-		@IGitHubService private readonly github: IGitHubService,
-		@IAccountService accounts: IAccountService,
+		@ISessionProviderScopeService private readonly scopes: ISessionProviderScopeService,
 		@INotificationService private readonly notifications: INotificationService,
 	) {
 		super();
 		this.owner = this.selectionKey();
 		this._register(sessions.onDidChange(() => { if (this.selectionKey() !== this.owner) { this.dispose(); } }));
-		this._register(accounts.onDidChangeAccounts(() => this.dispose()));
+		const selected = sessions.activeSelection;
+		this.scope = selected?.kind === 'session' ? scopes.getScope(selected.active.session.sessionId) : undefined;
+		if (this.scope) {
+			const events = this.scope.services.host.events.subscribe(event => { if (event.method === 'account/updated' || event.method === 'account/login/completed') this.dispose(); });
+			this._register(toDisposable(() => events.dispose()));
+			const state = this.scope.services.host.appServer.onConnectionState(state => { if (state !== 'ready') this.dispose(); });
+			this._register(toDisposable(() => state.dispose()));
+		}
+		this._register(scopes.onDidChangeScopes(() => { try { this.scope?.assertCurrent(); } catch { this.dispose(); } }));
 	}
 
 	private selectionKey(): string | undefined {
@@ -108,8 +114,25 @@ export class CreatePullRequestContextView extends Disposable {
 		const workspace = selected?.kind === 'session' ? selected.active.session.workspace : undefined;
 		if (!workspace || selected?.kind !== 'session') { return undefined; }
 		const sessionId = selected.active.session.sessionId;
+		const scope = this.scope;
+		if (!scope) throw new CancellationError();
+		const host = scope.services.host;
+		const github = host.github;
+		const generation = host.appServer.connectionGeneration;
+		const backendSessionId = scope.backendIdentity(sessionId);
+		const assertHostCurrent = (): void => {
+			scope.assertCurrent();
+			if (generation !== host.appServer.connectionGeneration) throw new CancellationError();
+		};
 		const root = sessionWorkspaceUri(workspace);
-		const [accounts, repositories] = await Promise.all([this.github.listAccounts(this.pending.token), readLocalRepositories(this.commands)]);
+		const repositoriesForSession = async () => {
+			assertHostCurrent();
+			const contexts = await host.localGit.readRepositoryContexts({ sessionId: backendSessionId, path: workspace.root }, this.pending.token);
+			assertHostCurrent();
+			return contexts.map(repository => ({ ...repository, root: root.with({ path: URI.file(repository.rootPath).path }) }));
+		};
+		const [accounts, repositories] = await Promise.all([github.listAccounts(this.pending.token), repositoriesForSession()]);
+		assertHostCurrent();
 		if (this.isDisposed) { return undefined; }
 		const sessionRepositories = repositories.filter(repository =>
 			extUriBiasedIgnorePathCase.isEqualOrParent(repository.root, root)
@@ -131,8 +154,9 @@ export class CreatePullRequestContextView extends Disposable {
 		const target: GitHubRepository = { host: choice.identity.host, owner: choice.identity.owner, name: choice.identity.repository, accountId: choice.account.id };
 		const repositoryName = `${target.host}/${target.owner}/${target.name}`;
 		const validateContext = async (options: Pick<ISessionPullRequestOptions, 'expectedContext'>): Promise<void> => {
+			assertHostCurrent();
 			if (this.isDisposed || this.owner !== this.selectionKey()) { throw new CancellationError(); }
-			const [freshRepositories, freshAccounts] = await Promise.all([readLocalRepositories(this.commands), this.github.listAccounts(this.pending.token)]);
+			const [freshRepositories, freshAccounts] = await Promise.all([repositoriesForSession(), github.listAccounts(this.pending.token)]);
 			if (this.isDisposed) { throw new CancellationError(); }
 			const fresh = freshRepositories.find(repository => repository.id === choice.repository.id);
 			const account = freshAccounts.find(account => account.id === choice.account.id && account.status === 'ready' && account.credentialRevision === choice.account.credentialRevision);
@@ -150,7 +174,9 @@ export class CreatePullRequestContextView extends Disposable {
 		};
 		return {
 			prepare: async token => {
-				const info = await this.github.readRepository(target, token);
+				assertHostCurrent();
+				const info = await github.readRepository(target, token);
+				assertHostCurrent();
 				return {
 					title: choice.repository.head.name,
 					description: '',
@@ -171,7 +197,7 @@ export class CreatePullRequestContextView extends Disposable {
 			create: async options => {
 				await validateContext(options);
 				// Once submitted, completion belongs to the initiating Session even if the form closes.
-				const result = await this.github.createPullRequest(target, {
+				const result = await github.createPullRequest(target, {
 					title: options.title,
 					body: options.description,
 					head: choice.repository.head.name,
@@ -181,12 +207,13 @@ export class CreatePullRequestContextView extends Disposable {
 				const warnings: string[] = [];
 				const matchesLocalHead = result.headCommit === choice.repository.head.objectId;
 				if (!matchesLocalHead) { warnings.push(localize('sessions.changes.prHeadChanged', 'The published branch differs from the local commit. Review the pull request before merging.')); }
-				try { await this.github.attachSessionPullRequest(sessionId, { repository: { host: target.host, owner: target.owner, name: target.name }, number: result.number }); }
+				try { assertHostCurrent(); await github.attachSessionPullRequest(backendSessionId, { repository: { host: target.host, owner: target.owner, name: target.name }, number: result.number }); }
 				catch { warnings.push(localize('sessions.changes.prAttachFailed', 'The pull request was created, but could not be attached to this session.')); }
 				if (options.autoMergeMethod && matchesLocalHead && !options.draft) {
 					try {
+						assertHostCurrent();
 						const method = { MERGE: GitHubMergeMethod.Merge, SQUASH: GitHubMergeMethod.Squash, REBASE: GitHubMergeMethod.Rebase }[options.autoMergeMethod];
-						await this.github.enableAutoMerge(target, result.number, { commit: result.headCommit, method });
+						await github.enableAutoMerge(target, result.number, { commit: result.headCommit, method });
 					} catch { warnings.push(localize('sessions.changes.prAutoFailed', 'The pull request was created, but auto-merge could not be enabled.')); }
 				}
 				return [localize('sessions.changes.prCreated', 'Created pull request: {0}', result.url), ...warnings].join('\n');

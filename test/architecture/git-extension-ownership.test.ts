@@ -12,7 +12,9 @@ test('Git frontend policy is owned by the extension and cannot be imported into 
 	const contract = ts.createSourceFile('localGitService.ts', readFileSync(resolve(root, 'src/ash/platform/git/common/localGitService.ts'), 'utf8'), ts.ScriptTarget.Latest, true);
 	const service = contract.statements.find(statement => ts.isInterfaceDeclaration(statement) && statement.name.text === 'ILocalGitService');
 	assert.ok(service && ts.isInterfaceDeclaration(service));
-	assert.deepEqual(service.members.filter(ts.isMethodSignature).map(member => member.name.getText(contract)).sort(), ['cancel', 'clone']);
+	// Session GitHub references can inspect an authorized historical directory without
+	// installing a window Git provider. Repository mutations and frontend policy stay in the extension.
+	assert.deepEqual(service.members.filter(ts.isMethodSignature).map(member => member.name.getText(contract)).sort(), ['cancel', 'clone', 'readRepositoryContexts']);
 	const violations: string[] = [];
 	function inspect(directory: string): void {
 		for (const entry of readdirSync(directory, { withFileTypes: true })) {

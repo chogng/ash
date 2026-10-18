@@ -1,4 +1,7 @@
-import { Disposable } from '../../../base/common/lifecycle.js';
+import { Disposable, DisposableStore } from '../../../base/common/lifecycle.js';
+import type { IAgentHostResourceService } from '../common/agentHostResourceService.js';
+import type { InputItem } from '../../../../../.build/protocol/typescript/index.js';
+import type { AgentInput } from '../common/agent.js';
 import { Emitter } from '../../../base/common/event.js';
 import { getNLSLanguage, localize } from '../../../nls.js';
 import type { VoiceStatus } from '../../../../../.build/protocol/typescript/index.js';
@@ -285,7 +288,7 @@ async function readToolResource(connection: AppServerProtocolClient, source: Par
 	} finally { signal?.removeEventListener('abort', cancel); }
 }
 
-export function createAppServerAgentThreadService(connection: AppServerProtocolClient, sshHost?: string): IAgentThreadService {
+export function createAppServerAgentThreadService(connection: AppServerProtocolClient, sshHost?: string, snapshots?: IAgentHostResourceService): IAgentThreadService {
 	return {
 		fork: async params => {
 			const result = sessionThreadResult(await appServerRequest(connection, 'session/request', sessionRequest(params, {
@@ -294,11 +297,11 @@ export function createAppServerAgentThreadService(connection: AppServerProtocolC
 			if (params.target === 'thread' && result.session.sessionId !== params.sessionId) throw new Error(localize('chat.operation.wrongIdentity', 'The server returned a different conversation. Refresh before trying again.'));
 			return { sessionId: result.session.sessionId, threadId: result.threadId };
 		},
-		rewrite: async params => {
-			const result = await appServerRequest(connection, 'session/request', sessionRequest(params, {
+		rewrite: async (params, signal) => {
+			const result = await withHostResourceInput(connection, snapshots, params.input, input => appServerRequest(connection, 'session/request', sessionRequest(params, {
 				type: 'rewriteThread', parentThreadId: params.threadId, beforeTurnId: params.beforeTurnId, title: params.title,
-				input: params.input.map(item => ({ ...item })),
-			}));
+				input,
+			})), signal);
 			if (result.type !== 'rewrite' || result.value.session.sessionId !== params.sessionId) throw new Error(localize('chat.operation.wrongIdentity', 'The server returned a different conversation. Refresh before trying again.'));
 			return { sessionId: result.value.session.sessionId, threadId: result.value.threadId };
 		},
@@ -462,16 +465,16 @@ export function createAppServerAgentThreadService(connection: AppServerProtocolC
 	};
 }
 
-export function createAppServerAgentTurnService(connection: AppServerProtocolClient): IAgentTurnService {
+export function createAppServerAgentTurnService(connection: AppServerProtocolClient, snapshots?: IAgentHostResourceService): IAgentTurnService {
 	return {
-		enqueue: (params) =>
-			appServerRequest(connection, 'queue/enqueue', params).then((result) => ({ status: result.status })),
+		enqueue: (params, signal) =>
+			withHostResourceInput(connection, snapshots, params.input, input => appServerRequest(connection, 'queue/enqueue', { ...params, input }), signal).then((result) => ({ status: result.status })),
 		listQueued: (params) =>
 			appServerRequest(connection, 'queue/list', params).then((result) => ({
 				messages: result.messages.map((message) => ({ status: message.status }))
 			})),
-		start: (params) =>
-			appServerRequest(
+		start: (params, signal) =>
+			withHostResourceInput(connection, snapshots, params.input, input => appServerRequest(
 				connection,
 				'session/request',
 				sessionRequest(params, {
@@ -483,9 +486,9 @@ export function createAppServerAgentTurnService(connection: AppServerProtocolCli
 					model: params.model,
 					reasoningEffort: params.reasoningEffort,
 					toolMode: params.toolMode,
-					input: params.input
+					input
 				})
-			).then(turnStartResult),
+			), signal).then(turnStartResult),
 		consultAdvisor: (params) =>
 			appServerRequest(
 				connection,
@@ -508,8 +511,8 @@ export function createAppServerAgentTurnService(connection: AppServerProtocolCli
 					retentionPrompt: params.retentionPrompt
 				})
 			).then(turnStartResult),
-		steer: (params) =>
-			appServerRequest(
+		steer: (params, signal) =>
+			withHostResourceInput(connection, snapshots, params.input, input => appServerRequest(
 				connection,
 				'session/request',
 				sessionRequest(params, {
@@ -517,9 +520,9 @@ export function createAppServerAgentTurnService(connection: AppServerProtocolCli
 					threadId: params.threadId,
 					expectedSequence: params.expectedSequence,
 					turnId: params.turnId,
-					input: params.input
+					input
 				})
-			).then(turnSteerResult),
+			), signal).then(turnSteerResult),
 		interrupt: (params) =>
 			appServerRequest(
 				connection,
@@ -1068,4 +1071,27 @@ export class AppServerAgentVoiceService extends Disposable implements IAgentVoic
 		this.current = { resourceId: status.resourceId, sessionId: status.sessionId, threadId: status.threadId, mediaEpoch: status.mediaEpoch, sequence: status.sequence, state: status.state, inputMode: status.inputMode, muted: status.muted, listening: status.listening, inputSequence: status.inputSequence, usageMilliseconds: status.usageMilliseconds, ...(status.error ? { error: status.error } : {}) };
 		this.changed.fire();
 	}
+}
+
+
+async function withHostResourceInput<T>(connection: AppServerProtocolClient, snapshots: IAgentHostResourceService | undefined, input: readonly AgentInput[], operation: (input: InputItem[]) => Promise<T>, signal?: AbortSignal): Promise<T> {
+	if (signal) { throwIfCancelled(signal); }
+	const converted: InputItem[] = input.map(item => ({ ...item }));
+	if (!snapshots || connection.capabilities?.contracts.hostResources?.version !== 1) { return operation(converted); }
+	const generation = connection.generation;
+	using leases = new DisposableStore();
+	for (const [index, item] of input.entries()) {
+		if (item.type !== 'context') { continue; }
+		if (signal) { throwIfCancelled(signal); }
+		const lease = await snapshots.createSnapshot(item.content);
+		if (lease) {
+			leases.add(lease);
+			converted[index] = { type: 'hostResource', name: item.name, resource: lease.object };
+		}
+		// Own a late lease before observing cancellation, so teardown always releases it.
+		if (signal) { throwIfCancelled(signal); }
+		if (connection.state !== 'ready' || connection.generation !== generation) { throw canceled(); }
+	}
+	if (signal) { throwIfCancelled(signal); }
+	return await operation(converted);
 }

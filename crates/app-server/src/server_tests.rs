@@ -24,6 +24,8 @@ mod message_history_tests;
 mod automation_tests;
 #[path = "backup_tests.rs"]
 mod backup_tests;
+#[path = "git_repository_contexts_tests.rs"]
+mod git_repository_contexts_tests;
 #[path = "infrastructure_tests.rs"]
 mod infrastructure_tests;
 #[path = "memory_tests.rs"]

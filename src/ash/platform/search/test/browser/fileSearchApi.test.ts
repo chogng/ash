@@ -107,3 +107,24 @@ for (const kind of ['glob', 'fuzzy'] as const) {
 		assert.equal(changed.hasListeners(), false);
 	});
 }
+
+test('filename RPC carries filtering constraints to the owning backend before truncation', async () => {
+	const requests: { method: string; params: unknown; }[] = [];
+	const connection = {
+		generation: 1, state: 'ready', onStateChange: () => Disposable.None,
+		async request(definition: { method: string; }, params: Record<string, unknown>) {
+			requests.push({ method: definition.method, params: { ...params, operationId: undefined } });
+			return definition.method === 'file/search/glob'
+				? { paths: ['src/needle.ts'], totalMatches: 1 }
+				: { matches: [{ path: 'src/needle.ts', score: 42 }], totalMatches: 1, freshness: 'current' };
+		},
+	} as unknown as AppServerProtocolClient;
+	const api = createAppServerFileSearchApi(connection);
+	const constraints = { includePatterns: ['src/**'], excludePatterns: ['**/*.test.ts'], maxResults: 1 };
+	await api.glob(directory, { ...constraints, requiredPattern: '**/*needle*' });
+	await api.fuzzy(directory, { ...constraints, query: 'needle' });
+	assert.deepEqual(requests, [
+		{ method: 'file/search/glob', params: { operationId: undefined, target: directory.target, ...constraints, requiredPattern: '**/*needle*' } },
+		{ method: 'file/search/fuzzy', params: { operationId: undefined, target: directory.target, ...constraints, query: 'needle' } },
+	]);
+});

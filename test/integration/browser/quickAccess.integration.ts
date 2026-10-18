@@ -29,6 +29,12 @@ import { IWorkspaceContextService } from '../../../src/ash/platform/workspace/co
 import { IHistoryService } from '../../../src/ash/workbench/services/history/common/history.js';
 import { IEditorGroupsService } from '../../../src/ash/workbench/services/editor/common/editorGroupsService.js';
 import { ISearchService } from '../../../src/ash/workbench/services/search/common/search.js';
+import { IFileSearchService } from '../../../src/ash/platform/search/common/fileSearch.js';
+import { BrowserFileSearchService } from '../../../src/ash/platform/search/browser/browserFileSearchService.js';
+import { AgentHostFileSearchProvider } from '../../../src/ash/workbench/services/agentHost/common/agentHostFileSearchProvider.js';
+import { TestWorkspaceService } from '../../../src/ash/workbench/services/configuration/test/common/testServices.js';
+import { FileService } from '../../../src/ash/platform/files/common/fileService.js';
+import { InMemoryFileSystemProvider } from '../../../src/ash/platform/files/common/inMemoryFilesystemProvider.js';
 import { IConfigurationService } from '../../../src/ash/platform/configuration/common/configuration.js';
 import { InMemoryConfigurationService } from '../../../src/ash/platform/configuration/common/inMemoryConfigurationService.js';
 import { ContextKeyService } from '../../../src/ash/platform/contextkey/browser/contextKeyService.js';
@@ -61,6 +67,7 @@ declare global {
 		ashQuickAccessIntegration: {
 			setNavigationBinding(mode: 'default' | 'rebound' | 'blocked'): void;
 			setHistoryLength(value: number): Promise<void>;
+			setSearchPatterns(include: string, exclude: string): Promise<void>;
 			writeShortcutBindings(bindings: readonly IUserFriendlyKeybinding[]): Promise<void>;
 			show(value: string, scoped?: boolean): void;
 			setSignedIn(value: boolean): void;
@@ -111,14 +118,29 @@ if (!parameters.has('shortcuts')) {
 		openEditor: async input => { document.querySelector('output')!.textContent = input.resource.toString(); },
 	} as IEditorService);
 }
-services.registerInstance(IFileService, { hasProvider: () => true } as unknown as IFileService);
 services.registerInstance(IPathService, { getPath: async () => posix } as unknown as IPathService);
-services.registerInstance(IWorkspaceContextService, {
-	getWorkspace: () => ({ id: 'quick-access', folders: [{ uri: URI.file('/workspace'), name: 'repo', index: 0 }] }),
-} as unknown as IWorkspaceContextService);
 services.registerInstance(IHistoryService, { getHistory: () => [{ resource: URI.file('/workspace/Fix.ts') }] } as unknown as IHistoryService);
 services.registerInstance(IEditorGroupsService, { groups: [] } as unknown as IEditorGroupsService);
-services.registerInstance(ISearchService, { fileSearch: async () => ({ results: [], limitHit: false }) } as unknown as ISearchService);
+if (parameters.has('fileSearch')) {
+	const files = resources.add(new FileService());
+	const storage = resources.add(new InMemoryFileSystemProvider());
+	resources.add(files.registerProvider('file', storage));
+	await files.createDirectory(URI.file('/workspace/src'));
+	for (const path of ['needle.ts', 'src/needle_skip.ts', 'src/long_needle.ts', 'src/long_needle.md']) {
+		await files.writeFile({ resource: URI.file(`/workspace/${path}`), content: 'fixture' }, { create: true, overwrite: false });
+	}
+	services.registerInstance(IFileService, files);
+	services.registerInstance(IWorkspaceContextService, resources.add(new TestWorkspaceService({ id: 'quick-access', folders: [{ id: 'folder', uri: URI.file('/workspace'), name: 'repo', index: 0 }] })));
+	services.registerInstance(IFileSearchService, services.createInstance(BrowserFileSearchService));
+	const provider = resources.add(services.createInstance(AgentHostFileSearchProvider));
+	services.registerInstance(ISearchService, { fileSearch: provider.fileSearch.bind(provider), textSearch: async () => { throw new Error('Filename fixture must not search contents'); } });
+} else {
+	services.registerInstance(IFileService, { hasProvider: () => true } as unknown as IFileService);
+	services.registerInstance(IWorkspaceContextService, {
+		getWorkspace: () => ({ id: 'quick-access', folders: [{ uri: URI.file('/workspace'), name: 'repo', index: 0 }] }),
+	} as unknown as IWorkspaceContextService);
+	services.registerInstance(ISearchService, { fileSearch: async () => ({ results: [], limitHit: false }) } as unknown as ISearchService);
+}
 let signedIn = true;
 let holdNext = false;
 let releaseHeld: (() => void) | undefined;
@@ -355,6 +377,10 @@ window.ashQuickAccessIntegration = {
 		if (mode === 'rebound') bindings.add(KeybindingsRegistry.registerKeybindingRule({ command: 'quickInput.next', keybinding: KeyCode.F8, when: inQuickInputContext.isEqualTo(true), source: KeybindingSource.User }));
 	},
 	setHistoryLength: value => configuration.updateValue('workbench.commandPalette.history', value),
+	setSearchPatterns: async (include, exclude) => {
+		await configuration.updateValue('search.includePatterns', include);
+		await configuration.updateValue('search.excludePatterns', exclude);
+	},
 	show: (value, scoped) => quickAccess.show(value, scoped ? { enabledProviderPrefixes: ['>'] } : undefined),
 	setSignedIn: value => { signedIn = value; },
 	holdNextRequest: () => { holdNext = true; },

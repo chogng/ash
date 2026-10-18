@@ -795,6 +795,7 @@ impl<B: ash_sandboxing::SandboxBackend> LocalToolSuite<B> {
                 scope: resolved.relative,
                 include_patterns,
                 exclude_patterns,
+                required_pattern: None,
                 max_results: 100,
             },
             cancellation,

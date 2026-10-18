@@ -351,6 +351,7 @@ const pluginApi: IPluginManagementApi = {
 let cancelHeldGitClone: (() => void) | undefined;
 services.registerInstance(ILocalGitService, {
 	_serviceBrand: undefined,
+	readRepositoryContexts: async () => [],
 	clone: async (operationId, url, targetPath, reference) => {
 		if (!new URLSearchParams(location.search).has('holdGitClone')) { throw new Error('Unexpected Git clone in the local installation fixture'); }
 		requests.push(['gitClone', { operationId, url, targetPath, reference }]);

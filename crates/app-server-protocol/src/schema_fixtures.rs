@@ -255,6 +255,8 @@ fn registry_method_and_notification_names_are_unique() {
         BTreeSet::from([
             "app/request",
             "ide/hostRequest",
+            "hostResource/read",
+            "hostResource/release",
             "browser/close",
             "browser/sharing/set",
             "extensionClient/request",
@@ -630,7 +632,7 @@ fn dto_driven_typescript_preserves_model_ref_and_patch_shape() {
     assert!(!typescript.contains(r#""turn/start": { method: "turn/start" }"#));
     assert!(!typescript.contains(r#""turn/shell/start": { method: "turn/shell/start" }"#));
     assert!(typescript.contains(
-        r#"export type InputItem = { "type": "issue", number: number, } | { "type": "text", text: string, } | { "type": "context", name: string, content: string, } | { "type": "toolSelection", disabled: Array<ToolName>,"#
+        r#"export type InputItem = { "type": "issue", number: number, } | { "type": "text", text: string, } | { "type": "context", name: string, content: string, } | { "type": "hostResource", name: string, resource: HostResourceRef, } | { "type": "toolSelection", disabled: Array<ToolName>,"#
     ));
     assert!(typescript.contains("scope?: ToolScope | null,"));
     assert!(!typescript.contains("InputItemKind"));

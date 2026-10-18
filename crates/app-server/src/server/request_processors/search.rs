@@ -129,26 +129,33 @@ impl<'ctx, C: SearchRequestProcessorContext + ?Sized> SearchRequestProcessor<'ct
                 authorization.dir(),
                 Permission::SearchFiles,
                 || {
+                    // An indexed finite ranking cannot be filtered afterwards without losing matches.
+                    // Filtered requests scan the current authorized path set before ranking.
                     let indexed = match &grep {
-                        Some(service) => service
-                            .indexed_fuzzy(
-                                authorization.dir(),
-                                &params.query,
-                                params.max_results,
-                                cancellation,
-                            )
-                            .map_err(|error| match error {
-                                grep::Error::Cancelled(_) => {
-                                    RpcError::new(-32800, AppServerErrorName::RequestCancelled)
-                                }
-                                grep::Error::InvalidInput(_) => {
-                                    RpcError::new(-32602, AppServerErrorName::InvalidParams)
-                                }
-                                grep::Error::Failed(_) => {
-                                    RpcError::new(-32050, AppServerErrorName::SearchUnavailable)
-                                }
-                            })?,
-                        None => None,
+                        Some(service)
+                            if params.include_patterns.as_ref().is_none_or(Vec::is_empty)
+                                && params.exclude_patterns.as_ref().is_none_or(Vec::is_empty) =>
+                        {
+                            service
+                                .indexed_fuzzy(
+                                    authorization.dir(),
+                                    &params.query,
+                                    params.max_results,
+                                    cancellation,
+                                )
+                                .map_err(|error| match error {
+                                    grep::Error::Cancelled(_) => {
+                                        RpcError::new(-32800, AppServerErrorName::RequestCancelled)
+                                    }
+                                    grep::Error::InvalidInput(_) => {
+                                        RpcError::new(-32602, AppServerErrorName::InvalidParams)
+                                    }
+                                    grep::Error::Failed(_) => {
+                                        RpcError::new(-32050, AppServerErrorName::SearchUnavailable)
+                                    }
+                                })?
+                        }
+                        Some(_) | None => None,
                     };
                     match indexed {
                         Some(found) => Ok((
@@ -173,10 +180,20 @@ impl<'ctx, C: SearchRequestProcessorContext + ?Sized> SearchRequestProcessor<'ct
                         )),
                         None => self
                             .file_search
-                            .fuzzy(
+                            .fuzzy_filtered(
                                 authorization.dir().canonical_path().to_path_buf(),
                                 &params.query,
                                 params.max_results,
+                                &file_search::PathFilters {
+                                    include_patterns: params
+                                        .include_patterns
+                                        .clone()
+                                        .unwrap_or_default(),
+                                    exclude_patterns: params
+                                        .exclude_patterns
+                                        .clone()
+                                        .unwrap_or_default(),
+                                },
                                 cancellation,
                             )
                             .map(|found| (found, ContentSearchFreshness::Current))
@@ -243,6 +260,7 @@ impl<'ctx, C: SearchRequestProcessorContext + ?Sized> SearchRequestProcessor<'ct
             scope: Default::default(),
             include_patterns: params.include_patterns,
             exclude_patterns: params.exclude_patterns,
+            required_pattern: params.required_pattern,
             max_results: params.max_results,
         };
         // Hold the grant lease for the scan; directory replacement/revocation waits for admitted I/O.

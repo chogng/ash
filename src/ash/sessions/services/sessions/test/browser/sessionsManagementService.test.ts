@@ -11,7 +11,7 @@ import { IAgentSessionService, IAgentTurnService } from "../../../../../platform
 import { type ThreadSubscription } from "../../../../../platform/agentHost/common/agent.js";
 import { IAgentModelsService } from "../../../../../platform/agentHost/common/agentModels.js";
 import { createDisconnectedRendererApi } from '../../../../../workbench/browser/rendererApi.js';
-import { SessionsManagementService } from "../../browser/sessionsManagementService.js";
+import { TestSessionsManagementService as SessionsManagementService } from './testSessionsManagementService.js';
 import { AppServerSessionsProvider } from "../../../../contrib/providers/agentHost/browser/appServerSessionsProvider.js";
 import type { IUntitledChatSession, ModelRef, SessionExecutionTarget, SessionWorkspaceSelection } from "../../common/session.js";
 

@@ -1,4 +1,4 @@
-import { CommandsRegistry, type ICommandService } from '../../../../../platform/commands/common/commands.js';
+import { CommandsRegistry } from '../../../../../platform/commands/common/commands.js';
 import type { ISCMService } from '../../../../../workbench/contrib/scm/common/scm.js';
 import assert from 'node:assert/strict';
 import { suite, test } from 'mocha';
@@ -26,6 +26,11 @@ import type { ISessionsService, SessionsViewSelection } from '../../../../servic
 import type { ISessionsManagementService } from '../../../../services/sessions/common/sessionsManagement.js';
 import type { ISession } from '../../../../services/sessions/common/session.js';
 import { GitHubService } from '../../browser/githubService.js';
+import { createDisconnectedRendererApi } from '../../../../../workbench/browser/rendererApi.js';
+import type { IRendererHost } from '../../../../../platform/renderer/common/rendererHost.js';
+import type { ISessionProviderScope, ISessionProviderScopeService, SessionProviderServices } from '../../../../browser/agentHost/sessionProviderScopeService.js';
+import { parseSessionIdentity, sessionIdentity } from '../../../../services/sessions/common/sessionIdentity.js';
+import { CancellationError } from '../../../../../base/common/errors.js';
 
 const session: ISession = { sessionId: 'session', title: 'PR work', status: 'active', workspace: { authorityId: 'local', root: '/work' }, nextApprovalMode: 'manual', chats: [{ threadId: 'thread', origin: { type: 'root' }, status: 'active' }] };
 const pullRequest: GitHubPullRequest = { number: 7, title: 'Branch work', body: '', url: 'https://github.com/team/repo/pull/7', state: 'open', draft: false, mergedAt: null, mergeable: null, headCommit: 'a'.repeat(40), headBranch: 'feature', headRepository: 'team/repo', baseBranch: 'main', autoMerge: false };
@@ -56,18 +61,50 @@ function fixture(overrides: Partial<IGitHubService> = {}, gitOverrides: Partial<
 	} as RepositoryCommandsFixture;
 	resources.add(statusChanged.event(value => Object.assign(status, value)));
 	resources.add(CommandsRegistry.register('git.getRepositoryContexts', () => { }));
-	const commands = { executeCommand: async () => Promise.all(git.repositories.map(async repository => ({ ...repository, root: repository.root.toString(), head: (await git.status(repository.id)).head, remotes: (await git.graph({ limit: 1 }, repository.id)).remotes }))) } as unknown as ICommandService;
 	const scm = { onDidAddRepository: repositoriesChanged.event, onDidRemoveRepository: Event.None, get repositories() { return git.repositories.map(repository => ({ provider: { id: repository.id, onDidChangeResources: statusChanged.event } })); } } as unknown as ISCMService;
+	const hostEvents = resources.add(new Emitter<Parameters<Parameters<IRendererHost['events']['subscribe']>[0]>[0]>());
+	resources.add(accountChanged.event(() => hostEvents.fire({ method: 'account/updated', params: {} } as never)));
+	const scopeChanges = resources.add(new Emitter<void>());
+	const hostScopes = new Map<string, ISessionProviderScope>();
+	const catalog: ISession[] = [session];
+	const base = createDisconnectedRendererApi();
+	const host: IRendererHost = {
+		...base, github, events: { subscribe: hostEvents.event },
+		localGit: {
+			...base.localGit, readRepositoryContexts: async () => Promise.all(git.repositories.map(async repository => ({
+				id: repository.id, label: repository.label, path: repository.path, rootPath: repository.root.fsPath,
+				head: (await git.status(repository.id)).head, remotes: (await git.graph({ limit: 1 }, repository.id)).remotes,
+			})))
+		},
+	};
+	const addHost = (providerId: string, api: IRendererHost): ISessionProviderScope => {
+		const scope: ISessionProviderScope = {
+			providerId, services: { host: api } as SessionProviderServices, thread: api.thread,
+			identity: value => sessionIdentity(providerId, value, 'primary'),
+			backendIdentity: value => { const parsed = parseSessionIdentity(value, 'primary'); if (parsed.providerId !== providerId) throw new CancellationError(); return parsed.backendSessionId; },
+			assertCurrent: () => { if (hostScopes.get(providerId) !== scope) throw new CancellationError(); },
+		};
+		hostScopes.set(providerId, scope);
+		scopeChanges.fire();
+		return scope;
+	};
+	addHost('primary', host);
+	const scopes = {
+		onDidChangeScopes: scopeChanges.event,
+		getScopes: () => [...hostScopes.values()],
+		getScope: (sessionId: string) => { const scope = hostScopes.get(parseSessionIdentity(sessionId, 'primary').providerId); if (!scope) throw new CancellationError(); return scope; },
+	} as unknown as ISessionProviderScopeService;
 	const service = resources.add(new GitHubService(
 		{ get activeSelection() { return selection; }, onDidChange: selectionChanged.event } as ISessionsService,
-		{ sessions: [session] } as unknown as ISessionsManagementService,
-		commands, scm, github, { onDidChangeAccounts: accountChanged.event } as IAccountService, new NullLoggerService(),
+		{ get sessions() { return catalog; } } as unknown as ISessionsManagementService,
+		scm, scopes, new NullLoggerService(),
 	));
 	const nextChange = (): Promise<void> => new Promise(resolve => {
 		const listener = resources.add(service.onDidChange(() => { listener.dispose(); resolve(); }));
 	});
 	return {
-		[Symbol.dispose]: () => resources.dispose(), service, status, statusChanged, accountChanged, nextChange,
+		[Symbol.dispose]: () => resources.dispose(), service, status, host, catalog, addHost,
+		removeHost: (id: string) => { hostScopes.delete(id); scopeChanges.fire(); }, statusChanged, accountChanged, nextChange,
 		select: (value: SessionsViewSelection | undefined) => { selection = value; selectionChanged.fire(); },
 		load: async () => {
 			const changed = nextChange();
@@ -79,6 +116,99 @@ function fixture(overrides: Partial<IGitHubService> = {}, gitOverrides: Partial<
 }
 
 suite('Session GitHub associations', () => {
+	test('equal backend Session and repository IDs route through the owning host and preserve its remote workspace', async () => {
+		const calls: string[] = [];
+		using context = fixture({ attachSessionPullRequest: async id => { calls.push(`primary:${id}`); } });
+		const changed = new Emitter<string>();
+		try {
+			const host: IRendererHost = {
+				...context.host,
+				events: { subscribe: Event.None },
+				github: {
+					...context.host.github, onDidChangeSessionPullRequests: changed.event,
+					listSessionPullRequests: async id => { calls.push(`remote:list:${id}`); return []; },
+					attachSessionPullRequest: async id => { calls.push(`remote:attach:${id}`); },
+					detachSessionPullRequest: async id => { calls.push(`remote:detach:${id}`); },
+					readPullRequest: async () => ({ ...pullRequest, title: 'Remote branch' }),
+				},
+				localGit: {
+					...context.host.localGit, readRepositoryContexts: async directory => {
+						calls.push(`remote:repos:${directory.sessionId}:${directory.path}`);
+						return [{ id: 'repo', label: 'repo', path: '', rootPath: '/work', head: { type: 'branch', name: 'feature' }, remotes: [{ name: 'origin', identity: { provider: 'github', host: 'github.com', owner: 'team', repository: 'repo' } }] }];
+					}
+				},
+			};
+			const scope = context.addHost('remote', host);
+			const remote = { ...session, sessionId: scope.identity('session'), providerId: 'remote', workspace: { authorityId: 'ssh+build', root: '/work' } };
+			context.catalog.push(remote);
+			context.select({ kind: 'session', active: { session: remote, threadId: 'thread' } });
+			await context.nextChange();
+			assert.equal(context.service.getSessionPullRequests(remote.sessionId)[0]!.title, 'Remote branch');
+			await context.service.attachPullRequest(remote.sessionId, pullRequest.url);
+			await context.service.detachPullRequest(remote.sessionId, { repository: { host: 'github.com', owner: 'team', name: 'repo' }, number: 7 });
+			assert.ok(calls.includes('remote:list:session'));
+			assert.ok(calls.includes('remote:repos:session:/work'));
+			assert.ok(calls.includes('remote:attach:session'));
+			assert.ok(calls.includes('remote:detach:session'));
+			assert.equal(calls.some(call => call.startsWith('primary:')), false);
+		} finally { changed.dispose(); }
+	});
+
+	test('retiring a captured host cancels a late attachment before its write and never falls back to the primary host', async () => {
+		const started = new DeferredPromise<void>();
+		const accounts = new DeferredPromise<Awaited<ReturnType<IGitHubService['listAccounts']>>>();
+		const writes: string[] = [];
+		using context = fixture({ attachSessionPullRequest: async id => { writes.push(`primary:${id}`); } });
+		const scope = context.addHost('remote', {
+			...context.host, events: { subscribe: Event.None }, github: {
+				...context.host.github, listAccounts: () => { void started.complete(); return accounts.p; },
+				attachSessionPullRequest: async id => { writes.push(`remote:${id}`); },
+			},
+		});
+		const attaching = context.service.attachPullRequest(scope.identity('session'), pullRequest.url);
+		const rejected = assert.rejects(attaching, { name: 'CancellationError' });
+		await started.p;
+		context.removeHost('remote');
+		await accounts.complete([{ id: 'account', host: 'github.com', login: 'user', status: 'ready', credentialRevision: 1n }]);
+		await rejected;
+		assert.deepEqual(writes, []);
+		await assert.rejects(context.service.detachPullRequest(scope.identity('session'), { repository: { host: 'github.com', owner: 'team', name: 'repo' }, number: 7 }), { name: 'CancellationError' });
+	});
+
+	test('an unrelated host account update does not cancel a captured remote attachment', async () => {
+		const accounts = new DeferredPromise<Awaited<ReturnType<IGitHubService['listAccounts']>>>();
+		const writes: string[] = [];
+		using context = fixture();
+		const scope = context.addHost('remote', {
+			...context.host, events: { subscribe: Event.None }, github: {
+				...context.host.github, listAccounts: () => accounts.p,
+				attachSessionPullRequest: async id => { writes.push(id); },
+			},
+		});
+		const attaching = context.service.attachPullRequest(scope.identity('session'), pullRequest.url);
+		context.accountChanged.fire({ revision: 2n, accounts: [] });
+		await accounts.complete([{ id: 'account', host: 'github.com', login: 'user', status: 'ready', credentialRevision: 1n }]);
+		await attaching;
+		assert.deepEqual(writes, ['session']);
+	});
+
+	test('adding an unrelated provider cannot cancel an attachment already captured by another host', async () => {
+		const accounts = new DeferredPromise<Awaited<ReturnType<IGitHubService['listAccounts']>>>();
+		const writes: string[] = [];
+		using context = fixture();
+		const scope = context.addHost('remote', {
+			...context.host, events: { subscribe: Event.None }, github: {
+				...context.host.github, listAccounts: () => accounts.p,
+				attachSessionPullRequest: async id => { writes.push(id); },
+			},
+		});
+		const attaching = context.service.attachPullRequest(scope.identity('session'), pullRequest.url);
+		context.addHost('third', { ...context.host, events: { subscribe: Event.None } });
+		await accounts.complete([{ id: 'account', host: 'github.com', login: 'user', status: 'ready', credentialRevision: 1n }]);
+		await attaching;
+		assert.deepEqual(writes, ['session']);
+	});
+
 	test('discovery merges equivalent PR links across remotes without rewriting the open URL', async () => {
 		let reads = 0;
 		const urls = ['https://github.com/TEAM/Repo/pull/7/', 'https://github.com/team/repo/pull/7'];

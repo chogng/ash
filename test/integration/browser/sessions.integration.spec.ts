@@ -696,3 +696,85 @@ test('Sessions navigation geometry centers icons and enables the component actio
 	await expect(activityButtons.nth(2)).toBeEnabled();
 	await expect(activityButtons.nth(3)).toBeEnabled();
 });
+
+
+test('multiple Agent hosts keep equal backend IDs, model scopes and retained Code/Cowork drafts isolated', async ({ page }) => {
+	await page.goto('/sessions.html?multiHost');
+	await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
+	const sidebar = page.locator('.ash-sessions-list');
+	await expect(sidebar.getByRole('heading', { name: 'Host A', exact: true })).toBeVisible();
+	await expect(sidebar.getByRole('heading', { name: 'Host B', exact: true })).toBeVisible();
+	await sidebar.getByRole('button', { name: 'Task from Host A', exact: true }).click();
+	await sidebar.getByRole('button', { name: 'Task from Host B', exact: true }).click();
+	await expect.poll(() => page.evaluate(() => window.ashSessionsIntegration.multiHost!.calls.filter(call => call.method === 'subscribe').map(call => call.host))).toEqual(expect.arrayContaining(['Host A', 'Host B']));
+	await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Code', exact: true }).click();
+	await page.evaluate(() => window.ashSessionsIntegration.multiHost!.open('Host A', true));
+	const active = page.locator('.ash-sessions-chat-slot.active');
+	await active.locator('.stanza-editor-input').focus();
+	await page.keyboard.insertText('Private Host A draft');
+	await page.evaluate(() => window.ashSessionsIntegration.multiHost!.open('Host B', true));
+	await active.locator('.stanza-editor-input').focus();
+	await page.keyboard.insertText('Private Host B draft');
+	await expect(active).toContainText('Host B model');
+	await sidebar.getByRole('button', { name: 'Host A draft', exact: true }).click();
+	await expect(active.locator('.stanza-editor-line-text')).toContainText('Private Host A draft');
+	await expect(active).toContainText('Host A model');
+	await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Chat', exact: true }).click();
+	await expect(active.locator('.stanza-editor-line-text')).toContainText('Private Host A draft');
+	// Cowork has its own model preference; choose from the captured host's real catalog.
+	await active.locator('.ash-chat-input-model-action').click();
+	const modelPicker = page.locator('.ash-chat-model-picker');
+	const automaticModel = modelPicker.getByRole('switch', { name: 'Auto', exact: true });
+	await expect(automaticModel).toHaveAttribute('aria-checked', 'true');
+	await automaticModel.focus();
+	await automaticModel.press('Space');
+	await expect(automaticModel).toHaveAttribute('aria-checked', 'false');
+	await expect(modelPicker.getByRole('menuitemradio')).toHaveCount(1);
+	await modelPicker.getByRole('menuitemradio', { name: 'Host A model', exact: true }).click();
+	await expect(active).toContainText('Host A model');
+	await sidebar.getByRole('button', { name: 'Host B draft', exact: true }).click();
+	await expect(active.locator('.stanza-editor-line-text')).toContainText('Private Host B draft');
+	await active.locator('.ash-chat-input-model-action').click();
+	await expect(automaticModel).toHaveAttribute('aria-checked', 'true');
+	await automaticModel.focus();
+	await automaticModel.press('Space');
+	await expect(automaticModel).toHaveAttribute('aria-checked', 'false');
+	await expect(modelPicker.getByRole('menuitemradio')).toHaveCount(1);
+	await modelPicker.getByRole('menuitemradio', { name: 'Host B model', exact: true }).click();
+	await expect(active).toContainText('Host B model');
+	await page.evaluate(() => window.ashSessionsIntegration.multiHost!.disconnect('Host A'));
+	await expect(sidebar.getByRole('button', { name: 'Task from Host A', exact: true })).toHaveCount(0);
+	await expect(sidebar.getByRole('button', { name: 'Task from Host B', exact: true })).toBeVisible();
+	await expect.poll(() => page.evaluate(() => window.ashSessionsIntegration.multiHost!.calls.every(call => call.sessionId === 'same' && call.threadId === 'same'))).toBe(true);
+});
+
+
+for (const locale of ['en', 'zh-CN']) {
+	test(`new Session host chooser preserves keyboard selection and scope in ${locale}`, async ({ page }) => {
+		await page.goto(`/sessions.html?multiHost&locale=${locale}`);
+		await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
+		await page.locator('.ash-sessions-list-add').click();
+		const picker = page.getByPlaceholder(locale === 'en' ? 'Choose a host for the new session' : '选择新会话的宿主');
+		await expect(picker).toBeFocused();
+		await picker.fill('Host B');
+		await page.keyboard.press('Enter');
+		await expect(picker).toHaveCount(0);
+		await expect.poll(() => page.evaluate(() => window.ashSessionsIntegration.multiHost!.activeProvider())).toBe('Host B');
+		const active = page.locator('.ash-sessions-chat-slot.active');
+		await active.locator('.ash-chat-input-model-action').click();
+		const modelPicker = page.locator('.ash-chat-model-picker');
+		const automaticModel = modelPicker.getByRole('switch', { name: locale === 'en' ? 'Auto' : '自动', exact: true });
+		await expect(automaticModel).toHaveAttribute('aria-checked', 'true');
+		await automaticModel.focus();
+		await automaticModel.press('Space');
+		await expect(automaticModel).toHaveAttribute('aria-checked', 'false');
+		await expect(modelPicker.getByRole('menuitemradio')).toHaveCount(1);
+		await modelPicker.getByRole('menuitemradio', { name: 'Host B model', exact: true }).click();
+		await expect(page.locator('.ash-sessions-chat-slot.active')).toContainText('Host B model');
+		await page.locator('.ash-sessions-list-add').click();
+		await expect(picker).toBeFocused();
+		await page.keyboard.press('Escape');
+		await expect(picker).toHaveCount(0);
+		expect(await page.evaluate(() => window.ashSessionsIntegration.multiHost!.activeProvider())).toBe('Host B');
+	});
+}

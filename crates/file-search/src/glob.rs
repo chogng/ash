@@ -18,6 +18,7 @@ pub struct GlobQuery {
     pub scope: PathBuf,
     pub include_patterns: Vec<String>,
     pub exclude_patterns: Vec<String>,
+    pub required_pattern: Option<String>,
     pub max_results: usize,
 }
 
@@ -71,37 +72,18 @@ impl Service {
                 "scope must be a directory inside its root".into(),
             ));
         }
-        let mut overrides = OverrideBuilder::new(root);
-        for (patterns, prefix) in [
-            (&query.include_patterns, ""),
-            (&query.exclude_patterns, "!"),
-        ] {
-            for pattern in patterns {
-                if pattern.is_empty()
-                    || pattern.len() > 1024
-                    || pattern.starts_with('!')
-                    || pattern.contains('\0')
-                    || !relative(Path::new(pattern))
-                {
-                    return Err(Error::InvalidInput(
-                        "glob must be a relative include or exclude".into(),
-                    ));
-                }
-                overrides
-                    .add(&format!("{prefix}{pattern}"))
-                    .map_err(|error| Error::InvalidInput(error.to_string()))?;
-            }
-        }
+        let overrides = path_overrides(root, &query.include_patterns, &query.exclude_patterns)?;
+        let required = query
+            .required_pattern
+            .as_ref()
+            .map(|pattern| path_overrides(root, std::slice::from_ref(pattern), &[]))
+            .transpose()?;
         let mut builder = WalkBuilder::new(scope);
         builder
             .hidden(true)
             .follow_links(false)
             .require_git(true)
-            .overrides(
-                overrides
-                    .build()
-                    .map_err(|error| Error::InvalidInput(error.to_string()))?,
-            );
+            .overrides(overrides);
         let started = Instant::now();
         let mut newest = BinaryHeap::new();
         let mut total_matches = 0usize;
@@ -111,7 +93,11 @@ impl Service {
                 return Err(Error::Failed("file search exceeded 30 seconds".into()));
             }
             let entry = entry.map_err(failed)?;
-            if !entry.file_type().is_some_and(|kind| kind.is_file()) {
+            if !entry.file_type().is_some_and(|kind| kind.is_file())
+                || required
+                    .as_ref()
+                    .is_some_and(|required| !required.matched(entry.path(), false).is_whitelist())
+            {
                 continue;
             }
             let path = entry
@@ -140,6 +126,37 @@ impl Service {
             total_matches,
         })
     }
+}
+
+pub(crate) fn path_overrides(
+    root: &Path,
+    includes: &[String],
+    excludes: &[String],
+) -> Result<ignore::overrides::Override, Error> {
+    if includes.len() > 64 || excludes.len() > 64 {
+        return Err(Error::InvalidInput("too many file search patterns".into()));
+    }
+    let mut overrides = OverrideBuilder::new(root);
+    for (patterns, prefix) in [(includes, ""), (excludes, "!")] {
+        for pattern in patterns {
+            if pattern.is_empty()
+                || pattern.len() > 1024
+                || pattern.starts_with('!')
+                || pattern.contains('\0')
+                || !relative(Path::new(pattern))
+            {
+                return Err(Error::InvalidInput(
+                    "glob must be a relative include or exclude".into(),
+                ));
+            }
+            overrides
+                .add(&format!("{prefix}{pattern}"))
+                .map_err(|error| Error::InvalidInput(error.to_string()))?;
+        }
+    }
+    overrides
+        .build()
+        .map_err(|error| Error::InvalidInput(error.to_string()))
 }
 
 fn relative(path: &Path) -> bool {

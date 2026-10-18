@@ -25,6 +25,7 @@ function fixture() {
 	} as unknown as IFileService;
 	const git: ILocalGitService = {
 		_serviceBrand: undefined,
+		readRepositoryContexts: async () => [],
 		clone: async (...args) => { cloned = args; checkout = URI.file(args[2]); },
 		cancel: async id => { cancellations.push(id); },
 	};

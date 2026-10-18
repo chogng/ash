@@ -1,3 +1,7 @@
+import { AgentHostConnectionsService } from '../../../src/ash/platform/agentHost/browser/agentHostConnectionsService.js';
+import { IAgentHostConnectionsService, agentHostConnectionAddress } from '../../../src/ash/platform/agentHost/common/agentHostConnectionsService.js';
+import { ILanguageModelsConfigurationService } from '../../../src/ash/workbench/contrib/chat/common/languageModelsConfiguration.js';
+import type { IRendererAgentHostConnection, IRendererAgentHost } from '../../../src/ash/platform/renderer/common/rendererHost.js';
 import { BrowserLayoutService } from '../../../src/ash/platform/layout/browser/layoutService.js';
 import { IQuickInputService } from '../../../src/ash/platform/quickinput/common/quickInput.js';
 import { QuickInputService } from '../../../src/ash/platform/quickinput/browser/quickInputService.js';
@@ -10,7 +14,7 @@ import '../../../src/ash/base/browser/ui/styles.css';
 import '../../../src/ash/workbench/browser/media/style.css';
 import { setARIAContainer } from '../../../src/ash/base/browser/ui/aria/aria.js';
 import { addDisposableListener } from '../../../src/ash/base/browser/dom.js';
-import { Emitter } from '../../../src/ash/base/common/event.js';
+import { Emitter, Event } from '../../../src/ash/base/common/event.js';
 import { DisposableStore, toDisposable } from '../../../src/ash/base/common/lifecycle.js';
 import { observableValue, autorun } from '../../../src/ash/base/common/observable.js';
 import { setNlsMessages } from '../../../src/ash/nls.js';
@@ -224,12 +228,25 @@ const hostTargets = [
 	{ name: 'build-b', host: 'server-b', workspace: '/srv/project' },
 ];
 const disconnected = createDisconnectedRendererApi();
+const endpointChanges = resources.add(new Emitter<void>());
+const endpoints = new Map<string, IRendererAgentHostConnection>();
+services.registerInstance(ILanguageModelsConfigurationService, {
+	onDidChangeModels: Event.None, getDefaultNewChatModel: () => undefined, rememberSelectedModel: () => { },
+	isModelVisible: () => true, setModelVisible: async () => { },
+});
 const renderer: IRendererHost = parameters.has('hosts') ? {
 	...disconnected, automation: backend,
 	agentHosts: {
+		get connections() { return [...endpoints.values()]; },
+		onDidChangeConnections: endpointChanges.event,
+		disconnect: id => { [...endpoints.values()].find(entry => entry.id === id)?.host?.dispose(); },
+		reconnect: async () => { },
 		connect: async target => {
+			const key = agentHostConnectionAddress(target);
+			const existing = endpoints.get(key)?.host;
+			if (existing) return existing;
 			hostChanges.push(`open:${target.name}`);
-			return {
+			const host: IRendererAgentHost = {
 				id: target.name, connection: target,
 				api: {
 					...disconnected,
@@ -241,12 +258,16 @@ const renderer: IRendererHost = parameters.has('hosts') ? {
 						delete: async id => { hostChanges.push(`delete:${target.name}:${id}`); },
 					},
 				},
-				...toDisposable(() => { hostChanges.push(`close:${target.name}`); }),
+				...toDisposable(() => { hostChanges.push(`close:${target.name}`); endpoints.delete(key); endpointChanges.fire(); }),
 			};
+			endpoints.set(key, { id: host.id, connection: target, state: 'ready', host });
+			endpointChanges.fire();
+			return host;
 		}
 	},
 } : { automation: parameters.get('available') === '0' ? undefined : backend } as unknown as IRendererHost;
 services.registerInstance(IRendererHostService, renderer);
+services.registerInstance(IAgentHostConnectionsService, resources.add(services.createInstance(AgentHostConnectionsService)));
 
 const registry = resources.add(new SessionsProvidersService());
 services.registerInstance(ISessionsProvidersService, registry);

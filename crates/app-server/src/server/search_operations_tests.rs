@@ -570,3 +570,69 @@ fn file_glob_session_target_requires_that_sessions_directory_authorization() {
     );
     server.close_connection(connection);
 }
+
+#[test]
+fn file_search_filters_are_applied_on_the_authorized_backend_before_limits() {
+    use ash_file_access::Dir;
+    use ash_file_access::Grant;
+    use ash_file_access::GrantSource;
+    use ash_file_access::Permission;
+    use ash_file_access::Permissions;
+    let root = tempfile::tempdir().unwrap();
+    std::fs::create_dir(root.path().join("src")).unwrap();
+    for path in [
+        "needle.rs",
+        "src/needle_skip.rs",
+        "src/long_needle.rs",
+        "src/long_needle.md",
+    ] {
+        std::fs::write(root.path().join(path), "not searched").unwrap();
+    }
+    let grant = Grant::for_environment(
+        Dir::open_local(root.path()).unwrap(),
+        GrantSource::HostConfiguration,
+        Permissions::new([Permission::SearchFiles]),
+    );
+    let server = glob_server();
+    server
+        .activate_local_dirs(vec![("folder".into(), grant)])
+        .unwrap();
+    let mut connection = server.connection();
+    glob_call(
+        &server,
+        &mut connection,
+        1,
+        "initialize",
+        serde_json::json!({"clientInfo":{"name":"filtered-search","version":"1"},"capabilities":{}}),
+    );
+    let response = glob_call(
+        &server,
+        &mut connection,
+        2,
+        "file/search/fuzzy",
+        serde_json::json!({
+            "operationId":"filtered-fuzzy", "target":{"type":"workspace","dirId":"folder"}, "query":"needle", "includePatterns":["src/**"], "excludePatterns":["**/*skip*","**/*.md"], "maxResults":1
+        }),
+    );
+    assert_eq!(
+        response["result"]["matches"][0]["path"], "src/long_needle.rs",
+        "{response}"
+    );
+    assert_eq!(response["result"]["totalMatches"], 1, "{response}");
+    assert_eq!(response["result"]["freshness"], "current");
+    let response = glob_call(
+        &server,
+        &mut connection,
+        3,
+        "file/search/glob",
+        serde_json::json!({
+            "operationId":"filtered-glob", "target":{"type":"workspace","dirId":"folder"}, "includePatterns":["**/*.rs","**/*.md"], "excludePatterns":["**/*skip*","**/*.md"], "requiredPattern":"src/**", "maxResults":1
+        }),
+    );
+    assert_eq!(
+        response["result"]["paths"],
+        serde_json::json!(["src/long_needle.rs"]),
+        "{response}"
+    );
+    assert_eq!(response["result"]["totalMatches"], 1, "{response}");
+}

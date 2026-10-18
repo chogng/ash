@@ -240,9 +240,11 @@ class MessagePortSocket extends Disposable implements ISocket {
 		this.drainWaiters.clear();
 		this.pending.length = 0;
 		this.pendingBytes = 0;
+		// Publish the typed close before EOF: the protocol carrier needs its
+		// intentional flag before an unclassified end can retire the socket.
+		this.closeEmitter.fire({ type: SocketCloseEventType.NodeSocketCloseEvent, hadError: !!error, error });
 		if (!error) {
 			this.endEmitter.fire();
 		}
-		this.closeEmitter.fire({ type: SocketCloseEventType.NodeSocketCloseEvent, hadError: !!error, error });
 	}
 }

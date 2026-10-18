@@ -9,6 +9,8 @@ export interface ISessionsProviderAutomations extends IAutomationStore { }
 
 /** Adapts one backend into frontend Session and Chat objects. */
 export interface ISessionsProvider extends IDisposable {
+	/** Borrowed scope used by conversation owners to construct provider-scoped presentation. */
+	readonly instantiationService?: import('../../../../platform/instantiation/common/instantiation.js').IInstantiationService;
 	readonly id: string;
 	readonly label: string;
 	readonly order: number;

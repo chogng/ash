@@ -1,3 +1,15 @@
+import { SessionsAgentSessionService } from './agentHost/sessionsAgentSessionService.js';
+import { SessionConversationLinks } from './agentHost/sessionConversationLinks.js';
+import { SessionsAgentThreadService } from './agentHost/sessionsAgentThreadService.js';
+import { SessionsSearchService } from '../contrib/providers/agentHost/browser/sessionsSearchService.js';
+import { SessionFileSystemContribution } from '../contrib/providers/agentHost/browser/sessionFileSystemContribution.js';
+import { sessionWorkspaceUri } from '../common/sessionWorkspace.js';
+import { ISessionProviderScopeService, ISessionPrimaryProviderServices, SessionProviderScopeService, SessionProviderServices } from './agentHost/sessionProviderScopeService.js';
+import { SessionsChatService } from './agentHost/sessionsChatService.js';
+import { SessionsLanguageModelsService } from './agentHost/sessionsLanguageModelsService.js';
+import { SessionsPromptsService } from './agentHost/sessionsPromptsService.js';
+import { SessionsExecutionSettingsService } from './agentHost/sessionsExecutionSettingsService.js';
+import { sessionIdentity } from '../services/sessions/common/sessionIdentity.js';
 import { IDefaultLogLevelsService } from '../../workbench/services/log/common/defaultLogLevels.js';
 import { IDocumentEditorTextModelService } from '../../workbench/services/documentEditor/common/documentTypes.js';
 import { DocumentEditorTextModelService } from '../../workbench/services/documentEditor/browser/documentEditorTextModelService.js';
@@ -114,7 +126,7 @@ import '../../workbench/contrib/accessibility/browser/accessibilityConfiguration
 import { NotificationActionRunner } from '../../workbench/browser/parts/notifications/notificationsCommands.js';
 import '../../workbench/contrib/accessibility/browser/accessibleViewActions.js';
 import { addDisposableListener, h, type IDimension } from "../../base/browser/dom.js";
-import { errorHandler, getErrorMessage, onUnexpectedError, setUnexpectedErrorHandler } from '../../base/common/errors.js';
+import { canceled, errorHandler, getErrorMessage, onUnexpectedError, setUnexpectedErrorHandler } from '../../base/common/errors.js';
 import { mainWindow } from '../../base/browser/window.js';
 import { Event } from '../../base/common/event.js';
 import { SessionsViewRegistry } from '../common/views.js';
@@ -162,6 +174,8 @@ import { NotificationService } from "../../workbench/services/notification/commo
 import { INotificationsCenter, NotificationsCenter } from "../../workbench/browser/parts/notifications/notificationsCenter.js";
 import { INotificationService } from "../../platform/notification/common/notification.js";
 import { IRendererHostService, type IRendererHost } from "../../platform/renderer/common/rendererHost.js";
+import { AgentHostConnectionsService } from '../../platform/agentHost/browser/agentHostConnectionsService.js';
+import { IAgentHostConnectionsService } from '../../platform/agentHost/common/agentHostConnectionsService.js';
 import { IExtensionResourceLoaderService } from '../../platform/extensionResourceLoader/common/extensionResourceLoader.js';
 import { ITraceSettingsService } from '../../platform/trace/common/traceSettingsService.js';
 import type { INativeHostApi, IOpenAgentsWindowOptions } from '../../platform/native/common/nativeHost.js';
@@ -439,6 +453,7 @@ export abstract class Workbench extends Disposable {
 		services.registerInstance(IWorkbenchHostService, workbenchWindow);
 		services.registerInstance(AppServerApiId, options.api.appServer);
 		services.registerInstance(IRendererHostService, options.api);
+		services.registerSingleton(IAgentHostConnectionsService, () => services.createInstance(AgentHostConnectionsService));
 		services.registerInstance(IMessageHistoryService, options.api.messageHistory);
 		services.registerInstance(IExtensionResourceLoaderService, enabledExtensions.resources);
 		services.registerInstance(IExtensionApi, enabledExtensions);
@@ -447,45 +462,46 @@ export abstract class Workbench extends Disposable {
 		services.registerInstance(ITestExecutionService, options.api.testing);
 		services.registerInstance(IRemoteConnectionApi, options.api.remoteConnections ?? UnavailableRemoteConnectionApi);
 		services.registerSingleton(IRemoteConnectionService, () => services.createInstance(RemoteConnectionService));
+		const primaryHostServices = this._register(services.createChild());
 		services.registerInstance(IAgentModelsService, options.api.model);
 		services.registerInstance(ISecretStorageStatusService, options.api.secretStorage);
 		if (!services.has(ISecretStorageService)) services.registerInstance(ISecretStorageService, this._register(new BaseSecretStorageService()));
-		services.registerInstance(IAgentExecutionSettingsService, options.api.executionSettings);
-		services.registerInstance(IAgentSessionService, options.api.session);
+		primaryHostServices.registerInstance(IAgentExecutionSettingsService, options.api.executionSettings);
+		primaryHostServices.registerInstance(IAgentSessionService, options.api.session);
 		services.registerSingleton(IDevContainerAgentHostService, () => services.createInstance(DevContainerAgentHostService));
-		services.registerInstance(IAgentThreadService, options.api.thread);
+		primaryHostServices.registerInstance(IAgentThreadService, options.api.thread);
 		services.registerInstance(IAgentTurnService, options.api.turn);
 		services.registerInstance(ITurnChangesApi, options.api.turnChanges);
 		services.registerInstance(ServerEventApiId, options.api.events);
 		services.registerInstance(IAppServerSkillApi, options.api.skills);
-		services.registerSingleton(IPromptsService, () => services.createInstance(PromptsService));
-		const provider = services.createInstance(AppServerSessionsProvider, {
+		primaryHostServices.registerSingleton(IPromptsService, () => primaryHostServices.createInstance(PromptsService));
+		const provider = primaryHostServices.createInstance(AppServerSessionsProvider, {
 			workspace: options.workspaceSelection,
 			selectWorkspace: async folders => {
 				using selection = services.createInstance(WorkspaceSelection);
 				return await selection.pick(folders);
 			},
 		} satisfies AppServerSessionsProviderHost);
-		const sessions = this._register(new SessionsManagementService(provider));
+		const sessions = this._register(services.createInstance(SessionsManagementService, provider));
 		this._register(services.get(ISessionsProvidersService).registerProvider(provider));
 		const teams = new TeamsManagementService(new AppServerTeamsProvider(options.api.teams));
 		services.registerInstance(ITeamsManagementService, teams);
 		const storage = this._register(storageService);
 		services.registerInstance(ISessionsManagementService, sessions);
 		const view = this.sessionsView = this._register(services.createInstance(SessionsService));
-		const chat = this._register(services.createInstance(ChatService));
+		const chat = this._register(primaryHostServices.createInstance(ChatService));
 		services.registerInstance(ISessionsService, view);
 		services.registerInstance(ISessionGroupsService, this._register(services.createInstance(SessionGroupsService)));
 		const workspace = configurationService;
 		this._register(services.createInstance(SessionsWorkspaceContextService, options.workspace, (next: IWorkspace) => workspace.updateWorkspace(next)));
 		services.registerInstance(IWorkspaceContextService, workspace);
 		services.registerInstance(IMarkerService, this._register(new MarkerService()));
-		const files = this._register(services.createInstance(SessionFileService, options.api, () => options.workspace().folders.map(folder => ({ uri: folder.uri, target: { type: 'environment', dirId: folder.id } }))));
+		const files = this._register(services.createInstance(SessionFileService, options.api, () => [...options.workspace().folders.map(folder => ({ uri: folder.uri, target: { type: 'environment' as const, dirId: folder.id } })), ...sessions.sessions.filter(session => (session.providerId ?? provider.id) === provider.id).flatMap(session => [session.workspace, ...session.chats.map(chat => chat.workspace)].flatMap(workspace => workspace ? [{ uri: sessionWorkspaceUri(workspace), target: { type: 'session' as const, sessionId: session.backendSessionId ?? session.sessionId, path: workspace.root } }] : []))]));
 		const agentHostFiles = this._register(services.createInstance(AgentHostFileSystemService, files, options.browserFileSystemProvider));
 		services.registerInstance(IAgentHostFileSystemService, agentHostFiles);
 		const systemPolicies = hostServices.has(IPolicyService) ? hostServices.get(IPolicyService) : new NullPolicyService();
 		services.registerInstance(IPluginManagementService, this._register(services.createInstance(AppServerPluginManagementService, options.api.plugins, options.api.events)));
-		services.registerInstance(IFileSearchService, options.api.hasAppServer ? files : services.createInstance(BrowserFileSearchService));
+		if (!options.api.hasAppServer) services.registerInstance(IFileSearchService, services.createInstance(BrowserFileSearchService));
 		services.registerInstance(ISystemFileTransferService, files);
 		services.registerInstance(IResourceIconRenderer, themeService);
 		services.registerInstance(IDecorationsService, this._register(services.createInstance(DecorationsService, ownerDocument)));
@@ -522,15 +538,14 @@ export abstract class Workbench extends Disposable {
 		}));
 		services.registerInstance(ITextModelResourceService, textModels);
 		services.registerInstance(IFileTextModelService, textModels);
-		services.registerInstance(IContentSearchService, options.api.hasAppServer ? files : new FileContentSearchService(fileService));
-		services.registerInstance(ISearchService, this._register(services.createInstance(SearchService)));
+		if (!options.api.hasAppServer) services.registerInstance(IContentSearchService, new FileContentSearchService(fileService));
 		services.registerSingleton(IKeybindingEditingService, () => services.createInstance(KeybindingsEditingService));
 		services.registerSingleton(ITextModelService, () => services.createInstance(TextModelResolverService));
-		services.registerInstance(IChatService, chat);
+		primaryHostServices.registerInstance(IChatService, chat);
 		const accountService = this._register(new AppServerAccountService(options.api.accounts, options.api.events));
 		services.registerInstance(IAccountService, accountService);
 		services.registerInstance(ILanguageModelsConfigurationService, this._register(services.createInstance(LanguageModelsConfigurationService, ChatModelPreferences)));
-		services.registerInstance(ILanguageModelsService, this._register(services.createInstance(LanguageModelsService)));
+		primaryHostServices.registerInstance(ILanguageModelsService, this._register(primaryHostServices.createInstance(LanguageModelsService)));
 		services.registerInstance(IInstructionService, options.api.instructions);
 		services.registerInstance(IAgentCapabilitiesService, options.api.agentCapabilities);
 		services.registerInstance(IAgentToolsApi, options.api.agentTools);
@@ -545,6 +560,23 @@ export abstract class Workbench extends Disposable {
 		services.registerInstance(ILanguageDiagnosticsService, languageDiagnosticsService);
 		this._register(new LanguageDiagnosticsMarkerBridge(languageDiagnosticsService, services.get(IMarkerService)));
 		services.registerInstance(IAppServerHookApi, options.api.hooks);
+		services.registerInstance(ISessionPrimaryProviderServices, primaryHostServices.createInstance(SessionProviderServices));
+		const providerScopes = this._register(services.createInstance(SessionProviderScopeService, provider.id));
+		services.registerInstance(ISessionProviderScopeService, providerScopes);
+		this._register(services.createInstance(SessionFileSystemContribution, provider.id));
+		if (options.api.hasAppServer) {
+			const search = services.createInstance(SessionsSearchService, provider.id, options.workspace);
+			services.registerInstance(IFileSearchService, search);
+			services.registerInstance(IContentSearchService, search);
+		}
+		const routedChat = this._register(services.createInstance(SessionsChatService));
+		services.registerInstance(IChatService, routedChat);
+		services.registerInstance(IAgentThreadService, this._register(services.createInstance(SessionsAgentThreadService)));
+		services.registerInstance(IAgentSessionService, services.createInstance(SessionsAgentSessionService));
+		services.registerInstance(ISearchService, this._register(services.createInstance(SearchService)));
+		services.registerInstance(ILanguageModelsService, this._register(services.createInstance(SessionsLanguageModelsService)));
+		services.registerInstance(IPromptsService, this._register(services.createInstance(SessionsPromptsService)));
+		services.registerInstance(IAgentExecutionSettingsService, this._register(services.createInstance(SessionsExecutionSettingsService)));
 		services.registerInstance(ITraceSettingsService, options.api.traceSettings);
 		const localization = this._register(new WorkbenchLocalizationService());
 		services.registerInstance(ILocalizationService, localization);
@@ -745,7 +777,7 @@ export abstract class Workbench extends Disposable {
 				return new AccessibleContentProvider(
 					AccessibleViewProviderId.SessionsActivityBar,
 					{ type: AccessibleViewType.Help },
-					() => localize('sessions.chatgpt.activityHelp', 'On Desktop, ChatGPT opens conversations in the window sidebar and a shared chat editor. Selection and unsent drafts are retained when switching product entries or Agent sessions. Press Alt+F1 in the sidebar or editor for accessibility help. Right-click the ChatGPT icon, or press Shift+F10 on it, then choose Reload to refresh the current chat. Use ChatGPT: Toggle Scrolling Optimization in the Command Palette to change offscreen rendering.') + ' ' + localize('sessions.activity.help', 'Sessions Activity Bar\nUse Tab and Shift+Tab to enter navigation and Accounts. Use arrow keys, Home and End to move between actions. Press Enter or Space to open the focused action. Drag icons to reorder them, or choose Move earlier and Move later with the Context Menu key or Shift+F10. Navigation order is saved across restarts and Activity Bar positions. The menu also offers position and size options. Chat focuses the sessions list. Custom group headings organize tasks; use Tab to reach a task and Enter to open it. Application tools can create, rename and remove groups without deleting tasks. Chat and Code share the selected session, navigation history, unsent text and attachments; switching changes the layout. Each session restores its editor tabs. Toggle Code panel shows or hides the bottom tools. Toggle details, Hide editor and Show editor change the side panel. Toggle Code side panel closes and reopens the composition. Changes and Files tabs remain available in Details-only mode. Use arrow keys on separators to resize. Collaboration opens the channel preview and Calls in the sidebar. Agent Teams opens the separate Agent teams list. Library and Creator are product pages selected from the Activity Bar. Library retains its search, categories and view choice. Creator opens seven workspaces. Creator home returns to the mode list. Each workspace retains its document, selection and viewport. Code retains its own file and comparison tabs when you leave the page. Accounts opens the account menu, which includes Return to Workbench.') + ' ' + localize('automations.activityHelp', 'Automations opens schedules and run history. Create or edit a plan, run it now, pause future runs, or open a result in its conversation.') + ' ' + localize('symphony.activityHelp', 'Symphony schedules tasks inside Ash. The monitor shows conversation messages, status, cumulative tokens and runtime.') + ' ' + localize('agentTrace.activityHelp', 'View Execution Trace opens saved execution from the conversation menu or Command Palette. Show Agent Output opens a bounded live summary in Output; its channel identifies the reviewed Session. Switching conversations keeps that reader on its selected Session until Show Agent Output is invoked again. Output links open the exact execution event. Clear Output only clears the text view, and Auto Scroll only controls following new output.') + (options.api.agentHosts ? ' ' + localize({ bundle: 'ash.workbench', key: 'agentHosts.help' }, 'Use Agents: Manage Connected Hosts in the Command Palette or Sessions header menu to connect a saved SSH host or disconnect a selected host. In the picker, use arrow keys to move, Enter to select, and Escape to cancel.') : ''),
+					() => localize('sessions.chatgpt.activityHelp', 'On Desktop, ChatGPT opens conversations in the window sidebar and a shared chat editor. Selection and unsent drafts are retained when switching product entries or Agent sessions. Press Alt+F1 in the sidebar or editor for accessibility help. Right-click the ChatGPT icon, or press Shift+F10 on it, then choose Reload to refresh the current chat. Use ChatGPT: Toggle Scrolling Optimization in the Command Palette to change offscreen rendering.') + ' ' + localize('sessions.activity.help', 'Sessions Activity Bar\nUse Tab and Shift+Tab to enter navigation and Accounts. Use arrow keys, Home and End to move between actions. Press Enter or Space to open the focused action. Drag icons to reorder them, or choose Move earlier and Move later with the Context Menu key or Shift+F10. Navigation order is saved across restarts and Activity Bar positions. The menu also offers position and size options. Chat focuses the sessions list. Sessions from connected Agent hosts are grouped by host. New Session opens a host picker when more than one host is available; use arrow keys and Enter to choose, or Escape to cancel. Each draft keeps its chosen host when switching conversations. Custom group headings organize tasks; use Tab to reach a task and Enter to open it. Application tools can create, rename and remove groups without deleting tasks. Chat and Code share the selected session, navigation history, unsent text and attachments; switching changes the layout. Each session restores its editor tabs. Toggle Code panel shows or hides the bottom tools. Toggle details, Hide editor and Show editor change the side panel. Toggle Code side panel closes and reopens the composition. Changes and Files tabs remain available in Details-only mode. Use arrow keys on separators to resize. Collaboration opens the channel preview and Calls in the sidebar. Agent Teams opens the separate Agent teams list. Library and Creator are product pages selected from the Activity Bar. Library retains its search, categories and view choice. Creator opens seven workspaces. Creator home returns to the mode list. Each workspace retains its document, selection and viewport. Code retains its own file and comparison tabs when you leave the page. Accounts opens the account menu, which includes Return to Workbench.') + ' ' + localize('automations.activityHelp', 'Automations opens schedules and run history. Create or edit a plan, run it now, pause future runs, or open a result in its conversation.') + ' ' + localize('symphony.activityHelp', 'Symphony schedules tasks inside Ash. The monitor shows conversation messages, status, cumulative tokens and runtime.') + ' ' + localize('agentTrace.activityHelp', 'View Execution Trace opens saved execution from the conversation menu or Command Palette. Show Agent Output opens a bounded live summary in Output; its channel identifies the reviewed Session. Switching conversations keeps that reader on its selected Session until Show Agent Output is invoked again. Output links open the exact execution event. Clear Output only clears the text view, and Auto Scroll only controls following new output.') + (options.api.agentHosts ? ' ' + localize({ bundle: 'ash.workbench', key: 'agentHosts.help' }, 'Use Agents: Manage Connected Hosts in the Command Palette or Sessions header menu to connect a saved SSH host or disconnect a selected host. In the picker, use arrow keys to move, Enter to select, and Escape to cancel.') : ''),
 					() => focused.focus(),
 					AccessibilityVerbositySettingId.SessionsActivityBar,
 				);
@@ -759,13 +791,13 @@ export abstract class Workbench extends Disposable {
 		const cowork = this._register(services.createInstance(CoworkPaneFactory));
 		sessionsPart = this.sessionsPart = this._register(services.createInstance(SessionsPart, this.domNode, {
 			sessionService: sessions,
-			chatService: chat,
+			chatService: routedChat,
 			contextMenuService: contextMenus,
 			contextViewService: contextViews,
 			accessibleViewService,
 			notifications: notificationService,
 			commandService,
-			createInputPart: (container, delegate, model) => services.createInstance(NewChatInputWidget, container, delegate, model),
+			createInputPart: (container, delegate, model, scope) => scope.createInstance(NewChatInputWidget, container, delegate, model),
 			createCoworkPane: (container, panelId, selection) => cowork.createPane(container, panelId, selection, () => { view.openNewSession(); }),
 			activateSelection: selection => view.activateSelection(selection),
 			createNewSession: () => { view.openNewSession(); },
@@ -777,13 +809,34 @@ export abstract class Workbench extends Disposable {
 		};
 		this._register(view.onDidChange(updateSessionsPart));
 		updateSessionsPart();
+		const conversationLinks = services.createInstance(SessionConversationLinks, provider.id);
 		services.registerInstance(IChatSessionNavigationService, {
 			get revision() { return view.navigationRevision; },
+			captureConnection: sessionId => {
+				const scope = providerScopes.getScope(sessionId);
+				scope.assertCurrent();
+				const appServer = scope.services.host.appServer;
+				const generation = appServer.connectionGeneration;
+				let retired = false;
+				const listener = appServer.onConnectionState(() => { retired = true; });
+				return Object.assign(toDisposable(() => { retired = true; listener.dispose(); }), {
+					generation,
+					assertCurrent: async () => {
+						scope.assertCurrent();
+						if (retired || generation !== appServer.connectionGeneration) throw canceled();
+						const state = await appServer.getConnectionState();
+						scope.assertCurrent();
+						if (retired || generation !== appServer.connectionGeneration || state !== 'ready') throw canceled();
+					},
+				});
+			},
+			prepareConversationLink: (sessionId, threadId) => conversationLinks.prepare(sessionId, threadId),
+			openConversationLink: address => conversationLinks.open(address),
 			getActiveConversation: () => {
 				const selected = view.activeSelection;
 				return selected?.kind === 'session' ? { sessionId: selected.active.session.sessionId, threadId: selected.active.threadId } : undefined;
 			},
-			getConversations: () => sessions.sessions.filter(session => session.status === 'active').flatMap(session => session.chats.filter(chat => chat.status === 'active').map(chat => ({ providerId: provider.id, sessionId: session.sessionId, threadId: chat.threadId, title: chat.title ?? session.title }))),
+			getConversations: () => sessions.sessions.filter(session => session.status === 'active').flatMap(session => session.chats.filter(chat => chat.status === 'active').map(chat => ({ providerId: session.providerId ?? provider.id, sessionId: session.backendSessionId ?? session.sessionId, threadId: session.backendSessionId ? providerScopes.getScope(session.sessionId).backendIdentity(chat.threadId) : chat.threadId, title: chat.title ?? session.title }))),
 			appendToActiveDraft: text => {
 				void this.showChat().then(() => {
 					sessionsPart!.appendToDraft(text);
@@ -792,8 +845,9 @@ export abstract class Workbench extends Disposable {
 			},
 			captureActiveDraft: () => sessionsPart!.captureActiveDraft(),
 			openConversation: async (sessionId, threadId, providerId) => {
-				if (providerId !== undefined && providerId !== provider.id) {
-					throw new Error(localize({ bundle: 'ash.workbench', key: 'agentHosts.conversationUnavailable' }, 'This conversation belongs to another Agent host.'));
+				if (providerId !== undefined) {
+					sessionId = sessionIdentity(providerId, sessionId, provider.id);
+					threadId = sessionIdentity(providerId, threadId, provider.id);
 				}
 				// Visible Code and Cowork panes keep their current composition and draft owner.
 				if (!layout.isPartVisible('sessions')) await this.showChat();

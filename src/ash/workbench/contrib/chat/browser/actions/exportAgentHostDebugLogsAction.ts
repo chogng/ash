@@ -10,7 +10,7 @@ import { ILayoutService } from '../../../../../platform/layout/browser/layoutSer
 import { ILoggerService, type ILogFileService } from '../../../../../platform/log/common/log.js';
 import { INotificationService } from '../../../../../platform/notification/common/notification.js';
 import { IProgressService, ProgressLocation } from '../../../../../platform/progress/common/progress.js';
-import { IChatSessionNavigationService } from '../../../../services/chat/common/chatSessionNavigationService.js';
+import { IChatSessionNavigationService, type IChatSessionConnection } from '../../../../services/chat/common/chatSessionNavigationService.js';
 import { IOutputService } from '../../../../services/output/common/output.js';
 import { IChatDebugService } from '../../common/chatDebugService.js';
 import { diagnosticPayload } from '../../common/chatDebugEvents.js';
@@ -71,20 +71,36 @@ export class ExportAgentHostDebugLogsAction extends Action2 {
 		const progressService = accessor.get(IProgressService);
 		const notifications = accessor.get(INotificationService);
 		const ownerDocument = accessor.get(ILayoutService).mainContainer.ownerDocument;
-		const generation = appServer.connectionGeneration;
+		let generation: number | undefined;
+		let backend: IChatSessionConnection | undefined;
+		let backendFailure: unknown;
+		let failedToCapture = false;
+		let connectionListener: { dispose(): void; } | undefined;
 		const cancellation = new AbortController();
 		let connectionChanged = false;
-		const connectionListener = appServer.onConnectionState(() => { connectionChanged = true; });
 		const assertCurrent = (): void => {
 			if (cancellation.signal.aborted) throw canceled();
 		};
-		const assertBackend = (): void => {
+		const assertBackend = async (): Promise<void> => {
 			assertCurrent();
+			if (failedToCapture) throw backendFailure;
+			if (backend) {
+				await backend.assertCurrent();
+				assertCurrent();
+				return;
+			}
 			if (connectionChanged || generation !== appServer.connectionGeneration) {
 				throw new Error(localize('debugLogs.connectionChanged', 'The App Server connection changed during export.'));
 			}
 		};
 		try {
+			if (conversation && navigation.captureConnection) {
+				try { backend = navigation.captureConnection(conversation.sessionId); generation = backend.generation; }
+				catch (error) { failedToCapture = true; backendFailure = error; }
+			} else {
+				generation = appServer.connectionGeneration;
+				connectionListener = appServer.onConnectionState(() => { connectionChanged = true; });
+			}
 			await progressService.withProgress({
 				location: ProgressLocation.Notification,
 				title: localize('debugLogs.collecting', 'Collecting Agent Host debug logs…'),
@@ -127,9 +143,9 @@ export class ExportAgentHostDebugLogsAction extends Action2 {
 				};
 				if (conversation) {
 					await attempt('sessionHostLogs', async () => {
-						assertBackend();
+						await assertBackend();
 						const logs = await sessions.collectDebugLogs({ sessionId: conversation.sessionId }, cancellation.signal);
-						assertBackend();
+						await assertBackend();
 						processLogsStatus = logs.files.length ? 'collected' : 'unavailable';
 						if (!logs.files.length) issues.push({ source: 'sessionHostLogs', reason: 'unavailable' });
 						if (logs.omittedFiles) { issues.push({ source: 'sessionHostLogs', reason: 'collectionLimit' }); processLogsStatus = 'partial'; }
@@ -159,9 +175,9 @@ export class ExportAgentHostDebugLogsAction extends Action2 {
 					await attempt('sessionTrace', async () => {
 						let after: Readonly<Record<string, number>> = {};
 						for (let pageNumber = 1; pageNumber <= MaxTracePages; pageNumber++) {
-							assertBackend();
+							await assertBackend();
 							const page = await traces.readTrace(conversation.sessionId, after);
-							assertBackend();
+							await assertBackend();
 							for (const thread of page.trace.threads) {
 								for (const record of thread.events) {
 									const origin = record.event.origin;
@@ -188,9 +204,9 @@ export class ExportAgentHostDebugLogsAction extends Action2 {
 					await attempt('sessionDiagnostics', async () => {
 						let after = 0;
 						for (let pageNumber = 1; pageNumber <= MaxTracePages; pageNumber++) {
-							assertBackend();
+							await assertBackend();
 							const page = await traces.readTraceDiagnostics(conversation.sessionId, after);
-							assertBackend();
+							await assertBackend();
 							if (captureId !== undefined && captureId !== page.diagnostics.captureId) {
 								throw new Error(localize('debugLogs.captureChanged', 'The session evidence capture changed during export.'));
 							}
@@ -219,9 +235,9 @@ export class ExportAgentHostDebugLogsAction extends Action2 {
 								entry.status = 'failed';
 								const payloadCapture = captureId;
 								await attempt(key, async () => {
-									assertBackend();
+									await assertBackend();
 									const payload = await traces.readTracePayload(conversation.sessionId, payloadCapture, reference.payloadId);
-									assertBackend();
+									await assertBackend();
 									const path = `session/payloads/${payloads.length}.json`;
 									if (add(path, key, JSON.stringify(payload))) { entry.path = path; entry.status = 'saved'; }
 									else entry.status = 'omitted';
@@ -262,7 +278,8 @@ export class ExportAgentHostDebugLogsAction extends Action2 {
 		} catch (error) {
 			if (!isCancellationError(error)) notifications.error(localize('debugLogs.failed', 'Could not export Agent Host debug logs: {0}', error instanceof Error ? error.message : String(error)));
 		} finally {
-			connectionListener.dispose();
+			backend?.dispose();
+			connectionListener?.dispose();
 		}
 	}
 }

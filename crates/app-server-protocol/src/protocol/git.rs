@@ -217,6 +217,31 @@ pub struct GitFetchParams {
     pub mode: Option<GitFetchModeDto>,
 }
 
+/// Reads repository context inside one existing Session directory grant.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct GitRepositoryContextsParams {
+    pub session_directory: crate::protocol::environment::SessionDirSelector,
+}
+
+/// Credential-free context for matching a Session repository to an optional provider.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct GitRepositoryContextDto {
+    pub id: String,
+    pub label: String,
+    pub path: String,
+    pub root_path: String,
+    pub head: GitHeadDto,
+    pub remotes: Vec<GitRemoteDto>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct GitRepositoryContextsResult {
+    pub repositories: Vec<GitRepositoryContextDto>,
+}
+
 /// Stable, directory-relative identity for one discovered Git repository projection.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]

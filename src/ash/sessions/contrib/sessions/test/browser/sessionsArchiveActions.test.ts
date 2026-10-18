@@ -18,7 +18,7 @@ import { TestConfigurationService as WorkbenchConfigurationService } from '../..
 import { initializeTestLocalization } from '../../../../../workbench/services/localization/test/common/localizationTestUtils.js';
 import '../../../../../workbench/contrib/chat/browser/chat.shared.contribution.js';
 import '../../browser/views/sessionsViewActions.js';
-import { SessionsManagementService } from '../../../../services/sessions/browser/sessionsManagementService.js';
+import { TestSessionsManagementService as SessionsManagementService } from '../../../../services/sessions/test/browser/testSessionsManagementService.js';
 import type { IActiveSessionThread, ISession } from '../../../../services/sessions/common/session.js';
 import { ISessionsManagementService } from '../../../../services/sessions/common/sessionsManagement.js';
 import type { ISessionsProvider } from '../../../../services/sessions/common/sessionsProvider.js';

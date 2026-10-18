@@ -388,7 +388,9 @@ export class ChatWidgetModel extends Disposable {
 			this._onDidChangeComposer.fire();
 		}
 		this.selection = { kind: "session", active };
-		if (previousThreadId === active.threadId && this._thread?.threadId === active.threadId) {
+		// Catalog hydration changes metadata; reselecting the same conversation must not
+		// erase a failed history read or start another read beside initialization/Retry.
+		if (previousThreadId === active.threadId) {
 			if (!sameModel(previousModel, active.session.model)) void this.loadModels();
 			this._onDidChange.fire();
 			return;

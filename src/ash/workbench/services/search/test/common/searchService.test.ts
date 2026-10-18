@@ -16,6 +16,8 @@ import { BulkEditTestServices } from '../../../../contrib/bulkEdit/test/browser/
 import { SearchResultImpl } from '../../../../contrib/search/browser/searchTreeModel/searchResult.js';
 import { BrowserFileSearchService } from '../../../../../platform/search/browser/browserFileSearchService.js';
 import { IFileSearchService } from '../../../../../platform/search/common/fileSearch.js';
+import { FileService } from '../../../../../platform/files/common/fileService.js';
+import { InMemoryFileSystemProvider } from '../../../../../platform/files/common/inMemoryFilesystemProvider.js';
 import { SearchService } from '../../common/searchService.js';
 import { QueryBuilder } from '../../common/queryBuilder.js';
 import { resetNlsResolver, setNlsMessages } from '../../../../../nls.js';
@@ -423,3 +425,27 @@ function createSearchService(content: IContentSearchService, workspace: IWorkspa
 	services.registerInstance(IFileSearchService, files);
 	return services.createInstance(SearchService);
 }
+
+test('Workbench filename constraints reach the backend before glob and fuzzy budgets', async () => {
+	const paths = ['needle.ts', 'src/needle_skip.ts', 'src/long_needle.ts', 'docs/long_needle.ts'];
+	using fixture = new BulkEditTestServices([]);
+	using files = new FileService();
+	using storage = new InMemoryFileSystemProvider();
+	using registration = files.registerProvider('file', storage);
+	await files.createDirectory(URI.joinPath(folders[0]!.uri, 'src'));
+	await files.createDirectory(URI.joinPath(folders[0]!.uri, 'docs'));
+	for (const path of paths) await files.writeFile({ resource: URI.joinPath(folders[0]!.uri, path), content: 'not searched' }, { create: true, overwrite: false });
+	using workspace = new TestWorkspaceService({ id: 'workspace', folders: [folders[0]!] });
+	using service = createSearchService({ async search() { assert.fail('filename queries do not search contents'); } }, workspace, fixture.models, new BrowserFileSearchService(files));
+	for (const shouldGlobMatchFilePattern of [false, true]) {
+		const query = new QueryBuilder().file([folders[0]!.uri], {
+			filePattern: shouldGlobMatchFilePattern ? '**/*needle*' : 'needle',
+			shouldGlobMatchFilePattern,
+			includePattern: 'src/**/*.{ts,tsx}, other/**', excludePattern: '**/*skip*', maxResults: 1,
+		});
+		assert.deepEqual(query.includePattern, { 'src/**/*.{ts,tsx}': true, 'other/**': true });
+		const result = await service.fileSearch(query);
+		assert.deepEqual(result.results.map(item => item.resource.toString()), [URI.joinPath(folders[0]!.uri, 'src/long_needle.ts').toString()]);
+		assert.equal(result.limitHit, false);
+	}
+});

@@ -208,6 +208,57 @@ pub(crate) enum GitRuntimeError {
     Service(GitServiceError),
 }
 
+/// A request-local projection reuses Git's discovery and I/O contracts without creating
+/// another repository registry, watcher, history cursor, or environment selection.
+pub(super) fn repository_contexts(
+    authorization: &Authorization,
+    cancellation: &CancellationToken,
+) -> Result<Vec<ash_app_server_protocol::protocol::git::GitRepositoryContextDto>, GitRuntimeError> {
+    use ash_app_server_protocol::protocol::git::GitRepositoryContextDto;
+    // Discovery directly traverses the authorized directory. Release that operation lease
+    // before GitService performs its own grant checks; recursive read-locks can deadlock
+    // when a revocation writer is waiting.
+    let roots = authorization
+        .execute(
+            authorization.subject(),
+            authorization.dir(),
+            ash_file_access::Permission::InspectRepository,
+            || {
+                discover_repository_roots(
+                    authorization,
+                    &GitDiscoveryOptions::default(),
+                    &mut GitDiscoveryScans::new(),
+                    cancellation,
+                )
+            },
+        )
+        .map_err(|_| GitRuntimeError::Service(GitServiceError::Permission))??;
+    roots
+        .into_iter()
+        .map(|root| {
+            let descriptor = repository_descriptor(None, authorization, &root)?;
+            let service = GitService::new(authorization.clone(), root.clone())
+                .map_err(GitRuntimeError::Service)?;
+            let (repository, snapshot) = service
+                .snapshot_for_request(cancellation)
+                .map_err(GitRuntimeError::Service)?;
+            let references = service
+                .reference_state_for_request(&repository, cancellation)
+                .map_err(GitRuntimeError::Service)?;
+            cancellation
+                .check()
+                .map_err(|_| GitRuntimeError::Service(GitServiceError::Cancelled))?;
+            Ok(GitRepositoryContextDto {
+                id: descriptor.id,
+                label: descriptor.label,
+                path: descriptor.path,
+                root_path: wire_path(&root)?,
+                head: head(snapshot.head()),
+                remotes: project_remotes(&references.remotes),
+            })
+        })
+        .collect()
+}
 impl GitRuntime {
     pub(super) fn new(
         authorization: Authorization,

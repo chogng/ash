@@ -11,7 +11,7 @@ import { Emitter, Event } from '../../../../../base/common/event.js';
 import { canceled, isCancellationError } from '../../../../../base/common/errors.js';
 import { Disposable } from '../../../../../base/common/lifecycle.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
-import { SessionsManagementService } from '../../browser/sessionsManagementService.js';
+import { TestSessionsManagementService as SessionsManagementService } from './testSessionsManagementService.js';
 import type { IActiveSessionThread, ISession, SessionWorkspaceSelection } from '../../common/session.js';
 import type { ISessionsProvider } from '../../common/sessionsProvider.js';
 import type { ChatAgent } from '../../../../../workbench/services/chat/common/chatService.js';

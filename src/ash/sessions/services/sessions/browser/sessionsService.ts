@@ -35,7 +35,7 @@ export interface ISessionsService {
 	openThread(sessionId: SessionId, threadId: ThreadId): Promise<void>;
 	openSession(sessionId: SessionId, threadId: ThreadId): void;
 	openUntitledSession(untitledSessionId: string): void;
-	openNewSession(title?: string, options?: { readonly sideBySide?: boolean; readonly source?: 'restore'; }): IUntitledChatSession;
+	openNewSession(title?: string, options?: { readonly sideBySide?: boolean; readonly source?: 'restore'; readonly providerId?: string; }): IUntitledChatSession;
 	activateSelection(selection: SessionsViewSelection, options?: { readonly source: 'restore'; }): void;
 	closeVisibleSelection(selection: SessionsViewSelection): void;
 	navigateBack(): void;
@@ -144,8 +144,8 @@ export class SessionsService extends Disposable implements ISessionsService {
 		if (revision === this._navigationRevision) { this.activate({ kind: 'session', sessionId, threadId }); }
 	}
 	openUntitledSession(untitledSessionId: string): void { this.activate({ kind: 'untitled', untitledSessionId }); }
-	openNewSession(title = 'New chat', options?: { readonly sideBySide?: boolean; readonly source?: 'restore'; }): IUntitledChatSession {
-		const session = this.sessionService.createUntitledSession(title);
+	openNewSession(title = 'New chat', options?: { readonly sideBySide?: boolean; readonly source?: 'restore'; readonly providerId?: string; }): IUntitledChatSession {
+		const session = this.sessionService.createUntitledSession(title, undefined, options?.providerId);
 		this.select({ kind: 'untitled', session }, this.current, options?.sideBySide ? 'add' : 'open', options?.source === 'restore' ? 'automatic' : 'explicit');
 		return session;
 	}
@@ -469,6 +469,7 @@ function nonEmptyString(value: unknown): value is string {
 function isUntitledSession(value: unknown): value is IUntitledChatSession {
 	return isRecord(value) && nonEmptyString(value.untitledSessionId) && typeof value.title === 'string'
 		&& (value.model === undefined || isRecord(value.model) && nonEmptyString(value.model.provider) && nonEmptyString(value.model.model))
+		&& (value.providerId === undefined || nonEmptyString(value.providerId))
 		&& (value.modelSelectionKind === undefined || value.modelSelectionKind === 'manual')
 		&& (value.agent === undefined || isRecord(value.agent) && nonEmptyString(value.agent.name) && typeof value.agent.description === 'string' && nonEmptyString(value.agent.sourceId))
 		&& isWorkspaceSelection(value.workspace);

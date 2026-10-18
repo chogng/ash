@@ -1054,7 +1054,7 @@ window.ashChatTranscriptIntegration = {
 				return read();
 			},
 		});
-		lifecycleSessions = resources.add(new SessionsManagementService(lifecycleServices.createInstance(AppServerSessionsProvider, { workspace: () => ({ type: 'current' }), selectWorkspace: async () => undefined })));
+		lifecycleSessions = resources.add(lifecycleServices.createInstance(SessionsManagementService, lifecycleServices.createInstance(AppServerSessionsProvider, { workspace: () => ({ type: 'current' }), selectWorkspace: async () => undefined })));
 		await lifecycleSessions.initialize();
 		lifecycleServices.registerInstance(ISessionsManagementService, lifecycleSessions);
 		lifecycleServices.registerInstance(IChatSessionNavigationService, {

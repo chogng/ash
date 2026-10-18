@@ -197,6 +197,11 @@ pub struct FileGlobParams {
     pub include_patterns: Vec<String>,
     #[schemars(length(max = 64))]
     pub exclude_patterns: Vec<String>,
+    /// Additional filename condition, intersected with includes before result limiting.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    #[schemars(length(max = 1024))]
+    pub required_pattern: Option<String>,
     #[schemars(range(min = 1, max = 5000))]
     pub max_results: usize,
 }
@@ -218,6 +223,14 @@ pub struct FileFuzzyParams {
     pub target: FileGlobTarget,
     #[schemars(length(max = 1024))]
     pub query: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    #[schemars(length(max = 64))]
+    pub include_patterns: Option<Vec<String>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    #[schemars(length(max = 64))]
+    pub exclude_patterns: Option<Vec<String>>,
     #[schemars(range(min = 1, max = 5000))]
     pub max_results: usize,
 }

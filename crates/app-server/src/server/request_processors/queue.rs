@@ -26,6 +26,7 @@ pub(super) trait QueueRequestProcessorContext: Send + Sync {
     ) -> Result<(), core_api::CoreError>;
     fn normalize_input(
         &self,
+        owner: Option<u64>,
         session_id: &ash_protocol::SessionId,
         input: Vec<ash_app_server_protocol::protocol::turn::InputItem>,
     ) -> Result<Vec<ash_protocol::UserInput>, super::RpcError>;
@@ -104,7 +105,7 @@ impl<'ctx, C: QueueRequestProcessorContext + ?Sized> QueueRequestProcessor<'ctx,
             || !snapshot.turns.iter().any(|turn| active(turn.status)))
     }
 
-    pub(super) fn queue_edit(&self, value: &Value) -> Result<Value, RpcError> {
+    pub(super) fn queue_edit(&self, owner: u64, value: &Value) -> Result<Value, RpcError> {
         let params: ash_app_server_protocol::protocol::queue::QueueEditParams = decode(value)?;
         self.context
             .read_session_thread(&params.session_id, &params.thread_id)?;
@@ -124,7 +125,9 @@ impl<'ctx, C: QueueRequestProcessorContext + ?Sized> QueueRequestProcessor<'ctx,
                     .get(&params.command_id)
                     .map_err(error)?
                     .ok_or_else(|| error(QueueError::NotFound))?;
-                let mut input = self.context.normalize_input(&params.session_id, input)?;
+                let mut input =
+                    self.context
+                        .normalize_input(Some(owner), &params.session_id, input)?;
                 self.context
                     .turn_instruction_selection(&mut input, existing.request.mode)?;
                 queue::QueueEdit::Replace { input }
@@ -177,7 +180,7 @@ impl<'ctx, C: QueueRequestProcessorContext + ?Sized> QueueRequestProcessor<'ctx,
         Ok(pending || active)
     }
 
-    pub(super) fn queue_enqueue(&self, value: &Value) -> Result<Value, RpcError> {
+    pub(super) fn queue_enqueue(&self, owner: u64, value: &Value) -> Result<Value, RpcError> {
         let params: QueueEnqueueParams = decode(value)?;
         let snapshot = self
             .context
@@ -200,9 +203,9 @@ impl<'ctx, C: QueueRequestProcessorContext + ?Sized> QueueRequestProcessor<'ctx,
         if snapshot.status != ash_protocol::ThreadStatus::Active {
             return Err(RpcError::new(-32602, AppServerErrorName::InvalidParams));
         }
-        let mut input = self
-            .context
-            .normalize_input(&params.session_id, params.input)?;
+        let mut input =
+            self.context
+                .normalize_input(Some(owner), &params.session_id, params.input)?;
         self.context
             .turn_instruction_selection(&mut input, params.mode)?;
         let tool_mode = match (params.tool_mode, existing.as_ref()) {

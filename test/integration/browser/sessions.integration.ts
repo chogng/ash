@@ -1,3 +1,4 @@
+import { installMultiHostSessionsFixture } from './multiHostSessionsFixture.js';
 import { errorHandler } from '../../../src/ash/base/common/errors.js';
 import { Event } from '../../../src/ash/base/common/event.js';
 import { createDisconnectedRendererApi } from '../../../src/ash/workbench/browser/rendererApi.js';
@@ -42,6 +43,7 @@ if (new URL(location.href).searchParams.has('automations')) {
 const themes = WorkbenchThemesRegistry.registerColorThemes([darkColorTheme, lightColorTheme, highContrastDarkColorTheme, highContrastLightColorTheme]);
 window.addEventListener('pagehide', () => themes.dispose(), { once: true });
 const initialErrorHandler = errorHandler.getUnexpectedErrorHandler();
+const multiHost = new URL(location.href).searchParams.has('multiHost') ? installMultiHostSessionsFixture() : undefined;
 let main = new SessionsBrowserMain(document.querySelector<HTMLElement>('#app')!, codeSessionsProfile);
 window.addEventListener('pagehide', () => main.dispose(), { once: true });
 let workbench = await main.open();
@@ -54,6 +56,7 @@ declare global {
 	interface Window {
 		ashSessionsIntegration: {
 			readonly errors: readonly string[];
+			readonly multiHost?: ReturnType<typeof installMultiHostSessionsFixture>;
 			readonly errorDetails: readonly string[];
 			takeErrors(): string[];
 			disposeAndCheckErrorHandler(): Promise<boolean>;
@@ -65,7 +68,7 @@ declare global {
 }
 
 window.ashSessionsIntegration = {
-	errors, errorDetails,
+	errors, errorDetails, multiHost,
 	takeErrors: () => { errorDetails.splice(0); return errors.splice(0); },
 	disposeAndCheckErrorHandler: async () => {
 		await workbench.shutdown('windowClose');

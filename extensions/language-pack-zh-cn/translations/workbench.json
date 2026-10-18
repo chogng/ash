@@ -2252,6 +2252,7 @@
     "agentHosts.duplicateLease": "Agent 宿主连接租约已存在",
     "agentHosts.limit": "Agent 宿主连接数已达到上限",
     "agentHosts.targetChanged": "已保存的远程连接发生变化，请重新选择目标",
+    "agentHosts.currentWindow": "当前窗口",
     "agentHosts.unavailable": "此窗口无法连接 Agent 宿主。",
     "agentHost.remoteWorkspaceUnavailable": "远程工作区的 App Server 连接不可用。",
     "agentHost.remoteResolverUnavailable": "此窗口未提供本地 Remote 解析器。",

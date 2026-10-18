@@ -42,7 +42,7 @@ export interface IAgentThreadService {
 		readonly beforeTurnId: string;
 		readonly title: string;
 		readonly input: readonly Agent.AgentInput[];
-	}): Promise<{ readonly sessionId: string; readonly threadId: string; }>;
+	}, signal?: AbortSignal): Promise<{ readonly sessionId: string; readonly threadId: string; }>;
 	rename(params: Agent.SessionMutationParams & { readonly threadId: string; readonly title: string; readonly source: 'manual' | 'automatic'; }): Promise<void>;
 	/** Delivery grants are independent of historical committed events. */
 	readonly onDidOfferInteraction: Event<Agent.AgentInteractionOffer>;
@@ -84,12 +84,12 @@ export class AgentThreadHistoryConflictError extends Error {
 }
 
 export interface IAgentTurnService {
-	enqueue(params: Agent.QueueEnqueueParams): Promise<Agent.QueuedMessage>;
+	enqueue(params: Agent.QueueEnqueueParams, signal?: AbortSignal): Promise<Agent.QueuedMessage>;
 	listQueued(params: Agent.QueueListParams): Promise<Agent.QueueListResult>;
 	consultAdvisor(params: Agent.SessionOperationInput<'consultAdvisor'>): Promise<Agent.TurnStartResult>;
-	start(params: Agent.SessionOperationInput<'startTurn'>): Promise<Agent.TurnStartResult>;
+	start(params: Agent.SessionOperationInput<'startTurn'>, signal?: AbortSignal): Promise<Agent.TurnStartResult>;
 	compact(params: Agent.SessionOperationInput<'compactContext'>): Promise<Agent.TurnStartResult>;
-	steer(params: Agent.SessionOperationInput<'steerTurn'>): Promise<Agent.TurnSteerResult>;
+	steer(params: Agent.SessionOperationInput<'steerTurn'>, signal?: AbortSignal): Promise<Agent.TurnSteerResult>;
 	interrupt(params: Agent.SessionOperationInput<'interruptTurn'>): Promise<Agent.TurnInterruptResult>;
 	resolveInteraction(params: Agent.SessionOperationInput<'resolveInteraction'>): Promise<Agent.TurnInteractionResolveResult>;
 }

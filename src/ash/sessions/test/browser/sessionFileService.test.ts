@@ -21,7 +21,7 @@ import type { IRendererHost } from '../../../platform/renderer/common/rendererHo
 import { BrowserStorageService } from '../../../workbench/services/storage/browser/storageService.js';
 import { ISessionsService, SessionsService } from '../../services/sessions/browser/sessionsService.js';
 import { ISessionsManagementService } from '../../services/sessions/common/sessionsManagement.js';
-import { SessionsManagementService } from '../../services/sessions/browser/sessionsManagementService.js';
+import { TestSessionsManagementService as SessionsManagementService } from '../../services/sessions/test/browser/testSessionsManagementService.js';
 import type { ISessionsProvider } from '../../services/sessions/common/sessionsProvider.js';
 import type { ISession, SessionId } from '../../services/sessions/common/session.js';
 import { SessionsWorkspaceContextService } from '../../services/workspace/browser/workspaceContextService.js';

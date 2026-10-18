@@ -238,3 +238,47 @@ fn disk_and_streaming_walks_apply_gitignore_outside_a_repository() {
         [Path::new("source.rs")]
     );
 }
+
+#[test]
+fn fuzzy_filters_select_eligible_paths_before_ranking_and_truncation() {
+    let root = TestWorkspace::new();
+    root.write("needle.rs");
+    root.write("src/needle_skip.rs");
+    root.write("src/long_needle_path.rs");
+    root.write("src/long_needle_path.md");
+    let token = ash_async_utils::CancellationSource::new().token();
+    let found = Service
+        .fuzzy_filtered(
+            root.path.clone(),
+            "needle",
+            1,
+            &PathFilters {
+                include_patterns: vec!["src/**".into()],
+                exclude_patterns: vec!["**/*skip*".into(), "**/*.md".into()],
+            },
+            &token,
+        )
+        .unwrap();
+    assert_eq!(
+        found
+            .matches
+            .iter()
+            .map(|matched| matched.path.clone())
+            .collect::<Vec<_>>(),
+        vec![PathBuf::from("src/long_needle_path.rs")]
+    );
+    assert_eq!(found.total_match_count, 1);
+    assert!(matches!(
+        Service.fuzzy_filtered(
+            root.path.clone(),
+            "needle",
+            1,
+            &PathFilters {
+                include_patterns: vec!["../outside".into()],
+                exclude_patterns: vec![],
+            },
+            &token
+        ),
+        Err(Error::InvalidInput(_))
+    ));
+}

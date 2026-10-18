@@ -33,3 +33,45 @@ test('App local Git translates structured host cancellation into a domain cancel
 	const connection = { request: async () => { throw new AppServerRemoteError(-32800, 'cancelled', { kind: 'RequestCancelled' }); } } as unknown as AppServerProtocolClient;
 	await assert.rejects(new AppServerLocalGitService(connection).clone('operation', 'url', '/workspace/new'), { name: 'CancellationError' });
 });
+
+
+test('Session repository contexts use the captured connection and retain typed metadata without transport DTOs', async () => {
+	const { Event } = await import('../../../../base/common/event.js');
+	const calls: unknown[] = [];
+	const service = new AppServerLocalGitService({
+		generation: 2, state: 'ready', onStateChange: Event.None,
+		request: async (definition: { method: string; }, params: unknown) => {
+			decodeAppServerRequestParams('git/repositoryContexts', params);
+			calls.push([definition.method, params]);
+			return { repositories: [{ id: 'same-repo', label: 'Repo', path: 'nested', rootPath: '/historical/nested', head: { type: 'detached', objectId: 'a'.repeat(40) }, remotes: [{ name: 'origin', identity: null }] }] };
+		},
+	} as unknown as AppServerProtocolClient);
+	assert.deepEqual(await service.readRepositoryContexts({ sessionId: 'same-session', path: '/historical' }), [{
+		id: 'same-repo', label: 'Repo', path: 'nested', rootPath: '/historical/nested',
+		head: { type: 'detached', name: '', objectId: 'a'.repeat(40) }, remotes: [{ name: 'origin' }],
+	}]);
+	assert.deepEqual(calls, [['git/repositoryContexts', { sessionDirectory: { sessionId: 'same-session', path: '/historical' } }]]);
+});
+
+test('repository reads retire on caller cancellation or connection replacement and cannot publish late snapshots', async () => {
+	const { DeferredPromise } = await import('../../../../base/common/async.js');
+	const { CancellationTokenSource } = await import('../../../../base/common/cancellation.js');
+	const { Emitter } = await import('../../../../base/common/event.js');
+	using changes = new Emitter<import('../../../agentHost/common/appServerApi.js').AppServerConnectionState>();
+	let response = new DeferredPromise<unknown>();
+	const service = new AppServerLocalGitService({
+		generation: 1, state: 'ready', onStateChange: changes.event, request: () => response.p,
+	} as unknown as AppServerProtocolClient);
+	using source = new CancellationTokenSource();
+	const first = service.readRepositoryContexts({ sessionId: 'session', path: '/repo' }, source.token);
+	const cancelled = assert.rejects(first, { name: 'CancellationError' });
+	source.cancel();
+	await cancelled;
+	await response.complete({ repositories: [] });
+	response = new DeferredPromise<unknown>();
+	const next = service.readRepositoryContexts({ sessionId: 'session', path: '/repo' });
+	const retired = assert.rejects(next, { name: 'CancellationError' });
+	changes.fire('restarting');
+	await retired;
+	await response.complete({ repositories: [] });
+});

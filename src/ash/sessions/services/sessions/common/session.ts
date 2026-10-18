@@ -150,6 +150,10 @@ export interface ISessionApplication {
 
 /** Frontend product model for one App Server Session tree. */
 export interface ISession {
+	/** Provenance belongs to the provider registry; sessionId is the window identity. */
+	readonly providerId?: string;
+	readonly providerLabel?: string;
+	readonly backendSessionId?: string;
 	readonly application?: ISessionApplication;
 	readonly sessionId: SessionId;
 	readonly title: string;
@@ -171,6 +175,7 @@ export interface IActiveSessionThread {
 
 /** An untitled Chat session that has not yet acquired a durable Session identity. */
 export interface IUntitledChatSession {
+	readonly providerId?: string;
 	readonly untitledSessionId: string;
 	readonly title: string;
 	readonly model: ModelRef | undefined;

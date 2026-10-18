@@ -24,6 +24,7 @@ fn query() -> GlobQuery {
         scope: PathBuf::new(),
         include_patterns: Vec::new(),
         exclude_patterns: vec![".git".into()],
+        required_pattern: None,
         max_results: 100,
     }
 }
@@ -122,6 +123,34 @@ fn does_not_follow_links_and_rejects_scope_outside_the_authorized_root() {
     q.scope = "escape".into();
     assert!(matches!(
         Service.glob(&dir, &q, &cancellation.token()),
+        Err(Error::InvalidInput(_))
+    ));
+}
+
+#[test]
+fn filename_constraint_intersects_includes_before_newest_result_limit() {
+    let temp = tempfile::tempdir().unwrap();
+    let dir = Dir::open_local(temp.path()).unwrap();
+    write(dir.canonical_path(), "docs/newer.rs", 30);
+    write(dir.canonical_path(), "src/skip.rs", 20);
+    write(dir.canonical_path(), "src/keep.rs", 10);
+    let mut q = query();
+    q.include_patterns = vec!["**/*.rs".into(), "**/*.md".into()];
+    q.exclude_patterns.push("**/skip.rs".into());
+    q.required_pattern = Some("src/**".into());
+    q.max_results = 1;
+    assert_eq!(
+        Service
+            .glob(&dir, &q, &CancellationSource::new().token())
+            .unwrap(),
+        GlobResult {
+            paths: vec!["src/keep.rs".into()],
+            total_matches: 1,
+        }
+    );
+    q.required_pattern = Some("../outside".into());
+    assert!(matches!(
+        Service.glob(&dir, &q, &CancellationSource::new().token()),
         Err(Error::InvalidInput(_))
     ));
 }

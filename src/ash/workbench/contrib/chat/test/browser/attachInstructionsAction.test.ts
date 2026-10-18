@@ -13,14 +13,14 @@ import { ChatInstructionsPickerPick } from '../../browser/promptSyntax/attachIns
 const document = browserEnvironment.window.document;
 const path = '/outside-workspaces/instructions/review.md';
 
-function setup(resources: DisposableStore, initial: RemoteAgentConnection) {
+function setup(resources: DisposableStore, initial: RemoteAgentConnection, resource?: URI) {
 	const keys = resources.add(new ContextKeyService());
 	const quick = resources.add(new TestQuickInputService({ container: document.body, contextKeyService: keys }));
 	let connection = initial;
 	const pick = new ChatInstructionsPickerPick('instruction-session', {
 		isAvailable: true, list: async sessionId => {
 			assert.equal(sessionId, 'instruction-session');
-			return [{ name: 'A synthetic instruction', path, scope: 'user' }];
+			return [{ name: 'A synthetic instruction', path, scope: 'user', resource }];
 		}
 	}, quick, {
 		get connection() { return connection; }, connectionState: 'connected',
@@ -68,6 +68,18 @@ test('Instruction selection cannot attach a catalog from a replaced connection',
 	changeConnection({ kind: 'local', generation: 2 });
 	accept();
 	assert.equal(await selecting, undefined);
+	assert.equal(quick.currentQuickInput, undefined);
+});
+
+test('a provider-owned Instruction URI remains attached to its host when the ambient connection changes', async () => {
+	using resources = new DisposableStore();
+	const resource = URI.parse(`ash-remote://ssh+additional${path}`);
+	const { quick, pick, changeConnection } = setup(resources, { kind: 'local', generation: 1 }, resource);
+	const selecting = pick.asAttachment(new AbortController().signal);
+	await ready(quick);
+	changeConnection({ kind: 'local', generation: 2 });
+	accept();
+	assert.equal((await selecting)?.attachment.resource?.toString(), resource.toString());
 	assert.equal(quick.currentQuickInput, undefined);
 });
 

@@ -1124,6 +1124,41 @@ connection 会接收这些 child Thread 的实时 update。产品宿主应先应
 必须读取当前表并保留未知键，`null` 清除整张表，缺失字段的默认值由对应前端决定。Settings 与手工
 TOML 编辑共享同一 Config revision/generation 和 `config/changed` 通知链。
 
+### 文件名查询的路径过滤
+
+`file/search/fuzzy` 可选 `includePatterns`／`excludePatterns`，`file/glob` 另可选 `requiredPattern`。includes 内部取并集，再与 requiredPattern 交集，并减去 excludes；过滤发生在匹配计数、排序预算和结果截断之前。空过滤保留原请求行为。带过滤的 fuzzy 使用当前授权目录遍历，不对已截断的索引结果再过滤；取消和目录授权沿原查询 owner。
+
+### 历史 Session 仓库上下文
+
+`git/repositoryContexts { sessionDirectory: { sessionId, path } }` 返回该 Session 授权目录中的
+`repositories: [{ id, label, path, rootPath, head, remotes }]`。`path` 相对授权根，`rootPath` 是后端机器
+上的绝对仓库投影路径；`head` 和不含 URL/凭据的 `remotes.identity` 复用既有 Git 领域语义。Sessions
+依据该连接及目录的仓库身份关联 GitHub，不会查询当前环境或另一 Session 的同名目录作为后备。
+
+请求要求现有 Session 目录的 `inspectRepository` 权限。发现、HEAD 和 remote 查询复用同一 Git
+领域实现，操作只产生当前读取结果，不建立额外仓库表、watcher 或 graph cursor。目录撤权后后续请求
+失败，读取结束前再次检查授权；连接取消沿现有请求 token 终止 Git 子进程及等待。
+
+### Renderer 附件快照传输
+
+`capabilities.contracts.hostResources.version = 1` 表示后端支持将现有文本附件 Context 通过
+`InputItem.hostResource { name, resource: { handle, byteLength, sha256 } }` 传输。Renderer 在用户选择时
+已捕获的内容仍是唯一快照；发送期间不会重新读取路径、工作副本或远端同名文件。未协商的连接继续发送
+原有 inline `context`；图片、音频和后端 opaque byte resources 仍使用各自既有 owner。
+
+后端只向发起此 Turn、steer、rewrite 或 queue enqueue 的同一连接发送 typed 反向请求：
+`hostResource/read { handle, offset, maxBytes }` 返回 `{ handle, offset, dataBase64, decodedLength, eof }`；
+`hostResource/release { handle }` 返回 `null`。句柄不接受连接 ID、URI、路径或目录权限参数，也不授予
+live 文件读写或 realpath 权限。读取必须从 offset 0 顺序推进，重复读取与跨连接复用会失败。
+
+每个快照最多 8 MiB、64 次顺序读取，每块最多 256 KiB；Renderer 每连接最多 64 份、合计 32 MiB，
+租约 2 分钟后失效。
+后端对整份传输共用 30 秒预算，验证块偏移、长度、结束标记、UTF-8 和 `sha256:` 摘要，并在接纳操作前
+释放租约。读取或释放失败都不提交新 Context；已有读取错误优先于清理错误。校验成功后仅持久化原有
+Context 内容，句柄不进入历史或队列。连接关闭立即终止等待并清空该连接快照，迟到响应不会转移到新连接。
+客户端提交信号在创建快照前后及真正派发前检查；导航或取消期间完成的摘要只释放租约，不发送旧操作。
+该信号不自动重放或撤销已经接纳的 Turn。
+
 ### 执行轨迹配置
 
 `config/read.trace` 返回已保存的 `{ enabled, directory }` 或 `null`；`directory` 是后端机器上的

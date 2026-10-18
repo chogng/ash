@@ -33,7 +33,8 @@ export class SessionsWorkspaceContextService extends Disposable {
 				// Drafts have no SessionDirectory authority yet; expose no writable Explorer root.
 				this.updateWorkspace({ id: host.id, folders: [] }); return;
 			}
-			this.updateWorkspace({ id: host.id, folders: host.folders.filter(folder => extUriBiasedIgnorePathCase.isEqual(folder.uri, uri)) });
+			const known = host.folders.filter(folder => extUriBiasedIgnorePathCase.isEqual(folder.uri, uri));
+			this.updateWorkspace({ id: host.id, folders: known.length || target.type !== 'ssh' ? known : [{ id: `agent-host:${selected?.kind === 'untitled' ? selected.session.providerId ?? '' : ''}`, uri, name: basename(uri), index: 0 }] });
 			return;
 		}
 		this.updateWorkspace(host);

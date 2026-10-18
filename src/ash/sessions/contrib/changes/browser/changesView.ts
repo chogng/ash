@@ -27,7 +27,6 @@ import { MutableDisposable } from '../../../../base/common/lifecycle.js';
 import { ChecksWidget } from './checksWidget.js';
 import { SessionSyncChangesActionViewItem } from './sessionSyncChanges.js';
 import { CreatePullRequestContextView } from './createPullRequestContextView.js';
-import { CommandsRegistry } from '../../../../platform/commands/common/commands.js';
 import { IChangesViewService } from '../common/changesViewService.js';
 import { IStorageService } from '../../../../platform/storage/common/storage.js';
 import { ChangesViewMode } from '../common/changes.js';
@@ -122,10 +121,9 @@ export class ChangesViewPane extends ViewPane {
 		}));
 		const updatePullRequest = (): void => {
 			const selected = this.sessions.activeSelection;
-			this.createPullRequest.domNode.hidden = selected?.kind !== 'session' || !selected.active.session.workspace || !CommandsRegistry.hasCommand('git.getRepositoryContexts');
+			this.createPullRequest.domNode.hidden = selected?.kind !== 'session' || !selected.active.session.workspace;
 		};
 		this._register(sessions.onDidChange(updatePullRequest));
-		this._register(CommandsRegistry.onDidChangeCommands(updatePullRequest));
 		updatePullRequest();
 		this._register(new ChangesSummaryWidget(this.statistics)).render(this.contentElement);
 		const controls = h(container.ownerDocument, 'div', { className: 'ash-sessions-changes-view-actions' });

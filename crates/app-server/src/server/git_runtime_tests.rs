@@ -3448,3 +3448,30 @@ fn ai_editor_evidence_is_bound_to_candidate_bytes_commit_scope_and_directory() {
             .unwrap()
     );
 }
+
+#[test]
+fn repository_context_projection_respects_cancellation_and_retired_authority() {
+    let repository = TestRepository::init();
+    let grant = Grant::for_environment(
+        Dir::open_local(repository.root()).unwrap(),
+        GrantSource::HostConfiguration,
+        Permissions::new([Permission::InspectRepository]),
+    );
+    let authorization = grant.authorize(Permission::InspectRepository).unwrap();
+    let cancellation = ash_async_utils::CancellationSource::new();
+    cancellation.cancel();
+    assert!(matches!(
+        super::repository_contexts(&authorization, &cancellation.token()),
+        Err(super::GitRuntimeError::Service(
+            crate::git_service::GitServiceError::Cancelled
+        ))
+    ));
+    grant.revoke();
+    let cancellation = ash_async_utils::CancellationSource::new();
+    assert!(matches!(
+        super::repository_contexts(&authorization, &cancellation.token()),
+        Err(super::GitRuntimeError::Service(
+            crate::git_service::GitServiceError::Permission
+        ))
+    ));
+}

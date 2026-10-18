@@ -14,6 +14,7 @@ mod execution_environments;
 mod extension_packages_editor_extensions;
 mod extension_tools;
 mod git_service;
+mod host_resource_host;
 mod ide_registry;
 mod local;
 mod local_tools;

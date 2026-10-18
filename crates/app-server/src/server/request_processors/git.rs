@@ -99,6 +99,12 @@ pub(super) trait GitRequestProcessorContext: Send + Sync {
         &self,
         request: &core_api::HookEventRequest,
     ) -> Result<core_api::HookEventDecision, super::RpcError>;
+    fn session_dir_authorization(
+        &self,
+        session_id: &ash_protocol::SessionId,
+        root: &Path,
+        permission: ash_file_access::Permission,
+    ) -> Result<ash_file_access::Authorization, RpcError>;
     fn git_runtime_service(
         &self,
     ) -> Result<std::sync::Arc<super::git_runtime::GitRuntime>, super::RpcError>;
@@ -674,6 +680,31 @@ impl<'ctx, C: GitRequestProcessorContext + ?Sized> GitRequestProcessor<'ctx, C> 
         result(&GitCloneCancelResult {})
     }
 
+    pub(super) fn git_repository_contexts(
+        &self,
+        value: &Value,
+        cancellation: &CancellationToken,
+    ) -> Result<Value, RpcError> {
+        use ash_app_server_protocol::protocol::git::GitRepositoryContextsParams;
+        use ash_app_server_protocol::protocol::git::GitRepositoryContextsResult;
+        use ash_file_access::Permission;
+        let params: GitRepositoryContextsParams = decode(value)?;
+        if !params.session_directory.path.is_absolute() {
+            return Err(RpcError::new(-32602, AppServerErrorName::InvalidParams));
+        }
+        let authorization = self.context.session_dir_authorization(
+            &params.session_directory.session_id,
+            &params.session_directory.path,
+            Permission::InspectRepository,
+        )?;
+        let repositories = super::git_runtime::repository_contexts(&authorization, cancellation)
+            .map_err(git_error)?;
+        // Do not publish a context whose Session grant retired during the Git I/O.
+        authorization
+            .ensure_active()
+            .map_err(|_| RpcError::new(-32043, AppServerErrorName::PermissionRequired))?;
+        result(&GitRepositoryContextsResult { repositories })
+    }
     pub(super) fn git_repositories(
         &self,
         connection: &ConnectionState,

@@ -1,3 +1,6 @@
+import { createDisconnectedRendererApi } from '../../../src/ash/workbench/browser/rendererApi.js';
+import type { IRendererHost } from '../../../src/ash/platform/renderer/common/rendererHost.js';
+import type { ISessionProviderScope, ISessionProviderScopeService, SessionProviderServices } from '../../../src/ash/sessions/browser/agentHost/sessionProviderScopeService.js';
 import { observableValue } from '../../../src/ash/base/common/observable.js';
 import type { ICustomViewService } from '../../../src/ash/sessions/services/customView/browser/customViewService.js';
 import type { IMenuService } from '../../../src/ash/platform/actions/common/actions.js';
@@ -160,7 +163,22 @@ const sessions = { get activeSelection() { return selection; }, get visibleSelec
 resources.add(CommandsRegistry.register('git.getRepositoryContexts', () => undefined));
 const repositoryCommands = { executeCommand: async () => Promise.all(git.repositories.map(async repository => ({ ...repository, root: repository.root.toString(), head: (await git.status(repository.id)).head, remotes: (await git.graph({ limit: 1 }, repository.id)).remotes }))) } as unknown as ICommandService;
 const scm = { onDidAddRepository: Event.None, onDidRemoveRepository: Event.None, repositories: git.repositories.map(repository => ({ provider: { id: repository.id, onDidChangeResources: (listener: () => void) => statusChanged.event(() => listener()) } })) } as unknown as ISCMService;
-const github = resources.add(new GitHubService(sessions, management, repositoryCommands, scm, new AppServerGitHubService(client), { onDidChangeAccounts: accountsChanged.event } as IAccountService, new ConsoleLogger('sessions-pr-test')));
+const baseHost = createDisconnectedRendererApi();
+const hostEvents = resources.add(new Emitter<Parameters<Parameters<IRendererHost['events']['subscribe']>[0]>[0]>());
+resources.add(accountsChanged.event(() => hostEvents.fire({ method: 'account/updated', params: {} } as never)));
+const host: IRendererHost = {
+	...baseHost, github: new AppServerGitHubService(client), events: { subscribe: hostEvents.event },
+	appServer: { ...baseHost.appServer, getConnectionState: async () => 'ready', onConnectionState: listener => client.onStateChange(listener) },
+	localGit: {
+		...baseHost.localGit, readRepositoryContexts: async () => Promise.all(git.repositories.map(async repository => ({
+			id: repository.id, label: repository.label, path: repository.path, rootPath: repository.root.fsPath,
+			head: (await git.status(repository.id)).head, remotes: (await git.graph({ limit: 1 }, repository.id)).remotes,
+		})))
+	},
+};
+const scope: ISessionProviderScope = { providerId: 'primary', services: { host } as SessionProviderServices, thread: host.thread, identity: value => value, backendIdentity: value => value, assertCurrent: () => { } };
+const scopes = { getScopes: () => [scope], getScope: () => scope, onDidChangeScopes: Event.None } as unknown as ISessionProviderScopeService;
+const github = resources.add(new GitHubService(sessions, management, scm, scopes, new ConsoleLogger('sessions-pr-test')));
 const main = document.createElement('main');
 main.style.width = '320px';
 document.body.append(main);
@@ -170,7 +188,7 @@ const notifications = { error: (error: unknown) => { throw error; } } as unknown
 const quickInput = resources.add(new TestQuickInputService({ container: document.body }));
 const toolbar = resources.add(new SessionChatInputToolbar(main, { sessionId: 'session', onDidChange: Event.None }, github, opener, notifications, quickInput, { openEditor: async input => { opened.push(input.resource.toString()); } } as IEditorService));
 toolbar.render();
-const list = resources.add(new SessionsList(main, management, sessions, 'Sessions', 'New Session', github, undefined, listCustomViews, listMenus, listNotifications));
+const list = resources.add(new SessionsList(main, management, sessions, 'Sessions', 'New Session', github, undefined, listCustomViews, listMenus, listNotifications, { executeCommand: async () => { sessions.openNewSession(); }, onWillExecuteCommand: Event.None, onDidExecuteCommand: Event.None } as unknown as import('../../../src/ash/platform/commands/common/commands.js').ICommandService));
 github.initialize();
 
 window.ashSessionGitHub = {

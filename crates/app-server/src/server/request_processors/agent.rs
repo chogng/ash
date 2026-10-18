@@ -131,6 +131,12 @@ impl RewritePhase {
 /// Coordinates the existing owners needed by the agent adapter.
 /// This contract deliberately exposes no server object or unrestricted service registry.
 pub(super) trait AgentRequestProcessorContext: Send + Sync {
+    fn read_host_context(
+        &self,
+        owner: u64,
+        resource: &ash_app_server_protocol::protocol::host_resource::HostResourceRef,
+    ) -> Result<String, super::RpcError>;
+
     fn submit_bound_turn_with_ide(
         &self,
         thread: &ash_protocol::ThreadId,
@@ -1103,8 +1109,11 @@ impl<'ctx, C: AgentRequestProcessorContext + ?Sized> AgentRequestProcessor<'ctx,
                 ))
             })?
             .mode;
-        let mut normalized_input =
-            self.normalize_input(&mutation.session_id, rewrite.input.clone())?;
+        let mut normalized_input = self.normalize_input(
+            Some(connection_id),
+            &mutation.session_id,
+            rewrite.input.clone(),
+        )?;
         self.turn_instruction_selection(&mut normalized_input, mode)?;
         let rewound = self
             .context
@@ -1450,7 +1459,8 @@ impl<'ctx, C: AgentRequestProcessorContext + ?Sized> AgentRequestProcessor<'ctx,
             Some(tool_mode) => TurnToolModeSelection::Explicit(tool_mode),
             None => TurnToolModeSelection::ConfiguredDefault,
         };
-        let mut input = self.normalize_input(&mutation.session_id, input)?;
+        let mut input =
+            self.normalize_input(mutation.connection_id, &mutation.session_id, input)?;
         let selection = self.turn_instruction_selection(&mut input, mode)?;
         self.start_agent_turn_request(
             mutation,
@@ -1919,6 +1929,7 @@ impl<'ctx, C: AgentRequestProcessorContext + ?Sized> AgentRequestProcessor<'ctx,
                     item,
                     InputItem::Text { .. }
                         | InputItem::Context { .. }
+                        | InputItem::HostResource { .. }
                         | InputItem::Issue { .. }
                         | InputItem::ToolSelection { .. }
                 )
@@ -1929,7 +1940,7 @@ impl<'ctx, C: AgentRequestProcessorContext + ?Sized> AgentRequestProcessor<'ctx,
                 AppServerErrorName::CoreOperationFailed,
             ));
         }
-        let input = self.normalize_input(&mutation.session_id, input)?;
+        let input = self.normalize_input(mutation.connection_id, &mutation.session_id, input)?;
         let receipt = self
             .context
             .agent_runtime()
@@ -2096,6 +2107,7 @@ fn thread_mutation(
 impl<'ctx, C: AgentRequestProcessorContext + ?Sized> AgentRequestProcessor<'ctx, C> {
     pub(super) fn normalize_input(
         &self,
+        owner: Option<u64>,
         session_id: &ash_protocol::SessionId,
         input: Vec<InputItem>,
     ) -> Result<Vec<UserInput>, RpcError> {
@@ -2126,6 +2138,15 @@ impl<'ctx, C: AgentRequestProcessorContext + ?Sized> AgentRequestProcessor<'ctx,
                     }
                     InputItem::Text { text } => UserInput::Text { text },
                     InputItem::Context { name, content } => UserInput::Context { name, content },
+                    InputItem::HostResource { name, resource } => {
+                        let owner = owner.ok_or_else(|| {
+                            RpcError::new(-32602, AppServerErrorName::InvalidParams)
+                        })?;
+                        UserInput::Context {
+                            name,
+                            content: self.context.read_host_context(owner, &resource)?,
+                        }
+                    }
                     InputItem::ToolSelection { disabled, scope } => {
                         if disabled.len() > 4096
                             || disabled

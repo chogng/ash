@@ -1,3 +1,5 @@
+import { ISessionProviderScopeService } from '../agentHost/sessionProviderScopeService.js';
+import { ScopedSessionConversationPane } from './scopedSessionConversationPane.js';
 import { IStorageService, StorageScope } from '../../../platform/storage/common/storage.js';
 import { IThemeService } from '../../../platform/theme/common/themeService.js';
 import type { ChatContextAttachment } from '../../../workbench/services/chat/common/chatContextService.js';
@@ -36,7 +38,7 @@ export interface SessionsPartOptions {
 	readonly accessibleViewService: IAccessibleViewService;
 	readonly notifications: INotificationService;
 	readonly commandService: ICommandService;
-	readonly createInputPart: (container: HTMLElement, delegate: ChatInputDelegate, model: ChatWidgetModel) => IChatInputPart;
+	readonly createInputPart: (container: HTMLElement, delegate: ChatInputDelegate, model: ChatWidgetModel, scope: IInstantiationService) => IChatInputPart;
 	readonly createCoworkPane: (container: HTMLElement, panelId: string, selection: SessionsViewSelection) => ISessionsConversationPane;
 	readonly activateSelection: (selection: SessionsViewSelection) => void;
 	readonly createNewSession: () => void;
@@ -61,6 +63,7 @@ export class SessionsPart extends Part implements ISessionsConversationService {
 		@IInstantiationService private readonly services: IInstantiationService,
 		@IThemeService themeService: IThemeService,
 		@IStorageService storageService: IStorageService,
+		@ISessionProviderScopeService private readonly providerScopes: ISessionProviderScopeService,
 	) {
 		super(container, 'sessions', themeService, storageService);
 		this.content = h(container.ownerDocument, 'section');
@@ -171,9 +174,13 @@ export class SessionsPart extends Part implements ISessionsConversationService {
 	private createPane(kind: SessionsConversationKind, container: HTMLElement, panelId: string, selection: SessionsViewSelection): ISessionsConversationPane {
 		const options = this.options;
 		if (kind === 'cowork') return options.createCoworkPane(container, panelId, selection);
-		const model = this.services.createInstance(ChatWidgetModel, options.chatService, selection.kind === 'session' ? { kind: 'session', active: selection.active } : { kind: 'untitled', session: selection.session }, options.sessionService);
-		return this.services.createInstance<ChatWidget<ChatWidgetModel>>(ChatWidget, container, panelId, model, options.createNewSession, options.contextMenuService, options.contextViewService, options.commandService, options.accessibleViewService, options.notifications, undefined, undefined, undefined,
-			(inputContainer: HTMLElement, delegate: ChatInputDelegate) => options.createInputPart(inputContainer, delegate, model));
+		const scope = this.providerScopes.createScope(selection.kind === 'session' ? selection.active.session.sessionId : undefined, selection.kind === 'untitled' ? selection.session.providerId : undefined);
+		try {
+			const model = scope.createInstance(ChatWidgetModel, options.chatService, selection.kind === 'session' ? { kind: 'session', active: selection.active } : { kind: 'untitled', session: selection.session }, options.sessionService);
+			const pane = scope.createInstance<ChatWidget<ChatWidgetModel>>(ChatWidget, container, panelId, model, options.createNewSession, options.contextMenuService, options.contextViewService, options.commandService, options.accessibleViewService, options.notifications, undefined, undefined, undefined,
+				(inputContainer: HTMLElement, delegate: ChatInputDelegate) => options.createInputPart(inputContainer, delegate, model, scope));
+			return new ScopedSessionConversationPane(pane, scope);
+		} catch (error) { scope.dispose(); throw error; }
 	}
 }
 

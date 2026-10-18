@@ -293,6 +293,14 @@ impl super::fs_operations::FileSystemRequestProcessorContext for AppServer {
 }
 
 impl super::git_operations::GitRequestProcessorContext for AppServer {
+    fn session_dir_authorization(
+        &self,
+        session_id: &ash_protocol::SessionId,
+        root: &std::path::Path,
+        permission: ash_file_access::Permission,
+    ) -> Result<ash_file_access::Authorization, super::RpcError> {
+        AppServer::session_dir_authorization(self, session_id, root, permission)
+    }
     fn delete_worktree_session(
         &self,
         owner_thread_id: &str,
@@ -704,6 +712,18 @@ impl super::team_operations::TeamRequestProcessorContext for AppServer {
 }
 
 impl super::operations::AgentRequestProcessorContext for AppServer {
+    fn read_host_context(
+        &self,
+        owner: u64,
+        resource: &ash_app_server_protocol::protocol::host_resource::HostResourceRef,
+    ) -> Result<String, super::RpcError> {
+        crate::host_resource_host::read_context(&self.client_host, owner, resource).map_err(|_| {
+            super::RpcError::new(
+                -32602,
+                ash_app_server_protocol::protocol::error::AppServerErrorName::InvalidParams,
+            )
+        })
+    }
     fn submit_bound_turn_with_ide(
         &self,
         thread: &ash_protocol::ThreadId,
@@ -890,10 +910,12 @@ impl super::queue_operations::QueueRequestProcessorContext for AppServer {
     }
     fn normalize_input(
         &self,
+        owner: Option<u64>,
         session_id: &ash_protocol::SessionId,
         input: Vec<ash_app_server_protocol::protocol::turn::InputItem>,
     ) -> Result<Vec<ash_protocol::UserInput>, super::RpcError> {
-        self.agent_processor().normalize_input(session_id, input)
+        self.agent_processor()
+            .normalize_input(owner, session_id, input)
     }
     fn read_session_thread(
         &self,

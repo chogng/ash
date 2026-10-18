@@ -448,3 +448,19 @@ for (const steering of ['afterOutput', 'early', 'contextOnly'] as const) test(`e
 	await assert.rejects(f.chat.rewriteRequest({ sessionId: 'session', threadId: 'A', turnId: turn.turnId, itemId: 'original-input', text: 'Legacy', commandId: 'legacy-edit' }), /no longer available/);
 	assert.equal(rewrites.length, 1);
 });
+
+test('Chat preserves the composer cancellation signal through start, queue and steering domain dispatch', async () => {
+	const f = fixture('Code');
+	using resources = f.resources;
+	await f.model.initialize();
+	const controller = new AbortController();
+	const signals: (AbortSignal | undefined)[] = [];
+	f.turnApi.start = async (_params, signal) => { signals.push(signal); return { turnId: 'started', sequence: 2 }; };
+	f.turnApi.enqueue = async (_params, signal) => { signals.push(signal); return { status: 'pending' }; };
+	f.turnApi.steer = async (_params, signal) => { signals.push(signal); return { turnId: 'started', sequence: 2 }; };
+	const options = { sessionId: 'session', threadId: 'A', text: 'Captured context', mode: 'agent' as const, expectedSequence: 1, signal: controller.signal };
+	await f.chat.startTurn(options);
+	await f.chat.queueTurn(options);
+	await f.chat.steerTurn({ ...options, turnId: 'started' });
+	assert.deepEqual(signals, [controller.signal, controller.signal, controller.signal]);
+});

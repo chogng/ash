@@ -1,6 +1,10 @@
 import { localize } from '../../nls.js';
 import { throwIfCancelled } from '../../base/common/cancellation.js';
 import { generateUuid } from '../../base/common/uuid.js';
+import { DeferredPromise, raceCancellationError } from '../../base/common/async.js';
+import { Emitter } from '../../base/common/event.js';
+import { agentHostConnectionAddress } from '../../platform/agentHost/common/agentHostConnectionsService.js';
+import type { RemoteConnectionDefinition } from '../../platform/remote/common/remoteConnectionService.js';
 import { REMOTE_AGENT_HOST_OPEN_CHANNEL, REMOTE_AGENT_HOST_CLOSE_CHANNEL } from '../../platform/remote/common/remoteConnectionIpc.js';
 import { createSshRemoteWorkspaceUri } from '../../platform/remote/common/remote.js';
 import { AppServerChannelService } from "../../platform/collaboration/browser/appServerChannelService.js";
@@ -118,6 +122,7 @@ export async function createElectronRendererApi(contributions: readonly Electron
 				clipboardService: new ElectronRendererClipboardService(),
 			}, contributions.map(contribution => (client, appServer) => contribution(client, appServer, localClient)), remoteConnection.kind === 'ssh' ? remoteConnection.host : undefined, connection.recovery);
 			resources.add(backend.mcpServerManagement);
+			if (backend.contextResourceHost) { resources.add(backend.contextResourceHost); }
 			resources.add(registerAppServerWorkspaceHost(client, () => connection.whenConnected(), workspaceTrust, backend.workspaceTrust, folders => workspaceApi.validateFolders(folders), path => remoteConnection.kind === 'ssh' ? createSshRemoteWorkspaceUri(remoteConnection.host, path) : URI.file(path)));
 			// Editor recovery belongs to this Desktop profile, including SSH workspaces.
 			backend = { ...backend, backup: new AppServerBackupService(localClient, 'ash-editor'), ...(agentHost.windowExtensions ? { extensionHost: agentHost.windowExtensions } : {}) };
@@ -146,55 +151,169 @@ export async function createElectronRendererApi(contributions: readonly Electron
 			backend = createDisconnectedRendererApi();
 		}
 
-		const agentHosts: IRendererHost['agentHosts'] = hostCapabilities.agentHosts ? {
-			connect: async (target, signal): Promise<IRendererAgentHost> => {
+		interface HostScope {
+			readonly id: string;
+			readonly target: RemoteConnectionDefinition;
+			readonly resources: DisposableStore;
+			readonly controller: AbortController;
+			readonly ready: Promise<IRendererAgentHost>;
+			lease?: LocalAgentHostServiceClient;
+			host?: IRendererAgentHost;
+			initialization?: Promise<void>;
+			initializing?: boolean;
+			error?: unknown;
+		}
+		const hostChanges = resources.add(new Emitter<void>());
+		const hostScopes = new Map<string, HostScope>();
+		const hostState = (scope: HostScope): import('../../platform/agentHost/common/appServerApi.js').AppServerConnectionState => {
+			if (scope.resources.isDisposed) return 'stopped';
+			const state = scope.lease?.client.state ?? 'starting';
+			if (state !== 'ready') return state;
+			return scope.error ? 'crashed' : scope.initializing ? 'initializing' : state;
+		};
+		const releaseScope = (scope: HostScope): void => {
+			const key = agentHostConnectionAddress(scope.target);
+			if (hostScopes.get(key) !== scope) return;
+			hostScopes.delete(key);
+			resources.delete(scope.resources);
+			scope.resources.dispose();
+			hostChanges.fire();
+		};
+		resources.add(toDisposable(() => { for (const scope of [...hostScopes.values()]) releaseScope(scope); }));
+		const openHostScope = async (scope: HostScope): Promise<IRendererAgentHost> => {
+			const { id, target, resources: hostResources, controller } = scope;
+			const signal = controller.signal;
+			const release = (): void => releaseScope(scope);
+			try {
 				throwIfCancelled(signal);
-				if (resources.isDisposed) { throw new CancellationError(); }
-				const id = generateUuid();
-				const hostResources = new DisposableStore();
-				// Install release before opening so cancellation can retire Main's pending catalog check.
-				const release = (): void => { resources.delete(hostResources); hostResources.dispose(); };
-				hostResources.add(toDisposable(() => { void invoke(REMOTE_AGENT_HOST_CLOSE_CHANNEL, { id }).catch(error => { if (!resources.isDisposed) connectionLogger.error('app-server', 'Agent host release failed', error); }); }));
-				signal.addEventListener('abort', release, { once: true });
-				hostResources.add(toDisposable(() => signal.removeEventListener('abort', release)));
-				resources.add(hostResources);
-				try {
-					await invoke(REMOTE_AGENT_HOST_OPEN_CHANNEL, { id, connection: target });
-					throwIfCancelled(signal);
-					if (hostResources.isDisposed) { throw new CancellationError(); }
-					const lease = hostResources.add(connectionServices.createInstance(LocalAgentHostServiceClient, {
-						clientName: 'ash-desktop-agents', connection: { id }, initializeTimeoutMs: SSH_REMOTE_INITIALIZE_TIMEOUT_MS,
-						capabilities: { agentInteractions: { version: 1, kinds: ['approval', 'permissions', 'userInput'] }, directoryGrantsHost: { version: 1 } },
-					}));
-					// Each scope observes device power, but keeps its own retry and protocol generation.
-					const suspend = nativeHost.onDidSuspendOS(() => lease.recovery.suspend());
-					const resume = nativeHost.onDidResumeOS(() => lease.recovery.resume());
-					hostResources.add(toDisposable(() => { suspend.dispose(); resume.dispose(); }));
-					const enabled = await lease.connect();
-					throwIfCancelled(signal);
-					if (!enabled) { throw new Error(localize({ bundle: 'ash.workbench', key: 'agentHosts.unavailable' }, 'Agent host connections are unavailable in this window.')); }
-					if (hostResources.isDisposed) { throw new CancellationError(); }
-					let api = createRendererHost(lease.client, {
-						externalOpener: { openExternal: value => invoke<boolean>('ash:host:openExternal', value) },
-						callbackHost: { listen: options => invoke('ash:oauth-callback:listen', options), wait: id => invoke('ash:oauth-callback:wait', { id }), close: id => invoke('ash:oauth-callback:close', { id }) },
-						clipboardService: new ElectronRendererClipboardService(),
-					}, [], target.host, lease.recovery);
-					hostResources.add(api.mcpServerManagement);
-					if (lease.client.capabilities?.contracts.automation?.version === 1) {
-						api = { ...api, automation: hostResources.add(new AppServerAutomationService(lease.client)) };
-					}
-					const initialize = (): Promise<void> => initializeWorkspaceDirectories(lease.client, workspaceTrust, api.workspaceTrust, [
-						{ id: `agent-host:${id}`, path: target.workspace, label: createSshRemoteWorkspaceUri(target.host, target.workspace).toString() },
-					]);
-					await initialize();
-					throwIfCancelled(signal);
-					if (hostResources.isDisposed) { throw new CancellationError(); }
-					hostResources.add(lease.onDidReconnect(() => { void initialize().catch(error => { if (!hostResources.isDisposed && !isCancellationError(error)) connectionLogger.error('app-server', 'Agent host directory recovery failed', error); }); }));
-					return { id, connection: target, api, dispose: release, [Symbol.dispose]: release };
-				} catch (error) {
-					release();
-					throw error;
+				await raceCancellationError(invoke(REMOTE_AGENT_HOST_OPEN_CHANNEL, { id, connection: target }), signal);
+				throwIfCancelled(signal);
+				if (hostResources.isDisposed) { throw new CancellationError(); }
+				const lease = hostResources.add(connectionServices.createInstance(LocalAgentHostServiceClient, {
+					clientName: 'ash-desktop-agents', connection: { id }, initializeTimeoutMs: SSH_REMOTE_INITIALIZE_TIMEOUT_MS,
+					capabilities: { agentInteractions: { version: 1, kinds: ['approval', 'permissions', 'userInput'] }, directoryGrantsHost: { version: 1 } },
+				}));
+				scope.lease = lease;
+				hostResources.add(lease.client.onStateChange(state => {
+					// Protocol readiness precedes restoring this scope's directory environment.
+					if (state !== 'ready') scope.initializing = true;
+					hostChanges.fire();
+				}));
+				// Each scope observes device power, but keeps its own retry and protocol generation.
+				const suspend = nativeHost.onDidSuspendOS(() => lease.recovery.suspend());
+				const resume = nativeHost.onDidResumeOS(() => lease.recovery.resume());
+				hostResources.add(toDisposable(() => { suspend.dispose(); resume.dispose(); }));
+				const enabled = await lease.connect();
+				throwIfCancelled(signal);
+				if (!enabled) { throw new Error(localize({ bundle: 'ash.workbench', key: 'agentHosts.unavailable' }, 'Agent host connections are unavailable in this window.')); }
+				if (hostResources.isDisposed) { throw new CancellationError(); }
+				let api = createRendererHost(lease.client, {
+					externalOpener: { openExternal: value => invoke<boolean>('ash:host:openExternal', value) },
+					callbackHost: { listen: options => invoke('ash:oauth-callback:listen', options), wait: id => invoke('ash:oauth-callback:wait', { id }), close: id => invoke('ash:oauth-callback:close', { id }) },
+					clipboardService: new ElectronRendererClipboardService(),
+				}, [], target.host, lease.recovery);
+				hostResources.add(api.mcpServerManagement);
+				if (api.contextResourceHost) { hostResources.add(api.contextResourceHost); }
+				if (lease.client.capabilities?.contracts.automation?.version === 1) {
+					api = { ...api, automation: hostResources.add(new AppServerAutomationService(lease.client)) };
 				}
+				const connectionApi = api.appServer;
+				hostResources.add(lease.recovery.onDidChange(() => hostChanges.fire()));
+				const reconnect = async (): Promise<void> => {
+					throwIfCancelled(signal);
+					await lease.recovery.reconnect();
+					await scope.initialization;
+					throwIfCancelled(signal);
+				};
+				api = {
+					...api, appServer: {
+						get connectionGeneration() { return connectionApi.connectionGeneration; },
+						get operatingSystem() { return connectionApi.operatingSystem; },
+						get userHome() { return connectionApi.userHome; },
+						recovery: {
+							get status() {
+								const status = lease.recovery.status;
+								return status === 'unavailable' || status === 'suspended' ? status : scope.error ? 'failed' : scope.initializing && status === 'idle' ? 'recovering' : status;
+							},
+							get error() { return lease.recovery.status === 'unavailable' ? lease.recovery.error : scope.error instanceof Error ? scope.error.message : lease.recovery.error; },
+							onDidChange: hostChanges.event,
+							reconnect,
+						},
+						getConnectionState: async () => hostState(scope),
+						getSlashCommands: () => connectionApi.getSlashCommands(),
+						onConnectionState: listener => {
+							let previous = hostState(scope);
+							return hostChanges.event(() => { const state = hostState(scope); if (state !== previous) { previous = state; listener(state); } });
+						},
+					}
+				};
+				const initialize = (): Promise<void> => initializeWorkspaceDirectories(lease.client, workspaceTrust, api.workspaceTrust, [
+					{ id: `agent-host:${id}`, path: target.workspace, label: createSshRemoteWorkspaceUri(target.host, target.workspace).toString() },
+				]);
+				const restoreDirectories = (): Promise<void> => {
+					const task = scope.initialization = initialize();
+					scope.initializing = true;
+					scope.error = undefined;
+					hostChanges.fire();
+					void task.then(() => {
+						if (scope.initialization !== task || hostResources.isDisposed) return;
+						scope.initializing = false;
+						hostChanges.fire();
+					}, error => {
+						if (scope.initialization !== task || hostResources.isDisposed) return;
+						scope.initializing = false;
+						scope.error = error;
+						hostChanges.fire();
+						if (!isCancellationError(error)) connectionLogger.error('app-server', 'Agent host directory recovery failed', error);
+					});
+					return task;
+				};
+				await restoreDirectories();
+				throwIfCancelled(signal);
+				if (hostResources.isDisposed) { throw new CancellationError(); }
+				hostResources.add(lease.onDidReconnect(() => { void restoreDirectories().catch(() => { }); }));
+				scope.host = { id, connection: target, api, dispose: release, [Symbol.dispose]: release };
+				hostChanges.fire();
+				throwIfCancelled(signal);
+				return scope.host;
+			} catch (error) {
+				release();
+				throw error;
+			}
+		};
+		const agentHosts: IRendererHost['agentHosts'] = hostCapabilities.agentHosts ? {
+			get connections() {
+				return [...hostScopes.values()].map(scope => ({ id: scope.id, connection: scope.target, state: hostState(scope), host: scope.host }));
+			},
+			onDidChangeConnections: hostChanges.event,
+			connect: (target, signal) => {
+				throwIfCancelled(signal);
+				if (resources.isDisposed) throw new CancellationError();
+				const key = agentHostConnectionAddress(target);
+				const existing = hostScopes.get(key);
+				if (existing) return raceCancellationError(existing.ready, signal);
+				const controller = new AbortController();
+				const hostResources = new DisposableStore();
+				const ready = new DeferredPromise<IRendererAgentHost>();
+				const scope: HostScope = { id: generateUuid(), target, controller, resources: hostResources, ready: ready.p };
+				hostScopes.set(key, scope);
+				hostResources.add(toDisposable(() => controller.abort()));
+				hostResources.add(toDisposable(() => { void invoke(REMOTE_AGENT_HOST_CLOSE_CHANNEL, { id: scope.id }).catch(error => { if (!resources.isDisposed) connectionLogger.error('app-server', 'Agent host release failed', error); }); }));
+				const cancel = (): void => releaseScope(scope);
+				signal.addEventListener('abort', cancel, { once: true });
+				hostResources.add(toDisposable(() => signal.removeEventListener('abort', cancel)));
+				resources.add(hostResources);
+				hostChanges.fire();
+				void openHostScope(scope).then(host => { signal.removeEventListener('abort', cancel); void ready.complete(host); }, error => { void ready.error(error); });
+				return ready.p;
+			},
+			disconnect: id => { const scope = [...hostScopes.values()].find(scope => scope.id === id); if (scope) releaseScope(scope); },
+			reconnect: async id => {
+				const scope = [...hostScopes.values()].find(scope => scope.id === id);
+				if (!scope) throw new CancellationError();
+				await scope.ready;
+				if (scope.resources.isDisposed) throw new CancellationError();
+				await scope.host!.api.appServer.recovery!.reconnect();
 			},
 		} : undefined;
 

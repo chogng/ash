@@ -1,4 +1,5 @@
 import { createServiceIdentifier } from '../../instantiation/common/instantiation.js';
+import type { URI } from '../../../base/common/uri.js';
 
 /** Metadata from the authorized catalog; App Server loads bodies when the Turn starts. */
 export interface ChatInstruction {
@@ -6,6 +7,8 @@ export interface ChatInstruction {
 	readonly name: string;
 	readonly description?: string;
 	readonly scope: 'user' | 'directory';
+	/** The catalog's owning host supplies resource identity when it differs from the window host. */
+	readonly resource?: URI;
 }
 
 export interface IInstructionService {

@@ -1,3 +1,4 @@
+import { ISessionProviderScopeService } from '../../browser/agentHost/sessionProviderScopeService.js';
 import { IChatSpeechToTextService, ChatSpeechToTextService } from '../../../workbench/contrib/chat/browser/speechToText/chatSpeechToTextService.js';
 import { createDisconnectedRendererApi } from '../../../workbench/browser/rendererApi.js';
 import { IAgentVoiceService } from '../../../platform/agentHost/common/agentService.js';
@@ -310,6 +311,11 @@ test("SessionsPart remains owned by the Sessions product layer", async () => {
 		...emptyEditorServiceState,
 		onDidActiveEditorChange: Event.None, onDidVisibleEditorsChange: Event.None, activeEditor: undefined, visibleEditors: [],
 		openEditor: async () => { throw new Error('Unexpected editor navigation'); }, focusActiveEditor: () => { },
+	});
+	paneServices.registerInstance(ISessionProviderScopeService, {
+		onDidChange: Event.None, onDidChangeScopes: Event.None,
+		getScopes: () => [], getScope: () => { throw new Error('Unexpected host routing'); }, getProviderScope: () => { throw new Error('Unexpected host routing'); },
+		createScope: () => paneServices.createChild(),
 	});
 	const cowork = resources.add(paneServices.createInstance(CoworkPaneFactory));
 	const part = paneServices.createInstance(SessionsPart, dom.window.document.body, {

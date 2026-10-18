@@ -21,7 +21,7 @@ export class BrowserFileSearchService implements IFileSearchService {
 				const path = prefix + entry.name;
 				if (query.excludePatterns.some(pattern => matchesPattern(pattern, path) || matchesPattern(pattern, path + '/'))) { continue; }
 				if (entry.kind === FileKind.Directory) { await visit(entry.resource, path + '/'); }
-				else if (entry.kind === FileKind.File && (!query.includePatterns.length || query.includePatterns.some(pattern => matchesPattern(pattern, path)))) {
+				else if (entry.kind === FileKind.File && (!query.includePatterns.length || query.includePatterns.some(pattern => matchesPattern(pattern, path))) && (!query.requiredPattern || matchesPattern(query.requiredPattern, path))) {
 					totalMatches++;
 					if (matches.length < query.maxResults) { matches.push({ path, resource: entry.resource }); }
 				}
@@ -37,6 +37,7 @@ export class BrowserFileSearchService implements IFileSearchService {
 			throw illegalArgument('query');
 		}
 		const tokens = query.query.toLocaleLowerCase('en-US').split(/\s+/).filter(Boolean);
+		const matchesPattern = (pattern: string, path: string): boolean => match(pattern, path) || (pattern.startsWith('**/') && match(pattern.slice(3), path));
 		const matches: { path: string; resource: URI; score: number; }[] = [];
 		let totalMatches = 0;
 		const checkCancellation = (): void => { if (signal?.aborted) { throw new CancellationError(); } };
@@ -45,9 +46,11 @@ export class BrowserFileSearchService implements IFileSearchService {
 			for (const entry of await this.files.readDirectory(directory)) {
 				checkCancellation();
 				const path = prefix + entry.name;
+				if (query.excludePatterns?.some(pattern => matchesPattern(pattern, path) || matchesPattern(pattern, path + '/'))) { continue; }
 				if (entry.kind === FileKind.Directory) {
 					if (!['.git', '.ash', 'node_modules', 'target'].includes(entry.name)) { await visit(entry.resource, path + '/'); }
 				} else if (entry.kind === FileKind.File) {
+					if (query.includePatterns?.length && !query.includePatterns.some(pattern => matchesPattern(pattern, path))) { continue; }
 					const score = scorePath(path, tokens);
 					if (score === undefined) { continue; }
 					totalMatches++;

@@ -2,11 +2,17 @@ import { browserEnvironment } from '../../../../../../editor/test/browser/testEd
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { test } from 'mocha';
-import { DeferredPromise } from '../../../../../../base/common/async.js';
+import { DeferredPromise, raceCancellationError } from '../../../../../../base/common/async.js';
+import { canceled } from '../../../../../../base/common/errors.js';
 import { Emitter, Event } from '../../../../../../base/common/event.js';
 import { DisposableStore, toDisposable } from '../../../../../../base/common/lifecycle.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../../base/test/common/utils.js';
 import { resetNlsResolver, setNlsMessages } from '../../../../../../nls.js';
+import { AgentHostConnectionsService } from '../../../../../../platform/agentHost/browser/agentHostConnectionsService.js';
+import { IAgentHostConnectionsService, agentHostConnectionAddress } from '../../../../../../platform/agentHost/common/agentHostConnectionsService.js';
+import { IConfigurationService } from '../../../../../../platform/configuration/common/configuration.js';
+import { InMemoryConfigurationService } from '../../../../../../platform/configuration/common/inMemoryConfigurationService.js';
+import { ILanguageModelsConfigurationService } from '../../../../../../workbench/contrib/chat/common/languageModelsConfiguration.js';
 import type { ResourceMetadataResult } from '../../../../../../platform/agentHost/common/appServerApi.js';
 import type { AgentSession } from '../../../../../../platform/agentHost/common/agent.js';
 import type { Automation, IAutomationBackendService } from '../../../../../../platform/agentHost/common/automation.js';
@@ -22,7 +28,7 @@ import { FileService } from '../../../../../../platform/files/common/fileService
 import { IFileService, type IFileChangeEvent } from '../../../../../../platform/files/common/files.js';
 import { createSshRemoteWorkspaceUri } from '../../../../../../platform/remote/common/remote.js';
 import { AgentHostFileSystemService, IAgentHostFileSystemService } from '../../../../../../workbench/services/agentHost/common/agentHostFileSystemService.js';
-import { IRendererHostService, type IRendererAgentHost, type IRendererHost } from '../../../../../../platform/renderer/common/rendererHost.js';
+import { IRendererHostService, type IRendererAgentHost, type IRendererAgentHostConnection, type IRendererHost } from '../../../../../../platform/renderer/common/rendererHost.js';
 import { createDisconnectedRendererApi } from '../../../../../../workbench/browser/rendererApi.js';
 import { CommandService } from '../../../../../../workbench/services/commands/common/commandService.js';
 import { productLanguagePackCatalogs } from '../../../../../../workbench/services/localization/common/localizationCatalogs.js';
@@ -66,6 +72,17 @@ function fixture(remoteConnections: readonly RemoteConnectionDefinition[] = targ
 	const deleted: string[] = [];
 	let openResult: ((target: RemoteConnectionDefinition, host: IRendererAgentHost) => Promise<IRendererAgentHost>) | undefined;
 	const renderer = createDisconnectedRendererApi();
+	services.registerInstance(IConfigurationService, lifetime.add(new InMemoryConfigurationService()));
+	services.registerInstance(ILanguageModelsConfigurationService, {
+		onDidChangeModels: Event.None, getDefaultNewChatModel: () => undefined,
+		rememberSelectedModel: () => { }, isModelVisible: () => true, setModelVisible: async () => { },
+	});
+	const hostChanges = lifetime.add(new Emitter<void>());
+	const hosts = new Map<string, IRendererAgentHostConnection>();
+	const disconnect = (id: string): void => {
+		const entry = [...hosts.entries()].find(([, value]) => value.id === id);
+		if (entry) entry[1].host?.dispose();
+	};
 	const files = lifetime.add(new FileService());
 	services.registerInstance(IFileService, files);
 	const primaryRequests: string[] = [];
@@ -87,7 +104,14 @@ function fixture(remoteConnections: readonly RemoteConnectionDefinition[] = targ
 	services.registerInstance(IRendererHostService, {
 		...renderer,
 		agentHosts: {
-			connect: async target => {
+			get connections() { return [...hosts.values()]; },
+			onDidChangeConnections: hostChanges.event,
+			disconnect,
+			reconnect: async () => { },
+			connect: async (target, signal) => {
+				const key = agentHostConnectionAddress(target);
+				const existing = hosts.get(key);
+				if (existing?.host) return existing.host;
 				opened.push(target.name);
 				const session: AgentSession = {
 					sessionId: 'same-session', title: target.name, status: 'active',
@@ -188,11 +212,23 @@ function fixture(remoteConnections: readonly RemoteConnectionDefinition[] = targ
 						rename: async params => { renamed.push(`${target.name}:${params.sessionId}`); return { session: { ...session, title: params.title }, agentTree: { roots: [] } }; },
 					},
 				};
-				const host: IRendererAgentHost = { id: target.name, connection: target, api, ...toDisposable(() => { closed.push(target.name); }) };
-				return openResult ? openResult(target, host) : host;
+				const host: IRendererAgentHost = {
+					id: target.name, connection: target, api, ...toDisposable(() => {
+						closed.push(target.name);
+						if (hosts.get(key)?.host === host) { hosts.delete(key); hostChanges.fire(); }
+					})
+				};
+				try {
+					await raceCancellationError(openResult ? openResult(target, host) : Promise.resolve(host), signal);
+					if (signal.aborted) throw canceled();
+					hosts.set(key, { id: host.id, connection: target, state: 'ready', host });
+					hostChanges.fire();
+					return host;
+				} catch (error) { host.dispose(); throw error; }
 			},
 		},
 	});
+	services.registerInstance(IAgentHostConnectionsService, lifetime.add(services.createInstance(AgentHostConnectionsService)));
 	const contribution = lifetime.add(services.createInstance(SSHAgentHostContribution));
 	const commands = lifetime.add(new CommandService(services));
 	const automations = lifetime.add(services.createInstance(ProviderAutomationService));

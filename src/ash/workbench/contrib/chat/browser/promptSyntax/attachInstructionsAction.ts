@@ -38,12 +38,13 @@ export class ChatInstructionsPickerPick implements ChatContextSource {
 				instruction,
 			})), query);
 		}, signal);
-		if (signal.aborted || connection !== this.remote.connection || !selected || selected.kind === 'back') { return undefined; }
-		const { name, path } = selected.item.instruction;
+		if (signal.aborted || !this.isEnabled() || !selected || selected.kind === 'back') { return undefined; }
+		const { name, path, resource: ownedResource } = selected.item.instruction;
+		if (!ownedResource && connection !== this.remote.connection) { return undefined; }
 		// User instructions can live outside every workspace folder; the connection still owns their URI.
-		const resource = connection?.kind === 'ssh' ? createSshRemoteWorkspaceUri(connection.host, path)
+		const resource = ownedResource ?? (connection?.kind === 'ssh' ? createSshRemoteWorkspaceUri(connection.host, path)
 			: connection?.kind === 'remote' ? URI.from({ scheme: Schemas.ashRemote, authority: connection.authority, path })
-				: URI.file(path);
+				: URI.file(path));
 		return {
 			acceptInBackground: selected.background,
 			attachment: {

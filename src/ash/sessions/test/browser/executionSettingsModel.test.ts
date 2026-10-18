@@ -10,6 +10,15 @@ import type { IAgentCapabilitiesService } from '../../../platform/agentCapabilit
 import type { IDialogService } from '../../../platform/dialogs/common/dialogs.js';
 import type { IAppServerRemoteAgentService } from '../../../workbench/services/remote/common/appServerRemoteAgentService.js';
 import { ExecutionSettingsModel } from '../../contrib/preferences/browser/executionSettingsModel.js';
+import { createDisconnectedRendererApi } from '../../../workbench/browser/rendererApi.js';
+import type { ISessionProviderScope, ISessionProviderScopeService, SessionProviderServices } from '../../browser/agentHost/sessionProviderScopeService.js';
+
+function createModel(execution: IAgentExecutionSettingsService, workspaceTrust: IWorkspaceTrustApi, agentCapabilities: IAgentCapabilitiesService, _remote: IAppServerRemoteAgentService, dialogs: IDialogService, localization: ILocalizationService): ExecutionSettingsModel {
+	const base = createDisconnectedRendererApi();
+	const host = { ...base, executionSettings: execution, workspaceTrust, agentCapabilities, appServer: { ...base.appServer, getConnectionState: async () => 'ready' as const } };
+	const scope = { providerId: 'primary', services: { host } as unknown as SessionProviderServices, thread: host.thread, assertCurrent: () => { }, identity: value => value, backendIdentity: value => value } satisfies ISessionProviderScope;
+	return new ExecutionSettingsModel({ getScope: () => scope, onDidChange: Event.None, onDidChangeScopes: Event.None } as unknown as ISessionProviderScopeService, dialogs, localization);
+}
 
 function field(model: ExecutionSettingsModel, id: string) { return model.fields.find(field => field.id === id)!; }
 function ready(model: ExecutionSettingsModel): Promise<void> {
@@ -38,7 +47,7 @@ test('execution settings preserve an unsaved default while saving an aliased dir
 	};
 	const capabilities: IAgentCapabilitiesService = { isAvailable: true, onDidChange: Event.None, read: async () => ({ directoryGrantsReadable: true, sandboxBackends: [], sandboxDiagnostics: [], localProcessSandboxConfigured: true }) };
 	const remote = { connectionState: 'connected', onDidChangeConnection: Event.None, onDidChangeConnectionState: Event.None } as IAppServerRemoteAgentService;
-	using model = new ExecutionSettingsModel(execution, directories, capabilities, remote, {} as IDialogService, { translate: (_bundle, _key, fallback) => fallback } as ILocalizationService);
+	using model = createModel(execution, directories, capabilities, remote, {} as IDialogService, { translate: (_bundle, _key, fallback) => fallback } as ILocalizationService);
 	const initialized = ready(model); model.setVisible(true); await initialized;
 	const approval = field(model, 'approval'); assert.equal(approval.kind, 'select'); if (approval.kind === 'select') approval.setValue('auto');
 	const path = field(model, 'directory'); if (path.kind === 'text') path.setValue('/alias');
@@ -55,7 +64,7 @@ test('execution settings preserve an unsaved default while saving an aliased dir
 
 
 function executionFixture(execution: IAgentExecutionSettingsService) {
-	return new ExecutionSettingsModel(execution,
+	return createModel(execution,
 		{ onDidChangeTrust: Event.None } as IWorkspaceTrustApi,
 		{ read: async () => ({ directoryGrantsReadable: false }) } as IAgentCapabilitiesService,
 		{ connectionState: 'connected', onDidChangeConnection: Event.None, onDidChangeConnectionState: Event.None } as IAppServerRemoteAgentService,
@@ -79,7 +88,7 @@ test('a directory revision conflict preserves the draft and never silently retri
 		createGrant: async () => { throw new Error('Unexpected host grant'); },
 		persistGrant: async () => { throw new Error('Unexpected host write'); },
 	};
-	using model = new ExecutionSettingsModel(
+	using model = createModel(
 		{ onDidChange: Event.None, read: async () => ({ revision: 3, settings: manualDefaults }), configure: async () => { } },
 		trust,
 		{ isAvailable: true, onDidChange: Event.None, read: async () => ({ directoryGrantsReadable: true, tools: [], sourceGroups: [], sandboxBackends: [], sandboxDiagnostics: [], localProcessSandboxConfigured: true }) },
@@ -126,7 +135,7 @@ test('Execution settings ignore a late read from the previously hidden page', as
 	const old = new DeferredPromise<{ revision: number; settings: ExecutionSettings; }>();
 	let reads = 0;
 	using model = executionFixture({ onDidChange: Event.None, read: () => ++reads === 1 ? old.p : Promise.resolve({ revision: 2, settings: { ...manualDefaults, approvalMode: 'auto' } }), configure: async () => { } });
-	model.setVisible(true); model.setVisible(false);
+	model.setVisible(true); await Promise.resolve(); model.setVisible(false);
 	const initialized = ready(model); model.setVisible(true); await initialized;
 	await old.complete({ revision: 1, settings: manualDefaults });
 	await Promise.resolve(); await Promise.resolve();
@@ -140,10 +149,90 @@ test('A backend change received during execution-default loading is reread befor
 	let reads = 0;
 	using model = executionFixture({ onDidChange: updates.event, read: () => ++reads === 1 ? old.p : Promise.resolve({ revision: 2, settings: { ...manualDefaults, approvalMode: 'auto' } }), configure: async () => { } });
 	model.setVisible(true);
+	await Promise.resolve();
 	updates.fire();
 	await old.complete({ revision: 1, settings: manualDefaults });
 	await new Promise(resolve => setTimeout(resolve, 0));
 	assert.equal(reads, 2);
 	const current = field(model, 'approval');
 	assert.ok(current.kind === 'select' && current.value === 'auto' && current.enabled);
+});
+
+test('switching hosts retires an in-flight directory edit before a same-id grant can be written', async () => {
+	using selection = new Emitter<void>();
+	const base = createDisconnectedRendererApi();
+	const oldDirectory = new DeferredPromise<{ dir: string; permissions: readonly WorkspaceTrustPermission[]; }>();
+	const writes: string[] = [];
+	const host = (name: string, pending: boolean) => ({
+		...base,
+		appServer: { ...base.appServer, getConnectionState: async () => 'ready' as const },
+		executionSettings: { onDidChange: Event.None, read: async () => ({ revision: 7, settings: manualDefaults }), configure: async () => { writes.push(`${name}:defaults`); } },
+		agentCapabilities: { isAvailable: true, onDidChange: Event.None, read: async () => ({ directoryGrantsReadable: true, localProcessSandboxConfigured: true, sandboxBackends: [], sandboxDiagnostics: [] }) },
+		workspaceTrust: {
+			...base.workspaceTrust, onDidChangeTrust: Event.None,
+			listDirectories: async () => ({ revision: 7, entries: [{ dir: 'same-id', path: '/same', permissions: ['readFiles'] as const }] }),
+			readDirectory: async () => pending ? oldDirectory.p : { dir: 'same-id', permissions: ['readFiles'] as const },
+			setDirectoryPermissions: async () => { writes.push(`${name}:grant`); return { revision: 8, generation: 1, disposition: 'updated' as const }; },
+		},
+	});
+	const scope = (name: string, pending: boolean): ISessionProviderScope => ({
+		providerId: name, services: { host: host(name, pending) } as unknown as SessionProviderServices, thread: base.thread,
+		identity: value => value, backendIdentity: value => value, assertCurrent: () => { },
+	});
+	let selected = scope('first', true);
+	using model = new ExecutionSettingsModel({ getScope: () => selected, onDidChange: selection.event, onDidChangeScopes: Event.None } as unknown as ISessionProviderScopeService,
+		{} as IDialogService, { translate: (_bundle, _key, fallback) => fallback } as ILocalizationService);
+	const initialized = ready(model); model.setVisible(true); await initialized;
+	const path = field(model, 'directory'); if (path.kind === 'text') path.setValue('/same');
+	const save = field(model, 'save-directory'); assert.equal(save.kind, 'action');
+	const saving = save.kind === 'action' ? save.run() : undefined;
+	selected = scope('second', false);
+	const rebound = ready(model); selection.fire(); await rebound;
+	await oldDirectory.complete({ dir: 'same-id', permissions: ['readFiles'] });
+	await saving;
+	assert.deepEqual(writes, []);
+	const resetPath = field(model, 'directory'); assert.ok(resetPath.kind === 'text' && resetPath.value === '');
+	if (resetPath.kind === 'text') resetPath.setValue('/same');
+	const saveSecond = field(model, 'save-directory'); if (saveSecond.kind === 'action') await saveSecond.run();
+	assert.deepEqual(writes, ['second:grant']);
+});
+
+test('a host switch during confirmation cannot apply the old defaults to either host', async () => {
+	using selection = new Emitter<void>();
+	const base = createDisconnectedRendererApi();
+	const confirmation = new DeferredPromise<{ confirmed: boolean; }>();
+	const writes: string[] = [];
+	const scope = (name: string): ISessionProviderScope => ({
+		providerId: name, services: {
+			host: {
+				...base,
+				appServer: { ...base.appServer, getConnectionState: async () => 'ready' },
+				executionSettings: { onDidChange: Event.None, read: async () => ({ revision: 1, settings: manualDefaults }), configure: async () => { writes.push(name); } },
+				agentCapabilities: { isAvailable: true, onDidChange: Event.None, read: async () => ({ directoryGrantsReadable: false }) },
+			}
+		} as unknown as SessionProviderServices, thread: base.thread,
+		identity: value => value, backendIdentity: value => value, assertCurrent: () => { },
+	});
+	let selected = scope('first');
+	using model = new ExecutionSettingsModel({ getScope: () => selected, onDidChange: selection.event, onDidChangeScopes: Event.None } as unknown as ISessionProviderScopeService,
+		{ confirm: () => confirmation.p } as unknown as IDialogService, { translate: (_bundle, _key, fallback) => fallback } as ILocalizationService);
+	const initialized = ready(model); model.setVisible(true); await initialized;
+	const approval = field(model, 'approval'); if (approval.kind === 'select') approval.setValue('bypassPermissions');
+	const save = field(model, 'save'); const saving = save.kind === 'action' ? save.run() : undefined;
+	selected = scope('second');
+	const rebound = ready(model); selection.fire(); await rebound;
+	await confirmation.complete({ confirmed: true }); await saving;
+	assert.deepEqual(writes, []);
+	const current = field(model, 'approval'); assert.ok(current.kind === 'select' && current.value === 'manual');
+});
+
+test('execution accessibility help explains host changes in Chinese', async () => {
+	const { productLanguagePackCatalogs } = await import('../../../workbench/services/localization/common/localizationCatalogs.js');
+	const { resetNlsResolver, setNlsMessages } = await import('../../../nls.js');
+	const chinese = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
+	setNlsMessages(chinese.locale, chinese.bundles);
+	try {
+		using model = executionFixture({ onDidChange: Event.None, read: async () => ({ revision: 1, settings: manualDefaults }), configure: async () => { } });
+		assert.ok(model.help.includes('切换会话宿主会丢弃草稿'));
+	} finally { resetNlsResolver(); }
 });

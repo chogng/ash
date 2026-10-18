@@ -27,6 +27,8 @@ export interface IFileQuery {
 	shouldGlobMatchFilePattern?: boolean;
 	sortByScore?: boolean;
 	maxResults?: number;
+	includePattern?: Readonly<Record<string, boolean>>;
+	excludePattern?: Readonly<Record<string, boolean>>;
 }
 
 export interface IPatternInfo {

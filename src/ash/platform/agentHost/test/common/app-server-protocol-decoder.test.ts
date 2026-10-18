@@ -461,3 +461,23 @@ test('cached numeric syntax tuples retain all coordinate and edit boundary check
 		assert.deepEqual(decodeAppServerResponse('syntax/query', response), response);
 	}
 });
+
+test('renderer snapshot callbacks enforce bounded, closed connection-handle requests', () => {
+	const request = { jsonrpc: '2.0', id: 'snapshot', method: 'hostResource/read', params: { handle: 'capture', offset: 0, maxBytes: 262144 } };
+	assert.deepEqual(decodeAppServerServerRequest(request), request);
+	for (const invalid of [{ maxBytes: 0 }, { maxBytes: 262145 }, { offset: -1 }, { offset: 8388609 }, { handle: '' }, { handle: 'x'.repeat(129) }, { path: '/arbitrary/file' }]) {
+		assert.throws(() => decodeAppServerServerRequest({ ...request, params: { ...request.params, ...invalid } }), AppServerProtocolDecodeError);
+	}
+	const release = { jsonrpc: '2.0', id: 'release', method: 'hostResource/release', params: { handle: 'capture' } };
+	assert.deepEqual(decodeAppServerServerRequest(release), release);
+	assert.throws(() => decodeAppServerServerRequest({ ...release, params: { ...release.params, connectionId: 5 } }), AppServerProtocolDecodeError);
+});
+
+test('transport snapshot input retains integrity metadata without granting paths or durable handle variants', () => {
+	const resource = { handle: 'capture', byteLength: 10, sha256: `sha256:${'a'.repeat(64)}` };
+	const params = { commandId: 'start', sessionId: 'session', request: { type: 'startTurn', threadId: 'thread', expectedSequence: 1, input: [{ type: 'hostResource', name: 'selected.ts', resource }] } };
+	assert.deepEqual(decodeAppServerRequestParams('session/request', params), params);
+	for (const invalid of [{ byteLength: 0 }, { byteLength: 8388609 }, { sha256: 'a' }, { path: '/arbitrary/file' }]) {
+		assert.throws(() => decodeAppServerRequestParams('session/request', { ...params, request: { ...params.request, input: [{ ...params.request.input[0], resource: { ...resource, ...invalid } }] } }), AppServerProtocolDecodeError);
+	}
+});

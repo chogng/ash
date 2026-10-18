@@ -93,7 +93,7 @@ import { Extensions as ConfigurationExtensions, type IConfigurationRegistry } fr
 import { Registry } from '../../../platform/registry/common/platform.js';
 import { ModelCatalogConfiguration } from "../../../workbench/contrib/chat/common/languageModelsConfiguration.js";
 import { TestConfigurationService as WorkbenchConfigurationService } from '../../../workbench/services/configuration/test/common/testServices.js';
-import { SessionsManagementService as BaseSessionsManagementService } from "../../services/sessions/browser/sessionsManagementService.js";
+import { TestSessionsManagementService as BaseSessionsManagementService } from "../../services/sessions/test/browser/testSessionsManagementService.js";
 import { AppServerSessionsProvider } from "../../contrib/providers/agentHost/browser/appServerSessionsProvider.js";
 import type { ISession } from "../../services/sessions/common/session.js";
 import { ISessionsManagementService } from "../../services/sessions/common/sessionsManagement.js";

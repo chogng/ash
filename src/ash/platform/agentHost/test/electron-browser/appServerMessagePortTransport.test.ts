@@ -6,8 +6,9 @@ import { setup, suite, suiteSetup, suiteTeardown, teardown, test } from 'mocha';
 import { DisposableTracker, installDisposableTracker } from '../../../../base/common/lifecycle.js';
 import type { ISandboxGlobals } from '../../../../base/parts/sandbox/electron-browser/sandboxTypes.js';
 import { VSBuffer } from '../../../../base/common/buffer.js';
+import { SocketCloseEventType } from '../../../../base/parts/ipc/common/ipc.net.js';
 import { deferAppServerRead } from '../../common/appServerTransport.js';
-import { DeferredPromise } from '../../../../base/common/async.js';
+import { DeferredPromise, TimeoutTimer } from '../../../../base/common/async.js';
 
 suite('App Server MessagePort transport', () => {
 	const dom = new JSDOM('<!doctype html><body></body>');
@@ -272,6 +273,29 @@ suite('App Server MessagePort transport', () => {
 				await consumed.complete();
 				assert.deepEqual(post.mock.calls.map(call => call.arguments[0]), retire ? [{ intentional: true }] : [{ ack: true }]);
 			} finally { post.mock.restore(); }
+		} finally { channel.port1.close(); channel.port2.close(); }
+	});
+
+	test('an intentional Main closure publishes its classified close before generic EOF', async () => {
+		using transport = new Transport(() => { });
+		const ready = transport.acquire();
+		const channel = new MessageChannel();
+		try {
+			requests[0].resolve({ enabled: true, byteStream: true });
+			dom.window.dispatchEvent(new dom.window.MessageEvent('message', { source: dom.window as unknown as Window, data: { nonce: requests[0].nonce }, ports: [channel.port1 as unknown as MessagePort] }));
+			await ready;
+			const notifications: string[] = [];
+			const closed = new DeferredPromise<void>();
+			using deadline = new TimeoutTimer(() => { void closed.error(new Error('Main closure was not delivered')); }, 5_000);
+			using close = transport.socket.onClose(event => {
+				notifications.push(event?.type === SocketCloseEventType.NodeSocketCloseEvent && !event.hadError ? 'intentional' : 'failed');
+				void closed.complete();
+			});
+			using end = transport.socket.onEnd(() => notifications.push('EOF'));
+			channel.port2.postMessage({ intentional: true });
+			await closed.p;
+			assert.deepEqual(notifications, ['intentional', 'EOF']);
+			assert.throws(() => transport.socket, /was closed/);
 		} finally { channel.port1.close(); channel.port2.close(); }
 	});
 

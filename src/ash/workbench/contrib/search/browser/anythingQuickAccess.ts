@@ -21,6 +21,8 @@ import { IHistoryService } from '../../../services/history/common/history.js';
 import { IPathService } from '../../../../platform/path/common/pathService.js';
 import { untildify } from '../../../../base/common/labels.js';
 import { Schemas } from '../../../../base/common/network.js';
+import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
+import { ContentSearchConfiguration } from '../common/searchConfiguration.js';
 
 export interface IAnythingQuickPickItem extends IPickerQuickAccessItem {
 	readonly resource: URI;
@@ -40,6 +42,7 @@ export class AnythingQuickAccessProvider extends PickerQuickAccessProvider<IPick
 		@IHistoryService private readonly history: IHistoryService,
 		@INotificationService private readonly notifications: INotificationService,
 		@IPathService private readonly paths: IPathService,
+		@IConfigurationService private readonly configuration: IConfigurationService,
 	) { super(AnythingQuickAccessProvider.PREFIX, { canAcceptInBackground: true }); }
 
 	protected override _getPicks(query: string, _resources: DisposableStore, token: CancellationToken, options: AnythingQuickAccessProviderRunOptions = {}): Picks<IPickerQuickAccessItem> | FastAndSlowPicks<IPickerQuickAccessItem> {
@@ -105,6 +108,8 @@ export class AnythingQuickAccessProvider extends PickerQuickAccessProvider<IPick
 				if (query && !absolute) {
 					const found = await this.search.fileSearch(new QueryBuilder().file(folders.map(folder => folder.uri), {
 						filePattern: query, shouldGlobMatchFilePattern: isGlob, sortByScore: !isGlob, maxResults: 100,
+						includePattern: this.configuration.getValue<string>(ContentSearchConfiguration.includePatterns),
+						excludePattern: this.configuration.getValue<string>(ContentSearchConfiguration.excludePatterns),
 					}), token);
 					for (const file of found.results) {
 						if (options.includeFolders) {

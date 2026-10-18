@@ -78,3 +78,21 @@ test('browser fuzzy discovery uses strongest matches, all tokens and determinist
 	});
 	assert.deepEqual((await tied.fuzzy(folder, { query: 'ab', maxResults: 2 })).matches.map(item => item.path), ['ab-a.ts', 'ab-z.ts']);
 });
+
+test('browser filename filters intersect before glob limiting and fuzzy ranking', async () => {
+	const service = new BrowserFileSearchService({
+		async readDirectory(directory) {
+			const entries: [string, FileKind][] = directory.path === folder.resource.path
+				? [['needle.ts', FileKind.File], ['src', FileKind.Directory]]
+				: [['needle_skip.ts', FileKind.File], ['long_needle.ts', FileKind.File], ['long_needle.md', FileKind.File]];
+			return entries.map(([name, kind]) => ({ resource: URI.joinPath(directory, name), name, kind }));
+		},
+	});
+	const constraints = { includePatterns: ['src/**'], excludePatterns: ['**/*skip*', '**/*.md'], maxResults: 1 };
+	const glob = await service.glob(folder, { ...constraints, requiredPattern: '**/*.ts' });
+	assert.deepEqual(glob.matches.map(item => item.path), ['src/long_needle.ts']);
+	assert.equal(glob.totalMatches, 1);
+	const fuzzy = await service.fuzzy(folder, { ...constraints, query: 'needle' });
+	assert.deepEqual(fuzzy.matches.map(item => item.path), ['src/long_needle.ts']);
+	assert.equal(fuzzy.totalMatches, 1);
+});

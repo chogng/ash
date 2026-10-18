@@ -836,3 +836,21 @@ test('Quick Access workspace symbols cancel stale queries and accept through the
 	await expect(page.getByRole('dialog')).toHaveCount(0);
 	await expect(page.getByRole('status', { name: 'Executed commands' })).toHaveText('file:///workspace/symbol.ts');
 });
+
+test('Quick Open applies configured path filters before filename results are limited', async ({ page }) => {
+	await page.goto('/quickAccess.html?fileSearch');
+	await expect(page.getByRole('button', { name: 'Open files' })).toBeEnabled();
+	await page.evaluate(async () => {
+		await window.ashQuickAccessIntegration.setSearchPatterns('src/**', '**/*skip*, **/*.md');
+		window.ashQuickAccessIntegration.show('needle');
+	});
+	const picker = page.getByRole('dialog');
+	await expect(picker.getByRole('option').filter({ hasText: 'long_needle.ts' })).toHaveCount(1);
+	await expect(picker.getByRole('option')).toHaveCount(1);
+	await picker.getByRole('combobox').press('Escape');
+	await page.evaluate(() => window.ashQuickAccessIntegration.show('**/*needle*'));
+	await expect(picker.getByRole('option').filter({ hasText: 'long_needle.ts' })).toHaveCount(1);
+	await expect(picker.getByRole('option')).toHaveCount(1);
+	await picker.getByRole('combobox').press('Enter');
+	await expect(page.locator('output')).toHaveText('file:///workspace/src/long_needle.ts');
+});

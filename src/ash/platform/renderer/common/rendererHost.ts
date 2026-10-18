@@ -20,6 +20,8 @@ import type { IApprovalEnvironmentService } from '../../approvalEnvironment/comm
 import type { IMemoriesService } from '../../memories/common/memoriesService.js';
 import type { IMemoryDiagnosticsService } from '../../memory/common/memoryDiagnosticsService.js';
 import type { IAppServerApi, IResourceApi, IServerEventApi } from "../../agentHost/common/appServerApi.js";
+import type { AppServerConnectionState } from '../../agentHost/common/appServerApi.js';
+import type { Event } from '../../../base/common/event.js';
 import type { IExtensionApi } from "../../extensions/common/extensionApi.js";
 import type { IFileApi } from "../../files/common/fileApi.js";
 import type { ISyntaxApi } from "../../syntax/common/syntaxApi.js";
@@ -86,11 +88,29 @@ export interface IRendererAgentHost extends IDisposable {
 	readonly api: IRendererHost;
 }
 
+/** A runtime-owned endpoint. Domain ports are borrowed and retain their original connection scope. */
+export interface IRendererAgentHostConnection {
+	readonly id: string;
+	readonly connection: RemoteConnectionDefinition;
+	readonly state: AppServerConnectionState;
+	readonly host: IRendererAgentHost | undefined;
+}
+
+export interface IRendererAgentHostService {
+	readonly connections: readonly IRendererAgentHostConnection[];
+	readonly onDidChangeConnections: Event<void>;
+	connect(connection: RemoteConnectionDefinition, signal: AbortSignal): Promise<IRendererAgentHost>;
+	disconnect(id: string): void;
+	reconnect(id: string): Promise<void>;
+}
+
 /** Transport-neutral capability set supplied by a renderer host at startup. */
 export interface IRendererHost extends RendererHostCapabilities {
 	readonly workspaceConfigurationFiles?: IWorkspaceConfigurationFileApi;
 	/** Host support is stable for the window; connection state describes temporary availability. */
 	readonly hasAppServer: boolean;
+	/** Connection-owned callback registrations and immutable context transfer leases. */
+	readonly contextResourceHost?: IDisposable;
 	/** Actual local OS user directory when supplied by the desktop host. */
 	readonly localUserHome?: URI;
 	/** Opens this host's profile TOML; absent when the host cannot edit a local profile. */
@@ -115,7 +135,7 @@ export interface IRendererHost extends RendererHostCapabilities {
 	/** Optional because web hosts cannot restart into a host-owned SSH connection. */
 	readonly remoteConnections?: IRemoteConnectionApi;
 	/** Additional backend scopes are available only in hosts with a multi-host window owner. */
-	readonly agentHosts?: { connect(connection: RemoteConnectionDefinition, signal: AbortSignal): Promise<IRendererAgentHost>; };
+	readonly agentHosts?: IRendererAgentHostService;
 	readonly session: IAgentSessionService;
 	readonly teams: ITeamApi;
 	readonly model: IAgentModelsService;

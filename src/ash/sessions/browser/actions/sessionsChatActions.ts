@@ -1,3 +1,4 @@
+import { ISessionsProvidersService } from '../../services/sessions/browser/sessionsProvidersService.js';
 import { sessionManagementLabel } from '../sessionManagementLabels.js';
 import { localize2, localize } from '../../../nls.js';
 import { DisposableStore } from "../../../base/common/lifecycle.js";
@@ -133,8 +134,20 @@ registerAction2(class NewSessionsChatAction extends Action2 {
 		super({ id: NEW_CHAT_COMMAND_ID, title: localize2({ bundle: 'ash', key: 'chat.sessions.new' }, "New Session") });
 	}
 
-	override run(accessor: ServicesAccessor): void {
-		accessor.get(ISessionsService).openNewSession("New code session");
+	override async run(accessor: ServicesAccessor): Promise<void> {
+		const view = accessor.get(ISessionsService);
+		const providers = accessor.get(ISessionsProvidersService).getProviders();
+		if (providers.length < 2) { view.openNewSession(localize('chat.sessions.new', 'New Session')); return; }
+		using picker = accessor.get(IQuickInputService).createQuickPick<IQuickPickItem & { providerId: string; }>();
+		picker.placeholder = localize('sessions.new.chooseHost', 'Choose a host for the new session');
+		picker.items = providers.map(provider => ({ label: provider.label, providerId: provider.id }));
+		const chosen = await new Promise<(IQuickPickItem & { providerId: string; }) | undefined>(resolve => {
+			const lifetime = new DisposableStore();
+			lifetime.add(picker.onDidAccept(() => { const item = picker.selectedItems[0]; if (item) { resolve(item); picker.hide(); lifetime.dispose(); } }));
+			lifetime.add(picker.onDidHide(() => { resolve(undefined); lifetime.dispose(); }));
+			picker.show();
+		});
+		if (chosen) view.openNewSession(localize('chat.sessions.new', 'New Session'), { providerId: chosen.providerId });
 	}
 });
 

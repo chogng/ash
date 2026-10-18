@@ -26,6 +26,11 @@ pub enum InputItem {
         name: String,
         content: String,
     },
+    /// Materialized from the initiating renderer before domain input is admitted or persisted.
+    HostResource {
+        name: String,
+        resource: crate::protocol::host_resource::HostResourceRef,
+    },
     /// Frozen when a Turn is accepted; steering cannot change this selection.
     ToolSelection {
         #[schemars(length(max = 4096))]
