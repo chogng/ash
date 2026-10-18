@@ -192,3 +192,44 @@ env dir remove <env-id> <dir-id>
 - 条件写入在同一物理目录的进程内写锁下检查和提交；不承诺与其他进程的文件修改进行事务隔离。
 - 配置来源可以影响签发政策；配置目录引用不能签发 Grant，已明确签发的贡献权限不再被来源过滤。
 - 旧的仅路径目录 ID 不匹配新的物理对象绑定，必须重新建立绑定并取得授权。
+
+## 9. 执行层实现核对（Codex 对照）
+
+2026-10-17 核对本地 Codex `822e58cc3d666166c7446c5b1ea2e52f5d09594c`：
+`codex-rs/core/src/config/mod.rs` 分开保存 `cwd`、`workspace_roots` 与权限；
+`core/src/session/session.rs` 分别应用执行目录和运行根更新；
+`app-server-protocol/src/protocol/v2/{thread,turn}.rs` 分别表达 `cwd` 与 `runtime_workspace_roots`。
+后一个字段在该版本仍为实验协议，本次只采用职责约束，不在 Ash 接入它。
+
+| Ash 对象                | 唯一职责与 owner                                                                                                                                  | 权限边界                                                                                            |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| 窗口 Workspace folders  | TypeScript Workspace services 管理显示顺序、编辑器归属和配置文件；Rust `EnvRuntime.dirs` 路由目录服务                                             | `env/dirs/set` 的根和授权分别解析；目录 ID、顺序、当前 Session 均不代替能力检查                     |
+| Session / Thread `cwd`  | `DirContributions.session_environments` 保存显式 Session move 的来源；`ThreadDirs` 拥有受管理 worktree 绑定，绑定存在时决定 Thread 的相对路径基准 | 位置元数据读取不授予 I/O；根重排不会改变已有 Thread 或进程的 cwd                                    |
+| 模型 `dirs`             | `DirContributions` 从当前 Session 目录条目和本次 cwd 构造；`ash-agent-environment::Dirs` 只排序、去重和渲染                                       | 不按 Git 检查权限筛掉普通文件目录，不代表可读或可写，也不导入其他窗口的目录                         |
+| 目录能力与临时批准      | `ash-file-access::Grant/Authorization` 与 App Server `DirGrants` 按 Environment、Session tree、Thread、Turn 持有和撤销                            | 请求分别取得 `ReadFiles`、`WriteFiles`、`ExecuteCommands` 等证明，不能由 cwd 或根列表推导           |
+| Profile、动作批准与沙箱 | config / action-policy 决定约束和批准；App Server 组装 `SandboxScope`，exec-server 与 sandbox backend 执行                                        | 执行目录只有执行权限时默认只读；额外目录的文件证明分别进入范围，每个根保留 profile 和受保护路径规则 |
+
+`DirGrants::bind_thread_dir` 是受管理 worktree owner 使用的宿主授权入口，包含其工作副本的
+文件、命令与仓库能力。它不是普通目录导航操作；`session/dir/move` 显式接收权限，窗口根列表不调用它。
+这些 worktree 授权仍受生效 profile、路径约束及动作审批限制。
+
+本次修正包括：文件工具与 `apply_patch` 在 cwd 无写权限时不再把相对路径落到第一个额外可写根；
+命令沙箱由独立文件能力构造可写范围，不把 `ExecuteCommands` 当作 `WriteFiles`，并包含当前
+Session / Thread / Turn 的有效额外文件授权；模型将旧 `filesystem/accessible_dirs` 改为独立
+`dirs`，位置元数据与权限分开表达。准备后的 shell 调用保存范围所用的全部文件租约，
+审批等待期间撤销任一租约会阻止执行；选择启动方式时也保留只读范围与 profile 的宿主可读限制。
+初始环境采集和 Thread 目录切换分别检查 `InspectRepository`，缺少该能力时不执行 Git 采集；
+允许加载目录指令不会附带仓库检查权限。
+配置提交和后台配置监听也检查非选中根的用户授权变化；失效的根先撤销旧租约、移除服务路由并
+清理终端、调试与语言资源。保留根不受影响，新权限由现有 `env/dirs/set` 显式重新绑定，
+不能因该根不是当前 cwd 就继续使用旧授权。
+
+窗口的第二根不会自动扩大 Agent 的 Session 权限。Agent 额外目录继续通过已有的 Session 目录授权
+或明确批准的 Turn / Session 临时授权进入执行范围；选择命令 cwd 也不改变这些根的权限。
+沙箱现有契约要求目录 grant 不重叠，无法无损表示的重叠授权明确失败，不合并成更宽的可写父目录。
+本次未改变线上 RPC，也未新增 Main 状态或进程；模型环境块的结构变化属于请求上下文，不改写历史消息。
+
+验证覆盖 `local_tools` 33 项、`environment_runtime` 49 项、`dir_contributions` 20 项、
+`agent_runtime` 11 项和 `ash-agent-environment` 8 项。macOS 真实沙箱进程分别用普通沙箱授权和
+动作批准验证 cwd 保持、只读根拒绝写入、额外可写根成功写入及受保护文件拒绝读取。
+两个受影响包的 check、rust-warnings 和改动文件格式检查通过；本次未运行 Windows / Linux 的真实沙箱。

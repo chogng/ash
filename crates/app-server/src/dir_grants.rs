@@ -319,6 +319,8 @@ impl DirGrants {
             .remove(session_id);
     }
 
+    /// Issues the host's working-copy capabilities for a managed Thread binding.
+    /// Ordinary cwd changes and workspace folder selection must not use this grant-issuing path.
     pub(crate) fn bind_thread_dir(&self, thread_id: ThreadId, dir: Dir) {
         let mut threads = self
             .threads
@@ -352,13 +354,18 @@ impl DirGrants {
     /// Identifies the current Thread directory without granting filesystem access. Domain-specific
     /// consumers such as Memories must separately authorize their own scoped content.
     pub(crate) fn thread_dir_id(&self, thread_id: &ThreadId) -> Option<ash_file_access::DirId> {
+        self.thread_dir(thread_id).map(|dir| dir.id())
+    }
+
+    /// Returns execution location metadata. Callers must separately authorize any I/O.
+    pub(crate) fn thread_dir(&self, thread_id: &ThreadId) -> Option<Dir> {
         self.threads
             .read()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .get(thread_id)
             .and_then(|dirs| dirs.default.as_ref())
             .filter(|grant| grant.is_active())
-            .map(|grant| grant.dir().id())
+            .map(|grant| grant.dir().clone())
     }
 
     pub(crate) fn thread_scope(

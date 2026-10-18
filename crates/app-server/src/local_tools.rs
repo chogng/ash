@@ -889,7 +889,7 @@ impl<B: SandboxBackend> LocalShellToolService<B> {
         &self,
         request: &ShellCommandRequest,
     ) -> Result<ActionReviewRequest, CoreError> {
-        let scope = local_sandbox_scope(&self.authorization, self.profile_policy)?;
+        let scope = local_sandbox_scope(&self.authorization, &[], self.profile_policy)?;
         self.review_request_scoped(request, Some(&scope))
     }
 
@@ -969,7 +969,7 @@ impl<B: SandboxBackend> LocalShellToolService<B> {
         authorization: &ToolAuthorization,
         cancellation: &CancellationToken,
     ) -> Result<ToolExecutionOutput, CoreError> {
-        let scope = local_sandbox_scope(&self.authorization, self.profile_policy)?;
+        let scope = local_sandbox_scope(&self.authorization, &[], self.profile_policy)?;
         self.execute_request_scoped(request, authorization, cancellation, Some(&scope), None)
     }
 
@@ -1191,7 +1191,20 @@ impl LocalExecutorReviewer {
         } else {
             self.shell_policy
         };
-        let mut scope = local_sandbox_scope(&authorization, self.profile_policy)?;
+        let turn = thread_id
+            .zip(self.threads.as_ref())
+            .map(|(thread, threads)| running_turn(threads, thread))
+            .transpose()?
+            .flatten();
+        let file_authorizations = local_file_authorizations(
+            &self.grant,
+            &self.dir_grants,
+            session_id,
+            thread_id,
+            turn.as_ref(),
+        )?;
+        let mut scope =
+            local_sandbox_scope(&authorization, &file_authorizations, self.profile_policy)?;
         if let (Some(session), Some(thread), Some(threads)) = (session_id, thread_id, &self.threads)
         {
             let snapshot = threads.read_thread(thread)?;
@@ -1253,7 +1266,7 @@ impl LocalExecutorReviewer {
         );
         // Keep the reviewed host scope with the frozen payload. Reconstructing
         // a plain directory scope in the executor drops denied path rules.
-        Ok(PreparedToolExecution::new(
+        let mut prepared = PreparedToolExecution::new(
             review,
             ToolPayload::FunctionArguments(json!({
                 "program": request.program(),
@@ -1263,7 +1276,13 @@ impl LocalExecutorReviewer {
             })),
         )
         .with_dir_authorization(authorization)
-        .with_sandbox_scope(scope))
+        .with_sandbox_scope(scope);
+        // Freeze every filesystem lease used by the reviewed sandbox, so revocation
+        // during an approval wait cannot leave an extra root in the prepared process.
+        for authorization in file_authorizations {
+            prepared = prepared.with_dir_authorization(authorization);
+        }
+        Ok(prepared)
     }
 
     fn resolve_execution_dir(
@@ -1428,8 +1447,12 @@ impl LocalExecutorReviewer {
             .into_iter()
             .map(|authorization| authorization.constrained_by(self.authorization.path_policy()))
             .collect::<Vec<_>>();
+        let relative_root = thread_scope
+            .as_ref()
+            .map(|scope| scope.primary().dir())
+            .unwrap_or_else(|| self.authorization.dir());
         let (authorization, rewritten_patch, targets) =
-            materialize_patch_targets(&authorizations, patch, &[])?;
+            materialize_patch_targets(&authorizations, relative_root, patch, &[])?;
         let capabilities = targets.iter().flat_map(|target| {
             [
                 Capability::new(CapabilityKind::FileRead, target.clone()),
@@ -1461,12 +1484,10 @@ impl LocalExecutorReviewer {
 
 fn materialize_patch_targets(
     authorizations: &[Authorization],
+    relative_root: &Dir,
     patch: &str,
     source_aliases: &[(Dir, Authorization)],
 ) -> Result<(Authorization, String, Vec<String>), CoreError> {
-    let primary = authorizations
-        .first()
-        .ok_or_else(|| CoreError::Policy("apply_patch has no writable directory".into()))?;
     let mut selected: Option<Authorization> = None;
     let mut targets = Vec::new();
     let mut rewritten = Vec::new();
@@ -1491,8 +1512,14 @@ fn materialize_patch_targets(
                 "apply_patch contains an empty target path".into(),
             ));
         }
-        let path = Path::new(path);
-        let (authorization, relative) = if path.is_absolute() {
+        // Relative patch paths always name the execution directory, even when
+        // only an extra root has write permission.
+        let path = if Path::new(path).is_absolute() {
+            PathBuf::from(path)
+        } else {
+            relative_root.canonical_path().join(path)
+        };
+        let (authorization, relative) = {
             if let Some((authorization, relative)) = source_aliases
                 .iter()
                 .filter_map(|(source, authorization)| {
@@ -1530,8 +1557,6 @@ fn materialize_patch_targets(
                         ))
                     })?
             }
-        } else {
-            (primary.clone(), path.to_path_buf())
         };
         if let Some(selected) = &selected
             && selected.dir() != authorization.dir()
@@ -1877,63 +1902,160 @@ pub(crate) static LOCAL_FILE_ACCESS_POLICY: LazyLock<ash_file_access::PathAccess
         .expect("built-in local filesystem patterns are valid")
     });
 
+fn running_turn(
+    threads: &ash_core::ThreadController,
+    thread: &ash_protocol::ThreadId,
+) -> Result<Option<ash_protocol::TurnId>, CoreError> {
+    Ok(threads
+        .read_thread(thread)?
+        .turns
+        .iter()
+        .rev()
+        .find(|turn| turn.status == ash_protocol::TurnStatus::Running)
+        .map(|turn| turn.turn_id.clone()))
+}
+
+/// Reads file capabilities independently of the directory selected for command execution.
+fn local_file_authorizations(
+    default: &ash_file_access::Grant,
+    grants: &DirGrants,
+    session: Option<&ash_protocol::SessionId>,
+    thread: Option<&ash_protocol::ThreadId>,
+    turn: Option<&ash_protocol::TurnId>,
+) -> Result<Vec<Authorization>, CoreError> {
+    let mut files = Vec::new();
+    for permission in [DirPermission::ReadFiles, DirPermission::WriteFiles] {
+        files.extend(default.authorize(permission).ok());
+        if let Some(thread) = thread {
+            if let Some(scope) = grants
+                .thread_scope(thread, permission)
+                .map_err(|error| CoreError::Policy(error.to_string()))?
+            {
+                files.extend(scope.authorizations().cloned());
+            }
+        }
+        if let Some(session) = session {
+            if let Some(snapshot) = grants
+                .snapshot_for(session, permission)
+                .map_err(|error| CoreError::Policy(error.to_string()))?
+            {
+                files.extend(snapshot.authorizations().iter().cloned());
+            }
+        }
+        if let (Some(session), Some(thread), Some(turn)) = (session, thread, turn) {
+            files.extend(grants.requested_authorizations(session, thread, turn, permission));
+        }
+    }
+    Ok(files
+        .into_iter()
+        .map(|files| files.constrained_by(default.path_policy()))
+        .collect())
+}
+
 pub(crate) fn local_sandbox_scope(
     authorization: &Authorization,
+    file_authorizations: &[Authorization],
     ceiling: Option<SandboxPolicy>,
 ) -> Result<SandboxScope, CoreError> {
     let dir = authorization.dir();
     let policy = authorization.path_policy();
+    authorization
+        .ensure_active()
+        .map_err(|error| CoreError::Policy(error.to_string()))?;
+    // Command location is required to launch the process; it does not confer write
+    // access. Only separate file authorizations may add writable sandbox roots.
+    let mut roots = std::collections::BTreeMap::from([(
+        dir.id(),
+        (
+            dir.clone(),
+            ash_sandboxing::SandboxDirAccess::ReadOnly,
+            policy.clone(),
+        ),
+    )]);
+    for files in file_authorizations {
+        files
+            .ensure_active()
+            .map_err(|error| CoreError::Policy(error.to_string()))?;
+        let files = files.clone().constrained_by(policy);
+        let access = match (files.permission(), files.path_policy().baseline()) {
+            (_, ash_file_access::PathAccess::Denied) => continue,
+            (DirPermission::WriteFiles, ash_file_access::PathAccess::ReadWrite) => {
+                ash_sandboxing::SandboxDirAccess::ReadWrite
+            }
+            (DirPermission::ReadFiles | DirPermission::WriteFiles, _) => {
+                ash_sandboxing::SandboxDirAccess::ReadOnly
+            }
+            _ => continue,
+        };
+        roots
+            .entry(files.dir().id())
+            .and_modify(|(_, current, constraints)| {
+                if access == ash_sandboxing::SandboxDirAccess::ReadWrite {
+                    *current = access;
+                }
+                *constraints = constraints.intersect(files.path_policy());
+            })
+            .or_insert_with(|| (files.dir().clone(), access, files.path_policy().clone()));
+    }
     let timing = if cfg!(target_os = "macos") {
         PatternMatchTiming::Continuous
     } else {
         PatternMatchTiming::PreparationSnapshot
     };
-    let mut rules = LOCAL_DENIED_GLOBS
-        .iter()
-        .map(|pattern| {
-            SandboxPathRule::pattern(dir.clone(), *pattern, SandboxPathAccess::Denied, timing)
-        })
-        .collect::<Result<Vec<_>, _>>()
-        .map_err(|error| CoreError::Policy(error.to_string()))?;
-    for rule in policy.rules() {
-        let access = match rule.access {
-            ash_file_access::PathAccess::Denied => SandboxPathAccess::Denied,
-            ash_file_access::PathAccess::ReadOnly => SandboxPathAccess::ReadOnly,
-            ash_file_access::PathAccess::ReadWrite => continue,
-        };
-        // Configured rules describe continuous ceilings. Unsupported backends reject these
-        // rather than turning them into a snapshot that new files could escape.
-        rules.push(
-            SandboxPathRule::pattern(
-                dir.clone(),
-                rule.pattern.clone(),
-                access,
-                PatternMatchTiming::Continuous,
-            )
-            .map_err(|error| CoreError::Policy(error.to_string()))?,
+    let mut rules = Vec::new();
+    let mut grants = Vec::new();
+    for (dir, access, policy) in roots.into_values() {
+        rules.extend(
+            LOCAL_DENIED_GLOBS
+                .iter()
+                .map(|pattern| {
+                    SandboxPathRule::pattern(
+                        dir.clone(),
+                        *pattern,
+                        SandboxPathAccess::Denied,
+                        timing,
+                    )
+                })
+                .collect::<Result<Vec<_>, _>>()
+                .map_err(|error| CoreError::Policy(error.to_string()))?,
         );
-    }
-    let access = match policy.baseline() {
-        ash_file_access::PathAccess::ReadOnly => ash_sandboxing::SandboxDirAccess::ReadOnly,
-        ash_file_access::PathAccess::ReadWrite => ash_sandboxing::SandboxDirAccess::ReadWrite,
-        ash_file_access::PathAccess::Denied => {
-            return Err(CoreError::Policy(
-                "profile denies the execution directory".into(),
-            ));
+        for rule in policy.rules() {
+            let access = match rule.access {
+                ash_file_access::PathAccess::Denied => SandboxPathAccess::Denied,
+                ash_file_access::PathAccess::ReadOnly => SandboxPathAccess::ReadOnly,
+                ash_file_access::PathAccess::ReadWrite => continue,
+            };
+            // Configured rules describe continuous ceilings. Unsupported backends reject these
+            // rather than turning them into a snapshot that new files could escape.
+            rules.push(
+                SandboxPathRule::pattern(
+                    dir.clone(),
+                    rule.pattern.clone(),
+                    access,
+                    PatternMatchTiming::Continuous,
+                )
+                .map_err(|error| CoreError::Policy(error.to_string()))?,
+            );
         }
-    };
-    let mut scope = SandboxScope::new(
-        dir.clone(),
-        vec![ash_sandboxing::SandboxDirGrant::new(dir.clone(), access)],
-        vec![],
-    )
-    .map_err(|error| CoreError::Policy(error.to_string()))?
-    .with_host_read(match policy.host_read() {
-        ash_file_access::HostReadAccess::Host => ash_sandboxing::HostReadScope::Host,
-        ash_file_access::HostReadAccess::GrantedRoots => ash_sandboxing::HostReadScope::Minimal,
-    })
-    .with_path_rules(rules)
-    .map_err(|error| CoreError::Policy(error.to_string()))?;
+        let access = match policy.baseline() {
+            ash_file_access::PathAccess::ReadOnly => ash_sandboxing::SandboxDirAccess::ReadOnly,
+            ash_file_access::PathAccess::ReadWrite => access,
+            ash_file_access::PathAccess::Denied => {
+                return Err(CoreError::Policy(
+                    "profile denies the execution directory".into(),
+                ));
+            }
+        };
+        grants.push(ash_sandboxing::SandboxDirGrant::new(dir, access));
+    }
+    let mut scope = SandboxScope::new(dir.clone(), grants, vec![])
+        .map_err(|error| CoreError::Policy(error.to_string()))?
+        .with_host_read(match policy.host_read() {
+            ash_file_access::HostReadAccess::Host => ash_sandboxing::HostReadScope::Host,
+            ash_file_access::HostReadAccess::GrantedRoots => ash_sandboxing::HostReadScope::Minimal,
+        })
+        .with_path_rules(rules)
+        .map_err(|error| CoreError::Policy(error.to_string()))?;
     if let Some(ceiling) = ceiling {
         scope = scope.with_policy_ceiling(ceiling);
     }
@@ -1970,24 +2092,37 @@ fn local_command_authority(
         | ToolAuthorization::PermissionBypassed(_)
         | ToolAuthorization::ApprovedOnce(_) => {}
     }
-    // Approval does not remove the workspace's explicit read denials.
-    let denied = scope
+    // Approval may authorize a broader command, but cannot erase directory or
+    // profile read-only constraints when choosing the process launch path.
+    let restricted = scope
         .map(|scope| {
+            if scope.host_read() == ash_sandboxing::HostReadScope::Minimal
+                || scope
+                    .grants()
+                    .iter()
+                    .any(|grant| grant.access() == ash_sandboxing::SandboxDirAccess::ReadOnly)
+            {
+                return Ok(true);
+            }
             if scope.path_rules().iter().any(|rule| {
-                rule.access() == SandboxPathAccess::Denied
-                    && rule.pattern_timing() == Some(PatternMatchTiming::Continuous)
+                matches!(
+                    rule.access(),
+                    SandboxPathAccess::Denied | SandboxPathAccess::ReadOnly
+                ) && rule.pattern_timing() == Some(PatternMatchTiming::Continuous)
             }) {
                 return Ok(true);
             }
             scope
                 .resolve_filesystem(FileSystemAccess::FullAccess)
-                .map(|filesystem| !filesystem.denied_paths().is_empty())
+                .map(|filesystem| {
+                    !filesystem.denied_paths().is_empty() || !filesystem.readonly_paths().is_empty()
+                })
         })
         .transpose()
         .map_err(|error| CoreError::Policy(error.to_string()))?
         .unwrap_or(false);
     let network = shell_policy.network();
-    if denied || network == NetworkAccess::Managed {
+    if restricted || network == NetworkAccess::Managed {
         return Ok(CommandExecutionAuthority::Sandboxed(
             SandboxPolicy::new(
                 FileSystemAccess::FullAccess,

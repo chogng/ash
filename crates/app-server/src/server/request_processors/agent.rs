@@ -417,7 +417,14 @@ impl<'ctx, C: AgentRequestProcessorContext + ?Sized> AgentRequestProcessor<'ctx,
             let authorization = grant
                 .authorize(ash_file_access::Permission::ExecuteCommands)
                 .map_err(|error| core_error(core_api::CoreError::Policy(error.to_string())))?;
-            let scope = crate::local_tools::local_sandbox_scope(&authorization, None)
+            let files = [
+                ash_file_access::Permission::ReadFiles,
+                ash_file_access::Permission::WriteFiles,
+            ]
+            .into_iter()
+            .filter_map(|permission| grant.authorize(permission).ok())
+            .collect::<Vec<_>>();
+            let scope = crate::local_tools::local_sandbox_scope(&authorization, &files, None)
                 .map_err(core_error)?;
             let executable = std::env::current_exe()
                 .map_err(|_| RpcError::new(-32603, AppServerErrorName::InternalError))?;

@@ -353,6 +353,7 @@ fn root_agent_picker_lists_authorized_roles_and_creates_the_selected_session() {
         server.env_runtime_mut().dir_grants.clone(),
         Some(authorization),
         None,
+        super::agent_environment_source::RepositoryInspection::Allowed,
     )
     .unwrap();
     server.env_runtime_mut()._dir_contributions = Some(contributions);
@@ -750,6 +751,7 @@ fn built_in_model_guidance_reaches_rpc_roots_and_default_workers_through_tool_ex
                 runtime.dir_grants.clone(),
                 Some(authorization),
                 Some(home),
+                super::agent_environment_source::RepositoryInspection::Allowed,
             )
             .unwrap();
             runtime._dir_contributions = Some(contributions.clone());

@@ -552,6 +552,75 @@ App Server 连接并重新读取 Session/Thread；Renderer 不直接读写 SQLit
   普通打开另一工作区仍保留其独立备份，不执行迁移；
 - 启动目标无效时记录错误并安全回退到空窗口。
 
+### 4.2 多根工作区文件与职责核对（2026-10-17）
+
+参照本地 VS Code `a2acc8c864a42fbf386e59d9335281fce3362c5f`，比较生产 TS/CSS（排除测试）。
+这份清单记录当前调用链与职责差异，不代表已完成结构迁移，也不授权新增空文件。
+
+| 相对 `src/ash/` 的范围          | 双方同路径 | 仅 Ash | 仅 VS Code |
+| ------------------------------- | ---------: | -----: | ---------: |
+| `platform/workspace`            |          2 |      3 |          3 |
+| `platform/workspaces`           |          4 |      4 |          2 |
+| `workbench/services/workspaces` |          5 |      5 |          8 |
+| `workbench/contrib/workspace`   |          1 |      0 |          3 |
+
+本地增删、保存和重新打开所需的生产入口均存在：
+`workbench/browser/actions/workspaceActions.ts` → `services/workspaces/common/workspaceEditing.ts` →
+`services/workspaces/electron-browser/workspaceEditingService.ts` →
+`platform/workspaces/electron-main/workspacesManagementMainService.ts`。
+最后一个文件同时导出解析器 `WorkspacesManagementMainService` 和串行编辑 owner `WorkspaceEditingMainService`；
+后者写入元数据，经过 Renderer 的目录授权、脏文件检查及 `env/dirs/set` 后，更新 Main 的窗口上下文。
+Renderer 只接受已提交的目录列表。空编辑或规范化后没有变化的目录编辑不会创建工作区、迁移身份或重写 JSONC；
+文件系统根目录使用路径本身作为默认名称，避免空名称在 IPC 校验时使整个工作区失效。
+配置文件只读访问直接校验并读取当前窗口的精确文件，不进入目录编辑和窗口切换队列；写入仍串行提交并检查修订号。
+这是 Renderer 初始化的必需边界：窗口替换需要等待 Renderer ready，而 Renderer ready 需要先读取工作区设置，
+把配置读取排在窗口替换后会形成互相等待。
+
+切换执行主根时，Rust 的目录资源保留流程会暂时抽出仍保留的路由。请求侧解析文件归属和取得
+FileSystem、Search、Terminal、Debug 服务时，需要先经过同一个 `env_runtime_gate`，再读取目录表；
+返回的读锁保持该次查询的表稳定。这样并发读取只能观察提交前或提交后的目录集合，不能把内部中间态
+误报为 `TerminalUnavailable` 或其他目录服务不可用。真正移除或撤权的根仍由原资源退休流程处理。
+PTY 的不透明 ID 还需要区分目录运行时及其重建代次；每个 `TerminalService` 使用随机前缀和自己的
+递增序号，避免不同根或清空／恢复根后重新从 `terminal-1` 开始，与 Renderer 保留的租约记录碰撞。
+
+职责尚未完全对齐：
+
+| VS Code 对应职责                                                                                              | Ash 当前 owner 与差异                                                                                                                                                                           |
+| ------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `platform/workspace/common/workspace.ts` 的上下文契约                                                         | 同路径存在；Ash 只有原子的 `onDidChangeWorkspace`，未提供上游的 folder/state/name 分层事件与完整上下文 API。                                                                                    |
+| `workbench/services/configuration/browser/configurationService.ts` 的 `WorkspaceService` 同时实现配置与上下文 | Ash 的 `WorkbenchConfigurationService` 消费独立 `WorkspaceContextService`；Main 窗口上下文拥有已提交状态。不能把同名服务文件视为相同 owner。                                                    |
+| `services/workspaces/browser/abstractWorkspaceEditingService.ts`、`browser/workspaceEditingService.ts`        | 两个文件均缺失。Desktop 编辑入口已存在，但持久化、外部监听与提交编排在 Main；Browser 没有多根编辑服务。                                                                                         |
+| `services/workspaces/electron-browser/workspaceEditingService.ts` 的 `NativeWorkspaceEditingService`          | 同路径存在，但 Ash 导出 `WorkspaceEditingService`，只代理宿主编辑与脏文件保护。`onDidEnterWorkspace`、`enterWorkspace`、`createAndEnterWorkspace`、`copyWorkspaceSettings` 等公开能力尚未对齐。 |
+| `platform/workspaces/electron-main/workspacesMainService.ts`                                                  | 缺失；历史通过 Main channel 暴露，工作区编辑通过窗口 IPC 暴露，没有上游统一的 `IWorkspacesService` 管理端口。                                                                                   |
+| `platform/workspaces/common/workspaceIdentifier.ts`                                                           | 缺失；稳定身份生成目前在 `node/workspaces.ts`，依赖 Node crypto，不能直接补一个 common 转发壳。                                                                                                 |
+
+以下仅 Ash 路径均有实际生产调用方。本批只核对，没有迁移、删除或将其登记为已确认的专属归属：
+
+| 仅 Ash 路径（相对 `src/ash/`）                                         | 当前职责与直接调用方                                                                        |
+| ---------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| `platform/workspace/browser/workspaceTrustApi.ts`                      | Rust 逐目录授权适配；Renderer API 装配。                                                    |
+| `platform/workspace/common/workspaceIpc.ts`                            | 窗口上下文、编辑和配置文件 IPC 契约；Main routes、Renderer API、文件 provider。             |
+| `platform/workspace/electron-browser/workspaceContextApi.ts`           | 上述窗口 IPC 的 Renderer 适配；Workbench 与 Sessions 的 Electron 入口。                     |
+| `platform/workspaces/electron-browser/appServerWorkspaceHost.ts`       | 初始化后端目录、处理 Main 发起的目录操作；Workbench Renderer API。                          |
+| `platform/workspaces/electron-main/appServerWorkspaceTransition.ts`    | 连接与后端切换适配；`code/electron-main/app.ts`。                                           |
+| `platform/workspaces/electron-main/rendererWorkspaceHost.ts`           | Main 到拥有连接的 Renderer 的请求生命周期；`app.ts` 与切换适配器。                          |
+| `platform/workspaces/electron-main/workspaceTransitionMainService.ts`  | 单目录运行时切换与恢复状态；`app.ts` 与切换适配器。                                         |
+| `workbench/services/workspaces/browser/appServerWebWorkspaceClient.ts` | 已连接 Web 的服务端目录选择与授权；`workbench/browser/web.host.ts`。                        |
+| `workbench/services/workspaces/browser/workspaceContextService.ts`     | 当前窗口状态的不可变视图与所属根查询；Workbench 和 Sessions。                               |
+| `workbench/services/workspaces/browser/workspaceOpenService.ts`        | Desktop、已连接 Web 与浏览器目录句柄的打开入口、根选择器；工作台动作与各宿主装配。          |
+| `workbench/services/workspaces/browser/recentWorkspacesService.ts`     | 将宿主历史适配给 Welcome；Workbench 装配与 Getting Started。                                |
+| `workbench/services/workspaces/common/recentWorkspacesService.ts`      | Welcome 最近项目契约；上面的适配器与 Getting Started。持久历史实际归 `IWorkspacesService`。 |
+
+其余仅上游文件按能力记录：`platform/workspace/common/{canonicalUri,editSessions,virtualWorkspace}.ts`、
+`services/workspaces/common/{canonicalUriService,editSessionIdentityService,workspaceFolderLabelService,workspaceIdentityService,workspaceUtils}.ts`，
+以及 `services/workspaces/browser/workspaceTrustEditorInput.ts`、
+`contrib/workspace/browser/{workspaceTrustEditor.ts,media/workspaceTrustEditor.css}` 和 `contrib/workspace/common/workspace.ts`。
+它们涉及规范 URI、编辑会话、虚拟工作区、标签/身份与信任编辑器；当前本地多根命令链未经过这些文件，
+不能仅为文件数相同而创建。Remote 多根、Browser 多根编辑与完整上游 API 仍未实现。
+
+执行目录、目录列表与权限的跨组件语义，以及本次 Codex 执行层核对与修复见
+[环境与目录访问 §9](environment-access.md#9-执行层实现核对codex-对照)。
+
 ## 5. 沙箱桥接与 Renderer API
 
 Electron sandbox 边界分为两层。`ISandboxGlobals` 是 preload 唯一暴露到主世界的底层桥接：
@@ -1293,5 +1362,8 @@ Desktop 完成的最低证据：
 完整打包链路已产出使用测试更新密钥及 Remote 发布绑定的未签名 macOS arm64 `.app`，并从其嵌入资源重新执行上述验证，核对包内全部后端资源及协议的哈希。
 包内后端还验证了真实 PTY 的第二根 cwd／环境、重排与移除原主根后的存活、清空根后的进程结束及恢复根后的重新创建。
 这些后端进程验证将包内 Electron 仅作为 Node 运行时使用，不启动窗口；本地测试产物不代表签名、公证、正式发布配置或桌面交互验收已通过。
-桌面 E2E 尚未完整通过，当前不据此声明完整交互验证完成；真实菜单和选择器、环境变量修正后的桌面流程、
-重排／移除和清空／恢复根时的界面与真实 PTY 联动、重开工作区及中文界面仍待桌面验证。
+2026-10-17 的 macOS arm64 开发构建通过 `workspace-multiroot.spec.ts` 两项 Desktop E2E：
+添加／移除根、保留编辑器内容、另存配置、第二根文件读写、终端 cwd／环境、重排与移除原主根后的终端存活、
+编辑配置清空根、恢复根后创建新终端、应用重启后显式重开保存文件，以及中文命令名称。
+测试操作实际命令面板、目录授权弹窗和移除根选择器；系统打开／保存对话框使用受控返回路径。
+Windows／Linux、多平台真实系统文件选择器和 Remote 多根仍不在本次桌面验证范围。

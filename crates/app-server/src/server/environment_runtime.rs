@@ -85,6 +85,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::Mutex;
 use std::sync::RwLock;
+use std::sync::RwLockReadGuard;
 
 pub(super) struct EnvRuntime {
     pub(super) selected_grant: Option<Grant>,
@@ -623,10 +624,65 @@ impl EnvRuntimeControl {
         Ok(())
     }
 
+    /// Invalidates changed non-selected routes before their cached services can reuse old grants.
+    /// Installing the replacement capabilities remains the explicit directory-binding operation.
+    pub(crate) fn reconcile_user_directory_routes(
+        &self,
+        config: &ash_config::ResolvedConfig,
+    ) -> Result<(), EnvRuntimeError> {
+        let _authority = self
+            .authority_gate
+            .lock()
+            .map_err(|_| EnvRuntimeError::Failed("Environment runtime gate poisoned".into()))?;
+        let mut runtime = self
+            .runtime
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let stale = runtime
+            .dirs
+            .iter()
+            .filter(|(_, dir)| {
+                let grant = &dir.grant;
+                grant.source() == GrantSource::ExplicitUser
+                    && !runtime
+                        .selected_grant
+                        .as_ref()
+                        .is_some_and(|selected| selected.dir() == grant.dir())
+                    && config
+                        .directory_grants
+                        .explicit_permissions_for(&grant.dir().id())
+                        .cloned()
+                        .unwrap_or_else(inspection_permissions)
+                        != *grant.permissions()
+            })
+            .map(|(id, _)| id.clone())
+            .collect::<Vec<_>>();
+        let retired = stale
+            .into_iter()
+            .filter_map(|id| runtime.dirs.remove(&id))
+            .collect::<Vec<_>>();
+        for dir in &retired {
+            dir.grant.revoke();
+        }
+        let language_roots = language_roots_for(&runtime);
+        drop(runtime);
+        if !retired.is_empty() {
+            self.language
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .retain_dir_roots(&language_roots);
+        }
+        for dir in retired {
+            dir.retire(None, None, None);
+        }
+        Ok(())
+    }
+
     pub(crate) fn reconcile_user_directory_grants(
         &self,
         config: &ash_config::ResolvedConfig,
     ) -> Result<(), EnvRuntimeError> {
+        self.reconcile_user_directory_routes(config)?;
         let _authority = self
             .authority_gate
             .lock()
@@ -2366,6 +2422,14 @@ impl AppServer {
             dir_grants,
             authorization.authorize(Permission::LoadInstructions).ok(),
             self.home.clone(),
+            if authorization
+                .permissions()
+                .allows(Permission::InspectRepository)
+            {
+                super::agent_environment_source::RepositoryInspection::Allowed
+            } else {
+                super::agent_environment_source::RepositoryInspection::Omit
+            },
         )
         .map_err(|error| EnvRuntimeError::Failed(error.to_string()))?;
         let file_system_watcher = if authorization.permissions().allows(Permission::WatchFiles) {
@@ -2498,6 +2562,14 @@ impl AppServer {
             dir_grants,
             authorization.authorize(Permission::LoadInstructions).ok(),
             self.home.clone(),
+            if authorization
+                .permissions()
+                .allows(Permission::InspectRepository)
+            {
+                super::agent_environment_source::RepositoryInspection::Allowed
+            } else {
+                super::agent_environment_source::RepositoryInspection::Omit
+            },
         )
         .map_err(|error| EnvRuntimeError::Failed(error.to_string()))?;
         let git = authorization
@@ -3021,10 +3093,7 @@ impl AppServer {
             .threads
             .list_thread_catalog()
             .map_err(super::core_error)?;
-        let runtime = self
-            .env_runtime
-            .read()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let runtime = self.directory_runtime_for_request()?;
         let mut candidates = Vec::new();
         let mut add = |dir: &Dir, target: FsDirectoryTarget| {
             // Match aliases of the granted root without resolving the leaf: creating a missing
@@ -3114,14 +3183,25 @@ impl AppServer {
             .ok_or_else(|| RpcError::new(-32043, AppServerErrorName::PermissionRequired))
     }
 
+    // Root changes temporarily extract retained routes while rebuilding the execution
+    // owner. Requests must wait for that transaction, then keep its table stable with
+    // the read guard until they have acquired the existing service instance.
+    fn directory_runtime_for_request(&self) -> Result<RwLockReadGuard<'_, EnvRuntime>, RpcError> {
+        let _transition = self
+            .env_runtime_gate
+            .lock()
+            .map_err(|_| RpcError::new(-32070, AppServerErrorName::EnvironmentUnavailable))?;
+        Ok(self
+            .env_runtime
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner))
+    }
+
     pub(super) fn file_system_service_for(
         &self,
         dir_id: Option<&str>,
     ) -> Result<Arc<dyn FileSystem>, RpcError> {
-        let runtime = self
-            .env_runtime
-            .read()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        let runtime = self.directory_runtime_for_request()?;
         if let Some(dir_id) = dir_id {
             return runtime
                 .dirs
@@ -3205,10 +3285,7 @@ impl AppServer {
         &self,
         dir_id: Option<&str>,
     ) -> Result<Arc<ContentSearchService>, RpcError> {
-        let runtime = self
-            .env_runtime
-            .read()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        let runtime = self.directory_runtime_for_request()?;
         if let Some(dir_id) = dir_id {
             return runtime
                 .dirs
@@ -3346,10 +3423,7 @@ impl AppServer {
                 self.session_dir_authorization(&session_id, &path, Permission::ExecuteCommands)?;
             return self.session_terminal_service(&session_id, &authorization);
         }
-        let runtime = self
-            .env_runtime
-            .read()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        let runtime = self.directory_runtime_for_request()?;
         if let Some(dir_id) = dir_id {
             return runtime
                 .dirs
@@ -3436,10 +3510,7 @@ impl AppServer {
         &self,
         dir_id: Option<&str>,
     ) -> Result<Arc<crate::debug_service::DebugAdapterService>, RpcError> {
-        let runtime = self
-            .env_runtime
-            .read()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        let runtime = self.directory_runtime_for_request()?;
         if let Some(dir_id) = dir_id {
             return runtime
                 .dirs

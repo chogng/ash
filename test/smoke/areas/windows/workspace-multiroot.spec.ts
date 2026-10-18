@@ -73,17 +73,36 @@ test('local multi-root commands, live folders and retained second-root terminals
 		await editor.waitForEditorContents(text => text.includes('Server'));
 		await editor.waitForEditorFocus();
 		await page.keyboard.press('ControlOrMeta+a');
-		await page.keyboard.insertText(JSON.stringify({ folders: [], settings: { 'editor.tabSize': 3 } }));
+		const emptyConfiguration = JSON.stringify({ folders: [], settings: { 'editor.tabSize': 3 } });
+		// Replacing a document is a paste; typing its opening brace surrounds the selection.
+		await editor.input.evaluate((element, text) => {
+			const clipboardData = new DataTransfer();
+			clipboardData.setData('text/plain', text);
+			element.dispatchEvent(new ClipboardEvent('paste', { bubbles: true, cancelable: true, clipboardData }));
+		}, emptyConfiguration);
+		await editor.waitForEditorContents(text => text === emptyConfiguration);
 		await page.keyboard.press('ControlOrMeta+s');
 		await expect.poll(async () => (await workspace(page)).folders.length).toBe(0);
 		await writeFile(saved, JSON.stringify({ folders: reordered.folders.filter(folder => folder.name === 'Server'), settings: { 'editor.tabSize': 3 } }));
 		await expect.poll(async () => (await workspace(page)).folders.map(folder => folder.name)).toEqual(['Server']);
+		const terminalCount = await workbench.terminal.instances.count();
+		await page.getByRole('button', { name: 'New Terminal', exact: true }).click();
+		await expect(workbench.terminal.instances).toHaveCount(terminalCount + 1);
+		await workbench.terminal.runCommand(`node -e "console.log(['restored','root'].join('-')+'='+process.cwd())"`);
+		await expect(workbench.terminal.activeInstance.locator('.xterm-rows')).toContainText(`restored-root=${second}`);
 		await testInfo.attach('local-multi-root', { body: await page.screenshot(), contentType: 'image/png' });
 	} finally {
 		await electron.evaluate(({ dialog }, original) => { dialog.showOpenDialog = original.open; dialog.showSaveDialog = original.save; }, originals);
 		await originals.dispose();
 	}
 	({ application, workbench } = await reloadWorkbench());
+	// The fixture relaunches with the original folder argument. Reopen the saved
+	// workspace explicitly, as opening its file after restarting the application.
+	await (application as ElectronApplication).evaluate(({ app }, file) => {
+		app.emit('second-instance', {} as never, [process.execPath, app.getAppPath(), '--workspace', file, '--reuse-window'], process.cwd(), {});
+	}, saved);
+	await expect.poll(async () => (await workspace(workbench.page)).configuration?.fsPath).toBe(saved);
+	await workbench.waitForReady();
 	expect((await workspace(workbench.page)).folders.map(folder => folder.name)).toEqual(['Server']);
 	expect((await workspace(workbench.page)).configuration?.fsPath).toBe(saved);
 });

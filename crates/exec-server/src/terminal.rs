@@ -77,6 +77,7 @@ const RECONNECT_TOKEN_BYTES: usize = 32;
 /// `ExecuteCommands` authorization.
 pub struct TerminalService {
     authorization: RwLock<Authorization>,
+    terminal_id_prefix: String,
     next_terminal_id: AtomicU64,
     sessions: Arc<Mutex<HashMap<String, TerminalSession>>>,
     runtime: Runtime,
@@ -86,6 +87,8 @@ pub struct TerminalService {
 impl TerminalService {
     pub fn new(authorization: Authorization) -> Result<Self, TerminalError> {
         validate_authorization(&authorization)?;
+        // Clients retain leases across directory changes, including service recreation.
+        let terminal_id_prefix = random_hex::<16>()?;
         let runtime = tokio::runtime::Builder::new_multi_thread()
             .worker_threads(2)
             .enable_all()
@@ -96,6 +99,7 @@ impl TerminalService {
         spawn_reconnect_sweeper(&runtime, Arc::clone(&sessions));
         Ok(Self {
             authorization: RwLock::new(authorization),
+            terminal_id_prefix,
             next_terminal_id: AtomicU64::new(1),
             sessions,
             runtime,
@@ -342,7 +346,8 @@ impl TerminalService {
                 .to_owned(),
         };
         let terminal_id = format!(
-            "terminal-{:x}",
+            "terminal-{}-{:x}",
+            self.terminal_id_prefix,
             self.next_terminal_id.fetch_add(1, Ordering::Relaxed)
         );
         let mode = if integration.is_some() {
@@ -1149,17 +1154,21 @@ fn validate_size(rows: u16, cols: u16) -> Result<(), TerminalError> {
 }
 
 fn new_reconnect_lease() -> Result<TerminalReconnectLease, TerminalError> {
-    let mut bytes = [0_u8; RECONNECT_TOKEN_BYTES];
-    getrandom(&mut bytes).map_err(|_| TerminalError::OperationFailed)?;
-    let mut reconnect_token = String::with_capacity(RECONNECT_TOKEN_BYTES * 2);
-    for byte in bytes {
-        use std::fmt::Write;
-        write!(&mut reconnect_token, "{byte:02x}").expect("writing to a String cannot fail");
-    }
     Ok(TerminalReconnectLease {
-        reconnect_token,
+        reconnect_token: random_hex::<RECONNECT_TOKEN_BYTES>()?,
         reconnect_grace_period_millis: RECONNECT_GRACE_PERIOD_MILLIS,
     })
+}
+
+fn random_hex<const N: usize>() -> Result<String, TerminalError> {
+    let mut bytes = [0_u8; N];
+    getrandom(&mut bytes).map_err(|_| TerminalError::OperationFailed)?;
+    let mut encoded = String::with_capacity(N * 2);
+    for byte in bytes {
+        use std::fmt::Write;
+        write!(&mut encoded, "{byte:02x}").expect("writing to a String cannot fail");
+    }
+    Ok(encoded)
 }
 
 fn constant_time_eq(left: &str, right: &str) -> bool {

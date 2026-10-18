@@ -2,7 +2,7 @@ import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../base/test/c
 import assert from 'node:assert/strict';
 import { mkdtemp, mkdir, readFile, writeFile, rename, rm, realpath, symlink } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join, dirname } from 'node:path';
+import { join, dirname, parse } from 'node:path';
 import { test } from 'mocha';
 import { URI } from '../../../../base/common/uri.js';
 import { parseJsonc } from '../../../../base/common/jsonc.js';
@@ -10,10 +10,11 @@ import { WorkspaceContextMainService } from '../../../window/electron-main/windo
 import { validateWorkspaceEdit } from '../../../workspace/common/workspaceIpc.js';
 import { WorkspaceEditingMainService, WorkspacesManagementMainService } from '../../electron-main/workspacesManagementMainService.js';
 import { getSingleFolderWorkspaceIdentifier, getWorkspaceIdentifier } from '../../node/workspaces.js';
+import { parseWorkspace, serializeWorkspace } from '../../../workspace/common/workspace.js';
 
 ensureNoDisposablesAreLeakedInTestSuite();
 
-async function fixture() {
+async function fixture(runExclusive?: <T>(operation: () => Promise<T>) => Promise<T>) {
 	const root = await realpath(await mkdtemp(join(tmpdir(), 'ash-workspace-edit-')));
 	const first = join(root, 'first');
 	const second = join(root, 'second');
@@ -28,7 +29,7 @@ async function fixture() {
 		resolveGrant: async () => ({ type: 'config' }), persistDirectoryGrant: async () => { },
 		validateFolders: async () => { await validate?.(); },
 		setFolders: async folders => { if (rejection) throw rejection; requests.push(folders.map(({ id, path }) => ({ id, path }))); },
-	}, error => errors.push(error));
+	}, error => errors.push(error), runExclusive);
 	return {
 		root, first, second, context, editing, manager, requests, errors,
 		reject: (error: Error | undefined) => { rejection = error; },
@@ -52,6 +53,45 @@ test('adding and removing roots publishes one persisted workspace after backend 
 	assert.equal(f.context.getWorkspace().id, workspace.id);
 	assert.deepEqual(changes, [0]);
 	assert.deepEqual(f.requests.at(-1), []);
+});
+
+test('empty edits and duplicate roots preserve the single-folder workspace identity', async () => {
+	await using f = await fixture();
+	const previous = f.context.getResolvedWorkspace();
+	const changes: unknown[] = [];
+	using listener = f.context.onDidChangeWorkspace(event => changes.push(event));
+	await f.editing.edit({ operation: 'folders', index: 1, deleteCount: 0, folders: [] });
+	await f.editing.edit({ operation: 'folders', index: 1, deleteCount: 0, folders: [{ uri: URI.file(f.first).toString() }] });
+	assert.equal(f.context.getResolvedWorkspace(), previous);
+	assert.deepEqual(changes, []);
+	assert.deepEqual(f.requests, []);
+});
+
+test('unchanged folder edits preserve workspace metadata bytes', async () => {
+	await using f = await fixture();
+	const config = join(f.root, 'team.code-workspace');
+	const source = '{\n "folders": [\n  // Keep root metadata\n  {"path":"first"}\n ],\n "settings":{"editor.tabSize":3}\n}\n';
+	await writeFile(config, source);
+	const identifier = getWorkspaceIdentifier(URI.file(config));
+	f.context.updateWorkspace(identifier, await f.manager.resolveWorkspace(identifier));
+	await f.editing.edit({ operation: 'folders', index: 0, deleteCount: 1, folders: [{ uri: URI.file(f.first).toString() }] });
+	assert.equal(await readFile(config, 'utf8'), source);
+	assert.deepEqual(f.requests, []);
+});
+
+test('filesystem roots retain a nonempty folder label through editing, IPC and reopening', async () => {
+	await using f = await fixture();
+	const root = parse(f.root).root;
+	const config = URI.file(join(f.root, 'root.code-workspace'));
+	await writeFile(config.fsPath, JSON.stringify({ folders: [{ path: root }] }));
+	const resolved = await f.manager.resolveWorkspace(getWorkspaceIdentifier(config));
+	assert.equal(resolved.folders[0]?.name, root);
+	assert.deepEqual(parseWorkspace(serializeWorkspace(resolved)), resolved);
+	await f.editing.edit({ operation: 'folders', index: 1, deleteCount: 0, folders: [{ uri: URI.file(root).toString() }] });
+	const workspace = f.context.getResolvedWorkspace();
+	assert.equal(workspace.folders[1]?.name, root);
+	assert.deepEqual(parseWorkspace(serializeWorkspace(workspace)), workspace);
+	assert.deepEqual(await f.manager.resolveWorkspace(getWorkspaceIdentifier(workspace.configuration!)), workspace);
 });
 
 test('saving elsewhere rebases roots while retaining JSONC, settings and extension metadata', async () => {
@@ -140,6 +180,34 @@ test('workspace metadata access is limited to the current file and preserves rev
 	await writeFile(path, external);
 	assert.deepEqual(await f.editing.configuration({ operation: 'write', uri, content: '{}', options: { create: false, overwrite: true, expectedRevision: original.revision } }), { error: 'revisionConflict' });
 	assert.equal(await readFile(path, 'utf8'), external);
+});
+
+test('renderer startup can read workspace configuration while window replacement holds queued writes', async () => {
+	let finishOpening!: () => void;
+	const opening = new Promise<void>(resolve => { finishOpening = resolve; });
+	await using f = await fixture(async operation => { await opening; return operation(); });
+	const config = URI.file(join(f.root, 'team.ash-workspace'));
+	const source = JSON.stringify({ folders: [{ path: 'first' }] });
+	const updated = JSON.stringify({ folders: [{ path: 'first' }], settings: { 'editor.tabSize': 3 } });
+	await writeFile(config.fsPath, source);
+	const identifier = getWorkspaceIdentifier(config);
+	f.context.updateWorkspace(identifier, await f.manager.resolveWorkspace(identifier));
+	const write = f.editing.configuration({ operation: 'write', uri: config.toString(), content: updated, options: { create: false, overwrite: true } });
+	const read = f.editing.configuration({ operation: 'read', uri: config.toString() });
+	let deadline: ReturnType<typeof setTimeout> | undefined;
+	try {
+		const result = await Promise.race([
+			read,
+			new Promise<never>((_resolve, reject) => { deadline = setTimeout(() => reject(new Error('Renderer startup configuration read waited for window readiness')), 5000); }),
+		]) as { content: string; };
+		assert.equal(result.content, source);
+		assert.equal(await readFile(config.fsPath, 'utf8'), source, 'metadata writes still wait for the window transition');
+	} finally {
+		clearTimeout(deadline);
+		finishOpening();
+		await Promise.all([read, write]);
+	}
+	assert.equal(await readFile(config.fsPath, 'utf8'), updated);
 });
 
 test('metadata conflicts leave live backend directories untouched', async () => {

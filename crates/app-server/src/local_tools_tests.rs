@@ -26,6 +26,33 @@ struct DeniedPathBackend {
     prepared: Arc<AtomicUsize>,
 }
 
+#[test]
+fn approved_command_keeps_execute_only_cwd_read_only() {
+    let root = TestDir::new();
+    let grant = Grant::for_environment(
+        root.root(),
+        GrantSource::ExplicitUser,
+        Permissions::new([Permission::ExecuteCommands]),
+    );
+    let scope = local_sandbox_scope(
+        &grant.authorize(Permission::ExecuteCommands).unwrap(),
+        &[],
+        None,
+    )
+    .unwrap();
+    let approval = ToolAuthorization::UnsandboxedGrant {
+        grant_id: GrantId::new("execute-only-command"),
+    };
+    assert!(matches!(
+        local_command_authority(&approval, shell_sandbox(), Some(&scope)).unwrap(),
+        CommandExecutionAuthority::Sandboxed(_)
+    ));
+    let files = scope
+        .resolve_filesystem_with_continuous_patterns(FileSystemAccess::FullAccess)
+        .unwrap();
+    assert!(!files.allows_write(&grant.dir().canonical_path().join("new.txt")));
+}
+
 impl SandboxBackend for DeniedPathBackend {
     fn kind(&self) -> SandboxKind {
         SandboxKind::Restricted
@@ -76,14 +103,14 @@ impl SandboxBackend for DeniedPathBackend {
 fn approved_shell_keeps_an_existing_env_denial() {
     let temp = tempfile::tempdir().unwrap();
     let dir = Dir::open_local(temp.path()).unwrap();
+    let grant = Grant::for_environment(
+        dir.clone(),
+        GrantSource::ExplicitUser,
+        Permissions::new([Permission::ExecuteCommands, Permission::WriteFiles]),
+    );
     let scope = local_sandbox_scope(
-        &Grant::for_environment(
-            dir.clone(),
-            GrantSource::ExplicitUser,
-            Permissions::new([Permission::ExecuteCommands]),
-        )
-        .authorize(Permission::ExecuteCommands)
-        .unwrap(),
+        &grant.authorize(Permission::ExecuteCommands).unwrap(),
+        &[grant.authorize(Permission::WriteFiles).unwrap()],
         None,
     )
     .unwrap();

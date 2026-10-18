@@ -1,6 +1,26 @@
 use super::*;
 
 #[test]
+fn terminal_identities_are_unique_across_directories_and_runtime_recreation() {
+    let first_root = tempfile::tempdir().unwrap();
+    let second_root = tempfile::tempdir().unwrap();
+    let first = terminal_service_for(first_root.path());
+    let second = terminal_service_for(second_root.path());
+    let request = terminal_request(TerminalLifecycle::ConnectionOwned);
+    let first_terminal = first.create(1, request.clone()).unwrap();
+    let second_terminal = second.create(1, request.clone()).unwrap();
+    assert_ne!(first_terminal.terminal_id, second_terminal.terminal_id);
+    first.close(1, &first_terminal.terminal_id).unwrap();
+    second.close(1, &second_terminal.terminal_id).unwrap();
+    drop(second);
+
+    let replacement = terminal_service_for(second_root.path());
+    let restored = replacement.create(1, request).unwrap();
+    assert_ne!(second_terminal.terminal_id, restored.terminal_id);
+    replacement.close(1, &restored.terminal_id).unwrap();
+}
+
+#[test]
 fn revoked_directory_terminates_detached_sessions_and_rejects_new_work() {
     let root = tempfile::tempdir().unwrap();
     let grant = ash_file_access::Grant::for_environment(

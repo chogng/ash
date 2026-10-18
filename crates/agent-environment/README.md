@@ -4,7 +4,7 @@
 > [`docs/environment-access.md`](../../docs/environment-access.md)。
 
 - 保存宿主 `cwd`、平台、Shell 和仓库摘要等不可变环境事实。
-- 保存并确定性排序当前调用明确获权的 `Dirs`；`cwd` 不会自动进入该集合。
+- 保存并确定性排序当前调用的目录位置 `Dirs`；调用方显式加入本次 `cwd`，列表本身不授予权限。
 - 校验并渲染独立的请求时间快照与输入时间参照；IANA 转换在本 crate 内完成。
 - 渲染经过 XML 转义的 `<environment_context>`；本 crate 不读取文件、不执行命令，也不决定权限。
 

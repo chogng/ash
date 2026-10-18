@@ -500,6 +500,40 @@ fn env_dirs_set_routes_services_by_stable_folder_id() {
 }
 
 #[test]
+fn non_selected_directory_grant_revocation_invalidates_cached_services() {
+    let first = TestDir::new("grant-selected", "first.txt");
+    let second = TestDir::new("grant-secondary", "second.txt");
+    let server = server().with_local_env_host(None, host_policy()).unwrap();
+    let secondary = Grant::for_environment(
+        second.root(),
+        GrantSource::ExplicitUser,
+        host_directory_capabilities(),
+    );
+    server
+        .activate_local_dirs(vec![
+            ("first".into(), first.authorization()),
+            ("second".into(), secondary.clone()),
+        ])
+        .unwrap();
+    let files = server.file_system_service_for(Some("second")).unwrap();
+    let selected = server.file_system_service_for(Some("first")).unwrap();
+    assert!(files.read_file(Path::new("second.txt"), 1024).is_ok());
+    server
+        .env_runtime_control()
+        .unwrap()
+        .reconcile_user_directory_grants(&ash_config::ResolvedConfig::default())
+        .unwrap();
+    assert!(!secondary.is_active());
+    assert!(files.read_file(Path::new("second.txt"), 1024).is_err());
+    assert!(server.file_system_service_for(Some("second")).is_err());
+    assert!(server.terminal_service_for(Some("second")).is_err());
+    assert!(Arc::ptr_eq(
+        &selected,
+        &server.file_system_service_for(Some("first")).unwrap()
+    ));
+}
+
+#[test]
 fn env_dirs_set_preserves_retained_terminals_when_other_roots_change() {
     let first = TestDir::new("roots-retain-first", "first.txt");
     let second = TestDir::new("roots-retain-second", "second.txt");
@@ -537,6 +571,66 @@ fn env_dirs_set_preserves_retained_terminals_when_other_roots_change() {
     ));
     assert!(server.terminal_service_for(Some("first")).is_err());
     assert!(server.file_system_service_for(Some("third")).is_err());
+}
+
+#[test]
+fn env_dirs_set_keeps_retained_directory_routes_available_during_primary_switch() {
+    let first = TestDir::new("routes-first", "first.txt");
+    let second = TestDir::new("routes-second", "second.txt");
+    let server = server().with_local_env_host(None, host_policy()).unwrap();
+    server
+        .activate_local_dirs(vec![
+            ("first".into(), first.authorization()),
+            ("second".into(), second.authorization()),
+        ])
+        .unwrap();
+    let files = server.file_system_service_for(Some("second")).unwrap();
+    let search = server.content_search_service_for(Some("second")).unwrap();
+    let terminals = server.terminal_service_for(Some("second")).unwrap();
+    let debug = server.debug_adapter_service_for(Some("second")).unwrap();
+    let finished = AtomicBool::new(false);
+    let (ready, started) = std::sync::mpsc::sync_channel(0);
+    std::thread::scope(|scope| {
+        let reader = scope.spawn(|| -> Result<usize, String> {
+            let mut samples = 0;
+            loop {
+                let resolved = server
+                    .resolve_file_path(&second.path.join("second.txt"))
+                    .map_err(|error| format!("retained path route: {error:?}"))?;
+                assert_eq!(resolved.root, second.path);
+                assert!(matches!(resolved.target, FsDirectoryTarget::Environment { dir_id } if dir_id == "second"));
+                let next_files = server
+                    .file_system_service_for(Some("second"))
+                    .map_err(|error| format!("retained file route: {error:?}"))?;
+                let next_search = server
+                    .content_search_service_for(Some("second"))
+                    .map_err(|error| format!("retained search route: {error:?}"))?;
+                let next_terminals = server
+                    .terminal_service_for(Some("second"))
+                    .map_err(|error| format!("retained terminal route: {error:?}"))?;
+                let next_debug = server
+                    .debug_adapter_service_for(Some("second"))
+                    .map_err(|error| format!("retained debug route: {error:?}"))?;
+                assert!(Arc::ptr_eq(&files, &next_files));
+                assert!(Arc::ptr_eq(&search, &next_search));
+                assert!(Arc::ptr_eq(&terminals, &next_terminals));
+                assert!(Arc::ptr_eq(&debug, &next_debug));
+                if samples == 0 {
+                    ready.send(()).unwrap();
+                }
+                samples += 1;
+                if finished.load(Ordering::Acquire) {
+                    return Ok(samples);
+                }
+            }
+        });
+        started.recv_timeout(Duration::from_secs(10)).unwrap();
+        let switched = server.activate_local_dirs(vec![("second".into(), second.authorization())]);
+        finished.store(true, Ordering::Release);
+        switched.unwrap();
+        assert!(reader.join().unwrap().unwrap() > 0);
+    });
+    assert!(server.terminal_service_for(Some("first")).is_err());
 }
 
 #[test]

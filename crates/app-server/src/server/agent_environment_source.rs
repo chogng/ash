@@ -33,7 +33,7 @@ impl AgentEnvironmentSource {
         repository_inspection: RepositoryInspection,
     ) -> Result<Self, AgentEnvironmentError> {
         if matches!(repository_inspection, RepositoryInspection::Allowed) {
-            return Self::capture(path);
+            return Self::capture(path, repository_inspection);
         }
         Ok(Self {
             host: HostEnvironment::new(
@@ -46,9 +46,13 @@ impl AgentEnvironmentSource {
         })
     }
 
-    pub(super) fn capture(dir_root: &Path) -> Result<Self, AgentEnvironmentError> {
-        let is_git_repo = command_output(dir_root, "git", &["rev-parse", "--is-inside-work-tree"])
-            .is_some_and(|output| output.trim() == "true");
+    pub(super) fn capture(
+        dir_root: &Path,
+        repository_inspection: RepositoryInspection,
+    ) -> Result<Self, AgentEnvironmentError> {
+        let is_git_repo = matches!(repository_inspection, RepositoryInspection::Allowed)
+            && command_output(dir_root, "git", &["rev-parse", "--is-inside-work-tree"])
+                .is_some_and(|output| output.trim() == "true");
         let branch = is_git_repo
             .then(|| command_output(dir_root, "git", &["branch", "--show-current"]))
             .flatten()

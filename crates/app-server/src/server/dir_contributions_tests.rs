@@ -16,6 +16,46 @@ use std::sync::Arc;
 use tempfile::TempDir;
 
 #[test]
+fn instruction_permission_does_not_authorize_repository_environment_capture() {
+    let root = TempDir::new().unwrap();
+    assert!(
+        std::process::Command::new("git")
+            .args(["init", "--quiet", "--initial-branch", "private-branch"])
+            .current_dir(root.path())
+            .status()
+            .unwrap()
+            .success()
+    );
+    fs::write(root.path().join("AGENTS.md"), "Allowed instruction.").unwrap();
+    let contributions = DirContributions::discover(
+        root.path(),
+        Arc::new(DirGrants::default()),
+        Some(load_instructions_authorization(root.path())),
+        None,
+        RepositoryInspection::Omit,
+    )
+    .unwrap();
+    let snapshot = instruction_snapshot(contributions.as_ref(), "instruction-only-environment");
+    assert!(
+        snapshot
+            .instructions()
+            .directory_instructions()
+            .unwrap()
+            .contains("Allowed instruction.")
+    );
+    let environment = snapshot.environment().unwrap();
+    assert_eq!(
+        environment.repository(),
+        &ash_agent_environment::RepositoryEnvironment::NotDetected
+    );
+    assert!(!environment.render().contains("private-branch"));
+    assert_eq!(
+        dunce::canonicalize(environment.host().cwd()).unwrap(),
+        dunce::canonicalize(root.path()).unwrap()
+    );
+}
+
+#[test]
 fn draft_instruction_sources_exclude_other_sessions_and_revoked_environment_grants() {
     let root = TempDir::new().unwrap();
     let extra = TempDir::new().unwrap();
@@ -34,6 +74,7 @@ fn draft_instruction_sources_exclude_other_sessions_and_revoked_environment_gran
         Arc::new(crate::dir_grants::DirGrants::default()),
         Some(authorization),
         None,
+        RepositoryInspection::Allowed,
     )
     .unwrap();
     let session = SessionId::new("other-session").unwrap();
@@ -121,6 +162,7 @@ fn user_instructions_are_present_with_authorized_directory_instructions() {
         Arc::new(crate::dir_grants::DirGrants::default()),
         Some(load_instructions_authorization(dir.path())),
         Some(home),
+        RepositoryInspection::Allowed,
     )
     .unwrap();
 
@@ -170,6 +212,7 @@ fn contextual_instructions_match_only_confirmed_files_in_their_scope() {
         Arc::new(crate::dir_grants::DirGrants::default()),
         Some(load_instructions_authorization(dir.path())),
         Some(home),
+        RepositoryInspection::Allowed,
     )
     .unwrap();
 
@@ -252,6 +295,7 @@ fn root_agent_can_explicitly_reference_on_demand_user_instruction() {
         Arc::new(crate::dir_grants::DirGrants::default()),
         Some(load_instructions_authorization(dir.path())),
         Some(home),
+        RepositoryInspection::Allowed,
     )
     .unwrap();
     let roles = contributions.agent_snapshot();
@@ -303,6 +347,7 @@ fn cwd_without_load_instructions_does_not_load_contributions() {
         Arc::new(crate::dir_grants::DirGrants::default()),
         None,
         None,
+        RepositoryInspection::Allowed,
     )
     .unwrap();
 
@@ -377,11 +422,17 @@ fn dirs_are_rendered_only_for_the_matching_session() {
         first.clone(),
         Dir::open_local(dir.path()).unwrap(),
         GrantSource::ExplicitUser,
-        ash_file_access::Permissions::new([ash_file_access::Permission::InspectRepository]),
+        ash_file_access::Permissions::new([ash_file_access::Permission::ReadFiles]),
     );
     access.add_dir(first.clone(), authorization).unwrap();
-    let customizations =
-        DirContributions::discover(cwd.path(), Arc::clone(&access), None, None).unwrap();
+    let customizations = DirContributions::discover(
+        cwd.path(),
+        Arc::clone(&access),
+        None,
+        None,
+        RepositoryInspection::Allowed,
+    )
+    .unwrap();
 
     let first_environment = instruction_snapshot(customizations.as_ref(), first.as_str())
         .environment()
@@ -394,8 +445,8 @@ fn dirs_are_rendered_only_for_the_matching_session() {
         .display()
         .to_string();
     assert!(first_environment.contains(&dir_path));
-    assert!(first_environment.contains("<filesystem>"));
-    assert!(first_environment.contains("<accessible_dirs>"));
+    assert!(first_environment.contains("<dirs>"));
+    assert!(first_environment.contains("do not grant file or command permissions"));
     assert!(first_environment.contains("Relative paths resolve from cwd"));
     assert!(
         !second_snapshot
@@ -461,6 +512,7 @@ fn thread_environment_matches_execution_authority_without_changing_session_roots
         grants,
         Some(load_instructions_authorization(source.path())),
         None,
+        RepositoryInspection::Allowed,
     )
     .unwrap();
     let turn_id = TurnId::new("thread-environment-turn").unwrap();
@@ -478,10 +530,12 @@ fn thread_environment_matches_execution_authority_without_changing_session_roots
     .unwrap();
     let environment = snapshot.environment().unwrap();
     assert_eq!(environment.host().cwd(), managed_dir.canonical_path());
-    assert_eq!(
-        environment.dirs().as_slice(),
-        &[AbsolutePathBuf::from_absolute(extra_dir.canonical_path()).unwrap()]
-    );
+    let expected = ash_agent_environment::Dirs::new([
+        extra_dir.canonical_path().to_path_buf(),
+        managed_dir.canonical_path().to_path_buf(),
+    ])
+    .unwrap();
+    assert_eq!(environment.dirs(), &expected);
     let rendered = environment.render();
     assert!(rendered.contains("<git_branch>managed-root</git_branch>"));
     assert!(rendered.contains("managed-only.txt"));
@@ -534,6 +588,7 @@ fn thread_environment_preserves_child_isolation_rebinding_and_snapshot_lifetime(
         Arc::clone(&grants),
         None,
         None,
+        RepositoryInspection::Allowed,
     )
     .unwrap();
     let turn = TurnId::new("thread-environment-family-turn").unwrap();
@@ -614,6 +669,7 @@ fn thread_environment_without_binding_keeps_session_move_and_inspection_permissi
         Arc::new(DirGrants::default()),
         None,
         None,
+        RepositoryInspection::Allowed,
     )
     .unwrap();
     let environment = contributions
@@ -642,7 +698,10 @@ fn thread_environment_without_binding_keeps_session_move_and_inspection_permissi
         environment.host().cwd(),
         Dir::open_local(selected.path()).unwrap().canonical_path()
     );
-    assert!(environment.dirs().as_slice().is_empty());
+    assert_eq!(
+        environment.dirs().as_slice(),
+        &[AbsolutePathBuf::from_absolute(environment.host().cwd()).unwrap()]
+    );
     assert!(!environment.render().contains("private-session-branch"));
     assert!(
         environment
@@ -696,8 +755,14 @@ fn authorized_dir_contributions_are_session_scoped_refreshable_and_revocable() {
             ),
         )
         .unwrap();
-    let customizations =
-        DirContributions::discover(cwd.path(), Arc::clone(&access), None, None).unwrap();
+    let customizations = DirContributions::discover(
+        cwd.path(),
+        Arc::clone(&access),
+        None,
+        None,
+        RepositoryInspection::Allowed,
+    )
+    .unwrap();
     let authorizations = access
         .snapshot_for(&first, ash_file_access::Permission::LoadInstructions)
         .unwrap()
@@ -767,6 +832,7 @@ fn customizations(dir: &Path) -> Arc<DirContributions> {
         Arc::new(crate::dir_grants::DirGrants::default()),
         Some(load_instructions_authorization(dir)),
         None,
+        RepositoryInspection::Allowed,
     )
     .unwrap()
 }
@@ -848,6 +914,7 @@ fn revoked_environment_grant_removes_cached_harness_instructions() {
                 .unwrap(),
         ),
         None,
+        RepositoryInspection::Allowed,
     )
     .unwrap();
     assert!(
@@ -885,6 +952,7 @@ fn a_valid_authorization_for_another_directory_cannot_load_contributions() {
                 .unwrap(),
         ),
         None,
+        RepositoryInspection::Allowed,
     )
     .unwrap();
     assert!(contributions.instruction_snapshot().entries().is_empty());
@@ -1011,6 +1079,7 @@ fn instruction_reader_exposes_only_catalog_files_and_rechecks_revocation() {
         Some(Arc::new(AshHome::new(
             AbsolutePathBuf::from_absolute(home.path()).unwrap(),
         ))),
+        RepositoryInspection::Allowed,
     )
     .unwrap();
     let session = SessionId::new("reader").unwrap();
@@ -1066,7 +1135,14 @@ fn invalid_directory_config_preserves_hooks_until_a_valid_refresh() {
             ),
         )
         .unwrap();
-    let contributions = DirContributions::discover(cwd.path(), grants, None, None).unwrap();
+    let contributions = DirContributions::discover(
+        cwd.path(),
+        grants,
+        None,
+        None,
+        RepositoryInspection::Allowed,
+    )
+    .unwrap();
     let hooks = Arc::new(ash_hooks::DeclarativeHookRuntime::new(
         ash_config::HooksConfig::default(),
         Arc::new(Policy),
@@ -1144,8 +1220,14 @@ fn live_agent_watcher_discovers_creation_edits_and_recreation() {
             ),
         )
         .unwrap();
-    let contributions =
-        DirContributions::discover(cwd.path(), Arc::clone(&grants), None, None).unwrap();
+    let contributions = DirContributions::discover(
+        cwd.path(),
+        Arc::clone(&grants),
+        None,
+        None,
+        RepositoryInspection::Allowed,
+    )
+    .unwrap();
     contributions.reconcile_session(
         &session,
         grants

@@ -119,22 +119,22 @@ loop:
   <git_main_branch>main</git_main_branch>
   <git_status>porcelain 摘要，最多 40 行，超出标注截断</git_status>
   <git_recent_commits>最近 5 条 oneline</git_recent_commits>
-  <filesystem>
-    <accessible_dirs>
-      <dir>/abs/path</dir>
-      <dir>/通过 add-dir 授权的目录</dir>
-    </accessible_dirs>
-  </filesystem>
+  <dirs>
+    <dir>/abs/path</dir>
+    <dir>/当前 Session 的额外目录</dir>
+  </dirs>
 </environment_context>
 ```
 
 冻结纪律：git、platform、shell 等字段在 Environment 连接时采集一次；需要新鲜状态时模型自己调工具。
-`accessible_dirs` 来自当前 Session tree 的有效 Grant，每次模型调用读取一次。Core 每次渲染完整
+`dirs` 包含本次 `cwd` 和当前 Session tree 的有效目录条目，每次模型调用读取一次，
+按绝对路径排序去重，不依赖 `InspectRepository` 能力。根列表只说明位置，不授予文件或命令权限；
+相对路径始终以 `cwd` 为基准，不能因为该目录缺少某项权限就换成额外根。Core 每次渲染完整
 `<environment_context>` 块，与启用时的本次 `<time_context>` 一起作为最后一条 user-role context 放在
 durable Thread history 和当前 Turn 输入之后，不进入可复用缓存前缀，也不制造持久用户消息。
 环境增量渲染及历史前缀内的环境消息复用尚未实现。
 
-职责边界：`ash-agent-environment` 只拥有不可变值、目录不变量和确定性渲染；App Server 采集平台与 Git 信息，并通过 `DirGrants` 读取 Session tree 的有效 Authorization；Core 的 `HarnessContextProvider` 在每次模型调用边界冻结两者，并由 Context Planner 负责预算与位置。环境 crate 不执行命令、不保存 Session、不签发 Grant，也不参与工具路径判定。
+职责边界：`ash-agent-environment` 只拥有不可变值、目录不变量和确定性渲染；App Server 采集平台与 Git 信息，并通过 `DirGrants` 读取 Session tree 的有效目录条目。Thread 的执行位置读取不需要文件授权，Git 检查另行取得 `InspectRepository`。Core 的 `HarnessContextProvider` 在每次模型调用边界冻结事实，并由 Context Planner 负责预算与位置。环境 crate 不执行命令、不保存 Session、不签发 Grant，也不参与工具路径判定。执行层的权限与沙箱职责见 [环境与目录访问 §9](environment-access.md#9-执行层实现核对codex-对照)。
 
 ### 4.3 Directory Instruction 发现与注入
 

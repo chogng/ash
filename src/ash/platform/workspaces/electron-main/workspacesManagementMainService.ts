@@ -59,7 +59,7 @@ export class WorkspacesManagementMainService {
 			folders.push(Object.freeze({
 				id: stableWorkspaceId(uri),
 				uri,
-				name: configured.name ?? basename(resolved.path),
+				name: configured.name ?? (basename(resolved.path) || resolved.path),
 				index: folders.length,
 			}));
 		}
@@ -104,7 +104,7 @@ export class WorkspaceEditingMainService extends Disposable {
 	}
 
 	configuration(request: WorkspaceConfigurationRequest): Promise<unknown> {
-		return this.enqueue(async () => {
+		const access = async (): Promise<unknown> => {
 			this.assertNotDisposed();
 			const resource = this.context.getResolvedWorkspace().configuration;
 			if (!resource || resource.toString() !== request.uri) throw new Error('Only the current workspace configuration file is accessible');
@@ -122,7 +122,11 @@ export class WorkspaceEditingMainService extends Disposable {
 				if (error instanceof FileNotFoundError) return { error: 'notFound' };
 				throw error;
 			}
-		});
+		};
+		// A replacement window waits for renderer readiness, which itself needs to
+		// read this file. Reads must bypass both editing queues; writes still join
+		// the window transaction and keep their revision checks.
+		return request.operation === 'read' ? access() : this.enqueue(access);
 	}
 
 	edit(request: WorkspaceEditRequest): Promise<unknown> {
@@ -147,7 +151,7 @@ export class WorkspaceEditingMainService extends Disposable {
 					const uri = URI.parse(entry.uri);
 					if (uri.scheme !== 'file' || uri.query || uri.fragment || !isAbsolute(uri.fsPath)) throw new TypeError(localize('workspace.localFoldersOnly', 'Workspace folders must be absolute local directories'));
 					const resolved = await this.workspaces.resolveFolder(uri.fsPath);
-					return { id: resolved.id, uri: resolved.uri, name: entry.name ?? basename(resolved.uri.fsPath), index: 0 };
+					return { id: resolved.id, uri: resolved.uri, name: entry.name ?? (basename(resolved.uri.fsPath) || resolved.uri.fsPath), index: 0 };
 				}));
 				folders.splice(request.index, request.deleteCount, ...added);
 			}
@@ -158,6 +162,14 @@ export class WorkspaceEditingMainService extends Disposable {
 				return true;
 			}).map((folder, index) => ({ ...folder, index }));
 			if (folders.length > 256) throw new RangeError(localize('workspace.folderLimit', 'Workspace supports at most 256 folders'));
+			// A duplicate or empty edit must not create a workspace identity or rewrite
+			// the user's JSONC when the accepted folder list did not change.
+			if (request.operation === 'folders' && folders.length === current.folders.length && folders.every((folder, index) => {
+				const previous = current.folders[index]!;
+				return folder.id === previous.id && folder.uri.toString() === previous.uri.toString() && folder.name === previous.name;
+			})) {
+				return serializeWorkspace(current);
+			}
 			const path = request.operation === 'save' ? resolve(request.path)
 				: current.configuration?.fsPath ?? resolve(this.untitledHome, randomUUID(), 'workspace.ash-workspace');
 			if (!hasWorkspaceFileExtension(path)) throw new TypeError(localize('workspace.invalidExtension', 'Expected an .ash-workspace or .code-workspace file'));

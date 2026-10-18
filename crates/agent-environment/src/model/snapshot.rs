@@ -102,7 +102,7 @@ pub struct AgentEnvironmentSnapshot {
 }
 
 impl AgentEnvironmentSnapshot {
-    /// Combines host, repository, and authorized directory facts.
+    /// Combines host, repository, and execution location facts without issuing permissions.
     pub fn new(host: HostEnvironment, repository: RepositoryEnvironment, dirs: Dirs) -> Self {
         Self {
             host,
@@ -121,7 +121,7 @@ impl AgentEnvironmentSnapshot {
         &self.repository
     }
 
-    /// Returns the exact accessible directories visible for this invocation.
+    /// Returns execution locations for this invocation, independently of permissions.
     pub fn dirs(&self) -> &Dirs {
         &self.dirs
     }

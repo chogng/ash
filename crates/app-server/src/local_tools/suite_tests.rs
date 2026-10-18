@@ -30,9 +30,13 @@ fn patch_move_review_checks_both_paths_and_preserves_the_move_header() {
         source.display(),
         target.display()
     );
-    let (_, rewritten, targets) =
-        super::super::materialize_patch_targets(std::slice::from_ref(&authorized), &patch, &[])
-            .unwrap();
+    let (_, rewritten, targets) = super::super::materialize_patch_targets(
+        std::slice::from_ref(&authorized),
+        authorized.dir(),
+        &patch,
+        &[],
+    )
+    .unwrap();
     assert!(rewritten.contains("*** Update File: old.txt"));
     assert!(rewritten.contains("*** Move to: new.txt"));
     assert_eq!(targets.len(), 2);
@@ -43,7 +47,15 @@ fn patch_move_review_checks_both_paths_and_preserves_the_move_header() {
         &target.display().to_string(),
         &outside.path().join("new.txt").display().to_string(),
     );
-    assert!(super::super::materialize_patch_targets(&[authorized], &escaping, &[]).is_err());
+    assert!(
+        super::super::materialize_patch_targets(
+            std::slice::from_ref(&authorized),
+            authorized.dir(),
+            &escaping,
+            &[]
+        )
+        .is_err()
+    );
     assert_eq!(fs::read_to_string(source).unwrap(), "old\n");
     assert!(!target.exists());
 }
@@ -67,6 +79,197 @@ fn text_edit_suite(path: &std::path::Path) -> LocalToolSuite<PassThroughBackend>
         Arc::new(crate::dir_grants::DirGrants::default()),
         grant,
     )
+}
+
+#[test]
+fn relative_paths_do_not_move_to_an_extra_root_when_cwd_lacks_permission() {
+    let cwd = tempfile::tempdir().unwrap();
+    let extra = tempfile::tempdir().unwrap();
+    let mut suite = text_edit_suite(cwd.path());
+    suite.grant = Grant::for_environment(
+        Dir::open_local(cwd.path()).unwrap(),
+        GrantSource::ExplicitUser,
+        Permissions::new([Permission::ReadFiles, Permission::ExecuteCommands]),
+    );
+    let session = SessionId::new("stable-relative-directory").unwrap();
+    suite
+        .dir_grants
+        .add_dir(
+            session.clone(),
+            Grant::for_session_tree(
+                session.clone(),
+                Dir::open_local(extra.path()).unwrap(),
+                GrantSource::ExplicitUser,
+                Permissions::new([Permission::WriteFiles]),
+            ),
+        )
+        .unwrap();
+    assert!(
+        suite
+            .resolve(
+                "created.txt",
+                false,
+                Some(&session),
+                None,
+                Permission::WriteFiles
+            )
+            .is_err()
+    );
+    let absolute = extra.path().join("created.txt");
+    let resolved = suite
+        .resolve(
+            &absolute.display().to_string(),
+            false,
+            Some(&session),
+            None,
+            Permission::WriteFiles,
+        )
+        .unwrap();
+    assert_eq!(
+        resolved.absolute,
+        dunce::canonicalize(extra.path())
+            .unwrap()
+            .join("created.txt")
+    );
+    let files = suite
+        .dir_grants
+        .snapshot_for(&session, Permission::WriteFiles)
+        .unwrap()
+        .unwrap();
+    let patch = "*** Begin Patch\n*** Add File: created.txt\n+hello\n*** End Patch";
+    assert!(
+        super::super::materialize_patch_targets(
+            files.authorizations(),
+            suite.grant.dir(),
+            patch,
+            &[]
+        )
+        .is_err()
+    );
+    let absolute_patch = patch.replace("created.txt", &absolute.display().to_string());
+    assert!(
+        super::super::materialize_patch_targets(
+            files.authorizations(),
+            suite.grant.dir(),
+            &absolute_patch,
+            &[]
+        )
+        .is_ok()
+    );
+}
+
+#[test]
+fn command_scope_keeps_cwd_read_only_and_includes_explicit_extra_write_roots() {
+    let cwd = tempfile::tempdir().unwrap();
+    let extra = tempfile::tempdir().unwrap();
+    let mut suite = text_edit_suite(cwd.path());
+    suite.grant = Grant::for_environment(
+        Dir::open_local(cwd.path()).unwrap(),
+        GrantSource::ExplicitUser,
+        Permissions::new([Permission::ReadFiles, Permission::ExecuteCommands]),
+    );
+    let session = SessionId::new("separate-command-scope").unwrap();
+    let extra_grant = Grant::for_session_tree(
+        session.clone(),
+        Dir::open_local(extra.path()).unwrap(),
+        GrantSource::ExplicitUser,
+        Permissions::new([Permission::ReadFiles, Permission::WriteFiles]),
+    );
+    suite
+        .dir_grants
+        .add_dir(session.clone(), extra_grant.clone())
+        .unwrap();
+    let command = suite.grant.authorize(Permission::ExecuteCommands).unwrap();
+    let scope = suite
+        .sandbox_scope_for(&command, Some(&session), None)
+        .unwrap();
+    let files = scope
+        .resolve_filesystem_with_continuous_patterns(
+            ash_sandboxing::FileSystemAccess::DirectoryWrite,
+        )
+        .unwrap();
+    assert_eq!(scope.command_dir(), command.dir());
+    assert!(!files.allows_write(&command.dir().canonical_path().join("new.txt")));
+    assert!(files.allows_write(&extra_grant.dir().canonical_path().join("new.txt")));
+    extra_grant.revoke();
+    assert!(
+        suite
+            .sandbox_scope_for(&command, Some(&session), None)
+            .is_err()
+    );
+}
+
+#[cfg(target_os = "macos")]
+#[test]
+fn command_scope_enforces_cwd_and_extra_root_permissions_in_a_real_process() {
+    let cwd = tempfile::tempdir().unwrap();
+    let extra = tempfile::tempdir().unwrap();
+    let mut suite = text_edit_suite(cwd.path());
+    suite.grant = Grant::for_environment(
+        Dir::open_local(cwd.path()).unwrap(),
+        GrantSource::ExplicitUser,
+        Permissions::new([Permission::ReadFiles, Permission::ExecuteCommands]),
+    );
+    let session = SessionId::new("real-command-scope").unwrap();
+    let extra_dir = Dir::open_local(extra.path()).unwrap();
+    suite
+        .dir_grants
+        .add_dir(
+            session.clone(),
+            Grant::for_session_tree(
+                session.clone(),
+                extra_dir.clone(),
+                GrantSource::ExplicitUser,
+                Permissions::new([Permission::ReadFiles, Permission::WriteFiles]),
+            ),
+        )
+        .unwrap();
+    let command = suite.grant.authorize(Permission::ExecuteCommands).unwrap();
+    let scope = suite
+        .sandbox_scope_for(&command, Some(&session), None)
+        .unwrap();
+    let shell = LocalShellToolService::new_with_action_policy_revision(
+        command.clone(),
+        super::super::resolve_ripgrep(&ash_install_context::InstallContext::current()).unwrap(),
+        exec_server::LocalSandbox::new(ash_install_context::InstallContext::current()).build(),
+        ActionPolicyRevision::new("real-scope-test"),
+        super::super::shell_sandbox(),
+    )
+    .unwrap();
+    fs::write(extra_dir.canonical_path().join(".env"), "private").unwrap();
+    let request = ShellCommandRequest::new("/bin/sh", vec!["-c".into(),
+        "test \"$PWD\" = \"$1\" || exit 90; if (printf forbidden > \"$2\") 2>/dev/null; then exit 91; fi; printf allowed > \"$3\" || exit 92; if cat \"$4\" 2>/dev/null; then exit 93; fi".into(),
+        "scope-check".into(), command.dir().canonical_path().display().to_string(),
+        command.dir().canonical_path().join("forbidden.txt").display().to_string(),
+        extra_dir.canonical_path().join("allowed.txt").display().to_string(),
+        extra_dir.canonical_path().join(".env").display().to_string()], ".").unwrap()
+        .with_dir_root(command.dir().canonical_path());
+    for authority in [
+        ToolAuthorization::Sandboxed(super::super::shell_sandbox()),
+        ToolAuthorization::UnsandboxedGrant {
+            grant_id: ash_action_policy::GrantId::new("real-scope-approval"),
+        },
+    ] {
+        let output = shell
+            .execute_request_scoped(
+                request.clone(),
+                &authority,
+                &ash_async_utils::CancellationSource::new().token(),
+                Some(&scope),
+                None,
+            )
+            .unwrap();
+        let ToolExecutionOutput::Success(text) = output else {
+            panic!("command failed: {output:?}");
+        };
+        let result: Value = serde_json::from_str(&text).unwrap();
+        assert_eq!(result["exit_code"], 0, "{result}");
+    }
+    assert!(!cwd.path().join("forbidden.txt").exists());
+    assert_eq!(
+        fs::read_to_string(extra.path().join("allowed.txt")).unwrap(),
+        "allowed"
+    );
 }
 
 #[test]

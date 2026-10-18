@@ -429,7 +429,20 @@ impl<B: ash_sandboxing::SandboxBackend> LocalToolSuite<B> {
         session: Option<&SessionId>,
         thread: Option<&ThreadId>,
     ) -> Result<ash_sandboxing::SandboxScope, CoreError> {
-        let mut scope = super::local_sandbox_scope(authorization, self.shell.profile_policy)?;
+        let turn = thread
+            .zip(self.permission_requests.as_ref())
+            .map(|(thread, requests)| super::running_turn(&requests.threads, thread))
+            .transpose()?
+            .flatten();
+        let files = super::local_file_authorizations(
+            &self.grant,
+            &self.dir_grants,
+            session,
+            thread,
+            turn.as_ref(),
+        )?;
+        let mut scope =
+            super::local_sandbox_scope(authorization, &files, self.shell.profile_policy)?;
         if let (Some(session), Some(thread), Some(requests)) =
             (session, thread, &self.permission_requests)
         {
@@ -477,7 +490,7 @@ impl<B: ash_sandboxing::SandboxBackend> LocalToolSuite<B> {
             .transpose()?
             .flatten();
         let default = self.grant.authorize(permission).ok();
-        let mut primary = thread_scope
+        let primary = thread_scope
             .as_ref()
             .map(|scope| scope.primary().clone())
             .or_else(|| default.clone());
@@ -528,9 +541,6 @@ impl<B: ash_sandboxing::SandboxBackend> LocalToolSuite<B> {
                     permission,
                 ));
             }
-        }
-        if primary.is_none() {
-            primary = authorizations.first().cloned();
         }
         let (authorization, relative) = if path.is_absolute() {
             authorizations

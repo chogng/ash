@@ -324,6 +324,12 @@ impl<'ctx, C: EnvironmentRequestProcessorContext + ?Sized> EnvironmentRequestPro
         if self.local_env_host.is_none() {
             return Ok(());
         }
+        let snapshot = self.context.directory_grants_snapshot()?;
+        if let Some(runtime) = self.context.env_runtime_control() {
+            runtime
+                .reconcile_user_directory_routes(&snapshot.values)
+                .map_err(environment_runtime_error)?;
+        }
         let active = self
             .env_runtime
             .read()
@@ -333,7 +339,6 @@ impl<'ctx, C: EnvironmentRequestProcessorContext + ?Sized> EnvironmentRequestPro
         let Some(active) = active else {
             return Ok(());
         };
-        let snapshot = self.context.directory_grants_snapshot()?;
         let configured = snapshot
             .values
             .directory_grants

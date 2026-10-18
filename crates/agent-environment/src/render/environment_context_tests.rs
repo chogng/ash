@@ -33,6 +33,7 @@ fn render_is_deterministic_and_escapes_host_values_and_paths() {
         rendered.contains("<git_recent_commits>abc123 &apos;message&apos;</git_recent_commits>")
     );
     assert!(rendered.contains("other&gt;root</dir>"));
+    assert!(rendered.contains("do not grant file or command permissions"));
     assert_eq!(rendered, snapshot.render());
 }
 

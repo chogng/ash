@@ -3,7 +3,7 @@ use crate::error::absolute_path;
 use ash_utils_absolute_path::AbsolutePathBuf;
 use std::path::PathBuf;
 
-/// Sorted, deduplicated directories visible to the Agent.
+/// Sorted, deduplicated execution locations. Membership does not grant access.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Dirs {
     entries: Vec<AbsolutePathBuf>,

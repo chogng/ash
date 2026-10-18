@@ -56,6 +56,7 @@ impl DirContributions {
         dir_grants: Arc<DirGrants>,
         authorization: Option<Authorization>,
         home: Option<Arc<AshHome>>,
+        repository_inspection: RepositoryInspection,
     ) -> Result<Arc<Self>, ash_agent_environment::AgentEnvironmentError> {
         let dir_root = dir_root.as_ref().to_path_buf();
         let env_dir = authorization
@@ -78,7 +79,7 @@ impl DirContributions {
                     authorization,
                 }
             });
-        let environment = AgentEnvironmentSource::capture(&dir_root)?;
+        let environment = AgentEnvironmentSource::capture(&dir_root, repository_inspection)?;
         let hooks: Arc<RwLock<Option<Arc<ash_hooks::DeclarativeHookRuntime>>>> =
             Arc::new(RwLock::new(None));
         Ok(Arc::new(Self {
@@ -654,22 +655,16 @@ impl HarnessContextProvider for DirContributions {
         } else {
             Vec::new()
         };
-        let roots = request
+        // Root membership is location metadata, not proof of a file, command or
+        // repository capability. In particular, a read-only root need not grant Git inspection.
+        let mut roots = request
             .scope
             .session_id()
-            .map(|session_id| {
-                self.dir_grants
-                    .snapshot_for(session_id, ash_file_access::Permission::InspectRepository)
-            })
-            .transpose()
-            .map_err(|error| CoreError::Context(error.to_string()))?
-            .flatten()
             .into_iter()
-            .flat_map(|snapshot| {
-                snapshot
-                    .authorizations()
-                    .iter()
-                    .filter(|root| root.is_active())
+            .flat_map(|session| {
+                self.dir_grants
+                    .list(session)
+                    .into_iter()
                     .map(|root| root.dir().canonical_path().to_path_buf())
                     .collect::<Vec<_>>()
             })
@@ -685,28 +680,40 @@ impl HarnessContextProvider for DirContributions {
             .cloned()
             .unwrap_or_else(|| self.environment.clone());
         drop(environments);
-        let thread_scope = match &request.scope {
+        let thread_dir = match &request.scope {
             HarnessContextScope::Environment => None,
             HarnessContextScope::Thread { thread_id, .. }
-            | HarnessContextScope::Turn { thread_id, .. } => self
-                .dir_grants
-                .thread_scope(thread_id, ash_file_access::Permission::InspectRepository)
-                .map_err(|error| CoreError::Context(error.to_string()))?,
+            | HarnessContextScope::Turn { thread_id, .. } => self.dir_grants.thread_dir(thread_id),
         };
         // The Session retains its source context. A bound Thread owns Tool-relative paths,
         // so its invocation must describe that directory and its repository facts.
-        let source = if let Some(scope) = thread_scope
-            && source.cwd() != scope.primary().dir().canonical_path()
+        let source = if let Some(dir) = thread_dir
+            && source.cwd() != dir.canonical_path()
         {
+            let inspection = match &request.scope {
+                HarnessContextScope::Environment => RepositoryInspection::Omit,
+                HarnessContextScope::Thread { thread_id, .. }
+                | HarnessContextScope::Turn { thread_id, .. } => {
+                    if self
+                        .dir_grants
+                        .thread_scope(thread_id, ash_file_access::Permission::InspectRepository)
+                        .ok()
+                        .flatten()
+                        .is_some()
+                    {
+                        RepositoryInspection::Allowed
+                    } else {
+                        RepositoryInspection::Omit
+                    }
+                }
+            };
             source
-                .for_directory(
-                    scope.primary().dir().canonical_path(),
-                    RepositoryInspection::Allowed,
-                )
+                .for_directory(dir.canonical_path(), inspection)
                 .map_err(|error| CoreError::Context(error.to_string()))?
         } else {
             source
         };
+        roots.push(source.cwd().to_path_buf());
         let environment = source
             .snapshot(roots)
             .map_err(|error| CoreError::Context(error.to_string()))?;
