@@ -79,6 +79,7 @@ RUN cargo install --locked --jobs 2 --version "$(cat /tmp/ash-just-version)" jus
 
 ENV CXX=clang++-21 \
     LIBCLANG_PATH=/usr/lib/llvm-21/lib \
+    SHELL=/bin/bash \
     LANG=C.UTF-8 \
     LC_ALL=C.UTF-8 \
     PATH=${PATH}:/workspaces/ash/scripts/.venv/bin

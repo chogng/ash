@@ -194,6 +194,8 @@ bazel test //cli:tui-real-scenarios --test_output=errors --test_env=PATH
 
 在容器终端执行 `just ash` 启动 Electron，在宿主机打开转发的 6080 端口，使用 VNC 密码 `vscode` 查看桌面。容器启用 `privileged` 并配置 Electron 沙箱权限；依赖和产物使用容器卷，与宿主机隔离。`/dev/shm` 配置为 1 GiB：Chromium 并发加载本地 Renderer 模块和样式时会占用共享内存，Docker 默认的 64 MiB 会导致 `net::ERR_FAILED`。修改该配置后须重建容器。手动创建测试容器时保留 `--shm-size=1g` 和 namespace 能力（本机 Linux Docker 已验证 `--cap-add SYS_ADMIN`），再运行 `.devcontainer/configure-electron-sandbox.sh` 配置沙箱权限；不要用 `--no-sandbox` 绕过启动失败。
 
+镜像将 `SHELL=/bin/bash` 声明为 `node` 用户的实际登录 shell。手动通过 `docker exec` 启动产品或测试时须保留该环境，旧容器可显式传入 `-e SHELL=/bin/bash`；没有 `SHELL` 时终端后端会回退到 `/bin/sh`，不会获得 Bash 的路径转义与 shell integration 能力。
+
 仅前端 Web 模式执行 `pnpm dev:web --host 0.0.0.0`，打开转发的 5173 端口。完整 Web 模式和 App Server 只监听容器回环地址，须在容器内运行 Playwright，不能通过端口转发在宿主机浏览器访问。Browser 测试执行 `pnpm test:desktop:smoke:browser` 或 `pnpm test:web-integration`；Electron Playwright 使用容器桌面。
 
 ## 输出布局
