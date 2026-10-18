@@ -1465,4 +1465,4 @@ signal 的用途是退休结果 payload，Promise 仍跟随原响应或原 deadl
 
 没有在本轮采集 Rust producer / writer 的运行数据，也没有跨进程单调时钟与 Renderer request identity 的配对实测；这些 TODO 保留。当前完成的取消切片也不覆盖所有 Thread/transcript refresh、通用 transport 中止或所有大内容按需资源读取。
 
-正文的分页／重连补充回归另有 12 项通过，覆盖有界分页、重叠尾部、旧页退休、较新 streaming revision，以及两个窗口／连接 Worker 注册入口；Renderer 类型检查通过。
+正文的分页／重连补充回归另有 12 项通过，覆盖有界分页、重叠尾部、旧页退休、较新 streaming revision，以及两个窗口／连接 Worker 注册入口；Renderer 类型检查通过。启动的四组真实场景、nonce 阶段和 CPU 证据见[启动复测](desktop-startup.md#2026-10-18-入口与连接复测)。

@@ -43,6 +43,7 @@ export class AppServerMessagePortTransport extends Disposable {
 		this.assertNotDisposed();
 		this.close();
 		const nonce = this.nonce = generateUuid();
+		this.mark('acquire-start', nonce);
 		const port = acquirePort(undefined, `${this.channelPrefix}:port`, nonce);
 		const cancellation = toDisposable(() => port.cancel());
 		this.acquisition.value = cancellation;
@@ -72,6 +73,7 @@ export class AppServerMessagePortTransport extends Disposable {
 		});
 		try {
 			await Promise.race([Promise.all([acquisition, ready]), timedOut]);
+			this.mark('acquired', nonce);
 			return this.enabled === true;
 		} catch (error) {
 			if (this.nonce === nonce) { this.close(); }
@@ -83,10 +85,24 @@ export class AppServerMessagePortTransport extends Disposable {
 	}
 
 	public async initialized(): Promise<void> {
-		await invoke(`${this.channelPrefix}:initialized`, { nonce: this.nonce });
+		const nonce = this.nonce;
+		await invoke(`${this.channelPrefix}:initialized`, { nonce });
+		this.mark('initialized', nonce);
+	}
+
+	/** A lease owns its diagnostics; late replies cannot recreate retired marks. */
+	private mark(phase: string, nonce: string | undefined): void {
+		if (nonce !== undefined && nonce === this.nonce && !this.isDisposed) {
+			performance.mark(`ash.appServer.port-${phase}:${nonce}`, { detail: { nonce } });
+		}
 	}
 
 	private close(): void {
+		if (this.nonce !== undefined) {
+			for (const phase of ['acquire-start', 'acquired', 'initialized']) {
+				performance.clearMarks(`ash.appServer.port-${phase}:${this.nonce}`);
+			}
+		}
 		this.acquisition.clear();
 		this.socketOwner.clear();
 		this.nonce = undefined;

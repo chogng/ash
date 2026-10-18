@@ -157,6 +157,7 @@ export class AppServerConnectionRelay extends Disposable {
 				return value.nonce;
 			},
 			invoke: async nonce => {
+				this.trace('acquire', nonce as string);
 				const navigationGeneration = this.navigationGeneration;
 				const acquisitionRevision = ++this.acquisitionRevision;
 				this.pendingAcquisitions++;
@@ -165,6 +166,7 @@ export class AppServerConnectionRelay extends Disposable {
 					const launcher = processLauncher();
 					if (!launcher) { return { enabled: false }; }
 					await launcher.validate();
+					this.trace('validated', nonce as string);
 					return await this.connectionOperations.schedule(async () => {
 						this.assertNotDisposed();
 						// Validation can outlive a document or a Renderer acquisition timeout.
@@ -175,9 +177,11 @@ export class AppServerConnectionRelay extends Disposable {
 						if (this.acquisitionRevision !== acquisitionRevision || this.navigationGeneration !== navigationGeneration || processLauncher() !== launcher) { throw new CancellationError(); }
 						let transport = this.transport.value;
 						if (!transport) {
+							this.trace('launch', nonce as string);
 							transport = new ChildProcessJsonlTransport(launcher.launch(), { stdoutMode: 'bytes' });
 							this.transport.value = transport;
 						}
+						this.trace('carrier-ready', nonce as string);
 						this.attach(renderer, nonce as string, transport);
 						return { enabled: true, protocolVersion: 1, byteStream: true, ...metadata() };
 					});
@@ -208,6 +212,7 @@ export class AppServerConnectionRelay extends Disposable {
 				this.assertNotDisposed();
 				if (value.nonce !== this.nonce || this.transport.value !== transport) { throw new CancellationError(); }
 				this.setState('ready');
+				this.trace('initialized', value.nonce as string);
 			}),
 		}];
 	}
@@ -246,7 +251,10 @@ export class AppServerConnectionRelay extends Disposable {
 			port1.close();
 			transport.dispose();
 		};
+		let firstRead = true;
+		let firstWrite = true;
 		const data = transport.onData(chunk => {
+			if (firstRead) { firstRead = false; this.trace('first-read', nonce); }
 			const size = chunk.byteLength;
 			if (sent.length >= 128 || bytes + size > DEFAULT_MAX_JSONL_FRAME_BYTES) { close(); return; }
 			sent.push(size);
@@ -278,6 +286,7 @@ export class AppServerConnectionRelay extends Disposable {
 			if (!(value.data instanceof Uint8Array) || writes >= 128) { close(); return; }
 			const size = value.data.byteLength;
 			if (writeBytes + size > DEFAULT_MAX_JSONL_FRAME_BYTES) { close(); return; }
+			if (firstWrite) { firstWrite = false; this.trace('first-write', nonce); }
 			writeBytes += size;
 			writes++;
 			void transport.sendBytes(value.data).then(() => { if (!closed) { port1.postMessage({ ack: true }); } }, close).finally(() => { writes--; writeBytes -= size; });
@@ -286,6 +295,14 @@ export class AppServerConnectionRelay extends Disposable {
 		port1.start();
 		this.portResources.value = toDisposable(close);
 		renderer.postMessage(`${this.channelPrefix}:port`, { nonce }, [port2]);
+		this.trace('port-attached', nonce);
+	}
+
+	/** Opt-in marks correlate one port lease without retaining protocol payloads. */
+	private trace(phase: string, nonce: string): void {
+		if (process.env.ASH_DESKTOP_STARTUP_TRACE === '1') {
+			performance.mark(`ash.appServer.main.${phase}`, { detail: { nonce, connection: this.connection } });
+		}
 	}
 
 	private setState(state: AppServerConnectionState): void {

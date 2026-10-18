@@ -10,7 +10,7 @@ import { launchElectron, type ElectronLaunchMilestone, type ElectronLaunchResult
 import { appServerDaemonExecutablePath, appServerExecutablePath } from '../../../../src/ash/platform/app-server-daemon/node/appServerDaemonPackage.js';
 
 const execFileAsync = promisify(execFile);
-const samplesPerCohort = 5;
+const samplesPerCohort = process.env.ASH_DESKTOP_STARTUP_PROFILE === '1' ? 1 : 5;
 const accountHome = homedir();
 
 interface ConnectionSample {
@@ -18,7 +18,9 @@ interface ConnectionSample {
 	readonly index: number;
 	readonly readyMs: number | null;
 	readonly milestones: readonly { phase: 'launch-requested' | ElectronLaunchMilestone; elapsedMs: number; }[];
-	readonly renderer: { readonly responseEndMs: number; readonly marks: readonly { name: string; startTimeMs: number; }[]; } | null;
+	readonly renderer: { readonly responseEndMs: number; readonly marks: readonly { name: string; startTimeMs: number; detail?: unknown; }[]; } | null;
+	readonly main: readonly { name: string; startTimeMs: number; detail: unknown; }[];
+	readonly firstUse: { readonly editorMs: number | null; readonly quickAccessMs: number; } | null;
 	readonly error?: string;
 }
 
@@ -59,6 +61,9 @@ test('Desktop startup trace', { tag: '@electron-app-server' }, async ({ target, 
 		profileState: 'fresh profiles include Playwright trust selection; stopped, reused, and UI-only use an authorized profile',
 		milestoneClock: 'Playwright worker performance.now; each elapsed time is relative to launch-requested in the same process',
 		rendererClock: 'Renderer performance timeline; source-owned startup marks v2 and navigation responseEnd share one window clock',
+		connectionClock: 'Main performance timeline; nonce correlates the same Renderer port lease, clocks are never subtracted across processes',
+		cpuProfiles: process.env.ASH_DESKTOP_STARTUP_PROFILE === '1' ? 'first sample per cohort, separate diagnostic run' : 'disabled',
+		firstUse: 'post-readiness first main.ts open through asserted text, then titlebar command search and > through visible command option; Playwright worker clock',
 	};
 	const stop = async (profile: string): Promise<void> => {
 		await execFileAsync(daemon, ['stop'], { env: { ...process.env, ASH_HOME: profile }, windowsHide: true, timeout: 30_000 });
@@ -73,15 +78,21 @@ test('Desktop startup trace', { tag: '@electron-app-server' }, async ({ target, 
 		const start = performance.now();
 		let readyMs: number | null = null;
 		let renderer: ConnectionSample['renderer'] = null;
+		let main: ConnectionSample['main'] = [];
+		let firstUse: ConnectionSample['firstUse'] = null;
+		const profileCpu = process.env.ASH_DESKTOP_STARTUP_PROFILE === '1' && index === 0;
+		const cpuTrace = join(traceDirectory, `${cohort}-${index}.trace.json`);
 		let error: string | undefined;
 		const milestones: { phase: 'launch-requested' | ElectronLaunchMilestone; elapsedMs: number; }[] = [{ phase: 'launch-requested', elapsedMs: 0 }];
 		try {
+			if (profileCpu) await mkdir(traceDirectory, { recursive: true });
 			desktop = await launchElectron({
 				appServerMode: cohort === 'ui-only' ? 'disabled' : 'required',
 				userDataDirectory: join(directory, `${cohort}-${index}`),
 				profileDirectory: profile,
 				workspaceDirectory: testWorkspace.directory,
 				workspacePermissions: cohort === 'fresh' ? 'development' : undefined,
+				extraArgs: profileCpu ? ['--trace-startup=devtools.timeline,v8,blink.user_timing,disabled-by-default-v8.cpu_profiler', '--trace-startup-format=json', '--trace-startup-duration=1', `--trace-startup-file=${cpuTrace}`] : undefined,
 			}, phase => milestones.push({ phase, elapsedMs: Math.round(performance.now() - start) }));
 			readyMs = Math.round(performance.now() - start);
 			renderer = await desktop.driver.workbench.page.evaluate(() => {
@@ -89,9 +100,32 @@ test('Desktop startup trace', { tag: '@electron-app-server' }, async ({ target, 
 				if (!navigation) throw new Error('Desktop navigation timing is unavailable');
 				return {
 					responseEndMs: navigation.responseEnd,
-					marks: window.performance.getEntriesByType('mark').filter(mark => mark.name.startsWith('ash.')).map(mark => ({ name: mark.name, startTimeMs: mark.startTime })),
+					marks: window.performance.getEntriesByType('mark').filter(mark => mark.name.startsWith('ash.')).map(mark => ({ name: mark.name.replace(/^(ash\.appServer\.port-(?:acquire-start|acquired|initialized)):[\da-f-]{36}$/u, '$1'), startTimeMs: mark.startTime, detail: (mark as PerformanceMark).detail })),
 				};
 			});
+			main = await desktop.application.evaluate(() => performance.getEntriesByType('mark')
+				.filter(mark => mark.name.startsWith('ash.appServer.main.'))
+				.map(mark => ({ name: mark.name, startTimeMs: mark.startTime, detail: (mark as PerformanceMark).detail })));
+			const workbench = desktop.driver.workbench;
+			let editorMs: number | null = null;
+			if (cohort !== 'ui-only') {
+				const showSidebar = workbench.page.getByRole('button', { name: 'Show Primary Side Bar', exact: true });
+				if (await showSidebar.isVisible()) await showSidebar.click();
+				const file = workbench.page.locator('.ash-explorer .ash-tree-row').filter({ hasText: 'main.ts' });
+				await expect(file).toHaveCount(1);
+				const editorStart = performance.now();
+				await file.dblclick();
+				await expect(workbench.page.locator('.stanza-editor-line-text').first()).toContainText('const value = 1;');
+				editorMs = performance.now() - editorStart;
+			}
+			const quickAccessStart = performance.now();
+			await workbench.page.locator('.ash-titlebar-command-center-button').click();
+			await expect(workbench.quickaccess.input).toBeFocused();
+			await workbench.quickaccess.input.fill('>');
+			await expect(workbench.quickaccess.items.first()).toBeVisible();
+			firstUse = { editorMs, quickAccessMs: performance.now() - quickAccessStart };
+			await workbench.quickaccess.close();
+			if (profileCpu) await expect.poll(() => stat(cpuTrace).then(file => file.size, () => 0), { timeout: 5_000 }).toBeGreaterThan(0);
 		} catch (cause) {
 			error = redact(String(cause), directory, testWorkspace.directory);
 		} finally {
@@ -105,7 +139,7 @@ test('Desktop startup trace', { tag: '@electron-app-server' }, async ({ target, 
 			} catch (cause) {
 				error = `${error ? `${error}\n` : ''}Cleanup: ${redact(String(cause), directory, testWorkspace.directory)}`;
 			}
-			samples.push({ cohort, index, readyMs, milestones, renderer, ...(error ? { error } : {}) });
+			samples.push({ cohort, index, readyMs, milestones, renderer, main, firstUse, ...(error ? { error } : {}) });
 		}
 	};
 	try {
@@ -120,7 +154,11 @@ test('Desktop startup trace', { tag: '@electron-app-server' }, async ({ target, 
 		await writeFile(join(credentials, 'credentials.json'), JSON.stringify(entries));
 		const packageRoot = dirname(dirname(backend));
 		metadata.buildId = (JSON.parse(await readFile(join(packageRoot, 'ash-package.json'), 'utf8')) as { buildId: string; }).buildId;
-		metadata.rendererBuildId = `sha256:${createHash('sha256').update(await readFile(resolve(appPath, '.build/desktop/renderer/ash/build-assets.json'))).digest('hex')}`;
+		const rendererMetrics = await readFile(resolve(appPath, '.build/desktop/renderer/ash/build-metrics.json'));
+		metadata.rendererBuildId = `sha256:${createHash('sha256').update(rendererMetrics).update(await readFile(resolve(appPath, '.build/desktop/renderer/ash/build-assets.json'))).digest('hex')}`;
+		metadata.staticJavaScript = (JSON.parse(rendererMetrics.toString()) as { entry: string; staticJavaScriptBytes: number; }[]).map(({ entry, staticJavaScriptBytes }) => ({ entry, staticJavaScriptBytes }));
+		metadata.sourceRevision = (await execFileAsync('git', ['rev-parse', 'HEAD'], { cwd: appPath })).stdout.trim();
+		metadata.sourceDiffSha256 = createHash('sha256').update((await execFileAsync('git', ['diff', 'HEAD'], { cwd: appPath, maxBuffer: 16 * 1024 * 1024 })).stdout).digest('hex');
 		metadata.backendBytes = (await stat(backend)).size;
 
 		for (let index = 0; index < samplesPerCohort; index++) {
@@ -156,6 +194,14 @@ test('Desktop startup trace', { tag: '@electron-app-server' }, async ({ target, 
 		expect(samples.filter(sample => !sample.renderer?.marks.some(mark => mark.name === 'ash.workbench.restored'))).toEqual([]);
 		expect(samples.filter(sample => !sample.renderer?.marks.some(mark => mark.name === 'ash.desktop.lifecycle-ready'))).toEqual([]);
 		expect(metadata.reusedDaemonSameProcess).toBe(true);
+		for (const sample of samples.filter(sample => sample.cohort !== 'ui-only' && !sample.error)) {
+			const port = sample.renderer?.marks.find(mark => mark.name === 'ash.appServer.port-acquire-start')?.detail as { nonce?: string; } | undefined;
+			expect(port?.nonce).toBeTruthy();
+			const connected = sample.main.filter(mark => (mark.detail as { nonce?: string; }).nonce === port?.nonce);
+			for (const phase of ['acquire', 'validated', 'carrier-ready', 'port-attached', 'first-write', 'first-read', 'initialized']) {
+				expect(connected.some(mark => mark.name === `ash.appServer.main.${phase}`), `${sample.cohort}[${sample.index}] Main ${phase}`).toBe(true);
+			}
+		}
 	} catch (cause) {
 		metadata.failure = redact(String(cause), directory, testWorkspace.directory);
 		throw cause;

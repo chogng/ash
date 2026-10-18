@@ -24,6 +24,15 @@ CONDITIONS = (
 )
 V2_CONDITIONS = ("osRelease", "cpuModel", "cpuCount", "milestoneClock")
 V3_CONDITIONS = ("rendererClock",)
+OPTIONAL_CONDITIONS = ("connectionClock", "cpuProfiles", "firstUse")
+MAIN_STAGES = (
+    ("acquire", "validated"),
+    ("validated", "carrier-ready"),
+    ("carrier-ready", "port-attached"),
+    ("port-attached", "first-write"),
+    ("first-write", "first-read"),
+    ("first-read", "initialized"),
+)
 STAGES = (
     ("launch-requested", "electron-launch-resolved"),
     ("electron-launch-resolved", "first-window"),
@@ -167,6 +176,31 @@ def validate(report: dict, label: str) -> dict[str, list[dict]]:
             )
             if any(name not in names for name in required_marks):
                 raise ValueError(f"{label}: missing renderer mark in {cohort}[{index}]")
+        if not sample.get("error") and metadata.get("connectionClock"):
+            main = sample.get("main")
+            if not isinstance(main, list) or any(
+                not isinstance(mark, dict)
+                or not isinstance(mark.get("name"), str)
+                or not isinstance(mark.get("startTimeMs"), (int, float))
+                or isinstance(mark.get("startTimeMs"), bool)
+                or mark["startTimeMs"] < 0
+                or not isinstance(mark.get("detail"), dict)
+                or not isinstance(mark["detail"].get("nonce"), str)
+                for mark in main
+            ):
+                raise ValueError(f"{label}: invalid Main timings in {cohort}[{index}]")
+        if not sample.get("error") and metadata.get("firstUse"):
+            first_use = sample.get("firstUse")
+            features = ("quickAccessMs",) + (
+                ("editorMs",) if cohort != "ui-only" else ()
+            )
+            if not isinstance(first_use, dict) or any(
+                not isinstance(first_use.get(feature), (int, float))
+                or isinstance(first_use.get(feature), bool)
+                or first_use[feature] < 0
+                for feature in features
+            ):
+                raise ValueError(f"{label}: invalid first use in {cohort}[{index}]")
         grouped[cohort].append(sample)
     for cohort, cohort_samples in grouped.items():
         indexes = [sample["index"] for sample in cohort_samples]
@@ -222,7 +256,7 @@ def compare_reports(baseline: dict, candidate: dict) -> tuple[str, int]:
     )
     differences = [
         key
-        for key in conditions
+        for key in conditions + OPTIONAL_CONDITIONS
         if baseline["metadata"].get(key) != candidate["metadata"].get(key)
     ]
     if differences:
@@ -362,6 +396,86 @@ def compare_reports(baseline: dict, candidate: dict) -> tuple[str, int]:
                 lines.append(
                     f"{cohort} | {start} → {end} | {display(old_durations)} | {display(new_durations)} "
                     f"| {median(old_values)} | {median(new_values)} | {delta}"
+                )
+    if baseline["metadata"].get("connectionClock"):
+        lines.extend(
+            (
+                "",
+                "Main stages for the Renderer port nonce, one Main clock (ms)",
+                "cohort | stage | baseline median | candidate median | delta",
+            )
+        )
+        for cohort in COHORTS:
+            if cohort == "ui-only":
+                continue
+            for start, end in MAIN_STAGES:
+                values = []
+                for groups in (before, after):
+                    durations = []
+                    for sample in groups[cohort]:
+                        port = next(
+                            (
+                                mark
+                                for mark in (sample.get("renderer") or {}).get(
+                                    "marks", []
+                                )
+                                if mark["name"] == "ash.appServer.port-acquire-start"
+                            ),
+                            {},
+                        )
+                        nonce = (port.get("detail") or {}).get("nonce")
+                        marks = {
+                            mark["name"].removeprefix("ash.appServer.main."): mark[
+                                "startTimeMs"
+                            ]
+                            for mark in sample.get("main", [])
+                            if nonce
+                            and (mark.get("detail") or {}).get("nonce") == nonce
+                        }
+                        if valid(sample, 3) and start in marks and end in marks:
+                            durations.append(marks[end] - marks[start])
+                    if len(durations) != len(groups[cohort]):
+                        incomplete = True
+                    values.append(durations)
+                delta = (
+                    f"{statistics.median(values[1]) - statistics.median(values[0]):+.1f}"
+                    if all(values)
+                    else "—"
+                )
+                lines.append(
+                    f"{cohort} | {start} → {end} | {median(values[0])} | {median(values[1])} | {delta}"
+                )
+    if baseline["metadata"].get("firstUse"):
+        lines.extend(
+            (
+                "",
+                "First feature use after readiness, Playwright observer clock (ms)",
+                "cohort | feature | baseline median | candidate median | delta",
+            )
+        )
+        for cohort in COHORTS:
+            for feature in ("editorMs", "quickAccessMs"):
+                if cohort == "ui-only" and feature == "editorMs":
+                    continue
+                values = [
+                    [
+                        sample["firstUse"][feature]
+                        for sample in groups[cohort]
+                        if valid(sample, 3)
+                        and sample.get("firstUse")
+                        and sample["firstUse"].get(feature) is not None
+                    ]
+                    for groups in (before, after)
+                ]
+                if any(len(value) != len(before[cohort]) for value in values):
+                    incomplete = True
+                delta = (
+                    f"{statistics.median(values[1]) - statistics.median(values[0]):+.1f}"
+                    if all(values)
+                    else "—"
+                )
+                lines.append(
+                    f"{cohort} | {feature} | {median(values[0])} | {median(values[1])} | {delta}"
                 )
     for label, groups in (("baseline", before), ("candidate", after)):
         for cohort in COHORTS:

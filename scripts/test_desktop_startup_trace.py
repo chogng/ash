@@ -145,6 +145,70 @@ class DesktopStartupTraceComparisonTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "measurement conditions differ: cache"):
             desktop_startup_trace.compare_reports(report(), candidate)
 
+    def test_profiled_run_cannot_be_compared_to_unprofiled_run(self):
+        baseline = report(version=3)
+        candidate = report(version=3)
+        baseline["metadata"]["cpuProfiles"] = "disabled"
+        candidate["metadata"]["cpuProfiles"] = "first sample per cohort"
+        with self.assertRaisesRegex(
+            ValueError, "measurement conditions differ: cpuProfiles"
+        ):
+            desktop_startup_trace.compare_reports(baseline, candidate)
+
+    def test_unmatched_connection_nonce_is_incomplete(self):
+        baseline = report(version=3)
+        candidate = report(version=3)
+        for value in (baseline, candidate):
+            value["metadata"]["connectionClock"] = "same Main clock"
+            for sample in value["samples"]:
+                sample["renderer"]["marks"].append(
+                    {
+                        "name": "ash.appServer.port-acquire-start",
+                        "startTimeMs": 22,
+                        "detail": {"nonce": "renderer-nonce"},
+                    }
+                )
+                sample["main"] = [
+                    {
+                        "name": f"ash.appServer.main.{phase}",
+                        "startTimeMs": index,
+                        "detail": {"nonce": "renderer-nonce"},
+                    }
+                    for index, phase in enumerate(
+                        (
+                            "acquire",
+                            "validated",
+                            "carrier-ready",
+                            "port-attached",
+                            "first-write",
+                            "first-read",
+                            "initialized",
+                        )
+                    )
+                ]
+        output, status = desktop_startup_trace.compare_reports(baseline, candidate)
+        self.assertEqual(status, 0)
+        self.assertIn("first-write → first-read", output)
+        candidate["samples"][0]["main"][0]["detail"]["nonce"] = "another-connection"
+        output, status = desktop_startup_trace.compare_reports(baseline, candidate)
+        self.assertEqual(status, 2)
+        self.assertIn("incomplete comparison", output)
+
+    def test_malformed_main_timing_is_rejected(self):
+        candidate = report(version=3)
+        candidate["metadata"]["connectionClock"] = "same Main clock"
+        candidate["samples"][0]["main"] = [
+            {"name": "acquire", "startTimeMs": 1, "detail": "invalid"}
+        ]
+        with self.assertRaisesRegex(ValueError, "invalid Main timings"):
+            desktop_startup_trace.validate(candidate, "candidate")
+
+    def test_missing_first_use_is_rejected(self):
+        candidate = report(version=3)
+        candidate["metadata"]["firstUse"] = "actual UI"
+        with self.assertRaisesRegex(ValueError, "invalid first use"):
+            desktop_startup_trace.validate(candidate, "candidate")
+
     def test_mismatched_instrumentation_is_rejected(self):
         candidate = report()
         candidate["schemaVersion"] = 1

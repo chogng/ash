@@ -39,13 +39,61 @@ suite('App Server MessagePort transport', () => {
 		dom.window.close();
 	});
 	setup(() => { requests.length = 0; tracker = new DisposableTracker(); tracking = installDisposableTracker(tracker); });
-	teardown(() => { try { assert.equal(registrations.size, 0); tracker.assertNoLeaks(); } finally { tracking[Symbol.dispose](); } });
+	teardown(() => { try { assert.equal(registrations.size, 0); assert.equal(performance.getEntriesByType('mark').filter(mark => mark.name.startsWith('ash.appServer.port-')).length, 0); tracker.assertNoLeaks(); } finally { tracking[Symbol.dispose](); } });
 
 	test('disabled hosts settle without a port and release their pending registration', async () => {
 		using transport = new Transport(() => { });
 		const ready = transport.acquire();
 		requests[0].resolve({ enabled: false });
 		assert.equal(await ready, false);
+	});
+
+	test('reconnecting keeps only current lease marks and disposing one transport preserves its peer', async () => {
+		const first = new Transport(() => { });
+		using peer = new Transport(() => { }, 'local');
+		const marks = (nonce: string) => performance.getEntriesByType('mark').filter(mark => mark.name.endsWith(`:${nonce}`));
+		try {
+			const peerReady = peer.acquire();
+			const peerNonce = requests.at(-1)!.nonce;
+			requests.at(-1)!.resolve({ enabled: false });
+			await peerReady;
+			let previousNonce: string | undefined;
+			for (let index = 0; index < 20; index++) {
+				const ready = first.acquire();
+				if (previousNonce) assert.equal(marks(previousNonce).length, 0);
+				previousNonce = requests.at(-1)!.nonce;
+				requests.at(-1)!.resolve({ enabled: false });
+				await ready;
+				assert.equal(marks(previousNonce).length, 2);
+				assert.equal(marks(peerNonce).length, 2);
+				assert.equal(performance.getEntriesByType('mark').filter(mark => mark.name.startsWith('ash.appServer.port-')).length, 4);
+			}
+			first.dispose();
+			assert.equal(marks(previousNonce!).length, 0);
+			assert.equal(marks(peerNonce).length, 2);
+		} finally { first.dispose(); }
+	});
+
+	test('a delayed initialization acknowledgement cannot recreate retired lease marks', async () => {
+		using transport = new Transport(() => { });
+		const channel = new MessageChannel();
+		try {
+			const ready = transport.acquire();
+			const retiredNonce = requests.at(-1)!.nonce;
+			requests.at(-1)!.resolve({ enabled: true, byteStream: true });
+			dom.window.dispatchEvent(new dom.window.MessageEvent('message', { source: dom.window as unknown as Window, data: { nonce: retiredNonce }, ports: [channel.port1 as unknown as MessagePort] }));
+			await ready;
+			const initialized = transport.initialized();
+			const acknowledgement = requests.at(-1)!;
+			const successor = transport.acquire();
+			const successorNonce = requests.at(-1)!.nonce;
+			acknowledgement.resolve(undefined);
+			await initialized;
+			assert.equal(performance.getEntriesByType('mark').filter(mark => mark.name.endsWith(`:${retiredNonce}`)).length, 0);
+			assert.equal(performance.getEntriesByType('mark').filter(mark => mark.name.endsWith(`:${successorNonce}`)).length, 1);
+			requests.at(-1)!.resolve({ enabled: false });
+			await successor;
+		} finally { channel.port1.close(); channel.port2.close(); }
 	});
 
 	test('cold SSH validation uses its connection budget instead of the local ten-second deadline', async () => {
