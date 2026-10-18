@@ -156,7 +156,7 @@ export interface INativeHostApi extends ICommonNativeHostService {
 	getOSColorScheme(): Promise<IColorScheme>;
 	onDidChangeColorScheme(listener: (scheme: IColorScheme) => void): DisposableHandle;
 	showMessageBox(options: MessageBoxOptions): Promise<MessageBoxReturnValue>;
-	listWindows(): Promise<readonly IWorkbenchWindowInfo[]>;
+	listWindows(windowName?: string): Promise<readonly IWorkbenchWindowInfo[]>;
 	focusWindowById(windowId: number): Promise<void>;
 	focusWindow(windowName?: string): Promise<void>;
 	closeWindow(windowName?: string): Promise<void>;

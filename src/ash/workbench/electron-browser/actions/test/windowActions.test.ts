@@ -144,15 +144,36 @@ test('desktop window commands reach the window host', async () => {
 	assert.deepEqual(calls, ['zoom:1', 'zoom:0', 'zoom:0', 'top:true', 'focusSelf', 'newTab', 'tab:next', 'closeOthers', 'close']);
 });
 
-test('quick window switching focuses the next registered window', async () => {
+test('quick window switching advances from the caller even when another window owns OS focus', async () => {
 	using services = new InstantiationService();
+	services.registerInstance(ILayoutService, { activeContainer: environment.window.document.body } as ILayoutService);
 	services.registerInstance(INativeHostService, {
 		isAdmin: async () => false,
-		listWindows: async () => [{ id: 1, title: 'Workbench', focused: true }, { id: 2, title: 'Agents', focused: false }],
-		focusWindowById: async (id: number) => { assert.equal(id, 2); },
+		listWindows: async () => [{ id: 1, title: 'Workbench', focused: true, current: false }, { id: 2, title: 'Agents', focused: false, current: true }],
+		focusWindowById: async (id: number) => { assert.equal(id, 1); },
 	} as unknown as INativeHostApi);
 	using commands = new CommandService(services);
 	await commands.executeCommand('workbench.action.quickSwitchWindow');
+});
+
+test('quick window switching captures the auxiliary input container for the caller identity', async () => {
+	using services = new InstantiationService();
+	const popup = new JSDOM('<!doctype html><body></body>');
+	popup.window.name = 'ash-auxiliary-12345678-1234-1234-1234-123456789abc';
+	services.registerInstance(ILayoutService, { activeContainer: popup.window.document.body } as ILayoutService);
+	const calls: unknown[] = [];
+	services.registerInstance(INativeHostService, {
+		listWindows: async (name?: string) => {
+			calls.push(name);
+			return [{ id: 1, title: 'Workbench', focused: true, current: false }, { id: 2, title: 'Editor', focused: false, current: true }];
+		},
+		focusWindowById: async (id: number) => { calls.push(id); },
+	} as unknown as INativeHostApi);
+	using commands = new CommandService(services);
+	try {
+		await commands.executeCommand('workbench.action.quickSwitchWindow');
+		assert.deepEqual(calls, [popup.window.name, 1]);
+	} finally { popup.window.close(); }
 });
 
 test('always-on-top commands capture the focused editor window before awaiting the host', async () => {

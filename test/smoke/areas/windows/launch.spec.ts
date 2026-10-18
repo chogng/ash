@@ -6,6 +6,7 @@ import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { promisify } from 'node:util';
 import { expect, test } from '../../../automation/test.js';
+import { waitForElectronWindowState } from '../../../automation/electronDriver.js';
 import { launchElectron } from '../../../automation/playwrightElectron.js';
 import { toDisposable } from '../../../../src/ash/base/common/lifecycle.js';
 import type { ConsoleMessage, Page } from '@playwright/test';
@@ -29,9 +30,16 @@ for (const launchKind of ['executable', 'bundle'] as const) test(`ash app hands 
 	const quote = (value: string): string => `'${value.replace(/'/g, `'\\''`)}'`;
 	if (launchKind === 'bundle') {
 		await mkdir(join(testWorkspace.directory, 'Ash.app', 'Contents', 'MacOS'), { recursive: true });
-		await writeFile(join(testWorkspace.directory, 'Ash.app', 'Contents', 'Info.plist'), '<?xml version="1.0" encoding="UTF-8"?><plist version="1.0"><dict><key>CFBundleExecutable</key><string>Ash</string><key>CFBundleIdentifier</key><string>com.ash.cli-launch-test</string><key>CFBundleName</key><string>Ash</string><key>CFBundlePackageType</key><string>APPL</string></dict></plist>');
+		const bundleId = `com.ash.cli-launch-test.${testWorkspace.directory.split('/').at(-1)}`;
+		await writeFile(join(testWorkspace.directory, 'Ash.app', 'Contents', 'Info.plist'), `<?xml version="1.0" encoding="UTF-8"?><plist version="1.0"><dict><key>CFBundleExecutable</key><string>Ash</string><key>CFBundleIdentifier</key><string>${bundleId}</string><key>CFBundleName</key><string>Ash</string><key>CFBundlePackageType</key><string>APPL</string></dict></plist>`);
 	}
-	await writeFile(launcher, `#!/bin/sh\nexec ${[configuration.executable, configuration.appPath, `--user-data-dir=${configuration.userData}`].map(quote).join(' ')} "$@"\n`, { mode: 0o755 });
+	// LaunchServices starts bundles outside the CLI's environment. Pin only the
+	// fixture's isolation settings, without copying unrelated process secrets.
+	const environment = ['HOME', 'ASH_HOME', 'ASH_DESKTOP_UI_ONLY', 'ASH_TEST_WINDOW_MODE'].map(key => {
+		const value = configuration.environment[key];
+		return value === undefined ? `unset ${key}` : `export ${key}=${quote(value)}`;
+	}).join('\n');
+	await writeFile(launcher, `#!/bin/sh\n${environment}\nunset ELECTRON_RUN_AS_NODE\nexec ${[configuration.executable, configuration.appPath, `--user-data-dir=${configuration.userData}`].map(quote).join(' ')} "$@"\n`, { mode: 0o755 });
 	const appPath = launchKind === 'bundle' ? join(testWorkspace.directory, 'Ash.app') : launcher;
 	await promisify(execFile)(resolve(cli), ['app', '--app-path', appPath, '.'], {
 		cwd: folder,
@@ -196,7 +204,11 @@ focusTest('UI-only launches create a requested window and focus it on the next l
 	try {
 		await expect(page.locator('.ash-workbench')).toBeVisible();
 		expect(application.windows()).toHaveLength(2);
-		const id = await application.evaluate(({ BrowserWindow }) => BrowserWindow.getFocusedWindow()!.id);
+		const window = await application.browserWindow(page);
+		let id: number;
+		try { id = await window.evaluate(window => window.id); }
+		finally { await window.dispose(); }
+		await waitForElectronWindowState(application, page, { focused: true });
 		await application.evaluate(({ app }) => { app.emit('second-instance', {}, [process.execPath, app.getAppPath(), '--reuse-window'], process.cwd(), {}); });
 		await expect.poll(() => application.evaluate(({ BrowserWindow }) => BrowserWindow.getFocusedWindow()?.id)).toBe(id);
 		expect(application.windows()).toHaveLength(2);

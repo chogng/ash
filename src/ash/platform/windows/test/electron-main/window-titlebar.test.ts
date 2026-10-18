@@ -109,3 +109,16 @@ test('opaque high-contrast backdrop keeps window control symbols visible', () =>
 	controls.setDimmed(true);
 	assert.deepEqual(updates.at(-1), { color: '#000000', symbolColor: '#ffffff', height: 35 });
 });
+
+test('partial window control colors retain the current theme and modal backdrop', () => {
+	const updates: { color: string; symbolColor: string; height: number; }[] = [];
+	const controls = new WindowControlsOverlay(colors => updates.push(colors));
+	controls.setTheme({ backgroundColor: '#ffffff', symbolColor: '#424242', backdropColor: '#00000080' });
+	controls.setDimmed(true);
+	assert.deepEqual(controls.setTheme({ symbolColor: '#ffffff' }), {
+		backgroundColor: '#ffffff', symbolColor: '#ffffff', backdropColor: '#00000080',
+	});
+	assert.deepEqual(updates.at(-1), { color: '#7e7e7e', symbolColor: '#7e7e7e', height: 35 });
+	controls.setDimmed(false);
+	assert.deepEqual(updates.at(-1), { color: '#ffffff', symbolColor: '#ffffff', height: 35 });
+});

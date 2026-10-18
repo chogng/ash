@@ -8,6 +8,7 @@ for (const windowKind of ['Workbench', 'Agents'] as const) {
 	focusTest(`Electron ${windowKind} window operations use the registered window host`, { tag: ['@electron-ui', '@electron-app-server'] }, async ({ application, target, workbench }) => {
 		if (!('windows' in application)) throw new Error('Expected Electron windows');
 		const page = windowKind === 'Agents' ? await workbench.openAgentsWindow(target.kind) : workbench.page;
+		await application.evaluate(({ app }) => app.focus({ steal: true }));
 		const windowHandle = await application.browserWindow(page);
 		const windowId = await windowHandle.evaluate(window => window.id);
 		const result = await page.evaluate(async windowId => {
@@ -47,20 +48,17 @@ for (const windowKind of ['Workbench', 'Agents'] as const) {
 			} catch {
 				rejected = true;
 			}
-			return { count: windows.length, focused: (await bridge.invoke(channel, { kind: 'list' }) as typeof windows).some(window => window.id === focused.id && window.focused), zoomNotification, changedZoom, changedAlwaysOnTop, zoom, alwaysOnTop, rejected };
+			return { count: windows.length, zoomNotification, changedZoom, changedAlwaysOnTop, zoom, alwaysOnTop, rejected };
 		}, windowId);
 
-		expect(result).toEqual({ count: windowKind === 'Agents' ? 2 : 1, focused: true, zoomNotification: 1, changedZoom: 1, changedAlwaysOnTop: true, zoom: 0, alwaysOnTop: false, rejected: true });
+		await waitForElectronWindowState(application, page, { focused: true });
+		expect(result).toEqual({ count: windowKind === 'Agents' ? 2 : 1, zoomNotification: 1, changedZoom: 1, changedAlwaysOnTop: true, zoom: 0, alwaysOnTop: false, rejected: true });
 	});
 }
 
 focusTest('window picker data includes the Agents window and can focus it', { tag: ['@electron-ui', '@electron-app-server'] }, async ({ application, target, workbench }) => {
 	if (target.kind !== 'electron' || !('windows' in application)) return;
-	const opened = application.waitForEvent('window');
-	await workbench.page.keyboard.press('F1');
-	await workbench.page.locator('.ash-quick-pick').getByRole('combobox').fill('Open Agents Window');
-	await workbench.page.keyboard.press('Enter');
-	const childPage = await opened;
+	const childPage = await workbench.openAgentsWindow(target.kind);
 	try {
 		const agentsWindow = await application.browserWindow(childPage);
 		const agentsWindowId = await agentsWindow.evaluate(window => window.id);

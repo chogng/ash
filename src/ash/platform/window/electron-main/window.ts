@@ -1,6 +1,7 @@
+import type { CancellationToken } from '../../../base/common/cancellation.js';
 import { Emitter, type Event } from '../../../base/common/event.js';
-import { Disposable } from '../../../base/common/lifecycle.js';
-import { type IAnyWorkspaceIdentifier, type IWorkspace, workspaceFromIdentifier } from '../../workspace/common/workspace.js';
+import { Disposable, type IDisposable } from '../../../base/common/lifecycle.js';
+import { type IAnyWorkspaceIdentifier, type IWorkspace, type IWorkspaceIdentifier, type ISingleFolderWorkspaceIdentifier, workspaceFromIdentifier } from '../../workspace/common/workspace.js';
 import {
 	DEFAULT_EMPTY_WINDOW_SIZE,
 	DEFAULT_WORKSPACE_WINDOW_SIZE,
@@ -24,6 +25,45 @@ export interface IWindowBounds {
 	readonly y: number;
 	readonly width: number;
 	readonly height: number;
+}
+
+export const enum LoadReason {
+	INITIAL = 1,
+	LOAD,
+	RELOAD,
+}
+
+export interface ILoadEvent {
+	readonly workspace: IWorkspaceIdentifier | ISingleFolderWorkspaceIdentifier | undefined;
+	readonly reason: LoadReason;
+}
+
+/** One window owns its current document and the readiness of that document. */
+export interface ICodeWindow<TWindow = Electron.BrowserWindow> extends IDisposable {
+	readonly win: TWindow;
+	readonly id: number;
+	readonly lastFocusTime: number;
+	readonly onDidClose: Event<void>;
+	readonly onDidEnterFullScreen: Event<void>;
+	readonly onDidLeaveFullScreen: Event<void>;
+	readonly openedWorkspace: IAnyWorkspaceIdentifier;
+	readonly onDidSignalReady: Event<void>;
+	readonly onWillLoad: Event<ILoadEvent>;
+	readonly isReady: boolean;
+	readonly whenClosedOrLoaded: Promise<void>;
+	focus(): void;
+	close(): void;
+	getBounds(): IWindowBounds;
+	isFullScreen(): boolean;
+	serializeWindowState(): IWindowState & IWindowBounds;
+	addTabbedWindow(window: ICodeWindow<TWindow>): void;
+	send(channel: string, ...args: unknown[]): void;
+	sendWhenReady(channel: string, token: CancellationToken, ...args: unknown[]): void;
+	ready(): Promise<ICodeWindow<TWindow>>;
+	setReady(): void;
+	load(configuration: { readonly file: string; readonly url: string; readonly useDevelopmentUrl: boolean; }): Promise<void>;
+	reload(): Promise<void>;
+	updateWindowControls(options: { backgroundColor?: string; foregroundColor?: string; backdropColor?: string; dimmed?: boolean; }): void;
 }
 
 /**

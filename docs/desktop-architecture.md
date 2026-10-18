@@ -318,8 +318,57 @@ primitive 位于 `platform/ipc/electron-main`，不反向依赖任何产品能�
 Electron 主进程由 `code/electron-main/main.ts` 编排启动，`app.ts` 装配产品服务并管理应用事件。
 进程参数归 `platform/environment/node/argvHelper.ts`，系统默认数据目录归同目录的
 `userDataPath.ts`，外部窗口启动请求归 `platform/launch/electron-main/launchMainService.ts`。
-`WindowsMainService` 统一拥有窗口身份、活动顺序和工作区复用；`app.ts` 只保留窗口对应的
+`WindowsMainService` 统一拥有窗口注册、活动窗口选择和工作区复用；`app.ts` 只保留窗口对应的
 App Server、模式和产品资源。Windows 最近项目跳转列表由 `WorkspacesHistoryMainService` 更新。
+
+`platform/windows/electron-main/windowImpl.ts` 的 `CodeWindow` 拥有每个窗口的 Renderer 就绪、
+加载、开发服务器断线重试、重载协调及标题栏主题／模态 dim 状态；`WindowsMainService` 通过
+实例化服务创建它，构造注入日志、系统对话框、生命周期、主题和辅助窗口服务。文件打开请求
+通过 `sendWhenReady` 等待 Renderer，并在请求取消时移除待发消息；URL 分发和工作区切换等待
+同一窗口的 `ready()`，不再保留另一份页面就绪表。
+重载仍先完成生命周期服务的关闭参与者握手，否决时保留当前页面。无响应窗口提供重新打开、
+关闭和继续等待，恢复后取消提示并忽略迟到结果；Renderer 退出后可在原窗口重建页面，或关闭
+并释放资源。系统提示使用客户端语言目录。App Server 连接、权限和产品 IPC 装配仍归应用入口。
+
+2026-10-18，首批完整测试编译、75 项定向单测（另有 2 项 Windows 专属跳过）、Main／Renderer
+构建及 macOS Electron 8 项窗口回归通过。真实窗口覆盖 Workbench／Sessions 冷启动与重载时
+HTTP 断线、英中无响应恢复和真实 Renderer 崩溃后重开；OS 对话框的用户响应由测试控制，恢复后
+通过 Electron 检查实际 DOM、键盘焦点和窗口身份。证据位于 `.build/codewindow-alignment/`。
+该批验证覆盖上述初始职责，不表示整个 VS Code 窗口契约已齐备；Ash 尚无 CLI 扩展测试窗口入口，
+上游 `f79427132b3` 的测试专用 60 秒宽限及失败退出没有生产消费者，当前不注册该策略。
+
+后续审计沿现有生产调用链补齐以下端口，外围原有的重复实现已退出：
+
+| 生产入口                         | `ICodeWindow` 端口与唯一职责                                                                                                         |
+| -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| 激活、窗口选择器、恢复窗口及托盘 | `id`、`lastFocusTime`、`focus()`；窗口记录实际焦点时间并恢复最小化窗口，多窗口服务只比较各 owner 的时间                              |
+| 关闭、全屏和 Renderer 状态通知   | `close()`、`onDidClose`、`isFullScreen()`、进入／退出全屏事件；关闭通知完成后释放资源，缩放 wheel 监听随窗口释放                     |
+| 新窗口尺寸与最后关闭位置         | `getBounds()`、`serializeWindowState()`；读取 OS 普通窗口矩形及当前模式，显示器归一化和持久化仍归 `WindowsStateHandler`              |
+| 文件启动与窗口消息               | `send()`、`sendWhenReady(channel, token, ...)`；检查窗口及 WebContents 存活，取消后不投递，重复 ready 不重发                         |
+| 邀请、handoff 与 CLI 等待        | `onWillLoad`／`ILoadEvent`／`LoadReason`、`whenClosedOrLoaded`；只处理主框架新文档，子框架及页内导航不终止当前文档，崩溃另走失败取消 |
+| macOS 新建窗口标签               | `addTabbedWindow()`；父窗口在异步创建期间关闭时，由原 owner 关闭新窗口                                                               |
+
+`CodeWindow` 的公开契约仍按实际消费者裁剪：represented filename、document edited、application badge、
+Touch Bar、profile、backupPath、extension development/test host 和自定义 zoom override 没有当前
+Ash 调用方，不注册空端口；工作区配置、Remote authority 与产品连接继续消费各领域 owner。
+辅助窗口沿其同 Renderer 的 `AuxiliaryWindow` 生命周期管理；固定窗口、系统标签导航等仅有 OS
+操作的路径继续由窗口操作服务调用 Electron，不新增同名中转层。Renderer 崩溃诊断保留
+Electron 的 reason 与 exitCode。验证证据目录为 `.build/codewindow-remaining/`。
+
+连续批次暴露了窗口选择器把瞬时 OS 焦点当作命令发起窗口的问题：两次异步调用间失焦时，
+所有 `focused` 都可能为 false，导致 current 标记丢失。窗口列表现在由 Main 根据可信调用方
+上下文返回独立的 `current`；辅助窗口名称沿现有 IPC 校验归属，命令在 await 前捕获目标，
+选择器与快速切换均使用调用方身份。真实 Electron 回归主动让应用失去 OS 焦点，旧实现稳定
+缺失标记，修复后仍保留一个 current；窗口焦点状态及真实焦点断言继续独立验证。
+
+最终 232 项定向单测通过（另有 2 项 Windows 专属跳过），Main／Renderer 构建、Main／自动化
+类型检查及格式检查通过。macOS 完整相关 UI 窗口批次 22 项、连接 App Server 批次 18 项，
+以及连续 5 轮窗口批次 45 项全部通过；包含真实 CLI 可执行文件和 `.app` 启动、文件等待、
+工作区切换、共享缩放持久化，以及 Workbench／Sessions 英中崩溃恢复和 HTTP 断线恢复。
+验收同时修复了空终端检查点在无 PTY 宿主重载时仍要求 attach 能力的问题，非空检查点仍按
+原契约校验和重连。连续回归还捕获测试清理逐个 destroy 后再 exit 时的 Cocoa 焦点切换崩溃；
+清理改由 Electron 的 app.exit 统一销毁，仍拒绝异常退出，以上完整批次与连续批次均在修复后
+通过。首次失败诊断与最终记录保留在 `.build/window-focus-fix/`。
 
 当前实现明确区分两个所有权边界：
 

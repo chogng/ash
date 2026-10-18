@@ -6,6 +6,7 @@ import { URI } from '../../../../src/ash/base/common/uri.js';
 import { waitForElectronWindowState } from '../../../automation/electronDriver.js';
 
 const focusTest = test.extend({ electronWindowMode: 'active' });
+const persistedZoomTest = test.extend({ electronWindowMode: 'active', electronUserSettings: { 'window.zoomPerWindow': false } });
 
 test.use({ openWorkspace: false });
 
@@ -104,9 +105,10 @@ test('desktop Recents removes shared history without deleting projects and stays
 	expect(await history('getRecentlyOpened')).toEqual({ workspaces: [] });
 });
 
-test('desktop window commands update and persist zoom', { tag: ['@electron-ui', '@electron-app-server'] }, async ({ application, target, workbench }) => {
+persistedZoomTest('desktop window commands update and persist zoom', { tag: ['@electron-ui', '@electron-app-server'] }, async ({ application, target, workbench }) => {
 	if (target.kind !== 'electron' || !('windows' in application)) return;
 	const page = workbench.page;
+	page.on('dialog', dialog => { expect(dialog.type()).toBe('beforeunload'); });
 	const window = await application.browserWindow(page);
 	try {
 		await expect(page.locator('[data-statusbar-item-id="ash.status.zoom"]')).toHaveCount(0);
@@ -119,7 +121,10 @@ test('desktop window commands update and persist zoom', { tag: ['@electron-ui', 
 			return (JSON.parse(await readFile(join(profileRoot, 'settings.json'), 'utf8')) as Record<string, unknown>)['window.zoomLevel'];
 		}).toBe(1);
 		await page.reload({ waitUntil: 'domcontentloaded' });
-		await expect(page.locator('.ash-workbench')).toBeVisible();
+		await workbench.waitForReady();
+		await application.evaluate(({ app }) => app.focus({ steal: true }));
+		await window.evaluate(window => window.focus());
+		await page.bringToFront();
 		await expect.poll(() => window.evaluate(window => window.webContents.getZoomLevel())).toBe(1);
 		await expect(page.locator('[data-statusbar-item-id="ash.status.zoom"]')).toHaveCount(0);
 
@@ -128,8 +133,8 @@ test('desktop window commands update and persist zoom', { tag: ['@electron-ui', 
 	} finally { await window.dispose(); }
 });
 
-// The current-window marker comes from the OS-focused window in the window list.
-focusTest('desktop window switcher marks the focused window as current', { tag: ['@electron-ui', '@electron-app-server'] }, async ({ application, target, workbench }) => {
+// The current-window marker belongs to the calling window, even across OS focus changes.
+focusTest('desktop window switcher marks the calling window as current', { tag: ['@electron-ui', '@electron-app-server'] }, async ({ application, target, workbench }) => {
 	if (!('windows' in application)) throw new Error('Expected Electron windows');
 	const page = workbench.page;
 	await application.evaluate(({ app, BrowserWindow }) => {
@@ -143,6 +148,23 @@ focusTest('desktop window switcher marks the focused window as current', { tag: 
 	await expect(picker.locator('.ash-window-switch-current')).toHaveCount(1);
 	await page.keyboard.press('Escape');
 	await expect(picker).toHaveCount(0);
+});
+
+focusTest('window switcher keeps the calling window current after losing OS focus', { tag: ['@electron-ui', '@electron-app-server', '@darwin'] }, async ({ application, workbench }) => {
+	if (!('windows' in application)) throw new Error('Expected Electron windows');
+	const page = workbench.page;
+	await application.evaluate(({ app }) => app.hide());
+	try {
+		await waitForElectronWindowState(application, page, { focused: false });
+		await workbench.quickaccess.runCommand('workbench.action.switchWindow');
+		const picker = page.locator('.ash-quick-pick');
+		await expect(picker.getByRole('combobox')).toHaveAttribute('aria-label', 'Select a window');
+		await expect(picker.locator('.ash-window-switch-current')).toHaveCount(1);
+		await expect(picker.locator('.ash-window-switch-current')).toContainText('Current window');
+		await page.keyboard.press('Escape');
+	} finally {
+		await application.evaluate(({ app }) => app.show());
+	}
 });
 
 test('keyboard layout stays in commands while the status bar is quiet', async ({ workbench }) => {

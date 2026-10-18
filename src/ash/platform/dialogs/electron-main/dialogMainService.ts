@@ -5,6 +5,18 @@ import { hash } from '../../../base/common/hash.js';
 import { Disposable } from '../../../base/common/lifecycle.js';
 import type { NativeDialogOperation } from '../../native/common/nativeHost.js';
 import { massageMessageBoxOptions } from './dialogMainUtils.js';
+import { createDecorator } from '../../instantiation/common/instantiation.js';
+
+/** The window type is supplied by the Electron host, including in-process test hosts. */
+export interface IDialogMainService<TWindow = BrowserWindow> {
+	perform(window: TWindow, operation: NativeDialogOperation): Promise<MessageBoxReturnValue | void>;
+	showMessageBox(options: MessageBoxOptions, window?: TWindow): Promise<MessageBoxReturnValue>;
+	showOpenDialog(options: OpenDialogOptions, window?: TWindow): Promise<OpenDialogReturnValue>;
+	showSaveDialog(options: SaveDialogOptions, window?: TWindow): Promise<SaveDialogReturnValue>;
+	cancelWindow(window: TWindow): void;
+}
+
+export const IDialogMainService = createDecorator<IDialogMainService>('dialogMainService');
 
 export interface ISystemDialogApi {
 	showMessageBox(options: MessageBoxOptions, window?: BrowserWindow): Promise<MessageBoxReturnValue>;
@@ -13,7 +25,7 @@ export interface ISystemDialogApi {
 }
 
 /** Owns system dialog ordering and cancellation across Electron windows. */
-export class DialogMainService extends Disposable {
+export class DialogMainService extends Disposable implements IDialogMainService {
 	private readonly queues = new Map<number, Promise<unknown>>();
 	private readonly fileDialogLocks = new Map<number, Set<number>>();
 	private readonly active = new Map<number, Map<number, AbortController>>();

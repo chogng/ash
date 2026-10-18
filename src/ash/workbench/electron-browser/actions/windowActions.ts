@@ -38,15 +38,16 @@ async function applyWindowZoom(accessor: ServicesAccessor, level: number, window
 
 async function switchWindow(accessor: ServicesAccessor): Promise<void> {
 	const host = accessor.get(INativeHostService);
-	const windows = await host.listWindows();
+	const target = getWindowCommandTarget(accessor);
+	const windows = await host.listWindows(target === mainWindow ? undefined : target.name);
 	if (windows.length === 0) return;
 	using picker = accessor.get(IQuickInputService).createQuickPick<WindowPickItem>();
 	using listeners = new DisposableStore();
 	picker.items = windows.map(window => ({
 		windowId: window.id,
 		label: window.title || localize({ bundle: 'ash', key: 'workbench.untitledWindow' }, 'Untitled Window'),
-		description: window.focused ? localize({ bundle: 'ash', key: 'workbench.currentWindow' }, 'Current window') : undefined,
-		className: window.focused ? 'ash-window-switch-current' : undefined,
+		description: window.current ? localize({ bundle: 'ash', key: 'workbench.currentWindow' }, 'Current window') : undefined,
+		className: window.current ? 'ash-window-switch-current' : undefined,
 	}));
 	picker.placeholder = localize({ bundle: 'ash', key: 'workbench.switchWindowPlaceholder' }, 'Select a window');
 	picker.ariaLabel = picker.placeholder;
@@ -158,10 +159,11 @@ export class QuickSwitchWindowAction extends Action2 {
 
 	override async run(accessor: ServicesAccessor): Promise<void> {
 		const host = accessor.get(INativeHostService);
-		const windows = await host.listWindows();
+		const target = getWindowCommandTarget(accessor);
+		const windows = await host.listWindows(target === mainWindow ? undefined : target.name);
 		if (windows.length < 2) return;
-		const focusedIndex = windows.findIndex(window => window.focused);
-		await host.focusWindowById(windows[(focusedIndex + 1) % windows.length]!.id);
+		const currentIndex = windows.findIndex(window => window.current);
+		await host.focusWindowById(windows[(currentIndex + 1) % windows.length]!.id);
 	}
 }
 

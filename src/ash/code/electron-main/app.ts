@@ -5,7 +5,6 @@ import { SystemPolicyService } from '../../platform/policy/node/systemPolicyServ
 import { FilePolicyService } from '../../platform/policy/common/filePolicyService.js';
 import { PolicyChannel } from '../../platform/policy/common/policyIpc.js';
 import { randomUUID } from 'node:crypto';
-import { setTimeout as delay } from 'node:timers/promises';
 import { WebviewProtocolProvider } from '../../platform/webview/electron-main/webviewProtocolProvider.js';
 import { isAdmin } from '../../platform/native/electron-main/nativeHostMainService.js';
 import { ChecksumService, checksumChannel } from '../../platform/checksum/node/checksumService.js';
@@ -15,6 +14,7 @@ import { IInstantiationService } from '../../platform/instantiation/common/insta
 import { URLHandlerChannel, URLHandlerChannelClient } from '../../platform/url/common/urlIpc.js';
 import type { IOpenURLOptions } from '../../platform/url/common/url.js';
 import { userConfigurationIpcRoute, openUserConfigurationTextFile } from '../../platform/configuration/electron-main/userConfigurationIpc.js';
+import { IThemeMainService } from '../../platform/theme/electron-main/themeMainService.js';
 import { ThemeMainService } from '../../platform/theme/electron-main/themeMainServiceImpl.js';
 import { Server as MainProcessIPCServer } from '../../base/parts/ipc/electron-main/ipc.electron.js';
 import { isRecord } from '../../base/common/types.js';
@@ -59,7 +59,7 @@ import { UtilityProcess } from '../../platform/utilityProcess/electron-main/util
 import { BrowserViewGroupMainService } from '../../platform/browserView/electron-main/browserViewGroupMainService.js';
 import { IPlaywrightService } from '../../platform/browserView/common/playwrightService.js';
 import { WebContentsView, session as electronSession } from 'electron/main';
-import { formatNlsMessage, localize2 } from '../../nls.js';
+import { formatNlsMessage, localize2, setNlsMessages } from '../../nls.js';
 import { ConfigurationService } from '../../platform/configuration/common/configurationService.js';
 import { IConfigurationService } from '../../platform/configuration/common/configuration.js';
 import { IPolicyService } from '../../platform/policy/common/policy.js';
@@ -80,7 +80,7 @@ import { powerMonitorChannel, colorSchemeChannel, windowSplashIpcRoutes, nativeH
 import { UpdateMainService } from '../../platform/update/electron-main/updateMainService.js';
 import { UpdateChannel } from '../../platform/update/common/updateIpc.js';
 import { NATIVE_HOST_ACCESSIBILITY_SUPPORT_CHANGED_CHANNEL, validateOpenAgentsWindow, type INativeSystemWideKeybinding, type IOpenAgentsWindowOptions } from "../../platform/native/common/nativeHost.js";
-import { DialogMainService } from '../../platform/dialogs/electron-main/dialogMainService.js';
+import { DialogMainService, IDialogMainService } from '../../platform/dialogs/electron-main/dialogMainService.js';
 import type { DialogRequest } from '../../platform/dialogs/common/dialogs.js';
 import { RETURN_TO_WORKBENCH_CHANNEL, validateReturnToWorkbench } from '../../sessions/common/windowNavigation.js';
 import { AGENTS_WINDOW_HANDOFF_AVAILABLE_CHANNEL, AGENTS_WINDOW_HANDOFF_COMPLETE_CHANNEL, AGENTS_WINDOW_HANDOFF_TAKE_CHANNEL, validateAgentsWindowHandoffComplete, validateAgentsWindowHandoffTake, type IAgentsWindowHandoffResult } from '../../platform/window/common/window.js';
@@ -97,12 +97,12 @@ import { URI } from "../../base/common/uri.js";
 import { extUriBiasedIgnorePathCase } from '../../base/common/resources.js';
 import { DiskFileSystemProvider } from "../../platform/files/node/diskFileSystemProvider.js";
 import { LOCAL_FILE_SYSTEM_CHANNEL_NAME } from "../../platform/files/common/diskFileSystemProviderClient.js";
-import { IWindowsMainService, WindowControlsOverlay, resolveWindowTitleBarOptions, type IOpenConfiguration } from "../../platform/windows/electron-main/windows.js";
+import { IWindowsMainService, type IOpenConfiguration } from "../../platform/windows/electron-main/windows.js";
 import { RESTORE_WINDOWS_SETTING, TitleBarSetting, parseTitleBarStyle, type TitleBarStyleConfiguration } from "../../platform/window/common/window.js";
 import { WindowsStateHandler, WindowSessionStateHandler, type IWindowSessionEntry, type IWindowSessionWindow } from "../../platform/windows/electron-main/windowsStateHandler.js";
 import { WindowsMainService, windowOperationIpcRoute, workspaceContextIpcRoutes, workspaceRecoveryIpcRoute } from "../../platform/windows/electron-main/windowsMainService.js";
-import { LifecycleMainService, windowCloseResponseIpcRoute } from '../../platform/lifecycle/electron-main/lifecycleMainService.js';
-import { defaultWindowState, focusWindow, WorkspaceContextMainService, type IWindowState } from "../../platform/window/electron-main/window.js";
+import { LifecycleMainService, ILifecycleMainService, windowCloseResponseIpcRoute } from '../../platform/lifecycle/electron-main/lifecycleMainService.js';
+import { defaultWindowState, WorkspaceContextMainService, type IWindowState } from "../../platform/window/electron-main/window.js";
 import { type IAnyWorkspaceIdentifier, type IWorkspace, getWorkspaceRemoteAuthority, hasWorkspaceFileExtension, isRemoteWorkspaceIdentifier, isSingleFolderWorkspaceIdentifier, serializeWorkspace, UNKNOWN_EMPTY_WINDOW_WORKSPACE, WorkbenchState } from "../../platform/workspace/common/workspace.js";
 import { createEmptyWorkspaceIdentifier } from "../../platform/workspaces/node/workspaces.js";
 import { packagedRemoteRuntimeCatalogSource } from "../../platform/remote/electron-main/packagedRemoteRuntimeCatalog.js";
@@ -168,9 +168,6 @@ interface PersistentServices {
 	readonly userKeyboardLayout: UserKeyboardLayoutMainService;
 }
 
-// Connection failures and HTTP error responses can occur while the dev server restarts.
-const developmentLoadErrors = new Set([-100, -101, -102, -103, -106, -324, -379]);
-
 interface RendererEntry {
 	readonly file: string;
 	readonly url: string;
@@ -216,7 +213,6 @@ const AGENTS_WINDOW_KEY = 'agents';
 /** Owns the Electron application's persistent services, Workbench windows, IPC, and shutdown. */
 export class AshApplication extends Disposable {
 	private readonly rendererRoot: string;
-	private readonly rendererLoads = new WeakMap<BrowserWindow, Promise<void>>();
 	private readonly chatGPTChannels = new Map<string, IServerChannel<string>>();
 	private readonly appServerStartupMode: AppServerStartupMode;
 	private readonly disposableTracker: DisposableTracker | undefined;
@@ -260,7 +256,7 @@ export class AshApplication extends Disposable {
 			}
 			const record = reuseWindow ? this.workbenchWindowData.get(reuseWindow.id) : undefined;
 			if (record) {
-				await this.windowsMainService.whenReady(record.window);
+				await this.windowsMainService.getWindowById(record.window.id)!.ready();
 			}
 			let workspace: IAnyWorkspaceIdentifier;
 			if (!configuration?.workspace && configuration && configuration.files.length > 0) {
@@ -393,6 +389,8 @@ export class AshApplication extends Disposable {
 			this.cancelQuit();
 			this.windowsMainService.failManagedWindowClose(window, 'Window close was vetoed');
 		}, this.stateService, app.getVersion()));
+		this.windowServices.registerInstance(IDialogMainService, this.dialogs);
+		this.windowServices.registerInstance(ILifecycleMainService, this.lifecycleMainService);
 		this.windowSessionStateHandler = new WindowSessionStateHandler(this.stateService, () => this.getOpenWindowSessions(), isWindowSessionEntry);
 
 		app.on('second-instance', this.onSecondInstance);
@@ -540,6 +538,7 @@ export class AshApplication extends Disposable {
 		const catalog = productLanguagePackCatalogs.find(catalog => catalog.locale === localeValue) ?? productLanguagePackCatalogs.find(catalog => catalog.locale === 'en')!;
 		throwIfCancelled(token);
 		this.activeLanguagePack = catalog;
+		setNlsMessages(catalog.locale, catalog.bundles);
 		const storage = this.storageMainService = this._register(new StorageMainService(join(app.getPath('userData'), 'workbench-state.json')));
 		await storage.initialize();
 		const invitationStorage = { scope: StorageScope.APPLICATION, id: 'application' };
@@ -591,6 +590,7 @@ export class AshApplication extends Disposable {
 			this.configureWindowsTaskbar();
 		}
 		this.themeMainService = this._register(new ThemeMainService(nativeTheme, this.services.state));
+		this.windowServices.registerInstance(IThemeMainService, this.themeMainService);
 		this.mainProcessIpcServer.registerChannel('colorScheme', colorSchemeChannel(this.themeMainService));
 		this.mainProcessIpcServer.registerChannel('powerMonitor', powerMonitorChannel(powerMonitor));
 		this.mainProcessIpcServer.registerChannel('checksum', checksumChannel(app.getAppPath(), app.isPackaged, new ChecksumService()));
@@ -698,11 +698,11 @@ export class AshApplication extends Disposable {
 		if (active) {
 			if (active.kind === 'workbench') {
 				const window = this.windowsMainService.findWorkspace(active.workspace);
-				if (window) focusWindow(window);
+				if (window) this.windowsMainService.getWindowById(window.id)?.focus();
 			}
 			else {
 				const window = this.windowsMainService.managedWindow(AGENTS_WINDOW_KEY);
-				if (window) focusWindow(window);
+				if (window) this.windowsMainService.getWindowById(window.id)?.focus();
 			}
 		}
 	}
@@ -863,7 +863,7 @@ export class AshApplication extends Disposable {
 				if (!window) {
 					return false;
 				}
-				focusWindow(window);
+				this.windowsMainService.getWindowById(window.id)?.focus();
 				arguments_.push('--reuse-window');
 			}
 			url.searchParams.delete('windowId');
@@ -881,7 +881,7 @@ export class AshApplication extends Disposable {
 			return false;
 		}
 		// Renderer readiness guarantees that its URL handler channel has been registered.
-		await this.windowsMainService.whenReady(window);
+		await this.windowsMainService.getWindowById(window.id)!.ready();
 		const handler = new URLHandlerChannelClient(this.mainProcessIpcServer.getChannel('urlHandler', client => client.ctx === `window:${window.id}`));
 		return handler.handleURL(uri, options);
 	}
@@ -971,7 +971,7 @@ export class AshApplication extends Disposable {
 	handleActivate(): void {
 		const active = this.windowsMainService.getLastActiveWindow();
 		if (active) {
-			focusWindow(active);
+			this.windowsMainService.getWindowById(active.id)?.focus();
 			return;
 		}
 		const workspaces = this.workspaces;
@@ -1073,7 +1073,7 @@ export class AshApplication extends Disposable {
 		const existingWindow = this.windowsMainService.findWorkspace(workspace);
 		const existing = existingWindow ? this.workbenchWindowData.get(existingWindow.id) : undefined;
 		if (existing && !forceNewWindow) {
-			focusWindow(existing.window);
+			this.windowsMainService.getWindowById(existing.window.id)?.focus();
 			return existing;
 		}
 		const resources = new DisposableStore();
@@ -1122,6 +1122,7 @@ export class AshApplication extends Disposable {
 				validate: value => { const catalog = parseLanguagePackCatalog(value); if (!catalog) { throw new TypeError('Invalid display language resource'); } return catalog; },
 				invoke: catalog => {
 					this.activeLanguagePack = catalog as LanguagePackCatalog;
+					setNlsMessages(this.activeLanguagePack.locale, this.activeLanguagePack.bundles);
 					this.localizationChanged.fire();
 					if (process.platform === 'win32') { this.configureWindowsTaskbar(); }
 				},
@@ -1289,7 +1290,6 @@ export class AshApplication extends Disposable {
 		const windowHost = this.windowsMainService.createWindow(options => new BrowserWindow(options), {
 			workspace: workspaceContext.getWorkspace(),
 			state: windowState,
-			backgroundColor: this.themeMainService.getBackgroundColor(`workbench:${workspaceContext.getWorkspace().id}`),
 			titleBarStyle,
 			webPreferences: this.createSandboxWebPreferences(),
 			title: AshWorkbenchName,
@@ -1359,7 +1359,7 @@ export class AshApplication extends Disposable {
 		let loadingWorkspace = false;
 		windowDisposables.add(workspaceContext.onDidChangeWorkspace(({ resolvedWorkspace }) => {
 			if (!loadingWorkspace && !window.isDestroyed()) {
-				window.webContents.send(WORKSPACE_CONTEXT_CHANGED_CHANNEL, serializeWorkspace(resolvedWorkspace));
+				windowHost.send(WORKSPACE_CONTEXT_CHANGED_CHANNEL, serializeWorkspace(resolvedWorkspace));
 			}
 		}));
 		const workspaceTransitions = windowDisposables.add(new WorkspaceTransitionMainService({
@@ -1373,7 +1373,7 @@ export class AshApplication extends Disposable {
 			connections: record.remoteConnections,
 			tunnels: remotePortForwardingService,
 			host: electronRemoteWindowMainHost(window, this.dialogs),
-			prepareForRuntimeReplacement: () => window.webContents.send("ash:terminal:prepareReplacement"),
+			prepareForRuntimeReplacement: () => windowHost.send("ash:terminal:prepareReplacement"),
 		}));
 		const performTransitionToFolder = async (folderPath: string, selectionRequired: boolean): Promise<void> => {
 			const currentWorkspace = workspaceContext.getWorkspace();
@@ -1387,7 +1387,7 @@ export class AshApplication extends Disposable {
 				return;
 			}
 			await record.windowsStateHandler.saveWindowState(window);
-			window.webContents.send("ash:terminal:prepareReplacement");
+			windowHost.send("ash:terminal:prepareReplacement");
 			const transition = isRemoteWorkspaceIdentifier(nextWorkspace)
 				? await workspaceTransitions.transitionToWorkspace({ workspace: nextWorkspace, root: folderPath }, grant)
 				: await workspaceTransitions.transitionToFolder(folderPath, grant);
@@ -1425,15 +1425,15 @@ export class AshApplication extends Disposable {
 				}
 				const load = async (): Promise<void> => {
 					try {
-						await this.loadRendererEntry(window, this.resolveRendererEntry('workbench'));
-						await this.windowsMainService.whenReady(window);
+						await windowHost.load(this.resolveRendererEntry('workbench'));
+						await windowHost.ready();
 					} finally {
 						loadingWorkspace = false;
 					}
 				};
 				try {
 					await record.windowsStateHandler.saveWindowState(window);
-					window.webContents.send('ash:terminal:prepareReplacement');
+					windowHost.send('ash:terminal:prepareReplacement');
 					if (this.appServerStartupMode !== 'disabled') {
 						await reconnectAppServerWorkspace(supervisor, workspaceHost, root, grant, workspace.id, workspaceContext.getWorkspace().id);
 					}
@@ -1463,19 +1463,16 @@ export class AshApplication extends Disposable {
 			validateFolders: folders => workspaceHost.validateFolders(folders),
 		}, error => {
 			this.logService.error('workspaces', String(error));
-			if (!window.isDestroyed()) window.webContents.send(WORKSPACE_EDIT_ERROR_CHANNEL, error instanceof Error ? error.message : String(error));
+			if (!window.isDestroyed()) windowHost.send(WORKSPACE_EDIT_ERROR_CHANNEL, error instanceof Error ? error.message : String(error));
 		}, operation => {
 			const result = workspaceOpenQueue.then(operation);
 			workspaceOpenQueue = result.then(() => undefined, () => undefined);
 			return result;
 		},
-			() => { if (!window.isDestroyed()) window.webContents.send(WORKSPACE_CONFIGURATION_CHANGED_CHANNEL); },
+			() => { if (!window.isDestroyed()) windowHost.send(WORKSPACE_CONFIGURATION_CHANGED_CHANNEL); },
 		));
 
 		windowDisposables.add(toDisposable(() => this.dialogs.cancelWindow(window)));
-		const windowControlsOverlay = new WindowControlsOverlay(colors => {
-			if (titleBarStyle === 'custom' && (process.platform === 'win32' || process.platform === 'linux')) window.setTitleBarOverlay(colors);
-		});
 		const ipcRoutes = [
 			...this.mainProcessIpcRoutes(window),
 			...workspaceHost.routes(),
@@ -1498,7 +1495,7 @@ export class AshApplication extends Disposable {
 			...windowSplashIpcRoutes(this.themeMainService, () => `workbench:${workspaceContext.getWorkspace().id}`, color => window.setBackgroundColor(color)),
 			...nativeHostIpcRoutes({
 				getTitleBarStyle: () => titleBarStyle,
-				...this.windowHostOperations(window, windowControlsOverlay, windowDisposables, titleBarStyle),
+				...this.windowHostOperations(window, windowDisposables),
 				openWindow: async options => {
 					const workspace = { ...createEmptyWorkspaceIdentifier(), ...(options.remoteAuthority ? { remoteAuthority: options.remoteAuthority } : {}) };
 					if (!options.forceReuseWindow) {
@@ -1542,10 +1539,9 @@ export class AshApplication extends Disposable {
 			ipcRoutes,
 		));
 		windowDisposables.add(this.mainProcessIpcServer.registerClient(window.webContents, `window:${window.id}`, new Set([normalizeEntryUrl(this.resolveRendererEntry('workbench').url)])));
-		windowDisposables.add(this.windowsMainService.trackZoomLevel(window));
 		windowDisposables.add(this.lifecycleMainService.registerWindow(window));
 		try {
-			await this.loadRendererEntry(window, rendererEntry);
+			await windowHost.load(rendererEntry);
 			return record;
 		} catch (error) {
 			windowHost.dispose();
@@ -1563,17 +1559,15 @@ export class AshApplication extends Disposable {
 			});
 	}
 
-	private windowHostOperations(window: BrowserWindow, controls: WindowControlsOverlay, windowDisposables: DisposableStore, titleBarStyle: TitleBarStyleConfiguration): Omit<INativeHostMainService, 'getTitleBarStyle' | 'openWorkspace' | 'openWindow' | 'openAgentsWindow' | 'syncSystemWideKeybindings'> {
+	private windowHostOperations(window: BrowserWindow, windowDisposables: DisposableStore): Omit<INativeHostMainService, 'getTitleBarStyle' | 'openWorkspace' | 'openWindow' | 'openAgentsWindow' | 'syncSystemWideKeybindings'> {
 		const invitationContents = window.webContents;
 		const resetInvitation = (): void => this.agentsWindowInvitations.resetWindow(window.id);
-		const onInvitationNavigation = (_event: ElectronEvent, _url: string, inPlace: boolean, mainFrame: boolean): void => { if (mainFrame && !inPlace) resetInvitation(); };
-		invitationContents.on('did-start-navigation', onInvitationNavigation);
+		windowDisposables.add(this.windowsMainService.getWindowById(window.id)!.onWillLoad(resetInvitation));
 		invitationContents.on('render-process-gone', resetInvitation);
 		windowDisposables.add(this.agentsWindowInvitations.onDidChange(state => {
-			if (!window.isDestroyed()) invitationContents.send(AGENT_HOST_EDITOR_STATE_CHANGED_CHANNEL, state);
+			this.windowsMainService.getWindowById(window.id)?.send(AGENT_HOST_EDITOR_STATE_CHANGED_CHANNEL, state);
 		}));
 		windowDisposables.add(toDisposable(() => {
-			invitationContents.off('did-start-navigation', onInvitationNavigation);
 			invitationContents.off('render-process-gone', resetInvitation);
 			resetInvitation();
 		}));
@@ -1604,17 +1598,10 @@ export class AshApplication extends Disposable {
 				shell.showItemInFolder(path);
 			},
 			isAccessibilitySupportEnabled: () => app.isAccessibilitySupportEnabled(),
-			setWindowTheme: theme => {
-				controls.setTheme(theme);
-				const overlay = resolveWindowTitleBarOptions(titleBarStyle, process.platform, theme.backgroundColor).titleBarOverlay;
-				if (typeof overlay === 'object') {
-					// Share the palette with same-document editors; modal dimming stays with its own window.
-					for (const auxiliary of this.auxiliaryWindowsMainService.getWindows()) {
-						if (auxiliary.parentId === window.id) auxiliary.win.setTitleBarOverlay({ ...overlay, symbolColor: theme.symbolColor });
-					}
-				}
-			},
-			setWindowDimmed: dimmed => controls.setDimmed(dimmed),
+			setWindowTheme: theme => this.windowsMainService.getWindowById(window.id)!.updateWindowControls({
+				backgroundColor: theme.backgroundColor, foregroundColor: theme.symbolColor, backdropColor: theme.backdropColor,
+			}),
+			setWindowDimmed: dimmed => this.windowsMainService.getWindowById(window.id)!.updateWindowControls({ dimmed }),
 			toggleDeveloperTools: () => window.webContents.toggleDevTools(),
 		};
 	}
@@ -1625,7 +1612,7 @@ export class AshApplication extends Disposable {
 		window.webContents.setWindowOpenHandler(details => {
 			if (details.url !== 'about:blank') {
 				// The owning workbench selects URL rules; auxiliary windows share that owner.
-				try { openerWindow.webContents.send(WINDOW_OPEN_EXTERNAL_URI_CHANNEL, normalizeExternalUrl(details.url)); }
+				try { this.windowsMainService.getWindowById(openerWindow.id)?.send(WINDOW_OPEN_EXTERNAL_URI_CHANNEL, normalizeExternalUrl(details.url)); }
 				catch (error) { console.error('Could not request external link opening', error); }
 				return { action: 'deny' };
 			}
@@ -1643,38 +1630,18 @@ export class AshApplication extends Disposable {
 		};
 		// BrowserWindow releases its webContents getter on close; cleanup owns the original emitter.
 		const webContents = window.webContents;
-		let reloading = false;
-		const prepareReload = (): void => {
-			if (reloading) return;
-			reloading = true;
-			// Keep the prevented navigation canceled until every renderer participant
-			// has saved its handoff. Main handles only the window lifetime, never PTY data.
-			void this.lifecycleMainService.unload(window, 'reload').then(accepted => {
-				if (accepted && !window.isDestroyed()) webContents.reload();
-			}).catch(error => this.logService.error('window', 'Could not prepare window reload', error)).finally(() => { reloading = false; });
-		};
-		webContents.on('will-prevent-unload', prepareReload);
-		windowDisposables.add(toDisposable(() => webContents.off('will-prevent-unload', prepareReload)));
 		// Reloads replace the product document; link destinations belong to the Browser views.
 		const preventNavigation = (event: ElectronEvent, url: string): void => {
 			event.preventDefault();
-			if (url === webContents.getURL()) prepareReload();
+			if (url === webContents.getURL()) {
+				void this.windowsMainService.getWindowById(window.id)?.reload().catch(error => this.logService.error('window', 'Could not prepare window reload', error));
+			}
 		};
 		webContents.on('will-navigate', preventNavigation);
 		windowDisposables.add(toDisposable(() => webContents.off('will-navigate', preventNavigation)));
 		webContents.on('did-create-window', onDidCreateWindow);
 		windowDisposables.add(toDisposable(() => webContents.off('did-create-window', onDidCreateWindow)));
-		const onDidFailLoad = (_event: ElectronEvent, code: number, description: string, url: string, mainFrame: boolean): void => {
-			if (!mainFrame || code === -3) return;
-			this.logService.error('window', 'Renderer navigation failed', { windowId: window.id, code, description, url });
-			// An error document has lost Vite's reconnect script. Recovery must live
-			// in Main and may reload only one of this host's exact development entries.
-			if (app.isPackaged || !process.env.ASH_RENDERER_URL || !developmentLoadErrors.has(code)) return;
-			const entry = (['workbench', 'sessions'] as const).map(kind => this.resolveRendererEntry(kind)).find(entry => entry.url === url);
-			if (entry) void this.loadRendererEntry(window, entry).catch(error => this.logService.error('window', 'Renderer recovery failed', error));
-		};
-		webContents.on('did-fail-load', onDidFailLoad);
-		windowDisposables.add(toDisposable(() => webContents.off('did-fail-load', onDidFailLoad)));
+
 	}
 
 	private getBrowserHostChannel(context: string): IServerChannel<string> {
@@ -1789,7 +1756,8 @@ export class AshApplication extends Disposable {
 			{
 				title: `${AshWorkbenchName} Sessions`,
 				titleBarStyle,
-				backgroundColor: this.themeMainService.getBackgroundColor(`sessions:${session.workspaceContext.getWorkspace().id}`),
+				workspace: session.workspaceContext.getWorkspace(),
+				isSessionsWindow: true,
 				icon: this.windowIconPath,
 				state: this.windowsMainService.getNewWindowState(sessionsWindowState, this.windowConfigurationValues(), this.lifecycleMainService.wasRestarted),
 				webPreferences: this.createSandboxWebPreferences(),
@@ -1809,19 +1777,12 @@ export class AshApplication extends Disposable {
 						// Contribution leases belong to the live window and handle navigation themselves.
 						this.globalKeybindings.updateKeybindings(window.id, []);
 					};
-					const onNavigation = (_event: unknown, _url: string, inPlace: boolean, mainFrame: boolean): void => {
-						if (mainFrame && !inPlace) clearInterruptedKeybindings();
-					};
-					window.webContents.on('did-start-navigation', onNavigation);
+					windowDisposables.add(this.windowsMainService.getWindowById(window.id)!.onWillLoad(clearInterruptedKeybindings));
 					window.webContents.on('render-process-gone', clearInterruptedKeybindings);
 					windowDisposables.add(toDisposable(() => {
 						if (window.isDestroyed()) return;
-						window.webContents.removeListener('did-start-navigation', onNavigation);
 						window.webContents.removeListener('render-process-gone', clearInterruptedKeybindings);
 					}));
-					const windowControlsOverlay = new WindowControlsOverlay(colors => {
-						if (titleBarStyle === 'custom' && (process.platform === 'win32' || process.platform === 'linux')) window.setTitleBarOverlay(colors);
-					});
 					const runtimeResources = new DisposableStore();
 					let sessionsRelay: AppServerConnectionRelay;
 					try {
@@ -1870,7 +1831,7 @@ export class AshApplication extends Disposable {
 						connections: session.remoteConnections,
 						tunnels: remotePortForwardingService,
 						host: electronRemoteWindowMainHost(window, this.dialogs),
-						prepareForRuntimeReplacement: () => window.webContents.send("ash:terminal:prepareReplacement"),
+						prepareForRuntimeReplacement: () => this.windowsMainService.getWindowById(window.id)?.send("ash:terminal:prepareReplacement"),
 					}));
 					const ipcRoutes = [
 						...this.mainProcessIpcRoutes(window),
@@ -1887,7 +1848,7 @@ export class AshApplication extends Disposable {
 						...windowSplashIpcRoutes(this.themeMainService, () => `sessions:${session.workspaceContext.getWorkspace().id}`, color => window.setBackgroundColor(color)),
 						...nativeHostIpcRoutes({
 							getTitleBarStyle: () => titleBarStyle,
-							...this.windowHostOperations(window, windowControlsOverlay, windowDisposables, titleBarStyle),
+							...this.windowHostOperations(window, windowDisposables),
 							openWindow: async options => {
 								const workspace = { ...createEmptyWorkspaceIdentifier(), ...(options.remoteAuthority ? { remoteAuthority: options.remoteAuthority } : {}) };
 								// An empty Workbench requires its own window kind even when the requesting Agents window asks for reuse.
@@ -1915,7 +1876,7 @@ export class AshApplication extends Disposable {
 								// Keep one window alive when Agents is the only restored window.
 								const opened = await this.openWorkspace(session.workspaceContext.getWorkspace(), workspaces);
 								await this.windowsMainService.closeManagedWindow(AGENTS_WINDOW_KEY);
-								if (opened) focusWindow(opened.window);
+								if (opened) this.windowsMainService.getWindowById(opened.window.id)?.focus();
 							},
 						},
 						windowCloseResponseIpcRoute(this.lifecycleMainService, window),
@@ -1933,15 +1894,14 @@ export class AshApplication extends Disposable {
 						ipcRoutes,
 					));
 					windowDisposables.add(this.mainProcessIpcServer.registerClient(window.webContents, `window:${window.id}`, new Set([normalizeEntryUrl(this.resolveRendererEntry('sessions').url)])));
-					windowDisposables.add(this.windowsMainService.trackZoomLevel(window));
-					windowDisposables.add(this.windowsMainService.trackFullscreen(window));
 					windowDisposables.add(this.lifecycleMainService.registerWindow(window));
-					windowDisposables.add(session.workspaceContext.onDidChangeWorkspace(({ resolvedWorkspace }) => {
+					windowDisposables.add(session.workspaceContext.onDidChangeWorkspace(({ workspace, resolvedWorkspace }) => {
 						if (!window.isDestroyed()) {
-							window.webContents.send(WORKSPACE_CONTEXT_CHANGED_CHANNEL, serializeWorkspace(resolvedWorkspace));
+							this.windowsMainService.updateWorkspace(window.id, workspace);
+							this.windowsMainService.getWindowById(window.id)?.send(WORKSPACE_CONTEXT_CHANGED_CHANNEL, serializeWorkspace(resolvedWorkspace));
 						}
 					}));
-					await this.loadRendererEntry(window, sessionsEntry);
+					await this.windowsMainService.getWindowById(window.id)!.load(sessionsEntry);
 				},
 			},
 			() => {
@@ -1956,7 +1916,7 @@ export class AshApplication extends Disposable {
 			const completed = this.windowsMainService.enqueueManagedWindowHandoff(AGENTS_WINDOW_KEY, handoff);
 			const window = this.windowsMainService.managedWindow(AGENTS_WINDOW_KEY);
 			if (!window) throw new Error('Agents Window is unavailable for handoff');
-			window.webContents.send(AGENTS_WINDOW_HANDOFF_AVAILABLE_CHANNEL);
+			this.windowsMainService.getWindowById(window.id)?.send(AGENTS_WINDOW_HANDOFF_AVAILABLE_CHANNEL);
 			await completed;
 		}
 	}
@@ -1991,60 +1951,6 @@ export class AshApplication extends Disposable {
 			url: baseUrl,
 			useDevelopmentUrl,
 		};
-	}
-
-	private loadRendererEntry(window: BrowserWindow, entry: RendererEntry): Promise<void> {
-		if (!entry.useDevelopmentUrl) {
-			return new URL(entry.url).search.length > 0 ? window.loadURL(entry.url) : window.loadFile(entry.file);
-		}
-		const pending = this.rendererLoads.get(window);
-		if (pending) return pending;
-		// Publish the operation before loadURL can emit did-fail-load, so an
-		// initial failure and a later HMR failure share one recovery operation.
-		const operation = Promise.resolve().then(async () => {
-			const closed = new AbortController();
-			const onClosed = (): void => closed.abort();
-			window.once('closed', onClosed);
-			let waiting = false;
-			try {
-				while (!window.isDestroyed()) {
-					// Gate both startup and recovery on the actual HTML response. An HMR
-					// socket can be listening while the page still returns an HTTP error.
-					let ready = false;
-					let reason: string | number | undefined;
-					try {
-						const response = await fetch(entry.url, { redirect: 'error', signal: AbortSignal.any([closed.signal, AbortSignal.timeout(2_000)]) });
-						ready = response.ok;
-						reason = response.status;
-						await response.body?.cancel();
-					} catch (error) {
-						reason = error instanceof Error ? `${error.message}: ${String(error.cause)}` : String(error);
-					}
-					if (!ready) {
-						if (!waiting) this.logService.warn('window', 'Waiting for development renderer', { windowId: window.id, url: entry.url, reason });
-						waiting = true;
-						await delay(500, undefined, { signal: closed.signal });
-						continue;
-					}
-					try {
-						await window.loadURL(entry.url);
-						return;
-					} catch (error) {
-						if (closed.signal.aborted) return;
-						if (!isRecord(error) || typeof error.errno !== 'number' || !developmentLoadErrors.has(error.errno)) throw error;
-						await delay(500, undefined, { signal: closed.signal });
-					}
-				}
-			} catch (error) {
-				if (!closed.signal.aborted) throw error;
-			} finally {
-				window.off('closed', onClosed);
-			}
-		});
-		this.rendererLoads.set(window, operation);
-		const complete = (): void => { this.rendererLoads.delete(window); };
-		void operation.then(complete, complete);
-		return operation;
 	}
 
 	private createSandboxWebPreferences() {
@@ -2178,10 +2084,10 @@ export class AshApplication extends Disposable {
 		enabled: boolean,
 	): void => {
 		for (const record of this.workbenchWindowData.values()) {
-			record.window.webContents.send(NATIVE_HOST_ACCESSIBILITY_SUPPORT_CHANGED_CHANNEL, enabled);
+			this.windowsMainService.getWindowById(record.window.id)?.send(NATIVE_HOST_ACCESSIBILITY_SUPPORT_CHANGED_CHANNEL, enabled);
 		}
 		for (const window of this.windowsMainService.managedWindowValues()) {
-			window.webContents.send(NATIVE_HOST_ACCESSIBILITY_SUPPORT_CHANGED_CHANNEL, enabled);
+			this.windowsMainService.getWindowById(window.id)?.send(NATIVE_HOST_ACCESSIBILITY_SUPPORT_CHANGED_CHANNEL, enabled);
 		}
 	};
 

@@ -1,5 +1,11 @@
 {
   "ash": {
+    "window.rendererGone": "窗口意外关闭。",
+    "window.unresponsive": "窗口没有响应。",
+    "window.recoveryDetail": "重新打开窗口以继续，或关闭窗口。",
+    "window.reopen": "重新打开",
+    "window.close": "关闭",
+    "window.keepWaiting": "继续等待",
     "keybindings.openJsonEditor": "打开键盘快捷方式 (JSON)",
     "keybindings.rowLabel": "{0}，{1}，{2}，{3}",
     "keybindings.always": "始终生效",

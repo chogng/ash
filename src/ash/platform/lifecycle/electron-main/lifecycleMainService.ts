@@ -4,6 +4,7 @@ import { CancellationTokenSource, throwIfCancelled, type CancellationToken } fro
 import { isCancellationError } from '../../../base/common/errors.js';
 import type { IpcRoute } from '../../ipc/electron-main/trustedIpcRouter.js';
 import type { IStateService } from '../../state/node/state.js';
+import { createDecorator } from '../../instantiation/common/instantiation.js';
 import { WINDOW_CLOSE_RESPONSE_CHANNEL, WINDOW_PREPARE_CLOSE_CHANNEL, WINDOW_PREPARE_LOAD_CHANNEL, WINDOW_PREPARE_RELOAD_CHANNEL, validateWindowCloseResponse, type WindowCloseResponse } from '../../window/common/window.js';
 
 interface WindowCloseState {
@@ -26,8 +27,21 @@ interface ILifecycleWindow {
 	};
 }
 
+export interface ILifecycleMainService<TWindow = Electron.BrowserWindow> {
+	readonly wasRestarted: boolean;
+	readonly isStarting: boolean;
+	startup(ready: Promise<void>, initialize: (token: CancellationToken) => Promise<void>): Promise<void>;
+	stopStartup(): Promise<void>;
+	prepareUpdateRestart(version: string): Promise<void>;
+	registerWindow(window: TWindow): IDisposable;
+	unload(window: TWindow, reason?: 'load' | 'reload'): Promise<boolean>;
+	respondToClose(window: TWindow, response: WindowCloseResponse): void;
+}
+
+export const ILifecycleMainService = createDecorator<ILifecycleMainService>('lifecycleMainService');
+
 /** Owns startup cancellation and the close handshake for Workbench and Sessions windows. */
-export class LifecycleMainService<TWindow extends ILifecycleWindow> extends Disposable {
+export class LifecycleMainService<TWindow extends ILifecycleWindow> extends Disposable implements ILifecycleMainService<TWindow> {
 	private static readonly updateRestartStateKey = 'updateRestartVersion';
 	private readonly windowRegistrations = this._register(new DisposableMap<TWindow, IDisposable>());
 	private readonly closeStates = new Map<TWindow, WindowCloseState>();

@@ -70,19 +70,21 @@ export async function launchElectronApplication(options: ElectronLaunchOptions):
 				// End the renderer before stopping its daemon, so it cannot reconnect.
 				if (kind === 'destroy' && electronProcess.exitCode === null && electronProcess.signalCode === null) {
 					try {
-						await application.evaluate(({ BrowserWindow, app }) => {
-							for (const window of BrowserWindow.getAllWindows()) window.destroy();
-							// Fixture destruction must also bypass app-level quit vetoes and
-							// state-save participants. quit() exercises that product handshake.
+						await application.evaluate(({ app }) => {
+							// Let Electron own forced window teardown. Destroying windows first
+							// can reenter Cocoa key-window changes during pending close events.
+							// exit() bypasses vetoes; quit() exercises the product handshake.
 							app.exit(0);
 						});
 					} catch (error) {
-						// Closing the last window can exit Main before its inspector sends the reply.
+						// Forced exit can close Main before its inspector sends the reply.
 						// Accept a confirmed clean exit or the fixture's deliberate force
 						// termination, never an unrelated process crash.
 						if (!(error instanceof Error) || !error.message.includes('Target page, context or browser has been closed')) throw error;
 						await exited;
-						if (electronProcess.exitCode !== 0 && !termination) throw error;
+						if (electronProcess.exitCode !== 0 && !termination) {
+							throw new Error(`Fixture destruction observed an unexpected Main exit: code=${electronProcess.exitCode}; signal=${electronProcess.signalCode}`, { cause: error });
+						}
 					}
 				}
 			} finally {

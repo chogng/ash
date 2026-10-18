@@ -136,9 +136,10 @@ export class WindowControlsOverlay {
 
 	constructor(private readonly apply: (colors: { color: string; symbolColor: string; height: number; }) => void) { }
 
-	setTheme(theme: INativeWindowTheme): void {
-		this.theme = theme;
+	setTheme(theme: Partial<INativeWindowTheme>): INativeWindowTheme {
+		this.theme = { backgroundColor: '#000000', symbolColor: '#ffffff', backdropColor: '#00000000', ...this.theme, ...theme };
 		this.update();
+		return this.theme;
 	}
 
 	setDimmed(dimmed: boolean): void {

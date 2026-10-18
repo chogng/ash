@@ -1,3 +1,6 @@
+import { ISecretStorageService } from '../../../../../platform/secrets/common/secrets.js';
+import { IStorageService, StorageScope, StorageTarget } from '../../../../../platform/storage/common/storage.js';
+import { TerminalStorageKeys } from '../../common/terminalStorageKeys.js';
 import { TerminalLocation } from '../../../../../platform/terminal/common/terminal.js';
 import { registerTestTerminalCreationServices } from '../../../../test/browser/workbenchTestServices.js';
 import { ShellEnvDetectionCapability } from '../../../../../platform/terminal/common/capabilities/shellEnvDetectionCapability.js';
@@ -51,6 +54,24 @@ test('the interrupt command reaches the Rust process port and preserves the term
 	assert.deepEqual(processes.closeCalls, []);
 	await assert.rejects(instance.sendSignal('SIGTERM'), /Only SIGINT/);
 	assert.equal(processes.signalCalls.length, 1);
+});
+
+test('TerminalService restores an empty reload checkpoint without a process attachment capability', async () => {
+	const processes = new TestTerminalProcessService([]);
+	using workspace = new TestWorkspaceService({ id: 'empty-reload' });
+	using services = terminalServices(processes, workspace);
+	const stateKey = 'terminal.reload.12345678-1234-1234-1234-123456789abc';
+	services.get(IStorageService).store(stateKey, JSON.stringify({
+		version: 1, workspaceId: 'empty-reload', instances: [], groups: [],
+	}), StorageScope.WORKSPACE, StorageTarget.MACHINE);
+	await services.get(ISecretStorageService).set(TerminalStorageKeys.Reload, JSON.stringify({
+		stateKey, expiresAt: Date.now() + 60_000, leases: [],
+	}));
+	assert.equal((processes as ITerminalProcessService).attach, undefined);
+	const terminals = services.get(ITerminalService);
+	await terminals.whenConnected;
+	assert.deepEqual(terminals.instances, []);
+	assert.equal(processes.createCalls.length, 0);
 });
 
 test("TerminalService keeps empty windows off the process API and enables a folder after transition", async () => {

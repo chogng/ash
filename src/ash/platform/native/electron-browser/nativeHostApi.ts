@@ -63,7 +63,7 @@ export function createNativeHostApi(mainProcessService: IMainProcessService): IN
 		getOSColorScheme: async () => validateColorScheme(await colors.call<unknown>('getOSColorScheme')),
 		onDidChangeColorScheme: listener => colors.listen<unknown>('onDidChangeColorScheme')(value => listener(validateColorScheme(value))),
 		showMessageBox,
-		listWindows: () => invoke<readonly IWorkbenchWindowInfo[]>(WINDOW_OPERATION_CHANNEL, { kind: 'list' }),
+		listWindows: windowName => invoke<readonly IWorkbenchWindowInfo[]>(WINDOW_OPERATION_CHANNEL, { kind: 'list', ...(windowName === undefined ? {} : { windowName }) }),
 		focusWindowById: windowId => invoke<void>(WINDOW_OPERATION_CHANNEL, { kind: 'focus', windowId }),
 		focusWindow: windowName => invoke<void>(WINDOW_OPERATION_CHANNEL, { kind: 'focusSelf', ...(windowName === undefined ? {} : { windowName }) }),
 		closeWindow: windowName => invoke<void>(WINDOW_OPERATION_CHANNEL, { kind: 'close', ...(windowName === undefined ? {} : { windowName }) }),

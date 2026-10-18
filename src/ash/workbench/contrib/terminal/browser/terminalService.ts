@@ -196,6 +196,8 @@ export class TerminalService extends Disposable implements ITerminalService {
 		for (const snapshot of state.instances) {
 			if (parseTerminalUri(URI.parse(snapshot.resource)).instanceId !== snapshot.instanceId || !this.workspaceContext.getWorkspace().folders.some(folder => folder.id === snapshot.dirId)) throw new TypeError('Invalid terminal checkpoint identity');
 		}
+		// An empty window has no process to reattach, including hosts without a PTY backend.
+		if (state.instances.length === 0) return;
 		if (!this.processService.attach) throw new Error('Terminal attachment is unavailable');
 		const screens: Promise<unknown>[] = [];
 		for (const snapshot of state.instances) {

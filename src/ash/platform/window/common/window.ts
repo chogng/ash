@@ -292,10 +292,12 @@ export interface IWorkbenchWindowInfo {
 	readonly id: number;
 	readonly title: string;
 	readonly focused: boolean;
+	/** The window selected by the caller's trusted window context, independent of OS focus. */
+	readonly current: boolean;
 }
 
 export type WindowOperation =
-	| { readonly kind: 'list'; }
+	| { readonly kind: 'list'; readonly windowName?: string; }
 	| { readonly kind: 'focus'; readonly windowId: number; }
 	| { readonly kind: 'focusSelf'; readonly windowName?: string; }
 	| { readonly kind: 'close'; readonly windowName?: string; }
@@ -316,13 +318,13 @@ export function validateWindowOperation(value: unknown): WindowOperation {
 	const keys = Object.keys(operation).sort().join(',');
 	const hasAuxiliaryWindowName = typeof operation.windowName === 'string' && /^ash-auxiliary-[0-9a-f-]{36}$/.test(operation.windowName);
 	switch (operation.kind) {
-		case 'list':
 		case 'newTab':
 		case 'closeOthers':
 		case 'getZoomFactor':
 		case 'getFullscreen':
 			if (keys === 'kind') return operation as WindowOperation;
 			break;
+		case 'list':
 		case 'focusSelf':
 		case 'close':
 		case 'getZoom':
