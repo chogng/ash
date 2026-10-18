@@ -1,5 +1,6 @@
-import { scm, editors } from 'ash';
-import { commands, workspace, Uri, EventEmitter } from 'vscode';
+import { ash, commands, workspace, Uri, EventEmitter } from 'vscode';
+
+const { scm, editors } = ash;
 
 export function activate(context) {
 	scm.initialize();

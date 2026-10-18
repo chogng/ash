@@ -450,6 +450,10 @@ fn javascript_entry_uses_sdk_without_requesting_execution_of_its_source_file() {
     assert!(parse(&unsupported).is_ok());
     for (capability, event) in [
         (
+            "sourceControl",
+            json!({"type": "onDemand", "capability": "sourceControl"}),
+        ),
+        (
             "taskProvider",
             json!({"type": "onTaskType", "taskType": "builder"}),
         ),

@@ -323,7 +323,7 @@ fn runtime_with_recipe(
                 output_events: Vec::new(),
                 registrations: Vec::new(),
             },
-            window_deployment: Some(deployment),
+            deployment: Some(deployment),
         },
     );
     runtime
@@ -532,7 +532,7 @@ fn lldb_rust_providers_keep_client_configuration_language_and_shutdown_separate(
         .inner
         .build_entry(None, &deployment, std::num::NonZeroU64::new(7).unwrap());
     assert!(
-        entry.window_deployment.is_some(),
+        entry.is_window_template(),
         "the production recipe must bind Rust Debug to a window"
     );
     runtime

@@ -1,0 +1,18 @@
+{
+	"schemaVersion": 1,
+	"id": "ash-test/scm-fixture",
+	"version": "1.0.0",
+	"displayName": "Independent SCM fixture",
+	"compatibility": { "ash": ">=0.1.0" },
+	"contributions": {
+		"editorExtensions": [{
+			"id": "scm",
+			"runtime": "javascript",
+			"entrypoint": "extension.js",
+			"runtimeApiVersion": 1,
+			"activationEvents": [{ "type": "startup" }],
+			"capabilities": ["command", "sourceControl"]
+		}]
+	},
+	"permissions": [{ "type": "directory", "access": "read" }]
+}

@@ -105,7 +105,7 @@ struct FleetState {
 impl FleetState {
     fn entry(&self, owner: u64, id: &str) -> Option<&RuntimeEntry> {
         let entry = self.entries.get(id)?;
-        if entry.window_deployment.is_some() {
+        if entry.is_window_template() {
             self.windows.get(&owner).and_then(|entries| entries.get(id))
         } else {
             Some(entry)
@@ -113,7 +113,7 @@ impl FleetState {
     }
 
     fn entry_mut(&mut self, owner: u64, id: &str) -> Option<&mut RuntimeEntry> {
-        if self.entries.get(id)?.window_deployment.is_some() {
+        if self.entries.get(id)?.is_window_template() {
             self.windows
                 .get_mut(&owner)
                 .and_then(|entries| entries.get_mut(id))
@@ -157,7 +157,17 @@ struct RuntimeEntry {
     failure: Option<ExtensionHostRuntimeFailure>,
     pending_activation: Option<source::ActivationPlan>,
     client_scope: EditorClientScope,
-    window_deployment: Option<source::EditorExtensionDeployment>,
+    // Base entries retain their launch facts for selective catalog reconciliation.
+    // Per-window instances borrow the base's identity and have no deployment recipe.
+    deployment: Option<source::EditorExtensionDeployment>,
+}
+
+impl RuntimeEntry {
+    fn is_window_template(&self) -> bool {
+        self.deployment
+            .as_ref()
+            .is_some_and(source::EditorExtensionDeployment::is_window_scoped)
+    }
 }
 
 pub(super) enum ExtensionHostReconcileMode {
@@ -505,7 +515,7 @@ impl ExtensionHostRuntime {
                         extension_id,
                         workspace_read,
                         credential_providers: entry
-                            .window_deployment
+                            .deployment
                             .as_ref()
                             .map(|deployment| deployment.credential_providers.clone())
                             .unwrap_or_default(),
@@ -1128,7 +1138,7 @@ impl RuntimeInner {
                 supervisor,
                 entry.workspace_read,
                 entry
-                    .window_deployment
+                    .deployment
                     .as_ref()
                     .map(|deployment| deployment.credential_providers.clone())
                     .unwrap_or_default(),
@@ -1146,7 +1156,12 @@ impl RuntimeInner {
         self.sessions
             .lock()
             .map_err(|_| ExtensionHostRuntimeError::Internal)?
-            .reserve(id.clone(), owner, request.incarnation)?;
+            .reserve(
+                id.clone(),
+                owner,
+                request.incarnation,
+                request.extension_id.clone(),
+            )?;
         let handle = match supervisor.begin_fenced_invoke(
             target,
             ExtensionInvocation {

@@ -344,7 +344,7 @@ Manifest 必须 strict-parse：
 和撤销生命周期，无需再声明一个独立启用的 `declarativeExtensions` 载体。一个插件包只有一个
 标准包根 manifest，因此只允许一个 JavaScript 标准入口。
 声明式 `declarativeExtensions` 仍只加载资源。`api` 不适用于 `hostRpc`。
-JS v1 允许 command、languageProvider、statusBar、taskProvider、debugAdapter 和 customTextEditor ceiling；
+JS v1 允许 command、sourceControl、languageProvider、statusBar、taskProvider、debugAdapter、customTextEditor 和 remoteAuthorityResolver ceiling；
 读取工作区还需要 `directory: read` 与当前目录读授权。`runtimeApiVersion` 仅接受数值 `1`；activation event 和 capability ceiling 都必须 non-empty、unique、bounded。v1 triggers 是
 `startup`、`onCommand`、`onLanguage`、`onDemand`、`onDebugType`、`onTaskType` 和
 `onTestProfile`。除 `startup` 外，trigger 不得请求 ceiling 中未声明的 capability。

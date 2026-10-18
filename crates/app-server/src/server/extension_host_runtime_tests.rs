@@ -313,14 +313,18 @@ fn normalized_extension_source_does_not_require_legacy_plugin_authority() {
 fn session_reservations_enforce_global_and_connection_quotas() {
     let mut sessions = InvocationSessionStore::new(2, 1);
 
-    sessions.reserve("one".into(), 7, 1).unwrap();
+    sessions
+        .reserve("one".into(), 7, 1, "test.extension".into())
+        .unwrap();
     assert!(matches!(
-        sessions.reserve("same-owner".into(), 7, 1),
+        sessions.reserve("same-owner".into(), 7, 1, "test.extension".into()),
         Err(ExtensionHostRuntimeError::QuotaExceeded)
     ));
-    sessions.reserve("two".into(), 8, 1).unwrap();
+    sessions
+        .reserve("two".into(), 8, 1, "test.extension".into())
+        .unwrap();
     assert!(matches!(
-        sessions.reserve("global".into(), 9, 1),
+        sessions.reserve("global".into(), 9, 1, "test.extension".into()),
         Err(ExtensionHostRuntimeError::QuotaExceeded)
     ));
 }
@@ -328,7 +332,9 @@ fn session_reservations_enforce_global_and_connection_quotas() {
 #[test]
 fn pending_invocation_identity_is_connection_owned() {
     let mut sessions = InvocationSessionStore::new(2, 2);
-    sessions.reserve("one".into(), 7, 1).unwrap();
+    sessions
+        .reserve("one".into(), 7, 1, "test.extension".into())
+        .unwrap();
 
     assert!(matches!(
         sessions.read(7, "one"),
@@ -341,9 +347,38 @@ fn pending_invocation_identity_is_connection_owned() {
 }
 
 #[test]
+fn retiring_git_preserves_another_extensions_pending_invocation_in_the_same_window() {
+    let mut sessions = InvocationSessionStore::new(2, 2);
+    sessions
+        .reserve("git".into(), 7, 1, "ash.git".into())
+        .unwrap();
+    sessions
+        .reserve("independent".into(), 7, 1, "test.scm".into())
+        .unwrap();
+    assert!(
+        sessions
+            .detach_except(
+                &std::collections::BTreeSet::from(["test.scm".into()]),
+                ash_external_ext::CancelReason::AuthorityRevoked,
+            )
+            .is_empty()
+    );
+    assert!(matches!(
+        sessions.read(7, "git"),
+        Err(ExtensionHostRuntimeError::InvocationNotFound)
+    ));
+    assert!(matches!(
+        sessions.read(7, "independent"),
+        Ok(ExtensionHostInvocationRead::Pending)
+    ));
+}
+
+#[test]
 fn detaching_an_owner_releases_terminal_sessions_immediately() {
     let mut sessions = InvocationSessionStore::new(1, 1);
-    sessions.reserve("one".into(), 7, 1).unwrap();
+    sessions
+        .reserve("one".into(), 7, 1, "test.extension".into())
+        .unwrap();
     sessions.complete(
         "one",
         Ok(InvokeResult {
@@ -356,13 +391,17 @@ fn detaching_an_owner_releases_terminal_sessions_immediately() {
             .detach_owner(7, ash_external_ext::CancelReason::Shutdown)
             .is_empty()
     );
-    sessions.reserve("replacement".into(), 8, 1).unwrap();
+    sessions
+        .reserve("replacement".into(), 8, 1, "test.extension".into())
+        .unwrap();
 }
 
 #[test]
 fn abandoned_terminal_sessions_are_reaped_before_reusing_quota() {
     let mut sessions = InvocationSessionStore::new(1, 1);
-    sessions.reserve("one".into(), 7, 1).unwrap();
+    sessions
+        .reserve("one".into(), 7, 1, "test.extension".into())
+        .unwrap();
     sessions.complete(
         "one",
         Ok(InvokeResult {
@@ -371,13 +410,17 @@ fn abandoned_terminal_sessions_are_reaped_before_reusing_quota() {
     );
     sessions.sweep_expired(Instant::now() + Duration::from_secs(61));
 
-    sessions.reserve("replacement".into(), 8, 1).unwrap();
+    sessions
+        .reserve("replacement".into(), 8, 1, "test.extension".into())
+        .unwrap();
 }
 
 #[test]
 fn discarding_a_completed_invocation_is_owner_fenced_and_releases_quota_without_a_read() {
     let mut sessions = InvocationSessionStore::new(1, 1);
-    sessions.reserve("one".into(), 7, 1).unwrap();
+    sessions
+        .reserve("one".into(), 7, 1, "test.extension".into())
+        .unwrap();
     sessions.complete(
         "one",
         Ok(InvokeResult {
@@ -394,7 +437,7 @@ fn discarding_a_completed_invocation_is_owner_fenced_and_releases_quota_without_
         Err(ExtensionHostRuntimeError::InvocationNotFound)
     ));
     assert!(matches!(
-        sessions.reserve("blocked".into(), 8, 1),
+        sessions.reserve("blocked".into(), 8, 1, "test.extension".into()),
         Err(ExtensionHostRuntimeError::QuotaExceeded)
     ));
     sessions
@@ -409,13 +452,17 @@ fn discarding_a_completed_invocation_is_owner_fenced_and_releases_quota_without_
         sessions.read(7, "one"),
         Err(ExtensionHostRuntimeError::InvocationNotFound)
     ));
-    sessions.reserve("replacement".into(), 7, 1).unwrap();
+    sessions
+        .reserve("replacement".into(), 7, 1, "test.extension".into())
+        .unwrap();
 }
 
 #[test]
 fn cancellation_with_retained_results_keeps_the_existing_polling_contract() {
     let mut sessions = InvocationSessionStore::new(1, 1);
-    sessions.reserve("one".into(), 7, 1).unwrap();
+    sessions
+        .reserve("one".into(), 7, 1, "test.extension".into())
+        .unwrap();
     sessions.complete(
         "one",
         Ok(InvokeResult {
@@ -433,7 +480,9 @@ fn cancellation_with_retained_results_keeps_the_existing_polling_contract() {
     assert!(
         matches!(sessions.read(7, "one"), Ok(ExtensionHostInvocationRead::Succeeded(value)) if value == json!("result"))
     );
-    sessions.reserve("replacement".into(), 7, 1).unwrap();
+    sessions
+        .reserve("replacement".into(), 7, 1, "test.extension".into())
+        .unwrap();
 }
 
 #[test]
@@ -459,13 +508,18 @@ require('node:readline').createInterface({ input: process.stdin }).on('line', li
  process.stdout.write(JSON.stringify({ protocolVersion: r.protocolVersion, requestId: r.requestId, incarnation: r.incarnation, activationGeneration: r.activationGeneration, status: 'success', body }) + '\n');
 });
 "#;
+    // The fixture uses an explicit environment; Windows Node needs this to
+    // initialize its cryptographic provider before it can answer the handshake.
+    let environment = std::env::var_os("SystemRoot")
+        .map(|root| std::collections::BTreeMap::from([("SystemRoot".into(), root)]))
+        .unwrap_or_default();
     let supervisor = ExtensionHostSupervisor::new(
         Arc::new(ash_external_ext::TrustedDevelopmentLauncher),
         ExtensionLaunchCommand::new(
             executable,
             ["-e", source],
             std::env::temp_dir(),
-            Default::default(),
+            environment,
         )
         .unwrap(),
         ExtensionActivationSpec::new(
@@ -503,7 +557,9 @@ require('node:readline').createInterface({ input: process.stdin }).on('line', li
             .unwrap(),
     );
     let mut sessions = InvocationSessionStore::new(1, 1);
-    sessions.reserve("one".into(), 7, 1).unwrap();
+    sessions
+        .reserve("one".into(), 7, 1, "test.extension".into())
+        .unwrap();
     sessions.install("one", handle.clone()).unwrap();
     sessions
         .cancel(
@@ -518,11 +574,13 @@ require('node:readline').createInterface({ input: process.stdin }).on('line', li
         Err(ExtensionHostRuntimeError::InvocationNotFound)
     ));
     assert!(matches!(
-        sessions.reserve("blocked".into(), 7, 1),
+        sessions.reserve("blocked".into(), 7, 1, "test.extension".into()),
         Err(ExtensionHostRuntimeError::QuotaExceeded)
     ));
     sessions.complete("one", handle.wait());
-    sessions.reserve("replacement".into(), 7, 1).unwrap();
+    sessions
+        .reserve("replacement".into(), 7, 1, "test.extension".into())
+        .unwrap();
     assert_eq!(supervisor.snapshot().incarnation, 1);
     let handle = Arc::new(
         supervisor
@@ -551,7 +609,9 @@ require('node:readline').createInterface({ input: process.stdin }).on('line', li
         Err(ExtensionHostRuntimeError::InvocationNotFound)
     ));
     sessions.complete("replacement", handle.wait());
-    sessions.reserve("after-exit".into(), 7, 1).unwrap();
+    sessions
+        .reserve("after-exit".into(), 7, 1, "test.extension".into())
+        .unwrap();
 }
 
 #[test]
@@ -718,6 +778,93 @@ impl ash_external_ext::ExtensionHostLauncher for CountingLauncher {
         self.0.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
         Err(ExtensionHostError::SpawnFailed)
     }
+}
+
+#[test]
+fn changing_git_enablement_preserves_unrelated_runtime_and_window_instances() {
+    use std::sync::Arc;
+    use std::sync::atomic::AtomicU64;
+    use std::sync::atomic::Ordering;
+
+    struct Policy(AtomicU64);
+    impl crate::ExtensionsEditorExtensionAdmission for Policy {
+        fn generation(&self) -> u64 {
+            self.0.load(Ordering::Acquire)
+        }
+        fn is_product_extension_enabled(&self, id: &str) -> bool {
+            id != "ash.git" || self.generation() != 2
+        }
+        fn authorizes(&self, _: &crate::ExtensionsEditorExtensionBinding) -> bool {
+            false
+        }
+        fn acquire(
+            &self,
+            _: &crate::ExtensionsEditorExtensionBinding,
+        ) -> Option<Box<dyn crate::ExtensionsEditorExtensionAdmissionLease>> {
+            None
+        }
+    }
+    let policy = Arc::new(Policy(AtomicU64::new(1)));
+    let mut limits = ash_external_ext::ExtensionHostLimits::default();
+    limits.isolation = ash_external_ext::ProcessIsolationPolicy::TrustedDevelopment;
+    let runtime = super::ExtensionHostRuntime::start(
+        super::source::BuiltInEditorExtensions::Product,
+        None,
+        None,
+        Some(policy.clone()),
+        Arc::new(CountingLauncher(std::sync::atomic::AtomicUsize::new(0))),
+        limits,
+        ash_external_ext::RestartPolicy::default(),
+        Arc::new(super::super::update_broker::UpdateBroker::default()),
+        Arc::new(crate::client_host::ClientHost::default()),
+        Default::default(),
+    )
+    .unwrap();
+    let (mut git_generation, shared_gate, window_gate) = {
+        let mut state = runtime.inner.state.lock().unwrap();
+        let git_generation = state.entries["ash.git"].fallback.activation_generation;
+        let shared_gate = state.entries["ash.markdown-math"].activation_gate.clone();
+        let base = &state.entries["ash.markdown-language-features"];
+        let mut window = runtime.inner.build_entry(
+            None,
+            base.deployment.as_ref().unwrap(),
+            std::num::NonZeroU64::new(base.fallback.activation_generation).unwrap(),
+        );
+        window.deployment = None;
+        let window_gate = window.activation_gate.clone();
+        state
+            .windows
+            .entry(42)
+            .or_default()
+            .insert(window.fallback.id.clone(), window);
+        (git_generation, shared_gate, window_gate)
+    };
+    for revision in [2, 3] {
+        policy.0.store(revision, Ordering::Release);
+        runtime
+            .reconcile(super::ExtensionHostReconcileMode::Refresh)
+            .unwrap();
+        let state = runtime.inner.state.lock().unwrap();
+        assert!(Arc::ptr_eq(
+            &shared_gate,
+            &state.entries["ash.markdown-math"].activation_gate
+        ));
+        assert!(Arc::ptr_eq(
+            &window_gate,
+            &state.windows[&42]["ash.markdown-language-features"].activation_gate
+        ));
+        let git = &state.entries["ash.git"];
+        assert!(git.fallback.activation_generation > git_generation);
+        git_generation = git.fallback.activation_generation;
+        if revision == 2 {
+            // The product catalog must retain the disabled provider so the UI can re-enable it.
+            assert!(git.supervisor.is_none());
+        } else {
+            assert!(git.supervisor.is_some());
+            assert!(git.pending_activation.is_some());
+        }
+    }
+    runtime.shutdown();
 }
 
 #[test]
@@ -910,7 +1057,7 @@ fn assert_lazy_activation_fence(event: super::source::ActivationEvent) {
                 backend_channels: std::collections::BTreeMap::new(),
                 activation_gate: Arc::new(std::sync::Mutex::new(())),
                 client_scope: super::EditorClientScope::Unsupported,
-                window_deployment: None,
+                deployment: None,
                 version: "1".into(),
                 workspace_read: super::source::WorkspaceReadAccess::Denied,
                 supervisor: Some(supervisor),

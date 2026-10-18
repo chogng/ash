@@ -142,6 +142,7 @@ pub enum EditorExtensionCapability {
     RemoteAuthorityResolver,
     StatusBar,
     Command,
+    SourceControl,
     LanguageProvider,
     CustomTextEditor,
     DebugAdapter,

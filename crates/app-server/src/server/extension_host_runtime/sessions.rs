@@ -1,4 +1,5 @@
 use std::collections::BTreeMap;
+use std::collections::BTreeSet;
 use std::sync::Arc;
 use std::time::Duration;
 use std::time::Instant;
@@ -31,6 +32,7 @@ pub(super) struct InvocationSessionStore {
 
 struct InvocationSession {
     owner: u64,
+    extension_id: String,
     incarnation: u64,
     handle: Option<Arc<ExtensionInvocationHandle>>,
     terminal: Option<InvocationTerminal>,
@@ -60,6 +62,7 @@ impl InvocationSessionStore {
         id: String,
         owner: u64,
         incarnation: u64,
+        extension_id: String,
     ) -> Result<(), ExtensionHostRuntimeError> {
         self.sweep_expired(Instant::now());
         if self.sessions.len() >= self.maximum_global
@@ -74,6 +77,7 @@ impl InvocationSessionStore {
             id,
             InvocationSession {
                 owner,
+                extension_id,
                 incarnation,
                 handle: None,
                 terminal: None,
@@ -201,11 +205,12 @@ impl InvocationSessionStore {
         self.detach_where(reason, |session| session.owner == owner)
     }
 
-    pub(super) fn detach_all(
+    pub(super) fn detach_except(
         &mut self,
+        retained: &BTreeSet<String>,
         reason: CancelReason,
     ) -> Vec<Arc<ExtensionInvocationHandle>> {
-        self.detach_where(reason, |_| true)
+        self.detach_where(reason, |session| !retained.contains(&session.extension_id))
     }
 
     fn detach_where(

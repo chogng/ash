@@ -486,13 +486,30 @@ impl ExtensionHostLauncher for ProductExecutableLauncher {
         limits: &ExtensionHostLimits,
     ) -> Result<Arc<dyn ExtensionHostProcess>, ExtensionHostError> {
         limits.validate()?;
-        command.validate_limits(limits)?;
         if !matches!(command.runtime, LaunchRuntime::Executable(_))
             || command.executable() != Some(self.executable.as_path())
             || limits.isolation != ProcessIsolationPolicy::AuthorizedProduct
         {
             return Err(ExtensionHostError::IsolationUnavailable);
         }
+        #[cfg(windows)]
+        let command = {
+            let mut command = command.clone();
+            // The process transport clears inherited variables. Windows needs SystemRoot
+            // to load Winsock providers, including a product extension's loopback broker.
+            // Preserve only this OS prerequisite, not the parent's application environment.
+            if !command.environment.keys().any(|key| {
+                key.to_str()
+                    .is_some_and(|key| key.eq_ignore_ascii_case("SystemRoot"))
+            }) {
+                let root = std::env::var_os("SystemRoot").ok_or(ExtensionHostError::SpawnFailed)?;
+                command.environment.insert("SystemRoot".into(), root);
+            }
+            command
+        };
+        #[cfg(windows)]
+        let command = &command;
+        command.validate_limits(limits)?;
         StdioExtensionHostProcess::spawn(command, limits).map(|process| Arc::new(process) as _)
     }
 }

@@ -1,4 +1,5 @@
 use std::collections::BTreeMap;
+use std::collections::BTreeSet;
 use std::num::NonZeroU64;
 use std::sync::Arc;
 
@@ -92,9 +93,35 @@ impl RuntimeInner {
             .ok_or(ExtensionHostRuntimeError::Internal)?;
         let generation =
             NonZeroU64::new(activation_generation).ok_or(ExtensionHostRuntimeError::Internal)?;
-        self.retire_current(CancelReason::AuthorityRevoked)?;
+        // A catalog revision can change one extension's enablement. Preserve
+        // unrelated instances, their registrations and in-flight editor calls.
+        let retained = {
+            let state = self
+                .state
+                .lock()
+                .map_err(|_| ExtensionHostRuntimeError::Internal)?;
+            source_snapshot
+                .deployments
+                .iter()
+                .filter_map(|deployment| {
+                    (!force
+                        && state
+                            .entries
+                            .get(&deployment.id)
+                            // Re-enabling must rebuild an entry that was rejected by admission.
+                            .filter(|entry| entry.supervisor.is_some())
+                            .and_then(|entry| entry.deployment.as_ref())
+                            .is_some_and(|current| current.can_reuse(deployment)))
+                    .then_some(deployment.id.clone())
+                })
+                .collect::<BTreeSet<_>>()
+        };
+        self.retire_except(&retained, CancelReason::AuthorityRevoked)?;
         let mut entries = BTreeMap::new();
         for deployment in &source_snapshot.deployments {
+            if retained.contains(&deployment.id) {
+                continue;
+            }
             let entry = self.build_entry(authorization.as_ref(), deployment, generation);
             if entries.insert(entry.fallback.id.clone(), entry).is_some() {
                 return Err(ExtensionHostRuntimeError::Internal);
@@ -105,7 +132,7 @@ impl RuntimeInner {
                 .state
                 .lock()
                 .map_err(|_| ExtensionHostRuntimeError::Internal)?;
-            state.entries = entries;
+            state.entries.extend(entries);
             state.authority_generation = activation_generation;
             state.source_revision = source_snapshot.revision;
             self.refresh_generation_locked(&mut state)?
@@ -121,18 +148,7 @@ impl RuntimeInner {
         generation: NonZeroU64,
     ) -> RuntimeEntry {
         let version = deployment.version.clone();
-        let window_scoped = deployment.command.is_vscode()
-            || deployment
-                .params
-                .capabilities
-                .contains(&ash_external_ext::ExtensionCapability::SourceControl)
-            // Rust debugger callbacks borrow this window's configuration, locale
-            // and session handles just like their standard JS counterparts.
-            || deployment
-                .params
-                .capabilities
-                .contains(&ash_external_ext::ExtensionCapability::DebugAdapter);
-        let window_deployment = window_scoped.then(|| deployment.clone());
+        let window_scoped = deployment.is_window_scoped();
         let fallback = ExtensionHostExtensionSnapshot {
             id: deployment.id.clone(),
             version: version.clone(),
@@ -163,7 +179,7 @@ impl RuntimeInner {
                 }),
                 pending_activation: None,
                 client_scope: super::EditorClientScope::Unsupported,
-                window_deployment,
+                deployment: Some(deployment.clone()),
             };
         }
         let prepared = prepare_extension(authorization, deployment, generation);
@@ -276,7 +292,7 @@ impl RuntimeInner {
                     fallback,
                     failure,
                     pending_activation,
-                    window_deployment,
+                    deployment: Some(deployment.clone()),
                     client_scope: if window_scoped {
                         super::EditorClientScope::Pending
                     } else {
@@ -295,7 +311,7 @@ impl RuntimeInner {
                 failure: Some(runtime_failure(&error, None)),
                 pending_activation: None,
                 client_scope: super::EditorClientScope::Unsupported,
-                window_deployment,
+                deployment: Some(deployment.clone()),
             },
         }
     }
@@ -319,7 +335,11 @@ impl RuntimeInner {
             if base.fallback.activation_generation != generation {
                 return Err(ExtensionHostRuntimeError::Stale);
             }
-            let Some(deployment) = &base.window_deployment else {
+            let Some(deployment) = base
+                .deployment
+                .as_ref()
+                .filter(|deployment| deployment.is_window_scoped())
+            else {
                 return Ok(());
             };
             // Connection IDs are assigned by the transport. A retired window cannot resurrect
@@ -350,7 +370,7 @@ impl RuntimeInner {
             &recipe.1,
             NonZeroU64::new(generation).ok_or(ExtensionHostRuntimeError::Stale)?,
         );
-        entry.window_deployment = None;
+        entry.deployment = None;
         self.state
             .lock()
             .map_err(|_| ExtensionHostRuntimeError::Internal)?
@@ -456,19 +476,32 @@ impl RuntimeInner {
         &self,
         reason: CancelReason,
     ) -> Result<(), ExtensionHostRuntimeError> {
+        self.retire_except(&BTreeSet::new(), reason)
+    }
+
+    fn retire_except(
+        &self,
+        retained: &BTreeSet<String>,
+        reason: CancelReason,
+    ) -> Result<(), ExtensionHostRuntimeError> {
         let (entries, published) = {
             let mut state = self
                 .state
                 .lock()
                 .map_err(|_| ExtensionHostRuntimeError::Internal)?;
-            let mut entries = std::mem::take(&mut state.entries)
-                .into_values()
+            let mut entries = state
+                .entries
+                .extract_if(.., |id, _| !retained.contains(id))
+                .map(|(_, entry)| entry)
                 .collect::<Vec<_>>();
-            entries.extend(
-                std::mem::take(&mut state.windows)
-                    .into_values()
-                    .flat_map(BTreeMap::into_values),
-            );
+            for window in state.windows.values_mut() {
+                entries.extend(
+                    window
+                        .extract_if(.., |id, _| !retained.contains(id))
+                        .map(|(_, entry)| entry),
+                );
+            }
+            state.windows.retain(|_, entries| !entries.is_empty());
             let published = self.refresh_generation_locked(&mut state)?;
             (entries, published)
         };
@@ -477,7 +510,7 @@ impl RuntimeInner {
             .sessions
             .lock()
             .map_err(|_| ExtensionHostRuntimeError::Internal)?
-            .detach_all(reason);
+            .detach_except(retained, reason);
         cancel_handles(handles, reason);
         for entry in entries {
             if let Some(supervisor) = entry.supervisor {

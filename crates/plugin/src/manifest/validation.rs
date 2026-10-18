@@ -227,6 +227,7 @@ fn validate_editor_extension(extension: &EditorExtensionContribution) -> Result<
                 capability,
                 super::EditorExtensionCapability::RemoteAuthorityResolver
                     | super::EditorExtensionCapability::Command
+                    | super::EditorExtensionCapability::SourceControl
                     | super::EditorExtensionCapability::CustomTextEditor
                     | super::EditorExtensionCapability::LanguageProvider
                     | super::EditorExtensionCapability::StatusBar
@@ -235,7 +236,7 @@ fn validate_editor_extension(extension: &EditorExtensionContribution) -> Result<
             )
         }) {
             return invalid(
-                "JavaScript host contract v1 supports command, language provider, status bar, Task provider, Debug and Remote resolver registrations",
+                "JavaScript host contract v1 supports command, source control, language provider, custom editor, status bar, Task provider, Debug and Remote resolver registrations",
             );
         }
     }

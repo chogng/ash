@@ -409,7 +409,8 @@ exports.activate = context => context.subscriptions.push(v.commands.registerComm
     };
     assert_eq!(
         serde_json::to_value(activated.registrations).unwrap(),
-        json!([{"registrationId":"vscode.output.events","kind":"outputEvents"}, {"registrationId":"vscode.workspace.events","kind":"workspaceEvents"}, {
+        json!([{"registrationId":"vscode.output.events","kind":"outputEvents"},
+            {"registrationId":"vscode.workspace.events","kind":"workspaceEvents"}, {
                 "registrationId": "test.node", "kind": "command", "command": "test.node", "title": "Node", "icon": "play",
                 "menus": [{"menu": "editor/title", "when": "editorTextFocus", "group": "navigation@1", "alt": "test.alternate"}]
         }])
