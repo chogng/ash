@@ -1,10 +1,11 @@
 import assert from 'node:assert/strict';
-import { test } from 'mocha';
+import { suite, test } from 'mocha';
 import { CancellationToken, CancellationTokenSource } from '../../../../../base/common/cancellation.js';
 import { isCancellationError } from '../../../../../base/common/errors.js';
 import { DeferredPromise } from '../../../../../base/common/async.js';
 import { URI } from '../../../../../base/common/uri.js';
-import { IContentSearchService, type ContentSearchMatch } from '../../../../../platform/search/common/search.js';
+import { IContentSearchService, type ContentSearchMatch, type IContentSearchOptions, type IContentSearchComplete } from '../../../../../platform/search/common/search.js';
+import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
 import { BrowserContentSearchService } from '../../../../../platform/search/browser/searchService.js';
 import type { IContentSearchApi } from '../../../../../platform/search/common/searchApi.js';
 import { IWorkspaceContextService } from '../../../../../platform/workspace/common/workspace.js';
@@ -274,6 +275,144 @@ test('Workbench file search deduplicates overlapping roots and cancellation reje
 	response.complete();
 	await rejected;
 	assert.equal(calls, 1);
+});
+
+suite('Workbench text search scope lifetime', () => {
+	ensureNoDisposablesAreLeakedInTestSuite();
+
+	for (const nested of [false, true]) {
+		test(`${nested ? 'nested ' : ''}workspace replacement preserves queries started by an earlier workspace listener`, async () => {
+			using fixture = new BulkEditTestServices([]);
+			using workspace = new TestWorkspaceService({ id: 'workspace', folders: [folders[0]!] });
+			const response = new DeferredPromise<IContentSearchComplete>();
+			const oldStarted = new DeferredPromise<IContentSearchOptions>();
+			const replacementStarted = new DeferredPromise<IContentSearchOptions>();
+			let replacement: Promise<unknown> | undefined;
+			using listener = workspace.onDidChangeWorkspace(event => {
+				if (event.workspace.folders[0]?.id !== 'replacement') return;
+				if (nested) workspace.updateWorkspace({ id: 'workspace', folders: [{ ...folders[0]!, id: 'current' }] });
+				replacement = service.textSearch(new QueryBuilder().text(pattern, [folders[0]!.uri]));
+				void replacement.catch(() => { });
+			});
+			using service = createSearchService({
+				async search(folder, _query, options) {
+					if (folder.id === 'first') { oldStarted.complete(options!); return response.p; }
+					assert.equal(folder.id, nested ? 'current' : 'replacement');
+					replacementStarted.complete(options!);
+					return { resultCount: 0, limitHit: false, error: undefined };
+				},
+			}, workspace, fixture.models, new BrowserFileSearchService(fixture.files));
+			const pending = service.textSearch(new QueryBuilder().text(pattern, [folders[0]!.uri]));
+			void pending.catch(() => { });
+			const old = await oldStarted.p;
+			try {
+				workspace.updateWorkspace({ id: 'workspace', folders: [{ ...folders[0]!, id: 'replacement' }] });
+				const current = await replacementStarted.p;
+				assert.equal(old.signal?.aborted, true);
+				assert.equal(current.signal?.aborted, false);
+				await assert.rejects(pending, isCancellationError);
+				assert.deepEqual(await replacement, { results: [], limitHit: false, messages: [] });
+			} finally {
+				response.complete({ resultCount: 0, limitHit: false, error: undefined });
+				await pending.catch(() => { });
+				await replacement?.catch(() => { });
+			}
+		});
+	}
+
+	for (const reason of ['dispose', 'workspace', 'token'] as const) {
+		test(`${reason} retires a query before an uncooperative provider responds`, async () => {
+			using fixture = new BulkEditTestServices([]);
+			using workspace = new TestWorkspaceService({ id: 'workspace', folders });
+			using cancellation = new CancellationTokenSource();
+			const started = new DeferredPromise<IContentSearchOptions>();
+			const response = new DeferredPromise<IContentSearchComplete>();
+			const directories: string[] = [];
+			let progress = 0;
+			using service = createSearchService({
+				async search(folder, _query, options) {
+					directories.push(folder.id);
+					started.complete(options!);
+					return response.p;
+				},
+			}, workspace, fixture.models, new BrowserFileSearchService(fixture.files));
+			const pending = service.textSearch(query(), cancellation.token, () => progress++);
+			void pending.catch(() => { });
+			const options = await started.p;
+			try {
+				if (reason === 'dispose') service.dispose();
+				else if (reason === 'workspace') workspace.updateWorkspace({ id: 'replacement', folders: [{ ...folders[0]!, id: 'new-directory' }] });
+				else cancellation.cancel();
+				assert.equal(options.signal?.aborted, true);
+				await assert.rejects(pending, isCancellationError);
+				assert.equal(response.isSettled, false);
+				options.onProgress?.([content]);
+				assert.equal(progress, 0);
+				assert.deepEqual(directories, ['first']);
+				if (reason === 'dispose') await assert.rejects(service.textSearch(query()), isCancellationError);
+			} finally {
+				response.complete({ resultCount: 1, limitHit: false, error: undefined });
+				await pending.catch(() => { });
+			}
+		});
+	}
+
+	for (const reason of ['dispose', 'workspace'] as const) {
+		test(`${reason} during progress stops a completed backend batch and releases its job`, async () => {
+			using fixture = new BulkEditTestServices([]);
+			using workspace = new TestWorkspaceService({ id: 'workspace', folders });
+			const released: string[] = [];
+			const api: IContentSearchApi = {
+				async start() { return { searchId: 'batch' }; },
+				async read() {
+					return { searchId: 'batch', matches: [{ ...content, ranges: [...content.ranges] }, { ...content, ranges: [...content.ranges], lineNumber: 2 }], nextMatch: 2, completed: true, limitHit: false, error: null };
+				},
+				async cancel(params) { released.push(params.searchId); },
+			};
+			using service = createSearchService(new BrowserContentSearchService(api), workspace, fixture.models, new BrowserFileSearchService(fixture.files));
+			let progress = 0;
+			await assert.rejects(service.textSearch(query(), CancellationToken.None, () => {
+				progress++;
+				if (reason === 'dispose') service.dispose();
+				else workspace.updateWorkspace({ id: 'replacement', folders: [] });
+			}), isCancellationError);
+			assert.equal(progress, 1);
+			assert.deepEqual(released, ['batch']);
+		});
+
+		test(`${reason} releases the active App Server search job`, async () => {
+			using fixture = new BulkEditTestServices([]);
+			using workspace = new TestWorkspaceService({ id: 'workspace', folders });
+			const reading = new DeferredPromise<void>();
+			const cancelled = new DeferredPromise<void>();
+			const response = new DeferredPromise<Awaited<ReturnType<IContentSearchApi['read']>>>();
+			const released: string[] = [];
+			let signal: AbortSignal | undefined;
+			const api: IContentSearchApi = {
+				async start() { return { searchId: 'retired-job' }; },
+				async read() { reading.complete(); return response.p; },
+				async cancel(params) { released.push(params.searchId); cancelled.complete(); },
+			};
+			const backend = new BrowserContentSearchService(api);
+			using service = createSearchService({
+				search(folder, query, options) { signal = options?.signal; return backend.search(folder, query, options); },
+			}, workspace, fixture.models, new BrowserFileSearchService(fixture.files));
+			const pending = service.textSearch(query());
+			void pending.catch(() => { });
+			await reading.p;
+			try {
+				if (reason === 'dispose') service.dispose();
+				else workspace.updateWorkspace({ id: 'replacement', folders: [] });
+				assert.equal(signal?.aborted, true);
+				await assert.rejects(pending, isCancellationError);
+				await cancelled.p;
+				assert.deepEqual(released, ['retired-job']);
+			} finally {
+				response.complete({ searchId: 'retired-job', matches: [], nextMatch: 0, completed: true, limitHit: false, error: null });
+				await pending.catch(() => { });
+			}
+		});
+	}
 });
 
 function createSearchService(content: IContentSearchService, workspace: IWorkspaceContextService, models: IFileTextModelService, files: IFileSearchService): SearchService {

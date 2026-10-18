@@ -3,10 +3,11 @@ import { readFileSync } from 'node:fs';
 import { MessageChannel } from 'node:worker_threads';
 import { JSDOM } from 'jsdom';
 import { setup, suite, suiteSetup, suiteTeardown, teardown, test } from 'mocha';
-import { DeferredPromise } from '../../../../../base/common/async.js';
+import { DeferredPromise, TimeoutTimer } from '../../../../../base/common/async.js';
 import { VSBuffer } from '../../../../../base/common/buffer.js';
-import { Emitter } from '../../../../../base/common/event.js';
-import { Disposable, DisposableTracker, installDisposableTracker } from '../../../../../base/common/lifecycle.js';
+import { Emitter, Event } from '../../../../../base/common/event.js';
+import { Disposable, DisposableTracker, installDisposableTracker, type IDisposable } from '../../../../../base/common/lifecycle.js';
+import { URI } from '../../../../../base/common/uri.js';
 import type { ISocket, SocketCloseEvent, SocketDiagnosticsEventType } from '../../../../../base/parts/ipc/common/ipc.net.js';
 import type { ISandboxGlobals } from '../../../../../base/parts/sandbox/electron-browser/sandboxTypes.js';
 import { createTestInitializeResult } from '../../../../../platform/agentHost/test/common/testAppServerProtocol.js';
@@ -18,6 +19,10 @@ import { ManagedRemoteConnection, RemoteConnectionType } from '../../../../../pl
 import { IRemoteSocketFactoryService, RemoteSocketFactoryService } from '../../../../../platform/remote/common/remoteSocketFactoryService.js';
 import type { RemoteAgentConnection } from '../../../../../platform/remote/common/remoteAgentApi.js';
 import { resetNlsResolver, setNlsMessages } from '../../../../../nls.js';
+import { installEditorTestDom } from '../../../../../editor/test/browser/editorTestGlobals.js';
+import type { IMainProcessService } from '../../../../../platform/ipc/common/mainProcessService.js';
+import type { LogEntry } from '../../../../../platform/log/common/log.js';
+import { createSshRemoteWorkspaceUri } from '../../../../../platform/remote/common/remote.js';
 
 class RemoteEndpoint extends Disposable implements ISocket {
 	private readonly data = this._register(new Emitter<VSBuffer>());
@@ -41,22 +46,39 @@ class RemoteEndpoint extends Disposable implements ISocket {
 
 suite('Desktop Workbench Agent Host selection', () => {
 	const dom = new JSDOM('<!doctype html><body></body>');
-	const previousWindow = Object.getOwnPropertyDescriptor(globalThis, 'window');
 	const previousGlobals = Object.getOwnPropertyDescriptor(globalThis, 'ash');
 	const ports: MessageChannel[] = [];
 	const acquired: string[] = [];
-	const subscriptions = new Set<() => void>();
+	const subscriptions = new Set<(value: unknown) => void>();
+	const ipcListeners = new Map<string, Set<(value: unknown) => void>>();
 	const disabled = new Set<string>();
 	const handshakes: { channel: string; params: unknown; }[] = [];
 	let Service: typeof import('../../electron-browser/agentHostService.js').WorkbenchAgentHostService;
+	let createRendererApi: typeof import('../../../../electron-browser/rendererApi.js').createElectronRendererApi;
+	let testDom: IDisposable;
+	let windowConnection: RemoteAgentConnection;
+	let onDirectoryBound: ((channel: string) => void) | undefined;
+	let onInitialized: ((channel: string) => void) | undefined;
+	let onLog: ((entry: LogEntry) => void) | undefined;
+	let failDirectoryBinding: boolean;
+	const directoryBindings: { readonly channel: string; readonly dirs: unknown; }[] = [];
+	let requestedWorkspace: URI;
 	let tracker: DisposableTracker;
 	let tracking: ReturnType<typeof installDisposableTracker>;
 	const globals: ISandboxGlobals = {
 		ipcRenderer: {
 			send() { },
-			on: () => { const listener = () => { }; subscriptions.add(listener); return { dispose: () => { subscriptions.delete(listener); } }; },
+			on: (channel, listener) => {
+				subscriptions.add(listener);
+				const listeners = ipcListeners.get(channel) ?? new Set();
+				ipcListeners.set(channel, listeners);
+				listeners.add(listener);
+				return { dispose: () => { subscriptions.delete(listener); listeners.delete(listener); if (listeners.size === 0) ipcListeners.delete(channel); } };
+			},
 			invoke: async (channel, payload) => {
-				if (channel.endsWith(':initialized')) return;
+				if (channel === 'ash:remote:connection') return windowConnection;
+				if (channel === 'ash:workspace:context:read') return { id: 'desktop', folders: [{ id: 'workspace-folder', uri: requestedWorkspace.toString(), name: 'Project', index: 0 }] };
+				if (channel.endsWith(':initialized')) { onInitialized?.(channel); return; }
 				assert.ok(channel.endsWith(':acquire'), channel);
 				acquired.push(channel);
 				if (disabled.has(channel)) return { enabled: false };
@@ -69,6 +91,15 @@ suite('Desktop Workbench Agent Host selection', () => {
 					if (frame.method === 'initialize') {
 						handshakes.push({ channel, params: frame.params });
 						pair.port2.postMessage({ data: new TextEncoder().encode(JSON.stringify({ jsonrpc: '2.0', id: frame.id, result: createTestInitializeResult() }) + '\n') });
+					} else if (frame.method === 'config/directoryGrants/read') {
+						pair.port2.postMessage({ data: new TextEncoder().encode(JSON.stringify({ jsonrpc: '2.0', id: frame.id, result: { dir: frame.params.path, permissions: [] } }) + '\n') });
+					} else if (frame.method === 'env/dirs/set') {
+						directoryBindings.push({ channel, dirs: frame.params.dirs });
+						const response = failDirectoryBinding
+							? { jsonrpc: '2.0', id: frame.id, error: { code: -32043, message: 'restore rejected', data: { kind: 'PermissionRequired' } } }
+							: { jsonrpc: '2.0', id: frame.id, result: { dirs: frame.params.dirs.map((dir: { id: string; path: string; }) => ({ id: dir.id, path: dir.path, permissions: [] })) } };
+						pair.port2.postMessage({ data: new TextEncoder().encode(JSON.stringify(response) + '\n') });
+						onDirectoryBound?.(channel);
 					}
 				});
 				dom.window.dispatchEvent(new dom.window.MessageEvent('message', {
@@ -85,17 +116,23 @@ suite('Desktop Workbench Agent Host selection', () => {
 	};
 
 	suiteSetup(async () => {
-		Object.defineProperty(globalThis, 'window', { configurable: true, value: dom.window });
+		testDom = installEditorTestDom(dom, ['Node', 'Element', 'HTMLElement', 'HTMLButtonElement', 'HTMLCanvasElement', 'Event', 'MouseEvent', 'KeyboardEvent', 'InputEvent', 'NodeFilter']);
 		Object.defineProperty(globalThis, 'ash', { configurable: true, value: globals });
 		Service = (await import('../../electron-browser/agentHostService.js')).WorkbenchAgentHostService;
+		createRendererApi = (await import('../../../../electron-browser/rendererApi.js')).createElectronRendererApi;
 	});
 	suiteTeardown(() => {
-		if (previousWindow) Object.defineProperty(globalThis, 'window', previousWindow); else Reflect.deleteProperty(globalThis, 'window');
+		testDom.dispose();
 		if (previousGlobals) Object.defineProperty(globalThis, 'ash', previousGlobals); else Reflect.deleteProperty(globalThis, 'ash');
 		dom.window.close();
 	});
 	setup(() => {
 		acquired.length = handshakes.length = 0;
+		directoryBindings.length = 0;
+		onDirectoryBound = onInitialized = onLog = undefined;
+		failDirectoryBinding = false;
+		windowConnection = { kind: 'ssh', generation: 1, authority: 'ssh+host', host: 'host' };
+		requestedWorkspace = createSshRemoteWorkspaceUri('host', '/workspace');
 		disabled.clear();
 		tracker = new DisposableTracker();
 		tracking = installDisposableTracker(tracker);
@@ -120,6 +157,67 @@ suite('Desktop Workbench Agent Host selection', () => {
 		services.registerInstance(ILogService, logger);
 		services.registerSingleton(IRemoteSocketFactoryService, () => services.createInstance(RemoteSocketFactoryService));
 	}
+
+	const mainProcess: IMainProcessService = {
+		_serviceBrand: undefined,
+		registerChannel: () => { throw new Error('Unexpected renderer channel registration'); },
+		getChannel: name => ({
+			listen: () => Event.None,
+			call: async <T>(command: string, argument?: unknown): Promise<T> => {
+				let result: unknown;
+				if (name === 'localFilesystem' && ['userDataHome', 'userHome'].includes(command)) result = URI.file('/profile').toString();
+				else if (name === 'localFilesystem' && command === 'readFile') result = { bytes: 'e30=', revision: 'settings-1' };
+				else if (name === 'policy' && command === 'updatePolicyDefinitions') result = {};
+				else if (name === 'logger' && command === 'log') { onLog?.(argument as LogEntry); }
+				else throw new Error(`Unexpected renderer channel call: ${name}/${command}`);
+				return result as T;
+			},
+		}),
+	};
+
+	function restart(channel: string): void {
+		const listeners = ipcListeners.get(channel);
+		assert.ok(listeners?.size, `No carrier restart subscription: ${channel}`);
+		for (const listener of [...listeners]) listener(undefined);
+	}
+
+	test('the production SSH renderer restores current workspace directories only after its execution carrier reconnects', async () => {
+		using renderer = await createRendererApi([], { browser: false }, { requestWorkspaceTrust: async () => { throw new Error('Saved grants need no prompt'); } }, mainProcess);
+		assert.deepEqual(directoryBindings, [{ channel: 'ash:app-server:acquire', dirs: [{ id: 'workspace-folder', path: '/workspace', grant: { type: 'config' } }] }]);
+		const localReconnected = new DeferredPromise<void>();
+		onInitialized = channel => { if (channel === 'ash:app-server:local:initialized') void localReconnected.complete(); };
+		restart('ash:app-server:local:restart');
+		await localReconnected.p;
+		assert.equal(directoryBindings.length, 1, 'local device recovery must not rebind the workspace');
+		requestedWorkspace = createSshRemoteWorkspaceUri('host', '/next-project');
+		const rebound = new DeferredPromise<void>();
+		onDirectoryBound = () => { void rebound.complete(); };
+		restart('ash:app-server:restart');
+		await rebound.p;
+		assert.deepEqual(directoryBindings, [
+			{ channel: 'ash:app-server:acquire', dirs: [{ id: 'workspace-folder', path: '/workspace', grant: { type: 'config' } }] },
+			{ channel: 'ash:app-server:acquire', dirs: [{ id: 'workspace-folder', path: '/next-project', grant: { type: 'config' } }] },
+		]);
+	});
+
+	test('workspace rebind failure is logged on the selected renderer connection and a later recovery can rebind again', async () => {
+		using renderer = await createRendererApi([], { browser: false }, { requestWorkspaceTrust: async () => { throw new Error('Saved grants need no prompt'); } }, mainProcess);
+		failDirectoryBinding = true;
+		const failed = new DeferredPromise<LogEntry>();
+		using failureDeadline = new TimeoutTimer(() => { void failed.error(new Error('Workspace recovery log was not delivered')); }, 5_000);
+		onLog = entry => { if (entry.message.startsWith('Workspace recovery failed')) void failed.complete(entry); };
+		restart('ash:app-server:restart');
+		const diagnostic = await failed.p;
+		assert.match(String(diagnostic.error), /PermissionRequired|restore rejected/);
+		assert.equal(directoryBindings.length, 2);
+		failDirectoryBinding = false;
+		const rebound = new DeferredPromise<void>();
+		onDirectoryBound = () => { void rebound.complete(); };
+		restart('ash:app-server:restart');
+		await rebound.p;
+		assert.equal(directoryBindings.length, 3);
+		assert.ok(directoryBindings.every(binding => binding.channel === 'ash:app-server:acquire'));
+	});
 
 	test('local windows select one shared lease and concurrent startup waits for the same handshake', async () => {
 		using services = new InstantiationService();

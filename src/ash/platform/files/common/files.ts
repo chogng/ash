@@ -223,6 +223,31 @@ export interface IFileSystemProvider {
 	delete(resource: URI, missing: FileMissingTargetBehavior, mode: FileDeleteMode): Promise<void>;
 }
 
+/**
+ * A borrowed execution scope for every step and cleanup of a recursive copy.
+ * Method tokens cancel the whole copy before dispatch; cleanup omits that token
+ * and remains available only while this original connection is alive.
+ */
+export interface IFileSystemProviderCopyScope extends IDisposable {
+	/** Connection lifetime only. Operation tokens can cancel publication without preventing cleanup. */
+	readonly token: CancellationToken;
+	stat(resource: URI, token?: CancellationToken): Promise<IFileStat>;
+	readDirectory(resource: URI, token?: CancellationToken): Promise<readonly IFileEntry[]>;
+	readFile(resource: URI, token?: CancellationToken): Promise<IFileBytes>;
+	writeFile(resource: URI, content: Uint8Array, options: IFileWriteOptions, token?: CancellationToken): Promise<IFileWriteResult>;
+	createDirectory(resource: URI, token?: CancellationToken): Promise<IFileStat>;
+	delete(resource: URI, missing: FileMissingTargetBehavior, mode: FileDeleteMode, token?: CancellationToken): Promise<void>;
+}
+
+/** Providers that route one namespace to replaceable connections pin a copy to its original owner. */
+export interface IFileSystemProviderWithCopyScope extends IFileSystemProvider {
+	acquireCopyScope(resource: URI): IFileSystemProviderCopyScope;
+}
+
+export function hasCopyScopeCapability(provider: IFileSystemProvider): provider is IFileSystemProviderWithCopyScope {
+	return 'acquireCopyScope' in provider;
+}
+
 /** Routes file operations through explicitly registered resource schemes. */
 export interface IFileService {
 	retainPathIdentity(resource: URI): IDisposable;

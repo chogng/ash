@@ -52,10 +52,10 @@
 
 ## AgentHost · TODO
 
-文件关系与实施顺序见 [AgentHost 文件台账](agenthost-todo.md#当前文件台账--2026-10-18)。已完成的通用服务、跨连接复制和权限取消验证见 [通用服务记录](agenthost-todo.md#通用复制与权限取消--2026-10-18)。
+文件关系与实施顺序见 [AgentHost 文件台账](agenthost-todo.md#当前文件台账--2026-10-18)。已完成的宿主恢复、查询退役与复制作用域契约见 [通用服务记录](agenthost-todo.md#通用服务作用域契约--2026-10-18)。
 
 - [ ] **文件对齐 · 剩余连接／Workbench 契约**：闭合统一宿主管理和多端点公开契约；证明上游 `IAgentService`／`IAgentHostService` 与 Rust 执行契约的对应关系，不按同名文件计完成。范围见 [AgentHost 文件台账](agenthost-todo.md)。
-- [ ] **前置契约 · Workbench 文件／资源服务**：renderer 本地资源 broker 尚缺双向 host request、realpath／授权 owner 及消费者；synced customization 尚无 producer。跨宿主复制和目录权限取消已闭合，验证见 [通用服务记录](agenthost-todo.md#通用复制与权限取消--2026-10-18)。文件查询交集过滤需要截断前后端过滤或分页契约；当前生产查询保留既有 glob／fuzzy。具体路径与现有 owner 见上述记录。
+- [ ] **前置契约 · Workbench 文件／资源服务**：renderer 本地资源 broker 尚缺正式双向 host request、realpath／授权 owner 及消费者；现有 opaque bytes resource 不能代替它。synced customization 尚无 producer。文件查询 include／exclude 尚无生产调用方，实际需要交集时仍须先补截断前过滤或分页契约；当前保留既有 glob／fuzzy。具体路径与现有 owner 见上述记录。
 - [ ] **新产品 · Agent SDK／Codex 续接／本地模型／独立 Web 启用**（用户决定先列缺口）：SDK 下载／重载、Codex 专属账号与配额续接、模型安装／server lifecycle、Web 启用设置／context owner 均须先闭合领域契约与生产入口；保留现有多 provider 账号和 Web transport 可用性，不新增空服务。准确文件清单见上述 Workbench 记录。
 - [ ] **文件对齐 · 剩余 Sessions／Chat／现有远程能力**：`SessionsManagementService` 主模型仍只绑定一个 Provider，尚须实现跨宿主 Session 身份、统一主列表／分组、创建和选择，以及 Chat／模型／文件／仓库／权限的对应 scope 路由；完整范围见 [多宿主复核](agenthost-todo.md#多宿主范围复核--尚未完成)。当前其他宿主的对话导航会明确拒绝，禁止打开本机同名 ID；这不代表远端 Chat 已完成。Node、state／meta 和生成协议的既有 Rust／可选 Provider 分流仍待逐项证明；不覆盖正在进行的 Terminal 工作。
 - [ ] **新产品 · Cloud Sandbox**（用户决定先 TODO）：先确定服务端实例／仓库 producer、账号和凭证刷新、Session／文件权限及 Provider 归属，再实现连接、目录、模型和会话入口；当前没有对应生产 producer，具体路径见清单 `todo-by-user`。

@@ -1,13 +1,14 @@
 import { CancellationToken } from '../../../../base/common/cancellation.js';
 import { CancellationError } from '../../../../base/common/errors.js';
+import { raceCancellationError } from '../../../../base/common/async.js';
 import { match } from '../../../../base/common/glob.js';
 import { escapeRegExpCharacters } from '../../../../base/common/strings.js';
 import { extUri } from '../../../../base/common/resources.js';
 import { URI } from '../../../../base/common/uri.js';
 import { USUAL_WORD_SEPARATORS } from '../../../../editor/common/core/wordHelper.js';
 import { IContentSearchService, type ContentSearchMatch, type IContentSearchQuery } from '../../../../platform/search/common/search.js';
-import { IWorkspaceContextService } from '../../../../platform/workspace/common/workspace.js';
-import { Disposable } from '../../../../base/common/lifecycle.js';
+import { IWorkspaceContextService, type IWorkspace } from '../../../../platform/workspace/common/workspace.js';
+import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { AgentHostFileSearchProvider } from '../../agentHost/common/agentHostFileSearchProvider.js';
 import { IFileTextModelService } from '../../textmodelResolver/common/textModelResourceService.js';
@@ -20,6 +21,7 @@ const DEFAULT_MAX_RESULTS = 2_000;
 /** Dispatches filename queries and owns content queries' model snapshots and result budgets. */
 export class SearchService extends Disposable implements ISearchService {
 	private readonly fileSearchProvider: ISearchResultProvider;
+	private readonly textSearches = new Map<AbortController, IWorkspace>();
 
 	constructor(
 		@IContentSearchService private readonly contentSearch: IContentSearchService,
@@ -29,6 +31,13 @@ export class SearchService extends Disposable implements ISearchService {
 	) {
 		super();
 		this.fileSearchProvider = this._register(instantiationService.createInstance(AgentHostFileSearchProvider));
+		// Directory IDs can change even when a replacement workspace keeps its URIs.
+		this._register(workspace.onDidChangeWorkspace(() => {
+			const current = workspace.getWorkspace();
+			for (const [controller, snapshot] of this.textSearches) {
+				if (snapshot !== current) { controller.abort(); }
+			}
+		}));
 	}
 
 	public fileSearch(query: IFileQuery, token: CancellationToken = CancellationToken.None): Promise<ISearchComplete> {
@@ -36,13 +45,17 @@ export class SearchService extends Disposable implements ISearchService {
 	}
 
 	public async textSearch(query: ITextQuery, token: CancellationToken = CancellationToken.None, onProgress?: (result: ISearchProgressItem) => void): Promise<ISearchComplete> {
+		if (this.isDisposed) { throw new CancellationError(); }
 		const controller = new AbortController();
+		const workspace = this.workspace.getWorkspace();
+		this.textSearches.set(controller, workspace);
+		using lifetime = toDisposable(() => this.textSearches.delete(controller));
 		using cancellation = token.onCancellationRequested(() => controller.abort());
 		const checkCancellation = (): void => {
-			if (token.isCancellationRequested) { throw new CancellationError(); }
+			if (token.isCancellationRequested || controller.signal.aborted) { throw new CancellationError(); }
 		};
 		checkCancellation();
-		const workspaceFolders = this.workspace.getWorkspace().folders;
+		const workspaceFolders = workspace.folders;
 		const folders = query.folderQueries.map(folderQuery => {
 			const folder = workspaceFolders.find(folder => extUri.isEqual(folder.uri, folderQuery.folder));
 			if (!folder) { throw new RangeError(localize('search.folderOutsideWorkspace', 'Search folder is outside the current workspace.')); }
@@ -131,10 +144,10 @@ export class SearchService extends Disposable implements ISearchService {
 			}
 			for (const folder of folders) {
 				checkCancellation();
-				const response = await this.contentSearch.search(folder, { ...directoryQuery, maxResults: overridden.size ? 5_000 : Math.max(1, limit - resultCount) }, {
+				const response = await raceCancellationError(this.contentSearch.search(folder, { ...directoryQuery, maxResults: overridden.size ? 5_000 : Math.max(1, limit - resultCount) }, {
 					signal: controller.signal,
 					onProgress: matches => {
-						if (!active || token.isCancellationRequested) { return; }
+						if (!active || controller.signal.aborted || token.isCancellationRequested) { return; }
 						for (const content of matches) {
 							const resource = URI.joinPath(folder.uri, content.path);
 							if (!overridden.has(extUri.getComparisonKey(resource))) {
@@ -142,7 +155,7 @@ export class SearchService extends Disposable implements ISearchService {
 							}
 						}
 					},
-				});
+				}), controller.signal);
 				checkCancellation();
 				complete.limitHit ||= response.limitHit;
 				if (response.error) { complete.messages.push({ text: response.error }); }
@@ -153,6 +166,12 @@ export class SearchService extends Disposable implements ISearchService {
 		} finally { active = false; }
 		if (!folders.length && !searchedModel) { complete.messages.push({ text: localize('search.openFolder', 'Open a folder to search files.') }); }
 		return complete;
+	}
+
+	protected override disposeCore(): void {
+		for (const controller of this.textSearches.keys()) { controller.abort(); }
+		this.textSearches.clear();
+		super.disposeCore();
 	}
 }
 

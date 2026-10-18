@@ -2,7 +2,7 @@ import { IWebWorkerService } from '../../webWorker/browser/webWorkerService.js';
 import { createAppServerFrameDecoder } from './appServerFrameDecoder.js';
 import { raceCancellationError } from '../../../base/common/async.js';
 import { throwIfCancelled } from '../../../base/common/cancellation.js';
-import type { Event } from '../../../base/common/event.js';
+import { Emitter, type Event } from '../../../base/common/event.js';
 import { Disposable, toDisposable } from '../../../base/common/lifecycle.js';
 import { IInstantiationService } from '../../instantiation/common/instantiation.js';
 import { ILogService } from '../../log/common/log.js';
@@ -22,9 +22,12 @@ interface RemoteAgentHostConnectionOptions {
 /** Owns one extension-resolved remote endpoint, independently of the local carrier. */
 export class RemoteAgentHostService extends Disposable {
 
+	private readonly reconnected = this._register(new Emitter<void>());
+	public readonly onDidReconnect = this.reconnected.event;
 	public readonly client: AppServerProtocolClient;
 	public readonly recovery: AppServerConnectionRecovery;
 	private localConnectionEpoch = 0;
+	private hasInitialized = false;
 
 	constructor(
 		private readonly options: RemoteAgentHostConnectionOptions,
@@ -79,6 +82,8 @@ export class RemoteAgentHostService extends Disposable {
 				this.assertNotDisposed();
 				if (localConnectionEpoch !== this.localConnectionEpoch) continue;
 				this.logService.debug('app-server', 'Remote App Server connection initialized');
+				if (this.hasInitialized) { this.reconnected.fire(); }
+				this.hasInitialized = true;
 				return;
 			} catch (error) {
 				if (this.isDisposed || localConnectionEpoch === this.localConnectionEpoch) throw error;

@@ -55,6 +55,22 @@ Common 2,752 文件检查、10 个改动 TS 文件 formatter 和 whitespace 检�
 
 Renderer 4,291、Common 2,752、浏览器集成 4,264 文件类型检查及 Desktop `pnpm build:prepared` 通过。日志 `.build/agenthost-commit-validation/{unit,unit-copy-final,unit-copy-targeted,build-final}.log`；浏览器结果 `.build/desktop/playwright/editor-browser-BuEd2W/`。当前未验证真实外部 SSH、跨平台复制或系统休眠，不将受控 scope 测试计为实际机器验收。本次提交仅包含本任务改动，按仓库提交门禁核对；门禁结果以提交交付报告为准。
 
+## 通用服务作用域契约 · 2026-10-18
+
+本批基线 Ash `972bb6e28`，继续用户已确认的通用服务范围，三个子代理分别推进宿主恢复、文件查询与复制作用域；保留其他正在进行的改动。没有新增产品入口、Renderer 本地资源 broker 或 synced customization。
+
+- 工作区运行时替换 → 平台 Local／Remote host 恢复 → `rendererApi.ts` 重绑当前工作区目录。扩展远端的 `onDidReconnect` 只在首次成功之后、当前代次的扩展初始化完整成功时发布；SSH 使用选中的 workspace carrier，本机设备连接恢复不重绑远端目录。失败沿原日志 owner 记录，下一次恢复仍能重试。测试通过真实 Renderer 装配、MessagePort 与现有 `config/directoryGrants/read`／`env/dirs/set` 端口观察实际目录重绑，不只测试事件次数。
+- Quick Open／附件与 Search View → 文件名／文本查询 → 当前 Workspace snapshot。每个 pending 查询借用其启动时的不可变工作区快照；工作区替换、同 URI 换目录 ID、服务释放或调用者取消立即退役旧等待并阻止迟到进度。事件处理读取 Workspace owner 的当前快照，保留更早监听器或嵌套替换已经启动的新查询；没有第二份工作区状态。文本查询的取消继续传到现有 App Server 搜索 job 的 cancel／release；同批进度回调里切换工作区或关闭服务会停止后续发布。
+- Explorer 复制 → `FileService.copy` → 可选的 `IFileSystemProviderWithCopyScope`。平台 `AgentHostFileSystemProvider` 为整个递归复制固定原始连接、代次和路由；每次执行与目标解析后的 dispatch 都验证作用域，不跨越其他嵌套挂载，也不重新选择替代连接。复制整体取消与目标连接存活分别表达：源连接退役会阻止迟到目标写入，原目标仍有效时可以清理；目标退役则不对新连接执行回滚。无关挂载的变化不取消复制。普通 provider 和原生 copy 快路径保留。已经派发的后端写入仍可能完成，这不是跨连接原子事务；不自动重放，跨连接 rename 继续拒绝。
+
+准入路径为既有 `platform/agentHost/{browser/remoteAgentHostServiceImpl.ts,common/agentHostFileSystemProvider.ts}`、`platform/files/common/{files.ts,fileService.ts}`、`workbench/electron-browser/rendererApi.ts`、`workbench/services/agentHost/common/agentHostFileSearchProvider.ts`、`workbench/services/search/common/searchService.ts` 及对应原测试、台账和 TODO。对应平台／Workbench 文件按已有职责原地修改；Ash 自有文件领域、Renderer 和正式协议保留既定 owner；未更改 Rust、生成 DTO、协议版本、进程拓扑或目录授权规则。
+
+重新核对的前置缺口保持开放：正式双向宿主请求注册表没有 Renderer 本地文件资源请求；`IResourceApi` 只承接后端 connection-owned opaque bytes。Rust `CanonicalPathRoot`／file-access 可复用，但尚无贯通的 Renderer host-resource 身份、realpath／授权 owner 与生产消费者。synced customization 仍无 producer。Workbench 文件查询仍无 include／exclude producer；现有 Tasks problem matcher 已将根、文件 suffix 和排除下推为单个 glob，不以它制造新的交集契约。SDK、账号配额续接、本地模型和独立 Web 启用等产品项继续按根 TODO 保留缺口。
+
+验证：11 文件的定向测试累计 **163 项通过**，覆盖上述真实 Renderer／MessagePort、文件复制与资源释放、搜索 job cancel、重入进度以及层级／App Server 架构。首次标准 `pnpm test:unit:prepared` 完成前置检查时碰到并行 `platform/dialogs/test/electron-main/dialogMainService.test.ts:168` 的 `filePath` 类型错误；本批新搜索测试的 readonly ranges fixture 也一并修正。随后用原 `tsconfig.test.json` 选项收窄输入编译，标准 runner 执行 163 项时仅一个新复制断言遇到 Buffer／Uint8Array 类型差异；保留完整字节比较并统一类型后，62 项 FileService 测试重跑全过，其余 101 项沿用同轮通过结果。早期 Renderer fixture 曾因持久日志追加错误消息导致精确匹配超时，已改为匹配消息前缀与错误内容并增加有界截止时间，最终两个真实装配恢复用例通过。配置位于 `.build/agenthost-contracts-20261018/tsconfig.json`，日志为同目录 `{search-red,services-green,units-final,units-targeted,copy-final}.log`。
+
+Common **2,761**、Renderer **4,300** 文件类型检查通过，Desktop `pnpm build:prepared` 通过；见同目录 `common-final.log`、`renderer-final.log`、`build.log`。本批没有改 UI、产品文案、协议或 Rust；未执行真实外部 SSH、OS sleep／wake、跨平台或多窗口产品验收。提交门禁的具体结果随交付报告列出，不将未纳入本提交的其他工作树错误记为通过。
+
 ## 当前文件台账 · 2026-10-18
 
 首次盘点基线为 Ash `9cdd17c01337eae7119cb62d04d94e1679aee588` 与只读参照 `../vscode` 的 `2de8dcf8062d43587ee1c552d60b099a58e5c9ef`。下面数量保留首次盘点快照，包含当时的重连策略、领域数据拆分、文件 Provider 迁移及新增回归；本轮 Workbench 的局部复核与新增行在 TSV 的 `reviewScope` 单独记录，不据此重新推断其他目录的最新数量。开始时及实施过程中已有 Terminal、Notifications、Sessions 测试、编辑器路线图与根 TODO 的并行变化，本次保留这些变化。

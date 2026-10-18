@@ -5,7 +5,7 @@ import { Disposable } from '../../../../base/common/lifecycle.js';
 import { extUri } from '../../../../base/common/resources.js';
 import { URI } from '../../../../base/common/uri.js';
 import { IFileSearchService } from '../../../../platform/search/common/fileSearch.js';
-import { IWorkspaceContextService } from '../../../../platform/workspace/common/workspace.js';
+import { IWorkspaceContextService, type IWorkspace } from '../../../../platform/workspace/common/workspace.js';
 import { localize } from '../../../../nls.js';
 import type { IFileQuery, ISearchComplete, ISearchResultProvider } from '../../search/common/search.js';
 
@@ -13,22 +13,32 @@ const DEFAULT_MAX_RESULTS = 2_000;
 
 /** Executes Workbench filename queries against the host's authorized directory search. */
 export class AgentHostFileSearchProvider extends Disposable implements ISearchResultProvider {
-	private readonly active = new Set<AbortController>();
+	private readonly active = new Map<AbortController, IWorkspace>();
 
 	constructor(
 		@IWorkspaceContextService private readonly workspace: IWorkspaceContextService,
 		@IFileSearchService private readonly backend: IFileSearchService,
-	) { super(); }
+	) {
+		super();
+		this._register(workspace.onDidChangeWorkspace(() => {
+			// Earlier listeners can replace the workspace again before this queued event is delivered.
+			const current = workspace.getWorkspace();
+			for (const [controller, snapshot] of this.active) {
+				if (snapshot !== current) { controller.abort(); }
+			}
+		}));
+	}
 
 	public async fileSearch(query: IFileQuery, token: CancellationToken = CancellationToken.None): Promise<ISearchComplete> {
 		if (this.isDisposed || token.isCancellationRequested) { throw new CancellationError(); }
+		const snapshot = this.workspace.getWorkspace();
 		const controller = new AbortController();
 		using cancellation = token.onCancellationRequested(() => controller.abort());
-		this.active.add(controller);
+		this.active.set(controller, snapshot);
 		try {
 			const limit = query.maxResults ?? DEFAULT_MAX_RESULTS;
 			if (!Number.isSafeInteger(limit) || limit < 1 || limit > 5_000) { throw new RangeError(localize('search.invalidResultLimit', 'Search result limit must be between 1 and 5000.')); }
-			const workspaceFolders = this.workspace.getWorkspace().folders;
+			const workspaceFolders = snapshot.folders;
 			const folders = query.folderQueries.map(folderQuery => {
 				const folder = workspaceFolders.find(folder => extUri.isEqual(folder.uri, folderQuery.folder));
 				if (!folder) { throw new RangeError(localize('search.folderOutsideWorkspace', 'Search folder is outside the current workspace.')); }
@@ -67,7 +77,7 @@ export class AgentHostFileSearchProvider extends Disposable implements ISearchRe
 	}
 
 	protected override disposeCore(): void {
-		for (const controller of this.active) { controller.abort(); }
+		for (const controller of this.active.keys()) { controller.abort(); }
 		this.active.clear();
 		super.disposeCore();
 	}

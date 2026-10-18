@@ -17,6 +17,7 @@ import {
 	FileSystemProviderCapabilities,
 	hasFileReadStreamCapability,
 	hasPathIdentityCapability,
+	hasCopyScopeCapability,
 	type IFilePathIdentity,
 	type FileDeleteMode,
 	type FileExistingTargetBehavior,
@@ -29,6 +30,7 @@ import {
 	type IFileStreamContent,
 	type IReadFileStreamOptions,
 	type IFileSystemProvider,
+	type IFileSystemProviderCopyScope,
 	type IFileSystemProviderRegistrationEvent,
 	type IFileSystemProviderCapabilitiesChangeEvent,
 	type IFileSystemProviderPathIdentityChangeEvent,
@@ -281,7 +283,11 @@ export class FileService extends Disposable implements IFileService {
 		if (sourceProvider === targetProvider && this.hasCapability(source, FileSystemProviderCapabilities.FileFolderCopy)) {
 			return sourceProvider.copy(source, target);
 		}
-		await this.copyBetweenProviders(sourceProvider, targetProvider, source, target);
+		using sourceScope = acquireCopyScope(sourceProvider, source);
+		using targetScope = acquireCopyScope(targetProvider, target);
+		using cancellation = new CancellationTokenSource(sourceScope.token);
+		using targetRetired = targetScope.token.onCancellationRequested(() => cancellation.cancel());
+		await this.copyBetweenProviders(sourceScope, targetScope, source, target, sourceProvider === targetProvider, cancellation.token);
 	}
 
 	public rename(source: URI, target: URI, existing: FileExistingTargetBehavior): Promise<void> {
@@ -313,14 +319,18 @@ export class FileService extends Disposable implements IFileService {
 		return registration.provider;
 	}
 
-	private async copyBetweenProviders(sourceProvider: IFileSystemProvider, targetProvider: IFileSystemProvider, source: URI, target: URI): Promise<void> {
-		const sourceStat = await sourceProvider.stat(source);
-		if (sourceStat.kind === FileKind.Directory && sourceProvider === targetProvider && extUri.isEqualOrParent(target, source)) {
+	private async copyBetweenProviders(sourceProvider: IFileSystemProviderCopyScope, targetProvider: IFileSystemProviderCopyScope, source: URI, target: URI, sameProvider: boolean, token: CancellationToken): Promise<void> {
+		const run = <T>(operation: () => Promise<T>): Promise<T> => {
+			throwIfCancelled(token);
+			return raceCancellationError(operation(), token);
+		};
+		const sourceStat = await run(() => sourceProvider.stat(source, token));
+		if (sourceStat.kind === FileKind.Directory && sameProvider && extUri.isEqualOrParent(target, source)) {
 			// The generic traversal must never enumerate a destination that it just created inside its source.
 			throw new FileOperationNotSupportedError(source, 'copy');
 		}
 		try {
-			await targetProvider.stat(target);
+			await run(() => targetProvider.stat(target, token));
 			throw new Error(`Copy target already exists: ${target.toString()}`);
 		} catch (error) {
 			if (!(error instanceof FileNotFoundError)) {
@@ -328,21 +338,22 @@ export class FileService extends Disposable implements IFileService {
 			}
 		}
 		if (sourceStat.kind === FileKind.File) {
-			const { bytes } = await sourceProvider.readFile(source);
+			const { bytes } = await run(() => sourceProvider.readFile(source, token));
 			// Storage owns failed publication cleanup; deleting here could remove an intervening writer's file.
-			await targetProvider.writeFile(target, bytes, { create: true, overwrite: false });
+			await run(() => targetProvider.writeFile(target, bytes, { create: true, overwrite: false }, token));
 			return;
 		}
 		if (sourceStat.kind !== FileKind.Directory) {
 			throw new FileOperationNotSupportedError(source, 'copy');
 		}
-		await targetProvider.createDirectory(target);
+		await run(() => targetProvider.createDirectory(target, token));
 		try {
-			for (const entry of await sourceProvider.readDirectory(source)) {
-				await this.copyBetweenProviders(sourceProvider, targetProvider, entry.resource, URI.joinPath(target, entry.name));
+			for (const entry of await run(() => sourceProvider.readDirectory(source, token))) {
+				await this.copyBetweenProviders(sourceProvider, targetProvider, entry.resource, URI.joinPath(target, entry.name), sameProvider, token);
 			}
 		} catch (error) {
-			await targetProvider.delete(target, 'error', 'recursive');
+			// A retired target belongs to its old connection. Cleanup must never resolve a replacement route.
+			if (!targetProvider.token.isCancellationRequested) { await targetProvider.delete(target, 'error', 'recursive'); }
 			throw error;
 		}
 	}
@@ -357,4 +368,17 @@ export class FileService extends Disposable implements IFileService {
 			this.changeEmitter.fire({ resources });
 		}
 	}
+}
+
+function acquireCopyScope(provider: IFileSystemProvider, resource: URI): IFileSystemProviderCopyScope {
+	if (hasCopyScopeCapability(provider)) { return provider.acquireCopyScope(resource); }
+	return Object.assign(toDisposable(() => { }), {
+		token: CancellationToken.None,
+		stat: provider.stat.bind(provider),
+		readDirectory: provider.readDirectory.bind(provider),
+		readFile: provider.readFile.bind(provider),
+		writeFile: (uri: URI, bytes: Uint8Array, options: IFileWriteOptions) => provider.writeFile(uri, bytes, options),
+		createDirectory: provider.createDirectory.bind(provider),
+		delete: provider.delete.bind(provider),
+	});
 }

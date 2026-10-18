@@ -27,6 +27,8 @@ import {
 	type IFileContent,
 	type IFilePathIdentity,
 	type IFileSystemProviderWithPathIdentity,
+	type IFileSystemProviderWithCopyScope,
+	type IFileSystemProviderCopyScope,
 	type IFileChangeEvent,
 	type IFileEntry,
 	type IFileSystemProviderWithFileReadStreamCapability,
@@ -89,7 +91,7 @@ const MAX_TRANSIENT_PATH_RULES = 4096;
 /**
  * Routes resource URIs to backend-authorized directories independently of the visible Workspace.
  */
-export class AgentHostFileSystemProvider extends Disposable implements IFileSystemProviderWithFileReadStreamCapability, IFileSystemProviderWithPathIdentity, ISystemFileTransferService {
+export class AgentHostFileSystemProvider extends Disposable implements IFileSystemProviderWithFileReadStreamCapability, IFileSystemProviderWithPathIdentity, IFileSystemProviderWithCopyScope, ISystemFileTransferService {
 	// Unknown rules preserve spelling; confirmed rules are applied per directory below.
 	public get capabilities(): FileSystemProviderCapabilities {
 		const capabilities = FileSystemProviderCapabilities.FileReadWrite | FileSystemProviderCapabilities.FileReadStream
@@ -121,6 +123,7 @@ export class AgentHostFileSystemProvider extends Disposable implements IFileSyst
 	private connectionEpoch = 0;
 	private readonly authorities = new Map<string, Map<string, AuthorityRoot>>();
 	private readonly authorityLifetimes = this._register(new DisposableStore());
+	private readonly copyScopes = this._register(new DisposableStore());
 
 	readonly onDidChangeFiles = this.fileChanges.event;
 
@@ -224,6 +227,47 @@ export class AgentHostFileSystemProvider extends Disposable implements IFileSyst
 		const result = await raceCancellationError(operation(provider), cancellation.token);
 		if (provider.isDisposed || generation !== provider.api.connectionGeneration || epoch !== provider.connectionEpoch) { throw canceled(); }
 		return result;
+	}
+
+	public acquireCopyScope(resource: URI): IFileSystemProviderCopyScope {
+		const route = this.connectionRoute(resource);
+		const provider = route ? route.provider : this;
+		if (!provider) { throw canceled(); }
+		const generation = provider.api.connectionGeneration;
+		const epoch = provider.connectionEpoch;
+		const lifetime = new DisposableStore();
+		const cancellation = new CancellationTokenSource(route?.cancellation.token);
+		lifetime.add(toDisposable(() => cancellation.dispose(true)));
+		const token = cancellation.token;
+		lifetime.add(Event.once(provider.api.onDidChangeConnection)(() => cancellation.cancel()));
+		provider.copyScopes.add(lifetime);
+		const assertCurrent = (uri: URI, operationToken: CancellationToken): void => {
+			if (token.isCancellationRequested || operationToken.isCancellationRequested || this.isDisposed || provider.isDisposed || generation !== provider.api.connectionGeneration || epoch !== provider.connectionEpoch || this.connectionRoute(uri) !== route) { throw canceled(); }
+			const entries = this.authorities.get(resource.authority.toLowerCase());
+			// Recursive traversal and rollback cover descendants too. Crossing a nested
+			// mount would access the parent backend beneath another connection's namespace.
+			if (entries && [...entries.values()].some(entry => extUri.isEqualOrParent(entry.resource, resource) && (!entry.route || entry.route !== route))) { throw canceled(); }
+		};
+		const run = async <T>(uri: URI, operation: (assertScope: () => void) => Promise<T>, operationToken: CancellationToken = CancellationToken.None): Promise<T> => {
+			const assertScope = (): void => assertCurrent(uri, operationToken);
+			assertScope();
+			using pending = new CancellationTokenSource(token);
+			using cancelled = operationToken.onCancellationRequested(() => pending.cancel());
+			const result = await raceCancellationError(operation(assertScope), pending.token);
+			assertScope();
+			return result;
+		};
+		// The selected connection's execution methods bypass the mutable authority registry.
+		// In particular, rollback cannot rediscover a newly mounted owner of the same URI.
+		return Object.assign(toDisposable(() => { provider.copyScopes.delete(lifetime); lifetime.dispose(); }), {
+			token,
+			stat: (uri: URI, operationToken?: CancellationToken) => run(uri, check => provider.statOnConnection(uri, check), operationToken),
+			readDirectory: (uri: URI, operationToken?: CancellationToken) => run(uri, check => provider.readDirectoryOnConnection(uri, check), operationToken),
+			readFile: (uri: URI, operationToken?: CancellationToken) => run(uri, check => provider.readFileOnConnection(uri, check), operationToken),
+			writeFile: (uri: URI, bytes: Uint8Array, options: IFileWriteOptions, operationToken?: CancellationToken) => run(uri, check => provider.writeContents(uri, bytes, undefined, options, undefined, check), operationToken),
+			createDirectory: (uri: URI, operationToken?: CancellationToken) => run(uri, check => provider.createDirectoryOnConnection(uri, check), operationToken),
+			delete: (uri: URI, missing: FileMissingTargetBehavior, mode: FileDeleteMode, operationToken?: CancellationToken) => run(uri, check => provider.deleteOnConnection(uri, missing, mode, check), operationToken),
+		});
 	}
 
 	public getPathIdentity(resource: URI): IFilePathIdentity {
@@ -445,9 +489,13 @@ export class AgentHostFileSystemProvider extends Disposable implements IFileSyst
 	async stat(resource: URI): Promise<IFileStat> {
 		const route = this.connectionRoute(resource);
 		if (route) { return this.onRoute(route, provider => provider.stat(resource)); }
+		return this.statOnConnection(resource);
+	}
+
+	private async statOnConnection(resource: URI, assertScope?: () => void): Promise<IFileStat> {
 		if (this.isConfiguration(resource)) return (await this.configurationFiles!.read(resource)).stat;
 		let result;
-		try { result = await this.onFileTarget(resource, target => this.api.getMetadata(target)); }
+		try { result = await this.onFileTarget(resource, target => this.api.getMetadata(target), assertScope); }
 		catch (error) { if (isFileNotFound(error)) throw new FileNotFoundError(resource); throw error; }
 		return {
 			resource,
@@ -461,8 +509,12 @@ export class AgentHostFileSystemProvider extends Disposable implements IFileSyst
 	async readDirectory(resource: URI): Promise<readonly IFileEntry[]> {
 		const route = this.connectionRoute(resource);
 		if (route) { return this.onRoute(route, provider => provider.readDirectory(resource)); }
+		return this.readDirectoryOnConnection(resource);
+	}
+
+	private async readDirectoryOnConnection(resource: URI, assertScope?: () => void): Promise<readonly IFileEntry[]> {
 		let result: Awaited<ReturnType<IFileApi['readDirectory']>>;
-		try { result = await this.onFileTarget(resource, target => this.api.readDirectory(target)); }
+		try { result = await this.onFileTarget(resource, target => this.api.readDirectory(target), assertScope); }
 		catch (error) { if (isFileNotFound(error)) throw new FileNotFoundError(resource); throw error; }
 		return result.entries.map((entry) => ({
 			resource: resource.joinPathSegment(entry.name),
@@ -474,6 +526,10 @@ export class AgentHostFileSystemProvider extends Disposable implements IFileSyst
 	async readFile(resource: URI): Promise<IFileBytes> {
 		const route = this.connectionRoute(resource);
 		if (route) { return this.onRoute(route, provider => provider.readFile(resource)); }
+		return this.readFileOnConnection(resource);
+	}
+
+	private async readFileOnConnection(resource: URI, assertScope?: () => void): Promise<IFileBytes> {
 		if (this.isConfiguration(resource)) return this.configurationFiles!.read(resource);
 		const generation = this.resourceApi.connectionGeneration;
 		const epoch = this.connectionEpoch;
@@ -481,6 +537,7 @@ export class AgentHostFileSystemProvider extends Disposable implements IFileSyst
 		try {
 			const target = await this.fileTarget(resource);
 			this.assertResourceConnection(generation, epoch);
+			assertScope?.();
 			result = await this.api.readBinaryFile(target);
 		}
 		catch (error) { if (isFileNotFound(error)) throw new FileNotFoundError(resource); throw error; }
@@ -620,7 +677,7 @@ export class AgentHostFileSystemProvider extends Disposable implements IFileSyst
 		return this.writeContents(resource, content, encoding, options, signal);
 	}
 
-	private async writeContents(resource: URI, content: string | Uint8Array, encoding: string | undefined, options: IFileWriteOptions, signal?: AbortSignal): Promise<IFileWriteResult> {
+	private async writeContents(resource: URI, content: string | Uint8Array, encoding: string | undefined, options: IFileWriteOptions, signal?: AbortSignal, assertScope?: () => void): Promise<IFileWriteResult> {
 		if (this.isConfiguration(resource)) {
 			if (signal?.aborted) throw canceled();
 			return this.configurationFiles!.write(resource, typeof content === 'string' ? new TextEncoder().encode(content) : content, options);
@@ -643,7 +700,7 @@ export class AgentHostFileSystemProvider extends Disposable implements IFileSyst
 						...target,
 						dataBase64: encodeBinaryFile(content),
 						options: { mode, ...(options.unlock ? { unlock: true } : {}), ...(options.expectedRevision === undefined ? {} : { expectedRevision: options.expectedRevision }) },
-					}));
+					}), assertScope);
 			return Object.freeze({
 				stat: {
 					resource,
@@ -685,13 +742,17 @@ export class AgentHostFileSystemProvider extends Disposable implements IFileSyst
 	async createDirectory(resource: URI): Promise<IFileStat> {
 		const route = this.connectionRoute(resource);
 		if (route) { return this.onRoute(route, provider => provider.createDirectory(resource)); }
+		return this.createDirectoryOnConnection(resource);
+	}
+
+	private async createDirectoryOnConnection(resource: URI, assertScope?: () => void): Promise<IFileStat> {
 		const configuration = this.configuration();
 		if (this.configurationFiles && configuration && dirname(configuration).toString() === resource.toString()) {
 			// The metadata host already created this directory. This does not grant
 			// browsing or mutation rights to other files beside the workspace file.
 			return { resource, kind: FileKind.Directory, sizeBytes: 0, readonly: false, modifiedAtMillis: undefined };
 		}
-		const result = await this.onFileTarget(resource, target => this.api.createDirectory(target));
+		const result = await this.onFileTarget(resource, target => this.api.createDirectory(target), assertScope);
 		return { resource, kind: fileKind(result.fileType), sizeBytes: result.sizeBytes, readonly: result.readonly, modifiedAtMillis: result.modifiedAtMillis ?? undefined };
 	}
 
@@ -738,7 +799,11 @@ export class AgentHostFileSystemProvider extends Disposable implements IFileSyst
 	async delete(resource: URI, missing: FileMissingTargetBehavior, mode: FileDeleteMode): Promise<void> {
 		const route = this.connectionRoute(resource);
 		if (route) { return this.onRoute(route, provider => provider.delete(resource, missing, mode)); }
-		return this.onFileTarget(resource, target => this.api.delete({ ...target, missing, mode }));
+		return this.deleteOnConnection(resource, missing, mode);
+	}
+
+	private deleteOnConnection(resource: URI, missing: FileMissingTargetBehavior, mode: FileDeleteMode, assertScope?: () => void): Promise<void> {
+		return this.onFileTarget(resource, target => this.api.delete({ ...target, missing, mode }), assertScope);
 	}
 
 	private knownDirectory(resource: URI): IFileSystemDirectory | undefined {
@@ -775,13 +840,14 @@ export class AgentHostFileSystemProvider extends Disposable implements IFileSyst
 		return pending;
 	}
 
-	private async onFileTarget<T>(resource: URI, operation: (target: ReturnType<AgentHostFileSystemProvider['directoryTarget']>) => Promise<T>): Promise<T> {
+	private async onFileTarget<T>(resource: URI, operation: (target: ReturnType<AgentHostFileSystemProvider['directoryTarget']>) => Promise<T>, assertScope?: () => void): Promise<T> {
 		const generation = this.api.connectionGeneration;
 		const epoch = this.connectionEpoch;
 		const target = await this.fileTarget(resource);
 		// Resolving even a known root yields to the caller. Retiring its mount or
 		// connection during that await must prevent dispatch, especially for writes.
 		if (this.isDisposed || generation !== this.api.connectionGeneration || epoch !== this.connectionEpoch) { throw canceled(); }
+		assertScope?.();
 		return operation(target);
 	}
 

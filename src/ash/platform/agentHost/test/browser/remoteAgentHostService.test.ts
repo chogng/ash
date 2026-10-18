@@ -62,15 +62,19 @@ test('remote service reacquires its endpoint and reinitializes extensions after 
 		initialize: async () => { initialized++; },
 	} satisfies ConstructorParameters<typeof RemoteAgentHostService>[0]);
 	const client = service.client;
+	let reconnects = 0;
+	using reconnect = service.onDidReconnect(() => { reconnects++; });
 	const initial = service.connect();
 	assert.equal(service.connect(), initial);
 	await initial;
+	assert.equal(reconnects, 0);
 	localRestart.fire();
 	localRestart.fire();
 	await service.whenConnected();
 	assert.equal(service.client, client);
 	assert.equal(client.state, 'ready');
 	assert.deepEqual({ initialized, resolutions, generation: client.generation }, { initialized: 2, resolutions: 2, generation: 2 });
+	assert.equal(reconnects, 1);
 	assert.equal(sockets[0].isDisposed, true);
 	service.dispose();
 	assert.equal(sockets[1].isDisposed, true);
@@ -100,13 +104,17 @@ test('remote extension initialization failure is logged and retried even while t
 				if (++initialized === 2) { throw new Error('remote extension initialization failed'); }
 			},
 		} satisfies ConstructorParameters<typeof RemoteAgentHostService>[0]);
+		let reconnects = 0;
+		using reconnect = service.onDidReconnect(() => { reconnects++; });
 		await service.connect();
 		localRestart.fire();
 		await assert.rejects(service.whenConnected(), /remote extension initialization failed/);
 		assert.equal(service.client.state, 'ready');
+		assert.equal(reconnects, 0);
 		mock.timers.tick(100);
 		await service.whenConnected();
 		assert.equal(initialized, 3);
+		assert.equal(reconnects, 1);
 		const errors = entries.filter(entry => entry.error !== undefined);
 		assert.equal(errors.length, 1);
 		assert.match((errors[0].error as Error).message, /remote extension initialization failed/);
@@ -276,6 +284,8 @@ suite('remote extension initialization retirement', () => {
 					}
 				},
 			} satisfies ConstructorParameters<typeof RemoteAgentHostService>[0]);
+			let reconnects = 0;
+			using reconnect = service.onDidReconnect(() => { reconnects++; });
 			const connecting = service.connect();
 			void connecting.catch(() => { });
 			await entered.p;
@@ -286,6 +296,7 @@ suite('remote extension initialization retirement', () => {
 			assert.equal(service.recovery.status, 'recovering');
 			await fresh.complete();
 			await connecting;
+			assert.equal(reconnects, 0, 'the first completed incarnation is initialization, not reconnection');
 			if (outcome === 'success') { await obsolete.complete(); }
 			else { await obsolete.error(new Error('obsolete initialization failed')); }
 			await new Promise<void>(resolve => setImmediate(resolve));
@@ -293,6 +304,7 @@ suite('remote extension initialization retirement', () => {
 			assert.equal(service.client.generation, 2);
 			assert.equal(service.recovery.status, 'idle');
 			assert.deepEqual(errors, []);
+			assert.equal(reconnects, 0, 'an obsolete initialization cannot publish recovery');
 			assert.equal(sockets[0].isDisposed, true);
 			service.dispose();
 			assert.equal(sockets[1].isDisposed, true);

@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { suite, test } from 'mocha';
 import { DeferredPromise } from '../../../../base/common/async.js';
+import { CancellationTokenSource } from '../../../../base/common/cancellation.js';
 import { isCancellationError } from '../../../../base/common/errors.js';
 import { Emitter } from '../../../../base/common/event.js';
 import { Schemas } from '../../../../base/common/network.js';
@@ -174,6 +175,75 @@ suite('Agent Host filesystem authority routes', () => {
 		registration.dispose();
 		await assert.rejects(pending, isCancellationError);
 		assert.deepEqual(mutations, []);
+	});
+
+	for (const primary of [false, true]) {
+		test(`a ${primary ? 'primary' : 'mounted'} copy scope cannot cross an existing or newly mounted nested route`, async () => {
+			let parentCalls = 0;
+			let nestedCalls = 0;
+			const parent = connection(root, 'parent', {
+				getMetadata: async () => { parentCalls++; return { fileType: 'file', sizeBytes: 1, readonly: false, modifiedAtMillis: null }; },
+			});
+			using provider = new AgentHostFileSystemProvider(primary ? parent : connection(URI.file('/workspace'), 'primary'));
+			using parentMount = primary ? undefined : provider.registerAuthority(root.authority, parent);
+			using scope = provider.acquireCopyScope(root);
+			const nested = URI.joinPath(root, 'nested');
+			const nestedConnection = (uri: URI) => connection(uri, 'nested', {
+				getMetadata: async () => { nestedCalls++; return { fileType: 'file', sizeBytes: 1, readonly: false, modifiedAtMillis: null }; },
+			});
+			using existing = provider.registerAuthority(root.authority, nestedConnection(nested));
+			await assert.rejects(scope.stat(URI.joinPath(nested, 'file.ts')), isCancellationError);
+			const late = URI.joinPath(root, 'late');
+			using lateScope = provider.acquireCopyScope(late);
+			const pending = lateScope.stat(URI.joinPath(late, 'file.ts'));
+			using lateMount = provider.registerAuthority(root.authority, nestedConnection(late));
+			await assert.rejects(pending, isCancellationError);
+			assert.deepEqual({ parentCalls, nestedCalls }, { parentCalls: 0, nestedCalls: 0 });
+		});
+	}
+
+	test('source retirement blocks a late target dispatch while its original cleanup scope remains usable', async () => {
+		using provider = new AgentHostFileSystemProvider(connection(URI.file('/workspace'), 'primary'));
+		const sourceRoot = root.with({ authority: 'ssh+source' });
+		using sourceMount = provider.registerAuthority(sourceRoot.authority, connection(sourceRoot, 'source'));
+		const target = connection(root, 'target');
+		let directories = target.directories();
+		const started = new DeferredPromise<void>();
+		const resolved = new DeferredPromise<IFileSystemDirectory>();
+		let writes = 0;
+		let cleanups = 0;
+		using targetMount = provider.registerAuthority(root.authority, {
+			...target,
+			directories: () => directories,
+			api: {
+				...target.api,
+				resolvePath: () => { void started.complete(); return resolved.p; },
+				writeBinaryFile: async () => { writes++; throw new Error('Cancelled copy must not publish'); },
+				delete: async () => { cleanups++; },
+			},
+		});
+		using sourceScope = provider.acquireCopyScope(sourceRoot);
+		using targetScope = provider.acquireCopyScope(root);
+		using cancellation = new CancellationTokenSource(sourceScope.token);
+		directories = [{ uri: root.with({ path: '/other' }), target: { type: 'environment', dirId: 'other' } }];
+		const resource = URI.joinPath(root, 'copied.bin');
+		const writing = targetScope.writeFile(resource, new Uint8Array([42]), { create: true, overwrite: false }, cancellation.token);
+		const rejected = assert.rejects(writing, isCancellationError);
+		await started.p;
+		sourceMount.dispose();
+		try {
+			await rejected;
+			assert.equal(targetScope.token.isCancellationRequested, false);
+			// Join the same target-resolution task to observe its dispatch phase without timing sleeps.
+			const observation = targetScope.stat(resource);
+			await resolved.complete({ uri: root, target: { type: 'environment', dirId: 'target' } });
+			await observation;
+			assert.equal(writes, 0);
+			await targetScope.delete(resource, 'ignore', 'recursive');
+			assert.equal(cleanups, 1);
+		} finally {
+			if (!resolved.isSettled) { await resolved.complete({ uri: root, target: { type: 'environment', dirId: 'target' } }); }
+		}
 	});
 
 	test('native cross-connection copy and rename fail before either backend receives a mutation', async () => {

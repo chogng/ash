@@ -3,7 +3,7 @@ import { createHash } from 'node:crypto';
 import { setNlsMessages, resetNlsResolver } from '../../../../nls.js';
 import type { IFileApi, IFileSystemDirectory } from '../../common/fileApi.js';
 import { InMemoryFileSystemProvider } from '../../common/inMemoryFilesystemProvider.js';
-import { toDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
+import { DisposableStore, toDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
 import { type IFileWriteOptions, type IWatchOptions, FileSystemProviderCapabilities } from '../../common/files.js';
 import { FileService } from '../../../../platform/files/common/fileService.js';
 import { FileOperationNotSupportedError, type IFileSystemProvider, type FileDeleteMode, type FileExistingTargetBehavior, type FileMissingTargetBehavior, type IFileBytes, type IFileChangeEvent, type IFileEntry, type IFileStat, type IFileWriteResult } from '../../../../platform/files/common/files.js';
@@ -1289,4 +1289,138 @@ function copyConnection(storage: InMemoryFileSystemProvider, root: URI, id: stri
 		},
 	};
 	return { connection, resources, get nativeCopies() { return nativeCopies; } };
+}
+
+suite('FileService pinned copy scopes', () => {
+	ensureNoDisposablesAreLeakedInTestSuite();
+
+	test('retiring the target during a source read cannot publish into its replacement connection', async () => {
+		using fixture = await copyScopeFixture();
+		const pendingRead = pauseCopySource(fixture.sourceHost.connection);
+		const writes: string[] = [];
+		const write = fixture.targetHost.connection.api.writeBinaryFile;
+		fixture.targetHost.connection.api.writeBinaryFile = async params => { writes.push('old'); return write(params); };
+		const copying = fixture.files.copy(fixture.source, fixture.target);
+		const rejected = assert.rejects(copying, CancellationError);
+		await pendingRead.started.p;
+		fixture.targetMount!.dispose();
+		const replacement = copyConnection(fixture.replacementStorage, fixture.targetRoot, 'replacement');
+		const replacementWrite = replacement.connection.api.writeBinaryFile;
+		replacement.connection.api.writeBinaryFile = async params => { writes.push('new'); return replacementWrite(params); };
+		using mounted = fixture.provider.registerAuthority(fixture.targetRoot.authority, replacement.connection);
+		try {
+			await rejected;
+			assert.equal(pendingRead.resume.isSettled, false);
+		} finally { await pendingRead.resume.complete(); }
+		await pendingRead.released.p;
+		assert.deepEqual(writes, []);
+		assert.deepEqual(await fixture.replacementStorage.readDirectory(fixture.targetRoot), []);
+	});
+
+	test('a failed directory copy cannot roll back a replacement connection directory', async () => {
+		using fixture = await copyScopeFixture();
+		const started = new DeferredPromise<void>();
+		const resume = new DeferredPromise<void>();
+		const finished = new DeferredPromise<void>();
+		const sourceDirectory = URI.joinPath(fixture.sourceRoot, 'directory');
+		await fixture.sourceStorage.createDirectory(sourceDirectory);
+		fixture.sourceHost.connection.api.readDirectory = async () => {
+			void started.complete();
+			try { await resume.p; throw new Error('Old source enumeration failed'); }
+			finally { void finished.complete(); }
+		};
+		const deletes: string[] = [];
+		const originalDelete = fixture.targetHost.connection.api.delete;
+		fixture.targetHost.connection.api.delete = async params => { deletes.push('old'); await originalDelete(params); };
+		const copying = fixture.files.copy(sourceDirectory, fixture.target);
+		const rejected = assert.rejects(copying, CancellationError);
+		await started.p;
+		fixture.targetMount!.dispose();
+		await fixture.replacementStorage.createDirectory(fixture.target);
+		const retained = URI.joinPath(fixture.target, 'keep.txt');
+		await fixture.replacementStorage.writeFile(retained, new Uint8Array([42]), { create: true, overwrite: false });
+		const replacement = copyConnection(fixture.replacementStorage, fixture.targetRoot, 'replacement');
+		const replacementDelete = replacement.connection.api.delete;
+		replacement.connection.api.delete = async params => { deletes.push('new'); await replacementDelete(params); };
+		using mounted = fixture.provider.registerAuthority(fixture.targetRoot.authority, replacement.connection);
+		try { await rejected; }
+		finally { await resume.complete(); }
+		await finished.p;
+		assert.deepEqual(deletes, []);
+		assert.deepEqual((await fixture.replacementStorage.readFile(retained)).bytes, new Uint8Array([42]));
+	});
+
+	test('mounting and retiring an unrelated route leaves a valid copy running', async () => {
+		using fixture = await copyScopeFixture();
+		const pendingRead = pauseCopySource(fixture.sourceHost.connection);
+		const copying = fixture.files.copy(fixture.source, fixture.target);
+		await pendingRead.started.p;
+		const unrelatedRoot = createSshRemoteWorkspaceUri('unrelated', '/other');
+		const unrelated = copyConnection(fixture.replacementStorage, unrelatedRoot, 'unrelated');
+		using mounted = fixture.provider.registerAuthority(unrelatedRoot.authority, unrelated.connection);
+		mounted.dispose();
+		await pendingRead.resume.complete();
+		await copying;
+		assert.deepEqual(Uint8Array.from((await fixture.targetStorage.readFile(fixture.target)).bytes), new Uint8Array([1, 2, 3]));
+		assert.equal(fixture.sourceHost.resources.size, 0);
+	});
+
+	for (const primary of [false, true]) {
+		test(`a same-generation ${primary ? 'primary' : 'selected route'} reconnect retires the copy before publication`, async () => {
+			using fixture = await copyScopeFixture(primary);
+			const pendingRead = pauseCopySource(fixture.sourceHost.connection);
+			let writes = 0;
+			const write = fixture.targetHost.connection.api.writeBinaryFile;
+			fixture.targetHost.connection.api.writeBinaryFile = async params => { writes++; return write(params); };
+			const copying = fixture.files.copy(fixture.source, fixture.target);
+			const rejected = assert.rejects(copying, CancellationError);
+			await pendingRead.started.p;
+			fixture.targetChanged.fire();
+			try {
+				await rejected;
+				assert.equal(pendingRead.resume.isSettled, false);
+			} finally { await pendingRead.resume.complete(); }
+			await pendingRead.released.p;
+			assert.equal(writes, 0);
+			await assert.rejects(fixture.targetStorage.stat(fixture.target), FileNotFoundError);
+		});
+	}
+});
+
+async function copyScopeFixture(primary = false) {
+	const resources = new DisposableStore();
+	try {
+		const sourceRoot = createSshRemoteWorkspaceUri('source', '/source');
+		const targetRoot = createSshRemoteWorkspaceUri('target', '/target');
+		const sourceStorage = resources.add(new InMemoryFileSystemProvider());
+		const targetStorage = resources.add(new InMemoryFileSystemProvider());
+		const replacementStorage = resources.add(new InMemoryFileSystemProvider());
+		await sourceStorage.createDirectory(sourceRoot);
+		await targetStorage.createDirectory(targetRoot);
+		await replacementStorage.createDirectory(targetRoot);
+		const source = URI.joinPath(sourceRoot, 'source.bin');
+		const target = URI.joinPath(targetRoot, 'copied');
+		await sourceStorage.writeFile(source, new Uint8Array([1, 2, 3]), { create: true, overwrite: false });
+		const sourceHost = copyConnection(sourceStorage, sourceRoot, 'source');
+		let targetHost = copyConnection(targetStorage, targetRoot, 'target');
+		const targetChanged = resources.add(new Emitter<void>());
+		targetHost = { ...targetHost, connection: { ...targetHost.connection, api: { ...targetHost.connection.api, onDidChangeConnection: targetChanged.event } } };
+		const provider = resources.add(new AgentHostFileSystemProvider(primary ? targetHost.connection : { api: unavailableFileApi(), resourceApi: unavailableResourceApi() }));
+		resources.add(provider.registerAuthority(sourceRoot.authority, sourceHost.connection));
+		const targetMount = primary ? undefined : resources.add(provider.registerAuthority(targetRoot.authority, targetHost.connection));
+		const files = resources.add(new FileService());
+		resources.add(files.registerProvider('ash-remote', provider));
+		return { ...toDisposable(() => resources.dispose()), provider, files, sourceRoot, targetRoot, source, target, sourceStorage, targetStorage, replacementStorage, sourceHost, targetHost, targetMount, targetChanged };
+	} catch (error) { resources.dispose(); throw error; }
+}
+
+function pauseCopySource(connection: IRemoteFilesystemConnection) {
+	const started = new DeferredPromise<void>();
+	const resume = new DeferredPromise<void>();
+	const released = new DeferredPromise<void>();
+	const read = connection.api.readBinaryFile;
+	const release = connection.resourceApi.release;
+	connection.api.readBinaryFile = async params => { void started.complete(); await resume.p; return read(params); };
+	connection.resourceApi.release = async params => { await release(params); await released.complete(); };
+	return { started, resume, released };
 }

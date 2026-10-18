@@ -135,14 +135,12 @@ export async function createElectronRendererApi(contributions: readonly Electron
 			const replacement = subscribe('ash:terminal:prepareReplacement', () => terminals.prepareForServerReplacement());
 			resources.add(toDisposable(() => replacement.dispose()));
 			await initializeWorkspace(client, workspaceTrust, backend.workspaceTrust, workspaceApi);
-			if (remoteConnection.kind === 'local') {
-				// Directory bindings belong to the backend connection and disappear when
-				// a development rebuild replaces it. Restore them from the workspace owner.
-				resources.add(localConnection.onDidReconnect(() => {
-					void initializeWorkspace(client, workspaceTrust, backend.workspaceTrust, workspaceApi)
-						.catch(error => connectionLogger.error('app-server', 'Workspace recovery failed', error));
-				}));
-			}
+			// The selected execution host needs its roots after a runtime replacement,
+			// including SSH and extension hosts; local device recovery is independent.
+			resources.add(connection.onDidReconnect(() => {
+				void initializeWorkspace(client, workspaceTrust, backend.workspaceTrust, workspaceApi)
+					.catch(error => { if (!resources.isDisposed && !isCancellationError(error)) connectionLogger.error('app-server', 'Workspace recovery failed', error); });
+			}));
 			performance.mark('ash.rendererApi.workspace-initialized');
 		} else {
 			backend = createDisconnectedRendererApi();
