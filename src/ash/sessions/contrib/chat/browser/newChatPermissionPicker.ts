@@ -1,4 +1,7 @@
 import { addDisposableListener, h } from '../../../../base/browser/dom.js';
+import { KeybindingLabel } from '../../../../base/browser/ui/keybindinglabel/keybindinglabel.js';
+import { Keybinding, logicalKey, resolveKeybinding } from '../../../../base/common/keybindings.js';
+import { defaultKeybindingLabelStyles } from '../../../../platform/theme/browser/defaultStyles.js';
 import { appendIcon } from '../../../../base/browser/ui/lxicons/lxicon.js';
 import { ContextViewFocusRestore } from '../../../../base/browser/ui/contextview/contextview.js';
 import { Disposable, DisposableStore, toDisposable } from '../../../../base/common/lifecycle.js';
@@ -85,11 +88,14 @@ export class NewChatPermissionPicker extends Disposable {
 			check.className = 'ash-sessions-permission-check';
 			check.setAttribute('aria-hidden', 'true');
 			appendIcon(Lxicon.check, check);
-			const shortcut = h(menu.ownerDocument, 'span');
-			shortcut.className = 'ash-sessions-permission-shortcut';
-			shortcut.setAttribute('aria-hidden', 'true');
-			shortcut.textContent = String(index + 1);
-			item.append(text, check, shortcut);
+			item.append(text, check);
+			const shortcut = this.listeners.add(new KeybindingLabel(item, {
+				...defaultKeybindingLabelStyles,
+				keybinding: resolveKeybinding(Keybinding.single(logicalKey(String(index + 1)))),
+				presentation: 'keycap',
+			}));
+			shortcut.element.classList.add('ash-sessions-permission-shortcut');
+			shortcut.element.setAttribute('aria-hidden', 'true');
 			this.listeners.add(addDisposableListener(item, 'click', () => activate(`sessions.chat.permission.${definition.id}`)));
 			menu.append(item);
 			buttons.push(item);

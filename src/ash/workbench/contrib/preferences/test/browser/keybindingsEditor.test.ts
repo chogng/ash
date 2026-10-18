@@ -302,6 +302,10 @@ test('Keyboard Shortcuts reuses one modal and reconciles resource rows across ed
 	findButton(alpha, 'Edit').click();
 	const recorder = ownerDocument.querySelector<HTMLInputElement>('.ash-keybindings-record-input input');
 	assert.ok(recorder);
+	for (const shiftKey of [false, true]) {
+		press(recorder, 'Tab', 'Tab', { shiftKey });
+		assert.equal(ownerDocument.activeElement, recorder, 'Nested recorder retains focus within the real modal editor host');
+	}
 	recorder.dispatchEvent(new browserEnvironment.window.KeyboardEvent('keydown', {
 		bubbles: true,
 		cancelable: true,
@@ -311,7 +315,7 @@ test('Keyboard Shortcuts reuses one modal and reconciles resource rows across ed
 		shiftKey: true,
 	}));
 	assert.equal(conflictingCommandExecutions, 0);
-	assert.equal(recorder.value, 'ctrl+shift+[KeyP]');
+	assert.equal(recorder.value, 'ctrl+shift+p');
 	recorder.dispatchEvent(new browserEnvironment.window.KeyboardEvent('keydown', {
 		bubbles: true,
 		cancelable: true,
@@ -319,10 +323,10 @@ test('Keyboard Shortcuts reuses one modal and reconciles resource rows across ed
 		key: 'k',
 		ctrlKey: true,
 	}));
-	assert.equal(recorder.value, 'ctrl+shift+[KeyP] ctrl+[KeyK]');
+	assert.equal(recorder.value, 'ctrl+shift+p ctrl+k');
 	const editorRoot = ownerDocument.querySelector<HTMLElement>('.ash-keybindings-editor');
 	assert.ok(editorRoot);
-	findButton(editorRoot, 'Save').click();
+	press(recorder, 'Enter', 'Enter');
 	await waitForStatus(ownerDocument, 'Keybinding saved.');
 	assert.equal((await resources.read())[0]?.key, 'ctrl+shift+[KeyP] ctrl+[KeyK]');
 
@@ -367,7 +371,7 @@ test('Keyboard Shortcuts reuses one modal and reconciles resource rows across ed
 	assert.ok(remainingRoot);
 	findButton(shortcutRow(ownerDocument, 'test.shortcuts.alpha')!, 'Edit').click();
 	press(remainingRoot.querySelector<HTMLInputElement>('.ash-keybindings-record-input input')!, 'KeyJ', 'j', { ctrlKey: true });
-	findButton(remainingRoot, 'Save').click();
+	press(remainingRoot.querySelector<HTMLInputElement>('.ash-keybindings-record-input input')!, 'Enter', 'Enter');
 	await waitForStatus(ownerDocument, 'Keybinding saved.');
 	assert.equal((await resources.read())[0]?.key, 'ctrl+[KeyJ]');
 	// Closing the source's last tab retires that empty group. Create a live target
@@ -551,31 +555,46 @@ test('retired shortcut resolution cannot clear a replacement using the same inpu
 	assert.deepEqual([input.isDisposed, model.isDisposed()], [true, true]);
 });
 
-test('recorder replaces the preview, ignores incomplete input and explicitly restarts after four chords', async () => {
+test('recorder opens an empty modal, previews keys, ignores incomplete input and explicitly restarts after four chords', async () => {
 	using disposables = new DisposableStore();
 	const { document, input, root, open, resources } = await createRecorderFixture(disposables);
 	open();
-	assert.equal(input.value, 'ctrl+1 ctrl+2 ctrl+3 ctrl+4');
+	assert.equal(input.value, '');
+	const dialog = root.querySelector('[role="dialog"]')!;
+	assert.equal(dialog.getAttribute('aria-modal'), 'true');
+	assert.match(dialog.getAttribute('aria-label')!, /Alpha/);
+	assert.equal(document.activeElement, input);
+	assert.equal(root.querySelectorAll('.ash-keybindings-recorder input').length, 1);
+	assert.equal(root.querySelectorAll('.ash-keybindings-recorder button').length, 0);
+	assert.equal(root.querySelector<HTMLElement>('.ash-keybindings-list')?.inert, true);
+	press(input, 'AltLeft', 'Alt', { altKey: true });
+	press(input, 'MetaLeft', 'Meta', { altKey: true, metaKey: true });
+	assert.equal(input.value, 'alt+win');
+	assert.deepEqual([...root.querySelectorAll('.ash-keybindings-recorder-preview kbd')].map(key => key.textContent), ['Alt', 'Windows']);
+	press(input, 'Enter', 'Enter');
+	assert.equal(root.querySelector<HTMLElement>('.ash-keybindings-recorder')?.hidden, false, 'Modifiers alone cannot be saved');
 	const help = document.getElementById(input.getAttribute('aria-describedby')!);
 	assert.match(help?.textContent ?? '', /up to 4 chords/);
 	assert.match(help?.textContent ?? '', /Use Keyboard Shortcuts \(JSON\) for bare Enter, Escape, Tab or Shift\+Tab/);
 	press(input, 'KeyK', 'k', { ctrlKey: true });
-	assert.equal(input.value, 'ctrl+[KeyK]');
+	assert.equal(input.value, 'ctrl+k');
 	for (const options of [
 		{ code: 'KeyK', key: 'k', ctrlKey: true, repeat: true },
 		{ code: 'ShiftLeft', key: 'Shift', shiftKey: true },
 		{ code: 'KeyP', key: 'p', isComposing: true },
 		{ code: 'KeyP', key: 'Process' },
 	]) input.dispatchEvent(new browserEnvironment.window.KeyboardEvent('keydown', { bubbles: true, cancelable: true, ...options }));
-	assert.equal(input.value, 'ctrl+[KeyK]');
+	assert.equal(input.value, 'ctrl+k');
 	press(input, 'KeyP', 'p', { ctrlKey: true });
 	press(input, 'KeyC', 'c', { altKey: true });
 	press(input, 'KeyD', 'd', { ctrlKey: true, shiftKey: true });
-	assert.equal(input.value, 'ctrl+[KeyK] ctrl+[KeyP] alt+[KeyC] ctrl+shift+[KeyD]');
+	assert.equal(input.value, 'ctrl+k ctrl+p alt+c ctrl+shift+d');
 	press(input, 'KeyY', 'y', { ctrlKey: true });
-	assert.equal(input.value, 'ctrl+[KeyY]');
+	assert.equal(input.value, 'ctrl+y');
 	assert.equal(root.querySelector('[role="status"]')?.textContent, 'Started a new sequence after 4 chords: ctrl+[KeyY].');
-	findButton(root, 'Cancel').click();
+	press(input, 'Escape', 'Escape');
+	press(input, 'Escape', 'Escape');
+	assert.equal(root.querySelector<HTMLElement>('.ash-keybindings-list')?.inert, false);
 	assert.equal(document.activeElement, shortcutRow(document, 'test.shortcuts.alpha')?.querySelector('button'));
 	assert.equal((await resources.read())[0]?.key, 'ctrl+1 ctrl+2 ctrl+3 ctrl+4');
 });
@@ -586,9 +605,10 @@ test('recorder reserves bare controls, records modified Enter and Escape, and sa
 	open();
 	for (const shiftKey of [false, true]) {
 		const event = press(input, 'Tab', 'Tab', { shiftKey });
-		assert.equal(event.defaultPrevented, false);
+		assert.equal(event.defaultPrevented, true);
 	}
-	assert.equal(input.value, 'ctrl+1 ctrl+2 ctrl+3 ctrl+4');
+	assert.equal(input.value, '');
+	press(input, 'KeyK', 'k', { ctrlKey: true });
 	press(input, 'Escape', 'Escape');
 	assert.equal(input.value, '');
 	assert.equal(root.querySelector<HTMLElement>('.ash-keybindings-recorder')?.hidden, false);
@@ -599,7 +619,7 @@ test('recorder reserves bare controls, records modified Enter and Escape, and sa
 	press(input, 'Enter', 'Enter', { shiftKey: true });
 	press(input, 'Escape', 'Escape', { altKey: true });
 	press(input, 'Enter', 'Enter', { ctrlKey: true });
-	assert.equal(input.value, 'ctrl+[KeyK] shift+[Enter] alt+[Escape] ctrl+[Enter]');
+	assert.equal(input.value, 'ctrl+k shift+enter alt+escape ctrl+enter');
 	const saved = waitForStatus(document, 'Keybinding saved.');
 	press(input, 'Enter', 'Enter');
 	await saved;
@@ -611,22 +631,19 @@ test('recorder reserves bare controls, records modified Enter and Escape, and sa
 
 test('recorder preserves a failed draft, retries through the shared model and locks it while saving', async () => {
 	using disposables = new DisposableStore();
-	const { document, input, when, root, open, resources } = await createRecorderFixture(disposables);
+	const { document, input, root, open, resources } = await createRecorderFixture(disposables);
 	const resource = resources.profiles.currentProfile.keybindingsResource;
 	using reference = await resources.models.acquire({ resource, languageId: 'jsonc' }, new AbortController().signal);
 	reference.model.pushEditOperations(null, [{ range: reference.model.getFullModelRange(), text: '// unsaved\n' + reference.model.getValue() }], null);
 	open();
 	press(input, 'KeyK', 'k', { ctrlKey: true });
 	press(input, 'KeyP', 'p', { ctrlKey: true });
-	when.value = 'true';
-	when.dispatchEvent(new browserEnvironment.window.Event('input', { bubbles: true }));
 	const failed = waitForStatus(document, 'Save keybindings.json before changing a shortcut in the Keyboard Shortcuts editor.');
-	findButton(root, 'Save').click();
+	press(input, 'Enter', 'Enter');
 	await failed;
-	assert.equal(input.value, 'ctrl+[KeyK] ctrl+[KeyP]');
-	assert.equal(when.value, 'true');
+	assert.equal(input.value, 'ctrl+k ctrl+p');
 	assert.equal(document.activeElement, input);
-	assert.equal(findButton(root, 'Save').disabled, false);
+	assert.equal(input.disabled, false);
 	assert.equal(root.querySelector<HTMLElement>('.ash-keybindings-recorder')?.hidden, false);
 	assert.equal((await resources.read())[0]?.key, 'ctrl+1 ctrl+2 ctrl+3 ctrl+4');
 	await reference.revert(new AbortController().signal);
@@ -642,27 +659,25 @@ test('recorder preserves a failed draft, retries through the shared model and lo
 		}
 	}));
 	const saved = waitForStatus(document, 'Keybinding saved.');
-	findButton(root, 'Save').click();
+	press(input, 'Enter', 'Enter');
 	await enteredSave;
 	try {
 		assert.equal(input.disabled, true);
-		assert.equal(when.disabled, true);
 		assert.equal(root.querySelector('.ash-keybindings-recorder')?.getAttribute('aria-busy'), 'true');
-		assert.equal(findButton(root, 'Cancel').disabled, true);
 		assert.ok([...root.querySelectorAll<HTMLButtonElement>('.ash-keybindings-row button')].every(button => button.disabled));
 		press(input, 'KeyY', 'y', { ctrlKey: true });
 		press(input, 'Escape', 'Escape');
-		assert.equal(input.value, 'ctrl+[KeyK] ctrl+[KeyP]');
-		findButton(root, 'Cancel').click();
+		assert.equal(input.value, 'ctrl+k ctrl+p');
+		press(input, 'Escape', 'Escape');
 		findButton(shortcutRow(document, 'test.shortcuts.beta')!, 'Edit').click();
-		assert.match(root.querySelector('h2')?.textContent ?? '', /Alpha/);
+		assert.match(root.querySelector('[role="dialog"]')?.getAttribute('aria-label') ?? '', /Alpha/);
 		assert.equal((await resources.read())[0]?.key, 'ctrl+1 ctrl+2 ctrl+3 ctrl+4');
 	} finally { release(); }
 	await saved;
-	assert.deepEqual((await resources.read())[0], { key: 'ctrl+[KeyK] ctrl+[KeyP]', command: 'test.shortcuts.alpha', args: { retained: true }, when: 'true' });
+	assert.deepEqual((await resources.read())[0], { key: 'ctrl+[KeyK] ctrl+[KeyP]', command: 'test.shortcuts.alpha', args: { retained: true } });
 	assert.match((await resources.files.readFile(resource)).content, /keep recorder comment/);
 	assert.equal(root.querySelector('.ash-keybindings-recorder')?.getAttribute('aria-busy'), 'false');
-	assert.equal(findButton(root, 'Cancel').disabled, false);
+	assert.equal(input.disabled, false);
 });
 
 for (const retirement of ['clear', 'hide', 'dispose', 'focus another editor'] as const) {
@@ -686,7 +701,7 @@ for (const retirement of ['clear', 'hide', 'dispose', 'focus another editor'] as
 			open();
 			press(input, 'KeyK', 'k', { ctrlKey: true });
 			press(input, 'KeyP', 'p', { ctrlKey: true });
-			findButton(root, 'Save').click();
+			press(input, 'Enter', 'Enter');
 			await entered.p;
 			const controls = [...root.querySelectorAll<HTMLElement>('input, button, [role="status"], .ash-keybindings-recorder')];
 			if (retirement === 'clear') editor.clearInput();
@@ -787,17 +802,16 @@ test('source menu filters system, user, extension and unassigned rows and edits 
 	assert.equal(document.querySelectorAll('.ash-keybindings-row').length, 1);
 	assert.ok(row.querySelector('.ash-keybindings-row-action svg'));
 	findButton(row, 'Edit').click();
-	const fields = document.querySelectorAll<HTMLInputElement>('.ash-keybindings-recorder-fields input');
-	assert.notEqual(fields[0].value, '');
-	assert.equal(fields[1].value, when.serialize());
-	press(fields[0], 'KeyJ', 'j', { ctrlKey: true });
+	const input = document.querySelector<HTMLInputElement>('.ash-keybindings-record-input input')!;
+	assert.equal(input.value, '');
+	press(input, 'KeyJ', 'j', { ctrlKey: true });
 	const saved = waitForStatus(document, 'Keybinding saved.');
-	findButton(document, 'Save').click();
+	press(input, 'Enter', 'Enter');
 	await saved;
 	assert.equal((await resources.read()).find(binding => binding.command === 'test.shortcuts.system')?.when, when.serialize());
 	editor.search('@source:unassigned @command:test.shortcuts.unassigned');
 	findButton(shortcutRow(document, 'test.shortcuts.unassigned')!, 'Add').click();
-	assert.equal(fields[0].value, '');
+	assert.equal(input.value, '');
 	await editor.getSecondaryActions().find(action => action.id === 'keybindings.editor.clearSearchResults')!.run();
 	assert.ok(shortcutRow(document, 'test.shortcuts.alpha'));
 });
@@ -831,9 +845,8 @@ async function createRecorderFixture(disposables: InstanceType<typeof Disposable
 	await editor.setInput(editorInput, new AbortController().signal);
 	const root = document.querySelector<HTMLElement>('.ash-keybindings-editor')!;
 	const input = root.querySelector<HTMLInputElement>('.ash-keybindings-record-input input')!;
-	const when = root.querySelector<HTMLInputElement>('.ash-keybindings-recorder-fields label:nth-child(2) input')!;
 	return {
-		document, input, when, root, resources, keybindings, editor, editorInput, open: () => {
+		document, input, root, resources, keybindings, editor, editorInput, open: () => {
 			const button = shortcutRow(document, 'test.shortcuts.alpha')!.querySelector<HTMLButtonElement>('.ash-keybindings-row-action')!;
 			button.focus();
 			button.click();

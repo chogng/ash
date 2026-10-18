@@ -292,6 +292,7 @@ test('application menu shows clean labels and readable shortcuts', { tag: proces
 	const selectionMenu = page.getByRole('menu').last();
 	const selectAll = selectionMenu.getByRole('menuitem', { name: 'Select All' });
 	await expect(selectAll.locator('.ash-button-label')).toHaveText('Select All');
+	await expect(selectAll.locator('.ash-menu-keybinding')).toHaveClass(/ash-keybinding-label-plain/u);
 	const shortcut = selectAll.locator('.ash-menu-keybinding kbd');
 	await expect(shortcut).toHaveText(process.platform === 'darwin' ? '⌘A' : 'Ctrl+A');
 	expect(await shortcut.evaluate(element => ({

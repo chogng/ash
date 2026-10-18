@@ -1434,6 +1434,37 @@ test('Sessions Design exports SVG and HTML and reopens grouped text and paths th
 	await expect(canvas.locator('path[data-shape-id]')).toHaveCount(1);
 });
 
+test('Sessions permission shortcuts use shared keycaps and keep numeric activation scoped', async ({ target, workbench }) => {
+	const page = await workbench.openAgentsWindow(target.kind);
+	await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Code', exact: true }).click();
+	const composer = page.locator(':is(.ash-sessions-chat-input,.ash-sessions-cowork-input)').first();
+	const manual = composer.getByRole('button', { name: 'Permissions: Manual', exact: true });
+	await manual.press('ArrowDown');
+	const menu = page.getByRole('menu', { name: 'Permissions', exact: true });
+	const keys = menu.locator('.ash-keybinding-label-keycap kbd');
+	await expect(keys).toHaveText(['1', '2', '3']);
+	await expect(menu.getByRole('menuitemradio').first()).toHaveAttribute('aria-keyshortcuts', '1');
+	expect(await keys.evaluateAll(keys => keys.map(key => ({ height: getComputedStyle(key).height, fontSize: getComputedStyle(key).fontSize })))).toEqual([
+		{ height: '20px', fontSize: '12px' },
+		{ height: '20px', fontSize: '12px' },
+		{ height: '20px', fontSize: '12px' },
+	]);
+	await page.keyboard.press('1');
+	const automatic = composer.getByRole('button', { name: 'Permissions: Auto', exact: true });
+	await expect(automatic).toBeFocused();
+	await automatic.press('ArrowDown');
+	await page.keyboard.press('2');
+	await expect(manual).toBeFocused();
+	await manual.press('ArrowDown');
+	await page.keyboard.press('Escape');
+	await expect(manual).toBeFocused();
+	await expect(menu).toBeHidden();
+	const editor = new Editor(composer);
+	await replaceChatInput(editor, '123');
+	await editor.waitForEditorContents(contents => contents === '123');
+	await expect(manual).toBeVisible();
+});
+
 test('Sessions composer attaches files, chooses permissions, and restores the unsent draft', async ({ application, target, workbench }) => {
 	let page = await workbench.openAgentsWindow(target.kind);
 	await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Code', exact: true }).click();

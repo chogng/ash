@@ -206,14 +206,14 @@ for (const outcome of ['resolve', 'abort'] as const) {
 		await workbench.quickaccess.runCommand('workbench.action.openKeyboardShortcuts');
 		const root = workbench.page.locator('.ash-keybindings-editor');
 		await root.getByRole('searchbox').fill('workbench.action.openSettings');
-		await root.locator('.ash-keybindings-row.is-user').getByRole('button', { name: 'Edit', exact: true }).click();
+		await userShortcutRows(root).getByRole('button', { name: /^Edit keybinding for /u }).click();
 		const input = root.getByRole('textbox', { name: 'Record keybinding', exact: true });
 		const binding = 'ctrl+alt+[KeyK] ctrl+alt+[KeyP]';
 		await input.press('Control+Alt+K');
 		await input.press('Control+Alt+P');
 		await holdRecorderProfileWrite(root, binding);
 		try {
-			await root.getByRole('button', { name: 'Save', exact: true }).click();
+			await input.press('Enter');
 			await expect.poll(() => workbench.page.evaluate(() => globalThis.ashTestRecorderSaveGate?.held)).toBe(true);
 			await expect(root.locator('.ash-keybindings-recorder')).toHaveAttribute('aria-busy', 'true');
 			await expect(input).toBeDisabled();
@@ -260,7 +260,7 @@ for (const outcome of ['resolve', 'reject'] as const) {
 		await workbench.quickaccess.runCommand('workbench.action.openKeyboardShortcuts');
 		const root = workbench.page.locator('.ash-keybindings-editor');
 		await root.getByRole('searchbox').fill('workbench.action.openSettings');
-		await root.locator('.ash-keybindings-row.is-user').getByRole('button', { name: 'Edit', exact: true }).click();
+		await userShortcutRows(root).getByRole('button', { name: /^Edit keybinding for /u }).click();
 		const input = root.getByRole('textbox', { name: 'Record keybinding', exact: true });
 		const binding = 'ctrl+alt+[KeyK] ctrl+alt+[KeyP]';
 		await input.press('Control+Alt+K');
@@ -268,7 +268,7 @@ for (const outcome of ['resolve', 'reject'] as const) {
 		await observeRecorderSave(root);
 		await holdRecorderDiskWrite(application, binding);
 		try {
-			await root.getByRole('button', { name: 'Save', exact: true }).click();
+			await input.press('Enter');
 			await expect.poll(() => application.evaluate(() => globalThis.ashTestRecorderDiskSaveGate?.held)).toBe(true);
 			await expect(root.locator('.ash-keybindings-recorder')).toHaveAttribute('aria-busy', 'true');
 			await expect(input).toBeDisabled();
@@ -365,15 +365,15 @@ test('Keyboard Shortcuts shares one input across split panes and restores it aft
 	await expect(secondPane.getByRole('searchbox')).toHaveValue('');
 	await secondPane.getByRole('searchbox').fill('workbench.action.openKeyboardShortcuts');
 	await expect(firstPane.getByRole('searchbox')).toHaveValue('workbench.action.openSettings');
-	await expect(firstPane.locator('.ash-keybindings-row.is-user .ash-keybindings-command-id')).toHaveText('workbench.action.openSettings');
-	await expect(secondPane.locator('.ash-keybindings-row.is-user .ash-keybindings-command-id')).toHaveText('workbench.action.openKeyboardShortcuts');
+	await expect(userShortcutRows(firstPane).locator('.ash-keybindings-command-id')).toHaveText('workbench.action.openSettings');
+	await expect(userShortcutRows(secondPane).locator('.ash-keybindings-command-id')).toHaveText('workbench.action.openKeyboardShortcuts');
 
-	await secondPane.locator('.ash-keybindings-row.is-user').getByRole('button', { name: 'Edit', exact: true }).click();
+	await userShortcutRows(secondPane).getByRole('button', { name: /^Edit keybinding for /u }).click();
 	const recording = secondPane.getByRole('textbox', { name: 'Record keybinding', exact: true });
 	await recording.press('Control+Alt+P');
 	await recording.press('Enter');
 	await expect(secondPane.getByRole('status')).toHaveText('Keybinding saved.');
-	await expect(firstPane.locator('.ash-keybindings-row.is-user .ash-keybindings-command-id')).toHaveText('workbench.action.openSettings');
+	await expect(userShortcutRows(firstPane).locator('.ash-keybindings-command-id')).toHaveText('workbench.action.openSettings');
 	await firstGroup.tabs.filter({ hasText: 'Keyboard Shortcuts', hasNotText: '(JSON)' }).locator('..').getByRole('button', { name: 'Close Keyboard Shortcuts', exact: true }).click();
 	let remainingPane = workbench.page.locator('.ash-keybindings-editor');
 	await expect(remainingPane).toHaveCount(1);
@@ -387,13 +387,13 @@ test('Keyboard Shortcuts shares one input across split panes and restores it aft
 	await expect(json.getByRole('tab', { name: 'Keyboard Shortcuts (JSON)', exact: true }).locator('..')).not.toHaveAttribute('data-state', /dirty|conflict/u);
 	await workbench.quickaccess.runCommand('workbench.action.openKeyboardShortcuts');
 	await remainingPane.getByRole('searchbox').fill('workbench.action.openSettings');
-	await expect(remainingPane.locator('.ash-keybindings-row.is-user .ash-keybindings-key')).toContainText('X');
+	await expect(userShortcutRows(remainingPane).locator('.ash-keybindings-key')).toContainText('X');
 	await workbench.quickaccess.runCommand('workbench.action.closeActiveEditor');
 	await expect(remainingPane).toHaveCount(0);
 	await workbench.quickaccess.runCommand('workbench.action.openKeyboardShortcuts');
 	await expect(remainingPane).toHaveCount(1);
 	await remainingPane.getByRole('searchbox').fill('workbench.action.openSettings');
-	await expect(remainingPane.locator('.ash-keybindings-row.is-user .ash-keybindings-key')).toContainText('X');
+	await expect(userShortcutRows(remainingPane).locator('.ash-keybindings-key')).toContainText('X');
 
 	({ workbench } = await reloadWorkbench());
 	remainingPane = workbench.page.locator('.ash-keybindings-editor');
@@ -401,7 +401,7 @@ test('Keyboard Shortcuts shares one input across split panes and restores it aft
 	await workbench.quickaccess.runCommand('workbench.action.openKeyboardShortcuts');
 	await expect(remainingPane).toHaveCount(1);
 	await remainingPane.getByRole('searchbox').fill('workbench.action.openSettings');
-	await expect(remainingPane.locator('.ash-keybindings-row.is-user .ash-keybindings-key')).toContainText('X');
+	await expect(userShortcutRows(remainingPane).locator('.ash-keybindings-key')).toContainText('X');
 });
 
 test('Keyboard Shortcuts recorder persists and executes an ordered four-chord binding after reload', async ({ target, application, workbench, reloadWorkbench }) => {
@@ -414,11 +414,11 @@ test('Keyboard Shortcuts recorder persists and executes an ordered four-chord bi
 	await workbench.quickaccess.runCommand('workbench.action.openKeyboardShortcuts');
 	const root = workbench.page.locator('.ash-keybindings-editor');
 	await root.getByRole('searchbox').fill('runCommands');
-	await root.locator('.ash-keybindings-row.is-user').getByRole('button', { name: 'Edit', exact: true }).click();
+	await userShortcutRows(root).getByRole('button', { name: /^Edit keybinding for /u }).click();
 	const input = root.getByRole('textbox', { name: 'Record keybinding', exact: true });
 	for (const letter of ['K', 'P', 'C', 'D']) await input.press(`Control+Alt+${letter}`);
 	const binding = 'ctrl+alt+[KeyK] ctrl+alt+[KeyP] ctrl+alt+[KeyC] ctrl+alt+[KeyD]';
-	await expect(input).toHaveValue(binding);
+	await expect(input).toHaveValue(binding.replace(/\[Key([A-Z])\]/gu, (_, key: string) => key.toLowerCase()));
 	await input.press('Enter');
 	await expect(root.getByRole('status')).toHaveText('Keybinding saved.');
 	await expect(root.locator('.ash-keybindings-recorder')).toBeHidden();
@@ -464,25 +464,23 @@ test('Keyboard Shortcuts recorder retains a failed draft and retries after savin
 	await workbench.quickaccess.runCommand('workbench.action.openKeyboardShortcuts');
 	const root = workbench.page.locator('.ash-keybindings-editor');
 	await root.getByRole('searchbox').fill('workbench.action.files.newUntitledFile');
-	await root.locator('.ash-keybindings-row.is-user').getByRole('button', { name: 'Edit', exact: true }).click();
+	await userShortcutRows(root).getByRole('button', { name: /^Edit keybinding for /u }).click();
 	const input = root.getByRole('textbox', { name: 'Record keybinding', exact: true });
 	const binding = 'ctrl+alt+[KeyK] ctrl+alt+[KeyP]';
 	await input.press('Control+Alt+K');
 	await input.press('Control+Alt+P');
-	await root.getByRole('textbox', { name: 'Keybinding when condition', exact: true }).fill('true');
-	await root.getByRole('button', { name: 'Save', exact: true }).click();
+	await input.press('Enter');
 	await expect(root.getByRole('status')).toHaveText('Save keybindings.json before changing a shortcut in the Keyboard Shortcuts editor.');
-	await expect(input).toHaveValue(binding);
+	await expect(input).toHaveValue(binding.replace(/\[Key([A-Z])\]/gu, (_, key: string) => key.toLowerCase()));
 	await expect(input).toBeEnabled();
 	await expect(input).toBeFocused();
-	await expect(root.getByRole('textbox', { name: 'Keybinding when condition', exact: true })).toHaveValue('true');
 	await jsonTab.click();
 	await group.editor.waitForEditorContents(content => content === '// unsaved recorder comment\n' + source);
 	await workbench.quickaccess.runCommand('workbench.action.files.save');
 	await expect(jsonTab.locator('..')).not.toHaveAttribute('data-state', /dirty|conflict/u);
 	await group.tabs.filter({ hasText: 'Keyboard Shortcuts', hasNotText: '(JSON)' }).click();
-	await expect(input).toHaveValue(binding);
-	await root.getByRole('button', { name: 'Save', exact: true }).click();
+	await expect(input).toHaveValue(binding.replace(/\[Key([A-Z])\]/gu, (_, key: string) => key.toLowerCase()));
+	await input.press('Enter');
 	await expect(root.getByRole('status')).toHaveText('Keybinding saved.');
 	await expect(root.locator('.ash-keybindings-recorder')).toBeHidden();
 	await jsonTab.click();
@@ -528,32 +526,36 @@ test('Keyboard Shortcuts recorder explains controls in Chinese and announces a f
 	({ workbench } = await restartWorkbench());
 	await workbench.quickaccess.runCommand('workbench.action.openKeyboardShortcuts');
 	const root = workbench.page.locator('.ash-keybindings-editor');
-	await root.getByRole('searchbox').fill('workbench.action.openGlobalKeybindingsFile');
-	const add = root.locator('.ash-keybindings-row').getByRole('button', { name: 'Add', exact: true });
+	await root.locator('.ash-keybindings-search input').fill('workbench.action.openGlobalKeybindingsFile');
+	const add = root.locator('.ash-keybindings-row').getByRole('button', { name: /^添加.*的快捷键$/u });
 	await add.click();
-	const input = root.getByRole('textbox', { name: 'Record keybinding', exact: true });
+	const input = root.getByRole('textbox', { name: '录制快捷键', exact: true });
 	const helpId = await input.getAttribute('aria-describedby');
 	await expect(root.locator(`[id="${helpId}"]`)).toContainText('单独的 Enter、Escape、Tab 或 Shift+Tab 请在键盘快捷方式（JSON）中编辑');
-	const layout = await root.locator('.ash-keybindings-recorder').evaluate(recorder => {
-		const help = recorder.querySelector('.ash-keybindings-recorder-help')!.getBoundingClientRect();
-		const fields = recorder.querySelector('.ash-keybindings-recorder-fields')!.getBoundingClientRect();
-		const actions = recorder.querySelector('.ash-keybindings-recorder-actions')!.getBoundingClientRect();
-		return { helpBottom: help.bottom, fieldsTop: fields.top, actionsTop: actions.top, fits: recorder.scrollWidth <= recorder.clientWidth };
+	const dialog = root.getByRole('dialog');
+	await expect(dialog).toHaveAttribute('aria-modal', 'true');
+	await expect(dialog.getByRole('button')).toHaveCount(0);
+	await expect(root.locator('.ash-keybindings-recorder-message')).toHaveText('请按所需的组合键，然后按 Enter。');
+	const layout = await dialog.evaluate(dialog => {
+		const rect = dialog.getBoundingClientRect();
+		const host = dialog.closest('.ash-keybindings-editor')!.getBoundingClientRect();
+		return { width: rect.width, offsetX: rect.x + rect.width / 2 - host.x - host.width / 2, offsetY: rect.y + rect.height / 2 - host.y - host.height / 2, fits: dialog.scrollWidth <= dialog.clientWidth };
 	});
-	expect(layout.helpBottom).toBeLessThanOrEqual(layout.fieldsTop);
-	expect(layout.helpBottom).toBeLessThanOrEqual(layout.actionsTop);
+	expect(layout.width).toBeLessThanOrEqual(400);
+	expect(Math.abs(layout.offsetX)).toBeLessThanOrEqual(1);
+	expect(Math.abs(layout.offsetY)).toBeLessThanOrEqual(1);
 	expect(layout.fits).toBe(true);
 	await input.press('Tab');
-	await expect(root.getByRole('textbox', { name: 'Keybinding when condition', exact: true })).toBeFocused();
-	await workbench.page.keyboard.press('Shift+Tab');
+	await expect(input).toBeFocused();
+	await input.press('Shift+Tab');
 	await expect(input).toBeFocused();
 	await input.press('Control+K');
 	await input.press('Shift+Enter');
 	await input.press('Alt+Escape');
 	await input.press('Control+Enter');
-	await expect(input).toHaveValue('ctrl+[KeyK] shift+[Enter] alt+[Escape] ctrl+[Enter]');
+	await expect(input).toHaveValue('ctrl+k shift+enter alt+escape ctrl+enter');
 	await input.press('Control+Y');
-	await expect(input).toHaveValue('ctrl+[KeyY]');
+	await expect(input).toHaveValue('ctrl+y');
 	await expect(root.getByRole('status')).toHaveText('已录满 4 段，开始新序列：ctrl+[KeyY]。');
 	await input.press('Escape');
 	await expect(input).toHaveValue('');
@@ -718,3 +720,10 @@ test('Keybindings external changes reload clean models and preserve dirty text o
 	await group.editor.waitForEditorContents(content => content === '// unsaved\n' + source);
 	expect(await readFile(join(profile, 'keybindings.json'), 'utf8')).toBe('[]');
 });
+
+/** Source labels identify user rules without depending on a renderer-only state class. */
+function userShortcutRows(root: Locator): Locator {
+	return root.locator('.ash-keybindings-row').filter({
+		has: root.page().locator('.ash-keybindings-source').filter({ hasText: /^User$/u }),
+	});
+}

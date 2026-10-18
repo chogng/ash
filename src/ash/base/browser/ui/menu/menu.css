@@ -101,10 +101,6 @@
 		var(--ash-menu-selectionForeground)
 	);
 }
-/* User-agent kbd styling otherwise switches menu shortcuts to monospace. */
-.ash-menu .ash-menu-keybinding kbd {
-	font: inherit;
-}
 .ash-menu .ash-menu-badge {
 	flex-shrink: 0;
 	margin-left: auto;

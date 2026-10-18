@@ -18,7 +18,7 @@
 }
 
 .ash-hover code,
-.ash-hover kbd {
+.ash-hover kbd:not(:where(.ash-keybinding-label kbd)) {
 	padding: 2px 4px;
 	background: var(--ash-text-codeBlockBackground);
 	border-radius: var(--ash-cornerRadius-small);

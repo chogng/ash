@@ -1,22 +1,28 @@
 .ash-keybinding-label {
 	display: inline-flex;
-	gap: 4px;
+	gap: var(--ash-spacing-size40);
 	align-items: center;
+}
+
+.ash-keybinding-label-plain kbd {
+	font: inherit;
 }
 
 .ash-keybinding-label-keycap kbd {
 	display: inline-flex;
 	box-sizing: border-box;
-	min-width: 22px;
-	height: 22px;
-	padding: 0 2px;
+	min-width: 20px;
+	height: 20px;
+	padding: 0 var(--ash-spacing-size40);
 	align-items: center;
 	justify-content: center;
 	border: var(--ash-strokeThickness) solid
 		var(
 			--ash-keybinding-style-keybinding-label-border,
-			var(--ash-contrastBorder, transparent)
+			var(--ash-keybindingLabel-border)
 		);
+	border-bottom-color: var(--ash-keybindingLabel-bottomBorder);
+	box-shadow: 0 1px 0 var(--ash-keybindingLabel-bottomBorder);
 	border-radius: var(--ash-cornerRadius-small);
 	color: var(
 		--ash-keybinding-style-keybinding-label-foreground,
@@ -32,12 +38,23 @@
 	white-space: nowrap;
 }
 
+:where(.ash-keybinding-label-keycap) {
+	min-width: 0;
+	max-width: 100%;
+	flex-wrap: wrap;
+}
+
 .ash-keybinding-label-keycap {
-	gap: 8px;
+	gap: var(--ash-spacing-size80);
 }
 
 .ash-keybinding-label-chord {
 	display: inline-flex;
-	gap: 4px;
+	gap: var(--ash-spacing-size40);
 	align-items: center;
+}
+
+.hc-black .ash-keybinding-label-keycap kbd,
+.hc-light .ash-keybinding-label-keycap kbd {
+	box-shadow: none;
 }

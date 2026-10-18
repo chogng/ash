@@ -165,11 +165,6 @@
 	visibility: visible;
 }
 
-.ash-sessions-permission-shortcut {
-	color: var(--ash-description-foreground);
-	font-size: var(--ash-fontSize-label1);
-}
-
 .ash-sessions-permission-settings {
 	margin-top: var(--ash-spacing-size40);
 	border-top: var(--ash-strokeThickness) solid var(--ash-border);

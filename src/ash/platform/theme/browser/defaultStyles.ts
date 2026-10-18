@@ -77,7 +77,7 @@ export const defaultCountBadgeStyles: ICountBadgeStyles = Object.freeze({
 export const defaultKeybindingLabelStyles: IKeybindingLabelStyles = Object.freeze({
 	keybindingLabelBackground: colorVariable('keybindingLabel.background'),
 	keybindingLabelForeground: colorVariable('keybindingLabel.foreground'),
-	keybindingLabelBorder: colorVariable('contrastBorder'),
+	keybindingLabelBorder: colorVariable('keybindingLabel.border'),
 	keybindingLabelBottomBorder: undefined,
 	keybindingLabelShadow: undefined,
 });

@@ -20,7 +20,7 @@ import type { ITableColumn, ITableRenderer } from '../../../../base/browser/ui/t
 import { observeElementSize } from '../../../../base/browser/observer.js';
 import { throwIfCancelled } from '../../../../base/common/cancellation.js';
 import { getKeybindingLabel, KeybindingLabelStyle } from '../../../../base/common/keybindingLabels.js';
-import { MAX_KEYBINDING_CHORDS } from '../../../../base/common/keybindings.js';
+import { Keybinding, KeybindingChordKind, logicalKey, MAX_KEYBINDING_CHORDS } from '../../../../base/common/keybindings.js';
 import { DisposableStore, MutableDisposable, toDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
 import { localize } from '../../../../nls.js';
 import { Separator, type IAction } from '../../../../base/common/actions.js';
@@ -69,11 +69,11 @@ export class KeybindingsEditor extends EditorPane implements IKeybindingsEditorP
 	private count: HTMLSpanElement | undefined;
 	private status: HTMLParagraphElement | undefined;
 	private recorder: HTMLDivElement | undefined;
-	private recorderTitle: HTMLHeadingElement | undefined;
+	private recorderTitle: HTMLParagraphElement | undefined;
+	private recorderPreview: HTMLDivElement | undefined;
+	private recorderError: HTMLParagraphElement | undefined;
+	private readonly recorderLabel = this._register(new MutableDisposable<KeybindingLabel>());
 	private keyInput: InputBox | undefined;
-	private whenInput: InputBox | undefined;
-	private saveButton: Button | undefined;
-	private cancelButton: Button | undefined;
 	private scopedContext: IScopedContextKeyService | undefined;
 	private recordingContext: IContextKey<boolean> | undefined;
 	private editingItem: KeyboardShortcutItem | undefined;
@@ -258,7 +258,7 @@ export class KeybindingsEditor extends EditorPane implements IKeybindingsEditorP
 	}
 
 	public override focus(): void {
-		this.searchInput?.focus();
+		(this.editingItem ? this.keyInput : this.searchInput)?.focus();
 	}
 
 	public override getActions(): readonly IAction[] {
@@ -546,72 +546,59 @@ export class KeybindingsEditor extends EditorPane implements IKeybindingsEditorP
 		const recorder = h(ownerDocument, 'div');
 		recorder.className = 'ash-keybindings-recorder';
 		recorder.hidden = true;
-		this.recorderTitle = h(ownerDocument, 'h2');
-		const fields = h(ownerDocument, 'div');
-		fields.className = 'ash-keybindings-recorder-fields';
-		const keyField = h(ownerDocument, 'label');
-		keyField.textContent = localize('keybindings.keybinding', 'Keybinding');
-		this.keyInput = this._register(new InputBox(keyField, {
+		const dialog = h(ownerDocument, 'div');
+		dialog.className = 'ash-keybindings-recorder-dialog';
+		dialog.setAttribute('role', 'dialog');
+		dialog.setAttribute('aria-modal', 'true');
+		this.recorderTitle = h(ownerDocument, 'p');
+		this.recorderTitle.className = 'ash-keybindings-recorder-message';
+		this.recorderTitle.textContent = localize('keybindings.recordingPrompt', 'Press desired key combination and then press ENTER.');
+		const help = h(ownerDocument, 'p');
+		help.className = 'ash-keybindings-recorder-help';
+		help.id = `ash-keybindings-recorder-help-${nextRecorderHelpId++}`;
+		help.textContent = localize('keybindings.recordingHelp', 'Press up to {0} chords in order. Enter saves; Escape clears the binding, then cancels when empty. Tab and Shift+Tab keep focus in the recorder. Modified Enter and Escape are recorded. Use Keyboard Shortcuts (JSON) for bare Enter, Escape, Tab or Shift+Tab. After {0} chords, the next chord starts a new sequence.', MAX_KEYBINDING_CHORDS);
+		dialog.setAttribute('aria-describedby', help.id);
+		this.keyInput = this._register(new InputBox(dialog, {
 			inputBoxStyles: defaultInputBoxStyles,
-			placeholder: localize('keybindings.pressKeys', 'Press the desired key combination'),
 			ariaLabel: localize('keybindings.record', 'Record keybinding'),
 			presentation: 'field',
 		}));
 		this.keyInput.inputElement.readOnly = true;
 		this.keyInput.element.classList.add('ash-keybindings-record-input');
-		const help = h(ownerDocument, 'p');
-		help.className = 'ash-keybindings-recorder-help';
-		help.id = `ash-keybindings-recorder-help-${nextRecorderHelpId++}`;
-		help.textContent = localize('keybindings.recordingHelp', 'In the recording field, press up to {0} chords in order. Enter saves; Escape clears the binding, then cancels when empty. Tab and Shift+Tab move focus. Modified Enter and Escape are recorded. Use Keyboard Shortcuts (JSON) for bare Enter, Escape, Tab or Shift+Tab. After {0} chords, the next chord starts a new sequence.', MAX_KEYBINDING_CHORDS);
 		this.keyInput.inputElement.setAttribute('aria-describedby', help.id);
-		keyField.append(this.keyInput.element);
-		const whenField = h(ownerDocument, 'label');
-		whenField.textContent = localize('keybindings.when', 'When');
-		this.whenInput = this._register(new InputBox(whenField, {
-			inputBoxStyles: defaultInputBoxStyles,
-			placeholder: localize('keybindings.optionalWhen', 'Optional context expression'),
-			ariaLabel: localize('keybindings.whenLabel', 'Keybinding when condition'),
-			presentation: 'field',
+		this.recorderPreview = h(ownerDocument, 'div');
+		this.recorderPreview.className = 'ash-keybindings-recorder-preview';
+		this.recorderPreview.setAttribute('aria-hidden', 'true');
+		this.recorderError = h(ownerDocument, 'p');
+		this.recorderError.className = 'ash-keybindings-recorder-error';
+		this.recorderError.setAttribute('role', 'alert');
+		this.recorderError.hidden = true;
+		dialog.append(this.recorderTitle, this.keyInput.element, this.recorderPreview, this.recorderError, help);
+		recorder.append(dialog);
+		this._register(addDisposableListener(recorder, 'mousedown', event => {
+			if (event.target === recorder && !this.saving) this.closeRecorder();
 		}));
-		whenField.append(this.whenInput.element);
-		fields.append(keyField, whenField);
-
-		const actions = h(ownerDocument, 'div');
-		actions.className = 'ash-keybindings-recorder-actions';
-		this.saveButton = this._register(new Button(actions, {
-			...defaultButtonStyles,
-			label: localize('keybindings.save', 'Save'),
-			presentation: 'primary',
-			onClick: () => void this.saveEditingItem(),
-		}));
-		this.saveButton.toggleClassName('ash-keybindings-save', true);
-		this.cancelButton = this._register(new Button(actions, {
-			...defaultButtonStyles,
-			label: localize('keybindings.cancel', 'Cancel'),
-			presentation: 'secondary',
-			onClick: () => { if (!this.saving) this.closeRecorder(); },
-		}));
-		this.cancelButton.toggleClassName('ash-keybindings-cancel', true);
-		recorder.append(this.recorderTitle, help, fields, actions);
 		this._register(this.keyInput.onKeyDown(event => this.recordKeybinding(event)));
 		return recorder;
 	}
 
 	private openRecorder(item: KeyboardShortcutItem): void {
-		if (this.isDisposed || !this.input || this.saving || !this.recorder || !this.recorderTitle || !this.keyInput || !this.whenInput) return;
+		if (this.isDisposed || !this.input || this.saving || !this.recorder || !this.recorderTitle || !this.keyInput) return;
 		if (!this.editingItem) {
 			const activeElement = this.container?.ownerDocument.activeElement;
 			this.recorderReturnFocus = isHTMLElement(activeElement) ? activeElement : undefined;
 		}
 		this.editingItem = item;
-		// A stored binding is a preview: the first recorded chord replaces it.
+		// Record a replacement without changing the selected rule's context or arguments.
 		this.recordedChords.length = 0;
-		this.recorderTitle.textContent = item.key
+		this.recorder.querySelector('[role="dialog"]')?.setAttribute('aria-label', item.key
 			? localize('keybindings.editTitle', 'Edit keybinding for {0}', item.commandLabel)
-			: localize('keybindings.addTitle', 'Add keybinding for {0}', item.commandLabel);
-		this.keyInput.value = item.key;
-		this.whenInput.value = item.when;
+			: localize('keybindings.addTitle', 'Add keybinding for {0}', item.commandLabel));
+		this.keyInput.value = '';
+		this.recorderLabel.clear();
+		if (this.recorderError) this.recorderError.hidden = true;
 		this.recorder.hidden = false;
+		this.setRecorderBackgroundInert(true);
 		this.recordingContext?.set(true);
 		this.keyInput.focus();
 	}
@@ -620,6 +607,8 @@ export class KeybindingsEditor extends EditorPane implements IKeybindingsEditorP
 		this.editingItem = undefined;
 		this.recordedChords.length = 0;
 		if (this.recorder) this.recorder.hidden = true;
+		this.recorderLabel.clear();
+		this.setRecorderBackgroundInert(false);
 		this.recordingContext?.reset();
 		if (restoreFocus) {
 			if (this.recorderReturnFocus?.isConnected) this.recorderReturnFocus.focus();
@@ -628,20 +617,33 @@ export class KeybindingsEditor extends EditorPane implements IKeybindingsEditorP
 		this.recorderReturnFocus = undefined;
 	}
 
+	private setRecorderBackgroundInert(inert: boolean): void {
+		this.container?.classList.toggle('is-recording-keybinding', inert);
+		for (const child of this.container?.children ?? []) {
+			if (isHTMLElement(child) && child !== this.recorder && child !== this.status) child.inert = inert;
+		}
+	}
+
 	private recordKeybinding(event: KeyboardEvent): void {
-		// Keep both directions of focus navigation available in this inline editor.
-		if (event.key === 'Tab' && !event.ctrlKey && !event.altKey && !event.metaKey) return;
+		// An outer modal host can move focus during capture; keep this nested
+		// dialog's only focus target active after that handler has run.
+		if (event.key === 'Tab' && !event.ctrlKey && !event.altKey && !event.metaKey) {
+			stopEvent(event);
+			this.keyInput?.focus();
+			return;
+		}
 		stopEvent(event);
-		if (this.saving || event.repeat || isModifierKey(event) || event.isComposing || event.key === 'Process' || !this.keyInput) return;
+		if (this.saving || event.repeat || event.isComposing || event.key === 'Process' || !this.keyInput) return;
 		const unmodified = !event.ctrlKey && !event.altKey && !event.metaKey && !event.shiftKey;
 		if (unmodified && event.key === 'Enter') {
-			void this.saveEditingItem();
+			if (this.recordedChords.length) void this.saveEditingItem();
 			return;
 		}
 		if (unmodified && event.key === 'Escape') {
 			if (this.keyInput.value) {
 				this.recordedChords.length = 0;
 				this.keyInput.value = '';
+				this.recorderLabel.clear();
 				this.setStatus(localize('keybindings.recordingCleared', 'Keybinding cleared. Record a new sequence, or press Escape again to cancel.'), false);
 			} else this.closeRecorder();
 			return;
@@ -660,12 +662,41 @@ export class KeybindingsEditor extends EditorPane implements IKeybindingsEditorP
 			altGraphKey: keyboardEvent.altGraphKey,
 			isComposing: keyboardEvent.isComposing,
 		});
+		if (isModifierKey(event)) {
+			if (!this.recordedChords.length) {
+				const keys = [
+					event.ctrlKey ? 'ctrl' : '',
+					event.shiftKey ? 'shift' : '',
+					event.altKey ? 'alt' : '',
+					event.metaKey ? 'meta' : '',
+				].filter(Boolean);
+				if (keys.length && this.recorderPreview) {
+					const modifiers = this.keybindingService.resolveKeybinding(new Keybinding(keys.map(key => logicalKey(key))));
+					this.keyInput.value = modifiers.chords.map(chord => getKeybindingLabel(
+						{ chords: [chord], operatingSystem: modifiers.operatingSystem }, KeybindingLabelStyle.UserSettings,
+					)).join('+');
+					this.recorderLabel.value = new KeybindingLabel(this.recorderPreview, { ...defaultKeybindingLabelStyles, keybinding: modifiers, presentation: 'keycap' });
+				}
+			}
+			return;
+		}
 		const chord = getKeybindingLabel(resolved, KeybindingLabelStyle.UserSettings);
 		if (!chord) return;
 		const restarting = this.recordedChords.length === MAX_KEYBINDING_CHORDS;
 		if (restarting) this.recordedChords.length = 0;
 		this.recordedChords.push(chord);
 		this.keyInput.value = this.recordedChords.join(' ');
+		const binding = this.keybindingService.resolveUserBinding(this.recordedChords.join(' '));
+		if (binding && this.recorderPreview) {
+			// Show layout labels in the field while retaining physical keys for persistence.
+			this.keyInput.value = getKeybindingLabel({
+				chords: binding.chords.map(chord => ({ ...chord, kind: KeybindingChordKind.Logical, key: (chord.label ?? chord.key).toLocaleLowerCase() })),
+				operatingSystem: binding.operatingSystem,
+			}, KeybindingLabelStyle.UserSettings);
+			this.recorderLabel.value = new KeybindingLabel(this.recorderPreview, {
+				...defaultKeybindingLabelStyles, keybinding: binding, presentation: 'keycap',
+			});
+		}
 		this.setStatus(restarting
 			? localize('keybindings.recordingRestarted', 'Started a new sequence after {0} chords: {1}.', MAX_KEYBINDING_CHORDS, chord)
 			: localize('keybindings.recordingChords', 'Recorded {0} of {1} chords: {2}.', this.recordedChords.length, MAX_KEYBINDING_CHORDS, this.keyInput.value), false);
@@ -673,13 +704,13 @@ export class KeybindingsEditor extends EditorPane implements IKeybindingsEditorP
 
 	private async saveEditingItem(): Promise<void> {
 		const item = this.editingItem;
-		if (!item || !this.keyInput || !this.whenInput || this.saving) return;
+		if (!item || !this.keyInput || this.saving) return;
 		this.setSaving(true);
 		this.setStatus(localize('keybindings.recordingSaving', 'Saving keybinding…'), false);
 		try {
-			const key = this.keyInput.value.trim();
+			const key = this.recordedChords.join(' ');
 			if (!this.keybindingService.resolveUserBinding(key)) throw new TypeError(localize('keybindings.invalidKey', 'Enter a valid keybinding before saving.'));
-			await this.keybindingEditingService.editKeybinding(item.keybindingItem, key, this.whenInput.value.trim() || undefined);
+			await this.keybindingEditingService.editKeybinding(item.keybindingItem, key, item.when || undefined);
 			if (this.isDisposed || this.editingItem !== item) return;
 			// The saved row can be replaced by the asynchronous file watcher.
 			this.closeRecorder(false);
@@ -708,9 +739,6 @@ export class KeybindingsEditor extends EditorPane implements IKeybindingsEditorP
 		this.saving = saving;
 		this.recorder?.setAttribute('aria-busy', String(saving));
 		if (this.keyInput) this.keyInput.enabled = !saving;
-		if (this.whenInput) this.whenInput.enabled = !saving;
-		if (this.saveButton) this.saveButton.enabled = !saving;
-		if (this.cancelButton) this.cancelButton.enabled = !saving;
 		for (const button of this.actionButtons) button.enabled = !saving;
 	}
 
@@ -745,6 +773,10 @@ export class KeybindingsEditor extends EditorPane implements IKeybindingsEditorP
 
 	private setStatus(message: string, isError: boolean): void {
 		if (!this.status) return;
+		if (this.recorderError && this.editingItem) {
+			this.recorderError.textContent = isError ? message : '';
+			this.recorderError.hidden = !isError;
+		}
 		this.status.textContent = message;
 		this.status.hidden = false;
 		this.status.classList.toggle('is-error', isError);
