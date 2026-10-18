@@ -15,7 +15,8 @@ schemars = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 sha2 = { workspace = true }
-ts-rs = { workspace = true }
+# ts-rs 12 warns on enum deny_unknown_fields, which only affects Serde validation.
+ts-rs = { workspace = true, features = ["no-serde-warnings"] }
 
 [lints]
 workspace = true
