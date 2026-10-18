@@ -1,3 +1,4 @@
+import { SettingsPageRenderer } from './settingsRenderers.js';
 import { validateJsonValue, type JsonValue } from '../../../../base/common/jsonValue.js';
 import type { LanguageServerConfiguration } from '../../../../platform/language/common/languageServerService.js';
 import {
@@ -7,14 +8,14 @@ import {
 	defaultSelectBoxStyles,
 } from '../../../../platform/theme/browser/defaultStyles.js';
 import type { IResourceEditorInput } from '../../../common/editor.js';
-import './media/languageServerSettingsContent.css';
+import './media/languageServerSettingsRenderer.css';
 import { h, isHTMLElement } from '../../../../base/browser/dom.js';
 import { Button } from '../../../../base/browser/ui/button/button.js';
 import { InputBox } from '../../../../base/browser/ui/inputbox/inputbox.js';
 import { SelectBox } from '../../../../base/browser/ui/selectbox/selectbox.js';
 import { Checkbox } from '../../../../base/browser/ui/toggle/toggle.js';
 import { Emitter } from '../../../../base/common/event.js';
-import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
+import { toDisposable } from '../../../../base/common/lifecycle.js';
 import { localize } from '../../../../nls.js';
 import { ICodeEditorService } from '../../../../editor/browser/services/codeEditorService.js';
 import { AccessibleContentProvider, AccessibleViewProviderId, AccessibleViewType, AccessibilityVerbositySettingId, IAccessibleViewService } from '../../../../platform/accessibility/browser/accessibleView.js';
@@ -31,10 +32,10 @@ import { IWorkspaceContextService } from '../../../../platform/workspace/common/
 import { CLOSE_EDITOR_COMMAND_ID } from '../../../browser/parts/editor/editorCommands.js';
 import { ILocalizationService } from '../../../services/localization/common/localizationService.js';
 import { IAppServerRemoteAgentService } from '../../../services/remote/common/appServerRemoteAgentService.js';
-import { SettingsSearchQuery } from '../../preferences/browser/settingsSearch.js';
-import type { SettingsContent, SettingsContentItem, SettingsTreeNode } from '../../preferences/browser/settingsTreeModels.js';
+import { SettingsSearchQuery } from './settingsSearch.js';
+import type { SettingsSectionReference, SettingsTreeNode } from './settingsTreeModels.js';
 
-export const LanguageServerSettingsTarget = 'editor-language.group.language-servers';
+import { LanguageServerSettingsTarget } from '../common/preferences.js';
 
 Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfiguration({
 	key: AccessibilityVerbositySettingId.LanguageServers, defaultValue: true,
@@ -50,7 +51,7 @@ Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfigurat
 });
 
 /** Settings owns this form; the App Server keeps the profile configuration and revision authority. */
-export class LanguageServerSettingsContent extends Disposable implements SettingsContent {
+export class LanguageServerSettingsRenderer extends SettingsPageRenderer<SettingsSectionReference> {
 	public readonly categoryId = 'editor-language';
 	private readonly changed = this._register(new Emitter<void>());
 	public readonly onDidChange = this.changed.event;
@@ -187,14 +188,14 @@ export class LanguageServerSettingsContent extends Disposable implements Setting
 		else { this.generation++; }
 	}
 
-	public getNodes(_query: SettingsSearchQuery): readonly SettingsTreeNode<SettingsContentItem>[] {
+	protected override buildNodes(_query: SettingsSearchQuery): readonly SettingsTreeNode<SettingsSectionReference>[] {
 		return [{
 			element: { kind: 'group', id: LanguageServerSettingsTarget, title: this.label('title', 'Language Servers'), description: this.label('description', 'Configure language servers. View their logs and failures in Output.') },
 			children: [{
 				element: {
 					kind: 'item', id: 'language-servers.configuration', title: this.label('title', 'Language Servers'), description: this.note.textContent ?? '',
 					keywords: ['lsp', 'language servers', 'output', 'extensionManagement', 'executable', this.language.value, ...Object.keys(this.snapshot?.configurations ?? {}), ...(this.snapshot?.servers.flatMap(server => [server.id, ...server.languageIds]) ?? [])],
-					value: { domNode: this.domNode },
+					value: this.retainElement('language-servers.configuration', this.domNode),
 				}
 			}],
 		}];

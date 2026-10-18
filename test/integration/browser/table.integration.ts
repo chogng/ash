@@ -1,3 +1,8 @@
+import { SearchSettingsModel } from '../../../src/ash/workbench/contrib/search/browser/searchSettingsModel.js';
+import { SettingsSectionRenderer } from '../../../src/ash/workbench/contrib/preferences/browser/settingsSectionRenderer.js';
+import { AccessibleViewProviderId, AccessibilityVerbositySettingId } from '../../../src/ash/platform/accessibility/browser/accessibleView.js';
+import { IContentSearchConfigurationService } from '../../../src/ash/platform/search/common/search.js';
+import { IAppServerRemoteAgentService } from '../../../src/ash/workbench/services/remote/common/appServerRemoteAgentService.js';
 import { DEFAULT_LOCAL_TRANSCRIPTION_MODEL } from '../../../src/ash/platform/localTranscription/common/localTranscription.js';
 import { IChatSpeechToTextService, ChatSpeechToTextService } from '../../../src/ash/workbench/contrib/chat/browser/speechToText/chatSpeechToTextService.js';
 import '../../../src/ash/workbench/contrib/accessibility/browser/accessibilityConfiguration.js';
@@ -38,7 +43,7 @@ import { ILocalTranscriptionModelService, DictationModelState, type ILocalTransc
 import { bindTestColorTheme } from './themeFixture.js';
 import { lightColorTheme, darkColorTheme, highContrastDarkColorTheme, highContrastLightColorTheme } from '../../../src/ash/platform/theme/common/colorTheme.js';
 import { TestThemeService } from '../../../src/ash/platform/theme/test/common/testThemeService.js';
-import { LocalTranscriptionModelControls } from '../../../src/ash/workbench/contrib/localTranscription/browser/localTranscriptionModelControls.js';
+import { LocalTranscriptionModelControls } from '../../../src/ash/workbench/contrib/preferences/browser/localTranscriptionModelControls.js';
 import { TestConfigurationService as WorkbenchConfigurationService } from '../../../src/ash/workbench/services/configuration/test/common/testServices.js';
 import { setNlsMessages } from '../../../src/ash/nls.js';
 import { productLanguagePackCatalogs } from '../../../src/ash/workbench/services/localization/common/localizationCatalogs.js';
@@ -62,14 +67,16 @@ import { IDialogService } from '../../../src/ash/platform/dialogs/common/dialogs
 import { DialogService } from '../../../src/ash/workbench/services/dialogs/common/dialogService.js';
 import { BrowserDialogHandler } from '../../../src/ash/workbench/browser/parts/dialogs/dialog.js';
 import { DialogHandlerContribution } from '../../../src/ash/workbench/browser/parts/dialogs/dialog.web.contribution.js';
-import { ModelSettingsContent } from '../../../src/ash/workbench/contrib/chat/browser/modelSettingsContent.js';
-import { SettingsTreeModel, type SettingsContentItem } from '../../../src/ash/workbench/contrib/preferences/browser/settingsTreeModels.js';
+import { ModelSettingsRenderer } from '../../../src/ash/workbench/contrib/preferences/browser/modelSettingsRenderer.js';
+import { SettingsTreeModel, type SettingsSectionReference } from '../../../src/ash/workbench/contrib/preferences/browser/settingsTreeModels.js';
 import { SettingsTree } from '../../../src/ash/workbench/contrib/preferences/browser/settingsTree.js';
 
 declare global {
 	interface Window {
 		ashTableIntegration: {
 			showCredentialSettings(): void;
+			showSearchSettings(): void;
+			readonly searchSaved: readonly string[];
 			setCredentialStorage(status: SecretStorageStatus): void;
 			setCredentialStorageMode(mode: SecretStorageMode): void;
 			readonly credentialOperations: readonly string[];
@@ -289,16 +296,41 @@ resources.add(speechExtensions.registerActivationHandler(async (event, signal) =
 	signal?.throwIfAborted();
 	speechBridge.update(speechSnapshot(true));
 }));
+const searchSaved: string[] = [];
 window.ashTableIntegration = {
+	get searchSaved() { return searchSaved; },
+	showSearchSettings: () => {
+		let engine: 'tgrep' | 'ripgrep' = 'tgrep';
+		let revision = 1;
+		services.registerInstance(IContentSearchConfigurationService, {
+			read: async () => ({ revision, engine }),
+			configure: async (next, expected) => {
+				if (expected !== revision) throw new Error('stale revision');
+				engine = next;
+				revision++;
+				searchSaved.push(next);
+			},
+		});
+		services.registerInstance(IAppServerRemoteAgentService, { onDidChangeConnection: Event.None, onDidChangeConnectionState: Event.None } as IAppServerRemoteAgentService);
+		const root = document.createElement('div');
+		root.id = 'search-settings';
+		document.body.append(root);
+		const model = resources.add(services.createInstance(SearchSettingsModel));
+		const renderer = resources.add(services.createInstance(SettingsSectionRenderer, root, model, AccessibleViewProviderId.ContentSearchSettings, AccessibilityVerbositySettingId.ContentSearchSettings));
+		const node = renderer.getNodes()[0].children![0].element;
+		if (node.kind !== 'item' || !('rendererId' in node.value)) throw new Error('Missing search settings');
+		root.append(renderer.renderItem(node.value));
+		renderer.setVisible(true);
+	},
 	showCredentialSettings: () => {
 		credentialSettings = true;
 		const root = document.createElement('div');
 		root.id = 'credential-settings';
 		document.body.append(root);
-		const content = resources.add(services.createInstance(ModelSettingsContent, root));
-		const model = resources.add(new SettingsTreeModel<SettingsContentItem>());
+		const content = resources.add(services.createInstance(ModelSettingsRenderer, root));
+		const model = resources.add(new SettingsTreeModel<SettingsSectionReference>());
 		resources.add(new SettingsTree(root, {
-			model, rootClassName: 'ash-models-settings', groupClassName: 'ash-settings-content-group', groupDescriptionClassName: 'ash-settings-group-description', itemsClassName: 'ash-settings-list', renderItem: item => item.value.domNode,
+			model, rootClassName: 'ash-models-settings', groupClassName: 'ash-settings-content-group', groupDescriptionClassName: 'ash-settings-group-description', itemsClassName: 'ash-settings-list', renderGroupHeader: header => content.renderItem(header), renderItem: item => content.renderItem(item.value),
 		}));
 		resources.add(content.onDidChange(() => model.setChildren(content.getNodes())));
 		content.setVisible(true);

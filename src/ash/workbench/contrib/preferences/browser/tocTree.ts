@@ -7,7 +7,7 @@ import { Emitter, type Event } from '../../../../base/common/event.js';
 import { Disposable } from '../../../../base/common/lifecycle.js';
 import type { ISetting } from '../../../services/preferences/common/preferences.js';
 import { SettingsNavigation, type SettingsCategoryDescriptor, type SettingsCategoryGroupDescriptor, type SettingsNavigationDescriptor } from './settingsLayout.js';
-import type { SettingsContentItem, SettingsTreeModel } from './settingsTreeModels.js';
+import type { SettingsSectionReference, SettingsTreeModel } from './settingsTreeModels.js';
 
 export type SettingsTOCEntry =
 	| { readonly kind: 'group'; readonly id: string; readonly group: SettingsCategoryGroupDescriptor; }
@@ -25,7 +25,7 @@ export interface TOCTreeOptions {
 
 /** Projects the product hierarchy and contributed layout groups into Settings TOC entries. */
 export class TOCTreeModel {
-	constructor(private readonly content: SettingsTreeModel<ISetting | SettingsContentItem>, private readonly navigation: () => readonly SettingsNavigationDescriptor[] = () => SettingsNavigation) { }
+	constructor(private readonly content: SettingsTreeModel<ISetting | SettingsSectionReference>, private readonly navigation: () => readonly SettingsNavigationDescriptor[] = () => SettingsNavigation) { }
 
 	public get hasModifiedFilter(): boolean {
 		return this.content.hasModifiedFilter;

@@ -7,3 +7,6 @@ export const ChangeKeyboardLayoutCommandId = 'workbench.action.changeKeyboardLay
 export const InspectKeyMappingsCommandId = 'workbench.action.inspectKeyMappings';
 export const InspectKeyMappingsJsonCommandId = 'workbench.action.inspectKeyMappingsJSON';
 export const ToggleKeyboardShortcutsTroubleshootingCommandId = 'workbench.action.toggleKeyboardShortcutsTroubleshooting';
+
+/** Stable navigation target used by language-server commands and Preferences. */
+export const LanguageServerSettingsTarget = 'editor-language.group.language-servers';

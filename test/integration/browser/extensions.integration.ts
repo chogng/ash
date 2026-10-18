@@ -8,7 +8,7 @@ import { parseExtensionManifest } from '../../../src/ash/workbench/services/exte
 import { DefaultSettings } from '../../../src/ash/workbench/services/preferences/common/settingsModels.js';
 import { createSettingsLayout, settingsRootNodes } from '../../../src/ash/workbench/contrib/preferences/browser/settingsLayout.js';
 import { SettingsRenderer } from '../../../src/ash/workbench/contrib/preferences/browser/settingsRenderers.js';
-import { SettingsTreeModel, type SettingsContentItem } from '../../../src/ash/workbench/contrib/preferences/browser/settingsTreeModels.js';
+import { SettingsTreeModel, type SettingsSectionReference } from '../../../src/ash/workbench/contrib/preferences/browser/settingsTreeModels.js';
 import { SettingsTree } from '../../../src/ash/workbench/contrib/preferences/browser/settingsTree.js';
 import { TOCTree, TOCTreeModel } from '../../../src/ash/workbench/contrib/preferences/browser/tocTree.js';
 import type { ISetting } from '../../../src/ash/workbench/services/preferences/common/preferences.js';
@@ -104,7 +104,7 @@ import { AppServerRemoteError } from '../../../src/ash/platform/agentHost/common
 import type { AppServerProtocolClient } from '../../../src/ash/platform/agentHost/browser/appServerProtocolClient.js';
 import { PaneView } from '../../../src/ash/base/browser/ui/splitview/paneview.js';
 import { registerSkillActions } from '../../../src/ash/workbench/contrib/chat/browser/promptSyntax/skillActions.js';
-import { LanguageServerSettingsContent } from '../../../src/ash/workbench/contrib/language/browser/languageServerSettingsContent.js';
+import { LanguageServerSettingsRenderer } from '../../../src/ash/workbench/contrib/preferences/browser/languageServerSettingsRenderer.js';
 import { setNlsMessages } from '../../../src/ash/nls.js';
 import { IAgentExecutionSettingsService, type ExecutionSettings } from '../../../src/ash/platform/agentHost/common/agentExecutionSettingsService.js';
 import { SandboxSettingsModel } from '../../../src/ash/workbench/contrib/preferences/browser/sandboxSettingsModel.js';
@@ -516,7 +516,7 @@ services.registerInstance(IViewsService, {
 } as unknown as IViewsService);
 registerSkillActions();
 const commands = disposables.add(new CommandService(services));
-const lsp = disposables.add(services.createInstance(LanguageServerSettingsContent, document.getElementById('lsp')!));
+const lsp = disposables.add(services.createInstance(LanguageServerSettingsRenderer, document.getElementById('lsp')!));
 document.getElementById('lsp')!.append(lsp.domNode);
 lsp.setInput(createSettingsEditorInput());
 lsp.setVisible(true);
@@ -562,7 +562,7 @@ function prepareSettings(): void {
 	settingServices.registerInstance(IClipboardService, disposables.add(new BrowserClipboardService(navigator.clipboard)));
 	settingServices.registerInstance(IContextMenuService, { contextMenuStyle: 'custom', onDidShowContextMenu: Event.None, onDidHideContextMenu: Event.None, showContextMenu: () => { }, hideContextMenu: () => { } });
 	const layout = createSettingsLayout(new DefaultSettings(registry).all).filter(entry => entry.id.startsWith('extension.'));
-	const model = disposables.add(new SettingsTreeModel<ISetting | SettingsContentItem>());
+	const model = disposables.add(new SettingsTreeModel<ISetting | SettingsSectionReference>());
 	model.setChildren(settingsRootNodes(layout));
 	model.setNavigationTarget('extension.test.sample');
 	const renderer = disposables.add(settingServices.createInstance(SettingsRenderer, content, {
@@ -572,8 +572,9 @@ function prepareSettings(): void {
 	disposables.add(new SettingsTree(content, {
 		model, rootClassName: 'ash-settings-content-tree', groupClassName: 'ash-configuration-settings-group',
 		groupDescriptionClassName: 'ash-configuration-settings-group-description', itemsClassName: 'ash-configuration-settings-list',
-		renderItem: item => 'domNode' in item.value ? item.value.domNode : renderer.render(item.value),
-		updateItem: item => { if (!('domNode' in item.value)) renderer.update(item.value); }, disposeItem: item => renderer.disposeSetting(item.id),
+		renderGroupHeader: header => renderer.render(header),
+		renderItem: item => renderer.render(item.value),
+		updateItem: item => { if (!('rendererId' in item.value)) renderer.update(item.value); }, disposeItem: item => renderer.disposeSetting(item.id),
 	}));
 	const toc = disposables.add(new TOCTree(navigation, new TOCTreeModel(model, () => [{
 		id: 'extensions', label: localize({ bundle: 'ash.settings', key: 'groups.extensions.label' }, 'Extensions'), description: '', categories: layout.map(entry => entry.descriptor),
@@ -669,7 +670,7 @@ window.ashSandboxIntegration = {
 		const model = disposables.add(child.createInstance(SandboxSettingsModel));
 		const renderer = disposables.add(child.createInstance(SettingsSectionRenderer, host, model, AccessibleViewProviderId.SandboxSettings, AccessibilityVerbositySettingId.SandboxSettings));
 		for (const group of renderer.getNodes()) for (const node of group.children ?? []) {
-			if (node.element.kind === 'item' && 'domNode' in node.element.value) host.append(node.element.value.domNode);
+			if (node.element.kind === 'item' && 'rendererId' in node.element.value) host.append(renderer.renderItem(node.element.value));
 		}
 		renderer.setVisible(true);
 		const diagnostics = disposables.add(new AgentCapabilitiesSettings(host, { isAvailable: true, onDidChange: Event.None, read: async () => ({ localProcessSandboxConfigured: true, sandboxBackends: ['windows'], directoryGrantsReadable: false, sandboxDiagnostics: [], sandboxPolicy: { profile: ':readOnly', fileSystem: 'readOnly', network: 'denied', hostRead: 'grantedRoots', managedConstraints: true, pathRuleCount: 1 } }) }, child.get(IAppServerRemoteAgentService), { onDidChangeTrust: Event.None } as IWorkspaceTrustApi, { whenReady: Promise.resolve(), translate: (bundle, key, fallback, parameters) => localize({ bundle, key }, fallback, ...Object.values(parameters ?? {})) }, child.get(IAgentExecutionSettingsService)));

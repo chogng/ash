@@ -11,8 +11,8 @@ import { BrowserContextViewService } from '../../../../../platform/contextview/b
 import type { AdvisorConfig, IChatService } from '../../../../services/chat/common/chatService.js';
 import type { ModelCatalogEntry } from '../../../../services/chat/common/modelCatalog.js';
 import type { ILocalizationService } from '../../../../services/localization/common/localizationService.js';
-import { AdvisorSettingsContent } from '../../browser/advisorSettingsContent.js';
-import type { ILanguageModelsService } from '../../common/languageModels.js';
+import { AdvisorSettingsRenderer } from '../../browser/advisorSettingsRenderer.js';
+import type { ILanguageModelsService } from '../../../chat/common/languageModels.js';
 
 test('Advisor focuses its saved model, Disable when disabled and the menu when the saved model is hidden', async () => {
 	const dom = new JSDOM('<body></body>');
@@ -31,7 +31,7 @@ test('Advisor focuses its saved model, Disable when disabled and the menu when t
 		};
 		let saved: AdvisorConfig = { model: model.model, enabled: true, maxCalls: 3, maxOutputTokens: 2048 };
 		let modelVisible = true;
-		const content = resources.add(new AdvisorSettingsContent(document.body,
+		const content = resources.add(new AdvisorSettingsRenderer(document.body,
 			{ readAdvisorDefault: async () => saved } as IChatService,
 			{ onDidChangeModels: Event.None, listAdvisorModels: async () => [model], isModelVisible: () => modelVisible } as unknown as ILanguageModelsService,
 			resources.add(new BrowserContextViewService(document.body)),
@@ -83,14 +83,14 @@ test('Advisor focuses its saved model, Disable when disabled and the menu when t
 function advisorFixture(chat: Pick<IChatService, 'readAdvisorDefault' | 'saveAdvisorDefault'>, changes = Event.None) {
 	const dom = new JSDOM('<body></body>');
 	const resources = new DisposableStore();
-	const content = resources.add(new AdvisorSettingsContent(dom.window.document.body, chat as IChatService,
+	const content = resources.add(new AdvisorSettingsRenderer(dom.window.document.body, chat as IChatService,
 		{ onDidChangeModels: changes, listAdvisorModels: async () => [], isModelVisible: () => true } as unknown as ILanguageModelsService,
 		resources.add(new BrowserContextViewService(dom.window.document.body)), resources.add(new ContextKeyService()),
 		{ getOpenAriaHint: () => undefined } as unknown as IAccessibleViewService, resources.add(new InMemoryConfigurationService()), {} as ILocalizationService));
 	dom.window.document.body.append(content.domNode);
 	return { content, dom, dispose() { resources.dispose(); dom.window.close(); }, [Symbol.dispose]() { this.dispose(); } };
 }
-function advisorLoaded(content: AdvisorSettingsContent): Promise<void> {
+function advisorLoaded(content: AdvisorSettingsRenderer): Promise<void> {
 	return new Promise(resolve => { const listener = content.onDidChange(() => { listener.dispose(); resolve(); }); });
 }
 

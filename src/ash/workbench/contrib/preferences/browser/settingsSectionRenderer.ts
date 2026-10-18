@@ -1,3 +1,4 @@
+import { SettingsPageRenderer } from './settingsRenderers.js';
 import {
 	defaultButtonStyles,
 	defaultInputBoxStyles,
@@ -11,7 +12,7 @@ import { InputBox } from '../../../../base/browser/ui/inputbox/inputbox.js';
 import { SelectBox } from '../../../../base/browser/ui/selectbox/selectbox.js';
 import { Switch } from '../../../../base/browser/ui/toggle/toggle.js';
 import { Emitter } from '../../../../base/common/event.js';
-import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
+import { toDisposable } from '../../../../base/common/lifecycle.js';
 import { generateUuid } from '../../../../base/common/uuid.js';
 import { localize } from '../../../../nls.js';
 import { AccessibleContentProvider, AccessibleViewType, type AccessibleViewProviderId, type AccessibilityVerbositySettingId, IAccessibleViewService } from '../../../../platform/accessibility/browser/accessibleView.js';
@@ -20,13 +21,12 @@ import { IConfigurationService } from '../../../../platform/configuration/common
 import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
 import { ContextKeyExpr } from '../../../../platform/contextkey/common/contextkey.js';
 import { IContextViewService } from '../../../../platform/contextview/browser/contextView.js';
-import type { ISetting } from '../../../services/preferences/common/preferences.js';
-import type { SettingsContent, SettingsContentItem, SettingsSectionField, SettingsSectionModel, SettingsTreeNode } from './settingsTreeModels.js';
+import type { SettingsSectionReference, SettingsSectionField, SettingsSectionModel, SettingsTreeNode } from './settingsTreeModels.js';
 
 /** Renders service-backed sections from data while preserving controls and focus across updates. */
-export class SettingsSectionRenderer extends Disposable implements SettingsContent {
+export class SettingsSectionRenderer extends SettingsPageRenderer<SettingsSectionReference> {
 	public get categoryId(): string { return this.model.categoryId; }
-	public get settingIds(): readonly string[] | undefined { return this.model.settingIds; }
+	public override get settingIds(): readonly string[] | undefined { return this.model.settingIds; }
 	private readonly changed = this._register(new Emitter<void>());
 	public readonly onDidChange = this.changed.event;
 	private readonly domNode: HTMLElement;
@@ -72,9 +72,9 @@ export class SettingsSectionRenderer extends Disposable implements SettingsConte
 		this._register(toDisposable(() => { this.model.setVisible(false); this.domNode.remove(); }));
 	}
 
-	public getNodes(): readonly SettingsTreeNode<ISetting | SettingsContentItem>[] {
+	protected override buildNodes(): readonly SettingsTreeNode<SettingsSectionReference>[] {
 		this.render();
-		return [{ element: { kind: 'group', id: `${this.categoryId}.services`, title: this.model.title, description: '' }, children: [{ element: { kind: 'item', id: `${this.categoryId}.section`, title: this.model.title, description: this.model.description, keywords: [this.categoryId, ...this.model.fields.flatMap(field => field.kind === 'status' ? [] : [field.label])], value: { domNode: this.domNode } } }] }];
+		return [{ element: { kind: 'group', id: this.model.groupId ?? `${this.categoryId}.services`, title: this.model.groupTitle ?? this.model.title, description: '' }, children: [{ element: { kind: 'item', id: this.model.itemId ?? `${this.categoryId}.section`, title: this.model.title, description: this.model.description, keywords: [this.categoryId, ...this.model.keywords ?? [], ...this.model.fields.flatMap(field => field.kind === 'status' ? [] : [field.label])], value: this.retainElement(this.model.itemId ?? `${this.categoryId}.section`, this.domNode) } }] }];
 	}
 
 	public setVisible(visible: boolean): void { this.isVisible = visible; this.model.setVisible(visible); }

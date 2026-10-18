@@ -44,7 +44,7 @@ import { IWorkbenchEnvironmentService } from '../../workbench/services/environme
 import { BrowserWorkbenchEnvironmentService } from '../../workbench/services/environment/browser/environmentService.js';
 import { createWebUpdateProvider } from '../../workbench/services/update/browser/updateService.js';
 
-registerSingleton(IHostService, BrowserHostService, InstantiationType.Delayed);
+registerSingleton(IHostService, new SyncDescriptor(BrowserHostService, [{}], true));
 registerSingleton(ILanguagePackStore, BrowserLanguagePackStore, InstantiationType.Delayed);
 
 /** Owns the browser services and Workbench created for one Sessions embedder. */

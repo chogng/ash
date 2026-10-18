@@ -45,7 +45,7 @@ test('Models Settings saves enabled choices, preserves keyboard focus and restor
 	await page.keyboard.press('Escape');
 });
 
-test('Models Settings offers provider creation with compact fields and keyboard navigation', async ({ workbench }) => {
+test('Models Settings offers provider creation with compact fields and keyboard navigation', async ({ workbench, target }) => {
 	const page = workbench.page;
 	await workbench.settingsEditor.openUserSettingsUI();
 	const settings = page.getByRole('dialog', { name: 'Ash Settings' });
@@ -72,8 +72,12 @@ test('Models Settings offers provider creation with compact fields and keyboard 
 	await name.press('Tab');
 	await expect(card.getByRole('textbox', { name: 'Base URL', exact: true })).toBeFocused();
 	await page.keyboard.press('Tab');
-	await expect(card.locator('input[type="password"]')).toBeFocused();
-	await page.keyboard.press('Tab');
+	if (target.appServerMode === 'required') {
+		await expect(card.locator('input[type="password"]')).toBeFocused();
+		await page.keyboard.press('Tab');
+	} else {
+		await expect(card.locator('input[type="password"]')).toBeDisabled();
+	}
 	await expect(card.getByRole('combobox', { name: 'API format' })).toBeFocused();
 	await card.getByRole('button', { name: 'Add model' }).click();
 	const model = card.getByRole('textbox', { name: 'Model ID', exact: true });

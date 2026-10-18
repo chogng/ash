@@ -27,7 +27,7 @@ import { localize } from '../../../../nls.js';
 import { AccessibleContentProvider, AccessibleViewProviderId, AccessibleViewType, AccessibilityVerbositySettingId, IAccessibleViewService } from '../../../../platform/accessibility/browser/accessibleView.js';
 import { AccessibleViewRegistry } from '../../../../platform/accessibility/browser/accessibleViewRegistry.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
-import { Extensions as ConfigurationExtensions, type IConfigurationRegistry, type IRegisteredConfiguration } from '../../../../platform/configuration/common/configurationRegistry.js';
+import { Extensions as ConfigurationExtensions, type IConfigurationRegistry } from '../../../../platform/configuration/common/configurationRegistry.js';
 import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
 import { ContextKeyExpr } from '../../../../platform/contextkey/common/contextkey.js';
 import { Registry } from '../../../../platform/registry/common/platform.js';
@@ -36,15 +36,15 @@ import { INotificationService } from '../../../../platform/notification/common/n
 import { IEditorService } from '../../../../workbench/services/editor/common/editorService.js';
 import { createSettingsEditorInput } from '../../../../workbench/services/preferences/common/settingsEditorInput.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
-import { ActivityBarPosition, WorkbenchConfiguration } from '../../../../workbench/common/configuration.js';
+import { WorkbenchConfiguration } from '../../../../workbench/common/configuration.js';
 import '../../../../workbench/contrib/preferences/common/settingsEditorColorRegistry.js';
 import { DefaultSettings } from '../../../../workbench/services/preferences/common/settingsModels.js';
-import { SettingsRenderer } from '../../../../workbench/contrib/preferences/browser/settingsRenderers.js';
-import { AdvisorSettingsContent } from '../../../../workbench/contrib/chat/browser/advisorSettingsContent.js';
-import { ModelSettingsContent } from '../../../../workbench/contrib/chat/browser/modelSettingsContent.js';
-import { DictationSettingsContent } from '../../../../workbench/contrib/chat/browser/speechToText/dictationSettingsContent.js';
+import { SettingsRenderer, SettingsPageRenderer } from '../../../../workbench/contrib/preferences/browser/settingsRenderers.js';
+import { AdvisorSettingsRenderer } from '../../../../workbench/contrib/preferences/browser/advisorSettingsRenderer.js';
+import { ModelSettingsRenderer } from '../../../../workbench/contrib/preferences/browser/modelSettingsRenderer.js';
+import { DictationSettingsRenderer } from '../../../../workbench/contrib/preferences/browser/dictationSettingsRenderer.js';
 import { SettingsTree } from '../../../../workbench/contrib/preferences/browser/settingsTree.js';
-import { SettingsTreeModel, type SettingsContent, type SettingsContentItem, type SettingsSectionField, type SettingsTreeNode } from '../../../../workbench/contrib/preferences/browser/settingsTreeModels.js';
+import { SettingsTreeModel, type SettingsSectionReference, type SettingsSectionField, type SettingsTreeNode } from '../../../../workbench/contrib/preferences/browser/settingsTreeModels.js';
 import { SettingsSearchQuery } from '../../../../workbench/contrib/preferences/browser/settingsSearch.js';
 import { SettingsSearchMenu } from '../../../../workbench/contrib/preferences/browser/settingsSearchMenu.js';
 import type { SettingWidgetOptions } from '../../../../workbench/contrib/preferences/browser/settingsWidgets.js';
@@ -63,25 +63,32 @@ Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration).regis
 		if (typeof value !== 'boolean') throw new TypeError('Sessions Settings accessibility verbosity must be boolean');
 		return value;
 	},
+	setting: {
+		included: false,
+		valueType: 'boolean',
+		get title() { return localize('sessions.settings.verbosityTitle', 'Settings accessibility help'); },
+		get description() { return localize('sessions.settings.verbosityDescription', 'Announce how to open accessibility help when this page has focus.'); }
+	},
 });
 
 Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration).registerConfiguration({
 	key: AccessibilityVerbositySettingId.ExecutionSettings, defaultValue: true,
 	parse(value: unknown): boolean { if (typeof value !== 'boolean') throw new TypeError('Execution Settings accessibility verbosity must be boolean'); return value; },
+	setting: {
+		included: false,
+		valueType: 'boolean',
+		get title() { return localize({ bundle: 'ash.settings', key: 'execution.verbosityTitle' }, 'Execution and permissions accessibility help'); },
+		get description() { return localize({ bundle: 'ash.settings', key: 'execution.verbosityDescription' }, 'Announce how to open accessibility help for execution and permissions controls.'); }
+	},
 });
 
-function configuration<T>(key: string): IRegisteredConfiguration<T> {
-	const registered = Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration).getConfiguration(key);
-	if (!registered) throw new Error(`Sessions setting '${key}' is not registered`);
-	return registered as IRegisteredConfiguration<T>;
-}
 
 interface SettingsCategory {
 	readonly id: string;
 	readonly title: string;
 	readonly icon: Icon;
 	readonly settings: readonly ISetting[];
-	readonly content?: SettingsContent;
+	readonly content?: SettingsPageRenderer<ISetting | SettingsSectionReference>;
 }
 
 interface SettingsSection {
@@ -262,7 +269,7 @@ export class SessionsPreferences extends Disposable {
 		}));
 		openJson.domNode.classList.add('ash-settings-open-json');
 		openJson.domNode.setAttribute('aria-description', localize({ bundle: 'ash.settings', key: 'editor.switchHelp' }, 'Switch between Settings UI and JSON without changing the default settings editor. Unsaved JSON edits remain in the editor.'));
-		const managementContent = (id: string, title: string, description: string, fields: readonly SettingsSectionField[]): SettingsContent =>
+		const managementContent = (id: string, title: string, description: string, fields: readonly SettingsSectionField[]): SettingsPageRenderer =>
 			resources.add(contentServices.createInstance(SettingsSectionRenderer, list, {
 				categoryId: id, title, description, help: description, fields,
 				onDidChange: Event.None, setVisible: () => { },
@@ -277,17 +284,17 @@ export class SessionsPreferences extends Disposable {
 			},
 		};
 		const renderer = resources.add(contentServices.createInstance(SettingsRenderer, list, settingOptions));
-		const modelContent = resources.add(this.instantiationService.createInstance(ModelSettingsContent, list));
-		const dictationContent = resources.add(this.instantiationService.createInstance(DictationSettingsContent, list));
+		const modelContent = resources.add(this.instantiationService.createInstance(ModelSettingsRenderer, list));
+		const dictationContent = resources.add(this.instantiationService.createInstance(DictationSettingsRenderer, list));
 		const customizeContent = resources.add(contentServices.createInstance(SessionsCustomizeContent, list, async () => { dialog.close(); }, this.showEditor, () => openSettingsEditor(), () => openUserSettings()));
-		const advisorContent = resources.add(contentServices.createInstance(AdvisorSettingsContent, list));
+		const advisorContent = resources.add(contentServices.createInstance(AdvisorSettingsRenderer, list));
 		const githubSettings = resources.add(contentServices.createInstance(GitHubSettingsModel, async () => { dialog.close(); }));
 		const githubContent = resources.add(contentServices.createInstance(SettingsSectionRenderer, list, githubSettings, AccessibleViewProviderId.GitHubSettings, AccessibilityVerbositySettingId.GitHubSettings));
 		const traceSettings = resources.add(contentServices.createInstance(TraceSettingsModel));
 		const traceContent = resources.add(contentServices.createInstance(SettingsSectionRenderer, list, traceSettings, AccessibleViewProviderId.TraceSettings, AccessibilityVerbositySettingId.TraceSettings));
 		const executionSettings = resources.add(contentServices.createInstance(ExecutionSettingsModel));
 		const executionContent = resources.add(contentServices.createInstance(SettingsSectionRenderer, list, executionSettings, AccessibleViewProviderId.ExecutionSettings, AccessibilityVerbositySettingId.ExecutionSettings));
-		const management = new Map<string, SettingsContent>();
+		const management = new Map<string, SettingsPageRenderer>();
 		const accountTitle = localize('sessions.settings.account', 'Account');
 		management.set('account', managementContent('account', accountTitle,
 			localize('sessions.settings.accountDescription', 'Manage connected accounts and sign-in methods.'), [{
@@ -326,6 +333,9 @@ export class SessionsPreferences extends Disposable {
 		}
 		const sections = this.sections(modelContent, dictationContent, customizeContent, advisorContent, githubContent, traceContent, executionContent, management);
 		const categories = sections.flatMap(section => section.categories);
+		for (const category of categories) {
+			if (category.content) resources.add(renderer.registerPage(category.content));
+		}
 		const categoryIndex = (id: string | undefined): number => {
 			const target = id === 'hooks' ? 'customize' : id === 'dictation' ? 'general' : id;
 			const index = categories.findIndex(category => category.id === target);
@@ -334,7 +344,7 @@ export class SessionsPreferences extends Disposable {
 		if (categoryId === 'hooks') customizeContent.selectTab('hooks');
 		let activeCategory = categoryIndex(categoryId);
 		const configurationRegistry = Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration);
-		const treeModel = resources.add(new SettingsTreeModel<ISetting | SettingsContentItem>(id =>
+		const treeModel = resources.add(new SettingsTreeModel<ISetting | SettingsSectionReference>(id =>
 			// Keep service-only sections out of the local-user filter without creating configuration copies.
 			configurationRegistry.getConfiguration(id) !== undefined && this.configurationService.inspect(id).userLocalValue !== undefined,
 		));
@@ -344,9 +354,10 @@ export class SessionsPreferences extends Disposable {
 			groupClassName: 'ash-sessions-settings-content-group',
 			groupDescriptionClassName: 'ash-sessions-settings-group-description',
 			itemsClassName: 'ash-sessions-settings-list ash-settings-card',
-			renderItem: item => 'domNode' in item.value ? item.value.domNode : renderer.render(item.value),
-			updateItem: item => { if (!('domNode' in item.value)) renderer.update(item.value); },
-			disposeItem: item => { if (!('domNode' in item.value)) renderer.disposeSetting(item.id); },
+			renderGroupHeader: header => renderer.render(header),
+			renderItem: item => renderer.render(item.value),
+			updateItem: item => { if (!('rendererId' in item.value)) renderer.update(item.value); },
+			disposeItem: item => { if (!('rendererId' in item.value)) renderer.disposeSetting(item.id); },
 		}));
 		const buttons: Button[] = [];
 		for (const section of sections) {
@@ -381,7 +392,7 @@ export class SessionsPreferences extends Disposable {
 		}
 		const render = (): void => {
 			const query = new SettingsSearchQuery(searchInput.value);
-			const nodes: readonly SettingsTreeNode<ISetting | SettingsContentItem>[] = categories.map((category, index) => ({
+			const nodes: readonly SettingsTreeNode<ISetting | SettingsSectionReference>[] = categories.map((category, index) => ({
 				element: { kind: 'group', id: `sessions.category.${category.id}`, title: category.title, description: '' },
 				children: [
 					...category.settings.map(setting => ({ element: { kind: 'item' as const, id: setting.id, title: setting.title, description: setting.description, keywords: [setting.id, ...setting.keywords ?? []], tags: setting.tags, value: setting } })),
@@ -486,86 +497,29 @@ export class SessionsPreferences extends Disposable {
 		}
 	}
 
-	private sections(modelContent: SettingsContent, dictationContent: SettingsContent, customizeContent: SettingsContent, advisorContent: SettingsContent, githubContent: SettingsContent, traceContent: SettingsContent, executionContent: SettingsContent, management: ReadonlyMap<string, SettingsContent>): readonly SettingsSection[] {
-		const appearanceSettings: readonly ISetting[] = [{
-			id: SESSIONS_LAYOUT_SCOPE_SETTING,
-			valueType: 'select',
-			configuration: configuration<string | boolean>(SESSIONS_LAYOUT_SCOPE_SETTING),
-			title: localize('sessions.layoutScope.title', 'Layout scope'),
-			description: localize('sessions.layoutScope.description', 'Keep documents per session, per chat with shared visibility, or per chat with its own visibility.'),
-			options: [
-				{ value: 'session-shared', label: localize('sessions.layoutScope.session', 'Session') },
-				{ value: 'chat-shared', label: localize('sessions.layoutScope.sharedChat', 'Chat, shared visibility') },
-				{ value: 'chat', label: localize('sessions.layoutScope.chat', 'Chat') },
-			],
-		}, {
-			id: SessionsConfiguration.layoutStyle,
-			valueType: 'select',
-			configuration: configuration<string | boolean>(SessionsConfiguration.layoutStyle),
-			title: localize('sessions.layoutStyle.title', 'Layout style'),
-			description: localize('sessions.layoutStyle.description', 'Choose an inset frame (Modern) or edge-to-edge regions (Flat).'),
-			options: [
-				{ value: 'modern', label: localize('sessions.layoutStyle.modern', 'Modern') },
-				{ value: 'flat', label: localize('sessions.layoutStyle.flat', 'Flat') },
-			],
-		}, {
-			id: SessionsConfiguration.activityBarLocation,
-			valueType: 'select',
-			configuration: configuration<string | boolean>(SessionsConfiguration.activityBarLocation),
-			title: localize('sessions.activityBar.location.title', 'Activity Bar position'),
-			description: localize('sessions.activityBar.location.description', 'Place the Activity Bar on the side, top, or bottom, or hide it.'),
-			options: [
-				{ value: ActivityBarPosition.DEFAULT, label: localize('workbench.activityBar.location.side', 'Side') },
-				{ value: ActivityBarPosition.TOP, label: localize('workbench.activityBar.location.top', 'Top') },
-				{ value: ActivityBarPosition.BOTTOM, label: localize('workbench.activityBar.location.bottom', 'Bottom') },
-				{ value: ActivityBarPosition.HIDDEN, label: localize('workbench.activityBar.location.hidden', 'Hidden') },
-			],
-		}, {
-			id: SessionsConfiguration.activityBarCompact,
-			valueType: 'boolean',
-			configuration: configuration<boolean>(SessionsConfiguration.activityBarCompact),
-			title: localize('sessions.activityBar.compact.title', 'Compact Activity Bar'),
-			description: localize('sessions.activityBar.compact.description', 'Use smaller buttons when the Activity Bar is on the side.'),
-		}];
+	private sections(modelContent: SettingsPageRenderer<ISetting | SettingsSectionReference>, dictationContent: SettingsPageRenderer<ISetting | SettingsSectionReference>, customizeContent: SettingsPageRenderer<ISetting | SettingsSectionReference>, advisorContent: SettingsPageRenderer<ISetting | SettingsSectionReference>, githubContent: SettingsPageRenderer<ISetting | SettingsSectionReference>, traceContent: SettingsPageRenderer<ISetting | SettingsSectionReference>, executionContent: SettingsPageRenderer<ISetting | SettingsSectionReference>, management: ReadonlyMap<string, SettingsPageRenderer<ISetting | SettingsSectionReference>>): readonly SettingsSection[] {
+		const defaults = new DefaultSettings();
+		const appearanceSettings: readonly ISetting[] = [
+			SESSIONS_LAYOUT_SCOPE_SETTING,
+			SessionsConfiguration.layoutStyle,
+			SessionsConfiguration.activityBarLocation,
+			SessionsConfiguration.activityBarCompact
+		].map(id => defaults.get(id));
 		// Existing accessibility preferences live under General without changing their stored keys.
-		const aiFeatures = configuration<boolean>(ChatAIDisabledSettingId);
-		const generalSettings: readonly ISetting[] = [new DefaultSettings().get(WorkbenchConfiguration.settingsEditor), {
-			id: ChatAIDisabledSettingId,
-			valueType: 'boolean',
-			configuration: aiFeatures,
-			title: aiFeatures.setting!.title,
-			description: aiFeatures.setting!.description,
-		}, {
-			id: AccessibilityVerbositySettingId.SessionsActivityBar,
-			valueType: 'boolean',
-			configuration: configuration<boolean>(AccessibilityVerbositySettingId.SessionsActivityBar),
-			title: localize('sessions.activity.verbosityTitle', 'Activity Bar accessibility help'),
-			description: localize('sessions.activity.verbosityDescription', 'Announce how to open accessibility help when the Activity Bar receives focus.'),
-		}, {
-			id: AccessibilityVerbositySettingId.SessionsSettings,
-			valueType: 'boolean',
-			configuration: configuration<boolean>(AccessibilityVerbositySettingId.SessionsSettings),
-			title: localize('sessions.settings.verbosityTitle', 'Settings accessibility help'),
-			description: localize('sessions.settings.verbosityDescription', 'Announce how to open accessibility help when this page has focus.'),
-		}, {
-			id: AccessibilityVerbositySettingId.ExecutionSettings, valueType: 'boolean', configuration: configuration<boolean>(AccessibilityVerbositySettingId.ExecutionSettings),
-			title: localize({ bundle: 'ash.settings', key: 'execution.verbosityTitle' }, 'Execution and permissions accessibility help'),
-			description: localize({ bundle: 'ash.settings', key: 'execution.verbosityDescription' }, 'Announce how to open accessibility help for execution and permissions controls.'),
-		}];
-		const designSettings: readonly ISetting[] = [{
-			id: DesignConfiguration.usePointerCursor,
-			valueType: 'boolean',
-			configuration: configuration<boolean>(DesignConfiguration.usePointerCursor),
-			title: localize('sessions.design.usePointerCursor.title', 'Use pointer cursor on the canvas'),
-			description: localize('sessions.design.usePointerCursor.description', 'Show the cursor icon on the Design canvas. Turn this off to use a hand cursor. Dragging shows a grabbing hand.'),
-		}, {
-			id: AccessibilityVerbositySettingId.DesignCanvas,
-			valueType: 'boolean',
-			configuration: configuration<boolean>(AccessibilityVerbositySettingId.DesignCanvas),
-			title: localize('sessions.design.verbosityTitle', 'Design canvas accessibility help'),
-			description: localize('sessions.design.verbosityDescription', 'Announce how to open accessibility help when the Design canvas receives focus.'),
-		}];
-		const librarySettings: readonly ISetting[] = [{ id: AccessibilityVerbositySettingId.Library, valueType: 'boolean', configuration: configuration<boolean>(AccessibilityVerbositySettingId.Library), title: localize('library.verbosityTitle', 'Library accessibility help'), description: localize('library.verbosityDescription', 'Announce how to open accessibility help when Library receives focus.') }];
+		const generalSettings: readonly ISetting[] = [
+			WorkbenchConfiguration.settingsEditor,
+			ChatAIDisabledSettingId,
+			AccessibilityVerbositySettingId.SessionsActivityBar,
+			AccessibilityVerbositySettingId.SessionsSettings,
+			AccessibilityVerbositySettingId.ExecutionSettings
+		].map(id => defaults.get(id));
+		const designSettings: readonly ISetting[] = [
+			DesignConfiguration.usePointerCursor,
+			AccessibilityVerbositySettingId.DesignCanvas
+		].map(id => defaults.get(id));
+		const librarySettings: readonly ISetting[] = [
+			AccessibilityVerbositySettingId.Library
+		].map(id => defaults.get(id));
 		return [{
 			title: localize('sessions.settings.section.basics', 'Basics'),
 			categories: [

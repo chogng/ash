@@ -37,13 +37,12 @@ Hook 声明保留各自领域 owner，不为复用界面而伪造配置键或改
 准备、导入、取消及凭据保存仍由所属服务负责，Preferences 只呈现数据和操作。
 
 当前 SettingsEditor 使用 SettingsTree 的条目元数据过滤内容，TOC 从同一棵树读取搜索词。
-GitHub 已使用数据模型与共享 SettingsSectionRenderer；Hooks 使用同一 renderer 呈现管理入口，
-事件与声明的 DOM、搜索和样式归 Chat 的 Agent Customizations 编辑器。Models、Dictation 等仍由
-功能模块创建旧 SettingsContent 控件，CSS 跟随这些控件。Sessions 复用部分 renderer 与
-widget，但仍拥有独立布局和部分手工设置模型。这些是当前迁移债务，不能作为新功能
-传入 DOM、widget 或渲染回调的依据。
+GitHub、Trace、Sandbox 和 Search 使用数据模型与共享 SettingsSectionRenderer；Hooks 使用同一 renderer 呈现管理入口，
+事件与声明的 DOM、搜索和样式归 Chat 的 Agent Customizations 编辑器。Models、Advisor、Dictation、Language Server 与
+Network 的设置控件和 CSS 归 Preferences，功能模块通过服务提供数据和操作。设置树只传递区段 ID，DOM 由当前
+Preferences renderer 保留；Sessions 复用这些 renderer，并从注册表取得普通设置元数据。
 
-迁移时，设置页呈现与 CSS 回到 Preferences renderer；可独立复用的基础控件继续拥有
+设置页呈现与 CSS 由 Preferences renderer 拥有；可独立复用的基础控件继续拥有
 自己的 DOM 和样式。例如 `base/browser/ui/table` 拥有列标题、列宽、行与单元格焦点和
 选中样式，业务数据及操作仍由领域 owner 提供。宿主不穿透覆盖这些基础控件的内部状态。
 

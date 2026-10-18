@@ -1,5 +1,6 @@
+import { SettingsPageRenderer } from './settingsRenderers.js';
 import { defaultButtonStyles, defaultSelectBoxStyles } from '../../../../platform/theme/browser/defaultStyles.js';
-import './media/networkSettingsContent.css';
+import './media/networkSettingsRenderer.css';
 import { h, isHTMLElement } from '../../../../base/browser/dom.js';
 import { Button } from '../../../../base/browser/ui/button/button.js';
 import { SelectBox } from '../../../../base/browser/ui/selectbox/selectbox.js';
@@ -17,9 +18,8 @@ import { ContextKeyExpr } from '../../../../platform/contextkey/common/contextke
 import { INetworkDiagnosticsService, type HttpCompatibilityMode, type NetworkDiagnostics, type NetworkFailure, type NetworkSnapshot, type NetworkTarget } from '../../../../platform/networkDiagnostics/common/networkDiagnosticsService.js';
 import { Registry } from '../../../../platform/registry/common/platform.js';
 import { ILocalizationService } from '../../../services/localization/common/localizationService.js';
-import type { ISetting } from '../../../services/preferences/common/preferences.js';
 import { IAppServerRemoteAgentService } from '../../../services/remote/common/appServerRemoteAgentService.js';
-import type { SettingsContent, SettingsContentItem, SettingsTreeNode } from './settingsTreeModels.js';
+import type { SettingsSectionReference, SettingsTreeNode } from './settingsTreeModels.js';
 
 Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfiguration({
 	key: AccessibilityVerbositySettingId.NetworkSettings,
@@ -36,7 +36,7 @@ Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfigurat
 });
 
 /** Workbench presents backend transport settings without copying them into frontend settings.json. */
-export class NetworkSettingsContent extends Disposable implements SettingsContent {
+export class NetworkSettingsRenderer extends SettingsPageRenderer<SettingsSectionReference> {
 	public readonly categoryId = 'network';
 	private readonly changed = this._register(new Emitter<void>());
 	public readonly onDidChange = this.changed.event;
@@ -171,13 +171,13 @@ export class NetworkSettingsContent extends Disposable implements SettingsConten
 		this.render();
 	}
 
-	public getNodes(): readonly SettingsTreeNode<ISetting | SettingsContentItem>[] {
+	protected override buildNodes(): readonly SettingsTreeNode<SettingsSectionReference>[] {
 		return [{
 			element: { kind: 'group', id: 'network.services', title: localize('network.group', 'Network'), description: '' },
 			children: [
-				{ element: { kind: 'item' as const, id: 'network.http', title: localize('network.http.title', 'HTTP compatibility mode'), description: localize('network.http.description', 'Prefer HTTP/2 for application HTTP requests. Select HTTP/1.1 for incompatible proxies or VPNs. Changes apply to subsequent requests; existing requests continue.'), keywords: ['HTTP/2', 'HTTP/1.1', 'proxy', 'VPN'], value: { domNode: this.protocolControls } } },
-				{ element: { kind: 'item' as const, id: 'network.domains', title: localize('network.domains.title', 'Required domains'), description: localize('network.domains.description', 'Service hosts used by configured model connections and Ash services. Add them to your firewall or proxy allowlist.'), keywords: ['firewall', 'hosts', 'allowlist', 'domains'], value: { domNode: this.domains } } },
-				{ element: { kind: 'item' as const, id: 'network.diagnostics', title: localize('network.diagnostics.title', 'Network diagnostics'), description: localize('network.diagnostics.description', 'Check connectivity through the application transport. HTTP reachability and signed-in account checks are reported separately.'), keywords: ['DNS', 'TLS', 'certificate', 'connectivity', 'diagnostic'], value: { domNode: this.diagnostics } } },
+				{ element: { kind: 'item' as const, id: 'network.http', title: localize('network.http.title', 'HTTP compatibility mode'), description: localize('network.http.description', 'Prefer HTTP/2 for application HTTP requests. Select HTTP/1.1 for incompatible proxies or VPNs. Changes apply to subsequent requests; existing requests continue.'), keywords: ['HTTP/2', 'HTTP/1.1', 'proxy', 'VPN'], value: this.retainElement('network.http', this.protocolControls) } },
+				{ element: { kind: 'item' as const, id: 'network.domains', title: localize('network.domains.title', 'Required domains'), description: localize('network.domains.description', 'Service hosts used by configured model connections and Ash services. Add them to your firewall or proxy allowlist.'), keywords: ['firewall', 'hosts', 'allowlist', 'domains'], value: this.retainElement('network.domains', this.domains) } },
+				{ element: { kind: 'item' as const, id: 'network.diagnostics', title: localize('network.diagnostics.title', 'Network diagnostics'), description: localize('network.diagnostics.description', 'Check connectivity through the application transport. HTTP reachability and signed-in account checks are reported separately.'), keywords: ['DNS', 'TLS', 'certificate', 'connectivity', 'diagnostic'], value: this.retainElement('network.diagnostics', this.diagnostics) } },
 			].map(node => ({ ...node, element: { ...node.element, keywords: [...node.element.keywords, 'network', localize('network.group', 'Network')] } })),
 		}];
 	}
@@ -280,8 +280,8 @@ export class NetworkSettingsContent extends Disposable implements SettingsConten
 
 	private render(): void {
 		for (const node of this.getNodes()[0].children!) {
-			if (node.element.kind === 'item' && 'domNode' in node.element.value) {
-				const labels = this.rowLabels.get(node.element.value.domNode)!;
+			if (node.element.kind === 'item' && 'rendererId' in node.element.value) {
+				const labels = this.rowLabels.get(this.renderItem(node.element.value))!;
 				labels.title.textContent = node.element.title;
 				labels.description.textContent = node.element.description;
 			}

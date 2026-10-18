@@ -36,7 +36,7 @@ import '../../../chat/common/languageModelsConfiguration.js';
 import '../../../terminal/common/terminalConfiguration.js';
 import '../../../chat/browser/chat.shared.contribution.js';
 import { ILanguageModelsService } from '../../../../contrib/chat/common/languageModels.js';
-import type { SettingsContentItem } from '../../browser/settingsTreeModels.js';
+import type { SettingsSectionReference } from '../../browser/settingsTreeModels.js';
 import { IFileTextModelService } from '../../../../services/textmodelResolver/common/textModelResourceService.js';
 import { IPreferencesService, type ISetting } from '../../../../services/preferences/common/preferences.js';
 import type { IRegisteredConfiguration } from '../../../../../platform/configuration/common/configurationRegistry.js';
@@ -76,7 +76,7 @@ import { IChatSessionNavigationService } from '../../../../services/chat/common/
 import { IEditorService } from '../../../../services/editor/common/editorService.js';
 import { IFileService } from '../../../../../platform/files/common/files.js';
 import { DiskFileSystemProvider } from '../../../../../platform/files/node/diskFileSystemProvider.js';
-import { IAccessibleViewService, AccessibleViewType, AccessibilityVerbositySettingId } from '../../../../../platform/accessibility/browser/accessibleView.js';
+import { IAccessibleViewService, AccessibleViewType, AccessibleViewProviderId, AccessibilityVerbositySettingId } from '../../../../../platform/accessibility/browser/accessibleView.js';
 import { AccessibleViewRegistry } from '../../../../../platform/accessibility/browser/accessibleViewRegistry.js';
 import { ICommandService } from '../../../../../platform/commands/common/commands.js';
 import { CommandService } from '../../../../services/commands/common/commandService.js';
@@ -167,8 +167,8 @@ await import('../../../chat/browser/aiCustomization/aiCustomizationManagement.co
 const { AI_CUSTOMIZATION_MANAGEMENT_EDITOR_ID } = await import('../../../chat/browser/aiCustomization/aiCustomizationManagement.js');
 const { ILocalTranscriptionService, ILocalTranscriptionModelService, DictationModelState } = await import('../../../../../platform/localTranscription/common/localTranscription.js');
 const { NullLocalTranscriptionService } = await import('../../../../services/localTranscription/browser/localTranscriptionService.js');
-const { ModelSettingsContent } = await import('../../../chat/browser/modelSettingsContent.js');
-const { LocalTranscriptionModelControls } = await import('../../../localTranscription/browser/localTranscriptionModelControls.js');
+const { ModelSettingsRenderer } = await import('../../browser/modelSettingsRenderer.js');
+const { LocalTranscriptionModelControls } = await import('../../browser/localTranscriptionModelControls.js');
 const { SettingsTree } = await import('../../browser/settingsTree.js');
 const { SettingsTreeModel } = await import('../../browser/settingsTreeModels.js');
 const { PreferencesService } = await import('../../../../services/preferences/browser/preferencesService.js');
@@ -288,7 +288,8 @@ test('developer command opens a grouped read-only tool snapshot outside ordinary
 
 test('Chinese indexed search settings explain engine scope in the control and accessibility help', async () => {
 	using resources = new DisposableStore();
-	const { SearchSettingsContent } = await import('../../../search/browser/searchSettingsContent.js');
+	const { SearchSettingsModel } = await import('../../../search/browser/searchSettingsModel.js');
+	const { SettingsSectionRenderer } = await import('../../browser/settingsSectionRenderer.js');
 	const { ContextKeyService, IContextKeyService } = await import('../../../../../platform/contextkey/browser/contextKeyService.js');
 	const chinese = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
 	setNlsResolver((bundle, key, fallback, parameters) => formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters));
@@ -303,10 +304,10 @@ test('Chinese indexed search settings explain engine scope in the control and ac
 	services.registerInstance(RemoteAgentServiceId, { onDidChangeConnectionState: Event.None, onDidChangeConnection: Event.None } as IAppServerRemoteAgentService);
 	services.registerInstance(IContentSearchConfigurationService, { read: async () => ({ revision: 1, engine: 'tgrep' }), configure: async () => { } });
 	services.registerInstance(IAccessibleViewService, { show: () => true, getOpenAriaHint: () => undefined, disableHint: async () => { }, showAccessibleViewHelp: () => { }, dispose() { }, [Symbol.dispose]() { } });
-	const content = resources.add(services.createInstance(SearchSettingsContent, root));
+	const content = resources.add(services.createInstance(SettingsSectionRenderer, root, resources.add(services.createInstance(SearchSettingsModel)), AccessibleViewProviderId.ContentSearchSettings, AccessibilityVerbositySettingId.ContentSearchSettings));
 	const item = content.getNodes()[0].children![0].element;
-	assert.ok(item.kind === 'item' && 'domNode' in item.value);
-	root.append(item.value.domNode);
+	assert.ok(item.kind === 'item' && 'rendererId' in item.value);
+	root.append(content.renderItem(item.value));
 	content.setVisible(true);
 	await nextTurn();
 	const engine = root.querySelector<HTMLElement>('[role="combobox"]')!;
@@ -315,11 +316,43 @@ test('Chinese indexed search settings explain engine scope in the control and ac
 	assert.match(root.textContent ?? '', /tgrep 加速 Agent 和 Codebase 的索引搜索/);
 	assert.match(root.textContent ?? '', /编辑器的 Current 搜索始终使用 ripgrep（rg）/);
 	engine.focus();
-	const help = AccessibleViewRegistry.getImplementations().find(provider => provider.name.startsWith('content-search-settings-'))?.getProvider(services);
+	const help = AccessibleViewRegistry.getImplementations().find(provider => provider.name.startsWith('settingsSection-') && provider.type === AccessibleViewType.Help)?.getProvider(services);
 	assert.ok(help);
 	resources.add(help);
 	assert.match(help.provideContent(), /选择 ripgrep 会关闭索引并扫描当前文件/);
 	assert.match(help.provideContent(), /编辑器的 Current 搜索始终使用 ripgrep/);
+});
+
+test('Search settings discard retired reads and save through the current backend revision', async () => {
+	using resources = new DisposableStore();
+	const { SearchSettingsModel } = await import('../../../search/browser/searchSettingsModel.js');
+	const connections = resources.add(new Emitter<void>());
+	const reads: DeferredPromise<{ revision: number; engine: 'tgrep' | 'ripgrep'; }>[] = [];
+	const writes: [string, number][] = [];
+	const model = resources.add(new SearchSettingsModel({
+		read: () => { const read = new DeferredPromise<{ revision: number; engine: 'tgrep' | 'ripgrep'; }>(); reads.push(read); return read.p; },
+		configure: async (engine, revision) => { writes.push([engine, revision]); },
+	}, { onDidChangeConnection: connections.event, onDidChangeConnectionState: Event.None } as unknown as IAppServerRemoteAgentService));
+	const engine = () => model.fields.find(field => field.kind === 'select')!;
+	model.setVisible(true);
+	connections.fire();
+	await reads[1].complete({ revision: 8, engine: 'ripgrep' });
+	await nextTurn();
+	await reads[0].complete({ revision: 1, engine: 'tgrep' });
+	await nextTurn();
+	assert.equal(engine().value, 'ripgrep');
+	engine().setValue('tgrep');
+	await nextTurn();
+	assert.deepEqual(writes, [['tgrep', 8]]);
+	model.setVisible(false);
+	await reads[2].complete({ revision: 9, engine: 'tgrep' });
+	await nextTurn();
+	assert.equal(engine().value, 'ripgrep');
+	model.setVisible(true);
+	model.dispose();
+	await reads[3].complete({ revision: 10, engine: 'tgrep' });
+	await nextTurn();
+	assert.equal(engine().value, 'ripgrep');
 });
 
 test('Settings maturity filters compose with text, identifiers and modified settings without changing values', () => {
@@ -391,6 +424,34 @@ test('DefaultSettings projects only Configuration Registry metadata', () => {
 	assert.deepEqual(defaults.all.map(setting => setting.id), ['editor.test.enabled', 'editor.test.patterns']);
 	assert.equal(defaults.get(visible).valueType, 'boolean');
 	assert.equal(defaults.get('editor.test.patterns').valueType, 'stringMap');
+});
+
+test('Explicit host settings resolve registry metadata without entering the automatic Workbench catalog', () => {
+	const registry = new ConfigurationRegistry();
+	registry.registerConfiguration({
+		key: 'test.host.preference', defaultValue: false, parse: value => value as boolean,
+		setting: { included: false, valueType: 'boolean', title: 'Host preference', description: 'Host-owned layout entry.' },
+	});
+	const defaults = new DefaultSettings(registry);
+	assert.deepEqual(defaults.all, []);
+	assert.equal(defaults.get('test.host.preference').title, 'Host preference');
+	assert.equal(defaults.get('test.host.preference').configuration.defaultValue, false);
+});
+
+test('Sessions resolves its registered appearance metadata in the active language', async () => {
+	const { SessionsConfiguration } = await import('../../../../../sessions/common/configuration.js');
+	const { SESSIONS_LAYOUT_SCOPE_SETTING } = await import('../../../../../sessions/common/chatLayout.js');
+	await import('../../../../../sessions/common/sessionConfig.js');
+	const chinese = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
+	setNlsResolver((bundle, key, fallback, parameters) => formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters));
+	using reset = toDisposable(resetNlsResolver);
+	const defaults = new DefaultSettings();
+	assert.equal(defaults.get(SessionsConfiguration.layoutStyle).title, '布局样式');
+	const scope = defaults.get(SESSIONS_LAYOUT_SCOPE_SETTING);
+	assert.equal(scope.title, '布局范围');
+	assert.ok(scope.valueType === 'select');
+	assert.equal(scope.options.find(option => option.value === 'session-shared')!.label, '会话');
+	assert.equal(defaults.all.some(setting => setting.id === SessionsConfiguration.layoutStyle), false);
 });
 
 test('Extension settings use catalog identities and standard schemas without a product layout entry', () => {
@@ -753,6 +814,7 @@ test('Copy Setting as JSON uses the current window default and reports clipboard
 	const contextView = resources.add(new BrowserContextViewService(root));
 	let actions: readonly IAction[] = [];
 	let copied = '';
+	let revealed = '';
 	let fail = false;
 	const reported = new DeferredPromise<{ message: string; isError: boolean; }>();
 	const widget = resources.add(createSettingWidget(resources, root, new DefaultSettings(registry).get('copy.window'), {
@@ -766,6 +828,7 @@ test('Copy Setting as JSON uses the current window default and reports clipboard
 			readImage: async () => new Uint8Array(),
 			readResources: async () => ({ resources: [], operation: 'copy' }), writeResources: async () => { }, hasResources: async () => false,
 		},
+		onOpenSettings: async key => { revealed = key; },
 		onStatus: (message, isError) => { void reported.complete({ message, isError }); },
 	}));
 	root.append(widget.domNode);
@@ -774,6 +837,12 @@ test('Copy Setting as JSON uses the current window default and reports clipboard
 	assert.equal(action.label, '复制设置为 JSON');
 	await action.run();
 	assert.equal(copied, '"copy.window": false');
+	const edit = actions.find(action => action.id === 'settings.editInJSON')!;
+	assert.equal(edit.label, '在 JSON 中编辑');
+	await edit.run();
+	await nextTurn();
+	assert.equal(revealed, 'copy.window');
+	assert.equal(configuration.inspect('copy.window').userLocalValue, undefined);
 	fail = true;
 	await action.run();
 	assert.deepEqual(await reported.p, { message: '无法执行设置操作。', isError: true });
@@ -826,6 +895,7 @@ test('Chinese setting actions, search filters and pending saves expose translate
 			readResources: async () => ({ resources: [], operation: 'copy' }),
 			writeResources: async () => { }, hasResources: async () => false,
 		},
+		onOpenSettings: async () => { throw new Error('Domain bindings have no settings.json entry'); },
 		onStatus: message => { status = message; },
 	}));
 	root.append(widget.domNode);
@@ -1073,7 +1143,7 @@ test('settingsLayout is the single projection from registered settings to catego
 		assert.equal(findSettingCategory(layout, setting.id), setting.id.startsWith('accessibility.signal') ? 'accessibilitySignals' : 'accessibility', setting.id);
 		assert.equal(layout.flatMap(category => category.groups.flatMap(group => group.settings)).filter(item => item.id === setting.id).length, 1, setting.id);
 	}
-	using tree = new SettingsTreeModel<ISetting | SettingsContentItem>();
+	using tree = new SettingsTreeModel<ISetting | SettingsSectionReference>();
 	tree.setChildren(settingsRootNodes(layout));
 	const features = new TOCTreeModel(tree).children.find(node => node.element.id === 'group.features');
 	assert.ok(features);
@@ -1335,7 +1405,7 @@ test('Modified Settings derives membership from accepted local overrides through
 
 test('Settings table of contents follows modified result counts through reset', async () => {
 	using configuration = new WorkspaceService();
-	using tree = new SettingsTreeModel<ISetting | SettingsContentItem>(id => configurationRegistry.getConfiguration(id) !== undefined && configuration.inspect(id).userLocalValue !== undefined);
+	using tree = new SettingsTreeModel<ISetting | SettingsSectionReference>(id => configurationRegistry.getConfiguration(id) !== undefined && configuration.inspect(id).userLocalValue !== undefined);
 	tree.setChildren(settingsRootNodes(createSettingsLayout(new DefaultSettings().all)));
 	using listener = configuration.onDidChangeConfiguration(() => tree.refilter());
 	const toc = new TOCTreeModel(tree);
@@ -1359,7 +1429,7 @@ test('Settings table of contents follows modified result counts through reset', 
 test('Models Settings requires a separately registered secret storage status service', () => {
 	using services = new InstantiationService();
 	services.registerInstance(ILanguageModelsService, {} as ILanguageModelsService);
-	assert.throws(() => services.createInstance(ModelSettingsContent, h(browserEnvironment.window.document, 'div')), /Unknown service: secretStorageStatusService/);
+	assert.throws(() => services.createInstance(ModelSettingsRenderer, h(browserEnvironment.window.document, 'div')), /Unknown service: secretStorageStatusService/);
 });
 
 test('Models Settings keeps loading API connections when the model catalog changes', async () => {
@@ -1398,10 +1468,10 @@ test('Models Settings keeps loading API connections when the model catalog chang
 	services.registerInstance(IAgentExecutionSettingsService, { onDidChange: Event.None, read: async () => ({ revision: 1, settings: { approvalMode: 'manual', commandFileAccess: 'directoryWrite', commandNetworkAccess: 'denied' } }), configure: async () => { } });
 	services.registerInstance(IContextViewService, disposables.add(new BrowserContextViewService(root)));
 	services.registerInstance(IAccessibleViewService, { show: () => true, getOpenAriaHint: () => undefined, disableHint: async () => { }, showAccessibleViewHelp: () => { }, dispose() { }, [Symbol.dispose]() { } });
-	const panel = disposables.add(services.createInstance(ModelSettingsContent, root));
-	const modelTree = disposables.add(new SettingsTreeModel<SettingsContentItem>());
+	const panel = disposables.add(services.createInstance(ModelSettingsRenderer, root));
+	const modelTree = disposables.add(new SettingsTreeModel<SettingsSectionReference>());
 	disposables.add(new SettingsTree(root, {
-		model: modelTree, rootClassName: 'ash-models-settings', groupClassName: 'ash-settings-content-group', groupDescriptionClassName: 'ash-settings-group-description', itemsClassName: 'ash-settings-list', renderItem: item => item.value.domNode,
+		model: modelTree, rootClassName: 'ash-models-settings', groupClassName: 'ash-settings-content-group', groupDescriptionClassName: 'ash-settings-group-description', itemsClassName: 'ash-settings-list', renderGroupHeader: header => panel.renderItem(header), renderItem: item => panel.renderItem(item.value),
 	}));
 	disposables.add(panel.onDidChange(() => modelTree.setChildren(panel.getNodes())));
 	panel.setVisible(true);
@@ -1467,7 +1537,7 @@ test('Models Settings orders enabled models by catalog position and restores dis
 	services.registerInstance(ConfigurationServiceId, resources.add(new WorkspaceService()));
 	services.registerInstance(INotificationService, resources.add(new NotificationService()));
 	services.registerInstance(IAccessibleViewService, { show: () => true, getOpenAriaHint: () => undefined, disableHint: async () => { }, showAccessibleViewHelp: () => { }, dispose() { }, [Symbol.dispose]() { } });
-	const content = resources.add(services.createInstance(ModelSettingsContent, root));
+	const content = resources.add(services.createInstance(ModelSettingsRenderer, root));
 	const loaded = new DeferredPromise<void>();
 	resources.add(content.onDidChange(() => {
 		if (content.getNodes()[0].children?.some(node => node.element.id === 'models.catalog.first/newest')) { void loaded.complete(); }
@@ -1487,7 +1557,7 @@ test('Models Settings orders enabled models by catalog position and restores dis
 	await models.setModelVisible(catalog[1].model, true);
 	const group = content.getNodes()[0].element;
 	assert.ok(group.kind === 'group');
-	const search = group.titleDomNode!.querySelector<HTMLInputElement>('input')!;
+	const search = content.renderItem(group.header!).querySelector<HTMLInputElement>('input')!;
 	search.value = 'first';
 	search.dispatchEvent(new browserEnvironment.window.Event('input', { bubbles: true }));
 	assert.deepEqual(names(), ['First older', 'First newest']);
@@ -2534,9 +2604,9 @@ test('Models Settings collapses by provider and saves keys and custom models on 
 	services.registerInstance(IContextViewService, disposables.add(new BrowserContextViewService(root)));
 	services.registerInstance(ConfigurationServiceId, configuration);
 	services.registerInstance(IAccessibleViewService, { show: () => true, getOpenAriaHint: () => undefined, disableHint: async () => { }, showAccessibleViewHelp: () => { }, dispose() { }, [Symbol.dispose]() { } });
-	const content = disposables.add(services.createInstance(ModelSettingsContent, root));
-	const modelTree = disposables.add(new SettingsTreeModel<SettingsContentItem>());
-	disposables.add(new SettingsTree(root, { model: modelTree, rootClassName: 'ash-models-settings', groupClassName: 'ash-settings-content-group', groupDescriptionClassName: 'ash-settings-group-description', itemsClassName: 'ash-settings-list', renderItem: item => item.value.domNode }));
+	const content = disposables.add(services.createInstance(ModelSettingsRenderer, root));
+	const modelTree = disposables.add(new SettingsTreeModel<SettingsSectionReference>());
+	disposables.add(new SettingsTree(root, { model: modelTree, rootClassName: 'ash-models-settings', groupClassName: 'ash-settings-content-group', groupDescriptionClassName: 'ash-settings-group-description', itemsClassName: 'ash-settings-list', renderGroupHeader: header => content.renderItem(header), renderItem: item => content.renderItem(item.value) }));
 	disposables.add(content.onDidChange(() => modelTree.setChildren([{ element: { kind: 'group', id: 'models', title: 'Models', description: '' }, children: content.getNodes() }])));
 	content.setVisible(true);
 	await nextTurn();
@@ -2697,13 +2767,13 @@ test('Models Settings keeps checks silent and requires explicit authorization an
 	let confirmed = false;
 	let confirmations = 0;
 	services.registerInstance(IDialogService, { confirm: async () => { confirmations++; return { confirmed }; } } as unknown as IDialogService);
-	const content = resources.add(services.createInstance(ModelSettingsContent, root));
+	const content = resources.add(services.createInstance(ModelSettingsRenderer, root));
 	content.setVisible(true);
 	await nextTurn();
 	const node = content.getNodes().flatMap(group => group.children ?? []).find(node => node.element.id === 'models.credentials.storage')!;
 	assert.equal(node.element.kind, 'item');
 	if (node.element.kind !== 'item') throw new Error('Expected credential storage item');
-	root.append(node.element.value.domNode);
+	root.append(content.renderItem(node.element.value));
 	const button = (label: string): HTMLButtonElement => [...root.querySelectorAll('button')].find(button => button.textContent === label)!;
 	assert.deepEqual(mutations, []);
 	button('Retry credential storage').click();

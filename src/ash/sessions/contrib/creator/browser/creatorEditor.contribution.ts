@@ -72,6 +72,12 @@ Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfigurat
 		}
 		return value;
 	},
+	setting: {
+		included: false,
+		valueType: 'boolean',
+		get title() { return localize('sessions.design.verbosityTitle', 'Design canvas accessibility help'); },
+		get description() { return localize('sessions.design.verbosityDescription', 'Announce how to open accessibility help when the Design canvas receives focus.'); }
+	},
 });
 
 AccessibleViewRegistry.register({

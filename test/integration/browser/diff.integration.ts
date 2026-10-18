@@ -1,7 +1,7 @@
 import { LanguageCompletionItemKind } from '../../../src/ash/editor/common/languages.js';
 import '../../../src/ash/editor/editor.all.js';
 import { ILanguageFeaturesService } from '../../../src/ash/editor/common/services/languageFeatures.js';
-import { WorkspaceContextService } from '../../../src/ash/workbench/services/workspaces/browser/workspaceContextService.js';
+import { TestWorkspaceService } from '../../../src/ash/workbench/services/configuration/test/common/testServices.js';
 import { IWorkspaceContextService } from '../../../src/ash/platform/workspace/common/workspace.js';
 import { BreadcrumbsSymbolPicker } from '../../../src/ash/workbench/browser/parts/editor/breadcrumbsPicker.js';
 import { IFileTextModelService } from '../../../src/ash/workbench/services/textmodelResolver/common/textModelResourceService.js';
@@ -384,7 +384,7 @@ const harness = {
 		titleServices = services;
 		if (kind === 'markdown') {
 			services.registerInstance(ILanguageFeaturesService, editorServices.languageFeaturesService);
-			services.registerInstance(IWorkspaceContextService, resources.add(new WorkspaceContextService({ id: 'markdown', uri: URI.file('/fixture') })));
+			services.registerInstance(IWorkspaceContextService, resources.add(new TestWorkspaceService({ id: 'markdown', uri: URI.file('/fixture') })));
 			resources.add(editorServices.languageFeaturesService.documentSymbolProvider.register('markdown', {
 				provideDocumentSymbols: request => [{
 					name: 'Cross-machine Desktop acceptance', kind: 'string',

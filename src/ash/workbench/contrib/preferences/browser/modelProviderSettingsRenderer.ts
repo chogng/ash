@@ -3,23 +3,23 @@ import {
 	defaultInputBoxStyles,
 	defaultSelectBoxStyles,
 	defaultToggleStyles,
-} from '../../../../../platform/theme/browser/defaultStyles.js';
-import './media/chatModelsWidget.css';
-import { addDisposableListener, h } from '../../../../../base/browser/dom.js';
-import { Button } from '../../../../../base/browser/ui/button/button.js';
-import { InputBox } from '../../../../../base/browser/ui/inputbox/inputbox.js';
-import { SelectBox } from '../../../../../base/browser/ui/selectbox/selectbox.js';
-import { Switch } from '../../../../../base/browser/ui/toggle/toggle.js';
-import { Lxicon } from '../../../../../base/common/lxicons.js';
-import { Disposable, DisposableStore } from '../../../../../base/common/lifecycle.js';
-import { localize } from '../../../../../nls.js';
-import { IContextViewService } from '../../../../../platform/contextview/browser/contextView.js';
-import { IInstantiationService } from '../../../../../platform/instantiation/common/instantiation.js';
-import { INotificationService } from '../../../../../platform/notification/common/notification.js';
-import type { CustomModelProvider, ModelProviderApiFormat } from '../../../../../platform/agentHost/common/agentModels.js';
-import { SecretStorageError } from '../../../../../platform/secrets/common/secrets.js';
-import { ILanguageModelsService } from '../../common/languageModels.js';
-import { ChatModelsViewModel, type ProviderModelItem } from './chatModelsViewModel.js';
+} from '../../../../platform/theme/browser/defaultStyles.js';
+import './media/modelProviderSettingsRenderer.css';
+import { addDisposableListener, h } from '../../../../base/browser/dom.js';
+import { Button } from '../../../../base/browser/ui/button/button.js';
+import { InputBox } from '../../../../base/browser/ui/inputbox/inputbox.js';
+import { SelectBox } from '../../../../base/browser/ui/selectbox/selectbox.js';
+import { Switch } from '../../../../base/browser/ui/toggle/toggle.js';
+import { Lxicon } from '../../../../base/common/lxicons.js';
+import { Disposable, DisposableStore } from '../../../../base/common/lifecycle.js';
+import { localize } from '../../../../nls.js';
+import { IContextViewService } from '../../../../platform/contextview/browser/contextView.js';
+import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
+import { INotificationService } from '../../../../platform/notification/common/notification.js';
+import type { CustomModelProvider, ModelProviderApiFormat } from '../../../../platform/agentHost/common/agentModels.js';
+import { SecretStorageError } from '../../../../platform/secrets/common/secrets.js';
+import { ILanguageModelsService } from '../../chat/common/languageModels.js';
+import { ChatModelsViewModel, type ProviderModelItem } from '../../chat/browser/chatManagement/chatModelsViewModel.js';
 
 // A stored credential is represented by a mask, never retrieved into the settings renderer.
 const SavedKeyMask = '••••••••';
@@ -93,7 +93,7 @@ export class ProviderApiKeyInput extends Disposable {
 }
 
 /** Owns the provider form and table DOM; the view model owns declarations and test progress. */
-export class ChatModelsWidget extends Disposable {
+export class ModelProviderSettingsRenderer extends Disposable {
 	public readonly domNode: HTMLElement;
 	private readonly viewModel: ChatModelsViewModel;
 	private readonly name: InputBox;

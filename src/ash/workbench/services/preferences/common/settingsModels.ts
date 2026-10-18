@@ -125,7 +125,7 @@ export class DefaultSettings {
 	}
 
 	public get all(): readonly ISetting[] {
-		return [...this.settings.values()];
+		return [...this.settings.values()].filter(setting => setting.configuration.setting?.included !== false);
 	}
 
 	public get(key: string): ISetting {

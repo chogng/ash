@@ -18,7 +18,7 @@ test('Sessions Settings command queries reuse search and restore saved values af
 		{ key: 'ctrl+alt+y', command: 'workbench.action.openSettings', args: 'sessions.activityBar.compact' },
 		{ key: 'ctrl+alt+u', command: 'workbench.action.openSettings', args: { query: '@id:sessions.activityBar.compact', target: 3 } },
 		{ key: 'ctrl+alt+i', command: 'workbench.action.openSettings', args: { query: '' } },
-		{ key: 'ctrl+alt+o', command: 'workbench.action.openSettings', args: { section: 'tools' } },
+		{ key: 'ctrl+alt+o', command: 'workbench.action.openSettings', args: { section: 'models' } },
 	]));
 	await group.editor.input.press('ControlOrMeta+S');
 	await expect(group.tabs.filter({ hasText: 'Keyboard Shortcuts (JSON)' }).locator('..')).not.toHaveAttribute('data-state', /dirty|conflict/u);
@@ -57,7 +57,7 @@ test('Sessions Settings command queries reuse search and restore saved values af
 	await expect(settings.getByRole('searchbox')).toHaveValue('');
 	await expect(settings.getByRole('searchbox')).toBeFocused();
 	await settings.getByRole('searchbox').press('Control+Alt+O');
-	await expect(settings.getByRole('button', { name: 'Tools', exact: true })).toHaveAttribute('aria-current', 'page');
+	await expect(settings.getByRole('button', { name: 'Models', exact: true })).toHaveAttribute('aria-current', 'page');
 	await settings.evaluate(element => (element as HTMLDialogElement).requestClose());
 	await expect(settings).toHaveCount(0);
 	await openQuery();

@@ -1,3 +1,4 @@
+import { SettingsPageRenderer, SettingsRenderer } from '../../../../workbench/contrib/preferences/browser/settingsRenderers.js';
 import { h } from '../../../../base/browser/dom.js';
 import { TabList, type TabListItem } from '../../../../base/browser/ui/tablist/tabList.js';
 import { Emitter, Event } from '../../../../base/common/event.js';
@@ -10,12 +11,12 @@ import { AccessibleViewProviderId, AccessibilityVerbositySettingId } from '../..
 import { SettingsSectionRenderer } from '../../../../workbench/contrib/preferences/browser/settingsSectionRenderer.js';
 import { SettingsSearchQuery } from '../../../../workbench/contrib/preferences/browser/settingsSearch.js';
 import { SettingsTree } from '../../../../workbench/contrib/preferences/browser/settingsTree.js';
-import { SettingsTreeModel, type SettingsContent, type SettingsContentItem, type SettingsTreeNode } from '../../../../workbench/contrib/preferences/browser/settingsTreeModels.js';
+import { SettingsTreeModel, type SettingsSectionReference, type SettingsTreeNode } from '../../../../workbench/contrib/preferences/browser/settingsTreeModels.js';
 
 type CustomizeTab = 'settings' | 'hooks';
 
 /** Owns Customize navigation; each domain retains its content and operation state across tabs. */
-export class SessionsCustomizeContent extends Disposable implements SettingsContent {
+export class SessionsCustomizeContent extends SettingsPageRenderer {
 	public readonly categoryId = 'customize';
 	public readonly domNode: HTMLElement;
 	private readonly changed = this._register(new Emitter<void>());
@@ -23,8 +24,9 @@ export class SessionsCustomizeContent extends Disposable implements SettingsCont
 	private readonly tabs: TabList<CustomizeTab>;
 	private readonly tabItems: readonly TabListItem<CustomizeTab>[];
 	private readonly panel: HTMLElement;
-	private readonly treeModel = this._register(new SettingsTreeModel<SettingsContentItem>());
-	private readonly tree: SettingsTree<SettingsContentItem>;
+	private readonly treeModel = this._register(new SettingsTreeModel<SettingsSectionReference>());
+	private readonly tree: SettingsTree<SettingsSectionReference>;
+	private readonly renderer: SettingsRenderer;
 	private visible = false;
 	private activeTab: CustomizeTab = 'settings';
 	private query = new SettingsSearchQuery('');
@@ -51,13 +53,14 @@ export class SessionsCustomizeContent extends Disposable implements SettingsCont
 			{ id: 'hooks', value: 'hooks', label: localize('sessions.customize.hooks', 'Hooks'), tabId: 'ash-sessions-customize-hooks', panelId: this.panel.id },
 		];
 		this.domNode.append(this.panel);
+		this.renderer = this._register(this.instantiation.createInstance(SettingsRenderer, this.panel, {}));
 		this.tree = this._register(new SettingsTree(this.panel, {
 			model: this.treeModel,
 			rootClassName: 'ash-sessions-customize-tree',
 			groupClassName: 'ash-sessions-customize-group',
 			groupDescriptionClassName: 'ash-sessions-customize-description',
 			itemsClassName: 'ash-sessions-customize-items',
-			renderItem: item => item.value.domNode,
+			renderItem: item => this.renderer.render(item.value),
 		}));
 		this._register(toDisposable(() => { this.domNode.remove(); }));
 		this.render();
@@ -74,11 +77,11 @@ export class SessionsCustomizeContent extends Disposable implements SettingsCont
 		this.render();
 	}
 
-	public getNodes(query: SettingsSearchQuery): readonly SettingsTreeNode<SettingsContentItem>[] {
+	protected override buildNodes(query: SettingsSearchQuery): readonly SettingsTreeNode<SettingsSectionReference>[] {
 		this.query = query;
 		this.render();
 		const keywords = [...this.tabItems.flatMap(tab => [tab.id, tab.label]), ...this.treeModel.visibleItems.flatMap(item => [item.title, item.description, ...item.keywords ?? []])];
-		return [{ element: { kind: 'item', id: 'sessions.customize', title: localize('sessions.settings.customize', 'Customize'), description: '', keywords, value: { domNode: this.domNode } } }];
+		return [{ element: { kind: 'item', id: 'sessions.customize', title: localize('sessions.settings.customize', 'Customize'), description: '', keywords, value: this.retainElement('sessions.customize', this.domNode) } }];
 	}
 
 	private render(): void {
@@ -101,6 +104,7 @@ export class SessionsCustomizeContent extends Disposable implements SettingsCont
 				}],
 				setVisible: () => { },
 			}, AccessibleViewProviderId.SessionsSettings, AccessibilityVerbositySettingId.SessionsSettings));
+			this._register(this.renderer.registerPage(this.settings));
 			contentCreated = true;
 		}
 		if (isActive('hooks') && !this.hooks) {
@@ -121,12 +125,13 @@ export class SessionsCustomizeContent extends Disposable implements SettingsCont
 				}],
 				setVisible: () => { },
 			}, AccessibleViewProviderId.HooksSettings, AccessibilityVerbositySettingId.HooksSettings));
+			this._register(this.renderer.registerPage(this.hooks));
 			contentCreated = true;
 
 		}
-		const nodes: SettingsTreeNode<SettingsContentItem>[] = [
-			{ element: { kind: 'group', id: 'settings', title: this.tabItems[0].label, description: '' }, children: this.settings?.getNodes() as readonly SettingsTreeNode<SettingsContentItem>[] ?? [] },
-			{ element: { kind: 'group', id: 'hooks', title: this.tabItems[1].label, description: '' }, children: this.hooks?.getNodes() as readonly SettingsTreeNode<SettingsContentItem>[] ?? [] },
+		const nodes: SettingsTreeNode<SettingsSectionReference>[] = [
+			{ element: { kind: 'group', id: 'settings', title: this.tabItems[0].label, description: '' }, children: this.settings?.getNodes() as readonly SettingsTreeNode<SettingsSectionReference>[] ?? [] },
+			{ element: { kind: 'group', id: 'hooks', title: this.tabItems[1].label, description: '' }, children: this.hooks?.getNodes() as readonly SettingsTreeNode<SettingsSectionReference>[] ?? [] },
 		];
 		this.treeModel.setChildren(nodes);
 		this.tree.setNavigationTarget(searching ? undefined : this.activeTab);

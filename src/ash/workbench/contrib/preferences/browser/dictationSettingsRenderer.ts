@@ -1,36 +1,37 @@
-import { defaultButtonStyles, defaultSelectBoxStyles } from '../../../../../platform/theme/browser/defaultStyles.js';
-import { ILocalTranscriptionModelService } from '../../../../../platform/localTranscription/common/localTranscription.js';
-import { ISpeechService } from '../../../speech/common/speechService.js';
-import { IVoiceCodeTranscriptionBackendService } from '../../../../../platform/renderer/common/dictation.js';
-import { readDictationOptions } from './dictationInput.js';
-import { ILanguageModelsService } from '../../common/languageModels.js';
-import './media/dictationSettingsContent.css';
-import { h } from '../../../../../base/browser/dom.js';
-import { Emitter } from '../../../../../base/common/event.js';
-import { Disposable } from '../../../../../base/common/lifecycle.js';
-import { localize } from '../../../../../nls.js';
-import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
-import { DictationConfiguration, dictationBackend } from '../../common/constants.js';
-import { IInstantiationService } from '../../../../../platform/instantiation/common/instantiation.js';
-import { IPreferencesService } from '../../../../services/preferences/common/preferences.js';
-import { DefaultSettings } from '../../../../services/preferences/common/settingsModels.js';
-import type { ISetting } from '../../../../services/preferences/common/preferences.js';
-import type { SettingsContent, SettingsContentItem, SettingsTreeNode } from '../../../preferences/browser/settingsTreeModels.js';
-import { LocalTranscriptionModelControls } from '../../../localTranscription/browser/localTranscriptionModelControls.js';
-import { Button } from '../../../../../base/browser/ui/button/button.js';
-import { generateUuid } from '../../../../../base/common/uuid.js';
+import { SettingsPageRenderer } from './settingsRenderers.js';
+import { defaultButtonStyles, defaultSelectBoxStyles } from '../../../../platform/theme/browser/defaultStyles.js';
+import { ILocalTranscriptionModelService } from '../../../../platform/localTranscription/common/localTranscription.js';
+import { ISpeechService } from '../../speech/common/speechService.js';
+import { IVoiceCodeTranscriptionBackendService } from '../../../../platform/renderer/common/dictation.js';
+import { readDictationOptions } from '../../chat/browser/speechToText/dictationInput.js';
+import { ILanguageModelsService } from '../../chat/common/languageModels.js';
+import './media/dictationSettingsRenderer.css';
+import { h } from '../../../../base/browser/dom.js';
+import { Emitter } from '../../../../base/common/event.js';
+import { Disposable } from '../../../../base/common/lifecycle.js';
+import { localize } from '../../../../nls.js';
+import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
+import { DictationConfiguration, dictationBackend } from '../../chat/common/constants.js';
+import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
+import { IPreferencesService } from '../../../services/preferences/common/preferences.js';
+import { DefaultSettings } from '../../../services/preferences/common/settingsModels.js';
+import type { ISetting } from '../../../services/preferences/common/preferences.js';
+import type { SettingsSectionReference, SettingsTreeNode } from './settingsTreeModels.js';
+import { LocalTranscriptionModelControls } from './localTranscriptionModelControls.js';
+import { Button } from '../../../../base/browser/ui/button/button.js';
+import { generateUuid } from '../../../../base/common/uuid.js';
 import {
 	AccessibleContentProvider, AccessibleViewProviderId, AccessibleViewType,
 	AccessibilityVerbositySettingId, IAccessibleViewService,
-} from '../../../../../platform/accessibility/browser/accessibleView.js';
-import { AccessibleViewRegistry } from '../../../../../platform/accessibility/browser/accessibleViewRegistry.js';
-import { ContextKeyExpr } from '../../../../../platform/contextkey/common/contextkey.js';
-import { SelectBox } from '../../../../../base/browser/ui/selectbox/selectbox.js';
-import { IChatSpeechToTextService } from './chatSpeechToTextService.js';
-import { INotificationService } from '../../../../../platform/notification/common/notification.js';
-import { IContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
-import { Registry } from '../../../../../platform/registry/common/platform.js';
-import { Extensions as ConfigurationExtensions, type IConfigurationRegistry } from '../../../../../platform/configuration/common/configurationRegistry.js';
+} from '../../../../platform/accessibility/browser/accessibleView.js';
+import { AccessibleViewRegistry } from '../../../../platform/accessibility/browser/accessibleViewRegistry.js';
+import { ContextKeyExpr } from '../../../../platform/contextkey/common/contextkey.js';
+import { SelectBox } from '../../../../base/browser/ui/selectbox/selectbox.js';
+import { IChatSpeechToTextService } from '../../chat/browser/speechToText/chatSpeechToTextService.js';
+import { INotificationService } from '../../../../platform/notification/common/notification.js';
+import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
+import { Registry } from '../../../../platform/registry/common/platform.js';
+import { Extensions as ConfigurationExtensions, type IConfigurationRegistry } from '../../../../platform/configuration/common/configurationRegistry.js';
 
 Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration).registerConfiguration({
 	key: AccessibilityVerbositySettingId.DictationModels,
@@ -47,9 +48,9 @@ Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration).regis
 });
 
 /** Shared dictation content; each settings host owns navigation, search and setting widgets. */
-export class DictationSettingsContent extends Disposable implements SettingsContent {
+export class DictationSettingsRenderer extends SettingsPageRenderer<ISetting | SettingsSectionReference> {
 	public readonly categoryId = 'voice-input';
-	public readonly settingIds = [...Object.values(DictationConfiguration), AccessibilityVerbositySettingId.DictationModels];
+	public override get settingIds(): readonly string[] { return [...Object.values(DictationConfiguration), AccessibilityVerbositySettingId.DictationModels]; }
 	private readonly changed = this._register(new Emitter<void>());
 	public readonly onDidChange = this.changed.event;
 	private readonly controls: LocalTranscriptionModelControls;
@@ -156,7 +157,7 @@ export class DictationSettingsContent extends Disposable implements SettingsCont
 		}
 	}
 
-	public getNodes(): readonly SettingsTreeNode<ISetting | SettingsContentItem>[] {
+	protected override buildNodes(): readonly SettingsTreeNode<ISetting | SettingsSectionReference>[] {
 		const settings = new DefaultSettings();
 		const settingNode = (id: string): SettingsTreeNode<ISetting> => {
 			const setting = { ...settings.get(id), presentation: 'general' as const };
@@ -167,11 +168,11 @@ export class DictationSettingsContent extends Disposable implements SettingsCont
 				},
 			};
 		};
-		const children: SettingsTreeNode<ISetting | SettingsContentItem>[] = [settingNode(DictationConfiguration.backend), {
+		const children: SettingsTreeNode<ISetting | SettingsSectionReference>[] = [settingNode(DictationConfiguration.backend), {
 			element: {
 				kind: 'item', id: 'dictation.inputOptions', keywords: [DictationConfiguration.inputDevice, DictationConfiguration.language], title: localize({ bundle: 'ash', key: 'dictation.inputOptions' }, 'Microphone and language'),
 				description: localize({ bundle: 'ash', key: 'dictation.inputOptionsDescription' }, 'Select the microphone for dictation. Language hints are available for supported cloud services; local models use their own languages.'),
-				value: { domNode: this.inputOptions },
+				value: this.retainElement('dictation.inputOptions', this.inputOptions),
 			}
 		}];
 		const backend = dictationBackend(this.configuration);
@@ -182,14 +183,14 @@ export class DictationSettingsContent extends Disposable implements SettingsCont
 					title: localize('dictation.cloudModel.title', 'Transcription model'),
 					description: localize('dictation.cloudModel.description', 'The transcription model follows the selected service. Voice input is independent of the chat model.'),
 					keywords: [backend.modelId, 'model', 'transcription'],
-					value: { domNode: this.cloudModel },
+					value: this.retainElement('dictation.cloudModel', this.cloudModel),
 				},
 			}, {
 				element: {
 					kind: 'item', id: 'dictation.connection',
 					title: localize('dictation.connections.title', 'Cloud connection'),
 					description: localize('dictation.connections.description', 'Cloud dictation uses an API connection that supports transcription.'),
-					value: { domNode: this.cloud },
+					value: this.retainElement('dictation.connection', this.cloud),
 				},
 			});
 		} else if (backend.type === 'local') {
@@ -199,7 +200,7 @@ export class DictationSettingsContent extends Disposable implements SettingsCont
 					title: localize('dictation.model.table', 'Local dictation models'),
 					description: localize('dictation.model.tableDescription', 'Install a model, select it for dictation, or uninstall it.'),
 					keywords: ['model', 'install', 'import', 'uninstall'],
-					value: { domNode: this.controls.domNode },
+					value: this.retainElement(DictationConfiguration.model, this.controls.domNode),
 				},
 			});
 		} else {
@@ -209,7 +210,7 @@ export class DictationSettingsContent extends Disposable implements SettingsCont
 					title: this.subscriptionTitle,
 					description: this.subscriptionDescription,
 					keywords: ['Codex', 'ChatGPT', 'subscription'],
-					value: { domNode: this.subscription },
+					value: this.retainElement('dictation.subscription', this.subscription),
 				},
 			});
 		}

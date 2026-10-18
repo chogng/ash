@@ -29,6 +29,8 @@ export interface IConfigurationPropertySchema extends JsonSchema {
 }
 
 interface IConfigurationSettingSchemaBase {
+	/** False omits automatic catalog listing; host layouts can still resolve the key explicitly. */
+	readonly included?: boolean;
 	readonly title: string;
 	readonly description: string;
 	readonly keywords?: readonly string[];

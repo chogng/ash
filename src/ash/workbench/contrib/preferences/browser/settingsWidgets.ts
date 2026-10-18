@@ -126,6 +126,7 @@ interface SettingActionsOptions {
 	readonly reference: SettingReference;
 	readonly onError: (error: unknown) => void;
 	readonly copySettingAsJSON?: () => string;
+	readonly editInJSON?: () => Promise<void>;
 }
 
 class SettingActions extends Disposable {
@@ -191,6 +192,15 @@ class SettingActions extends Disposable {
 				tooltip: '',
 				enabled: true,
 				run: () => this.run(() => this.clipboardService.writeText(this.options.copySettingAsJSON!())),
+			});
+		}
+		if (this.options.editInJSON) {
+			actions.push({
+				id: 'settings.editInJSON',
+				label: localize({ bundle: 'ash.settings', key: 'json.edit' }, 'Edit in settings.json'),
+				tooltip: '',
+				enabled: true,
+				run: () => this.run(this.options.editInJSON!),
 			});
 		}
 		this.setOpen(true);
@@ -259,6 +269,7 @@ abstract class AbstractSettingWidget<TSetting extends ISetting, TValue> extends 
 					isDefault: () => this.model.isDefault(),
 					reset: () => this.resetSetting(),
 				},
+				editInJSON: descriptor.binding || !options.onOpenSettings ? undefined : () => options.onOpenSettings!(this.descriptor.id),
 				onError: (error: unknown) => options.onStatus(settingErrorMessage(error, localize({ bundle: 'ash.settings', key: 'actions.failed' }, 'Unable to run the setting action.')), true),
 				copySettingAsJSON: descriptor.binding ? undefined : () => {
 					// The current Settings target is local user, without a language override.

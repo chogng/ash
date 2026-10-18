@@ -1,20 +1,21 @@
+import { SettingsPageRenderer } from './settingsRenderers.js';
 import {
 	defaultButtonStyles,
 	defaultInputBoxStyles,
 	defaultToggleStyles,
 } from '../../../../platform/theme/browser/defaultStyles.js';
-import { ILanguageModelsService } from '../common/languageModels.js';
-import './media/modelSettingsContent.css';
+import { ILanguageModelsService } from '../../chat/common/languageModels.js';
+import './media/modelSettingsRenderer.css';
 import { h, isHTMLElement } from '../../../../base/browser/dom.js';
 import { Button } from '../../../../base/browser/ui/button/button.js';
 import { InputBox } from '../../../../base/browser/ui/inputbox/inputbox.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
 import { createUuid } from '../../../../base/common/uuid.js';
-import { ChatModelsWidget, ProviderApiKeyInput } from './chatManagement/chatModelsWidget.js';
-import { SettingsSearchQuery } from '../../preferences/browser/settingsSearch.js';
+import { ModelProviderSettingsRenderer, ProviderApiKeyInput } from './modelProviderSettingsRenderer.js';
+import { SettingsSearchQuery } from './settingsSearch.js';
 import { Switch } from '../../../../base/browser/ui/toggle/toggle.js';
 import { Emitter } from '../../../../base/common/event.js';
-import { Disposable, DisposableStore, DisposableMap, toDisposable } from '../../../../base/common/lifecycle.js';
+import { DisposableStore, DisposableMap, toDisposable } from '../../../../base/common/lifecycle.js';
 import { AccessibleContentProvider, AccessibleViewProviderId, AccessibleViewType, AccessibilityVerbositySettingId, IAccessibleViewService } from '../../../../platform/accessibility/browser/accessibleView.js';
 import { AccessibleViewRegistry } from '../../../../platform/accessibility/browser/accessibleViewRegistry.js';
 import { INotificationService } from '../../../../platform/notification/common/notification.js';
@@ -24,11 +25,11 @@ import { IConfigurationService } from '../../../../platform/configuration/common
 import { localize } from '../../../../nls.js';
 import { type ModelProviderCredentialStatus } from '../../../services/chat/common/chatService.js';
 import type { ModelCatalogEntry } from '../../../services/chat/common/modelCatalog.js';
-import type { SettingsContent, SettingsContentItem, SettingsTreeNode } from '../../preferences/browser/settingsTreeModels.js';
+import type { SettingsSectionReference, SettingsTreeNode } from './settingsTreeModels.js';
 import { ISecretStorageStatusService, SecretStorageError, secretStorageMessage, type SecretStorageStatus, type SecretStorageMode } from '../../../../platform/secrets/common/secrets.js';
 
 /** Model and credential rows shared by Workbench and Sessions; the host owns navigation and search. */
-export class ModelSettingsContent extends Disposable implements SettingsContent {
+export class ModelSettingsRenderer extends SettingsPageRenderer<SettingsSectionReference> {
 	private readonly changed = this._register(new Emitter<void>());
 	public readonly onDidChange = this.changed.event;
 	private readonly document: Document;
@@ -53,7 +54,7 @@ export class ModelSettingsContent extends Disposable implements SettingsContent 
 	private readonly providerTitle: HTMLElement;
 	private readonly expandRow: HTMLElement;
 	private readonly expandButton: Button;
-	private readonly customProviders = this._register(new DisposableMap<string, ChatModelsWidget>());
+	private readonly customProviders = this._register(new DisposableMap<string, ModelProviderSettingsRenderer>());
 	private expanded = false;
 	private visible = false;
 	private modelLoadVersion = 0;
@@ -129,7 +130,7 @@ export class ModelSettingsContent extends Disposable implements SettingsContent 
 		}));
 		this._register(add.onDidClick(() => {
 			const id = `custom-${createUuid()}`;
-			const card = this.instantiation.createInstance(ChatModelsWidget, this.document, { id, name: '', baseUrl: '', apiFormat: 'responses', order: Date.now(), models: [] }, false, true);
+			const card = this.instantiation.createInstance(ModelProviderSettingsRenderer, this.document, { id, name: '', baseUrl: '', apiFormat: 'responses', order: Date.now(), models: [] }, false, true);
 			this.customProviders.set(id, card);
 			card.setCredentialStorageAvailable(this.storageAvailable);
 			void card.initialize();
@@ -187,9 +188,9 @@ export class ModelSettingsContent extends Disposable implements SettingsContent 
 		this._register(toDisposable(() => { this.modelLoadVersion++; this.apiLoadVersion++; }));
 	}
 
-	public getNodes(query?: SettingsSearchQuery): readonly SettingsTreeNode<SettingsContentItem>[] {
-		const item = (id: string, title: string, description: string, domNode: HTMLElement, keywords?: readonly string[]): SettingsTreeNode<SettingsContentItem> => ({
-			element: { kind: 'item', id, title, description, keywords, value: { domNode } },
+	protected override buildNodes(query?: SettingsSearchQuery): readonly SettingsTreeNode<SettingsSectionReference>[] {
+		const item = (id: string, title: string, description: string, domNode: HTMLElement, keywords?: readonly string[]): SettingsTreeNode<SettingsSectionReference> => ({
+			element: { kind: 'item', id, title, description, keywords, value: this.retainElement(id, domNode) },
 		});
 		const seenProviders = new Set<string>();
 		const modelQuery = new SettingsSearchQuery(this.modelSearch.value);
@@ -208,11 +209,11 @@ export class ModelSettingsContent extends Disposable implements SettingsContent 
 		const providerNodes = this.apiElements.map(({ provider, row }) => item(`models.providers.${provider.connection}`, provider.displayName, provider.provider, row, ['API key']));
 		return [
 			{
-				element: { kind: 'group', id: 'models.catalog', title: localize('sessions.settings.chatModels', 'Chat models'), titleDomNode: this.modelTitle, description: '' },
+				element: { kind: 'group', id: 'models.catalog', title: localize('sessions.settings.chatModels', 'Chat models'), header: this.retainElement('models.catalog' + '.heading', this.modelTitle), description: '' },
 				children: this.modelElements.length ? modelNodes : [item('models.catalog.status', localize('sessions.settings.chatModels', 'Chat models'), this.modelsStatus.textContent ?? '', this.modelsStatus)],
 			},
 			{
-				element: { kind: 'group', id: `${this.categoryId}.providers`, title: localize('models.keys.title', 'API key'), titleDomNode: this.providerTitle, description: '' },
+				element: { kind: 'group', id: `${this.categoryId}.providers`, title: localize('models.keys.title', 'API key'), header: this.retainElement(`${this.categoryId}.providers` + '.heading', this.providerTitle), description: '' },
 				children: [
 					...(this.storageStatus.hidden ? [] : [item('models.credentials.storage', localize('models.keys.title', 'API key'), this.storageMessage.textContent ?? '', this.storageStatus)]),
 					...customNodes,
@@ -299,7 +300,7 @@ export class ModelSettingsContent extends Disposable implements SettingsContent 
 				if (existing) {
 					existing.updateKeyConfigured(configured);
 				} else {
-					const card = this.instantiation.createInstance(ChatModelsWidget, this.document, provider, configured, false);
+					const card = this.instantiation.createInstance(ModelProviderSettingsRenderer, this.document, provider, configured, false);
 					this.customProviders.set(provider.id, card);
 					void card.initialize();
 				}

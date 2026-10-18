@@ -355,9 +355,9 @@ test('Settings sidebar stays at two levels and searches voice input inside Featu
 	await navigation.focus();
 	await navigation.press('ArrowDown');
 	await navigation.press('Enter');
-	await expect(settings.locator('[data-settings-container]')).toHaveAttribute('data-active-settings-category', 'explorer');
-	await expect(settings.locator('[data-configuration-key="explorer.autoReveal"]')).toBeVisible();
+	await expect(settings.locator('[data-settings-container]')).toHaveAttribute('data-active-settings-category', 'accessibilitySignals');
 	for (const [category, key] of [
+		['explorer', 'explorer.autoReveal'],
 		['search', 'search.maxResults'],
 		['source-control', 'scm.diffDecorationsIgnoreTrimWhitespace'],
 		['browser', 'workbench.externalUriOpeners'],

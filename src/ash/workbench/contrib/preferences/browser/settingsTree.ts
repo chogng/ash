@@ -2,7 +2,7 @@ import "./media/settingsTree.css";
 import './media/settingsCard.css';
 import type { ObjectTreeNode } from "../../../../base/browser/ui/tree/objectTreeModel.js";
 import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
-import type { SettingsTreeElement, SettingsTreeGroup, SettingsTreeItem, SettingsTreeModel } from "./settingsTreeModels.js";
+import type { SettingsSectionReference, SettingsTreeElement, SettingsTreeGroup, SettingsTreeItem, SettingsTreeModel } from "./settingsTreeModels.js";
 import { h } from "../../../../base/browser/dom.js";
 
 export interface SettingsTreeOptions<T> {
@@ -11,6 +11,7 @@ export interface SettingsTreeOptions<T> {
 	readonly groupClassName: string;
 	readonly groupDescriptionClassName: string;
 	readonly itemsClassName: string;
+	readonly renderGroupHeader?: (header: SettingsSectionReference) => HTMLElement;
 	readonly renderItem: (item: SettingsTreeItem<T>) => HTMLElement;
 	readonly updateItem?: (item: SettingsTreeItem<T>, element: HTMLElement) => void;
 	readonly disposeItem?: (item: SettingsTreeItem<T>, element: HTMLElement) => void;
@@ -34,7 +35,7 @@ interface RenderedSettingsItem<T> {
 type RenderedSettingsNode<T> = RenderedSettingsGroup<T> | RenderedSettingsItem<T>;
 
 /**
- * Keyed Settings renderer that leaves interactive item content to its domain.
+ * Keyed Settings tree that retains controls owned by Preferences renderers.
  *
  * Stable model IDs retain item DOM, focus, and control-local state across
  * filtering, sorting, and structural updates. This specialized renderer does
@@ -132,8 +133,9 @@ export class SettingsTree<T> extends Disposable {
 			this.rendered.set(group.id, rendered);
 		}
 		if (rendered.heading) {
-			if (group.titleDomNode) {
-				if (rendered.heading.firstChild !== group.titleDomNode) rendered.heading.replaceChildren(group.titleDomNode);
+			if (group.header && this.options.renderGroupHeader) {
+				const header = this.options.renderGroupHeader(group.header);
+				if (rendered.heading.firstChild !== header) rendered.heading.replaceChildren(header);
 			} else {
 				rendered.heading.textContent = group.title;
 			}

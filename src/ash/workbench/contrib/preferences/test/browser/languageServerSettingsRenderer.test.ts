@@ -1,3 +1,4 @@
+import { LanguageServerSettingsTarget } from '../../common/preferences.js';
 import type { IResourceEditorInput } from '../../../../common/editor.js';
 import { browserEnvironment } from '../../../../../editor/test/browser/testEditorDom.js';
 import assert from 'node:assert/strict';
@@ -24,9 +25,9 @@ import { ILocalizationService } from '../../../../services/localization/common/l
 import { createSettingsEditorInput } from '../../../../services/preferences/common/settingsEditorInput.js';
 import { IAppServerRemoteAgentService } from '../../../../services/remote/common/appServerRemoteAgentService.js';
 import { TestWorkspaceService } from '../../../../services/configuration/test/common/testServices.js';
-import { SettingsSearchQuery } from '../../../preferences/browser/settingsSearch.js';
-import { LanguageServerSettingsContent, LanguageServerSettingsTarget } from '../../browser/languageServerSettingsContent.js';
-import '../../browser/languageServers.contribution.js';
+import { SettingsSearchQuery } from '../../browser/settingsSearch.js';
+import { LanguageServerSettingsRenderer } from '../../browser/languageServerSettingsRenderer.js';
+import '../../../language/browser/languageServers.contribution.js';
 
 class SettingsFixture extends DisposableStore {
 	public readonly root = browserEnvironment.window.document.createElement('div');
@@ -41,7 +42,7 @@ class SettingsFixture extends DisposableStore {
 	public readonly writes: unknown[] = [];
 	public readonly commands: unknown[] = [];
 	public readonly inputs: IResourceEditorInput[] = [];
-	public readonly content: LanguageServerSettingsContent;
+	public readonly content: LanguageServerSettingsRenderer;
 
 	constructor(locale = 'en') {
 		super();
@@ -76,7 +77,7 @@ class SettingsFixture extends DisposableStore {
 		this.services.registerInstance(IContextKeyService, this.add(new ContextKeyService()));
 		this.services.registerInstance(IAccessibleViewService, { show: () => true, getOpenAriaHint: () => undefined, disableHint: async () => { }, showAccessibleViewHelp: () => { }, dispose() { }, [Symbol.dispose]() { } });
 		this.services.registerInstance(IEditorService, { openEditor: async (input: IResourceEditorInput) => { this.inputs.push(input); this.content.setInput(input); } } as IEditorService);
-		this.content = this.add(this.services.createInstance(LanguageServerSettingsContent, this.root));
+		this.content = this.add(this.services.createInstance(LanguageServerSettingsRenderer, this.root));
 		this.root.append(this.content.domNode);
 		this.content.setInput(createSettingsEditorInput());
 	}

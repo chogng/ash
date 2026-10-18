@@ -465,3 +465,23 @@ for (const locale of ['en', 'zh-CN']) {
 		await expect.poll(() => page.evaluate(() => [...window.ashTableIntegration.credentialOperations])).toEqual(['authorize', 'file', 'encrypted']);
 	});
 }
+
+for (const locale of ['en', 'zh-CN']) {
+	test(`search settings use the shared renderer and save backend revisions with the keyboard (${locale})`, async ({ page }) => {
+		await page.goto(`/table.html?locale=${locale}`);
+		await page.evaluate(() => window.ashTableIntegration.showSearchSettings());
+		const root = page.locator('#search-settings');
+		const engine = root.getByRole('combobox', { name: locale === 'zh-CN' ? '索引搜索引擎' : 'Indexed search engine', exact: true });
+		await expect(engine).toBeEnabled();
+		await expect(engine).toHaveText(locale === 'zh-CN' ? 'tgrep（默认）' : 'tgrep (default)');
+		await engine.focus();
+		await page.keyboard.press('Enter');
+		await page.getByRole('option', { name: 'ripgrep', exact: true }).press('End');
+		await page.keyboard.press('Enter');
+		await expect(engine).toHaveText('ripgrep');
+		await expect(root.getByRole('status')).toHaveText(locale === 'zh-CN' ? '搜索引擎已保存。' : 'Search engine saved.');
+		expect(await page.evaluate(() => window.ashTableIntegration.searchSaved)).toEqual(['ripgrep']);
+		await root.getByRole('button', { name: locale === 'zh-CN' ? '刷新' : 'Refresh', exact: true }).click();
+		await expect(engine).toHaveText('ripgrep');
+	});
+}

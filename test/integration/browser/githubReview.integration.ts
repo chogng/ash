@@ -176,7 +176,7 @@ function showSettings(): void {
 	const model = resources.add(services.createInstance(GitHubSettingsModel, async () => { root.replaceChildren(); }));
 	const section = resources.add(services.createInstance(SettingsSectionRenderer, root, model, AccessibleViewProviderId.GitHubSettings, AccessibilityVerbositySettingId.GitHubSettings));
 	const item = Array.from(section.getNodes()[0]!.children!)[0]!.element;
-	if (item.kind === 'item' && 'domNode' in item.value) { root.append(item.value.domNode); }
+	if (item.kind === 'item' && 'rendererId' in item.value) { root.append(section.renderItem(item.value)); }
 	section.setVisible(true);
 }
 services.registerInstance(IPreferencesService, { openSettings: async () => { showSettings(); }, openUserSettings: async () => { }, openGlobalKeybindingSettings: async () => { } });

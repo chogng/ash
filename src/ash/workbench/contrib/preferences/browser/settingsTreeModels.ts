@@ -15,8 +15,8 @@ export interface SettingsTreeItem<T> {
 }
 
 export interface SettingsTreeGroup {
-	/** Retained interactive heading content; its creator owns the controls and their disposal. */
-	readonly titleDomNode?: HTMLElement;
+	/** The Preferences renderer retains the interactive heading, independently of tree metadata. */
+	readonly header?: SettingsSectionReference;
 	readonly kind: "group";
 	readonly id: string;
 	readonly title: string;
@@ -27,22 +27,19 @@ export interface SettingsTreeGroup {
 export type SettingsTreeElement<T> = SettingsTreeGroup | SettingsTreeItem<T>;
 export type SettingsTreeNode<T> = ObjectTreeElement<SettingsTreeElement<T>>;
 
-/** Domain-owned content uses the same keyed tree as registered settings, without inventing configuration keys. */
-export interface SettingsContentItem {
-	readonly domNode: HTMLElement;
-}
-
-export interface SettingsContent {
-	readonly categoryId: string;
-	/** Registered keys whose controls are composed by this content rather than the generic layout. */
-	readonly settingIds?: readonly string[];
-	readonly onDidChange: Event<void>;
-	getNodes(query: SettingsSearchQuery): readonly SettingsTreeNode<ISetting | SettingsContentItem>[];
-	setVisible(visible: boolean): void;
+/** Identifies retained Preferences UI without placing DOM in searchable metadata. */
+export interface SettingsSectionReference {
+	readonly rendererId: string;
+	readonly hidden?: boolean;
+	readonly itemId: string;
 }
 
 /** Non-configuration service state and actions; Preferences owns their DOM and widgets. */
 export interface SettingsSectionModel {
+	readonly groupId?: string;
+	readonly groupTitle?: string;
+	readonly itemId?: string;
+	readonly keywords?: readonly string[];
 	readonly settingIds?: readonly string[];
 	readonly categoryId: string;
 	readonly title: string;

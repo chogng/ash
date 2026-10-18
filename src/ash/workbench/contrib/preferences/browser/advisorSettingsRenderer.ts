@@ -1,18 +1,19 @@
+import { SettingsPageRenderer } from './settingsRenderers.js';
 import {
 	defaultMenuStyles,
 	defaultToggleStyles,
 	defaultButtonStyles,
 	defaultKeybindingLabelStyles,
 } from '../../../../platform/theme/browser/defaultStyles.js';
-import { ILanguageModelsService } from '../common/languageModels.js';
-import './media/advisorSettingsContent.css';
+import { ILanguageModelsService } from '../../chat/common/languageModels.js';
+import './media/advisorSettingsRenderer.css';
 import { h, isHTMLElement } from '../../../../base/browser/dom.js';
 import { Dropdown } from '../../../../base/browser/ui/dropdown/dropdown.js';
 import { Menu } from '../../../../base/browser/ui/menu/menu.js';
 import { type IAction, Separator } from '../../../../base/common/actions.js';
 import { Switch } from '../../../../base/browser/ui/toggle/toggle.js';
 import { Emitter } from '../../../../base/common/event.js';
-import { Disposable, DisposableStore, toDisposable } from '../../../../base/common/lifecycle.js';
+import { DisposableStore, toDisposable } from '../../../../base/common/lifecycle.js';
 import { generateUuid } from '../../../../base/common/uuid.js';
 import { localize } from '../../../../nls.js';
 import { AccessibleContentProvider, AccessibleViewProviderId, AccessibleViewType, AccessibilityVerbositySettingId, IAccessibleViewService } from '../../../../platform/accessibility/browser/accessibleView.js';
@@ -24,7 +25,7 @@ import { IContextViewService } from '../../../../platform/contextview/browser/co
 import { IChatService, type AdvisorConfig } from '../../../services/chat/common/chatService.js';
 import { modelRefIdentity, type ModelCatalogEntry } from '../../../services/chat/common/modelCatalog.js';
 import { ILocalizationService } from '../../../services/localization/common/localizationService.js';
-import type { SettingsContent, SettingsContentItem, SettingsTreeNode } from '../../preferences/browser/settingsTreeModels.js';
+import type { SettingsSectionReference, SettingsTreeNode } from './settingsTreeModels.js';
 
 // This is a menu shortlist, not a second model catalog. Metadata and availability come from Models.
 const flagshipModels: Readonly<Record<string, readonly string[]>> = {
@@ -35,7 +36,7 @@ const flagshipModels: Readonly<Record<string, readonly string[]>> = {
 };
 
 /** Both settings hosts edit the chat service's saved Advisor preference. */
-export class AdvisorSettingsContent extends Disposable implements SettingsContent {
+export class AdvisorSettingsRenderer extends SettingsPageRenderer<SettingsSectionReference> {
 	public readonly categoryId = 'agents';
 	public readonly domNode: HTMLElement;
 	private readonly changed = this._register(new Emitter<void>());
@@ -136,12 +137,12 @@ export class AdvisorSettingsContent extends Disposable implements SettingsConten
 		this.updateControls();
 	}
 
-	public getNodes(): readonly SettingsTreeNode<SettingsContentItem>[] {
+	protected override buildNodes(): readonly SettingsTreeNode<SettingsSectionReference>[] {
 		return [{
 			element: {
 				kind: 'item', id: 'chat.advisor', title: localize('advisor.settings.title', 'Advisor'),
 				description: this.note.textContent ?? '', keywords: ['advisor', 'model', 'second opinion', localize('advisor.settings.model', 'Advisor model'), localize('advisor.settings.enabled', 'Enable Advisor')],
-				value: { domNode: this.domNode },
+				value: this.retainElement('chat.advisor', this.domNode),
 			}
 		}];
 	}

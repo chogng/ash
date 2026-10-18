@@ -6,7 +6,7 @@ import type { ServicesAccessor } from '../../../../platform/instantiation/common
 import { OPEN_LANGUAGE_SERVERS_COMMAND_ID } from '../../../../platform/language/common/languageServerService.js';
 import { IEditorService } from '../../../services/editor/common/editorService.js';
 import { createSettingsEditorInput } from '../../../services/preferences/common/settingsEditorInput.js';
-import { LanguageServerSettingsTarget } from './languageServerSettingsContent.js';
+import { LanguageServerSettingsTarget } from '../../preferences/common/preferences.js';
 
 registerAction2(class OpenLanguageServerSettings extends Action2 {
 	constructor() { super({ id: OPEN_LANGUAGE_SERVERS_COMMAND_ID, title: localize2({ bundle: 'ash.settings', key: 'lsp.open' }, 'Configure Language Servers'), f1: true }); }
