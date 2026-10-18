@@ -514,7 +514,7 @@ fn run(
     record.launched.notify_all();
     // Observe completion without copying output or maintaining a second process state machine.
     let observation = CancellationSource::new();
-    let _ = pollster::block_on(executor.wait_session(
+    let _ = ash_async_utils::block_on(executor.wait_session(
         &owner,
         &id,
         CommandSessionCursor::default(),

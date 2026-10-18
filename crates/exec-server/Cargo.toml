@@ -41,7 +41,6 @@ ash-utils-pty = { workspace = true }
 ash-sandboxing = { workspace = true }
 ash-async-utils = { workspace = true, features = ["wait"] }
 network-proxy = { workspace = true, features = ["server"] }
-pollster = { workspace = true }
 tempfile = { workspace = true }
 ash-protocol = { workspace = true }
 ash-package-store = { workspace = true, optional = true }

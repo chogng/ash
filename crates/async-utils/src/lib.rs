@@ -12,6 +12,11 @@ mod tree;
 #[cfg(feature = "wait")]
 mod wait;
 
+/// Drives a future on the current thread with an executor-owned wake signal.
+/// Unlike a thread park token, that signal survives synchronous operations inside a poll.
+#[cfg(feature = "wait")]
+pub use async_io::block_on;
+
 #[cfg(feature = "wait")]
 pub use wait::Notify;
 #[cfg(feature = "wait")]

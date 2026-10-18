@@ -1,10 +1,37 @@
 use super::*;
 use crate::CancellationSource;
 use std::future::pending;
+use std::future::poll_fn;
 use std::future::ready;
 use std::task::Context;
 use std::task::Waker;
 use std::time::Duration;
+
+#[test]
+fn blocking_wait_preserves_wakes_consumed_by_synchronous_code() {
+    let (finished, result) = std::sync::mpsc::channel();
+    let worker = std::thread::spawn(move || {
+        let mut first_poll = true;
+        crate::block_on(poll_fn(|context| {
+            if first_poll {
+                first_poll = false;
+                context.waker().wake_by_ref();
+                // Contended Once initialization can consume the thread's park token during
+                // a poll. The executor must retain its wake independently of that token.
+                std::thread::park_timeout(Duration::ZERO);
+                Poll::Pending
+            } else {
+                Poll::Ready(())
+            }
+        }));
+        finished.send(()).unwrap();
+    });
+    let completed = result.recv_timeout(Duration::from_secs(2));
+    // Release a broken executor before asserting, so a regression leaves no parked worker.
+    worker.thread().unpark();
+    worker.join().unwrap();
+    completed.expect("blocking executor lost the wake consumed by synchronous code");
+}
 
 #[test]
 fn cancellation_precedes_ready_condition_and_deadline() {

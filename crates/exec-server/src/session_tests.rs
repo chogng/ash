@@ -156,7 +156,7 @@ fn managed_session_read_failure_releases_its_proxy_before_reporting_failure() {
         .stdout
         .send(Err(io::Error::other("proxy workload output failed")))
         .unwrap();
-    let update = pollster::block_on(executor.wait_session(
+    let update = ash_async_utils::block_on(executor.wait_session(
         &owner,
         &id,
         CommandSessionCursor::default(),

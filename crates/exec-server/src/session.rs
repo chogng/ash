@@ -743,7 +743,7 @@ impl SessionRecord {
             if ready || Instant::now() >= deadline {
                 break;
             }
-            let _ = pollster::block_on(wait_until(changed, deadline, &cancellation.token()));
+            let _ = ash_async_utils::block_on(wait_until(changed, deadline, &cancellation.token()));
         }
         let (lock, _) = &*self.data;
         let state = lock

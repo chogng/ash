@@ -2,10 +2,6 @@
 
 仅保留尚未完成或缺少后续通过证据的项目；已核对至 2026-10-18。
 
-## exec-server 退出等待
-
-- [ ] 调查 `just verify ash-exec-server --lib` 中 `process_completion_waits_for_both_delayed_output_streams` 与 `stdout_read_failure_fails_the_process_and_closes_all_streams` 的退出等待。已有采样定位到 `Processes` 析构中的线程 join；尚未找到后续修复及全量通过证据。原记录：`.build/multi-root-exec-sample.txt`、`.build/multi-root-exec-verify.log`（当前 checkout 未找到这些文件）。定向 TerminalService 测试通过不能代替这两项验证。
-
 ## Remote / Browser 多根工作区
 
 本地、SSH 与独立 Browser 目录句柄模式已实现并提交，职责与验证范围见 `docs/ash-desktop-architecture.md` §4.2。下列能力仍未完成：
