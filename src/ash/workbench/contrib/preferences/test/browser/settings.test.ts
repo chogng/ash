@@ -30,6 +30,7 @@ import { PromptsService } from '../../../chat/common/promptSyntax/service/prompt
 import { IOpenerService } from '../../../../../platform/opener/common/opener.js';
 import { IAccountService } from '../../../../../platform/accounts/common/accountService.js';
 import { IGitHubService } from '../../../../../platform/github/common/githubService.js';
+import { IAccountPolicyService } from '../../../../services/policies/common/accountPolicyService.js';
 import { IGitHubConnectionService } from '../../../../../workbench/services/accounts/common/gitHubConnectionService.js';
 import { GitHubReviewModel, IGitHubReviewModel } from '../../../../../workbench/contrib/github/browser/githubReviewModel.js';
 import { KeybindingTestServices } from '../../../../services/keybinding/test/browser/keybindingTestServices.js';
@@ -1881,6 +1882,7 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	services.registerInstance(IOpenerService, { open: async () => true } as unknown as IOpenerService);
 	services.registerInstance(IAccountService, { onDidChangeAccounts: Event.None, onDidCompleteLogin: Event.None, read: async () => ({ revision: 1n, accounts: [] }), startLogin: async () => { throw new Error('Not used'); }, cancelLogin: async () => { }, logout: async () => { } });
 	services.registerInstance(IGitHubService, { listAccounts: async () => [] } as unknown as IGitHubService);
+	services.registerInstance(IAccountPolicyService, { state: { phase: 'idle' }, onDidChangeState: Event.None, refresh: async () => { } });
 	services.registerInstance(IGitHubConnectionService, { isConnecting: false, connect: async () => { }, cancel: async () => { } });
 	services.registerInstance(IGitHubReviewModel, disposables.add(services.createInstance(GitHubReviewModel)));
 	services.registerInstance(IWorkbenchHostService, { downloadText: () => assert.fail('Unexpected download'), editUserConfiguration: async () => { openUserToml++; } });
