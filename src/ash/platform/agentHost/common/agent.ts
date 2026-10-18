@@ -333,24 +333,28 @@ export type ChatContentPart =
 
 type MessagePhase = 'commentary' | 'partial_answer' | 'final_answer' | { readonly other: string; };
 
+/** User input clientId identifies the submitting command across all parts; legacy history may omit it. */
 export type ThreadItem =
-	| { readonly type: 'userMessage'; readonly itemId: string; readonly turnId: string; readonly text: string; }
+	| { readonly type: 'userMessage'; readonly clientId?: string | null; readonly itemId: string; readonly turnId: string; readonly text: string; }
 	| {
 		readonly type: 'userContext';
+		readonly clientId?: string | null;
 		readonly itemId: string;
 		readonly turnId: string;
 		readonly name: string;
 		readonly content: string;
 	}
-	| { readonly type: 'userImage'; readonly itemId: string; readonly turnId: string; readonly url: string; }
+	| { readonly type: 'userImage'; readonly clientId?: string | null; readonly itemId: string; readonly turnId: string; readonly url: string; }
 	| {
 		readonly type: 'userImageAttachment';
+		readonly clientId?: string | null;
 		readonly itemId: string;
 		readonly turnId: string;
 		readonly attachment: ChatImageAttachment;
 	}
 	| {
 		readonly type: 'userAudioAttachment';
+		readonly clientId?: string | null;
 		readonly itemId: string;
 		readonly turnId: string;
 		readonly attachment: ChatAudioAttachment;

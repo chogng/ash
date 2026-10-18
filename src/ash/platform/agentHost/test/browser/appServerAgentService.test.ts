@@ -120,12 +120,17 @@ test('Session debug logs verify routed resources and release every handle on com
 test('Thread history windows reach read and subscribe and retain detached pagination boundaries', async () => {
 	const requests: unknown[] = [];
 	const usage = { modelInvocations: 0, inputTokens: { reported: 0, complete: true }, outputTokens: { reported: 0, complete: true }, cachedInputTokens: { reported: 0, complete: true }, cacheWriteInputTokens: { reported: 0, complete: true }, reasoningTokens: { reported: 0, complete: true } };
+	const items = [
+		{ type: 'userContext' as const, clientId: 'original', itemId: 'context', turnId: 'turn', name: 'File', content: 'original context' },
+		{ type: 'userMessage' as const, clientId: 'original', itemId: 'message', turnId: 'turn', text: 'Original' },
+		{ type: 'userImage' as const, clientId: 'steering', itemId: 'image', turnId: 'turn', url: 'https://example.test/image.png' },
+	];
 	const boundary = { hasOlderTurns: true, oldestTurnId: 'turn-21' };
 	const service = createAppServerAgentThreadService({
 		async request(definition: { method: string; }, params: unknown): Promise<unknown> {
 			requests.push({ method: definition.method, params });
 			return {
-				thread: { sessionId: 'session', threadId: 'thread', agentId: 'agent', origin: { type: 'root' }, title: 'History', status: 'active', sequence: 80, advisor: { type: 'off' }, usage, referenceCost: { knownAmounts: [], complete: true }, turns: [], hookRuns: [] },
+				thread: { sessionId: 'session', threadId: 'thread', agentId: 'agent', origin: { type: 'root' }, title: 'History', status: 'active', sequence: 80, advisor: { type: 'off' }, usage, referenceCost: { knownAmounts: [], complete: true }, turns: [{ turnId: 'turn', status: 'running', kind: 'coding', mode: 'agent', approvalMode: 'manual', usage, items }], hookRuns: [] },
 				transcript: { sessionId: 'session', threadId: 'thread', durableSequence: 80, revision: 9, entries: [] },
 				history: boundary, updates: [],
 			};
@@ -142,6 +147,8 @@ test('Thread history windows reach read and subscribe and retain detached pagina
 	assert.equal(read.history?.oldestTurnId, 'turn-21');
 	assert.equal(subscription.history?.oldestTurnId, 'turn-21');
 	assert.equal(subscription.transcript.revision, 9);
+	assert.deepEqual(read.thread.turns[0]!.items, items);
+	assert.deepEqual(subscription.thread.turns[0]!.items, items);
 });
 
 test('message checkpoints and restoration use the existing typed session protocol', async () => {

@@ -303,7 +303,7 @@ for (const kind of ['Code', 'Cowork'] as const) {
 }
 
 for (const kind of ['Code', 'Cowork'] as const) {
-	test(`${kind} checkpoint summary retires immediately on undo and rejects delayed results`, async () => {
+	for (const failed of [false, true]) test(`${kind} checkpoint summary retires immediately on undo and rejects a delayed ${failed ? 'error' : 'result'}`, async () => {
 		const f = fixture(kind); using resources = f.resources; await f.model.initialize();
 		await waitFor(() => f.model.inputState.changesRevision === 'initial');
 		const reads: DeferredPromise<Awaited<ReturnType<ChatService['readThreadChanges']>>>[] = [];
@@ -315,14 +315,29 @@ for (const kind of ['Code', 'Cowork'] as const) {
 		sequence = 3;
 		f.updates.fire({ sessionId: 'session', threadId: 'A', durableSequence: 3, update: { type: 'committed', event: { type: 'threadHistoryMoved' } } });
 		assert.equal(f.model.inputState.changes, undefined);
+		assert.equal(f.model.inputState.changesRevision, undefined);
+		let staleResultShown = false;
+		let staleErrorShown = false;
+		resources.add(f.model.onDidChange(() => {
+			staleResultShown ||= f.model.inputState.changesRevision === 'old';
+			staleErrorShown ||= f.model.inputState.changesError !== undefined;
+		}));
+		await waitFor(() => f.model.thread?.sequence === 3);
+		// Code coalesces summary reads. Settle the invalidated read before
+		// waiting for its replacement, while checking that it never becomes visible.
+		if (kind === 'Code') assert.equal(reads.length, 1);
+		if (failed) await reads[0]!.error(new Error('Old summary failure'));
+		else await reads[0]!.complete({ sequence: 2, revision: 'old', statistics: { files: 30, additions: 100, deletions: 1 }, repositories: [], warnings: [] });
 		await waitFor(() => reads.length === 2);
+		assert.equal(f.model.inputState.changes, undefined);
+		assert.equal(f.model.inputState.changesError, undefined);
 		await reads[1]!.complete({ sequence: 3, revision: 'undone', statistics: { files: 0, additions: 0, deletions: 0 }, repositories: [], warnings: [] });
 		await waitFor(() => f.model.inputState.changesRevision === 'undone');
-		await reads[0]!.complete({ sequence: 2, revision: 'old', statistics: { files: 30, additions: 100, deletions: 1 }, repositories: [], warnings: [] });
-		await turnTask();
 		assert.deepEqual(f.model.inputState.changes, { files: 0, additions: 0, deletions: 0 });
 		assert.equal(f.model.inputState.changesScope, 'conversation');
 		assert.equal(f.model.inputState.changesRevision, 'undone');
+		assert.equal(staleResultShown, false);
+		assert.equal(staleErrorShown, false);
 	});
 	test(`${kind} summary cannot cross A-B-A navigation and failures do not show zero`, async () => {
 		const f = fixture(kind); using resources = f.resources; await f.model.initialize();
@@ -341,19 +356,25 @@ for (const kind of ['Code', 'Cowork'] as const) {
 	});
 }
 
-test('editing an accepted request retains its context and media without replaying later steering or output', async () => {
+for (const steering of ['afterOutput', 'early', 'contextOnly'] as const) test(`editing an accepted request excludes ${steering} steering`, async () => {
 	const f = fixture('Code'); using resources = f.resources;
 	const read = snapshot('A', 8, true);
 	const turn = read.thread.turns[0];
 	const image = { contentDigest: 'sha256:' + 'a'.repeat(64), mediaType: 'png' as const, encodedBytes: 128, width: 8, height: 8 };
 	const audio = { contentDigest: 'sha256:' + 'b'.repeat(64), mediaType: 'wav' as const, encodedBytes: 256, durationMs: 100 };
 	const items: typeof turn.items = [
-		{ type: 'userContext', itemId: 'context', turnId: turn.turnId, name: 'Original file', content: 'Accepted snapshot' },
-		{ type: 'userImageAttachment', itemId: 'image', turnId: turn.turnId, attachment: image },
-		{ type: 'userAudioAttachment', itemId: 'audio', turnId: turn.turnId, attachment: audio },
-		{ type: 'userMessage', itemId: 'original-input', turnId: turn.turnId, text: 'Original' },
-		{ type: 'agentMessage', itemId: 'reply', turnId: turn.turnId, text: 'Answer' },
-		{ type: 'userMessage', itemId: 'steer', turnId: turn.turnId, text: 'Later steer' },
+		{ type: 'userContext', clientId: 'original-command', itemId: 'context', turnId: turn.turnId, name: 'Original file', content: 'Accepted snapshot' },
+		{ type: 'userImageAttachment', clientId: 'original-command', itemId: 'image', turnId: turn.turnId, attachment: image },
+		{ type: 'userAudioAttachment', clientId: 'original-command', itemId: 'audio', turnId: turn.turnId, attachment: audio },
+		{ type: 'userMessage', clientId: 'original-command', itemId: 'original-input', turnId: turn.turnId, text: 'Original' },
+		...(steering === 'afterOutput' ? [{ type: 'agentMessage' as const, itemId: 'reply', turnId: turn.turnId, text: 'Answer' }] : []),
+		{ type: 'userContext', clientId: 'steering-command', itemId: 'steer-context', turnId: turn.turnId, name: 'Later context', content: 'Must not replay' },
+		...(steering !== 'contextOnly' ? [
+			{ type: 'userImage' as const, clientId: 'steering-command', itemId: 'steer-image', turnId: turn.turnId, url: 'https://example.test/later.png' },
+			{ type: 'userImageAttachment' as const, clientId: 'steering-command', itemId: 'steer-attachment', turnId: turn.turnId, attachment: image },
+			{ type: 'userAudioAttachment' as const, clientId: 'steering-command', itemId: 'steer-audio', turnId: turn.turnId, attachment: audio },
+		] : []),
+		...(steering !== 'contextOnly' ? [{ type: 'userMessage' as const, clientId: 'steering-command', itemId: 'steer', turnId: turn.turnId, text: 'Later steer' }] : []),
 	];
 	f.threadApi.read = async () => ({ ...read, thread: { ...read.thread, turns: [{ ...turn, items }] } });
 	const rewrites: unknown[] = [];
@@ -366,5 +387,8 @@ test('editing an accepted request retains its context and media without replayin
 		]
 	}]);
 	await assert.rejects(f.chat.rewriteRequest({ sessionId: 'session', threadId: 'A', turnId: turn.turnId, itemId: 'steer', text: 'Changed steering', commandId: 'invalid-edit' }), /no longer available/);
+	const legacyItems = items.map(item => { const { clientId: _, ...legacy } = item as typeof item & { clientId?: string; }; return legacy; });
+	f.threadApi.read = async () => ({ ...read, thread: { ...read.thread, turns: [{ ...turn, items: legacyItems }] } });
+	await assert.rejects(f.chat.rewriteRequest({ sessionId: 'session', threadId: 'A', turnId: turn.turnId, itemId: 'original-input', text: 'Legacy', commandId: 'legacy-edit' }), /no longer available/);
 	assert.equal(rewrites.length, 1);
 });

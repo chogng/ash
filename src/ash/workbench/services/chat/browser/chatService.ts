@@ -186,11 +186,14 @@ export class ChatService extends Disposable implements IChatService {
 		const { thread } = await this.readThread(options.sessionId, options.threadId);
 		const turn = thread.turns.find(turn => turn.turnId === options.turnId);
 		const firstMessage = turn?.items.find(item => item.type === 'userMessage');
-		if (!turn || firstMessage?.itemId !== options.itemId) throw new Error(localize('chat.edit.unavailable', 'This request is no longer available for editing.'));
+		if (!turn || firstMessage?.type !== 'userMessage' || firstMessage.itemId !== options.itemId || !firstMessage.clientId) {
+			throw new Error(localize('chat.edit.unavailable', 'This request is no longer available for editing.'));
+		}
 		const input: AgentInput[] = [];
-		// Only the original submission belongs to the replacement. Later steering and tool output do not.
+		// Submission identity separates the original input from steering, including context-only
+		// steering received before the agent produces its first output. Legacy items lack this identity.
 		for (const item of turn.items) {
-			if (item.type === 'userMessage' && item.itemId !== options.itemId) break;
+			if (!('clientId' in item) || item.clientId !== firstMessage.clientId) continue;
 			switch (item.type) {
 				case 'userMessage': input.push({ type: 'text', text: options.text }); break;
 				case 'userContext': input.push({ type: 'context', name: item.name, content: item.content }); break;
@@ -199,7 +202,6 @@ export class ChatService extends Disposable implements IChatService {
 				case 'userAudioAttachment': input.push({ type: 'audioAttachment', attachment: item.attachment }); break;
 				default: break;
 			}
-			if (!item.type.startsWith('user')) break;
 		}
 		if (this.isDisposed || epoch !== this.connectionEpoch) throw canceled();
 		this.assertAIEnabled();
