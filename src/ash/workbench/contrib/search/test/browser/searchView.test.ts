@@ -762,7 +762,7 @@ function createServices(store: DisposableStore, browser: JSDOM, search: ViewSear
 	services.registerInstance(ITextModelResourceService, editing.models);
 	services.registerInstance(IFileTextModelService, editing.models);
 	services.registerInstance(IFileSearchService, new BrowserFileSearchService(editing.files));
-	services.registerInstance(ISearchService, services.createInstance(SearchService));
+	services.registerInstance(ISearchService, store.add(services.createInstance(SearchService)));
 	services.registerInstance(IBulkEditService, editing.service);
 	services.registerInstance(IDialogService, editing.dialogs);
 	services.registerInstance(IWorkingCopyService, editing.workingCopies);

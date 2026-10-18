@@ -10,6 +10,8 @@ import { IInstantiationService } from '../../../../../platform/instantiation/com
 import { INotificationService } from '../../../../../platform/notification/common/notification.js';
 import { IQuickInputService, type IQuickPickItem } from '../../../../../platform/quickinput/common/quickInput.js';
 import { IRemoteConnectionService, type RemoteConnectionDefinition } from '../../../../../platform/remote/common/remoteConnectionService.js';
+import { createSshRemoteWorkspaceUri } from '../../../../../platform/remote/common/remote.js';
+import { IAgentHostFileSystemService } from '../../../../../workbench/services/agentHost/common/agentHostFileSystemService.js';
 import { IRendererHostService, type IRendererHost } from '../../../../../platform/renderer/common/rendererHost.js';
 import { Menus } from '../../../../browser/menus.js';
 import { ISessionsProvidersService } from '../../../../services/sessions/browser/sessionsProvidersService.js';
@@ -31,6 +33,7 @@ export class SSHAgentHostContribution extends Disposable {
 
 	constructor(
 		@IRendererHostService private readonly renderer: IRendererHost,
+		@IAgentHostFileSystemService private readonly files: IAgentHostFileSystemService,
 		@IRemoteConnectionService private readonly connections: IRemoteConnectionService,
 		@ISessionsProvidersService private readonly providers: ISessionsProvidersService,
 		@IInstantiationService private readonly instantiation: IInstantiationService,
@@ -109,6 +112,18 @@ export class SSHAgentHostContribution extends Disposable {
 			const host = await this.renderer.agentHosts!.connect(connection, controller.signal);
 			if (this.isDisposed || controller.signal.aborted) { host.dispose(); throw canceled(); }
 			resources.add(host);
+			const root = createSshRemoteWorkspaceUri(connection.host, connection.workspace);
+			resources.add(this.files.registerAuthority(root.authority, {
+				api: host.api.fs,
+				resourceApi: host.api.resource,
+				directories: () => [{ uri: root, target: { type: 'environment', dirId: `agent-host:${host.id}` } }],
+				onDidChange: listener => {
+					const subscription = host.api.events.subscribe(event => {
+						if (event.method === 'fs/changed') { listener(event.params); }
+					});
+					return toDisposable(() => subscription.dispose());
+				},
+			}));
 			// This contribution is the scope owner. Its providers borrow only this connection's domains.
 			const services = resources.add(this.instantiation.createChild());
 			services.registerInstance(IRendererHostService, host.api);

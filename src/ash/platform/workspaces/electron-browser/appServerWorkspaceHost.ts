@@ -1,4 +1,5 @@
 import { canceled } from '../../../base/common/errors.js';
+import { raceCancellationError } from '../../../base/common/async.js';
 import { AppServerRemoteError } from '../../agentHost/common/appServerError.js';
 import { APP_SERVER_METHODS } from '../../../../../.build/protocol/typescript/index.js';
 import { decodeAppServerRequestParams } from '../../../../../.build/protocol/typescript/AppServerProtocolDecoder.js';
@@ -25,7 +26,13 @@ export async function initializeWorkspace(client: AppServerProtocolClient, works
 export async function initializeWorkspaceDirectories(client: AppServerProtocolClient, workspaceTrust: IWorkspaceTrustRequestService, trustApi: IWorkspaceTrustApi, folders: readonly { readonly id: string; readonly path: string; readonly label?: string; }[]): Promise<void> {
 	const generation = client.generation;
 	let retired = client.state !== 'ready';
-	const connection = client.onStateChange(state => { if (state !== 'ready') { retired = true; } });
+	const cancellation = new AbortController();
+	const connection = client.onStateChange(state => {
+		if (state !== 'ready') {
+			retired = true;
+			cancellation.abort();
+		}
+	});
 	const assertCurrent = (): void => {
 		if (retired || client.generation !== generation) { throw canceled(); }
 	};
@@ -40,7 +47,8 @@ export async function initializeWorkspaceDirectories(client: AppServerProtocolCl
 				dirs.push({ id: folder.id, path, grant: { type: 'config' } });
 				continue;
 			}
-			const choice = await workspaceTrust.requestWorkspaceTrust(folder.label ?? path);
+			// The frontend prompt can outlive its connection; retiring setup must not wait for its answer.
+			const choice = await raceCancellationError(workspaceTrust.requestWorkspaceTrust(folder.label ?? path, cancellation.signal), cancellation.signal);
 			assertCurrent();
 			if (choice === 'cancel') { throw new Error('Directory permission selection cancelled'); }
 			if (choice !== 'development' && choice !== 'readOnly') { throw new TypeError('Invalid directory permission selection'); }

@@ -7,6 +7,7 @@ import { canceled } from '../../../base/common/errors.js';
 import { transform } from '../../../base/common/stream.js';
 import { Disposable, DisposableMap, DisposableStore, toDisposable, type IDisposable } from '../../../base/common/lifecycle.js';
 import { URI } from '../../../base/common/uri.js';
+import { extUri } from '../../../base/common/resources.js';
 import {
 	createFileSystemProviderError,
 	FileSystemProviderErrorCode,
@@ -314,6 +315,10 @@ export class FileService extends Disposable implements IFileService {
 
 	private async copyBetweenProviders(sourceProvider: IFileSystemProvider, targetProvider: IFileSystemProvider, source: URI, target: URI): Promise<void> {
 		const sourceStat = await sourceProvider.stat(source);
+		if (sourceStat.kind === FileKind.Directory && sourceProvider === targetProvider && extUri.isEqualOrParent(target, source)) {
+			// The generic traversal must never enumerate a destination that it just created inside its source.
+			throw new FileOperationNotSupportedError(source, 'copy');
+		}
 		try {
 			await targetProvider.stat(target);
 			throw new Error(`Copy target already exists: ${target.toString()}`);

@@ -142,6 +142,7 @@ import {
 import {
 	AgentHostFileSystemProvider,
 } from "../../platform/agentHost/common/agentHostFileSystemProvider.js";
+import { AgentHostFileSystemService, IAgentHostFileSystemService } from '../services/agentHost/common/agentHostFileSystemService.js';
 import { FileService } from "../../platform/files/common/fileService.js";
 import { IQuickInputService } from "../../platform/quickinput/common/quickInput.js";
 import type { HTMLFileSystemProvider } from '../../platform/files/browser/htmlFileSystemProvider.js';
@@ -711,8 +712,8 @@ export class Workbench extends Disposable {
 		});
 		this._register(workspaceFileService);
 		if (workspaceFileSystemProvider) this._register(workspaceFileSystemProvider);
-		this._register(fileService.registerProvider(Schemas.file, workspaceFileSystemProvider ?? browserFileSystemProvider ?? workspaceFileService));
-		this._register(fileService.registerProvider(Schemas.ashRemote, workspaceFileService));
+		const agentHostFiles = this._register(services.createInstance(AgentHostFileSystemService, workspaceFileService, workspaceFileSystemProvider ?? browserFileSystemProvider));
+		services.registerInstance(IAgentHostFileSystemService, agentHostFiles);
 		services.registerInstance(ISystemFileTransferService, workspaceFileService);
 		const languagePackService = this._register(services.createInstance(WebLanguagePacksService, builtinLanguagePackCatalogs, preinstalledLanguagePacks));
 		services.registerInstance(ILanguagePackService, languagePackService);
@@ -792,7 +793,7 @@ export class Workbench extends Disposable {
 			IContentSearchService,
 			api.hasAppServer ? new BrowserContentSearchService(api.contentSearch) : new FileContentSearchService(fileService),
 		);
-		services.registerInstance(ISearchService, services.createInstance(SearchService));
+		services.registerInstance(ISearchService, this._register(services.createInstance(SearchService)));
 		services.registerInstance(ITerminalProcessService, api.terminal);
 		services.registerInstance(ICodebaseService, new AppServerCodebaseService(api.codebase));
 		services.registerInstance(IConnectorService, this._register(new AppServerConnectorService(api.connectors, api.events)));

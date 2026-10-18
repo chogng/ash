@@ -88,6 +88,51 @@ test('aborting a dialog settles it as cancelled and removes its modal', async ({
 	await expect.poll(() => page.evaluate(() => window.ashDialogIntegration.lastResult)).toBe('cancel');
 });
 
+test('retiring a workspace connection removes its permission modal and allows the next prompt', async ({ page }) => {
+	await page.goto('/dialog.html');
+	await page.evaluate(() => {
+		const trigger = document.createElement('button');
+		trigger.id = 'directory-trigger';
+		trigger.textContent = 'Connect host';
+		document.body.append(trigger);
+		trigger.focus();
+		return window.ashDialogIntegration.showDirectoryPermission();
+	});
+	const dialog = page.getByRole('dialog', { name: 'Directory permissions' });
+	await expect(dialog).toBeVisible();
+	await expect(dialog.getByRole('button', { name: 'Read only', exact: true })).toBeFocused();
+	await page.evaluate(() => window.ashDialogIntegration.cancelDirectoryPermission());
+	await expect(dialog).toHaveCount(0);
+	await expect(page.locator('#directory-trigger')).toBeFocused();
+	await expect.poll(() => page.evaluate(() => window.ashDialogIntegration.lastDirectoryResult)).toBe('cancelled');
+	expect(await page.evaluate(() => window.ashDialogIntegration.directoryWrites)).toBe(0);
+	await page.evaluate(() => window.ashDialogIntegration.showDirectoryPermission());
+	await expect(dialog).toBeVisible();
+	await dialog.getByRole('button', { name: 'Read only', exact: true }).press('Enter');
+	await expect(dialog).toHaveCount(0);
+	await expect(page.locator('#directory-trigger')).toBeFocused();
+	await expect.poll(() => page.evaluate(() => window.ashDialogIntegration.lastDirectoryResult)).toBe('ready');
+	expect(await page.evaluate(() => window.ashDialogIntegration.directoryWrites)).toBe(2);
+});
+
+test('permission setup cancelled before prompt metadata arrives does not replace a newer modal', async ({ page }) => {
+	await page.goto('/dialog.html');
+	await page.evaluate(async () => {
+		window.ashDialogIntegration.holdDirectoryPrompt();
+		await window.ashDialogIntegration.showDirectoryPermission();
+		window.ashDialogIntegration.cancelDirectoryPermission();
+	});
+	await expect.poll(() => page.evaluate(() => window.ashDialogIntegration.lastDirectoryResult)).toBe('cancelled');
+	await page.evaluate(() => window.ashDialogIntegration.showDirectoryPermission());
+	const dialog = page.getByRole('dialog', { name: 'Directory permissions' });
+	await expect(dialog).toBeVisible();
+	await page.evaluate(() => window.ashDialogIntegration.releaseDirectoryPrompt());
+	await expect(page.getByRole('dialog')).toHaveCount(1);
+	await dialog.getByRole('button', { name: 'Read only', exact: true }).press('Enter');
+	await expect.poll(() => page.evaluate(() => window.ashDialogIntegration.lastDirectoryResult)).toBe('ready');
+	expect(await page.evaluate(() => window.ashDialogIntegration.directoryWrites)).toBe(2);
+});
+
 test('disposing a dialog without buttons resolves it and restores focus', async ({ page }) => {
 	await page.goto('/dialog.html');
 	await page.evaluate(() => {

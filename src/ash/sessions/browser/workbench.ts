@@ -173,6 +173,7 @@ import { IMarkerService } from '../../platform/markers/common/markers.js';
 import { MarkerService } from '../../platform/markers/common/markerService.js';
 import { GitHubService as SessionsGitHubService, IGitHubService as ISessionsGitHubService } from '../contrib/github/browser/githubService.js';
 import { SessionFileService } from '../contrib/providers/agentHost/browser/sessionFileService.js';
+import { AgentHostFileSystemService, IAgentHostFileSystemService } from '../../workbench/services/agentHost/common/agentHostFileSystemService.js';
 import { IFileService } from '../../platform/files/common/files.js';
 import { ISystemFileTransferService } from '../../platform/files/common/systemFileTransferService.js';
 import { IClipboardService } from '../../platform/clipboard/common/clipboardService.js';
@@ -480,8 +481,8 @@ export abstract class Workbench extends Disposable {
 		services.registerInstance(IWorkspaceContextService, workspace);
 		services.registerInstance(IMarkerService, this._register(new MarkerService()));
 		const files = this._register(services.createInstance(SessionFileService, options.api, () => options.workspace().folders.map(folder => ({ uri: folder.uri, target: { type: 'environment', dirId: folder.id } }))));
-		this._register(fileService.registerProvider(Schemas.file, options.browserFileSystemProvider ?? files));
-		this._register(fileService.registerProvider(Schemas.ashRemote, files));
+		const agentHostFiles = this._register(services.createInstance(AgentHostFileSystemService, files, options.browserFileSystemProvider));
+		services.registerInstance(IAgentHostFileSystemService, agentHostFiles);
 		const systemPolicies = hostServices.has(IPolicyService) ? hostServices.get(IPolicyService) : new NullPolicyService();
 		services.registerInstance(IPluginManagementService, this._register(services.createInstance(AppServerPluginManagementService, options.api.plugins, options.api.events)));
 		services.registerInstance(IFileSearchService, options.api.hasAppServer ? files : services.createInstance(BrowserFileSearchService));
@@ -522,7 +523,7 @@ export abstract class Workbench extends Disposable {
 		services.registerInstance(ITextModelResourceService, textModels);
 		services.registerInstance(IFileTextModelService, textModels);
 		services.registerInstance(IContentSearchService, options.api.hasAppServer ? files : new FileContentSearchService(fileService));
-		services.registerInstance(ISearchService, services.createInstance(SearchService));
+		services.registerInstance(ISearchService, this._register(services.createInstance(SearchService)));
 		services.registerSingleton(IKeybindingEditingService, () => services.createInstance(KeybindingsEditingService));
 		services.registerSingleton(ITextModelService, () => services.createInstance(TextModelResolverService));
 		services.registerInstance(IChatService, chat);

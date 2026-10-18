@@ -4,9 +4,8 @@ import { generateUuid } from '../../base/common/uuid.js';
 import { REMOTE_AGENT_HOST_OPEN_CHANNEL, REMOTE_AGENT_HOST_CLOSE_CHANNEL } from '../../platform/remote/common/remoteConnectionIpc.js';
 import { createSshRemoteWorkspaceUri } from '../../platform/remote/common/remote.js';
 import { AppServerChannelService } from "../../platform/collaboration/browser/appServerChannelService.js";
-import type { AppServerConnectionRecovery, AppServerProtocolClient } from '../../platform/agentHost/browser/appServerProtocolClient.js';
+import type { AppServerProtocolClient } from '../../platform/agentHost/browser/appServerProtocolClient.js';
 import type { IExtensionHostApi } from '../../platform/agentHost/common/extensionHostApi.js';
-import { createAppServerExtensionHostApi } from '../../platform/agentHost/browser/extensionHostApi.js';
 import type { IAddress } from '../../platform/remote/common/remoteAgentConnection.js';
 import { IRemoteSocketFactoryService, RemoteSocketFactoryService } from '../../platform/remote/common/remoteSocketFactoryService.js';
 import { AppServerSymphonyService } from '../../platform/symphony/browser/appServerSymphonyService.js';
@@ -19,7 +18,7 @@ import { AppServerMemoriesService } from '../../platform/memories/browser/appSer
 import { AppServerMemoryDiagnosticsService } from '../../platform/memory/browser/appServerMemoryDiagnosticsService.js';
 import type { MemoryObservation } from '../../platform/memory/common/memoryDiagnosticsService.js';
 import { LocalAgentHostServiceClient } from '../../platform/agentHost/electron-browser/localAgentHostService.js';
-import { RemoteAgentHostService } from '../../platform/agentHost/browser/remoteAgentHostServiceImpl.js';
+import { WorkbenchAgentHostService } from '../services/agentHost/electron-browser/agentHostService.js';
 import { createRendererHost, type RendererCapabilityContribution } from '../browser/webRendererApi.js';
 import { ElectronRendererClipboardService } from '../../platform/clipboard/electron-browser/electronRendererClipboardService.js';
 import { createDisconnectedRendererApi } from '../browser/rendererApi.js';
@@ -68,37 +67,22 @@ export async function createElectronRendererApi(contributions: readonly Electron
 	const resources = new DisposableStore();
 	const workspaceApi = createWorkspaceContextApi();
 	const nativeHost = createNativeHostApi(mainProcessService);
-	const observePower = (recovery: AppServerConnectionRecovery): void => {
-		const suspend = nativeHost.onDidSuspendOS(() => recovery.suspend());
-		const resume = nativeHost.onDidResumeOS(() => recovery.resume());
-		resources.add(toDisposable(() => { suspend.dispose(); resume.dispose(); }));
-	};
 	const remoteConnection = await createRemoteAgentApi().getConnection();
 	const connectionServices = resources.add(new InstantiationService());
 	connectionServices.registerInstance(IMainProcessService, mainProcessService);
 	const connectionLogger = resources.add(connectionServices.createInstance(LoggerChannelClient)).createLogger('app-server', { hidden: true });
 	connectionServices.registerInstance(ILogService, connectionLogger);
 	connectionServices.registerSingleton(IRemoteSocketFactoryService, () => connectionServices.createInstance(RemoteSocketFactoryService));
-	const factories = connectionServices.get(IRemoteSocketFactoryService);
-	// Initialization includes the local daemon's cold start, which can take 15 seconds.
-	const localConnection = resources.add(connectionServices.createInstance(LocalAgentHostServiceClient, {
-		clientName: 'ash-desktop',
-		connection: remoteConnection.kind === 'ssh' ? 'local' : 'workspace',
-		initializeTimeoutMs: 30_000,
-		capabilities: {
-			agentInteractions: { version: 1, kinds: ['approval', 'permissions', 'userInput'] },
-			...(hostCapabilities.browser ? { browser: { version: 4, observe: true, input: true } } : {}),
-			...(hostCapabilities.textDocuments ? { textDocuments: { version: 2 } } : {}),
-			...(hostCapabilities.appTools ? { appTools: { version: 1, agents: true, desktop: true } } : {}),
-			directoryGrantsHost: { version: 1 },
-		},
-	} satisfies ConstructorParameters<typeof LocalAgentHostServiceClient>[0]));
-	observePower(localConnection.recovery);
+	const agentHost = resources.add(connectionServices.createInstance(WorkbenchAgentHostService, {
+		connection: remoteConnection,
+		capabilities: hostCapabilities,
+		onDidSuspendOS: listener => nativeHost.onDidSuspendOS(listener),
+		onDidResumeOS: listener => nativeHost.onDidResumeOS(listener),
+		resolveRemoteAuthority,
+		initializeRemoteExtensions,
+	} satisfies ConstructorParameters<typeof WorkbenchAgentHostService>[0]));
+	const localConnection = agentHost.localConnection;
 	const localClient = localConnection.client;
-	let client = localClient;
-	let connection: LocalAgentHostServiceClient | RemoteAgentHostService = localConnection;
-	let localExtensions: IExtensionHostApi | undefined;
-	let windowExtensions: IExtensionHostApi | undefined;
 
 	try {
 		const localFiles = resources.add(new DiskFileSystemProviderClient(mainProcessService.getChannel(LOCAL_FILE_SYSTEM_CHANNEL_NAME)));
@@ -113,59 +97,12 @@ export async function createElectronRendererApi(contributions: readonly Electron
 		const configuration = resources.add(configurationServices.createInstance(ConfigurationService, URI.from({ scheme: Schemas.vscodeUserData, path: '/user/settings.json' })));
 		await configuration.initialize();
 		performance.mark('ash.rendererApi.connect-start');
-		const enabled = await localConnection.connect();
+		const enabled = await agentHost.connect();
+		const connection = agentHost.connection;
+		const client = agentHost.client;
 		let backend: IRendererHost;
 		if (enabled) {
 			performance.mark('ash.rendererApi.initialized');
-			if (remoteConnection.kind === 'ssh') {
-				const workspaceConnection = resources.add(connectionServices.createInstance(LocalAgentHostServiceClient, {
-					clientName: 'ash-desktop-remote', initializeTimeoutMs: SSH_REMOTE_INITIALIZE_TIMEOUT_MS,
-					capabilities: {
-						directoryGrantsHost: { version: 1 },
-						agentInteractions: { version: 1, kinds: ['approval', 'permissions', 'userInput'] },
-						...(hostCapabilities.browser ? { browser: { version: 4, observe: true, input: true } } : {}),
-						...(hostCapabilities.textDocuments ? { textDocuments: { version: 2 } } : {}),
-						...(hostCapabilities.appTools ? { appTools: { version: 1, agents: true, desktop: true } } : {}),
-					},
-				}));
-				observePower(workspaceConnection.recovery);
-				await workspaceConnection.connect();
-				connection = workspaceConnection;
-				client = workspaceConnection.client;
-			}
-			if (remoteConnection.kind === 'remote') {
-				if (!resolveRemoteAuthority || !initializeRemoteExtensions) { throw new Error('This window does not provide a local Remote resolver'); }
-				localExtensions = createAppServerExtensionHostApi(localClient);
-				let attempt = 0;
-				// An extension endpoint does not inherit the local stdio host's directory-grant authority.
-				const remote = resources.add(connectionServices.createInstance(RemoteAgentHostService, {
-					protocol: {
-						clientName: 'ash-desktop-remote',
-						initializeTimeoutMs: 30_000,
-						capabilities: {
-							agentInteractions: { version: 1, kinds: ['approval', 'permissions', 'userInput'] },
-							...(hostCapabilities.browser ? { browser: { version: 4, observe: true, input: true } } : {}),
-							...(hostCapabilities.textDocuments ? { textDocuments: { version: 2 } } : {}),
-						},
-					},
-					getAddress: async () => {
-						await localConnection.whenConnected();
-						return resolveRemoteAuthority(localExtensions!, factories, remoteConnection.authority, ++attempt);
-					},
-					getMetadata: () => localConnection.connectionMetadata,
-					onDidReconnectLocal: localConnection.onDidReconnect,
-					initialize: async remoteClient => {
-						const generation = remoteClient.generation;
-						const extensions = await initializeRemoteExtensions(createAppServerExtensionHostApi(remoteClient), remoteConnection.authority);
-						if (remoteClient.generation !== generation || remoteClient.state !== 'ready') { throw new CancellationError(); }
-						windowExtensions = extensions;
-					},
-				} satisfies ConstructorParameters<typeof RemoteAgentHostService>[0]));
-				connection = remote;
-				client = remote.client;
-				observePower(remote.recovery);
-				await remote.connect();
-			}
 			backend = createRendererHost(client, {
 				externalOpener: { openExternal: target => invoke<boolean>('ash:host:openExternal', target) },
 				callbackHost: {
@@ -178,7 +115,7 @@ export async function createElectronRendererApi(contributions: readonly Electron
 			resources.add(backend.mcpServerManagement);
 			resources.add(registerAppServerWorkspaceHost(client, () => connection.whenConnected(), workspaceTrust, backend.workspaceTrust, folders => workspaceApi.validateFolders(folders), path => remoteConnection.kind === 'ssh' ? createSshRemoteWorkspaceUri(remoteConnection.host, path) : URI.file(path)));
 			// Editor recovery belongs to this Desktop profile, including SSH workspaces.
-			backend = { ...backend, backup: new AppServerBackupService(localClient, 'ash-editor'), ...(windowExtensions ? { extensionHost: windowExtensions } : {}) };
+			backend = { ...backend, backup: new AppServerBackupService(localClient, 'ash-editor'), ...(agentHost.windowExtensions ? { extensionHost: agentHost.windowExtensions } : {}) };
 			if (client.capabilities?.memories) { backend = { ...backend, memories: resources.add(new AppServerMemoriesService(client)) }; }
 			if (client.capabilities?.contracts.memoryDiagnostics?.version === 1) { backend = { ...backend, memoryDiagnostics: resources.add(new AppServerMemoryDiagnosticsService(client, 'electron', () => invoke<MemoryObservation[]>('ash:memory:collect'))) }; }
 			// Device ownership stays on this computer when the workspace connection is remote.

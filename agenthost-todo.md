@@ -2,9 +2,62 @@
 
 当前仍有文件、公开契约与职责需要对齐，不能把 B1/B2/B3 已实现理解成 AgentHost 已完成。文件关系和本次实施范围见下面台账；剩余代码工作与环境验收入口由 [AgentHost TODO](TODO.md#agenthost--todo) 维护。保留 Ash 的 Rust 执行与持久化架构，VS Code 用于核对公开职责和可观察行为。
 
+## Workbench 服务切片 · 2026-10-18
+
+用户明确选择先补通用服务和现有能力，SDK、Codex 续接和本地模型等新产品项列明缺口。本轮三个子代理在原 checkout 并行工作，基线 Ash `3bb4be221`、只读 VS Code `72e9539ed`；保留开始前已有的 Debug、Log、Menubar 等未提交改动。
+
+| 用户行为 → 生产调用方                                                      | 同路径服务与唯一 owner                                                                                                                                                              | 已验证结果                                                                                                                                         |
+| -------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Desktop 打开本地、SSH 或扩展远端工作区 → `electron-browser/rendererApi.ts` | 新增 `electron-browser/agentHostService.ts`，Workbench 拥有宿主选择、能力组合和电源订阅；平台 Local／Remote lease 继续拥有连接、恢复和协议代次，Main／Rust 保持进程及领域状态归属。 | SSH 工作区 lease 不可用时拒绝启动；本地设备保留本地连接；远端不继承本地目录授权／Desktop tools；重启重新解析并初始化扩展；释放阻止迟到初始化发布。 |
+| Quick Open／附件文件查询 → `SearchService.fileSearch`                      | 新增 `common/agentHostFileSearchProvider.ts`，唯一执行 Workbench 文件查询聚合；平台 `IFileSearchService` 保持授权目标和后端 glob／fuzzy owner。                                     | 保持全局排序、去重、预算与 Session 目录路由；取消及 scope 关闭立即拒绝等待，即使后端尚未返回；预先检查全部查询根，不向未授权根发请求。             |
+| 编辑／保存工作区文件 → `browser/workbench.ts`                              | 新增 `common/agentHostFileSystemService.ts`，拥有 `file`／`ash-remote` 成对注册；既有平台 Provider 仍拥有文件执行、路径身份和事件。                                                 | 本地／Browser provider 优先级保持；冲突不覆盖既有 provider；第二项注册失败会回滚；释放只注销，不处置借用的 provider。                              |
+
+三个生产文件均为上游已有、Ash 原来缺失的对应路径，由 Ash 现有调用链独立实现，没有复制上游私有实现。`SearchService`、Workbench／Sessions 创建点和测试 fixture 同批迁移 DI 与释放；新增三个行为测试文件。同路径存在只表示本批职责落位，不代表上游全部公开契约已等价。
+
+验证：8 个文件共 **80 项定向单测通过**，其中新增服务测试 17 项，含实际 MessagePort／socket 连接、重连、pending dispose、注册失败回滚、取消和中文错误路径。标准 `pnpm test:unit` 的全量编译被既存 `debugService.test.ts:2375` 的构造参数错误阻挡；按原 `tsconfig.test.json` 编译选项，仅收窄输入至受影响测试，编译通过后由标准 runner 执行上述 80 项。定向配置保存在忽略目录 `.build/agenthost-workbench-validation/`。17 项层级／App Server 架构测试通过。Common 2,749、Renderer 4,288、浏览器集成 4,255 文件类型检查通过；`pnpm build:prepared` 的 Desktop 构建和 16 个 touched TS 文件格式检查通过。新增文案中文验证通过；本地化报告仍有本批未改的 `ash/path.platformUnavailable` 缺项。未执行真实 SSH／多窗口／系统休眠的产品验收。
+
+复核时撤销了无生产调用方的新文件过滤字段：后端在最多 5,000 个候选之后过滤会漏结果，当前没有相交过滤或分页契约；不把这一未闭合能力放入公开查询。本轮保留既有 glob／fuzzy 语义与实际取消修复。
+
+剩余契约与产品缺口：
+
+- `common/agentHostFileSystemService.ts` 的多 authority 注册已在下面“多 authority 文件服务”切片实现；synced customization 尚无生产消费者，不能预建另一个内存文件系统。
+- `common/agentHostResourceService.ts` 需要 renderer 本地文件授权／realpath owner、正式双向 host request 与实际消费者。现有 `IResourceApi` 是后端 opaque bytes，不能改名充当本地授权 broker。
+- `browser/editorRemoteAgentHostServiceClient.ts`、`common/editorRemoteAgentHostTransport.ts` 的上游 AHP／Session 协议与 Ash Rust typed protocol 不同。本轮由 Workbench service 接入现有平台远端 lease，不创建第二个 transport 或无消费者 facade；统一宿主管理仍在根 TODO。
+- `browser/codexAccountService.ts`：现有多 provider 账号仍归 `IAccountService`／`AppServerAccountService`；Codex 专属 root state、头像及 SDK 状态尚无等价契约。`browser/codexContinuation.ts`、`codexContinuationService.ts` 还缺配额新鲜度、Copilot entitlement、Session／model 配对与跨窗口 reservation。正式 `account/rateLimits/read` 已存在，但前端账号契约尚未接入，不能据此宣称续接已实现。
+- `browser/agentSdkSetupService.ts` 缺 SDK 下载／重载领域契约；`common/localModelService.ts`、`browser/localModelService.ts` 缺安装／下载／server lifecycle 后端 owner。按用户决定保留为新产品缺口。
+- `browser/webAgentHostEnablementService.ts`：当前 Web 可用性仍由 transport／initialize 和 `hasAppServer` 表达，独立设置／context-key owner 尚未建立，不用一个恒真服务冒充启用能力。
+
+## 多 authority 文件服务 · 2026-10-18
+
+本轮继续用户已选的通用服务范围，三个子代理协作补齐平台路由、Workbench／Sessions 装配和 Main 租约取消，保留同 checkout 的 Debug／Log 等并行改动。
+
+准入链：现有“管理已连接宿主”命令 → `SSHAgentHostContribution` 的独立 backend scope → `IAgentHostFileSystemService.registerAuthority` → 平台 `AgentHostFileSystemProvider` 的唯一 authority／授权根注册表 → 现有 Chat Markdown 远端文件链接或 URI 拖入 → Editor／`IFileService`。本轮不依赖尚未实现的远端 Session 选择。
+
+- `platform/agentHost/common/agentHostFileSystemProvider.ts` 在原文件独立实现注册表；每个连接沿用原文件读写、大小写与 opaque resource owner。authority 按 URI 比较语义处理大小写，同 authority 多根按最长根匹配，重复根拒绝覆盖。注销保留根身份作为屏障，旧 URI 即使被主工作区重新投影也不会回落到另一连接；重连后重新注册可取得新路由。
+- Workbench 的同路径 `common/agentHostFileSystemService.ts` 提供服务标识和 `registerAuthority`，只拥有挂载句柄；Workbench／Sessions 启动入口各注册一个实例。SSH scope 在 `agent-host:<scope id>` 环境根初始化后挂载对应文件域，关闭时先卸载，再释放原连接。事件、路径身份和流读均归所属连接；没有新增窗口以外的进程或第二份业务状态。
+- pending 查询在卸载或换代时及时取消；目标解析的 await 之后、实际后端写入之前再次检查生命周期，避免已关闭 scope 继续派发写操作。流读及时结束，同时让原连接负责释放迟到的 snapshot，资源 ID 不发到新连接。该切片当时拒绝跨连接 copy／rename；下面“通用复制与权限取消”已接通 copy，rename 仍拒绝。
+- `platform/remote/electron-main/remoteConnectionIpc.ts` 仍是 pending lease 的唯一 owner；关闭、导航重置或 dispose 会立即结束等待 catalog 的 OPEN，而不等待旧目录请求返回；迟到结果／失败不会创建 carrier 或影响同 ID 的新租约。
+
+最终验证合计 **128 项**：最新受影响文件／路径／scope 回归 7 文件、102 项通过，未再变化的 Main 租约 9 项和层级／App Server 架构 17 项复用先前通过结果。新增平台测试 10 项、Workbench 服务现 7 项、SSH contribution 现 8 项；均经原编译选项的定向 `tsc` 编译后由标准单测 runner 执行。初轮两项失败来自新测试 fixture 未实现默认字节读写的完整资源链；补齐 binary snapshot／read／release、持久字节与 revision 后，默认读取及 Unicode 写入断言通过，没有改用文本捷径。配置位于 `.build/agenthost-authority-validation/`。
+
+Common 2,752 文件检查、10 个改动 TS 文件 formatter 和 whitespace 检查通过；新增冲突错误已通过真实中文语言包验证。Desktop `pnpm build:prepared` 通过，日志 `build-final.log` 位于上述证据目录。该切片验证时，全量测试编译、Renderer 和浏览器集成代码类型检查受并行 Debug 代码阻挡：`debugSession.ts` 的 `exceptionBreakpoints` 重复声明／调用、`rawDebugSession.ts` 缺 `DebugExceptionsSnapshot`，以及 adapter 的生成 exceptions 类型缺 `appliedFilters`；这些文件未由本轮修改。受影响 2,339 文件的定向编译／检查通过。未执行真实跨机器 SSH 或窗口 UI 验收，不把受控后端测试计为这些环境已验收。
+
+剩余范围：renderer 本地文件权限 broker、synced customization 的实际 producer、统一宿主管理，以及远端 Session 选择后的 Chat／模型／搜索／仓库／权限 scope 仍按根 TODO 推进。本轮只接通完整 URI 的文件域，未把远端 Session 开放保护去掉。
+
+## 通用复制与权限取消 · 2026-10-18
+
+本轮继续现有能力，并准备提交本聊天累计的 AgentHost 服务改动。三个子代理分别补跨连接复制、权限生命周期和独立复核；未新增无生产消费者的 resource broker、synced customization 或搜索路由。
+
+- 现有 Explorer 粘贴／拖入复制 → `FileService.copy` → 平台文件 dispatcher。无附加连接时保留原生 copy；挂载附加连接后撤下整个 namespace 的原生 copy 能力，让 `FileService` 复用既有跨 provider 字节／目录复制算法；最后一个挂载退出后恢复能力并通知消费者。没有捕获原生失败再重放。通用递归复制在写入前拒绝目录自身／子目录目标；跨 authority、同 authority 不同根、目标冲突、目录失败回滚、单次写入和资源释放均有回归。跨连接 rename 仍拒绝。
+- 连接退出 ready → `initializeWorkspaceDirectories` 取消本次权限等待 → `IWorkspaceTrustRequestService` 的可选 signal → `DirectoryPermissionDialog` 复用现有 Dialog abort 链。IPC 返回前即占有请求；取消同步撤下 modal、释放请求槽位并恢复焦点；旧 IPC 和 finally 不会关闭下一请求。迟到选择／拒绝不产生 grant 或目录写入，后续请求可正常打开并通过键盘确认。
+
+验证：18 文件累计 **220 项定向单测通过**。首轮标准入口完成全测试编译，复制测试有两项 Buffer／Uint8Array 类型断言差异，统一实际字节类型后 57 项文件测试全过，其余 163 项复用原通过结果。重跑标准编译时碰到并行 `debugTerminalLauncher.test.ts` 的重复 LabelService imports，未修改该文件；改用已存在的同编译选项定向项目编译后执行 57 项，配置在 `.build/agenthost-authority-validation/`。权限取消另外有 **2 项真实 Chromium 测试通过**，覆盖 modal 移除、焦点恢复、后续权限和旧 metadata 迟到。
+
+Renderer 4,291、Common 2,752、浏览器集成 4,264 文件类型检查及 Desktop `pnpm build:prepared` 通过。日志 `.build/agenthost-commit-validation/{unit,unit-copy-final,unit-copy-targeted,build-final}.log`；浏览器结果 `.build/desktop/playwright/editor-browser-BuEd2W/`。当前未验证真实外部 SSH、跨平台复制或系统休眠，不将受控 scope 测试计为实际机器验收。本次提交仅包含本任务改动，按仓库提交门禁核对；门禁结果以提交交付报告为准。
+
 ## 当前文件台账 · 2026-10-18
 
-本次基线为 Ash `9cdd17c01337eae7119cb62d04d94e1679aee588` 与只读参照 `../vscode` 的 `2de8dcf8062d43587ee1c552d60b099a58e5c9ef`。以下数字包含本次重连策略、领域数据拆分、文件 Provider 迁移及新增回归，不代表上游最新版本。开始时及实施过程中已有 Terminal、Notifications、Sessions 测试、编辑器路线图与根 TODO 的并行变化，本次保留这些变化。
+首次盘点基线为 Ash `9cdd17c01337eae7119cb62d04d94e1679aee588` 与只读参照 `../vscode` 的 `2de8dcf8062d43587ee1c552d60b099a58e5c9ef`。下面数量保留首次盘点快照，包含当时的重连策略、领域数据拆分、文件 Provider 迁移及新增回归；本轮 Workbench 的局部复核与新增行在 TSV 的 `reviewScope` 单独记录，不据此重新推断其他目录的最新数量。开始时及实施过程中已有 Terminal、Notifications、Sessions 测试、编辑器路线图与根 TODO 的并行变化，本次保留这些变化。
 
 [完整文件清单](docs/research/agenthost-file-alignment-2026-10-18.tsv) 逐行记录路径、双方存在关系、源码类别、职责分组、审查状态、双方顶层导出名称（含再导出）、Ash 直接生产引用路径及本批复核范围。路径分别相对 `src/ash/` 与 `src/vs/`。查询覆盖 Git 管理或非忽略的现有 `.ts`／`.css` 文件，选择路径中包含 `agenthost` 的项，忽略大小写：因此包含完整 AgentHost、RemoteAgentHost、AgentHostFilter 目录及同名相邻文件，不把语义相关但名称不同的 Chat／Rust 文件混入存在性统计；后者按下表记录真实 owner。
 
@@ -18,9 +71,9 @@
 | 其他同名相邻路径                                    | 7 / 1           | 22 / 0 / 15                    | 6                  |
 | 合计                                                | 55 / 22         | 1078 / 891 / 763               | 16                 |
 
-清单共 2790 行：1062 个仅上游的手写生产文件、39 个仅 Ash 的生产文件、16 个双方同路径生产文件，另有 891 个生成文件和 782 个测试／fixture 源码。生成文件包括 888 个 `node/codex/protocol/generated/` 文件与 3 个协议生成文件，不属于前端手写文件补齐队列。
+原始清单共 2790 行：1062 个仅上游的手写生产文件、39 个仅 Ash 的生产文件、16 个双方同路径生产文件，另有 891 个生成文件和 782 个测试／fixture 源码。本轮新增一行 Ash 文件注册测试，当前 TSV 为 2791 行数据。生成文件包括 888 个 `node/codex/protocol/generated/` 文件与 3 个协议生成文件，不属于前端手写文件补齐队列。
 
-`both` 只表示同路径存在；`pending-review` 表示尚未完成公开契约、owner 与行为复核，不能计为已对齐。`ownership-migrated` 表示本批唯一 owner 和调用方迁移完成，`verified-slice` 表示仅说明栏中的行为已验证，均不表示整份上游 API 等价。`todo-by-user` 表示用户决定先记 TODO 的新产品文件，当前有 59 个生产文件和 39 个测试；`reference-only` 用于其余生成物和测试，不表示对应能力已经实现或无需测试。直接引用数包括类型导入、再导出、字面量动态导入和模块 URL，不等于生产运行证明；例如 Worker 由 `appServerFrameDecoder.ts` 的 URL 创建，Sessions contribution 由两个 Code 启动入口动态加载，不能把没有静态 import 的文件判成无调用方。
+`both` 只表示同路径存在；`pending-review` 表示尚未完成公开契约、owner 与行为复核，不能计为已对齐。`ownership-migrated` 表示唯一 owner 和调用方迁移完成，`verified-slice` 表示仅说明栏中的行为已验证，均不表示整份上游 API 等价。`todo-by-user` 表示用户决定先记 TODO 的新产品文件，当前有 66 个生产文件和 39 个测试；`reference-only` 用于其余生成物和测试，不表示对应能力已经实现或无需测试。直接引用数包括类型导入、再导出、字面量动态导入和模块 URL，不等于生产运行证明；例如 Worker 由 `appServerFrameDecoder.ts` 的 URL 创建，Sessions contribution 由两个 Code 启动入口动态加载，不能把没有静态 import 的文件判成无调用方。
 
 ### 同路径文件的实际差异
 
@@ -59,7 +112,7 @@
 | 顺序与清单分组                                    | 需要核对的准确入口                                                                                                                                                       | Ash 当前 owner、缺口与准入条件                                                                                                                                                                                                                                                                                                                   |
 | ------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | 1 · 连接服务，`platform-client`                   | `common/remoteAgentHostService.ts`、`common/agentHostConnectionsService.ts`、`browser/agentHostConnectionsService.ts`、`browser/agentHostProtocolClient.ts`              | 先沿 Renderer 的 Local／Remote service 及 `platform/remote` 确认窗口连接／端点注册契约，再处理现有同路径文件。App Server 请求配对继续由现有客户端拥有；AHP 协议客户端不能另建平行实现。                                                                                                                                                          |
-| 2 · Workbench 服务，`workbench-services`          | `common/agentHostFileSystemService.ts`、`agentHostFileSearchProvider.ts`、`agentHostResourceService.ts`、`electron-browser/agentHostService.ts`，以及清单中另外 9 个文件 | 当前装配在 `workbench/browser/`、`workbench/electron-browser/`，文件／搜索／资源分属既有领域。先证明消费者缺少什么公共职责，再落位；SDK 安装、账户 continuation、本地模型服务分别核对可选 Provider 与后端前置。                                                                                                                                  |
+| 2 · Workbench 服务，`workbench-services`          | `common/agentHostFileSystemService.ts`、`agentHostFileSearchProvider.ts`、`agentHostResourceService.ts`、`electron-browser/agentHostService.ts`，以及清单中另外 9 个文件 | Workbench 宿主组合、文件注册及文件搜索切片已落到同路径服务并验证，范围见本轮记录；多 authority 文件路由已继续接通；renderer 本地资源授权和统一宿主管理仍缺前置契约；SDK、账户 continuation、本地模型与独立 Web 启用按用户决定先列产品缺口。                                                                                                      |
 | 3 · Sessions Provider，`sessions-provider`        | `browser/baseAgentHostSessionsProvider.ts`、`localAgentHostSessionsProvider.ts`、`localAgentHost.contribution.ts`、`electron-browser/agentHost.contribution.ts`          | 当前调用方在 Sessions Workbench 与 `AppServerSessionsProvider`。先闭合共同提供方端口、创建／订阅／关闭及身份映射，再处理 picker、文件、fork、权限、PR 与 automation；42 个上游独有文件均未计为完成。                                                                                                                                             |
 | 4 · Code Chat，`workbench-chat`                   | `browser/agentSessions/agentHost/`、`browser/remoteAgentHost/` 与相关 actions／测试                                                                                      | 当前由 ChatService、Chat widget、LanguageModelsService 与 Sessions invitation 等不同 owner 承担。先记录每条用户入口和真实缺失行为，再确定对应文件；完整 135 个生产文件见清单。                                                                                                                                                                   |
 | 5 · 远程与相邻服务，`remote-provider`／`adjacent` | `sessions/contrib/providers/remoteAgentHost/`、`sessions/services/agentHost/`、`sessions/services/agentHostFilter/`、相邻 Dev Container／Terminal／Chat 入口             | 当前复用 `platform/remote`、扩展解析与单窗口 App Server 连接。多 host 分组、筛选、隧道及 cloud sandbox 不能因上游有文件就视作现有能力；先确定真实连接 producer 与状态 owner。                                                                                                                                                                    |
@@ -115,7 +168,7 @@ Session 创建切片的真实入口为新建 composer／SessionsManagement → �
 
 只读证据：VS Code `2de8dcf8062` 的 `IAgentHostConnectionsService` 统一 ambient 与多个 remote，普通 Editor 与 Agents Window 的连接支持分别由 `EditorWindowRemoteAgentHostService`／`AgentsWindowRemoteAgentHostService` 约束；Zed `56934ec056` 的 `MultiWorkspace.find_or_create_workspace` 支持每个 Workspace 的独立 RemoteClient，`ProjectGroupKey` 同时包含 host 与 paths；Codex `822e58cc3d` 的公开仓库不能证明桌面 UI 的全部实现，官方 [Remote connections](https://learn.chatgpt.com/docs/remote-connections) 文档确认 SSH 远程项目及跨宿主会话交接。不能把“单工作区有明确执行宿主”与“一个窗口只能管理一个宿主”混为一谈。
 
-Ash 的 `SessionsProvidersService` 现已接入独立 SSH Provider，Automation 是当前可使用它们的生产消费者；`SessionsManagementService` 主模型仍由启动入口直接绑定单个 Provider，Chat／文件／模型服务也仍绑定主 Renderer host。连接与 scope 验证后，下一步必须沿“有宿主归属的 Session 身份 → registry 驱动的主模型 → 对应 Chat／模型／文件／仓库／权限 scope → 窗口显示／切换”深度闭合；不能新增无消费者的标准 AHP facade 或把原始 SessionId 当作跨宿主唯一身份。仓库事实仍由现有 Git/GitHub owner 持有，尚未将 Node/state/meta 文件逐项判为能力等价，两条根 TODO 保留。
+Ash 的 `SessionsProvidersService` 现已接入独立 SSH Provider，Automation 是当前可使用它们的生产消费者；`SessionsManagementService` 主模型仍由启动入口直接绑定单个 Provider，Chat／模型服务仍绑定主 Renderer host；文件服务已接通额外宿主的完整 URI 路由，但不表示 Session 选择、搜索及其他领域 scope 已切换。连接与 scope 验证后，下一步必须沿“有宿主归属的 Session 身份 → registry 驱动的主模型 → 对应 Chat／模型／文件／仓库／权限 scope → 窗口显示／切换”深度闭合；不能新增无消费者的标准 AHP facade 或把原始 SessionId 当作跨宿主唯一身份。仓库事实仍由现有 Git/GitHub owner 持有，尚未将 Node/state/meta 文件逐项判为能力等价，两条根 TODO 保留。
 
 ### 本轮代码迁移与行为修复
 

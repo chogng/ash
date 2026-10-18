@@ -87,7 +87,7 @@ export interface IWorkspaceTrustManagementService {
 export const IWorkspaceTrustManagementService = createServiceIdentifier<IWorkspaceTrustManagementService>('workspaceTrustManagementService');
 
 export interface IWorkspaceTrustRequestService {
-	requestWorkspaceTrust(path: string): Promise<WorkspaceTrustChoice>;
+	requestWorkspaceTrust(path: string, signal?: AbortSignal): Promise<WorkspaceTrustChoice>;
 }
 
 /** English NLS originals; each consumer resolves them through its window's localization service. */

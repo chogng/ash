@@ -10,6 +10,11 @@ export interface ISearchService {
 	textSearch(query: ITextQuery, token?: CancellationToken, onProgress?: (result: ISearchProgressItem) => void): Promise<ISearchComplete>;
 }
 
+/** A file-search implementation selected by the Workbench search service. */
+export interface ISearchResultProvider {
+	fileSearch(query: IFileQuery, token?: CancellationToken): Promise<ISearchComplete>;
+}
+
 export const enum QueryType {
 	File = 1,
 	Text = 2,

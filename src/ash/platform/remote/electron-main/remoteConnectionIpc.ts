@@ -1,4 +1,5 @@
 import { localize } from '../../../nls.js';
+import { raceCancellationError } from '../../../base/common/async.js';
 import { canceled } from '../../../base/common/errors.js';
 import { Disposable, DisposableStore, toDisposable, type IDisposable } from '../../../base/common/lifecycle.js';
 import { REMOTE_AGENT_HOST_OPEN_CHANNEL, REMOTE_AGENT_HOST_CLOSE_CHANNEL } from '../common/remoteConnectionIpc.js';
@@ -138,10 +139,13 @@ export class RemoteAgentHostConnectionPool extends Disposable {
 		if (this.leases.has(id)) { throw new Error(localize({ bundle: 'ash.workbench', key: 'agentHosts.duplicateLease' }, 'Agent host connection lease already exists')); }
 		if (this.leases.size >= 16) { throw new Error(localize({ bundle: 'ash.workbench', key: 'agentHosts.limit' }, 'Too many Agent host connections')); }
 		const resources = new DisposableStore();
+		const cancellation = new AbortController();
+		resources.add(toDisposable(() => cancellation.abort()));
 		// Register before the asynchronous catalog read so close/navigation retires setup too.
 		this.leases.set(id, resources);
 		try {
-			const actual = (await this.catalog.list()).find(connection => connection.name === expected.name);
+			// Retiring a lease must settle its OPEN route even if the old catalog connection never replies.
+			const actual = (await raceCancellationError(this.catalog.list(), cancellation.signal)).find(connection => connection.name === expected.name);
 			if (this.isDisposed || this.leases.get(id) !== resources) { throw canceled(); }
 			if (!actual || actual.host !== expected.host || actual.workspace !== expected.workspace) {
 				throw new Error(localize({ bundle: 'ash.workbench', key: 'agentHosts.targetChanged' }, 'Saved Remote connection changed; select the target again'));

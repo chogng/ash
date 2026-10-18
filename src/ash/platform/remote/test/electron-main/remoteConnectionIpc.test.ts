@@ -1,6 +1,7 @@
 import { isCancellationError } from '../../../../base/common/errors.js';
 import { DeferredPromise } from '../../../../base/common/async.js';
 import { toDisposable } from '../../../../base/common/lifecycle.js';
+import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../base/test/common/utils.js';
 import { REMOTE_AGENT_HOST_OPEN_CHANNEL, REMOTE_AGENT_HOST_CLOSE_CHANNEL } from '../../common/remoteConnectionIpc.js';
 import { RemoteAgentHostConnectionPool } from '../../electron-main/remoteConnectionIpc.js';
 import { strict as assert } from "node:assert";
@@ -13,6 +14,8 @@ import { REMOTE_CONNECTION_UPDATE_CHANNEL } from "../../../../platform/remote/co
 import type { RemoteConnectionDefinition } from "../../../../platform/remote/common/remoteConnectionService.js";
 import type { IRemoteConnectionApi } from "../../../../platform/remote/common/remoteConnectionService.js";
 import { remoteConnectionIpcRoutes } from "../../../../platform/remote/electron-main/remoteConnectionIpc.js";
+
+ensureNoDisposablesAreLeakedInTestSuite();
 
 test("Remote connection IPC exposes only credential-free canonical catalog operations", async () => {
 	const calls: unknown[] = [];
@@ -124,8 +127,8 @@ test('Agent host close retires a pending catalog read without creating a late ca
 	const pending = invokeLease(pool, REMOTE_AGENT_HOST_OPEN_CHANNEL, { id: leaseA, connection: hostA }) as Promise<void>;
 	const rejected = assert.rejects(pending, isCancellationError);
 	invokeLease(pool, REMOTE_AGENT_HOST_CLOSE_CHANNEL, { id: leaseA });
-	await catalog.complete([hostA]);
 	await rejected;
+	await catalog.complete([hostA]);
 	assert.equal(created, 0);
 });
 
@@ -141,11 +144,27 @@ test('Agent host navigation retires setup and does not retire a reused successor
 	const pending = invokeLease(pool, REMOTE_AGENT_HOST_OPEN_CHANNEL, { id: leaseA, connection: hostA }) as Promise<void>;
 	const rejected = assert.rejects(pending, isCancellationError);
 	pool.reset();
+	await rejected;
 	await invokeLease(pool, REMOTE_AGENT_HOST_OPEN_CHANNEL, { id: leaseA, connection: hostA });
 	await catalog.complete([hostA]);
-	await rejected;
 	assert.equal(created, 1);
 	assert.equal(closed, 0);
+});
+
+test('disposing the Agent host pool rejects setup before a failing catalog read completes', async () => {
+	const catalog = new DeferredPromise<readonly RemoteConnectionDefinition[]>();
+	let created = 0;
+	using pool = new RemoteAgentHostConnectionPool({ list: () => catalog.p }, () => {
+		created++;
+		return toDisposable(() => { });
+	});
+	const pending = invokeLease(pool, REMOTE_AGENT_HOST_OPEN_CHANNEL, { id: leaseA, connection: hostA }) as Promise<void>;
+	const rejected = assert.rejects(pending, isCancellationError);
+	pool.dispose();
+	await rejected;
+	// The retired read still needs a rejection handler, even after the OPEN route has replied.
+	await catalog.error(new Error('The old catalog connection closed'));
+	assert.equal(created, 0);
 });
 
 test('Agent host leases reject changed targets, duplicate IDs and arbitrary transport options', async () => {

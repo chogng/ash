@@ -1,6 +1,8 @@
 import { readFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
 import { setNlsMessages, resetNlsResolver } from '../../../../nls.js';
-import type { IFileSystemDirectory } from '../../common/fileApi.js';
+import type { IFileApi, IFileSystemDirectory } from '../../common/fileApi.js';
+import { InMemoryFileSystemProvider } from '../../common/inMemoryFilesystemProvider.js';
 import { toDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
 import { type IFileWriteOptions, type IWatchOptions, FileSystemProviderCapabilities } from '../../common/files.js';
 import { FileService } from '../../../../platform/files/common/fileService.js';
@@ -11,7 +13,7 @@ import { Emitter, Event } from "../../../../base/common/event.js";
 import { URI } from "../../../../base/common/uri.js";
 import { AppServerRemoteError } from "../../../agentHost/common/appServerError.js";
 import { createDisconnectedFileApi } from "../../../../platform/files/browser/fileApi.js";
-import { AgentHostFileSystemProvider } from "../../../agentHost/common/agentHostFileSystemProvider.js";
+import { AgentHostFileSystemProvider, type IRemoteFilesystemConnection } from "../../../agentHost/common/agentHostFileSystemProvider.js";
 import { workspaceResourceFromPath } from "../../../workspace/common/workspace.js";
 import { FileKind, FileNotFoundError, FileRevisionConflictError } from "../../../../platform/files/common/files.js";
 import type { FsChanged } from "../../../../../../.build/protocol/typescript/index.js";
@@ -1115,3 +1117,176 @@ test('resource discovery preserves host authority and reports invalid routes in 
 		assert.equal(discoveries, 1);
 	} finally { resetNlsResolver(); }
 });
+
+for (const sameAuthority of [false, true]) {
+	test(`FileService copies mounted connection files and directories across ${sameAuthority ? 'roots on one authority' : 'different authorities'}`, async () => {
+		const sourceRoot = createSshRemoteWorkspaceUri('source-host', '/source');
+		const targetRoot = createSshRemoteWorkspaceUri(sameAuthority ? 'source-host' : 'target-host', '/target');
+		using sourceStorage = new InMemoryFileSystemProvider();
+		using targetStorage = new InMemoryFileSystemProvider();
+		await sourceStorage.createDirectory(sourceRoot);
+		await targetStorage.createDirectory(targetRoot);
+		const sourceHost = copyConnection(sourceStorage, sourceRoot, 'source');
+		const targetHost = copyConnection(targetStorage, targetRoot, 'target');
+		using provider = new AgentHostFileSystemProvider({ api: unavailableFileApi(), resourceApi: unavailableResourceApi() });
+		using sourceMount = provider.registerAuthority(sourceRoot.authority, sourceHost.connection);
+		using targetMount = provider.registerAuthority(targetRoot.authority, targetHost.connection);
+		using files = new FileService();
+		using registration = files.registerProvider('ash-remote', provider);
+		const source = URI.joinPath(sourceRoot, 'folder');
+		const nested = URI.joinPath(source, 'nested');
+		const sourceFile = URI.joinPath(nested, '100% ready.bin');
+		const bytes = new Uint8Array([0, 255, 128, 42]);
+		await sourceStorage.createDirectory(nested);
+		await sourceStorage.writeFile(sourceFile, bytes, { create: true, overwrite: false });
+		const target = URI.joinPath(targetRoot, 'copied');
+
+		await files.copy(source, target);
+		assert.deepEqual(Uint8Array.from((await files.readFileBytes(URI.joinPath(target, 'nested', '100% ready.bin'))).bytes), bytes);
+		const direct = URI.joinPath(targetRoot, 'direct.bin');
+		await files.copy(sourceFile, direct);
+		assert.deepEqual(Uint8Array.from((await files.readFileBytes(direct)).bytes), bytes);
+		await assert.rejects(files.copy(sourceFile, direct), /already exists/);
+		assert.deepEqual(Uint8Array.from((await targetStorage.readFile(direct)).bytes), bytes);
+		assert.deepEqual(Uint8Array.from((await sourceStorage.readFile(sourceFile)).bytes), bytes);
+		assert.equal(sourceHost.nativeCopies + targetHost.nativeCopies, 0);
+		assert.equal(sourceHost.resources.size + targetHost.resources.size, 0);
+	});
+}
+
+test('FileService rolls back a failed mounted directory copy without replaying native or byte writes', async () => {
+	const sourceRoot = createSshRemoteWorkspaceUri('source-host', '/source');
+	const targetRoot = createSshRemoteWorkspaceUri('target-host', '/target');
+	using sourceStorage = new InMemoryFileSystemProvider();
+	using targetStorage = new InMemoryFileSystemProvider();
+	await sourceStorage.createDirectory(sourceRoot);
+	await targetStorage.createDirectory(targetRoot);
+	const sourceHost = copyConnection(sourceStorage, sourceRoot, 'source');
+	const targetHost = copyConnection(targetStorage, targetRoot, 'target');
+	const failure = new Error('Publication failed after storage accepted the bytes');
+	const failedPath = 'copied/second.bin';
+	const write = targetHost.connection.api.writeBinaryFile;
+	const attempts: string[] = [];
+	targetHost.connection.api.writeBinaryFile = async params => {
+		attempts.push(params.path);
+		const written = await write(params);
+		if (params.path === failedPath) { throw failure; }
+		return written;
+	};
+	using provider = new AgentHostFileSystemProvider({ api: unavailableFileApi(), resourceApi: unavailableResourceApi() });
+	using sourceMount = provider.registerAuthority(sourceRoot.authority, sourceHost.connection);
+	using targetMount = provider.registerAuthority(targetRoot.authority, targetHost.connection);
+	using files = new FileService();
+	using registration = files.registerProvider('ash-remote', provider);
+	const source = URI.joinPath(sourceRoot, 'folder');
+	await sourceStorage.createDirectory(source);
+	for (const name of ['first.bin', 'second.bin']) {
+		await sourceStorage.writeFile(URI.joinPath(source, name), new Uint8Array([42]), { create: true, overwrite: false });
+	}
+	const target = URI.joinPath(targetRoot, 'copied');
+
+	await assert.rejects(files.copy(source, target), error => error === failure);
+	assert.deepEqual(attempts, ['copied/first.bin', failedPath]);
+	await assert.rejects(targetStorage.stat(target), FileNotFoundError);
+	assert.equal((await sourceStorage.readDirectory(source)).length, 2);
+	assert.equal(sourceHost.nativeCopies + targetHost.nativeCopies, 0);
+	assert.equal(sourceHost.resources.size + targetHost.resources.size, 0);
+});
+
+test('FileService rejects generic directory copies into themselves before publishing a destination', async () => {
+	using storage = new TestFileProvider('generic');
+	storage.setCapabilities(FileSystemProviderCapabilities.FileReadWrite);
+	using files = new FileService();
+	using registration = files.registerProvider('file', storage);
+	const source = URI.file('/source');
+	storage.addDirectory(source, []);
+	const target = URI.joinPath(source, 'child');
+
+	await assert.rejects(files.copy(source, target), FileOperationNotSupportedError);
+	await assert.rejects(storage.stat(target), FileNotFoundError);
+	assert.deepEqual(storage.writeRequests, []);
+});
+
+test('FileService resumes native host copies after the final mounted connection is released', async () => {
+	const remoteRoot = createSshRemoteWorkspaceUri('other-host', '/project');
+	using remoteStorage = new InMemoryFileSystemProvider();
+	await remoteStorage.createDirectory(remoteRoot);
+	const remote = copyConnection(remoteStorage, remoteRoot, 'remote');
+	const calls: unknown[] = [];
+	const nativeFailure = new Error('Native copy outcome is unknown');
+	let failNativeCopy = false;
+	using provider = new AgentHostFileSystemProvider({
+		api: { ...unavailableFileApi(), copy: async params => { calls.push(params); if (failNativeCopy) { throw nativeFailure; } } },
+		resourceApi: unavailableResourceApi(),
+		directories: () => [{ uri: URI.file('/primary'), target: { type: 'environment', dirId: 'primary' } }],
+	});
+	using files = new FileService();
+	using localRegistration = files.registerProvider('file', provider);
+	using remoteRegistration = files.registerProvider('ash-remote', provider);
+	const source = URI.file('/primary/source.bin');
+	const target = URI.file('/primary/target.bin');
+	using mount = provider.registerAuthority(remoteRoot.authority, remote.connection);
+	assert.equal(files.hasCapability(source, FileSystemProviderCapabilities.FileFolderCopy), false);
+	mount.dispose();
+	assert.equal(files.hasCapability(source, FileSystemProviderCapabilities.FileFolderCopy), true);
+
+	await files.copy(source, target);
+	assert.deepEqual(calls, [{ sourceDirId: 'primary', source: 'source.bin', targetDirId: 'primary', target: 'target.bin' }]);
+	failNativeCopy = true;
+	await assert.rejects(files.copy(source, target), error => error === nativeFailure);
+	assert.equal(calls.length, 2);
+});
+
+function copyConnection(storage: InMemoryFileSystemProvider, root: URI, id: string) {
+	let nextResource = 0;
+	let nativeCopies = 0;
+	const resources = new Map<string, Uint8Array>();
+	const resource = (params: Parameters<IFileApi['getMetadata']>[0]): URI => {
+		assert.equal(params.dirId, id);
+		const result = workspaceResourceFromPath(root, params.path);
+		assert.ok(result);
+		return result;
+	};
+	const metadata = (stat: IFileStat) => ({
+		fileType: stat.kind === FileKind.Directory ? 'directory' as const : 'file' as const,
+		sizeBytes: stat.sizeBytes,
+		readonly: stat.readonly,
+		modifiedAtMillis: stat.modifiedAtMillis ?? null,
+	});
+	const connection: IRemoteFilesystemConnection = {
+		directories: () => [{ uri: root, target: { type: 'environment', dirId: id } }],
+		api: {
+			...unavailableFileApi(),
+			getMetadata: async params => metadata(await storage.stat(resource(params))),
+			readDirectory: async params => {
+				const entries = await storage.readDirectory(resource(params));
+				return { entries: entries.map(entry => ({ name: entry.name, fileType: entry.kind === FileKind.Directory ? 'directory' as const : 'file' as const })) };
+			},
+			readBinaryFile: async params => {
+				const content = await storage.readFile(resource(params));
+				const resourceId = `${id}:${++nextResource}`;
+				resources.set(resourceId, content.bytes);
+				return { resource: { resourceId, mimeType: 'application/octet-stream', size: content.bytes.byteLength, sha256: `sha256:${createHash('sha256').update(content.bytes).digest('hex')}` }, revision: content.revision };
+			},
+			writeBinaryFile: async params => {
+				assert.equal(params.options?.mode, 'create');
+				const written = await storage.writeFile(resource(params), Buffer.from(params.dataBase64, 'base64'), { create: true, overwrite: false });
+				return { metadata: metadata(written.stat), revision: written.revision };
+			},
+			createDirectory: async params => metadata(await storage.createDirectory(resource(params))),
+			delete: async params => storage.delete(resource(params), params.missing, params.mode),
+			copy: async () => { nativeCopies++; throw new Error('Mounted connection must use generic copying'); },
+		},
+		resourceApi: {
+			...unavailableResourceApi(),
+			read: async params => {
+				const bytes = resources.get(params.resourceId);
+				assert.ok(bytes);
+				const chunk = bytes.subarray(params.offset, params.offset + params.maxBytes);
+				return { resourceId: params.resourceId, offset: params.offset, dataBase64: Buffer.from(chunk).toString('base64'), decodedLength: chunk.byteLength, eof: params.offset + chunk.byteLength === bytes.byteLength };
+			},
+			release: async params => { assert.equal(resources.delete(params.resourceId), true); },
+		},
+	};
+	return { connection, resources, get nativeCopies() { return nativeCopies; } };
+}

@@ -212,7 +212,7 @@ instantiation.registerInstance(IContentSearchService, {
 	},
 });
 instantiation.registerInstance(IFileSearchService, new BrowserFileSearchService(editing.files));
-instantiation.registerInstance(ISearchService, instantiation.createInstance(SearchService));
+instantiation.registerInstance(ISearchService, store.add(instantiation.createInstance(SearchService)));
 const registry = store.add(new WorkbenchViewRegistry());
 registerSearchViews(registry);
 class FixtureView extends ViewPane {

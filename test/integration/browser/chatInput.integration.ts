@@ -500,7 +500,7 @@ services.registerInstance(IFileTextModelService, {
 	waitForSaveRecovery: async () => { }, refresh: async () => { },
 	acquire: async () => { throw new Error('Chat context fixture has no shared file models'); },
 });
-services.registerInstance(ISearchService, services.createInstance(SearchService));
+services.registerInstance(ISearchService, resources.add(services.createInstance(SearchService)));
 services.registerInstance(IRendererHostService, createDisconnectedRendererApi());
 services.registerInstance(IPathService, services.createInstance(BrowserPathService));
 

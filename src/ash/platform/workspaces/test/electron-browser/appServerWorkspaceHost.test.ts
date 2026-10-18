@@ -5,6 +5,7 @@ import { DeferredPromise } from '../../../../base/common/async.js';
 import { isCancellationError } from '../../../../base/common/errors.js';
 import { toDisposable } from '../../../../base/common/lifecycle.js';
 import { Emitter, Event } from '../../../../base/common/event.js';
+import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../base/test/common/utils.js';
 import { URI } from '../../../../base/common/uri.js';
 import type { ISandboxGlobals } from '../../../../base/parts/sandbox/electron-browser/sandboxTypes.js';
 import type { AppServerProtocolClient } from '../../../agentHost/browser/appServerProtocolClient.js';
@@ -12,6 +13,7 @@ import type { IWorkspaceContextApi } from '../../../workspace/common/workspaceIp
 import { DEVELOPMENT_DIR_PERMISSIONS, READ_DIR_PERMISSIONS, type IWorkspaceTrustApi, type WorkspaceTrustPermission } from '../../../workspace/common/workspaceTrust.js';
 
 suite('workspace trust during directory opening', () => {
+	ensureNoDisposablesAreLeakedInTestSuite();
 	const previousGlobals = Object.getOwnPropertyDescriptor(globalThis, 'ash');
 	const listeners = new Map<string, (value: unknown) => void>();
 	let reply: ((value: unknown) => void) | undefined;
@@ -122,7 +124,11 @@ suite('workspace trust during directory opening', () => {
 				request: async () => { writes++; await wait('write'); return { dirs: [] }; },
 			} as unknown as AppServerProtocolClient;
 			const setup = host.initializeWorkspaceDirectories(client, {
-				requestWorkspaceTrust: async () => { prompts++; await wait('choice'); return 'readOnly'; },
+				requestWorkspaceTrust: async (_path, signal) => {
+					assert.ok(signal);
+					assert.equal(signal.aborted, false);
+					prompts++; await wait('choice'); return 'readOnly';
+				},
 			}, {
 				...original,
 				readDirectory: async path => { const value = await original.readDirectory(path); await wait('read'); return value; },
@@ -132,6 +138,11 @@ suite('workspace trust during directory opening', () => {
 			await entered.p;
 			changes.fire('stopped');
 			changes.fire('ready');
+			if (stage === 'choice') {
+				await rejected;
+				assert.equal(gate.isSettled, false);
+				assert.equal(listeners, 0);
+			}
 			await gate.complete();
 			await rejected;
 			assert.equal(prompts, stage === 'read' ? 0 : 1);
@@ -140,6 +151,31 @@ suite('workspace trust during directory opening', () => {
 			assert.equal(listeners, 0);
 		});
 	}
+
+	test('retired directory setup observes a late prompt rejection without granting or writing directories', async () => {
+		const entered = new DeferredPromise<void>();
+		const choice = new DeferredPromise<'readOnly'>();
+		using changes = new Emitter<'ready' | 'stopped'>();
+		const grants: WorkspaceTrustPermission[][] = [];
+		let writes = 0;
+		const client = {
+			state: 'ready', generation: 1,
+			onStateChange: changes.event,
+			request: async () => { writes++; return { dirs: [] }; },
+		} as unknown as AppServerProtocolClient;
+		const setup = host.initializeWorkspaceDirectories(client, {
+			requestWorkspaceTrust: () => { void entered.complete(); return choice.p; },
+		}, trustApi(new Map(), grants), [{ id: 'retired-root', path: '/srv/project' }]);
+		const rejected = assert.rejects(setup, isCancellationError);
+		await entered.p;
+		changes.fire('stopped');
+		await rejected;
+		assert.equal(choice.isSettled, false);
+		assert.equal(changes.hasListeners(), false);
+		await choice.error(new Error('The old prompt owner closed'));
+		assert.deepEqual(grants, []);
+		assert.equal(writes, 0);
+	});
 
 	test('remote directory prompts display the host while granting only the original server path', async () => {
 		const paths: string[] = [];

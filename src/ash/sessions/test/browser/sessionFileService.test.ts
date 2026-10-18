@@ -12,6 +12,9 @@ import type { IFileSystemDirectory } from '../../../platform/files/common/fileAp
 import { URI } from '../../../base/common/uri.js';
 import { InstantiationService } from '../../../platform/instantiation/common/instantiationService.js';
 import { IStorageService } from '../../../platform/storage/common/storage.js';
+import { IFileSearchService } from '../../../platform/search/common/fileSearch.js';
+import { IContentSearchService } from '../../../platform/search/common/search.js';
+import { IFileTextModelService } from '../../../workbench/services/textmodelResolver/common/textModelResourceService.js';
 import { IWorkspaceContextService } from '../../../platform/workspace/common/workspace.js';
 import { createDisconnectedRendererApi } from '../../../workbench/browser/rendererApi.js';
 import type { IRendererHost } from '../../../platform/renderer/common/rendererHost.js';
@@ -168,7 +171,10 @@ test('Workbench file and content search retain Session directory authorization a
 			async cancel(params) { calls.push(params); },
 		},
 	} satisfies IRendererHost, () => []);
-	const search = new SearchService(files, workspace, editing.models, files);
+	services.registerInstance(IContentSearchService, files);
+	services.registerInstance(IFileSearchService, files);
+	services.registerInstance(IFileTextModelService, editing.models);
+	using search = services.createInstance(SearchService);
 	const result = await search.fileSearch(new QueryBuilder().file([uri], { filePattern: 'main', sortByScore: true, maxResults: 1 }));
 	assert.deepEqual(result.results.map(file => file.resource.toString()), [URI.joinPath(uri, 'main.ts').toString()]);
 	await search.textSearch(new QueryBuilder().text({ pattern: 'needle' }, [uri]));

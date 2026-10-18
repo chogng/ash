@@ -1,5 +1,6 @@
 import type { IFileReadOptions } from '../../files/common/files.js';
 import { localize } from '../../../nls.js';
+import { Schemas } from '../../../base/common/network.js';
 import { generateUuid } from '../../../base/common/uuid.js';
 import { posix } from '../../../base/common/path.js';
 import { createFileSystemProviderError, FileSystemProviderErrorCode } from '../../files/common/files.js';
@@ -11,7 +12,7 @@ import { Disposable, DisposableMap, DisposableStore, toDisposable, type IDisposa
 import { CancellationToken, CancellationTokenSource } from '../../../base/common/cancellation.js';
 import { canceled } from '../../../base/common/errors.js';
 import { raceCancellationError } from '../../../base/common/async.js';
-import { newWriteableStream, type ReadableStreamEvents } from '../../../base/common/stream.js';
+import { listenStream, newWriteableStream, type ReadableStream } from '../../../base/common/stream.js';
 import { URI } from "../../../base/common/uri.js";
 import {
 	FileKind,
@@ -57,6 +58,24 @@ interface AgentHostFileSystemProviderOptions {
 	readonly onDidChange?: Event<FileInvalidation>;
 }
 
+/** One connection's existing file domains and authorized roots, independent of the active editor. */
+export interface IRemoteFilesystemConnection {
+	readonly api: IFileApi;
+	readonly resourceApi: IResourceApi;
+	readonly directories: () => readonly IFileSystemDirectory[];
+	readonly onDidChange?: Event<FileInvalidation>;
+}
+
+interface AuthorityRoute {
+	readonly cancellation: CancellationTokenSource;
+	provider: AgentHostFileSystemProvider | undefined;
+}
+
+interface AuthorityRoot {
+	readonly resource: URI;
+	route: AuthorityRoute | undefined;
+}
+
 interface PathIdentityState {
 	readonly folder: IFileSystemDirectory;
 	readonly rules: Map<string, PathSensitivity>;
@@ -72,7 +91,19 @@ const MAX_TRANSIENT_PATH_RULES = 4096;
  */
 export class AgentHostFileSystemProvider extends Disposable implements IFileSystemProviderWithFileReadStreamCapability, IFileSystemProviderWithPathIdentity, ISystemFileTransferService {
 	// Unknown rules preserve spelling; confirmed rules are applied per directory below.
-	public readonly capabilities = FileSystemProviderCapabilities.FileReadWrite | FileSystemProviderCapabilities.FileFolderCopy | FileSystemProviderCapabilities.FileReadStream | FileSystemProviderCapabilities.FileWriteElevated | FileSystemProviderCapabilities.FileWriteUnlock | FileSystemProviderCapabilities.PathCaseSensitive;
+	public get capabilities(): FileSystemProviderCapabilities {
+		const capabilities = FileSystemProviderCapabilities.FileReadWrite | FileSystemProviderCapabilities.FileReadStream
+			| FileSystemProviderCapabilities.FileWriteElevated | FileSystemProviderCapabilities.FileWriteUnlock
+			| FileSystemProviderCapabilities.PathCaseSensitive;
+		// One namespace can address several connections. Its global capability must
+		// not promise a native copy between roots owned by different backends.
+		for (const entries of this.authorities.values()) {
+			for (const entry of entries.values()) {
+				if (entry.route) { return capabilities; }
+			}
+		}
+		return capabilities | FileSystemProviderCapabilities.FileFolderCopy;
+	}
 	private readonly capabilityChanges = this._register(new Emitter<void>());
 	public readonly onDidChangeCapabilities = this.capabilityChanges.event;
 	private readonly identityChanges = this._register(new Emitter<void>());
@@ -88,6 +119,8 @@ export class AgentHostFileSystemProvider extends Disposable implements IFileSyst
 	private readonly fileChanges = this._register(new Emitter<IFileChangeEvent>());
 	private readonly reads = this._register(new DisposableMap<object, DisposableStore>());
 	private connectionEpoch = 0;
+	private readonly authorities = new Map<string, Map<string, AuthorityRoot>>();
+	private readonly authorityLifetimes = this._register(new DisposableStore());
 
 	readonly onDidChangeFiles = this.fileChanges.event;
 
@@ -113,12 +146,98 @@ export class AgentHostFileSystemProvider extends Disposable implements IFileSyst
 		if (options.onDidChange) this._register(options.onDidChange(change => this.acceptFileChange(change)));
 	}
 
+	/** Mounts roots on their originating connection; a retired root can never fall back to another host. */
+	public registerAuthority(authority: string, connection: IRemoteFilesystemConnection): IDisposable {
+		this.assertNotDisposed();
+		const previousCapabilities = this.capabilities;
+		const roots = connection.directories().map(directory => directory.uri);
+		if (!authority || roots.length === 0 || roots.some(root => root.scheme !== Schemas.ashRemote || root.authority.toLowerCase() !== authority.toLowerCase())) {
+			throw createFileSystemProviderError(localize('files.resourceAuthorityUnavailable', 'No filesystem route for the resource authority'), FileSystemProviderErrorCode.Unavailable);
+		}
+		const key = authority.toLowerCase();
+		const entries = this.authorities.get(key) ?? new Map<string, AuthorityRoot>();
+		for (const root of roots) {
+			if (entries.get(extUri.getComparisonKey(root))?.route || this.directories().some(directory => extUri.isEqual(directory.uri, root))) {
+				throw createFileSystemProviderError(localize('files.authorityRootRegistered', 'A filesystem connection already owns this resource root.'), FileSystemProviderErrorCode.Unavailable);
+			}
+		}
+		const lifetime = new DisposableStore();
+		const cancellation = lifetime.add(new CancellationTokenSource());
+		const provider = lifetime.add(new AgentHostFileSystemProvider(connection));
+		const route: AuthorityRoute = { cancellation, provider };
+		this.authorities.set(key, entries);
+		for (const root of roots) { entries.set(extUri.getComparisonKey(root), { resource: root, route }); }
+		this.authorityLifetimes.add(lifetime);
+		lifetime.add(toDisposable(() => {
+			const previousCapabilities = this.capabilities;
+			// Keep only the root identity after unmounting. Backend APIs and caches are released.
+			// This blocks stale links even if the visible Workspace later projects the same URI.
+			for (const entry of entries.values()) { if (entry.route === route) { entry.route = undefined; } }
+			route.provider = undefined;
+			cancellation.cancel();
+			if (previousCapabilities !== this.capabilities) { this.capabilityChanges.fire(); }
+			this.identityChanges.fire();
+			this.fileChanges.fire({ resources: roots });
+		}));
+		lifetime.add(provider.onDidChangeFiles(event => {
+			this.fileChanges.fire({ resources: event.resources ?? roots });
+		}));
+		lifetime.add(provider.onDidChangePathIdentity(() => this.identityChanges.fire()));
+		if (previousCapabilities !== this.capabilities) { this.capabilityChanges.fire(); }
+		this.identityChanges.fire();
+		this.fileChanges.fire({ resources: roots });
+		return toDisposable(() => { this.authorityLifetimes.delete(lifetime); lifetime.dispose(); });
+	}
+
+	private registeredRoute(resource: URI): AuthorityRoute | null | undefined {
+		if (resource.scheme !== Schemas.ashRemote) { return undefined; }
+		const entries = this.authorities.get(resource.authority.toLowerCase());
+		if (!entries) { return undefined; }
+		let length = -1;
+		let selected: AuthorityRoute | null | undefined;
+		for (const entry of entries.values()) {
+			if (entry.resource.path.length >= length && extUri.isEqualOrParent(resource.with({ query: null, fragment: null }), entry.resource)) {
+				length = entry.resource.path.length;
+				selected = entry.route ?? null;
+			}
+		}
+		if (length >= 0) { return selected; }
+		return this.knownDirectory(resource) ? undefined : null;
+	}
+
+	private connectionRoute(resource: URI): AuthorityRoute | undefined {
+		this.assertNotDisposed();
+		const route = this.registeredRoute(resource);
+		if (route === null) {
+			throw createFileSystemProviderError(localize('files.resourceAuthorityUnavailable', 'No filesystem route for the resource authority'), FileSystemProviderErrorCode.Unavailable);
+		}
+		return route;
+	}
+
+	private async onRoute<T>(route: AuthorityRoute, operation: (provider: AgentHostFileSystemProvider) => Promise<T>): Promise<T> {
+		const provider = route.provider;
+		if (!provider) { throw canceled(); }
+		const generation = provider.api.connectionGeneration;
+		const epoch = provider.connectionEpoch;
+		using cancellation = new CancellationTokenSource(route.cancellation.token);
+		using changed = Event.once(provider.api.onDidChangeConnection)(() => cancellation.cancel());
+		const result = await raceCancellationError(operation(provider), cancellation.token);
+		if (provider.isDisposed || generation !== provider.api.connectionGeneration || epoch !== provider.connectionEpoch) { throw canceled(); }
+		return result;
+	}
+
 	public getPathIdentity(resource: URI): IFilePathIdentity {
+		const route = this.registeredRoute(resource);
+		if (route) { return route.provider!.getPathIdentity(resource); }
+		if (route === null) { return { comparisonResource: resource }; }
 		const folder = this.knownDirectory(resource);
 		return folder ? this.pathIdentity(resource, this.pathIdentityState(folder)) : { comparisonResource: resource };
 	}
 
 	public retainPathIdentity(resource: URI): IDisposable {
+		const route = this.registeredRoute(resource);
+		if (route) { return route.provider!.retainPathIdentity(resource); }
+		if (route === null) { return Disposable.None; }
 		this.assertNotDisposed();
 		const folder = this.knownDirectory(resource);
 		if (!folder) {
@@ -143,6 +262,8 @@ export class AgentHostFileSystemProvider extends Disposable implements IFileSyst
 	}
 
 	public async resolvePathIdentity(resource: URI): Promise<void> {
+		const route = this.connectionRoute(resource);
+		if (route) { return this.onRoute(route, provider => provider.resolvePathIdentity(resource)); }
 		this.assertNotDisposed();
 		if (this.isConfiguration(resource)) return;
 		const generation = this.api.connectionGeneration;
@@ -314,15 +435,19 @@ export class AgentHostFileSystemProvider extends Disposable implements IFileSyst
 	}
 
 	public watch(resource: URI, _options: IWatchOptions): IDisposable {
+		const route = this.connectionRoute(resource);
+		if (route) { return route.provider!.watch(resource, _options); }
 		this.assertNotDisposed();
 		// Rust owns continuous watches for authorized environment and Session roots, including Agent consumers.
 		return Disposable.None;
 	}
 
 	async stat(resource: URI): Promise<IFileStat> {
+		const route = this.connectionRoute(resource);
+		if (route) { return this.onRoute(route, provider => provider.stat(resource)); }
 		if (this.isConfiguration(resource)) return (await this.configurationFiles!.read(resource)).stat;
 		let result;
-		try { result = await this.api.getMetadata(await this.fileTarget(resource)); }
+		try { result = await this.onFileTarget(resource, target => this.api.getMetadata(target)); }
 		catch (error) { if (isFileNotFound(error)) throw new FileNotFoundError(resource); throw error; }
 		return {
 			resource,
@@ -334,8 +459,10 @@ export class AgentHostFileSystemProvider extends Disposable implements IFileSyst
 	}
 
 	async readDirectory(resource: URI): Promise<readonly IFileEntry[]> {
+		const route = this.connectionRoute(resource);
+		if (route) { return this.onRoute(route, provider => provider.readDirectory(resource)); }
 		let result: Awaited<ReturnType<IFileApi['readDirectory']>>;
-		try { result = await this.api.readDirectory(await this.fileTarget(resource)); }
+		try { result = await this.onFileTarget(resource, target => this.api.readDirectory(target)); }
 		catch (error) { if (isFileNotFound(error)) throw new FileNotFoundError(resource); throw error; }
 		return result.entries.map((entry) => ({
 			resource: resource.joinPathSegment(entry.name),
@@ -345,6 +472,8 @@ export class AgentHostFileSystemProvider extends Disposable implements IFileSyst
 	}
 
 	async readFile(resource: URI): Promise<IFileBytes> {
+		const route = this.connectionRoute(resource);
+		if (route) { return this.onRoute(route, provider => provider.readFile(resource)); }
 		if (this.isConfiguration(resource)) return this.configurationFiles!.read(resource);
 		const generation = this.resourceApi.connectionGeneration;
 		const epoch = this.connectionEpoch;
@@ -375,12 +504,14 @@ export class AgentHostFileSystemProvider extends Disposable implements IFileSyst
 	}
 
 	async readTextFile(resource: URI, encoding: string, options?: IFileReadOptions): Promise<IFileContent> {
+		const route = this.connectionRoute(resource);
+		if (route) { return this.onRoute(route, provider => provider.readTextFile(resource, encoding, options)); }
 		if (this.isConfiguration(resource)) {
 			const file = await this.configurationFiles!.read(resource);
 			return { resource, content: new TextDecoder().decode(file.bytes), revision: file.revision, encoding: 'utf8' };
 		}
 		try {
-			const result = await this.api.readFile({ ...await this.fileTarget(resource), encoding, ...options });
+			const result = await this.onFileTarget(resource, target => this.api.readFile({ ...target, encoding, ...options }));
 			return { resource, content: result.content, revision: result.revision, ...(result.encoding === undefined ? {} : { encoding: result.encoding }) };
 		} catch (error) {
 			if (isFileNotFound(error)) throw new FileNotFoundError(resource);
@@ -389,7 +520,39 @@ export class AgentHostFileSystemProvider extends Disposable implements IFileSyst
 		}
 	}
 
-	public readFileStream(resource: URI, options: IFileReadStreamOptions, token: CancellationToken): ReadableStreamEvents<Uint8Array> {
+	public readFileStream(resource: URI, options: IFileReadStreamOptions, token: CancellationToken): ReadableStream<Uint8Array> {
+		const route = this.connectionRoute(resource);
+		if (route) {
+			const lifetime = new DisposableStore();
+			const cancellation = new CancellationTokenSource(token);
+			lifetime.add(toDisposable(() => cancellation.dispose(true)));
+			lifetime.add(route.cancellation.token.onCancellationRequested(() => cancellation.cancel()));
+			lifetime.add(Event.once(route.provider!.api.onDidChangeConnection)(() => cancellation.cancel()));
+			const stream = newWriteableStream<Uint8Array>(null, { highWaterMark: 1 });
+			try {
+				const source = route.provider!.readFileStream(resource, options, cancellation.token);
+				const destroy = stream.destroy;
+				stream.destroy = (): void => { lifetime.dispose(); source.destroy(); destroy(); };
+				// Report retirement immediately while the original reader keeps ownership of
+				// any late allocation response and releases its opaque resource on that connection.
+				listenStream(source, {
+					onData: chunk => {
+						const drained = stream.write(chunk);
+						if (drained) {
+							source.pause();
+							void drained.then(() => { if (!cancellation.token.isCancellationRequested) { source.resume(); } });
+						}
+					},
+					onError: error => { stream.error(error); stream.end(); lifetime.dispose(); },
+					onEnd: () => { stream.end(); lifetime.dispose(); },
+				}, cancellation.token);
+				return stream;
+			} catch (error) {
+				lifetime.dispose();
+				stream.destroy();
+				throw error;
+			}
+		}
 		this.assertNotDisposed();
 		if (this.isConfiguration(resource)) {
 			const stream = newWriteableStream<Uint8Array>(null);
@@ -446,10 +609,14 @@ export class AgentHostFileSystemProvider extends Disposable implements IFileSyst
 	}
 
 	async writeFile(resource: URI, content: Uint8Array, options: IFileWriteOptions, signal?: AbortSignal): Promise<IFileWriteResult> {
+		const route = this.connectionRoute(resource);
+		if (route) { return this.onRoute(route, provider => provider.writeFile(resource, content, options, signal)); }
 		return this.writeContents(resource, content, undefined, options, signal);
 	}
 
 	async writeTextFile(resource: URI, content: string, encoding: string, options: IFileWriteOptions, signal?: AbortSignal): Promise<IFileWriteResult> {
+		const route = this.connectionRoute(resource);
+		if (route) { return this.onRoute(route, provider => provider.writeTextFile(resource, content, encoding, options, signal)); }
 		return this.writeContents(resource, content, encoding, options, signal);
 	}
 
@@ -468,15 +635,15 @@ export class AgentHostFileSystemProvider extends Disposable implements IFileSyst
 			throw new FileOperationNotSupportedError(resource, 'writeFileElevated');
 		}
 		try {
-			const result = options.writeElevated
-				? await this.api.writeFileElevated({ ...await this.fileTarget(resource), operationId: generateUuid(), dataBase64: encodeBinaryFile(typeof content === 'string' ? new TextEncoder().encode(content) : content), ...(encoding === undefined ? {} : { encoding }), ...(options.expectedRevision === undefined ? {} : { expectedRevision: options.expectedRevision }) }, signal)
+			const result = await this.onFileTarget(resource, target => options.writeElevated
+				? this.api.writeFileElevated({ ...target, operationId: generateUuid(), dataBase64: encodeBinaryFile(typeof content === 'string' ? new TextEncoder().encode(content) : content), ...(encoding === undefined ? {} : { encoding }), ...(options.expectedRevision === undefined ? {} : { expectedRevision: options.expectedRevision }) }, signal)
 				: typeof content === 'string'
-					? await this.api.writeFile({ ...await this.fileTarget(resource), content, ...(encoding === undefined ? {} : { encoding }), options: { mode, ...(options.unlock ? { unlock: true } : {}), ...(options.expectedRevision === undefined ? {} : { expectedRevision: options.expectedRevision }) } })
-					: await this.api.writeBinaryFile({
-						...await this.fileTarget(resource),
+					? this.api.writeFile({ ...target, content, ...(encoding === undefined ? {} : { encoding }), options: { mode, ...(options.unlock ? { unlock: true } : {}), ...(options.expectedRevision === undefined ? {} : { expectedRevision: options.expectedRevision }) } })
+					: this.api.writeBinaryFile({
+						...target,
 						dataBase64: encodeBinaryFile(content),
 						options: { mode, ...(options.unlock ? { unlock: true } : {}), ...(options.expectedRevision === undefined ? {} : { expectedRevision: options.expectedRevision }) },
-					});
+					}));
 			return Object.freeze({
 				stat: {
 					resource,
@@ -509,24 +676,34 @@ export class AgentHostFileSystemProvider extends Disposable implements IFileSyst
 	}
 
 	async createFile(resource: URI, existing: FileExistingTargetBehavior): Promise<IFileStat> {
-		const result = await this.api.createFile({ ...await this.fileTarget(resource), existing });
+		const route = this.connectionRoute(resource);
+		if (route) { return this.onRoute(route, provider => provider.createFile(resource, existing)); }
+		const result = await this.onFileTarget(resource, target => this.api.createFile({ ...target, existing }));
 		return { resource, kind: fileKind(result.fileType), sizeBytes: result.sizeBytes, readonly: result.readonly, modifiedAtMillis: result.modifiedAtMillis ?? undefined };
 	}
 
 	async createDirectory(resource: URI): Promise<IFileStat> {
+		const route = this.connectionRoute(resource);
+		if (route) { return this.onRoute(route, provider => provider.createDirectory(resource)); }
 		const configuration = this.configuration();
 		if (this.configurationFiles && configuration && dirname(configuration).toString() === resource.toString()) {
 			// The metadata host already created this directory. This does not grant
 			// browsing or mutation rights to other files beside the workspace file.
 			return { resource, kind: FileKind.Directory, sizeBytes: 0, readonly: false, modifiedAtMillis: undefined };
 		}
-		const result = await this.api.createDirectory(await this.fileTarget(resource));
+		const result = await this.onFileTarget(resource, target => this.api.createDirectory(target));
 		return { resource, kind: fileKind(result.fileType), sizeBytes: result.sizeBytes, readonly: result.readonly, modifiedAtMillis: result.modifiedAtMillis ?? undefined };
 	}
 
 	async copy(source: URI, target: URI): Promise<void> {
+		const generation = this.api.connectionGeneration;
+		const epoch = this.connectionEpoch;
+		const route = this.connectionRoute(source);
+		if (route !== this.connectionRoute(target)) { throw new FileOperationNotSupportedError(source, 'copy'); }
+		if (route) { return this.onRoute(route, provider => provider.copy(source, target)); }
 		const from = await this.fileTarget(source);
 		const to = await this.fileTarget(target);
+		if (this.isDisposed || generation !== this.api.connectionGeneration || epoch !== this.connectionEpoch) { throw canceled(); }
 		if (from.sessionDirectory || to.sessionDirectory) {
 			if (JSON.stringify(from.sessionDirectory) !== JSON.stringify(to.sessionDirectory)) {
 				throw new Error('Copying between Session directories is not supported.');
@@ -537,12 +714,20 @@ export class AgentHostFileSystemProvider extends Disposable implements IFileSyst
 	}
 
 	async pasteSystemFiles(directory: URI, moveRequested: boolean): Promise<boolean> {
-		return this.api.pasteSystemFiles({ ...await this.fileTarget(directory), moveRequested });
+		const route = this.connectionRoute(directory);
+		if (route) { return this.onRoute(route, provider => provider.pasteSystemFiles(directory, moveRequested)); }
+		return this.onFileTarget(directory, target => this.api.pasteSystemFiles({ ...target, moveRequested }));
 	}
 
 	async rename(source: URI, target: URI, existing: FileExistingTargetBehavior): Promise<void> {
+		const generation = this.api.connectionGeneration;
+		const epoch = this.connectionEpoch;
+		const route = this.connectionRoute(source);
+		if (route !== this.connectionRoute(target)) { throw new FileOperationNotSupportedError(source, 'rename'); }
+		if (route) { return this.onRoute(route, provider => provider.rename(source, target, existing)); }
 		const sourceDirectory = await this.resolveDirectory(source);
 		const targetDirectory = await this.resolveDirectory(target);
+		if (this.isDisposed || generation !== this.api.connectionGeneration || epoch !== this.connectionEpoch) { throw canceled(); }
 		if (JSON.stringify(sourceDirectory.target) !== JSON.stringify(targetDirectory.target)) {
 			throw new Error(localize('files.crossDirectoryRename', 'Renaming across authorized directories is not supported'));
 		}
@@ -551,7 +736,9 @@ export class AgentHostFileSystemProvider extends Disposable implements IFileSyst
 	}
 
 	async delete(resource: URI, missing: FileMissingTargetBehavior, mode: FileDeleteMode): Promise<void> {
-		return this.api.delete({ ...await this.fileTarget(resource), missing, mode });
+		const route = this.connectionRoute(resource);
+		if (route) { return this.onRoute(route, provider => provider.delete(resource, missing, mode)); }
+		return this.onFileTarget(resource, target => this.api.delete({ ...target, missing, mode }));
 	}
 
 	private knownDirectory(resource: URI): IFileSystemDirectory | undefined {
@@ -586,6 +773,16 @@ export class AgentHostFileSystemProvider extends Disposable implements IFileSyst
 		});
 		this.directoryRequests.set(key, pending);
 		return pending;
+	}
+
+	private async onFileTarget<T>(resource: URI, operation: (target: ReturnType<AgentHostFileSystemProvider['directoryTarget']>) => Promise<T>): Promise<T> {
+		const generation = this.api.connectionGeneration;
+		const epoch = this.connectionEpoch;
+		const target = await this.fileTarget(resource);
+		// Resolving even a known root yields to the caller. Retiring its mount or
+		// connection during that await must prevent dispatch, especially for writes.
+		if (this.isDisposed || generation !== this.api.connectionGeneration || epoch !== this.connectionEpoch) { throw canceled(); }
+		return operation(target);
 	}
 
 	private async fileTarget(resource: URI) {

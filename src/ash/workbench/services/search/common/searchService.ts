@@ -7,57 +7,32 @@ import { URI } from '../../../../base/common/uri.js';
 import { USUAL_WORD_SEPARATORS } from '../../../../editor/common/core/wordHelper.js';
 import { IContentSearchService, type ContentSearchMatch, type IContentSearchQuery } from '../../../../platform/search/common/search.js';
 import { IWorkspaceContextService } from '../../../../platform/workspace/common/workspace.js';
-import { IFileSearchService } from '../../../../platform/search/common/fileSearch.js';
+import { Disposable } from '../../../../base/common/lifecycle.js';
+import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
+import { AgentHostFileSearchProvider } from '../../agentHost/common/agentHostFileSearchProvider.js';
 import { IFileTextModelService } from '../../textmodelResolver/common/textModelResourceService.js';
 import { localize } from '../../../../nls.js';
-import type { IFileMatch, IFileQuery, ISearchComplete, ISearchProgressItem, ISearchService, ISearchRange, ITextQuery, ITextSearchMatch } from './search.js';
+import type { IFileMatch, IFileQuery, ISearchComplete, ISearchProgressItem, ISearchService, ISearchResultProvider, ISearchRange, ITextQuery, ITextSearchMatch } from './search.js';
 import { editorMatchesToTextSearchResults } from './searchHelpers.js';
 
 const DEFAULT_MAX_RESULTS = 2_000;
 
-/** Owns one workspace query's model snapshot, directory aggregation and result budget. */
-export class SearchService implements ISearchService {
+/** Dispatches filename queries and owns content queries' model snapshots and result budgets. */
+export class SearchService extends Disposable implements ISearchService {
+	private readonly fileSearchProvider: ISearchResultProvider;
+
 	constructor(
 		@IContentSearchService private readonly contentSearch: IContentSearchService,
 		@IWorkspaceContextService private readonly workspace: IWorkspaceContextService,
 		@IFileTextModelService private readonly models: IFileTextModelService,
-		@IFileSearchService private readonly fileSearchProvider: IFileSearchService,
-	) { }
+		@IInstantiationService instantiationService: IInstantiationService,
+	) {
+		super();
+		this.fileSearchProvider = this._register(instantiationService.createInstance(AgentHostFileSearchProvider));
+	}
 
-	public async fileSearch(query: IFileQuery, token: CancellationToken = CancellationToken.None): Promise<ISearchComplete> {
-		const controller = new AbortController();
-		using cancellation = token.onCancellationRequested(() => controller.abort());
-		const checkCancellation = (): void => { if (token.isCancellationRequested) { throw new CancellationError(); } };
-		checkCancellation();
-		const limit = query.maxResults ?? DEFAULT_MAX_RESULTS;
-		if (!Number.isSafeInteger(limit) || limit < 1 || limit > 5_000) { throw new RangeError(localize('search.invalidResultLimit', 'Search result limit must be between 1 and 5000.')); }
-		const folders = this.workspace.getWorkspace().folders;
-		const matches = new Map<string, { resource: URI; score: number; folderIndex: number; path: string; }>();
-		let limitHit = false;
-		for (const folderQuery of query.folderQueries) {
-			checkCancellation();
-			const folder = folders.find(folder => extUri.isEqual(folder.uri, folderQuery.folder));
-			if (!folder) { throw new RangeError(localize('search.folderOutsideWorkspace', 'Search folder is outside the current workspace.')); }
-			const directory = { resource: folder.uri, target: { type: 'workspace' as const, dirId: folder.id } };
-			// Each root supplies its best candidates before the Workbench applies one global limit.
-			const maxResults = Math.min(5_000, limit + 1);
-			const found = query.shouldGlobMatchFilePattern
-				? await this.fileSearchProvider.glob(directory, { includePatterns: query.filePattern ? [query.filePattern] : [], excludePatterns: [], maxResults }, controller.signal)
-				: await this.fileSearchProvider.fuzzy(directory, { query: query.filePattern ?? '', maxResults }, controller.signal);
-			checkCancellation();
-			limitHit ||= found.totalMatches > found.matches.length;
-			for (const candidate of found.matches) {
-				const key = extUri.getComparisonKey(candidate.resource);
-				const retained = matches.get(key);
-				const score = candidate.score ?? 0;
-				if (!retained || score > retained.score) { matches.set(key, { resource: candidate.resource, score, folderIndex: folder.index, path: candidate.path }); }
-			}
-		}
-		const ordered = [...matches.values()].sort((left, right) => {
-			if (query.sortByScore && left.score !== right.score) { return right.score - left.score; }
-			return left.folderIndex - right.folderIndex || left.path.localeCompare(right.path);
-		});
-		return { results: ordered.slice(0, limit).map(match => ({ resource: match.resource })), limitHit: limitHit || ordered.length > limit, messages: [] };
+	public fileSearch(query: IFileQuery, token: CancellationToken = CancellationToken.None): Promise<ISearchComplete> {
+		return this.fileSearchProvider.fileSearch(query, token);
 	}
 
 	public async textSearch(query: ITextQuery, token: CancellationToken = CancellationToken.None, onProgress?: (result: ISearchProgressItem) => void): Promise<ISearchComplete> {

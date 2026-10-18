@@ -1,6 +1,12 @@
 import { Dialog } from '../../../src/ash/base/browser/ui/dialog/dialog.js';
 import { Emitter, Event } from '../../../src/ash/base/common/event.js';
-import { DisposableStore } from '../../../src/ash/base/common/lifecycle.js';
+import { DisposableStore, MutableDisposable } from '../../../src/ash/base/common/lifecycle.js';
+import { DeferredPromise } from '../../../src/ash/base/common/async.js';
+import { isCancellationError } from '../../../src/ash/base/common/errors.js';
+import type { ISandboxGlobals } from '../../../src/ash/base/parts/sandbox/electron-browser/sandboxTypes.js';
+import type { AppServerProtocolClient } from '../../../src/ash/platform/agentHost/browser/appServerProtocolClient.js';
+import type { IWorkspaceTrustApi } from '../../../src/ash/platform/workspace/common/workspaceTrust.js';
+import type { DirectoryPermissionDialog } from '../../../src/ash/workbench/electron-browser/parts/dialogs/directoryPermissionDialog.js';
 import { MenuId, MenusRegistry } from '../../../src/ash/platform/actions/common/actions.js';
 import { MenuService } from '../../../src/ash/platform/actions/common/menuService.js';
 import { CommandRegistry, ICommandService } from '../../../src/ash/platform/commands/common/commands.js';
@@ -37,6 +43,12 @@ declare global {
 			disposeBare(): void;
 			abort(): void;
 			showCommandFailure(): void;
+			showDirectoryPermission(): Promise<void>;
+			cancelDirectoryPermission(): void;
+			holdDirectoryPrompt(): void;
+			releaseDirectoryPrompt(): void;
+			lastDirectoryResult?: string;
+			directoryWrites: number;
 			lastResult?: string;
 			lastOutcome?: IDialogOutcome;
 		};
@@ -45,10 +57,66 @@ declare global {
 
 const handler = new BrowserDialogHandler(document.body);
 const commandResources = new DisposableStore();
+const directoryFlow = commandResources.add(new MutableDisposable<DisposableStore>());
+const directoryPrompt = {
+	kind: 'prompt', title: 'Directory permissions', message: 'Authorize this workspace directory.', detail: '/srv/project',
+	primaryButton: 'Read only', secondaryButton: 'Development', cancelButton: 'Cancel',
+};
+let heldDirectoryPrompt: DeferredPromise<unknown> | undefined;
+let holdNextDirectoryPrompt = false;
+Object.defineProperty(globalThis, 'ash', {
+	configurable: true, value: {
+		ipcRenderer: {
+			send() { },
+			on: () => ({ dispose() { } }),
+			invoke: async channel => {
+				if (channel !== 'ash:host:directoryPermissionPrompt') throw new Error(`Unexpected fixture IPC channel: ${channel}`);
+				if (holdNextDirectoryPrompt) { holdNextDirectoryPrompt = false; return heldDirectoryPrompt!.p; }
+				return directoryPrompt;
+			},
+		},
+		ipcMessagePort: { acquire: () => ({ dispose() { } }) },
+		process: { platform: 'linux', arch: 'x64' },
+		webUtils: { getPathForFile: () => '' },
+	} satisfies ISandboxGlobals
+});
+let directoryPermission: DirectoryPermissionDialog | undefined;
+let cancelDirectoryPermission = (): void => { };
 window.addEventListener('pagehide', () => commandResources.dispose(), { once: true });
 let controller: AbortController;
 let bareDialog: Dialog;
 window.ashDialogIntegration = {
+	directoryWrites: 0,
+	async showDirectoryPermission(): Promise<void> {
+		const [{ DirectoryPermissionDialog }, { initializeWorkspaceDirectories }] = await Promise.all([
+			import('../../../src/ash/workbench/electron-browser/parts/dialogs/directoryPermissionDialog.js'),
+			import('../../../src/ash/platform/workspaces/electron-browser/appServerWorkspaceHost.js'),
+		]);
+		directoryPermission ??= commandResources.add(new DirectoryPermissionDialog(document.body));
+		const resources = directoryFlow.value = new DisposableStore();
+		const changes = resources.add(new Emitter<'ready' | 'stopped'>());
+		const client = {
+			state: 'ready' as 'ready' | 'stopped', generation: 1, onStateChange: changes.event,
+			request: async () => { window.ashDialogIntegration.directoryWrites++; return { dirs: [] }; },
+		};
+		cancelDirectoryPermission = () => { client.state = 'stopped'; changes.fire('stopped'); };
+		const unexpected = async (): Promise<never> => { throw new Error('Unexpected directory management request'); };
+		const trust: IWorkspaceTrustApi = {
+			onDidChangeTrust: Event.None,
+			listDirectories: unexpected, setDirectoryPermissions: unexpected, forgetDirectory: unexpected,
+			readWorkspaceDirectory: unexpected, persistGrant: unexpected,
+			readDirectory: async path => ({ dir: path, permissions: undefined }),
+			createGrant: async (_path, permissions) => ({ type: 'user', commandId: 'directory-prompt', expectedRevision: 1, permissions }),
+		};
+		window.ashDialogIntegration.lastDirectoryResult = undefined;
+		void initializeWorkspaceDirectories(client as unknown as AppServerProtocolClient, directoryPermission, trust, [{ id: 'directory-root', path: '/srv/project' }])
+			.then(() => { window.ashDialogIntegration.lastDirectoryResult = 'ready'; }, error => {
+				window.ashDialogIntegration.lastDirectoryResult = isCancellationError(error) ? 'cancelled' : String(error);
+			});
+	},
+	cancelDirectoryPermission(): void { cancelDirectoryPermission(); },
+	holdDirectoryPrompt(): void { heldDirectoryPrompt = new DeferredPromise<unknown>(); holdNextDirectoryPrompt = true; },
+	releaseDirectoryPrompt(): void { const pending = heldDirectoryPrompt; heldDirectoryPrompt = undefined; void pending?.complete(directoryPrompt); },
 	show(detail: string): void {
 		controller = new AbortController();
 		void handler.showDialog({
