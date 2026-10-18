@@ -730,6 +730,7 @@ async fn thread_provision_supports_an_unborn_target_without_creating_its_branch(
     fs::create_dir_all(&repository).unwrap();
     fs::create_dir_all(&profile).unwrap();
     run_git(&repository, &["init", "--quiet", "--initial-branch=main"]);
+    run_git(&repository, &["config", "core.autocrlf", "false"]);
     fs::write(repository.join("baseline.txt"), "initial baseline\n").unwrap();
     let manager = WorktreeManager::new(WorktreeSettings::defaults(&profile));
 
@@ -826,6 +827,7 @@ async fn thread_provision_maps_nested_repositories_to_independent_linked_worktre
     let nested = fixture.repository.join("nested");
     fs::create_dir_all(&nested).unwrap();
     run_git(&nested, &["init", "--quiet", "--initial-branch=main"]);
+    run_git(&nested, &["config", "core.autocrlf", "false"]);
     fs::write(nested.join("nested.txt"), "nested baseline\n").unwrap();
     run_git(&nested, &["add", "nested.txt"]);
     run_git(
@@ -1350,6 +1352,7 @@ fn desktop_settings_match_codex_defaults_and_validate_overrides() {
 fn initialize_repository(repository: &Path) {
     fs::create_dir_all(repository.join("nested/component")).expect("create repository directories");
     run_git(repository, &["init", "--quiet", "--initial-branch=main"]);
+    run_git(repository, &["config", "core.autocrlf", "false"]);
     fs::write(repository.join("README.md"), "initial contents\n").expect("write README");
     fs::write(
         repository.join("nested/component/tracked.txt"),

@@ -411,8 +411,10 @@ fn git_and_directory_history_restore_files_and_keep_the_same_thread_after_restar
         );
         if !git {
             // The immutable directory evidence outlives the original checkout.
+            let runtime_lifetime = Arc::downgrade(runtime);
             server.close_connection(connection);
             drop(server);
+            assert!(runtime_lifetime.upgrade().is_none());
             assert!(directory.starts_with(dunce::canonicalize(profile.path()).unwrap()));
             std::fs::remove_dir_all(directory.parent().unwrap()).unwrap();
             let server = open_app_server(options()).unwrap();

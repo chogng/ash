@@ -6918,7 +6918,9 @@ fn git_clone_requires_the_product_host_and_returns_a_new_repository_path() {
     );
     let path = cloned["result"]["repositoryPath"].as_str().unwrap();
     assert!(std::path::Path::new(path).join(".git").exists());
-    assert!(std::path::Path::new(path).starts_with(destination.path().canonicalize().unwrap()));
+    assert!(
+        std::path::Path::new(path).starts_with(dunce::canonicalize(destination.path()).unwrap())
+    );
 }
 
 #[test]

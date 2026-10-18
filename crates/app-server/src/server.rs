@@ -1379,10 +1379,13 @@ impl AppServer {
         if let Err(error) = self.threads.collect_message_checkpoints(runtime.as_ref()) {
             log::warn!("message checkpoint cleanup remains pending: {error}");
         }
+        let callbacks = Arc::new(git_turn_changes_runtime::GitRuntimeHandle(Arc::downgrade(
+            &runtime,
+        )));
         self.multi_agent
-            .install_thread_worktree_binder(runtime.clone())
+            .install_thread_worktree_binder(callbacks.clone())
             .map_err(|error| error.to_string())?;
-        let observer: Arc<dyn core_api::TurnExecutionObserver> = runtime.clone();
+        let observer: Arc<dyn core_api::TurnExecutionObserver> = callbacks;
         let executor = self
             .env_runtime
             .read()
@@ -1399,7 +1402,7 @@ impl AppServer {
             .install_turn_submission(Arc::new(AppServerAgentTurnSubmission {
                 clients: Arc::clone(&self.client_host),
                 threads: Arc::clone(&self.threads),
-                directories: Some(Arc::clone(&runtime)),
+                directories: Some(Arc::downgrade(&runtime)),
             }))
             .map_err(|error| error.to_string())?;
         self.git_turn_changes = Some(runtime);
@@ -4633,7 +4636,7 @@ mod agent_benchmarks;
 struct AppServerAgentTurnSubmission {
     clients: Arc<crate::client_host::ClientHost>,
     threads: Arc<ThreadController>,
-    directories: Option<Arc<git_turn_changes_runtime::GitTurnChangesRuntime>>,
+    directories: Option<std::sync::Weak<git_turn_changes_runtime::GitTurnChangesRuntime>>,
 }
 
 impl ash_core::AgentTurnSubmission for AppServerAgentTurnSubmission {
@@ -4668,7 +4671,16 @@ impl ash_core::AgentTurnSubmission for AppServerAgentTurnSubmission {
         }) {
             return self.threads.start_turn(child_thread, request);
         }
-        let mode = match &self.directories {
+        let directories = self
+            .directories
+            .as_ref()
+            .map(|directories| {
+                directories
+                    .upgrade()
+                    .ok_or_else(|| CoreError::Execution("Thread file owner was disposed".into()))
+            })
+            .transpose()?;
+        let mode = match &directories {
             Some(directories) => match (
                 directories.binding(parent_thread),
                 directories.binding(child_thread),

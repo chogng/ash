@@ -1,3 +1,4 @@
+use super::git_turn_changes_runtime::GitRuntimeHandle;
 use super::git_turn_changes_runtime::GitTurnChangesRuntime;
 use ash_protocol::ThreadOrigin;
 use core_api::CoreError;
@@ -43,23 +44,11 @@ impl GitTurnChangesRuntime {
         let Some(binding) = self.binding(thread) else {
             return Ok(());
         };
-        self.dirs.release_search(binding.checkout_root())?;
-        self.dirs
-            .runtime
-            .block_on(self.dirs.worktrees.cleanup(
-                &binding,
-                worktree::ManagedDirCleanupEligibility::WorkflowTerminal,
-            ))
-            .map_err(|error| error.to_string())?;
-        self.dirs
-            .bindings
-            .write()
-            .map_err(|_| "Thread directory lock poisoned")?
-            .remove(thread);
-        self.dirs.file_access.unbind_thread_dir(thread);
-        self.dirs.hooks.unbind_thread_dir(thread);
-        self.stop_watcher(thread);
-        Ok(())
+        self.cleanup_thread_binding(
+            thread,
+            &binding,
+            worktree::ManagedDirCleanupEligibility::WorkflowTerminal,
+        )
     }
 
     /// Cleans a binding after its Session history has been deleted by an explicit user action.
@@ -70,22 +59,39 @@ impl GitTurnChangesRuntime {
         let Some(binding) = self.binding(thread_id) else {
             return Ok(());
         };
+        self.cleanup_thread_binding(
+            thread_id,
+            &binding,
+            worktree::ManagedDirCleanupEligibility::SessionDeletedByUser,
+        )
+    }
+
+    fn cleanup_thread_binding(
+        &self,
+        thread_id: &ash_protocol::ThreadId,
+        binding: &ManagedDirBinding,
+        eligibility: worktree::ManagedDirCleanupEligibility,
+    ) -> Result<(), String> {
         self.dirs.release_search(binding.checkout_root())?;
-        self.dirs
+        // Windows directory capabilities pin their roots. Release the owning services
+        // before deletion and restore them on failure so cleanup can be retried.
+        self.stop_watcher(thread_id);
+        self.dirs.file_access.unbind_thread_dir(thread_id);
+        self.dirs.hooks.unbind_thread_dir(thread_id);
+        if let Err(error) = self
+            .dirs
             .runtime
-            .block_on(self.dirs.worktrees.cleanup(
-                &binding,
-                worktree::ManagedDirCleanupEligibility::SessionDeletedByUser,
-            ))
-            .map_err(|error| error.to_string())?;
+            .block_on(self.dirs.worktrees.cleanup(binding, eligibility))
+        {
+            self.bind_thread_services(thread_id, binding)
+                .map_err(|error| error.to_string())?;
+            return Err(error.to_string());
+        }
         self.dirs
             .bindings
             .write()
             .map_err(|_| "Thread dir binding lock poisoned".to_string())?
             .remove(thread_id);
-        self.dirs.file_access.unbind_thread_dir(thread_id);
-        self.dirs.hooks.unbind_thread_dir(thread_id);
-        self.stop_watcher(thread_id);
         Ok(())
     }
 
@@ -135,22 +141,11 @@ impl GitTurnChangesRuntime {
         }
         eligible.sort_by(|left, right| right.0.cmp(&left.0));
         for (_, thread_id, binding) in eligible.into_iter().skip(settings.keep_count) {
-            self.dirs.release_search(binding.checkout_root())?;
-            self.dirs
-                .runtime
-                .block_on(self.dirs.worktrees.cleanup(
-                    &binding,
-                    worktree::ManagedDirCleanupEligibility::AllChangeSetsSettled,
-                ))
-                .map_err(|error| error.to_string())?;
-            self.dirs
-                .bindings
-                .write()
-                .map_err(|_| "Thread dir binding lock poisoned".to_string())?
-                .remove(&thread_id);
-            self.dirs.file_access.unbind_thread_dir(&thread_id);
-            self.dirs.hooks.unbind_thread_dir(&thread_id);
-            self.stop_watcher(&thread_id);
+            self.cleanup_thread_binding(
+                &thread_id,
+                &binding,
+                worktree::ManagedDirCleanupEligibility::AllChangeSetsSettled,
+            )?;
         }
         Ok(())
     }
@@ -585,6 +580,12 @@ fn primary_tree(trees: &BTreeMap<PathBuf, String>) -> Result<String, CoreError> 
     trees.get(Path::new(".")).cloned().ok_or_else(|| {
         CoreError::Journal("Thread checkpoint omitted its primary repository".into())
     })
+}
+
+impl ThreadWorktreeBinder for GitRuntimeHandle {
+    fn provision(&self, request: &ThreadWorktreeBindingRequest) -> Result<(), CoreError> {
+        self.upgrade()?.provision(request)
+    }
 }
 
 impl ThreadWorktreeBinder for GitTurnChangesRuntime {

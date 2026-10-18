@@ -61,6 +61,7 @@ fn run_directory_binding(kind: DirectoryKind, creation: CreationRuntime) {
     if let DirectoryKind::Git = kind {
         for args in [
             vec!["init", "-b", "main"],
+            vec!["config", "core.autocrlf", "false"],
             vec!["add", "main.ts"],
             vec!["commit", "-m", "Isolated binding baseline"],
         ] {

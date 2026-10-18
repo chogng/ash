@@ -873,19 +873,6 @@ fn socket_eof_stops_running_git_network_operations_without_waiting_for_remote_re
         let listener = TcpListener::bind("127.0.0.1:0").unwrap();
         let address = listener.local_addr().unwrap();
         listener.set_nonblocking(true).unwrap();
-        let accepting = thread::spawn(move || {
-            let deadline = Instant::now() + Duration::from_secs(3);
-            loop {
-                match listener.accept() {
-                    Ok((stream, _)) => return stream,
-                    Err(error) if error.kind() == io::ErrorKind::WouldBlock => {
-                        assert!(Instant::now() < deadline, "Git did not connect");
-                        thread::sleep(Duration::from_millis(10));
-                    }
-                    Err(error) => panic!("Git listener failed: {error}"),
-                }
-            }
-        });
         let mut backend = server();
         if method != "git/clone" {
             for args in [
@@ -949,6 +936,19 @@ fn socket_eof_stops_running_git_network_operations_without_waiting_for_remote_re
                 .unwrap();
         });
         client.initialize();
+        let accepting = thread::spawn(move || {
+            let deadline = Instant::now() + Duration::from_secs(3);
+            loop {
+                match listener.accept() {
+                    Ok((stream, _)) => return stream,
+                    Err(error) if error.kind() == io::ErrorKind::WouldBlock => {
+                        assert!(Instant::now() < deadline, "Git did not connect");
+                        thread::sleep(Duration::from_millis(10));
+                    }
+                    Err(error) => panic!("Git listener failed: {error}"),
+                }
+            }
+        });
         client.send(
             2,
             method,

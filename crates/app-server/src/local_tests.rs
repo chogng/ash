@@ -1164,13 +1164,12 @@ fn local_git_turn_changes_seal_and_commit_a_shell_turn_through_rpc() {
     run_local_git(dir.path(), &["add", "."]);
     run_local_git(dir.path(), &["commit", "--quiet", "-m", "initial"]);
     let initial_head = run_local_git(dir.path(), &["rev-parse", "HEAD"]);
-    let server = open_app_server(
+    let options = || {
         AppServerOptions::new(profile.path())
             .without_built_in_skills()
-            .with_session_state_mode(SessionStateMode::Ephemeral)
-            .with_dir_root(dir.path()),
-    )
-    .unwrap();
+            .with_dir_root(dir.path())
+    };
+    let server = open_app_server(options()).unwrap();
     let mut connection = server.connection();
     let initialized = local_call(
         &server,
@@ -1225,7 +1224,7 @@ fn local_git_turn_changes_seal_and_commit_a_shell_turn_through_rpc() {
     );
     let thread_id = thread["result"]["value"]["threadId"].as_str().unwrap();
     let write_command = if cfg!(windows) {
-        "echo sealed turn contents>turn.txt & echo remaining contents>remaining.txt"
+        "(echo sealed turn contents)>turn.txt & (echo remaining contents)>remaining.txt"
     } else {
         "printf 'sealed turn contents\\n' > turn.txt; printf 'remaining contents\\n' > remaining.txt"
     };
@@ -1340,6 +1339,7 @@ fn local_git_turn_changes_seal_and_commit_a_shell_turn_through_rpc() {
         }),
     );
     assert_eq!(queued["result"]["changeSets"][0]["commitState"], "queued");
+    let commit_deadline = std::time::Instant::now() + Duration::from_secs(30);
     let committed = loop {
         request_id += 1;
         let listed = local_call(
@@ -1358,7 +1358,10 @@ fn local_git_turn_changes_seal_and_commit_a_shell_turn_through_rpc() {
             state == "queued" || state == "committing",
             "commit failed: {listed}"
         );
-        assert!(request_id < 406, "commit did not finish: {listed}");
+        assert!(
+            std::time::Instant::now() < commit_deadline,
+            "commit did not finish: {listed}"
+        );
         std::thread::sleep(Duration::from_millis(10));
     };
 
@@ -1422,9 +1425,20 @@ fn local_git_turn_changes_seal_and_commit_a_shell_turn_through_rpc() {
             .trim(),
         "sealed turn contents"
     );
+    // External removal needs the host's directory capabilities released on Windows.
+    // Reopen from durable history to verify object reads without the old checkout.
+    server.close_connection(connection);
+    drop(server);
     run_local_git(dir.path(), &["worktree", "unlock", checkout]);
     run_local_git(dir.path(), &["worktree", "remove", "--force", checkout]);
     run_local_git(dir.path(), &["gc", "--prune=now"]);
+    let server = open_app_server(options()).unwrap();
+    let mut connection = server.connection();
+    local_call(
+        &server,
+        &mut connection,
+        serde_json::json!({"jsonrpc":"2.0","id":1,"method":"initialize","params":{"clientInfo":{"name":"turn-changes-test","version":"1"},"capabilities":{}}}),
+    );
     for method in ["turnChanges/readFile", "turnChanges/readCommitFile"] {
         request_id += 1;
         let read = local_call(

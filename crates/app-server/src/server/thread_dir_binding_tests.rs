@@ -9,6 +9,7 @@ use ash_protocol::SessionId;
 use ash_protocol::ThreadId;
 use ash_protocol::TurnId;
 use std::process::Command;
+use std::sync::Arc;
 
 fn git(directory: &Path, arguments: &[&str]) -> String {
     let output = Command::new("git")
@@ -63,6 +64,7 @@ fn archiving_more_than_the_keep_count_preserves_non_git_edits_until_explicit_che
         serde_json::json!({"clientInfo":{"name":"cleanup-test","version":"1"},"capabilities":{}}),
     );
     let runtime = server.git_turn_changes.as_ref().unwrap();
+    let runtime_lifetime = Arc::downgrade(runtime);
     let mut copies = Vec::new();
     for index in 0..=runtime.dirs.worktrees.settings().keep_count {
         let result = call(
@@ -147,6 +149,11 @@ fn archiving_more_than_the_keep_count_preserves_non_git_edits_until_explicit_che
         );
     }
     server.close_connection(connection);
+    drop(server);
+    assert!(
+        runtime_lifetime.upgrade().is_none(),
+        "Hook observers must release the directory runtime"
+    );
 }
 
 #[test]
