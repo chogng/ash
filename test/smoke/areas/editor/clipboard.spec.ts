@@ -1,6 +1,74 @@
 import type { ElectronApplication } from '@playwright/test';
 import { expect, test } from '../../../automation/test.js';
 
+interface DelayedClipboardRead {
+	readonly calls: number;
+	settle(outcome: 'resolve' | 'reject'): void;
+	restore(): void;
+}
+
+for (const outcome of ['resolve', 'reject'] as const) {
+	test(`cancelled browser paste ignores a late clipboard ${outcome} after a new paste`, { tag: ['@browser-ui', '@browser-app-server'] }, async ({ workbench }) => {
+		const page = workbench.page;
+		await page.keyboard.press('ControlOrMeta+N');
+		const editor = workbench.editors.groupAt(0).editor;
+		await editor.waitForEditorFocus();
+		await editor.waitForTypeInEditor('anchor');
+		await page.evaluate(() => {
+			const original = navigator.clipboard.readText;
+			let resolve!: (text: string) => void;
+			let reject!: (reason: Error) => void;
+			const pending = new Promise<string>((accept, fail) => { resolve = accept; reject = fail; });
+			let calls = 0;
+			navigator.clipboard.readText = () => {
+				calls++;
+				return calls === 1 ? pending : Promise.resolve(calls === 2 ? 'fresh' : 'stale');
+			};
+			const fixture: DelayedClipboardRead = {
+				get calls() { return calls; },
+				settle(outcome) {
+					if (outcome === 'reject') reject(new Error('Delayed clipboard read failed'));
+					else resolve('stale');
+				},
+				restore() {
+					resolve('');
+					navigator.clipboard.readText = original;
+				},
+			};
+			(window as unknown as { delayedClipboardRead: DelayedClipboardRead; }).delayedClipboardRead = fixture;
+		});
+		try {
+			await editor.input.press('Shift+F10');
+			await page.getByRole('menuitem', { name: 'Paste', exact: true }).click();
+			await expect.poll(() => page.evaluate(() => (window as unknown as { delayedClipboardRead: DelayedClipboardRead; }).delayedClipboardRead.calls)).toBe(1);
+			await editor.input.press('Home');
+			await editor.input.press('Shift+F10');
+			await page.getByRole('menuitem', { name: 'Paste', exact: true }).click();
+			await editor.waitForEditorContents(text => text === 'freshanchor');
+			await page.evaluate(outcome => (window as unknown as { delayedClipboardRead: DelayedClipboardRead; }).delayedClipboardRead.settle(outcome), outcome);
+			if (outcome === 'reject') {
+				// The clipboard owner still handles the failed read. Retrying it must
+				// never revive the editor command whose selection was cancelled.
+				const prompt = page.locator('.ash-notification').filter({ hasText: 'Unable to read the clipboard.' });
+				await expect(prompt).toBeVisible();
+				await prompt.getByRole('button', { name: 'Retry', exact: true }).click();
+				await expect(prompt).toHaveCount(0);
+				await expect.poll(() => page.evaluate(() => (window as unknown as { delayedClipboardRead: DelayedClipboardRead; }).delayedClipboardRead.calls)).toBe(3);
+			}
+			await editor.waitForEditorFocus();
+			await editor.input.press('End');
+			await editor.waitForTypeInEditor('!');
+			await editor.waitForEditorContents(text => text === 'freshanchor!');
+		} finally {
+			await page.evaluate(() => {
+				const state = window as unknown as { delayedClipboardRead?: DelayedClipboardRead; };
+				state.delayedClipboardRead?.restore();
+				delete state.delayedClipboardRead;
+			});
+		}
+	});
+}
+
 test('editor paste reads text through the current Workbench clipboard service', async ({ workbench, target, application }) => {
 	const page = workbench.page;
 	await page.keyboard.press('ControlOrMeta+N');

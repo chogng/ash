@@ -242,6 +242,62 @@ test('paste command releases cancelled work before the clipboard read settles an
 	}
 });
 
+for (const outcome of ['resolve', 'reject'] as const) {
+	test(`paste command cancels a pending host trigger and observes its late ${outcome}`, async () => {
+		const dom = new JSDOM('<!doctype html><body><main></main></body>');
+		using closeWindow = toDisposable(() => dom.window.close());
+		using registration = registerWindow(dom.window as unknown as Window);
+		const getContext = environment.window.HTMLCanvasElement.prototype.getContext;
+		environment.window.HTMLCanvasElement.prototype.getContext = () => null;
+		using restoreCanvas = toDisposable(() => { environment.window.HTMLCanvasElement.prototype.getContext = getContext; });
+		dom.window.HTMLCanvasElement.prototype.getContext = () => null;
+		using model = new TextModel('anchor');
+		using services = new InstantiationService();
+		using contextKeys = new ContextKeyService();
+		using codeEditorService = new StandaloneCodeEditorService();
+		let resolve!: () => void;
+		let reject!: (error: Error) => void;
+		const triggered = new Promise<void>((accept, fail) => { resolve = accept; reject = fail; });
+		class TriggerClipboard extends DeferredClipboardService {
+			triggers = 0;
+			override triggerPaste(): Promise<void> | undefined {
+				return ++this.triggers === 1 ? triggered : undefined;
+			}
+		}
+		const clipboard = new TriggerClipboard();
+		services.registerInstance(IContextKeyService, contextKeys);
+		services.registerInstance(ILogService, new NullLoggerService());
+		services.registerInstance(IClipboardService, clipboard);
+		services.registerInstance(ICodeEditorService, codeEditorService);
+		using editor = createTestCodeEditor({ container: dom.window.document.querySelector<HTMLElement>('main')!, model, instantiationService: services });
+		editor.focus();
+		editor.setSelection(new Selection(1, 7, 1, 7));
+		const tracker = new DisposableTracker();
+		using tracking = installDisposableTracker(tracker);
+		try {
+			const pending = PasteAction.runCommand(services, undefined);
+			assert.equal(clipboard.triggers, 1);
+			const subscriptions = tracker.leaks().filter(leak => leak.label === 'toDisposable' && leak.ownerLabel === undefined);
+			assert.equal(subscriptions.length, 1);
+			const subscription = subscriptions[0]!.disposable;
+			editor.setSelection(new Selection(1, 1, 1, 1));
+			// This must complete while the IPC-like host operation remains pending.
+			await pending;
+			assert.equal(tracker.leaks().some(leak => leak.disposable === subscription), false);
+			const next = PasteAction.runCommand(services, undefined);
+			clipboard.resolveRead(0, 'fresh');
+			await next;
+			if (outcome === 'reject') reject(new Error('Late host trigger failure'));
+			else resolve();
+			await new Promise<void>(resolve => setImmediate(resolve));
+			assert.equal(model.getText(), 'freshanchor');
+			assert.equal(clipboard.triggers, 2);
+		} finally {
+			resolve();
+		}
+	});
+}
+
 test('cut command keeps text when clipboard writing completes after selection or focus changes', async () => {
 	const dom = new JSDOM('<!doctype html><body><main></main><aside></aside></body>');
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
