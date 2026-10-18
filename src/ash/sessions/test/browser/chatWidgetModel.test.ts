@@ -105,10 +105,27 @@ for (const kind of ['Code', 'Cowork'] as const) {
 		});
 	}
 	test(`${kind} owner offer received before subscribe survives hydration and retires on reconnect`, async () => {
-		const pending = new DeferredPromise<ThreadSubscription>(); const f = fixture(kind, () => pending.p, true); using resources = f.resources;
-		f.offers.fire(approval('owned')); assert.equal(f.model.interaction, undefined);
-		await pending.complete({ ...snapshot('A', 1, true), updates: [] }); await f.model.initialize(); assert.equal(f.model.inputState.interaction?.requestId, 'owned');
-		f.reconnect(); await turnTask(); assert.equal(f.model.interaction, undefined);
+		const pending = new DeferredPromise<ThreadSubscription>();
+		const f = fixture(kind, () => pending.p, true);
+		using resources = f.resources;
+		const offer = approval('owned');
+		f.offers.fire(offer);
+		// The service owns the offer while the widget's initial snapshot is in flight.
+		assert.equal(f.chat.getInteractionOffer('session', 'A'), offer);
+		await pending.complete({ ...snapshot('A', 1, true), updates: [] });
+		await f.model.initialize();
+		assert.equal(f.model.interaction, offer.interaction);
+		assert.equal(f.model.inputState.interaction, offer.interaction);
+
+		f.reconnect();
+		assert.equal(f.chat.getInteractionOffer('session', 'A'), undefined);
+		assert.equal(f.model.interaction, undefined);
+		assert.equal(f.model.inputState.interaction, undefined);
+		f.offers.fire(approval('retired-connection'));
+		await turnTask();
+		assert.equal(f.chat.getInteractionOffer('session', 'A'), undefined);
+		assert.equal(f.model.interaction, undefined);
+		assert.equal(f.model.inputState.interaction, undefined);
 	});
 	for (const failed of [false, true]) {
 		test(`${kind} old approval ${failed ? 'error' : 'completion'} cannot erase the next A-B-A offer`, async () => {

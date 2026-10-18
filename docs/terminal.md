@@ -44,7 +44,11 @@ Agent 执行、审批与终端呈现的详细边界以 [Platform Terminal 的前
 
 xterm 的文本和原始字节输入经实例进入同一进程输入 owner。`sendText` 负责换行、执行用的 Enter 与 bracketed paste；原始键盘和二进制输入保留原有编码。输入和尺寸操作等待执行端或 provider 确认，关闭会拒绝排队及进行中的操作，迟到回复不能恢复已关闭的输入链。
 
-剪贴板贡献捕获发起实例和输入 generation，异步读取后核对活动项、连接及屏幕；切换回来也不会发送已失效的粘贴。没有文本选区时，Ctrl+C 继续发送给 Shell；Interrupt Active Command 通过执行宿主发送 SIGINT。
+剪贴板贡献捕获发起实例和输入 generation，异步读取或确认后核对活动项、连接及屏幕；切换回来也不会发送已失效的粘贴。浏览器 paste 在 xterm 处理之前进入同一贡献，经原实例 `sendText` 发送并等待输入确认，不会同时进入 raw onData。没有文本选区时，Ctrl+C 继续发送给 Shell；Interrupt Active Command 通过执行宿主发送 SIGINT。
+
+`terminal.integrated.enableMultiLinePasteWarning` 由 TypeScript 窗口配置解释，沿现有 `settings.json` 的用户／工作区层解析，默认 `auto`。`auto` 在 bracketed paste 模式下放行，其他情况下移除单条命令末尾的换行及空白，对其余多行文本确认；`always` 对 LF、CRLF 和 CR 换行均确认，即使 Shell 启用了 bracketed paste；`never` 关闭确认。对话框仅展示有界开头预览，接受后发送原文；Escape 取消且恢复有效原实例的焦点。
+
+2026-10-18 验证：终端创建、分组、编辑区 Split、装饰菜单、剪贴板与层级边界共 149 项单测通过；整份终端 Chromium 集成 113 项通过，覆盖原进程／屏幕保留、拖拽与键盘重排、精确复制／选择、可信与未可信命令重跑、取消、失效代次、监听释放及中英文交互。Renderer 4,211 文件及 Browser 集成 4,183 文件类型检查通过。日志位于 `.build/todo-local-baselines/terminal-round2-unit-standard.log` 与 `terminal-round2-browser-verified.log`；不代表 Windows／Linux 系统剪贴板或真实 PTY 实机验收。
 
 最近命令选择器从终端历史 owner 读取按 Profile 保存的命令，只在用户明确接受后重跑。听写文字进入原实例输入链，由用户按 Enter 执行；切换实例、退出或隐藏面板取消录音。
 
@@ -64,13 +68,17 @@ Rust 输出字节与 typed Shell boundaries 共享顺序信息。协议适配层
 
 ShellIntegrationAddon 消费已提交事件；`CwdDetectionCapability` 持有已提交 cwd，命令能力模型关联屏幕 markers、输入和输出范围。gap、trim、clear、reuse 与禁止历史存储会撤回相应显示状态。实际 Shell 状态、nonce 和权威历史继续归 Rust；PartialCommandDetection 的回退 marker 只用于导航，不猜测命令文本或退出状态。
 
-命令概览装饰复用同一 marker 生命周期，主题变化更新颜色，失败状态显示在概览尺右侧。Find 搜索本实例已解析的屏幕和 scrollback；可访问输出从同一屏幕读取，关闭辅助视图后恢复原终端焦点。
+命令概览装饰复用同一 marker 生命周期，主题变化更新颜色，失败状态显示在概览尺右侧。检测到命令的标记提供按钮菜单；点击或聚焦后按 Enter／Space／Shift+F10，可复制命令、精确输出或两者、选择从命令输入起点到执行点的文本，以及明确重跑。菜单始终引用 capability 原命令对象；输出读取要求原执行／结束端点均保留，trim 撤销 marker 时关闭菜单并释放回调，不把当前屏幕尾部当作完整输出。
+
+重跑由同实例的输入贡献承接；未受信文本先确认，确认前后校验实例、输入代次、活动项与 command capability 成员身份。关闭、重连、进程替换或切换后不能把迟到确认交给其他实例。Find 搜索本实例已解析的屏幕和 scrollback；可访问输出从同一屏幕读取，关闭辅助视图后恢复原终端焦点。
 
 ## 视图、分组与资源导航
 
-隐藏面板保留实例、PTY、屏幕、待提交输入、分屏比例与焦点。面板组由 `TerminalGroupService` 管理成员，`TerminalGroup` 使用横向 SplitView；列表从组模型派生行顺序、连接线与可访问位置描述。
+隐藏面板保留实例、PTY、屏幕、待提交输入、分屏比例与焦点。面板组由 `TerminalGroupService` 管理成员，`TerminalGroup` 使用横向 SplitView；列表从组模型派生行顺序、连接线与可访问位置描述。标签拖到另一标签之前／之后可加入该组或重排；拖到可见窗格左／右侧使用相同 `moveInstance` 操作，资源只匹配本窗口的存活实例。组内重排将比例与实例一起保留。Join or Reorder Terminals 提供同等键盘选择器，取消、切换实例或关闭后不应用过期结果。
 
 `TerminalEditorService` 将同一个 TerminalInstance 移入或移出编辑区，编辑器 pane 只承载原 xterm。移动不复制屏幕或重建进程；关闭终端编辑器标签通过原编辑器关闭链释放实例。重命名和图标变化由实例保存，标签与编辑器通过原事件更新。
+
+编辑区 Split 捕获原终端所在组，通过编辑器组服务调用现有 EditorPart 的相邻组操作。新终端的创建同时携带原实例和准确的目标组，继续使用 TerminalService 的 cwd／Profile 解析；原 PTY 与屏幕不变。父实例代次失效时关闭迟到的新进程；创建失败只清理本次仍为空的目标组。Panel 位置与方向切换仍须由布局服务提供契约，不能从窗口宽高推断。
 
 文件链接的点击和键盘选择共用 `TerminalLinkContribution` 与路径解析。解析器只产生候选，贡献使用命令所在行的 cwd、执行宿主的 `IPathService` 与原文件服务确认资源，再通过编辑器服务打开文件和行列位置。远端资源保留所属目录的 authority；文本位置从真实 buffer cells 换算，处理宽字符与自动换行。状态、工作区或实例失效会撤回过期打开结果。
 

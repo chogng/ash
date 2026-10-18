@@ -4,7 +4,7 @@ import { IPreferencesService } from '../../../services/preferences/common/prefer
 import { TerminalChatCommandId } from '../terminalContribChatExports.js';
 import { TerminalTabsChatEntry } from './terminalTabsChatEntry.js';
 import { TerminalIconPicker } from './terminalIconPicker.js';
-import { DisposableStore } from '../../../../base/common/lifecycle.js';
+import { DisposableStore, toDisposable } from '../../../../base/common/lifecycle.js';
 import { terminalStrings } from '../common/terminalStrings.js';
 import { TerminalLocation } from '../../../../platform/terminal/common/terminal.js';
 import { localize, localize2 } from '../../../../nls.js';
@@ -28,6 +28,7 @@ import { MarshalledId } from '../../../../base/common/marshallingIds.js';
 import { InstanceContext } from './terminalContextMenu.js';
 import { ICodeEditorService } from '../../../../editor/browser/services/codeEditorService.js';
 import { EndOfLinePreference } from '../../../../editor/common/model.js';
+import { IQuickInputService } from '../../../../platform/quickinput/common/quickInput.js';
 
 
 /** Command definitions use the invoking window's services, never a retained View callback. */
@@ -228,11 +229,14 @@ export function registerTerminalActions(): void {
 		}
 		override async run(accessor: ServicesAccessor, context?: unknown, profileId?: unknown): Promise<void> {
 			const parent = resolveInstance(accessor, context);
-			if (!parent || parent.target === TerminalLocation.Editor || parent.state !== 'running' || parent.isReadOnly || parent.shellLaunchConfig?.customPtyImplementation) return;
+			if (!parent || parent.state !== 'running' || parent.isReadOnly || parent.shellLaunchConfig?.customPtyImplementation) return;
 			const terminals = accessor.get(ITerminalService);
 			const profiles = accessor.get(ITerminalProfileService);
 			const config = profileId === undefined ? parent.shellLaunchConfig : resolveProfile(profiles, profileId, parent.dirId);
-			const created = await terminals.createTerminal({ config, location: { parentTerminal: parent } });
+			const terminalEditors = accessor.get(ITerminalEditorService);
+			const created = parent.target === TerminalLocation.Editor
+				? await terminalEditors.splitInstance(parent, config)
+				: await terminals.createTerminal({ config, location: { parentTerminal: parent } });
 			created?.xterm?.focus();
 		}
 	});
@@ -263,6 +267,45 @@ export function registerTerminalActions(): void {
 			if (!instance) return;
 			accessor.get(ITerminalGroupService).unsplitInstance(instance);
 			instance.xterm?.focus();
+		}
+	});
+	registerAction2(class JoinTerminalAction extends Action2 {
+		constructor() {
+			super({ id: TerminalCommandId.Join, title: localize2('terminal.group.join', 'Terminal: Join or Reorder Terminals...'), f1: true, precondition: TerminalHasActiveInstanceContext.isEqualTo(true) });
+		}
+		override async run(accessor: ServicesAccessor, context?: unknown): Promise<void> {
+			const source = resolveInstance(accessor, context);
+			const terminals = accessor.get(ITerminalService);
+			const groups = accessor.get(ITerminalGroupService);
+			const quickInput = accessor.get(IQuickInputService);
+			if (!source || !groups.getGroupForInstance(source)) return;
+			using lifetime = new DisposableStore();
+			let retired = false;
+			const items = groups.groups.flatMap(group => group.terminalInstances).filter(instance => instance !== source).flatMap(target => (['before', 'after'] as const).map(side => ({
+				label: side === 'before' ? localize('terminal.group.moveBefore', 'Before {0}', target.title) : localize('terminal.group.moveAfter', 'After {0}', target.title),
+				target, side,
+			})));
+			const picker = lifetime.add(quickInput.createQuickPick<typeof items[number]>());
+			picker.items = items;
+			picker.placeholder = localize('terminal.group.joinPlaceholder', 'Choose a terminal and pane position');
+			picker.ariaLabel = picker.placeholder;
+			const retire = (): void => { retired = true; picker.hide(); };
+			lifetime.add(source.onDidChangeState(retire));
+			lifetime.add(terminals.onDidChangeActiveInstance(retire));
+			lifetime.add(terminals.onDidDisposeInstance(instance => { if (instance === source) retire(); }));
+			let selected: typeof items[number] | undefined;
+			const item = await new Promise<typeof selected>(resolve => {
+				lifetime.add(picker.onDidAccept(() => {
+					selected = picker.selectedItems[0];
+					picker.hide();
+				}));
+				lifetime.add(picker.onDidHide(() => resolve(selected)));
+				lifetime.add(toDisposable(() => resolve(undefined)));
+				picker.show();
+			});
+			if (!item || retired || !terminals.instances.includes(source) || !terminals.instances.includes(item.target)) return;
+			groups.moveInstance(source, item.target, item.side);
+			source.xterm?.focus();
 		}
 	});
 	registerAction2(class NewWithProfileAction extends Action2 {

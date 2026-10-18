@@ -75,6 +75,8 @@ export const emptyEditorGroupsService: IEditorGroupsService = Object.freeze({
 	count: 1,
 	getGroup: (id: number) => id === emptyGroup.id ? emptyGroup : undefined,
 	findGroup: () => undefined,
+	addGroup: () => { throw new Error('Unexpected editor group creation in context-key fixture'); },
+	removeGroup: async () => { throw new Error('Unexpected editor group removal in context-key fixture'); },
 });
 
 const emptyEditorService: IEditorService = Object.freeze({

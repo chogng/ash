@@ -1871,6 +1871,30 @@ suite('Terminal Send Sequence', () => {
 suite('TerminalService panel groups', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();
 
+	test('moving a pane between groups and reordering keeps its process and rejects removed members', async () => {
+		const processes = new TestTerminalProcessService([]);
+		using workspace = folderWorkspaceContext();
+		using services = terminalServices(processes, workspace);
+		services.registerInstance(IViewsService, { openView: async () => null } as unknown as IViewsService);
+		const terminals = services.get(ITerminalService);
+		const first = await terminals.createTerminal({ profile: { type: 'default' } });
+		const second = await terminals.createTerminal({ profile: { type: 'default' } });
+		const third = await terminals.createTerminal({ profile: { type: 'default' } });
+		using groups = services.createInstance(TerminalGroupService);
+		const processesBefore = [first.processId, second.processId, third.processId];
+		groups.moveInstance(first, second, 'after');
+		assert.deepEqual(groups.groups.map(group => group.terminalInstances), [[second, first], [third]]);
+		groups.moveInstance(first, second, 'before');
+		assert.deepEqual(groups.groups.map(group => group.terminalInstances), [[first, second], [third]]);
+		groups.moveInstance(first, third, 'after');
+		assert.deepEqual(groups.groups.map(group => group.terminalInstances), [[second], [third, first]]);
+		assert.deepEqual([first.processId, second.processId, third.processId], processesBefore);
+		assert.equal(processes.createCalls.length, 3);
+		await terminals.closeTerminal(first);
+		groups.moveInstance(first, second, 'before');
+		assert.deepEqual(groups.groups.map(group => group.terminalInstances), [[second], [third]]);
+	});
+
 	test('editor focus retains the most recent surviving panel group', async () => {
 		const processes = new TestTerminalProcessService([]);
 		using workspace = folderWorkspaceContext();

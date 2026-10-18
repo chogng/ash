@@ -1,19 +1,23 @@
 import { addDisposableListener } from '../../../../../base/browser/dom.js';
 import { KeyCode, KeyMod } from '../../../../../base/common/keyCodes.js';
 import { Disposable, toDisposable } from '../../../../../base/common/lifecycle.js';
+import { onUnexpectedError } from '../../../../../base/common/errors.js';
 import { isLinux, isWindows } from '../../../../../base/common/platform.js';
-import { localize2 } from '../../../../../nls.js';
+import { localize, localize2 } from '../../../../../nls.js';
 import { Action2, registerAction2 } from '../../../../../platform/actions/common/actions.js';
 import { IClipboardService } from '../../../../../platform/clipboard/common/clipboardService.js';
 import { IContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
 import { ContextKeyExpr } from '../../../../../platform/contextkey/common/contextkey.js';
-import type { ServicesAccessor } from '../../../../../platform/instantiation/common/instantiation.js';
+import { IInstantiationService, type ServicesAccessor } from '../../../../../platform/instantiation/common/instantiation.js';
 import { KeybindingWeight } from '../../../../../platform/keybinding/common/keybindingsRegistry.js';
 import { ITerminalService, type ITerminalContribution, type ITerminalInstance, type IXtermTerminal } from '../../../terminal/browser/terminal.js';
 import { registerTerminalContribution, type ITerminalContributionContext } from '../../../terminal/browser/terminalExtensions.js';
 
 import { TerminalCommandId } from '../../../terminal/common/terminal.js';
 import { TerminalContextKeys, TerminalHasActiveInstanceContext } from '../../../terminal/common/terminalContextKey.js';
+import { shouldPasteTerminalText } from './terminalClipboard.js';
+import { IDialogService } from '../../../../../platform/dialogs/common/dialogs.js';
+import { TerminalCapability } from '../../../../../platform/terminal/common/capabilities/capabilities.js';
 
 /** Clipboard operations retain their initiating instance across asynchronous host reads. */
 export class TerminalClipboardContribution extends Disposable implements ITerminalContribution {
@@ -26,6 +30,8 @@ export class TerminalClipboardContribution extends Disposable implements ITermin
 		@IClipboardService private readonly clipboard: IClipboardService,
 		@IContextKeyService private readonly contextKeys: IContextKeyService,
 		@ITerminalService private readonly terminals: ITerminalService,
+		@IInstantiationService private readonly instantiation: IInstantiationService,
+		@IDialogService private readonly dialogs: IDialogService,
 	) {
 		super();
 		this._register(context.instance.onDidChangeState(() => this.inputGeneration++));
@@ -39,6 +45,26 @@ export class TerminalClipboardContribution extends Disposable implements ITermin
 
 	public xtermReady(screen: IXtermTerminal): void {
 		this.screen = screen;
+		this._register(screen.onDidRequestRunCommand(async ({ command, noNewLine }) => {
+			const generation = this.inputGeneration;
+			const instance = this.context.instance;
+			const current = (): boolean => !this.isDisposed && !screen.isDisposed && this.inputGeneration === generation
+				&& instance.state === 'running' && !instance.isReadOnly && this.terminals.activeInstance === instance
+				&& instance.capabilities?.get(TerminalCapability.CommandDetection)?.commands.includes(command) === true;
+			if (!command.command || !current()) return;
+			try {
+				if (!command.isTrusted) {
+					const result = await this.dialogs.confirm({
+						message: localize('terminal.command.confirmRerun', 'Run this command again?'),
+						detail: command.command,
+						primaryButton: localize('terminal.command.confirmRun', 'Run'),
+					});
+					if (!result.confirmed || !current()) return;
+				}
+				screen.focus();
+				await instance.sendText(command.command, !noNewLine);
+			} catch (error) { onUnexpectedError(error); }
+		}));
 		const textarea = screen.raw.textarea!;
 		const scope = this._register(this.contextKeys.createScoped(textarea));
 		const selected = TerminalContextKeys.textSelectedInFocused.bindTo(scope);
@@ -48,6 +74,13 @@ export class TerminalClipboardContribution extends Disposable implements ITermin
 		this._register(toDisposable(() => listener.dispose()));
 		this._register(addDisposableListener(textarea, 'focus', updateSelection));
 		this._register(addDisposableListener(textarea, 'blur', () => selected.set(false)));
+		// xterm listens on both its textarea and root. Capture before either handler
+		// so browser-menu paste uses the same confirmation and acknowledged input path.
+		this._register(addDisposableListener(screen.element, 'paste', (event: ClipboardEvent) => {
+			event.preventDefault();
+			event.stopImmediatePropagation();
+			void this.readAndPaste(undefined, event.clipboardData?.getData('text/plain') ?? '').catch(onUnexpectedError);
+		}, true));
 	}
 
 	public async copySelection(): Promise<void> {
@@ -65,7 +98,7 @@ export class TerminalClipboardContribution extends Disposable implements ITermin
 		return this.readAndPaste('selection');
 	}
 
-	private async readAndPaste(type?: string): Promise<void> {
+	private async readAndPaste(type?: string, suppliedText?: string): Promise<void> {
 		const screen = this.screen;
 		const instance = this.context.instance;
 		const generation = this.inputGeneration;
@@ -73,10 +106,14 @@ export class TerminalClipboardContribution extends Disposable implements ITermin
 			&& generation === this.inputGeneration && instance.state === 'running' && !instance.isReadOnly
 			&& this.terminals.activeInstance === instance && screen.element.isConnected && !screen.element.hidden;
 		if (!canPaste()) return;
-		const text = await this.clipboard.readText(type);
+		const text = suppliedText ?? await this.clipboard.readText(type);
 		if (!text || !canPaste()) return;
+		const decision = await this.instantiation.invokeFunction(shouldPasteTerminalText, text, screen!.raw.modes.bracketedPasteMode);
+		if (!canPaste()) return;
 		screen!.focus();
-		await instance.sendText(text, false, true);
+		if (decision === false) return;
+		const pasteText = typeof decision === 'object' ? decision.modifiedText : text;
+		if (pasteText) await instance.sendText(pasteText, false, true);
 	}
 
 	protected override disposeCore(): void {

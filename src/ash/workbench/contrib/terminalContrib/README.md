@@ -14,4 +14,4 @@ history 贡献持久化最近命令并提供选择重跑。终端输出的帮助
 
 跨层生命周期见 [Terminal 职责与运行契约](../../../../../docs/terminal.md)，未完成动作和可选增强由 [Terminal TODO](../../../../../TODO.md#terminal--todo) 及[发展候选](../../../../../TODO.md#发展候选未排期)维护。听写样式归 `terminal/browser/media/terminalVoice.css`，听写会话归本目录。
 
-Clipboard 贡献按实例提供复制、复制并清除、粘贴命令；Linux 另提供 selection clipboard 粘贴。焦点选区键只影响终端复制快捷键，无选区 Ctrl+C 仍发送给 Shell。宿主剪贴板读取完成后再次检查实例、连接代次、活动项与屏幕可用性；切换回来也不会发送失效结果。粘贴使用 `sendText` 的换行、child paste mode 与输入确认，不复制输入队列。关闭实例释放监听和 DOM 上下文。HTML／资源粘贴、copy-on-selection、多行确认与 clipboard 配置仍未实现。
+Clipboard 贡献按实例提供复制、复制并清除、粘贴命令；Linux 另提供 selection clipboard 粘贴。焦点选区键只影响终端复制快捷键，无选区 Ctrl+C 仍发送给 Shell。命令与浏览器 paste 共用 `shouldPasteTerminalText` 的多行决策及 `terminal.integrated.enableMultiLinePasteWarning` 设置。宿主剪贴板读取和确认完成后再次检查实例、连接代次、活动项与屏幕可用性；切换回来也不会发送失效结果。命令标记的复制／选区由 DecorationAddon 读取原 command capability 范围；重跑请求通过 xterm 事件到达本实例贡献，在未受信文本确认前后核对输入代次及原命令成员身份。所有发送复用实例 `sendText` 与输入确认，不复制输入队列。关闭实例释放监听和 DOM 上下文。HTML／资源粘贴、copy-on-selection 与其他 clipboard 偏好仍未实现。

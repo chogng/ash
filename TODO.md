@@ -2,7 +2,7 @@
 
 按功能记录已选范围内尚未完成或缺少通过证据的工作，完成后移除。2026-10-18 以 Ash `e323c7bcb` 对照本地 VS Code `a2acc8c864a`，源码核对集中于 Terminal、Preferences、Workspace、Sessions 与 Speech／MCP App 入口的公开契约、生产调用及相关测试；其他领域按已有记录分类。上述清单审查未重跑历史验收；后续完成项以各领域的验证记录为准，不将源码存在当作行为通过。
 
-任务标签：**可做**表示已能定位现有入口与 owner，可选择一个行为切片实施；**后端前置**表示须先闭合领域或宿主契约；**复核**表示还需确认具体消费者或复现旧问题；**验收**表示缺真实环境证据；**测量**表示先取得数据；**Ash 产品**表示独立产品需求，不能按 VS Code 是否存在来删除。可选增强统一放在文末的[发展候选（未排期）](#发展候选未排期)，不计入当前交付待办。
+任务标签：**可做**表示已能定位现有入口与 owner，可选择一个行为切片实施；**后端前置**表示须先闭合领域或宿主契约；**布局前置**表示须先补齐布局 owner 的位置或移动契约；**复核**表示还需确认具体消费者或复现旧问题；**验收**表示缺真实环境证据；**测量**表示先取得数据；**Ash 产品**表示独立产品需求，不能按 VS Code 是否存在来删除。可选增强统一放在文末的[发展候选（未排期）](#发展候选未排期)，不计入当前交付待办。
 
 ## MXC · 跨平台验收
 
@@ -85,13 +85,10 @@
 - [ ] **验收** · 对已接通的提交／会话切换、Changes 审阅与 PR 表单执行上游窗口配对场景，观察仓库身份、修订、焦点、取消和关闭后的结果；现有 Ash Electron、浏览器和架构回归仅覆盖原有范围。尚未接入的 CI 操作和后台合并不纳入这次已实现行为的验收。
 - [ ] **复核** · 复核并重跑 Common 的标准 unit runner，闭合 Windows `Get-CimInstance Win32_Process` 清理超时；原 203 项直接 Mocha 结果保留其范围，不当作整条标准命令通过。
 
-- [ ] **复核 · 既有单测基线**：`SessionsPart remains owned by the Sessions product layer` 的 fixture 缺少 `hostService`；已在 `b4ea368dd` 原始源码复现，待独立修正测试装配。证据为 `.build/chat-requests-baseline-sessions.log`。
-
 布局、工作集、Common 与 Changes 契约见 [Sessions](docs/sessions.md)。
 
 ## Chat / Speech · TODO
 
-- [ ] **复核 · 既有单测基线**：`Code owner offer received before subscribe survives hydration and retires on reconnect` 在重连后仍保留审批 offer；已在 `b4ea368dd` 原始源码复现，待独立定位。证据为 `.build/chat-requests-baseline-offer.log`。
 - [ ] **后端前置** · Speech 动态注册：Host 当前 `sealActivation` 冻结注册，`host.mjs` 只允许 activating 期间 register。先为原 admitted registry 定义晚注册／注销与后端 fleet 更新端口，覆盖精确 registration／activation generation、退休清理和迟到事件；不用前端轮询或另一张 provider 表替代。
 - [ ] **后端前置** · 标准 Voice／hold 命令先闭合聚焦 Chat widget 与输入生命周期的 `IChatWidgetService` 调用链；PTT／audio／session-context 的完整 VoiceClient 仍缺兼容 producer。现有 Ash Call／VoiceAgent 验证不代表上游 API 对齐；远端自有 Voice/Core bridge 不继续扩展为本轮对齐任务。
 - [ ] **后端前置** · MCP App sampling、media context 与双向 App tools 按原 Core 权限和能力契约逐项补齐；现有 tools/call、资源、消息/context、CSP、导出、诊断和 fullscreen 保持回归，缺失 capability 不宣告。
@@ -105,11 +102,8 @@
 
 当前进程、屏幕、关闭保护、reload 与输出背压已接通，见 [Terminal](docs/terminal.md)。以下按现有调用链分批推进；未排期的独立增强见文末发展候选。上游行为参照 `terminalActions.ts`、`terminalTabsList.ts`、`terminalContrib/clipboard` 与 `terminalContrib/history`，不以文件数衡量对齐。
 
-- [ ] **可做 · 多行粘贴确认**：`TerminalClipboardContribution` 已拥有菜单／快捷键粘贴，浏览器原始粘贴还须核对 xterm 输入入口。统一适用条件、确认和取消行为；bracketed paste 不能替代确认。保留既有异步读取期间的实例身份与 generation 校验。参照上游 `terminalClipboard.test.ts` 的换行和 bracketed-paste 场景。
-- [ ] **可做 · 命令级复制、重跑与选区**：现有 command capability、markers、完成状态和普通文本复制可复用，`DecorationAddon` 目前仅显示／hover。补命令文本／输出复制、命令范围选区及明确触发的重跑；先核对输出边界和 buffer trim，不把屏幕剩余内容当作完整命令输出。异步菜单、关闭及重连不能把动作发给另一实例。
-- [ ] **可做 · 分屏方向与编辑区分屏**：`TerminalGroup` 固定创建横向 `SplitView`，Split 命令明确跳过 Editor 目标。分别闭合面板方向切换和从编辑区终端创建相邻终端，沿现有 group／editor owner 保留 PTY、输入、比例与焦点。
-- [ ] **可做 · 拖动合并、跨组移动与组内重排**：`TerminalTabList` 仅改变全局实例顺序；已有 `joinInstances`、组成员操作和取消拆分。补拖放到组／窗格的行为及键盘等价入口，不把组连接线当作交互完成。
-- [ ] **可做 · 最近目录**：已有命令 cwd 元数据和最近命令选择器，但没有 Go To Recent Directory。目录历史归既有终端历史 owner，选择后按执行宿主 Shell 发送路径；覆盖无 cwd、重复目录、切换实例和取消。Shell 历史文件导入另列为发展候选。
+- [ ] **布局前置 · 面板分屏方向**：编辑区 Split 已接通相邻组创建，原实例／屏幕保留，复用原终端创建链解析 cwd 与 Profile；120 项单测（含层级检查）、10 项分组／编辑区 Chromium 场景通过，见 `.build/todo-local-baselines/terminal-owner-unit-final.log` 与 `editor-group-browser.log`。剩余方向切换依赖布局 owner 的真实 Panel 位置契约：当前 `IWorkbenchLayoutService` 没有 `getPanelPosition`，Part 也未提供移动 Panel 位置的操作。不能按宽高猜位置或在 Terminal 自建第二份 Panel 状态；先闭合布局契约，再让组按方向保留相对尺寸和焦点。
+- [ ] **后端前置 · 最近目录**：已有命令 cwd 元数据和最近命令选择器，但没有 Go To Recent Directory。目录历史归既有终端历史 owner，需按执行宿主隔离。当前实例没有已闭合的 Shell 类型／路径发送端口：`processReady.shellType` 只随有序屏幕事件进入 ShellIntegrationAddon，`AhpTerminalCommandSource` 的重连快照没有此字段；不能按 Profile 显示名猜 Shell 或拼接原始目录。先与运行当前文件共用执行宿主路径发送契约，再补无 cwd、重复目录、切换实例和取消。Shell 历史文件导入另列为发展候选。
 - [ ] **后端前置 · 运行当前文件**：Ash 尚无上游 `sendPath` 对应的实例端口。先闭合执行宿主路径、Shell quoting、本地／远端资源匹配和不支持 scheme 的反馈，再接 Run Active File；不能把编辑器 URI 直接当命令文本。与 Run Selected Text 分开验收。
 - [ ] **后端前置 · 文件／文件夹拖入输入路径**：当前屏幕没有文件 drop 链，标签 drop 仅接受本地终端实例。复用上一项的执行宿主路径发送契约，覆盖 OS 文件与工作台资源拖动；不另造路径映射。
 - [ ] **后端前置 · 跨窗口转移**：独立定义进程租约、屏幕及输入交接并验收；现有 30 秒租约只闭合同一 Desktop 窗口 reload，Web 保持 connection-owned 生命周期。
@@ -123,7 +117,6 @@
 
 - [ ] **复核** · 完成 3.4 装饰／View Zone 的软换行、隐藏行、滚动交叉场景及 Electron 验收。零高度展开／收起、折叠标题坐标和回调 `this` 已修复并有 Standalone Chromium 回归，不能据此宣称整个 3.4 完成。
 - [ ] **验收** · 补系统 IME 候选窗口、Electron 平台及屏幕阅读器验收；浏览器合成 composition 事件不代替物理输入法。
-- [ ] **复核** · 复核历史 `editor-architecture` 11 项和 `dom-foundation` 2 项失败在当前 HEAD 的状态，按生产调用链处理缺口／过时断言，不削弱测试。2026-09-13 的 242 文件 unit、54 项浏览器及构建结果是历史基线。
 
 后续阶段由[编辑器路线图](docs/design/editor-roadmap.md)维护；本清单不再把整条路线图重复记成一个未完成任务。
 
@@ -167,7 +160,7 @@
 | 终端进程属性与 backend port                | 先找到缺失属性、其他信号或 child-process／port 的具体消费者，再扩充 Rust 领域契约；现有 SIGINT 链不表示完整支持。                                                                                                                                                                                                                                                                                                                                                                           |
 | Fish 增强 Shell Integration                | Fish 启动与增强注入分开；确定支持范围后补命令生命周期、可信 cwd／env 及实机回归。基础 Fish 运行验收仍在当前待办。                                                                                                                                                                                                                                                                                                                                                                           |
 | Shell 历史文件导入                         | 将 Shell 历史与 Ash 最近命令组合。需要执行宿主侧读取、格式解析、限额和隐私／禁存配置，不让 Renderer 读取另一台机器的历史文件。                                                                                                                                                                                                                                                                                                                                                              |
-| 鼠标剪贴板偏好                             | 选中即复制、可配置右键复制／粘贴；沿 `TerminalClipboardContribution` 和已有配置链实现，覆盖平台差异、焦点及异步剪贴板失败。多行确认单独保留为当前待办。                                                                                                                                                                                                                                                                                                                                     |
+| 鼠标剪贴板偏好                             | 选中即复制、可配置右键复制／粘贴；沿 `TerminalClipboardContribution` 和已有配置链实现，覆盖平台差异、焦点及异步剪贴板失败。复用现有多行粘贴确认。                                                                                                                                                                                                                                                                                                                                           |
 | 完成通知／自动回复                         | 分别确认后台命令完成提醒和固定响应规则的产品需求；bell signal 不等于完成通知，自动回复需复用后端输入与权限边界。                                                                                                                                                                                                                                                                                                                                                                            |
 | 远端本地回显／尺寸提示／独立缩放           | 先量化输入延迟或确认显示需求，再选具体交互，避免用局部回显掩盖真实 PTY 状态。                                                                                                                                                                                                                                                                                                                                                                                                               |
 | GPU／字符宽度／图片显示                    | 先证明 renderer 性能问题、具体 Unicode／grapheme 兼容用例或图片协议需求；不能仅凭没有 addon 判断现有中文显示缺失。                                                                                                                                                                                                                                                                                                                                                                          |

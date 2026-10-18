@@ -1,3 +1,5 @@
+import { BrowserClipboardService } from '../../../../../../platform/clipboard/browser/clipboardService.js';
+import type { IContextMenuService } from '../../../../../../platform/contextview/browser/contextView.js';
 import { TestThemeService } from '../../../../../../platform/theme/test/common/testThemeService.js';
 import { lightColorTheme } from '../../../../../../platform/theme/common/colorTheme.js';
 import { TerminalCapability } from '../../../../../../platform/terminal/common/capabilities/capabilities.js';
@@ -14,6 +16,8 @@ import { DisposableStore } from '../../../../../../base/common/lifecycle.js';
 import { Event } from '../../../../../../base/common/event.js';
 import { TestConfigurationService } from '../../../../../services/configuration/test/common/testServices.js';
 import '../../../common/terminalConfiguration.js';
+
+const menus: IContextMenuService = { contextMenuStyle: 'custom', onDidShowContextMenu: Event.None, onDidHideContextMenu: Event.None, showContextMenu() { assert.fail('Unexpected command menu'); }, hideContextMenu() { } };
 
 ensureNoDisposablesAreLeakedInTestSuite();
 
@@ -32,7 +36,7 @@ function createScreen(lifetime: DisposableStore, viewportY: number, lines: reado
 	} as unknown as Terminal;
 	const capabilities = lifetime.add(new TerminalCapabilityStore());
 	capabilities.add(TerminalCapability.BufferMarkDetection, lifetime.add(new BufferMarkCapability(terminal)));
-	const decorations = lifetime.add(new DecorationAddon(capabilities, lifetime.add(new TestConfigurationService()), lifetime.add(new TestThemeService(lightColorTheme))));
+	const decorations = lifetime.add(new DecorationAddon(capabilities, lifetime.add(new TestConfigurationService()), lifetime.add(new TestThemeService(lightColorTheme)), lifetime.add(new BrowserClipboardService(undefined)), menus));
 	decorations.activate(terminal);
 	for (const { key } of lines) {
 		const [process, commandId = key] = key.split(':');

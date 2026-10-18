@@ -57,6 +57,7 @@ export const enum TerminalCommandId {
 	RunSelectedText = 'workbench.action.terminal.runSelectedText',
 	Split = 'workbench.action.terminal.split',
 	Unsplit = 'workbench.action.terminal.unsplit',
+	Join = 'workbench.action.terminal.join',
 	FocusNextPane = 'workbench.action.terminal.focusNextPane',
 	FocusPreviousPane = 'workbench.action.terminal.focusPreviousPane',
 }

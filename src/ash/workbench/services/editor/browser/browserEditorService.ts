@@ -5,7 +5,7 @@ import { Disposable } from '../../../../base/common/lifecycle.js';
 import { isCancellationError } from '../../../../base/common/errors.js';
 import type { IEditorPart } from "../../../browser/parts/editor/editorPart.js";
 import type { EditorOpenOptions, EditorOpenTarget, IEditorService, ISaveAllEditorsOptions, ISaveEditorsOptions, ISaveEditorsResult } from "../common/editorService.js";
-import type { IEditorGroup, IEditorGroupsService, IFindGroupScope } from '../common/editorGroupsService.js';
+import { GroupDirection, type IEditorGroup, type IEditorGroupsService, type IFindGroupScope } from '../common/editorGroupsService.js';
 import type { EditorGroupId, EditorGroupState, EditorPartChangeEvent, EditorPartState } from "../common/editorState.js";
 
 /** Projects the Editor Part into the resource-oriented Workbench editor contract. */
@@ -75,6 +75,16 @@ export class BrowserEditorService extends Disposable implements IEditorService, 
 
 	getGroup(id: EditorGroupId): IEditorGroup | undefined {
 		return this.editorPart.groups.find(group => group.id === id);
+	}
+
+	addGroup(location: IEditorGroup | EditorGroupId, direction: GroupDirection): IEditorGroup {
+		const reference = typeof location === 'number' ? location : location.id;
+		const directions = { [GroupDirection.UP]: 'up', [GroupDirection.DOWN]: 'down', [GroupDirection.LEFT]: 'left', [GroupDirection.RIGHT]: 'right' } as const;
+		return this.editorPart.addGroup(reference, directions[direction]);
+	}
+
+	removeGroup(group: IEditorGroup | EditorGroupId): Promise<boolean> {
+		return this.editorPart.removeGroup(typeof group === 'number' ? group : group.id);
 	}
 
 	public findGroup(scope: IFindGroupScope, source?: IEditorGroup): IEditorGroup | undefined {

@@ -30,6 +30,15 @@
 	cursor: default;
 }
 
+.ash-terminal-command-status[role="button"] {
+	cursor: pointer;
+}
+
+.ash-terminal-command-status[role="button"]:focus-visible {
+	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
+	outline-offset: var(--ash-spacing-size20);
+}
+
 .ash-terminal-command-icon {
 	display: flex;
 	align-items: center;

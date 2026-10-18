@@ -5,6 +5,8 @@ import { TerminalService } from '../../../src/ash/workbench/contrib/terminal/bro
 import { TerminalEditorService } from '../../../src/ash/workbench/contrib/terminal/browser/terminalEditorService.js';
 import { IDialogService } from '../../../src/ash/platform/dialogs/common/dialogs.js';
 import { DialogService } from '../../../src/ash/workbench/services/dialogs/common/dialogService.js';
+import { BrowserDialogHandler } from '../../../src/ash/workbench/browser/parts/dialogs/dialog.js';
+import { DialogHandlerContribution } from '../../../src/ash/workbench/browser/parts/dialogs/dialog.web.contribution.js';
 import { ISecretStorageService, BaseSecretStorageService } from '../../../src/ash/platform/secrets/common/secrets.js';
 import { IUriIdentityService } from '../../../src/ash/platform/uriIdentity/common/uriIdentity.js';
 import { IEditorGroupsService } from '../../../src/ash/workbench/services/editor/common/editorGroupsService.js';
@@ -112,6 +114,7 @@ if (new URLSearchParams(location.search).has('workbench')) {
 store.add(installTestDictationAudio(window));
 setIconResolver(document, icon => getIconDefinition(icon));
 function setupTerminalFixtureServices(services: import('../../../src/ash/platform/instantiation/common/instantiationService.js').InstantiationService, lifetime: DisposableStore): void {
+	// Keep the concrete owner observable after scope disposal for cleanup assertions.
 	if (!services.has(ITerminalService)) services.registerSingleton(ITerminalService, () => services.createInstance(TerminalService), { instantiation: InstantiationType.Delayed });
 	if (!services.has(IDialogService)) services.registerSingleton(IDialogService, () => services.createInstance(DialogService));
 	if (!services.has(ISecretStorageService)) services.registerInstance(ISecretStorageService, lifetime.add(new BaseSecretStorageService()));
@@ -707,8 +710,8 @@ if (new URLSearchParams(location.search).has('assembly')) {
 		const isolated = services[0].instances[0] !== services[1].instances[0];
 		for (const service of services) { await service.closeTerminal(service.instances[0]); }
 		let missingDependency = '';
-		const missing = resources.add(new InstantiationService(new ServiceCollection([IWorkspaceContextService, workspace])));
-		try { installWorkbenchServiceContributions({ container: missing, register: value => resources.add(value), blockRestorationUntil: () => { } }); }
+		const missing = resources.add(widgetServices.createChild(new ServiceCollection([IWorkspaceContextService, workspace])));
+		try { install(missing); }
 		catch (error) { missingDependency = String(error); }
 		return { isolated, output, calls, missingDependency, remaining: services.map(service => service.instances.length) };
 	};
@@ -1018,6 +1021,10 @@ if (new URLSearchParams(location.search).has('input')) {
 	const workspace = store.add(new TestWorkspaceService({ id: 'input', uri: URI.file('/workspace') }));
 	const services = store.add(widgetServices.createChild(new ServiceCollection([ITerminalProcessService, processes], [IWorkspaceContextService, workspace])));
 	setupTerminalFixtureServices(services, store);
+	if (clipboardFixture) {
+		const dialogs = services.get(IDialogService) as DialogService;
+		store.add(new DialogHandlerContribution(dialogs.model, new BrowserDialogHandler(document.body)));
+	}
 	installWorkbenchServiceContributions({ container: services, register: value => store.add(value), blockRestorationUntil: () => { } });
 	const terminals = services.get(ITerminalService);
 	store.add(terminals.onDidCreateInstance(instance => {
@@ -1110,6 +1117,7 @@ if (new URLSearchParams(location.search).has('input')) {
 					import('../../../src/ash/workbench/contrib/terminal/browser/terminalEditorService.js'),
 				]);
 				window.ashTerminalEditorIntegration = {
+					groups: () => editors.groups.map(group => ({ id: group.id, resources: group.inputs.map(input => input.resource.toString()) })),
 					state: () => ({ instances: terminals.instances.length, created: nextTerminal, editorTabs: editors.groups.flatMap(group => group.inputs).length, originalScreen: terminal.xterm === screen, target: terminal.target }),
 					disconnect: () => connectionChanged.fire('stopped'),
 					close: async () => { const input = editors.activeEditor; if (input) await editors.activeGroup.closeEditor(input); },
@@ -1265,6 +1273,7 @@ declare global {
 			errors(): readonly string[];
 		};
 		ashTerminalEditorIntegration: {
+			groups(): { id: number; resources: string[]; }[];
 			disconnect(): void;
 			state(): { instances: number; created: number; editorTabs: number; originalScreen: boolean; target: number | undefined; };
 			close(): Promise<void>;

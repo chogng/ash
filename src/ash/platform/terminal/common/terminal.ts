@@ -17,6 +17,7 @@ export const enum TerminalSettingPrefix {
 
 export const enum TerminalSettingId {
 	Cwd = 'terminal.integrated.cwd',
+	EnableMultiLinePasteWarning = 'terminal.integrated.enableMultiLinePasteWarning',
 }
 
 export type TerminalProcessConnectionState = "stopped" | "starting" | "initializing" | "ready" | "stopping" | "crashed" | "restarting";

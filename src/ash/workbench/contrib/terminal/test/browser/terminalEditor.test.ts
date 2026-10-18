@@ -1,8 +1,12 @@
-import { Event } from '../../../../../base/common/event.js';
+import { Emitter, Event } from '../../../../../base/common/event.js';
+import { DisposableStore } from '../../../../../base/common/lifecycle.js';
+import { DeferredPromise } from '../../../../../base/common/async.js';
+import { isCancellationError } from '../../../../../base/common/errors.js';
+import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
 import { TerminalEditorService } from '../../browser/terminalEditorService.js';
-import { ITerminalService, type ITerminalInstance } from '../../browser/terminal.js';
+import { ITerminalService, type ITerminalInstance, type ICreateTerminalOptions, type TerminalInstanceState } from '../../browser/terminal.js';
 import { IEditorService } from '../../../../services/editor/common/editorService.js';
-import { IEditorGroupsService } from '../../../../services/editor/common/editorGroupsService.js';
+import { IEditorGroupsService, GroupDirection, type IEditorGroup } from '../../../../services/editor/common/editorGroupsService.js';
 import { TerminalLocation } from '../../../../../platform/terminal/common/terminal.js';
 import assert from 'node:assert/strict';
 import { suite, test } from 'mocha';
@@ -11,6 +15,8 @@ import { TerminalEditorInput } from '../../browser/terminalEditorInput.js';
 import { TerminalInputSerializer } from '../../browser/terminalEditorSerializer.js';
 import { getTerminalUri, parseTerminalUri, getInstanceFromResource } from '../../browser/terminalUri.js';
 import { EditorInputSerializerRegistry } from '../../../../services/editor/common/editorInputSerializer.js';
+
+ensureNoDisposablesAreLeakedInTestSuite();
 
 suite('Terminal editor resource boundary', () => {
 	test('working sets persist only identity, not executable configuration', () => {
@@ -56,4 +62,64 @@ suite('Terminal editor destination', () => {
 		assert.deepEqual(options, { pinned: true, ignoreError: true, preserveFocus: undefined });
 		assert.deepEqual(target, { groupId: 12 });
 	});
+});
+
+function splitFixture() {
+	const lifetime = new DisposableStore();
+	const state = lifetime.add(new Emitter<TerminalInstanceState>());
+	const source = { resource: getTerminalUri('split', 1), target: TerminalLocation.Editor, state: 'running', onDidChangeState: state.event, shellLaunchConfig: { executable: '/bin/bash', env: { TEST: 'retained' } } } as unknown as ITerminalInstance;
+	const created = { resource: getTerminalUri('split', 2), target: TerminalLocation.Editor } as ITerminalInstance;
+	const input = new TerminalEditorInput(source.resource!, source);
+	const origin = { id: 7, inputs: [input], onDidChangeEditors: Event.None } as unknown as IEditorGroup;
+	const destination = { id: 8, inputs: [], onDidChangeEditors: Event.None } as unknown as IEditorGroup;
+	const allGroups = [origin];
+	const instances = [source];
+	const closed: ITerminalInstance[] = [];
+	const removed: IEditorGroup[] = [];
+	const requests: ICreateTerminalOptions[] = [];
+	let create = async (options: ICreateTerminalOptions): Promise<ITerminalInstance> => { requests.push(options); instances.push(created); return created; };
+	const terminals = { instances, onDidDisposeInstance: Event.None, onDidChangeInstances: Event.None, createTerminal: (options: ICreateTerminalOptions) => create(options), closeTerminal: async (instance: ITerminalInstance) => { closed.push(instance); instances.splice(instances.indexOf(instance), 1); } } as unknown as ITerminalService;
+	const groups = {
+		groups: allGroups, onDidChangeGroups: Event.None,
+		getGroup: (id: number) => allGroups.find(group => group.id === id),
+		addGroup: (reference: IEditorGroup, direction: GroupDirection) => { assert.equal(reference, origin); assert.equal(direction, GroupDirection.RIGHT); allGroups.push(destination); return destination; },
+		removeGroup: async (group: IEditorGroup) => { removed.push(group); allGroups.splice(allGroups.indexOf(group), 1); return true; },
+	} as unknown as IEditorGroupsService;
+	const service = lifetime.add(new TerminalEditorService(terminals, { onDidActiveEditorChange: Event.None } as IEditorService, groups));
+	return { lifetime, source, created, destination, instances, state, closed, removed, requests, service, setCreate: (value: typeof create) => create = value };
+}
+
+test('editor terminal split captures the original group and reuses parent launch resolution', async () => {
+	const f = splitFixture();
+	using lifetime = f.lifetime;
+	assert.equal(await f.service.splitInstance(f.source), f.created);
+	assert.deepEqual(f.requests, [{ config: f.source.shellLaunchConfig, location: { parentTerminal: f.source, viewColumn: 8 } }]);
+	assert.deepEqual(f.closed, []);
+	assert.deepEqual(f.removed, []);
+});
+
+test('editor terminal split removes only its empty destination after creation fails', async () => {
+	const f = splitFixture();
+	using lifetime = f.lifetime;
+	f.setCreate(async () => { throw new Error('Shell launch failed'); });
+	await assert.rejects(f.service.splitInstance(f.source), /Shell launch failed/);
+	assert.deepEqual(f.instances, [f.source]);
+	assert.deepEqual(f.closed, []);
+	assert.deepEqual(f.removed, [f.destination]);
+});
+
+test('editor terminal split closes a late new process after the parent changes generation', async () => {
+	const f = splitFixture();
+	using lifetime = f.lifetime;
+	const pending = new DeferredPromise<ITerminalInstance>();
+	f.setCreate(() => pending.p);
+	const splitting = f.service.splitInstance(f.source);
+	const rejected = assert.rejects(splitting, isCancellationError);
+	f.state.fire('disconnected');
+	f.instances.push(f.created);
+	await pending.complete(f.created);
+	await rejected;
+	assert.deepEqual(f.instances, [f.source]);
+	assert.deepEqual(f.closed, [f.created]);
+	assert.deepEqual(f.removed, [f.destination]);
 });

@@ -10,7 +10,7 @@ Work / Code 工作台与通用文档编辑器的目标行为见 [目标设计](w
 
 - 本路线图覆盖 `src/ash/editor`、它在 Workbench 中的 pane 和服务接线，以及 Standalone 入口。Rust App Server 提供文件与语言等异步能力，不接管 TypeScript 编辑器的同步文本、选区或输入状态。
 - 同一职责要对齐 VS Code 的公开名称、参数、事件、生命周期和可观察行为。Ash 内部依照现有 `TextModel`、视图和服务所有权独立实现；不复制上游私有结构，也不为同名而添加空方法。
-- 截至 2026-09-13，Node 24 下 Editor 单测为 242/242 文件通过，浏览器集成为 54/54 通过，Renderer 构建通过。这证明已覆盖的路径可运行，不代表整个 Editor 已完成。`editor-architecture.test.ts` 仍有 11 项失败，`dom-foundation.test.ts` 仍有 2 项失败；其中既有真实职责缺口，也有需核实的旧断言。它们保持可见，逐项按生产调用链处理。
+- 截至 2026-09-13，Node 24 下 Editor 单测为 242/242 文件通过，浏览器集成为 54/54 通过，Renderer 构建通过。这证明已覆盖的路径可运行，不代表整个 Editor 已完成。2026-10-18 通过标准 `pnpm test:unit` 重新编译并复核 `editor-architecture.test.ts`（24 项）和 `dom-foundation.test.ts`（2 项），全部通过，未修改断言；旧的 11＋2 项失败已不适用于当前源码。日志为 `.build/todo-local-baselines/before.log` 和 `after.log`；此次复核不替代完整 Editor 回归。
 
 ## API 名称与契约怎么对齐
 

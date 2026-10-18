@@ -1,10 +1,10 @@
 import { Disposable, DisposableMap, DisposableStore } from '../../../../base/common/lifecycle.js';
 import type { URI } from '../../../../base/common/uri.js';
-import { onUnexpectedError } from '../../../../base/common/errors.js';
+import { canceled, onUnexpectedError } from '../../../../base/common/errors.js';
 import { TerminalLocation } from '../../../../platform/terminal/common/terminal.js';
 import { IEditorService } from '../../../services/editor/common/editorService.js';
-import { IEditorGroupsService } from '../../../services/editor/common/editorGroupsService.js';
-import { ITerminalService, type ITerminalEditorService, type ITerminalInstance } from './terminal.js';
+import { IEditorGroupsService, GroupDirection } from '../../../services/editor/common/editorGroupsService.js';
+import { ITerminalService, type ITerminalEditorService, type ITerminalInstance, type ICreateTerminalOptions } from './terminal.js';
 import { TerminalEditorInput } from './terminalEditorInput.js';
 import { getInstanceFromResource } from './terminalUri.js';
 
@@ -52,6 +52,30 @@ export class TerminalEditorService extends Disposable implements ITerminalEditor
 					await group.closeEditor(input, { skipConfirmation: true, reason: 'move' });
 				}
 			}
+		}
+	}
+
+	async splitInstance(instanceToSplit: ITerminalInstance, shellLaunchConfig?: ICreateTerminalOptions['config']): Promise<ITerminalInstance> {
+		const source = this.editorGroups.groups.find(group => group.inputs.some(input => input instanceof TerminalEditorInput && input.resource.path === instanceToSplit.resource?.path));
+		if (!source || instanceToSplit.target !== TerminalLocation.Editor || instanceToSplit.state !== 'running' || instanceToSplit.isReadOnly || !this.terminals.instances.includes(instanceToSplit)) throw canceled();
+		using lifetime = new DisposableStore();
+		let retired = false;
+		lifetime.add(instanceToSplit.onDidChangeState(() => retired = true));
+		if (instanceToSplit.onDidChangeTarget) lifetime.add(instanceToSplit.onDidChangeTarget(() => retired = true));
+		// Capture the source group before profile resolution can activate another editor.
+		const destination = this.editorGroups.addGroup(source, GroupDirection.RIGHT);
+		let created: ITerminalInstance | undefined;
+		try {
+			created = await this.terminals.createTerminal({
+				config: shellLaunchConfig ?? instanceToSplit.shellLaunchConfig,
+				location: { parentTerminal: instanceToSplit, viewColumn: destination.id },
+			});
+			if (this.isDisposed || retired || !this.terminals.instances.includes(instanceToSplit) || !this.editorGroups.getGroup(source.id)?.inputs.some(input => input instanceof TerminalEditorInput && input.resource.path === instanceToSplit.resource?.path)) throw canceled();
+			return created;
+		} catch (error) {
+			if (created && this.terminals.instances.includes(created)) await this.terminals.closeTerminal(created);
+			if (this.editorGroups.getGroup(destination.id)?.inputs.length === 0) await this.editorGroups.removeGroup(destination);
+			throw error;
 		}
 	}
 

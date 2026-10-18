@@ -4,6 +4,7 @@ import { ConfigurationScope, Extensions, type IConfigurationPropertySchema, type
 import { Registry } from '../../../../platform/registry/common/platform.js';
 import { terminalContribConfiguration } from '../terminalContribExports.js';
 import { TERMINAL_CONFIG_SECTION } from './terminal.js';
+import { TerminalSettingId } from '../../../../platform/terminal/common/terminal.js';
 import { registerTerminalPlatformConfiguration } from '../../../../platform/terminal/common/terminalPlatformConfiguration.js';
 
 const properties: Record<string, IConfigurationPropertySchema> = {};
@@ -91,6 +92,10 @@ properties[`${TERMINAL_CONFIG_SECTION}.confirmOnExit`] = {
 properties[`${TERMINAL_CONFIG_SECTION}.enablePersistentSessions`] = {
 	type: 'boolean', default: true,
 	get description() { return localize('terminal.config.enablePersistentSessions', 'Preserve terminal processes, history and layout across window reloads.'); },
+};
+properties[TerminalSettingId.EnableMultiLinePasteWarning] = {
+	type: 'string', default: 'auto', enum: ['auto', 'always', 'never'],
+	get description() { return localize('terminal.config.multiLinePasteWarning', 'Use auto to skip confirmation in bracketed paste mode and remove a single command’s trailing newline. Use always to confirm any newline, or never to disable the warning.'); },
 };
 Object.assign(properties, terminalContribConfiguration);
 Registry.as<IConfigurationRegistry>(Extensions.Configuration).updateConfigurations({

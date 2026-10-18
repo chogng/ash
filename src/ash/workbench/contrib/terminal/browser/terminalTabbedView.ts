@@ -5,9 +5,9 @@ import type { Event } from '../../../../base/common/event.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { TerminalTabList, TerminalTabsListSizes } from './terminalTabsList.js';
 import { localize } from '../../../../nls.js';
-import { ITerminalService } from './terminal.js';
+import { ITerminalService, ITerminalGroupService, TerminalDataTransfers } from './terminal.js';
 import { SplitView, type ISplitViewView } from "../../../../base/browser/ui/splitview/splitview.js";
-import { h } from "../../../../base/browser/dom.js";
+import { h, addDisposableListener } from "../../../../base/browser/dom.js";
 import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
 import { TerminalContextKeys } from '../common/terminalContextKey.js';
@@ -27,7 +27,7 @@ export class TerminalTabbedView extends Disposable {
 	private initialized = false;
 	private readonly tabsNarrow;
 
-	constructor(parentElement: HTMLElement, @ITerminalService private readonly terminalService: ITerminalService, @IInstantiationService instantiation: IInstantiationService, @IStorageService private readonly storage: IStorageService, @IContextKeyService contextKeys: IContextKeyService) {
+	constructor(parentElement: HTMLElement, @ITerminalService private readonly terminalService: ITerminalService, @IInstantiationService instantiation: IInstantiationService, @IStorageService private readonly storage: IStorageService, @IContextKeyService contextKeys: IContextKeyService, @ITerminalGroupService private readonly groups: ITerminalGroupService) {
 		super();
 		this.tabsNarrow = TerminalContextKeys.tabsNarrow.bindTo(contextKeys);
 		this._register(toDisposable(() => this.tabsNarrow.reset()));
@@ -35,6 +35,27 @@ export class TerminalTabbedView extends Disposable {
 		this.onDidFocusInstance = this.tabList.onDidFocusInstance;
 		this.terminalContainer = h(parentElement.ownerDocument, 'div');
 		this.terminalContainer.className = 'ash-terminal-widgets';
+		this._register(addDisposableListener(this.terminalContainer, 'dragover', event => {
+			if (event.dataTransfer?.types.includes(TerminalDataTransfers.Terminals.toLowerCase())) {
+				event.preventDefault();
+				event.dataTransfer.dropEffect = 'move';
+			}
+		}));
+		this._register(addDisposableListener(this.terminalContainer, 'drop', event => {
+			const encoded = event.dataTransfer?.getData(TerminalDataTransfers.Terminals);
+			if (!encoded || encoded.length > 65536) return;
+			let resources: unknown;
+			try { resources = JSON.parse(encoded); } catch { return; }
+			if (!Array.isArray(resources) || resources.length !== 1 || typeof resources[0] !== 'string') return;
+			const source = this.terminalService.instances.find(candidate => candidate.resource?.toString() === resources[0]);
+			const pane = (event.target as HTMLElement).closest<HTMLElement>('.ash-terminal-group-pane');
+			const target = this.terminalService.instances.find(candidate => candidate.id === pane?.dataset.instanceId);
+			if (!source || !target || source === target || !this.groups.getGroupForInstance(source)) return;
+			event.preventDefault();
+			event.stopPropagation();
+			const bounds = pane!.getBoundingClientRect();
+			this.groups.moveInstance(source, target, event.clientX < bounds.left + bounds.width / 2 ? 'before' : 'after');
+		}));
 		const host = h(parentElement.ownerDocument, 'div');
 		this.splitView = this._register(new SplitView(host, "horizontal"));
 		this.element = this.splitView.element;

@@ -48,6 +48,21 @@ export class TerminalGroup extends Disposable implements ITerminalGroup {
 		this.changed.fire();
 	}
 
+	moveInstance(instances: ITerminalInstance | readonly ITerminalInstance[], index: number, position: 'before' | 'after'): void {
+		const target = this.instances[index];
+		const moving = new Set(Array.isArray(instances) ? instances : [instances]);
+		if (!target || moving.has(target)) return;
+		const sizes = new Map(this.instances.map((instance, i) => [instance, this.splitView?.getViewSize(i) || this.initialSizes?.[i] || 1]));
+		const members = this.instances.filter(instance => moving.has(instance));
+		if (!members.length) return;
+		const remaining = this.instances.filter(instance => !moving.has(instance));
+		remaining.splice(remaining.indexOf(target) + (position === 'after' ? 1 : 0), 0, ...members);
+		this.instances.splice(0, this.instances.length, ...remaining);
+		this.initialSizes = remaining.map(instance => sizes.get(instance)!);
+		this.rebuildLayout();
+		this.changed.fire();
+	}
+
 	attachToElement(element: HTMLElement): void {
 		if (this.isDisposed) return;
 		if (!this.splitView || this.container !== element) {

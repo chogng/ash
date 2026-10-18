@@ -9,7 +9,7 @@ import { createServiceIdentifier } from "../../../../platform/instantiation/comm
 import type { IProcessDataEvent, IShellLaunchConfig, TerminalProcessExecution, TerminalProcessProfileSelection, TerminalLocation, ProcessPropertyType, IProcessPropertyMap } from '../../../../platform/terminal/common/terminal.js';
 import type { ThemeIcon } from '../../../../base/common/themables.js';
 import type { ITerminalStatus } from '../common/terminal.js';
-import type { ITerminalCapabilityStore } from '../../../../platform/terminal/common/capabilities/capabilities.js';
+import type { ITerminalCapabilityStore, ITerminalCommand } from '../../../../platform/terminal/common/capabilities/capabilities.js';
 import type { ITerminalSerializedState } from '../../../services/terminal/common/terminal.js';
 import type { ITerminalProcessCreation } from '../../../../platform/terminal/common/terminal.js';
 import type { ITerminalTabLayoutInfoById } from '../../../../platform/terminal/common/terminal.js';
@@ -164,6 +164,7 @@ export interface IXtermTerminal extends IDisposable {
 	readonly raw: Terminal;
 	readonly isDisposed: boolean;
 	readonly onDidChangeFindResults: Event<ISearchResultChangeEvent>;
+	readonly onDidRequestRunCommand: Event<{ command: ITerminalCommand; noNewLine?: boolean; }>;
 	readonly findResult: ISearchResultChangeEvent | undefined;
 	attachWidget(widget: IDisposable & { readonly id: string; attach(container: HTMLElement): void; }): IDisposable | undefined;
 	setVisible(visible: boolean): void;
@@ -219,6 +220,7 @@ export interface ITerminalGroup extends IDisposable {
 	readonly onInstancesChanged: Event<void>;
 	addInstance(instance: ITerminalInstance): void;
 	removeInstance(instance: ITerminalInstance): void;
+	moveInstance(instances: ITerminalInstance | readonly ITerminalInstance[], index: number, position: 'before' | 'after'): void;
 	attachToElement(element: HTMLElement): void;
 	setVisible(visible: boolean): void;
 	layout(width: number, height: number): void;
@@ -235,6 +237,7 @@ export interface ITerminalGroupService extends IDisposable {
 	createGroup(instance: ITerminalInstance): ITerminalGroup;
 	getGroupForInstance(instance: ITerminalInstance): ITerminalGroup | undefined;
 	joinInstances(instances: readonly ITerminalInstance[]): void;
+	moveInstance(source: ITerminalInstance, target: ITerminalInstance, side: 'before' | 'after'): void;
 	unsplitInstance(instance: ITerminalInstance): void;
 	instanceIsSplit(instance: ITerminalInstance): boolean;
 	setActiveInstanceByIndex(index: number): void;
@@ -242,6 +245,10 @@ export interface ITerminalGroupService extends IDisposable {
 }
 
 export const ITerminalGroupService = createServiceIdentifier<ITerminalGroupService>('terminalGroupService');
+
+export const enum TerminalDataTransfers {
+	Terminals = 'Terminals',
+}
 
 /** Display messages are independent of the instance's process and connection state. */
 export interface ITerminalStatusList {
@@ -255,6 +262,7 @@ export interface ITerminalStatusList {
 /** Editor operations for the same window-owned terminal instances. */
 export interface ITerminalEditorService {
 	openEditor(instance: ITerminalInstance, editorOptions?: TerminalEditorLocation): Promise<void>;
+	splitInstance(instanceToSplit: ITerminalInstance, shellLaunchConfig?: ICreateTerminalOptions['config']): Promise<ITerminalInstance>;
 	detachInstance(instance: ITerminalInstance): Promise<void>;
 	getInstanceFromResource(resource: URI): ITerminalInstance | undefined;
 }

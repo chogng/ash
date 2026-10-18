@@ -13,7 +13,7 @@ import { IContextMenuService } from '../../../../platform/contextview/browser/co
 import { ICommandService } from '../../../../platform/commands/common/commands.js';
 import { colorCssVariable } from '../../../../platform/theme/common/colorUtils.js';
 import { TerminalActiveInstanceStateContext, TerminalHasActiveInstanceContext } from '../common/terminalContextKey.js';
-import { ITerminalService, ITerminalGroupService, type ITerminalInstance } from './terminal.js';
+import { ITerminalService, ITerminalGroupService, TerminalDataTransfers, type ITerminalInstance } from './terminal.js';
 import { InstanceContext, openContextMenu } from './terminalContextMenu.js';
 import { terminalProfileIcon } from './terminalIcon.js';
 import { IEnvironmentVariableService } from '../common/environmentVariable.js';
@@ -57,12 +57,32 @@ export class TerminalTabList extends TabList<ITerminalInstance> {
 			onClose: instance => { void this.closeTerminal(instance).catch(() => { }); },
 			dragAndDrop: {
 				canDrop: () => this.draggedTerminal !== undefined,
-				onDragStart: instance => { this.draggedTerminal = instance; },
+				onDragStart: (instance, event) => {
+					this.draggedTerminal = instance;
+					if (instance.resource) event.dataTransfer?.setData(TerminalDataTransfers.Terminals, JSON.stringify([instance.resource.toString()]));
+				},
 				onDrop: (target, position) => { if (this.draggedTerminal) this.moveTerminal(this.draggedTerminal, target, position); },
 				onDragEnd: () => { this.draggedTerminal = undefined; },
 			},
 		});
 		this.element.classList.add('ash-terminal-tabs');
+		// Adjacent rows may belong to different groups. Their drop still changes
+		// membership even when a flat tab list would regard it as a no-op.
+		this._register(addDisposableListener(this.element, 'dragover', event => {
+			if (this.draggedTerminal) event.preventDefault();
+		}, true));
+		this._register(addDisposableListener(this.element, 'drop', event => {
+			const source = this.draggedTerminal;
+			if (!source) return;
+			const row = (event.target as HTMLElement).closest<HTMLElement>('[role="tab"]');
+			const target = this.terminals.instances.find(instance => `${instance.id}-tab` === row?.id);
+			const bounds = row?.getBoundingClientRect();
+			const position = bounds && event.clientY < bounds.top + bounds.height / 2 ? 'before' : 'after';
+			event.preventDefault();
+			event.stopImmediatePropagation();
+			this.moveTerminal(source, target, position);
+			this.draggedTerminal = undefined;
+		}, true));
 		const scope = this._register(contextKeys.createScoped(this.element));
 		const hasInstance = TerminalHasActiveInstanceContext.bindTo(scope);
 		const state = TerminalActiveInstanceStateContext.bindTo(scope);
@@ -187,8 +207,10 @@ export class TerminalTabList extends TabList<ITerminalInstance> {
 		const instances = this.terminals.instances;
 		const sourceIndex = instances.indexOf(source);
 		if (sourceIndex < 0) return;
-		const targetIndex = target === undefined ? instances.length : instances.indexOf(target);
-		const insertion = targetIndex < 0 ? instances.length - 1 : position === 'before' ? targetIndex : targetIndex + 1;
-		this.terminals.moveTerminal(source, insertion > sourceIndex ? insertion - 1 : insertion);
+		if (target) this.groups.moveInstance(source, target, position);
+		else {
+			this.groups.unsplitInstance(source);
+			this.terminals.moveTerminal(source, instances.length - 1);
+		}
 	}
 }

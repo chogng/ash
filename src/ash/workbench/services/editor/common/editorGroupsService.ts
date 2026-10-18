@@ -69,6 +69,8 @@ export interface IEditorGroupsService {
 	readonly activeGroup: IEditorGroup;
 	readonly count: number;
 	getGroup(id: EditorGroupId): IEditorGroup | undefined;
+	addGroup(location: IEditorGroup | EditorGroupId, direction: GroupDirection): IEditorGroup;
+	removeGroup(group: IEditorGroup | EditorGroupId): Promise<boolean>;
 	findGroup(scope: IFindGroupScope, source?: IEditorGroup): IEditorGroup | undefined;
 }
 

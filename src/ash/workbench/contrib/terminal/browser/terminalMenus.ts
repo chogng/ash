@@ -26,6 +26,8 @@ export function setupTerminalMenus(): void {
 		{ id: TerminalCommandId.ChangeIcon, title: localize2('terminal.icon.title', 'Change Terminal Icon') },
 		{ id: TerminalCommandId.MoveToEditor, title: localize2('terminal.editor.moveToEditorMenu', 'Move Terminal into Editor Area') },
 		{ id: TerminalCommandId.Split, title: localize2('terminal.group.splitMenu', 'Split Terminal'), when: TerminalActiveInstanceStateContext.isEqualTo('running') },
+		{ id: TerminalCommandId.Join, title: localize2('terminal.group.joinMenu', 'Join or Reorder Terminals...') },
+		{ id: TerminalCommandId.Unsplit, title: localize2('terminal.group.unsplitMenu', 'Unsplit Terminal') },
 		{ id: TerminalCommandId.Focus, title: localize2('terminal.context.focus', 'Focus Terminal') },
 		{ id: TerminalCommandId.Clear, title: localize2('terminal.context.clear', 'Clear Terminal') },
 		{

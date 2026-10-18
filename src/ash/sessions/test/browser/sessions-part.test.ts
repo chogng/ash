@@ -22,6 +22,8 @@ import { TestWorkspaceService } from '../../../workbench/services/configuration/
 import { IDialogService, IFileDialogService } from '../../../platform/dialogs/common/dialogs.js';
 import { DialogService } from '../../../workbench/services/dialogs/common/dialogService.js';
 import { FileDialogService } from '../../../workbench/services/dialogs/browser/fileDialogService.js';
+import { IHostService } from '../../../workbench/services/host/browser/host.js';
+import { TestHostService } from '../../../workbench/services/host/test/browser/testHostService.js';
 import type { IWebWorkspaceClient } from '../../../workbench/services/workspaces/browser/appServerWebWorkspaceClient.js';
 import { registerTestDictationOnboarding } from '../../../workbench/test/common/testDictationServices.js';
 import { IVoiceCodeTranscriptionBackendService } from '../../../platform/renderer/common/dictation.js';
@@ -243,6 +245,7 @@ test("SessionsPart remains owned by the Sessions product layer", async () => {
 	const editorRoot = createCodeEditorServices(resources);
 	editorRoot.registerInstance(IVoiceCodeTranscriptionBackendService, undefined);
 	const services = resources.add(editorRoot.createChild());
+	services.registerInstance(IHostService, new TestHostService());
 	services.registerInstance(IRendererHostService, createDisconnectedRendererApi());
 	services.registerInstance(IAgentVoiceService, createDisconnectedRendererApi().agentVoice);
 	services.registerSingleton(IPathService, () => services.createInstance(BrowserPathService));

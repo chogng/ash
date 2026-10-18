@@ -1,6 +1,6 @@
 import { LineDataEventAddon } from './lineDataEventAddon.js';
 import { DecorationAddon } from './decorationAddon.js';
-import { TerminalCapability } from '../../../../../platform/terminal/common/capabilities/capabilities.js';
+import { TerminalCapability, type ITerminalCommand } from '../../../../../platform/terminal/common/capabilities/capabilities.js';
 import { ShellIntegrationAddon } from '../../../../../platform/terminal/common/xterm/shellIntegrationAddon.js';
 import type { TerminalShellIntegrationEvent } from '../../../../../platform/terminal/common/terminal.js';
 import { TerminalCapabilityStore } from '../../../../../platform/terminal/common/capabilities/terminalCapabilityStore.js';
@@ -22,7 +22,7 @@ import type { ITerminalDimensions, ITerminalScreenHost, IXtermTerminal } from ".
 import { h } from "../../../../../base/browser/dom.js";
 import { observeResize } from "../../../../../base/browser/observer.js";
 import { TerminalResizeDebouncer } from '../terminalResizeDebouncer.js';
-import { Emitter } from '../../../../../base/common/event.js';
+import { Emitter, type Event } from '../../../../../base/common/event.js';
 import { Color } from '../../../../../base/common/color.js';
 import { CancellationError } from '../../../../../base/common/errors.js';
 import { searchMatchBackground } from '../../../../../platform/theme/common/colors/searchColors.js';
@@ -53,6 +53,7 @@ export class XtermTerminal extends Disposable implements IXtermTerminal {
 	private readonly alternateScroll = new AlternateScrollMode();
 	private readonly shellIntegrationAddon: ShellIntegrationAddon;
 	private readonly decorationAddon: DecorationAddon;
+	readonly onDidRequestRunCommand: Event<{ command: ITerminalCommand; noNewLine?: boolean; }>;
 	private readonly markNavigationAddon = this._register(new MarkNavigationAddon(() => this.instance.capabilities?.has(TerminalCapability.CommandDetection)
 		? this.decorationAddon.markers : this.capabilities.get(TerminalCapability.PartialCommandDetection)?.commands ?? this.decorationAddon.markers));
 	private visible = false;
@@ -83,6 +84,7 @@ export class XtermTerminal extends Disposable implements IXtermTerminal {
 	) {
 		super();
 		this.decorationAddon = this._register(instantiation.createInstance(DecorationAddon, this.capabilities));
+		this.onDidRequestRunCommand = this.decorationAddon.onDidRequestRunCommand;
 		this.shellIntegrationAddon = this._register(instantiation.createInstance(ShellIntegrationAddon, this.capabilities, undefined));
 		this.element = h(container.ownerDocument, "div");
 		this.element.className = "ash-terminal-instance";

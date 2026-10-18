@@ -356,5 +356,5 @@ function terminalProfileTitle(profile: ITerminalProfile): string {
 }
 
 function isEditorLocation(location: ITerminalLocationOptions | undefined): location is TerminalLocation.Editor | import('./terminal.js').TerminalEditorLocation {
-	return location === TerminalLocation.Editor || typeof location === 'object' && !('parentTerminal' in location) && !('splitActiveTerminal' in location);
+	return location === TerminalLocation.Editor || typeof location === 'object' && ('viewColumn' in location || !('parentTerminal' in location) && !('splitActiveTerminal' in location));
 }
