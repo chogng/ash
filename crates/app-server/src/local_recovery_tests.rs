@@ -8,6 +8,73 @@ use core_api::SequenceExpectation;
 use core_api::StartThreadRequest;
 
 #[test]
+fn model_provider_migration_keeps_idle_history_lazy_across_directory_hosts() {
+    let profile = tempfile::tempdir().unwrap();
+    let first_dir = tempfile::tempdir().unwrap();
+    let second_dir = tempfile::tempdir().unwrap();
+    let runtime = LocalProfileRuntime::open(profile.path()).unwrap();
+    for index in 0..24 {
+        let id = format!("idle-{index}");
+        runtime
+            .threads
+            .create_thread(ash_core::CreateThreadRequest {
+                execution_target: None,
+                agent_id: ash_protocol::AgentId::new(format!("agent-{index}")).unwrap(),
+                origin: Default::default(),
+                agent: None,
+                session_id: ash_protocol::SessionId::new(id.clone()).unwrap(),
+                thread_id: ash_protocol::ThreadId::new(id).unwrap(),
+                title: "Idle history".into(),
+            })
+            .unwrap();
+    }
+    drop(runtime);
+    let runtime = Arc::new(LocalProfileRuntime::open(profile.path()).unwrap());
+    assert!(runtime.threads.list_loaded_threads().unwrap().is_empty());
+    for directory in [first_dir.path(), second_dir.path()] {
+        let server = open_app_server(
+            AppServerOptions::new(profile.path())
+                .with_profile_runtime(runtime.clone())
+                .with_dir_root(directory)
+                .without_built_in_skills(),
+            ash_app_server_diff::compute,
+        )
+        .unwrap();
+        assert!(server.threads().list_loaded_threads().unwrap().is_empty());
+    }
+    // A shared profile can receive older history after its first Directory has opened.
+    let id = ash_protocol::ThreadId::new("idle-0").unwrap();
+    runtime
+        .threads
+        .configure_advisor(
+            &id,
+            CommandId::new("late-legacy-advisor").unwrap(),
+            SequenceExpectation::Any,
+            ash_protocol::AdvisorSelection::Model {
+                config: ash_protocol::AdvisorConfig::new(ModelRef::new(
+                    ProviderId::new("bigmodel").unwrap(),
+                    ModelId::new("model").unwrap(),
+                )),
+            },
+        )
+        .unwrap();
+    let server = open_app_server(
+        AppServerOptions::new(profile.path())
+            .with_profile_runtime(runtime.clone())
+            .with_dir_root(first_dir.path())
+            .without_built_in_skills(),
+        ash_app_server_diff::compute,
+    )
+    .unwrap();
+    let loaded = server.threads().list_loaded_threads().unwrap();
+    assert_eq!(loaded.len(), 1);
+    assert!(
+        matches!(&loaded[0].advisor, ash_protocol::AdvisorSelection::Model { config }
+        if config.model.provider.as_str() == "glm")
+    );
+}
+
+#[test]
 fn initial_directory_opens_before_recovered_tool_continuations_resume() {
     for user_config in [false, true] {
         let profile = tempfile::tempdir().unwrap();

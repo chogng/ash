@@ -3416,6 +3416,58 @@ fn branch_history_turns(source: &ThreadSnapshot) -> Result<Vec<Turn>, CoreError>
     Ok(turns)
 }
 
+/// Catalogs every selection that the provider migration can change, without retaining history.
+pub(crate) fn resumable_model_providers(
+    snapshot: &ThreadSnapshot,
+) -> BTreeSet<ash_protocol::ProviderId> {
+    fn instruction_model(instructions: &TurnInstructions) -> Option<&ModelRef> {
+        instructions.model_guidance()?.model()
+    }
+
+    let mut providers = BTreeSet::new();
+    let mut retain = |model: &ModelRef| {
+        providers.insert(model.provider.clone());
+    };
+    if let Some(agent) = &snapshot.agent {
+        if let Some(model) = agent.role.as_ref().and_then(|role| role.model.as_ref()) {
+            retain(model);
+        }
+        if let Some(model) = agent.base_instructions.as_ref().and_then(instruction_model) {
+            retain(model);
+        }
+    }
+    if let ash_protocol::AdvisorSelection::Model { config } = &snapshot.advisor {
+        retain(&config.model);
+    }
+    for turn in &snapshot.turns {
+        if !has_resumable_model_selection(turn.status) {
+            continue;
+        }
+        if let Some(model) = &turn.model {
+            retain(model);
+        }
+        if let Some(advisor) = &turn.advisor {
+            retain(&advisor.model);
+        }
+        if let Some(model) = turn.instructions.as_ref().and_then(instruction_model) {
+            retain(model);
+        }
+    }
+    providers
+}
+
+fn has_resumable_model_selection(status: TurnStatus) -> bool {
+    match status {
+        TurnStatus::Created
+        | TurnStatus::Running
+        | TurnStatus::WaitingForApproval
+        | TurnStatus::WaitingForUserInput
+        | TurnStatus::WaitingForCapability
+        | TurnStatus::Cancelling => true,
+        TurnStatus::Completed | TurnStatus::Failed | TurnStatus::Interrupted => false,
+    }
+}
+
 /// Only resumable selections change. Invocation facts, usage and retained history remain exact.
 pub(crate) fn migrate_model_providers(
     snapshot: &mut ThreadSnapshot,
@@ -3456,12 +3508,7 @@ pub(crate) fn migrate_model_providers(
         migrate(&mut config.model);
     }
     for turn in &mut snapshot.turns {
-        if matches!(
-            turn.status,
-            ash_protocol::TurnStatus::Completed
-                | ash_protocol::TurnStatus::Failed
-                | ash_protocol::TurnStatus::Interrupted
-        ) {
+        if !has_resumable_model_selection(turn.status) {
             continue;
         }
         if let Some(model) = &mut turn.model {

@@ -1404,23 +1404,39 @@ impl ThreadController {
     }
 
     /// Changes future Turn consultations while preserving the active Turn's frozen selection.
-    /// Appends one migration record for each affected Thread. Repeated startup is a no-op.
+    /// Appends one migration record for each affected Thread. Current catalog rows keep
+    /// unaffected histories unloaded; older rows are backfilled without changing their events.
     /// The caller owns the reviewed identity mapping; Core preserves immutable call history.
     pub fn migrate_model_providers(
         &self,
         providers: &BTreeMap<ash_protocol::ProviderId, ash_protocol::ProviderId>,
     ) -> Result<(), CoreError> {
-        for thread in self.list_threads()? {
-            self.mutate_thread(&thread.thread_id, |snapshot| {
-                let mut candidate = snapshot.clone();
-                if crate::thread_reducer::migrate_model_providers(&mut candidate, providers) {
+        if providers.is_empty() {
+            return Ok(());
+        }
+        for record in self.list_thread_catalog()? {
+            if record
+                .resumable_model_providers
+                .as_ref()
+                .is_some_and(|ids| !ids.iter().any(|provider| providers.contains_key(provider)))
+            {
+                continue;
+            }
+            self.mutate_thread(&record.thread.thread_id, |snapshot| {
+                if crate::thread_reducer::resumable_model_providers(snapshot)
+                    .iter()
+                    .any(|provider| providers.contains_key(provider))
+                {
                     self.record_batch(
                         snapshot,
                         vec![ThreadEvent::ModelProvidersMigrated {
-                            thread_id: thread.thread_id.clone(),
+                            thread_id: record.thread.thread_id.clone(),
                             providers: providers.clone(),
                         }],
                     )?;
+                } else if record.resumable_model_providers.is_none() {
+                    self.store
+                        .backfill_catalog(&thread_catalog_record(snapshot))?;
                 }
                 Ok(())
             })?;
@@ -3658,6 +3674,7 @@ fn thread_catalog_record(snapshot: &ThreadSnapshot) -> ThreadCatalogRecord {
         },
         execution_target: snapshot.execution_target.clone(),
         model: snapshot.turns.last().and_then(|turn| turn.model.clone()),
+        resumable_model_providers: Some(crate::thread_reducer::resumable_model_providers(snapshot)),
         sequence: snapshot.sequence,
         manager: thread_manager_info(snapshot),
         archived_at_unix_ms: snapshot.archived_at_unix_ms,

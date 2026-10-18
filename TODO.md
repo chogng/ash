@@ -11,6 +11,10 @@
 ## Windows 开发实验资源清理
 
 - [ ] 定位并清理 Windows 测量的五个临时目录。本机复核时 `.build/desktop/dev/app-server/.staging-c8813138-4733-4acc-8ebe-05eee0827ccd` 已不存在；`.build/perf-win-edit-20261018/round4-cleanup.json` 也不在当前检出，缺少五个目录的准确路径，不能据此宣称其已清理。
+- 保存 Rust 到 App 可用的 15 秒目标尚未达到。2026-10-19 在 `3df4938da` 暂停开发与同步后完成迁移修复的 20 次匹配尝试：空库成功中位数 20.06 → 19.80 秒（5/5 → 5/5），100 条历史会话 22.27 → 21.15 秒（3/5 → 5/5），历史成功样本快 1.12 秒（5.0%）；仍差 4.80／6.15 秒。空库差异很小，不能用成功样本的条件中位数替代总体延迟或失败率结论。原始样本与阶段成本见 `docs/build.md` 完整循环复测及 `.build/perf-win-edit-20261019-migration/q2-summary.json`。
+- [ ] **复核** · 100 条历史会话在真实 Desktop 重连时仍触发 `AppServerProtocolClient.requestRaw` 的 128 pending 上限；迁移修复后的 5 次搜索虽均通过，仍有 18 次限流日志，修复前另有 2 次 `Workspace recovery failed` 后持续 `SearchUnavailable`。继续定位历史恢复的请求调度与 `rendererApi.ts` 工作区恢复，保留既有准入和超时边界；证据为 `q2-diagnostics-summary.json` 及逐组窗口日志，不能宣称迁移修复已解决客户端恢复问题。
+- 本轮复测完成，修复内容与正常构建已恢复；此前第五轮的 diff 适配器边界优化仍保留，旧源码上的约 25 秒结果不作为本轮基线。15 秒是体验目标，并非测量推导的性能下限；若继续优化，需根据发布前约 13.7 秒及历史发布后约 7.4 秒的成本选择方向。上述结果仅覆盖 diff 适配器编辑；本机卷均为 NTFS，没有 Dev Drive。
+- 实验资源暂存目录 `.build/desktop/dev/app-server/.staging-c8813138-4733-4acc-8ebe-05eee0827ccd` 的 bin 为空；此前删除被自动审批策略阻止，仍保留。第四轮五个测量临时目录也因相同策略保留，准确路径见 `.build/perf-win-edit-20261018/round4-cleanup.json`；不影响正常构建。
 
 ## Remote / Browser 多根工作区 · TODO
 

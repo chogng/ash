@@ -752,6 +752,50 @@ CGU=1 未发现稳定的运行回退，但不能将未显著的差异视为严�
 
 正常全部 21 个后端程序的 PE 架构、程序属性、安全标志、子系统和 8 MiB 栈预留与既有 LLD 基线一致（`round5-final-pe.json`）；App Server 为 168,348,672 字节。最后确认输入上限已恢复，无本轮 watcher、测量或 Cargo／rustc 进程。诊断与测量临时目录保留，没有绕过此前的自动删除审批拒绝。
 
+#### App Server 启动模型迁移保留历史按需加载（2026-10-19）
+
+源码复核发现，`open_app_server_with_codebase_providers` 的旧模型 provider 迁移调用 `ThreadController::list_threads()`，在每次打开目录运行时时读取全部 Thread 的完整快照；没有实际迁移时仍执行全量读取与快照克隆。这会抵消 `LocalStateRepository` 对普通历史的按需加载。
+
+Core 现在随原有事件 batch 原子写入 `ThreadCatalogRecord.resumable_model_providers`，记录 Agent 角色、基础指令、Advisor 和未结束 Turn 的模型选择所引用的 provider。迁移先筛选轻量目录，只加载命中旧标识的 Thread，并继续通过原有 `ModelProvidersMigrated` 事件提交变更。已完成调用及其历史模型事实保持原样。
+
+该字段是可重建的派生索引，旧目录缺失字段时从权威历史补齐；不增加全局“迁移已完成”标记，因此后来导入或新增的旧模型选择仍能被识别。目录记录格式保持兼容，补索引不改写旧事件。正常入口继续检查目录索引，不把检查移到只执行一次的构造函数中。
+
+Windows x64 上先用 Core 回归复现原实现加载无关历史的失败，再完成 3 项 Core 迁移回归、`just verify ash-state --lib --filter model` 的 6 项回归、`just verify ash-thread-store --lib` 的 3 项回归，以及 `just verify ash-app-server-runtime --lib --filter model_provider_migration` 的初始化回归。最后一项通过实际 App Server 组合入口跨两个目录打开同一 profile，确认 24 条空闲历史保持未加载；再新增旧 provider 选择，确认只加载并迁移对应的 1 条 Thread。Core／State／Thread Store／App Server 的生产 check 与全目标 warnings 均通过；`scripts/.venv/Scripts/python.exe -B scripts/cargo.py build -p ash-app-server --bin ash-app-server --profile ci-test` 正常产品构建通过。验证摘要及源码指纹为 `.build/app-server-migration-validation.json`，后端验证与最终构建日志为 `.build/app-server-migration-*.log`。
+
+以上是修复时的正确性验证；后续完整开发循环复测如下。
+
+#### Windows x64 启动模型迁移修复的完整循环复测（2026-10-19）
+
+在 `3df4938dac9ed7e40e73bf7019394595dfcf19e8` 加上上述未提交修复，暂停同检出的开发与同步任务后测量。前后仅切换 `thread_controller.rs`、`thread_reducer.rs`、`thread-store/src/store.rs` 的迁移实现，其余 Rust／构建输入保持一致。使用同一台 i5-12600KF／16 逻辑处理器、Windows 11 build 22631、Rust 1.98.0、LLD、`dev-small`、默认 16 jobs、普通优先级和共享 `.build/cargo`，没有清理共享缓存或修改系统安全设置。
+
+每个版本先正常预热全部后端，再分别在空 profile 和历史 profile 连续尝试 5 次。历史种子由真实 Core／SQLite 写入：100 条 Thread、2,000 个已完成 Turn、10,100 个事件、16,384,000 字节回答文本，数据库 47,869,952 字节；目录派生索引已经存在，测量不包含旧目录首次补索引。各组从同一种子独立复制，初次启动与首次搜索不计入热编辑时间。
+
+通过真实 `build/desktop/watch-app-server.ts --skip-initial` 保存 diff 输入上限的新常量值，计时从写源码开始，包含四组 Cargo、代次发布、已有 Electron 窗口重连及准确的新文件内容搜索。只看到 `ash.appServer.initialized` 不算可用：搜索必须返回且高亮本次唯一 token。搜索仍沿用原有 30 秒断言，失败保留，未增加产品或测试超时。
+
+| 场景           | 修复前原始完整秒数                    | 修复后原始完整秒数                    | 成功样本中位数  | 成功次数，前 → 后 |
+| -------------- | ------------------------------------- | ------------------------------------- | --------------- | ----------------- |
+| 空资料库       | 20.71 / 19.84 / 20.26 / 20.06 / 19.66 | 20.64 / 20.22 / 19.57 / 19.80 / 19.65 | 20.06 → 19.80 s | 5/5 → 5/5         |
+| 100 条历史会话 | 23.39 / 21.34 / 22.27 / 失败 / 失败   | 20.69 / 21.15 / 21.83 / 21.16 / 20.63 | 22.27 → 21.15 s | 3/5 → 5/5         |
+
+空库中位数仅缩短 0.26 秒（1.3%），范围重叠，未证明明显收益。历史场景的成功样本中位数缩短 1.12 秒（5.0%）；这只能说明本轮有小幅改善，不能用 3 个成功基线样本和 5 个成功候选样本推导稳定的总体延迟或失败率改善。两个基线失败分别在保存后 49.76／49.60 秒结束：后端约 19.8 秒已初始化，随后搜索在原有 30 秒断言内持续返回 `SearchUnavailable`，没有将失败时间当作可用时间。
+
+| 阶段中位数           | 空库，前 → 后   | 历史，前 → 后   |
+| -------------------- | --------------- | --------------- |
+| 保存至发布           | 14.05 → 13.81 s | 13.81 → 13.73 s |
+| 发布至完成新内容搜索 | 6.05 → 5.97 s   | 8.46 → 7.43 s   |
+| 核心 Cargo 组        | 5.59 → 5.48 s   | 5.55 → 5.49 s   |
+| 实际链接             | 2.45 → 2.45 s   | 2.50 → 2.42 s   |
+
+阶段各自取中位数，不能相加当作一个实际样本。20 次均只重编译 `ash-app-server-diff` 与薄 `ash-app-server`，每次一个链接、不同 exe SHA-256，无 Cargo 锁等待、缓存预算回收或额外源码变动。核心编译基本未变；本次修复的观测收益主要出现在历史场景的发布后恢复阶段。修复后距离 15 秒仍差空库 4.80 秒、历史 6.15 秒，即还需缩短当前完整时间约 24.2%／29.1%。这不是测量推导的性能下限，也不是所有 Rust 业务编辑的结果。
+
+历史组仍有独立的请求准入问题：修复前日志出现 21 次请求上限错误及 2 次工作区恢复失败；修复后虽 5 次搜索均通过，仍有 18 次请求上限错误。`AppServerProtocolClient.requestRaw` 在 pending 达到 128 时立即拒绝，`rendererApi` 的工作区恢复会记录这类失败。本次未修改客户端准入或恢复逻辑，不能宣称该问题已解决；后续应复测历史恢复时的请求调度与工作区恢复可靠性。
+
+为防其他前端构建改变对照，测量使用 `.build/pm21` 的编译前端副本，2,810 个文件前后 SHA-256 一致；真实 Rust 源码、watcher、Cargo 缓存与发布目录仍在本检出。两版都临时固定 `ASH_BUILD_COMMIT` 为同一源码提交，避免 `.git/packed-refs` 更新时间单独触发 build-identity 重编译，未更改编译参数。正常结束后撤去该变量，恢复三个修复文件及 512 KiB 输入上限并保留新修改时间，正常全部 21 个后端程序构建与发布通过。当前前端完整构建也通过。
+
+证据位于 `.build/perf-win-edit-20261019-migration/`：`q2-summary.json`、`q2-diagnostics-summary.json`、`q2-progress.json`、`q2-*-edit-ready.json`、watcher 日志、链接进程与 Cargo timings。汇总核对了同一 HEAD、测量脚本、组内源码指纹、归一化输入指纹、种子及前端副本。`edit-ready-q2.mjs` SHA-256 为 `12e16bdb6f53e3bf7401dd3b1a35cc55962728250c525e692543cc30a9206cab`；归一化输入为 `128e784cca53c4c39394d93885c58d4492e3902dfeb23d9839a43e525b9c22fe`。先测基线再测候选，样本量有限，未进行交替随机实验或冷构建／RSS／其他平台测量。
+
+此前的 `candidate-*`、`v2-*`、`retry*`、`frozen-*`、`quiet-*` 尝试均保留。它们分别受到 Git refs 更新、Cargo 锁、前端重建或外部 rebase 的影响，其中 `quiet-*` 在候选空库第 4 次被输入守卫中止；没有将这些组混入本次匹配对照，也没有把不同源码上此前约 25 秒的结果当作本次修复基线。
+
 ## 构建源码与仓库脚本边界
 
 根 `justfile` 和 `package.json` 声明命令并调用上述实现。`scripts/` 可以调用 `build/`；构建实现不反向调用仓库脚本。前端构建工具使用 TypeScript，后端构建和组包使用 Python。测试内容归对应产品，运行产物归 `.build/`。

@@ -2828,6 +2828,138 @@ fn advisor_selection_is_retry_safe_and_inherited_at_the_fork_boundary() {
 }
 
 #[test]
+fn model_identity_migration_catalog_covers_all_resumable_selections() {
+    let controller = ThreadController::with_store(Arc::new(InMemoryThreadStore::default()));
+    let id = create_thread(&controller, "migration-selections");
+    controller
+        .start_turn(&id, start_request("selection-turn"))
+        .unwrap();
+    let mut snapshot = controller.read_thread(&id).unwrap();
+    let model = |provider: &str| {
+        ModelRef::new(
+            ProviderId::new(provider).unwrap(),
+            ModelId::new("model").unwrap(),
+        )
+    };
+    let instructions = |provider: &str| {
+        ash_prompts::AGENT_INSTRUCTIONS
+            .freeze()
+            .with_model_guidance(ash_protocol::ModelInstructionSelection::Generic {
+                model: Some(model(provider)),
+            })
+    };
+    snapshot.agent = Some(ash_protocol::AgentConfiguration {
+        role: Some(ash_protocol::AgentRoleSnapshot {
+            name: "role".into(),
+            instructions: "role".into(),
+            model: Some(model("role-provider")),
+            definition: None,
+        }),
+        capability_scope: ash_protocol::AgentCapabilityScope {
+            tools: Vec::new(),
+            delegation_tools: Vec::new(),
+            skills: Vec::new(),
+        },
+        base_instructions: Some(instructions("agent-instructions-provider")),
+    });
+    snapshot.advisor = ash_protocol::AdvisorSelection::Model {
+        config: ash_protocol::AdvisorConfig::new(model("thread-advisor-provider")),
+    };
+    snapshot.turns[0].model = Some(model("turn-provider"));
+    snapshot.turns[0].advisor = Some(ash_protocol::AdvisorConfig::new(model(
+        "turn-advisor-provider",
+    )));
+    snapshot.turns[0].instructions = Some(instructions("turn-instructions-provider"));
+    let all: std::collections::BTreeSet<_> = [
+        "role-provider",
+        "agent-instructions-provider",
+        "thread-advisor-provider",
+        "turn-provider",
+        "turn-advisor-provider",
+        "turn-instructions-provider",
+    ]
+    .into_iter()
+    .map(|id| ProviderId::new(id).unwrap())
+    .collect();
+    for status in [
+        TurnStatus::Created,
+        TurnStatus::Running,
+        TurnStatus::WaitingForApproval,
+        TurnStatus::WaitingForUserInput,
+        TurnStatus::WaitingForCapability,
+        TurnStatus::Cancelling,
+    ] {
+        snapshot.turns[0].status = status;
+        assert_eq!(
+            crate::thread_reducer::resumable_model_providers(&snapshot),
+            all
+        );
+        let mut migrated = snapshot.clone();
+        let mapping = all
+            .iter()
+            .cloned()
+            .map(|old| (old, ProviderId::new("current-provider").unwrap()))
+            .collect();
+        crate::thread_reducer::migrate_model_providers(&mut migrated, &mapping);
+        assert_eq!(
+            crate::thread_reducer::resumable_model_providers(&migrated),
+            [ProviderId::new("current-provider").unwrap()]
+                .into_iter()
+                .collect()
+        );
+    }
+    let future: std::collections::BTreeSet<_> = [
+        "role-provider",
+        "agent-instructions-provider",
+        "thread-advisor-provider",
+    ]
+    .into_iter()
+    .map(|id| ProviderId::new(id).unwrap())
+    .collect();
+    for status in [
+        TurnStatus::Completed,
+        TurnStatus::Failed,
+        TurnStatus::Interrupted,
+    ] {
+        snapshot.turns[0].status = status;
+        assert_eq!(
+            crate::thread_reducer::resumable_model_providers(&snapshot),
+            future
+        );
+    }
+}
+
+#[test]
+fn model_identity_migration_keeps_unaffected_history_unloaded() {
+    let store = Arc::new(InMemoryThreadStore::default());
+    let controller = ThreadController::with_store(store.clone());
+    create_thread(&controller, "migration-empty");
+    let completed = create_thread(&controller, "migration-completed");
+    let current = create_thread(&controller, "migration-current");
+    let old = ProviderId::new("legacy-provider").unwrap();
+    let new = ProviderId::new("current-provider").unwrap();
+    for (thread, provider) in [(&completed, old.clone()), (&current, new.clone())] {
+        let mut request = start_request(thread.as_str());
+        request.model = Some(ModelRef::new(provider, ModelId::new("test-model").unwrap()));
+        let turn = controller.start_turn(thread, request).unwrap().turn_id;
+        if thread == &completed {
+            controller
+                .complete_turn(thread, &turn, "done".into())
+                .unwrap();
+        }
+    }
+    let events = store.events();
+    drop(controller);
+
+    let reopened = ThreadController::with_store(store.clone());
+    reopened
+        .migrate_model_providers(&[(old, new)].into_iter().collect())
+        .unwrap();
+    assert!(reopened.list_loaded_threads().unwrap().is_empty());
+    assert_eq!(store.events(), events);
+}
+
+#[test]
 fn model_identity_migration_replays_once_and_preserves_completed_turns() {
     let store = Arc::new(InMemoryThreadStore::default());
     let controller = ThreadController::with_store(store.clone());
@@ -2873,8 +3005,9 @@ fn model_identity_migration_replays_once_and_preserves_completed_turns() {
         if config.model.provider.as_str() == "zai")
     );
     let reopened = ThreadController::with_store(store);
-    assert_eq!(reopened.read_thread(&thread).unwrap(), after);
     reopened.migrate_model_providers(&mapping).unwrap();
+    assert!(reopened.list_loaded_threads().unwrap().is_empty());
+    assert_eq!(reopened.read_thread(&thread).unwrap(), after);
     assert_eq!(
         reopened.read_thread(&thread).unwrap().sequence,
         after.sequence

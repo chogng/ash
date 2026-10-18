@@ -170,6 +170,7 @@ fn open_change_set(thread_id: ThreadId) -> TurnChangeSet {
 fn catalog(session_id: &SessionId, thread_id: &ThreadId, sequence: u64) -> ThreadCatalogRecord {
     ThreadCatalogRecord {
         model: None,
+        resumable_model_providers: Some(Default::default()),
         execution_target: None,
         binding: agent_graph_store::ThreadBinding {
             agent_id: ash_protocol::AgentId::new("agent-test").unwrap(),
@@ -1071,6 +1072,90 @@ fn start_catalog_model_turn(
         )
         .unwrap()
         .turn_id
+}
+
+#[test]
+fn sqlite_model_provider_migration_backfills_legacy_catalog_once() {
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("model-migration.sqlite3");
+    let store = Arc::new(SqliteThreadStore::open(&path).unwrap());
+    let threads = ThreadController::with_store(store.clone());
+    let id = ThreadId::new("legacy-catalog").unwrap();
+    threads
+        .create_thread(CreateThreadRequest {
+            execution_target: None,
+            agent_id: ash_protocol::AgentId::new("legacy-agent").unwrap(),
+            origin: Default::default(),
+            agent: None,
+            session_id: SessionId::new(id.as_str()).unwrap(),
+            thread_id: id.clone(),
+            title: "Legacy catalog".into(),
+        })
+        .unwrap();
+    let events = store.load(&id).unwrap();
+    let mut catalog = serde_json::to_value(store.list_catalog().unwrap().remove(0)).unwrap();
+    catalog
+        .as_object_mut()
+        .unwrap()
+        .remove("resumable_model_providers");
+    let json = serde_json::to_string(&catalog).unwrap();
+    rusqlite::Connection::open(&path)
+        .unwrap()
+        .execute(
+            "UPDATE thread_catalog SET record_json = ?1, record_digest = ?2 WHERE thread_id = ?3",
+            rusqlite::params![
+                json,
+                ash_protocol::ContentDigest::sha256(json.as_bytes()).as_str(),
+                id.as_str()
+            ],
+        )
+        .unwrap();
+    drop(threads);
+    drop(store);
+    let old = ProviderId::new("legacy-provider").unwrap();
+    let new = ProviderId::new("current-provider").unwrap();
+    let mapping = [(old.clone(), new.clone())].into_iter().collect();
+    let store = Arc::new(SqliteThreadStore::open(&path).unwrap());
+    let threads = ThreadController::with_store(store.clone());
+    threads.migrate_model_providers(&mapping).unwrap();
+    assert_eq!(threads.list_loaded_threads().unwrap().len(), 1);
+    assert_eq!(store.load(&id).unwrap(), events);
+    assert_eq!(
+        store.list_catalog().unwrap()[0].resumable_model_providers,
+        Some(Default::default())
+    );
+    drop(threads);
+    drop(store);
+
+    let store = Arc::new(SqliteThreadStore::open(&path).unwrap());
+    let threads = ThreadController::with_store(store.clone());
+    threads.migrate_model_providers(&mapping).unwrap();
+    assert!(threads.list_loaded_threads().unwrap().is_empty());
+    // History added after an earlier migration must still be discovered from its own catalog.
+    threads
+        .configure_advisor(
+            &id,
+            ash_protocol::CommandId::new("new-legacy-selection").unwrap(),
+            core_api::SequenceExpectation::Any,
+            ash_protocol::AdvisorSelection::Model {
+                config: ash_protocol::AdvisorConfig::new(ModelRef::new(
+                    old,
+                    ModelId::new("model").unwrap(),
+                )),
+            },
+        )
+        .unwrap();
+    drop(threads);
+    let threads = ThreadController::with_store(store.clone());
+    threads.migrate_model_providers(&mapping).unwrap();
+    assert!(matches!(threads.read_thread(&id).unwrap().advisor,
+        ash_protocol::AdvisorSelection::Model { config } if config.model.provider == new));
+    let events = store.load(&id).unwrap();
+    drop(threads);
+    let threads = ThreadController::with_store(store.clone());
+    threads.migrate_model_providers(&mapping).unwrap();
+    assert!(threads.list_loaded_threads().unwrap().is_empty());
+    assert_eq!(store.load(&id).unwrap(), events);
 }
 
 #[test]

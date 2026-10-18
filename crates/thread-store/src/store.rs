@@ -23,6 +23,10 @@ pub struct ThreadCatalogRecord {
     pub execution_target: Option<ash_protocol::SessionExecutionTarget>,
     /// Retained in the catalog so listing Sessions never replays histories to find a model.
     pub model: Option<ash_protocol::ModelRef>,
+    /// Providers in future or resumable model selections, excluding completed invocation facts.
+    /// Missing on older catalog rows; Core backfills it from history before skipping migration.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub resumable_model_providers: Option<std::collections::BTreeSet<ash_protocol::ProviderId>>,
     pub sequence: u64,
     pub manager: SessionManagerInfo,
     pub archived_at_unix_ms: Option<u64>,
