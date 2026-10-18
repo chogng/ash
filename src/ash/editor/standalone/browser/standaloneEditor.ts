@@ -1,3 +1,4 @@
+import { IWebWorkerService } from '../../../platform/webWorker/browser/webWorkerService.js';
 import './standalone-tokens.css';
 import { DisposableStore, type IDisposable } from "../../../base/common/lifecycle.js";
 import { URI } from "../../../base/common/uri.js";
@@ -26,7 +27,7 @@ import { EditorAction, EditorCommand, EditorExtensionsRegistry, type ServicesAcc
 import { ContextKeyExpr } from '../../../platform/contextkey/common/contextkey.js';
 import { MenuId, MenusRegistry } from '../../../platform/actions/common/actions.js';
 import { createWebWorker as createStandaloneWebWorker, type MonacoWebWorker } from './standaloneWebWorker.js';
-import type { StandaloneWorkerOptions } from './services/standaloneWebWorkerService.js';
+import type { StandaloneWorkerOptions } from './standaloneWebWorker.js';
 
 export interface ICommandDescriptor {
 	readonly id: string;
@@ -155,7 +156,7 @@ export function createModel(value: string, language?: string, uri?: URI): ITextM
 }
 
 export function createWebWorker<T extends object>(options: StandaloneWorkerOptions): MonacoWebWorker<T> {
-	return createStandaloneWebWorker<T>(StandaloneServices.get(IModelService), options);
+	return createStandaloneWebWorker<T>(StandaloneServices.get(IModelService), StandaloneServices.get(IWebWorkerService), options);
 }
 
 export function getModel(uri: URI): ITextModel | null {

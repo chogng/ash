@@ -16,7 +16,7 @@ import { CancellationTokenSource, throwIfCancelled } from '../../../../base/comm
 import { DisposableStore, MutableDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { extUriBiasedIgnorePathCase } from '../../../../base/common/resources.js';
 import { URI } from '../../../../base/common/uri.js';
-import { WorkerDiffComputationService } from '../../../../editor/browser/services/workerDiffComputationService.js';
+import { WorkerBasedDiffProviderFactoryService } from '../../../../editor/browser/widget/diffEditor/diffProviderFactoryService.js';
 import { DiffEditorWidget } from '../../../../editor/browser/widget/diffEditor/diffEditorWidget.js';
 import { DiffModel } from '../../../../editor/common/diff/diffModel.js';
 import { localize } from '../../../../nls.js';
@@ -498,7 +498,8 @@ export class GitHubEditor extends EditorPane implements IEditorPane {
 			const original = resources.add(await this.models.acquire({ resource: uri(base, file.previousFilename ?? file.filename), initialText: before.text }, controller.signal));
 			const modified = resources.add(await this.models.acquire({ resource: uri(pr.headCommit, file.filename), initialText: after.text }, controller.signal));
 			if (token.isCancellationRequested) { resources.dispose(); return; }
-			const computation = resources.add(new WorkerDiffComputationService());
+			const factory = resources.add(this.instantiation.createInstance(WorkerBasedDiffProviderFactoryService));
+			const computation = resources.add(factory.createDiffProvider());
 			const diff = resources.add(new DiffModel({ original: original.model, modified: modified.model, diffProvider: computation, diffOptions: { ignoreTrimWhitespace: false, maxComputationTimeMs: 5000, computeMoves: false } }));
 			const widget = resources.add(this.instantiation.createInstance(DiffEditorWidget, { container: this.diffContainer, model: diff, readOnly: true, originalAriaLabel: localize('github.editor.original', 'Original file'), modifiedAriaLabel: localize('github.editor.modified', 'Modified file') }));
 			for (const [editor, side] of [[widget.originalEditor, GitHubDiffSide.Left], [widget.modifiedEditor, GitHubDiffSide.Right]] as const) {

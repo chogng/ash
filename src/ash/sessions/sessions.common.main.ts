@@ -74,6 +74,12 @@ import { ICommandService } from '../platform/commands/common/commands.js';
 import { ContextKeyExpr } from '../platform/contextkey/common/contextkey.js';
 import { localize2 } from '../nls.js';
 import { Menus } from './browser/menus.js';
+import { InstantiationType, registerSingleton } from '../platform/instantiation/common/extensions.js';
+import { IWebWorkerService } from '../platform/webWorker/browser/webWorkerService.js';
+import { WebWorkerService } from '../platform/webWorker/browser/webWorkerServiceImpl.js';
+
+// Sessions has its own renderer entry and cannot rely on Code's shared editor service registrations.
+registerSingleton(IWebWorkerService, WebWorkerService, InstantiationType.Delayed);
 
 for (const [id, title, icon, activeIcon, order] of [
 	['chat', localize2({ bundle: 'ash', key: 'sessions.activity.chat' }, 'Chat'), Lxicon.chat2, Lxicon.chat2Filled, 10],

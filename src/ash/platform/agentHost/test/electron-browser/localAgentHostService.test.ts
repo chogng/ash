@@ -1,3 +1,5 @@
+import { IWebWorkerService } from '../../../webWorker/browser/webWorkerService.js';
+import { WebWorkerService } from '../../../webWorker/browser/webWorkerServiceImpl.js';
 import assert from 'node:assert/strict';
 import { MessageChannel } from 'node:worker_threads';
 import { mock } from 'node:test';
@@ -116,6 +118,7 @@ suite('Local Agent Host connection service', () => {
 
 	test('SSH workspace and local media use distinct carriers and keep Agent requests on the workspace', async () => {
 		using services = new InstantiationService();
+		services.registerInstance(IWebWorkerService, new WebWorkerService());
 		using logger = new LogService({ sinks: [] });
 		services.registerInstance(ILogService, logger);
 		services.registerSingleton(IRemoteSocketFactoryService, () => services.createInstance(RemoteSocketFactoryService));
@@ -138,6 +141,7 @@ suite('Local Agent Host connection service', () => {
 
 	test('additional hosts own independent protocol clients and retiring one leaves the other usable', async () => {
 		using services = new InstantiationService();
+		services.registerInstance(IWebWorkerService, new WebWorkerService());
 		using logger = new LogService({ sinks: [] });
 		services.registerInstance(ILogService, logger);
 		services.registerSingleton(IRemoteSocketFactoryService, () => services.createInstance(RemoteSocketFactoryService));
@@ -159,6 +163,7 @@ suite('Local Agent Host connection service', () => {
 
 	test('production assembly requires the connection log service', () => {
 		using services = new InstantiationService();
+		services.registerInstance(IWebWorkerService, new WebWorkerService());
 		services.registerSingleton(IRemoteSocketFactoryService, () => services.createInstance(RemoteSocketFactoryService));
 		assert.throws(() => services.createInstance(Service, {}), /Unknown service: logService/);
 	});
@@ -166,6 +171,7 @@ suite('Local Agent Host connection service', () => {
 	test('disabled development hosts settle without initializing a protocol', async () => {
 		enabled = false;
 		using services = new InstantiationService();
+		services.registerInstance(IWebWorkerService, new WebWorkerService());
 		using logger = new LogService({ sinks: [] });
 		using service = assemble(services, logger);
 		assert.equal(await service.connect(), false);
@@ -182,6 +188,7 @@ suite('Local Agent Host connection service', () => {
 			pendingAcquisition = () => new Promise(resolve => { release = resolve; entered(); });
 			enabled = false;
 			using services = new InstantiationService();
+			services.registerInstance(IWebWorkerService, new WebWorkerService());
 			using logger = new LogService({ sinks: [] });
 			services.registerInstance(ILogService, logger);
 			services.registerSingleton(IRemoteSocketFactoryService, () => services.createInstance(RemoteSocketFactoryService));
@@ -200,6 +207,7 @@ suite('Local Agent Host connection service', () => {
 
 	test('restart replaces the local lease once and preserves the protocol client for consumers', async () => {
 		using services = new InstantiationService();
+		services.registerInstance(IWebWorkerService, new WebWorkerService());
 		using logger = new LogService({ sinks: [] });
 		using service = assemble(services, logger);
 		const client = service.client;
@@ -217,6 +225,7 @@ suite('Local Agent Host connection service', () => {
 	test('runtime incompatibility repairs and reacquires before publishing readiness', async () => {
 		mismatch = true;
 		using services = new InstantiationService();
+		services.registerInstance(IWebWorkerService, new WebWorkerService());
 		using logger = new LogService({ sinks: [] });
 		using service = assemble(services, logger);
 		assert.equal(await service.connect(), true);
@@ -229,6 +238,7 @@ suite('Local Agent Host connection service', () => {
 		try {
 			const entries: LogEntry[] = [];
 			using services = new InstantiationService();
+			services.registerInstance(IWebWorkerService, new WebWorkerService());
 			using logger = new LogService({ sinks: [{ log: entry => entries.push(entry) }] });
 			using service = assemble(services, logger);
 			await service.connect();
@@ -251,6 +261,7 @@ suite('Local Agent Host connection service', () => {
 		failAcquisition = true;
 		const entries: LogEntry[] = [];
 		using services = new InstantiationService();
+		services.registerInstance(IWebWorkerService, new WebWorkerService());
 		using logger = new LogService({ sinks: [{ log: entry => entries.push(entry) }] });
 		using service = assemble(services, logger);
 		await assert.rejects(service.connect(), /acquisition refused/);
@@ -264,6 +275,7 @@ suite('Local Agent Host connection service', () => {
 		const acquiring = new Promise<void>(resolve => { entered = resolve; });
 		pendingAcquisition = () => new Promise(resolve => { release = resolve; entered(); });
 		using services = new InstantiationService();
+		services.registerInstance(IWebWorkerService, new WebWorkerService());
 		using logger = new LogService({ sinks: [] });
 		using service = assemble(services, logger);
 		const result = assert.rejects(service.connect(), { name: 'CancellationError' });

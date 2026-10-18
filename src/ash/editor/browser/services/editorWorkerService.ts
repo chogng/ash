@@ -1,12 +1,13 @@
 import { type LanguageCompletionRequest, type LanguageCompletionProvider, type LanguageCompletionResult, type IInplaceReplaceSupportResult, type TextEdit } from '../../common/languages.js';
-import { BrowserWorkerClientPort } from '../../../platform/webWorker/browser/browserWorkerClientPort.js';
+import type { IWebWorkerService } from '../../../platform/webWorker/browser/webWorkerService.js';
+import { WebWorkerDescriptor } from '../../../platform/webWorker/browser/webWorkerDescriptor.js';
 import { createServiceIdentifier } from '../../../platform/instantiation/common/instantiation.js';
 import { Disposable, type IDisposable } from '../../../base/common/lifecycle.js';
 import { Range } from '../../common/core/range.js';
 import { LanguageRequestCoordinator, LanguageRequestStatus } from '../../common/model/languageRequestCoordinator.js';
 import { type TextModel } from '../../common/model/textModel.js';
 import { type UnicodeHighlight } from '../../common/services/unicodeTextModelHighlighter.js';
-import { WorkerTextModelSyncClient } from '../../common/services/textModelSync/textModelSync.impl.js';
+import { WorkerTextModelSyncClient, modelChannel } from '../../common/services/textModelSync/textModelSync.impl.js';
 import { editorWorkerWireCodec } from '../../common/services/editorWebWorker.js';
 import { EDITOR_WORKER_TEXTUAL_SUGGEST_LANE, EDITOR_WORKER_MINIMAL_EDITS_LANE, EDITOR_WORKER_NAVIGATE_VALUE_LANE, EDITOR_WORKER_UNICODE_HIGHLIGHTS_LANE, type EditorWorkerImplementationFactory, type EditorWorkerLane, type EditorWorkerRequest, type EditorWorkerResult } from '../../common/services/editorWorker.js';
 
@@ -21,14 +22,19 @@ export interface IVersionedEditorWorkerClient extends IDisposable {
 	navigateValueSet(range: Range, up: boolean, wordDefinition: RegExp, signal?: AbortSignal): Promise<IInplaceReplaceSupportResult | undefined>;
 }
 
+/** The host chooses the shared Worker policy; the client still owns one model lifetime. */
+export function createEditorWorkerClient(model: TextModel, workers: IWebWorkerService): VersionedEditorWorkerClient {
+	return new VersionedEditorWorkerClient(model, () => new WorkerTextModelSyncClient(workers.createWorkerClient(new WebWorkerDescriptor({
+		label: 'ash-editor', channel: modelChannel,
+		createWorker: () => new Worker(new URL('../../common/services/editorWebWorkerMain.ts', import.meta.url), { type: 'module', name: 'ash-editor' }),
+	})), editorWorkerWireCodec));
+}
+
 /** Browser-side editor worker client with model-version gating and one reusable worker implementation. */
 export class VersionedEditorWorkerClient extends Disposable implements IVersionedEditorWorkerClient {
 	private readonly coordinator: LanguageRequestCoordinator<EditorWorkerLane, EditorWorkerRequest, EditorWorkerResult>;
 
-	constructor(model: TextModel, createWorker: EditorWorkerImplementationFactory = () => new WorkerTextModelSyncClient(
-		new BrowserWorkerClientPort(new Worker(new URL('../../common/services/editorWebWorkerMain.ts', import.meta.url), { type: 'module', name: 'ash-editor' })),
-		editorWorkerWireCodec,
-	)) {
+	constructor(model: TextModel, createWorker: EditorWorkerImplementationFactory) {
 		super();
 		this.coordinator = this._register(new LanguageRequestCoordinator(model, createWorker));
 	}

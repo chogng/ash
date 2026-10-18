@@ -455,7 +455,7 @@ interface StandaloneHarness {
 	readMultiCursor(): { readonly value: string; readonly version: number; readonly selections: readonly string[]; readonly ownedSelections: readonly string[]; readonly focused: boolean; };
 	releaseCaller(): void;
 	releaseOwned(): void;
-	runStandaloneWebWorker(): Promise<{ readonly initial: readonly { uri: string; version: number; value: string; }[]; readonly changed: readonly { uri: string; version: number; value: string; }[]; readonly afterRemoval: readonly { uri: string; version: number; value: string; }[]; readonly host: string; readonly disposed: boolean; }>;
+	runStandaloneWebWorker(): Promise<{ readonly initial: readonly { uri: string; version: number; value: string; }[]; readonly changed: readonly { uri: string; version: number; value: string; }[]; readonly afterRemoval: readonly { uri: string; version: number; value: string; }[]; readonly host: string; readonly disposed: boolean; readonly transferred: { readonly detached: number; readonly bytes: readonly number[]; }; }>;
 	dispose(): void;
 }
 
@@ -3300,6 +3300,7 @@ window.ashStandaloneIntegration = {
 		const worker = stanza.editor.createWebWorker<{
 			readModels(): Promise<{ uri: string; version: number; value: string; }[]>;
 			callHost(value: string): Promise<string>;
+			echoBuffer(value: ArrayBuffer): Promise<ArrayBuffer>;
 		}>({
 			worker: new Worker(new URL('./standaloneWebWorker.worker.ts', import.meta.url), { type: 'module' }),
 			host: { echo: (value: string) => `host:${value}` },
@@ -3311,12 +3312,15 @@ window.ashStandaloneIntegration = {
 			callerModel.setValue('changed in main thread');
 			const changed = await proxy.readModels();
 			const host = await proxy.callHost('hello');
+			const buffer = new Uint8Array([3, 7, 11]);
+			const echoed = await proxy.echoBuffer(buffer.buffer);
+			const transferred = { detached: buffer.byteLength, bytes: [...new Uint8Array(echoed)] };
 			extra.dispose();
 			const afterRemoval = await proxy.readModels();
 			worker.dispose();
 			let disposed = false;
 			try { await proxy.readModels(); } catch { disposed = true; }
-			return { initial, changed, afterRemoval, host, disposed };
+			return { initial, changed, afterRemoval, host, disposed, transferred };
 		} finally {
 			worker.dispose();
 			extra.dispose();

@@ -1,3 +1,5 @@
+import { IWebWorkerService } from '../../../platform/webWorker/browser/webWorkerService.js';
+import { WebWorkerService } from '../../../platform/webWorker/browser/webWorkerServiceImpl.js';
 import { IActivityService } from '../../services/activity/common/activity.js';
 import { ActivityService } from '../../services/activity/browser/activityService.js';
 import { IStatusbarService, StatusbarService } from '../../services/statusbar/browser/statusbar.js';
@@ -160,6 +162,7 @@ export function getWebviewHtml(element: HTMLIFrameElement): string {
 /** Assembles the real label owner for editor tests without an extension icon theme. */
 export function createTestEditorServices(configuration?: IConfigurationService, parent?: InstantiationService, document: Document = globalThis.document, storage?: IStorageService): InstantiationService {
 	const services = createTestComponentServices(storage, parent, document);
+	if (!services.has(IWebWorkerService)) services.registerInstance(IWebWorkerService, new WebWorkerService());
 	if (!services.has(IContextKeyService)) services.registerSingleton(IContextKeyService, () => new ContextKeyService());
 	if (!services.has(ILinkPresentationService)) services.registerSingleton(ILinkPresentationService, () => services.createInstance(LinkPresentationService));
 	if (configuration) {

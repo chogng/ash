@@ -110,6 +110,7 @@
 
 ## Stanza 编辑器 · TODO
 
+- [ ] **复核** · Chromium Diff 现存 3 项回归：移动比较在 wrapping／readonly 切换后残留 72 px 位移，分隔条复位宽度为 358 而断言要求 359（英文／中文各一项）。2026-10-18 的 Worker 迁移回归和撤去该批源码改动的只读基线均复现；涉及 `diff.integration.spec.ts` 的 `moved comparison supports keyboard exit` 与 `diff separator resizes`，尚未修改布局或放宽断言。
 - [ ] **验收** · 补系统 IME 候选窗口、Electron 平台及屏幕阅读器验收；浏览器合成 composition 事件不代替物理输入法。
 
 后续阶段由[编辑器路线图](docs/design/editor-roadmap.md)维护；本清单不再把整条路线图重复记成一个未完成任务。

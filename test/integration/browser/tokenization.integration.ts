@@ -1,3 +1,4 @@
+import { WebWorkerService } from '../../../src/ash/platform/webWorker/browser/webWorkerServiceImpl.js';
 import { IThemeService } from '../../../src/ash/platform/theme/common/themeService.js';
 import { TreeSitterLibraryService, TreeSitterSyntaxProviders, createTreeSitterSyntaxTokenBackend } from '../../../src/ash/workbench/services/treeSitter/browser/treeSitterLibraryService.js';
 import { rustSyntaxFixture } from './rustSyntaxHostFixture.js';
@@ -15,7 +16,7 @@ import { createLanguageExtensions } from './languageExtensions.js';
 import { AdapterManager } from '../../../src/ash/workbench/contrib/debug/browser/debugAdapterManager.js';
 
 const store = new DisposableStore();
-const library = store.add(new TreeSitterLibraryService(await rustSyntaxFixture()));
+const library = store.add(new TreeSitterLibraryService(await rustSyntaxFixture(), new WebWorkerService()));
 const services: ReturnType<typeof StandaloneServices.initialize> = store.add(StandaloneServices.initialize({
 	tokenization: { createSyntaxTokenBackend: model => createTreeSitterSyntaxTokenBackend(model, services.get(IConfigurationService), library, services.get(IThemeService)) },
 }));

@@ -1,3 +1,5 @@
+import { WebWorkerService } from '../../../src/ash/platform/webWorker/browser/webWorkerServiceImpl.js';
+import { createAppServerFrameDecoder } from '../../../src/ash/platform/agentHost/browser/appServerFrameDecoder.js';
 import { APP_SERVER_METHODS } from '../../../.build/protocol/typescript/index.js';
 import { AppServerFrameDecoder } from '../../../src/ash/platform/agentHost/browser/appServerFrameDecoder.js';
 import { AppServerProtocolClient } from '../../../src/ash/platform/agentHost/browser/appServerProtocolClient.js';
@@ -44,7 +46,7 @@ async function prepare(turns: number, textBytes: number): Promise<void> {
 	wireResult = JSON.stringify(result);
 	for (const variant of ['before', 'worker'] as const) {
 		const transport = new ResponseTransport();
-		const client = new AppServerProtocolClient(transport, {}, variant === 'before' ? new BeforeDecoder() : new AppServerFrameDecoder());
+		const client = new AppServerProtocolClient(transport, {}, variant === 'before' ? new BeforeDecoder() : createAppServerFrameDecoder(new WebWorkerService()));
 		clients.set(variant, { client, transport });
 		await client.connect();
 	}

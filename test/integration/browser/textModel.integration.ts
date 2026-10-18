@@ -1,3 +1,4 @@
+import { WebWorkerService } from '../../../src/ash/platform/webWorker/browser/webWorkerServiceImpl.js';
 import { TreeSitterLibraryService, TreeSitterSyntaxProviders, createTreeSitterSyntaxTokenBackend } from '../../../src/ash/workbench/services/treeSitter/browser/treeSitterLibraryService.js';
 import { rustSyntaxFixture } from './rustSyntaxHostFixture.js';
 import { TestThemeService } from '../../../src/ash/platform/theme/test/common/testThemeService.js';
@@ -137,7 +138,7 @@ const configurationService = disposables.add(new WorkbenchConfigurationService()
 const languageConfigurationService = disposables.add(new LanguageConfigurationService(configurationService, languageService));
 const languageFeaturesService = disposables.add(new LanguageFeaturesService());
 const syntaxTheme = disposables.add(new TestThemeService(darkColorTheme));
-const library = disposables.add(new TreeSitterLibraryService(await rustSyntaxFixture()));
+const library = disposables.add(new TreeSitterLibraryService(await rustSyntaxFixture(), new WebWorkerService()));
 const extensions = disposables.add(await createLanguageExtensions({ languageService, languageConfigurationService }, disposables.add(new AdapterManager())));
 const snippets = disposables.add(new SnippetsService(extensions));
 disposables.add(new SnippetCompletionProvider(snippets, languageFeaturesService));

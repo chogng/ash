@@ -1,3 +1,4 @@
+import { TestWebWorkerService } from '../../../../platform/webWorker/test/browser/testWebWorkerService.js';
 import assert from 'node:assert/strict';
 import { suite, test } from 'mocha';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../base/test/common/utils.js';
@@ -20,11 +21,11 @@ suite('Frontend diff Worker', () => {
 	test('shared Worker failure rejects pending work and allows the next comparison to recover', async () => {
 		using failures = new Emitter<unknown>();
 		const ports: DiffTestPort[] = [];
-		using factory = new WorkerBasedDiffProviderFactoryService(() => {
+		using factory = new WorkerBasedDiffProviderFactoryService(new TestWebWorkerService(() => {
 			const port = Object.assign(new DiffTestPort(), { onFailure: failures.event });
 			ports.push(port);
 			return port;
-		});
+		}));
 		using provider = factory.createDiffProvider();
 		using original = new TextModel('old');
 		using modified = new TextModel('new');
@@ -38,11 +39,11 @@ suite('Frontend diff Worker', () => {
 	});
 	test('factory reuses its Worker across disposed providers while cancelling only their own requests', async () => {
 		const ports: DiffTestPort[] = [];
-		using factory = new WorkerBasedDiffProviderFactoryService(() => {
+		using factory = new WorkerBasedDiffProviderFactoryService(new TestWebWorkerService(() => {
 			const port = new DiffTestPort();
 			ports.push(port);
 			return port;
-		});
+		}));
 		using first = factory.createDiffProvider();
 		using second = factory.createDiffProvider();
 		using original = new TextModel('old');

@@ -1,3 +1,5 @@
+import { WebWorkerService } from '../../../src/ash/platform/webWorker/browser/webWorkerServiceImpl.js';
+import { createAppServerFrameDecoder } from '../../../src/ash/platform/agentHost/browser/appServerFrameDecoder.js';
 import { AppServerProtocolClient } from '../../../src/ash/platform/agentHost/browser/appServerProtocolClient.js';
 import { createAppServerSyntaxApi } from '../../../src/ash/platform/syntax/browser/syntaxApi.js';
 import { WEB_APP_SERVER_CLOSED_EVENT, type AppServerTransport } from '../../../src/ash/platform/agentHost/common/appServerTransport.js';
@@ -36,7 +38,7 @@ async function connect(): Promise<{ api: ISyntaxApi; client: AppServerProtocolCl
 			});
 		},
 	};
-	const client = new AppServerProtocolClient(transport);
+	const client = new AppServerProtocolClient(transport, {}, createAppServerFrameDecoder(new WebWorkerService()));
 	window.addEventListener('pagehide', () => client.dispose(), { once: true });
 	try {
 		await client.connect();

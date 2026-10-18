@@ -3,4 +3,5 @@ import { startStandaloneWebWorker, type StandaloneWorkerContext } from '../../..
 startStandaloneWebWorker(self, (context: StandaloneWorkerContext) => ({
 	readModels: () => context.getMirrorModels().map(model => ({ uri: model.uri.toString(), version: model.version, value: model.getValue() })),
 	callHost: (value: string) => context.callHost('echo', value),
+	echoBuffer: (value: ArrayBuffer) => value,
 }));

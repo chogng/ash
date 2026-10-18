@@ -1,3 +1,5 @@
+import { IWebWorkerService } from '../../../platform/webWorker/browser/webWorkerService.js';
+import { StandaloneWebWorkerService } from './services/standaloneWebWorkerService.js';
 import type { ModelServiceTokenizationOptions } from '../../common/services/modelService.js';
 import { getSingletonServiceDescriptors } from '../../../platform/instantiation/common/extensions.js';
 import { ResolvedKeybindingItem } from '../../../platform/keybinding/common/resolvedKeybindingItem.js';
@@ -23,7 +25,7 @@ import { ConfigurationTarget, IConfigurationService, isConfigurationUpdateOverri
 import { InMemoryConfigurationService } from '../../../platform/configuration/common/inMemoryConfigurationService.js';
 import { ICodeEditorService, type ICodeEditorService as ICodeEditorServiceContract } from '../../browser/services/codeEditorService.js';
 import { type LanguageCompletionWorkerFactory, type SyntaxWorkerFactory } from '../../common/languages.js';
-import { VersionedEditorWorkerClient, type VersionedEditorWorkerFactory } from "../../browser/services/editorWorkerService.js";
+import { createEditorWorkerClient, type VersionedEditorWorkerFactory } from "../../browser/services/editorWorkerService.js";
 import { ILanguageFeaturesService } from '../../common/services/languageFeatures.js';
 import { LanguageFeaturesService } from '../../common/services/languageFeaturesService.js';
 import { IOpenerService } from '../../../platform/opener/common/opener.js';
@@ -172,6 +174,7 @@ export class StandaloneServiceCollection extends InstantiationService {
 	constructor(overrides: StandaloneServiceOverrides) {
 		if (overrides.languageFeaturesService && !overrides.languageConfigurationService) throw new TypeError("Standalone language feature overrides require a language configuration service");
 		super();
+		this.registerSingleton(IWebWorkerService, () => new StandaloneWebWorkerService());
 		this.registerInstance(ILogService, new NullLoggerService());
 		this.registerSingleton(IInlineCompletionsService, () => this.createInstance(InlineCompletionsService));
 		this.registerInstance(IDataChannelService, new NullDataChannelService());
@@ -199,7 +202,7 @@ export class StandaloneServiceCollection extends InstantiationService {
 		this.registerSingleton(IQuickInputService, () => this.createInstance(StandaloneQuickInputService));
 		this.registerSingleton(IBulkEditService, () => this.createInstance(StandaloneBulkEditService));
 		this.codeEditorService = this.get(ICodeEditorService);
-		this.editorWorkerFactory = overrides.editorWorkerFactory ?? (model => new VersionedEditorWorkerClient(model));
+		this.editorWorkerFactory = overrides.editorWorkerFactory ?? (model => createEditorWorkerClient(model, this.get(IWebWorkerService)));
 		this.syntaxWorkerFactory = overrides.syntaxWorkerFactory;
 		this.completionWorkerFactory = overrides.completionWorkerFactory;
 		const configurationService = this._register(new StandaloneConfigurationService());

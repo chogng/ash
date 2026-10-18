@@ -71,7 +71,7 @@ resources.add(panes.registerEditorPane({
 	id: CODE_EDITOR_ID, name: 'Text', canOpen: input => isDiffEditorInput(input) ? EditorPaneMatch.None : EditorPaneMatch.Default,
 	create: () => services.createInstance(TextResourceEditor, store, { lineWrapping: 'off', lineHeight: 20 }),
 }));
-const factory = new WorkerBasedDiffProviderFactoryService();
+const factory = services.createInstance(WorkerBasedDiffProviderFactoryService);
 resources.add(panes.registerEditorPane({
 	id: DIFF_EDITOR_ID, name: 'Diff', canOpen: input => isDiffEditorInput(input) ? EditorPaneMatch.Default : EditorPaneMatch.None,
 	create: () => services.createInstance(TextDiffEditor, store, { modelService: services.get(ITextModelResourceService), createComputationService: () => factory.createDiffProvider(), lineHeight: 20 }),

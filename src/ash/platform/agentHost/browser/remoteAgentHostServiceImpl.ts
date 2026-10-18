@@ -1,3 +1,5 @@
+import { IWebWorkerService } from '../../webWorker/browser/webWorkerService.js';
+import { createAppServerFrameDecoder } from './appServerFrameDecoder.js';
 import { raceCancellationError } from '../../../base/common/async.js';
 import { throwIfCancelled } from '../../../base/common/cancellation.js';
 import type { Event } from '../../../base/common/event.js';
@@ -27,11 +29,12 @@ export class RemoteAgentHostService extends Disposable {
 	constructor(
 		private readonly options: RemoteAgentHostConnectionOptions,
 		@IInstantiationService instantiationService: IInstantiationService,
+		@IWebWorkerService workers: IWebWorkerService,
 		@ILogService private readonly logService: ILogService,
 	) {
 		super();
 		const transport = this._register(instantiationService.createInstance(AppServerSocketTransport, options));
-		this.client = new AppServerProtocolClient(transport, options.protocol);
+		this.client = new AppServerProtocolClient(transport, options.protocol, createAppServerFrameDecoder(workers));
 		this._register(toDisposable(() => this.client.dispose()));
 		this.recovery = this._register(new AppServerConnectionRecovery(
 			this.client,

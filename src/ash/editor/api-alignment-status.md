@@ -466,11 +466,23 @@ Marker API：用户已确认迁移平台公开契约；原 `MarkerInput / Marker
 
 ### 用户已确认的 Ash 底层归属
 
-| 准确路径（相对 `src/ash/`）                                                   | 现状与建议                                                                                                                                                                                                       |
-| ----------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `platform/quickinput/browser/quickPick.ts`                                    | 仅 Ash；用户已确认迁移并删除。现已迁入 `platform/quickinput/browser/quickInput.ts`，唯一生产消费者同步迁移，旧路径退出；Git 可恢复。平台 QuickInputController 已承接共享弹层，Standalone 和 Workbench 都使用它。 |
-| `editor/common/diff/diffModel.ts`、`diffComputationService.ts`、`lineDiff.ts` | 用户已确认保留共享差异计算与版本有效性。DiffEditorWidget 仍是只读行展示，两侧 CodeEditor、模型切换、编辑后差异和滚动对齐尚未实现；本批没有增加伪装成可编辑器的 createDiffEditor。                                |
-| `platform/webWorker/browser/browserWorkerClientPort.ts`                       | 用户已确认保留 Editor Worker 与 Workbench TextMate 共用的传输和释放实现。base WebWorkerClient 已有请求、取消与失败协议，但标准代理、双向 channel、多资源同步和外部模块加载仍需沿同一协议补齐。                   |
+| 准确路径（相对 `src/ash/`）                                                   | 现状与建议                                                                                                                                                                                                                                                     |
+| ----------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `platform/quickinput/browser/quickPick.ts`                                    | 仅 Ash；用户已确认迁移并删除。现已迁入 `platform/quickinput/browser/quickInput.ts`，唯一生产消费者同步迁移，旧路径退出；Git 可恢复。平台 QuickInputController 已承接共享弹层，Standalone 和 Workbench 都使用它。                                               |
+| `editor/common/diff/diffModel.ts`、`diffComputationService.ts`、`lineDiff.ts` | 用户已确认保留共享差异计算与版本有效性。DiffEditorWidget 仍是只读行展示，两侧 CodeEditor、模型切换、编辑后差异和滚动对齐尚未实现；本批没有增加伪装成可编辑器的 createDiffEditor。                                                                              |
+| `platform/webWorker/browser/browserWorkerClientPort.ts`                       | 用户已确认保留共享传输和释放实现。2026-10-18：生产创建收敛到 Platform WebWorkerService，当前消费者是 Editor、Diff、Standalone、Tree-sitter Web 后备和 App Server 大帧解码。Base 已沿同一消息协议提供代理及双向 channel；多资源同步仍归 Standalone 模型 owner。 |
+
+2026-10-18 Worker 调用链续批：对照本地 VS Code `72e9539ed6b`，补齐 `platform/webWorker/browser/webWorkerDescriptor.ts`、`webWorkerService.ts` 和 `webWorkerServiceImpl.ts` 的对应职责。Workbench 延迟注册通用服务，Standalone 在自己的窗口作用域注册宿主策略实现；模型与空闲同步 owner 从 `services/standaloneWebWorkerService.ts` 归回 `standaloneWebWorker.ts`，前者只负责宿主 `getWorker`／`getWorkerUrl` 与默认工厂选择。显式传入的 Worker 不经过宿主覆盖。
+
+Base 保留 Ash 已有的版本化请求、取消、错误与失败入口，并增加 `proxy`／`setChannel`／`getChannel`；通用调用复用同一请求实现，命名空间与领域请求分开，失败会拒绝关联调用并终止拥有的物理 Worker。直接 ArrayBuffer 参数与返回值使用 transfer。Descriptor 的 `channel` 和 `createWorker` 是有当前消费者的 Ash 扩展：前者保留领域协议，后者保留 Vite 当前能够识别的字面量 `new Worker(new URL(...))` 入口，不把上游 `?esm` 当作 Ash 已有的打包能力。
+
+Tree-sitter Web Worker 失败后清理旧客户端及监听，通过已有的语法后端变化事件从模型当前文本重建。每次健康运行后的失败最多自动替换一次，替代实例成功返回后才恢复自动替换预算，持续启动失败不会循环创建。本文早期 TextMate Worker 描述保留为历史记录，当前这条生产链是 Tree-sitter。
+
+验证：220 项定向单测及架构检查通过，包含 Base／Platform 的释放追踪、宿主覆盖和缺失服务注册、Diff 并发取消、Editor 同步、协议解码与连接恢复；最新 Chromium 6 项通过，覆盖两次语法 Worker 恢复、持续启动失败的单次替换上限、Standalone 多模型／宿主回调／ArrayBuffer transfer，以及 App Server 大帧与队列消费。Common／Renderer 类型检查、Stanza／Renderer 构建、Editor 结构审计及本批 42 个可独立格式检查的源码通过；`web.host.ts` 保留批次前已有的格式差异。
+
+扩大浏览器回归为 239 通过、4 失败：中文 Markdown Diff 的导航竞争定向重试通过；另 3 项移动比较／分隔条布局断言定向重试仍失败，撤去本批 Worker 相关源码的只读基线也同样失败，已登记根 TODO。本批不据此宣称整个 Diff 回归通过。标准浏览器首次准备曾被并行后端改动的协议 package 一致性／Cargo lock 检查阻塞；后续使用仓库 prepared 入口的类型检查和独立构建资源完成上述回归。
+
+本批不把上游的 Blob／Trusted Types 启动、本地化注入、跨源隔离和事件订阅代理记为已完成；也不把通用服务接入作为资源级 EditorWorkerService、完整 Editor API 或 Worker 回传复制／保留堆测量完成的证据。
 
 用户答复“按建议迁移 Quick Pick，保留共享底层”，确认上表全部建议，包括准确旧路径的删除。共享计算与传输能力继续由现有文件负责，不再重复询问。
 

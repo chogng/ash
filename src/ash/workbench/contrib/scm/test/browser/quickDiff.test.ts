@@ -1,3 +1,4 @@
+import { TestWebWorkerService } from '../../../../../platform/webWorker/test/browser/testWebWorkerService.js';
 import '../../../../../editor/test/browser/testEditorDom.js';
 import '../../browser/quickDiff.contribution.js';
 import assert from 'node:assert/strict';
@@ -33,7 +34,7 @@ test('Quick Diff resolves registered window services and rejects a missing diff 
 	assert.throws(() => incomplete.get(IQuickDiffModelService), /diffService/);
 	using services = new InstantiationService(new ServiceCollection(...getSingletonServiceDescriptors()));
 	services.registerInstance(IConfigurationService, configuration);
-	services.registerInstance(IDiffService, new DiffService(new WorkerBasedDiffProviderFactoryService(() => new DiffTestPort())));
+	services.registerInstance(IDiffService, new DiffService(new WorkerBasedDiffProviderFactoryService(new TestWebWorkerService(() => new DiffTestPort()))));
 	const quickDiffService = services.get(IQuickDiffService);
 	let requests = 0;
 	using registration = quickDiffService.addProvider({
@@ -55,7 +56,7 @@ test('Quick Diff shares one resource model and projects configurable editor targ
 	using quickDiffService = new QuickDiffService();
 	using providerRegistration = quickDiffService.addProvider(provider);
 	using configuration = new InMemoryConfigurationService();
-	using modelService = new QuickDiffModelService(quickDiffService, new DiffService(new WorkerBasedDiffProviderFactoryService(() => new DiffTestPort())), configuration);
+	using modelService = new QuickDiffModelService(quickDiffService, new DiffService(new WorkerBasedDiffProviderFactoryService(new TestWebWorkerService(() => new DiffTestPort()))), configuration);
 	using model = new TextModel('same\nnew\nlast', { resource: URI.file('/workspace/src/file.ts') });
 	const firstReference = modelService.createModelReference(URI.file('/workspace/src/file.ts'), model);
 	const secondReference = modelService.createModelReference(URI.file('/workspace/src/file.ts'), model);
@@ -94,7 +95,7 @@ test('Quick Diff whitespace option inherits Diff settings without refetching the
 		},
 	});
 	using configuration = new InMemoryConfigurationService();
-	using modelService = new QuickDiffModelService(quickDiffService, new DiffService(new WorkerBasedDiffProviderFactoryService(() => new DiffTestPort())), configuration);
+	using modelService = new QuickDiffModelService(quickDiffService, new DiffService(new WorkerBasedDiffProviderFactoryService(new TestWebWorkerService(() => new DiffTestPort()))), configuration);
 	using model = new TextModel('word ', { resource: URI.file('/workspace/whitespace.ts') });
 	using reference = modelService.createModelReference(URI.file('/workspace/whitespace.ts'), model);
 	await waitFor(() => reference.object.state.changes.length === 1);
@@ -158,7 +159,7 @@ test('Registered Quick Diff creates after first render and releases decorations 
 		using quickDiffService = new QuickDiffService();
 		using providerRegistration = quickDiffService.addProvider(provider);
 		using configuration = new InMemoryConfigurationService();
-		using modelService = new QuickDiffModelService(quickDiffService, new DiffService(new WorkerBasedDiffProviderFactoryService(() => new DiffTestPort())), configuration);
+		using modelService = new QuickDiffModelService(quickDiffService, new DiffService(new WorkerBasedDiffProviderFactoryService(new TestWebWorkerService(() => new DiffTestPort()))), configuration);
 		using controllers = new QuickDiffEditorControllerService();
 		await configuration.updateValue('scm.diffDecorations', 'all');
 		using services = new InstantiationService();

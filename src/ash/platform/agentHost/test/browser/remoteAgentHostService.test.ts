@@ -1,3 +1,5 @@
+import { IWebWorkerService } from '../../../webWorker/browser/webWorkerService.js';
+import { WebWorkerService } from '../../../webWorker/browser/webWorkerServiceImpl.js';
 import assert from 'node:assert/strict';
 import { mock } from 'node:test';
 import { suite, test } from 'mocha';
@@ -41,6 +43,7 @@ function registerServices(services: InstantiationService, logger: ILogService): 
 
 test('remote service reacquires its endpoint and reinitializes extensions after a local restart', async () => {
 	using services = new InstantiationService();
+	services.registerInstance(IWebWorkerService, new WebWorkerService());
 	using logger = new LogService({ sinks: [] });
 	using localRestart = new Emitter<void>();
 	registerServices(services, logger);
@@ -78,6 +81,7 @@ test('remote extension initialization failure is logged and retried even while t
 	mock.timers.enable({ apis: ['setTimeout'] });
 	try {
 		using services = new InstantiationService();
+		services.registerInstance(IWebWorkerService, new WebWorkerService());
 		const entries: LogEntry[] = [];
 		using logger = new LogService({ sinks: [{ log: entry => entries.push(entry) }] });
 		using localRestart = new Emitter<void>();
@@ -111,6 +115,7 @@ test('remote extension initialization failure is logged and retried even while t
 
 test('disposing a remote service during authority resolution prevents late sockets and initialization', async () => {
 	using services = new InstantiationService();
+	services.registerInstance(IWebWorkerService, new WebWorkerService());
 	using logger = new LogService({ sinks: [] });
 	using localRestart = new Emitter<void>();
 	registerServices(services, logger);
@@ -142,6 +147,7 @@ test('disposing a remote service during authority resolution prevents late socke
 
 test('a local restart retires unresolved authority lookup without waiting for its stale result', async () => {
 	using services = new InstantiationService();
+	services.registerInstance(IWebWorkerService, new WebWorkerService());
 	using logger = new LogService({ sinks: [] });
 	using localRestart = new Emitter<void>();
 	registerServices(services, logger);
@@ -189,6 +195,7 @@ test('a local restart retires unresolved authority lookup without waiting for it
 
 test('a local restart during extension initialization completes only after fresh remote initialization', async () => {
 	using services = new InstantiationService();
+	services.registerInstance(IWebWorkerService, new WebWorkerService());
 	using logger = new LogService({ sinks: [] });
 	using localRestart = new Emitter<void>();
 	registerServices(services, logger);
@@ -237,6 +244,7 @@ suite('remote extension initialization retirement', () => {
 	for (const outcome of ['success', 'failure'] as const) {
 		test(`a local restart recovers before obsolete initialization returns ${outcome}`, async () => {
 			using services = new InstantiationService();
+			services.registerInstance(IWebWorkerService, new WebWorkerService());
 			const errors: unknown[] = [];
 			using logger = new LogService({ sinks: [{ log: entry => { if (entry.error) errors.push(entry.error); } }] });
 			using localRestart = new Emitter<void>();
@@ -296,6 +304,7 @@ suite('remote extension initialization retirement', () => {
 		mock.timers.enable({ apis: ['setTimeout'] });
 		try {
 			using services = new InstantiationService();
+			services.registerInstance(IWebWorkerService, new WebWorkerService());
 			using logger = new LogService({ sinks: [] });
 			using localRestart = new Emitter<void>();
 			registerServices(services, logger);
@@ -341,6 +350,7 @@ suite('remote extension initialization retirement', () => {
 
 	test('disposing during extension initialization rejects the connection wait before a late reply', async () => {
 		using services = new InstantiationService();
+		services.registerInstance(IWebWorkerService, new WebWorkerService());
 		using logger = new LogService({ sinks: [] });
 		using localRestart = new Emitter<void>();
 		registerServices(services, logger);

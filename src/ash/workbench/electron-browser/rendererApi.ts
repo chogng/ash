@@ -57,6 +57,9 @@ import { createRemoteConnectionApi } from "../../platform/remote/electron-browse
 import { SSH_REMOTE_INITIALIZE_TIMEOUT_MS } from '../../platform/remote/common/remote.js';
 import type { IWorkspaceTrustRequestService } from '../../platform/workspace/common/workspaceTrust.js';
 import { InstantiationService } from '../../platform/instantiation/common/instantiationService.js';
+import { InstantiationType } from '../../platform/instantiation/common/extensions.js';
+import { IWebWorkerService } from '../../platform/webWorker/browser/webWorkerService.js';
+import { WebWorkerService } from '../../platform/webWorker/browser/webWorkerServiceImpl.js';
 import { isCancellationError, CancellationError } from '../../base/common/errors.js';
 
 export type ElectronRendererCapabilityContribution = (client: AppServerProtocolClient, appServer: Parameters<RendererCapabilityContribution>[1], localClient: AppServerProtocolClient) => ReturnType<RendererCapabilityContribution>;
@@ -69,6 +72,8 @@ export async function createElectronRendererApi(contributions: readonly Electron
 	const nativeHost = createNativeHostApi(mainProcessService);
 	const remoteConnection = await createRemoteAgentApi().getConnection();
 	const connectionServices = resources.add(new InstantiationService());
+	// Connections are created before the Workbench window and own an independent service scope.
+	connectionServices.registerSingleton(IWebWorkerService, () => connectionServices.createInstance(WebWorkerService), { instantiation: InstantiationType.Delayed });
 	connectionServices.registerInstance(IMainProcessService, mainProcessService);
 	const connectionLogger = resources.add(connectionServices.createInstance(LoggerChannelClient)).createLogger('app-server', { hidden: true });
 	connectionServices.registerInstance(ILogService, connectionLogger);

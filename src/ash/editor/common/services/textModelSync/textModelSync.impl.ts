@@ -3,11 +3,11 @@ import { isNonNegativeSafeInteger, isPositiveSafeInteger } from '../../../../bas
 import { type TextModelChange, type TextSnapshot } from '../../core/textChange.js';
 import { ValidAnnotatedEditOperation, type ITextBuffer } from '../../model.js';
 import { type WorkerTextModelCodec, type WorkerTextModelResultStore, type LanguageWorkerDocumentSynchronizationObserver, type LanguageWorkerDocumentChange } from './textModelSync.protocol.js';
-import { WebWorkerClient, WebWorkerServer, type WebWorkerPort, type WebWorkerClientPort } from '../../../../base/common/worker/webWorker.js';
+import { WebWorkerClient, WebWorkerServer, type WebWorkerPort, type WebWorkerClientPort, type IWebWorkerClient } from '../../../../base/common/worker/webWorker.js';
 import { LanguageWorkerResultDisposition, type LanguageWorker, type LanguageWorkerRequest, type LanguageWorkerModelSynchronizer, type LanguageWorkerResultSettler } from '../../model/languageRequestCoordinator.js';
 import { createPieceTreeTextBuffer } from '../../model/pieceTreeTextBuffer/pieceTreeTextBufferBuilder.js';
 
-const modelChannel = Object.freeze({ protocol: 'ash.text-model', version: 1 });
+export const modelChannel = Object.freeze({ protocol: 'ash.text-model', version: 1 });
 
 /** Single-document Piece Tree mirror owned by one language-worker server. */
 export class LanguageWorkerDocumentMirror extends Disposable {
@@ -85,14 +85,14 @@ export class LanguageWorkerDocumentMirror extends Disposable {
 
 /** Encodes model requests and keeps the remote mirror at the requested version. */
 export class WorkerTextModelSyncClient<TLane extends string, TPayload, TResult> extends Disposable implements LanguageWorker<TLane, TPayload, TResult>, LanguageWorkerModelSynchronizer, LanguageWorkerResultSettler {
-	private readonly transport: WebWorkerClient;
+	private readonly transport: IWebWorkerClient<object>;
 	private readonly results: WorkerTextModelResultStore<TLane, TResult> | undefined;
 	private mirroredVersion: number | undefined;
 	public readonly onDidFail;
 
-	constructor(port: WebWorkerClientPort, private readonly codec: WorkerTextModelCodec<TLane, TPayload, TResult>) {
+	constructor(port: WebWorkerClientPort | IWebWorkerClient<object>, private readonly codec: WorkerTextModelCodec<TLane, TPayload, TResult>) {
 		super();
-		this.transport = this._register(new WebWorkerClient(port, modelChannel));
+		this.transport = this._register('request' in port ? port : new WebWorkerClient(port, modelChannel));
 		this.results = codec.createResultStore?.();
 		this.onDidFail = this.transport.onDidFail;
 		const clear = (): void => {

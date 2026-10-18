@@ -1,3 +1,6 @@
+import { IWebWorkerService } from '../platform/webWorker/browser/webWorkerService.js';
+import { WebWorkerService } from '../platform/webWorker/browser/webWorkerServiceImpl.js';
+import { registerSingleton, InstantiationType } from '../platform/instantiation/common/extensions.js';
 import './contrib/logs/common/logs.contribution.js';
 import './contrib/debug/browser/debugAdapterManager.js';
 import '../platform/uriIdentity/common/uriIdentityService.js';
@@ -86,3 +89,5 @@ registerWorkbenchContribution(
 		accessor.get(ISyntaxApi),
 	) : Disposable.None,
 );
+
+registerSingleton(IWebWorkerService, WebWorkerService, InstantiationType.Delayed);

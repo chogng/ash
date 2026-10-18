@@ -98,6 +98,8 @@ Electron Main 或异步网络执行器。所有文档操作按 connection + docu
 可取消查询携带 operation ID，`syntax/cancel` 经控制队列取消排队和正在执行的查询。
 
 Web host 连接 App Server 时复用 Rust 语法服务；连接不可用时改用 Dedicated Worker 中的本地 WASM，恢复连接后再切回 Rust。每个模型只消费当前选定的后台会话。两种宿主读取各内置语言包 `extensions/*/queries/` 的同一份高亮规则，并支持 HTML 脚本/样式、Markdown 代码块/行内文本、Diff 代码、commit patch 和 rebase exec 的嵌套注入。注入保留全局坐标及编辑器语言 ID，括号和临时输入预览读取对应的内嵌树。TextModel 继续拥有文本、selection、history 与文件状态，后台只保存派生分析副本。
+
+Web 后备 Worker 的创建和传输通过窗口的 `IWebWorkerService`。终止性失败清理旧实例及监听，现有语法后端变化事件让模型从当前文本重建，保留编辑和撤销历史。一次失败至多自动替换一次；替代 Worker 成功返回后才恢复自动替换预算，持续启动失败交给现有错误路径，不无限重启。
 模型关闭发送 `syntax/close`，connection 关闭清理其文档。连接代次改变时旧会话明确失败，
 不把旧增量重放到新连接；连接可用性变化时，仅重建派生语法会话，并以当前未保存文本作为完整快照，保留同一个 TextModel、版本、选择与撤销记录。
 高亮、括号着色/引导线、折叠、大纲、语法诊断和结构化选择读取同一版本的树。

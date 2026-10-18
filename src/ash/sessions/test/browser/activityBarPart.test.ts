@@ -64,6 +64,22 @@ test('Sessions common entry registers the shared speech service for unavailable 
 	assert.equal(speech.hasActiveSpeechToTextSession, false);
 });
 
+test('Sessions common entry supplies the shared editor Worker service in each window scope', async () => {
+	const { getSingletonServiceDescriptors } = await import('../../../platform/instantiation/common/extensions.js');
+	const { ServiceCollection } = await import('../../../platform/instantiation/common/serviceCollection.js');
+	const { IWebWorkerService } = await import('../../../platform/webWorker/browser/webWorkerService.js');
+	const { WebWorkerService } = await import('../../../platform/webWorker/browser/webWorkerServiceImpl.js');
+	const registrations = getSingletonServiceDescriptors().filter(([id]) => id === IWebWorkerService);
+	assert.equal(registrations.length, 1);
+	assert.equal(registrations[0][1].supportsDelayedInstantiation, true);
+	using firstWindow = new InstantiationService(new ServiceCollection(...registrations));
+	using secondWindow = new InstantiationService(new ServiceCollection(...registrations));
+	const first = firstWindow.get(IWebWorkerService);
+	assert.ok(first instanceof WebWorkerService);
+	assert.equal(firstWindow.get(IWebWorkerService), first);
+	assert.notEqual(secondWindow.get(IWebWorkerService), first);
+});
+
 test('Sessions Activity Bar selects Chat, Collaboration, Agent Teams, Library, Code, Creator, and Symphony actions', async () => {
 	const ownerDocument = browser.window.document;
 	ownerDocument.body.replaceChildren();

@@ -21,7 +21,7 @@ export { ColorScheme } from "../platform/theme/common/theme.js";
 export type { IActionDescriptor, IStandaloneCodeEditor, IStandaloneEditorConstructionOptions } from './standalone/browser/standaloneCodeEditor.js';
 export type { IStandaloneEditorApi } from "./standalone/browser/standaloneEditor.js";
 export type { MonacoWebWorker, StandaloneWorkerContext, StandaloneWorkerMirrorModel } from './standalone/browser/standaloneWebWorker.js';
-export type { StandaloneWorkerOptions } from './standalone/browser/services/standaloneWebWorkerService.js';
+export type { StandaloneWorkerOptions } from './standalone/browser/standaloneWebWorker.js';
 export type { ICommandDescriptor, IKeybindingRule } from './standalone/browser/standaloneEditor.js';
 export { KeyCode, KeyMod } from '../base/common/keyCodes.js';
 export { MarkerSeverity, MarkerTag } from '../platform/markers/common/markers.js';

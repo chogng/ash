@@ -1,6 +1,8 @@
 import { CancellationTokenSource, type CancellationToken } from '../../../../base/common/cancellation.js';
 import { Disposable, toDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
-import type { WebWorkerClientPort } from '../../../../base/common/worker/webWorker.js';
+import { IWebWorkerService } from '../../../../platform/webWorker/browser/webWorkerService.js';
+import { WebWorkerDescriptor } from '../../../../platform/webWorker/browser/webWorkerDescriptor.js';
+import { diffWorkerChannel } from '../../../common/diff/diffWorker.js';
 import { createServiceIdentifier } from '../../../../platform/instantiation/common/instantiation.js';
 import { registerSingleton, InstantiationType } from '../../../../platform/instantiation/common/extensions.js';
 import type { IDocumentDiff, IDocumentDiffProvider, IDocumentDiffProviderOptions } from '../../../common/diff/documentDiffProvider.js';
@@ -20,9 +22,12 @@ export class WorkerBasedDiffProviderFactoryService extends Disposable implements
 	declare readonly _serviceBrand: undefined;
 	private readonly computation: WorkerDiffComputationService;
 
-	constructor(createPort?: () => WebWorkerClientPort) {
+	constructor(@IWebWorkerService workers: IWebWorkerService) {
 		super();
-		this.computation = this._register(new WorkerDiffComputationService(createPort));
+		this.computation = this._register(new WorkerDiffComputationService(() => workers.createWorkerClient(new WebWorkerDescriptor({
+			label: 'ash-editor-diff', channel: diffWorkerChannel,
+			createWorker: () => new Worker(new URL('../../../common/diff/diffWorkerMain.ts', import.meta.url), { type: 'module', name: 'ash-editor-diff' }),
+		}))));
 	}
 
 	public createDiffProvider(): IDocumentDiffProvider & IDisposable {

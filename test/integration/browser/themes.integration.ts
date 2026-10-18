@@ -1,3 +1,4 @@
+import { WebWorkerService } from '../../../src/ash/platform/webWorker/browser/webWorkerServiceImpl.js';
 import { List } from '../../../src/ash/base/browser/ui/list/listWidget.js';
 import { createDisconnectedSyntaxApi } from '../../../src/ash/platform/syntax/browser/syntaxApi.js';
 import { parseUserColorTheme } from '../../../src/ash/workbench/services/themes/common/colorThemeData.js';
@@ -103,7 +104,7 @@ window.tokenizeWithSyntax = async () => {
 	using scopeTheme = new TestThemeService(parseUserColorTheme('{}', 'empty-theme'));
 	using library = new TreeSitterLibraryService(new URL(location.href).searchParams.get('backend') === 'offline'
 		? createDisconnectedSyntaxApi(operation => { throw new Error(`Unexpected offline syntax request: ${operation}`); })
-		: await rustSyntaxFixture());
+		: await rustSyntaxFixture(), new WebWorkerService());
 	const configuration = { getValue: () => false } as unknown as IConfigurationService;
 	const create = (text: string): TextModel => new TextModel(text, {
 		languageId: 'javascript', tokenization: {
@@ -356,7 +357,7 @@ document.body.dataset.ready = 'true';
 
 window.previewWithRustSyntax = async () => {
 	using theme = new TestThemeService(parseUserColorTheme('{}', 'empty-theme'));
-	using library = new TreeSitterLibraryService(await rustSyntaxFixture());
+	using library = new TreeSitterLibraryService(await rustSyntaxFixture(), new WebWorkerService());
 	const configuration = { getValue: () => false } as unknown as IConfigurationService;
 	using model = new TextModel('const text = `start\nend`;\nif (true) {}', {
 		languageId: 'javascript',

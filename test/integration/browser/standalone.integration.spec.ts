@@ -285,6 +285,7 @@ test('standalone Worker mirrors models, calls its host, and releases its transpo
 	expect(result.changed.map(model => model.value)).toEqual(['changed in main thread', 'second']);
 	expect(result.changed[0]!.version).toBeGreaterThan(result.initial[0]!.version);
 	expect(result.host).toBe('host:hello');
+	expect(result.transferred).toEqual({ detached: 0, bytes: [3, 7, 11] });
 	expect(result.afterRemoval.map(model => model.value)).toEqual(['changed in main thread']);
 	expect(result.disposed).toBe(true);
 	expect(errors).toEqual([]);

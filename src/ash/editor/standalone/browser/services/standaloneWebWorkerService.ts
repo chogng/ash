@@ -1,143 +1,24 @@
-import { Disposable, DisposableMap, DisposableStore, toDisposable } from '../../../../base/common/lifecycle.js';
-import type { URI } from '../../../../base/common/uri.js';
-import { WebWorkerClient, WebWorkerServer, type WebWorkerClientPort, type WebWorkerPort } from '../../../../base/common/worker/webWorker.js';
-import { BrowserWorkerClientPort } from '../../../../platform/webWorker/browser/browserWorkerClientPort.js';
-import type { ITextModel } from '../../../common/model.js';
-import type { IModelService } from '../../../common/services/model.js';
+import { getMonacoEnvironment, type IMonacoEnvironment } from '../../../../base/browser/browser.js';
+import { WebWorkerDescriptor } from '../../../../platform/webWorker/browser/webWorkerDescriptor.js';
+import { WebWorkerService } from '../../../../platform/webWorker/browser/webWorkerServiceImpl.js';
 
-export const standaloneWorkerChannel = Object.freeze({ protocol: 'ash.standalone-worker', version: 1 });
-export const standaloneHostChannel = Object.freeze({ protocol: 'ash.standalone-worker-host', version: 1 });
+/** Standalone embedding controls how default Workers are resolved and created. */
+export class StandaloneWebWorkerService extends WebWorkerService {
+	constructor(private readonly environment: () => IMonacoEnvironment | undefined = getMonacoEnvironment) { super(); }
 
-export interface StandaloneWorkerSnapshot {
-	readonly uri: string;
-	readonly version: number;
-	readonly text: string;
-	readonly lineCount: number;
-}
-
-export interface StandaloneWorkerOptions {
-	readonly worker: Worker | Promise<Worker>;
-	readonly host?: Record<string, Function>;
-	readonly keepIdleModels?: boolean;
-}
-
-/** Owns one browser Worker, its model subscriptions, and both RPC channels. */
-export class StandaloneWebWorkerService<T extends object> extends Disposable {
-	private readonly models = this._register(new DisposableMap<string, DisposableStore>());
-	private readonly tracked = new Map<string, ITextModel>();
-	private readonly ready: Promise<WebWorkerClient>;
-	private client: WebWorkerClient | undefined;
-	private requestId = 0;
-	private idleTimer: ReturnType<typeof setTimeout> | undefined;
-	private proxy: T | undefined;
-
-	constructor(private readonly modelService: IModelService, private readonly options: StandaloneWorkerOptions) {
-		super();
-		this.ready = Promise.resolve(options.worker).then(worker => {
-			if (this.isDisposed) {
-				worker.terminate();
-				throw new ReferenceError('Standalone Worker is disposed');
-			}
-			const port = this._register(new BrowserWorkerClientPort(worker));
-			const channel = sharedPort(port);
-			const client = this._register(new WebWorkerClient(channel, standaloneWorkerChannel));
-			this.client = client;
-			this._register(new WebWorkerServer(channel, standaloneHostChannel, {
-				handleRequest: async message => {
-					if (message.operation !== 'invoke' || typeof message.method !== 'string' || !Array.isArray(message.args)) {
-						throw new TypeError('Invalid standalone Worker host request');
-					}
-					const method = this.options.host && Object.hasOwn(this.options.host, message.method) ? this.options.host[message.method] : undefined;
-					if (typeof method !== 'function') throw new ReferenceError(`Unknown standalone Worker host method '${message.method}'`);
-					return method.apply(this.options.host, message.args);
-				},
-				handleNotification: () => { throw new TypeError('Unknown standalone Worker host notification'); },
-			}));
-			this._register(client.onDidFail(() => this.clearModels()));
-			return client;
-		});
-		void this.ready.catch(() => { });
-		this._register(toDisposable(() => this.clearModels()));
-	}
-
-	async getProxy(): Promise<T> {
-		const client = await this.ready;
-		await client.request(++this.requestId, { operation: 'ready' }, new AbortController().signal);
-		if (!this.proxy) {
-			this.proxy = new Proxy({} as T, {
-				get: (_target, property) => {
-					if (property === 'then') return undefined;
-					if (typeof property !== 'string' || property === 'constructor' || property === '__proto__' || property === 'prototype') {
-						throw new TypeError('Invalid standalone Worker method');
-					}
-					return (...args: unknown[]) => this.invoke(property, args);
-				},
-			});
+	protected override _createWorker(descriptor: WebWorkerDescriptor): Promise<Worker> {
+		const environment = this.environment();
+		const supplied = environment?.getWorker?.('workerMain.js', descriptor.label);
+		if (supplied !== undefined) return Promise.resolve(supplied);
+		if (environment?.getWorkerUrl) {
+			return Promise.resolve(new Worker(this.getWorkerUrl(descriptor), { type: 'module', name: descriptor.label }));
 		}
-		return this.proxy;
+		return super._createWorker(descriptor);
 	}
 
-	async withSyncedResources(resources: readonly URI[]): Promise<T> {
-		const client = await this.ready;
-		const models = resources.map(resource => this.modelService.getModel(resource)).filter((model): model is ITextModel => model !== null);
-		for (const model of models) this.track(model, client);
-		await client.request(++this.requestId, { operation: 'sync', snapshots: models.map(snapshot) }, new AbortController().signal);
-		this.scheduleIdle();
-		return this.getProxy();
+	override getWorkerUrl(descriptor: WebWorkerDescriptor): string {
+		const supplied = this.environment()?.getWorkerUrl?.('workerMain.js', descriptor.label);
+		if (supplied !== undefined) return new URL(supplied, globalThis.document?.baseURI).href;
+		return super.getWorkerUrl(descriptor);
 	}
-
-	private async invoke(method: string, args: readonly unknown[]): Promise<unknown> {
-		const client = await this.ready;
-		const result = await client.request(++this.requestId, { operation: 'invoke', method, args }, new AbortController().signal);
-		this.scheduleIdle();
-		return result;
-	}
-
-	private track(model: ITextModel, client: WebWorkerClient): void {
-		const key = model.uri.toString();
-		if (this.tracked.get(key) === model) return;
-		this.models.deleteAndDispose(key);
-		this.tracked.set(key, model);
-		const listeners = new DisposableStore();
-		this.models.set(key, listeners);
-		listeners.add(model.onDidChangeContent(change => {
-			client.send('change', {
-				uri: key,
-				previousVersion: change.version - 1,
-				modelVersion: change.version,
-				eol: change.eol,
-				changes: change.changes.map(item => ({ rangeOffset: item.rangeOffset, rangeLength: item.rangeLength, text: item.text })),
-			});
-		}));
-		listeners.add(model.onWillDispose(() => {
-			this.tracked.delete(key);
-			client.send('drop', { uri: key });
-			this.models.deleteAndDispose(key);
-		}));
-	}
-
-	private scheduleIdle(): void {
-		if (this.options.keepIdleModels) return;
-		if (this.idleTimer) clearTimeout(this.idleTimer);
-		this.idleTimer = setTimeout(() => {
-			this.clearModels();
-			this.client?.send('clear', {});
-		}, 60_000);
-	}
-
-	private clearModels(): void {
-		if (this.idleTimer) clearTimeout(this.idleTimer);
-		this.idleTimer = undefined;
-		for (const key of this.models.keys()) this.models.deleteAndDispose(key);
-		this.tracked.clear();
-	}
-}
-
-function snapshot(model: ITextModel): StandaloneWorkerSnapshot {
-	return { uri: model.uri.toString(), version: model.getVersionId(), text: model.getValue(), lineCount: model.getLineCount() };
-}
-
-/** Both RPC channels share one physical Worker without either channel terminating it. */
-export function sharedPort(port: WebWorkerClientPort): WebWorkerClientPort & WebWorkerPort {
-	return { onMessage: port.onMessage, onFailure: port.onFailure, send: value => port.send(value), ...Disposable.None };
 }

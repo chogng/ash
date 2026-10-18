@@ -1,3 +1,5 @@
+import { IWebWorkerService } from '../../webWorker/browser/webWorkerService.js';
+import { createAppServerFrameDecoder } from '../browser/appServerFrameDecoder.js';
 import { appServerConnectionChannel, type AppServerConnectionTarget } from '../common/appServerTransport.js';
 import { Emitter } from '../../../base/common/event.js';
 import { Disposable, MutableDisposable, toDisposable, type IDisposable } from '../../../base/common/lifecycle.js';
@@ -31,6 +33,7 @@ export class LocalAgentHostServiceClient extends Disposable {
 		options: AppServerProtocolClientOptions & { readonly connection?: AppServerConnectionTarget; },
 		@IRemoteSocketFactoryService private readonly factories: IRemoteSocketFactoryService,
 		@IInstantiationService instantiationService: IInstantiationService,
+		@IWebWorkerService workers: IWebWorkerService,
 		@ILogService private readonly logService: ILogService,
 	) {
 		super();
@@ -44,7 +47,7 @@ export class LocalAgentHostServiceClient extends Disposable {
 			getAddress: async () => ({ connectTo: new ManagedRemoteConnection(this.connectionId), connectionToken: undefined }),
 			getMetadata: () => this.connectionMetadata,
 		}));
-		this.client = new AppServerProtocolClient(transport, options);
+		this.client = new AppServerProtocolClient(transport, options, createAppServerFrameDecoder(workers));
 		this._register(toDisposable(() => this.client.dispose()));
 		this.recovery = this._register(new AppServerConnectionRecovery(
 			this.client,

@@ -1,3 +1,4 @@
+import { WebWorkerService } from '../../../src/ash/platform/webWorker/browser/webWorkerServiceImpl.js';
 import { rustSyntaxFixture, disconnectRustSyntaxFixture, reconnectRustSyntaxFixture } from './rustSyntaxHostFixture.js';
 import { createDisconnectedSyntaxApi } from '../../../src/ash/platform/syntax/browser/syntaxApi.js';
 import { ExtensionColorThemeService } from '../../../src/ash/workbench/services/extensions/browser/extensionColorThemeService.js';
@@ -31,7 +32,7 @@ const configuration = services.get(IConfigurationService);
 const syntax = new URL(location.href).searchParams.get('backend') === 'offline'
 	? createDisconnectedSyntaxApi(operation => { throw new Error(`Unexpected offline syntax request: ${operation}`); })
 	: await rustSyntaxFixture();
-const library = store.add(new TreeSitterLibraryService(syntax));
+const library = store.add(new TreeSitterLibraryService(syntax, new WebWorkerService()));
 const errors: string[] = [];
 let model: TextModel;
 let inspection: Promise<unknown> = Promise.resolve();

@@ -1,3 +1,4 @@
+import type { AppServerFrameDecoder } from '../../platform/agentHost/browser/appServerFrameDecoder.js';
 import type { IAppServerConnectionRecovery } from '../../platform/agentHost/common/appServerApi.js';
 import { AppServerChannelService } from "../../platform/collaboration/browser/appServerChannelService.js";
 import { createAppServerSecretStorageStatusService } from '../../platform/secrets/browser/appServerSecretStorageStatusService.js';
@@ -59,8 +60,8 @@ export interface ConnectedWebRendererApi {
 }
 
 /** Connects a browser Renderer host through its transport. */
-export async function connectWebRendererApi(transport: AppServerTransport, connectorHostServices: BrowserConnectorHostServices, options: AppServerProtocolClientOptions = {}, contributions: readonly RendererCapabilityContribution[] = []): Promise<ConnectedWebRendererApi> {
-	const connection = new AppServerProtocolClient(transport, { ...options, capabilities: { agentInteractions: { version: 1, kinds: ['approval', 'permissions', 'userInput'] }, ...options.capabilities } });
+export async function connectWebRendererApi(transport: AppServerTransport, connectorHostServices: BrowserConnectorHostServices, options: AppServerProtocolClientOptions = {}, contributions: readonly RendererCapabilityContribution[] = [], decoder?: AppServerFrameDecoder): Promise<ConnectedWebRendererApi> {
+	const connection = new AppServerProtocolClient(transport, { ...options, capabilities: { agentInteractions: { version: 1, kinds: ['approval', 'permissions', 'userInput'] }, ...options.capabilities } }, decoder);
 	let metadata: AppServerConnectionMetadata;
 	const recovery = new AppServerConnectionRecovery(connection, async () => {
 		connection.disconnect();
