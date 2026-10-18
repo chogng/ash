@@ -120,7 +120,6 @@
 
 ## Stanza 编辑器 · TODO
 
-- [ ] **复核** · 完成 3.4 装饰／View Zone 的软换行、隐藏行、滚动交叉场景及 Electron 验收。零高度展开／收起、折叠标题坐标和回调 `this` 已修复并有 Standalone Chromium 回归，不能据此宣称整个 3.4 完成。
 - [ ] **验收** · 补系统 IME 候选窗口、Electron 平台及屏幕阅读器验收；浏览器合成 composition 事件不代替物理输入法。
 
 后续阶段由[编辑器路线图](docs/design/editor-roadmap.md)维护；本清单不再把整条路线图重复记成一个未完成任务。

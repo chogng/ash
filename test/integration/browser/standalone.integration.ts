@@ -3122,11 +3122,25 @@ window.ashStandaloneIntegration = {
 		callerEditor.updateOptions({ lineHeight: 20, padding: { top: 0, bottom: 0 }, wordWrap: 'wordWrapColumn', wordWrapColumn: 10, wrappingIndent: 'none', showFoldingControls: 'always', scrollBeyondLastLine: false });
 		callerEditor.setValue(['abcdefghijklmnopqrstuvwxy', '  x', '  y', ...Array.from({ length: 30 }, () => 'tail')].join('\n'));
 		callerEditor.setPosition(new stanza.Position(1, 1));
+		callerEditor.createDecorationsCollection([
+			{
+				range: new stanza.Range(1, 11, 1, 21),
+				options: { description: 'wrapped fold header', inlineClassName: 'ash-folded-inline-probe' },
+			},
+			{
+				range: new stanza.Range(2, 3, 2, 4),
+				options: { description: 'hidden fold body', inlineClassName: 'ash-folded-hidden-probe' },
+			},
+			{
+				range: new stanza.Range(1, 1, 3, 4),
+				options: { description: 'fold and zone geometry', blockClassName: 'ash-folded-block-probe' },
+			},
+		]);
 		const domNode = h(document, 'div');
 		domNode.className = 'ash-folded-zone-probe';
 		const marginDomNode = h(document, 'div');
 		marginDomNode.className = 'ash-folded-zone-margin-probe';
-		callerEditor.changeViewZones(accessor => accessor.addZone({
+		viewZone = {
 			afterLineNumber: 2,
 			heightInPx: 40,
 			showInHiddenAreas,
@@ -3138,7 +3152,8 @@ window.ashStandaloneIntegration = {
 			onDomNodeTop(top) {
 				this.domNode.dataset.top = String(top);
 			},
-		}));
+		};
+		callerEditor.changeViewZones(accessor => { viewZoneId = accessor.addZone(viewZone!); });
 		return callerModel.getVersionId();
 	},
 	resizeViewZone: (height, afterLineNumber) => {

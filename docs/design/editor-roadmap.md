@@ -47,17 +47,17 @@ Work / Code 工作台与通用文档编辑器的目标行为见 [目标设计](w
 
 表中的“基础具备”只表示仓库已有实现和测试，不表示该部分已经验收完成。后续部分可以先调查，但实现要沿依赖从下向上闭合。
 
-| 顺序 | 部分              | 主要 owner                                                       | 逐项完成的用户行为                         | 当前状态                                                       |
-| ---- | ----------------- | ---------------------------------------------------------------- | ------------------------------------------ | -------------------------------------------------------------- |
-| 0    | 入口与装配        | `editor.api.ts`、`editor.*.all.ts`、`CodeEditorWidget`           | 创建、挂载、切换模型、激活贡献、释放       | 0.1–0.4 行为已验收；完整 Widget API 仍待随各分部核对           |
-| 1    | 文本与文档内核    | `common/model`、`common/core`                                    | 编辑、撤销、快照、结构事务、超大文件       | 1.1–1.5 已验收；完整公开 API 仍待随其他分部核对                |
-| 2    | 选区与输入        | `common/cursor`、`browser/controller`                            | 键盘和指针编辑、多光标、IME、剪贴板        | 2.1–2.4、2.6 已验收；2.5 浏览器事件链已验收，平台输入法待验收  |
-| 3    | 视图与几何        | `common/viewModel`、`common/viewLayout`、`browser/view*`         | 换行、滚动、命中、装饰、控件、DOM/GPU 绘制 | 3.1–3.3 已验收；3.4 已验证区域收起与块装饰联动，其余待逐项验收 |
-| 4    | 语言与异步结果    | `common/languages`、`common/services`、语言贡献                  | 配置、分词、诊断、折叠、符号、过期结果拒绝 | 部分具备                                                       |
-| 5    | Code 编辑功能     | `contrib/<feature>`                                              | 查找、补全、悬停、导航、重命名、代码操作等 | 部分具备                                                       |
-| 6    | Academic 富文档   | `common/model` 的文档语义、`RichTextEditorWidget`、Academic 贡献 | 结构编辑、代码区域、格式、协作             | 部分具备                                                       |
-| 7    | Diff 与多文件审阅 | `DiffModel`、diff/multi-diff widget                              | 比较、同步滚动、内联差异、多文件审阅       | 部分具备                                                       |
-| 8    | 宿主与持久化      | `standalone`、Workbench editor pane 与服务                       | 打开、保存、回退、冲突、恢复、模式切换     | 部分具备                                                       |
+| 顺序 | 部分              | 主要 owner                                                       | 逐项完成的用户行为                         | 当前状态                                                                              |
+| ---- | ----------------- | ---------------------------------------------------------------- | ------------------------------------------ | ------------------------------------------------------------------------------------- |
+| 0    | 入口与装配        | `editor.api.ts`、`editor.*.all.ts`、`CodeEditorWidget`           | 创建、挂载、切换模型、激活贡献、释放       | 0.1–0.4 行为已验收；完整 Widget API 仍待随各分部核对                                  |
+| 1    | 文本与文档内核    | `common/model`、`common/core`                                    | 编辑、撤销、快照、结构事务、超大文件       | 1.1–1.5 已验收；完整公开 API 仍待随其他分部核对                                       |
+| 2    | 选区与输入        | `common/cursor`、`browser/controller`                            | 键盘和指针编辑、多光标、IME、剪贴板        | 2.1–2.4、2.6 已验收；2.5 浏览器事件链已验收，平台输入法待验收                         |
+| 3    | 视图与几何        | `common/viewModel`、`common/viewLayout`、`browser/view*`         | 换行、滚动、命中、装饰、控件、DOM/GPU 绘制 | 3.1–3.4 已验收；3.4 含 Chromium 与 macOS Electron Standalone 交叉场景，其余待逐项验收 |
+| 4    | 语言与异步结果    | `common/languages`、`common/services`、语言贡献                  | 配置、分词、诊断、折叠、符号、过期结果拒绝 | 部分具备                                                                              |
+| 5    | Code 编辑功能     | `contrib/<feature>`                                              | 查找、补全、悬停、导航、重命名、代码操作等 | 部分具备                                                                              |
+| 6    | Academic 富文档   | `common/model` 的文档语义、`RichTextEditorWidget`、Academic 贡献 | 结构编辑、代码区域、格式、协作             | 部分具备                                                                              |
+| 7    | Diff 与多文件审阅 | `DiffModel`、diff/multi-diff widget                              | 比较、同步滚动、内联差异、多文件审阅       | 部分具备                                                                              |
+| 8    | 宿主与持久化      | `standalone`、Workbench editor pane 与服务                       | 打开、保存、回退、冲突、恢复、模式切换     | 部分具备                                                                              |
 
 ### 0. 入口与装配
 
@@ -173,12 +173,16 @@ Textarea 与 EditContext 都由当前输入节点处理复制、剪切和粘贴�
 
 一个模型行折成多条视图行时，行号只在首行出现，glyph marker 固定于对应模型行的起点，光标按当前模型列落在正确续行。相对行号以模型行而非视图行计算；光标移到下一模型行或首行内容缩短后，光标、行号和 marker 沿同一纵向布局更新，单纯移动光标不改变模型版本。Chromium 用例与既有光标、行号、glyph owner 测试覆盖这条链，本项不需要修改三个 Part 的生产实现。下一项是装饰与 View Zone。
 
-## 3.4 装饰与 View Zone（部分验收）
+## 3.4 装饰与 View Zone（已验收）
 
-2026-09-15 修复 View Zone 拒绝零高度的问题：`heightInPx: 0` 和 `heightInLines: 0` 都允许创建收起的区域，并通过 `layoutZone` 展开、移动和再次收起。区域沿用同一 DOM 节点，margin 同步隐藏与展开；空白区变化不修改文本版本。块装饰包含相邻区域的空白，区域展开时块装饰增高、文本光标下移，区域移到当前行之后时光标回到原位置。两个 Standalone Chromium 回归用例覆盖这条链及删除后的节点退出。尚缺的交叉场景与平台验收统一见根 TODO，不能把收起区域修复视为 3.4 全部完成。
+2026-09-15 修复 View Zone 拒绝零高度的问题：`heightInPx: 0` 和 `heightInLines: 0` 都允许创建收起的区域，并通过 `layoutZone` 展开、移动和再次收起。区域沿用同一 DOM 节点，margin 同步隐藏与展开；空白区变化不修改文本版本。块装饰包含相邻区域的空白，区域展开时块装饰增高、文本光标下移，区域移到当前行之后时光标回到原位置。两个 Standalone 回归用例覆盖这条链及删除后的节点退出。
 
-同日补充修复折叠行坐标转换：隐藏行的列号不再用于折叠标题的换行计算，而是定位到已保留的标题末尾。此前 `showInHiddenAreas: true` 的区域在三条显示行的标题折叠后会错误插在第一条之后（20px），现在位于标题末尾（60px）。两条坐标回归测试覆盖短、长隐藏行以及换行开启与未发生换行的情况；Standalone Chromium 用例覆盖真实折叠按钮、滚动、展开、文本版本不变和节点释放。该用例尚未覆盖 Electron，3.4 保持进行中。
+同日补充修复折叠行坐标转换：隐藏行的列号不再用于折叠标题的换行计算，而是定位到已保留的标题末尾。此前 `showInHiddenAreas: true` 的区域在三条显示行的标题折叠后会错误插在第一条之后（20px），现在位于标题末尾（60px）。两条坐标回归测试覆盖短、长隐藏行以及换行开启与未发生换行的情况；Standalone 用例覆盖真实折叠按钮、滚动、展开、文本版本不变和节点释放。
 
-同日补充修复区域回调丢失 `this`：`onComputedHeight` 和 `onDomNodeTop` 都绑定到传入的区域对象。Standalone 用对象方法读写区域 DOM，验证零高度展开、折叠隐藏、展开恢复、滚动后的高度与位置通知、模型版本不变及节点释放。此项仍未完成系统输入法和全部 Electron 平台验收。
+同日补充修复区域回调丢失 `this`：`onComputedHeight` 和 `onDomNodeTop` 都绑定到传入的区域对象。Standalone 用对象方法读写区域 DOM，验证零高度展开、折叠隐藏、展开恢复、滚动后的高度与位置通知、模型版本不变及节点释放。
+
+2026-10-18 补齐交叉场景，生产实现未改动。`standalone.integration.spec.ts` 新增两例，分别验证隐藏行中的区域保留与隐藏：标题由三条软换行改成五条时，行内装饰仍对应原模型列；折叠体装饰退出，块装饰高度包含当前可见文本与区域空白。滚动后块装饰与 body／margin 区域使用同一几何，滚出视口后装饰退出，返回时区域保留原 DOM；折叠期间收起／展开区域、再展开折叠和恢复换行列数后，高度与位置恢复，文本版本不变，移除与销毁释放节点并保留输入焦点。
+
+本轮 Chromium 六例通过（含上述两例及原四例），浏览器集成 TypeScript 检查通过；同六例在隔离的 macOS ARM64 Electron Standalone 窗口通过，使用仓库准备的 Electron runtime、关闭 Node integration 并开启 context isolation 与 sandbox。Electron 临时测试只替换页面 fixture 与服务器 URL，断言取自当前回归源码；首轮测试壳缺少初始页面加载而未就绪，补上 `about:blank` 后六例通过。日志为 `.build/todo-stanza-view-zones-chromium.log` 和 `.build/todo-stanza-view-zones-electron-retry.log`，Electron 脚本、逐例 trace 与报告保存在 `.build/todo-stanza-electron/`，可用 `node .build/todo-stanza-electron/run.ts` 复跑该快照。正常 Renderer 构建与 Editor／DOM 架构 26 项检查通过，日志为 `.build/todo-stanza-view-zones-renderer.log` 和 `.build/todo-stanza-view-zones-architecture.log`。这里验收的是 Standalone 视图行为；完整 Desktop 工作台、Windows／Linux、物理输入法及屏幕阅读器仍按各自范围验收。
 
 整个 Editor 的最终验收还要求上述各部分的真实入口、单测、浏览器/Electron 行为、Renderer 构建和相关架构测试全部闭合。当前已通过的套件不能代替仍未覆盖的平台、屏幕阅读器或未接线能力。

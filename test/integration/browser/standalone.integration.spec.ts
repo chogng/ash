@@ -5313,6 +5313,87 @@ test('folding hides view zones and restores their layout callbacks after scrolli
 });
 
 
+for (const showInHiddenAreas of [false, true]) {
+	test(`decorations and view zones retain geometry through rewrapping, folding and scrolling with hidden zones ${showInHiddenAreas}`, async ({ page }) => {
+		const errors: string[] = [];
+		page.on('pageerror', error => errors.push(error.message));
+		await page.goto('/standalone.html');
+		const version = await page.evaluate(value => window.ashStandaloneIntegration.prepareFoldedViewZone(value), showInHiddenAreas);
+		const zone = page.locator('#caller .ash-folded-zone-probe');
+		const margin = page.locator('#caller .ash-folded-zone-margin-probe');
+		const block = page.locator('#caller .ash-folded-block-probe');
+		const inline = page.locator('#caller .ash-folded-inline-probe');
+		const hidden = page.locator('#caller .ash-folded-hidden-probe');
+		const input = page.locator('#caller .stanza-editor-input');
+		const node = await zone.elementHandle();
+		await expect(block).toHaveCSS('height', '140px');
+		await expect(inline).toHaveText(['klmnopqrst']);
+		await expect(hidden).toHaveText('x');
+
+		await page.locator('#caller .ash-icon-folding-expanded').first().click();
+		await expect(hidden).toHaveCount(0);
+		await expect(block).toHaveCSS('height', showInHiddenAreas ? '100px' : '60px');
+		await page.evaluate(() => window.ashStandaloneIntegration.updateContributionOptions({ wordWrapColumn: 5 }));
+		await expect(inline).toHaveText(['klmno', 'pqrst']);
+		await expect(block).toHaveCSS('height', showInHiddenAreas ? '140px' : '100px');
+		if (showInHiddenAreas) {
+			await expect(zone).toHaveAttribute('data-top', '100');
+			await expect(margin).toHaveCSS('top', '100px');
+		} else {
+			await expect(zone).toBeHidden();
+			await expect(zone).toHaveAttribute('data-computed-height', '0');
+		}
+
+		await input.focus();
+		await page.evaluate(() => window.ashStandaloneIntegration.scrollVisibleRows(40));
+		await expect(block).toHaveCSS('top', '-40px');
+		if (showInHiddenAreas) {
+			await expect(zone).toHaveAttribute('data-top', '60');
+			const zoneBounds = await zone.boundingBox();
+			const marginBounds = await margin.boundingBox();
+			expect(zoneBounds?.y).toBe(marginBounds?.y);
+		}
+		await expect(input).toBeFocused();
+		await page.evaluate(() => window.ashStandaloneIntegration.scrollVisibleRows(200));
+		await expect(zone).toBeHidden();
+		await expect(margin).toBeHidden();
+		await expect(block).toHaveCount(0);
+		await expect(inline).toHaveCount(0);
+		await page.evaluate(() => window.ashStandaloneIntegration.scrollVisibleRows(0));
+		await expect(block).toHaveCSS('height', showInHiddenAreas ? '140px' : '100px');
+		await expect(inline).toHaveText(['klmno', 'pqrst']);
+		expect(await node!.evaluate(element => element === document.querySelector('#caller .ash-folded-zone-probe'))).toBe(true);
+
+		await page.evaluate(() => window.ashStandaloneIntegration.resizeViewZone(0, 2));
+		await expect(zone).toBeHidden();
+		await expect(margin).toBeHidden();
+		await expect(block).toHaveCSS('height', '100px');
+		await page.evaluate(() => window.ashStandaloneIntegration.resizeViewZone(40, 2));
+		await expect(block).toHaveCSS('height', showInHiddenAreas ? '140px' : '100px');
+		await page.locator('#caller .ash-icon-folding-collapsed').first().click();
+		await expect(block).toHaveCSS('height', '180px');
+		await expect(hidden).toHaveText('x');
+		await expect(zone).toHaveAttribute('data-top', '120');
+		await page.evaluate(() => window.ashStandaloneIntegration.updateContributionOptions({ wordWrapColumn: 10 }));
+		await expect(block).toHaveCSS('height', '140px');
+		await expect(inline).toHaveText(['klmnopqrst']);
+		await expect(zone).toHaveAttribute('data-top', '80');
+		expect(await page.evaluate(() => window.ashStandaloneIntegration.getCallerVersion())).toBe(version);
+		await input.focus();
+		await page.evaluate(() => window.ashStandaloneIntegration.removeViewZone());
+		await expect(zone).toHaveCount(0);
+		await expect(margin).toHaveCount(0);
+		await expect(block).toHaveCSS('height', '100px');
+		await expect(input).toBeFocused();
+		await page.evaluate(() => window.ashStandaloneIntegration.dispose());
+		await expect(block).toHaveCount(0);
+		await expect(inline).toHaveCount(0);
+		expect(await node!.evaluate(element => element.isConnected)).toBe(false);
+		await node!.dispose();
+		expect(errors).toEqual([]);
+	});
+}
+
 test('clicking the clipped end of a long line reveals its remaining text', async ({ page }) => {
 	const errors: string[] = [];
 	page.on('pageerror', error => errors.push(error.message));
