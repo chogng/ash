@@ -71,13 +71,115 @@ impl LspRequestMetricsSink for AppServerLanguageMetrics {
 }
 
 struct AppServerLanguageEventSink {
-    routes: BTreeMap<String, Vec<String>>,
+    routes: Arc<std::sync::RwLock<BTreeMap<String, Vec<String>>>>,
+    requests: Arc<LanguageRequestResults>,
+    sources: Arc<Mutex<LanguageRuntimeSources>>,
+    launch_versions: Arc<std::sync::RwLock<BTreeMap<String, u64>>>,
+    active_versions: Mutex<BTreeMap<String, u64>>,
     sender: mpsc::Sender<LspManagerEvent>,
     diagnostics: Arc<LanguageDiagnosticPublisher>,
 }
 
 impl LspManagerEventSink for AppServerLanguageEventSink {
+    fn on_request_queued(&self, id: LanguageRequestId) {
+        self.requests.register(id);
+    }
+
+    fn on_request_abandoned(&self, id: LanguageRequestId) {
+        self.requests.remove(id);
+    }
     fn on_event(&self, event: LspManagerEvent) {
+        if let LspManagerEvent::RequestResult(result) = event {
+            self.requests.publish(result);
+            return;
+        }
+        // Events already queued by a retiring incarnation must not republish diagnostics or
+        // Ready after its source is disabled. Starting binds a replacement's source version.
+        let server = match &event {
+            LspManagerEvent::Notification(
+                LspManagerNotification::ServerStateChanged { server, .. }
+                | LspManagerNotification::ServerMessage { server, .. }
+                | LspManagerNotification::CapabilitiesChanged { server, .. },
+            ) => Some(server.clone()),
+            LspManagerEvent::Notification(LspManagerNotification::ServerProgress(progress)) => {
+                Some(progress.server.clone())
+            }
+            LspManagerEvent::Notification(LspManagerNotification::Diagnostics(diagnostics))
+                if !diagnostics.diagnostics().is_empty() =>
+            {
+                let language = self
+                    .diagnostics
+                    .documents
+                    .lock()
+                    .ok()
+                    .and_then(|documents| {
+                        documents
+                            .get(diagnostics.path())
+                            .map(|snapshot| snapshot.language_id.clone())
+                    });
+                language.and_then(|language| {
+                    self.routes
+                        .read()
+                        .unwrap_or_else(std::sync::PoisonError::into_inner)
+                        .iter()
+                        .find(|(_, languages)| languages.contains(&language))
+                        .map(|(server, _)| server.clone())
+                })
+            }
+            _ => None,
+        };
+        if server.is_none()
+            && matches!(&event, LspManagerEvent::Notification(LspManagerNotification::Diagnostics(diagnostics)) if !diagnostics.diagnostics().is_empty())
+        {
+            return;
+        }
+        if let Some(server) = server {
+            if matches!(
+                &event,
+                LspManagerEvent::Notification(LspManagerNotification::ServerStateChanged {
+                    state: LanguageServerState::Starting,
+                    ..
+                })
+            ) {
+                let version = self
+                    .launch_versions
+                    .read()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .get(&server)
+                    .copied()
+                    .unwrap_or(0);
+                self.active_versions
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .insert(server.clone(), version);
+            }
+            let active = self
+                .active_versions
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .get(&server)
+                .copied()
+                .unwrap_or(0);
+            let current = self
+                .sources
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .versions
+                .get(&server)
+                .copied()
+                .unwrap_or(0);
+            if active != current
+                && !matches!(
+                    &event,
+                    LspManagerEvent::Notification(LspManagerNotification::ServerStateChanged {
+                        state: LanguageServerState::Stopped,
+                        ..
+                    })
+                )
+            {
+                return;
+            }
+        }
         if let LspManagerEvent::Notification(LspManagerNotification::Diagnostics(diagnostics)) =
             &event
         {
@@ -166,7 +268,7 @@ impl LspManagerEventSink for AppServerLanguageEventSink {
                 self.diagnostics.connection_id,
                 ash_app_server_protocol::protocol::language::LanguageServerCapabilitiesNotification {
                     dir_id: self.diagnostics.dir_id.clone(), server: server.clone(),
-                    language_ids: self.routes.get(server).cloned().unwrap_or_default(),
+                    language_ids: self.routes.read().unwrap_or_else(std::sync::PoisonError::into_inner).get(server).cloned().unwrap_or_default(),
                     completion_trigger_characters: capabilities.completion_trigger_characters.clone(),
                     signature_help_trigger_characters: capabilities.signature_help_trigger_characters.clone(),
                     signature_help_retrigger_characters: capabilities.signature_help_retrigger_characters.clone(),
@@ -250,7 +352,6 @@ impl LanguageDiagnosticPublisher {
 struct AppServerLanguageDirState {
     documents: Arc<Mutex<BTreeMap<PathBuf, AppServerLanguageDocumentSnapshot>>>,
     root: Option<PathBuf>,
-    config_generation: Option<u64>,
     language_servers: BTreeMap<String, String>,
     server_states: BTreeMap<String, LanguageServerState>,
     dir_id: Option<String>,
@@ -261,7 +362,6 @@ impl Default for AppServerLanguageDirState {
         Self {
             documents: Arc::new(Mutex::new(BTreeMap::new())),
             root: None,
-            config_generation: None,
             language_servers: BTreeMap::new(),
             server_states: BTreeMap::new(),
             dir_id: None,
@@ -269,46 +369,243 @@ impl Default for AppServerLanguageDirState {
     }
 }
 
-/// A connection borrows its own LSP session while the shared owner serializes catalog changes.
-/// Editor revisions are local to a client, so they must never share a document-version table.
-pub(super) struct LanguageRuntimeGuard<'a> {
-    runtime: std::sync::MutexGuard<'a, AppServerLanguageRuntime>,
-    connection_id: u64,
+/// Source changes and session retirement are serialized here; no process I/O or request wait
+/// holds this lock. Per-server versions also reject responses completed just before revocation.
+#[derive(Default)]
+struct LanguageRuntimeSources {
+    providers: LspServerProviders,
+    acquisitions: BTreeMap<String, LanguageServerAcquisition>,
+    configuration: Option<LanguageServersConfig>,
+    versions: BTreeMap<String, u64>,
+    sessions: Vec<std::sync::Weak<LanguageSession>>,
+    retained_roots: Option<std::collections::BTreeSet<PathBuf>>,
 }
 
-impl<'a> LanguageRuntimeGuard<'a> {
+impl LanguageRuntimeSources {
+    fn retire(&mut self, names: Vec<String>) {
+        if names.is_empty() {
+            return;
+        }
+        for name in &names {
+            let version = self.versions.entry(name.clone()).or_default();
+            *version = version.saturating_add(1);
+        }
+        self.sessions.retain(|session| {
+            if let Some(session) = session.upgrade() {
+                session
+                    .routes
+                    .write()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .retain(|id, _| !names.contains(id));
+                let _ = session.manager.retire_servers(names.clone());
+                session
+                    .acquired
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .retain(|id, _| !names.contains(id));
+                true
+            } else {
+                false
+            }
+        });
+    }
+}
+
+#[derive(Default)]
+struct LanguageRequestResults {
+    // Registration happens before queueing, so even a synchronous rejection has a receiver.
+    requests: Mutex<
+        BTreeMap<
+            LanguageRequestId,
+            (
+                mpsc::Sender<LspManagerRequestResult>,
+                Option<mpsc::Receiver<LspManagerRequestResult>>,
+            ),
+        >,
+    >,
+}
+
+impl LanguageRequestResults {
+    fn register(&self, id: LanguageRequestId) {
+        let (sender, receiver) = mpsc::channel();
+        self.requests
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .insert(id, (sender, Some(receiver)));
+    }
+
+    fn publish(&self, result: LspManagerRequestResult) {
+        if let Some((sender, _)) = self
+            .requests
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .get(&result.request_id())
+        {
+            let _ = sender.send(result);
+        }
+    }
+
+    fn take(
+        &self,
+        id: LanguageRequestId,
+    ) -> Result<mpsc::Receiver<LspManagerRequestResult>, String> {
+        self.requests
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .get_mut(&id)
+            .and_then(|(_, receiver)| receiver.take())
+            .ok_or_else(|| "language request has no result destination".into())
+    }
+
+    fn remove(&self, id: LanguageRequestId) {
+        self.requests
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .remove(&id);
+    }
+}
+
+type AcquiredLanguageServers = Arc<Mutex<BTreeMap<String, ManagedLanguageServer>>>;
+
+struct LanguageSession {
+    acquired: AcquiredLanguageServers,
+    manager: Arc<LspManager>,
+    requests: Arc<LanguageRequestResults>,
+    routes: Arc<std::sync::RwLock<BTreeMap<String, Vec<String>>>>,
+    launch_versions: Arc<std::sync::RwLock<BTreeMap<String, u64>>>,
+    root: PathBuf,
+    connection_id: Option<u64>,
+    cancellation: ash_async_utils::CancellationSource,
+}
+
+struct LanguageConnection {
+    runtime: Arc<tokio::sync::Mutex<AppServerLanguageRuntime>>,
+    cancellation: ash_async_utils::CancellationSource,
+}
+
+/// Holds only one client's short mutation phase. Request waiting consumes this guard and keeps
+/// its own result channel, so neither other clients nor retirement need to wait for its reply.
+pub(super) struct LanguageRuntimeGuard {
+    runtime: tokio::sync::OwnedMutexGuard<AppServerLanguageRuntime>,
+    connection: Arc<LanguageConnection>,
+}
+
+impl LanguageRuntimeGuard {
     pub(super) fn new(
-        mut runtime: std::sync::MutexGuard<'a, AppServerLanguageRuntime>,
+        mut runtime: std::sync::MutexGuard<'_, AppServerLanguageRuntime>,
         connection_id: u64,
     ) -> Self {
         if !runtime.connections.contains_key(&connection_id) {
             let mut child = runtime.child_runtime();
             child.connection_id = Some(connection_id);
-            runtime.connections.insert(connection_id, Box::new(child));
+            let cancellation = ash_async_utils::CancellationSource::new();
+            child.connection_cancellation = Some(cancellation.token());
+            runtime.connections.insert(
+                connection_id,
+                Arc::new(LanguageConnection {
+                    runtime: Arc::new(tokio::sync::Mutex::new(child)),
+                    cancellation,
+                }),
+            );
         }
+        let connection = runtime.connections[&connection_id].clone();
+        drop(runtime);
+        let mut runtime = pollster::block_on(Arc::clone(&connection.runtime).lock_owned());
+        runtime.refresh_sources();
         Self {
             runtime,
-            connection_id,
+            connection,
         }
     }
-}
-impl std::ops::Deref for LanguageRuntimeGuard<'_> {
-    type Target = AppServerLanguageRuntime;
-    fn deref(&self) -> &Self::Target {
-        &self.runtime.connections[&self.connection_id]
+
+    pub(super) fn wait_for_request(
+        self,
+        request_id: LanguageRequestId,
+        cancellation: &CancellationToken,
+    ) -> Result<LspManagerRequestResult, String> {
+        let runtime = self.selected_runtime();
+        let session = runtime
+            .session
+            .clone()
+            .ok_or_else(|| "language session is unavailable".to_owned())?;
+        let server = runtime
+            .active_language_id
+            .as_ref()
+            .and_then(|language| runtime.dir_state.language_servers.get(language))
+            .cloned()
+            .ok_or_else(|| "language route is unavailable".to_owned())?;
+        let version = runtime.source_versions.get(&server).copied().unwrap_or(0);
+        let sources = Arc::clone(&runtime.sources);
+        let receiver = session.requests.take(request_id)?;
+        let connection_cancellation = self.connection.cancellation.token();
+        drop(self);
+        let wait = || {
+            let deadline = Instant::now() + REQUEST_TIMEOUT;
+            loop {
+                if cancellation.is_cancelled()
+                    || connection_cancellation.is_cancelled()
+                    || session.cancellation.token().is_cancelled()
+                {
+                    return Err("language request cancelled".into());
+                }
+                let current = sources
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .versions
+                    .get(&server)
+                    .copied()
+                    .unwrap_or(0);
+                if current != version {
+                    return Err("language server source was retired".into());
+                }
+                let remaining = deadline.saturating_duration_since(Instant::now());
+                if remaining.is_zero() {
+                    return Err("language service request timed out".into());
+                }
+                match receiver.recv_timeout(remaining.min(Duration::from_millis(25))) {
+                    Ok(result) => {
+                        let current = sources
+                            .lock()
+                            .unwrap_or_else(std::sync::PoisonError::into_inner)
+                            .versions
+                            .get(&server)
+                            .copied()
+                            .unwrap_or(0);
+                        if current != version {
+                            return Err("language server source was retired".into());
+                        }
+                        return Ok(result);
+                    }
+                    Err(mpsc::RecvTimeoutError::Timeout) => {}
+                    Err(mpsc::RecvTimeoutError::Disconnected) => {
+                        return Err("language service event channel is unavailable".into());
+                    }
+                }
+            }
+        };
+        let result = wait();
+        session.requests.remove(request_id);
+        if result.is_err() {
+            let _ = session.manager.cancel_request(request_id);
+        }
+        result
     }
 }
-impl std::ops::DerefMut for LanguageRuntimeGuard<'_> {
+
+impl std::ops::Deref for LanguageRuntimeGuard {
+    type Target = AppServerLanguageRuntime;
+    fn deref(&self) -> &Self::Target {
+        &self.runtime
+    }
+}
+impl std::ops::DerefMut for LanguageRuntimeGuard {
     fn deref_mut(&mut self) -> &mut Self::Target {
-        self.runtime
-            .connections
-            .get_mut(&self.connection_id)
-            .expect("connection session exists")
+        &mut self.runtime
     }
 }
 
 pub(super) struct AppServerLanguageRuntime {
-    pub(super) manager: Option<LspManager>,
+    pub(super) manager: Option<Arc<LspManager>>,
     receiver: Option<mpsc::Receiver<LspManagerEvent>>,
     updates: Arc<UpdateBroker>,
     dir_state: AppServerLanguageDirState,
@@ -318,12 +615,16 @@ pub(super) struct AppServerLanguageRuntime {
     home: Option<PathBuf>,
     network_policy: ash_http_client::OutboundNetworkPolicy,
     extension_generation: Option<(u64, u64)>,
-    connections: BTreeMap<u64, Box<AppServerLanguageRuntime>>,
+    connections: BTreeMap<u64, Arc<LanguageConnection>>,
     connection_id: Option<u64>,
-    // Last applied immutable Config snapshot, used only to invalidate runtime resources.
-    applied_configuration: Option<LanguageServersConfig>,
     acquisitions: BTreeMap<String, LanguageServerAcquisition>,
-    acquired: BTreeMap<String, ManagedLanguageServer>,
+    acquired: AcquiredLanguageServers,
+    sources: Arc<Mutex<LanguageRuntimeSources>>,
+    source_versions: BTreeMap<String, u64>,
+    session: Option<Arc<LanguageSession>>,
+    definitions_dirty: bool,
+    active_language_id: Option<String>,
+    connection_cancellation: Option<CancellationToken>,
 }
 
 impl AppServerLanguageRuntime {
@@ -341,14 +642,22 @@ impl AppServerLanguageRuntime {
             extension_generation: None,
             connections: BTreeMap::new(),
             connection_id: None,
-            applied_configuration: None,
             acquisitions: BTreeMap::new(),
-            acquired: BTreeMap::new(),
+            acquired: Arc::new(Mutex::new(BTreeMap::new())),
+            sources: Arc::new(Mutex::new(LanguageRuntimeSources::default())),
+            source_versions: BTreeMap::new(),
+            session: None,
+            definitions_dirty: false,
+            active_language_id: None,
+            connection_cancellation: None,
         }
     }
 
     fn child_runtime(&self) -> Self {
         let mut runtime = Self::new(Arc::clone(&self.updates));
+        runtime.sources = Arc::clone(&self.sources);
+        runtime.source_versions = self.source_versions.clone();
+        runtime.connection_cancellation = self.connection_cancellation.clone();
         runtime.providers = self.providers.clone();
         runtime.acquisitions = self.acquisitions.clone();
         runtime.extension_generation = self.extension_generation;
@@ -358,20 +667,140 @@ impl AppServerLanguageRuntime {
         runtime
     }
 
-    pub(super) fn reconcile_configuration(&mut self, configuration: &LanguageServersConfig) {
-        if self.applied_configuration.as_ref() != Some(configuration) {
-            self.shutdown();
-            self.applied_configuration = Some(configuration.clone());
+    fn selected_runtime(&self) -> &Self {
+        self.active_dir_root
+            .as_ref()
+            .and_then(|root| self.env_runtimes.get(root))
+            .map_or(self, |runtime| runtime.selected_runtime())
+    }
+
+    fn refresh_sources(&mut self) {
+        let (providers, acquisitions, versions, retained_roots) = {
+            let sources = self
+                .sources
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            (
+                sources.providers.clone(),
+                sources.acquisitions.clone(),
+                sources.versions.clone(),
+                sources.retained_roots.clone(),
+            )
+        };
+        let changed_names = self
+            .source_versions
+            .keys()
+            .chain(versions.keys())
+            .filter(|id| self.source_versions.get(*id) != versions.get(*id))
+            .cloned()
+            .collect::<std::collections::BTreeSet<_>>();
+        let changed = !changed_names.is_empty();
+        if let Some(receiver) = &self.receiver {
+            let events = receiver.try_iter().collect::<Vec<_>>();
+            for event in events {
+                if !matches!(&event, LspManagerEvent::Notification(LspManagerNotification::ServerStateChanged { server, .. }) if changed_names.contains(server))
+                {
+                    self.accept_state(&event);
+                }
+            }
+        }
+        self.dir_state
+            .server_states
+            .retain(|id, _| !changed_names.contains(id));
+        self.acquired
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .retain(|id, _| self.source_versions.get(id) == versions.get(id));
+        self.providers = providers;
+        self.acquisitions = acquisitions;
+        self.source_versions = versions;
+        self.definitions_dirty |= changed;
+        if let Some(roots) = retained_roots {
+            self.env_runtimes.retain(|root, _| roots.contains(root));
+            if self
+                .dir_state
+                .root
+                .as_ref()
+                .is_some_and(|root| !roots.contains(root))
+            {
+                self.shutdown_selected();
+            }
+        }
+        for runtime in self.env_runtimes.values_mut() {
+            runtime.refresh_sources();
         }
     }
 
+    pub(super) fn reconcile_configuration(&mut self, configuration: &LanguageServersConfig) {
+        let mut sources = self
+            .sources
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if sources.configuration.as_ref() != Some(configuration) {
+            let old = sources.configuration.as_ref().map(|config| &config.servers);
+            let ids = old
+                .into_iter()
+                .flat_map(|servers| servers.keys())
+                .chain(configuration.servers.keys())
+                .cloned()
+                .collect::<std::collections::BTreeSet<_>>();
+            let changed = ids
+                .into_iter()
+                .filter(|id| {
+                    old.and_then(|servers| servers.get(id)) != configuration.servers.get(id)
+                })
+                .map(|id| id.to_string())
+                .collect();
+            sources.configuration = Some(configuration.clone());
+            sources.retire(changed);
+        }
+        drop(sources);
+        self.refresh_sources();
+    }
+
     pub(super) fn close_connection(&mut self, connection_id: u64) {
-        self.connections.remove(&connection_id);
+        if let Some(connection) = self.connections.remove(&connection_id) {
+            connection.cancellation.cancel();
+        }
+        let sources = self
+            .sources
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        for session in sources
+            .sessions
+            .iter()
+            .filter_map(std::sync::Weak::upgrade)
+            .filter(|session| session.connection_id == Some(connection_id))
+        {
+            session.cancellation.cancel();
+            let _ = session
+                .manager
+                .set_enablement(ash_lsp_manager::LspManagerEnablement::Disabled);
+        }
     }
 
     pub(super) fn set_server_providers(&mut self, providers: LspServerProviders) {
-        self.shutdown();
-        self.providers = providers;
+        let mut sources = self
+            .sources
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let ids = sources
+            .providers
+            .ids()
+            .chain(providers.ids())
+            .map(str::to_owned)
+            .collect::<std::collections::BTreeSet<_>>();
+        let changed: Vec<String> = ids
+            .into_iter()
+            .filter(|id| !sources.providers.same_provider(&providers, id))
+            .collect();
+        sources.providers = providers;
+        if let Some(manager) = &self.manager {
+            let _ = manager.retire_servers(changed.clone());
+        }
+        sources.retire(changed);
+        drop(sources);
+        self.refresh_sources();
     }
 
     pub(super) fn set_home(&mut self, home: &Path) {
@@ -407,8 +836,31 @@ impl AppServerLanguageRuntime {
                     .map(|server| (server.id.clone(), server))
             })
             .collect();
-        self.shutdown();
-        self.acquisitions = acquisitions;
+        let mut sources = self
+            .sources
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let acquisitions: BTreeMap<String, LanguageServerAcquisition> = acquisitions;
+        let ids = sources
+            .acquisitions
+            .keys()
+            .chain(acquisitions.keys())
+            .cloned()
+            .collect::<std::collections::BTreeSet<_>>();
+        let changed = ids
+            .into_iter()
+            .filter(
+                |id| match (sources.acquisitions.get(id), acquisitions.get(id)) {
+                    (Some(old), Some(new)) => !old.same_policy(new),
+                    (None, None) => false,
+                    _ => true,
+                },
+            )
+            .collect();
+        sources.acquisitions = acquisitions;
+        sources.retire(changed);
+        drop(sources);
+        self.refresh_sources();
         self.extension_generation = Some(generation);
         Ok(())
     }
@@ -443,20 +895,40 @@ impl AppServerLanguageRuntime {
         self.acquisitions(configuration)
             .filter(|server| server.languages.iter().any(|id| id == language))
             .all(|server| {
-                active.is_some_and(|runtime| runtime.acquired.contains_key(&server.id))
-                    || server
-                        .workspace_files
-                        .iter()
-                        .any(|file| root.join(file).is_file())
+                active.is_some_and(|runtime| {
+                    runtime
+                        .acquired
+                        .lock()
+                        .unwrap_or_else(std::sync::PoisonError::into_inner)
+                        .contains_key(&server.id)
+                }) || server
+                    .workspace_files
+                    .iter()
+                    .any(|file| root.join(file).is_file())
             })
     }
 
     pub(super) fn server_running(&self, id: &str) -> bool {
-        self.acquired.contains_key(id)
-            || self
-                .connections
-                .values()
-                .any(|runtime| runtime.server_running(id))
+        let sessions = self
+            .sources
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .sessions
+            .iter()
+            .filter_map(std::sync::Weak::upgrade)
+            .collect::<Vec<_>>();
+        self.acquired
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .contains_key(id)
+            || sessions.iter().any(|session| {
+                session
+                    .routes
+                    .read()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .contains_key(id)
+                    && !session.cancellation.token().is_cancelled()
+            })
             || self
                 .env_runtimes
                 .values()
@@ -464,34 +936,38 @@ impl AppServerLanguageRuntime {
     }
 
     pub(super) fn invalidate_extensions(&mut self) {
-        self.shutdown();
         self.extension_generation = None;
     }
 
     pub(super) fn reset_dirs(&mut self) {
         self.shutdown();
+        // The directory owner has replaced the whole grant set. Requests already holding the
+        // old set are cancelled above; new requests must resolve against the new authority.
+        self.sources
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .retained_roots = None;
     }
 
     pub(super) fn retain_dir_roots(&mut self, roots: &std::collections::BTreeSet<PathBuf>) {
-        for runtime in self.connections.values_mut() {
-            runtime.retain_dir_roots(roots);
-        }
-        self.env_runtimes.retain(|root, _| roots.contains(root));
-        if self
-            .dir_state
-            .root
-            .as_ref()
-            .is_some_and(|root| !roots.contains(root))
+        let mut sources = self
+            .sources
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        sources.retained_roots = Some(roots.clone());
+        for session in sources
+            .sessions
+            .iter()
+            .filter_map(std::sync::Weak::upgrade)
+            .filter(|session| !roots.contains(&session.root))
         {
-            self.shutdown_selected();
+            session.cancellation.cancel();
+            let _ = session
+                .manager
+                .set_enablement(ash_lsp_manager::LspManagerEnablement::Disabled);
         }
-        if self
-            .active_dir_root
-            .as_ref()
-            .is_some_and(|root| !roots.contains(root))
-        {
-            self.active_dir_root = None;
-        }
+        drop(sources);
+        self.refresh_sources();
     }
 
     pub(super) fn ensure(
@@ -522,19 +998,31 @@ impl AppServerLanguageRuntime {
             );
         }
         self.active_dir_root = None;
+        self.active_language_id = Some(language_id.to_owned());
         self.dir_state.dir_id = dir_id.map(str::to_owned);
+        if self
+            .session
+            .as_ref()
+            .is_some_and(|session| session.cancellation.token().is_cancelled())
+        {
+            self.shutdown_selected();
+        }
         if self.dir_state.root.as_deref() != Some(dir_root)
-            || self.dir_state.config_generation != Some(config_generation)
+            || self.definitions_dirty
             || self.acquisitions(configuration).any(|server| {
                 server.languages.iter().any(|id| id == language_id)
-                    && !self.acquired.contains_key(&server.id)
+                    && !self
+                        .acquired
+                        .lock()
+                        .unwrap_or_else(std::sync::PoisonError::into_inner)
+                        .contains_key(&server.id)
             })
         {
             self.restart(dir_root, config_generation, configuration, language_id)?;
         }
         self.wait_until_ready(language_id)?;
         self.manager
-            .as_ref()
+            .as_deref()
             .ok_or_else(|| "language service is unavailable".into())
     }
 
@@ -544,61 +1032,7 @@ impl AppServerLanguageRuntime {
                 .env_runtimes
                 .get(root)
                 .and_then(|runtime| runtime.manager()),
-            None => self.manager.as_ref(),
-        }
-    }
-
-    pub(super) fn wait_for_request(
-        &mut self,
-        request_id: LanguageRequestId,
-        cancellation: &CancellationToken,
-    ) -> Result<LspManagerRequestResult, String> {
-        if let Some(root) = self.active_dir_root.clone() {
-            return self
-                .env_runtimes
-                .get_mut(&root)
-                .ok_or_else(|| String::from("language directory runtime is unavailable"))?
-                .wait_for_request(request_id, cancellation);
-        }
-        let deadline = Instant::now() + REQUEST_TIMEOUT;
-        loop {
-            if cancellation.is_cancelled() {
-                if let Some(manager) = self.manager() {
-                    let _ = manager.cancel_request(request_id);
-                }
-                return Err("language request cancelled".into());
-            }
-            let remaining = deadline.saturating_duration_since(Instant::now());
-            if remaining.is_zero() {
-                return Err("language service request timed out".into());
-            }
-            let event = self
-                .receiver
-                .as_ref()
-                .ok_or_else(|| String::from("language service event channel is unavailable"))?
-                .recv_timeout(remaining.min(Duration::from_millis(25)))
-                .map_err(|error| match error {
-                    mpsc::RecvTimeoutError::Timeout => String::new(),
-                    mpsc::RecvTimeoutError::Disconnected => {
-                        String::from("language service event channel is unavailable")
-                    }
-                });
-            let event = match event {
-                Ok(event) => event,
-                Err(message) if message.is_empty() => continue,
-                Err(message) => return Err(message),
-            };
-            let matches = matches!(
-                &event,
-                LspManagerEvent::RequestResult(result) if result.request_id() == request_id
-            );
-            self.accept_state(&event);
-            if matches {
-                let LspManagerEvent::RequestResult(result) = event else {
-                    unreachable!("request result match must contain a request result")
-                };
-                return Ok(result);
-            }
+            None => self.manager.as_deref(),
         }
     }
 
@@ -772,33 +1206,58 @@ impl AppServerLanguageRuntime {
         configuration: &LanguageServersConfig,
         language_id: &str,
     ) -> Result<(), String> {
-        let documents = self
-            .dir_state
-            .documents
-            .lock()
-            .map_err(|_| String::from("language document snapshots are unavailable"))?
-            .clone();
-        let previous: std::collections::BTreeSet<_> = self.acquired.keys().cloned().collect();
-        // Retire the previous commands before resolving new intent. A failed explicit override
-        // must not leave the old server running as an accidental fallback.
-        self.shutdown_selected();
-        let mut acquired = BTreeMap::new();
-        for server in self.acquisitions(configuration).filter(|server| {
-            server.languages.iter().any(|id| id == language_id) || previous.contains(&server.id)
-        }) {
-            // Each acquisition reports its own failure. Keep unrelated languages usable,
-            // including when a previously running server's override has become stale.
-            if let Ok(resolved) = self.resolve_server(server, dir_root, configuration) {
-                acquired.insert(server.id.clone(), resolved);
+        let needed = self
+            .acquisitions(configuration)
+            .filter(|server| {
+                server.languages.iter().any(|id| id == language_id)
+                    && !self
+                        .acquired
+                        .lock()
+                        .unwrap_or_else(std::sync::PoisonError::into_inner)
+                        .contains_key(&server.id)
+            })
+            .cloned()
+            .collect::<Vec<_>>();
+        for server in needed {
+            if let Ok(resolved) = self.resolve_server(&server, dir_root, configuration) {
+                self.acquired
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .insert(server.id.clone(), resolved);
             }
         }
-        self.acquired = acquired;
         let mut definitions = self.definitions(dir_root, configuration)?;
-        for server in self.acquired.values() {
+        for server in self
+            .acquired
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .values()
+        {
             definitions.push(configure_definition(
                 server.definition().clone(),
                 configuration,
             )?);
+        }
+        // Selection can perform process/network I/O. Recheck its source while registering the
+        // manager, so a concurrent disable or uninstall cannot launch a retired recipe.
+        let mut sources = self
+            .sources
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if self
+            .connection_cancellation
+            .as_ref()
+            .is_some_and(CancellationToken::is_cancelled)
+            || sources
+                .retained_roots
+                .as_ref()
+                .is_some_and(|roots| !roots.contains(dir_root))
+            || definitions.iter().any(|definition| {
+                sources.versions.get(definition.name().as_str())
+                    != self.source_versions.get(definition.name().as_str())
+            })
+        {
+            return Err("language server source was retired during resolution".into());
         }
         self.dir_state.language_servers = definitions
             .iter()
@@ -812,7 +1271,7 @@ impl AppServerLanguageRuntime {
         if definitions.is_empty() {
             return Err("no configured language-server executable is available".into());
         }
-        let routes = definitions
+        let routes: BTreeMap<String, Vec<String>> = definitions
             .iter()
             .map(|definition| {
                 (
@@ -821,44 +1280,66 @@ impl AppServerLanguageRuntime {
                 )
             })
             .collect();
-        let (sender, receiver) = mpsc::channel();
-        let manager = LspManager::start_with_events_and_metrics(
-            LspManagerConfiguration::enabled(dir_root, definitions)
-                .with_generation(config_generation),
-            Arc::new(AppServerLanguageEventSink {
-                routes,
-                sender,
-                diagnostics: Arc::new(LanguageDiagnosticPublisher {
-                    documents: Arc::clone(&self.dir_state.documents),
-                    updates: Arc::clone(&self.updates),
-                    dir_id: self.dir_state.dir_id.clone(),
-                    connection_id: self.connection_id,
-                }),
-            }),
-            Arc::new(AppServerLanguageMetrics),
-        )
-        .map_err(|error| error.to_string())?;
-        self.manager = Some(manager);
-        self.receiver = Some(receiver);
-        self.dir_state.root = Some(dir_root.to_path_buf());
-        self.dir_state.config_generation = Some(config_generation);
-        // Activating another extension server must preserve already-open LSP documents.
-        for (path, snapshot) in documents {
-            if self
-                .dir_state
-                .language_servers
-                .contains_key(&snapshot.language_id)
-            {
-                let document = LspDocumentSnapshot::new(
-                    path,
-                    snapshot.language_id,
-                    snapshot.revision,
-                    snapshot.text,
-                )
+        if let Some(session) = &self.session {
+            *session
+                .launch_versions
+                .write()
+                .unwrap_or_else(std::sync::PoisonError::into_inner) = self.source_versions.clone();
+            *session
+                .routes
+                .write()
+                .unwrap_or_else(std::sync::PoisonError::into_inner) = routes;
+            session
+                .manager
+                .replace_servers(definitions, config_generation)
                 .map_err(|error| error.to_string())?;
-                self.synchronize_selected_document(&snapshot.relative_path, document)?;
-            }
+        } else {
+            let (sender, receiver) = mpsc::channel();
+            let requests = Arc::new(LanguageRequestResults::default());
+            let routes = Arc::new(std::sync::RwLock::new(routes));
+            let launch_versions = Arc::new(std::sync::RwLock::new(self.source_versions.clone()));
+            let manager = Arc::new(
+                LspManager::start_with_events_and_metrics(
+                    LspManagerConfiguration::enabled(dir_root, definitions)
+                        .with_generation(config_generation),
+                    Arc::new(AppServerLanguageEventSink {
+                        routes: Arc::clone(&routes),
+                        requests: Arc::clone(&requests),
+                        sender,
+                        sources: Arc::clone(&self.sources),
+                        launch_versions: Arc::clone(&launch_versions),
+                        active_versions: Mutex::new(self.source_versions.clone()),
+                        diagnostics: Arc::new(LanguageDiagnosticPublisher {
+                            documents: Arc::clone(&self.dir_state.documents),
+                            updates: Arc::clone(&self.updates),
+                            dir_id: self.dir_state.dir_id.clone(),
+                            connection_id: self.connection_id,
+                        }),
+                    }),
+                    Arc::new(AppServerLanguageMetrics),
+                )
+                .map_err(|error| error.to_string())?,
+            );
+            let session = Arc::new(LanguageSession {
+                acquired: Arc::clone(&self.acquired),
+                manager: Arc::clone(&manager),
+                requests,
+                routes,
+                launch_versions,
+                root: dir_root.to_path_buf(),
+                connection_id: self.connection_id,
+                cancellation: ash_async_utils::CancellationSource::new(),
+            });
+            sources
+                .sessions
+                .retain(|session| session.strong_count() > 0);
+            sources.sessions.push(Arc::downgrade(&session));
+            self.session = Some(session);
+            self.manager = Some(manager);
+            self.receiver = Some(receiver);
         }
+        self.dir_state.root = Some(dir_root.to_path_buf());
+        self.definitions_dirty = false;
         Ok(())
     }
 
@@ -961,35 +1442,59 @@ impl AppServerLanguageRuntime {
             .get(language_id)
             .cloned()
             .ok_or_else(|| format!("no language server is available for '{language_id}'"))?;
-        if matches!(
-            self.dir_state.server_states.get(&server),
-            Some(LanguageServerState::Ready)
-        ) {
-            return Ok(());
-        }
         let deadline = Instant::now() + SERVER_START_TIMEOUT;
         loop {
-            let event = self.recv_until(deadline)?;
-            self.accept_state(&event);
+            let version = self
+                .sources
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .versions
+                .get(&server)
+                .copied()
+                .unwrap_or(0);
+            if version != self.source_versions.get(&server).copied().unwrap_or(0) {
+                return Err("language server source was retired".into());
+            }
+            if self
+                .connection_cancellation
+                .as_ref()
+                .is_some_and(CancellationToken::is_cancelled)
+                || self
+                    .session
+                    .as_ref()
+                    .is_some_and(|session| session.cancellation.token().is_cancelled())
+            {
+                return Err("language session was cancelled".into());
+            }
             match self.dir_state.server_states.get(&server) {
                 Some(LanguageServerState::Ready) => return Ok(()),
                 Some(LanguageServerState::Failed(message)) => return Err(message.clone()),
                 Some(LanguageServerState::CrashLoop { message, .. }) => return Err(message.clone()),
                 _ => {}
             }
+            if let Some(event) = self.recv_until(deadline)? {
+                self.accept_state(&event);
+            }
         }
     }
 
-    fn recv_until(&self, deadline: Instant) -> Result<LspManagerEvent, String> {
+    fn recv_until(&self, deadline: Instant) -> Result<Option<LspManagerEvent>, String> {
         let remaining = deadline.saturating_duration_since(Instant::now());
         if remaining.is_zero() {
             return Err("language service request timed out".into());
         }
-        self.receiver
+        match self
+            .receiver
             .as_ref()
             .ok_or_else(|| String::from("language service event channel is unavailable"))?
-            .recv_timeout(remaining)
-            .map_err(|_| "language service request timed out".into())
+            .recv_timeout(remaining.min(Duration::from_millis(25)))
+        {
+            Ok(event) => Ok(Some(event)),
+            Err(mpsc::RecvTimeoutError::Timeout) => Ok(None),
+            Err(mpsc::RecvTimeoutError::Disconnected) => {
+                Err("language service event channel is unavailable".into())
+            }
+        }
     }
 
     fn accept_state(&mut self, event: &LspManagerEvent) {
@@ -1005,7 +1510,10 @@ impl AppServerLanguageRuntime {
     }
 
     fn shutdown(&mut self) {
-        self.connections.clear();
+        let connections = self.connections.keys().copied().collect::<Vec<_>>();
+        for connection in connections {
+            self.close_connection(connection);
+        }
         self.env_runtimes.clear();
         self.active_dir_root = None;
         self.shutdown_selected();
@@ -1015,13 +1523,18 @@ impl AppServerLanguageRuntime {
         if let Ok(mut documents) = self.dir_state.documents.lock() {
             documents.clear();
         }
-        if let Some(manager) = self.manager.take() {
-            let _ = manager.shutdown();
+        if let Some(session) = self.session.take() {
+            session.cancellation.cancel();
         }
-        self.acquired.clear();
+        if let Some(manager) = self.manager.take() {
+            let _ = manager.set_enablement(ash_lsp_manager::LspManagerEnablement::Disabled);
+        }
+        self.acquired
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clear();
         self.receiver = None;
         self.dir_state.root = None;
-        self.dir_state.config_generation = None;
         self.dir_state.language_servers.clear();
         self.dir_state.server_states.clear();
     }
@@ -1112,3 +1625,7 @@ fn configure_definition(
     }
     Ok(definition)
 }
+
+#[cfg(all(test, unix))]
+#[path = "language_runtime_regression_tests.rs"]
+mod regression_tests;

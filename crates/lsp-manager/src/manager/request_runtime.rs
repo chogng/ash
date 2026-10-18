@@ -664,6 +664,7 @@ impl Supervisor {
         let failure_kind = request.kind();
         let failure_path = request.path().to_path_buf();
         let failure_revision = request.revision();
+        let tracking_path = failure_path.clone();
         let kind = request.kind();
         let cold_for_incarnation =
             self.observed_request_kinds
@@ -704,6 +705,8 @@ impl Supervisor {
             failure_id,
             InFlightLanguageRequest {
                 cancellation,
+                path: tracking_path,
+                revision: failure_revision,
                 kind,
                 server: server_name.clone(),
                 server_epoch,
@@ -1886,6 +1889,8 @@ impl Supervisor {
             id,
             InFlightLanguageRequest {
                 cancellation,
+                path: self.configuration.dir_root.clone(),
+                revision: LanguageDocumentRevision::new(0),
                 kind,
                 server,
                 server_epoch,

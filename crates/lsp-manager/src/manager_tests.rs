@@ -247,6 +247,8 @@ async fn cancelling_an_in_flight_request_aborts_work_and_records_the_terminal_ou
         request_id,
         InFlightLanguageRequest {
             cancellation,
+            path: workspace.path().join("test.rs"),
+            revision: LanguageDocumentRevision::new(1),
             kind: LanguageRequestKind::References,
             server,
             server_epoch: 3,
@@ -686,4 +688,51 @@ fn profile_settings_answer_ordered_scoped_configuration_sections() {
             serde_json::json!({"python":{"analysis":{"strict":true}}})
         ]
     );
+}
+
+#[tokio::test]
+async fn retiring_and_readding_a_name_rejects_old_launches_without_losing_the_new_task() {
+    let workspace = tempfile::tempdir().unwrap();
+    let definition = LanguageServerDefinition::new(
+        "replaceable",
+        ["demo"],
+        LanguageServerCommand::new("missing-lsp-test-executable"),
+    )
+    .unwrap();
+    let route = definition.clone().into_launch_parts().0;
+    let (commands, _receiver) = mpsc::unbounded_channel();
+    let mut supervisor = Supervisor::new(
+        LspManagerConfiguration::enabled(workspace.path(), vec![definition.clone()])
+            .with_restart_policy(LanguageServerRestartPolicy::Never),
+        Arc::new(NoopLspManagerEventSink),
+        None,
+        commands,
+    );
+    supervisor.enable().await;
+    let name = definition.name().clone();
+    let old_epoch = supervisor.servers[&name].epoch;
+    supervisor.retire_server(&name).await;
+    supervisor.replace_servers(vec![definition.clone()]).await;
+    let new_epoch = supervisor.servers[&name].epoch;
+    assert!(new_epoch > old_epoch);
+    supervisor
+        .handle_server_started(
+            name.clone(),
+            supervisor.generation,
+            old_epoch,
+            route,
+            definition,
+            Err("old launch completed late".into()),
+        )
+        .await;
+    assert_eq!(supervisor.servers[&name].epoch, new_epoch);
+    assert_eq!(
+        supervisor.servers[&name].phase,
+        ManagedServerPhase::Starting
+    );
+    assert!(
+        supervisor.launches.contains_key(&name),
+        "a late old result must not remove ownership of the replacement task"
+    );
+    supervisor.disable().await;
 }

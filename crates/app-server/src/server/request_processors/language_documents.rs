@@ -61,7 +61,7 @@ pub(super) trait LanguageDocumentRequestProcessorContext: Send + Sync {
         source_path: &std::path::Path,
         document: &ash_app_server_protocol::protocol::language::LanguageDocumentDto,
         cancellation: &ash_async_utils::CancellationToken,
-    ) -> Result<LanguageRuntimeGuard<'_>, super::RpcError>;
+    ) -> Result<LanguageRuntimeGuard, super::RpcError>;
 }
 
 pub(super) struct LanguageDocumentRequestProcessor<
@@ -92,7 +92,7 @@ impl<'ctx, C: LanguageDocumentRequestProcessorContext + ?Sized>
         cancellation: &CancellationToken,
     ) -> Result<Value, RpcError> {
         let params: LanguageDocumentFeaturesParams = decode_language_operation(params)?;
-        let (source_path, revision, mut runtime) =
+        let (source_path, revision, runtime) =
             self.prepare_document_feature_request(&params.document, cancellation)?;
         let request_id = runtime
             .manager()
@@ -123,7 +123,7 @@ impl<'ctx, C: LanguageDocumentRequestProcessorContext + ?Sized>
         cancellation: &CancellationToken,
     ) -> Result<Value, RpcError> {
         let params: LanguageDocumentFeaturesParams = decode_language_operation(params)?;
-        let (source_path, revision, mut runtime) =
+        let (source_path, revision, runtime) =
             self.prepare_document_feature_request(&params.document, cancellation)?;
         let request_id = runtime
             .manager()
@@ -154,7 +154,7 @@ impl<'ctx, C: LanguageDocumentRequestProcessorContext + ?Sized>
         cancellation: &CancellationToken,
     ) -> Result<Value, RpcError> {
         let params: LanguageResolveCodeLensParams = decode_language_operation(params)?;
-        let (source_path, revision, mut runtime) =
+        let (source_path, revision, runtime) =
             self.prepare_document_feature_request(&params.document, cancellation)?;
         let lens = code_lens_from_dto(&params.document.text, params.lens)?;
         let request_id = runtime
@@ -187,7 +187,7 @@ impl<'ctx, C: LanguageDocumentRequestProcessorContext + ?Sized>
         cancellation: &CancellationToken,
     ) -> Result<Value, RpcError> {
         let params: LanguageDocumentFeaturesParams = decode_language_operation(params)?;
-        let (source_path, revision, mut runtime) =
+        let (source_path, revision, runtime) =
             self.prepare_document_feature_request(&params.document, cancellation)?;
         let request_id = runtime
             .manager()
@@ -218,7 +218,7 @@ impl<'ctx, C: LanguageDocumentRequestProcessorContext + ?Sized>
         cancellation: &CancellationToken,
     ) -> Result<Value, RpcError> {
         let params: LanguageResolveDocumentLinkParams = decode_language_operation(params)?;
-        let (source_path, revision, mut runtime) =
+        let (source_path, revision, runtime) =
             self.prepare_document_feature_request(&params.document, cancellation)?;
         let link = document_link_from_dto(&params.document.text, params.link)?;
         let request_id = runtime
@@ -251,7 +251,7 @@ impl<'ctx, C: LanguageDocumentRequestProcessorContext + ?Sized>
         cancellation: &CancellationToken,
     ) -> Result<Value, RpcError> {
         let params: LanguageDocumentFeaturesParams = decode_language_operation(params)?;
-        let (source_path, revision, mut runtime) =
+        let (source_path, revision, runtime) =
             self.prepare_document_feature_request(&params.document, cancellation)?;
         let request_id = runtime
             .manager()
@@ -287,7 +287,7 @@ impl<'ctx, C: LanguageDocumentRequestProcessorContext + ?Sized>
         cancellation: &CancellationToken,
     ) -> Result<Value, RpcError> {
         let params: LanguageColorPresentationsParams = decode_language_operation(params)?;
-        let (source_path, revision, mut runtime) =
+        let (source_path, revision, runtime) =
             self.prepare_document_feature_request(&params.document, cancellation)?;
         let range = LanguageTextRange::new(
             utf8_byte_range(&params.document.text, params.range)
@@ -337,7 +337,7 @@ impl<'ctx, C: LanguageDocumentRequestProcessorContext + ?Sized>
         cancellation: &CancellationToken,
     ) -> Result<Value, RpcError> {
         let params: LanguageDocumentFeaturesParams = decode_language_operation(params)?;
-        let (source_path, revision, mut runtime) =
+        let (source_path, revision, runtime) =
             self.prepare_document_feature_request(&params.document, cancellation)?;
         let request_id = runtime
             .manager()
@@ -375,14 +375,7 @@ impl<'ctx, C: LanguageDocumentRequestProcessorContext + ?Sized>
         &self,
         document: &LanguageDocumentDto,
         cancellation: &CancellationToken,
-    ) -> Result<
-        (
-            PathBuf,
-            LanguageDocumentRevision,
-            LanguageRuntimeGuard<'ctx>,
-        ),
-        RpcError,
-    > {
+    ) -> Result<(PathBuf, LanguageDocumentRevision, LanguageRuntimeGuard), RpcError> {
         let dir = self.context.language_dir_root_for(
             document.dir_id.as_deref(),
             document.session_directory.as_ref(),

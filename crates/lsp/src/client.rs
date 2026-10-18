@@ -21,7 +21,7 @@ use tokio::sync::Mutex;
 
 use crate::capability::DynamicCapabilityRegistry;
 use crate::document::OpenDocument;
-use crate::driver::{DriverCommand, DriverHandle, spawn_driver};
+use crate::driver::{DriverCommand, DriverHandle, DriverTask, spawn_driver};
 use crate::raw_client::RawClient;
 use crate::{
     DocumentChange, DocumentChangeSync, DocumentSave, DocumentSaveSync, DocumentSyncPolicy,
@@ -120,13 +120,14 @@ impl LanguageServerClient {
     {
         let intentional_stop = Arc::new(AtomicBool::new(false));
         let dynamic_capabilities = DynamicCapabilityRegistry::default();
-        let DriverHandle { commands, task } = spawn_driver(
+        let DriverHandle { commands, mut task } = spawn_driver(
             reader,
             writer,
             Arc::clone(&options.host),
             Arc::clone(&intentional_stop),
             dynamic_capabilities.clone(),
             options.workspace_folders.clone(),
+            options.timeouts.request,
         );
         let raw = RawClient::new(commands);
         #[allow(deprecated)]
@@ -142,16 +143,39 @@ impl LanguageServerClient {
             locale: options.locale,
             work_done_progress_params: Default::default(),
         };
-        let initialized: InitializeResult = match raw
-            .request::<Initialize>(initialize_params, options.timeouts.initialize)
-            .await
-        {
+        // The deadline includes initialized and all queued writes. A peer that stops reading
+        // cannot make error cleanup wait behind the very write that exhausted the deadline.
+        let handshake = tokio::time::timeout(options.timeouts.initialize, async {
+            let initialized: InitializeResult = raw
+                .request::<Initialize>(initialize_params, options.timeouts.initialize)
+                .await?;
+            let encoding = initialized
+                .capabilities
+                .position_encoding
+                .clone()
+                .unwrap_or(PositionEncodingKind::UTF16);
+            if encoding != PositionEncodingKind::UTF8 && encoding != PositionEncodingKind::UTF16 {
+                return Err(LanguageServerError::InvalidMessage(format!(
+                    "unsupported position encoding `{encoding:?}`"
+                )));
+            }
+            raw.notify::<Initialized>(InitializedParams {}).await?;
+            Ok::<InitializeResult, LanguageServerError>(initialized)
+        })
+        .await
+        .unwrap_or_else(|_| {
+            Err(LanguageServerError::Timeout {
+                operation: "initialize".into(),
+                duration: options.timeouts.initialize,
+            })
+        });
+        let initialized = match handshake {
             Ok(result) => result,
             Err(error) => {
                 intentional_stop.store(true, Ordering::Release);
-                let _ = raw.commands.send(DriverCommand::Stop).await;
-                let _ = task.await;
-                terminate_process(process.as_ref()).await;
+                task.abort();
+                let _ = (&mut task).await;
+                terminate_process(process.as_ref(), options.timeouts.shutdown).await;
                 return Err(error);
             }
         };
@@ -160,17 +184,6 @@ impl LanguageServerClient {
             .position_encoding
             .clone()
             .unwrap_or(PositionEncodingKind::UTF16);
-        if position_encoding != PositionEncodingKind::UTF8
-            && position_encoding != PositionEncodingKind::UTF16
-        {
-            intentional_stop.store(true, Ordering::Release);
-            let _ = raw.commands.send(DriverCommand::Stop).await;
-            let _ = task.await;
-            terminate_process(process.as_ref()).await;
-            return Err(LanguageServerError::InvalidMessage(format!(
-                "unsupported position encoding `{position_encoding:?}`"
-            )));
-        }
         let initialization = LanguageServerInitialization {
             server_info: initialized.server_info,
             document_sync: DocumentSyncPolicy::from_capability(
@@ -179,13 +192,6 @@ impl LanguageServerClient {
             capabilities: initialized.capabilities,
             position_encoding,
         };
-        if let Err(error) = raw.notify::<Initialized>(InitializedParams {}).await {
-            intentional_stop.store(true, Ordering::Release);
-            let _ = raw.commands.send(DriverCommand::Stop).await;
-            let _ = task.await;
-            terminate_process(process.as_ref()).await;
-            return Err(error);
-        }
         Ok(Self {
             inner: Arc::new(ClientInner {
                 raw,
@@ -393,17 +399,33 @@ impl LanguageServerClient {
                 }
             })?;
         self.inner.intentional_stop.store(true, Ordering::Release);
-        let shutdown_result = self
-            .inner
-            .raw
-            .request::<Shutdown>((), self.inner.timeouts.shutdown)
-            .await;
-        let _ = self.inner.raw.notify::<Exit>(()).await;
-        let _ = self.inner.raw.commands.send(DriverCommand::Stop).await;
-        if let Some(task) = self.inner.driver_task.lock().await.take() {
-            let _ = task.await;
+        let mut task = self.inner.driver_task.lock().await.take();
+        let shutdown_result = tokio::time::timeout(self.inner.timeouts.shutdown, async {
+            let result = self
+                .inner
+                .raw
+                .request::<Shutdown>((), self.inner.timeouts.shutdown)
+                .await;
+            self.inner.raw.notify::<Exit>(()).await?;
+            let _ = self.inner.raw.commands.send(DriverCommand::Stop).await;
+            if let Some(mut task) = task.take() {
+                let _ = (&mut task).await;
+            }
+            reap_process(self.inner.process.as_ref(), self.inner.timeouts.shutdown).await;
+            result
+        })
+        .await
+        .unwrap_or_else(|_| {
+            Err(LanguageServerError::Timeout {
+                operation: "shutdown".into(),
+                duration: self.inner.timeouts.shutdown,
+            })
+        });
+        if let Some(mut task) = task {
+            task.abort();
+            let _ = (&mut task).await;
         }
-        reap_process(self.inner.process.as_ref(), self.inner.timeouts.shutdown).await;
+        terminate_process(self.inner.process.as_ref(), self.inner.timeouts.shutdown).await;
         self.inner.state.store(STATE_CLOSED, Ordering::Release);
         shutdown_result
     }
@@ -417,11 +439,11 @@ impl LanguageServerClient {
         if self.inner.state.swap(STATE_CLOSED, Ordering::AcqRel) == STATE_CLOSED {
             return;
         }
-        let _ = self.inner.raw.commands.send(DriverCommand::Stop).await;
-        if let Some(task) = self.inner.driver_task.lock().await.take() {
-            let _ = task.await;
+        if let Some(mut task) = self.inner.driver_task.lock().await.take() {
+            task.abort();
+            let _ = (&mut task).await;
         }
-        terminate_process(self.inner.process.as_ref()).await;
+        terminate_process(self.inner.process.as_ref(), self.inner.timeouts.shutdown).await;
     }
 
     fn require_ready(&self) -> Result<(), LanguageServerError> {
@@ -440,7 +462,7 @@ struct ClientInner {
     dynamic_capabilities: DynamicCapabilityRegistry,
     documents: Mutex<HashMap<Uri, OpenDocument>>,
     process: Option<Arc<Mutex<Option<Child>>>>,
-    driver_task: Mutex<Option<tokio::task::JoinHandle<()>>>,
+    driver_task: Mutex<Option<DriverTask>>,
     state: AtomicU8,
     intentional_stop: Arc<AtomicBool>,
     timeouts: LanguageServerTimeouts,
@@ -476,7 +498,7 @@ async fn reap_process(process: Option<&Arc<Mutex<Option<Child>>>>, timeout: Dura
     process.take();
 }
 
-async fn terminate_process(process: Option<&Arc<Mutex<Option<Child>>>>) {
+async fn terminate_process(process: Option<&Arc<Mutex<Option<Child>>>>, timeout: Duration) {
     let Some(process) = process else {
         return;
     };
@@ -487,8 +509,8 @@ async fn terminate_process(process: Option<&Arc<Mutex<Option<Child>>>>) {
     match child.try_wait() {
         Ok(Some(_)) => {}
         Ok(None) | Err(_) => {
-            let _ = child.kill().await;
-            let _ = child.wait().await;
+            let _ = child.start_kill();
+            let _ = tokio::time::timeout(timeout, child.wait()).await;
         }
     }
 }

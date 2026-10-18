@@ -9,7 +9,7 @@ use lsp_types::{
     Uri, WorkDoneProgressParams,
 };
 use serde_json::{Value, json};
-use tokio::io::{AsyncWrite, BufReader};
+use tokio::io::{AsyncWrite, AsyncWriteExt, BufReader};
 use tokio::sync::{Notify, oneshot};
 
 use super::*;
@@ -717,4 +717,172 @@ async fn workspace_folders_request_matches_the_folders_advertised_at_initializat
     received.await.unwrap();
     client.shutdown().await.unwrap();
     task.await.unwrap();
+}
+
+#[tokio::test]
+async fn nonreading_peer_must_not_defeat_initialize_deadline() {
+    let (client_io, server_io) = tokio::io::duplex(512);
+    let (reader, writer) = tokio::io::split(client_io);
+    let result = tokio::time::timeout(
+        Duration::from_millis(300),
+        LanguageServerClient::connect(
+            BufReader::new(reader),
+            writer,
+            LanguageServerOptions::new("audit", "1").with_timeouts(LanguageServerTimeouts {
+                initialize: Duration::from_millis(25),
+                request: Duration::from_millis(25),
+                shutdown: Duration::from_millis(25),
+            }),
+        ),
+    )
+    .await;
+    drop(server_io);
+    assert!(
+        result.is_ok(),
+        "initialize exceeded 300ms with a configured 25ms deadline"
+    );
+}
+
+#[tokio::test]
+async fn cancelling_initialization_drops_both_transport_halves() {
+    let (client_io, server_io) = tokio::io::duplex(512);
+    let (reader, writer) = tokio::io::split(client_io);
+    let initialization = tokio::spawn(LanguageServerClient::connect(
+        BufReader::new(reader),
+        writer,
+        LanguageServerOptions::new("cancel-test", "1"),
+    ));
+    let mut peer = BufReader::new(server_io);
+    assert_eq!(read_json(&mut peer).await["method"], "initialize");
+    initialization.abort();
+    assert!(matches!(initialization.await, Err(error) if error.is_cancelled()));
+    let mut peer = peer.into_inner();
+    let mut bytes = [0; 64];
+    assert_eq!(
+        tokio::time::timeout(
+            Duration::from_secs(1),
+            tokio::io::AsyncReadExt::read(&mut peer, &mut bytes)
+        )
+        .await
+        .unwrap()
+        .unwrap(),
+        0
+    );
+    assert!(
+        tokio::time::timeout(Duration::from_secs(1), peer.write_all(&[0; 1024]))
+            .await
+            .unwrap()
+            .is_err()
+    );
+}
+
+#[tokio::test]
+async fn stalled_writer_must_not_prevent_bounded_shutdown() {
+    let (client_io, server_io) = tokio::io::duplex(512);
+    let (client_reader, client_writer) = tokio::io::split(client_io);
+    let (server_reader, mut server_writer) = tokio::io::split(server_io);
+    let (ready, initialized) = tokio::sync::oneshot::channel();
+    let server = tokio::spawn(async move {
+        let mut reader = BufReader::new(server_reader);
+        let request = read_json(&mut reader).await;
+        let response = serde_json::to_vec(&json!({
+            "jsonrpc": "2.0", "id": request["id"],
+            "result": {"capabilities": {"textDocumentSync": 1}}
+        }))
+        .unwrap();
+        server_writer
+            .write_all(format!("Content-Length: {}\r\n\r\n", response.len()).as_bytes())
+            .await
+            .unwrap();
+        server_writer.write_all(&response).await.unwrap();
+        assert_eq!(read_json(&mut reader).await["method"], "initialized");
+        ready.send(()).unwrap();
+        // Keep both transport halves alive, while the peer stops reading client messages.
+        std::future::pending::<()>().await;
+        drop((reader, server_writer));
+    });
+    let client = LanguageServerClient::connect(
+        BufReader::new(client_reader),
+        client_writer,
+        LanguageServerOptions::new("audit", "1").with_timeouts(LanguageServerTimeouts {
+            initialize: Duration::from_secs(1),
+            request: Duration::from_secs(1),
+            shutdown: Duration::from_millis(25),
+        }),
+    )
+    .await
+    .unwrap();
+    initialized.await.unwrap();
+    let document_client = client.clone();
+    let notification = tokio::spawn(async move {
+        document_client
+            .open_document(
+                "file:///audit.demo".parse().unwrap(),
+                "demo",
+                "x".repeat(8192),
+            )
+            .await
+    });
+    tokio::time::sleep(Duration::from_millis(25)).await;
+    let result = tokio::time::timeout(Duration::from_millis(300), client.shutdown()).await;
+    notification.abort();
+    server.abort();
+    assert!(
+        result.is_ok(),
+        "shutdown exceeded 300ms with a configured 25ms deadline"
+    );
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn shutdown_timeout_kills_and_reaps_the_owned_stdio_process() {
+    let script = r#"
+cr=$(printf '\r')
+while IFS= read -r line; do
+  line=${line%"$cr"}
+  [ -z "$line" ] && break
+  case "$line" in Content-Length:*) length=${line#Content-Length: };; esac
+done
+message=$(dd bs=1 count="$length" 2>/dev/null)
+id=$(printf '%s' "$message" | sed -n 's/.*"id":\([0-9]*\).*/\1/p')
+response="{\"jsonrpc\":\"2.0\",\"id\":$id,\"result\":{\"capabilities\":{},\"serverInfo\":{\"name\":\"owned-fixture\",\"version\":\"$$\"}}}"
+printf 'Content-Length: %s\r\n\r\n%s' "${#response}" "$response"
+exec sleep 60
+"#;
+    let client = LanguageServerClient::start_stdio(
+        LanguageServerCommand::new("/bin/sh").with_arguments(["-c", script]),
+        LanguageServerOptions::new("stdio-lifecycle", "1").with_timeouts(LanguageServerTimeouts {
+            initialize: Duration::from_secs(2),
+            request: Duration::from_secs(1),
+            shutdown: Duration::from_millis(25),
+        }),
+    )
+    .await
+    .unwrap();
+    let pid = client
+        .initialization()
+        .server_info
+        .as_ref()
+        .unwrap()
+        .version
+        .as_ref()
+        .unwrap();
+    let alive = || {
+        std::process::Command::new("/bin/kill")
+            .args(["-0", pid])
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .status()
+            .unwrap()
+            .success()
+    };
+    assert!(alive());
+    let result = tokio::time::timeout(Duration::from_secs(1), client.shutdown())
+        .await
+        .unwrap();
+    assert!(result.is_err(), "the fixture never acknowledges shutdown");
+    assert!(
+        !alive(),
+        "forced cleanup must reap this exact owned process before returning"
+    );
 }

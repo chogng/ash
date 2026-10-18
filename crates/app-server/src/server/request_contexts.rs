@@ -392,7 +392,7 @@ impl super::language_document_features::LanguageDocumentRequestProcessorContext 
         source_path: &std::path::Path,
         document: &ash_app_server_protocol::protocol::language::LanguageDocumentDto,
         cancellation: &ash_async_utils::CancellationToken,
-    ) -> Result<super::language_runtime::LanguageRuntimeGuard<'_>, super::RpcError> {
+    ) -> Result<super::language_runtime::LanguageRuntimeGuard, super::RpcError> {
         self.language_processor(connection_id)
             .prepare_document_runtime(dir, source_path, document, cancellation)
     }

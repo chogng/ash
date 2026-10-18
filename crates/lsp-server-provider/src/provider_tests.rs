@@ -4,29 +4,25 @@ use std::path::Path;
 use ash_lsp::LanguageServerEnvironmentPolicy;
 use tempfile::TempDir;
 
-use crate::CSS_LANGUAGE_SERVER_ID;
-use crate::CssLanguageServerProvider;
 use crate::DirectPackageLanguageServerProvider;
 use crate::LanguageServerProviderError;
 use crate::LspServerLaunch;
 use crate::LspServerProviders;
 use crate::ManagedNodeRuntime;
-use crate::ManagedNodeRuntimeSource;
+use crate::NodePackageLanguageServerProvider;
+
+const TEST_SERVER_ID: &str = "css-language-server";
 
 #[test]
-fn css_provider_uses_managed_node_and_a_clean_environment() {
+fn node_package_provider_uses_managed_node_and_a_clean_environment() {
     let fixture = ProviderFixture::new();
     let provider = fixture.provider();
-    assert_eq!(
-        provider.node_runtime().source(),
-        ManagedNodeRuntimeSource::PackagedNode
-    );
     let mut registry = LspServerProviders::new();
     registry.register(provider).unwrap();
 
     let definition = registry
         .definition(
-            CSS_LANGUAGE_SERVER_ID,
+            TEST_SERVER_ID,
             fixture.dir.path(),
             LspServerLaunch::Packaged,
         )
@@ -76,7 +72,7 @@ fn an_electron_installation_replaced_after_binding_cannot_start_a_language_serve
     registry.register(provider).unwrap();
     assert!(matches!(
         registry.definition(
-            CSS_LANGUAGE_SERVER_ID,
+            TEST_SERVER_ID,
             fixture.dir.path(),
             LspServerLaunch::Packaged
         ),
@@ -85,20 +81,16 @@ fn an_electron_installation_replaced_after_binding_cannot_start_a_language_serve
 }
 
 #[test]
-fn css_provider_uses_electron_only_for_the_language_server_child() {
+fn node_package_provider_uses_electron_only_for_the_language_server_child() {
     let fixture = ProviderFixture::new();
     let provider = fixture
         .provider_with_runtime(ManagedNodeRuntime::from_electron_path(&fixture.node).unwrap());
-    assert_eq!(
-        provider.node_runtime().source(),
-        ManagedNodeRuntimeSource::ElectronRunAsNode
-    );
     let mut registry = LspServerProviders::new();
     registry.register(provider).unwrap();
 
     let definition = registry
         .definition(
-            CSS_LANGUAGE_SERVER_ID,
+            TEST_SERVER_ID,
             fixture.dir.path(),
             LspServerLaunch::Packaged,
         )
@@ -119,7 +111,7 @@ fn css_provider_uses_electron_only_for_the_language_server_child() {
 }
 
 #[test]
-fn css_provider_accepts_an_authoritative_executable_override() {
+fn node_package_provider_accepts_an_authoritative_executable_override() {
     let fixture = ProviderFixture::new();
     let provider = fixture.provider();
     let executable = fixture.root.path().join("explicit-css-server");
@@ -129,7 +121,7 @@ fn css_provider_accepts_an_authoritative_executable_override() {
 
     let definition = registry
         .definition(
-            CSS_LANGUAGE_SERVER_ID,
+            TEST_SERVER_ID,
             fixture.dir.path(),
             LspServerLaunch::ExplicitExecutable(&executable),
         )
@@ -155,7 +147,7 @@ fn registry_rejects_duplicate_provider_identity() {
     let error = registry.register(fixture.provider()).unwrap_err();
     assert!(matches!(
         error,
-        LanguageServerProviderError::DuplicateProvider(id) if id == CSS_LANGUAGE_SERVER_ID
+        LanguageServerProviderError::DuplicateProvider(id) if id == TEST_SERVER_ID
     ));
 }
 
@@ -165,8 +157,8 @@ fn packaged_registry_retains_user_enablement() {
     let mut registry = LspServerProviders::new();
     registry.register_packaged(fixture.provider()).unwrap();
 
-    assert!(registry.contains(CSS_LANGUAGE_SERVER_ID));
-    assert!(registry.activation_enables(CSS_LANGUAGE_SERVER_ID));
+    assert!(registry.contains(TEST_SERVER_ID));
+    assert!(registry.activation_enables(TEST_SERVER_ID));
 }
 
 #[test]
@@ -216,7 +208,7 @@ impl ProviderFixture {
         let entrypoint = root
             .path()
             .join("languages")
-            .join(CSS_LANGUAGE_SERVER_ID)
+            .join(TEST_SERVER_ID)
             .join("0.1.0")
             .join("server/css-language-server");
         write_executable(&node);
@@ -230,12 +222,21 @@ impl ProviderFixture {
         }
     }
 
-    fn provider(&self) -> CssLanguageServerProvider {
+    fn provider(&self) -> NodePackageLanguageServerProvider {
         self.provider_with_runtime(ManagedNodeRuntime::from_path(&self.node).unwrap())
     }
 
-    fn provider_with_runtime(&self, runtime: ManagedNodeRuntime) -> CssLanguageServerProvider {
-        CssLanguageServerProvider::new(&self.entrypoint, runtime).unwrap()
+    fn provider_with_runtime(
+        &self,
+        runtime: ManagedNodeRuntime,
+    ) -> NodePackageLanguageServerProvider {
+        NodePackageLanguageServerProvider::new(
+            TEST_SERVER_ID,
+            ["css", "less", "scss"].map(str::to_owned),
+            &self.entrypoint,
+            runtime,
+        )
+        .unwrap()
     }
 }
 

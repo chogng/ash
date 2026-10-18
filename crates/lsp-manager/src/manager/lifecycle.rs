@@ -3,6 +3,102 @@
 use super::*;
 
 impl Supervisor {
+    pub(super) async fn replace_servers(&mut self, definitions: Vec<LanguageServerDefinition>) {
+        let removed = self
+            .servers
+            .iter()
+            .filter_map(|(name, server)| {
+                (!definitions.iter().any(|definition| {
+                    definition.name() == name && definition.same_launch(&server.definition)
+                }))
+                .then(|| name.clone())
+            })
+            .collect::<Vec<_>>();
+        for name in removed {
+            self.retire_server(&name).await;
+        }
+        for definition in definitions {
+            let name = definition.name().clone();
+            if self.servers.contains_key(&name) {
+                continue;
+            }
+            self.servers.insert(
+                name.clone(),
+                ManagedServer {
+                    definition,
+                    epoch: 0,
+                    phase: ManagedServerPhase::Stopped,
+                    restart: ServerRestartTracker::default(),
+                },
+            );
+            if self.configuration.enablement == LspManagerEnablement::Enabled {
+                self.start_server(&name);
+            }
+        }
+        // Keep the manager's resource leases aligned with its live definitions.
+        self.configuration.servers = self
+            .servers
+            .values()
+            .map(|server| server.definition.clone())
+            .collect();
+    }
+
+    pub(super) async fn retire_server(&mut self, name: &LanguageServerName) {
+        if !self.servers.contains_key(name) {
+            return;
+        }
+        if let Some(launch) = self.launches.remove(name) {
+            launch.abort();
+        }
+        if let Some(retry) = self.retry_tasks.remove(name) {
+            retry.abort();
+        }
+        let requests = self
+            .in_flight_requests
+            .iter()
+            .filter_map(|(id, tracking)| (&tracking.server == name).then_some(*id))
+            .collect::<Vec<_>>();
+        for request in requests {
+            if let Some(tracking) = self.in_flight_requests.remove(&request) {
+                tracking.cancellation.cancel();
+                self.emit_request_result(LspManagerRequestResult::RequestFailed {
+                    request_id: request,
+                    kind: tracking.kind,
+                    path: tracking.path.clone(),
+                    revision: tracking.revision,
+                    message: "language server was retired".into(),
+                });
+                self.record_request_metric(tracking, LanguageRequestMetricOutcome::Cancelled, 0);
+            }
+        }
+        self.clear_diagnostics_for_server(name);
+        self.mark_documents_unrouted(name);
+        let retired = self.servers.remove(name);
+        self.configuration
+            .servers
+            .retain(|definition| definition.name() != name);
+        if let (Ok(client), Some(retired)) = (self.router.remove_server(name), retired) {
+            self.close_retired_client(client, retired.definition);
+        }
+        self.observed_request_kinds
+            .retain(|(server, _, _)| server != name);
+        self.emit_server_state(name, LanguageServerState::Stopped);
+    }
+
+    fn close_retired_client(
+        &mut self,
+        client: LanguageServerClient,
+        definition: LanguageServerDefinition,
+    ) {
+        self.retirements.retain(|task| !task.is_finished());
+        self.retirements.push(tokio::spawn(async move {
+            // Even a late initialize result owns a process. Retain its exact source until reap
+            // without making the supervisor wait behind that obsolete server's shutdown.
+            let _definition = definition;
+            let _ = client.shutdown().await;
+        }));
+    }
+
     pub(super) async fn enable(&mut self) {
         self.generation = self.generation.saturating_add(1).max(1);
         for (_, retry) in self.retry_tasks.drain() {
@@ -25,10 +121,12 @@ impl Supervisor {
         let Some(server) = self.servers.get_mut(name) else {
             return;
         };
-        server.epoch = server.epoch.saturating_add(1).max(1);
+        self.next_server_epoch = self.next_server_epoch.saturating_add(1).max(1);
+        server.epoch = self.next_server_epoch;
         server.phase = ManagedServerPhase::Starting;
         let server_epoch = server.epoch;
         let settings = server.definition.settings().clone();
+        let launch_definition = server.definition.clone();
         let (route, command, initialization_options) =
             server.definition.clone().into_launch_parts();
         self.emit_server_state(name, LanguageServerState::Starting);
@@ -66,6 +164,7 @@ impl Supervisor {
                 .await
                 .map_err(|error| error.to_string());
             let _ = commands.send(SupervisorCommand::ServerStarted {
+                definition: launch_definition,
                 server: server_name,
                 generation,
                 server_epoch,
@@ -79,11 +178,11 @@ impl Supervisor {
     }
 
     pub(super) fn retry_server(&mut self, name: &LanguageServerName, server_epoch: u64) {
-        self.retry_tasks.remove(name);
         let can_retry = self.servers.get(name).is_some_and(|server| {
             server.epoch == server_epoch && server.phase == ManagedServerPhase::BackingOff
         });
         if can_retry {
+            self.retry_tasks.remove(name);
             self.start_server(name);
         }
     }
@@ -94,19 +193,20 @@ impl Supervisor {
         generation: u64,
         server_epoch: u64,
         route: LanguageServerRoute,
+        definition: LanguageServerDefinition,
         result: Result<LanguageServerClient, String>,
     ) {
-        self.launches.remove(&name);
         let current = generation == self.generation
             && self.servers.get(&name).is_some_and(|server| {
                 server.epoch == server_epoch && server.phase == ManagedServerPhase::Starting
             });
         if !current {
             if let Ok(client) = result {
-                let _ = client.shutdown().await;
+                self.close_retired_client(client, definition);
             }
             return;
         }
+        self.launches.remove(&name);
         let client = match result {
             Ok(client) => client,
             Err(message) => {
@@ -116,7 +216,7 @@ impl Supervisor {
         };
         let client_for_shutdown = client.clone();
         if let Err(error) = self.router.register(route, client) {
-            let _ = client_for_shutdown.shutdown().await;
+            self.close_retired_client(client_for_shutdown, definition);
             if let Some(server) = self.servers.get_mut(&name) {
                 server.phase = ManagedServerPhase::Terminal;
             }
@@ -317,6 +417,9 @@ impl Supervisor {
                 show: false,
                 message: failure.message,
             });
+        }
+        for retirement in self.retirements.drain(..) {
+            let _ = retirement.await;
         }
         for server in stopped {
             self.emit_server_state(&server, LanguageServerState::Stopped);

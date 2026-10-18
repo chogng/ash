@@ -73,6 +73,8 @@ impl Supervisor {
             id,
             InFlightLanguageRequest {
                 cancellation,
+                path: self.configuration.dir_root.clone(),
+                revision: crate::LanguageDocumentRevision::new(0),
                 kind,
                 server,
                 server_epoch,

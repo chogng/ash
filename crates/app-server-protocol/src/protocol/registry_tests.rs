@@ -304,6 +304,31 @@ fn definition(method: &str) -> &'static super::ClientMethodDefinition {
 }
 
 #[test]
+fn language_requests_allow_configuration_and_revocation_while_a_server_is_pending() {
+    for definition in CLIENT_METHODS
+        .iter()
+        .filter(|definition| definition.method.starts_with("language/"))
+    {
+        assert_eq!(
+            definition
+                .serialization_scope(&serde_json::json!({}))
+                .unwrap(),
+            None,
+            "{} must not hold a profile-wide permit during server I/O",
+            definition.method
+        );
+    }
+    assert_eq!(
+        definition("languageServer/configure")
+            .serialization_scope(&serde_json::json!({}))
+            .unwrap(),
+        Some(ClientRequestSerializationScope::Global {
+            access: SerializationAccess::Exclusive
+        })
+    );
+}
+
+#[test]
 fn session_scope_uses_the_declared_session_identity() {
     let scope = definition("session/request")
         .serialization_scope(&serde_json::json!({ "sessionId": "session-1" }))

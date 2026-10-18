@@ -60,8 +60,16 @@ impl LspServerProviders {
     where
         P: LanguageServerProvider + 'static,
     {
+        self.register_packaged_shared(Arc::new(provider))
+    }
+
+    /// Retains a cached exact package identity while enabling its installed launch.
+    pub fn register_packaged_shared(
+        &mut self,
+        provider: Arc<dyn LanguageServerProvider>,
+    ) -> Result<(), LanguageServerProviderError> {
         let id = provider.id().to_owned();
-        self.register(provider)?;
+        self.register_shared(provider)?;
         self.activation_enabled.insert(id);
         Ok(())
     }
@@ -127,6 +135,17 @@ impl LspServerProviders {
             .get(id)
             .map(|provider| provider.definition(dir_root, launch))
             .transpose()
+    }
+
+    /// Tests one exact source identity and its activation state. Registries rebuilding an
+    /// unchanged package must retain its shared provider so unrelated package changes are inert.
+    pub fn same_provider(&self, other: &Self, id: &str) -> bool {
+        self.activation_enables(id) == other.activation_enables(id)
+            && match (self.providers.get(id), other.providers.get(id)) {
+                (Some(left), Some(right)) => Arc::ptr_eq(left, right),
+                (None, None) => true,
+                _ => false,
+            }
     }
 
     /// Compares registries by exact shared provider identity for composition option equality.

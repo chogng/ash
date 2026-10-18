@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::time::Duration;
 
 use lsp_types::{
     ConfigurationParams, LogMessageParams, ProgressParams, PublishDiagnosticsParams,
@@ -39,7 +40,33 @@ pub(crate) enum DriverCommand {
 
 pub(crate) struct DriverHandle {
     pub(crate) commands: mpsc::Sender<DriverCommand>,
-    pub(crate) task: tokio::task::JoinHandle<()>,
+    pub(crate) task: DriverTask,
+}
+
+/// A transport task must not outlive the connection or the future initializing it.
+pub(crate) struct DriverTask(tokio::task::JoinHandle<()>);
+
+impl DriverTask {
+    pub(crate) fn abort(&self) {
+        self.0.abort();
+    }
+}
+
+impl std::future::Future for DriverTask {
+    type Output = Result<(), tokio::task::JoinError>;
+
+    fn poll(
+        mut self: std::pin::Pin<&mut Self>,
+        context: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<Self::Output> {
+        std::pin::Pin::new(&mut self.0).poll(context)
+    }
+}
+
+impl Drop for DriverTask {
+    fn drop(&mut self) {
+        self.abort();
+    }
 }
 
 pub(crate) fn spawn_driver<R, W>(
@@ -49,6 +76,7 @@ pub(crate) fn spawn_driver<R, W>(
     intentional_stop: Arc<AtomicBool>,
     dynamic_capabilities: DynamicCapabilityRegistry,
     workspace_folders: Option<Vec<lsp_types::WorkspaceFolder>>,
+    write_timeout: Duration,
 ) -> DriverHandle
 where
     R: AsyncBufRead + Send + Unpin + 'static,
@@ -63,10 +91,11 @@ where
         dynamic_capabilities,
         workspace_folders,
         command_rx,
+        write_timeout,
     ));
     DriverHandle {
         commands: command_tx,
-        task,
+        task: DriverTask(task),
     }
 }
 
@@ -78,12 +107,13 @@ async fn run_driver<R, W>(
     dynamic_capabilities: DynamicCapabilityRegistry,
     workspace_folders: Option<Vec<lsp_types::WorkspaceFolder>>,
     mut commands: mpsc::Receiver<DriverCommand>,
+    write_timeout: Duration,
 ) where
     R: AsyncBufRead + Send + Unpin + 'static,
     W: AsyncWrite + Send + Unpin + 'static,
 {
     let (incoming_tx, mut incoming_rx) = mpsc::channel(32);
-    let reader_task = tokio::spawn(async move {
+    let reader_task = DriverTask(tokio::spawn(async move {
         loop {
             let frame = match read_frame(
                 &mut reader,
@@ -110,7 +140,7 @@ async fn run_driver<R, W>(
                 break;
             }
         }
-    });
+    }));
     let mut pending = HashMap::new();
     let close_message = loop {
         tokio::select! {
@@ -118,16 +148,17 @@ async fn run_driver<R, W>(
                 let Some(command) = command else {
                     break Some("language server client command channel closed".into());
                 };
-                match handle_command(command, &mut writer, &mut pending).await {
-                    Ok(DriverControl::Continue) => {}
-                    Ok(DriverControl::Stop) => break None,
-                    Err(()) => break Some("language server transport stopped while writing a client message".into()),
+                match tokio::time::timeout(write_timeout, handle_command(command, &mut writer, &mut pending)).await {
+                    Ok(Ok(DriverControl::Continue)) => {}
+                    Ok(Ok(DriverControl::Stop)) => break None,
+                    Ok(Err(())) => break Some("language server transport stopped while writing a client message".into()),
+                    Err(_) => break Some("language server transport write timed out".into()),
                 }
             }
             message = incoming_rx.recv() => {
                 match message {
                     Some(Ok(message)) => {
-                        if handle_incoming(message, &mut writer, &host, &dynamic_capabilities, &workspace_folders, &mut pending).await.is_err() {
+                        if !matches!(tokio::time::timeout(write_timeout, handle_incoming(message, &mut writer, &host, &dynamic_capabilities, &workspace_folders, &mut pending)).await, Ok(Ok(()))) {
                             break Some("language server transport stopped while handling a server message".into());
                         }
                     }

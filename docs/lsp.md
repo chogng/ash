@@ -1,8 +1,8 @@
 # 语言服务器系统
 
 > 状态：server provider、托管 Node、低层 LSP runtime 与产品级 LSP manager 已实现；Desktop/App Server
-> 已接入 revision-bound 语言请求与编辑器 provider，Desktop 仍保留既有 Rust、JSON/JSONC、Shell
-> 设置和 diagnostics presentation。
+> 已接入 revision-bound 语言请求与编辑器 provider，Desktop 负责服务器设置与
+> diagnostics presentation。
 > 本文拥有跨 crate 的语言能力语义、所有权和演进阶段；当前实现接口与修改路径由
 > [`ash-lsp` README](../crates/lsp/README.md) 和
 > [`ash-lsp-server-provider` README](../crates/lsp-server-provider/README.md)、
@@ -44,7 +44,7 @@ route 默认启用；显式 Config `Disabled` 仍可关闭。显式路径失效�
 
 ```mermaid
 flowchart LR
-    Host["Desktop host"] --> Providers["ash-lsp-server-provider"]
+    Host["App Server host"] --> Providers["ash-lsp-server-provider"]
     Pack["Verified language pack"] --> Provider["LanguageServerProvider"]
     Node["Managed JS runtime<br/>Electron or packaged Node"] --> Provider
     Provider --> Providers
@@ -55,7 +55,8 @@ flowchart LR
     Server --> Runtime
     Runtime --> Manager
     Manager --> Host
-    Host --> Editor["ash-editor / legacy editor runtime presentation"]
+    Host --> Workbench["Desktop / Browser Workbench"]
+    Workbench --> Editor["Editor presentation"]
 ```
 
 ## Extensions 与内置扩展
@@ -71,7 +72,7 @@ flowchart LR
 - 安装、卸载、配置变化后重新读取列表，并为仍打开的文档重建同步。已卸载服务器的晚到诊断被丢弃。
 - 同 ID 的已安装 provider 负责该服务器；用户显式 executable 配置传给该 provider，避免再创建同名 PATH 实例。
 - Node 服务器包的源码保留固定版本、lockfile 和构建配方；Extensions 在发布时组装依赖并签名。Ash 按需安装整个语言包，校验后缓存，不在用户机器上运行 npm。
-- Extensions 当前带服务器的语言包为 CSS/Less/SCSS、JSON/JSONC、Python、JavaScript/TypeScript 和 YAML；其他语法包的服务器需另行提供。
+- 2026-10-18 核对本地 Extensions 源仓库，带服务器的语言包为 CSS/Less/SCSS 和 YAML；JSON/JSONC、Python、TypeScript 等包仍只有静态语言资源。语言资源包存在不代表已附带或已发布服务器。
 - Web/Electron 的 `/lsp` 打开设置的“编辑器 → 语言服务器”，显示当前编辑器语言、可用服务器及配置；“查找服务器”打开统一 Extensions 页面，
   使用 `languageId` 与 `capabilityKind=executable` 查找明确路由，排除只有语法资源的包。安装前展示整个包。
   `/lsp` 可按工作区目录检查可用性，启用/停用服务器、保存宿主 executable 路径或移除配置覆盖。
@@ -126,7 +127,7 @@ Settings 高级 JSON 示例：
 2. 产品宿主把 preference、冻结的 executable candidates 和 execution policy 交给 resolver；resolver 只在候选
    可 canonicalize、为普通可执行文件时产生 resolved definition。对 package-backed CSS，宿主先把
    distribution activation authority 返回的 `InstalledLanguageServer` 和宿主选择的共享 Node-compatible runtime 注入
-   `CssLanguageServerProvider`；provider 产生同样的 definition，不直接启动 child。
+   `NodePackageLanguageServerProvider`；provider 产生同样的 definition，不直接启动 child。
 3. 产品宿主把 definitions 交给 `ash-lsp-manager`；无 definition 时禁用，不启动进程。
 4. 协调层把 resolved command 委托给 `ash-lsp`；后者启动或接入 transport、发送 initialize，
    并校验 server 选定的位置编码。
@@ -163,15 +164,14 @@ Git object identity 或 durable product sequence。
 | mode/path durable preference                          | ❌                 | 只消费 preference    | ❌                | ❌                 | Settings UI / adapter         | ✅ authority                |
 | directory capabilities / executable policy            | ❌                 | 只消费结果           | 只消费 definition | ❌                 | 协调                          | authority                   |
 
-`ash-editor` 保持纯 presentation，不依赖 provider、`ash-lsp` 或 manager。Desktop host 组合 provider、
-editor 和 `ash-lsp-manager`，只在 adapter 中转换文档与事件；其他 editor runtime host 可以消费相同系统语义，
-但不需要复用 Desktop paint types。
+`ash-editor` 保持纯 presentation，不依赖 provider、`ash-lsp` 或 manager。App Server 组合 provider 和 `ash-lsp-manager`；Desktop/Browser 的语言领域 adapter 通过 typed 协议同步
+编辑器快照并消费结果，编辑器 presentation 不需要依赖这些 Rust crate。其他产品宿主可以复用相同系统语义。
 App Server 拥有 Desktop 的 Environment-bound 目录访问与 LSP IPC boundary；Editor 仍拥有当前 document text 和 revision。App Server 只组合 provider、配置、
 `ash-lsp-manager` 和协议 DTO，不复制 LSP framing、process supervisor 或 Editor presentation。
 
 ## 3. 可靠性与失败语义
 
-- **有界 transport**：header 上限为 16 KiB，单消息上限为 4 MiB；非法 framing 或 envelope
+- **有界 transport**：header 上限为 16 KiB，单消息上限为 64 MiB；非法 framing 或 envelope
   明确终止 connection。
 - **初始化 gate**：initialize 失败、超时或选择不支持的位置编码时，不返回部分 ready client。
 - **请求隔离**：每个 request 使用唯一整数 ID 和独立 completion；普通请求超时后发送协议取消。
@@ -209,8 +209,8 @@ App Server 拥有 Desktop 的 Environment-bound 目录访问与 LSP IPC boundary
 - App Server 将 activation-confirmed provider、启用的扩展声明与显式启用的 built-in resolver 合并后交给同一 manager；
 - 独立 `ash-lsp-manager` supervisor、显式 enablement、resolved definition 校验、generation gate；
 - Desktop 文档 open/change/save/close、workspace replacement 与 event-loop adapter；
-- `ash-config` mode/path schema、App Server typed mutation/config notification，以及三个内置 server 的
-  Desktop Settings selector 与独立 draft；
+- `ash-config` mode/path schema、App Server typed mutation/config notification，以及通用的
+  Desktop Settings server 列表 与独立 draft；
 - config generation gate、server replacement 与全部打开文档 replay；
 - diagnostics freshness 校验、UTF-8/UTF-16 position conversion 和 product-neutral event；
 - Desktop revision gate、CodeEditor severity squiggle/soft-wrap projection 与 hover detail；
@@ -228,12 +228,12 @@ App Server 拥有 Desktop 的 Environment-bound 目录访问与 LSP IPC boundary
 - Extensions Language asset 投影到共享 Extension catalog，Executable 按 signed language route 和
   `node`/`direct` runtime 组合 provider；
 - App Server 通过通用 Extensions API 的 `packageType=language` 提供发现与安装，并在
-  install/update/uninstall 后热重建 provider collection；Desktop 已有消费服务，安装页面尚未接通；
+  install/update/uninstall 后重读精确 provider collection；Workbench 的 Extensions 页面与 `/lsp` 查找安装入口已接通；
 - in-memory protocol vertical tests。
 
 ### 计划
 
-1. 把 `UseLanguageServices` 与 `ExecuteCommands` 的 Authorization 映射为 resolver execution policy。
+1. 在现有目录授权入口继续扩展组织策略或 per-server grant；当前 App Server 已同时检查 `UseLanguageServices` 和 `ExecuteCommands`，不是未授权地调用 resolver。
 2. 增加 pull diagnostics 的 result-id cache、partial-result progress 与 `workspace/diagnostic/refresh`。
 3. 为更多 language-server family 增加领域初始化参数 adapter，并为未引用 artifact 增加独立
    garbage collection policy。
@@ -243,9 +243,21 @@ App Server 拥有 Desktop 的 Environment-bound 目录访问与 LSP IPC boundary
 
 ### 潜在方向
 
-远程 Environment 或共享 daemon 出现后，可以把 server execution 放到 App Server 后方；前置条件是
-定义 `Dir` Grant、document content transport、cancellation、incarnation、privacy 和
-disconnect recovery。当前本地 editor request 不承担这套远程成本。
+server execution 已位于 App Server，客户端通过带目录授权的协议提交文档快照和语言请求。
+不同连接保留独立文档 revision、会话与诊断目的地；关闭连接回收其资源。远程 Environment
+沿相同目录授权消费，跨系统进程行为与网络恢复仍需真实环境验收。
 
 长期不变量是：协议运行时不拥有编辑器文档，编辑器组件不解析 LSP，宿主不把旧文档版本的结果
 应用到当前 revision，未实现的 server capability 不对外宣称。
+
+## 并发与精确失效
+
+App Server 的共享目录仅管理来源快照和连接句柄。每个连接独立串行化短暂的文档／会话操作；
+`language/*` 不持有 RPC 调度器的全局读许可，配置写入与撤权能在慢查询期间继续执行。
+进程启动或获取不持有共享目录 mutex。请求在排入 manager 前按 ID 注册结果通道，等待前释放连接锁，
+不会消费另一个请求的结果。超时、取消或断连撤销结果通道和在途请求。
+
+包与配置变更按服务器维护单调 source version。无关主题、Skill、设置或未改变的 provider 不退休现有实例；
+同 ID 的版本／digest／路由变化、停用、卸载和撤权只退休受影响服务器，取消其请求和重启任务。
+manager 保留其他实例、未保存文档和在途请求；新实例获得新的 epoch 并重放文档。
+即使结果恰好在撤权前完成，App Server 交付前也再次比较 source version，拒绝旧来源的迟到结果。

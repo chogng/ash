@@ -12,20 +12,19 @@
 
 ## 所有权与公共接口
 
-| API / type                                                                  | 当前职责                                                                                                                                          | 明确不做                                              |
-| --------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------- |
-| `LspServerResolver`                                                         | 保存内置 server 与 preference，按 directory 生成一次冻结 resolution                                                                               | 持有 live client 或自动重启                           |
-| `LanguageServerPreference` / `LanguageServerMode`                           | 表达 Disabled、Enabled 和 authoritative executable override                                                                                       | 用布尔值混合启用与发现语义                            |
-| `LanguageServerExecutionPolicy`                                             | 接收产品宿主已经作出的 process allow/disallow 决策                                                                                                | 自行读取或持久化 directory capability                 |
-| `LanguageServerExecutableCandidates`                                        | 注入有优先级的冻结候选；`InstallContext` 是当前实现                                                                                               | 搜索时启动或 probe 进程                               |
-| `LspServerResolution`                                                       | 同时返回 resolved definitions 与每个内置 server 的 availability                                                                                   | 表示 server 已经 initialize                           |
-| `LanguageServerDefinition`                                                  | 冻结唯一 route、canonical executable command 和 initialize options                                                                                | 在 runtime 内重新查询 PATH                            |
-| `LanguageServerProvider` / `LspServerProviders`                             | 把已验证、已安装的 server 包和运行时绑定为稳定 language route 与 definition                                                                       | 下载、验签、启动进程或监督重启                        |
-| `ManagedNodeRuntime`                                                        | 冻结 canonical Node-compatible executable；Desktop 使用 Electron run-as-Node，其他 package 使用 standalone Node，并生成 clean-environment command | 回退 host `PATH` 或允许 language pack 携带 Node       |
-| `CssLanguageServerProvider`                                                 | 用共享 Node-compatible runtime 运行 verified CSS package 入口，route `css`/`less`/`scss`                                                          | 复制 LSP client/supervisor 或解释 Extensions metadata |
-| `NodePackageLanguageServerProvider` / `DirectPackageLanguageServerProvider` | 把 Manager-verified entrypoint 和 signed language route 绑定为 packaged provider                                                                  | 下载、安装、解析远端 catalog 或持有 live process      |
+| API / type                                                                  | 当前职责                                                                                                                                          | 明确不做                                         |
+| --------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------ |
+| `LspServerResolver`                                                         | 保存内置 server 与 preference，按 directory 生成一次冻结 resolution                                                                               | 持有 live client 或自动重启                      |
+| `LanguageServerPreference` / `LanguageServerMode`                           | 表达 Disabled、Enabled 和 authoritative executable override                                                                                       | 用布尔值混合启用与发现语义                       |
+| `LanguageServerExecutionPolicy`                                             | 接收产品宿主已经作出的 process allow/disallow 决策                                                                                                | 自行读取或持久化 directory capability            |
+| `LanguageServerExecutableCandidates`                                        | 注入有优先级的冻结候选；`InstallContext` 是当前实现                                                                                               | 搜索时启动或 probe 进程                          |
+| `LspServerResolution`                                                       | 同时返回 resolved definitions 与每个内置 server 的 availability                                                                                   | 表示 server 已经 initialize                      |
+| `LanguageServerDefinition`                                                  | 冻结唯一 route、canonical executable command 和 initialize options                                                                                | 在 runtime 内重新查询 PATH                       |
+| `LanguageServerProvider` / `LspServerProviders`                             | 把已验证、已安装的 server 包和运行时绑定为稳定 language route 与 definition                                                                       | 下载、验签、启动进程或监督重启                   |
+| `ManagedNodeRuntime`                                                        | 冻结 canonical Node-compatible executable；Desktop 使用 Electron run-as-Node，其他 package 使用 standalone Node，并生成 clean-environment command | 回退 host `PATH` 或允许 language pack 携带 Node  |
+| `NodePackageLanguageServerProvider` / `DirectPackageLanguageServerProvider` | 把 Manager-verified entrypoint 和 signed language route 绑定为 packaged provider                                                                  | 下载、安装、解析远端 catalog 或持有 live process |
 
-resolver 保留 JSON/JSONC、Shell 和 TypeScript 的冻结 PATH 入口；Rust 路由只来自内置 Rust 扩展，核心已移除旧 Rust resolver 入口。CSS 是独立 provider。产品从
+resolver 保留 JSON/JSONC、Shell 和 TypeScript 的冻结 PATH 入口；Rust 路由只来自内置 Rust 扩展，核心已移除旧 Rust resolver 入口。CSS、YAML 等包统一使用通用 Node/direct provider。产品从
 Config snapshot 映射持久化 preference；
 Rust 扩展声明默认启用；其余 PATH built-in 未配置时使用 `Disabled`，需要显式选择 `Enabled` 才会生成 definition；
 activation-backed provider 的用户安装确认已经构成启用意图，未配置时生成 packaged definition，显式
@@ -82,21 +81,21 @@ verified Extensions package composition
 ## 测试与当前限制
 
 ```bash
-cargo test --manifest-path Cargo.toml -p ash-lsp-server-provider
-cargo clippy --manifest-path Cargo.toml -p ash-lsp-server-provider --all-targets -- -D warnings
+just test ash-lsp-server-provider
+just rust-warnings ash-lsp-server-provider
 ```
 
-测试覆盖三项 built-in 的 Enabled PATH resolution/route/launch arguments、execution policy gate、
-失效 explicit override 不回退，以及 CSS package 的 standalone/Electron runtime command、clean
+测试覆盖 JSON、Shell、JS/TS 的 built-in 的 Enabled PATH resolution/route/launch arguments、execution policy gate、
+失效 explicit override 不回退，以及 Node package 的 standalone/Electron runtime command、clean
 environment、host override 和 duplicate provider gate。
 
 当前限制：
 
-- ✅ Rust server 的 frozen PATH 发现、canonical executable 和 product-neutral availability；
-- ✅ `ash-config` 持久化 mode/path、App Server typed mutation 与 Desktop 三项 server Settings selector；
+- ✅ 内置扩展声明的按需探测／获取、canonical executable 和 product-neutral availability；
+- ✅ `ash-config` 持久化 mode/path、App Server typed mutation 与 Desktop 通用 server Settings 列表；
 - ✅ JSON/JSONC、Shell server definitions 与持久化 mode/path 映射；
 - ✅ 通用 `ash-core-plugins` 提供整包 digest 复核、immutable artifact、安装/update/uninstall 和 lease；
-- ✅ verified CSS package provider、managed Node-compatible runtime 启动命令、App Server provider 组合点与 host override；
+- ✅ verified Node/direct package provider、managed Node-compatible runtime 启动命令、App Server provider 组合点与 host override；
 - ✅ Extensions Language target 的通用 TUF 下载/解压 adapter、Settings 安装 UI，以及从 verified
   Language/Executable capability 自动构建 `node`/`direct` provider collection；
 - 尚未完成：组织策略或更细的 per-server executable grant。
@@ -113,3 +112,11 @@ Extensions 的整包停用与 LSP 设置的 server Disabled 都阻止探测和�
 `LanguageServerDefinition` 可携带标准化的启动参数、settings 和运行期资源 lease；配置覆盖保留
 Node 脚本前缀、环境策略及 lease。包来源 adapter 在解析 definition 时取得精确 package lease，
 provider 目录自身不持有活跃租约；manager 保留 definition 到进程监管结束。
+
+## Provider 身份与失效
+
+App Server 的 Extensions adapter 按 `LocalCapabilitySource` 缓存 provider，其比较包含精确 package
+版本／digest、capability、入口、runtime 与语言路由。无关主题或 Skill 的变化复用同一个共享 provider；
+停用、移除或损坏包会撤下缓存，重新启用创建新实例。同 ID 更新必须退休旧 source，不能按 ID 复用。
+`same_provider` 比较这一精确共享身份及 activation 状态；`same_launch` 仅用于 manager 保留未改变的
+启动契约，不能替代 source 撤权检查。

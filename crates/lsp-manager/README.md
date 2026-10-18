@@ -6,14 +6,14 @@
 
 `ash-lsp-manager` 位于产品宿主与 `ash-lsp` 之间。它拥有语言服务启停、调用方已经解析并
 验证过的 server definitions、文档快照路由、editor revision freshness、LSP position 到 UTF-8 byte range
-的转换，以及 supervisor thread 生命周期。它不读取文件、不拥有 mutable editor text、不发现或
+的转换，以及 supervisor thread 生命周期。它不读取文件、不作为编辑器文本 authority、不发现或
 安装 executable，也不绘制诊断、补全或 hover UI。
 
 ## 所有权与公共接口
 
 | API / type                                                      | 当前职责                                                                                                                  | 明确不做                                       |
 | --------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------- |
-| `LspManager`                                                    | 提供非阻塞文档 API并拥有 supervisor thread、Tokio runtime、router 与 clients                                              | 保存编辑器文本或直接修改 UI                    |
+| `LspManager`                                                    | 提供非阻塞文档 API并拥有 supervisor thread、Tokio runtime、router 与 clients                                              | 拥有编辑器文本 authority 或直接修改 UI         |
 | `LspManagerConfiguration`                                       | 固定 directory root、启用状态和 resolved server definitions                                                               | 读取设置、PATH 或安装目录                      |
 | `LanguageServerRestartPolicy`                                   | 定义 Never 或有限指数退避、重启预算和 healthy-window reset                                                                | 发现 executable 或绘制错误 UI                  |
 | `LanguageServerState`                                           | 向产品发布 Starting、Ready、BackingOff、CrashLoop、Failed、Stopped                                                        | 保存设置或作为协议状态                         |
@@ -36,7 +36,7 @@ App 迁移兼容层。
 ## 内部执行路径
 
 ```text
-Desktop / another product host
+App Server / another product host
   → LspManager::synchronize_document(full snapshot)
   → SupervisorCommand::Synchronize
   → Supervisor
@@ -113,8 +113,8 @@ ownership 漂移。
 ## 测试、修改影响与当前限制
 
 ```bash
-cargo test --manifest-path Cargo.toml -p ash-lsp-manager
-cargo clippy --manifest-path Cargo.toml -p ash-lsp-manager --all-targets -- -D warnings
+just test ash-lsp-manager
+just rust-warnings ash-lsp-manager
 ```
 
 测试覆盖禁用模式的文档生命周期、启动失败隔离、resolver 歧义校验、精确重启预算、backoff 期间
@@ -129,8 +129,8 @@ server 选定的位置编码。
 - ✅ 产品级 supervisor、resolved definition 消费、显式启停、文档路由和规范 shutdown；
 - ✅ diagnostics freshness 与 product-neutral byte-range projection；
 - ✅ Desktop 已通过独立 adapter 接入 editor open/change/save/close 和 directory change；
-- ✅ Desktop 通过独立 resolver 自动解析 PATH 中的 Rust、JSON/JSONC 与 Shell server，不可用时保持 Disabled；
-- ✅ Desktop 消费 App Server Config snapshot，三个内置 server 均支持独立持久化 mode/path、Settings UI、
+- ✅ Rust 由内置扩展声明默认启用并按需获取；JSON/JSONC、Shell、JS/TS 的 PATH resolver 默认关闭；
+- ✅ Desktop 消费 App Server Config snapshot，每个 server 均支持独立持久化 mode/path、Settings UI、
   热重配和打开文档重放；
 - ✅ Desktop host 已把 neutral diagnostics 接入 CodeEditor decoration 与 hover detail；本 crate 仍不拥有 UI；
 - ✅ 意外 transport close、断连 route retirement、有限指数退避、healthy-window reset、crash-loop gate
@@ -149,10 +149,10 @@ server 选定的位置编码。
   definition navigation；
 - ✅ Desktop 已把 completion resolve/commands、additional edits、semantic tokens 和文档特性接入现有 Editor contract；多 definition target 复用 Peek 列表；
 - 尚未完成：diagnostic result-id/partial-result/refresh；
-- 尚未完成：server-specific distribution provider 与产品级 message/install UI；
+- ✅ App Server 消费已验证的 Node/direct 语言包；Workbench 通过 Extensions 安装服务器，日志、消息与进度接入 Output、Dialog 和状态栏；
 - 尚未安装：references/navigation session cache；先由现有指标证明重复成本，再设计 incarnation/revision
   完整绑定的 key 与失效规则；
-- Potential：远程 directory authority 出现后再评估是否把 execution 放到 App Server。
+- ✅ server execution 已由 App Server 承载，目录授权与客户端连接生命周期由产品宿主检查；跨系统远程体验仍需各平台验收。
 
 ## 配置与保存
 
@@ -162,3 +162,15 @@ server 选定的位置编码。
 随 incarnation 的 capability snapshot 发布，客户端按实际声明注册补全和签名帮助。
 `save_document(path, saved_text)` 在同一 supervisor 队列发送 didSave，不覆盖更新的 dirty snapshot。
 连接隔离和断连回收归 App Server 的运行期 owner；manager 本身不解释客户端连接身份。
+
+## 精确替换与请求结果
+
+`replace_servers` 接受完整的 resolved definition 集合，保留启动契约不变的实例、文档绑定和在途请求。
+`retire_servers` 立即撤销指定 source 的 route、重启任务和请求，其他服务器继续服务。
+宿主在同 ID 的包更新、停用或撤权时先 retire，再提交新定义；不能仅比较服务器名称。
+每次启动分配新的 server epoch，移除后重新添加同名服务器也不会复用旧 epoch。
+退役实例的 graceful shutdown 在独立 task 中完成，原 definition 保留 lease 到进程回收。
+
+`LspManagerEventSink::on_request_queued` 在请求发往 supervisor 前注册结果目的地，随后由
+`RequestResult` 按 request ID 交付。App Server 在等待结果前释放连接 mutex，不持有目录／包目录的共享锁；
+取消、超时、连接关闭或 source version 变化均撤下该请求的结果目的地并取消协议请求。

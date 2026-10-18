@@ -479,6 +479,13 @@ impl From<LanguageServiceEvent> for LspManagerEvent {
 
 /// Non-blocking destination for the manager's typed event stream.
 pub trait LspManagerEventSink: Send + Sync + 'static {
+    /// Register a result destination before this request can reach the supervisor. The callback
+    /// runs on the caller's thread and must not call back into the manager.
+    fn on_request_queued(&self, _request: LanguageRequestId) {}
+
+    /// Discard the result destination when queueing fails or the caller cancels a request.
+    fn on_request_abandoned(&self, _request: LanguageRequestId) {}
+
     fn on_event(&self, event: LspManagerEvent);
 }
 
@@ -531,8 +538,9 @@ impl LspManagerEventSink for NoopLspManagerEventSink {
 /// Callers retain authoritative text and send full snapshots whenever their revision changes.
 pub struct LspManager {
     commands: mpsc::UnboundedSender<SupervisorCommand>,
-    thread: Option<JoinHandle<()>>,
+    thread: std::sync::Mutex<Option<JoinHandle<()>>>,
     next_request_id: AtomicU64,
+    events: Arc<dyn LspManagerEventSink>,
 }
 
 impl LspManager {
@@ -586,6 +594,7 @@ impl LspManager {
         let (commands, receiver) = mpsc::unbounded_channel();
         let (started_tx, started_rx) = std_mpsc::sync_channel(1);
         let thread_commands = commands.clone();
+        let thread_events = Arc::clone(&events);
         let thread = std::thread::Builder::new()
             .name("ash-lsp-manager".into())
             .spawn(move || {
@@ -598,7 +607,7 @@ impl LspManager {
                     Ok(runtime) => {
                         let _ = started_tx.send(Ok(()));
                         runtime.block_on(
-                            Supervisor::new(configuration, events, metrics, thread_commands)
+                            Supervisor::new(configuration, thread_events, metrics, thread_commands)
                                 .run(receiver),
                         );
                     }
@@ -611,8 +620,9 @@ impl LspManager {
         match started_rx.recv() {
             Ok(Ok(())) => Ok(Self {
                 commands,
-                thread: Some(thread),
+                thread: std::sync::Mutex::new(Some(thread)),
                 next_request_id: AtomicU64::new(1),
+                events,
             }),
             Ok(Err(error)) => {
                 let _ = thread.join();
@@ -651,8 +661,29 @@ impl LspManager {
         self.send(SupervisorCommand::SetEnablement(enablement))
     }
 
+    /// Replaces resolved definitions while retaining unchanged server instances and their
+    /// document bindings. Hosts retire revoked sources before supplying any replacement.
+    pub fn replace_servers(
+        &self,
+        definitions: Vec<LanguageServerDefinition>,
+        configuration_generation: u64,
+    ) -> Result<(), LspManagerError> {
+        validate_server_definitions(&definitions)?;
+        self.send(SupervisorCommand::ReplaceServers {
+            definitions,
+            configuration_generation,
+        })
+    }
+
+    /// Immediately invalidates the named sources without disrupting unrelated servers. A
+    /// retired name cannot restart until the host supplies a new resolved definition.
+    pub fn retire_servers(&self, names: Vec<String>) -> Result<(), LspManagerError> {
+        self.send(SupervisorCommand::RetireServers(names))
+    }
+
     /// Cancels one queued or in-flight request. Unknown or already completed IDs are a no-op.
     pub fn cancel_request(&self, request_id: LanguageRequestId) -> Result<(), LspManagerError> {
+        self.events.on_request_abandoned(request_id);
         self.send(SupervisorCommand::CancelLanguageRequest(request_id))
     }
 
@@ -876,11 +907,14 @@ impl LspManager {
         query: impl Into<String>,
     ) -> Result<LanguageRequestId, LspManagerError> {
         let id = self.next_request_id();
-        self.send(SupervisorCommand::WorkspaceSymbols {
+        self.send_tracked_request(
             id,
-            language_id: language_id.into(),
-            query: query.into(),
-        })?;
+            SupervisorCommand::WorkspaceSymbols {
+                id,
+                language_id: language_id.into(),
+                query: query.into(),
+            },
+        )?;
         Ok(id)
     }
 
@@ -889,10 +923,13 @@ impl LspManager {
         language_id: impl Into<String>,
     ) -> Result<LanguageRequestId, LspManagerError> {
         let id = self.next_request_id();
-        self.send(SupervisorCommand::DirectoryDiagnostics {
+        self.send_tracked_request(
             id,
-            language_id: language_id.into(),
-        })?;
+            SupervisorCommand::DirectoryDiagnostics {
+                id,
+                language_id: language_id.into(),
+            },
+        )?;
         Ok(id)
     }
 
@@ -1162,15 +1199,21 @@ impl LspManager {
         })
     }
 
-    pub fn shutdown(mut self) -> Result<(), LspManagerError> {
+    pub fn shutdown(&self) -> Result<(), LspManagerError> {
+        let Some(thread) = self
+            .thread
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .take()
+        else {
+            return Ok(());
+        };
         let (completion, response) = std_mpsc::sync_channel(1);
         self.send(SupervisorCommand::Shutdown { completion })?;
         response
             .recv_timeout(SHUTDOWN_TIMEOUT)
             .map_err(|_| LspManagerError::ShutdownTimeout)?;
-        if let Some(thread) = self.thread.take() {
-            let _ = thread.join();
-        }
+        let _ = thread.join();
         Ok(())
     }
 
@@ -1185,8 +1228,21 @@ impl LspManager {
         request: PendingLanguageRequest,
     ) -> Result<LanguageRequestId, LspManagerError> {
         let id = request.id();
-        self.send(SupervisorCommand::LanguageRequest(request))?;
+        self.send_tracked_request(id, SupervisorCommand::LanguageRequest(request))?;
         Ok(id)
+    }
+
+    fn send_tracked_request(
+        &self,
+        id: LanguageRequestId,
+        command: SupervisorCommand,
+    ) -> Result<(), LspManagerError> {
+        self.events.on_request_queued(id);
+        if let Err(error) = self.send(command) {
+            self.events.on_request_abandoned(id);
+            return Err(error);
+        }
+        Ok(())
     }
 
     fn next_request_id(&self) -> LanguageRequestId {
@@ -1196,7 +1252,12 @@ impl LspManager {
 
 impl Drop for LspManager {
     fn drop(&mut self) {
-        if self.thread.is_some() {
+        if self
+            .thread
+            .get_mut()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .is_some()
+        {
             let (completion, _) = std_mpsc::sync_channel(1);
             let _ = self
                 .commands
@@ -1213,6 +1274,11 @@ enum SupervisorCommand {
     },
     Close(PathBuf),
     SetEnablement(LspManagerEnablement),
+    ReplaceServers {
+        definitions: Vec<LanguageServerDefinition>,
+        configuration_generation: u64,
+    },
+    RetireServers(Vec<String>),
     ProtocolEvent {
         server: LanguageServerName,
         generation: u64,
@@ -1220,6 +1286,7 @@ enum SupervisorCommand {
         event: LanguageServerEvent,
     },
     ServerStarted {
+        definition: LanguageServerDefinition,
         server: LanguageServerName,
         generation: u64,
         server_epoch: u64,
@@ -1301,6 +1368,8 @@ struct InFlightLanguageRequest {
     service_generation: u64,
     cold_for_incarnation: bool,
     started: Instant,
+    path: PathBuf,
+    revision: LanguageDocumentRevision,
 }
 
 struct Supervisor {
@@ -1317,6 +1386,8 @@ struct Supervisor {
     in_flight_requests: BTreeMap<LanguageRequestId, InFlightLanguageRequest>,
     observed_request_kinds: BTreeSet<(LanguageServerName, u64, LanguageRequestKind)>,
     generation: u64,
+    next_server_epoch: u64,
+    retirements: Vec<tokio::task::JoinHandle<()>>,
 }
 
 impl Supervisor {
@@ -1356,6 +1427,8 @@ impl Supervisor {
             in_flight_requests: BTreeMap::new(),
             observed_request_kinds: BTreeSet::new(),
             generation: 0,
+            next_server_epoch: 0,
+            retirements: Vec::new(),
         }
     }
 
@@ -1371,6 +1444,20 @@ impl Supervisor {
                 SupervisorCommand::SetEnablement(enablement) => {
                     self.set_enablement(enablement).await;
                 }
+                SupervisorCommand::ReplaceServers {
+                    definitions,
+                    configuration_generation,
+                } => {
+                    self.configuration.generation = configuration_generation;
+                    self.replace_servers(definitions).await;
+                }
+                SupervisorCommand::RetireServers(names) => {
+                    for name in names {
+                        if let Ok(name) = LanguageServerName::new(name) {
+                            self.retire_server(&name).await;
+                        }
+                    }
+                }
                 SupervisorCommand::ProtocolEvent {
                     server,
                     generation,
@@ -1382,14 +1469,22 @@ impl Supervisor {
                 }
                 SupervisorCommand::ProtocolEvent { .. } => {}
                 SupervisorCommand::ServerStarted {
+                    definition,
                     server,
                     generation,
                     server_epoch,
                     route,
                     result,
                 } => {
-                    self.handle_server_started(server, generation, server_epoch, route, result)
-                        .await;
+                    self.handle_server_started(
+                        server,
+                        generation,
+                        server_epoch,
+                        route,
+                        definition,
+                        result,
+                    )
+                    .await;
                 }
                 SupervisorCommand::RetryServer {
                     server,
@@ -1876,9 +1971,16 @@ impl LanguageServerHost for ProtocolEventBridge {
 }
 
 fn validate_definitions(configuration: &LspManagerConfiguration) -> Result<(), LspManagerError> {
+    validate_server_definitions(&configuration.servers)?;
+    file_uri(&configuration.dir_root).map(|_| ())
+}
+
+fn validate_server_definitions(
+    definitions: &[LanguageServerDefinition],
+) -> Result<(), LspManagerError> {
     let mut names = BTreeSet::new();
     let mut languages = BTreeSet::new();
-    for definition in &configuration.servers {
+    for definition in definitions {
         if !names.insert(definition.name().to_string()) {
             return Err(LspManagerError::DuplicateServer(
                 definition.name().to_string(),
@@ -1890,7 +1992,7 @@ fn validate_definitions(configuration: &LspManagerConfiguration) -> Result<(), L
             }
         }
     }
-    file_uri(&configuration.dir_root).map(|_| ())
+    Ok(())
 }
 
 fn router_snapshot(current: &DocumentState) -> Result<LanguageDocumentSnapshot, LspManagerError> {

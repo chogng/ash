@@ -86,7 +86,7 @@ UTF-8。
 ## 协议、失败与宿主义务
 
 Transport 使用 LSP stdio 的 `Content-Length` framing。Header 最多 16 KiB，单条 JSON message
-最多 4 MiB；缺少或重复 `Content-Length`、非 JSON-RPC 2.0 envelope、非整数 client response ID
+最多 64 MiB；缺少或重复 `Content-Length`、非 JSON-RPC 2.0 envelope、非整数 client response ID
 和同时缺少 result/error 的 response 都会关闭当前 driver。服务端 request 目前支持
 `workspace/configuration`、`workspace/workspaceFolders`、`client/registerCapability`、`client/unregisterCapability` 和
 `window/workDoneProgress/create`；其他 request 返回 JSON-RPC `Method not found` 并产生
@@ -115,8 +115,8 @@ child，最后返回原 shutdown error。Client 被直接 drop 时 child 使用 
 ## 测试、修改影响与当前限制
 
 ```bash
-cargo test --manifest-path Cargo.toml -p ash-lsp
-cargo clippy --manifest-path Cargo.toml -p ash-lsp --all-targets -- -D warnings
+just test ash-lsp
+just rust-warnings ash-lsp
 bazel test //crates/lsp:lsp-unit-tests
 ```
 
@@ -150,3 +150,13 @@ Desktop position conversion；增加 server request 时必须先定义宿主 aut
 保存通过 `save_document(uri, saved_text)` 接收实际写盘文本；需要 includeText 的服务器获得该文本，
 当前未保存 snapshot 和 revision 保持不变。`workspace/workspaceFolders` 返回本 session 初始化时的
 workspace folder 快照，与 capability 声明保持一致。
+
+## 阻塞传输与清理
+
+initialize deadline 覆盖请求、响应与 `initialized` 写入。driver 的每次消息写入也有 request deadline；
+管道背压超时会结束整个 transport，避免部分写入后继续发送导致 framing 或 document version 失配。
+shutdown deadline 覆盖 handshake、`exit`、driver 退出和正常 child wait；到期后中止 driver 并执行有界强制回收。
+终止后的 driver 不能留下 reader task，取消初始化 future 或最后一个 client owner 释放时同样撤销 transport。
+
+`LanguageServerDocumentRouter::remove_server` 立即移除指定 route 与文档绑定并转移 client 所有权；
+manager 可在后台关闭旧实例，使其他服务器继续处理请求，并保留旧 package lease 到进程回收完成。

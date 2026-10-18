@@ -9,17 +9,16 @@ use ash_http_client::HttpClient;
 use ash_lsp::LanguageServerCommand;
 use ash_package_store::ExecutableRelease;
 use ash_package_store::InstalledExecutable;
-use ash_package_store::PackageLease;
 
 use crate::LanguageServerDefinition;
 use crate::LanguageServerExecutableCandidates;
 use serde::Deserialize;
+use serde::Serialize;
 use std::collections::BTreeMap;
 
 /// One verified launch and, for managed binaries, its package lifetime.
 pub struct ManagedLanguageServer {
     definition: LanguageServerDefinition,
-    _lease: Option<PackageLease>,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -36,7 +35,7 @@ pub enum ManagedLanguageServerError {
 
 /// A product extension owns executable selection and acquisition policy. Only trusted built-in
 /// packages may supply this declaration; discovery does not execute probes or download assets.
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct LanguageServerAcquisition {
     pub id: String,
@@ -50,6 +49,14 @@ pub struct LanguageServerAcquisition {
 }
 
 impl LanguageServerAcquisition {
+    /// Compares normalized declarations, including every pinned release and launch option.
+    pub fn same_policy(&self, other: &Self) -> bool {
+        match (serde_json::to_value(self), serde_json::to_value(other)) {
+            (Ok(left), Ok(right)) => left == right,
+            _ => false,
+        }
+    }
+
     /// Decodes and validates the versioned contribution at the extension package boundary.
     pub fn from_contribution(
         value: serde_json::Value,
@@ -135,10 +142,7 @@ impl LanguageServerAcquisition {
         };
         for path in paths {
             if let Some(definition) = self.probe(&path, dir_root, &effective_environment) {
-                return Ok(ManagedLanguageServer {
-                    definition,
-                    _lease: None,
-                });
+                return Ok(ManagedLanguageServer { definition });
             }
         }
         if let Some(path) = explicit {
@@ -149,8 +153,7 @@ impl LanguageServerAcquisition {
             .probe(&installed.path, dir_root, &effective_environment)
             .ok_or_else(|| ManagedLanguageServerError::Unavailable(installed.path.clone()))?;
         Ok(ManagedLanguageServer {
-            definition,
-            _lease: Some(installed.lease),
+            definition: definition.with_lease(installed.lease),
         })
     }
 

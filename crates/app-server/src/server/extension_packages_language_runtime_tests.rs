@@ -557,7 +557,19 @@ impl ExtensionSource for LanguageRegistry {
         request: DownloadPackageRequest,
     ) -> Result<Box<dyn ExtensionPackagePayload>, ExtensionsClientError> {
         match request.package_id.as_str() {
-            "example.demo-language" => Ok(Box::new(LanguagePayload::new())),
+            "example.demo-language" => {
+                let mut payload = LanguagePayload::new();
+                if request.version.as_deref() == Some("2.0.0") {
+                    payload.package.version = "2.0.0".into();
+                    payload.entrypoint = b"// updated server contents\n";
+                    payload.capabilities[1].language_ids = vec!["demo2".into()];
+                    payload.package.digest = package_digest(&[
+                        ("language/package.json", LANGUAGE_MANIFEST),
+                        ("server/demo.js", payload.entrypoint),
+                    ]);
+                }
+                Ok(Box::new(payload))
+            }
             "example.broken-language" => {
                 let mut payload = LanguagePayload::new();
                 payload.package.id = "example.broken-language".into();
@@ -922,13 +934,13 @@ fn language_package_changes_retire_idle_peer_runtime_and_complete_deferred_unins
     ));
     peer.lock().unwrap().set_server_providers(providers);
     // A manager retains configured definitions before any document starts its process.
-    peer.lock().unwrap().manager = Some(
+    peer.lock().unwrap().manager = Some(Arc::new(
         ash_lsp_manager::LspManager::start_with_events(
             ash_lsp_manager::LspManagerConfiguration::enabled(root.path(), vec![definition]),
             Arc::new(ash_lsp_manager::NoopLspManagerEventSink),
         )
         .unwrap(),
-    );
+    ));
     let _watcher =
         ExtensionsChangeWatcher::start_language_runtime(None, runtime, peer.clone()).unwrap();
     assert!(
@@ -961,7 +973,7 @@ fn language_package_changes_retire_idle_peer_runtime_and_complete_deferred_unins
             .is_empty(),
         "an idle peer must release its lease without a renderer request"
     );
-    assert!(peer.lock().unwrap().manager.is_none());
+    // The coordinator can survive with no routes; the retired definition must release its lease.
     assert!(
         peer.lock()
             .unwrap()
@@ -1038,4 +1050,93 @@ fn damaged_executable_package_does_not_hide_a_healthy_server_or_prevent_its_disa
         )
         .unwrap();
     assert!(runtime.providers().unwrap().is_empty());
+}
+
+#[test]
+fn exact_language_provider_identity_survives_unrelated_packages_and_changes_on_update_or_reenable()
+{
+    let root = tempfile::tempdir().unwrap();
+    let node = root.path().join("node");
+    fs::write(&node, b"runtime").unwrap();
+    make_executable(&node);
+    let manager = Arc::new(
+        ExtensionPackageManager::open(
+            root.path().join("manager"),
+            providers(Arc::new(LanguageRegistry)),
+        )
+        .unwrap(),
+    );
+    let installed = manager
+        .install(InstallPackageRequest {
+            package_id: "example.demo-language@test".into(),
+            version: Some("1.0.0".into()),
+        })
+        .unwrap();
+    let policy = Arc::new(
+        ash_core_plugins::EditorExtensionPolicy::open(root.path().join("policy.json")).unwrap(),
+    );
+    let mut runtime = ExtensionsLanguageRuntime::new(
+        manager.clone(),
+        Some(ManagedNodeRuntime::from_path(node).unwrap()),
+        LspServerProviders::new(),
+    );
+    runtime.set_editor_extension_policy(policy.clone());
+    let first = runtime.providers().unwrap();
+    manager
+        .install(InstallPackageRequest {
+            package_id: "example.demo-theme@test".into(),
+            version: Some("1.0.0".into()),
+        })
+        .unwrap();
+    assert!(
+        first.ptr_eq(&runtime.clone().providers().unwrap()),
+        "installing a theme cannot replace a language provider"
+    );
+    let executable = installed
+        .capabilities
+        .iter()
+        .find(|capability| capability.kind == CapabilityKind::Executable)
+        .unwrap();
+    policy
+        .set(
+            &installed.package,
+            &executable.reference,
+            ash_core_plugins::EditorExtensionPolicyAction::Disable,
+            policy.generation(),
+        )
+        .unwrap();
+    assert!(runtime.providers().unwrap().is_empty());
+    policy
+        .set(
+            &installed.package,
+            &executable.reference,
+            ash_core_plugins::EditorExtensionPolicyAction::Enable,
+            policy.generation(),
+        )
+        .unwrap();
+    let restored = runtime.providers().unwrap();
+    assert!(
+        !first.same_provider(&restored, "demo-language-server"),
+        "reenabling must not reuse a retired provider instance"
+    );
+    manager
+        .update(ash_core_plugins::UpdatePackageRequest {
+            installation_id: installed.installation_id,
+            version: Some("2.0.0".into()),
+        })
+        .unwrap();
+    let updated = runtime.providers().unwrap();
+    assert!(
+        !restored.same_provider(&updated, "demo-language-server"),
+        "a stable server ID cannot hide a new version, digest or route"
+    );
+    let definition = updated
+        .definition(
+            "demo-language-server",
+            root.path(),
+            LspServerLaunch::Packaged,
+        )
+        .unwrap()
+        .unwrap();
+    assert_eq!(definition.language_ids().collect::<Vec<_>>(), ["demo2"]);
 }

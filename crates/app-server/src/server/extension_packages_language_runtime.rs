@@ -14,6 +14,11 @@ pub(crate) struct ExtensionsLanguageRuntime {
     node: Option<ManagedNodeRuntime>,
     base: LspServerProviders,
     policy: Option<Arc<ash_core_plugins::EditorExtensionPolicy>>,
+    // Stable identities let consumers distinguish an unrelated catalog change from a new
+    // version, digest, entrypoint, runtime or language route of the same server ID.
+    providers: Arc<
+        std::sync::Mutex<std::collections::BTreeMap<String, Arc<PackageLanguageServerProvider>>>,
+    >,
 }
 
 impl ExtensionsLanguageRuntime {
@@ -27,6 +32,7 @@ impl ExtensionsLanguageRuntime {
             node,
             base,
             policy: None,
+            providers: Arc::new(Default::default()),
         }
     }
 
@@ -47,6 +53,11 @@ impl ExtensionsLanguageRuntime {
             .local_capability_source_snapshot(CapabilityKind::Executable)
             .map_err(|error| error.to_string())?;
         let mut providers = self.base.clone();
+        let mut cached = self
+            .providers
+            .lock()
+            .map_err(|_| "language-server provider cache is unavailable")?;
+        let mut retained = std::collections::BTreeSet::new();
         for (package, error) in executables.failures {
             log::error!(
                 "language-server package {} is unavailable: {error}",
@@ -76,6 +87,16 @@ impl ExtensionsLanguageRuntime {
             if languages.is_empty() {
                 continue;
             }
+            if let Some(provider) = cached
+                .get(executable.id())
+                .filter(|provider| provider.source == executable)
+            {
+                providers
+                    .register_packaged_shared(provider.clone())
+                    .map_err(|error| error.to_string())?;
+                retained.insert(executable.id().to_owned());
+                continue;
+            }
             let provider =
                 (|| -> Result<Box<dyn ash_lsp_server_provider::LanguageServerProvider>, String> {
                     match executable.runtime().unwrap_or("node") {
@@ -102,19 +123,26 @@ impl ExtensionsLanguageRuntime {
                     }
                 })();
             match provider {
-                Ok(provider) => providers
-                    .register_packaged(PackageLanguageServerProvider {
+                Ok(provider) => {
+                    let id = executable.id().to_owned();
+                    let provider = Arc::new(PackageLanguageServerProvider {
                         manager: Arc::clone(&self.manager),
                         source: executable,
                         provider,
-                    })
-                    .map_err(|error| error.to_string())?,
+                    });
+                    providers
+                        .register_packaged_shared(provider.clone())
+                        .map_err(|error| error.to_string())?;
+                    cached.insert(id.clone(), provider);
+                    retained.insert(id);
+                }
                 Err(error) => log::error!(
                     "language server {} is unavailable: {error}",
                     executable.id()
                 ),
             }
         }
+        cached.retain(|id, _| retained.contains(id));
         Ok(providers)
     }
 }

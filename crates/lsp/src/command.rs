@@ -20,7 +20,7 @@ pub enum LanguageServerEnvironmentPolicy {
 ///
 /// Server discovery, executable verification, installation, sandboxing, and environment policy belong to
 /// the caller. This value only preserves the resolved process launch contract.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct LanguageServerCommand {
     program: OsString,
     #[cfg(unix)]

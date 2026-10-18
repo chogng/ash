@@ -338,18 +338,31 @@ impl LanguageServerDocumentRouter {
         &mut self,
         name: &LanguageServerName,
     ) -> Result<usize, LanguageServerRouterError> {
+        let removed = self
+            .documents
+            .values()
+            .filter(|document| &document.server_name == name)
+            .count();
+        let client = self.remove_server(name)?;
+        client.abort_disconnected().await;
+        Ok(removed)
+    }
+
+    /// Removes a route and its protocol document bindings immediately, returning its client
+    /// so a supervisor can shut it down without blocking unrelated live servers.
+    pub fn remove_server(
+        &mut self,
+        name: &LanguageServerName,
+    ) -> Result<LanguageServerClient, LanguageServerRouterError> {
         let server = self.servers.remove(name).ok_or_else(|| {
             LanguageServerRouterError::ServerNotRegistered {
                 server: name.clone(),
             }
         })?;
         self.language_routes.retain(|_, server| server != name);
-        let before = self.documents.len();
         self.documents
             .retain(|_, document| &document.server_name != name);
-        let removed_documents = before - self.documents.len();
-        server.client.abort_disconnected().await;
-        Ok(removed_documents)
+        Ok(server.client)
     }
 
     pub async fn shutdown(self) -> Vec<LanguageServerShutdownFailure> {

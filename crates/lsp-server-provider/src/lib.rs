@@ -5,7 +5,6 @@
 //! package on demand; process supervision and editor documents remain with the LSP runtime.
 
 mod acquisition;
-mod css;
 mod definition;
 mod direct_package;
 mod error;
@@ -20,13 +19,10 @@ pub const JSON_LANGUAGE_SERVER_ID: &str = "vscode-json-language-server";
 pub const BASH_LANGUAGE_SERVER_ID: &str = "bash-language-server";
 /// Stable built-in identity for JavaScript and TypeScript language intelligence.
 pub const TYPESCRIPT_LANGUAGE_SERVER_ID: &str = "typescript-language-server";
-/// Stable provider identity for the Extensions CSS/SCSS/Less language server.
-pub const CSS_LANGUAGE_SERVER_ID: &str = "css-language-server";
 
 pub use acquisition::LanguageServerAcquisition;
 pub use acquisition::ManagedLanguageServer;
 pub use acquisition::ManagedLanguageServerError;
-pub use css::CssLanguageServerProvider;
 pub use definition::LanguageServerDefinition;
 pub use direct_package::DirectPackageLanguageServerProvider;
 pub use error::LspServerResolverError;

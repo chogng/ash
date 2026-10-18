@@ -6,13 +6,12 @@ use ash_config::LanguageServerConfig;
 use ash_config::LanguageServerId;
 use ash_config::LanguageServerModeConfig;
 use ash_config::LanguageServersConfig;
-use ash_lsp_server_provider::CSS_LANGUAGE_SERVER_ID;
-use ash_lsp_server_provider::CssLanguageServerProvider;
 use ash_lsp_server_provider::LanguageServerMode;
 use ash_lsp_server_provider::LspServerProviders;
 use ash_lsp_server_provider::ManagedNodeRuntime;
 use ash_lsp_server_provider::NodePackageLanguageServerProvider;
 const RUST_ANALYZER_SERVER_ID: &str = "rust-analyzer";
+const TEST_SERVER_ID: &str = "css-language-server";
 use ash_lsp_server_provider::TYPESCRIPT_LANGUAGE_SERVER_ID;
 use tempfile::TempDir;
 
@@ -20,6 +19,20 @@ use super::AppServerLanguageRuntime;
 use super::UpdateBroker;
 use super::configured_provider_definitions;
 use super::preference;
+
+#[tokio::test]
+async fn connection_guard_can_be_used_by_synchronous_adapters_inside_an_async_host() {
+    let shared = std::sync::Mutex::new(AppServerLanguageRuntime::new(Arc::new(
+        UpdateBroker::default(),
+    )));
+    let guard = super::LanguageRuntimeGuard::new(shared.lock().unwrap(), 1);
+    assert!(
+        shared.try_lock().is_ok(),
+        "the profile registry is released before connection-local work"
+    );
+    drop(guard);
+    shared.lock().unwrap().close_connection(1);
+}
 
 #[test]
 fn installed_server_catalog_respects_configuration_without_starting_a_process() {
@@ -204,7 +217,7 @@ fn manually_injected_provider_requires_explicit_user_enablement() {
     let definitions =
         configured_provider_definitions(&providers, &configuration, fixture.dir.path()).unwrap();
     assert_eq!(definitions.len(), 1);
-    assert_eq!(definitions[0].name().as_str(), CSS_LANGUAGE_SERVER_ID);
+    assert_eq!(definitions[0].name().as_str(), TEST_SERVER_ID);
 }
 
 #[test]
@@ -232,7 +245,7 @@ fn configuration(
 ) -> LanguageServersConfig {
     LanguageServersConfig {
         servers: [(
-            LanguageServerId::new(CSS_LANGUAGE_SERVER_ID).unwrap(),
+            LanguageServerId::new(TEST_SERVER_ID).unwrap(),
             LanguageServerConfig {
                 mode,
                 executable,
@@ -263,7 +276,9 @@ impl ProviderFixture {
         let entrypoint = self.root.path().join("server/css-language-server");
         fs::create_dir_all(entrypoint.parent().unwrap()).unwrap();
         fs::write(&entrypoint, b"// server").unwrap();
-        let provider = CssLanguageServerProvider::new(
+        let provider = NodePackageLanguageServerProvider::new(
+            TEST_SERVER_ID,
+            ["css", "less", "scss"].map(str::to_owned),
             entrypoint,
             ManagedNodeRuntime::from_path(&self.node).unwrap(),
         )
@@ -403,11 +418,24 @@ fn acquisition_uses_configured_environment_and_failure_does_not_block_other_serv
     );
 
     runtime
+        .sources
+        .lock()
+        .unwrap()
         .acquisitions
         .insert(acquisition.id.clone(), acquisition);
-    // A previously active acquisition is resolved again when another language is activated.
-    runtime.acquired.insert("rust-analyzer".into(), server);
+    runtime.reconcile_configuration(&configuration);
+    // Changing an authoritative override retires that acquisition while other languages remain usable.
+    runtime
+        .acquired
+        .lock()
+        .unwrap()
+        .insert("rust-analyzer".into(), server);
     fs::remove_file(executable).unwrap();
+    configuration
+        .servers
+        .get_mut(&LanguageServerId::new("rust-analyzer").unwrap())
+        .unwrap()
+        .executable = Some(root.path().join("missing-rust-analyzer"));
     configuration.servers.insert(
         LanguageServerId::new("working").unwrap(),
         LanguageServerConfig {
@@ -417,6 +445,7 @@ fn acquisition_uses_configured_environment_and_failure_does_not_block_other_serv
             ..Default::default()
         },
     );
+    runtime.reconcile_configuration(&configuration);
     runtime
         .restart(root.path(), 1, &configuration, "demo")
         .unwrap();
@@ -428,7 +457,7 @@ fn acquisition_uses_configured_environment_and_failure_does_not_block_other_serv
             .map(String::as_str),
         Some("working")
     );
-    assert!(runtime.acquired.is_empty());
+    assert!(runtime.acquired.lock().unwrap().is_empty());
 }
 
 #[cfg(unix)]
@@ -436,39 +465,7 @@ fn acquisition_uses_configured_environment_and_failure_does_not_block_other_serv
 fn connection_sessions_keep_independent_revisions_saved_text_and_process_lifetimes() {
     let root = tempfile::tempdir().unwrap();
     let script = root.path().join("server.sh");
-    fs::write(&script, r#"
-log="$LSP_LOG/$$"
-printf '{"environment":"%s","argument":"%s"}\n' "$LSP_OPTION" "$1" >> "$log"
-text= saved=
-cr=$(printf '\r')
-while :; do
-  length=
-  while IFS= read -r line; do
-    line=${line%"$cr"}
-    [ -z "$line" ] && break
-    case "$line" in Content-Length:*) length=${line#Content-Length: };; esac
-  done
-  [ -n "$length" ] || exit 0
-  message=$(dd bs=1 count="$length" 2>/dev/null)
-  printf '%s\n' "$message" >> "$log"
-  id=$(printf '%s' "$message" | sed -n 's/.*"id":\([0-9]*\).*/\1/p')
-  case "$message" in
-    *'"method":"exit"'*) exit 0;;
-    *'"method":"textDocument/didOpen"'*|*'"method":"textDocument/didChange"'*)
-      text=$(printf '%s' "$message" | sed -n 's/.*"text":"\([^"]*\)".*/\1/p');;
-    *'"method":"textDocument/didSave"'*)
-      saved=$(printf '%s' "$message" | sed -n 's/.*"text":"\([^"]*\)".*/\1/p');;
-  esac
-  [ -n "$id" ] || continue
-  result=null
-  case "$message" in
-    *'"method":"initialize"'*) result='{"capabilities":{"textDocumentSync":{"openClose":true,"change":1,"save":{"includeText":true}},"hoverProvider":true,"completionProvider":{"triggerCharacters":["="]},"signatureHelpProvider":{"triggerCharacters":["["],"retriggerCharacters":["]"]}}}';;
-    *'"method":"textDocument/hover"'*) result="{\"contents\":\"$text|$saved|$$\"}";;
-  esac
-  response="{\"jsonrpc\":\"2.0\",\"id\":$id,\"result\":$result}"
-  printf 'Content-Length: %s\r\n\r\n%s' "${#response}" "$response"
-done
-"#).unwrap();
+    fs::write(&script, super::regression_tests::SERVER).unwrap();
     let logs = root.path().join("logs");
     fs::create_dir(&logs).unwrap();
     let path = root.path().join("same.demo");
@@ -616,10 +613,23 @@ done
         serde_json::json!({"commandId":"disable-fixture","expectedRevision":4,"serverId":"fixture","config":{"mode":"disabled"}}),
     );
     assert!(
-        server.language.lock().unwrap().connections.is_empty(),
-        "configuration must retire sessions before returning"
+        !server.language.lock().unwrap().server_running("fixture"),
+        "configuration must retire the affected route before returning"
     );
     server.close_connection(second);
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+    while std::time::Instant::now() < deadline {
+        if fs::read_dir(&logs).unwrap().all(|entry| {
+            fs::read_to_string(entry.unwrap().path())
+                .unwrap()
+                .lines()
+                .last()
+                .is_some_and(|line| line.contains("\"method\":\"exit\""))
+        }) {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(10));
+    }
     for entry in fs::read_dir(logs).unwrap() {
         let messages: Vec<serde_json::Value> = fs::read_to_string(entry.unwrap().path())
             .unwrap()

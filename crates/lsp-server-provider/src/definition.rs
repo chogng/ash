@@ -30,6 +30,15 @@ impl std::fmt::Debug for DefinitionLease {
 }
 
 impl LanguageServerDefinition {
+    /// Compares the resolved launch contract, excluding the lease retaining its immutable source.
+    /// Hosts must retire a revoked source even if its replacement has an identical command.
+    pub fn same_launch(&self, other: &Self) -> bool {
+        self.route == other.route
+            && self.command == other.command
+            && self.initialization_options == other.initialization_options
+            && self.settings == other.settings
+    }
+
     pub fn new<I, S>(
         name: impl Into<String>,
         language_ids: I,

@@ -191,7 +191,7 @@ impl<'ctx, C: LanguageRequestProcessorContext + ?Sized> LanguageRequestProcessor
 }
 
 impl<'ctx, C: LanguageRequestProcessorContext + ?Sized> LanguageRequestProcessor<'ctx, C> {
-    fn runtime(&self) -> Result<super::language_runtime::LanguageRuntimeGuard<'ctx>, RpcError> {
+    fn runtime(&self) -> Result<super::language_runtime::LanguageRuntimeGuard, RpcError> {
         let snapshot = self
             .extensions
             .lock()
@@ -342,7 +342,7 @@ impl<'ctx, C: LanguageRequestProcessorContext + ?Sized> LanguageRequestProcessor
             .resolve_existing(&params.document.path)
             .map_err(|_| language_error(AppServerErrorName::LanguageRequestFailed))?;
         let revision = LanguageDocumentRevision::new(params.document.revision);
-        let mut runtime =
+        let runtime =
             self.prepare_document_runtime(&dir, &source_path, &params.document, cancellation)?;
         let request_id = runtime
             .manager()
@@ -485,7 +485,7 @@ impl<'ctx, C: LanguageRequestProcessorContext + ?Sized> LanguageRequestProcessor
             std::path::PathBuf,
             LanguageDocumentRevision,
             LanguageDocumentPosition,
-            super::language_runtime::LanguageRuntimeGuard<'ctx>,
+            super::language_runtime::LanguageRuntimeGuard,
         ),
         RpcError,
     > {
@@ -509,7 +509,7 @@ impl<'ctx, C: LanguageRequestProcessorContext + ?Sized> LanguageRequestProcessor
         source_path: &Path,
         document: &ash_app_server_protocol::protocol::language::LanguageDocumentDto,
         cancellation: &CancellationToken,
-    ) -> Result<super::language_runtime::LanguageRuntimeGuard<'ctx>, RpcError> {
+    ) -> Result<super::language_runtime::LanguageRuntimeGuard, RpcError> {
         if cancellation.is_cancelled() {
             return Err(language_error(AppServerErrorName::RequestCancelled));
         }
@@ -547,7 +547,7 @@ impl<'ctx, C: LanguageRequestProcessorContext + ?Sized> LanguageRequestProcessor
         cancellation: &CancellationToken,
     ) -> Result<Value, RpcError> {
         let params: LanguageHoverParams = decode_language_operation(params)?;
-        let (_, source_path, revision, position, mut runtime) =
+        let (_, source_path, revision, position, runtime) =
             self.prepare_position_request(&params.document, params.position, cancellation)?;
         let service = runtime
             .manager()
@@ -589,7 +589,7 @@ impl<'ctx, C: LanguageRequestProcessorContext + ?Sized> LanguageRequestProcessor
             .resolve_existing(&params.document.path)
             .map_err(|_| language_error(AppServerErrorName::LanguageRequestFailed))?;
         let revision = LanguageDocumentRevision::new(params.document.revision);
-        let mut runtime =
+        let runtime =
             self.prepare_document_runtime(&dir, &source_path, &params.document, cancellation)?;
         let request_id = runtime
             .manager()
@@ -624,7 +624,7 @@ impl<'ctx, C: LanguageRequestProcessorContext + ?Sized> LanguageRequestProcessor
             .resolve_existing(&params.document.path)
             .map_err(|_| language_error(AppServerErrorName::LanguageRequestFailed))?;
         let revision = LanguageDocumentRevision::new(params.document.revision);
-        let mut runtime =
+        let runtime =
             self.prepare_document_runtime(&dir, &source_path, &params.document, cancellation)?;
         let request_id = runtime
             .manager()
@@ -654,7 +654,7 @@ impl<'ctx, C: LanguageRequestProcessorContext + ?Sized> LanguageRequestProcessor
         cancellation: &CancellationToken,
     ) -> Result<Value, RpcError> {
         let params: LanguageCompletionsParams = decode_language_operation(params)?;
-        let (_, source_path, revision, position, mut runtime) =
+        let (_, source_path, revision, position, runtime) =
             self.prepare_position_request(&params.document, params.position, cancellation)?;
         let trigger = completion_trigger(params.trigger_kind, params.trigger_character.as_deref())?;
         let service = runtime
@@ -727,8 +727,7 @@ impl<'ctx, C: LanguageRequestProcessorContext + ?Sized> LanguageRequestProcessor
             .resolve_existing(&document.path)
             .map_err(|_| language_error(AppServerErrorName::LanguageRequestFailed))?;
         let revision = LanguageDocumentRevision::new(document.revision);
-        let mut runtime =
-            self.prepare_document_runtime(&dir, &source_path, document, cancellation)?;
+        let runtime = self.prepare_document_runtime(&dir, &source_path, document, cancellation)?;
         let service = runtime
             .manager()
             .ok_or_else(|| language_error(AppServerErrorName::LanguageServiceUnavailable))?;
@@ -772,7 +771,7 @@ impl<'ctx, C: LanguageRequestProcessorContext + ?Sized> LanguageRequestProcessor
         cancellation: &CancellationToken,
     ) -> Result<Value, RpcError> {
         let params: LanguageSignatureHelpParams = decode_language_operation(params)?;
-        let (_, source_path, revision, position, mut runtime) =
+        let (_, source_path, revision, position, runtime) =
             self.prepare_position_request(&params.document, params.position, cancellation)?;
         let trigger = match (params.trigger_kind, params.trigger_character) {
             (LanguageSignatureHelpTriggerKindDto::Invoke, None) => {
@@ -855,7 +854,7 @@ impl<'ctx, C: LanguageRequestProcessorContext + ?Sized> LanguageRequestProcessor
         let range = utf8_byte_range(&params.document.text, params.range)
             .map(LanguageTextRange::new)
             .ok_or_else(|| language_error(AppServerErrorName::LanguageRequestFailed))?;
-        let mut runtime =
+        let runtime =
             self.prepare_document_runtime(&dir, &source_path, &params.document, cancellation)?;
         let service = runtime
             .manager()
@@ -910,7 +909,7 @@ impl<'ctx, C: LanguageRequestProcessorContext + ?Sized> LanguageRequestProcessor
         cancellation: &CancellationToken,
     ) -> Result<Value, RpcError> {
         let params: LanguageLinkedEditingRangesParams = decode_language_operation(params)?;
-        let (_, source_path, revision, position, mut runtime) =
+        let (_, source_path, revision, position, runtime) =
             self.prepare_position_request(&params.document, params.position, cancellation)?;
         let service = runtime
             .manager()
@@ -958,7 +957,7 @@ impl<'ctx, C: LanguageRequestProcessorContext + ?Sized> LanguageRequestProcessor
             .resolve_existing(&params.document.path)
             .map_err(|_| language_error(AppServerErrorName::LanguageRequestFailed))?;
         let revision = LanguageDocumentRevision::new(params.document.revision);
-        let mut runtime =
+        let runtime =
             self.prepare_document_runtime(&dir, &source_path, &params.document, cancellation)?;
         let service = runtime
             .manager()
@@ -1272,7 +1271,7 @@ impl<'ctx, C: LanguageRequestProcessorContext + ?Sized> LanguageRequestProcessor
         cancellation: &CancellationToken,
     ) -> Result<Value, RpcError> {
         let params: LanguagePrepareRenameParams = decode_language_operation(params)?;
-        let (dir, source_path, revision, position, mut runtime) =
+        let (dir, source_path, revision, position, runtime) =
             self.prepare_position_request(&params.document, params.position, cancellation)?;
         let service = runtime
             .manager()
@@ -1309,7 +1308,7 @@ impl<'ctx, C: LanguageRequestProcessorContext + ?Sized> LanguageRequestProcessor
         cancellation: &CancellationToken,
     ) -> Result<Value, RpcError> {
         let params: LanguageRenameParams = decode_language_operation(params)?;
-        let (dir, source_path, revision, position, mut runtime) =
+        let (dir, source_path, revision, position, runtime) =
             self.prepare_position_request(&params.document, params.position, cancellation)?;
         let service = runtime
             .manager()
@@ -1349,7 +1348,7 @@ impl<'ctx, C: LanguageRequestProcessorContext + ?Sized> LanguageRequestProcessor
             .resolve_existing(&params.document.path)
             .map_err(|_| language_error(AppServerErrorName::LanguageRequestFailed))?;
         let revision = LanguageDocumentRevision::new(params.document.revision);
-        let mut runtime =
+        let runtime =
             self.prepare_document_runtime(&dir, &source_path, &params.document, cancellation)?;
         let diagnostics = params
             .diagnostics
@@ -1428,7 +1427,7 @@ impl<'ctx, C: LanguageRequestProcessorContext + ?Sized> LanguageRequestProcessor
             .resolve_existing(&params.document.path)
             .map_err(|_| language_error(AppServerErrorName::LanguageRequestFailed))?;
         let revision = LanguageDocumentRevision::new(params.document.revision);
-        let mut runtime =
+        let runtime =
             self.prepare_document_runtime(&dir, &source_path, &params.document, cancellation)?;
         let service = runtime
             .manager()

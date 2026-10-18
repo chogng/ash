@@ -692,7 +692,7 @@ fn response_backpressure_releases_resources_used_by_other_connections() {
 }
 
 #[test]
-fn cancellation_completes_a_queued_request_before_its_resource_is_released() {
+fn language_requests_do_not_wait_for_unrelated_global_mutations() {
     let server = Arc::new(server());
     let (mut client, host) = Client::pair();
     let serving = Arc::clone(&server);
@@ -713,19 +713,16 @@ fn cancellation_completes_a_queued_request_before_its_resource_is_released() {
         "language/completions",
         json!({"operationId":"queued", "request":{}}),
     );
+    let response = client.read();
+    assert_eq!(response["id"], 2);
+    assert_eq!(
+        response["error"]["code"], -32602,
+        "invalid language params must be checked while the global mutation is held"
+    );
     client.send(3, "language/cancel", json!({"operationId":"queued"}));
-    let first = client.read();
-    let second = client.read();
-    assert!(
-        [&first, &second]
-            .iter()
-            .any(|message| message["id"] == 2 && message["error"]["message"] == "RequestCancelled")
-    );
-    assert!(
-        [&first, &second]
-            .iter()
-            .any(|message| message["id"] == 3 && message["result"].is_object())
-    );
+    let cancellation = client.read();
+    assert_eq!(cancellation["id"], 3);
+    assert!(cancellation["result"].is_object());
     drop(held);
     client.close();
     served.join().unwrap().unwrap();
