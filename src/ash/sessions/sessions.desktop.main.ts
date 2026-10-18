@@ -17,6 +17,7 @@ import { registerWorkbenchContribution, WorkbenchPhase } from '../workbench/comm
 import { IInstantiationService } from '../platform/instantiation/common/instantiation.js';
 import '../workbench/contrib/terminal/electron-browser/terminal.contribution.js';
 import '../workbench/services/clipboard/electron-browser/clipboardService.js';
+import '../workbench/services/menubar/electron-browser/menubarService.js';
 import '../workbench/services/process/electron-browser/processService.js';
 import '../workbench/contrib/processExplorer/electron-browser/processExplorer.contribution.js';
 import './browser/parts/menubar.contribution.js';

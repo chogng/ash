@@ -4,9 +4,6 @@ import { IContextMenuService } from '../../../../platform/contextview/browser/co
 import { ILocalizationService } from '../../../services/localization/common/localizationService.js';
 import { isMacintosh } from "../../../../base/common/platform.js";
 import { Disposable, toDisposable, type IDisposable } from "../../../../base/common/lifecycle.js";
-import type {
-	INativeMenubarApi,
-} from "../../../../platform/menubar/common/nativeMenubar.js";
 import {
 	BrowserMenubarControl,
 	type IMenubarControl,
@@ -40,7 +37,6 @@ export class NativeTitlebarPart extends BrowserTitlebarPart {
 	constructor(
 		container: HTMLElement,
 		options: ITitlebarPartFactoryOptions,
-		nativeMenubar: INativeMenubarApi,
 		@IInstantiationService instantiationService: IInstantiationService,
 		@IMenuService menuService: IMenuService,
 		@IContextMenuService contextMenuService: IContextMenuService,
@@ -53,7 +49,7 @@ export class NativeTitlebarPart extends BrowserTitlebarPart {
 		super(
 			container,
 			options,
-			(menus, contextMenus, localization, contextKeys) => new ElectronMenubarControl(container, nativeMenubar, menus, contextMenus, localization, contextKeys, instantiationService),
+			(menus, contextMenus, localization, contextKeys) => new ElectronMenubarControl(container, menus, contextMenus, localization, contextKeys, instantiationService),
 			instantiationService,
 			menuService,
 			contextMenuService,
@@ -145,7 +141,6 @@ class ElectronMenubarControl extends Disposable
 
 	constructor(
 		container: HTMLElement,
-		nativeMenubar: INativeMenubarApi,
 		menuService: IMenuService,
 		contextMenuService: IContextMenuService,
 		localizationService: ILocalizationService,
@@ -163,7 +158,7 @@ class ElectronMenubarControl extends Disposable
 		));
 		this.domNode = browserMenubar.domNode;
 		if (isMacintosh) {
-			this._register(instantiationService.createInstance(NativeMenubarControl, nativeMenubar, MenuId.MenubarMainMenu));
+			this._register(instantiationService.createInstance(NativeMenubarControl, MenuId.MenubarMainMenu));
 		}
 	}
 }

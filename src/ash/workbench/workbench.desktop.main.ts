@@ -17,6 +17,7 @@ import "./workbench.common.main.js";
 import './contrib/terminal/electron-browser/terminal.contribution.js';
 import './services/tunnel/electron-browser/tunnelService.js';
 import './services/clipboard/electron-browser/clipboardService.js';
+import './services/menubar/electron-browser/menubarService.js';
 import './services/process/electron-browser/processService.js';
 import './contrib/processExplorer/electron-browser/processExplorer.contribution.js';
 import './contrib/issue/electron-browser/issue.contribution.js';

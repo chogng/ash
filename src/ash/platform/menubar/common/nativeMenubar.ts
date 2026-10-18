@@ -49,18 +49,6 @@ export interface INativeMenubarSelection {
 	readonly id: string;
 }
 
-export interface INativeMenubarSubscription {
-	dispose(): void;
-}
-
-/** Narrow Electron capability used to synchronize the macOS application menu. */
-export interface INativeMenubarApi {
-	update(data: INativeMenubarData): Promise<void>;
-	onDidSelect(
-		listener: (selection: INativeMenubarSelection) => void,
-	): INativeMenubarSubscription;
-}
-
 const MAX_MENU_DEPTH = 8;
 const MAX_MENU_ITEMS = 256;
 const MAX_ITEMS_PER_LEVEL = 64;

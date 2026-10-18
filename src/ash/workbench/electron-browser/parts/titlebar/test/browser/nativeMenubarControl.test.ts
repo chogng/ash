@@ -5,7 +5,8 @@ import { Emitter, Event } from '../../../../../../base/common/event.js';
 import { type IMenuChangeEvent, type IMenuService, MenuId, MenuItemAction } from '../../../../../../platform/actions/common/actions.js';
 import type { ICommandService } from '../../../../../../platform/commands/common/commands.js';
 import { ContextKeyService } from "../../../../../../platform/contextkey/browser/contextKeyService.js";
-import type { INativeMenubarApi, INativeMenubarData, INativeMenubarSelection } from '../../../../../../platform/menubar/common/nativeMenubar.js';
+import type { INativeMenubarData, INativeMenubarSelection } from '../../../../../../platform/menubar/common/nativeMenubar.js';
+import type { IMenubarService } from '../../../../../../platform/menubar/electron-browser/menubar.js';
 import { NativeMenubarControl } from '../../../../../../workbench/electron-browser/parts/titlebar/menubarControl.js';
 import { NotificationService } from '../../../../../services/notification/common/notificationService.js';
 import { CancellationError } from '../../../../../../base/common/errors.js';
@@ -50,18 +51,16 @@ test('failed menubar updates retain the last installed revision', async () => {
 		createMenu: (id: MenuId) => id === MenuId.MenubarMainMenu ? menu : { ...menu, onDidChange: Event.None, getActions: () => [] },
 		getMenuActions: () => [],
 	} as unknown as IMenuService;
-	const api: INativeMenubarApi = {
-		async update(data): Promise<void> {
+	const api: IMenubarService = {
+		_serviceBrand: undefined,
+		async updateMenubar(data): Promise<void> {
 			updates.push(data);
 			if (failures.has(data.revision)) throw new Error(`revision ${data.revision} failed`);
 		},
-		onDidSelect(listener) {
-			const disposable = selections.event(listener);
-			return { dispose: () => disposable.dispose() };
-		},
+		onDidSelect: selections.event,
 	};
 	using notifications = new NotificationService();
-	using control = new NativeMenubarControl(api, MenuId.MenubarMainMenu, menuService, notifications);
+	using control = new NativeMenubarControl(MenuId.MenubarMainMenu, api, menuService, notifications);
 	await waitFor(() => updates.length === 1);
 	const firstItem = updates[0]!.menus[0]!.items[0];
 	assert.equal(firstItem?.type, 'action');

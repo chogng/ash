@@ -216,7 +216,7 @@ export class DesktopMain extends Disposable {
 				userThemeService: userThemes,
 				createContextMenuService: services => services.createInstance(ElectronContextMenuService, api.nativeContextMenu),
 				createAuxiliaryWindowService: (owner, root, services) => services.createInstance(ElectronAuxiliaryWindowService, owner, root),
-				createTitleService: (container, productName, groups, services) => services.createInstance(ElectronTitleService, container, productName, createElectronTitlebarPartFactory(api.nativeMenubar), groups),
+				createTitleService: (container, productName, groups, services) => services.createInstance(ElectronTitleService, container, productName, createElectronTitlebarPartFactory(), groups),
 			}));
 			performance.mark('ash.desktop.workbench-created');
 			const subscription = api.workspace.onDidChange(workspace => {

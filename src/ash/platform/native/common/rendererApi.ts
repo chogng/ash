@@ -8,9 +8,6 @@ import type {
 	INativeContextMenuApi,
 } from "../../../base/parts/contextmenu/common/contextmenu.js";
 import type {
-	INativeMenubarApi,
-} from "../../menubar/common/nativeMenubar.js";
-import type {
 	IWorkspaceContextApi,
 } from "../../workspace/common/workspaceIpc.js";
 import type { IFileSystemProvider } from "../../files/common/files.js";
@@ -26,7 +23,6 @@ export interface AshElectronRendererApi extends IRendererHost {
 	readonly userKeyboardLayout: IUserKeyboardLayoutApi;
 	readonly nativeContextMenu: INativeContextMenuApi;
 	readonly nativeHost: INativeHostApi;
-	readonly nativeMenubar: INativeMenubarApi;
 	readonly localFiles: IFileSystemProvider;
 	readonly userDataHome: URI;
 	readonly workspace: IWorkspaceContextApi;

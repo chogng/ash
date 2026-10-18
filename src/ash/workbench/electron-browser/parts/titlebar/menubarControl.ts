@@ -17,11 +17,11 @@ import {
 	MenuItemAction,
 } from "../../../../platform/actions/common/actions.js";
 import type {
-	INativeMenubarApi,
 	INativeMenubarData,
 	NativeMenubarItem,
 	INativeTouchBarItem,
 } from "../../../../platform/menubar/common/nativeMenubar.js";
+import { IMenubarService } from "../../../../platform/menubar/electron-browser/menubar.js";
 import type {
 	IMenubarControl,
 } from "../../../browser/parts/titlebar/menubarControl.js";
@@ -29,7 +29,6 @@ import type {
 /** Synchronizes the workbench menu model to the macOS application menu. */
 export class NativeMenubarControl extends Disposable
 	implements IMenubarControl {
-	private readonly api: INativeMenubarApi;
 	private readonly menu: IMenu;
 	private readonly touchBarMenu: IMenu | undefined;
 	private touchBarIcons: Promise<readonly string[]> | undefined;
@@ -43,20 +42,19 @@ export class NativeMenubarControl extends Disposable
 	readonly domNode = undefined;
 
 	constructor(
-		api: INativeMenubarApi,
 		applicationMenuId: MenuId,
+		@IMenubarService private readonly menubarService: IMenubarService,
 		@IMenuService menuService: IMenuService,
 		@INotificationService private readonly notifications: INotificationService,
 	) {
 		super();
-		this.api = api;
 		this.menu = this._register(menuService.createMenu(applicationMenuId));
 		this._register(this.menu.onDidChange(() => this.synchronize()));
 		if (isMacintosh) {
 			this.touchBarMenu = this._register(menuService.createMenu(MenuId.TouchBarContext));
 			this._register(this.touchBarMenu.onDidChange(() => this.synchronize()));
 		}
-		const selection = api.onDidSelect(({ revision, id }) => {
+		const selection = this.menubarService.onDidSelect(({ revision, id }) => {
 			const action = this.actionsByRevision.get(revision)?.get(id);
 			if (action) void this.runAction(action);
 		});
@@ -94,7 +92,7 @@ export class NativeMenubarControl extends Disposable
 				const serialized = serializeMenubar(menuActions, revision, touchBarActions, icons);
 				this.actionsByRevision.set(revision, serialized.actions);
 				try {
-					await this.api.update(serialized.data);
+					await this.menubarService.updateMenubar(serialized.data);
 				} catch (error) {
 					this.actionsByRevision.delete(revision);
 					throw error;

@@ -217,7 +217,7 @@ export async function main(profile: SessionsProfile): Promise<IDisposable> {
 			createTitlebarPart: (titlebarContainer, services) => {
 				if (isMacintosh) {
 					// Publish this window's menu so switching focus never dispatches Workbench-only actions here.
-					sessions.add(services.createInstance(NativeMenubarControl, api.nativeMenubar, Menus.MenubarMainMenu));
+					sessions.add(services.createInstance(NativeMenubarControl, Menus.MenubarMainMenu));
 				}
 				return services.createInstance(TitlebarPart, titlebarContainer, isMacintosh ? 'actions-only' : 'application-menu');
 			},

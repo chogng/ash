@@ -7,6 +7,9 @@ import { DisposableStore, DisposableTracker, installDisposableTracker } from '..
 import { InstantiationService } from '../../../../../../platform/instantiation/common/instantiationService.js';
 import { ICommandService } from '../../../../../../platform/commands/common/commands.js';
 import { IQuickInputService } from '../../../../../../platform/quickinput/common/quickInput.js';
+import { IMenubarService } from '../../../../../../platform/menubar/electron-browser/menubar.js';
+import { INotificationService } from '../../../../../../platform/notification/common/notification.js';
+import { NotificationService } from '../../../../../services/notification/common/notificationService.js';
 import { IThemeService } from '../../../../../../platform/theme/common/themeService.js';
 import { TestThemeService } from '../../../../../../platform/theme/test/common/testThemeService.js';
 import { darkColorTheme, lightColorTheme } from '../../../../../../platform/theme/common/colorTheme.js';
@@ -122,7 +125,10 @@ test('Electron titlebars apply the active theme and release their subscriptions 
 			isAccessibilitySupportEnabled: async () => false,
 			onDidChangeAccessibilitySupport: () => ({ dispose() { } }),
 		});
-		const factory = createElectronTitlebarPartFactory({ update: async () => { }, onDidSelect: () => ({ dispose() { } }) });
+		services.registerInstance(IMenubarService, { _serviceBrand: undefined, updateMenubar: async () => { }, onDidSelect: Event.None });
+		using notifications = new NotificationService();
+		services.registerInstance(INotificationService, notifications);
+		const factory = createElectronTitlebarPartFactory();
 		const options = {
 			windowTitle: { value: 'Ash Code', onDidChange: Event.None, updateProperties() { }, registerVariables() { } },
 			menuService: menus,

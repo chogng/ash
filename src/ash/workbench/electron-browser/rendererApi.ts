@@ -44,7 +44,6 @@ import { Schemas } from '../../base/common/network.js';
 import { popup as popupContextMenu, close as closeContextMenu } from '../../base/parts/contextmenu/electron-browser/contextmenu.js';
 import { createNativeKeyboardLayoutApi } from "../../platform/keyboardLayout/electron-browser/nativeKeyboardLayoutApi.js";
 import { createUserKeyboardLayoutApi } from "../../platform/keyboardLayout/electron-browser/userKeyboardLayoutApi.js";
-import { createNativeMenubarApi } from "../../platform/menubar/electron-browser/nativeMenubarApi.js";
 import { DiskFileSystemProviderClient, LOCAL_FILE_SYSTEM_CHANNEL_NAME } from "../../platform/files/common/diskFileSystemProviderClient.js";
 import { URI } from "../../base/common/uri.js";
 import { createWorkspaceContextApi } from "../../platform/workspace/electron-browser/workspaceContextApi.js";
@@ -277,7 +276,6 @@ export async function createElectronRendererApi(contributions: readonly Electron
 			userKeyboardLayout: createUserKeyboardLayoutApi(mainProcessService),
 			nativeContextMenu: { popup: popupContextMenu, close: closeContextMenu },
 			nativeHost,
-			nativeMenubar: createNativeMenubarApi(),
 			editUserConfiguration: () => invoke<void>(EDIT_USER_CONFIGURATION_CHANNEL),
 			localFiles,
 			userDataHome,

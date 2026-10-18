@@ -79,10 +79,11 @@ test('Sessions and Workbench menus keep product commands separate while sharing 
 		using resources = new DisposableStore();
 		using notifications = new NotificationService();
 		const published = new Promise<INativeMenubarData>(resolve => {
-			resources.add(new NativeMenubarControl({
-				async update(data) { resolve(data); },
+			resources.add(new NativeMenubarControl(Menus.MenubarMainMenu, {
+				_serviceBrand: undefined,
+				async updateMenubar(data) { resolve(data); },
 				onDidSelect: listener => selections.event(listener),
-			}, Menus.MenubarMainMenu, menus, notifications));
+			}, menus, notifications));
 		});
 		const data = await published;
 		const items = data.menus.find(menu => menu.label === 'File')!.items;
