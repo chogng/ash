@@ -108,6 +108,9 @@ members = [
     "crates/core-api",
     "crates/diff",
     "crates/debug-adapter",
+    "crates/debug-client",
+    "crates/debug-contract",
+    "crates/debug-manager",
     "crates/testing",
     "crates/external-ext",
     "crates/external-ext-protocol",
@@ -489,6 +492,9 @@ ash-core = { path = "crates/core" }
 core-api = { package = "ash-core-api", path = "crates/core-api" }
 ash-diff = { path = "crates/diff" }
 ash-debug-adapter = { path = "crates/debug-adapter" }
+ash-debug-contract = { path = "crates/debug-contract" }
+ash-debug-client = { path = "crates/debug-client" }
+ash-debug-manager = { path = "crates/debug-manager" }
 ash-environment = { path = "crates/environment" }
 ash-extension-api = { path = "crates/ext/extension-api" }
 connectors = { package = "ash-connectors-extension", path = "crates/ext/connectors" }

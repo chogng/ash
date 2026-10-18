@@ -6,10 +6,31 @@ use ash_app_server_protocol::protocol::debug::DebugAdapterReadResult;
 use ash_app_server_protocol::protocol::debug::DebugAdapterSendParams;
 use ash_app_server_protocol::protocol::debug::DebugAdapterStartParams;
 use ash_app_server_protocol::protocol::debug::DebugAdapterStartResult;
+use ash_app_server_protocol::protocol::debug::DebugBreakpointsSetParams;
+use ash_app_server_protocol::protocol::debug::DebugExceptionFilterDto;
+use ash_app_server_protocol::protocol::debug::DebugExecutionStateDto;
+use ash_app_server_protocol::protocol::debug::DebugInitializationPhaseDto;
+use ash_app_server_protocol::protocol::debug::DebugInspectionReadParams;
+use ash_app_server_protocol::protocol::debug::DebugInspectionStartParams;
+use ash_app_server_protocol::protocol::debug::DebugInspectionStartResult;
+use ash_app_server_protocol::protocol::debug::DebugLaunchRequestDto;
+use ash_app_server_protocol::protocol::debug::DebugMessageDirectionDto;
+use ash_app_server_protocol::protocol::debug::DebugSessionCapabilitiesDto;
+use ash_app_server_protocol::protocol::debug::DebugSessionConfigureParams;
+use ash_app_server_protocol::protocol::debug::DebugSessionInitializeParams;
+use ash_app_server_protocol::protocol::debug::DebugSessionInputParams;
+use ash_app_server_protocol::protocol::debug::DebugSessionRequestParams;
+use ash_app_server_protocol::protocol::debug::DebugSessionRequestResult;
+use ash_app_server_protocol::protocol::debug::DebugSessionResponseParams;
+use ash_app_server_protocol::protocol::debug::DebugSessionResponseResult;
+use ash_app_server_protocol::protocol::debug::DebugSessionSnapshotDto;
 use ash_app_server_protocol::protocol::error::AppServerErrorName;
 use ash_debug_adapter::DebugAdapterCommand;
 use ash_debug_adapter::DebugAdapterConnection;
 use ash_debug_adapter::DebugAdapterError;
+use ash_debug_manager::DebugManagerError;
+use ash_debug_manager::DebugMessageDirection;
+use ash_debug_manager::DebugResponse;
 use serde_json::Value;
 
 use crate::debug_service::DebugAdapterServiceError;
@@ -66,19 +87,23 @@ impl<'ctx, C: DebugRequestProcessorContext + ?Sized> DebugRequestProcessor<'ctx,
             (None, Some(endpoint))
                 if params.arguments.is_empty() && params.cwd.is_none() && params.env.is_none() =>
             {
-                let endpoint = match endpoint {
-                    DebugAdapterConnectionDto::Server { port, host } => {
-                        DebugAdapterConnection::Server { port, host }
+                match endpoint {
+                    DebugAdapterConnectionDto::Client => {
+                        service.open_client_transport(connection.connection_id)
                     }
-                    DebugAdapterConnectionDto::NamedPipe { path } => {
-                        DebugAdapterConnection::NamedPipe { path }
-                    }
-                };
-                service.connect(connection.connection_id, endpoint)
+                    DebugAdapterConnectionDto::Server { port, host } => service.connect(
+                        connection.connection_id,
+                        DebugAdapterConnection::Server { port, host },
+                    ),
+                    DebugAdapterConnectionDto::NamedPipe { path } => service.connect(
+                        connection.connection_id,
+                        DebugAdapterConnection::NamedPipe { path },
+                    ),
+                }
             }
             _ => return Err(RpcError::new(-32602, AppServerErrorName::InvalidParams)),
         }
-        .map_err(debug_runtime_error)?;
+        .map_err(debug_manager_error)?;
         result(&DebugAdapterStartResult { session_id })
     }
 
@@ -116,11 +141,17 @@ impl<'ctx, C: DebugRequestProcessorContext + ?Sized> DebugRequestProcessor<'ctx,
             )
             .map_err(debug_service_error)?;
         result(&DebugAdapterReadResult {
+            breakpoint_revision: read.breakpoint_revision,
+            session: session_snapshot(read.session),
             messages: read
                 .messages
                 .into_iter()
                 .map(|message| DebugAdapterMessageDto {
                     sequence: message.sequence,
+                    direction: match message.direction {
+                        DebugMessageDirection::Incoming => DebugMessageDirectionDto::Incoming,
+                        DebugMessageDirection::Outgoing => DebugMessageDirectionDto::Outgoing,
+                    },
                     message: message.message,
                 })
                 .collect(),
@@ -145,6 +176,204 @@ impl<'ctx, C: DebugRequestProcessorContext + ?Sized> DebugRequestProcessor<'ctx,
             .map_err(debug_service_error)?;
         result(&())
     }
+
+    pub(super) fn debug_breakpoints_set(
+        &self,
+        connection: &ConnectionState,
+        params: &Value,
+    ) -> Result<Value, RpcError> {
+        let params: DebugBreakpointsSetParams = decode(params)?;
+        self.context
+            .debug_adapter_service_for(params.dir_id.as_deref())?
+            .set_breakpoints(
+                connection.connection_id,
+                &params.session_id,
+                params.version,
+                params.intents,
+            )
+            .map_err(debug_service_error)?;
+        result(&())
+    }
+
+    pub(super) fn debug_breakpoints_read(
+        &self,
+        connection: &ConnectionState,
+        params: &Value,
+    ) -> Result<Value, RpcError> {
+        let params: DebugAdapterCloseParams = decode(params)?;
+        result(
+            &self
+                .context
+                .debug_adapter_service_for(params.dir_id.as_deref())?
+                .breakpoints(connection.connection_id, &params.session_id)
+                .map_err(debug_service_error)?,
+        )
+    }
+
+    pub(super) fn debug_inspection_start(
+        &self,
+        connection: &ConnectionState,
+        params: &Value,
+    ) -> Result<Value, RpcError> {
+        let params: DebugInspectionStartParams = decode(params)?;
+        let inspection_id = self
+            .context
+            .debug_adapter_service_for(params.dir_id.as_deref())?
+            .inspect(
+                connection.connection_id,
+                &params.session_id,
+                params.query,
+                params.inspection_revision,
+            )
+            .map_err(debug_service_error)?;
+        result(&match inspection_id {
+            Some(inspection_id) => DebugInspectionStartResult::Started { inspection_id },
+            None => DebugInspectionStartResult::Invalidated,
+        })
+    }
+
+    pub(super) fn debug_inspection_read(
+        &self,
+        connection: &ConnectionState,
+        params: &Value,
+    ) -> Result<Value, RpcError> {
+        let params: DebugInspectionReadParams = decode(params)?;
+        result(
+            &self
+                .context
+                .debug_adapter_service_for(params.dir_id.as_deref())?
+                .inspection(
+                    connection.connection_id,
+                    &params.session_id,
+                    params.inspection_id,
+                )
+                .map_err(debug_service_error)?,
+        )
+    }
+
+    pub(super) fn debug_session_initialize(
+        &self,
+        connection: &ConnectionState,
+        params: &Value,
+    ) -> Result<Value, RpcError> {
+        let params: DebugSessionInitializeParams = decode(params)?;
+        self.context
+            .debug_adapter_service_for(params.dir_id.as_deref())?
+            .initialize(
+                connection.connection_id,
+                &params.session_id,
+                ash_debug_manager::DebugInitialize {
+                    adapter_id: params.adapter_id,
+                    request: match params.request {
+                        DebugLaunchRequestDto::Launch => {
+                            ash_debug_manager::DebugLaunchRequest::Launch
+                        }
+                        DebugLaunchRequestDto::Attach => {
+                            ash_debug_manager::DebugLaunchRequest::Attach
+                        }
+                    },
+                    arguments: params.arguments,
+                    run_in_terminal: params.run_in_terminal,
+                    start_debugging: params.start_debugging,
+                },
+                params.public_id,
+            )
+            .map_err(debug_service_error)?;
+        result(&())
+    }
+
+    pub(super) fn debug_session_configure(
+        &self,
+        connection: &ConnectionState,
+        params: &Value,
+    ) -> Result<Value, RpcError> {
+        let params: DebugSessionConfigureParams = decode(params)?;
+        self.context
+            .debug_adapter_service_for(params.dir_id.as_deref())?
+            .configure(
+                connection.connection_id,
+                &params.session_id,
+                params.exception_filters,
+            )
+            .map_err(debug_service_error)?;
+        result(&())
+    }
+
+    pub(super) fn debug_session_request(
+        &self,
+        connection: &ConnectionState,
+        params: &Value,
+    ) -> Result<Value, RpcError> {
+        let params: DebugSessionRequestParams = decode(params)?;
+        let request_id = self
+            .context
+            .debug_adapter_service_for(params.dir_id.as_deref())?
+            .request(
+                connection.connection_id,
+                &params.session_id,
+                &params.command,
+                params.arguments,
+            )
+            .map_err(debug_service_error)?;
+        result(&DebugSessionRequestResult { request_id })
+    }
+
+    pub(super) fn debug_session_response(
+        &self,
+        connection: &ConnectionState,
+        params: &Value,
+    ) -> Result<Value, RpcError> {
+        let params: DebugSessionResponseParams = decode(params)?;
+        let response = self
+            .context
+            .debug_adapter_service_for(params.dir_id.as_deref())?
+            .response(
+                connection.connection_id,
+                &params.session_id,
+                params.request_id,
+            )
+            .map_err(debug_service_error)?;
+        result(&match response {
+            DebugResponse::Pending => DebugSessionResponseResult::Pending,
+            DebugResponse::Complete(response) => DebugSessionResponseResult::Complete { response },
+            DebugResponse::Failed(message) => DebugSessionResponseResult::Failed { message },
+        })
+    }
+
+    pub(super) fn debug_session_input(
+        &self,
+        connection: &ConnectionState,
+        params: &Value,
+    ) -> Result<Value, RpcError> {
+        let params: DebugSessionInputParams = decode(params)?;
+        self.context
+            .debug_adapter_service_for(params.dir_id.as_deref())?
+            .input(
+                connection.connection_id,
+                &params.session_id,
+                ash_debug_adapter::DebugAdapterRead {
+                    messages: params
+                        .messages
+                        .into_iter()
+                        .enumerate()
+                        .map(
+                            |(sequence, message)| ash_debug_adapter::DebugAdapterMessage {
+                                sequence: sequence as u64,
+                                message,
+                            },
+                        )
+                        .collect(),
+                    next_sequence: 0,
+                    output_gap: params.output_gap,
+                    stderr: params.stderr,
+                    exited: params.exited,
+                    exit_code: params.exit_code,
+                    protocol_error: params.protocol_error,
+                },
+            )
+            .map_err(debug_service_error)?;
+        result(&())
+    }
 }
 
 fn debug_service_error(error: DebugAdapterServiceError) -> RpcError {
@@ -152,7 +381,29 @@ fn debug_service_error(error: DebugAdapterServiceError) -> RpcError {
         DebugAdapterServiceError::NotOwner => {
             RpcError::new(-32072, AppServerErrorName::DebugAdapterNotOwner)
         }
-        DebugAdapterServiceError::Runtime(error) => debug_runtime_error(error),
+        DebugAdapterServiceError::Runtime(error) => debug_manager_error(error),
+    }
+}
+
+fn debug_manager_error(error: DebugManagerError) -> RpcError {
+    match error {
+        DebugManagerError::Transport(error) => debug_runtime_error(error),
+        DebugManagerError::Client(error) => match error {
+            ash_debug_manager::DebugClientError::InvalidMessage => {
+                RpcError::new(-32602, AppServerErrorName::InvalidParams)
+            }
+            ash_debug_manager::DebugClientError::Capacity => {
+                RpcError::new(-32073, AppServerErrorName::DebugAdapterBusy)
+            }
+            ash_debug_manager::DebugClientError::Closed
+            | ash_debug_manager::DebugClientError::UnknownRequest => {
+                RpcError::new(-32071, AppServerErrorName::DebugAdapterNotFound)
+            }
+        },
+        DebugManagerError::NotFound => {
+            RpcError::new(-32071, AppServerErrorName::DebugAdapterNotFound)
+        }
+        DebugManagerError::Busy => RpcError::new(-32073, AppServerErrorName::DebugAdapterBusy),
     }
 }
 
@@ -172,5 +423,59 @@ fn debug_runtime_error(error: DebugAdapterError) -> RpcError {
         | DebugAdapterError::Json(_) => {
             RpcError::new(-32074, AppServerErrorName::DebugAdapterOperationFailed)
         }
+    }
+}
+
+fn session_snapshot(snapshot: ash_debug_manager::DebugSessionSnapshot) -> DebugSessionSnapshotDto {
+    use ash_debug_manager::DebugExecutionState;
+    use ash_debug_manager::DebugInitializationPhase;
+    let capabilities = snapshot.capabilities;
+    DebugSessionSnapshotDto {
+        revision: snapshot.revision,
+        execution_revision: snapshot.execution_revision,
+        inspection_revision: snapshot.inspection_revision,
+        state: match snapshot.state {
+            DebugExecutionState::Starting => DebugExecutionStateDto::Starting,
+            DebugExecutionState::Running => DebugExecutionStateDto::Running,
+            DebugExecutionState::Stopped => DebugExecutionStateDto::Stopped,
+            DebugExecutionState::Terminated => DebugExecutionStateDto::Terminated,
+            DebugExecutionState::Error => DebugExecutionStateDto::Error,
+        },
+        phase: match snapshot.phase {
+            DebugInitializationPhase::Uninitialized => DebugInitializationPhaseDto::Uninitialized,
+            DebugInitializationPhase::Initializing => DebugInitializationPhaseDto::Initializing,
+            DebugInitializationPhase::AwaitingInitialized => {
+                DebugInitializationPhaseDto::AwaitingInitialized
+            }
+            DebugInitializationPhase::Configuring => DebugInitializationPhaseDto::Configuring,
+            DebugInitializationPhase::Launching => DebugInitializationPhaseDto::Launching,
+            DebugInitializationPhase::Active => DebugInitializationPhaseDto::Active,
+            DebugInitializationPhase::Ended => DebugInitializationPhaseDto::Ended,
+        },
+        reason: snapshot.reason,
+        stopped_thread_id: snapshot.stopped_thread_id,
+        capabilities: DebugSessionCapabilitiesDto {
+            supports_restart: capabilities.supports_restart,
+            supports_terminate: capabilities.supports_terminate,
+            supports_set_variable: capabilities.supports_set_variable,
+            supports_conditional_breakpoints: capabilities.supports_conditional_breakpoints,
+            supports_hit_conditional_breakpoints: capabilities.supports_hit_conditional_breakpoints,
+            supports_log_points: capabilities.supports_log_points,
+            supports_function_breakpoints: capabilities.supports_function_breakpoints,
+            supports_data_breakpoints: capabilities.supports_data_breakpoints,
+            supports_instruction_breakpoints: capabilities.supports_instruction_breakpoints,
+            supports_disassemble_request: capabilities.supports_disassemble_request,
+            supports_stepping_granularity: capabilities.supports_stepping_granularity,
+            exception_breakpoint_filters: capabilities
+                .exception_breakpoint_filters
+                .into_iter()
+                .map(|filter| DebugExceptionFilterDto {
+                    filter: filter.filter,
+                    label: filter.label,
+                    description: filter.description,
+                    default: filter.default,
+                })
+                .collect(),
+        },
     }
 }

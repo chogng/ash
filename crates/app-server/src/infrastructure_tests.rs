@@ -8,6 +8,73 @@ use std::sync::Arc;
 use std::time::Duration;
 use std::time::Instant;
 
+#[test]
+fn session_debug_logs_are_profile_owned_and_resource_handles_are_connection_owned() {
+    let root = tempfile::tempdir().unwrap();
+    let log = ash_app_server_daemon::daemon_endpoint_path(root.path())
+        .unwrap()
+        .with_extension("log");
+    std::fs::write(&log, b"owning host diagnostic\n").unwrap();
+    let server = server().with_home(Arc::new(ash_home::AshHome::new(
+        ash_utils_absolute_path::AbsolutePathBuf::from_absolute(root.path()).unwrap(),
+    )));
+    let mut owner = server.connection();
+    initialize(&server, &mut owner);
+    let session = create_session(&server, &mut owner, 2, "debug-logs-session")["result"]["session"]
+        ["sessionId"]
+        .clone();
+    let collected = call(
+        &server,
+        &mut owner,
+        json!({"jsonrpc":"2.0","id":3,"method":"session/debugLogs/collect","params":{"sessionId":session}}),
+    );
+    assert_eq!(
+        collected["result"]["files"][0]["name"], "app-server.log",
+        "{collected}"
+    );
+    let resource = collected["result"]["files"][0]["resource"]["resourceId"].clone();
+    let mut other = server.connection();
+    initialize(&server, &mut other);
+    let rejected = call(
+        &server,
+        &mut other,
+        json!({"jsonrpc":"2.0","id":2,"method":"resource/read","params":{"resourceId":resource,"offset":0,"maxBytes":1024}}),
+    );
+    assert_eq!(rejected["error"]["message"], "ResourceNotOwner");
+    let read = call(
+        &server,
+        &mut owner,
+        json!({"jsonrpc":"2.0","id":4,"method":"resource/read","params":{"resourceId":resource,"offset":0,"maxBytes":1024}}),
+    );
+    use base64::Engine;
+    assert_eq!(
+        base64::engine::general_purpose::STANDARD
+            .decode(read["result"]["dataBase64"].as_str().unwrap())
+            .unwrap(),
+        b"owning host diagnostic\n"
+    );
+    call(
+        &server,
+        &mut owner,
+        json!({"jsonrpc":"2.0","id":5,"method":"resource/release","params":{"resourceId":resource}}),
+    );
+    let missing = call(
+        &server,
+        &mut owner,
+        json!({"jsonrpc":"2.0","id":6,"method":"session/debugLogs/collect","params":{"sessionId":"missing-session"}}),
+    );
+    assert!(missing.get("error").is_some());
+    let invalid = call(
+        &server,
+        &mut owner,
+        json!({"jsonrpc":"2.0","id":7,"method":"session/debugLogs/collect","params":{"sessionId":session,"path":"/etc/passwd"}}),
+    );
+    assert!(
+        invalid.get("error").is_some(),
+        "clients cannot select process log paths"
+    );
+}
+
 fn queued_server(path: &std::path::Path) -> (crate::AppServer, Arc<queue::QueueStore>) {
     let store = Arc::new(queue::QueueStore::open(&path.join("state.sqlite")).unwrap());
     (

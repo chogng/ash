@@ -1,5 +1,16 @@
 {
   "ash": {
+    "exportAgentHostDebugLogs": "导出 Agent Host 调试日志…",
+    "debugLogs.developer": "开发人员",
+    "debugLogs.connectionChanged": "导出期间 App Server 连接发生了变化。",
+    "debugLogs.captureChanged": "导出期间会话证据的采集批次发生了变化。",
+    "debugLogs.manifestSize": "调试日志的收集范围清单超过了大小限制。",
+    "debugLogs.collectionByteLimit": "调试日志资源超过了收集字节限制。",
+    "debugLogs.collecting": "正在收集 Agent Host 调试日志…",
+    "debugLogs.sessionEvidence": "正在收集会话执行证据…",
+    "debugLogs.partial": "调试日志已导出，但有 {0} 项收集问题。缺失或截断的证据详见 manifest.json。",
+    "debugLogs.exported": "Agent Host 调试日志已导出。",
+    "debugLogs.failed": "无法导出 Agent Host 调试日志：{0}",
     "chat.operation.wrongIdentity": "服务器返回了另一段对话。请刷新后重试。",
     "chat.edit.invalid": "请选择已接受的请求并输入非空消息，再发送。",
     "chat.edit.command": "发送编辑后的请求",

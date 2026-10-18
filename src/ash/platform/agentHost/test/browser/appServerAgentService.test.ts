@@ -78,6 +78,45 @@ suite('Session runtime connection ownership', () => {
 	});
 });
 
+test('Session debug logs verify routed resources and release every handle on completion, abort and corruption', async () => {
+	for (const mode of ['read', 'abort', 'replace', 'corrupt', 'overBudget'] as const) {
+		const controller = new AbortController();
+		const bytes = Buffer.from('remote process log\n');
+		let generation = 1;
+		const calls: { method: string; params: { sessionId: string; resourceId?: string; }; }[] = [];
+		const files = Array.from({ length: mode === 'overBudget' ? 5 : 2 }, (_, index) => `gateway-resource:7:log-${index}`).map(resourceId => ({
+			name: 'app-server.log', truncated: false,
+			resource: { resourceId, mimeType: 'text/plain', size: mode === 'overBudget' ? 16 * 1024 * 1024 : bytes.length, sha256: `sha256:${createHash('sha256').update(bytes).digest('hex')}` },
+		}));
+		const service = createAppServerAgentSessionService({
+			get generation() { return generation; },
+			async request(definition: { method: string; }, params: typeof calls[number]['params']) {
+				calls.push({ method: definition.method, params });
+				if (definition.method === 'session/debugLogs/collect') {
+					if (mode === 'abort') controller.abort();
+					if (mode === 'replace') generation++;
+					return { files, omittedFiles: 0 };
+				}
+				if (definition.method === 'resource/read') {
+					const content = mode === 'corrupt' ? Buffer.from('wrong process log!\n') : bytes;
+					return { resourceId: params.resourceId, offset: 0, decodedLength: content.length, dataBase64: content.toString('base64'), eof: true };
+				}
+				if (definition.method === 'resource/release') return null;
+				throw new Error('Unexpected debug log request');
+			},
+		} as unknown as AppServerProtocolClient);
+		const operation = service.collectDebugLogs({ sessionId: 'remote-session' }, controller.signal);
+		if (mode === 'read') {
+			const result = await operation;
+			assert.deepEqual(result.files.map(file => file.bytes), [new Uint8Array(bytes), new Uint8Array(bytes)]);
+		} else if (mode === 'overBudget') await assert.rejects(operation, /collection byte limit/);
+		else await assert.rejects(operation);
+		assert(calls.every(call => call.params.sessionId === 'remote-session'));
+		assert.equal(calls.filter(call => call.method === 'resource/read').length, mode === 'read' ? 2 : mode === 'corrupt' ? 1 : 0);
+		assert.deepEqual(calls.filter(call => call.method === 'resource/release').map(call => call.params.resourceId).sort(), mode === 'replace' ? [] : files.map(file => file.resource.resourceId).sort());
+	}
+});
+
 test('Thread history windows reach read and subscribe and retain detached pagination boundaries', async () => {
 	const requests: unknown[] = [];
 	const usage = { modelInvocations: 0, inputTokens: { reported: 0, complete: true }, outputTokens: { reported: 0, complete: true }, cachedInputTokens: { reported: 0, complete: true }, cacheWriteInputTokens: { reported: 0, complete: true }, reasoningTokens: { reported: 0, complete: true } };

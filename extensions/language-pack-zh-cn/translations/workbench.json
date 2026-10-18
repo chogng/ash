@@ -1665,6 +1665,7 @@
     "debug.adapterTrackerFailed": "调试适配器跟踪器失败：{0}",
     "debug.adapterTrackerTimedOut": "调试适配器跟踪器回调超时，已停用该跟踪器。",
     "debug.adapterTrackerShutdownBacklog": "已跳过积压的调试适配器跟踪器消息，以完成停止会话。",
+    "debug.initializationEnded": "调试会话在初始化期间结束。",
     "debug.adapterSessionUnavailable": "调试适配器会话已不可用。",
     "debug.adapterTrackerQueueExceeded": "调试适配器跟踪器的消息队列已超出上限；已停止观察消息。",
     "debug.invalidResolvedAdapter": "解析后的调试适配器可执行文件为空，或包含无效的进程参数。",

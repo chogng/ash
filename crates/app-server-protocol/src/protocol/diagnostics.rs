@@ -3,6 +3,29 @@ use crate::TS;
 use serde::Deserialize;
 use serde::Serialize;
 
+/// Process logs are collected by the runtime owning the selected Session, including SSH runtimes.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct AgentHostDebugLogsParams {
+    pub session_id: ash_protocol::SessionId,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentHostDebugLogsResult {
+    #[schemars(length(max = 32))]
+    pub files: Vec<AgentHostDebugLogFile>,
+    pub omitted_files: usize,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentHostDebugLogFile {
+    pub name: String,
+    pub truncated: bool,
+    pub resource: crate::protocol::resources::ResourceMetadataResult,
+}
+
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct FeedbackPrepareParams {

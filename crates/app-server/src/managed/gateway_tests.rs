@@ -4,6 +4,33 @@ use std::io::BufReader;
 use std::sync::mpsc;
 
 #[test]
+fn debug_log_collection_tags_every_nested_binary_resource_without_touching_other_ids() {
+    let response = serde_json::json!({"jsonrpc":"2.0","id":2,"result":{
+        "files":[
+            {"name":"app-server.log","resource":{"resourceId":"first","sha256":"digest"}},
+            {"name":"app-server.log.1","resource":{"resourceId":"second","sha256":"digest"}},
+            {"resource":{"resourceId":"not-a-binary-handle"}}
+        ], "resourceId":"unrelated", "omittedFiles":0
+    }});
+    let tagged: Value =
+        serde_json::from_str(&tag_resource_response(response.to_string(), 7)).unwrap();
+    assert_eq!(
+        tagged["result"]["files"][0]["resource"]["resourceId"],
+        "gateway-resource:7:first"
+    );
+    assert_eq!(
+        tagged["result"]["files"][1]["resource"]["resourceId"],
+        "gateway-resource:7:second"
+    );
+    assert_eq!(
+        tagged["result"]["files"][2]["resource"]["resourceId"],
+        "not-a-binary-handle"
+    );
+    // The top-level field is not itself a binary resource contract.
+    assert_eq!(tagged["result"]["resourceId"], "unrelated");
+}
+
+#[test]
 fn message_history_keeps_local_profile_authority_with_remote_thread_origins() {
     let profile = tempfile::tempdir().unwrap();
     let options = ash_app_server_daemon::ConnectionOptions::new(
@@ -141,6 +168,7 @@ fn resource_handles_keep_their_opening_session_runtime_for_reads_and_release() {
         "tool/app/resource/open",
         "attachment/resource/open",
         "skill/resource/open",
+        "session/debugLogs/collect",
         "resource/metadata",
         "resource/read",
         "resource/release",

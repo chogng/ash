@@ -10,6 +10,13 @@ import {
 } from '../../../../../../.build/protocol/typescript/AppServerProtocolDecoder.js';
 import type { MethodResult } from '../../../../../../.build/protocol/typescript/index.js';
 
+test('debug log collection rejects client paths and oversized remote resource collections', () => {
+	assert.throws(() => decodeAppServerRequestParams('session/debugLogs/collect', { sessionId: 'session', path: '/outside/profile' }), AppServerProtocolDecodeError);
+	const file = { name: 'app-server.log', truncated: false, resource: { resourceId: 'resource', mimeType: 'text/plain', size: 10, sha256: `sha256:${'a'.repeat(64)}` } };
+	assert.doesNotThrow(() => decodeAppServerResponse('session/debugLogs/collect', { jsonrpc: '2.0', id: 1, result: { files: Array.from({ length: 32 }, () => file), omittedFiles: 0 } }));
+	assert.throws(() => decodeAppServerResponse('session/debugLogs/collect', { jsonrpc: '2.0', id: 1, result: { files: Array.from({ length: 33 }, () => file), omittedFiles: 0 } }), AppServerProtocolDecodeError);
+});
+
 function usageResponse() {
 	const count = { reported: 0, complete: true };
 	const usage = { modelInvocations: 0, inputTokens: { ...count }, outputTokens: { ...count }, cachedInputTokens: { ...count }, cacheWriteInputTokens: { ...count }, reasoningTokens: { ...count } };

@@ -57,6 +57,7 @@ import type { SessionMutationParams } from '../common/agent.js';
 
 export function createDisconnectedAgentSessionService(unavailable: UnavailableOperation): IAgentSessionService {
 	return {
+		collectDebugLogs: () => unavailable('session.collectDebugLogs'),
 		create: () => unavailable('session.create'),
 		listAgents: () => unavailable('session.listAgents'),
 		read: () => unavailable('session.read'),
@@ -120,6 +121,36 @@ export function createDisconnectedAgentTurnService(unavailable: UnavailableOpera
 
 export function createAppServerAgentSessionService(connection: AppServerProtocolClient, sshHost?: string): IAgentSessionService {
 	return {
+		async collectDebugLogs(params, signal) {
+			if (signal?.aborted) throw canceled();
+			const generation = connection.generation;
+			const result = await appServerRequest(connection, 'session/debugLogs/collect', params);
+			const resources = createAppServerResourceApi(connection, params);
+			const pending = new Set(result.files.map(file => file.resource.resourceId));
+			const files: { name: string; bytes: Uint8Array; truncated: boolean; }[] = [];
+			let failed = false;
+			try {
+				if (result.files.reduce((bytes, file) => bytes + file.resource.size, 0) > 64 * 1024 * 1024) {
+					throw new Error(localize('debugLogs.collectionByteLimit', 'Debug log resources exceed the collection byte limit.'));
+				}
+				for (const file of result.files) {
+					// The resource reader owns release even when verification or cancellation fails.
+					pending.delete(file.resource.resourceId);
+					const bytes = await readAppServerResource(resources, file.resource, 16 * 1024 * 1024, signal, generation);
+					files.push({ name: file.name, bytes, truncated: file.truncated });
+				}
+				return { files, omittedFiles: result.omittedFiles };
+			} catch (error) {
+				failed = true;
+				throw error;
+			} finally {
+				if (generation === connection.generation) {
+					const cleanup = await Promise.allSettled([...pending].map(resourceId => resources.release({ resourceId })));
+					const rejected = cleanup.find(result => result.status === 'rejected');
+					if (!failed && rejected?.status === 'rejected') throw rejected.reason;
+				}
+			}
+		},
 		async invokeRuntime(providerId, request, signal) {
 			throwIfCancelled(signal);
 			if (connection.capabilities?.contracts.sessionRuntimes?.version !== 1) {

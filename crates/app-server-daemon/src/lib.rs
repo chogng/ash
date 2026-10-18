@@ -276,6 +276,20 @@ pub fn daemon_endpoint_path(profile_root: &Path) -> Result<PathBuf, String> {
     endpoint::EndpointPaths::prepare(profile_root).map(|endpoint| endpoint.socket)
 }
 
+/// A snapshot of a process log selected by the profile lifecycle owner.
+pub struct ProcessLog {
+    pub name: String,
+    pub bytes: Vec<u8>,
+    pub truncated: bool,
+}
+
+/// Reads only this profile's managed process log and its numeric rotations.
+/// Callers cannot select paths; no process is started and the active log is never truncated.
+#[cfg(any(unix, windows))]
+pub fn read_process_logs(profile_root: &Path) -> Result<(Vec<ProcessLog>, usize), String> {
+    endpoint::read_process_logs(profile_root)
+}
+
 #[cfg(not(any(unix, windows)))]
 pub fn run_lifecycle(
     _command: LifecycleCommand,

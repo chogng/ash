@@ -2,7 +2,7 @@ import { type IDisposable, toDisposable } from "../../../base/common/lifecycle.j
 import { type IAppServerApi } from "../../agentHost/common/appServerApi.js";
 import { type AppServerProtocolClient } from "../../agentHost/browser/appServerProtocolClient.js";
 import { appServerRequest, voidResult } from "../../agentHost/browser/appServerRequest.js";
-import { type IDebugAdapterProcessReadResult, type IDebugAdapterProcessService, type IDebugAdapterProcessStartOptions } from "../common/debugAdapterProcessService.js";
+import { type DebugBreakpointIntent, type DebugBreakpointsSnapshot, type DebugInspection, type DebugInspectionResult, type DebugSessionInitializeOptions, type IDebugAdapterProcessReadResult, type IDebugAdapterProcessService, type IDebugAdapterProcessStartOptions } from "../common/debugAdapterProcessService.js";
 import { type RendererHostCapabilities } from "../../renderer/common/rendererHost.js";
 import { generateUuid } from "../../../base/common/uuid.js";
 import { localize } from "../../../nls.js";
@@ -22,6 +22,45 @@ export class AppServerDebugAdapterProcessService implements IDebugAdapterProcess
 
 	async send(sessionId: string, message: unknown): Promise<void> {
 		await voidResult(appServerRequest(this.connection, "debug/adapter/send", { ...this.session(sessionId), message }));
+	}
+
+	async initializeSession(sessionId: string, options: DebugSessionInitializeOptions): Promise<void> {
+		await voidResult(appServerRequest(this.connection, 'debug/session/initialize', { ...this.session(sessionId), ...options, arguments: { ...options.arguments } }));
+	}
+
+	async completeConfiguration(sessionId: string, exceptionFilters: readonly string[]): Promise<void> {
+		await voidResult(appServerRequest(this.connection, 'debug/session/configure', { ...this.session(sessionId), exceptionFilters: [...exceptionFilters] }));
+	}
+
+	async setBreakpoints(sessionId: string, version: number, intents: readonly DebugBreakpointIntent[]): Promise<void> {
+		await voidResult(appServerRequest(this.connection, 'debug/session/breakpoints/set', { ...this.session(sessionId), version, intents: [...intents] }));
+	}
+	readBreakpoints(sessionId: string): Promise<DebugBreakpointsSnapshot> {
+		return appServerRequest(this.connection, 'debug/session/breakpoints/read', this.session(sessionId));
+	}
+	async startInspection(sessionId: string, query: DebugInspection, inspectionRevision: number): Promise<number | undefined> {
+		const result = await appServerRequest(this.connection, 'debug/session/inspection/start', { ...this.session(sessionId), inspectionRevision, query: query.kind === 'watch' ? { ...query, expressions: [...query.expressions] } : query });
+		return result.state === 'started' ? result.inspectionId : undefined;
+	}
+
+	readInspection(sessionId: string, inspectionId: number): Promise<DebugInspectionResult> {
+		return appServerRequest(this.connection, 'debug/session/inspection/read', { ...this.session(sessionId), inspectionId });
+	}
+
+	async startRequest(sessionId: string, command: string, args?: unknown): Promise<number> {
+		return (await appServerRequest(this.connection, 'debug/session/request', { ...this.session(sessionId), command, ...(args === undefined ? {} : { arguments: args }) })).requestId;
+	}
+
+	readResponse(sessionId: string, requestId: number) {
+		return appServerRequest(this.connection, 'debug/session/response', { ...this.session(sessionId), requestId });
+	}
+
+	async acceptInput(sessionId: string, input: IDebugAdapterProcessReadResult): Promise<void> {
+		await voidResult(appServerRequest(this.connection, 'debug/session/input', {
+			...this.session(sessionId), messages: input.messages.map(entry => entry.message),
+			outputGap: input.outputGap, stderr: input.stderr, exited: input.exited,
+			exitCode: input.exitCode, protocolError: input.protocolError,
+		}));
 	}
 
 	async read(sessionId: string, afterSequence: number, maxMessages: number): Promise<IDebugAdapterProcessReadResult> {

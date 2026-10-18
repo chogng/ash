@@ -1,25 +1,85 @@
 # 调试系统
 
-> 状态：Code 产品已具备通用 DAP 调试平台；SSH Remote Workbench 的 stdio adapter、debuggee Terminal、断点路径和调用栈源码都绑定同一个远端 Environment，编辑器 Workspace 只负责路径与配置呈现；Academic 不组装 Tasks、Testing 或 Debug。后端实现细节由 [`ash-debug-adapter` README](../crates/debug-adapter/README.md) 拥有，Renderer 实现细节由 [Workbench Debug README](../src/ash/workbench/contrib/debug/README.md) 拥有。
+> 状态：Code 产品已有通用 DAP 调试平台。首个 Rust 迁移切片已接入生产：`ash-debug-client` 拥有请求编号、响应配对、超时和反向应答；`ash-debug-manager` 拥有初始化门禁、能力协商、执行状态、异常断点初始配置与检查结果失效，以及 client 与适配器资源。Rust 还拥有会话断点运行意图、DAP 绑定和 Watch/检查编排；TS 仍保留可编辑工作区目录及持久化，完整迁移尚未完成。SSH Remote 的执行资源继续绑定同一 Environment；Academic 不组装 Tasks、Testing 或 Debug。具体实现分别见 [client](../crates/debug-client/README.md)、[manager](../crates/debug-manager/README.md)、[transport](../crates/debug-adapter/README.md) 和 [Workbench](../src/ash/workbench/contrib/debug/README.md)。
 
 ## 快速理解
 
-Code 可以从 `.vscode/launch.json` 启动或附加到一个调试目标，并同时运行多个 DAP 会话。用户可以设置持久化行断点、选择线程和栈帧、递归展开和修改变量、维护 Watch、在调试控制台求值、启用异常断点、读取适配器提供的虚拟源码，以及启动 compound 配置。调试前后的 Tasks 由 Workbench 编排；后端只负责受信任的适配器进程和 DAP framing。
+Code 可以从 `.vscode/launch.json` 启动或附加到一个调试目标，并同时运行多个 DAP 会话。用户可以设置持久化行断点、选择线程和栈帧、递归展开和修改变量、维护 Watch、在调试控制台求值、启用异常断点、读取适配器提供的虚拟源码，以及启动 compound 配置。调试前后的 Tasks 由 Workbench 编排；Rust 后端负责 DAP 请求配对、初始化、能力、执行状态、传输与资源，Workbench 继续编排尚未迁走的调试行为。
 
-| 使用场景                    | 当前结果                                                                                                                                                                                | 关键边界                                                                               |
-| --------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
-| 启动或附加                  | ✅ `launch`、`attach`、重启、停止和 `runInTerminal`                                                                                                                                     | Workbench 解释配置；后端启动适配器                                                     |
-| 断点                        | 行断点、函数断点、变量数据断点、指令地址断点、条件和命中次数、日志消息、单独或批量启用/禁用、适配器确认状态、异常断点                                                                   | 条件和日志能力取决于适配器；不支持时显示未验证原因，不下发普通断点                     |
-| 停住后检查                  | 线程选择、调用栈、作用域、递归变量树和 `sourceReference`；侧栏检查暂停状态时，首个栈帧有可用行列号时定位源码，正在查看反汇编时保留反汇编编辑器；支持 `setVariable` 的适配器允许修改变量 | DAP Session 拥有请求语义；只读或尚未展开的延迟变量不能修改                             |
-| 反汇编                      | 中央编辑器展示地址、机器码、指令与符号；地址跳转、分页、当前指令、F9 指令断点、源代码导航与指令单步                                                                                     | 需要适配器声明反汇编能力；指令单步另需粒度能力；恢复执行后清空旧指令                   |
-| Watch 与控制台              | ✅ 持久 Watch；独立 Panel `Debug Console` 提供多会话 DAP 输出、清理和 `evaluate`                                                                                                        | Watch 持久；每窗口控制台历史有界且不进通用 Output                                      |
-| 多目标调试                  | ✅ 多会话、会话切换、compound 和 `stopAll`                                                                                                                                              | 后端会话仍按连接隔离                                                                   |
-| SSH Remote 调试             | ✅ adapter 由远端 App Server 启动；`${workspaceFolder}`、断点、调用栈源码和 `runInTerminal` 使用远端路径/Terminal                                                                       | stdio 不需要额外 Tunnel；socket/server adapter 尚未实现                                |
-| 调试任务                    | ✅ `preLaunchTask`、`postDebugTask`                                                                                                                                                     | Tasks 负责执行和退出状态                                                               |
-| 适配器发现                  | ✅ 声明式 `contributes.debuggers`，仍可显式写 `debugAdapter`                                                                                                                            | 不执行扩展 JavaScript                                                                  |
-| 完整 VS Code Debug 扩展 API | 对齐目标，尚未完成                                                                                                                                                                      | 已接入配置 provider 与 executable descriptor；完整会话 API、tracker 和其他传输仍需实现 |
+| 使用场景                    | 当前结果                                                                                                                                                                                | 关键边界                                                                     |
+| --------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| 启动或附加                  | ✅ `launch`、`attach`、重启、停止和 `runInTerminal`                                                                                                                                     | Workbench 解释配置；后端启动适配器                                           |
+| 断点                        | 行断点、函数断点、变量数据断点、指令地址断点、条件和命中次数、日志消息、单独或批量启用/禁用、适配器确认状态、异常断点                                                                   | 条件和日志能力取决于适配器；不支持时显示未验证原因，不下发普通断点           |
+| 停住后检查                  | 线程选择、调用栈、作用域、递归变量树和 `sourceReference`；侧栏检查暂停状态时，首个栈帧有可用行列号时定位源码，正在查看反汇编时保留反汇编编辑器；支持 `setVariable` 的适配器允许修改变量 | DAP Session 拥有请求语义；只读或尚未展开的延迟变量不能修改                   |
+| 反汇编                      | 中央编辑器展示地址、机器码、指令与符号；地址跳转、分页、当前指令、F9 指令断点、源代码导航与指令单步                                                                                     | 需要适配器声明反汇编能力；指令单步另需粒度能力；恢复执行后清空旧指令         |
+| Watch 与控制台              | ✅ 持久 Watch；独立 Panel `Debug Console` 提供多会话 DAP 输出、清理和 `evaluate`                                                                                                        | Watch 持久；每窗口控制台历史有界且不进通用 Output                            |
+| 多目标调试                  | ✅ 多会话、会话切换、compound 和 `stopAll`                                                                                                                                              | 后端会话仍按连接隔离                                                         |
+| SSH Remote 调试             | adapter 由远端 App Server 启动；`${workspaceFolder}`、断点、调用栈源码和 `runInTerminal` 使用远端路径/Terminal                                                                          | stdio 不需要额外 Tunnel；TCP/pipe 传输已实现，其 Remote 产品验收另计         |
+| 调试任务                    | ✅ `preLaunchTask`、`postDebugTask`                                                                                                                                                     | Tasks 负责执行和退出状态                                                     |
+| 适配器发现                  | 声明式 `contributes.debuggers`、动态配置 provider 与 descriptor factory，仍可显式写 `debugAdapter`                                                                                      | 发现类型不调用工厂或启动适配器；Rust 与 JS 扩展按各自宿主执行                |
+| 完整 VS Code Debug 扩展 API | 对齐目标，尚未完成                                                                                                                                                                      | 已有会话 API 子集、tracker 和多种传输；完整 namespace 与部分会话选项仍待补齐 |
 
-## 一次调试如何执行
+## 已接入的迁移切片
+
+`DebugSession` 通过上游同职责的 `browser/rawDebugSession.ts` 访问 Rust 请求 client，已退出 TS 请求编号、pending response table 和请求超时实现。`ash-debug-manager` 组合 `ash-debug-client` 与既有 `ash-debug-adapter`，App Server 只增加连接与目录绑定。每个会话只有一个请求配对 owner；stdio、TCP、pipe 和 inline 使用同一 client。tracker 从有界、双向、有序的观察日志取消息，其回调可重入请求而不阻塞协议配对；关闭前先收取观察记录，再按原生命周期释放 tracker 与 transport。
+
+初始化已由 Rust 状态机决定：initialize 响应触发 launch/attach，initialized 事件开放配置阶段；Workbench 提交当前断点后调用 completeConfiguration，Rust 选择受支持的异常过滤器（空选择使用适配器默认值，noDebug 下清空过滤器，未知过滤器拒绝提交）、发送 setExceptionBreakpoints，并按协商能力发送 configurationDone。launch 回复可以等到配置结束；提前到达的 stopped 事件不会被迟到的 launch 或单步回复覆盖。初始化超时与失败也在 Rust 决定。capabilities 增量事件由后端合并归一化，read 返回带 revision 的只读会话快照。
+
+Rust 同时使在途 stackTrace/scopes/variables/setVariable 在恢复执行、再次停住或 invalidated 后失效；不会重放这些请求。会话执行状态属于 Rust，选中线程/栈帧仍由 Workbench 维护。此切片沿 DebugService → DebugSession → RawDebugSession → platform capability → App Server → DebugManager 的生产链迁移，两个 Workbench 文件保留 VS Code 的对应文件路径与职责入口，协议执行落在 Rust。
+
+会话断点运行意图和绑定已迁入 `breakpoints.rs`：前端只提交带编辑版本的 source/function/data/instruction 意图；Rust 决定能力过滤、源文件分组、整组替换顺序和旧源清空，只有仍匹配当前意图的回复才能建立绑定。适配器主动的 new/changed/removed 也更新同一份绑定。前端的 protocolBreakpoints、syncedBreakpointSources 和 breakpointSync 队列已退出生产链。未支持的条件不会被降级为无条件断点，跨会话的变量/指令地址不会发送或覆盖验证状态。
+
+`inspection.rs` 已拥有 threads → stack、scopes → variables、子变量和批量 Watch 求值。每次查询携带显式线程/帧及 inspectionRevision，Rust 在发送前拒绝旧暂停代次，并使迟到的中间步骤和终态失效。Watch 单个表达式、scope 单个变量请求失败不会抹掉其他结果；任务数量、期限与结果内存都有界，终态只消费一次。`DebugViewPane` 不再编排这些 DAP 链，只请求结果、处理 URI、选择、源码打开和展示。共享 [debug-contract](../crates/debug-contract/README.md) 定义领域值，RPC/生成 decoder 仍归 App Server protocol。
+
+这还不是完整的 Rust manager：可编辑工作区目录、断点和 Watch 定义的 Memento 持久化、REPL 模型及父子会话协调仍在 TS；本轮不能把会话运行意图迁移表述为工作区持久目录已经迁走。`rawDebugSession.ts` 仅保留产品请求调用、inline IO 桥接和取消后的释放，不在前端配对 DAP 响应。协议端口与逐次完成结果见 [App Server DAP 会话](app-server-api.md#dap-会话与请求调度)。
+
+## 已确认的目标分层
+
+2026-10-18 确认：参考 LSP 的协议客户端、运行管理与具体工具提供者分层，把通用调试后端迁入 Rust；Workbench 的公开契约与交互继续对齐 VS Code。Zed 的 DAP client、会话协调和 adapter 注册可作职责参考，其 GPUI 对象不进入 Ash 后端。下面描述完整目标；实际完成范围以上述首个切片为准。
+
+```mermaid
+flowchart LR
+    UI[TS Workbench / Debug Extension API] --> Service[前端 Debug 领域契约]
+    Service --> Boundary[领域 adapter / App Server typed dispatch]
+    Boundary --> Manager[Rust Debug Manager / Session]
+    Manager --> Client[Rust DAP Client]
+    Client --> Transport[进程 / TCP / pipe / 扩展消息通道]
+    Transport --> Adapter[具体 DAP adapter]
+    Provider[预装或用户安装的调试器扩展] -->|配置与 adapter 描述符| Manager
+```
+
+| 层                           | 目标职责                                                                                                                                                                                                                               |
+| ---------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Rust DAP Client              | 单连接的 DAP 初始化、请求配对、能力协商、事件、反向请求、取消和关闭；复用现有进程及 framing 机制，不选择调试器、不拥有 UI。                                                                                                            |
+| Rust Debug Manager / Session | 调试会话与父子关系、执行状态、断点意图及各会话绑定、Watch 求值、线程/栈/变量/源码/反汇编查询、结构化输出和对象引用生命周期；按 Environment、目录授权和发起连接界定资源，拒绝过期会话与暂停代次的结果。                                 |
+| 具体调试器扩展               | 工具链发现与运行包准备、调试器配置方言、配置 provider 和 adapter 描述符；沿现有扩展 SDK、注册与授权体系接入，具体实现不链接进核心。Rust 编写的调试器也优先通过 DAP 接入，暂不建立绕过 DAP 的第二套执行契约。                           |
+| App Server                   | 产品协议、typed dispatch、连接归属、授权与领域路由；不在 request processor 中实现调试状态机。生成 DTO 只进入前端领域 adapter。                                                                                                         |
+| TS Workbench                 | 编辑器与工作副本、保存和变量交互、Tasks/Terminal 的客户端入口、扩展 API 对象与注册、断点位置随编辑变化的通知，以及控制台/调用栈/变量/Watch/反汇编的展示。聚焦会话、选中线程/栈帧、过滤、输入草稿、输入历史和滚动属于各客户端视图状态。 |
+
+Workbench 发送明确的会话与栈帧身份执行求值，不把某窗口的当前选择变成共享后端的全局选择。TS 可以持有稳定身份的展示模型和只读快照，但不能另做 DAP 配对、维护第二套执行状态机或自动重放请求。断点意图及 Watch 定义的工作区持久化随所属行为切片一次转移，保留原有数据迁移入口；编辑器模型、dirty buffer 和撤销仍由 TS 唯一拥有。
+
+保存、交互变量、配置回调、前置/后置任务及 `runInTerminal` 仍经过各自领域 owner；后端需要客户端行为时，使用绑定原调用方的显式请求、取消和关闭契约。现有 inline adapter 和 tracker 也必须接入同一个 Rust DAP 会话，保留消息顺序、原扩展实例身份、重入与释放语义，不能以迁移为由删除兼容行为或保留另一条 TS DAP 会话执行路径。
+
+借鉴 LSP 的分层不等于照搬恢复策略。调试器退出、连接失效或权限撤销后先终止对应会话；不自动重放 `launch`、`evaluate`、`setVariable` 或其他可能有副作用的请求。继续执行后，旧栈帧、变量引用和在途检查结果失效；多窗口共享与跨进程恢复需另有明确租约契约，当前不承诺调试会话脱离发起连接存活。
+
+### VS Code 前端对齐与迁移顺序
+
+对齐的是公开 API、文件职责、生产调用与可观察行为，Rust 后端不照搬 VS Code 的 TS 实现。`common/debug.ts` 和 `browser/debugService.ts` 保留 Workbench 领域入口，`browser/debugSession.ts` 的 DAP 执行职责逐段迁走；不能为维持同名而保留第二套协议客户端。配置解析继续使用现有 ConfigurationResolver、Editor、Tasks 和扩展注册 owner。
+
+本轮已修改的对应文件如下。这里对齐职责和生产入口，协议执行使用 Ash 的 Rust owner，不复制上游内部实现：
+
+| Ash 文件                         | VS Code 对应关系                 | 当前职责                                                                                                 |
+| -------------------------------- | -------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| `browser/debugService.ts`        | 双方同路径                       | Workbench 启动/配置/Tasks 与会话集合；身份保留到 adapter、inline 与子会话完成释放                        |
+| `browser/debugSession.ts`        | 双方同路径                       | 会话模型、线程/栈帧选择、扩展对象与宿主回调；消费 Rust 快照，新的暂停代次即使枚举仍为 stopped 也刷新检查 |
+| `browser/rawDebugSession.ts`     | 双方同路径                       | 原始会话调用入口；Ash 委托 Rust 初始化和请求 owner，保留 inline IO 与关闭确认                            |
+| `platform/debug` 领域 capability | Ash 专属，已确认的 Rust 接入边界 | DI 契约与 App Server adapter；不拥有 Workbench 状态或第二套协议语义                                      |
+
+当前控制台入口是 `browser/debug.contribution.ts` → `browser/debugConsoleViewPane.ts` → `common/replModel.ts`。对齐 REPL 时，由这一生产链迁往上游对应的 `browser/repl.ts`、`replFilter.ts`、`replViewer.ts` 及已有 `common/replModel.ts` 职责，闭合过滤、结构化输出、对象展开、输入历史/补全和按选中栈帧求值。当前 `DebugViewPane` 聚合检查侧栏，后续按实际行为迁往 `variablesView.ts`、`watchExpressionsView.ts`、`callStackView.ts` 和 `breakpointsView.ts` 对应职责。视图选择与聚焦的共同契约参考 `common/debugViewModel.ts`；每次只创建当前调用链真正需要的文件，同批迁移注册/import 并退出被替代的职责，独立实现 Ash 的 DOM、样式和交互。
+
+实施从 Rust DAP client 与可验证的单会话契约开始，再逐段迁移 manager 状态、App Server 产品端口及消费者；每个切片只保留一个有效执行 owner。已存在的 Testing 调试入口、`MainThreadDebugService`、配置 provider、descriptor、tracker、inline/parent session 与 Remote 路径都属于迁移回归范围。前端可独立闭合的交互不必等待整条后端重写，但结构化输出、变量引用和会话身份必须使用已就绪的领域契约。单元与契约测试之外，还需真实 adapter、Desktop/连接后端的 Browser、远端及扩展生命周期验证；纯 TUI 不因复用 Rust crate 自动加载调试扩展。
+
+## 当前一次调试如何执行
 
 ```mermaid
 flowchart LR
@@ -28,8 +88,9 @@ flowchart LR
     DebugService --> Sessions["one or more DAP sessions"]
     Sessions --> Platform["Renderer debug process boundary"]
     Platform --> AppServer["App Server connection owner"]
-    AppServer --> Runtime["ash-debug-adapter"]
-    Runtime --> Adapter["Debug adapter process"]
+    AppServer --> Manager["ash-debug-manager / ash-debug-client"]
+    Manager --> Runtime["ash-debug-adapter / inline IO"]
+    Runtime --> Adapter["Debug adapter"]
     Sessions --> View["Run and Debug view"]
     Sessions --> Console["Debug Console panel"]
     DebugService --> Gutter["Generic editor gutter"]
@@ -43,18 +104,20 @@ flowchart LR
 5. `stopped` 事件驱动线程、栈帧、作用域、变量、Watch 和源码请求。多个会话独立保存运行状态，Run and Debug 侧栏只负责检查；独立 Debug Console Panel 在不可见时也持续捕获 DAP output，并按会话提供 REPL。
 6. 适配器退出、用户停止、编辑器 Workspace 切换、目录 Grant 撤销或连接关闭都会回收进程。Workbench 随后运行对应的 `postDebugTask`。
 
-## 所有权边界
+## 当前所有权边界
 
-| 能力                               | Editor  | Workbench Debug  | Platform / App Server | `ash-debug-adapter` |
-| ---------------------------------- | ------- | ---------------- | --------------------- | ------------------- |
-| 通用 gutter 槽位                   | ✅ 拥有 | 投影断点         | ❌                    | ❌                  |
-| 断点、Watch、会话和 DAP 客户端语义 | ❌      | ✅ 拥有          | 传输                  | ❌                  |
-| launch、compound 与 Tasks 编排     | ❌      | ✅ 拥有          | ❌                    | ❌                  |
-| `runInTerminal` 产品组合           | ❌      | ✅ 委托 Terminal | 终端传输              | ❌                  |
-| Environment 与目录 Grant           | ❌      | 请求             | ✅ 拥有               | 消费能力            |
-| 进程、framing、缓冲与回收          | ❌      | 消费             | 连接包装              | ✅ 拥有             |
+| 能力                                                                                                    | 当前 owner                                                            |
+| ------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------- |
+| 通用 gutter 槽位与编辑器模型                                                                            | Editor；Workbench 通过现有 contribution 展示断点与源码                |
+| launch/compound、断点目录/绑定、Watch 与检查编排、线程/栈帧选择                                         | TS Workbench Debug；保存、配置回调、Tasks/Terminal 仍由原领域服务拥有 |
+| 初始化/配置门禁、动态能力、执行状态、会话断点意图/绑定/主动事件、初始异常过滤器、Watch 和检查编排及失效 | `ash-debug-manager`；Workbench 仅持有带 revision 的只读运行快照       |
+| DAP 请求编号、响应配对、请求超时和反向请求应答编号                                                      | `ash-debug-client`                                                    |
+| 单会话 client/transport 生命周期、有界双向观察与输出分页                                                | `ash-debug-manager`                                                   |
+| `runInTerminal`、Tasks、保存与交互变量                                                                  | 原有 Workbench 领域 owner                                             |
+| Environment、目录 Grant、App Server 连接归属与 typed dispatch                                           | 原有授权和连接 owner                                                  |
+| 子进程、连接、framing、传输缓冲与回收                                                                   | `ash-debug-adapter`；inline 实现 IO 保留在其扩展宿主                  |
 
-Editor 不得 import Debug service；它只提供无领域语义的 gutter decoration contract。后端 runtime 不得解析 launch 配置、持久化断点、决定当前线程或拥有 Workbench 会话选择。声明式扩展服务只贡献经过验证的适配器命令元数据；Ash executable Host v1 是另一条逐扩展进程、Plugin + Environment/Grant 与 brokered provider 边界，当前产品接入状态见 [`editor-extensions.md`](editor-extensions.md)。
+Editor 不得 import Debug service；它只提供无领域语义的 gutter decoration contract。表中 Rust runtime 指当前 `ash-debug-adapter` 的进程与传输层，不承担 launch 配置或断点领域语义；目标 Rust manager 将承担上文明确的领域职责，各窗口选择仍归 Workbench。扩展的来源、宿主、注册与授权边界见 [`editor-extensions.md`](editor-extensions.md)。
 
 ## 持久性与失败语义
 
@@ -74,4 +137,6 @@ compound 启动中任一配置失败时，已经启动的会话会回滚。自�
 
 当前已实现：已授权 stdio adapter、连接级归属、有界 framing/分页、显式和声明式适配器解析、初始化与请求配对、持久行断点和函数断点、变量数据断点、指令断点、异常断点、线程/栈/递归变量、Watch/`evaluate`、调试控制台、虚拟源码、多会话、compound、restart、Tasks 生命周期、`runInTerminal`、Code-only 组装和断点 gutter。Remote Workbench 复用相同协议让 App Server 在远端启动 adapter，并保持 Workspace 变量、断点、调用栈源码和集成终端都映射到同一个远端 Environment。
 
-仍属于后续扩展：socket/server adapter，跨进程会话恢复，以及完整 VS Code Debug Extension API 兼容层。已授权 JavaScript 扩展可提供初始 launch 配置、在变量替换前后修改配置，并返回 executable adapter descriptor；Select and Start 已支持 Dynamic provider 选择；配置类型重定向会先激活目标扩展，再执行目标配置回调与 descriptor。仍不具备完整 Node Extension Host、tracker、公开会话 API，以及 socket、pipe 或 inline adapter。生产运行仍遵守安装、启用、权限和进程隔离边界。
+当前还已接入 TCP server、OS named pipe 与 inline adapter，以及公开会话 API 子集、tracker、父子会话、`noDebug` 和父子控制台合并；这些行为通过当前 Workbench Session 接入 Rust 请求 client；完整 manager 语义仍待迁移，也不证明任意 VS Code 调试扩展完整兼容。Select and Start 支持 Dynamic provider 选择；类型重定向会先激活目标扩展，再执行目标配置回调与 descriptor。完整 namespace、部分会话选项和跨进程恢复仍有缺口，兼容细节由 Workbench README 维护。
+
+Debug Console 当前保留纯文本输出和单行求值，尚缺过滤、结构化分组/对象/源码链接、输入历史与补全。REPL 求值尚未传入选中栈帧；DAP output 只提取文本，evaluate 返回的对象引用尚未用于结果展开。上述差距属于已选中的前端对齐与领域契约工作，不能用基础控制台已有测试代替完整交付。后续任务与验收缺口见根目录 [TODO](../TODO.md#debug--todo)。

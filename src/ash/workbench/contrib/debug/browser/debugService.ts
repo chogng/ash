@@ -541,12 +541,12 @@ export class DebugService extends Disposable implements IDebugService {
 			},
 			startDebugging: value => this.startChildSession(initializingSession!, value),
 			updateBreakpoints: updates => { if (acceptsBreakpointEvents()) this.acceptBreakpointUpdates(updates); },
-			addBreakpoint: (source, line, column) => {
+			addBreakpoint: (source, line, column, id) => {
 				if (!initializingSession || !acceptsBreakpointEvents()) return undefined;
 				const resource = getUriFromSource(source, source.path, initializingSession.id, this.uriIdentity, this.logService);
 				const existing = this.currentBreakpoints.find(point => this.uriIdentity.extUri.isEqual(point.resource, resource) && point.lineNumber === line && point.columnNumber === column);
 				if (existing) return existing.enabled ? existing : undefined;
-				const point = Object.freeze({ id: generateUuid(), resource, lineNumber: line, ...(column === undefined ? {} : { columnNumber: column }), enabled: true, verified: false });
+				const point = Object.freeze({ id: id ?? generateUuid(), resource, lineNumber: line, ...(column === undefined ? {} : { columnNumber: column }), enabled: true, verified: false });
 				this.currentBreakpoints = Object.freeze([...this.currentBreakpoints, point].sort(compareBreakpoints));
 				this.persistState();
 				return point;
@@ -919,12 +919,14 @@ export class DebugService extends Disposable implements IDebugService {
 	private async releaseSession(record: DebugSessionRecord): Promise<void> {
 		const session = record.session;
 		record.listener.dispose();
-		this.sessionRecords.delete(session.id);
 		this.currentDataBreakpoints = Object.freeze(this.currentDataBreakpoints.filter(point => point.canPersist || point.sessionId !== session.id));
 		this.currentInstructionBreakpoints = Object.freeze(this.currentInstructionBreakpoints.filter(point => point.sessionId !== session.id));
 		this.breakpointsEmitter.fire(this.allBreakpoints());
 		await session.disconnect();
 		await this.stopChildSessions(session);
+		// Keep identity addressable while release is pending; requests observe
+		// cancellation until adapter, inline implementation and children finish.
+		this.sessionRecords.delete(session.id);
 		this.endSessionEmitter.fire(session);
 		if (this.activeSessionId === session.id) {
 			this.activeSessionId = this.sessions.at(-1)?.id;

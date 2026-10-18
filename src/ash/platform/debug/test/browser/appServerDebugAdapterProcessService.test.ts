@@ -38,7 +38,7 @@ test('Debug adapter handles isolate identical backend IDs across folders and ret
 			}
 			const result = request.method === 'initialize' ? createTestInitializeResult()
 				: request.method === 'debug/adapter/start' ? { sessionId: 'adapter-1' }
-					: request.method === 'debug/adapter/read' ? { messages: [], nextSequence: 0, outputGap: false, stderr: '', exited: false, exitCode: null, protocolError: null } : null;
+					: request.method === 'debug/adapter/read' ? { breakpointRevision: 0, session: { revision: 0, executionRevision: 0, inspectionRevision: 0, state: 'starting', phase: 'uninitialized', reason: null, stoppedThreadId: null, capabilities: { supportsRestart: false, supportsTerminate: false, supportsSetVariable: false, supportsConditionalBreakpoints: false, supportsHitConditionalBreakpoints: false, supportsLogPoints: false, supportsFunctionBreakpoints: false, supportsDataBreakpoints: false, supportsInstructionBreakpoints: false, supportsDisassembleRequest: false, supportsSteppingGranularity: false, exceptionBreakpointFilters: [] } }, messages: [], nextSequence: 0, outputGap: false, stderr: '', exited: false, exitCode: null, protocolError: null } : null;
 			emit(WEB_APP_SERVER_FRAME_EVENT, { frame: JSON.stringify({ jsonrpc: '2.0', id: request.id, result }) });
 		},
 	};

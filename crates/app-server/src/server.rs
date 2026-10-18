@@ -945,6 +945,8 @@ impl AppServer {
             &self.diagnostics,
             &self.feedback,
             &self.telemetry,
+            &self.home,
+            &self.resources,
         )
     }
 
@@ -3316,6 +3318,18 @@ impl AppServer {
             Some(ClientMethod::SessionTraceRead) => {
                 self.session_processor().session_trace_read(&request.params)
             }
+            Some(ClientMethod::SessionDebugLogsCollect) => {
+                let params: ash_app_server_protocol::protocol::diagnostics::AgentHostDebugLogsParams =
+                    decode(&request.params)?;
+                self.threads
+                    .read_session_catalog(&params.session_id)
+                    .map_err(core_error)?
+                    .ok_or_else(|| {
+                        RpcError::new(-32011, AppServerErrorName::CoreOperationFailed)
+                    })?;
+                self.diagnostics_processor()
+                    .collect_debug_logs(connection, cancellation)
+            }
             Some(ClientMethod::SessionTraceDiagnosticsRead) => self
                 .session_processor()
                 .session_trace_diagnostics_read(&request.params),
@@ -4493,6 +4507,33 @@ impl AppServer {
             Some(ClientMethod::TestingRelease) => self
                 .testing_processor()
                 .testing_release(connection, &request.params),
+            Some(ClientMethod::DebugBreakpointsSet) => self
+                .debug_processor()
+                .debug_breakpoints_set(connection, &request.params),
+            Some(ClientMethod::DebugBreakpointsRead) => self
+                .debug_processor()
+                .debug_breakpoints_read(connection, &request.params),
+            Some(ClientMethod::DebugInspectionStart) => self
+                .debug_processor()
+                .debug_inspection_start(connection, &request.params),
+            Some(ClientMethod::DebugInspectionRead) => self
+                .debug_processor()
+                .debug_inspection_read(connection, &request.params),
+            Some(ClientMethod::DebugSessionInitialize) => self
+                .debug_processor()
+                .debug_session_initialize(connection, &request.params),
+            Some(ClientMethod::DebugSessionConfigure) => self
+                .debug_processor()
+                .debug_session_configure(connection, &request.params),
+            Some(ClientMethod::DebugSessionRequest) => self
+                .debug_processor()
+                .debug_session_request(connection, &request.params),
+            Some(ClientMethod::DebugSessionResponse) => self
+                .debug_processor()
+                .debug_session_response(connection, &request.params),
+            Some(ClientMethod::DebugSessionInput) => self
+                .debug_processor()
+                .debug_session_input(connection, &request.params),
             Some(ClientMethod::DebugAdapterSend) => self
                 .debug_processor()
                 .debug_adapter_send(connection, &request.params),

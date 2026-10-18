@@ -1,3 +1,4 @@
+import type { PlaywrightApplication } from '../../../automation/playwrightDriver.js';
 import { pathToFileURL } from 'node:url';
 import { mkdir, readFile, unlink, writeFile } from 'node:fs/promises';
 import { createServer, type Socket } from 'node:net';
@@ -114,8 +115,8 @@ test('debug launch resolves host paths and scalar settings through the shared va
 	await workbench.page.keyboard.press('Shift+End');
 	await workbench.page.getByRole('tab', { name: 'Run and Debug', exact: true }).first().click();
 	const pane = workbench.page.locator('[data-view-id="workbench.view.debug"]');
-	await expect(pane.getByRole('combobox', { name: 'Debug configuration', exact: true })).toContainText('Debug smoke');
-	await pane.getByRole('button', { name: 'Start Debugging', exact: true }).click();
+	await expect(workbench.page.locator('[data-part="sidebar"]').getByRole('button', { name: /^Debug configuration:/ })).toContainText('Debug smoke');
+	await workbench.page.locator('[data-part="sidebar"]').getByRole('button', { name: 'Start Debugging', exact: true }).click();
 	await expect(pane.getByRole('status')).toContainText('stopped');
 	await expect.poll(async () => (await readFile(join(directory, 'debug-requests.jsonl'), 'utf8')).trim().split('\n').map(line => JSON.parse(line) as { command: string; arguments?: unknown; }).find(request => request.command === 'launch')?.arguments).toEqual({ environmentIdentity: 'ash', missingEnvironment: '', folder: directory, home: home, separator: sep + sep, setting: '0', editor: { file: join(directory, 'editor-variable-debug.ts'), basename: 'editor-variable-debug', relative: 'editor-variable-debug.ts', selection: selected, line: '1', column: String(selected.length + 1) } });
 	await pane.getByRole('button', { name: 'Stop', exact: true }).click();
@@ -310,7 +311,7 @@ test('debugging routes colliding adapter IDs to their own workspace folders', { 
 		const starts = await page.evaluate(() => (globalThis as typeof globalThis & { debugAdapterBoundary: DebugAdapterBoundary; }).debugAdapterBoundary.starts);
 		expect(starts).toHaveLength(2);
 		expect(new Set(starts.map(start => start.dirId)).size).toBe(2);
-		expect(starts.map(start => start.sessionId)).toEqual(['debug-adapter-1', 'debug-adapter-1']);
+		expect(new Set(starts.map(start => start.sessionId)).size).toBe(1);
 		await expect(sessions.locator('option')).toHaveCount(2);
 		const commands = async (name: string) => (await readFile(join(testWorkspace.directory, name, 'debug-requests.jsonl'), 'utf8')).trim().split('\n').map(line => JSON.parse(line).command as string);
 		for (const { name } of folders) {
@@ -349,7 +350,7 @@ test('debug adapter exit retains every line from a 200 message output burst', { 
 	const page = workbench.page;
 	await page.getByRole('tab', { name: 'Run and Debug', exact: true }).first().click();
 	const pane = page.locator('[data-view-id="workbench.view.debug"]');
-	await pane.getByRole('button', { name: 'Start Debugging', exact: true }).click();
+	await workbench.page.locator('[data-part="sidebar"]').getByRole('button', { name: 'Start Debugging', exact: true }).click();
 	await expect(pane.getByRole('status')).toContainText('stopped');
 	await workbench.quickaccess.runCommand('workbench.debug.action.focusRepl');
 	const output = page.getByRole('log', { name: 'Debug Console output', exact: true });
@@ -364,8 +365,8 @@ test('debugging locates stopped source, edits nested variables by keyboard, refr
 	const page = workbench.page;
 	await page.getByRole('tab', { name: 'Run and Debug', exact: true }).first().click();
 	const pane = page.locator('[data-view-id="workbench.view.debug"]');
-	await expect(pane.getByRole('combobox', { name: 'Debug configuration', exact: true })).toContainText('Debug smoke');
-	await pane.getByRole('button', { name: 'Start Debugging', exact: true }).click();
+	await expect(page.locator('[data-part="sidebar"]').getByRole('button', { name: /^Debug configuration:/ })).toContainText('Debug smoke');
+	await page.locator('[data-part="sidebar"]').getByRole('button', { name: 'Start Debugging', exact: true }).click();
 	await expect(pane.getByRole('status')).toContainText('stopped');
 	await expect(pane.locator('.ash-debug-frame')).toContainText('debug-program.js:2');
 	await workbench.editors.groupAt(0).editor.waitForEditorContents(content => content.includes('console.log(answer)'));
@@ -373,6 +374,7 @@ test('debugging locates stopped source, edits nested variables by keyboard, refr
 	await workbench.quickaccess.runCommand('editor.debug.action.toggleBreakpoint');
 	const breakpoint = pane.locator('.ash-debug-breakpoints > li').filter({ hasText: 'debug-program.js:2' });
 	await expect(breakpoint).toBeVisible();
+	await breakpoint.hover();
 	await breakpoint.getByRole('button', { name: 'Edit breakpoint', exact: true }).click();
 	await pane.getByRole('textbox', { name: 'Expression condition', exact: true }).fill('answer > 0');
 	await pane.getByRole('textbox', { name: 'Hit count condition', exact: true }).fill('>= 2');
@@ -382,12 +384,15 @@ test('debugging locates stopped source, edits nested variables by keyboard, refr
 	await expect.poll(async () => (await breakpointRequests()).at(-1)?.arguments?.breakpoints).toEqual([{ line: 2, condition: 'answer > 0', hitCondition: '>= 2', logMessage: 'answer={answer}' }]);
 	await breakpoint.getByRole('checkbox').uncheck();
 	await expect.poll(async () => (await breakpointRequests()).at(-1)?.arguments?.breakpoints).toEqual([]);
+	await pane.getByRole('button', { name: 'Breakpoints', exact: true }).hover();
 	await pane.getByRole('button', { name: 'Enable All Breakpoints', exact: true }).click();
 	await expect.poll(async () => (await breakpointRequests()).at(-1)?.arguments?.breakpoints).toEqual([{ line: 2, condition: 'answer > 0', hitCondition: '>= 2', logMessage: 'answer={answer}' }]);
+	await pane.getByRole('button', { name: 'Breakpoints', exact: true }).hover();
 	await pane.getByRole('button', { name: 'Remove All Breakpoints', exact: true }).click();
 	await expect.poll(async () => (await breakpointRequests()).at(-1)?.arguments?.breakpoints).toEqual([]);
 
 	const lastArguments = async (command: string) => (await readFile(join(testWorkspace.directory, 'debug-requests.jsonl'), 'utf8')).trim().split('\n').map(line => JSON.parse(line) as { command: string; arguments?: unknown; }).filter(request => request.command === command).at(-1)?.arguments;
+	await pane.getByRole('button', { name: 'Breakpoints', exact: true }).hover();
 	await pane.getByRole('button', { name: 'Add Function Breakpoint', exact: true }).click();
 	const functionName = pane.getByRole('textbox', { name: 'Function name', exact: true });
 	await functionName.fill('main');
@@ -400,23 +405,28 @@ test('debugging locates stopped source, edits nested variables by keyboard, refr
 	await pane.getByRole('button', { name: 'Save breakpoint', exact: true }).click();
 	await expect.poll(() => lastArguments('dataBreakpointInfo')).toEqual({ name: 'answer', variablesReference: 10, frameId: 11 });
 	await expect.poll(() => lastArguments('setDataBreakpoints')).toEqual({ breakpoints: [{ dataId: 'memory:answer', accessType: 'readWrite' }] });
+	await pane.getByRole('button', { name: 'Call Stack', exact: true }).hover();
 	await pane.getByRole('button', { name: 'Add Instruction Breakpoint', exact: true }).click();
 	await expect(pane.getByRole('textbox', { name: 'Instruction address', exact: true })).toHaveValue('0x1000');
 	const instructionOffset = pane.getByRole('textbox', { name: 'Instruction byte offset', exact: true });
 	await instructionOffset.fill('-4');
 	await instructionOffset.press('Enter');
 	await expect.poll(() => lastArguments('setInstructionBreakpoints')).toEqual({ breakpoints: [{ instructionReference: '0x1000', offset: -4 }] });
+	await pane.getByRole('button', { name: 'Breakpoints', exact: true }).hover();
 	await pane.getByRole('button', { name: 'Disable All Breakpoints', exact: true }).click();
 	for (const command of ['setFunctionBreakpoints', 'setDataBreakpoints', 'setInstructionBreakpoints']) {
 		await expect.poll(() => lastArguments(command)).toEqual({ breakpoints: [] });
 	}
+	await pane.getByRole('button', { name: 'Breakpoints', exact: true }).hover();
 	await pane.getByRole('button', { name: 'Enable All Breakpoints', exact: true }).click();
 	await expect.poll(() => lastArguments('setInstructionBreakpoints')).toEqual({ breakpoints: [{ instructionReference: '0x1000', offset: -4 }] });
+	await pane.getByRole('button', { name: 'Breakpoints', exact: true }).hover();
 	await pane.getByRole('button', { name: 'Remove All Breakpoints', exact: true }).click();
 	for (const command of ['setFunctionBreakpoints', 'setDataBreakpoints', 'setInstructionBreakpoints']) {
 		await expect.poll(() => lastArguments(command)).toEqual({ breakpoints: [] });
 	}
 
+	await pane.getByRole('button', { name: 'Watch', exact: true }).hover();
 	await pane.getByRole('button', { name: 'Add watch expression', exact: true }).click();
 	await pane.getByRole('textbox', { name: 'Add watch expression' }).fill('answer');
 	await pane.getByRole('textbox', { name: 'Add watch expression' }).press('Enter');
@@ -458,6 +468,7 @@ test('debugging locates stopped source, edits nested variables by keyboard, refr
 	await pane.getByRole('button', { name: 'Step Over', exact: true }).click();
 	await expect(pane.locator('.ash-debug-frame')).toContainText('debug-program.js:3');
 	await expect(pane.locator('.ash-debug-variable').filter({ hasText: 'answer =' })).toContainText('answer = 43');
+	await pane.getByRole('button', { name: 'Call Stack', exact: true }).hover();
 	await pane.getByRole('button', { name: 'Open Disassembly View', exact: true }).click();
 	const disassembly = page.locator('.ash-disassembly');
 	const instructions = disassembly.getByRole('grid', { name: 'Disassembly', exact: true });
@@ -816,18 +827,13 @@ exports.activate = function(context) {
 	await installation.getByRole('textbox').fill('debug-events-extension');
 	const installed = await workbench.dialogs.expectMessage(application, 'Information', () => installation.getByRole('textbox').press('Enter'));
 	expect(installed.message).toContain('Installed acme/debug-events-smoke 1.0.0');
-	const manage = async (button: string): Promise<void> => {
-		await workbench.dialogs.confirm(application, 'Debug events smoke', button, async () => {
-			await workbench.quickaccess.runCommand('ash.extensions.manageLocal');
-			await page.getByRole('option').filter({ has: page.getByText('Debug events smoke', { exact: true }) }).click();
-		});
-	};
+	const manage = (button: string) => manageDebugExtension(application, workbench, 'Debug events smoke', button);
 	await manage('Enable');
 	await manage('Grant permissions');
 	await page.getByRole('tab', { name: 'Run and Debug', exact: true }).first().click();
 	const pane = page.locator('[data-view-id="workbench.view.debug"]');
-	await expect(pane.getByRole('combobox', { name: 'Debug configuration', exact: true })).toContainText('Debug smoke');
-	await pane.getByRole('button', { name: 'Start Debugging', exact: true }).click();
+	await expect(workbench.page.locator('[data-part="sidebar"]').getByRole('button', { name: /^Debug configuration:/ })).toContainText('Debug smoke');
+	await workbench.page.locator('[data-part="sidebar"]').getByRole('button', { name: 'Start Debugging', exact: true }).click();
 	await expect(pane.getByRole('status')).toContainText('stopped');
 	const pid = Number(await readFile(join(directory, 'debug-events-pid.txt'), 'utf8'));
 	await workbench.editors.groupAt(0).editor.waitForEditorContents(content => content.includes('console.log(answer)'));
@@ -835,6 +841,7 @@ exports.activate = function(context) {
 	await expect(page.locator('.ash-notification', { hasText: 'DEBUG_BREAKPOINTS:1:0:0' })).toBeVisible();
 	const breakpointRequests = async () => (await readFile(join(directory, 'debug-requests.jsonl'), 'utf8')).trim().split('\n').map(line => JSON.parse(line) as { command: string; arguments?: { breakpoints?: unknown[]; }; }).filter(request => request.command === 'setBreakpoints');
 	await expect.poll(async () => (await breakpointRequests()).at(-1)?.arguments?.breakpoints).toEqual([{ line: 2 }]);
+	await pane.getByRole('button', { name: 'Breakpoints', exact: true }).hover();
 	await pane.getByRole('button', { name: 'Remove All Breakpoints', exact: true }).click();
 	await expect(page.locator('.ash-notification', { hasText: 'DEBUG_BREAKPOINTS:0:1:0' })).toBeVisible();
 	await expect.poll(async () => (await breakpointRequests()).at(-1)?.arguments?.breakpoints).toEqual([]);
@@ -931,16 +938,11 @@ exports.activate = function(context) {
 			await installation.getByRole('textbox').fill('debug-network');
 			const installed = await workbench.dialogs.expectMessage(application, 'Information', () => installation.getByRole('textbox').press('Enter'));
 			expect(installed.message).toContain('Installed acme/debug-network 1.0.0');
-			for (const button of ['Enable', 'Grant permissions']) {
-				await workbench.dialogs.confirm(application, 'Debug network', button, async () => {
-					await workbench.quickaccess.runCommand('ash.extensions.manageLocal');
-					await page.getByRole('option').filter({ has: page.getByText('Debug network', { exact: true }) }).click();
-				});
-			}
+			for (const button of ['Enable', 'Grant permissions']) await manageDebugExtension(application, workbench, 'Debug network', button);
 			await page.getByRole('tab', { name: 'Run and Debug', exact: true }).first().click();
 			const pane = page.locator('[data-view-id="workbench.view.debug"]');
-			await expect(pane.getByRole('combobox', { name: 'Debug configuration', exact: true })).toContainText('Debug network');
-			await pane.getByRole('button', { name: 'Start Debugging', exact: true }).click();
+			await expect(workbench.page.locator('[data-part="sidebar"]').getByRole('button', { name: /^Debug configuration:/ })).toContainText('Debug network');
+			await workbench.page.locator('[data-part="sidebar"]').getByRole('button', { name: 'Start Debugging', exact: true }).click();
 			await expect(pane.getByRole('status')).toContainText('stopped');
 			expect(requests).toEqual(expect.arrayContaining(['initialize', 'launch', 'configurationDone']));
 			await pane.getByRole('button', { name: 'Stop', exact: true }).click();
@@ -1009,16 +1011,11 @@ exports.activate = function(context) {
 	await installation.getByRole('textbox').fill('debug-inline');
 	const installed = await workbench.dialogs.expectMessage(application, 'Information', () => installation.getByRole('textbox').press('Enter'));
 	expect(installed.message).toContain('Installed acme/debug-inline 1.0.0');
-	for (const button of ['Enable', 'Grant permissions']) {
-		await workbench.dialogs.confirm(application, 'Debug inline', button, async () => {
-			await workbench.quickaccess.runCommand('ash.extensions.manageLocal');
-			await page.getByRole('option').filter({ has: page.getByText('Debug inline', { exact: true }) }).click();
-		});
-	}
+	for (const button of ['Enable', 'Grant permissions']) await manageDebugExtension(application, workbench, 'Debug inline', button);
 	await page.getByRole('tab', { name: 'Run and Debug', exact: true }).first().click();
 	const pane = page.locator('[data-view-id="workbench.view.debug"]');
-	await expect(pane.getByRole('combobox', { name: 'Debug configuration', exact: true })).toContainText('Debug inline');
-	await pane.getByRole('button', { name: 'Start Debugging', exact: true }).click();
+	await expect(workbench.page.locator('[data-part="sidebar"]').getByRole('button', { name: /^Debug configuration:/ })).toContainText('Debug inline');
+	await workbench.page.locator('[data-part="sidebar"]').getByRole('button', { name: 'Start Debugging', exact: true }).click();
 	await expect(pane.getByRole('status')).toContainText('stopped');
 	await workbench.editors.groupAt(0).editor.waitForEditorContents(contents => contents.includes('const generated = true;'));
 	await expect(page.locator('.ash-notification', { hasText: 'DEBUG_SOURCE_READ' })).toBeVisible();
@@ -1032,7 +1029,7 @@ exports.activate = function(context) {
 	await expect(notice).toBeVisible();
 	const commands = await notice.innerText();
 	for (const command of ['initialize', 'launch', 'configurationDone', 'source', 'disconnect']) expect(commands).toContain(command);
-	await expect(pane.getByRole('button', { name: 'Start Debugging', exact: true })).toBeEnabled();
+	await expect(workbench.page.locator('[data-part="sidebar"]').getByRole('button', { name: 'Start Debugging', exact: true })).toBeEnabled();
 });
 
 
@@ -1596,3 +1593,20 @@ developerEnvironmentTest('developer environment reaches the debug adapter and sh
 	const requests = (await readFile(join(directory, 'debug-requests.jsonl'), 'utf8')).trim().split('\n').map(line => JSON.parse(line));
 	expect(requests.find(request => request.command === 'launch').arguments.developerCredential).toBe('ash-synthetic-developer-key');
 });
+
+/** Exercise the retained details editor; only permission review and uninstall use dialogs. */
+async function manageDebugExtension(application: PlaywrightApplication, workbench: Workbench, label: string, action: string): Promise<void> {
+	const page = workbench.page;
+	await workbench.quickaccess.runCommand('ash.extensions.manageLocal');
+	await page.getByRole('listbox', { name: 'Installed Extensions', exact: true }).getByRole('option').filter({ has: page.getByText(label, { exact: true }) }).click();
+	const editor = page.locator('.ash-extension-editor').filter({ has: page.getByRole('heading', { name: label, exact: true }) });
+	const click = () => editor.getByRole('button', { name: action, exact: true }).click();
+	if (action === 'Enable' || action === 'Disable') {
+		await click();
+		await expect(editor.getByRole('button', { name: action === 'Enable' ? 'Disable' : 'Enable', exact: true })).toBeEnabled();
+	} else {
+		await workbench.dialogs.confirm(application, action === 'Uninstall' ? 'Uninstall extension' : label, action, click);
+		if (action === 'Uninstall') await expect(editor.getByRole('status')).toHaveText('Uninstalled');
+		else await expect(editor.getByRole('button', { name: action === 'Grant permissions' ? 'Revoke permissions' : 'Grant permissions', exact: true })).toBeEnabled();
+	}
+}

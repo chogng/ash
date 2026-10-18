@@ -1,5 +1,4 @@
-import { ILabelService } from '../../../../../platform/label/common/label.js';
-import { LabelService } from '../../../../services/label/common/labelService.js';
+import { installDebugClientFixture } from '../common/debugClientFixture.js';
 import { registerTestTerminalCreationServices } from '../../../../test/browser/workbenchTestServices.js';
 import { MergedEnvironmentVariableCollection } from '../../../../../platform/terminal/common/environmentVariableCollection.js';
 import { IEnvironmentVariableService } from '../../../terminal/common/environmentVariable.js';
@@ -279,7 +278,7 @@ async function launchWithTerminalRequest(terminals: ITerminalService, argumentsV
 	const messages: Array<{ sequence: number; message: unknown; }> = [];
 	const transportClosed = new DeferredPromise<void>();
 	const enqueue = (message: unknown): void => { messages.push({ sequence: messages.length, message }); };
-	const processes: IDebugAdapterProcessService = {
+	const processes = installDebugClientFixture({
 		onConnectionState: () => Event.None(() => { }),
 		getConnectionState: async () => 'ready',
 		start: async request => { options.adapterRoutes?.push(request.dirId); return 'adapter-process'; },
@@ -294,7 +293,7 @@ async function launchWithTerminalRequest(terminals: ITerminalService, argumentsV
 		},
 		read: async (_id, afterSequence, maxMessages) => ({ messages: messages.filter(message => message.sequence >= afterSequence).slice(0, maxMessages), nextSequence: messages.length, outputGap: false, stderr: '', exited: false, exitCode: null, protocolError: null }),
 		close: async () => { await transportClosed.complete(undefined); },
-	};
+	});
 	const browser = new JSDOM('', { url: 'https://ash.test' });
 	resources.add(toDisposable(() => browser.window.close()));
 	const storage = resources.add(new BrowserStorageService({ ownerWindow: browser.window as unknown as Window, workspaceId: 'test', backend: browser.window.localStorage, flushInterval: 0 }));
@@ -309,7 +308,7 @@ async function launchWithTerminalRequest(terminals: ITerminalService, argumentsV
 	const services = resources.add(new InstantiationService(new ServiceCollection([IPathService, new SyncDescriptor(BrowserPathService)], [IRendererHostService, createDisconnectedRendererApi()], [IConfigurationService, options.configuration ?? new SyncDescriptor(WorkbenchConfigurationService)],
 		[IFileService, new SyncDescriptor(FileService)],
 		[IUriIdentityService, new SyncDescriptor(UriIdentityService)],
-		[ITerminalProcessService, terminalProcesses], [IWorkspaceContextService, workspace], [ILabelService, new SyncDescriptor(LabelService)], [IConfigurationResolverService, new SyncDescriptor(ConfigurationResolverService)],
+		[ITerminalProcessService, terminalProcesses], [IWorkspaceContextService, workspace], [IConfigurationResolverService, new SyncDescriptor(ConfigurationResolverService)],
 		[IStorageService, storage],
 		[IDebugAdapterProcessService, processes],
 		[ITerminalService, terminals],

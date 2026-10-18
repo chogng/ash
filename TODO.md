@@ -87,12 +87,34 @@
 
 ## Chat / Speech · TODO
 
+- [ ] **复核 · 既有单测基线**：`Code owner offer received before subscribe survives hydration and retires on reconnect` 在重连后仍保留审批 offer；已在 `b4ea368dd` 原始源码复现，待独立定位。证据为 `.build/chat-requests-baseline-offer.log`。
+
+- [ ] **复核 · 全仓检查基线**：Debug 类型与未使用依赖阻塞已清理；223 成员依赖检查、Rust 全 workspace／all-targets 零警告检查、manager 24 项及前端各项目类型检查通过。全仓格式仍涉及 GitHub 两个 TS 文件和 `automationDialog.css`，日志中的 Debug 格式问题已局部修正。构建工具存在 CSS 热更新监听失败，以及 `tsconfig.extensions-test.json` 对已迁移 Task 测试的旧路径引用；语言资源监听首次失败、一次定向复跑通过。全量前端输出观察到 8,219 通过、24 失败（16 个文件）；其中导出 action 的 Host 聚合依赖已改用 `IAppServerApi` 并定向复验。另有模型目录调度、热更新、Sessions 装配、生命周期和样式架构等失败；Workspaces 与 DebugSession 在 Mocha 结束后仍未退出，本轮进程已清理，命令以 143 结束，不能当作完整成功。证据为 `.build/debug-gates-format-final.log`、`.build/debug-gates-test-main.log`、`.build/debug-gates-build-timing-retry.log`、`.build/debug-gates-frontend-unit.log` 和 `.build/debug-gates-export-regression.log`。
+
 - [ ] **后端前置** · Speech 动态注册：Host 当前 `sealActivation` 冻结注册，`host.mjs` 只允许 activating 期间 register。先为原 admitted registry 定义晚注册／注销与后端 fleet 更新端口，覆盖精确 registration／activation generation、退休清理和迟到事件；不用前端轮询或另一张 provider 表替代。
 - [ ] **后端前置** · 标准 Voice／hold 命令先闭合聚焦 Chat widget 与输入生命周期的 `IChatWidgetService` 调用链；PTT／audio／session-context 的完整 VoiceClient 仍缺兼容 producer。现有 Ash Call／VoiceAgent 验证不代表上游 API 对齐；远端自有 Voice/Core bridge 不继续扩展为本轮对齐任务。
 - [ ] **后端前置** · MCP App sampling、media context 与双向 App tools 按原 Core 权限和能力契约逐项补齐；现有 tools/call、资源、消息/context、CSP、导出、诊断和 fullscreen 保持回归，缺失 capability 不宣告。
 - [ ] **验收** · 补真实账户、物理音频设备与音质验收；现有本地 Call/LiveKit、模拟 Live wire 和 AudioHost 设备替身不能代替该结果。本地转写的 Foundry Local cacheDir／下载／代理契约与完整 Prompt／Agent 格式按真实调用需求另核对。
 
 输入、渲染、工具与语音职责及历史验证范围见 [Chat](docs/chat.md)。
+
+## Debug · TODO
+
+- [ ] **复核 · 断点清理与单测释放**：本轮最终 Debug 定向运行输出观察到 169 通过、1 失败：扩展显式启动场景清除断点时，预期仅清空 sourceReference 18，实际还清空带 generated.ts 名称的 sourceReference 17。DebugSession 的 35 项已结束，但子进程滞留，本轮已终止并保留输出，不能声称定向命令通过；证据为 `.build/debug-gates-debug-final.log`。继续核对源组退休与测试 owner 释放，不削弱断言或强制成功退出。
+
+已确认 Rust client / manager / 调试器扩展分层，完整目标和当前落地范围见 [调试系统](docs/debugging.md)。首个生产切片已实现：新增 `ash-debug-client` 与 `ash-debug-manager`，App Server 接入统一 client，Workbench 经 VS Code 对应职责的 `rawDebugSession.ts` 调用；TS 请求编号、pending response table 和请求超时已移除。stdio、TCP、pipe、inline 共用 Rust 请求 owner，保留 tracker 观察顺序、重入及释放；协议破坏性语义升级到 major 9。
+
+本轮已接入 Rust initialize/launch/initialized/configurationDone 状态机、动态能力归一化、带 revision 的执行快照、初始异常过滤器及检查失效保护；前端 DebugSession 不再解释这些 DAP 事件或自行乐观切换运行状态。新增端口 `debug/session/initialize` 与 `debug/session/configure`，沿 `debugSession.ts` / `rawDebugSession.ts` 对应职责接回生产；新的暂停代次刷新检查，会话身份保留至资源释放完成。
+
+当前验证：Rust manager 14 项、App Server Debug RPC 4 项、协议 154 单元 + 3 边界 + 1 schema hash 及各自 check/warnings 通过；协议类型检查通过；Debug 前端 170 项通过，含中文初始化失败提示。真实 Browser + App Server 的 stdio/TCP/pipe/inline/observer、变量路径与 200 条尾输出共 6 场景通过；本轮新增完整检查/变量修改/Watch/源码及指令单步/停止场景也已通过。释放顺序最终调整后的完整检查、observer、inline 三场景复验全部通过，七个真实场景分批通过。通过日志 `.build/debug-lifecycle-manager-final.log`、`.build/debug-lifecycle-server-final.log`、`.build/debug-lifecycle-protocol-final.log`、`.build/debug-lifecycle-frontend-verified.log`、`.build/debug-lifecycle-smoke-stable.log`、`.build/debug-lifecycle-smoke-inspection.log`。早期导出并发、并行源码编译、旧 smoke 定位及修复前的生命周期断言失败不计为通过；当前 full 单元编译已恢复通过。Desktop、Remote、真实 LLDB 与完整扩展生命周期验收另计。
+
+本轮已接入共享 `ash-debug-contract`、会话断点运行意图及 DAP 绑定/主动事件、版本排序与替换队列，以及 Rust stack/frame/variables/Watch 编排与发送前的暂停代次校验。前端已移除本地绑定表和替换队列，检查侧栏只消费领域查询结果。工作区可编辑目录及原 Memento 持久化仍在 Workbench，不能算已迁移。
+
+本轮验证：Rust manager 27 项、contract 2 项、Debug RPC 4 项与 check/warnings 通过；协议 155 单元 + 3 边界 + 1 schema hash 与 warnings 通过；协议类型检查、依赖检查通过（223 workspace members，无新增第三方版本）；Debug 前端 172 项通过；真实 Browser + App Server 7 场景全部通过，覆盖源码/指令单步、变量修改、Watch、四种传输、适配器断点事件、观察和释放。日志 `.build/debug-model-manager-regressions.log`、`.build/debug-model-contract-verified.log`、`.build/debug-model-server-tests.log`、`.build/debug-model-protocol-tests.log`、`.build/debug-model-frontend-complete.log`、`.build/debug-model-smoke.log`。早期 fixture 生命周期与源地址回归失败已修复，不计为通过。
+
+- [ ] **后端前置 · Rust manager 领域状态**：当前会话运行意图/绑定、Watch 求值及检查链已在 Rust。继续迁移可编辑工作区断点/Watch 定义及原 Memento 数据、实时异常过滤器配置、父子生命周期与结构化输出；核对 Testing/扩展 API 消费者，保留保存、配置回调、Tasks/Terminal 的原 owner。
+- [ ] **可做 / 后端前置 · Debug Console 对齐**：从 `debug.contribution.ts` → `debugConsoleViewPane.ts` → `common/replModel.ts` 的真实入口对齐 `repl.ts`、`replFilter.ts`、`replViewer.ts` 职责；先闭合选中会话/栈帧求值和过滤，再接就绪的结构化输出、分组/对象展开/源码链接、历史与补全。当前 REPL 未传 frameId，output 只保留文本；补 NLS、无障碍、焦点与窄布局验证。
+- [ ] **后端前置 / 验收 · 检查视图与跨端回归**：manager 端口就绪后，逐段对齐 Variables、Watch、Call Stack、Breakpoints 和 ViewModel。补新架构的真实 Desktop、Remote 路径、真实 LLDB 程序、父子会话及扩展停用/取消/崩溃回归；本轮 Browser 与确定性 adapter 结果不替代这些验收，历史跨机器记录也不证明新架构已通过。
 
 ## Terminal · TODO
 

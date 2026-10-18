@@ -198,6 +198,17 @@ export class MockDebugSession extends Disposable implements IDebugSession {
 	public readonly onDidChangeThread = Event.None;
 	public get name(): string { return this.configuration.name; }
 	public setName(): void { throw new Error("Renaming is unsupported in this fixture"); }
+	public async inspectStack(threadId?: number) {
+		const threads = await this.threads();
+		const selected = threads.find(thread => thread.id === threadId) ?? threads[0];
+		return { threads, frames: selected ? await this.stackTrace(selected.id) : [], ...(selected ? { threadId: selected.id } : {}) };
+	}
+	public async inspectFrame(frameId: number) {
+		return Promise.all((await this.scopes(frameId)).map(async scope => ({ scope, variables: scope.variablesReference > 0 ? await this.variables(scope.variablesReference) : [] })));
+	}
+	public async evaluateWatchExpressions(expressions: readonly string[], frameId?: number) {
+		return Promise.all(expressions.map(async expression => { try { return { expression, result: await this.evaluate(expression, frameId, 'watch') }; } catch (error) { return { expression, error: error instanceof Error ? error.message : String(error) }; } }));
+	}
 	public getDebugProtocolBreakpoint(): undefined { return undefined; }
 	public async customRequest(): Promise<never> { throw new Error("Custom requests are unsupported in this fixture"); }
 	public output = '';
@@ -215,8 +226,8 @@ export class MockDebugSession extends Disposable implements IDebugSession {
 	public async restart(): Promise<void> { }
 	public async threads(): Promise<readonly IDebugThread[]> { return Object.freeze([{ id: 1, name: 'main' }, { id: 2, name: 'worker' }]); }
 	public selectThread(threadId: number): void { this.selectedThread = threadId; }
-	public async stackTrace(): Promise<readonly IDebugStackFrame[]> { return Object.freeze([{ id: 10, name: 'main', source: this.stackSource, lineNumber: 1, columnNumber: 1 }]); }
-	public async scopes(): Promise<readonly IDebugScope[]> { return Object.freeze([{ name: 'Locals', variablesReference: 20, expensive: false }]); }
+	public async stackTrace(_threadId?: number): Promise<readonly IDebugStackFrame[]> { return Object.freeze([{ id: 10, name: 'main', source: this.stackSource, lineNumber: 1, columnNumber: 1 }]); }
+	public async scopes(_frameId?: number): Promise<readonly IDebugScope[]> { return Object.freeze([{ name: 'Locals', variablesReference: 20, expensive: false }]); }
 	public async variables(reference: number): Promise<readonly IDebugVariable[]> { return reference === 20 ? Object.freeze([{ name: 'parent', value: 'Object', variablesReference: 21 }]) : Object.freeze([{ name: 'child', value: 'value', variablesReference: 0 }]); }
 	public async setVariable(reference: number, name: string, value: string): Promise<IDebugVariable> { this.assignments.push({ reference, name, value }); this.watchValue = value; return { name, value, type: 'string', variablesReference: 0 }; }
 	public async evaluate(_expression: string, _frameId: number | undefined, _context: DebugEvaluateContext): Promise<IDebugEvaluateResult> { return { result: this.watchValue, type: 'number', variablesReference: 0 }; }
@@ -282,6 +293,7 @@ export class DebugViewTestServices extends Disposable {
 	}
 
 	public register(services: ServiceCollection): ServiceCollection {
+		if (!services.get(IContextKeyService)) services.set(IContextKeyService, this._register(new ContextKeyService()));
 		// This fixture also runs in a real browser; model resolution must not load jsdom or editor widgets.
 		const configuration = this._register(new WorkbenchConfigurationService());
 		const languages = this._register(new LanguageService());

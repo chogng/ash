@@ -812,9 +812,33 @@ pub(super) fn serve<R: BufRead, W: Write + Send>(
 /// Qualify only binary resource contracts, not unrelated call/dictation resource IDs.
 fn tag_resource_handles(message: &mut Value, route_id: usize) {
     for path in ["/result/resourceId", "/result/resource/resourceId"] {
+        let binary_contract = if path == "/result/resourceId" {
+            message.pointer("/result/sha256").is_some()
+                || message.pointer("/result/dataBase64").is_some()
+        } else {
+            message.pointer("/result/resource/sha256").is_some()
+        };
+        if !binary_contract {
+            continue;
+        }
         if let Some(value) = message.pointer_mut(path) {
             if let Some(id) = value.as_str() {
                 *value = Value::String(format!("gateway-resource:{route_id}:{id}"));
+            }
+        }
+    }
+    if let Some(files) = message
+        .pointer_mut("/result/files")
+        .and_then(Value::as_array_mut)
+    {
+        for file in files {
+            if file.pointer("/resource/sha256").is_none() {
+                continue;
+            }
+            if let Some(id) = file.pointer_mut("/resource/resourceId") {
+                if let Some(value) = id.as_str() {
+                    *id = Value::String(format!("gateway-resource:{route_id}:{value}"));
+                }
             }
         }
     }
@@ -831,6 +855,14 @@ fn tag_resource_response(response: String, route_id: usize) -> String {
     if message.pointer("/result/sha256").is_some()
         || message.pointer("/result/dataBase64").is_some()
         || message.pointer("/result/resource/sha256").is_some()
+        || message
+            .pointer("/result/files")
+            .and_then(Value::as_array)
+            .is_some_and(|files| {
+                files
+                    .iter()
+                    .any(|file| file.pointer("/resource/sha256").is_some())
+            })
     {
         tag_resource_handles(&mut message, route_id);
         message.to_string()

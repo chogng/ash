@@ -85,6 +85,16 @@ Profile 拥有媒体、模型及供应商；目录 Thread 通过原 gateway 的 
 
 打断关闭原房间／模型并建立新媒体代次，从 Core 恢复有界上下文。关闭等待 bounded model close，只排空最终 Usage／Closed，拒绝迟到转写／提议；同一 resource 累计 SDK 权威时长，不推断价格。原来错误归到 common VoiceClient 的 Widget 控制器和 platform/voice 已退出；这些 Ash 自有行为不能当成上游 PTT／audio／session-context transport 已兼容。
 
+## 调试日志导出
+
+IDE 与 Agent Window 均可从命令面板运行“开发人员：导出 Agent Host 调试日志…”（`workbench.action.chat.exportAgentHostDebugLogs`）。共享 action 在 `workbench/contrib/chat/browser/actions/exportAgentHostDebugLogsAction.ts`，通过窗口原有的 `IChatSessionNavigationService` 固定当前 Session／Thread；切换聊天不会改变正在导出的目标，没有活动聊天时只导出宿主日志。该命令生成 `ash-agent-host-debug-logs.zip`，不改变消息、草稿或执行状态。
+
+客户端日志沿宿主的 `ILoggerService.files`，仅选本轮 Main、当前窗口及其轮转文件、本地 App Server；Output 补充已保留的日志通道，排除用户另行打开的历史／其他窗口日志缓存。`host/` 另存 Session 所属本地或 SSH 宿主的进程日志和现存数字轮转文件：`IAgentSessionService.collectDebugLogs` → `session/debugLogs/collect` → 该宿主的 daemon 日志 owner。请求只接受 Session ID；内容通过当前连接所属的有期限资源分块读取、验证摘要并释放，不能提交任意路径，也不从本机推测远端路径。
+
+会话执行记录与诊断分页沿原 `ITraceService` → `IAgentThreadService` → App Server 读取。模型正文按当前 Thread 及其持久记录中的子 agent 限定，独立 peer Chat 的正文不混入；Session 级事件仍保留为上下文。已保存的 Core 请求、物化请求、完整响应、失败／取消的部分输出与 Hook 正文放入 `session/payloads/`，manifest 用 capture／payload 身份关联原诊断引用。原 TraceReader 校验所属 Session、已保存引用和摘要；导出不自动开启录制，不补造此前未保存的内容，不宣称正文是 HTTP 原始字节。
+
+ZIP 的 `manifest.json` 格式为 2，记录目标、来源、正文索引、录制状态及读取失败、未录制、截断和分页上限。每个文件最多 16 MiB，最多 1,000 个文件、64 MiB，每类会话证据最多 64 页；正文索引最多 1,000 项，完整原引用仍在诊断分页中。daemon 每次只读取该 profile 的最多 32 个日志文件，共最多 64 MiB，不修改生产日志。超过限额的来源和宿主尾读缺口均有标记，不再因旧的 1 MiB 单文件限制丢弃正文。部分来源失败仍导出已有证据并通知用户。取消等待当前有界读取结束后停止并释放尚未读取的资源，不下载半成品；后端连接或 capture 变化拒绝迟到证据，不向新代次续读。复测入口为 `exportAgentHostDebugLogs.test.ts`、`appServerAgentService.test.ts` 和 `test/smoke/areas/chat/chat-debug-logs.spec.ts`。
+
 ## 历史验证与复测入口
 
 以下均是原实现批次的记录，本次文档整理未重跑产品测试，不据此声称当前 HEAD 或完整上游 API 通过：

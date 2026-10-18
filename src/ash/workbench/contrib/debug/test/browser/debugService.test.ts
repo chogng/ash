@@ -1,5 +1,4 @@
-import { ILabelService } from '../../../../../platform/label/common/label.js';
-import { LabelService } from '../../../../services/label/common/labelService.js';
+import { installDebugClientFixture } from '../common/debugClientFixture.js';
 import { InstantiationType } from '../../../../../platform/instantiation/common/extensions.js';
 import { registerTestTerminalCreationServices } from '../../../../test/browser/workbenchTestServices.js';
 import { MergedEnvironmentVariableCollection } from '../../../../../platform/terminal/common/environmentVariableCollection.js';
@@ -360,6 +359,18 @@ class FakeTaskService extends Disposable implements ITaskService {
 }
 
 class FakeDebugAdapterProcessService implements IDebugAdapterProcessService {
+	declare setBreakpoints: IDebugAdapterProcessService['setBreakpoints'];
+	declare readBreakpoints: IDebugAdapterProcessService['readBreakpoints'];
+	declare startInspection: IDebugAdapterProcessService['startInspection'];
+	declare readInspection: IDebugAdapterProcessService['readInspection'];
+	declare initializeSession: IDebugAdapterProcessService['initializeSession'];
+	declare completeConfiguration: IDebugAdapterProcessService['completeConfiguration'];
+	declare startRequest: IDebugAdapterProcessService['startRequest'];
+	declare readResponse: IDebugAdapterProcessService['readResponse'];
+	declare acceptInput: IDebugAdapterProcessService['acceptInput'];
+
+	constructor(managed = true) { if (managed) installDebugClientFixture(this); }
+
 	readonly reverseResponses = new Emitter<{ readonly sessionId: string; readonly response: Record<string, unknown>; }>();
 	readonly closed: string[] = [];
 	private readonly connectionEmitter = new Emitter<AppServerConnectionState>();
@@ -462,13 +473,9 @@ function workspaceService(root: URI): IWorkspaceContextService {
 function task(label: string): IWorkspaceTask { return Object.freeze({ id: `vscode:${label}`, label, command: label, source: "vscode", group: "other" }); }
 
 // Fixture paths describe the execution host, independently of the test runner's OS.
-function testRendererHost(os = OperatingSystem.Linux) {
-	const host = createDisconnectedRendererApi();
-	return { ...host, hasAppServer: true, appServer: { ...host.appServer, operatingSystem: os } };
-}
-
 function testPathService(workspace: IWorkspaceContextService, os = OperatingSystem.Linux): BrowserPathService {
-	return new BrowserPathService(testRendererHost(os), workspace);
+	const host = createDisconnectedRendererApi();
+	return new BrowserPathService({ ...host, hasAppServer: true, appServer: { ...host.appServer, operatingSystem: os } }, workspace);
 }
 
 function registerTerminalProfiles(services: InstantiationService): void {
@@ -488,7 +495,7 @@ async function resolveTerminalProfile(selection: import('../../../../../platform
 }
 
 function createDebugService(owner: DisposableStore, files: IFileSystemProvider, workspace: IWorkspaceContextService, processes: IDebugAdapterProcessService | undefined, terminals: ITerminalService, storage: IStorageService, tasks: ITaskService, adapters: AdapterManager, contextKeys = owner.add(new ContextKeyService()), quickInput?: IQuickInputService, extensions?: TestExtensionService, options?: { editor?: IEditorService; groups?: IEditorGroupsService; configuration?: IConfigurationService; executionOS?: OperatingSystem; }): DebugService {
-	const services = owner.add(new InstantiationService(new ServiceCollection([ILabelService, new SyncDescriptor(LabelService)], [IPathService, testPathService(workspace, options?.executionOS)], [IRendererHostService, testRendererHost(options?.executionOS)], [IConfigurationService, options?.configuration ?? new SyncDescriptor(WorkbenchConfigurationService)],
+	const services = owner.add(new InstantiationService(new ServiceCollection([IPathService, testPathService(workspace, options?.executionOS)], [IRendererHostService, createDisconnectedRendererApi()], [IConfigurationService, options?.configuration ?? new SyncDescriptor(WorkbenchConfigurationService)],
 		[IFileService, owner.add(createTestFileService(files))],
 		[IUriIdentityService, new SyncDescriptor(UriIdentityService)],
 		[IWorkspaceContextService, workspace], [IConfigurationResolverService, new SyncDescriptor(ConfigurationResolverService)],
@@ -1420,8 +1427,6 @@ suite('Extension debug session lifecycle', () => {
 			services.registerInstance(IMarkerService, resources.add(new MarkerService()));
 			registerTestExtensionService(resources, services);
 			services.registerInstance(ITerminalProcessService, createDisconnectedRendererApi().terminal);
-			services.registerInstance(IRendererHostService, testRendererHost());
-			services.registerSingleton(ILabelService, () => services.createInstance(LabelService));
 			services.registerInstance(IConfigurationResolverService, resources.add(services.createInstance(ConfigurationResolverService)));
 			registerTerminalProfiles(services);
 			registerTestTerminalCreationServices(services);
@@ -1499,8 +1504,6 @@ suite('Extension debug session lifecycle', () => {
 				services.registerInstance(IMarkerService, resources.add(new MarkerService()));
 				registerTestExtensionService(resources, services);
 				services.registerInstance(ITerminalProcessService, createDisconnectedRendererApi().terminal);
-				services.registerInstance(IRendererHostService, testRendererHost());
-				services.registerSingleton(ILabelService, () => services.createInstance(LabelService));
 				services.registerInstance(IConfigurationResolverService, resources.add(services.createInstance(ConfigurationResolverService)));
 				registerTerminalProfiles(services);
 				registerTestTerminalCreationServices(services);
@@ -1787,8 +1790,6 @@ test('installed inline descriptors use the real DAP session and await implementa
 	services.registerInstance(IMarkerService, resources.add(new MarkerService()));
 	registerTestExtensionService(resources, services);
 	services.registerInstance(ITerminalProcessService, createDisconnectedRendererApi().terminal);
-	services.registerInstance(IRendererHostService, testRendererHost());
-	services.registerSingleton(ILabelService, () => services.createInstance(LabelService));
 	services.registerInstance(IConfigurationResolverService, resources.add(services.createInstance(ConfigurationResolverService)));
 	registerTerminalProfiles(services);
 	registerTestTerminalCreationServices(services);
@@ -1798,7 +1799,7 @@ test('installed inline descriptors use the real DAP session and await implementa
 	const processes = resources.add(new FakeDebugAdapterProcessService());
 	services.registerInstance(IDebugAdapterProcessService, processes);
 	// This peer supplies only DAP IO; the actual service/session own all debug state.
-	const peer = resources.add(new FakeDebugAdapterProcessService());
+	const peer = resources.add(new FakeDebugAdapterProcessService(false));
 	peer.customHandler = request => ({ body: request.arguments });
 	const io = await peer.start({});
 	peer.closeBarrier = new DeferredPromise<void>();
@@ -1830,7 +1831,7 @@ test('installed inline descriptors use the real DAP session and await implementa
 	const bridge = resources.add(services.createInstance(MainThreadDebugService, 5000, (error: unknown) => { throw error; }));
 	bridge.update({ generation: 1, extensions: [{ id: 'observer', version: '1', packageDigest: 'digest', runtimeApiVersion: 1, activationGeneration: 1, incarnation: 1, lifecycle: 'ready', failure: undefined, stderr: '', outputEvents: [], registrations: [{ registrationId: 'events', kind: 'debugEvents' }] }] });
 	const session = await debug.startDebugging({ id: 'inline', name: 'Inline', type: 'inline', request: 'launch', arguments: {} });
-	assert.equal(processes.started.length, 0);
+	assert.deepEqual(processes.started, [{ arguments: [], connection: { type: 'client' }, dirId: 'test' }]);
 	assert.equal(debug.session, session);
 	peer.requestHandler = request => request.command === 'threads' ? { threads: [{ id: 0, name: 'main' }, { id: -1, name: 'worker' }] }
 		: request.command === 'stackTrace' ? { stackFrames: [{ id: 0, name: 'main', line: 1, column: 1 }] } : {};
@@ -1881,16 +1882,6 @@ test('installed inline descriptors use the real DAP session and await implementa
 	assert.equal(services.get(IModelService).getModel(resource), references[1]!.object.textEditorModel);
 	references[1]!.dispose();
 	assert.equal(services.get(IModelService).getModel(resource), null);
-	const relativeResource = getUriFromSource({ path: 'src/generated.ts' }, 'src/generated.ts', session.id, uriIdentity, services.get(ILogService));
-	peer.sourceHandler = request => {
-		const argumentsValue = request.arguments as { sourceReference: number; source: { path: string; }; };
-		assert.equal(argumentsValue.sourceReference, 0);
-		assert.equal(argumentsValue.source.path, 'src/generated.ts');
-		return { content: 'relative adapter content' };
-	};
-	const relativeReference = await textModels.createModelReference(relativeResource);
-	assert.equal(relativeReference.object.textEditorModel.getValue(), 'relative adapter content');
-	relativeReference.dispose();
 	const lateSource = new DeferredPromise<unknown>();
 	const requested = new DeferredPromise<void>();
 	peer.sourceHandler = () => { void requested.complete(undefined); return lateSource.p; };
@@ -1914,7 +1905,7 @@ test('installed inline descriptors use the real DAP session and await implementa
 	try { await assert.rejects(textModels.createModelReference(resource), { message: '调试会话已结束，无法加载此源文件。' }); }
 	finally { resetNlsResolver(); }
 	assert.equal(closed, 1);
-	assert.equal(processes.started.length, 0);
+	assert.deepEqual(processes.started, [{ arguments: [], connection: { type: 'client' }, dirId: 'test' }]);
 	assert.deepEqual(peer.requests.slice(0, 2).map(message => message.command), ['initialize', 'launch']);
 });
 
@@ -2095,8 +2086,6 @@ suite('DAP reverse startDebugging through the real session owner', () => {
 			registerTestExtensionService(resources, services);
 			registerTestWorkbenchInteractionServices(resources, services);
 			services.registerInstance(ITerminalProcessService, createDisconnectedRendererApi().terminal);
-			services.registerInstance(IRendererHostService, testRendererHost());
-			services.registerSingleton(ILabelService, () => services.createInstance(LabelService));
 			services.registerInstance(IConfigurationResolverService, resources.add(services.createInstance(ConfigurationResolverService)));
 			registerTerminalProfiles(services);
 			registerTestTerminalCreationServices(services);

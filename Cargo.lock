@@ -486,6 +486,7 @@ dependencies = [
  "ash-build-info",
  "ash-call-contract",
  "ash-collab-contract",
+ "ash-debug-contract",
  "ash-diagnostics",
  "ash-environment",
  "ash-extension-items",
@@ -556,6 +557,8 @@ dependencies = [
  "ash-core-api",
  "ash-core-plugins",
  "ash-debug-adapter",
+ "ash-debug-contract",
+ "ash-debug-manager",
  "ash-diagnostics",
  "ash-diff",
  "ash-exec-server",
@@ -1275,6 +1278,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "ash-debug-client"
+version = "0.1.0"
+dependencies = [
+ "serde_json",
+ "thiserror 2.0.21",
+]
+
+[[package]]
+name = "ash-debug-contract"
+version = "0.1.0"
+dependencies = [
+ "schemars",
+ "serde",
+ "serde_json",
+ "ts-rs",
+]
+
+[[package]]
 name = "ash-debug-lldb"
 version = "0.1.0"
 dependencies = [
@@ -1292,6 +1313,18 @@ dependencies = [
  "tempfile",
  "url",
  "zip",
+]
+
+[[package]]
+name = "ash-debug-manager"
+version = "0.1.0"
+dependencies = [
+ "ash-debug-adapter",
+ "ash-debug-client",
+ "ash-debug-contract",
+ "ash-file-access",
+ "serde_json",
+ "thiserror 2.0.21",
 ]
 
 [[package]]

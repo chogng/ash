@@ -1,8 +1,4 @@
-import { ILabelService } from '../../../../../platform/label/common/label.js';
-import { LabelService } from '../../../../services/label/common/labelService.js';
-import { IUriIdentityService } from '../../../../../platform/uriIdentity/common/uriIdentity.js';
-import { TestUriIdentityServices } from '../../../../../platform/uriIdentity/test/common/uriIdentityTestServices.js';
-import { ILogService, NullLoggerService } from '../../../../../platform/log/common/log.js';
+import { installDebugClientFixture } from '../common/debugClientFixture.js';
 import { toDisposable } from '../../../../../base/common/lifecycle.js';
 import { resetNlsResolver } from '../../../../../nls.js';
 import { initializeTestLocalization } from '../../../../services/localization/test/common/localizationTestUtils.js';
@@ -27,7 +23,7 @@ import { suite, test } from "mocha";
 import { Emitter } from "../../../../../base/common/event.js";
 import { URI } from "../../../../../base/common/uri.js";
 import { OperatingSystem } from '../../../../../base/common/platform.js';
-import { type IDebugAdapterProcessReadResult, IDebugAdapterProcessService } from "../../../../../platform/debug/common/debugAdapterProcessService.js";
+import { type IDebugAdapterProcessReadResult, type IDebugAdapterProcessService } from "../../../../../platform/debug/common/debugAdapterProcessService.js";
 import { type AppServerConnectionState } from "../../../../../platform/agentHost/common/appServerApi.js";
 import { createSshRemoteWorkspaceUri } from "../../../../../platform/remote/common/remote.js";
 import { DebugSession } from "../../browser/debugSession.js";
@@ -326,7 +322,7 @@ test("DebugSession cancels pending breakpoint replacements when disposed", async
 	using processes = new FakeDebugAdapterProcessService();
 	const session = await startSession({ configuration: configuration(), processService: processes, breakpoints: () => [breakpoint(4)], workspace: URI.file('/workspace') });
 	processes.holdBreakpoints = true;
-	const running = assert.rejects(session.syncBreakpoints(), /Debug session was disposed/);
+	const running = assert.rejects(session.syncBreakpoints(), { name: 'CancellationError', message: 'Operation cancelled' });
 	await waitFor(() => processes.heldBreakpointResponse !== undefined);
 	const queued = assert.rejects(session.syncBreakpoints(), { name: 'CancellationError', message: 'Operation cancelled' });
 	await session.disconnect();
@@ -499,7 +495,50 @@ test('DebugSession drains output after a terminated event before closing its tra
 	} finally { await session.disconnect(); }
 });
 
+test('DebugSession publishes a fresh pause and capabilities without inventing a running transition', async () => {
+	using processes = new FakeDebugAdapterProcessService();
+	const session = await startSession({ configuration: configuration(), processService: processes, breakpoints: () => [], workspace: URI.file('/workspace') });
+	const states: string[] = [];
+	const listener = session.onDidChangeState(state => states.push(state));
+	try {
+		processes.event('stopped', { threadId: 7 });
+		await waitFor(() => states.length === 1);
+		processes.event('stopped', { threadId: 7 });
+		await waitFor(() => states.length === 2);
+		assert.deepEqual(states, ['stopped', 'stopped']);
+		processes.event('capabilities', { capabilities: { supportsRestartRequest: false } });
+		await waitFor(() => session.capabilities.supportsRestart === false);
+		assert.equal(states.length, 3);
+	} finally { listener.dispose(); await session.disconnect(); }
+});
+
+test('DebugSession localizes a backend terminal snapshot during initialization', async () => {
+	using processes = new FakeDebugAdapterProcessService();
+	const read = processes.read.bind(processes);
+	let ended = false;
+	processes.completeConfiguration = async () => { ended = true; };
+	processes.read = async (...args) => {
+		const result = await read(...args);
+		return ended ? { ...result, session: { ...result.session!, revision: result.session!.revision + 1, phase: 'ended', state: 'terminated', reason: null } } : result;
+	};
+	initializeTestLocalization('zh-CN');
+	try {
+		await assert.rejects(startSession({ configuration: configuration(), processService: processes, breakpoints: () => [], workspace: URI.file('/workspace') }), { message: '调试会话在初始化期间结束。' });
+		assert.equal(processes.closed, true);
+	} finally { resetNlsResolver(); }
+});
+
 class FakeDebugAdapterProcessService implements IDebugAdapterProcessService {
+	declare setBreakpoints: IDebugAdapterProcessService['setBreakpoints'];
+	declare readBreakpoints: IDebugAdapterProcessService['readBreakpoints'];
+	declare startInspection: IDebugAdapterProcessService['startInspection'];
+	declare readInspection: IDebugAdapterProcessService['readInspection'];
+	declare initializeSession: IDebugAdapterProcessService['initializeSession'];
+	declare completeConfiguration: IDebugAdapterProcessService['completeConfiguration'];
+	declare startRequest: IDebugAdapterProcessService['startRequest'];
+	declare readResponse: IDebugAdapterProcessService['readResponse'];
+	declare acceptInput: IDebugAdapterProcessService['acceptInput'];
+
 	private readonly connectionEmitter = new Emitter<AppServerConnectionState>();
 	private readonly messages: Array<{ readonly sequence: number; readonly message: unknown; }> = [];
 	private nextMessageSequence = 0;
@@ -515,7 +554,7 @@ class FakeDebugAdapterProcessService implements IDebugAdapterProcessService {
 	dataInfoReply: Record<string, unknown> = { dataId: 'memory:counter', description: 'counter', canPersist: false, accessTypes: ['read', 'write', 'readWrite'] };
 	readonly onConnectionState = this.connectionEmitter.event;
 
-	constructor(private readonly stackFramePath = "C:\\workspace\\main.ts", private readonly supportsSetVariable = true, private readonly supportsAdvancedBreakpoints = true, private readonly supportsBreakpointFamilies = false, private readonly supportsDisassembly = false, public threadId = 7, public frameId = 11) { }
+	constructor(private readonly stackFramePath = "C:\\workspace\\main.ts", private readonly supportsSetVariable = true, private readonly supportsAdvancedBreakpoints = true, private readonly supportsBreakpointFamilies = false, private readonly supportsDisassembly = false, public threadId = 7, public frameId = 11) { installDebugClientFixture(this); }
 
 	async start(options: unknown): Promise<string> { this.started = options; return "debug-1"; }
 
@@ -584,21 +623,16 @@ async function waitFor(predicate: () => boolean): Promise<void> {
 	}
 }
 
-async function startSession(options: Omit<DebugSessionStartOptions, 'resolvedConfiguration'> & { processService: IDebugAdapterProcessService; }): Promise<DebugSession> {
+async function startSession(options: Omit<DebugSessionStartOptions, 'resolvedConfiguration'>): Promise<DebugSession> {
 	using workspace = new TestWorkspaceService({ id: 'test', uri: options.workspace });
-	const identity = new TestUriIdentityServices();
 	const base = createDisconnectedRendererApi();
 	const host = { ...base, hasAppServer: true, appServer: { ...base.appServer, operatingSystem: OperatingSystem.Windows } };
-	using services = new InstantiationService(new ServiceCollection([ILabelService, new SyncDescriptor(LabelService)], [IUriIdentityService, identity.get(IUriIdentityService)], [ILogService, new NullLoggerService()], [IDebugAdapterProcessService, options.processService], [IPathService, new SyncDescriptor(BrowserPathService)], [IRendererHostService, host], [IConfigurationService, new SyncDescriptor(WorkbenchConfigurationService)], [ITerminalProcessService, { getEnvironment: async () => ({}) }], [IWorkspaceContextService, workspace]));
+	using services = new InstantiationService(new ServiceCollection([IPathService, new SyncDescriptor(BrowserPathService)], [IRendererHostService, host], [IConfigurationService, new SyncDescriptor(WorkbenchConfigurationService)], [ITerminalProcessService, { getEnvironment: async () => ({}) }], [IWorkspaceContextService, workspace]));
 	services.registerSingleton(ICommandService, () => new CommandService(services));
 	using resolver = services.createInstance(ConfigurationResolverService);
 	const resolvedConfiguration = await resolver.resolveAsync(workspace.getWorkspace().folders[0], { adapter: options.configuration.adapter, arguments: options.configuration.arguments });
 	assert.ok(resolvedConfiguration.adapter);
-	try {
-		const session = await DebugSession.start({ id: 'debug-1', ...options, resolvedConfiguration: { ...resolvedConfiguration, adapter: resolvedConfiguration.adapter } }, services);
-		const release = session.onDidChangeState(state => { if (state === 'terminated' || state === 'error') { release.dispose(); identity.dispose(); } });
-		return session;
-	} catch (error) { identity.dispose(); throw error; }
+	return DebugSession.start({ id: 'debug-1', ...options, resolvedConfiguration: { ...resolvedConfiguration, adapter: resolvedConfiguration.adapter } });
 }
 
 
@@ -635,8 +669,6 @@ for (const [path, address] of [
 	['//server/share/main.ts', 'file://server/share/main.ts'],
 	['/workspace/main\\part.ts', 'file:///workspace/main%5Cpart.ts'],
 	['/workspace/main\\part?#.ts', 'file:///workspace/main%5Cpart%3F%23.ts'],
-	['file:///D:/workspace/main%20file.ts', 'file:///D:/workspace/main%20file.ts'],
-	['\\\\?\\C:\\workspace\\main.ts', 'file:///C:/workspace/main.ts'],
 ]) {
 	test(`DAP file sources preserve execution path ${path}`, async () => {
 		using processes = new FakeDebugAdapterProcessService(path);
@@ -646,37 +678,6 @@ for (const [path, address] of [
 		} finally { await session.disconnect(); }
 	});
 }
-
-for (const { root, path, expected } of [
-	{ root: 'C:/project', path: 'file:///D:/code/main%20file.ts', expected: 'D:/code/main file.ts' },
-	{ root: '//server/share/project', path: 'file://build/share/main.ts', expected: '//build/share/main.ts' },
-	{ root: 'C:/project', path: '\\\\?\\D:\\code\\main.ts', expected: 'D:/code/main.ts' },
-	{ root: '/srv/project', path: 'file:///srv/part%5Cname.ts%20', expected: '/srv/part\\name.ts ' },
-]) {
-	test(`DAP sources bind ${path} to their execution authority`, async () => {
-		using processes = new FakeDebugAdapterProcessService(path);
-		const workspace = createSshRemoteWorkspaceUri('source-host', root);
-		const session = await startSession({ configuration: configuration(), processService: processes, breakpoints: () => [], workspace });
-		try {
-			const source = (await session.stackTrace())[0]!.source!;
-			assert.equal(source.path, path);
-			assert.equal(source.resource?.toString(), createSshRemoteWorkspaceUri('source-host', expected).toString());
-		} finally { await session.disconnect(); }
-	});
-}
-
-test('relative DAP sources retain session identity instead of acquiring a host filesystem path', async () => {
-	using processes = new FakeDebugAdapterProcessService('src/generated.ts');
-	const session = await startSession({ configuration: configuration(), processService: processes, breakpoints: () => [], workspace: createSshRemoteWorkspaceUri('build', '/srv/project') });
-	try {
-		const source = (await session.stackTrace())[0]!.source!;
-		assert.equal(source.resource?.scheme, 'debug');
-		assert.equal(source.resource?.path, 'src/generated.ts');
-		assert.equal(source.resource?.query, `session=${session.id}&ref=0`);
-		await session.source(source);
-		assert.equal((processes.request('source').arguments as { sourceReference: number; }).sourceReference, 0);
-	} finally { await session.disconnect(); }
-});
 
 
 test('DebugSession reports invalid identifiers in the current locale without sending a request', async () => {

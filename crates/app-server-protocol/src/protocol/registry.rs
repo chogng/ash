@@ -769,6 +769,72 @@ use crate::protocol::debug::DebugAdapterStartParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::debug::DebugAdapterStartResult;
 #[cfg(any(test, feature = "export"))]
+use crate::protocol::debug::DebugBreakpointBinding;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::debug::DebugBreakpointIntent;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::debug::DebugBreakpointLocation;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::debug::DebugBreakpointUnsupported;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::debug::DebugBreakpointsSetParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::debug::DebugBreakpointsSnapshot;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::debug::DebugDataAccess;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::debug::DebugExceptionFilterDto;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::debug::DebugExecutionStateDto;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::debug::DebugInitializationPhaseDto;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::debug::DebugInspection;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::debug::DebugInspectionReadParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::debug::DebugInspectionResult;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::debug::DebugInspectionStartParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::debug::DebugInspectionStartResult;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::debug::DebugInspectionValue;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::debug::DebugLaunchRequestDto;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::debug::DebugMessageDirectionDto;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::debug::DebugScopeVariables;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::debug::DebugSessionCapabilitiesDto;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::debug::DebugSessionConfigureParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::debug::DebugSessionInitializeParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::debug::DebugSessionInputParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::debug::DebugSessionRequestParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::debug::DebugSessionRequestResult;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::debug::DebugSessionResponseParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::debug::DebugSessionResponseResult;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::debug::DebugSessionSnapshotDto;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::debug::DebugSourceAddress;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::debug::DebugWatchValue;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::diagnostics::AgentHostDebugLogFile;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::diagnostics::AgentHostDebugLogsParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::diagnostics::AgentHostDebugLogsResult;
+#[cfg(any(test, feature = "export"))]
 use crate::protocol::diagnostics::FeedbackPrepareParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::diagnostics::FeedbackUploadParams;
@@ -3747,6 +3813,11 @@ client_methods! {
         response: SessionTraceReadResult,
         serialization: SessionSharedRead,
     },
+    SessionDebugLogsCollect => "session/debugLogs/collect" {
+        params: AgentHostDebugLogsParams,
+        response: AgentHostDebugLogsResult,
+        serialization: SessionSharedRead,
+    },
     SessionTraceDiagnosticsRead => "session/trace/diagnostics/read" {
         params: SessionTraceDiagnosticsReadParams,
         response: SessionTraceDiagnosticsReadResult,
@@ -5512,6 +5583,51 @@ client_methods! {
         response: DebugAdapterReadResult,
         serialization: None,
     },
+    DebugBreakpointsSet => "debug/session/breakpoints/set" {
+        params: DebugBreakpointsSetParams,
+        response: (),
+        serialization: None,
+    },
+    DebugBreakpointsRead => "debug/session/breakpoints/read" {
+        params: DebugAdapterCloseParams,
+        response: DebugBreakpointsSnapshot,
+        serialization: None,
+    },
+    DebugInspectionStart => "debug/session/inspection/start" {
+        params: DebugInspectionStartParams,
+        response: DebugInspectionStartResult,
+        serialization: None,
+    },
+    DebugInspectionRead => "debug/session/inspection/read" {
+        params: DebugInspectionReadParams,
+        response: DebugInspectionResult,
+        serialization: None,
+    },
+    DebugSessionInitialize => "debug/session/initialize" {
+        params: DebugSessionInitializeParams,
+        response: (),
+        serialization: None,
+    },
+    DebugSessionConfigure => "debug/session/configure" {
+        params: DebugSessionConfigureParams,
+        response: (),
+        serialization: None,
+    },
+    DebugSessionRequest => "debug/session/request" {
+        params: DebugSessionRequestParams,
+        response: DebugSessionRequestResult,
+        serialization: None,
+    },
+    DebugSessionResponse => "debug/session/response" {
+        params: DebugSessionResponseParams,
+        response: DebugSessionResponseResult,
+        serialization: None,
+    },
+    DebugSessionInput => "debug/session/input" {
+        params: DebugSessionInputParams,
+        response: (),
+        serialization: None,
+    },
     DebugAdapterClose => "debug/adapter/close" {
         params: DebugAdapterCloseParams,
         response: (),
@@ -6549,6 +6665,9 @@ typescript_bindings! {
     SessionReadParams,
     SessionTraceReadParams,
     SessionTraceReadResult,
+    AgentHostDebugLogsResult,
+    AgentHostDebugLogsParams,
+    AgentHostDebugLogFile,
     SessionTraceDiagnosticsReadParams,
     SessionTraceDiagnosticsReadResult,
     SessionTracePayloadReadParams,
@@ -7418,6 +7537,30 @@ typescript_bindings! {
     TestingOperationStatus,
     TestingSnapshot,
     TestingUpdate,
+    DebugBreakpointsSetParams,
+    DebugInspectionStartParams,
+    DebugInspectionStartResult,
+    DebugInspectionReadParams,
+    DebugSourceAddress,
+    DebugBreakpointLocation,
+    DebugDataAccess,
+    DebugBreakpointIntent,
+    DebugBreakpointUnsupported,
+    DebugBreakpointBinding,
+    DebugBreakpointsSnapshot,
+    DebugInspection,
+    DebugWatchValue,
+    DebugScopeVariables,
+    DebugInspectionValue,
+    DebugInspectionResult,
+    DebugSessionInitializeParams,
+    DebugSessionConfigureParams,
+    DebugLaunchRequestDto,
+    DebugExecutionStateDto,
+    DebugInitializationPhaseDto,
+    DebugSessionSnapshotDto,
+    DebugSessionCapabilitiesDto,
+    DebugExceptionFilterDto,
     DebugAdapterConnectionDto,
     DebugAdapterStartParams,
     DebugAdapterStartResult,
@@ -7425,6 +7568,12 @@ typescript_bindings! {
     DebugAdapterReadParams,
     DebugAdapterMessageDto,
     DebugAdapterReadResult,
+    DebugMessageDirectionDto,
+    DebugSessionRequestParams,
+    DebugSessionRequestResult,
+    DebugSessionResponseParams,
+    DebugSessionResponseResult,
+    DebugSessionInputParams,
     DebugAdapterCloseParams,
     AppServerErrorName,
     AppServerErrorData,

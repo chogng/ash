@@ -357,6 +357,91 @@ fn read_log_tail(path: &Path, byte_limit: u64) -> Result<Option<String>, String>
     Ok((!contents.is_empty()).then_some(contents))
 }
 
+pub(crate) fn read_process_logs(
+    profile_root: &Path,
+) -> Result<(Vec<super::ProcessLog>, usize), String> {
+    const MAX_FILES: usize = 32;
+    const MAX_FILE_BYTES: u64 = 16 * 1024 * 1024;
+    let endpoint = EndpointPaths::prepare(profile_root)?;
+    let parent = endpoint
+        .log
+        .parent()
+        .ok_or("Process log has no directory")?;
+    let name = endpoint
+        .log
+        .file_name()
+        .and_then(|name| name.to_str())
+        .ok_or("Invalid process log name")?;
+    let mut paths = Vec::new();
+    for entry in fs::read_dir(parent).map_err(io_error)? {
+        let entry = entry.map_err(io_error)?;
+        let file_name = entry.file_name();
+        let Some(file_name) = file_name.to_str() else {
+            continue;
+        };
+        let rotation = if file_name == name {
+            0
+        } else if let Some(rotation) =
+            file_name
+                .strip_prefix(&format!("{name}."))
+                .and_then(|suffix| {
+                    suffix
+                        .parse::<u32>()
+                        .ok()
+                        .filter(|rotation| *rotation > 0 && suffix == rotation.to_string())
+                })
+        {
+            rotation
+        } else {
+            continue;
+        };
+        paths.push((rotation, entry.path()));
+    }
+    paths.sort_by_key(|(rotation, _)| *rotation);
+    let mut omitted = paths.len().saturating_sub(MAX_FILES);
+    let mut remaining_bytes: u64 = 64 * 1024 * 1024;
+    let mut logs = Vec::new();
+    for (rotation, path) in paths.into_iter().take(MAX_FILES) {
+        if !fs::symlink_metadata(&path).map_err(io_error)?.is_file() {
+            return Err("Process log must be a regular file".into());
+        }
+        let mut options = OpenOptions::new();
+        options.read(true);
+        #[cfg(unix)]
+        options.custom_flags(libc::O_NOFOLLOW | libc::O_NONBLOCK);
+        // Open the reparse point itself so descriptor metadata rejects redirected files.
+        #[cfg(windows)]
+        {
+            use std::os::windows::fs::OpenOptionsExt;
+            options.custom_flags(0x0020_0000);
+        }
+        let file = options.open(&path).map_err(io_error)?;
+        let metadata = file.metadata().map_err(io_error)?;
+        if !metadata.is_file() {
+            return Err("Process log must be a regular file".into());
+        }
+        if remaining_bytes == 0 && metadata.len() > 0 {
+            omitted += 1;
+            continue;
+        }
+        let mut bytes = Vec::new();
+        file.take(metadata.len().min(MAX_FILE_BYTES).min(remaining_bytes))
+            .read_to_end(&mut bytes)
+            .map_err(io_error)?;
+        remaining_bytes -= bytes.len() as u64;
+        logs.push(super::ProcessLog {
+            name: if rotation == 0 {
+                "app-server.log".into()
+            } else {
+                format!("app-server.log.{rotation}")
+            },
+            truncated: metadata.len() > bytes.len() as u64,
+            bytes,
+        });
+    }
+    Ok((logs, omitted))
+}
+
 #[cfg(unix)]
 fn socket_path_exists(path: &Path) -> bool {
     fs::symlink_metadata(path).is_ok_and(|metadata| metadata.file_type().is_socket())

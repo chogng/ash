@@ -360,13 +360,12 @@ export class DebugViewPane extends ViewPane {
 		this.error = undefined;
 		this.render();
 		try {
-			const threads = await session.threads();
+			const inspection = await session.inspectStack(session.threadId);
 			if (!this.isCurrentInspection(session, generation)) return;
-			const selectedThread = threads.find(thread => thread.id === session.threadId) ?? threads[0];
-			if (!selectedThread) throw new Error(localize("debug.noThreads", "The Debug Adapter did not report any stopped threads"));
-			session.selectThread(selectedThread.id);
-			const frames = await session.stackTrace(selectedThread.id);
-			if (!this.isCurrentInspection(session, generation)) return;
+			if (inspection.threadId === undefined) throw new Error(localize("debug.noThreads", "The Debug Adapter did not report any stopped threads"));
+			session.selectThread(inspection.threadId);
+			const threads = inspection.threads;
+			const frames = inspection.frames;
 			this.threads = threads;
 			this.frames = frames;
 			this.selectedFrameId = frames[0]?.id;
@@ -397,11 +396,12 @@ export class DebugViewPane extends ViewPane {
 	private async loadFrameVariables(session: IDebugSession, frameId: number | undefined, generation = this.refreshGeneration): Promise<void> {
 		if (!this.isCurrentInspection(session, generation)) return;
 		if (frameId === undefined) { this.variableRows = []; return; }
-		const scopes = await session.scopes(frameId);
-		if (!this.isCurrentInspection(session, generation)) return;
-		const variables = await Promise.all(scopes.map(scope => scope.variablesReference > 0 ? session.variables(scope.variablesReference) : Promise.resolve(Object.freeze([]) as readonly IDebugVariable[])));
+		const scopes = await session.inspectFrame(frameId);
 		if (!this.isCurrentInspection(session, generation) || this.selectedFrameId !== frameId) return;
-		this.variableRows = Object.freeze(scopes.flatMap((scope, index) => [this.scopeRow(scope), ...variables[index]!.map(variable => this.variableRow(variable, 1, scope.variablesReference))]));
+		this.variableRows = Object.freeze(scopes.flatMap(entry => [this.scopeRow(entry.scope), ...entry.variables.map(variable => this.variableRow(variable, 1, entry.scope.variablesReference))]));
+		const failed = scopes.find(entry => entry.error);
+		if (failed) this.error = failed.error;
+
 	}
 
 	private activateFrame(event: Event): void {
@@ -570,10 +570,7 @@ export class DebugViewPane extends ViewPane {
 		if (!session || session.state !== "stopped") { this.watchResults = expressions.map(expression => ({ expression })); return; }
 		const frameId = this.selectedFrameId;
 		const generation = this.refreshGeneration;
-		const results = await Promise.all(expressions.map(async expression => {
-			try { return { expression, result: await session.evaluate(expression, frameId, "watch") }; }
-			catch (error) { return { expression, error: message(error) }; }
-		}));
+		const results = await session.evaluateWatchExpressions(expressions, frameId);
 		if (!this.isCurrentInspection(session, generation) || this.selectedFrameId !== frameId || this.debug.watchExpressions !== expressions) return;
 		this.watchResults = Object.freeze(results);
 	}

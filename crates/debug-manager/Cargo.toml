@@ -1,0 +1,20 @@
+[package]
+name = "ash-debug-manager"
+version.workspace = true
+edition.workspace = true
+license-file.workspace = true
+publish.workspace = true
+
+[lib]
+doctest = false
+
+[dependencies]
+ash-debug-contract.workspace = true
+ash-debug-adapter.workspace = true
+ash-debug-client.workspace = true
+ash-file-access.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+
+[lints]
+workspace = true

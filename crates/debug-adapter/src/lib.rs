@@ -7,6 +7,8 @@
 mod framing;
 mod service;
 
+pub use framing::MAX_MESSAGE_BYTES;
+
 pub use service::DebugAdapterCommand;
 pub use service::DebugAdapterConnection;
 pub use service::DebugAdapterError;

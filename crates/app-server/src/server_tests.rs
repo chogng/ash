@@ -2154,9 +2154,9 @@ fn debug_adapter_network_roundtrip(named_pipe: bool) {
         let message: serde_json::Value = serde_json::from_slice(&body).unwrap();
         assert_eq!(
             message,
-            serde_json::json!({"seq":0,"type":"request","command":"custom:echo","arguments":{"literal":"$HOME"}})
+            serde_json::json!({"seq":1,"type":"request","command":"custom:echo","arguments":{"literal":"$HOME"}})
         );
-        let response = serde_json::json!({"seq":0,"type":"response","request_seq":0,"command":"custom:echo","success":true,"body":message["arguments"]});
+        let response = serde_json::json!({"seq":0,"type":"response","request_seq":message["seq"],"command":"custom:echo","success":true,"body":message["arguments"]});
         let body = serde_json::to_vec(&response).unwrap();
         write!(stream.get_mut(), "Content-Length: {}\r\n\r\n", body.len()).unwrap();
         stream.get_mut().write_all(&body).unwrap();
@@ -2179,22 +2179,74 @@ fn debug_adapter_network_roundtrip(named_pipe: bool) {
     let rejected = call(
         &server,
         &mut other,
-        serde_json::json!({"jsonrpc":"2.0","id":2,"method":"debug/adapter/send","params":{"sessionId":id,"message":{"seq":0,"type":"request","command":"custom:echo"}}}),
+        serde_json::json!({"jsonrpc":"2.0","id":2,"method":"debug/session/request","params":{"sessionId":id,"command":"custom:echo"}}),
     );
     assert_eq!(rejected["error"]["message"], "DebugAdapterNotOwner");
     let sent = call(
         &server,
         &mut owner,
-        serde_json::json!({"jsonrpc":"2.0","id":3,"method":"debug/adapter/send","params":{"sessionId":id,"message":{"seq":0,"type":"request","command":"custom:echo","arguments":{"literal":"$HOME"}}}}),
+        serde_json::json!({"jsonrpc":"2.0","id":3,"method":"debug/session/request","params":{"sessionId":id,"command":"custom:echo","arguments":{"literal":"$HOME"}}}),
     );
     assert!(sent["error"].is_null(), "{sent}");
+    for (index, method) in [
+        "debug/session/response",
+        "debug/session/input",
+        "debug/session/initialize",
+        "debug/session/configure",
+        "debug/session/breakpoints/set",
+        "debug/session/breakpoints/read",
+        "debug/session/inspection/start",
+        "debug/session/inspection/read",
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        let params = match method {
+            "debug/session/response" => {
+                serde_json::json!({"sessionId":id,"requestId":sent["result"]["requestId"]})
+            }
+            "debug/session/initialize" => {
+                serde_json::json!({"publicId":"test-session","sessionId":id,"adapterId":"test","request":"launch","arguments":{},"runInTerminal":false,"startDebugging":false})
+            }
+            "debug/session/configure" => serde_json::json!({"sessionId":id,"exceptionFilters":[]}),
+            "debug/session/breakpoints/set" => {
+                serde_json::json!({"sessionId":id,"version":1,"intents":[]})
+            }
+            "debug/session/breakpoints/read" => serde_json::json!({"sessionId":id}),
+            "debug/session/inspection/start" => {
+                serde_json::json!({"sessionId":id,"query":{"kind":"stack"},"inspectionRevision":0})
+            }
+            "debug/session/inspection/read" => serde_json::json!({"sessionId":id,"inspectionId":1}),
+            _ => {
+                serde_json::json!({"sessionId":id,"messages":[],"outputGap":false,"stderr":"","exited":false,"exitCode":null,"protocolError":null})
+            }
+        };
+        let denied = call(
+            &server,
+            &mut other,
+            serde_json::json!({"jsonrpc":"2.0","id":100 + index,"method":method,"params":params}),
+        );
+        assert_eq!(denied["error"]["message"], "DebugAdapterNotOwner");
+    }
+    let injection = call(
+        &server,
+        &mut owner,
+        serde_json::json!({"jsonrpc":"2.0","id":10,"method":"debug/session/input","params":{"sessionId":id,"messages":[],"outputGap":false,"stderr":"","exited":false,"exitCode":null,"protocolError":null}}),
+    );
+    assert_eq!(injection["error"]["message"], "InvalidParams");
+    let bypass = call(
+        &server,
+        &mut owner,
+        serde_json::json!({"jsonrpc":"2.0","id":11,"method":"debug/adapter/send","params":{"sessionId":id,"message":{"seq":999,"type":"request","command":"launch"}}}),
+    );
+    assert_eq!(bypass["error"]["message"], "InvalidParams");
     let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
-    let mut request_id = 4;
+    let mut request_id = 20;
     loop {
         let read = call(
             &server,
             &mut owner,
-            serde_json::json!({"jsonrpc":"2.0","id":request_id,"method":"debug/adapter/read","params":{"sessionId":id,"afterSequence":0,"maxMessages":1}}),
+            serde_json::json!({"jsonrpc":"2.0","id":request_id,"method":"debug/adapter/read","params":{"sessionId":id,"afterSequence":1,"maxMessages":1}}),
         );
         request_id += 1;
         assert!(read["error"].is_null(), "{read}");
@@ -2203,7 +2255,8 @@ fn debug_adapter_network_roundtrip(named_pipe: bool) {
                 read["result"]["messages"][0]["message"]["body"],
                 serde_json::json!({"literal":"$HOME"})
             );
-            assert_eq!(read["result"]["nextSequence"], 1);
+            assert_eq!(read["result"]["nextSequence"], 2);
+            assert_eq!(read["result"]["messages"][0]["direction"], "incoming");
             assert_eq!(read["result"]["exited"], false);
             assert!(read["result"]["exitCode"].is_null());
             break;
@@ -2214,6 +2267,24 @@ fn debug_adapter_network_roundtrip(named_pipe: bool) {
         );
         std::thread::sleep(std::time::Duration::from_millis(5));
     }
+    let response_params =
+        serde_json::json!({"sessionId":id,"requestId":sent["result"]["requestId"]});
+    let response = call(
+        &server,
+        &mut owner,
+        serde_json::json!({"jsonrpc":"2.0","id":request_id,"method":"debug/session/response","params":response_params}),
+    );
+    assert_eq!(response["result"]["state"], "complete");
+    assert_eq!(
+        response["result"]["response"]["body"],
+        serde_json::json!({"literal":"$HOME"})
+    );
+    let consumed = call(
+        &server,
+        &mut owner,
+        serde_json::json!({"jsonrpc":"2.0","id":request_id + 1,"method":"debug/session/response","params":response_params}),
+    );
+    assert_eq!(consumed["error"]["message"], "DebugAdapterNotFound");
     server.close_connection(owner);
     peer.join().unwrap();
     let missing = call(

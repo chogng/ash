@@ -114,6 +114,9 @@ class FakeDebugSession extends Disposable implements IDebugSession {
 	public readonly onDidChangeThread = Event.None;
 	public readonly name = "One";
 	public setName(): void { throw new Error("Renaming is unsupported in this fixture"); }
+	public async inspectStack() { return { threads: [], frames: [] }; }
+	public async inspectFrame() { return []; }
+	public async evaluateWatchExpressions() { return []; }
 	public getDebugProtocolBreakpoint(): undefined { return undefined; }
 	public async customRequest(): Promise<never> { throw new Error("Custom requests are unsupported in this fixture"); }
 	private retainedOutput = "";

@@ -297,6 +297,22 @@ export interface IDebugSessionOptions {
 	readonly suppressSaveBeforeStart?: boolean;
 }
 
+export interface IDebugStackInspection {
+	readonly threads: readonly IDebugThread[];
+	readonly frames: readonly IDebugStackFrame[];
+	readonly threadId?: number;
+}
+export interface IDebugScopeInspection {
+	readonly scope: IDebugScope;
+	readonly variables: readonly IDebugVariable[];
+	readonly error?: string;
+}
+export interface IDebugWatchResult {
+	readonly expression: string;
+	readonly result?: IDebugEvaluateResult;
+	readonly error?: string;
+}
+
 export interface IDebugSession extends IDisposable {
 	readonly id: string;
 	readonly name: string;
@@ -324,6 +340,9 @@ export interface IDebugSession extends IDisposable {
 	stepInto(granularity?: DebugSteppingGranularity): Promise<void>;
 	stepOut(granularity?: DebugSteppingGranularity): Promise<void>;
 	restart(): Promise<void>;
+	inspectStack(threadId?: number): Promise<IDebugStackInspection>;
+	inspectFrame(frameId: number): Promise<readonly IDebugScopeInspection[]>;
+	evaluateWatchExpressions(expressions: readonly string[], frameId?: number): Promise<readonly IDebugWatchResult[]>;
 	threads(): Promise<readonly IDebugThread[]>;
 	selectThread(threadId: number): void;
 	stackTrace(threadId?: number): Promise<readonly IDebugStackFrame[]>;

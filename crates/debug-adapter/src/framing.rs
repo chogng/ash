@@ -5,7 +5,7 @@ use tokio::io::AsyncReadExt;
 
 use crate::service::DebugAdapterError;
 
-pub(crate) const MAX_MESSAGE_BYTES: usize = 4 * 1024 * 1024;
+pub const MAX_MESSAGE_BYTES: usize = 4 * 1024 * 1024;
 
 pub(crate) async fn read_message(
     reader: &mut (impl AsyncBufRead + Unpin),

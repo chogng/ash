@@ -11,6 +11,7 @@ name = "ash_app_server_runtime"
 path = "src/lib.rs"
 
 [dependencies]
+ash-debug-contract.workspace = true
 ash-utils-string = { workspace = true }
 ash-utils-plugins = { workspace = true }
 ash-language = { workspace = true }
@@ -102,6 +103,7 @@ thread-store = { package = "ash-thread-store", path = "../thread-store" }
 ash-client = { workspace = true }
 ash-diff = { workspace = true }
 ash-debug-adapter = { workspace = true }
+ash-debug-manager = { workspace = true }
 ash-external-ext = { workspace = true }
 ash-extension-api = { workspace = true }
 ash-mcp-extension = { workspace = true }

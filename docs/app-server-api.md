@@ -165,7 +165,7 @@ notification contract，不能拥有隐藏业务接口。JSONL/stdio、WebSocket
 ```json
 {
   "serverInfo": { "name": "ash-app-server", "version": "0.1.0" },
-  "protocolVersion": { "major": 8 },
+  "protocolVersion": { "major": 9 },
   "schemaHash": "sha256:...",
   "capabilities": {
     "sessions": true,
@@ -830,6 +830,14 @@ spawn 前执行 `env_clear`，所以 PTY 看不到最终 map 之外的 App Serve
 `agent/capabilities/read` 接受 `{}`，读取当前已组合的工具注册表。`tools` 中每项包含名称、描述、来源类别、无凭据的 `sourceChain`、暴露方式与 `authority` 类别；其中本地文件工具区分目录读写、命令工具标记进程执行，扩展、MCP 等提供方工具的具体范围由提供方定义。`localProcessSandboxConfigured` 表示当前环境已启用本地进程执行；`sandboxBackends` 是已注册的候选后端，不保证任意请求能通过后端检查。`directoryGrantsReadable` 表示本连接有目录授权宿主权限；只有此时才能再通过 `config/directoryGrants/list` 读取目录路径与已保存授权。某个 Session 实际选中的目录和每次调用的参数、操作策略、沙箱策略还会进一步收窄权限。该接口不授予权限，也不预测单次执行的结果。Workbench 的 Settings > Agents > Tools / Sandbox 使用这两个只读接口。
 
 ### 读取执行 Trace
+
+`session/debugLogs/collect` 接受且只接受 `{ sessionId }`，由现有 Session 路由到所属本地或 SSH runtime。
+返回 `{ files: [{ name, truncated, resource }], omittedFiles }`。daemon 日志 owner 只枚举该 profile
+当前进程日志和现存数字轮转文件；客户端不能提交路径。每次最多 32 个文件、每文件 16 MiB、共 64 MiB，
+截断与省略明确返回。`resource` 是既有带 size／SHA-256 的二进制资源，属于发起请求的 connection，
+十分钟后过期；通过 `resource/read` 分块读取并用 `resource/release` 释放，断连统一清理。
+gateway 为集合内每个资源保留原 runtime 路由；其他 connection 不能读取这些句柄。失败分配会回收
+本次已创建的所有资源。该方法不启动其他会话、模型或日志录制，也不改变日志保留策略。
 
 `session/trace/read` 接受 `{ "sessionId": "...", "after": { "thread-id": 42 }, "limit": 500 }`。
 `after` 缺省为空；每个游标属于该 Session 的一个 Thread，表示已经读取的 durable sequence。
@@ -1527,6 +1535,24 @@ Thread 保存普通 Coding Turn 的顾问选择策略；接受 Turn 时将解析
 `testing/prepareDebug` 使用相同的 `catalogId` 和一个 `testId`，异步准备包含调试信息的测试程序，通过 `testing/updated.launch` 和 `testing/read.launch` 返回 `program`、`arguments`、`directory`、`adapterProgram`。Renderer 将其交给已有 DebugService 启动 DAP 会话；断点、调用栈、继续、重启及停止归 DebugService。编辑器按 F9 设置断点，测试树选择“调试所选测试”，或按住 Alt 点击测试边栏图标启动。该操作不会写入 `launch.json`，也不会先运行所选测试。macOS 通过 `xcrun --find lldb-dap` 找到适配器，其他平台使用 PATH 中的 `lldb-dap`。文档测试的 `debuggable` 为 `false`，不提供调试按钮。
 
 `testing/read` 读取已有操作的完整快照，不重新执行。`testing/cancel` 等待进程终止与最终更新；`testing/release` 还删除操作状态。连接关闭取消并回收该连接的所有操作。操作最多保留 10,000 个测试，单条结果输出最多 16 KiB，每次运行保留的总输出最多 2 MiB；超出部分明确标记 `outputTruncated`。`TestingNotFound` 表示当前连接没有对应操作，`TestingBusy` 表示操作数量达到上限，`TestingOperationFailed` 表示后端无法完成操作。
+
+## DAP 会话与请求调度
+
+`debug/adapter/start` 创建绑定连接和目录的 Rust manager 会话，选择 executable、TCP/pipe 或 `{ "type": "client" }` inline IO。返回的 `sessionId` 是不透明身份，不能当作进程 ID，也不能跨目录或连接使用。所有模式使用同一个 Rust DAP client。
+
+`debug/session/initialize` 接收 adapterId、launch/attach、已解析 arguments 与绑定客户端的 runInTerminal/startDebugging 能力，启动一次性的 Rust 初始化状态机，不等待 DAP 完成。`debug/adapter/read.session` 返回 revision、executionRevision、state、phase、reason、stoppedThreadId 和归一化 capabilities；调用方在 configuring 阶段提交现有断点，再以 `debug/session/configure` 提交 exceptionFilters。Rust 验证过滤器并选择默认值（noDebug 下清空），按能力发送 configurationDone，等待 launch/attach 后进入 active。重复初始化或配置，以及绕过状态机发送 initialize/launch/configurationDone，均被拒绝。
+
+`debug/session/breakpoints/set` 提交 `version` 与 source/function/data/instruction `intents`。Rust 接纳最新编辑版本、按源和家族串行替换，旧版本不会覆盖新版本，迟到回复只绑定仍相同的意图。`debug/session/breakpoints/read` 返回带 revision、appliedVersion、pending/verified/removed、可用范围和绑定的领域快照；`debug/adapter/read.breakpointRevision` 提供变化游标。跨会话地址及不支持能力由后端判断，通用 request 端口不允许绕过此 owner 发送四类 set 请求。
+
+`debug/session/inspection/start` 接收显式 stack/frame/variables/watch 查询和调用方的 `inspectionRevision`，返回 started/inspectionId 或 invalidated。后者不发送 DAP。`inspection/read` 返回 pending、complete、failed 或 invalidated；终态只消费一次。线程/帧选择属于查询本身，不写后端全局焦点；Rust 拥有请求依赖链，并分别保留 Watch/scopes 的部分失败。任务数量/结果总量/期限均有界，关闭会话清理全部任务；不承诺单个查询的独立取消。共享 `ash-debug-contract` 提供领域值，protocol crate 拥有 RPC、身份及生成运行时 decoder。
+
+执行事件与继续/单步回复按执行代次处理；迟到成功回复不能覆盖更新的 stopped。恢复执行或 invalidated 后，新检查任务返回 invalidated，旧通用检查 request 返回 failed。快照独立于观察游标：调用方忽略较旧 revision，并在排空输出后发布终态；线程和栈帧的 UI 选择仍属于客户端。
+
+`debug/session/request` 接收 `sessionId`、`command`、可选 `arguments` 和目录身份，登记并发送请求，返回 `requestId`。省略 arguments 与显式 JSON null 保持区别。`debug/session/response` 接收同一会话与请求身份，返回 `pending`、`complete`（保留原 DAP response）或 `failed`；终态只消费一次。请求超时、适配器错误与连接关闭不会重放操作。响应读取可以驱动底层传输，不依赖控制台可见性。
+
+`debug/adapter/read` 返回有界的双向观察页；每项 `direction` 为 `incoming` 或 `outgoing`，`sequence` 是观察游标，独立于 DAP seq。`debug/adapter/send` 现在只提交已登记的反向请求应答，其输出 seq 由 Rust 分配。inline 桥通过 `debug/session/input` 提交输入页并转发观察页中的 outgoing 消息；此端口拒绝为 executable/TCP/pipe 注入消息。关闭会话或发起连接后，后端释放 client 与 transport；inline 实现的释放另由绑定该扩展实例的客户端桥等待确认。
+
+这些改变包含发送端口的破坏性语义变化，protocol major 已升为 9，同时继续校验生成 schemaHash；旧后端包需要更新，不能连接后回退到旧 TS DAP 配对路径。领域所有权与剩余迁移范围见 [调试系统](debugging.md)。
 
 ## 素材入库与确切版本读取
 

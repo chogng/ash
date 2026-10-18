@@ -1,5 +1,7 @@
 # `ash-app-server-daemon`
 
+诊断导出通过只读 `read_process_logs` 取得 profile 所属的当前日志和现存数字轮转文件，不接受客户端路径，不启动进程或截断日志；每次最多 32 个文件、单文件 16 MiB、合计 64 MiB，返回截断及省略信息，拒绝重定向文件。App Server 将快照放入发起连接所属的有期限资源，远端与本地使用同一接口。
+
 - 管理独立的 `ash-app-server --managed` 进程，记录其 PID、启动身份、可执行文件摘要和随包 `buildId`。
 - 串行化生命周期操作，所选服务探测成功后才返回 ready。Agent 连接验证 initialize 和必需能力；Execution 连接验证执行协议，不打开 Agent 历史。普通 start/connect 复用同一 profile 已运行且协议与必需能力兼容的进程；`ensure-selected` 在可执行文件内容变化时更换运行代次，`restart` 总是更换运行代次。
 - 提供同用户控制端点与 stdio 连接程序；`ManagedEndpoint` 由后台服务进程持有。

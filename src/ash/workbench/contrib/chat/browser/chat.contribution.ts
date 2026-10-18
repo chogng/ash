@@ -1,5 +1,7 @@
 import { ChatResponseResourceFileSystemProvider, ChatResponseResourceWorkbenchContribution, IChatResponseResourceFileSystemProvider } from '../common/widget/chatResponseResourceFileSystemProvider.js';
 import { registerChatActions } from './actions/chatActions.js';
+import { registerAction2 } from '../../../../platform/actions/common/actions.js';
+import { ExportAgentHostDebugLogsAction } from './actions/exportAgentHostDebugLogsAction.js';
 import { ChatSessionLinkOpener, registerChatCopyActions } from './actions/chatCopyActions.js';
 import { registerChatContextActions } from './actions/chatContextActions.js';
 import { registerChatCodeBlockActions } from './actions/chatCodeblockActions.js';
@@ -29,6 +31,7 @@ registerSingleton(IDictationOnboardingService, DictationOnboardingService, Insta
 registerSingleton(IChatResponseResourceFileSystemProvider, ChatResponseResourceFileSystemProvider, InstantiationType.Delayed);
 registerWorkbenchContribution(ChatResponseResourceWorkbenchContribution.ID, WorkbenchPhase.BlockStartup, accessor => accessor.get(IInstantiationService).createInstance(ChatResponseResourceWorkbenchContribution));
 registerChatActions();
+registerAction2(ExportAgentHostDebugLogsAction);
 registerChatCopyActions();
 registerWorkbenchContribution('workbench.contrib.chatSessionLinks', WorkbenchPhase.BlockRestore, accessor => accessor.get(IInstantiationService).createInstance(ChatSessionLinkOpener));
 registerWorkbenchContribution('workbench.contrib.chatContextActions', WorkbenchPhase.BlockStartup, () => registerChatContextActions());

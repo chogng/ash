@@ -3,6 +3,15 @@ import { createServiceIdentifier } from '../../instantiation/common/instantiatio
 import type * as Agent from './agent.js';
 
 export interface IAgentSessionService {
+	/** Collects process logs from the runtime owning this Session, using connection-owned resources. */
+	collectDebugLogs(params: SessionReadParams, signal?: AbortSignal): Promise<{
+		readonly files: readonly {
+			readonly name: string;
+			readonly bytes: Uint8Array;
+			readonly truncated: boolean;
+		}[];
+		readonly omittedFiles: number;
+	}>;
 	/** Optional runtime capability; cancellation belongs to the originating connection. */
 	invokeRuntime?(providerId: string, request: Agent.SessionRuntimeRequest, signal: AbortSignal): Promise<Agent.SessionRuntimeResult>;
 	create(params: Agent.SessionCreateParams): Promise<Agent.SessionResult>;
