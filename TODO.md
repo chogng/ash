@@ -47,7 +47,8 @@
 
 - [ ] **验收** · 在 macOS／Linux 验收真实系统 Policy 来源；用真实登录账户验证 GitHub managed settings 的读取、账户切换、撤回和失败保留。
 - [ ] **验收 · Preferences 上游窗口配对**：以本地 VS Code `a2acc8c864a` 对照用户／Workspace／Folder、`@lang:` 与 `@modified` 组合、重置、JSON 草稿、侧边／指定组和焦点语义。本地 VS Code 尚无可运行构建，源码／上游测试核对不能代替窗口配对。当前实现与证据范围见 [Preferences](docs/preferences-and-settings.md#已有验证与限制)。
-      当前存储、配置层和设置入口见 [Preferences 与 Configuration](docs/preferences-and-settings.md)。
+
+当前存储、配置层和设置入口见 [Preferences 与 Configuration](docs/preferences-and-settings.md)。
 
 ## AgentHost · TODO
 
