@@ -9,6 +9,13 @@ pub(crate) const MAX_TRANSACTION_BYTES: usize = 1_048_576;
 pub(crate) const MAX_ROOM_HISTORY: usize = 512;
 pub(crate) const MAX_JAVASCRIPT_SAFE_INTEGER: u64 = 9_007_199_254_740_991;
 
+/// Match the clients' UTF-16 length unit so persisted channel members also work in notes.
+pub(crate) fn valid_display_name(value: &str, max_length: usize) -> bool {
+    !value.is_empty()
+        && value.encode_utf16().count() <= max_length
+        && !value.chars().any(char::is_control)
+}
+
 /// Recoverable ordered history returned by a durable collaboration authority.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum DocumentCollaborationReplay {

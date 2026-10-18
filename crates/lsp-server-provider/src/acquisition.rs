@@ -123,14 +123,18 @@ impl LanguageServerAcquisition {
         dir_root: &Path,
         explicit: Option<&Path>,
         candidates: &dyn LanguageServerExecutableCandidates,
+        environment: &BTreeMap<String, String>,
         install: impl FnOnce() -> Result<InstalledExecutable, ManagedLanguageServerError>,
     ) -> Result<ManagedLanguageServer, ManagedLanguageServerError> {
+        // User overrides have the same precedence during probing and the eventual launch.
+        let mut effective_environment = self.environment.clone();
+        effective_environment.extend(environment.clone());
         let paths = match explicit {
             Some(path) => vec![path.to_path_buf()],
             None => candidates.candidates(&self.executable)?,
         };
         for path in paths {
-            if let Some(definition) = self.probe(&path, dir_root) {
+            if let Some(definition) = self.probe(&path, dir_root, &effective_environment) {
                 return Ok(ManagedLanguageServer {
                     definition,
                     _lease: None,
@@ -142,7 +146,7 @@ impl LanguageServerAcquisition {
         }
         let installed = install()?;
         let definition = self
-            .probe(&installed.path, dir_root)
+            .probe(&installed.path, dir_root, &effective_environment)
             .ok_or_else(|| ManagedLanguageServerError::Unavailable(installed.path.clone()))?;
         Ok(ManagedLanguageServer {
             definition,
@@ -183,14 +187,19 @@ impl LanguageServerAcquisition {
         )?)
     }
 
-    fn probe(&self, path: &Path, dir_root: &Path) -> Option<LanguageServerDefinition> {
+    fn probe(
+        &self,
+        path: &Path,
+        dir_root: &Path,
+        environment: &BTreeMap<String, String>,
+    ) -> Option<LanguageServerDefinition> {
         crate::provider::canonical_executable(path, "language server").ok()?;
         let path = std::path::absolute(path).ok()?;
         // Preserve the invocation name for toolchain proxies that dispatch using argv[0].
         let mut child = Command::new(&path)
             .args(&self.probe_args)
             .current_dir(dir_root)
-            .envs(&self.environment)
+            .envs(environment)
             .stdin(Stdio::null())
             .stdout(Stdio::null())
             .stderr(Stdio::null())
@@ -215,7 +224,7 @@ impl LanguageServerAcquisition {
         }
         let canonical = path.canonicalize().ok()?;
         let mut command = LanguageServerCommand::new(canonical).with_current_dir(dir_root);
-        for (key, value) in &self.environment {
+        for (key, value) in environment {
             command = command.with_environment(key, value);
         }
         #[cfg(unix)]

@@ -142,6 +142,42 @@ test('queued replies cannot match requests created after their receipt', async (
 	assert.equal(client.state, 'crashed');
 });
 
+test('host deadlines cancel work while EOF is waiting for Worker decoding without replying', async () => {
+	mock.timers.enable({ apis: ['setTimeout'] });
+	try {
+		const transport = new ProtocolTransport();
+		const port = new TestAppServerDecodePort();
+		const client = new AppServerProtocolClient(transport, { requestTimeoutMs: 100 }, new AppServerFrameDecoder(() => port));
+		using cleanup = toDisposable(() => client.dispose());
+		await client.connect();
+		let signal!: AbortSignal;
+		let finish!: () => void;
+		let effects = 0;
+		using handler = client.registerRequestHandler(APP_SERVER_SERVER_REQUESTS['browser/create'], async (_params, context) => {
+			signal = context.signal;
+			await new Promise<void>(resolve => { finish = resolve; });
+			if (!signal.aborted) { effects++; }
+			return { targetId: 'late' };
+		});
+		transport.hostRequest('deadline');
+		await flushHandlers();
+		mock.timers.tick(50);
+		const payload = largeFrame(transport, { method: '$/cancelRequest', params: { id: 'unrelated' } });
+		transport.rejectFrameWrites = true;
+		transport.emit(WEB_APP_SERVER_CLOSED_EVENT, { message: 'EOF' });
+		mock.timers.tick(50);
+		assert.equal(client.state, 'ready', 'EOF still waits for the received frame');
+		assert.equal(signal.aborted, true, 'host deadline must cancel before decode finishes');
+		finish();
+		await flushHandlers();
+		assert.equal(effects, 0);
+		assert.equal(transport.frames.some(frame => frame.id === 'deadline'), false);
+		await port.release();
+		await payload.consumed;
+		assert.equal(client.state, 'crashed');
+	} finally { mock.timers.reset(); }
+});
+
 test('retirement settles queued consumption and cannot dispatch an old Worker reply into a replacement', async () => {
 	const transport = new ProtocolTransport();
 	const ports: TestAppServerDecodePort[] = [];

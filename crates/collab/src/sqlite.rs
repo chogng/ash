@@ -865,7 +865,7 @@ fn validate_principal(principal: &DocumentCollaborationPrincipal) -> Result<(), 
 }
 
 fn validate_display_name(value: &str) -> Result<(), String> {
-    if value.is_empty() || value.len() > 128 || value.chars().any(char::is_control) {
+    if !crate::room::valid_display_name(value, 128) {
         return Err("displayName must contain between 1 and 128 non-control characters".into());
     }
     Ok(())

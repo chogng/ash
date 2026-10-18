@@ -739,21 +739,30 @@ impl AppServerLanguageRuntime {
                 continue;
             }
             if let Some(executable) = &config.executable {
-                definitions.push(
-                    ash_lsp_server_provider::resolve_executable(
-                        id.as_str(),
-                        &config.language_ids,
-                        executable,
-                        dir_root,
-                    )
-                    .map_err(|error| error.to_string())?,
-                );
+                match ash_lsp_server_provider::resolve_executable(
+                    id.as_str(),
+                    &config.language_ids,
+                    executable,
+                    dir_root,
+                ) {
+                    Ok(definition) => definitions.push(definition),
+                    Err(error) => log::warn!("language server {id} is unavailable: {error}"),
+                }
             }
         }
-        definitions
+        Ok(definitions
             .into_iter()
-            .map(|definition| configure_definition(definition, configuration))
-            .collect()
+            .filter_map(|definition| {
+                let id = definition.name().to_string();
+                match configure_definition(definition, configuration) {
+                    Ok(definition) => Some(definition),
+                    Err(error) => {
+                        log::warn!("language server {id} is unavailable: {error}");
+                        None
+                    }
+                }
+            })
+            .collect())
     }
 
     fn restart(
@@ -777,10 +786,11 @@ impl AppServerLanguageRuntime {
         for server in self.acquisitions(configuration).filter(|server| {
             server.languages.iter().any(|id| id == language_id) || previous.contains(&server.id)
         }) {
-            acquired.insert(
-                server.id.clone(),
-                self.resolve_server(server, dir_root, configuration)?,
-            );
+            // Each acquisition reports its own failure. Keep unrelated languages usable,
+            // including when a previously running server's override has become stale.
+            if let Ok(resolved) = self.resolve_server(server, dir_root, configuration) {
+                acquired.insert(server.id.clone(), resolved);
+            }
         }
         self.acquired = acquired;
         let mut definitions = self.definitions(dir_root, configuration)?;
@@ -858,67 +868,77 @@ impl AppServerLanguageRuntime {
         dir_root: &Path,
         configuration: &LanguageServersConfig,
     ) -> Result<ManagedLanguageServer, String> {
-        let explicit = configuration
+        let config = configuration
             .servers
             .iter()
-            .find_map(|(id, config)| (id.as_str() == server.id).then_some(config))
-            .and_then(|config| config.executable.as_deref());
-        let result = server.resolve(dir_root, explicit, &InstallContext::current(), || {
-            let home = self.home.as_deref().ok_or_else(|| {
-                ManagedLanguageServerError::Installation("Ash home is unavailable".into())
-            })?;
-            self.updates.publish_language_server_progress(
-                self.connection_id,
-                LanguageServerProgressNotification {
-                    dir_id: self.dir_state.dir_id.clone(),
-                    server: server.id.clone(),
-                    token: "ash.language-server.install".into(),
-                    title: Some(server.id.clone()),
-                    message: None,
-                    percentage: None,
-                    done: false,
-                },
-            );
-            let install = || {
-                use ash_http_client::HttpClientConfig;
-                use ash_http_client::OutboundNetworkSnapshot;
-                use ash_http_client::RedirectPolicy;
-                use ash_http_client::ReqwestHttpClient;
-                use ash_http_client::ResponseBodyLimit;
-                let config = HttpClientConfig::default()
-                    .with_response_body_limit(
-                        ResponseBodyLimit::new(
-                            std::num::NonZeroUsize::new(128 * 1024 * 1024).unwrap(),
+            .find_map(|(id, config)| (id.as_str() == server.id).then_some(config));
+        let explicit = config.and_then(|config| config.executable.as_deref());
+        let environment = config
+            .map(|config| config.environment.clone())
+            .unwrap_or_default();
+        let result = server.resolve(
+            dir_root,
+            explicit,
+            &InstallContext::current(),
+            &environment,
+            || {
+                let home = self.home.as_deref().ok_or_else(|| {
+                    ManagedLanguageServerError::Installation("Ash home is unavailable".into())
+                })?;
+                self.updates.publish_language_server_progress(
+                    self.connection_id,
+                    LanguageServerProgressNotification {
+                        dir_id: self.dir_state.dir_id.clone(),
+                        server: server.id.clone(),
+                        token: "ash.language-server.install".into(),
+                        title: Some(server.id.clone()),
+                        message: None,
+                        percentage: None,
+                        done: false,
+                    },
+                );
+                let install = || {
+                    use ash_http_client::HttpClientConfig;
+                    use ash_http_client::OutboundNetworkSnapshot;
+                    use ash_http_client::RedirectPolicy;
+                    use ash_http_client::ReqwestHttpClient;
+                    use ash_http_client::ResponseBodyLimit;
+                    let config = HttpClientConfig::default()
+                        .with_response_body_limit(
+                            ResponseBodyLimit::new(
+                                std::num::NonZeroUsize::new(128 * 1024 * 1024).unwrap(),
+                            )
+                            .unwrap(),
                         )
-                        .unwrap(),
-                    )
-                    .with_redirect_policy(RedirectPolicy::Follow {
-                        max_hops: std::num::NonZeroU8::new(5).unwrap(),
-                    });
-                let network =
-                    OutboundNetworkSnapshot::with_policy(config, self.network_policy.clone())
-                        .map_err(|error| {
+                        .with_redirect_policy(RedirectPolicy::Follow {
+                            max_hops: std::num::NonZeroU8::new(5).unwrap(),
+                        });
+                    let network =
+                        OutboundNetworkSnapshot::with_policy(config, self.network_policy.clone())
+                            .map_err(|error| {
                             ManagedLanguageServerError::Installation(error.to_string())
                         })?;
-                let http = ReqwestHttpClient::with_network(network)
-                    .map_err(|error| ManagedLanguageServerError::Installation(error.to_string()))?;
-                server.install(home, &http)
-            };
-            let result = install();
-            self.updates.publish_language_server_progress(
-                self.connection_id,
-                LanguageServerProgressNotification {
-                    dir_id: self.dir_state.dir_id.clone(),
-                    server: server.id.clone(),
-                    token: "ash.language-server.install".into(),
-                    title: None,
-                    message: None,
-                    percentage: None,
-                    done: true,
-                },
-            );
-            result
-        });
+                    let http = ReqwestHttpClient::with_network(network).map_err(|error| {
+                        ManagedLanguageServerError::Installation(error.to_string())
+                    })?;
+                    server.install(home, &http)
+                };
+                let result = install();
+                self.updates.publish_language_server_progress(
+                    self.connection_id,
+                    LanguageServerProgressNotification {
+                        dir_id: self.dir_state.dir_id.clone(),
+                        server: server.id.clone(),
+                        token: "ash.language-server.install".into(),
+                        title: None,
+                        message: None,
+                        percentage: None,
+                        done: true,
+                    },
+                );
+                result
+            },
+        );
         if let Err(error) = &result {
             self.updates.publish_language_server_state(
                 self.connection_id,
@@ -1030,11 +1050,10 @@ fn configured_provider_definitions(
                 LspServerLaunch::Packaged,
                 LspServerLaunch::ExplicitExecutable,
             );
-        if let Some(definition) = providers
-            .definition(server_id, dir_root, launch)
-            .map_err(|error| error.to_string())?
-        {
-            definitions.push(definition);
+        match providers.definition(server_id, dir_root, launch) {
+            Ok(Some(definition)) => definitions.push(definition),
+            Ok(None) => {}
+            Err(error) => log::warn!("language server {server_id} is unavailable: {error}"),
         }
     }
     Ok(definitions)

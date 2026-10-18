@@ -33,6 +33,7 @@ fn failed_proxy_falls_through_to_usable_path_without_downloading() {
             root.path(),
             None,
             &Candidates(vec![broken, working.clone()]),
+            &BTreeMap::new(),
             || panic!("local server must avoid installation"),
         )
         .unwrap();
@@ -49,15 +50,19 @@ fn missing_candidates_reach_managed_installation_but_explicit_override_never_doe
     let root = tempfile::tempdir().unwrap();
     let missing = root.path().join("missing");
     let candidates = Candidates(vec![missing.clone()]);
-    let fallback = rust_support().resolve(root.path(), None, &candidates, || {
+    let fallback = rust_support().resolve(root.path(), None, &candidates, &BTreeMap::new(), || {
         Err(ManagedLanguageServerError::Installation("offline".into()))
     });
     assert!(
         matches!(fallback, Err(ManagedLanguageServerError::Installation(message)) if message == "offline")
     );
-    let explicit = rust_support().resolve(root.path(), Some(&missing), &candidates, || {
-        panic!("explicit override must never download")
-    });
+    let explicit = rust_support().resolve(
+        root.path(),
+        Some(&missing),
+        &candidates,
+        &BTreeMap::new(),
+        || panic!("explicit override must never download"),
+    );
     assert!(
         matches!(explicit, Err(ManagedLanguageServerError::Unavailable(path)) if path == missing)
     );
@@ -78,9 +83,13 @@ fn preserves_proxy_invocation_name_and_workspace_during_probe_and_launch() {
     let invoked = root.path().join("rust-analyzer");
     std::os::unix::fs::symlink(&proxy, &invoked).unwrap();
     let rust = rust_support()
-        .resolve(&dir, None, &Candidates(vec![invoked.clone()]), || {
-            panic!("proxy is usable")
-        })
+        .resolve(
+            &dir,
+            None,
+            &Candidates(vec![invoked.clone()]),
+            &BTreeMap::new(),
+            || panic!("proxy is usable"),
+        )
         .unwrap();
     let (_, command, _) = rust.definition().clone().into_launch_parts();
     assert_eq!(command.program(), proxy.canonicalize().unwrap().as_os_str());
@@ -101,6 +110,41 @@ fn pinned_releases_cover_supported_desktop_targets() {
         )));
         assert_eq!(release.sha256.len(), 64);
         assert!(release.size > 0);
+    }
+}
+
+#[cfg(unix)]
+#[test]
+fn probes_and_launches_with_configured_toolchain_and_environment_precedence() {
+    let root = tempfile::tempdir().unwrap();
+    let executable = script(
+        root.path(),
+        "rust-analyzer",
+        "test \"$RUSTUP_TOOLCHAIN\" = configured && test \"$RUSTUP_AUTO_INSTALL\" = 1",
+    );
+    let environment = BTreeMap::from([
+        ("RUSTUP_TOOLCHAIN".into(), "configured".into()),
+        ("RUSTUP_AUTO_INSTALL".into(), "1".into()),
+    ]);
+    for explicit in [None, Some(executable.as_path())] {
+        let server = rust_support()
+            .resolve(
+                root.path(),
+                explicit,
+                &Candidates(vec![executable.clone()]),
+                &environment,
+                || panic!("configured local toolchain must avoid installation"),
+            )
+            .unwrap();
+        let (_, command, _) = server.definition().clone().into_launch_parts();
+        assert_eq!(
+            command.environment()[std::ffi::OsStr::new("RUSTUP_TOOLCHAIN")],
+            "configured"
+        );
+        assert_eq!(
+            command.environment()[std::ffi::OsStr::new("RUSTUP_AUTO_INSTALL")],
+            "1"
+        );
     }
 }
 

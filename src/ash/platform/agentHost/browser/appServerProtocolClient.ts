@@ -393,16 +393,18 @@ export class AppServerProtocolClient {
 			const generation = this._generation;
 			const controller = new AbortController();
 			this.inbound.set(request.id, controller);
-			const ownsRequest = (): boolean => this._generation === generation && !this.receiving?.closed && this.inbound.get(request.id) === controller;
+			const ownsRequest = (): boolean => this._generation === generation && this.inbound.get(request.id) === controller;
 			// Check ownership before decoding or serializing a host result. Both can throw,
 			// and retired work must have no effect on a replacement connection.
 			const reply = (response: () => object, options?: { readonly abort: boolean; }): void => {
 				if (!ownsRequest()) { return; }
-				const frame = JSON.stringify({ jsonrpc: '2.0', id: request.id, ...response() });
+				// EOF can wait for Worker decoding, but the request deadline must still
+				// retire and cancel host work without serializing a reply to the closed peer.
+				const frame = this.receiving?.closed ? undefined : JSON.stringify({ jsonrpc: '2.0', id: request.id, ...response() });
 				this.inbound.delete(request.id);
 				clearTimeout(timeout);
 				if (options?.abort) { controller.abort(); }
-				if (this.isCurrentConnection(generation, 'ready') && !this.receiving?.closed) {
+				if (frame !== undefined && this.isCurrentConnection(generation, 'ready') && !this.receiving?.closed) {
 					try {
 						this.transport.send(WEB_APP_SERVER_FRAME_EVENT, { frame });
 					} catch (error) {
@@ -412,7 +414,7 @@ export class AppServerProtocolClient {
 			};
 			const timeout = setTimeout(() => reply(() => ({ error: { code: -32000, message: 'Host request timed out', data: null } }), { abort: true }), this.options.requestTimeoutMs);
 			controller.signal.addEventListener('abort', () => clearTimeout(timeout), { once: true });
-			void Promise.resolve().then(() => ownsRequest() ? handler(request.params as never, { signal: controller.signal }) : undefined).then(
+			void Promise.resolve().then(() => ownsRequest() && !this.receiving?.closed ? handler(request.params as never, { signal: controller.signal }) : undefined).then(
 				value => reply(() => ({ result: decodeAppServerServerRequestResult(request.method, value) })),
 				error => reply(() => ({ error: { code: isCancellationError(error) ? -32800 : -32000, message: toError(error).message, data: null } })),
 			).catch(error => {

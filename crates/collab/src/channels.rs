@@ -387,10 +387,7 @@ fn validate_sibling(
 }
 pub(crate) fn validate_name(name: &str) -> Result<String, ChannelError> {
     let name = name.trim();
-    if name.is_empty()
-        || name.encode_utf16().count() > 80
-        || name.chars().any(|c| c.is_control() || c == '/')
-    {
+    if !crate::room::valid_display_name(name, 80) || name.contains('/') {
         return Err(ChannelError::Invalid);
     }
     Ok(name.into())

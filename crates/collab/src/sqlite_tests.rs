@@ -40,6 +40,99 @@ fn sqlite_rooms_recover_ordered_snapshots_after_reopening() {
 }
 
 #[test]
+fn persisted_channel_members_with_long_unicode_names_can_open_notes() {
+    use crate::channels::ChannelChange;
+    use crate::channels::ChannelCredential;
+    use crate::channels::ChannelEditParams;
+    use crate::channels::ChannelInvite;
+    use crate::channels::ChannelInviteParams;
+    use crate::channels::ChannelResourceKind;
+    use crate::channels::ChannelResourceParams;
+    use crate::channels::ChannelRole;
+    use crate::channels::ChannelStore;
+
+    for name in ["中".repeat(80), "😀".repeat(40)] {
+        let directory = TempDir::new().unwrap();
+        let path = directory.path().join("collaboration.sqlite3");
+        let owner = ChannelCredential::generate().unwrap();
+        let member = ChannelCredential::generate().unwrap();
+        let access = {
+            let channels = ChannelStore::open(&path).unwrap();
+            let space = channels.create(&owner, "Workspace", &name).unwrap();
+            let space = channels
+                .invite(
+                    &owner,
+                    ChannelInvite {
+                        params: ChannelInviteParams {
+                            space_id: space.id.clone(),
+                            revision: space.revision,
+                            name: name.clone(),
+                            role: ChannelRole::Editor,
+                        },
+                        credential: member.expose().into(),
+                    },
+                )
+                .unwrap();
+            let space = channels
+                .edit(
+                    &owner,
+                    ChannelEditParams {
+                        space_id: space.id,
+                        revision: space.revision,
+                        change: ChannelChange::Create {
+                            name: "Notes".into(),
+                            parent_id: None,
+                        },
+                    },
+                )
+                .unwrap();
+            channels
+                .resource(
+                    &member,
+                    ChannelResourceParams {
+                        space_id: space.id,
+                        channel_id: space.channels[0].id.clone(),
+                    },
+                    ChannelResourceKind::Notes,
+                )
+                .unwrap()
+        };
+        // Reopen from persisted channel membership rather than shortening an existing name.
+        let rooms = SqliteDocumentCollaborationRooms::open_at(&path).unwrap();
+        let member_principal = rooms
+            .principal_for_access_token(&access.resource_id, &access.credential)
+            .unwrap()
+            .unwrap();
+        assert_eq!(member_principal.display_name, name);
+        let opened = rooms
+            .open_as(
+                &member_principal,
+                open_params(
+                    Some(access.resource_id.clone()),
+                    "client-unicode",
+                    document("ignored"),
+                ),
+            )
+            .unwrap();
+        assert_eq!(opened.snapshot.room_id, access.resource_id);
+        rooms
+            .submit_as(
+                &member_principal,
+                submit(&access.resource_id, "client-unicode", 1, 0, "edited"),
+            )
+            .unwrap();
+        assert!(
+            rooms
+                .open_as(
+                    &principal("invalid", &"中".repeat(129)),
+                    open_params(None, "client-invalid", document("initial"))
+                )
+                .is_err()
+        );
+    }
+}
+
+#[test]
 fn sqlite_rooms_make_submit_retries_idempotent() {
     let directory = TempDir::new().unwrap();
     let rooms =

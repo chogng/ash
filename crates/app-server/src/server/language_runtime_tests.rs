@@ -326,6 +326,111 @@ fn configured_server_uses_the_complete_launch_contract_without_starting_during_d
     assert!(runtime.manager().is_none());
 }
 
+#[test]
+fn invalid_provider_and_custom_overrides_do_not_poison_other_definitions() {
+    let fixture = ProviderFixture::new();
+    let mut configuration = configuration(
+        LanguageServerModeConfig::Enabled,
+        Some(fixture.root.path().join("missing-css")),
+    );
+    for (id, executable) in [
+        ("broken-custom", fixture.root.path().join("missing-custom")),
+        ("working-custom", fixture.node.clone()),
+    ] {
+        configuration.servers.insert(
+            LanguageServerId::new(id).unwrap(),
+            LanguageServerConfig {
+                executable: Some(executable),
+                language_ids: vec!["demo".into()],
+                ..Default::default()
+            },
+        );
+    }
+    let mut runtime = AppServerLanguageRuntime::new(Arc::new(UpdateBroker::default()));
+    runtime.set_server_providers(fixture.providers());
+    let definitions = runtime
+        .definitions(fixture.dir.path(), &configuration)
+        .unwrap();
+    assert_eq!(
+        definitions
+            .iter()
+            .map(|definition| definition.name().as_str())
+            .collect::<Vec<_>>(),
+        ["working-custom"]
+    );
+    assert!(runtime.manager().is_none());
+}
+
+#[cfg(unix)]
+#[test]
+fn acquisition_uses_configured_environment_and_failure_does_not_block_other_servers() {
+    let root = tempfile::tempdir().unwrap();
+    let executable = root.path().join("rust-analyzer");
+    fs::write(
+        &executable,
+        "#!/bin/sh\ntest \"$RUSTUP_TOOLCHAIN\" = configured\n",
+    )
+    .unwrap();
+    use std::os::unix::fs::PermissionsExt;
+    fs::set_permissions(&executable, fs::Permissions::from_mode(0o755)).unwrap();
+    let manifest: serde_json::Value =
+        serde_json::from_str(include_str!("../../../../extensions/rust/package.json")).unwrap();
+    let acquisition = ash_lsp_server_provider::LanguageServerAcquisition::from_contribution(
+        manifest["ashLanguageServers"].clone(),
+    )
+    .unwrap()
+    .remove(0);
+    let mut runtime = AppServerLanguageRuntime::new(Arc::new(UpdateBroker::default()));
+    let mut configuration = LanguageServersConfig::default();
+    configuration.servers.insert(
+        LanguageServerId::new("rust-analyzer").unwrap(),
+        LanguageServerConfig {
+            executable: Some(executable.clone()),
+            environment: std::collections::BTreeMap::from([(
+                "RUSTUP_TOOLCHAIN".into(),
+                "configured".into(),
+            )]),
+            ..Default::default()
+        },
+    );
+    let server = runtime
+        .resolve_server(&acquisition, root.path(), &configuration)
+        .unwrap();
+    let (_, command, _) = server.definition().clone().into_launch_parts();
+    assert_eq!(
+        command.environment()[std::ffi::OsStr::new("RUSTUP_TOOLCHAIN")],
+        "configured"
+    );
+
+    runtime
+        .acquisitions
+        .insert(acquisition.id.clone(), acquisition);
+    // A previously active acquisition is resolved again when another language is activated.
+    runtime.acquired.insert("rust-analyzer".into(), server);
+    fs::remove_file(executable).unwrap();
+    configuration.servers.insert(
+        LanguageServerId::new("working").unwrap(),
+        LanguageServerConfig {
+            executable: Some("/bin/sh".into()),
+            language_ids: vec!["demo".into()],
+            args: vec!["-c".into(), "exit 0".into()],
+            ..Default::default()
+        },
+    );
+    runtime
+        .restart(root.path(), 1, &configuration, "demo")
+        .unwrap();
+    assert_eq!(
+        runtime
+            .dir_state
+            .language_servers
+            .get("demo")
+            .map(String::as_str),
+        Some("working")
+    );
+    assert!(runtime.acquired.is_empty());
+}
+
 #[cfg(unix)]
 #[test]
 fn connection_sessions_keep_independent_revisions_saved_text_and_process_lifetimes() {
@@ -429,6 +534,28 @@ done
             "config":{"mode":"enabled","executable":config.executable,"languageIds":config.language_ids,"args":config.args,"environment":config.environment,"initializationOptions":config.initialization_options,"settings":{"demo":{"strict":true}}}
         }),
     );
+    let missing = root.path().join("missing-custom");
+    request(
+        &mut first,
+        "languageServer/configure",
+        serde_json::json!({
+            "commandId":"configure-broken","expectedRevision":1,"serverId":"broken",
+            "config":{"mode":"enabled","executable":missing,"languageIds":["broken"]}
+        }),
+    );
+    let catalog = request(&mut first, "language/servers", serde_json::json!({}));
+    assert!(
+        catalog["servers"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|server| server["id"] == "fixture")
+    );
+    let read = request(&mut first, "config/read", serde_json::json!({}));
+    assert_eq!(
+        read["languageServers"]["broken"]["executable"],
+        serde_json::json!(missing)
+    );
     let hover = |connection: &mut crate::ConnectionState, revision, text: &str| {
         let operation = sequence.load(std::sync::atomic::Ordering::Relaxed);
         let result = request(
@@ -442,6 +569,20 @@ done
         result["contents"].as_str().unwrap().to_owned()
     };
     assert!(hover(&mut first, 9, "alpha").starts_with("alpha||"));
+    request(
+        &mut first,
+        "languageServer/configure",
+        serde_json::json!({
+            "commandId":"correct-broken","expectedRevision":2,"serverId":"broken", "config":{"mode":"disabled"}
+        }),
+    );
+    request(
+        &mut first,
+        "languageServer/remove",
+        serde_json::json!({
+            "commandId":"reset-broken","expectedRevision":3,"serverId":"broken"
+        }),
+    );
     let second_result = hover(&mut second, 1, "beta");
     assert!(second_result.starts_with("beta||"), "{second_result}");
     assert!(hover(&mut first, 10, "dirty").starts_with("dirty||"));
@@ -472,7 +613,7 @@ done
     request(
         &mut second,
         "languageServer/configure",
-        serde_json::json!({"commandId":"disable-fixture","expectedRevision":1,"serverId":"fixture","config":{"mode":"disabled"}}),
+        serde_json::json!({"commandId":"disable-fixture","expectedRevision":4,"serverId":"fixture","config":{"mode":"disabled"}}),
     );
     assert!(
         server.language.lock().unwrap().connections.is_empty(),
