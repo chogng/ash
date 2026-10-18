@@ -255,7 +255,7 @@ Electron 主进程/preload、单元测试与扩展测试的 JavaScript 编译，
 
 ## 发布调试符号与离线崩溃解析
 
-第一阶段已接入 Cargo 发布组包、符号归档和离线工具。release 仅增加 `line-tables-only`、`split-debuginfo = off`、`strip = false`；macOS 发布入口覆盖为 `packed`。优化、LTO、codegen units、开发和测试 profile 保持不变。本机已验证 macOS arm64 的真实 release 程序、内联源码行、离线 Mach-O core 加载及栈展开；Linux/Windows 与正式签名、上传流程须由发布 CI 验证。统一 panic 采集、Electron 和 JavaScript 符号属于后续阶段。
+第一阶段已接入 Cargo 发布组包、符号归档和离线工具。符号接入时，release 仅增加 `line-tables-only`、`split-debuginfo = off`、`strip = false`；macOS 发布入口覆盖为 `packed`，当时未调整优化、LTO、codegen units、开发和测试 profile。后续 Windows x64 组包优化见下文历史测量。本机已验证 macOS arm64 的真实 release 程序、内联源码行、离线 Mach-O core 加载及栈展开；Linux/Windows 与正式签名、上传流程须由发布 CI 验证。统一 panic 采集、Electron 和 JavaScript 符号属于后续阶段。
 
 ### 第一阶段使用
 
@@ -300,11 +300,11 @@ LLDB 初始化先关闭符号预加载和符号文件脚本，再创建不自动
 - [发布工作流](https://github.com/openai/codex/blob/c3d3b142d10f4316b46e35aad7e5317e7e506cb7/.github/workflows/rust-release.yml) 上传独立符号归档，并将符号产物纳入最终发布资产；Cargo 和 Bazel 产物用不同名称区分。
 - [包级验证](https://github.com/openai/codex/blob/c3d3b142d10f4316b46e35aad7e5317e7e506cb7/scripts/codex_package/smoke_tests/test_codex_package.py) 在 Linux 检查函数及源码行、macOS 检查函数解析、Windows 检查 PDB 与程序匹配。这些检查没有证明所有真实崩溃都能自动采集、展开和解析。
 
-Ash 的 release 使用 Cargo 默认调试信息设置，现有组包与签名会计算和更新文件摘要，目前没有对应的第一方符号归档入口。采用 Codex 的按平台分离方式，但统一在包的 staging 副本上剥离，保留 Cargo/Bazel 原始输出；增加逐模块身份、最终包绑定和真实崩溃验证。LTO、codegen units 与优化级别保持现状，不与符号接入一起调整。
+符号接入前，Ash 的 release 使用 Cargo 默认调试信息设置，当时组包与签名会计算和更新文件摘要，但没有第一方符号归档入口。接入时采用 Codex 的按平台分离方式，统一在包的 staging 副本上剥离，保留 Cargo/Bazel 原始输出；增加逐模块身份、最终包绑定和真实崩溃验证。该阶段没有调整 LTO、codegen units 与优化级别。
 
 ### 生成与组包顺序
 
-release 的候选配置如下；这是计划中的配置，不表示当前已生效：
+根 release 的符号配置已生效：
 
 ```toml
 [profile.release]
@@ -398,13 +398,16 @@ WER 的行为与权限参考 [Microsoft 的本地 dump 文档](https://learn.mic
 
 配置以 [`Cargo.toml`](../Cargo.toml) 与 [`.cargo/config.toml`](../.cargo/config.toml) 为准：
 
-| Profile     | 用途                                                                | 调试信息       |
-| ----------- | ------------------------------------------------------------------- | -------------- |
-| `dev`       | 普通开发构建，保留增量编译                                          | `limited`      |
-| `dev-small` | Code 等产品开发程序；关闭本地 LTO，按包调整优化级别和 codegen units | 关闭并剥离符号 |
-| `ci-test`   | 包级完整验证、TUI 单测与 PTY 场景，共用编译产物                     | `limited`      |
+| Profile     | 用途                                                                | 调试信息           |
+| ----------- | ------------------------------------------------------------------- | ------------------ |
+| `dev`       | 普通开发构建，保留增量编译                                          | `limited`          |
+| `dev-small` | Code 等产品开发程序；关闭本地 LTO，按包调整优化级别和 codegen units | 关闭并剥离符号     |
+| `ci-test`   | 包级完整验证、TUI 单测与 PTY 场景，共用编译产物                     | `limited`          |
+| `release`   | 发布产品；Windows x64 后端组包额外使用 CGU=1                        | `line-tables-only` |
 
 `ci-test` 继承 `test` 的优化配置：共享包为 1，TUI 为 0，App Server 及其客户端为 `s`。不要全局降到 0，否则 macOS 服务程序的 `__eh_frame` 可能超过 compact-unwind 的 16 MiB 偏移限制。
+
+Windows x64 后端 release 组包在[共享可执行文件构建入口](../build/lib/package_binaries.py)显式传入 `--config profile.release.codegen-units=1`，覆盖也进入既有符号编译记录。优化级别保持 3，LTO 沿用默认值；根 Cargo release、开发/测试 profile 和直接构建的 CLI/TUI 配置保持原有职责。该覆盖只应用于 `release` 与 `x86_64-pc-windows-msvc` 的组合，测量依据见下文。
 
 协议消费者使用队列、通话、协作和任务交付的轻量契约，服务实现使用同一份类型；schema/export 按需启用。优化依赖范围与实际编辑循环后，再决定是否调整编译参数。本地保留增量编译；使用 sccache 的 CI 作业关闭增量编译，不能直接照搬到本地。
 
@@ -504,6 +507,8 @@ python -B scripts/check_blob_size.py --head HEAD
 
 ### 历史测量与适用范围
 
+#### macOS arm64 开发构建（2026-10-01～16）
+
 以下仅保留能说明当前构建选择的测量。条件均为 macOS arm64、Rust 1.98.0、`dev-small`、12 个任务、三轮中位数；不能作为其他机器或当前版本的耗时预算。
 
 | 场景                     | 已验证结果                                                                                             | 范围与代价                                                                      |
@@ -524,6 +529,63 @@ python -B scripts/check_blob_size.py --head HEAD
 此开发配置有体积代价：Desktop 构建的 App Server 为 221.29 → 246.11 MiB，Remote Server 为 166.03 → 176.10 MiB。在相同 Desktop 产物、隔离用户目录和 8 个各 4000 行的 TypeScript 文件下，实测两个后端 generation，均通过 30 次构建目录写入及 24 次编辑器打开/关闭断言：后端空闲 RSS 为 166.3 → 169.6 MiB，关闭编辑器后为 169.6 → 171.9 MiB；打开文件中位数为 137.3 → 138.6 毫秒，编辑阶段后端累计 CPU 为 1.76 → 1.98 秒。这是一次受控场景对比，不代表正式包占用或所有运行时负载都无回归。构建原始命令、Cargo timings、逐轮数据及运行场景保存在 `.build/perf-incremental-20261016/`，汇总为 `build-summary.json` 和 `runtime-summary.json`。
 
 工具库补齐没有证明产品构建提速；参数库拆分、过程宏优化与此前构建依赖 profile 对齐候选均未证明收益，未保留。原始测量保存在 `.build/build-health/`；已提交的详细记录可从本文 Git 历史查阅。
+
+#### 2026-10-17：Windows x64 release 体积 A/B
+
+在 Windows 11 x64、i5-12600KF、64 GiB 内存、Rust 1.98.0 / LLVM 22.1.8 上，以 8 个 Cargo jobs 比较四组独立配置。构建目标是 `x86_64-pc-windows-msvc` 的 19 个后端可执行文件，包含 `ash-voice-host/host`；使用锁定依赖、离线构建和独立 Cargo 输出目录，保留共享缓存。所有有效 A/B 使用同一份生产源码：`7dee9da39e6d` 加 Git 处理器的 `self.context.git_runtime_service()` 编译修复。
+
+候选参考 Zed 的官方 [体积优化提交](https://github.com/zed-industries/zed/commit/976ab33fb4b262155f518713019e0a8e7b788c9e)；其 [Linux 链接优化提交](https://github.com/zed-industries/zed/commit/d6b7f24b7b864a32893766445927bce5cff83552) 的平台参数不属于这轮 Windows 实验。四组分别为原 release、仅 `codegen-units = 1`、仅 `lto = "thin"`、选择性 `opt-level = "z"`，没有测量参数叠加组合。
+
+选择性 `z` 将工作区设为 `z`、非工作区依赖设为 3，并将 `ash-diff`、`ash-file-search`、`ash-syntax`、`ash-language`、`ash-model-tokenizer`、`ash-code-mode-runtime`、`ash-v8-runtime`、`ash-realtime-voice`、`ash-voice-agent`、`ash-voice-host`、`ash-livekit-client`、`ash-screen-capture`、`ash-utils-image` 保留为 3。
+
+下表的 MB 为十进制；不含 PDB 等 companion symbols。后端包采用 Desktop 使用的 `host-provided-node` 形式。桌面安装器使用正常 Inno Setup 6.7.3 流程生成，均为未签名的本地测量制品。四组复用完全相同的 Electron 44.4.5、前端及 addon 文件，逐文件摘要确认差异只来自后端程序和对应包元数据；压缩包的百分比不能直接用于另带独立 Node 的分发包。
+
+| 配置       | 19 个后端 exe 总计 MB |    后端 tar.gz MB | 完整桌面安装器 MB |
+| ---------- | --------------------: | ----------------: | ----------------: |
+| 原 release |                513.31 |            198.78 |            241.49 |
+| CGU=1      |      477.49（−6.98%） |  189.61（−4.61%） |  238.42（−1.27%） |
+| ThinLTO    |      504.69（−1.68%） |  195.47（−1.66%） |  241.29（−0.08%） |
+| 选择性 z   |     457.74（−10.83%） | 178.09（−10.41%） |  229.75（−4.86%） |
+
+CGU=1 的完整桌面目录从 1,075.31 MB 降至 1,039.29 MB，减少 36.02 MB（3.35%）；完整安装器只减少 3.07 MB。可执行文件、安装目录和压缩下载制品的降幅不能互相代替。
+
+运行比较使用真实组包中的 App Server stdio RPC，独立用户目录，交错轮换四组顺序共 9 轮。每轮预热后分别执行 64 次稀疏 diff、64 次密集 diff、16 次完整语法解析、64 次增量语法解析、32 次文件搜索，并校验各组结果指纹一致。负载为 5,000 行稀疏 diff、1,200 行密集 diff、500 个 TypeScript 函数和 4,096 个工作区文件。
+
+下表基线为各轮请求中位数的中位数；变化为同轮配对比值的中位数，正数表示耗时增加。因此变化百分比不等于两个总体中位数直接相除。
+
+| RPC 场景     | 基线 ms | CGU=1 变化 | ThinLTO 变化 | 选择性 z 变化 |
+| ------------ | ------: | ---------: | -----------: | ------------: |
+| 稀疏 diff    |  31.330 |     −1.98% |       −2.38% |        +3.61% |
+| 密集 diff    |  22.473 |     +2.58% |       +0.41% |        +1.01% |
+| 完整语法解析 |  28.728 |     −1.20% |       −4.43% |        +6.87% |
+| 增量语法解析 |  20.630 |     +1.63% |       −1.21% |       +13.98% |
+| 文件搜索     |   1.394 |     −2.24% |       +0.46% |       +12.54% |
+
+CGU=1 未发现稳定的运行回退，但不能将未显著的差异视为严格等效：例如密集 diff 的配对 bootstrap 95% 区间为 −22.36%～+17.43%。选择性 z 的文件搜索区间为 +5.73%～+17.81%，增量语法解析区间为 −7.50%～+27.05%。启动对比仅使用第 2～9 轮：预热后的基线中位数为 882.90 ms，CGU=1 的配对变化为 +1.46%，区间包含零。首轮因基线已做过校准、其他程序首次运行而条件不同，保留原始记录但不用于归因；这轮没有证明首次安装启动的变化。
+
+补查各轮均值和 P95 后，CGU=1 的配对变化范围分别为 −3.45%～+3.56% 和 −2.17%～+2.66%；五个 P95 区间均包含零。各轮 P95 使用原始请求样本的 nearest-rank 分位数，详细区间与逐轮变化保留在 `analysis.json`，不能把小样本的尾延迟结果视为严格等效证明。
+
+另用现有 `time_context_benchmark` 补测 ContextInput、ContextPlanner、ContextAssembler 和 JSON 序列化，16/128 个工具、普通/时间后缀四个场景，每次预热 100 次、采样 1,000 次，共交错重复 5 轮。CGU=1 的配对 P50 变化为 −6.45%～−0.78%；选择性 z 为 +25.79%～+37.38%。例如 128 个工具的普通场景，五轮 P50 的中位数为基线 270.5 μs、CGU=1 268.4 μs、ThinLTO 254.7 μs、选择性 z 371.2 μs。原 `instruction_benchmark_composition` 在基线就因请求指令不一致触发断言，没有弱化该断言或将失败运行纳入性能数据。
+
+应用内存只测 App Server 自身峰值 RSS，中位数为基线 326.23 MiB、CGU=1 323.70 MiB、ThinLTO 326.39 MiB、选择性 z 327.13 MiB；不能据此宣称整个应用或进程树的内存收益。CPU 原始值只包含服务进程，并受 Windows 计时粒度限制，零值不表示整个操作没有 CPU 开销。本轮没有测量远程模型、语音、GPU、CLI/TUI 或其他平台的运行性能。
+
+基线与 CGU=1 各确认三次空输出目录、无改动重跑和时间戳触碰构建。基线使用 trial 2/3/4，CGU=1 使用 trial 1/2/3；六组源码指纹一致，各配置的 19 个 exe 逐个大小完全一致。日志审计确认所有无改动样本的 Rust 编译产物均为 `fresh`，所有触碰样本均实际重编译 App Server 库。下表为三次中位数，提交内存为 Windows Job Object 的整个构建进程树峰值，**不是 RSS**。
+
+| 构建场景   | 基线秒 | CGU=1 秒 | 壁钟变化 | 基线 / CGU=1 提交峰值 GiB |
+| ---------- | -----: | -------: | -------: | ------------------------: |
+| 空输出目录 |  763.5 |  1,008.5 |  +32.08% |              7.22 / 11.54 |
+| 无改动重跑 |    4.4 |      9.3 | +111.32% |               0.21 / 0.21 |
+| 触碰重编译 |  150.9 |    505.2 | +234.76% |              7.13 / 10.69 |
+
+无改动重跑测的是完整构建入口，三次范围分别为基线 4.3～10.1 秒、CGU=1 4.3～13.3 秒；两组都没有重编译 Rust 单元，不能将这部分差异归因为 LLVM 代码生成。首轮 Cargo timings 显示，CGU=1 的触碰成本主要在 App Server 库编译阶段（约 140→486 秒），ThinLTO 主要在最终 bin 构建阶段；ThinLTO 的单次触碰构建为 559.5 秒，选择性 z 为 96.7 秒。后两组只有一次构建样本，没有据此宣称稳定的构建加速。
+
+最终采用 Windows x64 后端 release 组包的 CGU=1，以发布构建成本换取 6.98% 的后端 exe 体积收益，保留优化级别 3 和 LTO 默认值。选择性 z 的当前范围有可重复的负载回退，暂不采用；ThinLTO 的主要两个 exe 略增、完整安装器只减少约 0.20 MB，也不采用。本轮结论不代表完整发布 CI 的时间或其他目标的表现。
+
+落地验证通过：`just verify ash-app-server --lib --filter git_runtime::tests` 完成 check、48 项 Git 回归和全目标 warning 检查；`just test-python build scripts` 运行 217+192 项测试，13 项按条件跳过；Python lint、改动文件格式与 `git diff --check` 通过。Git 测试补齐现有处理器调用，并在临时仓库固定 `core.autocrlf=false`，隔离开发者换行偏好，保留原有内容断言。这些测试夹具修改不进入 release 程序。
+
+正常 `build/release/symbols.py build-update-host` 入口实际构建通过，编译清单记录了 CGU=1 命令覆盖及优化级别 3，实际 PE/PDB 配对收集通过。额外复用现有优化程序的源码行、内联帧和错误构建拒绝断言，在平台支持的符号参数上仅添加 CGU=1，也通过。原始日志、安装器和二进制快照保留，独立 Cargo 目标与 4,096 文件临时工作区已清理；共享 `.build/cargo` 保留。复测应新建报告目录并使用记录的源码，避免覆盖本轮归档。
+
+原始日志、Cargo timings、逐轮 JSON、PE section 大小、结果指纹和测量脚本保存在 `.build/build-health/release-ab-20261017/`。关键文件为 `analysis.json`、`build-summary.json`、`runtime-raw.json`、`core-runtime-raw.json`、`package-sizes.json`、`desktop-sizes.json` 和各配置的 `trial-*/report.json`。最初编译失败后恢复的基线 trial 1 标记为 `recovery`，不能充当空输出目录构建样本；失败和校准日志也保留在该目录。
 
 ## 构建源码与仓库脚本边界
 

@@ -139,6 +139,10 @@ def build_binaries(
         str(resolve_cargo_target_directory(repository_root)),
         "--message-format=json-render-diagnostics",
     ]
+    # Limit the measured size optimization to Windows x64 release packages.
+    # An explicit command override also preserves it in symbol provenance.
+    if cargo_profile == "release" and spec.target == "x86_64-pc-windows-msvc":
+        command.extend(["--config", "profile.release.codegen-units=1"])
     # Windows packages use MSVC, including their standalone V8 hosts. An
     # implicit host build can inherit a caller's GNU Cargo target and mismatch
     # the locked V8 archive; keep compilation and the cache lease explicit.
