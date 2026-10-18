@@ -31,7 +31,7 @@ test("Electron Main lists and resolves named targets through the shared Rust cat
 test("Electron Main creates, atomically updates, and removes targets through the Rust CLI", async () => {
 	const calls: string[][] = [];
 	const outputs = [
-		'{"name":"build","host":"build-linux","dir":"/srv/project"}\n',
+		'{"name":"build","host":"build-linux","dir":"/srv/project "}\n',
 		'{"name":"production","host":"production-linux","dir":"/srv/production"}\n',
 		'{"name":"production","host":"production-linux","dir":"/srv/production"}\n',
 	];
@@ -45,11 +45,13 @@ test("Electron Main creates, atomically updates, and removes targets through the
 		scheduleConnect: () => { },
 	});
 
-	assert.deepEqual(await service.save({ name: " BUILD ", host: "BUILD-LINUX", workspace: " /srv/project " }), { name: "build", host: "build-linux", workspace: "/srv/project" });
+	await assert.rejects(service.save({ name: "build", host: "build-linux", workspace: " /srv/project " }), /must be absolute/);
+	assert.deepEqual(calls, [], 'Invalid paths never reach the backend');
+	assert.deepEqual(await service.save({ name: " BUILD ", host: "BUILD-LINUX", workspace: "/srv/project " }), { name: "build", host: "build-linux", workspace: "/srv/project " });
 	assert.deepEqual(await service.update("BUILD", { name: "Production", host: "PRODUCTION-LINUX", workspace: "/srv/production" }), { name: "production", host: "production-linux", workspace: "/srv/production" });
 	assert.deepEqual(await service.remove("PRODUCTION"), { name: "production", host: "production-linux", workspace: "/srv/production" });
 	assert.deepEqual(calls, [
-		["connections", "save", "--name", "build", "--host", "build-linux", "--dir", "/srv/project", "--mode", "create"],
+		["connections", "save", "--name", "build", "--host", "build-linux", "--dir", "/srv/project ", "--mode", "create"],
 		["connections", "update", "--name", "build", "--new-name", "production", "--host", "production-linux", "--dir", "/srv/production"],
 		["connections", "remove", "--name", "production"],
 	]);

@@ -389,8 +389,12 @@ async function createElectronLifecycleFixture(completionFailure?: Error) {
 	const browser = new JSDOM('<!doctype html><body></body>');
 	const services = createLifecycleServices(browser);
 	const documentDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'document');
+	const windowDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'window');
+	const elementDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'HTMLElement');
 	const bridgeDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'ash');
 	Object.defineProperty(globalThis, 'document', { configurable: true, value: browser.window.document });
+	Object.defineProperty(globalThis, 'window', { configurable: true, value: browser.window });
+	Object.defineProperty(globalThis, 'HTMLElement', { configurable: true, value: browser.window.HTMLElement });
 	Object.defineProperty(globalThis, 'ash', { configurable: true, value: { ipcRenderer: electronTestBridge } });
 	const listeners = new Map<string, (value: unknown) => void>();
 	const window = new LifecycleTestWindow((channel, token) => listeners.get(channel)?.(token));
@@ -454,6 +458,8 @@ async function createElectronLifecycleFixture(completionFailure?: Error) {
 			lifecycle.dispose(); registration.dispose(); main.dispose(); services.dispose(); browser.window.close();
 			activeElectronIpc = undefined;
 			if (documentDescriptor) Object.defineProperty(globalThis, 'document', documentDescriptor); else Reflect.deleteProperty(globalThis, 'document');
+			if (windowDescriptor) Object.defineProperty(globalThis, 'window', windowDescriptor); else Reflect.deleteProperty(globalThis, 'window');
+			if (elementDescriptor) Object.defineProperty(globalThis, 'HTMLElement', elementDescriptor); else Reflect.deleteProperty(globalThis, 'HTMLElement');
 			if (bridgeDescriptor) Object.defineProperty(globalThis, 'ash', bridgeDescriptor); else Reflect.deleteProperty(globalThis, 'ash');
 		},
 	};

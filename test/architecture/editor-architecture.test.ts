@@ -666,7 +666,10 @@ test("Code Workbench composes code and Academic document contributions", () => {
 	assert.doesNotMatch(workbenchContributions, /editor\/editor\.academic\.all/u);
 	assert.match(academicContribution, /registerBuiltinEditorPane\('ash\.academic'/u);
 	assert.match(workbenchContributions, /contrib\/academic\/browser\/academicEditor\.contribution/u);
-	assert.doesNotMatch(workbenchContributions, /contrib\/documentEditor\/browser\/documentEditor\.contribution/u);
+	assert.match(workbenchContributions, /contrib\/documentEditor\/browser\/documentEditor\.contribution/u);
+	const documentContribution = readFileSync(join(workbenchRoot, 'contrib/documentEditor/browser/documentEditor.contribution.ts'), 'utf8');
+	assert.match(documentContribution, /documentType:\s*\{\s*id:\s*'general'/u);
+	assert.match(documentContribution, /registerEditorPane\(/u);
 	assert.doesNotMatch(academicContribution, /workbench\/contrib\/(?:tasks|testing|debug)/u);
 	assert.doesNotMatch(academicContribution, /workbench\/contrib\/extensionHost/u);
 	assert.doesNotMatch(academicContribution, /editor\/editor\.code\.all/u);

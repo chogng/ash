@@ -27,6 +27,7 @@ import "../../common/theme.js";
 import "../../contrib/chat/common/widget/chatColors.js";
 import "../../contrib/pdf/common/pdfColors.js";
 import "../../contrib/preferences/common/settingsEditorColorRegistry.js";
+import '../../contrib/preferences/browser/keybindingsEditor.js';
 import '../../contrib/scm/browser/scmHistory.js';
 import "../../contrib/terminal/common/terminalColorRegistry.js";
 import "../../../sessions/common/theme.js";
@@ -52,13 +53,25 @@ test("CSS isolates intentional color samples", async () => {
 		const source = await readFile(file, "utf8");
 		const name = relative(sourceRoot, file).replaceAll("\\", "/");
 		if (!intentionalColorFiles.has(name)) {
-			for (const [index, line] of source.split(/\r?\n/).entries()) {
-				if (/#[0-9a-fA-F]{3,8}\b|rgba?\(|hsla?\(/.test(line)) rawColors.push(`${name}:${index + 1}`);
-			}
+			for (const line of rawColorLines(source)) rawColors.push(`${name}:${line}`);
 		}
 	}
 	assert.deepEqual(rawColors, []);
 });
+
+test('color scanning excludes alpha mask stops while retaining painted colors on the same line', () => {
+	assert.deepEqual(rawColorLines('.mask { mask-image: linear-gradient(to right, rgb(0 0 0 / 16%), black); }'), []);
+	assert.deepEqual(rawColorLines('.mask { mask-image: linear-gradient(black, transparent); color: rgb(0 0 0); }'), [1]);
+	assert.deepEqual(rawColorLines('.mask { mask-image: linear-gradient(rgb(1 2 3), black); }'), [1]);
+	assert.deepEqual(rawColorLines('.surface {\n background: #ffffff;\n}'), [2]);
+});
+
+function rawColorLines(source: string): number[] {
+	// Black alpha stops describe mask coverage without choosing a painted theme color.
+	// Other literal colors, including other mask colors, still require review.
+	const painted = source.replace(/\b(?:-webkit-)?mask-image\s*:[^;{}]*;/gu, declaration => declaration.replace(/\brgb\(0\s+0\s+0\s*\/\s*\d+(?:\.\d+)?%\)/gu, color => ' '.repeat(color.length)));
+	return painted.split(/\r?\n/).flatMap((line, index) => /#[0-9a-fA-F]{3,8}\b|rgba?\(|hsla?\(/.test(line) ? [index + 1] : []);
+}
 
 test('presentation scan skips nested .build output while retaining source CSS', async () => {
 	const root = await mkdtemp(join(tmpdir(), 'ash-design-tokens-'));

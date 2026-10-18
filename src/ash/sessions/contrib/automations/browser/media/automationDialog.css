@@ -66,7 +66,8 @@
 	padding: var(--ash-spacing-size120);
 	border-radius: var(--ash-cornerRadius-large);
 	background: var(--ash-list-hoverBackground);
-	border: var(--ash-strokeThickness) solid var(--ash-contrastBorder, transparent);
+	border: var(--ash-strokeThickness) solid
+		var(--ash-contrastBorder, transparent);
 }
 .ash-sessions-window .ash-automation-schedule-preview h3,
 .ash-sessions-window .ash-automation-schedule-preview p {

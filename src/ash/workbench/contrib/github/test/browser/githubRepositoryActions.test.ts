@@ -67,12 +67,14 @@ function setup(resources: DisposableStore) {
 	services.registerInstance(ICodeEditorService, { getFocusedCodeEditor: () => ({ getModel: () => ({ uri: URI.file('/workspace/src/a.ts') }), getSelection: () => ({ startLineNumber: 2, endLineNumber: 5, endColumn: 1 }) }), getActiveCodeEditor: () => null } as unknown as ICodeEditorService);
 	services.registerInstance(IWorkingCopyService, { get: () => [] } as unknown as IWorkingCopyService);
 	services.registerInstance(IFileService, { stat: async () => ({ kind: FileKind.File }) } as unknown as IFileService);
-	services.registerInstance(ICommandService, { executeCommand: async (id: string, ...args: unknown[]) => {
-		requests.push({ id, args });
-		if (id === 'git.getRepositoryContexts') return contexts;
-		if (id === 'git.executeRepositoryCommand' && (args[1] as { kind: string }).kind === 'publishBranch' && pushFailure) throw new Error('push rejected');
-		return null;
-	} } as ICommandService);
+	services.registerInstance(ICommandService, {
+		executeCommand: async (id: string, ...args: unknown[]) => {
+			requests.push({ id, args });
+			if (id === 'git.getRepositoryContexts') return contexts;
+			if (id === 'git.executeRepositoryCommand' && (args[1] as { kind: string; }).kind === 'publishBranch' && pushFailure) throw new Error('push rejected');
+			return null;
+		}
+	} as ICommandService);
 	services.registerInstance(IQuickInputService, {
 		input: async () => inputs.shift(),
 		createQuickPick: () => {
@@ -191,7 +193,8 @@ test('closing repository search on account changes cancels reads and never clone
 
 test('repository transport validates anonymous links and keeps lost create replies uncertain', async () => {
 	const sent: { method: string; params: Record<string, unknown>; }[] = [];
-	const github = new AppServerGitHubService({ state: 'ready', capabilities: { github: true, contracts: { github: { version: 1 } } },
+	const github = new AppServerGitHubService({
+		state: 'ready', capabilities: { github: true, contracts: { github: { version: 1 } } },
 		request: async (definition: { method: string; }, params: Record<string, unknown>) => {
 			decodeAppServerRequestParams(definition.method as 'github/share/link', params);
 			sent.push({ method: definition.method, params });

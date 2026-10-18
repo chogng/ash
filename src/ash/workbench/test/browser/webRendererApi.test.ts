@@ -41,7 +41,7 @@ test('Session runtime adapter negotiates its contract and preserves cancellation
 	assert.deepEqual(transport.requests.at(-1)?.params, { operationId: params.operationId });
 	transport.respondAt(-1, null);
 	transport.respondAt(index, { type: 'target', target: { type: 'provider', providerId: 'ash.dev-containers', workspace: 'C:\\work', root: '/workspace' } });
-	await assert.rejects(pending, error => error instanceof Error && error.name === 'AbortError');
+	await assert.rejects(pending, isCancellationError);
 });
 
 test('Session runtime discovery reports unavailable when its contract was not negotiated', async () => {

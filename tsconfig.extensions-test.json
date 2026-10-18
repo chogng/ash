@@ -25,7 +25,7 @@
     "src/ash/workbench/contrib/debug/test/browser/debugAdapterManager.test.ts",
     "src/ash/workbench/contrib/debug/test/browser/debugConfigurationManager.test.ts",
     "src/ash/workbench/services/extensionHost/**/*.ts",
-    "src/ash/workbench/services/tasks/test/browser/taskService.test.ts",
+    "src/ash/workbench/contrib/tasks/test/browser/taskService.test.ts",
     "src/ash/workbench/services/testing/test/browser/testingService.test.ts",
     "src/ash/workbench/services/untitled/test/common/untitledTextEditorService.test.ts",
     "src/ash/workbench/test/browser/workbench-theme.test.ts",

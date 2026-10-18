@@ -10,6 +10,8 @@ import { CancellationError, isCancellationError } from '../../../../../base/comm
 import { type IDebugSession, IAdapterManager } from '../../common/debug.js';
 import { IEditorService } from '../../../../services/editor/common/editorService.js';
 import { IEditorGroupsService } from '../../../../services/editor/common/editorGroupsService.js';
+import { ILabelService } from '../../../../../platform/label/common/label.js';
+import { LabelService } from '../../../../services/label/common/labelService.js';
 import { emptyEditorServiceState } from '../../../../test/common/testEditorService.js';
 import { registerTestExtensionService } from '../../../../test/common/testExtensionServices.js';
 import { TestConfigurationService as WorkbenchConfigurationService } from '../../../../services/configuration/test/common/testServices.js';
@@ -308,7 +310,7 @@ async function launchWithTerminalRequest(terminals: ITerminalService, argumentsV
 	const services = resources.add(new InstantiationService(new ServiceCollection([IPathService, new SyncDescriptor(BrowserPathService)], [IRendererHostService, createDisconnectedRendererApi()], [IConfigurationService, options.configuration ?? new SyncDescriptor(WorkbenchConfigurationService)],
 		[IFileService, new SyncDescriptor(FileService)],
 		[IUriIdentityService, new SyncDescriptor(UriIdentityService)],
-		[ITerminalProcessService, terminalProcesses], [IWorkspaceContextService, workspace], [IConfigurationResolverService, new SyncDescriptor(ConfigurationResolverService)],
+		[ITerminalProcessService, terminalProcesses], [IWorkspaceContextService, workspace], [ILabelService, new SyncDescriptor(LabelService)], [IConfigurationResolverService, new SyncDescriptor(ConfigurationResolverService)],
 		[IStorageService, storage],
 		[IDebugAdapterProcessService, processes],
 		[ITerminalService, terminals],

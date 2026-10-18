@@ -96,7 +96,7 @@ test('disconnected clients report catalog and resource unavailability without a 
 });
 
 
-test('an idle catalog request reaches the backend immediately and queued reads recover after failure', async () => {
+test('an idle catalog request starts immediately, concurrent reads share failure, and a later read retries', async () => {
 	const first = new DeferredPromise<unknown>();
 	const second = new DeferredPromise<unknown>();
 	const requests: unknown[] = [];
@@ -107,15 +107,20 @@ test('an idle catalog request reaches the backend immediately and queued reads r
 		},
 	} as unknown as AppServerProtocolClient;
 	const api = createAppServerExtensionApi(connection, { connectionGeneration: 1 } as IResourceApi);
-	const failed = assert.rejects(api.list('refresh'), /source scan failed/);
+	const refresh = api.list('refresh');
+	const failed = assert.rejects(refresh, /source scan failed/);
 	assert.deepEqual(requests, [{ reload: 'refresh' }], 'Backend work starts before the caller yields to Workbench construction');
-	const queued = api.list('cached');
+	const concurrent = api.list('cached');
+	assert.strictEqual(concurrent, refresh, 'Concurrent consumers share the same catalog operation');
+	const concurrentFailed = assert.rejects(concurrent, /source scan failed/);
 	assert.equal(requests.length, 1, 'Catalog publication remains serialized');
 	await first.error(new Error('source scan failed'));
-	await failed;
+	await Promise.all([failed, concurrentFailed]);
+	assert.deepEqual(requests, [{ reload: 'refresh' }], 'A shared failure does not silently retry discovery');
+	const retry = api.list('cached');
 	assert.deepEqual(requests, [{ reload: 'refresh' }, { reload: 'cached' }]);
 	await second.complete({ generation: 2, extensions: [], diagnostics: [] });
-	assert.equal((await queued).generation, 1);
+	assert.equal((await retry).generation, 1);
 	const idle = api.list('cached');
 	assert.equal(requests.length, 3);
 	assert.equal((await idle).generation, 2);

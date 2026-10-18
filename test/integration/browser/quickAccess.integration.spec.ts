@@ -249,7 +249,7 @@ for (const variant of [{ locale: 'en', theme: 'light' }, { locale: 'zh-CN', them
 		await expect(editor.locator('h1')).toHaveCount(0);
 		await expect(row.locator('.ash-keybindings-command-id')).toBeHidden();
 		await expect(row).toHaveCSS('height', '24px');
-		await expect(row.locator('.ash-keybinding-label kbd').first()).toHaveCSS('height', '18px');
+		await expect(row.locator('.ash-keybinding-label kbd').first()).toHaveCSS('height', '20px');
 		await expect(editor.locator('.ash-keybindings-list')).toHaveCSS('border-top-width', '0px');
 		await expect(editor.locator('.ash-keybindings-list')).toHaveCSS('border-radius', '0px');
 		const editorBounds = (await editor.boundingBox())!;

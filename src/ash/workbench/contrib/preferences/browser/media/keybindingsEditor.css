@@ -223,10 +223,14 @@
 	border-radius: var(--ash-cornerRadius-small);
 }
 
-.ash-keybindings-list
-	.ash-table-row:not(:hover):not(.selected):not(:focus-within)
-	.is-odd {
+.ash-keybindings-list .ash-table-row .is-odd {
 	background: var(--ash-keybindingTable-rowsBackground);
+}
+
+.ash-keybindings-list
+	.ash-table-row:is(:hover, .selected, :focus-within)
+	.is-odd {
+	background: transparent;
 }
 
 .ash-keybindings-list .ash-table-row.selected:focus-within {
