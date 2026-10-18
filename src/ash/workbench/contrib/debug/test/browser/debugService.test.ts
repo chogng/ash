@@ -1972,9 +1972,18 @@ test('extension debug session options retain parent identity, inherit noDebug, m
 	await receivedParent.p;
 	processes.event('debug-2', 'output', { output: 'child output\n' });
 	await receivedOutput.p;
+	const childStopped = new Promise<void>(resolve => {
+		const listener = resources.add(child.onDidChangeState(state => {
+			if (state === 'stopped') { listener.dispose(); resolve(); }
+		}));
+	});
+	processes.event('debug-2', 'stopped', { threadId: 1 });
+	await childStopped;
+	debug.focusStackFrame({ id: 0, name: 'child caller', lineNumber: 1, columnNumber: 1 });
 	await consoleService.evaluate('answer');
 	assert.match(consoleService.activeSession!.output, /child answer/);
 	assert.equal(childRequests.filter(request => request.command === 'evaluate').length, 1);
+	assert.deepEqual(childRequests.find(request => request.command === 'evaluate')!.arguments, { expression: 'answer', frameId: 0, context: 'repl' });
 	assert.equal(processes.requestsBySession.get('debug-1')!.filter(request => request.command === 'evaluate').length, 0);
 	assert.equal(await debug.restart(child), parent);
 	assert.equal(processes.requestsBySession.get('debug-1')!.filter(request => request.command === 'restart').length, 1);

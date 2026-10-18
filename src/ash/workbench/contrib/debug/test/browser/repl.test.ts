@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { suite, test } from "mocha";
 import { Emitter, Event } from "../../../../../base/common/event.js";
 import { Disposable } from "../../../../../base/common/lifecycle.js";
-import type { DebugEvaluateContext, DebugSessionState, IDebugConfiguration, IDebugEvaluateResult, IDebugService, IDebugSession } from "../../common/debug.js";
+import type { DebugEvaluateContext, DebugSessionState, IDebugConfiguration, IDebugEvaluateResult, IDebugService, IDebugSession, IDebugStackFrame } from "../../common/debug.js";
 import { ReplModel } from "../../common/replModel.js";
 import { mock } from 'node:test';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
@@ -74,14 +74,47 @@ test("ReplModel captures output while hidden, evaluates, and retains terminated 
 	assert.equal(consoleService.activeSession?.output, "");
 });
 
+test('ReplModel evaluates in the selected paused frame, including frame zero', async () => {
+	using debug = new FakeDebugService();
+	using repl = new ReplModel(debug as unknown as IDebugService);
+	const session = debug.addSession();
+	session.state = 'stopped';
+	debug.focusedStackFrame = { id: 0, name: 'top', lineNumber: 1, columnNumber: 1 };
+	await repl.evaluate('answer');
+	debug.focusedStackFrame = { id: 7, name: 'caller', lineNumber: 2, columnNumber: 1 };
+	await repl.evaluate('answer + 1');
+	assert.deepEqual(session.evaluations, [
+		{ expression: 'answer', frameId: 0, context: 'repl' },
+		{ expression: 'answer + 1', frameId: 7, context: 'repl' },
+	]);
+});
+
+test('ReplModel never sends a frame belonging to a running or different session', async () => {
+	using debug = new FakeDebugService();
+	using repl = new ReplModel(debug as unknown as IDebugService);
+	const first = debug.addSession();
+	debug.focusedStackFrame = { id: 7, name: 'old frame', lineNumber: 1, columnNumber: 1 };
+	await repl.evaluate('running');
+	const second = debug.addSession();
+	second.state = 'stopped';
+	debug.focusedStackFrame = { id: 9, name: 'other adapter', lineNumber: 1, columnNumber: 1 };
+	// A retained console can still be rendered during a session-selection event.
+	// The focused frame must never escape its actual DebugService session.
+	debug.session = first;
+	await repl.evaluate('different session');
+	assert.deepEqual(first.evaluations, [{ expression: 'running', frameId: undefined, context: 'repl' }]);
+	assert.deepEqual(second.evaluations, [{ expression: 'different session', frameId: undefined, context: 'repl' }]);
+});
+
 class FakeDebugService extends Disposable {
 	private readonly sessionEmitter = this._register(new Emitter<IDebugSession | undefined>());
 	readonly onDidChangeSession = this.sessionEmitter.event;
 	sessions: readonly IDebugSession[] = Object.freeze([]);
 	session: IDebugSession | undefined;
+	focusedStackFrame: IDebugStackFrame | undefined;
 
 	addSession(): FakeDebugSession {
-		const session = this._register(new FakeDebugSession());
+		const session = this._register(new FakeDebugSession(`debug-${this.sessions.length + 1}`));
 		this.sessions = Object.freeze([session]);
 		this.session = session;
 		this.sessionEmitter.fire(session);
@@ -103,7 +136,8 @@ class FakeDebugService extends Disposable {
 class FakeDebugSession extends Disposable implements IDebugSession {
 	private readonly stateEmitter = this._register(new Emitter<DebugSessionState>());
 	private readonly outputEmitter = this._register(new Emitter<string>());
-	readonly id = "debug-1";
+	constructor(readonly id: string) { super(); }
+	readonly evaluations: { expression: string; frameId: number | undefined; context: DebugEvaluateContext; }[] = [];
 	readonly configuration: IDebugConfiguration = Object.freeze({ id: "one", name: "One", type: "demo", request: "launch", adapter: Object.freeze({ program: "adapter", arguments: Object.freeze([]) }), arguments: Object.freeze({}) });
 	readonly capabilities = Object.freeze({ supportsRestart: true, supportsTerminate: true, supportsSetVariable: false, supportsConditionalBreakpoints: false, supportsHitConditionalBreakpoints: false, supportsLogPoints: false, supportsFunctionBreakpoints: false, supportsDataBreakpoints: false, supportsInstructionBreakpoints: false, supportsDisassembleRequest: false, supportsSteppingGranularity: false, exceptionBreakpointFilters: Object.freeze([]) });
 	state: DebugSessionState = "running";
@@ -122,7 +156,10 @@ class FakeDebugSession extends Disposable implements IDebugSession {
 	private retainedOutput = "";
 	get output(): string { return this.retainedOutput; }
 	emitOutput(value: string): void { this.retainedOutput += value; this.outputEmitter.fire(value); }
-	async evaluate(_expression: string, _frameId: number | undefined, _context: DebugEvaluateContext): Promise<IDebugEvaluateResult> { return { result: "42", type: "number", variablesReference: 0 }; }
+	async evaluate(expression: string, frameId: number | undefined, context: DebugEvaluateContext): Promise<IDebugEvaluateResult> {
+		this.evaluations.push({ expression, frameId, context });
+		return { result: "42", type: "number", variablesReference: 0 };
+	}
 	async continue() { }
 	async pause() { }
 	async stepOver() { }

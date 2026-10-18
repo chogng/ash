@@ -139,4 +139,4 @@ compound 启动中任一配置失败时，已经启动的会话会回滚。自�
 
 当前还已接入 TCP server、OS named pipe 与 inline adapter，以及公开会话 API 子集、tracker、父子会话、`noDebug` 和父子控制台合并；这些行为通过当前 Workbench Session 接入 Rust 请求 client；完整 manager 语义仍待迁移，也不证明任意 VS Code 调试扩展完整兼容。Select and Start 支持 Dynamic provider 选择；类型重定向会先激活目标扩展，再执行目标配置回调与 descriptor。完整 namespace、部分会话选项和跨进程恢复仍有缺口，兼容细节由 Workbench README 维护。
 
-Debug Console 当前保留纯文本输出和单行求值，尚缺过滤、结构化分组/对象/源码链接、输入历史与补全。REPL 求值尚未传入选中栈帧；DAP output 只提取文本，evaluate 返回的对象引用尚未用于结果展开。上述差距属于已选中的前端对齐与领域契约工作，不能用基础控制台已有测试代替完整交付。后续任务与验收缺口见根目录 [TODO](../TODO.md#debug--todo)。
+Debug Console 当前保留纯文本输出和单行求值。REPL 使用提交时选中暂停会话的栈帧，继续运行或控制台会话与当前选中会话不同时不发送 frameId；合并到父控制台的子会话仍向子 adapter 求值。尚缺过滤、结构化分组/对象/源码链接、输入历史与补全；DAP output 只提取文本，evaluate 返回的对象引用尚未用于结果展开。上述差距属于已选中的前端对齐与领域契约工作，不能用基础控制台已有测试代替完整交付。后续任务与验收缺口见根目录 [TODO](../TODO.md#debug--todo)。

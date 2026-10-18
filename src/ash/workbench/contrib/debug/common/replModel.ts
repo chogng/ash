@@ -64,9 +64,15 @@ export class ReplModel extends Disposable implements IReplModel {
 		if (!normalized || normalized.length > 32_768 || normalized.includes("\0")) throw new TypeError("Debug Console expression must contain 1 to 32768 characters");
 		const record = this.activeSessionId ? this.records.get(this.activeSessionId) : undefined;
 		if (!record?.session) throw new Error("Debug Console requires an active session");
+		const session = record.session;
+		// Frame IDs are adapter-local and only valid while that session is paused.
+		// Read the selection at submission, before an asynchronous evaluation can
+		// overlap a frame change, resume, or selection of another console.
+		const frame = this.debug.session === session && session.state === 'stopped'
+			? this.debug.focusedStackFrame : undefined;
 		this.append(record, `> ${normalized}\n`);
 		try {
-			const result = await record.session.evaluate(normalized, undefined, "repl");
+			const result = await session.evaluate(normalized, frame?.id, "repl");
 			this.append(record, `${result.result}${result.type ? ` : ${result.type}` : ""}\n`);
 		} catch (error) {
 			this.append(record, `Error: ${message(error)}\n`);
