@@ -2302,6 +2302,7 @@ impl AppServer {
             self.updates.clone(),
             self.combined_dynamic_skill_sources(),
         )?;
+        runtime.bind_metrics(self.diagnostics.metrics());
         let session_sources: Arc<dyn ash_skills_extension::SessionSkillSourceProvider> =
             Arc::clone(&self.env_runtime_mut().dir_grants)
                 as Arc<dyn ash_skills_extension::SessionSkillSourceProvider>;
