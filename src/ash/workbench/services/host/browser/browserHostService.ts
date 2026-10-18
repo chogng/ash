@@ -23,7 +23,7 @@ export const EMPTY_WORKSPACE_ID_KEY = 'ash.workbench.emptyWorkspaceId';
 /** The embedding host owns directory handles or the authenticated server session. */
 export interface BrowserHostServiceOptions {
 	readonly workspaceProvider?:
-	| { readonly kind: 'local'; readonly provider: HTMLFileSystemProvider; readonly updateWorkspace: (workspace: IWorkspace) => Promise<void>; }
+	| { readonly kind: 'local'; readonly provider: HTMLFileSystemProvider; readonly updateWorkspace: (workspace: IWorkspace, preserveEditors?: boolean) => Promise<void>; }
 	| { readonly kind: 'server'; readonly client: IWebWorkspaceClient; readonly prepareSwitch: () => Promise<boolean>; };
 }
 
@@ -158,7 +158,7 @@ export class BrowserHostService extends Disposable implements IHostService {
 				await provider.provider.openDirectory(folder.uri);
 				if ((await this.files.stat(folder.uri)).kind !== FileKind.Directory) throw new TypeError(localize('workspace.folderNotDirectory', 'Workspace folder must be a directory.'));
 			}
-			await provider.updateWorkspace({ id: resource.toString(), configuration: resource, name: basename(resource).replace(/\.(ash|code)-workspace$/i, ''), folders });
+			await provider.updateWorkspace({ id: resource.toString(), configuration: resource, name: basename(resource).replace(/\.(ash|code)-workspace$/i, ''), folders }, options.preserveEditors);
 			return;
 		}
 		if (provider.kind === 'local') {

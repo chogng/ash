@@ -235,12 +235,14 @@ async function browserWorkspaceFixture() {
 	await files.createDirectory(second);
 	const context = resources.add(new TestWorkspaceService({ id: first.toString(), uri: first }));
 	const errors: string[] = [];
+	const transitions: (boolean | undefined)[] = [];
 	let reject = false;
 	let dirty: URI | undefined;
 	const host = resources.add(new BrowserHostService({
 		workspaceProvider: {
 			kind: 'local', provider: { openDirectory: async (uri: URI) => uri } as HTMLFileSystemProvider,
-			updateWorkspace: async next => {
+			updateWorkspace: async (next, preserveEditors) => {
+				transitions.push(preserveEditors);
 				if (reject) throw new Error('Host rejected the workspace');
 				editing.validateFolders(next.folders.map(folder => folder.uri));
 				context.updateWorkspace(next);
@@ -249,7 +251,7 @@ async function browserWorkspaceFixture() {
 	}, {} as ILifecycleService, {} as IDialogService, {} as IPathService, files));
 	const copies = { getAll: () => dirty ? [{ resource: dirty, isDirty: true }] : [], get: (uri: URI) => uri.toString() === dirty?.toString() ? [{ resource: dirty, isDirty: true }] : [] } as unknown as IWorkingCopyService;
 	const editing = resources.add(new BrowserWorkspaceEditingService(context, {} as IFileDialogService, copies, host, files, { error: (error: string) => errors.push(error) } as unknown as INotificationService));
-	return { resources, files, first, second, context, host, editing, errors, reject: () => { reject = true; }, setDirty: (uri: URI | undefined) => { dirty = uri; } };
+	return { resources, files, first, second, context, host, editing, errors, transitions, reject: () => { reject = true; }, setDirty: (uri: URI | undefined) => { dirty = uri; } };
 }
 
 test('enterWorkspace reads an existing Browser configuration without rewriting it', async () => {
@@ -265,6 +267,7 @@ test('enterWorkspace reads an existing Browser configuration without rewriting i
 	const stored = await fixture.files.readFile(target);
 	assert.equal(stored.content, content);
 	assert.equal(stored.revision, original.revision);
+	assert.deepEqual(fixture.transitions, [undefined]);
 });
 
 test('Browser multi-root editing writes metadata, preserves JSONC on save and removes only the selected root', async () => {
@@ -278,6 +281,7 @@ test('Browser multi-root editing writes metadata, preserves JSONC on save and re
 	await fixture.files.writeFile({ resource: temporary, content: '// workspace comment\n' + source.replace('"folders"', '"settings": { "test": true }, "folders"') }, { create: false, overwrite: true });
 	const target = URI.joinPath(fixture.first, 'team.code-workspace');
 	await fixture.editing.saveAndEnterWorkspace(target);
+	assert.deepEqual(fixture.transitions, [true, true]);
 	const saved = (await fixture.files.readFile(target)).content;
 	assert.ok(saved.includes('// workspace comment'));
 	assert.deepEqual(JSON.parse(saved.slice(saved.indexOf('{'))).settings, { test: true });

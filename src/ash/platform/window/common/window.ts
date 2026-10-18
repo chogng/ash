@@ -57,6 +57,8 @@ export interface IOpenEmptyWindowOptions {
 export type IWindowOpenable = { readonly folderUri: URI; } | { readonly workspaceUri: URI; };
 
 export interface IOpenWindowOptions extends IOpenEmptyWindowOptions {
+	/** Browser workspace save/creation carries the current editors and backups into the new identity. */
+	readonly preserveEditors?: boolean;
 	readonly forceNewWindow?: boolean;
 }
 

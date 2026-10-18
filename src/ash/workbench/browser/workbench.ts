@@ -550,9 +550,9 @@ export class Workbench extends Disposable {
 		if (!nativeHostApi && !serviceCollection.has(IHostService)) {
 			serviceCollection.set(IHostService, new SyncDescriptor(BrowserHostService, [{
 				workspaceProvider: browserFileSystemProvider ? {
-					kind: 'local', provider: browserFileSystemProvider, updateWorkspace: async (next: IWorkspace) => {
+					kind: 'local', provider: browserFileSystemProvider, updateWorkspace: async (next: IWorkspace, preserveEditors = false) => {
 						services.get(IWorkspaceEditingService).validateFolders(next.folders.map(folder => folder.uri));
-						await this.updateWorkspace(next);
+						await this.updateWorkspace(next, preserveEditors);
 					},
 				} : webWorkspaceClient ? {
 					kind: 'server', client: webWorkspaceClient,
@@ -1332,19 +1332,19 @@ export class Workbench extends Disposable {
 	}
 
 	/** Applies a host-authoritative workspace replacement without rebuilding the Workbench. */
-	updateWorkspace(workspace: IWorkspace): Promise<void> {
-		const switching = this.workspaceSwitchQueue.then(() => this.doUpdateWorkspace(workspace));
+	updateWorkspace(workspace: IWorkspace, preserveEditors = false): Promise<void> {
+		const switching = this.workspaceSwitchQueue.then(() => this.doUpdateWorkspace(workspace, preserveEditors));
 		this.workspaceSwitchQueue = switching.then(() => undefined, () => undefined);
 		return switching;
 	}
 
-	private async doUpdateWorkspace(workspace: IWorkspace): Promise<void> {
+	private async doUpdateWorkspace(workspace: IWorkspace, preserveEditors: boolean): Promise<void> {
 		if (this.workspaceContext.getWorkspace().id === workspace.id) {
 			// A folders edit keeps editor models, dirty buffers and the window's storage scope.
 			this.workspaceContext.updateWorkspace(workspace);
 			return;
 		}
-		if (workspace.configuration) {
+		if (workspace.configuration && preserveEditors) {
 			const restoreLayout = this.workspaceContext.getWorkbenchState() === WorkbenchState.EMPTY;
 			// Entering/saving a workspace from this live window changes its storage
 			// identity, while open editors and unsaved buffers belong to the user.

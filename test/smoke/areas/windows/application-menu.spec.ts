@@ -425,6 +425,8 @@ test('Browser workspace files persist multiple authorized handles across save, c
 		const home = await (await navigator.storage.getDirectory()).getDirectoryHandle(name, { create: true });
 		const client = await home.getDirectoryHandle('client', { create: true });
 		const server = await home.getDirectoryHandle('server', { create: true });
+		const clean = await (await client.getFileHandle('clean.txt', { create: true })).createWritable();
+		await clean.write('saved workspace editor'); await clean.close();
 		const writable = await (await server.getFileHandle('kept.txt', { create: true })).createWritable();
 		await writable.write('server file is retained'); await writable.close();
 		Object.defineProperty(window, 'showDirectoryPicker', { configurable: true, value: async () => client });
@@ -456,21 +458,23 @@ test('Browser workspace files persist multiple authorized handles across save, c
 	await workbench.waitForReady();
 	await expect(roots).toHaveCount(2);
 	await chooseDirectory('client');
-	const conflictKey = await page.evaluate(async targetWorkspaceId => {
+	const recovery = await page.evaluate(async targetWorkspaceId => {
 		const database = await new Promise<IDBDatabase>((resolve, reject) => { const request = indexedDB.open('ash-working-copy-backups', 1); request.onsuccess = () => resolve(request.result); request.onerror = () => reject(request.error); });
 		try {
-			return await new Promise<string>((resolve, reject) => {
+			return await new Promise<{ key: string; source: Record<string, unknown>; }>((resolve, reject) => {
 				const transaction = database.transaction('backups', 'readwrite');
 				const store = transaction.objectStore('backups');
 				const reading = store.getAll();
 				let key = '';
+				let source: Record<string, unknown> = {};
 				reading.onsuccess = () => {
-					const source = reading.result.find(record => record.content.includes('unsaved browser workspace draft'));
-					if (!source) { transaction.abort(); return; }
+					const record = reading.result.find(record => record.content.includes('unsaved browser workspace draft'));
+					if (record) source = record;
+					if (!record) { transaction.abort(); return; }
 					key = `${targetWorkspaceId}\0${source.resource}`;
 					store.put({ ...source, key, workspaceId: targetWorkspaceId, content: 'existing target recovery', revision: 'other-writer' });
 				};
-				transaction.oncomplete = () => resolve(key);
+				transaction.oncomplete = () => resolve({ key, source });
 				transaction.onabort = () => reject(transaction.error ?? new Error('Missing source recovery'));
 			});
 		} finally { database.close(); }
@@ -496,7 +500,7 @@ test('Browser workspace files persist multiple authorized handles across save, c
 				transaction.oncomplete = () => resolve(); transaction.onabort = () => reject(new Error('Target recovery was overwritten'));
 			});
 		} finally { database.close(); }
-	}, conflictKey);
+	}, recovery.key);
 	await saveWorkspace();
 	await expect(page).toHaveURL(/workspace=file/);
 	const saved = await page.evaluate(async fixture => {
@@ -505,10 +509,15 @@ test('Browser workspace files persist multiple authorized handles across save, c
 		return JSON.parse(await (await (await client.getFileHandle('team.ash-workspace')).getFile()).text());
 	}, fixture);
 	expect(saved.folders).toHaveLength(2);
+	await expect(workbench.editors.groupAt(0).editor.lines).toContainText(['unsaved browser workspace draft']);
 	await page.reload();
 	await workbench.waitForReady();
 	await expect(roots).toHaveCount(2);
 	await expect(workbench.editors.groupAt(0).content.locator('.stanza-editor-line-text').first()).toContainText('unsaved browser workspace draft');
+	const client = roots.filter({ hasText: 'client' });
+	if (await client.getAttribute('aria-expanded') !== 'true') await client.locator('.ash-tree-twistie').click();
+	await page.locator('.ash-explorer').getByText('clean.txt', { exact: true }).dblclick();
+	await expect(workbench.editors.groupAt(0).editor.lines).toContainText(['saved workspace editor']);
 	const server = roots.filter({ hasText: 'server' });
 	await server.click(); await server.press('Shift+F10');
 	await page.getByRole('menu').last().getByRole('menuitem', { name: 'Remove Folder from Workspace...', exact: true }).click();
@@ -521,11 +530,30 @@ test('Browser workspace files persist multiple authorized handles across save, c
 	await page.getByRole('dialog', { name: 'Save Changes' }).getByRole('button', { name: "Don't Save", exact: true }).click();
 	await workbench.waitForReady();
 	await expect(page).not.toHaveURL(/workspace=/);
+	// Simulate a crash backup belonging to the saved workspace while a different
+	// workspace is active. Opening must recover it without a subsequent reload.
+	await page.evaluate(async ({ source, workspaceId }) => {
+		const database = await new Promise<IDBDatabase>((resolve, reject) => { const request = indexedDB.open('ash-working-copy-backups', 1); request.onsuccess = () => resolve(request.result); request.onerror = () => reject(request.error); });
+		try {
+			await new Promise<void>((resolve, reject) => {
+				const transaction = database.transaction('backups', 'readwrite');
+				transaction.objectStore('backups').put({ ...source, key: `${workspaceId}\0${source.resource}`, workspaceId, content: 'recovered target workspace draft', revision: 'crash-recovery' });
+				transaction.oncomplete = () => resolve(); transaction.onabort = () => reject(transaction.error);
+			});
+		} finally { database.close(); }
+	}, { source: recovery.source, workspaceId: targetWorkspaceId });
 	await chooseDirectory('client');
 	await fileMenu('Open Workspace from File...');
 	await page.locator('.ash-quick-pick').getByText('team.ash-workspace', { exact: true }).click();
 	await expect(roots).toHaveCount(1);
 	await expect(page).toHaveURL(/workspace=file/);
+	const group = workbench.editors.groupAt(0);
+	await expect(group.tabs.filter({ hasText: 'clean.txt' })).toHaveCount(1);
+	await group.tabs.filter({ hasText: 'clean.txt' }).click();
+	await expect(group.editor.lines).toContainText(['saved workspace editor']);
+	await group.title.locator('.ash-tab[data-state="dirty"]').click();
+	await expect(group.editor.lines).toContainText(['recovered target workspace draft']);
+	await expect(group.title.locator('.ash-tab[data-state="dirty"]')).toHaveCount(1);
 	const screenshot = testInfo.outputPath('browser-workspace-reopened.png');
 	await page.screenshot({ path: screenshot });
 	await testInfo.attach('browser-workspace-reopened', { path: screenshot, contentType: 'image/png' });

@@ -117,7 +117,7 @@ export class BrowserWorkspaceEditingService extends AbstractWorkspaceEditingServ
 		}
 		const written = await this.files.writeFile({ resource: target, content: output, expectedRevision: previous?.revision }, { create: true, overwrite: previous !== undefined });
 		try {
-			await this.enterWorkspace(target);
+			await this.hostService.openWindow([{ workspaceUri: target }], { forceReuseWindow: true, preserveEditors: true });
 			if (this.workspace.getWorkspace().configuration?.toString() !== target.toString()) throw new CancellationError();
 		} catch (error) {
 			try {
