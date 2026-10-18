@@ -34,6 +34,7 @@ function registerCommand<T extends Command>(command: T): T {
 	return command;
 }
 
+// Default shortcuts belong to editor text; terminals and native inputs own their keyboard handling.
 export const CutAction = supportsCut ? registerCommand(new MultiCommand({
 	id: 'editor.action.clipboardCutAction',
 	precondition: undefined,
@@ -41,6 +42,7 @@ export const CutAction = supportsCut ? registerCommand(new MultiCommand({
 		primary: KeyMod.CtrlCmd | KeyCode.KeyX,
 		win: { primary: KeyMod.CtrlCmd | KeyCode.KeyX, secondary: [KeyMod.Shift | KeyCode.Delete] },
 		weight: KeybindingWeight.EditorContrib,
+		kbExpr: EditorContextKeys.textInputFocus.isEqualTo(true),
 	} : undefined,
 	menuOpts: clipboardMenuOptions(nls.localize('actions.clipboard.cutLabel', 'Cut'), 1, true),
 })) : undefined;
@@ -52,6 +54,7 @@ export const CopyAction = supportsCopy ? registerCommand(new MultiCommand({
 		primary: KeyMod.CtrlCmd | KeyCode.KeyC,
 		win: { primary: KeyMod.CtrlCmd | KeyCode.KeyC, secondary: [KeyMod.CtrlCmd | KeyCode.Insert] },
 		weight: KeybindingWeight.EditorContrib,
+		kbExpr: EditorContextKeys.textInputFocus.isEqualTo(true),
 	} : undefined,
 	menuOpts: clipboardMenuOptions(nls.localize('actions.clipboard.copyLabel', 'Copy'), 2, false),
 })) : undefined;
@@ -64,6 +67,7 @@ export const PasteAction = supportsPaste ? registerCommand(new MultiCommand({
 		win: { primary: KeyMod.CtrlCmd | KeyCode.KeyV, secondary: [KeyMod.Shift | KeyCode.Insert] },
 		linux: { primary: KeyMod.CtrlCmd | KeyCode.KeyV, secondary: [KeyMod.Shift | KeyCode.Insert] },
 		weight: KeybindingWeight.EditorContrib,
+		kbExpr: EditorContextKeys.textInputFocus.isEqualTo(true),
 	} : undefined,
 	menuOpts: clipboardMenuOptions(nls.localize('actions.clipboard.pasteLabel', 'Paste'), 4, true),
 })) : undefined;

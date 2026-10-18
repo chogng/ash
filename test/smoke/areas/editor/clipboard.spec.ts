@@ -273,6 +273,38 @@ test('global Find clipboard seeds a new editor and preserves copied text', { tag
 });
 
 
+test('desktop clipboard shortcuts preserve editor operations and native Find textbox input', { tag: ['@electron-ui', '@electron-app-server'] }, async ({ workbench, application }, testInfo) => {
+	const desktop = application as ElectronApplication;
+	const previous = await desktop.evaluate(({ clipboard }) => clipboard.readText());
+	try {
+		await workbench.page.keyboard.press('ControlOrMeta+N');
+		const editor = workbench.editors.groupAt(0).editor;
+		await editor.waitForEditorFocus();
+		await editor.waitForTypeInEditor('clipboard editor text');
+		await editor.input.press('ControlOrMeta+A');
+		await editor.input.press('ControlOrMeta+C');
+		await expect.poll(() => desktop.evaluate(({ clipboard }) => clipboard.readText())).toBe('clipboard editor text');
+		await editor.input.press('ControlOrMeta+X');
+		await editor.waitForEditorContents(text => text === '');
+		await editor.input.press('ControlOrMeta+V');
+		await editor.waitForEditorContents(text => text === 'clipboard editor text');
+		await workbench.quickaccess.runCommand('actions.find');
+		const find = workbench.page.locator('.stanza-editor-find-widget:visible').getByRole('textbox', { name: 'Find', exact: true });
+		await expect(find).toBeFocused();
+		await find.fill('native textbox clipboard');
+		await find.press('ControlOrMeta+A');
+		await find.press('ControlOrMeta+C');
+		await expect.poll(() => desktop.evaluate(({ clipboard }) => clipboard.readText())).toBe('native textbox clipboard');
+		await find.fill('');
+		await find.press('ControlOrMeta+V');
+		await expect(find).toHaveValue('native textbox clipboard');
+		await editor.waitForEditorContents(text => text === 'clipboard editor text');
+		await workbench.page.screenshot({ path: testInfo.outputPath('native-clipboard-shortcuts.png') });
+	} finally {
+		await desktop.evaluate(({ clipboard }, text) => clipboard.writeText(text), previous);
+	}
+});
+
 test('desktop Paste command inserts clipboard text into a focused Find textbox', { tag: ['@electron-ui', '@electron-app-server'] }, async ({ workbench, target, application }) => {
 	const desktop = application as ElectronApplication;
 	const previous = await desktop.evaluate(({ clipboard }) => clipboard.readText());

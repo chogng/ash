@@ -14,6 +14,11 @@ import { installEditorTestDom } from '../../../../test/browser/editorTestGlobals
 import { getWindowId, registerWindow } from '../../../../../base/browser/window.js';
 import { toDisposable } from '../../../../../base/common/lifecycle.js';
 import { DisposableTracker, installDisposableTracker } from '../../../../../base/common/lifecycle.js';
+import { KeybindingResolveKind, KeybindingResolver } from '../../../../../platform/keybinding/common/keybindingResolver.js';
+import { KeybindingRegistry, KeybindingsRegistry, KeybindingSource, type IRegisteredCommandKeybindingRule } from '../../../../../platform/keybinding/common/keybindingsRegistry.js';
+import { resolveKeybinding } from '../../../../../base/common/keybindings.js';
+import { DisposableStore } from '../../../../../base/common/lifecycle.js';
+import { EditorContextKeys } from '../../../../common/editorContextKeys.js';
 
 const environment = new JSDOM('<!doctype html><body></body>');
 const installedGlobals = installEditorTestDom(environment, [
@@ -33,6 +38,36 @@ assert.ok(PasteAction);
 suiteTeardown(() => {
 	installedGlobals.dispose();
 	environment.window.close();
+});
+
+test('default clipboard shortcuts resolve only for editor text and preserve explicit user overrides', () => {
+	using resources = new DisposableStore();
+	const registry = new KeybindingRegistry();
+	const resolver = new KeybindingResolver({ registry });
+	const contexts = resources.add(new ContextKeyService());
+	const editor = environment.window.document.createElement('div');
+	const terminal = environment.window.document.createElement('textarea');
+	const input = environment.window.document.createElement('input');
+	const editorScope = resources.add(contexts.createScoped(editor));
+	EditorContextKeys.textInputFocus.bindTo(editorScope).set(true);
+	const terminalScope = resources.add(contexts.createScoped(terminal));
+	terminalScope.createKey('terminalFocus', true);
+	const commands = new Set([CutAction.id, CopyAction.id, PasteAction.id]);
+	const rules = KeybindingsRegistry.getKeybindings().filter((rule): rule is IRegisteredCommandKeybindingRule => rule.kind === 'command' && commands.has(rule.command));
+	assert.ok(rules.length >= 3, 'native clipboard shortcuts must be registered');
+	for (const rule of rules) resources.add(registry.registerKeybindingRule(rule));
+	for (const rule of rules) {
+		const chord = resolveKeybinding(rule.keybinding).chords[0]!;
+		const events = [{ ...chord, key: chord.key ?? '', code: '' }];
+		const resolved = resolver.resolve(contexts.getContext(editor), events);
+		assert.equal(resolved.kind, KeybindingResolveKind.Command);
+		if (resolved.kind === KeybindingResolveKind.Command) assert.equal(resolved.command, rule.command);
+		for (const target of [terminal, input]) assert.equal(resolver.resolve(contexts.getContext(target), events).kind, KeybindingResolveKind.NoMatch);
+		using override = registry.registerKeybindingRule({ command: 'user.clipboard', keybinding: rule.keybinding, source: KeybindingSource.User });
+		const explicit = resolver.resolve(contexts.getContext(terminal), events);
+		assert.equal(explicit.kind, KeybindingResolveKind.Command);
+		if (explicit.kind === KeybindingResolveKind.Command) assert.equal(explicit.command, 'user.clipboard');
+	}
 });
 
 test('clipboard actions use the focused code editor and platform clipboard service', async () => {
