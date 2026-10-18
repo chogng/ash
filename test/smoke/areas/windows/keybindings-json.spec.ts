@@ -723,6 +723,8 @@ test('Keybindings external changes reload clean models and preserve dirty text o
 	await writeFile(join(profile, 'keybindings.json'), source);
 	await group.editor.waitForEditorContents(content => content === source);
 	await replaceJson(group.editor.input, '// unsaved\n' + source);
+	await group.editor.waitForEditorContents(content => content === '// unsaved\n' + source);
+	await expect(group.tabs.filter({ hasText: 'Keyboard Shortcuts (JSON)' }).locator('..')).toHaveAttribute('data-state', 'dirty');
 	await writeFile(join(profile, 'keybindings.json'), '[]');
 	await workbench.dialogs.expectMessage(application, 'File changed on disk', () => workbench.quickaccess.runCommand('workbench.action.files.save'));
 	await expect(group.tabs.filter({ hasText: 'Keyboard Shortcuts (JSON)' }).locator('..')).toHaveAttribute('data-state', /conflict/u);
