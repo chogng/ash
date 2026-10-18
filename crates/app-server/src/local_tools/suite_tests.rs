@@ -913,6 +913,308 @@ fn shell_session_tool_returns_early_then_drives_the_same_process() {
     assert_eq!(stdout, "got:hello");
 }
 
+// Keep the turn token alive throughout these tests: revocation must stop the
+// command independently of the normal end-of-turn cancellation path.
+#[cfg(unix)]
+fn start_input_session(
+    suite: &LocalToolSuite<PassThroughBackend>,
+    session: &SessionId,
+    cwd: &std::path::Path,
+    cancellation: &CancellationToken,
+) -> CommandSessionId {
+    let output = suite
+        .shell_session(
+            &tool_call(
+                "shell-session",
+                json!({
+                    "action": "start", "program": "/bin/sh",
+                    "arguments": ["-c", "read line; printf '%s' \"$line\" > accepted.txt"],
+                    "working_directory": cwd, "wait_ms": 0,
+                }),
+            ),
+            &ToolAuthorization::Sandboxed(super::super::shell_sandbox()),
+            cancellation,
+            session,
+            &ThreadId::new("revocation-thread").unwrap(),
+            None,
+        )
+        .unwrap();
+    let ToolExecutionOutput::Success(output) = output else {
+        panic!("session start failed")
+    };
+    let output: Value = serde_json::from_str(&output).unwrap();
+    assert_eq!(output["status"], "running");
+    CommandSessionId::new(output["session_id"].as_str().unwrap()).unwrap()
+}
+
+#[cfg(unix)]
+fn assert_session_revoked(
+    suite: &LocalToolSuite<PassThroughBackend>,
+    session: &SessionId,
+    id: &CommandSessionId,
+    cwd: &std::path::Path,
+    turn: &CancellationToken,
+) {
+    let owner = command_session_owner(session, &ThreadId::new("revocation-thread").unwrap());
+    let update = pollster::block_on(suite.shell.shell.wait_session(
+        &owner,
+        id,
+        CommandSessionCursor::default(),
+        Duration::from_secs(5),
+        turn,
+    ))
+    .unwrap();
+    assert_eq!(update.status, CommandSessionStatus::Cancelled);
+    for action in ["write", "close_input", "interrupt", "resize"] {
+        assert!(
+            suite
+                .shell_session(
+                    &tool_call(
+                        "shell-session",
+                        json!({
+                            "action": action, "session_id": id.as_str(), "input": "revoked\n",
+                            "terminal_rows": 24, "terminal_cols": 80,
+                        })
+                    ),
+                    &ToolAuthorization::Sandboxed(super::super::shell_sandbox()),
+                    turn,
+                    session,
+                    &ThreadId::new("revocation-thread").unwrap(),
+                    None,
+                )
+                .is_err(),
+            "{action} accepted after revocation"
+        );
+    }
+    assert!(!cwd.join("accepted.txt").exists());
+    assert!(
+        turn.check().is_ok(),
+        "directory revocation cancelled the whole turn"
+    );
+}
+
+#[test]
+#[cfg(unix)]
+fn shell_session_revocation_stops_process_without_ending_turn() {
+    let cwd = tempfile::tempdir().unwrap();
+    let extra = tempfile::tempdir().unwrap();
+    let suite = text_edit_suite(cwd.path());
+    let session = SessionId::new("revoked-session").unwrap();
+    let other_session = SessionId::new("unaffected-session").unwrap();
+    let grant = Grant::for_session_tree(
+        session.clone(),
+        Dir::open_local(extra.path()).unwrap(),
+        GrantSource::ExplicitUser,
+        Permissions::new([
+            Permission::ExecuteCommands,
+            Permission::ReadFiles,
+            Permission::WriteFiles,
+        ]),
+    );
+    suite.dir_grants.add_dir(session.clone(), grant).unwrap();
+    let turn = ash_async_utils::CancellationSource::new();
+    let affected = start_input_session(&suite, &session, extra.path(), &turn.token());
+    let unaffected = start_input_session(&suite, &other_session, cwd.path(), &turn.token());
+    suite.dir_grants.remove_dir(&session, extra.path());
+    assert_session_revoked(&suite, &session, &affected, extra.path(), &turn.token());
+
+    suite
+        .shell_session(
+            &tool_call(
+                "shell-session",
+                json!({"action": "write", "session_id": unaffected.as_str(), "input": "allowed\n"}),
+            ),
+            &ToolAuthorization::Sandboxed(super::super::shell_sandbox()),
+            &turn.token(),
+            &other_session,
+            &ThreadId::new("revocation-thread").unwrap(),
+            None,
+        )
+        .unwrap();
+    let update = pollster::block_on(suite.shell.shell.wait_session(
+        &command_session_owner(&other_session, &ThreadId::new("revocation-thread").unwrap()),
+        &unaffected,
+        CommandSessionCursor::default(),
+        Duration::from_secs(5),
+        &turn.token(),
+    ))
+    .unwrap();
+    assert!(matches!(update.status, CommandSessionStatus::Exited(_)));
+    assert_eq!(
+        fs::read_to_string(cwd.path().join("accepted.txt")).unwrap(),
+        "allowed"
+    );
+}
+
+#[test]
+#[cfg(unix)]
+fn shell_session_revocation_covers_extra_file_roots_and_permission_changes() {
+    for permission in [Permission::ReadFiles, Permission::WriteFiles] {
+        for remove in [false, true] {
+            let cwd = tempfile::tempdir().unwrap();
+            let extra = tempfile::tempdir().unwrap();
+            let suite = text_edit_suite(cwd.path());
+            let session = SessionId::new("extra-files-session").unwrap();
+            suite
+                .dir_grants
+                .add_dir(
+                    session.clone(),
+                    Grant::for_session_tree(
+                        session.clone(),
+                        Dir::open_local(extra.path()).unwrap(),
+                        GrantSource::ExplicitUser,
+                        Permissions::new([permission]),
+                    ),
+                )
+                .unwrap();
+            let turn = ash_async_utils::CancellationSource::new();
+            let id = start_input_session(&suite, &session, cwd.path(), &turn.token());
+            if remove {
+                suite.dir_grants.remove_dir(&session, extra.path());
+            } else {
+                suite
+                    .dir_grants
+                    .set_permissions(
+                        &session,
+                        extra.path(),
+                        suite.dir_grants.revision(&session),
+                        Permissions::default(),
+                    )
+                    .unwrap();
+            }
+            assert_session_revoked(&suite, &session, &id, cwd.path(), &turn.token());
+        }
+    }
+}
+
+#[test]
+#[cfg(unix)]
+fn shell_session_input_rechecks_its_original_leases() {
+    let cwd = tempfile::tempdir().unwrap();
+    let extra = tempfile::tempdir().unwrap();
+    let suite = text_edit_suite(cwd.path());
+    let session = SessionId::new("rechecked-session").unwrap();
+    let grant = Grant::for_session_tree(
+        session.clone(),
+        Dir::open_local(extra.path()).unwrap(),
+        GrantSource::ExplicitUser,
+        Permissions::new([Permission::ReadFiles]),
+    );
+    suite
+        .dir_grants
+        .add_dir(session.clone(), grant.clone())
+        .unwrap();
+    let turn = ash_async_utils::CancellationSource::new();
+    let id = start_input_session(&suite, &session, cwd.path(), &turn.token());
+    // Bypass the owner's sweep: the input boundary must independently reject and
+    // cancel stale sessions, even if a grant is revoked by another lifetime owner.
+    grant.revoke();
+    let result = suite.shell_session(
+        &tool_call(
+            "shell-session",
+            json!({"action": "write", "session_id": id.as_str(), "input": "revoked\n"}),
+        ),
+        &ToolAuthorization::Sandboxed(super::super::shell_sandbox()),
+        &turn.token(),
+        &session,
+        &ThreadId::new("revocation-thread").unwrap(),
+        None,
+    );
+    assert!(result.is_err());
+    assert_session_revoked(&suite, &session, &id, cwd.path(), &turn.token());
+}
+
+#[test]
+fn command_registration_and_revocation_cover_both_launch_orderings() {
+    let dir = tempfile::tempdir().unwrap();
+    let access = DirGrants::default();
+    let session = SessionId::new("launch-race").unwrap();
+    let grant = Grant::for_session_tree(
+        session.clone(),
+        Dir::open_local(dir.path()).unwrap(),
+        GrantSource::ExplicitUser,
+        Permissions::new([Permission::ExecuteCommands]),
+    );
+    access.add_dir(session.clone(), grant.clone()).unwrap();
+    let authorization = grant.authorize(Permission::ExecuteCommands).unwrap();
+    let turn = ash_async_utils::CancellationSource::new();
+    let command = access
+        .authorize_command(vec![authorization.clone()], &turn.token())
+        .unwrap();
+    access.remove_dir(&session, dir.path());
+    assert!(command.cancellation().check().is_err());
+    assert!(
+        access
+            .authorize_command(vec![authorization], &turn.token())
+            .is_err()
+    );
+    assert!(turn.token().check().is_ok());
+}
+
+#[test]
+fn command_input_and_directory_revocation_share_an_admission_gate() {
+    let dir = tempfile::tempdir().unwrap();
+    let access = Arc::new(DirGrants::default());
+    let session = SessionId::new("input-revoke-race").unwrap();
+    let grant = Grant::for_session_tree(
+        session.clone(),
+        Dir::open_local(dir.path()).unwrap(),
+        GrantSource::ExplicitUser,
+        Permissions::new([Permission::ExecuteCommands]),
+    );
+    access.add_dir(session.clone(), grant.clone()).unwrap();
+    let turn = ash_async_utils::CancellationSource::new();
+    let command = access
+        .authorize_command(
+            vec![grant.authorize(Permission::ExecuteCommands).unwrap()],
+            &turn.token(),
+        )
+        .unwrap();
+    let (admitted_tx, admitted_rx) = std::sync::mpsc::sync_channel(1);
+    let (deliver_tx, deliver_rx) = std::sync::mpsc::sync_channel(1);
+    let input_access = access.clone();
+    let input_command = command.clone();
+    let input = std::thread::spawn(move || {
+        input_access.execute_command(&input_command, || {
+            admitted_tx.send(()).unwrap();
+            deliver_rx.recv_timeout(Duration::from_secs(5)).unwrap();
+            Ok(())
+        })
+    });
+    admitted_rx.recv_timeout(Duration::from_secs(5)).unwrap();
+    let (revoking_tx, revoking_rx) = std::sync::mpsc::sync_channel(1);
+    let (revoked_tx, revoked_rx) = std::sync::mpsc::sync_channel(1);
+    let revoke_access = access.clone();
+    let root = dir.path().to_path_buf();
+    let revoke = std::thread::spawn(move || {
+        revoking_tx.send(()).unwrap();
+        revoke_access.remove_dir(&session, &root);
+        revoked_tx.send(()).unwrap();
+    });
+    revoking_rx.recv_timeout(Duration::from_secs(5)).unwrap();
+    // Revocation cannot finish in the gap between input admission and delivery.
+    assert!(matches!(
+        revoked_rx.recv_timeout(Duration::from_millis(50)),
+        Err(std::sync::mpsc::RecvTimeoutError::Timeout)
+    ));
+    deliver_tx.send(()).unwrap();
+    input.join().unwrap().unwrap();
+    revoked_rx.recv_timeout(Duration::from_secs(5)).unwrap();
+    revoke.join().unwrap();
+    assert!(command.cancellation().check().is_err());
+    let mut delivered = false;
+    assert!(
+        access
+            .execute_command(&command, || {
+                delivered = true;
+                Ok(())
+            })
+            .is_err()
+    );
+    assert!(!delivered);
+    assert!(turn.token().check().is_ok());
+}
+
 fn authorization(path: &std::path::Path) -> Grant {
     Grant::for_environment(
         Dir::open_local(path).unwrap(),

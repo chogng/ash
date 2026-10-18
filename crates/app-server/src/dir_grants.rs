@@ -1,6 +1,9 @@
 use std::collections::BTreeMap;
 use std::path::Path;
+use std::sync::Arc;
+use std::sync::Mutex;
 use std::sync::RwLock;
+use std::sync::Weak;
 
 use ash_file_access::Access;
 use ash_file_access::AccessError;
@@ -20,6 +23,8 @@ use ash_protocol::ThreadId;
 #[derive(Default)]
 pub(crate) struct DirGrants {
     requested: RwLock<Vec<RequestedGrant>>,
+    // One gate orders grant changes against input admission; weak entries do not own turns.
+    commands: Mutex<Vec<Weak<CommandAuthorization>>>,
     approvals: RwLock<
         BTreeMap<
             SessionId,
@@ -31,6 +36,33 @@ pub(crate) struct DirGrants {
     >,
     session_trees: RwLock<BTreeMap<SessionId, Access>>,
     threads: RwLock<BTreeMap<ThreadId, ThreadDirs>>,
+}
+
+/// Leases used to launch a command, retained for its full interactive lifetime.
+/// The child cancellation domain stops only this command when a lease is revoked.
+pub(crate) struct CommandAuthorization {
+    authorizations: Vec<Authorization>,
+    cancellation: ash_async_utils::CancellationSource,
+}
+
+impl CommandAuthorization {
+    pub(crate) fn ensure_active(&self) -> Result<(), core_api::CoreError> {
+        for authorization in &self.authorizations {
+            if let Err(error) = authorization.ensure_active() {
+                self.cancellation.cancel();
+                return Err(core_api::CoreError::Policy(error.to_string()));
+            }
+        }
+        self.cancellation
+            .token()
+            .check()
+            .map_err(|signal| core_api::CoreError::Cancelled(signal.reason().to_string()))?;
+        Ok(())
+    }
+
+    pub(crate) fn cancellation(&self) -> ash_async_utils::CancellationToken {
+        self.cancellation.token()
+    }
 }
 
 #[derive(Default)]
@@ -91,6 +123,51 @@ impl Drop for RequestedGrant {
 }
 
 impl DirGrants {
+    /// Registers before launch so a concurrent revocation also cancels a command
+    /// whose process or session ID has not yet been returned to the tool caller.
+    pub(crate) fn authorize_command(
+        &self,
+        authorizations: Vec<Authorization>,
+        cancellation: &ash_async_utils::CancellationToken,
+    ) -> Result<Arc<CommandAuthorization>, core_api::CoreError> {
+        let mut commands = self
+            .commands
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        commands.retain(|command| command.strong_count() != 0);
+        let command = Arc::new(CommandAuthorization {
+            authorizations,
+            cancellation: cancellation.child_source(),
+        });
+        command.ensure_active()?;
+        commands.push(Arc::downgrade(&command));
+        Ok(command)
+    }
+
+    /// Holds the same gate as grant mutations through input enqueueing. Checking a
+    /// lease and releasing the gate before writing would admit input after revoke.
+    pub(crate) fn execute_command<T>(
+        &self,
+        command: &CommandAuthorization,
+        operation: impl FnOnce() -> Result<T, core_api::CoreError>,
+    ) -> Result<T, core_api::CoreError> {
+        let _commands = self
+            .commands
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        command.ensure_active()?;
+        operation()
+    }
+
+    fn cancel_revoked_commands(commands: &mut Vec<Weak<CommandAuthorization>>) {
+        commands.retain(|command| {
+            let Some(command) = command.upgrade() else {
+                return false;
+            };
+            command.ensure_active().is_ok()
+        });
+    }
+
     pub(crate) fn remember_approval(
         &self,
         session: SessionId,
@@ -204,6 +281,10 @@ impl DirGrants {
     }
 
     pub(crate) fn expire_turn(&self, thread: &ThreadId, turn: &ash_protocol::TurnId) {
+        let mut commands = self
+            .commands
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         self.requested
             .write()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
@@ -212,6 +293,7 @@ impl DirGrants {
                     || &grant.thread != thread
                     || &grant.turn != turn
             });
+        Self::cancel_revoked_commands(&mut commands);
     }
 
     pub(crate) fn requested_authorizations(
@@ -290,6 +372,10 @@ impl DirGrants {
     }
 
     pub(crate) fn clear(&self) {
+        let mut commands = self
+            .commands
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         self.approvals
             .write()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
@@ -302,9 +388,14 @@ impl DirGrants {
             .write()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .clear();
+        Self::cancel_revoked_commands(&mut commands);
     }
 
     pub(crate) fn clear_session(&self, session_id: &SessionId) {
+        let mut commands = self
+            .commands
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         self.approvals
             .write()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
@@ -317,11 +408,16 @@ impl DirGrants {
             .write()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .remove(session_id);
+        Self::cancel_revoked_commands(&mut commands);
     }
 
     /// Issues the host's working-copy capabilities for a managed Thread binding.
     /// Ordinary cwd changes and workspace folder selection must not use this grant-issuing path.
     pub(crate) fn bind_thread_dir(&self, thread_id: ThreadId, dir: Dir) {
+        let mut commands = self
+            .commands
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         let mut threads = self
             .threads
             .write()
@@ -335,9 +431,14 @@ impl DirGrants {
         )) {
             previous.revoke();
         }
+        Self::cancel_revoked_commands(&mut commands);
     }
 
     pub(crate) fn unbind_thread_dir(&self, thread_id: &ThreadId) {
+        let mut commands = self
+            .commands
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         let mut threads = self
             .threads
             .write()
@@ -349,6 +450,7 @@ impl DirGrants {
             grant.revoke();
         }
         threads.remove(thread_id);
+        Self::cancel_revoked_commands(&mut commands);
     }
 
     /// Identifies the current Thread directory without granting filesystem access. Domain-specific
@@ -402,15 +504,26 @@ impl DirGrants {
         session_id: SessionId,
         grant: Grant,
     ) -> Result<Mutation, AccessError> {
-        self.session_trees
+        let mut commands = self
+            .commands
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let result = self
+            .session_trees
             .write()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .entry(session_id.clone())
             .or_insert_with(|| Access::new(ash_file_access::GrantSubject::SessionTree(session_id)))
-            .add(grant, DirSource::SessionRequest)
+            .add(grant, DirSource::SessionRequest);
+        Self::cancel_revoked_commands(&mut commands);
+        result
     }
 
     pub(crate) fn remove_dir(&self, session_id: &SessionId, path: &Path) -> Mutation {
+        let mut commands = self
+            .commands
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         self.requested
             .write()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
@@ -424,13 +537,16 @@ impl DirGrants {
             .session_trees
             .write()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        let Some(access) = session_trees.get_mut(session_id) else {
-            return Mutation::NotPresent;
-        };
-        let Some(dir) = access.find(&ash_file_access::EnvId::local(), path) else {
-            return Mutation::NotPresent;
-        };
-        access.remove(&dir, DirSource::SessionRequest)
+        let mutation = session_trees
+            .get_mut(session_id)
+            .and_then(|access| {
+                access
+                    .find(&ash_file_access::EnvId::local(), path)
+                    .map(|dir| access.remove(&dir, DirSource::SessionRequest))
+            })
+            .unwrap_or(Mutation::NotPresent);
+        Self::cancel_revoked_commands(&mut commands);
+        mutation
     }
 
     pub(crate) fn list(&self, session_id: &SessionId) -> Vec<DirGrantEntry> {
@@ -472,6 +588,10 @@ impl DirGrants {
         expected_revision: u64,
         permissions: Permissions,
     ) -> Result<Mutation, AccessError> {
+        let mut commands = self
+            .commands
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         let mut session_trees = self
             .session_trees
             .write()
@@ -503,6 +623,7 @@ impl DirGrants {
                         || !grant.directories.iter().any(|entry| entry.dir() == &dir)
                 });
         }
+        Self::cancel_revoked_commands(&mut commands);
         result
     }
 

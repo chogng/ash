@@ -1,6 +1,7 @@
 use super::LocalShellToolService;
 use super::ShellCommandRequest;
 use super::read_only_sandbox;
+use crate::dir_grants::CommandAuthorization;
 use crate::dir_grants::DirGrants;
 use ash_action_policy::ActionReviewRequest;
 use ash_action_policy::ResolvedAction;
@@ -138,6 +139,12 @@ pub(crate) struct LocalToolSuite<B> {
     authorization: Authorization,
     grant: ash_file_access::Grant,
     dir_grants: Arc<DirGrants>,
+    command_authorizations: Mutex<
+        std::collections::HashMap<
+            CommandSessionId,
+            (CommandSessionOwner, Arc<CommandAuthorization>),
+        >,
+    >,
     read_fingerprints: Mutex<std::collections::BTreeMap<(String, PathBuf), String>>,
     definitions: Vec<ToolDefinition>,
     permission_requests: Option<super::permission_requests::PermissionRequests>,
@@ -192,6 +199,7 @@ impl<B: ash_sandboxing::SandboxBackend> LocalToolSuite<B> {
             authorization,
             grant,
             dir_grants,
+            command_authorizations: Mutex::default(),
             read_fingerprints: Mutex::new(std::collections::BTreeMap::new()),
             definitions,
             permission_requests: None,
@@ -429,6 +437,16 @@ impl<B: ash_sandboxing::SandboxBackend> LocalToolSuite<B> {
         session: Option<&SessionId>,
         thread: Option<&ThreadId>,
     ) -> Result<ash_sandboxing::SandboxScope, CoreError> {
+        self.command_scope_for(authorization, session, thread)
+            .map(|(scope, _)| scope)
+    }
+
+    fn command_scope_for(
+        &self,
+        authorization: &Authorization,
+        session: Option<&SessionId>,
+        thread: Option<&ThreadId>,
+    ) -> Result<(ash_sandboxing::SandboxScope, Vec<Authorization>), CoreError> {
         let turn = thread
             .zip(self.permission_requests.as_ref())
             .map(|(thread, requests)| super::running_turn(&requests.threads, thread))
@@ -466,7 +484,9 @@ impl<B: ash_sandboxing::SandboxBackend> LocalToolSuite<B> {
                 );
             }
         }
-        Ok(scope)
+        let mut authorizations = vec![self.authorization.clone(), authorization.clone()];
+        authorizations.extend(files);
+        Ok((scope, authorizations))
     }
 
     fn resolve(
@@ -820,7 +840,28 @@ impl<B: ash_sandboxing::SandboxBackend> LocalToolSuite<B> {
     ) -> Result<ToolExecutionOutput, CoreError> {
         let action = string_arg(&call.arguments, "action")?;
         let owner = command_session_owner(session_id, thread_id);
-        match action.as_str() {
+        let command_authorization = if matches!(
+            action.as_str(),
+            "write" | "close_input" | "interrupt" | "resize"
+        ) {
+            let id = command_session_id(&call.arguments)?;
+            let commands = self
+                .command_authorizations
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let (expected_owner, authorization) = commands.get(&id).ok_or_else(|| {
+                CoreError::Policy("command session authorization was not found".into())
+            })?;
+            if expected_owner != &owner {
+                return Err(CoreError::Policy(
+                    "command session belongs to another caller".into(),
+                ));
+            }
+            Some(Arc::clone(authorization))
+        } else {
+            None
+        };
+        let execute = || match action.as_str() {
             "start" => {
                 let program = required_nullable_string(&call.arguments, "program")?;
                 let arguments = required_nullable_strings(&call.arguments, "arguments")?;
@@ -851,11 +892,30 @@ impl<B: ash_sandboxing::SandboxBackend> LocalToolSuite<B> {
                 let request = ShellCommandRequest::new(program, arguments, command_directory)
                     .map_err(|error| CoreError::Execution(error.to_string()))?
                     .with_dir_root(resolved.root.canonical_path());
-                let scope = self.sandbox_scope_for(
+                let (scope, authorizations) = self.command_scope_for(
                     &resolved.authorization,
                     Some(session_id),
                     Some(thread_id),
                 )?;
+                let command_authorization = self
+                    .dir_grants
+                    .authorize_command(authorizations, cancellation)?;
+                // Match the executor's retirement of completed tool sessions without
+                // retaining old turn cancellation domains for the suite's lifetime.
+                self.command_authorizations
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .retain(|id, (owner, _)| {
+                        self.shell
+                            .shell
+                            .read_session(
+                                owner,
+                                id,
+                                CommandSessionCursor::default(),
+                                Duration::ZERO,
+                            )
+                            .is_ok_and(|update| update.status == CommandSessionStatus::Running)
+                    });
                 let authority = super::local_command_authority(
                     authorization,
                     self.shell.shell_policy,
@@ -867,11 +927,11 @@ impl<B: ash_sandboxing::SandboxBackend> LocalToolSuite<B> {
                     .start_authorized_session_with_network(
                         request,
                         authority,
-                        cancellation,
+                        &command_authorization.cancellation(),
                         matches!(authority, CommandExecutionAuthority::Sandboxed(_))
                             .then_some(&scope),
                         network_policy,
-                        owner,
+                        owner.clone(),
                         ash_shell_command::CommandSessionOptions {
                             execution_timeout: Duration::from_millis(execution_timeout_ms),
                             wait_budget: wait,
@@ -884,6 +944,10 @@ impl<B: ash_sandboxing::SandboxBackend> LocalToolSuite<B> {
                         Ok(ToolExecutionOutput::Success(session_outcome_json(outcome)?))
                     }
                     CommandSessionStart::Running(update) => {
+                        self.command_authorizations
+                            .lock()
+                            .unwrap_or_else(std::sync::PoisonError::into_inner)
+                            .insert(update.session_id.clone(), (owner, command_authorization));
                         Ok(ToolExecutionOutput::Success(session_update_json(&update)?))
                     }
                 }
@@ -978,6 +1042,10 @@ impl<B: ash_sandboxing::SandboxBackend> LocalToolSuite<B> {
             _ => Err(CoreError::Execution(format!(
                 "unsupported shell-session action: {action}"
             ))),
+        };
+        match command_authorization {
+            Some(command) => self.dir_grants.execute_command(&command, execute),
+            None => execute(),
         }
     }
 
