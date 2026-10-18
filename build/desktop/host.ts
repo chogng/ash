@@ -1,9 +1,10 @@
 import { spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { createReadStream } from 'node:fs';
+import { createReadStream, watch, type FSWatcher } from 'node:fs';
 import { lstat, mkdir, readFile, readdir, realpath, symlink, unlink, writeFile } from 'node:fs/promises';
-import { join, resolve } from 'node:path';
+import { isAbsolute, join, relative, resolve } from 'node:path';
 import { createInterface } from 'node:readline';
+import ts from 'typescript';
 import { ProcessRun } from '../processes.ts';
 import { desktopBuildPath } from './paths.ts';
 import { prepareIncrementalOutput } from '../lib/incrementalOutput.ts';
@@ -51,7 +52,11 @@ export async function writeApplicationChecksums(applicationRoot: string): Promis
 
 export async function prepareHostOutput(): Promise<void> {
 	await mkdir(outputRoot, { recursive: true });
-	await writeFile(join(outputRoot, 'package.json'), '{\n  "private": true,\n  "type": "module"\n}\n');
+	const metadata = '{\n  "private": true,\n  "type": "module"\n}\n';
+	const packageFile = join(outputRoot, 'package.json');
+	const previous = await readFile(packageFile, 'utf8').catch(error => { if (error.code !== 'ENOENT') throw error; return undefined; });
+	// Generated source imports use this package scope; touching unchanged metadata invalidates their compiler cache.
+	if (previous !== metadata) await writeFile(packageFile, metadata);
 	const link = join(outputRoot, 'node_modules');
 	const dependencies = await realpath(join(sourceRoot, 'node_modules'));
 	try {
@@ -84,46 +89,125 @@ export async function buildHost(): Promise<void> {
 	await verifyPreload();
 }
 
-export async function watchHost(onReady: (ready: boolean) => void): Promise<{ close: () => Promise<void>; done: Promise<void>; }> {
+/** Successful readiness includes the output content digest used to decide whether Electron needs restarting. */
+export async function watchHost(onReady: (ready: boolean, output?: string) => void): Promise<{ close: () => Promise<void>; done: Promise<void>; }> {
 	await prepareHostBuild();
 	const completion = Promise.withResolvers<void>();
+	let compilerRun: ProcessRun | undefined;
 	let revision = 0;
 	let closing: Promise<void> | undefined;
-
-	const child = spawn(process.execPath, [compiler, '--build', ...projects, '--watch', '--preserveWatchOutput', '--pretty', 'false'], {
-		cwd: sourceRoot, stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true, detached: process.platform !== 'win32',
-	});
-	const run = new ProcessRun(sourceRoot, undefined, 5_000);
-	await run.own(child);
-	const stdout = createInterface({ input: child.stdout });
-	const stderr = createInterface({ input: child.stderr });
-	stdout.on('line', line => {
-		console.log(`[host] ${line}`);
-		if (/Starting compilation in watch mode|File change detected\. Starting incremental compilation/u.test(line)) {
-			revision++;
-			onReady(false);
-			return;
+	let building: Promise<void> | undefined;
+	let timer: ReturnType<typeof setTimeout> | undefined;
+	let pending = true;
+	// Keep TS7's dependency-tree FSEvents watcher away from build caches and
+	// runtime files. Watch source inputs here and invoke its incremental build once.
+	const roots = ['src', '.build/protocol/typescript', '.build/desktop/localization'].map(path => resolve(sourceRoot, path));
+	const directories: FSWatcher[] = [];
+	const files = new Map<string, ts.FileWatcher>();
+	try {
+		for (const root of roots) {
+			// TypeScript's directory watcher only reports structural changes; source saves also need change events.
+			const watcher = watch(root, { recursive: true }, (event, file) => {
+				if (file === null || event === 'rename' || /\.(?:[cm]?ts|json)$/u.test(file)) requestBuild(file === null ? root : resolve(root, file));
+			});
+			watcher.on('error', error => { if (!closing) fail(error); });
+			directories.push(watcher);
 		}
-		const result = line.match(/Found (\d+) errors?\. Watching for file changes\./u);
-		if (!result) return;
-		if (Number(result[1]) > 0) { onReady(false); return; }
-		void validate(revision);
-	});
-	stderr.on('line', line => console.error(`[host] ${line}`));
-	child.once('error', fail);
-	child.once('close', (code, signal) => {
-		stdout.close();
-		stderr.close();
-		if (!closing) fail(new Error(`host watcher ${signal ? `stopped by ${signal}` : `exited with status ${code}`}`));
-	});
+		updateFileWatches();
+	} catch (error) {
+		for (const watcher of [...directories, ...files.values()]) watcher.close();
+		throw error;
+	}
+	onReady(false);
+	startBuild();
 
-	if (child.exitCode !== null || child.signalCode !== null) fail(new Error('Host watcher exited during startup.'));
+	function updateFileWatches(): void {
+		const paths = new Set(['package.json', 'pnpm-lock.yaml', 'pnpm-workspace.yaml'].map(path => resolve(sourceRoot, path)));
+		const readConfig = (path: string): string | undefined => { paths.add(resolve(path)); return ts.sys.readFile(path); };
+		for (const project of projects) {
+			const path = resolve(sourceRoot, project);
+			const config = ts.readJsonConfigFile(path, readConfig);
+			const parsed = ts.parseJsonSourceFileConfigFileContent(config, { ...ts.sys, readFile: readConfig }, sourceRoot, undefined, path);
+			for (const file of parsed.fileNames) {
+				if (!roots.some(root => {
+					const inside = relative(root, file);
+					return !isAbsolute(inside) && inside !== '..' && !inside.startsWith(`..${process.platform === 'win32' ? '\\' : '/'}`);
+				})) paths.add(resolve(file));
+			}
+		}
+		for (const [path, watcher] of files) {
+			if (!paths.has(path)) { watcher.close(); files.delete(path); }
+		}
+		for (const path of paths) {
+			if (!files.has(path)) files.set(path, ts.sys.watchFile!(path, () => requestBuild(path), 250));
+		}
+	}
+
+	function requestBuild(path: string): void {
+		if (closing) return;
+		revision++;
+		pending = true;
+		onReady(false);
+		console.log(`[host] Input changed: ${relative(sourceRoot, path)}`);
+		clearTimeout(timer);
+		timer = setTimeout(() => { timer = undefined; startBuild(); }, 100);
+	}
+
+	function startBuild(): void {
+		if (closing || building) return;
+		building = build().catch(fail).finally(() => {
+			building = undefined;
+			if (!closing && pending && timer === undefined) startBuild();
+		});
+	}
+
+	async function build(): Promise<void> {
+		pending = false;
+		const current = revision;
+		console.log('[host] Starting incremental compilation...');
+		const run = new ProcessRun(sourceRoot, undefined, 5_000);
+		compilerRun = run;
+		const child = spawn(process.execPath, [compiler, '--build', ...projects, '--pretty', 'false'], {
+			cwd: sourceRoot, stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true, detached: process.platform !== 'win32',
+		});
+		const stdout = createInterface({ input: child.stdout });
+		const stderr = createInterface({ input: child.stderr });
+		stdout.on('line', line => console.log(`[host] ${line}`));
+		stderr.on('line', line => console.error(`[host] ${line}`));
+		const result = new Promise<boolean>((done, reject) => {
+			child.once('error', reject);
+			child.once('close', code => { stdout.close(); stderr.close(); done(code === 0); });
+		});
+		let succeeded: boolean;
+		try { await run.own(child); succeeded = await result; }
+		finally { await run.close(); compilerRun = undefined; }
+		if (closing) return;
+		updateFileWatches();
+		if (succeeded) await validate(current);
+		else if (current === revision) onReady(false);
+	}
 
 	async function validate(current: number): Promise<void> {
 		if (closing || current !== revision) return;
 		try {
 			await verifyPreload();
-			if (!closing && current === revision) onReady(true);
+			// Watch notifications can complete a successful build without changing its
+			// outputs. Restarting on those notifications can feed back on runtime file writes.
+			const hash = createHash('sha256');
+			async function collect(directory: string): Promise<void> {
+				const entries = await readdir(directory, { withFileTypes: true });
+				entries.sort((left, right) => left.name.localeCompare(right.name));
+				for (const entry of entries) {
+					const path = join(directory, entry.name);
+					if (entry.isDirectory()) { await collect(path); }
+					else if (entry.isFile()) {
+						hash.update(JSON.stringify([path, await readFile(path, 'utf8')]));
+					}
+				}
+			}
+			for (const project of ['main', 'preload']) { await collect(join(outputRoot, project)); }
+			const output = hash.digest('hex');
+			if (!closing && current === revision) onReady(true, output);
 		} catch (error) {
 			console.error(`[host] ${error instanceof Error ? error.message : error}`);
 			if (!closing && current === revision) onReady(false);
@@ -137,7 +221,9 @@ export async function watchHost(onReady: (ready: boolean) => void): Promise<{ cl
 
 	function close(): Promise<void> {
 		if (closing) return closing;
-		closing = run.stop('SIGTERM').then(() => { completion.resolve(); });
+		clearTimeout(timer);
+		for (const watcher of [...directories, ...files.values()]) watcher.close();
+		closing = Promise.resolve(compilerRun?.stop('SIGTERM')).then(async () => { await building; completion.resolve(); });
 		return closing;
 	}
 

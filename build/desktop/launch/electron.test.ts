@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
-import { copyFile, mkdir, mkdtemp, readFile, realpath, rename, rm, symlink, writeFile } from 'node:fs/promises';
+import { appendFile, copyFile, mkdir, mkdtemp, readFile, realpath, rename, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
@@ -16,8 +16,9 @@ for (const profile of ['default', 'custom'] as const) {
 			await writeFile(temporary, phase);
 			// Publish complete phases so the compiler cannot read a truncated file as a valid build.
 			await rename(temporary, join(desktop, 'phase'));
+			await appendFile(join(desktop, 'fixture.cjs'), `\n// save ${phaseRevision}\n`);
 		}
-		for (const directory of ['build/desktop/launch', 'node_modules/@ash/typescript-compiler/bin', 'node_modules/electron']) {
+		for (const directory of ['build/desktop/launch', 'node_modules/@ash/typescript-compiler/bin', 'node_modules/electron', '.build/protocol/typescript', '.build/desktop/localization']) {
 			await mkdir(join(root, directory), { recursive: true });
 		}
 		for (const name of ['build/source-layout.json', 'build/processes.ts', 'build/desktop/launch/electron.ts', 'build/desktop/electron.ts', 'src/ash/code/common/application.ts', 'build/desktop/host.ts', 'build/desktop/paths.ts', 'build/desktop/appServer.ts', 'build/python.ts', 'build/protocol/generate.ts', 'build/lib/incrementalOutput.ts']) {
@@ -33,28 +34,34 @@ for (const profile of ['default', 'custom'] as const) {
 		await writeFile(join(desktop, 'node_modules/electron/index.js'), 'module.exports = process.execPath;');
 		await writeFile(join(desktop, 'fixture.cjs'), `
       require('node:fs').appendFileSync('launches.log', JSON.stringify({ pid: process.pid, cwd: process.cwd(), args: process.argv.slice(2), runAsNode: process.env.ELECTRON_RUN_AS_NODE, home: process.env.ASH_HOME }) + '\\n');
+      process.on('SIGTERM', () => {
+        require('node:fs').appendFileSync('stops.log', process.pid + '\\n');
+        setTimeout(() => process.exit(0), 750);
+      });
       setInterval(() => {}, 1000);
     `);
 		await writeFile(join(desktop, 'node_modules/@ash/typescript-compiler/bin/tsc'), `
       const fs = require('node:fs');
       const path = require('node:path');
+      if (fs.existsSync('compiler-active')) throw new Error('Concurrent Host compilers');
+      fs.writeFileSync('compiler-active', String(process.pid));
       fs.appendFileSync('compilers.log', JSON.stringify({ pid: process.pid, cwd: process.cwd(), args: process.argv.slice(2) }) + '\\n');
-      let previous;
-      setInterval(() => {
         const phase = fs.readFileSync('phase', 'utf8');
-        if (phase === 'stop') process.exit(0);
-        if (phase === previous) return;
-        console.log(previous === undefined ? 'Starting compilation in watch mode' : 'File change detected. Starting incremental compilation');
-        previous = phase;
+        fs.appendFileSync('started.log', phase + '\\n');
+      setTimeout(() => {
         const output = '.build/desktop/preload/src/ash/base/parts/sandbox/electron-browser/preload.cjs';
         fs.mkdirSync(path.dirname(output), { recursive: true });
         fs.writeFileSync(output, phase === 'initial' || phase === 'invalid' ? "require('fs')" : "require('electron')");
         const browserOutput = '.build/desktop/preload/src/ash/platform/browserView/electron-browser/preload-browserView.js';
         fs.mkdirSync(path.dirname(browserOutput), { recursive: true });
-        fs.writeFileSync(browserOutput, "require('electron')");
-        console.log('Found ' + (phase === 'error' ? 1 : 0) + ' errors. Watching for file changes.');
+        fs.writeFileSync(browserOutput, "require('electron'); // " + (phase === 'preload' ? 'updated' : 'initial'));
+        const mainOutput = '.build/desktop/main/src/main.js';
+        fs.mkdirSync(path.dirname(mainOutput), { recursive: true });
+        fs.writeFileSync(mainOutput, 'export const version = ' + (phase.startsWith('recovered') || phase === 'preload' ? 2 : 1));
         fs.appendFileSync('phases.log', phase + '\\n');
-      }, 25);
+        fs.unlinkSync('compiler-active');
+        process.exitCode = phase === 'error' ? 1 : 0;
+      }, phase === 'slow' ? 600 : 0);
     `);
 		await setPhase('initial');
 		const home = join(root, profile === 'custom' ? 'custom-profile' : '.build/desktop/dev/profile');
@@ -67,7 +74,7 @@ for (const profile of ['default', 'custom'] as const) {
 		child.stderr.on('data', chunk => { output += chunk; });
 		const closed = new Promise(resolvePromise => child.once('close', resolvePromise));
 		t.after(async () => {
-			await setPhase('stop');
+			child.kill('SIGTERM');
 			await closed;
 			await rm(root, { recursive: true, force: true });
 		});
@@ -91,12 +98,21 @@ for (const profile of ['default', 'custom'] as const) {
 		await setPhase('valid');
 		await until(async () => (await lines('launches.log')).length === 1);
 		const compilers = (await lines('compilers.log')).map(line => JSON.parse(line));
-		assert.equal(compilers.length, 1);
+		assert.equal(compilers.length, 2);
 		for (const compiler of compilers) {
 			assert.equal(compiler.cwd, desktop);
-			assert.ok(compiler.args.includes('--watch'));
+			assert.ok(!compiler.args.includes('--watch'), 'Only the input watcher owns filesystem subscriptions');
 			assert.deepEqual(compiler.args.slice(0, 3), ['--build', 'tsconfig.main.json', 'tsconfig.preload.json']);
 		}
+		await setPhase('unchanged');
+		await until(async () => (await lines('phases.log')).includes('unchanged'));
+		await delay(300);
+		assert.equal((await lines('launches.log')).length, 1, 'Rewriting unchanged compiler outputs must not restart Electron');
+		await setPhase('slow');
+		await until(async () => (await lines('started.log')).includes('slow'));
+		await setPhase('valid-after-slow');
+		await until(async () => (await lines('phases.log')).includes('valid-after-slow'));
+		assert.equal((await lines('launches.log')).length, 1, 'A save during compilation queues a build without starting another compiler or restarting unchanged output');
 		for (const phase of ['error', 'invalid']) {
 			output = '';
 			await setPhase(phase);
@@ -106,16 +122,22 @@ for (const profile of ['default', 'custom'] as const) {
 			assert.equal((await lines('launches.log')).length, 1);
 		}
 		await setPhase('recovered');
+		await until(async () => (await lines('stops.log')).length === 1);
+		// A no-op build while the old process exits must not cancel the pending replacement.
+		await setPhase('recovered-unchanged');
 		await until(async () => (await lines('launches.log')).length === 2);
+		await setPhase('preload');
+		await until(async () => (await lines('launches.log')).length === 3);
 		const launches = (await lines('launches.log')).map(line => JSON.parse(line));
-		assert.equal((await lines('compilers.log')).length, 1);
+		const allCompilers = (await lines('compilers.log')).map(line => JSON.parse(line));
+		assert.ok(allCompilers.length >= 7);
 		for (const { pid, ...launch } of launches) {
 			assert.ok(pid > 0);
 			assert.deepEqual(launch, { cwd: desktop, args: ['--fixture', `--user-data-dir=${userData}`], home });
 		}
-		await setPhase('stop');
+		child.kill('SIGTERM');
 		await closed;
-		assert.equal(child.exitCode, 1, 'An unexpectedly exited compiler fails the launch task');
-		for (const { pid } of [...launches, ...compilers]) assert.throws(() => process.kill(pid, 0), { code: 'ESRCH' });
+		assert.equal(child.exitCode, 143, 'Stopping the launch task closes its input watcher and active processes');
+		for (const { pid } of [...launches, ...allCompilers]) assert.throws(() => process.kill(pid, 0), { code: 'ESRCH' });
 	});
 }

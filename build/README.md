@@ -70,11 +70,19 @@ entrypoints retain their generated-input prehooks. Checks run sequentially;
 each Bun process uses all CPU cores by default. To limit contention on a shared
 machine, a direct check can use `./node_modules/bun/bin/bun.exe check -p <config> --threads 4 --all`.
 Bun does not write JavaScript or `.tsbuildinfo` files. TS7 7.0.2 retains
-Main/Preload and unit/extension-test JavaScript compilation, host watch and
+Main/Preload and unit/extension-test JavaScript compilation and
 `typecheck:web:watch` (Bun 1.4.3 has no standalone check watch mode). Vite/Rolldown
 and the scenario runner's esbuild retain bundling. Node, Mocha and Playwright
 retain test execution; pnpm retains dependency management. Build tools keep
 the TS6 JavaScript Compiler API provided by the `typescript` compatibility alias.
+
+Desktop Host development uses Node input watches for `src`, generated protocol
+and localization sources, plus the project configurations and package inputs.
+It coalesces saves and invokes one TS7 incremental build at a time, retaining one
+pending build for edits received during compilation. It does not use TS7's
+dependency-tree watcher, which can receive FSEvents overflows from build caches
+and runtime output. `[host] Input changed:` identifies the triggering input;
+Electron restarts only when validated Main/Preload output contents change.
 
 Bun also runs the product-icon generator, localization generator, CSS checker,
 TypeScript/JavaScript formatter and Prettier through their existing pnpm scripts.

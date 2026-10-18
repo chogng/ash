@@ -24,7 +24,8 @@ if (process.env.ASH_ELECTRON_LAUNCH_WORKER !== '1') {
 
 	let electronRun: ProcessRun | undefined;
 	let watcher: Awaited<ReturnType<typeof watchHost>> | undefined;
-	let ready = false;
+	let readyOutput: string | undefined;
+	let launchedOutput: string | undefined;
 	let restarting = false;
 	let stopped = false;
 
@@ -45,10 +46,12 @@ if (process.env.ASH_ELECTRON_LAUNCH_WORKER !== '1') {
 		if (restarting) return;
 		restarting = true;
 		try {
-			while (ready && !stopped) {
+			while (readyOutput !== undefined && !stopped) {
+				if (electronRun && readyOutput === launchedOutput) break;
 				if (electronRun) await electronRun.stop('SIGTERM');
-				if (!ready || stopped) break;
-				ready = false;
+				electronRun = undefined;
+				if (readyOutput === undefined || stopped) break;
+				launchedOutput = readyOutput;
 				await launch();
 			}
 		} finally {
@@ -67,9 +70,9 @@ if (process.env.ASH_ELECTRON_LAUNCH_WORKER !== '1') {
 	if (environment.ASH_DESKTOP_UI_ONLY !== '1') await prepareAppServer('host-provided-node');
 	if (stopped) process.exit(1);
 	if (watch) {
-		watcher = await watchHost(current => {
-			ready = current;
-			if (ready) void restart();
+		watcher = await watchHost((current, output) => {
+			readyOutput = current ? output : undefined;
+			if (current) void restart();
 		});
 		if (stopped) await watcher.close();
 		try {

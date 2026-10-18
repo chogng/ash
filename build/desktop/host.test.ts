@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { copyFile, mkdir, mkdtemp, readFile, rm, stat, symlink, writeFile } from 'node:fs/promises';
+import { copyFile, mkdir, mkdtemp, readFile, realpath, rm, stat, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
@@ -31,9 +31,7 @@ test('packaging publishes final desktop assets without hashing metadata or user 
 
 for (const mode of ['build', 'watch'] as const) {
 	test(`Host ${mode} regenerates deleted outputs when incremental metadata remains`, { timeout: 30_000 }, async t => {
-		const temporary = await mkdtemp(join(tmpdir(), 'ash-host-'));
-		// TS7 ignores shallow Linux watch roots (microsoft/TypeScript#64425).
-		// Match a real checkout's directory depth while retaining isolated temporary sources.
+		const temporary = await realpath(await mkdtemp(join(tmpdir(), 'ash-host-')));
 		const root = join(temporary, 'workspace', 'project', 'desktop');
 		await mkdir(root, { recursive: true });
 		let watcher: Awaited<ReturnType<typeof import('./host.ts').watchHost>> | undefined;
@@ -57,12 +55,18 @@ for (const mode of ['build', 'watch'] as const) {
 		await copyFile(join(import.meta.dirname, '../lib/incrementalOutput.ts'), join(root, 'build/lib/incrementalOutput.ts'));
 		await symlink(resolve(import.meta.dirname, '../../node_modules'), join(desktop, 'node_modules'), process.platform === 'win32' ? 'junction' : 'dir');
 		await writeFile(join(root, 'package.json'), '{"type":"module"}');
-		await writeFile(join(desktop, 'src/main.ts'), 'export const version = 1;');
+		await mkdir(join(desktop, '.build/protocol/typescript'), { recursive: true });
+		await mkdir(join(output, 'localization'), { recursive: true });
+		await writeFile(join(desktop, '.build/protocol/typescript/shared.ts'), 'export const protocolVersion = 1;');
+		await writeFile(join(output, 'localization/messages.ts'), 'export const label = "initial";');
+		await writeFile(join(desktop, 'src/main.ts'), 'export { protocolVersion } from "../.build/protocol/typescript/shared.js"; export { label } from "../.build/desktop/localization/messages.js"; export const version = 1;');
 		await mkdir(join(desktop, 'src/ash/platform/browserView/electron-browser'), { recursive: true });
 		await writeFile(join(desktop, browserPreloadSource), 'declare function require(name: string): unknown; (() => { require("electron"); })();');
 		await writeFile(join(desktop, preloadSource), 'declare function require(name: string): unknown; export const electron = require("electron");');
+		await writeFile(join(desktop, 'tsconfig.base.json'), '{"compilerOptions":{}}');
 		for (const [project, source] of [['main', 'src/main.ts'], ['preload', preloadSource]]) {
 			await writeFile(join(desktop, `tsconfig.${project}.json`), JSON.stringify({
+				extends: './tsconfig.base.json',
 				compilerOptions: {
 					module: 'NodeNext', moduleDetection: 'legacy', target: 'ES2022', types: [], rootDir: '.', incremental: true,
 					outDir: `.build/desktop/${project}`, tsBuildInfoFile: `.build/desktop/${project}.tsbuildinfo`,
@@ -99,7 +103,7 @@ for (const mode of ['build', 'watch'] as const) {
 		assert.match(await readFile(join(output, 'main/src/main.js'), 'utf8'), /version = 1/u);
 		assert.match(await readFile(preloadOutput, 'utf8'), /require\("electron"\)/u);
 		if (mode === 'build') {
-			const paths = ['main/src/main.js', 'main.tsbuildinfo', 'preload.tsbuildinfo'].map(path => join(output, path));
+			const paths = ['main/src/main.js', 'main.tsbuildinfo', 'preload.tsbuildinfo', 'package.json'].map(path => join(output, path));
 			const before = await Promise.all(paths.map(async path => (await stat(path, { bigint: true })).mtimeNs));
 			await host.buildHost();
 			assert.deepEqual(await Promise.all(paths.map(async path => (await stat(path, { bigint: true })).mtimeNs)), before, 'unchanged Host builds preserve emit and incremental state');
@@ -109,6 +113,21 @@ for (const mode of ['build', 'watch'] as const) {
 		}
 
 		if (mode === 'watch') {
+			readyStates.length = 0;
+			const cache = join(output, 'dev/cache');
+			await mkdir(cache, { recursive: true });
+			await Promise.all(Array.from({ length: 100 }, (_, index) => writeFile(join(cache, `runtime-${index}.ts`), `export const value = ${index};`)));
+			await writeFile(join(output, 'runtime.log'), 'runtime output');
+			await delay(500);
+			assert.deepEqual(readyStates, [], 'Runtime and cache output must never trigger a Host compilation');
+			ready = false;
+			await writeFile(join(desktop, '.build/protocol/typescript/shared.ts'), 'export const protocolVersion = 2;');
+			await until(() => ready);
+			assert.match(await readFile(join(output, 'main/.build/protocol/typescript/shared.js'), 'utf8'), /protocolVersion = 2/u);
+			ready = false;
+			await writeFile(join(output, 'localization/messages.ts'), 'export const label = "updated";');
+			await until(() => ready);
+			assert.match(await readFile(join(output, 'main/.build/desktop/localization/messages.js'), 'utf8'), /updated/u);
 			const preloadModified = (await stat(preloadOutput)).mtimeMs;
 			ready = false;
 			await writeFile(join(desktop, 'src/main.ts'), 'export const version = 2;');
@@ -124,6 +143,10 @@ for (const mode of ['build', 'watch'] as const) {
 			await until(() => ready);
 			assert.match(await readFile(join(output, 'main/src/main.js'), 'utf8'), /version = 3/u);
 			assert.equal((await stat(preloadOutput)).mtimeMs, preloadModified);
+			ready = false;
+			await writeFile(join(desktop, 'tsconfig.base.json'), '{"compilerOptions":{"removeComments":true}}');
+			await until(() => ready);
+			assert.equal(JSON.parse(await readFile(join(output, 'main.tsbuildinfo'), 'utf8')).options.removeComments, true, 'Extended configuration changes remain watched');
 		}
 	});
 }
