@@ -1,6 +1,11 @@
 import assert from 'node:assert/strict';
 import { mock } from 'node:test';
+import { getEventListeners } from 'node:events';
 import { test } from 'mocha';
+import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../base/test/common/utils.js';
+import { CancellationTokenSource } from '../../../../base/common/cancellation.js';
+import { CancellationError } from '../../../../base/common/errors.js';
+import { AppServerGitHubService } from '../../../github/browser/appServerGitHubService.js';
 import { APP_SERVER_METHODS, APP_SERVER_SERVER_REQUESTS } from '../../../../../../.build/protocol/typescript/index.js';
 import { toDisposable } from '../../../../base/common/lifecycle.js';
 import { AppServerConnectionRecovery, AppServerProtocolClient } from '../../browser/appServerProtocolClient.js';
@@ -14,6 +19,8 @@ import { createTestInitializeResult } from '../common/testAppServerProtocol.js';
 import { SSH_REMOTE_INITIALIZE_TIMEOUT_MS } from '../../../remote/common/remote.js';
 import { AppServerFrameDecoder } from '../../browser/appServerFrameDecoder.js';
 import { TestAppServerDecodePort } from '../common/testAppServerDecoder.js';
+
+ensureNoDisposablesAreLeakedInTestSuite();
 
 class ProtocolTransport implements AppServerTransport {
 	private readonly listeners = new Map<string, Set<(payload: unknown) => void>>();
@@ -1078,4 +1085,141 @@ test('a policy disabling automatic restore still allows explicit reconnect', asy
 		assert.equal(client.state, 'ready');
 		assert.equal(recovery.status, 'idle');
 	} finally { mock.timers.reset(); }
+});
+
+
+test('canceled reads retire large payloads while preserving remote lifetime and ordered carrier consumption', async () => {
+	const transport = new ProtocolTransport();
+	const port = new TestAppServerDecodePort();
+	const client = new AppServerProtocolClient(transport, {}, new AppServerFrameDecoder(() => port));
+	using cleanup = toDisposable(() => client.dispose());
+	await client.connect();
+	const controller = new AbortController();
+	const canceledRead = assert.rejects(client.request(APP_SERVER_METHODS['session/list'], {}, { signal: controller.signal }), CancellationError);
+	const canceledId = transport.frames.at(-1)!.id;
+	controller.abort();
+	// An out-of-order live response still validates and reaches its consumer.
+	const live = appServerRequest(client, 'session/list', {});
+	transport.frame({ id: transport.frames.at(-1)!.id, result: { sessions: [] } });
+	assert.deepEqual(await live, { sessions: [] });
+	// The canceled payload is deliberately schema-invalid: only its envelope is needed.
+	const late = largeFrame(transport, { id: canceledId, result: { unused: 'x'.repeat(300_000) } });
+	const ordered = appServerRequest(client, 'session/list', {});
+	const order: string[] = [];
+	void late.consumed!.then(() => order.push('late consumed'));
+	transport.frame({ id: transport.frames.at(-1)!.id, result: { sessions: [] } });
+	await port.release();
+	await late.consumed;
+	await canceledRead;
+	assert.deepEqual(await ordered, { sessions: [] });
+	assert.deepEqual(order, ['late consumed']);
+	assert.equal(client.state, 'ready');
+	// A duplicate is not an indefinitely accepted tombstone.
+	transport.frame({ id: canceledId, result: {} });
+	assert.equal(client.state, 'crashed');
+});
+
+test('canceling a read already queued in the Worker cannot publish its late validated result', async () => {
+	const transport = new ProtocolTransport();
+	const port = new TestAppServerDecodePort();
+	const client = new AppServerProtocolClient(transport, {}, new AppServerFrameDecoder(() => port));
+	using cleanup = toDisposable(() => client.dispose());
+	await client.connect();
+	const controller = new AbortController();
+	const result = assert.rejects(client.request(APP_SERVER_METHODS['session/list'], {}, { signal: controller.signal }), CancellationError);
+	const frame = largeFrame(transport, { id: transport.frames.at(-1)!.id, result: { sessions: [] } });
+	controller.abort();
+	await port.release();
+	await result;
+	await frame.consumed;
+	assert.equal(client.state, 'ready');
+});
+
+test('canceled routing slots keep the existing request bound and deadline rather than growing tombstones', async () => {
+	mock.timers.enable({ apis: ['setTimeout'] });
+	try {
+		const transport = new ProtocolTransport();
+		const client = new AppServerProtocolClient(transport, { requestTimeoutMs: 100 });
+		using cleanup = toDisposable(() => client.dispose());
+		await client.connect();
+		const canceledReads: Promise<void>[] = [];
+		for (let i = 0; i < 128; i++) {
+			const controller = new AbortController();
+			const rejected = assert.rejects(client.request(APP_SERVER_METHODS['session/list'], {}, { signal: controller.signal }), /timed out/);
+			canceledReads.push(rejected);
+			controller.abort();
+		}
+		await assert.rejects(appServerRequest(client, 'session/list', {}), /request limit/);
+		mock.timers.tick(100);
+		await Promise.all(canceledReads);
+		assert.equal(client.state, 'crashed');
+		await client.connect();
+		const read = appServerRequest(client, 'session/list', {});
+		// The old generation remains harmless after all cancellation slots are released.
+		transport.frame({ id: 2, result: {} });
+		transport.frame({ id: transport.frames.at(-1)!.id, result: { sessions: [] } });
+		assert.deepEqual(await read, { sessions: [] });
+		assert.equal(client.state, 'ready');
+	} finally { mock.timers.reset(); }
+});
+
+test('aborted input sends no request and completion removes its abort listener before later cancellation', async () => {
+	const transport = new ProtocolTransport();
+	const client = new AppServerProtocolClient(transport);
+	using cleanup = toDisposable(() => client.dispose());
+	await client.connect();
+	const controller = new AbortController();
+	controller.abort();
+	await assert.rejects(client.request(APP_SERVER_METHODS['session/list'], {}, { signal: controller.signal }), CancellationError);
+	assert.equal(transport.frames.length, 1);
+	const completed = new AbortController();
+	const result = client.request(APP_SERVER_METHODS['session/list'], {}, { signal: completed.signal });
+	assert.equal(getEventListeners(completed.signal, 'abort').length, 1);
+	transport.frame({ id: transport.frames.at(-1)!.id, result: { sessions: [] } });
+	assert.equal(getEventListeners(completed.signal, 'abort').length, 0);
+	completed.abort();
+	assert.deepEqual(await result, { sessions: [] });
+	assert.equal(client.state, 'ready');
+});
+
+test('GitHub read cancellation keeps refresh coalescing until remote retirement and skips the unused result', async () => {
+	const transport = new ProtocolTransport();
+	const client = new AppServerProtocolClient(transport);
+	using cleanup = toDisposable(() => client.dispose());
+	using source = new CancellationTokenSource();
+	await client.connect();
+	const service = new AppServerGitHubService(client);
+	let settled = false;
+	const read = assert.rejects(service.listAccounts(source.token), CancellationError).then(() => { settled = true; });
+	const original = transport.frames.at(-1)!;
+	source.cancel();
+	await flushHandlers();
+	assert.equal(settled, false);
+	assert.equal(transport.frames.at(-1)!.method, 'github/cancel');
+	assert.deepEqual(transport.frames.at(-1)!.params, { operationId: (original.params as { operationId: string; }).operationId });
+	transport.frame({ id: transport.frames.at(-1)!.id, result: { status: 'requested' } });
+	transport.frame({ id: original.id, result: { noLongerNeeded: 'large canceled graph' } });
+	await read;
+	assert.equal(client.state, 'ready');
+});
+
+test('GitHub write cancellation preserves the original committed outcome and never replays the write', async () => {
+	const transport = new ProtocolTransport();
+	const client = new AppServerProtocolClient(transport);
+	using cleanup = toDisposable(() => client.dispose());
+	using source = new CancellationTokenSource();
+	await client.connect();
+	const service = new AppServerGitHubService(client);
+	let settled = false;
+	const write = service.markNotificationRead('account', 'notification', source.token).then(() => { settled = true; });
+	const original = transport.frames.at(-1)!;
+	source.cancel();
+	await flushHandlers();
+	assert.equal(settled, false);
+	transport.frame({ id: transport.frames.at(-1)!.id, result: { status: 'requested' } });
+	transport.frame({ id: original.id, result: null });
+	await write;
+	assert.equal(settled, true);
+	assert.equal(transport.frames.filter(frame => frame.method === 'github/notifications/read').length, 1);
+	assert.equal(client.state, 'ready');
 });

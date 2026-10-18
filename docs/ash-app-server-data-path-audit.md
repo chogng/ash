@@ -4,7 +4,7 @@
 
 审计基线的结论：Ash Main 已经透明转发字节，避免了 Owl 在 Browser UI 线程完整解析 JSON 的问题。但 Renderer 的 framing 存在可复现的复制放大，完整帧还会重新 UTF-8 编码、同步解析和递归 schema 校验。聊天消费者没有使用后端已有的有界历史能力，进一步放大输入。背压能够限制传输中的字节块，不能等同于限制完整响应处理成本、总内存或控制消息延迟。
 
-**实施状态：三批链路 P1 与流式 Markdown 优化已实现。** 第 1～4 节保留 manifest 对应的优化前审计快照；固定页 framing、接收端副本与重复编码见第 7 节；Code Chat 的有界历史、翻页、回放与审批保护见第 8 节；大帧解析与 schema 校验的 Worker、顺序队列及异步 ACK 见第 9 节。第 15 节记录流式 Markdown 尾部更新，第 16～17 节记录 Worker 回传、领域堆与正文复用，第 18 节记录围栏增量更新。其余链路测量见[数据链路性能 TODO](../TODO.md#数据链路性能--todo)。
+**实施状态：三批链路 P1 与流式 Markdown 优化已实现。** 第 1～4 节保留 manifest 对应的优化前审计快照；固定页 framing、接收端副本与重复编码见第 7 节；Code Chat 的有界历史、翻页、回放与审批保护见第 8 节；大帧解析与 schema 校验的 Worker、顺序队列及异步 ACK 见第 9 节。第 15 节记录流式 Markdown 尾部更新，第 16～17 节记录 Worker 回传、领域堆与正文复用，第 18～19 节记录围栏增量更新和取消载荷退休。其余链路测量见[数据链路性能 TODO](../TODO.md#数据链路性能--todo)。
 
 证据快照与文件 hash 见 [manifest.json](research/ash-app-server-data-path-2026-10-17/manifest.json)，实验脚本见 [probe.cjs](research/ash-app-server-data-path-2026-10-17/probe.cjs)。这是调查时的实现，不替代 [前端与 App Server 连接边界](frontend-app-server-boundary.md)或产品契约。工作区有并发开发活动；后续修改前应重新核对文件 hash。
 
@@ -1400,7 +1400,7 @@ transient 条目、新版本与流式通知独立、较旧只读结果不能覆�
 这部分由上述快照中的独立节点数量验证。
 
 六个相关单测文件同一次编译运行，共 191 项通过，其中正文适配与模型两个文件 98 项。
-相关消费者回归与正文测试共用编译入口。运行命令：
+同组取消、解码和 GitHub 消费者测试为第 19 节提供覆盖。运行命令：
 
 ```sh
 pnpm test:unit:prepared --run src/ash/platform/agentHost/test/browser/appServerAgentService.test.ts --run src/ash/sessions/test/browser/chatWidgetModel.test.ts --run src/ash/platform/agentHost/test/browser/appServerProtocolClient.test.ts --run src/ash/platform/agentHost/test/browser/appServerFrameDecoder.test.ts --run src/ash/sessions/contrib/github/test/browser/githubService.test.ts --run src/ash/workbench/contrib/github/test/browser/githubRepositoryActions.test.ts
@@ -1444,3 +1444,25 @@ pnpm test:browser:integration:prepared chatTranscript.integration.spec.ts --proj
 已完成原“大代码围栏setValue、配置／布局与巨大单块尾部预算”的测量，并实现有证据的围栏追加优化；巨大单块的后续治理仍应作为已量化的剩余项，不宣称整个数据链路完成。
 
 原始证据：`.build/investigations/data-consumer-costs-2026-10-18/`。早期161,303字节单段落未完成暖机，已中断；其孤儿renderer被发现并按准确进程身份清理。与孤儿CPU重叠的后续成功功能样本标为`background-cpu-invalid.*`，不用于最终统计。未修改产品输入上限。
+
+## 19. 已实施：取消后的只读结果退休（2026-10-18）
+
+修复沿现有真实调用链落地：关闭或切换 GitHub 读取消费者 → CancellationToken → 既有 operationId / `github/cancel` → AppServerProtocolClient 的原 pending slot → 原 response / deadline 完成。取消只读读取后，收帧时已标记取消的响应仍按原顺序消费、验证 JSON-RPC envelope / 已发出 ID，但不递归校验已无消费者的 payload；Worker 只回传 `{ kind: 'retiredResponse', id }`。合法迟到响应回收原 pending slot，并按取消错误结算。
+
+signal 的用途是退休结果 payload，Promise 仍跟随原响应或原 deadline；这保留了 Session GitHub consumer 在远端请求退休之前合并 refresh 的现有约束。没有新增 tombstone map、调度器、自动重放或写请求合并：取消 slot 继续占原 128 pending 上限，原 deadline / disconnect / reconnect 清理仍由协议客户端单一 owner 负责。GitHub 写入不传 signal，取消后仍以原响应判断已提交或不确定的结果。
+
+收益范围是可确定的处理减量，不是本轮新延迟/堆测量：在取消发生早于帧进入 decoder 时，可跳过 schema 遍历及完整 Worker 对象回传；已送入 Worker 的响应不能撤回该次 schema / clone 成本，主线程仍拦截发布并回收 slot。JSON 解析、已有字节传输与同连接排队成本仍存在。协议本身未新增 client→server 通用 `$/cancelRequest`，物理中止继续使用 GitHub 已支持的 domain cancel。
+
+验证：`pnpm test:unit:prepared` 同次编译运行 AppServerAgentService、ChatWidgetModel、AppServerProtocolClient、AppServerFrameDecoder、Session GitHubService、GitHubRepositoryActions 六文件，共 191 passing。取消链自身与现有消费者覆盖合计 93 passing：ProtocolClient 56、FrameDecoder 9、Session GitHubService 17、RepositoryActions 11；其中新增 7 场景覆盖取消帧与后续活跃帧的消费顺序、乱序响应、已进 Worker 后取消、128 slot 额度、deadline / reconnect、发送前已取消与完成后 signal listener 释放、GitHub 只读取消及写入恰好一次/原 outcome。原 150 个通知合并直到 remote 退休的测试继续通过。两解码路径均断言取消响应仅返回 ID，并拒绝未发出的取消 ID、重复响应及非法 envelope。两个解码/协议套件启用了 disposable tracker。
+
+原始日志：`.build/investigations/data-flow-lifecycle-2026-10-18/unit-final.log`。5 个改动文件 formatter 和 `git diff --check` 通过。第一次全测试编译只因并行正文测试 fixture 缺 toolMode 失败，owner 补全后上述同一入口通过。
+
+### 19.1 后端 producer / writer 测量边界
+
+本轮只读确认已有 telemetry：`rpc.resource_wait_ms`、`rpc.execution_queue_wait_ms`、`rpc.execution_ms`、`rpc.outbound_queue_wait_ms`（request_processing.rs）及 `rpc.write_ms`（request_dispatch.rs）。execution 指标包含 dispatch / 结果构造 / JSON serialization，尚无这三段独立配对样本；outbound queue 指标覆盖已序列化响应等待输出准入与队列投递。
+
+共享 request admission 在结果序列化后、deliver 前释放，避免慢连接占据跨连接执行额度；本连接输出 byte lease 从 `OutboundSender.send` 成功取得额度到 writer 完成保持，但 response.raw 在等待这份 lease 之前已经构造，因此不能把输出字节额度当作全部结果构造内存的上限。单 writer 仍按整行输出，control 执行额度独立不意味着输出能抢占已开始的大行。已有后端 lease 释放 / writer 关闭唤醒 producer 的行为测试不构成本次性能采样。
+
+没有在本轮采集 Rust producer / writer 的运行数据，也没有跨进程单调时钟与 Renderer request identity 的配对实测；这些 TODO 保留。当前完成的取消切片也不覆盖所有 Thread/transcript refresh、通用 transport 中止或所有大内容按需资源读取。
+
+正文的分页／重连补充回归另有 12 项通过，覆盖有界分页、重叠尾部、旧页退休、较新 streaming revision，以及两个窗口／连接 Worker 注册入口；Renderer 类型检查通过。

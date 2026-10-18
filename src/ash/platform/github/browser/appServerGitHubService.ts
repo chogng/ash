@@ -7,6 +7,7 @@ import type { GitHubIssueReference, GitHubPullRequestReference } from '../common
 import type { AppServerProtocolClient } from '../../agentHost/browser/appServerProtocolClient.js';
 import { appServerRequest } from '../../agentHost/browser/appServerRequest.js';
 import { AppServerRemoteError } from '../../agentHost/common/appServerError.js';
+import { APP_SERVER_METHODS } from '../../../../../.build/protocol/typescript/index.js';
 import type { AppServerMethod, MethodParams, MethodResult } from '../../../../../.build/protocol/typescript/index.js';
 import { GitHubError, GitHubErrorCode, GitHubDiffSide, GitHubReviewerChange } from '../common/githubService.js';
 import type { IGitHubService, GitHubAccount, GitHubNotificationFilter, GitHubNotification, GitHubCreateFork, GitHubFork, GitHubRequestedReviewers, GitHubCommit, GitHubRepository, GitHubRepositoryInfo, GitHubIssueState, GitHubIssuePage, GitHubIssueDetails, GitHubCreateIssue, GitHubUpdateIssue, GitHubIssue, GitHubComment, GitHubPage, GitHubPullRequest, GitHubCreatePullRequest, GitHubUpdatePullRequest, GitHubPullRequestFiles, GitHubPullRequestReview, GitHubReview, GitHubMerge, GitHubMergeResult, GitHubChecks, GitHubLabel, GitHubFileContent, GitHubReviewDiff, GitHubReviewThreads, GitHubReviewComments, GitHubReviewComment, GitHubReviewThreadState } from '../common/githubService.js';
@@ -223,11 +224,20 @@ export class AppServerGitHubService implements IGitHubService {
 		const operationId = generateUuid();
 		const bound = 'repository' in params ? params.repository as GitHubRepository : undefined;
 		const wire = bound ? { ...params, ...(method === 'github/share/link' ? {} : { accountId: bound.accountId }), repository: { host: bound.host, owner: bound.owner, name: bound.name } } : params;
-		const response = appServerRequest(this.connection, method, { ...wire, operationId } as MethodParams<M>);
-		const listener = token.onCancellationRequested(() => {
-			// Cancellation acknowledges intent; the original response owns the remote outcome.
+		const controller = kind === RequestKind.Read ? new AbortController() : undefined;
+		const response = this.connection.request(APP_SERVER_METHODS[method], { ...wire, operationId } as MethodParams<M>, controller ? { signal: controller.signal } : undefined);
+		let cancellationSent = false;
+		const cancel = () => {
+			if (cancellationSent) return;
+			cancellationSent = true;
+			// Reads retire their payload, while settlement still follows the original
+			// response so refresh owners can coalesce until remote work finishes.
+			// Writes retain that response as the authority for a committed outcome.
+			controller?.abort();
 			void appServerRequest(this.connection, 'github/cancel', { operationId }).then(() => { }, onUnexpectedError);
-		});
+		};
+		const listener = token.onCancellationRequested(cancel);
+		if (token.isCancellationRequested) cancel();
 		try {
 			const result = await response;
 			if (kind === RequestKind.Read && token.isCancellationRequested) { throw new CancellationError(); }

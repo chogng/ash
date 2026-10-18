@@ -8,6 +8,7 @@ export const appServerDecodeChannel = { protocol: 'ash.appServer.decode', versio
 /** Routing information captured at receipt, never a second request lifecycle owner. */
 export interface AppServerDecodeContext {
 	readonly firstRequestId: number;
+	readonly canceledRequests?: readonly number[];
 	readonly methods: readonly (readonly [number, AppServerMethod])[];
 }
 
@@ -38,19 +39,24 @@ export function decodeAppServerMessage(message: unknown, context: AppServerDecod
 	if (id < context.firstRequestId) return { kind: 'retiredResponse', id };
 	const method = context.methods.find(entry => entry[0] === id)?.[1];
 	if (!method) throw new Error('App Server emitted an unmatched response ID');
+	// Canceled reads still consume their frame in order, but no consumer needs
+	// a recursively validated graph or a large Worker reply anymore.
+	if (context.canceledRequests?.includes(id)) return { kind: 'retiredResponse', id };
 	return { kind: 'response', method, response: decodeAppServerResponse(method, message) };
 }
 
 export const appServerDecodeHandler: WebWorkerRequestHandler = {
 	async handleRequest(message) {
 		if (typeof message.frame !== 'string' || message.frame.length > 320 * 1024 * 1024 || !isRecord(message.context)) throw new TypeError('Invalid App Server decode request');
-		const { firstRequestId, methods } = message.context;
+		const { firstRequestId, methods, canceledRequests } = message.context;
 		if (!Number.isSafeInteger(firstRequestId) || (firstRequestId as number) <= 0 || !Array.isArray(methods) || methods.length > 128) throw new TypeError('Invalid App Server decode context');
 		for (const entry of methods) {
 			if (!Array.isArray(entry) || entry.length !== 2 || !Number.isSafeInteger(entry[0]) || entry[0] < (firstRequestId as number)
 				|| typeof entry[1] !== 'string' || !Object.hasOwn(APP_SERVER_METHODS, entry[1])) throw new TypeError('Invalid App Server response method');
 		}
-		return decodeAppServerFrame(message.frame, { firstRequestId: firstRequestId as number, methods: methods as [number, AppServerMethod][] });
+		if (canceledRequests !== undefined && (!Array.isArray(canceledRequests) || canceledRequests.length > 128
+			|| canceledRequests.some(id => !methods.some(entry => entry[0] === id)))) throw new TypeError('Invalid canceled App Server request');
+		return decodeAppServerFrame(message.frame, { firstRequestId: firstRequestId as number, methods: methods as [number, AppServerMethod][], canceledRequests: canceledRequests as number[] | undefined });
 	},
 	handleNotification() { throw new TypeError('App Server decoder does not accept notifications'); },
 };
@@ -62,7 +68,7 @@ export const appServerDecodeHandler: WebWorkerRequestHandler = {
 export function readDecodedAppServerFrame(value: unknown, context: AppServerDecodeContext): DecodedAppServerFrame {
 	if (!isRecord(value)) throw new TypeError('Invalid App Server decoder result');
 	if (value.kind === 'retiredResponse') {
-		if (Number.isSafeInteger(value.id) && (value.id as number) > 0 && (value.id as number) < context.firstRequestId) return value as DecodedAppServerFrame;
+		if (Number.isSafeInteger(value.id) && (value.id as number) > 0 && ((value.id as number) < context.firstRequestId || context.canceledRequests?.includes(value.id as number))) return value as DecodedAppServerFrame;
 	} else if (value.kind === 'response') {
 		const envelope = decodeAppServerEnvelope(value.response);
 		if ((envelope.kind === 'response' || envelope.kind === 'error') && context.methods.some(entry => entry[0] === envelope.id && entry[1] === value.method)) return value as DecodedAppServerFrame;

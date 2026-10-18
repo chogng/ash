@@ -1,8 +1,11 @@
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
+import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../base/test/common/utils.js';
 import { AppServerFrameDecoder } from '../../browser/appServerFrameDecoder.js';
 import { appServerDecodeHandler, decodeAppServerFrame, readDecodedAppServerFrame, type AppServerDecodeContext } from '../../browser/appServerProtocolDecoding.js';
 import { TestAppServerDecodePort } from '../common/testAppServerDecoder.js';
+
+ensureNoDisposablesAreLeakedInTestSuite();
 
 const context: AppServerDecodeContext = { firstRequestId: 2, methods: [[2, 'session/list']] };
 const response = JSON.stringify({ jsonrpc: '2.0', id: 2, result: { sessions: [] } });
@@ -76,4 +79,21 @@ test('decode boundary rejects invalid context and result routing without walking
 	for (const invalid of [{ kind: 'retiredResponse', id: 2 }, { kind: 'response', method: 'session/list', response: { jsonrpc: '2.0', id: 3, result: {} } }, { kind: 'serverRequest', request: { jsonrpc: '2.0', id: 'x', method: 'unknown', params: {} } }]) {
 		assert.throws(() => readDecodedAppServerFrame(invalid, context));
 	}
+});
+
+
+test('canceled routing returns only an ID on both decoder paths and rejects unissued cancellation IDs', async () => {
+	const canceled: AppServerDecodeContext = { ...context, canceledRequests: [2] };
+	const frame = JSON.stringify({ jsonrpc: '2.0', id: 2, result: { ignored: 'x'.repeat(300_000) } });
+	assert.deepEqual(decodeAppServerFrame(frame, canceled), { kind: 'retiredResponse', id: 2 });
+	const port = new TestAppServerDecodePort();
+	using decoder = new AppServerFrameDecoder(() => port);
+	const result = decoder.decode(frame, 256 * 1024, canceled);
+	await port.release();
+	assert.deepEqual(await result, { kind: 'retiredResponse', id: 2 });
+	for (const canceledRequests of [[3], 'invalid', [2, 3]]) {
+		await assert.rejects(appServerDecodeHandler.handleRequest({ frame, context: { ...context, canceledRequests } }, new AbortController().signal), /Invalid canceled/);
+	}
+	assert.throws(() => readDecodedAppServerFrame({ kind: 'retiredResponse', id: 3 }, canceled));
+	assert.throws(() => decodeAppServerFrame(JSON.stringify({ jsonrpc: '2.0', id: 2, result: {}, error: {} }), canceled));
 });

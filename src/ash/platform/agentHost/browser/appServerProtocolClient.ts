@@ -42,8 +42,9 @@ export interface AppServerRequestContext {
 
 interface PendingRequest {
 	readonly method: AppServerMethod;
-	readonly resolve: (value: unknown) => void;
+	resolve: ((value: unknown) => void) | undefined;
 	readonly reject: (error: Error) => void;
+	abortListener?: IDisposable;
 	readonly timeout: ReturnType<typeof setTimeout>;
 }
 
@@ -187,10 +188,14 @@ export class AppServerProtocolClient {
 		return !this.disposed && this._generation === generation && this._state === state;
 	}
 
-	request<M extends AppServerMethod>(definition: AppServerMethodDefinition<M>, params: MethodParams<M>, options?: { readonly timeoutMs: number; }): Promise<MethodResult<M>> {
+	/** The signal retires result payloads; settlement still tracks remote completion.
+	 * Callers own method-specific remote cancellation and must preserve write outcomes.
+	 */
+	request<M extends AppServerMethod>(definition: AppServerMethodDefinition<M>, params: MethodParams<M>, options?: { readonly timeoutMs?: number; readonly signal?: AbortSignal; }): Promise<MethodResult<M>> {
 		// Abort listeners can reenter before the final state event is published.
+		if (options?.signal?.aborted) return Promise.reject(canceled());
 		if (this.disposed || this.isClosing || this.receiving?.closed || this._state !== "ready") return Promise.reject(new Error(`App Server is not ready: ${this.isClosing || this.receiving?.closed ? 'closing' : this._state}`));
-		return this.requestRaw(definition, params, options ? positiveInteger(options.timeoutMs, this.options.requestTimeoutMs, "timeoutMs") : this.options.requestTimeoutMs);
+		return this.requestRaw(definition, params, options ? positiveInteger(options.timeoutMs, this.options.requestTimeoutMs, "timeoutMs") : this.options.requestTimeoutMs, options?.signal);
 	}
 
 	onStateChange(listener: (state: AppServerConnectionState, error?: Error) => void): IDisposable {
@@ -227,7 +232,7 @@ export class AppServerProtocolClient {
 		}
 	}
 
-	private requestRaw<M extends AppServerMethod>(definition: AppServerMethodDefinition<M>, params: MethodParams<M>, timeoutMs: number): Promise<MethodResult<M>> {
+	private requestRaw<M extends AppServerMethod>(definition: AppServerMethodDefinition<M>, params: MethodParams<M>, timeoutMs: number, signal?: AbortSignal): Promise<MethodResult<M>> {
 		if (this.pending.size >= 128) {
 			return Promise.reject(new Error('App Server request limit reached'));
 		}
@@ -245,6 +250,19 @@ export class AppServerProtocolClient {
 				timeout,
 			};
 			this.pending.set(id, pending);
+			if (signal) {
+				const abort = () => {
+					if (this.pending.get(id) !== pending || !pending.resolve) return;
+					// Keep the bounded routing slot and original deadline until the peer
+					// replies. Keep rejection pending so read-refresh owners can coalesce
+					// until remote work retires, without accepting unknown response IDs.
+					pending.resolve = undefined;
+					pending.abortListener?.dispose();
+					pending.abortListener = undefined;
+				};
+				signal.addEventListener('abort', abort, { once: true });
+				pending.abortListener = toDisposable(() => signal.removeEventListener('abort', abort));
+			}
 		});
 		try {
 			const frame = JSON.stringify({ jsonrpc: "2.0", id, method: definition.method, params });
@@ -275,7 +293,13 @@ export class AppServerProtocolClient {
 			const { frame, byteLength } = validateFramePayload(payload);
 			// Freeze only routing at receipt: queued replies cannot match a request
 			// created later. Pending requests and their lifetimes remain owned here.
-			const context: AppServerDecodeContext = { firstRequestId: this.firstRequestId, methods: [...this.pending].map(([id, request]) => [id, request.method]) };
+			const methods: [number, AppServerMethod][] = [];
+			const canceledRequests: number[] = [];
+			for (const [id, request] of this.pending) {
+				methods.push([id, request.method]);
+				if (!request.resolve) canceledRequests.push(id);
+			}
+			const context: AppServerDecodeContext = { firstRequestId: this.firstRequestId, methods, canceledRequests };
 			if (this.receiving && (this.receiving.count >= 4096 || this.receiving.bytes + byteLength > MAX_FRAME_BYTES)) throw new Error('App Server decode queue capacity exceeded');
 			const decoded = this.receiving ? undefined : this.decoder.decode(frame, byteLength, context);
 			if (decoded && !(decoded instanceof Promise)) { this.dispatchFrame(decoded, byteLength); return; }
@@ -335,7 +359,11 @@ export class AppServerProtocolClient {
 	}
 
 	private dispatchFrame(decoded: DecodedAppServerFrame, byteLength: number): void {
-		if (decoded.kind === 'retiredResponse') return;
+		if (decoded.kind === 'retiredResponse') {
+			const pending = this.pending.get(decoded.id);
+			if (pending && !pending.resolve) this.rejectPending(decoded.id, canceled());
+			return;
+		}
 		if (decoded.kind === 'response') { this.handleResponse(decoded); return; }
 		if (this._state !== 'ready') {
 			// Compatibility must be checked before any buffered host effects run.
@@ -366,11 +394,13 @@ export class AppServerProtocolClient {
 		if (!pending || pending.method !== method) throw new Error('App Server emitted an unmatched response ID');
 		this.pending.delete(id);
 		clearTimeout(pending.timeout);
+		pending.abortListener?.dispose();
+		if (!pending.resolve) { pending.reject(canceled()); return; }
 		if ("error" in response) {
 			pending.reject(new AppServerRemoteError(response.error.code, response.error.message, response.error.data));
 			return;
 		}
-		pending.resolve(response.result);
+		pending.resolve?.(response.result);
 	}
 
 	private handleInboundCall(call: DecodedAppServerCall): void {
@@ -453,6 +483,7 @@ export class AppServerProtocolClient {
 		if (!pending) return false;
 		this.pending.delete(id);
 		clearTimeout(pending.timeout);
+		pending.abortListener?.dispose();
 		pending.reject(error);
 		return true;
 	}
@@ -491,6 +522,7 @@ export class AppServerProtocolClient {
 			reject?.(error);
 			for (const request of pending) {
 				clearTimeout(request.timeout);
+				request.abortListener?.dispose();
 				request.reject(error);
 			}
 			for (const controller of inbound) { controller.abort(); }
