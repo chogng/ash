@@ -245,6 +245,7 @@ use_repo(
 
 crate.annotation(
     crate = "sherpa-onnx-sys",
+    workspace_cargo_toml = "sherpa-onnx/rust/Cargo.toml",
     gen_build_script = "off",
     repositories = ["crates"],
     deps = ["@ash_sherpa_targets//:library"],
@@ -277,11 +278,6 @@ crate.annotation(
 # repository root has no Cargo.toml for rules_rs's GitHub metadata fast path.
 crate.annotation(
     crate = "sherpa-onnx",
-    workspace_cargo_toml = "sherpa-onnx/rust/Cargo.toml",
-)
-
-crate.annotation(
-    crate = "sherpa-onnx-sys",
     workspace_cargo_toml = "sherpa-onnx/rust/Cargo.toml",
 )
 

@@ -1,8 +1,10 @@
 # Microsoft MXC SDK
 
-Ash 声明官方 `mxc-sdk = "=1.0.0"`，通过根 `Cargo.toml` 的 `[patch.crates-io]` 固定兼容 fork。实际来源和提交由 `Cargo.lock` 记录，Cargo 与 Bazel 消费同一份外部源码。本目录只保存许可证和补丁审查依据，不保存 SDK 源码、复制的测试 fixture、二进制构建依赖或独立 lockfile。
+Ash 声明官方 `mxc-sdk = "=1.0.1"`，通过根 `Cargo.toml` 的 `[patch.crates-io]` 固定兼容 fork。实际来源和提交由 `Cargo.lock` 记录，Cargo 与 Bazel 消费同一份外部源码。本目录只保存许可证和补丁审查依据，不保存 SDK 源码、复制的测试 fixture、二进制构建依赖或独立 lockfile。
 
-发布包 `1.0.0` 来自 Microsoft `a846837d827b496fc4a08dfe60554515758c6647`，早于 Ash 已验证的官方基线 `c6f301d53a1430c4c921a05c57af838f7392348f`。兼容 fork 从后一提交建立，保留上游目录、清单的 workspace 继承和测试来源；不能仅按相同版本号认定发布包与当前实现等价。完整修正见 [固定差异](https://github.com/chogng/mxc/compare/c6f301d53a1430c4c921a05c57af838f7392348f...d4bc220668130f941d117aab4326edb4c1812e78)。
+官方 [1.0.1](https://github.com/microsoft/mxc/releases/tag/v1.0.1) 的源码基线是 `fda29ac63bc306b7f97f3b86b4b63d44f7f40cf2`，稳定 schema 仍为 `1.0.0`。兼容 fork 直接基于该 tag，固定为 `f1e8694b75dea05ebb3dc8050039d04fe304236f`；完整修正见 [固定差异](https://github.com/chogng/mxc/compare/fda29ac63bc306b7f97f3b86b4b63d44f7f40cf2...f1e8694b75dea05ebb3dc8050039d04fe304236f)。
+
+2026-10-18 逐项复核后，下表修正仍需保留：官方尚未提供 `prepare_restricted`、宿主执行路径／追加限制、前台中断及账户后端使用的 ACL helper。此次迁移保留官方的 macOS PTY 死锁修正、Seatbelt `spawn-open` 移除、Bubblewrap DNS／loopback 修正和 PSEC 1.0 回环实现；不带回旧的 PSEC 回环 workaround。严格 PSEC 准备使用新版的版本选择及 capture trace-source 语义，Managed 网络的既有拒绝保持不变。SDK 测试同步断言代理绕过变量为空，避免恢复客户端的默认绕过规则。
 
 上游提交的独立问题拆分、贡献要求与本地 PR 准备状态见 [上游补丁审查](upstream-review.md)。
 

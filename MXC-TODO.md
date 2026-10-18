@@ -1,21 +1,23 @@
 # MXC 升级验收与去除 vendor
 
-下述记录属于 2026-10-07 的官方提交 `c45e7d5a485036d88f469aa363efaa3c651564bc`，采用当时的 `mxc-sdk 1.0.0`。Windows 和 macOS ARM64 已有这些实机结果；Linux 发行版及各平台未覆盖的组合继续单独验收。每个平台记录实际源码、系统版本、架构、命令、通过数和清理结果，旧 pin 的结果不算新版通过证据。
+本清单区分当前 1.0.1 与历史验收。2026-10-07 的记录属于官方提交 `c45e7d5a485036d88f469aa363efaa3c651564bc`，采用当时的 `mxc-sdk 1.0.0`。Windows 和 macOS ARM64 已有这些实机结果；Linux 发行版及各平台未覆盖的组合继续单独验收。每个平台记录实际源码、系统版本、架构、命令、通过数和清理结果，旧 pin 的结果不算新版通过证据。
 
 ## 当前依赖方式
 
-2026-10-11 已删除 Ash 中的 SDK vendor，改为官方版本声明加固定兼容 fork。上游模块布局、workspace 清单和 fixture 来源均保留，必要的隔离修正通过 Git 提交复核；具体保留原因和退出条件见 [SDK 依赖说明](third_party/mxc/README.md)。适配器只保存 Ash 执行规格，通过 typed 严格准备接口和 SDK 句柄接入。
+当前声明 `mxc-sdk = "=1.0.1"`，官方基线为 `fda29ac63bc306b7f97f3b86b4b63d44f7f40cf2`，兼容 fork 固定为 `f1e8694b75dea05ebb3dc8050039d04fe304236f`。2026-10-18 已对照官方新版重新迁移必要修正，保留官方 PTY、Seatbelt、Bubblewrap 和 PSEC 新行为；严格准备、文件／网络限制和 ACL 接口尚不具备退出 fork 的条件。见 [SDK 依赖说明](third_party/mxc/README.md)。
 
-下述 2026-10-07 验收属于原 pin 的历史证据；它不证明当前 fork 已在 Windows/WSL 重新运行。当前 macOS 行为回归和跨平台编译结果由 [适配器验证](crates/mxc-sandbox/README.md#验证) 记录。
+当前 macOS ARM64 的适配器、PTY、执行服务、SDK 和新增网络矩阵已实际通过，命令、数量、原始日志与范围见 [适配器验证](crates/mxc-sandbox/README.md#验证)。Windows／WSL／Linux 实机和 Intel Mac 仍待验收；本文其他日期的结果仅作为对应旧 pin 的历史证据。
+
+全仓依赖安全门禁仍有既有阻挡：`zbus_names`、`zvariant`、`zvariant_derive` 的停止维护公告；这些包版本未随本次升级变化，licenses／sources 检查通过。详见适配器验证与 `.build/mxc-1.0.1-security.log`。
 
 ### 当前 SDK 的 Windows／WSL 实机复测
 
 - [ ] 在支持 PSEC 的 Windows 宿主重跑当前固定 fork 的文件、网络、ConPTY、执行服务 RPC、后代回收和清理验收，记录系统版本、架构、SDK 提交及原始结果；入口见 [Windows 验收手册](docs/windows-sandbox-acceptance-runbook.md) 和 `scripts/test-psec.ps1`。
 - [ ] 在该宿主的 WSL2 中重跑 Linux 适配器、PTY、执行服务及网络矩阵，补 Windows 挂载目录边界，记录发行版、内核和 Bubblewrap 版本；使用下文 Linux 命令及 [WSL 验证入口](crates/mxc-sandbox/README.md#验证)。
 
-2026-10-11 当前工作环境只有 macOS，无法直接运行 Windows／WSL2；本轮未接入可用的 Windows 宿主，因此以上两项保持待办。可以使用具备 PSEC 与 WSL2 的同一台 Windows 机器，通过 SSH 控制或相应 Windows CI 运行；交叉编译和历史 pin 的结果均不能替代当前 SDK 的实机证据。本轮 macOS 沙箱 45 项及执行服务 70 项测试通过，Linux ARM64、Windows x64 测试目标编译通过，Bazel 构建及依赖安全检查通过。
+2026-10-18 本轮没有可用的 Windows／WSL2 连接，也没有独立 Linux 或 Intel Mac 宿主。已完成 Windows x64 的适配器／账户库及 Linux x64 适配器库交叉编译，SDK 的两平台测试目标编译通过；Ash 全测试目标仍缺目标 C 工具链，详见适配器验证。交叉编译和历史结果不计为当前版本的实机验收。
 
-## Windows：本任务负责
+## Windows：历史验收（2026-10-07）
 
 - [x] Windows 适配器 13 项单元测试、终端启动器请求缺失拒绝、文件身份与快照测试。
 - [x] 账户文件策略 8 项测试，覆盖目录替换、junction 越界、硬链接、隐藏父目录与独立 ACL 日志。
@@ -37,7 +39,7 @@
 pwsh -NoProfile -File .build/acceptance/mxc-upgrade-windows-20261007/run-admin-acceptance.ps1
 ```
 
-## Linux：用户验收
+## Linux：待实机验收
 
 - [ ] 在真实 Linux 主机运行适配器、执行服务和终端测试，记录系统、架构及 Bubblewrap 版本。
 - [ ] 验证读写目录、参考目录只读、隐藏父目录中的授权例外、元数据、符号链接和真实退出码。
@@ -45,7 +47,7 @@ pwsh -NoProfile -File .build/acceptance/mxc-upgrade-windows-20261007/run-admin-a
 - [ ] 验证 PTY 输入、尺寸、显式环境、前台作业中断后 shell 继续运行，以及退出、关闭和丢弃后的回收。
 - [ ] 若支持 ARM64，补对应实机验收；交叉编译不算运行通过。
 
-本机 WSL2 已有新版的 6 项 PTY、3 项跨系统回归、11 项适配器单测及 2 项文件快照测试通过。用户仍需确认实际 Linux 发行版上的行为。
+历史 WSL2 验收曾通过 6 项 PTY、3 项跨系统回归、11 项适配器单测及 2 项文件快照测试；当前 1.0.1 仍须在真实 Linux／WSL2 上重跑。
 
 ```sh
 just test ash-mxc-sandbox --lib --locked
@@ -67,11 +69,12 @@ WSL 复测、Windows 挂载目录和可选公网 IPv6 的完整参数见 [现有
 
 ## macOS：ARM64 实机与剩余验收
 
-- [x] 在 macOS 27.0.1（build 26A434）ARM64 实机运行适配器库 27 项和官方 PTY 7 项测试。
+- [x] 1.0.1 在 macOS 27.0.1（build 26A434）ARM64 实机通过适配器库 36 项、macOS 集成 2 项及真实 PTY 7 项。
 - [x] 验证 Seatbelt 的只读目录、写入范围、隐藏父目录授权例外、元数据和进程树回收；新增祖先目录移动、未创建的元数据、持续 glob 的新文件及 `fcntl` 80/110 回归。
 - [x] 使用本机实际局域网私有 IPv4 接收端验证 HTTP 对照、Denied/Managed 直连拒绝，以及代理目标批准与拒绝。
 - [x] 验证 Unix socket 默认禁止、执行私有 IPC 目录中的创建与连接、其他可写目录 socket 拒绝，以及模拟 SSH agent socket 拒绝。
-- [ ] 补齐 IPv6、CONNECT、SOCKS、TCP/UDP DNS、后代网络继承及另一台局域网设备；真实 Docker/GPG socket 仍需对应环境验收。
+- [x] 1.0.1 的 macOS 网络矩阵：IPv4／IPv6 回环、HTTP／CONNECT／SOCKS、TCP／UDP DNS、直连拒绝与后代继承；普通进程正向对照、代理授权观察和本地 DNS 请求计数均通过。
+- [ ] 补另一台局域网设备、公网 IPv6 及真实 Docker／GPG socket；当前只有本机接收端和模拟 SSH socket 的证据。
 - [x] 验证 PTY 输入、尺寸、环境、中断前台作业后 shell 存活、退出和回收；终端内同样实施持续拒绝与只读规则。
 - [ ] 若支持 Intel Mac，补 x86_64 实机验收；记录 macOS 版本与架构。
 
@@ -92,16 +95,17 @@ just rust-warnings ash-mxc-sandbox
 补充 3 项 ARM64 实测通过：本机实际局域网私有 IPv4 接收端的 HTTP 对照、Denied 与 Managed
 直连拒绝、代理目标批准与拒绝；私有 IPC 目录内创建与连接成功且其他可写目录 socket 被拒绝；
 私有目录中的模拟 SSH agent socket 仍被拒绝。每个接收端都有普通进程可达性对照和实际请求计数。
-这些测试不依赖公网；IPv6、CONNECT、SOCKS、TCP/UDP DNS 及另一台局域网设备仍未覆盖。
+以上历史测试不依赖公网；1.0.1 已补协议与本机 IPv6 回环矩阵，另一台局域网设备和公网 IPv6 仍未覆盖。
 
 TS 聊天工作区文件选择器已通过 `file/search/glob` 复用 Agent 的后端文件查询；
 前端保留已有路径匹配与独立浏览器资源遍历。查询取消与连接绑定，搜索 ignore 规则不参与沙箱授权。
 
-Seatbelt 策略生成单测不证明实际访问受到限制；尚未完成网络实际流量矩阵、私有 IPC 完整矩阵和 Intel Mac 验收，不能据此宣称完成所有 Codex 能力对齐。
+Seatbelt 策略生成单测不证明实际访问受到限制；1.0.1 已完成上述本机网络实际流量矩阵，仍未完成外部设备、私有 IPC 完整矩阵和 Intel Mac 验收，不能据此宣称完成所有 Codex 能力对齐。
 
 ## 退出兼容 fork 的条件
 
-- [ ] 逐项对照固定 fork 与官方基线的差异，把仍需要的通用修正提交官方或确认官方已有等价实现；Unix PTY 作业控制与 UTF-8 资源构建可单独提交。
+- [x] 对照官方 1.0.1 逐项审查固定 fork，移除过时 PSEC 回环逻辑并保留官方新版实现；尚需保留的差异见 SDK 依赖说明。
+- [ ] 将仍需要的通用修正按上游贡献／安全流程独立提交或确认官方已有等价实现；Unix PTY 作业控制与 UTF-8 资源构建可单独提交。
 - [ ] 确认官方代码完整实施 Ash 已批准的文件、网络、ACL 和进程生命周期要求。
 - [ ] 固定新的官方 commit，用未经修改的 SDK 重新完成三个平台的受影响验收。
 - [ ] 移除根清单的兼容 patch，保留官方 SDK 版本声明，更新 Cargo/Bazel lockfile、来源审查与链接；保留许可证归属。

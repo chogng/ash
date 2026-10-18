@@ -237,7 +237,7 @@ version = "0.1.0"
 katex-rs = "=0.3.0"
 ash-utils-markdown-math = { path = "crates/utils/markdown-math" }
 trash = { version = "5.2.9", default-features = false, features = ["coinit_multithreaded", "chrono"] }
-mxc-sdk = "=1.0.0"
+mxc-sdk = "=1.0.1"
 testing = { package = "ash-testing", path = "crates/testing" }
 cli = { package = "ash-utils-cli", path = "crates/utils/cli" }
 cargo-bin = { package = "ash-utils-cargo-bin", path = "crates/utils/cargo-bin" }
@@ -695,7 +695,7 @@ debug = "limited"
 sherpa-onnx-sys = { git = "https://github.com/chogng/ash-sherpa-onnx", rev = "3ec6c278a136f0d42235db5e72863774543c291b" }
 # Preserve the sandbox boundaries absent from the published SDK. The compatibility
 # fork keeps upstream layout; remove this override after equivalent upstream support.
-mxc-sdk = { git = "https://github.com/chogng/mxc", rev = "d4bc220668130f941d117aab4326edb4c1812e78" }
+mxc-sdk = { git = "https://github.com/chogng/mxc", rev = "f1e8694b75dea05ebb3dc8050039d04fe304236f" }
 # Upstream PR #637 removes anymap2 while preserving Liquid's typed registers.
 # Pin core and its derive crate together so the optional derive feature has one source.
 # This PR is not yet merged; remove these pins after an upstream release includes it.

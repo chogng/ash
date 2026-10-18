@@ -4,6 +4,10 @@
 
 任务标签：**可做**表示已能定位现有入口与 owner，可选择一个行为切片实施；**后端前置**表示须先闭合领域或宿主契约；**复核**表示还需确认具体消费者或复现旧问题；**验收**表示缺真实环境证据；**测量**表示先取得数据；**Ash 产品**表示独立产品需求，不能按 VS Code 是否存在来删除。可选增强统一放在文末的[发展候选（未排期）](#发展候选未排期)，不计入当前交付待办。
 
+## MXC · 跨平台验收
+
+- [ ] **验收** · 已升级至 SDK 1.0.1（兼容提交 `f1e8694b`），macOS ARM64 文件／PTY／网络矩阵、SDK 和执行服务通过。仍须在支持 PSEC 的 Windows、WSL2、独立 Linux 和 Intel Mac 实机运行当前 pin，并补外部局域网／公网 IPv6、真实 Docker／GPG socket。Ash Windows／Linux 全测试目标交叉编译另缺目标 C 工具链；全仓依赖安全门禁被既有 zbus 生态停止维护公告阻挡，来源／许可证检查通过。当前范围、命令和旧版证据边界见 [MXC 清单](MXC-TODO.md) 与 [适配器验证](crates/mxc-sandbox/README.md#验证)。
+
 ## Smoke · Windows 验收
 
 - [ ] **验收** · 普通用户和管理员提升权限各执行 10 条 Electron smoke，完成 Windows 权限标题与 HMR 路径验证；本机修复已落地，macOS Electron 10 条及 Browser 8 条均通过。命令与证据见 [Windows Smoke 交接](smoke-platform-handoff-todo.md)。

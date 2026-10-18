@@ -76,7 +76,7 @@ just test ash-mxc-sandbox --test macos --locked -- --test-threads=1 --nocapture
 
 ## SDK 依赖
 
-使用官方 `mxc-sdk = "=1.0.0"` 声明；当前发布包尚不能保持全部已验证的沙箱行为，根清单通过 `[patch.crates-io]` 固定兼容 fork。它基于 Microsoft `c6f301d53a1430c4c921a05c57af838f7392348f`，保留上游结构。实际来源由 Cargo.lock 记录，Cargo 与 Bazel 使用同一外部源码。必要补丁、已移除的维护差异及退出条件见 [SDK 依赖说明](../../third_party/mxc/README.md)。
+使用官方 `mxc-sdk = "=1.0.1"` 声明；当前发布包尚不能保持全部已验证的沙箱行为，根清单通过 `[patch.crates-io]` 固定兼容 fork。它基于官方 1.0.1 的 Microsoft `fda29ac63bc306b7f97f3b86b4b63d44f7f40cf2`，保留上游结构。实际来源由 Cargo.lock 记录，Cargo 与 Bazel 使用同一外部源码。必要补丁、已移除的维护差异及退出条件见 [SDK 依赖说明](../../third_party/mxc/README.md)。
 
 适配器通过 SDK `v1::prepare_restricted` 固定 PSEC、禁止宿主 ACL 改动并传入受信 Bubblewrap 路径及 Seatbelt 追加拒绝规则。SDK 拥有运行器选择、基础 profile 和资源清理；Ash 保存唯一的执行规格，准备和启动时临时生成 SDK 请求。管道、PTY 和 Windows helper 分别取得标准 SDK 句柄。
 
@@ -85,6 +85,25 @@ just test ash-mxc-sandbox --test macos --locked -- --test-threads=1 --nocapture
 升级时固定 commit 并复核兼容 fork 相对官方基线的差异，再验证两个沙箱消费者及平台行为。源码版本和官方支持说明不能替代产品隔离验收。
 
 ## 验证
+
+2026-10-18 升级为 SDK 1.0.1，固定兼容提交 `f1e8694b75dea05ebb3dc8050039d04fe304236f`。在 macOS 27.0.1（26A434）ARM64、Rust 1.98.0 上：`just verify ash-mxc-sandbox` 的 36 项库测试、2 项 macOS 集成测试和 7 项真实 PTY 场景通过；默认忽略局域网场景及仅由父测试调用的 `fcntl` 子进程入口。显式运行 `network_tests` 的 3 项用例通过，包含本机局域网地址 `10.52.62.90` 的正向对照、直连拒绝、代理批准／拒绝及私有 IPC／模拟 SSH socket 边界。SDK 全部库测试 1,792 项通过、1 项忽略。执行服务 83 项库测试和 18 项真实 RPC 集成测试通过。
+
+`tests/network_matrix.rs` 现同时覆盖 Linux 和 macOS。macOS 显式运行 1 项真实网络矩阵通过：IPv4／IPv6 回环、HTTP／CONNECT／SOCKS 批准与拒绝、直连拒绝、TCP／UDP DNS 的 A／AAAA 查询及后代继承。计数的本地 DNS fixture 和实际端点 `114.114.114.114:53` 均先通过普通进程往返；该端点是本机网络可达对照，不证明到公共递归解析器的独立公网出口。没有运行另一台局域网设备、公网 IPv6、真实 Docker／GPG socket 或 Intel Mac 场景。
+
+```sh
+python3 -B scripts/cargo.py build -p ash-network-proxy --example matrix --locked
+export ASH_NETWORK_MATRIX_PROBE="$PWD/.build/cargo/debug/examples/matrix"
+export ASH_DNS_SERVER="<resolver-ip>:53" # 必须同时支持 TCP／UDP 往返
+just test ash-mxc-sandbox --test network_matrix --locked -- --ignored --nocapture
+```
+
+Windows x64 MSVC 的适配器／账户后端库和 Linux x64 的适配器库交叉编译通过；SDK 两个平台的测试目标编译通过，Windows SDK all-targets warning 门禁通过。Ash 全部测试目标交叉编译分别受缺少 Windows C 头文件和 `x86_64-linux-gnu-gcc` 阻挡；没有使用假头文件或宿主库代替目标库。当前 SDK 仍缺 Windows／WSL／Linux 实机结果，旧 pin 的通过记录不能替代。
+
+工具执行器 15 项、`sandboxing` 25 项库测试通过。远程固定源码的 `just verify ash-mxc-sandbox`、新增网络矩阵、`just dependencies`（218 members、87 个已审查重复版本组）和 Bazel 构建及 `--lockfile_mode=error` 复查通过。Bazel 首轮被既有重复 `sherpa-onnx-sys` 注解阻挡，已合并到唯一注解，保留原字段语义。Cargo 仅变更 SDK 包版本／来源；解析器同时归一化了若干既有 Windows 依赖边，没有新增其他包版本或修改版本审查策略。
+
+`just dependency-security --deny .build/mxc-security-tools/cargo-deny-0.20.2-aarch64-apple-darwin/cargo-deny` 的 licenses／sources 通过，advisories 未通过：`zbus_names` 3.0.0／4.3.4、`zvariant` 和 `zvariant_derive` 4.2.0／5.15.0 命中停止维护公告 RUSTSEC-2026-0371／0370／0372。这些版本与本轮前 HEAD 一致，不由 MXC 引入；本轮没有新增豁免或调整其消费者。工具从官方 0.20.2 release 下载并核对 SHA-256，仅保存在 `.build/mxc-security-tools/`。
+
+本轮原始日志在 `.build/mxc-1.0.1-*.log`，兼容源码 checkout 在 `.build/mxc-1.0.1/`。下面保留旧版本的历史证据。
 
 2026-10-11 退出 vendor 后，macOS ARM64 的 `just verify ash-mxc-sandbox` 通过：36 项库测试、2 项 macOS 集成测试和 7 项真实 PTY 场景通过，局域网用例与 `fcntl` 子进程入口按原条件忽略。远程固定 SDK 的 Cargo 正常编译、warning 门禁及 Bazel 适配器库构建通过；SDK 严格准备、Seatbelt profile 与退出观察的筛选组分别通过 8、89、2 项。Linux ARM64 与 Windows x64 MSVC 的适配器测试目标交叉编译通过。执行服务的 54 项库测试和 16 项真实 RPC 集成测试通过，覆盖重连、受限终端、取消、退出输出和回收。依赖结构、安全来源/许可证/漏洞检查通过，Python 工具回归 167 项（1 项按平台条件跳过）通过。以下较早的 Windows/WSL 运行结果属于原 pin，当前兼容 fork 尚未在这些平台重新运行验收。
 

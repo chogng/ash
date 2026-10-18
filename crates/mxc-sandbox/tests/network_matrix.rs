@@ -1,5 +1,5 @@
-//! End-to-end network matrix through the Linux SDK and the command executor.
-#![cfg(target_os = "linux")]
+//! End-to-end network matrix through the platform SDK and the command executor.
+#![cfg(any(target_os = "linux", target_os = "macos"))]
 #[path = "../../network-proxy/tests/support/matrix.rs"]
 mod matrix;
 
@@ -27,7 +27,7 @@ impl ApprovalPolicy for Approved {
 }
 
 #[test]
-#[ignore = "requires Bubblewrap, ASH_NETWORK_MATRIX_PROBE and a reachable ASH_DNS_SERVER"]
+#[ignore = "requires ASH_NETWORK_MATRIX_PROBE and a reachable ASH_DNS_SERVER; Linux also requires Bubblewrap"]
 fn dns_ipv6_and_host_routes_preserve_the_network_boundary() {
     let fixtures = matrix::Matrix::start();
     let probe = std::env::var("ASH_NETWORK_MATRIX_PROBE").unwrap();
