@@ -9,6 +9,7 @@
   },
   "overrideCommand": false,
   "privileged": true,
+  "runArgs": ["--shm-size=1g"],
   "workspaceFolder": "/workspaces/ash",
   "workspaceMount": "source=${localWorkspaceFolder},target=/workspaces/ash,type=bind",
   "remoteUser": "node",

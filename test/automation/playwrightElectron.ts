@@ -38,6 +38,8 @@ export async function launchElectronApplication(options: ElectronLaunchOptions):
 	}) : undefined);
 	const application = await _electron.launch({
 		args: [...configuration.args],
+		// On Linux Playwright otherwise injects --no-sandbox, bypassing the product's renderer isolation.
+		chromiumSandbox: process.platform === 'linux' ? true : undefined,
 		cwd: configuration.cwd,
 		env: configuration.env,
 		executablePath: configuration.executablePath,

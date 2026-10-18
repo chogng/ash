@@ -192,7 +192,7 @@ bazel test //cli:tui-real-scenarios --test_output=errors --test_env=PATH
 
 当前容器镜像未预装 uv。若首次初始化提示缺少 uv，在容器中安装 `scripts/pyproject.toml` 要求的版本并加入 PATH，再执行 `sh .devcontainer/post-create.sh` 完成初始化。
 
-在容器终端执行 `just ash` 启动 Electron，在宿主机打开转发的 6080 端口，使用 VNC 密码 `vscode` 查看桌面。容器启用 `privileged` 并配置 Electron 沙箱权限；依赖和产物使用容器卷，与宿主机隔离。
+在容器终端执行 `just ash` 启动 Electron，在宿主机打开转发的 6080 端口，使用 VNC 密码 `vscode` 查看桌面。容器启用 `privileged` 并配置 Electron 沙箱权限；依赖和产物使用容器卷，与宿主机隔离。`/dev/shm` 配置为 1 GiB：Chromium 并发加载本地 Renderer 模块和样式时会占用共享内存，Docker 默认的 64 MiB 会导致 `net::ERR_FAILED`。修改该配置后须重建容器。手动创建测试容器时保留 `--shm-size=1g` 和 namespace 能力（本机 Linux Docker 已验证 `--cap-add SYS_ADMIN`），再运行 `.devcontainer/configure-electron-sandbox.sh` 配置沙箱权限；不要用 `--no-sandbox` 绕过启动失败。
 
 仅前端 Web 模式执行 `pnpm dev:web --host 0.0.0.0`，打开转发的 5173 端口。完整 Web 模式和 App Server 只监听容器回环地址，须在容器内运行 Playwright，不能通过端口转发在宿主机浏览器访问。Browser 测试执行 `pnpm test:desktop:smoke:browser` 或 `pnpm test:web-integration`；Electron Playwright 使用容器桌面。
 
