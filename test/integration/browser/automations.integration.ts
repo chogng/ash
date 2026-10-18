@@ -1,3 +1,4 @@
+import { NotificationService } from '../../../src/ash/workbench/services/notification/common/notificationService.js';
 import '../../../src/ash/base/browser/ui/styles.css';
 import '../../../src/ash/workbench/browser/media/style.css';
 import { setARIAContainer } from '../../../src/ash/base/browser/ui/aria/aria.js';
@@ -84,11 +85,13 @@ services.registerInstance(IContextKeyService, contexts);
 services.registerInstance(IConfigurationService, resources.add(new InMemoryConfigurationService()));
 
 const errors: string[] = [];
+const notificationService = resources.add(new NotificationService());
 const notices: { message: string; actions: readonly NotificationAction[]; closed: boolean; }[] = [];
 const notify = (message: string, actions: readonly NotificationAction[] = []): NotificationHandle => {
 	const item = { message, actions, closed: false };
 	notices.push(item);
-	return { item: { id: notices.length, createdAt: Date.now(), severity: NotificationSeverity.Info, message }, close: () => { item.closed = true; } };
+	const handle = notificationService.info(message, actions);
+	return { ...handle, close: () => { item.closed = true; handle.close(); } };
 };
 services.registerInstance(INotificationService, { error: (message: string, actions?: readonly NotificationAction[]) => { errors.push(message); return notify(message, actions); }, warning: notify, info: notify } as unknown as INotificationService);
 

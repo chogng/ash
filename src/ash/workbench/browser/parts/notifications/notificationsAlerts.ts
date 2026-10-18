@@ -1,6 +1,6 @@
 import { Disposable } from '../../../../base/common/lifecycle.js';
 import { IAccessibilityService } from '../../../../platform/accessibility/common/accessibility.js';
-import { NotificationSeverity, type INotificationService, type NotificationItem } from '../../../../platform/notification/common/notification.js';
+import { NotificationPriority, NotificationSeverity, type INotificationService, type NotificationItem } from '../../../../platform/notification/common/notification.js';
 
 /** Announces arrivals even when the notification center has suppressed its toasts. */
 export class NotificationsAlerts extends Disposable {
@@ -13,6 +13,7 @@ export class NotificationsAlerts extends Disposable {
 	}
 
 	private announce(item: NotificationItem): void {
+		if (item.priority === NotificationPriority.SILENT) return;
 		if (item.severity === NotificationSeverity.Info) {
 			this.accessibilityService.status(item.message);
 		} else {

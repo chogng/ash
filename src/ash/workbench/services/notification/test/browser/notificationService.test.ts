@@ -3,7 +3,7 @@ import { test } from "mocha";
 import { JSDOM } from "jsdom";
 import { IAccessibilityService } from "../../../../../platform/accessibility/common/accessibility.js";
 import { AccessibilityService } from "../../../../../platform/accessibility/browser/accessibilityService.js";
-import { INotificationService, NotificationSeverity, type NotificationAction } from "../../../../../platform/notification/common/notification.js";
+import { INotificationService, NotificationPriority, NotificationSeverity, type NotificationAction } from "../../../../../platform/notification/common/notification.js";
 import { AccessibleViewRegistry } from "../../../../../platform/accessibility/browser/accessibleViewRegistry.js";
 import type { IAction, IRunEvent } from "../../../../../base/common/actions.js";
 import { CancellationError } from "../../../../../base/common/errors.js";
@@ -1064,3 +1064,41 @@ for (const useCenter of [false, true]) {
 		assert.deepEqual({ calls, notifications: fixture.service.getNotifications() }, { calls: 1, notifications: [] });
 	});
 }
+
+
+test("progress updates retain the notification row and its focused action", () => {
+	using fixture = new NotificationsFixture();
+	const handle = fixture.service.notify({ severity: NotificationSeverity.Info, message: "Indexing", progress: { infinite: true }, actions: { primary: [{ id: 'cancel', label: 'Cancel', run() { } }] } });
+	const button = fixture.document.querySelector<HTMLButtonElement>('.ash-notification-action')!;
+	button.focus();
+	let closed = 0;
+	using closeListener = handle.onDidClose(() => { closed++; });
+	handle.updateMessage("Indexing files");
+	handle.progress.total(3);
+	handle.progress.worked(1);
+	assert.equal(fixture.document.querySelector('.ash-notification-message')?.textContent, "Indexing files");
+	const progress = fixture.document.querySelector<HTMLProgressElement>('progress')!;
+	assert.equal(progress.hidden, false);
+	assert.equal(progress.value, 1 / 3);
+	assert.equal(progress.getAttribute('aria-label'), "Indexing files");
+	assert.equal(fixture.document.activeElement, button);
+	assert.equal(fixture.document.querySelector('.ash-notification-action'), button);
+	assert.equal(handle.item.message, "Indexing files");
+	fixture.center.show();
+	assert.equal(fixture.panel.querySelector('.ash-notification-message')?.textContent, "Indexing files");
+	handle.close();
+	handle.close();
+	handle.updateMessage("Late update");
+	assert.equal(closed, 1);
+	assert.deepEqual(fixture.service.getNotifications(), []);
+});
+
+test("silent progress is retained in the center without a toast or arrival announcement", () => {
+	using fixture = new NotificationsFixture();
+	const handle = fixture.service.notify({ severity: NotificationSeverity.Info, message: "Loading workspace", priority: NotificationPriority.SILENT, progress: { infinite: true } });
+	assert.equal(fixture.document.querySelector('.ash-notification'), null);
+	assert.deepEqual(fixture.presentation.statuses, []);
+	assert.equal(fixture.service.getNotifications().length, 1);
+	fixture.center.show();
+	assert.equal(fixture.panel.querySelector('.ash-notification-message')?.textContent, handle.item.message);
+});

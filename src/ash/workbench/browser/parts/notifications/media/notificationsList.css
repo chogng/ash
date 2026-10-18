@@ -16,6 +16,11 @@
 .ash-notification-content {
 	display: contents;
 }
+.ash-notification-content > .ash-progress-bar {
+	grid-column: 2 / -1;
+	grid-row: 3;
+	min-width: 0;
+}
 .ash-notification-severity {
 	display: flex;
 	align-items: center;

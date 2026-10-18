@@ -1,19 +1,24 @@
 import { Disposable, MutableDisposable, toDisposable } from "../../../../base/common/lifecycle.js";
+import { DeferredPromise } from "../../../../base/common/async.js";
+import { onUnexpectedError } from "../../../../base/common/errors.js";
+import { CommandsRegistry } from "../../../../platform/commands/common/commands.js";
 import { status } from "../../../../base/browser/ui/aria/aria.js";
 import { localize } from "../../../../nls.js";
-import { DialogSeverity, type IDialogService } from "../../../../platform/dialogs/common/dialogs.js";
+import { DialogSeverity, IDialogService } from "../../../../platform/dialogs/common/dialogs.js";
 import { type IServerEventApi } from "../../../../platform/agentHost/common/appServerApi.js";
-import { type IWorkspaceContextService } from "../../../../platform/workspace/common/workspace.js";
+import { IWorkspaceContextService } from "../../../../platform/workspace/common/workspace.js";
+import { IProgressService, ProgressLocation, type IProgress, type IProgressStep } from "../../../../platform/progress/common/progress.js";
 import { type LanguageServerMessageNotification, type LanguageServerMessageSeverityDto, type LanguageServerProgressNotification, type LanguageServerStateDto, type LanguageServerStateNotification } from "../../../../../../.build/protocol/typescript/index.js";
-import type { IOutputChannel, IOutputService } from "../../output/common/output.js";
-import { StatusbarAlignment, type IStatusbarEntry, type IStatusbarEntryAccessor, type IStatusbarService } from "../../statusbar/browser/statusbar.js";
+import { IOutputService, type IOutputChannel } from "../../output/common/output.js";
+import { IStatusbarService, StatusbarAlignment, type IStatusbarEntry, type IStatusbarEntryAccessor } from "../../statusbar/browser/statusbar.js";
 
-interface LanguageServerProgressState {
-	readonly server: string;
-	readonly token: string;
-	readonly title: string;
-	readonly message?: string;
-	readonly percentage?: number;
+let nextOutputCommand = 0;
+
+interface LanguageServerTask {
+	readonly completion: DeferredPromise<void>;
+	progress?: IProgress<IProgressStep>;
+	title: string;
+	percentage?: number;
 }
 
 interface LanguageServerLifecycleState {
@@ -28,12 +33,24 @@ interface LanguageServerLifecycleState {
 /** Projects App Server language notifications into Workbench dialogs, logs, and status. */
 export class AppServerLanguageServerStatusService extends Disposable {
 	private readonly channels = new Map<string, IOutputChannel>();
-	private readonly progress = new Map<string, LanguageServerProgressState>();
+	// Tokens only correlate protocol notifications; task state belongs to IProgressService.
+	private readonly progress = new Map<string, LanguageServerTask>();
 	private readonly states = new Map<string, LanguageServerLifecycleState>();
 	private readonly status = this._register(new MutableDisposable<IStatusbarEntryAccessor>());
 
-	constructor(events: IServerEventApi, private readonly dialogs: IDialogService, private readonly outputService: IOutputService, private readonly statusbar: IStatusbarService, private readonly workspace?: IWorkspaceContextService) {
+	constructor(
+		events: IServerEventApi,
+		@IDialogService private readonly dialogs: IDialogService,
+		@IOutputService private readonly outputService: IOutputService,
+		@IStatusbarService private readonly statusbar: IStatusbarService,
+		@IProgressService private readonly progressService: IProgressService,
+		@IWorkspaceContextService private readonly workspace: IWorkspaceContextService,
+	) {
 		super();
+		this._register(toDisposable(() => {
+			for (const task of this.progress.values()) void task.completion.complete(undefined);
+			this.progress.clear();
+		}));
 		const subscription = events.subscribe(event => {
 			if (event.method === "language/serverMessage") this.acceptMessage(event.params);
 			if (event.method === "language/serverProgress") this.acceptProgress(event.params);
@@ -62,23 +79,47 @@ export class AppServerLanguageServerStatusService extends Disposable {
 	private acceptProgress(update: LanguageServerProgressNotification): void {
 		const server = this.serverLabel(update.server, update.dirId);
 		this.ensureChannel(server);
-		const key = `${server}\0${update.token}`;
-		const current = this.progress.get(key);
+		const key = `${update.dirId ?? ""}\0${update.server}\0${update.token}`;
+		let task = this.progress.get(key);
 		if (update.done) {
+			if (task) void task.completion.complete(undefined);
 			this.progress.delete(key);
 		} else {
 			const installing = update.token === "ash.language-server.install";
-			const title = installing ? localize('languageServer.installing', "Installing {0}…", update.server) : update.title?.trim() || current?.title || "Language server operation";
-			if (installing && !current) { status(title); this.ensureChannel(server).appendLine({ severity: "information", category: "installation", text: title }); }
-			this.progress.set(key, Object.freeze({ server, token: update.token, title, ...(update.message?.trim() ? { message: update.message.trim() } : current?.message ? { message: current.message } : {}), ...(update.percentage === null ? current?.percentage === undefined ? {} : { percentage: current.percentage } : { percentage: update.percentage }) }));
+			const title = installing ? localize('languageServer.installing', "Installing {0}…", update.server) : update.title?.trim();
+			if (!task) {
+				task = { completion: new DeferredPromise<void>(), title: title || localize('languageServer.operation', "Language server operation") };
+				this.progress.set(key, task);
+				if (installing) {
+					status(task.title);
+					this.ensureChannel(server).appendLine({ severity: "information", category: "installation", text: task.title });
+				}
+				const commandId = `ash.languageServers.showOutput.${++nextOutputCommand}`;
+				const channelId = outputChannelId(server);
+				const command = CommandsRegistry.register(commandId, accessor => accessor.get(IOutputService).showChannel(channelId));
+				const current = task;
+				void this.progressService.withProgress({
+					location: ProgressLocation.Window,
+					title: installing ? task.title : server,
+					command: commandId,
+				}, progress => {
+					current.progress = progress;
+					const percentage = current.percentage === undefined ? "" : ` ${current.percentage}%`;
+					progress.report({ message: installing ? percentage.trim() : `${current.title}${percentage}` });
+					return current.completion.p;
+				}).finally(() => command.dispose()).catch(onUnexpectedError);
+			}
+			if (title) task.title = title;
+			if (update.percentage != null) task.percentage = update.percentage;
+			const percentage = task.percentage === undefined ? "" : ` ${task.percentage}%`;
+			task.progress?.report({ message: installing ? percentage.trim() : `${task.title}${percentage}` });
 		}
 		this.updateStatus();
 	}
 
 	private updateStatus(): void {
-		const active = [...this.progress.values()];
 		const reveal = (server: string): void => this.ensureChannel(server).show();
-		const entry = active.length > 0 ? progressStatusEntry(active, reveal) : lifecycleStatusEntry([...this.states.values()], reveal);
+		const entry = this.progress.size > 0 ? undefined : lifecycleStatusEntry([...this.states.values()], reveal);
 		if (!entry) { this.status.clear(); return; }
 		if (this.status.value) this.status.value.update(entry);
 		else this.status.value = this.statusbar.addEntry(entry, { id: "ash.status.languageServers", alignment: StatusbarAlignment.Right, priority: 20 });
@@ -96,7 +137,7 @@ export class AppServerLanguageServerStatusService extends Disposable {
 
 	private serverLabel(server: string, dirId: string | undefined): string {
 		if (!dirId) return server;
-		const folder = this.workspace?.getWorkspace().folders.find(folder => folder.id === dirId);
+		const folder = this.workspace.getWorkspace().folders.find(folder => folder.id === dirId);
 		return `${server} — ${folder?.name || dirId}`;
 	}
 }
@@ -121,13 +162,6 @@ function lifecyclePresentation(state: LanguageServerLifecycleState): { readonly 
 		case "failed": return { severity: "error", text: `Language server failed: ${state.message ?? "Unknown failure"}` };
 		case "stopped": return { severity: "log", text: "Language server stopped." };
 	}
-}
-
-function progressStatusEntry(active: readonly LanguageServerProgressState[], reveal: (server: string) => void): IStatusbarEntry {
-	const first = active[0]!;
-	const percentage = first.percentage === undefined ? "" : ` ${first.percentage}%`;
-	const suffix = active.length === 1 ? "" : ` (+${active.length - 1})`;
-	return { text: `${first.title}${percentage}${suffix}`, tooltip: [first.server, first.message].filter(Boolean).join(": "), run: () => reveal(first.server) };
 }
 
 function lifecycleStatusEntry(states: readonly LanguageServerLifecycleState[], reveal: (server: string) => void): IStatusbarEntry | undefined {

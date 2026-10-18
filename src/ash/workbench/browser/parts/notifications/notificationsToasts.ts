@@ -3,7 +3,7 @@ import { addDisposableListener } from "../../../../base/browser/dom.js";
 import type { IActionRunner } from "../../../../base/common/actions.js";
 import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import { IInstantiationService } from "../../../../platform/instantiation/common/instantiation.js";
-import type { INotificationService, NotificationItem } from "../../../../platform/notification/common/notification.js";
+import { NotificationPriority, type INotificationService } from "../../../../platform/notification/common/notification.js";
 
 import { NotificationsList } from "./notificationsList.js";
 import { PendingNotificationToasts } from "./pendingNotificationToasts.js";
@@ -13,7 +13,7 @@ export class NotificationsToasts extends Disposable {
 	private readonly element: HTMLDivElement;
 	private readonly visible = new Set<number>();
 	private readonly list: NotificationsList;
-	private readonly pending: PendingNotificationToasts<NotificationItem>;
+	private readonly pending: PendingNotificationToasts<number>;
 	private hidden = false;
 	private previousFocus: HTMLElement | undefined;
 
@@ -22,8 +22,8 @@ export class NotificationsToasts extends Disposable {
 		const document = container.ownerDocument;
 		this.list = this._register(instantiationService.createInstance(NotificationsList, container, "toast", actionRunner));
 		this.element = this.list.domNode;
-		this.pending = this._register(new PendingNotificationToasts<NotificationItem>(
-			item => !this.hidden && service.getNotifications().includes(item),
+		this.pending = this._register(new PendingNotificationToasts<number>(
+			id => !this.hidden && service.getNotifications().some(current => current.id === id),
 			callback => {
 				const window = this.element.ownerDocument.defaultView!;
 				const frame = window.requestAnimationFrame(callback);
@@ -31,16 +31,16 @@ export class NotificationsToasts extends Disposable {
 			},
 		));
 		this._register(service.onDidAdd(item => {
-			if (this.hidden) return;
-			this.pending.add(item, (current, resources) => {
+			if (this.hidden || item.priority === NotificationPriority.SILENT) return;
+			this.pending.add(item.id, (id, resources) => {
 				try {
-					this.visible.add(current.id);
+					this.visible.add(id);
 					if (this.visible.size > 3) this.visible.delete(this.visible.values().next().value!);
 					this.render();
 				} finally { resources.dispose(); }
 			});
 		}));
-		this._register(service.onDidRemove(item => { this.pending.remove(item); this.visible.delete(item.id); this.render(); }));
+		this._register(service.onDidRemove(item => { this.pending.remove(item.id); this.visible.delete(item.id); this.render(); }));
 		this._register(addDisposableListener(this.element, "focusin", event => {
 			const HTMLElement = document.defaultView?.HTMLElement;
 			const target = event.relatedTarget;
@@ -77,7 +77,7 @@ export class NotificationsToasts extends Disposable {
 				if (nextFocus?.isConnected) nextFocus.focus();
 			}
 		}));
-		for (const item of service.getNotifications().slice(-3)) this.visible.add(item.id);
+		for (const item of service.getNotifications().filter(item => item.priority !== NotificationPriority.SILENT).slice(-3)) this.visible.add(item.id);
 		this.render();
 	}
 

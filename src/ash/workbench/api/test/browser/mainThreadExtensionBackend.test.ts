@@ -1,8 +1,10 @@
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
-import { JSDOM } from 'jsdom';
+import { NotificationService } from '../../../services/notification/common/notificationService.js';
+import { CommandService } from '../../../services/commands/common/commandService.js';
 import { DeferredPromise } from '../../../../base/common/async.js';
-import { BrowserProgressService } from '../../../../platform/progress/browser/progressService.js';
+import { ProgressService } from '../../../services/progress/browser/progressService.js';
+import { StatusbarService } from '../../../services/statusbar/browser/statusbar.js';
 import type { IProgressService } from '../../../../platform/progress/common/progress.js';
 import { AppServerRemoteError } from '../../../../platform/agentHost/common/appServerError.js';
 import { resetNlsResolver, setNlsMessages } from '../../../../nls.js';
@@ -28,7 +30,7 @@ function fixture(sourceKind = 'builtIn', request?: IExtensionBackendApi['request
 	const workspace = { getWorkspace: () => ({ folders: [] }), onDidChangeWorkspace: Event.None } as unknown as IWorkspaceContextService;
 	const configurationChanges = new Emitter<IConfigurationChangeEvent>();
 	const configuration = { onDidChangeConfiguration: configurationChanges.event } as unknown as IConfigurationService;
-	return { bridge: new MainThreadExtensionBackend(extensions, backend, connection, events, workspace, configuration, progress), calls, notifications, configurationChanges };
+	return { bridge: new MainThreadExtensionBackend(extensions, backend, connection, events, workspace, configuration, progress ?? { withProgress: async (_options, task) => task({ report() { } }) }), calls, notifications, configurationChanges };
 }
 
 test('client settings invalidate backend state without fabricating a server configuration notification', async () => {
@@ -96,15 +98,16 @@ test('cancelled backend requests cannot publish a result or launch another opera
 });
 
 for (const retire of [false, true]) test(`backend cancellation retains its exact operation until terminal completion${retire ? ' during retirement' : ''}`, async () => {
-	const browser = new JSDOM('<!doctype html><body></body>');
-	const container = browser.window.document.body;
 	const operation = new DeferredPromise<JsonValue>();
 	const cancellation = new DeferredPromise<void>();
 	const controller = new AbortController();
 	let settled = false;
 	setNlsMessages('zh-CN', { ash: { 'progress.region': '进度', 'progress.cancel': '取消' } });
 	try {
-		using progress = new BrowserProgressService(container);
+		using statusbar = new StatusbarService();
+		using notifications = new NotificationService();
+		using commands = new CommandService({ get() { throw new Error('Unexpected command service request'); }, getOptional() { return undefined; } });
+		using progress = new ProgressService(statusbar, notifications, commands);
 		const value = fixture('builtIn', async (method, params) => {
 			if (method === 'git/transport') return operation.p;
 			assert.equal(method, 'git/transport/cancel');
@@ -117,17 +120,16 @@ for (const retire of [false, true]) test(`backend cancellation retains its exact
 		void result.then(() => { settled = true; }, () => { settled = true; });
 		// Admission reads the product catalog before creating the existing progress surface.
 		await Promise.resolve(); await Promise.resolve();
-		const cancel = container.querySelector<HTMLButtonElement>('button');
-		assert.equal(cancel?.textContent, '取消');
-		assert.equal(container.querySelector('[role="region"]')?.getAttribute('aria-label'), '进度');
+		const cancel = notifications.getNotifications()[0]?.actions?.primary?.[0];
+		assert.equal(cancel?.label, '取消');
 		if (retire) controller.abort('extension retired');
-		else cancel!.click();
+		else await cancel!.run();
 		await cancellation.p;
 		assert.equal(settled, false);
 		assert.equal(value.calls.filter(call => call.method.endsWith('/cancel')).length, 1);
 		await operation.error(new AppServerRemoteError(-32800, 'cancelled', { kind: 'RequestCancelled' }));
 		if (retire) await assert.rejects(result);
 		else assert.deepEqual(await result, { backendError: { name: 'RequestCancelled', message: 'cancelled' } });
-		assert.equal(container.querySelector('button'), null);
-	} finally { resetNlsResolver(); browser.window.close(); }
+		assert.deepEqual(notifications.getNotifications(), []);
+	} finally { resetNlsResolver(); }
 });

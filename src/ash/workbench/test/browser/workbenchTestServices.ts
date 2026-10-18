@@ -1,5 +1,7 @@
+import { ICommandService } from '../../../platform/commands/common/commands.js';
+import { CommandService } from '../../services/commands/common/commandService.js';
 import { IProgressService } from '../../../platform/progress/common/progress.js';
-import { BrowserProgressService } from '../../../platform/progress/browser/progressService.js';
+import { ProgressService } from '../../services/progress/browser/progressService.js';
 import type { ITextResourceStore } from '../../services/textmodelResolver/common/textResourceStore.js';
 import { TestUriIdentityServices } from '../../../platform/uriIdentity/test/common/uriIdentityTestServices.js';
 import { IUriIdentityService } from '../../../platform/uriIdentity/common/uriIdentity.js';
@@ -71,8 +73,10 @@ export function workbenchInstantiationService(owner?: Pick<DisposableStore, 'add
 	const services = new TestWorkbenchServices();
 	owner?.add(services);
 	const resources = services.resources;
+	services.registerSingleton(ICommandService, () => new CommandService(services));
+	services.registerSingleton(INotificationService, () => new NotificationService());
 	services.registerInstance(IContextKeyService, resources.add(new ContextKeyService()));
-	services.registerSingleton(IProgressService, () => new BrowserProgressService(document.createElement('div')));
+	services.registerSingleton(IProgressService, () => services.createInstance(ProgressService));
 	const uriIdentityServices = resources.add(new TestUriIdentityServices());
 	services.registerInstance(IUriIdentityService, uriIdentityServices.get(IUriIdentityService));
 	const configuration = resources.add(new WorkbenchConfigurationService());
@@ -128,5 +132,5 @@ export function registerTestWorkbenchInteractionServices(owner: DisposableStore,
 	const window = new JSDOM('', { url: 'https://ash.test' });
 	owner.add(toDisposable(() => window.window.close()));
 	services.registerInstance(IQuickInputService, owner.add(new TestQuickInputService({ container: window.window.document.body, contextKeyService: owner.add(new ContextKeyService()) })));
-	services.registerInstance(INotificationService, owner.add(new NotificationService()));
+	if (!services.has(INotificationService)) services.registerInstance(INotificationService, owner.add(new NotificationService()));
 }

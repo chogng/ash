@@ -1,5 +1,9 @@
+import { NotificationService } from '../../../src/ash/workbench/services/notification/common/notificationService.js';
+import { CommandService } from '../../../src/ash/workbench/services/commands/common/commandService.js';
+import { NotificationActionRunner } from '../../../src/ash/workbench/browser/parts/notifications/notificationsCommands.js';
+import { NotificationsToasts } from '../../../src/ash/workbench/browser/parts/notifications/notificationsToasts.js';
 import { ViewsRegistry } from '../../../src/ash/workbench/common/views.js';
-import { BrowserProgressService } from '../../../src/ash/platform/progress/browser/progressService.js';
+import { ProgressService } from '../../../src/ash/workbench/services/progress/browser/progressService.js';
 import { AppServerRemoteError } from '../../../src/ash/platform/agentHost/common/appServerError.js';
 import { RustGitHostFixture } from './rustGitHostFixture.js';
 import '../../../src/ash/workbench/browser/parts/editor/editor.contribution.js';
@@ -93,6 +97,11 @@ for (const source of [scmChineseMessages, settingsChineseMessages]) {
 
 const lifetime = new DisposableStore();
 const services = lifetime.add(new InstantiationService());
+const backendNotifications = lifetime.add(new NotificationService());
+const progressCommands = lifetime.add(new CommandService(services));
+const toastServices = lifetime.add(new InstantiationService());
+toastServices.registerInstance(IContextMenuService, { contextMenuStyle: 'custom', onDidShowContextMenu: Event.None, onDidHideContextMenu: Event.None, showContextMenu() { throw new Error('Unexpected notification menu'); }, hideContextMenu() { } } satisfies IContextMenuService);
+lifetime.add(toastServices.createInstance(NotificationsToasts, document.body, backendNotifications, lifetime.add(new NotificationActionRunner(backendNotifications))));
 const workspace = lifetime.add(new TestWorkspaceService({ id: 'workspace', uri: URI.file('/workspace') }));
 const gitConfigurationRegistry = new ConfigurationRegistry();
 gitConfigurationRegistry.updateConfigurations({ add: [...parseExtensionManifest(JSON.stringify(gitManifest), { id: 'ash.git', name: 'git', publisher: 'ash', version: '0.1.0' }).contributes.configuration], remove: [] });
@@ -238,7 +247,7 @@ const backend = lifetime.add(new MainThreadExtensionBackend(catalog, {
 			default: throw new Error(`Unexpected domain request ${method}`);
 		}
 	}
-}, { getConnectionState: async () => 'ready', getSlashCommands: async () => [], onConnectionState: () => ({ dispose() { } }), connectionGeneration: 1 } satisfies IAppServerApi, { subscribe: listener => configurationEvents.event(listener) }, workspace, configuration, lifetime.add(new BrowserProgressService(document.body))));
+}, { getConnectionState: async () => 'ready', getSlashCommands: async () => [], onConnectionState: () => ({ dispose() { } }), connectionGeneration: 1 } satisfies IAppServerApi, { subscribe: listener => configurationEvents.event(listener) }, workspace, configuration, lifetime.add(new ProgressService(lifetime.add(new StatusbarService()), backendNotifications, progressCommands))));
 const unavailable = (method: string): never => { throw new Error(`Unexpected remote host request ${method}`); };
 const workerCatalog = { ...catalog, list: async () => { const snapshot = await catalog.list('cached'); return { ...snapshot, extensions: snapshot.extensions.filter(extension => extension.id !== 'ash.git') }; } };
 const genericHost = lifetime.add(services.createInstance(BrowserExtensionHostApi, workerCatalog, createDisconnectedExtensionHostApi(unavailable)));

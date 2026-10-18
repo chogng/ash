@@ -1,10 +1,11 @@
+import { NotificationService } from '../../../../services/notification/common/notificationService.js';
 import assert from 'node:assert/strict';
 import { suite, test } from 'mocha';
 import { CancellationTokenSource } from '../../../../../base/common/cancellation.js';
 import { Event } from '../../../../../base/common/event.js';
 import { CommandsRegistry, ICommandService } from '../../../../../platform/commands/common/commands.js';
 import { DialogResult, IDialogService, type IConfirmationDialogOptions } from '../../../../../platform/dialogs/common/dialogs.js';
-import { INotificationService, NotificationSeverity, type NotificationOptions } from '../../../../../platform/notification/common/notification.js';
+import { INotificationService, type NotificationOptions } from '../../../../../platform/notification/common/notification.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { IViewsService } from '../../../../services/views/common/viewsService.js';
 import { CommandService } from '../../../../services/commands/common/commandService.js';
@@ -39,19 +40,12 @@ suite('OnboardingTryoutService', () => {
 			async input() { throw new Error('Unexpected input dialog'); },
 			async prompt(): Promise<never> { throw new Error('Unexpected prompt'); },
 		});
-		const notify = (options: NotificationOptions) => {
-			notifications.push(options);
-			return { item: { ...options, id: 1, createdAt: 0 }, close() { } };
-		};
-		services.registerInstance(INotificationService, {
-			onDidAdd: Event.None,
-			onDidRemove: Event.None,
-			notify,
-			info(message, actions) { return notify({ severity: NotificationSeverity.Info, message, actions: { primary: actions } }); },
-			warning(message, actions) { return notify({ severity: NotificationSeverity.Warning, message, actions: { primary: actions } }); },
-			error(message, actions) { return notify({ severity: NotificationSeverity.Error, message, actions: { primary: actions } }); },
-			getNotifications: () => [], remove: () => false, clear() { },
-		});
+		services.registerSingleton(INotificationService, () => new class extends NotificationService {
+			override notify(options: NotificationOptions) {
+				notifications.push(options);
+				return super.notify(options);
+			}
+		}());
 		return {
 			services,
 			commands,

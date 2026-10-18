@@ -1,9 +1,11 @@
-import { defaultButtonStyles } from '../../../../platform/theme/browser/defaultStyles.js';
+import { defaultButtonStyles, defaultProgressBarStyles } from '../../../../platform/theme/browser/defaultStyles.js';
 import './media/notificationsList.css';
+import '../../../../base/browser/ui/progressbar/progressbar.css';
 import './media/notificationsActions.css';
 import { h } from '../../../../base/browser/dom.js';
 import { ButtonActionViewItem } from '../../../../base/browser/ui/actionbar/actionViewItems.js';
 import { Button } from '../../../../base/browser/ui/button/button.js';
+import { ProgressBar } from '../../../../base/browser/ui/progressbar/progressbar.js';
 import { DropdownMenuActionViewItem } from '../../../../base/browser/ui/dropdown/dropdownMenuActionViewItem.js';
 import { appendIcon } from '../../../../base/browser/ui/lxicons/lxicon.js';
 import type { IAction, IActionRunner } from '../../../../base/common/actions.js';
@@ -56,6 +58,15 @@ export class NotificationTemplateRenderer extends Disposable {
 		message.className = 'ash-notification-message';
 		message.textContent = item.message;
 		content.append(message);
+		const progress = this._register(new ProgressBar(content, defaultProgressBarStyles));
+		const update = (current: NotificationItem): void => {
+			message.textContent = current.message;
+			progress.element.hidden = current.progress === undefined;
+			progress.element.setAttribute('aria-label', current.message);
+			progress.value = current.progress?.total ? (current.progress.worked ?? 0) / current.progress.total : undefined;
+		};
+		update(item);
+		if (item.onDidChange) this._register(item.onDidChange(update));
 		const details = h(container.ownerDocument, 'div');
 		details.className = 'ash-notification-details';
 		if (item.source) {

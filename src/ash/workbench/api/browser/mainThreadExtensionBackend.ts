@@ -1,4 +1,4 @@
-import { IProgressService, type ProgressOptions } from '../../../platform/progress/common/progress.js';
+import { IProgressService, ProgressLocation, type IProgressOptions } from '../../../platform/progress/common/progress.js';
 import { AppServerRemoteError } from '../../../platform/agentHost/common/appServerError.js';
 import { Disposable, toDisposable } from '../../../base/common/lifecycle.js';
 import { IExtensionApi } from '../../../platform/extensions/common/extensionApi.js';
@@ -33,7 +33,7 @@ export class MainThreadExtensionBackend extends Disposable {
 		@IWorkspaceContextService
 		private readonly workspace: IWorkspaceContextService,
 		@IConfigurationService configuration: IConfigurationService,
-		@IProgressService private readonly progress?: IProgressService) {
+		@IProgressService private readonly progress: IProgressService) {
 		super();
 		const listener = events.subscribe(event => {
 			this.events.push({ sequence: ++this.sequence, event: normalizeExtensionHostPayload(event), method: event.method });
@@ -55,7 +55,7 @@ export class MainThreadExtensionBackend extends Disposable {
 		}));
 		this._register(toDisposable(() => this.stopped.abort()));
 	}
-	public async handle(source: ExtensionClientSource, capability: string, method: string | undefined, params: JsonValue, after: number, signal: AbortSignal, progressOptions?: ProgressOptions, waitForChange = false): Promise<JsonValue> {
+	public async handle(source: ExtensionClientSource, capability: string, method: string | undefined, params: JsonValue, after: number, signal: AbortSignal, progressOptions?: Pick<IProgressOptions, 'title' | 'cancellable'>, waitForChange = false): Promise<JsonValue> {
 		const catalog = await this.extensions.list('cached');
 		signal.throwIfAborted();
 		const descriptor = catalog.extensions.find(extension => extension.id === source.extensionId);
@@ -91,8 +91,7 @@ export class MainThreadExtensionBackend extends Disposable {
 		}
 		const operationId = (params as Record<string, JsonValue>).operationId;
 		const cancellable = typeof route.cancellationRoute === 'string' && typeof operationId === 'string';
-		if (progressOptions && (!this.progress || typeof progressOptions.title !== 'string' || progressOptions.title.length > 2048 || progressOptions.cancellable && !cancellable)) throw new TypeError('Invalid backend progress contract');
-		using progress = progressOptions ? this.progress!.startProgress(progressOptions) : undefined;
+		if (progressOptions && (typeof progressOptions.title !== 'string' || progressOptions.title.length > 2048 || progressOptions.cancellable && !cancellable)) throw new TypeError('Invalid backend progress contract');
 		let cancellation: Promise<unknown> | undefined;
 		const cancel = (): void => {
 			if (!cancellable || cancellation) return;
@@ -101,28 +100,33 @@ export class MainThreadExtensionBackend extends Disposable {
 			cancellation = this.backend.request(route.cancellationRoute, { operationId }, AbortSignal.timeout(5000));
 			void cancellation.catch(() => undefined);
 		};
-		signal.addEventListener('abort', cancel, { once: true });
-		progress?.signal.addEventListener('abort', cancel, { once: true });
-		signal.throwIfAborted();
-		let result: JsonValue;
-		try {
-			result = await this.backend.request(route.route, params, cancellable ? new AbortController().signal : signal);
-			signal.throwIfAborted();
-		} catch (error) {
-			signal.throwIfAborted();
-			return { backendError: { name: error instanceof AppServerRemoteError ? error.errorName : 'Unavailable', message: error instanceof Error ? error.message : String(error) } };
-		} finally {
-			signal.removeEventListener('abort', cancel);
-			progress?.signal.removeEventListener('abort', cancel);
-			await cancellation?.catch(() => undefined);
-		}
-		if (!Array.isArray(route.resultFields)) {
-			return result;
-		}
-		if (!result || typeof result !== 'object' || Array.isArray(result)) {
-			throw new TypeError('Extension backend result must be an object');
-		}
-		return Object.fromEntries(route.resultFields.map((field: string) => [field, (result as Record<string, JsonValue>)[field] ?? null]));
+		const execute = async (): Promise<JsonValue> => {
+			signal.addEventListener('abort', cancel, { once: true });
+			let result: JsonValue;
+			try {
+				signal.throwIfAborted();
+				result = await this.backend.request(route.route, params, cancellable ? new AbortController().signal : signal);
+				signal.throwIfAborted();
+			} catch (error) {
+				signal.throwIfAborted();
+				return { backendError: { name: error instanceof AppServerRemoteError ? error.errorName : 'Unavailable', message: error instanceof Error ? error.message : String(error) } };
+			} finally {
+				signal.removeEventListener('abort', cancel);
+				await cancellation?.catch(() => undefined);
+			}
+			if (!Array.isArray(route.resultFields)) {
+				return result;
+			}
+			if (!result || typeof result !== 'object' || Array.isArray(result)) {
+				throw new TypeError('Extension backend result must be an object');
+			}
+			return Object.fromEntries(route.resultFields.map((field: string) => [field, (result as Record<string, JsonValue>)[field] ?? null]));
+		};
+		return progressOptions ? this.progress.withProgress({
+			location: ProgressLocation.Notification,
+			title: progressOptions.title,
+			cancellable: progressOptions.cancellable,
+		}, execute, cancel) : execute();
 	}
 
 	private async waitForStateChange(after: number, notifications: readonly string[], signal: AbortSignal): Promise<void> {

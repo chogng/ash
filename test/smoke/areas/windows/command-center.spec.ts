@@ -304,19 +304,7 @@ test('Manage Accounts command opens the account picker when the account service 
 		expect(notificationBounds!.y + notificationBounds!.height).toBeLessThanOrEqual(statusbarBounds!.y);
 		expect(statusbarBounds!.y - notificationBounds!.y - notificationBounds!.height).toBeLessThanOrEqual(24);
 		expect(workbenchBounds!.x + workbenchBounds!.width - notificationBounds!.x - notificationBounds!.width).toBeLessThanOrEqual(24);
-		await page.locator('.ash-progress-host').evaluate(host => {
-			const item = host.ownerDocument.createElement('div');
-			item.className = 'ash-progress-item';
-			item.textContent = 'Background task';
-			host.append(item);
-		});
-		const [notificationWithProgress, progressBounds] = await Promise.all([
-			notification.boundingBox(),
-			page.locator('.ash-progress-item').boundingBox(),
-		]);
-		expect(notificationWithProgress).not.toBeNull();
-		expect(progressBounds).not.toBeNull();
-		expect(notificationWithProgress!.y + notificationWithProgress!.height).toBeLessThanOrEqual(progressBounds!.y);
+
 		await notification.getByRole('button', { name: 'Remove notification' }).click();
 		await expect(notification).toHaveCount(0);
 		await page.getByRole('button', { name: 'Show Notification Center' }).click();

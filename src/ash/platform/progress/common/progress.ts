@@ -1,56 +1,50 @@
-import { type Event } from "../../../base/common/event.js";
-import { type IDisposable } from "../../../base/common/lifecycle.js";
 import { createServiceIdentifier } from "../../instantiation/common/instantiation.js";
+import type { INotificationSource, NotificationPriority } from "../../notification/common/notification.js";
 
-/** One incremental update to a progress task. */
-export interface ProgressUpdate {
-	readonly message?: string;
-	readonly increment?: number;
+export const enum ProgressLocation {
+	Window = 10,
+	Notification = 15,
+}
+
+/** Common options for the progress locations consumed by this Workbench. */
+export interface IProgressOptions {
+	readonly location: ProgressLocation;
+	readonly title?: string;
+	readonly source?: string | INotificationSource;
 	readonly total?: number;
+	readonly cancellable?: boolean | string;
 }
 
-/** Configuration for one progress task. */
-export interface ProgressOptions {
-	readonly title: string;
-	readonly total?: number;
-	readonly cancellable?: boolean;
+export interface IProgressWindowOptions extends IProgressOptions {
+	readonly location: ProgressLocation.Window;
+	readonly command?: string;
+	readonly type?: 'loading' | 'syncing';
 }
 
-/** Immutable progress state published to observers. */
-export interface ProgressSnapshot {
-	readonly id: number;
-	readonly title: string;
-	readonly message?: string;
-	readonly worked: number;
-	readonly total?: number;
-	readonly cancellable: boolean;
-	readonly cancelled: boolean;
-	readonly done: boolean;
+export interface IProgressNotificationOptions extends IProgressOptions {
+	readonly location: ProgressLocation.Notification;
+	readonly delay?: number;
+	readonly priority?: NotificationPriority;
+	readonly type?: 'loading' | 'syncing';
 }
 
-export type ProgressChange =
-	| { readonly kind: "started"; readonly progress: ProgressSnapshot; }
-	| { readonly kind: "updated"; readonly progress: ProgressSnapshot; }
-	| { readonly kind: "done"; readonly progress: ProgressSnapshot; };
-
-/** Handle for one running progress task. */
-export interface ProgressHandle extends IDisposable {
-	readonly id: number;
-	readonly signal: AbortSignal;
-	report(update: ProgressUpdate): void;
-	done(): void;
-	cancel(): void;
+export interface IProgressStep {
+	message?: string;
+	increment?: number;
+	total?: number;
 }
 
-/** Window-scoped progress service. */
+export interface IProgress<T> {
+	report(item: T): void;
+}
+
+/** Presentation follows the producer's Promise; cancellation requests do not settle it. */
 export interface IProgressService {
-	readonly onDidChange: Event<ProgressChange>;
-
-	startProgress(options: ProgressOptions): ProgressHandle;
-	withProgress<T>(
-		options: ProgressOptions,
-		task: (progress: Pick<ProgressHandle, "report">, signal: AbortSignal) => Promise<T> | T,
-	): Promise<T>;
+	withProgress<R>(
+		options: IProgressOptions | IProgressWindowOptions | IProgressNotificationOptions,
+		task: (progress: IProgress<IProgressStep>) => Promise<R>,
+		onDidCancel?: (choice?: number) => void,
+	): Promise<R>;
 }
 
 export const IProgressService = createServiceIdentifier<IProgressService>("progressService");

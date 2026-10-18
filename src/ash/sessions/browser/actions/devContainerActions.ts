@@ -2,7 +2,7 @@ import { Action2, registerAction2 } from '../../../platform/actions/common/actio
 import type { ServicesAccessor } from '../../../platform/instantiation/common/instantiation.js';
 import { IInstantiationService } from '../../../platform/instantiation/common/instantiation.js';
 import { IWorkspaceContextService } from '../../../platform/workspace/common/workspace.js';
-import { IProgressService } from '../../../platform/progress/common/progress.js';
+import { IProgressService, ProgressLocation } from '../../../platform/progress/common/progress.js';
 import { IQuickInputService, type IQuickPickItem } from '../../../platform/quickinput/common/quickInput.js';
 import { DisposableStore } from '../../../base/common/lifecycle.js';
 import { CancellationTokenSource, CancellationToken } from '../../../base/common/cancellation.js';
@@ -109,16 +109,8 @@ function pick<T extends IQuickPickItem>(input: IQuickInputService, placeholder: 
 	});
 }
 
-function withOperation<T>(progress: IProgressService, title: string, operation: (token: CancellationToken) => Promise<T>): Promise<T> {
-	return progress.withProgress({ title, cancellable: true }, async (_progress, signal) => {
-		using cancellation = new CancellationTokenSource();
-		const abort = (): void => cancellation.cancel();
-		signal.addEventListener('abort', abort, { once: true });
-		try {
-			if (signal.aborted) { throw canceled(); }
-			return await operation(cancellation.token);
-		} finally {
-			signal.removeEventListener('abort', abort);
-		}
-	});
+async function withOperation<T>(progress: IProgressService, title: string, operation: (token: CancellationToken) => Promise<T>): Promise<T> {
+	using cancellation = new CancellationTokenSource();
+	return await progress.withProgress({ location: ProgressLocation.Notification, title, cancellable: true },
+		() => operation(cancellation.token), () => cancellation.cancel());
 }

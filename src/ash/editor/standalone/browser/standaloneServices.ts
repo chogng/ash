@@ -378,6 +378,7 @@ export class StandaloneKeybindingService extends Disposable implements IKeybindi
 /** Standalone notifications are observable and reported to the embedding page's console. */
 export class StandaloneNotificationService extends Disposable implements INotificationService {
 	private readonly added = this._register(new Emitter<NotificationItem>());
+	private readonly updated = this._register(new Emitter<NotificationItem>());
 	private readonly removed = this._register(new Emitter<NotificationItem>());
 	private readonly items = new Map<number, NotificationItem>();
 	private nextId = 1;
@@ -385,7 +386,13 @@ export class StandaloneNotificationService extends Disposable implements INotifi
 	readonly onDidRemove = this.removed.event;
 
 	notify(options: NotificationOptions): NotificationHandle {
-		const item: NotificationItem = Object.freeze({ ...options, id: this.nextId++, createdAt: Date.now() });
+		const id = this.nextId++;
+		const item: NotificationItem = Object.freeze({
+			...options, id, createdAt: Date.now(),
+			onDidChange: ((listener, thisArgs, disposables) => this.updated.event(current => {
+				if (current.id === id) listener.call(thisArgs, current);
+			}, undefined, disposables)) as Event<NotificationItem>,
+		});
 		this.items.set(item.id, item);
 		this.added.fire(item);
 		switch (item.severity) {
@@ -399,7 +406,31 @@ export class StandaloneNotificationService extends Disposable implements INotifi
 				console.info(item.message);
 				break;
 		}
-		return { item, close: () => { this.remove(item.id); } };
+		const update = (changes: Partial<Pick<NotificationItem, 'message' | 'progress'>>): void => {
+			const current = this.items.get(item.id);
+			if (!current) return;
+			const next = Object.freeze({ ...current, ...changes });
+			this.items.set(item.id, next);
+			this.updated.fire(next);
+		};
+		const items = this.items;
+		return {
+			get item() { return items.get(item.id) ?? item; },
+			onDidClose: Event.once((listener, thisArgs, disposables) => this.removed.event(removed => {
+				if (removed.id === item.id) listener.call(thisArgs, undefined);
+			}, undefined, disposables)),
+			updateMessage: message => update({ message }),
+			progress: {
+				infinite: () => update({ progress: { infinite: true } }),
+				total: total => update({ progress: { total, worked: 0 } }),
+				worked: value => {
+					const progress = this.items.get(item.id)?.progress;
+					update({ progress: { total: progress?.total, worked: (progress?.worked ?? 0) + value } });
+				},
+				done: () => update({ progress: undefined }),
+			},
+			close: () => { this.remove(item.id); },
+		};
 	}
 
 	info(message: string, actions?: readonly NotificationAction[]): NotificationHandle {

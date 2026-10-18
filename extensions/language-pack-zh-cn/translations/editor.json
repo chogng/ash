@@ -857,7 +857,6 @@
     "extension.editor.saveBeforeOperation": "继续前保存 {0} 个已更改文件？",
     "extension.editor.saveFiles": "保存文件",
     "extension.editor.commitDiagnostics": "提交前请解决 {0} 个诊断。",
-    "progress.region": "进度",
     "progress.cancel": "取消",
     "inspectEditorTokens.embeddedLanguage": "内嵌语言：{0}",
     "inspectEditorTokens.engine": "语法引擎：{0}",

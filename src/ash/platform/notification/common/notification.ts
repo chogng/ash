@@ -8,6 +8,30 @@ export enum NotificationSeverity {
 	Error = "error",
 }
 
+export enum NotificationPriority {
+	DEFAULT,
+	OPTIONAL,
+	SILENT,
+}
+
+export interface INotificationSource {
+	readonly id: string;
+	readonly label: string;
+}
+
+export interface INotificationProgressProperties {
+	readonly infinite?: boolean;
+	readonly total?: number;
+	readonly worked?: number;
+}
+
+export interface INotificationProgress {
+	infinite(): void;
+	total(value: number): void;
+	worked(value: number): void;
+	done(): void;
+}
+
 /** An action presented with a notification. */
 export interface NotificationAction {
 	readonly id: string;
@@ -28,6 +52,8 @@ export interface NotificationOptions {
 	readonly severity: NotificationSeverity;
 	readonly message: string;
 	readonly source?: string;
+	readonly priority?: NotificationPriority;
+	readonly progress?: INotificationProgressProperties;
 	readonly actions?: INotificationActions;
 }
 
@@ -35,11 +61,15 @@ export interface NotificationOptions {
 export interface NotificationItem extends NotificationOptions {
 	readonly id: number;
 	readonly createdAt: number;
+	readonly onDidChange?: Event<NotificationItem>;
 }
 
 /** Handle used by the creator to close one notification. */
 export interface NotificationHandle {
 	readonly item: NotificationItem;
+	readonly onDidClose: Event<void>;
+	readonly progress: INotificationProgress;
+	updateMessage(message: string): void;
 	close(): void;
 }
 

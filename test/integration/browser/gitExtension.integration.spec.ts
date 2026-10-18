@@ -782,6 +782,11 @@ test('Git sync cancellation honors supportCancellation even when progress is hid
 		});
 		const sync = page.locator('[data-statusbar-item-id="ash.status.git.sync"] [role="button"]'); await sync.click();
 		await expect(page.getByRole('button', { name: 'Cancel', exact: true })).toBeVisible();
+		const indicator = page.getByRole('progressbar', { name: 'Syncing. Cancelling may cause serious damage to the repository.', exact: true });
+		await expect(indicator).toBeVisible();
+		const cancelBounds = await page.getByRole('button', { name: 'Cancel', exact: true }).boundingBox();
+		const progressBounds = await indicator.boundingBox();
+		expect(progressBounds!.y).toBeGreaterThanOrEqual(cancelBounds!.y + cancelBounds!.height);
 		expect(await page.evaluate(() => window.gitStatusbarIntegration.progress().filter(request => request.progress !== null))).toMatchObject([{ method: 'runTransport', progress: { cancellable: true, title: 'Syncing. Cancelling may cause serious damage to the repository.' } }]);
 		await page.getByRole('button', { name: 'Cancel', exact: true }).click();
 		await expect(sync).not.toHaveAttribute('aria-disabled');

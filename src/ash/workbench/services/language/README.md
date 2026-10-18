@@ -71,8 +71,31 @@ Language-server log and show-message notifications are adapted by the Workbench
 language status service. Each server owns a channel registered through the
 canonical [`OutputService`](../output/README.md); the generic Output panel owns
 channel selection and clearing. User-visible messages use the shared dialog
-service. Active work-done progress is summarized through a transient statusbar
-entry, which is removed when no operation remains.
+service. It adapts each work-done token to a Promise passed to
+`IProgressService.withProgress`, reports `IProgressStep` messages, and completes
+that Promise on the server's end notification or adapter disposal. Server names
+are task titles, while the operation and reported percentage form the message.
+Each running operation registers a temporary Output command consumed through
+`IProgressWindowOptions.command`; the registration ends with the task.
+
+`ProgressService` owns presentation routing and incremental progress accumulation.
+Window tasks with commands use the status bar; commandless Window tasks use
+silent notifications with a 150 ms delay and a status-bar entry that opens the
+notification center. Notification tasks use `INotificationService` and the
+existing notification model and views. The producer owns the Promise and handles
+`onDidCancel`; requesting cancellation never substitutes a completed task. The
+shared contract covers the currently consumed Window and Notification locations;
+view/composite and Dialog progress are outside this call chain.
+
+The progress implementation and tests use the VS Code paths
+`services/progress/browser/progressService.ts` and
+`services/progress/test/browser/progressService.test.ts`. The platform layer owns
+only the shared progress contract. `appServerLanguageServerStatusService.ts`
+remains the Ash-specific App Server notification adapter for both Workbench hosts;
+it does not own generic progress presentation. Extension-host progress RPC
+(`api/browser/mainThreadProgress.ts`) and active-editor language status
+(`contrib/languageStatus`) are separate responsibilities and are not part of this
+notification path.
 
 Tree-sitter is composed under `workbench/services/treeSitter`. Captures resolve styles through the current color theme; unsupported languages expose plain text. Diagnostics come from registered language providers.
 

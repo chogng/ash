@@ -125,7 +125,7 @@ import { IAccessibleViewService, AccessibilityVerbositySettingId } from "../../p
 import { INotificationsCenter, NotificationsCenter } from "./parts/notifications/notificationsCenter.js";
 import { NotificationActionRunner } from "./parts/notifications/notificationsCommands.js";
 import { INotificationService } from "../../platform/notification/common/notification.js";
-import { BrowserProgressService } from "../../platform/progress/browser/progressService.js";
+import { ProgressService } from "../services/progress/browser/progressService.js";
 import { IProgressService } from "../../platform/progress/common/progress.js";
 import { StatusbarHeight } from './parts/workbenchPartDimensions.js';
 import { IMarkerService } from "../../platform/markers/common/markers.js";
@@ -821,7 +821,9 @@ export class Workbench extends Disposable {
 		this._register(toDisposable(() => feedbackHost.remove()));
 		const notificationService = this._register(new NotificationService());
 		services.registerInstance(INotificationService, notificationService);
-		const progressService = this._register(new BrowserProgressService(feedbackHost));
+		const statusbarService = this._register(new StatusbarService());
+		services.registerInstance(IStatusbarService, statusbarService);
+		const progressService = this._register(services.createInstance(ProgressService));
 		services.registerInstance(IProgressService, progressService);
 		if (!services.has(IClipboardService)) {
 			services.registerSingleton(IClipboardService, () => services.createInstance(BrowserClipboardService), { instantiation: InstantiationType.Delayed });
@@ -923,9 +925,7 @@ export class Workbench extends Disposable {
 		services.registerInstance(IUserThemeService, userThemeService ?? UnavailableUserThemeService);
 		services.registerInstance(IResourceIconRenderer, themeService);
 		services.registerInstance(IResourceLabelService, services.createInstance(ResourceLabelService));
-		const statusbarService = this._register(new StatusbarService());
-		services.registerInstance(IStatusbarService, statusbarService);
-		this._register(new AppServerLanguageServerStatusService(api.events, dialogService, outputService, statusbarService, workspaceContext));
+		this._register(services.createInstance(AppServerLanguageServerStatusService, api.events));
 		services.registerInstance(
 			IWorkbenchDialogHandler,
 			dialogHandler ?? new BrowserDialogHandler(workbenchRoot),

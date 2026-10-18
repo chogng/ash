@@ -1,4 +1,5 @@
 import { Disposable } from "../../../../base/common/lifecycle.js";
+import { Event } from "../../../../base/common/event.js";
 import { NotificationSeverity, type INotificationService, type NotificationAction, type NotificationHandle, type NotificationItem, type NotificationOptions } from "../../../../platform/notification/common/notification.js";
 import { NotificationsModel } from "../../../common/notifications.js";
 
@@ -12,7 +13,24 @@ export class NotificationService extends Disposable implements INotificationServ
 		this.assertNotDisposed();
 		validateNotification(options);
 		const item = this.model.add(options);
-		return { item, close: () => { this.remove(item.id); } };
+		const model = this.model;
+		return {
+			get item() { return model.get(item.id) ?? item; },
+			onDidClose: Event.once((listener, thisArgs, disposables) => this.onDidRemove(removed => {
+				if (removed.id === item.id) listener.call(thisArgs, undefined);
+			}, undefined, disposables)),
+			updateMessage: message => model.update(item.id, { message }),
+			progress: {
+				infinite: () => model.update(item.id, { progress: { infinite: true } }),
+				total: total => model.update(item.id, { progress: { total, worked: 0 } }),
+				worked: value => {
+					const progress = model.get(item.id)?.progress;
+					model.update(item.id, { progress: { total: progress?.total, worked: (progress?.worked ?? 0) + value } });
+				},
+				done: () => model.update(item.id, { progress: undefined }),
+			},
+			close: () => { this.remove(item.id); },
+		};
 	}
 
 	info(message: string, actions?: readonly NotificationAction[]): NotificationHandle { return this.notify({ severity: NotificationSeverity.Info, message, actions: { primary: actions } }); }
