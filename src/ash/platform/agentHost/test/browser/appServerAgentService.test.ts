@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { Emitter } from '../../../../base/common/event.js';
-import type { ServerNotification, ToolOutputArtifact } from '../../../../../../.build/protocol/typescript/index.js';
+import type { ServerNotification, SessionThreadReadResult, ToolOutputArtifact } from '../../../../../../.build/protocol/typescript/index.js';
 import type { ThreadTranscriptUpdateEnvelope } from '../../common/agent.js';
 import assert from 'node:assert/strict';
 import { suite, test } from 'mocha';
@@ -149,6 +149,95 @@ test('Thread history windows reach read and subscribe and retain detached pagina
 	assert.equal(subscription.transcript.revision, 9);
 	assert.deepEqual(read.thread.turns[0]!.items, items);
 	assert.deepEqual(subscription.thread.turns[0]!.items, items);
+});
+
+function messageSnapshot(text: string, sequence = 1): SessionThreadReadResult {
+	const total = { reported: 0, complete: true };
+	const usage = { modelInvocations: 0, inputTokens: total, outputTokens: total, cachedInputTokens: total, cacheWriteInputTokens: total, reasoningTokens: total };
+	const item = { type: 'agentMessage' as const, itemId: 'answer', turnId: 'turn', text, phase: 'final_answer' as const };
+	return {
+		thread: { sessionId: 'session', threadId: 'thread', agentId: 'agent', origin: { type: 'root' }, title: 'Body reuse', status: 'active', sequence, advisor: { type: 'off' }, usage, referenceCost: { knownAmounts: [], complete: true }, hookRuns: [], turns: [{ turnId: 'turn', status: 'completed', kind: 'coding', mode: 'agent', toolMode: 'direct', approvalMode: 'manual', usage, items: [item] }] },
+		transcript: { sessionId: 'session', threadId: 'thread', durableSequence: sequence, revision: sequence, entries: [{ type: 'item', entryId: 'item:answer', turnId: 'turn', item: { ...item }, transient: false }] },
+	};
+}
+
+for (const operation of ['read', 'subscribe', 'sessionSubscribe'] as const) test(`Thread ${operation} retains detached Item shells when immutable body values agree`, async () => {
+	const wire = messageSnapshot('Original body'.repeat(1024));
+	const expected = structuredClone(wire);
+	const connection = {
+		async request(): Promise<unknown> {
+			const value = { ...wire, updates: [] };
+			return operation === 'sessionSubscribe'
+				? { session: { sessionId: 'session', title: 'Body reuse', status: 'active', manager: {}, threads: [] }, agentTree: { roots: [] }, threadProjections: [value] }
+				: value;
+		},
+	} as unknown as AppServerProtocolClient;
+	const api = createAppServerAgentThreadService(connection);
+	const params = { sessionId: 'session', threadId: 'thread' };
+	const result = operation === 'read' ? await api.read(params) : operation === 'subscribe' ? await api.subscribe({ ...params, afterSequence: 0 }) : (await createAppServerAgentSessionService(connection).subscribe({ sessionId: 'session' })).threadSnapshots[0];
+	const canonical = result.thread.turns[0].items[0];
+	const entry = result.transcript.entries[0];
+	const expectedItem = expected.thread.turns[0].items[0];
+	const wireItem = wire.thread.turns[0].items[0];
+	const wireEntry = wire.transcript.entries[0];
+	assert.ok(canonical.type === 'agentMessage' && entry.type === 'item' && entry.item.type === 'agentMessage');
+	assert.ok(expectedItem.type === 'agentMessage' && wireItem.type === 'agentMessage' && wireEntry.type === 'item' && wireEntry.item.type === 'agentMessage');
+	assert.equal(canonical.text, expectedItem.text);
+	assert.deepEqual(entry, expected.transcript.entries[0]);
+	assert.notEqual(entry.item, canonical);
+	assert.notEqual(entry.item, wireEntry.item);
+	assert.notEqual(canonical, wireItem);
+	wireItem.text = 'Retired transport body';
+	wireEntry.item.phase = 'commentary';
+	wireEntry.item.text = 'Changed transport transcript';
+	assert.equal(canonical.text, entry.item.text);
+	assert.equal(entry.item.phase, 'final_answer');
+});
+
+test('Thread snapshot conversion preserves independently versioned, transient and differently scoped bodies', async () => {
+	for (const mismatch of ['session', 'thread', 'sequence', 'turn', 'item', 'type', 'transient', 'text'] as const) {
+		const wire = messageSnapshot('Committed body');
+		const entry = wire.transcript.entries[0];
+		assert.ok(entry.type === 'item' && entry.item.type === 'agentMessage');
+		if (mismatch === 'session') wire.transcript.sessionId = 'another-session';
+		if (mismatch === 'thread') wire.transcript.threadId = 'another-thread';
+		if (mismatch === 'sequence') wire.transcript.durableSequence++;
+		if (mismatch === 'turn') { entry.turnId = 'another-turn'; entry.item.turnId = 'another-turn'; }
+		if (mismatch === 'item') entry.item.itemId = 'another-answer';
+		if (mismatch === 'type') entry.item = { type: 'plan', itemId: 'answer', turnId: 'turn', text: 'Independent plan' };
+		if (mismatch === 'transient') { entry.transient = true; entry.item.text = 'Streaming body'; }
+		if (mismatch === 'text') entry.item.text = 'Newer transcript body';
+		const expected = structuredClone(wire.transcript);
+		const api = createAppServerAgentThreadService({ request: async () => wire } as unknown as AppServerProtocolClient);
+		const result = await api.read({ sessionId: 'session', threadId: 'thread' });
+		assert.deepEqual(result.transcript, expected, mismatch);
+		assert.deepEqual(result.thread.turns[0].items, wire.thread.turns[0].items, mismatch);
+	}
+});
+
+test('Thread reads and streaming notifications retain their own revisions without a body cache', async () => {
+	using notifications = new Emitter<ServerNotification>();
+	let wire = messageSnapshot('Version one');
+	const api = createAppServerAgentThreadService({ request: async () => wire, onNotification: notifications.event } as unknown as AppServerProtocolClient);
+	const updates: ThreadTranscriptUpdateEnvelope[] = [];
+	using subscription = api.onDidUpdateThreadTranscript(update => updates.push(update));
+	const first = await api.read({ sessionId: 'session', threadId: 'thread' });
+	const secondWire = messageSnapshot('Version two', 2);
+	wire = secondWire;
+	const second = await api.read({ sessionId: 'session', threadId: 'thread' });
+	const streaming = { type: 'item' as const, entryId: 'item:answer', turnId: 'turn', item: { type: 'agentMessage' as const, itemId: 'answer', turnId: 'turn', text: 'Version two with live suffix' }, transient: true };
+	notifications.fire({ method: 'session/thread/transcript/update', params: { sessionId: 'session', threadId: 'thread', durableSequence: 2, revision: 3, changes: [{ type: 'upsert', entry: streaming }] } });
+	assert.deepEqual(updates[0].changes, [{ type: 'upsert', entry: streaming }]);
+	streaming.item.text = 'Retired notification';
+	const live = updates[0].changes[0];
+	assert.ok(live.type === 'upsert' && live.entry.type === 'item' && live.entry.item.type === 'agentMessage');
+	assert.equal(live.entry.item.text, 'Version two with live suffix');
+	const firstEntry = first.transcript.entries[0], secondEntry = second.transcript.entries[0];
+	assert.ok(firstEntry.type === 'item' && firstEntry.item.type === 'agentMessage' && secondEntry.type === 'item' && secondEntry.item.type === 'agentMessage');
+	assert.equal(firstEntry.item.text, 'Version one');
+	assert.equal(secondEntry.item.text, 'Version two');
+	assert.equal(first.transcript.revision, 1);
+	assert.equal(second.transcript.revision, 2);
 });
 
 test('message checkpoints and restoration use the existing typed session protocol', async () => {

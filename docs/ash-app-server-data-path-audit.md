@@ -4,7 +4,7 @@
 
 审计基线的结论：Ash Main 已经透明转发字节，避免了 Owl 在 Browser UI 线程完整解析 JSON 的问题。但 Renderer 的 framing 存在可复现的复制放大，完整帧还会重新 UTF-8 编码、同步解析和递归 schema 校验。聊天消费者没有使用后端已有的有界历史能力，进一步放大输入。背压能够限制传输中的字节块，不能等同于限制完整响应处理成本、总内存或控制消息延迟。
 
-**实施状态：三批链路 P1 与流式 Markdown 优化已实现。** 第 1～4 节保留 manifest 对应的优化前审计快照；固定页 framing、接收端副本与重复编码见第 7 节；Code Chat 的有界历史、翻页、回放与审批保护见第 8 节；大帧解析与 schema 校验的 Worker、顺序队列及异步 ACK 见第 9 节。第 15 节记录流式 Markdown 尾部更新的实现与性能对比。后端输出预算、Worker 结果复制和领域应用的候选统一见[数据链路性能 TODO](../TODO.md#数据链路性能--todo)。
+**实施状态：三批链路 P1 与流式 Markdown 优化已实现。** 第 1～4 节保留 manifest 对应的优化前审计快照；固定页 framing、接收端副本与重复编码见第 7 节；Code Chat 的有界历史、翻页、回放与审批保护见第 8 节；大帧解析与 schema 校验的 Worker、顺序队列及异步 ACK 见第 9 节。第 15 节记录流式 Markdown 尾部更新，第 16～17 节记录 Worker 回传、领域堆与正文复用。其余链路测量见[数据链路性能 TODO](../TODO.md#数据链路性能--todo)。
 
 证据快照与文件 hash 见 [manifest.json](research/ash-app-server-data-path-2026-10-17/manifest.json)，实验脚本见 [probe.cjs](research/ash-app-server-data-path-2026-10-17/probe.cjs)。这是调查时的实现，不替代 [前端与 App Server 连接边界](frontend-app-server-boundary.md)或产品契约。工作区有并发开发活动；后续修改前应重新核对文件 hash。
 
@@ -1210,3 +1210,204 @@ ASH_MARKDOWN_BENCHMARK_LABEL=after pnpm test:browser:integration:prepared chatTr
 每个保留片段增加一个无布局盒的容器及其 render 生命周期。本轮验证释放语义，没有测量整机内存收益。
 后续若继续优化，应先量化代码模型替换和布局，再决定是否让代码模型接收真正的增量编辑、合并配置／布局更新，
 或为巨大单块设置工作预算。传输编码、Protobuf 和共享内存不会自动消除这些消费端工作。
+
+## 16. Worker 回传与领域保留堆实测（2026-10-18）
+
+结果支持先减少重复正文，再考虑专用大对象表示。20 Turn 常规页的回传成本很小；已经加载的长历史中，
+Thread 和 transcript 各持有一份正文才是显著的常驻成本。本轮只测量和评估，未修改产品实现。
+
+### 16.1 场景、边界与采样
+
+环境为 Apple M5／macOS arm64、Node 24.21.0、Playwright Chromium 149.0.7827.55，
+使用当前工作树的非压缩 Vite 产物。基准 HEAD 为 `2217d590f08cd0b2507bddb505461a19b67e9f41`；
+当时还有未提交的 Worker 服务与恢复改动，不能用该 commit 单独代表本次源码。原始记录保留工作树状态，
+产物及 source map 的 hash 见本地证据 manifest。
+
+分开测两种边界：
+
+- **回传阶段**：Worker 先调用生产 `decodeAppServerFrame` 完成解析、校验和路由，再保留结果。
+  计时只发一个小命令，让它回传已校验的对象；同一 Worker 交错发送空 ACK 作为调度对照。
+  每种场景先预热两对，再测 21 对。检查每个返回的正文、Item ID 和数值元组，断言在计时端点之后执行。
+  ACK 没有返回业务值，只用于解释调度成本，不能视为可用替代方案或端到端优化收益。
+- **保留堆**：受控 transport 提供合成响应，经过生产 `AppServerProtocolClient`、
+  `createAppServerFrameDecoder`／通用 `WebWorkerService`、`createAppServerAgentThreadService`、
+  `ChatService` 和 `ChatWidgetModel`。实际按模型要求的 20 Turn 页读取，调用 `loadOlderHistory`
+  到目标数量，再通过合法的 `turnCompleted` 通知触发 20 次只读刷新。会话、目录、模型目录、
+  Changes 和队列等外围依赖由场景固定；不执行工具、不连接真实 provider。
+
+堆场景使用每 Item 4096 个 ASCII 字符，带唯一前缀；Thread／transcript 的相同 Item 正文相等。
+20、128、2048 Turn 各运行三轮加载／刷新／释放。另测完整 2048 Turn 返回值的 DTO 与领域适配结果，
+以及三轮不经过实验性共享的长历史释放。断言完整数量、逐 Item 正文一致、列表投影数量、ready 状态、
+无在途 transport 请求和订阅释放；WeakRef 探针不持有模型或首个 Item。
+
+计时期间不强制 GC、不拍快照。堆检查点在异步工作结束后，通过 Renderer CDP 分两次 GC，
+读取 `Runtime.getHeapUsage.usedSize`，并在代表性状态保存八份快照。没有保留用于生成响应的 Renderer
+全量 wire 字符串或原始 DTO；响应源留在独立的测试服务器进程，排除在 Renderer 指标之外。
+
+这是生产消费者的浏览器组件证据，尚未覆盖 Electron／Main／Rust、DOM／Markdown／编辑器模型、
+Worker isolate 的保留堆、瞬时分配峰值或进程 RSS。以下 MiB 均为 1024² 字节，不能外推为整机内存收益。
+
+### 16.2 回传成本：小页与大对象应分开
+
+下表的往返从 Renderer 发出小命令开始，到其收到对象消息的回调入口结束；包括命令调度、Worker 发送、
+接收端对象重建及回调调度。发送列是 Worker 同步 `postMessage` 调用耗时，包含在往返内，不能相加。
+JSON 字节数用于标识同数据集，并不是结构化克隆的真实字节计数。
+
+| 数据集                                  | JSON 字节数 | Worker 同步发送中位数 | 回传往返中位数 / p95 |
+| --------------------------------------- | ----------: | --------------------: | -------------------: |
+| 20 Turn × 4 KiB 正文                    |     177,221 |             约 0.1 ms |         0.1 / 0.2 ms |
+| 20 Turn × 16 KiB 正文                   |     668,741 |                0.1 ms |         0.2 / 0.3 ms |
+| 128 Turn × 4 KiB，一次回传压力场景      |   1,131,168 |                0.2 ms |         0.5 / 0.8 ms |
+| 2048 Turn × 4 KiB，一次回传压力场景     |  18,107,467 |                5.2 ms |        9.5 / 14.4 ms |
+| 单 Item 8 MiB 正文，两份正文合计 16 MiB |  16,778,516 |                1.8 ms |         3.6 / 5.5 ms |
+| 65,536 个六数值元组                     |   1,670,907 |                4.1 ms |         7.0 / 7.3 ms |
+
+ACK 对照的往返中位数低于或接近 0.1 ms 的计时分辨率；同序号配对差值中位数依次为
+0.1、0.2、0.4、9.5、3.6、7.0 ms。跨 Worker 的 `timeOrigin + now()` 还受时钟量化影响，
+原始 delivery 样本甚至有接近零的负值；小场景以上表同一 Renderer 时钟的往返为准，不用跨时钟差推导纯复制耗时。
+大场景的往返也不等于 UI 连续阻塞时长，未从这些结果推算物理 memcpy 次数。
+
+**当前 20 × 4 KiB 页本身小于 256 KiB，生产 decoder 走同步路径，不启动 Worker。**
+表中人为让它走 Worker 是回传对照。20 × 16 KiB 页超过阈值，但回传仍约 0.2 ms。
+当前 Chat 首次订阅和刷新都请求 20 Turn，2048 Turn 一次返回仅代表未指定历史窗口的契约及压力场景，
+不能据此宣称常规打开 Chat 会付出 9.5 ms 回传成本。
+
+数值元组只有约 1.6 MiB，成本却明显高于 16 MiB 的少数长字符串；对象数量和形状也决定成本。
+这支持按专用数据类型评估 packed buffer，而不是给通用 Worker 消息统一换协议。
+
+### 16.3 保留堆：重复正文比 Item 外壳更值得处理
+
+相对每轮已释放的预热基线，加载后存活 Renderer JS 堆增量的三轮中位数如下。
+“刷新增量”比较第 20 次刷新和刚加载完成，代表相同已加载历史规模。
+
+| 已加载 Turn 数，每个正文 4 KiB | 加载后 JS 堆增量 | 20 次刷新后额外增量，中位数 |
+| ------------------------------ | ---------------: | --------------------------: |
+| 20                             |         0.19 MiB |                    约 0 KiB |
+| 128                            |         1.06 MiB |                     0.6 KiB |
+| 2048，分 103 页读取            |        16.85 MiB |                     7.6 KiB |
+
+小场景第一轮刷新另有约 123 KiB 增量，释放后仍比基线多约 136 KiB；后两轮没有同幅增长。
+它与一次性的运行时／代码预热相容，不能直接定为泄漏。长历史三轮刷新增量为约 3.4～10.9 KiB，
+没有随 20 次刷新保留额外的完整历史副本。
+
+在同一 Renderer isolate 的长历史快照中，模型的直接字段路径为：
+
+```text
+ChatWidgetModel → _thread → turns[] → items[] → text
+ChatWidgetModel → transcriptEntries[] → item → text
+```
+
+两条路径各有 2048 个 Item，合计 4096 个独立 Item 对象和 **4096 个独立正文 string 节点**；
+正文节点去重后的 self size 合计 16,826,368 B（16.05 MiB）。20 次刷新后仍是相同数量。
+这里计算的是直接拥有的正文节点 self size，没有累加重叠可达子图或声称得到整个模型的 dominator retained size。
+
+完整 2048 Turn DTO 单独持有时堆增量约 17.44 MiB，领域适配结果单独持有时约 17.31 MiB；
+两份快照都只有 4096 个正文 string 节点。适配后并未再保留第三、第四份完整正文。
+源码也表明 `toThreadItem` 的普通消息转换和 `cloneTranscriptEntry` 复制对象外壳，复用各自的 string 值；
+两份正文来自 Thread／transcript 各自的 wire 字段，不能把所有成本归咎于领域 adapter 的 spread。
+上述单独持有比较不测适配瞬间 DTO 与结果共存的分配峰值。
+
+为估算减量上限，在完成上述断言后，仅对可丢弃的合成模型做两步内存实验：
+
+| 实验步骤                                 | 三轮堆下降中位数 | 快照变化                                         |
+| ---------------------------------------- | ---------------: | ------------------------------------------------ |
+| 同一 Item 的相等正文指向同一个 string 值 |         8.02 MiB | 正文节点 4096 → 2048，self size 16.05 → 8.02 MiB |
+| 在正文已经共享后，再共享 Item 对象       |         82.9 KiB | Item 节点 4096 → 2048，正文节点不再减少          |
+
+正文共享约占当前合成长历史模型增量的 48%。这只是收益上限实验，直接修改私有模型字段，
+没有实现可上线的更新、版本和生命周期契约，也没有测协议改变后的加载时间。
+
+释放另有三轮**未经过上述共享修改**的验证：2048 Turn 模型完成 20 次刷新后 dispose 并移除场景引用，
+订阅数和在途请求归零；模型和首个 Item 的 WeakRef 全部失效，释放后堆增量分别为 24、2664、3396 B。
+代表性快照中 `ChatWidgetModel` 实例与测试正文节点都归零。这一场景没有发现历史载荷持续保留，
+不代表已经验证真实 Desktop 隐藏页、控件池或所有后台任务的释放。
+
+### 16.4 优化优先级与证据
+
+1. **值得优先验证正文只保留／传输一次。** 当前已有限页读取，下一步应在同一 owner 内评估按完整
+   session／thread／turn／item 身份、durable sequence／transcript revision 以及内容相等性复用不可变领域正文。
+   候选范围应有界并随加载历史释放；不新增全局无界 intern 表，不把 transport DTO 变成权威状态。
+   wire 中正文只传一次可同时减少解析和克隆输入，但需先定义引用解析、瞬态 Item、翻页、回放和审批契约。
+2. **Item 外壳复用优先级低。** 该数据集在正文共享后只再省约 0.08 MiB；直接共享可变对象会增加
+   更新隔离的推理成本，尚无理由为这点收益改变通用生命周期。
+3. **保留通用 Worker 现有对象回传。** 常规小页不会进入 Worker，较长正文的 20 Turn 页回传仍在亚毫秒级。
+   第 13.2 节 ACK 后 UI 重新解析的方案不因本次回传成本就自动成立，仍需一起测 UI 解析、长任务及峰值。
+   大规模数值元组可单独评估 Transferable packed buffer；本轮尚未验证该替代格式的端到端收益。
+4. **当前不做推测性的历史泄漏修复。** 刷新没有积累完整副本，未修改的合成长历史可释放。
+   DOM、编辑器模型、隐藏会话及 Desktop 峰值继续由完整调用链测量负责。
+
+本轮未改产品代码。最终运行零场景错误，完成六组各 21 对有效回传样本、三组各三轮领域负载、
+三轮 DTO／领域持有比较、三轮独立长历史释放、75 个 GC 后检查点及八份快照。
+本地原始证据目录为 `.build/investigations/worker-return-heap-2026-10-18/`：
+`run.mjs`、`fixture.ts`、`worker.ts`、`results.json`、`summary.json`、`analyze.mjs`、`run.log`、
+`evidence-manifest.json` 和 `*.heapsnapshot`。`partial-*.json` 保留早期场景构造错误，
+`*-completed.json` 保留校准运行；它们不混入最终表格。脚本及大体积快照按调查约定保留在 ignored 目录。
+
+```sh
+node .build/investigations/worker-return-heap-2026-10-18/run.mjs
+node .build/investigations/worker-return-heap-2026-10-18/analyze.mjs
+```
+
+## 17. 已实施：同快照的不可变领域正文复用（2026-10-18）
+
+第 16 节的收益上限已经落实到现有领域适配边界。`createAppServerAgentThreadService` 的 read／subscribe，
+以及 Session 初始订阅的每份 Thread projection，先转换 canonical Thread，再转换配套 transcript。
+转换中的临时索引只包含这一份领域 Thread 的 Item，返回结果后即释放，没有跨请求、跨窗口或全局正文缓存。
+
+复用条件同时满足：session ID、thread ID 和 durable sequence 相同，entry／Item 的 turn ID、Item ID、
+Item 类型对应，entry 非 transient，而且两份 `text` 完全相等。只让 transcript 的不可变 string 值引用
+canonical 领域正文；两侧 Item 对象及 phase、富内容等可变外壳仍分别转换。transcript revision 保留原值，
+流式通知独立转换；不同持久版本或正文不相等时保留各自值，不从旧值推导新状态。
+
+这把复用范围限制在一次已校验快照，空间为该快照中 Item 数量的临时索引；Code 的普通页仍为 20 Turn，
+Cowork 保留既有完整历史契约。模型对分页、历史前缀和实时 revision 的接受顺序继续由原 owner 决定。
+Code／Cowork dispose 同时清掉 canonical Thread 和 transcript，Code 也清掉分页边界；
+既有 generation／disposed 守卫阻止迟到响应重新放回正文。没有改 wire schema、后台权威状态或 Worker 消息协议。
+
+### 17.1 相同场景的前后验证
+
+沿第 16 节原脚本、工作负载、三轮采样、75 个 GC 后检查点与八份快照，分别运行优化前后产物。
+优化前构建通过只读 loader 使用保存的两个原始源文件，没有替换工作区文件；其余依赖使用同一当前工作树。
+每 Item 仍是 4096 个 ASCII 字符，按实际 20 Turn 页加载到目标数量，20 次刷新后再验证释放。
+计时期间不强制 GC，原始 DTO 不作为额外领域状态保留，最终两组均无场景错误。
+
+| 场景，加载后的存活 Renderer JS 堆增量中位数 |     优化前 |    优化后 |
+| ------------------------------------------- | ---------: | --------: |
+| 20 Turn                                     |  0.185 MiB | 0.107 MiB |
+| 128 Turn                                    |  1.060 MiB | 0.558 MiB |
+| 2048 Turn，103 页                           | 16.853 MiB | 8.807 MiB |
+| 单独持有完整 2048 Turn 领域适配结果         | 17.318 MiB | 9.342 MiB |
+
+长历史模型减少约 **8.05 MiB／47.7%**。快照直接确认两条领域路径的 Item 外壳仍有 4096 个，
+正文 string 节点从 4096 降到 2048，去重后的正文 self size 从 16,826,368 降到 8,413,184 B。
+优化后再执行第 16 节实验性的正文共享不再减少这份正文，说明收益已经由生产调用链取得。
+DTO 控制场景前后仍约 17.44 MiB，本次没有减少 wire／Worker 克隆的两份输入。
+
+20 次刷新后，2048 Turn 的额外堆增量中位数为前 7.6 KiB、后 7.9 KiB，没有堆积完整副本。
+独立、不做实验性字段修改的三轮加载／刷新／释放后，优化后的堆与基线差值分别为 1600、2664、1732 B；
+模型和首个 Item 的 WeakRef 全部失效，代表性释放快照的模型实例和测试正文节点归零。
+这是领域保留堆改善，不是 Worker isolate、瞬时峰值、DOM／Markdown／编辑器资源或进程 RSS 的测量。
+
+新增的整场加载计时包含合成 HTTP、翻页和固定 30 ms settle，仅有三轮：20 Turn 中位数约 35.5 → 36.6 ms，
+128 Turn 42.3 → 46.7 ms，2048 Turn 133.5 → 129.8 ms。它不足以证明加载提速或稳定回归；
+本次收益结论以同状态堆和具体正文节点为依据，不把约 48% 的领域堆下降换算成响应时间收益。
+
+### 17.2 更新、隔离与释放覆盖
+
+新增边界／模型用例覆盖三种快照入口、对象壳与 transport 脱离、不同身份／持久版本／Item 类型／正文、
+transient 条目、新版本与流式通知独立、较旧只读结果不能覆盖更高 transcript revision、同 ID 的 A-B-A 导航，
+以及 Code／Cowork dispose 后迟到结果不得回灌。普通字符串的值相等断言不能证明物理共享，
+这部分由上述快照中的独立节点数量验证。
+
+六个相关单测文件同一次编译运行，共 191 项通过，其中正文适配与模型两个文件 98 项。
+相关消费者回归与正文测试共用编译入口。运行命令：
+
+```sh
+pnpm test:unit:prepared --run src/ash/platform/agentHost/test/browser/appServerAgentService.test.ts --run src/ash/sessions/test/browser/chatWidgetModel.test.ts --run src/ash/platform/agentHost/test/browser/appServerProtocolClient.test.ts --run src/ash/platform/agentHost/test/browser/appServerFrameDecoder.test.ts --run src/ash/sessions/contrib/github/test/browser/githubService.test.ts --run src/ash/workbench/contrib/github/test/browser/githubRepositoryActions.test.ts
+node .build/investigations/worker-body-reuse-before-2026-10-18/run.mjs
+node .build/investigations/worker-body-reuse-after-2026-10-18/run.mjs
+```
+
+本地证据为 `.build/investigations/worker-body-reuse-{before,after}-2026-10-18/` 中的脚本、
+`results.json`、`summary.json`、产物 source map 与快照；原始源码、准入记录和前后对照 manifest 位于
+`.build/investigations/worker-body-reuse-2026-10-18/`。

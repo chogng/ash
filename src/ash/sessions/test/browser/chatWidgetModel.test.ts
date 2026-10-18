@@ -26,6 +26,15 @@ function snapshot(threadId: string, sequence = 1, waiting = false): ThreadRead {
 	return { thread: { advisor: { type: 'default' }, agentId: 'agent', origin: { type: 'root' }, sessionId: 'session', threadId, title: `Sequence ${sequence}`, status: 'active', sequence, usage, turns: waiting ? [{ turnId: `turn-${threadId}`, status: 'waitingForApproval', mode: 'agent', kind: 'coding', approvalMode: 'manual', usage, items: [] }] : [] }, transcript: { sessionId: 'session', threadId, durableSequence: sequence, revision: sequence, entries: [] } };
 }
 
+function messageHistory(threadId: string, sequence: number, text: string): ThreadRead {
+	const value = snapshot(threadId, sequence, true);
+	const item = { type: 'agentMessage' as const, itemId: 'shared-id', turnId: 'shared-turn', text };
+	return {
+		thread: { ...value.thread, turns: [{ ...value.thread.turns[0], turnId: item.turnId, status: 'completed', items: [item] }] },
+		transcript: { ...value.transcript, entries: [{ type: 'item', entryId: 'item:shared-id', turnId: item.turnId, item: { ...item }, transient: false }] },
+	};
+}
+
 function fixture(kind: 'Code' | 'Cowork', subscribe?: (threadId: string) => Promise<ThreadSubscription>, waiting = false) {
 	const resources = new DisposableStore();
 	const updates = resources.add(new Emitter<ThreadUpdateEnvelope>());
@@ -63,6 +72,53 @@ function fixture(kind: 'Code' | 'Cowork', subscribe?: (threadId: string) => Prom
 async function turnTask(): Promise<void> { await new Promise(resolve => setTimeout(resolve, 0)); }
 async function waitFor(condition: () => boolean): Promise<void> { for (let i = 0; i < 200 && !condition(); i++) await turnTask(); assert.ok(condition(), 'expected deferred operation reached'); }
 function approval(requestId: string): AgentInteractionOffer { return { connectionGeneration: 1, sessionId: 'session', threadId: 'A', turnId: 'turn-A', interaction: { requestId, request: { type: 'approval', request: { reason: requestId, capabilities: [{ kind: 'fileWrite', scope: '/owned/file' }] } } } }; }
+
+test('Code transcript updates preserve live body revisions across stale reads and same-ID navigation', async () => {
+	const original = messageHistory('A', 1, 'Committed body');
+	const f = fixture('Code', async threadId => ({ ...(threadId === 'A' ? original : messageHistory(threadId, 1, 'Other thread body')), updates: [] }));
+	using resources = f.resources;
+	await f.model.initialize();
+	const oldRead = new DeferredPromise<ThreadRead>();
+	let readStarted = false;
+	f.threadApi.read = async () => { readStarted = true; return oldRead.p; };
+	f.updates.fire({ sessionId: 'session', threadId: 'A', durableSequence: 2, update: { type: 'committed', event: { type: 'turnCompleted', turnId: 'shared-turn' } } });
+	await waitFor(() => readStarted);
+	const live = { type: 'item' as const, entryId: 'item:shared-id', turnId: 'shared-turn', item: { type: 'agentMessage' as const, itemId: 'shared-id', turnId: 'shared-turn', text: 'Live body with appended output' }, transient: true };
+	f.transcripts.fire({ sessionId: 'session', threadId: 'A', durableSequence: 2, revision: 2, changes: [{ type: 'upsert', entry: live }] });
+	const stale = messageHistory('A', 2, 'Older read body');
+	await oldRead.complete({ ...stale, transcript: { ...stale.transcript, revision: 1 } });
+	await waitFor(() => f.model.thread?.sequence === 2);
+	assert.equal(f.model.items[0].text, live.item.text);
+	assert.equal(original.thread.turns[0].items[0].type === 'agentMessage' && original.thread.turns[0].items[0].text, 'Committed body');
+	await f.model.selectThread({ session: f.session, threadId: 'B' });
+	assert.equal(f.model.items[0].text, 'Other thread body');
+	f.transcripts.fire({ sessionId: 'session', threadId: 'A', durableSequence: 3, revision: 3, changes: [{ type: 'upsert', entry: { ...live, item: { ...live.item, text: 'Late body for retired A' } } }] });
+	assert.equal(f.model.items[0].text, 'Other thread body');
+	await f.model.selectThread({ session: f.session, threadId: 'A' });
+	assert.equal(f.model.items[0].text, 'Committed body');
+});
+
+for (const kind of ['Code', 'Cowork'] as const) test(`${kind} model releases both body projections and ignores a snapshot completing after disposal`, async () => {
+	const f = fixture(kind, async () => ({ ...messageHistory('A', 1, 'Retained body'.repeat(1024)), updates: [] }));
+	using resources = f.resources;
+	await f.model.initialize();
+	assert.equal(f.model.items.length, 1);
+	const pending = new DeferredPromise<ThreadRead>();
+	let readStarted = false;
+	f.threadApi.read = async () => { readStarted = true; return pending.p; };
+	let unsubscribed = 0;
+	f.threadApi.unsubscribe = async () => { unsubscribed++; };
+	f.updates.fire({ sessionId: 'session', threadId: 'A', durableSequence: 2, update: { type: 'committed', event: { type: 'turnCompleted', turnId: 'shared-turn' } } });
+	await waitFor(() => readStarted);
+	f.model.dispose();
+	assert.equal(f.model.thread, undefined);
+	assert.deepEqual(f.model.items, []);
+	if (f.model instanceof ChatWidgetModel) assert.equal(f.model.olderHistory, undefined);
+	await pending.complete(messageHistory('A', 2, 'Late replacement body'));
+	await waitFor(() => unsubscribed === 1);
+	assert.equal(f.model.thread, undefined);
+	assert.deepEqual(f.model.items, []);
+});
 
 for (const kind of ['Code', 'Cowork'] as const) {
 	for (const aba of [false, true]) {

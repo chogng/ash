@@ -144,8 +144,10 @@ export class ChatWidgetModel extends Disposable {
 			this._composerGeneration++;
 			const active = this.activeSession;
 			if (active) void this.chatService.unsubscribeThread(active.session.sessionId, active.threadId, this);
+			this._thread = undefined;
 			this.transcriptEntries = [];
 			this.transcriptRevision = 0;
+			this.historyBoundary = undefined;
 		}));
 		void this.initialize();
 	}

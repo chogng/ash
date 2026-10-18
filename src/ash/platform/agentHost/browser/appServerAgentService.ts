@@ -217,12 +217,15 @@ export function createAppServerAgentSessionService(connection: AppServerProtocol
 			const result = await appServerRequest(connection, 'session/subscribe', params);
 			return {
 				...toSessionResult(result, sshHost),
-				threadSnapshots: result.threadProjections.map((snapshot) => ({
-					thread: toThread(snapshot.thread),
-					directory: toExecutionTarget(snapshot.directory, sshHost),
-					transcript: toThreadTranscriptSnapshot(snapshot.transcript),
-					updates: snapshot.updates.map(toThreadUpdate)
-				}))
+				threadSnapshots: result.threadProjections.map((snapshot) => {
+					const thread = toThread(snapshot.thread);
+					return {
+						thread,
+						directory: toExecutionTarget(snapshot.directory, sshHost),
+						transcript: toThreadTranscriptSnapshot(snapshot.transcript, thread),
+						updates: snapshot.updates.map(toThreadUpdate)
+					};
+				})
 			};
 		},
 		unsubscribe: (params) => voidResult(appServerRequest(connection, 'session/unsubscribe', params)),
@@ -426,7 +429,8 @@ export function createAppServerAgentThreadService(connection: AppServerProtocolC
 		readTraceGraph: (params) => appServerRequest(connection, 'session/trace/graph/read', params),
 		read: async (params) => {
 			const result = await appServerRequest(connection, 'session/thread/read', params);
-			return { thread: toThread(result.thread), directory: toExecutionTarget(result.directory, sshHost), transcript: toThreadTranscriptSnapshot(result.transcript), ...(result.history ? { history: { ...result.history } } : {}) };
+			const thread = toThread(result.thread);
+			return { thread, directory: toExecutionTarget(result.directory, sshHost), transcript: toThreadTranscriptSnapshot(result.transcript, thread), ...(result.history ? { history: { ...result.history } } : {}) };
 		},
 		configureAdvisor: async (params) => {
 			const result = await appServerRequest(
@@ -445,10 +449,11 @@ export function createAppServerAgentThreadService(connection: AppServerProtocolC
 		},
 		subscribe: async (params) => {
 			const result = await appServerRequest(connection, 'session/thread/subscribe', params);
+			const thread = toThread(result.thread);
 			return {
-				thread: toThread(result.thread),
+				thread,
 				directory: toExecutionTarget(result.directory, sshHost),
-				transcript: toThreadTranscriptSnapshot(result.transcript),
+				transcript: toThreadTranscriptSnapshot(result.transcript, thread),
 				updates: result.updates.map(toThreadUpdate),
 				...(result.history ? { history: { ...result.history } } : {})
 			};
@@ -691,13 +696,28 @@ function toThreadUpdateValue(update: ThreadUpdateEnvelopeDto['update']): ThreadU
 	}
 }
 
-function toThreadTranscriptSnapshot(snapshot: ThreadTranscriptSnapshotDto): ThreadTranscriptSnapshot {
+function toThreadTranscriptSnapshot(snapshot: ThreadTranscriptSnapshotDto, thread: Thread): ThreadTranscriptSnapshot {
+	// The index lives only for this conversion and contains domain items from the same
+	// durable snapshot. Share immutable text, never mutable Item shells or transport
+	// objects. A later streaming revision still owns its independently converted text.
+	const turns = snapshot.sessionId === thread.sessionId && snapshot.threadId === thread.threadId && snapshot.durableSequence === thread.sequence
+		? new Map(thread.turns.map(turn => [turn.turnId, new Map(turn.items.map(item => [item.itemId, item]))]))
+		: undefined;
 	return {
 		sessionId: snapshot.sessionId,
 		threadId: snapshot.threadId,
 		durableSequence: snapshot.durableSequence,
 		revision: snapshot.revision,
-		entries: snapshot.entries.map(toThreadTranscriptEntry)
+		entries: snapshot.entries.map(entry => {
+			const converted = toThreadTranscriptEntry(entry);
+			if (converted.type !== 'item' || converted.transient) return converted;
+			const canonical = turns?.get(converted.turnId)?.get(converted.item.itemId);
+			if (canonical?.type !== converted.item.type || canonical.turnId !== converted.turnId || converted.item.turnId !== converted.turnId) return converted;
+			if ('text' in canonical && 'text' in converted.item && canonical.text === converted.item.text) {
+				return { ...converted, item: { ...converted.item, text: canonical.text } };
+			}
+			return converted;
+		})
 	};
 }
 

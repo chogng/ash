@@ -135,7 +135,6 @@
 测量入口与约束见[审计与测量](docs/ash-app-server-data-path-audit.md)。以下先量化，再决定方案，不能把隔离 microbenchmark 当成整条 Desktop 收益。
 
 - [ ] **测量** · 量化 receive／assemble／decode／parse／schema／adapter／apply／paint 阶段、队列 bytes／elapsed 与真实 task yield；核对 ACK 跟随消费和跨进程时钟关系。
-- [ ] **测量** · 测 Worker 回传对象的复制、Thread／transcript 重复 item 与领域保留堆；按稳定 ID／revision、有界领域值评估减量，不把 transport DTO 变成权威业务状态。
 - [ ] **复核** · 继续完善文件模型刷新、Chat Changes 摘要以外的过期只读 refresh，补齐传输取消、大内容按需资源读取及迟到响应清理；状态变更请求不得自动重放或合并。刷新与取消约束见[消费者刷新约束](docs/ash-app-server-data-path-audit.md#已接入的消费者刷新约束)。
 - [ ] **测量** · 把后端结果构造和 writer／producer 等待纳入资源准入测量，评估有界数据／控制输出契约与同连接队头阻塞；不靠降低既有文件上限掩盖成本。
 - [ ] **测量** · 先量化大代码围栏的完整 `TextModel.setValue`、配置／布局成本及巨大单块 Markdown 尾部预算，再决定增量编辑或更新合并；此前 Markdown 子阶段收益不能当作整条响应同幅度加速。
