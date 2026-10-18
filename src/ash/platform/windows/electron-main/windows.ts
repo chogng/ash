@@ -102,6 +102,22 @@ export function resolveBrowserWindowOptions({
 	return { ...browserWindowOptions, ...resolveWindowTitleBarOptions(titleBarStyle, platform, backgroundColor) };
 }
 
+/** Applies saved outer DIP bounds after Windows has selected the window's display. */
+export function restoreWindowBounds(window: { setBounds(bounds: IWindowBounds): void; getBounds(): IWindowBounds; }, bounds: IWindowBounds): void {
+	let requestedWidth = bounds.width;
+	let requestedHeight = bounds.height;
+	for (let attempt = 0; attempt < 4; attempt++) {
+		window.setBounds({ ...bounds, width: requestedWidth, height: requestedHeight });
+		const actual = window.getBounds();
+		if (actual.width === bounds.width && actual.height === bounds.height) break;
+		// Fractional DPI can map adjacent DIP requests to the same outer size.
+		// Accumulate corrections across that plateau, bounded for OS size constraints.
+		requestedWidth -= actual.width - bounds.width;
+		requestedHeight -= actual.height - bounds.height;
+		if (requestedWidth <= 0 || requestedHeight <= 0) break;
+	}
+}
+
 /** Main and auxiliary windows use the same frame and window-controls policy. */
 export function resolveWindowTitleBarOptions(
 	titleBarStyle: TitleBarStyleConfiguration,

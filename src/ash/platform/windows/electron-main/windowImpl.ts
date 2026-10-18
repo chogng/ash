@@ -14,7 +14,7 @@ import { Disposable, toDisposable, type DisposableStore, type IDisposable } from
 import { WindowMode, LoadReason, type ILoadEvent, type ICodeWindow, type IWindowBounds, type IWindowState } from '../../window/electron-main/window.js';
 import { WINDOW_ZOOM_CHANGED_CHANNEL, type TitleBarStyleConfiguration } from '../../window/common/window.js';
 import {
-	applyWindowState, resolveBrowserWindowOptions, resolveWindowTitleBarOptions, WindowControlsOverlay,
+	applyWindowState, resolveBrowserWindowOptions, resolveWindowTitleBarOptions, restoreWindowBounds, WindowControlsOverlay,
 	type IWindowConstructorOptions, type IWindowWebPreferences,
 } from './windows.js';
 import { UNKNOWN_EMPTY_WINDOW_WORKSPACE, isSingleFolderWorkspaceIdentifier, isWorkspaceIdentifier, type IAnyWorkspaceIdentifier } from '../../workspace/common/workspace.js';
@@ -150,23 +150,7 @@ export class CodeWindow<TWindow extends ICodeWindowHandle<TWindow>> extends Disp
 			// Windows may size the constructor frame using the primary display's DPI.
 			// Apply the outer DIP rectangle on the created window's display before
 			// placement tracking captures it or maximize/fullscreen changes its mode.
-			let requestedWidth = width;
-			let requestedHeight = height;
-			for (let attempt = 0; attempt < 4; attempt++) {
-				window.setBounds({ x, y, width: requestedWidth, height: requestedHeight });
-				const actual = window.getBounds();
-				if (actual.width === width && actual.height === height) {
-					break;
-				}
-				// Fractional DPI can map adjacent DIP requests to the same outer size.
-				// Accumulate corrections across that plateau before placement is tracked;
-				// bound attempts in case OS constraints make the saved size unreachable.
-				requestedWidth -= actual.width - width;
-				requestedHeight -= actual.height - height;
-				if (requestedWidth <= 0 || requestedHeight <= 0) {
-					break;
-				}
-			}
+			restoreWindowBounds(window, { x, y, width, height });
 		}
 		window.once('ready-to-show', () => {
 			if (window.isDestroyed()) return;

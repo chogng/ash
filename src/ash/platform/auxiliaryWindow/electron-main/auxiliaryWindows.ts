@@ -12,7 +12,7 @@ export interface IAuxiliaryWindowsMainService {
 	readonly onDidChangeWindowState: Event<{ readonly parentId: number; readonly event: IAuxiliaryWindowStateEvent; }>;
 	createWindow(details: HandlerDetails, titleBarStyle: TitleBarStyleConfiguration, zoomLevel?: number): BrowserWindowConstructorOptions;
 	/** The opener's resources own this registration, including any descendant windows. */
-	registerWindow(webContents: WebContents, parentId: number, restoreMaximized?: boolean): IDisposable;
+	registerWindow(webContents: WebContents, parentId: number, options?: Pick<BrowserWindowConstructorOptions, 'x' | 'y' | 'width' | 'height' | 'show'>): IDisposable;
 	getWindowByWebContents(webContents: WebContents): IAuxiliaryWindow | undefined;
 	getFocusedWindow(): IAuxiliaryWindow | undefined;
 	getLastActiveWindow(): IAuxiliaryWindow | undefined;

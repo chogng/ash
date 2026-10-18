@@ -458,8 +458,22 @@ test('auxiliary registration maximizes only when restoring that window mode', ()
 	using hiddenRegistration = auxiliary.registerWindow(hidden.webContents as unknown as WebContents, 1);
 	assert.deepEqual({ maximized: hidden.maximized, shown: hidden.shown }, { maximized: 0, shown: 0 });
 	const restored = new TestWindow(3, 'Restored editor');
-	using restoredRegistration = auxiliary.registerWindow(restored.webContents as unknown as WebContents, 1, true);
+	using restoredRegistration = auxiliary.registerWindow(restored.webContents as unknown as WebContents, 1, { show: false });
 	assert.deepEqual({ maximized: restored.maximized, shown: restored.shown }, { maximized: 1, shown: 1 });
+});
+
+test('auxiliary registration restores Windows outer bounds before capturing its initial state', function () {
+	if (process.platform !== 'win32') this.skip();
+	const child = new TestWindow(2, 'Restored editor');
+	const saved = { x: 120, y: 90, width: 718, height: 539 };
+	// Reproduce the constructor/frame mismatch measured on the Windows desktop.
+	child.bounds = { ...saved, width: 724, height: 544 };
+	using registration = windowServices.get(IAuxiliaryWindowsMainService).registerWindow(child.webContents as unknown as WebContents, 1, saved);
+	assert.deepEqual(child.getBounds(), saved);
+	assert.deepEqual(windowServices.get(IAuxiliaryWindowsMainService).getWindowByWebContents(child.webContents as unknown as WebContents)?.getState(), {
+		width: saved.width, height: saved.height, left: saved.x, top: saved.y,
+		zoomLevel: 0, alwaysOnTop: false, mode: 'normal',
+	});
 });
 
 test('window service assembly rejects a missing auxiliary window owner', () => {

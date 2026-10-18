@@ -1543,7 +1543,10 @@ test('Quick Access scrolls its results within the list', async ({ workbench }) =
 	}).toPass({ timeout: 10_000 });
 });
 
-titleTest('titlebar command center opens file search, switches to commands and restores focus', async ({ application, target, testWorkspace, workbench, privilegeSuffix }) => {
+// Exact CSS breakpoint probes need whole display pixels for each requested viewport pixel.
+const responsiveTitleTest = titleTest.extend({ electronArgs: ['--force-device-scale-factor=1'] });
+
+responsiveTitleTest('titlebar command center opens file search, switches to commands and restores focus', async ({ application, target, testWorkspace, workbench, privilegeSuffix }) => {
 	const page = workbench.page;
 	// UI-only hosts have bootstrap colors but no App Server extension theme catalog.
 	if (target.kind === 'electron') {
@@ -1625,6 +1628,7 @@ titleTest('titlebar command center opens file search, switches to commands and r
 	for (const width of [801, 700]) {
 		await page.setViewportSize({ width, height: 800 });
 		await expect(commandCenter).toBeVisible();
+		await expect.poll(() => page.evaluate(() => window.innerWidth)).toBe(width);
 		await expect(async () => {
 			const bounds = await commandCenter.evaluate(element => {
 				const titlebar = element.closest('.ash-workbench-titlebar')!;

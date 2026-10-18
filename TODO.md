@@ -8,15 +8,10 @@
 
 - [ ] **验收** · 已升级至 SDK 1.0.1（兼容提交 `f1e8694b`），macOS ARM64 文件／PTY／网络矩阵、SDK 和执行服务通过。仍须在支持 PSEC 的 Windows、WSL2、独立 Linux 和 Intel Mac 实机运行当前 pin，并补外部局域网／公网 IPv6、真实 Docker／GPG socket。Ash Windows／Linux 全测试目标交叉编译另缺目标 C 工具链；全仓依赖安全门禁被既有 zbus 生态停止维护公告阻挡，来源／许可证检查通过。当前范围、命令和旧版证据边界见 [MXC 清单](MXC-TODO.md) 与 [适配器验证](crates/mxc-sandbox/README.md#验证)。
 
-## Smoke · Windows 验收
-
-- [ ] **验收** · 普通用户和管理员提升权限各执行 10 条 Electron smoke，完成 Windows 权限标题与 HMR 路径验证；本机修复已落地，macOS Electron 10 条及 Browser 8 条均通过。命令与证据见 [Windows Smoke 交接](smoke-platform-handoff-todo.md)。
-
 ## Windows Rust 开发循环
 
 - 保存 Rust 到 App 可用的 15 秒目标尚未达到。第二轮保留的全流程改进仍在；第五轮在 `0ef650faa` 保持既有 profile 参数，将 diff 适配器通过薄产品入口注入共享运行时，编辑时只编译适配器和薄入口。最终三次完整实测 25.40 / 31.21 / 24.96 秒，中位数较本轮基线 29.97 秒缩短约 15.2%；核心 Cargo 组 13.92 → 6.80 秒。该收益只覆盖 diff 适配器编辑，不能推广至其他业务。原始长尾、自动缓存维护事件、无效的上游拆分对照和适用范围见 `docs/build.md` 第五轮记录。
 - 按用户要求结束本轮优化。15 秒是沿用的体验目标，并非测量推导的性能下限；若后续重新开启，需根据链接、发布、新映像加载和重连的实际成本选择方向。其他领域拆分尚无收益结论；本机卷均为 NTFS，没有 Dev Drive。
-- [ ] **验收** · 双窗口开发重启 smoke 尚未通过：两次均在替换之前，Agents 初始 `catalogSubscriptions` 预期 1、实际 0。后端日志显示两窗口连接 ready；独立正常代次诊断中 Agents 无 Renderer 错误，实际发出一次 catalog 订阅，同一探针计数也为 1，尚未定位隔离测试代次与正常代次的差异。未改探针、超时或产品逻辑来规避失败；保留 `round5-final-smoke.log`、`round5-final-smoke-retry.log` 和 `round5-agents-diagnostic*.log`。正常全部 21 个后端构建、相关 Rust 定向验证及脚本测试已完成，详细范围见 `docs/build.md` 第五轮记录。
 - 实验资源暂存目录 `.build/desktop/dev/app-server/.staging-c8813138-4733-4acc-8ebe-05eee0827ccd` 的 bin 为空；此前删除被自动审批策略阻止，仍保留。第四轮五个测量临时目录也因相同策略保留，准确路径见 `.build/perf-win-edit-20261018/round4-cleanup.json`；不影响正常构建。
 
 ## Remote / Browser 多根工作区 · TODO
@@ -62,7 +57,7 @@
 
 - [ ] **验收** · 在 macOS／Linux 验收真实系统 Policy 来源；用真实登录账户验证 GitHub managed settings 的读取、账户切换、撤回和失败保留。Windows 固定注册表只读探测和受控账户链已验证，不能代替其他 OS／真实账号结果。
 - [ ] **验收 · Preferences 上游窗口配对**：以本地 VS Code `a2acc8c864a` 对照用户／Workspace／Folder、`@lang:` 与 `@modified` 组合、重置、JSON 草稿、侧边／指定组和焦点语义。Ash 中英文真实 Chromium 已通过单根与多根读写、重载、高对比度和字号实际生效，macOS Desktop 的用户／单目录 Workspace 真实 App Server 文件链也已通过；本地 VS Code 尚无可运行构建，源码／上游测试核对不能代替窗口配对。当前实现与证据范围见 [Preferences](docs/preferences-and-settings.md#已有验证与限制)。
-- [ ] **验收 · 快捷键跨平台**：补 Windows／Linux 的录制、JSONC 保存、立即重载、完整组合恰好执行一次、失败重试与 pending-close；已有 macOS Web／Electron 严格场景不能代替这些平台结果。
+- [ ] **验收 · 快捷键跨平台**：补 Linux 的录制、JSONC 保存、立即重载、完整组合恰好执行一次、失败重试与 pending-close。
 
 当前存储、配置层和设置入口见 [Preferences 与 Configuration](docs/preferences-and-settings.md)。
 

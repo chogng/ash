@@ -196,7 +196,7 @@ focusTest('detached editor windows participate in desktop window switching and c
 	}
 });
 
-test('detached window titlebar follows its own editor and reserves layout space', async ({ target, workbench }) => {
+test('detached window titlebar follows its own editor and reserves layout space', async ({ application, target, workbench }) => {
 	const page = workbench.page;
 	await page.keyboard.press('ControlOrMeta+N');
 	await workbench.editors.groupAt(0).editor.waitForEditorFocus();
@@ -255,13 +255,15 @@ test('detached window titlebar follows its own editor and reserves layout space'
 		await popup.screenshot({ path: test.info().outputPath('compact-window.png') });
 		const originalSize = await popup.evaluate(() => ({ width: window.outerWidth, height: window.outerHeight }));
 		const originalViewport = popup.viewportSize();
+		const desktopWindow = 'windows' in application ? await application.browserWindow(popup) : undefined;
+		const originalHostBounds = await desktopWindow?.evaluate(window => window.getBounds());
 		const narrowWidth = target.kind === 'browser' ? 320 : 500;
 		try {
 			if (target.kind === 'browser') {
 				// Headless Chromium fixes the viewport independently of window.resizeTo.
 				await popup.setViewportSize({ width: narrowWidth, height: 530 });
 			} else {
-				await popup.evaluate(() => window.resizeTo(500, 530));
+				await desktopWindow!.evaluate(window => window.setBounds({ ...window.getBounds(), width: 500, height: 530 }));
 			}
 			await expect.poll(() => popup.evaluate(() => window.innerWidth)).toBeLessThanOrEqual(narrowWidth);
 			await expect(compactTitle).toHaveAttribute('title', await popup.title());
@@ -271,7 +273,9 @@ test('detached window titlebar follows its own editor and reserves layout space'
 			if (target.kind === 'browser') {
 				await popup.setViewportSize(originalViewport!);
 			} else {
-				await popup.evaluate(size => window.resizeTo(size.width, size.height), originalSize);
+				// DOM outer dimensions include Windows' invisible frame; restore in the host's DIP space.
+				await desktopWindow!.evaluate((window, bounds) => window.setBounds(bounds), originalHostBounds!);
+				await desktopWindow!.dispose();
 			}
 		}
 		if (target.kind === 'browser') {

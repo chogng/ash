@@ -128,6 +128,7 @@ async function holdRecorderProfileWrite(root: Locator, binding: string): Promise
 async function holdRecorderDiskWrite(application: ElectronApplication, binding: string): Promise<void> {
 	await application.evaluate(async (_electron, binding) => {
 		const fs = process.getBuiltinModule('fs').promises;
+		const { basename } = process.getBuiltinModule('path');
 		// Main and the fixture can spell macOS temporary paths through different aliases.
 		const path = await fs.realpath(`${process.env.ASH_HOME}/keybindings.json`);
 		const rename = fs.rename;
@@ -140,8 +141,8 @@ async function holdRecorderDiskWrite(application: ElectronApplication, binding: 
 		};
 		globalThis.ashTestRecorderDiskSaveGate = gate;
 		fs.rename = async (source, destination) => {
-			if (String(destination).endsWith('/keybindings.json')) gate.observed.push(`${source} -> ${destination}`);
-			if (captured || !String(destination).endsWith('/keybindings.json') || await fs.realpath(destination) !== path || !(await fs.realpath(source)).startsWith(`${path}.`) || !(await fs.readFile(source, 'utf8')).includes(binding)) return rename(source, destination);
+			if (basename(String(destination)) === 'keybindings.json') gate.observed.push(`${source} -> ${destination}`);
+			if (captured || basename(String(destination)) !== 'keybindings.json' || await fs.realpath(destination) !== path || !(await fs.realpath(source)).startsWith(`${path}.`) || !(await fs.readFile(source, 'utf8')).includes(binding)) return rename(source, destination);
 			captured = true;
 			gate.held = true;
 			try {
@@ -195,7 +196,7 @@ async function recordBackupTraffic(page: Page) {
 }
 
 for (const outcome of ['resolve', 'abort'] as const) {
-	test(`Keyboard Shortcuts recorder pending profile write ${outcome} after closing its tab leaves the next editor focused`, { tag: ['@browser-ui', '@browser-app-server'] }, async ({ target, workbench }) => {
+	test(`Keyboard Shortcuts recorder pending profile write ${outcome} after closing its editor leaves the next editor focused`, { tag: ['@browser-ui', '@browser-app-server'] }, async ({ target, workbench }) => {
 		await workbench.quickaccess.runCommand('workbench.action.openGlobalKeybindingsFile');
 		const group = workbench.editors.groupAt(0);
 		const source = '// keep pending recorder comment\n[{"key":"ctrl+alt+y","command":"workbench.action.openSettings"}]';
@@ -217,9 +218,9 @@ for (const outcome of ['resolve', 'abort'] as const) {
 			await expect.poll(() => workbench.page.evaluate(() => globalThis.ashTestRecorderSaveGate?.held)).toBe(true);
 			await expect(root.locator('.ash-keybindings-recorder')).toHaveAttribute('aria-busy', 'true');
 			await expect(input).toBeDisabled();
-			const tab = group.tabs.filter({ hasText: 'Keyboard Shortcuts', hasNotText: '(JSON)' });
-			await tab.locator('..').getByRole('button', { name: /Close/u }).click();
-			await expect(tab).toHaveCount(0);
+			const dialog = workbench.page.getByRole('dialog', { name: 'Keyboard Shortcuts', exact: true });
+			await dialog.getByRole('button', { name: 'Close Keyboard Shortcuts', exact: true }).click();
+			await expect(dialog).toBeHidden();
 			await group.editor.input.focus();
 			await expect(group.editor.input).toBeFocused();
 			await workbench.page.evaluate(() => globalThis.ashTestRecorderSaveGate!.observeRetiredPane());
@@ -245,7 +246,7 @@ for (const outcome of ['resolve', 'abort'] as const) {
 }
 
 for (const outcome of ['resolve', 'reject'] as const) {
-	test(`Keyboard Shortcuts recorder pending disk publication ${outcome} after closing its tab leaves the next editor focused`, { tag: ['@electron-ui', '@electron-app-server'] }, async ({ target, application, workbench }, testInfo) => {
+	test(`Keyboard Shortcuts recorder pending disk publication ${outcome} after closing its editor leaves the next editor focused`, { tag: ['@electron-ui', '@electron-app-server'] }, async ({ target, application, workbench }, testInfo) => {
 		if (!('windows' in application)) throw new Error('Requires Electron');
 		const profile = await application.evaluate(() => process.env.ASH_HOME);
 		if (!profile) throw new Error('Test profile unavailable');
@@ -273,9 +274,9 @@ for (const outcome of ['resolve', 'reject'] as const) {
 			await expect(root.locator('.ash-keybindings-recorder')).toHaveAttribute('aria-busy', 'true');
 			await expect(input).toBeDisabled();
 			expect(await readFile(join(profile, 'keybindings.json'), 'utf8')).toBe(source);
-			const tab = group.tabs.filter({ hasText: 'Keyboard Shortcuts', hasNotText: '(JSON)' });
-			await tab.locator('..').getByRole('button', { name: /Close/u }).click();
-			await expect(tab).toHaveCount(0);
+			const dialog = workbench.page.getByRole('dialog', { name: 'Keyboard Shortcuts', exact: true });
+			await dialog.getByRole('button', { name: 'Close Keyboard Shortcuts', exact: true }).click();
+			await expect(dialog).toBeHidden();
 			await group.editor.input.focus();
 			await expect(group.editor.input).toBeFocused();
 			await workbench.page.evaluate(() => globalThis.ashTestRecorderSaveGate!.observeRetiredPane());
@@ -461,60 +462,67 @@ test('Keyboard Shortcuts recorder retains a failed draft and retries after savin
 	await expect(jsonTab.locator('..')).not.toHaveAttribute('data-state', /dirty|conflict/u);
 	await replaceJson(group.editor.input, '// unsaved recorder comment\n' + source);
 	await expect(jsonTab.locator('..')).toHaveAttribute('data-state', /dirty/u);
-	await workbench.quickaccess.runCommand('workbench.action.openKeyboardShortcuts');
-	const root = workbench.page.locator('.ash-keybindings-editor');
-	await root.getByRole('searchbox').fill('workbench.action.files.newUntitledFile');
-	await userShortcutRows(root).getByRole('button', { name: /^Edit keybinding for /u }).click();
-	const input = root.getByRole('textbox', { name: 'Record keybinding', exact: true });
-	const binding = 'ctrl+alt+[KeyK] ctrl+alt+[KeyP]';
-	await input.press('Control+Alt+K');
-	await input.press('Control+Alt+P');
-	await input.press('Enter');
-	await expect(root.getByRole('status')).toHaveText('Save keybindings.json before changing a shortcut in the Keyboard Shortcuts editor.');
-	await expect(input).toHaveValue(binding.replace(/\[Key([A-Z])\]/gu, (_, key: string) => key.toLowerCase()));
-	await expect(input).toBeEnabled();
-	await expect(input).toBeFocused();
-	await jsonTab.click();
-	await group.editor.waitForEditorContents(content => content === '// unsaved recorder comment\n' + source);
-	await workbench.quickaccess.runCommand('workbench.action.files.save');
-	await expect(jsonTab.locator('..')).not.toHaveAttribute('data-state', /dirty|conflict/u);
-	await group.tabs.filter({ hasText: 'Keyboard Shortcuts', hasNotText: '(JSON)' }).click();
-	await expect(input).toHaveValue(binding.replace(/\[Key([A-Z])\]/gu, (_, key: string) => key.toLowerCase()));
-	await input.press('Enter');
-	await expect(root.getByRole('status')).toHaveText('Keybinding saved.');
-	await expect(root.locator('.ash-keybindings-recorder')).toBeHidden();
-	await jsonTab.click();
-	await group.editor.waitForEditorContents(content => content.includes(binding) && content.startsWith('// unsaved recorder comment'));
-	await expect(jsonTab.locator('..')).not.toHaveAttribute('data-state', /dirty|conflict/u);
-	const persisted = (await group.editor.lines.allTextContents()).join('\n').replace(/\u00a0/g, ' ');
-	if (target.kind === 'electron' && 'windows' in application) {
-		const profile = await application.evaluate(() => process.env.ASH_HOME);
-		if (!profile) throw new Error('Test profile unavailable');
-		await expect.poll(() => readFile(join(profile, 'keybindings.json'), 'utf8')).toBe(persisted);
-	} else await expect.poll(() => readBrowserProfile(group.editor.input)).toBe(persisted);
-	const backupBeforeReload = backupTraffic ? await readBrowserBackups(group.editor.input) : undefined;
-	({ workbench, application } = await reloadWorkbench());
-	await workbench.quickaccess.runCommand('workbench.action.openGlobalKeybindingsFile');
-	group = workbench.editors.groupAt(0);
-	const reloadedProfile = target.kind === 'electron' && 'windows' in application
-		? await readFile(join((await application.evaluate(() => process.env.ASH_HOME))!, 'keybindings.json'), 'utf8')
-		: await readBrowserProfile(group.editor.input);
-	await testInfo.attach('recorder-retry-profile-after-reload', { body: JSON.stringify({ persisted, reloadedProfile }), contentType: 'application/json' });
-	if (backupTraffic) {
-		await testInfo.attach('recorder-backup-traffic-after-reload', { body: JSON.stringify({ backupBeforeReload, rendered: (await group.editor.lines.allTextContents()).join('\n').replace(/\u00a0/g, ' '), state: await group.tabs.filter({ hasText: 'Keyboard Shortcuts (JSON)' }).locator('..').getAttribute('data-state'), backups: await readBrowserBackups(group.editor.input), events: backupTraffic.events }), contentType: 'application/json' });
-		await backupTraffic.dispose();
-	}
-	expect(reloadedProfile).toBe(persisted);
-	if (target.kind === 'electron') await group.editor.waitForEditorContents(content => content === persisted);
-	await group.editor.input.press('Control+Alt+K');
-	await expect(group.element.getByRole('tab', { name: /^Untitled-/u })).toHaveCount(0);
-	await group.editor.input.press('Control+Alt+P');
-	await expect(group.element.getByRole('tab', { name: /^Untitled-/u })).toHaveCount(1);
-	await expect(group.element.getByRole('tab', { name: 'Untitled-1', exact: true })).toHaveAttribute('aria-selected', 'true');
-	await testInfo.attach('recorder-two-chord-execution-after-reload', { body: JSON.stringify({ prefixTabs: 0, completeTabs: await group.element.getByRole('tab', { name: /^Untitled-/u }).count() }), contentType: 'application/json' });
-	if (target.kind === 'browser') {
-		await group.tabs.filter({ hasText: 'Keyboard Shortcuts (JSON)' }).click();
-		await group.editor.waitForEditorContents(content => content === persisted);
+	const copied = workbench.page.context().waitForEvent('page');
+	await workbench.quickaccess.runCommand('workbench.action.copyEditorToNewWindow');
+	const jsonWindow = await copied;
+	try {
+		await expect(jsonWindow.locator('.view-lines')).toContainText('// unsaved recorder comment');
+		await workbench.quickaccess.runCommand('workbench.action.openKeyboardShortcuts');
+		const root = workbench.page.locator('.ash-keybindings-editor');
+		await root.getByRole('searchbox').fill('workbench.action.files.newUntitledFile');
+		await userShortcutRows(root).getByRole('button', { name: /^Edit keybinding for /u }).click();
+		const input = root.getByRole('textbox', { name: 'Record keybinding', exact: true });
+		const binding = 'ctrl+alt+[KeyK] ctrl+alt+[KeyP]';
+		await input.press('Control+Alt+K');
+		await input.press('Control+Alt+P');
+		await input.press('Enter');
+		await expect(root.getByRole('status')).toHaveText('Save keybindings.json before changing a shortcut in the Keyboard Shortcuts editor.');
+		await expect(input).toHaveValue(binding.replace(/\[Key([A-Z])\]/gu, (_, key: string) => key.toLowerCase()));
+		await expect(input).toBeEnabled();
+		await expect(input).toBeFocused();
+		// The auxiliary editor shares the file model, so a real save leaves the failed modal draft intact.
+		await jsonWindow.locator('.stanza-editor-input').first().press('ControlOrMeta+s');
+		await expect(jsonTab.locator('..')).not.toHaveAttribute('data-state', /dirty|conflict/u);
+		await expect(input).toHaveValue(binding.replace(/\[Key([A-Z])\]/gu, (_, key: string) => key.toLowerCase()));
+		await input.focus();
+		await input.press('Enter');
+		await expect(root.getByRole('status')).toHaveText('Keybinding saved.');
+		await expect(root.locator('.ash-keybindings-recorder')).toBeHidden();
+		await workbench.quickaccess.runCommand('workbench.action.openGlobalKeybindingsFile');
+		await group.editor.waitForEditorContents(content => content.includes(binding) && content.startsWith('// unsaved recorder comment'));
+		await expect(jsonTab.locator('..')).not.toHaveAttribute('data-state', /dirty|conflict/u);
+		const persisted = (await group.editor.lines.allTextContents()).join('\n').replace(/\u00a0/g, ' ');
+		if (target.kind === 'electron' && 'windows' in application) {
+			const profile = await application.evaluate(() => process.env.ASH_HOME);
+			if (!profile) throw new Error('Test profile unavailable');
+			await expect.poll(() => readFile(join(profile, 'keybindings.json'), 'utf8')).toBe(persisted);
+		} else await expect.poll(() => readBrowserProfile(group.editor.input)).toBe(persisted);
+		const backupBeforeReload = backupTraffic ? await readBrowserBackups(group.editor.input) : undefined;
+		({ workbench, application } = await reloadWorkbench());
+		await workbench.quickaccess.runCommand('workbench.action.openGlobalKeybindingsFile');
+		group = workbench.editors.groupAt(0);
+		const reloadedProfile = target.kind === 'electron' && 'windows' in application
+			? await readFile(join((await application.evaluate(() => process.env.ASH_HOME))!, 'keybindings.json'), 'utf8')
+			: await readBrowserProfile(group.editor.input);
+		await testInfo.attach('recorder-retry-profile-after-reload', { body: JSON.stringify({ persisted, reloadedProfile }), contentType: 'application/json' });
+		if (backupTraffic) {
+			await testInfo.attach('recorder-backup-traffic-after-reload', { body: JSON.stringify({ backupBeforeReload, rendered: (await group.editor.lines.allTextContents()).join('\n').replace(/\u00a0/g, ' '), state: await group.tabs.filter({ hasText: 'Keyboard Shortcuts (JSON)' }).locator('..').getAttribute('data-state'), backups: await readBrowserBackups(group.editor.input), events: backupTraffic.events }), contentType: 'application/json' });
+			await backupTraffic.dispose();
+		}
+		expect(reloadedProfile).toBe(persisted);
+		if (target.kind === 'electron') await group.editor.waitForEditorContents(content => content === persisted);
+		await group.editor.input.press('Control+Alt+K');
+		await expect(group.element.getByRole('tab', { name: /^Untitled-/u })).toHaveCount(0);
+		await group.editor.input.press('Control+Alt+P');
+		await expect(group.element.getByRole('tab', { name: /^Untitled-/u })).toHaveCount(1);
+		await expect(group.element.getByRole('tab', { name: 'Untitled-1', exact: true })).toHaveAttribute('aria-selected', 'true');
+		await testInfo.attach('recorder-two-chord-execution-after-reload', { body: JSON.stringify({ prefixTabs: 0, completeTabs: await group.element.getByRole('tab', { name: /^Untitled-/u }).count() }), contentType: 'application/json' });
+		if (target.kind === 'browser') {
+			await group.tabs.filter({ hasText: 'Keyboard Shortcuts (JSON)' }).click();
+			await group.editor.waitForEditorContents(content => content === persisted);
+		}
+	} finally {
+		if (!jsonWindow.isClosed()) await jsonWindow.close();
 	}
 });
 
@@ -652,8 +660,9 @@ test('Keybindings JSON saves the profile file, applies shortcuts after reload an
 	group = workbench.editors.groupAt(0);
 	await group.editor.waitForEditorContents(content => content === source);
 	await group.editor.input.press('Control+Alt+Y');
-	await expect(group.tabs.filter({ hasText: 'Keyboard Shortcuts', hasNotText: '(JSON)' })).toHaveCount(1);
-	await expect(group.content.getByRole('searchbox')).toBeVisible();
+	const dialog = workbench.page.getByRole('dialog', { name: 'Keyboard Shortcuts', exact: true });
+	await expect(dialog).toBeVisible();
+	await expect(dialog.getByRole('searchbox')).toBeVisible();
 	await workbench.quickaccess.runCommand('workbench.action.configureLocale');
 	const picker = workbench.page.getByRole('dialog', { name: 'Select Display Language' });
 	await picker.getByRole('combobox').fill('简体中文');

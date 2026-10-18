@@ -1623,9 +1623,7 @@ export class AshApplication extends Disposable {
 		const onDidCreateWindow = (child: BrowserWindow, details: { readonly url: string; readonly options: BrowserWindowConstructorOptions; }): void => {
 			if (details.url !== 'about:blank') return;
 			const childResources = new DisposableStore();
-			// Only restored maximized popups are created with show:false. Visibility can
-			// also be controlled by the host and does not identify the requested mode.
-			childResources.add(this.auxiliaryWindowsMainService.registerWindow(child.webContents, window.id, details.options.show === false));
+			childResources.add(this.auxiliaryWindowsMainService.registerWindow(child.webContents, window.id, details.options));
 			auxiliaryWindows.set(child.id, childResources);
 			this.configureWindowNavigation(child, childResources, titleBarStyle, openerWindow);
 			child.once('closed', () => auxiliaryWindows.deleteAndDispose(child.id));

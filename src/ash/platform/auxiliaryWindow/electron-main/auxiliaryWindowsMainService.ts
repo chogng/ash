@@ -5,7 +5,7 @@ import { Disposable, DisposableMap, DisposableStore, toDisposable, type IDisposa
 import { AuxiliaryWindow, type IAuxiliaryWindow } from './auxiliaryWindow.js';
 import type { IAuxiliaryWindowsMainService } from './auxiliaryWindows.js';
 import type { TitleBarStyleConfiguration } from '../../window/common/window.js';
-import { resolveWindowTitleBarOptions } from '../../windows/electron-main/windows.js';
+import { resolveWindowTitleBarOptions, restoreWindowBounds } from '../../windows/electron-main/windows.js';
 
 export class AuxiliaryWindowsMainService extends Disposable implements IAuxiliaryWindowsMainService {
 	private readonly stateChanged = this._register(new Emitter<{ readonly parentId: number; readonly event: IAuxiliaryWindowStateEvent; }>());
@@ -52,7 +52,7 @@ export class AuxiliaryWindowsMainService extends Disposable implements IAuxiliar
 		return options;
 	}
 
-	public registerWindow(webContents: WebContents, parentId: number, restoreMaximized = false): IDisposable {
+	public registerWindow(webContents: WebContents, parentId: number, options: Pick<BrowserWindowConstructorOptions, 'x' | 'y' | 'width' | 'height' | 'show'> = {}): IDisposable {
 		this.assertNotDisposed();
 		const window = this.resolveWindow(webContents);
 		if (!window || window.isDestroyed()) {
@@ -61,13 +61,19 @@ export class AuxiliaryWindowsMainService extends Disposable implements IAuxiliar
 		if (this.windows.has(window.id)) {
 			throw new Error(`Auxiliary window ${window.id} is already registered`);
 		}
+		const { x, y, width, height } = options;
+		if (process.platform === 'win32' && x !== undefined && y !== undefined && width !== undefined && height !== undefined) {
+			// Constructor frame conversion can otherwise grow restored popups at fractional DPI.
+			restoreWindowBounds(window, { x, y, width, height });
+		}
 		const parent = this.windows.get(parentId);
 		const auxiliary = this.windows.set(window.id, new AuxiliaryWindow(window, parent?.parentId ?? parentId));
 		const resources = this.listeners.set(window.id, new DisposableStore());
 		resources.add(auxiliary.onDidChangeState(() => {
 			if (!window.isDestroyed()) this.stateChanged.fire({ parentId: auxiliary.parentId, event: { windowName: webContents.mainFrame.name, state: auxiliary.getState() } });
 		}));
-		if (restoreMaximized) {
+		// Only restored maximized popups are created with show:false by createWindow.
+		if (options.show === false) {
 			window.maximize();
 			window.show();
 		}

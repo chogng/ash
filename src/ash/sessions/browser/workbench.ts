@@ -183,8 +183,7 @@ import type { DialogService } from '../../workbench/services/dialogs/common/dial
 import { IDialogsModel } from '../../workbench/common/dialogs.js';
 import { BrowserDialogHandler } from '../../workbench/browser/parts/dialogs/dialog.js';
 import { DialogHandlerContribution } from '../../workbench/browser/parts/dialogs/dialog.web.contribution.js';
-import { ILabelService } from '../../platform/label/common/label.js';
-import { LabelService } from '../../workbench/services/label/common/labelService.js';
+import '../../workbench/services/label/common/labelService.js';
 import { IResourceIconRenderer, IResourceLabelService, ResourceLabelService } from '../../workbench/browser/labels.js';
 import { IDecorationsService } from '../../workbench/services/decorations/common/decorations.js';
 import { DecorationsService } from '../../workbench/services/decorations/browser/decorationsService.js';
@@ -489,7 +488,6 @@ export abstract class Workbench extends Disposable {
 		services.registerInstance(IPluginManagementService, this._register(services.createInstance(AppServerPluginManagementService, options.api.plugins, options.api.events)));
 		services.registerInstance(IFileSearchService, options.api.hasAppServer ? files : services.createInstance(BrowserFileSearchService));
 		services.registerInstance(ISystemFileTransferService, files);
-		services.registerInstance(ILabelService, this._register(services.createInstance(LabelService)));
 		services.registerInstance(IResourceIconRenderer, themeService);
 		services.registerInstance(IDecorationsService, this._register(services.createInstance(DecorationsService, ownerDocument)));
 		services.registerSingleton(IResourceLabelService, () => services.createInstance(ResourceLabelService));
