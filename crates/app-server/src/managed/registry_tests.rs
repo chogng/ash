@@ -942,7 +942,9 @@ fn ide_windows_are_discovered_across_real_profile_directory_runtimes() {
                 requested = true;
                 assert_eq!(
                     request["params"]["roots"],
-                    serde_json::json!([second.path().canonicalize().unwrap()])
+                    serde_json::json!([ash_file_access::Dir::open_local(second.path())
+                        .unwrap()
+                        .canonical_path()])
                 );
                 editor_server.handle_product_host_response(&editor, serde_json::json!({"jsonrpc":"2.0","id":request["id"],"result":{"type":"context","context":{"activeFile":{"path":active_file,"version":2,"selections":[{"startLine":1,"startColumn":1,"endLine":1,"endColumn":8,"text":"unsaved","truncated":false}]},"openTabs":[active_file],"dirtyFiles":[active_file]}}})).unwrap();
             }
@@ -953,6 +955,14 @@ fn ide_windows_are_discovered_across_real_profile_directory_runtimes() {
         assert_eq!(
             response["result"]["context"]["activeFile"]["selections"][0]["text"],
             "unsaved"
+        );
+        assert_eq!(
+            response["result"]["context"]["openTabs"],
+            serde_json::json!([active_file])
+        );
+        assert_eq!(
+            response["result"]["context"]["dirtyFiles"],
+            serde_json::json!([active_file])
         );
         assert_eq!(
             response["result"]["window"]["id"],

@@ -740,7 +740,9 @@ CGU=1 未发现稳定的运行回退，但不能将未显著的差异视为严�
 
 依赖检查覆盖 220 个 workspace 成员、87 项已审核多版本包，`just dependencies` 通过。包更名后的依赖约束继续禁止 daemon 反向依赖共享运行时，以及 Core 契约或 Code Mode 客户端越过原有实现边界。测试包装器继续为运行时单元测试准备 Markdown Math 和 LLDB 辅助程序。`just test-python scripts` 最终 197 项通过（跳过 7 项）；首次脚本套件因缺新包 Bazel 注册失败、首次调用方编译因 Remote 两处测试缺 `read_access` 失败，均已修复并重跑相应验证。Bazel BUILD 注册与 CLI 二进制标签已同步，注册测试通过；本机没有 Bazel／Bazelisk，未执行 Bazel query 或构建，不宣称该路径已通过。
 
-目录运行时回归执行 12 项，11 项通过；`ide_windows_are_discovered_across_real_profile_directory_runtimes` 失败。该测试与未修改的 IDE 处理逻辑混用了 Windows 普通路径和标准库 `canonicalize` 的 verbatim 路径：初次根预期断言失败，诊断性修正预期后仍被现有 `validate_context` 拒绝为 `InvalidParams`。两处试探性测试修改均撤回，没有为构建优化扩展修改 IDE 授权逻辑；该失败不计作通过，已单独记入 `TODO.md`，日志 `round5-runtime-registry*.log` 保留。一次错误的 `just test --filter` 调用被 Cargo 参数解析拒绝，随后使用位置过滤器执行了上述 12 项测试，也未把参数失败计作测试通过。
+目录运行时回归执行 12 项，11 项通过；`ide_windows_are_discovered_across_real_profile_directory_runtimes` 失败。该测试与未修改的 IDE 处理逻辑混用了 Windows 普通路径和标准库 `canonicalize` 的 verbatim 路径：初次根预期断言失败，诊断性修正预期后仍被现有 `validate_context` 拒绝为 `InvalidParams`。两处试探性测试修改均撤回，没有为构建优化扩展修改 IDE 授权逻辑；该轮失败不计作通过，日志 `round5-runtime-registry*.log` 保留，后续独立修复见下段。一次错误的 `just test --filter` 调用被 Cargo 参数解析拒绝，随后使用位置过滤器执行了上述 12 项测试，也未把参数失败计作测试通过。
+
+2026-10-18 在源码基线 `ff00a9e3063613ddde2dc6226aaaa9a86addd983` 上独立修复 IDE 路径一致性：上下文校验与策略过滤沿用目录 owner 的 `dunce::canonicalize`，原始文件名仅用 `dunce::simplified` 统一可安全转换的 Windows 前缀，仍同时检查原始相对路径与解析后目标的读取策略。测试根预期改为 `Dir::canonical_path`，跨目录回归同时断言选区、打开标签与脏文件。Windows 11 build 22631／x64 上先复现原始断言失败，再运行 `just verify ash-app-server-runtime --lib --filter ::ide`：14 项 IDE 回归、生产 check 与全目标零 warning 检查通过，覆盖普通／verbatim 路径、目录外拒绝和 denied buffers；Unix 专属符号链接回归保留但本机未运行。正常库构建 `python -B scripts/cargo.py build -p ash-app-server-runtime --lib --profile ci-test` 也通过。日志为 `.build/ide-context-baseline.log`、`.build/ide-context-verify.log` 与 `.build/ide-context-build.log`；这项正确性修复不计入开发循环的性能收益。
 
 验证期间，仓库现有缓存预算自动回收了 14.56 GiB 空闲缓存（`round5-runtime-registry-fixed.log`）；没有手动清理共享缓存。正常全部后端构建随后重新确认了开发产物，这段测试验证和准备耗时不计入编辑样本。另在复核日志时确认，基线首个 46.14 秒样本包含正常预算自动回收 1.69 GiB 的耗时，已完整保留，没有扣除；其余两次基线约 29.97／29.76 秒。该维护事件使首个样本的负载不完全匹配，不能把顺序样本的百分比解释为严格受控或冷构建收益。
 

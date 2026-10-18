@@ -11,10 +11,6 @@
 - [ ] **验收** · 双窗口开发重启 smoke 尚未通过：两次均在替换之前，Agents 初始 `catalogSubscriptions` 预期 1、实际 0。后端日志显示两窗口连接 ready；独立正常代次诊断中 Agents 无 Renderer 错误，实际发出一次 catalog 订阅，同一探针计数也为 1，尚未定位隔离测试代次与正常代次的差异。未改探针、超时或产品逻辑来规避失败；保留 `round5-final-smoke.log`、`round5-final-smoke-retry.log` 和 `round5-agents-diagnostic*.log`。正常全部 21 个后端构建、相关 Rust 定向验证及脚本测试已完成，详细范围见 `docs/build.md` 第五轮记录。
 - 实验资源暂存目录 `.build/desktop/dev/app-server/.staging-c8813138-4733-4acc-8ebe-05eee0827ccd` 的 bin 为空；此前删除被自动审批策略阻止，仍保留。第四轮五个测量临时目录也因相同策略保留，准确路径见 `.build/perf-win-edit-20261018/round4-cleanup.json`；不影响正常构建。
 
-## Windows IDE 上下文 · TODO
-
-- [ ] **可做** · Windows IDE 上下文路径格式一致性：`managed::registry::tests::ide_windows_are_discovered_across_real_profile_directory_runtimes` 在正常目录根与标准库 `canonicalize` 返回的 `\\?\` 路径之间断言失败；仅改测试根预期后，现有 `server/request_processors/ide.rs::validate_context` 仍返回 `InvalidParams`。核对目录准入、IDE 根和文件访问授权的规范化 owner，修复后保留越权路径与策略验证。第五轮编译边界调整未改该生产逻辑；两处试探性测试修改已撤回。原始失败、后续诊断见 `.build/perf-win-edit-20261018/round5-runtime-registry*.log`；同组另 11 项通过。
-
 ## Remote / Browser 多根工作区 · TODO
 
 本地、SSH 与独立 Browser 目录句柄模式已实现并提交，职责与验证范围见 `docs/desktop-architecture.md` §4.2。下列能力仍未完成：

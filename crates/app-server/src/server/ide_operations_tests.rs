@@ -8,9 +8,9 @@ fn ide_context_rejects_escaped_paths_invalid_ranges_and_large_selections() {
     let file = root.path().join("lib.rs");
     std::fs::write(&file, "disk").unwrap();
     let roots = vec![
-        root.path()
-            .canonicalize()
+        ash_file_access::Dir::open_local(root.path())
             .unwrap()
+            .canonical_path()
             .to_string_lossy()
             .into_owned(),
     ];
@@ -44,6 +44,38 @@ fn ide_context_rejects_escaped_paths_invalid_ranges_and_large_selections() {
     assert!(validate_context(&context, &roots).is_err());
 }
 
+#[cfg(windows)]
+#[test]
+fn ide_context_accepts_regular_and_verbatim_file_paths_with_directory_roots() {
+    let directory = tempfile::tempdir().unwrap();
+    let root = ash_file_access::Dir::open_local(directory.path()).unwrap();
+    let file = root.canonical_path().join("lib.rs");
+    std::fs::write(&file, "disk").unwrap();
+    let roots = vec![root.canonical_path().to_string_lossy().into_owned()];
+    for path in [&file, &file.canonicalize().unwrap()] {
+        let path = path.to_string_lossy().into_owned();
+        let context = IdeContext {
+            active_file: Some(IdeActiveFile {
+                path: path.clone(),
+                version: 1,
+                selections: vec![],
+            }),
+            open_tabs: vec![path.clone()],
+            dirty_files: vec![path],
+        };
+        validate_context(&context, &roots).unwrap();
+    }
+    let outside = tempfile::NamedTempFile::new().unwrap();
+    for path in [outside.path(), &outside.path().canonicalize().unwrap()] {
+        let context = IdeContext {
+            active_file: None,
+            open_tabs: vec![path.to_string_lossy().into_owned()],
+            dirty_files: vec![],
+        };
+        assert!(validate_context(&context, &roots).is_err());
+    }
+}
+
 #[cfg(unix)]
 #[test]
 fn ide_context_rejects_symlinks_that_escape_directory_grants() {
@@ -59,10 +91,9 @@ fn ide_context_rejects_symlinks_that_escape_directory_grants() {
     assert!(
         validate_context(
             &context,
-            &[root
-                .path()
-                .canonicalize()
+            &[ash_file_access::Dir::open_local(root.path())
                 .unwrap()
+                .canonical_path()
                 .to_string_lossy()
                 .into_owned()]
         )
@@ -83,11 +114,17 @@ fn ide_context_omits_denied_buffers_and_does_not_block_messages_outside_the_work
 
     let server = crate::tests::server();
     let directory = tempfile::tempdir().unwrap();
-    let root = directory.path().canonicalize().unwrap();
+    let root = Dir::open_local(directory.path())
+        .unwrap()
+        .canonical_path()
+        .to_path_buf();
     let allowed = root.join("lib.rs");
     let denied = root.join(".env");
     std::fs::write(&allowed, "disk").unwrap();
     std::fs::write(&denied, "private").unwrap();
+    // The editor can return verbatim Windows paths even though grants use regular paths.
+    let allowed = allowed.canonicalize().unwrap();
+    let denied = denied.canonicalize().unwrap();
     let policy = PathAccessPolicy::new(
         PathAccess::ReadOnly,
         vec![PathAccessRule {

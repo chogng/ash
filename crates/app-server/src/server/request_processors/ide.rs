@@ -348,18 +348,23 @@ impl<'ctx, C: IdeRequestProcessorContext + ?Sized> IdeRequestProcessor<'ctx, C> 
                         }
                         validate_context(&context, &allowed)?;
                         let readable = |path: &String| {
-                            std::fs::canonicalize(path).is_ok_and(|canonical| {
+                            // Match Dir's canonical namespace, including Windows verbatim paths.
+                            // Keep the lexical name too: resolving it must not bypass a deny rule.
+                            dunce::canonicalize(path).is_ok_and(|canonical| {
                                 authorizations.iter().any(|authorization| {
                                     let root = authorization.dir().canonical_path();
                                     canonical.strip_prefix(root).is_ok_and(|relative| {
                                         authorization
                                             .path_policy()
                                             .allows(relative, ash_file_access::PathOperation::Read)
-                                    }) && Path::new(path).strip_prefix(root).is_ok_and(|relative| {
-                                        authorization
-                                            .path_policy()
-                                            .allows(relative, ash_file_access::PathOperation::Read)
-                                    })
+                                    }) && dunce::simplified(Path::new(path))
+                                        .strip_prefix(root)
+                                        .is_ok_and(|relative| {
+                                            authorization.path_policy().allows(
+                                                relative,
+                                                ash_file_access::PathOperation::Read,
+                                            )
+                                        })
                                 })
                             })
                         };
@@ -413,7 +418,8 @@ fn validate_context(context: &IdeContext, roots: &[String]) -> Result<(), RpcErr
     let path_allowed = |path: &str| {
         Path::new(path).is_absolute()
             && path.len() <= 4096
-            && std::fs::canonicalize(path)
+            // Registration and directory grants already use Dir's dunce canonicalization.
+            && dunce::canonicalize(path)
                 .is_ok_and(|path| roots.iter().any(|root| path.starts_with(root)))
     };
     if context.open_tabs.len() > 100
