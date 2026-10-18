@@ -2,6 +2,7 @@
 
 - `capture_session_trace` 枚举 Thread 流并按根事件中的 `session_id` 分组，不读取 Session event log。
 - `RolloutTrace` 保存 Session tree identity 与各 Thread 的原始有序事件；format version 当前为 `3`，不制造全局顺序。
+- 可选 `overview` 由本 crate 归约已提交账目，绑定捕获游标和事件数，保留逐项上报覆盖率、未知值和调用去重；前端筛选不改变统计范围。
 - Trace 只在内存中返回，不能成为运行时事实源；写文件、脱敏、访问控制和上传由调用方负责。
 - 导出所有被引用的嵌套历史前缀；源 Thread 删除后仍能读取保留的历史，文件对象本身不嵌入 trace。
 - `ModelResponseEvaluated` 来自 Thread 的持久历史，保留循环动作、理由、停止原因、消息阶段和工具数；关闭详细诊断仍能读取这些决策。

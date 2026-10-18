@@ -12,14 +12,14 @@ import { IAgentSessionService } from '../../../../../platform/agentHost/common/a
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { ILayoutService } from '../../../../../platform/layout/browser/layoutService.js';
 import { ILoggerService, NullLoggerService, type ILogFile, type ILogFileReadResult, type ILogFileService } from '../../../../../platform/log/common/log.js';
-import { INotificationService } from '../../../../../platform/notification/common/notification.js';
+import { INotificationService, type NotificationMessage } from '../../../../../platform/notification/common/notification.js';
 import { IProgressService } from '../../../../../platform/progress/common/progress.js';
 import { IChatSessionNavigationService } from '../../../../services/chat/common/chatSessionNavigationService.js';
 import { CommandService } from '../../../../services/commands/common/commandService.js';
 import { initializeTestLocalization } from '../../../../services/localization/test/common/localizationTestUtils.js';
 import { IOutputService, type IOutputChannel } from '../../../../services/output/common/output.js';
-import { ITraceService } from '../../../../services/trace/common/traceService.js';
-import type { AgentTracePage, AgentTraceDiagnosticPage } from '../../../../services/trace/common/agentTrace.js';
+import { IChatDebugService } from '../../common/chatDebugService.js';
+import type { AgentTracePage, AgentTraceDiagnosticPage } from '../../common/chatDebugEvents.js';
 import { ExportAgentHostDebugLogsAction } from '../../browser/actions/exportAgentHostDebugLogsAction.js';
 
 class ExportFixture extends Disposable {
@@ -69,7 +69,7 @@ class ExportFixture extends Disposable {
 			getActiveConversation: () => this.active,
 		} as IChatSessionNavigationService);
 		this.services.registerInstance(IOutputService, { get channels() { return fixture.channels; } } as unknown as IOutputService);
-		this.services.registerInstance(ITraceService, {
+		this.services.registerInstance(IChatDebugService, {
 			readTrace: async (id, after) => { this.traceSessions.push(id); return await this.trace(id, after); },
 			readTraceDiagnostics: async id => { this.diagnosticSessions.push(id); return await this.diagnostics(); },
 			readTraceGraph: async () => { throw new Error('Graph is not part of this export'); },
@@ -90,11 +90,17 @@ class ExportFixture extends Disposable {
 				return await task({ report: () => { } });
 			},
 		});
+		const recordNotification = (severity: string, messages: NotificationMessage | NotificationMessage[]): void => {
+			for (const message of Array.isArray(messages) ? messages : [messages]) {
+				this.notifications.push({ severity, message: typeof message === 'string' ? message : message.message });
+			}
+		};
 		this.services.registerInstance(INotificationService, {
-			info: message => { this.notifications.push({ severity: 'info', message }); },
-			warning: message => { this.notifications.push({ severity: 'warning', message }); },
-			error: message => { this.notifications.push({ severity: 'error', message }); },
-		} as INotificationService);
+			notify: () => { throw new Error('Unexpected notification'); },
+			info: message => recordNotification('info', message),
+			warn: message => recordNotification('warning', message),
+			error: message => recordNotification('error', message),
+		});
 		this.services.registerInstance(ILayoutService, { mainContainer: this.dom.window.document.body } as ILayoutService);
 		this.dom.window.URL.createObjectURL = blob => { assert(blob instanceof Blob); this.downloads.push(blob); return 'blob:debug-logs'; };
 		this.dom.window.URL.revokeObjectURL = () => { };

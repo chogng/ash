@@ -1,18 +1,18 @@
-import { IAgentThreadService } from '../../../../platform/agentHost/common/agentService.js';
-import type { ITraceService } from '../common/traceService.js';
-import type { AgentTracePage, AgentTraceDiagnosticPage, AgentTraceGraph } from '../common/agentTrace.js';
+import { IAgentThreadService } from '../../../../../platform/agentHost/common/agentService.js';
+import type { IChatDebugService } from '../../common/chatDebugService.js';
+import type { AgentTracePage, AgentTraceDiagnosticPage, AgentTraceGraph } from '../../common/chatDebugEvents.js';
 
 /** Borrows the canonical transport. Parsers load only when evidence is requested. */
-export class AppServerTraceService implements ITraceService {
+export class AppServerChatDebugService implements IChatDebugService {
 	constructor(@IAgentThreadService private readonly threads: IAgentThreadService) { }
 
 	public async readTrace(sessionId: string, after: Readonly<Record<string, number>>): Promise<AgentTracePage> {
-		const [{ parseAgentTracePage }, page] = await Promise.all([import('../common/agentTrace.js'), this.threads.readTrace({ sessionId, after: { ...after }, limit: 500 })]);
+		const [{ parseAgentTracePage }, page] = await Promise.all([import('../../common/chatDebugEvents.js'), this.threads.readTrace({ sessionId, after: { ...after }, limit: 500 })]);
 		return parseAgentTracePage(page.trace, page.cursors, page.hasMore, sessionId, after);
 	}
 
 	public async readTraceDiagnostics(sessionId: string, after: number): Promise<AgentTraceDiagnosticPage> {
-		const [{ parseAgentTraceDiagnosticPage }, page] = await Promise.all([import('../common/agentTrace.js'), this.threads.readTraceDiagnostics({ sessionId, after, limit: 500 })]);
+		const [{ parseAgentTraceDiagnosticPage }, page] = await Promise.all([import('../../common/chatDebugEvents.js'), this.threads.readTraceDiagnostics({ sessionId, after, limit: 500 })]);
 		return parseAgentTraceDiagnosticPage(page.diagnostics, page.cursor, page.hasMore, after);
 	}
 
@@ -21,7 +21,7 @@ export class AppServerTraceService implements ITraceService {
 	}
 
 	public async readTraceGraph(sessionId: string): Promise<AgentTraceGraph> {
-		const [{ parseAgentTraceGraph }, page] = await Promise.all([import('../common/agentTrace.js'), this.threads.readTraceGraph({ sessionId })]);
+		const [{ parseAgentTraceGraph }, page] = await Promise.all([import('../../common/chatDebugEvents.js'), this.threads.readTraceGraph({ sessionId })]);
 		return parseAgentTraceGraph(page.graph);
 	}
 }

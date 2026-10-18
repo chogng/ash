@@ -5,61 +5,62 @@ import {
 	defaultListStyles,
 	defaultProgressBarStyles,
 	defaultFindWidgetStyles,
-} from '../../../../platform/theme/browser/defaultStyles.js';
-import { ITraceService } from '../../../services/trace/common/traceService.js';
+} from '../../../../../platform/theme/browser/defaultStyles.js';
+import { IChatDebugService } from '../../common/chatDebugService.js';
 // Sessions loads a smaller editor bundle; saved bodies still need the shared Find contribution.
-import { CommonFindController } from '../../../../editor/contrib/find/browser/findController.js';
-import './agentTraceEditor.css';
-import { addDisposableListener, h, type IDimension } from '../../../../base/browser/dom.js';
-import { triggerDownload } from '../../../../base/browser/fileAccess.js';
-import { RunOnceScheduler } from '../../../../base/common/async.js';
-import { DisposableStore, MutableDisposable, toDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
-import { onUnexpectedError } from '../../../../base/common/errors.js';
-import { isRecord } from '../../../../base/common/types.js';
-import { Button } from '../../../../base/browser/ui/button/button.js';
-import { InputBox } from '../../../../base/browser/ui/inputbox/inputbox.js';
-import { localize } from '../../../../nls.js';
-import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
-import { IStorageService } from '../../../../platform/storage/common/storage.js';
-import { IThemeService } from '../../../../platform/theme/common/themeService.js';
-import { IAccessibleViewService, AccessibilityVerbositySettingId, AccessibleViewType } from '../../../../platform/accessibility/browser/accessibleView.js';
-import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
-import { EditorPane } from '../../../browser/parts/editor/editorPane.js';
-import type { IResourceEditorInput, IEditorPane, IEditorControl } from '../../../common/editor.js';
-import { IChatService } from '../../../services/chat/common/chatService.js';
-import { readAgentTraceLocation, type AgentTraceLocation } from '../common/trace.js';
-import { diagnosticPayload, mergeAgentTrace, mergeAgentTraceDiagnostics, parseAgentTrace, type AgentTrace, type AgentTraceEvent, type AgentTraceGraph } from '../../../services/trace/common/agentTrace.js';
+import { CommonFindController } from '../../../../../editor/contrib/find/browser/findController.js';
+import './media/chatDebug.css';
+import { addDisposableListener, h, type IDimension } from '../../../../../base/browser/dom.js';
+import { triggerDownload } from '../../../../../base/browser/fileAccess.js';
+import { RunOnceScheduler } from '../../../../../base/common/async.js';
+import { DisposableStore, MutableDisposable, toDisposable, type IDisposable } from '../../../../../base/common/lifecycle.js';
+import { onUnexpectedError } from '../../../../../base/common/errors.js';
+import { isRecord } from '../../../../../base/common/types.js';
+import { Button } from '../../../../../base/browser/ui/button/button.js';
+import { InputBox } from '../../../../../base/browser/ui/inputbox/inputbox.js';
+import { localize } from '../../../../../nls.js';
+import { IContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
+import { IStorageService } from '../../../../../platform/storage/common/storage.js';
+import { IThemeService } from '../../../../../platform/theme/common/themeService.js';
+import { IAccessibleViewService, AccessibilityVerbositySettingId, AccessibleViewType } from '../../../../../platform/accessibility/browser/accessibleView.js';
+import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
+import { EditorPane } from '../../../../browser/parts/editor/editorPane.js';
+import type { IResourceEditorInput, IEditorPane, IEditorControl } from '../../../../common/editor.js';
+import { IChatService } from '../../../../services/chat/common/chatService.js';
+import { readAgentTraceLocation, type AgentTraceLocation } from './chatDebugEditorInput.js';
+import { traceOverview, diagnosticPayload, mergeAgentTrace, mergeAgentTraceDiagnostics, parseAgentTrace, type AgentTrace, type AgentTraceEvent, type AgentTraceGraph } from '../../common/chatDebugEvents.js';
 
-import { ObjectTree } from '../../../../base/browser/ui/tree/objectTree.js';
-import { TreeVisibility } from '../../../../base/browser/ui/tree/tree.js';
-import { SplitView } from '../../../../base/browser/ui/splitview/splitview.js';
-import { TabList } from '../../../../base/browser/ui/tablist/tabList.js';
-import { IconLabel } from '../../../../base/browser/ui/iconlabel/iconlabel.js';
-import { ScrollableElement } from '../../../../base/browser/ui/scrollbar/scrollableElement.js';
-import { List } from '../../../../base/browser/ui/list/listWidget.js';
-import { CountBadge } from '../../../../base/browser/ui/countBadge/countBadge.js';
-import { ProgressBar } from '../../../../base/browser/ui/progressbar/progressbar.js';
-import { Lxicon } from '../../../../base/common/lxicons.js';
-import { listRowHeight } from '../../../../base/common/uiSizes.js';
-import type { IAction } from '../../../../base/common/actions.js';
-import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
-import { IContextMenuService } from '../../../../platform/contextview/browser/contextView.js';
-import { WorkbenchToolBar } from '../../../../platform/actions/browser/toolbar.js';
-import { IModelService } from '../../../../editor/common/services/model.js';
-import type { ITextModel } from '../../../../editor/common/model.js';
-import { CodeEditorWidget } from '../../../../editor/browser/widget/codeEditor/codeEditorWidget.js';
+import { ObjectTree } from '../../../../../base/browser/ui/tree/objectTree.js';
+import { TreeVisibility } from '../../../../../base/browser/ui/tree/tree.js';
+import { SplitView } from '../../../../../base/browser/ui/splitview/splitview.js';
+import { TabList } from '../../../../../base/browser/ui/tablist/tabList.js';
+import { IconLabel } from '../../../../../base/browser/ui/iconlabel/iconlabel.js';
+import { ScrollableElement } from '../../../../../base/browser/ui/scrollbar/scrollableElement.js';
+import { List } from '../../../../../base/browser/ui/list/listWidget.js';
+import { CountBadge } from '../../../../../base/browser/ui/countBadge/countBadge.js';
+import { ProgressBar } from '../../../../../base/browser/ui/progressbar/progressbar.js';
+import { Lxicon } from '../../../../../base/common/lxicons.js';
+import { listRowHeight } from '../../../../../base/common/uiSizes.js';
+import type { IAction } from '../../../../../base/common/actions.js';
+import { IInstantiationService } from '../../../../../platform/instantiation/common/instantiation.js';
+import { IContextMenuService } from '../../../../../platform/contextview/browser/contextView.js';
+import { WorkbenchToolBar } from '../../../../../platform/actions/browser/toolbar.js';
+import { IModelService } from '../../../../../editor/common/services/model.js';
+import type { ITextModel } from '../../../../../editor/common/model.js';
+import { CodeEditorWidget } from '../../../../../editor/browser/widget/codeEditor/codeEditorWidget.js';
+import { ChatDebugFilterState, type ChatDebugEventKind } from './chatDebugFilters.js';
+import { ChatDebugOverviewView } from './chatDebugOverviewView.js';
 import { AgentTraceViewModel, eventLabel, recordingLabel, evidenceLabel, hookStatusLabel, relationLabel, type TraceEntry } from './agentTraceModel.js';
 
 type DetailTab = 'overview' | 'input' | 'output' | 'relations' | 'raw';
 interface TraceRelation { readonly id: string; readonly label: string; readonly target?: TraceEntry; readonly kind?: string; readonly outgoing?: boolean; }
 let detailSequence = 0;
 
-import { agentTraceEditorId } from '../common/trace.js';
-export { agentTraceEditorId } from '../common/trace.js';
+import { chatDebugEditorId } from './chatDebugEditorInput.js';
 
 /** Owns a read-only capture and reference-counted subscriptions only while its input is open. */
-export class AgentTraceEditor extends EditorPane implements IEditorPane {
-	public readonly id = agentTraceEditorId;
+export class ChatDebugEditor extends EditorPane implements IEditorPane {
+	public readonly id = chatDebugEditorId;
 	private domNode!: HTMLDivElement;
 	private statusDomNode!: HTMLParagraphElement;
 	private summaryDomNode!: HTMLParagraphElement;
@@ -78,6 +79,9 @@ export class AgentTraceEditor extends EditorPane implements IEditorPane {
 	private emptyTree!: HTMLParagraphElement;
 	private filter!: InputBox;
 	private errorsButton!: Button;
+	private overview!: ChatDebugOverviewView;
+	private readonly filters = this._register(new ChatDebugFilterState());
+	private readonly kindButtons = new Map<ChatDebugEventKind, Button>();
 	private toolbar!: WorkbenchToolBar;
 	private refreshAction!: IAction;
 	private secondaryActions!: readonly IAction[];
@@ -121,14 +125,13 @@ export class AgentTraceEditor extends EditorPane implements IEditorPane {
 	private dirty = false;
 	private isShown = true;
 	private inputSignal: AbortSignal | undefined;
-	private errorsOnly = false;
 	private selected: string | undefined;
 	private readonly pendingInput = this._register(new MutableDisposable<IDisposable>());
 	private readonly refreshScheduler = this._register(new RunOnceScheduler(() => { void this.refresh(); }, 100));
 
 	constructor(
 		@IChatService private readonly chat: IChatService,
-		@ITraceService private readonly traces: ITraceService,
+		@IChatDebugService private readonly traces: IChatDebugService,
 		@IContextKeyService private readonly contextKeys: IContextKeyService,
 		@IAccessibleViewService private readonly accessibleViews: IAccessibleViewService,
 		@IConfigurationService private readonly configuration: IConfigurationService,
@@ -138,7 +141,7 @@ export class AgentTraceEditor extends EditorPane implements IEditorPane {
 		@IThemeService theme: IThemeService,
 		@IStorageService storage: IStorageService,
 	) {
-		super(agentTraceEditorId, theme, storage);
+		super(chatDebugEditorId, theme, storage);
 		this._register(chat.onDidUpdateThread(event => {
 			if (event.sessionId === this.sessionId && event.durableSequence > (this.cursors[event.threadId] ?? 0)) { this.requestRefresh(); }
 		}));
@@ -157,7 +160,7 @@ export class AgentTraceEditor extends EditorPane implements IEditorPane {
 		this.domNode = h(document, 'div', { className: 'ash-agent-trace' });
 		const context = this._register(this.contextKeys.createScoped(this.domNode));
 		context.createKey('agentTraceFocused', true);
-		this.domNode.setAttribute('aria-label', localize('agentTrace.title', 'Execution Trace'));
+		this.domNode.setAttribute('aria-label', localize('chatDebugInputName', 'Agent Debug Logs'));
 		const updateHint = (): void => {
 			const hint = this.accessibleViews.getOpenAriaHint(AccessibilityVerbositySettingId.AgentTrace);
 			if (hint) { this.domNode.setAttribute('aria-description', hint); }
@@ -169,7 +172,7 @@ export class AgentTraceEditor extends EditorPane implements IEditorPane {
 		updateHint();
 		const header = h(document, 'div', { className: 'ash-agent-trace-header' });
 		const title = h(document, 'h1');
-		title.textContent = localize('agentTrace.title', 'Execution Trace');
+		title.textContent = localize('chatDebugInputName', 'Agent Debug Logs');
 		this.statusDomNode = h(document, 'p', { className: 'ash-agent-trace-status' });
 		this.statusDomNode.setAttribute('role', 'status');
 		const actions = h(document, 'div', { className: 'ash-agent-trace-actions' });
@@ -195,6 +198,8 @@ export class AgentTraceEditor extends EditorPane implements IEditorPane {
 		this.locationDomNode.setAttribute('aria-live', 'polite');
 		this.progress = this._register(new ProgressBar(this.domNode, defaultProgressBarStyles));
 		this.progress.element.hidden = true;
+		this.overview = this._register(new ChatDebugOverviewView(this.domNode));
+		this._register(addDisposableListener(this.overview.container, 'toggle', () => this.layout(this.dimension)));
 		this.bodyDomNode = h(document, 'div', { className: 'ash-agent-trace-body' });
 		this.navigationDomNode = h(document, 'div', { className: 'ash-agent-trace-navigation' });
 		const structure = h(document, 'div', { className: 'ash-agent-trace-structure' });
@@ -209,18 +214,44 @@ export class AgentTraceEditor extends EditorPane implements IEditorPane {
 			inputBoxStyles: defaultInputBoxStyles,
 			presentation: 'compact',
 			ariaLabel: localize('agentTrace.filter', 'Filter execution events'),
-			placeholder: localize('agentTrace.filter', 'Filter execution events'),
+			placeholder: localize('chatDebug.search', 'Filter (text, !exclude, after:YYYY-MM-DD)'),
 		}));
 		this.errorsButton = this._register(new Button(search, {
 			...defaultButtonStyles,
 			presentation: 'secondary',
 			label: localize('agentTrace.errors', 'Errors only'),
 			onClick: () => {
-				this.errorsOnly = !this.errorsOnly; this.errorsButton.checked = this.errorsOnly; this.render();
+				this.filters.setErrorsOnly(!this.filters.errorsOnly);
 			},
 		}));
 		this.errorsButton.checked = false;
-		this._register(this.filter.onDidChange(() => this.render()));
+		this._register(this.filter.onDidChange(() => this.filters.setTextFilter(this.filter.value)));
+		const kinds = h(document, 'div', { className: 'ash-chat-debug-kinds' });
+		const kindLabels: readonly [ChatDebugEventKind, string][] = [
+			['modelTurn', localize('chatDebug.filterModels', 'Models')],
+			['toolCall', localize('chatDebug.filterTools', 'Tools')],
+			['subagentInvocation', localize('chatDebug.filterAgents', 'Agents')],
+			['generic', localize('chatDebug.filterOther', 'Other')],
+		];
+		for (const [kind, label] of kindLabels) {
+			const button = this._register(new Button(kinds, {
+				...defaultButtonStyles, presentation: 'secondary', label,
+				onClick: () => this.filters.setKindVisible(kind, !this.filters.isKindVisible(kind)),
+			}));
+			button.checked = true;
+			this.kindButtons.set(kind, button);
+		}
+		this._register(new Button(kinds, {
+			...defaultButtonStyles, presentation: 'quiet', size: 'small',
+			label: localize('chatDebug.clearFilters', 'Clear filters'),
+			onClick: () => this.resetFilters(),
+		}));
+		this._register(this.filters.onDidChange(() => {
+			this.errorsButton.checked = this.filters.errorsOnly;
+			for (const [kind, button] of this.kindButtons) { button.checked = this.filters.isKindVisible(kind); }
+			this.filter.showValidation(this.filters.error ?? '');
+			this.render();
+		}));
 		this.summaryDomNode = h(document, 'p', { className: 'ash-agent-trace-summary' });
 		this.treeDomNode = h(document, 'div', { className: 'ash-agent-trace-tree' });
 		this.tree = this._register(new ObjectTree<TraceEntry>(this.treeDomNode, {
@@ -255,9 +286,16 @@ export class AgentTraceEditor extends EditorPane implements IEditorPane {
 				if (root) { this.rowLabels.get(root)?.dispose(); this.rowLabels.delete(root); }
 			},
 		}));
-		this._register(this.tree.onDidChangeSelection(({ elements, browserEvent }) => { if (browserEvent && elements[0]) { this.select(elements[0].id); } }));
+		this._register(this.tree.onDidChangeSelection(({ elements, browserEvent }) => {
+			if (!browserEvent || !elements[0]) { return; }
+			if (this.dimension.width < 640 && this.overview.container.open) {
+				this.overview.container.open = false;
+				this.layout(this.dimension);
+			}
+			this.select(elements[0].id);
+		}));
 		this.emptyTree = h(document, 'p', { className: 'ash-agent-trace-empty' });
-		this.navigationDomNode.append(structure, search, this.treeDomNode, this.emptyTree, this.summaryDomNode);
+		this.navigationDomNode.append(structure, search, kinds, this.treeDomNode, this.emptyTree, this.summaryDomNode);
 		this.inspectorDomNode = h(document, 'div', { className: 'ash-agent-trace-inspector' });
 		this.inspectorTitle = h(document, 'h2', { className: 'ash-agent-trace-inspector-title' });
 		this.inspectorIdentity = h(document, 'p', { className: 'ash-agent-trace-inspector-identity' });
@@ -295,13 +333,13 @@ export class AgentTraceEditor extends EditorPane implements IEditorPane {
 		}));
 		this._register(this.relationList.onDidAccept(({ item }) => {
 			if (!item.target) { return; }
-			this.errorsOnly = false; this.errorsButton.checked = false; this.filter.value = ''; this.render();
+			this.resetFilters();
 			this.select(item.target.id, true); this.tree.domFocus();
 		}));
 		this.relationWarning = h(document, 'p', { className: 'ash-agent-trace-relation-warning' });
 		this.panelDomNode.append(this.bodyEditorHost, this.relationsDomNode, this.relationWarning);
 		this.inspectorDomNode.append(this.panelDomNode);
-		this.domNode.append(header, file, this.locationDomNode, this.bodyDomNode);
+		this.domNode.append(header, file, this.locationDomNode, this.overview.container, this.bodyDomNode);
 		parent.append(this.domNode);
 		super.create(this.domNode);
 		this._register(toDisposable(() => this.domNode.remove()));
@@ -320,7 +358,7 @@ export class AgentTraceEditor extends EditorPane implements IEditorPane {
 
 	private layoutNavigation(width: number, height: number): void {
 		this.navigationDomNode.style.width = `${width}px`; this.navigationDomNode.style.height = `${height}px`;
-		this.tree.domNode.style.height = `${Math.max(0, height - 112)}px`;
+		this.tree.domNode.style.height = `${this.treeDomNode.clientHeight}px`;
 	}
 	private layoutInspector(width: number, height: number): void {
 		this.inspectorDomNode.style.width = `${width}px`; this.inspectorDomNode.style.height = `${height}px`;
@@ -335,7 +373,7 @@ export class AgentTraceEditor extends EditorPane implements IEditorPane {
 		catch (error) { this.statusDomNode.textContent = String(error); throw error; }
 		this.sessionId = this.location?.sessionId;
 		if (this.location?.threadId) {
-			this.errorsOnly = false; this.errorsButton.checked = false; this.filter.value = '';
+			this.resetFilters();
 		}
 		this.inputSignal = signal;
 		const abort = (): void => { if (this.inputSignal === signal) { this.clearInput(); } };
@@ -480,12 +518,12 @@ export class AgentTraceEditor extends EditorPane implements IEditorPane {
 		this.locationDomNode.hidden = !this.location?.threadId;
 		if (!this.location?.threadId) { this.locationDomNode.textContent = ''; }
 		const changed = this.viewModel.update(this.trace);
-		const query = this.filter.value.toLowerCase();
-		this.viewModel.filter(query, this.errorsOnly);
+		const query = this.filter.value;
+		this.viewModel.filter(this.filters);
 		if (changed) { this.tree.setChildren(this.viewModel.roots); }
 		else { this.tree.model.refilter(); }
-		const filterKey = JSON.stringify([query, this.errorsOnly]);
-		const filtering = !!query || this.errorsOnly;
+		const filterKey = JSON.stringify([query, this.filters.errorsOnly, [...this.kindButtons.keys()].map(kind => this.filters.isKindVisible(kind))]);
+		const filtering = this.filters.active;
 		if (filtering) {
 			this.filteredCollapse ??= new Map([...this.viewModel.entries.values()].filter(entry => entry.kind !== 'event').map(entry => [entry.id, this.tree.isCollapsed(entry.id) ?? false]));
 			if (this.filterKey !== filterKey || changed) {
@@ -502,6 +540,7 @@ export class AgentTraceEditor extends EditorPane implements IEditorPane {
 		this.emptyTree.hidden = this.viewModel.shownCount !== 0;
 		this.emptyTree.textContent = this.trace ? localize('agentTrace.noMatches', 'No matching execution events.') : localize('agentTrace.empty', 'Open a saved conversation or import an evaluation trace.');
 		this.summaryDomNode.textContent = this.trace ? localize('agentTrace.summary', '{0} Threads · {1} shown / {2} events.', this.trace.threads.length, this.viewModel.shownCount, this.viewModel.eventCount) : '';
+		this.overview.render(this.trace);
 		if (!this.trace) { this.statusDomNode.textContent = ''; }
 		let located = false;
 		if (this.location?.threadId && !this.locationKey) {
@@ -522,6 +561,12 @@ export class AgentTraceEditor extends EditorPane implements IEditorPane {
 		if (this.selected && located) { this.tree.expandTo(this.selected); this.tree.setFocus(this.selected); }
 		if (this.selected) { this.tree.setSelection([this.selected]); }
 		this.renderInspector();
+		this.layout(this.dimension);
+	}
+
+	private resetFilters(): void {
+		this.filter.value = '';
+		this.filters.reset();
 	}
 
 	private select(id: string, reveal = false): void {
@@ -754,7 +799,7 @@ export class AgentTraceEditor extends EditorPane implements IEditorPane {
 			let graph = capture.graph ?? (sessionId ? await this.traces.readTraceGraph(sessionId) : undefined);
 			if (revision !== this.revision || this.isDisposed) { return; }
 			if (graph && sessionId) { graph = graphForCapture(capture, graph); }
-			const artifact = { ...capture, graph, diagnostics: capture.diagnostics && { ...capture.diagnostics, payloads, recordingStatus: incomplete ? 'incomplete' : capture.diagnostics.recordingStatus } };
+			const artifact = { ...capture, overview: traceOverview(capture), graph, diagnostics: capture.diagnostics && { ...capture.diagnostics, payloads, recordingStatus: incomplete ? 'incomplete' : capture.diagnostics.recordingStatus } };
 			const serialized = JSON.stringify(artifact, null, 2);
 			const blob = new Blob([serialized], { type: 'application/json' });
 			if (blob.size > 64 * 1024 * 1024) { throw new Error(localize('agentTrace.fileSize', 'Trace files must be smaller than 64 MiB.')); }
@@ -770,7 +815,7 @@ export class AgentTraceEditor extends EditorPane implements IEditorPane {
 
 	public getAccessibleContent(): string {
 		const lines: string[] = [];
-		const visit = (nodes: readonly import('../../../../base/browser/ui/tree/objectTreeModel.js').ObjectTreeNode<TraceEntry>[]): void => {
+		const visit = (nodes: readonly import('../../../../../base/browser/ui/tree/objectTreeModel.js').ObjectTreeNode<TraceEntry>[]): void => {
 			for (const node of nodes) {
 				if (!node.visible) { continue; }
 				lines.push(node.element.record ? eventLabel(node.element.record) : node.element.label);
@@ -779,7 +824,7 @@ export class AgentTraceEditor extends EditorPane implements IEditorPane {
 		};
 		visit(this.tree.model.rootNodes);
 		const selected = this.selected && this.viewModel.entries.get(this.selected);
-		return `${this.emptyTree.hidden ? '' : this.emptyTree.textContent}\n${this.statusDomNode.textContent}\n${this.locationDomNode.textContent}\n${this.summaryDomNode.textContent}\n${lines.join('\n')}\n${this.relationList.items.map(item => item.label).join('\n')}\n${this.relationWarning.textContent}\n${this.detailText}\n${selected && selected.record ? JSON.stringify(selected.record, null, 2) : ''}`;
+		return `${this.overview.getAccessibleContent()}\n${this.filters.error ?? ''}\n${this.emptyTree.hidden ? '' : this.emptyTree.textContent}\n${this.statusDomNode.textContent}\n${this.locationDomNode.textContent}\n${this.summaryDomNode.textContent}\n${lines.join('\n')}\n${this.relationList.items.map(item => item.label).join('\n')}\n${this.relationWarning.textContent}\n${this.detailText}\n${selected && selected.record ? JSON.stringify(selected.record, null, 2) : ''}`;
 	}
 	public override setVisible(visible: boolean): void {
 		super.setVisible(visible);
@@ -804,8 +849,12 @@ export class AgentTraceEditor extends EditorPane implements IEditorPane {
 	public override layout(dimension: IDimension): void {
 		this.dimension = dimension;
 		this.domNode.style.width = `${dimension.width}px`; this.domNode.style.height = `${dimension.height}px`;
+		this.overview.setNarrow(dimension.width < 640);
 		this.configureSplit(dimension.width < 640);
-		const height = Math.max(0, dimension.height - 64 - (this.locationDomNode.hidden ? 0 : 24));
+		// On a narrow window the expanded overview and tree share the available height.
+		// Choosing an event closes the overview and restores the cached detail-pane size.
+		this.split.value!.setViewVisible(1, dimension.width >= 640 || !this.overview.container.open);
+		const height = this.bodyDomNode.clientHeight;
 		this.split.value!.layout(dimension.width < 640 ? height : dimension.width, dimension.width < 640 ? dimension.width : height);
 	}
 	public override focus(): void { if (this.selected) { this.tree.domFocus(); } else { this.filter.focus(); } }

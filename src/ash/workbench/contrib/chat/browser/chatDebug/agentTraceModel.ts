@@ -1,7 +1,8 @@
-import { isRecord } from '../../../../base/common/types.js';
-import { localize } from '../../../../nls.js';
-import type { ObjectTreeElement } from '../../../../base/browser/ui/tree/objectTreeModel.js';
-import { diagnosticPayload, type AgentTrace, type AgentTraceEvent, type AgentTraceDiagnosticEvent, type AgentTraceNode, type AgentTracePayloadRef } from '../../../services/trace/common/agentTrace.js';
+import type { ChatDebugFilterState } from './chatDebugFilters.js';
+import { isRecord } from '../../../../../base/common/types.js';
+import { localize } from '../../../../../nls.js';
+import type { ObjectTreeElement } from '../../../../../base/browser/ui/tree/objectTreeModel.js';
+import { diagnosticPayload, type AgentTrace, type AgentTraceEvent, type AgentTraceDiagnosticEvent, type AgentTraceNode, type AgentTracePayloadRef } from '../../common/chatDebugEvents.js';
 
 export interface SavedTraceRelation {
 	readonly kind: string;
@@ -121,17 +122,20 @@ export class AgentTraceViewModel {
 		return true;
 	}
 
-	filter(query: string, errorsOnly: boolean): void {
+	filter(state: ChatDebugFilterState): void {
 		this.matched.clear();
 		this.shownCount = 0;
 		for (const entry of this.entries.values()) {
-			if (!entry.record || (errorsOnly && !entry.failed)) { continue; }
+			if (!entry.record) { continue; }
 			let text = this.searchText.get(entry);
-			if (query && text === undefined) {
+			if (state.hasTextTerms && text === undefined) {
 				text = `${entry.threadId} ${entry.turnId ?? ''} ${eventLabel(entry.record)} ${JSON.stringify(entry.record)}`.toLowerCase();
 				this.searchText.set(entry, text);
 			}
-			if (!query || text!.includes(query)) { this.matched.add(entry.id); this.shownCount++; }
+			if (state.matches(entry.record, entry.turnId, entry.failed, text ?? '')) {
+				this.matched.add(entry.id);
+				this.shownCount++;
+			}
 		}
 	}
 

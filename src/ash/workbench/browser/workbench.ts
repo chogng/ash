@@ -16,8 +16,6 @@ import { GlobalExtensionEnablementService } from '../../platform/extensionManage
 import { IGlobalExtensionEnablementService } from '../../platform/extensionManagement/common/extensionManagement.js';
 import { IExtensionBackendApi } from '../../platform/agentHost/common/extensionBackendApi.js';
 import { IExtensionApi } from '../../platform/extensions/common/extensionApi.js';
-import { ITraceService } from '../services/trace/common/traceService.js';
-import { AppServerTraceService } from '../services/trace/browser/appServerTraceService.js';
 import { ISearchService } from '../services/search/common/search.js';
 import { SearchService } from '../services/search/common/searchService.js';
 import { IAgentExecutionSettingsService } from '../../platform/agentHost/common/agentExecutionSettingsService.js';
@@ -864,7 +862,6 @@ export class Workbench extends Disposable {
 		services.registerInstance(ISecretStorageStatusService, api.secretStorage);
 		services.registerInstance(IAgentSessionService, api.session);
 		services.registerInstance(IAgentThreadService, api.thread);
-		services.registerSingleton(ITraceService, () => services.createInstance(AppServerTraceService));
 		services.registerInstance(IAgentTurnService, api.turn);
 		services.registerInstance(ITurnChangesApi, api.turnChanges);
 		const chatService = this._register(services.createInstance(ChatService));

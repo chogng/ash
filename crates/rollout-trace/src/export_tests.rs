@@ -55,6 +55,7 @@ fn source(status: PayloadStatus, missing: bool) -> Source {
         history_prefixes: Vec::new(),
         diagnostics: None,
         graph: None,
+        overview: None,
     };
     let diagnostics = DiagnosticTrace {
         format_version: crate::DIAGNOSTIC_TRACE_FORMAT_VERSION,

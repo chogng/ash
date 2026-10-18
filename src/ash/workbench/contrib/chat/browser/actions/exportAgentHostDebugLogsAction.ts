@@ -12,8 +12,8 @@ import { INotificationService } from '../../../../../platform/notification/commo
 import { IProgressService, ProgressLocation } from '../../../../../platform/progress/common/progress.js';
 import { IChatSessionNavigationService } from '../../../../services/chat/common/chatSessionNavigationService.js';
 import { IOutputService } from '../../../../services/output/common/output.js';
-import { ITraceService } from '../../../../services/trace/common/traceService.js';
-import { diagnosticPayload } from '../../../../services/trace/common/agentTrace.js';
+import { IChatDebugService } from '../../common/chatDebugService.js';
+import { diagnosticPayload } from '../../common/chatDebugEvents.js';
 import { ChatContextKeys } from '../../common/actions/chatContextKeys.js';
 
 const MaxFiles = 1000;
@@ -65,7 +65,7 @@ export class ExportAgentHostDebugLogsAction extends Action2 {
 		const conversation = active ? { sessionId: active.sessionId, threadId: active.threadId } : undefined;
 		const loggers = accessor.get(ILoggerService);
 		const output = accessor.get(IOutputService);
-		const traces = accessor.get(ITraceService);
+		const traces = accessor.get(IChatDebugService);
 		const sessions = accessor.get(IAgentSessionService);
 		const appServer = accessor.get(IAppServerApi);
 		const progressService = accessor.get(IProgressService);
@@ -254,7 +254,7 @@ export class ExportAgentHostDebugLogsAction extends Action2 {
 				assertCurrent();
 				triggerDownload(new Blob([archive], { type: 'application/zip' }), 'ash-agent-host-debug-logs.zip', ownerDocument);
 				if (issues.length) {
-					notifications.warning(localize('debugLogs.partial', 'Debug logs exported with {0} collection issues. See manifest.json for missing or truncated evidence.', issues.length));
+					notifications.warn(localize('debugLogs.partial', 'Debug logs exported with {0} collection issues. See manifest.json for missing or truncated evidence.', issues.length));
 				} else {
 					notifications.info(localize('debugLogs.exported', 'Agent Host debug logs exported.'));
 				}

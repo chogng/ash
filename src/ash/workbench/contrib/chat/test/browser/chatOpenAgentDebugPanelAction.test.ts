@@ -1,3 +1,4 @@
+import { IChatSessionNavigationService } from '../../../../services/chat/common/chatSessionNavigationService.js';
 import '../../../../../editor/test/browser/testEditorDom.js';
 import assert from 'node:assert/strict';
 import { suite, test } from 'mocha';
@@ -6,8 +7,9 @@ import { CommandsRegistry } from '../../../../../platform/commands/common/comman
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import type { IResourceEditorInput } from '../../../../common/editor.js';
 import { IEditorService } from '../../../../services/editor/common/editorService.js';
-import { OpenAgentTraceCommandId, createAgentTraceResource } from '../../common/trace.js';
-import '../../browser/trace.contribution.js';
+import { OpenAgentTraceCommandId, createAgentTraceResource } from '../../browser/chatDebug/chatDebugEditorInput.js';
+import { registerChatOpenAgentDebugPanelAction } from '../../browser/actions/chatOpenAgentDebugPanelAction.js';
+registerChatOpenAgentDebugPanelAction();
 
 suite('Execution Trace command', () => {
 	for (const target of [undefined, 'session', { sessionId: 'session', threadId: 'child', turnId: 'turn', eventId: 'event' }]) {
@@ -36,4 +38,15 @@ suite('Workbench Trace navigation', () => {
 			assert.deepEqual(opened.map(input => ({ resource: input.resource.toString(), readOnly: input.readOnly })), [{ resource: saved?.startsWith('ash-agent-trace:') ? saved : 'ash-agent-trace:/import', readOnly: true }]);
 		});
 	}
+});
+
+
+test('Show Agent Debug Logs uses the current conversation through the shared navigation owner', async () => {
+	using services = new InstantiationService();
+	const opened: IResourceEditorInput[] = [];
+	services.registerInstance(IStorageService, { store() { } } as unknown as IStorageService);
+	services.registerInstance(IEditorService, { openEditor: async (input: IResourceEditorInput) => { opened.push(input); } } as unknown as IEditorService);
+	services.registerInstance(IChatSessionNavigationService, { getActiveConversation: () => ({ sessionId: 'session', threadId: 'child' }) } as IChatSessionNavigationService);
+	await services.invokeFunction(CommandsRegistry.getCommand('workbench.action.chat.openAgentDebugPanelForSession')!);
+	assert.deepEqual(opened.map(input => input.resource.toString()), ['ash-agent-trace:/session?threadId=child']);
 });

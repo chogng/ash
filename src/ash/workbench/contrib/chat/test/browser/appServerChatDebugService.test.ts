@@ -3,9 +3,12 @@ import { suite, test } from 'mocha';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { ServiceCollection } from '../../../../../platform/instantiation/common/serviceCollection.js';
 import { IAgentThreadService } from '../../../../../platform/agentHost/common/agentService.js';
-import { AppServerTraceService } from '../../browser/appServerTraceService.js';
+import { AppServerChatDebugService } from '../../browser/chatDebug/appServerChatDebugService.js';
+import { IChatDebugService } from '../../common/chatDebugService.js';
+import { getSingletonServiceDescriptors } from '../../../../../platform/instantiation/common/extensions.js';
+import '../../browser/chat.contribution.js';
 
-suite('App Server Trace service', () => {
+suite('App Server Chat Debug service', () => {
 	test('uses the injected connection only on explicit reads and validates its evidence', async () => {
 		const calls: unknown[] = [];
 		let sessionId = 'session';
@@ -15,8 +18,10 @@ suite('App Server Trace service', () => {
 			readTracePayload: async (params: unknown) => { calls.push(params); return { payload: { semantic: true } }; },
 			readTraceGraph: async (params: unknown) => { calls.push(params); return { graph: { nodes: {}, edges: [], warnings: [] } }; },
 		} as unknown as IAgentThreadService;
-		using services = new InstantiationService(new ServiceCollection([IAgentThreadService, threads]));
-		const trace = services.createInstance(AppServerTraceService);
+		const registrations = getSingletonServiceDescriptors().filter(([id]) => id === IChatDebugService);
+		assert.equal(registrations.length, 1);
+		using services = new InstantiationService(new ServiceCollection([IAgentThreadService, threads], registrations[0]!));
+		const trace = services.get(IChatDebugService);
 		assert.deepEqual(calls, []);
 		assert.equal((await trace.readTrace('session', {})).trace.sessionId, 'session');
 		assert.equal((await trace.readTraceDiagnostics('session', 0)).diagnostics.formatVersion, 2);
@@ -29,6 +34,6 @@ suite('App Server Trace service', () => {
 
 	test('requires its transport through production constructor injection', () => {
 		using services = new InstantiationService(new ServiceCollection());
-		assert.throws(() => services.createInstance(AppServerTraceService));
+		assert.throws(() => services.createInstance(AppServerChatDebugService));
 	});
 });

@@ -149,3 +149,42 @@
 .ash-agent-trace [hidden] {
 	display: none;
 }
+
+.ash-chat-debug-overview {
+	flex: 0 0 auto;
+	padding: var(--ash-spacing-size80) var(--ash-spacing-size120);
+	border-bottom: var(--ash-strokeThickness) solid var(--ash-widget-border);
+}
+.ash-chat-debug-overview summary {
+	margin: 0;
+	font-size: var(--ash-fontSize-body1);
+	font-weight: var(--ash-fontWeight-semiBold);
+}
+.ash-chat-debug-overview summary:focus-visible {
+	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
+	outline-offset: var(--ash-spacing-size20);
+}
+.ash-chat-debug-metrics {
+	display: grid;
+	grid-template-columns: repeat(4, minmax(0, 1fr));
+	gap: var(--ash-spacing-size80) var(--ash-spacing-size120);
+	margin: var(--ash-spacing-size80) 0;
+}
+.ash-chat-debug-metrics dt,
+.ash-chat-debug-metric-coverage,
+.ash-chat-debug-overview p {
+	color: var(--ash-description-foreground);
+	font-size: var(--ash-fontSize-body2);
+	overflow-wrap: anywhere;
+}
+.ash-chat-debug-metrics dd {
+	margin: 0;
+}
+.ash-chat-debug-overview p {
+	margin: var(--ash-spacing-size40) 0 0;
+}
+.ash-chat-debug-kinds {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--ash-spacing-size40);
+}

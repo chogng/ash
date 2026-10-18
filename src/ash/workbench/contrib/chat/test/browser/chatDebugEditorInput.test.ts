@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { suite, test } from 'mocha';
 import { resetNlsResolver, setNlsMessages } from '../../../../../nls.js';
 import { URI } from '../../../../../base/common/uri.js';
-import { createAgentTraceResource, readAgentTraceLocation, type AgentTraceLocation } from '../../common/trace.js';
+import { createAgentTraceResource, readAgentTraceLocation, type AgentTraceLocation } from '../../browser/chatDebug/chatDebugEditorInput.js';
 
 suite('Execution Trace location', () => {
 	test('preserves the Session-only command and import editor identity', () => {

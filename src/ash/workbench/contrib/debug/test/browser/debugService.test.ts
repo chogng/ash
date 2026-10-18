@@ -1,3 +1,5 @@
+import { ILabelService } from '../../../../../platform/label/common/label.js';
+import { LabelService } from '../../../../services/label/common/labelService.js';
 import { installDebugClientFixture } from '../common/debugClientFixture.js';
 import { InstantiationType } from '../../../../../platform/instantiation/common/extensions.js';
 import { registerTestTerminalCreationServices } from '../../../../test/browser/workbenchTestServices.js';
@@ -495,10 +497,12 @@ async function resolveTerminalProfile(selection: import('../../../../../platform
 }
 
 function createDebugService(owner: DisposableStore, files: IFileSystemProvider, workspace: IWorkspaceContextService, processes: IDebugAdapterProcessService | undefined, terminals: ITerminalService, storage: IStorageService, tasks: ITaskService, adapters: AdapterManager, contextKeys = owner.add(new ContextKeyService()), quickInput?: IQuickInputService, extensions?: TestExtensionService, options?: { editor?: IEditorService; groups?: IEditorGroupsService; configuration?: IConfigurationService; executionOS?: OperatingSystem; }): DebugService {
-	const services = owner.add(new InstantiationService(new ServiceCollection([IPathService, testPathService(workspace, options?.executionOS)], [IRendererHostService, createDisconnectedRendererApi()], [IConfigurationService, options?.configuration ?? new SyncDescriptor(WorkbenchConfigurationService)],
+	const baseHost = createDisconnectedRendererApi();
+	const host = { ...baseHost, hasAppServer: true, appServer: { ...baseHost.appServer, operatingSystem: options?.executionOS ?? OperatingSystem.Linux } };
+	const services = owner.add(new InstantiationService(new ServiceCollection([IPathService, testPathService(workspace, options?.executionOS)], [IRendererHostService, host], [IConfigurationService, options?.configuration ?? new SyncDescriptor(WorkbenchConfigurationService)],
 		[IFileService, owner.add(createTestFileService(files))],
 		[IUriIdentityService, new SyncDescriptor(UriIdentityService)],
-		[IWorkspaceContextService, workspace], [IConfigurationResolverService, new SyncDescriptor(ConfigurationResolverService)],
+		[IWorkspaceContextService, workspace], [ILabelService, new SyncDescriptor(LabelService)], [IConfigurationResolverService, new SyncDescriptor(ConfigurationResolverService)],
 		[IDebugAdapterProcessService, processes],
 		[ITerminalProcessService, {
 			operatingSystem: options?.executionOS ?? OperatingSystem.Linux, onConnectionState: Event.None,
@@ -1427,6 +1431,8 @@ suite('Extension debug session lifecycle', () => {
 			services.registerInstance(IMarkerService, resources.add(new MarkerService()));
 			registerTestExtensionService(resources, services);
 			services.registerInstance(ITerminalProcessService, createDisconnectedRendererApi().terminal);
+			services.registerInstance(IRendererHostService, createDisconnectedRendererApi());
+			services.registerSingleton(ILabelService, () => services.createInstance(LabelService));
 			services.registerInstance(IConfigurationResolverService, resources.add(services.createInstance(ConfigurationResolverService)));
 			registerTerminalProfiles(services);
 			registerTestTerminalCreationServices(services);
@@ -1504,6 +1510,8 @@ suite('Extension debug session lifecycle', () => {
 				services.registerInstance(IMarkerService, resources.add(new MarkerService()));
 				registerTestExtensionService(resources, services);
 				services.registerInstance(ITerminalProcessService, createDisconnectedRendererApi().terminal);
+				services.registerInstance(IRendererHostService, createDisconnectedRendererApi());
+				services.registerSingleton(ILabelService, () => services.createInstance(LabelService));
 				services.registerInstance(IConfigurationResolverService, resources.add(services.createInstance(ConfigurationResolverService)));
 				registerTerminalProfiles(services);
 				registerTestTerminalCreationServices(services);
@@ -1790,6 +1798,8 @@ test('installed inline descriptors use the real DAP session and await implementa
 	services.registerInstance(IMarkerService, resources.add(new MarkerService()));
 	registerTestExtensionService(resources, services);
 	services.registerInstance(ITerminalProcessService, createDisconnectedRendererApi().terminal);
+	services.registerInstance(IRendererHostService, createDisconnectedRendererApi());
+	services.registerSingleton(ILabelService, () => services.createInstance(LabelService));
 	services.registerInstance(IConfigurationResolverService, resources.add(services.createInstance(ConfigurationResolverService)));
 	registerTerminalProfiles(services);
 	registerTestTerminalCreationServices(services);
@@ -2086,6 +2096,8 @@ suite('DAP reverse startDebugging through the real session owner', () => {
 			registerTestExtensionService(resources, services);
 			registerTestWorkbenchInteractionServices(resources, services);
 			services.registerInstance(ITerminalProcessService, createDisconnectedRendererApi().terminal);
+			services.registerInstance(IRendererHostService, createDisconnectedRendererApi());
+			services.registerSingleton(ILabelService, () => services.createInstance(LabelService));
 			services.registerInstance(IConfigurationResolverService, resources.add(services.createInstance(ConfigurationResolverService)));
 			registerTerminalProfiles(services);
 			registerTestTerminalCreationServices(services);

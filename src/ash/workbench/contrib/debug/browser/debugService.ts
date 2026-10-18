@@ -128,7 +128,7 @@ export class DebugService extends Disposable implements IDebugService {
 		@IAdapterManager private readonly adapters: IAdapterManager,
 		@ILogService private readonly logService: ILogService,
 		@IContextKeyService contextKeys: IContextKeyService,
-		@IInstantiationService private readonly instantiationService: IInstantiationService,
+		@IInstantiationService instantiationService: IInstantiationService,
 		@IExtensionService private readonly extensions: IExtensionService,
 		@IUriIdentityService private readonly uriIdentity: IUriIdentityService,
 		@ICommandService private readonly commands: ICommandService,
@@ -518,6 +518,7 @@ export class DebugService extends Disposable implements IDebugService {
 		const acceptsBreakpointEvents = (): boolean => !this.isDisposed && workspaceGeneration === this.workspaceGeneration && initializingSession !== undefined && !['terminated', 'error'].includes(initializingSession.state);
 		const session = await DebugSession.start({
 			configuration: current, sessionOptions,
+			processService: this.processes,
 			resolvedConfiguration: factory?.createDebugAdapterDescriptor ? { ...resolvedConfiguration, adapter: undefined } : resolvedConfiguration,
 			workspace: root, breakpoints: () => this.currentBreakpoints,
 			additionalBreakpoints: () => [...this.currentFunctionBreakpoints, ...this.currentDataBreakpoints, ...this.currentInstructionBreakpoints],
@@ -577,7 +578,7 @@ export class DebugService extends Disposable implements IDebugService {
 					return adapter;
 				} finally { this.pendingDescriptors.delete(controller); this.descriptorControllers.delete(session.id); this.descriptorOwners.delete(controller); }
 			} : undefined,
-		}, this.instantiationService).catch(async error => {
+		}).catch(async error => {
 			if (initializingSession) {
 				this.preparingSessions.delete(initializingSession.id);
 				await this.stopChildSessions(initializingSession);

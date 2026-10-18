@@ -31,7 +31,7 @@ async function inspectInput(viewer: Locator, label = 'Input', body = 'Saved body
 function selectedEvent(viewer: Locator): Locator { return viewer.locator('[role=treeitem][aria-selected=true] .ash-agent-trace-event'); }
 
 test('Execution Trace shows loop actions, message phases and stop reasons', async ({ workbench }) => {
-	await workbench.quickaccess.runCommand('ash.agentTrace.open');
+	await workbench.quickaccess.runCommand('workbench.action.chat.openAgentDebugPanel');
 	const viewer = workbench.page.locator('.ash-agent-trace');
 	const decisions = [
 		{ action: 'executeTools', reason: 'toolRequests', stopReason: { type: 'toolUse' }, messagePhases: ['final_answer'], toolCallCount: 1 },
@@ -61,7 +61,7 @@ test('Execution Trace shows loop actions, message phases and stop reasons', asyn
 });
 
 test('Workbench opens the shared Execution Trace editor and imports a capture', async ({ application, workbench }) => {
-	await workbench.quickaccess.runCommand('ash.agentTrace.open');
+	await workbench.quickaccess.runCommand('workbench.action.chat.openAgentDebugPanel');
 	const viewer = workbench.page.locator('.ash-agent-trace');
 	await expect(viewer).toBeVisible();
 	await expect(viewer.locator('.ash-agent-trace-empty')).toContainText('Open a saved conversation');
@@ -169,7 +169,7 @@ test('Execution Trace command and help use Chinese in the real Sessions window',
 	await language.fill('简体中文');
 	await language.press('Enter');
 	({ application, workbench } = await restartWorkbench());
-	await workbench.quickaccess.runCommand('ash.agentTrace.open');
+	await workbench.quickaccess.runCommand('workbench.action.chat.openAgentDebugPanel');
 	await expect((await inspectTraceAction(workbench.page.locator('.ash-agent-trace'), application, '导入 Trace')).label).toBe('导入 Trace');
 	await workbench.page.keyboard.press('Escape');
 	await workbench.quickaccess.runCommand('workbench.action.closeActiveEditor');
@@ -260,7 +260,7 @@ test('Execution Trace opens current saved history and follows real new Turns and
 });
 
 test('Execution Trace keeps the latest import and reviews exported evidence offline', async ({ application, workbench }, testInfo) => {
-	await workbench.quickaccess.runCommand('ash.agentTrace.open');
+	await workbench.quickaccess.runCommand('workbench.action.chat.openAgentDebugPanel');
 	const page = workbench.page;
 	const viewer = page.locator('.ash-agent-trace');
 	await page.evaluate(() => {

@@ -7,9 +7,9 @@ import { AgentTraceOutput, IAgentTraceOutput } from './agentTraceOutput.js';
 import { IStorageService } from '../../../../platform/storage/common/storage.js';
 import { URI } from '../../../../base/common/uri.js';
 import { ISessionsLayoutService } from '../../../services/layout/common/sessionsLayoutService.js';
-import { createAgentTraceInput, readLastAgentTraceResource, rememberAgentTraceResource } from '../../../../workbench/contrib/trace/common/trace.js';
+import { createAgentTraceInput, readLastAgentTraceResource, rememberAgentTraceResource } from '../../../../workbench/contrib/chat/browser/chatDebug/chatDebugEditorInput.js';
 import type { ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
-import { createAgentTraceResource, type AgentTraceLocation } from '../../../../workbench/contrib/trace/common/trace.js';
+import { createAgentTraceResource, type AgentTraceLocation } from '../../../../workbench/contrib/chat/browser/chatDebug/chatDebugEditorInput.js';
 import { ISessionsService } from '../../../services/sessions/browser/sessionsService.js';
 import type { AgentTreeNode } from '../../../services/sessions/common/session.js';
 
@@ -17,7 +17,7 @@ registerAction2(class OpenAgentTrace extends Action2 {
 	constructor() {
 		super({
 			id: 'sessions.trace.open',
-			title: localize2('agentTrace.open', 'View Execution Trace'),
+			title: localize2('agentTrace.open', 'Show Agent Debug Logs'),
 			f1: true,
 			icon: Lxicon.history,
 			menu: { id: MenuId.ChatTitle, group: 'navigation', order: 3 },
@@ -42,7 +42,7 @@ function findTurn(nodes: readonly AgentTreeNode[], threadId: string): string | u
 registerAction2(class OpenTraceNavigation extends Action2 {
 	constructor() {
 		super({
-			id: 'sessions.open.trace', title: localize2('agentTrace.navigationTitle', 'Trace'), f1: true, icon: Lxicon.history,
+			id: 'sessions.open.trace', title: localize2('agentTrace.navigationTitle', 'Agent Debug Logs'), f1: true, icon: Lxicon.history,
 		});
 	}
 	public override async run(accessor: ServicesAccessor, source?: unknown): Promise<void> {

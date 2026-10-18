@@ -122,3 +122,66 @@ test('Execution Trace keeps long history virtual and exposes offscreen events to
 	await expect(viewer).toHaveCount(0);
 	expect(await page.evaluate(() => window.agentTraceIntegration.resources())).toEqual({ models: 0, editors: 0 });
 });
+
+test('Chat Debug shows backend coverage and keeps capture metrics stable across structured filters', async ({ page }, testInfo) => {
+	await page.goto('/agentTrace.html');
+	await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
+	const viewer = page.locator('.ash-agent-trace');
+	const ledger = (invocationId: string, usage: unknown, outcome: string) => ({ type: 'modelInvocationRecorded', record: { invocationId, outcome, usage } });
+	const first = ledger('first', { inputTokens: 100, outputTokens: 20, cachedInputTokens: 80 }, 'completed');
+	const events = [
+		{ type: 'threadCreated', title: 'Coverage fixture' }, first, first,
+		ledger('second', { inputTokens: null, outputTokens: 0, cachedInputTokens: null }, 'failed'),
+		{ type: 'itemCompleted', item: { type: 'toolCall', toolCallId: 'call', name: 'shell-command' } },
+		{ type: 'itemCompleted', item: { type: 'toolResult', toolCallId: 'call', text: 'private output', isError: true } },
+		{ type: 'turnFailed', error: { message: 'Failed Turn' } },
+	].map((event, index) => ({ eventId: `coverage-${index}`, sequence: index + 1, recordedAt: Date.UTC(2026, 9, 18, 12) + index, event: { ...event, threadId: 'root', turnId: event.type === 'threadCreated' ? undefined : 't' } }));
+	const metric = (reported: string | null, reportedCalls: number, missingCalls: number) => ({ reported, reportedCalls, missingCalls });
+	const artifact = {
+		formatVersion: 3, sessionId: 'coverage', historyPrefixes: [], threads: [{ threadId: 'root', events }],
+		overview: {
+			formatVersion: 1, threadCursors: { root: 7 }, eventCount: 7, modelCalls: 2, toolCalls: 1, failedModelCalls: 1, cancelledModelCalls: 0, excludedModelCalls: 0,
+			inputTokens: metric('100', 1, 1), outputTokens: metric('20', 2, 0), cachedInputTokens: metric('80', 1, 1), totalTokens: metric('120', 1, 1)
+		},
+		diagnostics: { formatVersion: 2, captureId: null, recordingStatus: 'incomplete', droppedRecords: 2, pendingRecords: 1, events: [] },
+	};
+	await viewer.locator('input[type=file]').setInputFiles({ name: 'coverage.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(artifact)) });
+	await expect(viewer.getByRole('status')).toContainText('Imported');
+	const overview = viewer.locator('.ash-chat-debug-overview');
+	const cell = (label: string) => overview.locator('.ash-chat-debug-metrics > div').filter({ has: page.getByText(label, { exact: true }) });
+	await expect(cell('Committed model calls').locator('dd')).toHaveText('2');
+	await expect(cell('Input tokens').locator('dd')).toHaveText(['100', 'Reported by 1/2 included calls']);
+	await expect(cell('Input + output tokens').locator('dd')).toHaveText(['120', 'Reported by 1/2 included calls']);
+	await expect(overview).toContainText('2 records omitted');
+	const before = await overview.innerText();
+	await viewer.getByRole('button', { name: 'Models', exact: true }).focus();
+	await page.keyboard.press('Space');
+	await expect(viewer.getByRole('button', { name: 'Models', exact: true })).toHaveAttribute('aria-pressed', 'false');
+	const search = viewer.getByRole('textbox', { name: 'Filter execution events' });
+	await search.fill('thread:root turn:t, !private, after:2026-10-18, before:2026-10-18');
+	await expect(viewer.locator('.ash-agent-trace-event')).toHaveCount(2);
+	expect(await overview.innerText()).toBe(before);
+	await search.fill('after:2026-02-30');
+	await expect(search).toHaveAttribute('aria-invalid', 'true');
+	await expect(viewer.locator('.ash-agent-trace-event')).toHaveCount(0);
+	await viewer.getByRole('button', { name: 'Clear filters', exact: true }).click();
+	await expect(search).not.toHaveAttribute('aria-invalid');
+	await expect(viewer.getByRole('button', { name: 'Models', exact: true })).toHaveAttribute('aria-pressed', 'true');
+	await expect(viewer.locator('.ash-agent-trace-event')).toHaveCount(7);
+	await testInfo.attach('chat-debug-overview-wide', { body: await viewer.screenshot(), contentType: 'image/png' });
+	await page.evaluate(() => window.agentTraceIntegration.layout(500, 650));
+	await expect(overview).not.toHaveAttribute('open');
+	await expect(viewer.getByRole('tree')).toBeVisible();
+	await overview.locator('summary').focus();
+	await page.keyboard.press('Enter');
+	await expect(overview).toHaveAttribute('open', '');
+	await expect.poll(() => viewer.locator('.ash-agent-trace-tree').evaluate(element => element.clientHeight)).toBeGreaterThan(80);
+	await expect(viewer.getByRole('tabpanel')).not.toBeVisible();
+	await testInfo.attach('chat-debug-overview-narrow', { body: await viewer.screenshot(), contentType: 'image/png' });
+	await viewer.locator('[data-event-id="coverage-4"]').click();
+	await expect(overview).not.toHaveAttribute('open');
+	await expect(viewer.getByRole('tabpanel')).toBeVisible();
+	const content = await page.evaluate(() => window.agentTraceIntegration.accessibleContent());
+	expect(content).toContain('Reported by 1/2 included calls');
+	await page.evaluate(() => window.agentTraceIntegration.dispose());
+});

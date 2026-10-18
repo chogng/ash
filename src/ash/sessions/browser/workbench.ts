@@ -36,8 +36,6 @@ import { withEnabledBuiltInExtensions } from '../../platform/extensions/browser/
 import { WebWorkerExtensionHost } from '../../workbench/services/extensions/browser/webWorkerExtensionHost.js';
 import { IExtensionBackendApi } from '../../platform/agentHost/common/extensionBackendApi.js';
 import { IExtensionApi } from '../../platform/extensions/common/extensionApi.js';
-import { ITraceService } from '../../workbench/services/trace/common/traceService.js';
-import { AppServerTraceService } from '../../workbench/services/trace/browser/appServerTraceService.js';
 import { IContentSearchService, IContentSearchConfigurationService } from '../../platform/search/common/search.js';
 import { FileContentSearchService } from '../../platform/search/browser/searchService.js';
 import { ISearchService } from '../../workbench/services/search/common/search.js';
@@ -454,7 +452,6 @@ export abstract class Workbench extends Disposable {
 		services.registerInstance(IAgentSessionService, options.api.session);
 		services.registerSingleton(IDevContainerAgentHostService, () => services.createInstance(DevContainerAgentHostService));
 		services.registerInstance(IAgentThreadService, options.api.thread);
-		services.registerSingleton(ITraceService, () => services.createInstance(AppServerTraceService));
 		services.registerInstance(IAgentTurnService, options.api.turn);
 		services.registerInstance(ITurnChangesApi, options.api.turnChanges);
 		services.registerInstance(ServerEventApiId, options.api.events);

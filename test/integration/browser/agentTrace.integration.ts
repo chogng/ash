@@ -22,9 +22,9 @@ import { setIconResolver } from '../../../src/ash/base/browser/ui/lxicons/lxicon
 import { getIconDefinition } from '../../../src/ash/platform/theme/common/iconRegistry.js';
 import { IStorageService } from '../../../src/ash/platform/storage/common/storage.js';
 import { IThemeService } from '../../../src/ash/platform/theme/common/themeService.js';
-import { AgentTraceEditor } from '../../../src/ash/workbench/contrib/trace/browser/agentTraceEditor.js';
+import { ChatDebugEditor } from '../../../src/ash/workbench/contrib/chat/browser/chatDebug/chatDebugEditor.js';
 import { IChatService } from '../../../src/ash/workbench/services/chat/common/chatService.js';
-import { ITraceService } from '../../../src/ash/workbench/services/trace/common/traceService.js';
+import { IChatDebugService } from '../../../src/ash/workbench/contrib/chat/common/chatDebugService.js';
 import { ExtensionColorThemeService } from '../../../src/ash/workbench/services/extensions/browser/extensionColorThemeService.js';
 import { BrowserStorageService } from '../../../src/ash/workbench/services/storage/browser/storageService.js';
 import { BrowserHostColorSchemeService } from '../../../src/ash/workbench/services/themes/browser/browserHostColorSchemeService.js';
@@ -63,7 +63,7 @@ services.registerInstance(IChatService, {
 	onDidBecomeReady: Event.None,
 } as unknown as IChatService);
 const rejectLiveRead = async (): Promise<never> => { throw new Error('Imported trace fixtures must not read live captures'); };
-services.registerInstance(ITraceService, {
+services.registerInstance(IChatDebugService, {
 	readTrace: rejectLiveRead,
 	readTraceDiagnostics: rejectLiveRead,
 	readTracePayload: rejectLiveRead,
@@ -72,7 +72,7 @@ services.registerInstance(ITraceService, {
 const themes = resources.add(services.createInstance(WorkbenchThemeService, root));
 themes.initialize();
 services.registerInstance(IThemeService, themes);
-const editor = resources.add(services.createInstance(AgentTraceEditor));
+const editor = resources.add(services.createInstance(ChatDebugEditor));
 editor.create(root);
 editor.layout({ width: 900, height: 650 });
 await editor.setInput({ resource: URI.parse('ash-agent-trace:/import') }, new AbortController().signal);

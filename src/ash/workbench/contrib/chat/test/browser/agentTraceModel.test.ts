@@ -1,9 +1,10 @@
+import { ChatDebugFilterState } from '../../browser/chatDebug/chatDebugFilters.js';
 import assert from 'node:assert/strict';
 import { suite, test } from 'mocha';
 import { resetNlsResolver, setNlsMessages } from '../../../../../nls.js';
 import { productLanguagePackCatalogs } from '../../../../services/localization/common/localizationCatalogs.js';
-import { AgentTraceViewModel, evidenceLabel, hookStatusLabel, recordingLabel, relationLabel } from '../../browser/agentTraceModel.js';
-import type { AgentTrace } from '../../../../services/trace/common/agentTrace.js';
+import { AgentTraceViewModel, evidenceLabel, hookStatusLabel, recordingLabel, relationLabel } from '../../browser/chatDebug/agentTraceModel.js';
+import type { AgentTrace } from '../../common/chatDebugEvents.js';
 
 suite('Execution Trace saved execution flow', () => {
 	test('links receipts to the exact committed invocation and leaves mismatches unknown', () => {
@@ -58,7 +59,9 @@ suite('Execution Trace saved execution flow', () => {
 		const entry = model.findEvent('root', 't', 'blocked')!;
 		assert.equal(model.payload(entry, false).record?.eventId, 'body');
 		assert.deepEqual(model.payload(entry, true).ref, ref);
-		model.filter('', true);
+		using filters = new ChatDebugFilterState();
+		filters.setErrorsOnly(true);
+		model.filter(filters);
 		assert.deepEqual([...model.matched], [entry.id]);
 	});
 

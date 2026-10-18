@@ -1,9 +1,4 @@
-import { IStorageService } from '../../../../platform/storage/common/storage.js';
-import { ResumeAgentTraceCommandId, createAgentTraceInput, readLastAgentTraceResource, rememberAgentTraceResource, agentTraceEditorId, traceEditorId } from '../common/trace.js';
-import { isHTMLElement } from '../../../../base/browser/dom.js';
-import { ContextKeyExpr } from '../../../../platform/contextkey/common/contextkey.js';
-import type { AgentTraceEditor } from './agentTraceEditor.js';
-import { OpenAgentTraceCommandId, createAgentTraceResource, type AgentTraceLocation } from '../common/trace.js';
+import { traceEditorId } from '../common/trace.js';
 import { AccessibleContentProvider, AccessibleViewProviderId, AccessibleViewType, AccessibilityVerbositySettingId } from '../../../../platform/accessibility/browser/accessibleView.js';
 import { AccessibleViewRegistry } from '../../../../platform/accessibility/browser/accessibleViewRegistry.js';
 import { ILayoutService } from '../../../../platform/layout/browser/layoutService.js';
@@ -57,38 +52,6 @@ AccessibleViewRegistry.register({
 	},
 });
 
-registerEditorPane({
-	id: agentTraceEditorId,
-	name: localize('agentTrace.title', 'Execution Trace'),
-	canOpen: input => input.resource.scheme === 'ash-agent-trace' ? EditorPaneMatch.Default : EditorPaneMatch.None,
-	create: async options => {
-		if (!options.instantiationService) { throw new Error('Execution Trace requires Workbench services'); }
-		const { AgentTraceEditor } = await import('./agentTraceEditor.js');
-		return options.instantiationService.createInstance(AgentTraceEditor);
-	},
-});
-
-registerAction2(class OpenAgentTrace extends Action2 {
-	constructor() {
-		super({
-			id: OpenAgentTraceCommandId,
-			title: localize2('agentTrace.openViewer', 'Developer: Open Execution Trace'),
-			f1: true,
-		});
-	}
-
-	public override async run(accessor: ServicesAccessor, target?: string | AgentTraceLocation): Promise<void> {
-		await openAgentTrace(accessor, createAgentTraceResource(target));
-	}
-});
-
-Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfiguration({
-	key: AccessibilityVerbositySettingId.AgentTrace,
-	defaultValue: true,
-	parse: value => { if (typeof value !== 'boolean') { throw new TypeError(localize('agentTrace.invalidVerbosity', 'Trace accessibility verbosity must be boolean.')); } return value; },
-	setting: { valueType: 'boolean', title: localize('agentTrace.verbosity', 'Execution Trace accessibility help'), description: localize('agentTrace.verbosityDescription', 'Announce keyboard help when the execution trace receives focus.') },
-});
-
 Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfiguration({
 	key: AccessibilityVerbositySettingId.TraceSettings,
 	defaultValue: true,
@@ -98,37 +61,4 @@ Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfigurat
 		get title() { return localize({ bundle: 'ash.settings', key: 'trace.verbosity' }, 'Execution trace settings accessibility help'); },
 		get description() { return localize({ bundle: 'ash.settings', key: 'trace.verbosityDescription' }, 'Announce how to open accessibility help in execution trace settings.'); },
 	},
-});
-
-for (const type of [AccessibleViewType.Help, AccessibleViewType.View]) {
-	AccessibleViewRegistry.register({
-		type,
-		name: `agentTrace.${type}`,
-		priority: 100,
-		when: ContextKeyExpr.has('agentTraceFocused'),
-		getProvider: accessor => {
-			const activePane = accessor.get(IEditorPart).activePane;
-			if (activePane?.id !== agentTraceEditorId) { return undefined; }
-			const pane = activePane as AgentTraceEditor;
-			const focused = accessor.get(ILayoutService).mainContainer.ownerDocument.activeElement;
-			return new AccessibleContentProvider(AccessibleViewProviderId.AgentTrace, { type },
-				() => type === AccessibleViewType.View ? pane.getAccessibleContent() : localize('agentTrace.helpText', 'Execution Trace\nRead the selected conversation’s saved execution history. Threads contain Turns and execution events; child Threads are nested beneath their parent. Events preserve each Thread’s sequence. A targeted opening selects the requested Thread, Turn or event after its history loads; a missing target is reported. Display filters keep the located event’s details and report when it is hidden. Tab moves between search, the execution tree and detail tabs. Arrow keys, Home and End navigate the tree; Left and Right collapse or expand it. Detail tabs activate with Enter or Space. Overview is the default; Raw record opens a readonly editor on demand. Errors only shows failed Turns, model calls and tool results. Filtering searches identifiers and event contents. Refresh reads newer durable events. Enable request evidence in Execution trace settings, then restart the owning App Server. Model attempts include failures, cancellations and partial output. Input and Output load the selected saved body on demand; choose a body section to read it. Core requests and materialized requests remain distinct, as do complete responses and partial output. Requests are semantic ModelService input, not HTTP bytes. Relations follows recorded model, tool, Code Mode, terminal and child-agent links. More Actions contains Import, Export and Help. Accessible View includes filtered events outside the mounted tree viewport. Model evidence is placed at its recorded Thread prefix when available. Child Threads keep their own sequence. Relations also shows saved child result returns and joins; result-to-model input links require the loaded Core request body. Unknown associations stay unknown. Hiding or closing the editor stops polling and releases subscriptions. Export freezes all loaded events when clicked, including events hidden by the filter. Relationships exclude events and causal evidence outside that capture, with omissions listed in graph warnings. Only one export runs at a time. The last selected import wins even if an earlier file finishes later. Import opens a version 3 rollout trace from an evaluation or another saved capture. Closing the editor releases its live subscriptions. <keybinding:editor.action.accessibleView> reads the trace; Escape closes this help.'),
-				() => { if (isHTMLElement(focused) && focused.isConnected) { focused.focus(); } else { pane.focus(); } }, AccessibilityVerbositySettingId.AgentTrace);
-		},
-	});
-}
-
-
-async function openAgentTrace(accessor: ServicesAccessor, resource: URI): Promise<void> {
-	const storage = accessor.get(IStorageService);
-	const editors = accessor.get(IEditorService);
-	await editors.openEditor(createAgentTraceInput(resource), { pinned: true });
-	rememberAgentTraceResource(storage, resource);
-}
-
-registerAction2(class ResumeAgentTrace extends Action2 {
-	constructor() { super({ id: ResumeAgentTraceCommandId, title: localize2('agentTrace.resume', 'Resume execution trace'), f1: true }); }
-	public override async run(accessor: ServicesAccessor): Promise<void> {
-		await openAgentTrace(accessor, readLastAgentTraceResource(accessor.get(IStorageService)) ?? createAgentTraceResource());
-	}
 });

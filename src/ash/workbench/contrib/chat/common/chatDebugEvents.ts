@@ -16,6 +16,56 @@ export interface AgentTrace {
 	readonly historyPrefixes: readonly unknown[];
 	readonly diagnostics?: AgentTraceDiagnostics;
 	readonly graph?: AgentTraceGraph;
+	readonly overview?: AgentTraceOverview;
+}
+
+export interface AgentTraceMetric {
+	readonly reported: string | null;
+	readonly reportedCalls: number;
+	readonly missingCalls: number;
+}
+
+/** Backend-derived accounting scoped to these exact durable prefixes, never a second ledger. */
+export interface AgentTraceOverview {
+	readonly formatVersion: 1;
+	readonly threadCursors: Readonly<Record<string, number>>;
+	readonly eventCount: number;
+	readonly modelCalls: number;
+	readonly toolCalls: number;
+	readonly failedModelCalls: number;
+	readonly cancelledModelCalls: number;
+	readonly excludedModelCalls: number;
+	readonly inputTokens: AgentTraceMetric;
+	readonly outputTokens: AgentTraceMetric;
+	readonly cachedInputTokens: AgentTraceMetric;
+	readonly totalTokens: AgentTraceMetric;
+}
+
+function parseOverview(value: unknown): AgentTraceOverview {
+	const invalid = (): never => { throw new Error(localize('chatDebug.invalidOverview', 'Invalid execution overview or metric coverage.')); };
+	if (!isRecord(value) || value.formatVersion !== 1 || !isRecord(value.threadCursors) || !Object.values(value.threadCursors).every(integer)) { return invalid(); }
+	for (const key of ['eventCount', 'modelCalls', 'toolCalls', 'failedModelCalls', 'cancelledModelCalls', 'excludedModelCalls']) {
+		if (!integer(value[key])) { return invalid(); }
+	}
+	if ((value.failedModelCalls as number) + (value.cancelledModelCalls as number) > (value.modelCalls as number)) { return invalid(); }
+	for (const key of ['inputTokens', 'outputTokens', 'cachedInputTokens', 'totalTokens']) {
+		const metric = value[key];
+		if (!isRecord(metric) || !integer(metric.reportedCalls) || !integer(metric.missingCalls)) { return invalid(); }
+		if (metric.reportedCalls + metric.missingCalls !== value.modelCalls) { return invalid(); }
+		if (metric.reportedCalls === 0) {
+			if (metric.reported !== null) { return invalid(); }
+		} else if (typeof metric.reported !== 'string' || !/^(0|[1-9]\d{0,38})$/.test(metric.reported)) {
+			return invalid();
+		}
+	}
+	return value as unknown as AgentTraceOverview;
+}
+
+/** Older or stale summaries stay unavailable instead of invoking a second analyzer. */
+export function traceOverview(trace: AgentTrace): AgentTraceOverview | undefined {
+	const overview = trace.overview;
+	if (!overview || Object.keys(overview.threadCursors).length !== trace.threads.length || overview.eventCount !== trace.threads.reduce((count, thread) => count + thread.events.length, 0)) { return undefined; }
+	return trace.threads.every(thread => overview.threadCursors[thread.threadId] === (thread.events.at(-1)?.sequence ?? 0)) ? overview : undefined;
 }
 
 export interface AgentTracePayloadRef {
@@ -151,6 +201,7 @@ export function parseAgentTrace(value: unknown): AgentTrace {
 	}
 	if (value.diagnostics !== undefined && value.diagnostics !== null) { parseAgentTraceDiagnostics(value.diagnostics); }
 	if (value.graph !== undefined && value.graph !== null) { parseAgentTraceGraph(value.graph); }
+	if (value.overview !== undefined && value.overview !== null) { parseOverview(value.overview); }
 	return value as unknown as AgentTrace;
 }
 

@@ -4,7 +4,7 @@ import type * as Agent from './agent.js';
 
 export interface IAgentSessionService {
 	/** Collects process logs from the runtime owning this Session, using connection-owned resources. */
-	collectDebugLogs(params: SessionReadParams, signal?: AbortSignal): Promise<{
+	collectDebugLogs(params: Agent.SessionReadParams, signal?: AbortSignal): Promise<{
 		readonly files: readonly {
 			readonly name: string;
 			readonly bytes: Uint8Array;

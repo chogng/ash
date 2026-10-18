@@ -12,8 +12,8 @@ import { createCodeEditorServices } from '../../../../../editor/test/browser/tes
 import { CommandsRegistry } from '../../../../../platform/commands/common/commands.js';
 import { IOpenerService } from '../../../../../platform/opener/common/opener.js';
 import { IOutputService, OUTPUT_VIEW_ID } from '../../../../../workbench/services/output/common/output.js';
-import { ITraceService } from '../../../../../workbench/services/trace/common/traceService.js';
-import type { AgentTraceDiagnosticEvent, AgentTraceEvent, AgentTracePage } from '../../../../../workbench/services/trace/common/agentTrace.js';
+import { IChatDebugService } from '../../../../../workbench/contrib/chat/common/chatDebugService.js';
+import type { AgentTraceDiagnosticEvent, AgentTraceEvent, AgentTracePage } from '../../../../../workbench/contrib/chat/common/chatDebugEvents.js';
 import { IViewsService } from '../../../../../workbench/services/views/common/viewsService.js';
 import { workbenchInstantiationService } from '../../../../../workbench/test/browser/workbenchTestServices.js';
 import { ISessionsService, type SessionsViewSelection } from '../../../../services/sessions/browser/sessionsService.js';
@@ -28,7 +28,8 @@ function record(sequence: number, type: string, extra: Record<string, unknown> =
 }
 
 function setup(resources: DisposableStore) {
-	const owner = workbenchInstantiationService(resources);
+	const parent = workbenchInstantiationService(resources);
+	const owner = resources.add(parent.createChild());
 	const active = observableValue<SessionsViewSelection | undefined>('selection', selection('first'));
 	const visibility = resources.add(new Emitter<{ id: string; visible: boolean; }>());
 	let visible = true;
@@ -41,7 +42,7 @@ function setup(resources: DisposableStore) {
 	const reads: { sessionId: string; after: Readonly<Record<string, number>>; }[] = [];
 	const diagnosticReads: number[] = [];
 	let readOverride: ((sessionId: string) => Promise<AgentTracePage>) | undefined;
-	owner.registerInstance(ITraceService, {
+	owner.registerInstance(IChatDebugService, {
 		readTrace: async (sessionId, after) => {
 			reads.push({ sessionId, after: { ...after } });
 			return readOverride ? readOverride(sessionId) : { trace: { formatVersion: 3, sessionId, historyPrefixes: [], threads: [{ threadId: 'root', events: events.filter(record => record.sequence > (after.root ?? 0)) }] }, cursors: { root: events.at(-1)?.sequence ?? 0 }, hasMore: false };

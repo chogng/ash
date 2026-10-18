@@ -13,7 +13,7 @@ import { registerCodeEditorServices } from '../../../src/ash/editor/test/browser
 import { IAccessibleViewService } from '../../../src/ash/platform/accessibility/browser/accessibleView.js';
 import { AgentTraceOutput } from '../../../src/ash/sessions/contrib/trace/browser/agentTraceOutput.js';
 import { ISessionsService, type SessionsViewSelection } from '../../../src/ash/sessions/services/sessions/browser/sessionsService.js';
-import { ITraceService } from '../../../src/ash/workbench/services/trace/common/traceService.js';
+import { IChatDebugService } from '../../../src/ash/workbench/contrib/chat/common/chatDebugService.js';
 import { observableValue, type IReader } from '../../../src/ash/base/common/observable.js';
 import { TestUriIdentityServices } from '../../../src/ash/platform/uriIdentity/test/common/uriIdentityTestServices.js';
 import { addDisposableListener, h } from '../../../src/ash/base/browser/dom.js';
@@ -260,7 +260,7 @@ if (new URLSearchParams(location.search).has('output')) {
 			}
 		});
 		services.registerInstance(ISessionsService, { getSelection: (reader?: IReader) => ({ activeSelection: agentSession.read(reader), visibleSelections: [] }), get activeSelection() { return agentSession.get(); } } as unknown as ISessionsService);
-		services.registerInstance(ITraceService, {
+		services.registerInstance(IChatDebugService, {
 			readTrace: async (sessionId, after) => ({ trace: { formatVersion: 3, sessionId, historyPrefixes: [], threads: [{ threadId: 'root', events: agentEvents.filter(event => event.sequence > (after.root ?? 0)) }] }, cursors: { root: agentEvents.at(-1)!.sequence }, hasMore: false }),
 			readTraceDiagnostics: async () => ({ diagnostics: { formatVersion: 2, captureId: null, recordingStatus: 'disabled', droppedRecords: 0, pendingRecords: 0, events: [] }, cursor: 0, hasMore: false }),
 			readTracePayload: async () => { throw new Error('Output must not read model bodies'); },

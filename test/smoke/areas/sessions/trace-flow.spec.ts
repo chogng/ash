@@ -6,7 +6,7 @@ import { expect, test as base } from '../../../automation/test.js';
 import { Menus } from '../../../automation/menus.js';
 import { QuickAccess } from '../../../automation/quickaccess.js';
 import { APP_SERVER_METHODS } from '../../../../.build/protocol/typescript/index.js';
-import { parseAgentTrace, parseAgentTraceDiagnostics, type AgentTraceEvent } from '../../../../src/ash/workbench/services/trace/common/agentTrace.js';
+import { parseAgentTrace, parseAgentTraceDiagnostics, type AgentTraceEvent } from '../../../../src/ash/workbench/contrib/chat/common/chatDebugEvents.js';
 import { connectTraceAppServer } from './traceFixture.js';
 
 type FixtureRequest = { input: Array<Record<string, unknown>>; tools?: Array<{ name: string; }>; };

@@ -180,10 +180,3 @@
 | 统一诊断包导出                             | IDE 与 Agent Window 已有 [Agent Host 调试日志包](docs/chat.md#调试日志导出)，包含客户端日志、Session 所属本地／SSH 宿主的进程日志与现存轮转文件、当前会话执行证据，以及当前 Chat／子 agent 已录制的请求和响应正文。manifest 记录录制状态、范围、限额和收集问题。更广的通用诊断包仍未排期：`feedback/prepare` 的构建、活动统计、响应诊断和指标快照尚未接入该入口，新增来源须沿其 owner 的真实收集契约接入。 |
 | Sessions 跨客户端审阅与 provider changeset | 当前 read marker 只属于窗口并绑定 revision。需要跨客户端 reviewed-file、transient/provider changeset、隔离或反馈评论时，先确定共享领域契约和真实消费者，不因上游身份模型不同新增 facade。                                                                                                                                                                                                                  |
 | Configuration 其他契约                     | configuration variables、Remote User、缓存默认值／实验覆盖、跨 profile 规则，以及 registry／schema、typed parse/serialize、控件描述与 `ashBinding` 均按具体调用需求复核，不按上游成员表整体补齐；Rust `config.toml` 的编辑入口仍归其宿主。设置呈现与接入规则见 [Settings 接入边界](src/ash/workbench/contrib/preferences/README.md#当前实现)。                                                             |
-
-## Trace overview and structured filters
-
-- User confirmed audit includes existing Trace analysis ownership. Keep `ash-rollout-trace` name. Preserve unrelated debug work and translations.
-- Saved and withdrew unverified TS metrics/filter UI draft to `/tmp/ash-trace-overview-baseline/draft`; Trace source files restored to their clean baseline. No Rust or protocol changes yet.
-- Current audit: Rust rollout-trace owns recording/reading/reducer/export; TS AgentTraceViewModel repeats causal derivation; Python agent_eval_trace.py computes accounting/coverage/relations independently. Check production consumers before moving logic, and preserve offline capture inspection.
-- Remaining: finish ownership audit; implement overview with accounting-only deduplication, unknown values and coverage from the domain owner; structured display filtering; accessibility/localization and focused unit/browser/Rust validation.

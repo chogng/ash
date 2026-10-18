@@ -41,18 +41,18 @@ test('Workbench commands open Trace without adding an Activity Bar destination',
 	const scripts = new Set<string>();
 	const cdp = await page.context().newCDPSession(page);
 	cdp.on('Debugger.scriptParsed', ({ url }) => {
-		if (/\/(agentTraceEditor|traceEditor|agentTrace)-[^/]+\.js(?:$|\?)/.test(url)) scripts.add(url);
+		if (/\/(chatDebugEditor|traceEditor|agentTrace)-[^/]+\.js(?:$|\?)/.test(url)) scripts.add(url);
 	});
 	try {
 		// Resource Timing omits Electron file loads. Debugger reports loaded scripts in both hosts,
 		// including scripts already parsed before attachment, without reading their contents.
 		await cdp.send('Debugger.enable');
 		expect([...scripts]).toEqual([]);
-		await new QuickAccess(page).runCommand('ash.agentTrace.open');
+		await new QuickAccess(page).runCommand('workbench.action.chat.openAgentDebugPanel');
 		await expect(entry).toHaveCount(0);
 		const viewer = page.locator('.ash-agent-trace:visible');
 		await expect(viewer).toBeVisible();
-		await expect.poll(() => [...scripts].some(name => /\/agentTraceEditor-/.test(name))).toBe(true);
+		await expect.poll(() => [...scripts].some(name => /\/chatDebugEditor-/.test(name))).toBe(true);
 		await expect(entry).toHaveCount(0);
 		await viewer.locator('input[type=file]').setInputFiles({ name: 'navigation.trace.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(offline)) });
 		await expect(viewer.getByRole('status')).toContainText('Imported');

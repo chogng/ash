@@ -9,11 +9,11 @@ import { localize } from '../../../../nls.js';
 import { ICommandService } from '../../../../platform/commands/common/commands.js';
 import { createServiceIdentifier } from '../../../../platform/instantiation/common/instantiation.js';
 import { IOpenerService } from '../../../../platform/opener/common/opener.js';
-import { eventLabel } from '../../../../workbench/contrib/trace/browser/agentTraceModel.js';
-import { createAgentTraceResource, readAgentTraceLocation } from '../../../../workbench/contrib/trace/common/trace.js';
+import { eventLabel } from '../../../../workbench/contrib/chat/browser/chatDebug/agentTraceModel.js';
+import { createAgentTraceResource, readAgentTraceLocation } from '../../../../workbench/contrib/chat/browser/chatDebug/chatDebugEditorInput.js';
 import { IOutputService, OUTPUT_VIEW_ID, type IOutputChannel, type IOutputEntryInput } from '../../../../workbench/services/output/common/output.js';
-import { ITraceService } from '../../../../workbench/services/trace/common/traceService.js';
-import type { AgentTraceDiagnosticEvent, AgentTraceEvent } from '../../../../workbench/services/trace/common/agentTrace.js';
+import { IChatDebugService } from '../../../../workbench/contrib/chat/common/chatDebugService.js';
+import type { AgentTraceDiagnosticEvent, AgentTraceEvent } from '../../../../workbench/contrib/chat/common/chatDebugEvents.js';
 import { IViewsService } from '../../../../workbench/services/views/common/viewsService.js';
 import { ISessionsService } from '../../../services/sessions/browser/sessionsService.js';
 
@@ -41,7 +41,7 @@ export class AgentTraceOutput extends Disposable implements IAgentTraceOutput {
 	constructor(
 		@ISessionsService private readonly sessions: ISessionsService,
 		@IOutputService private readonly output: IOutputService,
-		@ITraceService private readonly traces: ITraceService,
+		@IChatDebugService private readonly traces: IChatDebugService,
 		@IViewsService private readonly views: IViewsService,
 		@ILanguageFeaturesService languages: ILanguageFeaturesService,
 		@IOpenerService openers: IOpenerService,

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { suite, test } from 'mocha';
-import { mergeAgentTrace, mergeAgentTraceDiagnostics, parseAgentTrace, parseAgentTracePage, parseAgentTraceDiagnostics, parseAgentTraceDiagnosticPage, parseAgentTraceGraph } from '../../common/agentTrace.js';
+import { mergeAgentTrace, mergeAgentTraceDiagnostics, traceOverview, parseAgentTrace, parseAgentTracePage, parseAgentTraceDiagnostics, parseAgentTraceDiagnosticPage, parseAgentTraceGraph } from '../../common/chatDebugEvents.js';
 
 suite('Agent trace artifact', () => {
 	test('validates versioned accounting receipts and pending evidence without changing V3 history', () => {
@@ -73,4 +73,21 @@ suite('Agent trace artifact', () => {
 			{ ...artifact, threads: [{ threadId: 'root', events: [{ ...record, recordedAt: Number.MAX_SAFE_INTEGER }] }] },
 		]) { assert.throws(() => parseAgentTrace(value)); }
 	});
+	test('accepts only covered backend metrics and withholds a summary after capture growth', () => {
+		const record = (threadId: string, sequence: number) => ({ eventId: `event-${sequence}`, sequence, recordedAt: sequence, event: { type: 'turnCompleted', threadId, turnId: 'turn' } });
+		const metric = { reported: '0', reportedCalls: 1, missingCalls: 0 };
+		const trace = parseAgentTrace({
+			formatVersion: 3, sessionId: 's', historyPrefixes: [], threads: [{ threadId: 'root', events: [record('root', 1)] }], overview: {
+				formatVersion: 1, threadCursors: { root: 1 }, eventCount: 1, modelCalls: 1, toolCalls: 0,
+				failedModelCalls: 0, cancelledModelCalls: 0, excludedModelCalls: 0,
+				inputTokens: metric, outputTokens: metric, cachedInputTokens: { reported: null, reportedCalls: 0, missingCalls: 1 }, totalTokens: metric,
+			}
+		});
+		assert.equal(traceOverview(trace)?.totalTokens.reported, '0');
+		const grown = mergeAgentTrace(trace, { ...trace, overview: undefined, threads: [{ threadId: 'root', events: [record('root', 2)] }] });
+		assert.equal(traceOverview(grown), undefined);
+		assert.throws(() => parseAgentTrace({ ...trace, overview: { ...trace.overview, totalTokens: { ...metric, missingCalls: 1 } } }));
+		assert.throws(() => parseAgentTrace({ ...trace, overview: { ...trace.overview, inputTokens: { ...metric, reported: '-1' } } }));
+	});
+
 });

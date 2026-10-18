@@ -86,8 +86,8 @@ JSON 排版变化不使基线失效，实际文件内容和 grader 依赖变化�
 便于区分模型变化与产品版本变化。汇总见 `report.json` 和 `report.md`。失败时保留后端诊断；
 清理失败时报告 `retainedProfile`，可以用该 `ASH_HOME` 重试 `ash app-server daemon stop`。
 
-在 Workbench 命令面板运行“开发人员：打开执行 Trace”（`ash.agentTrace.open`），再选择“导入 Trace”
-打开报告对应的 `trace.json`。Sessions 的“查看执行 Trace”复用同一个编辑器，并默认读取当前会话。
+在 Workbench 命令面板运行“开发人员：打开 Agent 调试日志”（`workbench.action.chat.openAgentDebugPanel`），再选择“导入 Trace”
+打开报告对应的 `trace.json`。Sessions 的“显示 Agent 调试日志”复用同一个编辑器，并默认读取当前会话。
 Trace 保留历史事实、模型 attempt、Core／ModelService 的语义请求、响应、取消前部分输出及执行关系。
 语义请求不等于 provider HTTP 字节；逐个 streaming chunk 未保存。`modelAttempts`、`failedAttempts`、
 `cancelledAttempts` 和 `abandonedAttempts` 表示保留的 ModelService attempt 生命周期，

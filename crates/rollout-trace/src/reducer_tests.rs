@@ -27,6 +27,7 @@ fn accounting_edges_require_the_committed_thread_turn_identity_and_sequence() {
         history_prefixes: Vec::new(),
         diagnostics: None,
         graph: None,
+        overview: None,
     };
     let event = |sequence, event| DiagnosticEvent {
         event_id: format!("diag-{sequence}"),
@@ -143,6 +144,7 @@ fn reducer_links_observed_model_calls_code_cells_commands_and_results_without_in
         history_prefixes: Vec::new(),
         diagnostics: None,
         graph: None,
+        overview: None,
     };
     let payload = PayloadRef {
         payload_id: "payload-1".into(),
@@ -299,6 +301,7 @@ fn reducer_links_message_delivery_and_delegation_using_saved_identities() {
         history_prefixes: Vec::new(),
         diagnostics: None,
         graph: None,
+        overview: None,
     };
     let diagnostics = DiagnosticTrace {
         format_version: 1,

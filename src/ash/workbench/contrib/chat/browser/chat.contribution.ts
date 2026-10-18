@@ -1,3 +1,6 @@
+import { registerChatOpenAgentDebugPanelAction } from './actions/chatOpenAgentDebugPanelAction.js';
+import { IChatDebugService } from '../common/chatDebugService.js';
+import { AppServerChatDebugService } from './chatDebug/appServerChatDebugService.js';
 import { ChatResponseResourceFileSystemProvider, ChatResponseResourceWorkbenchContribution, IChatResponseResourceFileSystemProvider } from '../common/widget/chatResponseResourceFileSystemProvider.js';
 import { registerChatActions } from './actions/chatActions.js';
 import { registerAction2 } from '../../../../platform/actions/common/actions.js';
@@ -25,12 +28,14 @@ import { registerSingleton, InstantiationType } from '../../../../platform/insta
 import { DictationOnboardingService, IDictationOnboardingService } from './speechToText/dictationOnboarding.js';
 
 registerSingleton(IChatEditingService, ChatEditingService, InstantiationType.Delayed);
+registerSingleton(IChatDebugService, AppServerChatDebugService, InstantiationType.Delayed);
 registerWorkbenchContribution(ChatEditingEditorOverlay.ID, WorkbenchPhase.BlockRestore, accessor => accessor.get(IInstantiationService).createInstance(ChatEditingEditorOverlay));
 
 registerSingleton(IDictationOnboardingService, DictationOnboardingService, InstantiationType.Delayed);
 registerSingleton(IChatResponseResourceFileSystemProvider, ChatResponseResourceFileSystemProvider, InstantiationType.Delayed);
 registerWorkbenchContribution(ChatResponseResourceWorkbenchContribution.ID, WorkbenchPhase.BlockStartup, accessor => accessor.get(IInstantiationService).createInstance(ChatResponseResourceWorkbenchContribution));
 registerChatActions();
+registerChatOpenAgentDebugPanelAction();
 registerAction2(ExportAgentHostDebugLogsAction);
 registerChatCopyActions();
 registerWorkbenchContribution('workbench.contrib.chatSessionLinks', WorkbenchPhase.BlockRestore, accessor => accessor.get(IInstantiationService).createInstance(ChatSessionLinkOpener));

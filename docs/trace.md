@@ -6,6 +6,12 @@ Trace 是内置、可选的诊断能力：共享运行时继续拥有业务事�
 
 本文记录已实现的边界、设计依据与后续验收。具体契约以对应 owner 的源码为准；标明后续的能力不作为已可调用的 API。
 
+前端 Agent 执行诊断由 `contrib/chat/browser/chatDebug` 统一承载，IDE 与 Agents Window 复用同一个编辑器；OTel 性能查看器继续属于独立的 Trace contribution。概览由 `rollout-trace` 根据已提交的模型账目归约，随原有 `session/trace/read` 返回，不增加服务或第二份账目。
+
+概览绑定 Thread 游标及事件数量，只在与已加载捕获记录匹配时展示。按 Thread、Turn 和调用 ID 去重；相同账目只计一次，冲突身份排除并标明。输入、输出及缓存输入分别标明上报覆盖率；输入与输出总量仅统计同时上报两项的调用，不额外累加缓存或 reasoning。缺失上报保持未知，真实零值保留为零。数值使用十进制字符串，避免 JSON 客户端的大整数精度损失。失败 attempt 或未提交账目可能仍有未知用量，不能将账目小计解释为所有执行的完整用量。
+
+显示筛选独立于概览：模型、工具、Agent 和其他类型可分别开关；文本用逗号分隔可选项，`!term` 排除内容，`thread:ID`／`turn:ID` 精确匹配，`after:`／`before:` 接受包含边界的 UTC 日期或带时区的 ISO 时间戳。无效条件明确提示并不匹配任何事件。旧 V3 文件缺少概览时仍可阅读，指标保持未知。
+
 ## 1. 先明确“可选”的范围
 
 普通用户不必使用 Trace 页面，也不应因为页面被打包就启动详细采集、请求正文复制或持续查询。但运行时已有的历史、终态、授权、取消、续接和必要计量服务于产品本身，不能随 Trace 的停用一起移除。
@@ -41,16 +47,16 @@ Rust 内部贡献接口也不是可下载 Rust 动态库或稳定插件 ABI。�
 
 这一节记录迁移前的问题；所链接的 owner 源码已经更新，实施结果见第 4、10 节。原同步路径、具体依赖和默认导航不再代表当前实现。
 
-| 现状                                                         | 实际代码或文档                                                                                                                                                   | 改造含义                                                                             |
-| ------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
-| Core 和 core-api 直接依赖 rollout-trace                      | [Core Cargo](../crates/core/Cargo.toml)、[core-api Cargo](../crates/core-api/Cargo.toml)、[AgentRuntime](../crates/core-api/src/runtime.rs)                      | Core 的公共读取接口暴露 Trace 类型；仅移动 crate 不能解除耦合                        |
-| ThreadController 持有具体采集器，并负责 Trace 查询和关系归纳 | [ThreadController](../crates/core/src/thread_controller.rs)                                                                                                      | 执行事实 owner 与可选诊断实现混在同一个入口，应分离具体采集和派生查询职责            |
-| 模型边界有真实语义证据                                       | [DiagnosticStream](../crates/core/src/diagnostic_model.rs)、[ModelStreamSink](../crates/core-api/src/model.rs)                                                   | 复用 prepared-request 和真实流事件边界，保留取消前输出；不让界面事后猜测输入         |
-| 详细记录关闭时模型正文不会由 start_attempt 序列化            | [Recorder](../crates/rollout-trace/src/recorder.rs)                                                                                                              | 保留快速关闭路径；另外检查 Hook 调用方等是否已在开关前构造 JSON 或复制正文           |
-| 启用时同步序列化、写文件和更新 manifest                      | 同一 Recorder 的 payload、append_event 和终态路径                                                                                                                | 存储故障不会直接改写成功结果，但慢盘仍可能增加延迟；需要有界后台处理和实测           |
-| 采集配置归 profile runtime，修改需重启 App Server            | [配置契约](config.md#执行轨迹记录)、[组合入口](../crates/app-server/src/local.rs)                                                                                | 第一阶段保留生效时机，两个窗口共享实际状态；热切换不能由某个窗口单独实现             |
-| 视图已有正文按需读取和关闭释放，代码注册仍在启动入口         | [Trace contribution](../src/ash/workbench/contrib/trace/browser/trace.contribution.ts)、[编辑器](../src/ash/workbench/contrib/trace/browser/agentTraceEditor.ts) | 运行中按需读取和模块按需加载是两件事；保留现有释放行为，再减少启动加载和默认导航占用 |
-| 任务评测已有独立 verifier、重复运行和证据覆盖                | [runner](../scripts/agent_eval.py)、[分析层](../scripts/agent_eval_trace.py)                                                                                     | 在此基础上补实验条件和评分，不替换真实 Ash loop                                      |
+| 现状                                                         | 实际代码或文档                                                                                                                                                                            | 改造含义                                                                             |
+| ------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| Core 和 core-api 直接依赖 rollout-trace                      | [Core Cargo](../crates/core/Cargo.toml)、[core-api Cargo](../crates/core-api/Cargo.toml)、[AgentRuntime](../crates/core-api/src/runtime.rs)                                               | Core 的公共读取接口暴露 Trace 类型；仅移动 crate 不能解除耦合                        |
+| ThreadController 持有具体采集器，并负责 Trace 查询和关系归纳 | [ThreadController](../crates/core/src/thread_controller.rs)                                                                                                                               | 执行事实 owner 与可选诊断实现混在同一个入口，应分离具体采集和派生查询职责            |
+| 模型边界有真实语义证据                                       | [DiagnosticStream](../crates/core/src/diagnostic_model.rs)、[ModelStreamSink](../crates/core-api/src/model.rs)                                                                            | 复用 prepared-request 和真实流事件边界，保留取消前输出；不让界面事后猜测输入         |
+| 详细记录关闭时模型正文不会由 start_attempt 序列化            | [Recorder](../crates/rollout-trace/src/recorder.rs)                                                                                                                                       | 保留快速关闭路径；另外检查 Hook 调用方等是否已在开关前构造 JSON 或复制正文           |
+| 启用时同步序列化、写文件和更新 manifest                      | 同一 Recorder 的 payload、append_event 和终态路径                                                                                                                                         | 存储故障不会直接改写成功结果，但慢盘仍可能增加延迟；需要有界后台处理和实测           |
+| 采集配置归 profile runtime，修改需重启 App Server            | [配置契约](config.md#执行轨迹记录)、[组合入口](../crates/app-server/src/local.rs)                                                                                                         | 第一阶段保留生效时机，两个窗口共享实际状态；热切换不能由某个窗口单独实现             |
+| 视图已有正文按需读取和关闭释放，代码注册仍在启动入口         | [Chat Debug action](../src/ash/workbench/contrib/chat/browser/actions/chatOpenAgentDebugPanelAction.ts)、[编辑器](../src/ash/workbench/contrib/chat/browser/chatDebug/chatDebugEditor.ts) | 运行中按需读取和模块按需加载是两件事；保留现有释放行为，再减少启动加载和默认导航占用 |
+| 任务评测已有独立 verifier、重复运行和证据覆盖                | [runner](../scripts/agent_eval.py)、[分析层](../scripts/agent_eval_trace.py)                                                                                                              | 在此基础上补实验条件和评分，不替换真实 Ash loop                                      |
 
 改造前 Recorder 限制单正文 8 MiB、单 capture 128 MiB 和 32,000 条诊断事件，闲置 writer 缓存驱逐目标为 16，尚未约束整个 profile 和活跃正文。当前配额见第 10 节。图形界面导入／导出为 64 MiB，不能据此承诺任意完整 capture 都可装入单文件。
 
@@ -238,7 +244,7 @@ Agent 工作区。缺少完整原始材料时保留不可用状态，不补造�
 - 事件空间不足时先停止保存正文，防止持续积累无引用正文。旧证据超过当前读取预算会报告不可用并保留原文件，不静默覆盖或截取成完整证据。
 - `flush(deadline)`／`shutdown(deadline)` 返回完成或待写数量；读取最多等待 250 ms。业务 Turn 完成不等待此屏障。进程崩溃仍可能留下未闭合 attempt。
 - 诊断格式 V2 增加 `pendingRecords` 与 `modelAttemptAccounted`；外层仍为 V3，前端与分析器兼容旧诊断 V1。账目关联只接受实际提交后的 invocation ID、所属 Thread／Turn 和历史 sequence。
-- `ITraceService` 借用现有 `IThreadApi`，不另建连接或订阅。Chat 服务继续提供会话和历史更新，Trace 的读取和格式解析归独立服务；编辑器、解析器、导航和样式按需加载。
+- `IChatDebugService` 借用现有 `IAgentThreadService`，不另建连接或订阅。Chat 服务继续提供会话和历史更新，执行记录的只读契约与格式解析归 Chat contribution 的 `common/chatDebugService.ts`、`common/chatDebugEvents.ts`，后端适配器位于 `browser/chatDebug/appServerChatDebugService.ts`，复用 Rust `rollout-trace`；编辑器、解析器、导航和样式按需加载。
 - Runner 保留独立成果验收。`--experiment` 声明假设、变体和允许变化的条件，语义配置叶项只保存哈希；未声明变化会拒绝对照。评分器错误、超时和未知状态单列，Trace 观察不替代评分。
 
 ### 本轮验证结果

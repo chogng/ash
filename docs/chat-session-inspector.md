@@ -22,15 +22,15 @@ Workbench 通用 Agent Sidebar 不受影响。
 ## 执行 Trace
 
 执行 Trace 编辑器、命令和无障碍支持由 `workbench/contrib/trace` 共享提供。普通 Workbench 的
-“开发人员：打开执行 Trace”（`ash.agentTrace.open`）打开可导入的页面；命令传入 Session ID 时读取
+“开发人员：打开 Agent 调试日志”（`workbench.action.chat.openAgentDebugPanel`）打开可导入的页面；命令传入 Session ID 时读取
 该会话。也可传入 `{ sessionId, threadId, turnId?, eventId? }`，定位所属 Thread 的 Turn 或持久事件
 （包括诊断事件）；Turn 或 event 定位必须带 Thread ID。定位参数随编辑器 URI 保存，重开恢复同一目标。
-Sessions 的“查看执行 Trace”（`sessions.trace.open`）取得当前 Session 与 Thread，并用已有 agent tree
+Sessions 的“显示 Agent 调试日志”（`sessions.trace.open`）取得当前 Session 与 Thread，并用已有 agent tree
 中的最近 Turn 身份定位，打开独立 Trace 页面；没有当前会话时仍可导入 Trace。
 
 Trace 从对话菜单或命令面板打开，按需加载完整编辑器，不注册 Activity Bar 或侧栏导航入口。Sessions 的
 `sessions.open.trace` 恢复上次复查的 Session／Thread／Turn，不会因切换 Chat 自动替换复查上下文。
-“查看执行 Trace”显式定位当前 Chat；`sessions.trace.import` 打开导入页。复查位置随窗口恢复；
+“显示 Agent 调试日志”显式定位当前 Chat；`sessions.trace.import` 打开导入页。复查位置随窗口恢复；
 导入文件正文只保留在编辑器生命周期内，关闭窗口后需要重新导入。
 Workbench 的 `ash.agentTrace.resume` 同样恢复有效位置；无有效位置时打开导入页。
 
@@ -58,7 +58,7 @@ Trace 定位链接。有界文本缓存由 Output 拥有；隐藏或关闭停止
 这些决策属于持久执行历史，关闭详细记录仍可查看；“仅显示错误”也包含被拒绝的循环决策。
 完整响应及终止前部分输出的详细正文保留消息身份和阶段，已收到的阶段不会靠正文推测。
 
-界面通过独立 `ITraceService` 调用 `session/trace/read` 等只读方法，复用既有 `IThreadApi` 连接，增量读取历史，再按现有 Thread 订阅跟随新事件。
+界面通过 Chat contribution 的 `IChatDebugService` 调用 `session/trace/read` 等只读方法，复用既有 `IAgentThreadService` 连接，增量读取历史，再按现有 Thread 订阅跟随新事件。
 订阅 snapshot 补齐读取与订阅之间的空窗；共享 Chat 服务传递当前 Session 的 `session/changed`，
 触发读取以发现新子 Thread，编辑器不依赖 Sessions 目录服务。隐藏或关闭
 编辑器释放其订阅，重开读取后续历史；迟到的请求结果不会写回已关闭或切换的编辑器。

@@ -1,3 +1,5 @@
+import { ILabelService } from '../../../../../platform/label/common/label.js';
+import { LabelService } from '../../../../services/label/common/labelService.js';
 import { installDebugClientFixture } from '../common/debugClientFixture.js';
 import { toDisposable } from '../../../../../base/common/lifecycle.js';
 import { resetNlsResolver } from '../../../../../nls.js';
@@ -627,7 +629,7 @@ async function startSession(options: Omit<DebugSessionStartOptions, 'resolvedCon
 	using workspace = new TestWorkspaceService({ id: 'test', uri: options.workspace });
 	const base = createDisconnectedRendererApi();
 	const host = { ...base, hasAppServer: true, appServer: { ...base.appServer, operatingSystem: OperatingSystem.Windows } };
-	using services = new InstantiationService(new ServiceCollection([IPathService, new SyncDescriptor(BrowserPathService)], [IRendererHostService, host], [IConfigurationService, new SyncDescriptor(WorkbenchConfigurationService)], [ITerminalProcessService, { getEnvironment: async () => ({}) }], [IWorkspaceContextService, workspace]));
+	using services = new InstantiationService(new ServiceCollection([IPathService, new SyncDescriptor(BrowserPathService)], [IRendererHostService, host], [IConfigurationService, new SyncDescriptor(WorkbenchConfigurationService)], [ITerminalProcessService, { getEnvironment: async () => ({}) }], [IWorkspaceContextService, workspace], [ILabelService, new SyncDescriptor(LabelService)]));
 	services.registerSingleton(ICommandService, () => new CommandService(services));
 	using resolver = services.createInstance(ConfigurationResolverService);
 	const resolvedConfiguration = await resolver.resolveAsync(workspace.getWorkspace().folders[0], { adapter: options.configuration.adapter, arguments: options.configuration.arguments });

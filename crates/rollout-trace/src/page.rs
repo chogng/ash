@@ -71,15 +71,51 @@ pub fn read_session_trace_page(
         threads.push(ThreadRolloutTrace { thread_id, events });
     }
     let history_prefixes = retained_prefixes(store, &threads)?;
+    let mut trace = RolloutTrace {
+        format_version: crate::ROLLOUT_TRACE_FORMAT_VERSION,
+        session_id: session_id.clone(),
+        threads,
+        history_prefixes,
+        diagnostics: None,
+        graph: None,
+        overview: None,
+    };
+    // Only the caught-up page carries a summary. Read through the exact returned cursors,
+    // so concurrent newer events cannot leak into the viewer's loaded-capture metrics.
+    // An unchanged poll reuses the consumer's existing summary without rescanning history.
+    if !has_more && (after.is_empty() || &cursors != after) {
+        let mut overview = crate::overview::OverviewBuilder::default();
+        for (thread_id, end) in &cursors {
+            overview.start_thread(thread_id);
+            let mut cursor = 0;
+            while cursor < *end {
+                let page = store.load_range(thread_id, cursor, 500).map_err(|source| {
+                    RolloutTraceError::ThreadStore {
+                        thread_id: thread_id.clone(),
+                        source,
+                    }
+                })?;
+                let mut next = cursor;
+                for event in page
+                    .events
+                    .iter()
+                    .take_while(|event| event.sequence <= *end)
+                {
+                    next = event.sequence;
+                    overview.observe(thread_id, event);
+                }
+                if next <= cursor {
+                    return Err(RolloutTraceError::InvalidParameters(
+                        "trace prefix changed while building overview".into(),
+                    ));
+                }
+                cursor = next;
+            }
+        }
+        trace.overview = Some(overview.finish());
+    }
     Ok(TracePage {
-        trace: RolloutTrace {
-            format_version: crate::ROLLOUT_TRACE_FORMAT_VERSION,
-            session_id: session_id.clone(),
-            threads,
-            history_prefixes,
-            diagnostics: None,
-            graph: None,
-        },
+        trace,
         cursors,
         has_more,
     })

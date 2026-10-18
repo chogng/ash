@@ -132,9 +132,22 @@ fn trace_contains_the_complete_nested_history_prefix_closure() {
         }
         after = page.cursors;
         if !page.has_more {
+            let overview = page.trace.overview.as_ref().unwrap();
+            assert_eq!(overview.event_count, event_count as u64);
+            assert_eq!(overview.thread_cursors, after);
             break;
+        } else {
+            assert!(page.trace.overview.is_none());
         }
     }
+    let unchanged = read_session_trace_page(
+        repository.thread_store().as_ref(),
+        &first.session_id,
+        &after,
+        1,
+    )
+    .unwrap();
+    assert!(unchanged.trace.overview.is_none());
     assert_eq!(retained_pages, retained);
     assert_eq!(
         event_count,

@@ -19,6 +19,8 @@ pub struct RolloutTrace {
     pub diagnostics: Option<crate::DiagnosticTrace>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub graph: Option<crate::TraceGraph>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub overview: Option<crate::TraceOverview>,
 }
 
 /// One durable Thread history within a [`RolloutTrace`].
@@ -66,14 +68,17 @@ pub fn capture_session_trace(
     }
 
     let history_prefixes = retained_prefixes(thread_store, &threads)?;
-    Ok(RolloutTrace {
+    let mut trace = RolloutTrace {
         format_version: ROLLOUT_TRACE_FORMAT_VERSION,
         session_id: session_id.clone(),
         threads,
         history_prefixes,
         diagnostics: None,
         graph: None,
-    })
+        overview: None,
+    };
+    trace.overview = Some(crate::overview::summarize_trace(&trace));
+    Ok(trace)
 }
 
 pub(crate) fn retained_prefixes(
