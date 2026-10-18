@@ -3,7 +3,10 @@ import type { IAppServerApi } from '../../../agentHost/common/appServerApi.js';
 import { OperatingSystem } from '../../../../base/common/platform.js';
 import { GeneralShellType } from '../../common/terminal.js';
 import assert from "node:assert/strict";
-import { test } from "mocha";
+import { suite, test } from "mocha";
+import { DeferredPromise } from '../../../../base/common/async.js';
+import { isCancellationError } from '../../../../base/common/errors.js';
+import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../base/test/common/utils.js';
 import { APP_SERVER_METHODS } from "../../../../../../.build/protocol/typescript/index.js";
 import { toDisposable } from "../../../../base/common/lifecycle.js";
 import type { AppServerConnectionState } from "../../../agentHost/common/appServerApi.js";
@@ -14,6 +17,52 @@ import type { ITerminalProcessService } from "../../common/terminal.js";
 const FIRST_TOKEN = "a".repeat(64);
 const SECOND_TOKEN = "b".repeat(64);
 const THIRD_TOKEN = "c".repeat(64);
+
+suite('reconnectable terminal creation lifetime', () => {
+	ensureNoDisposablesAreLeakedInTestSuite();
+
+	for (const retirement of ['dispose', 'replacement'] as const) {
+		test(`a create reply after ${retirement} closes its original process without publishing a lease`, async () => {
+			const supervisor = new TestSupervisor();
+			const reply = new DeferredPromise<void>();
+			supervisor.createReply = reply.p;
+			using service = new ReconnectableTerminalProcessService(supervisor as unknown as AppServerProtocolClient);
+			const creation = service.create({ dirId: 'original-folder', rows: 24, cols: 80, profile: { type: 'default' } });
+			const rejected = assert.rejects(creation, isCancellationError);
+			if (retirement === 'dispose') service.dispose();
+			else service.prepareForServerReplacement();
+			await reply.complete();
+			await rejected;
+			assert.deepEqual(supervisor.requests.map(request => request.method), ['terminal/create', 'terminal/close']);
+			assert.deepEqual(supervisor.requests.at(-1)?.params, { dirId: 'original-folder', terminalId: 'terminal-1' });
+			await assert.rejects(service.getReconnectLease('terminal-1'), /no longer recoverable/);
+		});
+	}
+
+	test('a retired connection create reply cannot close or register a process on the replacement connection', async () => {
+		const supervisor = new TestSupervisor();
+		const reply = new DeferredPromise<void>();
+		supervisor.createReply = reply.p;
+		using service = new ReconnectableTerminalProcessService(supervisor as unknown as AppServerProtocolClient);
+		const creation = service.create({ rows: 24, cols: 80, profile: { type: 'default' } });
+		const rejected = assert.rejects(creation, isCancellationError);
+		supervisor.emit('crashed');
+		supervisor.generation++;
+		supervisor.emit('ready');
+		await reply.complete();
+		await rejected;
+		assert.deepEqual(supervisor.requests.map(request => request.method), ['terminal/create']);
+		await assert.rejects(service.getReconnectLease('terminal-1'), /no longer recoverable/);
+	});
+
+	test('a disposed service rejects creation before contacting the execution host', async () => {
+		const supervisor = new TestSupervisor();
+		using service = new ReconnectableTerminalProcessService(supervisor as unknown as AppServerProtocolClient);
+		service.dispose();
+		await assert.rejects(service.create({ rows: 24, cols: 80, profile: { type: 'default' } }), isCancellationError);
+		assert.deepEqual(supervisor.requests, []);
+	});
+});
 
 test('a replacement renderer attaches the original process and rotates its handoff credential', async () => {
 	const supervisor = new TestSupervisor();
@@ -237,6 +286,7 @@ class TestSupervisor {
 	attachFailures = 0;
 	successfulAttachments = 0;
 	invalidCreateLease = false;
+	createReply: Promise<void> | undefined;
 	output: Buffer | undefined;
 	cwd: { value: string; afterOutputSequence: number; isTrusted?: boolean; } | undefined;
 	readonly requests: RecordedRequest[] = [];
@@ -263,6 +313,7 @@ class TestSupervisor {
 				return { profile: { profileId: 'custom:Raw', title: 'Raw', isDefault: false }, executable: 'cmd.exe', args: profile.args };
 			}
 			case APP_SERVER_METHODS["terminal/create"].method:
+				await this.createReply;
 				return {
 					terminalId: "terminal-1",
 					ready: { pid: 1234, cwd: '/backend/workspace', shellType: this.shellType },

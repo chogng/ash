@@ -1,5 +1,6 @@
 import { APP_SERVER_METHODS, type TerminalAttachResult, type TerminalReconnectLease } from "../../../../../.build/protocol/typescript/index.js";
 import { timeout } from "../../../base/common/async.js";
+import { CancellationError } from '../../../base/common/errors.js';
 import { Disposable, toDisposable, type IDisposable } from "../../../base/common/lifecycle.js";
 import type { AppServerConnectionState } from "../../agentHost/common/appServerApi.js";
 import type { AppServerProtocolClient } from "../../agentHost/browser/appServerProtocolClient.js";
@@ -44,6 +45,7 @@ export class ReconnectableTerminalProcessService extends Disposable implements I
 	private readonly terminals = new Map<string, TerminalRecord>();
 	private readonly handedOff = new Set<string>();
 	private previousState: AppServerConnectionState;
+	private replacementRevision = 0;
 
 	constructor(private readonly supervisor: AppServerProtocolClient, options: ReconnectableTerminalProcessServiceOptions = {}) {
 		super();
@@ -83,6 +85,9 @@ export class ReconnectableTerminalProcessService extends Disposable implements I
 	}
 
 	async create(params: ITerminalProcessCreateOptions): Promise<ITerminalProcessCreation> {
+		if (this.isDisposed) throw new CancellationError();
+		const generation = this.supervisor.generation;
+		const replacementRevision = this.replacementRevision;
 		const execution = params.execution?.type === 'process' ? { ...params.execution, args: typeof params.execution.args === 'string' ? params.execution.args : [...params.execution.args] } : params.execution;
 		const result = await this.supervisor.request(APP_SERVER_METHODS["terminal/create"], {
 			...params,
@@ -90,6 +95,15 @@ export class ReconnectableTerminalProcessService extends Disposable implements I
 			execution,
 			lifecycle: { type: "reconnectable" },
 		});
+		if (this.isDisposed || replacementRevision !== this.replacementRevision || generation !== this.supervisor.generation || this.supervisor.state !== 'ready') {
+			// A reply already delivered by the protocol may outlive its owner. Only
+			// the original connection can release that process; a new host must never
+			// receive a close for an identity issued by the retired connection.
+			if (result.terminalId && generation === this.supervisor.generation && this.supervisor.state === 'ready') {
+				await this.supervisor.request(APP_SERVER_METHODS['terminal/close'], { ...workspaceFolder(params.dirId), terminalId: result.terminalId }).catch(() => { });
+			}
+			throw new CancellationError();
+		}
 		let lease: TerminalReconnectLease;
 		try {
 			lease = requireReconnectLease(result.reconnect);
@@ -207,6 +221,7 @@ export class ReconnectableTerminalProcessService extends Disposable implements I
 
 	/** Drops leases before an intentional runtime replacement changes broker identity. */
 	prepareForServerReplacement(): void {
+		this.replacementRevision++;
 		const records = [...this.terminals.values()];
 		this.terminals.clear();
 		for (const record of records) record.closing = true;
