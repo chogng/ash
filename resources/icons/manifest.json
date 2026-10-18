@@ -912,6 +912,11 @@
       "rendering": "symbolic"
     },
     {
+      "id": "mute",
+      "file": "mute.svg",
+      "rendering": "symbolic"
+    },
+    {
       "id": "new-file",
       "file": "new-file.svg",
       "rendering": "symbolic"
@@ -1294,6 +1299,11 @@
     {
       "id": "unlimited",
       "file": "unlimited.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "unmute",
+      "file": "unmute.svg",
       "rendering": "symbolic"
     },
     {
