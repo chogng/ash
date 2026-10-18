@@ -49,7 +49,6 @@
 
 ## 浏览器文件上传 · TODO
 
-- [ ] **验收** · Windows 实机运行 `just verify ash-app-server-runtime --lib --filter browser_upload` 与 `just verify ash-file-system --lib`，确认硬链接替换和 opened-file link information 两个回归通过，记录源码 SHA、Windows 版本／架构及日志。macOS 已通过上传 6 项、文件系统 77 项及共享策略 1 项；Windows 文件系统交叉编译通过，App Server 因缺 SDK 头文件中止，不能代替实机结果。
 - [ ] **验收** · Linux 实机运行上传验证，覆盖符号链接叶节点、父目录替换及硬链接竞态并记录 SHA／日志。文件系统交叉编译通过，App Server 因缺 `x86_64-linux-gnu-gcc` 中止。
 
 测试步骤及平台边界见[浏览器上传文件访问验证](docs/browser-foundation.md#浏览器上传文件访问验证)。
@@ -88,7 +87,6 @@
 - [ ] **后端前置** · 为 Agent PR 的持续合并策略与 request metadata 补后端工作流契约；当前只闭合请求提交／排队、直接创建 PR、Draft 和 auto-merge，任务提交成功不能视为 PR 已创建。
 - [ ] **后端前置** · 为 CI rerun、logs／annotations 和 Fix CI 请求闭合领域端口及 UI 生命周期；当前只读 checks／statuses 不代表这些操作已实现。
 - [ ] **验收** · 对已接通的提交／会话切换、Changes 审阅与 PR 表单执行上游窗口配对场景，观察仓库身份、修订、焦点、取消和关闭后的结果；现有 Ash Electron、浏览器和架构回归仅覆盖原有范围。尚未接入的 CI 操作和后台合并不纳入这次已实现行为的验收。
-- [ ] **复核** · 复核并重跑 Common 的标准 unit runner，闭合 Windows `Get-CimInstance Win32_Process` 清理超时；原 203 项直接 Mocha 结果保留其范围，不当作整条标准命令通过。
 
 布局、工作集、Common 与 Changes 契约见 [Sessions](docs/sessions.md)。
 

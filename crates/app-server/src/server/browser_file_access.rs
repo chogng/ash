@@ -109,9 +109,9 @@ pub(super) fn read(
         let (authorization, relative) = authorizations
             .iter()
             .filter_map(|authorization| {
-                path.strip_prefix(authorization.dir().canonical_path())
-                    .or_else(|_| path.strip_prefix(authorization.dir().requested_path()))
-                    .ok()
+                authorization
+                    .dir()
+                    .project_observed_path(path)
                     .map(|relative| (authorization, relative))
             })
             .max_by_key(|(authorization, _)| {
@@ -126,7 +126,7 @@ pub(super) fn read(
         #[cfg(test)]
         tests::before_read_snapshot();
         let snapshot = LocalFileSystem::from_authorization(authorization.clone())
-            .read_file_snapshot(relative, remaining)
+            .read_file_snapshot(&relative, remaining)
             .map_err(|_| denied())?;
         // A path denial cannot identify hard-link aliases; inspect the object that supplied bytes.
         if snapshot.has_multiple_links() {

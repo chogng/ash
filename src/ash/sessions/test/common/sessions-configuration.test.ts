@@ -14,7 +14,12 @@ test('Sessions settings keep their values while their labels belong to the Sessi
 	setNlsResolver((bundle, key, fallback) => chinese.bundles[bundle]?.[key] ?? fallback);
 	try {
 		const registry = Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration);
-		assert.equal(registry.getConfiguration(SessionsConfiguration.layoutStyle)?.setting, undefined);
+		const layoutSetting = registry.getConfiguration(SessionsConfiguration.layoutStyle)?.setting;
+		assert.ok(layoutSetting);
+		assert.equal(layoutSetting.included, false);
+		assert.equal(layoutSetting.title, '布局样式');
+		assert.equal(layoutSetting.valueType, 'select');
+		assert.deepEqual(layoutSetting.options, [{ value: 'modern', label: 'Modern' }, { value: 'flat', label: 'Flat' }]);
 		assert.equal(chinese.bundles.ash?.['sessions.settings.title'], '会话设置');
 		for (const [key, label] of Object.entries({
 			'sessions.settings.section.basics': '基础',

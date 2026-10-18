@@ -72,6 +72,35 @@ fn saves_exact_bytes_and_preserves_unix_ownership_and_readonly_mode() {
     assert_eq!(std::fs::read_dir(temporary.path()).unwrap().count(), 1);
 }
 
+#[cfg(windows)]
+#[test]
+fn privileged_replacement_preserves_a_nested_readonly_file() {
+    let temporary = tempfile::tempdir().unwrap();
+    std::fs::create_dir(temporary.path().join("nested")).unwrap();
+    let target = temporary.path().join("nested/notes.txt");
+    std::fs::write(&target, b"old").unwrap();
+    let mut permissions = std::fs::metadata(&target).unwrap().permissions();
+    permissions.set_readonly(true);
+    std::fs::set_permissions(&target, permissions).unwrap();
+    let dir = Dir::open_local(temporary.path()).unwrap();
+    let content = b"\xef\xbb\xbfnew\r\n";
+    crate::local::prepare_elevated_write(
+        &dir,
+        Path::new("nested/notes.txt"),
+        content,
+        Some(&file_revision(b"old")),
+    )
+    .unwrap()
+    .publish()
+    .unwrap();
+    assert_eq!(std::fs::read(&target).unwrap(), content);
+    assert!(std::fs::metadata(&target).unwrap().permissions().readonly());
+    assert_eq!(
+        std::fs::read_dir(target.parent().unwrap()).unwrap().count(),
+        1
+    );
+}
+
 #[test]
 fn external_change_during_authorization_rejects_publication_and_cleans_staging() {
     let temporary = tempfile::tempdir().unwrap();

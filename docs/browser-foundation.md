@@ -449,6 +449,7 @@ events. Completion metadata follows active registrations and is not persisted.
 - 执行以下验证，记录完整结果；失败时保留命令输出：
 
 ```powershell
+$env:PYTHONUTF8 = '1' # 让验证脚本保留中文 Windows 系统错误的诊断输出。
 just verify ash-app-server-runtime --lib --filter browser_upload
 if ($LASTEXITCODE -ne 0) { throw '浏览器上传验证失败' }
 just verify ash-file-system --lib
@@ -458,7 +459,11 @@ if ($LASTEXITCODE -ne 0) { throw '文件系统验证失败' }
 - 确认上传测试包含 `browser_upload_denies_hard_link_replacement_before_snapshot`，文件系统测试包含 `read_snapshot_link_information_belongs_to_the_opened_file`，且均通过。
 - 记录提交 SHA、测试结果和日志位置，在根 TODO 对应功能项完成验收后移除待办。符号链接替换的竞态用例仅在 Unix 编译，Windows 结果不覆盖该用例。
 
-原修复批次在 macOS 上通过两包的 check、test 和 rust-warnings：上传测试 6 项、文件系统测试 77 项；共享本地策略回归另有 1 项通过。文件系统的 Windows 测试目标交叉编译已通过；App Server 的 Windows 交叉编译因缺少 SDK 头文件（`assert.h`、`windows.h`）中止，不能记为通过。这些历史结果不替代当前待验收源码的实机运行。
+2026-10-19 在 Windows 11 23H2 x64（22631.6199）完成上述两条实机命令，均通过 check、test 和 rust-warnings：上传 5 项、文件系统 67 项，两个指定回归均通过。源码为 `01325b8c1ea3c2fb11c6e889dc72d79620a70fbb` 加本次工作树修复；差异与文件 SHA-256 保存在 `.build/todo-windows-20261019/validated-source.patch` 和 `environment.json`，完整通过日志为同目录 `browser-upload-fixed.log` 与 `file-system-final.log`。初次失败及诊断日志也保留，未用加长超时绕过失败。
+
+本轮修复让上传复用目录 owner 对普通／verbatim Windows 路径的既有处理，保留后续授权、敏感路径和 opened-file 硬链接检查。文件系统实机回归同时发现并修复目录复制的 Windows 句柄打开方式，以及授权替换误把 cap-std 相对路径用于 `ReplaceFileW` 的问题；绝对父目录仍经原有句柄身份与祖先固定检查。新增嵌套只读文件测试验证准确 BOM／CRLF 字节、只读属性和临时文件清理；此结果不代替真实 UAC 弹窗、ACL、标准用户凭据或焦点验收。
+
+原修复批次在 macOS 上通过上传 6 项、文件系统 77 项及共享本地策略 1 项，仅代表该历史源码。本轮文件系统测试目标另通过 Linux x64 与 macOS ARM64 交叉编译，命令为 `just check ash-file-system --tests --target <target> --profile ci-test`，target 分别为 `x86_64-unknown-linux-gnu` 和 `aarch64-apple-darwin`，日志为同目录 `file-system-linux-check.log` 和 `file-system-macos-check.log`；没有在这些系统运行本轮测试。
 
 ### Linux 实机
 

@@ -61,15 +61,25 @@ test('editor contributions follow layout state, serialize Add tab commands and r
 	} as unknown as IAgentWorkbenchLayoutService);
 	services.registerInstance(IEditorPart, { onDidChangeEditors: editorChanged.event } as unknown as IEditorPart);
 	services.registerInstance(IContextKeyService, contextKeys);
-	using contribution = services.createInstance(EditorTitleMenuBridgeContribution, controller, context);
 	const menus = new MenuService(commands, contextKeys);
 	using title = menus.createMenu(MenuId.EditorTitle);
 	using addTab = menus.createMenu(Menus.CodeAddTab);
 	using palette = menus.createMenu(MenuId.CommandPalette);
+	const paletteIds = () => palette.getActions().flatMap(([, actions]) => actions).map(action => action.id).sort();
+	// Shared editor imports may already contribute commands to the same registry.
+	const existingPaletteIds = paletteIds();
+	using contribution = services.createInstance(EditorTitleMenuBridgeContribution, controller, context);
 	const titleState = () => title.getActions().flatMap(([, actions]) => actions).map(action => [action.label, action.enabled, action.checked]);
 	assert.deepEqual(titleState(), [['Add tab', true, undefined], ['Toggle details', true, true], ['Show editor', true, undefined]]);
 	assert.deepEqual(addTab.getActions().flatMap(([, actions]) => actions).map(action => action.id), [NEW_FILE_TAB_COMMAND_ID, 'workbench.agentSessions.action.viewChanges']);
-	assert.equal(palette.getActions().flatMap(([, actions]) => actions).length, 5);
+	assert.deepEqual(paletteIds(), [
+		...existingPaletteIds,
+		NEW_FILE_TAB_COMMAND_ID,
+		'workbench.agentSessions.action.viewChanges',
+		'ash.sessions.toggleSidePane',
+		'ash.sessions.toggleDetails',
+		'ash.sessions.showEditor',
+	].sort());
 
 	await commands.executeCommand('ash.sessions.showEditor');
 	assert.deepEqual(titleState(), [['Add tab', true, undefined], ['Toggle details', true, true], ['Hide editor', true, undefined]]);
@@ -91,12 +101,13 @@ test('editor contributions follow layout state, serialize Add tab commands and r
 	assert.deepEqual(effects, ['files', 'changes']);
 	documentContent.set(false, undefined);
 	assert.deepEqual(title.getActions(), []);
-	assert.deepEqual(palette.getActions(), []);
+	assert.deepEqual(paletteIds(), existingPaletteIds);
 	await commands.executeCommand('workbench.agentSessions.action.viewChanges');
 	assert.deepEqual(effects, ['files', 'changes']);
 
 	contribution.dispose();
 	assert.deepEqual(addTab.getActions(), []);
+	assert.deepEqual(paletteIds(), existingPaletteIds);
 	assert.equal(CommandsRegistry.getCommand('workbench.agentSessions.action.viewChanges'), undefined);
 	assert.equal(CommandsRegistry.getCommand(NEW_FILE_TAB_COMMAND_ID), undefined);
 	assert.equal(CommandsRegistry.getCommand('ash.sessions.openFilesTab'), undefined);

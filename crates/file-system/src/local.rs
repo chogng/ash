@@ -989,17 +989,17 @@ fn copy_resource(
     permitted: &dyn Fn(&Path, &Path) -> Result<(), FileSystemError>,
 ) -> Result<(), FileSystemError> {
     permitted(source, target)?;
-    if source_dir
-        .symlink_metadata(source)
-        .map_err(io_error)?
-        .is_symlink()
-    {
+    let source_metadata = source_dir.symlink_metadata(source).map_err(io_error)?;
+    if source_metadata.is_symlink() {
         return Err(FileSystemError::InvalidPath(source.to_path_buf()));
     }
-    let mut from = open_resolved_file(source_dir, source).map_err(io_error)?;
-    let source_metadata = from.metadata().map_err(io_error)?;
     let kind = source_metadata.file_type();
     if kind.is_file() {
+        let mut from = open_resolved_file(source_dir, source).map_err(io_error)?;
+        let source_metadata = from.metadata().map_err(io_error)?;
+        if !source_metadata.is_file() {
+            return Err(FileSystemError::NotFile(source.to_path_buf()));
+        }
         let mut to = target_dir
             .open_with(target, OpenOptions::new().write(true).create_new(true))
             .map_err(|error| {
@@ -1020,8 +1020,12 @@ fn copy_resource(
     if !kind.is_dir() {
         return Err(FileSystemError::NotFile(source.to_path_buf()));
     }
-    let permissions = source_metadata.permissions();
-    let source_directory = Directory::from_std_file(from.into_std());
+    // Windows directory handles require backup semantics, supplied by the directory opener.
+    let source_directory = open_resolved_directory(source_dir, source).map_err(io_error)?;
+    let permissions = source_directory
+        .dir_metadata()
+        .map_err(io_error)?
+        .permissions();
     #[cfg(unix)]
     let created = {
         use cap_std::fs::DirBuilderExt;
@@ -1972,6 +1976,8 @@ pub(super) struct PreparedElevatedWrite<'a> {
     write: PreparedWrite<'a>,
     expected_revision: Option<String>,
     original: Option<FileInformation>,
+    #[cfg(windows)]
+    directory: PathBuf,
 }
 
 pub(super) fn prepare_elevated_write<'a>(
@@ -2032,6 +2038,13 @@ pub(super) fn prepare_elevated_write<'a>(
         write,
         expected_revision: expected_revision.map(str::to_owned),
         original,
+        #[cfg(windows)]
+        directory: dir
+            .canonical_path()
+            .join(&target)
+            .parent()
+            .ok_or_else(|| FileSystemError::InvalidPath(path.into()))?
+            .to_path_buf(),
     };
     prepared.check_revision()?;
     Ok(prepared)
@@ -2099,10 +2112,11 @@ impl PreparedElevatedWrite<'_> {
             use windows_sys::Win32::Storage::FileSystem::FILE_WRITE_ATTRIBUTES;
             use windows_sys::Win32::Storage::FileSystem::ReplaceFileW;
             // ReplaceFile preserves the target's ACL and identity-related attributes.
-            let directory = parent.canonicalize(".").map_err(io_error)?;
+            // cap-std canonicalization is relative to the capability, even for ".".
+            let directory = &self.directory;
             // ReplaceFile takes absolute paths. Deny deletion of every ancestor until it
             // returns, then verify the leaf still names our capability's pinned directory.
-            let _directories = pin_windows_directories(&parent, &directory)?;
+            let _directories = pin_windows_directories(&parent, directory)?;
             self.check_revision()?;
             let attribute_options = OpenOptions::new()
                 .access_mode(FILE_READ_ATTRIBUTES | FILE_WRITE_ATTRIBUTES)
