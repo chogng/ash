@@ -40,6 +40,33 @@ fn sqlite_rooms_recover_ordered_snapshots_after_reopening() {
 }
 
 #[test]
+fn sqlite_rooms_upgrade_legacy_snapshots_to_typed_v2_without_recreating_the_room() {
+    let directory = TempDir::new().unwrap();
+    let path = directory.path().join("collaboration.sqlite3");
+    let mut envelope: serde_json::Value = serde_json::from_str(&document("updated")).unwrap();
+    envelope["version"] = 2.into();
+    envelope["documentType"] = "general".into();
+    let encoded = envelope.to_string();
+    let room_id = {
+        let rooms = SqliteDocumentCollaborationRooms::open_at(&path).unwrap();
+        let opened = rooms
+            .open(open_params(None, "client-a", document("legacy")))
+            .unwrap();
+        let room_id = opened.snapshot.room_id;
+        let mut update = submit(&room_id, "client-a", 1, 0, "updated");
+        update.document = encoded.clone();
+        assert_eq!(accepted_version(&rooms.submit(update).unwrap()), 1);
+        room_id
+    };
+    let rooms = SqliteDocumentCollaborationRooms::open_at(&path).unwrap();
+    let joined = rooms
+        .open(open_params(Some(room_id), "client-b", document("ignored")))
+        .unwrap();
+    assert_eq!(joined.snapshot.document, encoded);
+    assert_eq!(joined.snapshot.version, 1);
+}
+
+#[test]
 fn persisted_channel_members_with_long_unicode_names_can_open_notes() {
     use crate::channels::ChannelChange;
     use crate::channels::ChannelCredential;

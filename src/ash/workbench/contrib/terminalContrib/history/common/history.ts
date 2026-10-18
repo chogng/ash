@@ -1,4 +1,5 @@
 import { VSBuffer } from '../../../../../base/common/buffer.js';
+import type { Event } from '../../../../../base/common/event.js';
 import type { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
 import { StorageScope, StorageTarget, type IStorageService } from '../../../../../platform/storage/common/storage.js';
 import { TerminalHistorySettingId } from './terminal.history.js';
@@ -103,4 +104,57 @@ function retainLatestPerProfile(entries: ITerminalHistoryCommand[], limit: numbe
 
 function isValidShellId(value: unknown): value is string {
 	return typeof value === 'string' && value.length > 0 && value.length <= 1024 && !/[\0-\x1f\x7f]/.test(value);
+}
+
+/** Bounded directory history within this workspace and execution host. */
+export class TerminalDirectoryHistory {
+	private readonly key = 'terminal.shellIntegration.directoryHistory.v1';
+	readonly onDidChange: Event<void>;
+	constructor(private readonly configuration: IConfigurationService, private readonly storage: IStorageService) {
+		this.onDidChange = (listener, thisArgs, disposables) => storage.onDidChangeValue(event => {
+			if (event.scope === StorageScope.WORKSPACE && event.key === this.key) listener.call(thisArgs);
+		}, undefined, disposables);
+	}
+
+	getDirectories(scope: string): readonly string[] {
+		return this.read().filter(entry => entry.scope === scope).slice(-this.limit()).reverse().map(entry => entry.path);
+	}
+
+	record(scope: string, path: string, isTrusted: boolean, disabled: boolean): void {
+		const limit = this.limit();
+		if (!limit || disabled || !isTrusted || !isValidShellId(scope) || !this.validPath(path)) return;
+		const entries = this.read().filter(entry => entry.scope !== scope || entry.path !== path);
+		entries.push({ scope, path });
+		const counts = new Map<string, number>();
+		const retained = entries.reverse().filter(entry => {
+			const count = (counts.get(entry.scope) ?? 0) + 1;
+			counts.set(entry.scope, count);
+			return count <= limit;
+		}).reverse();
+		while (retained.length && VSBuffer.fromString(JSON.stringify(retained)).byteLength > MAX_HISTORY_BYTES) retained.shift();
+		this.storage.store(this.key, JSON.stringify(retained), StorageScope.WORKSPACE, StorageTarget.MACHINE);
+	}
+
+	clear(): void { this.storage.remove(this.key, StorageScope.WORKSPACE); }
+
+	private limit(): number {
+		const value = this.configuration.getValue<number>(TerminalHistorySettingId.ShellIntegrationCommandHistory);
+		return Number.isSafeInteger(value) && value >= 0 ? Math.min(value, 10000) : DEFAULT_HISTORY_LIMIT;
+	}
+
+	private validPath(value: unknown): value is string {
+		return typeof value === 'string' && value.length > 0 && value.length <= 32768 && !/[\x00-\x1f\x7f]/.test(value)
+			&& (/^\//.test(value) || /^[a-z]:[\\/]/i.test(value) || /^\\\\[^\\]/.test(value));
+	}
+
+	private read(): { scope: string; path: string; }[] {
+		if (!this.limit()) return [];
+		const raw = this.storage.get(this.key, StorageScope.WORKSPACE);
+		if (!raw || raw.length > MAX_HISTORY_BYTES || VSBuffer.fromString(raw).byteLength > MAX_HISTORY_BYTES) return [];
+		try {
+			const value: unknown = JSON.parse(raw);
+			if (!Array.isArray(value)) return [];
+			return value.filter((entry): entry is { scope: string; path: string; } => !!entry && typeof entry === 'object' && isValidShellId(entry.scope) && this.validPath(entry.path));
+		} catch { return []; }
+	}
 }

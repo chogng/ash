@@ -881,6 +881,7 @@ fn interactive_shell_commands_report_real_boundaries_and_keep_user_configuration
     } else {
         TerminalShellType::Zsh
     };
+    assert_eq!(created.ready.shell_type, Some(expected_shell));
     assert!(read_shell_boundaries(&service, id).iter().any(|event| matches!(
         event,
         TerminalShellIntegrationEvent::ProcessReady { shell_type: Some(shell), .. } if *shell == expected_shell

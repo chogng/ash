@@ -410,6 +410,7 @@ let searchSnapshot: { query: string; content: string; matchCount: number; } | un
 const reportShellHistory = new URLSearchParams(location.search).has('shellHistory');
 const disableCommandStorage = new URLSearchParams(location.search).has('disableCommandStorage');
 const terminalInstance: ITerminalInstance = {
+	async sendPath() { throw new Error('Chat fixture does not send host paths'); },
 	async refreshProperty() { throw new Error('Screen-only fixture has no process properties'); },
 	async serializeState() { throw new Error('Screen-only fixture has no process checkpoint'); },
 	...Disposable.None, id: 'context-shell', instanceId: 1, dirId: 'workspace', processId: 1, initialCwd: '/workspace', cwd: new URLSearchParams(location.search).get('terminalCwd') ?? undefined, title: 'Shell',

@@ -61,6 +61,7 @@ import './contrib/codeActions/browser/codeActions.contribution.js';
 import './contrib/callHierarchy/browser/callHierarchy.contribution.js';
 import './contrib/typeHierarchy/browser/typeHierarchy.contribution.js';
 import './contrib/academic/browser/academicEditor.contribution.js';
+import './contrib/documentEditor/browser/documentEditor.contribution.js';
 // Task commands, Debug, Testing and the extension host share one task service.
 import './contrib/tasks/browser/task.contribution.js';
 import './contrib/debug/browser/debug.contribution.js';

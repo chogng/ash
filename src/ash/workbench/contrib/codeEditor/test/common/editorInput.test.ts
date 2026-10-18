@@ -116,3 +116,17 @@ test('files select the text editor before language extensions load while special
 	assert.equal(registry.getEditorPane({ resource: URI.file('/project/paper.pdf') })?.id, PDF_EDITOR_ID);
 	assert.equal(registry.getEditorPane({ resource: URI.file('/project/sample.bin'), contentType: 'application/octet-stream' })?.id, BINARY_EDITOR_ID);
 });
+test('static document declarations exclude the text editor only for the owning registry lifetime', () => {
+	const input = { resource: URI.file('/notes/document.ash-testdoc') };
+	using registry = new EditorPaneRegistry();
+	assert.equal(matchCodeEditor(input), EditorPaneMatch.Builtin);
+	registry.registerStatic({
+		id: 'test.staticDocument', name: 'Test Document',
+		documentType: { id: 'test-static', contentType: 'test/document', extensions: ['.ash-testdoc'] },
+		canOpen: () => EditorPaneMatch.Default,
+		create: () => { throw new Error('This routing test must not create a pane'); },
+	});
+	assert.equal(matchCodeEditor(input), EditorPaneMatch.None);
+	registry.dispose();
+	assert.equal(matchCodeEditor(input), EditorPaneMatch.Builtin);
+});

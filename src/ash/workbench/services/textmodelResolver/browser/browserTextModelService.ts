@@ -47,7 +47,14 @@ interface TextModelEntry {
 	hasExternalChange: boolean;
 	disposed: boolean;
 	saveQueue: Promise<void>;
+	refresh: TextModelRefresh | undefined;
 	references: number;
+}
+
+interface TextModelRefresh {
+	controller: AbortController;
+	invalidated: boolean;
+	promise: Promise<void>;
 }
 
 interface SaveRecoveryState {
@@ -243,6 +250,7 @@ export class BrowserTextModelService extends Disposable implements IFileTextMode
 			externalChangeEmitter,
 			modelChangeListener: model.onDidChangeContent(() => {
 				if (!entry.updatingFile) {
+					entry.refresh?.controller.abort();
 					this.refreshDirty(entry);
 				}
 			}),
@@ -260,6 +268,7 @@ export class BrowserTextModelService extends Disposable implements IFileTextMode
 			hasExternalChange: false,
 			disposed: false,
 			saveQueue: Promise.resolve(),
+			refresh: undefined,
 			references: 0,
 		};
 		this.entries.set(key, entry);
@@ -499,7 +508,7 @@ export class BrowserTextModelService extends Disposable implements IFileTextMode
 	private acceptFileChange(entry: TextModelEntry, event: TextResourceChangeEvent): void {
 		if (entry.disposed || (event.resources && !event.resources.some(resource => this.uriIdentity.extUri.isEqual(resource, entry.resource)))) return;
 		// Watcher events are invalidations, including workspace rescans and our own writes.
-		void this.refreshEntry(entry).catch(error => console.error("Could not refresh open file", error));
+		void this.refreshEntry(entry, 'fileChange').catch(error => console.error("Could not refresh open file", error));
 	}
 
 	/** Rechecks an open file when its window regains focus and watcher events may have been missed. */
@@ -509,16 +518,46 @@ export class BrowserTextModelService extends Disposable implements IFileTextMode
 		if (entry) await this.refreshEntry(entry);
 	}
 
-	private async refreshEntry(entry: TextModelEntry): Promise<void> {
+	private refreshEntry(entry: TextModelEntry, reason: 'focus' | 'fileChange' = 'focus'): Promise<void> {
+		if (entry.refresh) {
+			if (reason === 'fileChange') {
+				entry.refresh.invalidated = true;
+				entry.refresh.controller.abort();
+			}
+			return entry.refresh.promise;
+		}
+		if (entry.disposed || entry.dirty || entry.isSnapshot || entry.resource.scheme === Schemas.untitled) return Promise.resolve();
+		const observedSaveQueue = entry.saveQueue;
+		const refresh: TextModelRefresh = { controller: new AbortController(), invalidated: false, promise: Promise.resolve() };
+		entry.refresh = refresh;
+		refresh.promise = (async () => {
+			do {
+				refresh.invalidated = false;
+				refresh.controller = new AbortController();
+				try {
+					await this.readRefresh(entry, refresh.controller.signal);
+				} catch (error) {
+					if (!refresh.controller.signal.aborted) throw error;
+				}
+				// A mutation owns its acknowledged baseline. Watcher bursts can request
+				// one fresh read, but must never replay or wait behind a newly queued save.
+			} while (refresh.invalidated && !entry.disposed && !entry.dirty && entry.saveQueue === observedSaveQueue);
+		})().finally(() => { if (entry.refresh === refresh) entry.refresh = undefined; });
+		return refresh.promise;
+	}
+
+	private async readRefresh(entry: TextModelEntry, signal: AbortSignal): Promise<void> {
 		// Snapshot models belong to their content provider, not the filesystem watcher.
 		// Background reads must not advance the persisted baseline of local edits.
 		if (entry.disposed || entry.dirty || entry.isSnapshot || entry.resource.scheme === Schemas.untitled) return;
 		// A save can acknowledge a new revision without changing the text model version.
 		const observedSaveQueue = entry.saveQueue;
 		await observedSaveQueue;
+		throwIfCancelled(signal);
 		if (entry.disposed || entry.dirty || entry.saveQueue !== observedSaveQueue) return;
 		const observedVersion = entry.model.version;
-		const content = await this.resourceStore.resolve({ resource: entry.resource, ...(entry.savedEncoding === undefined ? {} : { encoding: entry.savedEncoding }) }, new AbortController().signal);
+		const content = await this.resourceStore.resolve({ resource: entry.resource, ...(entry.savedEncoding === undefined ? {} : { encoding: entry.savedEncoding }) }, signal);
+		throwIfCancelled(signal);
 		if (entry.disposed || entry.dirty || entry.model.version !== observedVersion || entry.saveQueue !== observedSaveQueue) return;
 		if (content.revision !== undefined && content.revision === entry.revision) {
 			this.setExternalChange(entry, false);
@@ -577,6 +616,7 @@ export class BrowserTextModelService extends Disposable implements IFileTextMode
 
 	private disposeEntry(entry: TextModelEntry): void {
 		entry.disposed = true;
+		entry.refresh?.controller.abort();
 		this.undoRedoParticipant.remember(entry.resource, entry.model);
 		entry.identityLifetime.dispose();
 		entry.modelChangeListener.dispose();

@@ -116,6 +116,8 @@ export type TerminalProcessConnectionPersistence = "connectionOwned" | "reconnec
 export interface ITerminalProcessReady {
 	readonly pid: number;
 	readonly cwd: string;
+	/** Execution-owner identification, including after process reattachment. */
+	readonly shellType?: TerminalShellType;
 }
 
 /** Current properties queried from the execution owner; unavailable cwd stays distinct from launch cwd. */

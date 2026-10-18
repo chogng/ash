@@ -158,6 +158,7 @@ fn terminal_ready_and_binary_contract_preserve_process_identity_and_bytes() {
         ready: crate::terminal::TerminalProcessReady {
             pid: 42,
             cwd: "/workspace".into(),
+            shell_type: Some(crate::terminal::TerminalShellType::Bash),
         },
         profile: crate::terminal::TerminalProfile {
             profile_id: "sh".into(),

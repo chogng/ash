@@ -1,6 +1,6 @@
 # Work / Code 工作台与文档编辑器目标设计
 
-> 状态：目标设计，部分基础已完成。当前只有 Code 工作台，Academic 已通过文档贡献接入，共享模型、严格读取和旧存储迁移已完成。普通文档类型、Work 界面组合、Chat 主画布及 Agent 文档修改尚未实施。本文用于后续修改 Ash Desktop 的 Workbench 与 Stanza Editor；当前实现以 [Workbench 装配说明](../workbench.md)、[Stanza 目录说明](../../src/ash/editor/README.md)和[富文档设计](../../src/ash/editor/document-engine.md)为准。本文不宣称 Work 界面组合已经存在。
+> 状态：目标设计，部分基础已完成。当前只有 Code 工作台；普通 `.ash-doc` 文档、实验性的 Academic、共享模型、严格读取和旧存储迁移已接入。Work 界面组合、Chat 主画布及 Agent 结构化文档修改尚未实施。本文用于后续修改 Ash Desktop 的 Workbench 与 Stanza Editor；当前实现以 [Workbench 装配说明](../workbench.md)、[Stanza 目录说明](../../src/ash/editor/README.md)和[富文档设计](../../src/ash/editor/document-engine.md)为准。本文不宣称 Work 界面组合已经存在。
 
 ## 结论
 
@@ -20,16 +20,16 @@ Work 和 Code 是同一 Desktop 产品内的不同界面组合，不改变 [`ash
 
 ## 当前基线与需要改变的地方
 
-| 事项                 | 当前实现                                                       | 目标                                                                 |
-| -------------------- | -------------------------------------------------------------- | -------------------------------------------------------------------- |
-| 产品装配             | 固定 Code 入口；无模式注册表或模式设置                         | Work 的界面组合由产品入口负责，共享 Workbench 不选择模式             |
-| 初始布局             | Code 使用默认 Workbench 区域布局                               | 由产品入口选择 Code 或 Work 的默认布局；布局机制继续共用             |
-| 编辑器装配           | Code 共同装配代码与文档编辑器，Academic 注册论文配置           | 两种界面组合都在启动时装配代码和文档编辑器；产品入口增加各自专用工具 |
-| Chat                 | 普通 Workbench 已注册 Chat；Code Sessions 复用聊天界面         | Work 将 Chat 放在主要导航位置；Code 继续使用同一会话能力             |
-| 文档类型             | Academic 匹配 `.ash-academic`、`.ash-paper` 和专用内容类型     | 增加普通 Work 文档类型；Academic 保留为独立文档类型                  |
-| 富文档保存           | 使用带版本的 `ash.document` JSON；工作副本负责保存、回退与冲突 | 文档持久记录类型与格式版本；打开时据此选定规则并校验                 |
-| 文档画布             | 连续、限宽正文；已有格式工具栏、表格与图片输入                 | 保持连续写作画布，完善通用文档流程与真实浏览器输入验证               |
-| 纸张分页与 Word 文件 | 未实现分页；当前编辑路径不读写 `.docx`                         | 单独设计排版和导入导出，不作为本设计的完成条件                       |
+| 事项                 | 当前实现                                                                                   | 目标                                                                 |
+| -------------------- | ------------------------------------------------------------------------------------------ | -------------------------------------------------------------------- |
+| 产品装配             | 固定 Code 入口；无模式注册表或模式设置                                                     | Work 的界面组合由产品入口负责，共享 Workbench 不选择模式             |
+| 初始布局             | Code 使用默认 Workbench 区域布局                                                           | 由产品入口选择 Code 或 Work 的默认布局；布局机制继续共用             |
+| 编辑器装配           | Code 共同装配代码与文档编辑器，Academic 注册论文配置                                       | 两种界面组合都在启动时装配代码和文档编辑器；产品入口增加各自专用工具 |
+| Chat                 | 普通 Workbench 已注册 Chat；Code Sessions 复用聊天界面                                     | Work 将 Chat 放在主要导航位置；Code 继续使用同一会话能力             |
+| 文档类型             | general 匹配 `.ash-doc`；实验性 Academic 匹配 `.ash-academic`、`.ash-paper` 和专用内容类型 | Code 与未来 Work 复用两类文档，Academic 按实验功能保留               |
+| 富文档保存           | 使用带版本的 `ash.document` JSON；工作副本负责保存、回退与冲突                             | 文档持久记录类型与格式版本；打开时据此选定规则并校验                 |
+| 文档画布             | 连续、限宽正文；已有格式工具栏、表格与图片输入                                             | 保持连续写作画布，完善通用文档流程与真实浏览器输入验证               |
+| 纸张分页与 Word 文件 | 未实现分页；当前编辑路径不读写 `.docx`                                                     | 单独设计排版和导入导出，不作为本设计的完成条件                       |
 
 当前 [`EditorPaneRegistry`](../../src/ash/workbench/browser/editor.ts) 已按输入选择编辑器，也支持显式选择兼容的编辑器；[`DocumentEditorPane`](../../src/ash/workbench/contrib/documentEditor/browser/documentEditorPane.ts) 已持有文档工作副本。后续实现应沿这些入口闭合用户流程。
 
@@ -68,14 +68,14 @@ Work 和 Code 是同一 Desktop 产品内的不同界面组合，不改变 [`ash
 
 两种界面组合共用 `TextModel`、文件服务和 Chat 契约。产品入口在启动时静态声明可用的代码与文档编辑器，不在运行中卸载贡献。Code 的测试、调试等工具与 Work 的文档工具分别由各自入口装配；打开文件不会加载另一套完整工作台。Work 的 Chat 主画布复用共享 Chat 组件，由 Work 的界面组合负责摆放与焦点；共享布局机制不嵌入 Work 专用分支。Academic 的结构规则由文档配置组合，不能写进通用编辑器内核。
 
-通用文档和 Academic 文档由同一个文档编辑器入口管理。当前每个配置都指向同一个 `DOCUMENT_EDITOR_ID`；增加配置时应由一个注册入口维护完整配置集合，并按文档类型选择，避免重复注册编辑器 ID。新文档的备份内容类型也应来自选中的文档类型，而非固定使用 Academic 内容类型。
+通用文档和 Academic 共用 `DocumentEditorPane`、profile 装配和工作副本。通用文档由核心声明 `ash.editor.document`；Academic 扩展保留既有 `stanza.editor.document` 身份和独立启停生命周期，避免扩展移除时连带关闭通用文档路由。编辑器 registry 同时拥有其类型声明的释放，代码编辑器从该唯一声明查询排除项。备份内容类型来自所选 profile。
 
 ## 持久化与迁移
 
 - 产品入口负责界面装配；当前 Desktop 固定启动 Code Workbench，Agents 为独立页面。未来 Work 的界面入口应按实际产品职责设计，不引入工作台模式注册表或 `workbench.mode` 设置。
 - 旧 `workbench.mode` 配置不再影响启动，保留用户 JSONC 中的其他设置和注释；旧 `configuration.json` 的搬迁继续由 profile owner 处理。
 - 原 `academic` 工作台状态已按 key 合并到 `code`，冲突源项保留。未来增加 `work` 时，须明确打开资源、未保存工作副本和窗口状态的恢复规则；布局若与 Work 不兼容，可以按 Work 默认布局重建，但不能删除未保存内容。状态留在工作台状态存储。
-- 新结构化文档使用自描述的文档类型和格式版本，并在读取时严格校验。现有 Academic v1 文件需有一次性读取迁移；新写入只生成目标格式。纯文本和 Markdown 的导入由显式转换命令负责，不作为结构化文件解析失败后的隐式读法。
+- 新结构化文档使用 `ash.document` v2，`documentType` 必须与当前 schema 的 `general`／`academic` 类型匹配。无类型的旧 Academic 文件及旧协作快照在读取时按当前 schema 校验，下一次保存、备份或提交快照只写 v2；打开旧文件本身不改盘，也不因格式升级而标脏。v1 不接受附加类型声明，v2 不接受缺失、未知或冲突类型。纯文本和 Markdown 的导入由显式转换命令负责，不作为结构化文件解析失败后的隐式读法。
 - 文档文件中的图片使用受文档拥有的稳定资源身份；显示尺寸与位置由编辑器计算，不把浏览器节点或临时 URL 当成持久数据。
 
 ## 编辑体验与边界
@@ -86,11 +86,23 @@ Work 和 Code 是同一 Desktop 产品内的不同界面组合，不改变 [`ash
 
 ## 当前基础与实施入口
 
+Academic 当前定位为实验性文档类型，暂时保留标题、摘要、章节、引用和文献能力，已有 `.ash-academic`／`.ash-paper` 文件继续兼容读写。它不承担普通文档的默认入口，也不代表已有投稿排版、分页或 Word／LaTeX 往返能力；通用编辑能力在共享文档层推进。
+
 共同编辑器注册、严格结构化读取、共享资源模型和唯一工作副本已经接入。`DocumentEditorTextModelService` 按规范化资源持有 `TextModel`／`DocumentWorkingCopy`，多个视图用引用计数管理生命周期；冲突文档类型拒绝打开，关闭一个视图不销毁另一个视图。备份内容类型跟随所选文档类型，另存为必须转移资源与工作副本身份。
 
-Academic 由扩展声明选择可信 factory，共享同一文档 pane；Code 共同装配代码与文档编辑器，代码匹配排除已注册结构化文档。旧 Academic 模式及中央模式注册表已经退场，`ash.academic.storage` 到 `ash.code.storage` 的逐 key 迁移保留冲突。上述基础不能视为普通文档、Work 界面或 Agent 结构化编辑已完成。
+持久类型归 `DocumentSchema` 所有，Academic schema 显式声明 `academic`，默认 schema 为 `general`；不按文件名或正文节点猜测类型。同一资源即使提供相同内容类型，也不能复用另一种 schema 的模型。`ash-collab` 同时接收旧 v1 和带合法类型的 v2 快照，频道新建笔记写 v2；协作 schema ID 与事务／剪贴板格式版本保持各自原有含义。
 
-具体剩余动作和依赖顺序统一维护在 [Work / 通用文档 TODO](../../TODO.md#work--通用文档--todo)：先升级自描述类型／格式，再闭合普通文档、Agent 编辑和 Work／Chat 界面流程。本文继续定义目标行为、所有权及验收要求。分页、`.docx` 和 PDF 输出分别另行设计与验收。
+普通文档已接入 `.ash-doc`、New Document、当前文本／Markdown 的显式转换和文档导出命令。转换读取当前文本模型而非陈旧磁盘内容，创建参与既有脏状态和备份流程的新草稿，源文件保持原内容；另存为校验当前类型支持的扩展名，改格式必须走转换命令。相对图片通过源资源及原文件服务读取后内嵌稳定数据；HTTP／data 图片保留稳定 URL。Markdown 支持段落、标题、引用、列表、代码围栏、水平线、带表头的表格、强调、链接和图片；无法表示的 HTML、任务列表、删除线、额外属性等按源行列或节点 ID 报错。空段落等不能往返的结构同样拒绝导出，不自动压平。普通文档与 Academic 共用无障碍帮助、文本视图及提示详细程度设置。
+
+未命名文档另存为后，由 `EditorParts` 将全部视图替换为目标资源。最后一个旧视图关闭会释放旧模型，旧保存回调返回时不再访问它；目标工作副本拥有新保存基线。宿主回归通过真实 Academic pane、双组和文件服务断言资源替换及唯一工作副本，另有模型测试覆盖旧文件升级、备份恢复、类型冲突拒绝、图片身份和目标文件重开。
+
+2026-10-18 格式升级验证：六个定向文件共 239 项前端单测、`just verify ash-collab` 的 13 项测试及 warning 检查、Renderer 4,213 文件类型检查通过；Chromium 中英文各一个扩展开关／编辑／保存场景通过，保存结果明确断言 v2／`academic`。日志位于 `.build/todo-document-v2/`。这些结果不替代后续普通文档入口、Work 界面或 Electron 全流程验收。
+
+普通文档本轮验证覆盖转换往返、图片字节内嵌、源文件保留、脏备份、错误扩展名拒绝、工作副本替换、注册生命周期及无障碍焦点恢复。相关七个文件 420 项单测通过，正常 Renderer 和 Web 构建通过；完整 Academic／文档 Chromium 文件 13 项场景通过，其中四项覆盖中英文 general／Academic 保存链；真实 Electron 与 Browser App Server 各一项覆盖 Explorer 打开、写盘、Markdown 导出及新建。日志位于 `.build/todo-general-document/`；完整 Work 布局和 Agent 结构化修改仍按下列待办推进。
+
+Academic 由扩展声明选择可信 factory，共享同一文档 pane；Code 共同装配代码与文档编辑器，代码匹配排除已注册结构化文档。旧 Academic 模式及中央模式注册表已经退场，`ash.academic.storage` 到 `ash.code.storage` 的逐 key 迁移保留冲突。上述基础不能视为 Work 界面或 Agent 结构化编辑已完成。
+
+具体剩余动作和依赖顺序统一维护在 [Work / 通用文档 TODO](../../TODO.md#work--通用文档--todo)：自描述类型／格式及普通文档入口已接入，继续闭合 Agent 编辑和 Work／Chat 界面流程。本文继续定义目标行为、所有权及验收要求。分页、`.docx` 和 PDF 输出分别另行设计与验收。
 
 ### 验证矩阵与完成标准
 

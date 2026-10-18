@@ -3,9 +3,10 @@ import { isRecord } from "../../../base/common/types.js";
 import { isFiniteNumber } from "../../../base/common/numbers.js";
 import { createDocumentNode, findDocumentNode, type DocumentNodeId, type DocumentAttributeValue, type DocumentAttributes, type DocumentMark, type DocumentNode } from "./document.js";
 import { type DocumentSchema, type DocumentValidationOptions } from "./documentSchema.js";
+import { localize } from "../../../nls.js";
 
 export const DOCUMENT_SERIALIZATION_FORMAT = "ash.document";
-export const DOCUMENT_SERIALIZATION_VERSION = 1;
+export const DOCUMENT_SERIALIZATION_VERSION = 2;
 export const DOCUMENT_FRAGMENT_SERIALIZATION_FORMAT = "ash.document.fragment";
 export const DOCUMENT_FRAGMENT_SERIALIZATION_VERSION = 1;
 export const DOCUMENT_FRAGMENT_CLIPBOARD_MIME = "application/vnd.ash.document.fragment+json";
@@ -56,7 +57,7 @@ export function decodeDocumentNode(value: unknown, schema: DocumentSchema, optio
 /** Serializes a validated document in a versioned envelope for persistence. */
 export function serializeDocument(document: DocumentNode, schema: DocumentSchema, pretty = false): string {
 	schema.validate(document);
-	return JSON.stringify({ format: DOCUMENT_SERIALIZATION_FORMAT, version: DOCUMENT_SERIALIZATION_VERSION, document }, undefined, pretty ? 2 : undefined);
+	return JSON.stringify({ format: DOCUMENT_SERIALIZATION_FORMAT, version: DOCUMENT_SERIALIZATION_VERSION, documentType: schema.documentType, document }, undefined, pretty ? 2 : undefined);
 }
 
 /** Parses, validates, and freezes a persisted document without trusting its JSON shape. */
@@ -69,7 +70,14 @@ export function deserializeDocument(value: string | unknown, schema: DocumentSch
 			throw new DocumentSerializationError("Structured document JSON is invalid", { cause: error });
 		}
 	}
-	if (!isRecord(parsed) || parsed.format !== DOCUMENT_SERIALIZATION_FORMAT || parsed.version !== DOCUMENT_SERIALIZATION_VERSION) throw new DocumentSerializationError("Unsupported structured document format or version");
+	if (!isRecord(parsed) || parsed.format !== DOCUMENT_SERIALIZATION_FORMAT || (parsed.version !== 1 && parsed.version !== DOCUMENT_SERIALIZATION_VERSION)) throw new DocumentSerializationError("Unsupported structured document format or version");
+	// Legacy files and collaboration snapshots had no kind. The receiving schema
+	// supplies it once; all subsequent persistence and snapshots use the v2 envelope.
+	if (parsed.version === 1) {
+		if ("documentType" in parsed) throw new DocumentSerializationError(localize('document.serialization.legacyType', "Legacy structured documents cannot declare a document type"));
+	} else if (parsed.documentType !== schema.documentType) {
+		throw new DocumentSerializationError(localize('document.serialization.typeMismatch', "Structured document type must be '{0}'", schema.documentType));
+	}
 	try {
 		const document = decodeNode(parsed.document);
 		schema.validate(document);

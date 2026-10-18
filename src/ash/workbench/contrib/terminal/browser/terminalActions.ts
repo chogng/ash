@@ -29,10 +29,29 @@ import { InstanceContext } from './terminalContextMenu.js';
 import { ICodeEditorService } from '../../../../editor/browser/services/codeEditorService.js';
 import { EndOfLinePreference } from '../../../../editor/common/model.js';
 import { IQuickInputService } from '../../../../platform/quickinput/common/quickInput.js';
+import { Schemas } from '../../../../base/common/network.js';
 
 
 /** Command definitions use the invoking window's services, never a retained View callback. */
 export function registerTerminalActions(): void {
+	registerAction2(class RunActiveFileTerminalAction extends Action2 {
+		constructor() {
+			super({ id: TerminalCommandId.RunActiveFile, title: localize2('terminal.runActiveFile', 'Terminal: Run Active File in Active Terminal'), f1: true, precondition: AppServerAvailableContext.isEqualTo(true) });
+		}
+		override async run(accessor: ServicesAccessor): Promise<void> {
+			const resource = accessor.get(ICodeEditorService).getActiveCodeEditor()?.getModel()?.uri;
+			if (!resource) return;
+			if (resource.scheme !== Schemas.file && resource.scheme !== Schemas.ashRemote) throw new Error(localize('terminal.runActiveFile.diskRequired', 'Open a file on disk before running it in the terminal.'));
+			const terminals = accessor.get(ITerminalService);
+			let instance = terminals.activeInstance;
+			if (!instance || instance.isReadOnly || instance.state === 'exited') instance = await terminals.createTerminal();
+			if (!instance || !terminals.instances.includes(instance) || terminals.activeInstance !== instance || instance.isReadOnly || instance.state !== 'running') return;
+			await instance.sendPath(resource, true);
+			if (!terminals.instances.includes(instance) || terminals.activeInstance !== instance) return;
+			if (instance.target === TerminalLocation.Editor) await accessor.get(ITerminalEditorService).openEditor(instance, { preserveFocus: true });
+			else await accessor.get(ITerminalGroupService).showPanel(false);
+		}
+	});
 	registerAction2(class RunSelectedTextTerminalAction extends Action2 {
 		constructor() {
 			super({

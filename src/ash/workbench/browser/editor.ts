@@ -86,7 +86,7 @@ export class EditorPaneRegistry extends Disposable implements IEditorPaneRegistr
 
 	/** Product contributions retain their declarations for the module lifetime. */
 	public registerStatic(descriptor: IEditorPaneDescriptor): void {
-		this.add(descriptor);
+		this._register(this.registerEditorPane(descriptor));
 	}
 
 	public getEditorPanes(): readonly IEditorPaneDescriptor[] {
@@ -121,14 +121,6 @@ export class EditorPaneRegistry extends Disposable implements IEditorPaneRegistr
 		return this.getEditorPanesForInput(input)[0];
 	}
 
-	private add(descriptor: IEditorPaneDescriptor): void {
-		validateDescriptor(descriptor);
-		if (this.descriptors.has(descriptor.id)) {
-			throw new Error(`Editor pane is already registered: ${descriptor.id}`);
-		}
-		this.descriptors.set(descriptor.id, descriptor);
-		this.changeEmitter.fire();
-	}
 }
 
 class EditorPaneRegistration extends AbstractDisposable {

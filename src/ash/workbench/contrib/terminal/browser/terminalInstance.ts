@@ -32,6 +32,17 @@ import { TerminalCapability } from '../../../../platform/terminal/common/capabil
 import { TerminalCapabilityStore, TerminalCapabilityStoreMultiplexer } from '../../../../platform/terminal/common/capabilities/terminalCapabilityStore.js';
 import { TerminalRecorder } from '../../../../platform/terminal/common/terminalRecorder.js';
 import { NaiveCwdDetectionCapability } from '../../../../platform/terminal/common/capabilities/naiveCwdDetectionCapability.js';
+import { IPathService } from '../../../../platform/path/common/pathService.js';
+import { IWorkspaceContextService } from '../../../../platform/workspace/common/workspace.js';
+import { ITerminalProcessService, GeneralShellType, PosixShellType } from '../../../../platform/terminal/common/terminal.js';
+import { OperatingSystem } from '../../../../base/common/platform.js';
+import { escapeNonWindowsPath } from '../../../../platform/terminal/common/terminalEnvironment.js';
+import { getRemoteAuthority } from '../../../../platform/remote/common/remoteHosts.js';
+import { addDisposableListener } from '../../../../base/browser/dom.js';
+import { containsDragType, DataTransfers } from '../../../../base/browser/dnd.js';
+import { UriList } from '../../../../base/common/dataTransfer.js';
+import { getPathForFile, LocalSelectionTransfer } from '../../../../platform/dnd/browser/dnd.js';
+import { DraggedEditorIdentifier } from '../../../browser/parts/editor/editorTabDragAndDrop.js';
 
 export interface CustomTerminalProcessOptions {
 	readonly create: NonNullable<IShellLaunchConfig['customPtyImplementation']>;
@@ -123,6 +134,9 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 		private readonly backend: AgentHostTerminalService,
 		private restored: ITerminalSerializedState | undefined,
 		@IInstantiationService private readonly instantiationService: IInstantiationService,
+		@IPathService private readonly paths: IPathService,
+		@IWorkspaceContextService private readonly workspace: IWorkspaceContextService,
+		@ITerminalProcessService private readonly processes: ITerminalProcessService,
 	) {
 		super();
 		this._register(this.capabilities.add(this.processCapabilities));
@@ -197,6 +211,7 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 
 	public get cwd(): string | undefined { return this.shellProcessManager?.cwd; }
 	public get shellIntegration() { return this.shellProcessManager?.shellIntegration; }
+	public get shellType() { return this.processReady.shellType; }
 
 	public get initialCwd(): string {
 		return this.processReady.cwd;
@@ -303,6 +318,31 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 		}
 		const screen = this._register(this.instantiationService.createInstance(XtermTerminal, container, this));
 		this.screen = screen;
+		const editorDrag = LocalSelectionTransfer.getInstance<DraggedEditorIdentifier>();
+		const acceptsDrop = (event: DragEvent): boolean => !this.isReadOnly && this.state === 'running'
+			&& (editorDrag.hasData(DraggedEditorIdentifier.prototype) || containsDragType(event, 'text/uri-list') || containsDragType(event, DataTransfers.FILES));
+		this._register(addDisposableListener(screen.element, 'dragover', event => {
+			if (!acceptsDrop(event)) return;
+			event.preventDefault();
+			event.stopPropagation();
+			if (event.dataTransfer) event.dataTransfer.dropEffect = 'copy';
+		}));
+		this._register(addDisposableListener(screen.element, 'drop', event => {
+			if (!acceptsDrop(event) || !event.dataTransfer) return;
+			event.preventDefault();
+			event.stopPropagation();
+			// Read the transfer during the event. Browser File contents are never uploaded
+			// or interpreted as a path on the execution host.
+			const dragged = editorDrag.getData(DraggedEditorIdentifier.prototype)?.[0]?.input.resource;
+			const uri = UriList.parse(event.dataTransfer.getData('text/uri-list'))[0];
+			const file = event.dataTransfer.files[0];
+			const localPath = file && getPathForFile(file);
+			try {
+				const resource = dragged ?? (uri ? URI.parse(uri, true) : localPath ? URI.file(localPath) : undefined);
+				if (!resource) throw new Error(localize('terminal.path.dropUnavailable', 'This dropped file has no path on the terminal execution host.'));
+				void this.sendPath(resource, false).then(() => screen.focus(), onUnexpectedError);
+			} catch (error) { onUnexpectedError(error); }
+		}));
 		this._register(this.capabilities.add(screen.capabilities));
 		const recorder = this.screenRecorder!;
 		const replay = recorder.generateReplayEventSync();
@@ -365,6 +405,36 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 		text = text.replace(/\r?\n/g, '\r');
 		if (shouldExecute && !text.endsWith('\r')) { text += '\r'; }
 		await this.sendRawInput(text);
+	}
+
+	public async sendPath(originalPath: string | URI, shouldExecute: boolean): Promise<void> {
+		const process = this.shellProcessManager;
+		const generation = this.pollGeneration;
+		let retired = false;
+		using stateListener = this.onDidChangeState(() => { retired = true; });
+		const folder = this.workspace.getWorkspace().folders.find(folder => folder.id === this.dirId);
+		if (!process || !folder || this.isReadOnly || this.closed || this._state !== 'running') throw new CancellationError();
+		const shell = this.processReady.shellType;
+		if (shell !== PosixShellType.Bash && shell !== PosixShellType.Zsh && shell !== GeneralShellType.PowerShell
+			|| shell !== GeneralShellType.PowerShell && this.processes.operatingSystem === OperatingSystem.Windows) {
+			throw new Error(localize('terminal.path.unsupportedShell', 'This terminal does not have a supported, confirmed shell for sending paths.'));
+		}
+		let path: string | undefined;
+		if (typeof originalPath === 'string') {
+			path = originalPath;
+		} else {
+			if (originalPath.query || originalPath.fragment || originalPath.scheme !== folder.uri.scheme || getRemoteAuthority(originalPath) !== getRemoteAuthority(folder.uri)) {
+				throw new Error(localize('terminal.path.wrongHost', 'The resource does not belong to this terminal execution host.'));
+			}
+			path = await this.paths.getHostPath(originalPath);
+		}
+		const rules = await this.paths.getPath(folder.uri);
+		if (!path || !rules?.isAbsolute(path) || /[\x00-\x1f\x7f]/.test(path)) throw new Error(localize('terminal.path.invalid', 'Only absolute host paths without control characters can be sent to the terminal.'));
+		// URI conversion can yield; never insert into a relaunched process or a replaced root.
+		if (retired || this.shellProcessManager !== process || this.pollGeneration !== generation
+			|| this.workspace.getWorkspace().folders.find(candidate => candidate.id === this.dirId)?.uri.toString() !== folder.uri.toString()) throw new CancellationError();
+		const quoted = escapeNonWindowsPath(path, shell);
+		await this.sendText(shell === GeneralShellType.PowerShell && shouldExecute ? `& ${quoted}` : quoted, shouldExecute);
 	}
 
 	private async sendRawInput(data: string): Promise<void> {

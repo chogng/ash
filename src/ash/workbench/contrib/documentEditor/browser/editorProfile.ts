@@ -8,6 +8,17 @@ import type { DocumentOutlineOptions } from "../../../../editor/common/model/doc
 import type { DocumentPlugin } from "../../../../editor/common/model/documentPlugin.js";
 import type { DocumentSchema } from "../../../../editor/common/model/documentSchema.js";
 import type { EditorPaneOptions } from "./documentEditorPane.js";
+import { createDefaultDocumentSchema } from '../../../../editor/common/model/documentSchema.js';
+import { GENERAL_DOCUMENT_CONTENT_TYPE, GENERAL_DOCUMENT_EDITOR_ID } from './documentEditorInput.js';
+
+/** General documents use the shared writing surface without Academic structure. */
+export const generalProfile: EditorProfile = Object.freeze({
+	id: 'general', editorId: GENERAL_DOCUMENT_EDITOR_ID,
+	contentType: GENERAL_DOCUMENT_CONTENT_TYPE,
+	createSchema: createDefaultDocumentSchema,
+	createEmptyDocument: (schema: DocumentSchema) => schema.createDocument([schema.createNode('paragraph')]),
+	outlineNavigator: true,
+});
 
 /** Product-neutral schema and browser composition for one document kind. */
 export interface EditorProfile {

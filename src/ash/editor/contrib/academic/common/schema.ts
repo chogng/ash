@@ -59,7 +59,7 @@ export function createAcademicDocumentSchema(): DocumentSchema {
 	nodes[BIBLIOGRAPHY_NODE_TYPE] = bibliographyNodeSpec;
 	nodes[REFERENCE_NODE_TYPE] = referenceNodeSpec;
 	const marks: Record<string, DocumentMarkSpec> = Object.fromEntries(defaults.getMarkSpecs());
-	return new DocumentSchema({ topNodeType: defaults.topNodeType, nodes, marks });
+	return new DocumentSchema({ documentType: "academic", topNodeType: defaults.topNodeType, nodes, marks });
 }
 
 /** Creates the canonical empty Academic document used by new document flows. */

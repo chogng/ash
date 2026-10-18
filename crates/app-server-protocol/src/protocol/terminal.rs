@@ -189,6 +189,10 @@ pub struct TerminalProcessReady {
     #[schemars(range(min = 1))]
     pub pid: u32,
     pub cwd: String,
+    /// Shell identified by the execution owner; absent for unrecognized executables.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub shell_type: Option<TerminalShellType>,
 }
 
 /// Backend-owned properties. Shell-reported cwd survives exit; cwd is absent when unavailable.

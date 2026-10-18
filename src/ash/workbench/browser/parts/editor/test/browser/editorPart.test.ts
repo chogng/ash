@@ -8,7 +8,15 @@ import { WorkbenchThemeService } from '../../../../../services/themes/browser/wo
 import { WindowTitle } from '../../../titlebar/windowTitle.js';
 import { ILocalizationService } from '../../../../../services/localization/common/localizationService.js';
 import { TestUriIdentityServices } from '../../../../../../platform/uriIdentity/test/common/uriIdentityTestServices.js';
-import { createTestComponentServices, registerTestComponentServices, createTestEditorServices } from '../../../../../test/common/testEditorServices.js';
+import { createTestComponentServices, registerTestComponentServices, createTestEditorServices, createTestTextFileService, createTestFileService } from '../../../../../test/common/testEditorServices.js';
+import { MemoryFileService } from '../../../../../contrib/bulkEdit/test/browser/bulkEditTestServices.js';
+import { createDocumentEditorPane } from '../../../../../contrib/documentEditor/browser/editorProfile.js';
+import { academicProfile } from '../../../../../contrib/academic/browser/academicEditorProfile.js';
+import { DocumentEditorTextModelService } from '../../../../../services/documentEditor/browser/documentEditorTextModelService.js';
+import { IDocumentEditorTextModelService } from '../../../../../services/documentEditor/common/documentTypes.js';
+import { IWorkingCopyService } from '../../../../../services/workingCopy/common/workingCopyService.js';
+import { IOpenerService } from '../../../../../../platform/opener/common/opener.js';
+import { OpenerService } from '../../../../../../editor/browser/services/openerService.js';
 import { SaveReason, type IResourceEditorInput, type ISaveOptions } from '../../../../../common/editor.js';
 import { WorkbenchWindowBarHeight, StatusbarHeight } from '../../../workbenchPartDimensions.js';
 import { Direction } from '../../../../../../base/browser/ui/grid/grid.js';
@@ -51,7 +59,7 @@ import { InMemoryConfigurationService } from "../../../../../../platform/configu
 import { EditorCloseEmptyGroupsConfiguration, EditorFocusRecentEditorAfterCloseConfiguration } from '../../../../../services/editor/common/editorConfiguration.js';
 import { TestWorkspaceService } from '../../../../../services/configuration/test/common/testServices.js';
 import { IConfigurationService } from '../../../../../../platform/configuration/common/configuration.js';
-import { FileNotFoundError, type IFileService } from "../../../../../../platform/files/common/files.js";
+import { FileNotFoundError, IFileService } from "../../../../../../platform/files/common/files.js";
 import { Extensions as ConfigurationExtensions, type IConfigurationRegistry } from "../../../../../../platform/configuration/common/configurationRegistry.js";
 import { Registry } from "../../../../../../platform/registry/common/platform.js";
 import {
@@ -67,7 +75,9 @@ import { FileService } from '../../../../../../platform/files/common/fileService
 import { AgentHostFileSystemProvider } from '../../../../../../platform/agentHost/common/agentHostFileSystemProvider.js';
 import type { FsReadPathCaseSensitivityResult } from '../../../../../../../../.build/protocol/typescript/index.js';
 import { BrowserTextModelService } from '../../../../../services/textmodelResolver/browser/browserTextModelService.js';
-import { TextModelSaveCompletionError, type TextModelReference } from '../../../../../services/textmodelResolver/common/textModelResourceService.js';
+import { IFileTextModelService, TextModelSaveCompletionError, type TextModelReference } from '../../../../../services/textmodelResolver/common/textModelResourceService.js';
+import { IUntitledTextEditorService } from '../../../../../services/untitled/common/untitledTextEditorService.js';
+import { StandaloneCodeEditorService } from '../../../../../../editor/standalone/browser/standaloneCodeEditorService.js';
 import { TextResourceConflictError, type ITextResourceStore, type TextResourceResolveRequest, type TextResourceSaveRequest } from '../../../../../services/textmodelResolver/common/textResourceStore.js';
 import { Position } from "../../../../../../editor/common/core/position.js";
 import { Range } from "../../../../../../editor/common/core/range.js";
@@ -97,7 +107,7 @@ import {
 import {
 	ConfirmResult,
 	DialogResult,
-	type IDialogService,
+	IDialogService,
 	type IFileDialogService,
 } from "../../../../../../platform/dialogs/common/dialogs.js";
 
@@ -3877,6 +3887,128 @@ test('saveAll returns the saved untitled replacement and reports a cancelled Sav
 		target = destination;
 		assert.deepEqual(await service.saveAll({ includeUntitled: true }), { success: true, editors: [{ resource: destination, label: 'draft.txt' }] });
 		assert.equal(part.activeInput?.resource.toString(), destination.toString());
+	} finally { dom.window.close(); }
+});
+
+test('Academic Save As transfers every view to one typed v2 resource and working copy', async () => {
+	const dom = new JSDOM('<!doctype html><body></body>', { url: 'http://localhost' });
+	try {
+		using services = createTestEditorServices(undefined, undefined, dom.window.document);
+		using dialogs = new DialogService();
+		services.registerInstance(IDialogService, dialogs);
+		services.registerSingleton(ICodeEditorService, () => new CodeEditorService(parts));
+		services.registerSingleton(ICommandService, () => new CommandService(services));
+		services.registerSingleton(IOpenerService, () => services.createInstance(OpenerService));
+		using files = createTestTextFileService(new MemoryFileService([]));
+		const copies = services.get(IWorkingCopyService);
+		using models = new DocumentEditorTextModelService(files, copies);
+		services.registerInstance(IDocumentEditorTextModelService, models);
+		using registry = new EditorPaneRegistry();
+		registry.registerEditorPane({
+			id: 'stanza.editor.document', name: 'Academic Document', canOpen: () => EditorPaneMatch.Default,
+			create: options => createDocumentEditorPane(academicProfile, options),
+		});
+		const untitled = { resource: URI.parse('untitled:/Paper.ash-academic') };
+		const destination = URI.file('/project/paper.ash-academic');
+		let parts: InstanceType<typeof EditorParts>;
+		using main = createEditorPart(dom.window.document.body, {
+			registry, saveAsResource: async () => destination,
+			replaceEditorResource: (group, input, replacement) => parts.replaceEditorResource(group, input, replacement),
+		}, services);
+		using windows = new TestAuxiliaryWindowService();
+		using editorParts = parts = createEditorParts(main, windows, container => createAuxiliaryPart(container, registry, services), {
+			onDidChangeScreenReaderOptimized: Event.None, isScreenReaderOptimized: () => false,
+		} as unknown as IAccessibilityService, services.get(IStorageService));
+		await main.openEditor(untitled, { pinned: true });
+		await main.openEditor(untitled, { pinned: true }, 'sideGroup');
+		const textareas = dom.window.document.querySelectorAll<HTMLTextAreaElement>('textarea.stanza-document-text-input');
+		assert.ok(textareas.length >= 2);
+		textareas[0]!.value = 'Shared paper';
+		textareas[0]!.dispatchEvent(new dom.window.Event('input', { bubbles: true }));
+		assert.equal(copies.get(untitled.resource).length, 1);
+		assert.equal(copies.get(untitled.resource)[0]!.isDirty, true);
+		await main.saveActiveEditor();
+		assert.deepEqual(editorParts.groups.map(group => group.inputs.map(input => input.resource.toString())), [[destination.toString()], [destination.toString()]]);
+		assert.equal(copies.get(untitled.resource).length, 0);
+		assert.equal(copies.get(destination).length, 1);
+		assert.equal(copies.get(destination)[0]!.isDirty, false);
+		const saved = JSON.parse((await files.resolve({ resource: destination }, new AbortController().signal)).text);
+		assert.equal(saved.version, 2);
+		assert.equal(saved.documentType, 'academic');
+		assert.equal(saved.document.content[0].content[0].content[0].text, 'Shared paper');
+	} finally { dom.window.close(); }
+});
+
+test('general document commands preserve dirty source text, create a backed-up draft and save typed content', async () => {
+	await import('../../../../../contrib/documentEditor/browser/documentEditor.contribution.js');
+	const { DocumentEditorPane } = await import('../../../../../contrib/documentEditor/browser/documentEditorPane.js');
+	const { DocumentTypes } = await import('../../../../../services/documentEditor/common/documentTypes.js');
+	const dom = new JSDOM('<!doctype html><body></body>', { url: 'http://localhost' });
+	try {
+		const source = URI.file('/notes/source.md');
+		const target = URI.file('/notes/converted.ash-doc');
+		using sourceFiles = createTestFileService(new MemoryFileService([[source, '# On disk'], [URI.file('/notes/diagram.png'), 'image bytes']]));
+		using parent = new InstantiationService();
+		parent.registerInstance(IFileService, sourceFiles);
+		using services = createTestEditorServices(undefined, parent, dom.window.document);
+		using dialogs = new DialogService();
+		services.registerInstance(IDialogService, dialogs);
+		using codeEditors = new StandaloneCodeEditorService();
+		services.registerInstance(ICodeEditorService, codeEditors);
+		services.registerSingleton(ICommandService, () => new CommandService(services));
+		services.registerSingleton(IOpenerService, () => services.createInstance(OpenerService));
+		using files = createTestTextFileService(sourceFiles);
+		const copies = services.get(IWorkingCopyService);
+		using models = new DocumentEditorTextModelService(files, copies);
+		services.registerInstance(IDocumentEditorTextModelService, models);
+		using registry = new EditorPaneRegistry();
+		const documentPane = EditorPanes.getEditorPane({ resource: target })!;
+		registry.registerEditorPane({ ...documentPane, documentType: undefined });
+		registry.registerEditorPane({ id: 'test.source', name: 'Text', canOpen: input => input.resource.path.endsWith('.ash-doc') ? EditorPaneMatch.None : EditorPaneMatch.Default, create: () => new TestEditorPane('test.source') });
+		using main = createEditorPart(dom.window.document.body, {
+			registry, saveAsResource: async () => target,
+			replaceEditorResource: (group, input, replacement) => group.replaceEditor(input, replacement),
+		}, services);
+		services.registerInstance(IEditorPart, main);
+		using text = await services.get(IFileTextModelService).acquire({ resource: source, initialText: '# Original', languageId: 'markdown' }, new AbortController().signal);
+		const draftText = '# Unsaved title\n\nBody with **bold**.\n\n![Diagram](diagram.png)';
+		text.model.setValue(draftText);
+		await main.openEditor({ resource: source }, { pinned: true });
+		const commands = services.get(ICommandService);
+		await commands.executeCommand('workbench.action.document.import.markdown');
+		assert.ok(main.activePane instanceof DocumentEditorPane);
+		assert.equal(DocumentTypes.find(main.activeInput!)?.id, 'general');
+		assert.equal(copies.get(main.activeInput!.resource)[0]!.isDirty, true);
+		const imported = JSON.parse(copies.get(main.activeInput!.resource)[0]!.backup());
+		assert.equal(imported.documentType, 'general');
+		assert.equal(imported.document.content[0].content[0].text, 'Unsaved title');
+		assert.deepEqual(imported.document.content[2].content[0].attrs, { src: 'data:image/png;base64,aW1hZ2UgYnl0ZXM=', alt: 'Diagram' });
+		assert.equal(text.model.getValue(), draftText);
+		assert.equal((await files.resolve({ resource: source }, new AbortController().signal)).text, '# On disk');
+		await assert.rejects(copies.get(main.activeInput!.resource)[0]!.saveAs(URI.file('/notes/incorrect.md'), new AbortController().signal), /supported extension/u);
+		assert.equal(copies.get(main.activeInput!.resource)[0]!.isDirty, true);
+		await main.saveActiveEditor();
+		assert.equal(main.activeInput!.resource.toString(), target.toString());
+		assert.equal(copies.get(target).length, 1);
+		assert.deepEqual(JSON.parse((await files.resolve({ resource: target }, new AbortController().signal)).text), imported);
+		main.activePane!.focus();
+		const focused = dom.window.document.activeElement;
+		const { AccessibleViewRegistry } = await import('../../../../../../platform/accessibility/browser/accessibleViewRegistry.js');
+		for (const implementation of AccessibleViewRegistry.getImplementations().filter(value => value.name === 'document')) {
+			const provider = services.invokeFunction(accessor => implementation.getProvider(accessor));
+			assert.ok(provider);
+			assert.ok(provider.provideContent().includes(implementation.type === 'help' ? 'Convert Active Markdown' : 'Unsaved title'));
+			provider.dispose();
+			assert.equal(dom.window.document.activeElement, focused);
+		}
+		await commands.executeCommand('workbench.action.document.export.markdown');
+		const exported = services.get(IUntitledTextEditorService).get(main.activeInput!.resource)!;
+		assert.ok(exported.textEditorModel!.getValue().includes('**bold**'));
+		assert.ok(main.activeInput!.resource.path.endsWith('.md'));
+		assert.equal((await files.resolve({ resource: source }, new AbortController().signal)).text, '# On disk');
+		await commands.executeCommand('workbench.action.document.new');
+		assert.ok(main.activePane instanceof DocumentEditorPane);
+		assert.deepEqual(main.activePane.getDocument().content.map(node => node.type), ['paragraph']);
 	} finally { dom.window.close(); }
 });
 

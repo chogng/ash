@@ -1,5 +1,5 @@
 {
-  "academic.displayName": "Academic",
-  "academic.description": "Edit structured papers with titles, abstracts, sections, citations and bibliographies using Stanza.",
+  "academic.displayName": "Academic (Experimental)",
+  "academic.description": "Experimental structured paper editing with titles, abstracts, sections, citations and bibliographies. Existing Academic files remain supported.",
   "academic.editor": "Academic Document"
 }

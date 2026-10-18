@@ -11,7 +11,7 @@ import { JSDOM } from "jsdom";
 import { type IDimension } from "../../../../../base/browser/dom.js";
 import { URI } from "../../../../../base/common/uri.js";
 import type { IFileChangeEvent } from "../../../../../platform/files/common/files.js";
-import { TextFileSaveConflictError, type ResolvedTextFileContent, type TextFileResolveRequest, type TextFileSaveRequest } from "../../../../services/textfile/common/textFileService.js";
+import { TextFileContentSource, TextFileSaveConflictError, type ResolvedTextFileContent, type TextFileResolveRequest, type TextFileSaveRequest } from "../../../../services/textfile/common/textFileService.js";
 import { type ITextFileService } from "../../../../services/textfile/common/textfiles.js";
 import { DocumentEditorTextModelService } from '../../../../services/documentEditor/browser/documentEditorTextModelService.js';
 import { IDocumentEditorTextModelService } from '../../../../services/documentEditor/common/documentTypes.js';
@@ -141,6 +141,79 @@ test('structured acquisition rejects plain text, cancellation and conflicting do
 	const { parseDocument } = await import('../../../../services/documentEditor/browser/documentWorkingCopy.js');
 	assert.throws(() => parseDocument('Plain text', input.schema));
 	assert.throws(() => parseDocument('{broken', input.schema));
+});
+
+test('Academic v1 migration preserves one typed working copy through backup, revert and Save As', async () => {
+	const schema = createAcademicDocumentSchema();
+	const document = schema.createDocument([schema.createNode('paragraph', {
+		id: 'migration-paragraph', content: [
+			schema.createText('Original', { id: 'migration-text' }),
+			schema.createNode('image', { id: 'migration-image', attrs: { src: 'https://images.example/figure.png', alt: 'Figure' } }),
+		],
+	})], 'migration-document');
+	const resource = URI.file('/legacy.ash-academic');
+	const target = URI.file('/saved.ash-paper');
+	const records = new Map([[resource.toString(), { text: JSON.stringify({ format: 'ash.document', version: 1, document }), revision: '1' }]]);
+	const files: ITextFileService = {
+		onDidSave: Event.None, onDidChangeFiles: Event.None,
+		async resolve(request) {
+			const record = records.get(request.resource.toString());
+			assert.ok(record);
+			return { resource: request.resource, ...record, source: TextFileContentSource.FileSystem, encoding: 'utf8' };
+		},
+		async save(request) {
+			const current = records.get(request.resource.toString());
+			if (request.expectedRevision !== undefined && request.expectedRevision !== current?.revision) throw new TextFileSaveConflictError(request.resource);
+			const revision = String(Number(current?.revision ?? 0) + 1);
+			records.set(request.resource.toString(), { text: request.text, revision });
+			return { revision };
+		},
+	};
+	using copies = uriIdentityServices.createInstance(BrowserWorkingCopyService);
+	using models = new DocumentEditorTextModelService(files, copies);
+	const signal = new AbortController().signal;
+	const input = { resource, contentType: 'application/vnd.ash.academic-document+json', schema };
+	const first = await models.acquire(input, signal);
+	const second = await models.acquire({ ...input, schema: createAcademicDocumentSchema() }, signal);
+	try {
+		assert.equal(first.model, second.model);
+		assert.equal(copies.get(resource).length, 1);
+		assert.equal(first.isDirty, false);
+		assert.equal(JSON.parse(records.get(resource.toString())!.text).version, 1, 'opening must not rewrite the file');
+		assert.deepEqual(JSON.parse(first.backup()), { format: 'ash.document', version: 2, documentType: 'academic', document });
+		await assert.rejects(models.acquire({ ...input, schema: createDefaultDocumentSchema() }, signal), /different document type/u);
+		const restored = schema.createDocument([schema.createNode('paragraph', { content: [schema.createText('Recovered')] })]);
+		first.restoreBackup(serializeDocument(restored, schema));
+		assert.equal(second.isDirty, true);
+		assert.deepEqual(second.model.document, restored);
+		const wrongKind = serializeDocument(createDefaultDocumentSchema().createDocument([]), createDefaultDocumentSchema());
+		assert.throws(() => first.restoreBackup(wrongKind), /document type/u);
+		assert.deepEqual(first.model.document, restored);
+		await second.revert(signal);
+		assert.deepEqual(first.model.document, document);
+		assert.equal(first.isDirty, false);
+		await first.save(signal);
+		assert.equal(JSON.parse(records.get(resource.toString())!.text).documentType, 'academic');
+		assert.equal(JSON.parse(records.get(resource.toString())!.text).version, 2);
+		const valid = records.get(resource.toString())!;
+		records.set(resource.toString(), { text: wrongKind, revision: '3' });
+		await assert.rejects(first.revert(signal), /document type/u);
+		assert.deepEqual(first.model.document, document);
+		records.set(resource.toString(), valid);
+		await first.saveAs(target, signal);
+		first.dispose();
+		second.dispose();
+		assert.equal(copies.get(resource).length, 0);
+		using reopened = await models.acquire({ ...input, resource: target }, signal);
+		assert.equal(copies.get(target).length, 1);
+		assert.equal(reopened.resource.toString(), target.toString());
+		assert.deepEqual(reopened.model.document, document);
+		assert.equal(reopened.isDirty, false);
+		assert.equal(JSON.parse(reopened.backup()).documentType, 'academic');
+	} finally {
+		first.dispose();
+		second.dispose();
+	}
 });
 
 function documentAction(parent: ParentNode, actionId: string): HTMLButtonElement {

@@ -60,6 +60,18 @@ xterm 的文本和原始字节输入经实例进入同一进程输入 owner。`s
 
 文本经 `sendText(text, true, true)` 输入；该命令不承担运行当前文件所需的路径转换。面板显示保留代码编辑器焦点与选区；已有编辑区终端经 `TerminalEditorService` 用 `preserveFocus` 展示，保留其原位置。
 
+### 路径与最近目录
+
+`workbench.action.terminal.runActiveFile` 捕获活动文件 URI，经原终端实例的 `sendPath` 执行磁盘上的文件，不自动保存编辑器。`terminal/create` 与重新 attach 的 ready 数据保留执行端确认的交互式 Shell 类型；Task 的任意程序和一次性 Shell 命令不取得该能力。当前支持 Bash、Zsh 和 PowerShell，未知 Shell 和 Windows Bash 的路径转换明确拒绝。
+
+`sendPath` 复用 PathService 解析执行宿主路径，要求资源与实例目录具有相同 scheme／Remote authority，拒绝虚拟资源、查询或 fragment、相对路径和控制字符。POSIX 引用保留文件名中的空格、单引号和命令语法字符；PowerShell 使用字面量单引号，执行文件时添加调用运算符。关闭、重连、复用或替换目录会退休尚未完成的路径转换。
+
+将文件、目录或编辑器标签拖到屏幕只插入第一个资源的引用路径，不追加 Enter；没有宿主路径的浏览器 File 不会上传或变成猜测路径。实例继续拥有同一屏幕、输入和释放流程。
+
+`workbench.action.terminal.goToRecentDirectory` 使用原历史 owner 和已提交的 CwdDetection 能力，按工作区与执行宿主保存有界目录历史。输出中的每个 cwd 边界按屏幕提交序列发布，最终快照不再抹掉两次读取之间经过的目录。选择器支持方向键、Enter 与 Escape，后续历史更新会进入已打开的列表；切换实例、连接状态或目录根时取消。Bash／Zsh 使用引用后的 `cd --`，PowerShell 使用 `Set-Location -LiteralPath`。历史上限为零或 Shell 禁用历史时不保存新目录；清除以前的会话历史记录同时清理目录。
+
+本轮验证记录位于 `.build/todo-terminal-*`：相关七个文件 289 项单测、两份架构文件 16 项测试、整份终端 Chromium 115 项、协议生成和类型检查、执行端与协议／客户端 Rust 验证通过；中英文浏览器场景覆盖路径拖入、晚到目录、键盘确认与取消。真实 macOS Electron 和连接 App Server 的 Web 使用含空格／引号的可执行文件与目录验证路径执行、原文件保留和目录切换。Windows PowerShell、Linux、真实 OS 文件拖入及跨机器 SSH 仍须按 TODO 补实机验收。
+
 ## 输出与命令状态
 
 Rust 输出字节与 typed Shell boundaries 共享顺序信息。协议适配层保留原始字节，`TerminalProcessManager` 唯一拥有增量 UTF-8 解码和读取游标；有屏幕时等待 xterm write callback，再发布相应命令事件和退出。没有屏幕的 Shell 不制造屏幕解析确认，稍后附着使用实例保留的有限显示回放。

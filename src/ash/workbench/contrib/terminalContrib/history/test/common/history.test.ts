@@ -5,7 +5,7 @@ import { StorageScope, StorageTarget } from '../../../../../../platform/storage/
 import { TestConfigurationService as WorkbenchConfigurationService } from '../../../../../services/configuration/test/common/testServices.js';
 import { BrowserStorageService } from '../../../../../../workbench/services/storage/browser/storageService.js';
 import '../../../../terminal/common/terminalConfiguration.js';
-import { TerminalCommandHistory } from '../../common/history.js';
+import { TerminalCommandHistory, TerminalDirectoryHistory } from '../../common/history.js';
 import { TerminalHistorySettingId } from '../../common/terminal.history.js';
 
 test('Terminal command history isolates PowerShell, Bash and Zsh and rejects untrusted or Task command text', () => {
@@ -29,6 +29,32 @@ test('Terminal command history isolates PowerShell, Bash and Zsh and rejects unt
 	} finally {
 		dom.window.close();
 	}
+});
+
+test('directory history persists newest verified paths per host and ignores unsafe or disabled entries', async () => {
+	const dom = new JSDOM('', { url: 'https://ash.test' });
+	try {
+		using storage = new BrowserStorageService({ ownerWindow: dom.window as unknown as Window, workspaceId: 'directories', backend: dom.window.localStorage, flushInterval: 0 });
+		using configuration = new WorkbenchConfigurationService();
+		await configuration.updateValue(TerminalHistorySettingId.ShellIntegrationCommandHistory, 2);
+		const history = new TerminalDirectoryHistory(configuration, storage);
+		for (const path of ['/old', '/a b', "/quote';$(no)", '/a b']) history.record('ssh:first', path, true, false);
+		history.record('ssh:second', 'C:\\remote\\path', true, false);
+		history.record('ssh:first', '/untrusted', false, false);
+		history.record('ssh:first', '/private', true, true);
+		for (const path of ['relative', '/line\nfeed', '/control\x1b']) history.record('ssh:first', path, true, false);
+		assert.deepEqual(history.getDirectories('ssh:first'), ['/a b', "/quote';$(no)"]);
+		assert.deepEqual(history.getDirectories('ssh:second'), ['C:\\remote\\path']);
+		const restored = new TerminalDirectoryHistory(configuration, storage);
+		assert.deepEqual(restored.getDirectories('ssh:first'), history.getDirectories('ssh:first'));
+		await configuration.updateValue(TerminalHistorySettingId.ShellIntegrationCommandHistory, 0);
+		assert.deepEqual(restored.getDirectories('ssh:first'), []);
+		restored.record('ssh:first', '/not saved', true, false);
+		await configuration.updateValue(TerminalHistorySettingId.ShellIntegrationCommandHistory, 2);
+		assert.deepEqual(restored.getDirectories('ssh:first'), ['/a b', "/quote';$(no)"]);
+		restored.clear();
+		assert.deepEqual(history.getDirectories('ssh:first'), []);
+	} finally { dom.window.close(); }
 });
 
 test('Terminal command history survives a new StorageService and keeps newest profile commands first', async () => {

@@ -283,6 +283,18 @@ impl TerminalService {
         } else {
             None
         };
+        // Path commands are supported only by an interactive, identified shell,
+        // never by a Task's arbitrary executable or one-shot shell command.
+        let shell_type = if params.execution.is_none() {
+            match profile.shell_kind() {
+                profiles::ShellKind::Bash => Some(TerminalShellType::Bash),
+                profiles::ShellKind::Zsh => Some(TerminalShellType::Zsh),
+                profiles::ShellKind::PowerShell => Some(TerminalShellType::PowerShell),
+                profiles::ShellKind::Other => None,
+            }
+        } else {
+            None
+        };
         let (program, args) = match params.execution {
             Some(TerminalExecution::Process { program, args }) => {
                 if program.trim().is_empty()
@@ -344,6 +356,7 @@ impl TerminalService {
                 .to_str()
                 .ok_or(TerminalError::InvalidInput)?
                 .to_owned(),
+            shell_type,
         };
         let terminal_id = format!(
             "terminal-{}-{:x}",

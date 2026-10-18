@@ -97,6 +97,7 @@ export class ChatWidgetModel extends Disposable {
 	private threadChanges: ThreadChangesSummary | undefined;
 	private threadChangesError: string | undefined;
 	private summaryRequest = 0;
+	private summaryRead: { readonly generation: number; sequence: number; promise: Promise<void>; invalidated: boolean; } | undefined;
 
 	readonly onDidChange: Event<void> = this._onDidChange.event;
 	/** Navigation retires input synchronously, including A-B-A. First materialization keeps its composer. */
@@ -958,10 +959,29 @@ export class ChatWidgetModel extends Disposable {
 		}
 	}
 
-	async refreshChanges(): Promise<void> {
+	refreshChanges(): Promise<void> {
 		const owner = this.activeSession;
-		if (!owner) return;
+		if (!owner || this.isDisposed) return Promise.resolve();
 		const generation = this.generation;
+		if (this.summaryRead?.generation === generation) {
+			if (this.durableSequence > this.summaryRead.sequence) this.summaryRead.invalidated = true;
+			return this.summaryRead.promise;
+		}
+		const read = { generation, sequence: this.durableSequence, promise: Promise.resolve(), invalidated: false };
+		this.summaryRead = read;
+		read.promise = (async () => {
+			do {
+				read.invalidated = false;
+				read.sequence = this.durableSequence;
+				await this.readChangesSummary(owner, generation);
+				// Durable history may advance while its summary is being read. Request
+				// one fresh summary instead of concurrent reads whose results will be discarded.
+			} while (!this.isDisposed && generation === this.generation && (read.invalidated || this.durableSequence > read.sequence));
+		})().finally(() => { if (this.summaryRead === read) this.summaryRead = undefined; });
+		return read.promise;
+	}
+
+	private async readChangesSummary(owner: IActiveSessionThread, generation: number): Promise<void> {
 		const request = ++this.summaryRequest;
 		try {
 			const summary = await this.chatService.readThreadChanges(owner.session.sessionId, owner.threadId);

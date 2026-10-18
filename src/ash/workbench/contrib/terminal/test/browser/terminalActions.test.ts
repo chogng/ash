@@ -18,6 +18,7 @@ import { ITerminalEditorService, ITerminalGroupService, ITerminalService, type I
 import { IViewsService } from '../../../../services/views/common/viewsService.js';
 import { registerTerminalActions } from '../../browser/terminalActions.js';
 import { TerminalCommandId } from '../../common/terminal.js';
+import { URI } from '../../../../../base/common/uri.js';
 
 registerTerminalActions();
 
@@ -26,12 +27,14 @@ class InputTerminal {
 	isReadOnly = false;
 	target = TerminalLocation.Panel;
 	readonly input: unknown[][] = [];
+	readonly paths: unknown[][] = [];
 	readonly instance = this as unknown as ITerminalInstance;
 	async sendText(...args: unknown[]): Promise<void> { this.input.push(args); }
+	async sendPath(...args: unknown[]): Promise<void> { this.paths.push(args); }
 }
 
 class SelectionFixture extends Disposable {
-	readonly model = this._register(new TextModel('  echo first  \r\necho second'));
+	readonly model = this._register(new TextModel('  echo first  \r\necho second', { resource: URI.file('/workspace/run.sh') }));
 	selection = new Selection(1, 3, 2, 12);
 	editor: ICodeEditor | null = {
 		getModel: () => this.model,
@@ -79,7 +82,20 @@ class SelectionFixture extends Disposable {
 	}
 
 	run(): Promise<unknown> { return this.commands.executeCommand(TerminalCommandId.RunSelectedText); }
+	runFile(): Promise<unknown> { return this.commands.executeCommand(TerminalCommandId.RunActiveFile); }
 }
+
+test('Run Active File sends the captured resource to the existing instance without saving or replacing its text', async () => {
+	using fixture = new SelectionFixture();
+	const terminal = new InputTerminal();
+	fixture.add(terminal);
+	const source = fixture.model.getValue();
+	await fixture.runFile();
+	assert.deepEqual(terminal.paths, [[fixture.model.uri, true]]);
+	assert.deepEqual(terminal.input, []);
+	assert.equal(fixture.model.getValue(), source);
+	assert.deepEqual(fixture.effects, [['panel', false]]);
+});
 
 suite('Terminal run selected text', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();

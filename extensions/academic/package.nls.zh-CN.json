@@ -1,5 +1,5 @@
 {
-  "academic.displayName": "学术论文",
-  "academic.description": "使用 Stanza 编辑结构化论文，支持标题、摘要、章节、引用和参考文献。",
+  "academic.displayName": "学术论文（实验性）",
+  "academic.description": "实验性的结构化论文编辑，支持标题、摘要、章节、引用和参考文献。继续兼容已有 Academic 文件。",
   "academic.editor": "学术论文文档"
 }

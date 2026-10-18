@@ -1,5 +1,5 @@
 import { KeyCode, KeyMod } from '../../../../../base/common/keyCodes.js';
-import { Disposable, DisposableStore, toDisposable } from '../../../../../base/common/lifecycle.js';
+import { Disposable, DisposableStore, MutableDisposable, toDisposable } from '../../../../../base/common/lifecycle.js';
 import { localize, localize2 } from '../../../../../nls.js';
 import { Action2, registerAction2 } from '../../../../../platform/actions/common/actions.js';
 import { CONTEXT_ACCESSIBILITY_MODE_ENABLED } from '../../../../../platform/accessibility/common/accessibility.js';
@@ -12,8 +12,13 @@ import { IQuickInputService, type IQuickPickItem } from '../../../../../platform
 import { TerminalContextKeys, TerminalHasActiveInstanceContext } from '../../../terminal/common/terminalContextKey.js';
 import { ITerminalService, type ITerminalContribution } from '../../../terminal/browser/terminal.js';
 import { registerTerminalContribution, type ITerminalContributionContext } from '../../../terminal/browser/terminalExtensions.js';
-import { TerminalCommandHistory } from '../common/history.js';
+import { TerminalCommandHistory, TerminalDirectoryHistory } from '../common/history.js';
 import { TerminalHistoryCommandId } from '../common/terminal.history.js';
+import { IWorkspaceContextService } from '../../../../../platform/workspace/common/workspace.js';
+import { TerminalCapability } from '../../../../../platform/terminal/common/capabilities/capabilities.js';
+import { GeneralShellType, PosixShellType } from '../../../../../platform/terminal/common/terminal.js';
+import { escapeNonWindowsPath } from '../../../../../platform/terminal/common/terminalEnvironment.js';
+import type { ITerminalInstance } from '../../../terminal/browser/terminal.js';
 
 const HISTORY_CONTRIBUTION_ID = 'terminal.history';
 
@@ -22,18 +27,85 @@ class TerminalHistoryContribution extends Disposable implements ITerminalContrib
 		context: ITerminalContributionContext,
 		@IConfigurationService configurationService: IConfigurationService,
 		@IStorageService storageService: IStorageService,
+		@IWorkspaceContextService workspace: IWorkspaceContextService,
 	) {
 		super();
 		const { instance } = context;
 		const history = new TerminalCommandHistory(configurationService, storageService);
+		const directories = new TerminalDirectoryHistory(configurationService, storageService);
+		const scope = directoryScope(workspace, instance);
+		const cwdListener = this._register(new MutableDisposable());
+		const recordDirectory = (): void => {
+			const cwd = instance.capabilities?.get(TerminalCapability.CwdDetection);
+			if (scope && cwd) directories.record(scope, cwd.getCwd(), cwd.isTrusted, instance.shellIntegration?.commandStorageDisabled === true);
+		};
+		const bindDirectory = (): void => {
+			cwdListener.value = instance.capabilities?.get(TerminalCapability.CwdDetection)?.onDidChangeCwd(recordDirectory);
+			recordDirectory();
+		};
+		bindDirectory();
+		if (instance.capabilities) {
+			this._register(instance.capabilities.createOnDidAddCapabilityOfTypeEvent(TerminalCapability.CwdDetection)(bindDirectory));
+			this._register(instance.capabilities.createOnDidRemoveCapabilityOfTypeEvent(TerminalCapability.CwdDetection)(() => cwdListener.clear()));
+		}
 		this._register(instance.onDidChangeCommandStatus(event => {
 			if (event.status === 'running') return;
+			recordDirectory();
 			history.record(instance.profile.profileId, event.status, event.command, event.isTrusted, instance.shellIntegration?.commandStorageDisabled === true);
 		}));
 	}
 }
 
 registerTerminalContribution(HISTORY_CONTRIBUTION_ID, TerminalHistoryContribution);
+
+function directoryScope(workspace: IWorkspaceContextService, instance: ITerminalInstance): string | undefined {
+	const current = workspace.getWorkspace();
+	const root = current.folders.find(folder => folder.id === instance.dirId);
+	return root ? JSON.stringify([current.id, current.remoteAuthority ?? '', root.uri.scheme, root.uri.authority]) : undefined;
+}
+
+registerAction2(class GoToRecentDirectoryAction extends Action2 {
+	constructor() {
+		super({ id: TerminalHistoryCommandId.GoToRecentDirectory, title: localize2('terminal.history.goToDirectory', 'Terminal: Go to Recent Directory...'), f1: true, precondition: TerminalHasActiveInstanceContext.isEqualTo(true) });
+	}
+	override async run(accessor: ServicesAccessor): Promise<void> {
+		const terminals = accessor.get(ITerminalService);
+		const instance = terminals.activeInstance;
+		if (!instance || instance.isReadOnly || instance.state !== 'running') return;
+		const workspace = accessor.get(IWorkspaceContextService);
+		const scope = directoryScope(workspace, instance);
+		const shell = instance.shellType;
+		if (!scope || shell !== GeneralShellType.PowerShell && shell !== PosixShellType.Bash && shell !== PosixShellType.Zsh) throw new Error(localize('terminal.path.unsupportedShell', 'This terminal does not have a supported, confirmed shell for sending paths.'));
+		const history = new TerminalDirectoryHistory(accessor.get(IConfigurationService), accessor.get(IStorageService));
+		using lifetime = new DisposableStore();
+		const picker = lifetime.add(accessor.get(IQuickInputService).createQuickPick<IQuickPickItem>());
+		picker.ariaLabel = localize('terminal.history.directoryAria', 'Recent directories on this terminal execution host');
+		const refresh = (): void => {
+			const items = history.getDirectories(scope).filter(path => shell === GeneralShellType.PowerShell || path.startsWith('/')).map(path => ({ label: path }));
+			picker.placeholder = items.length ? localize('terminal.history.directoryPlaceholder', 'Select a directory to open in this terminal') : localize('terminal.history.directoryEmpty', 'No verified directories for this terminal execution host');
+			picker.items = items;
+		};
+		refresh();
+		lifetime.add(history.onDidChange(refresh));
+		let retired = false;
+		const retire = (): void => { retired = true; picker.hide(); };
+		lifetime.add(instance.onDidChangeState(retire));
+		lifetime.add(terminals.onDidChangeActiveInstance(retire));
+		lifetime.add(workspace.onDidChangeWorkspaceFolders(retire));
+		let selected: IQuickPickItem | undefined;
+		const directory = await new Promise<IQuickPickItem | undefined>(resolve => {
+			lifetime.add(picker.onDidAccept(() => { selected = picker.selectedItems[0]; picker.hide(); }));
+			lifetime.add(picker.onDidHide(() => resolve(selected)));
+			lifetime.add(toDisposable(() => resolve(undefined)));
+			picker.show();
+		});
+		if (!directory || retired || terminals.activeInstance !== instance || !terminals.instances.includes(instance)
+			|| instance.state !== 'running' || instance.shellType !== shell || directoryScope(workspace, instance) !== scope) return;
+		const command = shell === GeneralShellType.PowerShell ? 'Set-Location -LiteralPath ' : 'cd -- ';
+		await instance.sendText(command + escapeNonWindowsPath(directory.label, shell), true);
+		instance.xterm?.focus();
+	}
+});
 
 interface CommandHistoryPick extends IQuickPickItem {
 	readonly command: string;
@@ -117,5 +189,6 @@ registerAction2(class ClearPreviousSessionHistoryAction extends Action2 {
 
 	override run(accessor: ServicesAccessor): void {
 		new TerminalCommandHistory(accessor.get(IConfigurationService), accessor.get(IStorageService)).clear();
+		new TerminalDirectoryHistory(accessor.get(IConfigurationService), accessor.get(IStorageService)).clear();
 	}
 });

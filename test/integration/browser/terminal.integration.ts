@@ -113,7 +113,7 @@ if (new URLSearchParams(location.search).has('workbench')) {
 }
 store.add(installTestDictationAudio(window));
 setIconResolver(document, icon => getIconDefinition(icon));
-function setupTerminalFixtureServices(services: import('../../../src/ash/platform/instantiation/common/instantiationService.js').InstantiationService, lifetime: DisposableStore): void {
+function setupTerminalFixtureServices(services: import('../../../src/ash/platform/instantiation/common/instantiationService.js').InstantiationService, lifetime: DisposableStore, fallbackProcess = true): void {
 	// Keep the concrete owner observable after scope disposal for cleanup assertions.
 	if (!services.has(ITerminalService)) services.registerSingleton(ITerminalService, () => services.createInstance(TerminalService), { instantiation: InstantiationType.Delayed });
 	if (!services.has(IDialogService)) services.registerSingleton(IDialogService, () => services.createInstance(DialogService));
@@ -130,7 +130,7 @@ function setupTerminalFixtureServices(services: import('../../../src/ash/platfor
 	if (!services.has(IWorkspaceContextService)) services.registerInstance(IWorkspaceContextService, lifetime.add(new TestWorkspaceService({ id: 'terminal-paths', folders: [] })));
 	services.registerSingleton(IPathService, () => services.createInstance(BrowserPathService));
 	services.registerSingleton(ILabelService, () => services.createInstance(LabelService));
-	if (!services.has(ITerminalProcessService)) services.registerInstance(ITerminalProcessService, { getEnvironment: async () => ({ HOME: '/home/test' }) } as unknown as ITerminalProcessService);
+	if (fallbackProcess && !services.has(ITerminalProcessService)) services.registerInstance(ITerminalProcessService, { getEnvironment: async () => ({ HOME: '/home/test' }) } as unknown as ITerminalProcessService);
 	services.registerInstance(IConfigurationResolverService, lifetime.add(services.createInstance(ConfigurationResolverService)));
 }
 
@@ -168,6 +168,7 @@ function createFixtureInstance(id: string) {
 		clearBuffer: () => screen?.clearBuffer(),
 		reuseTerminal: async () => { throw new Error('Screen-only fixture has no process to reuse'); },
 		sendSignal: async () => { }, sendText: async (data, shouldExecute) => { writes.push(data + (shouldExecute ? '\r' : '')); },
+		sendPath: async () => { throw new Error('Screen-only fixture has no path input'); },
 		processBinary: async data => { binaryWrites.push(Array.from(data, character => character.charCodeAt(0))); },
 		resize: dimensions => { resizes.push(dimensions); },
 		close: async () => { },
@@ -687,7 +688,7 @@ if (new URLSearchParams(location.search).has('assembly')) {
 		const install = (container: import('../../../src/ash/platform/instantiation/common/instantiationService.js').InstantiationService): void => {
 			container.registerInstance(ICommandService, widgetServices.get(ICommandService));
 			container.registerInstance(IEditorService, widgetServices.get(IEditorService));
-			setupTerminalFixtureServices(container, resources);
+			setupTerminalFixtureServices(container, resources, false);
 			installWorkbenchServiceContributions({ container, register: value => resources.add(value), blockRestorationUntil: () => { } });
 		};
 		const services = [0, 1].map(() => {
@@ -780,12 +781,13 @@ if (new URLSearchParams(location.search).has('embedder')) {
 	});
 	const contributions = store.add(WorkbenchContributionsRegistry.createHost(services, undefined, [TerminalMainContribution.ID]));
 	contributions.advance(WorkbenchPhase.BlockRestore);
+	const hostInstances = terminals.instances;
 	window.ashEmbedderTerminalIntegration = {
 		ready: async () => { await hostReady; },
 		name: value => hostName.fire(value),
 		output: value => hostOutput.fire(value),
 		exit: code => hostExit.fire(code),
-		status: () => ({ opens, closes, backendCalls, title: terminals.activeInstance?.title, state: terminals.activeInstance?.state, readOnly: terminals.activeInstance?.isReadOnly, remaining: terminals.instances.length }),
+		status: () => ({ opens, closes, backendCalls, title: hostInstances.at(-1)?.title, state: hostInstances.at(-1)?.state, readOnly: hostInstances.at(-1)?.isReadOnly, remaining: hostInstances.length }),
 		close: async () => { await terminals.activeInstance!.close(); store.dispose(); },
 		dispose: () => store.dispose(),
 	};
@@ -908,8 +910,9 @@ if (new URLSearchParams(location.search).has('stream')) {
 		store.add(instance.onDidExit(() => events.push('exit')));
 	}));
 	const terminal = await terminals.createTerminal({ dimensions: { rows: 24, cols: 80 }, profile: { type: 'default' } });
+	const streamInstances = terminals.instances;
 	window.ashTerminalStreamIntegration = {
-		status: () => ({ reads, events, closes, state: terminal.state, remaining: terminals.instances.length, ...(reportCwd ? { cwd: terminal.cwd } : {}), ...(reportHistory ? { shellIntegration: terminal.shellIntegration } : {}) }),
+		status: () => ({ reads, events, closes, state: terminal.state, remaining: streamInstances.length, ...(reportCwd ? { cwd: terminal.cwd } : {}), ...(reportHistory ? { shellIntegration: terminal.shellIntegration } : {}) }),
 		reuse: async () => { await terminal.reuseTerminal({ executable: '/bin/sh', args: [], deferStart: true }); terminal.start(); },
 		start: async () => {
 			if (!screen) { terminal.attachToElement(document.querySelector<HTMLElement>('#terminal')!); screen = terminal.xterm!; screen.setVisible(true); }
@@ -1002,7 +1005,7 @@ if (new URLSearchParams(location.search).has('input')) {
 		sendSignal: async () => { }, resolveProfile: async (profile: import('../../../src/ash/platform/terminal/common/terminal.js').TerminalProcessProfileSelection) => ({ profile: profile.type === 'custom' ? { profileId: `custom:${profile.name}`, title: profile.name, isDefault: false } : instance.profile, executable: profile.type === 'custom' ? profile.path.at(-1)! : '/bin/sh', args: profile.type === 'custom' ? (typeof profile.args === 'string' ? profile.args : [...profile.args]) : [] }), getEnvironment: async () => ({}), listProfiles: async () => [profile],
 		create: async options => {
 			launchDirectories.push(options.cwd);
-			return { terminalId: `input-shell-${++nextTerminal}`, ready: { pid: 1234, cwd: '/workspace' }, profile, connectionPersistence: 'connectionOwned' };
+			return { terminalId: `input-shell-${++nextTerminal}`, ready: { pid: 1234, cwd: '/workspace', shellType: PosixShellType.Bash }, profile, connectionPersistence: 'connectionOwned' };
 		},
 		write: async options => {
 			writes.push(typeof options.data === 'string' ? options.data : [...options.data]);
@@ -1016,8 +1019,13 @@ if (new URLSearchParams(location.search).has('input')) {
 		read: async options => ({
 			terminalId: options.terminalId, chunks: queuedOutput.splice(0).map(chunk => ({ sequence: ++sequence, ...chunk })), nextSequence: sequence,
 			outputGap: false, commandEvents: [], nextCommandSequence: 0, commandEventGap: false, exited: false, exitCode: undefined,
+			...(currentDirectory ? {
+				cwd: { value: currentDirectory, isTrusted: true, afterOutputSequence: sequence },
+				shellIntegration: { commandDetection: false, cwdDetection: true, hasRichCommandDetection: false, commandStorageDisabled: false, commands: [], afterOutputSequence: sequence },
+			} : {}),
 		}),
 	};
+	let currentDirectory: string | undefined;
 	const workspace = store.add(new TestWorkspaceService({ id: 'input', uri: URI.file('/workspace') }));
 	const services = store.add(widgetServices.createChild(new ServiceCollection([ITerminalProcessService, processes], [IWorkspaceContextService, workspace])));
 	setupTerminalFixtureServices(services, store);
@@ -1220,6 +1228,10 @@ if (new URLSearchParams(location.search).has('input')) {
 	}
 	window.ashTerminalInputIntegration = {
 		writes,
+		path: (resource, execute) => terminal.sendPath(URI.parse(resource), execute),
+		cwd: () => terminal.cwd,
+		visit: path => { currentDirectory = path; },
+		command: id => services.get(ICommandService).executeCommand(id),
 		configure: (key, value) => services.get(IConfigurationService).updateValue(key, value),
 		dimensions: () => ({ cols: screen.raw.cols, rows: screen.raw.rows }),
 		clear: () => { writes.length = 0; },
@@ -1298,6 +1310,10 @@ declare global {
 			help(): Promise<string>;
 		};
 		ashTerminalInputIntegration: {
+			path(resource: string, execute: boolean): Promise<void>;
+			cwd(): string | undefined;
+			visit(path: string): void;
+			command(id: string): Promise<unknown>;
 			configure(key: string, value: unknown): Promise<void>;
 			dimensions(): { cols: number; rows: number; };
 			readonly writes: readonly (string | number[])[];

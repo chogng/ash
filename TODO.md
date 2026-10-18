@@ -106,13 +106,10 @@
 当前进程、屏幕、关闭保护、reload 与输出背压已接通，见 [Terminal](docs/terminal.md)。以下按现有调用链分批推进；未排期的独立增强见文末发展候选。上游行为参照 `terminalActions.ts`、`terminalTabsList.ts`、`terminalContrib/clipboard` 与 `terminalContrib/history`，不以文件数衡量对齐。
 
 - [ ] **布局前置 · 面板分屏方向**：编辑区 Split 已接通相邻组创建，原实例／屏幕保留，复用原终端创建链解析 cwd 与 Profile；120 项单测（含层级检查）、10 项分组／编辑区 Chromium 场景通过，见 `.build/todo-local-baselines/terminal-owner-unit-final.log` 与 `editor-group-browser.log`。剩余方向切换依赖布局 owner 的真实 Panel 位置契约：当前 `IWorkbenchLayoutService` 没有 `getPanelPosition`，Part 也未提供移动 Panel 位置的操作。不能按宽高猜位置或在 Terminal 自建第二份 Panel 状态；先闭合布局契约，再让组按方向保留相对尺寸和焦点。
-- [ ] **后端前置 · 最近目录**：已有命令 cwd 元数据和最近命令选择器，但没有 Go To Recent Directory。目录历史归既有终端历史 owner，需按执行宿主隔离。当前实例没有已闭合的 Shell 类型／路径发送端口：`processReady.shellType` 只随有序屏幕事件进入 ShellIntegrationAddon，`AhpTerminalCommandSource` 的重连快照没有此字段；不能按 Profile 显示名猜 Shell 或拼接原始目录。先与运行当前文件共用执行宿主路径发送契约，再补无 cwd、重复目录、切换实例和取消。Shell 历史文件导入另列为发展候选。
-- [ ] **后端前置 · 运行当前文件**：Ash 尚无上游 `sendPath` 对应的实例端口。先闭合执行宿主路径、Shell quoting、本地／远端资源匹配和不支持 scheme 的反馈，再接 Run Active File；不能把编辑器 URI 直接当命令文本。与 Run Selected Text 分开验收。
-- [ ] **后端前置 · 文件／文件夹拖入输入路径**：当前屏幕没有文件 drop 链，标签 drop 仅接受本地终端实例。复用上一项的执行宿主路径发送契约，覆盖 OS 文件与工作台资源拖动；不另造路径映射。
 - [ ] **后端前置 · 跨窗口转移**：独立定义进程租约、屏幕及输入交接并验收；现有 30 秒租约只闭合同一 Desktop 窗口 reload，Web 保持 connection-owned 生命周期。
 - [ ] **后端前置 · 应用退出后恢复输出、cwd 和布局**：有限 `TerminalRecorder` replay 与命令文本历史不等于完整终端恢复；缺少持久化缓冲、布局和重建 Shell 的入口。与保留原进程的 reload 分开验收；不承诺任意旧命令跨应用退出继续执行。
 - [ ] **复核 · 文件链接扩展**：补目录打开、工作区搜索型链接、外部 provider 与适用配置的实际入口，复用执行宿主 cwd／路径和文件服务授权，验收鼠标、键盘及异步关闭／重连。
-- [ ] **验收** · 补真实 SSH、Windows／Linux PTY、PowerShell／Fish 的运行，覆盖文件链接、连续输出、关闭清理和 reload；应用退出后的 revive 独立验收，macOS 或 URI 单测不能替代。
+- [ ] **验收** · 补真实 SSH、Windows／Linux PTY、PowerShell／Fish 的运行，覆盖文件链接、连续输出、关闭清理、reload，以及本轮接通的路径执行／OS 文件拖入／最近目录；应用退出后的 revive 独立验收。路径模型与引用的单测、115 项终端 Chromium 及 macOS Electron／Web 各一个真实 Shell 场景通过，范围见 [路径与最近目录](docs/terminal.md#路径与最近目录)，不能替代其他平台实机。
 
 高频交互验收同时观察原进程身份、待提交输入、选区和焦点；执行、权限和工具调度继续归 Rust。
 
@@ -124,11 +121,9 @@
 
 ## Work / 通用文档 · TODO
 
-当前共享 `TextModel`／工作副本、共同编辑器注册及 Academic 模式退场已完成；目标与依赖见 [Work / Code 设计](docs/design/work-code-workbench.md)。
+当前共享 `TextModel`／工作副本、共同编辑器注册、普通 `.ash-doc` 的创建／转换／导出及 Academic 模式退场已完成。Academic 按用户决定标为实验性并保留现有文件兼容；目标、420 项单测与真实 Electron／Browser 验证见 [Work / Code 设计](docs/design/work-code-workbench.md)。
 
-- [ ] **Ash 产品** · 先完成 `ash.document` v2 自描述 `general`／`academic` 类型与 Academic v1 一次性读取升级，覆盖类型冲突、损坏数据、双视图、备份和另存为资源转移；纯文本不能成为结构化文件解析失败后的隐式读法。
-- [ ] **Ash 产品** · 接入 general 文档、`.ash-doc`、新建／保存／回退／备份／冲突及显式 txt／Markdown 转换，保留不支持语义的定位错误及稳定图片资源。
-- [ ] **Ash 产品** · Agent 结构化文档编辑经统一文档服务校验模型版本／文件修订、权限和 schema，一次事务可撤销；覆盖打开和未打开资源及过期拒绝。
+- [ ] **Ash 产品** · Agent 结构化文档编辑经统一文档服务校验模型版本／文件修订、权限和 schema，一次事务可撤销；覆盖打开和未打开资源及过期拒绝。现有 `AppServerTextDocumentHost` 仅闭合普通文本快照和 WorkspaceEdit；须先定义结构化编辑的真实 producer／领域端口及审阅行为，不能把 `.ash-doc` 的共享模型再解析成第二份普通文本模型。
 - [ ] **Ash 产品** · 增加 Work 产品入口和默认布局，复用现有生命周期，明确 Code／Work 的资源、未保存内容、会话与状态恢复，不恢复模式注册表或第二份配置。
 - [ ] **Ash 产品** · Chat 主画布与辅助栏共用会话、附件和草稿状态，接通 Move Chat to Editor Area；验证布局切换、重启、并排焦点及不误发送。分页、docx／PDF 输出仍属另行设计范围。
 
@@ -145,7 +140,7 @@
 
 - [ ] **测量** · 量化 receive／assemble／decode／parse／schema／adapter／apply／paint 阶段、队列 bytes／elapsed 与真实 task yield；核对 ACK 跟随消费和跨进程时钟关系。
 - [ ] **测量** · 测 Worker 回传对象的复制、Thread／transcript 重复 item 与领域保留堆；按稳定 ID／revision、有界领域值评估减量，不把 transport DTO 变成权威业务状态。
-- [ ] **复核** · 完善过期只读 refresh 的取消／合并、大内容按需资源读取及迟到响应清理；状态变更请求不得自动重放或合并。
+- [ ] **复核** · 继续完善文件模型刷新、Chat Changes 摘要以外的过期只读 refresh，补齐传输取消、大内容按需资源读取及迟到响应清理；状态变更请求不得自动重放或合并。已完成切片及取消范围见[消费者刷新约束](docs/ash-app-server-data-path-audit.md#已接入的消费者刷新约束)。
 - [ ] **测量** · 把后端结果构造和 writer／producer 等待纳入资源准入测量，评估有界数据／控制输出契约与同连接队头阻塞；不靠降低既有文件上限掩盖成本。
 - [ ] **测量** · 先量化大代码围栏的完整 `TextModel.setValue`、配置／布局成本及巨大单块 Markdown 尾部预算，再决定增量编辑或更新合并；此前 Markdown 子阶段收益不能当作整条响应同幅度加速。
 

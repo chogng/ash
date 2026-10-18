@@ -3,6 +3,9 @@ import { createDocumentNode, createDocumentRoot, createTextNode, type DocumentAt
 /** Structural layers available to Stanza schemas. */
 export type DocumentNodeKind = "root" | "group" | "block" | "line" | "inline" | "text";
 
+/** Persistent document kind; schemas own the interpretation of their document trees. */
+type DocumentType = "general" | "academic";
+
 export interface DocumentMarkSpec {
 	readonly validateAttributes?: (attrs: DocumentAttributes) => void;
 }
@@ -36,6 +39,7 @@ export interface DocumentContentTerm {
 }
 
 export interface DocumentSchemaOptions {
+	readonly documentType?: DocumentType;
 	readonly topNodeType?: string;
 	readonly nodes?: Readonly<Record<string, DocumentNodeSpec>>;
 	readonly marks?: Readonly<Record<string, DocumentMarkSpec>>;
@@ -58,6 +62,7 @@ const DEFAULT_TOP_NODE_TYPE = "doc";
 
 /** Schema and content validator for Stanza's structured document tree. */
 export class DocumentSchema {
+	readonly documentType: DocumentType;
 	readonly topNodeType: string;
 	private readonly nodeSpecs: ReadonlyMap<string, DocumentNodeSpec>;
 	private readonly markSpecs: ReadonlyMap<string, DocumentMarkSpec>;
@@ -65,6 +70,7 @@ export class DocumentSchema {
 	private nextGeneratedId = 1;
 
 	constructor(options: DocumentSchemaOptions = {}) {
+		this.documentType = options.documentType ?? "general";
 		this.topNodeType = options.topNodeType ?? DEFAULT_TOP_NODE_TYPE;
 		const nodes = options.nodes ?? defaultNodeSpecs();
 		const marks = options.marks ?? defaultMarkSpecs();

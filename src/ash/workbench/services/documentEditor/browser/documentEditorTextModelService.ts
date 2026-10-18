@@ -60,7 +60,7 @@ export class DocumentEditorTextModelService extends Disposable implements IDocum
 	}
 
 	private reference(key: string, entry: DocumentModelEntry, input: TextModelBlockInput): TextModelWorkingCopyReference {
-		if (entry.workingCopy.backupContentType !== input.contentType) { throw new Error('The resource is already open with a different document type'); }
+		if (entry.workingCopy.backupContentType !== input.contentType || entry.model.schema.documentType !== input.schema.documentType) { throw new Error('The resource is already open with a different document type'); }
 		entry.references += 1;
 		const reference = new TextModelWorkingCopyReferenceImpl(entry.model, entry.workingCopy, () => {
 			entry.saveHandlers.delete(reference);

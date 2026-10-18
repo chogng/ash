@@ -1,5 +1,30 @@
 import { expect, test, type Page } from '@playwright/test';
 
+for (const locale of ['en', 'zh-CN']) {
+	test(`terminal path drops insert literal filenames and recent directories support keyboard acceptance and cancellation in ${locale}`, async ({ page }) => {
+		await page.goto(`/terminal.html?input&groups&clipboard&browser&locale=${locale}`);
+		await page.waitForFunction(() => Boolean(window.ashTerminalInputIntegration));
+		await page.evaluate(() => window.ashTerminalInputIntegration.clear());
+		await page.locator('.ash-terminal-instance:visible').first().dispatchEvent('drop', {
+			dataTransfer: await page.evaluateHandle(() => { const transfer = new DataTransfer(); transfer.setData('text/uri-list', "file:///workspace/space%20%27%24%28literal%29.sh"); return transfer; }),
+		});
+		await expect.poll(() => page.evaluate(() => window.ashTerminalInputIntegration.writes)).toEqual(["'/workspace/space '\"'\"'$(literal).sh'"]);
+		await page.evaluate(() => { void window.ashTerminalInputIntegration.command('workbench.action.terminal.goToRecentDirectory'); });
+		await page.evaluate(() => window.ashTerminalInputIntegration.visit("/workspace/quoted ' directory"));
+		// The backend fixture publishes cwd through the normal output-commit metadata path.
+		await expect.poll(() => page.evaluate(() => window.ashTerminalInputIntegration.cwd())).toBe("/workspace/quoted ' directory");
+		await expect(page.getByText("/workspace/quoted ' directory", { exact: true })).toBeVisible();
+		await expect(page.getByRole('combobox', { name: locale === 'zh-CN' ? '此终端执行宿主上的最近目录' : 'Recent directories on this terminal execution host', exact: true })).toBeVisible();
+		await page.keyboard.press('Escape');
+		await expect.poll(() => page.evaluate(() => window.ashTerminalInputIntegration.writes.length)).toBe(1);
+		await page.evaluate(() => { void window.ashTerminalInputIntegration.command('workbench.action.terminal.goToRecentDirectory'); });
+		await expect(page.getByText("/workspace/quoted ' directory", { exact: true })).toBeVisible();
+		await page.keyboard.press('Enter');
+		await expect.poll(() => page.evaluate(() => window.ashTerminalInputIntegration.writes)).toEqual(["'/workspace/space '\"'\"'$(literal).sh'", "cd -- '/workspace/quoted '\"'\"' directory'\r"]);
+		await page.evaluate(() => window.ashTerminalInputIntegration.close());
+	});
+}
+
 async function seedScreenCommand(page: Page, trusted = true, locale = 'en'): Promise<void> {
 	await page.goto(`/terminal.html?input&groups&clipboard&browser&locale=${locale}`);
 	await page.waitForFunction(() => Boolean(window.ashTerminalGroupsIntegration));

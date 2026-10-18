@@ -101,6 +101,9 @@ impl fmt::Debug for TerminalReconnectLease {
 pub struct TerminalProcessReady {
     pub pid: u32,
     pub cwd: String,
+    /// Shell identified from the spawned executable, retained across attach.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub shell_type: Option<TerminalShellType>,
 }
 
 /// Current backend-owned process properties; shell cwd is retained after exit when detected.

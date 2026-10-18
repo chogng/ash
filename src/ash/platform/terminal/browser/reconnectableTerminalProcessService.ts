@@ -11,7 +11,7 @@ import type {
 	ITerminalProcessResizeOptions, ITerminalProcessService, ITerminalProcessWriteOptions,
 	TerminalProcessConnectionState, ITerminalResolvedProfile, TerminalProcessProfileSelection,
 } from "../common/terminal.js";
-import { decodeTerminalProcessReadResult, encodeTerminalProcessInput, profileSelection } from "./appServerTerminalProcessService.js";
+import { decodeTerminalProcessReadResult, decodeTerminalProcessReady, encodeTerminalProcessInput, profileSelection } from "./appServerTerminalProcessService.js";
 
 const MAX_RECONNECT_GRACE_PERIOD_MILLIS = 5 * 60 * 1_000;
 const INITIAL_RECONNECT_DELAY_MILLIS = 50;
@@ -113,7 +113,7 @@ export class ReconnectableTerminalProcessService extends Disposable implements I
 			closing: false,
 		});
 		return {
-			ready: result.ready,
+			ready: decodeTerminalProcessReady(result.ready),
 			terminalId: result.terminalId,
 			profile: result.profile,
 			connectionPersistence: "reconnectable",
@@ -176,7 +176,7 @@ export class ReconnectableTerminalProcessService extends Disposable implements I
 	async getProcessInfo(params: ITerminalProcessCloseOptions): Promise<ITerminalProcessInfo> {
 		await this.ensureAttached(params.terminalId);
 		const result = await this.supervisor.request(APP_SERVER_METHODS['terminal/processInfo'], params);
-		return { ...result, cwd: result.cwd ?? undefined };
+		return { ...result, ready: decodeTerminalProcessReady(result.ready), cwd: result.cwd ?? undefined };
 	}
 
 	async close(params: ITerminalProcessCloseOptions): Promise<void> {

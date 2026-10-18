@@ -54,6 +54,10 @@ import { BrowserTerminalProfileResolverService } from '../../contrib/terminal/br
 import { TerminalGroupService } from '../../contrib/terminal/browser/terminalGroupService.js';
 import { TerminalEditorService } from '../../contrib/terminal/browser/terminalEditorService.js';
 import { IEditorService } from '../../services/editor/common/editorService.js';
+import { IPathService } from '../../../platform/path/common/pathService.js';
+import { BrowserPathService } from '../../services/path/browser/pathService.js';
+import { ITerminalProcessService } from '../../../platform/terminal/common/terminal.js';
+import type { IRendererHost } from '../../../platform/renderer/common/rendererHost.js';
 
 /** Explicit window dependencies for fixtures that construct the real terminal owner. */
 export function registerTestTerminalLifecycleServices(services: InstantiationService): void {
@@ -67,6 +71,7 @@ export function registerTestTerminalLifecycleServices(services: InstantiationSer
 /** Explicit dependencies for fixtures that instantiate the real terminal creation owner. */
 export function registerTestTerminalCreationServices(services: InstantiationService): void {
 	registerTestTerminalLifecycleServices(services);
+	if (!services.has(IPathService)) services.registerSingleton(IPathService, () => new BrowserPathService({ hasAppServer: true, appServer: { operatingSystem: services.get(ITerminalProcessService).operatingSystem } } as IRendererHost, services.get(IWorkspaceContextService)));
 	if (!services.has(ICommandService)) services.registerSingleton(ICommandService, () => new CommandService(services));
 	if (!services.has(IEditorService)) services.registerInstance(IEditorService, { ...emptyEditorServiceState, openEditor: async () => { }, focusActiveEditor() { }, save: async () => ({ success: true, editors: [] }), saveAll: async () => ({ success: true, editors: [] }) });
 	// Low-level lifecycle fixtures do not open UI. Keep the real creation services

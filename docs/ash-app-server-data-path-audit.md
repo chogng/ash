@@ -148,6 +148,14 @@ ChatWidgetModel 的 refresh 在 await 后使用 generation、request 和 revisio
 
 ## 4. 背压已经有效，但保护范围有限
 
+### 已接入的消费者刷新约束
+
+文件模型的焦点刷新共享同一在途读取；文件事件使旧读取失效，并在事件突发后串行补读当前内容。编辑或关闭最后一个视图会取消相应信号，晚到内容在创建文本缓冲前丢弃。保存队列继续拥有写入及已确认修订；只读刷新不会重放写入，也不会因旧刷新等待而跨过新排队的保存。`browserTextModelService.test.ts` 48 项通过，其中回归直接断言读取次数、旧信号退休、最新修订及写入恰好一次，日志 `.build/todo-refresh/unit.log`。
+
+Chat 的 Changes 摘要按当前模型代次共享在途读取。durable sequence 推进时串行补读最新摘要，迟到的旧代次或已关闭模型不能发布结果；提交和执行接口不参与合并。`chatViewPane.test.ts` 158 项通过，其中新增两个场景覆盖三次并发调用合并、读取期间历史推进与关闭后的迟到结果，日志 `.build/todo-chat-refresh/` 和 `.build/todo-general-document/all-unit-final.log`。
+
+这些结果证明消费者请求数量及生命周期约束，不是整条 Desktop 的性能测量，也没有给未支持取消的文件 provider 或 RPC 增加物理中止保证。Thread／transcript 等其他读取、传输取消和大内容按需读取仍待推进；已有帧的解析成本不能据此宣称消失。
+
 ### 4.1 当前链路怎样反压上游
 
 ```text

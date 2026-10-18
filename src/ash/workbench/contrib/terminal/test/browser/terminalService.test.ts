@@ -32,6 +32,12 @@ import { BasePty } from '../../common/basePty.js';
 import { TerminalProcessExtHostProxy } from '../../browser/terminalProcessExtHostProxy.js';
 import { ITerminalService, type ITerminalInstance, type ITerminalCommandStatusEvent } from "../../browser/terminal.js";
 import { TestWorkspaceService } from "../../../../services/configuration/test/common/testServices.js";
+import { GeneralShellType, PosixShellType, type TerminalShellType } from '../../../../../platform/terminal/common/terminal.js';
+import { OperatingSystem } from '../../../../../base/common/platform.js';
+import { createSshRemoteWorkspaceUri } from '../../../../../platform/remote/common/remote.js';
+import { IPathService } from '../../../../../platform/path/common/pathService.js';
+import { AhpTerminalCommandSource } from '../../browser/ahpTerminalCommandSource.js';
+import { CancellationToken } from '../../../../../base/common/cancellation.js';
 
 const DEFAULT_PROFILE = {
 	profileId: "command-prompt",
@@ -470,6 +476,8 @@ suite('Terminal process identity and raw input', () => {
 });
 
 class TestTerminalProcessService implements ITerminalProcessService {
+	operatingSystem = OperatingSystem.Linux;
+	shellType: TerminalShellType;
 	readonly signalCalls: Array<{ terminalId: string; dirId?: string; signal: 'interrupt'; }> = [];
 	async sendSignal(options: { terminalId: string; dirId?: string; signal: 'interrupt'; }): Promise<void> { this.signalCalls.push(options); }
 	async resolveProfile(): Promise<import("../../../../../platform/terminal/common/terminal.js").ITerminalResolvedProfile> { return { profile: DEFAULT_PROFILE, executable: "cmd.exe", args: [] }; }
@@ -506,7 +514,7 @@ class TestTerminalProcessService implements ITerminalProcessService {
 		await this.creationGates.shift();
 		return {
 			terminalId,
-			ready: { pid: this.createCalls.length + 1000, cwd: '/backend/workspace' },
+			ready: { pid: this.createCalls.length + 1000, cwd: '/backend/workspace', shellType: this.shellType },
 			profile: DEFAULT_PROFILE,
 			connectionPersistence: this.connectionPersistence,
 		};
@@ -552,6 +560,76 @@ class TestTerminalProcessService implements ITerminalProcessService {
 		for (const listener of this.connectionListeners) listener(state);
 	}
 }
+
+test('cwd boundaries preserve intermediate verified directories through output commit even when a read includes a later snapshot', () => {
+	using source = new AhpTerminalCommandSource();
+	const observed: string[] = [];
+	using listener = source.cwdDetection.onDidChangeCwd(cwd => observed.push(cwd));
+	source.receive({
+		commandEvents: [], cwd: { value: '/last', isTrusted: true, afterOutputSequence: 2 },
+		chunks: [
+			{ sequence: 1, data: new Uint8Array(), shellIntegration: { type: 'cwd', value: '/middle', isTrusted: true } },
+			{ sequence: 2, data: new Uint8Array(), shellIntegration: { type: 'cwd', value: '/last', isTrusted: true } },
+		],
+	});
+	source.commitThrough(1, CancellationToken.None);
+	assert.equal(source.cwd, '/middle');
+	assert.equal(source.cwdDetection.isTrusted, true);
+	assert.equal(source.shellIntegration?.cwdDetection, true);
+	source.commitThrough(2, CancellationToken.None);
+	assert.deepEqual(observed, ['/middle', '/last']);
+	source.receive({ commandEvents: [], cwd: { value: '/stale', isTrusted: true, afterOutputSequence: 0 } });
+	source.commitThrough(3, CancellationToken.None);
+	assert.equal(source.cwd, '/last');
+});
+
+test('sendPath quotes literal POSIX filenames once and never treats filename characters as commands', async () => {
+	const processes = new TestTerminalProcessService([]);
+	processes.shellType = PosixShellType.Bash;
+	using workspace = folderWorkspaceContext();
+	using services = terminalServices(processes, workspace);
+	const instance = await services.get(ITerminalService).createTerminal({ profile: { type: 'default' } });
+	await instance.sendPath(URI.file("/workspace/中文 a'$(echo bad);`x`.sh"), true);
+	await instance.sendPath('/workspace/no execute', false);
+	assert.deepEqual(processes.writeCalls.map(call => call.data), ["'/workspace/中文 a'\"'\"'$(echo bad);`x`.sh'\r", "'/workspace/no execute'"]);
+	for (const resource of [URI.parse('untitled:/draft'), createSshRemoteWorkspaceUri('other', '/workspace/file'), URI.file('/workspace/a').with({ query: 'version=old' }), '/workspace/line\nfeed', '/workspace/escape\x1b', 'relative']) {
+		await assert.rejects(instance.sendPath(resource, true), /host|absolute/);
+	}
+	assert.equal(processes.writeCalls.length, 2);
+});
+
+test('sendPath uses the execution host Windows quoting and supports the matching Remote authority', async () => {
+	const processes = new TestTerminalProcessService([]);
+	processes.operatingSystem = OperatingSystem.Windows;
+	processes.shellType = GeneralShellType.PowerShell;
+	using workspace = new TestWorkspaceService({ id: 'remote-path', folders: [{ id: 'root', uri: createSshRemoteWorkspaceUri('windows', 'C:/work'), name: 'remote', index: 0 }] });
+	using services = terminalServices(processes, workspace);
+	const instance = await services.get(ITerminalService).createTerminal({ dirId: 'root', profile: { type: 'default' } });
+	await instance.sendPath(createSshRemoteWorkspaceUri('windows', "C:/work/a'b $x.ps1"), true);
+	await instance.sendPath(createSshRemoteWorkspaceUri('windows', '//server/share/a b'), false);
+	assert.deepEqual(processes.writeCalls.map(call => call.data), ["& 'C:\\work\\a''b $x.ps1'\r", "'\\\\server\\share\\a b'"]);
+	await assert.rejects(instance.sendPath(createSshRemoteWorkspaceUri('other', 'C:/work/a.ps1'), true), /execution host/);
+	await assert.rejects(instance.sendPath(URI.file('/work/a.ps1'), true), /execution host/);
+});
+
+test('sendPath refuses unknown shells and retires a host path conversion when the original process closes', async () => {
+	const processes = new TestTerminalProcessService([]);
+	using workspace = folderWorkspaceContext();
+	using services = terminalServices(processes, workspace);
+	const terminals = services.get(ITerminalService);
+	const unknown = await terminals.createTerminal({ profile: { type: 'default' } });
+	await assert.rejects(unknown.sendPath('/workspace/file', true), /confirmed shell/);
+	await unknown.close();
+	processes.shellType = PosixShellType.Zsh;
+	const instance = await terminals.createTerminal({ profile: { type: 'default' } });
+	const pending = deferred<string>();
+	services.get(IPathService).getHostPath = () => pending.promise;
+	const sending = assert.rejects(instance.sendPath(URI.file('/workspace/file'), true), isCancellationError);
+	await instance.close();
+	pending.resolve('/workspace/file');
+	await sending;
+	assert.equal(processes.writeCalls.length, 0);
+});
 
 function folderWorkspaceContext(): TestWorkspaceService {
 	return new TestWorkspaceService({ id: "workspace", uri: URI.file("/workspace") });

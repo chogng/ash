@@ -73,6 +73,41 @@ fn collaboration_authorities_reject_invalid_document_and_transaction_envelopes()
 }
 
 #[test]
+fn collaboration_accepts_typed_v2_snapshots_and_rejects_invalid_kinds() {
+    for document_type in ["general", "academic"] {
+        let mut rooms = InMemoryDocumentCollaborationRooms::default();
+        let mut envelope: serde_json::Value = serde_json::from_str(&document("initial")).unwrap();
+        envelope["version"] = 2.into();
+        envelope["documentType"] = document_type.into();
+        let encoded = envelope.to_string();
+        let opened = rooms
+            .open(DocumentCollaborationOpenParams {
+                room_id: None,
+                client_id: "client-a".into(),
+                schema_id: "test-schema".into(),
+                document: encoded.clone(),
+            })
+            .unwrap();
+        assert_eq!(opened.snapshot.document, encoded);
+        let mut update = submit(&opened.snapshot.room_id, "client-a", 1, 0, "first");
+        update.document = encoded;
+        assert_eq!(accepted_version(&rooms.submit(update).unwrap()), 1);
+    }
+    for document_type in [serde_json::Value::Null, "unknown".into(), 1.into()] {
+        let mut envelope: serde_json::Value = serde_json::from_str(&document("initial")).unwrap();
+        envelope["version"] = 2.into();
+        envelope["documentType"] = document_type;
+        assert!(crate::room::validate_document(&envelope.to_string()).is_err());
+    }
+    let mut envelope: serde_json::Value = serde_json::from_str(&document("initial")).unwrap();
+    envelope["version"] = 2.into();
+    assert!(crate::room::validate_document(&envelope.to_string()).is_err());
+    envelope["version"] = 1.into();
+    envelope["documentType"] = "academic".into();
+    assert!(crate::room::validate_document(&envelope.to_string()).is_err());
+}
+
+#[test]
 fn in_memory_rooms_publish_and_clear_ephemeral_presence_without_advancing_document_version() {
     let mut rooms = InMemoryDocumentCollaborationRooms::default();
     let room_id = open_room(&mut rooms);

@@ -17,8 +17,10 @@ const THIRD_TOKEN = "c".repeat(64);
 
 test('a replacement renderer attaches the original process and rotates its handoff credential', async () => {
 	const supervisor = new TestSupervisor();
+	supervisor.shellType = 'pwsh';
 	const original = new ReconnectableTerminalProcessService(supervisor as unknown as AppServerProtocolClient);
 	const created = await original.create({ dirId: 'folder', rows: 24, cols: 80, profile: { type: 'default' } });
+	assert.equal(created.ready.shellType, GeneralShellType.PowerShell);
 	const credential = await original.getReconnectLease(created.terminalId);
 	original.prepareForReload();
 	await original.close({ terminalId: created.terminalId, dirId: 'folder' });
@@ -228,6 +230,7 @@ interface RecordedRequest {
 }
 
 class TestSupervisor {
+	shellType: 'pwsh' | undefined;
 	operatingSystem: OperatingSystem | undefined = OperatingSystem.Linux;
 	state: AppServerConnectionState = "ready";
 	generation = 1;
@@ -262,7 +265,7 @@ class TestSupervisor {
 			case APP_SERVER_METHODS["terminal/create"].method:
 				return {
 					terminalId: "terminal-1",
-					ready: { pid: 1234, cwd: '/backend/workspace' },
+					ready: { pid: 1234, cwd: '/backend/workspace', shellType: this.shellType },
 					profile: { profileId: "shell", title: "Shell", isDefault: true },
 					reconnect: this.invalidCreateLease
 						? { reconnectToken: "secret", reconnectGracePeriodMillis: 30_000 }
@@ -271,7 +274,7 @@ class TestSupervisor {
 			case APP_SERVER_METHODS["terminal/writeBinary"].method:
 				return null;
 			case APP_SERVER_METHODS['terminal/processInfo'].method:
-				return { ready: { pid: 1234, cwd: '/backend/workspace' }, cwd: '/backend/current', rows: 40, cols: 120 };
+				return { ready: { pid: 1234, cwd: '/backend/workspace', shellType: this.shellType }, cwd: '/backend/current', rows: 40, cols: 120 };
 			case APP_SERVER_METHODS["terminal/attach"].method:
 				if (this.attachFailures > 0) {
 					this.attachFailures -= 1;
@@ -280,7 +283,7 @@ class TestSupervisor {
 				this.successfulAttachments += 1;
 				return {
 					terminalId: "terminal-1",
-					ready: { pid: 1234, cwd: '/backend/workspace' },
+					ready: { pid: 1234, cwd: '/backend/workspace', shellType: this.shellType },
 					reconnect: {
 						reconnectToken: this.successfulAttachments === 1 ? SECOND_TOKEN : THIRD_TOKEN,
 						reconnectGracePeriodMillis: 30_000,

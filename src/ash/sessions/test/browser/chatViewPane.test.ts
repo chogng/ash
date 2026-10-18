@@ -88,7 +88,7 @@ import { PreferencesService as BrowserPreferencesService } from "../../../workbe
 import { emptyEditorServiceState } from '../../../workbench/test/common/testEditorService.js';
 import { IWorkbenchLayoutService, type WorkbenchPartId, type WorkbenchPartVisibilityChangeEvent } from "../../../workbench/services/layout/browser/layoutService.js";
 import { ChatService } from "../../../workbench/services/chat/browser/chatService.js";
-import { IChatService, type AdvisorConfig, type ModelProviderCredentialStatus, type ThreadTranscriptUpdateEnvelope, type ThreadUpdateEnvelope, type TurnError } from "../../../workbench/services/chat/common/chatService.js";
+import { IChatService, type AdvisorConfig, type ModelProviderCredentialStatus, type ThreadTranscriptUpdateEnvelope, type ThreadUpdateEnvelope, type ThreadChangesSummary, type TurnError } from "../../../workbench/services/chat/common/chatService.js";
 import { Extensions as ConfigurationExtensions, type IConfigurationRegistry } from '../../../platform/configuration/common/configurationRegistry.js';
 import { Registry } from '../../../platform/registry/common/platform.js';
 import { ModelCatalogConfiguration } from "../../../workbench/contrib/chat/common/languageModelsConfiguration.js";
@@ -4128,6 +4128,57 @@ test('reconnection keeps a draft and blocks submission until thread subscription
 	assert.equal((await part.captureDraft())?.draft.text, 'Keep this draft');
 	await part.acceptInput();
 	assert.deepEqual(fake.turnStartRequests.map(request => request.input), [[{ type: 'text', text: 'Keep this draft' }]]);
+});
+
+test('Chat Changes refreshes share a pending summary and reread once when durable history advances', async () => {
+	const activeSession = session('session-1', 'thread-1');
+	let sequence = 1;
+	const fake = fakeApi({ sessions: [activeSession], thread: () => ({ ...thread(), sequence }) });
+	using chat = createChatService(fake.api);
+	const pending = new DeferredPromise<ThreadChangesSummary>();
+	let block = false;
+	let reads = 0;
+	const summary = (value: number): ThreadChangesSummary => ({ sequence: value, revision: String(value), statistics: { files: value, additions: value, deletions: 0 }, repositories: [], warnings: [] });
+	chat.readThreadChanges = async () => !block ? summary(sequence) : ++reads === 1 ? pending.p : summary(sequence);
+	using sessions = new SessionsManagementService(fake.api);
+	using model = createWidgetModel(chat, { kind: 'session', active: { session: activeSession, threadId: 'thread-1' } }, sessions);
+	await model.initialize();
+	await model.refreshChanges();
+	block = true;
+	const first = model.refreshChanges();
+	const second = model.refreshChanges();
+	const third = model.refreshChanges();
+	assert.equal(reads, 1);
+	sequence = 2;
+	fake.emit({ method: 'session/thread/update', params: { sessionId: 'session-1', threadId: 'thread-1', durableSequence: 2, update: { type: 'committed', event: { type: 'turnCompleted', threadId: 'thread-1', turnId: 'turn-1' } } } });
+	await nextTask();
+	assert.equal(reads, 1);
+	await pending.complete(summary(1));
+	await Promise.all([first, second, third]);
+	assert.equal(reads, 2);
+	assert.equal(model.inputState.changesRevision, '2');
+	assert.deepEqual(fake.turnStartRequests, []);
+});
+
+test('a disposed Chat model ignores its late Changes summary and starts no new reads', async () => {
+	const activeSession = session('session-1', 'thread-1');
+	const fake = fakeApi({ sessions: [activeSession] });
+	using chat = createChatService(fake.api);
+	using sessions = new SessionsManagementService(fake.api);
+	using model = createWidgetModel(chat, { kind: 'session', active: { session: activeSession, threadId: 'thread-1' } }, sessions);
+	await model.initialize();
+	await model.refreshChanges();
+	const revision = model.inputState.changesRevision;
+	const pending = new DeferredPromise<ThreadChangesSummary>();
+	let reads = 0;
+	chat.readThreadChanges = async () => { reads++; return pending.p; };
+	const refreshing = model.refreshChanges();
+	model.dispose();
+	await pending.complete({ sequence: 1, revision: 'late', statistics: { files: 0, additions: 0, deletions: 0 }, repositories: [], warnings: [] });
+	await refreshing;
+	await model.refreshChanges();
+	assert.equal(reads, 1);
+	assert.equal(model.inputState.changesRevision, revision);
 });
 
 test('stream updates preserve message order and survive an older refresh snapshot', async () => {

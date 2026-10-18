@@ -1,13 +1,13 @@
 import { type IDisposable, toDisposable } from "../../../base/common/lifecycle.js";
 import { decodeBase64 } from "../../../base/common/buffer.js";
 import type { IAppServerApi } from "../../agentHost/common/appServerApi.js";
-import type { TerminalReadResult, TerminalCommandStatusEvent } from "../../../../../.build/protocol/typescript/index.js";
+import type { TerminalReadResult, TerminalCommandStatusEvent, TerminalProcessReady } from "../../../../../.build/protocol/typescript/index.js";
 import type { AppServerProtocolClient } from "../../agentHost/browser/appServerProtocolClient.js";
 import { appServerRequest, voidResult } from "../../agentHost/browser/appServerRequest.js";
 import { GeneralShellType, PosixShellType } from '../common/terminal.js';
 import type {
 	ITerminalProcessCloseOptions, ITerminalProcessCreateOptions, ITerminalProcessCreation,
-	ITerminalProcessInfo, TerminalShellIntegrationEvent,
+	ITerminalProcessInfo, ITerminalProcessReady, TerminalShellIntegrationEvent,
 	ITerminalProcessProfile, ITerminalProcessCommandStatusEvent, ITerminalProcessReadOptions, ITerminalProcessReadResult,
 	ITerminalProcessResizeOptions, ITerminalProcessService, ITerminalProcessWriteOptions,
 	TerminalProcessConnectionState, ITerminalResolvedProfile, TerminalProcessProfileSelection,
@@ -36,12 +36,12 @@ export class AppServerTerminalProcessService implements ITerminalProcessService 
 	async create(options: ITerminalProcessCreateOptions): Promise<ITerminalProcessCreation> {
 		const execution = options.execution?.type === 'process' ? { ...options.execution, args: typeof options.execution.args === 'string' ? options.execution.args : [...options.execution.args] } : options.execution;
 		const created = await appServerRequest(this.connection, "terminal/create", { ...options, profile: profileSelection(options.profile), execution, lifecycle: { type: "connectionOwned" } });
-		return { ready: created.ready, terminalId: created.terminalId, profile: created.profile, connectionPersistence: "connectionOwned" };
+		return { ready: decodeTerminalProcessReady(created.ready), terminalId: created.terminalId, profile: created.profile, connectionPersistence: "connectionOwned" };
 	}
 
 	async getProcessInfo(options: ITerminalProcessCloseOptions): Promise<ITerminalProcessInfo> {
 		const result = await appServerRequest(this.connection, 'terminal/processInfo', options);
-		return { ...result, cwd: result.cwd ?? undefined };
+		return { ...result, ready: decodeTerminalProcessReady(result.ready), cwd: result.cwd ?? undefined };
 	}
 
 	write(options: ITerminalProcessWriteOptions): Promise<void> {
@@ -82,6 +82,12 @@ export class AppServerTerminalProcessService implements ITerminalProcessService 
 /** Copies readonly domain collections into the generated transport request. */
 export function profileSelection(profile: TerminalProcessProfileSelection) {
 	return profile.type === 'custom' ? { ...profile, path: [...profile.path], args: typeof profile.args === 'string' ? profile.args : [...profile.args] } : profile;
+}
+
+/** Spawn and attach use the same execution-owned shell identity. */
+export function decodeTerminalProcessReady(ready: TerminalProcessReady): ITerminalProcessReady {
+	const shellType = ready.shellType === 'bash' ? PosixShellType.Bash : ready.shellType === 'zsh' ? PosixShellType.Zsh : ready.shellType === 'pwsh' ? GeneralShellType.PowerShell : undefined;
+	return { pid: ready.pid, cwd: ready.cwd, ...(shellType === undefined ? {} : { shellType }) };
 }
 
 /** Both connection lifecycles expose the same frontend bytes and exit-code semantics. */

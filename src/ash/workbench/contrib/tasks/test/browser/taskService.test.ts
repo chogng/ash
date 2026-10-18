@@ -404,6 +404,7 @@ class FakeTerminalInstance extends Disposable implements ITerminalInstance {
 	constructor(readonly id: string, readonly dirId: string, public title: string) { super(); }
 	async sendSignal(): Promise<void> { }
 	async sendText(data: string, shouldExecute: boolean): Promise<void> { this.writes.push(data + (shouldExecute ? '\r' : '')); }
+	async sendPath(): Promise<void> { throw new Error('Tasks do not send interactive file paths'); }
 	readonly xterm = undefined;
 	readonly xtermReadyPromise = Promise.resolve(undefined);
 	getContribution(): null { return null; }

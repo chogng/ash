@@ -1,6 +1,33 @@
-import { readFile, writeFile } from 'node:fs/promises';
+import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import { expect, test } from '../../../automation/test.js';
+
+test('terminal path commands run a literal file and reopen a recent directory in the real shell', { tag: ['@electron-app-server', '@browser-app-server'] }, async ({ workbench, testWorkspace }) => {
+	test.skip(process.platform === 'win32', 'POSIX executable fixture; Windows PowerShell requires its own real-host acceptance.');
+	const filename = "run 'literal' file.sh";
+	const source = "#!/bin/sh\nprintf '%s' 'executed literal file' > path-command-result.txt\n";
+	await writeFile(join(testWorkspace.directory, filename), source, { mode: 0o755 });
+	const directory = join(testWorkspace.directory, "recent 'literal' directory");
+	await mkdir(directory);
+	const row = workbench.page.locator('.ash-explorer').getByRole('treeitem', { name: filename, exact: true });
+	await expect(row).toBeVisible();
+	await row.dblclick();
+	const editor = workbench.editors.groupAt(0).editor;
+	await editor.waitForEditorFocus();
+	await workbench.quickaccess.runCommand('workbench.action.terminal.runActiveFile');
+	await expect.poll(() => readFile(join(testWorkspace.directory, 'path-command-result.txt'), 'utf8').catch(() => '')).toBe('executed literal file');
+	await expect(editor.input).toBeFocused();
+	await expect(workbench.terminal.instances).toHaveCount(1);
+	const quote = (path: string): string => "'" + path.replaceAll("'", "'\"'\"'") + "'";
+	await workbench.terminal.runCommand(`cd -- ${quote(directory)}`);
+	await workbench.terminal.runCommand(`cd -- ${quote(testWorkspace.directory)}`);
+	await workbench.quickaccess.runCommand('workbench.action.terminal.goToRecentDirectory');
+	await expect(workbench.page.getByText(directory, { exact: true })).toBeVisible();
+	await workbench.page.getByText(directory, { exact: true }).click();
+	await workbench.terminal.runCommand(`pwd > ${quote(join(testWorkspace.directory, 'path-directory-result.txt'))}`);
+	await expect.poll(() => readFile(join(testWorkspace.directory, 'path-directory-result.txt'), 'utf8').catch(() => '')).toBe(directory + '\n');
+	expect(await readFile(join(testWorkspace.directory, filename), 'utf8')).toBe(source);
+});
 
 for (const locale of ['en', 'zh-CN'] as const) test.describe(`terminal run selected text (${locale})`, () => {
 	test.use({ electronUserSettings: { 'workbench.locale': locale } });

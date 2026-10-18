@@ -605,8 +605,43 @@ test("Block documents round-trip through a versioned serialization envelope", ()
 	const decoded = deserializeDocument(encoded, schema);
 
 	assert.deepEqual(decoded, document);
+	assert.deepEqual(JSON.parse(encoded), { format: "ash.document", version: 2, documentType: "general", document });
 	assert.throws(() => deserializeDocument("{\"format\":\"ash.document\",\"version\":99}", schema), DocumentSerializationError);
 	assert.throws(() => deserializeDocument("not json", schema), DocumentSerializationError);
+});
+
+test("Document v2 rejects a conflicting kind even when both schemas accept the tree", () => {
+	const general = createDefaultDocumentSchema();
+	const academic = createAcademicDocumentSchema();
+	for (const schema of [general, academic]) {
+		const document = createDocument(schema);
+		const encoded = serializeDocument(document, schema);
+		assert.deepEqual(JSON.parse(encoded), { format: "ash.document", version: 2, documentType: schema.documentType, document });
+		assert.deepEqual(deserializeDocument(encoded, schema), document);
+		const other = schema === general ? academic : general;
+		other.validate(document);
+		assert.throws(() => deserializeDocument(encoded, other), /Structured document type/u);
+		for (const documentType of [undefined, null, "unknown", 1, {}]) {
+			assert.throws(() => deserializeDocument({ ...JSON.parse(encoded), documentType }, schema), DocumentSerializationError);
+		}
+	}
+});
+
+test("Legacy Academic documents upgrade on serialization without losing IDs, attributes or marks", () => {
+	const schema = createAcademicDocumentSchema();
+	const document = schema.createDocument([
+		schema.createNode("paragraph", {
+			id: "legacy-paragraph", attrs: { alignment: "center" },
+			content: [schema.createText("Research", { id: "legacy-text", marks: [{ type: "strong", attrs: {} }] })],
+		}),
+	], "legacy-document");
+	const legacy = { format: "ash.document", version: 1, document };
+	const migrated = deserializeDocument(JSON.stringify(legacy), schema);
+	assert.deepEqual(migrated, document);
+	assert.ok(Object.isFrozen(migrated));
+	assert.deepEqual(JSON.parse(serializeDocument(migrated, schema)), { ...legacy, version: 2, documentType: "academic" });
+	assert.throws(() => deserializeDocument({ ...legacy, documentType: "general" }, schema), /Legacy/u);
+	assert.throws(() => deserializeDocument({ ...legacy, document: { ...document, content: [{ type: "unknown" }] } }, schema), DocumentSerializationError);
 });
 
 test("Stanza serializes every transaction step and preserves transport metadata", () => {

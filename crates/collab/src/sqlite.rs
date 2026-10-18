@@ -146,7 +146,7 @@ impl SqliteDocumentCollaborationRooms {
             if params.schema_id != "stanza-document-v1" {
                 return Err("Channel notes require the document schema".into());
             }
-            params.document = r#"{"format":"ash.document","version":1,"document":{"id":"channel-notes","type":"doc","attrs":{},"marks":[],"content":[{"id":"channel-notes-paragraph","type":"paragraph","attrs":{},"marks":[],"content":[]}]}}"#.into();
+            params.document = r#"{"format":"ash.document","version":2,"documentType":"general","document":{"id":"channel-notes","type":"doc","attrs":{},"marks":[],"content":[{"id":"channel-notes-paragraph","type":"paragraph","attrs":{},"marks":[],"content":[]}]}}"#.into();
         }
         if let Some(room) = load_room(&transaction, &room_id)? {
             if room.schema_id != params.schema_id {

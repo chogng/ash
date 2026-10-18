@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { test } from "mocha";
 import { academicProfile } from "../../browser/academicEditorProfile.js";
 import { createDocumentEditorPaneOptions } from "../../../documentEditor/browser/editorProfile.js";
+import { deserializeDocument } from '../../../../../editor/common/model/documentSerialization.js';
 
 test("Stanza profile materialization keeps schema and browser extensions together", () => {
 	const options = createDocumentEditorPaneOptions(academicProfile);
@@ -37,6 +38,12 @@ for (const [locale, label] of [['en', 'Academic Document'], ['zh-CN', '学术论
 		await import('../../browser/academicEditor.contribution.js');
 		using localization = toDisposable(resetNlsResolver);
 		initializeTestLocalization(locale);
+		assert.throws(() => deserializeDocument({ format: 'ash.document', version: 2, documentType: 'general' }, academicProfile.createSchema()), {
+			message: locale === 'zh-CN' ? '结构化文档类型必须为“academic”。' : "Structured document type must be 'academic'",
+		});
+		assert.throws(() => deserializeDocument({ format: 'ash.document', version: 1, documentType: 'academic' }, academicProfile.createSchema()), {
+			message: locale === 'zh-CN' ? '旧版结构化文档不能声明文档类型。' : 'Legacy structured documents cannot declare a document type',
+		});
 		const dom = new JSDOM('', { url: 'https://ash.test' });
 		try {
 			using storage = new BrowserStorageService({ ownerWindow: dom.window as unknown as Window, workspaceId: `academic-${locale}`, flushInterval: 0 });

@@ -1,4 +1,4 @@
-import type { TextResourceResolveRequest, TextResourceSaveRequest } from '../../../../services/textmodelResolver/common/textResourceStore.js';
+import type { TextResourceResolveRequest, TextResourceSaveRequest, TextResourceChangeEvent, TextResourceContent } from '../../../../services/textmodelResolver/common/textResourceStore.js';
 import { TestUriIdentityServices } from '../../../../../platform/uriIdentity/test/common/uriIdentityTestServices.js';
 import { TestLanguageConfigurationService } from '../../../../../editor/test/common/modes/testLanguageConfigurationService.js';
 import assert from "node:assert/strict";
@@ -613,6 +613,100 @@ test('a background read that overlaps local edits leaves the saved revision and 
 	assert.deepEqual([reference.model.getText(), reference.isDirty, reference.hasExternalChange], ['local saved', true, false]);
 	await assert.rejects(reference.save(new AbortController().signal), TextModelConflictError);
 	assert.equal(reference.hasExternalChange, true);
+});
+
+test('simultaneous focus refreshes share one read and publish one model update', async () => {
+	const resource = URI.file('/project/shared-refresh.txt');
+	using changes = new Emitter<TextResourceChangeEvent>();
+	const started = new DeferredPromise<void>();
+	const content = new DeferredPromise<TextResourceContent>();
+	let reads = 0;
+	using models = uriIdentityServices.createInstance(BrowserTextModelService, {
+		onDidChange: changes.event,
+		resolve: async () => {
+			if (++reads === 1) return { resource, text: 'initial', revision: '1' };
+			await started.complete();
+			return content.p;
+		},
+		save: async () => ({ revision: 'saved' }),
+	}, {});
+	using reference = await models.acquire({ resource }, new AbortController().signal);
+	const first = models.refresh(resource);
+	const second = models.refresh(resource);
+	const third = models.refresh(resource);
+	await started.p;
+	assert.equal(reads, 2);
+	await content.complete({ resource, text: 'latest', revision: '2' });
+	await Promise.all([first, second, third]);
+	assert.equal(reads, 2);
+	assert.equal(reference.model.getValue(), 'latest');
+	assert.equal(reference.isDirty, false);
+});
+
+test('watcher bursts retire a stale read and request one fresh read without replaying writes', async () => {
+	const resource = URI.file('/project/invalidated-refresh.txt');
+	using changes = new Emitter<TextResourceChangeEvent>();
+	const started = new DeferredPromise<void>();
+	const content = new DeferredPromise<TextResourceContent>();
+	let reads = 0;
+	let writes = 0;
+	let staleSignal: AbortSignal | undefined;
+	using models = uriIdentityServices.createInstance(BrowserTextModelService, {
+		onDidChange: changes.event,
+		resolve: async (_request: TextResourceResolveRequest, signal: AbortSignal) => {
+			if (++reads === 1) return { resource, text: 'initial', revision: '1' };
+			if (reads === 2) { staleSignal = signal; await started.complete(); return content.p; }
+			return { resource, text: 'latest', revision: '3' };
+		},
+		save: async (request: TextResourceSaveRequest) => {
+			writes++;
+			assert.equal(request.expectedRevision, '3');
+			return { revision: '4' };
+		},
+	}, {});
+	using reference = await models.acquire({ resource }, new AbortController().signal);
+	const observed: string[] = [];
+	using listener = reference.model.onDidChangeContent(() => observed.push(reference.model.getValue()));
+	const refreshing = models.refresh(resource);
+	await started.p;
+	for (let index = 0; index < 3; index++) changes.fire({ resources: [resource] });
+	assert.equal(staleSignal?.aborted, true);
+	assert.equal(reads, 2);
+	await content.complete({ resource, text: 'obsolete', revision: '2' });
+	await refreshing;
+	assert.equal(reads, 3);
+	assert.deepEqual(observed, ['latest']);
+	reference.model.setValue('local edit');
+	await reference.save(new AbortController().signal);
+	assert.equal(writes, 1);
+});
+
+test('closing the last view aborts its refresh and ignores a provider that returns after cancellation', async () => {
+	const resource = URI.file('/project/closed-refresh.txt');
+	using changes = new Emitter<TextResourceChangeEvent>();
+	const started = new DeferredPromise<void>();
+	const content = new DeferredPromise<TextResourceContent>();
+	let reads = 0;
+	let readSignal: AbortSignal | undefined;
+	using models = uriIdentityServices.createInstance(BrowserTextModelService, {
+		onDidChange: changes.event,
+		resolve: async (_request: TextResourceResolveRequest, signal: AbortSignal) => {
+			if (++reads === 1) return { resource, text: 'initial', revision: '1' };
+			readSignal = signal;
+			await started.complete();
+			return content.p;
+		},
+		save: async () => ({ revision: '2' }),
+	}, {});
+	const reference = await models.acquire({ resource }, new AbortController().signal);
+	const refreshing = models.refresh(resource);
+	await started.p;
+	reference.dispose();
+	assert.equal(readSignal?.aborted, true);
+	await content.complete({ resource, text: 'late', revision: '2' });
+	await refreshing;
+	assert.deepEqual(models.getModels(), []);
+	assert.equal(reads, 2);
 });
 
 test('undoing local edits clears a rejected-save conflict when the model returns to its saved state', async () => {

@@ -8,34 +8,34 @@
 
 Attach to Chat 与原 Chat context picker 捕获 xterm 已解析输出、选择及 Shell 元数据，存入原 draft；只读预览复用 XtermTerminal，通过 DetachedTerminalSnapshotMirror 显示接受时的文字。源实例关闭、重新选择和 draft handoff 不替换已接受内容；预览无 PTY、实例 membership 或 stdin 目的地。screen host 契约只含必要的显示事件/geometry，widget manager 持有 Find/URL hover 的唯一 overlay lifetime。
 
-| Owner                                                      | 职责                                                                                                        |
-| ---------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
-| `browser/terminal.contribution.ts`                         | 实例服务、View、编辑器与动作/菜单的注册入口；独立增强由 terminal.all.ts 装载                                |
-| `browser/terminalMainContribution.ts`                      | BlockRestore 时订阅宿主 PTY 创建通知，交给实例服务并显示 View                                               |
-| `browser/terminal.ts`                                      | 实例、ICreateTerminalOptions、组、TerminalEditorLocation、屏幕与配置服务契约                                |
-| `common/terminalConfiguration.ts`                          | 消费中的终端设置 schema、默认值、scope、settings UI 元数据；有效值和持久化属于配置系统                      |
-| `browser/terminalConfigurationService.ts`                  | 读取有效屏幕配置及编辑器字体继承，通知保留的 xterm 实时更新                                                 |
-| `browser/terminalProfileService.ts`                        | 合并执行端发现、自定义与扩展 profile；默认选择、provider 注册、按需激活和连接/工作区失效                    |
-| `browser/terminalProfileResolverService.ts`                | 解析执行端变量、argv/env/cwd、automation/agentHost 配置及图标；真实 executable 由后端确认                   |
-| `browser/terminalProfileQuickpick.ts`                      | 命令面板选择/取消与 USER 默认 profile 写入；不拥有 shell 执行定义                                           |
-| `browser/terminalService.ts`                               | 窗口实例列表、创建意图解析、目录/profile 选择、分屏/编辑器定位与失败回收                                    |
-| `browser/terminalInstance.ts`                              | 每实例身份、关闭/复用、连接状态、宿主 PTY、原进程客户端及唯一 xterm 的生命周期；原始输入绑定与 sendText     |
-| `browser/terminalExtensions.ts`                            | 实例贡献注册元数据；实例通过自己的容器装配和释放贡献                                                        |
-| `browser/terminalProcessManager.ts`                        | Shell 输入队列、UTF-8 分块、二进制顺序、尺寸合并、输入/尺寸确认、增量读取、双游标、分页排空、解析等待与取消 |
-| `browser/terminalView.ts`                                  | 可见性、初始化、标题 toolbar、屏幕 attach/detach 及焦点；屏幕由实例保留                                     |
-| `browser/xterm/xtermTerminal.ts`                           | 每实例一份屏幕：ANSI/VT 解析、alternate scroll、主题、选择、输入编码、fit、链接与命令标记                   |
-| `browser/terminalTabbedView.ts`                            | 右侧分栏几何与宽度吸附；实例列表的渲染和交互归 TerminalTabList                                              |
-| `browser/terminalTabsList.ts`                              | 终端行渲染、状态监听、激活／关闭／拖动、键盘与实例菜单；复用 Ash TabList                                    |
-| `browser/terminalContextMenu.ts`                           | 只携带实例身份的动作上下文、菜单转发与异步执行释放                                                          |
-| `browser/terminalResizeDebouncer.ts`                       | 屏幕横向重排／隐藏 idle 调度；最终尺寸仍交给原实例与进程管理器                                              |
-| `browser/terminalActions.ts`、`terminalMenus.ts`           | 标准命令 ID 的静态注册与菜单；执行时从当前窗口 accessor 取得 View，不保存窗口回调                           |
-| `browser/terminalIcon.ts`                                  | Ash 可信 profile 标识的产品图标映射                                                                         |
-| `browser/media/terminal.css`、`terminalVoice.css`          | Ash 终端屏幕、Tab、标题与听写样式                                                                           |
-| `common/terminalColorRegistry.ts`、`terminalContextKey.ts` | 终端颜色 token、标题动作、Find 焦点与选区上下文；不保存实例或后端资源                                       |
-| `terminalContrib/find`                                     | 按实例保留的查找控件、标准命令和无障碍帮助；屏幕负责搜索与高亮                                              |
-| `terminalContrib/links`                                    | URL 用户命令，扫描与选择由屏幕实现，真实打开委托 Opener                                                     |
-| `terminalContrib/voice`                                    | 听写会话与动作，消费实例输入契约和已有 dictation 服务                                                       |
-| `terminalContrib/clipboard`                                | 宿主剪贴板命令、焦点选区快捷键和异步读取失效；输入等待实例 sendText 的确认                                  |
+| Owner                                                      | 职责                                                                                                              |
+| ---------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| `browser/terminal.contribution.ts`                         | 实例服务、View、编辑器与动作/菜单的注册入口；独立增强由 terminal.all.ts 装载                                      |
+| `browser/terminalMainContribution.ts`                      | BlockRestore 时订阅宿主 PTY 创建通知，交给实例服务并显示 View                                                     |
+| `browser/terminal.ts`                                      | 实例、ICreateTerminalOptions、组、TerminalEditorLocation、屏幕与配置服务契约                                      |
+| `common/terminalConfiguration.ts`                          | 消费中的终端设置 schema、默认值、scope、settings UI 元数据；有效值和持久化属于配置系统                            |
+| `browser/terminalConfigurationService.ts`                  | 读取有效屏幕配置及编辑器字体继承，通知保留的 xterm 实时更新                                                       |
+| `browser/terminalProfileService.ts`                        | 合并执行端发现、自定义与扩展 profile；默认选择、provider 注册、按需激活和连接/工作区失效                          |
+| `browser/terminalProfileResolverService.ts`                | 解析执行端变量、argv/env/cwd、automation/agentHost 配置及图标；真实 executable 由后端确认                         |
+| `browser/terminalProfileQuickpick.ts`                      | 命令面板选择/取消与 USER 默认 profile 写入；不拥有 shell 执行定义                                                 |
+| `browser/terminalService.ts`                               | 窗口实例列表、创建意图解析、目录/profile 选择、分屏/编辑器定位与失败回收                                          |
+| `browser/terminalInstance.ts`                              | 每实例身份、关闭/复用、连接状态、宿主 PTY、原进程客户端及唯一 xterm 的生命周期；原始输入、sendText 与宿主路径发送 |
+| `browser/terminalExtensions.ts`                            | 实例贡献注册元数据；实例通过自己的容器装配和释放贡献                                                              |
+| `browser/terminalProcessManager.ts`                        | Shell 输入队列、UTF-8 分块、二进制顺序、尺寸合并、输入/尺寸确认、增量读取、双游标、分页排空、解析等待与取消       |
+| `browser/terminalView.ts`                                  | 可见性、初始化、标题 toolbar、屏幕 attach/detach 及焦点；屏幕由实例保留                                           |
+| `browser/xterm/xtermTerminal.ts`                           | 每实例一份屏幕：ANSI/VT 解析、alternate scroll、主题、选择、输入编码、fit、链接与命令标记                         |
+| `browser/terminalTabbedView.ts`                            | 右侧分栏几何与宽度吸附；实例列表的渲染和交互归 TerminalTabList                                                    |
+| `browser/terminalTabsList.ts`                              | 终端行渲染、状态监听、激活／关闭／拖动、键盘与实例菜单；复用 Ash TabList                                          |
+| `browser/terminalContextMenu.ts`                           | 只携带实例身份的动作上下文、菜单转发与异步执行释放                                                                |
+| `browser/terminalResizeDebouncer.ts`                       | 屏幕横向重排／隐藏 idle 调度；最终尺寸仍交给原实例与进程管理器                                                    |
+| `browser/terminalActions.ts`、`terminalMenus.ts`           | 标准命令 ID 的静态注册与菜单；执行时从当前窗口 accessor 取得 View，不保存窗口回调                                 |
+| `browser/terminalIcon.ts`                                  | Ash 可信 profile 标识的产品图标映射                                                                               |
+| `browser/media/terminal.css`、`terminalVoice.css`          | Ash 终端屏幕、Tab、标题与听写样式                                                                                 |
+| `common/terminalColorRegistry.ts`、`terminalContextKey.ts` | 终端颜色 token、标题动作、Find 焦点与选区上下文；不保存实例或后端资源                                             |
+| `terminalContrib/find`                                     | 按实例保留的查找控件、标准命令和无障碍帮助；屏幕负责搜索与高亮                                                    |
+| `terminalContrib/links`                                    | URL 用户命令，扫描与选择由屏幕实现，真实打开委托 Opener                                                           |
+| `terminalContrib/voice`                                    | 听写会话与动作，消费实例输入契约和已有 dictation 服务                                                             |
+| `terminalContrib/clipboard`                                | 宿主剪贴板命令、焦点选区快捷键和异步读取失效；输入等待实例 sendText 的确认                                        |
 
 桌面原始输入链路是 xterm 的 onData/onBinary → TerminalInstance 绑定 → `TerminalProcessManager.write`/`processBinary` → `ITerminalProcessService.write` → Renderer protocol client → MessagePort → Main 透明 relay → App Server → `exec-server` → PTY。Tasks 与 DAP runInTerminal 使用创建参数中的进程或 Shell 执行配置；听写和用户文本通过实例 `sendText` 进入同一管理器。输出走相反方向，实例创建并保留唯一 xterm 屏幕；Rust Desktop 的终端网格属于另一个产品，并不作为 Electron 屏幕的后端副本。
 

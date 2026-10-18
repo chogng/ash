@@ -38,11 +38,39 @@ for (const [locale, name] of [['en', 'Academic Document'], ['zh-CN', '学术论�
 		await expect.poll(() => page.evaluate(() => window.ashAcademicIntegration.getStructuredBlockTexts())).toEqual(['Draft paper', 'Retained body']);
 		await page.evaluate(() => window.ashAcademicIntegration.saveStructured());
 		expect(await page.evaluate(() => window.ashAcademicIntegration.getSavedStructured())).toContain('Retained body');
+		expect(JSON.parse(await page.evaluate(() => window.ashAcademicIntegration.getSavedStructured()))).toMatchObject({ format: 'ash.document', version: 2, documentType: 'academic' });
 		await page.evaluate(() => window.ashAcademicIntegration.setAcademicEnabled(true));
 		expect(await page.evaluate(() => window.ashAcademicIntegration.getAcademicRegistration())).toEqual({ name, routed: true });
 		await bodyInput.focus();
 		await bodyInput.press('ControlOrMeta+z');
 		await expect.poll(() => page.evaluate(() => window.ashAcademicIntegration.getStructuredBlockTexts())).toEqual(['Draft paper', 'Body']);
+	});
+}
+
+for (const [locale, name] of [['en', 'Document'], ['zh-CN', '文档']] as const) {
+	test(`general documents route, edit, save, recover and reject conflicting content in ${locale}`, async ({ page }) => {
+		await page.goto(`/academic.html?generalDocument&locale=${locale}`);
+		await page.waitForFunction(() => !!window.ashAcademicIntegration);
+		expect(await page.evaluate(() => window.ashAcademicIntegration.getAcademicRegistration())).toEqual({ name, routed: true });
+		const input = page.locator('#document-editor textarea.stanza-document-text-input').first();
+		await input.fill('General draft');
+		expect(await page.evaluate(() => window.ashAcademicIntegration.getStructuredDirty())).toBe(true);
+		const backup = await page.evaluate(() => window.ashAcademicIntegration.getStructuredBackup());
+		expect(JSON.parse(backup)).toMatchObject({ format: 'ash.document', version: 2, documentType: 'general' });
+		await page.evaluate(() => window.ashAcademicIntegration.saveStructured());
+		expect(await page.evaluate(() => window.ashAcademicIntegration.getStructuredDirty())).toBe(false);
+		await input.fill('Later change');
+		await page.evaluate(() => window.ashAcademicIntegration.revertStructured());
+		await expect(input).toHaveValue('General draft');
+		await page.evaluate(content => window.ashAcademicIntegration.restoreStructuredBackup(content), backup);
+		const conflicting = { ...JSON.parse(backup), documentType: 'academic' };
+		await page.evaluate(content => window.ashAcademicIntegration.setExternalStructured(content), JSON.stringify(conflicting));
+		const failure = await page.evaluate(async () => {
+			try { await window.ashAcademicIntegration.revertStructured(); return ''; }
+			catch (error) { return String(error); }
+		});
+		expect(failure).toContain(locale === 'zh-CN' ? '结构化文档类型' : 'Structured document type');
+		await expect(input).toHaveValue('General draft');
 	});
 }
 

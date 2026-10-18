@@ -181,6 +181,10 @@ export class DocumentEditorPane extends EditorPane implements IEditorPane {
 		return this.requireEditor().getDocument();
 	}
 
+	getDocumentSchema(): DocumentSchema {
+		return this.requireWorkingCopy().model.schema;
+	}
+
 	/** Returns the current structured-document selection of the hosted editor. */
 	getDocumentSelection(): DocumentSelection | undefined {
 		return this.requireEditor().getDocumentSelection();

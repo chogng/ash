@@ -13,7 +13,10 @@ import { TerminalExtensionsRegistry } from '../../../../terminal/browser/termina
 import { TestConfigurationService as WorkbenchConfigurationService } from '../../../../../services/configuration/test/common/testServices.js';
 import { BrowserStorageService } from '../../../../../../workbench/services/storage/browser/storageService.js';
 import { TerminalCommandHistory } from '../../common/history.js';
+import { URI } from '../../../../../../base/common/uri.js';
 import { TerminalHistoryCommandId } from '../../common/terminal.history.js';
+import { IWorkspaceContextService } from '../../../../../../platform/workspace/common/workspace.js';
+import { TestWorkspaceService } from '../../../../../services/configuration/test/common/testServices.js';
 import '../../../../terminal/common/terminalConfiguration.js';
 import '../../browser/terminal.history.contribution.js';
 
@@ -24,11 +27,13 @@ test('Terminal history contribution keeps commands across PTY reuse and rejects 
 		const configuration = resources.add(new WorkbenchConfigurationService());
 		const storage = resources.add(new BrowserStorageService({ ownerWindow: dom.window as unknown as Window, workspaceId: 'history-contribution', backend: dom.window.localStorage, flushInterval: 0 }));
 		const services = resources.add(new InstantiationService());
+		services.registerInstance(IWorkspaceContextService, resources.add(new TestWorkspaceService({ id: 'history', folders: [{ id: 'folder', uri: URI.file('/workspace'), name: 'root', index: 0 }] })));
 		services.registerInstance(IConfigurationService, configuration);
 		services.registerInstance(IStorageService, storage);
 		const commands = resources.add(new Emitter<ITerminalCommandStatusEvent>());
 		let commandStorageDisabled = false;
 		const instance = {
+			dirId: 'folder',
 			profile: { profileId: 'bash', title: 'Bash', isDefault: true },
 			get shellIntegration() { return { commandDetection: true, cwdDetection: false, hasRichCommandDetection: true, commandStorageDisabled, commands: [] }; },
 			onDidChangeCommandStatus: commands.event,
@@ -38,9 +43,9 @@ test('Terminal history contribution keeps commands across PTY reuse and rejects 
 		const history = services.createInstance(contribution.ctor, { instance });
 		resources.add(history);
 
-		commands.fire({ commandId: 'command-1', status: 'succeeded', exitCode: 0, command: 'echo before reuse', isTrusted: true });
+		commands.fire({ commandId: 'command-1', status: 'succeeded', exitCode: 0, command: 'echo before reuse', isTrusted: true, cwd: '/earlier directory' });
 		// A replacement PTY starts its command IDs over, while this Terminal instance and contribution survive.
-		commands.fire({ commandId: 'command-1', status: 'succeeded', exitCode: 0, command: 'echo after reuse', isTrusted: true });
+		commands.fire({ commandId: 'command-1', status: 'succeeded', exitCode: 0, command: 'echo after reuse', isTrusted: true, cwd: '/later directory' });
 		commandStorageDisabled = true;
 		commands.fire({ commandId: 'task-command', status: 'succeeded', exitCode: 0, command: 'echo task', isTrusted: true });
 		commandStorageDisabled = false;

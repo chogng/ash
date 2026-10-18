@@ -54,9 +54,23 @@ pub(crate) fn validate_javascript_safe_integer(
 pub(crate) fn validate_document(value: &str) -> Result<(), String> {
     let document = parse_json_object(value, MAX_DOCUMENT_BYTES, "document")?;
     if document.get("format") != Some(&Value::String("ash.document".into()))
-        || document.get("version") != Some(&Value::Number(1.into()))
+        || !matches!(document.get("version").and_then(Value::as_u64), Some(1 | 2))
     {
-        return Err("document must use the ash.document v1 envelope".into());
+        return Err("document must use the ash.document v1 or v2 envelope".into());
+    }
+    match document.get("version").and_then(Value::as_u64) {
+        Some(1) if document.contains_key("documentType") => {
+            return Err("legacy documents cannot declare a documentType".into());
+        }
+        Some(2)
+            if !matches!(
+                document.get("documentType").and_then(Value::as_str),
+                Some("general" | "academic")
+            ) =>
+        {
+            return Err("documentType must be general or academic".into());
+        }
+        _ => {}
     }
     validate_document_node(document.get("document"), 0, &mut 0)
 }

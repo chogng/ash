@@ -1,5 +1,42 @@
-import { readFile } from "node:fs/promises";
+import { readFile, writeFile } from "node:fs/promises";
+import { join } from 'node:path';
 import { expect, test } from "../../../automation/test.js";
+
+test('Code opens and saves a general document and exposes document creation and export commands', { tag: ['@electron-app-server', '@browser-app-server'] }, async ({ testWorkspace, workbench }) => {
+	const resource = join(testWorkspace.directory, 'notes.ash-doc');
+	const document = {
+		format: 'ash.document', version: 2, documentType: 'general',
+		document: {
+			id: 'notes', type: 'doc', attrs: {}, marks: [], content: [{
+				id: 'paragraph', type: 'paragraph', attrs: {}, marks: [], content: [
+					{ id: 'text', type: 'text', attrs: {}, marks: [], content: [], text: 'General notes' },
+				],
+			}]
+		},
+	};
+	await writeFile(resource, JSON.stringify(document), 'utf8');
+	const explorer = workbench.page.locator('.ash-explorer');
+	const row = explorer.getByRole('treeitem', { name: 'notes.ash-doc', exact: true });
+	await expect(row).toBeVisible({ timeout: 15_000 });
+	await row.dblclick();
+	const group = workbench.editors.groupAt(0);
+	const input = group.content.locator('.stanza-structured-editor-pane:visible textarea.stanza-document-text-input').first();
+	await expect(input).toHaveValue('General notes');
+	await input.fill('Saved general notes');
+	await input.press(process.platform === 'darwin' ? 'Meta+S' : 'Control+S');
+	await expect.poll(async () => JSON.parse(await readFile(resource, 'utf8')), { timeout: 15_000 }).toMatchObject({
+		format: 'ash.document', version: 2, documentType: 'general',
+		document: { content: [{ content: [{ text: 'Saved general notes' }] }] },
+	});
+	await workbench.quickaccess.runCommand('workbench.action.document.export.markdown');
+	await expect(group.tabs.filter({ hasText: 'notes.md' })).toHaveAttribute('aria-selected', 'true');
+	await group.editor.waitForEditorContents(contents => contents.includes('Saved general notes'));
+	await workbench.quickaccess.runCommand('workbench.action.document.new');
+	await expect(input).toHaveValue('');
+	await input.fill('A new document draft');
+	await expect(group.content.locator('.stanza-structured-editor-pane:visible')).toBeVisible();
+	expect(JSON.parse(await readFile(resource, 'utf8')).document.content[0].content[0].text).toBe('Saved general notes');
+});
 
 test("Code opens Academic through the document contribution and saves its structured document through the Workbench", { tag: ['@electron-app-server', '@browser-app-server'] }, async ({ target, testWorkspace, workbench }) => {
 

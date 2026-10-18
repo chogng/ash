@@ -126,6 +126,7 @@ export interface ITerminalInstance extends IDisposable {
 	readonly initialCwd: string;
 	readonly cwd?: string;
 	readonly shellIntegration?: ITerminalShellIntegration;
+	readonly shellType?: import('../../../../platform/terminal/common/terminal.js').TerminalShellType;
 	readonly capabilities?: ITerminalCapabilityStore;
 	readonly title: string;
 	readonly profile: ITerminalProfile;
@@ -148,6 +149,8 @@ export interface ITerminalInstance extends IDisposable {
 	detachFromElement(): void;
 	/** Sends text to stdin, optionally executing it or applying the child Shell's paste mode. */
 	sendText(text: string, shouldExecute: boolean, bracketedPasteMode?: boolean): Promise<void>;
+	/** Quotes a host path for the spawn-confirmed shell; URI inputs must belong to this execution host. */
+	sendPath(originalPath: string | URI, shouldExecute: boolean): Promise<void>;
 	sendSignal(signal: string): Promise<void>;
 	processBinary(data: string): Promise<void>;
 	resize(dimensions: ITerminalDimensions): void;

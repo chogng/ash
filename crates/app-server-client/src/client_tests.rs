@@ -372,6 +372,7 @@ fn client_drives_terminal_lifecycle_through_typed_methods() {
     let ready = TerminalProcessReady {
         pid: 1234,
         cwd: "/workspace".into(),
+        shell_type: None,
     };
     assert_eq!(created.ready, ready);
     let attached = client

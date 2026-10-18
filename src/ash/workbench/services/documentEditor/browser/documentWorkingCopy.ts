@@ -10,6 +10,8 @@ import { TextFileSaveConflictError } from "../../textfile/common/textFileService
 import type { ITextFileService } from "../../textfile/common/textfiles.js";
 import type { IWorkingCopy } from "../../workingCopy/common/workingCopyService.js";
 import type { IWorkingCopyService } from "../../workingCopy/common/workingCopyService.js";
+import { DocumentTypes } from '../common/documentTypes.js';
+import { localize } from '../../../../nls.js';
 
 export interface DocumentWorkingCopyOptions {
 	readonly contentType: string;
@@ -101,7 +103,9 @@ export class DocumentWorkingCopy extends Disposable implements IWorkingCopy {
 		if (this.resource.scheme === "untitled") {
 			if (!this.options.onSave) throw new Error("Untitled document has no save handler");
 			const result = await this.options.onSave();
-			if (result === false) return;
+			// Save As may replace every view and retire this resource's shared model.
+			// The destination working copy owns the saved baseline after that transfer.
+			if (result === false || this.isDisposed) return;
 			this.savedContent = serializeDocument(this.options.model.document, this.schema);
 			this.refreshDirty();
 			this.setExternalChange(false);
@@ -123,6 +127,12 @@ export class DocumentWorkingCopy extends Disposable implements IWorkingCopy {
 
 	async saveAs(resource: URI, signal: AbortSignal): Promise<void> {
 		throwIfCancelled(signal, "Document Save As was cancelled");
+		const type = DocumentTypes.find({ resource: this.resource, contentType: this.backupContentType });
+		if (type && DocumentTypes.find({ resource })?.id !== type.id) {
+			// Renaming must not turn a structured working copy into a plain-text view.
+			// Explicit conversion commands create the destination's actual format.
+			throw new Error(localize('document.saveAs.type', 'Save this document with a supported extension ({0}). Use an explicit conversion command to change formats.', type.extensions.join(', ')));
+		}
 		const serialized = serializeDocument(this.options.model.document, this.schema);
 		await this.options.textFiles.save({ resource, text: serialized }, signal);
 		this.savedContent = serialized;

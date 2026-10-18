@@ -55,6 +55,7 @@ export const enum TerminalCommandId {
 	SendSequence = 'workbench.action.terminal.sendSequence',
 	SendSignal = 'workbench.action.terminal.sendSignal',
 	RunSelectedText = 'workbench.action.terminal.runSelectedText',
+	RunActiveFile = 'workbench.action.terminal.runActiveFile',
 	Split = 'workbench.action.terminal.split',
 	Unsplit = 'workbench.action.terminal.unsplit',
 	Join = 'workbench.action.terminal.join',

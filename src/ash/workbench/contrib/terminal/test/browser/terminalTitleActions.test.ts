@@ -396,7 +396,7 @@ suite('Terminal context command lifecycle', () => {
 			profile: { profileId: 'shell', title: 'Shell', isDefault: true }, exitCode: 0,
 			onDidWriteData: Event.None, onDidChangeCommandStatus: Event.None, onDidExit: Event.None, onDidChangeState: Event.None,
 			xtermReadyPromise: Promise.resolve(undefined), getContribution: () => null,
-			start() { }, attachToElement() { }, detachFromElement() { }, async sendSignal() { }, async sendText() { }, async processBinary() { }, resize() { },
+			start() { }, attachToElement() { }, detachFromElement() { }, async sendSignal() { }, async sendText() { }, async sendPath() { throw new Error('Title fixture does not insert file paths'); }, async processBinary() { }, resize() { },
 			async reuseTerminal() { }, async close() { }, clearBuffer: () => { effects.push(['clear', instanceId]); },
 			refreshProperty: async () => { throw new Error("No OS process in action fixture"); }, serializeState: async () => { throw new Error("No process checkpoint in action fixture"); },
 		} satisfies ITerminalInstance);

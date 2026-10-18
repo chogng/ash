@@ -443,6 +443,15 @@ fn ready_to_dto(value: exec_server::terminal::TerminalProcessReady) -> wire::Ter
     wire::TerminalProcessReady {
         pid: value.pid,
         cwd: value.cwd,
+        shell_type: value.shell_type.map(terminal_shell_type),
+    }
+}
+
+fn terminal_shell_type(value: exec_server::terminal::TerminalShellType) -> wire::TerminalShellType {
+    match value {
+        exec_server::terminal::TerminalShellType::Bash => wire::TerminalShellType::Bash,
+        exec_server::terminal::TerminalShellType::Zsh => wire::TerminalShellType::Zsh,
+        exec_server::terminal::TerminalShellType::PowerShell => wire::TerminalShellType::PowerShell,
     }
 }
 
@@ -577,13 +586,7 @@ fn shell_boundary(
             shell_type,
         } => wire::TerminalShellIntegrationEvent::ProcessReady {
             is_windows_pty,
-            shell_type: shell_type.map(|shell| match shell {
-                exec_server::terminal::TerminalShellType::Bash => wire::TerminalShellType::Bash,
-                exec_server::terminal::TerminalShellType::Zsh => wire::TerminalShellType::Zsh,
-                exec_server::terminal::TerminalShellType::PowerShell => {
-                    wire::TerminalShellType::PowerShell
-                }
-            }),
+            shell_type: shell_type.map(terminal_shell_type),
         },
         Event::Cwd { value, is_trusted } => {
             wire::TerminalShellIntegrationEvent::Cwd { value, is_trusted }
