@@ -122,7 +122,7 @@ impl SandboxBackend for SandboxBackends {
         policy: SandboxPolicy,
         scope: &SandboxScope,
     ) -> Result<PreparedCommand, SandboxError> {
-        if !policy.requires_platform_sandbox() && scope.is_single_unhidden() {
+        if !policy.requires_platform_sandbox() && scope.can_run_unrestricted()? {
             return Ok(PreparedCommand::unrestricted(command));
         }
         let mut unsupported = Vec::new();

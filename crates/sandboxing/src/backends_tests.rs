@@ -370,3 +370,51 @@ fn explicit_unrestricted_authority_does_not_depend_on_backend_availability() {
         .unwrap();
     assert_eq!(prepared.kind(), SandboxKind::Unrestricted);
 }
+
+#[test]
+fn unmatched_snapshot_rules_do_not_require_a_backend_but_effective_restrictions_do() {
+    use crate::PatternMatchTiming;
+    use crate::SandboxPathAccess;
+    use crate::SandboxPathRule;
+    let temp = tempfile::tempdir().unwrap();
+    let dir = Dir::open_local(temp.path()).unwrap();
+    let command = SandboxCommand::new("command", Vec::<String>::new(), ".");
+    let manager = SandboxManager::new(dir.clone(), SandboxBackends::new(Vec::new()));
+    let unrestricted = SandboxPolicy::new(FileSystemAccess::FullAccess, NetworkAccess::Allowed);
+    let scope = |timing| {
+        SandboxScope::single(dir.clone())
+            .with_path_rules(vec![
+                SandboxPathRule::pattern(dir.clone(), "**/.env", SandboxPathAccess::Denied, timing)
+                    .unwrap(),
+            ])
+            .unwrap()
+    };
+    let snapshot = scope(PatternMatchTiming::PreparationSnapshot);
+    assert_eq!(
+        manager
+            .prepare_scoped(&command, unrestricted, &snapshot)
+            .unwrap()
+            .kind(),
+        SandboxKind::Unrestricted
+    );
+    assert!(
+        manager
+            .prepare_scoped(&command, policy(), &snapshot)
+            .is_err()
+    );
+    assert!(
+        manager
+            .prepare_scoped(
+                &command,
+                unrestricted,
+                &scope(PatternMatchTiming::Continuous)
+            )
+            .is_err()
+    );
+    std::fs::write(temp.path().join(".env"), "secret").unwrap();
+    assert!(
+        manager
+            .prepare_scoped(&command, unrestricted, &snapshot)
+            .is_err()
+    );
+}

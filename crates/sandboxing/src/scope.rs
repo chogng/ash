@@ -271,8 +271,31 @@ impl SandboxScope {
 
     /// Whether this scope grants only its command directory without hiding host directories.
     pub fn is_single_unhidden(&self) -> bool {
+        self.path_rules.is_empty() && self.has_single_host_grant()
+    }
+
+    /// Preparation snapshots with no matches impose no additional path restriction.
+    /// Continuous rules still require enforcement even before a matching file exists.
+    pub(crate) fn can_run_unrestricted(&self) -> Result<bool, SandboxError> {
+        if !self.has_single_host_grant() {
+            return Ok(false);
+        }
+        for rule in &self.path_rules {
+            if rule.pattern_timing() != Some(crate::PatternMatchTiming::PreparationSnapshot)
+                || !crate::filesystem::resolve_rule(
+                    rule,
+                    crate::filesystem::ContinuousPatterns::Reject,
+                )?
+                .is_empty()
+            {
+                return Ok(false);
+            }
+        }
+        Ok(true)
+    }
+
+    fn has_single_host_grant(&self) -> bool {
         self.hidden_dirs.is_empty()
-            && self.path_rules.is_empty()
             && self.private_ipc_dirs.is_empty()
             && self.host_read == HostReadScope::Host
             && self.grants.len() == 1

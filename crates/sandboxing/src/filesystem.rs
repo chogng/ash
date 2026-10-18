@@ -313,7 +313,7 @@ pub(crate) enum ContinuousPatterns {
     EnforcedByBackend,
 }
 
-fn resolve_rule(
+pub(super) fn resolve_rule(
     rule: &SandboxPathRule,
     continuous_patterns: ContinuousPatterns,
 ) -> Result<Vec<PathBuf>, SandboxError> {
