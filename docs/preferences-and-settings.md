@@ -191,7 +191,7 @@ EditorGroupModel 是数字组 ID 的分配 owner；组操作、命令上下文�
 
 编辑器组批次另覆盖指定组重开、侧边优先级、独立查询、保留焦点、关闭后重开、旧工作集嵌套布局转换与数字 ID 冲突，以及扩展请求边界。Browser 的中英文组切换和目标／语言场景共 6 项、Sessions 侧边入口 1 项，以及 macOS Desktop UI 的中英文组切换／查询和 Sessions 侧边入口 5 项均通过。日志在 `.build/preferences-groups/` 的 `browser-windows-final.log`、`browser-sessions.log` 和 `desktop-final.log`；下方验收限制仍然适用。
 
-Web / Desktop 构建、Renderer 与自动化类型检查、formatter 和定向 CSS 检查通过。额外的 Bun 全量测试类型检查仍被未修改的 `terminalConfigurationService.test.ts:469` 中既有 `undefined → ThemeIcon` 断言阻塞；标准测试编译与上述定向测试通过，不能据此宣告整条全仓检查通过。
+Web / Desktop 构建、Renderer 与自动化类型检查、formatter 和定向 CSS 检查通过。Bun 全量测试类型检查（5,228 个文件）与 Terminal 配置／profile 的 43 项定向单测也已通过。
 
 存储迁移与跨平台验收的历史范围如下；设置渲染的检查范围另列于表后：
 

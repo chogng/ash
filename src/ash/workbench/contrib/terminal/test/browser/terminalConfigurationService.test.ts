@@ -23,7 +23,7 @@ import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/tes
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { IQuickInputService, type IQuickPick, type IQuickPickItem } from '../../../../../platform/quickinput/common/quickInput.js';
-import { ITerminalProcessService } from '../../../../../platform/terminal/common/terminal.js';
+import { ITerminalProcessService, type IShellLaunchConfig } from '../../../../../platform/terminal/common/terminal.js';
 import { registerTerminalPlatformConfiguration } from '../../../../../platform/terminal/common/terminalPlatformConfiguration.js';
 import { IWorkspaceContextService } from '../../../../../platform/workspace/common/workspace.js';
 import { TestConfigurationService as WorkbenchConfigurationService } from '../../../../services/configuration/test/common/testServices.js';
@@ -466,7 +466,7 @@ suite('Terminal configuration and interactive profiles', () => {
 				await resolver.resolveShellLaunchConfig(shell, options);
 				assert.equal(shell.icon?.id, entry.icon, `${name}: ${entry.executable} ${JSON.stringify(entry.args)}`);
 				assert.deepEqual(shell.args, entry.args ?? [], 'Icon inference must preserve the actual launch arguments');
-				const preview = { executable: entry.executable, args: entry.args, icon: undefined as typeof shell.icon };
+				const preview: IShellLaunchConfig = { executable: entry.executable, args: entry.args };
 				resolver.resolveIcon(preview, OperatingSystem.Windows);
 				assert.equal(preview.icon?.id, shell.icon?.id, 'Profile menus and resolved launches must agree');
 			}
