@@ -5972,3 +5972,42 @@ fn production_review_model_bridge_preserves_streaming_for_guardian_metrics() {
             .contains("private")
     );
 }
+
+#[test]
+fn native_web_directory_consent_does_not_load_directory_configuration() {
+    let profile = tempfile::tempdir().unwrap();
+    let root = tempfile::tempdir().unwrap();
+    let directory = Dir::open_local(root.path()).unwrap();
+    let config = ConfigStore::open(profile.path().join("permissions.sqlite3")).unwrap();
+    config
+        .apply(ConfigCommandRequest {
+            command_id: CommandId::new("web-existing-config-access").unwrap(),
+            expected_revision: ConfigRevision::INITIAL,
+            command: UserConfigCommand::SetDirectoryGrant {
+                dir: directory.id(),
+                permissions: ash_file_access::Permissions::new([
+                    DirPermission::ReadFiles,
+                    DirPermission::BrowseFiles,
+                    DirPermission::LoadConfig,
+                ]),
+                display_path: None,
+            },
+        })
+        .unwrap();
+    let path = root.path().join("config.toml");
+    std::fs::write(&path, "this is not a config document").unwrap();
+    let snapshot = config.read_snapshot().unwrap();
+    let tracker = DirConfigTracker::new(
+        DirConfigStore::open(path, DirConfigScope::new(directory.id())),
+        InitialDirGrantPolicy::WebSession {
+            dir: directory,
+            permissions: ash_file_access::Permissions::new([
+                DirPermission::ReadFiles,
+                DirPermission::BrowseFiles,
+                DirPermission::WriteFiles,
+            ]),
+            authority_revision: snapshot.revision,
+        },
+    );
+    assert!(tracker.read_authorized(&snapshot).unwrap().is_none());
+}

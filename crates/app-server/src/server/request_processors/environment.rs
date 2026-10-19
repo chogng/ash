@@ -350,6 +350,11 @@ impl<'ctx, C: EnvironmentRequestProcessorContext + ?Sized> EnvironmentRequestPro
         }
         let snapshot = self.context.directory_grants_snapshot()?;
         if let Some(runtime) = self.context.env_runtime_control() {
+            if runtime.is_web_session() {
+                return runtime
+                    .reconcile_user_directory_grants(&snapshot.values)
+                    .map_err(environment_runtime_error);
+            }
             runtime
                 .reconcile_user_directory_routes(&snapshot.values)
                 .map_err(environment_runtime_error)?;

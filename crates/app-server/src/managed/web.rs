@@ -192,7 +192,7 @@ impl WebWorkspaces {
         let selected_directory =
             ash_file_access::Dir::open_local(&root).map_err(io::Error::other)?;
         let approved_directory = selected_directory.clone();
-        tokio::task::spawn_blocking(move || {
+        let (approved_grant, authority_revision) = tokio::task::spawn_blocking(move || {
             if !current_server.web_workspace_authorizes_directory(&approved_directory)
                 && !show_workspace_approval(approved_directory.canonical_path())
             {
@@ -204,7 +204,18 @@ impl WebWorkspaces {
             approved_directory
                 .directory()
                 .ensure_current()
-                .map_err(io::Error::other)
+                .map_err(io::Error::other)?;
+            let revision = current_server
+                .config
+                .as_ref()
+                .ok_or_else(|| io::Error::other("Config authority unavailable"))?
+                .read_snapshot()
+                .map_err(io::Error::other)?
+                .revision;
+            let grant = current_server
+                .approve_web_directory(approved_directory)
+                .map_err(workspace_error)?;
+            Ok((grant, revision))
         })
         .await
         .map_err(io::Error::other)??;
@@ -214,10 +225,23 @@ impl WebWorkspaces {
             GrantSource::UserConfig,
             connection.product_services().map(Path::to_path_buf),
         );
-        let server = tokio::task::spawn_blocking(move || registry.open_web_workspace(&selected))
-            .await
-            .map_err(io::Error::other)?
-            .map_err(io::Error::other)?;
+        let active = Arc::clone(&self.active);
+        let server = tokio::task::spawn_blocking(move || {
+            let lease = active
+                .lock()
+                .map_err(|_| io::Error::other("Web lease lock poisoned"))?;
+            if !*lease {
+                return Err(io::Error::new(
+                    io::ErrorKind::Interrupted,
+                    "Web listener stopped",
+                ));
+            }
+            registry
+                .open_native_web_workspace(&selected, approved_grant, authority_revision)
+                .map_err(io::Error::other)
+        })
+        .await
+        .map_err(io::Error::other)??;
         if selected_directory.directory().ensure_current().is_err()
             || server
                 .browser_workspace_id(&root)

@@ -464,8 +464,12 @@ fn watch_dir(
                     }
                     if let Some(mut changed) = project_event(&dir, dir_id.as_deref(), event) {
                         if let Some((relative, grant, authority)) = &exact_file {
-                            let allowed = authority.as_ref().is_none_or(|store| grant.source() != ash_file_access::GrantSource::ExplicitUser || store.read_snapshot().is_ok_and(|snapshot| snapshot.values.directory_grants.explicit_permissions_for(&grant.dir().id()).cloned().unwrap_or_else(super::environment_runtime::inspection_permissions).allows(ash_file_access::Permission::WatchFiles)));
-                            if !grant.is_active() || !allowed { continue; }
+                            let allowed = match grant.source() {
+                                ash_file_access::GrantSource::OrganizationPolicy => true,
+                                ash_file_access::GrantSource::ExplicitUser | ash_file_access::GrantSource::HostConfiguration => authority.as_ref().is_none_or(|store| store.read_snapshot().is_ok_and(|snapshot| super::environment_runtime::web_session_permissions(grant, &snapshot.values).allows(ash_file_access::Permission::WatchFiles))),
+                            };
+                            if !allowed { grant.revoke(); }
+                            if !grant.is_active() { continue; }
                             let Some(filtered) = project_exact_file_event(relative, changed) else { continue; };
                             changed = filtered;
                         }

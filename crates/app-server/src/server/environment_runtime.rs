@@ -195,7 +195,7 @@ impl EnvRuntime {
 pub(super) struct LocalEnvHost {
     tools: Arc<EnvToolPorts>,
     hooks: Arc<DeclarativeHookRuntime>,
-    grants: DirGrantPolicy,
+    pub(super) grants: DirGrantPolicy,
 }
 
 impl LocalEnvHost {
@@ -258,6 +258,7 @@ pub(crate) struct EnvRuntimeControl {
     hooks: Arc<DeclarativeHookRuntime>,
     mcp_status: Arc<RwLock<ash_mcp_extension::McpRuntimeStatusSnapshot>>,
     config: Option<Arc<ConfigStore>>,
+    grant_policy: DirGrantPolicy,
     env_config: Arc<RwLock<EnvRuntimeConfig>>,
     file_search: Arc<file_search::Service>,
     pty_helper: Option<std::path::PathBuf>,
@@ -267,6 +268,10 @@ pub(crate) struct EnvRuntimeControl {
 }
 
 impl EnvRuntimeControl {
+    pub(super) fn is_web_session(&self) -> bool {
+        self.grant_policy.is_web_session()
+    }
+
     pub(crate) fn reconcile_grep_backend(
         &self,
         backend: grep::Backend,
@@ -649,17 +654,13 @@ impl EnvRuntimeControl {
             .iter()
             .filter(|(_, dir)| {
                 let grant = &dir.grant;
-                grant.source() == GrantSource::ExplicitUser
+                self.grant_policy
+                    .reconciled_permissions(grant, config)
+                    .is_some_and(|permissions| permissions != *grant.permissions())
                     && !runtime
                         .selected_grant
                         .as_ref()
                         .is_some_and(|selected| selected.dir() == grant.dir())
-                    && config
-                        .directory_grants
-                        .explicit_permissions_for(&grant.dir().id())
-                        .cloned()
-                        .unwrap_or_else(inspection_permissions)
-                        != *grant.permissions()
             })
             .map(|(id, _)| id.clone())
             .collect::<Vec<_>>();
@@ -700,22 +701,19 @@ impl EnvRuntimeControl {
         let Some(authorization) = runtime.selected_grant.as_ref() else {
             return Ok(());
         };
-        if authorization.source() != GrantSource::ExplicitUser {
+        let Some(permissions) = self
+            .grant_policy
+            .reconciled_permissions(authorization, config)
+        else {
             return Ok(());
-        }
-
-        let permissions = config
-            .directory_grants
-            .explicit_permissions_for(&authorization.dir().id())
-            .cloned()
-            .unwrap_or_else(inspection_permissions);
+        };
         if authorization.permissions() == &permissions {
             return Ok(());
         }
 
         let root = authorization.dir().clone();
         let replacement =
-            Grant::for_environment(root.clone(), GrantSource::ExplicitUser, permissions.clone());
+            Grant::for_environment(root.clone(), authorization.source(), permissions.clone());
         let git_permission = if permissions.allows(Permission::MutateRepository) {
             Permission::MutateRepository
         } else {
@@ -882,16 +880,63 @@ pub(crate) enum DirGrantPolicy {
     HostSelectedDirs(ash_file_access::GrantSource),
     /// Resolves each client-requested root against the durable user Config authority.
     UserConfig(Arc<ConfigStore>),
+    /// Native approvals belong only to this Web listener; Config remains a reducing ceiling.
+    WebSession(Arc<ConfigStore>),
 }
 
 impl DirGrantPolicy {
+    pub(super) fn is_web_session(&self) -> bool {
+        matches!(self, Self::WebSession(_))
+    }
+
+    pub(super) fn reconciled_permissions(
+        &self,
+        grant: &Grant,
+        config: &ash_config::ResolvedConfig,
+    ) -> Option<Permissions> {
+        if self.is_web_session() {
+            return Some(web_session_permissions(grant, config));
+        }
+        (grant.source() == GrantSource::ExplicitUser).then(|| {
+            config
+                .directory_grants
+                .explicit_permissions_for(&grant.dir().id())
+                .cloned()
+                .unwrap_or_else(inspection_permissions)
+        })
+    }
+
+    pub(super) fn approve_web_directory(&self, dir: Dir) -> Result<Grant, EnvRuntimeError> {
+        let Self::WebSession(config) = self else {
+            return self.grant(dir);
+        };
+        let snapshot = config
+            .read_snapshot()
+            .map_err(|error| EnvRuntimeError::Failed(error.0))?;
+        let grant = Grant::for_environment(
+            dir,
+            GrantSource::HostConfiguration,
+            Permissions::new(
+                inspection_permissions()
+                    .entries()
+                    .chain([Permission::WriteFiles]),
+            ),
+        );
+        let permissions = web_session_permissions(&grant, &snapshot.values);
+        Ok(Grant::for_environment(
+            grant.dir().clone(),
+            GrantSource::HostConfiguration,
+            permissions,
+        ))
+    }
+
     fn grant(&self, dir: Dir) -> Result<Grant, EnvRuntimeError> {
         let (source, permissions) = match self {
             #[cfg(test)]
             Self::InspectOnly => (GrantSource::HostConfiguration, inspection_permissions()),
             #[cfg(test)]
             Self::HostSelectedDirs(source) => (*source, host_directory_capabilities()),
-            Self::UserConfig(config) => {
+            Self::UserConfig(config) | Self::WebSession(config) => {
                 let snapshot = config
                     .read_snapshot()
                     .map_err(|error| EnvRuntimeError::Failed(error.0))?;
@@ -907,6 +952,24 @@ impl DirGrantPolicy {
         };
         Ok(Grant::for_environment(dir, source, permissions))
     }
+}
+
+/// Native consent is a ceiling, never a replacement for an explicit user restriction. Keeping
+/// the already-issued set makes removal or later expansion of Config unable to restore powers.
+pub(super) fn web_session_permissions(
+    grant: &Grant,
+    config: &ash_config::ResolvedConfig,
+) -> Permissions {
+    let configured = config
+        .directory_grants
+        .explicit_permissions_for(&grant.dir().id())
+        .cloned()
+        .or_else(|| (grant.source() == GrantSource::ExplicitUser).then(inspection_permissions));
+    Permissions::new(grant.permissions().entries().filter(|permission| {
+        configured
+            .as_ref()
+            .is_none_or(|permissions| permissions.allows(*permission))
+    }))
 }
 
 pub(super) fn inspection_permissions() -> Permissions {
@@ -1502,6 +1565,7 @@ impl AppServer {
             hooks: Arc::clone(&host.hooks),
             mcp_status: Arc::clone(&self.mcp_status),
             config: self.config.clone(),
+            grant_policy: host.grants.clone(),
             env_config: Arc::clone(&self.env_config),
             file_search: Arc::clone(&self.file_search),
             pty_helper: self.pty_helper.clone(),
@@ -1552,6 +1616,52 @@ impl AppServer {
                 host_directory_capabilities(),
             ),
             InitialDirGrantPolicy::UserConfig => host.grants.grant(dir)?,
+            InitialDirGrantPolicy::WebSession {
+                dir: approved,
+                permissions,
+                authority_revision,
+            } => {
+                if dir != approved || approved.directory().ensure_current().is_err() {
+                    return Err(EnvRuntimeError::PermissionRequired);
+                }
+                let grant = host.grants.approve_web_directory(approved)?;
+                let snapshot = self
+                    .config
+                    .as_ref()
+                    .ok_or(EnvRuntimeError::Unavailable)?
+                    .read_snapshot()
+                    .map_err(|error| EnvRuntimeError::Failed(error.0))?;
+                let inspection = inspection_permissions();
+                let unchanged_or_explicit = snapshot.revision == authority_revision
+                    || snapshot
+                        .values
+                        .directory_grants
+                        .explicit_permissions_for(&grant.dir().id())
+                        .is_some();
+                Grant::for_environment(
+                    grant.dir().clone(),
+                    GrantSource::HostConfiguration,
+                    Permissions::new(grant.permissions().entries().filter(|permission| {
+                        permissions.allows(*permission)
+                            && (unchanged_or_explicit || inspection.allows(*permission))
+                    })),
+                )
+            }
+        };
+        let authorization = if host.grants.is_web_session() {
+            let snapshot = self
+                .config
+                .as_ref()
+                .ok_or(EnvRuntimeError::Unavailable)?
+                .read_snapshot()
+                .map_err(|error| EnvRuntimeError::Failed(error.0))?;
+            Grant::for_environment(
+                authorization.dir().clone(),
+                authorization.source(),
+                web_session_permissions(&authorization, &snapshot.values),
+            )
+        } else {
+            authorization
         };
         self.activate_dir_runtime(authorization, host)
     }
@@ -1574,6 +1684,35 @@ impl AppServer {
         let dir =
             Dir::open_local(root).map_err(|error| EnvRuntimeError::Failed(error.to_string()))?;
         self.activate_dir_runtime(Grant::for_environment(dir, source, permissions), host)
+    }
+
+    pub(crate) fn approve_web_directory(&self, dir: Dir) -> Result<Grant, EnvRuntimeError> {
+        let host = self
+            .local_env_host
+            .as_ref()
+            .ok_or(EnvRuntimeError::Unavailable)?;
+        let approved = host.grants.approve_web_directory(dir.clone())?;
+        let runtime = self
+            .env_runtime
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let retained = runtime
+            .dirs
+            .values()
+            .find(|entry| entry.grant.dir() == &dir && entry.grant.is_active());
+        Ok(match retained {
+            Some(entry) if host.grants.is_web_session() => Grant::for_environment(
+                dir,
+                GrantSource::HostConfiguration,
+                Permissions::new(
+                    approved
+                        .permissions()
+                        .entries()
+                        .filter(|permission| entry.grant.permissions().allows(*permission)),
+                ),
+            ),
+            _ => approved,
+        })
     }
 
     pub(crate) fn authorize_local_dir_root(
@@ -1640,6 +1779,22 @@ impl AppServer {
             .local_env_host
             .as_ref()
             .ok_or(EnvRuntimeError::Unavailable)?;
+        if host.grants.is_web_session() {
+            let snapshot = self
+                .config
+                .as_ref()
+                .ok_or(EnvRuntimeError::Unavailable)?
+                .read_snapshot()
+                .map_err(|error| EnvRuntimeError::Failed(error.0))?;
+            for (_, grant) in &mut dirs {
+                let permissions = web_session_permissions(grant, &snapshot.values);
+                if &permissions != grant.permissions() {
+                    *grant =
+                        Grant::for_environment(grant.dir().clone(), grant.source(), permissions)
+                            .with_path_policy(grant.path_policy().clone());
+                }
+            }
+        }
         let _env_runtime = self
             .env_runtime_gate
             .lock()
@@ -3211,6 +3366,22 @@ impl AppServer {
         &self,
         dir_id: Option<&str>,
     ) -> Result<Arc<dyn FileSystem>, RpcError> {
+        if self
+            .local_env_host
+            .as_ref()
+            .is_some_and(|host| host.grants.is_web_session())
+        {
+            let snapshot = self
+                .config
+                .as_ref()
+                .ok_or_else(|| RpcError::new(-32030, AppServerErrorName::ConfigUnavailable))?
+                .read_snapshot()
+                .map_err(|_| RpcError::new(-32030, AppServerErrorName::ConfigUnavailable))?;
+            self.env_runtime_control()
+                .ok_or_else(|| RpcError::new(-32043, AppServerErrorName::PermissionRequired))?
+                .reconcile_user_directory_grants(&snapshot.values)
+                .map_err(|_| RpcError::new(-32043, AppServerErrorName::PermissionRequired))?;
+        }
         if let Some(files) = self.web_configuration_file_system(dir_id)? {
             return Ok(files);
         }
