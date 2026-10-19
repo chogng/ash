@@ -54,4 +54,4 @@ Terminal 的交互 PTY 归原 App Server／exec-server；Agent 的执行工具�
 
 定向单测使用各贡献 `test/` 与原 Terminal/Profile/ExtensionHost 测试；真实屏幕、键盘、通知按钮及扩展补全场景见 `test/integration/browser/terminal*.integration.spec.ts`。真实 Node Extension Host 的注册、撤销与调用测试位于 `resources/extension-host/node.test.mjs`。Rust 终端真实 PTY 测试覆盖信号、首次输出自动回复、连接隔离和租约撤销，App Server 测试覆盖实际 RPC owner。
 
-2026-10-19 macOS 验证覆盖 28 条 Chromium 场景，以及 Electron 和 Web 各 2 条连接实际打包 App Server／PTY 的 smoke，后者验证自动回复、Quick Access 保持实例与前台 SIGTERM。终端单测、扩展桥接／Node／V8 测试、相关 Rust 包检查及正常产品构建通过。验证结果以执行日志为准。当前机器是 macOS；Windows／Linux PTY 测试目标曾通过交叉编译，完整 Windows exec-server 构建受缺失的 MSVC SDK 阻挡。未执行 Windows／Linux 实机信号场景及上游可运行窗口配对，不将编译或源码核对标为这些场景通过。
+2026-10-19 macOS 验证覆盖 28 条 Chromium 场景，以及 Electron 和 Web 各 2 条连接实际打包 App Server／PTY 的 smoke，后者验证自动回复、Quick Access 保持实例与前台 SIGTERM。终端单测、扩展桥接／Node／V8 测试、相关 Rust 包检查及正常产品构建通过。Linux 独立虚拟机的原生运行、发现并修复的描述符边界及本轮窗口配对范围见 [跨平台与窗口配对验收](../../../../../docs/terminal.md#跨平台与窗口配对验收2026-10-19)。Windows 按用户本轮要求停止验证，不计为通过。

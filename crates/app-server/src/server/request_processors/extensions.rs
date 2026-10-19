@@ -16,6 +16,7 @@ use ash_app_server_protocol::protocol::extensions::ExtensionListParams;
 use ash_app_server_protocol::protocol::extensions::ExtensionListResult;
 use ash_app_server_protocol::protocol::extensions::ExtensionResourceOpenParams;
 use ash_app_server_protocol::protocol::extensions::ExtensionResourceOpenResult;
+use ash_app_server_protocol::protocol::extensions::ExtensionRuntimeBindingDto;
 use ash_app_server_protocol::protocol::extensions::ExtensionSourceKindDto;
 use ash_app_server_protocol::protocol::resources::ResourceMetadataResult;
 use ash_external_ext::packages::ExtensionDescriptor;
@@ -205,6 +206,12 @@ fn extension_descriptor(value: ExtensionDescriptor) -> ExtensionDto {
         manifest_json: value.manifest_json,
         manifest_sha256: value.manifest_sha256,
         package_sha256: value.package_sha256,
+        runtime_binding: value
+            .runtime_binding
+            .map(|binding| ExtensionRuntimeBindingDto {
+                runtime_id: binding.runtime_id,
+                package_digest: binding.package_digest,
+            }),
     }
 }
 

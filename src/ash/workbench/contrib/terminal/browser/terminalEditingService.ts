@@ -31,7 +31,8 @@ export class TerminalEditingService extends Disposable implements ITerminalEditi
 			if (this.current === cancellation) {
 				this.current = undefined;
 				this.editing = undefined;
-				if (!this.isDisposed && this.terminals.activeInstance === instance && this.terminals.instances.includes(instance) && !instance.xterm?.isDisposed) instance.xterm?.focus();
+				// A newer picker owns focus once the rename prompt has closed.
+				if (!this.isDisposed && !this.quickInput.currentQuickInput && this.terminals.activeInstance === instance && this.terminals.instances.includes(instance) && !instance.xterm?.isDisposed) instance.xterm?.focus();
 			}
 		}
 	}

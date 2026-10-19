@@ -33,6 +33,16 @@ pub enum ExtensionDiagnosticCodeDto {
     ResourceTooLarge,
 }
 
+/// Trusted source metadata linking one runtime authority package to catalog resources.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ExtensionRuntimeBindingDto {
+    #[schemars(length(min = 1, max = 256))]
+    pub runtime_id: String,
+    #[schemars(length(min = 71, max = 71))]
+    pub package_digest: String,
+}
+
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct ExtensionDto {
@@ -53,6 +63,10 @@ pub struct ExtensionDto {
     pub manifest_json: String,
     pub manifest_sha256: String,
     pub package_sha256: String,
+    /// Set only by the effective Plugin authority for its standard JavaScript package.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub runtime_binding: Option<ExtensionRuntimeBindingDto>,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
@@ -112,3 +126,7 @@ pub struct ExtensionGalleryResourceOpenParams {
     /// Portable path relative to the extension directory in the verified VSIX.
     pub path: String,
 }
+
+#[cfg(test)]
+#[path = "extensions_tests.rs"]
+mod tests;

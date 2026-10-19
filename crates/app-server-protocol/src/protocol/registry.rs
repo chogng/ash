@@ -1080,6 +1080,8 @@ use crate::protocol::extensions::ExtensionResourceOpenParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::extensions::ExtensionResourceOpenResult;
 #[cfg(any(test, feature = "export"))]
+use crate::protocol::extensions::ExtensionRuntimeBindingDto;
+#[cfg(any(test, feature = "export"))]
 use crate::protocol::extensions::ExtensionSourceKindDto;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::fs::FsCancelElevatedWriteParams;
@@ -6698,6 +6700,7 @@ typescript_bindings! {
     ExtensionSourceKindDto,
     ExtensionDiagnosticCodeDto,
     ExtensionDto,
+    ExtensionRuntimeBindingDto,
     ExtensionDiagnosticDto,
     ExtensionListParams,
     ExtensionListResult,

@@ -2,7 +2,9 @@ use ash_core_plugins::PluginActivationAuthority;
 use ash_external_ext::packages::DynamicExtensionPackageSource;
 use ash_external_ext::packages::DynamicExtensionSourceProvider;
 use ash_external_ext::packages::DynamicExtensionSourceSnapshot;
+use ash_external_ext::packages::ExtensionRuntimeBinding;
 use ash_plugin::EditorExtensionApi;
+use ash_plugin::EditorExtensionRuntime;
 
 /// Selects declarative and standard API package manifests from the same effective Plugin snapshot.
 pub(super) struct PluginExtensionSourceProvider {
@@ -25,14 +27,32 @@ impl DynamicExtensionSourceProvider for PluginExtensionSourceProvider {
                 .contributions
                 .editor_extensions
                 .iter()
-                .find(|contribution| contribution.api == EditorExtensionApi::Vscode)
+                .find(|contribution| {
+                    contribution.api == EditorExtensionApi::Vscode
+                        && contribution.runtime == EditorExtensionRuntime::JavaScript
+                })
+                .or_else(|| {
+                    package
+                        .manifest()
+                        .contributions
+                        .editor_extensions
+                        .iter()
+                        .find(|contribution| contribution.api == EditorExtensionApi::Vscode)
+                })
             {
                 // The standard module and its declarations share this immutable package root;
                 // discovery must not require another independently enabled contribution.
-                packages.push(DynamicExtensionPackageSource::plugin(
+                let mut source = DynamicExtensionPackageSource::plugin(
                     format!("{}:{}", package.manifest().id, contribution.id.as_str()),
                     package.package_root(),
-                ));
+                );
+                if contribution.runtime == EditorExtensionRuntime::JavaScript {
+                    source.runtime_binding = Some(ExtensionRuntimeBinding {
+                        runtime_id: source.subject.clone(),
+                        package_digest: package.package_digest().as_str().to_string(),
+                    });
+                }
+                packages.push(source);
             }
             for contribution in &package.manifest().contributions.declarative_extensions {
                 let root = package

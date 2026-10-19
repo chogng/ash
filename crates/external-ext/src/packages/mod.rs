@@ -25,6 +25,7 @@ pub use source::DynamicExtensionSourceProvider;
 pub use source::DynamicExtensionSourceSnapshot;
 pub use source::ExtensionRoot;
 pub use source::ExtensionRootKind;
+pub use source::ExtensionRuntimeBinding;
 
 #[cfg(test)]
 #[path = "packages_tests.rs"]

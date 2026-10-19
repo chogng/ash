@@ -20,6 +20,8 @@ export interface ExtensionDescriptor {
 	readonly manifestJson: string;
 	readonly manifestSha256: string;
 	readonly packageSha256: string;
+	/** Backend-attested executable owner when Plugin and catalog digest domains differ. */
+	readonly runtimeBinding?: { readonly runtimeId: string; readonly packageDigest: string; };
 }
 
 export interface ExtensionDiagnostic {
@@ -69,13 +71,24 @@ function normalizeExtension(value: unknown): ExtensionDescriptor {
 	}
 	const targetPlatform = extension.targetPlatform === undefined ? undefined : boundedText(extension.targetPlatform, 'extension target platform', 128);
 	if (targetPlatform !== undefined && !/^[a-z0-9]+-[a-z0-9_]+$/.test(targetPlatform)) throw new TypeError('extension target platform is invalid');
+	const sourceKind = stringEnum(extension.sourceKind, "extension source kind", ["builtIn", "plugin", "registry", "user"] as const);
+	let runtimeBinding: ExtensionDescriptor['runtimeBinding'];
+	if (extension.runtimeBinding !== undefined) {
+		if (sourceKind !== 'plugin') throw new TypeError('extension runtime binding requires a Plugin source');
+		const binding = record(extension.runtimeBinding, 'extension runtime binding');
+		if (Object.keys(binding).some(key => key !== 'runtimeId' && key !== 'packageDigest')) throw new TypeError('extension runtime binding has an unknown field');
+		const runtimeId = boundedText(binding.runtimeId, 'extension runtime id', 256);
+		if (/[\u0000-\u001f\u007f]/.test(runtimeId)) throw new TypeError('extension runtime id is invalid');
+		runtimeBinding = Object.freeze({ runtimeId, packageDigest: sha256Digest(binding.packageDigest, 'extension runtime package digest') });
+	}
 	return Object.freeze({
 		id: boundedText(extension.id, "extension id", 160),
 		name: boundedText(extension.name, "extension name", 256),
 		publisher: boundedText(extension.publisher, "extension publisher", 256),
 		version: boundedText(extension.version, "extension version", 256),
 		displayName: boundedText(extension.displayName, "extension display name", 256),
-		sourceKind: stringEnum(extension.sourceKind, "extension source kind", ["builtIn", "plugin", "registry", "user"] as const),
+		sourceKind,
+		...(runtimeBinding === undefined ? {} : { runtimeBinding }),
 		...(extensionLocation === undefined ? {} : { extensionLocation }),
 		...(targetPlatform === undefined ? {} : { targetPlatform }),
 		manifestJson: boundedText(extension.manifestJson, "extension manifest", 4 * 1024 * 1024),

@@ -442,11 +442,16 @@ export class MainThreadTerminalService extends Disposable {
 	}
 
 	private extensionForRuntime(descriptor: ExtensionTerminalEnvironmentRegistration) {
-		// Product executables use a source fingerprint for their process fence;
-		// the client catalog hashes packaged resources. Only built-in identities
-		// can bridge those different digests; external packages require an exact match.
-		return this.extensions.currentCatalog.extensions.find(extension => extension.packageSha256 === descriptor.packageDigest
-			|| extension.sourceKind === 'builtIn' && extension.id === descriptor.runtimeId);
+		return this.extensions.currentCatalog.extensions.find(extension => {
+			// A Plugin's executable authority and declarative catalog hash different
+			// domains. Only its backend-attested pair can join those identities.
+			if (extension.sourceKind === 'plugin' && extension.runtimeBinding) {
+				return extension.runtimeBinding.runtimeId === descriptor.runtimeId && extension.runtimeBinding.packageDigest === descriptor.packageDigest;
+			}
+			// Product executables retain their source fingerprint; other packages
+			// retain the standard exact catalog digest fence.
+			return extension.packageSha256 === descriptor.packageDigest || extension.sourceKind === 'builtIn' && extension.id === descriptor.runtimeId;
+		});
 	}
 
 	protected override disposeCore(): void {

@@ -182,9 +182,17 @@ export function registerTerminalActions(): void {
 		override async run(accessor: ServicesAccessor): Promise<void> {
 			const terminals = accessor.get(ITerminalService);
 			const groups = accessor.get(ITerminalGroupService);
+			const quickInput = accessor.get(IQuickInputService);
 			const instance = await terminals.createTerminal();
+			// Creation may itself ask for a workspace folder. That completed prompt
+			// belongs to this action; a picker still open now owns the user's focus.
+			let focus = !quickInput.currentQuickInput;
+			using focusRequest = quickInput.onShow(() => { focus = false; });
 			terminals.setActiveInstance(instance);
-			await groups.showPanel(true);
+			// Reveal without deferring focus inside openView: a newer picker may
+			// open while process creation or view restoration is still pending.
+			await groups.showPanel(false);
+			if (focus && !quickInput.currentQuickInput && terminals.activeInstance === instance) instance.xterm?.focus();
 		}
 	});
 	registerAction2(class NewTerminalWindowAction extends Action2 {

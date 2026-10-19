@@ -853,6 +853,12 @@ regular files、8192 个 filesystem entries，总 bytes 最大 64 MiB。
 package digest，原始 `package.json` bytes 已包含在 `packageSha256` 的整包身份中。当前快照只保留
 最新代，旧代资源请求明确失败，不做隐式重绑定。
 
+有效 Plugin 的标准 JavaScript 包另携带可选 `runtimeBinding: { runtimeId, packageDigest }`，
+由来源 authority 的同一精确包与可执行贡献生成，不读取 manifest 的同名属性。它关联 Plugin
+执行授权摘要与静态资源摘要这两个域，不替换 `packageSha256`，也不授予执行权限。终端 provider
+按绑定中的 runtime ID 与授权摘要共同匹配；已有绑定不回退到静态摘要。绑定变化或来源撤销使目录
+代次失效，断连和撤权同时撤销环境 collection reader 与缓存。
+
 静态 profile 根当前没有独立 Editor Extension registry、signature、revocation 或 grant authority。
 Extensions Theme/Language 静态目录继承 Manager 的 TUF/digest/revocation 与 exact installation
 identity，但声明式消费不等于 executable grant；所有来源都只能贡献第 3 节列出的声明式数据。

@@ -22,6 +22,7 @@ use super::source::DynamicExtensionSourceProvider;
 use super::source::DynamicExtensionSourceSnapshot;
 use super::source::ExtensionRoot;
 use super::source::ExtensionRootKind;
+use super::source::ExtensionRuntimeBinding;
 
 const MAX_EXTENSION_ID_LENGTH: usize = 160;
 const MAX_MANIFEST_FIELD_LENGTH: usize = 256;
@@ -58,6 +59,8 @@ pub struct ExtensionDescriptor {
     pub manifest_sha256: String,
     /// Deterministic SHA-256 digest of every frozen regular file in the package.
     pub package_sha256: String,
+    /// Trusted executable package identity, independent of the frozen-resource hash domain.
+    pub runtime_binding: Option<ExtensionRuntimeBinding>,
 }
 
 /// Provenance attached to a discovered extension descriptor.
@@ -568,6 +571,9 @@ fn publish_package(
         },
     ) {
         Ok(mut extension) => {
+            extension.descriptor.runtime_binding = dynamic_source
+                .as_ref()
+                .and_then(|source| source.runtime_binding.clone());
             extension.dynamic_source = dynamic_source;
             publish_discovered(
                 root,
@@ -760,6 +766,7 @@ fn discover_package(
             manifest_json: canonical_manifest,
             manifest_sha256,
             package_sha256,
+            runtime_binding: None,
         },
     })
 }

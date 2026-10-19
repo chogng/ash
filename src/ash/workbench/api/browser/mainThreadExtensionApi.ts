@@ -395,6 +395,7 @@ export class MainThreadExtensionApi extends Disposable {
 		this.workspaceApi.clear();
 		this.taskApi.clear();
 		this.terminalApi.replaceProfiles([]);
+		this.terminalApi.replaceEnvironmentProviders([]);
 		this.terminalApi.replaceLinkProviders([]);
 		this.terminalApi.replaceCompletionProviders([]);
 		this.terminalApi.replaceQuickFixProviders([]);
@@ -713,6 +714,7 @@ export class MainThreadExtensionApi extends Disposable {
 				this.testRegistration.replace([]);
 				this.remoteRegistration.replace([]);
 				this.terminalApi.replaceProfiles([]);
+				this.terminalApi.replaceEnvironmentProviders([]);
 				this.terminalApi.replaceLinkProviders([]);
 				this.terminalApi.replaceCompletionProviders([]);
 				this.terminalApi.replaceQuickFixProviders([]);
@@ -746,6 +748,7 @@ export class MainThreadExtensionApi extends Disposable {
 		this.testRegistration.replace([]);
 		this.remoteRegistration.replace([]);
 		this.terminalApi.replaceProfiles([]);
+		this.terminalApi.replaceEnvironmentProviders([]);
 		this.terminalApi.replaceLinkProviders([]);
 		this.terminalApi.replaceCompletionProviders([]);
 		this.terminalApi.replaceQuickFixProviders([]);

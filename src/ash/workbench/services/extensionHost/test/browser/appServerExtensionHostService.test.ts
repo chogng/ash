@@ -1756,6 +1756,75 @@ test('terminal link registrations reach the shared owner and retire callbacks wi
 	assert.equal(api.invocations.length, 4);
 });
 
+suite('Extension terminal environment reader lifecycle', () => {
+	ensureNoDisposablesAreLeakedInTestSuite();
+
+	for (const retirement of ['clear', 'disconnect'] as const) test(`withdraws cached environment contributions and their reader on ${retirement}`, async () => {
+		const api = new FakeExtensionHostApi(snapshot(1, 'acme.run', [{ kind: 'terminalEnvironment', registrationId: 'environment' }]));
+		api.invocationResult = Promise.resolve({ persistent: false, map: [['EXTENSION_VALUE', { type: 1, value: 'active' }]] });
+		using languages = new LanguageFeaturesService();
+		const manifestJson = JSON.stringify({ name: 'demo', publisher: 'acme', version: '1.0.0' });
+		const manifestSha256 = `sha256:${createHash('sha256').update(manifestJson).digest('hex')}`;
+		const extensionApi: IExtensionApi = {
+			resources: new ExtensionResourceLoaderService(async () => assert.fail('Unexpected extension resource request')),
+			list: async () => ({ generation: 1, diagnostics: [], extensions: [{ id: 'acme.demo', name: 'demo', publisher: 'acme', version: '1.0.0', displayName: 'Demo', sourceKind: 'user', manifestSha256, packageSha256: DIGEST, manifestJson }] }),
+		};
+		using services = createServices(api, languages, new ProviderSink<TaskProvider>(), new ProviderSink<TestProfileProvider>(), undefined, undefined, undefined, extensionApi);
+		await services.get(IExtensionService).start();
+		using output = retirement === 'clear' ? services.get(IOutputService).createChannel({ id: 'terminal-environment-lifecycle', label: 'Terminal environment lifecycle' }) : undefined;
+		using bridge = output ? services.createInstance(MainThreadExtensionApi, CommandsRegistry, 1_000, output) : undefined;
+		using host = retirement === 'disconnect' ? services.createInstance(AppServerExtensionHostService, CommandsRegistry, 1_000) : undefined;
+		if (host) await host.start();
+		else bridge!.update(api.current);
+		const environment = services.get(IEnvironmentVariableService);
+		await environment.refreshCollections();
+		assert.equal(environment.collections.get('acme.demo')?.map.get('EXTENSION_VALUE')?.value, 'active');
+		const reads = api.invocations.filter(request => request.operation === 'getTerminalEnvironment').length;
+		assert.equal(reads, 1);
+
+		if (host) api.emitConnection('stopped');
+		else bridge!.clear();
+		assert.equal(environment.collections.has('acme.demo'), false, 'Retirement removes the cached extension collection synchronously');
+		await environment.refreshCollections();
+		assert.equal(api.invocations.filter(request => request.operation === 'getTerminalEnvironment').length, reads, 'A future terminal launch cannot invoke the retired reader');
+	});
+});
+
+suite('Extension terminal trusted runtime binding', () => {
+	ensureNoDisposablesAreLeakedInTestSuite();
+
+	for (const scenario of [
+		{ name: 'accepts the admitted runtime across different digest domains', catalogDigest: `sha256:${'c'.repeat(64)}`, runtimeId: 'acme.demo', runtimeDigest: DIGEST, admitted: true },
+		{ name: 'rejects a different runtime identity', catalogDigest: `sha256:${'c'.repeat(64)}`, runtimeId: 'other.runtime', runtimeDigest: DIGEST, admitted: false },
+		{ name: 'rejects a different admitted runtime digest', catalogDigest: `sha256:${'c'.repeat(64)}`, runtimeId: 'acme.demo', runtimeDigest: `sha256:${'d'.repeat(64)}`, admitted: false },
+		{ name: 'does not bypass a declared binding through a matching catalog digest', catalogDigest: DIGEST, runtimeId: 'other.runtime', runtimeDigest: DIGEST, admitted: false },
+	]) test(scenario.name, async () => {
+		const api = new FakeExtensionHostApi(snapshot(1, 'acme.run', [
+			{ kind: 'terminalEnvironment', registrationId: 'environment' },
+			{ kind: 'terminalCompletionProvider', registrationId: 'completion', triggerCharacters: ['-'] },
+		]));
+		api.invocationResult = Promise.resolve({ persistent: false, map: [['EXTENSION_VALUE', { type: 1, value: 'bound' }]] });
+		using languages = new LanguageFeaturesService();
+		const manifestJson = JSON.stringify({ name: 'demo', publisher: 'acme', version: '1.0.0' });
+		const manifestSha256 = `sha256:${createHash('sha256').update(manifestJson).digest('hex')}`;
+		const extensionApi: IExtensionApi = {
+			resources: new ExtensionResourceLoaderService(async () => assert.fail('Unexpected extension resource request')),
+			list: async () => ({ generation: 1, diagnostics: [], extensions: [{ id: 'acme.demo', name: 'demo', publisher: 'acme', version: '1.0.0', displayName: 'Demo', sourceKind: 'plugin', manifestSha256, packageSha256: scenario.catalogDigest, manifestJson, runtimeBinding: { runtimeId: scenario.runtimeId, packageDigest: scenario.runtimeDigest } }] }),
+		};
+		using services = createServices(api, languages, new ProviderSink<TaskProvider>(), new ProviderSink<TestProfileProvider>(), undefined, undefined, undefined, extensionApi);
+		await services.get(IExtensionService).start();
+		using output = services.get(IOutputService).createChannel({ id: 'terminal-runtime-binding', label: 'Terminal runtime binding' });
+		using bridge = services.createInstance(MainThreadExtensionApi, CommandsRegistry, 1_000, output);
+		if (scenario.admitted) bridge.update(api.current);
+		else assert.throws(() => bridge.update(api.current), /Invalid terminal profile provider response/);
+		const environment = services.get(IEnvironmentVariableService);
+		await environment.refreshCollections();
+		assert.equal(environment.collections.get('acme.demo')?.map.get('EXTENSION_VALUE')?.value, scenario.admitted ? 'bound' : undefined);
+		assert.equal([...services.get(ITerminalCompletionService).providers].length, scenario.admitted ? 1 : 0);
+		assert.equal(api.invocations.filter(request => request.operation === 'getTerminalEnvironment').length, scenario.admitted ? 1 : 0);
+	});
+});
+
 suite('Extension terminal profile registration lifecycle', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();
 

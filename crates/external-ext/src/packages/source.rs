@@ -56,6 +56,17 @@ pub struct DynamicExtensionPackageSource {
     /// The catalog still snapshots and hashes the exact package directory. This value may only
     /// adapt its manifest contract; it cannot add files or bypass package path validation.
     pub normalized_manifest_json: Option<String>,
+    /// Optional executable identity selected by the same trusted package authority.
+    /// This is host metadata, never a field read from the extension's manifest.
+    pub runtime_binding: Option<ExtensionRuntimeBinding>,
+}
+
+/// Connects an authority-owned executable package to its declarative catalog snapshot.
+/// The runtime package digest retains its own domain; it does not replace the catalog hash.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ExtensionRuntimeBinding {
+    pub runtime_id: String,
+    pub package_digest: String,
 }
 
 impl DynamicExtensionPackageSource {
@@ -66,6 +77,7 @@ impl DynamicExtensionPackageSource {
             path: path.into(),
             kind: ExtensionRootKind::Plugin,
             normalized_manifest_json: None,
+            runtime_binding: None,
         }
     }
 
@@ -76,6 +88,7 @@ impl DynamicExtensionPackageSource {
             path: path.into(),
             kind: ExtensionRootKind::Registry,
             normalized_manifest_json: None,
+            runtime_binding: None,
         }
     }
 
@@ -90,6 +103,7 @@ impl DynamicExtensionPackageSource {
             path: path.into(),
             kind: ExtensionRootKind::Registry,
             normalized_manifest_json: Some(normalized_manifest_json.into()),
+            runtime_binding: None,
         }
     }
 }

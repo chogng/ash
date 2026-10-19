@@ -154,3 +154,33 @@ pnpm run smoketest test/smoke/areas/windows/terminal.spec.ts
 just verify ash-exec-server
 just test ash-app-server-runtime --lib terminal
 ```
+
+## 跨平台与窗口配对验收（2026-10-19）
+
+验证以 `786b887b1` 为基线。Linux 产物包含本次描述符清理修复；窗口焦点与扩展准入修复另在 macOS 重建验证，不将 Linux 结果算作这些增补变更的验证。Linux 构建在当前检出的 Debian 13 arm64 容器中完成，部署时核对可执行文件 SHA-256；执行端验收运行于独立的 Debian 13 arm64 QEMU/HVF 虚拟机，内核为 `6.12.113+deb13-cloud-arm64`、普通用户。虚拟机结果与 Docker Desktop 的 LinuxKit 容器结果分别留证，不以交叉编译或容器结果替代独立内核实跑，也不将虚拟机称为物理机器。
+
+| 环境              | 实际结果                                                                                                                                                                                                                                                              |
+| ----------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 独立 Linux 虚拟机 | PTY 26 项、终端执行端 66 项、App Server `terminal_` 过滤回归 23 项、真实 Electron/App Server smoke 2 项通过；覆盖四种信号送达前台进程组后原 Shell PID 保持、启动时自动回复、连接隔离、租约、尺寸、输出与回放。Smoke 从界面验证自动回复／Quick Access 和前台 SIGTERM。 |
+| LinuxKit 容器     | 当前源码的 `ash-utils-pty`、`ash-exec-server` 验证通过；正常产品包构建成功，Electron/App Server smoke 2 项通过。此行仅作为容器补充覆盖。                                                                                                                              |
+| macOS             | `just verify ash-utils-pty` 的 check、26 项测试及 warnings 检查通过；`ash-plugin` 的 34 项测试、焦点回归、Quick Input 生命周期、渲染器与正常后端包构建通过。真实窗口重跑 Quick Access 行内重命名、关闭、重新接受原实例，确认焦点、PID 和 Shell 变量均保持。           |
+
+Linux 运行发现的 `EMFILE` 来自降低 `RLIMIT_NOFILE` 并耗尽低位槽后的启动清理：旧实现还要打开 `/proc/self/fd`，导致 spawn 在清理前失败。回归先以旧实现确定性复现，再验证分段 `close_range(CLOSE_RANGE_CLOEXEC)` 可在无可用描述符槽时标记高位 FD，并保留乱序、重复例外及 exec-error 管道。旧内核不支持该 syscall／flag 时继续使用原有 `/proc` 回退；回归仅在子进程探测到该能力后才耗尽槽位，旧内核继续核对稀疏高位 FD，不宣称回退也能处理完全耗尽的描述符表。
+
+窗口配对使用 macOS arm64 的 Ash 实际 Desktop／App Server 与已安装的 VS Code `1.142.0`（`6d62b1d5dace93a33b3a6d3eca1317bd5e15bcb1`），分别使用隔离 profile 和合成工作区。配对从真实 Shell 检查自动回复、Quick Access 保持 PID、字号缩放及重置、OSC 99 通知、开发者写屏不注入输入、尺寸覆盖层消失、环境详情编辑器、会话录制，以及原生粘贴取消和单行粘贴。单行粘贴使用真实 PTY 的 `cat` 消费者核对字节，确认只移除换行而保留空格与 Tab；避免把 Shell readline 的 Tab 补全行为误算为产品差异。失败的自动化选择器、焦点归属和 Shell oracle 诊断单独保留，不计为通过。
+
+配对另发现重命名完成后的焦点竞态：重命名写入仍在等待时，用户已打开新的 Quick Access，旧操作的 `finally` 却重新聚焦终端。终端编辑 owner 现在只在没有新的 Quick Input 时恢复焦点；同一 prompt 的 accept／hide／error 订阅也随 prompt 释放。回归通过延迟重命名 Promise、打开实际 Quick Input，再完成旧操作，验证新输入框持续保有焦点，并由 disposable tracker 核对释放。
+
+新建命令也有独立的晚到聚焦请求：创建 PTY 后的 `showPanel(true)` 会在后续 F1 已打开时重新聚焦终端。该命令现在将显示结果与恢复焦点分开，记录操作期间后续 Quick Input 的接管，避免创建或显示尚未完成时抢走新的输入焦点。
+
+真实扩展包安装还暴露出准入列表缺项：JavaScript 宿主已经实现终端 profile、link、completion 和 quick fix，但 Plugin manifest 校验尚未允许这些声明。修复位于原 manifest validator，只接受已有宿主契约；安装、启用、精确包摘要授权和撤权仍由原 Plugin owner 处理，不以直接注册 provider 代替正常准入。
+
+扩展目录的文件完整性摘要与 Plugin 执行授权摘要属于不同域。目录现在通过可选 `runtimeBinding` 携带来源 authority 提供的准确 runtime ID 和包摘要，终端桥接据此识别同一已授权 provider；静态 `packageSha256`、执行端原有包 fence 与显式 Grant 均保留。该绑定不从扩展 manifest 自报。断连、清理及失败回滚也撤销环境 collection reader 与缓存，避免旧运行时取消后继续影响下一次启动。
+
+两产品的同一真实 JavaScript producer 已分别验证环境启动快照、显式 Relaunch、新 PID 应用新值、补全回调与范围替换、Quick Fix 插入和命令回调，以及公开 disposable 撤回注册。Ash 另从正常安装、启用、精确摘要授权进入扩展宿主，确认授权前命令不可用；最后通过正常权限详情及原生菜单撤权，原 PTY 保留启动环境，新 PTY 不再注入扩展变量。全程使用公开扩展 API 与产品准入操作。
+
+对应 macOS 定向回归包括 Plugin 34 项、静态目录 24 项、App Server 来源 4 项、DTO 1 项、生成契约一致性 2 项，以及扩展宿主所属前端单测 64 项、目录服务 47 项和焦点／Quick Input／终端命令回归。协议、相关 Rust warnings、正常后端包与渲染器构建通过。测试命令、独立场景结果和产物摘要分别保存在下述证据目录。
+
+Windows 分支按用户本轮“先不管”的要求停止，没有执行新的 Windows 验证，也不记录为通过。原有 Windows API 的明确 `Unsupported` 与键盘 Ctrl-C 是不同契约。
+
+本轮原始日志、产物摘要和窗口证据位于忽略目录 `.build/terminal-cross-platform/`；窗口场景的录屏、截图和 trace 由现有 scenario runner 写入 `.build/ash-playwright-mcp/evidence/`。

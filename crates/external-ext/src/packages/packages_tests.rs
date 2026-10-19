@@ -434,6 +434,65 @@ fn refresh_revalidates_source_identity_and_discards_unavailable_authority() {
 }
 
 #[test]
+fn runtime_binding_comes_from_authority_and_changes_catalog_identity_without_rehashing() {
+    let root = tempfile::tempdir().unwrap();
+    let package = write_package(root.path(), "1.0.0");
+    let manifest_path = package.join("package.json");
+    let mut manifest: serde_json::Value =
+        serde_json::from_slice(&fs::read(&manifest_path).unwrap()).unwrap();
+    manifest["runtimeBinding"] = serde_json::json!({
+        "runtimeId": "forged:runtime", "packageDigest": format!("sha256:{}", "f".repeat(64))
+    });
+    fs::write(&manifest_path, manifest.to_string()).unwrap();
+    let mut source = DynamicExtensionPackageSource::plugin("acme/demo:runtime", &package);
+    let provider = Arc::new(TestDynamicSourceProvider::new(1, vec![source.clone()]));
+    let mut catalog = ExtensionPackages::new(Vec::new()).with_dynamic_sources(provider.clone());
+    let unbound = catalog.list(ExtensionPackagesReload::Cached);
+    assert!(unbound.extensions[0].runtime_binding.is_none());
+
+    source.runtime_binding = Some(ExtensionRuntimeBinding {
+        runtime_id: source.subject.clone(),
+        package_digest: format!("sha256:{}", "a".repeat(64)),
+    });
+    provider.replace(2, vec![source.clone()]);
+    let bound = catalog.list(ExtensionPackagesReload::Cached);
+    assert!(bound.generation > unbound.generation);
+    assert_eq!(bound.extensions[0].runtime_binding, source.runtime_binding);
+    assert_eq!(
+        bound.extensions[0].package_sha256,
+        unbound.extensions[0].package_sha256
+    );
+    assert_eq!(
+        bound.extensions[0].manifest_sha256,
+        unbound.extensions[0].manifest_sha256
+    );
+
+    source.runtime_binding.as_mut().unwrap().package_digest = format!("sha256:{}", "b".repeat(64));
+    // Even an unchanged authority generation cannot reuse a differently bound
+    // source when an explicit refresh checks its complete source identity.
+    provider.replace(2, vec![source.clone()]);
+    let rebound = catalog.list(ExtensionPackagesReload::Refresh);
+    assert!(rebound.generation > bound.generation);
+    assert_eq!(
+        rebound.extensions[0].runtime_binding,
+        source.runtime_binding
+    );
+    assert_eq!(
+        rebound.extensions[0].package_sha256,
+        bound.extensions[0].package_sha256
+    );
+    assert_eq!(
+        catalog.open_resource(bound.generation, "ash.demo", "package.json"),
+        Err(ExtensionPackagesError::GenerationConflict)
+    );
+
+    provider.replace(3, Vec::new());
+    let revoked = catalog.list(ExtensionPackagesReload::Cached);
+    assert!(revoked.extensions.is_empty());
+    assert!(revoked.generation > rebound.generation);
+}
+
+#[test]
 fn plugin_authority_packages_precede_user_roots_and_refresh_on_generation_change() {
     let plugin_root = tempfile::tempdir().expect("plugin package parent");
     let plugin_package = write_package(plugin_root.path(), "2.0.0");

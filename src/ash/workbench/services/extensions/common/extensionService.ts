@@ -28,6 +28,8 @@ export interface ExtensionDescriptor {
 	readonly extensionLocation?: URI;
 	readonly manifestSha256: string;
 	readonly packageSha256: string;
+	/** Backend-attested Plugin executable identity; packageSha256 keeps its catalog domain. */
+	readonly runtimeBinding?: { readonly runtimeId: string; readonly packageDigest: string; };
 }
 
 export interface ExtensionDiagnostic {

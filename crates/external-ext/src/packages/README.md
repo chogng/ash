@@ -98,7 +98,7 @@ theme 和 debugger 字段由产品 host 解释。
 首次 `Cached` query 在没有 snapshot 时执行扫描；已有 snapshot 且 dynamic authority generation 未变时
 直接 clone 当前结果。dynamic generation 改变时，即使请求 `Cached` 也会重新扫描。
 `Refresh` 总会检查 live dynamic authority，并完整重扫可变 roots。已成功冻结的 dynamic package，
-仅在 authority generation 和 exact source identity（subject、path、provenance、normalized manifest）
+仅在 authority generation 和 exact source identity（subject、path、provenance、normalized manifest、runtime binding）
 均未变化时复用其已校验的内存 bytes；候选数、字节和重复 ID 预算仍重新核算。来源失效、撤销、重绑或
 代次改变时不复用；新增和上次失败的 package 仍执行完整校验。上游必须在更新包内容时发布新代次。
 只有 descriptor（含完整 package digest）或 diagnostics 变化时才发布新的单调 generation；discovered map
@@ -107,6 +107,11 @@ theme 和 debugger 字段由产品 host 解释。
 generation；上游 dynamic generation 改变但目录内容未变时保持当前 generation。资源读取必须携带当前
 generation；旧代返回 `GenerationConflict`。Catalog 不保留多代 bytes，也不把旧 descriptor 隐式绑定
 到新磁盘内容。
+
+`runtime_binding` 是来源 authority 提供的可选可执行包身份，不读取 manifest 同名字段。
+它保留 runtime ID 与原授权包 digest，关联静态目录的独立摘要域，不替换资源 hash 或授予执行权限。
+绑定变化也使 descriptor 和 catalog generation 变化；来源撤销同时移除绑定。完整边界见
+[扩展目录完整性契约](../../../../docs/editor-extensions.md#51-声明式静态资源)。
 
 缺失可选 root 等价于空来源；存在但不可读的 root 产生 `SourceUnavailable`。单个无效 package 产生
 结构化 diagnostic 并跳过，其他有效 package 仍可发布。来源 adapter 按包报告规范化失败；组合来源

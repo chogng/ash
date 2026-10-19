@@ -678,6 +678,7 @@ function projectExtensionDescriptor(extension: TransportExtensionDescriptor): Ex
 		...(extension.extensionLocation === undefined ? {} : { extensionLocation: URI.parse(extension.extensionLocation) }),
 		manifestSha256: extension.manifestSha256,
 		packageSha256: extension.packageSha256,
+		...(extension.runtimeBinding === undefined ? {} : { runtimeBinding: Object.freeze({ ...extension.runtimeBinding }) }),
 	});
 }
 
