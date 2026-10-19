@@ -381,6 +381,9 @@ pub enum ExtensionHostRegistrationKindDto {
     SpeechProvider {
         #[schemars(length(min = 1, max = 256))]
         identifier: String,
+        #[schemars(range(min = 1))]
+        #[ts(type = "number")]
+        registration_generation: u64,
     },
     LinkPresentationProvider {
         #[schemars(length(min = 1, max = 2048))]
@@ -497,6 +500,10 @@ pub struct ExtensionHostInvokeStartParams {
     pub extension_id: String,
     #[schemars(length(min = 1, max = 256))]
     pub registration_id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[schemars(range(min = 1))]
+    #[ts(type = "number | null")]
+    pub registration_generation: Option<u64>,
     #[schemars(range(min = 1))]
     #[ts(type = "number")]
     pub activation_generation: u64,

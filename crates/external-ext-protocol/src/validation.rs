@@ -74,6 +74,7 @@ pub(super) fn validate_registrations(
     let mut task_types = BTreeSet::new();
     let mut terminal_profiles = BTreeSet::new();
     let mut speech_providers = BTreeSet::new();
+    let mut speech_generations = BTreeSet::new();
     let mut has_terminal_environment = false;
     let mut test_profile_providers = BTreeSet::new();
     for registration in registrations {
@@ -154,7 +155,15 @@ pub(super) fn validate_registrations(
                 validate_display_text(label, "external URI opener label")?;
                 ExtensionCapability::ExternalUriOpener
             }
-            RegistrationKind::SpeechProvider { identifier } => {
+            RegistrationKind::SpeechProvider {
+                identifier,
+                registration_generation,
+            } => {
+                if *registration_generation == 0
+                    || !speech_generations.insert(registration_generation)
+                {
+                    return Err(protocol_error("invalid Speech registration generation"));
+                }
                 validate_identifier(identifier)?;
                 require_unique(
                     &mut speech_providers,

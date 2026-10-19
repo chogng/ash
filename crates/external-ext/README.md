@@ -59,7 +59,7 @@ entrypoint 加载。
 | `authority.rs`                           | `ActivationAuthority`、`ActivationLease`、`ExtensionActivationSpec`       | 授权是 live gate，不是 activation 时的一次布尔判断                                     |
 | `limits.rs`                              | `ExtensionHostLimits`、`ProcessIsolationPolicy`                           | 默认要求平台强制隔离；所有 byte/count/deadline limit 必须非零且一致                    |
 | `process.rs`                             | `ExtensionHostLauncher`、`ExtensionHostProcess`、`ExtensionLaunchCommand` | launcher 在 entrypoint 执行前实施选定策略并应用明确的进程环境                          |
-| `supervisor.rs`                          | `ExtensionHostSupervisor`、`ExtensionHostSnapshot`                        | 一扩展一监管器；注册仅在完整 activation 成功后发布                                     |
+| `supervisor.rs`                          | `ExtensionHostSupervisor`、`ExtensionHostSnapshot`                        | 一扩展一监管器；初始注册整批发布，动态 Speech 沿原准入表更新                           |
 | `supervisor/invocation.rs`               | `ExtensionInvocation`、`ExtensionInvocationHandle`                        | wait 与 cancel 可由不同线程并发调用；lease 持续到 terminal handling                    |
 | `restart.rs`                             | `RestartPolicy`、`RestartTracker`                                         | 滑动窗口、指数退避和 terminal `CrashLoop`                                              |
 | `error.rs`                               | `ExtensionHostError`                                                      | 区分拒绝、配额、协议、退出、超时和 unknown outcome                                     |
@@ -125,6 +125,16 @@ stdout 顺序发送 `append`、`replace`、`clear`、`show` 和 `dispose`。监�
 ceiling 包含 completion、Parameter Hints、definition、hover、references、rename、formatting、code
 action、code lens、document symbols、folding、document links/colors、semantic tokens、Inlay Hints 与
 Linked Editing。
+
+Speech 在激活后通过 `ExtensionHostRegistrationEvent` 发送有界替换快照，携带原进程的
+`HostEventContext`、单调 `revision` 与 `speechProviders`。监管器校验原包的 capability、
+注册唯一性和正整数 `registrationGeneration`，仅替换原准入表中的 Speech 子集；命令等注册保持不变。
+进程 reader 直接调用监管器的弱引用回调，App Server 沿既有 fleet changed 通知发布，
+不等待 health poll。激活回包前的快照保留在一个有界 mailbox，已观察的注册代次不能因初始回包而倒退。
+Speech 调用在 App Server 和 Host RPC 的 `InvokeParams.registrationGeneration` 绑定已选择的注册代次。
+Node 与 Rust/V8 在共用宿主入口按原注册表重新核对后才执行 provider 回调，阻止排队期间退休的请求产生新副作用；
+注销或替换取消旧调用并丢弃晚结果。其他 provider 的调用继续省略此字段。
+旧的 Speech 描述或调用缺少注册代次时明确拒绝，不默认成可复用的零代次。
 
 命令注册可附带 `icon` 和 `menus`，Host RPC 与 App Server 保留这些展示元数据供客户端解析；
 省略字段的旧注册继续有效。`icon` 最多 128 字节，每个命令最多 64 个 menu placement；

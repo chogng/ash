@@ -1778,11 +1778,29 @@ suite('Extension terminal profile registration lifecycle', () => {
 	});
 });
 
+test('fleet notifications dynamically register, replace and unregister Speech through the production client owner', async () => {
+	const api = new FakeExtensionHostApi(snapshot(1, 'acme.run', [], '', [], 11));
+	using languages = new LanguageFeaturesService();
+	using services = createServices(api, languages, new ProviderSink<TaskProvider>(), new ProviderSink<TestProfileProvider>());
+	using host = services.createInstance(AppServerExtensionHostService, new CommandRegistry(), 1_000);
+	await host.start();
+	const speech = services.get(ISpeechService); assert.equal(speech.hasSpeechProvider, false);
+	api.current = snapshot(2, 'acme.run', [{ kind: 'speechProvider', registrationId: 'late', identifier: 'acme.dynamic', registrationGeneration: 1 }], '', [], 11);
+	api.emitChanged(2); await waitFor(() => host.currentSnapshot.fleetGeneration === 2);
+	assert.equal(speech.hasSpeechProvider, true);
+	api.current = snapshot(3, 'acme.run', [{ kind: 'speechProvider', registrationId: 'replacement', identifier: 'acme.dynamic', registrationGeneration: 2 }], '', [], 11);
+	api.emitChanged(3); await waitFor(() => host.currentSnapshot.fleetGeneration === 3);
+	assert.equal(speech.hasSpeechProvider, true);
+	api.current = snapshot(4, 'acme.run', [], '', [], 11);
+	api.emitChanged(4); await waitFor(() => host.currentSnapshot.fleetGeneration === 4);
+	assert.equal(speech.hasSpeechProvider, false);
+});
+
 test('onSpeech activates the exact dormant provider and commits it through MainThreadSpeech', async () => {
 	for (const event of ['onSpeech', 'onDemand:speechProvider']) {
 		const api = new FakeExtensionHostApi(dormantSnapshot([event]));
 		const ready = snapshot(2, 'acme.lazy', [], '', [], 11);
-		api.activationResult = Promise.resolve({ ...ready, extensions: ready.extensions.map(runtime => ({ ...runtime, registrations: [{ kind: 'speechProvider' as const, registrationId: 'speech', identifier: 'acme.recognition' }] })) });
+		api.activationResult = Promise.resolve({ ...ready, extensions: ready.extensions.map(runtime => ({ ...runtime, registrations: [{ kind: 'speechProvider' as const, registrationGeneration: 1, registrationId: 'speech', identifier: 'acme.recognition' }] })) });
 		using languages = new LanguageFeaturesService();
 		using services = createServices(api, languages, new ProviderSink<TaskProvider>(), new ProviderSink<TestProfileProvider>());
 		using host = services.createInstance(AppServerExtensionHostService, new CommandRegistry(), 1_000);

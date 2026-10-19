@@ -138,6 +138,7 @@ export interface ExtensionHostTestProfileProviderRegistration extends ExtensionH
 /** Provider identity is admitted by the original extension snapshot, not by renderer payloads. */
 export interface ExtensionHostSpeechProviderRegistration extends ExtensionHostRegistrationBase {
 	readonly kind: 'speechProvider';
+	readonly registrationGeneration: number;
 	readonly identifier: string;
 }
 
@@ -221,6 +222,7 @@ export interface ExtensionHostFleetSnapshot {
 }
 
 export interface ExtensionHostInvocationRequest {
+	readonly registrationGeneration?: number;
 	readonly extensionId: string;
 	readonly registrationId: string;
 	readonly activationGeneration: number;

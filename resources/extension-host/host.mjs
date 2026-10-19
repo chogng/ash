@@ -7,6 +7,14 @@ const registrations = new Map();
 const invocations = new Map();
 let phase = 'new';
 let activation;
+let registrationListener;
+let registrationRevision = 0;
+let speechRegistrationGeneration = 0;
+
+function publishSpeechRegistrations() {
+	if (phase !== 'active') return;
+	registrationListener?.(JSON.stringify({ revision: ++registrationRevision, speechProviders: [...registrations.values()].filter(value => value.kind === 'speechProvider').map(({ registrationId, kind, identifier, registrationGeneration }) => ({ registrationId, kind, identifier, registrationGeneration })) }));
+}
 
 export class CancellationTokenSource {
 	#cancelled = false;
@@ -43,12 +51,17 @@ export class CancellationTokenSource {
 }
 
 function register(registration) {
-	if (phase !== 'activating') { throw new Error('Registrations must be created during activation'); }
+	if (phase !== 'activating' && !(phase === 'active' && registration.kind === 'speechProvider' && registrationListener)) { throw new Error('Registrations must be created during activation'); }
 	if (registrations.has(registration.registrationId)) { throw new Error(`Duplicate registration '${registration.registrationId}'`); }
 	registrations.set(registration.registrationId, registration);
+	if (registration.kind === 'speechProvider') publishSpeechRegistrations();
 	return Object.freeze({
 		dispose() {
-			if (registrations.get(registration.registrationId) === registration) { registrations.delete(registration.registrationId); registration.disposeResources?.(); }
+			if (registrations.get(registration.registrationId) === registration) {
+				registrations.delete(registration.registrationId);
+				try { registration.disposeResources?.(); }
+				finally { if (registration.kind === 'speechProvider') publishSpeechRegistrations(); }
+			}
 		}
 	});
 }
@@ -409,7 +422,7 @@ export const speech = Object.freeze({
 			}
 		}
 		const registration = {
-			registrationId, kind: 'speechProvider', identifier,
+			registrationId, kind: 'speechProvider', identifier, registrationGeneration: ++speechRegistrationGeneration,
 			operation: ['createSpeechSession', 'readSpeechSession', 'synthesizeSpeech', 'closeSpeechSession'],
 			disposeResources() {
 				let failure;
@@ -673,6 +686,11 @@ function checkedRange(range, text) {
 
 // The runtime module is not resolved from extension packages; Rust owns final authority.
 export const __runtime = Object.freeze({
+	// The product transport owns this hook; authors receive only the vscode facade.
+	onRegistrationsChanged(listener) {
+		if (phase !== 'new' || registrationListener || typeof listener !== 'function') throw new Error('Invalid registration event binding');
+		registrationListener = listener;
+	},
 	get isDisposed() { return phase === 'disposed'; },
 	beginActivation(extensionId) {
 		if (phase !== 'new') { throw new Error('Extension is already initialized'); }
@@ -689,10 +707,12 @@ export const __runtime = Object.freeze({
 	registerContribution(descriptor, operation, callback) {
 		return register(Object.defineProperties({ operation, callback, invokePayload: true }, Object.getOwnPropertyDescriptors(descriptor)));
 	},
-	async invoke(registrationId, payloadJson, requestId, operation) {
+	async invoke(registrationId, payloadJson, requestId, operation, registrationGeneration) {
 		if (phase !== 'active') { throw new Error('Extension is not active'); }
 		const registration = registrations.get(registrationId);
 		if (!registration) { throw new Error(`Registration '${registrationId}' is disposed`); }
+		// Resolve and fence the handle together, before any provider callback can run.
+		if (registration.kind === 'speechProvider' && registrationGeneration !== registration.registrationGeneration) { throw new Error('Speech registration generation has retired'); }
 		if (!registration.dispatch && (Array.isArray(registration.operation) ? !registration.operation.includes(operation) : registration.operation !== operation)) { throw new TypeError('Invocation operation does not match its registration'); }
 		const payload = JSON.parse(payloadJson);
 		const source = new CancellationTokenSource();
@@ -727,6 +747,7 @@ export const __runtime = Object.freeze({
 	},
 	async dispose() {
 		phase = 'disposed';
+		registrationListener = undefined;
 		let failure;
 		for (const source of invocations.values()) {
 			try { source.cancel(); } catch (error) { failure ??= error; }

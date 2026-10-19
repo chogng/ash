@@ -608,7 +608,7 @@ const readSnapshot: ExtensionHostFleetSnapshot = {
 	generation: 1, extensions: [{
 		id: 'example.reader', version: '1', packageDigest: `sha256:${'a'.repeat(64)}`, runtimeApiVersion: 1,
 		incarnation: 1, activationGeneration: 1, lifecycle: 'ready', failure: undefined, stderr: '', outputEvents: [],
-		registrations: [{ registrationId: 'reader', kind: 'speechProvider', identifier: 'example.reader' }]
+		registrations: [{ registrationId: 'reader', kind: 'speechProvider', registrationGeneration: 1, identifier: 'example.reader' }]
 	}]
 };
 const readApi: IExtensionHostApi = {

@@ -60,10 +60,11 @@ export function normalizeExtensionHostPayload(value: unknown): JsonValue {
 }
 
 export function normalizeExtensionHostInvocationRequest(value: ExtensionHostInvocationRequest): ExtensionHostInvocationRequest {
-	const request = exactRecord(value, "Extension Host invocation", ["activationGeneration", "deadlineUnixMillis", "extensionId", "incarnation", "operation", "payload", "registrationId"]);
+	const request = exactRecord(value, "Extension Host invocation", ["activationGeneration", "deadlineUnixMillis", "extensionId", "incarnation", "operation", "payload", "registrationId"], ["registrationGeneration"]);
 	return Object.freeze({
 		extensionId: boundedText(request.extensionId, "Extension Host extension ID", 256),
 		registrationId: boundedText(request.registrationId, "Extension Host registration ID", 256),
+		...(request.registrationGeneration === undefined ? {} : { registrationGeneration: positiveSafeInteger(request.registrationGeneration, "Speech registration generation") }),
 		activationGeneration: positiveSafeInteger(request.activationGeneration, "Extension Host activation generation"),
 		incarnation: positiveSafeInteger(request.incarnation, "Extension Host incarnation"),
 		operation: boundedText(request.operation, "Extension Host operation", 128),
@@ -363,10 +364,10 @@ function normalizeRegistration(value: unknown): ExtensionHostRegistration {
 		return Object.freeze({ kind, registrationId, providerId: boundedText(input.providerId, "Extension Host Test Profile provider ID", 256), label: boundedText(input.label, "Extension Host Test Profile provider label", 512) });
 	}
 	if (kind === 'speechProvider') {
-		exactKeys(input, 'Extension Host speech registration', ['kind', 'registrationId', 'identifier']);
+		exactKeys(input, 'Extension Host speech registration', ['kind', 'registrationId', 'identifier', 'registrationGeneration']);
 		const identifier = boundedText(input.identifier, 'Speech provider identifier', 256);
 		if (/\s/u.test(identifier)) throw new TypeError('Invalid Speech provider identifier');
-		return Object.freeze({ kind, registrationId, identifier });
+		return Object.freeze({ kind, registrationId, identifier, registrationGeneration: positiveSafeInteger(input.registrationGeneration, 'Speech registration generation') });
 	}
 	if (kind === 'dataChannel') {
 		exactKeys(input, 'Extension Host data channel registration', ['channelId', 'kind', 'registrationId']);

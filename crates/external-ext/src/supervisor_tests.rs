@@ -87,6 +87,7 @@ impl Drop for TestLease {
 
 #[derive(Default)]
 struct TestLauncher {
+    starting_speech: AtomicUsize,
     spawns: AtomicUsize,
     processes: Mutex<Vec<Arc<TestProcess>>>,
 }
@@ -98,7 +99,10 @@ impl ExtensionHostLauncher for TestLauncher {
         _limits: &ExtensionHostLimits,
     ) -> Result<Arc<dyn ExtensionHostProcess>, ExtensionHostError> {
         self.spawns.fetch_add(1, Ordering::AcqRel);
-        let process = Arc::new(TestProcess::default());
+        let process = Arc::new(TestProcess {
+            starting_speech: self.starting_speech.load(Ordering::Acquire),
+            ..TestProcess::default()
+        });
         self.processes.lock().unwrap().push(Arc::clone(&process));
         Ok(process)
     }
@@ -106,6 +110,7 @@ impl ExtensionHostLauncher for TestLauncher {
 
 #[derive(Default)]
 struct TestProcess {
+    starting_speech: usize,
     exited: AtomicBool,
     hang_invocations: AtomicBool,
     client_on_invoke: AtomicBool,
@@ -113,9 +118,13 @@ struct TestProcess {
     cancels: AtomicUsize,
     output_events: Mutex<Vec<ExtensionHostOutputEvent>>,
     initializations: Mutex<Vec<Option<external_ext_protocol::ExtensionHostInitialization>>>,
+    registration_handler: Mutex<Option<Arc<crate::ExtensionRegistrationHandler>>>,
 }
 
 impl ExtensionHostProcess for TestProcess {
+    fn set_registration_handler(&self, handler: Arc<crate::ExtensionRegistrationHandler>) {
+        *self.registration_handler.lock().unwrap() = Some(handler);
+    }
     fn respond_client(
         &self,
         _: external_ext_protocol::ExtensionClientResponse,
@@ -139,6 +148,34 @@ impl ExtensionHostProcess for TestProcess {
                 }))
             }
             HostRequestKind::Activate(params) => {
+                if self.starting_speech != 0 {
+                    let handler = self.registration_handler.lock().unwrap().clone().unwrap();
+                    let context = HostEventContext::new(
+                        request.context.incarnation,
+                        request.context.activation_generation,
+                    );
+                    handler(crate::ExtensionHostRegistrationEvent {
+                        context,
+                        revision: 1,
+                        speech_providers: vec![RegistrationDescriptor {
+                            registration_id: "starting.speech".into(),
+                            kind: RegistrationKind::SpeechProvider {
+                                identifier: "starting".into(),
+                                registration_generation: 1,
+                            },
+                        }],
+                    })
+                    .unwrap();
+                    if self.starting_speech == 1 {
+                        handler(crate::ExtensionHostRegistrationEvent {
+                            context,
+                            revision: 2,
+                            speech_providers: vec![],
+                        })
+                        .unwrap();
+                    }
+                }
+
                 self.initializations
                     .lock()
                     .unwrap()
@@ -240,6 +277,14 @@ fn supervisor(
     launcher: Arc<TestLauncher>,
     authority: Arc<TestAuthority>,
 ) -> ExtensionHostSupervisor {
+    supervisor_with_capabilities(launcher, authority, vec![ExtensionCapability::Command])
+}
+
+fn supervisor_with_capabilities(
+    launcher: Arc<TestLauncher>,
+    authority: Arc<TestAuthority>,
+    capabilities: Vec<ExtensionCapability>,
+) -> ExtensionHostSupervisor {
     let params = ActivateParams {
         initialization: None,
         extension_id: "acme.review".into(),
@@ -250,7 +295,7 @@ fn supervisor(
         },
         runtime_api_version: 1,
         activation_events: vec!["onCommand:acme.review".into()],
-        capabilities: vec![ExtensionCapability::Command],
+        capabilities,
     };
     let activation = ExtensionActivationSpec::new(params, NonZeroU64::new(9).unwrap(), authority);
     let limits = ExtensionHostLimits {
@@ -519,6 +564,7 @@ fn fenced_invoke_never_replays_on_a_new_incarnation() {
 
     let error = match supervisor.begin_fenced_invoke(
         ExtensionInvocationTarget {
+            registration_generation: None,
             incarnation: NonZeroU64::new(advertised.incarnation).unwrap(),
             activation_generation: NonZeroU64::new(advertised.activation_generation).unwrap(),
         },
@@ -566,4 +612,177 @@ fn initialization_is_bound_once_and_replayed_after_an_idle_crash() {
     supervisor.reconcile().unwrap();
     let second = Arc::clone(&launcher.processes.lock().unwrap()[1]);
     assert_eq!(*second.initializations.lock().unwrap(), vec![Some(initial)]);
+}
+
+#[test]
+fn dynamic_speech_registry_is_admitted_ordered_and_fenced_to_its_activation() {
+    let launcher = Arc::new(TestLauncher::default());
+    let host = supervisor_with_capabilities(
+        launcher.clone(),
+        Arc::new(TestAuthority::authorized()),
+        vec![
+            ExtensionCapability::Command,
+            ExtensionCapability::SpeechProvider,
+        ],
+    );
+    host.start().unwrap();
+    let process = launcher.processes.lock().unwrap()[0].clone();
+    let handler = process
+        .registration_handler
+        .lock()
+        .unwrap()
+        .clone()
+        .unwrap();
+    let changes = Arc::new(AtomicUsize::new(0));
+    let observed = changes.clone();
+    host.set_registration_listener(Arc::new(move |_| {
+        observed.fetch_add(1, Ordering::SeqCst);
+    }));
+    let speech = RegistrationDescriptor {
+        registration_id: "speech.1".into(),
+        kind: RegistrationKind::SpeechProvider {
+            registration_generation: 1,
+            identifier: "acme.recognition".into(),
+        },
+    };
+    let event = |context, revision, speech_providers| crate::ExtensionHostRegistrationEvent {
+        context,
+        revision,
+        speech_providers,
+    };
+    handler(event(HostEventContext::new(1, 9), 2, vec![speech.clone()])).unwrap();
+    assert_eq!(host.snapshot().registrations.len(), 2);
+    handler(event(HostEventContext::new(1, 9), 1, vec![])).unwrap();
+    handler(event(HostEventContext::new(1, 8), 3, vec![])).unwrap();
+    assert_eq!(host.snapshot().registrations.len(), 2);
+    assert_eq!(changes.load(Ordering::SeqCst), 1);
+    process.hang_invocations.store(true, Ordering::Release);
+    let mut request = invocation();
+    request.registration_id = speech.registration_id.clone();
+    let pending = host.begin_invoke(request).unwrap();
+    handler(event(HostEventContext::new(1, 9), 3, vec![])).unwrap();
+    let mut replacement = speech.clone();
+    if let RegistrationKind::SpeechProvider {
+        registration_generation,
+        ..
+    } = &mut replacement.kind
+    {
+        *registration_generation = 2;
+    }
+    handler(event(HostEventContext::new(1, 9), 4, vec![replacement])).unwrap();
+    assert!(matches!(
+        pending.wait(),
+        Err(ExtensionHostError::RegistrationNotFound)
+    ));
+    assert_eq!(process.cancels.load(Ordering::SeqCst), 1);
+    assert_eq!(host.snapshot().registrations.len(), 1);
+    handler(event(HostEventContext::new(1, 9), 99, vec![speech.clone()])).unwrap();
+    assert_eq!(host.snapshot().registrations.len(), 1);
+    assert_eq!(changes.load(Ordering::SeqCst), 3);
+    host.shutdown().unwrap();
+    handler(event(HostEventContext::new(1, 9), 100, vec![speech])).unwrap();
+    assert!(host.snapshot().registrations.is_empty());
+
+    let unauthorized = supervisor(
+        Arc::new(TestLauncher::default()),
+        Arc::new(TestAuthority::authorized()),
+    );
+    unauthorized.start().unwrap();
+    assert!(
+        unauthorized
+            .inner
+            .update_registrations(event(
+                HostEventContext::new(1, 9),
+                1,
+                vec![RegistrationDescriptor {
+                    registration_id: "speech".into(),
+                    kind: RegistrationKind::SpeechProvider {
+                        registration_generation: 1,
+                        identifier: "denied".into()
+                    }
+                }]
+            ))
+            .is_err()
+    );
+}
+
+#[test]
+fn starting_speech_updates_keep_the_observed_generation_after_the_activate_receipt() {
+    for mode in [1, 2] {
+        let launcher = Arc::new(TestLauncher::default());
+        launcher.starting_speech.store(mode, Ordering::Release);
+        let host = supervisor_with_capabilities(
+            launcher.clone(),
+            Arc::new(TestAuthority::authorized()),
+            vec![
+                ExtensionCapability::Command,
+                ExtensionCapability::SpeechProvider,
+            ],
+        );
+        host.start().unwrap();
+        assert_eq!(
+            host.snapshot().registrations.len(),
+            if mode == 1 { 1 } else { 2 }
+        );
+        let process = launcher.processes.lock().unwrap()[0].clone();
+        let handler = process
+            .registration_handler
+            .lock()
+            .unwrap()
+            .clone()
+            .unwrap();
+        let mut event = crate::ExtensionHostRegistrationEvent {
+            context: HostEventContext::new(1, 9),
+            revision: 3,
+            speech_providers: vec![RegistrationDescriptor {
+                registration_id: "replacement".into(),
+                kind: RegistrationKind::SpeechProvider {
+                    identifier: "replacement".into(),
+                    registration_generation: 1,
+                },
+            }],
+        };
+        assert!(handler(event.clone()).is_err());
+        if let RegistrationKind::SpeechProvider {
+            registration_generation,
+            ..
+        } = &mut event.speech_providers[0].kind
+        {
+            *registration_generation = 2;
+        }
+        handler(event).unwrap();
+        assert_eq!(host.snapshot().registrations.len(), 2);
+        host.shutdown().unwrap();
+    }
+}
+
+#[test]
+fn process_registration_callback_does_not_retain_its_supervisor() {
+    let launcher = Arc::new(TestLauncher::default());
+    let host = supervisor_with_capabilities(
+        launcher.clone(),
+        Arc::new(TestAuthority::authorized()),
+        vec![
+            ExtensionCapability::Command,
+            ExtensionCapability::SpeechProvider,
+        ],
+    );
+    host.start().unwrap();
+    let process = launcher.processes.lock().unwrap()[0].clone();
+    let handler = process
+        .registration_handler
+        .lock()
+        .unwrap()
+        .clone()
+        .unwrap();
+    let weak = Arc::downgrade(&host.inner);
+    host.shutdown().unwrap();
+    drop(host);
+    assert!(weak.upgrade().is_none());
+    handler(crate::ExtensionHostRegistrationEvent {
+        context: HostEventContext::new(1, 9),
+        revision: 99,
+        speech_providers: vec![],
+    })
+    .unwrap();
 }

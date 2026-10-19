@@ -409,6 +409,7 @@ pub enum RegistrationKind {
     },
     SpeechProvider {
         identifier: String,
+        registration_generation: u64,
     },
     LinkPresentationProvider {
         uri_pattern: String,
@@ -481,12 +482,60 @@ pub struct ActivateResult {
     pub registrations: Vec<RegistrationDescriptor>,
 }
 
+impl ActivateResult {
+    /// Validates one complete admitted registry, including dynamic Speech replacements.
+    pub fn validate(
+        &self,
+        capabilities: &[ExtensionCapability],
+        limits: &ProtocolLimits,
+    ) -> Result<(), ProtocolError> {
+        validate_registrations(
+            &self.registrations,
+            limits.maximum_registrations,
+            capabilities,
+        )
+    }
+}
+
+/// A bounded replacement of only the Speech registrations in one live activation.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ExtensionHostRegistrationEvent {
+    pub context: HostEventContext,
+    pub revision: u64,
+    pub speech_providers: Vec<RegistrationDescriptor>,
+}
+
+impl ExtensionHostRegistrationEvent {
+    pub fn validate(&self, limits: &ProtocolLimits) -> Result<(), ProtocolError> {
+        self.context.validate()?;
+        if self.revision == 0
+            || self.speech_providers.iter().any(|registration| {
+                !matches!(registration.kind, RegistrationKind::SpeechProvider { .. })
+            })
+        {
+            return Err(validation::protocol_error(
+                "invalid dynamic Speech registrations",
+            ));
+        }
+        validate_registrations(
+            &self.speech_providers,
+            limits.maximum_registrations,
+            &[ExtensionCapability::SpeechProvider],
+        )?;
+        validation::validate_encoded_size(self, limits.maximum_payload_bytes)
+    }
+}
+
 /// Invocation routed to one registration owned by the activated extension.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct InvokeParams {
     pub extension_id: String,
     pub registration_id: String,
+    /// Exact Speech handle selected before queueing; other registrations omit this fence.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub registration_generation: Option<u64>,
     pub operation: String,
     pub payload: Value,
     pub deadline_unix_millis: u64,
@@ -558,6 +607,11 @@ impl ExtensionHostRequest {
                 validate_identifier(&params.extension_id)?;
                 validate_identifier(&params.registration_id)?;
                 validate_short_text(&params.operation, MAX_OPERATION_BYTES, "operation")?;
+                if params.registration_generation == Some(0) {
+                    return Err(protocol_error(
+                        "invoke registration generation must be non-zero",
+                    ));
+                }
                 if params.deadline_unix_millis == 0 {
                     return Err(protocol_error("invoke deadline must be non-zero"));
                 }
@@ -640,6 +694,7 @@ pub struct ExtensionHostResponse {
 #[derive(Debug, Deserialize)]
 #[serde(untagged)]
 pub enum ExtensionHostStdoutFrame {
+    Registrations(ExtensionHostRegistrationEvent),
     Response(ExtensionHostResponse),
     Output(ExtensionHostOutputEvent),
     ClientRequest(ExtensionClientRequest),

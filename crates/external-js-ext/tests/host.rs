@@ -3267,6 +3267,7 @@ fn managed_authority_sockets_preserve_bytes_and_retire_on_resolution_and_restart
             .supervisor
             .begin_fenced_invoke(
                 ExtensionInvocationTarget {
+                    registration_generation: None,
                     activation_generation: NonZeroU64::new(1).unwrap(),
                     incarnation: old
                 },
@@ -3623,7 +3624,7 @@ fn vscode_speech_provider_sessions_use_persistent_tokens_and_retire_with_registr
         .unwrap();
     assert_eq!(
         serde_json::to_value(&registration).unwrap(),
-        json!({"registrationId":"vscode.speech.1","kind":"speechProvider","identifier":"example.recognition"})
+        json!({"registrationId":"vscode.speech.1","kind":"speechProvider","registrationGeneration":1,"identifier":"example.recognition"})
     );
     let mut request = invocation("unused", json!([]), Duration::from_secs(5));
     request.registration_id = registration.registration_id;
@@ -3768,4 +3769,212 @@ fn vscode_output_channels_keep_order_and_log_metadata_in_the_confined_runtime() 
             .iter()
             .any(|value| value["severity"] == "information" && value["text"] == "ready agent")
     );
+}
+
+#[test]
+fn vscode_speech_can_register_after_activation_and_retire_its_exact_session() {
+    let running = start_vscode_with_files_and_capabilities(r#"
+        const v = require('vscode');
+        let registration, cancelled = 0;
+        const factory = token => { const emitter = new v.EventEmitter(); token.onCancellationRequested(() => { cancelled++; emitter.dispose(); }); return { onDidChange: emitter.event }; };
+        exports.activate = context => context.subscriptions.push(v.commands.registerCommand('example.hello', action => {
+            if (action === 'register') registration = v.speech.registerSpeechProvider('example.dynamic', { provideSpeechToTextSession: factory, provideTextToSpeechSession: factory, provideKeywordRecognitionSession: factory });
+            if (action === 'unregister') registration.dispose();
+            return cancelled;
+        }));
+    "#, &[], vec![ExtensionCapability::Command, ExtensionCapability::SpeechProvider]).unwrap();
+    let baseline = running.supervisor.snapshot().registrations.len();
+    assert!(
+        !running
+            .supervisor
+            .snapshot()
+            .registrations
+            .iter()
+            .any(|entry| matches!(
+                entry.kind,
+                external_ext_protocol::RegistrationKind::SpeechProvider { .. }
+            ))
+    );
+    running
+        .supervisor
+        .invoke(invocation(
+            "hello",
+            json!(["register"]),
+            Duration::from_secs(5),
+        ))
+        .unwrap();
+    let first = running
+        .supervisor
+        .snapshot()
+        .registrations
+        .into_iter()
+        .find(|registration| {
+            matches!(
+                registration.kind,
+                external_ext_protocol::RegistrationKind::SpeechProvider { .. }
+            )
+        })
+        .unwrap();
+    assert!(matches!(
+        first.kind,
+        external_ext_protocol::RegistrationKind::SpeechProvider {
+            registration_generation: 1,
+            ..
+        }
+    ));
+    let mut speech = invocation("unused", json!([]), Duration::from_secs(5));
+    speech.registration_id = first.registration_id.clone();
+    speech.operation = "createSpeechSession".into();
+    speech.payload =
+        json!({"sessionId":"a1234567-1234-1234-1234-123456789abc", "kind":"speechToText"});
+    running.supervisor.invoke(speech.clone()).unwrap();
+    assert_eq!(
+        running
+            .supervisor
+            .invoke(invocation(
+                "hello",
+                json!(["unregister"]),
+                Duration::from_secs(5)
+            ))
+            .unwrap()
+            .payload,
+        json!(1)
+    );
+    assert_eq!(running.supervisor.snapshot().registrations.len(), baseline);
+    assert!(matches!(
+        running.supervisor.invoke(speech),
+        Err(ExtensionHostError::RegistrationNotFound)
+    ));
+    running
+        .supervisor
+        .invoke(invocation(
+            "hello",
+            json!(["register"]),
+            Duration::from_secs(5),
+        ))
+        .unwrap();
+    let second = running
+        .supervisor
+        .snapshot()
+        .registrations
+        .into_iter()
+        .find(|registration| {
+            matches!(
+                registration.kind,
+                external_ext_protocol::RegistrationKind::SpeechProvider { .. }
+            )
+        })
+        .unwrap();
+    assert_ne!(first.registration_id, second.registration_id);
+    assert!(matches!(
+        second.kind,
+        external_ext_protocol::RegistrationKind::SpeechProvider {
+            registration_generation: 2,
+            ..
+        }
+    ));
+    running.supervisor.shutdown().unwrap();
+    assert!(running.supervisor.snapshot().registrations.is_empty());
+}
+
+#[test]
+fn vscode_speech_host_rejects_retired_or_missing_generation_before_provider_side_effects() {
+    struct ObservedLauncher(Arc<std::sync::Mutex<Option<Arc<dyn host::ExtensionHostProcess>>>>);
+    impl host::ExtensionHostLauncher for ObservedLauncher {
+        fn spawn(
+            &self,
+            command: &ExtensionLaunchCommand,
+            limits: &ExtensionHostLimits,
+        ) -> Result<Arc<dyn host::ExtensionHostProcess>, ExtensionHostError> {
+            let process =
+                host::ExtensionHostLauncher::spawn(&TrustedDevelopmentLauncher, command, limits)?;
+            *self.0.lock().unwrap() = Some(process.clone());
+            Ok(process)
+        }
+    }
+    let process = Arc::new(std::sync::Mutex::new(None));
+    let running = start_with_launcher(r#"
+        const v = require('vscode');
+        let registration, created = 0;
+        const factory = () => { created++; const events = new v.EventEmitter(); return { onDidChange: events.event }; };
+        const install = () => registration = v.speech.registerSpeechProvider('example.dynamic', { provideSpeechToTextSession: factory, provideTextToSpeechSession: factory, provideKeywordRecognitionSession: factory });
+        exports.activate = context => {
+            install();
+            context.subscriptions.push(v.commands.registerCommand('example.hello', action => {
+                if (action === 'replace') { registration.dispose(); install(); }
+                return created;
+            }));
+        };
+    "#, vec![ExtensionCapability::Command, ExtensionCapability::SpeechProvider], ProcessIsolationPolicy::TrustedDevelopment, Arc::new(ObservedLauncher(process.clone()))).unwrap();
+    let first = running
+        .supervisor
+        .snapshot()
+        .registrations
+        .into_iter()
+        .find(|entry| {
+            matches!(
+                entry.kind,
+                external_ext_protocol::RegistrationKind::SpeechProvider { .. }
+            )
+        })
+        .unwrap();
+    let mut queued = external_ext_protocol::InvokeParams {
+        extension_id: "example".into(),
+        registration_id: first.registration_id,
+        registration_generation: Some(1),
+        operation: "createSpeechSession".into(),
+        payload: json!({"sessionId":"a1234567-1234-1234-1234-123456789abc", "kind":"speechToText"}),
+        deadline_unix_millis: (SystemTime::now().duration_since(UNIX_EPOCH).unwrap()
+            + Duration::from_secs(5))
+        .as_millis() as u64,
+    };
+    run(&running, "hello", json!(["replace"])).unwrap();
+    let snapshot = running.supervisor.snapshot();
+    let current = snapshot
+        .registrations
+        .iter()
+        .find(|entry| {
+            matches!(
+                entry.kind,
+                external_ext_protocol::RegistrationKind::SpeechProvider { .. }
+            )
+        })
+        .unwrap();
+    let process = process.lock().unwrap().clone().unwrap();
+    // Deliver the retired frame directly to the real V8 process, bypassing the Rust precheck.
+    // The host also refuses the old generation paired with the new handle, or no fence at all.
+    for (offset, (id, generation)) in [
+        (queued.registration_id.clone(), Some(1)),
+        (current.registration_id.clone(), Some(1)),
+        (current.registration_id.clone(), None),
+        (current.registration_id.clone(), Some(2)),
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        queued.registration_id = id;
+        queued.registration_generation = generation;
+        let result = process
+            .dispatch(host::ExtensionHostRequest {
+                context: host::RequestContext::new(10_000 + offset as u64, snapshot.incarnation, 1),
+                request: host::HostRequestKind::Invoke(queued.clone()),
+            })
+            .unwrap()
+            .recv_timeout(Duration::from_secs(5))
+            .unwrap()
+            .unwrap();
+        if offset == 3 {
+            assert!(
+                matches!(result.response, host::HostResponseKind::Success(_)),
+                "{result:?}"
+            );
+        } else {
+            assert!(
+                matches!(result.response, host::HostResponseKind::Failure(_)),
+                "{result:?}"
+            );
+            assert_eq!(run(&running, "hello", json!([])).unwrap(), json!(0));
+        }
+    }
+    assert_eq!(run(&running, "hello", json!([])).unwrap(), json!(1));
 }

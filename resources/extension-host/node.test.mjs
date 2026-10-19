@@ -47,6 +47,8 @@ async function host(t, source, entry = 'extension.cjs', capabilities = ['command
 	const responses = new Map();
 	const waiters = new Map();
 	const clientCalls = [];
+	const registrationEvents = [];
+	const registrationWaiters = new Map();
 	const readers = createInterface({ input: control });
 	t.after(() => readers.close());
 	let controlFailure;
@@ -62,6 +64,12 @@ async function host(t, source, entry = 'extension.cjs', capabilities = ['command
 	assert.equal((await once(readers, 'line'))[0], token);
 	readers.on('line', line => {
 		const frame = JSON.parse(line);
+		if (frame.speechProviders) {
+			registrationEvents.push(frame);
+			registrationWaiters.get(frame.revision)?.(frame);
+			registrationWaiters.delete(frame.revision);
+			return;
+		}
 		if (frame.callId) {
 			clientCalls.push(frame);
 			if (onClient) Promise.resolve(onClient(frame)).then(value => send({ context: frame.context, callId: frame.callId, outcome: { Ok: value } }));
@@ -99,6 +107,7 @@ async function host(t, source, entry = 'extension.cjs', capabilities = ['command
 	}).result;
 	assert.equal(activated.body.result, 'activated', stderr);
 	return {
+		registrationEvent(revision) { return registrationEvents.find(event => event.revision === revision) ?? new Promise(resolve => registrationWaiters.set(revision, resolve)); },
 		child, control, extension, request, send, clientCalls, registrations: activated.body.body.registrations, stderr: () => stderr, stdout: () => stdout,
 		invoke(registrationId, arguments_) { return request('invoke', { extensionId: 'test.node', registrationId, operation: 'execute', payload: { arguments: arguments_ }, deadlineUnixMillis: Date.now() + 30000 }); }
 	};
@@ -486,7 +495,7 @@ exports.activate = context => {
 };`, 'extension.cjs', ['terminalLinkProvider', 'command']);
 	const registration = h.registrations.find(entry => entry.kind === 'terminalLinkProvider');
 	assert.ok(registration);
-	const invoke = (operation, payload) => h.request('invoke', { extensionId: 'test.node', registrationId: registration.registrationId, operation, payload, deadlineUnixMillis: Date.now() + 5000 }).result;
+	const invoke = (operation, payload) => h.request('invoke', { extensionId: 'test.node', registrationId: registration.registrationId, registrationGeneration: registration.registrationGeneration, operation, payload, deadlineUnixMillis: Date.now() + 5000 }).result;
 	const result = await invoke('provideTerminalLinks', { line: '  #123 text', terminal: { id: 'terminal-1', name: 'Shell', processId: 42 } });
 	assert.equal(result.status, 'success', JSON.stringify(result));
 	assert.deepEqual(result.body.body.payload.links.map(({ id, ...link }) => link), [{ startIndex: 2, length: 4, label: 'Open issue' }]);
@@ -506,7 +515,7 @@ exports.activate = context => {
  context.subscriptions.push(v.commands.registerCommand('test.node', () => accepted));
 };`, 'extension.cjs', ['terminalLinkProvider', 'command']);
 	const registration = h.registrations.find(entry => entry.kind === 'terminalLinkProvider');
-	const invoke = (operation, payload) => h.request('invoke', { extensionId: 'test.node', registrationId: registration.registrationId, operation, payload, deadlineUnixMillis: Date.now() + 5000 }).result;
+	const invoke = (operation, payload) => h.request('invoke', { extensionId: 'test.node', registrationId: registration.registrationId, registrationGeneration: registration.registrationGeneration, operation, payload, deadlineUnixMillis: Date.now() + 5000 }).result;
 	const terminal = { id: 'terminal-1', name: 'Shell', processId: 42 };
 	const first = await invoke('provideTerminalLinks', { line: '#123', terminal });
 	for (let index = 0; index < 9; index++) await invoke('provideTerminalLinks', { line: '#456', terminal });
@@ -675,8 +684,8 @@ exports.activate = context => {
  }));
 };`, 'extension.cjs', ['speechProvider', 'command']);
 	const registration = h.registrations.find(value => value.kind === 'speechProvider');
-	assert.deepEqual(registration, { registrationId: 'vscode.speech.1', kind: 'speechProvider', identifier: 'test.recognition' });
-	const invoke = (operation, payload) => h.request('invoke', { extensionId: 'test.node', registrationId: registration.registrationId, operation, payload, deadlineUnixMillis: Date.now() + 30000 });
+	assert.deepEqual(registration, { registrationId: 'vscode.speech.1', kind: 'speechProvider', registrationGeneration: 1, identifier: 'test.recognition' });
+	const invoke = (operation, payload) => h.request('invoke', { extensionId: 'test.node', registrationId: registration.registrationId, registrationGeneration: registration.registrationGeneration, operation, payload, deadlineUnixMillis: Date.now() + 30000 });
 	const ids = ['a1234567-1234-1234-1234-123456789abc', 'b1234567-1234-1234-1234-123456789abc', 'c1234567-1234-1234-1234-123456789abc'];
 	for (const [index, kind] of ['speechToText', 'textToSpeech', 'keywordRecognition'].entries()) assert.equal((await invoke('createSpeechSession', { sessionId: ids[index], kind }).result).status, 'success');
 	assert.deepEqual((await h.invoke('test.node', ['emit', 'stt']).result).body.body.payload, { cancelled: 0, detached: 0, sessions: ['stt', 'tts', 'keyword'] });
@@ -712,7 +721,7 @@ exports.activate = context => context.subscriptions.push(
  v.commands.registerCommand('test.node', () => cancelled)
 );`, 'extension.cjs', ['speechProvider', 'command']);
 	const registrationId = h.registrations.find(value => value.kind === 'speechProvider').registrationId;
-	const invoke = (operation, sessionId) => h.request('invoke', { extensionId: 'test.node', registrationId, operation, payload: { sessionId, ...(operation === 'createSpeechSession' ? { kind: 'speechToText' } : {}) }, deadlineUnixMillis: Date.now() + 30000 });
+	const invoke = (operation, sessionId) => h.request('invoke', { extensionId: 'test.node', registrationId, registrationGeneration: 1, operation, payload: { sessionId, ...(operation === 'createSpeechSession' ? { kind: 'speechToText' } : {}) }, deadlineUnixMillis: Date.now() + 30000 });
 	const first = 'a1234567-1234-1234-1234-123456789abc';
 	const second = 'b1234567-1234-1234-1234-123456789abc';
 	const created = invoke('createSpeechSession', first);
@@ -772,4 +781,47 @@ test('fetched task terminal groups survive public edits without entering the pub
 	const result = await h.invoke('test.node', []).result;
 	assert.equal(result.status, 'success', JSON.stringify(result));
 	assert.deepEqual(executions.map(task => task.presentation), [{ panel: 'new', group: 'build' }, { panel: 'new', group: 'build' }]);
+});
+
+
+test('Speech registrations created after activation update the original registry and retire only their own sessions', { timeout: 15000 }, async t => {
+	const h = await host(t, `const v = require('vscode');
+let registration, retired, emitter, oldEmitter, cancelled = 0, created = 0;
+function install() {
+ registration = v.speech.registerSpeechProvider('test.dynamic', {
+  provideSpeechToTextSession(token) { created++; emitter = new v.EventEmitter(); token.onCancellationRequested(() => cancelled++); return { onDidChange: emitter.event }; },
+  provideTextToSpeechSession() {}, provideKeywordRecognitionSession() {}
+ });
+}
+exports.activate = context => {
+ context.subscriptions.push(v.commands.registerCommand('test.node', action => {
+  if (action === 'retire') { oldEmitter = emitter; retired = registration; registration.dispose(); }
+  if (action === 'install') install();
+  if (action === 'oldDispose') { retired.dispose(); oldEmitter.fire({ status: 3, text: 'retired event' }); }
+  if (action === 'created') return created;
+  return cancelled;
+ }));
+ setTimeout(install, 10);
+};`, 'extension.cjs', ['speechProvider', 'command']);
+	assert.equal(h.registrations.some(value => value.kind === 'speechProvider'), false);
+	const first = await h.registrationEvent(1);
+	assert.deepEqual(first.context, { protocolVersion: 1, incarnation: 2, activationGeneration: 3 });
+	assert.deepEqual(first.speechProviders, [{ registrationId: 'vscode.speech.1', kind: 'speechProvider', registrationGeneration: 1, identifier: 'test.dynamic' }]);
+	const sessionId = 'a1234567-1234-1234-1234-123456789abc';
+	const speech = (registrationId, operation, payload, registrationGeneration = Number(registrationId.split('.').at(-1))) => h.request('invoke', { extensionId: 'test.node', registrationId, registrationGeneration, operation, payload, deadlineUnixMillis: Date.now() + 5000 }).result;
+	assert.equal((await speech('vscode.speech.1', 'createSpeechSession', { sessionId, kind: 'speechToText' })).status, 'success');
+	assert.equal((await h.invoke('test.node', ['retire']).result).body.body.payload, 1);
+	assert.deepEqual((await h.registrationEvent(2)).speechProviders, []);
+	await h.invoke('test.node', ['install']).result;
+	assert.equal((await h.registrationEvent(3)).speechProviders[0].registrationId, 'vscode.speech.2');
+	await h.invoke('test.node', ['oldDispose']).result;
+	// A queued request carries its selected generation even if delivered after replacement.
+	assert.equal((await speech('vscode.speech.2', 'createSpeechSession', { sessionId, kind: 'speechToText' }, 1)).status, 'failure');
+	assert.equal((await h.request('invoke', { extensionId: 'test.node', registrationId: 'vscode.speech.2', operation: 'createSpeechSession', payload: { sessionId, kind: 'speechToText' }, deadlineUnixMillis: Date.now() + 5000 }).result).status, 'failure');
+	assert.equal((await h.invoke('test.node', ['created']).result).body.body.payload, 1);
+	assert.equal((await speech('vscode.speech.1', 'readSpeechSession', { sessionId })).status, 'failure');
+	assert.equal((await speech('vscode.speech.2', 'createSpeechSession', { sessionId, kind: 'speechToText' })).status, 'success');
+	assert.deepEqual((await speech('vscode.speech.2', 'readSpeechSession', { sessionId })).body.body.payload, { events: [], closed: false });
+	assert.equal((await h.invoke('test.node', []).result).status, 'success');
+	await h.request('shutdown').result;
 });

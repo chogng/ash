@@ -96,6 +96,11 @@ function send(frame) {
 	if (Buffer.byteLength(bytes) > maximumFrame) throw new Error('Host frame quota exceeded');
 	return new Promise((resolveWrite, reject) => protocolWrite(bytes + '\n', error => error ? reject(error) : resolveWrite()));
 }
+
+runtime.onRegistrationsChanged(encoded => {
+	if (phase !== 'active' || !identity) throw new Error('Extension activation is no longer active');
+	void send({ context: { protocolVersion: 1, ...identity }, ...JSON.parse(encoded) }).catch(reportExtensionError);
+});
 function context(frame) {
 	return {
 		protocolVersion: frame.protocolVersion, requestId: frame.requestId,
@@ -232,7 +237,7 @@ async function dispatch(frame) {
 				active.set(ctx.requestId, owned);
 				try {
 					const payload = await invocation.run(ctx, () => runtime.invoke(frame.params.registrationId,
-						JSON.stringify(frame.params.payload), ctx.requestId, frame.params.operation));
+						JSON.stringify(frame.params.payload), ctx.requestId, frame.params.operation, frame.params.registrationGeneration));
 					success = { result: 'invoked', body: { payload: JSON.parse(payload) } };
 				} finally {
 					active.delete(ctx.requestId);

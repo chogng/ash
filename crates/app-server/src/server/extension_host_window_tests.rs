@@ -246,6 +246,15 @@ fn invoke_registration(
     let snapshot = runtime.snapshot_for(owner);
     let extension = &snapshot.extensions[0];
     let request = ExtensionHostInvocationRequest {
+        registration_generation: extension.registrations.iter().find_map(|entry| {
+            match entry.kind {
+                external_ext_protocol::RegistrationKind::SpeechProvider {
+                    registration_generation,
+                    ..
+                } if entry.registration_id == registration => Some(registration_generation),
+                _ => None,
+            }
+        }),
         extension_id: extension.id.clone(),
         registration_id: registration.into(),
         activation_generation: extension.activation_generation,
@@ -400,6 +409,7 @@ fn standard_extensions_keep_window_facts_callbacks_and_lifetimes_separate() {
         runtime.start_invocation(
             11,
             ExtensionHostInvocationRequest {
+                registration_generation: None,
                 extension_id: "test.node".into(),
                 registration_id: "test.node".into(),
                 activation_generation: 7,
@@ -708,5 +718,133 @@ fn first_window_activation_publishes_authority_failure_without_waiting_for_healt
             .unwrap()
             .supervisor
             .is_none()
+    );
+}
+
+#[test]
+fn late_speech_host_events_publish_the_admitted_fleet_without_health_polling() {
+    let directory = tempfile::tempdir().unwrap();
+    let (launcher, mut deployment) = install_node_fixture(directory.path());
+    deployment
+        .params
+        .capabilities
+        .push(ExtensionCapability::SpeechProvider);
+    std::fs::write(directory.path().join("extension/extension.cjs"), r#"
+        const v = require('vscode'); let registration, cancelled = 0;
+        const factory = token => { const events = new v.EventEmitter(); token.onCancellationRequested(() => { cancelled++; events.dispose(); }); return { onDidChange: events.event }; };
+        exports.activate = context => context.subscriptions.push(v.commands.registerCommand('test.node', action => {
+            if (action === 'register') setTimeout(() => { registration = v.speech.registerSpeechProvider('test.dynamic', { provideSpeechToTextSession: factory, provideTextToSpeechSession: factory, provideKeywordRecognitionSession: factory }); }, 20);
+            if (action === 'unregister') setTimeout(() => registration.dispose(), 20);
+            return cancelled;
+        }));
+    "#).unwrap();
+    let grant = Grant::for_environment(
+        Dir::open_local(directory.path()).unwrap(),
+        GrantSource::ExplicitUser,
+        Permissions::new([Permission::DiscoverPlugins]),
+    );
+    let client = Arc::new(crate::client_host::ClientHost::default());
+    let _peer = EditorPeer::start(client.clone(), 11, "first");
+    let runtime = runtime_with_recipe(launcher, deployment, &grant, client);
+    // Only the registration event callback can publish after this point.
+    runtime
+        .inner
+        .shutdown
+        .lock()
+        .unwrap()
+        .take()
+        .unwrap()
+        .send(())
+        .unwrap();
+    runtime
+        .inner
+        .worker
+        .lock()
+        .unwrap()
+        .take()
+        .unwrap()
+        .join()
+        .unwrap();
+    let queue = crate::server::notification_queue::NotificationQueue::default();
+    runtime.inner.updates.register(11, false, &queue);
+    runtime
+        .activate_by_event(
+            11,
+            "test.node",
+            7,
+            ActivationEvent::Command("test.node".into()),
+            None,
+            Err(test_files_unavailable()),
+        )
+        .unwrap();
+    queue.drain();
+    let initial = runtime.snapshot_for(11).generation;
+    invoke_registration(
+        &runtime,
+        11,
+        "test.node",
+        "execute",
+        json!({"arguments":["register"]}),
+    );
+    let wait_changed = || {
+        let deadline = Instant::now() + Duration::from_secs(3);
+        loop {
+            let notifications = queue.drain();
+            if notifications
+                .iter()
+                .any(|value| value["method"] == "extensionHost/changed")
+            {
+                break;
+            }
+            assert!(
+                Instant::now() < deadline,
+                "Speech event did not publish its fleet"
+            );
+            std::thread::sleep(Duration::from_millis(5));
+        }
+    };
+    wait_changed();
+    let registered = runtime.snapshot_for(11);
+    assert!(registered.generation > initial);
+    let speech = registered.extensions[0]
+        .registrations
+        .iter()
+        .find(|entry| {
+            matches!(
+                entry.kind,
+                external_ext_protocol::RegistrationKind::SpeechProvider { .. }
+            )
+        })
+        .unwrap();
+    invoke_registration(
+        &runtime,
+        11,
+        &speech.registration_id,
+        "createSpeechSession",
+        json!({"sessionId":"a1234567-1234-1234-1234-123456789abc","kind":"speechToText"}),
+    );
+    queue.drain();
+    invoke_registration(
+        &runtime,
+        11,
+        "test.node",
+        "execute",
+        json!({"arguments":["unregister"]}),
+    );
+    wait_changed();
+    assert!(
+        !runtime.snapshot_for(11).extensions[0]
+            .registrations
+            .iter()
+            .any(|entry| matches!(
+                entry.kind,
+                external_ext_protocol::RegistrationKind::SpeechProvider { .. }
+            ))
+    );
+    assert_eq!(invoke(&runtime, 11), json!(1));
+    runtime.close_owner(11);
+    assert_eq!(
+        runtime.snapshot_for(11).extensions[0].lifecycle,
+        ExtensionHostLifecycle::Dormant
     );
 }

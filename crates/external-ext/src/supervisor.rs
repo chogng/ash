@@ -80,6 +80,9 @@ struct SupervisorState {
     process: Option<Arc<dyn ExtensionHostProcess>>,
     process_lease: Option<Box<dyn ActivationLease>>,
     registrations: Vec<RegistrationDescriptor>,
+    registration_revision: u64,
+    speech_registration_generation: u64,
+    pending_registrations: Option<crate::ExtensionHostRegistrationEvent>,
     invocation_leases: BTreeMap<u64, Box<dyn ActivationLease>>,
     restart: RestartTracker,
     output_events: VecDeque<RetainedOutputEvent>,
@@ -96,6 +99,7 @@ struct SupervisorInner {
     lifecycle: Mutex<()>,
     next_request_id: AtomicU64,
     started_at: Instant,
+    registration_listener: Mutex<Option<Arc<dyn Fn(crate::HostEventContext) + Send + Sync>>>,
 }
 
 /// Supervises one authorized extension-owned executable speaking Ash Host RPC v1.
@@ -134,6 +138,9 @@ impl ExtensionHostSupervisor {
                     process: None,
                     process_lease: None,
                     registrations: Vec::new(),
+                    registration_revision: 0,
+                    speech_registration_generation: 0,
+                    pending_registrations: None,
                     invocation_leases: BTreeMap::new(),
                     restart,
                     output_events: VecDeque::new(),
@@ -143,12 +150,25 @@ impl ExtensionHostSupervisor {
                 lifecycle: Mutex::new(()),
                 next_request_id: AtomicU64::new(1),
                 started_at: Instant::now(),
+                registration_listener: Mutex::new(None),
             }),
         })
     }
 
     pub fn start(&self) -> Result<ExtensionHostSnapshot, ExtensionHostError> {
         self.start_with_initialization(None)
+    }
+
+    /// Binds the product fleet's existing snapshot publisher to admitted registry changes.
+    pub fn set_registration_listener(
+        &self,
+        listener: Arc<dyn Fn(crate::HostEventContext) + Send + Sync>,
+    ) {
+        *self
+            .inner
+            .registration_listener
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(listener);
     }
 
     /// Binds window facts to the first incarnation; recovery retains this activation's snapshot.
@@ -416,8 +436,18 @@ impl ExtensionHostSupervisor {
             state.status = ExtensionHostStatus::Starting;
             state.process = Some(Arc::clone(&process));
             state.registrations.clear();
+            state.registration_revision = 0;
+            state.speech_registration_generation = 0;
+            state.pending_registrations = None;
             state.incarnation
         };
+        let weak = Arc::downgrade(&self.inner);
+        process.set_registration_handler(Arc::new(move |event| {
+            if let Some(inner) = weak.upgrade() {
+                inner.update_registrations(event)?;
+            }
+            Ok(())
+        }));
         let handler = self
             .inner
             .state
@@ -475,8 +505,34 @@ impl ExtensionHostSupervisor {
                     terminate_confirmed(&process)?;
                     return Err(ExtensionHostError::HostRestarted);
                 }
-                state.status = ExtensionHostStatus::Ready;
                 state.registrations = registrations;
+                state.speech_registration_generation = state.speech_registration_generation.max(
+                    state
+                        .registrations
+                        .iter()
+                        .filter_map(|registration| match registration.kind {
+                            external_ext_protocol::RegistrationKind::SpeechProvider {
+                                registration_generation,
+                                ..
+                            } => Some(registration_generation),
+                            _ => None,
+                        })
+                        .max()
+                        .unwrap_or(0),
+                );
+                if let Some(event) = state.pending_registrations.take() {
+                    if let Err(error) = self.inner.replace_speech_registrations(&mut state, &event)
+                    {
+                        state.status = ExtensionHostStatus::Stopped;
+                        state.registrations.clear();
+                        state.process = None;
+                        drop(state);
+                        drop(worker);
+                        terminate_confirmed(&process)?;
+                        return Err(error);
+                    }
+                }
+                state.status = ExtensionHostStatus::Ready;
                 state.process_lease = Some(lease);
                 state.client_worker = worker;
                 state.restart.record_healthy();
@@ -712,6 +768,120 @@ fn terminate_confirmed(process: &Arc<dyn ExtensionHostProcess>) -> Result<(), Ex
         Ok(())
     } else {
         Err(ExtensionHostError::HostExited)
+    }
+}
+
+impl SupervisorInner {
+    fn admit_speech_generations(
+        &self,
+        state: &mut SupervisorState,
+        event: &crate::ExtensionHostRegistrationEvent,
+    ) -> Result<(), ExtensionHostError> {
+        let previous = state
+            .pending_registrations
+            .as_ref()
+            .map(|event| event.speech_providers.as_slice())
+            .unwrap_or(&state.registrations);
+        let mut maximum = state.speech_registration_generation;
+        for registration in &event.speech_providers {
+            let external_ext_protocol::RegistrationKind::SpeechProvider {
+                registration_generation,
+                ..
+            } = registration.kind
+            else {
+                return Err(ExtensionHostError::InvalidProtocol(
+                    "registration event may only change Speech".into(),
+                ));
+            };
+            if !previous.contains(registration)
+                && registration_generation <= state.speech_registration_generation
+            {
+                return Err(ExtensionHostError::InvalidProtocol(
+                    "Speech registration generation was reused".into(),
+                ));
+            }
+            maximum = maximum.max(registration_generation);
+        }
+        state.speech_registration_generation = maximum;
+        Ok(())
+    }
+
+    fn replace_speech_registrations(
+        &self,
+        state: &mut SupervisorState,
+        event: &crate::ExtensionHostRegistrationEvent,
+    ) -> Result<(), ExtensionHostError> {
+        let mut registrations = state
+            .registrations
+            .iter()
+            .filter(|registration| {
+                !matches!(
+                    registration.kind,
+                    external_ext_protocol::RegistrationKind::SpeechProvider { .. }
+                )
+            })
+            .cloned()
+            .collect::<Vec<_>>();
+        registrations.extend(event.speech_providers.iter().cloned());
+        let snapshot = ActivateResult { registrations };
+        snapshot
+            .validate(
+                &self.activation.params().capabilities,
+                &self.limits.protocol_limits(),
+            )
+            .map_err(|error| ExtensionHostError::InvalidProtocol(error.to_string()))?;
+        state.registrations = snapshot.registrations;
+        Ok(())
+    }
+
+    fn update_registrations(
+        &self,
+        event: crate::ExtensionHostRegistrationEvent,
+    ) -> Result<(), ExtensionHostError> {
+        let _lease = self
+            .activation
+            .acquire()
+            .ok_or(ExtensionHostError::AuthorityDenied)?;
+        let mut state = self
+            .state
+            .lock()
+            .map_err(|_| ExtensionHostError::HostExited)?;
+        if event.context.incarnation != state.incarnation
+            || event.context.activation_generation != self.activation.activation_generation().get()
+            || !matches!(
+                state.status,
+                ExtensionHostStatus::Starting | ExtensionHostStatus::Ready
+            )
+            || event.revision <= state.registration_revision
+        {
+            return Ok(());
+        }
+        // Event validation fixes the mutable subset; admission still belongs to this activation.
+        ActivateResult {
+            registrations: event.speech_providers.clone(),
+        }
+        .validate(
+            &self.activation.params().capabilities,
+            &self.limits.protocol_limits(),
+        )
+        .map_err(|error| ExtensionHostError::InvalidProtocol(error.to_string()))?;
+        self.admit_speech_generations(&mut state, &event)?;
+        state.registration_revision = event.revision;
+        if state.status == ExtensionHostStatus::Starting {
+            state.pending_registrations = Some(event);
+            return Ok(());
+        }
+        self.replace_speech_registrations(&mut state, &event)?;
+        drop(state);
+        let listener = self
+            .registration_listener
+            .lock()
+            .map_err(|_| ExtensionHostError::HostExited)?
+            .clone();
+        if let Some(listener) = listener {
+            listener(event.context);
+        }
+        Ok(())
     }
 }
 
