@@ -10,7 +10,7 @@ export class ElectronWorkbenchEnvironmentService implements IWorkbenchEnvironmen
 	readonly initialLogLevel?: LogLevel;
 	readonly extensionLogLevel?: readonly (readonly [string, string])[];
 	public readonly webviewExternalEndpoint = `${Schemas.vscodeWebview}://{{uuid}}`;
-	constructor(value?: unknown) {
+	constructor(value?: unknown, readonly expectsTerminalTransfer = false) {
 		if (value === undefined) return;
 		if (!isRecord(value) ||
 			(value.logLevel !== undefined && (typeof value.logLevel !== 'string' || parseLogLevel(value.logLevel) === undefined)) ||

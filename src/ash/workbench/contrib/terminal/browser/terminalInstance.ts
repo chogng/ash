@@ -72,6 +72,7 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 	private shellProcessManager: AgentHostPty | undefined;
 	private screen: XtermTerminal | undefined;
 	private screenInitialization: Promise<XtermTerminal | undefined> | undefined;
+	private readonly startupReset = this._register(new MutableDisposable<DisposableStore>());
 	private readonly contributions = this._register(new DisposableMap<string, ITerminalContribution>());
 	private pendingExit: { readonly code: number | undefined; } | undefined;
 	private readonly customLifetime = this._register(new MutableDisposable<DisposableStore>());
@@ -364,6 +365,13 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 		const restored = this.restored;
 		this.screenInitialization = screen.initialize(restored).then(async () => {
 			if (this.isDisposed || screen.isDisposed) { return undefined; }
+			if (restored && this.processes.operatingSystem === OperatingSystem.Windows
+				&& restored.process.terminalId !== this.shellProcessManager?.creation.terminalId) {
+				// A new ConPTY owns viewport coordinates starting at row one. Move
+				// the saved screen into scrollback before its first absolute repaint.
+				screen.raw.write('\r\n'.repeat(screen.raw.rows));
+				this.preserveRevivedHistory(screen);
+			}
 			if (truncated) screen.raw.write(`\r\n${localize('terminal.outputTruncated', '[terminal output truncated]')}\r\n`);
 			for (const entry of restored ? [] : replay.events) {
 				if (entry.cols > 0 && entry.rows > 0) screen.raw.resize(entry.cols, entry.rows);
@@ -381,6 +389,7 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 			});
 			this._register(toDisposable(() => input.dispose()));
 			const completedInput = screen.raw.onKey(({ domEvent }) => {
+				this.startupReset.clear();
 				// Workbench shortcuts remain available after exit. Parser replies use
 				// onData, so they cannot accidentally close a waiting task terminal.
 				// xterm prevents Enter's default before firing onKey. Workbench
@@ -414,6 +423,7 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 
 	public async sendText(text: string, shouldExecute: boolean, bracketedPasteMode?: boolean): Promise<void> {
 		if (this.isReadOnly || this.closed || this._state !== 'running') { throw new CancellationError(); }
+		this.startupReset.clear();
 		if (bracketedPasteMode && this.screen) {
 			const screen = await this.xtermReadyPromise;
 			if (!this.closed && !this.isDisposed && screen?.raw.modes.bracketedPasteMode) { text = `${TerminalEscapeSequences.BracketedPasteStart}${text}${TerminalEscapeSequences.BracketedPasteEnd}`; }
@@ -491,9 +501,27 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 	}
 
 	public clearBuffer(): void {
+		this.startupReset.clear();
 		this.pendingOutput.length = 0;
 		this.screenRecorder = this.screen ? undefined : this.createScreenRecorder();
 		this.screen?.clearBuffer();
+	}
+
+	private preserveRevivedHistory(screen: XtermTerminal): void {
+		const handlers = new DisposableStore();
+		this.startupReset.value = handlers;
+		// ConPTY paints its new viewport after the shell's prompt boundaries.
+		// Preserve only saved scrollback during that initial paint; cursor moves
+		// and ordinary viewport erases must retain their normal console semantics.
+		const erase = screen.raw.parser.registerCsiHandler({ final: 'J' }, parameters => {
+			return parameters[0] === 3;
+		});
+		handlers.add(toDisposable(() => erase.dispose()));
+		const cursor = screen.raw.parser.registerCsiHandler({ prefix: '?', final: 'h' }, parameters => {
+			if (parameters.includes(25)) this.startupReset.clear();
+			return false;
+		});
+		handlers.add(toDisposable(() => cursor.dispose()));
 	}
 
 	private writeScreenData(data: string): void {

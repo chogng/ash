@@ -98,6 +98,7 @@ export class TerminalService extends Disposable implements ITerminalService {
 			await this.whenConnected;
 		}
 		const location = options.location;
+		const preserveFocus = options.preserveFocus ?? (isEditorLocation(location) && typeof location === 'object' && location.preserveFocus);
 		const parent = typeof location === 'object' && 'parentTerminal' in location ? await location.parentTerminal
 			: typeof location === 'object' && 'splitActiveTerminal' in location && location.splitActiveTerminal ? this.activeInstance : undefined;
 		const assertCurrent = (): void => {
@@ -107,7 +108,7 @@ export class TerminalService extends Disposable implements ITerminalService {
 		assertCurrent();
 		const dimensions = options.dimensions ?? parent?.xterm?.dimensions() ?? { rows: 24, cols: 80 };
 		const cwd = options.cwd ?? (options.config && 'cwd' in options.config ? options.config.cwd : undefined);
-		const cwdResource = URI.isUri(cwd) ? cwd : typeof cwd === 'string' && /^(?:\/|[a-z]:[\\/]|\\\\)/i.test(cwd) ? URI.file(cwd) : undefined;
+		const cwdResource = URI.isUri(cwd) ? cwd : typeof cwd === 'string' && /^(?:[\\/]|[a-z]:[\\/])/i.test(cwd) ? URI.file(cwd) : undefined;
 		let launch: ITerminalCreateOptions;
 		if (options.config && 'customPtyImplementation' in options.config && options.config.customPtyImplementation) {
 			launch = {
@@ -148,6 +149,7 @@ export class TerminalService extends Disposable implements ITerminalService {
 				const previous = new Set(this.instances);
 				const instanceId = await provider.createContributedTerminalProfile({
 					...contributed.options,
+					preserveFocus,
 					location: isEditorLocation(location) ? typeof location === 'object' ? location : TerminalLocation.Editor : undefined,
 					cwd: options.cwd ?? parent?.cwd ?? parent?.initialCwd ?? folder.uri,
 				});
@@ -156,7 +158,7 @@ export class TerminalService extends Disposable implements ITerminalService {
 				return this.placeCreatedTerminal(created, location, parent, () => {
 					assertCurrent();
 					if (created.dirId !== folder.id) throw new CancellationError();
-				});
+				}, created.target === TerminalLocation.Editor);
 			}
 			const profile = config && 'profileName' in config ? config : !config && !parent?.shellLaunchConfig?.executable ? this.profiles.getDefaultProfile(undefined, folder.id) : undefined;
 			const shell: IShellLaunchConfig = profile ? { name: profile.profileName, executable: profile.path, args: profile.args, env: profile.env, icon: profile.icon, color: profile.color }
@@ -200,16 +202,19 @@ export class TerminalService extends Disposable implements ITerminalService {
 			};
 		}
 		assertCurrent();
-		const preserveFocus = isEditorLocation(location) && typeof location === 'object' && location.preserveFocus;
 		const instance = await this.createTerminalCore(launch, isEditorLocation(location) ? TerminalLocation.Editor : undefined, !preserveFocus);
 		return this.placeCreatedTerminal(instance, location, parent, assertCurrent);
 	}
 
-	private async placeCreatedTerminal(instance: ITerminalInstance, location: ITerminalLocationOptions | undefined, parent: ITerminalInstance | undefined, assertCurrent: () => void): Promise<ITerminalInstance> {
+	private async placeCreatedTerminal(instance: ITerminalInstance, location: ITerminalLocationOptions | undefined, parent: ITerminalInstance | undefined, assertCurrent: () => void, editorAlreadyOpened = false): Promise<ITerminalInstance> {
 		try {
 			assertCurrent();
 			if (!this.instances.includes(instance)) throw new CancellationError();
-			if (isEditorLocation(location)) await this.terminalEditors.openEditor(instance, typeof location === 'object' ? location : undefined);
+			if (isEditorLocation(location)) {
+				// Extension providers can finish opening the requested editor during
+				// recursive creation. Keep placement with that completed operation.
+				if (!editorAlreadyOpened) await this.terminalEditors.openEditor(instance, typeof location === 'object' ? location : undefined);
+			}
 			else if (parent) this.groups.joinInstances([parent, instance]);
 			return instance;
 		} catch (error) {
@@ -253,7 +258,7 @@ export class TerminalService extends Disposable implements ITerminalService {
 				throw new CancellationError();
 			}
 			if (!revive && process.ready.pid !== snapshot.process.ready.pid) throw new Error('Terminal process identity changed');
-			const restored = revive ? { ...snapshot, process, sequence: 0, pendingUtf8: [] } : snapshot;
+			const restored = revive ? { ...snapshot, sequence: 0, pendingUtf8: [] } : snapshot;
 			const instance = await this.createTerminalCore({
 				...liveLaunch, revivalLaunch: snapshot.launch, dirId: snapshot.dirId, dimensions, profile: liveLaunch?.profile ?? { type: 'profile', profileId: snapshot.process.profile.profileId }, title: snapshot.customTitle ?? snapshot.title,
 				attachPersistentProcess: { state: restored, process }, deferStart: true

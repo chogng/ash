@@ -20,7 +20,7 @@ import { EnterMultiRootWorkspaceSupportContext } from '../common/contextkeys.js'
 import { WORKSPACE_EDIT_ERROR_CHANNEL } from '../../platform/workspace/common/workspaceIpc.js';
 import { INotificationService } from '../../platform/notification/common/notification.js';
 import { localize } from '../../nls.js';
-import { WORKSPACE_RECOVERY_CHANNEL } from '../../platform/window/common/window.js';
+import { WORKSPACE_RECOVERY_CHANNEL, WINDOW_TERMINAL_TRANSFER_STARTUP_CHANNEL } from '../../platform/window/common/window.js';
 import { serializeWorkspaceIdentifier, type IAnyWorkspaceIdentifier } from '../../platform/workspace/common/workspace.js';
 import { WorkingCopyBackupService } from '../services/workingCopy/browser/workingCopyBackupService.js';
 import { IndexedDbWorkingCopyBackupService } from '../services/workingCopy/browser/indexedDbWorkingCopyBackupService.js';
@@ -101,7 +101,9 @@ export class DesktopMain extends Disposable {
 			// The scope releases its dependent services before closing their Main connection.
 			profileServices.registerSingleton(IMainProcessService, () => profileServices.createInstance(ElectronIPCMainProcessService, windowId as number));
 			const mainProcessService = profileServices.get(IMainProcessService);
-			const environment = new ElectronWorkbenchEnvironmentService(await mainProcessService.getChannel('logger').call('getDefaultLogLevels'));
+			const expectsTerminalTransfer = await invoke<unknown>(WINDOW_TERMINAL_TRANSFER_STARTUP_CHANNEL);
+			if (typeof expectsTerminalTransfer !== 'boolean') throw new TypeError('Invalid terminal window startup intent');
+			const environment = new ElectronWorkbenchEnvironmentService(await mainProcessService.getChannel('logger').call('getDefaultLogLevels'), expectsTerminalTransfer);
 			profileServices.registerInstance(IWorkbenchEnvironmentService, environment);
 			const logger = this._register(profileServices.createInstance(NativeLogService, 'workbench'));
 			const playwrightService = profileServices.get(IPlaywrightService);

@@ -883,6 +883,48 @@ suite('Terminal configuration and interactive profiles', () => {
 		assert.equal(calls, 1);
 	});
 
+	for (const custom of [false, true]) test(`background extension ${custom ? 'PTY' : 'shell'} creation preserves user selection throughout provider completion`, async () => {
+		using owner = new DisposableStore();
+		const opened: number[] = [];
+		const { services, profiles } = createServices(owner, true, async input => { opened.push((input as import('../../browser/terminalEditorInput.js').TerminalEditorInput).terminalInstance!.instanceId); });
+		const terminals = services.get(ITerminalService);
+		const original = await terminals.createTerminal({ profile: { type: 'default' }, deferStart: true });
+		const selected = await terminals.createTerminal({ profile: { type: 'default' }, deferStart: true });
+		terminals.setActiveInstance(original);
+		const changes: string[] = [];
+		owner.add(terminals.onDidChangeActiveInstance(instance => { if (instance) changes.push(instance.id); }));
+		const entered = new DeferredPromise<void>();
+		const release = new DeferredPromise<void>();
+		const digest = `sha256:${'a'.repeat(64)}`;
+		Object.assign(services.get(IExtensionService), { currentCatalog: { generation: 1, diagnostics: [], extensions: [{ id: 'acme.extension', packageSha256: digest }] } });
+		const bridge = owner.add(services.createInstance(MainThreadTerminalService));
+		bridge.replaceProfiles([{
+			runtimeId: 'background-runtime', packageDigest: digest, profileId: 'background', title: 'Background',
+			invoke: async (operation): Promise<import('../../../../../platform/agentHost/common/extensionHostApi.js').JsonValue> => {
+				if (operation === 'createTerminalProfile') {
+					await entered.complete();
+					await release.p;
+					return custom ? { options: { name: 'Background' }, pty: { ptyId: 'background-pty', acceptsInput: true } } : { options: { name: 'Background', shellPath: '/extension/shell' } };
+				}
+				return { events: [] };
+			},
+		}]);
+		const pending = terminals.createTerminal({ config: profiles.contributedProfiles[0]!, location: { preserveFocus: true } });
+		try {
+			await entered.p;
+			terminals.setActiveInstance(selected);
+			await release.complete();
+			const background = await pending;
+			assert.equal(terminals.activeInstance, selected);
+			assert.deepEqual(changes, [selected.id]);
+			assert.deepEqual(opened, [background.instanceId]);
+			assert.equal(background.target, TerminalLocation.Editor);
+		} finally {
+			await release.complete();
+			await Promise.allSettled([pending]);
+		}
+	});
+
 	test('concurrent contributed profiles return and place their own instances despite focus changes', async () => {
 		using owner = new DisposableStore();
 		const opened: number[] = [];
@@ -952,7 +994,7 @@ suite('Terminal configuration and interactive profiles', () => {
 		assert.equal(background.target, TerminalLocation.Editor);
 		assert.equal(terminals.activeInstance, selected);
 		assert.deepEqual(changes, [selected.instanceId]);
-		assert.equal(opened.length, 2);
+		assert.equal(opened.length, 1);
 		for (const options of opened) assert.equal((options as { preserveFocus?: boolean; }).preserveFocus, true);
 		await terminals.closeTerminal(background);
 		bridge.replaceProfiles([]);
@@ -1070,7 +1112,7 @@ suite('Terminal configuration and interactive profiles', () => {
 		if (!custom) {
 			assert.equal(launches[0]!.dirId, 'two');
 			assert.equal(launches[0]!.env?.ROOT, '/second');
-			assert.equal(launches[0]!.cwd, '/second');
+			assert.equal(launches[0]!.cwd, folders[1]!.uri.fsPath);
 		}
 		await terminals.closeTerminal(instance);
 		assert.deepEqual(terminals.instances, []);

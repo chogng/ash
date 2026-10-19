@@ -1776,6 +1776,33 @@ test('EditorPart closes the active editor using recent tab history or the curren
 	} finally { dom.window.close(); }
 });
 
+test('custom close handlers receive the exact close set after retained hosts and sticky exclusions', async () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	try {
+		using registry = new EditorPaneRegistry();
+		using registration = registry.registerEditorPane(descriptor('test.customClose', '.ts', () => new TestEditorPane('test.customClose')));
+		using editor = createEditorPart(dom.window.document.body, { registry });
+		const requests: unknown[] = [];
+		const handler = { showConfirm: () => true, confirm: async (editors: unknown) => { requests.push(editors); return ConfirmResult.CANCEL; } };
+		const shared = { ...input('/project/shared.ts'), editorId: 'custom', closeHandler: handler };
+		await editor.openEditor(shared, { pinned: true });
+		const first = editor.activeGroup;
+		await editor.openEditor(shared, { pinned: true }, 'sideGroup');
+		const second = editor.activeGroup;
+		const other = { ...input('/project/other.ts'), editorId: 'other', closeHandler: handler };
+		await editor.openEditor(other, { pinned: true });
+		assert.equal(await first.closeEditor(shared), true);
+		assert.deepEqual(requests.splice(0), []);
+		assert.equal(await editor.closeAllEditors(), false);
+		assert.deepEqual(requests.splice(0), [[{ editor: shared, groupId: second.id }, { editor: other, groupId: second.id }]]);
+		second.stickEditor(shared);
+		assert.equal(await editor.closeAllEditors({ excludeSticky: true }), false);
+		assert.deepEqual(requests, [[{ editor: other, groupId: second.id }]]);
+		assert.deepEqual(first.inputs, []);
+		assert.deepEqual(second.inputs, [shared, other]);
+	} finally { dom.window.close(); }
+});
+
 test('Close All Editors command retains dirty sticky tabs without a confirmation and lifecycle close still closes them', async () => {
 	const dom = new JSDOM('<!doctype html><body></body>');
 	try {

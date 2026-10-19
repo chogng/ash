@@ -1560,6 +1560,27 @@ suite('TerminalService lifecycle', () => {
 suite('TerminalService output parsing', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();
 
+	test('fragmented output shares one screen commit and acknowledges it only after parsing', async () => {
+		const parsed = deferred<void>();
+		const bytes = new TextEncoder().encode('中文🙂'.repeat(8));
+		const processes = new TestTerminalProcessService([
+			readResult({ chunks: Array.from(bytes, (byte, index) => ({ sequence: index + 1, data: new Uint8Array([byte]) })), nextSequence: bytes.length }),
+			readResult({ nextSequence: bytes.length, exited: true, exitCode: 0 }),
+		]);
+		using workspace = folderWorkspaceContext();
+		using services = terminalServices(processes, workspace);
+		using manager = services.createInstance(TerminalProcessManager, { terminalId: 'terminal-1' });
+		const writes: string[] = [];
+		using listener = manager.onProcessData(event => { writes.push(event.data); event.writePromise = parsed.promise; });
+		const reading = manager.start();
+		await waitFor(() => writes.length > 0);
+		assert.deepEqual(writes, ['中文🙂'.repeat(8)]);
+		assert.deepEqual(processes.readCursors, [0]);
+		parsed.resolve();
+		await reading;
+		assert.deepEqual(processes.readCursors, [0, bytes.length]);
+	});
+
 	test('reload checkpoint waits for accepted stdin and screen parsing, then resumes the same UTF-8 stream', async () => {
 		const parsed = deferred<void>();
 		const processes = new TestTerminalProcessService([
@@ -1699,7 +1720,7 @@ suite('TerminalService output parsing', () => {
 				exited: true,
 				exitCode: 0,
 			}),
-			readResult({ chunks: [{ sequence: 129, data: new TextEncoder().encode('tail') }], nextSequence: 129, nextCommandSequence: 1, exited: true, exitCode: 0 }),
+			readResult({ chunks: [{ sequence: 129, data: new TextEncoder().encode('tail') }, { sequence: 130, data: new TextEncoder().encode('after') }], nextSequence: 130, nextCommandSequence: 1, exited: true, exitCode: 0 }),
 		]);
 		using workspace = folderWorkspaceContext();
 		using services = terminalServices(processes, workspace);
@@ -1716,8 +1737,9 @@ suite('TerminalService output parsing', () => {
 		}));
 		const instance = await terminals.createTerminal({ dimensions: { rows: 24, cols: 80 }, profile: { type: 'default' } });
 		await waitFor(() => instance.state === 'exited');
-		assert.deepEqual({ count: events.length, tail: events.slice(-3), reads: processes.readCursors, commands: processes.commandReadCursors }, {
-			count: 131, tail: ['tail', 'succeeded', 'exit'], reads: [0, 128], commands: [0, 1],
+		assert.deepEqual(events, [Array.from({ length: 128 }, (_, index) => `line-${index + 1}`).join(''), 'tail', 'succeeded', 'after', 'exit']);
+		assert.deepEqual({ reads: processes.readCursors, commands: processes.commandReadCursors }, {
+			reads: [0, 128], commands: [0, 1],
 		});
 	});
 

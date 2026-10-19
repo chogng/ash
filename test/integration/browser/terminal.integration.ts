@@ -1,4 +1,5 @@
 import { IWorkbenchLayoutService, Position } from '../../../src/ash/workbench/services/layout/browser/layoutService.js';
+import { IWorkbenchEnvironmentService } from '../../../src/ash/workbench/services/environment/common/environmentService.js';
 import { ILabelService } from '../../../src/ash/platform/label/common/label.js';
 import { LabelService } from '../../../src/ash/workbench/services/label/common/labelService.js';
 import { InstantiationType } from '../../../src/ash/platform/instantiation/common/extensions.js';
@@ -30,7 +31,8 @@ import { setIconResolver } from '../../../src/ash/base/browser/ui/lxicons/lxicon
 import { getIconDefinition } from '../../../src/ash/platform/theme/common/iconRegistry.js';
 import { TerminalGroupService } from '../../../src/ash/workbench/contrib/terminal/browser/terminalGroupService.js';
 import { ITerminalGroupService } from '../../../src/ash/workbench/contrib/terminal/browser/terminal.js';
-import { IStorageService } from '../../../src/ash/platform/storage/common/storage.js';
+import { IStorageService, StorageScope, StorageTarget } from '../../../src/ash/platform/storage/common/storage.js';
+import { TerminalStorageKeys } from '../../../src/ash/workbench/contrib/terminal/common/terminalStorageKeys.js';
 import { BrowserStorageService } from '../../../src/ash/workbench/services/storage/browser/storageService.js';
 import { IExtensionService } from '../../../src/ash/workbench/services/extensions/common/extensionService.js';
 import { IConfigurationResolverService } from '../../../src/ash/workbench/services/configurationResolver/common/configurationResolver.js';
@@ -118,6 +120,11 @@ if (new URLSearchParams(location.search).has('workbench')) {
 store.add(installTestDictationAudio(window));
 setIconResolver(document, icon => getIconDefinition(icon));
 function setupTerminalFixtureServices(services: import('../../../src/ash/platform/instantiation/common/instantiationService.js').InstantiationService, lifetime: DisposableStore, fallbackProcess = true): void {
+	if (!services.has(IWorkbenchEnvironmentService)) services.registerInstance(IWorkbenchEnvironmentService, {
+		argvResource: URI.from({ scheme: 'vscode-userdata', path: '/user/argv.json' }),
+		webviewExternalEndpoint: 'http://{{uuid}}.localhost',
+		expectsTerminalTransfer: new URLSearchParams(location.search).has('transfer'),
+	});
 	// Keep the concrete owner observable after scope disposal for cleanup assertions.
 	if (!services.has(ITerminalService)) services.registerSingleton(ITerminalService, () => services.createInstance(TerminalService), { instantiation: InstantiationType.Delayed });
 	if (!services.has(IDialogService)) services.registerSingleton(IDialogService, () => services.createInstance(DialogService));
@@ -439,7 +446,7 @@ if (new URLSearchParams(location.search).has('pane') || new URLSearchParams(loca
 				disposed.fire(instance); activeChanged.fire(activeInstance); instancesChanged.fire();
 			},
 		};
-		services.registerSingleton(ITerminalService, () => new URLSearchParams(location.search).has('existing') ? legacyTerminals : services.createInstance(TerminalService));
+		services.registerSingleton(ITerminalService, () => new URLSearchParams(location.search).has('existing') || new URLSearchParams(location.search).has('incoming') ? legacyTerminals : services.createInstance(TerminalService));
 		let transcript!: (text: string, isFinal: boolean) => void;
 		let stops = 0;
 		services.registerInstance(IVoiceCodeTranscriptionBackendService, createTestDictationBackend(store, { getOptions: async () => ({ inputDevices: [], languages: [] }), start: async (_options, callback) => { transcript = callback; return { stop: async () => { stops++; }, cancel: async () => { stops++; } }; } }));
@@ -576,7 +583,7 @@ if (new URLSearchParams(location.search).has('pane') || new URLSearchParams(loca
 			getWorkspace: () => workspace,
 			getWorkbenchState: () => 2,
 			getWorkspaceFolder: resource => workspace.folders.find(folder => extUri.isEqualOrParent(resource, folder.uri)) ?? null,
-		}, services, profileService, resolver, services.get(ITerminalProcessService), services.get(ITerminalGroupService)));
+		}, services, profileService, resolver, services.get(ITerminalProcessService), services.get(ITerminalGroupService), services.get(IWorkbenchEnvironmentService)));
 		root.append(pane.partTitleProjection.actions!);
 		pane.layout(Math.max(0, root.clientHeight - pane.partTitleProjection.actions!.offsetHeight), 0, root.clientWidth);
 		return {
@@ -599,6 +606,7 @@ if (new URLSearchParams(location.search).has('pane') || new URLSearchParams(loca
 			activeId: () => terminals.activeInstance?.instanceId,
 			snapshot: () => pane.getTerminalOutput(paneInstance, 100_000, new AbortController().signal),
 			counts: () => ({ profiles, creates }),
+			receive: async () => { await legacyTerminals.createTerminal(); },
 			command: (id: string, argument?: unknown) => commands.executeCommand(id, argument),
 			dispose: () => lifetime.dispose(),
 			transcript: (text, final) => transcript(text, final),
@@ -654,6 +662,7 @@ declare global {
 			activeId(): number | undefined;
 			snapshot(): Promise<string | undefined>;
 			counts(): { profiles: number; creates: number; };
+			receive(): Promise<void>;
 			transcript(text: string, final: boolean): void;
 			stops(): number;
 			panel(visible: boolean): void;
@@ -849,12 +858,22 @@ if (new URLSearchParams(location.search).has('stream')) {
 	const reportHistory = new URLSearchParams(location.search).has('history');
 	const reuseCommands = new URLSearchParams(location.search).has('reuseCommands');
 	const commandModel = new URLSearchParams(location.search).has('commandModel');
+	const reviveHistory = new URLSearchParams(location.search).has('reviveHistory');
 	let modelSequence = 0;
 	const modelOutput: import('../../../src/ash/platform/terminal/common/terminal.js').ITerminalProcessOutputChunk[] = [];
 	const queueModel = (data: string, shellIntegration?: import('../../../src/ash/platform/terminal/common/terminal.js').TerminalShellIntegrationEvent) => {
 		modelOutput.push({ sequence: ++modelSequence, data: new TextEncoder().encode(data), ...(shellIntegration ? { shellIntegration } : {}) });
 	};
-	if (commandModel) {
+	if (reviveHistory) {
+		queueModel('', { type: 'processReady', isWindowsPty: true, shellType: GeneralShellType.PowerShell });
+		queueModel('', { type: 'promptStart' });
+		queueModel('', { type: 'commandStart' });
+		// ConsoleHost's first console paint follows the shell's prompt metadata.
+		// Fragment the reset to exercise the real parser rather than text replacement.
+		queueModel('\x1b[?25l\x1b[2');
+		queueModel('J\x1b[3J\x1b[m\x1b[HPS NEW> ');
+		queueModel('\x1b[?25h');
+	} else if (commandModel) {
 		const powerShell = new URLSearchParams(location.search).has('powerShell');
 		queueModel('', { type: 'processReady', isWindowsPty: powerShell, shellType: powerShell ? GeneralShellType.PowerShell : PosixShellType.Bash });
 		queueModel('', { type: 'promptStart' });
@@ -874,6 +893,7 @@ if (new URLSearchParams(location.search).has('stream')) {
 	if (overflow) await widgetServices.get(IConfigurationService).updateValue('terminal.integrated.scrollback', 5000);
 	const profile = { profileId: 'shell', title: 'Shell', isDefault: true };
 	const processes: import('../../../src/ash/platform/terminal/common/terminal.js').ITerminalProcessService = {
+		operatingSystem: reviveHistory ? OperatingSystem.Windows : undefined,
 		getProcessInfo: async () => ({ ready: { pid: 1234, cwd: '/workspace' }, cwd: '/workspace/current', rows: 24, cols: 80 }),
 		sendSignal: async () => { }, resolveProfile: async (profile: import('../../../src/ash/platform/terminal/common/terminal.js').TerminalProcessProfileSelection) => ({ profile: profile.type === 'custom' ? { profileId: `custom:${profile.name}`, title: profile.name, isDefault: false } : instance.profile, executable: profile.type === 'custom' ? profile.path.at(-1)! : '/bin/sh', args: profile.type === 'custom' ? (typeof profile.args === 'string' ? profile.args : [...profile.args]) : [] }), getEnvironment: async () => ({}), listProfiles: async () => [profile],
 		create: async () => { launch++; return { terminalId: reuseCommands ? `stream-shell-${launch}` : 'stream-shell', ready: { pid: reuseCommands ? 1234 + launch : 1234, cwd: '/workspace' }, profile, connectionPersistence: 'connectionOwned' }; },
@@ -919,6 +939,16 @@ if (new URLSearchParams(location.search).has('stream')) {
 	const services = store.add(widgetServices.createChild(new ServiceCollection([ITerminalProcessService, processes], [IWorkspaceContextService, workspace])));
 	setupTerminalFixtureServices(services, store);
 	installWorkbenchServiceContributions({ container: services, register: value => store.add(value), blockRestorationUntil: () => { } });
+	if (reviveHistory) {
+		const snapshot: import('../../../src/ash/workbench/services/terminal/common/terminal.js').ITerminalSerializedState = {
+			instanceId: 7, resource: getTerminalUri('previous-window', 7).toString(), dirId: workspace.getWorkspace().folders[0]!.id,
+			process: { terminalId: 'previous-shell', ready: { pid: 321, cwd: '/workspace' }, profile, connectionPersistence: 'reconnectable' },
+			title: 'PowerShell', target: TerminalLocation.Panel, cols: 80, rows: 24, sequence: 88, pendingUtf8: [],
+			vt: 'SAVED_HISTORY\r\nold-command-complete\r\n', cwd: '/workspace',
+			launch: { profile: { type: 'custom', name: 'PowerShell', path: ['powershell.exe'], args: [] }, cwd: '/workspace' },
+		};
+		services.get(IStorageService).store(TerminalStorageKeys.Revive, JSON.stringify({ version: 1, kind: 'revive', workspaceId: workspace.getWorkspace().id, instances: [snapshot], groups: [{ ids: [7], sizes: [1] }], activeId: 7 }), StorageScope.WORKSPACE, StorageTarget.MACHINE);
+	}
 	const terminals = services.get(ITerminalService);
 	let screen: import('../../../src/ash/workbench/contrib/terminal/browser/terminal.js').IXtermTerminal | undefined;
 	const deferred = new URLSearchParams(location.search).has('deferred');
@@ -933,13 +963,17 @@ if (new URLSearchParams(location.search).has('stream')) {
 		store.add(instance.onDidChangeCommandStatus(event => events.push(event.status)));
 		store.add(instance.onDidExit(() => events.push('exit')));
 	}));
-	const terminal = await terminals.createTerminal({ dimensions: { rows: 24, cols: 80 }, profile: { type: 'default' } });
+	const terminal = reviveHistory ? (await terminals.whenConnected, terminals.instances[0]!) : await terminals.createTerminal({ dimensions: { rows: 24, cols: 80 }, profile: { type: 'default' } });
+	if (reviveHistory) terminal.start();
 	const streamInstances = terminals.instances;
 	window.ashTerminalStreamIntegration = {
 		status: () => ({ reads, events, closes, state: terminal.state, remaining: streamInstances.length, ...(reportCwd ? { cwd: terminal.cwd } : {}), ...(reportHistory ? { shellIntegration: terminal.shellIntegration } : {}) }),
 		reuse: async () => { await terminal.reuseTerminal({ executable: '/bin/sh', args: [], deferStart: true }); terminal.start(); },
 		start: async () => {
-			if (!screen) { terminal.attachToElement(document.querySelector<HTMLElement>('#terminal')!); screen = terminal.xterm!; screen.setVisible(true); }
+			terminal.attachToElement(document.querySelector<HTMLElement>('#terminal')!);
+			screen = terminal.xterm!;
+			if (reviveHistory) screen.element.style.height = '100%';
+			screen.setVisible(true);
 			await terminal.xtermReadyPromise; screen.focus();
 		},
 		feedModel: text => queueModel(text),
@@ -1018,6 +1052,7 @@ if (new URLSearchParams(location.search).has('input')) {
 	const connectionChanged = store.add(new Emitter<import('../../../src/ash/platform/terminal/common/terminal.js').TerminalProcessConnectionState>());
 	const writes: Array<string | number[]> = [];
 	const routedWrites: { terminalId: string; data: string | number[]; }[] = [];
+	const closedProcesses: string[] = [];
 	const launchDirectories: (string | undefined)[] = [];
 	const sizes: { terminalId: string; cols: number; rows: number; }[] = [];
 	const queuedOutput: { data: Uint8Array; shellIntegration?: import('../../../src/ash/platform/terminal/common/terminal.js').TerminalShellIntegrationEvent; }[] = [{ data: new TextEncoder().encode('retained screen\r\n\x1b[c') }];
@@ -1039,7 +1074,7 @@ if (new URLSearchParams(location.search).has('input')) {
 				await new Promise<void>((resolve, reject) => { releaseInput = failed => failed ? reject(new Error('Terminal write denied')) : resolve(); });
 			}
 		},
-		resize: async options => { sizes.push({ terminalId: options.terminalId, cols: options.cols, rows: options.rows }); }, close: async () => { }, getConnectionState: async () => 'ready', onConnectionState: connectionChanged.event,
+		resize: async options => { sizes.push({ terminalId: options.terminalId, cols: options.cols, rows: options.rows }); }, close: async options => { closedProcesses.push(options.terminalId); }, getConnectionState: async () => 'ready', onConnectionState: connectionChanged.event,
 		read: async options => ({
 			terminalId: options.terminalId, chunks: queuedOutput.splice(0).map(chunk => ({ sequence: ++sequence, ...chunk })), nextSequence: sequence,
 			outputGap: false, commandEvents: [], nextCommandSequence: 0, commandEventGap: false, exited: false, exitCode: undefined,
@@ -1154,6 +1189,15 @@ if (new URLSearchParams(location.search).has('input')) {
 					import('../../../src/ash/workbench/contrib/terminal/browser/terminal.js'),
 					import('../../../src/ash/workbench/contrib/terminal/browser/terminalEditorService.js'),
 				]);
+				if (new URLSearchParams(location.search).has('extensionProfiles')) {
+					const digest = `sha256:${'a'.repeat(64)}`;
+					Object.assign(services.get(IExtensionService), { currentCatalog: { generation: 1, diagnostics: [], extensions: [{ id: 'acme.extension', packageSha256: digest }] } });
+					const bridge = store.add(services.createInstance(MainThreadTerminalService));
+					bridge.replaceProfiles([{
+						runtimeId: 'background-runtime', packageDigest: digest, profileId: 'background', title: 'Background',
+						invoke: async () => ({ options: { name: 'Background', shellPath: '/extension/shell' } }),
+					}]);
+				}
 				window.ashTerminalEditorIntegration = {
 					activeContext: () => services.get(IContextKeyService).getValue<boolean>(TerminalHasActiveInstanceContext.key) === true,
 					copyToSide: async (sticky: boolean) => {
@@ -1162,11 +1206,16 @@ if (new URLSearchParams(location.search).has('input')) {
 						await editors.openEditor(input, { pinned: true }, 'sideGroup');
 					},
 					confirmClose: () => services.get(IConfigurationService).updateValue('terminal.integrated.confirmOnKill', 'editor'),
-					closeAll: (excludeSticky: boolean) => part.closeAllEditors({ excludeSticky }),
-					createBackground: async () => {
-						const instance = await terminals.createTerminal({ profile: { type: 'default' }, location: { preserveFocus: true } });
+					createBackground: async (contributed = false) => {
+						const instance = await terminals.createTerminal({ ...(contributed ? { config: services.get(ITerminalProfileService).contributedProfiles[0]! } : { profile: { type: 'default' as const } }), location: { preserveFocus: true } });
 						return instance.id;
 					},
+					split: () => part.splitActiveGroupHorizontal(),
+					stick: () => editors.activeGroup.stickEditor(editors.activeEditor!),
+					closeAll: (excludeSticky = false) => part.closeAllEditors({ excludeSticky }),
+					closeGroup: (id: number) => part.removeGroup(id),
+					confirmOnKill: () => services.get(IConfigurationService).updateValue('terminal.integrated.confirmOnKill', 'always'),
+					closedProcesses: () => closedProcesses,
 					revealBackground: async (id: string) => {
 						const instance = terminals.instances.find(instance => instance.id === id);
 						if (!instance) throw new Error('Background terminal is unavailable');
@@ -1335,8 +1384,13 @@ declare global {
 			activeContext(): boolean;
 			copyToSide(sticky: boolean): Promise<void>;
 			confirmClose(): Promise<void>;
-			closeAll(excludeSticky: boolean): Promise<boolean>;
-			createBackground(): Promise<string>;
+			createBackground(contributed?: boolean): Promise<string>;
+			split(): Promise<void>;
+			stick(): void;
+			closeAll(excludeSticky?: boolean): Promise<boolean>;
+			closeGroup(id: number): Promise<boolean>;
+			confirmOnKill(): Promise<void>;
+			closedProcesses(): string[];
 			revealBackground(id: string): Promise<void>;
 			groups(): { id: number; resources: string[]; }[];
 			disconnect(): void;

@@ -13,6 +13,7 @@ export interface IRectangle {
 }
 
 export const WORKSPACE_RECOVERY_CHANNEL = 'ash:window:restoreWorkspaces';
+export const WINDOW_TERMINAL_TRANSFER_STARTUP_CHANNEL = 'ash:window:terminal-transfer-startup';
 export const WINDOW_OPEN_EXTERNAL_URI_CHANNEL = 'ash:window:openExternalUri';
 export const AGENTS_WINDOW_HANDOFF_AVAILABLE_CHANNEL = 'ash:sessions:handoff-available';
 export const AGENTS_WINDOW_HANDOFF_TAKE_CHANNEL = 'ash:sessions:handoff-take';

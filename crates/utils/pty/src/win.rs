@@ -10,6 +10,7 @@ use std::io;
 use std::os::windows::io::AsHandle;
 use std::os::windows::io::RawHandle;
 use std::sync::Arc;
+use std::sync::Once;
 
 mod job;
 
@@ -23,6 +24,15 @@ pub(crate) struct ConPtySystem {}
 
 impl PtySystem for ConPtySystem {
     fn openpty(&self, size: PtySize) -> anyhow::Result<PtyPair> {
+        static TERMINAL_SIGNALS: Once = Once::new();
+        TERMINAL_SIGNALS.call_once(|| {
+            // Detached launchers pass an inherited "ignore Ctrl-C" attribute to
+            // ConPTY clients. Restore Ctrl-C processing for future children;
+            // this does not remove any of the host's registered signal handlers.
+            // GUI/background hosts may have no console, so the return value is
+            // not a console-availability check (node-pty uses the same reset).
+            unsafe { winapi::um::consoleapi::SetConsoleCtrlHandler(None, 0) };
+        });
         let mut pair = portable_pty::win::conpty::ConPtySystem::default().openpty(size)?;
         pair.slave = Box::new(JobSlave { inner: pair.slave });
         Ok(pair)

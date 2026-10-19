@@ -254,13 +254,30 @@ async fn conpty_delivers_input_to_foreground_children() -> anyhow::Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn conpty_ctrl_c_interrupts_powershell_foreground_child() -> anyhow::Result<()> {
+    const DETACHED_HOST: &str = "ASH_TEST_DETACHED_PTY_HOST";
+    if std::env::var_os(DETACHED_HOST).is_none() {
+        use std::os::windows::process::CommandExt;
+        use winapi::um::winbase::CREATE_NEW_PROCESS_GROUP;
+        use winapi::um::winbase::CREATE_NO_WINDOW;
+
+        // Match a managed backend's inherited Ctrl-C policy without changing
+        // the signal state of this concurrent test harness.
+        let status = std::process::Command::new(std::env::current_exe()?)
+            .args([
+                "--exact",
+                "tests::windows_tests::conpty_ctrl_c_interrupts_powershell_foreground_child",
+                "--nocapture",
+            ])
+            .env(DETACHED_HOST, "1")
+            .creation_flags(CREATE_NEW_PROCESS_GROUP | CREATE_NO_WINDOW)
+            .status()?;
+        anyhow::ensure!(status.success(), "detached ConPTY host failed: {status}");
+        return Ok(());
+    }
     let Some(program) = find_powershell() else {
         return Ok(());
     };
-    // Some test runners disable Ctrl-C in their descendants. Establish the shell fixture's
-    // signal state inside that child without changing the concurrent test harness.
-    // https://learn.microsoft.com/en-us/windows/console/ctrl-c-and-ctrl-break-signals
-    let startup = r#"Add-Type -TypeDefinition 'using System; using System.Runtime.InteropServices; public class ConsoleSignals { [DllImport("kernel32.dll", SetLastError=true)] public static extern bool SetConsoleCtrlHandler(IntPtr handler, bool add); }'; if (-not [ConsoleSignals]::SetConsoleCtrlHandler([IntPtr]::Zero, $false)) { throw 'cannot enable Ctrl-C' }; Write-Output '__ASH_SHELL_READY__'"#;
+    let startup = "Write-Output '__ASH_SHELL_READY__'";
     let args = vec![
         "-NoLogo".to_string(),
         "-NoProfile".to_string(),

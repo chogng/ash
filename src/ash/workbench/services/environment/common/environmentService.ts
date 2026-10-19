@@ -8,6 +8,8 @@ export const IWorkbenchEnvironmentService = createServiceIdentifier<IWorkbenchEn
 export interface IWorkbenchEnvironmentService {
 	readonly webviewExternalEndpoint: string;
 	readonly argvResource: URI;
+	/** The host opened this window to receive an existing terminal process. */
+	readonly expectsTerminalTransfer?: boolean;
 	readonly logLevel?: string;
 	/** Initial host recorder level; persisted values are reread before each new window starts. */
 	readonly initialLogLevel?: LogLevel;

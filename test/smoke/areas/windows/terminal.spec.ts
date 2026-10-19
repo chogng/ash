@@ -1,11 +1,38 @@
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import { expect, test } from '../../../automation/test.js';
+import type { Locator } from '@playwright/test';
+
+const windowsPowerShellSettings = process.platform === 'win32' ? {
+	'terminal.integrated.profiles.windows': {
+		'Smoke PowerShell': {
+			path: join(process.env.SystemRoot ?? 'C:\\Windows', 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe'),
+			args: ['-NoLogo', '-NoProfile', '-ExecutionPolicy', 'RemoteSigned'],
+		},
+	},
+	// A runner launched from PowerShell 7 can otherwise inject incompatible core
+	// modules into Windows PowerShell 5.1. Let the child build its own module path.
+	'terminal.integrated.env.windows': { PSModulePath: null },
+	'terminal.integrated.defaultProfile.windows': 'Smoke PowerShell',
+} : {};
+test.use({ electronUserSettings: windowsPowerShellSettings });
+
+async function revealSavedHistory(pane: Locator, text: string): Promise<void> {
+	const input = pane.locator('.xterm-helper-textarea');
+	await input.focus();
+	await input.press('ControlOrMeta+f');
+	const find = pane.getByRole('region', { name: 'Find in terminal', exact: true });
+	const query = find.getByRole('textbox', { name: 'Find', exact: true });
+	await query.fill(text);
+	await expect(find.getByRole('status')).toHaveText('1 of 1');
+	await query.press('Escape');
+	await expect(pane.locator('.xterm-rows')).toContainText(text);
+}
 
 test('terminal path commands run a literal file and reopen a recent directory in the real shell', { tag: ['@electron-app-server', '@browser-app-server'] }, async ({ workbench, testWorkspace }) => {
-	test.skip(process.platform === 'win32', 'POSIX executable fixture; Windows PowerShell requires its own real-host acceptance.');
-	const filename = "run 'literal' file.sh";
-	const source = "#!/bin/sh\nprintf '%s' 'executed literal file' > path-command-result.txt\n";
+	const windows = process.platform === 'win32';
+	const filename = windows ? "run 'literal' file.cmd" : "run 'literal' file.sh";
+	const source = windows ? '@echo off\r\n<nul set /p "=executed literal file">path-command-result.txt\r\n' : "#!/bin/sh\nprintf '%s' 'executed literal file' > path-command-result.txt\n";
 	await writeFile(join(testWorkspace.directory, filename), source, { mode: 0o755 });
 	const directory = join(testWorkspace.directory, "recent 'literal' directory");
 	await mkdir(directory);
@@ -18,19 +45,20 @@ test('terminal path commands run a literal file and reopen a recent directory in
 	await expect.poll(() => readFile(join(testWorkspace.directory, 'path-command-result.txt'), 'utf8').catch(() => '')).toBe('executed literal file');
 	await expect(editor.input).toBeFocused();
 	await expect(workbench.terminal.instances).toHaveCount(1);
-	const quote = (path: string): string => "'" + path.replaceAll("'", "'\"'\"'") + "'";
-	await workbench.terminal.runCommand(`cd -- ${quote(directory)}`);
-	await workbench.terminal.runCommand(`cd -- ${quote(testWorkspace.directory)}`);
+	const quote = (path: string): string => "'" + path.replaceAll("'", windows ? "''" : "'\"'\"'") + "'";
+	const changeDirectory = windows ? 'Set-Location -LiteralPath' : 'cd --';
+	await workbench.terminal.runCommand(`${changeDirectory} ${quote(directory)}`);
+	await workbench.terminal.runCommand(`${changeDirectory} ${quote(testWorkspace.directory)}`);
 	await workbench.quickaccess.runCommand('workbench.action.terminal.goToRecentDirectory');
 	await expect(workbench.page.getByText(directory, { exact: true })).toBeVisible();
 	await workbench.page.getByText(directory, { exact: true }).click();
-	await workbench.terminal.runCommand(`pwd > ${quote(join(testWorkspace.directory, 'path-directory-result.txt'))}`);
-	await expect.poll(() => readFile(join(testWorkspace.directory, 'path-directory-result.txt'), 'utf8').catch(() => '')).toBe(directory + '\n');
+	await workbench.terminal.runCommand(`node -e "require('fs').writeFileSync('path-directory-result.txt', process.cwd() + '\\n')"`);
+	await expect.poll(() => readFile(join(directory, 'path-directory-result.txt'), 'utf8').catch(() => '')).toBe(directory + '\n');
 	expect(await readFile(join(testWorkspace.directory, filename), 'utf8')).toBe(source);
 });
 
 for (const locale of ['en', 'zh-CN'] as const) test.describe(`terminal run selected text (${locale})`, () => {
-	test.use({ electronUserSettings: { 'workbench.locale': locale } });
+	test.use({ electronUserSettings: { ...windowsPowerShellSettings, 'workbench.locale': locale } });
 
 	test('runs selected text and the current line in a real shell while retaining editor focus', { tag: ['@electron-app-server'] }, async ({ workbench, testWorkspace, driver }, testInfo) => {
 		const page = workbench.page;
@@ -165,11 +193,11 @@ test('terminal preserves every output line when the screen temporarily stops con
 	await workbench.quickaccess.runCommand('workbench.action.openSettingsJson');
 	const editor = workbench.editors.groupAt(0);
 	await editor.editor.input.press('ControlOrMeta+A');
-	await editor.editor.input.evaluate(element => {
+	await editor.editor.input.evaluate((element, settings) => {
 		const clipboardData = new DataTransfer();
-		clipboardData.setData('text/plain', JSON.stringify({ 'terminal.integrated.scrollback': 60000 }));
+		clipboardData.setData('text/plain', JSON.stringify({ ...settings, 'terminal.integrated.scrollback': 60000 }));
 		element.dispatchEvent(new ClipboardEvent('paste', { bubbles: true, cancelable: true, clipboardData }));
-	});
+	}, windowsPowerShellSettings);
 	await editor.editor.waitForEditorContents(source => JSON.parse(source)['terminal.integrated.scrollback'] === 60000);
 	await workbench.quickaccess.runCommand('workbench.action.files.save');
 	await expect(editor.tabs.filter({ hasText: 'User Settings (JSON)' }).locator('..')).not.toHaveAttribute('data-state', /dirty|conflict/u);
@@ -334,7 +362,9 @@ test('terminal command markers use VS Code geometry and follow real shell comman
 	await terminal.runCommand(`node -e "console.log(['ash','command-success'].join('-'))"`);
 	await expect(instance.locator('.ash-terminal-command-status.succeeded')).toBeVisible();
 	await terminal.runCommand('node -e "process.exit(7)"');
-	await expect(instance.getByRole('img', { name: 'Command failed with exit code 7', exact: true })).toBeVisible();
+	// PowerShell reports pipeline success through $?; POSIX preserves the child's exit code.
+	const failedExitCode = process.platform === 'win32' ? 1 : 7;
+	await expect(instance.getByRole('button', { name: `Command failed with exit code ${failedExitCode}`, exact: true })).toBeVisible();
 	const ruler = instance.locator('canvas.xterm-decoration-overview-ruler');
 	await expect(ruler).toBeVisible();
 	await expect.poll(() => ruler.evaluate(canvas => {
@@ -355,7 +385,7 @@ test('terminal command markers use VS Code geometry and follow real shell comman
 	await workbench.page.locator('.ash-workbench-panel').screenshot({ path: testInfo.outputPath('terminal-presentation.png') });
 });
 
-test('terminal split row icons create panes whose keyboard focus and input stay independent', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ workbench, driver }) => {
+test('terminal split row icons create panes whose keyboard focus and input stay independent', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ workbench, driver, testWorkspace }) => {
 	const page = workbench.page;
 	await workbench.terminal.show();
 	await page.locator('.ash-terminal-title-toolbar').getByRole('button', { name: 'Split Terminal', exact: true }).click();
@@ -373,16 +403,20 @@ test('terminal split row icons create panes whose keyboard focus and input stay 
 	await expect(panes.nth(2).locator('.xterm-helper-textarea')).toBeFocused();
 	await panes.nth(0).locator('.xterm-screen').click({ position: { x: 20, y: 20 } });
 	await expect(panes.nth(0).locator('.xterm-helper-textarea')).toBeFocused();
+	const shellPids = new Map<number, string>();
 	for (const index of [1, 2, 0]) {
 		await page.keyboard.press('ControlOrMeta+Alt+ArrowRight');
 		await expect(panes.nth(index).locator('.xterm-helper-textarea')).toBeFocused();
-		await page.keyboard.type(`echo pane-${index}-ready`);
+		await page.keyboard.type(`node -e "require('fs').writeFileSync('pane-${index}.pid',String(process.ppid));console.log(['P',${index},'_OK'].join(''))"`);
 		await page.keyboard.press('Enter');
-		await expect(panes.nth(index).locator('.xterm-rows > div').filter({ hasText: new RegExp(`^pane-${index}-ready\\s*$`) })).toBeVisible();
+		await expect.poll(() => readFile(join(testWorkspace.directory, `pane-${index}.pid`), 'utf8').catch(() => '')).toMatch(/^\d+$/u);
+		await expect(panes.nth(index).locator('.xterm-rows > div').filter({ hasText: new RegExp(`^P${index}_OK\\s*$`) })).toBeVisible();
+		shellPids.set(index, await readFile(join(testWorkspace.directory, `pane-${index}.pid`), 'utf8'));
 		for (const other of [0, 1, 2].filter(other => other !== index)) {
-			await expect(panes.nth(other).locator('.xterm-rows')).not.toContainText(`pane-${index}-ready`);
+			await expect(panes.nth(other).locator('.xterm-rows')).not.toContainText(`P${index}_OK`);
 		}
 	}
+	expect(new Set(shellPids.values()).size).toBe(3);
 	await page.keyboard.press('ControlOrMeta+Alt+ArrowLeft');
 	await expect(panes.nth(2).locator('.xterm-helper-textarea')).toBeFocused();
 	const sash = page.locator('.ash-terminal-group:visible > .ash-sash').first();
@@ -404,9 +438,12 @@ test('terminal split row icons create panes whose keyboard focus and input stay 
 	await driver.setWindowSize({ width: 1200, height: 700 });
 	await expect.poll(screensFit).toBe(true);
 	await expect(panes.nth(2).locator('.xterm-helper-textarea')).toBeFocused();
-	await page.keyboard.type('echo after-resize');
+	// Narrow ConPTY panes can scroll output behind a long prompt. Verify execution
+	// and its original shell identity independently of the current viewport.
+	await page.keyboard.type(`node -e "require('fs').writeFileSync('resize-result.pid',String(process.ppid))"`);
 	await page.keyboard.press('Enter');
-	await expect(panes.nth(2).locator('.xterm-rows > div').filter({ hasText: /^after-resize\s*$/ })).toBeVisible();
+	await expect.poll(() => readFile(join(testWorkspace.directory, 'resize-result.pid'), 'utf8').catch(() => '')).toBe(shellPids.get(2));
+	await expect(panes.nth(2).locator('.xterm-helper-textarea')).toBeFocused();
 });
 
 test('terminal panel reopening retains split output, pending input, focus and column widths', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ workbench }) => {
@@ -421,7 +458,7 @@ test('terminal panel reopening retains split output, pending input, focus and co
 	const widths = () => panes.evaluateAll(nodes => nodes.map(node => node.getBoundingClientRect().width));
 	for (const index of [0, 1, 2]) {
 		await panes.nth(index).locator('.xterm-screen').click({ position: { x: 12, y: 12 } });
-		await page.keyboard.type(`printf 'retained-%s\\n' ${index}`);
+		await page.keyboard.type(`node -e "console.log(['retained',${index}].join('-'))"`);
 		await page.keyboard.press('Enter');
 		await expect(panes.nth(index).locator('.xterm-rows > div').filter({ hasText: new RegExp(`^retained-${index}\\s*$`) })).toBeVisible();
 	}
@@ -495,7 +532,7 @@ test('terminal title toolbar uses shell names, preserves renamed text and splits
 	const title = toolbar.locator('.ash-terminal-active-action button');
 	await expect(title).toBeVisible();
 	const shellName = (await title.textContent())!.trim();
-	expect(shellName).toBe(shellName.toLowerCase());
+	expect(shellName).toBe(process.platform === 'win32' ? 'Smoke PowerShell' : shellName.toLowerCase());
 	await workbench.menus.select(application, () => title.click(), ['Rename Terminal']);
 	const input = page.getByPlaceholder('Enter a terminal name; leave empty to restore the shell name', { exact: true });
 	await expect(input).toBeFocused();
@@ -504,6 +541,7 @@ test('terminal title toolbar uses shell names, preserves renamed text and splits
 	await expect(title).toHaveText('Build Shell');
 	await expect(workbench.terminal.activeInstance.locator('.xterm-helper-textarea')).toBeFocused();
 	await page.screenshot({ path: testInfo.outputPath('terminal-title-toolbar.png') });
+	await expect(workbench.terminal.activeInstance).toHaveAttribute('data-state', 'running');
 	await toolbar.getByRole('button', { name: 'New Terminal', exact: true }).click({ modifiers: ['Alt'] });
 	await expect(page.locator('.ash-terminal-group-pane:visible')).toHaveCount(2);
 	await expect(title).toBeVisible();
@@ -514,7 +552,7 @@ test('terminal title toolbar uses shell names, preserves renamed text and splits
 });
 
 for (const locale of ['en', 'zh-CN'] as const) test.describe(`terminal close protection and reload (${locale})`, () => {
-	test.use({ electronUserSettings: { 'terminal.integrated.confirmOnKill': 'always', 'terminal.integrated.confirmOnExit': 'always', 'workbench.locale': locale } });
+	test.use({ electronUserSettings: { ...windowsPowerShellSettings, 'terminal.integrated.confirmOnKill': 'always', 'terminal.integrated.confirmOnExit': 'always', 'workbench.locale': locale } });
 
 	test('canceling pane and window close preserves the process, output and input focus', { tag: ['@electron-app-server'] }, async ({ workbench, application, testWorkspace }) => {
 		const page = workbench.page;
@@ -544,7 +582,11 @@ for (const locale of ['en', 'zh-CN'] as const) test.describe(`terminal close pro
 		expect([after.pid, after.shell]).toEqual([before.pid, before.shell]);
 		process.kill(before.pid, 0);
 		await input.press('Control+c');
-		await input.pressSequentially("printf 'CLOSE_%s\\n' RESUMED");
+		await expect.poll(() => {
+			try { process.kill(before.pid, 0); return true; } catch { return false; }
+		}).toBe(false);
+		await expect(pane.locator('.ash-terminal-command-status.pending')).toBeVisible();
+		await input.pressSequentially('echo CLOSE_RESUMED');
 		await input.press('Enter');
 		await expect(pane.locator('.xterm-rows > div').filter({ hasText: /^CLOSE_RESUMED\s*$/u })).toBeVisible();
 		await page.locator('.ash-terminal-title-toolbar').getByRole('button', { name: zh ? '终止终端' : 'Kill Terminal', exact: true }).click();
@@ -571,7 +613,7 @@ for (const locale of ['en', 'zh-CN'] as const) test.describe(`terminal close pro
 		}
 		const third = panes.nth(2).locator('.xterm-helper-textarea');
 		await third.focus();
-		await third.pressSequentially("printf 'PENDING_%s\\n' ");
+		await third.pressSequentially('echo PENDING_');
 		const sash = page.locator('.ash-terminal-group:visible > .ash-sash').first();
 		const bounds = (await sash.boundingBox())!;
 		await page.mouse.move(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2);
@@ -611,7 +653,11 @@ for (const locale of ['en', 'zh-CN'] as const) test.describe(`terminal close pro
 			const input = panes.nth(index).locator('.xterm-helper-textarea');
 			await input.focus();
 			await input.press('Control+c');
-			await input.pressSequentially(`printf 'AFTER_%s\\n' ${index}`);
+			await expect.poll(() => {
+				try { process.kill(before[index].pid, 0); return true; } catch { return false; }
+			}).toBe(false);
+			await expect(panes.nth(index).locator('.ash-terminal-command-status.pending')).toBeVisible();
+			await input.pressSequentially(`echo AFTER_${index}`);
 			await input.press('Enter');
 			await expect(panes.nth(index).locator('.xterm-rows > div').filter({ hasText: new RegExp(`^AFTER_${index}\\s*$`, 'u') })).toBeVisible();
 			await input.press('Alt+F2');
@@ -620,7 +666,8 @@ for (const locale of ['en', 'zh-CN'] as const) test.describe(`terminal close pro
 			const history = await accessible.inputValue();
 			await writeFile(testInfo.outputPath(`terminal-history-${index}.txt`), history);
 			expect(history).toContain(`HISTORY:${index}`);
-			const sequences = [...history.matchAll(new RegExp(`^LIVE:${index}:(\\d+)$`, 'gmu'))].map(match => Number(match[1]));
+			// ConPTY can pad resized rows; the numbered stream must still be exact.
+			const sequences = [...history.matchAll(new RegExp(`^LIVE:${index}:(\\d+)[ \\t]*$`, 'gmu'))].map(match => Number(match[1]));
 			expect(sequences.length).toBeGreaterThan(before[index].count);
 			expect(sequences.findIndex((sequence, offset) => sequence !== offset + 1), 'Reload must retain the complete numbered stream without gaps or duplicates').toBe(-1);
 			await accessible.press('Escape');
@@ -697,26 +744,26 @@ test('terminal Panel position commands rotate real splits while preserving sizes
 });
 
 test('moving a terminal to a real desktop window retains its shell PID, cwd, output and pending input', { tag: ['@electron-app-server'] }, async ({ application, workbench, testWorkspace, driver }, testInfo) => {
-	test.skip(process.platform === 'win32', 'POSIX shell input fixture; Windows needs its host-specific pending-input acceptance.');
 	test.setTimeout(90000);
 	if (!('windows' in application)) throw new Error('The terminal window transfer requires Electron');
 	const { Workbench } = await import('../../../automation/workbench.js');
 	const source = workbench.page;
 	const directory = join(testWorkspace.directory, 'transfer working directory');
 	await mkdir(directory);
-	const quote = (value: string): string => "'" + value.replaceAll("'", "'\"'\"'") + "'";
+	const windows = process.platform === 'win32';
+	const quote = (value: string): string => "'" + value.replaceAll("'", windows ? "''" : "'\"'\"'") + "'";
 	await workbench.terminal.show();
-	await workbench.terminal.runCommand(`cd -- ${quote(directory)}`);
+	await workbench.terminal.runCommand(`${windows ? 'Set-Location -LiteralPath' : 'cd --'} ${quote(directory)}`);
 	const beforeFile = join(directory, 'before.json');
 	await workbench.terminal.runCommand("node -e \"require('fs').writeFileSync('before.json',JSON.stringify({shell:process.ppid,cwd:process.cwd()}))\"");
 	await expect.poll(() => readFile(beforeFile, 'utf8').catch(() => '')).toMatch(/"shell":\d+/u);
 	const before = JSON.parse(await readFile(beforeFile, 'utf8')) as { shell: number; cwd: string; };
-	await workbench.terminal.runCommand("printf 'WINDOW_%s\\n' HISTORY");
+	await workbench.terminal.runCommand('echo WINDOW_HISTORY');
 	await expect(workbench.terminal.activeInstance.locator('.xterm-rows > div').filter({ hasText: /^WINDOW_HISTORY\s*$/u })).toBeVisible();
 	await workbench.quickaccess.runCommand('workbench.action.terminal.moveToEditor');
 	const sourceInput = source.locator('.ash-terminal-editor .xterm-helper-textarea');
 	await expect(sourceInput).toBeFocused();
-	await sourceInput.pressSequentially("printf 'PENDING_%s\\n' ");
+	await sourceInput.pressSequentially('echo PENDING_');
 	const opening = application.waitForEvent('window');
 	await workbench.quickaccess.runCommand('workbench.action.terminal.moveIntoNewWindow');
 	const target = await opening;
@@ -750,9 +797,8 @@ test('moving a terminal to a real desktop window retains its shell PID, cwd, out
 });
 
 for (const reason of ['quit', 'windowClose'] as const) test.describe(`terminal process revival after ${reason}`, () => {
-	test.use({ electronUserSettings: { 'terminal.integrated.persistentSessionReviveProcess': reason === 'quit' ? 'onExit' : 'onExitAndWindowClose' } });
+	test.use({ electronUserSettings: { ...windowsPowerShellSettings, 'terminal.integrated.persistentSessionReviveProcess': reason === 'quit' ? 'onExit' : 'onExitAndWindowClose' } });
 	test('restores output, cwd and split layout with fresh shells without replaying commands', { tag: ['@electron-app-server'] }, async ({ workbench, runningApplication, testWorkspace }, testInfo) => {
-		test.skip(process.platform === 'win32', 'POSIX shell acceptance; PowerShell is covered separately.');
 		test.setTimeout(90_000);
 		const directory = join(testWorkspace.directory, 'revived-cwd');
 		await mkdir(directory);
@@ -785,6 +831,7 @@ for (const reason of ['quit', 'windowClose'] as const) test.describe(`terminal p
 		await expect.poll(() => restoredPanes.evaluateAll(nodes => nodes[0]!.getBoundingClientRect().width / nodes.reduce((sum, node) => sum + node.getBoundingClientRect().width, 0))).toBeCloseTo(ratio, 2);
 		for (const index of [0, 1]) {
 			const pane = restoredPanes.nth(index);
+			if (process.platform === 'win32') await revealSavedHistory(pane, `REVIVE_HISTORY:${index}`);
 			await expect(pane.locator('.xterm-rows')).toContainText(`REVIVE_HISTORY:${index}`);
 			const input = pane.locator('.xterm-helper-textarea');
 			await input.focus();
@@ -803,10 +850,9 @@ for (const reason of ['quit', 'windowClose'] as const) test.describe(`terminal p
 });
 
 test.describe('terminal revival keeps independent windows of the same workspace isolated', () => {
-	test.use({ electronUserSettings: { 'window.restoreWindows': 'preserve', 'terminal.integrated.persistentSessionReviveProcess': 'onExit' } });
+	test.use({ electronUserSettings: { ...windowsPowerShellSettings, 'window.restoreWindows': 'preserve', 'terminal.integrated.persistentSessionReviveProcess': 'onExit' } });
 
 	test('quit restores both window histories, directories and split layouts with separate fresh shells', { tag: ['@electron-app-server'] }, async ({ application, workbench, runningApplication, testWorkspace }, testInfo) => {
-		test.skip(process.platform === 'win32', 'POSIX directory fixture; Windows needs its host-specific shell acceptance.');
 		test.setTimeout(120_000);
 		if (!('windows' in application)) throw new Error('Multi-window revival requires Electron');
 		const { Workbench } = await import('../../../automation/workbench.js');
@@ -828,11 +874,12 @@ test.describe('terminal revival keeps independent windows of the same workspace 
 		const panesB = peer.page.locator('.ash-terminal-group-pane:visible');
 		await expect(panesA).toHaveCount(2);
 		await expect(panesB).toHaveCount(1);
-		const quote = (value: string): string => "'" + value.replaceAll("'", "'\"'\"'") + "'";
+		const windowsHost = process.platform === 'win32';
+		const quote = (value: string): string => "'" + value.replaceAll("'", windowsHost ? "''" : "'\"'\"'") + "'";
 		for (const { pane, id, cwd } of [{ pane: panesA.nth(0), id: 'A0', cwd: directoryA }, { pane: panesA.nth(1), id: 'A1', cwd: directoryA }, { pane: panesB.nth(0), id: 'B0', cwd: directoryB }]) {
 			const input = pane.locator('.xterm-helper-textarea');
 			await input.focus();
-			await input.pressSequentially(`cd -- ${quote(cwd)}`);
+			await input.pressSequentially(`${windowsHost ? 'Set-Location -LiteralPath' : 'cd --'} ${quote(cwd)}`);
 			await input.press('Enter');
 			await input.pressSequentially(`node ../multiwindow-revive.cjs ${id} before`);
 			await input.press('Enter');
@@ -853,6 +900,9 @@ test.describe('terminal revival keeps independent windows of the same workspace 
 		await expect.poll(() => desktop.windows().length).toBe(2);
 		const windows = desktop.windows().map(page => new Workbench(page));
 		await Promise.all(windows.map(window => window.waitForReady()));
+		if (process.platform === 'win32') {
+			for (const window of windows) await revealSavedHistory(window.page.locator('.ash-terminal-group-pane:visible').first(), 'MW_HISTORY:');
+		}
 		await expect.poll(async () => (await Promise.all(windows.map(async window => {
 			const text = (await window.page.locator('.ash-terminal-instance .xterm-rows').allTextContents()).join('\n');
 			return text.includes('MW_HISTORY:A0') ? 'A' : text.includes('MW_HISTORY:B0') ? 'B' : 'loading';
@@ -874,6 +924,7 @@ test.describe('terminal revival keeps independent windows of the same workspace 
 		const restoredPanesA = a.page.locator('.ash-terminal-group-pane:visible');
 		await expect.poll(() => restoredPanesA.evaluateAll(nodes => nodes[0]!.getBoundingClientRect().width / nodes.reduce((sum, node) => sum + node.getBoundingClientRect().width, 0))).toBeCloseTo(ratio, 1);
 		for (const { pane, id, cwd } of [{ pane: restoredPanesA.nth(0), id: 'A0', cwd: directoryA }, { pane: restoredPanesA.nth(1), id: 'A1', cwd: directoryA }, { pane: b.page.locator('.ash-terminal-group-pane:visible').nth(0), id: 'B0', cwd: directoryB }]) {
+			if (process.platform === 'win32') await revealSavedHistory(pane, `MW_HISTORY:${id}`);
 			const input = pane.locator('.xterm-helper-textarea');
 			await input.focus();
 			await input.pressSequentially(`node ../multiwindow-revive.cjs ${id} after`);

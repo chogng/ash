@@ -93,7 +93,7 @@
 终端契约见 [Terminal](docs/terminal.md)。以下按现有调用链分批推进；上游行为参照 `terminalActions.ts`、`terminalTabsList.ts`、`terminalContrib/clipboard` 与 `terminalContrib/history`。
 
 - [ ] **复核 · 文件链接扩展**：补工作区搜索型链接、外部 provider 与适用配置的实际入口；工作区外目录打开另需沿原窗口／工作区授权契约处理。工作区内显式目录路径的鼠标／键盘定位已完成，范围与关闭／重连验证见 [Terminal](docs/terminal.md)。
-- [ ] **验收** · 补跨机器 SSH、Windows PTY／PowerShell，以及 Linux Desktop 的真实 OS 文件拖入。Linux 文件链接、reload、活动文件／选中文本执行和最近目录选择器的 6 项真实 Desktop 场景已通过，范围见 [Terminal](docs/terminal.md)。
+- [ ] **验收** · 补跨机器 SSH 终端，以及 Linux Desktop 的真实 OS 文件拖入。
 
 高频交互验收同时观察原进程身份、待提交输入、选区和焦点；执行、权限和工具调度继续归 Rust。
 

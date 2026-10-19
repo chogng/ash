@@ -489,6 +489,43 @@ for (const action of ['hide', 'dispose', 'move focus'] as const) {
 	});
 }
 
+test('a terminal arriving during profile discovery prevents an extra default process', async ({ page }) => {
+	await page.goto('/terminal.html?pane&incoming');
+	await page.waitForFunction(() => Boolean(window.ashTerminalPaneIntegration));
+	await page.evaluate(() => {
+		window.ashTerminalPaneIntegration.hold();
+		window.ashTerminalPaneIntegration.panel(true);
+	});
+	await expect.poll(() => page.evaluate(() => window.ashTerminalPaneIntegration.counts())).toEqual({ profiles: 1, creates: 0 });
+	await page.evaluate(async () => {
+		await window.ashTerminalPaneIntegration.receive();
+		window.ashTerminalPaneIntegration.release();
+	});
+	await expect(page.locator('.xterm')).toHaveCount(1);
+	expect(await page.evaluate(() => window.ashTerminalPaneIntegration.counts().creates)).toBe(1);
+	await page.evaluate(() => window.ashTerminalIntegration.dispose());
+});
+
+test('a transfer window waits for its incoming process before creating a default shell', async ({ page }) => {
+	await page.goto('/terminal.html?pane&incoming&transfer');
+	await page.waitForFunction(() => Boolean(window.ashTerminalPaneIntegration));
+	await page.evaluate(async () => {
+		window.ashTerminalPaneIntegration.panel(true);
+		await new Promise(requestAnimationFrame);
+	});
+	expect(await page.evaluate(() => window.ashTerminalPaneIntegration.counts().creates)).toBe(0);
+	await page.evaluate(() => window.ashTerminalPaneIntegration.receive());
+	await expect(page.locator('.xterm')).toHaveCount(1);
+	expect(await page.evaluate(() => window.ashTerminalPaneIntegration.counts().creates)).toBe(1);
+	await page.evaluate(() => window.ashTerminalPaneIntegration.command('workbench.action.terminal.kill'));
+	await page.evaluate(() => {
+		window.ashTerminalPaneIntegration.panel(false);
+		window.ashTerminalPaneIntegration.panel(true);
+	});
+	await expect.poll(() => page.evaluate(() => window.ashTerminalPaneIntegration.counts().creates)).toBe(2);
+	await page.evaluate(() => window.ashTerminalIntegration.dispose());
+});
+
 test('existing hidden terminal retains output without loading xterm until revealed', async ({ page }) => {
 	const requests: string[] = [];
 	page.on('request', request => requests.push(request.url()));
@@ -914,6 +951,18 @@ test('terminal panel uses themed surfaces and regular UI type for the instance l
 	await page.evaluate(() => window.ashTerminalPaneIntegration.theme('light'));
 	await expect(page.locator('.xterm-scrollable-element').first()).toHaveCSS('background-color', 'rgb(248, 248, 248)');
 	await page.evaluate(() => window.ashTerminalPaneIntegration.dispose());
+});
+
+test('Windows revival preserves history across fragmented initial ConPTY paint and allows later clear', async ({ page }) => {
+	await page.goto('/terminal.html?stream&commandModel&reviveHistory');
+	await page.waitForFunction(() => Boolean(window.ashTerminalStreamIntegration));
+	await page.evaluate(() => window.ashTerminalStreamIntegration.start());
+	await expect(page.locator('.xterm-rows')).toContainText('PS NEW>');
+	expect(await page.evaluate(() => window.ashTerminalStreamIntegration.snapshot())).toContain('SAVED_HISTORY');
+	await page.evaluate(() => window.ashTerminalStreamIntegration.feedModel('\x1b[2J\x1b[3J\x1b[HAFTER_CLEAR'));
+	await expect(page.locator('.xterm-rows')).toContainText('AFTER_CLEAR');
+	expect(await page.evaluate(() => window.ashTerminalStreamIntegration.snapshot())).not.toContain('SAVED_HISTORY');
+	await page.evaluate(() => window.ashTerminalStreamIntegration.close());
 });
 
 test('child alternate scroll mode controls wheel input and restores its saved value', async ({ page }) => {
@@ -1890,13 +1939,13 @@ for (const locale of ['en', 'zh-CN']) {
 	});
 }
 
-test('background terminal editor creation and reveal preserve panel focus and input destination', async ({ page }) => {
-	await page.goto('/terminal.html?input&groups&editor');
+for (const contributed of [false, true]) test(`background ${contributed ? 'extension' : 'standard'} terminal editor creation and reveal preserve panel focus and input destination`, async ({ page }) => {
+	await page.goto(`/terminal.html?input&groups&editor${contributed ? '&extensionProfiles' : ''}`);
 	await page.waitForFunction(() => Boolean(window.ashTerminalEditorIntegration));
 	const panelInput = page.locator('.ash-terminal-widgets .xterm-helper-textarea');
 	await panelInput.focus();
 	const original = await page.evaluate(() => window.ashTerminalGroupsIntegration.active());
-	const background = await page.evaluate(() => window.ashTerminalEditorIntegration.createBackground());
+	const background = await page.evaluate(contributed => window.ashTerminalEditorIntegration.createBackground(contributed), contributed);
 	expect(background).not.toBe(original);
 	await expect(page.locator('.ash-terminal-editor .xterm-helper-textarea')).toHaveCount(1);
 	await expect(panelInput).toBeFocused();
@@ -1965,6 +2014,54 @@ test('cancelling a later terminal confirmation aborts close all without terminat
 	expect(await closing).toBe(false);
 	expect(await page.evaluate(() => window.ashTerminalEditorIntegration.state())).toMatchObject({ instances: 2, editorTabs: 2 });
 });
+for (const locale of ['en', 'zh-CN']) {
+	for (const action of ['tab', 'group', 'all', 'sticky'] as const) test(`shared terminal editor ${action} closes only its final host in ${locale}`, async ({ page }) => {
+		const errors: string[] = [];
+		page.on('pageerror', error => errors.push(error.message));
+		await page.goto(`/terminal.html?input&groups&editor&clipboard&browser&locale=${locale}`);
+		await page.waitForFunction(() => Boolean(window.ashTerminalEditorIntegration));
+		await page.evaluate(async () => {
+			await window.ashTerminalGroupsIntegration.command('workbench.action.terminal.moveToEditor');
+			await window.ashTerminalEditorIntegration.confirmOnKill();
+		});
+		const firstGroup = (await page.evaluate(() => window.ashTerminalEditorIntegration.groups()))[0]!.id;
+		if (action === 'sticky') await page.evaluate(() => window.ashTerminalEditorIntegration.stick());
+		await page.evaluate(() => window.ashTerminalEditorIntegration.split());
+		await expect.poll(() => page.evaluate(() => window.ashTerminalEditorIntegration.state().editorTabs)).toBe(2);
+		if (action === 'tab') {
+			// Close the old group's tab through its keyboard-accessible action.
+			const closeButton = page.locator('.ash-editor-group').first().getByRole('button', { name: locale === 'zh-CN' ? '关闭 Shell' : 'Close Shell', exact: true });
+			await closeButton.focus();
+			await closeButton.press('Enter');
+		} else if (action === 'group') {
+			expect(await page.evaluate(id => window.ashTerminalEditorIntegration.closeGroup(id), firstGroup)).toBe(true);
+		} else if (action === 'sticky') {
+			expect(await page.evaluate(() => window.ashTerminalEditorIntegration.closeAll(true))).toBe(true);
+		}
+		const remaining = action === 'all' ? 2 : 1;
+		await expect.poll(() => page.evaluate(() => window.ashTerminalEditorIntegration.state().editorTabs)).toBe(remaining);
+		await expect(page.getByRole('dialog')).toHaveCount(0);
+		expect(await page.evaluate(() => window.ashTerminalEditorIntegration.closedProcesses())).toEqual([]);
+		await page.locator('.ash-terminal-editor .xterm-helper-textarea').last().focus();
+		await page.keyboard.type('still-alive');
+		await expect.poll(() => page.evaluate(() => window.ashTerminalGroupsIntegration.writes().filter(write => write.terminalId === 'input-shell-1').map(write => write.data).join(''))).toContain('still-alive');
+		const cancel = page.evaluate(() => window.ashTerminalEditorIntegration.closeAll());
+		const dialog = page.getByRole('dialog');
+		await expect(dialog).toBeVisible();
+		await page.keyboard.press('Escape');
+		expect(await cancel).toBe(false);
+		expect(await page.evaluate(() => window.ashTerminalEditorIntegration.state().editorTabs)).toBe(remaining);
+		expect(await page.evaluate(() => window.ashTerminalEditorIntegration.closedProcesses())).toEqual([]);
+		const close = page.evaluate(() => window.ashTerminalEditorIntegration.closeAll());
+		await expect(dialog).toBeVisible();
+		await dialog.getByRole('button', { name: locale === 'zh-CN' ? '终止' : 'Terminate', exact: true }).click();
+		expect(await close).toBe(true);
+		await expect.poll(() => page.evaluate(() => window.ashTerminalEditorIntegration.state().editorTabs)).toBe(0);
+		expect(await page.evaluate(() => window.ashTerminalEditorIntegration.closedProcesses())).toEqual(['input-shell-1']);
+		expect(errors).toEqual([]);
+		await page.evaluate(() => window.ashTerminalGroupsIntegration.dispose());
+	});
+}
 
 test('terminal editor restoration displays an unavailable resource without starting a shell', async ({ page }) => {
 	await page.goto('/terminal.html?input&groups&editor&locale=zh-CN');

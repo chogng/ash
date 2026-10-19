@@ -161,7 +161,7 @@ import { productLanguagePackCatalogs } from '../../workbench/services/localizati
 import { parseLanguagePackCatalog } from '../../platform/languagePacks/common/languagePackCatalog.js';
 import type { LanguagePackCatalog } from '../../platform/languagePacks/common/languagePackContract.js';
 import { NLS_CONFIGURATION_CHANNEL, NLS_ACTIVATE_CHANNEL } from '../../platform/languagePacks/common/languagePackStore.js';
-import { HOST_RESTART_CHANNEL, WINDOW_OPEN_EXTERNAL_URI_CHANNEL } from '../../platform/window/common/window.js';
+import { HOST_RESTART_CHANNEL, WINDOW_OPEN_EXTERNAL_URI_CHANNEL, WINDOW_TERMINAL_TRANSFER_STARTUP_CHANNEL } from '../../platform/window/common/window.js';
 export type AppServerStartupMode = "required" | "disabled";
 
 export interface AshApplicationOptions {
@@ -186,6 +186,7 @@ interface RendererEntry {
 interface WorkbenchWindowRecord {
 	readonly id: number;
 	readonly windowSessionId: string;
+	terminalTransferStartup: boolean;
 	readonly window: BrowserWindow;
 	readonly workspaceContext: WorkspaceContextMainService;
 	readonly supervisor: AppServerConnectionRelay;
@@ -265,7 +266,7 @@ export class AshApplication extends Disposable {
 		openWindow: async sourceWindowId => {
 			const source = this.workbenchWindowData.get(sourceWindowId);
 			if (!source || !this.workspaces) throw new Error('Terminal source window is unavailable');
-			const target = await this.openWorkspace(source.workspaceContext.getWorkspace(), this.workspaces, true, randomUUID());
+			const target = await this.openWorkspace(source.workspaceContext.getWorkspace(), this.workspaces, true, randomUUID(), true);
 			if (!target) throw new Error('Terminal target window could not be opened');
 			return target.id;
 		},
@@ -1117,15 +1118,15 @@ export class AshApplication extends Disposable {
 		}
 	}
 
-	private async openWorkspace(workspace: IAnyWorkspaceIdentifier, workspaces: WorkspacesManagementMainService, forceNewWindow = false, windowSessionId?: string): Promise<WorkbenchWindowRecord | undefined> {
+	private async openWorkspace(workspace: IAnyWorkspaceIdentifier, workspaces: WorkspacesManagementMainService, forceNewWindow = false, windowSessionId?: string, terminalTransferStartup = false): Promise<WorkbenchWindowRecord | undefined> {
 		if (forceNewWindow) {
-			return this.performOpenWorkspace(workspace, workspaces, true, windowSessionId);
+			return this.performOpenWorkspace(workspace, workspaces, true, windowSessionId, terminalTransferStartup);
 		}
 		const window = await this.windowsMainService.openWorkspace(workspace, async () => (await this.performOpenWorkspace(workspace, workspaces))?.window);
 		return window ? this.workbenchWindowData.get(window.id) : undefined;
 	}
 
-	private async performOpenWorkspace(workspace: IAnyWorkspaceIdentifier, workspaces: WorkspacesManagementMainService, forceNewWindow = false, windowSessionId?: string): Promise<WorkbenchWindowRecord | undefined> {
+	private async performOpenWorkspace(workspace: IAnyWorkspaceIdentifier, workspaces: WorkspacesManagementMainService, forceNewWindow = false, windowSessionId?: string, terminalTransferStartup = false): Promise<WorkbenchWindowRecord | undefined> {
 		const existingWindow = this.windowsMainService.findWorkspace(workspace);
 		const existing = existingWindow ? this.workbenchWindowData.get(existingWindow.id) : undefined;
 		if (existing && !forceNewWindow) {
@@ -1160,7 +1161,7 @@ export class AshApplication extends Disposable {
 				resources.dispose();
 				return undefined;
 			}
-			return await this.openWorkbenchWindow(workspaceContext, workspaces, supervisor, resources, windowSessionId);
+			return await this.openWorkbenchWindow(workspaceContext, workspaces, supervisor, resources, windowSessionId, terminalTransferStartup);
 		} catch (error) {
 			resources.dispose();
 			throw error;
@@ -1211,6 +1212,16 @@ export class AshApplication extends Disposable {
 				channel: 'ash:ipc:window-id',
 				validate: value => { if (value !== undefined) { throw new TypeError('Window ID read takes no arguments'); } return undefined; },
 				invoke: () => window.id,
+			},
+			{
+				channel: WINDOW_TERMINAL_TRANSFER_STARTUP_CHANNEL,
+				validate: value => { if (value !== undefined) throw new TypeError('Terminal startup intent takes no arguments'); return undefined; },
+				invoke: () => {
+					const record = this.workbenchWindowData.get(window.id);
+					const expected = record?.terminalTransferStartup ?? false;
+					if (record) record.terminalTransferStartup = false;
+					return expected;
+				},
 			},
 		];
 	}
@@ -1359,6 +1370,7 @@ export class AshApplication extends Disposable {
 		supervisor: AppServerConnectionRelay,
 		resources: DisposableStore,
 		windowSessionId: string,
+		terminalTransferStartup = false,
 	): Promise<WorkbenchWindowRecord> {
 		const windowsStateHandler = this.createWindowsStateHandler(workspaceContext.getWorkspace());
 		const windowState = this.windowsMainService.getNewWindowState(windowsStateHandler, this.windowConfigurationValues(), this.lifecycleMainService.wasRestarted);
@@ -1386,6 +1398,7 @@ export class AshApplication extends Disposable {
 		const record: WorkbenchWindowRecord = {
 			id: window.id,
 			windowSessionId,
+			terminalTransferStartup,
 			window,
 			workspaceContext,
 			supervisor,

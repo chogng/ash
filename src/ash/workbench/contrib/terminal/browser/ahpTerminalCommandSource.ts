@@ -21,6 +21,14 @@ export class AhpTerminalCommandSource extends Disposable {
 	private currentShellIntegration: ITerminalShellIntegration | undefined;
 	get shellIntegration(): ITerminalShellIntegration | undefined { return this.currentShellIntegration; }
 	get cwd(): string | undefined { return this.cwdDetection.getCwd() || undefined; }
+	/** Earliest boundary, including metadata paginated ahead of its display bytes. */
+	get nextBoundarySequence(): number {
+		return Math.min(
+			this.pendingCommandEvents[0]?.afterOutputSequence ?? Infinity,
+			this.pendingCwds[0]?.afterOutputSequence ?? Infinity,
+			this.pendingShellIntegration?.afterOutputSequence ?? Infinity,
+		);
+	}
 
 	receive(result: Pick<ITerminalProcessReadResult, 'cwd' | 'shellIntegration' | 'commandEvents'> & Partial<Pick<ITerminalProcessReadResult, 'chunks'>>): void {
 		// A read's snapshot contains only its final cwd. Preserve ordered boundaries

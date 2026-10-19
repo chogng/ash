@@ -210,11 +210,13 @@ impl TerminalService {
         let authorized_root = authorization.dir().canonical_path();
         let dir_root = match params.cwd {
             Some(path) => {
-                let path = authorized_root.join(path);
-                let path = path
-                    .canonicalize()
+                // The directory owner resolves Windows ordinary/verbatim aliases
+                // and checks containment against the opened authorization.
+                let path = authorization
+                    .dir()
+                    .resolve_existing_path(path)
                     .map_err(|_| TerminalError::InvalidInput)?;
-                if !path.is_dir() || !path.starts_with(authorized_root) {
+                if !path.is_dir() {
                     return Err(TerminalError::InvalidInput);
                 }
                 path

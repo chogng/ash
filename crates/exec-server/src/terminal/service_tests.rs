@@ -1259,7 +1259,7 @@ fn interactive_shell_commands_report_real_boundaries_and_keep_user_configuration
     service.close(1, id).unwrap();
 }
 
-#[cfg(unix)]
+#[cfg(any(unix, windows))]
 fn write_shell(service: &TerminalService, terminal_id: &str, data: &str) {
     service
         .write(
@@ -1292,7 +1292,7 @@ fn wait_shell_cwd(
     }
 }
 
-#[cfg(unix)]
+#[cfg(any(unix, windows))]
 fn read_shell_boundaries(
     service: &TerminalService,
     terminal_id: &str,
@@ -1325,7 +1325,7 @@ fn read_shell_boundaries(
     boundaries
 }
 
-#[cfg(unix)]
+#[cfg(any(unix, windows))]
 fn shell_status(service: &TerminalService, terminal_id: &str) -> TerminalReadResult {
     service
         .read(
@@ -1340,7 +1340,7 @@ fn shell_status(service: &TerminalService, terminal_id: &str) -> TerminalReadRes
         .unwrap()
 }
 
-#[cfg(unix)]
+#[cfg(any(unix, windows))]
 fn wait_shell_events(service: &TerminalService, terminal_id: &str, count: usize) {
     let deadline = Instant::now() + Duration::from_secs(5);
     loop {
@@ -1385,6 +1385,81 @@ fn wait_shell_output(service: &TerminalService, terminal_id: &str, after_sequenc
         assert!(Instant::now() < deadline, "no new prompt: {result:?}");
         std::thread::sleep(Duration::from_millis(10));
     }
+}
+
+#[cfg(windows)]
+#[test]
+fn windows_powershell_without_a_profile_reports_trusted_commands() {
+    let root = tempfile::tempdir().unwrap();
+    let service = terminal_service_for(root.path());
+    let program = std::path::PathBuf::from(std::env::var_os("SystemRoot").unwrap())
+        .join("System32/WindowsPowerShell/v1.0/powershell.exe");
+    let created = service
+        .create(
+            1,
+            TerminalCreateRequest {
+                profile: TerminalProfileSelection::Custom {
+                    name: "Windows PowerShell".into(),
+                    path: vec![program.to_str().unwrap().into()],
+                    args: TerminalArguments::Argv(
+                        ["-NoLogo", "-NoProfile", "-ExecutionPolicy", "RemoteSigned"]
+                            .into_iter()
+                            .map(String::from)
+                            .collect(),
+                    ),
+                },
+                // A PowerShell 7 test runner must not supply its incompatible
+                // core modules to Windows PowerShell 5.1.
+                env: Some(HashMap::from([("PSModulePath".into(), None)])),
+                ..terminal_request(TerminalLifecycle::ConnectionOwned)
+            },
+        )
+        .unwrap();
+    let id = &created.terminal_id;
+    let deadline = Instant::now() + Duration::from_secs(10);
+    let mut saw_input_boundary = false;
+    loop {
+        saw_input_boundary |= read_shell_boundaries(&service, id)
+            .iter()
+            .any(|event| matches!(event, TerminalShellIntegrationEvent::CommandStart));
+        let status = shell_status(&service, id);
+        if saw_input_boundary
+            && status
+                .shell_integration
+                .as_ref()
+                .is_some_and(|integration| {
+                    integration.has_rich_command_detection && integration.cwd_detection
+                })
+        {
+            break;
+        }
+        assert!(
+            Instant::now() < deadline,
+            "PowerShell prompt did not report its input boundary and shell capabilities"
+        );
+        std::thread::sleep(Duration::from_millis(10));
+    }
+    write_shell(&service, id, "Write-Output ('ASH_PS_' + 'READY')\r");
+    wait_shell_events(&service, id, 2);
+    let status = shell_status(&service, id);
+    assert_eq!(
+        status.command_events[1].status,
+        TerminalCommandStatus::Succeeded
+    );
+    assert_eq!(status.command_events[1].is_trusted, Some(true));
+    assert_eq!(
+        status.command_events[1].command.as_deref(),
+        Some("Write-Output ('ASH_PS_' + 'READY')")
+    );
+    write_shell(&service, id, "Write-Error 'expected failure'\r");
+    wait_shell_events(&service, id, 4);
+    let status = shell_status(&service, id);
+    assert_eq!(
+        status.command_events[3].status,
+        TerminalCommandStatus::Failed
+    );
+    assert_eq!(status.command_events[3].exit_code, Some(1));
+    service.close(1, id).unwrap();
 }
 
 #[cfg(unix)]
@@ -1731,6 +1806,47 @@ fn terminal_process_execution_preserves_literal_arguments_cwd_and_exit_status() 
         std::thread::sleep(Duration::from_millis(10));
     }
     service.close(1, &created.terminal_id).unwrap();
+}
+
+#[test]
+fn terminal_cwd_uses_the_authorized_directory_namespace() {
+    let root = tempfile::tempdir().unwrap();
+    let child = root.path().join("child with spaces");
+    std::fs::create_dir(&child).unwrap();
+    let service = terminal_service_for(root.path());
+    let expected = ash_file_access::Dir::open_local(&child).unwrap();
+    let paths = vec![
+        std::path::PathBuf::from("child with spaces"),
+        child.clone(),
+        std::path::PathBuf::from("child with spaces/../child with spaces"),
+        child.join("..").join("child with spaces"),
+    ];
+    #[cfg(windows)]
+    let paths = {
+        let mut paths = paths;
+        paths.push(child.canonicalize().unwrap());
+        paths
+    };
+    for cwd in paths {
+        let mut request = terminal_request(TerminalLifecycle::ConnectionOwned);
+        request.cwd = Some(cwd.clone());
+        request.execution = Some(TerminalExecution::Process {
+            program: if cfg!(windows) { "cmd.exe" } else { "/bin/sh" }.into(),
+            args: TerminalArguments::Argv(if cfg!(windows) {
+                vec!["/D".into(), "/C".into(), "exit 0".into()]
+            } else {
+                vec!["-c".into(), "exit 0".into()]
+            }),
+        });
+        let created = service
+            .create(1, request)
+            .unwrap_or_else(|error| panic!("{cwd:?}: {error:?}"));
+        assert_eq!(
+            std::path::Path::new(&created.ready.cwd),
+            expected.canonical_path()
+        );
+        service.close(1, &created.terminal_id).unwrap();
+    }
 }
 
 #[test]

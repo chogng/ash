@@ -46,6 +46,10 @@ impl Dir {
     pub fn resolve_existing(&self, path: impl AsRef<Path>) -> Result<PathBuf, DirPathError> {
         self.directory.resolve_existing(path)
     }
+    /// Resolves an absolute or root-relative user path through this directory's identity boundary.
+    pub fn resolve_existing_path(&self, path: impl AsRef<Path>) -> Result<PathBuf, DirPathError> {
+        self.directory.resolve_existing_path(path)
+    }
     pub fn resolve_for_write(&self, path: impl AsRef<Path>) -> Result<PathBuf, DirPathError> {
         self.directory.resolve_for_write(path)
     }

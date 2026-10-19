@@ -14,6 +14,7 @@ const MAX_INPUT_BATCH_BYTES = 60 * 1024;
 
 const MAX_READ_CHUNKS = 128;
 const POLL_DELAY_MILLIS = 35;
+const OUTPUT_BATCH_CHARACTERS = 64 * 1024;
 
 /** One Shell's input, dimensions and output stream; the instance owns creation and shutdown. */
 export class TerminalProcessManager extends Disposable {
@@ -102,14 +103,30 @@ export class TerminalProcessManager extends Disposable {
 				this.commandSource.receive(result);
 				this.nextCommandSequence = result.nextCommandSequence;
 				this.commandSource.commitThrough(this.nextSequence, token);
-				for (const chunk of result.chunks) {
+				for (let index = 0; index < result.chunks.length; index++) {
+					const chunk = result.chunks[index]!;
 					if (token.isCancellationRequested) {
 						return;
 					}
 					this.commandSource.commitThrough(chunk.sequence - 1, token);
-					const data = this.decoder.decode(chunk.data, { stream: true });
+					let data = this.decoder.decode(chunk.data, { stream: true });
 					this.pendingUtf8 = utf8Suffix([...this.pendingUtf8, ...chunk.data]);
 					this.nextSequence = chunk.sequence;
+					// ConPTY can fragment one burst into many small reads. Waiting for
+					// xterm's parser for each fragment serializes its scheduling delay.
+					// Stop at metadata boundaries, including commands paginated ahead
+					// of their output in an earlier read, to retain screen positions.
+					const boundary = this.commandSource.nextBoundarySequence;
+					if (!chunk.shellIntegration) {
+						while (index + 1 < result.chunks.length && data.length < OUTPUT_BATCH_CHARACTERS) {
+							const next = result.chunks[index + 1]!;
+							if (next.shellIntegration || next.sequence > boundary) break;
+							index++;
+							data += this.decoder.decode(next.data, { stream: true });
+							this.pendingUtf8 = utf8Suffix([...this.pendingUtf8, ...next.data]);
+							this.nextSequence = next.sequence;
+						}
+					}
 					await this.emitProcessData(data, token, chunk.shellIntegration);
 					this.commandSource.commitThrough(this.nextSequence, token);
 				}

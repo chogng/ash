@@ -108,6 +108,8 @@ export type ICreateTerminalOptions = Omit<Partial<ITerminalCreateOptions>, 'conf
 	readonly cwd?: string | URI;
 	readonly location?: ITerminalLocationOptions;
 	readonly skipContributedProfileCheck?: boolean;
+	/** Do not select the created instance, including intermediate provider-created instances. */
+	readonly preserveFocus?: boolean;
 };
 
 export type ITerminalLocationOptions = TerminalLocation | TerminalEditorLocation | { readonly parentTerminal: ITerminalInstance | Promise<ITerminalInstance>; } | { readonly splitActiveTerminal: boolean; };

@@ -912,8 +912,8 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 		}
 		// Prompt only for files that lose their last retained editor, including files in other multi-diffs.
 		const dirty = copies.filter(copy => copy.isDirty && !this._groups.some(host =>
-			!closingGroups.includes(host.group.id) && host.group.editors.some(other => {
-				if (host.group === group && other.input === input) return false;
+			host.group.editors.some(other => {
+				if (closingEditors.some(candidate => candidate.groupId === host.group.id && candidate.editor === other.input)) return false;
 				const otherPane = host.group.getEditorPane(other.input);
 				return otherPane && getEditorWorkingCopies(otherPane).some(candidate => this.uriIdentity.extUri.isEqual(candidate.resource, copy.resource));
 			})));

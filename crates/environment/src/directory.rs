@@ -163,12 +163,16 @@ impl Directory {
     ) -> Result<PathBuf, DirPathError> {
         let relative_path = relative_path.as_ref();
         let candidate = self.candidate(relative_path)?;
-        let canonical =
-            dunce::canonicalize(&candidate).map_err(|error| DirPathError::RootUnavailable {
-                path: candidate,
-                message: error.to_string(),
-            })?;
-        self.ensure_contained(canonical)
+        self.canonical_existing(candidate)
+    }
+
+    /// Resolves a user-supplied absolute or root-relative path within this opened directory.
+    ///
+    /// Unlike a relative file-operation path, a shell cwd may contain parent segments.
+    /// Resolve them on the filesystem before checking containment, including through symlinks.
+    pub fn resolve_existing_path(&self, path: impl AsRef<Path>) -> Result<PathBuf, DirPathError> {
+        self.ensure_current()?;
+        self.canonical_existing(self.canonical.join(path))
     }
 
     /// Resolves a relative write target while checking its nearest existing ancestor.
@@ -255,6 +259,15 @@ impl Directory {
         } else {
             Err(DirPathError::OutsideDir(canonical))
         }
+    }
+
+    fn canonical_existing(&self, candidate: PathBuf) -> Result<PathBuf, DirPathError> {
+        let canonical =
+            dunce::canonicalize(&candidate).map_err(|error| DirPathError::RootUnavailable {
+                path: candidate,
+                message: error.to_string(),
+            })?;
+        self.ensure_contained(canonical)
     }
 }
 

@@ -161,7 +161,7 @@ export class MainThreadTerminalService extends Disposable {
 							if (typeof pty.acceptsInput !== 'boolean') throw invalid();
 							let nextPtyId: string | undefined = id;
 							instance = await this.terminals.createTerminal({
-								cwd: presentation.cwd, location: presentation.location, dimensions: { cols: 80, rows: 24 }, config: {
+								cwd: presentation.cwd, location: presentation.location, preserveFocus: presentation.preserveFocus, dimensions: { cols: 80, rows: 24 }, config: {
 									name, icon, color, customPtyImplementation: (terminalId, cols, rows) => {
 										if (lifetime.isDisposed || generation !== this.workspaceGeneration) throw new CancellationError();
 										let registration: IDisposable | undefined;
@@ -187,7 +187,7 @@ export class MainThreadTerminalService extends Disposable {
 								env: environment(options.env),
 								strictEnv: options.strictEnv === undefined ? undefined : boolean(options.strictEnv),
 							};
-							instance = await this.terminals.createTerminal({ config: shell, cwd: presentation.cwd, location: presentation.location, skipContributedProfileCheck: true });
+							instance = await this.terminals.createTerminal({ config: shell, cwd: presentation.cwd, location: presentation.location, preserveFocus: presentation.preserveFocus, skipContributedProfileCheck: true });
 						}
 						if (lifetime.isDisposed || generation !== this.workspaceGeneration) {
 							await this.terminals.closeTerminal(instance);

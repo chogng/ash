@@ -513,7 +513,8 @@ PS1="${PS1-}"$'\[\e]633;B\a\]'
 "#;
 
 // PSConsoleHostReadLine returns a complete accepted command, including multiline
-// input. Without that host hook, leave command detection unavailable.
+// input. Windows PowerShell loads it after -Command unless loaded explicitly;
+// other hosts without that hook leave command detection unavailable.
 const POWERSHELL: &str = r#"
 if ($ExecutionContext.SessionState.LanguageMode -eq 'FullLanguage') {
     $global:__AshNonce = '__ASH_SHELL_NONCE__'
@@ -522,6 +523,9 @@ if ($ExecutionContext.SessionState.LanguageMode -eq 'FullLanguage') {
         [regex]::Replace($value, '[\x00-\x20\\;]', {
             param($match) '\x{0:x2}' -f [int][char]$match.Value
         })
+    }
+    if ($PSVersionTable.PSEdition -eq 'Desktop' -and $Host.Name -eq 'ConsoleHost' -and -not (Test-Path Function:PSConsoleHostReadLine)) {
+        Import-Module PSReadLine -ErrorAction SilentlyContinue
     }
     $global:__AshReadLine = $function:PSConsoleHostReadLine
     $global:__AshPrompt = $function:prompt
@@ -578,9 +582,11 @@ if ($ExecutionContext.SessionState.LanguageMode -eq 'FullLanguage') {
         }
         # Preserve $? for prompts that render the last command's status.
         if (-not $succeeded) { Write-Error 'command failed' -ErrorAction Ignore }
-        $global:__AshPrompt.Invoke()
+        # ConsoleHost consumes only the first returned object as its prompt.
+        # Keep the original text and the input boundary in that same string.
+        $prompt = -join $global:__AshPrompt.Invoke()
         __AshEnvironment
-        "$([char]27)]633;B$([char]7)"
+        "$prompt$([char]27)]633;B$([char]7)"
     }
 }
 "#;

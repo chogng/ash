@@ -85,6 +85,8 @@ export interface ITerminalProfile extends ITerminalProcessProfile {
 
 export interface ICreateContributedTerminalProfileOptions {
 	readonly location?: TerminalLocation | { readonly viewColumn?: number; readonly preserveFocus?: boolean; };
+	/** Carry background creation through the provider's recursive terminal creation. */
+	readonly preserveFocus?: boolean;
 	readonly cwd?: string | import('../../../base/common/uri.js').URI;
 	readonly icon?: ThemeIcon;
 	readonly color?: string;

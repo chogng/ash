@@ -10,6 +10,7 @@ import { ITerminalService, ITerminalEditorService, type ITerminalInstance } from
 import { TerminalEditorInput } from './terminalEditorInput.js';
 import './media/terminal.css';
 import { ConfirmResult } from '../../../../platform/dialogs/common/dialogs.js';
+import { IEditorService } from '../../../services/editor/common/editorService.js';
 
 /** Hosts the original xterm; disposing a pane releases its DOM lease, not its PTY. */
 export class TerminalEditor extends EditorPane {
@@ -25,6 +26,7 @@ export class TerminalEditor extends EditorPane {
 		@IThemeService theme: IThemeService,
 		@IStorageService storage: IStorageService,
 		@IEditorGroupsService private readonly editorGroups: IEditorGroupsService,
+		@IEditorService private readonly editors: IEditorService,
 	) { super(TerminalEditorInput.ID, theme, storage); }
 
 	override create(parent: HTMLElement): void {
@@ -71,13 +73,27 @@ export class TerminalEditor extends EditorPane {
 	override setVisible(visible: boolean): void {
 		super.setVisible(visible);
 		this.visible = visible;
+		if (visible && this.instance && !this.instance.xterm?.element.isConnected) this.instance.attachToElement(this.element);
 		if (this.instance?.xterm?.element.parentElement === this.element) this.instance.xterm.setVisible(visible);
 	}
 
 	override clearInput(): void {
 		// A move opens the destination before disposing the source pane.
-		if (this.instance?.xterm?.element.parentElement === this.element) this.instance.detachFromElement();
+		const instance = this.instance;
 		this.instance = undefined;
+		if (instance?.xterm?.element.parentElement === this.element) {
+			instance.detachFromElement();
+			// A retained visible tab takes over the original screen when its current
+			// host closes. There is still only one screen and one process.
+			const retained = this.editors.visibleEditorPanes.find((pane): pane is TerminalEditor =>
+				pane instanceof TerminalEditor && pane !== this && !pane.isDisposed && pane.visible && pane.instance === instance,
+			);
+			if (retained && instance.target === TerminalLocation.Editor && this.terminals.instances.includes(instance)) {
+				instance.attachToElement(retained.element);
+				instance.xterm.setVisible(true);
+				instance.xterm.fit();
+			}
+		}
 		this.element?.replaceChildren();
 	}
 
@@ -86,7 +102,13 @@ export class TerminalEditor extends EditorPane {
 		this.element.style.height = `${dimension.height}px`;
 		if (this.instance?.xterm?.element.parentElement === this.element) this.instance.xterm.fit();
 	}
-	override focus(): void { this.instance?.xterm?.focus(); }
+	override focus(): void {
+		if (!this.instance) return;
+		this.instance.attachToElement(this.element);
+		this.instance.xterm?.setVisible(this.visible);
+		this.instance.xterm?.fit();
+		this.instance.xterm?.focus();
+	}
 	override getControl(): ITerminalInstance | undefined { return this.instance; }
 	protected override disposeCore(): void { this.clearInput(); super.disposeCore(); }
 }

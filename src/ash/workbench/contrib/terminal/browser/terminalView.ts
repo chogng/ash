@@ -41,6 +41,7 @@ import { TerminalTabbedView } from "./terminalTabbedView.js";
 import "./media/terminal.css";
 import { h, addDisposableListener, stopEvent } from "../../../../base/browser/dom.js";
 import { observeResize } from "../../../../base/browser/observer.js";
+import { IWorkbenchEnvironmentService } from '../../../services/environment/common/environmentService.js';
 
 /** Tabbed xterm panel whose persistent widgets preserve per-instance terminal state. */
 export class TerminalViewPane extends ViewPane {
@@ -54,6 +55,7 @@ export class TerminalViewPane extends ViewPane {
 	private creating: Promise<ITerminalInstance | undefined> | undefined;
 	private initializing = false;
 	private focusSource: Element | null | undefined;
+	private awaitingTransfer: boolean;
 
 	constructor(
 		container: HTMLElement,
@@ -66,9 +68,11 @@ export class TerminalViewPane extends ViewPane {
 		@ITerminalProfileResolverService private readonly profileResolver: ITerminalProfileResolverService,
 		@ITerminalProcessService private readonly processes: ITerminalProcessService,
 		@ITerminalGroupService private readonly groups: ITerminalGroupService,
+		@IWorkbenchEnvironmentService environment: IWorkbenchEnvironmentService,
 	) {
 		super(container, options);
 		this.terminalService = terminalService;
+		this.awaitingTransfer = environment.expectsTerminalTransfer === true && terminalService.instances.length === 0;
 		this.element.classList.add("ash-terminal-view");
 		this.setHeaderVisible(false);
 		this.titleActions = this._register(instantiation.createInstance(TerminalTitleActions, this.headerActionsElement));
@@ -88,6 +92,7 @@ export class TerminalViewPane extends ViewPane {
 
 		for (const instance of terminalService.instances) this.addInstance(instance);
 		this._register(terminalService.onDidCreateInstance((instance) => {
+			this.awaitingTransfer = false;
 			this.addInstance(instance);
 			this.updateInstances();
 		}));
@@ -164,12 +169,16 @@ export class TerminalViewPane extends ViewPane {
 		this.initializing = true;
 		try {
 			await this.terminalService.whenConnected;
+			// A transfer window may restore a visible panel before Main offers the PTY.
+			// Its first terminal belongs to that handoff, not an implicit new shell.
+			if (this.awaitingTransfer && this.terminalService.instances.length === 0) return;
 			if (this.terminalService.instances.length === 0) {
 				// Profile readiness also drives the title menu. A hidden panel must
 				// stop here before handing a creation intent to the service.
 				const folders = this.workspaceContext.getWorkspace().folders;
 				if (folders.length === 1) await this.profileService.refreshAvailableProfiles(folders[0]!.id);
-				if (!this.isBodyVisible() || this.isDisposed) return;
+				// An incoming process can acquire the panel while discovery is pending.
+				if (!this.isBodyVisible() || this.isDisposed || this.terminalService.instances.length > 0) return;
 				this.titleActions.setCreating(true);
 				this.creating = this.terminalService.createTerminal();
 				try { await this.creating; }
