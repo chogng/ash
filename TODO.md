@@ -51,6 +51,9 @@
 - [ ] **验收 · 系统休眠恢复**：在可中断的测试机器运行实际 OS sleep/wake，核对连接恢复、重新鉴权、订阅和工具权限；尚未在日常开发机器执行系统休眠。
 - [ ] **验收 · B2 TUI 与真实外部模型**：继续补真实外部账号的模型 picker 与 TUI 场景。本机已重新验证当前 CLI 缓存契约，并通过真实 Rust observer 的完整 10 分钟 Web Code／Cowork metadata 更新和失败保留场景；该合成账号结果不覆盖外部服务或真实 TUI，证据范围见 [AgentHost 台账](agenthost-todo.md)。
 - [ ] **复核 · 旧隔离环境故障**：取得麦克风枚举失败的准确步骤和底层诊断，沿音频设备 owner 定位。原 2026-10-08 证据目录不在当前检出；不能凭通用错误码或普通音频测试关闭报告。
+- [ ] **复核 · MCP 授权退休与在途调用**：沿 `crates/ext/mcp/src/auth.rs`、`crates/rmcp-client/src/http_auth.rs` 和 `crates/app-server/src/server/request_processors/mcp.rs` 核对登出／撤权的完成边界。当前 OAuth owner 已绑定登录代次，撤权入口在启用 watcher 时也会先等待 runtime 状态不可用或消失；但 `crates/app-server/src/tool_composition.rs` 的旧调用会保留原 generation，状态变化不能单独证明在途请求和流已结束。此项是源码发现的回归覆盖缺口，尚未运行复现，不认定为已证实缺陷。
+  - 目标与范围：只闭合现有独立 Config MCP 的授权生命周期，避免退休后的结果重新进入旧会话。先确定原 OAuth owner、transport 与 runtime 之间的取消／释放完成契约；不新增认证状态 owner，不改变普通配置热更保留已绑定调用的既有行为。参考 [Codex 请求授权边界检查](https://github.com/openai/codex/pull/55288)，不引入其企业策略子系统。
+  - 验收：用离线 fixture 覆盖登出／撤权与刷新、HTTP、SSE 重叠，确认旧身份停止后续发送和结果投递、流资源被释放、新登录不被旧请求采用；保留正常刷新、明确 401 的单次重试及不确定写入不重放回归。由 `crates/ext/mcp/src/auth_tests.rs`、`crates/rmcp-client/src/http_auth_tests.rs` 与 App Server 真实调用链共同验证，不能仅凭状态变为不可用消项。已完成的外部操作不能靠本地取消回滚。
 
 ## Sessions · TODO
 
@@ -97,6 +100,9 @@
 - [ ] **复核** · 继续识别大内容按需资源及领域物理取消的具体消费者。文件模型、Chat Changes 摘要及 Code／Cowork Thread／transcript 的在途只读刷新已合并；后者补齐代次隔离、写后补读和落后 bounded 快照的有界重试，两个模型/视图文件 239 项测试通过。GitHub 已取消读取可跳过无消费者 payload 的 schema／Worker 回传；这些结果不代表通用传输取消或所有读取入口均完成。约束见[消费者刷新约束](docs/ash-app-server-data-path-audit.md#已接入的消费者刷新约束)。
 - [ ] **测量** · 把后端结果构造和 writer／producer 等待纳入资源准入测量，评估有界数据／控制输出契约与同连接队头阻塞；不靠降低既有文件上限掩盖成本。
 - [ ] **测量 / 可做** · 继续测量更大段落、候选密集公式、列表与表格的单次分词及投递预算。已修复普通巨大段落的数学候选重复扫描：10,103 字节／128 次更新的累计同步成本下降 85.7%，7 样本长任务 84 → 0，单次最大更新中位数 57.3 → 5.8 ms；56 项 Markdown 单测及 3 项 Chromium 场景通过。此结果没有给任意输入提供硬时间预算，也不是完整 Desktop 收益；范围见[数学候选扫描复测](docs/ash-app-server-data-path-audit.md#20-已实施巨大段落的数学候选扫描减量2026-10-18)。
+- [ ] **测量 · 模型调用的不可变工具 schema 复制**：`crates/core/src/services.rs` 的 `ModelToolCatalogSnapshot` 持有 `Vec<ToolDefinition>`；`crates/core/src/turn/executor.rs` 为每个模型步骤复制 definitions，并再次复制给 invocation preparation；`crates/core/src/context/planner.rs` 的 Handoff 预算分支还会克隆包含工具定义的 `ContextInput`，`crates/app-server/src/tool_composition.rs` 的 Code Mode catalog 另有复制。参考 [Codex 共享冻结工具定义](https://github.com/openai/codex/pull/55261)，先量化工具数量、schema 大小、多步骤和 Handoff 场景的分配字节、峰值内存及准备耗时，再决定是否复用不可变切片或按需复制；尚无 Ash 性能收益证据。
+  - 范围与风险：仅处理同一冻结 catalog 的重复副本，保留 Core 的唯一 owner、精确 generation／binder、工具 scope 及每次调用的提示内容；不把动态过滤结果共享为可变缓存，不顺带重构整个上下文系统。
+  - 验收：相同输入下比对最终工具 schema、顺序及预算结果；覆盖配置热更后旧 invocation 仍绑定旧 generation、新 invocation 使用新 catalog，以及 Code Mode 和 Handoff。记录优化前后重复样本；只有复制成本实际下降且上述行为不变才保留改动，局部结果不替代整条 Desktop 性能结论。
 
 ## 发展候选（未排期）
 
@@ -108,3 +114,10 @@
 | Sessions 跨客户端审阅与 provider changeset | 当前 read marker 只属于窗口并绑定 revision。需要跨客户端 reviewed-file、transient/provider changeset、隔离或反馈评论时，先确定共享领域契约和真实消费者，不因上游身份模型不同新增 facade。                                                                                                                                                                                                                  |
 | Configuration 其他契约                     | configuration variables、Remote User、缓存默认值／实验覆盖、跨 profile 规则，以及 registry／schema、typed parse/serialize、控件描述与 `ashBinding` 均按具体调用需求复核，不按上游成员表整体补齐；Rust `config.toml` 的编辑入口仍归其宿主。设置呈现与接入规则见 [Settings 接入边界](src/ash/workbench/contrib/preferences/README.md#当前实现)。                                                             |
 | 托管策略强制新鲜度门禁                     | 当前生产账户映射仅 `ChatDefaultModel`；未接入 `forceRemoteSettingsRefresh`、跨重启的刷新要求或执行端门禁。若纳入企业治理，先确定 Ash 管理来源、作用域、启动／重载要求及 App Server 执行 owner，再贯通 pending／blocked／satisfied、显式恢复和跨端校验；普通网络失败不自动升级为全产品 AI 禁用，Renderer 禁用输入不作为执行端强制保证。                                                                     |
+
+### Sessions 按关联 PR 号查找
+
+未排期的新工作流增强。`src/ash/sessions/browser/parts/sidebar/sessionsList.ts` 目前只按标题／provider label 过滤，随后才读取已有 `IGitHubService.getSessionPullRequests()` 绘制 PR 标记；关联 PR 的 number 已存在，不需要新增后端发现服务。参考 [VS Code Sessions PR 号查找](https://github.com/microsoft/vscode/pull/338904)，让用户能从 PR 号找回标题不含该号码的会话。
+
+- 进入条件与范围：先确认 `#N` 与纯数字 `N` 精确匹配关联 PR 号的产品语义，再在现有 Sessions 列表 owner 内实现；仅消费已有分支关联／手动附加 PR 数据，不新增网络请求、第二份关联状态或通用搜索层。
+- 风险与验收：在 `src/ash/sessions/test/browser/sessions-list.test.ts` 和真实列表场景覆盖两种输入、同号跨仓库的全部匹配、多个 PR、无 PR、关联解除／刷新以及不存在的号码；标题、provider、分组、焦点与清空查询行为保持可用。PR-only 命中不能伪造标题高亮；仅有现有关联数据的会话可按 PR 查找，不承诺尚未提供元数据的外部 provider。
