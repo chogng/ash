@@ -27,3 +27,25 @@
 	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
 	outline-offset: var(--ash-spacing-size20);
 }
+
+.ash-sessions-check-actions {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--ash-spacing-size40);
+	margin-block: var(--ash-spacing-size40);
+}
+
+.ash-sessions-check-output {
+	max-height: 20em;
+	margin: 0;
+	overflow: auto;
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
+	font-family: var(--ash-font-family-monospace);
+	font-size: var(--ash-fontSize-body2);
+}
+
+.ash-sessions-check-output:focus-visible {
+	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
+	outline-offset: var(--ash-spacing-size20);
+}

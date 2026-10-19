@@ -4,6 +4,11 @@ use ash_app_server_protocol::protocol::github::GitHubAccountListParams;
 use ash_app_server_protocol::protocol::github::GitHubAccountsResult;
 use ash_app_server_protocol::protocol::github::GitHubBranchProtectionResult;
 use ash_app_server_protocol::protocol::github::GitHubBranchProtectionRule;
+use ash_app_server_protocol::protocol::github::GitHubCheckAnnotation;
+use ash_app_server_protocol::protocol::github::GitHubCheckDetailsParams;
+use ash_app_server_protocol::protocol::github::GitHubCheckDetailsResult;
+use ash_app_server_protocol::protocol::github::GitHubCheckLogResult;
+use ash_app_server_protocol::protocol::github::GitHubCheckParams;
 use ash_app_server_protocol::protocol::github::GitHubDiffSide;
 use ash_app_server_protocol::protocol::github::GitHubFileContent;
 use ash_app_server_protocol::protocol::github::GitHubFileReadParams;
@@ -350,6 +355,9 @@ impl GitHubRequestProcessor {
                 | ClientMethod::GitHubPullRequestReview
                 | ClientMethod::GitHubPullRequestMerge
                 | ClientMethod::GitHubPullRequestAutoMerge
+                | ClientMethod::GitHubCheckDetails
+                | ClientMethod::GitHubCheckLog
+                | ClientMethod::GitHubCheckRerun
                 | ClientMethod::GitHubChecks
                 | ClientMethod::GitHubLabelsList
                 | ClientMethod::GitHubLabelCreate
@@ -918,6 +926,43 @@ impl GitHubRequestProcessor {
                         .await
                 })
             }
+            ClientMethod::GitHubCheckDetails => {
+                operation!(GitHubCheckDetailsParams, |p, repository| {
+                    let details = client
+                        .check_details(&repository, p.number, &p.commit, p.check_id, p.page)
+                        .await?;
+                    Ok::<_, github::Error>(GitHubCheckDetailsResult {
+                        title: details.title,
+                        summary: details.summary,
+                        text: details.text,
+                        next_page: details.next_page,
+                        actions_job: details.actions_job,
+                        annotations: details
+                            .annotations
+                            .into_iter()
+                            .map(|annotation| GitHubCheckAnnotation {
+                                path: annotation.path,
+                                start_line: annotation.start_line,
+                                end_line: annotation.end_line,
+                                annotation_level: annotation.annotation_level,
+                                message: annotation.message,
+                                title: annotation.title,
+                            })
+                            .collect(),
+                    })
+                })
+            }
+            ClientMethod::GitHubCheckLog => operation!(GitHubCheckParams, |p, repository| {
+                client
+                    .check_log(&repository, p.number, &p.commit, p.check_id)
+                    .await
+                    .map(|url| GitHubCheckLogResult { url })
+            }),
+            ClientMethod::GitHubCheckRerun => operation!(GitHubCheckParams, |p, repository| {
+                client
+                    .rerun_check(&repository, p.number, &p.commit, p.check_id)
+                    .await
+            }),
             ClientMethod::GitHubChecks => operation!(GitHubChecksParams, |p, repository| {
                 let page = client.checks(&repository, &p.commit, p.page).await?;
                 Ok::<_, github::Error>(GitHubChecksResult {

@@ -762,6 +762,72 @@ impl GitHub {
             )),
         }
     }
+    pub async fn check_details(
+        &self,
+        repository: &Repository,
+        number: u64,
+        commit: &str,
+        check_id: u64,
+        page: u32,
+    ) -> Result<CheckDetails> {
+        match self
+            .invoke(GitHubRequest::CheckDetails {
+                repository: repository.clone(),
+                number,
+                commit: commit.into(),
+                check_id,
+                page,
+            })
+            .await?
+        {
+            GitHubResponse::CheckDetails(value) => Ok(value),
+            _ => Err(Error::InvalidResponse(
+                "Unexpected check operation response".into(),
+            )),
+        }
+    }
+    pub async fn check_log(
+        &self,
+        repository: &Repository,
+        number: u64,
+        commit: &str,
+        check_id: u64,
+    ) -> Result<String> {
+        match self
+            .invoke(GitHubRequest::CheckLog {
+                repository: repository.clone(),
+                number,
+                commit: commit.into(),
+                check_id,
+            })
+            .await?
+        {
+            GitHubResponse::CheckLog(value) => Ok(value),
+            _ => Err(Error::InvalidResponse(
+                "Unexpected check operation response".into(),
+            )),
+        }
+    }
+    pub async fn rerun_check(
+        &self,
+        repository: &Repository,
+        number: u64,
+        commit: &str,
+        check_id: u64,
+    ) -> Result<()> {
+        match self
+            .invoke(GitHubRequest::RerunCheck {
+                repository: repository.clone(),
+                number,
+                commit: commit.into(),
+                check_id,
+            })
+            .await?
+        {
+            GitHubResponse::RerunCheck(value) => Ok(value),
+            _ => Err(Error::SubmissionUncertain),
+        }
+    }
     pub async fn pull_request(&self, repository: &Repository, number: u64) -> Result<PullRequest> {
         match self
             .invoke(GitHubRequest::PullRequest {

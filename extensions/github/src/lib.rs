@@ -1,5 +1,6 @@
 //! GitHub API implementation, executed by the independently supervised Rust extension.
 mod api;
+mod checks;
 mod dispatch;
 mod error;
 mod forks;

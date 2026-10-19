@@ -1,3 +1,9 @@
+import { InstantiationService } from '../../../src/ash/platform/instantiation/common/instantiationService.js';
+import { ChecksWidget } from '../../../src/ash/sessions/contrib/changes/browser/checksWidget.js';
+import { IChangesViewService } from '../../../src/ash/sessions/contrib/changes/common/changesViewService.js';
+import { IChatService, type StartTurnOptions } from '../../../src/ash/workbench/services/chat/common/chatService.js';
+import { IGitHubService as IGitHubApi } from '../../../src/ash/platform/github/common/githubService.js';
+import { IGitHubService as ISessionGitHubService } from '../../../src/ash/sessions/contrib/github/browser/githubService.js';
 import { createDisconnectedRendererApi } from '../../../src/ash/workbench/browser/rendererApi.js';
 import type { IRendererHost } from '../../../src/ash/platform/renderer/common/rendererHost.js';
 import type { ISessionProviderScope, ISessionProviderScopeService, SessionProviderServices } from '../../../src/ash/sessions/browser/agentHost/sessionProviderScopeService.js';
@@ -16,15 +22,15 @@ import { AppServerProtocolClient } from '../../../src/ash/platform/agentHost/bro
 import { WEB_APP_SERVER_CONNECT_EVENT, WEB_APP_SERVER_CONNECTED_EVENT, WEB_APP_SERVER_FRAME_EVENT, WEB_APP_SERVER_PROTOCOL_VERSION, type AppServerTransport } from '../../../src/ash/platform/agentHost/common/appServerTransport.js';
 import { createTestInitializeResult } from '../../../src/ash/platform/agentHost/test/common/testAppServerProtocol.js';
 import { AppServerGitHubService } from '../../../src/ash/platform/github/browser/appServerGitHubService.js';
-import type { IAccountService, AccountState } from '../../../src/ash/platform/accounts/common/accountService.js';
+import { IAccountService, type AccountState } from '../../../src/ash/platform/accounts/common/accountService.js';
 import { ConsoleLogger } from '../../../src/ash/platform/log/common/log.js';
 import { bindTestColorTheme } from './themeFixture.js';
 import { TestThemeService } from '../../../src/ash/platform/theme/test/common/testThemeService.js';
 import { darkColorTheme, highContrastDarkColorTheme, lightColorTheme } from '../../../src/ash/platform/theme/common/colorTheme.js';
-import type { IOpenerService } from '../../../src/ash/platform/opener/common/opener.js';
-import type { INotificationService } from '../../../src/ash/platform/notification/common/notification.js';
+import { IOpenerService } from '../../../src/ash/platform/opener/common/opener.js';
+import { INotificationService } from '../../../src/ash/platform/notification/common/notification.js';
 
-import type { ISessionsService, SessionsViewSelection } from '../../../src/ash/sessions/services/sessions/browser/sessionsService.js';
+import { ISessionsService, type SessionsViewSelection } from '../../../src/ash/sessions/services/sessions/browser/sessionsService.js';
 import type { ISessionsManagementService } from '../../../src/ash/sessions/services/sessions/common/sessionsManagement.js';
 import type { ISession } from '../../../src/ash/sessions/services/sessions/common/session.js';
 import { GitHubService } from '../../../src/ash/sessions/contrib/github/browser/githubService.js';
@@ -112,6 +118,9 @@ class Transport implements AppServerTransport {
 			case 'github/account/list': this.reply(request, { accounts: this.signedIn ? [{ id: 'account', host: 'github.com', login: 'User', status: 'ready', credentialRevision: '1' }] : [] }); break;
 			case 'github/pullRequest/list': this.reply(request, { pullRequests: request.params.state === pr.state ? [pr] : [], nextPage: null }); break;
 			case 'github/pullRequest/read': this.reply(request, pr); break;
+			case 'github/check/details': this.reply(request, { title: 'Build failure', summary: 'Compiler error', text: '<script>untrusted output</script>', annotations: [{ path: 'src/main.rs', startLine: 3, endLine: 4, annotationLevel: 'failure', message: `Error page ${request.params.page}`, title: null }], nextPage: request.params.page === 1 ? 2 : null, actionsJob: true }); break;
+			case 'github/check/log': this.reply(request, { url: 'https://productionresults.blob.core.windows.net/logs?sig=fixture' }); break;
+			case 'github/check/rerun': this.reply(request, null); break;
 			case 'github/checks': this.reply(request, { state: 'pending', statuses: [], checks: Number(request.params.page) === 1 ? [{ id: 1, name: 'waiting', status: 'in_progress', conclusion: null, detailsUrl: null }] : [{ id: 2, name: 'build', status: 'completed', conclusion: this.failingChecks ? 'failure' : 'success', detailsUrl: null }], nextPage: Number(request.params.page) === 1 ? 2 : null }); break;
 			case 'github/pullRequest/threads': this.reply(request, { threads: request.params.cursor === null ? [] : [{ id: 'review-thread', path: 'file.ts', line: null, side: 'RIGHT', resolved: !this.unresolvedComments, outdated: false, canResolve: true, comments: { comments: [], nextCursor: null } }], nextCursor: request.params.cursor === null ? 'second' : null }); break;
 			case 'github/cancel': this.reply(request, {}); break;
@@ -189,10 +198,31 @@ const quickInput = resources.add(new TestQuickInputService({ container: document
 const toolbar = resources.add(new SessionChatInputToolbar(main, { sessionId: 'session', onDidChange: Event.None }, github, opener, notifications, quickInput, { openEditor: async input => { opened.push(input.resource.toString()); } } as IEditorService));
 toolbar.render();
 const list = resources.add(new SessionsList(main, management, sessions, 'Sessions', 'New Session', github, undefined, listCustomViews, listMenus, listNotifications, { executeCommand: async () => { sessions.openNewSession(); }, onWillExecuteCommand: Event.None, onDidExecuteCommand: Event.None } as unknown as import('../../../src/ash/platform/commands/common/commands.js').ICommandService));
+const submissions: Record<string, unknown>[] = [];
+if (new URL(location.href).searchParams.has('checks')) {
+	transport.failingChecks = true;
+	const services = resources.add(new InstantiationService());
+	services.registerInstance(ISessionsService, sessions);
+	services.registerInstance(ISessionGitHubService, github);
+	services.registerInstance(IGitHubApi, host.github);
+	services.registerInstance(IAccountService, { onDidChangeAccounts: accountsChanged.event } as IAccountService);
+	services.registerInstance(IOpenerService, opener);
+	services.registerInstance(INotificationService, notifications);
+	services.registerInstance(IChangesViewService, {
+		activeSessionSectionCollapseStateObs: observableValue('testChecksCollapse', { checks: false }),
+		setSectionCollapsed: () => { },
+	} as unknown as IChangesViewService);
+	services.registerInstance(IChatService, {
+		readThread: async () => ({ thread: { status: 'active', sequence: 3, turns: [] } }),
+		startTurn: async (options: StartTurnOptions) => { submissions.push({ ...options }); },
+		queueTurn: async (options: StartTurnOptions) => { submissions.push({ ...options, queued: true }); },
+	} as unknown as IChatService);
+	resources.add(services.createInstance(ChecksWidget, main));
+}
 github.initialize();
 
 window.ashSessionGitHub = {
-	opened, requests: transport.requests,
+	opened, requests: transport.requests, submissions,
 	setIssueState: (number: number, state: string, reason?: string) => transport.changeIssue(number, state, reason),
 	setState: (state: State) => { transport.states.set(7, state); statusChanged.fire(gitStatus('one')); },
 	setAttention: (attention: 'comments' | 'checks' | 'conflicts' | 'none') => {
@@ -208,4 +238,4 @@ window.ashSessionGitHub = {
 	dispose: () => { resources.dispose(); list.domNode.remove(); },
 };
 window.addEventListener('pagehide', () => resources.dispose(), { once: true });
-declare global { interface Window { ashSessionGitHub: { opened: string[]; requests: Request[]; setIssueState(number: number, state: string, reason?: string): void; setState(state: State): void; setAttention(attention: 'comments' | 'checks' | 'conflicts' | 'none'): void; changeBranch(): void; signOut(): void; selectDraft(): void; theme(name: string): void; dispose(): void; }; } }
+declare global { interface Window { ashSessionGitHub: { submissions: Record<string, unknown>[]; opened: string[]; requests: Request[]; setIssueState(number: number, state: string, reason?: string): void; setState(state: State): void; setAttention(attention: 'comments' | 'checks' | 'conflicts' | 'none'): void; changeBranch(): void; signOut(): void; selectDraft(): void; theme(name: string): void; dispose(): void; }; } }

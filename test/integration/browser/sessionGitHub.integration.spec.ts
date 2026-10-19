@@ -208,3 +208,37 @@ test('Issue labels translate and survive narrow layout, theme changes and accoun
 	await page.evaluate(() => window.ashSessionGitHub.dispose());
 	await expect(page.locator('.ash-session-chat-input-issues')).toHaveCount(0);
 });
+
+for (const locale of ['en', 'zh-CN']) {
+	test(`CI actions read annotations and dispatch only explicit scoped requests in ${locale}`, async ({ page }) => {
+		await page.goto(`/sessionGitHub.html?checks&locale=${locale}`);
+		const zh = locale === 'zh-CN';
+		await page.waitForFunction(() => Boolean(window.ashSessionGitHub));
+		await page.evaluate(() => window.ashSessionGitHub.theme('highContrast'));
+		const row = page.locator('.ash-sessions-checks li').filter({ hasText: 'team/one #7' }).filter({ hasText: 'build' });
+		await expect(row).toHaveCount(1);
+		expect(await page.evaluate(() => window.ashSessionGitHub.submissions)).toEqual([]);
+		const annotations = row.getByRole('button', { name: zh ? '读取注释' : 'Read annotations', exact: true });
+		await annotations.focus(); await annotations.press('Enter');
+		const output = row.getByRole('region', { name: zh ? 'build 注释' : 'build annotations', exact: true });
+		await expect(output).toBeFocused();
+		await expect(output).toContainText('src/main.rs:3-4');
+		await expect(output).toContainText('Error page 2');
+		await expect(output).toContainText('<script>untrusted output</script>');
+		expect(await output.locator('script').count()).toBe(0);
+		await row.getByRole('button', { name: zh ? '下载日志' : 'Download logs', exact: true }).click();
+		await expect.poll(() => page.evaluate(() => window.ashSessionGitHub.opened)).toContain('https://productionresults.blob.core.windows.net/logs?sig=fixture');
+		await row.getByRole('button', { name: zh ? '重新运行作业' : 'Re-run job', exact: true }).click();
+		await expect.poll(() => page.evaluate(() => window.ashSessionGitHub.requests.filter(request => request.method === 'github/check/rerun').length)).toBe(1);
+		await row.getByRole('button', { name: zh ? '请 Agent 修复 CI' : 'Ask agent to fix CI', exact: true }).click();
+		await expect.poll(() => page.evaluate(() => window.ashSessionGitHub.submissions.length)).toBe(1);
+		const submission = await page.evaluate(() => window.ashSessionGitHub.submissions[0]!);
+		expect(submission).toMatchObject({ sessionId: 'session', threadId: 'thread', expectedSequence: 3, mode: 'agent' });
+		expect(submission.text).toContain('Error page 2');
+		expect(submission.text).not.toContain('sig=fixture');
+		const rerun = await page.evaluate(() => window.ashSessionGitHub.requests.find(request => request.method === 'github/check/rerun')!);
+		expect(rerun.params).toMatchObject({ accountId: 'account', repository: { host: 'github.com', owner: 'team', name: 'one' }, number: 7, commit: '7'.repeat(40), checkId: 2 });
+		await page.evaluate(() => window.ashSessionGitHub.signOut());
+		await expect(page.locator('.ash-sessions-check-output')).toHaveCount(0);
+	});
+}

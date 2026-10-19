@@ -67,6 +67,19 @@ Path Service 的资源路径 provider 注册仍没有生产调用方，未扩展
 `github/issue/read` 验证访问，实时状态仍按当前账号读取。移除只取消关联，不向 GitHub
 提交关闭或删除操作。关联随根 Thread 删除、恢复和历史迁移；不依赖工作区目录。
 
+`github/check/details`、`github/check/log` 与 `github/check/rerun` 共用明确的
+`operationId`、可选 `accountId`、`repository`、PR `number`、完整 head `commit` 和
+`checkId`；详情另外接收 `page`。详情返回纯文本 title／summary／text、带文件行号的
+annotations、下一页和 Actions job 识别结果。注释最多读取 100 页；最后一页仍满额时明确报告
+上限，不制造不可请求的下一页。Provider 每次核对 PR head 与 check SHA，Actions 操作还核对
+同仓库 job 的 `check_run_url`，拒绝跨仓库、跨主机或非默认 HTTPS 端口目标。
+
+详情及日志请求使用共享读作用域；重新运行使用托管仓库独占作用域和 `PreserveOutcome`。
+取消仍经 connection 内 `github/cancel`，取消回执不能替代原写入终态，不自动重放。
+日志响应只含短时 HTTPS 下载链接；扩展不跟随带 Bearer 的重定向，仅允许已知 GitHub Actions
+日志存储主机或 Enterprise 自身主机，拒绝 URL 凭据、片段及非 443 端口。
+权限拒绝与可能已提交分别使用 `GitHubPermissionDenied`、`GitHubSubmissionUncertain`。
+
 ## 编译与导出
 
 `file/search/fuzzy` 与 `file/search/glob` 都要求显式选择已授权的 Workspace 或 Session 目录，

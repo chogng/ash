@@ -1549,6 +1549,14 @@ use crate::protocol::github::GitHubShareLinkParams;
 use crate::protocol::github::GitHubShareLinkResult;
 
 #[cfg(any(test, feature = "export"))]
+use crate::protocol::github::GitHubCheckDetailsParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::github::GitHubCheckDetailsResult;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::github::GitHubCheckLogResult;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::github::GitHubCheckParams;
+#[cfg(any(test, feature = "export"))]
 use crate::protocol::github::GitHubChecksParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::github::GitHubCommit;
@@ -5190,6 +5198,9 @@ client_methods! {
     GitHubPullRequestReview => "github/pullRequest/review" { params: GitHubPullRequestReviewParams, response: GitHubPullRequestReview, serialization: HostedRepositoryExclusive, cancellation: "operationId" => PreserveOutcome, },
     GitHubPullRequestMerge => "github/pullRequest/merge" { params: GitHubPullRequestMergeParams, response: GitHubMergeResult, serialization: HostedRepositoryExclusive, cancellation: "operationId" => PreserveOutcome, },
     GitHubPullRequestAutoMerge => "github/pullRequest/autoMerge" { params: GitHubPullRequestMergeParams, response: (), serialization: HostedRepositoryExclusive, cancellation: "operationId" => PreserveOutcome, },
+    GitHubCheckDetails => "github/check/details" { params: GitHubCheckDetailsParams, response: GitHubCheckDetailsResult, serialization: HostedRepositorySharedRead, cancellation: "operationId", },
+    GitHubCheckLog => "github/check/log" { params: GitHubCheckParams, response: GitHubCheckLogResult, serialization: HostedRepositorySharedRead, cancellation: "operationId", },
+    GitHubCheckRerun => "github/check/rerun" { params: GitHubCheckParams, response: (), serialization: HostedRepositoryExclusive, cancellation: "operationId" => PreserveOutcome, },
     GitHubChecks => "github/checks" { params: GitHubChecksParams, response: GitHubChecksResult, serialization: HostedRepositorySharedRead, cancellation: "operationId", },
     GitHubLabelsList => "github/labels/list" { params: GitHubRepositoryParams, response: GitHubLabelsResult, serialization: HostedRepositorySharedRead, cancellation: "operationId", },
     GitHubLabelCreate => "github/label/create" { params: GitHubLabelParams, response: GitHubLabel, serialization: HostedRepositoryExclusive, cancellation: "operationId" => PreserveOutcome, },
@@ -6146,6 +6157,11 @@ typescript_bindings! {
     crate::protocol::github::GitHubPullRequestMergeParams,
     crate::protocol::github::GitHubMergeResult,
     crate::protocol::github::GitHubChecksParams,
+    crate::protocol::github::GitHubCheckParams,
+    crate::protocol::github::GitHubCheckDetailsParams,
+    crate::protocol::github::GitHubCheckDetailsResult,
+    crate::protocol::github::GitHubCheckAnnotation,
+    crate::protocol::github::GitHubCheckLogResult,
     crate::protocol::github::GitHubCommitParams,
     crate::protocol::github::GitHubCommit,
     crate::protocol::github::GitHubCommitStatus,

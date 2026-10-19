@@ -47,5 +47,19 @@ fn wrong_operation_replies_preserve_uncertainty_for_writes() {
             client.create_comment(&repository, 7, "body").await,
             Err(Error::SubmissionUncertain)
         );
+        assert!(matches!(
+            client
+                .check_details(&repository, 7, &"a".repeat(40), 9, 1)
+                .await,
+            Err(Error::InvalidResponse(_))
+        ));
+        assert!(matches!(
+            client.check_log(&repository, 7, &"a".repeat(40), 9).await,
+            Err(Error::InvalidResponse(_))
+        ));
+        assert_eq!(
+            client.rerun_check(&repository, 7, &"a".repeat(40), 9).await,
+            Err(Error::SubmissionUncertain)
+        );
     });
 }

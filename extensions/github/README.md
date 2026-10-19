@@ -71,3 +71,12 @@ App Server 在 `issue/list` 与 `issue/read` 中用 Git origin 关联 GitHub 仓
 编辑器和资源管理器的分享菜单以及命令面板提供 `github.copyPermalink`、`github.copyVscodeDevLink`、`github.copyVscodeDevLinkFile`、`github.copyVscodeDevLinkWithoutRange` 和 `github.openOnGitHub`。优先使用当前分支跟踪的 GitHub 远程；文件／目录路径和引用逐段编码，编辑器选择转换为 GitHub 行号。永久链接固定到完整提交 SHA；普通链接使用远程跟踪分支。未发布的分支或提交先询问发布／推送，分支落后时先询问拉取，本地更改需要确认链接指向已提交版本。生成链接无需登录，也不发出网络请求；Enterprise 链接留在其主机，vscode.dev 仅支持 GitHub.com。
 
 `github.branchProtection` 默认开启。Git 扩展在常规提交检查前，通过可选的 GitHub 命令读取当前远程仓库的活动分支规则集；只读取有写权限账号的要求 PR 的规则，包括继承规则和分页，支持全部分支、默认分支、包含与排除模式。命中后复用 `git.branchProtectionPrompt` 的提交当前分支／新建分支提示；网络或权限错误不会被当作无保护规则。没有 GitHub 账号的普通 Git 操作继续可用。此检查是提交提示，远端仍拥有最终分支保护裁决。
+
+CI 使用 [Checks annotations API](https://docs.github.com/en/rest/checks/runs#list-check-run-annotations)
+读取同 PR head 的输出和注释；Actions job 重新运行使用
+[Workflow runs API](https://docs.github.com/en/rest/actions/workflow-runs#re-run-a-job-from-a-workflow-run)，
+日志下载使用 [Workflow jobs API](https://docs.github.com/en/rest/actions/workflow-jobs)。调用前核对 check、PR head、
+Actions job 的仓库和 `check_run_url`；不向检查的外部详情 URL 发送 API 凭据。
+日志 API 的 302 仅转换为短时下载能力，扩展不跟随跳转；URL 必须为默认 HTTPS 端口，
+主机属于 `*.blob.core.windows.net`、`*.actions.githubusercontent.com`、`logs.githubusercontent.com`
+或该 Enterprise 自身主机。其他 Enterprise 存储主机明确拒绝，可使用已有完整结果链接。

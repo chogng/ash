@@ -3260,6 +3260,9 @@ impl AppServer {
                 | ClientMethod::GitHubPullRequestReview
                 | ClientMethod::GitHubPullRequestMerge
                 | ClientMethod::GitHubPullRequestAutoMerge
+                | ClientMethod::GitHubCheckDetails
+                | ClientMethod::GitHubCheckLog
+                | ClientMethod::GitHubCheckRerun
                 | ClientMethod::GitHubChecks
                 | ClientMethod::GitHubLabelsList
                 | ClientMethod::GitHubLabelCreate
