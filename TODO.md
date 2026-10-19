@@ -24,7 +24,7 @@
 ## Desktop 跨机器验收 · TODO
 
 - [ ] **验收** · 在指定 Windows 主机完成真实 Desktop → SSH／Tailscale 全部十步、清理和证据 QA，保留两端原检出与无关改动。现有实现 `7cfdccd9b` 的历史部分步骤不能替代完整通过；此前 Debug 不可用及启动约 33 秒时连接退出仍未归因。当前协议已到 major10，不能复用旧 major8 包冒充本轮产物。
-- 本轮管理 SSH 已恢复应答，但本机缺可信主机公钥，正等待用户独立核对指纹；旧 `.build/remote-desktop-acceptance/cross-machine/` 脚本和证据不在当前检出。后续需恢复既有 runner，重建匹配协议的隔离 runtime／client 后执行全套，不以诊断参数、替代 checkout 或部分步骤消项。
+- 用户已独立核对 Windows 主机公钥，本机保存后严格主机校验通过；管理 SSH 仍因现有公钥被账号拒绝而未登录，等待可用账号／已有密钥或用户配置授权。旧 `.build/remote-desktop-acceptance/cross-machine/` 脚本和证据不在当前检出；正式 `test/smoke/areas/windows/remote-ssh.spec.ts` 使用 macOS 同机 fixture，不能直接替代 Windows 跨机验收。后续需恢复既有 runner，重建匹配协议的隔离 runtime／client 后执行全套，不以诊断参数、替代 checkout 或部分步骤消项。
 
 ## 系统授权保存 · TODO
 
