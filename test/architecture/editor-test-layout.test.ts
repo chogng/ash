@@ -42,8 +42,8 @@ test("browser integrations import the stable API and required contributions", ()
 	assert.match(textModelIntegration, /editor\/editor\.api\.js/u);
 	assert.match(textModelIntegration, /editor\/editor\.code\.all\.js/u);
 	assert.doesNotMatch(textModelIntegration, /editor\.(?:main|academic\.all)\.js/u);
-	assert.match(academicIntegration, /editor\/editor\.api\.js/u);
-	assert.match(academicIntegration, /editor\/contrib\/documentEditor\.contribution\.js/u);
+	assert.match(academicIntegration, /MainThreadClientEditors/u);
+	assert.match(academicIntegration, /loadExtensionEditorModule/u);
 	assert.doesNotMatch(academicIntegration, /editor\.(?:main|code\.all)\.js/u);
 });
 

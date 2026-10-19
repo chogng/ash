@@ -1,3 +1,5 @@
+import { registerTestCodeEditorFeatures } from '../../../../../../test/fixtures/codeEditorFeatures.js';
+import { after as afterCodeFeatures } from 'mocha';
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { Range } from '../../../common/core/range.js';
@@ -87,3 +89,6 @@ test('Margin and injected text queries do not generate whole-document bracket co
 	assert.ok(model.getAllDecorations(2).some(value => value.options.description === 'BracketPairColorization'));
 	assert.ok(bracketQueries > 0);
 });
+
+const codeFeatures = registerTestCodeEditorFeatures();
+afterCodeFeatures(() => codeFeatures.dispose());

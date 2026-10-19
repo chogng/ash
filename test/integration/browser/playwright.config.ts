@@ -4,6 +4,7 @@ import { defineConfig } from "@playwright/test";
 // CLI file filters are ORed together. Keep the editor scope in testMatch so a
 // user-supplied file filter narrows that scope instead of adding to it.
 const editorSpecs = [
+	"codeExtension.integration.spec.ts",
 	"academic.integration.spec.ts",
 	"diff.integration.spec.ts",
 	"gpuText.integration.spec.ts",

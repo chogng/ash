@@ -1,0 +1,8 @@
+load("//:defs.bzl", "ash_rust_crate")
+
+exports_files(["src/lib.rs"], visibility = ["//crates/app-server:__pkg__"])
+
+ash_rust_crate(
+    name = "editor-client-build",
+    crate_name = "ash_editor_client_build",
+)

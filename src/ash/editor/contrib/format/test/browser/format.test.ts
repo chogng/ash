@@ -1,3 +1,5 @@
+import { registerTestCodeEditorFeatures } from '../../../../../../../test/fixtures/codeEditorFeatures.js';
+import { after as afterCodeFeatures } from 'mocha';
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { ExtensionIdentifier } from '../../../../../platform/extensions/common/extensions.js';
@@ -5,7 +7,7 @@ import { CancellationToken } from '../../../../../base/common/cancellation.js';
 import { TestLanguageFeaturesService } from '../../../../test/common/testLanguageFeaturesService.js';
 import { TextModel } from '../../../../common/model/textModel.js';
 import { type DocumentFormattingEditProvider } from '../../../../common/languages.js';
-import { FormattingConflicts, FormattingKind, FormattingMode, getRealAndSyntheticDocumentFormattersOrdered } from '../../browser/format.js';
+import { FormattingConflicts, FormattingKind, FormattingMode, getRealAndSyntheticDocumentFormattersOrdered } from '../../../../../../../extensions/code/browser/contrib/format/browser/format.js';
 
 const options = { tabSize: 4, insertSpaces: true };
 
@@ -61,3 +63,6 @@ test('an empty formatter list never opens the selector', async () => {
 	using selector = FormattingConflicts.setFormatterSelector(async () => { throw new Error('unexpected selector'); });
 	assert.equal(await FormattingConflicts.select([], model, FormattingMode.Explicit, FormattingKind.File), undefined);
 });
+
+const codeFeatures = registerTestCodeEditorFeatures();
+afterCodeFeatures(() => codeFeatures.dispose());

@@ -233,10 +233,10 @@ checksum = "d3fb67a6e08acf24fdeccbac2cb6ac4305825bd1f117462e0e6f2f193345ad56"
 name = "ash-academy"
 version = "0.1.0"
 dependencies = [
+ "ash-editor-client-build",
  "ash-external-ext-sdk",
  "serde",
  "serde_json",
- "sha2 0.10.9",
 ]
 
 [[package]]
@@ -571,6 +571,7 @@ dependencies = [
  "ash-debug-manager",
  "ash-diagnostics",
  "ash-diff",
+ "ash-editor-client-build",
  "ash-exec-server",
  "ash-exec-server-protocol",
  "ash-execpolicy",
@@ -1014,6 +1015,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "ash-code-editor"
+version = "0.1.0"
+dependencies = [
+ "ash-editor-client-build",
+ "ash-external-ext-sdk",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "ash-code-mode"
 version = "0.1.0"
 dependencies = [
@@ -1386,6 +1397,13 @@ version = "0.1.0"
 dependencies = [
  "thiserror 2.0.21",
  "unicode-segmentation",
+]
+
+[[package]]
+name = "ash-editor-client-build"
+version = "0.1.0"
+dependencies = [
+ "sha2 0.10.9",
 ]
 
 [[package]]

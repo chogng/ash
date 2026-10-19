@@ -1,3 +1,5 @@
+import { registerTestCodeEditorFeatures } from '../../../../../../test/fixtures/codeEditorFeatures.js';
+import { after as afterCodeFeatures } from 'mocha';
 import { h } from '../../../../base/browser/dom.js';
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
@@ -398,3 +400,6 @@ function measuredFont(font: BareFontInfo, width: number): FontInfo {
 		maxDigitWidth: width,
 	}, true);
 }
+
+const codeFeatures = registerTestCodeEditorFeatures();
+afterCodeFeatures(() => codeFeatures.dispose());

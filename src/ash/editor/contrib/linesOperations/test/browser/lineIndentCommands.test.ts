@@ -1,3 +1,5 @@
+import { registerTestCodeEditorFeatures } from '../../../../../../../test/fixtures/codeEditorFeatures.js';
+import { after as afterCodeFeatures } from 'mocha';
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { ShiftCommand } from '../../../../common/commands/shiftCommand.js';
@@ -27,3 +29,6 @@ test('ShiftCommand owns selected-line indentation after the legacy helper retire
 	cursors.executeCommand(new ShiftCommand(cursors.getSelections()[0]!, { ...options, isUnshift: true }, configurations));
 	assert.equal(model.getText(), 'one\n  two\nthree');
 });
+
+const codeFeatures = registerTestCodeEditorFeatures();
+afterCodeFeatures(() => codeFeatures.dispose());

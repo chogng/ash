@@ -1,3 +1,5 @@
+import { registerTestCodeEditorFeatures } from '../../../../../../../test/fixtures/codeEditorFeatures.js';
+import { after as afterCodeFeatures } from 'mocha';
 import type { TextResourceResolveRequest, TextResourceSaveRequest, TextResourceChangeEvent, TextResourceContent } from '../../../../services/textmodelResolver/common/textResourceStore.js';
 import { TestUriIdentityServices } from '../../../../../platform/uriIdentity/test/common/uriIdentityTestServices.js';
 import { TestLanguageConfigurationService } from '../../../../../editor/test/common/modes/testLanguageConfigurationService.js';
@@ -1125,3 +1127,6 @@ test('an explicit editor input encoding reaches the first file read and later sa
 	await reference.save(new AbortController().signal);
 	assert.deepEqual(writes, ['gbk']);
 });
+
+const codeFeatures = registerTestCodeEditorFeatures();
+afterCodeFeatures(() => codeFeatures.dispose());

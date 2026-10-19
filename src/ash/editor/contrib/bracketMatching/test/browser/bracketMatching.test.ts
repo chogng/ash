@@ -1,3 +1,5 @@
+import { registerTestCodeEditorFeatures } from '../../../../../../../test/fixtures/codeEditorFeatures.js';
+import { after as afterCodeFeatures } from 'mocha';
 import '../../../../test/browser/testEditorDom.js';
 import assert from "node:assert/strict";
 import { test } from "mocha";
@@ -13,7 +15,7 @@ import { type ICodeEditor } from '../../../../browser/editorBrowser.js';
 import { type TextMeasurer } from '../../../../common/viewModel.js';
 
 const { TestView: View } = await import("../../../../test/browser/viewModel/testViewModel.js");
-const { BracketMatchingController } = await import("../../browser/bracketMatching.js");
+const { BracketMatchingController } = await import("../../../../../../../extensions/code/browser/contrib/bracketMatching/browser/bracketMatching.js");
 
 test("Bracket match controller stores standard decoration options and clears them for a range selection", () => {
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");
@@ -97,3 +99,6 @@ function editorFor(model: TextModel, selections: ReturnType<typeof createTestCur
 		onDidChangeCursorSelection: (listener: Parameters<ICodeEditor['onDidChangeCursorSelection']>[0]) => selections.onDidChange(() => listener({} as never)),
 	} as unknown as ICodeEditor;
 }
+
+const codeFeatures = registerTestCodeEditorFeatures();
+afterCodeFeatures(() => codeFeatures.dispose());

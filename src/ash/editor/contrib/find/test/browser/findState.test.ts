@@ -1,7 +1,9 @@
+import { registerTestCodeEditorFeatures } from '../../../../../../../test/fixtures/codeEditorFeatures.js';
+import { after as afterCodeFeatures } from 'mocha';
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { Range } from '../../../../common/core/range.js';
-import { FindOptionOverride, FindReplaceState } from '../../browser/findState.js';
+import { FindOptionOverride, FindReplaceState } from '../../../../../../../extensions/code/browser/contrib/find/browser/findState.js';
 
 test('find state announces effective option changes and clamps match navigation', () => {
 	using state = new FindReplaceState();
@@ -32,3 +34,6 @@ test('find state announces effective option changes and clamps match navigation'
 		{ regex: true, position: false, count: false },
 	]);
 });
+
+const codeFeatures = registerTestCodeEditorFeatures();
+afterCodeFeatures(() => codeFeatures.dispose());

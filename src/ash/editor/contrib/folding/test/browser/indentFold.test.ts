@@ -1,7 +1,9 @@
+import { registerTestCodeEditorFeatures } from '../../../../../../../test/fixtures/codeEditorFeatures.js';
+import { after as afterCodeFeatures } from 'mocha';
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { TextModel } from '../../../../common/model/textModel.js';
-import { computeEditorIndentFoldingRanges } from '../../browser/indentRangeProvider.js';
+import { computeEditorIndentFoldingRanges } from '../../../../../../../extensions/code/browser/contrib/folding/browser/indentRangeProvider.js';
 
 test('indent folding closes nested blocks at the first peer line', () => {
 	using model = new TextModel('root\n  child\n    leaf\n  peer\nafter');
@@ -15,3 +17,6 @@ test('indent folding validates tab size', () => {
 	using model = new TextModel('a\n\tb');
 	assert.throws(() => computeEditorIndentFoldingRanges(model, { tabSize: 0 }), RangeError);
 });
+
+const codeFeatures = registerTestCodeEditorFeatures();
+afterCodeFeatures(() => codeFeatures.dispose());

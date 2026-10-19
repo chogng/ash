@@ -1,3 +1,5 @@
+import { registerTestCodeEditorFeatures } from '../../../../../../../test/fixtures/codeEditorFeatures.js';
+import { after as afterCodeFeatures } from 'mocha';
 import assert from 'node:assert/strict';
 import { test, suiteTeardown } from 'mocha';
 import { JSDOM } from 'jsdom';
@@ -15,7 +17,7 @@ const installedGlobals = installEditorTestDom(moduleDom, [
 });
 const { CodeEditorWidget } = await import('../../../../browser/widget/codeEditor/codeEditorWidget.js');
 const { createTestCodeEditor } = await import('../../../../test/browser/testCodeEditor.js');
-const { JoinLinesAction } = await import('../../browser/linesOperations.js');
+const { JoinLinesAction } = await import('../../../../../../../extensions/code/browser/contrib/linesOperations/browser/linesOperations.js');
 suiteTeardown(() => {
 	installedGlobals.dispose();
 	moduleDom.window.close();
@@ -42,3 +44,6 @@ test('the host owns the join shortcut and the registered action joins lines', ()
 	assert.deepEqual(editor.getSelection(), Selection.fromPositions(new Position(1, 6)));
 	dom.window.close();
 });
+
+const codeFeatures = registerTestCodeEditorFeatures();
+afterCodeFeatures(() => codeFeatures.dispose());

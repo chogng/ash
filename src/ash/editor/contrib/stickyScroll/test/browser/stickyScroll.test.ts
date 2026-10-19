@@ -1,3 +1,5 @@
+import { registerTestCodeEditorFeatures } from '../../../../../../../test/fixtures/codeEditorFeatures.js';
+import { after as afterCodeFeatures } from 'mocha';
 import assert from 'node:assert/strict';
 import { suite, test } from 'mocha';
 import { CancellationToken, CancellationTokenSource } from '../../../../../base/common/cancellation.js';
@@ -10,8 +12,8 @@ import type { LanguageDocumentSymbol } from '../../../../common/languages.js';
 import { TextModel } from '../../../../common/model/textModel.js';
 import { ILanguageFeaturesService } from '../../../../common/services/languageFeatures.js';
 import { LanguageFeaturesService } from '../../../../common/services/languageFeaturesService.js';
-import { EditorFoldingModel } from '../../../folding/browser/foldingModel.js';
-import { StickyModelProvider } from '../../browser/stickyScrollModelProvider.js';
+import { EditorFoldingModel } from '../../../../../../../extensions/code/browser/contrib/folding/browser/foldingModel.js';
+import { StickyModelProvider } from '../../../../../../../extensions/code/browser/contrib/stickyScroll/browser/stickyScrollModelProvider.js';
 
 suite('Sticky scroll scope sources', () => {
 	test('folding ancestors retain one-based bounds and parent ownership', async () => {
@@ -208,3 +210,6 @@ class Fixture extends Disposable {
 function symbol(start: number, end: number): LanguageDocumentSymbol {
 	return { name: 'scope', kind: 'function', range: new Range(start, 1, end, 2), selectionRange: new Range(start, 1, start, 2) };
 }
+
+const codeFeatures = registerTestCodeEditorFeatures();
+afterCodeFeatures(() => codeFeatures.dispose());

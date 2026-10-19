@@ -146,6 +146,7 @@ class RemotePackageTests(unittest.TestCase):
                     "ash-git-extension",
                     "ash-markdown-math",
                     "ash-academy",
+                    "ash-code-editor",
                     "ash-markdown-language-features",
                     "ash-github-authentication",
                     "ash-github-extension",

@@ -1,5 +1,5 @@
 import { ICodeEditorService } from '../../../../editor/browser/services/codeEditorService.js';
-import type { WordWrapController } from '../../../../editor/contrib/wordWrap/browser/wordWrapController.js';
+import type { WordWrapController } from '../../../../../../extensions/code/browser/contrib/wordWrap/browser/wordWrapController.js';
 import { localize2 } from '../../../../nls.js';
 import { Action2, registerAction2 } from '../../../../platform/actions/common/actions.js';
 import type { ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';

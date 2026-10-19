@@ -1,3 +1,5 @@
+import { registerTestCodeEditorFeatures } from '../../../../../../../test/fixtures/codeEditorFeatures.js';
+import { after as afterCodeFeatures } from 'mocha';
 import '../../../../test/browser/testEditorDom.js';
 import type { LanguageColorProvider } from '../../../../common/languages.js';
 import assert from 'node:assert/strict';
@@ -7,18 +9,18 @@ import { Position } from '../../../../common/core/position.js';
 import { Range } from '../../../../common/core/range.js';
 import { LanguageFeatureRegistry } from '../../../../common/languageFeatureRegistry.js';
 import { TextModel } from '../../../../common/model/textModel.js';
-import { ColorService } from '../../common/languageColors.js';
-import { ColorDetector } from '../../browser/colorDetector.js';
+import { ColorService } from '../../../../../../../extensions/code/browser/contrib/colorPicker/common/languageColors.js';
+import { ColorDetector } from '../../../../../../../extensions/code/browser/contrib/colorPicker/browser/colorDetector.js';
 import { toDisposable } from '../../../../../base/common/lifecycle.js';
 import { LanguageFeaturesService } from '../../../../common/services/languageFeaturesService.js';
-import type { ColorPickerController } from '../../browser/colorPickerController.js';
+import type { ColorPickerController } from '../../../../../../../extensions/code/browser/contrib/colorPicker/browser/colorPickerController.js';
 import { AccessibleViewRegistry } from '../../../../../platform/accessibility/browser/accessibleViewRegistry.js';
 import { AccessibleViewType } from '../../../../../platform/accessibility/browser/accessibleView.js';
 import { productLanguagePackCatalogs } from '../../../../../workbench/services/localization/common/localizationCatalogs.js';
 import { resetNlsResolver, setNlsMessages } from '../../../../../nls.js';
 
-await import('../../browser/colorPickerContribution.js');
-await import('../../../hover/browser/hoverContribution.js');
+await import('../../../../../../../extensions/code/browser/contrib/colorPicker/browser/colorPickerContribution.js');
+await import('../../../../../../../extensions/code/browser/contrib/hover/browser/hoverContribution.js');
 const { CodeEditorWidget } = await import('../../../../browser/widget/codeEditor/codeEditorWidget.js');
 const { createTestCodeEditor } = await import('../../../../test/browser/testCodeEditor.js');
 
@@ -291,3 +293,6 @@ test('color picker guesses the document format from the first current result aft
 	await pending;
 	assert.equal(dialog.querySelector<HTMLSelectElement>('.stanza-editor-color-picker-presentation')!.value, '#00ff00');
 });
+
+const codeFeatures = registerTestCodeEditorFeatures();
+afterCodeFeatures(() => codeFeatures.dispose());

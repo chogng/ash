@@ -1,3 +1,5 @@
+import { registerTestCodeEditorFeatures } from '../../../../../../../test/fixtures/codeEditorFeatures.js';
+import { after as afterCodeFeatures } from 'mocha';
 import '../../../../test/browser/testEditorDom.js';
 import { browserEnvironment as environment } from '../../../../test/browser/testEditorDom.js';
 import { h } from '../../../../../base/browser/dom.js';
@@ -7,7 +9,7 @@ import { InstantiationService } from '../../../../../platform/instantiation/comm
 import type { ICodeEditor, IContentWidget } from '../../../../browser/editorBrowser.js';
 import { Position } from '../../../../common/core/position.js';
 
-const { InlineProgressManager } = await import('../../browser/inlineProgress.js');
+const { InlineProgressManager } = await import('../../../../../../../extensions/code/browser/contrib/inlineProgress/browser/inlineProgress.js');
 
 
 test('InlineProgressManager delays, positions, cancels, and releases its widget', async () => {
@@ -39,3 +41,6 @@ test('InlineProgressManager delays, positions, cancels, and releases its widget'
 	assert.equal(await operation, 'done');
 	assert.equal(removed, true);
 });
+
+const codeFeatures = registerTestCodeEditorFeatures();
+afterCodeFeatures(() => codeFeatures.dispose());

@@ -120,6 +120,7 @@ pub(super) fn built_in_deployments(
         product_markdown_math_deployment(directory)?,
         product_markdown_deployment(directory)?,
         product_academy_deployment(directory)?,
+        product_code_editor_deployment(directory)?,
     ];
     // This optional package only supplies debugger policy. Missing binaries do
     // not make the shared host or non-debugging clients depend on LLDB.
@@ -324,6 +325,7 @@ fn product_academy_deployment(
         manifest,
         include_str!("../../../../../extensions/academic/src/lib.rs"),
         include_str!("../../../../../extensions/academic/build.rs"),
+        include_str!("../../../../../crates/utils/editor-client-build/src/lib.rs"),
         include_str!("../../../../../extensions/academic/browser/contrib/academic/browser/nodeViews.ts"),
         include_str!("../../../../../extensions/academic/browser/contrib/academic/common/schema.ts"),
         include_str!("../../../../../extensions/academic/browser/contrib/citation/browser/nodeViews.ts"),
@@ -397,6 +399,59 @@ fn product_academy_deployment(
                 package_id: "ash.academic@1.0.0".into(),
                 package_digest: digest,
                 entrypoint: "ash-academy".into(),
+            },
+            runtime_api_version: 1,
+            activation_events: events.clone(),
+            capabilities: vec![ExtensionCapability::DataChannel],
+        },
+        authority: Arc::new(ProductAuthority),
+        activation: Some(ActivationPlan {
+            events,
+            commands: Vec::new(),
+        }),
+        activation_failure: None,
+    })
+}
+
+fn product_code_editor_deployment(
+    directory: &Path,
+) -> Result<EditorExtensionDeployment, ExtensionHostRuntimeError> {
+    let manifest = include_str!("../../../../../extensions/code/package.json");
+    let source = [
+        manifest,
+        env!("ASH_BUNDLED_CODE_CLIENT_DIGEST"),
+        include_str!("../../../../../extensions/code/src/lib.rs"),
+        include_str!("../../../../../extensions/code/build.rs"),
+        include_str!("../../../../../crates/utils/editor-client-build/src/lib.rs"),
+        include_str!("../../../../../extensions/code/package.nls.json"),
+        include_str!("../../../../../extensions/code/package.nls.zh-CN.json"),
+    ]
+    .join("\0");
+    let digest = format!("sha256:{:x}", Sha256::digest(source));
+    let events = vec!["*".into()];
+    Ok(EditorExtensionDeployment {
+        scope: EditorExtensionScope::Product,
+        id: "ash.code".into(),
+        version: "1.0.0".into(),
+        package_digest: digest.clone(),
+        command: ExtensionLaunchCommand::new(
+            directory.join(format!("ash-code-editor{}", std::env::consts::EXE_SUFFIX)),
+            std::iter::empty::<String>(),
+            directory,
+            BTreeMap::new(),
+        )
+        .map_err(ExtensionHostRuntimeError::Host)?,
+        workspace_read: WorkspaceReadAccess::Denied,
+        credential_providers: Vec::new(),
+        backend_channels: BTreeMap::new(),
+        protocol_limits: None,
+        params: ActivateParams {
+            initialization: None,
+            extension_id: "ash.code".into(),
+            package: PackageBinding {
+                package_id: "ash.code@1.0.0".into(),
+                package_digest: digest,
+                entrypoint: "ash-code-editor".into(),
             },
             runtime_api_version: 1,
             activation_events: events.clone(),

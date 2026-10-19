@@ -1,3 +1,5 @@
+import { registerTestCodeEditorFeatures } from '../../fixtures/codeEditorFeatures.js';
+const codeFeatures = registerTestCodeEditorFeatures();
 import '../../../src/ash/workbench/contrib/screenshot/browser/screenshot.contribution.js';
 import { BrowserScreenshotService } from '../../../src/ash/workbench/contrib/screenshot/browser/browserScreenshotService.js';
 import { IScreenshotService } from '../../../src/ash/workbench/contrib/screenshot/common/screenshot.js';

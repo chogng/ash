@@ -162,3 +162,18 @@ function installWindowTimeouts(dom: JSDOM): { runPending(): void;[Symbol.dispose
 		},
 	};
 }
+
+
+test('fresh font measurements preserve fractional glyph advances rather than accumulating integer rounding', () => {
+	const dom = new JSDOM('<body></body>');
+	using cleanup = toDisposable(() => dom.window.close());
+	using measurements = new FontMeasurementsImpl();
+	Object.defineProperty(dom.window.HTMLElement.prototype, 'offsetWidth', { get() { return this.style.display === 'inline-block' ? 2048 : 100000; } });
+	dom.window.HTMLElement.prototype.getBoundingClientRect = function () {
+		const width = this.style.display === 'inline-block' ? 2047.5 : 100000;
+		return { x: 0, y: 0, top: 0, left: 0, width, height: 0, right: width, bottom: 0, toJSON() { } };
+	};
+	const measured = measurements.readFontInfo(dom.window as unknown as Window, new FontInfo(savedFontInfo(), false));
+	assert.equal(measured.spaceWidth * 256, 2047.5);
+	assert.equal(dom.window.document.querySelectorAll('span').length, 0);
+});

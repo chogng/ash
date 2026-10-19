@@ -1,3 +1,5 @@
+import { registerTestCodeEditorFeatures } from '../../../../../test/fixtures/codeEditorFeatures.js';
+import { after as afterCodeFeatures } from 'mocha';
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { AccessibilitySupport } from '../../../platform/accessibility/common/accessibility.js';
@@ -208,3 +210,6 @@ test('editor settings are registered by the common configuration owner', () => {
 	assert.equal(isDiffEditorConfigurationKey('diffAlgorithm'), true);
 	assert.equal(isDiffEditorConfigurationKey('notADiffSetting'), false);
 });
+
+const codeFeatures = registerTestCodeEditorFeatures();
+afterCodeFeatures(() => codeFeatures.dispose());

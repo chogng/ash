@@ -1,3 +1,5 @@
+import { registerTestCodeEditorFeatures } from '../../../../../../test/fixtures/codeEditorFeatures.js';
+import { after as afterCodeFeatures } from 'mocha';
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { Range } from '../../../common/core/range.js';
@@ -69,3 +71,6 @@ test('Multiline bracket guide stays active inside a single-line pair', () => {
 		['stanza-editor-guide-level-1 active'],
 	]);
 });
+
+const codeFeatures = registerTestCodeEditorFeatures();
+afterCodeFeatures(() => codeFeatures.dispose());

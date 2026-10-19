@@ -1,7 +1,9 @@
+import { registerTestCodeEditorFeatures } from '../../../../../test/fixtures/codeEditorFeatures.js';
+import { after as afterCodeFeatures } from 'mocha';
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
-import { MinimapCharRendererFactory } from '../../browser/viewParts/minimap/minimapCharRendererFactory.js';
-import { Constants, getCharIndex } from '../../browser/viewParts/minimap/minimapCharSheet.js';
+import { MinimapCharRendererFactory } from '../../../../../extensions/code/browser/viewParts/minimap/minimapCharRendererFactory.js';
+import { Constants, getCharIndex } from '../../../../../extensions/code/browser/viewParts/minimap/minimapCharSheet.js';
 import { RGBA8 } from '../../common/core/misc/rgba.js';
 
 test('Minimap character renderer downsamples one glyph sheet into deterministic pixels', () => {
@@ -61,3 +63,6 @@ test('Minimap maps non-ASCII characters to an existing glyph at every font scale
 		}
 	}
 });
+
+const codeFeatures = registerTestCodeEditorFeatures();
+afterCodeFeatures(() => codeFeatures.dispose());

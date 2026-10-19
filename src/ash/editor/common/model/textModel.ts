@@ -1,8 +1,5 @@
-import { SyntaxProviderRegistry } from '../languageFeatureRegistry.js';
+import { TextModelFeatureHost, type TextModelTokenizationOptions } from './textModelFeatures.js';
 import * as languages from '../languages.js';
-import { SyntaxProviderWorker } from '../services/editorWebWorker.js';
-import { LanguageRequestCoordinator } from './languageRequestCoordinator.js';
-import { createLanguageDiagnosticStore } from './languageResultStore.js';
 import { Emitter, type Event } from "../../../base/common/event.js";
 import { BugIndicatingError, onUnexpectedError } from '../../../base/common/errors.js';
 import { StringSHA1 } from '../../../base/common/hash.js';
@@ -11,7 +8,6 @@ import * as strings from '../../../base/common/strings.js';
 import { URI } from "../../../base/common/uri.js";
 import { LengthEdit, LengthReplacement } from "../core/edits/lengthEdit.js";
 import { TextEdit } from '../core/edits/textEdit.js';
-import { ColorizedBracketPairsDecorationProvider } from './bracketPairsTextModelPart/colorizedBracketPairsDecorationProvider.js';
 import type { DecorationProvider } from './decorationProvider.js';
 import { countEOL } from "../core/misc/eolCounter.js";
 import { normalizeIndentation } from '../core/misc/indentation.js';
@@ -40,10 +36,7 @@ import { ResolvedLanguageConfiguration, type ILanguageConfigurationService } fro
 import { EditSources, type TextModelEditSource } from '../textModelEditSource.js';
 import { UndoRedoGroup } from '../../../platform/undoRedo/common/undoRedo.js';
 import type { IBracketPairsTextModelPart } from '../textModelBracketPairs.js';
-import { BracketPairsTextModelPart } from './bracketPairsTextModelPart/bracketPairsImpl.js';
-import { TokenizationTextModelPart, type TokenizationTextModelPartOptions } from './tokens/tokenizationTextModelPart.js';
 import { LineTokens } from '../tokens/lineTokens.js';
-import { GuidesTextModelPart } from './guidesTextModelPart.js';
 import type { IViewModel } from '../viewModel.js';
 import { createPieceTreeTextBuffer } from './pieceTreeTextBuffer/pieceTreeTextBufferBuilder.js';
 
@@ -123,7 +116,7 @@ export interface TextModelOptions {
 	readonly largeFileOptimizations?: boolean;
 	readonly bracketPairColorizationOptions?: BracketPairColorizationOptions;
 	readonly languageConfigurationService?: ILanguageConfigurationService;
-	readonly tokenization?: TokenizationTextModelPartOptions;
+	readonly tokenization?: TextModelTokenizationOptions;
 }
 
 export interface TextEditOptions {
@@ -204,12 +197,14 @@ export class TextModel implements ITextModel {
 	readonly id: string;
 	readonly uri: URI;
 	readonly isForSimpleWidget: boolean;
-	private readonly _bracketPairs: BracketPairsTextModelPart;
-	private readonly bracketDecorations: DecorationProvider;
-	get bracketPairs(): IBracketPairsTextModelPart { return this._bracketPairs; }
-	readonly guides: GuidesTextModelPart;
-	readonly tokenization: TokenizationTextModelPart;
-	readonly diagnostics: ModelLanguageDiagnostics;
+	private readonly features: TextModelFeatureHost;
+	private get _bracketPairs() { return this.features.brackets; }
+	private get bracketDecorations() { return this.features.decorations; }
+	get bracketPairs(): IBracketPairsTextModelPart { return this.features.brackets; }
+	get guides() { return this.features.guides; }
+	get tokenization() { return this.features.tokenization; }
+	get diagnostics() { return this.features.diagnostics; }
+	get editingPolicy() { return this.features.editingPolicy; }
 
 	readonly onDidChangeContent: Event<TextModelChange> = this.changeEmitter.event;
 	readonly onDidChangeLanguage: Event<IModelLanguageChangedEvent> = this.languageEmitter.event;
@@ -271,23 +266,12 @@ export class TextModel implements ITextModel {
 			this.buffer.getLineCount(),
 			options.largeFileOptimizations ?? EDITOR_MODEL_DEFAULTS.largeFileOptimizations,
 		);
-		const languageConfigurationService = options.languageConfigurationService;
-		const resolveLanguageConfiguration = languageConfigurationService
-			? (languageId: string) => languageConfigurationService.getLanguageConfiguration(languageId)
-			: (languageId: string) => new ResolvedLanguageConfiguration(languageId, {});
-		this._bracketPairs = this._register(new BracketPairsTextModelPart(this, resolveLanguageConfiguration));
-		const bracketDecorations = this._register(new ColorizedBracketPairsDecorationProvider(this));
-		this.bracketDecorations = bracketDecorations;
-		this._register(bracketDecorations.onDidChange(() => this.emitDecorationsChanged([])));
-		this.guides = this._register(new GuidesTextModelPart(this, resolveLanguageConfiguration));
-		this.tokenization = this._register(new TokenizationTextModelPart(this, options.tokenization));
-		this.diagnostics = this._register(new ModelLanguageDiagnostics(this, options.tokenization?.syntaxProviderRegistry, options.languageConfigurationService?.onDidChange));
-		if (languageConfigurationService) this._register(languageConfigurationService.onDidChange(event => {
-			this._bracketPairs.handleLanguageConfigurationServiceChange(event);
+		this.features = this._register(new TextModelFeatureHost(this, options));
+		this.features.initialize();
+		this._register(this.features.onDidChangeDecorations(() => this.emitDecorationsChanged([])));
+		if (options.languageConfigurationService) this._register(options.languageConfigurationService.onDidChange(event => {
 			if (event.affects(this.languageId)) this.languageConfigurationEmitter.fire({});
 		}));
-		this._register(this.onDidChangeLanguage(event => this._bracketPairs.handleDidChangeLanguage(event)));
-		this._register(this.onDidChangeOptions(event => this._bracketPairs.handleDidChangeOptions(event)));
 		this._register(this.tokenization.onDidChange(ranges => {
 			const event: IModelTokensChangedEvent = {
 				semanticTokensApplied: false,
@@ -2424,47 +2408,6 @@ function endOfLineText(eol: EndOfLineSequence): '\n' | '\r\n' {
 
 function normalizeTextToEOL(text: string, eol: '\n' | '\r\n'): string {
 	return text.replace(/\r\n|\r|\n/g, eol);
-}
-
-/** Owns diagnostic requests independently of tokenization and its Worker. */
-class ModelLanguageDiagnostics extends Disposable {
-	private readonly coordinator: LanguageRequestCoordinator<SyntaxLane, SyntaxRequest, SyntaxResult>;
-	private readonly errors = this._register(new Emitter<unknown>());
-	readonly onDidEncounterError = this.errors.event;
-	readonly results: ReturnType<typeof createLanguageDiagnosticStore>;
-	private generation = 0;
-
-	constructor(private readonly model: TextModel, registry?: SyntaxProviderRegistry, onDidChangeConfiguration?: Event<unknown>) {
-		super();
-		const providers = registry ?? this._register(new SyntaxProviderRegistry());
-		this.results = this._register(createLanguageDiagnosticStore(model));
-		this.coordinator = this._register(new LanguageRequestCoordinator(model, () => new SyntaxProviderWorker(providers, undefined, undefined, model)));
-		this._register(model.onDidChangeContent(() => this.schedule()));
-		this._register(model.onDidChangeLanguage(() => this.reset()));
-		this._register(providers.onDidChange(() => this.reset()));
-		if (onDidChangeConfiguration) this._register(onDidChangeConfiguration(() => this.reset()));
-		this.schedule();
-	}
-
-	private reset(): void {
-		this.coordinator.restartWorker();
-		this.results.clear();
-		this.schedule();
-	}
-
-	private schedule(): void {
-		const generation = ++this.generation;
-		if (this.model.largeFile.tooLargeForTokenization) return;
-		queueMicrotask(() => {
-			if (this.isDisposed || generation !== this.generation) return;
-			void this.coordinator.runLatest(SYNTAX_DIAGNOSTIC_LANE, { languageId: this.model.getLanguageId() }, result => {
-				if (result.value.lane !== SYNTAX_DIAGNOSTIC_LANE) throw new TypeError('Expected diagnostic result');
-				this.results.accept({ ...result, value: result.value.value });
-			}).catch(error => {
-				if (!this.isDisposed && generation === this.generation) this.errors.fire(error);
-			});
-		});
-	}
 }
 
 /** Fixed model-size limits used to keep expensive editor features bounded. */

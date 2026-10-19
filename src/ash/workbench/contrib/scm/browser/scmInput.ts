@@ -10,11 +10,8 @@ import { Lxicon } from '../../../../base/common/lxicons.js';
 import { RunOnceScheduler } from '../../../../base/common/async.js';
 import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { CodeEditorWidget } from '../../../../editor/browser/widget/codeEditor/codeEditorWidget.js';
-import { EditorExtensionsRegistry } from '../../../../editor/browser/editorExtensions.js';
 import { EditorOption } from '../../../../editor/common/config/editorOptions.js';
 import { TextModel } from '../../../../editor/common/model/textModel.js';
-import { PlaceholderTextContribution } from '../../../../editor/contrib/placeholderText/browser/placeholderTextContribution.js';
-import '../../../../editor/contrib/placeholderText/browser/placeholderText.contribution.js';
 import { localize } from '../../../../nls.js';
 import { AccessibilityVerbositySettingId } from '../../../../platform/accessibility/browser/accessibleView.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
@@ -90,7 +87,7 @@ export class SCMInputWidget extends Disposable {
 			tabFocusMode: true,
 			readOnly: true,
 			ariaLabel: localize('scm.input.label', 'Commit message'),
-			contributions: EditorExtensionsRegistry.getSomeEditorContributions([PlaceholderTextContribution.ID]),
+			contributionIds: ['editor.contrib.placeholderText'],
 		}));
 		this._register(this.editor.onDidFocusEditorText(() => {
 			focused.set(true);

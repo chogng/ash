@@ -1,6 +1,7 @@
 import '../../../../../editor/test/browser/testEditorDom.js';
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
+import { registerTestCodeEditorFeatures } from '../../../../../../../test/fixtures/codeEditorFeatures.js';
 import { Emitter, Event } from '../../../../../base/common/event.js';
 import { DisposableStore, toDisposable } from '../../../../../base/common/lifecycle.js';
 import { TextModel } from '../../../../../editor/common/model/textModel.js';
@@ -8,7 +9,7 @@ import { Position } from '../../../../../editor/common/core/position.js';
 import { createLanguageFeatureRequest, LanguageCompletionTriggerKind } from '../../../../../editor/common/languages.js';
 import { LanguageFeaturesService } from '../../../../../editor/common/services/languageFeaturesService.js';
 import { ILanguageFeaturesService } from '../../../../../editor/common/services/languageFeatures.js';
-import { FoldingController } from '../../../../../editor/contrib/folding/browser/folding.js';
+import { FoldingController } from '../../../../../../../extensions/code/browser/contrib/folding/browser/folding.js';
 import { createTestCodeEditor } from '../../../../../editor/test/browser/testCodeEditor.js';
 import { resetNlsResolver, setNlsMessages } from '../../../../../nls.js';
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
@@ -63,33 +64,50 @@ function createServices(resources: DisposableStore): {
 	return { services, configuration, features, catalogChanged };
 }
 
-test('folding contribution applies persisted language overrides through the production host and releases selection', async () => {
+test('Code folding applies persisted language overrides independently of the host candidate catalog', async () => {
+	using codeFeatures = registerTestCodeEditorFeatures(['editor.contrib.folding']);
 	using resources = new DisposableStore();
 	const { services, configuration, features } = createServices(resources);
-	resources.add(features.foldingRangeProvider.register('*', { id: 'test.first', provideFoldingRanges: () => [] }));
-	resources.add(features.foldingRangeProvider.register('*', { id: 'test.second', provideFoldingRanges: () => [] }));
-	resources.add(features.foldingRangeProvider.register('*', { provideFoldingRanges: () => [] }));
+	const calls = new Set<string | undefined>();
+	for (const id of ['test.first', 'test.second', undefined]) resources.add(features.foldingRangeProvider.register('*', { id, provideFoldingRanges: () => { calls.add(id); return []; } }));
 	using model = new TextModel('one\ntwo', { languageId: 'plaintext' });
 	await configuration.write('{\n// Keep this comment\n"editor.defaultFoldingRangeProvider": "test.first",\n"[plaintext]": { "editor.defaultFoldingRangeProvider": "test.second" }\n}');
 	const errors: unknown[] = [];
 	const host = resources.add(WorkbenchContributionsRegistry.createHost(services, error => errors.push(error), ['workbench.contrib.folding']));
 	host.advance(WorkbenchPhase.AfterRestored);
-	const selected = () => FoldingController.getFoldingRangeProviders(features, model).map(provider => provider.id);
-	assert.deepEqual(selected(), ['test.second']);
+	const container = document.createElement('div');
+	document.body.appendChild(container);
+	resources.add(toDisposable(() => container.remove()));
+	using editor = createTestCodeEditor({ container, model, instantiationService: services, languageFeaturesService: features });
+	assert.ok(FoldingController.get(editor));
+	const selected = async () => {
+		await new Promise<void>(resolve => setImmediate(resolve));
+		const result = [...calls];
+		calls.clear();
+		return result;
+	};
+	assert.deepEqual(await selected(), ['test.second']);
 	model.setLanguage('javascript');
-	assert.deepEqual(selected(), ['test.first']);
+	assert.deepEqual(await selected(), ['test.first']);
 	await configuration.updateValue(configName, 'missing.provider');
-	assert.deepEqual(selected(), []);
+	assert.deepEqual(await selected(), []);
 	await configuration.updateValue(configName, null);
-	assert.equal(selected().length, 3);
+	assert.equal((await selected()).length, 3);
 	assert.match((await configuration.read()).source, /Keep this comment/);
 	await configuration.updateValue(configName, 'test.first');
+	assert.deepEqual(await selected(), ['test.first']);
 	host.dispose();
-	assert.equal(selected().length, 3);
+	assert.deepEqual(await selected(), [], 'Catalog teardown must not invoke language providers');
+	model.setLanguage('plaintext');
+	assert.deepEqual(await selected(), ['test.second']);
+	codeFeatures.dispose();
+	model.setLanguage('javascript');
+	assert.deepEqual(await selected(), [], 'Retiring Code stops its folding requests');
 	assert.deepEqual(errors, []);
 });
 
 test('changing the default folding provider cancels pending results and refreshes an open editor', async () => {
+	using codeFeatures = registerTestCodeEditorFeatures(['editor.contrib.folding']);
 	using resources = new DisposableStore();
 	const { services, configuration, features } = createServices(resources);
 	await configuration.updateValue(configName, 'test.pending');

@@ -1,3 +1,5 @@
+import { registerTestCodeEditorFeatures } from '../../fixtures/codeEditorFeatures.js';
+const codeFeatures = registerTestCodeEditorFeatures();
 import { TestUriIdentityServices } from '../../../src/ash/platform/uriIdentity/test/common/uriIdentityTestServices.js';
 import { registerTestComponentServices } from '../../../src/ash/workbench/test/common/testEditorServices.js';
 import { CommandService } from '../../../src/ash/workbench/services/commands/common/commandService.js';

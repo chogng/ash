@@ -1,3 +1,5 @@
+import { registerTestCodeEditorFeatures } from '../../../../../../../test/fixtures/codeEditorFeatures.js';
+import { after as afterCodeFeatures } from 'mocha';
 import '../../../../test/browser/testEditorDom.js';
 import type { IBulkEditOptions } from '../../../../browser/services/bulkEditService.js';
 import '../../../../test/browser/testEditorDom.js';
@@ -9,7 +11,7 @@ import { TextModel } from '../../../../common/model/textModel.js';
 import { LanguageFeaturesService } from '../../../../common/services/languageFeaturesService.js';
 import type { LanguageRenameRequest, LanguageWorkspaceEdit } from '../../../../common/languages.js';
 
-await import('../../browser/rename.js');
+await import('../../../../../../../extensions/code/browser/contrib/rename/browser/rename.js');
 const { createTestCodeEditor } = await import('../../../../test/browser/testCodeEditor.js');
 const { registerEditorContribution } = await import('../../../../browser/editorExtensions.js');
 const commandLogs = new WeakMap<TextModel, string[]>();
@@ -197,3 +199,6 @@ async function flushPromises(): Promise<void> {
 	await Promise.resolve();
 	await Promise.resolve();
 }
+
+const codeFeatures = registerTestCodeEditorFeatures();
+afterCodeFeatures(() => codeFeatures.dispose());

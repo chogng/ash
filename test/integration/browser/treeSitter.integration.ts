@@ -1,3 +1,5 @@
+import { registerTestCodeEditorFeatures } from '../../fixtures/codeEditorFeatures.js';
+const codeFeatures = registerTestCodeEditorFeatures();
 import { WebWorkerService } from '../../../src/ash/platform/webWorker/browser/webWorkerServiceImpl.js';
 import { rustSyntaxFixture, disconnectRustSyntaxFixture, reconnectRustSyntaxFixture } from './rustSyntaxHostFixture.js';
 import { createDisconnectedSyntaxApi } from '../../../src/ash/platform/syntax/browser/syntaxApi.js';
@@ -16,7 +18,7 @@ import { Range } from '../../../src/ash/editor/common/core/range.js';
 import { TextModel } from '../../../src/ash/editor/common/model/textModel.js';
 import { StandaloneServices } from '../../../src/ash/editor/standalone/browser/standaloneServices.js';
 import { IConfigurationService } from '../../../src/ash/platform/configuration/common/configuration.js';
-import { TreeSitterLibraryService, createTreeSitterSyntaxTokenBackend } from '../../../src/ash/workbench/services/treeSitter/browser/treeSitterLibraryService.js';
+import { TreeSitterLibraryService, createTreeSitterSyntaxSession } from '../../../src/ash/workbench/services/treeSitter/browser/treeSitterLibraryService.js';
 
 const locale = new URL(location.href).searchParams.get('locale') ?? 'en';
 setNlsMessages(locale, locale === 'zh-CN' ? chinese : {});
@@ -42,7 +44,7 @@ function open(language: string, text: string): void {
 	model = new TextModel(text, {
 		languageId: language,
 		tokenization: {
-			createSyntaxTokenBackend: value => createTreeSitterSyntaxTokenBackend(value, configuration, library, syntaxTheme),
+			createSyntaxSession: value => createTreeSitterSyntaxSession(value, configuration, library, syntaxTheme),
 			onDidChangeSyntaxBackend: library.onDidChange,
 		},
 	});

@@ -11,36 +11,142 @@ interface PendingCodeEditorContribution {
 	readonly instantiation: EditorContributionInstantiation;
 }
 
+interface ProviderScope extends DisposableStore {
+	readonly services: ReturnType<IInstantiationService['createChild']>;
+	readonly ids: Set<string>;
+}
+
 /** Owns one CodeEditorWidget's contribution instances and their staged creation. */
 export class CodeEditorContributions extends Disposable {
 	private editor: ICodeEditor | null = null;
 	private descriptions: readonly EditorContributionRegistration[] | undefined;
 	private readonly instances = new Map<string, IEditorContribution>();
+	private readonly providerScopes = this._register(new DisposableMap<AbortSignal, ProviderScope>());
 	private readonly resources = this._register(new DisposableMap<string, DisposableStore>());
+	private configurationContext: TextEditorContributionConfigurationContext | undefined;
+	private installationContext: TextEditorContributionContext | undefined;
+	private readonly configurations = new Map<string, DisposableStore>();
 	private readonly pending = new Map<string, PendingCodeEditorContribution>();
 	private readonly completedInstantiation = new Set<EditorContributionInstantiation>();
 	private onError: (error: unknown) => void = reportContributionError;
 
 	constructor(@IInstantiationService private readonly instantiationService: IInstantiationService) {
 		super();
-		this._register(toDisposable(() => { this.pending.clear(); this.instances.clear(); this.descriptions = undefined; }));
+		this._register(toDisposable(() => {
+			this.pending.clear();
+			this.instances.clear();
+			this.configurations.clear();
+			this.descriptions = undefined;
+			this.configurationContext = undefined;
+			this.installationContext = undefined;
+			this.editor = null;
+		}));
 	}
 
-	/** Configure model services before the View is constructed. */
+	/** The initial batch configures model services before the View is constructed. */
 	configure(descriptions: readonly EditorContributionRegistration[], context: TextEditorContributionConfigurationContext): void {
 		this.assertNotDisposed();
 		if (this.descriptions) throw new Error('Code editor contributions have already been configured');
+		this.configurationContext = context;
+		this.descriptions = [];
+		this.refresh(descriptions);
+	}
+
+	/** Newly admitted providers may attach to an existing view without replacing its text model. */
+	refresh(descriptions: readonly EditorContributionRegistration[]): void {
+		this.assertNotDisposed();
 		validateDescriptions(descriptions);
-		this.descriptions = descriptions.slice();
-		for (const description of this.descriptions) {
-			const resources = new DisposableStore();
-			this.resources.set(description.id, resources);
-			if (!('ctor' in description) && description.configure) {
-				// Model sources must outlive the View; installation resources end before it.
-				const configuration = context.register(new DisposableStore());
-				description.configure({ ...context, register: value => configuration.add(value) });
+		const context = this.configurationContext;
+		if (!context || !this.descriptions) throw new ReferenceError('Code editor contributions have not been configured');
+		const added: EditorContributionRegistration[] = [];
+		try {
+			for (const description of descriptions) {
+				if (description.providerSignal?.aborted || this.descriptions.includes(description)) continue;
+				if (this.descriptions.some(current => current.id === description.id)) this.retire(description.id);
+				this.descriptions = [...this.descriptions, description];
+				const resources = new DisposableStore();
+				this.resources.set(description.id, resources);
+				const scope = description.providerSignal ? this.providerScope(description.providerSignal) : undefined;
+				scope?.ids.add(description.id);
+				added.push(description);
+				if (!('ctor' in description) && description.configure) {
+					const configuration = scope ? scope.add(new DisposableStore()) : context.register(new DisposableStore());
+					this.configurations.set(description.id, configuration);
+					description.configure({
+						...context,
+						...(scope ? {
+							getService: scope.services.get.bind(scope.services),
+							getOptionalService: scope.services.getOptional.bind(scope.services),
+							provideService: scope.services.registerInstance.bind(scope.services),
+						} : {}),
+						register: value => configuration.add(value),
+					});
+				}
 			}
+		} catch (error) {
+			for (const description of added.reverse()) this.retire(description.id);
+			throw error;
 		}
+		if (!this.installationContext) return;
+		// Configure the complete batch before any controller reads another contribution's service.
+		for (const description of added) this.schedule(description);
+		for (const description of added) {
+			const phase = 'ctor' in description ? description.instantiation : description.instantiation ?? EditorContributionInstantiation.Eager;
+			if (this.completedInstantiation.has(phase)) this.instantiateById(description.id);
+		}
+	}
+
+	private providerScope(signal: AbortSignal): ProviderScope {
+		let scope = this.providerScopes.get(signal);
+		if (scope) return scope;
+		const resources = new DisposableStore();
+		scope = Object.assign(resources, {
+			services: resources.add(this.instantiationService.createChild()),
+			ids: new Set<string>(),
+		});
+		this.providerScopes.set(signal, scope);
+		resources.add(addDisposableListener(signal, 'abort', () => {
+			const current = this.providerScopes.get(signal);
+			if (!current) return;
+			for (const id of [...current.ids]) this.retire(id);
+			this.providerScopes.deleteAndDispose(signal);
+		}, { once: true }));
+		return scope;
+	}
+
+	private schedule(description: EditorContributionRegistration): void {
+		const editor = this.editor;
+		const context = this.installationContext;
+		const resources = this.resources.get(description.id);
+		if (!editor || !context || !resources || description.providerSignal?.aborted) return;
+		const scope = description.providerSignal ? this.providerScopes.get(description.providerSignal) : undefined;
+		if ('ctor' in description) {
+			const services = scope?.services ?? this.instantiationService;
+			this.pending.set(description.id, {
+				id: description.id,
+				create: () => services.createInstance(description.ctor, editor),
+				instantiation: description.instantiation,
+			});
+			return;
+		}
+		if (!description.install) return;
+		const contributionContext = {
+			...context,
+			...(scope ? {
+				instantiationService: scope.services,
+				getService: scope.services.get.bind(scope.services),
+				getOptionalService: scope.services.getOptional.bind(scope.services),
+			} : {}),
+			register: <T extends IDisposable>(value: T): T => resources.add(value),
+		};
+		this.pending.set(description.id, {
+			id: description.id,
+			instantiation: description.instantiation ?? EditorContributionInstantiation.Eager,
+			create: () => {
+				try { return description.install?.(contributionContext); }
+				catch (error) { resources.dispose(); throw error; }
+			},
+		});
 	}
 
 	initialize(
@@ -53,31 +159,8 @@ export class CodeEditorContributions extends Disposable {
 		if (typeof onError === 'function') this.onError = onError;
 		this.editor = editor;
 		if (!this.descriptions) throw new ReferenceError('Code editor contributions have not been configured');
-		for (const description of this.descriptions) {
-			if ('ctor' in description) {
-				this.pending.set(description.id, {
-					id: description.id,
-					create: () => this.instantiationService.createInstance(description.ctor, editor),
-					instantiation: description.instantiation,
-				});
-				continue;
-			}
-			if (!description.install) continue;
-			const resources = this.resources.get(description.id)!;
-			const contributionContext = { ...context, register: <T extends IDisposable>(value: T): T => resources.add(value) };
-			this.pending.set(description.id, {
-				id: description.id,
-				instantiation: description.instantiation ?? EditorContributionInstantiation.Eager,
-				create: () => {
-					try {
-						return description.install?.(contributionContext);
-					} catch (error) {
-						resources.dispose();
-						throw error;
-					}
-				},
-			});
-		}
+		this.installationContext = context;
+		for (const description of this.descriptions) this.schedule(description);
 		this.instantiateSome(EditorContributionInstantiation.Eager);
 
 		const domNode = editor.getDomNode();
@@ -134,6 +217,30 @@ export class CodeEditorContributions extends Disposable {
 		for (const value of pending) this.instantiateById(value.id);
 	}
 
+	private retire(id: string): void {
+		const description = this.descriptions?.find(current => current.id === id);
+		this.descriptions = this.descriptions?.filter(current => current.id !== id);
+		this.pending.delete(id);
+		this.instances.delete(id);
+		try {
+			this.resources.deleteAndDispose(id);
+		} catch (error) {
+			this.onError(error);
+		} finally {
+			// Retirement ends provider work immediately; the shared text model and view stay alive.
+			const configuration = this.configurations.get(id);
+			try { configuration?.dispose(); } catch (error) { this.onError(error); }
+			this.configurations.delete(id);
+			const signal = description?.providerSignal;
+			const scope = signal ? this.providerScopes.get(signal) : undefined;
+			if (scope) {
+				if (configuration) scope.delete(configuration);
+				scope.ids.delete(id);
+				if (scope.ids.size === 0) this.providerScopes.deleteAndDispose(signal!);
+			}
+		}
+	}
+
 	private instantiateById(id: string): void {
 		if (this.isDisposed) return;
 		const pending = this.pending.get(id);
@@ -143,7 +250,11 @@ export class CodeEditorContributions extends Disposable {
 			const instance = pending.create();
 			if (instance === undefined) return;
 			if (!instance || typeof instance.dispose !== 'function') throw new TypeError(`Code editor contribution '${id}' did not return a disposable`);
-			const resources = this.resources.get(id)!;
+			const resources = this.resources.get(id);
+			if (!resources || resources.isDisposed) {
+				instance.dispose();
+				return;
+			}
 			// Preserve the installation order when the controller is already owned.
 			if (!resources.has(instance)) resources.add(instance);
 			this.instances.set(id, instance);

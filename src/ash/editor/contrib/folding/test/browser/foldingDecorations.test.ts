@@ -1,3 +1,5 @@
+import { registerTestCodeEditorFeatures } from '../../../../../../../test/fixtures/codeEditorFeatures.js';
+import { after as afterCodeFeatures } from 'mocha';
 import '../../../../test/browser/testEditorDom.js';
 import { browserEnvironment as browser } from '../../../../test/browser/testEditorDom.js';
 import assert from 'node:assert/strict';
@@ -8,10 +10,10 @@ import { LanguageFeaturesService } from '../../../../common/services/languageFea
 import { registerTestTokens } from '../../../../test/common/testTokenization.js';
 import { Range } from '../../../../common/core/range.js';
 
-const { FoldingController } = await import('../../browser/folding.js');
+const { FoldingController } = await import('../../../../../../../extensions/code/browser/contrib/folding/browser/folding.js');
 const { CodeEditorWidget } = await import('../../../../browser/widget/codeEditor/codeEditorWidget.js');
 const { createTestCodeEditor } = await import('../../../../test/browser/testCodeEditor.js');
-const { FoldingDecorationProvider } = await import('../../browser/foldingDecorations.js');
+const { FoldingDecorationProvider } = await import('../../../../../../../extensions/code/browser/contrib/folding/browser/foldingDecorations.js');
 
 test('tokenization batches coalesce whole-document folding provider requests', async () => {
 	using features = new LanguageFeaturesService();
@@ -128,3 +130,6 @@ test('fold headers stay on their physical line after Enter moves a tracked gutte
 	assert.equal(firstHeader(), 1);
 	dom.window.close();
 });
+
+const codeFeatures = registerTestCodeEditorFeatures();
+afterCodeFeatures(() => codeFeatures.dispose());

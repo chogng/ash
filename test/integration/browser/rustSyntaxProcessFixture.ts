@@ -13,7 +13,7 @@ export const test = base.extend<{ rustSyntax: void; }>({
 	}, { auto: true }],
 });
 
-async function attachRustSyntax(page: Page): Promise<() => Promise<void>> {
+export async function attachRustSyntax(page: Page): Promise<() => Promise<void>> {
 	const profile = await mkdtemp(resolve(tmpdir(), 'ash-browser-syntax-'));
 	let child: ChildProcessWithoutNullStreams | undefined;
 	let lifecycle = Promise.resolve();

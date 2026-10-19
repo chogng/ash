@@ -30,13 +30,15 @@ test("minimal text editor assembly creates only the engine surface", () => {
 	assert.equal(container.querySelector(".stanza-editor-fold-toggle"), null);
 	assert.equal(container.querySelector(".stanza-editor-completion"), null);
 	assert.equal(container.querySelector(".stanza-editor-placeholder-text"), null);
+	assert.equal(container.querySelector(".minimap"), null);
+	assert.equal(container.querySelector(".core-guide"), null);
 
 	const copy = new dom.window.Event("copy", { bubbles: true, cancelable: true });
 	editor.controller.element.dispatchEvent(copy);
 	assert.equal(copy.defaultPrevented, true);
 });
 
-test("typing, pair deletion and Enter share cursor history without contributions", () => {
+test("plain typing, deletion and Enter share cursor history without optional editing policies", () => {
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");
 	using domCleanup = { [Symbol.dispose]: () => dom.window.close() };
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
@@ -57,13 +59,13 @@ test("typing, pair deletion and Enter share cursor history without contributions
 	};
 
 	input("insertText", "(");
-	assert.equal(model.getText(), "()");
+	assert.equal(model.getText(), "(");
 	assert.equal(editor.getPosition()?.column, 2);
 	editor.pushUndoStop();
 	input("deleteContentBackward");
 	assert.equal(model.getText(), "");
 	editor.controller.undo();
-	assert.equal(model.getText(), "()");
+	assert.equal(model.getText(), "(");
 	editor.controller.undo();
 	assert.equal(model.getText(), "");
 

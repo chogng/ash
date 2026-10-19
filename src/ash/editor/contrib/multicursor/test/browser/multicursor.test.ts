@@ -1,7 +1,9 @@
+import { registerTestCodeEditorFeatures } from '../../../../../../../test/fixtures/codeEditorFeatures.js';
+import { after as afterCodeFeatures } from 'mocha';
 import assert from "node:assert/strict";
 import { test } from "mocha";
 import { OperatingSystem } from "../../../../../base/common/platform.js";
-import { resolveStanzaAdjacentCursorDirection } from "../../browser/multicursor.js";
+import { resolveStanzaAdjacentCursorDirection } from "../../../../../../../extensions/code/browser/contrib/multicursor/browser/multicursor.js";
 
 test("Multi-cursor chord selection follows platform-specific non-conflicting bindings", () => {
 	assert.equal(resolveStanzaAdjacentCursorDirection(
@@ -25,3 +27,6 @@ test("Multi-cursor chord selection follows platform-specific non-conflicting bin
 function keydown(key: string, options: Partial<Pick<KeyboardEvent, 'ctrlKey' | 'altKey' | 'shiftKey' | 'metaKey'>>): Pick<KeyboardEvent, 'key' | 'ctrlKey' | 'altKey' | 'shiftKey' | 'metaKey'> {
 	return { key, ctrlKey: false, altKey: false, shiftKey: false, metaKey: false, ...options };
 }
+
+const codeFeatures = registerTestCodeEditorFeatures();
+afterCodeFeatures(() => codeFeatures.dispose());

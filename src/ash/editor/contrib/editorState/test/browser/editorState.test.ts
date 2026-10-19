@@ -1,3 +1,5 @@
+import { registerTestCodeEditorFeatures } from '../../../../../../../test/fixtures/codeEditorFeatures.js';
+import { after as afterCodeFeatures } from 'mocha';
 import '../../../../test/browser/testEditorDom.js';
 import { browserEnvironment as environment } from '../../../../test/browser/testEditorDom.js';
 import assert from 'node:assert/strict';
@@ -7,8 +9,8 @@ import { TextModel } from '../../../../common/model/textModel.js';
 import { Position } from '../../../../common/core/position.js';
 import { Selection } from '../../../../common/core/selection.js';
 import { Range } from '../../../../common/core/range.js';
-import { CodeEditorStateFlag, EditorStateCancellationTokenSource } from '../../browser/editorState.js';
-import { EditorKeybindingCancellationTokenSource } from '../../browser/keybindingCancellation.js';
+import { CodeEditorStateFlag, EditorStateCancellationTokenSource } from '../../../../../../../extensions/code/browser/contrib/editorState/browser/editorState.js';
+import { EditorKeybindingCancellationTokenSource } from '../../../../../../../extensions/code/browser/contrib/editorState/browser/keybindingCancellation.js';
 
 const { createTestCodeEditor } = await import('../../../../test/browser/testCodeEditor.js');
 
@@ -116,3 +118,6 @@ test('selection cancellation observes a secondary selection while the primary st
 	editor.setSelections([primary, new Selection(2, 2, 2, 5)]);
 	assert.equal(source.token.isCancellationRequested, true);
 });
+
+const codeFeatures = registerTestCodeEditorFeatures();
+afterCodeFeatures(() => codeFeatures.dispose());

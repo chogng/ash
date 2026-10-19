@@ -17,7 +17,8 @@
     "githubExtension": "bin/ash-github-extension{exe}",
     "remoteSshExtension": "bin/ash-remote-ssh-extension{exe}",
     "collaborationServer": "bin/ash-collab-server{exe}",
-    "remoteHost": "bin/ash-remote-host{exe}"
+    "remoteHost": "bin/ash-remote-host{exe}",
+    "codeEditorExtension": "bin/ash-code-editor{exe}"
   },
   "optionalBinaries": {
     "remoteServer": "bin/ash-remote-server{exe}",

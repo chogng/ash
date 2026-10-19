@@ -7,10 +7,7 @@ import { CodeEditorWidget } from '../../../../editor/browser/widget/codeEditor/c
 import { TextModel } from '../../../../editor/common/model/textModel.js';
 import { Selection } from '../../../../editor/common/core/selection.js';
 import { EditorOption } from '../../../../editor/common/config/editorOptions.js';
-import { EditorExtensionsRegistry } from '../../../../editor/browser/editorExtensions.js';
 import { EditorCoreCommandId } from '../../../../editor/browser/coreCommands.js';
-import { PlaceholderTextContribution } from '../../../../editor/contrib/placeholderText/browser/placeholderTextContribution.js';
-import '../../../../editor/contrib/placeholderText/browser/placeholderText.contribution.js';
 import { CancellationTokenSource } from '../../../../base/common/cancellation.js';
 import { Emitter } from '../../../../base/common/event.js';
 import { Position } from '../../../../editor/common/core/position.js';
@@ -171,9 +168,9 @@ export class Repl extends FilterViewPane {
 			lineDecorationsWidth: 0, glyphMargin: false, folding: false, overviewRulerLanes: 0,
 			scrollBeyondLastLine: false, tabFocusMode: true, suggestions: { enabled: false },
 			inlineCompletions: { enabled: false },
-			contributions: EditorExtensionsRegistry.getSomeEditorContributions([
-				EditorCoreCommandId.selectAll, PlaceholderTextContribution.ID,
-			]),
+			contributionIds: [
+				EditorCoreCommandId.selectAll, 'editor.contrib.placeholderText',
+			],
 		}));
 		this.input = this.replInput.controller.element;
 		this.input.setAttribute('aria-controls', suggestionId);

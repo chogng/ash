@@ -1,3 +1,5 @@
+import { registerTestCodeEditorFeatures } from '../../../../../../test/fixtures/codeEditorFeatures.js';
+import { after as afterCodeFeatures } from 'mocha';
 import assert from 'node:assert/strict';
 import { test, suiteTeardown } from 'mocha';
 import { JSDOM } from 'jsdom';
@@ -18,6 +20,7 @@ import { installEditorTestDom } from '../editorTestGlobals.js';
 import { getIconDefinition } from '../../../../platform/theme/common/iconRegistry.js';
 
 const browserEnvironment = new JSDOM('<!doctype html><body></body>');
+setIconResolver(browserEnvironment.window.document, icon => getIconDefinition(icon));
 browserEnvironment.window.HTMLCanvasElement.prototype.getContext = () => null;
 class TestResizeObserver {
 	observe(): void { }
@@ -31,7 +34,7 @@ const installedGlobals = installEditorTestDom(browserEnvironment, [
 const { DiffModel } = await import('../../../common/diff/diffModel.js');
 const { MultiDiffEditorWidget } = await import('../../../browser/widget/multiDiffEditor/multiDiffEditorWidget.js');
 const { createCodeEditorServices } = await import('../testCodeEditor.js');
-await import('../../../contrib/diffEditorBreadcrumbs/browser/contribution.js');
+await import('../../../../../../extensions/code/browser/contrib/diffEditorBreadcrumbs/browser/contribution.js');
 suiteTeardown(() => {
 	installedGlobals.dispose();
 	browserEnvironment.window.close();
@@ -76,6 +79,7 @@ test('source replacement releases readiness waits for disposed models during ini
 for (const restore of [false, true]) {
 	test(`MultiDiffEditorWidget ${restore ? 'preserves restored collapse state during' : 'reveals the first change without focus during'} initial navigation`, async () => {
 		const dom = new JSDOM('<!doctype html><body><main tabindex="0"></main></body>');
+		setIconResolver(dom.window.document, icon => getIconDefinition(icon));
 		try {
 			dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 			using resources = new DisposableStore();
@@ -263,3 +267,6 @@ function waitForReady(model: InstanceType<typeof DiffModel>): Promise<void> {
 		});
 	});
 }
+
+const codeFeatures = registerTestCodeEditorFeatures();
+afterCodeFeatures(() => codeFeatures.dispose());

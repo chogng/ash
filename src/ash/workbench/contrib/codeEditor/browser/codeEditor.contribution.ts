@@ -13,8 +13,6 @@ import { matchCodeEditor, matchDiffEditor } from "./codeEditorInput.js";
 import { CODE_EDITOR_ID, TextResourceEditor, type EditorPaneOptions } from "../../../browser/parts/editor/textResourceEditor.js";
 import { DIFF_EDITOR_ID } from "../../../common/editor/diffEditorInput.js";
 import { TextDiffEditor } from "../../../browser/parts/editor/textDiffEditor.js";
-import { bindCodeLensCacheStorage } from "../../../../editor/contrib/codelens/browser/codeLensCache.js";
-import { IStorageService } from "../../../../platform/storage/common/storage.js";
 import { registerWorkbenchContribution, WorkbenchPhase } from "../../../common/contributions.js";
 import './dictation/editorDictation.js';
 import { CodeEditorConfiguration, type WrappingIndentSetting } from "../common/editorConfiguration.js";
@@ -31,7 +29,6 @@ registerWorkbenchContribution('workbench.contrib.documentSymbolsOutline', Workbe
 // Cleanup uses CodeEditorService, whose EditorParts dependency is registered after BlockStartup.
 registerWorkbenchContribution(SaveParticipantsContribution.ID, WorkbenchPhase.BlockRestore, accessor => accessor.get(IInstantiationService).createInstance(SaveParticipantsContribution));
 
-registerWorkbenchContribution("workbench.contrib.codeLensCachePersistence", WorkbenchPhase.BlockStartup, accessor => bindCodeLensCacheStorage(accessor.get(IStorageService)));
 
 registerEditorPane({
 	id: CODE_EDITOR_ID,

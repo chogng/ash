@@ -88,11 +88,8 @@
 
 ## Stanza 编辑器 · TODO
 
-- [ ] **Academy／Code · M1–M5 迁移继续**：M0 清单和阶段退出条件见[边界审计](docs/design/editor-boundary-audit.md)，当前实现见[路线图状态](docs/design/editor-roadmap.md#当前基线与待迁移状态)。2026-10-19 Academy 的独立 Rust 注入、三种文档入口（论文、`.ash-doc`、频道笔记）及既有 Schema／结构状态／命令／Widget／协作算法／codec 迁移已实现；基础 `TextModel` 提供通用扩展快照提交，宿主保留模型引用、dirty、文件与备份。段落贡献已迁入包并改为每个 profile／视图装配，旧静态 factory 和默认文档贡献已退出，声明路由在停用时保护结构化文件。仍需：完成 Code 的真实注入及 contrib 迁移；复核三种组合的装载集合、纯文本入口及 Electron／远端验收；不把 Academy 迁移宣称为全部 M1–M5 完成。本机定向回归已通过：333 项注入／启动／文件工作流单测、193 项模型／协作回归、211 项版本兼容与新建导入回归、22 项 Chromium 场景、23 项构建／NLS 测试、Rust verify 和实际部署测试、Renderer 生产构建及 Common／Main 类型检查；日志 `.build/academy-migration-*.log`。生产构建报告确认 Workbench／Sessions 的 Web／Electron 入口静态依赖均无 Academy 实现。旧 CodeEditorPane `Unknown service: IWebWorkerService` 装配问题待随 Code 迁移复核。
-- [ ] **Academy · 6.1 写作与样式（M6，迁移后恢复）**：当前实现已有正文／标题选择和段落属性 contrib，Academy 的既有富文档迁移已实现，Code 与组合验收仍在进行；先完成 M1–M5，再继续闭合自定义样式定义与引用／局部覆盖、缩进、列表编号和富文档查找替换。按[路线图 6.1](docs/design/editor-roadmap.md#61-写作样式与文档语义)逐项验收输入、撤销、保存和协作；完成坐标与输入前置后再进入分页。
-- [ ] **复核 · Editor 组合测试入口**：本机 pnpm 为原生可执行文件，`test/editor.ts` 把 `npm_execpath` 交给 Node 后报 `SyntaxError: Invalid or unexpected token`，组合入口未进入行为测试。日志 `.build/academy-paragraph-alignment.log`；本批另行使用原有单测与浏览器入口验证，不能把组合入口记为通过。
-
-- [ ] **验收** · 补系统 IME 候选窗口、Electron 平台及屏幕阅读器验收；浏览器合成 composition 事件不代替物理输入法。
+- [ ] **验收 · 编辑器扩展平台组合**：Academy／Code 的独立 Rust 注入、既有实现迁移与基础入口退出静态装配已实现，本机真实 Provider／Chromium 组合回归覆盖启停、dirty／恢复及释放；尚需真实 Electron 多窗口／远端环境与物理 IME、屏幕阅读器验收。平台范围见[路线图](docs/design/editor-roadmap.md)，不能用单测或 Chromium 模拟输入替代这些环境证据。
+- [ ] **Academy · 6.1 写作与样式（M6，迁移后恢复）**：当前实现已有正文／标题选择和段落属性 contrib，Academy／Code 的既有实现迁移已实现，平台验收单独跟踪；随后继续闭合自定义样式定义与引用／局部覆盖、缩进、列表编号和富文档查找替换。按[路线图 6.1](docs/design/editor-roadmap.md#61-写作样式与文档语义)逐项验收输入、撤销、保存和协作；完成坐标与输入前置后再进入分页。
 
 后续阶段由[编辑器路线图](docs/design/editor-roadmap.md)维护；本清单不再把整条路线图重复记成一个未完成任务。
 

@@ -1,3 +1,4 @@
+import type { ITextEditingPolicy } from './cursor/textEditingPolicy.js';
 /** Selects one visual side when a model position has multiple rendered locations. */
 export enum PositionAffinity {
 	Left = 0,
@@ -379,6 +380,7 @@ export function isITextSnapshot(value: unknown): value is ITextSnapshot {
  * capabilities while preserving VS Code's ownership and method names.
  */
 export interface ITextModel extends IDisposable {
+	readonly editingPolicy?: ITextEditingPolicy;
 	readonly guides: IGuidesTextModelPart;
 	readonly bracketPairs: IBracketPairsTextModelPart;
 	readonly tokenization: ITokenizationTextModelPart;

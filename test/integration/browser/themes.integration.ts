@@ -1,8 +1,10 @@
+import { registerTestCodeEditorFeatures } from '../../fixtures/codeEditorFeatures.js';
+const codeFeatures = registerTestCodeEditorFeatures();
 import { WebWorkerService } from '../../../src/ash/platform/webWorker/browser/webWorkerServiceImpl.js';
 import { List } from '../../../src/ash/base/browser/ui/list/listWidget.js';
 import { createDisconnectedSyntaxApi } from '../../../src/ash/platform/syntax/browser/syntaxApi.js';
 import { parseUserColorTheme } from '../../../src/ash/workbench/services/themes/common/colorThemeData.js';
-import { TreeSitterLibraryService, createTreeSitterSyntaxTokenBackend } from '../../../src/ash/workbench/services/treeSitter/browser/treeSitterLibraryService.js';
+import { TreeSitterLibraryService, createTreeSitterSyntaxSession } from '../../../src/ash/workbench/services/treeSitter/browser/treeSitterLibraryService.js';
 import { rustSyntaxFixture } from './rustSyntaxHostFixture.js';
 import { createEmptyTestLanguagePacks } from '../../../src/ash/workbench/services/localization/test/common/localizationTestUtils.js';
 import { AdapterManager } from '../../../src/ash/workbench/contrib/debug/browser/debugAdapterManager.js';
@@ -39,7 +41,7 @@ import '../../../src/ash/base/browser/ui/scrollbar/scrollbar.css';
 import '../../../src/ash/base/browser/ui/tree/tree.css';
 import '../../../src/ash/base/browser/ui/list/list.css';
 import '../../../extensions/academic/browser/widget/richTextEditor/richTextEditorWidget.css';
-import '../../../src/ash/editor/contrib/hover/browser/hover.css';
+import '../../../extensions/code/browser/contrib/hover/browser/hover.css';
 import '../../../src/ash/platform/actionWidget/browser/actionWidget.css';
 import '../../../src/ash/sessions/browser/parts/titlebar/media/titlebarpart.css';
 import '../../../src/ash/workbench/browser/parts/editor/media/modalEditorPart.css';
@@ -108,7 +110,7 @@ window.tokenizeWithSyntax = async () => {
 	const configuration = { getValue: () => false } as unknown as IConfigurationService;
 	const create = (text: string): TextModel => new TextModel(text, {
 		languageId: 'javascript', tokenization: {
-			createSyntaxTokenBackend: model => createTreeSitterSyntaxTokenBackend(model, configuration, library, scopeTheme),
+			createSyntaxSession: model => createTreeSitterSyntaxSession(model, configuration, library, scopeTheme),
 			onDidChangeSyntaxBackend: listener => scopeTheme.onDidColorThemeChange(() => listener()),
 		},
 	});
@@ -361,7 +363,7 @@ window.previewWithRustSyntax = async () => {
 	const configuration = { getValue: () => false } as unknown as IConfigurationService;
 	using model = new TextModel('const text = `start\nend`;\nif (true) {}', {
 		languageId: 'javascript',
-		tokenization: { createSyntaxTokenBackend: model => createTreeSitterSyntaxTokenBackend(model, configuration, library, theme) },
+		tokenization: { createSyntaxSession: model => createTreeSitterSyntaxSession(model, configuration, library, theme) },
 	});
 	const before = model.getValue();
 	const preview = await model.tokenization.syntaxTree!.tokenizeLinesAtAsync(2, ['changed`;', 'if (true) {}'], new AbortController().signal);

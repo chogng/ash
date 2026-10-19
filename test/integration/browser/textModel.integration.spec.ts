@@ -1,4 +1,4 @@
-import { test } from './rustSyntaxProcessFixture.js';
+import { attachRustSyntax, test } from './rustSyntaxProcessFixture.js';
 import { expect, type Page } from "@playwright/test";
 import { getAxeResults, injectAxe } from "axe-playwright";
 import { ScrollType, type IEditor } from '../../../src/ash/editor/common/editorCommon.js';
@@ -30,7 +30,7 @@ test('plain ASCII widths agree with DOM measurement across fonts, weights and ho
 		expect(measured).toBeGreaterThan(5000);
 		await page.evaluate(() => window.ashTextModelIntegration.getControl().updateOptions({ disableMonospaceOptimizations: false }));
 		const optimized = await read();
-		expect(Math.abs(optimized - measured)).toBeLessThanOrEqual(1);
+		expect(Math.abs(optimized - measured), JSON.stringify({ fontFamily, fontWeight, scale, measured, optimized })).toBeLessThanOrEqual(1);
 	}
 });
 
@@ -434,6 +434,7 @@ for (const deviceScaleFactor of [1, 2]) {
 		test(`minimap shares scrollbar endpoints with size=${size} at pixel ratio ${deviceScaleFactor}`, async ({ browser, baseURL }) => {
 			const context = await browser.newContext({ deviceScaleFactor, baseURL });
 			const page = await context.newPage();
+			const stopSyntax = await attachRustSyntax(page);
 			try {
 				await openEditor(page);
 				for (const horizontal of ['auto', 'visible', 'hidden'] as const) {
@@ -471,6 +472,7 @@ for (const deviceScaleFactor of [1, 2]) {
 				}
 			} finally {
 				await page.evaluate(() => window.ashTextModelIntegration?.dispose());
+				await stopSyntax();
 				await context.close();
 			}
 		});
@@ -899,13 +901,22 @@ test('dragging across wrapped rows selects exact model columns in both direction
 	await expect.poll(() => page.locator('.view-lines > .view-line').count()).toBeGreaterThan(2);
 	const rows = await page.locator('.view-lines > .view-line').evaluateAll(elements => elements.slice(0, 3).map((row, index) => {
 		const text = row.querySelector('.stanza-editor-line-text')!;
-		const node = text.firstChild!.firstChild!;
+		const point = (offset: number): [Node, number] => {
+			const walker = document.createTreeWalker(text, NodeFilter.SHOW_TEXT);
+			let remaining = offset;
+			for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+				const length = node.textContent!.length;
+				if (remaining <= length) return [node, remaining];
+				remaining -= length;
+			}
+			throw new RangeError('Wrapped row offset exceeds its rendered text');
+		};
 		const length = text.textContent!.length;
 		const start = index === 0 ? 3 : 0;
 		const end = index === 2 ? 7 : length;
 		const range = document.createRange();
-		range.setStart(node, start);
-		range.setEnd(node, end);
+		range.setStart(...point(start));
+		range.setEnd(...point(end));
 		const selected = range.getBoundingClientRect();
 		const bounds = row.getBoundingClientRect();
 		return { length, x: selected.left, width: selected.width, y: bounds.top, height: bounds.height };
@@ -1017,13 +1028,14 @@ test('switching a Workbench file keeps keyboard input on the new editor and rele
 	await expect.poll(() => page.evaluate(() => window.ashTextModelIntegration.getValue())).toBe('fn other() {\n  answer();\n}\n!');
 });
 
-test('Shared bundle activates text editor contributions without mounting document controls and releases their UI', async ({ page }) => {
+test('Explicit Code assembly installs text contributions without document controls and releases their UI', async ({ page }) => {
 	await openEditor(page);
 	const ids = await page.evaluate(() => window.ashTextModelIntegration.getBundleIds());
 	expect(ids).toContain('editor.contrib.clipboard');
 	expect(await page.evaluate(() => window.ashTextModelIntegration.hasClipboardContribution())).toBe(true);
 	expect(ids).toContain('editor.contrib.findController');
-	expect(ids).toContain('editor.contrib.documentFormatting');
+	expect(ids).toContain('editor.contrib.format');
+	expect(ids).not.toContain('editor.contrib.documentFormatting');
 	expect(ids).not.toContain('editor.contrib.collaboration');
 	expect(await page.evaluate(() => window.ashTextModelIntegration.hasPlaceholderContribution())).toBe(true);
 	await expect(page.locator('.stanza-editor')).toBeVisible();
@@ -1597,6 +1609,8 @@ test('editor distinguishes accelerating pixel input from fixed wheel steps befor
 
 test('editor surface and diagnostic colors follow the current Ash theme', async ({ page }) => {
 	await openEditor(page);
+	// Valid Rust has no parser diagnostic; seed a real host marker for this theme projection check.
+	await page.evaluate(() => window.ashTextModelIntegration.showDiagnosticMarker());
 	const editor = page.locator('.stanza-editor');
 	const diagnostic = page.locator('.cdr.squiggly-error');
 	await expect(diagnostic).toHaveCount(1);

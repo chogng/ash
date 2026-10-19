@@ -1,3 +1,7 @@
+import { registerTestCodeEditorFeatures } from '../../../../../../../test/fixtures/codeEditorFeatures.js';
+import { after as afterCodeFeatures } from 'mocha';
+import { WebWorkerService } from '../../../../../platform/webWorker/browser/webWorkerServiceImpl.js';
+import { IWebWorkerService } from '../../../../../platform/webWorker/browser/webWorkerService.js';
 import { ILanguageService } from '../../../../../editor/common/languages/language.js';
 import { TestQuickInputService } from '../../../../../platform/quickinput/test/browser/testQuickInputService.js';
 import { TestUriIdentityServices } from '../../../../../platform/uriIdentity/test/common/uriIdentityTestServices.js';
@@ -960,6 +964,7 @@ test('Workbench status follows cursor movement through public editor events', as
 
 function paneServices(models: ITextModelResourceService, languages?: LanguageFeaturesService): InstantiationService {
 	const services = new InstantiationService();
+	services.registerSingleton(IWebWorkerService, () => new WebWorkerService());
 	services.registerSingleton(IContextKeyService, () => new ContextKeyService());
 	services.registerInstance(ITextModelResourceService, models);
 	services.registerSingleton(ITextModelService, () => services.createInstance(TextModelResolverService));
@@ -1026,3 +1031,6 @@ test('code editor creation rejects a missing language configuration registration
 	pane.create(parent);
 	await assert.rejects(pane.setInput({ resource: URI.file('/project/missing-service.ts') }, new AbortController().signal), /languageConfigurationService/);
 });
+
+const codeFeatures = registerTestCodeEditorFeatures();
+afterCodeFeatures(() => codeFeatures.dispose());

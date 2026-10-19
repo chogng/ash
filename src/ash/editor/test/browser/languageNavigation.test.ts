@@ -1,11 +1,13 @@
+import { registerTestCodeEditorFeatures } from '../../../../../test/fixtures/codeEditorFeatures.js';
+import { after as afterCodeFeatures } from 'mocha';
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { URI } from '../../../base/common/uri.js';
 import { Range } from '../../common/core/range.js';
 import { ICodeEditorService } from '../../browser/services/codeEditorService.js';
 import { createLanguageFeatureEditor } from './testLanguageFeatureEditor.js';
-import type { ReferencesController } from '../../contrib/gotoSymbol/browser/peek/referencesController.js';
-await import('../../contrib/gotoSymbol/browser/peek/referencesController.js');
+import type { ReferencesController } from '../../../../../extensions/code/browser/contrib/gotoSymbol/browser/peek/referencesController.js';
+await import('../../../../../extensions/code/browser/contrib/gotoSymbol/browser/peek/referencesController.js');
 
 test('definition navigation sends the requested side group and target selection to the editor service', async () => {
 	using fixture = createLanguageFeatureEditor();
@@ -80,3 +82,6 @@ for (const change of ['content', 'language', 'dispose', 'provider', 'selection']
 		assert.deepEqual(fixture.errors, []);
 	});
 }
+
+const codeFeatures = registerTestCodeEditorFeatures();
+afterCodeFeatures(() => codeFeatures.dispose());

@@ -1,3 +1,5 @@
+import { registerTestCodeEditorFeatures } from '../../../../../../test/fixtures/codeEditorFeatures.js';
+import { after as afterCodeFeatures } from 'mocha';
 import { strict as assert } from "node:assert";
 import { test } from "mocha";
 import { CursorsController } from "../../../common/cursor/cursor.js";
@@ -236,3 +238,6 @@ function primaryFirst<T>(items: readonly T[], primaryIndex: number): readonly T[
 	if (primaryIndex === 0) return Object.freeze([...items]);
 	return Object.freeze([items[primaryIndex]!, ...items.slice(0, primaryIndex), ...items.slice(primaryIndex + 1)]);
 }
+
+const codeFeatures = registerTestCodeEditorFeatures();
+afterCodeFeatures(() => codeFeatures.dispose());

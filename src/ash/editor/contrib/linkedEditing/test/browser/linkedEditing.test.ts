@@ -1,3 +1,5 @@
+import { registerTestCodeEditorFeatures } from '../../../../../../../test/fixtures/codeEditorFeatures.js';
+import { after as afterCodeFeatures } from 'mocha';
 import '../../../../test/browser/testEditorDom.js';
 import { browserEnvironment } from '../../../../test/browser/testEditorDom.js';
 import assert from 'node:assert/strict';
@@ -19,7 +21,7 @@ import { type TextMeasurer } from '../../../../common/viewModel.js';
 
 const { TestView: View } = await import('../../../../test/browser/viewModel/testViewModel.js');
 const { ViewController } = await import('../../../../browser/view/viewController.js');
-const { LinkedEditingContribution } = await import('../../browser/linkedEditing.js');
+const { LinkedEditingContribution } = await import('../../../../../../../extensions/code/browser/contrib/linkedEditing/browser/linkedEditing.js');
 
 
 test('linked editing applies one input transaction to every provider range', async () => {
@@ -172,3 +174,6 @@ class FixedTextMeasurer implements TextMeasurer {
 	refresh(): boolean { return false; }
 	measureLineWidth(text: string): number { return text.length * 10; }
 }
+
+const codeFeatures = registerTestCodeEditorFeatures();
+afterCodeFeatures(() => codeFeatures.dispose());

@@ -1,6 +1,8 @@
+import { registerTestCodeEditorFeatures } from '../../../../../../../test/fixtures/codeEditorFeatures.js';
+import { after as afterCodeFeatures } from 'mocha';
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
-import { fixBracketsInLine } from '../../../../common/model/bracketPairsTextModelPart/fixBrackets.js';
+import { fixBracketsInLine } from '../../../../../../../extensions/code/browser/model/bracketPairsTextModelPart/fixBrackets.js';
 import { LineTokens } from '../../../../common/tokens/lineTokens.js';
 import { MetadataConsts, StandardTokenType, type LanguageId } from '../../../../common/encodedTokenAttributes.js';
 import { type ILanguageIdCodec } from '../../../../common/languages.js';
@@ -52,3 +54,6 @@ test('completion bracket repair prefers the longest configured bracket at an off
 	const tokens = LineTokens.createFromTextAndMetadata([segment('<!-- text', StandardTokenType.Other, 'embedded')], codec);
 	assert.equal(fixBracketsInLine(tokens, configurations), '<!-- text-->');
 });
+
+const codeFeatures = registerTestCodeEditorFeatures();
+afterCodeFeatures(() => codeFeatures.dispose());

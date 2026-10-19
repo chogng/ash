@@ -1,3 +1,4 @@
+import type { ITextEditingPolicy } from './cursor/textEditingPolicy.js';
 import { ConfigurationChangedEvent, EditorAutoClosingEditStrategy, EditorAutoClosingStrategy, EditorAutoIndentStrategy, EditorAutoSurroundStrategy, EditorOption } from './config/editorOptions.js';
 import { LineTokens } from './tokens/lineTokens.js';
 import { Position } from './core/position.js';
@@ -247,6 +248,7 @@ export class CursorConfiguration {
  * Represents a simple model (either the model or the view model).
  */
 export interface ICursorSimpleModel {
+	readonly editingPolicy?: ITextEditingPolicy;
 	getLineCount(): number;
 	getLineContent(lineNumber: number): string;
 	getLineMinColumn(lineNumber: number): number;

@@ -14,13 +14,13 @@ import type { ILanguageConfigurationService } from '../languages/languageConfigu
 import { PLAINTEXT_LANGUAGE_ID } from '../languages/modesRegistry.js';
 import type { ILanguageFeaturesService } from './languageFeatures.js';
 import { type SyntaxServiceOptions } from '../languages.js';
-import type { TokenizationTextModelPartOptions } from '../model/tokens/tokenizationTextModelPart.js';
+import type { TextModelTokenizationOptions as TokenizationTextModelPartOptions } from '../tokenizationTextModelPart.js';
 import type { IModelService } from "./model.js";
 import type { TextModelEditSource } from '../textModelEditSource.js';
 import type { ITextResourcePropertiesService } from './textResourceConfiguration.js';
 import { createPieceTreeTextBuffer } from '../model/pieceTreeTextBuffer/pieceTreeTextBufferBuilder.js';
 
-export interface ModelServiceTokenizationOptions extends Pick<TokenizationTextModelPartOptions, 'createSyntaxTokenBackend' | 'onDidChangeSyntaxBackend'> {
+export interface ModelServiceTokenizationOptions extends Pick<TokenizationTextModelPartOptions, 'createSyntaxTokenBackend' | 'createSyntaxSession' | 'onDidChangeSyntaxBackend'> {
 	readonly syntaxService?: SyntaxServiceOptions;
 	readonly onDidChangeLanguageSupport?: Event<void>;
 }

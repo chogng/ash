@@ -1,12 +1,17 @@
-import { startAcademyExtension } from '../../../../../../../test/fixtures/academyExtension.js';
+import { prepareAcademyExtension, startAcademyExtension } from '../../../../../../../test/fixtures/academyExtension.js';
 import { MainThreadClientEditors } from '../../../../api/browser/mainThreadClientEditors.js';
 import type { IExtensionHostApi, ExtensionHostFleetSnapshot } from '../../../../../platform/agentHost/common/extensionHostApi.js';
 import { AdapterManager } from '../../../debug/browser/debugAdapterManager.js';
 import assert from "node:assert/strict";
-import { test } from "mocha";
+import { before, test } from "mocha";
 import { academicProfile } from "../../../../../../../extensions/academic/browser/editorProfile.js";
 import { createDocumentEditorPaneOptions } from "../../../documentEditor/browser/editorProfile.js";
 import { deserializeDocument } from '../../../../../../../extensions/academic/common/model/documentSerialization.js';
+
+before(function () {
+	this.timeout(600_000);
+	prepareAcademyExtension();
+});
 
 test("Stanza profile materialization keeps schema and browser extensions together", () => {
 	const options = createDocumentEditorPaneOptions(academicProfile);

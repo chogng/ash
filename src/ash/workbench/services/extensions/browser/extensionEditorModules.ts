@@ -1,9 +1,9 @@
 import { localize } from '../../../../nls.js';
-import type { ExtensionEditorModule, ExtensionEditorModuleLoader } from './extensionEditor.js';
+import type { ExtensionEditorClientModule, ExtensionEditorModuleLoader } from './extensionEditor.js';
 
 /** Verify product-compiled sources before importing their module. Catalog bytes never execute. */
 export const loadExtensionEditorModule: ExtensionEditorModuleLoader = async (packageName, entry, expectedDigest) => {
-	const modules = import.meta.glob<ExtensionEditorModule>('../../../../../../extensions/*/browser/editor.ts');
+	const modules = import.meta.glob<ExtensionEditorClientModule>('../../../../../../extensions/*/browser/editor.ts');
 	const sources = import.meta.glob<string>('../../../../../../extensions/*/{browser,common}/**/*.{ts,css}', { query: '?raw', import: 'default' });
 	const prefix = `../../../../../../extensions/${packageName}/`;
 	const load = modules[`../../../../../../extensions/${packageName}/${entry}`];

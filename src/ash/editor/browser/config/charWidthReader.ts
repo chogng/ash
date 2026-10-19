@@ -49,8 +49,12 @@ export function readCharWidths(targetWindow: Window, fontInfo: BareFontInfo, req
 	});
 	document.body.append(container);
 	try {
+		const scale = container.getBoundingClientRect().width / container.offsetWidth || 1;
 		for (let index = 0; index < requests.length; index += 1) {
-			requests[index]!.fulfill(samples[index]!.offsetWidth / 256);
+			const sample = samples[index]!;
+			// Integer sample widths amplify rounding across long lines. Preserve layout's fractional advance.
+			const width = sample.getBoundingClientRect().width / scale || sample.offsetWidth;
+			requests[index]!.fulfill(width / 256);
 		}
 	} finally {
 		container.remove();

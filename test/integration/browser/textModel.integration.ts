@@ -1,5 +1,8 @@
+import { IWebWorkerService } from '../../../src/ash/platform/webWorker/browser/webWorkerService.js';
+import { registerTestCodeEditorFeatures } from '../../fixtures/codeEditorFeatures.js';
+const codeFeatures = registerTestCodeEditorFeatures();
 import { WebWorkerService } from '../../../src/ash/platform/webWorker/browser/webWorkerServiceImpl.js';
-import { TreeSitterLibraryService, TreeSitterSyntaxProviders, createTreeSitterSyntaxTokenBackend } from '../../../src/ash/workbench/services/treeSitter/browser/treeSitterLibraryService.js';
+import { TreeSitterLibraryService, TreeSitterSyntaxProviders, createTreeSitterSyntaxSession } from '../../../src/ash/workbench/services/treeSitter/browser/treeSitterLibraryService.js';
 import { rustSyntaxFixture } from './rustSyntaxHostFixture.js';
 import { TestThemeService } from '../../../src/ash/platform/theme/test/common/testThemeService.js';
 import { SnippetsService } from '../../../src/ash/workbench/contrib/snippets/browser/snippetsService.js';
@@ -14,7 +17,7 @@ import { TextModelResolverService } from '../../../src/ash/workbench/services/te
 import { createLanguageExtensions } from './languageExtensions.js';
 import { AdapterManager } from '../../../src/ash/workbench/contrib/debug/browser/debugAdapterManager.js';
 import { ContextKeyService, IContextKeyService } from '../../../src/ash/platform/contextkey/browser/contextKeyService.js';
-import { IMarkerService } from '../../../src/ash/platform/markers/common/markers.js';
+import { IMarkerService, MarkerSeverity } from '../../../src/ash/platform/markers/common/markers.js';
 import { MarkerService } from '../../../src/ash/platform/markers/common/markerService.js';
 import { IMarkerDecorationsService } from '../../../src/ash/editor/common/services/markerDecorations.js';
 import { MarkerDecorationsService } from '../../../src/ash/editor/common/services/markerDecorationsService.js';
@@ -60,7 +63,6 @@ import { WorkbenchLanguageFeatures } from "../../../src/ash/workbench/services/l
 import { BrowserTextModelService } from "../../../src/ash/workbench/services/textmodelResolver/browser/browserTextModelService.js";
 import { TextModel } from "../../../src/ash/editor/editor.api.js";
 import "../../../src/ash/editor/editor.code.all.js";
-import '../../../src/ash/editor/standalone/browser/quickAccess/standaloneGotoSymbolQuickAccess.js';
 import { MemoryTextFiles } from "./memoryTextFiles.js";
 import { AccessibilitySupport, IAccessibilityService } from '../../../src/ash/platform/accessibility/common/accessibility.js';
 import { EditorExtensionsRegistry } from '../../../src/ash/editor/browser/editorExtensions.js';
@@ -68,7 +70,7 @@ import { registerCodeEditorServices } from '../../../src/ash/editor/test/browser
 import { IKeybindingService } from '../../../src/ash/platform/keybinding/common/keybinding.js';
 import { IQuickInputService } from '../../../src/ash/platform/quickinput/common/quickInput.js';
 import { TestQuickInputService } from '../../../src/ash/platform/quickinput/test/browser/testQuickInputService.js';
-import { ZoneWidget } from '../../../src/ash/editor/contrib/zoneWidget/browser/zoneWidget.js';
+import { ZoneWidget } from '../../../extensions/code/browser/contrib/zoneWidget/browser/zoneWidget.js';
 import { setIconResolver } from '../../../src/ash/base/browser/ui/lxicons/lxicon.js';
 import { getIconDefinition } from '../../../src/ash/platform/theme/common/iconRegistry.js';
 
@@ -112,6 +114,7 @@ interface IntegrationHarness {
 	showWidgets(): void;
 	moveGlyphWidget(lineIndex: number): void;
 	removeWidgets(): void;
+	showDiagnosticMarker(): void;
 	showModelDecorations(): void;
 	removeModelDecorations(): void;
 	dispose(): void;
@@ -145,7 +148,7 @@ disposables.add(new SnippetCompletionProvider(snippets, languageFeaturesService)
 await extensions.start();
 const models = disposables.add(uriIdentityServices.createInstance(BrowserTextModelService, resourceStore, {
 	languageService, languageConfigurationService, languageFeaturesService,
-	createSyntaxTokenBackend: (model: TextModel) => createTreeSitterSyntaxTokenBackend(model, configurationService, library, syntaxTheme),
+	createSyntaxSession: (model: TextModel) => createTreeSitterSyntaxSession(model, configurationService, library, syntaxTheme),
 	onDidChangeSyntaxBackend: (listener: () => void) => syntaxTheme.onDidColorThemeChange(() => listener()),
 }));
 disposables.add(new TreeSitterSyntaxProviders(languageFeaturesService));
@@ -186,6 +189,7 @@ let glyphWidgetLineNumber = 1;
 let glyphDecorations: IEditorDecorationsCollection | undefined;
 let modelDecorations: IEditorDecorationsCollection | undefined;
 const services = disposables.add(new InstantiationService());
+services.registerSingleton(IWebWorkerService, () => new WebWorkerService());
 services.registerSingleton(IContextKeyService, () => new ContextKeyService());
 services.registerSingleton(IMarkerService, () => services.createInstance(MarkerService));
 services.registerSingleton(IMarkerDecorationsService, () => services.createInstance(MarkerDecorationsService));
@@ -360,6 +364,9 @@ window.ashTextModelIntegration = {
 		requiredEditorPart().layoutGlyphMarginWidget(glyphWidget);
 	},
 	removeWidgets,
+	showDiagnosticMarker: () => services.get(IMarkerService).changeOne('integration', requiredEditorPart().getModel()!.uri, [{
+		severity: MarkerSeverity.Error, message: 'Theme diagnostic', startLineNumber: 2, startColumn: 3, endLineNumber: 2, endColumn: 9,
+	}]),
 	showModelDecorations: () => {
 		removeModelDecorations();
 		modelDecorations = requiredEditorPart().createDecorationsCollection([{

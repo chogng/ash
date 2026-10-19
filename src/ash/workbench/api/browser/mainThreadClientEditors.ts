@@ -1,3 +1,4 @@
+import { EditorExtensionsRegistry } from '../../../editor/browser/editorExtensions.js';
 import { DocumentTypes } from '../../services/documentEditor/common/documentTypes.js';
 import { parseExtensionManifest } from '../../services/extensions/common/extensionManifest.js';
 import { getNLSLanguage, localize } from '../../../nls.js';
@@ -74,7 +75,7 @@ export class MainThreadClientEditors extends Disposable {
 		for (const runtime of snapshot.extensions) {
 			if (runtime.lifecycle !== 'ready' || runtime.incarnation === undefined) continue;
 			for (const registration of runtime.registrations) {
-				if (registration.kind !== 'dataChannel' || registration.channelId !== 'editor.client.v1') continue;
+				if (registration.kind !== 'dataChannel' || !['editor.client.v1', 'editor.contributions.v1'].includes(registration.channelId)) continue;
 				const key = `${runtime.id}\0${registration.registrationId}`;
 				active.add(key);
 				const identity = JSON.stringify([runtime.id, runtime.version, runtime.packageDigest, runtime.incarnation, runtime.activationGeneration, registration]);
@@ -87,7 +88,7 @@ export class MainThreadClientEditors extends Disposable {
 				const lifetime = new DisposableStore();
 				const controller = new AbortController();
 				lifetime.add(toDisposable(() => controller.abort()));
-				const operation = this.register(runtime, registration.registrationId, lifetime, controller.signal);
+				const operation = this.register(runtime, registration.registrationId, registration.channelId === 'editor.client.v1' ? 'document' : 'contributions', lifetime, controller.signal);
 				const scope = Object.assign(lifetime, { identity, pending: operation });
 				this.registrations.set(key, scope);
 				pending.push(operation);
@@ -113,7 +114,7 @@ export class MainThreadClientEditors extends Disposable {
 		this.registrations.clearAndDisposeAll();
 	}
 
-	private async register(runtime: ExtensionHostRuntime, registrationId: string, lifetime: DisposableStore, signal: AbortSignal): Promise<void> {
+	private async register(runtime: ExtensionHostRuntime, registrationId: string, kind: 'document' | 'contributions', lifetime: DisposableStore, signal: AbortSignal): Promise<void> {
 		try {
 			const catalog = await this.packages.list('cached');
 			signal.throwIfAborted();
@@ -124,20 +125,37 @@ export class MainThreadClientEditors extends Disposable {
 				operation: 'receiveData', payload: { operation: 'describe', language: getNLSLanguage() }, deadlineUnixMillis: Date.now() + this.timeout,
 			}, signal);
 			signal.throwIfAborted();
-			const { clientModule, clientDigest, editors } = parseContribution(value);
+			const { clientModule, clientDigest, editors } = parseContribution(value, kind);
+			const resolveComponent = async () => {
+				signal.throwIfAborted();
+				const latest = await this.packages.list('cached');
+				const admitted = latest.extensions.find(entry => entry.id === owner.id
+					&& entry.version === owner.version
+					&& entry.sourceKind === 'builtIn'
+					&& entry.packageSha256 === owner.packageSha256);
+				if (!admitted) throw new Error(localize('extensions.clientEditor.packageRetired', 'The editor extension package has retired.'));
+				const component = await this.loadModule(owner.name, clientModule, clientDigest);
+				signal.throwIfAborted();
+				if (component.packageId !== owner.id || component.packageVersion !== owner.version) {
+					throw new Error(localize('extensions.clientEditor.versionMismatch', 'The editor component and extension versions do not match.'));
+				}
+				return component;
+			};
+			if (kind === 'contributions') {
+				const declared = parseExtensionManifest(owner.manifestJson, owner).contributes.editorFeatures;
+				if (!declared?.some(feature => feature.target === 'text')) throw new TypeError('Editor features were not declared by their package');
+				const component = await resolveComponent();
+				if (!('getEditorFeatures' in component) || typeof component.getEditorFeatures !== 'function') {
+					throw new Error(localize('extensions.clientEditor.versionMismatch', 'The editor component and extension versions do not match.'));
+				}
+				lifetime.add(EditorExtensionsRegistry.registerEditorFeatures(component.getEditorFeatures()));
+				return;
+			}
 			// Register only after the entire declaration is valid. No static factory supplies a fallback.
 			const descriptors = editors.map((editor): IEditorPaneDescriptor => {
 				const resolveDocumentProfile = async () => {
-					signal.throwIfAborted();
-					const latest = await this.packages.list('cached');
-					const admitted = latest.extensions.find(entry => entry.id === owner.id
-						&& entry.version === owner.version
-						&& entry.sourceKind === 'builtIn'
-						&& entry.packageSha256 === owner.packageSha256);
-					if (!admitted) throw new Error(localize('extensions.clientEditor.packageRetired', 'The editor extension package has retired.'));
-					const component = await this.loadModule(owner.name, clientModule, clientDigest);
-					signal.throwIfAborted();
-					if (component.packageId !== owner.id || component.packageVersion !== owner.version) {
+					const component = await resolveComponent();
+					if (!('getEditorProfile' in component) || typeof component.getEditorProfile !== 'function') {
 						throw new Error(localize('extensions.clientEditor.versionMismatch', 'The editor component and extension versions do not match.'));
 					}
 					const profile = component.getEditorProfile(editor.editorId);
@@ -176,7 +194,7 @@ export class MainThreadClientEditors extends Disposable {
 }
 
 /** This is a domain payload on the existing typed channel, not a second transport protocol. */
-function parseContribution(value: JsonValue): ClientEditorContribution {
+function parseContribution(value: JsonValue, kind: 'document' | 'contributions'): ClientEditorContribution {
 	const object = (value: JsonValue): Readonly<Record<string, JsonValue>> => {
 		if (!value || typeof value !== 'object' || Array.isArray(value)) throw new TypeError('Invalid client editor declaration');
 		return value as Readonly<Record<string, JsonValue>>;
@@ -186,11 +204,13 @@ function parseContribution(value: JsonValue): ClientEditorContribution {
 		return value;
 	};
 	const input = object(value);
-	if (input.version !== 1 || Object.keys(input).sort().join(',') !== 'clientDigest,clientModule,editors,version') throw new TypeError('Unsupported client editor contract');
+	const fields = kind === 'document' ? 'clientDigest,clientModule,editors,version' : 'clientDigest,clientModule,version';
+	if (input.version !== 1 || Object.keys(input).sort().join(',') !== fields) throw new TypeError('Unsupported client editor contract');
 	const clientModule = text(input.clientModule, 512);
 	const clientDigest = text(input.clientDigest, 71);
 	if (!/^sha256:[a-f0-9]{64}$/u.test(clientDigest)) throw new TypeError('Invalid client editor digest');
 	if (/[\\:\0]/u.test(clientModule) || clientModule.split('/').some(part => !part || part === '.' || part === '..')) throw new TypeError('Client editor module must belong to its package');
+	if (kind === 'contributions') return { clientModule, clientDigest, editors: [] };
 	if (!Array.isArray(input.editors) || !input.editors.length || input.editors.length > 32) throw new TypeError('Invalid client editor declarations');
 	const ids = new Set<string>();
 	const editors = input.editors.map(value => {

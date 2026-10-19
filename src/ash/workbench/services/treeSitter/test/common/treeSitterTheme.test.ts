@@ -7,7 +7,7 @@ import type { ITreeSitterLibraryService } from '../../../../../editor/common/ser
 import type { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
 import { TestThemeService } from '../../../../../platform/theme/test/common/testThemeService.js';
 import { parseUserColorTheme } from '../../../themes/common/colorThemeData.js';
-import { createTreeSitterSyntaxTokenBackend } from '../../browser/treeSitterLibraryService.js';
+import { createTestSyntaxBackend as createTreeSitterSyntaxTokenBackend } from '../../../../../../../test/fixtures/codeSyntaxBackend.js';
 
 test('Tree-sitter resolves capture styles directly through the current theme, including embedded languages', async () => {
 	using model = new TextModel('call run', { languageId: 'javascript' });

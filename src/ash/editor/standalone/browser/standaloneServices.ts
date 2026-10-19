@@ -50,7 +50,6 @@ import { ILogService, NullLoggerService } from '../../../platform/log/common/log
 import { BrowserClipboardService } from '../../../platform/clipboard/browser/clipboardService.js';
 import { IClipboardService } from '../../../platform/clipboard/common/clipboardService.js';
 import { ContextKeyService, IContextKeyService } from "../../../platform/contextkey/browser/contextKeyService.js";
-import { FormattingConflicts } from '../../contrib/format/browser/format.js';
 import { addDisposableListener, stopEvent } from '../../../base/browser/dom.js';
 import { ContextView } from '../../../base/browser/ui/contextview/contextview.js';
 import { RunOnceScheduler } from '../../../base/common/async.js';
@@ -76,7 +75,6 @@ import '../../../base/browser/ui/keybindinglabel/keybindinglabel.css';
 import { IQuickInputService } from '../../../platform/quickinput/common/quickInput.js';
 import { ILayoutService } from '../../../platform/layout/browser/layoutService.js';
 import { StandaloneQuickInputService } from './quickInput/standaloneQuickInputService.js';
-import { DefaultDropProvidersFeature, DefaultPasteProvidersFeature } from '../../contrib/dropOrPasteInto/browser/defaultProviders.js';
 import { IBulkEditService, ResourceEdit, ResourceTextEdit, type IBulkEditOptions, type IBulkEditPreviewHandler, type IBulkEditResult } from '../../browser/services/bulkEditService.js';
 import { EditOperation } from '../../common/core/editOperation.js';
 import { Range } from '../../common/core/range.js';
@@ -225,8 +223,6 @@ export class StandaloneServiceCollection extends InstantiationService {
 		else this.registerSingleton(ILanguageFeaturesService, () => new LanguageFeaturesService());
 		const workspaceContext = new StandaloneWorkspaceContextService();
 		this.registerInstance(IWorkspaceContextService, workspaceContext);
-		this._register(new DefaultPasteProvidersFeature(this.get(ILanguageFeaturesService), workspaceContext));
-		this._register(new DefaultDropProvidersFeature(this.get(ILanguageFeaturesService), workspaceContext));
 		this.registerSingleton(IStandaloneThemeService, () => new StandaloneThemeService(window));
 		this.themeService = this.get(IStandaloneThemeService);
 		this.registerSingleton(IModelService, accessor => new ModelService(
@@ -248,7 +244,6 @@ export class StandaloneServiceCollection extends InstantiationService {
 			}
 		}
 		this.get(IMarkdownRendererService).setDefaultCodeBlockRenderer(this.createInstance(EditorMarkdownCodeBlockRenderer));
-		this._register(FormattingConflicts.setFormatterSelector(async formatters => formatters[0]));
 	}
 }
 

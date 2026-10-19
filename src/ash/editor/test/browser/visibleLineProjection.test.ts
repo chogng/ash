@@ -1,11 +1,13 @@
+import { registerTestCodeEditorFeatures } from '../../../../../test/fixtures/codeEditorFeatures.js';
+import { after as afterCodeFeatures } from 'mocha';
 import assert from "node:assert/strict";
 import { test } from "mocha";
 import { EditorLineWrapping } from "../../common/config/editorOptions.js";
 import { FontInfo } from "../../common/config/fontInfo.js";
 import { ViewModelLinesFromProjectedModel } from "../../common/viewModel/viewModelLines.js";
 import { DOMLineBreaksComputerFactory } from "../../browser/view/domLineBreaksComputer.js";
-import { EditorFoldingModel } from "../../contrib/folding/browser/foldingModel.js";
-import { EditorHiddenRangeModel } from "../../contrib/folding/browser/hiddenRangeModel.js";
+import { EditorFoldingModel } from "../../../../../extensions/code/browser/contrib/folding/browser/foldingModel.js";
+import { EditorHiddenRangeModel } from "../../../../../extensions/code/browser/contrib/folding/browser/hiddenRangeModel.js";
 import { TextModel } from "../../common/model/textModel.js";
 import { Position } from "../../common/core/position.js";
 import { Range } from "../../common/core/range.js";
@@ -155,3 +157,6 @@ const TEST_FONT_INFO = new FontInfo({
 	wsmiddotWidth: 10,
 	maxDigitWidth: 10,
 }, true);
+
+const codeFeatures = registerTestCodeEditorFeatures();
+afterCodeFeatures(() => codeFeatures.dispose());

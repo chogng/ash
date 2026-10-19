@@ -1,3 +1,5 @@
+import { registerTestCodeEditorFeatures } from '../../../../../../../test/fixtures/codeEditorFeatures.js';
+import { after as afterCodeFeatures } from 'mocha';
 import '../../../../test/browser/testEditorDom.js';
 import { browserEnvironment } from '../../../../test/browser/testEditorDom.js';
 import assert from 'node:assert/strict';
@@ -16,7 +18,7 @@ import { createTestCursorsController } from '../../../../test/common/testCursorC
 import { type TextMeasurer } from '../../../../common/viewModel.js';
 
 const { TestView: View } = await import('../../../../test/browser/viewModel/testViewModel.js');
-const { SelectionAnchorController } = await import('../../browser/anchorSelect.js');
+const { SelectionAnchorController } = await import('../../../../../../../extensions/code/browser/contrib/anchorSelect/browser/anchorSelect.js');
 
 test('Selection anchor follows edits and supports set, go to, select, and cancel', async () => {
 	const fixture = createFixture('abcd');
@@ -122,3 +124,6 @@ function singleCaret(lineIndex: number, columnIndex: number): readonly Selection
 function keydown(targetWindow: typeof browserEnvironment.window, key: string, options: KeyboardEventInit = {}): KeyboardEvent {
 	return new targetWindow.KeyboardEvent('keydown', { bubbles: true, cancelable: true, key, ...options }) as unknown as KeyboardEvent;
 }
+
+const codeFeatures = registerTestCodeEditorFeatures();
+afterCodeFeatures(() => codeFeatures.dispose());

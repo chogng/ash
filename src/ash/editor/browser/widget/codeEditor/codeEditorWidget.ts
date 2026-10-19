@@ -31,7 +31,7 @@ import { ILanguageConfigurationService } from '../../../common/languages/languag
 import { ILanguageFeaturesService } from '../../../common/services/languageFeatures.js';
 import { type EditorIndentationOptions } from '../../../common/core/misc/indentation.js';
 import { type ConfigurationChangedEvent, EditorLineWrapping, EditorOption, type EditorLayoutInfo, type FindComputedEditorOptionValueById, type IComputedEditorOptions, type IEditorOptions, WrappingIndent } from '../../../common/config/editorOptions.js';
-import { type LanguageCompletionWorkerFactory, type LanguageLocation, type LanguageWorkspaceEdit, type LanguageDiagnosticsHost } from '../../../common/languages.js';
+import { type LanguageCompletionProvider, type LanguageCompletionWorkerFactory, type LanguageLocation, type LanguageWorkspaceEdit, type LanguageDiagnosticsHost } from '../../../common/languages.js';
 import { isCompletionsEnablement, type CompletionsEnablement } from '../../../common/services/completionsEnablement.js';
 import { ICodeEditorService } from '../../services/codeEditorService.js';
 import { applyFontInfo } from '../../config/domFontInfo.js';
@@ -66,6 +66,8 @@ export interface CodeEditorWidgetOptions extends IEditorConstructionOptions {
 	readonly ownerId?: string;
 	readonly editorWorkerFactory?: VersionedEditorWorkerFactory;
 	readonly completionWorkerFactory?: LanguageCompletionWorkerFactory;
+	readonly completionProviders?: readonly LanguageCompletionProvider[];
+	readonly completionWidgetContainer?: HTMLElement;
 	readonly languageDiagnosticsService?: LanguageDiagnosticsHost;
 	readonly onLanguageError?: (error: unknown) => void;
 	readonly onExecuteEditorCommand?: (id: string, args: readonly unknown[] | undefined) => void | Promise<void>;
@@ -76,6 +78,8 @@ export interface CodeEditorWidgetOptions extends IEditorConstructionOptions {
 	readonly onContributionError?: (error: unknown) => void;
 	/** Omit to use the registered set; an array selects exactly those contributions. */
 	readonly contributions?: readonly EditorContributionRegistration[];
+	/** Resolve these public IDs again when an optional provider arrives or leaves. */
+	readonly contributionIds?: readonly string[];
 	readonly sectionHeaders?: EditorSectionHeaderOptions | false;
 	readonly suggestions?: CompletionsEnablement;
 	readonly inlineCompletions?: CompletionsEnablement;
@@ -386,7 +390,13 @@ export class CodeEditorWidget extends Disposable implements ICodeEditor {
 			const getOptionalService = services.getOptional.bind(services);
 			const provideService = services.registerInstance.bind(services);
 			const semanticTokenSource = model.tokenization.renderedTokens;
-			const selectedContributions = options.contributions ?? EditorExtensionsRegistry.getEditorContributions();
+			const selectContributions = () => {
+				if (options.contributionIds === undefined) return options.contributions ?? EditorExtensionsRegistry.getEditorContributions();
+				const custom = options.contributions ?? [];
+				const registered = EditorExtensionsRegistry.getSomeEditorContributions([...options.contributionIds]);
+				return [...registered.filter(contribution => !custom.some(candidate => candidate.id === contribution.id)), ...custom];
+			};
+			const selectedContributions = selectContributions();
 			const contributions = modelStore.add(services.createInstance(CodeEditorContributions));
 			contributions.configure(selectedContributions, {
 				kind: 'text',
@@ -499,6 +509,9 @@ export class CodeEditorWidget extends Disposable implements ICodeEditor {
 				installContext,
 				options.onContributionError,
 			);
+			if (options.contributions === undefined || options.contributionIds !== undefined) {
+				modelStore.add(EditorExtensionsRegistry.onDidChangeEditorContributions(() => contributions.refresh(selectContributions())));
+			}
 			modelStore.add(contributions.onAfterModelAttached());
 		} catch (error) {
 			this.modelSlot.clear();

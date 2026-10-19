@@ -1,3 +1,4 @@
+import { registerTestCodeEditorFeatures } from '../../../../../../test/fixtures/codeEditorFeatures.js';
 import '../testEditorDom.js';
 
 import { h, text } from '../../../../base/browser/dom.js';
@@ -35,8 +36,6 @@ const { TextAreaEditContext } = await import('../../../browser/controller/editCo
 const { TestView } = await import('../viewModel/testViewModel.js');
 const { InstantiationService } = await import("../../../../platform/instantiation/common/instantiationService.js");
 const { ILogService, NullLoggerService } = await import('../../../../platform/log/common/log.js');
-await import("../../../contrib/placeholderText/browser/placeholderText.contribution.js");
-await import('../../../contrib/inPlaceReplace/browser/inPlaceReplace.js');
 
 const enabledAccessibilityService: IAccessibilityService = {
 	onDidChangeScreenReaderOptimized: EditorEvent.None,
@@ -946,6 +945,7 @@ for (const edit of ['type', 'paste', 'executeEdits'] as const) {
 }
 
 test('programmatic typing preserves its source and skips keyboard rules and events', () => {
+	using codeFeatures = registerTestCodeEditorFeatures();
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	try {

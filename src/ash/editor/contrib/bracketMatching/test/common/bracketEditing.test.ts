@@ -1,7 +1,9 @@
+import { registerTestCodeEditorFeatures } from '../../../../../../../test/fixtures/codeEditorFeatures.js';
+import { after as afterCodeFeatures } from 'mocha';
 import { registerTestTokens } from '../../../../test/common/testTokenization.js';
 import assert from "node:assert/strict";
 import { test } from "mocha";
-import { createRemoveMatchingBracketsCommand } from "../../common/bracketEditing.js";
+import { createRemoveMatchingBracketsCommand } from "../../../../../../../extensions/code/browser/contrib/bracketMatching/common/bracketEditing.js";
 import { TestLanguageConfigurationService } from '../../../../test/common/modes/testLanguageConfigurationService.js';
 import { Selection } from "../../../../common/core/selection.js";
 import { Position } from "../../../../common/core/position.js";
@@ -71,3 +73,6 @@ function primaryFirst<T>(items: readonly T[], primaryIndex: number): readonly T[
 	if (primaryIndex === 0) return Object.freeze([...items]);
 	return Object.freeze([items[primaryIndex]!, ...items.slice(0, primaryIndex), ...items.slice(primaryIndex + 1)]);
 }
+
+const codeFeatures = registerTestCodeEditorFeatures();
+afterCodeFeatures(() => codeFeatures.dispose());

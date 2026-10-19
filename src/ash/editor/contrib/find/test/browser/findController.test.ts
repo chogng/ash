@@ -1,3 +1,5 @@
+import { registerTestCodeEditorFeatures } from '../../../../../../../test/fixtures/codeEditorFeatures.js';
+import { after as afterCodeFeatures } from 'mocha';
 import assert from "node:assert/strict";
 import { test, suiteTeardown } from "mocha";
 import { JSDOM } from "jsdom";
@@ -14,8 +16,8 @@ import { IInstantiationService } from '../../../../../platform/instantiation/com
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { IClipboardService } from '../../../../../platform/clipboard/common/clipboardService.js';
 import { BrowserClipboardService } from '../../../../../platform/clipboard/browser/clipboardService.js';
-import { FindWidgetSearchHistory } from '../../browser/findWidgetSearchHistory.js';
-import { ReplaceWidgetHistory } from '../../browser/replaceWidgetHistory.js';
+import { FindWidgetSearchHistory } from '../../../../../../../extensions/code/browser/contrib/find/browser/findWidgetSearchHistory.js';
+import { ReplaceWidgetHistory } from '../../../../../../../extensions/code/browser/contrib/find/browser/replaceWidgetHistory.js';
 import { ICommandService } from '../../../../../platform/commands/common/commands.js';
 import { IContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
 import { showHistoryKeybindingHint } from '../../../../../platform/history/browser/historyWidgetKeybindingHint.js';
@@ -28,7 +30,7 @@ const installedGlobals = installEditorTestDom(browserEnvironment, [
 
 const { CodeEditorWidget } = await import("../../../../browser/widget/codeEditor/codeEditorWidget.js");
 const { createTestCodeEditor } = await import('../../../../test/browser/testCodeEditor.js');
-const { FindController, FindStartFocusAction, getSelectionSearchString } = await import("../../browser/findController.js");
+const { FindController, FindStartFocusAction, getSelectionSearchString } = await import("../../../../../../../extensions/code/browser/contrib/find/browser/findController.js");
 
 suiteTeardown(() => {
 	installedGlobals.dispose();
@@ -566,3 +568,6 @@ function requiredElement<T extends Element = HTMLElement>(root: ParentNode, sele
 	assert.ok(element);
 	return element;
 }
+
+const codeFeatures = registerTestCodeEditorFeatures();
+afterCodeFeatures(() => codeFeatures.dispose());

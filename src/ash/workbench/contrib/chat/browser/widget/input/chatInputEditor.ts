@@ -11,13 +11,6 @@ import { EditorLineWrapping, EditorOption } from "../../../../../../editor/commo
 import { CodeEditorWidget, type CodeEditorWidgetOptions } from "../../../../../../editor/browser/widget/codeEditor/codeEditorWidget.js";
 import { IConfigurationService } from '../../../../../../platform/configuration/common/configuration.js';
 import { ChatInputConfiguration } from '../../../common/constants.js';
-import { EditorExtensionsRegistry, type EditorContributionRegistration } from "../../../../../../editor/browser/editorExtensions.js";
-import { LanguageCompletionService } from '../../../../../../editor/contrib/suggest/browser/suggest.js';
-import { LanguageCompletionProviderRegistry } from '../../../../../../editor/common/languageFeatureRegistry.js';
-import { SuggestModel } from "../../../../../../editor/contrib/suggest/browser/suggestModel.js";
-import { SuggestController } from "../../../../../../editor/contrib/suggest/browser/suggestController.js";
-import { PlaceholderTextContribution } from "../../../../../../editor/contrib/placeholderText/browser/placeholderTextContribution.js";
-import "../../../../../../editor/contrib/placeholderText/browser/placeholderText.contribution.js";
 import { EditorCoreCommandId } from '../../../../../../editor/browser/coreCommands.js';
 import { Position } from "../../../../../../editor/common/core/position.js";
 import { Range } from "../../../../../../editor/common/core/range.js";
@@ -60,30 +53,12 @@ export class ChatInputEditor extends Disposable implements IChatInputEditor {
 		this.element.style.height = `${this.height}px`;
 		this.element.style.minHeight = `${this.minimumHeight}px`;
 		options.container.append(this.element);
-		const providers = this._register(new LanguageCompletionProviderRegistry());
-		this._register(providers.register(createChatCommandCompletionProvider(options.slashCommands)));
-		this._register(providers.register(createChatSkillCompletionProvider(options.skills)));
-		const chatSuggest = {
-			id: SuggestController.ID,
-			install: context => {
-				if (context.kind !== 'text') return;
-				const completions = context.register(new LanguageCompletionService(context.model, providers));
-				const session = context.register(new SuggestModel(completions.results, context.editor, {
-					resolver: completions,
-				}));
-				return context.instantiationService.createInstance(SuggestController, context.editor, context.controller, completions, session, {
-					widgetContainer: this.element,
-				});
-			},
-		} satisfies EditorContributionRegistration;
+		const completionProviders = [
+			createChatCommandCompletionProvider(options.slashCommands),
+			createChatSkillCompletionProvider(options.skills),
+		];
 		// Keep basic text commands alongside Chat features; unrelated editor features add work to every Chat tab.
-		const contributions = EditorExtensionsRegistry.getSomeEditorContributions([
-			EditorCoreCommandId.selectAll,
-			PlaceholderTextContribution.ID,
-			SuggestController.ID,
-		]).map(contribution =>
-			contribution.id === SuggestController.ID ? chatSuggest : contribution,
-		);
+		const contributionIds = [EditorCoreCommandId.selectAll, 'editor.contrib.placeholderText', 'editor.contrib.suggestController'];
 		this.editor = this._register(instantiationService.createInstance(CodeEditorWidget, {
 			container: this.element,
 			model: this.model,
@@ -99,7 +74,9 @@ export class ChatInputEditor extends Disposable implements IChatInputEditor {
 			scrollBeyondLastLine: false,
 			lineWrapping: EditorLineWrapping.On,
 			tabFocusMode: this.tabFocusMode,
-			contributions,
+			contributionIds,
+			completionProviders,
+			completionWidgetContainer: this.element,
 		}));
 		const layout = this._register(new RunOnceScheduler(() => this.layout(), 0));
 		this._register(toDisposable(() => { for (const widget of this.referenceWidgets.values()) widget.dispose(); this.referenceWidgets.clear(); }));

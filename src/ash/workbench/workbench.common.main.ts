@@ -58,7 +58,6 @@ import { registerCallView } from './contrib/call/browser/call.contribution.js';
 import { registerCollaborationViews } from './contrib/collaboration/browser/collaboration.contribution.js';
 import './contrib/agentsVoice/browser/agentsVoice.contribution.js';
 import '../editor/editor.code.all.js';
-import '../editor/standalone/browser/quickAccess/standaloneGotoSymbolQuickAccess.js';
 import './contrib/codeEditor/browser/codeEditor.contribution.js';
 import './contrib/codeActions/browser/codeActions.contribution.js';
 import './contrib/callHierarchy/browser/callHierarchy.contribution.js';

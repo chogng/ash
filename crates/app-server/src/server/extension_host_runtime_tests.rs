@@ -288,6 +288,27 @@ fn markdown_product_registration_owns_views_and_obeys_profile_policy() {
             .unwrap()
             .matches(&super::source::ActivationEvent::StartupFinished)
     );
+    let code = deployments
+        .iter()
+        .find(|entry| entry.id == "ash.code")
+        .unwrap();
+    assert_eq!(
+        code.params.capabilities,
+        [ash_external_ext::ExtensionCapability::DataChannel]
+    );
+    assert!(matches!(
+        code.workspace_read,
+        super::source::WorkspaceReadAccess::Denied
+    ));
+    assert!(code.backend_channels.is_empty());
+    assert!(code.credential_providers.is_empty());
+    assert!(!code.authority.authorizes());
+    assert!(
+        code.activation
+            .as_ref()
+            .unwrap()
+            .matches(&super::source::ActivationEvent::StartupFinished)
+    );
     let math = deployments
         .iter()
         .find(|entry| entry.id == "ash.markdown-math")
@@ -302,6 +323,10 @@ fn markdown_product_registration_owns_views_and_obeys_profile_policy() {
     assert!(math.backend_channels.is_empty());
     assert!(!math.authority.authorizes());
     for (deployment, manifest) in [
+        (
+            code,
+            include_str!("../../../../extensions/code/package.json"),
+        ),
         (
             academy,
             include_str!("../../../../extensions/academic/package.json"),

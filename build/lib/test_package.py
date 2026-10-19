@@ -118,6 +118,7 @@ class PackageTests(unittest.TestCase):
                 "ash-git-extension",
                 "ash-markdown-math",
                 "ash-academy",
+                "ash-code-editor",
                 "ash-markdown-language-features",
                 "ash-github-authentication",
                 "ash-github-extension",
@@ -307,6 +308,7 @@ class PackageTests(unittest.TestCase):
         "bat",
         "bazel",
         "clojure",
+        "code",
         "coffeescript",
         "cpp",
         "csharp",
@@ -465,6 +467,9 @@ class PackageTests(unittest.TestCase):
                 academy_extension_binary=executable_file(
                     root / "academy", b"academy-extension"
                 ),
+                code_editor_extension_binary=executable_file(
+                    root / "code-editor", b"code-editor-extension"
+                ),
                 markdown_extension_binary=executable_file(
                     root / "markdown-language-features", b"markdown-extension"
                 ),
@@ -619,6 +624,10 @@ class PackageTests(unittest.TestCase):
             )
             self.assertEqual(
                 b"academy-extension", (output / "bin" / "ash-academy").read_bytes()
+            )
+            self.assertEqual(
+                b"code-editor-extension",
+                (output / "bin" / "ash-code-editor").read_bytes(),
             )
             academy = output / "ash-resources/extensions/academic"
             self.assertEqual(
@@ -823,6 +832,9 @@ class PackageTests(unittest.TestCase):
                 ),
                 academy_extension_binary=executable_file(
                     root / "academy", b"academy-extension"
+                ),
+                code_editor_extension_binary=executable_file(
+                    root / "code-editor", b"code-editor-extension"
                 ),
                 markdown_extension_binary=executable_file(
                     root / "markdown-language-features", b"markdown-extension"
@@ -1142,6 +1154,9 @@ class PackageTests(unittest.TestCase):
                 academy_extension_binary=executable_file(
                     root / "academy", b"academy-extension"
                 ),
+                code_editor_extension_binary=executable_file(
+                    root / "code-editor", b"code-editor-extension"
+                ),
                 markdown_extension_binary=executable_file(
                     root / "markdown-language-features", b"markdown-extension"
                 ),
@@ -1240,6 +1255,9 @@ class PackageTests(unittest.TestCase):
                 ),
                 academy_extension_binary=executable_file(
                     root / "academy", b"academy-extension"
+                ),
+                code_editor_extension_binary=executable_file(
+                    root / "code-editor", b"code-editor-extension"
                 ),
                 markdown_extension_binary=executable_file(
                     root / "markdown-language-features", b"markdown-extension"

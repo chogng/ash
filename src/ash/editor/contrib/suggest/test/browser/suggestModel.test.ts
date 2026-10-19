@@ -1,14 +1,16 @@
+import { registerTestCodeEditorFeatures } from '../../../../../../../test/fixtures/codeEditorFeatures.js';
+import { after as afterCodeFeatures } from 'mocha';
 import { h } from '../../../../../base/browser/dom.js';
 import { strict as assert } from "node:assert";
 import { test, suiteTeardown } from "mocha";
 import { JSDOM } from "jsdom";
 import { ReplaceCommand } from '../../../../common/commands/replaceCommand.js';
-import { LanguageCompletionDetailsStatus, LanguageCompletionSessionChangeReason, SuggestModel } from "../../browser/suggestModel.js";
-import { SnippetController2 } from '../../../snippet/browser/snippetController2.js';
+import { LanguageCompletionDetailsStatus, LanguageCompletionSessionChangeReason, SuggestModel } from "../../../../../../../extensions/code/browser/contrib/suggest/browser/suggestModel.js";
+import { SnippetController2 } from '../../../../../../../extensions/code/browser/contrib/snippet/browser/snippetController2.js';
 import { EditorContributionInstantiation } from '../../../../browser/editorExtensions.js';
 import { LanguageResultAcceptance } from '../../../../common/model/languageResultStore.js';
 import { LanguageCompletionInsertTextFormat, LanguageCompletionItemKind, type LanguageCompletionItem, type LanguageCompletionItemDetails, type LanguageCompletionItemResolver, type LanguageCompletionResolveRequest } from '../../../../common/languages.js';
-import { createLanguageCompletionStore } from '../../browser/suggest.js';
+import { createLanguageCompletionStore } from '../../../../../../../extensions/code/browser/contrib/suggest/browser/suggest.js';
 import { Selection } from "../../../../common/core/selection.js";
 import { Position } from "../../../../common/core/position.js";
 import { Range } from "../../../../common/core/range.js";
@@ -622,3 +624,6 @@ test('adjacent empty placeholders track only the active input and keep later ran
 	assert.deepEqual(editor.getSelection(), new Selection(1, 4, 1, 7));
 	assert.equal(model.getText(), 'onetwo');
 });
+
+const codeFeatures = registerTestCodeEditorFeatures();
+afterCodeFeatures(() => codeFeatures.dispose());

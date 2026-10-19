@@ -1,5 +1,5 @@
 import type { URI } from '../../../../base/common/uri.js';
-import { parseSnippet } from '../../../../editor/contrib/snippet/common/snippetParser.js';
+import { parseSnippet } from '../../../../../../extensions/code/browser/contrib/snippet/common/snippetParser.js';
 import { parseJsonc } from '../../../../base/common/jsonc.js';
 import type { ExtensionSnippetFile } from '../../../services/extensions/common/extensionService.js';
 

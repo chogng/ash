@@ -14,9 +14,9 @@ import { createLanguageFeatureRequest, isLanguageFeatureRequestCurrent, Language
 import type { TextModel } from '../../../../editor/common/model/textModel.js';
 import { ILanguageFeaturesService } from '../../../../editor/common/services/languageFeatures.js';
 import { EditSources } from '../../../../editor/common/textModelEditSource.js';
-import { getCodeActions } from '../../../../editor/contrib/codeAction/browser/codeAction.js';
-import { CodeActionKind } from '../../../../editor/contrib/codeAction/common/types.js';
-import { SnippetController2 } from '../../../../editor/contrib/snippet/browser/snippetController2.js';
+import { EditorExtensionsRegistry } from '../../../../editor/browser/editorExtensions.js';
+import { CodeActionKind } from '../../../../../../extensions/code/browser/contrib/codeAction/common/types.js';
+import type { SnippetController2 } from '../../../../../../extensions/code/browser/contrib/snippet/browser/snippetController2.js';
 import { localize } from '../../../../nls.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
@@ -47,7 +47,7 @@ class TrimWhitespaceParticipant implements ITextModelSaveParticipant {
 		if (reason === SaveReason.AUTO) {
 			for (const editor of editors) {
 				protectedPositions.push(...(editor.getSelections() ?? []).map(selection => selection.getPosition()));
-				const snippet = SnippetController2.get(editor)?.getSessionEnclosingRange();
+				const snippet = editor.getContribution<SnippetController2>('snippetController2')?.getSessionEnclosingRange();
 				if (!snippet) continue;
 				// Placeholder navigation can return to any tracked line in the active session.
 				for (let line = snippet.startLineNumber; line <= snippet.endLineNumber; line++) {
@@ -92,6 +92,8 @@ class CodeActionOnSaveParticipant implements ITextModelSaveParticipant {
 
 	public async participate(model: TextModel, reason: SaveReason, signal: AbortSignal): Promise<void> {
 		if (reason === SaveReason.AUTO) { return; }
+		const contribution = EditorExtensionsRegistry.getSomeEditorContributions(['editor.contrib.codeActionController'])[0];
+		if (!contribution) return;
 		const settings = this.configuration.getValue<Readonly<Record<string, 'always' | 'explicit' | 'never'>>>('editor.codeActionsOnSave', { overrideIdentifier: model.getLanguageId() });
 		const selected = Object.entries(settings)
 			.filter(([, mode]) => mode === 'always' || mode === 'explicit' && reason === SaveReason.EXPLICIT)
@@ -101,7 +103,9 @@ class CodeActionOnSaveParticipant implements ITextModelSaveParticipant {
 		const excludes = Object.entries(settings).filter(([, mode]) => mode === 'never').map(([kind]) => new HierarchicalKind(kind));
 		const lifetime = new AbortController();
 		using release = combinedDisposable(model.onWillDispose(() => lifetime.abort()), toDisposable(() => lifetime.abort()));
-		const requestSignal = AbortSignal.any([signal, lifetime.signal]);
+		const requestSignal = AbortSignal.any([signal, lifetime.signal, ...(contribution.providerSignal ? [contribution.providerSignal] : [])]);
+		const { getCodeActions } = await import('../../../../../../extensions/code/browser/contrib/codeAction/browser/codeAction.js');
+		requestSignal.throwIfAborted();
 		for (const kind of kinds) {
 			// Providers must query after preceding providers' edits, rather than share stale versions.
 			for (const provider of this.features.codeActionProvider.ordered(model)) {

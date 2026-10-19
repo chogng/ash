@@ -74,7 +74,7 @@ const { createMultiDiffEditorInput } = await import('../../browser/multiDiffEdit
 const { MultiDiffEditor } = await import('../../browser/multiDiffEditor.js');
 await import('../../../codeEditor/browser/toggleWordWrap.js');
 await import('../../../../../editor/browser/widget/diffEditor/commands.js');
-await import('../../../../../editor/contrib/diffEditorBreadcrumbs/browser/contribution.js');
+await import('../../../../../../../extensions/code/browser/contrib/diffEditorBreadcrumbs/browser/contribution.js');
 const { MultiDiffGoToFileAction } = await import('../../browser/multiDiffEditorActions.js');
 
 function registerMultiDiffTestServices(services: InstantiationService): InstantiationService {

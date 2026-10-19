@@ -9,7 +9,7 @@ import { onUnexpectedExternalError } from '../../../../../base/common/errors.js'
 import { Range } from '../../../../../editor/common/core/range.js';
 import { TextModel } from '../../../../../editor/common/model/textModel.js';
 import { ILanguageFeaturesService } from '../../../../../editor/common/services/languageFeatures.js';
-import { OutlineModel, OutlineElement } from '../../../../../editor/contrib/documentSymbols/browser/outlineModel.js';
+import { OutlineModel, OutlineElement } from '../../../../../../../extensions/code/browser/contrib/documentSymbols/browser/outlineModel.js';
 import { CodeEditorWidget } from '../../../../../editor/browser/widget/codeEditor/codeEditorWidget.js';
 import { DiffEditorWidget } from '../../../../../editor/browser/widget/diffEditor/diffEditorWidget.js';
 import type { IEditorOptions } from '../../../../../platform/editor/common/editor.js';

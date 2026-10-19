@@ -1,3 +1,5 @@
+import { registerTestCodeEditorFeatures } from '../../../../../../../test/fixtures/codeEditorFeatures.js';
+import { after as afterCodeFeatures } from 'mocha';
 import '../../../../test/browser/testEditorDom.js';
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
@@ -11,8 +13,8 @@ import { TestLanguageFeaturesService } from '../../../../test/common/testLanguag
 
 const { CodeEditorWidget } = await import('../../../../browser/widget/codeEditor/codeEditorWidget.js');
 const { createTestCodeEditor } = await import('../../../../test/browser/testCodeEditor.js');
-const { TextualMultiDocumentHighlightFeature } = await import('../../../wordHighlighter/browser/textualHighlightProvider.js');
-const { SelectionHighlighter } = await import('../../browser/multicursor.js');
+const { TextualMultiDocumentHighlightFeature } = await import('../../../../../../../extensions/code/browser/contrib/wordHighlighter/browser/textualHighlightProvider.js');
+const { SelectionHighlighter } = await import('../../../../../../../extensions/code/browser/contrib/multicursor/browser/multicursor.js');
 
 test('Selection highlighter owns non-empty textual matches and excludes active selections', () => {
 	using languages = new TestLanguageFeaturesService();
@@ -96,3 +98,6 @@ class SelectionHarness implements Disposable {
 		this.dispose();
 	}
 }
+
+const codeFeatures = registerTestCodeEditorFeatures();
+afterCodeFeatures(() => codeFeatures.dispose());

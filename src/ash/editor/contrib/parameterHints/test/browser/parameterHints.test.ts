@@ -1,3 +1,5 @@
+import { registerTestCodeEditorFeatures } from '../../../../../../../test/fixtures/codeEditorFeatures.js';
+import { after as afterCodeFeatures } from 'mocha';
 import '../../../../test/browser/testEditorDom.js';
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
@@ -8,7 +10,7 @@ import { LanguageFeaturesService } from '../../../../common/services/languageFea
 import type { LanguageParameterHints, LanguageParameterHintsRequest } from '../../../../common/languages.js';
 import { IContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
 
-await import('../../browser/parameterHints.js');
+await import('../../../../../../../extensions/code/browser/contrib/parameterHints/browser/parameterHints.js');
 const { createTestCodeEditor } = await import('../../../../test/browser/testCodeEditor.js');
 
 const hints: LanguageParameterHints = {
@@ -212,3 +214,6 @@ async function flushPromises(): Promise<void> {
 	await Promise.resolve();
 	await Promise.resolve();
 }
+
+const codeFeatures = registerTestCodeEditorFeatures();
+afterCodeFeatures(() => codeFeatures.dispose());

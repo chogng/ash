@@ -1,3 +1,5 @@
+import { registerTestCodeEditorFeatures } from '../../../../../../../test/fixtures/codeEditorFeatures.js';
+import { after as afterCodeFeatures } from 'mocha';
 import '../../../../test/browser/testEditorDom.js';
 import { browserEnvironment as environment } from '../../../../test/browser/testEditorDom.js';
 import assert from "node:assert/strict";
@@ -14,7 +16,7 @@ import { TrackedRangeStickiness } from '../../../../common/model.js';
 import { type TextMeasurer } from '../../../../common/viewModel.js';
 
 const { TestView: View } = await import("../../../../test/browser/viewModel/testViewModel.js");
-const { DiagnosticNavigationController } = await import("../../browser/gotoError.js");
+const { DiagnosticNavigationController } = await import("../../../../../../../extensions/code/browser/contrib/gotoError/browser/gotoError.js");
 
 test("F8 navigates current diagnostics in both directions", () => {
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");
@@ -55,3 +57,6 @@ test("F8 navigates current diagnostics in both directions", () => {
 function diagnostic(message: string): LanguageDiagnostic { return { range: Range.fromPositions(new Position((0) + 1, (0) + 1)), severity: LanguageDiagnosticSeverity.Warning, message }; }
 function key(window: typeof environment.window, shiftKey: boolean): KeyboardEvent { return new window.KeyboardEvent("keydown", { bubbles: true, cancelable: true, key: "F8", shiftKey }) as unknown as KeyboardEvent; }
 class FixedTextMeasurer implements TextMeasurer { readonly horizontalPadding = 24; readonly contentLeftPadding = 12; refresh(): boolean { return false; } measureLineWidth(text: string): number { return text.length * 10; } }
+
+const codeFeatures = registerTestCodeEditorFeatures();
+afterCodeFeatures(() => codeFeatures.dispose());

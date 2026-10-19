@@ -1,3 +1,5 @@
+import { registerTestCodeEditorFeatures } from '../../../../../../../test/fixtures/codeEditorFeatures.js';
+import { after as afterCodeFeatures } from 'mocha';
 import '../../../../../editor/test/browser/testEditorDom.js';
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
@@ -18,8 +20,8 @@ import type { TextModel } from '../../../../../editor/common/model/textModel.js'
 import { LanguageDiagnosticSeverity, type LanguageCodeAction, type LanguageCodeActionList, type LanguageCodeActionRequest } from '../../../../../editor/common/languages.js';
 import { ILanguageFeaturesService } from '../../../../../editor/common/services/languageFeatures.js';
 import { LanguageFeaturesService } from '../../../../../editor/common/services/languageFeaturesService.js';
-import { SnippetController2 } from '../../../../../editor/contrib/snippet/browser/snippetController2.js';
-import { parseSnippet } from '../../../../../editor/contrib/snippet/common/snippetParser.js';
+import { SnippetController2 } from '../../../../../../../extensions/code/browser/contrib/snippet/browser/snippetController2.js';
+import { parseSnippet } from '../../../../../../../extensions/code/browser/contrib/snippet/common/snippetParser.js';
 import { registerCodeEditorServices } from '../../../../../editor/test/browser/testCodeEditor.js';
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
@@ -597,4 +599,28 @@ test('save retains the shared model after its last pane closes until the action 
 	await saving;
 	assert.equal(fixture.bulk.store.text(resource), 'fixed');
 	assert.equal(reference.model.isDisposed(), true);
+});
+
+const codeFeatures = registerTestCodeEditorFeatures();
+afterCodeFeatures(() => codeFeatures.dispose());
+
+
+test('retiring the Code provider cancels an unfinished save action without persisting stale edits', async () => {
+	using fixture = new SaveTestServices();
+	await fixture.configuration.updateValue('editor.codeActionsOnSave', { 'source.fixAll': 'explicit' });
+	using reference = await fixture.bulk.models.acquire({ resource }, signal());
+	reference.model.setValue('edited');
+	const started = new DeferredPromise<void>();
+	const ready = new DeferredPromise<readonly LanguageCodeAction[]>();
+	using provider = fixture.features.codeActionProvider.register('*', { provideCodeActions: () => { void started.complete(); return ready.p; } });
+	try {
+		const saving = reference.save(signal());
+		await started.p;
+		codeFeatures.dispose();
+		await assert.rejects(saving, isCancellationError);
+		await ready.complete([]);
+		assert.equal(reference.model.getText(), 'edited');
+		assert.equal(reference.isDirty, true);
+		assert.equal(fixture.bulk.store.saved.length, 0);
+	} finally { await ready.complete([]); }
 });

@@ -1,3 +1,5 @@
+import { registerTestCodeEditorFeatures } from '../../../../../test/fixtures/codeEditorFeatures.js';
+import { after as afterCodeFeatures } from 'mocha';
 import './testEditorDom.js';
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
@@ -5,7 +7,7 @@ import { Emitter } from '../../../base/common/event.js';
 import type { View } from '../../browser/view.js';
 import { Range } from '../../common/core/range.js';
 import { TextModel } from '../../common/model/textModel.js';
-import { SectionHeadersController } from '../../contrib/sectionHeaders/browser/sectionHeadersController.js';
+import { SectionHeadersController } from '../../../../../extensions/code/browser/contrib/sectionHeaders/browser/sectionHeadersController.js';
 import { createTestLanguageConfigurationService } from '../common/modes/testLanguageConfigurationService.js';
 
 test('section headers scan only visible chunks and reuse text candidates on token and layout events', () => {
@@ -47,3 +49,6 @@ test('section headers scan only visible chunks and reuse text candidates on toke
 		model.getLineContent = getLineContent;
 	}
 });
+
+const codeFeatures = registerTestCodeEditorFeatures();
+afterCodeFeatures(() => codeFeatures.dispose());

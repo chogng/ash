@@ -11,7 +11,7 @@ import { Emitter } from '../../../../base/common/event.js';
 import { DisposableMap } from '../../../../base/common/lifecycle.js';
 import { type LanguageHierarchyItem } from '../../../../editor/common/languages.js';
 import { type ICodeEditor } from '../../../../editor/browser/editorBrowser.js';
-import { PeekViewWidget } from '../../../../editor/contrib/peekView/browser/peekView.js';
+import { PeekViewWidget } from '../../../../../../extensions/code/browser/contrib/peekView/browser/peekView.js';
 import { localize } from '../../../../nls.js';
 import { TypeHierarchyModel, TypeHierarchyDirection } from '../common/typeHierarchy.js';
 import { Type, DataSource } from './typeHierarchyTree.js';

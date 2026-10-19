@@ -1,10 +1,12 @@
+import { Emitter } from '../../base/common/event.js';
+import { getTextViewFeatures, onDidChangeTextViewFeatures, type TextViewFeatureContext, type TextViewFeature } from './view/viewFeatures.js';
 import type { IMouseWheelEvent } from '../../base/browser/mouseEvent.js';
 import { Event } from '../../base/common/event.js';
 import { addDisposableListener, getClientArea, h } from '../../base/browser/dom.js';
 import { FastDomNode } from '../../base/browser/fastDomNode.js';
 import { PixelRatio, type IPixelRatioMonitor } from '../../base/browser/pixelRatio.js';
 import { runAtThisOrScheduleAtNextAnimationFrame } from '../../base/browser/scheduler.js';
-import { DisposableMap, MutableDisposable, markAsSingleton, toDisposable, type IDisposable } from '../../base/common/lifecycle.js';
+import { DisposableMap, DisposableStore, MutableDisposable, markAsSingleton, toDisposable, type IDisposable } from '../../base/common/lifecycle.js';
 import { onUnexpectedError } from '../../base/common/errors.js';
 import { type ISize } from '../../base/common/layout.js';
 import { clamp, isFiniteNumber } from '../../base/common/numbers.js';
@@ -32,19 +34,16 @@ import { GlyphMarginWidgets } from './viewParts/glyphMargin/glyphMargin.js';
 import { GlyphMarginLane } from '../common/model.js';
 import { Rulers } from './viewParts/rulers/rulers.js';
 import { GpuMarkOverlay } from './viewParts/gpuMark/gpuMark.js';
-import { MinimapTokensColorTracker } from '../common/viewModel/minimapTokensColorTracker.js';
 import { RulersGpu } from './viewParts/rulersGpu/rulersGpu.js';
 import { EditorScrollbar } from './viewParts/editorScrollbar/editorScrollbar.js';
 import { LineNumbersOverlay } from './viewParts/lineNumbers/lineNumbers.js';
 import { BlockDecorations } from './viewParts/blockDecorations/blockDecorations.js';
 import { CurrentLineHighlightOverlay, CurrentLineMarginHighlightOverlay } from './viewParts/currentLineHighlight/currentLineHighlight.js';
-import { IndentGuidesOverlay } from './viewParts/indentGuides/indentGuides.js';
 import { LinesDecorationsOverlay } from './viewParts/linesDecorations/linesDecorations.js';
 import { MarginViewLineDecorationsOverlay } from './viewParts/marginDecorations/marginDecorations.js';
 import { SelectionsOverlay } from './viewParts/selections/selections.js';
 import { ViewCursors } from './viewParts/viewCursors/viewCursors.js';
 import { WhitespaceOverlay } from './viewParts/whitespace/whitespace.js';
-import { Minimap } from './viewParts/minimap/minimap.js';
 import { DecorationsOverviewRuler } from './viewParts/overviewRuler/decorationsOverviewRuler.js';
 import { OverviewRuler } from './viewParts/overviewRuler/overviewRuler.js';
 import { ScrollDecorationViewPart } from './viewParts/scrollDecoration/scrollDecoration.js';
@@ -156,6 +155,8 @@ export class View extends ViewEventHandler {
 	private readonly accessibilityStatusElement: HTMLDivElement;
 	private readonly viewContext: ViewContext;
 	private readonly viewParts: ViewPart[] = [];
+	private readonly featureScopes = new DisposableMap<string, DisposableStore & { readonly feature: TextViewFeature; }>();
+	private readonly featureTokensChanged = this._register(new Emitter<void>());
 	private readonly scrollbar: EditorScrollbar;
 	private readonly viewGpuContext: ViewGpuContext | undefined;
 	private readonly viewLines: ViewLines;
@@ -314,7 +315,7 @@ export class View extends ViewEventHandler {
 				if (!event.affectsConfiguration(EditorSemanticHighlightingConfiguration)) return;
 				this.viewGpuContext?.refreshSemanticStyles(this.viewContext.theme.value);
 				this.viewLines.onTokensChanged();
-				minimapPart.onTokensChanged();
+				this.featureTokensChanged.fire();
 				this.scheduleProjection();
 			}));
 		}
@@ -372,13 +373,7 @@ export class View extends ViewEventHandler {
 		this.contentViewOverlays.addDynamicOverlay(new SelectionsOverlay(this.viewContext, this.viewModel, this.model, this.contentElement, () => this.visualProjection, () => this.textLeft, this.textMeasurer));
 		// Opaque decoration backgrounds must be painted before indentation and bracket guides.
 		this.contentViewOverlays.addDynamicOverlay(this.decorations);
-		this.contentViewOverlays.addDynamicOverlay(new IndentGuidesOverlay(this.viewContext, {
-			viewModel: this.viewModel,
-			host: this.contentElement,
-			readVisualProjection: () => this.visualProjection,
-			readTextLeft: () => this.textLeft,
-			textMeasurer: this.textMeasurer,
-		}));
+
 		this.contentViewOverlays.addDynamicOverlay(new WhitespaceOverlay(
 			this.viewContext,
 			this.model,
@@ -420,19 +415,55 @@ export class View extends ViewEventHandler {
 				readTextLeft: () => this.textLeft,
 			})).domNode.domNode;
 		}
-		const minimapPart = this.registerViewPart(new Minimap(this.viewContext, {
-			host: this.domNode.domNode,
-			model: this.model,
+		const featureContext: Omit<TextViewFeatureContext, 'register' | 'registerPart' | 'registerContentOverlay'> = {
+			context: this.viewContext, host: this.domNode.domNode, contentHost: this.contentElement,
+			model: this.model, viewModel: this.viewModel, textMeasurer: this.textMeasurer,
 			semanticTokenSource: options.semanticTokenSource,
-			readLayout: () => this.viewport.layout,
 			semanticHighlightingEnabled: theme => {
 				const preference = options.configurationService?.getValue<boolean | 'configuredByTheme'>(EditorSemanticHighlightingConfiguration);
 				return preference === true || (preference !== false && theme.semanticHighlighting === true);
 			},
+			readLayout: () => this.viewport.layout,
 			readVisualProjection: () => this.visualProjection,
 			readProjectionRevision: () => this.projectionRevision,
+			readTextLeft: () => this.textLeft,
 			scrollTo: position => this.scrollTo(position),
-		}));
+			requestRender: () => this.scheduleProjection(),
+			onDidChangeTokens: this.featureTokensChanged.event,
+		};
+		const refreshFeatures = () => {
+			const active = new Set<string>();
+			for (const feature of getTextViewFeatures()) {
+				const lifetime = new DisposableStore();
+				const context: TextViewFeatureContext = {
+					...featureContext,
+					register: value => lifetime.add(value),
+					registerPart: part => {
+						lifetime.add(part);
+						this.viewParts.push(part);
+						lifetime.add(toDisposable(() => {
+							const index = this.viewParts.indexOf(part);
+							if (index >= 0) this.viewParts.splice(index, 1);
+						}));
+						return part;
+					},
+					registerContentOverlay: overlay => lifetime.add(this.contentViewOverlays.registerDynamicOverlay(overlay, this.decorations)),
+				};
+				if (feature.when && !feature.when(context)) { lifetime.dispose(); continue; }
+				active.add(feature.id);
+				if (this.featureScopes.get(feature.id)?.feature === feature) { lifetime.dispose(); continue; }
+				this.featureScopes.deleteAndDispose(feature.id);
+				try {
+					feature.install(context);
+					this.featureScopes.set(feature.id, Object.assign(lifetime, { feature }));
+				} catch (error) { lifetime.dispose(); onUnexpectedError(error); }
+			}
+			for (const id of this.featureScopes.keys()) if (!active.has(id)) this.featureScopes.deleteAndDispose(id);
+			this.scheduleProjection();
+		};
+		this._register(onDidChangeTextViewFeatures(refreshFeatures));
+		this._register(this.editorConfiguration.onDidChange(refreshFeatures));
+		refreshFeatures();
 		const decorationsOverviewRuler = this.registerViewPart(new DecorationsOverviewRuler(this.viewContext));
 		const scrollDecoration = this.registerViewPart(new ScrollDecorationViewPart(this.viewContext, this.domNode.domNode));
 
@@ -451,7 +482,6 @@ export class View extends ViewEventHandler {
 			blockDecorations.domNode.domNode,
 			this.margin.getDomNode().domNode,
 			this.overlayWidgets.getDomNode().domNode,
-			minimapPart.getDomNode().domNode,
 			scrollDecoration.getDomNode().domNode,
 		);
 		const overviewRulerLayout = this.scrollbar.getOverviewRulerLayoutInfo();
@@ -462,7 +492,6 @@ export class View extends ViewEventHandler {
 			this.contentWidgets.overflowingContentWidgetsDomNode.domNode,
 			this.overlayWidgets.overflowingOverlayWidgetsDomNode.domNode,
 		);
-		this._register(MinimapTokensColorTracker.getInstance().onDidChange(() => this.scheduleProjection()));
 		const scrollDomNode = this.scrollbar.getDomNode().domNode;
 		this._register(addDisposableListener(scrollDomNode, "scroll", () => {
 			if (scrollDomNode.scrollLeft === this.syncedScrollLeft && scrollDomNode.scrollTop === this.syncedScrollTop) return;
@@ -483,8 +512,7 @@ export class View extends ViewEventHandler {
 				this.viewLines.forceShouldRender();
 				this.viewLinesGpu?.forceShouldRender();
 				this.viewCursors.forceShouldRender();
-				minimapPart.onTokensChanged();
-				minimapPart.forceShouldRender();
+				this.featureTokensChanged.fire();
 				this.scheduleProjection();
 			};
 			if (semanticTokenSource === this.textModel.tokenization.renderedTokens) {
@@ -525,6 +553,7 @@ export class View extends ViewEventHandler {
 			}
 		}));
 		this._register(this.pixelRatio.onDidChange(() => this.render(false, true)));
+		this._register(this.featureScopes);
 		this.layout(options.dimension ?? getClientArea(this.domNode.domNode));
 		this.render(true, false);
 	}

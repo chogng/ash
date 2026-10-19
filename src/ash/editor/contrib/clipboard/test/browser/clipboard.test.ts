@@ -1,3 +1,5 @@
+import { registerTestCodeEditorFeatures } from '../../../../../../../test/fixtures/codeEditorFeatures.js';
+import { after as afterCodeFeatures } from 'mocha';
 import { StandaloneCodeEditorService } from '../../../../standalone/browser/standaloneCodeEditorService.js';
 import assert from 'node:assert/strict';
 import { test, suiteTeardown } from 'mocha';
@@ -30,7 +32,7 @@ const installedGlobals = installEditorTestDom(environment, [
 
 const { CodeEditorWidget } = await import('../../../../browser/widget/codeEditor/codeEditorWidget.js');
 const { createTestCodeEditor } = await import('../../../../test/browser/testCodeEditor.js');
-const { CopyAction, CutAction, PasteAction } = await import('../../browser/clipboard.js');
+const { CopyAction, CutAction, PasteAction } = await import('../../../../../../../extensions/code/browser/contrib/clipboard/browser/clipboard.js');
 assert.ok(CopyAction);
 assert.ok(CutAction);
 assert.ok(PasteAction);
@@ -465,3 +467,6 @@ class DeferredClipboardService implements IClipboardServiceContract {
 		this.writes[index]?.();
 	}
 }
+
+const codeFeatures = registerTestCodeEditorFeatures(['editor.contrib.codeServices', 'editor.contrib.clipboard', 'editor.contrib.copyPasteActionController', 'snippetController2']);
+afterCodeFeatures(() => codeFeatures.dispose());

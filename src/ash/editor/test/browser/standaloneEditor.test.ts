@@ -1,7 +1,9 @@
+import { registerTestCodeEditorFeatures } from '../../../../../test/fixtures/codeEditorFeatures.js';
+import { after as afterCodeFeatures } from 'mocha';
 import { createLanguageFeatureRequest, TokenizationRegistry } from '../../common/languages.js';
 import { Emitter } from '../../../base/common/event.js';
 import { editorWorkerWireCodec, EditorWorker } from '../../common/services/editorWebWorker.js';
-import { FormattingConflicts, FormattingKind, FormattingMode } from '../../contrib/format/browser/format.js';
+import { FormattingConflicts, FormattingKind, FormattingMode } from '../../../../../extensions/code/browser/contrib/format/browser/format.js';
 import { type DocumentFormattingEditProvider, type OnTypeFormattingEditProvider } from '../../common/languages.js';
 import { TextModel } from '../../common/model/textModel.js';
 import assert from "node:assert/strict";
@@ -122,7 +124,7 @@ test('standalone language identity and editing rules require host registration',
 	assert.equal(services.languageConfigurationService.getLanguageConfiguration('typescript').comments, null);
 });
 
-test('standalone services own and release their default formatter selection', async () => {
+test('standalone services leave formatter policy with the active Code owner', async () => {
 	using model = new TextModel('alpha');
 	const first: DocumentFormattingEditProvider = { provideDocumentFormattingEdits: () => [] };
 	const second: DocumentFormattingEditProvider = { provideDocumentFormattingEdits: () => [] };
@@ -130,7 +132,7 @@ test('standalone services own and release their default formatter selection', as
 	using host = FormattingConflicts.setFormatterSelector(async choices => choices[1]);
 	assert.strictEqual(await FormattingConflicts.select(providers, model, FormattingMode.Explicit, FormattingKind.File), second);
 	using services = new StandaloneServiceCollection({});
-	assert.strictEqual(await FormattingConflicts.select(providers, model, FormattingMode.Explicit, FormattingKind.File), first);
+	assert.strictEqual(await FormattingConflicts.select(providers, model, FormattingMode.Explicit, FormattingKind.File), second);
 	services.dispose();
 	assert.strictEqual(await FormattingConflicts.select(providers, model, FormattingMode.Explicit, FormattingKind.File), second);
 });
@@ -823,3 +825,6 @@ test("standalone editor rejects unregistered models and conflicting model option
 	lateConfigurations.dispose();
 	dom.window.close();
 });
+
+const codeFeatures = registerTestCodeEditorFeatures();
+afterCodeFeatures(() => codeFeatures.dispose());

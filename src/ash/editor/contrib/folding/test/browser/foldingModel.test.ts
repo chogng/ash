@@ -1,11 +1,13 @@
+import { registerTestCodeEditorFeatures } from '../../../../../../../test/fixtures/codeEditorFeatures.js';
+import { after as afterCodeFeatures } from 'mocha';
 import assert from "node:assert/strict";
 import { test } from "mocha";
-import { EditorFoldingModel } from "../../browser/foldingModel.js";
-import { EditorFoldingRangeSource } from "../../browser/foldingRanges.js";
+import { EditorFoldingModel } from "../../../../../../../extensions/code/browser/contrib/folding/browser/foldingModel.js";
+import { EditorFoldingRangeSource } from "../../../../../../../extensions/code/browser/contrib/folding/browser/foldingRanges.js";
 import { Position } from "../../../../common/core/position.js";
 import { Range } from "../../../../common/core/range.js";
 import { TextModel } from "../../../../common/model/textModel.js";
-import { EditorHiddenRangeModel } from '../../browser/hiddenRangeModel.js';
+import { EditorHiddenRangeModel } from '../../../../../../../extensions/code/browser/contrib/folding/browser/hiddenRangeModel.js';
 
 test('column edits and unchanged provider results retain fold state without rereading all tracked coordinates', () => {
 	using model = new TextModel('header\nbody\nend\nother');
@@ -248,3 +250,6 @@ test('Manual folds collapse on creation and removal respects cursor and selectio
 	folding.removeManualRanges([new Range(8, 1, 8, 1)]);
 	assert.deepEqual(folding.regions.map(region => region.source), [EditorFoldingRangeSource.Provider]);
 });
+
+const codeFeatures = registerTestCodeEditorFeatures();
+afterCodeFeatures(() => codeFeatures.dispose());

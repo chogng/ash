@@ -1,7 +1,9 @@
+import { registerTestCodeEditorFeatures } from '../../../../../test/fixtures/codeEditorFeatures.js';
+import { after as afterCodeFeatures } from 'mocha';
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { JSDOM } from 'jsdom';
-import { Minimap } from '../../browser/viewParts/minimap/minimap.js';
+import { Minimap } from '../../../../../extensions/code/browser/viewParts/minimap/minimap.js';
 import { PartFingerprint, PartFingerprints } from '../../browser/view/viewPart.js';
 import { TextModel } from '../../common/model/textModel.js';
 import { type ViewContext } from '../../common/viewModel/viewContext.js';
@@ -32,3 +34,6 @@ test('Minimap owns one canvas and removes its DOM node on disposal', () => {
 function testViewContext(): ViewContext {
 	return { addEventHandler() { }, removeEventHandler() { } } as unknown as ViewContext;
 }
+
+const codeFeatures = registerTestCodeEditorFeatures();
+afterCodeFeatures(() => codeFeatures.dispose());

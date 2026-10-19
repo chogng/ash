@@ -68,7 +68,7 @@ test("public Stanza entrypoints retain distinct API, contribution, main, and wor
 	assert.doesNotMatch(all, /documentEditor|academic|paragraphFormatting|paragraphStyle/u);
 	assert.doesNotMatch(all, /workbench|academicEditor\.contribution/u);
 	assert.match(all, /browser\/coreCommands/u);
-	assert.match(all, /quickAccess\/browser\/quickAccessController/u);
+	assert.doesNotMatch(all, /contrib\//u);
 	assert.doesNotMatch(all, /editor\.(?:code|academic)\.all/u);
 	assert.match(main, /import "\.\/editor\.all\.js"/u);
 	assert.match(main, /export \* from "\.\/editor\.api\.js"/u);
@@ -88,3 +88,31 @@ function exists(file: string): boolean {
 		return false;
 	}
 }
+
+test('plain-text entrypoints have no runtime dependency on editor capability packages', async () => {
+	const ts = await import('typescript');
+	const { dirname } = await import('node:path');
+	const root = findDesktopRoot(import.meta.dirname);
+	for (const entry of ['editor.api.ts', 'editor.main.ts']) {
+		const seen = new Set<string>();
+		const pending = [join(editorRoot, entry)];
+		while (pending.length) {
+			const file = pending.pop()!;
+			if (seen.has(file) || !exists(file)) continue;
+			seen.add(file);
+			assert.equal(file.startsWith(join(root, 'extensions')), false, `${entry} loads ${file}`);
+			if (!file.endsWith('.ts')) continue;
+			const source = ts.createSourceFile(file, readFileSync(file, 'utf8'), ts.ScriptTarget.Latest, true);
+			for (const node of source.statements) {
+				if (!ts.isImportDeclaration(node) && !ts.isExportDeclaration(node)) continue;
+				if (ts.isImportDeclaration(node) && (node.importClause?.isTypeOnly || node.importClause?.namedBindings && ts.isNamedImports(node.importClause.namedBindings) && !node.importClause.name && node.importClause.namedBindings.elements.every(value => value.isTypeOnly))) continue;
+				if (ts.isExportDeclaration(node) && node.isTypeOnly) continue;
+				if (!node.moduleSpecifier || !ts.isStringLiteral(node.moduleSpecifier)) continue;
+				const value = node.moduleSpecifier.text;
+				if (!value.startsWith('.')) continue;
+				pending.push(resolve(dirname(file), value.replace(/\.js$/u, '.ts')));
+			}
+		}
+		assert.ok(seen.size > 100, 'the assertion follows the assembled entry, not just its first module');
+	}
+});

@@ -7,7 +7,7 @@ import { Position } from '../../core/position.js';
 import { Range, type IRange } from '../../core/range.js';
 import { type TextModelChange } from '../../core/textChange.js';
 import { MirrorTextModel } from '../../model/mirrorTextModel.js';
-import { TreeSitterTree, type TreeSitterTokenizationRuntime } from '../../model/tokens/treeSitter/treeSitterTree.js';
+import { TreeSitterTree, type TreeSitterTokenizationRuntime } from './treeSitterTree.js';
 import type { Node } from '@vscode/tree-sitter-wasm';
 
 

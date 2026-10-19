@@ -1,3 +1,5 @@
+import { registerTestCodeEditorFeatures } from '../../../../../../../test/fixtures/codeEditorFeatures.js';
+import { after as afterCodeFeatures } from 'mocha';
 import '../../../../test/browser/testEditorDom.js';
 import assert from 'node:assert/strict';
 import { URI } from '../../../../../base/common/uri.js';
@@ -11,7 +13,7 @@ import { TextModel } from '../../../../common/model/textModel.js';
 import { LanguageFeaturesService } from '../../../../common/services/languageFeaturesService.js';
 import type { browserEnvironment } from '../../../../test/browser/testEditorDom.js';
 
-await import('../../browser/dropIntoEditorContribution.js');
+await import('../../../../../../../extensions/code/browser/contrib/dropOrPasteInto/browser/dropIntoEditorContribution.js');
 const { createTestCodeEditor } = await import('../../../../test/browser/testCodeEditor.js');
 
 test('CodeEditorWidget leaves text drops available to its host without the contribution', () => {
@@ -292,3 +294,6 @@ function requiredElement<T extends Element = HTMLElement>(root: ParentNode, sele
 	assert.ok(element);
 	return element;
 }
+
+const codeFeatures = registerTestCodeEditorFeatures();
+afterCodeFeatures(() => codeFeatures.dispose());

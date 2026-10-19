@@ -8,7 +8,7 @@ import { getLanguageFoldingRules } from '../../../../platform/language/common/la
 
 start(({ port, resources }) => {
 	const library = resources.add(new TreeSitterWasmLibrary());
-	const load = async (languageId: string): Promise<import('../../../../editor/common/model/tokens/treeSitter/treeSitterTree.js').TreeSitterTokenizationRuntime | undefined> => {
+	const load = async (languageId: string): Promise<import('../../../../editor/common/services/treeSitter/treeSitterTree.js').TreeSitterTokenizationRuntime | undefined> => {
 		if (!library.supportsLanguage(languageId)) return undefined;
 		const [Parser, language] = await Promise.all([library.getParserClass(), library.getLanguagePromise(languageId)]);
 		const query = library.getHighlightingQueries(languageId);

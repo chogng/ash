@@ -11,7 +11,7 @@ serde = { workspace = true, features = ["derive"] }
 serde_json.workspace = true
 
 [build-dependencies]
-sha2.workspace = true
+ash-editor-client-build = { path = "../../crates/utils/editor-client-build" }
 
 [lints]
 workspace = true

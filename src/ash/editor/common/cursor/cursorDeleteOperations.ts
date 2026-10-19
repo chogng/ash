@@ -1,7 +1,7 @@
 import * as strings from '../../../base/common/strings.js';
 import { ReplaceCommand } from '../commands/replaceCommand.js';
 import { type EditorAutoClosingEditStrategy, type EditorAutoClosingStrategy } from '../config/editorOptions.js';
-import { CursorConfiguration, EditOperationResult, EditOperationType, type ICursorSimpleModel, isQuote } from '../cursorCommon.js';
+import { CursorConfiguration, EditOperationResult, EditOperationType, type ICursorSimpleModel } from '../cursorCommon.js';
 import { CursorColumns } from '../core/cursorColumns.js';
 import { Selection } from '../core/selection.js';
 import { Position } from '../core/position.js';
@@ -34,27 +34,11 @@ export class DeleteOperations {
 		model: ICursorSimpleModel,
 		selections: Selection[],
 		autoClosedCharacters: Range[],
-	): boolean {
-		if (autoClosingDelete === 'never' || (autoClosingBrackets === 'never' && autoClosingQuotes === 'never')) return false;
-		return selections.every(selection => autoClosingPairAt(
-			autoClosingDelete,
-			autoClosingBrackets,
-			autoClosingQuotes,
-			autoClosingPairsOpen,
-			model,
-			selection,
-			autoClosedCharacters,
-		) !== undefined);
-	}
+	): boolean { return model.editingPolicy?.isAutoClosingPairDelete(autoClosingDelete, autoClosingBrackets, autoClosingQuotes, autoClosingPairsOpen, model, selections, autoClosedCharacters) ?? false; }
 
 	public static deleteLeft(prevEditOperationType: EditOperationType, config: CursorConfiguration, model: ICursorSimpleModel, selections: Selection[], autoClosedCharacters: Range[]): [boolean, Array<ICommand | null>] {
-		if (this.isAutoClosingPairDelete(config.autoClosingDelete, config.autoClosingBrackets, config.autoClosingQuotes, config.autoClosingPairs.autoClosingPairsOpenByEnd, model, selections, autoClosedCharacters)) {
-			return [true, selections.map(selection => {
-				const position = selection.getPosition();
-				const pair = autoClosingPairAt(config.autoClosingDelete, config.autoClosingBrackets, config.autoClosingQuotes, config.autoClosingPairs.autoClosingPairsOpenByEnd, model, selection, autoClosedCharacters)!;
-				return new ReplaceCommand(new Range(position.lineNumber, position.column - pair.open.length, position.lineNumber, position.column + pair.close.length), '');
-			})];
-		}
+		const paired = model.editingPolicy?.deleteAutoClosedPair(config, model, selections, autoClosedCharacters);
+		if (paired) return paired;
 
 		const commands: Array<ICommand | null> = [];
 		let shouldPushStackElementBefore = prevEditOperationType !== EditOperationType.DeletingLeft;
@@ -99,32 +83,7 @@ export class DeleteOperations {
 	}
 }
 
-function autoClosingPairAt(
-	autoClosingDelete: EditorAutoClosingEditStrategy,
-	autoClosingBrackets: EditorAutoClosingStrategy,
-	autoClosingQuotes: EditorAutoClosingStrategy,
-	autoClosingPairsOpen: Map<string, StandardAutoClosingPairConditional[]>,
-	model: ICursorSimpleModel,
-	selection: Selection,
-	autoClosedCharacters: Range[],
-): StandardAutoClosingPairConditional | undefined {
-	if (!selection.isEmpty()) return undefined;
-	const position = selection.getPosition();
-	const line = model.getLineContent(position.lineNumber);
-	if (position.column < 2 || position.column > line.length) return undefined;
-	const openEnd = line.charAt(position.column - 2);
-	const candidates = autoClosingPairsOpen.get(openEnd);
-	const pair = candidates?.find(candidate =>
-		line.slice(0, position.column - 1).endsWith(candidate.open)
-		&& line.slice(position.column - 1).startsWith(candidate.close),
-	);
-	if (!pair) return undefined;
-	if (isQuote(pair.open) ? autoClosingQuotes === 'never' : autoClosingBrackets === 'never') return undefined;
-	if (autoClosingDelete === 'always') return pair;
-	return autoClosedCharacters.some(range => range.startLineNumber === position.lineNumber && range.startColumn === position.column)
-		? pair
-		: undefined;
-}
+
 
 function deleteRightRange(selection: Selection, model: ICursorSimpleModel, config: CursorConfiguration): Range {
 	if (!selection.isEmpty()) return selection;

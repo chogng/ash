@@ -1,4 +1,4 @@
-import type { TokenizationTextModelPartOptions } from '../../../../editor/common/model/tokens/tokenizationTextModelPart.js';
+import type { TextModelTokenizationOptions as TokenizationTextModelPartOptions } from '../../../../editor/common/tokenizationTextModelPart.js';
 import type { ILanguageConfigurationService } from '../../../../editor/common/languages/languageConfigurationRegistry.js';
 import { throwIfCancelled } from "../../../../base/common/cancellation.js";
 import { Emitter, type Event } from "../../../../base/common/event.js";
@@ -68,6 +68,7 @@ interface SaveRecoveryState {
 
 export interface BrowserTextModelServiceOptions {
 	readonly createSyntaxTokenBackend?: TokenizationTextModelPartOptions['createSyntaxTokenBackend'];
+	readonly createSyntaxSession?: TokenizationTextModelPartOptions['createSyntaxSession'];
 	readonly onDidChangeSyntaxBackend?: Event<void>;
 	/** Browser-owned maintenance policy applied to newly acquired text models. */
 	readonly maintenance?: TextModelMaintenanceOptions;
@@ -228,6 +229,7 @@ export class BrowserTextModelService extends Disposable implements IFileTextMode
 			...(this.options.languageService && this.options.languageFeaturesService ? {
 				tokenization: {
 					createSyntaxTokenBackend: this.options.createSyntaxTokenBackend,
+					createSyntaxSession: this.options.createSyntaxSession,
 					onDidChangeSyntaxBackend: this.options.onDidChangeSyntaxBackend,
 					languageIdCodec: this.options.languageService.languageIdCodec,
 					syntaxProviderRegistry: this.options.languageFeaturesService.syntaxProvider,

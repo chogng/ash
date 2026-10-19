@@ -1,10 +1,12 @@
+import { registerTestCodeEditorFeatures } from '../../../../../../../test/fixtures/codeEditorFeatures.js';
+import { after as afterCodeFeatures } from 'mocha';
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { Position } from '../../../../common/core/position.js';
 import { Range } from '../../../../common/core/range.js';
 import { TextModel } from '../../../../common/model/textModel.js';
 import { LanguageFeatureRegistry } from '../../../../common/languageFeatureRegistry.js';
-import { ColorService, DefaultDocumentColorProvider } from '../../common/languageColors.js';
+import { ColorService, DefaultDocumentColorProvider } from '../../../../../../../extensions/code/browser/contrib/colorPicker/common/languageColors.js';
 import { type LanguageColorProvider, createLanguageFeatureRequest } from '../../../../common/languages.js';
 
 test('presentation queries aggregate providers without requiring document color detection and honor default enablement', async () => {
@@ -167,3 +169,6 @@ test('a model edit while a large provider color result is normalized discards th
 	try { assert.deepEqual(await new ColorService(model, providers).provideDocumentColors('css', 'never', new AbortController().signal), []); }
 	finally { clearTimeout(timer); }
 });
+
+const codeFeatures = registerTestCodeEditorFeatures();
+afterCodeFeatures(() => codeFeatures.dispose());

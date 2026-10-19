@@ -1,3 +1,5 @@
+import { registerTestCodeEditorFeatures } from '../../../../../../../test/fixtures/codeEditorFeatures.js';
+import { after as afterCodeFeatures } from 'mocha';
 import assert from 'node:assert/strict';
 import { test, suiteTeardown } from 'mocha';
 import { JSDOM } from 'jsdom';
@@ -14,7 +16,7 @@ const installedGlobals = installEditorTestDom(moduleDom, [
 });
 const { CodeEditorWidget } = await import('../../../../browser/widget/codeEditor/codeEditorWidget.js');
 const { createTestCodeEditor } = await import('../../../../test/browser/testCodeEditor.js');
-await import('../../browser/linesOperations.js');
+await import('../../../../../../../extensions/code/browser/contrib/linesOperations/browser/linesOperations.js');
 suiteTeardown(() => {
 	installedGlobals.dispose();
 	moduleDom.window.close();
@@ -42,3 +44,6 @@ test('selected-line Tab remains available to the host keybinding', () => {
 function key(target: JSDOM['window'], value: string, options: KeyboardEventInit = {}): KeyboardEvent {
 	return new target.KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: value, ...options }) as unknown as KeyboardEvent;
 }
+
+const codeFeatures = registerTestCodeEditorFeatures();
+afterCodeFeatures(() => codeFeatures.dispose());

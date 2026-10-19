@@ -1,3 +1,5 @@
+import { registerTestCodeEditorFeatures } from '../../../../../../../test/fixtures/codeEditorFeatures.js';
+import { after as afterCodeFeatures } from 'mocha';
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { createLanguageFeatureEditor } from '../../../../test/browser/testLanguageFeatureEditor.js';
@@ -8,7 +10,7 @@ import { KeyMod, KeyCode } from '../../../../../base/common/keyCodes.js';
 import { decodeKeybinding } from '../../../../../base/common/keybindings.js';
 import { operatingSystem } from '../../../../../base/common/platform.js';
 import { getKeybindingLabel } from '../../../../../base/common/keybindingLabels.js';
-import { CodeActionKeybindingResolver } from '../../browser/codeActionKeybindingResolver.js';
+import { CodeActionKeybindingResolver } from '../../../../../../../extensions/code/browser/contrib/codeAction/browser/codeActionKeybindingResolver.js';
 
 test('code action shortcut resolves the most specific kind and respects preferred-only rules', () => {
 	using fixture = createLanguageFeatureEditor();
@@ -29,3 +31,6 @@ test('code action shortcut resolves the most specific kind and respects preferre
 		getKeybindingLabel(keybindings.resolveKeybinding(decodeKeybinding(KeyMod.CtrlCmd | KeyCode.KeyP, operatingSystem)!)));
 	assert.equal(resolve({ title: 'Unrelated', kind: 'quickfix' }), undefined);
 });
+
+const codeFeatures = registerTestCodeEditorFeatures();
+afterCodeFeatures(() => codeFeatures.dispose());

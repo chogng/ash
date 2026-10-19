@@ -1,3 +1,5 @@
+import { registerTestCodeEditorFeatures } from '../../../../../../../test/fixtures/codeEditorFeatures.js';
+import { after as afterCodeFeatures } from 'mocha';
 import '../../../../test/browser/testEditorDom.js';
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
@@ -10,7 +12,7 @@ import { TestLanguageConfigurationService } from '../../../../test/common/modes/
 const { CodeEditorWidget } = await import('../../../../browser/widget/codeEditor/codeEditorWidget.js');
 const { createTestCodeEditor } = await import('../../../../test/browser/testCodeEditor.js');
 const { EditorExtensionsRegistry } = await import('../../../../browser/editorExtensions.js');
-await import('../../browser/comment.js');
+await import('../../../../../../../extensions/code/browser/contrib/comment/browser/comment.js');
 
 
 test('Toggle Line Comment runs through the canonical editor action', () => {
@@ -81,3 +83,6 @@ test('Toggle Line Comment retains a primary selection below a secondary caret', 
 		dom.window.close();
 	}
 });
+
+const codeFeatures = registerTestCodeEditorFeatures();
+afterCodeFeatures(() => codeFeatures.dispose());

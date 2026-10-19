@@ -1,3 +1,4 @@
+import type { TextModelSyntaxSession } from '../../../../editor/common/tokenizationTextModelPart.js';
 import { isWeb } from '../../../../base/common/platform.js';
 import { Emitter, Event } from '../../../../base/common/event.js';
 import { type IWebWorkerClient } from '../../../../base/common/worker/webWorker.js';
@@ -17,7 +18,6 @@ import type { TreeSitterFacts, TreeSitterSyntaxResult } from '../../../../editor
 import type { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { IThemeService } from '../../../../platform/theme/common/themeService.js';
 import type { TextModel } from '../../../../editor/common/model/textModel.js';
-import { TreeSitterSyntaxTokenBackend } from '../../../../editor/common/model/tokens/treeSitter/treeSitterSyntaxTokenBackend.js';
 
 /** Rust owns connected syntax sessions; Web uses a local Worker while the connection is unavailable. */
 export class TreeSitterLibraryService extends Disposable implements ITreeSitterLibraryService {
@@ -106,22 +106,24 @@ function decodeResult(value: unknown, model: TextModel): TreeSitterSyntaxResult 
 	return result;
 }
 
-export function createTreeSitterSyntaxTokenBackend(model: TextModel, configuration: IConfigurationService, library: ITreeSitterLibraryService, themes: IThemeService): TreeSitterSyntaxTokenBackend | undefined {
+export function createTreeSitterSyntaxSession(model: TextModel, configuration: IConfigurationService, library: ITreeSitterLibraryService, themes: IThemeService): TextModelSyntaxSession | undefined {
 	if (!library.supportsLanguage(model.getLanguageId())) return undefined;
 	const session = library.createSession(model);
-	return new TreeSitterSyntaxTokenBackend(model, session, (capture, language) => {
-		const [tokenType, ...modifiers] = capture.split('.');
-		const theme = themes.getColorTheme();
-		const metadata = theme.getTokenStyleMetadata(tokenType!, modifiers, language);
-		const fontStyle = metadata ? (['italic', 'bold', 'underline', 'strikethrough'] as const).filter(style => metadata[style]) : undefined;
-		return {
-			tokenType: tokenType!, modifiers,
-			...(metadata?.foreground === undefined ? {} : { foreground: theme.tokenColorMap[metadata.foreground] }),
-			...(fontStyle?.length ? { fontStyle } : {}),
-		};
-	}, configuration.getValue('editor.experimental.treeSitterTelemetry') === true ? sample => {
-		performance.measure(`ash.treeSitter.${sample.operation}`, { start: performance.now() - sample.duration, duration: sample.duration, detail: { ...sample, version: model.version, model: model.uri.path, execution: session.execution } });
-	} : undefined);
+	return {
+		session, resolveStyle: (capture, language) => {
+			const [tokenType, ...modifiers] = capture.split('.');
+			const theme = themes.getColorTheme();
+			const metadata = theme.getTokenStyleMetadata(tokenType!, modifiers, language);
+			const fontStyle = metadata ? (['italic', 'bold', 'underline', 'strikethrough'] as const).filter(style => metadata[style]) : undefined;
+			return {
+				tokenType: tokenType!, modifiers,
+				...(metadata?.foreground === undefined ? {} : { foreground: theme.tokenColorMap[metadata.foreground] }),
+				...(fontStyle?.length ? { fontStyle } : {}),
+			};
+		}, measure: configuration.getValue('editor.experimental.treeSitterTelemetry') === true ? sample => {
+			performance.measure(`ash.treeSitter.${sample.operation}`, { start: performance.now() - sample.duration, duration: sample.duration, detail: { ...sample, version: model.version, model: model.uri.path, execution: session.execution } });
+		} : undefined
+	};
 }
 
 /** Registers shared-tree consumers in both Desktop and Browser hosts. */

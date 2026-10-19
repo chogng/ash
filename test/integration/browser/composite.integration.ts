@@ -264,7 +264,7 @@ if (new URLSearchParams(location.search).has('output')) {
 	await import('../../../src/ash/workbench/browser/parts/panel/panelActions.js');
 	registerOutputView(registry);
 	if (new URLSearchParams(location.search).has('agentOutput')) {
-		await import('../../../src/ash/editor/contrib/links/browser/links.js');
+		await import('../../../extensions/code/browser/contrib/links/browser/links.js');
 		services.registerInstance(ICommandService, {
 			onWillExecuteCommand: Event.None, onDidExecuteCommand: Event.None, executeCommand: async <T>(id: string, ...args: unknown[]) => {
 				if (id === 'sessions.trace.open') { openedAgentEvents.push(args[0]); return undefined as T; }

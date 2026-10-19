@@ -1,10 +1,12 @@
+import { registerTestCodeEditorFeatures } from '../../../../../../../test/fixtures/codeEditorFeatures.js';
+import { after as afterCodeFeatures } from 'mocha';
 import assert from "node:assert/strict";
 import { test } from "mocha";
 import { Selection } from "../../../../common/core/selection.js";
 import { Position } from "../../../../common/core/position.js";
 import { Range } from "../../../../common/core/range.js";
 import { TextModel } from "../../../../common/model/textModel.js";
-import { expandSmartSelection } from "../../common/smartSelectionExpansion.js";
+import { expandSmartSelection } from "../../../../../../../extensions/code/browser/contrib/smartSelect/common/smartSelectionExpansion.js";
 
 test("Smart select expands a caret through word, pair, line, and document scopes", () => {
 	using model = new TextModel("const value = (one + two);\nnext");
@@ -38,3 +40,6 @@ test("Smart select prefers the smallest parser scope before lexical pair and lin
 	assert.equal(model.getTextInRange(declaration), "let value = call(1 + 2);");
 	assert.equal(model.getTextInRange(functionScope), model.getText());
 });
+
+const codeFeatures = registerTestCodeEditorFeatures();
+afterCodeFeatures(() => codeFeatures.dispose());

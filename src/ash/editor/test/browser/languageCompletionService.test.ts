@@ -1,9 +1,11 @@
+import { registerTestCodeEditorFeatures } from '../../../../../test/fixtures/codeEditorFeatures.js';
+import { after as afterCodeFeatures } from 'mocha';
 import { h } from '../../../base/browser/dom.js';
 import { strict as assert } from "node:assert";
 import { test, suiteTeardown } from "mocha";
 import { JSDOM } from "jsdom";
-import { SuggestModel } from "../../contrib/suggest/browser/suggestModel.js";
-import { LanguageCompletionService } from '../../contrib/suggest/browser/suggest.js';
+import { SuggestModel } from "../../../../../extensions/code/browser/contrib/suggest/browser/suggestModel.js";
+import { LanguageCompletionService } from '../../../../../extensions/code/browser/contrib/suggest/browser/suggest.js';
 import { LanguageCompletionProviderRegistry } from '../../common/languageFeatureRegistry.js';
 import { LanguageCompletionTriggerKind, createLanguageCompletionIncompleteRefreshContext, createLanguageCompletionInvokeContext, createLanguageCompletionTriggerCharacterContext, type LanguageCompletionContext, type LanguageCompletionProvider, type LanguageCompletionProviderItem, type LanguageCompletionProviderRequest, type LanguageCompletionProviderResult, LanguageCompletionItemKind, LanguageCompletionInsertTextFormat } from '../../common/languages.js';
 import { LanguageRequestCancellationReason, LanguageRequestStatus } from '../../common/model/languageRequestCoordinator.js';
@@ -287,3 +289,6 @@ function deferred<T>(): Deferred<T> {
 	});
 	return { promise, resolve };
 }
+
+const codeFeatures = registerTestCodeEditorFeatures();
+afterCodeFeatures(() => codeFeatures.dispose());

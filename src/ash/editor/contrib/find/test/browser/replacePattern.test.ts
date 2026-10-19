@@ -1,6 +1,8 @@
+import { registerTestCodeEditorFeatures } from '../../../../../../../test/fixtures/codeEditorFeatures.js';
+import { after as afterCodeFeatures } from 'mocha';
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
-import { ReplacePattern, ReplacePiece, parseReplaceString } from '../../browser/replacePattern.js';
+import { ReplacePattern, ReplacePiece, parseReplaceString } from '../../../../../../../extensions/code/browser/contrib/find/browser/replacePattern.js';
 
 test('replacement parser keeps literal escapes and captures distinct', () => {
 	assert.deepEqual(parseReplaceString('a$$b\\n$1'), new ReplacePattern([
@@ -26,3 +28,6 @@ test('replacement patterns preserve word casing after expanding captures', () =>
 	assert.equal(ReplacePattern.fromStaticValue('newValue').buildReplaceString(['Title'], true), 'NewValue');
 	assert.equal(ReplacePattern.fromStaticValue('new-server').buildReplaceString(['api-CLIENT']), 'new-server');
 });
+
+const codeFeatures = registerTestCodeEditorFeatures();
+afterCodeFeatures(() => codeFeatures.dispose());

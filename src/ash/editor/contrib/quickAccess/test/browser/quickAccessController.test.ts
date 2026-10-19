@@ -1,3 +1,5 @@
+import { registerTestCodeEditorFeatures } from '../../../../../../../test/fixtures/codeEditorFeatures.js';
+import { after as afterCodeFeatures } from 'mocha';
 import '../../../../test/browser/testEditorDom.js';
 import { browserEnvironment } from '../../../../test/browser/testEditorDom.js';
 import assert from "node:assert/strict";
@@ -11,7 +13,7 @@ import { h } from "../../../../../base/browser/dom.js";
 import { type TextMeasurer } from '../../../../common/viewModel.js';
 
 const { TestView: View } = await import("../../../../test/browser/viewModel/testViewModel.js");
-const { GotoLineController, isStanzaGotoLineChord } = await import("../../browser/quickAccessController.js");
+const { GotoLineController, isStanzaGotoLineChord } = await import("../../../../../../../extensions/code/browser/contrib/quickAccess/browser/quickAccessController.js");
 
 test("Go to Line previews locally, accepts a line and column, and cancels without changing selections", () => {
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");
@@ -109,3 +111,6 @@ function keydown(targetWindow: typeof browserEnvironment.window, key: string, op
 		metaKey: options.metaKey,
 	}) as unknown as KeyboardEvent;
 }
+
+const codeFeatures = registerTestCodeEditorFeatures();
+afterCodeFeatures(() => codeFeatures.dispose());

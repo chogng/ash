@@ -1,10 +1,12 @@
+import type { IEditorContribution } from '../../../common/editorCommon.js';
 import { EditorAction, registerEditorAction, type ServicesAccessor } from '../../../browser/editorExtensions.js';
 import type { ICodeEditor } from '../../../browser/editorBrowser.js';
 import { EditorContextKeys } from '../../../common/editorContextKeys.js';
-import type { GotoLineController } from '../../../contrib/quickAccess/browser/quickAccessController.js';
 import { KeybindingWeight } from '../../../../platform/keybinding/common/keybindingsRegistry.js';
 import { KeyCode, KeyMod } from '../../../../base/common/keyCodes.js';
 import { localize2 } from '../../../../nls.js';
+
+interface GotoLineContribution extends IEditorContribution { open(mode?: 'line' | 'offset'): void; }
 
 export class GotoLineAction extends EditorAction {
 	public static readonly ID = 'editor.action.gotoLine';
@@ -24,7 +26,7 @@ export class GotoLineAction extends EditorAction {
 	}
 
 	public run(_accessor: ServicesAccessor, editor: ICodeEditor): void {
-		editor.getContribution<GotoLineController>('editor.contrib.quickAccess')?.open();
+		editor.getContribution<GotoLineContribution>('editor.contrib.quickAccess')?.open();
 	}
 }
 
@@ -42,7 +44,7 @@ export class GotoOffsetAction extends EditorAction {
 	}
 
 	public run(_accessor: ServicesAccessor, editor: ICodeEditor): void {
-		editor.getContribution<GotoLineController>('editor.contrib.quickAccess')?.open('offset');
+		editor.getContribution<GotoLineContribution>('editor.contrib.quickAccess')?.open('offset');
 	}
 }
 

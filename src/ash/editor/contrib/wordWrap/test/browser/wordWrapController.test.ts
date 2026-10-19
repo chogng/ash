@@ -1,3 +1,5 @@
+import { registerTestCodeEditorFeatures } from '../../../../../../../test/fixtures/codeEditorFeatures.js';
+import { after as afterCodeFeatures } from 'mocha';
 import '../../../../test/browser/testEditorDom.js';
 import { browserEnvironment } from '../../../../test/browser/testEditorDom.js';
 import assert from "node:assert/strict";
@@ -8,7 +10,7 @@ import { URI } from "../../../../../base/common/uri.js";
 import { DisposableStore, toDisposable } from "../../../../../base/common/lifecycle.js";
 
 const { EditorOption } = await import("../../../../common/config/editorOptions.js");
-const { WordWrapController } = await import("../../browser/wordWrapController.js");
+const { WordWrapController } = await import("../../../../../../../extensions/code/browser/contrib/wordWrap/browser/wordWrapController.js");
 const { createTestCodeEditor } = await import("../../../../test/browser/testCodeEditor.js");
 const { StandaloneCodeEditorService } = await import("../../../../standalone/browser/standaloneCodeEditorService.js");
 const { ICodeEditorService } = await import("../../../../browser/services/codeEditorService.js");
@@ -96,3 +98,6 @@ function keydown(targetWindow: typeof browserEnvironment.window, key: string, op
 		shiftKey: options.shiftKey,
 	}) as unknown as KeyboardEvent;
 }
+
+const codeFeatures = registerTestCodeEditorFeatures();
+afterCodeFeatures(() => codeFeatures.dispose());

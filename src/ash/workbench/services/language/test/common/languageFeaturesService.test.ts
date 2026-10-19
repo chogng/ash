@@ -5,7 +5,7 @@ import { CancellationToken } from '../../../../../base/common/cancellation.js';
 import { URI } from '../../../../../base/common/uri.js';
 import { Position } from '../../../../../editor/common/core/position.js';
 import { Range } from '../../../../../editor/common/core/range.js';
-import { LanguageCompletionService } from '../../../../../editor/contrib/suggest/browser/suggest.js';
+import { LanguageCompletionService } from '../../../../../../../extensions/code/browser/contrib/suggest/browser/suggest.js';
 import { TextModel } from '../../../../../editor/common/model/textModel.js';
 import { TestLanguageConfigurationService } from '../../../../../editor/test/common/modes/testLanguageConfigurationService.js';
 import { LanguageFeaturesService } from '../../../../../editor/common/services/languageFeaturesService.js';

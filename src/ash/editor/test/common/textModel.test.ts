@@ -1,3 +1,5 @@
+import { registerTestCodeEditorFeatures } from '../../../../../test/fixtures/codeEditorFeatures.js';
+import { after as afterCodeFeatures } from 'mocha';
 import assert from "node:assert/strict";
 import { test } from "mocha";
 import { Position } from "../../common/core/position.js";
@@ -921,3 +923,6 @@ test('long-line policy retains character weights across LF, CRLF, edits and undo
 		assert.equal(model.isDominatedByLongLines(), false);
 	}
 });
+
+const codeFeatures = registerTestCodeEditorFeatures();
+afterCodeFeatures(() => codeFeatures.dispose());

@@ -88,7 +88,7 @@ impl Extension for AcademyExtension {
                 Ok(Contribution {
                     version: 1,
                     client_module: "browser/editor.ts",
-                    client_digest: env!("ASH_ACADEMY_CLIENT_DIGEST"),
+                    client_digest: env!("ASH_EDITOR_CLIENT_DIGEST"),
                     editors: vec![
                         Editor {
                             editor_id: "stanza.editor.document",

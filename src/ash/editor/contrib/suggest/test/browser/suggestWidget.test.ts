@@ -1,13 +1,15 @@
+import { registerTestCodeEditorFeatures } from '../../../../../../../test/fixtures/codeEditorFeatures.js';
+import { after as afterCodeFeatures } from 'mocha';
 import '../../../../test/browser/testEditorDom.js';
 import { browserEnvironment } from '../../../../test/browser/testEditorDom.js';
 import { h } from '../../../../../base/browser/dom.js';
 import assert from "node:assert/strict";
 import { test } from "mocha";
 import { JSDOM } from "jsdom";
-import { LanguageCompletionDetailsStatus, SuggestModel, type LanguageCompletionSessionOptions } from "../../browser/suggestModel.js";
+import { LanguageCompletionDetailsStatus, SuggestModel, type LanguageCompletionSessionOptions } from "../../../../../../../extensions/code/browser/contrib/suggest/browser/suggestModel.js";
 import { LanguageResultAcceptance } from '../../../../common/model/languageResultStore.js';
 import { LanguageCompletionInsertTextFormat, LanguageCompletionItemKind, type LanguageCompletionItem } from '../../../../common/languages.js';
-import { createLanguageCompletionStore, LanguageCompletionService } from '../../browser/suggest.js';
+import { createLanguageCompletionStore, LanguageCompletionService } from '../../../../../../../extensions/code/browser/contrib/suggest/browser/suggest.js';
 import { LanguageCompletionProviderRegistry } from '../../../../common/languageFeatureRegistry.js';
 import { Selection } from "../../../../common/core/selection.js";
 import { Position } from "../../../../common/core/position.js";
@@ -15,8 +17,8 @@ import { Range } from "../../../../common/core/range.js";
 import { TextModel } from "../../../../common/model/textModel.js";
 import { LanguageService } from '../../../../common/services/languageService.js';
 import { EditorContributionInstantiation } from '../../../../browser/editorExtensions.js';
-import { SnippetController2 } from '../../../snippet/browser/snippetController2.js';
-import { SuggestController } from "../../browser/suggestController.js";
+import { SnippetController2 } from '../../../../../../../extensions/code/browser/contrib/snippet/browser/snippetController2.js';
+import { SuggestController } from "../../../../../../../extensions/code/browser/contrib/suggest/browser/suggestController.js";
 
 const { EditorTextDirection, View } = await import("../../../../browser/view.js");
 const { createTestCodeEditor } = await import("../../../../test/browser/testCodeEditor.js");
@@ -440,3 +442,6 @@ function requiredElement<T extends Element = HTMLElement>(root: ParentNode, sele
 	assert.ok(element);
 	return element;
 }
+
+const codeFeatures = registerTestCodeEditorFeatures();
+afterCodeFeatures(() => codeFeatures.dispose());

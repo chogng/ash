@@ -1,15 +1,17 @@
+import { registerTestCodeEditorFeatures } from '../../../../../../../test/fixtures/codeEditorFeatures.js';
+import { after as afterCodeFeatures } from 'mocha';
 import '../../../../test/browser/testEditorDom.js';
 import { browserEnvironment as environment } from '../../../../test/browser/testEditorDom.js';
 import { h } from '../../../../../base/browser/dom.js';
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { TextModel } from '../../../../common/model/textModel.js';
-import '../../browser/middleScroll.contribution.js';
+import '../../../../../../../extensions/code/browser/contrib/middleScroll/browser/middleScroll.contribution.js';
 
 
 const { CodeEditorWidget } = await import('../../../../browser/widget/codeEditor/codeEditorWidget.js');
 const { createTestCodeEditor } = await import('../../../../test/browser/testCodeEditor.js');
-const { MiddleScrollController } = await import('../../browser/middleScrollController.js');
+const { MiddleScrollController } = await import('../../../../../../../extensions/code/browser/contrib/middleScroll/browser/middleScrollController.js');
 
 
 test('middle click opens a scroll session and keyboard input closes it', () => {
@@ -100,3 +102,6 @@ function pointerEvent(type: string, button: number, pointerId: number, clientX: 
 	});
 	return event;
 }
+
+const codeFeatures = registerTestCodeEditorFeatures();
+afterCodeFeatures(() => codeFeatures.dispose());

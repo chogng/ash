@@ -1,3 +1,5 @@
+import { registerTestCodeEditorFeatures } from '../../../../../../test/fixtures/codeEditorFeatures.js';
+import { after as afterCodeFeatures } from 'mocha';
 import assert from 'node:assert/strict';
 import { test, suiteTeardown } from 'mocha';
 import { JSDOM } from 'jsdom';
@@ -41,7 +43,7 @@ const installedGlobals = installEditorTestDom(browserEnvironment, [
 ], { ResizeObserver: TestResizeObserver });
 setIconResolver(browserEnvironment.window.document, icon => getIconDefinition(icon));
 
-await import('../../../contrib/diffEditorBreadcrumbs/browser/contribution.js');
+await import('../../../../../../extensions/code/browser/contrib/diffEditorBreadcrumbs/browser/contribution.js');
 const { DiffEditorWidget } = await import('../../../browser/widget/diffEditor/diffEditorWidget.js');
 const { DiffModel } = await import('../../../common/diff/diffModel.js');
 const { registerCodeEditorServices } = await import('../testCodeEditor.js');
@@ -541,3 +543,6 @@ function waitForReady(model: InstanceType<typeof DiffModel>): Promise<void> {
 		});
 	});
 }
+
+const codeFeatures = registerTestCodeEditorFeatures();
+afterCodeFeatures(() => codeFeatures.dispose());

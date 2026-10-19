@@ -1,3 +1,5 @@
+import { registerTestCodeEditorFeatures } from '../../fixtures/codeEditorFeatures.js';
+const codeFeatures = registerTestCodeEditorFeatures();
 import type { NotificationService } from '../../../src/ash/workbench/services/notification/common/notificationService.js';
 import { IChatSpeechToTextService, ChatSpeechToTextService } from '../../../src/ash/workbench/contrib/chat/browser/speechToText/chatSpeechToTextService.js';
 import { IRendererHostService } from '../../../src/ash/platform/renderer/common/rendererHost.js';
@@ -32,7 +34,7 @@ import { IWebviewService } from '../../../src/ash/workbench/contrib/webview/brow
 import '../../../src/ash/workbench/contrib/webview/browser/webview.contribution.js';
 import { IFileService } from '../../../src/ash/platform/files/common/files.js';
 import { ITextModelService } from '../../../src/ash/editor/common/services/resolverService.js';
-import { LinkDetector } from '../../../src/ash/editor/contrib/links/browser/links.js';
+import { LinkDetector } from '../../../extensions/code/browser/contrib/links/browser/links.js';
 import { IPromptsService } from '../../../src/ash/workbench/contrib/chat/common/promptSyntax/service/promptsService.js';
 import { PromptsService } from '../../../src/ash/workbench/contrib/chat/common/promptSyntax/service/promptsServiceImpl.js';
 import { CancellationToken } from '../../../src/ash/base/common/cancellation.js';
@@ -84,8 +86,8 @@ import { ChatListWidget } from '../../../src/ash/workbench/contrib/chat/browser/
 import { ChatContentMarkdownRenderer } from '../../../src/ash/workbench/contrib/chat/browser/widget/chatContentMarkdownRenderer.js';
 import { WorkbenchContributionsRegistry, WorkbenchPhase } from '../../../src/ash/workbench/common/contributions.js';
 import { EditorExtensionsRegistry } from '../../../src/ash/editor/browser/editorExtensions.js';
-import { SuggestController } from '../../../src/ash/editor/contrib/suggest/browser/suggestController.js';
-import '../../../src/ash/editor/contrib/hover/browser/hoverContribution.js';
+import { SuggestController } from '../../../extensions/code/browser/contrib/suggest/browser/suggestController.js';
+import '../../../extensions/code/browser/contrib/hover/browser/hoverContribution.js';
 import { IEditorService } from '../../../src/ash/workbench/services/editor/common/editorService.js';
 import { IEditorPart } from '../../../src/ash/workbench/browser/parts/editor/editorPart.js';
 import { IUntitledTextEditorService } from '../../../src/ash/workbench/services/untitled/common/untitledTextEditorService.js';

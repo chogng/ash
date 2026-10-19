@@ -10,7 +10,7 @@ import type { Range } from "../../../../editor/common/core/range.js";
 import type { LanguageDocumentSymbol } from "../../../../editor/common/languages.js";
 import type { TextModel } from "../../../../editor/common/model/textModel.js";
 import type { ILanguageFeaturesService } from "../../../../editor/common/services/languageFeatures.js";
-import { OutlineModel } from "../../../../editor/contrib/documentSymbols/browser/outlineModel.js";
+import { OutlineModel } from "../../../../../../extensions/code/browser/contrib/documentSymbols/browser/outlineModel.js";
 import type { IContextMenuProvider } from "../../../../base/browser/contextmenu.js";
 import { AnchorPosition } from "../../../../base/browser/ui/contextview/contextview.js";
 import { MenuWorkbenchToolBar, WorkbenchToolBar } from "../../../../platform/actions/browser/toolbar.js";

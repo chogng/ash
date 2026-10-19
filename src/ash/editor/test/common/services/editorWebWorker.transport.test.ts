@@ -1,6 +1,8 @@
+import { registerTestCodeEditorFeatures } from '../../../../../../test/fixtures/codeEditorFeatures.js';
+import { after as afterCodeFeatures } from 'mocha';
 import { LanguageCompletionTriggerKind } from '../../../common/languages.js';
 import { LanguageCompletionProviderRegistry } from '../../../common/languageFeatureRegistry.js';
-import { LanguageCompletionService } from '../../../contrib/suggest/browser/suggest.js';
+import { LanguageCompletionService } from '../../../../../../extensions/code/browser/contrib/suggest/browser/suggest.js';
 import { WordBasedCompletionItemProvider, VersionedEditorWorkerClient } from '../../../browser/services/editorWorkerService.js';
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
@@ -130,3 +132,6 @@ test('editor worker transport rejects invalid edit coordinates and EOL before ex
 	assert.throws(() => editorWorkerWireCodec.decodeResult('minimalEdits', [{ range: { ...range, start: { lineIndex: -1, columnIndex: 0 } }, text: '' }], snapshot, undefined), /non-negative safe integer/);
 	assert.equal(model.getValue(), 'text');
 });
+
+const codeFeatures = registerTestCodeEditorFeatures();
+afterCodeFeatures(() => codeFeatures.dispose());

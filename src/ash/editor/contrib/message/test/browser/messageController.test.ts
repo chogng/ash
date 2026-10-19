@@ -1,3 +1,5 @@
+import { registerTestCodeEditorFeatures } from '../../../../../../../test/fixtures/codeEditorFeatures.js';
+import { after as afterCodeFeatures } from 'mocha';
 import { ICommandService, CommandsRegistry } from '../../../../../platform/commands/common/commands.js';
 import { StandaloneCommandService } from '../../../../standalone/browser/standaloneServices.js';
 import '../../../../test/browser/testEditorDom.js';
@@ -17,15 +19,15 @@ import { StandaloneCodeEditorService } from '../../../../standalone/browser/stan
 import { toDisposable } from '../../../../../base/common/lifecycle.js';
 import { IOpenerService } from '../../../../../platform/opener/common/opener.js';
 import { OpenerService } from '../../../../browser/services/openerService.js';
-import '../../browser/messageController.js';
-import '../../../readOnlyMessage/browser/contribution.js';
+import '../../../../../../../extensions/code/browser/contrib/message/browser/messageController.js';
+import '../../../../../../../extensions/code/browser/contrib/readOnlyMessage/browser/contribution.js';
 
 setARIAContainer(environment.window.document.body);
 
 const { CodeEditorWidget } = await import('../../../../browser/widget/codeEditor/codeEditorWidget.js');
 const { createTestCodeEditor } = await import('../../../../test/browser/testCodeEditor.js');
-const { MessageController } = await import('../../browser/messageController.js');
-const { ReadOnlyMessageController } = await import('../../../readOnlyMessage/browser/contribution.js');
+const { MessageController } = await import('../../../../../../../extensions/code/browser/contrib/message/browser/messageController.js');
+const { ReadOnlyMessageController } = await import('../../../../../../../extensions/code/browser/contrib/readOnlyMessage/browser/contribution.js');
 
 
 test('read-only edit attempts use MessageController and close after cursor movement', () => {
@@ -161,3 +163,6 @@ test('Markdown message commands pass through opener validation and retain their 
 	await activate();
 	assert.deepEqual({ validations, calls, visible: messages.isVisible() }, { validations: 2, calls: [['%20 中文']], visible: false });
 });
+
+const codeFeatures = registerTestCodeEditorFeatures();
+afterCodeFeatures(() => codeFeatures.dispose());

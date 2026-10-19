@@ -1,3 +1,5 @@
+import { registerTestCodeEditorFeatures } from '../../../../../../../test/fixtures/codeEditorFeatures.js';
+import { after as afterCodeFeatures } from 'mocha';
 import { setImmediate } from 'node:timers/promises';
 import { DeferredPromise } from '../../../../../base/common/async.js';
 import assert from "node:assert/strict";
@@ -151,3 +153,6 @@ test('removed semantic provider cannot publish its delayed result', async () => 
 function tokens(tokenType: string, modifiers: readonly string[] = []): LanguageTokenResult {
 	return { tokens: [{ range: new Range(1, 1, 1, 5), tokenType, modifiers }] };
 }
+
+const codeFeatures = registerTestCodeEditorFeatures();
+afterCodeFeatures(() => codeFeatures.dispose());

@@ -399,8 +399,10 @@ suite('Workbench localization', () => {
 		using localization = new WorkbenchLocalizationService();
 		await localization.whenReady;
 		initializeTestLocalization('zh-CN');
-		await import('../../../../../editor/contrib/folding/browser/folding.js');
+		await import('../../../../../../../extensions/code/browser/contrib/folding/browser/folding.js');
 		const { EditorExtensionsRegistry } = await import('../../../../../editor/browser/editorExtensions.js');
+		const { getEditorFeatures } = await import('../../../../../../../extensions/code/browser/registration.js');
+		using features = EditorExtensionsRegistry.registerEditorFeatures(getEditorFeatures());
 		const actions = [...EditorExtensionsRegistry.getEditorActions()];
 		const fold = actions.find(action => action.id === 'editor.fold')!.metadata!;
 		const unfold = actions.find(action => action.id === 'editor.unfold')!.metadata!;
@@ -416,10 +418,12 @@ suite('Workbench localization', () => {
 		using localization = new WorkbenchLocalizationService();
 		await localization.whenReady;
 		initializeTestLocalization('zh-CN');
-		const { ForceRetokenizeAction } = await import('../../../../../editor/contrib/tokenization/browser/tokenization.js');
-		await import('../../../../../editor/contrib/caretOperations/browser/caretOperations.js');
-		await import('../../../../../editor/contrib/insertFinalNewLine/browser/insertFinalNewLine.js');
+		const { ForceRetokenizeAction } = await import('../../../../../../../extensions/code/browser/contrib/tokenization/browser/tokenization.js');
+		await import('../../../../../../../extensions/code/browser/contrib/caretOperations/browser/caretOperations.js');
+		await import('../../../../../../../extensions/code/browser/contrib/insertFinalNewLine/browser/insertFinalNewLine.js');
 		const { EditorExtensionsRegistry } = await import('../../../../../editor/browser/editorExtensions.js');
+		const { getEditorFeatures } = await import('../../../../../../../extensions/code/browser/registration.js');
+		using features = EditorExtensionsRegistry.registerEditorFeatures(getEditorFeatures());
 		const actions = [...EditorExtensionsRegistry.getEditorActions()];
 		assert.deepEqual([
 			new ForceRetokenizeAction().label,

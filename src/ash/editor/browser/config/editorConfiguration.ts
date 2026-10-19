@@ -1,3 +1,5 @@
+import { hasTextViewFeature, onDidChangeTextViewFeatures } from '../view/viewFeatures.js';
+import type { EditorMinimapOptions } from '../../common/config/editorOptions.js';
 import * as browser from '../../../base/browser/browser.js';
 import { getWindow } from '../../../base/browser/dom.js';
 import { PixelRatio } from '../../../base/browser/pixelRatio.js';
@@ -117,6 +119,7 @@ export class EditorConfiguration extends Disposable implements IEditorConfigurat
 		this.options = this.computeOptions();
 		if (this.options.get(EditorOption.automaticLayout)) this.containerObserver.startObserving();
 
+		this._register(onDidChangeTextViewFeatures(() => this.recomputeOptions()));
 		this._register(EditorZoom.onDidChangeZoomLevel(() => this.recomputeOptions()));
 		this._register(TabFocus.onDidChangeTabFocus(() => this.recomputeOptions()));
 		this._register(InputMode.onDidChangeInputMode(() => this.recomputeOptions()));
@@ -240,7 +243,9 @@ export class EditorConfiguration extends Disposable implements IEditorConfigurat
 		};
 		const result = new ComputedEditorOptions();
 		for (const option of editorOptionsRegistry) {
-			result._write(option.id, option.compute(env, result, this.validatedOptions._read(option.id)));
+			let value = option.compute(env, result, this.validatedOptions._read(option.id));
+			if (option.id === EditorOption.minimap && !hasTextViewFeature('minimap')) value = { ...(value as EditorMinimapOptions), enabled: false };
+			result._write(option.id, value);
 		}
 		return result;
 	}

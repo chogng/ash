@@ -1,3 +1,5 @@
+import { registerTestCodeEditorFeatures } from '../../../../../../../test/fixtures/codeEditorFeatures.js';
+import { after as afterCodeFeatures } from 'mocha';
 import { TokenizationRegistry, type IState, type ILanguageIdCodec, type SyntaxRequest, LanguageDiagnosticSeverity, SYNTAX_DIAGNOSTIC_LANE, SYNTAX_TOKEN_LANE, type SyntaxResult, type SyntaxWorker, type SyntaxLane } from '../../../../common/languages.js';
 import assert from "node:assert/strict";
 import { test } from "mocha";
@@ -501,3 +503,6 @@ test('idle tokenization publishes bounded batches and stops when the last view d
 	assert.deepEqual([scanned, changed], [351, [{ fromLineNumber: 1, toLineNumber: 1 }]]);
 	assert.equal(model.tokenization.tokenCount, 350);
 });
+
+const codeFeatures = registerTestCodeEditorFeatures();
+afterCodeFeatures(() => codeFeatures.dispose());

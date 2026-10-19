@@ -6,13 +6,6 @@ import { RunOnceScheduler } from "../../../../../../base/common/async.js";
 import { Disposable, toDisposable } from "../../../../../../base/common/lifecycle.js";
 import { EditorLineWrapping } from "../../../../../../editor/common/config/editorOptions.js";
 import { CodeEditorWidget } from "../../../../../../editor/browser/widget/codeEditor/codeEditorWidget.js";
-import { EditorExtensionsRegistry, type EditorContributionRegistration } from "../../../../../../editor/browser/editorExtensions.js";
-import { LanguageCompletionService } from '../../../../../../editor/contrib/suggest/browser/suggest.js';
-import { LanguageCompletionProviderRegistry } from '../../../../../../editor/common/languageFeatureRegistry.js';
-import { SuggestModel } from "../../../../../../editor/contrib/suggest/browser/suggestModel.js";
-import { SuggestController } from "../../../../../../editor/contrib/suggest/browser/suggestController.js";
-import { PlaceholderTextContribution } from "../../../../../../editor/contrib/placeholderText/browser/placeholderTextContribution.js";
-import "../../../../../../editor/contrib/placeholderText/browser/placeholderText.contribution.js";
 import "../../../../../../editor/browser/coreCommands.js";
 import { Position } from "../../../../../../editor/common/core/position.js";
 import { Range } from "../../../../../../editor/common/core/range.js";
@@ -50,29 +43,12 @@ export class ChatInputEditor extends Disposable implements IChatInputEditor {
 		this.element.style.height = `${this.height}px`;
 		this.element.style.minHeight = `${this.minimumHeight}px`;
 		options.container.append(this.element);
-		const providers = this._register(new LanguageCompletionProviderRegistry());
-		this._register(providers.register(createChatCommandCompletionProvider(options.slashCommands)));
-		this._register(providers.register(createChatSkillCompletionProvider(options.skills, { id: 'ash.cowork.skills', languageId: CHAT_INPUT_LANGUAGE_ID })));
-		const chatSuggest = {
-			id: SuggestController.ID,
-			install: context => {
-				if (context.kind !== 'text') return;
-				const completions = context.register(new LanguageCompletionService(context.model, providers));
-				const session = context.register(new SuggestModel(completions.results, context.editor, {
-					resolver: completions,
-				}));
-				return context.instantiationService.createInstance(SuggestController, context.editor, context.controller, completions, session, {
-					widgetContainer: this.element,
-				});
-			},
-		} satisfies EditorContributionRegistration;
+		const completionProviders = [
+			createChatCommandCompletionProvider(options.slashCommands),
+			createChatSkillCompletionProvider(options.skills, { id: 'ash.cowork.skills', languageId: CHAT_INPUT_LANGUAGE_ID }),
+		];
 		// Chat only needs its placeholder and command/skill suggestions; unrelated editor features add work to every Chat tab.
-		const contributions = EditorExtensionsRegistry.getSomeEditorContributions([
-			PlaceholderTextContribution.ID,
-			SuggestController.ID,
-		]).map(contribution =>
-			contribution.id === SuggestController.ID ? chatSuggest : contribution,
-		);
+		const contributionIds = ['editor.contrib.placeholderText', 'editor.contrib.suggestController'];
 		this.editor = this._register(instantiationService.createInstance(CodeEditorWidget, {
 			container: this.element,
 			model: this.model,
@@ -87,7 +63,9 @@ export class ChatInputEditor extends Disposable implements IChatInputEditor {
 			overviewRulerLanes: 0,
 			scrollBeyondLastLine: false,
 			lineWrapping: EditorLineWrapping.On,
-			contributions,
+			contributionIds,
+			completionProviders,
+			completionWidgetContainer: this.element,
 		}));
 		const layout = this._register(new RunOnceScheduler(() => this.layout(), 0));
 		this._register(this.model.onDidChangeContent(() => {

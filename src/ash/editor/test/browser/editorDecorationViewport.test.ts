@@ -1,3 +1,5 @@
+import { registerTestCodeEditorFeatures } from '../../../../../test/fixtures/codeEditorFeatures.js';
+import { after as afterCodeFeatures } from 'mocha';
 import './testEditorDom.js';
 import { browserEnvironment } from './testEditorDom.js';
 import { editorCursorForeground } from '../../common/core/editorColorRegistry.js';
@@ -5,7 +7,7 @@ import assert from "node:assert/strict";
 import { test } from "mocha";
 import { JSDOM } from "jsdom";
 import { TextDecorationCollection } from "../../common/model/decorationCollection.js";
-import { LanguageDiagnosticDecorationBridge } from "../../contrib/gotoError/common/diagnosticDecorations.js";
+import { LanguageDiagnosticDecorationBridge } from "../../../../../extensions/code/browser/contrib/gotoError/common/diagnosticDecorations.js";
 import { LanguageResultAcceptance, createLanguageDiagnosticStore } from '../../common/model/languageResultStore.js';
 import { LanguageDiagnosticSeverity } from '../../common/languages.js';
 import { Position } from "../../common/core/position.js";
@@ -687,3 +689,6 @@ class FixedTextMeasurer implements TextMeasurer {
 		return [...text].length * 10;
 	}
 }
+
+const codeFeatures = registerTestCodeEditorFeatures();
+afterCodeFeatures(() => codeFeatures.dispose());

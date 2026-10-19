@@ -1,3 +1,5 @@
+import { registerTestCodeEditorFeatures } from '../../../../../test/fixtures/codeEditorFeatures.js';
+import { after as afterCodeFeatures } from 'mocha';
 import './testEditorDom.js';
 import assert from "node:assert/strict";
 import { test } from "mocha";
@@ -644,3 +646,6 @@ function requiredElement<T extends Element = HTMLElement>(root: ParentNode, sele
 	assert.ok(element);
 	return element;
 }
+
+const codeFeatures = registerTestCodeEditorFeatures();
+afterCodeFeatures(() => codeFeatures.dispose());

@@ -1,3 +1,5 @@
+import { registerTestCodeEditorFeatures } from '../../../../../../test/fixtures/codeEditorFeatures.js';
+import { after } from 'mocha';
 import '../testEditorDom.js';
 
 import { h, text } from '../../../../base/browser/dom.js';
@@ -30,11 +32,10 @@ const { ViewPart } = await import('../../../browser/view/viewPart.js');
 const { observableCodeEditor } = await import('../../../browser/observableCodeEditor.js');
 const { InstantiationService } = await import("../../../../platform/instantiation/common/instantiationService.js");
 const { ILogService, NullLoggerService } = await import('../../../../platform/log/common/log.js');
-const { PlaceholderTextContribution } = await import("../../../contrib/placeholderText/browser/placeholderTextContribution.js");
+const { PlaceholderTextContribution } = await import("../../../../../../extensions/code/browser/contrib/placeholderText/placeholderTextContribution.js");
 const { VersionedEditorWorkerClient } = await import('../../../browser/services/editorWorkerService.js');
 const { EditorWorker } = await import('../../../common/services/editorWebWorker.js');
-await import("../../../contrib/placeholderText/browser/placeholderText.contribution.js");
-await import('../../../contrib/inPlaceReplace/browser/inPlaceReplace.js');
+await import('../../../../../../extensions/code/browser/contrib/inPlaceReplace/browser/inPlaceReplace.js');
 
 const enabledAccessibilityService: IAccessibilityService = {
 	onDidChangeScreenReaderOptimized: EditorEvent.None,
@@ -202,7 +203,7 @@ test('CodeEditorWidget scopes and updates the standard editor context keys', () 
 });
 
 test('force retokenize action refreshes the active model through its syntax provider', async () => {
-	await import('../../../contrib/tokenization/browser/tokenization.contribution.js');
+	await import('../../../../../../extensions/code/browser/contrib/tokenization/browser/tokenization.contribution.js');
 	using providers = new SyntaxProviderRegistry();
 	let requests = 0;
 	using registration = providers.register({
@@ -274,7 +275,7 @@ test('an editor without contributions renders model tokens across model replacem
 });
 
 test('move selected text actions update text, selection and undo through the editor', async () => {
-	await import('../../../contrib/caretOperations/browser/caretOperations.js');
+	await import('../../../../../../extensions/code/browser/contrib/caretOperations/browser/caretOperations.js');
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	using model = new TextModel('012345');
@@ -333,7 +334,7 @@ test('move selected text actions update text, selection and undo through the edi
 });
 
 test('insert final new line action appends the model EOL and keeps the selection', async () => {
-	await import('../../../contrib/insertFinalNewLine/browser/insertFinalNewLine.js');
+	await import('../../../../../../extensions/code/browser/contrib/insertFinalNewLine/browser/insertFinalNewLine.js');
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	using model = new TextModel('alpha');
@@ -354,7 +355,7 @@ test('insert final new line action appends the model EOL and keeps the selection
 });
 
 test('CodeEditorWidget actions keep their editor context across read-only changes and model switches', async () => {
-	await import('../../../contrib/linesOperations/browser/linesOperations.js');
+	await import('../../../../../../extensions/code/browser/contrib/linesOperations/browser/linesOperations.js');
 	const dom = new JSDOM('<!doctype html><body><main></main><aside></aside></body>');
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	using first = new TextModel('first\nkeep');
@@ -1101,7 +1102,7 @@ test('trigger reports synchronous command errors and rejected action promises', 
 });
 
 test('formatting context keys follow registration, language changes, and model replacement', async () => {
-	await import('../../../contrib/format/browser/formatActions.js');
+	await import('../../../../../../extensions/code/browser/contrib/format/browser/formatActions.js');
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	using model = new TextModel('alpha', { languageId: 'plaintext' });
@@ -1146,7 +1147,7 @@ test('selection formatting merges expanded edits repeatedly before one undoable 
 		model,
 		contributions: [],
 	});
-	const { formatEditor, FormattingKind, FormattingConflicts } = await import('../../../contrib/format/browser/format.js');
+	const { formatEditor, FormattingKind, FormattingConflicts } = await import('../../../../../../extensions/code/browser/contrib/format/browser/format.js');
 	using selector = FormattingConflicts.setFormatterSelector(async providers => providers[0]);
 	const features = editor.invokeWithinContext(accessor => accessor.get(ILanguageFeaturesService));
 	const queried: string[] = [];
@@ -1168,8 +1169,8 @@ test('selection formatting merges expanded edits repeatedly before one undoable 
 });
 
 test('format actions share the model worker and release the save hook on detach', async () => {
-	await import('../../../contrib/format/browser/formatActions.js');
-	const { FormattingConflicts, FormattingMode } = await import('../../../contrib/format/browser/format.js');
+	await import('../../../../../../extensions/code/browser/contrib/format/browser/formatActions.js');
+	const { FormattingConflicts, FormattingMode } = await import('../../../../../../extensions/code/browser/contrib/format/browser/format.js');
 	const { IVersionedEditorWorkerClient } = await import('../../../browser/services/editorWorkerService.js');
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
@@ -1227,3 +1228,6 @@ test('format actions share the model worker and release the save hook on detach'
 	}
 	dom.window.close();
 });
+
+const codeFeatures = registerTestCodeEditorFeatures();
+after(() => codeFeatures.dispose());

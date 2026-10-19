@@ -21,13 +21,13 @@ import { KeybindingsRegistry, KeybindingWeight } from '../../platform/keybinding
 import { Registry } from '../../platform/registry/common/platform.js';
 import { assertType } from '../../base/common/types.js';
 import { ThemeIcon } from '../../base/common/themables.js';
-import { IDisposable, toDisposable } from '../../base/common/lifecycle.js';
+import { DisposableStore, IDisposable, markAsSingleton, toDisposable } from '../../base/common/lifecycle.js';
 import { KeyMod, KeyCode } from '../../base/common/keyCodes.js';
 import { ILogService } from '../../platform/log/common/log.js';
 import { getActiveElement } from '../../base/browser/dom.js';
 import { OperatingSystem, operatingSystem } from '../../base/common/platform.js';
 import { TriggerInlineEditCommandsRegistry } from './triggerInlineEditCommandsRegistry.js';
-import { type Event } from '../../base/common/event.js';
+import { Emitter, type Event } from '../../base/common/event.js';
 import { type TextModel } from '../common/model/textModel.js';
 import { type ILanguageConfigurationService } from '../common/languages/languageConfigurationRegistry.js';
 import { type ILanguageFeaturesService } from '../common/services/languageFeatures.js';
@@ -138,59 +138,63 @@ export abstract class Command {
 		this.canTriggerInlineEdits = opts.canTriggerInlineEdits;
 	}
 
-	public register(): void {
+	public register(): IDisposable {
+		const lifetime = new DisposableStore();
+		try {
 
-		if (Array.isArray(this._menuOpts)) {
-			this._menuOpts.forEach(this._registerMenuItem, this);
-		} else if (this._menuOpts) {
-			this._registerMenuItem(this._menuOpts);
-		}
+			if (Array.isArray(this._menuOpts)) {
+				this._menuOpts.forEach(item => lifetime.add(this._registerMenuItem(item)));
+			} else if (this._menuOpts) {
+				lifetime.add(this._registerMenuItem(this._menuOpts));
+			}
 
-		if (this._kbOpts) {
-			const kbOptsArr = Array.isArray(this._kbOpts) ? this._kbOpts : [this._kbOpts];
-			for (const kbOpts of kbOptsArr) {
-				const platformKeybindings = operatingSystem === OperatingSystem.Macintosh
-					? kbOpts.mac
-					: operatingSystem === OperatingSystem.Windows
-						? kbOpts.win
-						: kbOpts.linux;
-				let kbWhen = kbOpts.kbExpr;
-				if (this.precondition) {
-					if (kbWhen) {
-						kbWhen = ContextKeyExpr.and(kbWhen, this.precondition);
-					} else {
-						kbWhen = this.precondition;
+			if (this._kbOpts) {
+				const kbOptsArr = Array.isArray(this._kbOpts) ? this._kbOpts : [this._kbOpts];
+				for (const kbOpts of kbOptsArr) {
+					const platformKeybindings = operatingSystem === OperatingSystem.Macintosh
+						? kbOpts.mac
+						: operatingSystem === OperatingSystem.Windows
+							? kbOpts.win
+							: kbOpts.linux;
+					let kbWhen = kbOpts.kbExpr;
+					if (this.precondition) {
+						if (kbWhen) {
+							kbWhen = ContextKeyExpr.and(kbWhen, this.precondition);
+						} else {
+							kbWhen = this.precondition;
+						}
 					}
-				}
 
-				// Equal-weight rules prefer the latest entry; menus should display the primary shortcut.
-				for (const keybinding of [...(platformKeybindings?.secondary ?? kbOpts.secondary ?? []).slice().reverse(), platformKeybindings?.primary ?? kbOpts.primary]) {
-					if (keybinding !== undefined && keybinding !== 0) {
-						KeybindingsRegistry.registerKeybindingRule({
-							command: this.id,
-							keybinding,
-							when: kbWhen ?? undefined,
-							args: kbOpts.args === undefined ? undefined : [kbOpts.args],
-							priority: kbOpts.weight,
-						});
+					// Equal-weight rules prefer the latest entry; menus should display the primary shortcut.
+					for (const keybinding of [...(platformKeybindings?.secondary ?? kbOpts.secondary ?? []).slice().reverse(), platformKeybindings?.primary ?? kbOpts.primary]) {
+						if (keybinding !== undefined && keybinding !== 0) {
+							lifetime.add(KeybindingsRegistry.registerKeybindingRule({
+								command: this.id,
+								keybinding,
+								when: kbWhen ?? undefined,
+								args: kbOpts.args === undefined ? undefined : [kbOpts.args],
+								priority: kbOpts.weight,
+							}));
+						}
 					}
 				}
 			}
-		}
 
-		CommandsRegistry.registerMany([{
-			id: this.id,
-			handler: (accessor, args) => this.runCommand(accessor, args),
-			metadata: this.metadata,
-		}]);
+			lifetime.add(CommandsRegistry.registerMany([{
+				id: this.id,
+				handler: (accessor, args) => this.runCommand(accessor, args),
+				metadata: this.metadata,
+			}]));
 
-		if (this.canTriggerInlineEdits) {
-			TriggerInlineEditCommandsRegistry.registerCommand(this.id);
-		}
+			if (this.canTriggerInlineEdits) {
+				lifetime.add(TriggerInlineEditCommandsRegistry.registerScopedCommand(this.id));
+			}
+			return lifetime;
+		} catch (error) { lifetime.dispose(); throw error; }
 	}
 
-	private _registerMenuItem(item: ICommandMenuOptions): void {
-		MenusRegistry.appendMenuItem(item.menuId, {
+	private _registerMenuItem(item: ICommandMenuOptions): IDisposable {
+		return MenusRegistry.appendMenuItem(item.menuId, {
 			group: item.group,
 			command: {
 				id: this.id,
@@ -545,6 +549,8 @@ export interface TextEditorContributionContext extends SharedTextContext {
 		| 'colorDecoratorsActivatedOn'
 		| 'colorDecoratorsLimit'
 		| 'completionWorkerFactory'
+		| 'completionProviders'
+		| 'completionWidgetContainer'
 		| 'defaultColorDecorators'
 		| 'find'
 		| 'folding'
@@ -592,13 +598,24 @@ export interface EditorContributionHooks {
 }
 
 /** One registry contains constructor contributions and features with pre-view configuration. */
-export type EditorContributionRegistration = IEditorContributionDescription | EditorContributionHooks;
+export type EditorContributionRegistration = (IEditorContributionDescription | EditorContributionHooks) & {
+	/** The registration owner retires its instances without closing their shared text model. */
+	readonly providerSignal?: AbortSignal;
+};
+
+/** A trusted client package declares behavior; its bridge owns every active registration. */
+export interface EditorFeatureSet {
+	readonly contributions: readonly EditorContributionRegistration[];
+	readonly actions: readonly EditorAction[];
+	readonly commands: readonly Command[];
+	readonly registrations: readonly (() => IDisposable)[];
+}
 
 // --- Registration of commands and actions
 
 
-export function registerModelAndPositionCommand(id: string, handler: (accessor: ServicesAccessor, model: ITextModel, position: Position, ...args: unknown[]) => unknown) {
-	CommandsRegistry.register(id, function (accessor, ...args) {
+export function registerModelAndPositionCommand(id: string, handler: (accessor: ServicesAccessor, model: ITextModel, position: Position, ...args: unknown[]) => unknown): IDisposable {
+	return CommandsRegistry.register(id, function (accessor, ...args) {
 
 		const instaService = accessor.get(IInstantiationService);
 
@@ -669,6 +686,26 @@ export function registerDiffEditorContribution<Services extends EditorService[]>
 }
 
 export namespace EditorExtensionsRegistry {
+	export const onDidChangeEditorContributions: Event<void> = (listener, thisArgs, disposables) => EditorContributionRegistry.INSTANCE.onDidChange(listener, thisArgs, disposables);
+	/** Installs a complete admitted provider batch; withdrawing it also retires existing instances. */
+	export function registerEditorContributions(contributions: readonly EditorContributionRegistration[]): IDisposable {
+		return EditorContributionRegistry.INSTANCE.registerEditorContributions(contributions);
+	}
+
+	export function registerEditorFeatures(features: EditorFeatureSet): IDisposable {
+		const lifetime = new DisposableStore();
+		try {
+			for (const action of features.actions) {
+				lifetime.add(action.register());
+				lifetime.add(EditorContributionRegistry.INSTANCE.registerDynamicEditorAction(action));
+			}
+			for (const command of features.commands) lifetime.add(EditorContributionRegistry.INSTANCE.registerScopedEditorCommand(command));
+			for (const register of features.registrations) lifetime.add(register());
+			lifetime.add(registerEditorContributions(features.contributions));
+			return lifetime;
+		} catch (error) { lifetime.dispose(); throw error; }
+	}
+
 	export function registerDynamicEditorAction(action: EditorAction): IDisposable {
 		return EditorContributionRegistry.INSTANCE.registerDynamicEditorAction(action);
 	}
@@ -704,6 +741,9 @@ class EditorContributionRegistry {
 	public static readonly INSTANCE = new EditorContributionRegistry();
 
 	private readonly editorContributions: EditorContributionRegistration[] = [];
+	private readonly staticContributions = markAsSingleton(new DisposableStore());
+	private readonly changeEmitter = markAsSingleton(new Emitter<void>());
+	public readonly onDidChange = this.changeEmitter.event;
 	private readonly diffEditorContributions: IDiffEditorContributionDescription[] = [];
 	private readonly editorActions: EditorAction[] = [];
 	private readonly editorCommands: { [commandId: string]: EditorCommand; } = Object.create(null);
@@ -711,7 +751,33 @@ class EditorContributionRegistry {
 	constructor() {
 	}
 
-	public registerEditorContribution(contribution: EditorContributionRegistration): void {
+	public registerEditorContributions(contributions: readonly EditorContributionRegistration[]): IDisposable {
+		const ids = new Set<string>();
+		for (const contribution of contributions) {
+			this.validateContribution(contribution);
+			if (ids.has(contribution.id)) throw new Error(`Duplicate editor contribution '${contribution.id}'`);
+			ids.add(contribution.id);
+		}
+		const lifetime = new DisposableStore();
+		const controller = new AbortController();
+		try {
+			for (const contribution of contributions) {
+				lifetime.add(this.addEditorContribution({ ...contribution, providerSignal: controller.signal }));
+			}
+		} catch (error) {
+			lifetime.dispose();
+			controller.abort();
+			throw error;
+		}
+		this.changeEmitter.fire();
+		return toDisposable(() => {
+			// New views must stop selecting this batch before callbacks dispose old instances.
+			try { lifetime.dispose(); }
+			finally { controller.abort(); this.changeEmitter.fire(); }
+		});
+	}
+
+	private validateContribution(contribution: EditorContributionRegistration): void {
 		if (!contribution?.id?.trim() || !('ctor' in contribution ? contribution.ctor : contribution.configure || contribution.install)) {
 			throw new TypeError('Editor contribution is invalid');
 		}
@@ -722,11 +788,30 @@ class EditorContributionRegistry {
 			for (const command of contribution.commands ?? []) {
 				if (!command.id.trim()) throw new TypeError('Editor command ID is required');
 			}
+		}
+	}
+
+	public registerEditorContribution(contribution: EditorContributionRegistration): void {
+		this.staticContributions.add(this.addEditorContribution(contribution));
+	}
+
+	private addEditorContribution(contribution: EditorContributionRegistration): IDisposable {
+		this.validateContribution(contribution);
+		const lifetime = new DisposableStore();
+		if (!('ctor' in contribution)) {
 			for (const command of contribution.commands ?? []) {
-				if (command.canTriggerInlineEdits) TriggerInlineEditCommandsRegistry.registerCommand(command.id);
+				if (!command.canTriggerInlineEdits) continue;
+				if (contribution.providerSignal) lifetime.add(TriggerInlineEditCommandsRegistry.registerScopedCommand(command.id));
+				else TriggerInlineEditCommandsRegistry.registerCommand(command.id);
 			}
 		}
-		this.editorContributions.push(Object.freeze({ ...contribution }));
+		const registered = Object.freeze({ ...contribution });
+		this.editorContributions.push(registered);
+		lifetime.add(toDisposable(() => {
+			const index = this.editorContributions.indexOf(registered);
+			if (index >= 0) this.editorContributions.splice(index, 1);
+		}));
+		return lifetime;
 	}
 
 	public getEditorContributions(): EditorContributionRegistration[] {
@@ -745,7 +830,7 @@ class EditorContributionRegistry {
 		if (this.editorActions.some(existing => existing.id === action.id)) {
 			throw new Error(`Editor action is already registered: ${action.id}`);
 		}
-		action.register();
+		this.staticContributions.add(action.register());
 		this.editorActions.push(action);
 	}
 
@@ -765,8 +850,18 @@ class EditorContributionRegistry {
 	}
 
 	public registerEditorCommand(editorCommand: EditorCommand) {
-		editorCommand.register();
+		this.staticContributions.add(editorCommand.register());
 		this.editorCommands[editorCommand.id] = editorCommand;
+	}
+
+	public registerScopedEditorCommand(command: Command): IDisposable {
+		const lifetime = new DisposableStore();
+		lifetime.add(command.register());
+		if (command instanceof EditorCommand) {
+			this.editorCommands[command.id] = command;
+			lifetime.add(toDisposable(() => { if (this.editorCommands[command.id] === command) delete this.editorCommands[command.id]; }));
+		}
+		return lifetime;
 	}
 
 	public getEditorCommand(commandId: string): EditorCommand {
@@ -776,8 +871,9 @@ class EditorContributionRegistry {
 }
 Registry.add(Extensions.EditorCommonContributions, EditorContributionRegistry.INSTANCE);
 
+const sharedCommands = markAsSingleton(new DisposableStore());
 function registerCommand<T extends Command>(command: T): T {
-	command.register();
+	sharedCommands.add(command.register());
 	return command;
 }
 

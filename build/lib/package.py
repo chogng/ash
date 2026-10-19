@@ -98,6 +98,7 @@ def build_package_directory(
     git_extension_binary: Optional[Path] = None,
     markdown_math_binary: Optional[Path] = None,
     academy_extension_binary: Optional[Path] = None,
+    code_editor_extension_binary: Optional[Path] = None,
     markdown_extension_binary: Optional[Path] = None,
     github_authentication_binary: Optional[Path] = None,
     github_extension_binary: Optional[Path] = None,
@@ -112,6 +113,10 @@ def build_package_directory(
     if academy_extension_binary is None:
         raise RuntimeError(
             "Academy extension executable is required in product packages"
+        )
+    if code_editor_extension_binary is None:
+        raise RuntimeError(
+            "Code editor extension executable is required in product packages"
         )
     if markdown_extension_binary is None:
         raise RuntimeError(
@@ -173,6 +178,7 @@ def build_package_directory(
             "gitExtension": str(git_extension_binary),
             "markdownMath": str(markdown_math_binary),
             "academyExtension": str(academy_extension_binary),
+            "codeEditorExtension": str(code_editor_extension_binary),
             "markdownExtension": str(markdown_extension_binary),
             "githubAuthentication": str(github_authentication_binary),
             "githubExtension": str(github_extension_binary),
@@ -796,6 +802,9 @@ def system_signing_artifacts(package: Path, spec: TargetSpec) -> Dict[str, Path]
             "academyExtension": package
             / "bin"
             / ("ash-academy" + spec.executable_suffix),
+            "codeEditorExtension": package
+            / "bin"
+            / ("ash-code-editor" + spec.executable_suffix),
             "markdownExtension": package
             / "bin"
             / ("ash-markdown-language-features" + spec.executable_suffix),
@@ -888,6 +897,7 @@ def record_system_signing(
             "gitExtension",
             "markdownMath",
             "academyExtension",
+            "codeEditorExtension",
             "markdownExtension",
             "githubAuthentication",
             "githubExtension",

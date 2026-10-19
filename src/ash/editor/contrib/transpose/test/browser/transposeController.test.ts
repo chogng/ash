@@ -1,3 +1,5 @@
+import { registerTestCodeEditorFeatures } from '../../../../../../../test/fixtures/codeEditorFeatures.js';
+import { after as afterCodeFeatures } from 'mocha';
 import '../../../../test/browser/testEditorDom.js';
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
@@ -9,8 +11,8 @@ import { TextModel } from '../../../../common/model/textModel.js';
 const { CodeEditorWidget } = await import('../../../../browser/widget/codeEditor/codeEditorWidget.js');
 const { createTestCodeEditor } = await import('../../../../test/browser/testCodeEditor.js');
 const { EditorExtensionsRegistry } = await import('../../../../browser/editorExtensions.js');
-await import('../../../caretOperations/browser/transpose.js');
-await import('../../../linesOperations/browser/linesOperations.js');
+await import('../../../../../../../extensions/code/browser/contrib/caretOperations/browser/transpose.js');
+await import('../../../../../../../extensions/code/browser/contrib/linesOperations/browser/linesOperations.js');
 
 
 test('Transpose Letters runs directly through its canonical action', () => {
@@ -99,3 +101,6 @@ test('Transpose Letters leaves a single emoji unchanged without publishing an ed
 		dom.window.close();
 	}
 });
+
+const codeFeatures = registerTestCodeEditorFeatures();
+afterCodeFeatures(() => codeFeatures.dispose());

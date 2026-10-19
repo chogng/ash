@@ -1,3 +1,5 @@
+import { registerTestCodeEditorFeatures } from '../../../../../test/fixtures/codeEditorFeatures.js';
+import { after as afterCodeFeatures } from 'mocha';
 import { Event } from '../../../base/common/event.js';
 import type { TreeSitterTokenizationMeasure } from '../../common/services/treeSitter/treeSitterLibraryService.js';
 import { strict as assert } from 'node:assert';
@@ -7,7 +9,7 @@ import { before, after, test } from 'mocha';
 import * as treeSitterNamespace from '@vscode/tree-sitter-wasm';
 import { TextModel } from '../../common/model/textModel.js';
 import { Range } from '../../common/core/range.js';
-import { TreeSitterTree, type TreeSitterTokenizationRuntime } from '../../common/model/tokens/treeSitter/treeSitterTree.js';
+import { TreeSitterTree, type TreeSitterTokenizationRuntime } from '../../common/services/treeSitter/treeSitterTree.js';
 
 const runtime = (treeSitterNamespace as unknown as { default?: typeof treeSitterNamespace; }).default ?? treeSitterNamespace;
 const grammars = new Map<string, TreeSitterTokenizationRuntime>();
@@ -215,7 +217,7 @@ test('Tree-sitter publishes newly visible rows once so view token caches refresh
 // Exercise the Worker boundary against real grammars, not a second fake parser.
 import { TreeSitterWorker } from '../../common/services/treeSitter/treeSitterWorker.js';
 import { getLanguageFoldingRules } from '../../../platform/language/common/languageFolding.generated.js';
-import { TreeSitterSyntaxTokenBackend } from '../../common/model/tokens/treeSitter/treeSitterSyntaxTokenBackend.js';
+import { TreeSitterSyntaxTokenBackend } from '../../../../../extensions/code/browser/model/tokens/treeSitter/treeSitterSyntaxTokenBackend.js';
 
 test('a changed viewport preempts structure work without rejecting its shared consumers', async () => {
 	using model = new TextModel('function first() {}\nfunction second() {}');
@@ -643,3 +645,6 @@ test('Python default queries highlight decorators, functions and Unicode strings
 	await value.whenReady(signal());
 	await assertFresh(value, model, 'python');
 });
+
+const codeFeatures = registerTestCodeEditorFeatures();
+afterCodeFeatures(() => codeFeatures.dispose());

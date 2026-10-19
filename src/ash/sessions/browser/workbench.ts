@@ -211,7 +211,7 @@ import { TextFileEditorTracker } from '../../workbench/contrib/files/browser/edi
 import { ITextModelResourceService, IFileTextModelService } from '../../workbench/services/textmodelResolver/common/textModelResourceService.js';
 import { getBrowserTextModelService } from '../../workbench/services/textmodelResolver/browser/browserTextModelService.js';
 import { getBrowserTextResourceStore } from '../../workbench/contrib/codeEditor/browser/browserTextResourceStore.js';
-import { TreeSitterLibraryService, TreeSitterSyntaxProviders, createTreeSitterSyntaxTokenBackend } from '../../workbench/services/treeSitter/browser/treeSitterLibraryService.js';
+import { TreeSitterLibraryService, TreeSitterSyntaxProviders, createTreeSitterSyntaxSession } from '../../workbench/services/treeSitter/browser/treeSitterLibraryService.js';
 import { ITreeSitterLibraryService } from '../../editor/common/services/treeSitter/treeSitterLibraryService.js';
 import { ISyntaxApi } from '../../platform/syntax/common/syntaxApi.js';
 import { AppServerExtensionService } from '../../workbench/services/extensions/browser/appServerExtensionService.js';
@@ -529,7 +529,7 @@ export abstract class Workbench extends Disposable {
 			languageService,
 			languageConfigurationService: services.get(ILanguageConfigurationService),
 			languageFeaturesService: services.get(ILanguageFeaturesService),
-			createSyntaxTokenBackend: model => createTreeSitterSyntaxTokenBackend(model, configurationService, treeSitterLibrary, themeService),
+			createSyntaxSession: model => createTreeSitterSyntaxSession(model, configurationService, treeSitterLibrary, themeService),
 			onDidChangeSyntaxBackend: Event.any(
 				treeSitterLibrary.onDidChange,
 				Event.map(themeService.onDidColorThemeChange, () => undefined),

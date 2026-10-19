@@ -3,7 +3,7 @@ import { HierarchicalKind } from '../../../../base/common/hierarchicalKind.js';
 import type { JsonSchema } from '../../../../base/common/jsonSchema.js';
 import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { ILanguageFeaturesService } from '../../../../editor/common/services/languageFeatures.js';
-import { CodeActionKind } from '../../../../editor/contrib/codeAction/common/types.js';
+import { CodeActionKind } from '../../../../../../extensions/code/browser/contrib/codeAction/common/types.js';
 import { localize } from '../../../../nls.js';
 import { ConfigurationScope, type IConfigurationKeyDefinition } from '../../../../platform/configuration/common/configurationRegistry.js';
 import { IKeybindingService } from '../../../../platform/keybinding/common/keybinding.js';

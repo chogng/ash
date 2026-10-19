@@ -1,6 +1,7 @@
 import '../../../../../editor/test/browser/testEditorDom.js';
 import assert from 'node:assert/strict';
-import { test } from 'mocha';
+import { after, test } from 'mocha';
+import { registerTestCodeEditorFeatures } from '../../../../../../../test/fixtures/codeEditorFeatures.js';
 import { JSDOM } from 'jsdom';
 import { HierarchicalKind } from '../../../../../base/common/hierarchicalKind.js';
 import { toDisposable } from '../../../../../base/common/lifecycle.js';
@@ -11,8 +12,8 @@ import { TextModel } from '../../../../../editor/common/model/textModel.js';
 import { Selection } from '../../../../../editor/common/core/selection.js';
 import { ILanguageFeaturesService } from '../../../../../editor/common/services/languageFeatures.js';
 import { createTestCodeEditor, registerCodeEditorServices } from '../../../../../editor/test/browser/testCodeEditor.js';
-import { pasteAsPreferenceConfig } from '../../../../../editor/contrib/dropOrPasteInto/browser/copyPasteController.js';
-import { dropAsPreferenceConfig } from '../../../../../editor/contrib/dropOrPasteInto/browser/dropIntoEditorController.js';
+import { pasteAsPreferenceConfig } from '../../../../../../../extensions/code/browser/contrib/dropOrPasteInto/browser/copyPasteController.js';
+import { dropAsPreferenceConfig } from '../../../../../../../extensions/code/browser/contrib/dropOrPasteInto/browser/dropIntoEditorController.js';
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
 import { createConfigurationSchema } from '../../../../../platform/configuration/common/configurationSchema.js';
 import { IKeybindingService } from '../../../../../platform/keybinding/common/keybinding.js';
@@ -27,7 +28,7 @@ import { resetNlsResolver, setNlsMessages } from '../../../../../nls.js';
 import { DropOrPasteIntoCommands } from '../../browser/commands.js';
 import { DropOrPasteSchemaContribution } from '../../browser/configurationSchema.js';
 import '../../browser/dropOrPasteInto.contribution.js';
-import '../../../../../editor/contrib/dropOrPasteInto/browser/dropIntoEditorContribution.js';
+import '../../../../../../../extensions/code/browser/contrib/dropOrPasteInto/browser/dropIntoEditorContribution.js';
 
 for (const mode of ['paste', 'drop'] as const) {
 	test(`${mode} applies language-specific ordered preferences and opens its own settings from the selector`, async () => {
@@ -187,3 +188,6 @@ async function waitFor(predicate: () => boolean): Promise<void> {
 		await new Promise(resolve => setTimeout(resolve, 1));
 	}
 }
+
+const codeFeatures = registerTestCodeEditorFeatures(['editor.contrib.codeServices', 'editor.contrib.clipboard', 'editor.contrib.copyPasteActionController', 'editor.contrib.dropIntoEditorController', 'snippetController2']);
+after(() => codeFeatures.dispose());

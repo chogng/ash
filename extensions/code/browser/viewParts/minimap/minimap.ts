@@ -1,0 +1,295 @@
+import './minimap.css';
+import { MinimapTokensColorTracker } from './minimapTokensColorTracker.js';
+import { TokenizationRegistry } from '../../../../../src/ash/editor/common/languages.js';
+import { addDisposableListener, h } from '../../../../../src/ash/base/browser/dom.js';
+import { FastDomNode } from '../../../../../src/ash/base/browser/fastDomNode.js';
+import { toDisposable } from '../../../../../src/ash/base/common/lifecycle.js';
+import { clamp } from '../../../../../src/ash/base/common/numbers.js';
+import { ScrollbarVisibility } from '../../../../../src/ash/base/common/scrollable.js';
+import { isFullWidthCharacter } from '../../../../../src/ash/base/common/strings.js';
+import { Color } from '../../../../../src/ash/base/common/color.js';
+import { resolveSemanticTokenPresentation } from '../../../../../src/ash/editor/common/services/semanticTokensStyling.js';
+import { type IColorTheme } from '../../../../../src/ash/platform/theme/common/themeService.js';
+import { editorBackground, editorForeground } from '../../../../../src/ash/platform/theme/common/colors/editorColors.js';
+import { RGBA8 } from '../../../../../src/ash/editor/common/core/misc/rgba.js';
+import { MinimapCharRendererFactory } from './minimapCharRendererFactory.js';
+import { Constants } from './minimapCharSheet.js';
+import { type EditorMinimapLayoutInfo, EditorOption, RenderMinimap } from '../../../../../src/ash/editor/common/config/editorOptions.js';
+import { type TextModel } from '../../../../../src/ash/editor/common/model/textModel.js';
+import { type SemanticTokenSource } from '../../../../../src/ash/editor/common/tokens/languageTokens.js';
+import { type EditorVisualLineProjection } from '../../../../../src/ash/editor/common/viewModel/modelLineProjection.js';
+import { type EditorViewportLayout } from '../../../../../src/ash/editor/common/viewLayout/viewLayout.js';
+import { type RestrictedRenderingContext } from '../../../../../src/ash/editor/browser/view/renderingContext.js';
+import { ViewPart, PartFingerprint, PartFingerprints } from '../../../../../src/ash/editor/browser/view/viewPart.js';
+import { type ViewContext } from '../../../../../src/ash/editor/common/viewModel/viewContext.js';
+import { Range } from '../../../../../src/ash/editor/common/core/range.js';
+import { type EditorScrollPosition } from '../../../../../src/ash/editor/common/viewModel.js';
+import type * as viewEvents from '../../../../../src/ash/editor/common/viewEvents.js';
+
+export interface MinimapOptions {
+	readonly host: HTMLElement;
+	readonly model: TextModel;
+	readonly semanticTokenSource?: SemanticTokenSource;
+	readonly semanticHighlightingEnabled: (theme: IColorTheme) => boolean;
+	readonly readLayout: () => EditorViewportLayout;
+	readonly readVisualProjection: () => EditorVisualLineProjection;
+	readonly readProjectionRevision: () => number;
+	readonly scrollTo: (position: EditorScrollPosition) => void;
+}
+
+/** Owns the document overview canvas, viewport indicator, markers, and pointer navigation. */
+export class Minimap extends ViewPart {
+	private readonly domNode: HTMLDivElement;
+	private readonly root: FastDomNode<HTMLDivElement>;
+	private readonly canvas: HTMLCanvasElement;
+	private readonly slider: HTMLDivElement;
+	private dragging = false;
+	private dragOffset = 0;
+	private contentHeight = 0;
+	private sliderHeight = 0;
+	private sliderTop = 0;
+	private rasterKey: string | undefined;
+	private rasterDirty = true;
+
+	constructor(context: ViewContext, private readonly source: MinimapOptions) {
+		super(context);
+		this.domNode = h(source.host.ownerDocument, 'div');
+		this.root = new FastDomNode(this.domNode);
+		this.domNode.className = 'minimap';
+		this.root.setPosition('absolute');
+		this.domNode.setAttribute('role', 'presentation');
+		this.domNode.setAttribute('aria-hidden', 'true');
+		PartFingerprints.write(this.domNode, PartFingerprint.Minimap);
+		this.canvas = h(source.host.ownerDocument, 'canvas');
+		this.canvas.style.position = 'absolute';
+		this.canvas.style.left = '0';
+		this.slider = h(source.host.ownerDocument, 'div');
+		this.slider.className = 'stanza-editor-minimap-slider';
+		this.slider.setAttribute('aria-hidden', 'true');
+		this.domNode.append(this.canvas, this.slider);
+		this._register(toDisposable(() => this.domNode.remove()));
+		this._register(MinimapTokensColorTracker.getInstance().onDidChange(() => this.invalidateRaster()));
+		this._register(addDisposableListener(this.domNode, 'pointerdown', event => {
+			if (event.button !== 0) return;
+			const localY = event.clientY - this.domNode.getBoundingClientRect().top;
+			this.dragOffset = localY >= this.sliderTop && localY <= this.sliderTop + this.sliderHeight
+				? localY - this.sliderTop
+				: this.sliderHeight / 2;
+			this.dragging = true;
+			this.domNode.classList.add('stanza-editor-minimap-dragging');
+			this.domNode.setPointerCapture(event.pointerId);
+			this.moveTo(event.clientY);
+			event.preventDefault();
+		}));
+		this._register(addDisposableListener(this.domNode, 'pointermove', event => {
+			if (this.dragging) this.moveTo(event.clientY);
+		}));
+		this._register(addDisposableListener(this.domNode, 'pointerup', event => {
+			this.dragging = false;
+			this.domNode.classList.remove('stanza-editor-minimap-dragging');
+			if (this.domNode.hasPointerCapture(event.pointerId)) this.domNode.releasePointerCapture(event.pointerId);
+		}));
+		this._register(addDisposableListener(this.domNode, 'pointercancel', () => {
+			this.dragging = false;
+			this.domNode.classList.remove('stanza-editor-minimap-dragging');
+		}));
+	}
+
+	public getDomNode(): FastDomNode<HTMLElement> {
+		return this.root;
+	}
+
+	public override onConfigurationChanged(event: viewEvents.ViewConfigurationChangedEvent): boolean {
+		if (event.hasChanged(EditorOption.minimap) || event.hasChanged(EditorOption.fontInfo) || event.hasChanged(EditorOption.lineHeight) || event.hasChanged(EditorOption.padding)) {
+			this.invalidateRaster();
+		}
+		return true;
+	}
+
+	public override onFlushed(): boolean { return this.invalidateRaster(); }
+	public override onScrollChanged(event: viewEvents.ViewScrollChangedEvent): boolean {
+		return event.scrollTopChanged || event.scrollLeftChanged || event.scrollHeightChanged || event.scrollWidthChanged;
+	}
+	public override onLineMappingChanged(): boolean { return this.invalidateRaster(); }
+	public override onTokensChanged(): boolean { return this.invalidateRaster(); }
+	public override onTokensColorsChanged(): boolean { return this.invalidateRaster(); }
+	public override onThemeChanged(): boolean { return this.invalidateRaster(); }
+	public override onDecorationsChanged(event: viewEvents.ViewDecorationsChangedEvent): boolean {
+		return event.affectsMinimap ? this.invalidateRaster() : false;
+	}
+
+	render(context: RestrictedRenderingContext): void {
+		const geometry = this._context.configuration.options.get(EditorOption.layoutInfo).minimap;
+		const minimap = this._context.configuration.options.get(EditorOption.minimap);
+		const padding = this._context.configuration.options.get(EditorOption.padding);
+		const scrollbar = this._context.configuration.options.get(EditorOption.scrollbar);
+		const visible = minimap.enabled && geometry.renderMinimap !== RenderMinimap.None && geometry.minimapWidth > 0 && context.viewportHeight > 0;
+		this.domNode.style.display = visible ? '' : 'none';
+		this.slider.hidden = !visible;
+		if (!visible) return;
+
+		const projection = this.source.readVisualProjection();
+		const lineHeight = Math.max(1, this.source.readLayout().lineHeight);
+		const rows = projection.visualLineCount + (padding.top + padding.bottom) / lineHeight;
+		const pixelRatio = geometry.minimapCanvasInnerHeight / Math.max(1, geometry.minimapCanvasOuterHeight);
+		// The horizontal scrollbar occupies the bottom of the vertical track even
+		// when its auto thumb is faded out. Use that same extent for the document map.
+		const horizontalScrollbarHeight = scrollbar.horizontal === ScrollbarVisibility.Visible || (scrollbar.horizontal === ScrollbarVisibility.Auto && context.scrollWidth > context.viewportWidth)
+			? scrollbar.horizontalScrollbarSize : 0;
+		const trackHeight = Math.max(0, context.viewportHeight - horizontalScrollbarHeight);
+		this.contentHeight = Math.min(trackHeight, Math.max(0, rows * geometry.minimapLineHeight / Math.max(1, pixelRatio)));
+		const scaleY = geometry.minimapIsSampling ? this.contentHeight * pixelRatio / rows : geometry.minimapLineHeight;
+		const viewportRows = context.viewportHeight / lineHeight;
+		this.sliderHeight = Math.min(this.contentHeight, Math.max(8, viewportRows * scaleY / pixelRatio));
+		const scrollRange = Math.max(0, context.scrollHeight - context.viewportHeight);
+		const scrollRatio = scrollRange > 0 ? context.scrollTop / scrollRange : 0;
+		this.sliderTop = scrollRatio * (this.contentHeight - this.sliderHeight);
+		const rasterHeight = this.contentHeight * pixelRatio;
+		const rasterOffset = scrollRatio * Math.max(0, rows * scaleY - rasterHeight);
+		this.domNode.classList.toggle('stanza-editor-minimap-hover-slider', minimap.showSlider === 'mouseover');
+		this.domNode.classList.toggle('has-right-overflow', context.scrollWidth > context.scrollLeft + context.viewportWidth);
+		this.domNode.style.left = `${geometry.minimapLeft}px`;
+		this.domNode.style.top = '0px';
+		this.domNode.style.width = `${geometry.minimapWidth}px`;
+		this.domNode.style.height = `${trackHeight}px`;
+		this.slider.style.top = `${this.sliderTop}px`;
+		this.slider.style.height = `${this.sliderHeight}px`;
+		this.canvas.style.width = `${geometry.minimapCanvasOuterWidth}px`;
+		this.canvas.style.height = `${geometry.minimapCanvasOuterHeight}px`;
+		const width = Math.max(1, Math.round(geometry.minimapCanvasInnerWidth));
+		const height = Math.max(1, Math.round(geometry.minimapCanvasInnerHeight));
+		// Placement-only changes reuse the raster. Proportional scrolling changes
+		// its document window; sampling keeps the whole-document raster stable.
+		const rasterKey = [
+			width,
+			height,
+			geometry.minimapScale,
+			geometry.minimapLineHeight,
+			scaleY,
+			rasterOffset,
+			this.contentHeight,
+			context.viewportHeight,
+			padding.top,
+			padding.bottom,
+			this.source.model.version,
+			this.source.model.getOptions().tabSize,
+			this.source.readProjectionRevision(),
+		].join(':');
+		if (this.rasterDirty || this.rasterKey !== rasterKey) {
+			if (this.canvas.width !== width) this.canvas.width = width;
+			if (this.canvas.height !== height) this.canvas.height = height;
+			this.paint(geometry, scaleY, rasterOffset);
+			this.rasterKey = rasterKey;
+			this.rasterDirty = false;
+		}
+	}
+
+	private invalidateRaster(): boolean {
+		this.rasterDirty = true;
+		this.setShouldRender();
+		return true;
+	}
+
+	private paint(geometry: EditorMinimapLayoutInfo, scaleY: number, rasterOffset: number): void {
+		const painter = this.canvas.getContext('2d');
+		if (!painter) return;
+		const padding = this._context.configuration.options.get(EditorOption.padding);
+		const tabSize = this.source.model.getOptions().tabSize;
+		const width = this.canvas.width;
+		const height = this.canvas.height;
+		painter.clearRect(0, 0, width, height);
+		const projection = this.source.readVisualProjection();
+		const lineHeight = Math.max(1, this.source.readLayout().lineHeight);
+		const paddingRows = padding.top / lineHeight;
+		const fontInfo = this._context.configuration.options.get(EditorOption.fontInfo);
+		const renderer = MinimapCharRendererFactory.create(geometry.minimapScale, fontInfo.fontFamily);
+		const charWidth = Constants.BASE_CHAR_WIDTH * renderer.scale;
+		const force1pxHeight = scaleY < Constants.BASE_CHAR_HEIGHT * renderer.scale;
+		const glyphHeight = force1pxHeight ? 1 : Constants.BASE_CHAR_HEIGHT * renderer.scale;
+		const innerLinePadding = Math.max(0, Math.floor((scaleY - glyphHeight) / 2));
+		const colors = MinimapTokensColorTracker.getInstance();
+		const hasTokenColors = (TokenizationRegistry.getColorMap()?.length ?? 0) > 2;
+		const backgroundColor = this._context.theme.getColor(editorBackground)!.rgba;
+		const foregroundColor = this._context.theme.getColor(editorForeground)!.rgba;
+		const background = new RGBA8(backgroundColor.r, backgroundColor.g, backgroundColor.b, Math.round(backgroundColor.a * 255));
+		const foreground = new RGBA8(foregroundColor.r, foregroundColor.g, foregroundColor.b, Math.round(foregroundColor.a * 255));
+		const image = painter.createImageData(width, height);
+		// A raster row can represent many source rows. Sample before reading text
+		// and tokens, so large files neither overpaint rows nor block text rendering.
+		const startLine = Math.max(0, Math.floor(rasterOffset / scaleY - paddingRows));
+		const endLine = Math.min(projection.visualLineCount, Math.ceil((rasterOffset + height) / scaleY - paddingRows));
+		const lineCount = endLine - startLine;
+		const sampleCount = Math.min(lineCount, Math.ceil(lineCount * scaleY));
+		for (let sample = 0; sample < sampleCount; sample++) {
+			const line = projection.lineAt(startLine + Math.floor(sample * lineCount / sampleCount))!;
+			const text = this.source.model.getLineContent(line.logicalLineIndex + 1).slice(line.startColumn, line.endColumn);
+			const y = Math.floor((line.visualLineIndex + paddingRows) * scaleY - rasterOffset) + innerLinePadding;
+			if (y < 0 || y + glyphHeight > height) {
+				continue;
+			}
+			const tokens = this.source.model.tokenization.getLineTokens(line.logicalLineIndex + 1);
+			const renderedTokens = this.source.semanticTokenSource?.getLineTokens(line.logicalLineIndex) ?? [];
+			const tokenColors = renderedTokens.map(token => {
+				const presentation = resolveSemanticTokenPresentation(token, this._context.theme.value, this.source.semanticHighlightingEnabled(this._context.theme.value));
+				const color = presentation.foreground === undefined ? undefined : Color.fromHex(presentation.foreground).rgba;
+				return color ? new RGBA8(color.r, color.g, color.b, Math.round(color.a * 255)) : undefined;
+			});
+			let renderedTokenIndex = 0;
+			let column = Math.round((line.wrappedTextIndentWidth ?? 0) / fontInfo.typicalHalfwidthCharacterWidth);
+			for (let offset = 0; offset < text.length && (column + 1) * charWidth <= width; offset++) {
+				const charCode = text.charCodeAt(offset);
+				if (charCode === 9) {
+					column += tabSize - column % tabSize;
+					continue;
+				}
+				if (charCode === 32) {
+					column++;
+					continue;
+				}
+				const tokenIndex = tokens.findTokenIndexAtOffset(line.startColumn + offset);
+				const sourceOffset = line.startColumn + offset;
+				while (renderedTokenIndex < renderedTokens.length && renderedTokens[renderedTokenIndex].endColumn <= sourceOffset) {
+					renderedTokenIndex++;
+				}
+				const renderedToken = renderedTokens[renderedTokenIndex];
+				const renderedColor = renderedToken && renderedToken.startColumn <= sourceOffset ? tokenColors[renderedTokenIndex] : undefined;
+				const color = renderedColor ?? (hasTokenColors ? colors.getColor(tokens.getForeground(tokenIndex)) : foreground);
+				const characterColumns = isFullWidthCharacter(charCode) ? 2 : 1;
+				// Wide characters still occupy two cells when the compact font uses
+				// a replacement glyph rather than a dedicated character bitmap.
+				for (let cell = 0; cell < characterColumns && (column + 1) * charWidth <= width; cell++, column++) {
+					const x = column * charWidth;
+					const alpha = color.a;
+					if (geometry.renderMinimap === RenderMinimap.Text) {
+						renderer.renderChar(image, x, y, charCode, color, alpha, background, 0, renderer.scale, colors.backgroundIsLight(), force1pxHeight);
+					} else {
+						renderer.blockRenderChar(image, x, y, color, alpha, background, 0, force1pxHeight);
+					}
+				}
+			}
+		}
+		painter.putImageData(image, 0, 0);
+
+		const fullRange = new Range(1, 1, this._context.viewModel.getLineCount(), this._context.viewModel.getLineMaxColumn(this._context.viewModel.getLineCount()));
+		for (const decoration of this._context.viewModel.getMinimapDecorationsInRange(fullRange)) {
+			const minimap = decoration.options.minimap;
+			if (!minimap?.color) continue;
+			const color = typeof minimap.color === 'string' ? minimap.color : this._context.theme.getColor(minimap.color.id)?.toString();
+			if (!color) continue;
+			painter.fillStyle = color;
+			const top = Math.floor((decoration.range.startLineNumber - 1 + paddingRows) * scaleY - rasterOffset);
+			const markerHeight = Math.max(2, Math.ceil((decoration.range.endLineNumber - decoration.range.startLineNumber + 1) * scaleY));
+			painter.fillRect(Math.max(0, width - 3), top, 3, markerHeight);
+		}
+
+	}
+
+	private moveTo(clientY: number): void {
+		const bounds = this.domNode.getBoundingClientRect();
+		if (bounds.height <= 0) return;
+		const layout = this.source.readLayout();
+		const travel = this.contentHeight - this.sliderHeight;
+		const ratio = travel > 0 ? clamp((clientY - bounds.top - this.dragOffset) / travel, 0, 1) : 0;
+		this.source.scrollTo({ left: layout.scrollPosition.left, top: ratio * layout.maximumScrollPosition.top });
+	}
+}

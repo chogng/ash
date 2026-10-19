@@ -1,3 +1,5 @@
+import { registerTestCodeEditorFeatures } from '../../../../../../../test/fixtures/codeEditorFeatures.js';
+import { after as afterCodeFeatures } from 'mocha';
 import '../../../../test/browser/testEditorDom.js';
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
@@ -9,7 +11,7 @@ import { TextModel } from '../../../../common/model/textModel.js';
 const { CodeEditorWidget } = await import('../../../../browser/widget/codeEditor/codeEditorWidget.js');
 const { createTestCodeEditor } = await import('../../../../test/browser/testCodeEditor.js');
 const { EditorExtensionsRegistry } = await import('../../../../browser/editorExtensions.js');
-const { CursorUndoRedoController } = await import('../../browser/cursorUndo.js');
+const { CursorUndoRedoController } = await import('../../../../../../../extensions/code/browser/contrib/cursorUndo/browser/cursorUndo.js');
 
 
 test('CursorUndoRedoController restores and reapplies cursor-only history', () => {
@@ -35,3 +37,6 @@ test('CursorUndoRedoController restores and reapplies cursor-only history', () =
 	assert.equal(model.getText(), 'one\ntwo');
 	dom.window.close();
 });
+
+const codeFeatures = registerTestCodeEditorFeatures();
+afterCodeFeatures(() => codeFeatures.dispose());

@@ -1,3 +1,5 @@
+import { registerTestCodeEditorFeatures } from '../../../../../../../test/fixtures/codeEditorFeatures.js';
+import { after as afterCodeFeatures } from 'mocha';
 import '../../../../test/browser/testEditorDom.js';
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
@@ -13,12 +15,12 @@ import { Range } from '../../../../common/core/range.js';
 import { type CodeLens, type CodeLensProvider } from '../../../../common/languages.js';
 import { LanguageFeatureRegistry } from '../../../../common/languageFeatureRegistry.js';
 import { TextModel } from '../../../../common/model/textModel.js';
-import { bindCodeLensCacheStorage, codeLensCache } from '../../browser/codeLensCache.js';
-import { CodeLensModel, getCodeLensModel } from '../../browser/codelens.js';
+import { bindCodeLensCacheStorage, codeLensCache } from '../../../../../../../extensions/code/browser/contrib/codelens/browser/codeLensCache.js';
+import { CodeLensModel, getCodeLensModel } from '../../../../../../../extensions/code/browser/contrib/codelens/browser/codelens.js';
 import { type TextMeasurer } from '../../../../common/viewModel.js';
 
 const { TestView: View } = await import('../../../../test/browser/viewModel/testViewModel.js');
-const { CodeLensContribution } = await import('../../browser/codelensController.js');
+const { CodeLensContribution } = await import('../../../../../../../extensions/code/browser/contrib/codelens/browser/codelensController.js');
 
 test('CodeLens contribution exposes the canonical editor contribution ID', () => {
 	assert.equal(CodeLensContribution.ID, 'css.editor.codeLens');
@@ -458,3 +460,6 @@ class TestStorageService implements IStorageService {
 		this.changeEmitter.fire({ key, scope: StorageScope.WORKSPACE, target: StorageTarget.MACHINE, external: true });
 	}
 }
+
+const codeFeatures = registerTestCodeEditorFeatures();
+afterCodeFeatures(() => codeFeatures.dispose());

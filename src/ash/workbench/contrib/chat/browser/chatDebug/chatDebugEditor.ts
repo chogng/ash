@@ -8,7 +8,7 @@ import {
 } from '../../../../../platform/theme/browser/defaultStyles.js';
 import { IChatDebugService } from '../../common/chatDebugService.js';
 // Sessions loads a smaller editor bundle; saved bodies still need the shared Find contribution.
-import { CommonFindController } from '../../../../../editor/contrib/find/browser/findController.js';
+import { CommonFindController } from '../../../../../../../extensions/code/browser/contrib/find/browser/findController.js';
 import './media/chatDebug.css';
 import { addDisposableListener, h, type IDimension } from '../../../../../base/browser/dom.js';
 import { triggerDownload } from '../../../../../base/browser/fileAccess.js';

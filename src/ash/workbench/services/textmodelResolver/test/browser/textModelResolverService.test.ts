@@ -1,3 +1,5 @@
+import { registerTestCodeEditorFeatures } from '../../../../../../../test/fixtures/codeEditorFeatures.js';
+import { after as afterCodeFeatures } from 'mocha';
 import type { ITextResourceStore } from '../../common/textResourceStore.js';
 import { TestUriIdentityServices } from '../../../../../platform/uriIdentity/test/common/uriIdentityTestServices.js';
 import assert from 'node:assert/strict';
@@ -13,7 +15,7 @@ import type { LanguageDocumentSymbol } from '../../../../../editor/common/langua
 import { ILanguageFeaturesService } from '../../../../../editor/common/services/languageFeatures.js';
 import { LanguageFeaturesService } from '../../../../../editor/common/services/languageFeaturesService.js';
 import { ITextModelService } from '../../../../../editor/common/services/resolverService.js';
-import '../../../../../editor/contrib/documentSymbols/browser/documentSymbols.js';
+import '../../../../../../../extensions/code/browser/contrib/documentSymbols/browser/documentSymbols.js';
 import { CommandService } from '../../../../services/commands/common/commandService.js';
 import { BrowserTextModelService } from '../../browser/browserTextModelService.js';
 import { ITextModelResourceService } from '../../common/textModelResourceService.js';
@@ -101,3 +103,6 @@ function symbol(name: string, startColumn: number, endColumn: number): LanguageD
 	const range = new Range(1, startColumn, 1, endColumn);
 	return { name, kind: 'function', range, selectionRange: range };
 }
+
+const codeFeatures = registerTestCodeEditorFeatures();
+afterCodeFeatures(() => codeFeatures.dispose());

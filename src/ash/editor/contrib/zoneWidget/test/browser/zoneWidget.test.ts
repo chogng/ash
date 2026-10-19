@@ -1,3 +1,5 @@
+import { registerTestCodeEditorFeatures } from '../../../../../../../test/fixtures/codeEditorFeatures.js';
+import { after as afterCodeFeatures } from 'mocha';
 import '../../../../test/browser/testEditorDom.js';
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
@@ -12,7 +14,7 @@ import { TextModel } from '../../../../common/model/textModel.js';
 const { CodeEditorWidget } = await import('../../../../browser/widget/codeEditor/codeEditorWidget.js');
 const { createTestCodeEditor } = await import('../../../../test/browser/testCodeEditor.js');
 const { EditorLineWrapping } = await import('../../../../common/config/editorOptions.js');
-const { ZoneWidget } = await import('../../browser/zoneWidget.js');
+const { ZoneWidget } = await import('../../../../../../../extensions/code/browser/contrib/zoneWidget/browser/zoneWidget.js');
 
 test('ZoneWidget reserves editor space, tracks its anchor, updates layout, and releases its zone', () => {
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
@@ -214,3 +216,6 @@ function requiredElement<T extends Element = HTMLElement>(root: ParentNode, sele
 	assert.ok(element);
 	return element;
 }
+
+const codeFeatures = registerTestCodeEditorFeatures();
+afterCodeFeatures(() => codeFeatures.dispose());

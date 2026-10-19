@@ -160,6 +160,9 @@ ash-tools = { workspace = true }
 ash-web-search-extension = { workspace = true }
 worktree = { workspace = true }
 
+[build-dependencies]
+ash-editor-client-build = { path = "../utils/editor-client-build" }
+
 [dev-dependencies]
 ash-app-server-diff = { workspace = true }
 github-extension = { package = "ash-github-extension", path = "../../extensions/github" }

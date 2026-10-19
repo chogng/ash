@@ -1,3 +1,5 @@
+import { registerTestCodeEditorFeatures } from '../../../../../../../test/fixtures/codeEditorFeatures.js';
+import { after as afterCodeFeatures } from 'mocha';
 import '../../../../test/browser/testEditorDom.js';
 import { browserEnvironment } from '../../../../test/browser/testEditorDom.js';
 import assert from 'node:assert/strict';
@@ -55,3 +57,6 @@ class FixedTextMeasurer implements TextMeasurer {
 	refresh(): boolean { return false; }
 	measureLineWidth(text: string): number { return [...text].length * 10; }
 }
+
+const codeFeatures = registerTestCodeEditorFeatures();
+afterCodeFeatures(() => codeFeatures.dispose());

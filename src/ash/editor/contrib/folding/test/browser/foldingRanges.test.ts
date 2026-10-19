@@ -1,7 +1,9 @@
+import { registerTestCodeEditorFeatures } from '../../../../../../../test/fixtures/codeEditorFeatures.js';
+import { after as afterCodeFeatures } from 'mocha';
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { TextModel } from '../../../../common/model/textModel.js';
-import { EditorFoldingRangeSource, normalizeEditorFoldingRanges } from '../../browser/foldingRanges.js';
+import { EditorFoldingRangeSource, normalizeEditorFoldingRanges } from '../../../../../../../extensions/code/browser/contrib/folding/browser/foldingRanges.js';
 
 test('folding ranges are sorted, deduplicated, and given provider defaults', () => {
 	using model = new TextModel('a\nb\nc\nd');
@@ -23,3 +25,6 @@ test('crossing folding ranges are rejected', () => {
 		{ startLineIndex: 1, endLineIndex: 3 },
 	]), /nested or disjoint/u);
 });
+
+const codeFeatures = registerTestCodeEditorFeatures();
+afterCodeFeatures(() => codeFeatures.dispose());

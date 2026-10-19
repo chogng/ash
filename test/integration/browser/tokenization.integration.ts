@@ -1,6 +1,8 @@
+import { registerTestCodeEditorFeatures } from '../../fixtures/codeEditorFeatures.js';
+const codeFeatures = registerTestCodeEditorFeatures();
 import { WebWorkerService } from '../../../src/ash/platform/webWorker/browser/webWorkerServiceImpl.js';
 import { IThemeService } from '../../../src/ash/platform/theme/common/themeService.js';
-import { TreeSitterLibraryService, TreeSitterSyntaxProviders, createTreeSitterSyntaxTokenBackend } from '../../../src/ash/workbench/services/treeSitter/browser/treeSitterLibraryService.js';
+import { TreeSitterLibraryService, TreeSitterSyntaxProviders, createTreeSitterSyntaxSession } from '../../../src/ash/workbench/services/treeSitter/browser/treeSitterLibraryService.js';
 import { rustSyntaxFixture } from './rustSyntaxHostFixture.js';
 import { Range } from '../../../src/ash/editor/common/core/range.js';
 import { LanguageDiagnosticSeverity } from '../../../src/ash/editor/common/languages.js';
@@ -18,7 +20,7 @@ import { AdapterManager } from '../../../src/ash/workbench/contrib/debug/browser
 const store = new DisposableStore();
 const library = store.add(new TreeSitterLibraryService(await rustSyntaxFixture(), new WebWorkerService()));
 const services: ReturnType<typeof StandaloneServices.initialize> = store.add(StandaloneServices.initialize({
-	tokenization: { createSyntaxTokenBackend: model => createTreeSitterSyntaxTokenBackend(model, services.get(IConfigurationService), library, services.get(IThemeService)) },
+	tokenization: { createSyntaxSession: model => createTreeSitterSyntaxSession(model, services.get(IConfigurationService), library, services.get(IThemeService)) },
 }));
 store.add(new TreeSitterSyntaxProviders(services.languageFeaturesService));
 await services.get(IConfigurationService).updateValue('files.eol', '\n');

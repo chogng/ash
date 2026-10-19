@@ -1,3 +1,5 @@
+import { registerTestCodeEditorFeatures } from '../../../../../../../test/fixtures/codeEditorFeatures.js';
+import { after as afterCodeFeatures } from 'mocha';
 import assert from 'node:assert/strict';
 import { test, suiteTeardown } from 'mocha';
 import { JSDOM } from 'jsdom';
@@ -23,7 +25,7 @@ const installedGlobals = installEditorTestDom(environment, [
 
 const { CodeEditorWidget } = await import('../../../../browser/widget/codeEditor/codeEditorWidget.js');
 const { createTestCodeEditor } = await import('../../../../test/browser/testCodeEditor.js');
-const { ContextMenuController } = await import('../../browser/contextmenu.js');
+const { ContextMenuController } = await import('../../../../../../../extensions/code/browser/contrib/contextmenu/browser/contextmenu.js');
 const { IContextMenuService } = await import('../../../../../platform/contextview/browser/contextView.js');
 
 suiteTeardown(() => {
@@ -119,3 +121,6 @@ test('ContextMenuController opens minimap settings from the scrollbar and closes
 	assert.equal(hideCount, 2);
 	dom.window.close();
 });
+
+const codeFeatures = registerTestCodeEditorFeatures();
+afterCodeFeatures(() => codeFeatures.dispose());

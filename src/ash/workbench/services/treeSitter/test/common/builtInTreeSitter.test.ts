@@ -1,3 +1,5 @@
+import { registerTestCodeEditorFeatures } from '../../../../../../../test/fixtures/codeEditorFeatures.js';
+import { after as afterCodeFeatures } from 'mocha';
 import { TestThemeService } from '../../../../../platform/theme/test/common/testThemeService.js';
 import { StandardTokenType } from '../../../../../editor/common/encodedTokenAttributes.js';
 import { Event } from '../../../../../base/common/event.js';
@@ -9,13 +11,13 @@ import { after, before, test } from 'mocha';
 import * as treeSitterNamespace from '@vscode/tree-sitter-wasm';
 import { TextModel } from '../../../../../editor/common/model/textModel.js';
 import { Range } from '../../../../../editor/common/core/range.js';
-import type { TreeSitterTokenizationRuntime } from '../../../../../editor/common/model/tokens/treeSitter/treeSitterTree.js';
+import type { TreeSitterTokenizationRuntime } from '../../../../../editor/common/services/treeSitter/treeSitterTree.js';
 import { TreeSitterWorker } from '../../../../../editor/common/services/treeSitter/treeSitterWorker.js';
 import type { ITreeSitterLibraryService } from '../../../../../editor/common/services/treeSitter/treeSitterLibraryService.js';
 import type { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
 import { editorLanguageForSyntaxLanguage, syntaxLanguageForEditorLanguage, syntaxLanguages } from '../../../../../platform/syntax/common/syntaxApi.js';
 import { getWorkbenchColorTheme } from '../../../../common/theme.js';
-import { createTreeSitterSyntaxTokenBackend } from '../../browser/treeSitterLibraryService.js';
+import { createTestSyntaxBackend as createTreeSitterSyntaxTokenBackend } from '../../../../../../../test/fixtures/codeSyntaxBackend.js';
 import { getLanguageFoldingRules } from '../../../../../platform/language/common/languageFolding.generated.js';
 
 const runtime = (treeSitterNamespace as unknown as { default?: typeof treeSitterNamespace; }).default ?? treeSitterNamespace;
@@ -335,3 +337,6 @@ for (const [index, fixture] of structureFixtures.entries()) test(`Structure ${fi
 		assert.deepEqual(await facts(), original);
 	} finally { worker.dispose(); }
 });
+
+const codeFeatures = registerTestCodeEditorFeatures();
+afterCodeFeatures(() => codeFeatures.dispose());

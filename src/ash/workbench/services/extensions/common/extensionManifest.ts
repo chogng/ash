@@ -81,6 +81,7 @@ export interface ExtensionManifest {
 		readonly semanticTokenTypes: readonly TokenTypeOrModifierContribution[];
 		readonly semanticTokenModifiers: readonly TokenTypeOrModifierContribution[];
 		readonly icons: readonly ExtensionIconContribution[];
+		readonly editorFeatures?: readonly { readonly target: 'text'; }[];
 		readonly customEditors: readonly ExtensionCustomEditorContribution[];
 		readonly problemMatchers: readonly Readonly<Record<string, unknown>>[];
 		readonly problemPatterns: readonly Readonly<Record<string, unknown>>[];
@@ -147,6 +148,7 @@ export function parseExtensionManifest(manifestJson: string, descriptor: Extensi
 			semanticTokenTypes: parseClassifications(contributes.semanticTokenTypes, true),
 			semanticTokenModifiers: parseClassifications(contributes.semanticTokenModifiers, false),
 			icons: parseIcons(contributes.icons),
+			editorFeatures: parseEditorFeatures(contributes.editorFeatures),
 			customEditors: parseCustomEditors(contributes.customEditors, descriptor.id),
 			problemMatchers: parseProblemContributions(contributes.problemMatchers, 'problemMatchers'),
 			problemPatterns: parseProblemContributions(contributes.problemPatterns, 'problemPatterns'),
@@ -214,6 +216,14 @@ function parseProblemContributions(value: unknown, field: string): readonly Read
 		if (typeof contribution.name !== 'string' || !contribution.name.trim() || contribution.name.length > 128 || contribution.name.startsWith('$') || /[\x00-\x1f\x7f]/.test(contribution.name)) throw new TypeError(localize('extensions.problemContributionName', 'Invalid {0} name', field));
 		return Object.freeze(contribution);
 	}));
+}
+
+function parseEditorFeatures(value: unknown): readonly { readonly target: 'text'; }[] {
+	if (value === undefined || Array.isArray(value) && value.length === 0) return [];
+	if (!Array.isArray(value) || value.length !== 1 || record(value[0], 'Editor feature contribution').target !== 'text') {
+		throw new TypeError('Editor features must declare the text target once');
+	}
+	return Object.freeze([Object.freeze({ target: 'text' as const })]);
 }
 
 function parseCustomEditors(value: unknown, extensionId: string): readonly ExtensionCustomEditorContribution[] {

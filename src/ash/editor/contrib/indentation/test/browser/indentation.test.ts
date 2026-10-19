@@ -1,12 +1,14 @@
+import { registerTestCodeEditorFeatures } from '../../../../../../../test/fixtures/codeEditorFeatures.js';
+import { after as afterCodeFeatures } from 'mocha';
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { Position } from '../../../../common/core/position.js';
 import { Selection } from '../../../../common/core/selection.js';
 import { createTestLanguageConfigurationService } from '../../../../test/common/modes/testLanguageConfigurationService.js';
 import { TextModel } from '../../../../common/model/textModel.js';
-import { IndentationToSpacesCommand, IndentationToTabsCommand } from '../../browser/indentation.js';
-import { getReindentEditOperations } from '../../common/indentation.js';
-import { generateIndent, getSpaceCnt } from '../../common/indentUtils.js';
+import { IndentationToSpacesCommand, IndentationToTabsCommand } from '../../../../../../../extensions/code/browser/contrib/indentation/browser/indentation.js';
+import { getReindentEditOperations } from '../../../../../../../extensions/code/browser/contrib/indentation/common/indentation.js';
+import { generateIndent, getSpaceCnt } from '../../../../../../../extensions/code/browser/contrib/indentation/common/indentUtils.js';
 import { createTestCursorsController } from '../../../../test/common/testCursorConfiguration.js';
 
 test('indent utilities validate widths and generate compact indentation', () => {
@@ -45,3 +47,6 @@ test('indentation conversion preserves tab stops after leading spaces', () => {
 	cursors.executeCommand(new IndentationToTabsCommand(cursors.getSelections()[0]!, 4));
 	assert.equal(model.getText(), '\talpha\n\tbeta\n\t\tgamma');
 });
+
+const codeFeatures = registerTestCodeEditorFeatures();
+afterCodeFeatures(() => codeFeatures.dispose());

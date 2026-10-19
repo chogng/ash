@@ -1,3 +1,5 @@
+import { registerTestCodeEditorFeatures } from '../../../../../../../test/fixtures/codeEditorFeatures.js';
+import { after as afterCodeFeatures } from 'mocha';
 import '../../../../test/browser/testEditorDom.js';
 import { IAccessibilitySignalService } from '../../../../../platform/accessibilitySignal/browser/accessibilitySignalService.js';
 import { ContextKeyService, IContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
@@ -45,7 +47,7 @@ class TestResizeObserver {
 }
 
 const { TestView: View } = await import('../../../../test/browser/viewModel/testViewModel.js');
-const { InlineCompletionsController } = await import('../../browser/controller/inlineCompletionsController.js');
+const { InlineCompletionsController } = await import('../../../../../../../extensions/code/browser/contrib/inlineCompletions/browser/controller/inlineCompletionsController.js');
 
 
 test('Registered editor commands retrigger inline completions after their edit', async () => {
@@ -218,3 +220,6 @@ function editorFor(model: TextModel, selections: CursorsController): ICodeEditor
 		executeCommands: (source: string | null | undefined, commands: (ICommand | null)[]) => selections.executeCommands(commands, source),
 	} as unknown as ICodeEditor;
 }
+
+const codeFeatures = registerTestCodeEditorFeatures();
+afterCodeFeatures(() => codeFeatures.dispose());

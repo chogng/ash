@@ -1,3 +1,5 @@
+import { registerTestCodeEditorFeatures } from '../../fixtures/codeEditorFeatures.js';
+const codeFeatures = registerTestCodeEditorFeatures();
 import '../../../src/ash/editor/editor.all.js';
 import '../../../src/ash/workbench/contrib/url/browser/url.contribution.js';
 import { renderMarkdown, type IRenderedMarkdown } from '../../../src/ash/base/browser/markdownRenderer.js';

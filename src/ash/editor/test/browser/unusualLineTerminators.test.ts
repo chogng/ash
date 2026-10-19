@@ -1,3 +1,5 @@
+import { registerTestCodeEditorFeatures } from '../../../../../test/fixtures/codeEditorFeatures.js';
+import { after as afterCodeFeatures } from 'mocha';
 import './testEditorDom.js';
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
@@ -5,8 +7,8 @@ import { TextModel } from '../../common/model/textModel.js';
 import { TextDecorationCollection } from '../../common/model/decorationCollection.js';
 import { Range } from '../../common/core/range.js';
 import { EndOfLineSequence } from '../../common/model.js';
-import { UnusualLineTerminatorsController } from '../../contrib/unusualLineTerminators/browser/unusualLineTerminatorsController.js';
-import { findUnusualLineTerminators } from '../../contrib/unusualLineTerminators/common/unusualLineTerminatorRanges.js';
+import { UnusualLineTerminatorsController } from '../../../../../extensions/code/browser/contrib/unusualLineTerminators/browser/unusualLineTerminatorsController.js';
+import { findUnusualLineTerminators } from '../../../../../extensions/code/browser/contrib/unusualLineTerminators/common/unusualLineTerminatorRanges.js';
 
 test('unusual separators follow batches, Unicode columns, EOL changes and undo without rescanning the model', async () => {
 	using model = new TextModel('😀a\u0085\r\nb\u2028c\r\ntail');
@@ -36,3 +38,6 @@ test('unusual separators follow batches, Unicode columns, EOL changes and undo w
 		model.createSnapshot = snapshot;
 	}
 });
+
+const codeFeatures = registerTestCodeEditorFeatures();
+afterCodeFeatures(() => codeFeatures.dispose());

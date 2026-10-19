@@ -1,10 +1,12 @@
+import { registerTestCodeEditorFeatures } from '../../../../../../../test/fixtures/codeEditorFeatures.js';
+import { after as afterCodeFeatures } from 'mocha';
 import assert from 'node:assert/strict';
 import { suite, test } from 'mocha';
 import { Range } from '../../../../common/core/range.js';
 import type { LanguageDocumentSymbol } from '../../../../common/languages.js';
 import { TextModel } from '../../../../common/model/textModel.js';
 import { LanguageFeaturesService } from '../../../../common/services/languageFeaturesService.js';
-import { OutlineModel } from '../../browser/outlineModel.js';
+import { OutlineModel } from '../../../../../../../extensions/code/browser/contrib/documentSymbols/browser/outlineModel.js';
 
 suite('OutlineModel', () => {
 	test('large outlines allow an edit to cancel conversion before any stale tree is published', async () => {
@@ -105,3 +107,6 @@ function symbol(name: string, startLine: number, startColumn: number, endLine: n
 	const range = new Range(startLine, startColumn, endLine, endColumn);
 	return { name, kind: 'function', range, selectionRange: range };
 }
+
+const codeFeatures = registerTestCodeEditorFeatures();
+afterCodeFeatures(() => codeFeatures.dispose());

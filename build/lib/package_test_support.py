@@ -240,6 +240,7 @@ def create_runtime_package(
         git_extension_binary=executable("ash-git-extension"),
         markdown_math_binary=executable("ash-markdown-math"),
         academy_extension_binary=executable("ash-academy"),
+        code_editor_extension_binary=executable("ash-code-editor"),
         markdown_extension_binary=executable("ash-markdown-language-features"),
         github_authentication_binary=executable("ash-github-authentication"),
         github_extension_binary=executable("ash-github-extension"),

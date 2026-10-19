@@ -8,7 +8,7 @@ import { IInstantiationService } from '../../../../platform/instantiation/common
 import { EditorOption } from '../../../../editor/common/config/editorOptions.js';
 import { Position } from '../../../../editor/common/core/position.js';
 import { LineDiffKind } from '../../../../editor/common/diff/lineDiff.js';
-import { PeekViewWidget } from '../../../../editor/contrib/peekView/browser/peekView.js';
+import { PeekViewWidget } from '../../../../../../extensions/code/browser/contrib/peekView/browser/peekView.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { type IQuickDiffEditorController, IQuickDiffEditorControllerService, IQuickDiffModelService, type QuickDiffChange, type QuickDiffModelReference } from '../common/quickDiff.js';
 import { QuickDiffDecorator } from './quickDiffDecorator.js';

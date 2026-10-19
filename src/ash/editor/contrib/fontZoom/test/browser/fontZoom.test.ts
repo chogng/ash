@@ -1,9 +1,11 @@
+import { registerTestCodeEditorFeatures } from '../../../../../../../test/fixtures/codeEditorFeatures.js';
+import { after as afterCodeFeatures } from 'mocha';
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { type ICodeEditor } from '../../../../browser/editorBrowser.js';
 import { EditorExtensionsRegistry, type ServicesAccessor } from '../../../../browser/editorExtensions.js';
 import { EditorZoom } from '../../../../common/config/editorZoom.js';
-import '../../browser/fontZoom.js';
+import '../../../../../../../extensions/code/browser/contrib/fontZoom/browser/fontZoom.js';
 
 test('font zoom actions update the shared editor zoom owner', () => {
 	const previous = EditorZoom.getZoomLevel();
@@ -23,3 +25,6 @@ test('font zoom actions update the shared editor zoom owner', () => {
 		EditorZoom.setZoomLevel(previous);
 	}
 });
+
+const codeFeatures = registerTestCodeEditorFeatures();
+afterCodeFeatures(() => codeFeatures.dispose());

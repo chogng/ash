@@ -46,6 +46,7 @@ _BINARIES = {
     "ash-git-extension": ("ash-git-extension", "--git-extension-bin"),
     "ash-markdown-math": ("ash-markdown-math", "--markdown-math-bin"),
     "ash-academy": ("ash-academy", "--academy-extension-bin"),
+    "ash-code-editor": ("ash-code-editor", "--code-editor-extension-bin"),
     "ash-markdown-language-features": (
         "ash-markdown-language-features",
         "--markdown-extension-bin",

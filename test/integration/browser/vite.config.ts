@@ -26,6 +26,7 @@ export default defineConfig({
 		rolldownOptions: {
 			output: rendererOutput,
 			input: {
+				codeExtension: resolve(import.meta.dirname, "codeExtension.html"),
 				auxiliaryBar: resolve(import.meta.dirname, 'auxiliaryBar.html'),
 				collaboration: resolve(import.meta.dirname, 'collaboration.html'),
 				gettingStarted: resolve(import.meta.dirname, 'gettingStarted.html'),

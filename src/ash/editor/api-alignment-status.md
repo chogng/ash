@@ -1,5 +1,7 @@
 # Editor API 对齐状态
 
+2026-10-19 所有权迁移：既有 Code contrib／资源及 token、bracket、guide、diagnostic 实现已迁入 `extensions/code`，Academy 既有富文档实现位于 `extensions/academic`。两者均经独立 Rust Provider、公共 SDK 与共享客户端桥装配；基础入口只装配纯文本原语。下文的历史 API 对齐结论不代表这些实现仍由内核静态装配，原有测试目录保留。
+
 ## 2026-10-19：Academy 能力迁移
 
 富文档能力已归 `extensions/academic`；下节的原段落路径对应迁移前实现。Schema、段落命令／属性、投影和事务在包的 `common/`；Widget、格式／段落贡献和共享控件在包的 `browser/`。`browser/documentContributions.ts` 由 profile 按视图装配，不再使用 Editor 的全局贡献注册。普通文档与频道笔记也通过独立 Rust 能力注册消费这些 profile。基础 `TextModel` 只提供通用扩展快照／版本提交，`DocumentTextModel`、富文档历史和 codec 由包拥有；宿主保留唯一资源工作副本及 dirty／备份。

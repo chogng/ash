@@ -1,3 +1,5 @@
+import { registerTestCodeEditorFeatures } from '../../../../../../../test/fixtures/codeEditorFeatures.js';
+import { after as afterCodeFeatures } from 'mocha';
 import '../../../../test/browser/testEditorDom.js';
 import assert from 'node:assert/strict';
 import { IAccessibilitySignalService } from '../../../../../platform/accessibilitySignal/browser/accessibilitySignalService.js';
@@ -15,7 +17,7 @@ import { URI } from '../../../../../base/common/uri.js';
 import { toDisposable } from '../../../../../base/common/lifecycle.js';
 import { ICommandService } from '../../../../../platform/commands/common/commands.js';
 
-await import('../../browser/codeActionContributions.js');
+await import('../../../../../../../extensions/code/browser/contrib/codeAction/browser/codeActionContributions.js');
 const { createTestCodeEditor } = await import('../../../../test/browser/testCodeEditor.js');
 
 for (const [command, kind] of [['editor.action.refactor', 'refactor.extract'], ['editor.action.sourceAction', 'source.organizeImports']] as const) {
@@ -266,3 +268,6 @@ for (const outcome of ['accept', 'cancel', 'change', 'dispose', 'commit error'] 
 		}
 	});
 }
+
+const codeFeatures = registerTestCodeEditorFeatures();
+afterCodeFeatures(() => codeFeatures.dispose());

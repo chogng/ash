@@ -14,7 +14,7 @@ import { EditorOption } from '../../../../editor/common/config/editorOptions.js'
 import { Range } from '../../../../editor/common/core/range.js';
 import { Handler } from '../../../../editor/common/editorCommon.js';
 import { EditorContextKeys } from '../../../../editor/common/editorContextKeys.js';
-import { CodeEditorStateFlag, EditorStateCancellationTokenSource } from '../../../../editor/contrib/editorState/browser/editorState.js';
+import { CodeEditorStateFlag, EditorStateCancellationTokenSource } from '../../../../../../extensions/code/browser/contrib/editorState/browser/editorState.js';
 import { IClipboardService } from '../../../../platform/clipboard/common/clipboardService.js';
 
 /** Owns selection clipboard synchronization for one desktop editor. */

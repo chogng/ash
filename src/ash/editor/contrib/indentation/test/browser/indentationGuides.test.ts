@@ -1,3 +1,5 @@
+import { registerTestCodeEditorFeatures } from '../../../../../../../test/fixtures/codeEditorFeatures.js';
+import { after as afterCodeFeatures } from 'mocha';
 import assert from "node:assert/strict";
 import { test } from "mocha";
 import { TextModel } from '../../../../common/model/textModel.js';
@@ -18,3 +20,6 @@ test('Blank-line guides follow the language off-side rule', () => {
 	using registration = configurations.register('guide-test', { folding: { offSide: true } });
 	assert.deepEqual(model.guides.getLinesIndentGuides(1, 4), [0, 1, 0, 0]);
 });
+
+const codeFeatures = registerTestCodeEditorFeatures();
+afterCodeFeatures(() => codeFeatures.dispose());

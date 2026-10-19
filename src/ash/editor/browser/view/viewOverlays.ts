@@ -1,3 +1,4 @@
+import { toDisposable, type IDisposable } from '../../../base/common/lifecycle.js';
 import { type FastDomNode } from '../../../base/browser/fastDomNode.js';
 import { applyFontInfo } from '../config/domFontInfo.js';
 import { EditorOption } from '../../common/config/editorOptions.js';
@@ -37,7 +38,19 @@ export class ViewOverlays extends ViewPart {
 	}
 
 	public addDynamicOverlay(overlay: DynamicViewOverlay): void {
-		this._dynamicOverlays.push(this._register(overlay));
+		this._register(this.registerDynamicOverlay(overlay));
+	}
+
+	public registerDynamicOverlay(overlay: DynamicViewOverlay, after?: DynamicViewOverlay): IDisposable {
+		const index = after ? this._dynamicOverlays.indexOf(after) + 1 : this._dynamicOverlays.length;
+		this._dynamicOverlays.splice(index, 0, overlay);
+		this.setShouldRender();
+		return toDisposable(() => {
+			const index = this._dynamicOverlays.indexOf(overlay);
+			if (index >= 0) this._dynamicOverlays.splice(index, 1);
+			overlay.dispose();
+			this.setShouldRender();
+		});
 	}
 
 	public override onConfigurationChanged(_event: viewEvents.ViewConfigurationChangedEvent): boolean {

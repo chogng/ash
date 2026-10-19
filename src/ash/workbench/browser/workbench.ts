@@ -4,7 +4,7 @@ import { IWorkspaceEditingService, WorkspaceTransitionCommittedError } from '../
 import { IBrowserPasswordService, UnavailableBrowserPasswordService } from '../../platform/browserView/common/browserPasswordService.js';
 import { IWorkspacesService } from '../../platform/workspaces/common/workspaces.js';
 import { IChannelService } from "../../platform/collaboration/common/channelService.js";
-import { TreeSitterLibraryService, TreeSitterSyntaxProviders, createTreeSitterSyntaxTokenBackend } from '../services/treeSitter/browser/treeSitterLibraryService.js';
+import { TreeSitterLibraryService, TreeSitterSyntaxProviders, createTreeSitterSyntaxSession } from '../services/treeSitter/browser/treeSitterLibraryService.js';
 import { ITreeSitterLibraryService } from '../../editor/common/services/treeSitter/treeSitterLibraryService.js';
 import { UserSettings } from '../../platform/configuration/common/configurationModels.js';
 import { extUriBiasedIgnorePathCase } from '../../base/common/resources.js';
@@ -61,7 +61,6 @@ import { ILanguageServerService } from "../../platform/language/common/languageS
 import { ILanguageFeatureDebounceService, LanguageFeatureDebounceService } from '../../editor/common/services/languageFeatureDebounce.js';
 import { IInlineCompletionsService, InlineCompletionsService } from '../../editor/browser/services/inlineCompletionsService.js';
 import { ICallService } from '../../platform/call/common/callService.js';
-import { FormattingConflicts } from '../../editor/contrib/format/browser/format.js';
 import { MarkerDecorationsService } from '../../editor/common/services/markerDecorationsService.js';
 import { FontMeasurements } from '../../editor/browser/config/fontMeasurements.js';
 import { createBareFontInfoFromRawSettings } from '../../editor/common/config/fontInfoFromSettings.js';
@@ -235,7 +234,6 @@ import { ISnippetsService } from '../contrib/snippets/browser/snippets.js';
 import { AppServerRemoteAgentService } from "../services/remote/browser/appServerRemoteAgentService.js";
 import { IAppServerRemoteAgentService } from "../services/remote/common/appServerRemoteAgentService.js";
 import { ILanguageFeaturesService } from '../../editor/common/services/languageFeatures.js';
-import { DefaultDropProvidersFeature, DefaultPasteProvidersFeature } from '../../editor/contrib/dropOrPasteInto/browser/defaultProviders.js';
 import { ICodeEditorService } from '../../editor/browser/services/codeEditorService.js';
 import { CodeEditorService } from '../services/editor/browser/codeEditorService.js';
 import { LanguageFeaturesService } from '../../editor/common/services/languageFeaturesService.js';
@@ -557,7 +555,6 @@ export class Workbench extends Disposable {
 		super();
 		performance.mark('ash.workbench.constructor-start');
 		this._register(themes);
-		this._register(FormattingConflicts.setFormatterSelector(async formatters => formatters[0]));
 		if (clipboardService) {
 			serviceCollection.set(IClipboardService, clipboardService);
 		}
@@ -757,8 +754,6 @@ export class Workbench extends Disposable {
 		services.registerInstance(ILanguageFeaturesService, languageFeaturesService);
 		services.registerSingleton(ITextResourcePropertiesService, () => services.createInstance(TextResourcePropertiesService));
 		services.registerSingleton(IModelService, () => new ModelService(configuration, services.get(ITextResourcePropertiesService), languageService, languageFeaturesService, languageConfigurationService));
-		this._register(new DefaultPasteProvidersFeature(languageFeaturesService, workspaceContext));
-		this._register(new DefaultDropProvidersFeature(languageFeaturesService, workspaceContext));
 		// Markdown and opener services receive this before EditorParts exists;
 		// defer construction until an editor operation needs the completed Parts.
 		services.registerSingleton(ICodeEditorService, () => services.createInstance(CodeEditorService), { instantiation: InstantiationType.Delayed });
@@ -772,7 +767,7 @@ export class Workbench extends Disposable {
 			languageService,
 			languageConfigurationService,
 			languageFeaturesService,
-			createSyntaxTokenBackend: model => createTreeSitterSyntaxTokenBackend(model, configuration, treeSitterLibrary, themeService),
+			createSyntaxSession: model => createTreeSitterSyntaxSession(model, configuration, treeSitterLibrary, themeService),
 			onDidChangeSyntaxBackend: Event.any(
 				treeSitterLibrary.onDidChange,
 				// Models subscribe after the window's theme service has been initialized.

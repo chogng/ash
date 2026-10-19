@@ -1,17 +1,19 @@
+import { registerTestCodeEditorFeatures } from '../../../../../../../test/fixtures/codeEditorFeatures.js';
+import { after as afterCodeFeatures } from 'mocha';
 import assert from 'node:assert/strict';
 import { setup, suite, teardown, test } from 'mocha';
 import { createLanguageFeatureEditor } from '../../../../test/browser/testLanguageFeatureEditor.js';
 import { TextDecorationCollection } from '../../../../common/model/decorationCollection.js';
 import { CodeActionTriggerType, type LanguageCodeAction, type LanguageDiagnostic } from '../../../../common/languages.js';
 import { IInstantiationService } from '../../../../../platform/instantiation/common/instantiation.js';
-import { CodeActionModel, CodeActionsState } from '../../browser/codeActionModel.js';
-import { CodeActionTriggerSource } from '../../common/types.js';
+import { CodeActionModel, CodeActionsState } from '../../../../../../../extensions/code/browser/contrib/codeAction/browser/codeActionModel.js';
+import { CodeActionTriggerSource } from '../../../../../../../extensions/code/browser/contrib/codeAction/common/types.js';
 import { HierarchicalKind } from '../../../../../base/common/hierarchicalKind.js';
 import { toDisposable } from '../../../../../base/common/lifecycle.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
 import { IActionWidgetService } from '../../../../../platform/actionWidget/browser/actionWidget.js';
-import { getCodeActions } from '../../browser/codeAction.js';
-await import('../../browser/codeActionContributions.js');
+import { getCodeActions } from '../../../../../../../extensions/code/browser/contrib/codeAction/browser/codeAction.js';
+await import('../../../../../../../extensions/code/browser/contrib/codeAction/browser/codeActionContributions.js');
 
 for (const [command, args, expected] of [
 	['editor.action.fixAll', undefined, 'fixed'],
@@ -284,3 +286,6 @@ suite('Code action result ownership and AI markers', () => {
 		});
 	}
 });
+
+const codeFeatures = registerTestCodeEditorFeatures();
+afterCodeFeatures(() => codeFeatures.dispose());

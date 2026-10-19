@@ -96,7 +96,7 @@ export class AppServerExtensionHostService extends Disposable implements IExtens
 			if (!this.isDisposed && this.started && revision === this.connectionRevision) await this.acceptConnectionState(state, false);
 			// Eager editor providers must publish their factories before tabs restore. Other
 			// startup providers keep running concurrently with Workbench restoration.
-			const editorOwners = new Set(this.extensions.getExtensionPointContributions<readonly unknown[]>('customEditors')
+			const editorOwners = new Set(['customEditors', 'editorFeatures'].flatMap(point => this.extensions.getExtensionPointContributions<readonly unknown[]>(point))
 				.filter(user => user.value.length > 0).map(user => user.description.id));
 			const editorActivations = this.snapshot.extensions.flatMap(extension => {
 				const pending = this.pendingActivations.get(`${extension.id}:${extension.activationGeneration}`);

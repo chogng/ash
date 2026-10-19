@@ -6,7 +6,6 @@ import { Selection, SelectionDirection } from '../core/selection.js';
 import { ICommand, ICursorStateComputerData, IEditOperationBuilder } from '../editorCommon.js';
 import { ITextModel } from '../model.js';
 import { EditorAutoIndentStrategy } from '../config/editorOptions.js';
-import { getEnterAction } from '../languages/enterAction.js';
 import { ILanguageConfigurationService } from '../languages/languageConfigurationRegistry.js';
 
 export interface IShiftCommandOpts {
@@ -142,7 +141,7 @@ export class ShiftCommand implements ICommand {
 						// The current line is "miss-aligned", so let's see if this is expected...
 						// This can only happen when it has trailing commas in the indent
 						if (model.tokenization.isCheapToTokenize(lineNumber - 1)) {
-							const enterAction = getEnterAction(this._opts.autoIndent, model, new Range(lineNumber - 1, model.getLineMaxColumn(lineNumber - 1), lineNumber - 1, model.getLineMaxColumn(lineNumber - 1)), this._languageConfigurationService);
+							const enterAction = model.editingPolicy?.getEnterAction(this._opts.autoIndent, model, new Range(lineNumber - 1, model.getLineMaxColumn(lineNumber - 1), lineNumber - 1, model.getLineMaxColumn(lineNumber - 1)), this._languageConfigurationService);
 							if (enterAction) {
 								extraSpaces = previousLineExtraSpaces;
 								if (enterAction.appendText) {

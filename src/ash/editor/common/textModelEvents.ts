@@ -3,7 +3,7 @@ import { IRange, Range } from './core/range.js';
 import { Selection } from './core/selection.js';
 import { IModelDecoration, InjectedTextOptions } from './model.js';
 import { IModelContentChange } from './model/mirrorTextModel.js';
-import { AnnotationsUpdate } from './model/tokens/annotations.js';
+import type { AnnotationsUpdate } from './model/annotations.js';
 import { TextModelEditSource } from './textModelEditSource.js';
 
 /**

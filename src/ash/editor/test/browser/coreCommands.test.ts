@@ -1,3 +1,5 @@
+import { registerTestCodeEditorFeatures } from '../../../../../test/fixtures/codeEditorFeatures.js';
+import { after as afterCodeFeatures } from 'mocha';
 import './testEditorDom.js';
 import { browserEnvironment } from './testEditorDom.js';
 import { StandaloneCodeEditorService } from '../../standalone/browser/standaloneCodeEditorService.js';
@@ -20,7 +22,7 @@ import { type TextMeasurer } from '../../common/viewModel.js';
 const { TestView: View } = await import("./viewModel/testViewModel.js");
 const { installCoreTextEditorCommands } = await import("../../browser/coreCommands.js");
 const { KeyboardNavigationController } = await import('../../browser/view/viewController.js');
-await import('../../contrib/lineSelection/browser/lineSelection.js');
+await import('../../../../../extensions/code/browser/contrib/lineSelection/browser/lineSelection.js');
 const { CodeEditorWidget } = await import('../../browser/widget/codeEditor/codeEditorWidget.js');
 const { createTestCodeEditor } = await import('./testCodeEditor.js');
 const { SelectAllCommand } = await import('../../browser/editorExtensions.js');
@@ -159,3 +161,6 @@ class FixedTextMeasurer implements TextMeasurer {
 		return text.length * 10;
 	}
 }
+
+const codeFeatures = registerTestCodeEditorFeatures();
+afterCodeFeatures(() => codeFeatures.dispose());

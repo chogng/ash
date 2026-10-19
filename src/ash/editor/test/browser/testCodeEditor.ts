@@ -7,7 +7,6 @@ import { IModelService } from '../../common/services/model.js';
 import { ModelService } from '../../common/services/modelService.js';
 import { ActionWidgetService, IActionWidgetService } from '../../../platform/actionWidget/browser/actionWidget.js';
 import { ILanguageFeatureDebounceService, LanguageFeatureDebounceService } from '../../common/services/languageFeatureDebounce.js';
-import '../../browser/services/contribution.js';
 import { ContextKeyService, IContextKeyService } from '../../../platform/contextkey/browser/contextKeyService.js';
 import { IMarkerService } from '../../../platform/markers/common/markers.js';
 import { MarkerService } from '../../../platform/markers/common/markerService.js';
@@ -38,7 +37,6 @@ import { ILanguageService } from '../../common/languages/language.js';
 import { LanguageService } from '../../common/services/languageService.js';
 import { StandaloneBulkEditService, StandaloneCommandService, StandaloneKeybindingService, StandaloneNotificationService, StandaloneWorkspaceContextService } from '../../standalone/browser/standaloneServices.js';
 import { IBulkEditService } from '../../browser/services/bulkEditService.js';
-import { DefaultDropProvidersFeature, DefaultPasteProvidersFeature } from '../../contrib/dropOrPasteInto/browser/defaultProviders.js';
 import { IWorkspaceContextService } from '../../../platform/workspace/common/workspace.js';
 import { ICommandService } from '../../../platform/commands/common/commands.js';
 import { IKeybindingService } from '../../../platform/keybinding/common/keybinding.js';
@@ -204,8 +202,6 @@ export function createTestCodeEditor(options: TestCodeEditorOptions): CodeEditor
 			overrides.registerInstance(IAccessibilityService, accessibilityService);
 		}
 		const services = createCodeEditorServices(resources, overrides);
-		resources.add(new DefaultPasteProvidersFeature(services.get(ILanguageFeaturesService), services.get(IWorkspaceContextService)));
-		resources.add(new DefaultDropProvidersFeature(services.get(ILanguageFeaturesService), services.get(IWorkspaceContextService)));
 		return services.createInstance(TestCodeEditor, widgetOptions, resources);
 	} catch (error) {
 		resources.dispose();

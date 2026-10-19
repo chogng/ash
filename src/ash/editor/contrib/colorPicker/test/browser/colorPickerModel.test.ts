@@ -1,9 +1,11 @@
+import { registerTestCodeEditorFeatures } from '../../../../../../../test/fixtures/codeEditorFeatures.js';
+import { after as afterCodeFeatures } from 'mocha';
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { Color, RGBA } from '../../../../../base/common/color.js';
 import { Position } from '../../../../common/core/position.js';
 import { Range } from '../../../../common/core/range.js';
-import { ColorPickerModel } from '../../browser/colorPickerModel.js';
+import { ColorPickerModel } from '../../../../../../../extensions/code/browser/contrib/colorPicker/browser/colorPickerModel.js';
 
 test('selecting a document presentation flushes only the final selection', () => {
 	using model = new ColorPickerModel(Color.white, [{ label: 'rgb' }, { label: 'hsl' }, { label: 'hex' }], 0);
@@ -38,3 +40,6 @@ test('color picker model retains format choice while provider presentations refr
 	model.selectNextColorPresentation();
 	assert.equal(model.presentation.label, 'rgb(0, 255, 0)');
 });
+
+const codeFeatures = registerTestCodeEditorFeatures();
+afterCodeFeatures(() => codeFeatures.dispose());

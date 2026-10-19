@@ -1,6 +1,6 @@
 import { ReplaceCommand, ReplaceCommandThatPreservesSelection, ReplaceCommandWithoutChangingPosition, ReplaceCommandWithOffsetCursorState, ReplaceOvertypeCommand, ReplaceOvertypeCommandOnCompositionEnd } from '../commands/replaceCommand.js';
 import { ShiftCommand } from '../commands/shiftCommand.js';
-import { type CursorConfiguration, EditOperationResult, EditOperationType, isQuote } from '../cursorCommon.js';
+import { type CursorConfiguration, EditOperationResult, EditOperationType } from '../cursorCommon.js';
 import { Selection } from '../core/selection.js';
 import { type Position } from '../core/position.js';
 import { Range } from '../core/range.js';
@@ -70,32 +70,9 @@ export class EnterOperation {
 	}
 }
 
-export class AutoClosingOvertypeOperation {
-	public static getEdits(prevEditOperationType: EditOperationType, config: CursorConfiguration, model: ITextModel, selections: Selection[], autoClosedCharacters: Range[], text: string): EditOperationResult | undefined {
-		const normalized = normalizeTextLineEndings(text);
-		if (!canOvertypeAutoClosedCharacter(config, model, selections, autoClosedCharacters, normalized)) return undefined;
-		return new EditOperationResult(EditOperationType.TypingOther, selections.map(selection => {
-			const position = selection.getPosition();
-			return new ReplaceCommand(new Range(position.lineNumber, position.column, position.lineNumber, position.column + normalized.length), normalized);
-		}), {
-			shouldPushStackElementBefore: shouldSeparateTyping(prevEditOperationType, EditOperationType.TypingOther),
-			shouldPushStackElementAfter: false,
-		});
-	}
-}
 
-export class AutoClosingOvertypeWithInterceptorsOperation {
-	public static getEdits(config: CursorConfiguration, model: ITextModel, selections: Selection[], autoClosedCharacters: Range[], text: string): EditOperationResult | undefined {
-		if (!canOvertypeAutoClosedCharacter(config, model, selections, autoClosedCharacters, text)) return undefined;
-		return new EditOperationResult(EditOperationType.TypingOther, selections.map(selection => {
-			const position = selection.getPosition();
-			return new ReplaceCommand(new Range(position.lineNumber, position.column, position.lineNumber, position.column + text.length), '');
-		}), {
-			shouldPushStackElementBefore: true,
-			shouldPushStackElementAfter: false,
-		});
-	}
-}
+
+
 
 export class CompositionOperation {
 	public static getEdits(prevEditOperationType: EditOperationType, _config: CursorConfiguration, model: ITextModel, selections: Selection[], text: string, replacePrevCharCnt: number, replaceNextCharCnt: number, positionDelta: number): EditOperationResult {
@@ -230,17 +207,7 @@ export class BaseTypeWithAutoClosingCommand extends SelectionEditCommand {
 	}
 }
 
-function canOvertypeAutoClosedCharacter(config: CursorConfiguration, model: ITextModel, selections: Selection[], autoClosedCharacters: Range[], text: string): boolean {
-	if (text.length === 0 || text.includes('\n') || config.autoClosingOvertype === 'never') return false;
-	const graphemeCount = getTextGraphemeBoundaries(text).length - 1;
-	return selections.every(selection => {
-		if (!selection.isEmpty()) return false;
-		const position = selection.getPosition();
-		const end = advancePositionInLine(model, position, graphemeCount);
-		return model.getValueInRange(Range.fromPositions(position, end)) === text
-			&& autoClosedCharacters.some(range => range.containsPosition(position));
-	});
-}
+
 
 function advancePositionInLine(model: ITextModel, position: Position, count: number): Position {
 	let current = position;

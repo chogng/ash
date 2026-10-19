@@ -1,3 +1,5 @@
+import { registerTestCodeEditorFeatures } from '../../../../../../../test/fixtures/codeEditorFeatures.js';
+import { after as afterCodeFeatures } from 'mocha';
 import { TestQuickInputService } from '../../../../../platform/quickinput/test/browser/testQuickInputService.js';
 import '../../../../test/browser/testEditorDom.js';
 import assert from 'node:assert/strict';
@@ -20,15 +22,15 @@ import { Range } from '../../../../common/core/range.js';
 import { type DocumentPasteEditProvider } from '../../../../common/languages.js';
 import { TextModel } from '../../../../common/model/textModel.js';
 import { LanguageFeaturesService } from '../../../../common/services/languageFeaturesService.js';
-import { SnippetController2 } from '../../../snippet/browser/snippetController2.js';
+import { SnippetController2 } from '../../../../../../../extensions/code/browser/contrib/snippet/browser/snippetController2.js';
 import type { browserEnvironment } from '../../../../test/browser/testEditorDom.js';
 
 const previousClipboard = Object.getOwnPropertyDescriptor(navigator, 'clipboard');
 Object.defineProperty(navigator, 'clipboard', { configurable: true, value: {} });
 suiteTeardown(() => { if (previousClipboard) Object.defineProperty(navigator, 'clipboard', previousClipboard); else Reflect.deleteProperty(navigator, 'clipboard'); });
-await import('../../../clipboard/browser/clipboard.js');
-await import('../../browser/copyPasteContribution.js');
-const { CopyPasteController } = await import('../../browser/copyPasteController.js');
+await import('../../../../../../../extensions/code/browser/contrib/clipboard/browser/clipboard.js');
+await import('../../../../../../../extensions/code/browser/contrib/dropOrPasteInto/browser/copyPasteContribution.js');
+const { CopyPasteController } = await import('../../../../../../../extensions/code/browser/contrib/dropOrPasteInto/browser/copyPasteController.js');
 const { createTestCodeEditor, registerCodeEditorServices } = await import('../../../../test/browser/testCodeEditor.js');
 
 test('URI-list paste inserts paths before duplicate plain text', async () => {
@@ -818,3 +820,6 @@ test('command Paste As ends quietly when its clipboard read returns empty', asyn
 	await editor.getAction('editor.action.pasteAs')!.run();
 	assert.equal(model.getText(), 'old');
 });
+
+const codeFeatures = registerTestCodeEditorFeatures(['editor.contrib.codeServices', 'editor.contrib.clipboard', 'editor.contrib.copyPasteActionController', 'snippetController2']);
+afterCodeFeatures(() => codeFeatures.dispose());

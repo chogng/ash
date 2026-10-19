@@ -1,8 +1,6 @@
-import { Disposable, MutableDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
-import { FoldingController } from '../../../../editor/contrib/folding/browser/folding.js';
+import { Disposable } from '../../../../base/common/lifecycle.js';
 import { ILanguageFeaturesService } from '../../../../editor/common/services/languageFeatures.js';
 import { localize } from '../../../../nls.js';
-import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { ConfigurationScope, Extensions, type IConfigurationRegistry } from '../../../../platform/configuration/common/configurationRegistry.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { Registry } from '../../../../platform/registry/common/platform.js';
@@ -14,10 +12,8 @@ const providerIds: (string | null)[] = [null];
 const providerLabels = new Map<string, string>();
 
 class DefaultFoldingRangeProvider extends Disposable {
-	private readonly selector = this._register(new MutableDisposable<IDisposable>());
 
 	constructor(
-		@IConfigurationService configuration: IConfigurationService,
 		@ILanguageFeaturesService features: ILanguageFeaturesService,
 		@IExtensionService extensions: IExtensionService,
 	) {
@@ -30,19 +26,11 @@ class DefaultFoldingRangeProvider extends Disposable {
 			}
 			providerIds.splice(0, providerIds.length, null, ...[...ids].sort((left, right) => left.localeCompare(right)));
 		};
-		const installSelector = (): void => {
-			this.selector.value = FoldingController.setFoldingRangeProviderSelector((providers, model) => {
-				const id = configuration.getValue<string | null>(configName, { overrideIdentifier: model.getLanguageId(), resource: model.uri });
-				return id ? providers.filter(provider => provider.id === id) : undefined;
-			});
-		};
+
 		this._register(features.foldingRangeProvider.onDidChange(updateCandidates));
 		this._register(extensions.onDidChange(updateCandidates));
-		this._register(configuration.onDidChangeConfiguration(event => {
-			if (event.affectsConfiguration(configName)) installSelector();
-		}));
+
 		updateCandidates();
-		installSelector();
 	}
 }
 

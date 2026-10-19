@@ -1,12 +1,14 @@
+import { registerTestCodeEditorFeatures } from '../../../../../../../test/fixtures/codeEditorFeatures.js';
+import { after as afterCodeFeatures } from 'mocha';
 import assert from "node:assert/strict";
 import { test } from "mocha";
-import { DeleteLinesAction, InsertLineAfterAction, InsertLineBeforeAction, JoinLinesAction } from "../../browser/linesOperations.js";
+import { DeleteLinesAction, InsertLineAfterAction, InsertLineBeforeAction, JoinLinesAction } from "../../../../../../../extensions/code/browser/contrib/linesOperations/browser/linesOperations.js";
 import { Selection } from "../../../../common/core/selection.js";
 import { Position } from "../../../../common/core/position.js";
 import { TextModel } from "../../../../common/model/textModel.js";
-import { CopyLinesCommand } from '../../browser/copyLinesCommand.js';
-import { MoveLinesCommand } from '../../browser/moveLinesCommand.js';
-import { SortLinesCommand } from '../../browser/sortLinesCommand.js';
+import { CopyLinesCommand } from '../../../../../../../extensions/code/browser/contrib/linesOperations/browser/copyLinesCommand.js';
+import { MoveLinesCommand } from '../../../../../../../extensions/code/browser/contrib/linesOperations/browser/moveLinesCommand.js';
+import { SortLinesCommand } from '../../../../../../../extensions/code/browser/contrib/linesOperations/browser/sortLinesCommand.js';
 import { EditorAutoIndentStrategy } from '../../../../common/config/editorOptions.js';
 import { createTestLanguageConfigurationService } from '../../../../test/common/modes/testLanguageConfigurationService.js';
 import { createTestCursorConfiguration, createTestCursorsController } from '../../../../test/common/testCursorConfiguration.js';
@@ -248,3 +250,6 @@ function primaryFirst<T>(items: readonly T[], primaryIndex: number): readonly T[
 	if (primaryIndex === 0) return Object.freeze([...items]);
 	return Object.freeze([items[primaryIndex]!, ...items.slice(0, primaryIndex), ...items.slice(primaryIndex + 1)]);
 }
+
+const codeFeatures = registerTestCodeEditorFeatures();
+afterCodeFeatures(() => codeFeatures.dispose());
