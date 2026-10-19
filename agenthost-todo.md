@@ -243,11 +243,13 @@ Ash 的 `SessionsProvidersService` 现已接入独立 SSH Provider，Automation 
 在 `/Users/lx/Desktop/ash` 确认记录既有修复的 `0fff2125f25ffe641b5a3393fc47034d39dc52ba` 是当前 HEAD 的祖先。旧交接的停工、红测、待集成步骤和 worktree 信息已过时，交接文件已退场。
 
 - 标准单测入口执行 `languageModels.test.ts`、`chatViewPane.test.ts`、`gitHubConnectionService.test.ts`：208 项通过，0 个失败文件。
-- 新增 [MCP 进程回归](crates/app-server/tests/mcp_restart.rs)：隔离 profile 持久禁用 MCP，临时连接完成真实 loopback HTTP 握手并发现工具；退出后新进程仍禁用、工具数为零且无新握手；第三个进程显式连接仍成功。
+- 新增 [MCP 进程回归](crates/app-server-host/tests/mcp_restart.rs)：隔离 profile 持久禁用 MCP，临时连接完成真实 loopback HTTP 握手并发现工具；退出后新进程仍禁用、工具数为零且无新握手；第三个进程显式连接仍成功。
 - `just test ash-app-server --test mcp_restart` 和 `just test-processes ash-app-server --test mcp_restart --profile ci-test --locked` 各 1 项通过。回归接入 Desktop runtime acceptance 的 Windows/macOS matrix，远端 CI 尚未执行。
 - `just rust-warnings ash-app-server --profile ci-test` 全目标检查通过；`just test-python scripts` 执行 196 项、跳过 1 项，其余通过。
 
 命令、日志与文件哈希记录于 `.build/agenthost-evidence/recheck-20261018/validation.json`。真实账号、跨平台、系统休眠、TUI 与旧隔离故障复现仍未完成，详见根 TODO；不据此宣称整体验收通过。
+
+2026-10-19 在仓库 Dev Container 的 Linux ARM64 环境运行当前 checkout：AgentHost 协议、远端连接、socket transport 与 Policy 定向单测共 86 项通过；`just test ash-app-server --test mcp_restart` 的真实独立进程回归 1 项通过。正常 `pnpm prepare:backend` 发布的完整运行包另通过 Workbench／Sessions 中英文 Terminal 4 项与真实系统 Policy 五步 Desktop 场景。日志为 `.build/todo-linux-agenthost-policy-units-current.log`、`.build/todo-linux-mcp-restart-current.log` 与对应功能文档的 UI 证据；结果不覆盖 macOS 远端 runtime acceptance、外部账号、真实 TUI 或系统 sleep／wake。
 
 2026-10-18 本机补验 B2 GUI 长周期：先在隔离 HOME、OS 拒绝出站网络的环境验证已安装 `codex-cli 0.163.0-alpha.10.2` 的缓存身份与 schema，再用真实 Rust observer 和认证 Web App Server 驱动已打开的 Code／Cowork picker。正常五分钟调度的 metadata 更新和下一周期 invalidResponse 均通过，目录重读、账号范围不变、手动选择／Code Auto、推理级别及失败保留断言全部成立；完整 smoke 为 1 passed（10.2m），日志 `.build/todo-subscription-browser-final.log`。Electron 字节流 observer 现按端口处理 UTF-8／换行分片；headless Browser 的合成 key 通过产品确认切换到隔离 profile 的文件存储。该结果使用合成账号与版本校验的本地缓存，不代表真实外部账号或 TUI 验收。此前桌面交互干扰和 Browser 启动／存储失败证据单独保留。
 
