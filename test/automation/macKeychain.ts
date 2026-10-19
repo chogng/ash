@@ -4,7 +4,7 @@ import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { randomBytes } from 'node:crypto';
 
-/** The test-home owner removes this private keychain after its backend processes stop. */
+/** The test-home owner removes this private keychain after its owned processes stop. */
 export async function prepareTestKeychain(environment: Readonly<Record<string, string>>): Promise<void> {
 	if (process.platform !== 'darwin') return;
 	const keychain = join(environment.HOME, 'Library', 'Keychains', 'ash-smoke.keychain-db');

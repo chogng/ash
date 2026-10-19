@@ -29,7 +29,7 @@ test('a real-model scenario opts into one canonical auth directory while retaini
 	} finally { await rm(root, { recursive: true, force: true }); }
 });
 
-test('macOS backend tests retain their own keychain across restarts without changing the host default', { skip: process.platform !== 'darwin' }, async () => {
+test('macOS Desktop tests retain their own keychain across restarts without changing the host default', { skip: process.platform !== 'darwin' }, async () => {
 	const root = await mkdtemp(join(tmpdir(), 'ash-keychain-fixture-'));
 	const environment = createTestEnvironment(root, process.env);
 	const keychain = join(root, 'Library', 'Keychains', 'ash-smoke.keychain-db');
