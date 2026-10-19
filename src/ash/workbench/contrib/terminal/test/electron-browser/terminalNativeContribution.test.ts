@@ -271,6 +271,30 @@ suite('Desktop terminal exit revival', () => {
 		assert.equal(storage.get(unrelatedKey, StorageScope.WORKSPACE), 'another window owns this checkpoint');
 	});
 
+	test('partial restoration keeps the checkpoint and leases after restoring the surviving layout', async () => {
+		using owner = new DisposableStore();
+		const scope = fixture(owner, async () => { });
+		scope.contribution.dispose();
+		const first = await scope.create();
+		const second = await scope.create();
+		const snapshots = [exitSnapshot(first), exitSnapshot(second)];
+		await scope.terminals.closeTerminal(first);
+		const stateKey = 'terminal.reload.12345678-1234-1234-1234-123456789abc';
+		const text = JSON.stringify({ version: 1, workspaceId: 'workspace', instances: snapshots, groups: [{ ids: snapshots.map(snapshot => snapshot.instanceId), sizes: [0.5, 0.5] }] });
+		const storage = scope.services.get(IStorageService);
+		storage.store(stateKey, text, StorageScope.WORKSPACE, StorageTarget.MACHINE);
+		const secrets = scope.services.get(ISecretStorageService);
+		const credentials = JSON.stringify({ stateKey, expiresAt: Date.now() + 60_000, leases: snapshots.map(snapshot => ({ terminalId: snapshot.process.terminalId, reconnectToken: 'a'.repeat(64), reconnectGracePeriodMillis: 60_000 })) });
+		await secrets.set(TerminalStorageKeys.Reload, credentials);
+		const started = new DeferredPromise<void>();
+		second.start = () => { started.complete(); };
+		scope.lifecycle.phase = LifecyclePhase.Restored;
+		owner.add(scope.services.createInstance(TerminalNativeContribution));
+		await started.p;
+		assert.equal(storage.get(stateKey, StorageScope.WORKSPACE), text);
+		assert.equal(await secrets.get(TerminalStorageKeys.Reload), credentials);
+	});
+
 	test('failed serialization resumes the real process input client and removes a stale revival checkpoint', async () => {
 		using owner = new DisposableStore();
 		const scope = fixture(owner, async () => { }, { 'terminal.integrated.persistentSessionReviveProcess': 'onExit' });

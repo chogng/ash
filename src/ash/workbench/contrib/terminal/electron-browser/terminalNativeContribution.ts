@@ -222,6 +222,9 @@ export class TerminalNativeContribution extends Disposable implements IWorkbench
 			const focused = this.terminals.instances.find(instance => instance.instanceId === state.focusedId);
 			// The screen retains this focus request until its restored renderer opens in a visible layout.
 			if (focused?.xterm?.element.isConnected) focused.xterm.focus();
+			// Recovery can succeed for only part of the checkpoint. Keep failed
+			// snapshots and unconsumed leases available instead of treating it as complete.
+			if (state.instances.some(snapshot => !this.terminals.instances.some(instance => instance.instanceId === snapshot.instanceId))) return;
 		}
 		await this.clearCheckpoint();
 		this.storage.remove(await this.reviveStateKey(), StorageScope.WORKSPACE);

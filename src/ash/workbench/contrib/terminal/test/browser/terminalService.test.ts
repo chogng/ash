@@ -130,6 +130,51 @@ test('TerminalService restores an empty reload checkpoint without a process atta
 	assert.equal(processes.createCalls.length, 0);
 });
 
+for (const rejectFirst of [false, true]) {
+	test(`TerminalService reattaches saved PTYs without resolving a missing shell${rejectFirst ? ' and isolates an attachment failure' : ''}`, async () => {
+		const processes = new TestTerminalProcessService([], 'reconnectable');
+		using workspace = folderWorkspaceContext();
+		using services = revivalServices(processes, workspace);
+		const first = reviveSnapshot(workspace);
+		const second = { ...first, instanceId: 8, resource: getTerminalUri('saved-window', 8).toString(), process: { ...first.process, terminalId: 'second-pty', ready: { ...first.process.ready, pid: 322 } } };
+		const snapshots = [first, second];
+		let resolutions = 0;
+		processes.resolveProfile = async () => { resolutions++; throw new Error('Custom shell no longer exists'); };
+		const attached: string[] = [];
+		const attachmentFailure = new Error('First PTY is temporarily unavailable');
+		Object.assign(processes, {
+			attach: async (lease: { terminalId: string; }) => {
+				attached.push(lease.terminalId);
+				if (rejectFirst && lease.terminalId === first.process.terminalId) throw attachmentFailure;
+				return snapshots.find(snapshot => snapshot.process.terminalId === lease.terminalId)!.process;
+			}
+		});
+		const stateKey = 'terminal.reload.12345678-1234-1234-1234-123456789abc';
+		const text = JSON.stringify({ version: 1, workspaceId: workspace.getWorkspace().id, instances: snapshots, groups: [], activeId: second.instanceId });
+		services.get(IStorageService).store(stateKey, text, StorageScope.WORKSPACE, StorageTarget.MACHINE);
+		const credentials = JSON.stringify({ stateKey, expiresAt: Date.now() + 60_000, leases: snapshots.map(snapshot => ({ terminalId: snapshot.process.terminalId, reconnectToken: 'a'.repeat(64), reconnectGracePeriodMillis: 60_000 })) });
+		await services.get(ISecretStorageService).set(TerminalStorageKeys.Reload, credentials);
+		const errors: unknown[] = [];
+		const previous = errorHandler.getUnexpectedErrorHandler();
+		setUnexpectedErrorHandler(error => errors.push(error));
+		try {
+			const terminals = services.get(ITerminalService);
+			await terminals.whenConnected;
+			assert.deepEqual(attached, snapshots.map(snapshot => snapshot.process.terminalId));
+			assert.equal(resolutions, 0);
+			assert.deepEqual(processes.createCalls, []);
+			assert.deepEqual(processes.closeCalls, []);
+			assert.deepEqual(terminals.instances.map(instance => instance.instanceId), rejectFirst ? [8] : [7, 8]);
+			assert.equal(terminals.activeInstance?.instanceId, 8);
+			assert.deepEqual(terminals.instances.at(-1)!.revivalLaunch, second.launch);
+			assert.equal(errors.length, rejectFirst ? 1 : 0);
+			if (rejectFirst) assert.deepEqual(((errors[0] as Error).cause as AggregateError).errors, [attachmentFailure]);
+			assert.equal(services.get(IStorageService).get(stateKey, StorageScope.WORKSPACE), text);
+			assert.equal(await services.get(ISecretStorageService).get(TerminalStorageKeys.Reload), credentials);
+		} finally { setUnexpectedErrorHandler(previous); }
+	});
+}
+
 test("TerminalService keeps empty windows off the process API and enables a folder after transition", async () => {
 	const processService = new TestTerminalProcessService([]);
 	using workspace = new TestWorkspaceService({ id: "empty-window" });
