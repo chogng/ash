@@ -27,7 +27,9 @@ ${messages.join('\n')}\n`;
 	const fingerprint = `${require('protobufjs/package.json').version}\n${require('protobufjs-cli/package.json').version}\n${JSON.stringify(flags)}\n${schema}`;
 	const stamp = resolve(temporary, 'inputs.txt');
 	try { if (readFileSync(stamp, 'utf8') === fingerprint && readFileSync(output, 'utf8').includes('ashCodecPrototype')) return; } catch { /* First build. */ }
-	const staging = mkdtempSync(resolve(temporary, 'generate-'));
+	// Dev containers can mount .build on a separate volume. Stage beside the
+	// published module so its atomic rename stays on the same filesystem.
+	const staging = mkdtempSync(resolve(directory, '.codec-'));
 	try {
 		const source = resolve(staging, 'wire.proto');
 		const generated = resolve(staging, 'codec.js');

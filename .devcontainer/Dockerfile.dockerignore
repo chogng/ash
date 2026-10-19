@@ -1,7 +1,10 @@
 **
 !.nvmrc
+!.just-version
 !.devcontainer/
 !.devcontainer/configure-electron-sandbox.sh
 !.devcontainer/desktop-init.sh
 !package.json
 !rust-toolchain.toml
+!scripts/
+!scripts/pyproject.toml
