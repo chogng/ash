@@ -7,7 +7,6 @@
 - [ ] 在支持 PSEC 的 Windows 宿主重跑当前固定 fork 的文件、网络、ConPTY、执行服务 RPC、后代回收和清理验收，记录系统版本、架构、SDK 提交及原始结果；入口见 [Windows 验收手册](docs/windows-sandbox-acceptance-runbook.md) 和 `scripts/test-psec.ps1`。
 - [ ] 在该宿主的 WSL2 中重跑 Linux 适配器、PTY、执行服务及网络矩阵，补 Windows 挂载目录和互操作边界，记录发行版、内核和 Bubblewrap 版本；命令见 [WSL 验证入口](crates/mxc-sandbox/README.md#验证)。
 - [ ] 完成管理员账户的安装、认证管道、真实文件权限、网络、PTY、后代回收、运行器更新、服务更新和清理验收；步骤见 [Windows 验收手册](docs/windows-sandbox-acceptance-runbook.md)。
-- [ ] 补 Ash Windows x64 全测试目标编译所缺的目标 C 工具链。
 
 ## Linux
 

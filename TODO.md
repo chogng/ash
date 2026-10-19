@@ -6,14 +6,13 @@
 
 ## MXC · 跨平台验收
 
-- [ ] **验收** · 在支持 PSEC 的 Windows、WSL2 和独立 Linux／x64 运行当前 SDK pin `f1e8694b`，并补外部局域网／公网 IPv6。Ash Windows x64 全测试目标交叉编译仍缺目标 C 工具链；全仓依赖安全门禁仍被既有 zbus 生态停止维护公告阻挡。命令与验收边界见 [MXC 清单](MXC-TODO.md) 与 [适配器验证](crates/mxc-sandbox/README.md#验证)。
+- [ ] **验收** · 在支持 PSEC 的 Windows、WSL2 和独立 Linux／x64 运行当前 SDK pin `f1e8694b`，并补外部局域网／公网 IPv6。全仓依赖安全门禁仍被既有 zbus 生态停止维护公告阻挡。命令与验收边界见 [MXC 清单](MXC-TODO.md) 与 [适配器验证](crates/mxc-sandbox/README.md#验证)。
 
 ## Windows 开发实验资源清理
 
-- [ ] 定位并清理 Windows 测量的五个临时目录。本机复核时 `.build/desktop/dev/app-server/.staging-c8813138-4733-4acc-8ebe-05eee0827ccd` 已不存在；`.build/perf-win-edit-20261018/round4-cleanup.json` 也不在当前检出，缺少五个目录的准确路径，不能据此宣称其已清理。
+- [ ] 清理 Windows 测量实验目录。已找到 `.build/perf-win-edit-20261018/round4-cleanup.json`；其中五个临时目录及 staging 目录均存在、无进程引用。2026-10-19 按准确路径执行原生 PowerShell 删除仍被自动审批策略拒绝，未删除。
 - 保存 Rust 到 App 可用的 15 秒目标尚未达到。2026-10-19 在 `3df4938da` 暂停开发与同步后完成迁移修复的 20 次匹配尝试：空库成功中位数 20.06 → 19.80 秒（5/5 → 5/5），100 条历史会话 22.27 → 21.15 秒（3/5 → 5/5），历史成功样本快 1.12 秒（5.0%）；仍差 4.80／6.15 秒。空库差异很小，不能用成功样本的条件中位数替代总体延迟或失败率结论。原始样本与阶段成本见 `docs/build.md` 完整循环复测及 `.build/perf-win-edit-20261019-migration/q2-summary.json`。
 - 本轮复测完成，修复内容与正常构建已恢复；此前第五轮的 diff 适配器边界优化仍保留，旧源码上的约 25 秒结果不作为本轮基线。15 秒是体验目标，并非测量推导的性能下限；若继续优化，需根据发布前约 13.7 秒及历史发布后约 7.4 秒的成本选择方向。上述结果仅覆盖 diff 适配器编辑；本机卷均为 NTFS，没有 Dev Drive。
-- 实验资源暂存目录 `.build/desktop/dev/app-server/.staging-c8813138-4733-4acc-8ebe-05eee0827ccd` 的 bin 为空；此前删除被自动审批策略阻止，仍保留。第四轮五个测量临时目录也因相同策略保留，准确路径见 `.build/perf-win-edit-20261018/round4-cleanup.json`；不影响正常构建。
 
 ## Remote / Browser 多根工作区 · TODO
 
@@ -86,12 +85,6 @@
 - [ ] **验收** · 补真实账户、物理音频设备与音质验收；现有本地 Call/LiveKit、模拟 Live wire 和 AudioHost 设备替身不能代替该结果。本地转写的 Foundry Local cacheDir／下载／代理契约与完整 Prompt／Agent 格式按真实调用需求另核对。
 
 输入、渲染、工具与语音职责及历史验证范围见 [Chat](docs/chat.md)。
-
-## Debug · TODO
-
-已确认的 Rust 领域迁移、Memento 单向迁移和前端职责拆分已实现，范围与验证记录见 [调试系统](docs/debugging.md)。
-
-- [ ] **验收 · 真实 LLDB 程序**：本机 macOS Developer Mode 关闭。仓库要求测试不得触发 Developer Tools Access、密码或系统调试授权弹窗，本轮未启动真实 LLDB debuggee，也未修改系统安全设置。需要在已具备调试权限的环境验证 CodeLLDB／lldb-dap 的启动、断点、检查和停止；确定性 DAP、Desktop 和同机隔离 SSH 结果不替代此项。
 
 ## Terminal · TODO
 
