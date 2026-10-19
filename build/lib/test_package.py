@@ -117,6 +117,7 @@ class PackageTests(unittest.TestCase):
                 "ash-code-mode-host",
                 "ash-git-extension",
                 "ash-markdown-math",
+                "ash-academy",
                 "ash-markdown-language-features",
                 "ash-github-authentication",
                 "ash-github-extension",
@@ -461,6 +462,9 @@ class PackageTests(unittest.TestCase):
                 markdown_math_binary=executable_file(
                     root / "math-extension", b"math-extension"
                 ),
+                academy_extension_binary=executable_file(
+                    root / "academy", b"academy-extension"
+                ),
                 markdown_extension_binary=executable_file(
                     root / "markdown-language-features", b"markdown-extension"
                 ),
@@ -613,6 +617,25 @@ class PackageTests(unittest.TestCase):
             self.assertEqual(
                 b"git-extension", (output / "bin" / "ash-git-extension").read_bytes()
             )
+            self.assertEqual(
+                b"academy-extension", (output / "bin" / "ash-academy").read_bytes()
+            )
+            academy = output / "ash-resources/extensions/academic"
+            self.assertEqual(
+                "ash-academy",
+                json.loads((academy / "package.json").read_text())["ashRuntime"][
+                    "entrypoint"
+                ],
+            )
+            for build_input in [
+                "browser",
+                "src",
+                "Cargo.toml",
+                "Cargo.lock",
+                "build.rs",
+                "BUILD.bazel",
+            ]:
+                self.assertFalse((academy / build_input).exists(), build_input)
             self.assertEqual(
                 b"markdown-extension",
                 (output / "bin" / "ash-markdown-language-features").read_bytes(),
@@ -797,6 +820,9 @@ class PackageTests(unittest.TestCase):
                 protocol_metadata=generated_protocol,
                 markdown_math_binary=executable_file(
                     root / "math-extension", b"math-extension"
+                ),
+                academy_extension_binary=executable_file(
+                    root / "academy", b"academy-extension"
                 ),
                 markdown_extension_binary=executable_file(
                     root / "markdown-language-features", b"markdown-extension"
@@ -1113,6 +1139,9 @@ class PackageTests(unittest.TestCase):
                 markdown_math_binary=executable_file(
                     root / "math-extension", b"math-extension"
                 ),
+                academy_extension_binary=executable_file(
+                    root / "academy", b"academy-extension"
+                ),
                 markdown_extension_binary=executable_file(
                     root / "markdown-language-features", b"markdown-extension"
                 ),
@@ -1208,6 +1237,9 @@ class PackageTests(unittest.TestCase):
                 ),
                 markdown_math_binary=executable_file(
                     root / "math-extension", b"math-extension"
+                ),
+                academy_extension_binary=executable_file(
+                    root / "academy", b"academy-extension"
                 ),
                 markdown_extension_binary=executable_file(
                     root / "markdown-language-features", b"markdown-extension"

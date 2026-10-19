@@ -12,40 +12,33 @@ test("editor exposes one flat VS Code-shaped domain for both feature implementat
 	assert.deepEqual(directoryNames(editorRoot), ["browser", "common", "contrib", "standalone", "test"]);
 	assert.deepEqual(directoryNames(join(editorRoot, "common")), ["commands", "config", "core", "cursor", "diff", "languages", "model", "services", "standalone", "tokens", "viewLayout", "viewModel"]);
 	assert.deepEqual(directoryNames(join(editorRoot, "browser")), ["config", "controller", "gpu", "services", "view", "viewParts", "widget"]);
-	assert.equal(statSafe(join(editorRoot, "contrib", "academic")), true);
+	assert.equal(statSafe(resolve(desktopRoot, "extensions/academic/browser/contrib/academic/common/schema.ts")), true);
 	assert.equal(statSafe(join(editorRoot, "editor.all.ts")), true);
 	assert.deepEqual(collectFiles(editorRoot).filter(file => /[\\/]index\.ts$/u.test(file)), []);
 });
 
 test("document editing separates editor capabilities from Workbench hosting", () => {
 	for (const file of [
-		"common/core/documentSelection.ts",
-		"common/model/textModel.ts",
-		"common/model/pieceTreeTextBuffer/rbTreeBase.ts",
-		"common/model/pieceTreeTextBuffer/pieceTreeBase.ts",
-		"common/model/pieceTreeTextBuffer/pieceTreeTextBuffer.ts",
-		"common/model/pieceTreeTextBuffer/pieceTreeTextBufferBuilder.ts",
-		"common/model/lineDocument.ts",
-		"common/model/textModelBlockState.ts",
-		"common/model/lineDocumentProjection.ts",
-		"common/services/resolverService.ts",
-		"common/commands/documentCommands.ts",
-		"browser/widget/richTextEditor/richTextEditorWidget.ts",
-		"browser/widget/richTextEditor/richTextEditorWidget.css",
-		"browser/widget/richTextEditor/htmlDocumentFragment.ts",
-		"contrib/formatting/browser/formattingContribution.ts",
-		"contrib/collaboration/common/controller.ts",
-		"common/services/documentCollaborationService.ts",
-		"contrib/academic/common/schema.ts",
+		"common/model/textModel.ts", "common/model/lineDocument.ts", "common/services/resolverService.ts",
+		"common/model/pieceTreeTextBuffer/rbTreeBase.ts", "common/model/pieceTreeTextBuffer/pieceTreeBase.ts",
+		"common/model/pieceTreeTextBuffer/pieceTreeTextBuffer.ts", "common/model/pieceTreeTextBuffer/pieceTreeTextBufferBuilder.ts",
 	]) assert.equal(statSafe(join(editorRoot, file)), true, file);
+	for (const file of [
+		"common/core/documentSelection.ts", "common/model/documentSchema.ts", "common/model/documentTextModel.ts",
+		"common/model/textModelBlockState.ts", "common/model/lineDocumentProjection.ts", "common/commands/documentCommands.ts",
+		"browser/widget/richTextEditor/richTextEditorWidget.ts", "browser/widget/richTextEditor/richTextEditorWidget.css",
+		"browser/widget/richTextEditor/htmlDocumentFragment.ts", "browser/contrib/formatting/formattingContribution.ts",
+		"common/contrib/collaboration/controller.ts", "common/services/documentCollaborationService.ts",
+	]) {
+		assert.equal(statSafe(resolve(desktopRoot, 'extensions/academic', file)), true, file);
+		assert.equal(statSafe(join(editorRoot, file)), false, file);
+	}
 	for (const file of [
 		"contrib/documentEditor/browser/documentEditorInput.ts",
 		"contrib/documentEditor/browser/documentEditorPane.ts",
 		"contrib/documentEditor/browser/collaborationContribution.ts",
 		"services/documentCollaboration/common/documentCollaborationService.ts",
 		"contrib/documentEditor/browser/editorProfile.ts",
-		"contrib/academic/browser/academicEditorProfile.ts",
-		"contrib/academic/browser/academicEditor.contribution.ts",
 		"services/documentEditor/browser/documentWorkingCopy.ts",
 		"services/documentEditor/browser/documentEditorTextModelService.ts",
 		"services/documentCollaboration/browser/appServerDocumentCollaborationService.ts",
@@ -78,24 +71,24 @@ test("document editing separates editor capabilities from Workbench hosting", ()
 });
 
 test("document editing keeps lines and orthogonal rich semantics in one TextModel", () => {
-	const schema = readFileSync(join(editorRoot, "common/model/documentSchema.ts"), "utf8");
+	const schema = readFileSync(resolve(desktopRoot, "extensions/academic/common/model/documentSchema.ts"), "utf8");
 	const textModel = readFileSync(join(editorRoot, "common/model/textModel.ts"), "utf8");
 	const textBuffer = readFileSync(join(editorRoot, "common/model.ts"), "utf8");
 	const pieceTree = readFileSync(join(editorRoot, "common/model/pieceTreeTextBuffer/pieceTreeTextBuffer.ts"), "utf8");
 	const pieceTreeBuilder = readFileSync(join(editorRoot, "common/model/pieceTreeTextBuffer/pieceTreeTextBufferBuilder.ts"), "utf8");
 	const redBlackTree = readFileSync(join(editorRoot, "common/model/pieceTreeTextBuffer/rbTreeBase.ts"), "utf8");
 	const lineDocument = readFileSync(join(editorRoot, "common/model/lineDocument.ts"), "utf8");
-	const lineProjection = readFileSync(join(editorRoot, "common/model/lineDocumentProjection.ts"), "utf8");
+	const lineProjection = readFileSync(resolve(desktopRoot, "extensions/academic/common/model/lineDocumentProjection.ts"), "utf8");
 	const pane = readFileSync(join(workbenchRoot, "contrib/documentEditor/browser/documentEditorPane.ts"), "utf8");
-	const editor = readFileSync(join(editorRoot, "browser/widget/richTextEditor/richTextEditorWidget.ts"), "utf8");
-	const formatting = readFileSync(join(editorRoot, "contrib/formatting/browser/formattingContribution.ts"), "utf8");
-	const academicContribution = readFileSync(join(workbenchRoot, "contrib/academic/browser/academicEditor.contribution.ts"), "utf8");
+	const editor = readFileSync(resolve(desktopRoot, "extensions/academic/browser/widget/richTextEditor/richTextEditorWidget.ts"), "utf8");
+	const formatting = readFileSync(resolve(desktopRoot, "extensions/academic/browser/contrib/formatting/formattingContribution.ts"), "utf8");
+	const academicContribution = readFileSync(resolve(desktopRoot, "extensions/academic/browser/editor.ts"), "utf8");
 	const editorAll = readFileSync(join(editorRoot, "editor.all.ts"), "utf8");
 	assert.match(schema, /codeBlock:/u);
 	assert.match(schema, /"root" \| "group" \| "block" \| "line" \| "inline" \| "text"/u);
 	assert.match(pane, /export class DocumentEditorPane/u);
 	assert.match(pane, /implements IEditorPane/u);
-	assert.match(textModel, /static create\(/u);
+	assert.doesNotMatch(textModel, /DocumentSchema|TextModelBlock|projectDocumentToLines/u);
 	assert.match(textModel, /get lineDocument/u);
 	assert.match(textModel, /getLineId/u);
 	assert.match(textModel, /private buffer: ITextBuffer/u);
@@ -123,13 +116,13 @@ test("document editing keeps lines and orthogonal rich semantics in one TextMode
 	assert.match(editor, /export class RichTextEditorWidget/u);
 	assert.doesNotMatch(editor, /ITextModelResourceService|TextModelWorkingCopyReference|requireWorkingCopy/u);
 	assert.match(pane, /TextModelWorkingCopyReference/u);
-	assert.match(editor, /setModel\(model: TextModel/u);
+	assert.match(editor, /setModel\(model: DocumentTextModel/u);
 	assert.match(editor, /case "codeBlock":[\s\S]*this\.appendEditableText\(element, node, model, decorations\)/u);
 	assert.doesNotMatch(editor, /new TextModel|TextModel\.createStructured|EmbeddedTextEditor|CodeBlockEditorWidget/u);
 	assert.doesNotMatch(academicContribution, /AcademicCodeBlockEditorFactory|EmbeddedTextEditor|CodeEditorWidget/u);
 	assert.match(formatting, /new ToolBar\(/u);
-	const collaborationService = readFileSync(join(editorRoot, "common/services/documentCollaborationService.ts"), "utf8");
-	const collaborationWidget = readFileSync(join(editorRoot, "browser/widget/richTextEditor/richTextEditorWidget.ts"), "utf8");
+	const collaborationService = readFileSync(resolve(desktopRoot, "extensions/academic/common/services/documentCollaborationService.ts"), "utf8");
+	const collaborationWidget = readFileSync(resolve(desktopRoot, "extensions/academic/browser/widget/richTextEditor/richTextEditorWidget.ts"), "utf8");
 	const collaborationRouter = readFileSync(join(workbenchRoot, "services/documentCollaboration/browser/documentCollaborationService.ts"), "utf8");
 	const documentPane = readFileSync(join(workbenchRoot, "contrib/documentEditor/browser/documentEditorPane.ts"), "utf8");
 	assert.doesNotMatch(collaborationService, /IDocumentCollaborationService|createInvite|listMembers|accessToken|RoomRole/u);

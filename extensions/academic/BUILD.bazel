@@ -1,0 +1,28 @@
+load("//:defs.bzl", "ash_rust_binary", "ash_rust_crate")
+load("@crates//:defs.bzl", "all_crate_deps")
+load("@rules_rust//cargo:defs.bzl", "cargo_build_script")
+
+exports_files(glob(["browser/**/*.ts", "browser/**/*.css", "common/**/*.ts"]) + ["src/lib.rs", "build.rs", "package.json", "package.nls.json", "package.nls.zh-CN.json"], visibility = ["//crates/app-server:__pkg__"])
+
+cargo_build_script(
+    name = "build_script",
+    srcs = ["build.rs"],
+    crate_root = "build.rs",
+    data = glob(["browser/**/*.ts", "browser/**/*.css", "common/**/*.ts"]),
+    deps = all_crate_deps(build = True),
+    edition = "2024",
+)
+
+ash_rust_crate(
+    name = "academic",
+    crate_name = "ash_academy",
+    data = ["package.nls.json", "package.nls.zh-CN.json"],
+    extra_deps = [":build_script"],
+)
+
+ash_rust_binary(
+    name = "ash-academy",
+    crate_name = "ash_academy",
+    crate_root = "src/main.rs",
+    deps = [":academic"],
+)

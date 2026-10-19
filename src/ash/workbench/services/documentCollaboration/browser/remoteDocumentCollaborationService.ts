@@ -1,21 +1,20 @@
+import type { DocumentCodec } from '../../documentEditor/common/documentCodec.js';
 import { throwIfCancelled } from "../../../../base/common/cancellation.js";
 import { Emitter } from "../../../../base/common/event.js";
 import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import { isRecord } from "../../../../base/common/types.js";
-import { allSelection, nodeSelection, textSelection, type DocumentSelection } from "../../../../editor/common/core/documentSelection.js";
-import type { DocumentNode } from "../../../../editor/common/model/document.js";
-import { deserializeDocument, serializeDocument } from "../../../../editor/common/model/documentSerialization.js";
-import { deserializeDocumentTransaction, serializeDocumentTransaction } from "../../../../editor/common/model/documentTransactionSerialization.js";
+import type { DocumentSelection } from "../../../../../../extensions/academic/common/core/documentSelection.js";
+import type { DocumentNode } from "../../../../../../extensions/academic/common/model/document.js";
 import type { DocumentCollaborationRoom } from '../common/documentCollaborationService.js';
 import type { DocumentCollaborationInvite } from '../common/documentCollaborationService.js';
 import type { DocumentCollaborationMember } from '../common/documentCollaborationService.js';
 import type { DocumentCollaborationOpenInput } from '../common/documentCollaborationService.js';
-import type { DocumentCollaborationPresence } from "../../../../editor/common/services/documentCollaborationService.js";
+import type { DocumentCollaborationPresence } from "../../../../../../extensions/academic/common/services/documentCollaborationService.js";
 import type { DocumentCollaborationRoomRole } from '../common/documentCollaborationService.js';
-import type { DocumentCollaborationSnapshot } from "../../../../editor/common/services/documentCollaborationService.js";
-import type { DocumentCollaborationSubmitOutcome } from "../../../../editor/common/services/documentCollaborationService.js";
-import type { DocumentCollaborationEnvelope } from "../../../../editor/common/services/documentCollaborationService.js";
-import type { DocumentCollaborationRemoteEnvelope } from "../../../../editor/common/services/documentCollaborationService.js";
+import type { DocumentCollaborationSnapshot } from "../../../../../../extensions/academic/common/services/documentCollaborationService.js";
+import type { DocumentCollaborationSubmitOutcome } from "../../../../../../extensions/academic/common/services/documentCollaborationService.js";
+import type { DocumentCollaborationEnvelope } from "../../../../../../extensions/academic/common/services/documentCollaborationService.js";
+import type { DocumentCollaborationRemoteEnvelope } from "../../../../../../extensions/academic/common/services/documentCollaborationService.js";
 
 const API_ROOT = "/v1/document-collaboration";
 const INITIAL_POLL_RETRY_DELAY_MS = 250;
@@ -50,14 +49,14 @@ export class RemoteDocumentCollaborationService extends Disposable {
 			...(input.roomId === undefined ? {} : { roomId: input.roomId }),
 			clientId: input.clientId,
 			schemaId: input.schemaId,
-			document: serializeDocument(input.document, input.schema),
+			document: input.codec.serialize(input.document, input.schema),
 		}, signal);
 		throwIfCancelled(signal, "Opening a remote Stanza collaboration room was cancelled");
 		const response = expectRecord(opened, "remote collaboration open response");
-		const snapshot = decodeSnapshot(response.snapshot, input.schema);
+		const snapshot = decodeSnapshot(response.snapshot, input.schema, input.codec);
 		const clientId = expectString(response.clientId, "remote collaboration clientId");
 		const principalId = response.principalId === undefined ? undefined : expectString(response.principalId, "remote collaboration principalId");
-		const connection = new RemoteDocumentCollaborationConnection(this, target, input.schema, clientId, principalId, snapshot, expectBooleanOrDefault(response.canEdit, "remote collaboration canEdit", true), expectBooleanOrDefault(response.canManageMembers, "remote collaboration canManageMembers", false));
+		const connection = new RemoteDocumentCollaborationConnection(this, target, input.schema, input.codec, clientId, principalId, snapshot, expectBooleanOrDefault(response.canEdit, "remote collaboration canEdit", true), expectBooleanOrDefault(response.canManageMembers, "remote collaboration canManageMembers", false));
 		this.connections.add(connection);
 		return connection;
 	}
@@ -73,14 +72,14 @@ export class RemoteDocumentCollaborationService extends Disposable {
 			clientId: connection.clientId,
 			sequence: validateProtocolInteger(envelope.sequence, "sequence", 1),
 			baseVersion: validateProtocolInteger(envelope.baseVersion, "baseVersion", 0),
-			transaction: serializeDocumentTransaction(envelope.transaction, connection.schema),
-			document: serializeDocument(document, connection.schema),
+			transaction: connection.codec.serializeTransaction(envelope.transaction, connection.schema),
+			document: connection.codec.serialize(document, connection.schema),
 		}, signal), "remote collaboration submit response");
 		throwIfCancelled(signal, "Submitting a remote Stanza collaboration update was cancelled");
 		switch (expectString(response.status, "remote collaboration submit status")) {
-			case "accepted": return { kind: "accepted", update: decodeUpdate(response.update, connection.schema) };
-			case "conflict": return { kind: "conflict", updates: Object.freeze(expectArray(response.updates, "remote collaboration conflict updates").map(update => decodeUpdate(update, connection.schema))) };
-			case "resync": return { kind: "resync", snapshot: decodeSnapshot(response.snapshot, connection.schema) };
+			case "accepted": return { kind: "accepted", update: decodeUpdate(response.update, connection.schema, connection.codec) };
+			case "conflict": return { kind: "conflict", updates: Object.freeze(expectArray(response.updates, "remote collaboration conflict updates").map(update => decodeUpdate(update, connection.schema, connection.codec))) };
+			case "resync": return { kind: "resync", snapshot: decodeSnapshot(response.snapshot, connection.schema, connection.codec) };
 			default: throw new TypeError("Remote Stanza collaboration returned an unknown submit status");
 		}
 	}
@@ -89,8 +88,8 @@ export class RemoteDocumentCollaborationService extends Disposable {
 		const path = `rooms/${encodeURIComponent(connection.roomId)}/updates?afterVersion=${connection.version}`;
 		const response = expectRecord(await this.request(connection.target, path, undefined, signal), "remote collaboration updates response");
 		switch (expectString(response.status, "remote collaboration updates status")) {
-			case "updates": return { kind: "updates", updates: Object.freeze(expectArray(response.updates, "remote collaboration updates").map(update => decodeUpdate(update, connection.schema))) };
-			case "resync": return { kind: "resync", snapshot: decodeSnapshot(response.snapshot, connection.schema) };
+			case "updates": return { kind: "updates", updates: Object.freeze(expectArray(response.updates, "remote collaboration updates").map(update => decodeUpdate(update, connection.schema, connection.codec))) };
+			case "resync": return { kind: "resync", snapshot: decodeSnapshot(response.snapshot, connection.schema, connection.codec) };
 			default: throw new TypeError("Remote Stanza collaboration returned an unknown updates status");
 		}
 	}
@@ -198,7 +197,7 @@ class RemoteDocumentCollaborationConnection extends Disposable implements Docume
 	readonly roomId: string;
 	get serverUrl(): string { return this.target.endpoint.origin; }
 
-	constructor(private readonly service: RemoteDocumentCollaborationService, readonly target: RemoteTarget, readonly schema: DocumentCollaborationRoom["schema"], readonly clientId: string, readonly principalId: string | undefined, readonly initialSnapshot: DocumentCollaborationSnapshot, readonly canEdit: boolean, readonly canManageMembers: boolean) {
+	constructor(private readonly service: RemoteDocumentCollaborationService, readonly target: RemoteTarget, readonly schema: DocumentCollaborationRoom["schema"], readonly codec: DocumentCodec, readonly clientId: string, readonly principalId: string | undefined, readonly initialSnapshot: DocumentCollaborationSnapshot, readonly canEdit: boolean, readonly canManageMembers: boolean) {
 		super();
 		this.roomId = initialSnapshot.roomId;
 		this._version = initialSnapshot.version;
@@ -354,19 +353,19 @@ function normalizeTarget(endpoint: string, bearerToken: string): RemoteTarget {
 	return Object.freeze({ endpoint: parsed, bearerToken });
 }
 
-function decodeSnapshot(value: unknown, schema: DocumentCollaborationRoom["schema"]): DocumentCollaborationSnapshot {
+function decodeSnapshot(value: unknown, schema: DocumentCollaborationRoom["schema"], codec: DocumentCodec): DocumentCollaborationSnapshot {
 	const record = expectRecord(value, "remote collaboration snapshot");
-	return Object.freeze({ roomId: expectString(record.roomId, "remote collaboration roomId"), version: validateProtocolInteger(record.version, "version", 0), document: deserializeDocument(expectString(record.document, "remote collaboration document"), schema) });
+	return Object.freeze({ roomId: expectString(record.roomId, "remote collaboration roomId"), version: validateProtocolInteger(record.version, "version", 0), document: codec.deserialize(expectString(record.document, "remote collaboration document"), schema) });
 }
 
-function decodeUpdate(value: unknown, schema: DocumentCollaborationRoom["schema"]): DocumentCollaborationRemoteEnvelope {
+function decodeUpdate(value: unknown, schema: DocumentCollaborationRoom["schema"], codec: DocumentCodec): DocumentCollaborationRemoteEnvelope {
 	const record = expectRecord(value, "remote collaboration update");
 	return Object.freeze({
 		clientId: expectString(record.clientId, "remote collaboration clientId"),
 		sequence: validateProtocolInteger(record.sequence, "sequence", 1),
 		baseVersion: validateProtocolInteger(record.baseVersion, "baseVersion", 0),
 		version: validateProtocolInteger(record.version, "version", 1),
-		transaction: deserializeDocumentTransaction(expectString(record.transaction, "remote collaboration transaction"), schema),
+		transaction: codec.deserializeTransaction(expectString(record.transaction, "remote collaboration transaction"), schema),
 	});
 }
 
@@ -408,9 +407,9 @@ function decodeSelection(value: string): DocumentSelection {
 	}
 	const selection = expectRecord(parsed, "remote collaboration presence selection");
 	switch (selection.kind) {
-		case "all": return allSelection();
-		case "node": return nodeSelection(expectString(selection.nodeId, "remote collaboration node selection nodeId"));
-		case "text": return textSelection(decodePoint(selection.anchor, "remote collaboration text selection anchor"), decodePoint(selection.head, "remote collaboration text selection head"));
+		case "all": return Object.freeze({ kind: "all" });
+		case "node": return Object.freeze({ kind: "node", nodeId: expectString(selection.nodeId, "remote collaboration node selection nodeId") });
+		case "text": return Object.freeze({ kind: "text", anchor: decodePoint(selection.anchor, "remote collaboration text selection anchor"), head: decodePoint(selection.head, "remote collaboration text selection head") });
 		default: throw new TypeError("Remote Stanza collaboration presence selection has an unknown kind");
 	}
 }

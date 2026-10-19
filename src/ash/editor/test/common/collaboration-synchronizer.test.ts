@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
 import { test } from "mocha";
-import { createDefaultDocumentSchema, type DocumentSchema } from "../../common/model/documentSchema.js";
-import { textSelection } from "../../common/core/documentSelection.js";
-import { DocumentTransaction } from "../../common/model/documentTransaction.js";
-import { DocumentCollaborationSynchronizer, DocumentCollaborationError } from "../../contrib/collaboration/common/synchronizer.js";
+import { createDefaultDocumentSchema, type DocumentSchema } from "../../../../../extensions/academic/common/model/documentSchema.js";
+import { textSelection } from "../../../../../extensions/academic/common/core/documentSelection.js";
+import { DocumentTransaction } from "../../../../../extensions/academic/common/model/documentTransaction.js";
+import { DocumentCollaborationSynchronizer, DocumentCollaborationError } from "../../../../../extensions/academic/common/contrib/collaboration/synchronizer.js";
 
 function createDocument(schema: DocumentSchema) {
 	return schema.createDocument([schema.createNode("paragraph", { id: "paragraph-1", content: [schema.createText("Hello", { id: "text-1" })] })], "document-1");

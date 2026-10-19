@@ -57,7 +57,7 @@ export enum TextModelChangeReason {
 	Edit = "edit",
 	EOL = "eol",
 	/** Text changed as part of an atomic rich-document transaction. */
-	Blocks = "blocks",
+	Extension = "extension",
 	Reset = "reset",
 	Undo = "undo",
 	Redo = "redo",

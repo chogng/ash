@@ -108,7 +108,7 @@ async function preparePackages(): Promise<boolean> {
 			for (const entry of (await readdir(resourceDirectory, { withFileTypes: true })).sort((a, b) => a.name.localeCompare(b.name))) {
 				if (entry.name.startsWith('.') || ['node_modules', 'test'].includes(entry.name)) { continue; }
 				if (manifest.ashRuntime?.kind === 'rust' && entry.isFile() && entry.name.endsWith('.ts')) { continue; }
-				if (manifest.ashRuntime?.kind === 'rust' && ['src', 'tests', 'browser', 'Cargo.toml', 'Cargo.lock', 'BUILD.bazel'].includes(entry.name)) { continue; }
+				if (manifest.ashRuntime?.kind === 'rust' && ['src', 'tests', 'browser', 'common', 'Cargo.toml', 'Cargo.lock', 'build.rs', 'BUILD.bazel'].includes(entry.name)) { continue; }
 				const path = resolve(resourceDirectory, entry.name);
 				if (entry.isDirectory()) {
 					// Rust source projects are build inputs; generated sibling WASM remains a resource.

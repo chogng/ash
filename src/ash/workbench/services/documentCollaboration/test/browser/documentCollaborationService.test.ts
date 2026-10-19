@@ -1,7 +1,8 @@
+import { documentCodec } from '../../../../../../../extensions/academic/common/model/documentCodec.js';
 import assert from "node:assert/strict";
 import { test } from "mocha";
 import { isCancellationError } from "../../../../../base/common/errors.js";
-import { createDefaultDocumentSchema } from "../../../../../editor/common/model/documentSchema.js";
+import { createDefaultDocumentSchema } from "../../../../../../../extensions/academic/common/model/documentSchema.js";
 import { DialogResult, IDialogService } from "../../../../../platform/dialogs/common/dialogs.js";
 import { InstantiationService } from "../../../../../platform/instantiation/common/instantiationService.js";
 import type { DocumentCollaborationOpenInput, IDocumentCollaborationService } from '../../common/documentCollaborationService.js';
@@ -51,6 +52,7 @@ test("Workbench collaboration reports service selection cancellation", async () 
 function createOpenInput(): DocumentCollaborationOpenInput {
 	const schema = createDefaultDocumentSchema();
 	return {
+		codec: documentCodec,
 		clientId: "client-a",
 		schemaId: "stanza-document-v1",
 		schema,

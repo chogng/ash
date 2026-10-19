@@ -1,11 +1,13 @@
+import type { DocumentCodec } from '../../documentEditor/common/documentCodec.js';
 import type { ChannelReference } from '../../../../platform/collaboration/common/channelService.js';
 import type { IDisposable } from '../../../../base/common/lifecycle.js';
-import type { DocumentNode } from '../../../../editor/common/model/document.js';
-import type { DocumentSchema } from '../../../../editor/common/model/documentSchema.js';
-import type { DocumentCollaborationConnection } from '../../../../editor/common/services/documentCollaborationService.js';
+import type { DocumentNode } from '../../../../../../extensions/academic/common/model/document.js';
+import type { DocumentSchema } from '../../../../../../extensions/academic/common/model/documentSchema.js';
+import type { DocumentCollaborationConnection } from '../../../../../../extensions/academic/common/services/documentCollaborationService.js';
 
 /** Inputs needed to create or join one server-ordered Stanza collaboration room. */
 export interface DocumentCollaborationOpenInput {
+	readonly codec: DocumentCodec;
 	readonly roomId?: string;
 	readonly clientId: string;
 	readonly schemaId: string;

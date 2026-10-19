@@ -1,0 +1,17 @@
+[package]
+name = "ash-academy"
+version.workspace = true
+edition.workspace = true
+license-file.workspace = true
+publish.workspace = true
+
+[dependencies]
+external-ext-sdk = { package = "ash-external-ext-sdk", path = "../../sdk/rust" }
+serde = { workspace = true, features = ["derive"] }
+serde_json.workspace = true
+
+[build-dependencies]
+sha2.workspace = true
+
+[lints]
+workspace = true

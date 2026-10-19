@@ -1,43 +1,13 @@
+import type { EditorProfile } from '../../../services/documentEditor/browser/documentEditorProfile.js';
 import { DocumentEditorPane } from './documentEditorPane.js';
 import type { EditorPaneCreationOptions } from '../../../browser/parts/editor/editorPane.js';
 import { AppServerDocumentCollaborationService } from '../../../services/documentCollaboration/browser/appServerDocumentCollaborationService.js';
 import { DocumentCollaborationService } from '../../../services/documentCollaboration/browser/documentCollaborationService.js';
-import type { RichTextEditorOptions } from "../../../../editor/browser/widget/richTextEditor/richTextEditorWidget.js";
-import type { DocumentNode } from "../../../../editor/common/model/document.js";
-import type { DocumentOutlineOptions } from "../../../../editor/common/model/documentOutline.js";
-import type { DocumentPlugin } from "../../../../editor/common/model/documentPlugin.js";
-import type { DocumentSchema } from "../../../../editor/common/model/documentSchema.js";
 import type { EditorPaneOptions } from "./documentEditorPane.js";
-import { createDefaultDocumentSchema } from '../../../../editor/common/model/documentSchema.js';
-import { GENERAL_DOCUMENT_CONTENT_TYPE, GENERAL_DOCUMENT_EDITOR_ID } from './documentEditorInput.js';
-
-/** General documents use the shared writing surface without Academic structure. */
-export const generalProfile: EditorProfile = Object.freeze({
-	id: 'general', editorId: GENERAL_DOCUMENT_EDITOR_ID,
-	contentType: GENERAL_DOCUMENT_CONTENT_TYPE,
-	createSchema: createDefaultDocumentSchema,
-	createEmptyDocument: (schema: DocumentSchema) => schema.createDocument([schema.createNode('paragraph')]),
-	outlineNavigator: true,
-});
-
-/** Product-neutral schema and browser composition for one document kind. */
-export interface EditorProfile {
-	readonly editorId?: string;
-	readonly id: string;
-	readonly contentType: string;
-	readonly createSchema: () => DocumentSchema;
-	readonly createEmptyDocument?: (schema: DocumentSchema) => DocumentNode;
-	readonly outline?: DocumentOutlineOptions;
-	readonly outlineNavigator?: boolean;
-	readonly nodeViews?: RichTextEditorOptions["nodeViews"];
-	readonly inlineNodeViews?: RichTextEditorOptions["inlineNodeViews"];
-	readonly toolbarActions?: RichTextEditorOptions["toolbarActions"];
-	readonly createPlugins?: () => readonly DocumentPlugin<unknown>[];
-	/** Stable compatibility ID for documents that join the same collaboration room. */
-	readonly collaborationSchemaId?: string;
-}
 
 export interface EditorRuntimeOptions {
+	readonly providerSignal?: AbortSignal;
+	readonly modelCompatibility?: string;
 	readonly onSave?: () => Promise<void | boolean>;
 	readonly createDocumentCollaborationService?: EditorPaneOptions["createDocumentCollaborationService"];
 }
@@ -47,7 +17,11 @@ export function createDocumentEditorPaneOptions(profile: EditorProfile, runtime:
 	const schema = profile.createSchema();
 	return {
 		...runtime,
+		codec: profile.codec,
+		widget: profile.widget,
+		exportText: profile.exportText,
 		contentType: profile.contentType,
+		contributions: profile.contributions,
 		editorId: profile.editorId,
 		schema,
 		...(profile.createEmptyDocument ? { createEmptyDocument: () => profile.createEmptyDocument!(schema) } : {}),
@@ -62,11 +36,13 @@ export function createDocumentEditorPaneOptions(profile: EditorProfile, runtime:
 }
 
 /** Optional document packages reuse the Workbench model and collaboration owners. */
-export function createDocumentEditorPane(profile: EditorProfile, options: EditorPaneCreationOptions): DocumentEditorPane {
+export function createDocumentEditorPane(profile: EditorProfile, options: EditorPaneCreationOptions, providerSignal?: AbortSignal, modelCompatibility?: string): DocumentEditorPane {
 	const instantiationService = options.instantiationService;
 	if (!instantiationService) throw new Error('Document editor requires the Workbench instantiation service');
 	const paneOptions = createDocumentEditorPaneOptions(profile, {
 		onSave: options.onSave,
+		providerSignal,
+		modelCompatibility,
 		createDocumentCollaborationService: () => {
 			const appServerService = options.documentCollaborationApi && options.serverEvents
 				? new AppServerDocumentCollaborationService(options.documentCollaborationApi, options.serverEvents)

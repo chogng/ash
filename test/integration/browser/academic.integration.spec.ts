@@ -1,26 +1,78 @@
-import { expect, test } from "@playwright/test";
+import { prepareAcademyExtension, startAcademyExtension } from '../../fixtures/academyExtension.js';
+import { expect, test, type Page, type Locator } from "@playwright/test";
 import { getAxeResults, injectAxe } from "axe-playwright";
 
 const pageErrors = new WeakMap<object, string[]>();
+const academyProcesses = new WeakMap<Page, Awaited<ReturnType<typeof startAcademyExtension>>>();
+
+async function chooseParagraphOption(page: Page, control: Locator, label: string): Promise<void> {
+	await control.click();
+	await page.getByRole('option', { name: label, exact: true }).click();
+}
+
+// Compile the real provider before the UI scenario timer starts.
+test.beforeAll(() => {
+	test.setTimeout(120_000);
+	prepareAcademyExtension();
+});
 
 test.beforeEach(async ({ page }) => {
 	const errors: string[] = [];
 	pageErrors.set(page, errors);
 	page.on("pageerror", error => errors.push(error.stack ?? error.message));
+	let generation = 0;
+	const start = async (locale: string) => {
+		let runtime = academyProcesses.get(page);
+		if (!runtime) {
+			runtime = await startAcademyExtension(locale);
+			academyProcesses.set(page, runtime);
+		}
+		return runtime;
+	};
+	await page.route('**/__academy_extension?*', async route => {
+		try {
+			const locale = new URL(route.request().url()).searchParams.get('locale') ?? 'en';
+			const enabled = route.request().method() !== 'POST' || route.request().postDataJSON().enabled;
+			if (!enabled) {
+				await academyProcesses.get(page)?.dispose();
+				academyProcesses.delete(page);
+			}
+			const runtime = enabled ? await start(locale) : undefined;
+			await route.fulfill({
+				json: {
+					generation: ++generation, extensions: runtime ? [{
+						id: 'ash.academic', version: '1.0.0', packageDigest: `sha256:${'a'.repeat(64)}`, runtimeApiVersion: 1,
+						activationGeneration: generation, incarnation: generation, lifecycle: 'ready', failure: undefined, stderr: '', outputEvents: [], registrations: runtime.registrations,
+					}] : []
+				}
+			});
+		} catch (error) { await route.fulfill({ status: 503, json: { error: String(error) } }); }
+	});
+	await page.route('**/__academy_invoke?*', async route => {
+		try {
+			const runtime = academyProcesses.get(page);
+			if (!runtime) throw new Error('Academy is disabled');
+			await route.fulfill({ json: await runtime.invoke('editor.client.v1', 'receiveData', route.request().postDataJSON()) });
+		} catch (error) { await route.fulfill({ status: 503, json: { error: String(error) } }); }
+	});
 });
 
 test.afterEach(async ({ page }) => {
 	await page.evaluate(() => {
 		window.ashAcademicIntegration?.dispose();
 	}).catch(() => undefined);
+	await academyProcesses.get(page)?.dispose();
+	academyProcesses.delete(page);
 	expect(pageErrors.get(page) ?? []).toEqual([]);
 });
 
-for (const [locale, name] of [['en', 'Academic Document'], ['zh-CN', '学术论文文档']] as const) {
-	test(`Academic extension disablement preserves open editing and save in ${locale}`, async ({ page }) => {
-		await page.goto(`/academic.html?academicExtension&locale=${locale}`);
+for (const kind of ['academic', 'general'] as const) for (const locale of ['en', 'zh-CN'] as const) {
+	const name = kind === 'academic' ? locale === 'en' ? 'Academic Document' : '学术论文文档' : locale === 'en' ? 'Document' : '文档';
+	test(`Rust Academy ${kind} disablement freezes the view and preserves dirty recovery in ${locale}`, async ({ page }) => {
+		await page.goto(`/academic.html?${kind === 'general' ? 'generalDocument' : 'academicExtension'}&locale=${locale}`);
 		await page.waitForFunction(() => !!window.ashAcademicIntegration);
 		await expect.poll(() => page.evaluate(() => window.ashAcademicIntegration.getAcademicRegistration())).toEqual({ name, routed: true });
+		const original = await page.evaluate(() => window.ashAcademicIntegration.getStructuredBlockTexts());
 		const input = page.locator('#document-editor textarea.stanza-document-text-input').first();
 		await input.fill('Draft paper');
 		await expect.poll(() => page.evaluate(() => window.ashAcademicIntegration.getStructuredBlockTexts())).toEqual(['Draft paper', 'Body']);
@@ -34,18 +86,41 @@ for (const [locale, name] of [['en', 'Academic Document'], ['zh-CN', '学术论�
 		await page.evaluate(() => window.ashAcademicIntegration.setAcademicEnabled(false));
 		expect(await page.evaluate(() => window.ashAcademicIntegration.getAcademicRegistration())).toEqual({ name: undefined, routed: false });
 		const bodyInput = page.locator('#document-editor textarea.stanza-document-text-input').nth(1);
-		await bodyInput.fill('Retained body');
-		await expect.poll(() => page.evaluate(() => window.ashAcademicIntegration.getStructuredBlockTexts())).toEqual(['Draft paper', 'Retained body']);
+		await expect(bodyInput).toHaveAttribute('readonly', '');
+		expect(await page.evaluate(() => window.ashAcademicIntegration.getStructuredDirty())).toBe(true);
+		expect(await page.evaluate(() => window.ashAcademicIntegration.getStructuredBackup())).toContain('Draft paper');
 		await page.evaluate(() => window.ashAcademicIntegration.saveStructured());
-		expect(await page.evaluate(() => window.ashAcademicIntegration.getSavedStructured())).toContain('Retained body');
-		expect(JSON.parse(await page.evaluate(() => window.ashAcademicIntegration.getSavedStructured()))).toMatchObject({ format: 'ash.document', version: 2, documentType: 'academic' });
+		expect(await page.evaluate(() => window.ashAcademicIntegration.getSavedStructured())).toContain('Draft paper');
+		expect(JSON.parse(await page.evaluate(() => window.ashAcademicIntegration.getSavedStructured()))).toMatchObject({ format: 'ash.document', version: 2, documentType: kind });
 		await page.evaluate(() => window.ashAcademicIntegration.setAcademicEnabled(true));
 		expect(await page.evaluate(() => window.ashAcademicIntegration.getAcademicRegistration())).toEqual({ name, routed: true });
-		await bodyInput.focus();
-		await bodyInput.press('ControlOrMeta+z');
-		await expect.poll(() => page.evaluate(() => window.ashAcademicIntegration.getStructuredBlockTexts())).toEqual(['Draft paper', 'Body']);
+		// Re-enabling installs a new capability; the old view never resumes the retired instance.
+		await expect(bodyInput).toHaveAttribute('readonly', '');
+		await page.evaluate(() => window.ashAcademicIntegration.reopenStructured());
+		const recovered = page.locator('#document-editor textarea.stanza-document-text-input').first();
+		await expect(recovered).not.toHaveAttribute('readonly', '');
+		await recovered.focus();
+		await recovered.press('ControlOrMeta+z');
+		await expect.poll(() => page.evaluate(() => window.ashAcademicIntegration.getStructuredBlockTexts())).toEqual(original);
 	});
 }
+
+for (const [locale, message] of [
+	['en', 'The editor component and extension versions do not match.'],
+	['zh-CN', '编辑器组件与扩展的版本不匹配。'],
+]) test(`Academy rejects a client component from a different executable build in ${locale}`, async ({ page }) => {
+	await page.route('**/__academy_invoke?*', async route => {
+		const runtime = academyProcesses.get(page)!;
+		const result = await runtime.invoke('editor.client.v1', 'receiveData', route.request().postDataJSON());
+		await route.fulfill({ json: { ...result, clientDigest: `sha256:${'b'.repeat(64)}` } });
+	});
+	const failure = page.waitForEvent('pageerror');
+	await page.goto(`/academic.html?academicExtension&locale=${locale}`);
+	expect((await failure).message).toBe(message);
+	await expect(page.locator('#document-editor textarea')).toHaveCount(0);
+	expect(pageErrors.get(page)).toHaveLength(1);
+	pageErrors.set(page, []);
+});
 
 for (const [locale, name] of [['en', 'Document'], ['zh-CN', '文档']] as const) {
 	test(`general documents route, edit, save, recover and reject conflicting content in ${locale}`, async ({ page }) => {
@@ -139,7 +214,11 @@ test('Document links preserve editing and open through the product service with 
 test('Document contributions mount the rich editor and release its views', async ({ page }) => {
 	await page.goto('/academic.html');
 	const ids = await page.evaluate(() => window.ashAcademicIntegration.getBundleIds());
-	expect(ids).toContain('editor.contrib.documentFormatting');
+	expect(ids).not.toContain('editor.contrib.documentFormatting');
+	expect(ids).not.toContain('editor.contrib.paragraphStyle');
+	expect(ids).not.toContain('editor.contrib.paragraphFormatting');
+	await expect(page.locator('#document-editor .stanza-document-paragraph-style')).toHaveCount(1);
+	await expect(page.locator('#document-editor .stanza-document-paragraph-formatting')).toHaveCount(1);
 	expect(ids).not.toContain('editor.contrib.collaboration');
 	expect(ids).not.toContain('editor.contrib.clipboard');
 	expect(ids).not.toContain('editor.contrib.findController');
@@ -150,6 +229,112 @@ test('Document contributions mount the rich editor and release its views', async
 	await page.evaluate(() => window.ashAcademicIntegration.dispose());
 	await expect(page.locator('.stanza-structured-format-toolbar')).toHaveCount(0);
 	await expect(page.locator('.stanza-document-collaboration-toolbar')).toHaveCount(0);
+	await expect(page.locator('.stanza-document-format-controls')).toHaveCount(0);
+});
+
+for (const [locale, labels] of [['en', ['Paragraph style', 'Alignment', 'Line spacing', 'Space before', 'Space after']], ['zh-CN', ['段落样式', '对齐方式', '行距', '段前间距', '段后间距']]] as const) {
+	test(`Academy paragraph contributions persist styles, layout, selection and undo in ${locale}`, async ({ page }) => {
+		await page.goto(`/academic.html?generalDocument&locale=${locale}`);
+		const root = page.locator('#document-editor');
+		const input = root.locator('textarea.stanza-document-text-input').first();
+		await input.evaluate(element => {
+			const textarea = element as HTMLTextAreaElement;
+			textarea.focus();
+			textarea.setSelectionRange(1, 4);
+			textarea.dispatchEvent(new Event('select', { bubbles: true }));
+		});
+		const style = root.getByRole('combobox', { name: labels[0], exact: true });
+		await chooseParagraphOption(page, style, locale === 'en' ? 'Heading 2' : '标题 2');
+		await expect(root.locator('.stanza-document-heading')).toHaveAttribute('aria-level', '2');
+		await expect(root.locator('.stanza-document-outline-entry')).toContainText('Title');
+		await expect.poll(() => page.evaluate(() => window.ashAcademicIntegration.getStructuredSelection())).toMatchObject({ anchor: { offset: 1 }, head: { offset: 4 } });
+		await chooseParagraphOption(page, root.getByRole('combobox', { name: labels[1], exact: true }), locale === 'en' ? 'Center' : '居中');
+		await chooseParagraphOption(page, root.getByRole('combobox', { name: labels[2], exact: true }), '2');
+		await chooseParagraphOption(page, root.getByRole('combobox', { name: labels[3], exact: true }), locale === 'en' ? '6 pt' : '6 磅');
+		await chooseParagraphOption(page, root.getByRole('combobox', { name: labels[4], exact: true }), locale === 'en' ? '18 pt' : '18 磅');
+		const heading = root.locator('.stanza-document-heading');
+		await expect(heading).toHaveCSS('text-align', 'center');
+		await expect(heading).toHaveCSS('margin-block-start', '8px');
+		await expect(heading).toHaveCSS('margin-block-end', '24px');
+		await expect(heading.locator('textarea')).toHaveCSS('text-align', 'center');
+		const fontSize = await heading.locator('textarea').evaluate(element => Number.parseFloat(getComputedStyle(element).fontSize));
+		await expect(heading.locator('textarea')).toHaveCSS('line-height', `${fontSize * 2}px`);
+		// One undo removes only the most recent paragraph change and clears reused DOM styles.
+		await heading.locator('textarea').focus();
+		await page.keyboard.press('Control+z');
+		await expect(heading).toHaveCSS('margin-block-end', '12px');
+		await page.keyboard.press('Control+Shift+z');
+		await expect(heading).toHaveCSS('margin-block-end', '24px');
+		await page.evaluate(() => window.ashAcademicIntegration.saveStructured());
+		const saved = JSON.parse(await page.evaluate(() => window.ashAcademicIntegration.getSavedStructured()));
+		expect(saved.document.content[0]).toMatchObject({ type: 'heading', attrs: { level: 2, textAlign: 'center', lineSpacing: 2, spaceBefore: 6, spaceAfter: 18 } });
+		await page.evaluate(() => window.ashAcademicIntegration.reopenStructured());
+		await expect(heading).toHaveCSS('margin-block-end', '24px');
+		await expect(style).toContainText(locale === 'en' ? 'Heading 2' : '标题 2');
+		await chooseParagraphOption(page, style, locale === 'en' ? 'Normal' : '正文');
+		await expect(root.locator('.stanza-document-heading')).toHaveCount(0);
+		await expect(root.locator('.stanza-document-paragraph').first()).toHaveCSS('text-align', 'center');
+	});
+}
+
+test('Academy paragraph contributions respect read-only input and release retained controls', async ({ page }) => {
+	await page.goto('/academic.html?generalDocument&readOnly');
+	const root = page.locator('#document-editor');
+	const style = root.getByRole('combobox', { name: 'Paragraph style', exact: true });
+	await expect(style).toBeDisabled();
+	await expect(root.getByRole('combobox', { name: 'Alignment', exact: true })).toBeDisabled();
+	await style.evaluate(element => {
+		element.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+	});
+	await expect(root.locator('.stanza-document-heading')).toHaveCount(0);
+	await style.evaluate(element => {
+		window.ashAcademicIntegration.dispose();
+		(element as HTMLButtonElement).disabled = false;
+		element.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+	});
+	await expect(page.locator('.stanza-document-format-controls')).toHaveCount(0);
+});
+
+test('Academy paragraph contributions format a reversed cross-paragraph selection atomically', async ({ page }) => {
+	await page.goto('/academic.html?generalDocument&richParagraphs');
+	const root = page.locator('#document-editor');
+	await expect(root.locator('.stanza-document-rich-text-input')).toHaveCount(2);
+	await root.evaluate(element => {
+		const runs = element.querySelectorAll('.stanza-document-inline-run');
+		(element.querySelectorAll<HTMLElement>('.stanza-document-rich-text-input')[1]!).focus();
+		element.ownerDocument.getSelection()!.setBaseAndExtent(runs[1]!.firstChild!, 2, runs[0]!.firstChild!, 1);
+		element.ownerDocument.dispatchEvent(new Event('selectionchange'));
+	});
+	await chooseParagraphOption(page, root.getByRole('combobox', { name: 'Paragraph style', exact: true }), 'Heading 3');
+	await expect(root.locator('.stanza-document-heading')).toHaveCount(2);
+	await chooseParagraphOption(page, root.getByRole('combobox', { name: 'Alignment', exact: true }), 'End');
+	for (const heading of await root.locator('.stanza-document-heading').all()) await expect(heading).toHaveCSS('text-align', 'end');
+	await page.evaluate(() => window.ashAcademicIntegration.saveStructured());
+	let saved = JSON.parse(await page.evaluate(() => window.ashAcademicIntegration.getSavedStructured()));
+	expect(saved.document.content.map((node: { attrs: unknown; }) => node.attrs)).toEqual([{ level: 3, textAlign: 'end' }, { level: 3, textAlign: 'end' }]);
+	expect(saved.document.content.map((node: { content: { marks: unknown; }[]; }) => node.content[0]!.marks)).toEqual([[{ type: 'strong', attrs: {} }], [{ type: 'strong', attrs: {} }]]);
+	const editor = root.locator('.stanza-document-rich-text-input').first();
+	await editor.focus();
+	await page.keyboard.press('Control+z');
+	await page.evaluate(() => window.ashAcademicIntegration.saveStructured());
+	saved = JSON.parse(await page.evaluate(() => window.ashAcademicIntegration.getSavedStructured()));
+	expect(saved.document.content.map((node: { attrs: unknown; }) => node.attrs)).toEqual([{ level: 3 }, { level: 3 }]);
+});
+
+test('Academy paragraph controls support keyboard style selection without stealing focus', async ({ page }) => {
+	await page.goto('/academic.html?generalDocument');
+	const style = page.locator('#document-editor').getByRole('combobox', { name: 'Paragraph style', exact: true });
+	await style.focus();
+	await style.press('End');
+	await page.keyboard.press('Enter');
+	await expect(style).toContainText('Heading 6');
+	await expect(style).toBeFocused();
+	await expect(page.locator('#document-editor .stanza-document-heading')).toHaveAttribute('aria-level', '6');
+	await style.press('Home');
+	await page.keyboard.press('ArrowDown');
+	await page.keyboard.press('Enter');
+	await expect(style).toContainText('Normal');
+	await expect(page.locator('#document-editor .stanza-document-heading')).toHaveCount(0);
 });
 
 test("Academic TextModel editor persists selected font, size, and emphasis formatting", async ({ page }) => {

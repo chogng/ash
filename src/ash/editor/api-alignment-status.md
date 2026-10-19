@@ -1,5 +1,25 @@
 # Editor API 对齐状态
 
+## 2026-10-19：Academy 能力迁移
+
+富文档能力已归 `extensions/academic`；下节的原段落路径对应迁移前实现。Schema、段落命令／属性、投影和事务在包的 `common/`；Widget、格式／段落贡献和共享控件在包的 `browser/`。`browser/documentContributions.ts` 由 profile 按视图装配，不再使用 Editor 的全局贡献注册。普通文档与频道笔记也通过独立 Rust 能力注册消费这些 profile。基础 `TextModel` 只提供通用扩展快照／版本提交，`DocumentTextModel`、富文档历史和 codec 由包拥有；宿主保留唯一资源工作副本及 dirty／备份。
+
+## 2026-10-18：Academy 段落样式与排版
+
+用户要求按 Word 式文档路线图推进并合理拆分 contrib。本批属于已确认的 Ash 富文档职责；新增文件均为 Ash 专属，不宣称与 VS Code 的代码编辑器样式 API 对应。
+
+| 路径（相对 `src/ash/editor`）                                                    | 职责与生产调用方                                                                            |
+| -------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| `common/model/documentParagraph.ts`                                              | 段落度量默认值及 schema 边界校验；由默认 schema、段落控件与富文档投影消费。                 |
+| `common/commands/documentParagraphCommands.ts`                                   | 正反向跨段选区、排版事务及正文／标题级别命令；由两个段落 contrib 和 Widget 的状态投影消费。 |
+| `browser/widget/documentFormattingControls.ts`、`documentFormattingControls.css` | 两个 contrib 共用的原生选择控件与监听释放；只拥有控件机制，不持有文档或功能状态。           |
+| `contrib/paragraphStyle/browser/paragraphStyle.ts`                               | 正文与标题 1–6 选择，复用现有节点类型／level 语义，保留字符和局部段落格式。                 |
+| `contrib/paragraphFormatting/browser/paragraphFormatting.ts`                     | 对齐、行距与段前后间距；由标准文档 contribution bundle 装配，读取当前选段的混合状态。       |
+
+本节记录迁移前行为；当前契约由包内 `browser/documentContributions.ts` 拥有。文档上下文的单一 `setFormattingContribution` 迁为 `addFormattingContribution`，由 Widget 统一挂载、更新与释放多个控件。`runDocumentCommand` 在调用时取得当前模型及选区，并检查只读、组合输入和释放状态；贡献只返回领域命令，不持有另一份模型。旧 setter 及其调用已退出，代码编辑器分支不参与这些文档控件。
+
+当前仅实现内建正文／标题语义选择及局部段落排版；自定义样式定义、引用与覆盖关系、缩进和 Word 式分页继续按[路线图](../../../docs/design/editor-roadmap.md#61-写作样式与文档语义)推进。既有文档省略新增属性时沿用连续正文默认值，版本化包络及协作标识未更名；schema transaction、line facet 和现有序列化共同携带这些可选属性。
+
 ## 2026-10-06：右键菜单基座续批
 
 用户要求继续对齐上轮列出的 26 个生产文件，并确认迁移后删除 4 个旧导航／层级入口。这里只读参照上游公开契约和行为；实现从 Ash 当前状态与 DOM owner 迁移。
@@ -142,7 +162,7 @@ Ash 文档宿主按修改来源的 Thread／Turn 标识等待回复完成；多�
 
 ## Academic 文档贡献归属（2026-10-03）
 
-Academic 已退出顶层工作台模式。通用 `workbench/contrib/documentEditor/browser/editorProfile.ts` 组合共享文档 pane；`workbench/contrib/academic/browser/academicEditor.contribution.ts` 提供论文 profile 的可信 factory，由 `extensions/academic` 的可停用声明注册 editor 和文件路由。Academic 内容类型归 `workbench/contrib/academic/common/documentTypes.ts`，通用类型注册及文档模型服务契约归 `workbench/services/documentEditor/common/documentTypes.ts`。这些职责是 Ash 专属文档能力，不计为 VS Code API 对齐。
+Academic 已退出顶层工作台模式。共享文档 Pane 仍由 Workbench 承载。2026-10-19 起，`extensions/academic` 的独立 Rust executable 经 `editor.client.v1` 能力注册 editor 和文件路由，通用桥校验精确版本与客户端源码摘要后装载包内 profile；旧静态 factory 已移除。Academic Schema、引用、profile 和内容类型现归 `extensions/academic/browser`；通用类型注册、唯一模型与工作副本仍归 Workbench 原服务。普通富文档 Schema／Widget 等内核业务尚待后续迁移。这些职责是 Ash 专属文档能力，不计为 VS Code API 对齐。
 
 用户已确认删除以下无上游对应的旧模式文件，调用方同批迁移，Git 保留历史：
 

@@ -1,9 +1,11 @@
+import { localize } from '../../nls.js';
 import type { IResourceEditorInput } from '../common/editor.js';
 import { Emitter, type Event } from '../../base/common/event.js';
 import { AbstractDisposable, Disposable, type IDisposable } from '../../base/common/lifecycle.js';
 import type { EditorOpenOptions } from '../services/editor/common/editorService.js';
 import { DocumentTypes, type DocumentType } from '../services/documentEditor/common/documentTypes.js';
 import { EditorPaneMatch, type EditorPane, type EditorPaneCreationOptions } from './parts/editor/editorPane.js';
+import type { EditorProfile } from '../services/documentEditor/browser/documentEditorProfile.js';
 
 /** Resource matchers are pure; Workbench inputs are values rather than input classes. */
 export interface IEditorPaneDescriptor {
@@ -13,6 +15,8 @@ export interface IEditorPaneDescriptor {
 	canOpen(input: IResourceEditorInput): EditorPaneMatch;
 	/** Creates a distinct tab identity when this editor opens beside the source. */
 	createInput?(source: IResourceEditorInput): IResourceEditorInput;
+	/** Resolves the live package's document semantics for host-owned creation and conversion. */
+	resolveDocumentProfile?(): Promise<EditorProfile>;
 	create(options: EditorPaneCreationOptions): EditorPane | Promise<EditorPane>;
 }
 
@@ -118,7 +122,11 @@ export class EditorPaneRegistry extends Disposable implements IEditorPaneRegistr
 			}
 			return preferred;
 		}
-		return this.getEditorPanesForInput(input)[0];
+		const pane = this.getEditorPanesForInput(input)[0];
+		if (!pane && DocumentTypes.requiresProvider(input)) {
+			throw new Error(localize('extensions.clientEditor.packageUnavailable', 'The editor extension package is unavailable.'));
+		}
+		return pane;
 	}
 
 }

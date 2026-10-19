@@ -861,7 +861,22 @@
     "inspectEditorTokens.embeddedLanguage": "内嵌语言：{0}",
     "inspectEditorTokens.engine": "语法引擎：{0}",
     "inspectEditorTokens.captures": "Tree-sitter 捕获：",
-    "inspectEditorTokens.noCaptures": "此位置没有 Tree-sitter 捕获。"
+    "inspectEditorTokens.noCaptures": "此位置没有 Tree-sitter 捕获。",
+    "document.paragraphStyle.group": "段落样式",
+    "document.paragraphStyle.label": "段落样式",
+    "document.paragraphStyle.normal": "正文",
+    "document.paragraphStyle.heading": "标题 {0}",
+    "document.paragraph.mixed": "混合",
+    "document.paragraphFormatting.group": "段落排版",
+    "document.paragraphFormatting.alignment": "对齐方式",
+    "document.paragraphFormatting.start": "起始端对齐",
+    "document.paragraphFormatting.center": "居中",
+    "document.paragraphFormatting.end": "末端对齐",
+    "document.paragraphFormatting.justify": "两端对齐",
+    "document.paragraphFormatting.lineSpacing": "行距",
+    "document.paragraphFormatting.before": "段前间距",
+    "document.paragraphFormatting.after": "段后间距",
+    "document.paragraphFormatting.points": "{0} 磅"
   },
   "ash.editor.clipboard": {
     "selection.title": "选区剪贴板",

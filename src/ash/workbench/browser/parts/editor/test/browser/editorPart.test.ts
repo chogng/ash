@@ -1,3 +1,5 @@
+import type { IExtensionHostApi } from '../../../../../../platform/agentHost/common/extensionHostApi.js';
+import type { ExtensionDescriptor, IExtensionApi } from '../../../../../../platform/extensions/common/extensionApi.js';
 import { ILabelService } from '../../../../../../platform/label/common/label.js';
 import { LabelService } from '../../../../../services/label/common/labelService.js';
 import { ILanguageService } from '../../../../../../editor/common/languages/language.js';
@@ -11,7 +13,7 @@ import { TestUriIdentityServices } from '../../../../../../platform/uriIdentity/
 import { createTestComponentServices, registerTestComponentServices, createTestEditorServices, createTestTextFileService, createTestFileService } from '../../../../../test/common/testEditorServices.js';
 import { MemoryFileService } from '../../../../../contrib/bulkEdit/test/browser/bulkEditTestServices.js';
 import { createDocumentEditorPane } from '../../../../../contrib/documentEditor/browser/editorProfile.js';
-import { academicProfile } from '../../../../../contrib/academic/browser/academicEditorProfile.js';
+import { academicProfile } from '../../../../../../../../extensions/academic/browser/editorProfile.js';
 import { DocumentEditorTextModelService } from '../../../../../services/documentEditor/browser/documentEditorTextModelService.js';
 import { IDocumentEditorTextModelService } from '../../../../../services/documentEditor/common/documentTypes.js';
 import { IWorkingCopyService } from '../../../../../services/workingCopy/common/workingCopyService.js';
@@ -4072,6 +4074,24 @@ test('general document commands preserve dirty source text, create a backed-up d
 		using models = new DocumentEditorTextModelService(files, copies);
 		services.registerInstance(IDocumentEditorTextModelService, models);
 		using registry = new EditorPaneRegistry();
+		const { startAcademyExtension } = await import('../../../../../../../../test/fixtures/academyExtension.js');
+		const { MainThreadClientEditors } = await import('../../../../../api/browser/mainThreadClientEditors.js');
+		const { readFile } = await import('node:fs/promises');
+		const fixture = JSON.parse(await readFile('.build/builtin/fixture.json', 'utf8')) as { catalog: { extensions: ExtensionDescriptor[]; }; };
+		const entry = fixture.catalog.extensions.find((entry: { id: string; }) => entry.id === 'ash.academic');
+		assert.ok(entry);
+		const provider = await startAcademyExtension();
+		const moduleRequested = new DeferredPromise<void>();
+		const allowModule = new DeferredPromise<void>();
+		await using runtimeCleanup = { [Symbol.asyncDispose]: () => provider.dispose() };
+		using bridge = new MainThreadClientEditors(30_000, async () => {
+			moduleRequested.complete();
+			await allowModule.p;
+			return import('../../../../../../../../extensions/academic/browser/editor.js');
+		}, {
+			invoke: (request, signal) => provider.invoke(request.registrationId, request.operation, request.payload, signal),
+		} as IExtensionHostApi, { list: async () => ({ generation: 1, extensions: [entry], diagnostics: [] }) } as unknown as IExtensionApi);
+		await bridge.update({ generation: 1, extensions: [{ id: 'ash.academic', version: '1.0.0', packageDigest: `sha256:${'a'.repeat(64)}`, runtimeApiVersion: 1, activationGeneration: 1, incarnation: 1, lifecycle: 'ready', failure: undefined, stderr: '', outputEvents: [], registrations: provider.registrations }] });
 		const documentPane = EditorPanes.getEditorPane({ resource: target })!;
 		registry.registerEditorPane({ ...documentPane, documentType: undefined });
 		registry.registerEditorPane({ id: 'test.source', name: 'Text', canOpen: input => input.resource.path.endsWith('.ash-doc') ? EditorPaneMatch.None : EditorPaneMatch.Default, create: () => new TestEditorPane('test.source') });
@@ -4085,15 +4105,21 @@ test('general document commands preserve dirty source text, create a backed-up d
 		text.model.setValue(draftText);
 		await main.openEditor({ resource: source }, { pinned: true });
 		const commands = services.get(ICommandService);
-		await commands.executeCommand('workbench.action.document.import.markdown');
+		const conversion = commands.executeCommand('workbench.action.document.import.markdown');
+		await moduleRequested.p;
+		const subsequentSource = draftText + '\n\nEdited while the package loads.';
+		text.model.setValue(subsequentSource);
+		allowModule.complete();
+		await conversion;
 		assert.ok(main.activePane instanceof DocumentEditorPane);
 		assert.equal(DocumentTypes.find(main.activeInput!)?.id, 'general');
 		assert.equal(copies.get(main.activeInput!.resource)[0]!.isDirty, true);
 		const imported = JSON.parse(copies.get(main.activeInput!.resource)[0]!.backup());
 		assert.equal(imported.documentType, 'general');
+		assert.equal(imported.document.content.length, 3, 'conversion uses the command-time snapshot while source typing continues');
 		assert.equal(imported.document.content[0].content[0].text, 'Unsaved title');
 		assert.deepEqual(imported.document.content[2].content[0].attrs, { src: 'data:image/png;base64,aW1hZ2UgYnl0ZXM=', alt: 'Diagram' });
-		assert.equal(text.model.getValue(), draftText);
+		assert.equal(text.model.getValue(), subsequentSource);
 		assert.equal((await files.resolve({ resource: source }, new AbortController().signal)).text, '# On disk');
 		await assert.rejects(copies.get(main.activeInput!.resource)[0]!.saveAs(URI.file('/notes/incorrect.md'), new AbortController().signal), /supported extension/u);
 		assert.equal(copies.get(main.activeInput!.resource)[0]!.isDirty, true);

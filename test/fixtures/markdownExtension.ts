@@ -25,10 +25,10 @@ export function prepareMarkdownExtension(): void {
 }
 
 /** Runs the real Rust SDK process; tests supply only the initiating client's services. */
-async function startExtensionProcess(binary: string, extensionId: string, capabilities: string[], language: string, documents: readonly any[], configuration: any, folders: readonly string[], clientRequest: ClientRequest) {
+export async function startExtensionProcess(binary: string, extensionId: string, capabilities: string[], language: string, documents: readonly any[], configuration: any, folders: readonly string[], clientRequest: ClientRequest, prepare: () => void = prepareMarkdownExtension, extensionDirectory: string | undefined = preparedExtensionDirectory) {
 	const root = process.cwd();
-	prepareMarkdownExtension();
-	const executable = resolve(preparedExtensionDirectory ?? resolve(root, '.build/cargo/ci-test'), `${binary}${process.platform === 'win32' ? '.exe' : ''}`);
+	prepare();
+	const executable = resolve(extensionDirectory ?? resolve(root, '.build/cargo/ci-test'), `${binary}${process.platform === 'win32' ? '.exe' : ''}`);
 	const child = spawn(executable, [], { cwd: root, windowsHide: true, stdio: 'pipe' });
 	const reader = createInterface({ input: child.stdout });
 	let sequence = 0;

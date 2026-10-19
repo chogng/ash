@@ -1,5 +1,4 @@
-// Shared code and document editor features; document kinds are assembled by the host.
-import './contrib/documentEditor.contribution.js';
+// Optional Code features; Academy is installed by its live extension profile.
 import './browser/services/contribution.js';
 import "./browser/coreCommands.js";
 import "./contrib/languageAnalysis/browser/languageAnalysis.contribution.js";

@@ -1,17 +1,17 @@
+import { localize } from '../../../../nls.js';
 import type { URI } from '../../../../base/common/uri.js';
-import type { DocumentNode } from '../../../../editor/common/model/document.js';
+import type { DocumentNode } from '../../../../../../extensions/academic/common/model/document.js';
 import { throwIfCancelled } from "../../../../base/common/cancellation.js";
 import { AbstractDisposable, Disposable, DisposableMap } from "../../../../base/common/lifecycle.js";
 import { extUri } from '../../../../base/common/resources.js';
-import { TextModel } from "../../../../editor/common/model/textModel.js";
+import type { DocumentTextModel } from "../../../../../../extensions/academic/common/model/documentTextModel.js";
 import type { TextModelBlockInput, TextModelWorkingCopyReference } from "../../textmodelResolver/common/textModelResourceService.js";
 import { ITextFileService } from "../../textfile/common/textfiles.js";
 import { IWorkingCopyService } from "../../workingCopy/common/workingCopyService.js";
 import type { IDocumentEditorTextModelService } from '../common/documentTypes.js';
 import { DocumentWorkingCopy } from "./documentWorkingCopy.js";
-import { parseDocument } from "./documentWorkingCopy.js";
 
-/** Workbench persistence adapter for a TextModel opened by the document editor. */
+/** Workbench persistence adapter for a DocumentTextModel opened by the document editor. */
 export class DocumentEditorTextModelService extends Disposable implements IDocumentEditorTextModelService {
 	private readonly entries = this._register(new DisposableMap<string, DocumentModelEntry>());
 
@@ -37,9 +37,10 @@ export class DocumentEditorTextModelService extends Disposable implements IDocum
 		this.assertNotDisposed();
 		const concurrent = this.entries.get(key);
 		if (concurrent) { return this.reference(key, concurrent, input); }
-		const document = parseDocument(content.text, input.schema, input.createEmptyDocument);
-		const model = TextModel.create(input.schema, document, { plugins: input.plugins });
+		const document = input.codec.parse(content.text, input.schema, input.createEmptyDocument);
+		const model = input.codec.createModel(input.schema, document, input.plugins);
 		const workingCopy: DocumentWorkingCopy = new DocumentWorkingCopy({
+			codec: input.codec,
 			contentType: input.contentType,
 			resource: input.resource,
 			model,
@@ -50,7 +51,7 @@ export class DocumentEditorTextModelService extends Disposable implements IDocum
 			onSave: () => entry.saveUntitled(),
 			createEmptyDocument: input.createEmptyDocument,
 		});
-		const entry = new DocumentModelEntry(model, workingCopy);
+		const entry = new DocumentModelEntry(model, workingCopy, input.modelCompatibility ?? input.schema.documentType);
 		this.entries.set(key, entry);
 		return this.reference(key, entry, input);
 	}
@@ -61,6 +62,9 @@ export class DocumentEditorTextModelService extends Disposable implements IDocum
 
 	private reference(key: string, entry: DocumentModelEntry, input: TextModelBlockInput): TextModelWorkingCopyReference {
 		if (entry.workingCopy.backupContentType !== input.contentType || entry.model.schema.documentType !== input.schema.documentType) { throw new Error('The resource is already open with a different document type'); }
+		if (entry.compatibility !== (input.modelCompatibility ?? input.schema.documentType)) {
+			throw new Error(localize('document.model.incompatible', 'The document is open with a different editor version. Save or recover its existing content before reopening it.'));
+		}
 		entry.references += 1;
 		const reference = new TextModelWorkingCopyReferenceImpl(entry.model, entry.workingCopy, () => {
 			entry.saveHandlers.delete(reference);
@@ -75,7 +79,7 @@ export class DocumentEditorTextModelService extends Disposable implements IDocum
 class DocumentModelEntry extends Disposable {
 	public references = 0;
 	public readonly saveHandlers = new Map<TextModelWorkingCopyReference, () => Promise<void | boolean>>();
-	constructor(public readonly model: TextModel, public readonly workingCopy: DocumentWorkingCopy) {
+	constructor(public readonly model: DocumentTextModel, public readonly workingCopy: DocumentWorkingCopy, public readonly compatibility: string) {
 		super();
 		this._register(model);
 		this._register(workingCopy);
@@ -99,7 +103,7 @@ class TextModelWorkingCopyReferenceImpl extends AbstractDisposable implements Te
 	readonly backupKind;
 	readonly backupContentType;
 
-	constructor(model: TextModel, private readonly workingCopy: DocumentWorkingCopy, private readonly release: () => void) {
+	constructor(model: DocumentTextModel, private readonly workingCopy: DocumentWorkingCopy, private readonly release: () => void) {
 		super();
 		this.model = model;
 		this.resource = workingCopy.resource;

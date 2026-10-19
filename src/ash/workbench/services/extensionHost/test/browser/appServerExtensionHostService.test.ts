@@ -1513,6 +1513,29 @@ test('activating a task-only owner preserves existing debug providers and pendin
 });
 
 
+test('eager contributed editors finish activation before the restoration barrier opens', async () => {
+	const api = new FakeExtensionHostApi(dormantSnapshot(['*']));
+	const activation = deferred<ExtensionHostFleetSnapshot>();
+	api.activationResult = activation.promise;
+	using languages = new LanguageFeaturesService();
+	using services = createServices(api, languages, new ProviderSink<TaskProvider>(), new ProviderSink<TestProfileProvider>());
+	const extensions = services.get(IExtensionService);
+	extensions.getExtensionPointContributions = <T>(name: string) => name === 'customEditors' ? [{
+		description: { id: 'acme.demo', name: 'lazy', publisher: 'acme', version: '1', displayName: 'Lazy editor', sourceKind: 'builtIn', manifestSha256: DIGEST, packageSha256: DIGEST },
+		value: [{}] as unknown as T,
+	}] : [];
+	using service = services.createInstance(AppServerExtensionHostService, new CommandRegistry(), 1_000);
+	let restored = false;
+	const starting = service.start().then(() => { restored = true; });
+	await waitFor(() => api.activations.length === 1);
+	assert.equal(restored, false);
+	assert.ok(services.get(ILifecycleService).phase < LifecyclePhase.Restored);
+	activation.resolve(snapshot(2, 'acme.lazy', [], '', [], 11));
+	await starting;
+	assert.equal(service.currentSnapshot.extensions[0]?.state, 'ready');
+	assert.equal(restored, true);
+});
+
 test('wildcard startup binds actual window facts before restoration', async () => {
 	const api = new FakeExtensionHostApi(dormantSnapshot(['*']));
 	api.activationResult = Promise.resolve(snapshot(2, 'acme.lazy', [], '', [], 11));

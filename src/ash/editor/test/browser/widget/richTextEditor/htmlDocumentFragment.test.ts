@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import { test } from "mocha";
 import { JSDOM } from "jsdom";
-import { createDefaultDocumentSchema } from '../../../../common/model/documentSchema.js';
-import { createDocumentFragmentFromHtml } from '../../../../browser/widget/richTextEditor/htmlDocumentFragment.js';
+import { createDefaultDocumentSchema } from '../../../../../../../extensions/academic/common/model/documentSchema.js';
+import { createDocumentFragmentFromHtml } from '../../../../../../../extensions/academic/browser/widget/richTextEditor/htmlDocumentFragment.js';
 
 test("Stanza external HTML clipboard converts supported structure and inline marks into schema nodes", () => {
 	const environment = new JSDOM("<!doctype html><body></body>");

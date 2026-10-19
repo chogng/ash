@@ -1,11 +1,12 @@
+import { DocumentTextModel } from '../../../../../extensions/academic/common/model/documentTextModel.js';
 import assert from "node:assert/strict";
 import { test } from "mocha";
-import { rebaseDocumentHistory, rebaseDocumentTransaction } from "../../contrib/collaboration/common/rebase.js";
+import { rebaseDocumentHistory, rebaseDocumentTransaction } from "../../../../../extensions/academic/common/contrib/collaboration/rebase.js";
 import { TextModel } from "../../common/model/textModel.js";
-import { TextModelRemoteHistoryPolicy } from "../../common/model/textModelBlockState.js";
-import { createDefaultDocumentSchema, type DocumentSchema } from "../../common/model/documentSchema.js";
-import { nodeSelection, textSelection } from "../../common/core/documentSelection.js";
-import { DocumentTransaction } from "../../common/model/documentTransaction.js";
+import { TextModelRemoteHistoryPolicy } from "../../../../../extensions/academic/common/model/textModelBlockState.js";
+import { createDefaultDocumentSchema, type DocumentSchema } from "../../../../../extensions/academic/common/model/documentSchema.js";
+import { nodeSelection, textSelection } from "../../../../../extensions/academic/common/core/documentSelection.js";
+import { DocumentTransaction } from "../../../../../extensions/academic/common/model/documentTransaction.js";
 
 function createDocument(schema: DocumentSchema) {
 	return schema.createDocument([
@@ -90,7 +91,7 @@ test("Stanza collaboration maps non-overlapping replacements after a remote repl
 
 test("Stanza collaboration rebases both undo and redo branches without removing remote text", () => {
 	const schema = createDefaultDocumentSchema();
-	using model = TextModel.create(schema, createDocument(schema));
+	using model = DocumentTextModel.create(schema, createDocument(schema));
 	model.dispatch(new DocumentTransaction().replaceText("text-1", 0, 0, "A"));
 	model.dispatch(new DocumentTransaction().replaceText("text-1", 0, 0, "C"));
 	assert.ok(model.undoBlocks());
@@ -115,7 +116,7 @@ test("Stanza collaboration rebases both undo and redo branches without removing 
 test("Stanza collaboration replays structural history without moving an acknowledged remote block", () => {
 	const schema = createDefaultDocumentSchema();
 	const base = createDocument(schema);
-	using model = TextModel.create(schema, base);
+	using model = DocumentTextModel.create(schema, base);
 	const local = schema.createNode("paragraph", { id: "paragraph-local", content: [schema.createText("Local", { id: "text-local" })] });
 	const remoteNode = schema.createNode("paragraph", { id: "paragraph-remote", content: [schema.createText("Remote", { id: "text-remote" })] });
 	model.dispatch(new DocumentTransaction().insertNode("document-1", 1, local));
@@ -133,7 +134,7 @@ test("Stanza collaboration replays structural history without moving an acknowle
 
 test("Stanza collaboration drops a history branch that would overwrite a remote replacement", () => {
 	const schema = createDefaultDocumentSchema();
-	using model = TextModel.create(schema, createDocument(schema));
+	using model = DocumentTextModel.create(schema, createDocument(schema));
 	model.dispatch(new DocumentTransaction().replaceText("text-1", 0, 1, "A"));
 	const remote = new DocumentTransaction().replaceText("text-1", 0, 1, "B");
 
@@ -146,7 +147,7 @@ test("Stanza collaboration drops a history branch that would overwrite a remote 
 
 test("Stanza collaboration drops structural history that would delete remote block content", () => {
 	const schema = createDefaultDocumentSchema();
-	using model = TextModel.create(schema, createDocument(schema));
+	using model = DocumentTextModel.create(schema, createDocument(schema));
 	const local = schema.createNode("paragraph", { id: "paragraph-local", content: [schema.createText("Local", { id: "text-local" })] });
 	model.dispatch(new DocumentTransaction().insertNode("document-1", 1, local));
 	const remote = new DocumentTransaction().replaceText("text-local", 0, 5, "Remote");

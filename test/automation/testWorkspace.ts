@@ -3,8 +3,8 @@ import { execFile } from 'node:child_process';
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { promisify } from 'node:util';
-import { createAcademicDocumentSchema } from "../../src/ash/editor/contrib/academic/common/schema.js";
-import { serializeDocument } from "../../src/ash/editor/common/model/documentSerialization.js";
+import { createAcademicDocumentSchema } from "../../extensions/academic/browser/contrib/academic/common/schema.js";
+import { serializeDocument } from "../../extensions/academic/common/model/documentSerialization.js";
 
 export interface TestWorkspace {
 	readonly directory: string;

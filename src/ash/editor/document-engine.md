@@ -4,6 +4,10 @@
 >
 > 状态：Current + Proposed。状态表明确区分已实现内核、兼容路径与后续迁移。
 
+## 当前实现归属（2026-10-19）
+
+本文描述的富文档实现已经迁到 [`extensions/academic`](../../../extensions/academic/README.md)。Schema／命令／事务／历史／行投影／codec 位于包的 `common/`，富文本 Widget、段落贡献和格式控件位于包的 `browser/`；正文、论文与频道笔记通过相同 Rust 能力注册链选择 profile。`DocumentTextModel` 扩展唯一的基础 `TextModel`，通过通用快照提交更新同一文本 buffer 与版本；基础模型及公开入口不再导入具体富文档实现。下文的语义和行为约束继续有效，迁移前相对路径按包内对应目录阅读。
+
 ## 快速理解
 
 Stanza 以有序逻辑行为唯一内容主轴。Code 与 Academic 共用 `TextModel`、`LineId`、UTF-16 offset、version 和 history；富文档把文字样式、原子对象、行语义、连续区域与对象关系附着到行上，不再为代码文件或论文制造 BlockTree。
@@ -122,7 +126,7 @@ Academic `codeBlock` 当前投影为父 `TextModel` 中的连续 code region。�
 
 ## Profile、codec 与持久化
 
-Workbench `EditorProfile` 组合 schema/semantic vocabulary、empty document factory、node/atom views、toolbar actions、plugins 与 collaboration schema identity。Profile 在 pane 生命周期内固定。Academic 的文件关联与编辑器名称由可停用的 `ash.academic` 声明式扩展提供；启用时注册共享文档 editor，停用时撤下注册和文件路由，已打开的工作副本由原 tab 继续持有。扩展不创建第二份 TextModel 或 history。
+Workbench `EditorProfile` 组合 schema/semantic vocabulary、empty document factory、node/atom views、toolbar actions、plugins 与 collaboration schema identity。Profile 在 pane 生命周期内固定。Academic 的文件关联、编辑器名称和 profile 由独立 Rust 扩展 `ash.academic` 经共享宿主注入；Schema、NodeView 和引用实现位于 `extensions/academic/browser`。客户端组件须与 executable 声明的源码摘要匹配。停用时撤下注册与路由并冻结旧视图，原 tab 保留工作副本；显式重开经新注册取得同一模型与历史。扩展不创建第二份 TextModel 或 history。
 
 协作边界与 VS Code 的 Editor/Workbench 分层一致：Editor 定义文档事务、快照、远端选区和同步连接契约；Workbench 定义房间输入、邀请、成员角色与凭证管理。DocumentEditorPane 创建房间工具栏并选择连接方式，将已打开的连接交给 Widget；切换文档时取消房间请求并释放连接。
 
@@ -157,30 +161,31 @@ Invalid schema、selection、step、plugin state 或 line snapshot 在 commit �
 
 ## 当前状态与限制
 
-| Area                                                    | Status          | Boundary                                                                                               |
-| ------------------------------------------------------- | --------------- | ------------------------------------------------------------------------------------------------------ |
-| 有序逻辑行、稳定 LineId、UTF-16 LinePoint               | ✅ Current      | 普通 TextModel edit、split/join、undo/redo 已接入                                                      |
-| Range/Point/Facet/Region/Relation store 与 validation   | ✅ Current      | immutable `LineDocumentSnapshot`                                                                       |
-| 普通代码受限 profile，无 source Group/全文 Block        | ✅ Current      | mark/atom/facet/region/relation 为空                                                                   |
-| Schema document → line semantics projection             | ✅ Current      | mark、inline/block atom、ancestor facet、code region、caption relation                                 |
-| Table schema、行列命令、单元格导航与 browser editing    | ✅ Current      | 嵌套 table/row/cell 仍投影为同一 `TextModel` 的逻辑行                                                  |
-| Citation 与 bibliography UI                             | ✅ Current      | citation/reference schema、reference-index plugin、toolbar action 和 node view 已接入 Academic profile |
-| Academic browser 直接使用 LinePoint command             | Proposed        | 当前仍使用 DocumentPoint compatibility commands                                                        |
-| 直接 `LineDocumentTransaction` 与 line-first rich codec | Proposed        | 当前 schema transaction/serialization 是兼容输入                                                       |
-| Math 与 cross-reference UI                              | Extension point | store contract 已能表达；profile command/view 尚未提供                                                 |
-| Footnote、pagination、floating object                   | Potential       | 专门结构或页面布局问题，不改变行主轴                                                                   |
+| Area                                                    | Status          | Boundary                                                                                                                                         |
+| ------------------------------------------------------- | --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 有序逻辑行、稳定 LineId、UTF-16 LinePoint               | ✅ Current      | 普通 TextModel edit、split/join、undo/redo 已接入                                                                                                |
+| Range/Point/Facet/Region/Relation store 与 validation   | ✅ Current      | immutable `LineDocumentSnapshot`                                                                                                                 |
+| 普通代码受限 profile，无 source Group/全文 Block        | ✅ Current      | mark/atom/facet/region/relation 为空                                                                                                             |
+| Schema document → line semantics projection             | ✅ Current      | mark、inline/block atom、ancestor facet、code region、caption relation                                                                           |
+| Table schema、行列命令、单元格导航与 browser editing    | ✅ Current      | 嵌套 table/row/cell 仍投影为同一 `TextModel` 的逻辑行                                                                                            |
+| Built-in paragraph styles 与 paragraph formatting       | ✅ Current      | 正文／标题级别及 textAlign、lineSpacing、spaceBefore／spaceAfter 已接入独立贡献；间距以 pt 持久化，随事务投影为 line facet，未提供自定义样式定义 |
+| Citation 与 bibliography UI                             | ✅ Current      | citation/reference schema、reference-index plugin、toolbar action 和 node view 已接入 Academic profile                                           |
+| Academic browser 直接使用 LinePoint command             | Proposed        | 当前仍使用 DocumentPoint compatibility commands                                                                                                  |
+| 直接 `LineDocumentTransaction` 与 line-first rich codec | Proposed        | 当前 schema transaction/serialization 是兼容输入                                                                                                 |
+| Math 与 cross-reference UI                              | Extension point | store contract 已能表达；profile command/view 尚未提供                                                                                           |
+| Footnote、pagination、floating object                   | Potential       | 专门结构或页面布局问题，不改变行主轴                                                                                                             |
 
 ## 关键实现入口
 
-| Symbol/file                                             | Responsibility                                                          | 修改时同步检查                                            |
-| ------------------------------------------------------- | ----------------------------------------------------------------------- | --------------------------------------------------------- |
-| `common/model/lineDocument.ts`                          | LineId、五类 store、snapshot freeze 与 validation                       | codec、projection、atom/region/relation tests             |
-| `common/model/lineDocumentProjection.ts`                | schema compatibility value → line semantics                             | schema、serialization、Academic model tests               |
-| `common/model/textModel.ts`                             | TextBuffer、LineId mapping、version、history 与唯一 mutation boundary   | cursor、worker mirror、language version gate、model tests |
-| `common/model/textModelBlockState.ts`                   | schema transaction compatibility、selection、plugin 与 document history | transaction、collaboration、atomic commit tests           |
-| `common/model/documentTransaction.ts`                   | compatibility steps、mapping 与 metadata                                | selection、decoration、rebase、serialization              |
-| `browser/widget/richTextEditor/richTextEditorWidget.ts` | Academic compatibility projection 与 input                              | DOM selection、IME、clipboard、node views                 |
-| `browser/widget/codeEditor/codeEditorWidget.ts`         | Code profile browser surface                                            | input、viewport、accessibility、contributions             |
+| Symbol/file                                                                 | Responsibility                                                          | 修改时同步检查                                            |
+| --------------------------------------------------------------------------- | ----------------------------------------------------------------------- | --------------------------------------------------------- |
+| `common/model/lineDocument.ts`                                              | LineId、五类 store、snapshot freeze 与 validation                       | codec、projection、atom/region/relation tests             |
+| `extensions/academic/common/model/lineDocumentProjection.ts`                | schema compatibility value → line semantics                             | schema、serialization、Academic model tests               |
+| `common/model/textModel.ts`                                                 | TextBuffer、LineId mapping、version、history 与唯一 mutation boundary   | cursor、worker mirror、language version gate、model tests |
+| `extensions/academic/common/model/textModelBlockState.ts`                   | schema transaction compatibility、selection、plugin 与 document history | transaction、collaboration、atomic commit tests           |
+| `extensions/academic/common/model/documentTransaction.ts`                   | compatibility steps、mapping 与 metadata                                | selection、decoration、rebase、serialization              |
+| `extensions/academic/browser/widget/richTextEditor/richTextEditorWidget.ts` | Academic compatibility projection 与 input                              | DOM selection、IME、clipboard、node views                 |
+| `browser/widget/codeEditor/codeEditorWidget.ts`                             | Code profile browser surface                                            | input、viewport、accessibility、contributions             |
 
 ## 验证与修改影响
 

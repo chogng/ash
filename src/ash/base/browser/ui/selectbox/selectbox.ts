@@ -104,9 +104,8 @@ export class SelectBox extends Disposable {
 		setAriaAttribute(dropdown.button, "autocomplete", "none");
 
 		this._register(dropdown.onDidChangeVisibility(({ visible }) => {
-			if (!visible) return;
 			this.setActiveIndex(this._selectedIndex);
-			this.focusActiveOption();
+			if (visible) this.focusActiveOption();
 		}));
 		this._register(addDisposableListener(list, "click", (event) => {
 			const index = this.optionIndexFromTarget(event.target);
@@ -357,7 +356,8 @@ export class SelectBox extends Disposable {
 
 	private setActiveIndex(index: number): void {
 		this.activeIndex = index;
-		if (index < 0) {
+		// A collapsed ContextView detaches its options; ARIA must never reference them.
+		if (index < 0 || !this.dropdown.visible) {
 			setAriaAttribute(
 				this.dropdown.button,
 				"activedescendant",

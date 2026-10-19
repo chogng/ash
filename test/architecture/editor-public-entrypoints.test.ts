@@ -65,7 +65,7 @@ test("public Stanza entrypoints retain distinct API, contribution, main, and wor
 	assert.match(codeBundle, /editor\.all/u);
 	assert.doesNotMatch(codeBundle, /contrib\//u);
 	assert.doesNotMatch(codeBundle, /contrib\/academic/u);
-	assert.match(all, /contrib\/documentEditor\.contribution/u);
+	assert.doesNotMatch(all, /documentEditor|academic|paragraphFormatting|paragraphStyle/u);
 	assert.doesNotMatch(all, /workbench|academicEditor\.contribution/u);
 	assert.match(all, /browser\/coreCommands/u);
 	assert.match(all, /quickAccess\/browser\/quickAccessController/u);

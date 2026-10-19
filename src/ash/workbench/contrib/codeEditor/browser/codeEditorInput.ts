@@ -9,7 +9,7 @@ import { CODE_EDITOR_ID } from "../../../browser/parts/editor/textResourceEditor
 /** Selects the canonical editor for plain-text resources. */
 export function matchCodeEditor(input: IResourceEditorInput): EditorPaneMatch {
 	if (isDiffEditorInput(input)) return EditorPaneMatch.None;
-	if (DocumentTypes.find(input)) return EditorPaneMatch.None;
+	if (DocumentTypes.requiresProvider(input)) return EditorPaneMatch.None;
 	if (input.resource.scheme === "untitled") return EditorPaneMatch.Default;
 	if (input.languageId !== undefined || isTextResourceLanguageInput(input)) return EditorPaneMatch.Default;
 	return input.resource.scheme === "file" || isRemoteResource(input.resource) ? EditorPaneMatch.Builtin : EditorPaneMatch.None;

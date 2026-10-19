@@ -14,7 +14,9 @@ test('localization watches the same declarations that the scanner accepts', () =
 	for (const [path, accepted] of [
 		['src/ash/sessions/dormant.ts', true], ['src/ash/test/ignored.ts', false],
 		['src/ash/generated/ignored.ts', false], ['src/ash/ignored.test.ts', false],
-		['src/ash/feature.css', false], ['extensions/pack/translations/messages.json', true],
+		['src/ash/feature.css', false], ['extensions/pack/browser/widget.ts', true],
+		['extensions/pack/common/schema.ts', true], ['extensions/pack/browser/widget.test.ts', false],
+		['extensions/pack/src/extension.ts', false], ['extensions/pack/translations/messages.json', true],
 		['extensions/pack/test/messages.json', false], ['extensions/pack/node_modules/messages.json', false],
 	] as const) { assert.equal(isLocalizationInput(join(repository, path)), accepted, path); }
 });
@@ -179,7 +181,10 @@ test('clean checkout validates sources and generates catalogs consumed by host a
 		'localization/en/messages.json': '{}',
 		'localization/preinstalled.json': JSON.stringify(['ash/language-pack-zh-cn']),
 		'extensions/language-pack-zh-cn/package.json': JSON.stringify({ name: 'language-pack-zh-cn', publisher: 'ash', version: '1.0.0', displayName: '简体中文', description: 'Chinese', license: 'MIT', engines: { ash: '*' }, contributes: { localizations: [{ languageId: 'zh-CN', languageName: 'Chinese', localizedLanguageName: '简体中文', translations: [{ id: 'ash', path: 'localization/package.json' }] }] } }),
-		'extensions/language-pack-zh-cn/translations/messages.json': JSON.stringify({ ash: { hello: '你好' } }),
+		'extensions/language-pack-zh-cn/translations/messages.json': JSON.stringify({ ash: { hello: '你好', packageClient: '包内文档' } }),
+		'extensions/document-client/package.json': JSON.stringify({ name: 'document-client', publisher: 'ash', version: '1.0.0' }),
+		'extensions/document-client/browser/editor.ts': 'export {};',
+		'extensions/document-client/common/paragraph.ts': `import { localize } from '../../../src/ash/nls.js'; localize('packageClient', 'Package client');`,
 	};
 	for (const [name, text] of Object.entries(files)) {
 		await mkdir(dirname(join(root, name)), { recursive: true });
@@ -213,6 +218,8 @@ test('clean checkout validates sources and generates catalogs consumed by host a
 	const extensionRoot = join(generated, 'extensions/ash.language-pack-zh-cn');
 	const packedCatalog = JSON.parse(await readFile(join(extensionRoot, 'localization/package.json'), 'utf8'));
 	assert.equal(packedCatalog.locale, 'zh-CN');
+	assert.equal(packedCatalog.bundles.ash.packageClient, '包内文档');
+	assert.match(await readFile(join(generated, 'localizationCatalog.en.ts'), 'utf8'), /Package client/u);
 	assert.equal(packedCatalog.bundles.ash.hello, '你好');
 	const frenchCatalog = JSON.parse(await readFile(join(generated, 'extensions/ash.language-pack-fr/localization/package.json'), 'utf8'));
 	assert.equal(frenchCatalog.bundles.ash.hello, 'Bonjour');
@@ -253,29 +260,34 @@ test('clean checkout validates sources and generates catalogs consumed by host a
 	await mkdir(join(root, 'src/ash/code'));
 	await writeFile(join(root, 'src/ash/code/entry.js'), 'export const entry = 1;');
 	const dormant = join(root, 'src/ash/nested/dormant.ts');
+	const clientDormant = join(root, 'extensions/document-client/common/dormant.ts');
+	await writeFile(clientDormant, `import { localize } from '../../../src/ash/nls.js'; localize('clientDormant', 'Package before');`);
 	await writeFile(dormant, `import { localize } from '../nls.js'; localize('dormant', 'Before edit');`);
 	const { localizationPlugin } = await import(pathToFileURL(join(root, 'build/resources/localization.ts')).href) as typeof import('./localization.ts');
 	const server = await createServer({
 		configFile: false, root: join(root, 'src/ash/code'), logLevel: 'silent',
 		plugins: [localizationPlugin()], optimizeDeps: { noDiscovery: true },
-		server: { port: 0 },
+		// Exercise the real watcher without depending on native events in temporary directories.
+		server: { port: 0, watch: { usePolling: true, interval: 20 } },
 	});
 	try {
 		await server.listen();
 		const deadline = Date.now() + 5_000;
-		while (!server.watcher.getWatched()[dirname(dormant)]?.includes('dormant.ts') && Date.now() < deadline) { await delay(20); }
+		while ((!server.watcher.getWatched()[dirname(dormant)]?.includes('dormant.ts') || !server.watcher.getWatched()[dirname(clientDormant)]?.includes('dormant.ts')) && Date.now() < deadline) { await delay(20); }
 		assert.ok(server.watcher.getWatched()[dirname(dormant)]?.includes('dormant.ts'));
 		await server.environments.client.transformRequest('/entry.js');
 		assert.equal(server.environments.client.moduleGraph.getModuleById(dormant.replaceAll('\\', '/')), undefined);
 		await writeFile(dormant, `import { localize } from '../nls.js'; localize('dormant', 'After edit');`);
+		await writeFile(clientDormant, `import { localize } from '../../../src/ash/nls.js'; localize('clientDormant', 'Package after');`);
 		const updatedBy = Date.now() + 5_000;
 		let catalog = '';
 		do {
 			catalog = await readFile(join(generated, 'localizationCatalog.en.ts'), 'utf8');
-			if (catalog.includes('After edit')) break;
+			if (catalog.includes('After edit') && catalog.includes('Package after')) break;
 			await delay(20);
 		} while (Date.now() < updatedBy);
 		assert.match(catalog, /After edit/, 'unimported declarations update the language resource');
+		assert.match(catalog, /Package after/, 'unimported package declarations update the language resource');
 	} finally { await server.close(); }
 	// Large CJK catalogs remain byte-bounded modules while preserving the same runtime contract.
 	const largeMessages = Object.fromEntries(Array.from({ length: 120 }, (_, index) => [`large.${index}`, '翻译'.repeat(1000)]));

@@ -1,4 +1,4 @@
-import type { DocumentNode } from '../../../../editor/common/model/document.js';
+import type { DocumentNode } from '../../../../../../extensions/academic/common/model/document.js';
 import type { ChannelReference } from '../../../../platform/collaboration/common/channelService.js';
 import type { URI } from '../../../../base/common/uri.js';
 import { toDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
@@ -27,6 +27,19 @@ export interface DocumentType {
 /** Shared file routing consumes type declarations without depending on document contributions. */
 export const DocumentTypes = new class {
 	private readonly types = new Map<string, DocumentType>();
+	private readonly reservations = new Set<readonly Pick<DocumentType, 'contentType' | 'extensions'>[]>();
+
+	/** Package declarations protect resources even when execution is disabled or unavailable. */
+	public reserveTypes(types: readonly Pick<DocumentType, 'contentType' | 'extensions'>[]): IDisposable {
+		this.reservations.add(types);
+		return toDisposable(() => this.reservations.delete(types));
+	}
+
+	public requiresProvider(input: { readonly resource: URI; readonly contentType?: string; }): boolean {
+		const mediaType = input.contentType?.split(';', 1)[0].trim().toLowerCase();
+		return this.find(input) !== undefined || [...this.reservations].some(types => types.some(type =>
+			mediaType === type.contentType || type.extensions.some(extension => input.resource.path.toLowerCase().endsWith(extension))));
+	}
 
 	/** Routing declarations have the same lifetime as their available editor panes. */
 	public registerTypes(): IDisposable & { replace(types: readonly DocumentType[]): void; } {

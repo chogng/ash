@@ -29,7 +29,6 @@ import { OperatingSystem, operatingSystem } from '../../base/common/platform.js'
 import { TriggerInlineEditCommandsRegistry } from './triggerInlineEditCommandsRegistry.js';
 import { type Event } from '../../base/common/event.js';
 import { type TextModel } from '../common/model/textModel.js';
-import { type DocumentTextStyleAttributes } from '../common/model/documentSchema.js';
 import { type ILanguageConfigurationService } from '../common/languages/languageConfigurationRegistry.js';
 import { type ILanguageFeaturesService } from '../common/services/languageFeatures.js';
 import { type CodeEditorWidgetOptions } from './widget/codeEditor/codeEditorWidget.js';
@@ -581,33 +580,7 @@ export interface TextEditorContributionContext extends SharedTextContext {
 	readonly registerBeforeSave?: (hook: () => void | Promise<void>) => IDisposable;
 }
 
-export interface DocumentFormattingState {
-	readonly context: 'none' | 'text' | 'code';
-	readonly readOnly: boolean;
-	readonly bold: boolean;
-	readonly italic: boolean;
-	readonly fontFamily: 'sans' | 'serif' | 'monospace' | undefined;
-	readonly fontSize: number | undefined;
-	readonly checkedDocumentActionIds: ReadonlySet<string>;
-}
-
-export interface DocumentFormattingContribution extends IDisposable {
-	readonly element: HTMLElement;
-	setState(state: DocumentFormattingState): void;
-}
-
-export interface DocumentEditorContributionContext {
-	readonly kind: 'document';
-	readonly container: HTMLElement;
-	readonly documentActions: readonly { readonly id: string; readonly label: string; }[];
-	readonly onToggleMark: (markType: 'strong' | 'em') => void;
-	readonly onSetTextStyle: (attrs: DocumentTextStyleAttributes) => void;
-	readonly onClearTextStyle: () => void;
-	readonly onRunDocumentAction: (actionId: string) => void;
-	readonly setFormattingContribution: (contribution: DocumentFormattingContribution) => void;
-}
-
-export type EditorContributionContext = TextEditorContributionContext | DocumentEditorContributionContext;
+export type EditorContributionContext = TextEditorContributionContext;
 
 export interface EditorContributionHooks {
 	readonly id: string;

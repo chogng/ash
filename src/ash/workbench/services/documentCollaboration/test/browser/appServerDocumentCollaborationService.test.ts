@@ -1,3 +1,4 @@
+import { documentCodec } from '../../../../../../../extensions/academic/common/model/documentCodec.js';
 import assert from "node:assert/strict";
 import { test } from "mocha";
 import type { DocumentCollaborationOpenParams } from "../../../../../../../.build/protocol/typescript/index.js";
@@ -9,12 +10,12 @@ import type { DocumentCollaborationSubmitParams } from "../../../../../../../.bu
 import type { DocumentCollaborationSubmitResult } from "../../../../../../../.build/protocol/typescript/index.js";
 import type { DocumentCollaborationUpdate } from "../../../../../../../.build/protocol/typescript/index.js";
 import type { ServerNotification } from "../../../../../../../.build/protocol/typescript/index.js";
-import { textSelection } from "../../../../../editor/common/core/documentSelection.js";
-import type { DocumentNode } from "../../../../../editor/common/model/document.js";
-import { createDefaultDocumentSchema, type DocumentSchema } from "../../../../../editor/common/model/documentSchema.js";
-import { applyDocumentTransaction, DocumentTransaction } from "../../../../../editor/common/model/documentTransaction.js";
-import { serializeDocumentTransaction } from "../../../../../editor/common/model/documentTransactionSerialization.js";
-import type { DocumentCollaborationRemoteEnvelope } from "../../../../../editor/common/services/documentCollaborationService.js";
+import { textSelection } from "../../../../../../../extensions/academic/common/core/documentSelection.js";
+import type { DocumentNode } from "../../../../../../../extensions/academic/common/model/document.js";
+import { createDefaultDocumentSchema, type DocumentSchema } from "../../../../../../../extensions/academic/common/model/documentSchema.js";
+import { applyDocumentTransaction, DocumentTransaction } from "../../../../../../../extensions/academic/common/model/documentTransaction.js";
+import { serializeDocumentTransaction } from "../../../../../../../extensions/academic/common/model/documentTransactionSerialization.js";
+import type { DocumentCollaborationRemoteEnvelope } from "../../../../../../../extensions/academic/common/services/documentCollaborationService.js";
 import type { IServerEventApi } from "../../../../../platform/agentHost/common/appServerApi.js";
 import type { IDocumentCollaborationApi } from "../../../../../platform/collaboration/common/documentCollaborationApi.js";
 import { AppServerDocumentCollaborationService } from "../../browser/appServerDocumentCollaborationService.js";
@@ -25,7 +26,7 @@ test("Stanza App Server collaboration adapter uses JSON-safe ordered versions an
 	const events = new FakeServerEvents();
 	const api = new FakeDocumentCollaborationApi();
 	using service = new AppServerDocumentCollaborationService(api, events);
-	using connection = await service.open({ clientId: "client-a", schemaId: "stanza-document-v1", schema, document }, new AbortController().signal);
+	using connection = await service.open({ codec: documentCodec, clientId: "client-a", schemaId: "stanza-document-v1", schema, document }, new AbortController().signal);
 
 	assert.equal(connection.roomId, "room-a");
 	assert.equal(connection.canEdit, true);

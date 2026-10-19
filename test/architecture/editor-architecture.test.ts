@@ -174,8 +174,6 @@ test("Flat editor layout keeps one TextModel owner and shared contributions", ()
 		"browser/widget/codeEditor/codeEditorContributions.ts",
 		"browser/widget/codeEditor/codeEditorWidget.ts",
 		"browser/widget/codeEditor/editor.css",
-		"browser/widget/richTextEditor/richTextEditorWidget.ts",
-		"browser/widget/richTextEditor/richTextEditorWidget.css",
 		"browser/view/viewLayer.ts",
 		"browser/view/renderingContext.ts",
 		"browser/view/domLineBreaksComputer.ts",
@@ -275,8 +273,6 @@ test("Flat editor layout keeps one TextModel owner and shared contributions", ()
 		"common/model/pieceTreeTextBuffer/pieceTreeTextBuffer.ts",
 		"common/model/pieceTreeTextBuffer/pieceTreeTextBufferBuilder.ts",
 		"common/model/lineDocument.ts",
-		"common/model/textModelBlockState.ts",
-		"common/model/lineDocumentProjection.ts",
 		"common/viewModel.ts",
 		"common/viewModel/inlineDecorations.ts",
 		"common/viewLayout/lineDecorations.ts",
@@ -293,8 +289,6 @@ test("Flat editor layout keeps one TextModel owner and shared contributions", ()
 		"common/services/semanticTokensProviderStyling.ts",
 		"common/services/textModelSync/textModelSync.impl.ts",
 		"common/services/textModelSync/textModelSync.protocol.ts",
-		"common/model/documentTransaction.ts",
-		"contrib/academic/common/schema.ts",
 		"editor.code.all.ts",
 		"editor.all.ts",
 		"editor.api.ts",
@@ -562,9 +556,9 @@ test("Stanza owns its public protocol and DOM vocabulary without renaming the ed
 	const diffInput = readFileSync(join(workbenchRoot, "common/editor/diffEditorInput.ts"), "utf8");
 	const viewport = readFileSync(join(editorRoot, "browser/view.ts"), "utf8");
 	const structuredSurface = [
-		readFileSync(join(editorRoot, "browser/widget/richTextEditor/richTextEditorWidget.ts"), "utf8"),
-		readFileSync(join(editorRoot, "browser/widget/richTextEditor/richTextEditorWidget.css"), "utf8"),
-		readFileSync(join(editorRoot, "contrib/formatting/browser/formattingContribution.ts"), "utf8"),
+		readFileSync(resolve(desktopRoot, "extensions/academic/browser/widget/richTextEditor/richTextEditorWidget.ts"), "utf8"),
+		readFileSync(resolve(desktopRoot, "extensions/academic/browser/widget/richTextEditor/richTextEditorWidget.css"), "utf8"),
+		readFileSync(resolve(desktopRoot, "extensions/academic/browser/contrib/formatting/formattingContribution.ts"), "utf8"),
 		readFileSync(join(workbenchRoot, "contrib/documentEditor/browser/documentEditorPane.ts"), "utf8"),
 	].join("\n");
 	assert.match(api, /Stable Stanza API for standalone editors/u);
@@ -604,7 +598,7 @@ test("Frontend syntax sessions use the shared backend with a browser Worker fall
 	const syntaxAdapter = readFileSync(join(workbenchRoot, "services/language/browser/appServerSyntaxProviders.ts"), "utf8");
 	const sharedWorkbench = readFileSync(join(workbenchRoot, "browser/workbench.ts"), "utf8");
 	const workbenchContributions = readFileSync(join(workbenchRoot, "workbench.common.main.ts"), "utf8");
-	const academicContribution = readFileSync(join(workbenchRoot, "contrib/academic/browser/academicEditor.contribution.ts"), "utf8");
+	const academicContribution = readFileSync(resolve(desktopRoot, "extensions/academic/browser/editor.ts"), "utf8");
 	const styling = readFileSync(join(editorRoot, "common/services/semanticTokensProviderStyling.ts"), "utf8");
 	assert.match(packageManifest, /@vscode\/tree-sitter-wasm/u);
 	assert.match(syntaxCrate, /SyntaxDocument/u);
@@ -632,7 +626,7 @@ test("Code Workbench composes code and Academic document contributions", () => {
 	assert.match(codeBundle, /editor\.all/u);
 	assert.doesNotMatch(codeBundle, /contrib\//u);
 	assert.doesNotMatch(codeBundle, /contrib\/academic/u);
-	assert.match(standardBundle, /contrib\/documentEditor\.contribution/u);
+	assert.doesNotMatch(standardBundle, /documentEditor|paragraphStyle|paragraphFormatting/u);
 	assert.match(standardBundle, /browser\/coreCommands/u);
 	assert.doesNotMatch(standardBundle, /codeEditorPart\.contribution/u);
 	assert.doesNotMatch(standardBundle, /editor\.(?:code|academic)\.all/u);
@@ -640,7 +634,7 @@ test("Code Workbench composes code and Academic document contributions", () => {
 	const browserEntry = readFileSync(resolve(editorRoot, "../code/browser/workbench/workbench.ts"), "utf8");
 	const electronEntry = readFileSync(resolve(editorRoot, "../code/electron-browser/workbench/workbench.ts"), "utf8");
 	const workbenchContributions = readFileSync(join(workbenchRoot, "workbench.common.main.ts"), "utf8");
-	const academicContribution = readFileSync(join(workbenchRoot, "contrib/academic/browser/academicEditor.contribution.ts"), "utf8");
+	const academicContribution = readFileSync(resolve(desktopRoot, "extensions/academic/browser/editor.ts"), "utf8");
 	for (const entry of [browserEntry, electronEntry]) {
 		assert.doesNotMatch(entry, /WorkbenchMode|__ASH_WORKBENCH_MODE__/u);
 		assert.doesNotMatch(entry, /applicationId|AshStorageApplicationId/u);
@@ -664,12 +658,14 @@ test("Code Workbench composes code and Academic document contributions", () => {
 	assert.match(workbenchContributions, /contrib\/testing\/browser\/testing\.contribution/u);
 	assert.match(workbenchContributions, /contrib\/debug\/browser\/debug\.contribution/u);
 	assert.doesNotMatch(workbenchContributions, /editor\/editor\.academic\.all/u);
-	assert.match(academicContribution, /registerBuiltinEditorPane\('ash\.academic'/u);
-	assert.match(workbenchContributions, /contrib\/academic\/browser\/academicEditor\.contribution/u);
+	assert.match(academicContribution, /getEditorProfile/u);
+	assert.doesNotMatch(academicContribution, /registerBuiltinEditorPane/u);
+	assert.match(readFileSync(resolve(desktopRoot, 'extensions/academic/src/lib.rs'), 'utf8'), /editor\.client\.v1/u);
+	assert.doesNotMatch(workbenchContributions, /contrib\/academic\/browser\/academicEditor\.contribution/u);
 	assert.match(workbenchContributions, /contrib\/documentEditor\/browser\/documentEditor\.contribution/u);
 	const documentContribution = readFileSync(join(workbenchRoot, 'contrib/documentEditor/browser/documentEditor.contribution.ts'), 'utf8');
-	assert.match(documentContribution, /documentType:\s*\{\s*id:\s*'general'/u);
-	assert.match(documentContribution, /registerEditorPane\(/u);
+	assert.doesNotMatch(documentContribution, /registerEditorPane|createDefaultDocumentSchema|generalProfile/u);
+	assert.match(documentContribution, /createGeneralDocument/u);
 	assert.doesNotMatch(academicContribution, /workbench\/contrib\/(?:tasks|testing|debug)/u);
 	assert.doesNotMatch(academicContribution, /workbench\/contrib\/extensionHost/u);
 	assert.doesNotMatch(academicContribution, /editor\/editor\.code\.all/u);
@@ -731,10 +727,10 @@ test("Editor widgets delegate optional feature composition to contributions", ()
 	const coreCommands = readFileSync(join(editorRoot, "browser/coreCommands.ts"), "utf8");
 	const findContribution = readFileSync(join(editorRoot, "contrib/find/browser/findController.ts"), "utf8");
 	const quickAccessContribution = readFileSync(join(editorRoot, "contrib/quickAccess/browser/quickAccessController.ts"), "utf8");
-	const documentHost = readFileSync(join(editorRoot, "browser/widget/richTextEditor/richTextEditorWidget.ts"), "utf8");
-	const documentContribution = readFileSync(join(editorRoot, "contrib/documentEditor.contribution.ts"), "utf8");
+	const documentHost = readFileSync(resolve(desktopRoot, "extensions/academic/browser/widget/richTextEditor/richTextEditorWidget.ts"), "utf8");
+	const documentContribution = readFileSync(resolve(desktopRoot, "extensions/academic/browser/documentContributions.ts"), "utf8");
 	const codePaneContribution = readFileSync(join(workbenchRoot, "contrib/codeEditor/browser/codeEditor.contribution.ts"), "utf8");
-	const academicPaneContribution = readFileSync(join(workbenchRoot, "contrib/academic/browser/academicEditor.contribution.ts"), "utf8");
+	const academicPaneContribution = readFileSync(resolve(desktopRoot, "extensions/academic/browser/editor.ts"), "utf8");
 	const textModel = readFileSync(join(editorRoot, "common/model/textModel.ts"), "utf8");
 	const codeBundle = readFileSync(join(editorRoot, "editor.code.all.ts"), "utf8");
 	const standardBundle = readFileSync(join(editorRoot, "editor.all.ts"), "utf8");
@@ -782,9 +778,9 @@ test("Editor widgets delegate optional feature composition to contributions", ()
 	assert.doesNotMatch(codeBundle, /contrib\//u);
 	assert.doesNotMatch(codePaneContribution, /codeEditorPart\.contribution/u);
 	assert.doesNotMatch(documentHost, /from\s+["'][^"']*\/contrib\/(?:formatting|collaboration)\/browser\//u);
-	assert.match(documentHost, /getEditorContributions/u);
+	assert.match(documentHost, /this\.options\.contributions/u);
 	assert.doesNotMatch(documentHost, /registerDocumentEditorContributionFactory/u);
-	assert.match(documentContribution, /registerEditorContribution/u);
+	assert.match(documentContribution, /documentContributions/u);
 	assert.match(documentContribution, /FormattingContribution/u);
 	assert.doesNotMatch(documentContribution, /CollaborationContribution/u);
 	const documentPane = readFileSync(join(workbenchRoot, "contrib/documentEditor/browser/documentEditorPane.ts"), "utf8");
@@ -792,7 +788,7 @@ test("Editor widgets delegate optional feature composition to contributions", ()
 	assert.doesNotMatch(academicPaneContribution, /codeEditorPart\.contribution/u);
 	assert.doesNotMatch(academicPaneContribution, /contrib\/codeEditor|CodeEditorPane|EmbeddedTextEditorFactory|AcademicCodeBlockEditorFactory|CodeEditorWidget/u);
 	assert.doesNotMatch(academicPaneContribution, /documentEditor\.contribution/u);
-	assert.match(textModel, /static create\(/u);
+	assert.doesNotMatch(textModel, /DocumentSchema|TextModelBlock|projectDocumentToLines/u);
 	assert.match(textModel, /get lineDocument/u);
 	assert.match(textModel, /getLineId/u);
 	assert.doesNotMatch(textModel, /TextModelStructure|structureIndex|TextModelBlockTree/u);

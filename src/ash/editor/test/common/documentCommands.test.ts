@@ -1,10 +1,11 @@
+import { DocumentTextModel } from '../../../../../extensions/academic/common/model/documentTextModel.js';
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
-import { createDefaultDocumentSchema } from '../../common/model/documentSchema.js';
+import { createDefaultDocumentSchema } from '../../../../../extensions/academic/common/model/documentSchema.js';
 import { TextModel } from '../../common/model/textModel.js';
-import { deserializeDocument, serializeDocument } from '../../common/model/documentSerialization.js';
-import { nodeSelection, textSelection } from '../../common/core/documentSelection.js';
-import { createDeleteAdjacentInlineNodeCommand, createDeleteInlineSelectionCommand, createDeleteNodeSelectionCommand, createDeleteTableColumnCommand, createDeleteTableRowCommand, createExitEmptyListItemCommand, createInsertHardBreakCommand, createInsertHorizontalRuleCommand, createInsertImageAtSelectionCommand, createInsertImageCommand, createInsertParagraphAfterCommand, createInsertTableColumnCommand, createInsertTableCommand, createInsertTableRowCommand, createJoinAdjacentBlockCommand, createJoinAdjacentListItemCommand, createJoinAdjacentTextRunCommand, createListItemIndentationCommand, createMoveBlockCommand, createPasteTextCommand, createRemoveMarkCommand, createReplaceTextCommand, createSetBlockTypeCommand, createSetLinkMarkCommand, createSetTextStyleCommand, createSplitBlockCommand, createSplitListItemCommand, createToggleBlockquoteCommand, createToggleListCommand, createToggleMarkCommand, findAdjacentTableCell, findTableCellContext } from '../../common/commands/documentCommands.js';
+import { deserializeDocument, serializeDocument } from '../../../../../extensions/academic/common/model/documentSerialization.js';
+import { nodeSelection, textSelection } from '../../../../../extensions/academic/common/core/documentSelection.js';
+import { createDeleteAdjacentInlineNodeCommand, createDeleteInlineSelectionCommand, createDeleteNodeSelectionCommand, createDeleteTableColumnCommand, createDeleteTableRowCommand, createExitEmptyListItemCommand, createInsertHardBreakCommand, createInsertHorizontalRuleCommand, createInsertImageAtSelectionCommand, createInsertImageCommand, createInsertParagraphAfterCommand, createInsertTableColumnCommand, createInsertTableCommand, createInsertTableRowCommand, createJoinAdjacentBlockCommand, createJoinAdjacentListItemCommand, createJoinAdjacentTextRunCommand, createListItemIndentationCommand, createMoveBlockCommand, createPasteTextCommand, createRemoveMarkCommand, createReplaceTextCommand, createSetBlockTypeCommand, createSetLinkMarkCommand, createSetTextStyleCommand, createSplitBlockCommand, createSplitListItemCommand, createToggleBlockquoteCommand, createToggleListCommand, createToggleMarkCommand, findAdjacentTableCell, findTableCellContext } from '../../../../../extensions/academic/common/commands/documentCommands.js';
 
 test("Stanza block commands split, join, move, and insert through model transactions", () => {
 	const schema = createDefaultDocumentSchema();
@@ -16,7 +17,7 @@ test("Stanza block commands split, join, move, and insert through model transact
 		id: "paragraph-2",
 		content: [schema.createText("World", { id: "text-2" })],
 	});
-	using model = TextModel.create(schema, schema.createDocument([first, second], "document-1"));
+	using model = DocumentTextModel.create(schema, schema.createDocument([first, second], "document-1"));
 
 	const split = createSplitBlockCommand(schema, model.document, "paragraph-1", "text-1", 2);
 	assert.ok(split);
@@ -47,7 +48,7 @@ test("Stanza moves a block down to the requested sibling index", () => {
 		id: `paragraph-${index + 1}`,
 		content: [schema.createText(text, { id: `text-${index + 1}` })],
 	}));
-	using model = TextModel.create(schema, schema.createDocument(blocks, "document-1"));
+	using model = DocumentTextModel.create(schema, schema.createDocument(blocks, "document-1"));
 
 	const move = createMoveBlockCommand(model.document, "paragraph-1", "down");
 	assert.ok(move);
@@ -64,7 +65,7 @@ test("Stanza inline mark commands split text runs and preserve the selection", (
 		id: "paragraph-1",
 		content: [schema.createText("Hello", { id: "text-1" })],
 	});
-	using model = TextModel.create(schema, schema.createDocument([paragraph], "document-1"));
+	using model = DocumentTextModel.create(schema, schema.createDocument([paragraph], "document-1"));
 	const selection = textSelection({ nodeId: "text-1", offset: 1 }, { nodeId: "text-1", offset: 4 });
 
 	const mark = createToggleMarkCommand(schema, model.document, "paragraph-1", "text-1", selection, "strong");
@@ -89,7 +90,7 @@ test("Stanza inline mark commands split text runs and preserve the selection", (
 test("Stanza stores collapsed mark toggles for subsequent text insertion", () => {
 	const schema = createDefaultDocumentSchema();
 	const paragraph = schema.createNode("paragraph", { id: "paragraph-1", content: [schema.createText("Hello", { id: "text-1" })] });
-	using model = TextModel.create(schema, schema.createDocument([paragraph], "document-1"), { selection: textSelection({ nodeId: "text-1", offset: 5 }) });
+	using model = DocumentTextModel.create(schema, schema.createDocument([paragraph], "document-1"), { selection: textSelection({ nodeId: "text-1", offset: 5 }) });
 
 	const toggle = createToggleMarkCommand(schema, model.document, "paragraph-1", "text-1", model.selection!, "strong");
 	assert.ok(toggle);
@@ -119,7 +120,7 @@ test("Stanza link mark commands set, update, remove, and undo link attributes", 
 			schema.createText(" world", { id: "text-2", marks: [{ type: "strong", attrs: {} }] }),
 		],
 	});
-	using model = TextModel.create(schema, schema.createDocument([paragraph], "document-1"));
+	using model = DocumentTextModel.create(schema, schema.createDocument([paragraph], "document-1"));
 	const selection = textSelection({ nodeId: "text-1", offset: 1 }, { nodeId: "text-2", offset: 6 });
 
 	const link = createSetLinkMarkCommand(schema, model.document, "paragraph-1", "text-1", selection, " https://example.test ");
@@ -158,7 +159,7 @@ test("Stanza text-style commands merge persistent font attributes", () => {
 		id: "paragraph-1",
 		content: [schema.createText("Hello", { id: "text-1" })],
 	});
-	using model = TextModel.create(schema, schema.createDocument([paragraph], "document-1"));
+	using model = DocumentTextModel.create(schema, schema.createDocument([paragraph], "document-1"));
 	const selection = textSelection({ nodeId: "text-1", offset: 1 }, { nodeId: "text-1", offset: 4 });
 
 	const setFamily = createSetTextStyleCommand(schema, model.document, "paragraph-1", "text-1", selection, { fontFamily: "serif" });
@@ -193,7 +194,7 @@ test("Stanza block commands preserve inline runs while splitting and joining", (
 			schema.createText("o", { id: "text-3" }),
 		],
 	});
-	using model = TextModel.create(schema, schema.createDocument([paragraph], "document-1"));
+	using model = DocumentTextModel.create(schema, schema.createDocument([paragraph], "document-1"));
 
 	const split = createSplitBlockCommand(schema, model.document, "paragraph-1", "text-2", 1);
 	assert.ok(split);
@@ -224,7 +225,7 @@ test("Stanza structural block commands toggle blockquotes and insert horizontal 
 		id: "paragraph-2",
 		content: [schema.createText("Second", { id: "text-2" })],
 	});
-	using model = TextModel.create(schema, schema.createDocument([first, second], "document-1"));
+	using model = DocumentTextModel.create(schema, schema.createDocument([first, second], "document-1"));
 
 	const quote = createToggleBlockquoteCommand(schema, model.document, "paragraph-1");
 	assert.ok(quote);
@@ -252,7 +253,7 @@ test("Stanza replaces and undoes a text selection spanning sibling blocks", () =
 		id: `paragraph-${index + 1}`,
 		content: [schema.createText(text, { id: `text-${index + 1}` })],
 	}));
-	using model = TextModel.create(schema, schema.createDocument(blocks, "document-1"));
+	using model = DocumentTextModel.create(schema, schema.createDocument(blocks, "document-1"));
 	const selection = textSelection({ nodeId: "text-1", offset: 2 }, { nodeId: "text-3", offset: 2 });
 
 	const replace = createReplaceTextCommand(schema, model.document, "paragraph-1", selection, "X");
@@ -274,7 +275,7 @@ test("Stanza pastes multiline text across sibling blocks", () => {
 		id: `paragraph-${index + 1}`,
 		content: [schema.createText(text, { id: `text-${index + 1}` })],
 	}));
-	using model = TextModel.create(schema, schema.createDocument(blocks, "document-1"));
+	using model = DocumentTextModel.create(schema, schema.createDocument(blocks, "document-1"));
 	const selection = textSelection({ nodeId: "text-1", offset: 2 }, { nodeId: "text-2", offset: 3 });
 
 	const paste = createPasteTextCommand(schema, model.document, "paragraph-1", selection, "A\nB\nC");
@@ -295,7 +296,7 @@ test("Stanza inline commands handle selections spanning multiple text runs", () 
 			schema.createText("o", { id: "text-3" }),
 		],
 	});
-	using model = TextModel.create(schema, schema.createDocument([paragraph], "document-1"));
+	using model = DocumentTextModel.create(schema, schema.createDocument([paragraph], "document-1"));
 	const wholeText = textSelection({ nodeId: "text-1", offset: 0 }, { nodeId: "text-3", offset: 1 });
 
 	const mark = createToggleMarkCommand(schema, model.document, "paragraph-1", "text-1", wholeText, "strong");
@@ -322,7 +323,7 @@ test("Stanza paste commands turn multiline text into sibling blocks", () => {
 		id: "paragraph-1",
 		content: [schema.createText("Hello", { id: "text-1" })],
 	});
-	using model = TextModel.create(schema, schema.createDocument([paragraph], "document-1"));
+	using model = DocumentTextModel.create(schema, schema.createDocument([paragraph], "document-1"));
 	const paste = createPasteTextCommand(schema, model.document, "paragraph-1", textSelection({ nodeId: "text-1", offset: 2 }), "A\nB\n");
 	assert.ok(paste);
 	model.dispatch(paste.transaction);
@@ -341,7 +342,7 @@ test("Stanza splits a list paragraph into sibling list items", () => {
 	});
 	const item = schema.createNode("listItem", { id: "item-1", content: [paragraph] });
 	const list = schema.createNode("bulletList", { id: "list-1", content: [item] });
-	using model = TextModel.create(schema, schema.createDocument([list], "document-1"));
+	using model = DocumentTextModel.create(schema, schema.createDocument([list], "document-1"));
 
 	const split = createSplitListItemCommand(schema, model.document, "item-1", "paragraph-1", "text-1", 3);
 	assert.ok(split);
@@ -358,7 +359,7 @@ test("Stanza joins, indents, and outdents list items as atomic commands", () => 
 	const schema = createDefaultDocumentSchema();
 	const createItem = (id: string, paragraphId: string, textId: string, text: string) => schema.createNode("listItem", { id, content: [schema.createNode("paragraph", { id: paragraphId, content: [schema.createText(text, { id: textId })] })] });
 	const list = schema.createNode("bulletList", { id: "list-1", content: [createItem("item-1", "paragraph-1", "text-1", "one"), createItem("item-2", "paragraph-2", "text-2", "two"), createItem("item-3", "paragraph-3", "text-3", "three")] });
-	using model = TextModel.create(schema, schema.createDocument([list], "document-1"));
+	using model = DocumentTextModel.create(schema, schema.createDocument([list], "document-1"));
 
 	const joined = createJoinAdjacentListItemCommand(model.document, "item-2", "paragraph-2", "backward");
 	assert.ok(joined);
@@ -390,7 +391,7 @@ test("Stanza exits an empty list item at the list boundary", () => {
 	const schema = createDefaultDocumentSchema();
 	const emptyItem = schema.createNode("listItem", { id: "item-1", content: [schema.createNode("paragraph", { id: "paragraph-1" })] });
 	const list = schema.createNode("bulletList", { id: "list-1", content: [emptyItem] });
-	using model = TextModel.create(schema, schema.createDocument([list], "document-1"));
+	using model = DocumentTextModel.create(schema, schema.createDocument([list], "document-1"));
 	const exit = createExitEmptyListItemCommand(schema, model.document, "item-1", "paragraph-1");
 	assert.ok(exit);
 	model.dispatch(exit.transaction);
@@ -403,7 +404,7 @@ test("Stanza exits an empty list item at the list boundary", () => {
 test("Stanza block format commands change block and list types without replacing content", () => {
 	const schema = createDefaultDocumentSchema();
 	const paragraph = schema.createNode("paragraph", { id: "paragraph-1", content: [schema.createText("Hello", { id: "text-1" })] });
-	using model = TextModel.create(schema, schema.createDocument([paragraph], "document-1"));
+	using model = DocumentTextModel.create(schema, schema.createDocument([paragraph], "document-1"));
 
 	const heading = createSetBlockTypeCommand(model.document, "paragraph-1", "heading");
 	assert.ok(heading);
@@ -430,7 +431,7 @@ test("Stanza block format commands change block and list types without replacing
 test("Stanza inserts validated tables and inline images", () => {
 	const schema = createDefaultDocumentSchema();
 	const paragraph = schema.createNode("paragraph", { id: "paragraph-1", content: [schema.createText("Hello", { id: "text-1" })] });
-	using model = TextModel.create(schema, schema.createDocument([paragraph], "document-1"));
+	using model = DocumentTextModel.create(schema, schema.createDocument([paragraph], "document-1"));
 
 	const table = createInsertTableCommand(schema, model.document, "paragraph-1", 2, 3);
 	assert.ok(table);
@@ -458,7 +459,7 @@ test("Stanza inserts images at text selections while preserving inline runs", ()
 			schema.createText(" world", { id: "text-2", marks: [{ type: "strong", attrs: {} }] }),
 		],
 	});
-	using model = TextModel.create(schema, schema.createDocument([paragraph], "document-1"));
+	using model = DocumentTextModel.create(schema, schema.createDocument([paragraph], "document-1"));
 
 	const middle = createInsertImageAtSelectionCommand(schema, model.document, "paragraph-1", textSelection({ nodeId: "text-1", offset: 2 }), "data:image/png;base64,AA==", "middle");
 	assert.ok(middle);
@@ -491,7 +492,7 @@ test("Stanza deletes adjacent inline nodes through common boundary commands", ()
 			schema.createText("after", { id: "text-2" }),
 		],
 	});
-	using model = TextModel.create(schema, schema.createDocument([paragraph], "document-1"));
+	using model = DocumentTextModel.create(schema, schema.createDocument([paragraph], "document-1"));
 
 	const backward = createDeleteAdjacentInlineNodeCommand(model.document, "paragraph-1", "text-2", "backward");
 	assert.ok(backward);
@@ -514,7 +515,7 @@ test("Stanza deletes and restores a selected inline node", () => {
 		id: "paragraph-1",
 		content: [schema.createText("before", { id: "text-1" }), image, schema.createText("after", { id: "text-2" })],
 	});
-	using model = TextModel.create(schema, schema.createDocument([paragraph], "document-1"), { selection: nodeSelection(image.id) });
+	using model = DocumentTextModel.create(schema, schema.createDocument([paragraph], "document-1"), { selection: nodeSelection(image.id) });
 
 	const deletion = createDeleteNodeSelectionCommand(model.document, model.selection!);
 	assert.ok(deletion);
@@ -538,7 +539,7 @@ test("Stanza inserts hard breaks and deletes selections spanning inline nodes", 
 			schema.createText("world", { id: "text-2" }),
 		],
 	});
-	using model = TextModel.create(schema, schema.createDocument([paragraph], "document-1"));
+	using model = DocumentTextModel.create(schema, schema.createDocument([paragraph], "document-1"));
 
 	const breakCommand = createInsertHardBreakCommand(schema, model.document, "paragraph-1", textSelection({ nodeId: "text-1", offset: 2 }));
 	assert.ok(breakCommand);
@@ -559,7 +560,7 @@ test("Stanza inserts hard breaks and deletes selections spanning inline nodes", 
 test("Stanza navigates table cells and applies row and column transactions", () => {
 	const schema = createDefaultDocumentSchema();
 	const paragraph = schema.createNode("paragraph", { id: "paragraph-1", content: [schema.createText("Before", { id: "text-1" })] });
-	using model = TextModel.create(schema, schema.createDocument([paragraph], "document-1"));
+	using model = DocumentTextModel.create(schema, schema.createDocument([paragraph], "document-1"));
 	const insertTable = createInsertTableCommand(schema, model.document, "paragraph-1", 2, 2);
 	assert.ok(insertTable);
 	model.dispatch(insertTable.transaction);

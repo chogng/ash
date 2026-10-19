@@ -55,7 +55,7 @@ export interface ExtensionCustomEditorContribution {
 	readonly viewType: string;
 	readonly displayName: string;
 	readonly priority: 'default' | 'option' | 'explicit';
-	readonly selector: readonly { readonly filenamePattern: string; readonly mimeType?: string; }[];
+	readonly selector: readonly { readonly filenamePattern?: string; readonly mimeType?: string; }[];
 }
 
 export interface ExtensionManifest {
@@ -239,8 +239,10 @@ function parseCustomEditors(value: unknown, extensionId: string): readonly Exten
 			if (mimeType !== undefined && !/^[\w.+-]+\/[\w.+-]+$/.test(mimeType)) {
 				throw new TypeError('Invalid custom editor MIME type');
 			}
+			const filenamePattern = selector.filenamePattern === undefined ? undefined : requiredString(selector.filenamePattern, 'Custom editor filename pattern', 1024);
+			if (filenamePattern === undefined && mimeType === undefined) throw new TypeError('Custom editor selector requires a filename pattern or MIME type');
 			return Object.freeze({
-				filenamePattern: requiredString(selector.filenamePattern, 'Custom editor filename pattern', 1024),
+				...(filenamePattern === undefined ? {} : { filenamePattern }),
 				...(mimeType === undefined ? {} : { mimeType: mimeType.toLowerCase() }),
 			});
 		});

@@ -1141,3 +1141,13 @@ test('common project language packages register resources and localize English a
 		}
 	}
 });
+
+
+test('custom editor declarations accept MIME-only channel resources and reject empty selectors', () => {
+	const parse = (selector: unknown) => parseExtensionManifest(JSON.stringify({
+		name: 'demo', publisher: 'ash', version: '1.0.0',
+		contributes: { customEditors: [{ viewType: 'test.notes', displayName: 'Notes', selector: [selector] }] },
+	}), descriptor);
+	assert.deepEqual(parse({ mimeType: 'application/vnd.ash.channel-notes+json' }).contributes.customEditors[0]!.selector, [{ mimeType: 'application/vnd.ash.channel-notes+json' }]);
+	assert.throws(() => parse({}), /filename pattern or MIME type/);
+});

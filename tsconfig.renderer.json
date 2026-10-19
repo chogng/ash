@@ -5,6 +5,7 @@
     "types": ["vite/client", "@webgpu/types"]
   },
   "include": [
+    "extensions/*/browser/**/*.ts",
     "src/typings/css.d.ts",
     "src/typings/editContext.d.ts",
     "src/ash/base/**/*.ts",

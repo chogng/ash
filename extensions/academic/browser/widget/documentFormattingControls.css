@@ -1,0 +1,22 @@
+.stanza-document-format-controls {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: var(--ash-spacing-size80);
+	padding: var(--ash-spacing-size60) var(--ash-spacing-size120);
+	border-bottom: var(--ash-strokeThickness) solid
+		var(--ash-contrastBorder, var(--ash-border));
+	color: var(--ash-editor-foreground);
+	background: var(--ash-editor-background);
+}
+
+.stanza-document-format-controls[hidden] {
+	display: none;
+}
+
+.stanza-document-format-control {
+	display: inline-flex;
+	align-items: center;
+	gap: var(--ash-spacing-size40);
+	min-width: 0;
+}

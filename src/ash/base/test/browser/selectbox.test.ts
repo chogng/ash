@@ -46,6 +46,7 @@ test("SelectBox uses the default chevron trigger and trailing selected check ins
 	appendIcon(Lxicon.chevronDown, expectedIndicator);
 	assert.equal(indicator.innerHTML, expectedIndicator.innerHTML);
 
+	assert.equal(button.hasAttribute('aria-activedescendant'), false);
 	selectBox.show();
 	assert.equal(contextView.element.parentElement, host);
 	assert.equal(contextView.element.classList.contains("ash-context-view-default"), true);
@@ -59,6 +60,17 @@ test("SelectBox uses the default chevron trigger and trailing selected check ins
 	assert.equal(selected.lastElementChild, check);
 	assert.equal(check.innerHTML, expectedCheck.innerHTML);
 	assert.equal(selected.getAttribute("aria-selected"), "true");
+	assert.equal(button.getAttribute('aria-activedescendant'), selected.id);
+	selectBox.hide();
+	assert.equal(button.hasAttribute('aria-activedescendant'), false);
+	selectBox.value = 'on';
+	assert.equal(button.hasAttribute('aria-activedescendant'), false);
+	selectBox.show();
+	const activeId = button.getAttribute('aria-activedescendant')!;
+	assert.equal(dom.window.document.getElementById(activeId)?.textContent?.includes('On'), true);
+	selectBox.hide();
+	assert.equal(button.hasAttribute('aria-activedescendant'), false);
+
 
 	selectBox.dispose();
 	contextView.dispose();

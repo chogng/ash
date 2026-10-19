@@ -29,14 +29,6 @@ import { guessIndentation } from './indentationGuesser.js';
 import { findNextTextMatch, findTextMatches, TextSearchPatternKind, type TextSearchMatch, type TextModelSearchQuery } from './textModelSearch.js';
 import { TextModelHistory, type TextModelHistoryEntry, type TextModelHistorySnapshot } from "./editStack.js";
 import { TrackedRangeCollection, type TrackedRange } from "./trackedRange.js";
-import type { DocumentSelection } from "../core/documentSelection.js";
-import type { DocumentMark, DocumentNode } from "./document.js";
-import type { DocumentHistoryEntries } from "./documentHistory.js";
-import type { DocumentPluginKey } from "./documentPlugin.js";
-import type { DocumentSchema } from "./documentSchema.js";
-import type { DocumentTransaction } from "./documentTransaction.js";
-import { TextModelBlockState, TextModelRemoteHistoryPolicy, type TextModelBlockChange, type TextModelBlockOptions, type TextModelPluginDecorationSource } from "./textModelBlockState.js";
-import { projectDocumentToLines } from "./lineDocumentProjection.js";
 import { createLineDocumentSnapshot, freezeLineSemanticAttributes, linePoint, type LineDocumentSnapshot, type LineId, type LinePoint, type LineSemanticAttributes } from "./lineDocument.js";
 import * as model from '../model.js';
 import { DefaultEndOfLine, EndOfLinePreference, EndOfLineSequence, FindMatch, PositionAffinity, TextModelResolvedOptions, TrackedRangeStickiness, ValidAnnotatedEditOperation, isITextSnapshot, type BracketPairColorizationOptions, type IAttachedView, type ICursorStateComputer, type IIdentifiedSingleEditOperation, type IModelDecorationOptions, type IModelDecorationsChangeAccessor, type IModelDeltaDecoration, type ITextBuffer, type ITextModel, type ITextModelUpdateOptions, type ITextSnapshot, type IValidEditOperation } from '../model.js';
@@ -115,8 +107,8 @@ export interface TextModelOptions {
 	readonly historyLimit?: TextModelHistoryLimit;
 	/** Product-owned scheduling for non-semantic piece-tree maintenance. */
 	readonly maintenance?: TextModelMaintenanceOptions;
-	/** Schema-backed blocks used by document profiles. */
-	readonly blocks?: TextModelBlockInitialization;
+	/** Initial projection for a client extension that owns semantic transactions. */
+	readonly extensionSnapshot?: LineDocumentSnapshot;
 	/** Stable identities restored by a rich-document codec. Plain text codecs omit this. */
 	readonly lineIds?: readonly LineId[];
 	/** Document-level metadata such as a code file's languageId. */
@@ -132,11 +124,6 @@ export interface TextModelOptions {
 	readonly bracketPairColorizationOptions?: BracketPairColorizationOptions;
 	readonly languageConfigurationService?: ILanguageConfigurationService;
 	readonly tokenization?: TokenizationTextModelPartOptions;
-}
-
-export interface TextModelBlockInitialization extends TextModelBlockOptions {
-	readonly schema: DocumentSchema;
-	readonly document?: DocumentNode;
 }
 
 export interface TextEditOptions {
@@ -199,7 +186,7 @@ export class TextModel implements ITextModel {
 	private readonly maintenance: TextModelMaintenanceOptions | undefined;
 	private readonly pendingMaintenance = this._register(new MutableDisposable<IDisposable>());
 	private buffer: ITextBuffer;
-	private readonly blockState: TextModelBlockState | undefined;
+	private extensionSnapshot: LineDocumentSnapshot | undefined;
 	private readonly lineIdGenerator: () => LineId;
 	private readonly issuedLineIds = new Set<LineId>();
 	private nextGeneratedLineIdentity = 1;
@@ -265,19 +252,16 @@ export class TextModel implements ITextModel {
 			historyTransactionLimit,
 			historyTextUnitLimit,
 		);
-		if (options.blocks && options.lineIds) throw new TypeError("Schema-backed TextModel line identities come from the document codec");
+		if (options.extensionSnapshot && options.lineIds) throw new TypeError("Extension-backed TextModel identities come from its snapshot");
 		if (options.lineIdGenerator !== undefined && typeof options.lineIdGenerator !== "function") {
 			throw new TypeError("TextModel lineIdGenerator must be a function");
 		}
 		this.lineIdGenerator = options.lineIdGenerator ?? (() => `line:${this.nextGeneratedLineIdentity++}`);
-		const blockDocument = options.blocks?.document ?? options.blocks?.schema.createDocument();
-		const blockSnapshot = blockDocument && options.blocks ? projectDocumentToLines(options.blocks.schema, blockDocument) : undefined;
-		const initialValue = blockSnapshot?.getText() ?? initialText;
-		this.buffer = createPieceTreeTextBuffer(initialValue, this.modelOptionsValue.defaultEOL);
-		if (!options.blocks) {
+		this.extensionSnapshot = options.extensionSnapshot;
+		this.buffer = createPieceTreeTextBuffer(this.extensionSnapshot?.getText() ?? initialText, this.modelOptionsValue.defaultEOL);
+		if (!this.extensionSnapshot) {
 			this.plainLineIds = this.initializeLineIds(options.lineIds, options.lineIdGenerator === undefined);
-			// Plain editors need text and stable identities, not another full copy of
-			// every line. Materialize the immutable line document only for its caller.
+			// Plain editors materialize semantic line records only when a caller asks for them.
 			this.lineMetadata = freezeLineSemanticAttributes(options.metadata);
 		} else {
 			this.lineMetadata = Object.freeze({});
@@ -287,16 +271,6 @@ export class TextModel implements ITextModel {
 			this.buffer.getLineCount(),
 			options.largeFileOptimizations ?? EDITOR_MODEL_DEFAULTS.largeFileOptimizations,
 		);
-		this.blockState = options.blocks && blockDocument ? this._register(new TextModelBlockState(
-			options.blocks.schema,
-			blockDocument,
-			options.blocks,
-			{
-				getVersion: () => this._version,
-				commitText: text => this.commitBlockText(text),
-				publishTextChange: change => this.publishTextChange(change),
-			},
-		)) : undefined;
 		const languageConfigurationService = options.languageConfigurationService;
 		const resolveLanguageConfiguration = languageConfigurationService
 			? (languageId: string) => languageConfigurationService.getLanguageConfiguration(languageId)
@@ -332,21 +306,16 @@ export class TextModel implements ITextModel {
 		}));
 	}
 
-	/** Creates one TextModel from schema-backed document content. */
-	static create(schema: DocumentSchema, document = schema.createDocument(), options: TextModelBlockOptions = {}): TextModel {
-		return new TextModel("", { blocks: { ...options, schema, document } });
-	}
-
 	/** Immutable line-first content snapshot at the current model version. */
 	get lineDocument(): LineDocumentSnapshot {
 		this.assertNotDisposed();
-		return this.blockState?.snapshot ?? this.requirePlainLineSnapshot();
+		return this.extensionSnapshot ?? this.requirePlainLineSnapshot();
 	}
 
 	getLineId(lineIndex: number): LineId {
 		this.assertNotDisposed();
 		if (!Number.isSafeInteger(lineIndex) || lineIndex < 0) throw new RangeError("Line index is outside the TextModel");
-		const id = this.blockState ? this.blockState.snapshot.lines.at(lineIndex)?.id : this.plainLineIds?.[lineIndex];
+		const id = this.extensionSnapshot ? this.extensionSnapshot.lines.at(lineIndex)?.id : this.plainLineIds?.[lineIndex];
 		if (id === undefined) throw new RangeError("Line index is outside the TextModel");
 		return id;
 	}
@@ -354,8 +323,8 @@ export class TextModel implements ITextModel {
 	getLineIndex(lineId: LineId): number {
 		this.assertNotDisposed();
 		let lineIndex: number;
-		if (this.blockState) {
-			lineIndex = this.blockState.snapshot.lines.indexOf(lineId);
+		if (this.extensionSnapshot) {
+			lineIndex = this.extensionSnapshot.lines.indexOf(lineId);
 		} else {
 			const ids = this.plainLineIds!;
 			if (this.plainLineIndex?.ids !== ids) this.plainLineIndex = { ids, indices: new Map(ids.map((id, index) => [id, index])) };
@@ -378,82 +347,6 @@ export class TextModel implements ITextModel {
 			throw new RangeError("Line point offset is outside the TextModel");
 		}
 		return new Position((lineIndex) + 1, (point.offset) + 1);
-	}
-
-	get schema(): DocumentSchema {
-		return this.requireBlockState().schema;
-	}
-
-	get document(): DocumentNode {
-		return this.requireBlockState().document;
-	}
-
-	get selection(): DocumentSelection | undefined {
-		return this.requireBlockState().selection;
-	}
-
-	get storedMarks(): readonly DocumentMark[] | undefined {
-		return this.requireBlockState().storedMarks;
-	}
-
-	get onDidChangeBlocks(): Event<TextModelBlockChange> {
-		return this.requireBlockState().onDidChange;
-	}
-
-	get onDidChangeSelection(): Event<DocumentSelection | undefined> {
-		return this.requireBlockState().onDidChangeSelection;
-	}
-
-	get onDidChangeStoredMarks(): Event<readonly DocumentMark[] | undefined> {
-		return this.requireBlockState().onDidChangeStoredMarks;
-	}
-
-	get canUndoBlocks(): boolean {
-		return this.requireBlockState().canUndo;
-	}
-
-	get canRedoBlocks(): boolean {
-		return this.requireBlockState().canRedo;
-	}
-
-	dispatch(transaction: DocumentTransaction): TextModelBlockChange | undefined {
-		return this.requireBlockState().dispatch(transaction);
-	}
-
-	dispatchRemote(transaction: DocumentTransaction, historyPolicy: TextModelRemoteHistoryPolicy = TextModelRemoteHistoryPolicy.Clear): TextModelBlockChange | undefined {
-		return this.requireBlockState().dispatchRemote(transaction, historyPolicy);
-	}
-
-	rebaseHistory(mapper: (entries: DocumentHistoryEntries) => DocumentHistoryEntries): void {
-		this.requireBlockState().rebaseHistory(mapper);
-	}
-
-	undoBlocks(): TextModelBlockChange | undefined {
-		return this.requireBlockState().undo();
-	}
-
-	redoBlocks(): TextModelBlockChange | undefined {
-		return this.requireBlockState().redo();
-	}
-
-	setSelection(selection: DocumentSelection | undefined): void {
-		this.requireBlockState().setSelection(selection);
-	}
-
-	setStoredMarks(marks: readonly DocumentMark[] | undefined): void {
-		this.requireBlockState().setStoredMarks(marks);
-	}
-
-	resetBlocks(document: DocumentNode): TextModelBlockChange | undefined {
-		return this.requireBlockState().reset(document);
-	}
-
-	getPluginState<T>(key: DocumentPluginKey<T>): T | undefined {
-		return this.requireBlockState().getPluginState(key);
-	}
-
-	getPluginDecorations(): readonly TextModelPluginDecorationSource[] {
-		return this.requireBlockState().getPluginDecorations();
 	}
 
 	get version(): number {
@@ -1455,7 +1348,7 @@ export class TextModel implements ITextModel {
 		this.emitDecorationsChanged(changed.flatMap(pair => [pair.previous, pair.current].filter((entry): entry is ModelDecorationEntry => !!entry)));
 	}
 
-	private publishTextChange(change: TextModelChange): void {
+	protected publishTextChange(change: TextModelChange): void {
 		const event = toInternalModelContentChangedEvent(change);
 		// Views and token listeners may query brackets while processing this change.
 		this._bracketPairs.handleDidChangeContent(event.contentChangedEvent);
@@ -2172,10 +2065,16 @@ export class TextModel implements ITextModel {
 		return edits.every(edit => this.buffer.getValueInRange(this.buffer.getRangeAt(edit.startOffset, edit.endOffset - edit.startOffset)) === edit.text);
 	}
 
-	/** Commits flattened line text for one already-validated block transaction. */
-	private commitBlockText(text: string): { readonly version: number; readonly change?: TextModelChange; } {
+	/**
+	 * Commits a prepared semantic projection without publishing intermediate state.
+	 * The extension must finish validation before calling, then install its state and
+	 * publish the returned change synchronously. Semantic-only edits still get a version.
+	 */
+	protected commitExtensionSnapshot(snapshot: LineDocumentSnapshot): { readonly version: number; readonly change?: TextModelChange; } {
+		this.assertNotDisposed();
+		if (!this.extensionSnapshot) throw new Error("TextModel has no extension transaction owner");
 		const previousText = this.buffer.createSnapshot().getText();
-		const nextText = this.normalizeTextToBufferEOL(text);
+		const nextText = this.normalizeTextToBufferEOL(snapshot.getText());
 		let prefixLength = 0;
 		const maximumPrefixLength = Math.min(previousText.length, nextText.length);
 		while (prefixLength < maximumPrefixLength && previousText.charCodeAt(prefixLength) === nextText.charCodeAt(prefixLength)) prefixLength += 1;
@@ -2189,7 +2088,8 @@ export class TextModel implements ITextModel {
 			startOffset: prefixLength,
 			endOffset: previousText.length - suffixLength,
 			text: nextText.slice(prefixLength, nextText.length - suffixLength),
-		}], { reason: TextModelChangeReason.Blocks });
+		}], { reason: TextModelChangeReason.Extension });
+		this.extensionSnapshot = snapshot;
 		this.history.reset();
 		if (result) return { version: this._version, change: result.change };
 		this._version += 1;
@@ -2197,7 +2097,7 @@ export class TextModel implements ITextModel {
 		const change = Object.freeze<TextModelChange>({
 			version: this._version,
 			transactionId: this.nextTransactionId++,
-			reason: TextModelChangeReason.Blocks,
+			reason: TextModelChangeReason.Extension,
 			eol: this.buffer.getEOL(),
 			isEolChange: false,
 			detailedReasons: Object.freeze([]),
@@ -2289,13 +2189,6 @@ export class TextModel implements ITextModel {
 		});
 	}
 
-	private requireBlockState(): TextModelBlockState {
-		this.assertNotDisposed();
-		const blockState = this.blockState;
-		if (!blockState) throw new ReferenceError("TextModel has no schema-backed Block state");
-		return blockState;
-	}
-
 	private normalizeTextToBufferEOL(text: string): string {
 		return normalizeTextToEOL(text, this.buffer.getEOL());
 	}
@@ -2319,7 +2212,7 @@ export class TextModel implements ITextModel {
 	}
 
 	private ensureDirectTextMutationAllowed(): void {
-		if (this.blockState) throw new Error("TextModel edits must update schema-backed Blocks through dispatch()");
+		if (this.extensionSnapshot) throw new Error("TextModel edits must use the extension transaction owner");
 	}
 
 	public isDisposed(): boolean {
@@ -2347,7 +2240,7 @@ export class TextModel implements ITextModel {
 		this.dispose();
 	}
 
-	private _register<T extends IDisposable | null | undefined>(resource: T): T {
+	protected _register<T extends IDisposable | null | undefined>(resource: T): T {
 		return this.disposables.add(resource);
 	}
 

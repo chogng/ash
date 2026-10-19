@@ -22,7 +22,37 @@
             "filenamePattern": "*.ash-paper"
           }
         ]
+      },
+      {
+        "viewType": "ash.editor.document",
+        "displayName": "%academic.generalEditor%",
+        "priority": "default",
+        "selector": [
+          {
+            "filenamePattern": "*.ash-doc",
+            "mimeType": "application/vnd.ash.document+json"
+          }
+        ]
+      },
+      {
+        "viewType": "ash.collaboration.notes",
+        "displayName": "%academic.channelNotes%",
+        "priority": "default",
+        "selector": [
+          {
+            "mimeType": "application/vnd.ash.channel-notes+json"
+          }
+        ]
       }
     ]
-  }
+  },
+  "private": true,
+  "ashRuntime": {
+    "kind": "rust",
+    "entrypoint": "ash-academy"
+  },
+  "activationEvents": [
+    "*"
+  ],
+  "type": "module"
 }

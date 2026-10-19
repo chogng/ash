@@ -52,6 +52,7 @@ members = [
     "extensions/github-authentication",
     "extensions/github",
     "extensions/remote-ssh",
+    "extensions/academic",
     "extensions/markdown-language-features",
     "extensions/markdown-math",
     "extensions/git",

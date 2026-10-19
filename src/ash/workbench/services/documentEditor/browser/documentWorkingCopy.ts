@@ -1,11 +1,11 @@
+import type { DocumentCodec } from '../common/documentCodec.js';
 import { throwIfCancelled } from "../../../../base/common/cancellation.js";
 import { Emitter } from "../../../../base/common/event.js";
 import { Disposable } from "../../../../base/common/lifecycle.js";
 import { type URI } from "../../../../base/common/uri.js";
-import { type DocumentNode } from "../../../../editor/common/model/document.js";
-import { TextModel } from "../../../../editor/common/model/textModel.js";
-import { deserializeDocument, serializeDocument } from "../../../../editor/common/model/documentSerialization.js";
-import { createDefaultDocumentSchema, type DocumentSchema } from "../../../../editor/common/model/documentSchema.js";
+import { type DocumentNode } from "../../../../../../extensions/academic/common/model/document.js";
+import type { DocumentTextModel } from "../../../../../../extensions/academic/common/model/documentTextModel.js";
+import { type DocumentSchema } from "../../../../../../extensions/academic/common/model/documentSchema.js";
 import { TextFileSaveConflictError } from "../../textfile/common/textFileService.js";
 import type { ITextFileService } from "../../textfile/common/textfiles.js";
 import type { IWorkingCopy } from "../../workingCopy/common/workingCopyService.js";
@@ -14,9 +14,10 @@ import { DocumentTypes } from '../common/documentTypes.js';
 import { localize } from '../../../../nls.js';
 
 export interface DocumentWorkingCopyOptions {
+	readonly codec: DocumentCodec;
 	readonly contentType: string;
 	readonly resource: URI;
-	readonly model: TextModel;
+	readonly model: DocumentTextModel;
 	readonly initialDocument: DocumentNode;
 	readonly initialRevision: string | undefined;
 	readonly textFiles: ITextFileService;
@@ -26,7 +27,7 @@ export interface DocumentWorkingCopyOptions {
 	readonly createEmptyDocument?: () => DocumentNode;
 }
 
-/** Persistence adapter for Group/Block metadata owned by Stanza's TextModel. */
+/** Persistence adapter for Group/Block metadata owned by Stanza's DocumentTextModel. */
 export class DocumentWorkingCopy extends Disposable implements IWorkingCopy {
 	private readonly dirtyEmitter = this._register(new Emitter<void>());
 	private readonly externalChangeEmitter = this._register(new Emitter<void>());
@@ -52,7 +53,7 @@ export class DocumentWorkingCopy extends Disposable implements IWorkingCopy {
 		this.backupContentType = options.contentType;
 		this.schema = options.model.schema;
 		this.initialDocument = options.initialDocument;
-		this.initialContent = serializeDocument(options.initialDocument, this.schema);
+		this.initialContent = this.options.codec.serialize(options.initialDocument, this.schema);
 		this.savedContent = this.initialContent;
 		this.revision = options.initialRevision;
 		this._register(options.model.onDidChangeBlocks(() => this.refreshDirty()));
@@ -76,15 +77,15 @@ export class DocumentWorkingCopy extends Disposable implements IWorkingCopy {
 	}
 
 	backup(): string {
-		return serializeDocument(this.options.model.document, this.schema);
+		return this.options.codec.serialize(this.options.model.document, this.schema);
 	}
 
 	restoreBackup(content: string): void {
-		this.options.model.resetBlocks(parseDocument(content, this.schema, this.options.createEmptyDocument));
+		this.options.model.resetBlocks(this.options.codec.parse(content, this.schema, this.options.createEmptyDocument));
 	}
 
 	acceptCollaborationSnapshot(document: DocumentNode): void {
-		this.savedContent = serializeDocument(document, this.schema);
+		this.savedContent = this.options.codec.serialize(document, this.schema);
 		// Discarding local edits in a channel returns to the last confirmed version,
 		// rather than to the empty document used before joining the room.
 		this.initialDocument = document;
@@ -106,12 +107,12 @@ export class DocumentWorkingCopy extends Disposable implements IWorkingCopy {
 			// Save As may replace every view and retire this resource's shared model.
 			// The destination working copy owns the saved baseline after that transfer.
 			if (result === false || this.isDisposed) return;
-			this.savedContent = serializeDocument(this.options.model.document, this.schema);
+			this.savedContent = this.options.codec.serialize(this.options.model.document, this.schema);
 			this.refreshDirty();
 			this.setExternalChange(false);
 			return;
 		}
-		const serialized = serializeDocument(this.options.model.document, this.schema);
+		const serialized = this.options.codec.serialize(this.options.model.document, this.schema);
 		let saved;
 		try {
 			saved = await this.options.textFiles.save({ resource: this.resource, text: serialized, ...(this.revision === undefined ? {} : { expectedRevision: this.revision }) }, signal);
@@ -133,7 +134,7 @@ export class DocumentWorkingCopy extends Disposable implements IWorkingCopy {
 			// Explicit conversion commands create the destination's actual format.
 			throw new Error(localize('document.saveAs.type', 'Save this document with a supported extension ({0}). Use an explicit conversion command to change formats.', type.extensions.join(', ')));
 		}
-		const serialized = serializeDocument(this.options.model.document, this.schema);
+		const serialized = this.options.codec.serialize(this.options.model.document, this.schema);
 		await this.options.textFiles.save({ resource, text: serialized }, signal);
 		this.savedContent = serialized;
 		this.refreshDirty();
@@ -150,8 +151,8 @@ export class DocumentWorkingCopy extends Disposable implements IWorkingCopy {
 		}
 		const content = await this.options.textFiles.resolve({ resource: this.resource }, signal);
 		throwIfCancelled(signal, "Document revert was cancelled");
-		const document = parseDocument(content.text, this.schema, this.options.createEmptyDocument);
-		this.savedContent = serializeDocument(document, this.schema);
+		const document = this.options.codec.parse(content.text, this.schema, this.options.createEmptyDocument);
+		this.savedContent = this.options.codec.serialize(document, this.schema);
 		this.revision = content.revision;
 		this.options.model.resetBlocks(document);
 		this.setExternalChange(false);
@@ -164,8 +165,8 @@ export class DocumentWorkingCopy extends Disposable implements IWorkingCopy {
 				this.setExternalChange(true);
 				return;
 			}
-			const document = parseDocument(content.text, this.schema, this.options.createEmptyDocument);
-			this.savedContent = serializeDocument(document, this.schema);
+			const document = this.options.codec.parse(content.text, this.schema, this.options.createEmptyDocument);
+			this.savedContent = this.options.codec.serialize(document, this.schema);
 			this.revision = content.revision;
 			this.options.model.resetBlocks(document);
 			this.setExternalChange(false);
@@ -175,7 +176,7 @@ export class DocumentWorkingCopy extends Disposable implements IWorkingCopy {
 	}
 
 	private refreshDirty(): void {
-		const dirty = serializeDocument(this.options.model.document, this.schema) !== this.savedContent;
+		const dirty = this.options.codec.serialize(this.options.model.document, this.schema) !== this.savedContent;
 		if (this.dirty === dirty) return;
 		this.dirty = dirty;
 		this.dirtyEmitter.fire();
@@ -186,14 +187,4 @@ export class DocumentWorkingCopy extends Disposable implements IWorkingCopy {
 		this.externalChange = value;
 		this.externalChangeEmitter.fire();
 	}
-}
-
-/** Structured resources accept only their versioned document format. */
-export function parseDocument(text: string, schema: DocumentSchema = createDefaultDocumentSchema(), createEmptyDocument?: () => DocumentNode): DocumentNode {
-	if (text.trim().length === 0) {
-		const document = createEmptyDocument?.() ?? schema.createDocument([]);
-		schema.validate(document);
-		return document;
-	}
-	return deserializeDocument(text, schema);
 }

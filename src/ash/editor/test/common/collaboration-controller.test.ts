@@ -1,24 +1,25 @@
+import { DocumentTextModel } from '../../../../../extensions/academic/common/model/documentTextModel.js';
 import assert from "node:assert/strict";
 import { test } from "mocha";
 import { Emitter, type Event } from "../../../base/common/event.js";
 import { Disposable } from "../../../base/common/lifecycle.js";
 import { TextModel } from "../../common/model/textModel.js";
-import type { DocumentNode } from "../../common/model/document.js";
-import { createDefaultDocumentSchema, type DocumentSchema } from "../../common/model/documentSchema.js";
-import { DocumentTransaction } from "../../common/model/documentTransaction.js";
-import { textSelection, type DocumentSelection } from "../../common/core/documentSelection.js";
-import type { DocumentCollaborationConnection } from "../../common/services/documentCollaborationService.js";
-import type { DocumentCollaborationSnapshot } from "../../common/services/documentCollaborationService.js";
-import type { DocumentCollaborationPresence } from "../../common/services/documentCollaborationService.js";
-import type { DocumentCollaborationSubmitOutcome } from "../../common/services/documentCollaborationService.js";
-import { DocumentCollaborationController } from "../../contrib/collaboration/common/controller.js";
-import type { DocumentCollaborationEnvelope } from "../../common/services/documentCollaborationService.js";
-import type { DocumentCollaborationRemoteEnvelope } from "../../common/services/documentCollaborationService.js";
+import type { DocumentNode } from "../../../../../extensions/academic/common/model/document.js";
+import { createDefaultDocumentSchema, type DocumentSchema } from "../../../../../extensions/academic/common/model/documentSchema.js";
+import { DocumentTransaction } from "../../../../../extensions/academic/common/model/documentTransaction.js";
+import { textSelection, type DocumentSelection } from "../../../../../extensions/academic/common/core/documentSelection.js";
+import type { DocumentCollaborationConnection } from "../../../../../extensions/academic/common/services/documentCollaborationService.js";
+import type { DocumentCollaborationSnapshot } from "../../../../../extensions/academic/common/services/documentCollaborationService.js";
+import type { DocumentCollaborationPresence } from "../../../../../extensions/academic/common/services/documentCollaborationService.js";
+import type { DocumentCollaborationSubmitOutcome } from "../../../../../extensions/academic/common/services/documentCollaborationService.js";
+import { DocumentCollaborationController } from "../../../../../extensions/academic/common/contrib/collaboration/controller.js";
+import type { DocumentCollaborationEnvelope } from "../../../../../extensions/academic/common/services/documentCollaborationService.js";
+import type { DocumentCollaborationRemoteEnvelope } from "../../../../../extensions/academic/common/services/documentCollaborationService.js";
 
 test("Stanza collaboration submits only the in-flight snapshot while later typing is buffered", async () => {
 	const schema = createDefaultDocumentSchema();
 	const document = createDocument(schema);
-	using model = TextModel.create(schema, document);
+	using model = DocumentTextModel.create(schema, document);
 	const connection = new FakeDocumentCollaborationConnection(schema, document);
 	using controller = new DocumentCollaborationController(model, connection);
 	const confirmed: string[] = [];
@@ -51,7 +52,7 @@ test("Stanza collaboration submits only the in-flight snapshot while later typin
 test("Stanza collaboration shares an author's undo and redo as ordered transactions", async () => {
 	const schema = createDefaultDocumentSchema();
 	const document = createDocument(schema);
-	using model = TextModel.create(schema, document);
+	using model = DocumentTextModel.create(schema, document);
 	const connection = new FakeDocumentCollaborationConnection(schema, document);
 	using controller = new DocumentCollaborationController(model, connection);
 
@@ -81,7 +82,7 @@ test("Stanza collaboration shares an author's undo and redo as ordered transacti
 test("Stanza collaboration preserves a local author's history through an acknowledged remote edit", async () => {
 	const schema = createDefaultDocumentSchema();
 	const document = createDocument(schema);
-	using model = TextModel.create(schema, document);
+	using model = DocumentTextModel.create(schema, document);
 	const connection = new FakeDocumentCollaborationConnection(schema, document);
 	using controller = new DocumentCollaborationController(model, connection);
 
@@ -125,7 +126,7 @@ test("Stanza collaboration preserves a local author's history through an acknowl
 test("Stanza collaboration preserves local history when a remote update rebases in-flight typing", async () => {
 	const schema = createDefaultDocumentSchema();
 	const document = createDocument(schema);
-	using model = TextModel.create(schema, document);
+	using model = DocumentTextModel.create(schema, document);
 	const connection = new FakeDocumentCollaborationConnection(schema, document);
 	using controller = new DocumentCollaborationController(model, connection);
 
@@ -156,7 +157,7 @@ test("Stanza collaboration preserves local history when a remote update rebases 
 test("Stanza collaboration publishes local selections without versioning them and exposes remote selections", async () => {
 	const schema = createDefaultDocumentSchema();
 	const document = createDocument(schema);
-	using model = TextModel.create(schema, document);
+	using model = DocumentTextModel.create(schema, document);
 	const connection = new FakeDocumentCollaborationConnection(schema, document);
 	using controller = new DocumentCollaborationController(model, connection);
 	const received: (readonly { readonly clientId: string; }[])[] = [];

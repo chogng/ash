@@ -17,8 +17,14 @@ export function isLocalizationInput(path: string): boolean {
 	const file = resolve(path);
 	const [sources, translations, extensions] = localizationWatchRoots;
 	return file.startsWith(`${translations}${sep}`) && file.endsWith('.json')
-		|| file.startsWith(`${extensions}${sep}`) && file.endsWith('.json') && !relative(extensions, file).split(sep).some(part => ['node_modules', 'test', 'generated', '.git', 'target'].includes(part))
+		|| file.startsWith(`${extensions}${sep}`) && (file.endsWith('.json') || clientEditorSource(file)) && !relative(extensions, file).split(sep).some(part => ['node_modules', 'test', 'generated', '.git', 'target'].includes(part))
 		|| file.startsWith(`${sources}${sep}`) && sourceInput(file, false);
+}
+
+/** Product-compiled client components keep their existing NLS keys after package extraction. */
+function clientEditorSource(path: string): boolean {
+	return /^[^/]+\/(?:browser|common)\//u.test(relative(resolve(repository, 'extensions'), path).split(sep).join('/'))
+		&& sourceInput(path, false);
 }
 
 function sourceInput(path: string, directory: boolean): boolean {
@@ -32,7 +38,7 @@ async function localizationFingerprint(): Promise<string> {
 		resolve(repository, '.build/protocol/typescript/ApprovalModes.ts'),
 		resolve(repository, '.build/protocol/typescript/ProductSlashCommands.ts'),
 		fileURLToPath(import.meta.url), resolve(repository, 'build/resources/languagePacks.ts'), resolve(repository, 'build/lib/preparedInputs.ts'), resolve(repository, 'pnpm-lock.yaml'),
-	], (path, directory) => directory ? !['node_modules', 'test', 'generated', '.git', 'target'].includes(path.split(sep).at(-1)!) : path.startsWith(`${resolve(repository, 'extensions')}${sep}`) ? path.endsWith('.json') : /\.(json|ts|yaml)$/.test(path));
+	], (path, directory) => directory ? !['node_modules', 'test', 'generated', '.git', 'target'].includes(path.split(sep).at(-1)!) : path.startsWith(`${resolve(repository, 'extensions')}${sep}`) ? path.endsWith('.json') || clientEditorSource(path) : /\.(json|ts|yaml)$/.test(path));
 }
 
 type Bundles = Record<string, Record<string, string>>;
@@ -253,6 +259,21 @@ async function generate(check: boolean): Promise<boolean> {
 	const sourceRoot = resolve(repository, 'src/ash');
 	const resourceRoot = resolve(repository, 'localization');
 	const sources = await readSources(sourceRoot);
+	for (const entry of await readdir(resolve(repository, 'extensions'), { withFileTypes: true })) {
+		if (!entry.isDirectory()) continue;
+		const packageRoot = resolve(repository, 'extensions', entry.name);
+		const client = await readFile(resolve(packageRoot, 'browser/editor.ts'), 'utf8').catch(error => {
+			if (error.code === 'ENOENT') return undefined;
+			throw error;
+		});
+		if (client === undefined) continue;
+		for (const directory of ['browser', 'common']) {
+			sources.push(...await readSources(resolve(packageRoot, directory)).catch(error => {
+				if (error.code === 'ENOENT') return [];
+				throw error;
+			}));
+		}
+	}
 	const english = extractLocalizationMessages(sources);
 	const declarations = await readDomains(resolve(resourceRoot, 'en')).catch(error => {
 		if (error.code === 'ENOENT') return {};

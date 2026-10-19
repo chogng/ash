@@ -1,5 +1,10 @@
 {
   "ash": {
+    "extensions.clientEditor.moduleUnavailable": "此版本的 Ash 无法提供该编辑器组件。",
+    "extensions.clientEditor.versionMismatch": "编辑器组件与扩展的版本不匹配。",
+    "extensions.clientEditor.packageUnavailable": "编辑器扩展包不可用。",
+    "extensions.clientEditor.packageRetired": "编辑器扩展包已失效。",
+    "extensions.clientEditor.profileMismatch": "编辑器配置与扩展声明不匹配。",
     "error.defaultMessage": "发生未知错误。请查阅日志了解详情。",
     "error.moreErrors": "{0}（共 {1} 个错误）",
     "browser.passwords.saveSetting": "询问是否保存网站密码",
@@ -216,7 +221,6 @@
     "collaboration.verbosityDescription": "频道树获得焦点时，提示如何打开无障碍帮助。",
     "collaboration.desktopCalls": "频道通话可在桌面应用中使用。",
     "collaboration.permissionChanged": "频道访问权限已更改。重新打开笔记以应用当前权限；尚未同步的更改会保留在此编辑器中。",
-    "collaboration.notesEditor": "频道笔记",
     "collaboration.notes": "打开频道笔记",
     "collaboration.call": "加入或发起频道通话",
     "collaboration.notesTitle": "{0} — 笔记",
@@ -1322,7 +1326,6 @@
     "document.untitled": "未命名",
     "document.creation.failed": "文档编辑器无法打开新草稿。",
     "document.saveAs.type": "请使用支持的扩展名（{0}）保存此文档。要更改格式，请使用显式转换命令。",
-    "document.editor": "文档",
     "document.new": "新建文档",
     "document.importMarkdown": "将当前 Markdown 转换为文档",
     "document.importText": "将当前文本转换为文档",
@@ -2301,7 +2304,9 @@
     "debug.tooManyCompletions": "调试适配器返回了过多补全。",
     "debug.invalidCompletionField": "调试适配器返回了无效的补全字段：{0}。",
     "debug.invalidCompletionLabel": "调试适配器返回了无效的补全标签。",
-    "debug.invalidCompletionRange": "调试适配器返回了无效的补全编辑范围。"
+    "debug.invalidCompletionRange": "调试适配器返回了无效的补全编辑范围。",
+    "document.accessibility.paragraph": "段落样式控件可设置正文或标题 1 到 6；段落排版控件可设置对齐、行距和段前后间距。这些操作作用于选中的段落，保留字符格式，并可通过标准撤销命令恢复。",
+    "document.model.incompatible": "文档正由另一编辑器版本打开。请先保存或恢复现有内容，再重新打开。"
   },
   "ash.menu": {
     "file": "文件",

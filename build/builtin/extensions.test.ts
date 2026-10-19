@@ -27,6 +27,9 @@ test('browser packaging excludes independent capabilities and rejects missing JS
 		await mkdir(join(directory, 'extensions/git/src'), { recursive: true });
 		await writeFile(join(directory, 'extensions/git/package.json'), JSON.stringify({ publisher: 'test', name: 'git', version: '1.0.0', ashRuntime: { kind: 'rust', entrypoint: 'test-capability' } }));
 		await writeFile(join(directory, 'extensions/git/src/main.rs'), 'fn main() {}');
+		await writeFile(join(directory, 'extensions/git/build.rs'), 'fn main() {}');
+		await mkdir(join(directory, 'extensions/git/common'), { recursive: true });
+		await writeFile(join(directory, 'extensions/git/common/client.ts'), 'export const internalClient = true;');
 		await writeFile(join(directory, 'extensions/git/Cargo.toml'), '[package]');
 		await writeFile(join(directory, 'extensions/git/package.nls.zh-CN.json'), JSON.stringify({ displayName: 'Git 支持' }));
 		await mkdir(join(directory, 'extensions/language/tree-sitter/parser/src'), { recursive: true });

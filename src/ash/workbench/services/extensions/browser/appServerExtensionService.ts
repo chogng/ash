@@ -381,13 +381,13 @@ export class AppServerExtensionService extends Disposable implements IExtensionS
 							...(factory.documentType ? {
 								documentType: {
 									...factory.documentType,
-									extensions: editor.selector.map(selector => selector.filenamePattern).filter(pattern => /^\*\.[A-Za-z0-9-]+$/.test(pattern)).map(pattern => pattern.slice(1).toLowerCase()),
+									extensions: editor.selector.map(selector => selector.filenamePattern).filter((pattern): pattern is string => pattern !== undefined && /^\*\.[A-Za-z0-9-]+$/.test(pattern)).map(pattern => pattern.slice(1).toLowerCase()),
 								}
 							} : {}),
 							canOpen: input => {
 								if (isResourceDiffEditorInput(input)) { return EditorPaneMatch.None; }
 								const mediaType = input.contentType?.split(';', 1)[0].trim().toLowerCase();
-								const supported = editor.selector.some(selector => match(selector.filenamePattern.toLowerCase(), (selector.filenamePattern.includes('/') ? input.resource.path : basename(input.resource)).toLowerCase()) || mediaType !== undefined && selector.mimeType === mediaType);
+								const supported = editor.selector.some(selector => selector.filenamePattern !== undefined && match(selector.filenamePattern.toLowerCase(), (selector.filenamePattern.includes('/') ? input.resource.path : basename(input.resource)).toLowerCase()) || mediaType !== undefined && selector.mimeType === mediaType);
 								if (!supported) { return EditorPaneMatch.None; }
 								return editor.priority === 'default' ? EditorPaneMatch.Default : EditorPaneMatch.Optional;
 							},

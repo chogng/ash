@@ -39,7 +39,15 @@ def prepare_builtin_fixture(root: Path) -> dict[str, Path]:
         excluded = ["node_modules"]
         if manifest.get("ashRuntime", {}).get("kind") == "rust":
             excluded.extend(
-                ["Cargo.toml", "Cargo.lock", "BUILD.bazel", "tests", "src", "browser"]
+                [
+                    "Cargo.toml",
+                    "Cargo.lock",
+                    "build.rs",
+                    "BUILD.bazel",
+                    "tests",
+                    "src",
+                    "browser",
+                ]
             )
         browser = manifest.get("browser")
         if browser and browser.removeprefix("./").startswith("browser/"):
@@ -231,6 +239,7 @@ def create_runtime_package(
         remote_ssh_extension_binary=executable("ash-remote-ssh-extension"),
         git_extension_binary=executable("ash-git-extension"),
         markdown_math_binary=executable("ash-markdown-math"),
+        academy_extension_binary=executable("ash-academy"),
         markdown_extension_binary=executable("ash-markdown-language-features"),
         github_authentication_binary=executable("ash-github-authentication"),
         github_extension_binary=executable("ash-github-extension"),

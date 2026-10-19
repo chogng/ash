@@ -1,8 +1,3 @@
-import { EditorPanes } from '../../../browser/editor.js';
-import { EditorPaneMatch } from '../../../browser/parts/editor/editorPane.js';
-import { createDefaultDocumentSchema } from '../../../../editor/common/model/documentSchema.js';
-import { createDocumentEditorPane } from '../../documentEditor/browser/editorProfile.js';
-import { CHANNEL_NOTES_EDITOR_ID, CHANNEL_NOTES_CONTENT_TYPE } from '../common/collaboration.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
 import { localize, localize2 } from '../../../../nls.js';
 import { AccessibleContentProvider, AccessibleViewProviderId, AccessibleViewType, AccessibilityVerbositySettingId } from '../../../../platform/accessibility/browser/accessibleView.js';
@@ -18,19 +13,6 @@ import { IViewsService } from '../../../services/views/common/viewsService.js';
 import { CHANNELS_VIEW_ID, COLLABORATION_CONTAINER_ID } from '../common/collaboration.js';
 import { CollaborationViewPane } from './collaborationViewPane.js';
 
-
-// Retained for the contribution's module lifetime, like the shared view declaration.
-// Notes use the existing document engine without requiring an optional document package.
-EditorPanes.registerEditorPane({
-	id: CHANNEL_NOTES_EDITOR_ID,
-	name: localize('collaboration.notesEditor', 'Channel notes'),
-	documentType: { id: CHANNEL_NOTES_EDITOR_ID, contentType: CHANNEL_NOTES_CONTENT_TYPE, extensions: [] },
-	canOpen: input => input.contentType === CHANNEL_NOTES_CONTENT_TYPE ? EditorPaneMatch.Default : EditorPaneMatch.None,
-	create: options => createDocumentEditorPane({
-		id: CHANNEL_NOTES_EDITOR_ID, editorId: CHANNEL_NOTES_EDITOR_ID,
-		contentType: CHANNEL_NOTES_CONTENT_TYPE, createSchema: createDefaultDocumentSchema,
-	}, options),
-});
 
 /** Each product entry registers the same views in its own registry. */
 export function registerCollaborationViews(registry: WorkbenchViewRegistry = ViewsRegistry, open?: (accessor: ServicesAccessor) => Promise<unknown>): void {

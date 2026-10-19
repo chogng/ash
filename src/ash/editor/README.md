@@ -4,11 +4,11 @@
 
 ## 快速理解
 
-Stanza 以 VS Code `src/vs/editor` 为职责参照：`common` 拥有编辑器公共契约与内核，`browser` 拥有浏览器编辑器实现，`contrib` 拥有可装配功能，`test` 保存内核级回归测试。运行环境不代替职责判断：功能自己的纯算法可以留在其 `browser` 目录，不要求每个 contribution 建立 `common`。当前代码的归属缺口见[对齐台账](./api-alignment-status.md)。Stanza 只有一个源码域、一套公开入口和一个同步权威：按行存储的 `TextModel`。代码与富文档使用同一模型，Academic 是富文档的一种配置。
+Stanza 以 VS Code `src/vs/editor` 为职责参照：`common` 拥有编辑器公共契约与内核，`browser` 拥有浏览器编辑器实现，`contrib` 暂时保留待迁出的 Code 可装配功能，`test` 保存内核级回归测试。Academy 的完整既有富文档实现由 [`extensions/academic`](../../../extensions/academic/README.md) 拥有，经独立 Rust 扩展和共享宿主注入；基础 `TextModel` 不导入 Academy。运行环境不代替职责判断：功能自己的纯算法可以留在其 `browser` 目录，不要求每个 contribution 建立 `common`。当前代码的归属缺口见[对齐台账](./api-alignment-status.md)。Stanza 只有一个源码域、一套公开入口和一个同步权威：按行存储的 `TextModel`。代码与富文档使用同一模型，Academic 是富文档的一种配置。
 
 | 产品或调用方式       | 加载入口             | 得到的能力                                                                                                                                                                                                                                                                                     |
 | -------------------- | -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 完整编辑能力         | `editor.all.ts`      | 行式与富文档 contribution 集合；不注册 Workbench pane                                                                                                                                                                                                                                          |
+| 完整编辑能力         | `editor.all.ts`      | Code contribution 集合；不注册 Workbench pane 或 Academy 能力                                                                                                                                                                                                                                  |
 | Code 功能实现        | `editor.code.all.ts` | 加载完整行式实现，由 Code Workbench 注册 code/diff pane                                                                                                                                                                                                                                        |
 | 程序化调用           | `editor.api.ts`      | `editor.create/createModel`、`editor.addCommand/addEditorAction/addKeybindingRule/addKeybindingRules`、`languages.register/registerLanguages/registerProviderBatch/registerLanguage*Provider`、命名主题、standalone model registry、`TextModel`、schema、transaction 和坐标值对象；不注册 pane |
 | 完整 standalone 入口 | `editor.main.ts`     | 先加载 `editor.all.ts` 的完整编辑 contribution，再导出 `editor.api.ts`                                                                                                                                                                                                                         |
@@ -89,7 +89,7 @@ Contribution 必须满足以下条件：
 - 依赖 engine contract，而不是读取产品 ID；
 - schema-bearing 能力通过 `EditorProfile` 稳定组合，不能在打开文档后任意开关；
 - 贡献只依赖所需实现，不读取工作台模式决定编辑规则。
-- 完整入口 `editor.all.ts` 装配代码与文档贡献；Academic 配置由 Workbench 贡献注册，不再拥有独立编辑器 bundle。
+- `editor.all.ts` 当前装配 Code 贡献；Academy 由独立 Rust 扩展注册并按需装载其客户端包。
 
 因此 transaction、selection mapping、IME commit、schema validation 和 model lifecycle 属于 engine；find、folding、suggest、citation toolbar 与 collaboration projection 等属于 contribution 或 profile composition。
 
@@ -99,10 +99,10 @@ Contribution 必须满足以下条件：
 Shared Workbench ─────────→ workbench/contrib/multiDiffEditor ─────────→ multi-diff pane/controller/action registration
 Code build mode ───────┬→ editor.code.all.ts → editor.all.ts ─────────→ Code feature implementation
                        └→ workbench/contrib/codeEditor ────────────────→ code/diff pane + input registration
-Code Workbench ───────┬→ workbench/contrib/documentEditor ─→ one document pane registration
-                       └→ workbench/contrib/academic ──────→ Academic profile registration
+Academy Rust extension → public SDK / Host RPC → shared client-editor bridge → package profiles / Widget
+Shared Workbench ─────────→ document pane / model references / dirty / backup / file and collaboration transport
 
-editor.api.ts ─────────────→ editor.create/createModel + languages.register/registerLanguage*Provider + TextModel/document APIs
+editor.api.ts ─────────────→ editor.create/createModel + languages.register/registerLanguage*Provider + TextModel + generic line snapshots
 editor.main.ts ────────────→ editor.all.ts + editor.api.ts
 standalone/{common,browser} ─→ window services + model/editor/language/theme registries; never Workbench persistence
 ```
@@ -118,7 +118,7 @@ standalone/{common,browser} ─→ window services + model/editor/language/theme
 - `format.ts` 拥有请求选择、交叠处理、取消和 worker 调用，`formattingEdit.ts` 提交编辑；不再构造格式化控制器。`formatActions.ts` 注册命令、当前键盘入口和保存钩子。Widget 将既有 worker 客户端注册到模型作用域，模型解绑时释放；格式化选项读取当前模型。资源级 worker-service 与完整上游格式化调度 API 仍待对齐，`formatEditor` 是当前模型绑定调用入口。
 - 输入格式化要求提供者声明触发字符；Standalone 支持显式注册，`formatOnType` 自动触发链仍未接通。扩展注册协议尚未提供触发字符，因此扩展桥接只注册文档和范围格式化。
 
-Workbench 启动装配共同编辑能力。`documentEditor.contribution.ts` 只注册一次文档 pane，`academicEditor.contribution.ts` 只登记 Academic 配置。`DocumentTypes` 保存文档内容类型和扩展名，代码 pane 排除这些资源；文档 pane 使用同一配置集合匹配与实例化。Workbench 范围的 `DocumentEditorTextModelService` 管理资源引用，多视图共享模型和保存状态，最后一个引用释放时才销毁模型。
+共享扩展宿主在恢复标签页之前接入 Academy 的实时能力注册；旧的静态文档和 Academic factory 已退出。`DocumentTypes` 保存活跃文档类型和包声明的保护路由，默认代码 pane 排除这些资源；文档 pane 使用已准入 profile 的 Widget、Schema 和 codec。Workbench 范围的 `DocumentEditorTextModelService` 管理资源引用，多视图共享模型和保存状态，最后一个引用释放时才销毁模型。
 
 ## 关键实现符号
 

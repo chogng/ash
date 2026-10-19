@@ -1,3 +1,5 @@
+import { MainThreadClientEditors } from '../../../api/browser/mainThreadClientEditors.js';
+import { loadExtensionEditorModule } from '../../extensions/browser/extensionEditorModules.js';
 import { MainThreadLocalization } from '../../../api/browser/mainThreadLocalization.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { IWorkspaceContextService } from '../../../../platform/workspace/common/workspace.js';
@@ -27,6 +29,7 @@ export class AppServerExtensionHostService extends Disposable implements IExtens
 	private readonly changeEmitter = this._register(new Emitter<ExtensionHostSnapshot>());
 	private readonly failureEmitter = this._register(new Emitter<ExtensionHostFailure>());
 	private readonly extensionApi: MainThreadExtensionApi;
+	private readonly clientEditors: MainThreadClientEditors;
 	private readonly fleetOutput: IOutputChannel;
 	private _state: ExtensionHostState = "stopped";
 	private snapshot: ExtensionHostSnapshot = EmptyExtensionHostSnapshot;
@@ -59,6 +62,7 @@ export class AppServerExtensionHostService extends Disposable implements IExtens
 		const timeout = normalizeTimeout(invocationTimeoutMillis);
 		this.fleetOutput = this._register(output.createChannel({ id: "extension-host", label: "Extension Host", kind: "log", source: "core" }));
 		this.extensionApi = this._register(instantiationService.createInstance(MainThreadExtensionApi, commands, timeout, this.fleetOutput));
+		this.clientEditors = this._register(instantiationService.createInstance(MainThreadClientEditors, timeout, loadExtensionEditorModule));
 		this._register(extensions.registerActivationHandler((event, signal) => this.activateByEvent(event, signal)));
 		this._register(models.onModelAdded(() => this.activateEditorEvents()));
 		this._register(models.onModelLanguageChanged(() => this.activateEditorEvents()));
@@ -74,6 +78,7 @@ export class AppServerExtensionHostService extends Disposable implements IExtens
 			this.pendingAction = undefined;
 			this.pendingActivations.clear();
 			this.extensionApi.clear();
+			this.clientEditors.clear();
 		}));
 	}
 
@@ -89,6 +94,15 @@ export class AppServerExtensionHostService extends Disposable implements IExtens
 		try {
 			const state = await this.api.getConnectionState();
 			if (!this.isDisposed && this.started && revision === this.connectionRevision) await this.acceptConnectionState(state, false);
+			// Eager editor providers must publish their factories before tabs restore. Other
+			// startup providers keep running concurrently with Workbench restoration.
+			const editorOwners = new Set(this.extensions.getExtensionPointContributions<readonly unknown[]>('customEditors')
+				.filter(user => user.value.length > 0).map(user => user.description.id));
+			const editorActivations = this.snapshot.extensions.flatMap(extension => {
+				const pending = this.pendingActivations.get(`${extension.id}:${extension.activationGeneration}`);
+				return editorOwners.has(extension.id) && pending ? [pending] : [];
+			});
+			await Promise.all(editorActivations);
 		} catch (error) {
 			if (!this.isDisposed && this.started && revision === this.connectionRevision) this.failRefresh(error);
 		}
@@ -115,6 +129,7 @@ export class AppServerExtensionHostService extends Disposable implements IExtens
 		this.desiredGeneration = 0;
 		runWithBufferedEvents(() => {
 			this.extensionApi.clear();
+			this.clientEditors.clear();
 			this.setSnapshot(EmptyExtensionHostSnapshot);
 			this.setState("stopped");
 		});
@@ -147,6 +162,7 @@ export class AppServerExtensionHostService extends Disposable implements IExtens
 			if (!available) {
 				runWithBufferedEvents(() => {
 					this.extensionApi.clear();
+					this.clientEditors.clear();
 					this.setSnapshot(EmptyExtensionHostSnapshot);
 					this.setState("stopped");
 				});
@@ -161,6 +177,7 @@ export class AppServerExtensionHostService extends Disposable implements IExtens
 		this.pendingAction = undefined;
 		runWithBufferedEvents(() => {
 			this.extensionApi.clear();
+			this.clientEditors.clear();
 			this.setSnapshot(EmptyExtensionHostSnapshot);
 			this.setState(state === "crashed" ? "failed" : "starting");
 		});
@@ -216,6 +233,8 @@ export class AppServerExtensionHostService extends Disposable implements IExtens
 		snapshot = { ...snapshot, extensions };
 		const projected = projectSnapshot(snapshot);
 		try {
+			await this.clientEditors.update(snapshot);
+			if (this.isDisposed || !this.started || !this.connectionReady || revision !== this.authorityRevision || snapshot.generation < this.snapshot.fleetGeneration) return;
 			runWithBufferedEvents(() => {
 				const issues = this.extensionApi.update(snapshot);
 				this.setSnapshot(projected);
