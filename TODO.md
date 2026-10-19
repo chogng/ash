@@ -23,8 +23,7 @@
 
 ## Desktop 跨机器验收 · TODO
 
-- [ ] **验收** · 在指定 Windows 主机完成真实 Desktop → SSH／Tailscale 全部十步、清理和证据 QA，保留两端原检出与无关改动。现有实现 `7cfdccd9b` 的历史部分步骤不能替代完整通过；此前 Debug 不可用及启动约 33 秒时连接退出仍未归因。当前协议已到 major10，不能复用旧 major8 包冒充本轮产物。
-- 用户已独立核对 Windows 主机公钥，本机保存后严格主机校验通过；管理 SSH 仍因现有公钥被账号拒绝而未登录，等待可用账号／已有密钥或用户配置授权。旧 `.build/remote-desktop-acceptance/cross-machine/` 脚本和证据不在当前检出；正式 `test/smoke/areas/windows/remote-ssh.spec.ts` 使用 macOS 同机 fixture，不能直接替代 Windows 跨机验收。后续需恢复既有 runner，重建匹配协议的隔离 runtime／client 后执行全套，不以诊断参数、替代 checkout 或部分步骤消项。
+- [ ] **验收** · 完成指定 Windows 主机真实 Desktop → SSH／Tailscale 全部十步、远端清理和证据 QA；同机 SSH fixture 不能替代跨机器验收。2026-10-19 已通过严格主机校验、公钥登录及原检出的 major10 Windows runtime 构建，真实冷部署一步通过；FILES 在扩展激活超时后的重连中失败，其余步骤未执行。SSH 握手／通道持续不稳定，按用户要求停止重试；待连接稳定后重跑全套并复核远端清理。失败证据保留在 `.build/ash-playwright-mcp/evidence/desktop-cross-machine-windows-major10-2026-10-19T13-46-20-671Z/report.html`，本轮未据此消项。
 
 ## 系统授权保存 · TODO
 
