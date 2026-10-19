@@ -246,7 +246,7 @@ export class AgentHostFileSystemProvider extends Disposable implements IFileSyst
 			const entries = this.authorities.get(resource.authority.toLowerCase());
 			// Recursive traversal and rollback cover descendants too. Crossing a nested
 			// mount would access the parent backend beneath another connection's namespace.
-			if (entries && [...entries.values()].some(entry => extUri.isEqualOrParent(entry.resource, resource) && (!entry.route || entry.route !== route))) { throw canceled(); }
+			if (entries && [...entries.values()].some(entry => (extUri.isEqualOrParent(entry.resource, resource) || extUri.isEqualOrParent(entry.resource, uri)) && (!entry.route || entry.route !== route))) { throw canceled(); }
 		};
 		const run = async <T>(uri: URI, operation: (assertScope: () => void) => Promise<T>, operationToken: CancellationToken = CancellationToken.None): Promise<T> => {
 			const assertScope = (): void => assertCurrent(uri, operationToken);
@@ -266,6 +266,10 @@ export class AgentHostFileSystemProvider extends Disposable implements IFileSyst
 			readFile: (uri: URI, operationToken?: CancellationToken) => run(uri, check => provider.readFileOnConnection(uri, check), operationToken),
 			writeFile: (uri: URI, bytes: Uint8Array, options: IFileWriteOptions, operationToken?: CancellationToken) => run(uri, check => provider.writeContents(uri, bytes, undefined, options, undefined, check), operationToken),
 			createDirectory: (uri: URI, operationToken?: CancellationToken) => run(uri, check => provider.createDirectoryOnConnection(uri, check), operationToken),
+			rename: (source: URI, target: URI, existing: FileExistingTargetBehavior, operationToken?: CancellationToken) => run(source, check => {
+				assertCurrent(target, operationToken ?? CancellationToken.None);
+				return provider.renameOnConnection(source, target, existing, () => { check(); assertCurrent(target, operationToken ?? CancellationToken.None); });
+			}, operationToken),
 			delete: (uri: URI, missing: FileMissingTargetBehavior, mode: FileDeleteMode, operationToken?: CancellationToken) => run(uri, check => provider.deleteOnConnection(uri, missing, mode, check), operationToken),
 		});
 	}
@@ -786,9 +790,15 @@ export class AgentHostFileSystemProvider extends Disposable implements IFileSyst
 		const route = this.connectionRoute(source);
 		if (route !== this.connectionRoute(target)) { throw new FileOperationNotSupportedError(source, 'rename'); }
 		if (route) { return this.onRoute(route, provider => provider.rename(source, target, existing)); }
+		return this.renameOnConnection(source, target, existing, () => {
+			if (this.isDisposed || generation !== this.api.connectionGeneration || epoch !== this.connectionEpoch) { throw canceled(); }
+		});
+	}
+
+	private async renameOnConnection(source: URI, target: URI, existing: FileExistingTargetBehavior, assertScope: () => void): Promise<void> {
 		const sourceDirectory = await this.resolveDirectory(source);
 		const targetDirectory = await this.resolveDirectory(target);
-		if (this.isDisposed || generation !== this.api.connectionGeneration || epoch !== this.connectionEpoch) { throw canceled(); }
+		assertScope();
 		if (JSON.stringify(sourceDirectory.target) !== JSON.stringify(targetDirectory.target)) {
 			throw new Error(localize('files.crossDirectoryRename', 'Renaming across authorized directories is not supported'));
 		}

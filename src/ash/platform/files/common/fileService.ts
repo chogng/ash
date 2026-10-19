@@ -7,7 +7,8 @@ import { canceled } from '../../../base/common/errors.js';
 import { transform } from '../../../base/common/stream.js';
 import { Disposable, DisposableMap, DisposableStore, toDisposable, type IDisposable } from '../../../base/common/lifecycle.js';
 import { URI } from '../../../base/common/uri.js';
-import { extUri } from '../../../base/common/resources.js';
+import { dirname, extUri } from '../../../base/common/resources.js';
+import { generateUuid } from '../../../base/common/uuid.js';
 import {
 	createFileSystemProviderError,
 	FileSystemProviderErrorCode,
@@ -319,7 +320,7 @@ export class FileService extends Disposable implements IFileService {
 		return registration.provider;
 	}
 
-	private async copyBetweenProviders(sourceProvider: IFileSystemProviderCopyScope, targetProvider: IFileSystemProviderCopyScope, source: URI, target: URI, sameProvider: boolean, token: CancellationToken): Promise<void> {
+	private async copyBetweenProviders(sourceProvider: IFileSystemProviderCopyScope, targetProvider: IFileSystemProviderCopyScope, source: URI, target: URI, sameProvider: boolean, token: CancellationToken, staged = false): Promise<void> {
 		const run = <T>(operation: () => Promise<T>): Promise<T> => {
 			throwIfCancelled(token);
 			return raceCancellationError(operation(), token);
@@ -346,15 +347,25 @@ export class FileService extends Disposable implements IFileService {
 		if (sourceStat.kind !== FileKind.Directory) {
 			throw new FileOperationNotSupportedError(source, 'copy');
 		}
-		await run(() => targetProvider.createDirectory(target, token));
-		try {
-			for (const entry of await run(() => sourceProvider.readDirectory(source, token))) {
-				await this.copyBetweenProviders(sourceProvider, targetProvider, entry.resource, URI.joinPath(target, entry.name), sameProvider, token);
+		if (!staged) {
+			// Each traversal owns a private sibling. A failed or losing copy must never
+			// recursively delete the published destination of a concurrent writer.
+			const temporary = URI.joinPath(dirname(target), `.ash-copy-${generateUuid()}`);
+			try {
+				await this.copyBetweenProviders(sourceProvider, targetProvider, source, temporary, sameProvider, token, true);
+				await run(() => targetProvider.rename(temporary, target, 'error', token));
+			} catch (error) {
+				// Cleanup stays on the original connection and cannot mask the copy failure.
+				if (!targetProvider.token.isCancellationRequested) {
+					await targetProvider.delete(temporary, 'ignore', 'recursive').catch(() => { });
+				}
+				throw error;
 			}
-		} catch (error) {
-			// A retired target belongs to its old connection. Cleanup must never resolve a replacement route.
-			if (!targetProvider.token.isCancellationRequested) { await targetProvider.delete(target, 'error', 'recursive'); }
-			throw error;
+			return;
+		}
+		await run(() => targetProvider.createDirectory(target, token));
+		for (const entry of await run(() => sourceProvider.readDirectory(source, token))) {
+			await this.copyBetweenProviders(sourceProvider, targetProvider, entry.resource, URI.joinPath(target, entry.name), sameProvider, token, true);
 		}
 	}
 
@@ -379,6 +390,7 @@ function acquireCopyScope(provider: IFileSystemProvider, resource: URI): IFileSy
 		readFile: provider.readFile.bind(provider),
 		writeFile: (uri: URI, bytes: Uint8Array, options: IFileWriteOptions) => provider.writeFile(uri, bytes, options),
 		createDirectory: provider.createDirectory.bind(provider),
+		rename: provider.rename.bind(provider),
 		delete: provider.delete.bind(provider),
 	});
 }
