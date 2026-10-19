@@ -455,11 +455,16 @@ export class TextResourceEditor extends AbstractTextCodeEditor<EditorPanePart> i
 			await workingCopy?.save(new AbortController().signal, options);
 		} catch (error) {
 			if (isCancellationError(error)) { throw error; }
-			if (await this.handleSaveError(error)) { return; }
+			const recovered = await this.handleSaveError(error);
+			if (recovered === true) { return; }
+			// A presented failure remains a rejected save. Commands suppress cancellation so
+			// dismissing its recovery dialog does not present the same failure a second time.
+			if (recovered === false) { throw new CancellationError(undefined, error); }
 			throw error;
 		}
 	}
 
+	/** True means recovered, false means presented but not recovered, and void leaves reporting to the caller. */
 	protected handleSaveError(error: unknown): void | boolean | Promise<void | boolean> {
 		return (this.options.onSaveError ?? reportSaveError)(error, this.workingCopy?.resource);
 	}
