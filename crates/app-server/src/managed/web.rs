@@ -441,15 +441,19 @@ fn canonical_directory(path: &Path) -> io::Result<PathBuf> {
 }
 
 fn show_workspace_approval(selected: &Path) -> bool {
-    rfd::MessageDialog::new()
-        .set_title("Ash: Authorize Server Folder")
-        .set_description(format!(
-            "Allow this Ash Web session to read and change files in {}?",
-            selected.display()
-        ))
-        .set_buttons(rfd::MessageButtons::YesNo)
-        .show()
-        == rfd::MessageDialogResult::Yes
+    // Managed servers have no AppKit event loop. RFD's synchronous dialog
+    // requires its main thread on macOS; the async API uses a system alert
+    // that can also be awaited by this authorization worker.
+    pollster::block_on(
+        rfd::AsyncMessageDialog::new()
+            .set_title("Ash: Authorize Server Folder")
+            .set_description(format!(
+                "Allow this Ash Web session to read and change files in {}?",
+                selected.display()
+            ))
+            .set_buttons(rfd::MessageButtons::YesNo)
+            .show(),
+    ) == rfd::MessageDialogResult::Yes
 }
 
 fn list_directories(initial: &Path, body: &str) -> io::Result<String> {
