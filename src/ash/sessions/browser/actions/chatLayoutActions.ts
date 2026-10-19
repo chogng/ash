@@ -1,3 +1,7 @@
+import { ISessionsManagementService } from '../../services/sessions/common/sessionsManagement.js';
+import { Schemas } from '../../../base/common/network.js';
+import { ChatContextKeys } from '../../../workbench/contrib/chat/common/actions/chatContextKeys.js';
+import { IEditorGroupsService } from '../../../workbench/services/editor/common/editorGroupsService.js';
 import { ILanguageModelsService } from '../../../workbench/contrib/chat/common/languageModels.js';
 import { Lxicon } from "../../../base/common/lxicons.js";
 import { DisposableStore } from "../../../base/common/lifecycle.js";
@@ -71,7 +75,7 @@ for (const [orientation, title, id] of [
 }
 
 const ChatBrowserAvailable = ContextKeyExpr.equals("chatBrowserAvailable", true);
-const ChatEditorAreaAvailable = ContextKeyExpr.equals("chatEditorAreaAvailable", true);
+
 const ChatNewWindowAvailable = ContextKeyExpr.equals("chatNewWindowAvailable", true);
 
 registerAction2(class ToggleAgentSessionsSidebarAction extends Action2 {
@@ -130,7 +134,8 @@ registerAction2(class MoveChatToEditorAction extends Action2 {
 			id: MOVE_CHAT_TO_EDITOR_COMMAND_ID,
 			title: localize2({ bundle: 'ash.sessions', key: 'command.MoveChatToEditorAction' }, "Move Chat to Editor Area"),
 			icon: Lxicon.layoutPanel1,
-			precondition: ChatEditorAreaAvailable,
+			precondition: ContextKeyExpr.and(ChatContextKeys.enabled.isEqualTo(true), ContextKeyExpr.not('chatInEditor')),
+			f1: true,
 			menu: {
 				id: MenuId.ChatTitle,
 				group: "chatActions",
@@ -139,8 +144,35 @@ registerAction2(class MoveChatToEditorAction extends Action2 {
 		});
 	}
 
-	override run(): never {
-		throw new Error("Moving Chat to the Editor Area is not available in this build.");
+	override async run(accessor: ServicesAccessor): Promise<void> {
+		const view = await accessor.get(IViewsService).openView(CHAT_VIEW_ID);
+		if (view instanceof ChatViewPane) await view.moveToEditor();
+	}
+});
+
+registerAction2(class MoveChatToSidebarAction extends Action2 {
+	constructor() {
+		super({
+			id: 'workbench.action.chat.moveToSideBar',
+			title: localize2('chat.moveToSidebar', 'Move Chat to Side Bar'),
+			precondition: ContextKeyExpr.equals('chatInEditor', true),
+			f1: true,
+			menu: { id: MenuId.ChatTitle, group: 'chatActions', order: 2, when: ContextKeyExpr.equals('chatInEditor', true) },
+		});
+	}
+
+	override async run(accessor: ServicesAccessor): Promise<void> {
+		const sessions = accessor.get(ISessionsManagementService);
+		const revision = sessions.navigationRevision;
+		const view = accessor.get(IViewsService).getViewWithId(CHAT_VIEW_ID);
+		if (view instanceof ChatViewPane) await view.captureActiveDraft();
+		if (revision !== sessions.navigationRevision) return;
+		for (const group of accessor.get(IEditorGroupsService).groups) {
+			for (const input of [...group.inputs]) {
+				if (input.resource.scheme === Schemas.vscodeChatEditor) await group.closeEditor(input);
+			}
+		}
+		await accessor.get(IViewsService).focusView(CHAT_VIEW_ID);
 	}
 });
 

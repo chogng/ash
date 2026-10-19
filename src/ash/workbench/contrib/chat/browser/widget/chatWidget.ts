@@ -1,3 +1,4 @@
+import type { ILifecycleService } from '../../../../services/lifecycle/common/lifecycle.js';
 import { readWorkspaceChanges } from './input/chatInput.js';
 import { defaultButtonStyles } from '../../../../../platform/theme/browser/defaultStyles.js';
 import { IQuickInputService } from '../../../../../platform/quickinput/common/quickInput.js';
@@ -17,7 +18,7 @@ import type { IContextViewService } from "../../../../../platform/contextview/br
 import type { AgentResponse, ApprovalMode, ChatAgent, ChatMode, ModelRef, SessionId, ThreadGoal, ThreadId } from "../../../../services/chat/common/chatService.js";
 import type { ChatInputDelegate } from "./input/chatInput.js";
 import type { SkillReference } from "../../../../../platform/agentHost/common/appServerApi.js";
-import { ChatInputPart, type IChatInputPart } from "./input/chatInputPart.js";
+import { ChatInputPart, type IChatInputPart, type IChatDraftStorage } from "./input/chatInputPart.js";
 import type { ChatTurnErrorAction } from "./chatListItems.js";
 import { ChatListWidget } from "./chatListWidget.js";
 import type { ChatInputState } from "./input/chatInput.js";
@@ -341,6 +342,11 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 
 	captureScreenshot(): Promise<void> {
 		return this.inputPart.captureScreenshot();
+	}
+
+	bindDraftStorage(storage: IChatDraftStorage, onWillShutdown: ILifecycleService['onWillShutdown']): void {
+		if (!(this.inputPart instanceof ChatInputPart)) throw new Error('This Chat input owns its draft lifecycle');
+		this.inputPart.bindDraftStorage(this.model, storage, onWillShutdown);
 	}
 
 	captureDraft(): Promise<{ readonly draft: NonNullable<IOpenAgentsWindowOptions['draft']>; clear(): void; } | undefined> {

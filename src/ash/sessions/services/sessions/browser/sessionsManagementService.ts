@@ -171,7 +171,8 @@ export class SessionsManagementService extends Disposable implements ISessionsMa
 			listed = await this.readCatalog(sessionId);
 		}
 		if (this.isDisposed || generation !== this.catalogGeneration) throw canceled();
-		if (!listed || listed.status !== 'active') throw new Error(`Session is not available: ${sessionId}`);
+		if (!listed || listed.sessionId !== sessionId || listed.status !== 'active') throw new Error(`Session is not available: ${sessionId}`);
+		if (!listed.chats.some(chat => chat.threadId === threadId && chat.status === 'active')) throw new Error(`Active Session Thread is not available: ${threadId}`);
 		this.replaceSession(listed);
 		await this.hydrateSession(sessionId);
 		if (this.isDisposed || generation !== this.catalogGeneration) throw canceled();

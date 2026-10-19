@@ -43,6 +43,9 @@ import { IOpenerService } from '../../../../../platform/opener/common/opener.js'
 import { ICommandService } from '../../../../../platform/commands/common/commands.js';
 import { INotificationService } from '../../../../../platform/notification/common/notification.js';
 import { IChatSessionNavigationService } from '../../../../services/chat/common/chatSessionNavigationService.js';
+import type { IChatWidgetModel } from '../../browser/widget/chatWidget.js';
+import type { IWillShutdownEvent } from '../../../../services/lifecycle/common/lifecycle.js';
+import type { IChatDraftStorage } from '../../browser/widget/input/chatInputPart.js';
 import { ChatInputPart } from '../../browser/widget/input/chatInputPart.js';
 import { setARIAContainer } from '../../../../../base/browser/ui/aria/aria.js';
 import type { ChatInputDelegate, ChatInputState } from '../../browser/widget/input/chatInput.js';
@@ -1130,4 +1133,54 @@ test('peer-chat navigation isolates drafts and references while first-send mater
 	part.render({ ...state, draftIdentity: { id: 'peer', generation: 3 } });
 	assert.equal((await part.captureDraft())!.draft.text, 'Peer draft');
 	assert.deepEqual((await part.captureDraft())!.draft.contexts, []);
+});
+
+
+test('persistent Chat drafts retire consumed attachments when an untitled composer is promoted', async () => {
+	using changes = new Emitter<void>();
+	const model = { threadId: undefined as string | undefined, untitledSessionId: 'draft-promotion', onDidChange: changes.event };
+	const drafts = new Map<string, Parameters<IChatDraftStorage['write']>[1]>();
+	using part = inputPart(sharedNotifications, undefined, 'agent', {
+		send: async () => { model.threadId = 'promoted-thread'; changes.fire(); },
+	});
+	part.bindDraftStorage(model as IChatWidgetModel, {
+		read: id => drafts.get(id), write: (id, draft) => { drafts.set(id, draft); }, flush: async () => { },
+	}, AshEvent.None);
+	part.render({ mode: 'agent', queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false });
+	edit(part, 'Consume this snapshot');
+	part.addContext({ id: 'consumed', kind: 'file', name: 'consumed.txt', resolve: async () => ({ name: 'consumed.txt', content: 'Consumed snapshot' }) });
+	await part.acceptInput();
+	await Promise.resolve();
+	assert.equal(drafts.get('untitled:draft-promotion'), undefined);
+	assert.deepEqual(drafts.get('promoted-thread'), { mode: 'agent', text: '', contexts: [] });
+	assert.equal(await part.captureDraft(), undefined);
+});
+
+test('Chat shutdown waits for file preparation and retains the draft when the storage flush fails', async () => {
+	using globals = installEditorTestGlobals({ FileReader: browserEnvironment.window.FileReader });
+	using shutdown = new Emitter<IWillShutdownEvent>();
+	const drafts = new Map<string, Parameters<IChatDraftStorage['write']>[1]>();
+	let flushes = 0;
+	let sends = 0;
+	using part = inputPart(sharedNotifications, undefined, 'agent', { send: async () => { sends++; } });
+	part.bindDraftStorage({ threadId: 'shutdown-thread', onDidChange: AshEvent.None } as IChatWidgetModel, {
+		read: id => drafts.get(id), write: (id, draft) => { drafts.set(id, draft); },
+		flush: async () => { if (++flushes === 1) throw new Error('Storage unavailable'); },
+	}, shutdown.event);
+	edit(part, 'Keep my pending file');
+	const attaching = part.attachFiles([new browserEnvironment.window.File(['Pending file snapshot'], 'shutdown.txt', { type: 'text/plain' })]);
+	const operations: Promise<unknown>[] = [];
+	const join = (operation: Promise<unknown> | (() => Promise<unknown>)): void => { operations.push(typeof operation === 'function' ? operation() : operation); };
+	shutdown.fire({ reason: 'windowClose', join });
+	await assert.rejects(Promise.all(operations), /Storage unavailable/u);
+	await attaching;
+	const saved = drafts.get('shutdown-thread')!;
+	assert.equal(saved.contexts[0]?.content, 'Pending file snapshot');
+	assert.match(saved.text, /Keep my pending file/u);
+	assert.deepEqual((await part.captureDraft())?.draft, saved);
+	operations.length = 0;
+	shutdown.fire({ reason: 'windowClose', join });
+	await Promise.all(operations);
+	assert.equal(flushes, 2);
+	assert.equal(sends, 0);
 });

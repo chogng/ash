@@ -1,4 +1,4 @@
-import type { IResourceEditorInput, IEditorPane, IEditorIdentifier } from '../../../common/editor.js';
+import { EditorInputCapabilities, type IResourceEditorInput, type IEditorPane, type IEditorIdentifier } from '../../../common/editor.js';
 import type { IEditorPaneDescriptor } from '../../editor.js';
 import { addDisposableListener, getWindow } from "../../../../base/browser/dom.js";
 import type { IDimension } from "../../../../base/browser/dom.js";
@@ -199,6 +199,10 @@ export class EditorParts extends Disposable implements IEditorPartsService {
 	}
 
 	async openEditorsInNewWindow(editors: readonly EditorIdentifier[], mode: 'move' | 'copy'): Promise<IEditorPart | undefined> {
+		if (mode === 'copy') editors = editors.filter(editor => {
+			const input = this.groups.find(group => group.id === editor.groupId)?.editors.find(candidate => candidate.instanceId === editor.instanceId)?.input;
+			return !((input?.capabilities ?? EditorInputCapabilities.None) & EditorInputCapabilities.Singleton);
+		});
 		if (editors.length === 0) return undefined;
 		const previousActive = this._activePart;
 		const target = await this.createAuxiliaryEditorPart();

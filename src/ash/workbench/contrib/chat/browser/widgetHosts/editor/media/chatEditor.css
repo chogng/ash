@@ -1,0 +1,23 @@
+.ash-chat-editor {
+	display: flex;
+	min-width: 0;
+	min-height: 0;
+	flex-direction: column;
+	background: var(--ash-editor-background);
+}
+
+.ash-chat-editor-title {
+	display: flex;
+	flex: 0 0 auto;
+	align-items: center;
+	min-width: 0;
+}
+
+.ash-chat-editor-title .ash-chat-view-title {
+	min-width: 0;
+	flex: 1 1 auto;
+}
+
+.ash-chat-editor .ash-chat-pane-host > .ash-chat {
+	background: var(--ash-editor-background);
+}

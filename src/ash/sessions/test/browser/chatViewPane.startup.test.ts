@@ -1,3 +1,4 @@
+import { ILifecycleService } from '../../../workbench/services/lifecycle/common/lifecycle.js';
 import { IChatSpeechToTextService, ChatSpeechToTextService } from '../../../workbench/contrib/chat/browser/speechToText/chatSpeechToTextService.js';
 import { UserDataProfileService } from '../../../workbench/services/userDataProfile/browser/userDataProfileService.js';
 import { TestConfigurationFiles } from '../../../workbench/services/configuration/test/common/testServices.js';
@@ -84,6 +85,7 @@ test("opens a local Chat conversation before the backend session request settles
 	});
 	using notifications = new NotificationService();
 	services.registerInstance(INotificationService, notifications);
+	services.registerInstance(ILifecycleService, { onWillShutdown: Event.None } as unknown as ILifecycleService);
 	services.registerInstance(IEditorService, { ...emptyEditorServiceState, focusActiveEditor() { }, openEditor: async () => { } });
 	services.registerSingleton(IPromptsService, () => services.createInstance(PromptsService));
 	services.registerInstance(IAppServerHookApi, { onDidChangeHooks: Event.None, list: async () => { throw new Error('Unexpected Hook read in Skill fixture'); } });
@@ -127,6 +129,7 @@ test("opens a local Chat conversation before the backend session request settles
 		services.get(IConfigurationService),
 		services.get(IStorageService),
 		new UserDataProfileService(),
+		services.get(ILifecycleService),
 	);
 
 	assert.deepEqual(escaped, []);

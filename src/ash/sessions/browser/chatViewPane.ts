@@ -1,5 +1,8 @@
+import { isRecord } from '../../base/common/types.js';
+import { isUntitledSession } from '../services/sessions/browser/sessionsService.js';
+import { ChatEditorInput } from '../../workbench/contrib/chat/browser/widgetHosts/editor/chatEditorInput.js';
 import "./media/chatViewPane.css";
-import { setDisposableOwner, toDisposable } from "../../base/common/lifecycle.js";
+import { setDisposableOwner, toDisposable, type IDisposable } from "../../base/common/lifecycle.js";
 import { IMenuService } from "../../platform/actions/common/actions.js";
 import { IAccessibleViewService } from '../../platform/accessibility/browser/accessibleView.js';
 import { IContextMenuService, IContextViewService } from "../../platform/contextview/browser/contextView.js";
@@ -24,6 +27,8 @@ import { IConfigurationService } from '../../platform/configuration/common/confi
 import { AgentSessionsControl } from '../../workbench/contrib/chat/browser/agentSessions/agentSessionsControl.js';
 import { registerAgentSessionsAccessibility } from '../../workbench/contrib/chat/browser/agentSessions/agentSessionsAccessibility.js';
 import { createAgentSessionsModel } from './agentSessionsModel.js';
+import { ILifecycleService } from '../../workbench/services/lifecycle/common/lifecycle.js';
+import { readNewChatDraftState, writeNewChatDraftState } from '../contrib/chat/common/newChatDraftState.js';
 import { localize } from '../../nls.js';
 import { ChatWidgetModel } from './chatWidgetModel.js';
 import { IInstantiationService } from '../../platform/instantiation/common/instantiation.js';
@@ -76,6 +81,12 @@ export class ChatViewPane extends ViewPane implements IChatContextTarget {
 	private activePane: ChatWidget<ChatWidgetModel> | undefined;
 	private initialUntitledSessionId: string | undefined;
 	private viewDisposed = false;
+	private restoringViewState = true;
+	private failedSelectionRevision: number | undefined;
+	private editorMount: IDisposable | undefined;
+	private editorMountParent: HTMLElement | undefined;
+	private editorVisible = true;
+	private readonly inEditor: IContextKey<boolean>;
 	private focusReturn: (() => void) | undefined;
 
 	constructor(
@@ -95,6 +106,7 @@ export class ChatViewPane extends ViewPane implements IChatContextTarget {
 		@IConfigurationService private readonly configuration: IConfigurationService,
 		@IStorageService private readonly storage: IStorageService,
 		@IUserDataProfileService private readonly userProfile: IUserDataProfileService,
+		@ILifecycleService private readonly lifecycleService: ILifecycleService,
 		@IContextKeyService contextKeyService?: IContextKeyService,
 		@IOpenerService private readonly openerService?: IOpenerService,
 		@IEditorService private readonly editorService?: IEditorService,
@@ -121,6 +133,8 @@ export class ChatViewPane extends ViewPane implements IChatContextTarget {
 		this.body = h(container.ownerDocument, "div");
 		this.body.className = "ash-chat-body";
 		const sidebarContextKeys = contextKeyService ?? this._register(new ContextKeyService());
+		this.inEditor = sidebarContextKeys.createKey('chatInEditor', false);
+		this._register(toDisposable(() => this.inEditor.reset()));
 		this.sessionsSidebarVisible = AgentSessionsSidebarVisibleContext.bindTo(sidebarContextKeys);
 		this.sessionsOrientation = AgentSessionsOrientationContext.bindTo(sidebarContextKeys);
 		this._register(toDisposable(() => this.sessionsSidebarVisible.reset()));
@@ -196,12 +210,20 @@ export class ChatViewPane extends ViewPane implements IChatContextTarget {
 			observer.observe(this.body);
 			this._register(toDisposable(() => observer.disconnect()));
 		}
-		this._register(sessionService.onDidChange(() => this.syncSessions()));
+		const storedSelection = storage.get('chat.viewState', StorageScope.WORKSPACE);
+		const restored = this.restoreViewState(storedSelection);
+		this._register(sessionService.onDidChange(() => {
+			this.syncSessions();
+			if (!this.restoringViewState && this.failedSelectionRevision !== sessionService.navigationRevision) this.failedSelectionRevision = undefined;
+			this.saveViewState();
+		}));
+		this._register(storage.onWillSaveState(() => this.saveViewState()));
 		this._register(layoutService.onDidChangePartVisibility((event) => {
 			if (event.partId === "auxiliarybar" && event.visible) this.ensureConversationForVisibleChat();
 		}));
 		this._register(toDisposable(() => {
 			this.viewDisposed = true;
+			this.editorMount?.dispose();
 			for (const pane of this.panes.values()) pane.dispose();
 			this.panes.clear();
 		}));
@@ -209,11 +231,102 @@ export class ChatViewPane extends ViewPane implements IChatContextTarget {
 		this.updateSessionsLayout();
 		void this.migrateSessionsOrientation();
 		this.ensureConversationForVisibleChat();
-		void sessionService.initialize().then(() => {
+		let restoringRevision = sessionService.navigationRevision;
+		void sessionService.initialize().then(async () => {
 			if (this.viewDisposed) return;
+			if (restored && sessionService.navigationRevision === restoringRevision) {
+				const opening = sessionService.openThread(restored.sessionId, restored.threadId);
+				restoringRevision = sessionService.navigationRevision;
+				await opening;
+				if (this.viewDisposed) return;
+			}
+			this.restoringViewState = false;
+			if (sessionService.navigationRevision !== restoringRevision) this.failedSelectionRevision = undefined;
 			this.discardInitialUntitledSessionWhenDurableChatExists();
 			this.ensureConversationForVisibleChat();
+			this.saveViewState();
+		}).catch(error => {
+			if (this.viewDisposed) return;
+			this.restoringViewState = false;
+			this.failedSelectionRevision = storedSelection && sessionService.navigationRevision === restoringRevision ? restoringRevision : undefined;
+			this.saveViewState();
+			this.notifications.error(localize('chat.selection.restoreFailed', 'Could not restore the Chat selection: {0}', String(error)));
 		});
+	}
+
+	private restoreViewState(raw: string | undefined): { readonly sessionId: string; readonly threadId: string; } | undefined {
+		if (!raw || this.sessionService.active || this.sessionService.activeUntitledSession) return undefined;
+		try {
+			const value: unknown = JSON.parse(raw);
+			if (!isRecord(value) || value.version !== 1 || !Array.isArray(value.drafts) || !value.drafts.every(isUntitledSession)
+				|| new Set(value.drafts.map(draft => draft.untitledSessionId)).size !== value.drafts.length) {
+				throw new TypeError(localize('chat.selection.invalid', 'Invalid stored Chat selection.'));
+			}
+			const active = value.active;
+			if (active !== undefined && (!isRecord(active) || (active.kind === 'untitled'
+				? typeof active.id !== 'string' || !value.drafts.some(draft => draft.untitledSessionId === active.id)
+				: active.kind !== 'session' || typeof active.sessionId !== 'string' || !active.sessionId || typeof active.threadId !== 'string' || !active.threadId))) {
+				throw new TypeError(localize('chat.selection.invalid', 'Invalid stored Chat selection.'));
+			}
+			for (const draft of value.drafts) this.sessionService.restoreUntitledSession(draft);
+			if (isRecord(value.active) && value.active.kind === 'untitled') this.sessionService.selectUntitledSession(value.active.id as string);
+			if (isRecord(value.active) && value.active.kind === 'session') return { sessionId: value.active.sessionId as string, threadId: value.active.threadId as string };
+		} catch (error) {
+			this.failedSelectionRevision = this.sessionService.navigationRevision;
+			this.notifications.error(localize('chat.selection.restoreFailed', 'Could not restore the Chat selection: {0}', String(error)));
+		}
+		return undefined;
+	}
+
+	private saveViewState(): void {
+		if (this.restoringViewState || this.failedSelectionRevision !== undefined || this.viewDisposed) return;
+		const draft = this.sessionService.activeUntitledSession;
+		const selected = this.sessionService.active;
+		const active = draft ? { kind: 'untitled', id: draft.untitledSessionId }
+			: selected ? { kind: 'session', sessionId: selected.session.sessionId, threadId: selected.threadId } : undefined;
+		this.storage.store('chat.viewState', JSON.stringify({ version: 1, drafts: this.sessionService.untitledSessions, active }), StorageScope.WORKSPACE, StorageTarget.MACHINE);
+	}
+
+	async moveToEditor(): Promise<void> {
+		const revision = this.sessionService.navigationRevision;
+		const pane = this.activePane;
+		await pane?.captureDraft();
+		if (this.viewDisposed || pane !== this.activePane || revision !== this.sessionService.navigationRevision) return;
+		await this.editorService!.openEditor(new ChatEditorInput(), { pinned: true });
+	}
+
+	/** Lends the original conversation tree, including its live composer, to one editor host. */
+	attachEditor(parent: HTMLElement): IDisposable {
+		this.editorMount?.dispose();
+		const focused = this.element.ownerDocument.activeElement;
+		const title = this.titleControl.partTitleProjection;
+		const header = h(parent.ownerDocument, 'div', { className: 'ash-chat-editor-title' });
+		header.append(title.content!, title.actions!);
+		parent.append(header, this.body);
+		this.inEditor.set(true);
+		const lease = toDisposable(() => {
+			if (this.editorMount !== lease) return;
+			this.editorMount = undefined;
+			this.editorMountParent = undefined;
+			this.activePane?.setVisible(true);
+			this.contentElement.append(this.body);
+			this.element.append(title.content!, title.actions!);
+			header.remove();
+			this.inEditor.set(false);
+			this.updateTitleArea();
+			if (!this.viewDisposed && !this.lifecycleService.willShutdown) this.layoutService.showPart('auxiliarybar');
+		});
+		this.editorMount = lease;
+		this.editorMountParent = parent;
+		this.layoutService.hidePart('auxiliarybar');
+		if (isHTMLElement(focused) && parent.contains(focused)) focused.focus({ preventScroll: true });
+		return lease;
+	}
+
+	setEditorVisible(parent: HTMLElement, visible: boolean): void {
+		if (this.editorMountParent !== parent) return;
+		this.editorVisible = visible;
+		this.activePane?.setVisible(visible);
 	}
 
 	override focus(): void {
@@ -260,7 +373,7 @@ export class ChatViewPane extends ViewPane implements IChatContextTarget {
 	}
 
 	override get partTitleProjection(): PartTitleProjection {
-		return this.titleControl.partTitleProjection;
+		return this.editorMount ? {} : this.titleControl.partTitleProjection;
 	}
 
 	private syncSessions(): void {
@@ -291,6 +404,11 @@ export class ChatViewPane extends ViewPane implements IChatContextTarget {
 					(resource: URI) => readMarkdownImageResource(this.fileService, resource),
 					undefined,
 				);
+				pane.bindDraftStorage({
+					read: identity => readNewChatDraftState(this.storage, identity),
+					write: (identity, draft) => writeNewChatDraftState(this.storage, draft, identity),
+					flush: () => this.storage.flush(),
+				}, this.lifecycleService.onWillShutdown);
 				setDisposableOwner(pane, this);
 				this.panes.set(paneId, pane);
 			} else {
@@ -324,6 +442,11 @@ export class ChatViewPane extends ViewPane implements IChatContextTarget {
 					(resource: URI) => readMarkdownImageResource(this.fileService, resource),
 					undefined,
 				);
+				pane.bindDraftStorage({
+					read: identity => readNewChatDraftState(this.storage, identity),
+					write: (identity, draft) => writeNewChatDraftState(this.storage, draft, identity),
+					flush: () => this.storage.flush(),
+				}, this.lifecycleService.onWillShutdown);
 				setDisposableOwner(pane, this);
 				this.panes.set(paneId, pane);
 			} else {
@@ -346,7 +469,7 @@ export class ChatViewPane extends ViewPane implements IChatContextTarget {
 			if (this.paneHost.children[index] !== node) this.paneHost.insertBefore(node, this.paneHost.children[index] ?? null);
 		}
 		this.activePane = activePane;
-		for (const entry of entries) entry.pane.setVisible(entry.pane === this.activePane);
+		for (const entry of entries) entry.pane.setVisible(entry.pane === this.activePane && (!this.editorMount || this.editorVisible));
 		this.empty.hidden = entries.length > 0;
 		this.titleControl.update(entries.find(entry => entry.pane === activePane)?.label, activePane?.element.id);
 		for (const entry of entries) {

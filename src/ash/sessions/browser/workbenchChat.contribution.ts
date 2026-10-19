@@ -1,3 +1,9 @@
+import { EditorInputSerializers } from '../../workbench/services/editor/common/editorInputSerializer.js';
+import { Schemas } from '../../base/common/network.js';
+import { ChatEditor } from '../../workbench/contrib/chat/browser/widgetHosts/editor/chatEditor.js';
+import { ChatEditorInput, ChatEditorInputSerializer } from '../../workbench/contrib/chat/browser/widgetHosts/editor/chatEditorInput.js';
+import { EditorPaneMatch } from '../../workbench/browser/parts/editor/editorPane.js';
+import { registerEditorPane } from '../../workbench/browser/editor.js';
 import { LOCAL_AGENT_HOST_PROVIDER_ID } from '../common/agentHostSessionsProvider.js';
 import { localize } from '../../nls.js';
 import { Lxicon } from '../../base/common/lxicons.js';
@@ -95,3 +101,11 @@ export function registerChatViews(registry: WorkbenchViewRegistry = ViewsRegistr
 registerSingleton(IChatSessionNavigationService, ChatSessionNavigationService, InstantiationType.Delayed);
 registerAction2(ForkConversationAction);
 registerChatViews();
+
+EditorInputSerializers.registerStatic(new ChatEditorInputSerializer());
+registerEditorPane({
+	id: ChatEditorInput.EditorID,
+	name: localize({ bundle: 'ash.views', key: 'chat' }, 'Chat'),
+	canOpen: input => input.resource.scheme === Schemas.vscodeChatEditor && input.resource.path === '/current' ? EditorPaneMatch.Default : EditorPaneMatch.None,
+	create: options => options.instantiationService!.createInstance(ChatEditor),
+});

@@ -466,7 +466,7 @@ function nonEmptyString(value: unknown): value is string {
 	return typeof value === 'string' && value.length > 0;
 }
 
-function isUntitledSession(value: unknown): value is IUntitledChatSession {
+export function isUntitledSession(value: unknown): value is IUntitledChatSession {
 	return isRecord(value) && nonEmptyString(value.untitledSessionId) && typeof value.title === 'string'
 		&& (value.model === undefined || isRecord(value.model) && nonEmptyString(value.model.provider) && nonEmptyString(value.model.model))
 		&& (value.providerId === undefined || nonEmptyString(value.providerId))
