@@ -1,4 +1,3 @@
-import { Position } from '../../../workbench/services/layout/browser/layoutService.js';
 import { IChatSpeechToTextService, ChatSpeechToTextService } from '../../../workbench/contrib/chat/browser/speechToText/chatSpeechToTextService.js';
 import { UserDataProfileService } from '../../../workbench/services/userDataProfile/browser/userDataProfileService.js';
 import { TestConfigurationFiles } from '../../../workbench/services/configuration/test/common/testServices.js';
@@ -33,7 +32,7 @@ import { toDisposable } from "../../../base/common/lifecycle.js";
 import { type IMenu, IMenuService } from "../../../platform/actions/common/actions.js";
 import { IContextViewService, IContextMenuService } from "../../../platform/contextview/browser/contextView.js";
 import type { IChatService, ModelCatalogEntry, SlashCommandDefinition, ThreadRead, ThreadSubscription, ThreadTranscriptUpdateEnvelope, ThreadUpdateEnvelope } from "../../../workbench/services/chat/common/chatService.js";
-import type { IWorkbenchLayoutService, WorkbenchPartId, WorkbenchPartVisibilityChangeEvent } from "../../../workbench/services/layout/browser/layoutService.js";
+import { Position, type IWorkbenchLayoutService, type WorkbenchPartId, type WorkbenchPartVisibilityChangeEvent } from "../../../workbench/services/layout/browser/layoutService.js";
 import type { ApprovalMode, IActiveSessionThread, ISession, IUntitledChatSession, ModelRef, SessionId, ThreadId } from "../../services/sessions/common/session.js";
 import type { ISessionsManagementService, SessionsManagementState } from "../../services/sessions/common/sessionsManagement.js";
 import { InstantiationService } from '../../../platform/instantiation/common/instantiationService.js';

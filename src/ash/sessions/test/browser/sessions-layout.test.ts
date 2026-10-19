@@ -2,6 +2,7 @@ import { createTestComponentServices, registerTestComponentServices } from '../.
 import { IThemeService } from '../../../platform/theme/common/themeService.js';
 import { DisposableStore } from '../../../base/common/lifecycle.js';
 import { sessionsPartIds } from '../../common/layoutConstants.js';
+import { Position, positionToString } from '../../../workbench/services/layout/browser/layoutService.js';
 import assert from "node:assert/strict";
 import { test, suiteTeardown } from "mocha";
 import { JSDOM } from "jsdom";
@@ -77,6 +78,110 @@ function createParts(ownerDocument: Document): Map<SessionsPartId, WorkbenchPart
 	return new Map(sessionsPartIds.map(partId => [partId, new TestSessionsPart(partId, ownerDocument.body)]));
 }
 
+test('Sessions moves the retained Panel to all four edges and restores normal sizes after maximize', () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	const parts = createParts(dom.window.document);
+	const input = dom.window.document.createElement('input');
+	input.value = 'pending shell input';
+	parts.get('panel')!.domNode.append(input);
+	try {
+		using layout = createLayout(dom.window.document.body, parts, { initialDimension: new Dimension(1_600, 1_000) });
+		layout.layout(new Dimension(1_600, 1_000));
+		layout.showPart('panel');
+		layout.resizePart('panel', new Dimension(layout.getPartSize('panel').width, 280));
+		input.focus();
+		const events: string[] = [];
+		using subscription = layout.onDidChangePanelPosition(position => events.push(position));
+		for (const position of [Position.LEFT, Position.TOP, Position.RIGHT, Position.BOTTOM]) {
+			layout.setPanelPosition(position);
+			assert.equal(layout.getPanelPosition(), position);
+			assert.equal(layout.domNode.dataset.panelPosition, positionToString(position));
+			assert.equal(dom.window.document.activeElement, input);
+			assert.equal(input.value, 'pending shell input');
+			assert.equal(layout.isPartVisible('panel'), true);
+			assert.equal(layout.isPartVisible('sessions'), true);
+			const panelFrame = parts.get('panel')!.domNode.parentElement!;
+			const parentSplit = panelFrame.parentElement!.parentElement!;
+			assert.equal(parentSplit.classList.contains(position === Position.TOP || position === Position.BOTTOM ? 'ash-split-view-vertical' : 'ash-split-view-horizontal'), true);
+			const leading = position === Position.TOP || position === Position.LEFT;
+			const sessionsFrame = parts.get('sessions')!.domNode.parentElement!;
+			assert.equal(!!(panelFrame.compareDocumentPosition(sessionsFrame) & dom.window.Node.DOCUMENT_POSITION_FOLLOWING), leading);
+			if (position === Position.TOP || position === Position.BOTTOM) assert.equal(layout.getPartSize('panel').height, 280);
+			else layout.resizePart('panel', new Dimension(360, layout.getPartSize('panel').height));
+		}
+		assert.deepEqual(events, ['left', 'top', 'right', 'bottom']);
+		layout.hidePart('panel');
+		layout.setPanelPosition(Position.RIGHT);
+		assert.equal(layout.isPartVisible('panel'), false);
+		layout.showPart('panel');
+		assert.equal(layout.getPartSize('panel').width, 360);
+		layout.toggleMaximizedPanel();
+		assert.equal(layout.isPanelMaximized(), true);
+		assert.equal(layout.isPartVisible('sessions'), false);
+		assert.equal(layout.getPartSize('panel').width > 360, true);
+		layout.setPanelPosition(Position.TOP);
+		assert.equal(layout.isPanelMaximized(), true);
+		layout.toggleMaximizedPanel();
+		assert.equal(layout.isPanelMaximized(), false);
+		assert.equal(layout.isPartVisible('sessions'), true);
+		assert.equal(layout.getPartSize('panel').height, 280);
+		layout.setPanelPosition(Position.LEFT);
+		assert.equal(layout.getPartSize('panel').width, 360);
+		layout.toggleMaximizedPanel();
+		layout.setPartAvailable('panel', false);
+		assert.equal(layout.isPanelMaximized(), false);
+		assert.equal(layout.isPartVisible('sessions'), true);
+		layout.toggleMaximizedPanel();
+		assert.equal(layout.isPanelMaximized(), false);
+		assert.equal(layout.isPartVisible('sessions'), true);
+		layout.setPartAvailable('panel', true);
+		assert.equal(layout.getPartSize('panel').width, 360);
+		layout.showPart('editor');
+		layout.showPart('auxiliarybar');
+		layout.setPanelPosition(Position.RIGHT);
+		assert.equal(parts.get('editor')!.domNode.contains(parts.get('auxiliarybar')!.domNode), true);
+		layout.setPrimaryPart('editor');
+		layout.setPanelPosition(Position.LEFT);
+		assert.equal(parts.get('editor')!.domNode.contains(parts.get('auxiliarybar')!.domNode), false);
+	} finally {
+		for (const part of parts.values()) part.dispose();
+		dom.window.close();
+	}
+});
+
+test('Sessions restores Panel position and both axis sizes from the profile while hidden', async () => {
+	const dom = new JSDOM('<!doctype html><body></body>', { url: 'https://sessions-panel.test' });
+	const createStorage = () => new BrowserStorageService({ ownerWindow: dom.window as unknown as Window, workspaceId: 'sessions', profileId: 'panel-positions', backend: dom.window.localStorage, flushInterval: 0 });
+	const firstParts = createParts(dom.window.document);
+	const storage = createStorage();
+	const first = createLayout(dom.window.document.body, firstParts, { storageService: storage, initialDimension: new Dimension(1_600, 1_000) });
+	first.layout(new Dimension(1_600, 1_000));
+	first.showPart('panel');
+	first.resizePart('panel', new Dimension(first.getPartSize('panel').width, 280));
+	first.setPanelPosition(Position.RIGHT);
+	first.resizePart('panel', new Dimension(380, first.getPartSize('panel').height));
+	first.hidePart('panel');
+	await storage.flush(WillSaveStateReason.SHUTDOWN);
+	first.dispose();
+	storage.dispose();
+	for (const part of firstParts.values()) part.dispose();
+	const restoredParts = createParts(dom.window.document);
+	try {
+		using restoredStorage = createStorage();
+		using restored = createLayout(dom.window.document.body, restoredParts, { storageService: restoredStorage, initialDimension: new Dimension(1_600, 1_000) });
+		restored.layout(new Dimension(1_600, 1_000));
+		assert.equal(restored.getPanelPosition(), Position.RIGHT);
+		assert.equal(restored.isPartVisible('panel'), false);
+		restored.showPart('panel');
+		assert.equal(restored.getPartSize('panel').width, 380);
+		restored.setPanelPosition(Position.TOP);
+		assert.equal(restored.getPartSize('panel').height, 280);
+	} finally {
+		for (const part of restoredParts.values()) part.dispose();
+		dom.window.close();
+	}
+});
+
 test('Custom Views cover retained content without changing its desired visibility and sizes', () => {
 	const dom = new JSDOM('<!doctype html><body></body>');
 	const parts = createParts(dom.window.document);
@@ -86,6 +191,8 @@ test('Custom Views cover retained content without changing its desired visibilit
 		layout.showPart('editor'); layout.showPart('auxiliarybar'); layout.showPart('panel');
 		const previous = layout.state;
 		layout.setCustomViewVisible(true);
+		layout.toggleMaximizedPanel();
+		assert.equal(layout.isPanelMaximized(), false);
 		assert.equal(layout.isPartVisible('customview'), true);
 		for (const id of ['sidebar', 'sessions', 'editor', 'auxiliarybar', 'panel'] as const) assert.equal(layout.isPartVisible(id), false);
 		assert.deepEqual(layout.state, previous);

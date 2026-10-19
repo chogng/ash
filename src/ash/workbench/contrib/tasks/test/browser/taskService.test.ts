@@ -473,6 +473,7 @@ function taskServices(owner: DisposableStore, files: IFileSystemProvider, worksp
 	services.registerInstance(IMarkerService, owner.add(new MarkerService()));
 	registerTestExtensionService(owner, services);
 	registerTaskProfiles(services);
+	registerTestTerminalCreationServices(services);
 	return services;
 }
 

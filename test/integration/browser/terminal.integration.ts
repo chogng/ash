@@ -3,7 +3,6 @@ import { TerminalLinkProviderService } from '../../../src/ash/workbench/contrib/
 import { ISearchService } from '../../../src/ash/workbench/services/search/common/search.js';
 import { IHostService } from '../../../src/ash/workbench/services/host/browser/host.js';
 import { TestHostService } from '../../../src/ash/workbench/services/host/test/browser/testHostService.js';
-import { IWorkbenchLayoutService, Position } from '../../../src/ash/workbench/services/layout/browser/layoutService.js';
 import { IWorkbenchEnvironmentService } from '../../../src/ash/workbench/services/environment/common/environmentService.js';
 import { ILabelService } from '../../../src/ash/platform/label/common/label.js';
 import { LabelService } from '../../../src/ash/workbench/services/label/common/labelService.js';
@@ -50,7 +49,7 @@ import { TestWorkspaceService } from '../../../src/ash/workbench/services/config
 import { ITerminalContributionService, ITerminalProfileResolverService, ITerminalProfileService } from '../../../src/ash/workbench/contrib/terminal/common/terminal.js';
 import { BrowserTerminalProfileResolverService } from '../../../src/ash/workbench/contrib/terminal/browser/terminalProfileResolverService.js';
 import { MainThreadTerminalService } from '../../../src/ash/workbench/api/browser/mainThreadTerminalService.js';
-import { IWorkspaceContextService } from '../../../src/ash/platform/workspace/common/workspace.js';
+import { IWorkspaceContextService, WorkbenchState } from '../../../src/ash/platform/workspace/common/workspace.js';
 import { TestConfigurationService as WorkbenchConfigurationService } from '../../../src/ash/workbench/services/configuration/test/common/testServices.js';
 import { InMemoryConfigurationService } from '../../../src/ash/platform/configuration/common/inMemoryConfigurationService.js';
 import { TerminalConfigurationService } from '../../../src/ash/workbench/contrib/terminal/browser/terminalConfigurationService.js';
@@ -101,6 +100,11 @@ import { Emitter, Event } from '../../../src/ash/base/common/event.js';
 import { Disposable, DisposableStore, toDisposable } from '../../../src/ash/base/common/lifecycle.js';
 import { extUri } from '../../../src/ash/base/common/resources.js';
 import { BrowserLayoutService } from '../../../src/ash/platform/layout/browser/layoutService.js';
+import { Dimension, type IDimension } from '../../../src/ash/base/browser/dom.js';
+import { WorkbenchLayout } from '../../../src/ash/workbench/browser/layout.js';
+import { Part } from '../../../src/ash/workbench/browser/part.js';
+import { IWorkbenchLayoutService, Position, workbenchPartIds, type WorkbenchPartId } from '../../../src/ash/workbench/services/layout/browser/layoutService.js';
+import { BrowserAuxiliaryWindowService, IAuxiliaryWindowService } from '../../../src/ash/workbench/services/auxiliaryWindow/browser/auxiliaryWindowService.js';
 import { createCodeEditorServices } from '../../../src/ash/editor/test/browser/testCodeEditor.js';
 import { IQuickInputService } from '../../../src/ash/platform/quickinput/common/quickInput.js';
 import { XtermTerminal } from '../../../src/ash/workbench/contrib/terminal/browser/xterm/xtermTerminal.js';
@@ -124,7 +128,19 @@ if (new URLSearchParams(location.search).has('workbench')) {
 }
 store.add(installTestDictationAudio(window));
 setIconResolver(document, icon => getIconDefinition(icon));
-function setupTerminalFixtureServices(services: import('../../../src/ash/platform/instantiation/common/instantiationService.js').InstantiationService, lifetime: DisposableStore, fallbackProcess = true): void {
+function createTerminalFixtureLayout(root: HTMLElement, lifetime: DisposableStore): IWorkbenchLayoutService {
+	return Object.assign(lifetime.add(new BrowserLayoutService({ root })), {
+		getPanelPosition: () => Position.BOTTOM, setPanelPosition: () => { }, onDidChangePanelPosition: Event.None,
+		onDidChangeAuxiliaryBarMaximized: Event.None, isAuxiliaryBarMaximized: () => false,
+		toggleMaximizedAuxiliaryBar: () => { }, setAuxiliaryBarMaximized: () => false,
+		onDidChangePartVisibility: Event.None, isPartVisible: () => true, hidePart: () => { }, hasFocus: () => false,
+		setLayoutStyle: () => { }, getVisibleNeighborPart: () => undefined, isPanelMaximized: () => false,
+		toggleMaximizedPanel: () => { }, getPartSize: () => ({ width: root.clientWidth, height: root.clientHeight }),
+		resizePart: () => { }, showPart: () => { }, showParts: () => { }, hideParts: () => { },
+	});
+}
+
+function setupTerminalFixtureServices(services: import('../../../src/ash/platform/instantiation/common/instantiationService.js').InstantiationService, lifetime: DisposableStore, fallbackProcess = true, provideLayout = true): void {
 	if (!services.has(IHostService)) services.registerInstance(IHostService, new TestHostService());
 	// Filename discovery is an explicit boundary of the terminal-only fixture.
 	if (!services.has(ISearchService)) services.registerInstance(ISearchService, {
@@ -137,6 +153,7 @@ function setupTerminalFixtureServices(services: import('../../../src/ash/platfor
 		expectsTerminalTransfer: new URLSearchParams(location.search).has('transfer'),
 	});
 	// Keep the concrete owner observable after scope disposal for cleanup assertions.
+	if (provideLayout && !services.has(IWorkbenchLayoutService)) services.registerInstance(IWorkbenchLayoutService, createTerminalFixtureLayout(document.querySelector<HTMLElement>('#terminal')!, lifetime));
 	if (!services.has(ITerminalService)) services.registerSingleton(ITerminalService, () => services.createInstance(TerminalService), { instantiation: InstantiationType.Delayed });
 	if (!services.has(IDialogService)) services.registerSingleton(IDialogService, () => services.createInstance(DialogService));
 	if (!services.has(ISecretStorageService)) services.registerInstance(ISecretStorageService, lifetime.add(new BaseSecretStorageService()));
@@ -251,7 +268,7 @@ function setTerminalTestTheme(mode: 'dark' | 'light' | 'hcDark' | 'hcLight', ove
 	const base = { dark: darkColorTheme, light: lightColorTheme, hcDark: highContrastDarkColorTheme, hcLight: highContrastLightColorTheme }[mode];
 	themeService.setColorTheme(overrides ? createColorTheme({ id: 'terminal-test', label: 'Terminal test', colorScheme: base.colorScheme, baseTheme: base, colorOverrides: overrides }) : base);
 }
-if (new URLSearchParams(location.search).has('find') || new URLSearchParams(location.search).has('browser')) { store.add(bindTestColorTheme(themeService, document.body)); }
+if (new URLSearchParams(location.search).has('find') || new URLSearchParams(location.search).has('browser') || new URLSearchParams(location.search).has('panelLayout')) { store.add(bindTestColorTheme(themeService, document.body)); }
 widgetServices.registerInstance(IThemeService, themeService);
 widgetServices.registerInstance(ITerminalLogService, new NullLoggerService());
 widgetServices.registerInstance(ITerminalConfigurationService, store.add(widgetServices.createInstance(TerminalConfigurationService)));
@@ -260,6 +277,26 @@ instance.attachToElement(document.querySelector<HTMLElement>('#terminal')!);
 const widget = instance.xterm!;
 widget.setVisible(true);
 if (new URLSearchParams(location.search).has('browser')) widget.element.style.height = '100%';
+if (new URLSearchParams(location.search).has('deferredFocus')) {
+	const root = document.createElement('section');
+	root.id = 'terminal-deferred-focus';
+	root.style.cssText = 'width:0;height:300px;overflow:hidden';
+	document.body.append(root);
+	for (const label of ['Focus source', 'Other focus target']) {
+		const button = document.createElement('button');
+		button.textContent = label;
+		document.body.append(button);
+	}
+	const screen = store.add(widgetServices.createInstance(XtermTerminal, root, instance));
+	screen.element.style.height = '100%';
+	await screen.initialize({ cols: 80, rows: 24, vt: 'retained deferred output\r\n' });
+	screen.setVisible(true);
+	window.ashTerminalDeferredFocusIntegration = {
+		focus: () => screen.focus(),
+		reveal: () => { root.style.width = '600px'; screen.fit(); },
+	};
+}
+
 let completion: Promise<void> | undefined;
 
 window.ashTerminalIntegration = {
@@ -293,6 +330,7 @@ window.ashTerminalIntegration = {
 
 declare global {
 	interface Window {
+		ashTerminalDeferredFocusIntegration: { focus(): void; reveal(): void; };
 		ashTerminalIntegration: {
 			configure(key: string, value: unknown): Promise<void>;
 			sequence(event: import('../../../src/ash/platform/terminal/common/terminal.js').TerminalShellIntegrationEvent, text?: string): Promise<void>;
@@ -1139,7 +1177,34 @@ if (new URLSearchParams(location.search).has('input')) {
 		},
 		getViewWithId: (id: string) => id === TERMINAL_VIEW_ID ? groupPane ?? null : null,
 	} as unknown as IViewsService);
-	setupTerminalFixtureServices(services, store);
+	setupTerminalFixtureServices(services, store, true, !new URLSearchParams(location.search).has('panelLayout'));
+	let paneHost = document.querySelector<HTMLElement>('#terminal')!;
+	let panelLayout: WorkbenchLayout | undefined;
+	if (new URLSearchParams(location.search).has('panelLayout')) {
+		await import('../../../src/ash/workbench/browser/media/style.css');
+		const root = document.querySelector<HTMLElement>('#terminal')!;
+		root.style.width = '1000px'; root.style.height = '700px';
+		services.registerInstance(IAuxiliaryWindowService, store.add(services.createInstance(BrowserAuxiliaryWindowService, window, root)));
+		panelLayout = store.add(services.createInstance(WorkbenchLayout, root, { workbenchState: WorkbenchState.FOLDER, initialDimension: new Dimension(1000, 700), defaultLayout: { parts: { panel: true } } }));
+		services.registerInstance(IWorkbenchLayoutService, panelLayout);
+		class FixturePart extends Part {
+			constructor(private readonly partId: WorkbenchPartId) { super(root, partId, themeService, services.get(IStorageService)); }
+			get content(): HTMLElement { return this.contentDomNode; }
+			override get minimumHeight(): number { return this.partId === 'panel' ? 180 : 0; }
+			override layout(dimension: IDimension): void {
+				if (this.partId === 'panel') groupPane?.layout(dimension.height, 0, dimension.width);
+			}
+			override setVisible(visible: boolean): void {
+				super.setVisible(visible);
+				if (this.partId === 'panel') groupPane?.setVisible(visible);
+			}
+		}
+		const parts = new Map<WorkbenchPartId, Part>();
+		for (const id of workbenchPartIds) parts.set(id, store.add(new FixturePart(id)));
+		paneHost = (parts.get('panel') as FixturePart).content;
+		panelLayout.createParts(parts);
+		await import('../../../src/ash/workbench/browser/parts/panel/panelActions.js');
+	}
 	if (clipboardFixture || new URLSearchParams(location.search).has('editor')) {
 		const dialogs = services.get(IDialogService) as DialogService;
 		store.add(new DialogHandlerContribution(dialogs.model, new BrowserDialogHandler(document.body)));
@@ -1224,18 +1289,11 @@ if (new URLSearchParams(location.search).has('input')) {
 			services.registerInstance(IPreferencesService, { openSettings: async () => { } } as unknown as IPreferencesService);
 
 			services.registerInstance(IMenuService, new MenuService(commands, services.get(IContextKeyService)));
-			const layout = Object.assign(store.add(new BrowserLayoutService({ root })), {
-				onDidChangePanelPosition: Event.None, getPanelPosition: () => Position.BOTTOM, setPanelPosition: () => { },
-				onDidChangeAuxiliaryBarMaximized: Event.None, isAuxiliaryBarMaximized: () => false,
-				toggleMaximizedAuxiliaryBar: () => { }, setAuxiliaryBarMaximized: () => false,
-				onDidChangePartVisibility: Event.None, isPartVisible: () => true, hidePart: () => { }, hasFocus: () => false,
-				setLayoutStyle: () => { }, getVisibleNeighborPart: () => undefined, isPanelMaximized: () => false,
-				toggleMaximizedPanel: () => { }, getPartSize: () => ({ width: root.clientWidth, height: root.clientHeight }),
-				resizePart: () => { }, showPart: () => { }, showParts: () => { }, hideParts: () => { },
-			});
-			services.registerInstance(IWorkbenchLayoutService, layout);
-			groupPane = store.add(services.createInstance(TerminalViewPane, root, { id: 'ash.terminal', title: 'Terminal' }));
-			groupPane.setVisible(true); groupPane.setExpanded(true); groupPane.layout(root.clientHeight, 0, root.clientWidth);
+
+			groupPane = store.add(services.createInstance(TerminalViewPane, paneHost, { id: 'ash.terminal', title: 'Terminal' }));
+			groupPane.setVisible(true); groupPane.setExpanded(true);
+			if (panelLayout) panelLayout.layout(new Dimension(1000, 700));
+			else groupPane.layout(root.clientHeight, 0, root.clientWidth);
 			if (new URLSearchParams(location.search).has('editor')) {
 				// Individual scenarios enable the shared confirmation policy when testing close preflight.
 				await services.get(IConfigurationService).updateValue('terminal.integrated.confirmOnKill', 'never');

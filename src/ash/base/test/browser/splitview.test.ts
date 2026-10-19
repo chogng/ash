@@ -51,6 +51,21 @@ class TestView {
 	}
 }
 
+test('SplitView proportional layout preserves unequal pane ratios on either axis', () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	try {
+		for (const orientation of ['horizontal', 'vertical'] as const) {
+			using split = new SplitView(dom.window.document.body, orientation, { proportionalLayout: true });
+			for (const size of [200, 300, 500]) split.addView(new TestView(dom.window.document, 80, Infinity), size);
+			split.layout(1_000, 400);
+			split.layout(800, 600);
+			assert.deepEqual([0, 1, 2].map(index => split.getViewSize(index)), [160, 240, 400]);
+			split.layout(2_000, 300);
+			assert.deepEqual([0, 1, 2].map(index => split.getViewSize(index)), [400, 600, 1_000]);
+		}
+	} finally { dom.window.close(); }
+});
+
 test("SplitView owns constrained pixel sizes and positions", () => {
 	const dom = new JSDOM("<!doctype html><body></body>");
 	const split = new SplitView(dom.window.document.body, "horizontal");

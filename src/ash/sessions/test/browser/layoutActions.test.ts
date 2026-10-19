@@ -21,6 +21,8 @@ import { registerLayoutActions } from '../../browser/layoutActions.js';
 import { DesktopWorkbenchLayout } from '../../browser/desktopWorkbench.js';
 import { Menus } from '../../browser/menus.js';
 import { CanGoBackContext, CanGoForwardContext } from '../../common/contextkeys.js';
+import { PanelMaximizedContext, PanelPositionContext } from '../../../workbench/common/contextkeys.js';
+import { Position } from '../../../workbench/services/layout/browser/layoutService.js';
 import type { ISessionsService } from '../../services/sessions/browser/sessionsService.js';
 
 class TestPart extends Part {
@@ -69,6 +71,9 @@ test('Sessions layout commands update menu state from their owners and release w
 	const navigationState = (): unknown => [contextKeys.getValue(CanGoBackContext.key), contextKeys.getValue(CanGoForwardContext.key)];
 	try {
 		assert.deepEqual(navigationState(), [true, false]);
+		assert.equal(contextKeys.getValue(PanelPositionContext.key), 'bottom');
+		layout.setPanelPosition(Position.LEFT);
+		assert.equal(contextKeys.getValue(PanelPositionContext.key), 'left');
 		assert.equal(menu.getActions().flatMap(([, actions]) => actions).find(action => action.id === 'ash.sessions.togglePanel')?.enabled, true);
 		assert.deepEqual(state(), [['Hide sidebar', 'Hide sidebar', true, true], ['Back', 'Back', true, undefined], ['Forward', 'Forward', false, undefined]]);
 		await commands.executeCommand('ash.sessions.toggleSidebar');
@@ -81,8 +86,15 @@ test('Sessions layout commands update menu state from their owners and release w
 		await commands.executeCommand('ash.sessions.forward');
 		assert.deepEqual(navigationState(), [true, false]);
 		assert.deepEqual(state(), [['Hide sidebar', 'Hide sidebar', true, true], ['Back', 'Back', true, undefined], ['Forward', 'Forward', false, undefined]]);
+		layout.toggleMaximizedPanel();
+		assert.equal(contextKeys.getValue(PanelMaximizedContext.key), true);
+		assert.equal(menu.getActions().flatMap(([, actions]) => actions).find(action => action.id === 'ash.sessions.togglePanel')?.enabled, true);
+		layout.toggleMaximizedPanel();
+		assert.equal(contextKeys.getValue(PanelMaximizedContext.key), false);
 		actions.dispose();
 		assert.deepEqual(navigationState(), [false, false]);
+		assert.equal(contextKeys.getValue(PanelMaximizedContext.key), false);
+		assert.equal(contextKeys.getValue(PanelPositionContext.key), 'bottom');
 		assert.deepEqual(menu.getActions(), []);
 		assert.equal(CommandsRegistry.getCommand('ash.sessions.toggleSidebar'), undefined);
 		assert.equal(changed.hasListeners(), false);

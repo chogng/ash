@@ -2871,3 +2871,105 @@ test('screen reader textarea follows committed shell input and stops synchronizi
 	await expect(input).toHaveValue('echo 中文');
 	await page.evaluate(() => window.ashTerminalInputIntegration.close());
 });
+
+
+for (const locale of ['en', 'zh-CN'] as const) {
+	test(`terminal split direction follows the real panel layout without replacing screens or sending input in ${locale}`, async ({ page }) => {
+		const errors: string[] = [];
+		page.on('pageerror', error => errors.push(error.message));
+		await page.goto(`/terminal.html?input&groups&panelLayout&locale=${locale}`);
+		await expect.poll(async () => ({ ready: await page.evaluate(() => Boolean(window.ashTerminalGroupsIntegration)), errors })).toEqual({ ready: true, errors: [] });
+		await page.evaluate(locale => window.ashTerminalFindIntegration.theme(locale === 'zh-CN' ? 'hcLight' : 'hcDark'), locale);
+		const command = async (id: string): Promise<void> => { await page.evaluate(id => window.ashTerminalGroupsIntegration.command(id), id); };
+		await command('workbench.action.terminal.split');
+		const panes = page.locator('.ash-terminal-group-pane:visible');
+		await expect(panes).toHaveCount(2);
+		const ids = await panes.evaluateAll(nodes => nodes.map(node => node.getAttribute('data-instance-id')));
+		const created = await page.evaluate(() => window.ashTerminalGroupsIntegration.metadata().created);
+		await page.evaluate(() => window.ashTerminalGroupsIntegration.feed('retained-panel-output\r\n'));
+		await expect(panes.nth(0).locator('.xterm-rows')).toContainText('retained-panel-output');
+		const sash = page.getByRole('separator', { name: locale === 'zh-CN' ? '调整终端窗格大小' : 'Resize terminal panes', exact: true });
+		const share = async (horizontal: boolean): Promise<number> => panes.evaluateAll((nodes, horizontal) => {
+			const sizes = nodes.map(node => horizontal ? node.getBoundingClientRect().width : node.getBoundingClientRect().height);
+			return sizes[0]! / sizes.reduce((sum, size) => sum + size, 0);
+		}, horizontal);
+		const before = await share(true);
+		await sash.focus();
+		await sash.press('ArrowRight');
+		await expect.poll(() => share(true)).toBeGreaterThan(before);
+		let expectedShare = await share(true);
+		const input = panes.nth(1).locator('.xterm-helper-textarea');
+		await input.focus();
+		await input.pressSequentially('unsent-panel-input');
+		await expect.poll(() => page.evaluate(() => window.ashTerminalGroupsIntegration.writes().map(write => write.data).join(''))).toContain('unsent-panel-input');
+		await page.evaluate(() => window.ashTerminalGroupsIntegration.clearWrites());
+		for (const [position, suffix, horizontal] of [['left', 'Left', false], ['top', 'Top', true], ['right', 'Right', false], ['bottom', 'Bottom', true]] as const) {
+			await command(`workbench.action.positionPanel${suffix}`);
+			await expect(page.locator('.ash-workbench-layout')).toHaveAttribute('data-panel-position', position);
+			await expect(sash).toHaveAttribute('aria-orientation', horizontal ? 'vertical' : 'horizontal');
+			const panel = (await page.locator('[data-part="panel"]').boundingBox())!;
+			const editor = (await page.locator('[data-part="editor"]').boundingBox())!;
+			if (position === 'left') expect(panel.x + panel.width).toBeLessThanOrEqual(editor.x + 1);
+			if (position === 'right') expect(editor.x + editor.width).toBeLessThanOrEqual(panel.x + 1);
+			if (position === 'top') expect(panel.y + panel.height).toBeLessThanOrEqual(editor.y + 1);
+			if (position === 'bottom') expect(editor.y + editor.height).toBeLessThanOrEqual(panel.y + 1);
+			await expect(input).toBeFocused();
+			const separator = await panes.nth(1).locator('..').evaluate(element => {
+				const style = getComputedStyle(element, '::before');
+				return { color: style.backgroundColor, width: parseFloat(style.width), height: parseFloat(style.height) };
+			});
+			expect(separator.color).not.toBe('rgba(0, 0, 0, 0)');
+			expect(horizontal ? separator.width : separator.height).toBeGreaterThan(0);
+			await expect.poll(() => panes.evaluateAll(nodes => nodes.map(node => node.getAttribute('data-instance-id')))).toEqual(ids);
+			await expect.poll(async () => Math.abs(await share(horizontal) - expectedShare)).toBeLessThan(0.025);
+			if (position === 'left') {
+				await sash.focus();
+				await sash.press('ArrowDown');
+				await expect.poll(() => share(false)).toBeGreaterThan(expectedShare);
+				expectedShare = await share(false);
+				await input.focus();
+			}
+			const first = (await panes.nth(0).boundingBox())!;
+			const second = (await panes.nth(1).boundingBox())!;
+			if (horizontal) {
+				expect(second.x).toBeGreaterThanOrEqual(first.x + first.width - 1);
+				expect(Math.abs(first.y - second.y)).toBeLessThan(1);
+			} else {
+				expect(second.y).toBeGreaterThanOrEqual(first.y + first.height - 1);
+				expect(Math.abs(first.x - second.x)).toBeLessThan(1);
+			}
+			await expect(panes.nth(0).locator('.xterm-rows')).toContainText('retained-panel-output');
+			expect(await page.evaluate(() => window.ashTerminalGroupsIntegration.writes())).toEqual([]);
+			expect(await page.evaluate(() => window.ashTerminalGroupsIntegration.metadata().created)).toBe(created);
+		}
+		await command('workbench.action.positionPanelRight');
+		const target = page.locator(`.ash-terminal-group-pane[data-instance-id="${ids[1]}"]`);
+		const bounds = (await target.boundingBox())!;
+		await page.locator(`#${ids[0]}-tab`).dragTo(target, { targetPosition: { x: 10, y: bounds.height - 10 } });
+		await expect.poll(() => page.evaluate(() => window.ashTerminalGroupsIntegration.groups())).toEqual([[ids[1], ids[0]]]);
+		expect(await page.evaluate(() => window.ashTerminalGroupsIntegration.writes())).toEqual([]);
+		expect(await page.evaluate(() => window.ashTerminalGroupsIntegration.metadata().created)).toBe(created);
+		expect(errors).toEqual([]);
+	});
+}
+
+for (const moveFocus of [false, true]) {
+	test(`restored terminal keeps deferred focus ownership before its first visible layout (move focus: ${moveFocus})`, async ({ page }) => {
+		await page.goto('/terminal.html?deferredFocus&browser');
+		await page.waitForFunction(() => Boolean(window.ashTerminalDeferredFocusIntegration));
+		const root = page.locator('#terminal-deferred-focus');
+		await expect(root.locator('.xterm-helper-textarea')).toHaveCount(0);
+		await page.getByRole('button', { name: 'Focus source', exact: true }).focus();
+		await page.evaluate(() => window.ashTerminalDeferredFocusIntegration.focus());
+		const other = page.getByRole('button', { name: 'Other focus target', exact: true });
+		if (moveFocus) await other.focus();
+		await page.evaluate(() => window.ashTerminalDeferredFocusIntegration.reveal());
+		const input = root.locator('.xterm-helper-textarea');
+		await expect(input).toHaveCount(1);
+		await expect(root.locator('.xterm-rows')).toContainText('retained deferred output');
+		if (moveFocus) {
+			await expect(other).toBeFocused();
+			await expect(input).not.toBeFocused();
+		} else await expect(input).toBeFocused();
+	});
+}

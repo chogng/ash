@@ -5,6 +5,7 @@ import '../workbench/contrib/splash/electron-browser/splash.contribution.js';
 import { ElectronElevatedFileService } from '../workbench/services/files/electron-browser/elevatedFileService.js';
 import { IElevatedFileService } from '../workbench/services/files/common/elevatedFileService.js';
 import { localize2 } from '../nls.js';
+import { ReloadWindowAction } from '../workbench/browser/actions/windowActions.js';
 import '../workbench/electron-browser/desktop.contribution.js';
 import '../workbench/contrib/browserView/electron-browser/browserView.contribution.js';
 import '../workbench/services/browserView/electron-browser/playwrightWorkbenchService.js';
@@ -23,7 +24,7 @@ import '../workbench/contrib/processExplorer/electron-browser/processExplorer.co
 import './browser/parts/menubar.contribution.js';
 import './contrib/openAgentsWindow/electron-browser/openAgentsWindow.contribution.js';
 import { registerOpenAgentsWindowCommand } from './contrib/openAgentsWindow/electron-browser/openAgentsWindowCommand.js';
-import { MenusRegistry } from '../platform/actions/common/actions.js';
+import { MenusRegistry, registerAction2 } from '../platform/actions/common/actions.js';
 import { Menus } from './browser/menus.js';
 import { IHostService } from '../workbench/services/host/browser/host.js';
 import { NativeHostService } from '../workbench/services/host/electron-browser/nativeHostService.js';
@@ -38,6 +39,7 @@ registerSingleton(ILanguagePackStore, BrowserLanguagePackStore, InstantiationTyp
 registerSingleton(IRemoteAuthorityResolverService, RemoteAuthorityResolverService, InstantiationType.Delayed);
 
 registerOpenAgentsWindowCommand();
+registerAction2(ReloadWindowAction);
 registerWorkbenchContribution(AgentsWindowInvitationContribution.ID, WorkbenchPhase.BlockStartup, accessor => accessor.get(IInstantiationService).createInstance(AgentsWindowInvitationContribution));
 
 MenusRegistry.appendMenuItem(Menus.MenubarFileMenu, {

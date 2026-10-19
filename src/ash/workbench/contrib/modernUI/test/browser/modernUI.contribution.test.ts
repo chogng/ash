@@ -1,11 +1,10 @@
-import { Position } from '../../../../services/layout/browser/layoutService.js';
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { JSDOM } from 'jsdom';
 import { h } from '../../../../../base/browser/dom.js';
 import type { AuxiliaryWindowOpenOptions, IAuxiliaryWindow, IAuxiliaryWindowService as IAuxiliaryWindowServiceContract } from '../../../../services/auxiliaryWindow/browser/auxiliaryWindowService.js';
 import type { WorkbenchLayoutStyle } from '../../../../common/configuration.js';
-import type { IWorkbenchLayoutService as IWorkbenchLayoutServiceContract } from '../../../../services/layout/browser/layoutService.js';
+import type { Position as PanelPosition, IWorkbenchLayoutService as IWorkbenchLayoutServiceContract } from '../../../../services/layout/browser/layoutService.js';
 
 const browserEnvironment = new JSDOM('<!doctype html><body></body>');
 Object.defineProperty(globalThis, 'window', { configurable: true, value: browserEnvironment.window });
@@ -19,13 +18,16 @@ const { WorkbenchConfiguration } = await import('../../../../common/configuratio
 const { WorkbenchContributionsRegistry, WorkbenchPhase } = await import('../../../../common/contributions.js');
 const { IAuxiliaryWindowService } = await import('../../../../services/auxiliaryWindow/browser/auxiliaryWindowService.js');
 const { TestConfigurationService: WorkbenchConfigurationService } = await import("../../../../services/configuration/test/common/testServices.js");
-const { IWorkbenchLayoutService } = await import('../../../../services/layout/browser/layoutService.js');
+const { IWorkbenchLayoutService, Position } = await import('../../../../services/layout/browser/layoutService.js');
 const { BrowserLayoutService } = await import('../../../../../platform/layout/browser/layoutService.js');
 await import('../../browser/modernUI.contribution.js');
 
 class TestWorkbenchLayoutService extends BrowserLayoutService implements IWorkbenchLayoutServiceContract {
 	public readonly styles: WorkbenchLayoutStyle[] = [];
 	public readonly onDidChangePartVisibility = Event.None;
+	readonly onDidChangePanelPosition = Event.None;
+	getPanelPosition(): PanelPosition { return Position.BOTTOM; }
+	setPanelPosition(): void { }
 
 	constructor(container: HTMLElement) { super({ root: container }); }
 	isPartVisible(): boolean { return false; }
@@ -35,9 +37,6 @@ class TestWorkbenchLayoutService extends BrowserLayoutService implements IWorkbe
 	isAuxiliaryBarMaximized(): boolean { return false; }
 	toggleMaximizedAuxiliaryBar(): void { }
 	setAuxiliaryBarMaximized(): boolean { return false; }
-	readonly onDidChangePanelPosition = Event.None;
-	getPanelPosition(): Position { return Position.BOTTOM; }
-	setPanelPosition(): void { }
 	isPanelMaximized(): boolean { return false; }
 	toggleMaximizedPanel(): void { }
 	showPart(): void { }

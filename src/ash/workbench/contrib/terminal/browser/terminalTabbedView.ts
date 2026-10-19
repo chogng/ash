@@ -11,6 +11,7 @@ import { h, addDisposableListener } from "../../../../base/browser/dom.js";
 import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
 import { TerminalContextKeys } from '../common/terminalContextKey.js';
+import { IWorkbenchLayoutService, isHorizontal } from '../../../services/layout/browser/layoutService.js';
 
 const MIN_TERMINAL_WIDTH = 120;
 const TERMINAL_VIEW_INDEX = 0;
@@ -27,7 +28,15 @@ export class TerminalTabbedView extends Disposable {
 	private initialized = false;
 	private readonly tabsNarrow;
 
-	constructor(parentElement: HTMLElement, @ITerminalService private readonly terminalService: ITerminalService, @IInstantiationService instantiation: IInstantiationService, @IStorageService private readonly storage: IStorageService, @IContextKeyService contextKeys: IContextKeyService, @ITerminalGroupService private readonly groups: ITerminalGroupService) {
+	constructor(
+		parentElement: HTMLElement,
+		@ITerminalService private readonly terminalService: ITerminalService,
+		@IInstantiationService instantiation: IInstantiationService,
+		@IStorageService private readonly storage: IStorageService,
+		@IContextKeyService contextKeys: IContextKeyService,
+		@ITerminalGroupService private readonly groups: ITerminalGroupService,
+		@IWorkbenchLayoutService layoutService: IWorkbenchLayoutService,
+	) {
 		super();
 		this.tabsNarrow = TerminalContextKeys.tabsNarrow.bindTo(contextKeys);
 		this._register(toDisposable(() => this.tabsNarrow.reset()));
@@ -54,7 +63,10 @@ export class TerminalTabbedView extends Disposable {
 			event.preventDefault();
 			event.stopPropagation();
 			const bounds = pane!.getBoundingClientRect();
-			this.groups.moveInstance(source, target, event.clientX < bounds.left + bounds.width / 2 ? 'before' : 'after');
+			const before = isHorizontal(layoutService.getPanelPosition())
+				? event.clientX < bounds.left + bounds.width / 2
+				: event.clientY < bounds.top + bounds.height / 2;
+			this.groups.moveInstance(source, target, before ? 'before' : 'after');
 		}));
 		const host = h(parentElement.ownerDocument, 'div');
 		this.splitView = this._register(new SplitView(host, "horizontal"));

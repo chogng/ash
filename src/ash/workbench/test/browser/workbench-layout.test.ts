@@ -579,6 +579,62 @@ test('Workbench layout requires its services and hosts overlays before Parts cre
 	dom.window.close();
 });
 
+test('Panel position commands preserve visibility, both axis sizes, focus and scoped storage', async () => {
+	const dom = new JSDOM('<!doctype html><body></body>', { url: 'https://ash-panel-position.test' });
+	using storage = new BrowserStorageService({ ownerWindow: dom.window as unknown as Window, workspaceId: 'position', backend: dom.window.localStorage, flushInterval: 0 });
+	const harness = createLayoutHarness(dom.window.document, { storageService: storage, defaultLayout: { parts: { panel: true } } });
+	using resources = harness.disposables;
+	using context = new ContextKeyService();
+	using positionContext = createTestWorkbenchContextKeysHandler(context, { layoutService: harness.layout });
+	using commands = new CommandService(harness.services);
+	const menus = new MenuService(commands, context);
+	const positionMenu = () => menus.getMenuActions(MenuId.for('PanelPositionMenu')).flatMap(([, actions]) => actions);
+	const events: string[] = [];
+	resources.add(harness.layout.onDidChangePanelPosition(position => events.push(position)));
+	harness.layout.layout(new Dimension(1_800, 900));
+	harness.layout.resizePart('panel', new Dimension(1_000, 180));
+	const input = dom.window.document.createElement('textarea');
+	harness.container.querySelector('[data-part="panel"]')!.append(input);
+	input.focus();
+	for (const [suffix, position] of [['Left', Position.LEFT], ['Right', Position.RIGHT], ['Top', Position.TOP], ['Bottom', Position.BOTTOM]] as const) {
+		await commands.executeCommand(`workbench.action.positionPanel${suffix}`);
+		assert.equal(harness.layout.getPanelPosition(), position);
+		assert.equal(positionMenu().find(action => action.checked)?.id, `workbench.action.positionPanel${suffix}`);
+		assert.equal(dom.window.document.activeElement, input);
+		assert.equal(harness.layout.isPartVisible('panel'), true);
+		if (position === Position.LEFT || position === Position.RIGHT) {
+			assert.equal(harness.layout.getPartSize('panel').width, 300);
+			harness.layout.resizePart('panel', new Dimension(300, 800));
+		} else {
+			assert.equal(harness.layout.getPartSize('panel').height, 180);
+		}
+	}
+	assert.deepEqual(events, ['left', 'right', 'top', 'bottom']);
+	await positionMenu().find(action => action.id.endsWith('Left'))!.run();
+	harness.layout.resizePart('panel', new Dimension(350, 800));
+	harness.layout.hidePart('panel');
+	await commands.executeCommand('workbench.action.positionPanelRight');
+	assert.equal(harness.layout.isPartVisible('panel'), true);
+	harness.layout.showPart('panel');
+	assert.equal(harness.layout.getPartSize('panel').width, 350);
+	harness.layout.toggleMaximizedPanel();
+	await commands.executeCommand('workbench.action.positionPanelTop');
+	assert.equal(harness.layout.isPanelMaximized(), true);
+	harness.layout.toggleMaximizedPanel();
+	assert.equal(harness.layout.getPartSize('panel').height, 180);
+	await commands.executeCommand('workbench.action.positionPanelRight');
+	assert.equal(harness.layout.getPartSize('panel').width, 350);
+	await storage.flush(WillSaveStateReason.SHUTDOWN);
+	const restored = createLayoutHarness(dom.window.document, { storageService: storage, initialDimension: new Dimension(1_800, 900) });
+	restored.layout.layout(new Dimension(1_800, 900));
+	assert.equal(restored.layout.getPanelPosition(), Position.RIGHT);
+	assert.equal(restored.layout.getPartSize('panel').width, 350);
+	assert.equal(restored.layout.state.panel.height, 180);
+	restored.disposables.dispose();
+	resources.dispose();
+	dom.window.close();
+});
+
 test('maximized Panel survives configuration changes and restores its saved height', async () => {
 	const dom = new JSDOM('<!doctype html><body></body>');
 	const harness = createLayoutHarness(dom.window.document, { defaultLayout: { parts: { panel: true } } });

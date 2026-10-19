@@ -92,7 +92,7 @@ Sticky Scroll 由原 CommandDetection markers 和 xterm buffer 投影命令标�
 
 ## 视图、分组与资源导航
 
-隐藏面板保留实例、PTY、屏幕、待提交输入、分屏比例与焦点。面板组由 `TerminalGroupService` 管理成员，`TerminalGroup` 按布局服务的 Panel 位置使用 SplitView：顶部／底部横向，左侧／右侧纵向；列表从组模型派生行顺序、连接线与可访问位置描述。标签拖到另一标签之前／之后可加入该组或重排；拖到可见窗格左／右侧使用相同 `moveInstance` 操作，资源只匹配本窗口的存活实例。组内重排将比例与实例一起保留。Join or Reorder Terminals 提供同等键盘选择器，取消、切换实例或关闭后不应用过期结果。
+隐藏面板保留实例、PTY、屏幕、待提交输入、分屏比例与焦点。面板组由 `TerminalGroupService` 管理成员，`TerminalGroup` 按窗口布局服务的真实 Panel 位置分屏：顶部／底部横向排列，左侧／右侧纵向排列；移动面板保留相对尺寸和焦点。列表从组模型派生行顺序、连接线与可访问位置描述。标签拖到另一标签之前／之后可加入该组或重排；拖到可见窗格沿分屏轴的前／后半部使用相同 `moveInstance` 操作，资源只匹配本窗口的存活实例。组内重排将比例与实例一起保留。Join or Reorder Terminals 提供同等键盘选择器，取消、切换实例或关闭后不应用过期结果。
 
 `TerminalEditorService` 将同一个 TerminalInstance 移入或移出编辑区，编辑器 pane 只承载原 xterm。移动不复制屏幕或重建进程；同一终端可由多个编辑器组承载；关闭单个宿主保留原进程，最后一个宿主关闭后才释放实例。批量关闭先按准确关闭集合完成确认，取消不提前关闭任何进程。重命名和图标变化由实例保存，标签与编辑器通过原事件更新。
 
@@ -121,7 +121,7 @@ Sticky Scroll 由原 CommandDetection markers 和 xterm buffer 投影命令标�
 
 `confirmOnKill` 默认为 `editor`，`confirmOnExit` 默认为 `never`；设置及枚举值由原配置 schema 定义。子进程状态通过 Rust `terminal/processInfo` 查询，OS 无法确定时保守确认，取消关闭不停止进程、输出或待提交输入。
 
-Desktop 的 `enablePersistentSessions` 控制协调 reload 和退出恢复。准备阶段等待输入队列与屏幕解析提交，保存输出游标、UTF-8 尾部、终端资源、VT 屏幕、组成员／比例及活动／焦点项。普通工作区存储保存 UI checkpoint，租约 token 通过窗口级内存 SecretStorage 短期交接；准备或其他生命周期 join 失败时撤销交接并恢复同一实例读写。
+Desktop 的 `enablePersistentSessions` 控制协调 reload 和退出恢复。准备阶段等待输入队列与屏幕解析提交，保存输出游标、UTF-8 尾部、终端资源、VT 屏幕、组成员／比例及活动／焦点项。普通工作区存储保存 UI checkpoint，租约 token 通过窗口级内存 SecretStorage 短期交接；准备或其他生命周期 join 失败时撤销交接并恢复同一实例读写。 恢复屏幕等首次可见布局再打开渲染器；保存的焦点请求保留到这一步，期间用户移至其他控件时取消，避免启动时面板仍为零尺寸而丢失焦点或随后抢回焦点。
 
 新 Renderer 按原执行目录与租约 attach 并验证 PID，恢复原字符网格与屏幕，等待布局和工作台恢复后续读，避免临时尺寸改写历史。实际窗口关闭清空内存凭据；扩展自供 PTY 没有恢复协议时阻止不安全的 reload，并反馈原因。
 

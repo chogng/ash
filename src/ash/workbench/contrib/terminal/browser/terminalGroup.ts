@@ -95,6 +95,8 @@ export class TerminalGroup extends Disposable implements ITerminalGroup {
 	layout(width: number, height: number): void {
 		this.width = width;
 		this.height = height;
+		// Hidden Panels have no geometry for a new axis; retain panes until the next visible layout.
+		if (width <= 0 || height <= 0) return;
 		const orientation = isHorizontal(this.workbenchLayout.getPanelPosition()) ? 'horizontal' : 'vertical';
 		if (this.orientation !== orientation) {
 			this.orientation = orientation;
@@ -142,6 +144,7 @@ export class TerminalGroup extends Disposable implements ITerminalGroup {
 		if (!this.container) return;
 		const activeElement = this.container.ownerDocument.activeElement;
 		const focusedInstance = this.instances.find(instance => instance.xterm?.element.contains(activeElement));
+		const focusedSash = this.instances.findIndex((_, index) => this.splitView?.getSash(index)?.element === activeElement);
 		// Detach before disposing the old layout so xterm's DOM and buffer survive.
 		for (const instance of this.instances) instance.detachFromElement();
 		this.layoutLifetime.clear();
@@ -178,6 +181,7 @@ export class TerminalGroup extends Disposable implements ITerminalGroup {
 		this.layout(this.width, this.height);
 		// Reparenting a surviving screen blurs its textarea; retain its input focus.
 		focusedInstance?.xterm?.focus();
+		if (focusedSash >= 0) split.getSash(focusedSash)?.element.focus();
 	}
 
 	protected override disposeCore(): void {

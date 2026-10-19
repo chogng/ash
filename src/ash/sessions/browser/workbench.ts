@@ -1,4 +1,5 @@
 import { SessionsAgentSessionService } from './agentHost/sessionsAgentSessionService.js';
+import type { Position } from '../../workbench/services/layout/browser/layoutService.js';
 import { SessionConversationLinks } from './agentHost/sessionConversationLinks.js';
 import { SessionsAgentThreadService } from './agentHost/sessionsAgentThreadService.js';
 import { SessionsSearchService } from '../contrib/providers/agentHost/browser/sessionsSearchService.js';
@@ -1021,6 +1022,11 @@ function sameWorkspace(first: SessionWorkspaceSelection, second: SessionWorkspac
 }
 
 export interface IAgentWorkbenchLayoutService extends ILayoutService {
+	getPanelPosition(): Position;
+	setPanelPosition(position: Position): void;
+	readonly onDidChangePanelPosition: Event<string>;
+	isPanelMaximized(): boolean;
+	toggleMaximizedPanel(): void;
 	createWorkbenchLayout(parts: ReadonlyMap<SessionsPartId, Part>): void;
 	setActivityBarLocation(location: ActivityBarPosition): void;
 	layout(dimension?: IDimension): void;

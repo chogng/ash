@@ -15,6 +15,8 @@ export interface SplitViewStyles {
 }
 
 export interface SplitViewOptions {
+	/** Scales existing visible panes with the primary axis before applying constraints. */
+	readonly proportionalLayout?: boolean;
 	/** Optional Sash presentation shared by separators created for this view. */
 	readonly sashPresentation?: SashPresentation;
 	readonly styles?: SplitViewStyles;
@@ -288,6 +290,10 @@ export class SplitView extends Disposable {
 	layout(size: number, orthogonalSize: number): void {
 		assertNonNegativeFinite(size, "size");
 		assertNonNegativeFinite(orthogonalSize, "orthogonal size");
+		if (this.options.proportionalLayout && this.size > 0 && size !== this.size) {
+			const scale = size / this.size;
+			for (const item of this.visibleItems()) item.size *= scale;
+		}
 		this.size = size;
 		this.orthogonalSize = orthogonalSize;
 		this.didLayout = true;

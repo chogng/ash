@@ -220,7 +220,8 @@ export class TerminalNativeContribution extends Disposable implements IWorkbench
 				instance?.start();
 			}
 			const focused = this.terminals.instances.find(instance => instance.instanceId === state.focusedId);
-			if (focused?.xterm?.element.isConnected && focused.xterm.element.getBoundingClientRect().width > 0) focused.xterm.focus();
+			// The screen retains this focus request until its restored renderer opens in a visible layout.
+			if (focused?.xterm?.element.isConnected) focused.xterm.focus();
 		}
 		await this.clearCheckpoint();
 		this.storage.remove(await this.reviveStateKey(), StorageScope.WORKSPACE);
