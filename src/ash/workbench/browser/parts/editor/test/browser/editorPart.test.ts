@@ -4077,9 +4077,14 @@ test('general document commands preserve dirty source text, create a backed-up d
 		const { startAcademyExtension } = await import('../../../../../../../../test/fixtures/academyExtension.js');
 		const { MainThreadClientEditors } = await import('../../../../../api/browser/mainThreadClientEditors.js');
 		const { readFile } = await import('node:fs/promises');
-		const fixture = JSON.parse(await readFile('.build/builtin/fixture.json', 'utf8')) as { catalog: { extensions: ExtensionDescriptor[]; }; };
-		const entry = fixture.catalog.extensions.find((entry: { id: string; }) => entry.id === 'ash.academic');
-		assert.ok(entry);
+		const entry: ExtensionDescriptor = {
+			id: 'ash.academic', name: 'academic', publisher: 'ash', version: '1.0.0', displayName: 'Academy', sourceKind: 'registry',
+			manifestJson: await readFile('extensions/academic/package.json', 'utf8'), manifestSha256: `sha256:${'a'.repeat(64)}`, packageSha256: `sha256:${'a'.repeat(64)}`,
+			rendererClient: {
+				runtimeId: 'ash.academic', apiVersion: 1, entry: 'dist/editor.js', digest: `sha256:${'b'.repeat(64)}`,
+				style: 'dist/editor.css', styleDigest: `sha256:${'c'.repeat(64)}`, sourceDigest: `sha256:${'d'.repeat(64)}`,
+			},
+		};
 		const provider = await startAcademyExtension();
 		const moduleRequested = new DeferredPromise<void>();
 		const allowModule = new DeferredPromise<void>();

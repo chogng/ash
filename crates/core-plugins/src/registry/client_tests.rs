@@ -19,7 +19,7 @@ fn opening_the_remote_client_never_requires_network_access() {
     let client = ExtensionsRemoteClient::new(config);
     let result = client
         .search(crate::SearchPackagesRequest {
-            capability_kind: Some(crate::CapabilityKind::EditorExtension),
+            package_type: Some("editorExtension".into()),
             ..Default::default()
         })
         .unwrap();

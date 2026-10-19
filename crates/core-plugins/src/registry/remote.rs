@@ -53,6 +53,7 @@ pub struct RemoteExtensionsConfig {
     trusted_root: Vec<u8>,
     cache_root: PathBuf,
     allowed_publishers: BTreeSet<String>,
+    product_runtime_publishers: BTreeSet<String>,
     catalog_refresh_interval: Duration,
     tls_root_certificates: Option<CertificateBundle>,
 }
@@ -82,6 +83,7 @@ impl RemoteExtensionsConfig {
             trusted_root,
             cache_root: cache_root.into(),
             allowed_publishers: BTreeSet::new(),
+            product_runtime_publishers: BTreeSet::new(),
             catalog_refresh_interval: DEFAULT_CATALOG_REFRESH_INTERVAL,
             tls_root_certificates: None,
         })
@@ -108,6 +110,7 @@ impl RemoteExtensionsConfig {
             trusted_root,
             cache_root: cache_root.into(),
             allowed_publishers: BTreeSet::new(),
+            product_runtime_publishers: BTreeSet::new(),
             catalog_refresh_interval: DEFAULT_CATALOG_REFRESH_INTERVAL,
             tls_root_certificates: None,
         })
@@ -147,6 +150,44 @@ impl RemoteExtensionsConfig {
         }
         self.allowed_publishers = unique;
         Ok(self)
+    }
+
+    /// Selects publisher delegations trusted to ship product runtime code. This is a
+    /// product deployment decision, independent of a package's self-declared source.
+    pub fn with_product_runtime_publishers(
+        mut self,
+        publishers: impl IntoIterator<Item = String>,
+    ) -> Result<Self, ExtensionsClientError> {
+        let publishers = publishers.into_iter().collect::<Vec<_>>();
+        let unique = publishers.iter().cloned().collect::<BTreeSet<_>>();
+        if unique.is_empty()
+            || unique.len() != publishers.len()
+            || unique
+                .iter()
+                .any(|publisher| !valid_identifier_segment(publisher))
+        {
+            return Err(ExtensionsClientError::invalid_request(
+                "invalid product runtime publisher policy",
+            ));
+        }
+        self.product_runtime_publishers = unique;
+        Ok(self)
+    }
+
+    pub(crate) fn product_runtime_authority(&self, package_name: &str) -> Option<String> {
+        use sha2::Digest;
+        use sha2::Sha256;
+        let (publisher, _) = package_name.split_once('.')?;
+        self.product_runtime_publishers
+            .contains(publisher)
+            .then(|| {
+                // Pin the source's entire initial trust root and publisher namespace. A
+                // different product source cannot inherit authority for cached artifacts.
+                format!(
+                    "sha256:{:x}:{publisher}",
+                    Sha256::digest(&self.trusted_root)
+                )
+            })
     }
 
     /// Sets how long an in-process verified catalog snapshot may be reused before refreshing.

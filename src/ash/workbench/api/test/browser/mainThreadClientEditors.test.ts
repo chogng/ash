@@ -1,7 +1,6 @@
 import { generalProfile } from '../../../../../../extensions/academic/browser/generalProfile.js';
 import { resetNlsResolver, setNlsMessages } from '../../../../nls.js';
 import { toDisposable } from '../../../../base/common/lifecycle.js';
-import { createDefaultDocumentSchema } from '../../../../../../extensions/academic/common/model/documentSchema.js';
 import type { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import type { EditorPaneOptions } from '../../../contrib/documentEditor/browser/documentEditorPane.js';
 import assert from 'node:assert/strict';
@@ -16,9 +15,9 @@ import { DocumentTypes } from '../../../services/documentEditor/common/documentT
 import { type ExtensionEditorModuleLoader } from '../../../services/extensions/browser/extensionEditor.js';
 import { MainThreadClientEditors } from '../../browser/mainThreadClientEditors.js';
 
-const owner = { id: 'ash.academic', name: 'academic', version: '1.0.0', sourceKind: 'builtIn', packageSha256: 'a'.repeat(64) } as ExtensionDescriptor;
+const owner = { id: 'ash.academic', name: 'academic', publisher: 'ash', version: '1.0.0', sourceKind: 'builtIn', packageSha256: 'a'.repeat(64) } as ExtensionDescriptor;
 const declaration: { readonly [key: string]: JsonValue; } = {
-	version: 1, clientModule: 'browser/editor.ts', clientDigest: `sha256:${'a'.repeat(64)}`, editors: [{
+	version: 1, clientModule: 'dist/editor.js', clientDigest: `sha256:${'a'.repeat(64)}`, editors: [{
 		editorId: 'stanza.editor.document', displayName: 'Academic Document', selectors: ['*.ash-academic', '*.ash-paper'],
 		documentType: 'academic', contentType: 'application/vnd.ash.academic-document+json',
 	}],
@@ -41,14 +40,14 @@ for (const [language, title] of [['en', 'Academic Document'], ['zh-CN', '学术�
 			let loads = 0;
 			const api = { invoke: (request, signal) => process.invoke(request.registrationId, request.operation, request.payload, signal) } as IExtensionHostApi;
 			const packages = { list: async () => ({ generation: 1, extensions: enabled ? [owner] : [], diagnostics: [] }) } as unknown as IExtensionApi;
-			const load: ExtensionEditorModuleLoader = async (name, entry) => {
+			const load: ExtensionEditorModuleLoader = async ({ package: packageOwner, entry }) => {
 				loads++;
-				assert.equal(name, 'academic'); assert.equal(entry, 'browser/editor.ts');
+				assert.equal(packageOwner.name, 'academic'); assert.equal(entry, 'dist/editor.js');
 				return {
 					packageId: owner.id, packageVersion: owner.version,
 					getEditorProfile: id => {
 						assert.equal(id, 'stanza.editor.document');
-						return { ...generalProfile, id: 'academic', contentType: 'application/vnd.ash.academic-document+json', createSchema: createDefaultDocumentSchema };
+						return { ...generalProfile, id: 'academic', contentType: 'application/vnd.ash.academic-document+json' };
 					},
 				};
 			};
@@ -147,4 +146,91 @@ test('retiring the connection while the catalog is loading cannot create a new e
 	await pending;
 	assert.equal(invoked, false);
 	assert.equal(EditorPanes.getEditorPane({ resource: URI.file('/late-catalog.ash-paper') }), undefined);
+});
+
+test('verified installed packages bind editor scopes to exact admitted runtime and package bytes', async () => {
+	let entries: ExtensionDescriptor[] = [{
+		...owner,
+		sourceKind: 'registry',
+		manifestSha256: `sha256:${'b'.repeat(64)}`,
+		packageSha256: runtime.packageDigest,
+		rendererClient: {
+			runtimeId: 'marketplace:verified-academic:editor-extension:editor', apiVersion: 1,
+			entry: 'dist/editor.js', digest: `sha256:${'c'.repeat(64)}`,
+			style: 'dist/editor.css', styleDigest: `sha256:${'d'.repeat(64)}`,
+			sourceDigest: declaration.clientDigest as string,
+		},
+	}];
+	const admittedRuntime = { ...runtime, id: entries[0].rendererClient!.runtimeId };
+	let loads = 0;
+	let providerSignal: AbortSignal | undefined;
+	const packages = { list: async () => ({ generation: 7, extensions: entries, diagnostics: [] }) } as unknown as IExtensionApi;
+	using bridge = new MainThreadClientEditors(30_000, async request => {
+		loads++;
+		assert.strictEqual(request.package, entries[0]);
+		assert.equal(request.generation, 7);
+		assert.equal(request.entry, 'dist/editor.js');
+		providerSignal = request.signal;
+		return {
+			packageId: owner.id, packageVersion: owner.version,
+			getEditorProfile: () => ({ ...generalProfile, id: 'academic', contentType: 'application/vnd.ash.academic-document+json' }),
+		};
+	}, { invoke: async () => declaration } as unknown as IExtensionHostApi, packages);
+	await bridge.update({ generation: 1, extensions: [admittedRuntime] });
+	const input = { resource: URI.file('/installed.ash-paper') };
+	const descriptor = EditorPanes.getEditorPane(input)!;
+	assert.ok(descriptor);
+	await descriptor.resolveDocumentProfile!();
+	await descriptor.resolveDocumentProfile!();
+	assert.equal(loads, 1, 'one capability shares one verified module across its document profiles');
+	entries = [{ ...entries[0], packageSha256: `sha256:${'e'.repeat(64)}` }];
+	await assert.rejects(descriptor.resolveDocumentProfile!(), /retired/);
+	await assert.rejects(bridge.update({ generation: 2, extensions: [admittedRuntime] }), /unavailable/);
+	assert.equal(providerSignal?.aborted, true);
+	assert.equal(EditorPanes.getEditorPane(input), undefined);
+});
+
+test('a publisher name or runtime identity cannot grant installed renderer execution', async () => {
+	let invoked = false;
+	using bridge = new MainThreadClientEditors(30_000, async () => { throw new Error('must not load'); }, {
+		invoke: async () => { invoked = true; return declaration; },
+	} as unknown as IExtensionHostApi, {
+		list: async () => ({ generation: 1, extensions: [{ ...owner, sourceKind: 'registry', publisher: 'ash', packageSha256: runtime.packageDigest }], diagnostics: [] }),
+	} as unknown as IExtensionApi);
+	await assert.rejects(bridge.update({ generation: 1, extensions: [runtime] }), /unavailable/);
+	assert.equal(invoked, false);
+});
+
+test('temporary client resource failures can retry within the same live capability', async () => {
+	let attempts = 0;
+	using bridge = new MainThreadClientEditors(30_000, async () => {
+		if (++attempts === 1) throw new Error('Temporary resource read failure');
+		return { packageId: owner.id, packageVersion: owner.version, getEditorProfile: () => ({ ...generalProfile, id: 'academic', contentType: 'application/vnd.ash.academic-document+json' }) };
+	}, { invoke: async () => declaration } as unknown as IExtensionHostApi, {
+		list: async () => ({ generation: 1, extensions: [owner], diagnostics: [] }),
+	} as unknown as IExtensionApi);
+	await bridge.update({ generation: 1, extensions: [runtime] });
+	const descriptor = EditorPanes.getEditorPane({ resource: URI.file('/retry-resources.ash-paper') })!;
+	await assert.rejects(descriptor.resolveDocumentProfile!(), /Temporary resource read failure/);
+	assert.equal((await descriptor.resolveDocumentProfile!()).id, 'academic');
+	await descriptor.resolveDocumentProfile!();
+	assert.equal(attempts, 2);
+});
+
+test('disabled installed declarations protect document routing and uninstall removes their reservation', async () => {
+	const manifestJson = JSON.stringify({
+		name: 'academic', publisher: 'ash', version: '1.0.0', ashRuntime: { kind: 'rust' },
+		contributes: { customEditors: [{ viewType: 'stanza.editor.document', displayName: 'Academic', priority: 'default', selector: [{ filenamePattern: '*.ash-protected', mimeType: 'application/vnd.ash.academic-document+json' }] }] },
+	});
+	let entries = [{ ...owner, sourceKind: 'registry', manifestJson, manifestSha256: `sha256:${'a'.repeat(64)}` }];
+	using bridge = new MainThreadClientEditors(30_000, async () => { throw new Error('must not load'); }, {} as IExtensionHostApi, {
+		list: async () => ({ generation: 1, extensions: entries, diagnostics: [] }),
+	} as unknown as IExtensionApi);
+	const input = { resource: URI.file('/disabled.ash-protected') };
+	await bridge.update({ generation: 1, extensions: [] });
+	assert.equal(DocumentTypes.requiresProvider(input), true);
+	assert.equal(DocumentTypes.find(input), undefined);
+	entries = [];
+	await bridge.update({ generation: 2, extensions: [] });
+	assert.equal(DocumentTypes.requiresProvider(input), false);
 });

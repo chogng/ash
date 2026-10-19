@@ -318,7 +318,9 @@ export async function reviewExtensionExecution(extension: ExtensionsEditorExtens
 	if (!selected) { return; }
 	await dialogs.prompt({
 		title: selected.package.id, message: selected.package.version,
-		detail: localize({ bundle: 'ash.extensions', key: 'extensionsExecutionNotice' }, 'Authorize this exact extension to run in the product Node host with your user-level filesystem, network and child-process access, including inherited developer environment variables. Editor APIs receive documents including unsaved text. Package or execution-contract changes require new authorization.'),
+		detail: selected.executionKind === 'native'
+			? localize({ bundle: 'ash.extensions', key: 'nativeExtensionsExecutionNotice' }, 'Authorize this exact extension to run its native program and trusted editor client with your user-level filesystem, network and child-process access. The editor client receives document content, including unsaved text. Package or execution-contract changes require new authorization.')
+			: localize({ bundle: 'ash.extensions', key: 'extensionsExecutionNotice' }, 'Authorize this exact extension to run in the product Node host with your user-level filesystem, network and child-process access, including inherited developer environment variables. Editor APIs receive documents including unsaved text. Package or execution-contract changes require new authorization.'),
 		buttons: [{ label: selected.granted ? localize({ bundle: 'ash.extensions', key: 'revokeExtensionsExecution' }, 'Revoke execution authorization') : localize({ bundle: 'ash.extensions', key: 'grantExtensionsExecution' }, 'Authorize execution'), run: () => management.setEditorExtensionPolicy(selected, selected.granted ? 'revoke' : 'grant', catalog.revision) }],
 	});
 }

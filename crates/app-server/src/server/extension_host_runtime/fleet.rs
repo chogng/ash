@@ -209,15 +209,19 @@ impl RuntimeInner {
                 limits.maximum_payload_bytes = protocol.maximum_payload_bytes;
             }
             let mut launcher = Arc::clone(&self.launcher);
-            if deployment.scope == source::EditorExtensionScope::Product
-                && !prepared.command.is_javascript()
+            if matches!(
+                deployment.scope,
+                source::EditorExtensionScope::Product
+                    | source::EditorExtensionScope::ProductPackage
+            ) && !prepared.command.is_javascript()
                 && !matches!(
                     limits.isolation,
                     ash_external_ext::ProcessIsolationPolicy::TrustedDevelopment
                 )
             {
                 // Product executables use the same supervisor; the exact installed executable
-                // is the launch authority, without granting this policy to package programs.
+                // is the launch authority; installed first-party packages additionally retain
+                // exact artifact consent, Manager leases and their source trust fence.
                 limits.isolation = ash_external_ext::ProcessIsolationPolicy::AuthorizedProduct;
                 launcher = Arc::new(ash_external_ext::ProductExecutableLauncher::new(
                     prepared

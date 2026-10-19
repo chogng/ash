@@ -222,7 +222,8 @@
     "mcpOAuthClientRequired": "此 MCP 服务器需要已注册的 OAuth 客户端标识符或客户端元数据网址。",
     "mcpOAuthClientId": "已注册的 OAuth 客户端标识符",
     "mcpOAuthMetadataUrl": "客户端元数据网址（可选）",
-    "mcpOAuthHttpOnly": "MCP 登录需要 HTTPS 服务器。"
+    "mcpOAuthHttpOnly": "MCP 登录需要 HTTPS 服务器。",
+    "nativeExtensionsExecutionNotice": "授权此精确版本的扩展运行其原生程序和可信编辑器客户端，可使用用户级文件系统、网络和子进程权限。编辑器客户端会接收包含未保存文本的文档内容。包或执行契约变更后需要重新授权。"
   },
   "ash.workbench": {
     "command.OpenExtensions": "打开扩展",

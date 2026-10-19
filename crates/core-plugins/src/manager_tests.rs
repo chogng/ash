@@ -202,7 +202,10 @@ fn local_capability_sources_revalidate_the_immutable_artifact() {
         SKILL_CONTENT
     );
 
+    assert!(manager.local_source_is_current(&sources[0]));
     fs::write(sources[0].host_path().join("SKILL.md"), b"tampered").unwrap();
+    assert!(!manager.local_source_is_current(&sources[0]));
+    assert!(manager.acquire_local_source(&sources[0]).is_err());
     assert!(
         manager
             .local_capability_sources(CapabilityKind::Skill)
@@ -1160,4 +1163,112 @@ fn a_failed_source_does_not_hide_healthy_source_results() {
             .all(|package| package.id.ends_with("@test"))
     );
     assert!(!result.packages.is_empty());
+}
+
+struct ProductRegistry(&'static str);
+impl ExtensionSource for ProductRegistry {
+    fn product_runtime_authority(&self, _: &str) -> Option<String> {
+        Some(self.0.into())
+    }
+    fn search(
+        &self,
+        request: SearchPackagesRequest,
+    ) -> Result<SearchPackagesResult, ExtensionsClientError> {
+        FakeRegistry.search(request)
+    }
+    fn get(&self, request: GetPackageRequest) -> Result<PackageDetails, ExtensionsClientError> {
+        FakeRegistry.get(request)
+    }
+    fn download(
+        &self,
+        request: DownloadPackageRequest,
+    ) -> Result<Box<dyn ExtensionPackagePayload>, ExtensionsClientError> {
+        FakeRegistry.download(request)
+    }
+}
+
+#[test]
+fn product_runtime_authority_is_persisted_with_exact_artifact_and_source_trust() {
+    let root = tempfile::tempdir().unwrap();
+    let manager = ExtensionPackageManager::open(
+        root.path(),
+        providers(Arc::new(ProductRegistry("root-a:publisher"))),
+    )
+    .unwrap();
+    manager
+        .install(InstallPackageRequest {
+            package_id: "demo@test".into(),
+            version: Some("1.0.0".into()),
+        })
+        .unwrap();
+    assert!(
+        manager
+            .local_capability_sources(CapabilityKind::Skill)
+            .unwrap()[0]
+            .is_product_runtime()
+    );
+    drop(manager);
+    let manager = ExtensionPackageManager::open(
+        root.path(),
+        providers(Arc::new(ProductRegistry("root-a:publisher"))),
+    )
+    .unwrap();
+    assert!(
+        manager
+            .local_capability_sources(CapabilityKind::Skill)
+            .unwrap()[0]
+            .is_product_runtime()
+    );
+    drop(manager);
+    let manager = ExtensionPackageManager::open(
+        root.path(),
+        providers(Arc::new(ProductRegistry("root-b:publisher"))),
+    )
+    .unwrap();
+    assert!(
+        !manager
+            .local_capability_sources(CapabilityKind::Skill)
+            .unwrap()[0]
+            .is_product_runtime()
+    );
+    drop(manager);
+    let manager =
+        ExtensionPackageManager::open(root.path(), providers(Arc::new(FakeRegistry))).unwrap();
+    assert!(
+        !manager
+            .local_capability_sources(CapabilityKind::Skill)
+            .unwrap()[0]
+            .is_product_runtime()
+    );
+}
+
+#[test]
+fn product_runtime_authority_cannot_upgrade_an_existing_untrusted_installation() {
+    let root = tempfile::tempdir().unwrap();
+    let manager =
+        ExtensionPackageManager::open(root.path(), providers(Arc::new(FakeRegistry))).unwrap();
+    manager
+        .install(InstallPackageRequest {
+            package_id: "demo@test".into(),
+            version: Some("1.0.0".into()),
+        })
+        .unwrap();
+    assert!(
+        !manager
+            .local_capability_sources(CapabilityKind::Skill)
+            .unwrap()[0]
+            .is_product_runtime()
+    );
+    drop(manager);
+    let manager = ExtensionPackageManager::open(
+        root.path(),
+        providers(Arc::new(ProductRegistry("root-a:publisher"))),
+    )
+    .unwrap();
+    assert!(
+        !manager
+            .local_capability_sources(CapabilityKind::Skill)
+            .unwrap()[0]
+            .is_product_runtime()
+    );
 }

@@ -102,6 +102,11 @@ impl LocalProductServicesConfig {
                     .with_allowed_publishers(publishers)
                     .map_err(product_config_error)?;
             }
+            if let Some(publishers) = extension_packages.product_runtime_publishers {
+                config = config
+                    .with_product_runtime_publishers(publishers)
+                    .map_err(product_config_error)?;
+            }
             if extension_sources.insert(name, config).is_some() {
                 return Err(product_config_error(()));
             }
@@ -331,6 +336,8 @@ struct ProductExtensionsDocument {
     catalog_refresh_interval_seconds: Option<u64>,
     #[serde(default)]
     allowed_publishers: Option<Vec<String>>,
+    #[serde(default)]
+    product_runtime_publishers: Option<Vec<String>>,
 }
 
 #[derive(Deserialize)]

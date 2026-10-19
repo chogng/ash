@@ -25,9 +25,9 @@ pub(super) fn prepare_extension(
         return Err(ExtensionHostError::AuthorityDenied);
     }
     let authority: Arc<dyn ActivationAuthority> = match deployment.scope {
-        EditorExtensionScope::Product | EditorExtensionScope::Profile => {
-            Arc::clone(&deployment.authority)
-        }
+        EditorExtensionScope::Product
+        | EditorExtensionScope::ProductPackage
+        | EditorExtensionScope::Profile => Arc::clone(&deployment.authority),
         EditorExtensionScope::Workspace => {
             let authorization = authorization.ok_or(ExtensionHostError::AuthorityDenied)?;
             authorization

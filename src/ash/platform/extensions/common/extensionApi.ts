@@ -8,6 +8,17 @@ export const IExtensionApi = createServiceIdentifier<IExtensionApi>('extensionCa
 export type ExtensionSourceKind = "builtIn" | "plugin" | "registry" | "user";
 export type ExtensionDiagnosticCode = "sourceUnavailable" | "invalidManifest" | "duplicateExtension" | "pathEscapesRoot" | "resourceNotFound" | "resourceTooLarge";
 
+/** Backend admission for an exact, verified first-party client package. Manifest text cannot grant this. */
+export interface ExtensionRendererClient {
+	readonly runtimeId: string;
+	readonly apiVersion: 1;
+	readonly entry: string;
+	readonly digest: string;
+	readonly style: string;
+	readonly styleDigest: string;
+	readonly sourceDigest: string;
+}
+
 export interface ExtensionDescriptor {
 	readonly id: string;
 	readonly name: string;
@@ -20,6 +31,7 @@ export interface ExtensionDescriptor {
 	readonly manifestJson: string;
 	readonly manifestSha256: string;
 	readonly packageSha256: string;
+	readonly rendererClient?: ExtensionRendererClient;
 }
 
 export interface ExtensionDiagnostic {
@@ -81,6 +93,26 @@ function normalizeExtension(value: unknown): ExtensionDescriptor {
 		manifestJson: boundedText(extension.manifestJson, "extension manifest", 4 * 1024 * 1024),
 		manifestSha256: sha256Digest(extension.manifestSha256, "extension manifest digest"),
 		packageSha256: sha256Digest(extension.packageSha256, "extension package digest"),
+		...(extension.rendererClient === undefined || extension.rendererClient === null ? {} : { rendererClient: normalizeRendererClient(extension.rendererClient) }),
+	});
+}
+
+function normalizeRendererClient(value: unknown): ExtensionRendererClient {
+	const client = record(value, 'renderer client admission');
+	if (client.apiVersion !== 1) throw new TypeError('Unsupported renderer client API');
+	const path = (value: unknown): string => {
+		const result = boundedText(value, 'renderer client resource', 1024);
+		if (/[\\:\0]/u.test(result) || result.split('/').some(part => !part || part === '.' || part === '..')) throw new TypeError('Invalid renderer client resource');
+		return result;
+	};
+	return Object.freeze({
+		runtimeId: boundedText(client.runtimeId, 'renderer client runtime', 1024),
+		apiVersion: 1,
+		entry: path(client.entry),
+		digest: sha256Digest(client.digest, 'renderer client digest'),
+		style: path(client.style),
+		styleDigest: sha256Digest(client.styleDigest, 'renderer client style digest'),
+		sourceDigest: sha256Digest(client.sourceDigest, 'renderer client source digest'),
 	});
 }
 

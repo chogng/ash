@@ -266,28 +266,7 @@ fn markdown_product_registration_owns_views_and_obeys_profile_policy() {
             .map(String::as_str),
         Some("ash.markdown-math")
     );
-    let academy = deployments
-        .iter()
-        .find(|entry| entry.id == "ash.academic")
-        .unwrap();
-    assert_eq!(
-        academy.params.capabilities,
-        [ash_external_ext::ExtensionCapability::DataChannel]
-    );
-    assert!(matches!(
-        academy.workspace_read,
-        super::source::WorkspaceReadAccess::Denied
-    ));
-    assert!(academy.backend_channels.is_empty());
-    assert!(academy.credential_providers.is_empty());
-    assert!(!academy.authority.authorizes());
-    assert!(
-        academy
-            .activation
-            .as_ref()
-            .unwrap()
-            .matches(&super::source::ActivationEvent::StartupFinished)
-    );
+    assert!(deployments.iter().all(|entry| entry.id != "ash.academic"));
     let code = deployments
         .iter()
         .find(|entry| entry.id == "ash.code")
@@ -326,10 +305,6 @@ fn markdown_product_registration_owns_views_and_obeys_profile_policy() {
         (
             code,
             include_str!("../../../../extensions/code/package.json"),
-        ),
-        (
-            academy,
-            include_str!("../../../../extensions/academic/package.json"),
         ),
         (
             markdown,
@@ -1557,4 +1532,210 @@ fn credentials_are_private_to_admitted_consumers_and_never_relayed_to_the_render
     binding.credential_providers.clear();
     assert!(invoke(&binding, request("github.com", None)).is_err());
     assert!(queue.drain().is_empty());
+}
+
+#[test]
+#[ignore = "requires ASH_ACADEMY_DISTRIBUTION and ASH_ACADEMY_TRUSTED_ROOT signed package fixture"]
+fn signed_installed_academy_uses_product_launcher_and_exact_revocable_consent() {
+    use ash_core_plugins::CapabilityKind;
+    use ash_core_plugins::EditorExtensionPolicy;
+    use ash_core_plugins::EditorExtensionPolicyAction;
+    use ash_core_plugins::ExtensionPackageManager;
+    use ash_core_plugins::ExtensionPackageService;
+    use ash_core_plugins::ExtensionSource;
+    use ash_core_plugins::ExtensionSources;
+    use ash_core_plugins::ExtensionsRemoteClient;
+    use ash_core_plugins::InstallPackageRequest;
+    use ash_core_plugins::RemoteExtensionsConfig;
+    use std::sync::Arc;
+
+    let root = tempfile::tempdir().unwrap();
+    let config = RemoteExtensionsConfig::from_directory(
+        std::env::var_os("ASH_ACADEMY_DISTRIBUTION").expect("signed distribution path"),
+        std::fs::read(std::env::var_os("ASH_ACADEMY_TRUSTED_ROOT").expect("pinned root path"))
+            .unwrap(),
+        root.path().join("cache"),
+    )
+    .unwrap()
+    .with_product_runtime_publishers(["ash".into()])
+    .unwrap();
+    let manager = Arc::new(
+        ExtensionPackageManager::open(
+            root.path().join("manager"),
+            ExtensionSources::new([(
+                ash_utils_plugins::ExtensionSourceId::new("academic-smoke").unwrap(),
+                Arc::new(ExtensionsRemoteClient::new(config)) as Arc<dyn ExtensionSource>,
+            )])
+            .unwrap(),
+        )
+        .unwrap(),
+    );
+    let found = manager
+        .search(ash_core_plugins::SearchPackagesRequest {
+            query: "academic".into(),
+            capability_kind: Some(CapabilityKind::EditorExtension),
+            ..Default::default()
+        })
+        .unwrap();
+    assert!(
+        found
+            .packages
+            .iter()
+            .any(|package| package.id == "ash.academic@academic-smoke"
+                && package.package_type == "editor")
+    );
+    let details = manager
+        .get(ash_core_plugins::GetPackageRequest {
+            package_id: "ash.academic@academic-smoke".into(),
+            version: Some("1.0.0".into()),
+        })
+        .unwrap();
+    assert_eq!(details.package_type, "editor");
+    assert!(
+        details
+            .capabilities
+            .iter()
+            .any(|capability| capability.kind == CapabilityKind::EditorExtension)
+    );
+    let installed = manager
+        .install(InstallPackageRequest {
+            package_id: "ash.academic@academic-smoke".into(),
+            version: Some("1.0.0".into()),
+        })
+        .unwrap();
+    let executable = manager
+        .local_capability_sources(CapabilityKind::Executable)
+        .unwrap()
+        .into_iter()
+        .find(|source| {
+            crate::extension_packages_editor_extensions::product_runtime_extension_id(source)
+                .is_ok_and(|id| id.as_deref() == Some("ash.academic"))
+        })
+        .unwrap();
+    assert!(executable.is_product_runtime());
+    assert!(
+        executable
+            .editor_extension_root()
+            .unwrap()
+            .ends_with("editor")
+    );
+    let manifest: serde_json::Value = serde_json::from_slice(
+        &std::fs::read(
+            executable
+                .editor_extension_root()
+                .unwrap()
+                .join("package.json"),
+        )
+        .unwrap(),
+    )
+    .unwrap();
+    let expected_source = manifest
+        .pointer("/ashRuntime/client/sourceDigest")
+        .and_then(serde_json::Value::as_str)
+        .unwrap();
+    let policy = Arc::new(EditorExtensionPolicy::open(root.path().join("policy.json")).unwrap());
+    let runtime = super::ExtensionHostRuntime::start(
+        super::source::BuiltInEditorExtensions::Omitted,
+        None,
+        Some(manager.clone()),
+        Some(Arc::new(
+            crate::extension_packages_editor_extensions::ProfileEditorExtensionAdmission(
+                policy.clone(),
+            ),
+        )),
+        Arc::new(
+            ash_external_ext::ProductExecutableLauncher::new(std::env::current_exe().unwrap())
+                .unwrap(),
+        ),
+        ash_external_ext::ExtensionHostLimits::default(),
+        ash_external_ext::RestartPolicy::default(),
+        Arc::new(super::super::update_broker::UpdateBroker::default()),
+        Arc::new(crate::client_host::ClientHost::default()),
+        None,
+    )
+    .unwrap();
+    let rejected = runtime.snapshot_for(1);
+    assert_eq!(rejected.extensions.len(), 1);
+    assert_eq!(
+        rejected.extensions[0].failure.as_ref().unwrap().code,
+        ExtensionHostFailureKind::AuthorityDenied
+    );
+    policy
+        .set(
+            &installed.package,
+            executable.capability(),
+            EditorExtensionPolicyAction::Grant,
+            policy.generation(),
+        )
+        .unwrap();
+    let granted = runtime
+        .reconcile(super::ExtensionHostReconcileMode::Refresh)
+        .unwrap();
+    let generation = granted.extensions[0].activation_generation;
+    let activated = runtime
+        .activate_by_event(
+            1,
+            "ash.academic",
+            generation,
+            super::source::ActivationEvent::StartupFinished,
+            None,
+            Err(test_files_unavailable()),
+        )
+        .unwrap();
+    assert_eq!(
+        activated.extensions[0].lifecycle,
+        super::projection::ExtensionHostLifecycle::Ready
+    );
+    assert_eq!(activated.extensions[0].registrations.len(), 1);
+    let supervisor = runtime.inner.state.lock().unwrap().entries["ash.academic"]
+        .supervisor
+        .clone()
+        .unwrap();
+    for (language, expected) in [("en", "Academic Document"), ("zh-CN", "学术论文文档")] {
+        let result = supervisor
+            .begin_data_channel(
+                "editor.client.v1",
+                json!({"operation":"describe", "language":language}),
+                Duration::from_secs(10),
+            )
+            .unwrap()
+            .wait()
+            .unwrap();
+        assert_eq!(result.payload["editors"][0]["displayName"], expected);
+        assert_eq!(result.payload["clientModule"], "dist/editor.js");
+        assert_eq!(result.payload["clientDigest"], expected_source);
+    }
+    policy
+        .set(
+            &installed.package,
+            executable.capability(),
+            EditorExtensionPolicyAction::Revoke,
+            policy.generation(),
+        )
+        .unwrap();
+    runtime
+        .reconcile(super::ExtensionHostReconcileMode::Refresh)
+        .unwrap();
+    assert!(!supervisor.is_running());
+    assert_eq!(
+        runtime.snapshot_for(1).extensions[0]
+            .failure
+            .as_ref()
+            .unwrap()
+            .code,
+        ExtensionHostFailureKind::AuthorityDenied
+    );
+    manager
+        .uninstall(ash_core_plugins::UninstallPackageRequest {
+            installation_id: installed.installation_id,
+            mode: ash_core_plugins::UninstallMode::IfUnused,
+        })
+        .unwrap();
+    assert!(
+        runtime
+            .reconcile(super::ExtensionHostReconcileMode::Refresh)
+            .unwrap()
+            .extensions
+            .is_empty()
+    );
 }

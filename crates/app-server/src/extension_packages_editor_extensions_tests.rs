@@ -387,3 +387,153 @@ fn speech_manifest_declaration_produces_the_standard_activation_event() {
         );
     }
 }
+
+struct ProductRegistry;
+impl ExtensionSource for ProductRegistry {
+    fn product_runtime_authority(&self, _: &str) -> Option<String> {
+        Some("product-root:marketplace".into())
+    }
+    fn search(
+        &self,
+        request: SearchPackagesRequest,
+    ) -> Result<SearchPackagesResult, ExtensionsClientError> {
+        Registry.search(request)
+    }
+    fn get(&self, request: GetPackageRequest) -> Result<PackageDetails, ExtensionsClientError> {
+        Registry.get(request)
+    }
+    fn download(
+        &self,
+        request: DownloadPackageRequest,
+    ) -> Result<Box<dyn ExtensionPackagePayload>, ExtensionsClientError> {
+        Registry.download(request)
+    }
+}
+
+#[test]
+fn first_party_runtime_retains_exact_execution_consent_and_artifact_lease() {
+    let root = tempfile::tempdir().unwrap();
+    let manager = Arc::new(
+        ExtensionPackageManager::open(
+            root.path().join("manager"),
+            providers(Arc::new(ProductRegistry)),
+        )
+        .unwrap(),
+    );
+    let installed = manager
+        .install(InstallPackageRequest {
+            package_id: "marketplace.demo-plugin@test".into(),
+            version: Some("1.0.0".into()),
+        })
+        .unwrap();
+    let policy = Arc::new(
+        ash_core_plugins::EditorExtensionPolicy::open(root.path().join("policy.json")).unwrap(),
+    );
+    let admission: Arc<dyn ExtensionsEditorExtensionAdmission> =
+        Arc::new(super::ProfileEditorExtensionAdmission(policy.clone()));
+    let projected = deployments(&manager, &admission).unwrap();
+    let deployment = &projected[0];
+    assert_eq!(deployment.id, "marketplace.demo-plugin");
+    assert!(
+        deployment.scope
+            == crate::server::extension_host_runtime::source::EditorExtensionScope::ProductPackage
+    );
+    assert!(!deployment.authority.authorizes());
+    assert!(deployment.authority.acquire().is_none());
+    let executable = installed
+        .capabilities
+        .iter()
+        .find(|capability| capability.kind == CapabilityKind::Executable)
+        .unwrap();
+    policy
+        .set(
+            &installed.package,
+            &executable.reference,
+            ash_core_plugins::EditorExtensionPolicyAction::Grant,
+            policy.generation(),
+        )
+        .unwrap();
+    assert!(deployment.authority.authorizes());
+    let lease = deployment.authority.acquire().unwrap();
+    policy
+        .set(
+            &installed.package,
+            &executable.reference,
+            ash_core_plugins::EditorExtensionPolicyAction::Revoke,
+            policy.generation(),
+        )
+        .unwrap();
+    assert!(!deployment.authority.authorizes());
+    assert!(deployment.authority.acquire().is_none());
+    manager
+        .uninstall(UninstallPackageRequest {
+            installation_id: installed.installation_id,
+            mode: UninstallMode::WhenUnused,
+        })
+        .unwrap();
+    assert_eq!(
+        manager
+            .list_installed(ListInstalledRequest {})
+            .unwrap()
+            .len(),
+        1
+    );
+    drop(lease);
+    assert!(
+        manager
+            .list_installed(ListInstalledRequest {})
+            .unwrap()
+            .is_empty()
+    );
+}
+
+#[test]
+fn platform_sidecars_select_one_native_entry_without_falling_back_to_foreign_code() {
+    let mut declaration: serde_json::Value = serde_json::from_slice(PRODUCT_MANIFEST).unwrap();
+    let original = declaration["editorExtensions"][0].clone();
+    let mut selected = 0;
+    let mut entries = Vec::new();
+    for platform in [
+        "darwin-arm64",
+        "darwin-x64",
+        "linux-x64",
+        "linux-arm64",
+        "linux-armhf",
+        "win32-x64",
+        "win32-arm64",
+        "win32-ia32",
+    ] {
+        let mut entry = original.clone();
+        entry["targetPlatform"] = platform.into();
+        entry["executable"] = format!("editor-{platform}").into();
+        let parsed: super::ExtensionsEditorExtensionDeclaration =
+            serde_json::from_value(entry.clone()).unwrap();
+        super::validate_declaration(&parsed).unwrap();
+        if parsed.matches_platform() {
+            selected += 1;
+        }
+        entries.push(entry);
+    }
+    assert_eq!(selected, 1);
+    declaration["editorExtensions"] = entries.into();
+    let root = tempfile::tempdir().unwrap();
+    fs::create_dir(root.path().join("ash")).unwrap();
+    fs::write(
+        root.path().join("ash/editor-extensions.json"),
+        serde_json::to_vec(&declaration).unwrap(),
+    )
+    .unwrap();
+    assert_eq!(
+        super::read_product_manifest(root.path())
+            .unwrap()
+            .unwrap()
+            .editor_extensions
+            .len(),
+        8
+    );
+    let mut invalid = original;
+    invalid["targetPlatform"] = "unknown-x64".into();
+    assert!(
+        serde_json::from_value::<super::ExtensionsEditorExtensionDeclaration>(invalid).is_err()
+    );
+}

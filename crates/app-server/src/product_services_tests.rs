@@ -35,7 +35,8 @@ fn product_services_loads_public_oauth_and_pins_extension_packages_root() {
             "metadataBaseUrl": "https://marketplace.ash.example/metadata/",
             "targetsBaseUrl": "https://marketplace.ash.example/targets/",
             "trustedRoot": "root.json",
-            "catalogRefreshIntervalSeconds": 900
+            "catalogRefreshIntervalSeconds": 900,
+            "productRuntimePublishers": ["ash"]
           }],
           "githubAccount": {"clientId": "Ov23publicclient", "brokerBaseUrl": "https://broker.example/"},
           "connectorOauth": [{

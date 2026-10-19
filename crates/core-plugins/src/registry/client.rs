@@ -50,6 +50,10 @@ impl ExtensionsRemoteClient {
 }
 
 impl ExtensionSource for ExtensionsRemoteClient {
+    fn product_runtime_authority(&self, package_name: &str) -> Option<String> {
+        self.config.product_runtime_authority(package_name)
+    }
+
     fn search_page(
         &self,
         request: crate::SearchPackagesPageRequest,
@@ -71,11 +75,9 @@ impl ExtensionSource for ExtensionsRemoteClient {
         &self,
         request: SearchPackagesRequest,
     ) -> Result<SearchPackagesResult, ExtensionsClientError> {
-        // This signed catalog's package format has no VSIX/editorExtension capability.
-        // An explicit Open VSX filter must not make an unrelated registry network request.
-        if request.capability_kind == Some(crate::CapabilityKind::EditorExtension)
-            || request.package_type.as_deref() == Some("editorExtension")
-        {
+        // The signed catalog has the neutral editor family; Open VSX's VSIX package type
+        // remains a separate source and must not trigger this registry's network request.
+        if request.package_type.as_deref() == Some("editorExtension") {
             return Ok(SearchPackagesResult {
                 unavailable_sources: Vec::new(),
                 packages: Vec::new(),

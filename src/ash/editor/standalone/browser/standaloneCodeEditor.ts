@@ -1,4 +1,6 @@
 import { IContextKeyService } from '../../../platform/contextkey/browser/contextKeyService.js';
+import { IConfigurationService } from '../../../platform/configuration/common/configuration.js';
+import { ILogService } from '../../../platform/log/common/log.js';
 import { IInstantiationService } from '../../../platform/instantiation/common/instantiation.js';
 import { ILanguageConfigurationService } from '../../common/languages/languageConfigurationRegistry.js';
 import { ILanguageFeaturesService } from '../../common/services/languageFeatures.js';
@@ -72,11 +74,13 @@ export class StandaloneEditor extends CodeEditorWidget implements IStandaloneCod
 		@IContextKeyService contextKeyService: IContextKeyService,
 		@ICodeEditorService codeEditorService: ICodeEditorService,
 		@IModelService modelService: IModelService,
+		@ILogService logService: ILogService,
+		@IConfigurationService configurationService: IConfigurationService,
 	) {
 		// Theme variables must be ready before the view handles a theme event.
 		const themeBinding = standaloneThemeService.registerEditorContainer(options.container);
 		try {
-			super(options, instantiationService, standaloneThemeService, languageConfigurationService, languageFeaturesService, contextKeyService, codeEditorService);
+			super(options, instantiationService, standaloneThemeService, languageConfigurationService, languageFeaturesService, contextKeyService, codeEditorService, logService, configurationService);
 		} catch (error) {
 			themeBinding.dispose();
 			throw error;

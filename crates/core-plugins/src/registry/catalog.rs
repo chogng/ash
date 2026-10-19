@@ -66,6 +66,7 @@ pub(crate) enum PackageType {
     Skill,
     Mcp,
     Language,
+    Editor,
     Theme,
     Localization,
 }
@@ -77,6 +78,7 @@ impl PackageType {
             Self::Skill => "skill",
             Self::Mcp => "mcp",
             Self::Language => "language",
+            Self::Editor => "editor",
             Self::Theme => "theme",
             Self::Localization => "localization",
         }
@@ -131,6 +133,7 @@ impl CatalogCapability {
         match (self.kind, package_type) {
             (CatalogCapabilityKind::Asset, PackageType::Theme) => CapabilityKind::Theme,
             (CatalogCapabilityKind::Asset, PackageType::Language) => CapabilityKind::Language,
+            (CatalogCapabilityKind::Asset, PackageType::Editor) => CapabilityKind::EditorExtension,
             (CatalogCapabilityKind::Asset, PackageType::Localization) => {
                 CapabilityKind::Localization
             }
@@ -532,6 +535,27 @@ pub(crate) fn validate_manifest(manifest: &CatalogManifest) -> Result<(), Extens
     if manifest.package_type == PackageType::Localization
         && (manifest.capabilities.len() != 1
             || manifest.capabilities[0].kind != CatalogCapabilityKind::Asset)
+    {
+        return Err(ExtensionsClientError::package_untrusted());
+    }
+    if manifest.package_type == PackageType::Editor
+        && (manifest.schema_version != 2
+            || manifest.capabilities.iter().any(|capability| {
+                !matches!(
+                    capability.kind,
+                    CatalogCapabilityKind::Asset | CatalogCapabilityKind::Executable
+                ) || (capability.kind == CatalogCapabilityKind::Executable
+                    && !matches!(capability.runtime.as_deref(), Some("direct" | "node")))
+            })
+            || manifest
+                .capabilities
+                .iter()
+                .filter(|capability| capability.kind == CatalogCapabilityKind::Asset)
+                .count()
+                != 1
+            || !manifest.capabilities.iter().any(|capability| {
+                capability.kind == CatalogCapabilityKind::Asset && capability.path == "editor"
+            }))
     {
         return Err(ExtensionsClientError::package_untrusted());
     }

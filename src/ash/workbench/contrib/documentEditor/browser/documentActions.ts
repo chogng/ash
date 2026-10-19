@@ -10,7 +10,7 @@ import { IFileTextModelService } from '../../../services/textmodelResolver/commo
 import { IUntitledTextEditorService } from '../../../services/untitled/common/untitledTextEditorService.js';
 import { UntitledTextEditorInput } from '../../../services/untitled/common/untitledTextEditorInput.js';
 import { IEditorPart } from '../../../browser/parts/editor/editorPart.js';
-import type { DocumentNode } from '../../../../../../extensions/academic/common/model/document.js';
+import type { DocumentNode } from '../../../services/documentEditor/common/documentCodec.js';
 import { localize } from '../../../../nls.js';
 import { DocumentEditorPane } from './documentEditorPane.js';
 import { EditorPanes } from '../../../browser/editor.js';
@@ -29,9 +29,8 @@ export async function convertActiveTextToDocument(accessor: ServicesAccessor, fo
 	// Package loading and image reads may outlive navigation or further typing.
 	const sourceText = model.getValue();
 	const ownerDocument = editors.domNode.ownerDocument;
-	const profile = await resolveGeneralProfile();
-	const schema = profile.createSchema();
-	const document = profile.importText(sourceText, format, schema, ownerDocument, input.resource);
+	const profile = (await resolveGeneralProfile()).create();
+	const document = profile.importText(sourceText, format, ownerDocument, input.resource);
 	const files = accessor.get(IFileService);
 	const images = new Map<string, Promise<string>>();
 	const materialize = async (node: DocumentNode): Promise<DocumentNode> => {
@@ -44,11 +43,12 @@ export async function convertActiveTextToDocument(accessor: ServicesAccessor, fo
 				image = files.readFileBytes(resource).then(value => `data:${mime};base64,${encodeBase64(VSBuffer.wrap(new Uint8Array(value.bytes)))}`);
 				images.set(node.attrs.src, image);
 			}
-			return schema.createNode(node.type, { ...node, attrs: { ...node.attrs, src: await image } });
+			return { ...node, attrs: { ...node.attrs, src: await image } };
 		}
-		return schema.createNode(node.type, { ...node, content: await Promise.all(node.content.map(materialize)) });
+		return { ...node, content: await Promise.all(node.content.map(materialize)) };
 	};
-	const imported = schema.createDocument(await Promise.all(document.content.map(materialize)), document.id);
+	const imported = { ...document, content: await Promise.all(document.content.map(materialize)) };
+	profile.codec.validate(imported);
 	await openDraft(accessor, imported, basename(input.resource).replace(/\.[^.]+$/, ''));
 }
 

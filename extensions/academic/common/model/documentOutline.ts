@@ -1,15 +1,7 @@
 import type { DocumentNode, DocumentNodeId } from "./document.js";
 
-/** One navigable heading in a document outline. */
-export interface DocumentOutlineEntry {
-	readonly nodeId: DocumentNodeId;
-	readonly parentHeadingId: DocumentNodeId | undefined;
-	readonly depth: number;
-	readonly level: number;
-	readonly title: string;
-}
-
-export type DocumentOutline = readonly DocumentOutlineEntry[];
+import type { DocumentOutlineEntry, DocumentOutline } from '../../../../src/ash/workbench/services/documentEditor/common/documentCodec.js';
+export type { DocumentOutlineEntry, DocumentOutline } from '../../../../src/ash/workbench/services/documentEditor/common/documentCodec.js';
 
 export interface DocumentOutlineOptions {
 	/** Selects nodes that participate in the outline. Defaults to `heading`. */

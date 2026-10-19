@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { prepareAcademyExtension, startAcademyExtension } from '../../../../../../../test/fixtures/academyExtension.js';
 import { MainThreadClientEditors } from '../../../../api/browser/mainThreadClientEditors.js';
 import type { IExtensionHostApi, ExtensionHostFleetSnapshot } from '../../../../../platform/agentHost/common/extensionHostApi.js';
@@ -15,15 +16,14 @@ before(function () {
 
 test("Stanza profile materialization keeps schema and browser extensions together", () => {
 	const options = createDocumentEditorPaneOptions(academicProfile);
-	assert.equal(options.schema?.getNodeSpec("citation")?.kind, "inline");
-	assert.equal(options.schema?.getNodeSpec("title")?.kind, "group");
-	assert.equal(options.schema?.getNodeSpec("section")?.kind, "group");
-	assert.equal(options.schema?.getNodeSpec("bibliography")?.kind, "group");
-	assert.equal(options.outlineNavigator, true);
-	assert.equal(options.plugins?.length, 1);
-	assert.ok(options.nodeViews?.bibliography);
-	assert.ok(options.inlineNodeViews?.citation);
-	assert.deepEqual(options.createEmptyDocument?.().content.map(node => node.type), ["title", "abstract"]);
+	assert.equal(options.codec.documentType, 'academic');
+	assert.equal('schema' in options, false, 'Package schema and UI configuration do not cross the host boundary');
+	assert.equal('plugins' in options, false);
+	assert.equal('nodeViews' in options, false);
+	assert.deepEqual(options.createEmptyDocument?.().content.map(node => node.type), ['title', 'abstract']);
+	const document = options.createEmptyDocument!();
+	options.codec.validate(document);
+	assert.equal(JSON.parse(options.codec.serialize(document)).documentType, 'academic');
 });
 
 for (const [locale, label] of [['en', 'Academic Document'], ['zh-CN', '学术论文文档']] as const) {
@@ -36,7 +36,6 @@ for (const [locale, label] of [['en', 'Academic Document'], ['zh-CN', '学术论
 		const { initializeTestLocalization, createEmptyTestLanguagePacks } = await import('../../../../services/localization/test/common/localizationTestUtils.js');
 		const { GlobalExtensionEnablementService } = await import('../../../../../platform/extensionManagement/common/extensionEnablementService.js');
 		const { BrowserStorageService } = await import('../../../../services/storage/browser/storageService.js');
-		const { withEnabledBuiltInExtensions } = await import('../../../../../platform/extensions/browser/extensionApi.js');
 		const { ExtensionResourceLoaderService } = await import('../../../../../platform/extensionResourceLoader/browser/extensionResourceLoaderService.js');
 		const { AppServerExtensionService } = await import('../../../../services/extensions/browser/appServerExtensionService.js');
 		const { EditorPanes } = await import('../../../../browser/editor.js');
@@ -45,23 +44,30 @@ for (const [locale, label] of [['en', 'Academic Document'], ['zh-CN', '学术论
 		const { EditorPaneMatch } = await import('../../../../browser/parts/editor/editorPane.js');
 		using localization = toDisposable(resetNlsResolver);
 		initializeTestLocalization(locale);
-		assert.throws(() => deserializeDocument({ format: 'ash.document', version: 2, documentType: 'general' }, academicProfile.createSchema()), {
+		assert.throws(() => academicProfile.create().codec.deserialize({ format: 'ash.document', version: 2, documentType: 'general' }), {
 			message: locale === 'zh-CN' ? '结构化文档类型必须为“academic”。' : "Structured document type must be 'academic'",
 		});
-		assert.throws(() => deserializeDocument({ format: 'ash.document', version: 1, documentType: 'academic' }, academicProfile.createSchema()), {
+		assert.throws(() => academicProfile.create().codec.deserialize({ format: 'ash.document', version: 1, documentType: 'academic' }), {
 			message: locale === 'zh-CN' ? '旧版结构化文档不能声明文档类型。' : 'Legacy structured documents cannot declare a document type',
 		});
 		const dom = new JSDOM('', { url: 'https://ash.test' });
 		try {
 			using storage = new BrowserStorageService({ ownerWindow: dom.window as unknown as Window, workspaceId: `academic-${locale}`, flushInterval: 0 });
 			using enablement = new GlobalExtensionEnablementService(storage);
-			const fixture = JSON.parse(await readFile('.build/builtin/fixture.json', 'utf8'));
-			const entry = fixture.catalog.extensions.find((entry: { id: string; }) => entry.id === 'ash.academic');
-			assert.ok(entry, 'Academic must be staged as an extension package');
-			const api = withEnabledBuiltInExtensions({
-				list: async () => ({ generation: 1, extensions: [entry], diagnostics: [] }),
-				resources: new ExtensionResourceLoaderService(async request => Uint8Array.from(Buffer.from(fixture.resources[request.extensionId][request.path], 'base64'))),
-			}, enablement);
+			const manifestJson = await readFile('extensions/academic/package.json', 'utf8');
+			const entry = {
+				id: 'ash.academic', name: 'academic', publisher: 'ash', version: '1.0.0', displayName: 'Academy',
+				sourceKind: 'registry' as const, manifestJson,
+				manifestSha256: `sha256:${createHash('sha256').update(manifestJson).digest('hex')}`, packageSha256: `sha256:${'a'.repeat(64)}`,
+				rendererClient: {
+					runtimeId: 'ash.academic', apiVersion: 1 as const, entry: 'dist/editor.js', digest: `sha256:${'b'.repeat(64)}`,
+					style: 'dist/editor.css', styleDigest: `sha256:${'c'.repeat(64)}`, sourceDigest: `sha256:${'d'.repeat(64)}`,
+				},
+			};
+			const api = {
+				list: async () => ({ generation: 1, extensions: [{ ...entry, rendererClient: enablement.getDisabledExtensions().some(disabled => disabled.id === entry.id) ? undefined : entry.rendererClient }], diagnostics: [] }),
+				resources: new ExtensionResourceLoaderService(async request => new Uint8Array(await readFile(`extensions/academic/${request.path}`))),
+			};
 			using adapters = new AdapterManager();
 			using service = new AppServerExtensionService({
 				api,
@@ -111,3 +117,16 @@ for (const [locale, label] of [['en', 'Academic Document'], ['zh-CN', '学术论
 		} finally { dom.window.close(); }
 	});
 }
+
+test('bound package codecs validate opaque collaboration transactions without relying on constructor identity', async () => {
+	const { DocumentTransaction } = await import('../../../../../../../extensions/academic/common/model/documentTransaction.js');
+	const codec = academicProfile.create().codec;
+	const transaction = new DocumentTransaction().replaceText('body-text', 0, 0, 'Draft');
+	const structuralTransaction = { ...transaction };
+	assert.equal(codec.serializeTransaction(structuralTransaction), codec.serializeTransaction(transaction));
+	const decoded = codec.deserializeTransaction(codec.serializeTransaction(transaction));
+	assert.ok(decoded instanceof DocumentTransaction);
+	assert.deepEqual(decoded.steps, transaction.steps);
+	assert.throws(() => codec.serializeTransaction({ steps: 'invalid' }));
+	assert.throws(() => codec.serializeTransaction({ ...structuralTransaction, steps: [{ kind: 'unknown' }] }));
+});

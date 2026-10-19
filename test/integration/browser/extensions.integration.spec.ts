@@ -1044,3 +1044,26 @@ for (const locale of ['en', 'zh-CN']) {
 		expect(await page.evaluate(() => window.ashExtensionsIntegration.requests.filter((entry: any) => entry[0] === 'configure').length)).toBe(1);
 	});
 }
+
+for (const locale of ['en', 'zh-CN']) {
+	test(`Native editor packages show their document and accurate execution review in ${locale}`, async ({ page }) => {
+		await page.goto(`/extensions.html?locale=${locale}&nativeEditor`);
+		await page.evaluate(() => window.ashExtensionsIntegration.open({ capabilityKind: 'editorExtension' }));
+		await page.locator('[data-view-id="ash.extensions.view"] .ash-extensions').getByRole('option').click();
+		const editor = page.locator('.ash-extension-editor');
+		await expect(editor.getByRole('heading', { name: 'Academy', exact: true })).toBeVisible();
+		await expect(editor).toContainText('Tools for working with your project.');
+		const install = locale === 'en' ? 'Install' : '安装';
+		await editor.getByRole('button', { name: install, exact: true }).click();
+		await page.getByRole('dialog', { name: install, exact: true }).getByRole('button', { name: install, exact: true }).click();
+		const authorize = locale === 'en' ? 'Authorize execution' : '授权执行';
+		await editor.getByRole('button', { name: authorize, exact: true }).press('Enter');
+		const review = page.getByRole('dialog', { name: 'ash.academic@ash', exact: true });
+		await expect(review).toContainText(locale === 'en' ? 'native program and trusted editor client' : '原生程序和可信编辑器客户端');
+		await expect(review).toContainText(locale === 'en' ? 'unsaved text' : '未保存文本');
+		await expect(review).not.toContainText('Node');
+		await review.getByRole('button', { name: authorize, exact: true }).click();
+		await expect.poll(() => page.evaluate(() => window.ashExtensionsIntegration.requests.some((entry: any) => entry[0] === 'editorPolicy' && entry[1].action === 'grant'))).toBe(true);
+		await expect(editor.getByRole('button', { name: locale === 'en' ? 'Revoke execution authorization' : '撤销执行授权', exact: true })).toBeVisible();
+	});
+}

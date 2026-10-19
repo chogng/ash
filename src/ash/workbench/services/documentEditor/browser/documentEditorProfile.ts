@@ -1,30 +1,43 @@
-import type { DocumentCodec, DocumentTextFormat } from '../common/documentCodec.js';
+import type { DocumentCodec, DocumentNode, DocumentTextFormat, DocumentTextModel, DocumentSelection, DocumentOutline } from '../common/documentCodec.js';
+import type { Constructor } from '../../../../platform/instantiation/common/descriptors.js';
 import type { URI } from '../../../../base/common/uri.js';
-import type { RichTextEditorWidget } from '../../../../../../extensions/academic/browser/widget/richTextEditor/richTextEditorWidget.js';
-import type { RichTextEditorOptions } from '../../../../../../extensions/academic/browser/widget/richTextEditor/richTextEditorWidget.js';
-import type { DocumentNode } from '../../../../../../extensions/academic/common/model/document.js';
-import type { DocumentOutlineOptions } from '../../../../../../extensions/academic/common/model/documentOutline.js';
-import type { DocumentPlugin } from '../../../../../../extensions/academic/common/model/documentPlugin.js';
-import type { DocumentSchema } from '../../../../../../extensions/academic/common/model/documentSchema.js';
+import type { Event } from '../../../../base/common/event.js';
+import type { IDisposable } from '../../../../base/common/lifecycle.js';
+import type { IDimension } from '../../../../base/browser/dom.js';
+import type { DocumentCollaborationConnection } from '../../documentCollaboration/common/documentCollaborationService.js';
 
-/** Product-neutral schema and browser composition for one document kind. */
-export interface EditorProfile {
+export interface DocumentEditorWidget extends IDisposable {
+	readonly isDisposed: boolean;
+	create(parent: HTMLElement): void;
+	setModel(model: DocumentTextModel, input: { readonly resource: URI; readonly readOnly?: boolean; }): void;
+	setReadOnly(readOnly: boolean): void;
+	clearInput(): void;
+	layout(dimension: IDimension): void;
+	focus(): void;
+	getDocument(): DocumentNode;
+	getDocumentSelection(): DocumentSelection | undefined;
+	getOutline(): DocumentOutline;
+	clearCollaboration(): void;
+	setCollaborationConnection(connection: DocumentCollaborationConnection): {
+		readonly onDidChangeState: Event<{ readonly state: 'connected' | 'resyncRequired' | 'error'; readonly message?: string; }>;
+		readonly onDidConfirmDocument: Event<DocumentNode>;
+		invalidate(message: string): void;
+	};
+}
+
+/** Package-private schema, plugins and UI options are already captured by these closures. */
+export interface DocumentEditorConfiguration {
 	readonly codec: DocumentCodec;
-	readonly widget: typeof RichTextEditorWidget;
-	importText(text: string, format: DocumentTextFormat, schema: DocumentSchema, ownerDocument: Document, source: URI): DocumentNode;
-	exportText(document: DocumentNode, schema: DocumentSchema, format: DocumentTextFormat): string;
-	readonly contributions?: RichTextEditorOptions["contributions"];
+	readonly widget: Constructor<DocumentEditorWidget>;
+	readonly createEmptyDocument?: () => DocumentNode;
+	importText(text: string, format: DocumentTextFormat, ownerDocument: Document, source: URI): DocumentNode;
+	exportText(document: DocumentNode, format: DocumentTextFormat): string;
+}
+
+export interface EditorProfile {
 	readonly editorId?: string;
 	readonly id: string;
 	readonly contentType: string;
-	readonly createSchema: () => DocumentSchema;
-	readonly createEmptyDocument?: (schema: DocumentSchema) => DocumentNode;
-	readonly outline?: DocumentOutlineOptions;
-	readonly outlineNavigator?: boolean;
-	readonly nodeViews?: RichTextEditorOptions["nodeViews"];
-	readonly inlineNodeViews?: RichTextEditorOptions["inlineNodeViews"];
-	readonly toolbarActions?: RichTextEditorOptions["toolbarActions"];
-	readonly createPlugins?: () => readonly DocumentPlugin<unknown>[];
-	/** Stable compatibility ID for documents that join the same collaboration room. */
 	readonly collaborationSchemaId?: string;
+	create(): DocumentEditorConfiguration;
 }

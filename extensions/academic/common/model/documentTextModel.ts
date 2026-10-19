@@ -31,6 +31,8 @@ export class DocumentTextModel extends TextModel {
 		return new DocumentTextModel(schema, document, options);
 	}
 
+	get documentType(): string { return this.blockState.schema.documentType; }
+
 	get schema(): DocumentSchema {
 		return this.blockState.schema;
 	}

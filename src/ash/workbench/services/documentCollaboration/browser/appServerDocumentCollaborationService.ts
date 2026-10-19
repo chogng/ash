@@ -3,19 +3,19 @@ import { throwIfCancelled } from "../../../../base/common/cancellation.js";
 import { Emitter } from "../../../../base/common/event.js";
 import { Disposable, type IDisposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import { getOrSet } from "../../../../base/common/map.js";
-import type { DocumentSelection } from "../../../../../../extensions/academic/common/core/documentSelection.js";
-import type { DocumentNode } from "../../../../../../extensions/academic/common/model/document.js";
+import type { DocumentSelection } from '../../documentEditor/common/documentCodec.js';
+import type { DocumentNode } from '../../documentEditor/common/documentCodec.js';
 import type { DocumentCollaborationRoom } from '../common/documentCollaborationService.js';
 import type { DocumentCollaborationInvite } from '../common/documentCollaborationService.js';
 import type { DocumentCollaborationMember } from '../common/documentCollaborationService.js';
 import type { DocumentCollaborationOpenInput } from '../common/documentCollaborationService.js';
-import type { DocumentCollaborationPresence } from "../../../../../../extensions/academic/common/services/documentCollaborationService.js";
+import type { DocumentCollaborationPresence } from '../common/documentCollaborationService.js';
 import type { DocumentCollaborationRoomRole } from '../common/documentCollaborationService.js';
-import type { DocumentCollaborationSnapshot } from "../../../../../../extensions/academic/common/services/documentCollaborationService.js";
-import type { DocumentCollaborationSubmitOutcome } from "../../../../../../extensions/academic/common/services/documentCollaborationService.js";
+import type { DocumentCollaborationSnapshot } from '../common/documentCollaborationService.js';
+import type { DocumentCollaborationSubmitOutcome } from '../common/documentCollaborationService.js';
 import type { IDocumentCollaborationService } from '../common/documentCollaborationService.js';
-import type { DocumentCollaborationEnvelope } from "../../../../../../extensions/academic/common/services/documentCollaborationService.js";
-import type { DocumentCollaborationRemoteEnvelope } from "../../../../../../extensions/academic/common/services/documentCollaborationService.js";
+import type { DocumentCollaborationEnvelope } from '../common/documentCollaborationService.js';
+import type { DocumentCollaborationRemoteEnvelope } from '../common/documentCollaborationService.js';
 import type { IDocumentCollaborationApi } from "../../../../platform/collaboration/common/documentCollaborationApi.js";
 import type { IServerEventApi } from "../../../../platform/agentHost/common/appServerApi.js";
 import type { DocumentCollaborationPresenceSnapshot as AppServerDocumentCollaborationPresenceSnapshot } from "../../../../../../.build/protocol/typescript/index.js";
@@ -46,11 +46,11 @@ export class AppServerDocumentCollaborationService extends Disposable implements
 			...(input.roomId === undefined ? {} : { roomId: input.roomId }),
 			clientId: input.clientId,
 			schemaId: input.schemaId,
-			document: input.codec.serialize(input.document, input.schema),
+			document: input.codec.serialize(input.document),
 		});
 		throwIfCancelled(signal, "Opening a Stanza collaboration room was cancelled");
-		const snapshot = decodeSnapshot(opened.snapshot, input.schema, input.codec);
-		const connection = new AppServerDocumentCollaborationConnection(this, input.schema, input.codec, opened.clientId, snapshot);
+		const snapshot = decodeSnapshot(opened.snapshot, input.codec);
+		const connection = new AppServerDocumentCollaborationConnection(this, input.codec, opened.clientId, snapshot);
 		const roomConnections = getOrSet(this.connections, connection.roomId, new Set<AppServerDocumentCollaborationConnection>());
 		roomConnections.add(connection);
 		try {
@@ -77,14 +77,14 @@ export class AppServerDocumentCollaborationService extends Disposable implements
 			clientId: connection.clientId,
 			sequence: validateProtocolInteger(envelope.sequence, "sequence", 1),
 			baseVersion: validateProtocolInteger(envelope.baseVersion, "baseVersion", 0),
-			transaction: connection.codec.serializeTransaction(envelope.transaction, connection.schema),
-			document: connection.codec.serialize(document, connection.schema),
+			transaction: connection.codec.serializeTransaction(envelope.transaction),
+			document: connection.codec.serialize(document),
 		});
 		throwIfCancelled(signal, "Submitting a Stanza collaboration update was cancelled");
 		switch (submitted.status) {
-			case "accepted": return { kind: "accepted", update: decodeUpdate(submitted.update, connection.schema, connection.codec) };
-			case "conflict": return { kind: "conflict", updates: Object.freeze(submitted.updates.map(update => decodeUpdate(update, connection.schema, connection.codec))) };
-			case "resync": return { kind: "resync", snapshot: decodeSnapshot(submitted.snapshot, connection.schema, connection.codec) };
+			case "accepted": return { kind: "accepted", update: decodeUpdate(submitted.update, connection.codec) };
+			case "conflict": return { kind: "conflict", updates: Object.freeze(submitted.updates.map(update => decodeUpdate(update, connection.codec))) };
+			case "resync": return { kind: "resync", snapshot: decodeSnapshot(submitted.snapshot, connection.codec) };
 		}
 	}
 
@@ -112,7 +112,7 @@ class AppServerDocumentCollaborationConnection extends Disposable implements Doc
 	readonly onDidReceivePresence = this.presenceEmitter.event;
 	readonly onDidFail = this.failureEmitter.event;
 
-	constructor(private readonly service: AppServerDocumentCollaborationService, readonly schema: DocumentCollaborationRoom["schema"], readonly codec: DocumentCodec, readonly clientId: string, readonly initialSnapshot: DocumentCollaborationSnapshot) {
+	constructor(private readonly service: AppServerDocumentCollaborationService, readonly codec: DocumentCodec, readonly clientId: string, readonly initialSnapshot: DocumentCollaborationSnapshot) {
 		super();
 		this.roomId = initialSnapshot.roomId;
 		this._register(toDisposable(() => {
@@ -158,7 +158,7 @@ class AppServerDocumentCollaborationConnection extends Disposable implements Doc
 
 	acceptUpdate(value: AppServerDocumentCollaborationUpdate): void {
 		if (this.isDisposed || value.roomId !== this.roomId) return;
-		this.updateEmitter.fire(decodeUpdate(value, this.schema, this.codec));
+		this.updateEmitter.fire(decodeUpdate(value, this.codec));
 	}
 
 	acceptPresence(value: AppServerDocumentCollaborationPresenceSnapshot): void {
@@ -170,17 +170,17 @@ class AppServerDocumentCollaborationConnection extends Disposable implements Doc
 	}
 }
 
-function decodeSnapshot(value: AppServerDocumentCollaborationSnapshot, schema: DocumentCollaborationRoom["schema"], codec: DocumentCodec): DocumentCollaborationSnapshot {
-	return Object.freeze({ roomId: value.roomId, version: validateProtocolInteger(value.version, "version", 0), document: codec.deserialize(value.document, schema) });
+function decodeSnapshot(value: AppServerDocumentCollaborationSnapshot, codec: DocumentCodec): DocumentCollaborationSnapshot {
+	return Object.freeze({ roomId: value.roomId, version: validateProtocolInteger(value.version, "version", 0), document: codec.deserialize(value.document) });
 }
 
-function decodeUpdate(value: AppServerDocumentCollaborationUpdate, schema: DocumentCollaborationRoom["schema"], codec: DocumentCodec): DocumentCollaborationRemoteEnvelope {
+function decodeUpdate(value: AppServerDocumentCollaborationUpdate, codec: DocumentCodec): DocumentCollaborationRemoteEnvelope {
 	return Object.freeze({
 		clientId: value.clientId,
 		sequence: validateProtocolInteger(value.sequence, "sequence", 1),
 		baseVersion: validateProtocolInteger(value.baseVersion, "baseVersion", 0),
 		version: validateProtocolInteger(value.version, "version", 1),
-		transaction: codec.deserializeTransaction(value.transaction, schema),
+		transaction: codec.deserializeTransaction(value.transaction),
 	});
 }
 

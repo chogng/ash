@@ -54,6 +54,9 @@ pub(crate) enum EditorExtensionScope {
     Workspace,
     Profile,
     Product,
+    // Installed first-party runtime: no workspace IO grant, but exact package consent
+    // and Manager leases remain authoritative for its entire process lifetime.
+    ProductPackage,
 }
 
 #[derive(Clone)]
@@ -119,7 +122,6 @@ pub(super) fn built_in_deployments(
         product_ssh_deployment(directory)?,
         product_markdown_math_deployment(directory)?,
         product_markdown_deployment(directory)?,
-        product_academy_deployment(directory)?,
         product_code_editor_deployment(directory)?,
     ];
     // This optional package only supplies debugger policy. Missing binaries do
@@ -311,102 +313,6 @@ pub(super) fn product_markdown_math_deployment(
         authority: Arc::new(ProductAuthority),
         activation: Some(ActivationPlan {
             events: vec!["onCapability:math.render.v2".into()],
-            commands: Vec::new(),
-        }),
-        activation_failure: None,
-    })
-}
-
-fn product_academy_deployment(
-    directory: &Path,
-) -> Result<EditorExtensionDeployment, ExtensionHostRuntimeError> {
-    let manifest = include_str!("../../../../../extensions/academic/package.json");
-    let source = [
-        manifest,
-        include_str!("../../../../../extensions/academic/src/lib.rs"),
-        include_str!("../../../../../extensions/academic/build.rs"),
-        include_str!("../../../../../crates/utils/editor-client-build/src/lib.rs"),
-        include_str!("../../../../../extensions/academic/browser/contrib/academic/browser/nodeViews.ts"),
-        include_str!("../../../../../extensions/academic/browser/contrib/academic/common/schema.ts"),
-        include_str!("../../../../../extensions/academic/browser/contrib/citation/browser/nodeViews.ts"),
-        include_str!("../../../../../extensions/academic/browser/contrib/citation/browser/toolbarAction.ts"),
-        include_str!("../../../../../extensions/academic/browser/contrib/citation/common/citationCommands.ts"),
-        include_str!("../../../../../extensions/academic/browser/contrib/citation/common/references.ts"),
-        include_str!("../../../../../extensions/academic/browser/contrib/citation/common/schema.ts"),
-        include_str!("../../../../../extensions/academic/browser/contrib/formatting/formattingContribution.ts"),
-        include_str!("../../../../../extensions/academic/browser/contrib/paragraphFormatting/paragraphFormatting.ts"),
-        include_str!("../../../../../extensions/academic/browser/contrib/paragraphStyle/paragraphStyle.ts"),
-        include_str!("../../../../../extensions/academic/browser/documentContributions.ts"),
-        include_str!("../../../../../extensions/academic/browser/documentImportExport.ts"),
-        include_str!("../../../../../extensions/academic/browser/documentTypes.ts"),
-        include_str!("../../../../../extensions/academic/browser/editor.ts"),
-        include_str!("../../../../../extensions/academic/browser/editorProfile.ts"),
-        include_str!("../../../../../extensions/academic/browser/generalProfile.ts"),
-        include_str!("../../../../../extensions/academic/browser/widget/documentFormattingControls.css"),
-        include_str!("../../../../../extensions/academic/browser/widget/documentFormattingControls.ts"),
-        include_str!("../../../../../extensions/academic/browser/widget/documentOutlineNavigator.ts"),
-        include_str!("../../../../../extensions/academic/browser/widget/richTextEditor/htmlDocumentFragment.ts"),
-        include_str!("../../../../../extensions/academic/browser/widget/richTextEditor/richTextEditorWidget.css"),
-        include_str!("../../../../../extensions/academic/browser/widget/richTextEditor/richTextEditorWidget.ts"),
-        include_str!("../../../../../extensions/academic/common/commands/documentCommands.ts"),
-        include_str!("../../../../../extensions/academic/common/commands/documentParagraphCommands.ts"),
-        include_str!("../../../../../extensions/academic/common/contrib/collaboration/controller.ts"),
-        include_str!("../../../../../extensions/academic/common/contrib/collaboration/rebase.ts"),
-        include_str!("../../../../../extensions/academic/common/contrib/collaboration/synchronizer.ts"),
-        include_str!("../../../../../extensions/academic/common/core/documentPosition.ts"),
-        include_str!("../../../../../extensions/academic/common/core/documentSelection.ts"),
-        include_str!("../../../../../extensions/academic/common/model/document.ts"),
-        include_str!("../../../../../extensions/academic/common/model/documentCodec.ts"),
-        include_str!("../../../../../extensions/academic/common/model/documentDecoration.ts"),
-        include_str!("../../../../../extensions/academic/common/model/documentHistory.ts"),
-        include_str!("../../../../../extensions/academic/common/model/documentOutline.ts"),
-        include_str!("../../../../../extensions/academic/common/model/documentParagraph.ts"),
-        include_str!("../../../../../extensions/academic/common/model/documentPlugin.ts"),
-        include_str!("../../../../../extensions/academic/common/model/documentSchema.ts"),
-        include_str!("../../../../../extensions/academic/common/model/documentSerialization.ts"),
-        include_str!("../../../../../extensions/academic/common/model/documentTextModel.ts"),
-        include_str!("../../../../../extensions/academic/common/model/documentTransaction.ts"),
-        include_str!("../../../../../extensions/academic/common/model/documentTransactionSerialization.ts"),
-        include_str!("../../../../../extensions/academic/common/model/lineDocumentProjection.ts"),
-        include_str!("../../../../../extensions/academic/common/model/textModelBlockState.ts"),
-        include_str!("../../../../../extensions/academic/common/services/documentCollaborationService.ts"),
-        include_str!("../../../../../extensions/academic/package.nls.json"),
-        include_str!("../../../../../extensions/academic/package.nls.zh-CN.json"),
-    ]
-    .join("\0");
-    let digest = format!("sha256:{:x}", Sha256::digest(source));
-    let events = vec!["*".into()];
-    Ok(EditorExtensionDeployment {
-        scope: EditorExtensionScope::Product,
-        id: "ash.academic".into(),
-        version: "1.0.0".into(),
-        package_digest: digest.clone(),
-        command: ExtensionLaunchCommand::new(
-            directory.join(format!("ash-academy{}", std::env::consts::EXE_SUFFIX)),
-            std::iter::empty::<String>(),
-            directory,
-            BTreeMap::new(),
-        )
-        .map_err(ExtensionHostRuntimeError::Host)?,
-        workspace_read: WorkspaceReadAccess::Denied,
-        credential_providers: Vec::new(),
-        backend_channels: BTreeMap::new(),
-        protocol_limits: None,
-        params: ActivateParams {
-            initialization: None,
-            extension_id: "ash.academic".into(),
-            package: PackageBinding {
-                package_id: "ash.academic@1.0.0".into(),
-                package_digest: digest,
-                entrypoint: "ash-academy".into(),
-            },
-            runtime_api_version: 1,
-            activation_events: events.clone(),
-            capabilities: vec![ExtensionCapability::DataChannel],
-        },
-        authority: Arc::new(ProductAuthority),
-        activation: Some(ActivationPlan {
-            events,
             commands: Vec::new(),
         }),
         activation_failure: None,

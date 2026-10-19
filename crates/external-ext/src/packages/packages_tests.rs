@@ -340,6 +340,73 @@ fn authority_generation_changes_preserve_unchanged_extension_contents() {
 }
 
 #[test]
+fn renderer_admission_and_complete_package_digest_come_only_from_the_authority() {
+    let root = tempfile::tempdir().unwrap();
+    let package = write_package(root.path(), "1.0.0");
+    let manifest = serde_json::json!({
+        "name": "demo", "publisher": "ash", "version": "1.0.0",
+        "rendererClient": { "runtimeId": "ash.demo", "apiVersion": 1 },
+        "ashRuntime": { "client": { "entry": "editor.js" } }
+    });
+    fs::write(
+        package.join("package.json"),
+        serde_json::to_vec(&manifest).unwrap(),
+    )
+    .unwrap();
+    fs::write(package.join("editor.js"), b"export {};").unwrap();
+    let mut source = DynamicExtensionPackageSource::extension_packages("demo", package);
+    let provider = Arc::new(TestDynamicSourceProvider::new(1, vec![source.clone()]));
+    let mut catalog = ExtensionPackages::new(Vec::new()).with_dynamic_sources(provider.clone());
+    let declarations = catalog.list(ExtensionPackagesReload::Refresh);
+    assert_eq!(declarations.extensions.len(), 1);
+    assert!(declarations.extensions[0].renderer_client.is_none());
+
+    let proof = ExtensionRendererClient {
+        runtime_id: "ash.demo".into(),
+        api_version: 1,
+        entry: "editor.js".into(),
+        digest: format!("sha256:{:x}", Sha256::digest(b"export {};")),
+        style: "editor.css".into(),
+        style_digest: format!("sha256:{:x}", Sha256::digest(b"")),
+        source_digest: format!("sha256:{}", "a".repeat(64)),
+    };
+    let manager_digest = format!("sha256:{}", "b".repeat(64));
+    source.verified_package_sha256 = Some(manager_digest.clone());
+    source.renderer_client = Some(proof.clone());
+    provider.replace(2, vec![source.clone()]);
+    let admitted = catalog.list(ExtensionPackagesReload::Cached);
+    assert!(admitted.generation > declarations.generation);
+    assert_eq!(admitted.extensions[0].renderer_client, Some(proof));
+    assert_eq!(admitted.extensions[0].package_sha256, manager_digest);
+    assert_ne!(
+        admitted.extensions[0].package_sha256,
+        declarations.extensions[0].package_sha256
+    );
+    assert_eq!(
+        catalog
+            .open_resource(admitted.generation, "ash.demo", "editor.js")
+            .unwrap()
+            .bytes,
+        b"export {};"
+    );
+
+    source.renderer_client = None;
+    provider.replace(3, vec![source]);
+    let revoked = catalog.list(ExtensionPackagesReload::Cached);
+    assert!(revoked.generation > admitted.generation);
+    assert!(revoked.extensions[0].renderer_client.is_none());
+    assert_eq!(revoked.extensions[0].package_sha256, manager_digest);
+    assert_eq!(
+        revoked.extensions[0].manifest_json,
+        admitted.extensions[0].manifest_json
+    );
+    assert_eq!(
+        catalog.open_resource(admitted.generation, "ash.demo", "editor.js"),
+        Err(ExtensionPackagesError::GenerationConflict)
+    );
+}
+
+#[test]
 fn refresh_reuses_frozen_dynamic_bytes_but_scans_mutable_roots() {
     let immutable_root = tempfile::tempdir().expect("immutable package parent");
     let package = write_package(immutable_root.path(), "1.0.0");

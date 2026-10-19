@@ -1076,6 +1076,8 @@ use crate::protocol::extensions::ExtensionListParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::extensions::ExtensionListResult;
 #[cfg(any(test, feature = "export"))]
+use crate::protocol::extensions::ExtensionRendererClientDto;
+#[cfg(any(test, feature = "export"))]
 use crate::protocol::extensions::ExtensionResourceOpenParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::extensions::ExtensionResourceOpenResult;
@@ -1613,6 +1615,8 @@ use crate::protocol::extension_packages::ExtensionsChanged;
 use crate::protocol::extension_packages::ExtensionsConnectorActivationSpecDto;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::extension_packages::ExtensionsDownloadParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::extension_packages::ExtensionsEditorExecutionKindDto;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::extension_packages::ExtensionsEditorExtensionPolicyActionDto;
 #[cfg(any(test, feature = "export"))]
@@ -6293,6 +6297,7 @@ typescript_bindings! {
     ExtensionsEditorExtensionPolicyActionDto,
     ExtensionsEditorExtensionPolicyParams,
     ExtensionsEditorExtensionPolicyDto,
+    ExtensionsEditorExecutionKindDto,
     ExtensionsEditorExtensionsResult,
     ExtensionsBuiltInProviderDto,
     ExtensionsBuiltInProviderEnablementParams,
@@ -6673,6 +6678,7 @@ typescript_bindings! {
     ExtensionSourceKindDto,
     ExtensionDiagnosticCodeDto,
     ExtensionDto,
+    ExtensionRendererClientDto,
     ExtensionDiagnosticDto,
     ExtensionListParams,
     ExtensionListResult,

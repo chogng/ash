@@ -2,14 +2,10 @@ use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::sync::Arc;
 
-use ash_core_plugins::AcquireCapabilityRequest;
-use ash_core_plugins::ActivationSpec;
 use ash_core_plugins::CapabilityKind;
 use ash_core_plugins::CapabilityRef;
 use ash_core_plugins::ExtensionPackageManager;
 use ash_core_plugins::ExtensionPackageService;
-use ash_core_plugins::InstallationState;
-use ash_core_plugins::ListInstalledRequest;
 use ash_core_plugins::LocalCapabilitySource;
 use ash_core_plugins::PackageRef;
 use ash_core_plugins::ReleaseCapabilityRequest;
@@ -101,13 +97,22 @@ pub(crate) fn deployments(
     admission: &Arc<dyn ExtensionsEditorExtensionAdmission>,
 ) -> Result<Vec<EditorExtensionDeployment>, String> {
     let executable_sources = manager
-        .local_capability_sources(CapabilityKind::Executable)
-        .map_err(|error| error.to_string())?;
+        .local_capability_source_snapshot(CapabilityKind::Executable)
+        .map_err(|error| error.to_string())?
+        .sources;
     let mut manifests = BTreeMap::new();
     for source in &executable_sources {
         let digest = source.package().digest.clone();
         if let std::collections::btree_map::Entry::Vacant(entry) = manifests.entry(digest) {
-            entry.insert(read_product_manifest(source.package_root())?);
+            entry.insert(
+                read_product_manifest(
+                    source
+                        .editor_extension_root()
+                        .unwrap_or(source.package_root()),
+                )
+                .ok()
+                .flatten(),
+            );
         }
     }
     let mut result = Vec::new();
@@ -119,12 +124,24 @@ pub(crate) fn deployments(
         else {
             continue;
         };
-        for declaration in manifest
-            .editor_extensions
-            .iter()
-            .filter(|declaration| declaration.executable == source.id())
+        if source.is_product_runtime()
+            && manifest
+                .editor_extensions
+                .iter()
+                .filter(|declaration| declaration.matches_platform())
+                .count()
+                > 1
         {
-            let deployment = deployment(manager, admission, &source, declaration)?;
+            // The catalog reports this package's invalid declaration. It cannot
+            // suppress independent, healthy executable sources in the same fleet.
+            continue;
+        }
+        for declaration in manifest.editor_extensions.iter().filter(|declaration| {
+            declaration.executable == source.id() && declaration.matches_platform()
+        }) {
+            let Ok(deployment) = deployment(manager, admission, &source, declaration) else {
+                continue;
+            };
             if !identities.insert(deployment.id.clone()) {
                 return Err("Extensions Editor Extension identity is duplicated".into());
             }
@@ -132,8 +149,9 @@ pub(crate) fn deployments(
         }
     }
     for source in manager
-        .local_capability_sources(CapabilityKind::EditorExtension)
+        .local_capability_source_snapshot(CapabilityKind::EditorExtension)
         .map_err(|error| error.to_string())?
+        .sources
     {
         let Ok(Some(entrypoint)) = javascript_entrypoint(&source) else {
             continue;
@@ -223,6 +241,46 @@ pub(crate) fn deployments(
     Ok(result)
 }
 
+/// Resolves a first-party runtime identity from the same verified executable and
+/// sidecar used by deployment. Catalog clients cannot obtain this from package.json.
+pub(crate) fn product_runtime_extension_id(
+    source: &LocalCapabilitySource,
+) -> Result<Option<String>, String> {
+    if !source.is_product_runtime() || source.kind() != CapabilityKind::Executable {
+        return Ok(None);
+    }
+    let Some(manifest) = read_product_manifest(
+        source
+            .editor_extension_root()
+            .unwrap_or(source.package_root()),
+    )?
+    else {
+        return Ok(None);
+    };
+    let mut selected = manifest
+        .editor_extensions
+        .iter()
+        .filter(|declaration| declaration.matches_platform());
+    let Some(declaration) = selected.next() else {
+        return Ok(None);
+    };
+    if selected.next().is_some() {
+        return Err(
+            "Product runtime package must declare one editor extension per platform".into(),
+        );
+    }
+    if declaration.executable != source.id() || source.runtime() != Some("direct") {
+        return Ok(None);
+    }
+    validate_executable(source)?;
+    Ok(Some(
+        ash_utils_plugins::PluginId::parse(&source.package().id)
+            .map_err(|_| "invalid product runtime package identity")?
+            .plugin_name()
+            .to_owned(),
+    ))
+}
+
 fn deployment(
     manager: &Arc<ExtensionPackageManager>,
     admission: &Arc<dyn ExtensionsEditorExtensionAdmission>,
@@ -234,11 +292,18 @@ fn deployment(
         return Err("Extensions Editor Extension must use a direct executable runtime".into());
     }
     validate_executable(source)?;
-    let extension_id = format!(
-        "marketplace:{}:editor-extension:{}",
-        source.package().id,
-        declaration.id
-    );
+    let extension_id = if source.is_product_runtime() {
+        ash_utils_plugins::PluginId::parse(&source.package().id)
+            .map_err(|_| "invalid product runtime package identity")?
+            .plugin_name()
+            .to_owned()
+    } else {
+        format!(
+            "marketplace:{}:editor-extension:{}",
+            source.package().id,
+            declaration.id
+        )
+    };
     if extension_id.len() > 256 {
         return Err("Extensions Editor Extension identity is too large".into());
     }
@@ -261,8 +326,19 @@ fn deployment(
         source: source.clone(),
     });
     Ok(EditorExtensionDeployment {
-        scope: crate::server::extension_host_runtime::source::EditorExtensionScope::Workspace,
-        activation: None,
+        scope: if source.is_product_runtime() {
+            crate::server::extension_host_runtime::source::EditorExtensionScope::ProductPackage
+        } else {
+            crate::server::extension_host_runtime::source::EditorExtensionScope::Workspace
+        },
+        activation: source.is_product_runtime().then(|| ActivationPlan {
+            events: declaration
+                .activation_events
+                .iter()
+                .map(ManifestActivationEvent::host)
+                .collect(),
+            commands: Vec::new(),
+        }),
         activation_failure: None,
         id: extension_id.clone(),
         version: source.package().version.clone(),
@@ -325,7 +401,9 @@ fn read_product_manifest(
     let mut executables = BTreeSet::new();
     for declaration in &manifest.editor_extensions {
         validate_declaration(declaration)?;
-        if !ids.insert(&declaration.id) || !executables.insert(&declaration.executable) {
+        if !ids.insert((&declaration.id, &declaration.target_platform))
+            || !executables.insert(&declaration.executable)
+        {
             return Err("Extensions Editor Extension adapter contains duplicate bindings".into());
         }
     }
@@ -410,46 +488,15 @@ struct ExtensionsExecutableAuthority {
 impl ActivationAuthority for ExtensionsExecutableAuthority {
     fn authorizes(&self) -> bool {
         self.admission.authorizes(&self.binding)
-            && self
-                .manager
-                .list_installed(ListInstalledRequest {})
-                .is_ok_and(|installed| {
-                    installed.iter().any(|package| {
-                        package.state == InstallationState::Installed
-                            && package.package == self.binding.package
-                            && package.capabilities.iter().any(|capability| {
-                                capability.kind == self.source.kind()
-                                    && capability.reference == self.binding.capability
-                            })
-                    })
-                })
+            && self.manager.local_source_is_current(&self.source)
     }
 
     fn acquire(&self) -> Option<Box<dyn ActivationLease>> {
         let admission = self.admission.acquire(&self.binding)?;
-        if self.source.kind() == CapabilityKind::EditorExtension {
-            let lease = self.manager.acquire_local_source(&self.source).ok()?;
-            return Some(Box::new(ExtensionsExecutableLease {
-                manager: Arc::clone(&self.manager),
-                manager_lease_id: lease.id,
-                _admission: admission,
-            }));
-        }
-        let acquired = self
-            .manager
-            .acquire_capability(AcquireCapabilityRequest {
-                capability: self.binding.capability.clone(),
-            })
-            .ok()?;
-        if !matches!(acquired.spec, ActivationSpec::Executable(_)) {
-            let _ = self.manager.release_capability(ReleaseCapabilityRequest {
-                lease_id: acquired.lease.id,
-            });
-            return None;
-        }
+        let lease = self.manager.acquire_local_source(&self.source).ok()?;
         Some(Box::new(ExtensionsExecutableLease {
             manager: Arc::clone(&self.manager),
-            manager_lease_id: acquired.lease.id,
+            manager_lease_id: lease.id,
             _admission: admission,
         }))
     }
@@ -735,8 +782,68 @@ struct ExtensionsEditorExtensionDeclaration {
     id: String,
     executable: String,
     runtime_api_version: u16,
+    #[serde(default)]
+    target_platform: Option<ManifestTargetPlatform>,
     activation_events: Vec<ManifestActivationEvent>,
     capabilities: Vec<ManifestCapability>,
+}
+
+#[derive(Clone, Copy, Deserialize, Eq, Ord, PartialEq, PartialOrd)]
+enum ManifestTargetPlatform {
+    #[serde(rename = "darwin-arm64")]
+    DarwinArm64,
+    #[serde(rename = "darwin-x64")]
+    DarwinX64,
+    #[serde(rename = "linux-x64")]
+    LinuxX64,
+    #[serde(rename = "linux-arm64")]
+    LinuxArm64,
+    #[serde(rename = "linux-armhf")]
+    LinuxArmhf,
+    #[serde(rename = "win32-x64")]
+    Win32X64,
+    #[serde(rename = "win32-arm64")]
+    Win32Arm64,
+    #[serde(rename = "win32-ia32")]
+    Win32Ia32,
+}
+
+impl ManifestTargetPlatform {
+    fn name(self) -> &'static str {
+        match self {
+            Self::DarwinArm64 => "darwin-arm64",
+            Self::DarwinX64 => "darwin-x64",
+            Self::LinuxX64 => "linux-x64",
+            Self::LinuxArm64 => "linux-arm64",
+            Self::LinuxArmhf => "linux-armhf",
+            Self::Win32X64 => "win32-x64",
+            Self::Win32Arm64 => "win32-arm64",
+            Self::Win32Ia32 => "win32-ia32",
+        }
+    }
+}
+
+impl ExtensionsEditorExtensionDeclaration {
+    fn matches_platform(&self) -> bool {
+        let platform = format!(
+            "{}-{}",
+            match std::env::consts::OS {
+                "macos" => "darwin",
+                "windows" => "win32",
+                other => other,
+            },
+            match std::env::consts::ARCH {
+                "x86_64" => "x64",
+                "aarch64" => "arm64",
+                "x86" => "ia32",
+                "arm" => "armhf",
+                other => other,
+            }
+        );
+        self.target_platform
+            .as_ref()
+            .is_none_or(|selected| selected.name() == platform)
+    }
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -760,7 +867,7 @@ enum ManifestActivationEvent {
 impl ManifestActivationEvent {
     fn host(&self) -> String {
         match self {
-            Self::Startup => "startup".into(),
+            Self::Startup => "onStartupFinished".into(),
             Self::OnCommand { id } => format!("onCommand:{id}"),
             Self::OnLanguage { id } => format!("onLanguage:{id}"),
             Self::OnDemand { capability } => format!("onDemand:{}", capability.name()),

@@ -1,20 +1,36 @@
-import { documentCodec } from '../common/model/documentCodec.js';
-import { RichTextEditorWidget } from './widget/richTextEditor/richTextEditorWidget.js';
+import { bindDocumentCodec } from '../common/model/documentCodec.js';
+import { RichTextEditorWidget, type RichTextEditorOptions } from './widget/richTextEditor/richTextEditorWidget.js';
 import { importDocumentText, exportDocumentText } from './documentImportExport.js';
 import { documentContributions } from './documentContributions.js';
-import type { EditorProfile } from '../../../src/ash/workbench/services/documentEditor/browser/documentEditorProfile.js';
+import type { EditorProfile, DocumentEditorConfiguration } from '../../../src/ash/workbench/services/documentEditor/browser/documentEditorProfile.js';
+import { IDialogService } from '../../../src/ash/platform/dialogs/common/dialogs.js';
+import { IOpenerService } from '../../../src/ash/platform/opener/common/opener.js';
 import { createDefaultDocumentSchema, type DocumentSchema } from '../common/model/documentSchema.js';
+import type { DocumentPlugin } from '../common/model/documentPlugin.js';
+import type { DocumentNode } from '../common/model/document.js';
+
+/** A view constructor captures optional package UI, while the host owns service injection and disposal. */
+export function createEditorProfileConfiguration(schema: DocumentSchema, options: RichTextEditorOptions, plugins?: readonly DocumentPlugin<unknown>[], createEmptyDocument?: () => DocumentNode): DocumentEditorConfiguration {
+	class ProfileWidget extends RichTextEditorWidget {
+		constructor(@IDialogService dialogs: IDialogService, @IOpenerService opener: IOpenerService) { super(options, dialogs, opener); }
+	}
+	return {
+		codec: bindDocumentCodec(schema, plugins), widget: ProfileWidget, createEmptyDocument,
+		importText: (text, format, ownerDocument, source) => importDocumentText(text, format, schema, ownerDocument, source),
+		exportText: (document, format) => exportDocumentText(document, schema, format),
+	};
+}
 
 /** Free-form writing and channel notes share Academy semantics, not paper constraints. */
 export const generalProfile: EditorProfile = Object.freeze({
-	codec: documentCodec, widget: RichTextEditorWidget, importText: importDocumentText, exportText: exportDocumentText,
 	id: 'general', contentType: 'application/vnd.ash.document+json',
-	createSchema: createDefaultDocumentSchema,
-	createEmptyDocument: (schema: DocumentSchema) => schema.createDocument([schema.createNode('paragraph')]),
-	outlineNavigator: true,
-	contributions: documentContributions,
+	create: () => {
+		const schema = createDefaultDocumentSchema();
+		return createEditorProfileConfiguration(schema, { outlineNavigator: true, contributions: documentContributions }, undefined, () => schema.createDocument([schema.createNode('paragraph')]));
+	},
 });
 
 export const channelNotesProfile: EditorProfile = Object.freeze({
-	...generalProfile, outlineNavigator: false, createEmptyDocument: undefined, id: 'ash.collaboration.notes', contentType: 'application/vnd.ash.channel-notes+json',
+	id: 'ash.collaboration.notes', contentType: 'application/vnd.ash.channel-notes+json',
+	create: () => createEditorProfileConfiguration(createDefaultDocumentSchema(), { contributions: documentContributions }),
 });

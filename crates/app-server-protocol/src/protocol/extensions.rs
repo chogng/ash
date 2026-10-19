@@ -35,6 +35,18 @@ pub enum ExtensionDiagnosticCodeDto {
 
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
+pub struct ExtensionRendererClientDto {
+    pub runtime_id: String,
+    pub api_version: u32,
+    pub entry: String,
+    pub digest: String,
+    pub style: String,
+    pub style_digest: String,
+    pub source_digest: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
 pub struct ExtensionDto {
     pub id: String,
     pub name: String,
@@ -53,6 +65,10 @@ pub struct ExtensionDto {
     pub manifest_json: String,
     pub manifest_sha256: String,
     pub package_sha256: String,
+    /// Trusted host admission for these exact package bytes; never copied from package.json.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub renderer_client: Option<ExtensionRendererClientDto>,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]

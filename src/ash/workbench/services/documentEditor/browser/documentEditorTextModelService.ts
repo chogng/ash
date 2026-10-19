@@ -1,10 +1,10 @@
 import { localize } from '../../../../nls.js';
 import type { URI } from '../../../../base/common/uri.js';
-import type { DocumentNode } from '../../../../../../extensions/academic/common/model/document.js';
+import type { DocumentNode } from '../common/documentCodec.js';
 import { throwIfCancelled } from "../../../../base/common/cancellation.js";
 import { AbstractDisposable, Disposable, DisposableMap } from "../../../../base/common/lifecycle.js";
 import { extUri } from '../../../../base/common/resources.js';
-import type { DocumentTextModel } from "../../../../../../extensions/academic/common/model/documentTextModel.js";
+import type { DocumentTextModel } from '../common/documentCodec.js';
 import type { TextModelBlockInput, TextModelWorkingCopyReference } from "../../textmodelResolver/common/textModelResourceService.js";
 import { ITextFileService } from "../../textfile/common/textfiles.js";
 import { IWorkingCopyService } from "../../workingCopy/common/workingCopyService.js";
@@ -37,8 +37,8 @@ export class DocumentEditorTextModelService extends Disposable implements IDocum
 		this.assertNotDisposed();
 		const concurrent = this.entries.get(key);
 		if (concurrent) { return this.reference(key, concurrent, input); }
-		const document = input.codec.parse(content.text, input.schema, input.createEmptyDocument);
-		const model = input.codec.createModel(input.schema, document, input.plugins);
+		const document = input.codec.parse(content.text, input.createEmptyDocument);
+		const model = input.codec.createModel(document);
 		const workingCopy: DocumentWorkingCopy = new DocumentWorkingCopy({
 			codec: input.codec,
 			contentType: input.contentType,
@@ -51,7 +51,7 @@ export class DocumentEditorTextModelService extends Disposable implements IDocum
 			onSave: () => entry.saveUntitled(),
 			createEmptyDocument: input.createEmptyDocument,
 		});
-		const entry = new DocumentModelEntry(model, workingCopy, input.modelCompatibility ?? input.schema.documentType);
+		const entry = new DocumentModelEntry(model, workingCopy, input.modelCompatibility ?? input.codec.documentType);
 		this.entries.set(key, entry);
 		return this.reference(key, entry, input);
 	}
@@ -61,8 +61,8 @@ export class DocumentEditorTextModelService extends Disposable implements IDocum
 	}
 
 	private reference(key: string, entry: DocumentModelEntry, input: TextModelBlockInput): TextModelWorkingCopyReference {
-		if (entry.workingCopy.backupContentType !== input.contentType || entry.model.schema.documentType !== input.schema.documentType) { throw new Error('The resource is already open with a different document type'); }
-		if (entry.compatibility !== (input.modelCompatibility ?? input.schema.documentType)) {
+		if (entry.workingCopy.backupContentType !== input.contentType || entry.model.documentType !== input.codec.documentType) { throw new Error('The resource is already open with a different document type'); }
+		if (entry.compatibility !== (input.modelCompatibility ?? input.codec.documentType)) {
 			throw new Error(localize('document.model.incompatible', 'The document is open with a different editor version. Save or recover its existing content before reopening it.'));
 		}
 		entry.references += 1;

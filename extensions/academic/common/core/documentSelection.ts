@@ -1,27 +1,8 @@
 import { isNonNegativeSafeInteger } from "../../../../src/ash/base/common/numbers.js";
 import { findDocumentNode, type DocumentNode, type DocumentNodeId } from "../model/document.js";
 
-export interface DocumentPoint {
-	readonly nodeId: DocumentNodeId;
-	readonly offset: number;
-}
-
-export interface DocumentTextSelection {
-	readonly kind: "text";
-	readonly anchor: DocumentPoint;
-	readonly head: DocumentPoint;
-}
-
-export interface NodeSelection {
-	readonly kind: "node";
-	readonly nodeId: DocumentNodeId;
-}
-
-export interface AllSelection {
-	readonly kind: "all";
-}
-
-export type DocumentSelection = DocumentTextSelection | NodeSelection | AllSelection;
+import type { DocumentPoint, DocumentTextSelection, NodeSelection, AllSelection, DocumentSelection } from '../../../../src/ash/workbench/services/documentEditor/common/documentCodec.js';
+export type { DocumentPoint, DocumentTextSelection, NodeSelection, AllSelection, DocumentSelection } from '../../../../src/ash/workbench/services/documentEditor/common/documentCodec.js';
 
 export function textSelection(anchor: DocumentPoint, head = anchor): DocumentTextSelection {
 	validatePoint(anchor);

@@ -16,7 +16,8 @@
       "metadataBaseUrl": "https://chogng.github.io/extensions/metadata/",
       "targetsBaseUrl": "https://chogng.github.io/extensions/targets/",
       "trustedRoot": "extensions-root.json",
-      "catalogRefreshIntervalSeconds": 300
+      "catalogRefreshIntervalSeconds": 300,
+      "productRuntimePublishers": ["ash"]
     }
   ]
 }

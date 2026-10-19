@@ -1,3 +1,4 @@
+import type { DocumentEditorConfiguration, DocumentEditorWidget } from '../../../services/documentEditor/browser/documentEditorProfile.js';
 import type { DocumentCodec, DocumentTextFormat } from '../../../services/documentEditor/common/documentCodec.js';
 import { IChannelService, type ChannelReference } from '../../../../platform/collaboration/common/channelService.js';
 import { IStorageService } from '../../../../platform/storage/common/storage.js';
@@ -9,17 +10,14 @@ import type { IDisposable } from '../../../../base/common/lifecycle.js';
 import type { DocumentCollaborationRoom } from '../../../services/documentCollaboration/common/documentCollaborationService.js';
 import { CollaborationContribution, type CollaborationStartResult } from './collaborationContribution.js';
 import { throwIfCancelled } from '../../../../base/common/cancellation.js';
-import { type DocumentSchema } from '../../../../../../extensions/academic/common/model/documentSchema.js';
-import type { DocumentPlugin } from '../../../../../../extensions/academic/common/model/documentPlugin.js';
 import type { TextModelWorkingCopyReference } from '../../../services/textmodelResolver/common/textModelResourceService.js';
 import { assertDefined } from "../../../../base/common/types.js";
 import { DisposableStore, MutableDisposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import type { IDimension } from "../../../../base/browser/dom.js";
 import type { URI } from "../../../../base/common/uri.js";
-import type { RichTextEditorWidget, RichTextEditorOptions } from "../../../../../../extensions/academic/browser/widget/richTextEditor/richTextEditorWidget.js";
-import type { DocumentSelection } from "../../../../../../extensions/academic/common/core/documentSelection.js";
-import type { DocumentNode } from "../../../../../../extensions/academic/common/model/document.js";
-import type { DocumentOutline } from "../../../../../../extensions/academic/common/model/documentOutline.js";
+import type { DocumentSelection } from '../../../services/documentEditor/common/documentCodec.js';
+import type { DocumentNode } from '../../../services/documentEditor/common/documentCodec.js';
+import type { DocumentOutline } from '../../../services/documentEditor/common/documentCodec.js';
 import type { IDocumentCollaborationService } from '../../../services/documentCollaboration/common/documentCollaborationService.js';
 import { EditorPane } from '../../../browser/parts/editor/editorPane.js';
 import { IDocumentEditorTextModelService } from '../../../services/documentEditor/common/documentTypes.js';
@@ -32,19 +30,15 @@ import type { CallDocument } from '../../../../platform/call/common/callService.
 import { localize } from '../../../../nls.js';
 
 /** Workbench-only services that complement one document editor. */
-export interface EditorPaneOptions extends RichTextEditorOptions {
+export interface EditorPaneOptions extends Pick<DocumentEditorConfiguration, 'codec' | 'widget' | 'exportText' | 'createEmptyDocument'> {
 	readonly codec: DocumentCodec;
 	readonly modelCompatibility?: string;
-	readonly widget: typeof RichTextEditorWidget;
-	readonly exportText: (document: DocumentNode, schema: DocumentSchema, format: DocumentTextFormat) => string;
 	readonly editorId?: string;
 	/** Retiring a capability freezes the view without closing its dirty working copy. */
 	readonly providerSignal?: AbortSignal;
 	readonly contentType: string;
 	readonly collaborationSchemaId?: string;
 	readonly onSave?: () => Promise<void | boolean>;
-	readonly plugins?: readonly DocumentPlugin<unknown>[];
-	readonly schema: DocumentSchema;
 	readonly createEmptyDocument?: () => DocumentNode;
 	readonly createDocumentCollaborationService?: () => IDocumentCollaborationService;
 }
@@ -54,7 +48,6 @@ export class DocumentEditorPane extends EditorPane implements IEditorPane {
 	readonly id: string;
 
 	private readonly modelReference = this._register(new MutableDisposable<TextModelWorkingCopyReference>());
-	private readonly schema: DocumentSchema;
 	private inputGeneration = 0;
 	private readonly options: EditorPaneOptions;
 	private collaborationService: IDocumentCollaborationService | undefined;
@@ -63,7 +56,7 @@ export class DocumentEditorPane extends EditorPane implements IEditorPane {
 	private channel: ChannelReference | undefined;
 	private roomRequest: AbortController | undefined;
 	private readonly roomStateListener = this._register(new MutableDisposable<IDisposable>());
-	private editor: RichTextEditorWidget | undefined;
+	private editor: DocumentEditorWidget | undefined;
 	private container: HTMLDivElement | undefined;
 	private dimension: IDimension = { width: 0, height: 0 };
 
@@ -89,7 +82,6 @@ export class DocumentEditorPane extends EditorPane implements IEditorPane {
 		options.providerSignal?.addEventListener('abort', retire, { once: true });
 		this._register(toDisposable(() => options.providerSignal?.removeEventListener('abort', retire)));
 		this._register(toDisposable(() => this.stopCollaboration()));
-		this.schema = options.schema;
 		this._register(toDisposable(() => {
 			this.container?.remove();
 			this.container = undefined;
@@ -97,18 +89,18 @@ export class DocumentEditorPane extends EditorPane implements IEditorPane {
 	}
 
 	public exportText(format: DocumentTextFormat): string {
-		return this.options.exportText(this.getDocument(), this.schema, format);
+		return this.options.exportText(this.getDocument(), format);
 	}
 
 	public getAccessibleContent(): string {
-		return this.options.codec.toPlainText(this.getDocument(), this.schema);
+		return this.options.codec.toPlainText(this.getDocument());
 	}
 
 	/** A conversion populates the already-open untitled working copy without acquiring a second model. */
 	public restoreDraft(document: DocumentNode): void {
 		const reference = this.requireWorkingCopy();
 		if (reference.resource.scheme !== 'untitled') throw new Error('Only an untitled document accepts a converted draft');
-		reference.restoreBackup(this.options.codec.serialize(document, this.schema));
+		reference.restoreBackup(this.options.codec.serialize(document));
 	}
 
 	public override create(parent: HTMLElement): void {
@@ -118,7 +110,7 @@ export class DocumentEditorPane extends EditorPane implements IEditorPane {
 		parent.append(container);
 		super.create(container);
 		this.container = container;
-		const { createDocumentCollaborationService, ...editorOptions } = this.options;
+		const { createDocumentCollaborationService } = this.options;
 		this.collaborationService = createDocumentCollaborationService ? this._register(createDocumentCollaborationService()) : undefined;
 		const collaboration = this._register(new CollaborationContribution(container, {
 			fixedRoom: () => this.channel ? `channel-notes-${this.channel.channelId}` : undefined,
@@ -132,7 +124,7 @@ export class DocumentEditorPane extends EditorPane implements IEditorPane {
 		this.collaboration = collaboration;
 		container.append(collaboration.element);
 		collaboration.setState(this.collaborationService ? 'inactive' : 'unavailable');
-		const editor = this._register(this.instantiation.createInstance(this.options.widget, editorOptions));
+		const editor = this._register(this.instantiation.createInstance(this.options.widget));
 		this.editor = editor;
 		editor.create(container);
 	}
@@ -148,8 +140,6 @@ export class DocumentEditorPane extends EditorPane implements IEditorPane {
 			initialText: input.initialText,
 			codec: this.options.codec,
 			modelCompatibility: this.options.modelCompatibility,
-			schema: this.schema,
-			plugins: this.options.plugins,
 			createEmptyDocument: this.options.createEmptyDocument,
 			onSave: this.options.onSave,
 		}, signal);
@@ -213,10 +203,6 @@ export class DocumentEditorPane extends EditorPane implements IEditorPane {
 		return this.requireEditor().getDocument();
 	}
 
-	getDocumentSchema(): DocumentSchema {
-		return this.requireWorkingCopy().model.schema;
-	}
-
 	/** Returns the current structured-document selection of the hosted editor. */
 	getDocumentSelection(): DocumentSelection | undefined {
 		return this.requireEditor().getDocumentSelection();
@@ -274,7 +260,6 @@ export class DocumentEditorPane extends EditorPane implements IEditorPane {
 			clientId: `stanza-${generateUuid()}`,
 			schemaId: this.options.collaborationSchemaId ?? 'stanza-document-v1',
 			codec: this.options.codec,
-			schema: reference.model.schema,
 			document: reference.model.document,
 		}, request.signal);
 		if (request.signal.aborted || this.isDisposed || this.modelReference.value !== reference || !authorized()) {
@@ -343,7 +328,7 @@ export class DocumentEditorPane extends EditorPane implements IEditorPane {
 		return this.container;
 	}
 
-	private requireEditor(): RichTextEditorWidget {
+	private requireEditor(): DocumentEditorWidget {
 		const editor = this.editor;
 		assertDefined(editor, new ReferenceError("Document editor pane has not been created"));
 		return editor;

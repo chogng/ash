@@ -5,6 +5,49 @@ use super::language_ids_for;
 use super::validate_manifest;
 
 #[test]
+fn editor_family_maps_only_its_editor_asset_to_the_existing_editor_extension_capability() {
+    let value = serde_json::json!({
+        "schemaVersion": 2, "packageType": "editor", "source": "official",
+        "id": "ash/academic", "version": "1.0.0", "displayName": "Academy",
+        "description": "A document editor.", "license": "MIT",
+        "capabilities": [
+            { "kind": "asset", "id": "editor-resources", "path": "editor" },
+            { "kind": "executable", "id": "academy-runtime", "path": "bin/academy", "runtime": "direct" }
+        ]
+    });
+    let manifest: CatalogManifest = serde_json::from_value(value.clone()).unwrap();
+    validate_manifest(&manifest).unwrap();
+    assert_eq!(manifest.package_type.as_str(), "editor");
+    assert!(manifest.matches_filters(&crate::SearchPackagesRequest {
+        package_type: Some("editor".into()),
+        capability_kind: Some(crate::CapabilityKind::EditorExtension),
+        ..Default::default()
+    }));
+    assert_eq!(
+        manifest.capabilities[0].public_kind(manifest.package_type),
+        crate::CapabilityKind::EditorExtension
+    );
+    assert_eq!(
+        manifest.capabilities[1].public_kind(manifest.package_type),
+        crate::CapabilityKind::Executable
+    );
+    for (pointer, replacement) in [
+        ("/schemaVersion", serde_json::json!(1)),
+        (
+            "/capabilities/0/path",
+            serde_json::json!("arbitrary-assets"),
+        ),
+        ("/capabilities/0/kind", serde_json::json!("connector")),
+        ("/capabilities/1/runtime", serde_json::Value::Null),
+    ] {
+        let mut invalid = value.clone();
+        *invalid.pointer_mut(pointer).unwrap() = replacement;
+        let invalid: CatalogManifest = serde_json::from_value(invalid).unwrap();
+        assert!(validate_manifest(&invalid).is_err());
+    }
+}
+
+#[test]
 fn accepts_ash_french_localization_example() {
     let manifest: CatalogManifest = serde_json::from_str(include_str!(
         "../../../../localization/examples/fr/manifest.json"

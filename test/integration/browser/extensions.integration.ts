@@ -151,7 +151,9 @@ const mcpSummary = { id: 'catalog/docs@ash', version: '1.0.0', packageType: 'mcp
 const mcpDetails = { ...packageDetails, ...mcpSummary, package: { ...reference, id: mcpSummary.id }, capabilities: [{ kind: 'mcp' as const, id: 'docs-server', contractVersion: '1', permissions: ['network'], authenticationProvider: null }] };
 const discoveryFixture = new URLSearchParams(location.search).has('marketplace');
 const partialDiscoveryFailure = new URLSearchParams(location.search).has('partialDiscoveryFailure');
-const extensionSummary = { ...summary, id: 'publisher.sample@open-vsx', packageType: 'editorExtension', displayName: 'Sample editor extension' };
+const nativeEditor = new URLSearchParams(location.search).has('nativeEditor');
+const extensionId = nativeEditor ? 'ash.academic' : 'publisher.sample';
+const extensionSummary = { ...summary, id: nativeEditor ? 'ash.academic@ash' : 'publisher.sample@open-vsx', packageType: nativeEditor ? 'editor' : 'editorExtension', displayName: nativeEditor ? 'Academy' : 'Sample editor extension' };
 const extensionReference = { ...reference, id: extensionSummary.id };
 const extensionCapabilities = [{ kind: 'editorExtension' as const, id: 'publisher.sample', contractVersion: '1', permissions: [], authenticationProvider: null }];
 const extensionDetails = { ...packageDetails, package: extensionReference, ...extensionSummary, capabilities: extensionCapabilities };
@@ -178,11 +180,11 @@ services.registerInstance(IExtensionApi, {
 	list: async () => ({
 		generation: 1, diagnostics: [], extensions: [
 			...(await builtinPackages.list('cached')).extensions.filter(value => !rustBuiltIn || value.id !== 'ash.language-pack-zh-cn'),
-			...galleryOnly ? [] : [{ id: 'publisher.sample', name: 'sample', publisher: 'Fixture publisher', version: '1.0.0', displayName: extensionSummary.displayName, sourceKind: 'registry' as const, manifestSha256: reference.digest, packageSha256: reference.digest, manifestJson: JSON.stringify(extensionManifest) }],
+			...galleryOnly ? [] : [{ id: extensionId, name: 'sample', publisher: 'Fixture publisher', version: '1.0.0', displayName: extensionSummary.displayName, sourceKind: 'registry' as const, manifestSha256: reference.digest, packageSha256: reference.digest, manifestJson: JSON.stringify(extensionManifest) }],
 			...rustBuiltIn ? [{ id: 'ash.language-pack-zh-cn', ...rustLanguagePackManifest, sourceKind: 'builtIn' as const, manifestSha256: reference.digest, packageSha256: reference.digest, manifestJson: JSON.stringify(rustLanguagePackManifest) }] : [],
 		]
 	}),
-	resources: new ExtensionResourceLoaderService(request => request.extensionId === 'publisher.sample' || rustBuiltIn && request.extensionId === 'ash.language-pack-zh-cn' ? readPackageResource(request) : builtinPackages.resources.readExtensionResourceBytes(request), galleryOnly ? {
+	resources: new ExtensionResourceLoaderService(request => request.extensionId === extensionId || rustBuiltIn && request.extensionId === 'ash.language-pack-zh-cn' ? readPackageResource(request) : builtinPackages.resources.readExtensionResourceBytes(request), galleryOnly ? {
 		template: async () => 'https://registry.invalid/api/{publisher}/{name}/{version}/file/{path}',
 		read: async request => { requests.push(['galleryResource', request]); return readPackageResource({ generation: 1, extensionId: `${request.publisher}.${request.name}`, path: request.path }); },
 	} : undefined),
@@ -190,12 +192,12 @@ services.registerInstance(IExtensionApi, {
 services.registerInstance(IOpenerService, { open: async (href, options) => { requests.push(['openLink', String(href), options]); return true; } } as IOpenerService);
 services.registerSingleton(IMarkdownRendererService, () => services.createInstance(MarkdownRendererService));
 let editorPolicyRevision = 1;
-let editorEntrypoint: string | null = 'dist/extension.js';
+let editorEntrypoint: string | null = nativeEditor ? 'bin/darwin-arm64/ash-academy' : 'dist/extension.js';
 const editorPolicies = new Map<string, { enabled: boolean; granted: boolean; }>();
 function editorPolicySnapshot() {
 	return {
 		revision: editorPolicyRevision, extensions: installed.filter(entry => entry.capabilities.some(capability => capability.kind === 'editorExtension')).map(entry => ({
-			installationId: entry.installationId, package: entry.package, entrypoint: editorEntrypoint,
+			installationId: entry.installationId, package: entry.package, entrypoint: editorEntrypoint, executionKind: nativeEditor ? 'native' as const : 'node' as const,
 			...(editorPolicies.get(entry.installationId) ?? { enabled: true, granted: false }),
 		}))
 	};

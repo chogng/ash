@@ -14,6 +14,7 @@ use ash_app_server_protocol::protocol::extensions::ExtensionGalleryResourceOpenP
 use ash_app_server_protocol::protocol::extensions::ExtensionGalleryResult;
 use ash_app_server_protocol::protocol::extensions::ExtensionListParams;
 use ash_app_server_protocol::protocol::extensions::ExtensionListResult;
+use ash_app_server_protocol::protocol::extensions::ExtensionRendererClientDto;
 use ash_app_server_protocol::protocol::extensions::ExtensionResourceOpenParams;
 use ash_app_server_protocol::protocol::extensions::ExtensionResourceOpenResult;
 use ash_app_server_protocol::protocol::extensions::ExtensionSourceKindDto;
@@ -205,6 +206,17 @@ fn extension_descriptor(value: ExtensionDescriptor) -> ExtensionDto {
         manifest_json: value.manifest_json,
         manifest_sha256: value.manifest_sha256,
         package_sha256: value.package_sha256,
+        renderer_client: value
+            .renderer_client
+            .map(|client| ExtensionRendererClientDto {
+                runtime_id: client.runtime_id,
+                api_version: client.api_version,
+                entry: client.entry,
+                digest: client.digest,
+                style: client.style,
+                style_digest: client.style_digest,
+                source_digest: client.source_digest,
+            }),
     }
 }
 

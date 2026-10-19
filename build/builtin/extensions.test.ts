@@ -22,6 +22,8 @@ test('browser packaging excludes independent capabilities and rejects missing JS
 		await writeFile(join(directory, 'extensions/theme-defaults/package.json'), JSON.stringify({ publisher: 'test', name: 'theme-defaults', version: '1.0.0' }));
 		await mkdir(join(directory, 'extensions/capability'));
 		await writeFile(join(directory, 'extensions/capability/Cargo.toml'), '[package]\nname = "capability"\nversion = "1.0.0"\n');
+		await mkdir(join(directory, 'extensions/installed-editor'), { recursive: true });
+		await writeFile(join(directory, 'extensions/installed-editor/package.json'), JSON.stringify({ publisher: 'test', name: 'installed-editor', version: '1.0.0', ashRuntime: { kind: 'rust', client: { apiVersion: 1, entry: 'dist/editor.js' } } }));
 		await mkdir(join(directory, 'livekit-server'));
 		await writeFile(join(directory, 'livekit-server/runtime.json'), JSON.stringify({ schemaVersion: 1, id: 'ash.livekit', entrypoint: 'bin/livekit-server' }));
 		await mkdir(join(directory, 'extensions/git/src'), { recursive: true });

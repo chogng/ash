@@ -1,13 +1,11 @@
 import type { DocumentCodec } from '../../documentEditor/common/documentCodec.js';
-import type { DocumentTextModel } from '../../../../../../extensions/academic/common/model/documentTextModel.js';
+import type { DocumentTextModel } from '../../documentEditor/common/documentCodec.js';
 import type { FileReadOperation } from '../../../../platform/files/common/files.js';
 import { createServiceIdentifier, type ServiceIdentifier } from "../../../../platform/instantiation/common/instantiation.js";
 import { type Event } from "../../../../base/common/event.js";
 import { type IDisposable } from "../../../../base/common/lifecycle.js";
 import { type URI } from "../../../../base/common/uri.js";
-import type { DocumentNode } from "../../../../../../extensions/academic/common/model/document.js";
-import type { DocumentPlugin } from "../../../../../../extensions/academic/common/model/documentPlugin.js";
-import type { DocumentSchema } from "../../../../../../extensions/academic/common/model/documentSchema.js";
+import type { DocumentNode } from '../../documentEditor/common/documentCodec.js';
 import { type TextModel } from "../../../../editor/common/model/textModel.js";
 import type { ISaveOptions, SaveReason } from '../../../common/editor.js';
 import type { IEncodingSupport } from '../../textfile/common/textfiles.js';
@@ -49,8 +47,6 @@ export interface TextModelBlockInput extends TextModelInput {
 	readonly codec: DocumentCodec;
 	/** Opaque package/component identity; an existing model never hot-switches semantics. */
 	readonly modelCompatibility?: string;
-	readonly schema: DocumentSchema;
-	readonly plugins?: readonly DocumentPlugin<unknown>[];
 	readonly createEmptyDocument?: () => DocumentNode;
 	readonly onSave?: () => Promise<void | boolean>;
 }

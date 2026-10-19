@@ -1,24 +1,5 @@
-/** Stable identity for one node in a structured document tree. */
-export type DocumentNodeId = string;
-
-export type DocumentAttributeValue = string | number | boolean | null;
-
-export type DocumentAttributes = Readonly<Record<string, DocumentAttributeValue>>;
-
-export interface DocumentMark {
-	readonly type: string;
-	readonly attrs: DocumentAttributes;
-}
-
-/** Immutable structure metadata used by a Stanza TextModel and its serializers. */
-export interface DocumentNode {
-	readonly id: DocumentNodeId;
-	readonly type: string;
-	readonly attrs: DocumentAttributes;
-	readonly content: readonly DocumentNode[];
-	readonly marks: readonly DocumentMark[];
-	readonly text?: string;
-}
+import type { DocumentNodeId, DocumentAttributeValue, DocumentAttributes, DocumentMark, DocumentNode } from '../../../../src/ash/workbench/services/documentEditor/common/documentCodec.js';
+export type { DocumentNodeId, DocumentAttributeValue, DocumentAttributes, DocumentMark, DocumentNode } from '../../../../src/ash/workbench/services/documentEditor/common/documentCodec.js';
 
 export interface DocumentNodeOptions {
 	readonly id: DocumentNodeId;

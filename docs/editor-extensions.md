@@ -108,6 +108,12 @@ Markdown 识别行内、块级公式和 `math` 围栏，按文档顺序一次提
 “打开富文本编辑器”（`markdown.showRichEditor`）保留源码标签；“重新打开为富文本”替换当前视图。
 源码、预览与富文本标签可以同时打开。此入口没有扩大第三方扩展的生产执行许可。
 
+### 已安装的第一方编辑器客户端
+
+Academy 使用中立 `editor` 市场包，`editor/` 的标准扩展 manifest 和资源由包拥有，Rust executable 仍经公共 SDK／Host RPC 注册。Manager 的安装、来源校验、精确执行授权与租约保持唯一 owner。产品固定来源可用 `productRuntimePublishers` 选择可信发布者；此权限依据 pinned root 和已验证 publisher delegation，用户新增来源或包自报标识不能获得。
+
+已安装的精确包获准后，App Server 才投影 `rendererClient`；Renderer 在校验同代资源、摘要、API 版本及当前准入后运行独立模块工厂。模块只取得有限宿主机制，Schema、codec 与视图语义留在包内；宿主拥有模型资源、dirty、历史与恢复。该路径在 Renderer 执行可信第一方代码，不作为任意第三方客户端隔离机制，也不扩大普通 Rust executable 的生产执行权限。构建、升级、样式租约和验证范围见[编辑器路线图 6.7](design/editor-roadmap.md#67-贡献装配与市场扩展)。
+
 ### 浏览器 Worker 与后端宿主的生命周期
 
 执行位置与 Provider 类型决定生命周期机制，不能因实现语言是 TS 或 Rust 就把它们合并：

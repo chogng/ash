@@ -1,4 +1,4 @@
-import { documentCodec } from '../../../../../../../extensions/academic/common/model/documentCodec.js';
+import { documentCodec, bindDocumentCodec } from '../../../../../../../extensions/academic/common/model/documentCodec.js';
 import assert from "node:assert/strict";
 import { test } from "mocha";
 import { isCancellationError } from "../../../../../base/common/errors.js";
@@ -52,10 +52,10 @@ test("Workbench collaboration reports service selection cancellation", async () 
 function createOpenInput(): DocumentCollaborationOpenInput {
 	const schema = createDefaultDocumentSchema();
 	return {
-		codec: documentCodec,
+		codec: bindDocumentCodec(schema),
 		clientId: "client-a",
 		schemaId: "stanza-document-v1",
-		schema,
+
 		document: schema.createDocument([schema.createNode("paragraph", { id: "paragraph-1", content: [schema.createText("Hello", { id: "text-1" })] })], "document-1"),
 	};
 }

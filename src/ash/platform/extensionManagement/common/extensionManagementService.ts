@@ -85,6 +85,7 @@ export interface ExtensionsEditorExtensionPolicy {
 	readonly installationId: string;
 	readonly package: ExtensionsPackageRef;
 	readonly entrypoint: string | null;
+	readonly executionKind?: 'node' | 'native';
 	readonly enabled: boolean;
 	readonly granted: boolean;
 }

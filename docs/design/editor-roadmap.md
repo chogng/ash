@@ -1,6 +1,6 @@
 # Stanza 编辑器分部实施路线图
 
-Stanza 底层保留**通用文本编辑内核**，Code 编辑器与 Academy 富文档编辑器通过外部扩展注入，其中 Academy 由独立 Rust 扩展提供。本文维护目标边界、迁移顺序、contrib 归属及历史行为验收范围。M0 静态边界审计已完成，见[审计清单](editor-boundary-audit.md)；2026-10-19 已接通 Academy／Code 的真实 Rust 包注入，迁出既有能力并完成基础入口收敛；真实平台验收与 M6 新功能单独跟踪。不继续向默认 Schema、Widget 或 Editor bundle 添加 Code／Academy 业务能力。
+Stanza 底层保留**通用文本编辑内核**，Code 编辑器与 Academy 富文档编辑器通过扩展注入，其中 Academy 由独立 Rust 扩展提供。本文维护目标边界、迁移顺序、contrib 归属及历史行为验收范围。M0 静态边界审计已完成，见[审计清单](editor-boundary-audit.md)；2026-10-19 已迁出既有能力并完成基础入口收敛，Academy 继续改为已安装包的 Rust 进程与独立客户端资源，Code 保持产品预装扩展。Academy 的分发与授权边界见 [6.7](#67-贡献装配与市场扩展)，真实平台验收与 M6 新功能单独跟踪。不继续向默认 Schema、Widget 或 Editor bundle 添加 Code／Academy 业务能力。
 
 当前待办及迁移交接见 [Stanza 编辑器 TODO](../../TODO.md#stanza-编辑器--todo)。已有实现见 [Editor 目录说明](../../src/ash/editor/README.md)、[文本内核](../../src/ash/editor/text-engine.md)、[现有富文档实现](../../src/ash/editor/document-engine.md)和[跨系统边界](../editor-architecture.md)；公开契约与既有路径记录见 [API 对齐台账](../../src/ash/editor/api-alignment-status.md)。当前迁移结果与平台验收范围如下；历史基线不替代实际运行证据。
 
@@ -49,7 +49,7 @@ Academy 的运行边界如下：独立 Rust Provider 通过[公共 Rust SDK](../
 
 ## 当前基线与待迁移状态
 
-2026-10-19 Academy 已通过 [`ash-academy`](../../extensions/academic/README.md) 经公共 Rust SDK／Host RPC 注册 Academic、普通 `.ash-doc` 和频道笔记三种编辑器。[共享桥](../../src/ash/workbench/api/browser/mainThreadClientEditors.ts)按运行代次投影注册，[装载器](../../src/ash/workbench/services/extensions/browser/extensionEditorModules.ts)校验全部包内 TS／CSS 的摘要后按需装载。旧的 Academic／普通文档／频道笔记静态 Schema factory 和默认文档贡献已退出。
+Academy 的 [`ash-academy`](../../extensions/academic/README.md) 经公共 Rust SDK／Host RPC 注册 Academic、普通 `.ash-doc` 和频道笔记三种编辑器。[共享桥](../../src/ash/workbench/api/browser/mainThreadClientEditors.ts)按精确安装包、授权和运行代次投影注册；[装载器](../../src/ash/workbench/services/extensions/browser/extensionEditorModules.ts)读取同代资源、校验客户端与样式摘要及宿主 API 版本后装载独立模块。Academy 不再进入产品静态包目录、原生可执行文件清单或 Renderer 的模块 glob。旧的 Academic／普通文档／频道笔记静态 Schema factory 和默认文档贡献已退出。
 
 富文档 Schema、结构事务／历史、命令、行投影、协作算法、codec、富文本 Widget 与段落贡献由 `extensions/academic/common`、`browser` 唯一拥有。Academy 的 `DocumentTextModel` 使用基础 `TextModel` 的通用扩展快照提交边界；基础模型不导入富文档结构或包实现。宿主保留文件、资源引用、dirty、备份和网络连接，使用 profile 提供的 codec／Widget／导入导出端口。停用冻结旧视图并保留工作副本；显式重开复用模型与历史。声明路由在停用时仍保护结构化文件，缺少运行能力时拒绝自动回退普通文本。
 
@@ -73,7 +73,7 @@ Academy 仍以 Word 的文档工作流为目标：新建、写作、样式、对
 | M5 收敛内核与组合入口         | 在调用方、包注册、持久读取和测试转移后退出旧实现与默认导入；同步源码说明、台账、构建与打包依赖                                                                 | 基础文本、Code、Academy 注入三种编辑器组合及 Sessions 消费路径独立验收；基础入口不加载后两者的功能模块／资源，所有组合只有一个有效能力 owner。                   |
 | M6 扩展内功能演进             | 迁移闭环验收后，继续 Academy 写作、分页、输出与审阅，以及各自 Code 功能                                                                                        | 新能力由所属扩展内部 contrib 实现，核心只补实际需要且语义通用的机制；不把业务重新写回内核。                                                                      |
 
-M3 与 M4 都依赖 M1／M2，可按各自闭合切片推进；M5 对每个切片及时收敛，最后复核整体依赖。M2 必须同时验证 Code 和 Academy，避免接入端口只服务一种视图。M0 静态审计已完成；Academy 的注册、通用快照提交与既有富文档／codec 迁移已实施；Code 的注入、既有贡献与模型／输入／可选视图迁移已实施，M1–M5 的本机实现与自动回归已完成。真实 Electron 多窗口、远端、物理 IME 与屏幕阅读器验收仍按根 TODO 跟踪；M6 尚未开始。详细顺序、共享消费者与退出条件以[边界审计](editor-boundary-audit.md#实施顺序及每步交付)为准。
+M3 与 M4 都依赖 M1／M2，可按各自闭合切片推进；M5 对每个切片及时收敛，最后复核整体依赖。M2 必须同时验证 Code 和 Academy，避免接入端口只服务一种视图。M0 静态审计已完成；Academy 的注册、通用快照提交与既有富文档／codec 迁移已实施；Code 的注入、既有贡献与模型／输入／可选视图迁移已实施，M1–M5 的首次本机回归覆盖产品预装包；后续 Academy 外置包实现和验证范围另见 6.7。M6 接着推进写作能力。真实 Electron 多窗口、远端、物理 IME 与屏幕阅读器验收仍按根 TODO 跟踪；M6 尚未开始。详细顺序、共享消费者与退出条件以[边界审计](editor-boundary-audit.md#实施顺序及每步交付)为准。
 
 ## API 名称与契约怎么对齐
 
@@ -192,9 +192,26 @@ Academic 配置持续回归现有论文结构、引用和文献；公式、文�
 
 #### 6.7 贡献装配与市场扩展
 
-Academy 包内部 contrib 负责功能分工，独立 Rust Provider 经共享宿主和通用编辑器桥提供能力，客户端资源按上述运行边界装载。Sessions 只负责能力消费及产品入口、布局和会话关联，Workbench 下层继续提供已有共享基础设施；IDE 不新增 Academy 适配。Sessions 静态 contrib 不能成为能力注册或注入入口，也不预设需要新建 Academy 专用 contrib。现有 `extensions/academic` 的声明式路由与可信 factory 绑定必须迁为真正包拥有的能力链；内部 `registerEditorContribution` 也不能直接当作市场作者接口。
+Academy 的正式交付目标是从 Ash 扩展市场下载安装并按包装载、更新和卸载。源码位置不决定安装方式；默认推荐或默认安装也使用同一包管理生命周期。开发和离线场景可接入本地包，但不能另建 Academy 安装器或绕过来源、摘要、启用与执行授权检查。Rust Provider 与客户端资源属于同一精确版本，声明所需宿主契约及平台；升级扩展不要求重编 Ash，宿主不兼容时明确拒绝装载并保留文档。
 
-先以真实包验证 M2／M3 的装载、调用和释放，再确定第三方可用的公开子集、版本／能力协商、执行许可和隔离。第三方不能通过内部回调取得任意 Workbench DOM、完整服务容器或可变模型内部结构。扩展缺失、崩溃、停用、升级或格式不兼容时保留原始文档与未保存内容，不秘密回退旧内置实现，也不热切换正在编辑的 Schema。完整市场生态不作为首个可信扩展闭环的前置条件。
+源码仓库尚未决定迁移。目前建议继续在 Ash 的 `extensions/academic` 维护，便于在接入契约仍变化时同步实现和验证；契约稳定、确有独立发布需要后再迁到单独仓库。`extensions` 市场仓库按其现有职责维护目录、不可变版本产物、签名和撤销，不承接 Academy 日常源码开发或 Ash 安装器。是否迁仓不作为外置安装的前置条件，也不在多个仓库维护同一实现的可写副本。
+
+Academy 包内部 contrib 负责功能分工，独立 Rust Provider 经共享宿主和通用编辑器桥提供能力。Sessions 只负责能力消费及产品入口、布局和会话关联，Workbench 下层继续提供已有共享基础设施；IDE 不新增 Academy 适配。Sessions 静态 contrib 不能成为能力注册或注入入口，也不预设需要新建 Academy 专用 contrib；内部 `registerEditorContribution` 不能直接当作市场作者接口。
+
+实现沿原包管理生命周期接入：
+
+| 环节               | 所有权与行为                                                                                                                                                                                                                                                                                                                    |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 构建与分发         | `pnpm package:editor <source> <output> <target-platform>=<executable> ...` 生成中立 `editor` 家族的 schema 2 投稿目录。`editor/` 提供标准扩展 manifest、客户端和样式；`bin/<platform>/` 提供原生程序，同包可携带多个平台。市场负责签名、不可变版本和撤销，Ash 不再编入 Academy 实现。                                           |
+| 客户端接入         | 工厂模块只取得版本化的通用编辑、DOM、NLS、UI primitive 与服务标识契约，保持宿主 TextModel、URI 和 DI 身份；不传入容器或后端连接。Schema、codec、同步编辑策略和视图由包实现。样式按客户端身份隔离，实际视图持有租约，冻结的旧视图保留样式。                                                                                      |
+| 发行信任与执行许可 | 产品固定来源的 pinned TUF root 与发布者 delegation 建立发行信任，`productRuntimePublishers` 显式选定允许提供第一方代码的发布者。Manager 保存与精确内容绑定的来源证明；安装不授予执行权限。宿主仅对同摘要已启用且获准的 executable 投影 `rendererClient`，缺平台或撤权时不执行。用户新增源和 manifest 自报身份均不能获得该权限。 |
+| 装载与升级         | 客户端读取同代资源并校验 JS、CSS 与源码身份；执行前再次查询当前准入。代码缓存只保留按摘要识别的模块工厂，不缓存模型或权限。升级、停用、撤权和卸载退出旧注册；不兼容的工作副本不热切换 Schema，原数据与历史保留。                                                                                                                |
+
+这里允许的是产品明确选择的第一方发行代码，在宿主 Renderer 中运行；精确来源与授权是其信任边界，不宣称为任意第三方客户端提供了系统隔离。通用第三方 Rust／客户端执行仍按[扩展架构](../editor-extensions.md)的隔离边界处理。
+
+2026-10-19 在 macOS arm64 验证独立投稿目录和临时 TUF 签名分发，经真实 Manager 完成发现、下载、精确包授权、原生进程启动、英中双语 capability 描述、撤权及卸载，并断言客户端源码摘要与签名 manifest 一致。App Server runtime 的 978 项测试通过、8 项按配置忽略；Renderer 正常构建的 1,565 个模块不包含 Academy 实现。Editor 对齐检查的 2,133 项测试、Academy Chromium 的 25 项回归及新增同源码工厂重载后旧模型协作撤销／重做场景通过；扩展授权 UI 的 Node／native 英中双语 4 项回归通过。构建 Python 的 250 项测试通过、1 项忽略。日志与临时分发证据位于 `.build/academy-distribution/`，客户端和 Editor 检查日志另见 `/tmp/ash-academy-bound-*` 与 `/tmp/ash-editor-di-alignment.log`。这些结果不代表线上市场已发布，也不替代 Electron 多窗口、跨机器和物理输入验收。
+
+第三方不能通过内部回调取得任意 Workbench DOM、完整服务容器或可变模型内部结构。扩展缺失、崩溃、停用、升级或格式不兼容时保留原始文档与未保存内容，不秘密回退旧内置实现，也不热切换正在编辑的 Schema。
 
 ### 7. Diff 与多文件审阅
 

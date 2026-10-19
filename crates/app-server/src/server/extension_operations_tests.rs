@@ -3,6 +3,45 @@ use ash_app_server_protocol::protocol::error::AppServerErrorName;
 use ash_external_ext::packages::ExtensionPackagesError;
 
 #[test]
+fn renderer_admission_is_projected_from_the_catalog_proof_and_omitted_after_revocation() {
+    use ash_external_ext::packages::ExtensionDescriptor;
+    use ash_external_ext::packages::ExtensionRendererClient;
+    use ash_external_ext::packages::ExtensionSourceKind;
+    let digest = format!("sha256:{}", "a".repeat(64));
+    let mut descriptor = ExtensionDescriptor {
+        id: "ash.academic".into(),
+        name: "academic".into(),
+        publisher: "ash".into(),
+        version: "1.0.0".into(),
+        display_name: "Academy".into(),
+        source_kind: ExtensionSourceKind::Registry,
+        extension_location: std::env::temp_dir(),
+        manifest_json: r#"{"rendererClient":{"runtimeId":"untrusted"}}"#.into(),
+        manifest_sha256: digest.clone(),
+        package_sha256: digest.clone(),
+        renderer_client: Some(ExtensionRendererClient {
+            runtime_id: "ash.academic".into(),
+            api_version: 1,
+            entry: "dist/editor.js".into(),
+            digest: digest.clone(),
+            style: "dist/editor.css".into(),
+            style_digest: digest.clone(),
+            source_digest: digest,
+        }),
+    };
+    let admitted = serde_json::to_value(super::extension_descriptor(descriptor.clone())).unwrap();
+    assert_eq!(admitted["rendererClient"]["runtimeId"], "ash.academic");
+    assert_eq!(admitted["rendererClient"]["apiVersion"], 1);
+    assert_eq!(admitted["packageSha256"], descriptor.package_sha256);
+    let wire: ash_app_server_protocol::protocol::extensions::ExtensionDto =
+        serde_json::from_value(admitted).unwrap();
+    assert_eq!(wire.renderer_client.unwrap().runtime_id, "ash.academic");
+    descriptor.renderer_client = None;
+    let revoked = serde_json::to_value(super::extension_descriptor(descriptor)).unwrap();
+    assert!(revoked.get("rendererClient").is_none());
+}
+
+#[test]
 fn an_unconfigured_gallery_is_reported_without_exposing_a_resource() {
     use crate::local::ProviderModelService;
     use crate::server::AppServer;

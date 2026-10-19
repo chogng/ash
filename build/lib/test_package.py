@@ -117,7 +117,6 @@ class PackageTests(unittest.TestCase):
                 "ash-code-mode-host",
                 "ash-git-extension",
                 "ash-markdown-math",
-                "ash-academy",
                 "ash-code-editor",
                 "ash-markdown-language-features",
                 "ash-github-authentication",
@@ -304,7 +303,6 @@ class PackageTests(unittest.TestCase):
                 validate_product_services(root)
 
     BUILT_IN_EXTENSIONS = [
-        "academic",
         "bat",
         "bazel",
         "clojure",
@@ -464,9 +462,6 @@ class PackageTests(unittest.TestCase):
                 markdown_math_binary=executable_file(
                     root / "math-extension", b"math-extension"
                 ),
-                academy_extension_binary=executable_file(
-                    root / "academy", b"academy-extension"
-                ),
                 code_editor_extension_binary=executable_file(
                     root / "code-editor", b"code-editor-extension"
                 ),
@@ -623,28 +618,11 @@ class PackageTests(unittest.TestCase):
                 b"git-extension", (output / "bin" / "ash-git-extension").read_bytes()
             )
             self.assertEqual(
-                b"academy-extension", (output / "bin" / "ash-academy").read_bytes()
-            )
-            self.assertEqual(
                 b"code-editor-extension",
                 (output / "bin" / "ash-code-editor").read_bytes(),
             )
-            academy = output / "ash-resources/extensions/academic"
-            self.assertEqual(
-                "ash-academy",
-                json.loads((academy / "package.json").read_text())["ashRuntime"][
-                    "entrypoint"
-                ],
-            )
-            for build_input in [
-                "browser",
-                "src",
-                "Cargo.toml",
-                "Cargo.lock",
-                "build.rs",
-                "BUILD.bazel",
-            ]:
-                self.assertFalse((academy / build_input).exists(), build_input)
+            self.assertFalse((output / "bin/ash-academy").exists())
+            self.assertFalse((output / "ash-resources/extensions/academic").exists())
             self.assertEqual(
                 b"markdown-extension",
                 (output / "bin" / "ash-markdown-language-features").read_bytes(),
@@ -830,9 +808,6 @@ class PackageTests(unittest.TestCase):
                 markdown_math_binary=executable_file(
                     root / "math-extension", b"math-extension"
                 ),
-                academy_extension_binary=executable_file(
-                    root / "academy", b"academy-extension"
-                ),
                 code_editor_extension_binary=executable_file(
                     root / "code-editor", b"code-editor-extension"
                 ),
@@ -936,7 +911,11 @@ class PackageTests(unittest.TestCase):
             sorted(
                 path.name
                 for path in extensions.iterdir()
-                if path.is_dir() and (path / "package.json").is_file()
+                if path.is_dir()
+                and (path / "package.json").is_file()
+                and not json.loads((path / "package.json").read_text())
+                .get("ashRuntime", {})
+                .get("client")
             ),
         )
         seen_ids = set()
@@ -1151,9 +1130,6 @@ class PackageTests(unittest.TestCase):
                 markdown_math_binary=executable_file(
                     root / "math-extension", b"math-extension"
                 ),
-                academy_extension_binary=executable_file(
-                    root / "academy", b"academy-extension"
-                ),
                 code_editor_extension_binary=executable_file(
                     root / "code-editor", b"code-editor-extension"
                 ),
@@ -1252,9 +1228,6 @@ class PackageTests(unittest.TestCase):
                 ),
                 markdown_math_binary=executable_file(
                     root / "math-extension", b"math-extension"
-                ),
-                academy_extension_binary=executable_file(
-                    root / "academy", b"academy-extension"
                 ),
                 code_editor_extension_binary=executable_file(
                     root / "code-editor", b"code-editor-extension"

@@ -514,7 +514,7 @@ export class ExtensionsEditor extends EditorPane {
 				{ label: localize({ bundle: 'ash.extensions', key: 'detailDigest' }, 'Package digest'), value: installation?.package.digest ?? '' },
 			]
 		}]);
-		if (input.summary.packageType === 'editorExtension') { void this.loadPackageDocument(input, signal, version); }
+		if (input.summary.packageType === 'editorExtension' || input.summary.packageType === 'editor') { void this.loadPackageDocument(input, signal, version); }
 		this.capabilities.textContent = details ? describeExtensionCapabilities(details) : installation?.capabilities.map(capability => `${capability.kind}: ${capability.id}`).join('\n') ?? '';
 		const hasInstalled = installed.some(entry => entry.package.id === input.summary.id);
 		this.status.textContent = installation?.state === 'pendingRemoval' ? localize({ bundle: 'ash.extensions', key: 'removalPending' }, 'Removal pending') : hasInstalled ? localize({ bundle: 'ash.extensions', key: 'installed' }, 'Installed · activation is separate') : '';
@@ -619,7 +619,7 @@ export class ExtensionsEditor extends EditorPane {
 		let resourceFor: (path: string) => Promise<URI | undefined>;
 		try {
 			const catalog = await api.list('cached', { includeDisabled: input.source === ExtensionsInputSource.BuiltIn });
-			const id = input.summary.id.replace(/@open-vsx$/u, '');
+			const id = input.summary.id.replace(/@[^@]+$/u, '');
 			descriptor = catalog.extensions.find(extension => extension.id === id && extension.version === input.summary.version);
 			if (descriptor) {
 				const generation = catalog.generation; const extensionId = descriptor.id;

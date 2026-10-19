@@ -228,3 +228,25 @@ test('language extension syntax follows backend enablement, including revocation
 	enabled = true; offline = true;
 	assert.equal((await api.list('cached')).extensions.length, 0);
 });
+
+test('renderer admission preserves exact backend identity and rejects unsafe resources or unsupported APIs', () => {
+	const owner = packageSnapshot(1, 'ash.academic').extensions[0];
+	const admission = {
+		runtimeId: 'marketplace:ash.academic:editor-extension:editor', apiVersion: 1,
+		entry: 'dist/editor.js', digest: `sha256:${'c'.repeat(64)}`,
+		style: 'dist/editor.css', styleDigest: `sha256:${'d'.repeat(64)}`,
+		sourceDigest: `sha256:${'e'.repeat(64)}`,
+	};
+	const normalize = (rendererClient: unknown) => normalizeExtensionCatalog({ generation: 1, diagnostics: [], extensions: [{ ...owner, rendererClient }] });
+	const actual = normalize(admission).extensions[0].rendererClient;
+	assert.deepEqual(actual, admission);
+	assert.ok(Object.isFrozen(actual));
+	for (const invalid of [
+		{ ...admission, apiVersion: 2 },
+		{ ...admission, entry: '../other/editor.js' },
+		{ ...admission, style: 'https://other/editor.css' },
+		{ ...admission, styleDigest: 'sha256:bad' },
+		{ ...admission, sourceDigest: 'sha256:bad' },
+	]) assert.throws(() => normalize(invalid));
+	assert.equal(normalize(null).extensions[0].rendererClient, undefined);
+});

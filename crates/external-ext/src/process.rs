@@ -467,7 +467,11 @@ impl ExtensionHostLauncher for ProductJavaScriptLauncher {
     }
 }
 
-/// Launches one frozen product executable; package data cannot replace its path.
+/// Launches one exact executable selected by the product host.
+///
+/// The caller verifies product release provenance before constructing this launcher.
+/// Installed first-party releases must additionally retain their exact package consent
+/// and capability leases; this launcher does not authorize arbitrary package code.
 pub struct ProductExecutableLauncher {
     executable: PathBuf,
 }

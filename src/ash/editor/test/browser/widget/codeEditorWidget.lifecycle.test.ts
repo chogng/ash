@@ -21,6 +21,8 @@ import { Position } from '../../../common/core/position.js';
 import { Range } from '../../../common/core/range.js';
 import { TextModel } from "../../../common/model/textModel.js";
 import { IContextKeyService, ContextKeyService } from "../../../../platform/contextkey/browser/contextKeyService.js";
+import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
+import { InMemoryConfigurationService } from '../../../../platform/configuration/common/inMemoryConfigurationService.js';
 import { AccessibilitySupport, IAccessibilityService } from '../../../../platform/accessibility/common/accessibility.js';
 import { darkColorTheme } from '../../../../platform/theme/common/colorTheme.js';
 import { type TextEditorContributionContext } from '../../../browser/editorExtensions.js';
@@ -656,6 +658,8 @@ test('CodeEditorWidget rejects missing shared services before creating its surfa
 		IContextKeyService,
 		IAccessibilityService,
 		ICodeEditorService,
+		ILogService,
+		IConfigurationService,
 	]) {
 		using services = new InstantiationService();
 		if (missing !== ICodeEditorService) {
@@ -666,11 +670,15 @@ test('CodeEditorWidget rejects missing shared services before creating its surfa
 		if (missing !== ILanguageConfigurationService) services.registerInstance(ILanguageConfigurationService, configurations);
 		if (missing !== ILanguageFeaturesService) services.registerInstance(ILanguageFeaturesService, features);
 		if (missing !== IAccessibilityService) services.registerInstance(IAccessibilityService, enabledAccessibilityService);
+		if (missing !== ILogService) services.registerInstance(ILogService, new NullLoggerService());
+		if (missing !== IConfigurationService) services.registerSingleton(IConfigurationService, () => new InMemoryConfigurationService());
 		const container = h(browserEnvironment.window.document, 'div');
-		assert.throws(() => services.createInstance(CodeEditorWidget, {
-			container, model, contributions: [],
-		}), error => error instanceof Error && error.message.includes(missing.description));
-		assert.equal(container.childElementCount, 0);
+		for (const initialModel of [null, model]) {
+			assert.throws(() => services.createInstance(CodeEditorWidget, {
+				container, model: initialModel, contributions: [],
+			}), error => error instanceof Error && error.message.includes(missing.description));
+			assert.equal(container.childElementCount, 0);
+		}
 	}
 });
 
@@ -685,6 +693,8 @@ test('CodeEditorWidget shares host language services across contributions and mo
 	services.registerInstance(ILanguageFeaturesService, features);
 	services.registerInstance(IAccessibilityService, enabledAccessibilityService);
 	services.registerSingleton(ICodeEditorService, () => services.createInstance(StandaloneCodeEditorService));
+	services.registerInstance(ILogService, new NullLoggerService());
+	services.registerSingleton(IConfigurationService, () => new InMemoryConfigurationService());
 	using first = new TextModel('first');
 	using second = new TextModel('second');
 	const seen: ILanguageFeaturesService[] = [];

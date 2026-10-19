@@ -1,21 +1,27 @@
 # Academy / Academic
 
-`ash.academic` is a preinstalled, independently supervised Rust extension. Its
+`ash.academic` is an independently installed Rust editor extension. Its
 `ash-academy` executable registers the versioned `editor.client.v1` capability
 through the public Rust SDK and existing Host RPC. Shared Workbench integration
-projects that live registration into the editor registry before tab restoration;
-Sessions consumes it.
-There is no Sessions registration or built-in Academic pane factory.
+projects the admitted package's live registration into the editor registry before
+tab restoration; Sessions consumes it.
 
 The extension owns general documents (`.ash-doc`), Academic papers and channel
 notes. Its `common/` owns schemas, structural transactions, commands, history,
 line projections, collaboration algorithms and codecs. `browser/` owns the rich
 text view, paragraph/formatting contributions, node views, conversions and profiles.
-The product-compiled client module is loaded on first use.
-Before importing it, the loader checks the client source digest supplied by the
-Rust executable, the exact package version and current package admission. Only
-product-compiled modules are supported; downloaded catalog bytes never execute
-in the Renderer. The module receives no service container or backend connection.
+The independently built factory and stylesheet are loaded from the exact installed
+package. The loader verifies source identity, JS/CSS digests, host API version and
+current backend admission before evaluating the factory. It supplies only the
+versioned editor host mechanisms; no service container or backend connection is
+passed to the module. Styles are scoped by client identity and retained while a
+view exists, including a frozen view after package retirement.
+
+Only a product-selected publisher from a pinned, verified source can currently
+supply a native editor client. Installation still requires explicit exact-package
+execution consent. Package IDs, `publisher`, `source: official` and client metadata
+alone do not grant this authority. The code runs as admitted product code in the
+Renderer; this is not a sandbox for arbitrary third-party scripts.
 
 The shared model service owns resource references, working copies, dirty state,
 file persistence and collaboration connections. The package's `DocumentTextModel`
@@ -33,11 +39,22 @@ the same working copy and history through the replacement capability.
 `ash.editor.document`, the general document MIME type, `ash.collaboration.notes`
 and the channel-note MIME type also remain compatible. Paragraph contributions
 are installed per profile/view, never through the global Code contribution registry.
-Code extraction, complete product/platform acceptance and new Word features such
-as pagination, DOCX or PDF remain separate roadmap work. See the [roadmap](../../docs/design/editor-roadmap.md).
+Complete product/platform acceptance and new Word features such as pagination,
+DOCX or PDF remain separate roadmap work. See the [roadmap](../../docs/design/editor-roadmap.md).
 
 Validate with `just verify ash-academy`, the MainThreadClientEditors / Academic
 profile / DocumentEditorPane unit suites, and
 `pnpm test:browser:integration academic.integration.spec.ts --project=chromium`.
-The product package carries `bin/ash-academy{.exe}` and declaration/NLS resources;
-Rust sources, client TypeScript sources and Cargo/build files are build inputs.
+Ash product packages omit Academy's executable, manifest and client implementation.
+Build the runtime with the repository Rust wrappers, then stage a submission:
+
+```sh
+pnpm package:editor extensions/academic .build/academy-submission darwin-arm64=.build/cargo/ci-test/ash-academy
+```
+
+The command accepts additional `<target-platform>=<executable>` arguments. Its
+output contains `catalog.json` and `package/`, ready for the registry's `editors`
+family; signing and online publication belong to the registry release workflow.
+A new output directory is required. Sources and build files are not payload assets.
+Source maintenance remains in this repository until a separate move is chosen.
+See [distribution and validation](../../docs/design/editor-roadmap.md#67-贡献装配与市场扩展).

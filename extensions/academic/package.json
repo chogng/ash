@@ -49,7 +49,12 @@
   "private": true,
   "ashRuntime": {
     "kind": "rust",
-    "entrypoint": "ash-academy"
+    "entrypoint": "ash-academy",
+    "client": {
+      "apiVersion": 1,
+      "entry": "dist/editor.js",
+      "style": "dist/editor.css"
+    }
   },
   "activationEvents": [
     "*"

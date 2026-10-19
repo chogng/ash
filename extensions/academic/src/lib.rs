@@ -8,7 +8,7 @@ use serde::Deserialize;
 use serde::Serialize;
 
 /// A product-owned client component is selected through the shared extension transport.
-/// Its module is compiled with the product; this contract does not admit third-party code.
+/// Its independently built module requires verified package admission before client execution.
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct Request {
@@ -87,7 +87,7 @@ impl Extension for AcademyExtension {
                 };
                 Ok(Contribution {
                     version: 1,
-                    client_module: "browser/editor.ts",
+                    client_module: "dist/editor.js",
                     client_digest: env!("ASH_EDITOR_CLIENT_DIGEST"),
                     editors: vec![
                         Editor {

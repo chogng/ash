@@ -69,7 +69,7 @@ fn independent_provider_registers_localized_editors_and_rejects_unknown_requests
         assert_eq!(
             described["body"]["body"]["payload"],
             json!({
-                "version":1,"clientModule":"browser/editor.ts", "clientDigest":env!("ASH_EDITOR_CLIENT_DIGEST"), "editors":[{
+                "version":1,"clientModule":"dist/editor.js", "clientDigest":env!("ASH_EDITOR_CLIENT_DIGEST"), "editors":[{
                     "editorId":"stanza.editor.document", "displayName":expected,
                     "selectors":["*.ash-academic","*.ash-paper"],"documentType":"academic",
                     "contentType":"application/vnd.ash.academic-document+json"

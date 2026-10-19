@@ -227,6 +227,13 @@ pub struct ExtensionsEditorExtensionPolicyParams {
     pub action: ExtensionsEditorExtensionPolicyActionDto,
 }
 
+#[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub enum ExtensionsEditorExecutionKindDto {
+    Node,
+    Native,
+}
+
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct ExtensionsEditorExtensionPolicyDto {
@@ -234,6 +241,10 @@ pub struct ExtensionsEditorExtensionPolicyDto {
     pub package: ExtensionsPackageRefDto,
     /// Entry selection does not promise API compatibility. Missing entries remain resources-only.
     pub entrypoint: Option<String>,
+    /// Execution host selected by the verified source adapter, never inferred from a filename.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub execution_kind: Option<ExtensionsEditorExecutionKindDto>,
     pub enabled: bool,
     pub granted: bool,
 }

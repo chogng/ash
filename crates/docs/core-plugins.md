@@ -148,18 +148,24 @@ ExtensionPackageManager；领域页面不另建安装记录、更新策略或下
 不把静态语言资源当作服务器。`packageType` 筛选整个包的 family；`capabilityKind` 筛选包携带的能力，包括 Plugin bundle；
 `languageId` 只匹配明确绑定 executable 的语言，三个筛选条件同时生效。
 
-| Extensions capability                            | Ash consumer                                                 | 进入方式                                                                                                         | Core Plugins 不拥有                         |
-| ------------------------------------------------ | ------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------- | ------------------------------------------- |
-| `skill`                                          | `ash-skills-extension` / Skill catalog                       | verified exact Skill root                                                                                        | 选择、完整 `SKILL.md` 加载与执行            |
-| `mcp`                                            | MCP composition                                              | HTTPS 或 package-relative stdio transport；调用持有 capability lease                                             | OAuth、审批、Tool policy                    |
-| `connector`                                      | Connector authority                                          | 绑定同 digest 内 exact MCP，credential 由 Connector domain 注入                                                  | 登录、SecretStore、连接状态                 |
-| Theme package 的 `asset`                         | `ash-external-ext::packages` → Workbench Theme               | 规范化为 Theme capability，主题清单交给 TS Theme loader 解析，后端只校验包身份与资源                             | Theme 选择与应用                            |
-| Language package 的 `asset` + `executable`       | `ash-external-ext::packages` + `LspServerProviders`          | editor assets 与 LSP route 分别消费同一安装                                                                      | 文档路由、LSP lifecycle                     |
-| `localization`                                   | `platform/languagePacks` → `workbench/services/localization` | 读取静态 locale catalog，按 locale 和 catalog contract 应用；选择与 lookup 保持在 client/window                  | 文案提取、产品 bundle 设计与 UI 重建        |
-| `executable` + 可选 `ash/editor-extensions.json` | Editor Extension source/admission → Host                     | Ash consumer sidecar 绑定 exact executable；admission generation/lease 与 ExtensionPackageManager lease 同时成立 | enable/grant、目录执行 capability、进程隔离 |
+| Extensions capability                            | Ash consumer                                                 | 进入方式                                                                                                                           | Core Plugins 不拥有                         |
+| ------------------------------------------------ | ------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------- |
+| `skill`                                          | `ash-skills-extension` / Skill catalog                       | verified exact Skill root                                                                                                          | 选择、完整 `SKILL.md` 加载与执行            |
+| `mcp`                                            | MCP composition                                              | HTTPS 或 package-relative stdio transport；调用持有 capability lease                                                               | OAuth、审批、Tool policy                    |
+| `connector`                                      | Connector authority                                          | 绑定同 digest 内 exact MCP，credential 由 Connector domain 注入                                                                    | 登录、SecretStore、连接状态                 |
+| Theme package 的 `asset`                         | `ash-external-ext::packages` → Workbench Theme               | 规范化为 Theme capability，主题清单交给 TS Theme loader 解析，后端只校验包身份与资源                                               | Theme 选择与应用                            |
+| Language package 的 `asset` + `executable`       | `ash-external-ext::packages` + `LspServerProviders`          | editor assets 与 LSP route 分别消费同一安装                                                                                        | 文档路由、LSP lifecycle                     |
+| Editor package 的 `asset` + 可选 `executable`    | Extension catalog / Editor Extension source → Host           | 仅 `editor` family 的 `editor/` asset 映射为既有 `editorExtension` capability；可信 executable 的客户端准入另需 exact digest grant | manifest 解释、执行授权、renderer factory   |
+| `localization`                                   | `platform/languagePacks` → `workbench/services/localization` | 读取静态 locale catalog，按 locale 和 catalog contract 应用；选择与 lookup 保持在 client/window                                    | 文案提取、产品 bundle 设计与 UI 重建        |
+| `executable` + 可选 `ash/editor-extensions.json` | Editor Extension source/admission → Host                     | Ash consumer sidecar 绑定 exact executable；admission generation/lease 与 ExtensionPackageManager lease 同时成立                   | enable/grant、目录执行 capability、进程隔离 |
 
-`ash/editor-extensions.json` 是可选的产品 consumer adapter，并非 Extensions schema、Plugin package
-或通用发布工具的必需结构。没有 sidecar 的 executable 可以继续被 Language 等其他 consumer 使用；
+Editor family 使用 `schemaVersion: 2`、`packageType: "editor"`，恰好一个 `asset` 指向 `editor/`，
+可附带显式 `runtime` 的 executable。`editor/package.json` 是该 family 的公开标准扩展资产格式，
+远端 registry 原样归档和签名其中的扩展字段与自有运行声明，不解析 Ash 的运行时协议。
+Ash 的可选 `editor/ash/editor-extensions.json` sidecar 由本地 product adapter 解释；既有包根
+`ash/editor-extensions.json` 只保留已有包兼容。它们不是远端 catalog 的 consumer metadata，
+新 schema 2 catalog 的 `consumers` 与 `.marketplace/consumers/` 仍被禁止。
+没有 sidecar 的 executable 可以继续被 Language 等其他 consumer 使用；
 有 sidecar 但没有产品 admission grant 时也不会执行。`ash-editor-extension-host` 只消费已经规范化并
 授权的 deployment，不解析 Extensions 或 Plugin manifest。
 
@@ -167,11 +173,13 @@ ExtensionPackageManager；领域页面不另建安装记录、更新策略或下
 Extension、Language 等领域校验和注册路径。来源统一的是 consumer contract，不是把 product-shipped
 bytes 复制进 ExtensionPackageManager store。
 
-`Extension` 当前不是第六种 Extensions package family，也不是安装器名称；它是 Ash 对
-`package.json` 静态 editor assets 的声明式 consumer contract。Theme 与 Language family 先由各自
-portable adapter 规范化，再进入该 contract。只有出现真实的跨 Theme/Language 静态贡献发布需求时，
-才应新增有明确 schema 的 `editorAssets` capability；不能把通用 `asset` 自动当成 Extension。可执行
-Editor Extension 的现有代码走 sidecar + admission + Host 路径；它将退出目标编辑器扩展入口。
+`Extension` catalog 是 Ash 对 `package.json` 静态 editor assets 的声明式 consumer contract，
+与远端 `editor` package family 的名称和安装生命周期分开。Theme 与 Language family 先由各自
+portable adapter 规范化，再进入该 contract；只有明确的 `editor` family 会将其 `editor/` asset
+映射为 `editorExtension`，不能把任意通用 `asset` 自动识别为 Extension。Open VSX 的
+`editorExtension` VSIX 包类型继续由独立来源解析，不与 signed registry 的 `editor` family 混用。
+可信 Editor 包的 native runtime 与 renderer client 仍走 product proof + exact admission + Host，
+同一完整包 digest 绑定唯一 descriptor 与 runtime；禁用或撤销时保留文档路由声明并移除执行准入。
 TS/JS 宿主必须独立校验运行和操作授权，不能从声明式 catalog 可读或旧 executable grant 推导新权限。
 
 官方 MCP Registry 是上游发现源，不是 Ash 的安装信任根。Extensions publisher 将选中的

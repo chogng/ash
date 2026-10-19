@@ -1,5 +1,7 @@
-import { documentCodec } from '../../../../../../../extensions/academic/common/model/documentCodec.js';
-import { generalProfile } from '../../../../../../../extensions/academic/browser/generalProfile.js';
+import type { RichTextEditorOptions } from '../../../../../../../extensions/academic/browser/widget/richTextEditor/richTextEditorWidget.js';
+import type { DocumentPlugin } from '../../../../../../../extensions/academic/common/model/documentPlugin.js';
+import { documentCodec, bindDocumentCodec } from '../../../../../../../extensions/academic/common/model/documentCodec.js';
+import { generalProfile, createEditorProfileConfiguration } from '../../../../../../../extensions/academic/browser/generalProfile.js';
 import { documentContributions } from '../../../../../../../extensions/academic/browser/documentContributions.js';
 import { TestUriIdentityServices } from '../../../../../platform/uriIdentity/test/common/uriIdentityTestServices.js';
 import { createTestComponentServices } from '../../../../test/common/testEditorServices.js';
@@ -60,7 +62,7 @@ const testDialogs: IDialogService = {
 };
 
 class EditorPane extends DocumentEditorPane {
-	constructor(document: Document, files: ITextFileService, options: Partial<EditorPaneOptions> = {}) {
+	constructor(document: Document, files: ITextFileService, options: Partial<EditorPaneOptions> & RichTextEditorOptions & { schema?: DocumentSchema; plugins?: readonly DocumentPlugin<unknown>[]; } = {}) {
 		const copies = uriIdentityServices.createInstance(BrowserWorkingCopyService);
 		const models = new DocumentEditorTextModelService(files, copies);
 		const services = createTestComponentServices(undefined, undefined, document);
@@ -70,7 +72,7 @@ class EditorPane extends DocumentEditorPane {
 		const opener = services.createInstance(OpenerService);
 		services.registerInstance(IOpenerService, opener);
 		services.registerInstance(DialogServiceId, testDialogs);
-		super({ ...generalProfile, outlineNavigator: false, createEmptyDocument: undefined, schema: createDefaultDocumentSchema(), contributions: documentContributions, contentType: 'application/vnd.ash.document+json', ...options }, testDialogs, models, services, services.get(IThemeService), services.get(IStorageService));
+		super({ ...createEditorProfileConfiguration(options.schema ?? createDefaultDocumentSchema(), { outlineNavigator: false, contributions: documentContributions, ...options }, options.plugins), contentType: 'application/vnd.ash.document+json', ...options }, testDialogs, models, services, services.get(IThemeService), services.get(IStorageService));
 		this._register(services);
 		this._register(codeEditors);
 		this._register(opener);
@@ -94,7 +96,7 @@ test('Academic package panes share one model, save baseline and working copy unt
 	services.registerSingleton(ICommandService, () => services.createInstance(StandaloneCommandService));
 	using opener = services.createInstance(OpenerService);
 	services.registerInstance(IOpenerService, opener);
-	const input = { codec: documentCodec, resource: URI.file('/paper.ash-academic') };
+	const input = { codec: bindDocumentCodec(schema), resource: URI.file('/paper.ash-academic') };
 	using first = createDocumentEditorPane(academicProfile, { input, instantiationService: services }) as DocumentEditorPane;
 	using second = createDocumentEditorPane(academicProfile, { input, instantiationService: services }) as DocumentEditorPane;
 	try {
@@ -122,7 +124,7 @@ test('Academic package panes share one model, save baseline and working copy unt
 test('shared untitled save uses a live view after the original view closes', async () => {
 	using copies = uriIdentityServices.createInstance(BrowserWorkingCopyService);
 	using models = new DocumentEditorTextModelService(new MemoryTextFiles('Draft'), copies);
-	const input = { codec: documentCodec, resource: URI.parse('untitled:document/shared'), contentType: 'test.document', schema: createDefaultDocumentSchema() };
+	const input = { codec: bindDocumentCodec(createDefaultDocumentSchema()), resource: URI.parse('untitled:document/shared'), contentType: 'test.document' };
 	let saves = 0;
 	const first = await models.acquire({ ...input, onSave: async () => { throw new Error('Closed view must not save'); } }, new AbortController().signal);
 	using second = await models.acquire({ ...input, onSave: async () => { saves += 1; } }, new AbortController().signal);
@@ -135,13 +137,13 @@ test('shared untitled save uses a live view after the original view closes', asy
 test('structured acquisition rejects plain text, cancellation and conflicting document types', async () => {
 	using copies = uriIdentityServices.createInstance(BrowserWorkingCopyService);
 	using models = new DocumentEditorTextModelService(new MemoryTextFiles('Initial'), copies);
-	const input = { codec: documentCodec, resource: URI.file('/document.ash-paper'), contentType: 'test.document', schema: createDefaultDocumentSchema() };
+	const input = { codec: bindDocumentCodec(createDefaultDocumentSchema()), resource: URI.file('/document.ash-paper'), contentType: 'test.document' };
 	using reference = await models.acquire(input, new AbortController().signal);
 	await assert.rejects(models.acquire({ ...input, contentType: 'other.document' }, new AbortController().signal), /different document type/u);
 	await assert.rejects(models.acquire(input, AbortSignal.abort()), /cancelled/u);
 	assert.equal(copies.getAll().length, 1);
-	assert.throws(() => documentCodec.parse('Plain text', input.schema));
-	assert.throws(() => documentCodec.parse('{broken', input.schema));
+	assert.throws(() => input.codec.parse('Plain text'));
+	assert.throws(() => input.codec.parse('{broken'));
 });
 
 test('Academic v1 migration preserves one typed working copy through backup, revert and Save As', async () => {
@@ -173,9 +175,9 @@ test('Academic v1 migration preserves one typed working copy through backup, rev
 	using copies = uriIdentityServices.createInstance(BrowserWorkingCopyService);
 	using models = new DocumentEditorTextModelService(files, copies);
 	const signal = new AbortController().signal;
-	const input = { codec: documentCodec, resource, contentType: 'application/vnd.ash.academic-document+json', schema };
+	const input = { codec: bindDocumentCodec(schema), resource, contentType: 'application/vnd.ash.academic-document+json', schema };
 	const first = await models.acquire(input, signal);
-	const second = await models.acquire({ ...input, schema: createAcademicDocumentSchema() }, signal);
+	const second = await models.acquire({ ...input, codec: bindDocumentCodec(createAcademicDocumentSchema()) }, signal);
 	await assert.rejects(models.acquire({ ...input, modelCompatibility: 'changed-client-build' }, new AbortController().signal), /different editor version/);
 	try {
 		assert.equal(first.model, second.model);
@@ -183,7 +185,7 @@ test('Academic v1 migration preserves one typed working copy through backup, rev
 		assert.equal(first.isDirty, false);
 		assert.equal(JSON.parse(records.get(resource.toString())!.text).version, 1, 'opening must not rewrite the file');
 		assert.deepEqual(JSON.parse(first.backup()), { format: 'ash.document', version: 2, documentType: 'academic', document });
-		await assert.rejects(models.acquire({ ...input, schema: createDefaultDocumentSchema() }, signal), /different document type/u);
+		await assert.rejects(models.acquire({ ...input, codec: bindDocumentCodec(createDefaultDocumentSchema()) }, signal), /different document type/u);
 		const restored = schema.createDocument([schema.createNode('paragraph', { content: [schema.createText('Recovered')] })]);
 		first.restoreBackup(serializeDocument(restored, schema));
 		assert.equal(second.isDirty, true);
@@ -1929,7 +1931,7 @@ test('switching a document cancels a pending room and disposes a late connection
 				await pending;
 				return {
 					roomId: 'late-room', clientId: input.clientId, principalId: 'owner', canEdit: true, canManageMembers: true,
-					schema: input.schema, initialSnapshot: { roomId: 'late-room', version: 0, document: input.document }, currentPresence: [],
+					initialSnapshot: { roomId: 'late-room', version: 0, document: input.document }, currentPresence: [],
 					onDidReceiveUpdate: Event.None, onDidReceiveSnapshot: Event.None, onDidReceivePresence: Event.None, onDidFail: Event.None,
 					submit: async () => { throw new Error('A stale connection must not submit'); },
 					updatePresence: async () => { throw new Error('A stale connection must not publish presence'); },
@@ -1980,11 +1982,12 @@ test('call document joins use a separate untitled working copy and preserve the 
 				opens++;
 				selectedServer = input.serverUrl;
 				await pendingOpen;
-				const remote = input.schema.createDocument([input.schema.createNode('paragraph', { id: 'remote-paragraph', content: [input.schema.createText('Remote text', { id: 'remote-text' })] })], 'remote-document');
+				const remoteSchema = createDefaultDocumentSchema();
+				const remote = remoteSchema.createDocument([remoteSchema.createNode('paragraph', { id: 'remote-paragraph', content: [remoteSchema.createText('Remote text', { id: 'remote-text' })] })], 'remote-document');
 				return {
 					serverUrl: input.serverUrl, roomId: document.roomId, clientId: input.clientId,
 					principalId: 'viewer', canEdit: false, canManageMembers: false,
-					schema: input.schema, initialSnapshot: { roomId: document.roomId, version: 0, document: remote }, currentPresence: [],
+					initialSnapshot: { roomId: document.roomId, version: 0, document: remote }, currentPresence: [],
 					onDidReceiveUpdate: Event.None, onDidReceiveSnapshot: Event.None, onDidReceivePresence: Event.None, onDidFail: Event.None,
 					submit: async () => { throw new Error('A viewer must not submit'); }, updatePresence: async () => { },
 					createInvite: async () => { throw new Error('A viewer must not invite'); }, listMembers: async () => [],
@@ -2028,9 +2031,9 @@ test('a confirmed channel snapshot clears only the matching document baseline', 
 	using copies = uriIdentityServices.createInstance(BrowserWorkingCopyService);
 	using models = new DocumentEditorTextModelService(new MemoryTextFiles('Draft'), copies);
 	const resource = URI.parse('untitled:channel-notes/persistence');
-	using reference = await models.acquire({ codec: documentCodec, resource, contentType: 'test.document', schema: createDefaultDocumentSchema() }, new AbortController().signal);
+	using reference = await models.acquire({ codec: bindDocumentCodec(createDefaultDocumentSchema()), resource, contentType: 'test.document' }, new AbortController().signal);
 	const initial = reference.model.document;
-	reference.model.resetBlocks(reference.model.schema.createDocument([reference.model.schema.createNode('paragraph', { content: [reference.model.schema.createText('Newer local edit')] })]));
+	reference.model.resetBlocks(documentFromPlainText(createDefaultDocumentSchema(), 'Newer local edit'));
 	assert.equal(reference.isDirty, true);
 	models.acceptCollaborationSnapshot(resource, initial);
 	assert.equal(reference.isDirty, true);

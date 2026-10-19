@@ -74,6 +74,12 @@ async function preparePackages(): Promise<boolean> {
 		const files = await readdir(packageRoot);
 		// Product capability processes have independent packages and no browser manifest.
 		if (!files.includes('package.json') && (files.includes('Cargo.toml') || files.includes('runtime.json'))) { continue; }
+		// Installed editor clients publish their own package; they are absent from the product catalog.
+		if (files.includes('package.json')) {
+			const manifestPath = resolve(packageRoot, 'package.json');
+			if ((await stat(manifestPath)).size > 4 * 1024 * 1024) throw new RangeError('Browser extension manifest exceeds its byte limit');
+			if (JSON.parse(await readFile(manifestPath, 'utf8')).ashRuntime?.client) continue;
+		}
 		packages.push(packageRoot);
 	}
 	const builtInCount = packages.length;

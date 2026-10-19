@@ -5,9 +5,9 @@ import { getNLSLanguage, localize } from '../../../nls.js';
 import { createDocumentEditorPane } from '../../contrib/documentEditor/browser/editorProfile.js';
 import { match } from '../../../base/common/glob.js';
 import { basename } from '../../../base/common/resources.js';
-import { Disposable, DisposableMap, DisposableStore, toDisposable } from '../../../base/common/lifecycle.js';
+import { Disposable, DisposableMap, DisposableStore, toDisposable, type IDisposable } from '../../../base/common/lifecycle.js';
 import { IExtensionHostApi, type ExtensionHostFleetSnapshot, type ExtensionHostRuntime, type JsonValue } from '../../../platform/agentHost/common/extensionHostApi.js';
-import { IExtensionApi } from '../../../platform/extensions/common/extensionApi.js';
+import { IExtensionApi, type ExtensionDescriptor } from '../../../platform/extensions/common/extensionApi.js';
 import { EditorPanes, type IEditorPaneDescriptor } from '../../browser/editor.js';
 import { EditorPaneMatch } from '../../browser/parts/editor/editorPane.js';
 import { isResourceDiffEditorInput } from '../../common/editor.js';
@@ -37,7 +37,7 @@ export class MainThreadClientEditors extends Disposable {
 	private readonly registrations = this._register(new DisposableMap<string, RegistrationScope>());
 	private generation = 0;
 	private epoch = 0;
-	private readonly reservedPackages = new Set<string>();
+	private readonly reservedPackages = this._register(new DisposableMap<string, IDisposable>());
 
 	constructor(
 		private readonly timeout: number,
@@ -53,11 +53,17 @@ export class MainThreadClientEditors extends Disposable {
 		if (snapshot.generation < this.generation) return;
 		this.generation = snapshot.generation;
 		const epoch = this.epoch;
-		const catalog = await this.packages.list('cached', { includeDisabled: true });
+		const [catalog, enabledCatalog] = await Promise.all([
+			this.packages.list('cached', { includeDisabled: true }),
+			this.packages.list('cached'),
+		]);
 		if (epoch !== this.epoch || snapshot.generation < this.generation || this.isDisposed) return;
+		const reservations = new Set<string>();
 		for (const owner of catalog.extensions) {
 			const reservationKey = `${owner.id}/${owner.manifestSha256}`;
-			if (owner.sourceKind !== 'builtIn' || this.reservedPackages.has(reservationKey) || !owner.manifestJson) continue;
+			if (!owner.manifestJson) continue;
+			reservations.add(reservationKey);
+			if (this.reservedPackages.has(reservationKey)) continue;
 			const raw = JSON.parse(owner.manifestJson);
 			if (raw.ashRuntime?.kind !== 'rust') continue;
 			const manifest = parseExtensionManifest(owner.manifestJson, owner);
@@ -66,9 +72,11 @@ export class MainThreadClientEditors extends Disposable {
 				return [...new Set(editor.selector.flatMap(selector => selector.mimeType ? [selector.mimeType] : []))].map(contentType => ({ contentType, extensions }));
 			});
 			if (types.length) {
-				this._register(DocumentTypes.reserveTypes(types));
-				this.reservedPackages.add(reservationKey);
+				this.reservedPackages.set(reservationKey, DocumentTypes.reserveTypes(types));
 			}
+		}
+		for (const key of this.reservedPackages.keys()) {
+			if (!reservations.has(key)) this.reservedPackages.deleteAndDispose(key);
 		}
 		const active = new Set<string>();
 		const pending: Promise<void>[] = [];
@@ -78,7 +86,8 @@ export class MainThreadClientEditors extends Disposable {
 				if (registration.kind !== 'dataChannel' || !['editor.client.v1', 'editor.contributions.v1'].includes(registration.channelId)) continue;
 				const key = `${runtime.id}\0${registration.registrationId}`;
 				active.add(key);
-				const identity = JSON.stringify([runtime.id, runtime.version, runtime.packageDigest, runtime.incarnation, runtime.activationGeneration, registration]);
+				const owner = findRuntimePackage(enabledCatalog.extensions, runtime);
+				const identity = JSON.stringify([runtime.id, runtime.version, runtime.packageDigest, runtime.incarnation, runtime.activationGeneration, registration, owner?.packageSha256, owner?.manifestSha256, owner?.rendererClient]);
 				const current = this.registrations.get(key);
 				if (current?.identity === identity) {
 					pending.push(current.pending);
@@ -118,7 +127,7 @@ export class MainThreadClientEditors extends Disposable {
 		try {
 			const catalog = await this.packages.list('cached');
 			signal.throwIfAborted();
-			const owner = catalog.extensions.find(entry => entry.id === runtime.id && entry.version === runtime.version && entry.sourceKind === 'builtIn');
+			const owner = findRuntimePackage(catalog.extensions, runtime);
 			if (!owner) throw new Error(localize('extensions.clientEditor.packageUnavailable', 'The editor extension package is unavailable.'));
 			const value = await this.api.invoke({
 				extensionId: runtime.id, registrationId, incarnation: runtime.incarnation!, activationGeneration: runtime.activationGeneration,
@@ -126,15 +135,30 @@ export class MainThreadClientEditors extends Disposable {
 			}, signal);
 			signal.throwIfAborted();
 			const { clientModule, clientDigest, editors } = parseContribution(value, kind);
-			const resolveComponent = async () => {
+			let loaded: ReturnType<ExtensionEditorModuleLoader> | undefined;
+			const admittedPackage = async () => {
 				signal.throwIfAborted();
 				const latest = await this.packages.list('cached');
 				const admitted = latest.extensions.find(entry => entry.id === owner.id
 					&& entry.version === owner.version
-					&& entry.sourceKind === 'builtIn'
-					&& entry.packageSha256 === owner.packageSha256);
+					&& entry.sourceKind === owner.sourceKind
+					&& entry.manifestSha256 === owner.manifestSha256
+					&& entry.packageSha256 === owner.packageSha256
+					&& JSON.stringify(entry.rendererClient) === JSON.stringify(owner.rendererClient));
+				signal.throwIfAborted();
 				if (!admitted) throw new Error(localize('extensions.clientEditor.packageRetired', 'The editor extension package has retired.'));
-				const component = await this.loadModule(owner.name, clientModule, clientDigest);
+				return { admitted, generation: latest.generation };
+			};
+			const resolveComponent = async () => {
+				const { admitted, generation } = await admittedPackage();
+				if (!loaded) {
+					loaded = this.loadModule({
+						package: admitted, generation, entry: clientModule,
+						expectedDigest: clientDigest, resources: this.packages.resources, signal,
+						assertCurrent: async () => { await admittedPackage(); },
+					}).catch(error => { loaded = undefined; throw error; });
+				}
+				const component = await loaded;
 				signal.throwIfAborted();
 				if (component.packageId !== owner.id || component.packageVersion !== owner.version) {
 					throw new Error(localize('extensions.clientEditor.versionMismatch', 'The editor component and extension versions do not match.'));
@@ -191,6 +215,13 @@ export class MainThreadClientEditors extends Disposable {
 			if (!cancelled) throw error;
 		}
 	}
+}
+
+/** Installed clients are bound to backend-verified admission and the exact live package digest. */
+function findRuntimePackage(packages: readonly ExtensionDescriptor[], runtime: ExtensionHostRuntime): ExtensionDescriptor | undefined {
+	return packages.find(owner => owner.version === runtime.version && (owner.sourceKind === 'builtIn'
+		? owner.id === runtime.id
+		: owner.rendererClient?.runtimeId === runtime.id && owner.packageSha256 === runtime.packageDigest));
 }
 
 /** This is a domain payload on the existing typed channel, not a second transport protocol. */

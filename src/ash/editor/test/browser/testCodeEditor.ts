@@ -219,8 +219,10 @@ class TestCodeEditor extends CodeEditorWidget {
 		@ILanguageFeaturesService languageFeaturesService: ILanguageFeaturesService,
 		@IContextKeyService contextKeyService: IContextKeyService,
 		@ICodeEditorService codeEditorService: ICodeEditorService,
+		@ILogService logService: ILogService,
+		@IConfigurationService configurationService: IConfigurationService,
 	) {
-		super(options, instantiationService, themeService, languageConfigurationService, languageFeaturesService, contextKeyService, codeEditorService);
+		super(options, instantiationService, themeService, languageConfigurationService, languageFeaturesService, contextKeyService, codeEditorService, logService, configurationService);
 		this._register(resources);
 		this.registerWithService();
 	}

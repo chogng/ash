@@ -1,4 +1,4 @@
-//! Build-time identity for product-compiled editor client components.
+//! Build-time source identity for admitted editor client components.
 
 use sha2::Digest;
 use sha2::Sha256;
@@ -23,7 +23,7 @@ fn sources(directory: &Path, files: &mut Vec<PathBuf>) {
 }
 
 /// Bind the executable to normalized package-relative client paths and their source bytes.
-/// The Renderer verifies this identity before evaluating the corresponding compiled module.
+/// The Renderer binds this identity to the admitted module and its verified package bytes.
 pub fn emit_client_digest() {
     let root = PathBuf::from(std::env::var_os("CARGO_MANIFEST_DIR").expect("manifest directory"));
     emit_client_digest_at(&root, "ASH_EDITOR_CLIENT_DIGEST");

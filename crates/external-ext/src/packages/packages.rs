@@ -20,6 +20,7 @@ use super::resource::validate_relative_path;
 use super::source::DynamicExtensionPackageSource;
 use super::source::DynamicExtensionSourceProvider;
 use super::source::DynamicExtensionSourceSnapshot;
+use super::source::ExtensionRendererClient;
 use super::source::ExtensionRoot;
 use super::source::ExtensionRootKind;
 
@@ -56,8 +57,10 @@ pub struct ExtensionDescriptor {
     pub manifest_json: String,
     /// SHA-256 digest of the canonical JSON bytes exposed in `manifest_json`.
     pub manifest_sha256: String,
-    /// Deterministic SHA-256 digest of every frozen regular file in the package.
+    /// Authority-verified complete-package digest, or the digest of the frozen files for roots.
     pub package_sha256: String,
+    /// Host-authorized executable client admission, independent of manifest declarations.
+    pub renderer_client: Option<ExtensionRendererClient>,
 }
 
 /// Provenance attached to a discovered extension descriptor.
@@ -568,6 +571,12 @@ fn publish_package(
         },
     ) {
         Ok(mut extension) => {
+            if let Some(source) = &dynamic_source {
+                if let Some(digest) = &source.verified_package_sha256 {
+                    extension.descriptor.package_sha256 = digest.clone();
+                }
+                extension.descriptor.renderer_client = source.renderer_client.clone();
+            }
             extension.dynamic_source = dynamic_source;
             publish_discovered(
                 root,
@@ -760,6 +769,7 @@ fn discover_package(
             manifest_json: canonical_manifest,
             manifest_sha256,
             package_sha256,
+            renderer_client: None,
         },
     })
 }

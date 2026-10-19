@@ -1,9 +1,16 @@
+import { compileEditorClient } from '../../../build/builtin/editorClients.ts';
+import { readFile } from 'node:fs/promises';
+import { resolve } from 'node:path';
+import { createHash } from 'node:crypto';
 import { prepareAcademyExtension, startAcademyExtension } from '../../fixtures/academyExtension.js';
 import { expect, test, type Page, type Locator } from "@playwright/test";
 import { getAxeResults, injectAxe } from "axe-playwright";
 
 const pageErrors = new WeakMap<object, string[]>();
 const academyProcesses = new WeakMap<Page, Awaited<ReturnType<typeof startAcademyExtension>>>();
+let academyClient: Awaited<ReturnType<typeof compileEditorClient>>;
+let academyManifest: Record<string, unknown>;
+const digest = (value: string) => `sha256:${createHash('sha256').update(value).digest('hex')}`;
 
 async function chooseParagraphOption(page: Page, control: Locator, label: string): Promise<void> {
 	await control.click();
@@ -11,9 +18,11 @@ async function chooseParagraphOption(page: Page, control: Locator, label: string
 }
 
 // Compile the real provider before the UI scenario timer starts.
-test.beforeAll(() => {
+test.beforeAll(async () => {
 	test.setTimeout(120_000);
 	prepareAcademyExtension();
+	academyClient = await compileEditorClient(resolve('extensions/academic'));
+	academyManifest = JSON.parse(await readFile('extensions/academic/package.json', 'utf8'));
 });
 
 test.beforeEach(async ({ page }) => {
@@ -21,6 +30,29 @@ test.beforeEach(async ({ page }) => {
 	pageErrors.set(page, errors);
 	page.on("pageerror", error => errors.push(error.stack ?? error.message));
 	let generation = 0;
+	let replacement = 0;
+	const packageDigest = () => digest(JSON.stringify(academyClient.resources) + replacement);
+	await page.route('**/__academy_catalog', async route => {
+		const client = { ...academyClient.client, runtimeId: 'ash.academic' };
+		await route.fulfill({
+			json: {
+				generation, diagnostics: [], extensions: [{
+					id: 'ash.academic', name: 'academic', publisher: 'ash', version: '1.0.0', displayName: 'Academy', sourceKind: 'registry',
+					manifestJson: JSON.stringify(academyManifest), manifestSha256: digest(JSON.stringify(academyManifest)), packageSha256: packageDigest(),
+					rendererClient: academyProcesses.has(page) ? client : undefined,
+				}]
+			}
+		});
+	});
+	await page.route('**/__academy_resource?*', async route => {
+		const query = new URL(route.request().url()).searchParams;
+		const content = academyClient.resources[query.get('path') ?? ''];
+		if (query.get('generation') !== String(generation) || query.get('extensionId') !== 'ash.academic' || content === undefined || !academyProcesses.has(page)) {
+			await route.fulfill({ status: 410, body: 'Retired package resource' });
+			return;
+		}
+		await route.fulfill({ body: content, contentType: query.get('path')?.endsWith('.css') ? 'text/css' : 'text/javascript' });
+	});
 	const start = async (locale: string) => {
 		let runtime = academyProcesses.get(page);
 		if (!runtime) {
@@ -32,7 +64,13 @@ test.beforeEach(async ({ page }) => {
 	await page.route('**/__academy_extension?*', async route => {
 		try {
 			const locale = new URL(route.request().url()).searchParams.get('locale') ?? 'en';
-			const enabled = route.request().method() !== 'POST' || route.request().postDataJSON().enabled;
+			const change = route.request().method() === 'POST' ? route.request().postDataJSON() : { enabled: true };
+			const enabled = change.enabled;
+			if (change.replace) {
+				replacement++;
+				await academyProcesses.get(page)?.dispose();
+				academyProcesses.delete(page);
+			}
 			if (!enabled) {
 				await academyProcesses.get(page)?.dispose();
 				academyProcesses.delete(page);
@@ -41,7 +79,7 @@ test.beforeEach(async ({ page }) => {
 			await route.fulfill({
 				json: {
 					generation: ++generation, extensions: runtime ? [{
-						id: 'ash.academic', version: '1.0.0', packageDigest: `sha256:${'a'.repeat(64)}`, runtimeApiVersion: 1,
+						id: 'ash.academic', version: '1.0.0', packageDigest: packageDigest(), runtimeApiVersion: 1,
 						activationGeneration: generation, incarnation: generation, lifecycle: 'ready', failure: undefined, stderr: '', outputEvents: [], registrations: runtime.registrations,
 					}] : []
 				}
@@ -83,7 +121,9 @@ for (const kind of ['academic', 'general'] as const) for (const locale of ['en',
 			textarea.dispatchEvent(new Event('select', { bubbles: true }));
 		});
 		await expect.poll(() => page.evaluate(() => window.ashAcademicIntegration.getStructuredSelection())).toMatchObject({ head: { offset: 0 } });
+		await expect(page.locator('style[data-ash-editor-client-style]')).toHaveCount(1);
 		await page.evaluate(() => window.ashAcademicIntegration.setAcademicEnabled(false));
+		await expect(page.locator('style[data-ash-editor-client-style]')).toHaveCount(1);
 		expect(await page.evaluate(() => window.ashAcademicIntegration.getAcademicRegistration())).toEqual({ name: undefined, routed: false });
 		const bodyInput = page.locator('#document-editor textarea.stanza-document-text-input').nth(1);
 		await expect(bodyInput).toHaveAttribute('readonly', '');
@@ -97,6 +137,7 @@ for (const kind of ['academic', 'general'] as const) for (const locale of ['en',
 		// Re-enabling installs a new capability; the old view never resumes the retired instance.
 		await expect(bodyInput).toHaveAttribute('readonly', '');
 		await page.evaluate(() => window.ashAcademicIntegration.reopenStructured());
+		await expect(page.locator('style[data-ash-editor-client-style]')).toHaveCount(1);
 		const recovered = page.locator('#document-editor textarea.stanza-document-text-input').first();
 		await expect(recovered).not.toHaveAttribute('readonly', '');
 		await recovered.focus();
@@ -104,6 +145,69 @@ for (const kind of ['academic', 'general'] as const) for (const locale of ['en',
 		await expect.poll(() => page.evaluate(() => window.ashAcademicIntegration.getStructuredBlockTexts())).toEqual(original);
 	});
 }
+
+test('installed Academy package replacement retires its old view and releases its stylesheet after recovery', async ({ page }) => {
+	await page.goto('/academic.html?academicExtension');
+	await page.waitForFunction(() => !!window.ashAcademicIntegration);
+	const original = page.locator('#document-editor textarea.stanza-document-text-input').first();
+	await original.fill('Draft survives an installed package replacement');
+	await expect(page.locator('style[data-ash-editor-client-style]')).toHaveCount(1);
+	await page.evaluate(() => window.ashAcademicIntegration.replaceAcademicPackage());
+	await expect(original).toHaveAttribute('readonly', '');
+	expect(await page.evaluate(() => window.ashAcademicIntegration.getStructuredDirty())).toBe(true);
+	await expect(page.locator('style[data-ash-editor-client-style]')).toHaveCount(1);
+	await page.evaluate(() => window.ashAcademicIntegration.reopenStructured());
+	const recovered = page.locator('#document-editor textarea.stanza-document-text-input').first();
+	await expect(recovered).toHaveValue('Draft survives an installed package replacement');
+	await expect(recovered).not.toHaveAttribute('readonly', '');
+	await expect(page.locator('style[data-ash-editor-client-style]')).toHaveCount(1);
+	await page.evaluate(() => window.ashAcademicIntegration.saveStructured());
+	expect(await page.evaluate(() => window.ashAcademicIntegration.getSavedStructured())).toContain('Draft survives an installed package replacement');
+	await page.evaluate(() => window.ashAcademicIntegration.dispose());
+	await expect(page.locator('style[data-ash-editor-client-style]')).toHaveCount(0);
+});
+
+test('same-source factory restart preserves collaborative undo and redo across old model history', async ({ page }) => {
+	await page.goto('/academic.html?academicExtension');
+	await page.waitForFunction(() => !!window.ashAcademicIntegration);
+	const original = await page.evaluate(() => window.ashAcademicIntegration.getStructuredBlockTexts());
+	await page.locator('#document-editor textarea.stanza-document-text-input').first().fill('Old factory history');
+	await page.evaluate(() => window.ashAcademicIntegration.setAcademicEnabled(false));
+	await page.evaluate(() => window.ashAcademicIntegration.setAcademicEnabled(true));
+	await page.evaluate(() => window.ashAcademicIntegration.reopenStructured());
+	const toolbar = page.locator('#document-editor .stanza-document-collaboration-toolbar');
+	await toolbar.locator('[data-action-id="startCollaboration"] button').click();
+	const join = page.getByRole('dialog', { name: 'Collaborate', exact: true });
+	await join.getByRole('textbox').fill('restart-room');
+	await join.getByRole('button', { name: 'OK', exact: true }).click();
+	const endpoint = page.getByRole('dialog', { name: 'Collaboration server', exact: true });
+	await endpoint.getByRole('button', { name: 'OK', exact: true }).click();
+	await expect(toolbar).toHaveAttribute('data-state', 'connected');
+	const recovered = page.locator('#document-editor textarea.stanza-document-text-input').first();
+	await recovered.focus();
+	await recovered.press('ControlOrMeta+z');
+	await expect.poll(() => page.evaluate(() => window.ashAcademicIntegration.getStructuredBlockTexts())).toEqual(original);
+	await expect.poll(() => page.evaluate(() => window.ashAcademicIntegration.getStructuredCollaborationSubmissions().length)).toBe(1);
+	await expect(toolbar).toHaveAttribute('data-state', 'connected');
+	await recovered.press('ControlOrMeta+Shift+z');
+	await expect.poll(() => page.evaluate(() => window.ashAcademicIntegration.getStructuredBlockTexts())).toEqual(['Old factory history', 'Body']);
+	await expect.poll(() => page.evaluate(() => window.ashAcademicIntegration.getStructuredCollaborationSubmissions().length)).toBe(2);
+	await expect(toolbar).toHaveAttribute('data-state', 'connected');
+});
+
+for (const path of ['dist/editor.js', 'dist/editor.css']) test(`installed Academy rejects tampered ${path} before opening a document`, async ({ page }) => {
+	await page.route('**/__academy_resource?*', async route => {
+		if (new URL(route.request().url()).searchParams.get('path') === path) {
+			await route.fulfill({ body: 'throw new Error("unverified bytes executed")', contentType: 'text/javascript' });
+		} else await route.fallback();
+	});
+	const failure = page.waitForEvent('pageerror');
+	await page.goto('/academic.html?academicExtension');
+	expect((await failure).message).toBe('The editor component and extension versions do not match.');
+	await expect(page.locator('#document-editor textarea')).toHaveCount(0);
+	expect(pageErrors.get(page)).toHaveLength(1);
+	pageErrors.set(page, []);
+});
 
 for (const [locale, message] of [
 	['en', 'The editor component and extension versions do not match.'],

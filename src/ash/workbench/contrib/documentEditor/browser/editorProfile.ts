@@ -14,24 +14,9 @@ export interface EditorRuntimeOptions {
 
 /** Materializes one profile into pane options while keeping Workbench services at the composition root. */
 export function createDocumentEditorPaneOptions(profile: EditorProfile, runtime: EditorRuntimeOptions = {}): EditorPaneOptions {
-	const schema = profile.createSchema();
 	return {
-		...runtime,
-		codec: profile.codec,
-		widget: profile.widget,
-		exportText: profile.exportText,
-		contentType: profile.contentType,
-		contributions: profile.contributions,
-		editorId: profile.editorId,
-		schema,
-		...(profile.createEmptyDocument ? { createEmptyDocument: () => profile.createEmptyDocument!(schema) } : {}),
-		...(profile.outline === undefined ? {} : { outline: profile.outline }),
-		...(profile.outlineNavigator === undefined ? {} : { outlineNavigator: profile.outlineNavigator }),
-		...(profile.nodeViews === undefined ? {} : { nodeViews: profile.nodeViews }),
-		...(profile.inlineNodeViews === undefined ? {} : { inlineNodeViews: profile.inlineNodeViews }),
-		...(profile.toolbarActions === undefined ? {} : { toolbarActions: profile.toolbarActions }),
-		...(profile.createPlugins === undefined ? {} : { plugins: profile.createPlugins() }),
-		...(profile.collaborationSchemaId === undefined ? {} : { collaborationSchemaId: profile.collaborationSchemaId }),
+		...profile.create(), ...runtime, editorId: profile.editorId, contentType: profile.contentType,
+		collaborationSchemaId: profile.collaborationSchemaId,
 	};
 }
 

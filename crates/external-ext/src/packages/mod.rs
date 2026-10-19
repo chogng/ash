@@ -23,6 +23,7 @@ pub use packages::ExtensionSourceKind;
 pub use source::DynamicExtensionPackageSource;
 pub use source::DynamicExtensionSourceProvider;
 pub use source::DynamicExtensionSourceSnapshot;
+pub use source::ExtensionRendererClient;
 pub use source::ExtensionRoot;
 pub use source::ExtensionRootKind;
 

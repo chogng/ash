@@ -1,4 +1,4 @@
-import type { DocumentNode } from '../../../../../../extensions/academic/common/model/document.js';
+import type { DocumentNode } from './documentCodec.js';
 import type { ChannelReference } from '../../../../platform/collaboration/common/channelService.js';
 import type { URI } from '../../../../base/common/uri.js';
 import { toDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';

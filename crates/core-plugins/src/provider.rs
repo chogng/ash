@@ -43,6 +43,12 @@ pub trait ExtensionPackagePayload: Send {
 /// and activation remain the Manager's responsibility. Package IDs here are unqualified plugin
 /// names; the provider translates its own package format and must never activate contributions.
 pub trait ExtensionSource: Send + Sync {
+    /// Returns product-selected publisher authority for verified downloads from this
+    /// source. User-configured sources cannot confer this authority in Manager.
+    fn product_runtime_authority(&self, _package_name: &str) -> Option<String> {
+        None
+    }
+
     fn registry_kind(&self) -> crate::ExtensionRegistryKind {
         crate::ExtensionRegistryKind::Ash
     }
@@ -248,6 +254,11 @@ impl ExtensionSources {
         let mut package = payload.package().clone();
         package.id = id.to_string();
         Ok(Box::new(SourcePackage { package, payload }))
+    }
+
+    pub(crate) fn product_runtime_authority(&self, package_id: &str) -> Option<String> {
+        let (id, provider) = self.route(package_id).ok()?;
+        provider.product_runtime_authority(id.plugin_name())
     }
 
     /// The previous manager stored one signed registry without a source name. A legacy profile

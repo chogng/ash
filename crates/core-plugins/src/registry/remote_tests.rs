@@ -61,3 +61,55 @@ fn production_registry_exposes_only_pinned_remote_endpoints() {
             .is_ok()
     );
 }
+
+#[test]
+fn product_runtime_trust_requires_explicit_publisher_and_pinned_root() {
+    let root = TempDir::new().unwrap();
+    let config = RemoteExtensionsConfig::new(
+        Url::parse("https://example.com/metadata/").unwrap(),
+        Url::parse("https://example.com/targets/").unwrap(),
+        b"root-a".to_vec(),
+        root.path(),
+    )
+    .unwrap();
+    assert!(config.product_runtime_authority("ash.academic").is_none());
+    let trusted = config
+        .clone()
+        .with_product_runtime_publishers(["ash".into()])
+        .unwrap();
+    assert!(trusted.product_runtime_authority("ash.academic").is_some());
+    assert!(
+        trusted
+            .product_runtime_authority("other.academic")
+            .is_none()
+    );
+    assert!(
+        trusted
+            .product_runtime_authority("ash-impostor.academic")
+            .is_none()
+    );
+    assert!(
+        config
+            .clone()
+            .with_product_runtime_publishers(["ash".into(), "ash".into()])
+            .is_err()
+    );
+    assert!(
+        config
+            .with_product_runtime_publishers(["ash/other".into()])
+            .is_err()
+    );
+    let other_root = RemoteExtensionsConfig::new(
+        Url::parse("https://example.com/metadata/").unwrap(),
+        Url::parse("https://example.com/targets/").unwrap(),
+        b"root-b".to_vec(),
+        root.path(),
+    )
+    .unwrap()
+    .with_product_runtime_publishers(["ash".into()])
+    .unwrap();
+    assert_ne!(
+        trusted.product_runtime_authority("ash.academic"),
+        other_root.product_runtime_authority("ash.academic")
+    );
+}

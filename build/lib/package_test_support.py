@@ -34,6 +34,8 @@ def prepare_builtin_fixture(root: Path) -> dict[str, Path]:
         if not manifest_path.is_file():
             continue
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        if manifest.get("ashRuntime", {}).get("client"):
+            continue
         snapshot = hashlib.sha256(package.name.encode()).hexdigest()
         destination = prepared / "packages" / snapshot
         excluded = ["node_modules"]
@@ -239,7 +241,6 @@ def create_runtime_package(
         remote_ssh_extension_binary=executable("ash-remote-ssh-extension"),
         git_extension_binary=executable("ash-git-extension"),
         markdown_math_binary=executable("ash-markdown-math"),
-        academy_extension_binary=executable("ash-academy"),
         code_editor_extension_binary=executable("ash-code-editor"),
         markdown_extension_binary=executable("ash-markdown-language-features"),
         github_authentication_binary=executable("ash-github-authentication"),

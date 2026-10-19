@@ -93,6 +93,8 @@ impl DynamicExtensionSourceProvider for PreparedExtensionSourceProvider {
                     path: self.root.join("packages").join(snapshot),
                     kind: kind.clone(),
                     normalized_manifest_json: None,
+                    verified_package_sha256: None,
+                    renderer_client: None,
                 });
             }
         }

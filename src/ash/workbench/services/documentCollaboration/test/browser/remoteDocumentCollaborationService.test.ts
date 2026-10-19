@@ -1,4 +1,4 @@
-import { documentCodec } from '../../../../../../../extensions/academic/common/model/documentCodec.js';
+import { documentCodec, bindDocumentCodec } from '../../../../../../../extensions/academic/common/model/documentCodec.js';
 import assert from "node:assert/strict";
 import { test } from "mocha";
 import type { DocumentNode } from "../../../../../../../extensions/academic/common/model/document.js";
@@ -29,7 +29,7 @@ test("Stanza remote collaboration uses authenticated HTTP without App Server or 
 	}) as typeof fetch;
 	try {
 		using service = new RemoteDocumentCollaborationService();
-		using connection = await service.open({ codec: documentCodec, clientId: "client-a", schemaId: "stanza-document-v1", schema, document }, { endpoint: "https://collaboration.ash.example", bearerToken: TOKEN }, new AbortController().signal);
+		using connection = await service.open({ codec: bindDocumentCodec(schema), clientId: "client-a", schemaId: "stanza-document-v1", document }, { endpoint: "https://collaboration.ash.example", bearerToken: TOKEN }, new AbortController().signal);
 		const transaction = new DocumentTransaction().replaceText("text-1", 0, 0, "A");
 		const outcome = await connection.submit({ clientId: "client-a", sequence: 1, baseVersion: 0, transaction }, schema.createDocument([schema.createNode("paragraph", { id: "paragraph-1", content: [schema.createText("AHello", { id: "text-1" })] })], "document-1"), new AbortController().signal);
 
@@ -67,9 +67,12 @@ test("Stanza remote collaboration delivers ordered long-poll updates to its conn
 	}) as typeof fetch;
 	try {
 		using service = new RemoteDocumentCollaborationService();
-		using connection = await service.open({ codec: documentCodec, clientId: "client-a", schemaId: "stanza-document-v1", schema, document }, { endpoint: "https://collaboration.ash.example", bearerToken: TOKEN }, new AbortController().signal);
+		using connection = await service.open({ codec: bindDocumentCodec(schema), clientId: "client-a", schemaId: "stanza-document-v1", document }, { endpoint: "https://collaboration.ash.example", bearerToken: TOKEN }, new AbortController().signal);
 		const updates: DocumentTransaction[] = [];
-		connection.onDidReceiveUpdate(update => updates.push(update.transaction));
+		connection.onDidReceiveUpdate(update => {
+			assert.ok(update.transaction instanceof DocumentTransaction);
+			updates.push(update.transaction);
+		});
 		await waitFor(() => resolvePoll !== undefined);
 		resolvePoll?.();
 		await waitFor(() => updates.length === 1);
@@ -97,9 +100,12 @@ test("Stanza remote collaboration retries a transient long-poll transport failur
 	}) as typeof fetch;
 	try {
 		using service = new RemoteDocumentCollaborationService();
-		using connection = await service.open({ codec: documentCodec, clientId: "client-a", schemaId: "stanza-document-v1", schema, document }, { endpoint: "https://collaboration.ash.example", bearerToken: TOKEN }, new AbortController().signal);
+		using connection = await service.open({ codec: bindDocumentCodec(schema), clientId: "client-a", schemaId: "stanza-document-v1", document }, { endpoint: "https://collaboration.ash.example", bearerToken: TOKEN }, new AbortController().signal);
 		const updates: DocumentTransaction[] = [];
-		connection.onDidReceiveUpdate(update => updates.push(update.transaction));
+		connection.onDidReceiveUpdate(update => {
+			assert.ok(update.transaction instanceof DocumentTransaction);
+			updates.push(update.transaction);
+		});
 		await new Promise(resolve => setTimeout(resolve, 350));
 
 		assert.equal(polls >= 2, true);
@@ -134,7 +140,7 @@ test("Stanza remote collaboration publishes local presence and projects remote s
 	}) as typeof fetch;
 	try {
 		using service = new RemoteDocumentCollaborationService();
-		using connection = await service.open({ codec: documentCodec, clientId: "client-a", schemaId: "stanza-document-v1", schema, document }, { endpoint: "https://collaboration.ash.example", bearerToken: TOKEN }, new AbortController().signal);
+		using connection = await service.open({ codec: bindDocumentCodec(schema), clientId: "client-a", schemaId: "stanza-document-v1", document }, { endpoint: "https://collaboration.ash.example", bearerToken: TOKEN }, new AbortController().signal);
 		const presences: (readonly { readonly clientId: string; }[])[] = [];
 		connection.onDidReceivePresence(presence => presences.push(presence));
 		await connection.updatePresence({ kind: "text", anchor: { nodeId: "text-1", offset: 1 }, head: { nodeId: "text-1", offset: 1 } }, new AbortController().signal);
@@ -161,7 +167,7 @@ test("Stanza remote collaboration exposes a viewer room as read-only", async () 
 	}) as typeof fetch;
 	try {
 		using service = new RemoteDocumentCollaborationService();
-		using connection = await service.open({ codec: documentCodec, clientId: "client-viewer", schemaId: "stanza-document-v1", schema, document }, { endpoint: "https://collaboration.ash.example", bearerToken: TOKEN }, new AbortController().signal);
+		using connection = await service.open({ codec: bindDocumentCodec(schema), clientId: "client-viewer", schemaId: "stanza-document-v1", document }, { endpoint: "https://collaboration.ash.example", bearerToken: TOKEN }, new AbortController().signal);
 		assert.equal(connection.canEdit, false);
 		assert.equal(connection.canManageMembers, false);
 		await assert.rejects(connection.createInvite("Writer", "editor", new AbortController().signal), /cannot create room invitations/);
@@ -188,7 +194,7 @@ test("Stanza remote collaboration owners create typed room invitations", async (
 	}) as typeof fetch;
 	try {
 		using service = new RemoteDocumentCollaborationService();
-		using connection = await service.open({ codec: documentCodec, clientId: "client-owner", schemaId: "stanza-document-v1", schema, document }, { endpoint: "https://collaboration.ash.example", bearerToken: TOKEN }, new AbortController().signal);
+		using connection = await service.open({ codec: bindDocumentCodec(schema), clientId: "client-owner", schemaId: "stanza-document-v1", document }, { endpoint: "https://collaboration.ash.example", bearerToken: TOKEN }, new AbortController().signal);
 		const invite = await connection.createInvite(" Writer ", "editor", new AbortController().signal);
 		const members = await connection.listMembers(new AbortController().signal);
 		const rotated = await connection.rotateMemberAccessToken("member-1", new AbortController().signal);

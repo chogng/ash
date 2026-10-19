@@ -1,7 +1,9 @@
 import type { EditorFeatureSet } from '../../../../editor/browser/editorExtensions.js';
 import type { EditorProfile } from '../../documentEditor/browser/documentEditorProfile.js';
+import type { ExtensionDescriptor } from '../../../../platform/extensions/common/extensionApi.js';
+import type { IExtensionResourceLoaderService } from '../../../../platform/extensionResourceLoader/common/extensionResourceLoader.js';
 
-/** Product-compiled view behavior. No service container, backend connection or document is passed to a module. */
+/** Package-owned view behavior. The loader supplies only the versioned public client mechanisms. */
 export interface ExtensionEditorModule {
 	readonly packageId: string;
 	readonly packageVersion: string;
@@ -16,4 +18,15 @@ interface ExtensionEditorContributionModule {
 
 export type ExtensionEditorClientModule = ExtensionEditorModule | ExtensionEditorContributionModule;
 
-export type ExtensionEditorModuleLoader = (packageName: string, entry: string, expectedDigest: string) => Promise<ExtensionEditorClientModule>;
+export interface ExtensionEditorModuleRequest {
+	readonly package: ExtensionDescriptor;
+	readonly generation: number;
+	readonly entry: string;
+	readonly expectedDigest: string;
+	readonly resources: IExtensionResourceLoaderService;
+	readonly signal: AbortSignal;
+	/** Rechecks the owning catalog admission immediately before any package code executes. */
+	readonly assertCurrent: () => Promise<void>;
+}
+
+export type ExtensionEditorModuleLoader = (request: ExtensionEditorModuleRequest) => Promise<ExtensionEditorClientModule>;

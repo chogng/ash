@@ -76,6 +76,8 @@ pub(crate) struct InstallationRecord {
     pub package: PackageRef,
     pub state: InstallationState,
     pub capabilities: Vec<CapabilityRecord>,
+    #[serde(default)]
+    product_runtime_authority: Option<String>,
 }
 
 #[derive(Clone, Deserialize, Serialize)]
@@ -105,6 +107,8 @@ pub struct LocalCapabilitySource {
     package_root: PathBuf,
     relative_path: String,
     host_path: PathBuf,
+    product_runtime: bool,
+    editor_extension_root: Option<PathBuf>,
 }
 
 /// Independently verified sources. A damaged package cannot hide healthy installations or
@@ -123,6 +127,18 @@ impl LocalCapabilitySource {
             plugin_id: self.package.id.clone(),
             skill_name: self.id.clone(),
         })
+    }
+
+    /// True only for exact installed bytes downloaded under a product-pinned
+    /// publisher delegation whose trust authority is still selected by this host.
+    pub fn is_product_runtime(&self) -> bool {
+        self.product_runtime
+    }
+
+    /// Exact editor asset root declared by the same verified package. Executable
+    /// consumers may read their sidecar here without guessing a directory layout.
+    pub fn editor_extension_root(&self) -> Option<&std::path::Path> {
+        self.editor_extension_root.as_deref()
     }
 
     pub fn package(&self) -> &PackageRef {
@@ -248,15 +264,40 @@ impl ExtensionPackageManager {
         source: &LocalCapabilitySource,
     ) -> Result<CapabilityLease, ExtensionsClientError> {
         let mut runtime = self.lock_runtime()?;
-        let (installation, capability) = find_capability(&runtime.durable, &source.capability)?;
+        let installation_id = self.validate_local_source(&runtime.durable, source)?;
+        Ok(self.insert_lease(&mut runtime, source.capability.clone(), installation_id))
+    }
+
+    /// Checks the exact retained artifact before a product consumer admits new work.
+    pub fn local_source_is_current(&self, source: &LocalCapabilitySource) -> bool {
+        self.lock_runtime()
+            .is_ok_and(|runtime| self.validate_local_source(&runtime.durable, source).is_ok())
+    }
+
+    fn validate_local_source(
+        &self,
+        durable: &DurableState,
+        source: &LocalCapabilitySource,
+    ) -> Result<String, ExtensionsClientError> {
+        let (installation, capability) = find_capability(durable, &source.capability)?;
         if installation.state != InstallationState::Installed
             || installation.package != source.package
             || capability.descriptor.kind != source.kind
+            || capability.path != source.relative_path
+            || self
+                .store
+                .verified_package_path(&installation.package, &capability.path)?
+                != source.host_path
         {
             return Err(installation_in_use());
         }
-        let installation_id = installation.installation_id.clone();
-        Ok(self.insert_lease(&mut runtime, source.capability.clone(), installation_id))
+        let product_runtime = installation.product_runtime_authority.is_some()
+            && installation.product_runtime_authority
+                == self.product_runtime_authority(&installation.package.id, durable)?;
+        if source.product_runtime != product_runtime {
+            return Err(ExtensionsClientError::package_untrusted());
+        }
+        Ok(installation.installation_id.clone())
     }
 
     fn insert_lease(
@@ -406,7 +447,28 @@ impl ExtensionPackageManager {
                 .filter(|capability| capability.descriptor.kind == kind)
             {
                 let source = (|| {
+                    let mut editor_assets = installation
+                        .capabilities
+                        .iter()
+                        .filter(|entry| entry.descriptor.kind == CapabilityKind::EditorExtension);
+                    let editor_extension_root = editor_assets
+                        .next()
+                        .map(|entry| {
+                            self.store
+                                .verified_package_path(&installation.package, &entry.path)
+                        })
+                        .transpose()?;
+                    if editor_assets.next().is_some() {
+                        return Err(ExtensionsClientError::package_untrusted());
+                    }
                     Ok(LocalCapabilitySource {
+                        editor_extension_root,
+                        product_runtime: installation.product_runtime_authority.is_some()
+                            && installation.product_runtime_authority
+                                == self.product_runtime_authority(
+                                    &installation.package.id,
+                                    &durable,
+                                )?,
                         package: installation.package.clone(),
                         capability: capability.descriptor.reference.clone(),
                         kind,
@@ -443,6 +505,21 @@ impl ExtensionPackageManager {
         Ok(LocalCapabilitySourceSnapshot { sources, failures })
     }
 
+    fn product_runtime_authority(
+        &self,
+        package_id: &str,
+        durable: &DurableState,
+    ) -> Result<Option<String>, ExtensionsClientError> {
+        let id = ash_utils_plugins::PluginId::parse(package_id)
+            .map_err(|_| ExtensionsClientError::package_untrusted())?;
+        if durable.sources.contains_key(id.source_id()) {
+            return Ok(None);
+        }
+        Ok(self
+            .source_providers()?
+            .product_runtime_authority(package_id))
+    }
+
     fn install_downloaded(
         &self,
         downloaded: &dyn ExtensionPackagePayload,
@@ -471,6 +548,10 @@ impl ExtensionPackageManager {
             })
             .collect::<Vec<_>>();
         let mut installation = InstallationRecord {
+            product_runtime_authority: {
+                let runtime = self.lock_runtime()?;
+                self.product_runtime_authority(&artifact.package.id, &runtime.durable)?
+            },
             installation_id: installation_id.clone(),
             package: artifact.package,
             state: InstallationState::Installed,

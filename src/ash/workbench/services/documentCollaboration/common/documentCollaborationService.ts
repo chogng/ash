@@ -1,9 +1,48 @@
 import type { DocumentCodec } from '../../documentEditor/common/documentCodec.js';
 import type { ChannelReference } from '../../../../platform/collaboration/common/channelService.js';
 import type { IDisposable } from '../../../../base/common/lifecycle.js';
-import type { DocumentNode } from '../../../../../../extensions/academic/common/model/document.js';
-import type { DocumentSchema } from '../../../../../../extensions/academic/common/model/documentSchema.js';
-import type { DocumentCollaborationConnection } from '../../../../../../extensions/academic/common/services/documentCollaborationService.js';
+import type { DocumentNode } from '../../documentEditor/common/documentCodec.js';
+import type { Event } from '../../../../base/common/event.js';
+import type { DocumentSelection } from '../../documentEditor/common/documentCodec.js';
+
+
+export interface DocumentCollaborationSnapshot {
+	readonly roomId: string;
+	readonly version: number;
+	readonly document: DocumentNode;
+}
+export interface DocumentCollaborationPresence {
+	readonly clientId: string;
+	readonly selection: DocumentSelection;
+}
+export interface DocumentCollaborationEnvelope<TTransaction = unknown> {
+	readonly clientId: string;
+	readonly sequence: number;
+	readonly baseVersion: number;
+	readonly transaction: TTransaction;
+}
+export interface DocumentCollaborationRemoteEnvelope<TTransaction = unknown> extends DocumentCollaborationEnvelope<TTransaction> {
+	readonly version: number;
+}
+export type DocumentCollaborationSubmitOutcome<TTransaction = unknown> =
+	| { readonly kind: 'accepted'; readonly update: DocumentCollaborationRemoteEnvelope<TTransaction>; }
+	| { readonly kind: 'conflict'; readonly updates: readonly DocumentCollaborationRemoteEnvelope<TTransaction>[]; }
+	| { readonly kind: 'resync'; readonly snapshot: DocumentCollaborationSnapshot; };
+
+/** Transactions remain opaque to the transport owner and are decoded by the package codec. */
+export interface DocumentCollaborationConnection<TTransaction = unknown> extends IDisposable {
+	readonly roomId: string;
+	readonly clientId: string;
+	readonly canEdit: boolean;
+	readonly initialSnapshot: DocumentCollaborationSnapshot;
+	readonly currentPresence: readonly DocumentCollaborationPresence[];
+	readonly onDidReceiveUpdate: Event<DocumentCollaborationRemoteEnvelope<TTransaction>>;
+	readonly onDidReceiveSnapshot: Event<DocumentCollaborationSnapshot>;
+	readonly onDidReceivePresence: Event<readonly DocumentCollaborationPresence[]>;
+	readonly onDidFail: Event<Error>;
+	submit(envelope: DocumentCollaborationEnvelope<TTransaction>, document: DocumentNode, signal: AbortSignal): Promise<DocumentCollaborationSubmitOutcome<TTransaction>>;
+	updatePresence(selection: DocumentSelection | undefined, signal: AbortSignal): Promise<void>;
+}
 
 /** Inputs needed to create or join one server-ordered Stanza collaboration room. */
 export interface DocumentCollaborationOpenInput {
@@ -11,7 +50,6 @@ export interface DocumentCollaborationOpenInput {
 	readonly roomId?: string;
 	readonly clientId: string;
 	readonly schemaId: string;
-	readonly schema: DocumentSchema;
 	readonly document: DocumentNode;
 	/** An explicit document host selected from the call's shared references. */
 	readonly serverUrl?: string;

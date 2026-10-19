@@ -1,4 +1,4 @@
-import { documentCodec } from '../../../../../../../extensions/academic/common/model/documentCodec.js';
+import { documentCodec, bindDocumentCodec } from '../../../../../../../extensions/academic/common/model/documentCodec.js';
 import assert from "node:assert/strict";
 import { test } from "mocha";
 import type { DocumentCollaborationOpenParams } from "../../../../../../../.build/protocol/typescript/index.js";
@@ -15,7 +15,7 @@ import type { DocumentNode } from "../../../../../../../extensions/academic/comm
 import { createDefaultDocumentSchema, type DocumentSchema } from "../../../../../../../extensions/academic/common/model/documentSchema.js";
 import { applyDocumentTransaction, DocumentTransaction } from "../../../../../../../extensions/academic/common/model/documentTransaction.js";
 import { serializeDocumentTransaction } from "../../../../../../../extensions/academic/common/model/documentTransactionSerialization.js";
-import type { DocumentCollaborationRemoteEnvelope } from "../../../../../../../extensions/academic/common/services/documentCollaborationService.js";
+import type { DocumentCollaborationRemoteEnvelope } from '../../common/documentCollaborationService.js';
 import type { IServerEventApi } from "../../../../../platform/agentHost/common/appServerApi.js";
 import type { IDocumentCollaborationApi } from "../../../../../platform/collaboration/common/documentCollaborationApi.js";
 import { AppServerDocumentCollaborationService } from "../../browser/appServerDocumentCollaborationService.js";
@@ -26,7 +26,7 @@ test("Stanza App Server collaboration adapter uses JSON-safe ordered versions an
 	const events = new FakeServerEvents();
 	const api = new FakeDocumentCollaborationApi();
 	using service = new AppServerDocumentCollaborationService(api, events);
-	using connection = await service.open({ codec: documentCodec, clientId: "client-a", schemaId: "stanza-document-v1", schema, document }, new AbortController().signal);
+	using connection = await service.open({ codec: bindDocumentCodec(schema), clientId: "client-a", schemaId: "stanza-document-v1", document }, new AbortController().signal);
 
 	assert.equal(connection.roomId, "room-a");
 	assert.equal(connection.canEdit, true);
@@ -42,7 +42,8 @@ test("Stanza App Server collaboration adapter uses JSON-safe ordered versions an
 	events.fire({ roomId: "room-a", clientId: "client-b", sequence: 1, baseVersion: 0, version: 1, transaction: serializeDocumentTransaction(remote, schema) });
 	assert.equal(received.length, 1);
 	assert.equal(received[0]?.version, 1);
-	assert.deepEqual(received[0]?.transaction.steps, remote.steps);
+	assert.ok(received[0]?.transaction instanceof DocumentTransaction);
+	assert.deepEqual(received[0].transaction.steps, remote.steps);
 
 	const local = new DocumentTransaction().replaceText("text-1", 0, 0, "A");
 	const localDocument = applyDocumentTransaction(document, schema, local).document;

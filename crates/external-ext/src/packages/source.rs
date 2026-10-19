@@ -2,6 +2,21 @@ use std::path::PathBuf;
 
 use super::ExtensionDiagnostic;
 
+/// Host-authorized client resources for one exact executable editor runtime.
+///
+/// This fact comes from the package authority and its execution policy, never from declarative
+/// manifest discovery. Resource consumers still verify the frozen script and stylesheet bytes.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ExtensionRendererClient {
+    pub runtime_id: String,
+    pub api_version: u32,
+    pub entry: String,
+    pub digest: String,
+    pub style: String,
+    pub style_digest: String,
+    pub source_digest: String,
+}
+
 /// Identifies the provenance of a static extension package.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum ExtensionRootKind {
@@ -56,6 +71,11 @@ pub struct DynamicExtensionPackageSource {
     /// The catalog still snapshots and hashes the exact package directory. This value may only
     /// adapt its manifest contract; it cannot add files or bypass package path validation.
     pub normalized_manifest_json: Option<String>,
+    /// Exact complete-package digest already verified by the source authority.
+    /// This can differ from a snapshot of the capability's resource subtree.
+    pub verified_package_sha256: Option<String>,
+    /// Execution admission supplied by the host; manifest fields cannot create this fact.
+    pub renderer_client: Option<ExtensionRendererClient>,
 }
 
 impl DynamicExtensionPackageSource {
@@ -66,6 +86,8 @@ impl DynamicExtensionPackageSource {
             path: path.into(),
             kind: ExtensionRootKind::Plugin,
             normalized_manifest_json: None,
+            verified_package_sha256: None,
+            renderer_client: None,
         }
     }
 
@@ -76,6 +98,8 @@ impl DynamicExtensionPackageSource {
             path: path.into(),
             kind: ExtensionRootKind::Registry,
             normalized_manifest_json: None,
+            verified_package_sha256: None,
+            renderer_client: None,
         }
     }
 
@@ -90,6 +114,8 @@ impl DynamicExtensionPackageSource {
             path: path.into(),
             kind: ExtensionRootKind::Registry,
             normalized_manifest_json: Some(normalized_manifest_json.into()),
+            verified_package_sha256: None,
+            renderer_client: None,
         }
     }
 }

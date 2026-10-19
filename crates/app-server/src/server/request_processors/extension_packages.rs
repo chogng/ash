@@ -266,12 +266,15 @@ impl<'a> ExtensionPackagesRequestProcessor<'a> {
             .into_iter()
             .find(|source| *source.package() == installed.package)
             .ok_or_else(|| RpcError::new(-32602, AppServerErrorName::InvalidParams))?;
-        if matches!(params.action, Action::Grant)
-            && (source.kind() != ash_core_plugins::CapabilityKind::EditorExtension
-                || !ash_external_ext::ProductNodeLauncher::supports_platform()
-                || !crate::extension_packages_editor_extensions::javascript_entrypoint(&source)
-                    .is_ok_and(|entry| entry.is_some()))
-        {
+        let executable_admitted =
+            crate::extension_packages_editor_extensions::product_runtime_extension_id(&source)
+                .is_ok_and(|id| id.is_some());
+        let javascript_admitted = source.kind()
+            == ash_core_plugins::CapabilityKind::EditorExtension
+            && ash_external_ext::ProductNodeLauncher::supports_platform()
+            && crate::extension_packages_editor_extensions::javascript_entrypoint(&source)
+                .is_ok_and(|entry| entry.is_some());
+        if matches!(params.action, Action::Grant) && !executable_admitted && !javascript_admitted {
             return Err(extension_packages_error(ExtensionsClientError::business(
                 ExtensionsErrorCode::PackageIncompatible,
                 "This extension has no admitted JavaScript entry on this platform",
@@ -307,13 +310,9 @@ impl<'a> ExtensionPackagesRequestProcessor<'a> {
                 .reconcile(super::extension_host_runtime::ExtensionHostReconcileMode::Refresh)
                 .map_err(|_| RpcError::new(-32042, AppServerErrorName::PluginOperationFailed))?;
         }
-        if matches!(
-            action,
-            ash_core_plugins::EditorExtensionPolicyAction::Enable
-                | ash_core_plugins::EditorExtensionPolicyAction::Disable
-        ) {
-            self.reconcile_extension_packages_consumers();
-        }
+        // Executable consent also controls trusted renderer contributions. Retire the
+        // catalog generation after revocation before reporting the committed policy.
+        self.reconcile_extension_packages_consumers();
         self.updates.publish_extension_packages_changed();
         result(&self.editor_extension_policy_snapshot()?)
     }
@@ -324,6 +323,7 @@ impl<'a> ExtensionPackagesRequestProcessor<'a> {
         ash_app_server_protocol::protocol::extension_packages::ExtensionsEditorExtensionsResult,
         RpcError,
     > {
+        use ash_app_server_protocol::protocol::extension_packages::ExtensionsEditorExecutionKindDto;
         use ash_app_server_protocol::protocol::extension_packages::ExtensionsEditorExtensionPolicyDto;
         use ash_app_server_protocol::protocol::extension_packages::ExtensionsEditorExtensionsResult;
         let policy = self
@@ -355,19 +355,35 @@ impl<'a> ExtensionPackagesRequestProcessor<'a> {
                 continue;
             }
             let state = policy.snapshot(source.package(), source.capability());
-            let entrypoint = if source.kind() == ash_core_plugins::CapabilityKind::EditorExtension
+            let (entrypoint, execution_kind) = if source.kind()
+                == ash_core_plugins::CapabilityKind::EditorExtension
                 && ash_external_ext::ProductNodeLauncher::supports_platform()
             {
-                crate::extension_packages_editor_extensions::javascript_entrypoint(&source)
-                    .ok()
-                    .flatten()
+                let entry =
+                    crate::extension_packages_editor_extensions::javascript_entrypoint(&source)
+                        .ok()
+                        .flatten();
+                let kind = entry
+                    .as_ref()
+                    .map(|_| ExtensionsEditorExecutionKindDto::Node);
+                (entry, kind)
+            } else if crate::extension_packages_editor_extensions::product_runtime_extension_id(
+                &source,
+            )
+            .is_ok_and(|id| id.is_some())
+            {
+                (
+                    Some(source.relative_path().into()),
+                    Some(ExtensionsEditorExecutionKindDto::Native),
+                )
             } else {
-                None
+                (None, None)
             };
             extensions.push(ExtensionsEditorExtensionPolicyDto {
                 installation_id: package.installation_id.clone(),
                 package: extension_packages_projection::package_ref(source.package().clone()),
                 entrypoint,
+                execution_kind,
                 enabled: state.enabled,
                 granted: state.granted,
             });
@@ -388,14 +404,19 @@ impl<'a> ExtensionPackagesRequestProcessor<'a> {
         let mut sources = Vec::new();
         // Select executable consent before other editor assets in a multi-capability package.
         for kind in [
+            ash_core_plugins::CapabilityKind::Executable,
             ash_core_plugins::CapabilityKind::EditorExtension,
             ash_core_plugins::CapabilityKind::Language,
             ash_core_plugins::CapabilityKind::Theme,
         ] {
             sources.extend(
                 manager
-                    .local_capability_sources(kind)
-                    .map_err(extension_packages_error)?,
+                    .local_capability_source_snapshot(kind)
+                    .map_err(extension_packages_error)?.sources
+                    .into_iter()
+                    .filter(|source| kind != ash_core_plugins::CapabilityKind::Executable
+                        || crate::extension_packages_editor_extensions::product_runtime_extension_id(source)
+                            .is_ok_and(|id| id.is_some())),
             );
         }
         Ok(sources)

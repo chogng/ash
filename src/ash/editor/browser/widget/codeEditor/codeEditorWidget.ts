@@ -236,6 +236,8 @@ export class CodeEditorWidget extends Disposable implements ICodeEditor {
 		@ILanguageFeaturesService private readonly languageFeaturesService: ILanguageFeaturesService,
 		@IContextKeyService contextKeyService: IContextKeyService,
 		@ICodeEditorService private readonly codeEditorService: ICodeEditorService,
+		@ILogService private readonly logService: ILogService,
+		@IConfigurationService private readonly configurationService: IConfigurationService,
 	) {
 		super();
 		this.ownerId = options.ownerId ?? `ash-code-editor-${this.decorationOwnerId}`;
@@ -315,7 +317,6 @@ export class CodeEditorWidget extends Disposable implements ICodeEditor {
 		try {
 			const services = modelStore.add(this.editorServices.createChild());
 			this.instantiationService = services;
-			const logService = services.getOptional(ILogService);
 			const themeService = this.themeService;
 			const languageConfigurationService = this.languageConfigurationService;
 			const languageFeaturesService = this.languageFeaturesService;
@@ -431,13 +432,13 @@ export class CodeEditorWidget extends Disposable implements ICodeEditor {
 				ariaLabel,
 				dimension: options.dimension,
 				semanticTokenSource,
-				configurationService: services.getOptional(IConfigurationService),
+				configurationService: this.configurationService,
 				textDirection: options.textDirection,
 				presentation: options.presentation,
 				indentation: options.indentation,
 				controller: {
 					ownerId: this.ownerId,
-					...(logService ? { logService } : {}),
+					logService: this.logService,
 					ariaLabel,
 					semanticTokenSource,
 				},
