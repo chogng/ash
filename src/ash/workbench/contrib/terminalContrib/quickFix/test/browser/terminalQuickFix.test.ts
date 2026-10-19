@@ -1,3 +1,7 @@
+import { ITerminalQuickFixService } from '../../browser/quickFix.js';
+import { TerminalQuickFixService } from '../../browser/terminalQuickFixService.js';
+import { IExtensionService } from '../../../../../services/extensions/common/extensionService.js';
+import { IOpenerService } from '../../../../../../platform/opener/common/opener.js';
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { DeferredPromise } from '../../../../../../base/common/async.js';
@@ -38,6 +42,11 @@ function completedCommand(text: string, output: string, exitCode = 1): ITerminal
 function fixture(command = completedCommand('git sttatus', typoOutput), initialInput = '') {
 	const lifetime = new DisposableStore();
 	const services = lifetime.add(new InstantiationService());
+	const quickFixes = lifetime.add(new TerminalQuickFixService());
+	services.registerInstance(ITerminalQuickFixService, quickFixes);
+	services.registerInstance(IExtensionService, { activateByEvent: async () => undefined } as unknown as IExtensionService);
+	const opened: string[] = [];
+	services.registerInstance(IOpenerService, { open: async resource => { opened.push(resource.toString()); return true; } } as IOpenerService);
 	const capabilities = lifetime.add(new TerminalCapabilityStore());
 	const changedInput = lifetime.add(new Emitter<void>());
 	const started = lifetime.add(new Emitter<ITerminalCommand>());
@@ -78,16 +87,22 @@ function fixture(command = completedCommand('git sttatus', typoOutput), initialI
 	const accepted = lifetime.add(new Emitter<{ inBackground: boolean; }>());
 	const hidden = lifetime.add(new Emitter<void>());
 	const shown = new DeferredPromise<void>();
+	const itemChanges = lifetime.add(new Emitter<readonly IQuickPickItem[]>());
+	let items: readonly IQuickPickItem[] = [];
 	const picker = {
-		items: [] as IQuickPickItem[], selectedItems: [] as IQuickPickItem[], placeholder: '',
+		get items() { return items; }, set items(value: readonly IQuickPickItem[]) { items = value; itemChanges.fire(value); }, selectedItems: [] as IQuickPickItem[], placeholder: '',
 		onDidAccept: accepted.event, onDidHide: hidden.event,
 		show: () => { void shown.complete(); }, hide: () => hidden.fire(), dispose() { }, [Symbol.dispose]() { },
 	} as unknown as IQuickPick<IQuickPickItem>;
 	services.registerInstance(IQuickInputService, { createQuickPick: () => picker } as unknown as IQuickInputService);
 	return {
-		[Symbol.dispose]: () => lifetime.dispose(), instance, picker, sent, shown: shown.p, commands,
+		[Symbol.dispose]: () => lifetime.dispose(), instance, picker, sent, shown: shown.p, commands, quickFixes, opened,
+		waitForItems: (predicate: (items: readonly IQuickPickItem[]) => boolean): Promise<void> => new Promise(resolve => {
+			if (predicate(items)) { resolve(); return; }
+			const listener = lifetime.add(itemChanges.event(value => { if (predicate(value)) { listener.dispose(); resolve(); } }));
+		}),
 		run: () => services.invokeFunction(CommandsRegistry.getCommand('workbench.action.terminal.showQuickFixes')!),
-		accept: () => { picker.selectedItems = [picker.items[0]! as IQuickPickItem]; accepted.fire({ inBackground: false }); },
+		accept: (index = 0) => { picker.selectedItems = [picker.items[index]! as IQuickPickItem]; accepted.fire({ inBackground: false }); },
 		cancel: () => picker.hide(),
 		focusCount: () => focusCount,
 		input: (value: string) => { input = value; changedInput.fire(); },
@@ -196,3 +211,49 @@ for (const [text, output, code] of [
 		assert.deepEqual(state.sent, []);
 	});
 }
+
+
+test('Terminal Quick Fixes consumes extension actions through the registered provider and cancels stale requests', async () => {
+	using state = fixture(completedCommand('tool bad', 'failed'));
+	let receivedSignal: AbortSignal | undefined;
+	using registration = state.quickFixes.registerQuickFixProvider('extension/fix', {
+		provideTerminalQuickFixes: async (instance, command, signal) => {
+			assert.equal(instance, state.instance);
+			assert.equal(command.command, 'tool bad');
+			receivedSignal = signal;
+			return [{ label: 'tool good', terminalCommand: 'tool good', shouldExecute: true }];
+		},
+	});
+	const operation = state.run();
+	await state.waitForItems(items => items.some(item => item.label === 'tool good'));
+	state.accept();
+	await operation;
+	assert.deepEqual(state.sent, [{ text: 'tool good', execute: true, paste: true }]);
+	assert.equal(receivedSignal?.aborted, true);
+});
+
+test('Terminal Quick Fixes rejects a provider result delivered after the prompt changes', async () => {
+	using state = fixture(completedCommand('tool bad', 'failed'));
+	const pending = new DeferredPromise<readonly import('../../browser/quickFix.js').ITerminalQuickFix[]>();
+	const started = new DeferredPromise<AbortSignal>();
+	using registration = state.quickFixes.registerQuickFixProvider('extension/fix', { provideTerminalQuickFixes: (_instance, _command, signal) => { void started.complete(signal); return pending.p; } });
+	const operation = state.run();
+	const signal = await started.p;
+	state.input('preserve');
+	assert.equal(signal.aborted, true);
+	await pending.complete([{ label: 'late', terminalCommand: 'late' }]);
+	await operation;
+	assert.deepEqual(state.sent, []);
+	assert.deepEqual(state.picker.items, []);
+});
+
+test('Terminal Quick Fixes cannot execute an already visible action after its provider is revoked', async () => {
+	using state = fixture(completedCommand('tool bad', 'failed'));
+	using registration = state.quickFixes.registerQuickFixProvider('extension/fix', { provideTerminalQuickFixes: async () => [{ label: 'tool good', terminalCommand: 'tool good', shouldExecute: true }] });
+	const operation = state.run();
+	await state.waitForItems(items => items.some(item => item.label === 'tool good'));
+	registration.dispose();
+	state.accept();
+	await operation;
+	assert.deepEqual(state.sent, []);
+});

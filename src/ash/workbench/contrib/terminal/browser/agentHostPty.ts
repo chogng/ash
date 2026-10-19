@@ -1,3 +1,4 @@
+import type { ITerminalAutoReply } from '../../../../platform/terminal/common/terminal.js';
 import type { ITerminalProcessOwnership } from '../../../services/terminal/common/terminal.js';
 import { CancellationError, onUnexpectedError } from '../../../../base/common/errors.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
@@ -76,6 +77,7 @@ export class AgentHostPty extends BasePty<IProcessDataEvent> {
 	}
 
 	async input(data: string): Promise<void> { this.assertCanWrite(); return this.manager.write(data); }
+	async setAutoReplies(rules: readonly ITerminalAutoReply[]): Promise<void> { this.assertCanWrite(); return this.manager.setAutoReplies(rules); }
 	async sendSignal(signal: string): Promise<void> { this.assertCanWrite(); return this.manager.sendSignal(signal); }
 	async processBinary(data: string): Promise<void> { this.assertCanWrite(); return this.manager.processBinary(data); }
 	async resize(cols: number, rows: number): Promise<void> { this.assertCanWrite(); return this.manager.setDimensions(cols, rows); }

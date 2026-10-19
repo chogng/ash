@@ -1409,6 +1409,13 @@ fn registration_allows_operation(registration: &RegistrationKind, operation: &st
                 | "resizeTaskTerminal"
                 | "closeTaskTerminal"
         ),
+        RegistrationKind::TerminalCompletionProvider { .. } => {
+            operation == "provideTerminalCompletions"
+        }
+        RegistrationKind::TerminalQuickFixProvider { .. } => matches!(
+            operation,
+            "provideTerminalQuickFixes" | "handleTerminalQuickFix"
+        ),
         RegistrationKind::TerminalLinkProvider {} => {
             matches!(operation, "provideTerminalLinks" | "handleTerminalLink")
         }

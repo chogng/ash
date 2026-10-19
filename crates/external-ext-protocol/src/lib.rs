@@ -283,6 +283,8 @@ pub enum ExtensionCapability {
     TaskProvider,
     TerminalProfileProvider,
     TerminalLinkProvider,
+    TerminalCompletionProvider,
+    TerminalQuickFixProvider,
     TestProfileProvider,
     DataChannel,
     SpeechProvider,
@@ -461,6 +463,12 @@ pub enum RegistrationKind {
     TerminalEnvironment {},
     /// Provides line-local links; activation remains an explicit client gesture.
     TerminalLinkProvider {},
+    TerminalCompletionProvider {
+        trigger_characters: Vec<String>,
+    },
+    TerminalQuickFixProvider {
+        provider_id: String,
+    },
     TestProfileProvider {
         provider_id: String,
         label: String,
@@ -497,13 +505,15 @@ impl ActivateResult {
     }
 }
 
-/// A bounded replacement of only the Speech registrations in one live activation.
+/// A bounded replacement of dynamically registered providers in one live activation.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ExtensionHostRegistrationEvent {
     pub context: HostEventContext,
     pub revision: u64,
     pub speech_providers: Vec<RegistrationDescriptor>,
+    #[serde(default)]
+    pub terminal_providers: Vec<RegistrationDescriptor>,
 }
 
 impl ExtensionHostRegistrationEvent {
@@ -518,6 +528,25 @@ impl ExtensionHostRegistrationEvent {
                 "invalid dynamic Speech registrations",
             ));
         }
+        if self.terminal_providers.iter().any(|registration| {
+            !matches!(
+                registration.kind,
+                RegistrationKind::TerminalCompletionProvider { .. }
+                    | RegistrationKind::TerminalQuickFixProvider { .. }
+            )
+        }) {
+            return Err(validation::protocol_error(
+                "invalid dynamic terminal registrations",
+            ));
+        }
+        validate_registrations(
+            &self.terminal_providers,
+            limits.maximum_registrations,
+            &[
+                ExtensionCapability::TerminalCompletionProvider,
+                ExtensionCapability::TerminalQuickFixProvider,
+            ],
+        )?;
         validate_registrations(
             &self.speech_providers,
             limits.maximum_registrations,

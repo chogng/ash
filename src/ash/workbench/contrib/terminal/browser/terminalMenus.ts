@@ -32,7 +32,7 @@ export function setupTerminalMenus(): void {
 		{ id: TerminalCommandId.Clear, title: localize2('terminal.context.clear', 'Clear Terminal') },
 		{
 			id: TerminalCommandId.Relaunch, title: localize2('terminal.context.relaunch', 'Relaunch Terminal'), when: ContextKeyExpr.and(
-				ContextKeyExpr.notEquals(TerminalActiveInstanceStateContext.key, 'running'), ContextKeyExpr.notEquals(TerminalActiveInstanceStateContext.key, 'reconnecting'))
+				ContextKeyExpr.notEquals(TerminalActiveInstanceStateContext.key, 'reconnecting'))
 		},
 		{ id: TerminalCommandId.Kill, title: localize2('terminal.context.kill', 'Kill Terminal') },
 	]) {
@@ -82,7 +82,6 @@ export function setupTerminalMenus(): void {
 		},
 		when: ContextKeyExpr.and(
 			TerminalHasActiveInstanceContext.isEqualTo(true),
-			ContextKeyExpr.notEquals(TerminalActiveInstanceStateContext.key, "running"),
 			ContextKeyExpr.notEquals(TerminalActiveInstanceStateContext.key, 'reconnecting'),
 		),
 		group: "1_terminal",

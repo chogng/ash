@@ -149,6 +149,8 @@ pub enum EditorExtensionCapability {
     TaskProvider,
     TerminalProfileProvider,
     TerminalLinkProvider,
+    TerminalCompletionProvider,
+    TerminalQuickFixProvider,
     TestProfileProvider,
     DataChannel,
     SpeechProvider,

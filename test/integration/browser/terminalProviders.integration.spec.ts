@@ -1,0 +1,92 @@
+import { expect, test, type Page } from '@playwright/test';
+
+async function prompt(page: Page, value: string): Promise<void> {
+	await page.goto('/terminal.html?input&groups&clipboard&browser&suggest');
+	await page.waitForFunction(() => !!window.ashTerminalSuggestIntegration && !!window.ashTerminalInputIntegration);
+	await page.evaluate(value => {
+		const feed = window.ashTerminalInputIntegration.feed;
+		feed('', { type: 'processReady', isWindowsPty: false, shellType: 'bash' as import('../../../src/ash/platform/terminal/common/terminal.js').PosixShellType.Bash });
+		feed('', { type: 'promptStart' }); feed('$ '); feed('', { type: 'commandStart' }); feed(value);
+	}, value);
+	await expect.poll(() => page.evaluate(() => window.ashTerminalSuggestIntegration.model())).toBe(`${value}|`);
+	await page.evaluate(() => window.ashTerminalInputIntegration.clear());
+}
+
+test('terminal extension completion replaces its selected range in the original prompt without executing', async ({ page }) => {
+	await prompt(page, 'git --he');
+	await page.evaluate(() => {
+		window.ashTerminalSuggestIntegration.provider([{ label: '--help', replacementRange: [4, 8], detail: 'Extension flag', documentation: 'Show help' }]);
+		void window.ashTerminalInputIntegration.command('workbench.action.terminal.triggerSuggest');
+	});
+	const picker = page.getByRole('combobox', { name: 'Terminal suggestions', exact: true });
+	await expect(picker).toBeVisible();
+	await expect(page.getByRole('option')).toContainText('--help');
+	expect(await page.evaluate(() => window.ashTerminalSuggestIntegration.providerRequests())).toEqual([{ value: 'git --he', cursorIndex: 8, cancelled: false }]);
+	await picker.press('Enter');
+	await expect.poll(() => page.evaluate(() => window.ashTerminalInputIntegration.writes)).toEqual(['\x7f\x7f\x7f\x7f--help']);
+	await expect(page.locator('.xterm-helper-textarea')).toBeFocused();
+	await page.evaluate(() => window.ashTerminalInputIntegration.close());
+});
+
+test('terminal extension completion applies a range at the middle of the prompt', async ({ page }) => {
+	await prompt(page, 'git --he tail');
+	await page.evaluate(() => {
+		window.ashTerminalSuggestIntegration.provider([{ label: '--help', replacementRange: [4, 8] }]);
+		window.ashTerminalInputIntegration.feed('\x1b[5D');
+	});
+	await expect.poll(() => page.evaluate(() => window.ashTerminalSuggestIntegration.model())).toBe('git --he| tail');
+	await page.evaluate(() => { void window.ashTerminalInputIntegration.command('workbench.action.terminal.triggerSuggest'); });
+	const picker = page.getByRole('combobox', { name: 'Terminal suggestions', exact: true });
+	await expect(page.getByRole('option')).toContainText('--help');
+	await picker.press('Enter');
+	await expect.poll(() => page.evaluate(() => window.ashTerminalInputIntegration.writes)).toEqual(['\x7f\x7f\x7f\x7f--help']);
+	await page.evaluate(() => window.ashTerminalInputIntegration.close());
+});
+
+test('terminal extension trigger characters wait for confirmed shell input before opening suggestions', async ({ page }) => {
+	await prompt(page, 'git ');
+	await page.evaluate(() => window.ashTerminalSuggestIntegration.provider([{ label: '--help', replacementRange: [4, 5] }], ['-']));
+	await page.locator('.xterm-helper-textarea').press('-');
+	expect(await page.evaluate(() => window.ashTerminalSuggestIntegration.providerRequests())).toEqual([]);
+	await page.evaluate(() => window.ashTerminalInputIntegration.feed('-'));
+	const picker = page.getByRole('combobox', { name: 'Terminal suggestions', exact: true });
+	await expect(picker).toBeVisible();
+	await expect(page.getByRole('option')).toContainText('--help');
+	expect(await page.evaluate(() => window.ashTerminalSuggestIntegration.providerRequests())).toEqual([{ value: 'git -', cursorIndex: 5, cancelled: false }]);
+	await picker.press('Escape');
+	expect(await page.evaluate(() => window.ashTerminalInputIntegration.writes)).toEqual(['-']);
+	await page.evaluate(() => window.ashTerminalInputIntegration.close());
+});
+
+test('terminal extension completion ignores a late reply after prompt edits and unregisters its provider', async ({ page }) => {
+	await prompt(page, 'git -');
+	await page.evaluate(() => {
+		window.ashTerminalSuggestIntegration.provider([{ label: '--help', replacementRange: [4, 5] }], [], true);
+		void window.ashTerminalInputIntegration.command('workbench.action.terminal.triggerSuggest');
+	});
+	const picker = page.getByRole('combobox', { name: 'Terminal suggestions', exact: true });
+	await expect(picker).toBeVisible();
+	await expect.poll(() => page.evaluate(() => window.ashTerminalSuggestIntegration.providerRequests().length)).toBe(1);
+	await page.evaluate(() => window.ashTerminalInputIntegration.feed('x'));
+	await expect(picker).toBeHidden();
+	await expect.poll(() => page.evaluate(() => window.ashTerminalSuggestIntegration.providerRequests()[0]?.cancelled)).toBe(true);
+	await page.evaluate(() => { window.ashTerminalSuggestIntegration.disposeProvider(); window.ashTerminalSuggestIntegration.releaseProvider(); });
+	await expect(page.getByRole('option')).toHaveCount(0);
+	expect(await page.evaluate(() => window.ashTerminalInputIntegration.writes)).toEqual([]);
+	await page.evaluate(() => window.ashTerminalInputIntegration.close());
+});
+
+test('terminal extension completion cannot apply a visible item after its provider is revoked', async ({ page }) => {
+	await prompt(page, 'git -');
+	await page.evaluate(() => {
+		window.ashTerminalSuggestIntegration.provider([{ label: '--help', replacementRange: [4, 5] }]);
+		void window.ashTerminalInputIntegration.command('workbench.action.terminal.triggerSuggest');
+	});
+	const picker = page.getByRole('combobox', { name: 'Terminal suggestions', exact: true });
+	await expect(page.getByRole('option')).toContainText('--help');
+	await page.evaluate(() => window.ashTerminalSuggestIntegration.disposeProvider());
+	await picker.press('Enter');
+	await expect(picker).toBeHidden();
+	expect(await page.evaluate(() => window.ashTerminalInputIntegration.writes)).toEqual([]);
+	await page.evaluate(() => window.ashTerminalInputIntegration.close());
+});

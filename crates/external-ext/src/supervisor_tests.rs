@@ -157,6 +157,7 @@ impl ExtensionHostProcess for TestProcess {
                     handler(crate::ExtensionHostRegistrationEvent {
                         context,
                         revision: 1,
+                        terminal_providers: vec![],
                         speech_providers: vec![RegistrationDescriptor {
                             registration_id: "starting.speech".into(),
                             kind: RegistrationKind::SpeechProvider {
@@ -170,6 +171,7 @@ impl ExtensionHostProcess for TestProcess {
                         handler(crate::ExtensionHostRegistrationEvent {
                             context,
                             revision: 2,
+                            terminal_providers: vec![],
                             speech_providers: vec![],
                         })
                         .unwrap();
@@ -649,6 +651,7 @@ fn dynamic_speech_registry_is_admitted_ordered_and_fenced_to_its_activation() {
         context,
         revision,
         speech_providers,
+        terminal_providers: vec![],
     };
     handler(event(HostEventContext::new(1, 9), 2, vec![speech.clone()])).unwrap();
     assert_eq!(host.snapshot().registrations.len(), 2);
@@ -734,6 +737,7 @@ fn starting_speech_updates_keep_the_observed_generation_after_the_activate_recei
         let mut event = crate::ExtensionHostRegistrationEvent {
             context: HostEventContext::new(1, 9),
             revision: 3,
+            terminal_providers: vec![],
             speech_providers: vec![RegistrationDescriptor {
                 registration_id: "replacement".into(),
                 kind: RegistrationKind::SpeechProvider {
@@ -782,7 +786,82 @@ fn process_registration_callback_does_not_retain_its_supervisor() {
     handler(crate::ExtensionHostRegistrationEvent {
         context: HostEventContext::new(1, 9),
         revision: 99,
+        terminal_providers: vec![],
         speech_providers: vec![],
     })
     .unwrap();
+}
+
+#[test]
+fn dynamic_terminal_providers_revoke_pending_calls_and_keep_activation_authority() {
+    let launcher = Arc::new(TestLauncher::default());
+    let host = supervisor_with_capabilities(
+        launcher.clone(),
+        Arc::new(TestAuthority::authorized()),
+        vec![
+            ExtensionCapability::Command,
+            ExtensionCapability::TerminalCompletionProvider,
+            ExtensionCapability::TerminalQuickFixProvider,
+        ],
+    );
+    host.start().unwrap();
+    let process = launcher.processes.lock().unwrap()[0].clone();
+    let handler = process
+        .registration_handler
+        .lock()
+        .unwrap()
+        .clone()
+        .unwrap();
+    let providers = vec![
+        RegistrationDescriptor {
+            registration_id: "completion.1".into(),
+            kind: RegistrationKind::TerminalCompletionProvider {
+                trigger_characters: vec!["-".into()],
+            },
+        },
+        RegistrationDescriptor {
+            registration_id: "fix.1".into(),
+            kind: RegistrationKind::TerminalQuickFixProvider {
+                provider_id: "acme.fix".into(),
+            },
+        },
+    ];
+    let event = |context, revision, terminal_providers| crate::ExtensionHostRegistrationEvent {
+        context,
+        revision,
+        speech_providers: vec![],
+        terminal_providers,
+    };
+    handler(event(HostEventContext::new(1, 9), 1, providers.clone())).unwrap();
+    assert_eq!(host.snapshot().registrations.len(), 3);
+    handler(event(HostEventContext::new(1, 8), 2, vec![])).unwrap();
+    assert_eq!(host.snapshot().registrations.len(), 3);
+    process.hang_invocations.store(true, Ordering::Release);
+    let mut request = invocation();
+    request.registration_id = "completion.1".into();
+    request.operation = "provideTerminalCompletions".into();
+    let pending = host.begin_invoke(request).unwrap();
+    handler(event(HostEventContext::new(1, 9), 2, vec![])).unwrap();
+    assert!(handler(event(HostEventContext::new(1, 9), 3, providers.clone())).is_err());
+    assert!(matches!(
+        pending.wait(),
+        Err(ExtensionHostError::RegistrationNotFound)
+    ));
+    assert_eq!(process.cancels.load(Ordering::SeqCst), 1);
+    assert_eq!(host.snapshot().registrations.len(), 1);
+    host.shutdown().unwrap();
+    handler(event(HostEventContext::new(1, 9), 99, providers.clone())).unwrap();
+    assert!(host.snapshot().registrations.is_empty());
+    let denied = supervisor(
+        Arc::new(TestLauncher::default()),
+        Arc::new(TestAuthority::authorized()),
+    );
+    denied.start().unwrap();
+    assert!(
+        denied
+            .inner
+            .update_registrations(event(HostEventContext::new(1, 9), 1, providers))
+            .is_err()
+    );
+    denied.shutdown().unwrap();
 }

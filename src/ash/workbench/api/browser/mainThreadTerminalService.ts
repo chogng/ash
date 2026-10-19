@@ -1,3 +1,9 @@
+import { URI } from '../../../base/common/uri.js';
+import { extUri } from '../../../base/common/resources.js';
+import { match } from '../../../base/common/glob.js';
+import { FileKind, IFileService } from '../../../platform/files/common/files.js';
+import { ITerminalCompletionService, type ITerminalCompletion } from '../../contrib/terminalContrib/suggest/browser/terminalCompletionService.js';
+import { ITerminalQuickFixService, type ITerminalQuickFix } from '../../contrib/terminalContrib/quickFix/browser/quickFix.js';
 import { TerminalProcessExtHostProxy } from '../../contrib/terminal/browser/terminalProcessExtHostProxy.js';
 import { IEnvironmentVariableService } from '../../contrib/terminal/common/environmentVariable.js';
 import { deserializeEnvironmentDescriptionMap, deserializeEnvironmentVariableCollection } from '../../../platform/terminal/common/environmentVariableShared.js';
@@ -41,11 +47,20 @@ export interface ExtensionTerminalLinkRegistration {
 	readonly invoke: ExtensionHostProviderInvoker;
 }
 
+export interface ExtensionTerminalCompletionRegistration extends ExtensionTerminalLinkRegistration {
+	readonly triggerCharacters: readonly string[];
+}
+export interface ExtensionTerminalQuickFixRegistration extends ExtensionTerminalLinkRegistration { }
+
 /** Binds incarnation-owned callbacks to the existing terminal profile and instance owners. */
 export class MainThreadTerminalService extends Disposable {
 	private readonly registrations = this._register(new DisposableMap<string, DisposableStore>());
 	private readonly descriptors = new Map<string, ExtensionTerminalProfileRegistration>();
 	private workspaceGeneration = 0;
+	private readonly completionRegistrations = this._register(new DisposableMap<string, DisposableStore>());
+	private readonly completionDescriptors = new Map<string, ExtensionTerminalCompletionRegistration>();
+	private readonly quickFixRegistrations = this._register(new DisposableMap<string, DisposableStore>());
+	private readonly quickFixDescriptors = new Map<string, ExtensionTerminalQuickFixRegistration>();
 	private readonly environmentRegistrations = this._register(new DisposableMap<string, DisposableStore>());
 	private readonly environmentDescriptors = new Map<string, ExtensionTerminalEnvironmentRegistration>();
 	private readonly linkRegistrations = this._register(new DisposableMap<string, DisposableStore>());
@@ -60,9 +75,140 @@ export class MainThreadTerminalService extends Disposable {
 		@IInstantiationService private readonly instantiation: IInstantiationService,
 		@ILogService private readonly log: ILogService,
 		@ITerminalLinkProviderService private readonly links: ITerminalLinkProviderService,
+		@ITerminalCompletionService private readonly completions: ITerminalCompletionService,
+		@ITerminalQuickFixService private readonly quickFixes: ITerminalQuickFixService,
+		@IFileService private readonly files: IFileService,
 	) {
 		super();
 		this._register(workspace.onDidChangeWorkspace(() => this.workspaceGeneration++));
+	}
+
+	replaceCompletionProviders(next: readonly ExtensionTerminalCompletionRegistration[]): void {
+		this.replaceProviders(next, this.completionDescriptors, this.completionRegistrations, (descriptor, lifetime, controller) => {
+			return this.completions.registerTerminalCompletionProvider(descriptor.runtimeId, descriptor.registrationId, {
+				provideCompletions: async (instance, commandLine, cursorIndex, signal) => {
+					using pending = new DisposableStore();
+					const request = this.terminalRequest(instance, controller.signal, signal, pending);
+					if (!request.valid()) return [];
+					const result = record(await descriptor.invoke('provideTerminalCompletions', { commandLine, cursorIndex, terminal: { id: instance.id, name: instance.title, processId: instance.processId ?? null } }, request.signal), ['items', 'resourceOptions']);
+					if (!request.valid()) return [];
+					if (!Array.isArray(result.items) || result.items.length > 1000) throw invalid();
+					const items: ITerminalCompletion[] = result.items.map(value => {
+						const item = record(value, ['label', 'replacementRange', 'detail', 'documentation', 'kind']);
+						const label = text(item.label, 32768);
+						const range = item.replacementRange;
+						if (!Array.isArray(range) || range.length !== 2 || range.some(value => typeof value !== 'number' || !Number.isSafeInteger(value)) || (range[0] as number) < 0 || (range[1] as number) < (range[0] as number) || (range[1] as number) > commandLine.length) throw invalid();
+						if (item.kind !== undefined && (typeof item.kind !== 'number' || !Number.isInteger(item.kind) || item.kind < 0 || item.kind > 16)) throw invalid();
+						return { label, replacementRange: [range[0] as number, range[1] as number], ...(item.detail === undefined ? {} : { detail: text(item.detail, 4096, true) }), ...(item.documentation === undefined ? {} : { documentation: text(item.documentation, 32768, true) }), ...(item.kind === undefined ? {} : { kind: item.kind }) };
+					});
+					if (result.resourceOptions !== undefined) {
+						const options = record(result.resourceOptions, ['showFiles', 'showDirectories', 'globPattern', 'cwd']);
+						if (options.showFiles !== undefined && typeof options.showFiles !== 'boolean' || options.showDirectories !== undefined && typeof options.showDirectories !== 'boolean') throw invalid();
+						const cwd = URI.parse(text(options.cwd, 32768));
+						const glob = options.globPattern === undefined ? undefined : text(options.globPattern, 2048);
+						const folder = this.workspace.getWorkspace().folders.find(folder => folder.id === instance.dirId);
+						// Resource suggestions use the file service's existing workspace authority;
+						// an extension cannot turn completion into an arbitrary host filesystem read.
+						if ((options.showFiles || options.showDirectories) && folder && extUri.isEqualOrParent(cwd, folder.uri)) {
+							const tokenStart = commandLine.lastIndexOf(' ', cursorIndex - 1) + 1;
+							const typed = commandLine.slice(tokenStart, cursorIndex);
+							let entries: Awaited<ReturnType<IFileService['readDirectory']>>;
+							try { entries = await this.files.readDirectory(cwd); } catch { return request.valid() ? items : []; }
+							if (!request.valid()) return [];
+							for (const entry of entries.slice(0, 1000)) {
+								if (!entry.name.startsWith(typed) || /[\x00-\x1f\x7f]/.test(entry.name) || glob && !match(glob, entry.name)) continue;
+								if (entry.kind === FileKind.File && options.showFiles || entry.kind === FileKind.Directory && options.showDirectories) items.push({ label: entry.name + (entry.kind === FileKind.Directory ? '/' : ''), replacementRange: [tokenStart, cursorIndex] });
+							}
+						}
+					}
+					return request.valid() ? items : [];
+				}
+			}, ...descriptor.triggerCharacters);
+		});
+	}
+
+	replaceQuickFixProviders(next: readonly ExtensionTerminalQuickFixRegistration[]): void {
+		this.replaceProviders(next, this.quickFixDescriptors, this.quickFixRegistrations, (descriptor, lifetime, controller) => {
+			return this.quickFixes.registerQuickFixProvider(`${descriptor.runtimeId}/${descriptor.registrationId}`, {
+				provideTerminalQuickFixes: async (instance, command, signal) => {
+					using pending = new DisposableStore();
+					const request = this.terminalRequest(instance, controller.signal, signal, pending);
+					if (!request.valid() || command.wasReplayed || command.exitCode === undefined) return [];
+					const commandSnapshot = { commandLine: command.command, exitCode: command.exitCode, terminalId: instance.id };
+					const matcher = record(await descriptor.invoke('provideTerminalQuickFixes', { ...commandSnapshot, phase: 'matcher' }, request.signal), ['matches', 'outputMatcher']);
+					if (!request.valid() || matcher.matches === false) return [];
+					if (matcher.matches !== true) throw invalid();
+					let outputLines: string[] = [];
+					if (matcher.outputMatcher !== null) {
+						const window = record(matcher.outputMatcher, ['anchor', 'offset', 'length']);
+						if (window.anchor !== 'top' && window.anchor !== 'bottom' || typeof window.offset !== 'number' || !Number.isSafeInteger(window.offset) || window.offset < 0 || typeof window.length !== 'number' || !Number.isSafeInteger(window.length) || window.length < 1 || window.length > 40) throw invalid();
+						const output = command.getOutputMatch({ lineMatcher: /[\s\S]*/, anchor: window.anchor, offset: window.offset, length: window.length, multipleMatches: true });
+						if (!output || output.outputLines.some(line => line.length > 32768)) return [];
+						outputLines = output.outputLines;
+					}
+					const result = record(await descriptor.invoke('provideTerminalQuickFixes', { ...commandSnapshot, phase: 'provide', outputLines }, request.signal), ['fixes']);
+					if (!request.valid()) return [];
+					if (!Array.isArray(result.fixes) || result.fixes.length > 100) throw invalid();
+					return result.fixes.map(value => {
+						const fix = record(value, ['kind', 'label', 'id', 'shouldExecute']);
+						const label = text(fix.label, 32768);
+						if (fix.kind === 'terminalCommand') {
+							if (typeof fix.shouldExecute !== 'boolean') throw invalid();
+							return { label, terminalCommand: label, shouldExecute: fix.shouldExecute };
+						}
+						if (fix.kind === 'opener') {
+							const uri = URI.parse(label);
+							if (!['http', 'https', 'file', 'ash-remote', 'vscode-remote'].includes(uri.scheme)) throw invalid();
+							return { label, uri };
+						}
+						if (fix.kind !== 'command') throw invalid();
+						const id = text(fix.id, 256);
+						return {
+							label, run: async () => {
+								if (!request.bindingValid()) return;
+								using activation = new DisposableStore();
+								const active = this.terminalRequest(instance, controller.signal, signal, activation);
+								if (active.valid()) await descriptor.invoke('handleTerminalQuickFix', { id, terminalId: instance.id, commandLine: command.command }, active.signal);
+							}
+						} satisfies ITerminalQuickFix;
+					});
+				}
+			});
+		});
+	}
+
+	private replaceProviders<T extends ExtensionTerminalLinkRegistration>(next: readonly T[], descriptors: Map<string, T>, registrations: DisposableMap<string, DisposableStore>, register: (descriptor: T, lifetime: DisposableStore, controller: AbortController) => IDisposable): void {
+		if (this.isDisposed) throw new CancellationError();
+		const keys = new Set(next.map(descriptor => `${descriptor.runtimeId}/${descriptor.registrationId}`));
+		if (keys.size !== next.length) throw invalid();
+		for (const key of descriptors.keys()) if (!keys.has(key)) { registrations.deleteAndDispose(key); descriptors.delete(key); }
+		for (const descriptor of next) {
+			const key = `${descriptor.runtimeId}/${descriptor.registrationId}`;
+			if (descriptors.get(key) === descriptor) continue;
+			if (!this.extensionForRuntime(descriptor)) throw invalid();
+			registrations.deleteAndDispose(key);
+			descriptors.delete(key);
+			const lifetime = new DisposableStore();
+			const controller = new AbortController();
+			lifetime.add(toDisposable(() => controller.abort()));
+			try { lifetime.add(register(descriptor, lifetime, controller)); }
+			catch (error) { lifetime.dispose(); throw error; }
+			registrations.set(key, lifetime);
+			descriptors.set(key, descriptor);
+		}
+	}
+
+	private terminalRequest(instance: ITerminalInstance, provider: AbortSignal, caller: AbortSignal, lifetime: DisposableStore): { signal: AbortSignal; valid: () => boolean; bindingValid: () => boolean; } {
+		const processId = instance.processId;
+		const workspaceGeneration = this.workspaceGeneration;
+		const controller = new AbortController();
+		lifetime.add(instance.onDidChangeState(() => controller.abort()));
+		lifetime.add(this.workspace.onDidChangeWorkspace(() => controller.abort()));
+		lifetime.add(this.workspace.onDidChangeWorkspaceFolders(() => controller.abort()));
+		lifetime.add(this.terminals.onDidDisposeInstance(disposed => { if (disposed === instance) controller.abort(); }));
+		const signal = AbortSignal.any([provider, caller, controller.signal, AbortSignal.timeout(5_000)]);
+		const bindingValid = (): boolean => !provider.aborted && !caller.aborted && !controller.signal.aborted && workspaceGeneration === this.workspaceGeneration && instance.state === 'running' && instance.processId === processId && this.terminals.instances.includes(instance);
+		return { signal, bindingValid, valid: () => !signal.aborted && bindingValid() };
 	}
 
 	replaceLinkProviders(next: readonly ExtensionTerminalLinkRegistration[]): void {
@@ -307,6 +453,8 @@ export class MainThreadTerminalService extends Disposable {
 		this.descriptors.clear();
 		this.environmentDescriptors.clear();
 		this.linkDescriptors.clear();
+		this.completionDescriptors.clear();
+		this.quickFixDescriptors.clear();
 		super.disposeCore();
 	}
 }

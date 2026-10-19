@@ -124,6 +124,10 @@ pub enum TerminalExecution {
 pub struct TerminalCreateParams {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
+    #[schemars(length(max = 32))]
+    pub auto_replies: Option<Vec<TerminalAutoReply>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
     pub dir_id: Option<String>,
     #[schemars(range(min = 1, max = 512))]
     pub rows: u16,
@@ -224,6 +228,9 @@ pub struct TerminalProcessInfoParams {
 #[serde(rename_all = "camelCase")]
 pub enum TerminalSignal {
     Interrupt,
+    Terminate,
+    Kill,
+    Hangup,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
@@ -235,6 +242,29 @@ pub struct TerminalSendSignalParams {
     #[schemars(length(min = 1))]
     pub terminal_id: String,
     pub signal: TerminalSignal,
+}
+
+/// One exact raw-output match and its bounded process input.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct TerminalAutoReply {
+    #[schemars(length(min = 1, max = 4096))]
+    pub match_text: String,
+    #[schemars(length(min = 1, max = 4096))]
+    pub reply: String,
+}
+
+/// Replaces all automatic replies for the caller's current terminal lease.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct TerminalSetAutoRepliesParams {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub dir_id: Option<String>,
+    #[schemars(length(min = 1))]
+    pub terminal_id: String,
+    #[schemars(length(max = 32))]
+    pub rules: Vec<TerminalAutoReply>,
 }
 
 /// Identity allocated for one interactive terminal.

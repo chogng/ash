@@ -446,6 +446,12 @@ pub enum ExtensionHostRegistrationKindDto {
     },
     TerminalEnvironment {},
     TerminalLinkProvider {},
+    TerminalCompletionProvider {
+        trigger_characters: Vec<String>,
+    },
+    TerminalQuickFixProvider {
+        provider_id: String,
+    },
     TaskProvider {
         #[schemars(length(min = 1, max = 256))]
         task_type: String,

@@ -157,7 +157,7 @@ pub fn kill_process_group_by_pid(_pid: u32) -> io::Result<()> {
 }
 
 #[cfg(unix)]
-fn signal_process_group_id(pgid: libc::pid_t, signal: libc::c_int) -> io::Result<bool> {
+pub(crate) fn signal_process_group_id(pgid: libc::pid_t, signal: libc::c_int) -> io::Result<bool> {
     use std::io::ErrorKind;
 
     let result = unsafe { libc::killpg(pgid, signal) };

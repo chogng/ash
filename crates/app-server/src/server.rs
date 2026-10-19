@@ -4509,6 +4509,9 @@ impl AppServer {
             Some(ClientMethod::TerminalSendSignal) => self
                 .terminal_processor()
                 .terminal_send_signal(connection, &request.params),
+            Some(ClientMethod::TerminalSetAutoReplies) => self
+                .terminal_processor()
+                .terminal_set_auto_replies(connection, &request.params),
             Some(ClientMethod::TerminalResize) => self
                 .terminal_processor()
                 .terminal_resize(connection, &request.params),

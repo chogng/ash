@@ -347,7 +347,9 @@ fn standard_speech_proposal_requests_only_its_explicit_host_ceiling() {
         )
         .unwrap();
         assert_eq!(
-            super::javascript_speech_provider_requested(root.path()).unwrap(),
+            super::javascript_proposed_capabilities_requested(root.path())
+                .unwrap()
+                .contains(&ash_external_ext::ExtensionCapability::SpeechProvider),
             expected
         );
     }
@@ -365,7 +367,7 @@ fn standard_speech_proposal_requests_only_its_explicit_host_ceiling() {
             .unwrap(),
         )
         .unwrap();
-        assert!(super::javascript_speech_provider_requested(root.path()).is_err());
+        assert!(super::javascript_proposed_capabilities_requested(root.path()).is_err());
     }
 }
 
@@ -386,4 +388,29 @@ fn speech_manifest_declaration_produces_the_standard_activation_event() {
             .is_err()
         );
     }
+}
+
+#[test]
+fn terminal_proposals_request_distinct_capabilities_and_demand_activation() {
+    let root = tempfile::tempdir().unwrap();
+    let manifest = serde_json::json!({ "main": "main.js", "enabledApiProposals": ["terminalCompletionProvider", "terminalQuickFixProvider"] });
+    fs::write(
+        root.path().join("package.json"),
+        serde_json::to_vec(&manifest).unwrap(),
+    )
+    .unwrap();
+    assert_eq!(
+        super::javascript_proposed_capabilities_requested(root.path()).unwrap(),
+        [
+            ash_external_ext::ExtensionCapability::TerminalCompletionProvider,
+            ash_external_ext::ExtensionCapability::TerminalQuickFixProvider
+        ]
+    );
+    assert_eq!(
+        super::activation_plan(&manifest).unwrap().events,
+        [
+            "onDemand:terminalCompletionProvider",
+            "onDemand:terminalQuickFixProvider"
+        ]
+    );
 }

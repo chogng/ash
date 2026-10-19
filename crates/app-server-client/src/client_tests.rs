@@ -357,6 +357,7 @@ fn client_drives_terminal_lifecycle_through_typed_methods() {
 
     let created = client
         .terminal_create(TerminalCreateParams {
+            auto_replies: None,
             dir_id: None,
             rows: 24,
             cols: 80,

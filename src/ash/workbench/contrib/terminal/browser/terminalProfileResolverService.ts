@@ -11,6 +11,7 @@ import { IConfigurationResolverService } from '../../../services/configurationRe
 import { TERMINAL_CONFIG_SECTION } from '../common/terminal.js';
 import { IEnvironmentVariableService } from '../common/environmentVariable.js';
 import { MergedEnvironmentVariableCollection } from '../../../../platform/terminal/common/environmentVariableCollection.js';
+import { serializeEnvironmentVariableCollections } from '../../../../platform/terminal/common/environmentVariableShared.js';
 import { sanitizeCwd, shouldUseEnvironmentVariableCollection } from '../../../../platform/terminal/common/terminalEnvironment.js';
 import { createTerminalEnvironment, mergeEnvironments } from '../common/terminalEnvironment.js';
 import { ITerminalProfileResolverService, ITerminalProfileService, type IShellLaunchConfigResolveOptions } from '../common/terminal.js';
@@ -110,6 +111,8 @@ export abstract class BaseTerminalProfileResolverService extends Disposable impl
 		mergeEnvironments(overrides, shell.env, options.os !== OperatingSystem.Windows);
 		const resolve = (value: string) => this.variables.resolveWithEnvironment(environment, folder, value);
 		let env: IProcessEnvironment;
+		let environmentVariableCollections: IShellLaunchConfig['environmentVariableCollections'] = [];
+		let environmentVariableCollectionsPersistable = true;
 		if (!shouldUseEnvironmentVariableCollection(shell)) {
 			// Strict launch values are literal: no configured, inherited or extension mutations.
 			env = Object.fromEntries(Object.entries(shell.env ?? {}).flatMap(([key, value]) => value === null ? [] : [[key, value]]));
@@ -118,6 +121,8 @@ export abstract class BaseTerminalProfileResolverService extends Disposable impl
 			const launchEnv = await createTerminalEnvironment(overrides, resolve);
 			env = Object.fromEntries(Object.entries(launchEnv).map(([key, value]) => [key, value ?? undefined]));
 			const collection = new MergedEnvironmentVariableCollection(this.environmentVariables.collections, options.os !== OperatingSystem.Windows);
+			environmentVariableCollections = serializeEnvironmentVariableCollections(collection.collections);
+			environmentVariableCollectionsPersistable = [...this.environmentVariables.collections.values()].every(collection => collection.persistent);
 			const scope = { workspaceFolder: folder };
 			// Materialize inheritance only for mutated variables. Other host values
 			// remain with the Rust spawn owner; null overrides still mean deletion.
@@ -138,6 +143,8 @@ export abstract class BaseTerminalProfileResolverService extends Disposable impl
 		shell.executable = executable;
 		shell.args = resolvedArgs;
 		shell.env = Object.freeze(Object.fromEntries(Object.entries(env).map(([key, value]) => [key, value ?? null])));
+		shell.environmentVariableCollections = environmentVariableCollections;
+		shell.environmentVariableCollectionsPersistable = environmentVariableCollectionsPersistable;
 		shell.cwd = resolvedCwd;
 		shell.icon ??= profile.icon ?? this._guessProfileIcon(executable, resolvedArgs) ?? this.getDefaultIcon();
 		shell.color ??= profile.color;

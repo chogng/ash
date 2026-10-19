@@ -1233,3 +1233,57 @@ fn dynamic_speech_frames_reject_other_registrations_and_invalid_fences() {
         .push(invalid.speech_providers[0].clone());
     assert!(invalid.validate(&ProtocolLimits::default()).is_err());
 }
+
+#[test]
+fn terminal_completion_and_quick_fix_registrations_require_distinct_capabilities() {
+    for (value, capability) in [
+        (
+            json!({"registrationId":"completion", "kind":"terminalCompletionProvider", "triggerCharacters":["-"]}),
+            ExtensionCapability::TerminalCompletionProvider,
+        ),
+        (
+            json!({"registrationId":"fix", "kind":"terminalQuickFixProvider", "providerId":"acme.fix"}),
+            ExtensionCapability::TerminalQuickFixProvider,
+        ),
+    ] {
+        let mut params = activation();
+        params.capabilities = vec![ExtensionCapability::TerminalLinkProvider];
+        let mut request = ExtensionHostRequest {
+            context: RequestContext::new(1, 1, 1),
+            request: HostRequestKind::Activate(params.clone()),
+        };
+        assert_command_registration_rejected(&request, value.clone());
+        params.capabilities = vec![capability];
+        request.request = HostRequestKind::Activate(params);
+        let descriptor: RegistrationDescriptor = serde_json::from_value(value.clone()).unwrap();
+        let response = ExtensionHostResponse {
+            context: request.context,
+            response: HostResponseKind::Success(HostSuccess::Activated(ActivateResult {
+                registrations: vec![descriptor],
+            })),
+        };
+        response
+            .validate_for(&request, &ProtocolLimits::default())
+            .unwrap();
+        let mut invalid = value;
+        if capability == ExtensionCapability::TerminalCompletionProvider {
+            invalid["triggerCharacters"] = json!(["too long"]);
+        } else {
+            invalid["providerId"] = json!("");
+        }
+        assert_command_registration_rejected(&request, invalid);
+    }
+}
+
+#[test]
+fn dynamic_terminal_registrations_are_a_bounded_provider_subset() {
+    let value = json!({"context":{"protocolVersion":1,"incarnation":2,"activationGeneration":3},"revision":1,"speechProviders":[],"terminalProviders":[{"registrationId":"completion.1","kind":"terminalCompletionProvider","triggerCharacters":[]},{"registrationId":"fix.1","kind":"terminalQuickFixProvider","providerId":"acme.fix"}]});
+    let event: super::ExtensionHostRegistrationEvent =
+        serde_json::from_value(value.clone()).unwrap();
+    event.validate(&ProtocolLimits::default()).unwrap();
+    let mut invalid = value;
+    invalid["terminalProviders"] =
+        json!([{"registrationId":"command","kind":"command","command":"unsafe","title":"Unsafe"}]);
+    let event: super::ExtensionHostRegistrationEvent = serde_json::from_value(invalid).unwrap();
+    assert!(event.validate(&ProtocolLimits::default()).is_err());
+}

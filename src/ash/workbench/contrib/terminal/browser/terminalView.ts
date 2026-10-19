@@ -216,7 +216,7 @@ export class TerminalViewPane extends ViewPane {
 	public async relaunchActive(): Promise<void> {
 		const instance = this.terminalService.activeInstance;
 		const item = instance ? this.items.get(instance) : undefined;
-		if (!instance || !item || instance.state === "running" || instance.state === "reconnecting") return;
+		if (!instance || !item || instance.state === "reconnecting") return;
 		if (this.isBodyVisible()) super.focus();
 		const focusSource = this.element.ownerDocument.activeElement;
 		this.setStatus(undefined);

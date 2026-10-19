@@ -41,6 +41,10 @@ export class DisconnectedTerminalProcessService implements ITerminalProcessServi
 		return this.unavailable('terminal.sendSignal');
 	}
 
+	setAutoReplies(): Promise<void> {
+		return this.unavailable('terminal.setAutoReplies');
+	}
+
 	read(_options: ITerminalProcessReadOptions): Promise<ITerminalProcessReadResult> {
 		return this.unavailable("terminal.read");
 	}

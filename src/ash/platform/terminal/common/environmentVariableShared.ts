@@ -1,6 +1,21 @@
 import { localize } from '../../../nls.js';
 import { URI, isUriComponents } from '../../../base/common/uri.js';
-import type { EnvironmentVariableScope, IEnvironmentVariableCollectionDescription, IEnvironmentVariableMutator, ISerializableEnvironmentDescriptionMap, ISerializableEnvironmentVariableCollection } from './environmentVariable.js';
+import type { EnvironmentVariableScope, IEnvironmentVariableCollection, IEnvironmentVariableCollectionDescription, IEnvironmentVariableMutator, ISerializableEnvironmentDescriptionMap, ISerializableEnvironmentVariableCollection, ISerializableEnvironmentVariableCollections } from './environmentVariable.js';
+
+export function serializeEnvironmentVariableCollections(collections: ReadonlyMap<string, IEnvironmentVariableCollection>): ISerializableEnvironmentVariableCollections {
+	return [...collections].map(([extension, collection]) => [extension, serializeEnvironmentVariableCollection(collection.map), collection.descriptionMap ? serializeEnvironmentDescriptionMap(collection.descriptionMap) : []]);
+}
+
+/** Validates persisted launch metadata independently of the current extension registry. */
+export function deserializeEnvironmentVariableCollections(value: unknown): Map<string, IEnvironmentVariableCollection> {
+	if (!Array.isArray(value) || value.length > 256) throw invalid();
+	const collections = new Map<string, IEnvironmentVariableCollection>();
+	for (const entry of value) {
+		if (!Array.isArray(entry) || entry.length < 2 || entry.length > 3 || typeof entry[0] !== 'string' || !entry[0] || entry[0].length > 1024 || /[\x00-\x1f]/.test(entry[0]) || collections.has(entry[0])) throw invalid();
+		collections.set(entry[0], { map: deserializeEnvironmentVariableCollection(entry[1]), descriptionMap: deserializeEnvironmentDescriptionMap(entry[2] ?? []) });
+	}
+	return collections;
+}
 
 export function serializeEnvironmentVariableCollection(collection: ReadonlyMap<string, IEnvironmentVariableMutator>): ISerializableEnvironmentVariableCollection {
 	return [...collection].map(([key, mutator]) => [key, { ...mutator, ...(mutator.options ? { options: { ...mutator.options } } : {}), ...(mutator.scope ? { scope: { workspaceFolder: mutator.scope.workspaceFolder && { ...mutator.scope.workspaceFolder } } } : {}) }]);

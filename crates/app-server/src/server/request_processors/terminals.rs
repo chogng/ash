@@ -175,6 +175,7 @@ impl<'ctx, C: TerminalRequestProcessorContext + ?Sized> TerminalRequestProcessor
             .create_in_dir(
                 connection.connection_id,
                 exec_server::terminal::TerminalCreateRequest {
+                    auto_replies: Vec::new(),
                     rows: params.rows,
                     cols: params.cols,
                     profile: profile_selection(params.profile),
@@ -267,10 +268,37 @@ impl<'ctx, C: TerminalRequestProcessorContext + ?Sized> TerminalRequestProcessor
         let params: wire::TerminalSendSignalParams = decode(params)?;
         let signal = match params.signal {
             wire::TerminalSignal::Interrupt => exec_server::terminal::TerminalSignal::Interrupt,
+            wire::TerminalSignal::Terminate => exec_server::terminal::TerminalSignal::Terminate,
+            wire::TerminalSignal::Kill => exec_server::terminal::TerminalSignal::Kill,
+            wire::TerminalSignal::Hangup => exec_server::terminal::TerminalSignal::Hangup,
         };
         self.context
             .terminal_service_for(params.dir_id.as_deref())?
             .send_signal(connection.connection_id, &params.terminal_id, signal)
+            .map_err(terminal_error)?;
+        result(&())
+    }
+
+    pub(super) fn terminal_set_auto_replies(
+        &self,
+        connection: &ConnectionState,
+        params: &Value,
+    ) -> Result<Value, RpcError> {
+        let params: wire::TerminalSetAutoRepliesParams = decode(params)?;
+        self.context
+            .terminal_service_for(params.dir_id.as_deref())?
+            .set_auto_replies(
+                connection.connection_id,
+                &params.terminal_id,
+                params
+                    .rules
+                    .into_iter()
+                    .map(|rule| exec_server::terminal::TerminalAutoReply {
+                        match_text: rule.match_text,
+                        reply: rule.reply,
+                    })
+                    .collect(),
+            )
             .map_err(terminal_error)?;
         result(&())
     }
@@ -392,6 +420,15 @@ fn terminal_error(error: exec_server::terminal::TerminalError) -> RpcError {
 
 fn create_request(params: TerminalCreateParams) -> exec_server::terminal::TerminalCreateRequest {
     exec_server::terminal::TerminalCreateRequest {
+        auto_replies: params
+            .auto_replies
+            .unwrap_or_default()
+            .into_iter()
+            .map(|rule| exec_server::terminal::TerminalAutoReply {
+                match_text: rule.match_text,
+                reply: rule.reply,
+            })
+            .collect(),
         rows: params.rows,
         cols: params.cols,
         profile: profile_selection(params.profile),

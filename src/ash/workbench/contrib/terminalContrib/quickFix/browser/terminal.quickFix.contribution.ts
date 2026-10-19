@@ -1,3 +1,9 @@
+import { registerSingleton, InstantiationType } from '../../../../../platform/instantiation/common/extensions.js';
+import { ITerminalQuickFixService, type ITerminalQuickFix } from './quickFix.js';
+import { TerminalQuickFixService } from './terminalQuickFixService.js';
+import { IExtensionService } from '../../../../services/extensions/common/extensionService.js';
+import { IOpenerService } from '../../../../../platform/opener/common/opener.js';
+
 import { KeyCode, KeyMod } from '../../../../../base/common/keyCodes.js';
 import { DisposableStore, toDisposable } from '../../../../../base/common/lifecycle.js';
 import { localize, localize2 } from '../../../../../nls.js';
@@ -10,6 +16,10 @@ import { PromptInputState } from '../../../../../platform/terminal/common/capabi
 import { IWorkspaceContextService } from '../../../../../platform/workspace/common/workspace.js';
 import { ITerminalService } from '../../../terminal/browser/terminal.js';
 import { TerminalContextKeys, TerminalHasActiveInstanceContext } from '../../../terminal/common/terminalContextKey.js';
+
+registerSingleton(ITerminalQuickFixService, TerminalQuickFixService, InstantiationType.Delayed);
+
+interface QuickFixPick extends IQuickPickItem { readonly fix: ITerminalQuickFix; }
 
 const enum TerminalQuickFixCommandId {
 	ShowQuickFixes = 'workbench.action.terminal.showQuickFixes',
@@ -72,15 +82,18 @@ registerAction2(class ShowTerminalQuickFixesAction extends Action2 {
 		const emptyInput = (): boolean => !!prompt && prompt.state === PromptInputState.Input && prompt.value === '' && prompt.cursorIndex === 0
 			&& prompt.ghostTextIndex < 0 && screen.raw.buffer.active.type === 'normal';
 		using lifetime = new DisposableStore();
-		const picker = lifetime.add(accessor.get(IQuickInputService).createQuickPick<IQuickPickItem>());
+		const picker = lifetime.add(accessor.get(IQuickInputService).createQuickPick<QuickFixPick>());
 		picker.ariaLabel = localize('terminal.quickFix.aria', 'Terminal Quick Fixes');
 		const fixes = emptyInput() && !detection?.executingCommandObject ? commandFixes(command) : [];
-		picker.items = fixes.map(label => ({ label, description: localize('terminal.quickFix.insert', 'Insert command'), detail: localize('terminal.quickFix.detail', 'Review the inserted command, then press Enter to run it.') }));
+		picker.items = fixes.map(label => ({ label, fix: { label, terminalCommand: label }, description: localize('terminal.quickFix.insert', 'Insert command'), detail: localize('terminal.quickFix.detail', 'Review the inserted command, then press Enter to run it.') }));
+		const builtInItems = picker.items;
 		picker.placeholder = !emptyInput()
 			? localize('terminal.quickFix.inputNotEmpty', 'Quick fixes require an empty shell prompt; current input is preserved')
 			: fixes.length ? localize('terminal.quickFix.choose', 'Select a fix to insert without running it') : localize('terminal.quickFix.empty', 'No quick fixes for the latest failed command');
+		const request = new AbortController();
+		lifetime.add(toDisposable(() => request.abort()));
 		let retired = false;
-		const retire = (): void => { retired = true; picker.hide(); };
+		const retire = (): void => { retired = true; request.abort(); picker.hide(); };
 		lifetime.add(instance.onDidChangeState(retire));
 		lifetime.add(instance.onDidExit(retire));
 		lifetime.add(terminals.onDidChangeActiveInstance(retire));
@@ -99,8 +112,19 @@ registerAction2(class ShowTerminalQuickFixesAction extends Action2 {
 			lifetime.add(detection.promptInputModel.onDidChangeInput(retire));
 			lifetime.add(detection.promptInputModel.onDidInterrupt(retire));
 		}
-		let accepted: IQuickPickItem | undefined;
-		const selected = await new Promise<IQuickPickItem | undefined>(resolve => {
+		const extensionService = accessor.get(IExtensionService);
+		const providers = accessor.get(ITerminalQuickFixService);
+		const opener = accessor.get(IOpenerService);
+		if (command && !command.wasReplayed && command.exitCode !== undefined && emptyInput() && !detection?.executingCommandObject) {
+			picker.busy = true;
+			void extensionService.activateByEvent('onTerminal:terminalQuickFixProvider', request.signal).then(() => providers.provideTerminalQuickFixes(instance, command, request.signal)).then(results => {
+				if (retired || request.signal.aborted || !emptyInput()) return;
+				picker.items = [...picker.items, ...results.map(fix => ({ label: fix.label, fix }))];
+				if (picker.items.length) picker.placeholder = localize('terminal.quickFix.chooseAction', 'Choose a quick fix');
+			}).catch(() => undefined).finally(() => { if (!request.signal.aborted) picker.busy = false; });
+		}
+		let accepted: QuickFixPick | undefined;
+		const selected = await new Promise<QuickFixPick | undefined>(resolve => {
 			lifetime.add(picker.onDidAccept(() => { accepted = picker.selectedItems[0]; picker.hide(); }));
 			lifetime.add(picker.onDidHide(() => resolve(accepted)));
 			lifetime.add(toDisposable(() => resolve(undefined)));
@@ -108,10 +132,11 @@ registerAction2(class ShowTerminalQuickFixesAction extends Action2 {
 		});
 		const current = (): boolean => !retired && terminals.activeInstance === instance && terminals.instances.includes(instance)
 			&& instance.processId === processId && instance.state === 'running' && !instance.isReadOnly && !screen.isDisposed && instance.xterm === screen;
-		if (selected && current() && detection === instance.capabilities?.get(TerminalCapability.CommandDetection)
-			&& command === detection?.commands.at(-1) && !detection?.executingCommandObject && emptyInput() && fixes.includes(selected.label)
-			&& commandFixes(command).includes(selected.label)) {
-			await instance.sendText(selected.label, false, true);
+		if (selected && selected.fix.isValid?.() !== false && current() && detection === instance.capabilities?.get(TerminalCapability.CommandDetection)
+			&& command === detection?.commands.at(-1) && !detection?.executingCommandObject && emptyInput() && picker.items.includes(selected) && (!builtInItems.includes(selected) || commandFixes(command).includes(selected.label))) {
+			if (selected.fix.terminalCommand !== undefined) await instance.sendText(selected.fix.terminalCommand, selected.fix.shouldExecute === true, true);
+			else if (selected.fix.uri) await opener.open(selected.fix.uri, { fromUserGesture: true, allowCommands: false });
+			else await selected.fix.run?.();
 		}
 		if (current()) instance.xterm?.focus();
 	}

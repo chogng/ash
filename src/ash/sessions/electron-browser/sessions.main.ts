@@ -163,6 +163,8 @@ export async function main(profile: SessionsProfile): Promise<IDisposable> {
 			} : undefined,
 			contributionIds: [
 				'chatResponseResourceWorkbenchContribution',
+				'terminalAutoReplies',
+				'terminalTelemetry',
 				'workbench.contrib.settingsChangeRelauncher',
 				'workbench.contrib.partsSplash',
 				'workbench.contrib.preferences',

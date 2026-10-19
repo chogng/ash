@@ -10,10 +10,11 @@ let activation;
 let registrationListener;
 let registrationRevision = 0;
 let speechRegistrationGeneration = 0;
+const dynamicRegistration = kind => ['speechProvider', 'terminalCompletionProvider', 'terminalQuickFixProvider'].includes(kind);
 
-function publishSpeechRegistrations() {
+function publishDynamicRegistrations() {
 	if (phase !== 'active') return;
-	registrationListener?.(JSON.stringify({ revision: ++registrationRevision, speechProviders: [...registrations.values()].filter(value => value.kind === 'speechProvider').map(({ registrationId, kind, identifier, registrationGeneration }) => ({ registrationId, kind, identifier, registrationGeneration })) }));
+	registrationListener?.(JSON.stringify({ revision: ++registrationRevision, speechProviders: [...registrations.values()].filter(value => value.kind === 'speechProvider').map(({ registrationId, kind, identifier, registrationGeneration }) => ({ registrationId, kind, identifier, registrationGeneration })), terminalProviders: [...registrations.values()].filter(value => value.kind === 'terminalCompletionProvider' || value.kind === 'terminalQuickFixProvider').map(({ registrationId, kind, triggerCharacters, providerId }) => ({ registrationId, kind, ...(triggerCharacters ? { triggerCharacters } : {}), ...(providerId ? { providerId } : {}) })) }));
 }
 
 export class CancellationTokenSource {
@@ -51,16 +52,19 @@ export class CancellationTokenSource {
 }
 
 function register(registration) {
-	if (phase !== 'activating' && !(phase === 'active' && registration.kind === 'speechProvider' && registrationListener)) { throw new Error('Registrations must be created during activation'); }
+	if (phase !== 'activating' && !(phase === 'active' && dynamicRegistration(registration.kind) && registrationListener)) { throw new Error('Registrations must be created during activation'); }
 	if (registrations.has(registration.registrationId)) { throw new Error(`Duplicate registration '${registration.registrationId}'`); }
 	registrations.set(registration.registrationId, registration);
-	if (registration.kind === 'speechProvider') publishSpeechRegistrations();
+	if (dynamicRegistration(registration.kind)) publishDynamicRegistrations();
 	return Object.freeze({
 		dispose() {
 			if (registrations.get(registration.registrationId) === registration) {
 				registrations.delete(registration.registrationId);
+				if (dynamicRegistration(registration.kind)) {
+					for (const source of invocations.values()) if (source.registration === registration) { try { source.cancel(); } catch { /* Revocation still retires the registration when an extension listener throws. */ } }
+				}
 				try { registration.disposeResources?.(); }
-				finally { if (registration.kind === 'speechProvider') publishSpeechRegistrations(); }
+				finally { if (dynamicRegistration(registration.kind)) publishDynamicRegistrations(); }
 			}
 		}
 	});
@@ -489,6 +493,80 @@ export const speech = Object.freeze({
 });
 
 export const terminals = Object.freeze({
+	registerTerminalCompletionProvider(registrationId, triggerCharacters, provider) {
+		if (!Array.isArray(triggerCharacters) || triggerCharacters.length > 64 || new Set(triggerCharacters).size !== triggerCharacters.length || triggerCharacters.some(value => typeof value !== 'string' || [...value].length !== 1 || /[\x00-\x1f\x7f]/.test(value)) || typeof provider !== 'function') throw new TypeError('Invalid terminal completion provider');
+		return register({
+			registrationId, kind: 'terminalCompletionProvider', triggerCharacters, operation: 'provideTerminalCompletions', async callback(context, payload) {
+				if (typeof payload.commandLine !== 'string' || payload.commandLine.length > 32768 || !Number.isSafeInteger(payload.cursorIndex) || payload.cursorIndex < 0 || payload.cursorIndex > payload.commandLine.length || typeof payload.terminal?.id !== 'string') throw new TypeError('Invalid terminal completion context');
+				const result = await provider(context, payload);
+				if (context.cancellationToken.isCancellationRequested || result == null) return { items: [] };
+				const items = Array.isArray(result) ? result : result.items;
+				if (!Array.isArray(items) || items.length > 1000) throw new TypeError('Invalid terminal completions');
+				return {
+					items: items.map(item => {
+						const label = typeof item?.label === 'string' ? item.label : item?.label?.label;
+						const range = item?.replacementRange;
+						if (typeof label !== 'string' || !label || label.length > 32768 || /[\x00-\x1f\x7f]/.test(label) || !Array.isArray(range) || range.length !== 2 || range.some(value => !Number.isSafeInteger(value)) || range[0] < 0 || range[1] < range[0] || range[1] > payload.commandLine.length || item.detail !== undefined && (typeof item.detail !== 'string' || item.detail.length > 4096)) throw new TypeError('Invalid terminal completion item or replacement range');
+						const documentation = typeof item.documentation === 'string' ? item.documentation : item.documentation?.value;
+						if (documentation !== undefined && (typeof documentation !== 'string' || documentation.length > 32768) || item.kind !== undefined && (!Number.isInteger(item.kind) || item.kind < 0 || item.kind > 16)) throw new TypeError('Invalid terminal completion documentation or kind');
+						return { label, replacementRange: range, ...(item.detail === undefined ? {} : { detail: item.detail }), ...(documentation === undefined ? {} : { documentation }), ...(item.kind === undefined ? {} : { kind: item.kind }) };
+					}), ...(result.resourceOptions === undefined ? {} : { resourceOptions: result.resourceOptions })
+				};
+			}
+		});
+	},
+	registerTerminalQuickFixProvider(registrationId, providerId, selector, provider, activate) {
+		if (typeof providerId !== 'string' || !providerId || typeof selector?.commandLineMatcher !== 'string' || !['success', 'error'].includes(selector.commandExitResult) || typeof provider !== 'function' || typeof activate !== 'function') throw new TypeError('Invalid terminal quick fix declaration');
+		const commandMatcher = new RegExp(selector.commandLineMatcher);
+		const output = selector.outputMatcher;
+		if (output && (typeof output.lineMatcher !== 'string' || !['top', 'bottom'].includes(output.anchor) || !Number.isSafeInteger(output.offset) || output.offset < 0 || !Number.isSafeInteger(output.length) || output.length < 1 || output.length > 40)) throw new TypeError('Invalid terminal output selector');
+		const outputMatcher = output ? new RegExp(output.lineMatcher) : undefined;
+		const actions = new Map();
+		let sequence = 0;
+		return register({
+			registrationId, kind: 'terminalQuickFixProvider', providerId, operation: ['provideTerminalQuickFixes', 'handleTerminalQuickFix'], disposeResources() { actions.clear(); }, async callback(context, payload, operation) {
+				if (operation === 'handleTerminalQuickFix') {
+					const action = actions.get(payload.id);
+					if (!action || action.terminalId !== payload.terminalId || action.commandLine !== payload.commandLine) throw new Error('Terminal quick fix is no longer available');
+					actions.delete(payload.id);
+					if (!context.cancellationToken.isCancellationRequested) await activate(context, action.value);
+					return null;
+				}
+				if (typeof payload.commandLine !== 'string' || payload.commandLine.length > 32768 || typeof payload.terminalId !== 'string' || !Number.isSafeInteger(payload.exitCode)) throw new TypeError('Invalid terminal command snapshot');
+				const commandLineMatch = payload.commandLine.match(commandMatcher);
+				const matches = !!commandLineMatch && (payload.exitCode === 0) === (selector.commandExitResult === 'success');
+				if (payload.phase === 'matcher') return { matches, outputMatcher: output ? { anchor: output.anchor, offset: output.offset, length: output.length } : null };
+				if (payload.phase !== 'provide' || !Array.isArray(payload.outputLines) || payload.outputLines.length > 40 || payload.outputLines.some(line => typeof line !== 'string' || line.length > 32768)) throw new TypeError('Invalid terminal output snapshot');
+				if (!matches) return { fixes: [] };
+				let outputMatch;
+				if (output) {
+					// The original TerminalCommand owner extracts the declared window before
+					// this call, including offsets beyond the first or last forty lines.
+					const outputLines = payload.outputLines;
+					const regexMatch = outputMatcher.multiline || outputMatcher.source.includes('\\n')
+						? outputLines.join('\n').match(outputMatcher)
+						: outputLines.map(line => line.match(outputMatcher)).find(Boolean);
+					if (!regexMatch) return { fixes: [] };
+					outputMatch = { regexMatch, outputLines };
+				}
+				const result = await provider(context, { commandLine: payload.commandLine, commandLineMatch, ...(outputMatch ? { outputMatch } : {}) });
+				if (context.cancellationToken.isCancellationRequested || result == null) return { fixes: [] };
+				const values = Array.isArray(result) ? result : [result];
+				if (values.length > 100) throw new TypeError('Too many terminal quick fixes');
+				return {
+					fixes: values.map(value => {
+						if (typeof value?.terminalCommand === 'string' && value.terminalCommand.length > 0 && value.terminalCommand.length <= 32768 && !/[\x00-\x1f\x7f]/.test(value.terminalCommand) && (value.shouldExecute === undefined || typeof value.shouldExecute === 'boolean')) return { kind: 'terminalCommand', label: value.terminalCommand, shouldExecute: value.shouldExecute === true };
+						if (value?.uri && typeof value.uri.toString === 'function') return { kind: 'opener', label: value.uri.toString() };
+						if (typeof value?.command !== 'string' || !value.command || typeof value.title !== 'string' || !value.title || value.title.length > 512) throw new TypeError('Invalid terminal quick fix');
+						const id = String(++sequence);
+						actions.set(id, { value, terminalId: payload.terminalId, commandLine: payload.commandLine });
+						while (actions.size > 256) actions.delete(actions.keys().next().value);
+						return { kind: 'command', label: value.title, id };
+					})
+				};
+			}
+		});
+	},
 	registerTerminalLinkProvider(registrationId, provider) {
 		if (typeof provider?.provideTerminalLinks !== 'function' || typeof provider?.handleTerminalLink !== 'function') throw new TypeError('Terminal links require provide and handle callbacks');
 		const links = new Map();
@@ -716,6 +794,7 @@ export const __runtime = Object.freeze({
 		if (!registration.dispatch && (Array.isArray(registration.operation) ? !registration.operation.includes(operation) : registration.operation !== operation)) { throw new TypeError('Invocation operation does not match its registration'); }
 		const payload = JSON.parse(payloadJson);
 		const source = new CancellationTokenSource();
+		source.registration = registration;
 		invocations.set(requestId, source);
 		try {
 			const context = Object.freeze({ cancellationToken: source.token });

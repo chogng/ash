@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import { expect, test } from '../../../automation/test.js';
 import type { Locator } from '@playwright/test';
 import { QuickAccess } from '../../../automation/quickaccess.js';
+import { readUserSettings, writeUserSettings } from '../../../automation/settings.js';
 
 const windowsPowerShellSettings = process.platform === 'win32' ? {
 	'terminal.integrated.profiles.windows': {
@@ -1051,6 +1052,53 @@ for (const locale of ['en', 'zh-CN'] as const) for (const host of ['workbench', 
 		await expect(input()).toBeFocused();
 		await input().press('Enter');
 		await expect.poll(() => readFile(execution, 'utf8').catch(() => '')).toBe(`once:${shellPid}`);
+		expect(driver.diagnostics.errors).toEqual([]);
+	});
+});
+
+test.describe('terminal contributions execution chain', () => {
+	test.use({
+		electronUserSettings: {
+			...windowsPowerShellSettings,
+			'terminal.integrated.autoReplies': { 'ASH-AUTO-REPLY>': 'accepted\r' },
+		}
+	});
+
+	test('replies on the execution host and keeps the existing terminal through Quick Access', { tag: ['@electron-app-server', '@browser-app-server'] }, async ({ workbench, testWorkspace, driver }) => {
+		if (await workbench.page.evaluate(() => document.querySelector<HTMLElement>('#app')?.dataset.runtime !== 'electron')) {
+			const settings = await readUserSettings(workbench.page);
+			await writeUserSettings(workbench.page, JSON.stringify({ ...JSON.parse(settings.content), 'terminal.integrated.autoReplies': { 'ASH-AUTO-REPLY>': 'accepted\r' } }), settings.revision);
+			await workbench.reloadWindow();
+			await workbench.waitForReady();
+		}
+		await workbench.quickaccess.runCommand('workbench.action.terminal.new');
+		await expect(workbench.terminal.activeInstance).toBeVisible();
+		const instance = workbench.terminal.activeInstance;
+		const pane = workbench.page.locator('.ash-terminal-group-pane:visible');
+		const identity = await pane.getAttribute('data-instance-id');
+		expect(identity).not.toBeNull();
+		await workbench.terminal.runCommand(process.platform === 'win32'
+			? "$answer=Read-Host ('ASH-'+'AUTO-REPLY>'); [IO.File]::WriteAllText((Join-Path (Get-Location) 'auto-reply-result.txt'),$answer)"
+			: "printf 'ASH-%s>' AUTO-REPLY; read answer; printf '%s' \"$answer\" > auto-reply-result.txt");
+		await expect.poll(() => readFile(join(testWorkspace.directory, 'auto-reply-result.txt'), 'utf8').catch(() => '')).toBe('accepted');
+		await workbench.quickaccess.runCommand('workbench.action.quickOpenTerm');
+		await workbench.page.getByRole('combobox', { name: 'Type the name of a terminal to open', exact: true }).press('Enter');
+		await expect(instance.locator('.xterm-helper-textarea')).toBeFocused();
+		await expect(workbench.terminal.instances).toHaveCount(1);
+		await expect(pane).toHaveAttribute('data-instance-id', identity!);
+		expect(driver.diagnostics.errors).toEqual([]);
+	});
+
+	test('sends a foreground signal through the real terminal process chain', { tag: ['@electron-app-server', '@browser-app-server'] }, async ({ workbench, testWorkspace, driver }) => {
+		test.skip(process.platform === 'win32', 'The ConPTY backend explicitly reports process signals as unsupported.');
+		await workbench.quickaccess.runCommand('workbench.action.terminal.new');
+		await expect(workbench.terminal.activeInstance).toBeVisible();
+		await workbench.terminal.runCommand('node -e "require(\'fs\').writeFileSync(\'signal-ready.txt\',\'ready\');process.on(\'SIGTERM\',()=>{require(\'fs\').writeFileSync(\'signal-result.txt\',\'terminated\');process.exit(0)});setInterval(()=>{},1000)"');
+		await expect.poll(() => readFile(join(testWorkspace.directory, 'signal-ready.txt'), 'utf8').catch(() => '')).toBe('ready');
+		await workbench.quickaccess.runCommand('workbench.action.terminal.sendSignal');
+		await workbench.page.getByRole('option', { name: /SIGTERM/ }).click();
+		await expect.poll(() => readFile(join(testWorkspace.directory, 'signal-result.txt'), 'utf8').catch(() => '')).toBe('terminated');
+		await expect(workbench.terminal.instances).toHaveCount(1);
 		expect(driver.diagnostics.errors).toEqual([]);
 	});
 });

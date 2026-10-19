@@ -1,3 +1,5 @@
+import type { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
+import type { ITerminalAutoReply } from '../../../../platform/terminal/common/terminal.js';
 import { environment } from '../../../../base/common/platform.js';
 import { localize } from '../../../../nls.js';
 import { ConfigurationScope, Extensions, type IConfigurationPropertySchema, type IConfigurationRegistry } from '../../../../platform/configuration/common/configurationRegistry.js';
@@ -131,3 +133,11 @@ Object.assign(properties, terminalContribConfiguration);
 Registry.as<IConfigurationRegistry>(Extensions.Configuration).updateConfigurations({
 	add: [{ id: 'terminal', scope: ConfigurationScope.WINDOW, properties }], remove: [],
 });
+
+/** Converts the current configuration once for creation and live rule updates. */
+export function getTerminalAutoReplyRules(configuration: IConfigurationService): readonly ITerminalAutoReply[] {
+	const replies = configuration.getValue<Readonly<Record<string, string | null>>>('terminal.integrated.autoReplies');
+	return Object.entries(replies ?? {})
+		.filter((entry): entry is [string, string] => typeof entry[1] === 'string' && entry[1].length > 0)
+		.map(([matchText, reply]) => ({ matchText, reply }));
+}

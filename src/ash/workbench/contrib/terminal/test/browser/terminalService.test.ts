@@ -1,3 +1,5 @@
+import { IDialogService } from '../../../../../platform/dialogs/common/dialogs.js';
+import { TerminalAutoRepliesContribution } from '../../../terminalContrib/autoReplies/browser/terminal.autoReplies.contribution.js';
 import { IEnvironmentVariableService } from '../../common/environmentVariable.js';
 import { EnvironmentVariableService } from '../../common/environmentVariableService.js';
 import { ITerminalContributionService } from '../../common/terminal.js';
@@ -20,11 +22,13 @@ import { TerminalCapabilityStore, TerminalCapabilityStoreMultiplexer } from '../
 import { TerminalGroupService } from '../../browser/terminalGroupService.js';
 import { IViewsService } from '../../../../services/views/common/viewsService.js';
 import { ICommandService } from '../../../../../platform/commands/common/commands.js';
-import { IQuickInputService, type IInputOptions } from '../../../../../platform/quickinput/common/quickInput.js';
+import { IQuickInputService, type IInputOptions, type IQuickPick, type IQuickPickItem } from '../../../../../platform/quickinput/common/quickInput.js';
 import { IConfigurationResolverService } from '../../../../services/configurationResolver/common/configurationResolver.js';
 import { CommandService } from '../../../../services/commands/common/commandService.js';
 import { TerminalCommandId } from '../../common/terminal.js';
 import '../../../terminalContrib/sendSequence/browser/terminal.sendSequence.contribution.js';
+import { TerminalSendSignalCommandId } from '../../../terminalContrib/sendSignal/browser/terminal.sendSignal.contribution.js';
+import '../../../terminalContrib/sendSignal/browser/terminal.sendSignal.contribution.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { ServiceCollection } from '../../../../../platform/instantiation/common/serviceCollection.js';
 import { IWorkspaceContextService } from '../../../../../platform/workspace/common/workspace.js';
@@ -34,7 +38,7 @@ import { isCancellationError } from '../../../../../base/common/errors.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
 import { Disposable, DisposableStore, toDisposable } from '../../../../../base/common/lifecycle.js';
 import { URI } from "../../../../../base/common/uri.js";
-import { ITerminalProcessService, type ITerminalProcessCreateOptions, type ITerminalProcessReadResult, type TerminalProcessConnectionState } from "../../../../../platform/terminal/common/terminal.js";
+import { ITerminalProcessService, type ITerminalProcessCreateOptions, type ITerminalProcessReadResult, type TerminalProcessConnectionState, type TerminalProcessSignal } from "../../../../../platform/terminal/common/terminal.js";
 import { TerminalCapability } from '../../../../../platform/terminal/common/capabilities/capabilities.js';
 import { TerminalService } from "../../browser/terminalService.js";
 import { registerTerminalActions } from '../../browser/terminalActions.js';
@@ -51,7 +55,7 @@ import { IPathService } from '../../../../../platform/path/common/pathService.js
 import type { Constructor, SyncDescriptor } from '../../../../../platform/instantiation/common/descriptors.js';
 import { AhpTerminalCommandSource } from '../../browser/ahpTerminalCommandSource.js';
 import { CancellationToken } from '../../../../../base/common/cancellation.js';
-import { Event } from '../../../../../base/common/event.js';
+import { Emitter, Event } from '../../../../../base/common/event.js';
 import { IEditorGroupsService } from '../../../../services/editor/common/editorGroupsService.js';
 
 const DEFAULT_PROFILE = {
@@ -95,7 +99,32 @@ test('window active-terminal context remains true for editor terminals and reset
 	assert.equal(context.getValue(TerminalHasActiveInstanceContext.key), false);
 });
 
-test('the interrupt command reaches the Rust process port and preserves the terminal', async () => {
+test('automatic replies reach hidden processes at creation, configuration updates and process reuse', async () => {
+	const processes = new TestTerminalProcessService([]);
+	using workspace = folderWorkspaceContext();
+	using services = terminalServices(processes, workspace);
+	const configuration = services.get(IConfigurationService);
+	await configuration.updateValue('terminal.integrated.autoReplies', { 'Confirm?': 'yes\r', disabled: null });
+	const terminals = services.get(ITerminalService);
+	using contribution = services.createInstance(TerminalAutoRepliesContribution);
+	const instance = await terminals.createTerminal({ profile: { type: 'default' }, deferStart: true });
+	assert.equal(instance.xterm, undefined, 'output rendering is not required to install execution rules');
+	assert.deepEqual(processes.createCalls[0]!.autoReplies, [{ matchText: 'Confirm?', reply: 'yes\r' }]);
+	await waitFor(() => processes.autoReplyCalls.length === 1);
+	assert.deepEqual(processes.autoReplyCalls[0], { terminalId: 'terminal-1', dirId: 'workspace', rules: [{ matchText: 'Confirm?', reply: 'yes\r' }] });
+	await configuration.updateValue('terminal.integrated.autoReplies', { 'Continue?': 'go\r' });
+	await waitFor(() => processes.autoReplyCalls.length === 2);
+	assert.deepEqual(processes.autoReplyCalls[1]!.rules, [{ matchText: 'Continue?', reply: 'go\r' }]);
+	await instance.reuseTerminal({ deferStart: true });
+	assert.deepEqual(processes.createCalls[1]!.autoReplies, [{ matchText: 'Continue?', reply: 'go\r' }]);
+	await waitFor(() => processes.autoReplyCalls.some(call => call.terminalId === 'terminal-2'));
+	await configuration.updateValue('terminal.integrated.autoReplies', {});
+	await waitFor(() => processes.autoReplyCalls.at(-1)?.rules.length === 0);
+	assert.deepEqual(processes.autoReplyCalls.at(-1), { terminalId: 'terminal-2', dirId: 'workspace', rules: [] });
+	await instance.close();
+});
+
+test('the signal command forwards each supported signal to the Rust process port and preserves the terminal', async () => {
 	const processes = new TestTerminalProcessService([]);
 	using workspace = new TestWorkspaceService({ id: 'signals', uri: URI.file('/workspace') });
 	using services = terminalServices(processes, workspace);
@@ -104,12 +133,69 @@ test('the interrupt command reaches the Rust process port and preserves the term
 	await waitFor(() => instance.state === 'running');
 	registerTerminalActions();
 	using commands = new CommandService(services);
-	await commands.executeCommand(TerminalCommandId.SendSignal);
-	assert.deepEqual(processes.signalCalls, [{ dirId: 'signals', terminalId: 'terminal-1', signal: 'interrupt' }]);
+	for (const signal of ['SIGINT', 'SIGTERM', 'SIGKILL', 'SIGHUP']) {
+		await commands.executeCommand(TerminalSendSignalCommandId.SendSignal, { signal });
+	}
+	assert.deepEqual(processes.signalCalls, ['interrupt', 'terminate', 'kill', 'hangup'].map(signal => ({ dirId: 'signals', terminalId: 'terminal-1', signal })));
 	assert.equal(instance.state, 'running');
 	assert.deepEqual(processes.closeCalls, []);
-	await assert.rejects(instance.sendSignal('SIGTERM'), /Only SIGINT/);
+	for (const value of [null, 'SIGINT', [], {}, { signal: 42 }]) {
+		await assert.rejects(commands.executeCommand(TerminalSendSignalCommandId.SendSignal, value), /string signal property/);
+	}
+	await assert.rejects(commands.executeCommand(TerminalSendSignalCommandId.SendSignal, { signal: 'SIGUNKNOWN' }), /Unsupported terminal process signal/);
+	assert.equal(processes.signalCalls.length, 4);
+});
+
+test('the signal picker sends only its accepted item and retires when the active terminal changes', async () => {
+	using lifetime = new DisposableStore();
+	const processes = new TestTerminalProcessService([]);
+	using workspace = new TestWorkspaceService({ id: 'signals', uri: URI.file('/workspace') });
+	using services = terminalServices(processes, workspace);
+	const terminals = services.get(ITerminalService);
+	const instance = await terminals.createTerminal({ dimensions: { rows: 24, cols: 80 }, profile: { type: 'default' } });
+	await waitFor(() => instance.state === 'running');
+	let picker!: IQuickPick<IQuickPickItem>;
+	let accept!: () => void;
+	let shown = false;
+	services.registerInstance(IQuickInputService, {
+		createQuickPick: () => {
+			const accepted = lifetime.add(new Emitter<{ inBackground: boolean; }>());
+			const hidden = lifetime.add(new Emitter<void>());
+			picker = {
+				items: [], selectedItems: [],
+				onDidAccept: accepted.event, onDidHide: hidden.event,
+				show: () => { shown = true; }, hide: () => hidden.fire(),
+				dispose() { }, [Symbol.dispose]() { },
+			} as unknown as IQuickPick<IQuickPickItem>;
+			accept = () => accepted.fire({ inBackground: false });
+			return picker;
+		},
+	} as unknown as IQuickInputService);
+	using commands = new CommandService(services);
+	const accepted = commands.executeCommand(TerminalSendSignalCommandId.SendSignal);
+	await waitFor(() => shown);
+	assert.deepEqual(picker.items.map(item => item.label), ['SIGINT', 'SIGTERM', 'SIGKILL', 'SIGHUP']);
+	assert.ok(picker.ariaLabel);
+	picker.selectedItems = [picker.items[1] as IQuickPickItem];
+	accept();
+	await accepted;
+	assert.deepEqual(processes.signalCalls, [{ dirId: 'signals', terminalId: 'terminal-1', signal: 'terminate' }]);
+
+	shown = false;
+	const cancelled = commands.executeCommand(TerminalSendSignalCommandId.SendSignal);
+	await waitFor(() => shown);
+	picker.hide();
+	await cancelled;
+	shown = false;
+	const stale = commands.executeCommand(TerminalSendSignalCommandId.SendSignal);
+	await waitFor(() => shown);
+	terminals.setActiveInstance(undefined);
+	terminals.setActiveInstance(instance);
+	picker.selectedItems = [picker.items[2] as IQuickPickItem];
+	accept();
+	await stale;
 	assert.equal(processes.signalCalls.length, 1);
+	assert.deepEqual(processes.closeCalls, []);
 });
 
 test('TerminalService restores an empty reload checkpoint without a process attachment capability', async () => {
@@ -573,8 +659,10 @@ suite('Terminal process identity and raw input', () => {
 class TestTerminalProcessService implements ITerminalProcessService {
 	operatingSystem = OperatingSystem.Linux;
 	shellType: TerminalShellType;
-	readonly signalCalls: Array<{ terminalId: string; dirId?: string; signal: 'interrupt'; }> = [];
-	async sendSignal(options: { terminalId: string; dirId?: string; signal: 'interrupt'; }): Promise<void> { this.signalCalls.push(options); }
+	readonly signalCalls: Array<{ terminalId: string; dirId?: string; signal: TerminalProcessSignal; }> = [];
+	readonly autoReplyCalls: Array<{ terminalId: string; dirId?: string; rules: readonly { matchText: string; reply: string; }[]; }> = [];
+	async setAutoReplies(options: { terminalId: string; dirId?: string; rules: readonly { matchText: string; reply: string; }[]; }): Promise<void> { this.autoReplyCalls.push(options); }
+	async sendSignal(options: { terminalId: string; dirId?: string; signal: TerminalProcessSignal; }): Promise<void> { this.signalCalls.push(options); }
 	async resolveProfile(): Promise<import("../../../../../platform/terminal/common/terminal.js").ITerminalResolvedProfile> { return { profile: DEFAULT_PROFILE, executable: "cmd.exe", args: [] }; }
 	profileListCalls = 0;
 	readonly createCalls: ITerminalProcessCreateOptions[] = [];
@@ -775,7 +863,7 @@ async function waitFor(condition: () => boolean, timeoutMillis = 1_000): Promise
 	}
 }
 
-function terminalServices(processService: ITerminalProcessService, workspace: IWorkspaceContextService, instanceFactoryFailure?: () => never, storage?: IStorageService): InstantiationService {
+function terminalServices(processService: ITerminalProcessService, workspace: IWorkspaceContextService, instanceFactoryFailure?: () => never, storage?: IStorageService, dialogs?: IDialogService): InstantiationService {
 	// Fail the instance factory after PTY acquisition. Path resolution is also a
 	// creation-service dependency and must remain usable before that boundary.
 	const services = new class extends InstantiationService {
@@ -785,6 +873,7 @@ function terminalServices(processService: ITerminalProcessService, workspace: IW
 		}
 	}(new ServiceCollection([ITerminalProcessService, processService], [IWorkspaceContextService, workspace]));
 	if (storage) services.registerInstance(IStorageService, storage);
+	if (dialogs) services.registerInstance(IDialogService, dialogs);
 	registerTestTerminalCreationServices(services);
 	services.registerSingleton(ITerminalService, () => services.createInstance(TerminalService));
 	return services;
@@ -1455,6 +1544,53 @@ suite('TerminalService lifecycle', () => {
 		await replacing;
 		assert.deepEqual({ creates: processes.createCalls.length, state: instance.state }, { creates: 1, state: 'error' });
 		await assert.rejects(service.closeTerminal(instance), /release failed/);
+	});
+
+	test('a late relaunch confirmation cannot replace a reused process even when its PID and state match', async () => {
+		const processes = new TestTerminalProcessService([]);
+		const create = processes.create.bind(processes);
+		processes.create = async options => { const result = await create(options); return { ...result, ready: { ...result.ready, pid: 77 } }; };
+		using workspace = folderWorkspaceContext();
+		const confirmation = deferred<{ confirmed: boolean; }>();
+		let confirming = false;
+		using services = terminalServices(processes, workspace, undefined, undefined,
+			{ confirm: () => { confirming = true; return confirmation.promise; } } as unknown as IDialogService);
+		await services.get(IConfigurationService).updateValue('terminal.integrated.confirmOnKill', 'always');
+		const terminals = services.get(ITerminalService);
+		const instance = await terminals.createTerminal({ profile: { type: 'default' }, deferStart: true });
+		const stale = assert.rejects(terminals.relaunchTerminal(instance, { cols: 100, rows: 30 }), isCancellationError);
+		await waitFor(() => confirming);
+		await instance.reuseTerminal({ executable: '/replacement', deferStart: true });
+		assert.equal(instance.processId, 77);
+		assert.equal(instance.state, 'running');
+		confirmation.resolve({ confirmed: true });
+		await stale;
+		assert.equal(processes.createCalls.length, 2, 'The old confirmation cannot restart the replacement');
+		assert.deepEqual(processes.closeCalls, ['terminal-1']);
+	});
+
+	test('late relaunch environment resolution cannot replace a process reused during the request', async () => {
+		const processes = new TestTerminalProcessService([]);
+		using workspace = folderWorkspaceContext();
+		using services = terminalServices(processes, workspace);
+		services.registerInstance(ITerminalContributionService, { ...Disposable.None, terminalProfiles: [], onDidChangeTerminalProfiles: Event.None });
+		using environmentVariables = services.createInstance(EnvironmentVariableService);
+		services.registerInstance(IEnvironmentVariableService, environmentVariables);
+		services.registerInstance(IConfigurationResolverService, { resolveWithEnvironment: async (_environment: unknown, _folder: unknown, value: string) => value } as unknown as IConfigurationResolverService);
+		await services.get(IConfigurationService).updateValue('terminal.integrated.confirmOnKill', 'never');
+		const terminals = services.get(ITerminalService);
+		const instance = await terminals.createTerminal({ config: { executable: '/original', env: { MODE: 'original' } }, deferStart: true });
+		const environment = deferred<Readonly<Record<string, string>>>();
+		let resolving = false;
+		processes.getEnvironment = () => { resolving = true; return environment.promise; };
+		const stale = assert.rejects(terminals.relaunchTerminal(instance, { cols: 100, rows: 30 }), isCancellationError);
+		await waitFor(() => resolving);
+		await instance.reuseTerminal({ executable: '/replacement', env: { MODE: 'replacement' }, deferStart: true });
+		environment.resolve({});
+		await stale;
+		assert.equal(processes.createCalls.length, 2, 'The old resolution cannot restart the replacement');
+		assert.deepEqual(processes.createCalls[1]!.env, { MODE: 'replacement' });
+		assert.equal(instance.revivalLaunch, undefined);
 	});
 
 	test('concurrent relaunches create one replacement with the first requested dimensions', async () => {

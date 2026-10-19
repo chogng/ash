@@ -12,3 +12,15 @@ import '../terminalContrib/sendSequence/browser/terminal.sendSequence.contributi
 import '../terminalContrib/stickyScroll/browser/terminal.stickyScroll.contribution.js';
 import '../terminalContrib/suggest/browser/terminal.suggest.contribution.js';
 import '../terminalContrib/quickFix/browser/terminal.quickFix.contribution.js';
+import '../terminalContrib/quickAccess/browser/terminal.quickAccess.contribution.js';
+import '../terminalContrib/sendSignal/browser/terminal.sendSignal.contribution.js';
+import '../terminalContrib/zoom/browser/terminal.zoom.contribution.js';
+import '../terminalContrib/resizeDimensionsOverlay/browser/terminal.resizeDimensionsOverlay.contribution.js';
+import '../terminalContrib/commandGuide/browser/terminal.commandGuide.contribution.js';
+import '../terminalContrib/autoReplies/browser/terminal.autoReplies.contribution.js';
+import '../terminalContrib/notification/browser/terminal.notification.contribution.js';
+import '../terminalContrib/developer/browser/terminal.developer.contribution.js';
+import '../terminalContrib/typeAhead/browser/terminal.typeAhead.contribution.js';
+import '../terminalContrib/telemetry/browser/terminal.telemetry.contribution.js';
+import '../terminalContrib/chat/browser/terminal.chat.contribution.js';
+import '../terminalContrib/environmentChanges/browser/terminal.environmentChanges.contribution.js';

@@ -1,3 +1,6 @@
+import { ITerminalCompletionService, TerminalCompletionService } from '../../../src/ash/workbench/contrib/terminalContrib/suggest/browser/terminalCompletionService.js';
+import { ITerminalQuickFixService } from '../../../src/ash/workbench/contrib/terminalContrib/quickFix/browser/quickFix.js';
+import { TerminalQuickFixService } from '../../../src/ash/workbench/contrib/terminalContrib/quickFix/browser/terminalQuickFixService.js';
 import { ITerminalLinkProviderService } from '../../../src/ash/workbench/contrib/terminalContrib/links/browser/links.js';
 import { TerminalLinkProviderService } from '../../../src/ash/workbench/contrib/terminalContrib/links/browser/terminalLinkProviderService.js';
 import { ISearchService } from '../../../src/ash/workbench/services/search/common/search.js';
@@ -160,6 +163,8 @@ function setupTerminalFixtureServices(services: import('../../../src/ash/platfor
 	if (!services.has(ITerminalGroupService)) services.registerSingleton(ITerminalGroupService, () => services.createInstance(TerminalGroupService), { instantiation: InstantiationType.Delayed });
 	if (!services.has(ITerminalEditorService)) services.registerSingleton(ITerminalEditorService, () => services.createInstance(TerminalEditorService), { instantiation: InstantiationType.Delayed });
 	if (!services.has(IStorageService)) services.registerInstance(IStorageService, lifetime.add(new BrowserStorageService({ ownerWindow: window, workspaceId: 'terminal-integration', flushInterval: 0 })));
+	if (!services.has(ITerminalCompletionService)) services.registerInstance(ITerminalCompletionService, lifetime.add(services.createInstance(TerminalCompletionService)));
+	if (!services.has(ITerminalQuickFixService)) services.registerInstance(ITerminalQuickFixService, lifetime.add(services.createInstance(TerminalQuickFixService)));
 	if (!services.has(ITerminalLinkProviderService)) services.registerSingleton(ITerminalLinkProviderService, () => services.createInstance(TerminalLinkProviderService));
 	if (!services.has(IEnvironmentVariableService)) services.registerSingleton(IEnvironmentVariableService, () => services.createInstance(EnvironmentVariableService));
 	if (!services.has(IHoverService)) services.registerInstance(IHoverService, lifetime.add(new HoverService(services.get(IConfigurationService), lifetime.add(new BrowserContextViewService(document.body)), { contextMenuStyle: 'custom', onDidShowContextMenu: Event.None, onDidHideContextMenu: Event.None, showContextMenu: () => { }, hideContextMenu: () => { } })));
@@ -217,7 +222,7 @@ function createFixtureInstance(id: string) {
 		start: () => { },
 		clearBuffer: () => screen?.clearBuffer(),
 		reuseTerminal: async () => { throw new Error('Screen-only fixture has no process to reuse'); },
-		sendSignal: async () => { }, sendText: async (data, shouldExecute) => { writes.push(data + (shouldExecute ? '\r' : '')); },
+		setAutoReplies: async () => { }, sendSignal: async () => { }, sendText: async (data, shouldExecute) => { writes.push(data + (shouldExecute ? '\r' : '')); },
 		sendPath: async () => { throw new Error('Screen-only fixture has no path input'); },
 		processBinary: async data => { binaryWrites.push(Array.from(data, character => character.charCodeAt(0))); },
 		resize: dimensions => { resizes.push(dimensions); },
@@ -534,10 +539,10 @@ if (new URLSearchParams(location.search).has('pane') || new URLSearchParams(loca
 				return { terminalId: options.terminalId, chunks: [], nextSequence: 0, outputGap: false, commandEvents: [], nextCommandSequence: 0, commandEventGap: false, exited: new URLSearchParams(location.search).has('exited'), exitCode: undefined };
 			},
 			write: async options => { if (typeof options.data === 'string' && !options.data.startsWith('\x1b[?')) writes.push(options.data); },
-			resize: async () => { }, sendSignal: async () => { },
+			resize: async () => { }, setAutoReplies: async () => { }, sendSignal: async () => { },
 			close: async options => { closed.push(Number(options.terminalId.slice(5))); },
 		});
-		setupTerminalFixtureServices(services, lifetime);
+		setupTerminalFixtureServices(services, lifetime, true, false);
 		services.registerSingleton(ISpeechService, () => services.createInstance(SpeechService));
 		services.registerSingleton(IChatSpeechToTextService, () => services.createInstance(ChatSpeechToTextService));
 		services.registerSingleton(IVoiceCodeTranscriptionClient, () => services.createInstance(VoiceCodeTranscriptionClient));
@@ -746,7 +751,7 @@ if (new URLSearchParams(location.search).has('assembly')) {
 			getProcessInfo: async () => ({ ready: { pid: 1234, cwd: '/backend/workspace' }, cwd: '/backend/current', rows: 24, cols: 80 }),
 			getConnectionState: async () => 'ready',
 			onConnectionState: () => Disposable.None,
-			sendSignal: async () => { }, resolveProfile: async (profile: import('../../../src/ash/platform/terminal/common/terminal.js').TerminalProcessProfileSelection) => ({ profile: profile.type === 'custom' ? { profileId: `custom:${profile.name}`, title: profile.name, isDefault: false } : instance.profile, executable: profile.type === 'custom' ? profile.path.at(-1)! : '/bin/sh', args: profile.type === 'custom' ? (typeof profile.args === 'string' ? profile.args : [...profile.args]) : [] }), getEnvironment: async () => ({}), listProfiles: async () => [instance.profile],
+			setAutoReplies: async () => { }, sendSignal: async () => { }, resolveProfile: async (profile: import('../../../src/ash/platform/terminal/common/terminal.js').TerminalProcessProfileSelection) => ({ profile: profile.type === 'custom' ? { profileId: `custom:${profile.name}`, title: profile.name, isDefault: false } : instance.profile, executable: profile.type === 'custom' ? profile.path.at(-1)! : '/bin/sh', args: profile.type === 'custom' ? (typeof profile.args === 'string' ? profile.args : [...profile.args]) : [] }), getEnvironment: async () => ({}), listProfiles: async () => [instance.profile],
 			create: async () => {
 				const terminalId = `backend-${nextProcess++}`;
 				calls.push(`create:${terminalId}`);
@@ -946,7 +951,7 @@ if (new URLSearchParams(location.search).has('stream')) {
 	const processes: import('../../../src/ash/platform/terminal/common/terminal.js').ITerminalProcessService = {
 		operatingSystem: reviveHistory ? OperatingSystem.Windows : undefined,
 		getProcessInfo: async () => ({ ready: { pid: 1234, cwd: '/workspace' }, cwd: '/workspace/current', rows: 24, cols: 80 }),
-		sendSignal: async () => { }, resolveProfile: async (profile: import('../../../src/ash/platform/terminal/common/terminal.js').TerminalProcessProfileSelection) => ({ profile: profile.type === 'custom' ? { profileId: `custom:${profile.name}`, title: profile.name, isDefault: false } : instance.profile, executable: profile.type === 'custom' ? profile.path.at(-1)! : '/bin/sh', args: profile.type === 'custom' ? (typeof profile.args === 'string' ? profile.args : [...profile.args]) : [] }), getEnvironment: async () => ({}), listProfiles: async () => [profile],
+		setAutoReplies: async () => { }, sendSignal: async () => { }, resolveProfile: async (profile: import('../../../src/ash/platform/terminal/common/terminal.js').TerminalProcessProfileSelection) => ({ profile: profile.type === 'custom' ? { profileId: `custom:${profile.name}`, title: profile.name, isDefault: false } : instance.profile, executable: profile.type === 'custom' ? profile.path.at(-1)! : '/bin/sh', args: profile.type === 'custom' ? (typeof profile.args === 'string' ? profile.args : [...profile.args]) : [] }), getEnvironment: async () => ({}), listProfiles: async () => [profile],
 		create: async () => { launch++; return { terminalId: reuseCommands ? `stream-shell-${launch}` : 'stream-shell', ready: { pid: reuseCommands ? 1234 + launch : 1234, cwd: '/workspace' }, profile, connectionPersistence: 'connectionOwned' }; },
 		write: async options => {
 			if (typeof options.data === 'string') streamInputWrites.push(options.data);
@@ -1135,15 +1140,20 @@ if (new URLSearchParams(location.search).has('input')) {
 	const launchDirectories: (string | undefined)[] = [];
 	const sizes: { terminalId: string; cols: number; rows: number; }[] = [];
 	const queuedOutput: { data: Uint8Array; shellIntegration?: import('../../../src/ash/platform/terminal/common/terminal.js').TerminalShellIntegrationEvent; }[] = [{ data: new TextEncoder().encode('retained screen\r\n\x1b[c') }];
+	const directedOutput = new Map<string, { data: Uint8Array; }[]>();
+	const processPids = new Map<string, number>();
 	let sequence = 0;
 	const profile = { profileId: 'shell', title: 'Shell', isDefault: true };
 	const processes: import('../../../src/ash/platform/terminal/common/terminal.js').ITerminalProcessService = {
 		operatingSystem: OperatingSystem.Linux,
-		getProcessInfo: async () => ({ ready: { pid: 1234, cwd: '/workspace' }, cwd: '/workspace/current', rows: 24, cols: 80 }),
-		sendSignal: async () => { }, resolveProfile: async (profile: import('../../../src/ash/platform/terminal/common/terminal.js').TerminalProcessProfileSelection) => ({ profile: profile.type === 'custom' ? { profileId: `custom:${profile.name}`, title: profile.name, isDefault: false } : instance.profile, executable: profile.type === 'custom' ? profile.path.at(-1)! : '/bin/sh', args: profile.type === 'custom' ? (typeof profile.args === 'string' ? profile.args : [...profile.args]) : [] }), getEnvironment: async () => ({}), listProfiles: async () => [profile],
+		getProcessInfo: async options => ({ ready: { pid: processPids.get(options.terminalId) ?? 1234, cwd: '/workspace' }, cwd: '/workspace/current', rows: 24, cols: 80 }),
+		setAutoReplies: async () => { }, sendSignal: async () => { }, resolveProfile: async (profile: import('../../../src/ash/platform/terminal/common/terminal.js').TerminalProcessProfileSelection) => ({ profile: profile.type === 'custom' ? { profileId: `custom:${profile.name}`, title: profile.name, isDefault: false } : instance.profile, executable: profile.type === 'custom' ? profile.path.at(-1)! : '/bin/sh', args: profile.type === 'custom' ? (typeof profile.args === 'string' ? profile.args : [...profile.args]) : [] }), getEnvironment: async () => ({}), listProfiles: async () => [profile],
 		create: async options => {
 			launchDirectories.push(options.cwd);
-			return { terminalId: `input-shell-${++nextTerminal}`, ready: { pid: 1234, cwd: '/workspace', shellType: PosixShellType.Bash }, profile, connectionPersistence: 'connectionOwned' };
+			const terminalId = `input-shell-${++nextTerminal}`;
+			const pid = new URLSearchParams(location.search).has('osc99') ? 1234 + nextTerminal : 1234;
+			processPids.set(terminalId, pid);
+			return { terminalId, ready: { pid, cwd: '/workspace', shellType: PosixShellType.Bash }, profile, connectionPersistence: 'connectionOwned' };
 		},
 		write: async options => {
 			writes.push(typeof options.data === 'string' ? options.data : [...options.data]);
@@ -1155,7 +1165,7 @@ if (new URLSearchParams(location.search).has('input')) {
 		},
 		resize: async options => { sizes.push({ terminalId: options.terminalId, cols: options.cols, rows: options.rows }); }, close: async options => { closedProcesses.push(options.terminalId); }, getConnectionState: async () => 'ready', onConnectionState: connectionChanged.event,
 		read: async options => ({
-			terminalId: options.terminalId, chunks: queuedOutput.splice(0).map(chunk => ({ sequence: ++sequence, ...chunk })), nextSequence: sequence,
+			terminalId: options.terminalId, chunks: [...queuedOutput.splice(0), ...(directedOutput.get(options.terminalId)?.splice(0) ?? [])].map(chunk => ({ sequence: ++sequence, ...chunk })), nextSequence: sequence,
 			outputGap: false, commandEvents: [], nextCommandSequence: 0, commandEventGap: false, exited: false, exitCode: undefined,
 			...(currentDirectory ? {
 				cwd: { value: currentDirectory, isTrusted: true, afterOutputSequence: sequence },
@@ -1166,7 +1176,17 @@ if (new URLSearchParams(location.search).has('input')) {
 	let currentDirectory: string | undefined;
 	const workspace = store.add(new TestWorkspaceService({ id: 'input', uri: URI.file('/workspace') }));
 	const services = store.add(widgetServices.createChild(new ServiceCollection([ITerminalProcessService, processes], [IWorkspaceContextService, workspace])));
+	const notifications = store.add(new NotificationService());
+	services.registerInstance(INotificationService, notifications);
 	let groupPane: import('../../../src/ash/workbench/contrib/terminal/browser/terminalView.js').TerminalViewPane | undefined;
+	if (groupFixture) {
+		// Quick Access constructs its providers in this window's terminal scope.
+		// The parent fixture's input service has an independent editor-only scope.
+		const { TestQuickInputService } = await import('../../../src/ash/platform/quickinput/test/browser/testQuickInputService.js');
+		services.registerInstance(IQuickInputService, store.add(new TestQuickInputService({
+			container: document.body, instantiationService: services, contextKeyService: services.get(IContextKeyService),
+		})));
+	}
 	// Contributions are constructed with the first instance, before the optional pane.
 	services.registerInstance(IViewsService, {
 		openView: async (id: string) => {
@@ -1209,6 +1229,8 @@ if (new URLSearchParams(location.search).has('input')) {
 		const dialogs = services.get(IDialogService) as DialogService;
 		store.add(new DialogHandlerContribution(dialogs.model, new BrowserDialogHandler(document.body)));
 	}
+	const inputCommands = store.add(new CommandService(services));
+	services.registerInstance(ICommandService, inputCommands);
 	installWorkbenchServiceContributions({ container: services, register: value => store.add(value), blockRestorationUntil: () => { } });
 	const terminals = services.get(ITerminalService);
 	store.add(terminals.onDidCreateInstance(instance => {
@@ -1223,12 +1245,9 @@ if (new URLSearchParams(location.search).has('input')) {
 	screen.setVisible(true);
 	screen.focus();
 	if (new URLSearchParams(location.search).has('find') || clipboardFixture || sequenceFixture || groupFixture) {
-		const commands = store.add(new CommandService(services));
-		services.registerInstance(ICommandService, commands);
+		const commands = inputCommands;
 		services.registerInstance(IAccessibleViewService, { getOpenAriaHint: () => undefined } as unknown as IAccessibleViewService);
 		services.registerInstance(ILogService, new NullLoggerService());
-		const notifications = store.add(new NotificationService());
-		services.registerInstance(INotificationService, notifications);
 		services.registerInstance(IUserDataProfileService, new UserDataProfileService());
 		const keybindingSource = sequenceFixture ? JSON.stringify([
 			{ key: 'ctrl+alt+y', command: 'workbench.action.terminal.sendSequence', args: { text: '\u001b[1;5D${workspaceFolder}' }, when: 'terminalFocus' },
@@ -1255,6 +1274,11 @@ if (new URLSearchParams(location.search).has('input')) {
 			await files.createDirectory(URI.joinPath(keybindingsResource, '..'));
 			await files.writeFile({ resource: keybindingsResource, content: keybindingSource }, { create: true, overwrite: true });
 			const history = new TerminalCommandHistory(services.get(IConfigurationService), services.get(IStorageService));
+			const { ITerminalCompletionService } = await import('../../../src/ash/workbench/contrib/terminalContrib/suggest/browser/terminalCompletionService.js');
+			const providerRequests: { value: string; cursorIndex: number; signal: AbortSignal; }[] = [];
+			let providerRegistration: import('../../../src/ash/base/common/lifecycle.js').IDisposable | undefined;
+			let releaseProvider: (() => void) | undefined;
+			store.add(toDisposable(() => { providerRegistration?.dispose(); releaseProvider?.(); }));
 			window.ashTerminalSuggestIntegration = {
 				history: (command, trusted = true, disabled = false) => history.record(terminal.profile.profileId, 'succeeded', command, trusted, disabled),
 				file: async path => { await files.createFile(URI.from({ scheme: 'file', path }), 'overwrite'); },
@@ -1263,6 +1287,19 @@ if (new URLSearchParams(location.search).has('input')) {
 				filesPending: () => releaseFiles !== undefined,
 				releaseFiles: () => { releaseFiles?.(); releaseFiles = undefined; },
 				model: () => terminal.capabilities?.get(TerminalCapability.CommandDetection)?.promptInputModel.getCombinedString(),
+				provider: (items, triggers = [], delayed = false) => {
+					providerRegistration?.dispose();
+					providerRegistration = services.get(ITerminalCompletionService).registerTerminalCompletionProvider('fixture.extension', 'completion', {
+						provideCompletions: async (_instance, value, cursorIndex, signal) => {
+							providerRequests.push({ value, cursorIndex, signal });
+							if (delayed) await new Promise<void>(resolve => { releaseProvider = resolve; });
+							return items;
+						},
+					}, ...triggers);
+				},
+				providerRequests: () => providerRequests.map(({ value, cursorIndex, signal }) => ({ value, cursorIndex, cancelled: signal.aborted })),
+				releaseProvider: () => { releaseProvider?.(); releaseProvider = undefined; },
+				disposeProvider: () => { providerRegistration?.dispose(); providerRegistration = undefined; },
 			};
 		} else {
 			services.registerInstance(IFileService, { onDidChangeFiles: Event.None, readFile: async resource => ({ resource, content: keybindingSource, revision: '1' }) } as IFileService);
@@ -1407,6 +1444,12 @@ if (new URLSearchParams(location.search).has('input')) {
 				copied,
 				setText: text => { clipboardText = text; },
 				reads: () => clipboardReads,
+				warningPolicy: async () => {
+					const configuration = services.get(IConfigurationService) as WorkbenchConfigurationService;
+					await configuration.reloadConfiguration();
+					const key = 'terminal.integrated.enableMultiLinePasteWarning';
+					return { value: configuration.getValue<string>(key), persisted: JSON.parse((await configuration.read()).source)[key] ?? null };
+				},
 				select: (start, length) => screen.raw.select(start, 0, length),
 				selection: () => screen.raw.getSelection(),
 				selectedContext: () => services.get(IContextKeyService).getContext(document.activeElement).getValue<boolean>('terminalTextSelectedInFocused') === true,
@@ -1478,11 +1521,46 @@ if (new URLSearchParams(location.search).has('input')) {
 		hasScreen: () => terminal.xterm !== undefined,
 		close: () => terminal.close(),
 	};
+	if (new URLSearchParams(location.search).has('osc99')) {
+		const { IStatusbarService, StatusbarService, StatusbarAlignment } = await import('../../../src/ash/workbench/services/statusbar/browser/statusbar.js');
+		const [{ NotificationsToasts }, { NotificationActionRunner }] = await Promise.all([
+			import('../../../src/ash/workbench/browser/parts/notifications/notificationsToasts.js'),
+			import('../../../src/ash/workbench/browser/parts/notifications/notificationsCommands.js'),
+		]);
+		const statusbar = store.add(new StatusbarService());
+		services.registerInstance(IStatusbarService, statusbar);
+		const actionRunner = store.add(services.createInstance(NotificationActionRunner));
+		store.add(services.createInstance(NotificationsToasts, document.body, notifications.model, actionRunner));
+		window.ashTerminalOscIntegration = {
+			notifications: () => notifications.model.getNotifications().map(item => ({ id: item.id, message: item.message, labels: item.actions?.primary?.map(action => action.label) ?? [] })),
+			snapshotActive: async () => terminals.activeInstance?.xterm?.getBufferText(100000, new AbortController().signal),
+			feedActive: text => {
+				const id = [...processPids].find(([, pid]) => pid === terminals.activeInstance!.processId)?.[0];
+				if (!id) throw new Error('No process owns the active terminal');
+				const queue = directedOutput.get(id) ?? [];
+				directedOutput.set(id, queue);
+				queue.push({ data: new TextEncoder().encode(text) });
+			},
+			stopRecording: () => statusbar.getEntries(StatusbarAlignment.Left)[0]?.entry.run?.(),
+			recording: () => statusbar.getEntries(StatusbarAlignment.Left).length > 0,
+		};
+	}
 }
 
 declare global {
 	interface Window {
+		ashTerminalOscIntegration: {
+			notifications(): { id: number; message: string; labels: readonly string[]; }[];
+			snapshotActive(): Promise<string | undefined>;
+			feedActive(text: string): void;
+			stopRecording(): unknown;
+			recording(): boolean;
+		};
 		ashTerminalSuggestIntegration: {
+			provider(items: readonly import('../../../src/ash/workbench/contrib/terminalContrib/suggest/browser/terminalCompletionService.js').ITerminalCompletion[], triggers?: string[], delayed?: boolean): void;
+			providerRequests(): { value: string; cursorIndex: number; cancelled: boolean; }[];
+			releaseProvider(): void;
+			disposeProvider(): void;
 			history(command: string, trusted?: boolean, disabled?: boolean): void;
 			file(path: string): Promise<void>;
 			directory(path: string): Promise<void>;
@@ -1497,6 +1575,7 @@ declare global {
 			readonly copied: readonly string[];
 			setText(text: string): void;
 			reads(): number;
+			warningPolicy(): Promise<{ value: string; persisted: string | null; }>;
 			select(start: number, length: number): void;
 			selection(): string;
 			selectedContext(): boolean;

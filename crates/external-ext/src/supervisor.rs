@@ -1,4 +1,5 @@
 use std::collections::BTreeMap;
+use std::collections::BTreeSet;
 use std::collections::VecDeque;
 use std::sync::Arc;
 use std::sync::Mutex;
@@ -82,6 +83,7 @@ struct SupervisorState {
     registrations: Vec<RegistrationDescriptor>,
     registration_revision: u64,
     speech_registration_generation: u64,
+    terminal_registration_ids: BTreeSet<String>,
     pending_registrations: Option<crate::ExtensionHostRegistrationEvent>,
     invocation_leases: BTreeMap<u64, Box<dyn ActivationLease>>,
     restart: RestartTracker,
@@ -140,6 +142,7 @@ impl ExtensionHostSupervisor {
                     registrations: Vec::new(),
                     registration_revision: 0,
                     speech_registration_generation: 0,
+                    terminal_registration_ids: BTreeSet::new(),
                     pending_registrations: None,
                     invocation_leases: BTreeMap::new(),
                     restart,
@@ -438,6 +441,7 @@ impl ExtensionHostSupervisor {
             state.registrations.clear();
             state.registration_revision = 0;
             state.speech_registration_generation = 0;
+            state.terminal_registration_ids.clear();
             state.pending_registrations = None;
             state.incarnation
         };
@@ -505,6 +509,7 @@ impl ExtensionHostSupervisor {
                     terminate_confirmed(&process)?;
                     return Err(ExtensionHostError::HostRestarted);
                 }
+                state.terminal_registration_ids.extend(registrations.iter().filter(|registration| matches!(registration.kind, external_ext_protocol::RegistrationKind::TerminalCompletionProvider { .. } | external_ext_protocol::RegistrationKind::TerminalQuickFixProvider { .. })).map(|registration| registration.registration_id.clone()));
                 state.registrations = registrations;
                 state.speech_registration_generation = state.speech_registration_generation.max(
                     state
@@ -521,7 +526,7 @@ impl ExtensionHostSupervisor {
                         .unwrap_or(0),
                 );
                 if let Some(event) = state.pending_registrations.take() {
-                    if let Err(error) = self.inner.replace_speech_registrations(&mut state, &event)
+                    if let Err(error) = self.inner.replace_dynamic_registrations(&mut state, &event)
                     {
                         state.status = ExtensionHostStatus::Stopped;
                         state.registrations.clear();
@@ -806,7 +811,48 @@ impl SupervisorInner {
         Ok(())
     }
 
-    fn replace_speech_registrations(
+    fn admit_terminal_handles(
+        &self,
+        state: &mut SupervisorState,
+        event: &crate::ExtensionHostRegistrationEvent,
+    ) -> Result<(), ExtensionHostError> {
+        let previous = state
+            .pending_registrations
+            .as_ref()
+            .map(|event| event.terminal_providers.as_slice())
+            .unwrap_or(&state.registrations);
+        let mut added = Vec::new();
+        for registration in &event.terminal_providers {
+            if previous.contains(registration) {
+                continue;
+            }
+            if state
+                .terminal_registration_ids
+                .contains(&registration.registration_id)
+            {
+                return Err(ExtensionHostError::InvalidProtocol(
+                    "terminal provider handle was reused".into(),
+                ));
+            }
+            added.push(registration.registration_id.clone());
+        }
+        // Old callback handles must never revive within an incarnation. Bound this
+        // tombstone set so a rapidly rotating provider cannot retain memory forever.
+        if state
+            .terminal_registration_ids
+            .len()
+            .saturating_add(added.len())
+            > self.limits.maximum_registrations.saturating_mul(64)
+        {
+            return Err(ExtensionHostError::QuotaExceeded(
+                "terminal provider handles",
+            ));
+        }
+        state.terminal_registration_ids.extend(added);
+        Ok(())
+    }
+
+    fn replace_dynamic_registrations(
         &self,
         state: &mut SupervisorState,
         event: &crate::ExtensionHostRegistrationEvent,
@@ -818,11 +864,14 @@ impl SupervisorInner {
                 !matches!(
                     registration.kind,
                     external_ext_protocol::RegistrationKind::SpeechProvider { .. }
+                        | external_ext_protocol::RegistrationKind::TerminalCompletionProvider { .. }
+                        | external_ext_protocol::RegistrationKind::TerminalQuickFixProvider { .. }
                 )
             })
             .cloned()
             .collect::<Vec<_>>();
         registrations.extend(event.speech_providers.iter().cloned());
+        registrations.extend(event.terminal_providers.iter().cloned());
         let snapshot = ActivateResult { registrations };
         snapshot
             .validate(
@@ -858,7 +907,12 @@ impl SupervisorInner {
         }
         // Event validation fixes the mutable subset; admission still belongs to this activation.
         ActivateResult {
-            registrations: event.speech_providers.clone(),
+            registrations: event
+                .speech_providers
+                .iter()
+                .chain(&event.terminal_providers)
+                .cloned()
+                .collect(),
         }
         .validate(
             &self.activation.params().capabilities,
@@ -866,12 +920,13 @@ impl SupervisorInner {
         )
         .map_err(|error| ExtensionHostError::InvalidProtocol(error.to_string()))?;
         self.admit_speech_generations(&mut state, &event)?;
+        self.admit_terminal_handles(&mut state, &event)?;
         state.registration_revision = event.revision;
         if state.status == ExtensionHostStatus::Starting {
             state.pending_registrations = Some(event);
             return Ok(());
         }
-        self.replace_speech_registrations(&mut state, &event)?;
+        self.replace_dynamic_registrations(&mut state, &event)?;
         drop(state);
         let listener = self
             .registration_listener

@@ -89,13 +89,6 @@ export function registerTerminalActions(): void {
 			}
 		}
 	});
-	registerAction2(class SendSignalTerminalAction extends Action2 {
-		constructor() { super({ id: TerminalCommandId.SendSignal, title: localize2('terminal.signal.command', 'Terminal: Interrupt Active Command'), f1: true, precondition: TerminalHasActiveInstanceContext.isEqualTo(true) }); }
-		override async run(accessor: ServicesAccessor): Promise<void> {
-			const instance = accessor.get(ITerminalService).activeInstance;
-			if (instance && !instance.isReadOnly && instance.state === 'running') await instance.sendSignal('SIGINT');
-		}
-	});
 	registerAction2(class AttachTerminalToChatAction extends Action2 {
 		constructor() {
 			super({
@@ -392,7 +385,7 @@ export function registerTerminalActions(): void {
 	CommandsRegistry.register(TerminalCommandId.Relaunch, async (accessor, context) => {
 		if (context === undefined && accessor.get(ITerminalService).activeInstance?.target !== TerminalLocation.Editor) return terminalView(accessor).relaunchActive();
 		const instance = resolveInstance(accessor, context);
-		if (!instance || instance.state === 'running' || instance.state === 'reconnecting') return;
+		if (!instance || instance.state === 'reconnecting') return;
 		await accessor.get(ITerminalService).relaunchTerminal(instance, instance.xterm?.dimensions() ?? { cols: 80, rows: 24 });
 	});
 	CommandsRegistry.register(TerminalCommandId.Kill, (accessor, context) => {

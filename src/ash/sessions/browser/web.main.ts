@@ -83,6 +83,8 @@ export class SessionsBrowserMain extends Disposable {
 				} : undefined,
 				contributionIds: [
 					'chatResponseResourceWorkbenchContribution',
+					'terminalAutoReplies',
+					'terminalTelemetry',
 					'workbench.contrib.partsSplash',
 					'workbench.contrib.webUpdate',
 					'workbench.contrib.preferences',

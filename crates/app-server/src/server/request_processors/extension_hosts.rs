@@ -625,6 +625,12 @@ fn registration_dto(
             RegistrationKind::TerminalEnvironment {} => {
                 ExtensionHostRegistrationKindDto::TerminalEnvironment {}
             }
+            RegistrationKind::TerminalCompletionProvider { trigger_characters } => {
+                ExtensionHostRegistrationKindDto::TerminalCompletionProvider { trigger_characters }
+            }
+            RegistrationKind::TerminalQuickFixProvider { provider_id } => {
+                ExtensionHostRegistrationKindDto::TerminalQuickFixProvider { provider_id }
+            }
             RegistrationKind::TerminalLinkProvider {} => {
                 ExtensionHostRegistrationKindDto::TerminalLinkProvider {}
             }

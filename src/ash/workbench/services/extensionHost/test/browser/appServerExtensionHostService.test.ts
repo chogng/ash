@@ -1,3 +1,6 @@
+import { ITerminalCompletionService, TerminalCompletionService } from '../../../../contrib/terminalContrib/suggest/browser/terminalCompletionService.js';
+import { ITerminalQuickFixService } from '../../../../contrib/terminalContrib/quickFix/browser/quickFix.js';
+import { TerminalQuickFixService } from '../../../../contrib/terminalContrib/quickFix/browser/terminalQuickFixService.js';
 import { ITerminalLinkProviderService } from '../../../../contrib/terminalContrib/links/browser/links.js';
 import { TerminalLinkProviderService } from '../../../../contrib/terminalContrib/links/browser/terminalLinkProviderService.js';
 import { IAdapterManager, IDebugService, type IDebugConfigurationProvider, type DebugConfigurationProviderRegistration, type IDebugAdapterTrackerFactory, type DebugAdapterTrackerFactoryRegistration } from '../../../../contrib/debug/common/debug.js';
@@ -983,6 +986,7 @@ class FakeExtensionHostApi implements IExtensionHostApi {
 		assert.ok(this.activationResult, 'Unexpected activation request');
 		return this.activationResult;
 	}
+	terminalQuickFixMatcher: JsonValue = { matches: true, outputMatcher: null };
 	invocationResult: Promise<JsonValue> | undefined;
 	readonly invocationSignals: AbortSignal[] = [];
 	available = true;
@@ -1007,6 +1011,7 @@ class FakeExtensionHostApi implements IExtensionHostApi {
 		signal.throwIfAborted();
 		this.invocations.push(request);
 		this.invocationSignals.push(signal);
+		if (request.operation === 'provideTerminalQuickFixes' && request.payload !== null && typeof request.payload === 'object' && !Array.isArray(request.payload) && (request.payload as { readonly [key: string]: JsonValue; }).phase === 'matcher') return this.terminalQuickFixMatcher;
 		if (this.invocationResult) return this.invocationResult;
 		if (request.operation === 'outputEvent' || request.operation === 'documentEvent' || request.operation === 'workspaceEvent') return null;
 		if (request.operation === 'resolveConnection') return { connectionName: 'build' };
@@ -1134,6 +1139,8 @@ function createServices(api: IExtensionHostApi, languages: ILanguageFeaturesServ
 	services.registerSingleton(IExtensionService, () => new TestExtensionService(extensionApi, services.get(IAdapterManager)));
 	services.registerInstance(ITerminalProcessService, { onConnectionState: Event.None, listProfiles: async () => [] } as unknown as ITerminalProcessService);
 	services.registerInstance(ITerminalService, { ...Disposable.None } as unknown as ITerminalService);
+	services.registerSingleton(ITerminalCompletionService, () => services.createInstance(TerminalCompletionService));
+	services.registerSingleton(ITerminalQuickFixService, () => services.createInstance(TerminalQuickFixService));
 	services.registerSingleton(ITerminalLinkProviderService, () => services.createInstance(TerminalLinkProviderService));
 	services.registerSingleton(IEnvironmentVariableService, () => services.createInstance(EnvironmentVariableService));
 	services.registerSingleton(ITerminalContributionService, () => services.createInstance(TerminalContributionService));
@@ -1841,4 +1848,70 @@ test('large extension outlines share one document budget and index snapshot line
 	await assert.rejects(async () => provider.provideDocumentSymbols(request, signal), /Extension symbols/);
 	result = [{ ...wireSymbol(0), selectionRange: { start: { lineIndex: 0, columnIndex: 0 }, end: { lineIndex: 0, columnIndex: 2 } } }];
 	await assert.rejects(async () => provider.provideDocumentSymbols(request, signal), /outside the document snapshot/);
+});
+
+test('terminal completion and quick fix registrations bind the original instance, ranges and cancellation', async () => {
+	const api = new FakeExtensionHostApi(snapshot(1, 'acme.terminal', [
+		{ kind: 'terminalCompletionProvider', registrationId: 'completion', triggerCharacters: ['-'] },
+		{ kind: 'terminalQuickFixProvider', registrationId: 'fix', providerId: 'acme.fix' },
+	]));
+	using languages = new LanguageFeaturesService();
+	const manifestJson = JSON.stringify({ name: 'demo', publisher: 'acme', version: '1.0.0' });
+	const extensionApi: IExtensionApi = {
+		resources: new ExtensionResourceLoaderService(async () => assert.fail('Unexpected extension resource request')),
+		list: async () => ({ generation: 1, diagnostics: [], extensions: [{ id: 'acme.demo', name: 'demo', publisher: 'acme', version: '1.0.0', displayName: 'Demo', sourceKind: 'user', manifestSha256: `sha256:${createHash('sha256').update(manifestJson).digest('hex')}`, packageSha256: DIGEST, manifestJson }] }),
+	};
+	using services = createServices(api, languages, new ProviderSink<TaskProvider>(), new ProviderSink<TestProfileProvider>(), undefined, undefined, undefined, extensionApi);
+	await services.get(IExtensionService).start();
+	using stateChanged = new Emitter<import('../../../../contrib/terminal/browser/terminal.js').TerminalInstanceState>();
+	using removed = new Emitter<import('../../../../contrib/terminal/browser/terminal.js').ITerminalInstance>();
+	const instance = { id: 'terminal-1', title: 'Shell', processId: 42, state: 'running', onDidChangeState: stateChanged.event } as import('../../../../contrib/terminal/browser/terminal.js').ITerminalInstance;
+	Object.assign(services.get(ITerminalService), { instances: [instance], onDidDisposeInstance: removed.event });
+	using host = services.createInstance(AppServerExtensionHostService, new CommandRegistry(), 1_000);
+	await host.start();
+	const completions = services.get(ITerminalCompletionService);
+	const source = new AbortController();
+	api.invocationResult = Promise.resolve({ items: [{ label: '--help', replacementRange: [4, 5], detail: 'Help' }] });
+	assert.deepEqual((await completions.provideCompletions(instance, 'git -', 5, source.signal)).map(({ isValid, ...item }) => item), [{ label: '--help', replacementRange: [4, 5], detail: 'Help' }]);
+	assert.deepEqual(api.invocations.at(-1)?.payload, { commandLine: 'git -', cursorIndex: 5, terminal: { id: 'terminal-1', name: 'Shell', processId: 42 } });
+	assert.equal(api.invocations.at(-1)?.operation, 'provideTerminalCompletions');
+	assert.deepEqual(await completions.provideCompletions(instance, 'git -', 5, source.signal, '/'), []);
+	assert.equal(api.invocations.length, 1);
+	api.invocationResult = Promise.resolve({ items: [{ label: 'bad', replacementRange: [0, 6] }] });
+	assert.deepEqual(await completions.provideCompletions(instance, 'git -', 5, source.signal), []);
+	api.terminalQuickFixMatcher = { matches: true, outputMatcher: { anchor: 'bottom', offset: 42, length: 2 } };
+	const command = { command: 'tool bad', exitCode: 1, getOutputMatch: (matcher: { offset: number; length: number; anchor: string; }) => { assert.equal(matcher.offset, 42); assert.equal(matcher.length, 2); assert.equal(matcher.anchor, 'bottom'); return { regexMatch: [''], outputLines: ['failed', 'try good'] }; } } as unknown as import('../../../../../platform/terminal/common/capabilities/capabilities.js').ITerminalCommand;
+	const quickFixes = services.get(ITerminalQuickFixService);
+	api.invocationResult = Promise.resolve<JsonValue>({
+		fixes: [
+			{ kind: 'terminalCommand', label: 'tool good', shouldExecute: true },
+			{ kind: 'opener', label: 'https://example.com/help' },
+			{ kind: 'command', label: 'Explain', id: 'opaque-1' },
+		]
+	});
+	const fixes = await quickFixes.provideTerminalQuickFixes(instance, command, source.signal);
+	assert.equal(fixes.length, 3);
+	const { isValid, ...commandFix } = fixes[0]!;
+	assert.equal(isValid?.(), true);
+	assert.deepEqual(commandFix, { label: 'tool good', terminalCommand: 'tool good', shouldExecute: true });
+	assert.equal(fixes[1]?.uri?.toString(), 'https://example.com/help');
+	assert.deepEqual(api.invocations.at(-1)?.payload, { commandLine: 'tool bad', exitCode: 1, outputLines: ['failed', 'try good'], terminalId: 'terminal-1', phase: 'provide' });
+	api.invocationResult = Promise.resolve(null);
+	await fixes[2]!.run!();
+	assert.equal(api.invocations.at(-1)?.operation, 'handleTerminalQuickFix');
+	assert.deepEqual(api.invocations.at(-1)?.payload, { id: 'opaque-1', terminalId: 'terminal-1', commandLine: 'tool bad' });
+	const pending = deferred<JsonValue>();
+	api.invocationResult = pending.promise;
+	const reading = completions.provideCompletions(instance, 'pending', 7, source.signal);
+	const signal = api.invocationSignals.at(-1)!;
+	stateChanged.fire('reconnecting');
+	assert.equal(signal.aborted, true);
+	pending.resolve({ items: [{ label: 'late', replacementRange: [0, 7] }] });
+	assert.deepEqual(await reading, []);
+	api.emitConnection('stopped');
+	assert.deepEqual(await completions.provideCompletions(instance, 'git -', 5, source.signal), []);
+	assert.deepEqual(await quickFixes.provideTerminalQuickFixes(instance, command, source.signal), []);
+	const count = api.invocations.length;
+	await fixes[2]!.run!();
+	assert.equal(api.invocations.length, count);
 });

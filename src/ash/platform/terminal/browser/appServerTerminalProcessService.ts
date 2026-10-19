@@ -1,3 +1,4 @@
+import type { ITerminalAutoReply, TerminalProcessSignal } from '../common/terminal.js';
 import { type IDisposable, toDisposable } from "../../../base/common/lifecycle.js";
 import { decodeBase64 } from "../../../base/common/buffer.js";
 import type { IAppServerApi } from "../../agentHost/common/appServerApi.js";
@@ -35,7 +36,7 @@ export class AppServerTerminalProcessService implements ITerminalProcessService 
 
 	async create(options: ITerminalProcessCreateOptions): Promise<ITerminalProcessCreation> {
 		const execution = options.execution?.type === 'process' ? { ...options.execution, args: typeof options.execution.args === 'string' ? options.execution.args : [...options.execution.args] } : options.execution;
-		const created = await appServerRequest(this.connection, "terminal/create", { ...options, profile: profileSelection(options.profile), execution, lifecycle: { type: "connectionOwned" } });
+		const created = await appServerRequest(this.connection, "terminal/create", { ...options, autoReplies: options.autoReplies && [...options.autoReplies], profile: profileSelection(options.profile), execution, lifecycle: { type: "connectionOwned" } });
 		return { ready: decodeTerminalProcessReady(created.ready), terminalId: created.terminalId, profile: created.profile, connectionPersistence: "connectionOwned" };
 	}
 
@@ -56,8 +57,12 @@ export class AppServerTerminalProcessService implements ITerminalProcessService 
 		return voidResult(appServerRequest(this.connection, "terminal/resize", options));
 	}
 
-	sendSignal(options: ITerminalProcessCloseOptions & { readonly signal: 'interrupt'; }): Promise<void> {
+	sendSignal(options: ITerminalProcessCloseOptions & { readonly signal: TerminalProcessSignal; }): Promise<void> {
 		return voidResult(appServerRequest(this.connection, 'terminal/sendSignal', options));
+	}
+
+	setAutoReplies(options: ITerminalProcessCloseOptions & { readonly rules: readonly ITerminalAutoReply[]; }): Promise<void> {
+		return voidResult(appServerRequest(this.connection, 'terminal/setAutoReplies', { ...options, rules: [...options.rules] }));
 	}
 
 	async read(options: ITerminalProcessReadOptions): Promise<ITerminalProcessReadResult> {

@@ -42,6 +42,8 @@ tests 审查行为；不能用“来自上游”替代本地 correctness review�
 | `TerminalSize`                | rows/cols                                   | 默认 24 × 80                                       |
 | `combine_output_receivers`    | split mpsc → one broadcast stream           | 不保证 stdout/stderr total order                   |
 
+`ProcessSignal` 还支持 Terminate / Kill / Hangup，对应 SIGTERM / SIGKILL / SIGHUP；Unix PTY 始终定位当前前台进程组。
+
 `spawn_*` 参数包括 program、args、cwd、完整 env map 与 optional arg0；PTY 额外接收
 `TerminalSize`，pipe 额外接收 Unix inherited FDs。PTY 不支持额外的 FD 继承；当前生产调用没有
 该需求。Spawn 前 `env_clear`，因此 child 只看到 caller 显式提供的 environment。

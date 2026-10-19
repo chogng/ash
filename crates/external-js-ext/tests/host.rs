@@ -3978,3 +3978,53 @@ fn vscode_speech_host_rejects_retired_or_missing_generation_before_provider_side
     }
     assert_eq!(run(&running, "hello", json!([])).unwrap(), json!(1));
 }
+
+#[test]
+fn vscode_terminal_completions_use_public_context_and_retire_with_the_original_runtime() {
+    let running = start_vscode_with_files_and_capabilities(r#"
+        const v = require('vscode'); let registration; let terminal;
+        exports.activate = context => {
+            registration = v.window.registerTerminalCompletionProvider({ async provideTerminalCompletions(current, request, token) {
+                if (terminal && current !== terminal) throw new Error('Terminal identity changed');
+                terminal = current;
+                const item = new v.TerminalCompletionItem('--help', [request.cursorIndex - 1, request.cursorIndex], v.TerminalCompletionItemKind.Flag);
+                item.detail = current.name + ':' + await current.processId;
+                return new v.TerminalCompletionList([item]);
+            } }, '-');
+            context.subscriptions.push(registration, v.commands.registerCommand('example.hello', () => registration.dispose()));
+        };
+    "#, &[], vec![ExtensionCapability::Command, ExtensionCapability::TerminalCompletionProvider]).unwrap();
+    let registration = running
+        .supervisor
+        .snapshot()
+        .registrations
+        .into_iter()
+        .find(|entry| {
+            matches!(
+                entry.kind,
+                external_ext_protocol::RegistrationKind::TerminalCompletionProvider { .. }
+            )
+        })
+        .unwrap();
+    let mut request = invocation("unused", json!([]), Duration::from_secs(5));
+    request.registration_id = registration.registration_id;
+    request.operation = "provideTerminalCompletions".into();
+    request.payload = json!({ "commandLine": "git -", "cursorIndex": 5, "terminal": { "id": "terminal-1", "name": "Shell", "processId": 42 } });
+    assert_eq!(
+        running.supervisor.invoke(request.clone()).unwrap().payload,
+        json!({ "items": [{ "label": "--help", "replacementRange": [4, 5], "kind": 7, "detail": "Shell:42" }] })
+    );
+    run(&running, "hello", json!([])).unwrap();
+    assert!(
+        !running
+            .supervisor
+            .snapshot()
+            .registrations
+            .iter()
+            .any(|entry| entry.registration_id == request.registration_id)
+    );
+    assert!(matches!(
+        running.supervisor.invoke(request),
+        Err(ExtensionHostError::RegistrationNotFound)
+    ));
+}

@@ -34,7 +34,7 @@ Agent 执行、审批与终端呈现的详细边界以 [Platform Terminal 的前
 
 `TerminalProfileService` 合并执行端发现、自定义与扩展 Profile；`TerminalProfileResolverService` 解析执行端变量、Shell 参数、cwd、环境和图标，实际可执行文件由后端确认。多根工作区新建终端使用活动文件所属目录，无法确定时由用户选择；Split 继承原实例的目录与启动配置。
 
-交互终端、Tasks／DAP 和 Agent 的打开终端请求分别采用交互、automation 和 agentHost Profile 策略，共用原实例创建链。Relaunch 复用首次启动的配置快照；任务终端复用则按新任务替换启动配置并等待旧 PTY 释放。
+交互终端、Tasks／DAP 和 Agent 的打开终端请求分别采用交互、automation 和 agentHost Profile 策略，共用原实例创建链。交互终端的 Relaunch 从原始启动意图重新解析当前配置及扩展环境；任务终端复用则按新任务替换启动配置并等待旧 PTY 释放。现有 PTY 的重新附着不重新解析或修改进程环境。
 
 启动 schema 由平台唯一注册，屏幕与工作台设置由终端贡献注册，配置值及持久化归配置系统。扩展环境集合由 Workbench 管理生命周期与持久化，平台负责纯解码、快照和合并，resolver 将结果交给 Rust 创建请求。大小写、变量删除、`strictEnv` 和 Shell Integration 环境阶段的规则见 [Platform Terminal](../src/ash/platform/terminal/README.md)。
 
@@ -46,7 +46,7 @@ Profile 选择器属于单次命令。工作区或执行连接变化会关闭并
 
 xterm 的文本和原始字节输入经实例进入同一进程输入 owner。`sendText` 负责换行、执行用的 Enter 与 bracketed paste；原始键盘和二进制输入保留原有编码。输入和尺寸操作等待执行端或 provider 确认，关闭会拒绝排队及进行中的操作，迟到回复不能恢复已关闭的输入链。
 
-剪贴板贡献捕获发起实例和输入 generation，异步读取或确认后核对活动项、连接及屏幕；切换回来也不会发送已失效的粘贴。浏览器 paste 在 xterm 处理之前进入同一贡献，经原实例 `sendText` 发送并等待输入确认，不会同时进入 raw onData。没有文本选区时，Ctrl+C 继续发送给 Shell；Interrupt Active Command 通过执行宿主发送 SIGINT。
+剪贴板贡献捕获发起实例和输入 generation，异步读取或确认后核对活动项、连接及屏幕；切换回来也不会发送已失效的粘贴。浏览器 paste 在 xterm 处理之前进入同一贡献，经原实例 `sendText` 发送并等待输入确认，不会同时进入 raw onData。没有文本选区时，Ctrl+C 继续发送给 Shell；Send Signal 通过执行宿主发送 SIGINT、SIGTERM、SIGKILL 或 SIGHUP，POSIX 目标为当前前台进程组。无参打开选择器，显式 `{ signal }` 参数直接发送；取消、切换终端或断线后撤回选择。Shell 本身处于前台时，终止信号也可能结束 Shell；不支持的执行端明确报错。
 
 `copyOnSelection` 只在终端本身持有焦点时自动复制选区，Find 的匹配选择不覆盖剪贴板。`rightClickBehavior` 支持复制后清除选区／粘贴、仅粘贴、选词、默认菜单和不操作；Shift 保留菜单入口。剪贴板失败不清除选区，鼠标粘贴在焦点离开后也会失效。
 
@@ -54,9 +54,13 @@ xterm 的文本和原始字节输入经实例进入同一进程输入 owner。`s
 
 最近命令选择器从终端历史 owner 读取按 Profile 保存的命令，只在用户明确接受后重跑。最近命令和目录选择都绑定原 PID；切换实例、重连、退出、关闭或工作区替换会退休并关闭选择器，切换回来不能恢复旧选择。目录发送等待确认期间失效时也不再抢回焦点。听写文字进入原实例输入链，由用户按 Enter 执行；切换实例、退出或隐藏面板取消录音。
 
-Ctrl+Space／Trigger Suggest 显式打开建议选择器，读取同 Profile 的可信历史前缀；确认的 Bash／Zsh 还可读取同执行宿主、同授权工作区根下的实际目录项。只有单行、光标位于末尾且没有 ghost text 的普通输入可补全；复杂引号、转义和展开交给 Shell。接受仅追加正确引用的后缀，不发送 Enter；输入、光标、cwd、能力、实例或工作区变化撤回旧选择。Tab 继续由 Shell 处理。
+Ctrl+Space／Trigger Suggest 合并同 Profile 可信历史、已确认 Bash／Zsh 同授权根下的目录项与 Extension Host 的 completion provider。内置历史和路径只追加单行提示符末尾；扩展可指定提示符内替换范围与触发字符。接受不发送 Enter，Tab 继续由 Shell 处理；输入、光标、cwd、能力、实例、provider 或工作区变化撤回旧选择。
 
-Ctrl/Cmd+.／Show Terminal Quick Fixes 从最新失败命令保留的输出识别 Git 子命令拼写建议和缺失 upstream 的推送建议。只允许空 Shell prompt，拒绝多行、控制字符及 Shell 操作符；用户选择后仅插入建议供检查，仍须自行按 Enter。清屏、输出范围失效、新命令、输入和工作区变化使建议失效；没有匹配输出时不制造修正。
+Ctrl/Cmd+.／Show Terminal Quick Fixes 在空 Shell prompt 展示最新命令的内置 Git 修正和扩展 selector 匹配结果。内置修正仍仅插入经过检查的建议；扩展按其动作类型插入／执行命令、打开 URI 或执行扩展注册命令。扩展 outputMatcher 从原 command 提取准确的 anchor／offset／length 窗口，跨宿主仅传有界文本。清屏、输出范围失效、新命令、输入或宿主代次变化取消请求。
+
+Auto Replies 规则通过原进程 service 安装到 exec-server PTY 输出 drainer，创建时原子安装，跨字节块精确匹配，每条规则每秒最多发送一次，detach、连接关闭、退出均清空规则。Local Echo 默认关闭；启用后仅在已检测的 shell prompt 投影可打印输入，保留原输出流与输入 owner，不修改已解析 buffer。原始输出确认预测，控制或不匹配输出清除预测；Enter 后停止直到下个 prompt。
+
+OSC 99 经原 parser 进入通知中心，通知按钮及 query／alive／activation 回写绑定原实例。禁用设置或关闭实例会撤销该实例的待处理通知。Developer 写入只改显示，录制沿原输入／输出与 TerminalRecorder 生成有界记录。完整功能及宿主边界见 [Terminal 可选贡献](../src/ash/workbench/contrib/terminalContrib/README.md)。
 
 ### 运行编辑器选区
 
@@ -104,9 +108,9 @@ Sticky Scroll 由原 CommandDetection markers 和 xterm buffer 投影命令标�
 
 `terminal.integrated.enableFileLinks` 控制内置文件检测，`wordSeparators` 同时作用于文本链接分词和 xterm 选词。相对路径未直接命中时，只在实例授权根内搜索：唯一结果直接定位，多个结果要求再次选择。选择器先显示内置链接，外部 provider 按最多四个请求增量填入，取消或卸载后停止调度。
 
-扩展 `window.registerTerminalLinkProvider` 沿已有独立宿主注册和调用链接入窗口唯一 `ITerminalLinkProviderService`。包须获准声明 `terminalLinkProvider`；首次到达终端按 `onTerminal` 懒激活。提供者接收行文本、取消令牌及原终端的名称／PID 快照身份，返回经范围校验的链接；用户激活才调用原扩展对象。缓存有界，选择器保留项的句柄被淘汰时按原行重新解析；重命名／重启刷新快照，工作区、进程或扩展代次失效撤回旧调用。此链不声明 Quick Fix／补全 provider 或 Shell Execution 扩展事件的兼容性。
+扩展 `window.registerTerminalLinkProvider` 沿已有独立宿主注册和调用链接入窗口唯一 `ITerminalLinkProviderService`。包须获准声明 `terminalLinkProvider`；首次到达终端按 `onTerminal` 懒激活。提供者接收行文本、取消令牌及原终端的名称／PID 快照身份，返回经范围校验的链接；用户激活才调用原扩展对象。缓存有界，选择器保留项的句柄被淘汰时按原行重新解析；重命名／重启刷新快照，工作区、进程或扩展代次失效撤回旧调用。Completion／Quick Fix 使用同一 Extension Host 的独立 capability admission、注册及取消链，具体行为见 [Terminal 可选贡献](../src/ash/workbench/contrib/terminalContrib/README.md#功能与调用链)。Shell Execution 扩展事件按其原能力契约提供。
 
-附加终端到 Chat 时捕获已解析输出、选区及 Shell 元数据，交给原 draft。只读预览显示接受时的快照，源终端关闭或再次选择不改写已接受内容；预览没有 PTY 或输入目的地。
+附加终端到 Chat 时捕获已解析输出、选区及 Shell 元数据，交给原 draft。Terminal: Ask Chat 还允许输入问题，并将问题与输出快照一起追加到同一个 Chat 草稿，不自动提交；选择期间切换终端或会话取消交付。只读预览显示接受时的快照，源终端关闭或再次选择不改写已接受内容；预览没有 PTY 或输入目的地。
 
 ## 关闭与恢复
 

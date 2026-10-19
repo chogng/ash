@@ -347,6 +347,20 @@ function normalizeRegistration(value: unknown): ExtensionHostRegistration {
 		exactKeys(input, 'Extension Host terminal profile registration', ['kind', 'registrationId', 'profileId', 'title']);
 		return Object.freeze({ kind, registrationId, profileId: boundedText(input.profileId, 'Terminal profile ID', 256), title: boundedText(input.title, 'Terminal profile title', 512) });
 	}
+	if (kind === 'terminalCompletionProvider') {
+		exactKeys(input, 'Extension Host terminal completion registration', ['kind', 'registrationId', 'triggerCharacters']);
+		const triggerCharacters = boundedArray(input.triggerCharacters, 'Terminal completion triggers', 64).map(value => {
+			const character = boundedText(value, 'Terminal completion trigger', 8);
+			if ([...character].length !== 1 || /[\x00-\x1f\x7f]/.test(character)) throw new TypeError('Invalid terminal completion trigger');
+			return character;
+		});
+		assertUnique(triggerCharacters, 'Terminal completion triggers');
+		return Object.freeze({ kind, registrationId, triggerCharacters: Object.freeze(triggerCharacters) });
+	}
+	if (kind === 'terminalQuickFixProvider') {
+		exactKeys(input, 'Extension Host terminal quick fix registration', ['kind', 'registrationId', 'providerId']);
+		return Object.freeze({ kind, registrationId, providerId: boundedText(input.providerId, 'Terminal quick fix provider ID', 256) });
+	}
 	if (kind === 'terminalLinkProvider') {
 		exactKeys(input, 'Extension Host terminal link registration', ['kind', 'registrationId']);
 		return Object.freeze({ kind, registrationId });

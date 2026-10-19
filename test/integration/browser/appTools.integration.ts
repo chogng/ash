@@ -159,7 +159,7 @@ const terminalProcesses: ITerminalProcessService = {
 		return { ready: { pid: index + 1, cwd }, cwd, rows: launch.rows, cols: launch.cols };
 	},
 	listProfiles: async () => [{ profileId: 'bash', title: 'Bash', isDefault: true }],
-	sendSignal: async () => { }, resolveProfile: async selection => {
+	setAutoReplies: async () => { }, sendSignal: async () => { }, resolveProfile: async selection => {
 		profileSelections.push(selection);
 		if (holdProfile) {
 			holdProfile = false;

@@ -1,3 +1,5 @@
+import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
+import { getTerminalAutoReplyRules } from '../common/terminalConfiguration.js';
 import { CancellationError, onUnexpectedError } from '../../../../base/common/errors.js';
 import { Disposable } from '../../../../base/common/lifecycle.js';
 import { AgentHostTerminalService } from './agentHostTerminalService.js';
@@ -19,6 +21,7 @@ export class TerminalInstanceService extends Disposable {
 	private nextInstanceId = 1;
 	readonly backend: AgentHostTerminalService;
 	constructor(
+		@IConfigurationService private readonly configuration: IConfigurationService,
 		@IWorkspaceContextService private readonly workspaceContext: IWorkspaceContextService,
 		@IInstantiationService private readonly instantiationService: IInstantiationService,
 	) {
@@ -76,6 +79,8 @@ export class TerminalInstanceService extends Disposable {
 			: { ...options.execution });
 		const profile = options.profile.type === 'custom' ? Object.freeze({ ...options.profile, path: Object.freeze([...options.profile.path]), args: (typeof options.profile.args === 'string' ? options.profile.args : Object.freeze([...options.profile.args])) }) : Object.freeze({ ...options.profile });
 		const launch = Object.freeze({
+			environmentVariableCollections: options.environmentVariableCollections ?? options.attachPersistentProcess?.state.environmentVariableCollections,
+			environmentVariableCollectionsPersistable: options.environmentVariableCollectionsPersistable ?? (options.attachPersistentProcess?.state.environmentVariableCollections !== undefined),
 			...(environment === undefined ? {} : { env: environment }),
 			...(options.strictEnv === undefined ? {} : { strictEnv: options.strictEnv }),
 			...(options.cwd === undefined ? {} : { cwd: options.cwd }),
@@ -90,7 +95,9 @@ export class TerminalInstanceService extends Disposable {
 		const restored = options.attachPersistentProcess?.state;
 		const instanceNumber = restored?.instanceId ?? this.nextInstanceId++;
 		this.nextInstanceId = Math.max(this.nextInstanceId, instanceNumber + 1);
+		const autoReplies = getTerminalAutoReplyRules(this.configuration);
 		const child = await this.backend.createProcess({
+			...(autoReplies.length ? { autoReplies } : {}),
 			...processWorkspaceFolder(processWorkspaceFolderId),
 			rows: options.dimensions.rows,
 			cols: options.dimensions.cols,

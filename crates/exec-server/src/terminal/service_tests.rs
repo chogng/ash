@@ -1,5 +1,121 @@
 use super::*;
 
+#[cfg(unix)]
+#[test]
+fn auto_replies_are_installed_before_startup_output_and_write_real_pty_input() {
+    let root = tempfile::tempdir().unwrap();
+    let service = terminal_service_for(root.path());
+    let mut request = terminal_request(TerminalLifecycle::ConnectionOwned);
+    request.auto_replies = vec![TerminalAutoReply {
+        match_text: "Confirm deployment?".into(),
+        reply: "yes\r".into(),
+    }];
+    request.execution = Some(TerminalExecution::Process {
+        program: "/bin/sh".into(),
+        args: TerminalArguments::Argv(vec![
+            "-c".into(),
+            "stty -echo; printf 'Confirm deploy'; sleep 0.05; printf 'ment?'; IFS= read -r answer; printf '\\nREPLIED:%s\\n' \"$answer\"".into(),
+        ]),
+    });
+    let created = service.create(1, request).unwrap();
+    let output = read_until(&service, &created.terminal_id, "REPLIED:yes\r\n");
+    assert!(String::from_utf8_lossy(&output).contains("Confirm deployment?"));
+    service.close(1, &created.terminal_id).unwrap();
+}
+
+#[test]
+fn auto_reply_rules_are_atomic_owned_and_revoked_at_each_handoff() {
+    let root = tempfile::tempdir().unwrap();
+    let service = terminal_service_for(root.path());
+    let created = service
+        .create(1, terminal_request(TerminalLifecycle::Reconnectable))
+        .unwrap();
+    let rule = TerminalAutoReply {
+        match_text: "Confirm?".into(),
+        reply: "yes\r".into(),
+    };
+    assert_eq!(
+        service.set_auto_replies(2, &created.terminal_id, vec![rule.clone()]),
+        Err(TerminalError::NotOwner)
+    );
+    service
+        .set_auto_replies(1, &created.terminal_id, vec![rule.clone()])
+        .unwrap();
+    assert_eq!(
+        service.set_auto_replies(
+            1,
+            &created.terminal_id,
+            vec![TerminalAutoReply {
+                match_text: String::new(),
+                reply: "yes".into()
+            }]
+        ),
+        Err(TerminalError::InvalidInput)
+    );
+    let installed = |owner| {
+        let sessions = service.owned_sessions(owner, &created.terminal_id).unwrap();
+        let mut state = sessions[&created.terminal_id].state.lock().unwrap();
+        let mut sent = false;
+        state
+            .auto_replies
+            .process(b"Confirm?", Instant::now(), |_| {
+                sent = true;
+                true
+            });
+        sent
+    };
+    assert!(
+        installed(1),
+        "rejected replacement must preserve installed rules"
+    );
+    let lease = service.detach(1, &created.terminal_id).unwrap();
+    service
+        .attach(
+            2,
+            TerminalAttachRequest {
+                terminal_id: created.terminal_id.clone(),
+                reconnect_token: lease.reconnect_token,
+                rows: 24,
+                cols: 80,
+            },
+        )
+        .unwrap();
+    assert!(
+        !installed(2),
+        "a destination must install its own configuration"
+    );
+    service
+        .set_auto_replies(2, &created.terminal_id, vec![rule])
+        .unwrap();
+    service.close_owner(2);
+    let session = service.sessions.lock().unwrap();
+    let token = session[&created.terminal_id]
+        .reconnect_token
+        .clone()
+        .unwrap();
+    drop(session);
+    service
+        .attach(
+            3,
+            TerminalAttachRequest {
+                terminal_id: created.terminal_id.clone(),
+                reconnect_token: token,
+                rows: 24,
+                cols: 80,
+            },
+        )
+        .unwrap();
+    assert!(
+        !installed(3),
+        "connection close must revoke automatic input"
+    );
+    service.close(3, &created.terminal_id).unwrap();
+    assert_eq!(
+        service.set_auto_replies(3, &created.terminal_id, Vec::new()),
+        Err(TerminalError::NotFound)
+    );
+}
+
 #[test]
 fn terminal_identities_are_unique_across_directories_and_runtime_recreation() {
     let first_root = tempfile::tempdir().unwrap();
@@ -32,6 +148,7 @@ fn revoked_directory_terminates_detached_sessions_and_rejects_new_work() {
         TerminalService::new(grant.authorize(Permission::ExecuteCommands).unwrap()).unwrap();
     let request = TerminalCreateRequest {
         strict_env: None,
+        auto_replies: Vec::new(),
         env: None,
         cwd: None,
         execution: None,
@@ -748,44 +865,51 @@ fn close_protection_observes_real_child_processes_and_interrupt_returns_to_idle(
 
 #[cfg(unix)]
 #[test]
-fn terminal_signal_interrupts_foreground_job_and_keeps_shell_alive() {
-    let root = tempfile::tempdir().unwrap();
-    let service = terminal_service_for(root.path());
-    let created = service
-        .create(1, terminal_request(TerminalLifecycle::ConnectionOwned))
-        .unwrap();
-    service
-        .write(
-            1,
-            TerminalWriteRequest {
-                terminal_id: created.terminal_id.clone(),
-                data: "sh -c 'printf \"\\nSLEEP_READY\\n\"; exec sleep 60'\n".into(),
-            },
-        )
-        .unwrap();
-    read_until(&service, &created.terminal_id, "SLEEP_READY\r\n");
-    service
-        .send_signal(1, &created.terminal_id, TerminalSignal::Interrupt)
-        .unwrap();
-    service
-        .write(
-            1,
-            TerminalWriteRequest {
-                terminal_id: created.terminal_id.clone(),
-                data: "printf '\\nSHELL_ALIVE\\n'\n".into(),
-            },
-        )
-        .unwrap();
-    read_until(&service, &created.terminal_id, "SHELL_ALIVE\r\n");
-    assert_eq!(
+fn terminal_signals_reach_foreground_job_and_keep_shell_alive() {
+    for signal in [
+        TerminalSignal::Interrupt,
+        TerminalSignal::Terminate,
+        TerminalSignal::Kill,
+        TerminalSignal::Hangup,
+    ] {
+        let root = tempfile::tempdir().unwrap();
+        let service = terminal_service_for(root.path());
+        let created = service
+            .create(1, terminal_request(TerminalLifecycle::ConnectionOwned))
+            .unwrap();
         service
-            .process_info(1, &created.terminal_id)
-            .unwrap()
-            .ready
-            .pid,
-        created.ready.pid
-    );
-    service.close(1, &created.terminal_id).unwrap();
+            .write(
+                1,
+                TerminalWriteRequest {
+                    terminal_id: created.terminal_id.clone(),
+                    data: "sh -c 'printf \"\\nSLEEP_READY\\n\"; exec sleep 60'\n".into(),
+                },
+            )
+            .unwrap();
+        read_until(&service, &created.terminal_id, "SLEEP_READY\r\n");
+        service
+            .send_signal(1, &created.terminal_id, signal)
+            .unwrap();
+        service
+            .write(
+                1,
+                TerminalWriteRequest {
+                    terminal_id: created.terminal_id.clone(),
+                    data: "printf '\\nSHELL_ALIVE\\n'\n".into(),
+                },
+            )
+            .unwrap();
+        read_until(&service, &created.terminal_id, "SHELL_ALIVE\r\n");
+        assert_eq!(
+            service
+                .process_info(1, &created.terminal_id)
+                .unwrap()
+                .ready
+                .pid,
+            created.ready.pid
+        );
+        service.close(1, &created.terminal_id).unwrap();
+    }
 }
 
 #[cfg(windows)]
@@ -796,10 +920,17 @@ fn terminal_signal_reports_unsupported_without_injecting_input() {
     let created = service
         .create(1, terminal_request(TerminalLifecycle::ConnectionOwned))
         .unwrap();
-    assert_eq!(
-        service.send_signal(1, &created.terminal_id, TerminalSignal::Interrupt),
-        Err(TerminalError::Unsupported)
-    );
+    for signal in [
+        TerminalSignal::Interrupt,
+        TerminalSignal::Terminate,
+        TerminalSignal::Kill,
+        TerminalSignal::Hangup,
+    ] {
+        assert_eq!(
+            service.send_signal(1, &created.terminal_id, signal),
+            Err(TerminalError::Unsupported)
+        );
+    }
     assert_eq!(
         service.process_info(1, &created.terminal_id).unwrap().cwd,
         None
@@ -819,6 +950,7 @@ fn terminal_service_for(path: &std::path::Path) -> TerminalService {
 fn terminal_request(lifecycle: TerminalLifecycle) -> TerminalCreateRequest {
     TerminalCreateRequest {
         strict_env: None,
+        auto_replies: Vec::new(),
         env: None,
         cwd: None,
         execution: None,
@@ -955,6 +1087,7 @@ fn interactive_shell_commands_report_real_boundaries_and_keep_user_configuration
             1,
             TerminalCreateRequest {
                 strict_env: None,
+                auto_replies: Vec::new(),
                 env: None,
                 cwd: None,
                 execution: None,
@@ -1510,6 +1643,7 @@ function global:prompt {
             1,
             TerminalCreateRequest {
                 strict_env: None,
+                auto_replies: Vec::new(),
                 profile: TerminalProfileSelection::Custom {
                     name: "Configured PowerShell".into(),
                     path: vec![std::env::var("SHELL").unwrap()],
@@ -2154,6 +2288,7 @@ fn custom_profile_resolution_and_creation_share_identity_argv_and_environment() 
             1,
             TerminalCreateRequest {
                 strict_env: None,
+                auto_replies: Vec::new(),
                 rows: 24,
                 cols: 80,
                 profile: selection,

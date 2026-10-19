@@ -7,6 +7,7 @@ export const enum TerminalStorageKeys {
 
 import type { ITerminalReloadState, ITerminalReloadCredentials } from '../../../services/terminal/common/terminal.js';
 import { isRecord } from '../../../../base/common/types.js';
+import { deserializeEnvironmentVariableCollections, serializeEnvironmentVariableCollections } from '../../../../platform/terminal/common/environmentVariableShared.js';
 
 /** Reload state is an untrusted persistence boundary, even in the local profile. */
 export function parseTerminalReloadState(text: string): ITerminalReloadState {
@@ -34,6 +35,7 @@ export function parseTerminalReloadState(text: string): ITerminalReloadState {
 			throw new TypeError('Invalid terminal screen checkpoint');
 		}
 		if (entry.launch !== undefined) validateLaunch(entry.launch);
+		if (entry.environmentVariableCollections !== undefined) entry.environmentVariableCollections = serializeEnvironmentVariableCollections(deserializeEnvironmentVariableCollections(entry.environmentVariableCollections));
 		if (value.kind === 'revive' && entry.launch === undefined) throw new TypeError('Missing terminal revival launch');
 		const process = entry.process;
 		if (!isRecord(process) || !shortString(process.terminalId) || processIds.has(process.terminalId)

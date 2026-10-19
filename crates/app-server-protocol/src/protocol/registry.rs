@@ -2338,6 +2338,8 @@ use crate::protocol::terminal::TerminalAttachParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::terminal::TerminalAttachResult;
 #[cfg(any(test, feature = "export"))]
+use crate::protocol::terminal::TerminalAutoReply;
+#[cfg(any(test, feature = "export"))]
 use crate::protocol::terminal::TerminalCloseParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::terminal::TerminalCommandStatus;
@@ -2389,6 +2391,8 @@ use crate::protocol::terminal::TerminalReconnectLease;
 use crate::protocol::terminal::TerminalResizeParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::terminal::TerminalSendSignalParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::terminal::TerminalSetAutoRepliesParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::terminal::TerminalShellIntegration;
 #[cfg(any(test, feature = "export"))]
@@ -5588,6 +5592,11 @@ client_methods! {
         response: (),
         serialization: None,
     },
+    TerminalSetAutoReplies => "terminal/setAutoReplies" {
+        params: TerminalSetAutoRepliesParams,
+        response: (),
+        serialization: None,
+    },
     TerminalResize => "terminal/resize" {
         params: TerminalResizeParams,
         response: (),
@@ -7626,6 +7635,8 @@ typescript_bindings! {
     TerminalProcessInfoParams,
     TerminalSignal,
     TerminalSendSignalParams,
+    TerminalAutoReply,
+    TerminalSetAutoRepliesParams,
     TerminalResizeParams,
     TerminalReadParams,
     TerminalOutputChunk,

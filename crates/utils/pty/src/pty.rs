@@ -43,16 +43,15 @@ struct PtyChildTerminator {
 
 impl ChildTerminator for PtyChildTerminator {
     fn signal(&mut self, signal: ProcessSignal) -> std::io::Result<()> {
-        match signal {
-            ProcessSignal::Interrupt => {
-                #[cfg(unix)]
-                if let Some(process_group_id) = self.process_group_id {
-                    return crate::process_group::interrupt_process_group(process_group_id);
-                }
-
-                Err(crate::process::unsupported_signal(signal))
-            }
+        #[cfg(unix)]
+        if let Some(process_group_id) = self.process_group_id {
+            return crate::process_group::signal_process_group_id(
+                process_group_id as libc::pid_t,
+                signal.unix_number(),
+            )
+            .map(|_| ());
         }
+        Err(crate::process::unsupported_signal(signal))
     }
 
     fn kill(&mut self) -> std::io::Result<()> {
