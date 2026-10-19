@@ -6,6 +6,7 @@ import { createDecorator } from '../../instantiation/common/instantiation.js';
 import { IEncryptionMainService, KnownStorageProvider } from '../../encryption/common/encryptionService.js';
 import { IApplicationStorageMainService } from '../../storage/electron-main/storageMainService.js';
 import { StorageScope, StorageTarget } from '../../storage/common/storage.js';
+import type { IStorageEntry } from '../../storage/common/storageIpc.js';
 import { IConfigurationService } from '../../configuration/common/configuration.js';
 import type { BrowserPasswordState, IBrowserPasswordService } from '../common/browserPasswordService.js';
 import '../common/browserPasswordService.js';
@@ -28,18 +29,23 @@ export class BrowserPasswordMainService extends Disposable implements IBrowserPa
 	private readonly changed = this._register(new Emitter<void>());
 	readonly onDidChange = this.changed.event;
 	private turn: Promise<void> = Promise.resolve();
+	private readonly memoryEntries: Record<string, IStorageEntry> | undefined;
 
 	constructor(
+		readonly useInMemoryStorage: boolean,
 		@IEncryptionMainService private readonly encryption: IEncryptionMainService,
 		@IApplicationStorageMainService private readonly storage: IApplicationStorageMainService,
 		@IConfigurationService private readonly configuration: IConfigurationService,
-	) { super(); }
+	) {
+		super();
+		this.memoryEntries = useInMemoryStorage ? Object.create(null) : undefined;
+	}
 
 	get saveEnabled(): boolean { return this.configuration.getValue<boolean>('workbench.browser.savePasswords') !== false; }
 	get autofillEnabled(): boolean { return this.configuration.getValue<boolean>('workbench.browser.autofillPasswords') !== false; }
 
 	private async available(): Promise<boolean> {
-		return await this.encryption.isEncryptionAvailable() && await this.encryption.getKeyStorageProvider() !== KnownStorageProvider.basicText;
+		return this.memoryEntries !== undefined || await this.encryption.isEncryptionAvailable() && await this.encryption.getKeyStorageProvider() !== KnownStorageProvider.basicText;
 	}
 	async canSave(): Promise<boolean> { return this.saveEnabled && await this.available(); }
 
@@ -48,7 +54,7 @@ export class BrowserPasswordMainService extends Disposable implements IBrowserPa
 	}
 
 	private async decode(id: string, ciphertext: string): Promise<PasswordValue> {
-		const value: unknown = JSON.parse(await this.encryption.decrypt(ciphertext));
+		const value: unknown = JSON.parse(this.memoryEntries ? ciphertext : await this.encryption.decrypt(ciphertext));
 		if (!isRecord(value) || value.version !== 1 || typeof value.session !== 'string' || !/^[a-f0-9]{64}$/u.test(value.session)
 			|| !['global', 'workspace'].includes(value.scope as string) || typeof value.origin !== 'string' || value.origin.length > 2048
 			|| !validCredentials(value.username, value.password)) { throw new Error('Invalid saved password'); }
@@ -60,10 +66,10 @@ export class BrowserPasswordMainService extends Disposable implements IBrowserPa
 	async readState(): Promise<BrowserPasswordState> {
 		return this.run(async () => {
 			if (!await this.available()) { return { available: false, entries: [], corrupted: 0 }; }
-			const snapshot = await this.storage.getItems(storageIdentity);
+			const snapshot = await this.entries();
 			const entries: BrowserPasswordState['entries'][number][] = [];
 			let corrupted = 0;
-			for (const [id, entry] of Object.entries(snapshot.entries)) {
+			for (const [id, entry] of Object.entries(snapshot)) {
 				if (!id.startsWith(prefix)) { continue; }
 				try {
 					const value = await this.decode(id, entry.value);
@@ -78,9 +84,9 @@ export class BrowserPasswordMainService extends Disposable implements IBrowserPa
 	async find(session: string, origin: string): Promise<readonly (PasswordValue & { readonly id: string; })[]> {
 		return this.run(async () => {
 			if (!await this.available()) { return []; }
-			const snapshot = await this.storage.getItems(storageIdentity);
+			const snapshot = await this.entries();
 			const matches: (PasswordValue & { id: string; })[] = [];
-			for (const [id, entry] of Object.entries(snapshot.entries)) {
+			for (const [id, entry] of Object.entries(snapshot)) {
 				if (!id.startsWith(prefix + session + '.')) { continue; }
 				try { const value = await this.decode(id, entry.value); if (value.origin === origin) { matches.push({ ...value, id }); } }
 				catch { /* Preserve unreadable records until an explicit management action. */ }
@@ -99,34 +105,46 @@ export class BrowserPasswordMainService extends Disposable implements IBrowserPa
 	async update(id: string, username: string, password: string): Promise<void> {
 		await this.run(async () => {
 			if (!await this.available()) { throw new Error('Browser password storage unavailable'); }
-			const snapshot = await this.storage.getItems(storageIdentity);
-			const entry = snapshot.entries[id];
+			const snapshot = await this.entries();
+			const entry = snapshot[id];
 			if (!entry) { throw new Error('Saved password no longer exists'); }
 			const old = await this.decode(id, entry.value);
 			const next = { ...old, username, password };
 			const nextId = this.key(next);
-			if (nextId !== id && snapshot.entries[nextId]) { throw new Error('An account already exists for this username'); }
+			if (nextId !== id && snapshot[nextId]) { throw new Error('An account already exists for this username'); }
 			await this.write(next);
-			if (nextId !== id) { await this.storage.updateItems(storageIdentity, id, null); }
+			if (nextId !== id) { await this.remove(id); }
 		});
 	}
 
 	private async write(value: PasswordValue): Promise<void> {
 		const id = this.key(value);
-		const ciphertext = await this.encryption.encrypt(JSON.stringify({ ...value, version: 1 }));
-		await this.storage.updateItems(storageIdentity, id, { value: ciphertext, target: StorageTarget.MACHINE });
+		const serialized = JSON.stringify({ ...value, version: 1 });
+		if (this.memoryEntries) {
+			this.memoryEntries[id] = { value: serialized, target: StorageTarget.MACHINE };
+		} else {
+			const ciphertext = await this.encryption.encrypt(serialized);
+			await this.storage.updateItems(storageIdentity, id, { value: ciphertext, target: StorageTarget.MACHINE });
+		}
 		this.changed.fire();
+	}
+	private async entries(): Promise<Readonly<Record<string, IStorageEntry>>> {
+		return this.memoryEntries ?? (await this.storage.getItems(storageIdentity)).entries;
+	}
+	private async remove(id: string): Promise<void> {
+		if (this.memoryEntries) { delete this.memoryEntries[id]; }
+		else { await this.storage.updateItems(storageIdentity, id, null); }
 	}
 
 	async delete(id: string): Promise<void> {
-		await this.run(async () => { await this.storage.updateItems(storageIdentity, id, null); this.changed.fire(); });
+		await this.run(async () => { await this.remove(id); this.changed.fire(); });
 	}
 	async clear(): Promise<void> { await this.clearSession(); }
 	async clearSession(session?: string): Promise<void> {
 		await this.run(async () => {
-			const snapshot = await this.storage.getItems(storageIdentity);
-			for (const id of Object.keys(snapshot.entries)) {
-				if (id.startsWith(session ? prefix + session + '.' : prefix)) { await this.storage.updateItems(storageIdentity, id, null); }
+			const snapshot = await this.entries();
+			for (const id of Object.keys(snapshot)) {
+				if (id.startsWith(session ? prefix + session + '.' : prefix)) { await this.remove(id); }
 			}
 			this.changed.fire();
 		});
@@ -136,6 +154,12 @@ export class BrowserPasswordMainService extends Disposable implements IBrowserPa
 		const result = this.turn.then(action);
 		this.turn = result.then(() => undefined, () => undefined);
 		return result;
+	}
+	protected override disposeCore(): void {
+		if (this.memoryEntries) {
+			for (const key of Object.keys(this.memoryEntries)) { delete this.memoryEntries[key]; }
+		}
+		super.disposeCore();
 	}
 }
 

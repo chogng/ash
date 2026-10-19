@@ -15,7 +15,7 @@ import type { Socket } from 'node:net';
 
 for (const locale of ['en', 'zh-CN'] as const) {
 	test.describe(`Browser authentication ${locale}`, () => {
-		test.use({ openWorkspace: false, electronUserSettings: { 'workbench.locale': locale } });
+		test.use({ openWorkspace: false, useInMemorySecretStorage: false, electronUserSettings: { 'workbench.locale': locale } });
 		test(`browser HTTP authentication encrypts credentials, survives restart and clears them in ${locale}`, { tag: ['@electron-ui'] }, async ({ application: initialApplication, workbench: initialWorkbench, reloadWorkbench }, testInfo) => {
 			test.setTimeout(180_000);
 			let application = initialApplication;

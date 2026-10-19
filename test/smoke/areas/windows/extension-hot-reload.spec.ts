@@ -7,7 +7,6 @@ import { promisify } from 'node:util';
 import { createServer } from 'vite';
 import { expect, test } from '../../../automation/test.js';
 import { resolveElectronConfiguration } from '../../../automation/electron.js';
-import { prepareTestKeychain } from '../../../automation/macKeychain.js';
 import { Workbench } from '../../../automation/workbench.js';
 import { registerRunResource } from '../../../../build/processes.js';
 import { appServerDaemonExecutablePath } from '../../../../src/ash/platform/app-server-daemon/node/appServerDaemonPackage.js';
@@ -42,7 +41,6 @@ for (const reloadBackend of [false, true]) test(`development extension manifests
 	const daemonVersion = async () => JSON.parse((await execFileAsync(daemon, ['version'], { env: configuration.env, timeout: 15_000 })).stdout) as { pid: number; instanceId: string; };
 	try {
 		await server.listen();
-		await prepareTestKeychain(configuration.env);
 		application = await _electron.launch({
 			args: [...configuration.args], cwd: configuration.cwd, executablePath: configuration.executablePath,
 			env: { ...configuration.env, ASH_DEV_APP_SERVER_RELOAD: reloadBackend ? '1' : '0', ASH_RENDERER_URL: server.resolvedUrls!.local[0]! },

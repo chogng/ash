@@ -71,7 +71,7 @@ export async function connectProfile(application: PlaywrightApplication, web: We
 		profileRoot: web.profileDirectory, sourceEnvironment: { ...createTestEnvironment(web.profileDirectory, process.env), ASH_PRODUCT_SERVICES_PATH: join(web.profileDirectory, 'product-services.json') },
 	} : await (application as Extract<PlaywrightApplication, { evaluate: unknown; }>).evaluate(({ app }) => ({
 		appPath: app.getAppPath(), resourcesPath: process.resourcesPath, electronExecutable: process.execPath,
-		profileRoot: process.env.ASH_HOME!, sourceEnvironment: { PATH: process.env.PATH, HOME: process.env.HOME, SystemRoot: process.env.SystemRoot, ASH_RG_PATH: process.env.ASH_RG_PATH, ASH_PRODUCT_SERVICES_PATH: process.env.ASH_PRODUCT_SERVICES_PATH },
+		profileRoot: process.env.ASH_HOME!, sourceEnvironment: { PATH: process.env.PATH, HOME: process.env.HOME, SystemRoot: process.env.SystemRoot, ASH_RG_PATH: process.env.ASH_RG_PATH, ASH_PRODUCT_SERVICES_PATH: process.env.ASH_PRODUCT_SERVICES_PATH, ASH_USE_INMEMORY_SECRETSTORAGE: process.env.ASH_USE_INMEMORY_SECRETSTORAGE },
 	}));
 	const { launcher } = createAppServerDaemonLauncher({ ...host, profileRoot: options.profileRoot ?? host.profileRoot, packageLocation: { appPath: host.appPath, resourcesPath: host.resourcesPath, isPackaged: !!web, platform: process.platform }, workspaceRoot, role: options.directoryGrantsHost ? 'workbench' : 'agents' });
 	let frames: ChildProcessJsonlTransport | undefined;

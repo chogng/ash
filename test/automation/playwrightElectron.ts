@@ -9,7 +9,6 @@ import { ElectronPlaywrightDriver } from "./electronDriver.js";
 import { WorkbenchDiagnostics } from './playwrightDriver.js';
 import { resolveElectronConfiguration, type ElectronLaunchOptions } from "./electron.js";
 import { isProcessRunning, registerRunResource } from '../../build/processes.ts';
-import { prepareTestKeychain } from './macKeychain.js';
 
 export interface ElectronApplicationLaunchResult {
 	readonly application: ElectronApplication;
@@ -30,8 +29,6 @@ export type ElectronLaunchMilestone = 'electron-launch-resolved' | 'first-window
 /** Owns an Electron process independently of whether its first window is Workbench or Agents. */
 export async function launchElectronApplication(options: ElectronLaunchOptions): Promise<ElectronApplicationLaunchResult> {
 	const configuration = resolveElectronConfiguration(options);
-	// Electron safeStorage also runs in UI-only scenarios such as website passwords.
-	await prepareTestKeychain(configuration.env);
 	const startupDeadline = Date.now() + (options.startupTimeout ?? 30_000);
 	const resource = await registerRunResource(options.appServerMode === 'required' && options.profileDirectory === undefined ? () => ({
 		executable: appServerDaemonExecutablePath({ appPath: configuration.cwd, isPackaged: options.packagedBundle !== undefined, platform: process.platform, resourcesPath: configuration.resourcesPath }),

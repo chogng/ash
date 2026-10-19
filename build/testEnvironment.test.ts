@@ -4,9 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
 import { createTestEnvironment } from '../test/automation/testEnvironment.ts';
-import { prepareTestKeychain } from '../test/automation/macKeychain.ts';
-import { execFile } from 'node:child_process';
-import { promisify } from 'node:util';
+import { resolveElectronConfiguration } from '../test/automation/electron.ts';
 
 test('ordinary product tests exclude external Codex authentication even when the host sets CODEX_HOME', () => {
 	const environment = createTestEnvironment('/isolated-home', { HOME: '/host-home', CODEX_HOME: '/host-auth', PATH: '/bin' });
@@ -29,23 +27,22 @@ test('a real-model scenario opts into one canonical auth directory while retaini
 	} finally { await rm(root, { recursive: true, force: true }); }
 });
 
-test('macOS Desktop tests retain their own keychain across restarts without changing the host default', { skip: process.platform !== 'darwin' }, async () => {
-	const root = await mkdtemp(join(tmpdir(), 'ash-keychain-fixture-'));
-	const environment = createTestEnvironment(root, process.env);
-	const keychain = join(root, 'Library', 'Keychains', 'ash-smoke.keychain-db');
-	const execute = promisify(execFile);
-	const defaultKeychain = async (env = process.env) => (await execute('/usr/bin/security', ['default-keychain', '-d', 'user'], { env })).stdout.trim();
-	const hostDefault = await defaultKeychain();
+test('Electron tests default to memory credentials without preparing a system or temporary keychain', async () => {
+	const root = await mkdtemp(join(tmpdir(), 'ash-credential-fixture-'));
 	try {
-		await prepareTestKeychain(environment);
-		assert.equal(await realpath(JSON.parse(await defaultKeychain(environment))), await realpath(keychain));
-		const identity = await stat(keychain);
-		await prepareTestKeychain(environment);
-		assert.equal((await stat(keychain)).ino, identity.ino);
-		assert.equal(await defaultKeychain(), hostDefault);
-	} finally {
-		await execute('/usr/bin/security', ['delete-keychain', keychain], { env: environment }).catch(() => { });
-		await rm(root, { recursive: true, force: true });
-	}
-	assert.equal(await defaultKeychain(), hostDefault);
+		for (const appServerMode of ['disabled', 'required'] as const) {
+			const options = { appServerMode, userDataDirectory: root, packagedBundle: join(root, 'Ash.app'), environment: { ...process.env, ASH_USE_INMEMORY_SECRETSTORAGE: '0' } };
+			const ordinary = resolveElectronConfiguration(options);
+			assert.ok(ordinary.args.includes('--use-inmemory-secretstorage'));
+			assert.equal(ordinary.env.ASH_USE_INMEMORY_SECRETSTORAGE, undefined);
+			assert.equal(ordinary.env.HOME, root);
+			const persistence = resolveElectronConfiguration({ ...options, useInMemorySecretStorage: false });
+			assert.equal(persistence.args.includes('--use-inmemory-secretstorage'), false);
+			for (const launch of [ordinary, persistence]) {
+				if (process.platform === 'darwin') assert.ok(launch.args.includes('--use-mock-keychain'));
+				if (process.platform === 'linux') assert.ok(launch.args.includes('--password-store=basic'));
+			}
+		}
+		await assert.rejects(stat(join(root, 'Library', 'Keychains')), { code: 'ENOENT' });
+	} finally { await rm(root, { recursive: true, force: true }); }
 });

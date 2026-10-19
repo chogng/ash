@@ -1,10 +1,12 @@
 import { createServer } from 'node:http';
-import { readFile } from 'node:fs/promises';
+import { readFile, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { ElectronApplication, JSHandle } from '@playwright/test';
 import { expect, test } from '../../../automation/test.js';
 import { installMainChannelTestClient } from '../../../automation/mainProcessIpc.js';
 import type { BrowserPasswordState } from '../../../../src/ash/platform/browserView/common/browserPasswordService.js';
+import { APP_SERVER_METHODS } from '../../../../.build/protocol/typescript/index.js';
+import { connectProfile } from '../sessions/sessionProfileFixture.js';
 
 async function clickBrowserControl(view: JSHandle<Electron.WebContentsView>, selector: string): Promise<void> {
 	await expect.poll(() => view.evaluate(view => view.webContents.isLoading())).toBe(false);
@@ -24,9 +26,61 @@ async function clickBrowserControl(view: JSHandle<Electron.WebContentsView>, sel
 	} else { await click(); }
 }
 
+test.describe('Ephemeral website credentials', () => {
+	test.use({ openWorkspace: false });
+	test('ordinary Electron saves credentials in memory without a keychain or disk persistence', { tag: ['@electron-ui', '@electron-app-server'] }, async ({ application: initialApplication, workbench: initialWorkbench, reloadWorkbench, target, testWorkspace }) => {
+		let application = initialApplication; let workbench = initialWorkbench;
+		const server = createServer((request, response) => {
+			response.setHeader('Content-Type', 'text/html');
+			response.end(request.method === 'POST' ? '<title>Account page</title><p>Signed in</p>' : '<title>Memory login</title><form method="post"><input name="username" autocomplete="username" value="memory-account"><input name="password" type="password" autocomplete="current-password" value="memory-password"><button>Log in</button></form>');
+		});
+		await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
+		const address = server.address(); if (!address || typeof address === 'string') throw new Error('Missing login endpoint');
+		const origin = `http://127.0.0.1:${address.port}`;
+		let view: JSHandle<Electron.WebContentsView> | undefined;
+		let backend: Awaited<ReturnType<typeof connectProfile>> | undefined;
+		try {
+			const paths = await (application as ElectronApplication).evaluate(({ app, safeStorage }) => {
+				if (!process.argv.includes('--use-inmemory-secretstorage') || process.env.ASH_USE_INMEMORY_SECRETSTORAGE !== '1') throw new Error('Memory mode was not selected');
+				// Any application-level access to native credentials fails this scenario.
+				for (const method of ['isEncryptionAvailable', 'encryptString', 'decryptString'] as const) {
+					safeStorage[method] = () => { throw new Error('Memory credentials accessed safeStorage'); };
+				}
+				return { home: process.env.HOME!, profile: process.env.ASH_HOME!, storage: app.getPath('userData') };
+			});
+			if (target.appServerMode === 'required') {
+				backend = await connectProfile(application, undefined, testWorkspace.directory, workbench.page);
+				const result = await backend.client.request(APP_SERVER_METHODS['provider/apiKey/set'], { connection: 'openai', apiKey: 'synthetic-memory-key' });
+				expect(result.apiKeyConfigured).toBe(true);
+				await expect(stat(join(paths.profile, 'secrets'))).rejects.toMatchObject({ code: 'ENOENT' });
+				await backend.close(); backend = undefined;
+			}
+			await installMainChannelTestClient(workbench.page);
+			await workbench.page.evaluate(url => globalThis.ashTestMainProcess.call('browserView', 'getOrCreateBrowserView', ['browser_target_' + crypto.randomUUID(), { initialUrl: url, owner: { type: 'user' }, session: { scope: 'global' } }]), origin);
+			await expect(workbench.page.locator('.ash-browser-editor').getByRole('status')).toHaveText('Memory login');
+			view = await (application as ElectronApplication).evaluateHandle(({ BrowserWindow }, origin) => BrowserWindow.getAllWindows().flatMap(window => window.contentView.children).find(child => 'webContents' in child && (child as Electron.WebContentsView).webContents.getURL().startsWith(origin)) as Electron.WebContentsView, origin);
+			await workbench.dialogs.confirm(application, 'Save website password', 'Save password', () => clickBrowserControl(view!, 'button'));
+			const state = () => workbench.page.evaluate(() => globalThis.ashTestMainProcess.call<BrowserPasswordState>('browserPasswords', 'readState', []));
+			await expect.poll(async () => (await state()).entries.map(entry => entry.username)).toEqual(['memory-account']);
+			const disk = await readFile(join(paths.storage, 'workbench-state.json'), 'utf8');
+			for (const value of ['browser.passwords.', 'memory-account', 'memory-password']) expect(disk).not.toContain(value);
+			if (process.platform === 'darwin') await expect(stat(join(paths.home, 'Library', 'Keychains'))).rejects.toMatchObject({ code: 'ENOENT' });
+			await view.dispose(); view = undefined;
+			({ application, workbench } = await reloadWorkbench());
+			await installMainChannelTestClient(workbench.page);
+			expect(await state()).toEqual({ available: true, entries: [], corrupted: 0 });
+		} finally {
+			await backend?.close(); await view?.dispose();
+			server.closeAllConnections(); await new Promise<void>(resolve => server.close(() => resolve()));
+		}
+	});
+});
+
 for (const locale of ['en', 'zh-CN'] as const) {
 	test.describe(`Website passwords ${locale}`, () => {
-		test.use({ openWorkspace: false, electronUserSettings: { 'workbench.locale': locale } });
+		// These journeys verify encrypted disk records and process restart; the launcher
+		// still replaces Chromium's OS credential facility inside the isolated test profile.
+		test.use({ openWorkspace: false, useInMemorySecretStorage: false, electronUserSettings: { 'workbench.locale': locale } });
 		test('real form login saves, updates, fills and manages encrypted passwords across restart', { tag: ['@electron-ui'] }, async ({ application: initialApplication, workbench: initialWorkbench, reloadWorkbench }, testInfo) => {
 			test.setTimeout(180_000);
 			let application = initialApplication;
@@ -133,6 +187,7 @@ for (const locale of ['en', 'zh-CN'] as const) {
 				const storagePath = await (application as ElectronApplication).evaluate(({ app }) => app.getPath('userData'));
 				const disk = await readFile(join(storagePath, 'workbench-state.json'), 'utf8');
 				expect(disk).toContain('ash-encrypted:1:'); expect(disk).not.toContain('synthetic-account'); expect(disk).not.toContain(currentPassword);
+				if (process.platform === 'darwin') await expect(stat(join(storagePath, 'Library', 'Keychains'))).rejects.toMatchObject({ code: 'ENOENT' });
 				await view.dispose(); view = undefined;
 				({ application, workbench } = await reloadWorkbench()); await installMainChannelTestClient(workbench.page);
 				await navigate(); view = await acquire(); await click('input[name=username]');

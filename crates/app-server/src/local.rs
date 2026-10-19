@@ -954,7 +954,10 @@ impl LocalProfileRuntime {
                 config.clone(),
             )))
             .map_err(open_error)?;
-        let secrets = open_profile_secrets(&profile_root)?;
+        let secrets = open_profile_secrets(
+            &profile_root,
+            std::env::var("ASH_USE_INMEMORY_SECRETSTORAGE"),
+        )?;
         let diagnostics = diagnostics::Diagnostics::default();
         let telemetry = ash_otel::Telemetry::new(diagnostics.clone());
         let plugin_authority = PluginActivationAuthority::open(profile_root.join("plugins"))
@@ -1144,7 +1147,17 @@ impl CodebaseProviders {
     }
 }
 
-fn open_profile_secrets(profile_root: &Path) -> Result<Arc<dyn SecretStore>, OpenAppServerError> {
+fn open_profile_secrets(
+    profile_root: &Path,
+    memory_setting: Result<String, std::env::VarError>,
+) -> Result<Arc<dyn SecretStore>, OpenAppServerError> {
+    match memory_setting.as_deref() {
+        Ok("1") => return Ok(Arc::new(ash_secrets::MemorySecretStore::default())),
+        Ok("0") | Err(std::env::VarError::NotPresent) => {}
+        Ok(_) | Err(std::env::VarError::NotUnicode(_)) => {
+            return Err(open_error("ASH_USE_INMEMORY_SECRETSTORAGE must be 0 or 1"));
+        }
+    }
     #[cfg(not(test))]
     let keyring =
         ash_keyring_store::KeyringSecretStore::for_profile(profile_root).map_err(open_error)?;
@@ -1379,7 +1392,10 @@ pub fn open_app_server_with_codebase_providers(
         }
         (Some(runtime), None) => Arc::clone(&runtime.secrets),
         (None, Some(connectors)) => Arc::clone(&connectors.secrets),
-        (None, None) => open_profile_secrets(&options.profile_root)?,
+        (None, None) => open_profile_secrets(
+            &options.profile_root,
+            std::env::var("ASH_USE_INMEMORY_SECRETSTORAGE"),
+        )?,
     };
     let mut connector_runtime = match options.connector_runtime.take() {
         Some(runtime) => Some(runtime),
