@@ -20,6 +20,8 @@ export const enum TerminalSettingPrefix {
 
 export const enum TerminalSettingId {
 	Cwd = 'terminal.integrated.cwd',
+	CopyOnSelection = 'terminal.integrated.copyOnSelection',
+	RightClickBehavior = 'terminal.integrated.rightClickBehavior',
 	EnableMultiLinePasteWarning = 'terminal.integrated.enableMultiLinePasteWarning',
 }
 

@@ -1,3 +1,5 @@
+import { ITerminalLinkProviderService } from '../../../../contrib/terminalContrib/links/browser/links.js';
+import { TerminalLinkProviderService } from '../../../../contrib/terminalContrib/links/browser/terminalLinkProviderService.js';
 import { IAdapterManager, IDebugService, type IDebugConfigurationProvider, type DebugConfigurationProviderRegistration, type IDebugAdapterTrackerFactory, type DebugAdapterTrackerFactoryRegistration } from '../../../../contrib/debug/common/debug.js';
 import { AdapterManager } from '../../../../contrib/debug/browser/debugAdapterManager.js';
 import { IChatSpeechToTextService, ChatSpeechToTextService } from '../../../../contrib/chat/browser/speechToText/chatSpeechToTextService.js';
@@ -36,7 +38,7 @@ import { MainThreadConfiguration } from '../../../../api/browser/mainThreadConfi
 import { MainThreadWorkspace } from '../../../../api/browser/mainThreadWorkspace.js';
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
 import { MockDebugSession } from '../../../../contrib/debug/test/common/mockDebug.js';
-import { Event } from '../../../../../base/common/event.js';
+import { Emitter, Event } from '../../../../../base/common/event.js';
 import { IExtensionService } from '../../../extensions/common/extensionService.js';
 import { TestExtensionService } from '../../../../test/common/testExtensionServices.js';
 
@@ -1132,6 +1134,7 @@ function createServices(api: IExtensionHostApi, languages: ILanguageFeaturesServ
 	services.registerSingleton(IExtensionService, () => new TestExtensionService(extensionApi, services.get(IAdapterManager)));
 	services.registerInstance(ITerminalProcessService, { onConnectionState: Event.None, listProfiles: async () => [] } as unknown as ITerminalProcessService);
 	services.registerInstance(ITerminalService, { ...Disposable.None } as unknown as ITerminalService);
+	services.registerSingleton(ITerminalLinkProviderService, () => services.createInstance(TerminalLinkProviderService));
 	services.registerSingleton(IEnvironmentVariableService, () => services.createInstance(EnvironmentVariableService));
 	services.registerSingleton(ITerminalContributionService, () => services.createInstance(TerminalContributionService));
 	services.registerSingleton(ITerminalProfileService, () => services.createInstance(TerminalProfileService));
@@ -1679,6 +1682,72 @@ test('Remote extension cancellation and revocation cannot open a window', async 
 	await assert.rejects(api.clientHandler!({ operation: 'openRemoteConnection', authority: 'ssh+build' }, new AbortController().signal, source), /revoked/);
 });
 
+
+test('terminal link demand activates its exact dormant extension through the window owner', async () => {
+	const api = new FakeExtensionHostApi(dormantSnapshot(['onDemand:terminalLinkProvider']));
+	api.activationResult = Promise.resolve(snapshot(2, 'acme.links', [], '', [], 11));
+	using languages = new LanguageFeaturesService();
+	using services = createServices(api, languages, new ProviderSink<TaskProvider>(), new ProviderSink<TestProfileProvider>());
+	using host = services.createInstance(AppServerExtensionHostService, new CommandRegistry(), 1_000);
+	await host.start();
+	const extensions = services.get(IExtensionService);
+	await extensions.activateByEvent('onSpeech');
+	assert.equal(api.activations.length, 0);
+	await extensions.activateByEvent('onTerminal');
+	assert.deepEqual(api.activations.map(({ initialization, ...request }) => request), [{ extensionId: 'acme.demo', activationGeneration: 11, event: { type: 'capability', capability: 'terminalLinkProvider' } }]);
+});
+
+test('terminal link registrations reach the shared owner and retire callbacks with their process and host', async () => {
+	const api = new FakeExtensionHostApi(snapshot(1, 'acme.links', [{ kind: 'terminalLinkProvider', registrationId: 'links' }]));
+	using languages = new LanguageFeaturesService();
+	const manifestJson = JSON.stringify({ name: 'demo', publisher: 'acme', version: '1.0.0' });
+	const extensionApi: IExtensionApi = {
+		resources: new ExtensionResourceLoaderService(async () => assert.fail('Unexpected extension resource request')),
+		list: async () => ({ generation: 1, diagnostics: [], extensions: [{ id: 'acme.demo', name: 'demo', publisher: 'acme', version: '1.0.0', displayName: 'Demo', sourceKind: 'user', manifestSha256: `sha256:${createHash('sha256').update(manifestJson).digest('hex')}`, packageSha256: DIGEST, manifestJson }] }),
+	};
+	using services = createServices(api, languages, new ProviderSink<TaskProvider>(), new ProviderSink<TestProfileProvider>(), undefined, undefined, undefined, extensionApi);
+	await services.get(IExtensionService).start();
+	using stateChanged = new Emitter<import('../../../../contrib/terminal/browser/terminal.js').TerminalInstanceState>();
+	using removed = new Emitter<import('../../../../contrib/terminal/browser/terminal.js').ITerminalInstance>();
+	const instance = {
+		id: 'terminal-1', title: 'Shell', processId: 42, state: 'running', onDidChangeState: stateChanged.event,
+	} as import('../../../../contrib/terminal/browser/terminal.js').ITerminalInstance;
+	Object.assign(services.get(ITerminalService), { instances: [instance], onDidDisposeInstance: removed.event });
+	using host = services.createInstance(AppServerExtensionHostService, new CommandRegistry(), 1_000);
+	await host.start();
+	const links = services.get(ITerminalLinkProviderService);
+	assert.equal(links.linkProviders.size, 1);
+	const provider = [...links.linkProviders][0]!;
+	api.invocationResult = Promise.resolve({ links: [{ id: 'issue-1', startIndex: 2, length: 4, label: 'Open issue' }] });
+	const result = await provider.provideLinks(instance, '  #123');
+	assert.deepEqual(api.invocations.at(-1)?.payload, { line: '  #123', terminal: { id: 'terminal-1', name: 'Shell', processId: 42 } });
+	assert.equal(api.invocations.at(-1)?.operation, 'provideTerminalLinks');
+	assert.deepEqual(result?.map(({ activate, ...link }) => link), [{ startIndex: 2, length: 4, label: 'Open issue' }]);
+	api.invocationResult = Promise.resolve(null);
+	result![0]!.activate('#123');
+	await waitFor(() => api.invocations.length === 2);
+	assert.equal(api.invocations.at(-1)?.operation, 'handleTerminalLink');
+	assert.deepEqual(api.invocations.at(-1)?.payload, { id: 'issue-1', line: '  #123', startIndex: 2, length: 4, terminal: { id: 'terminal-1', name: 'Shell', processId: 42 } });
+	// Returning to the same running process cannot revive a pre-reconnect callback.
+	stateChanged.fire('reconnecting');
+	stateChanged.fire('running');
+	result![0]!.activate('#123');
+	assert.equal(api.invocations.length, 2);
+	api.invocationResult = Promise.resolve({ links: [{ id: 'bad', startIndex: 0, length: 7 }] });
+	await assert.rejects(provider.provideLinks(instance, 'short'), /Invalid terminal profile provider response/);
+	const pending = deferred<JsonValue>();
+	api.invocationResult = pending.promise;
+	const reading = provider.provideLinks(instance, 'pending');
+	const rejected = assert.rejects(reading);
+	const signal = api.invocationSignals.at(-1)!;
+	api.emitConnection('stopped');
+	assert.equal(signal.aborted, true);
+	assert.equal(links.linkProviders.size, 0);
+	pending.resolve({ links: [{ id: 'late', startIndex: 0, length: 1 }] });
+	await rejected;
+	result![0]!.activate('#123');
+	assert.equal(api.invocations.length, 4);
+});
 
 suite('Extension terminal profile registration lifecycle', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();

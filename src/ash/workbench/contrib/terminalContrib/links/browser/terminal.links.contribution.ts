@@ -10,7 +10,11 @@ import { TerminalLinkContribution } from './terminalLinkContribution.js';
 import { KeyCode, KeyMod } from '../../../../../base/common/keyCodes.js';
 import { KeybindingWeight } from '../../../../../platform/keybinding/common/keybindingsRegistry.js';
 import { TerminalContextKeys } from '../../../terminal/common/terminalContextKey.js';
+import { InstantiationType, registerSingleton } from '../../../../../platform/instantiation/common/extensions.js';
+import { ITerminalLinkProviderService } from './links.js';
+import { TerminalLinkProviderService } from './terminalLinkProviderService.js';
 
+registerSingleton(ITerminalLinkProviderService, TerminalLinkProviderService, InstantiationType.Delayed);
 registerTerminalContribution(TerminalLinkContribution.ID, TerminalLinkContribution);
 
 registerAction2(class OpenDetectedLinkAction extends Action2 {

@@ -204,6 +204,7 @@ export class XtermTerminal extends Disposable implements IXtermTerminal {
 			cursorBlink: config.cursorBlinking, cursorStyle: config.cursorStyle === 'line' ? 'bar' : config.cursorStyle,
 			cursorInactiveStyle: config.cursorStyleInactive === 'line' ? 'bar' : config.cursorStyleInactive,
 			cursorWidth: config.cursorWidth, scrollback: config.scrollback, minimumContrastRatio: config.minimumContrastRatio,
+			wordSeparator: config.wordSeparators,
 		};
 	}
 

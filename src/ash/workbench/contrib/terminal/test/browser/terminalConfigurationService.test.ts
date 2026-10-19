@@ -1,3 +1,5 @@
+import { ITerminalLinkProviderService } from '../../../terminalContrib/links/browser/links.js';
+import { TerminalLinkProviderService } from '../../../terminalContrib/links/browser/terminalLinkProviderService.js';
 import { ITerminalGroupService } from '../../browser/terminal.js';
 import { IViewsService } from '../../../../services/views/common/viewsService.js';
 import { IEditorService } from '../../../../services/editor/common/editorService.js';
@@ -93,6 +95,7 @@ function createServices(owner: DisposableStore, useInstances = false, openEditor
 	const stored = new Map<string, string>();
 	services.registerInstance(IStorageService, { get: (key: string) => stored.get(key), store: (key: string, value: string) => { stored.set(key, value); } } as unknown as IStorageService);
 	services.registerInstance(ITerminalProcessService, processes);
+	services.registerSingleton(ITerminalLinkProviderService, () => services.createInstance(TerminalLinkProviderService));
 	services.registerInstance(IEnvironmentVariableService, owner.add(services.createInstance(EnvironmentVariableService)));
 	const profiles = owner.add(services.createInstance(TerminalProfileService));
 	services.registerInstance(ITerminalProfileService, profiles);

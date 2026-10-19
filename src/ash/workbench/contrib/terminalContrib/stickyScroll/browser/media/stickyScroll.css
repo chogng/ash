@@ -1,0 +1,32 @@
+.ash-terminal-widget-overlay > .ash-terminal-sticky-scroll {
+	position: absolute;
+	display: block;
+	box-sizing: border-box;
+	margin: 0;
+	padding: 0;
+	border: 0;
+	border-bottom: var(--ash-strokeThickness) solid
+		var(--ash-contrastBorder, var(--ash-widget-border));
+	border-radius: 0;
+	background: var(--ash-terminal-surface-background);
+	color: var(--ash-terminal-foreground);
+	text-align: left;
+	cursor: pointer;
+	pointer-events: auto;
+}
+
+.ash-terminal-sticky-scroll[hidden] {
+	display: none;
+}
+
+.ash-terminal-sticky-scroll > span {
+	display: block;
+	overflow: hidden;
+	white-space: pre;
+	text-overflow: ellipsis;
+}
+
+.ash-terminal-sticky-scroll:focus-visible {
+	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
+	outline-offset: calc(-1 * var(--ash-strokeThickness));
+}

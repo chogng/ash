@@ -66,7 +66,7 @@
 - [ ] **验收 · 真实外部账号**：使用专用测试账号验收 Kimi Desktop/CLI 身份切换、同身份 token 轮换、旧结果隔离及临时发现失败，观察已打开的模型 picker。合成 scope/账号回归不能替代此结果。
 - [ ] **验收 · 系统休眠恢复**：在可中断的测试机器运行实际 OS sleep/wake，核对连接恢复、重新鉴权、订阅和工具权限；尚未在日常开发机器执行系统休眠。
 - [ ] **验收 · B2 TUI 与真实外部模型**：继续补真实外部账号的模型 picker 与 TUI 场景。本机已重新验证当前 CLI 缓存契约，并通过真实 Rust observer 的完整 10 分钟 Web Code／Cowork metadata 更新和失败保留场景；该合成账号结果不覆盖外部服务或真实 TUI，证据范围见 [AgentHost 台账](agenthost-todo.md)。
-- [ ] **复核 · 旧隔离环境故障**：取得麦克风枚举失败与 `TerminalOperationFailed` 的准确步骤和底层诊断，分别沿音频设备、app-server terminal/environment owner 定位。原 2026-10-08 证据目录不在当前检出；不能凭通用错误码或普通终端测试关闭报告。
+- [ ] **复核 · 旧隔离环境故障**：取得麦克风枚举失败的准确步骤和底层诊断，沿音频设备 owner 定位。原 2026-10-08 证据目录不在当前检出；不能凭通用错误码或普通音频测试关闭报告。
 
 ## Sessions · TODO
 
@@ -85,17 +85,6 @@
 - [ ] **验收** · 补真实账户、物理音频设备与音质验收；现有本地 Call/LiveKit、模拟 Live wire 和 AudioHost 设备替身不能代替该结果。本地转写的 Foundry Local cacheDir／下载／代理契约与完整 Prompt／Agent 格式按真实调用需求另核对。
 
 输入、渲染、工具与语音职责及历史验证范围见 [Chat](docs/chat.md)。
-
-## Terminal · TODO
-
-- [ ] **复核历史启动抖动** · 定位终端首次 `page.goto` 的 HTTP 文档请求挂起／ERR_ABORTED；原 trace 未加载产品代码，原因尚未查明。若再次出现，按原 trace 调查服务器首次连接，不延长断言。原日志 `.build/path-owner-browser-final.log`、`.build/path-owner-terminal-retry-prepared.log`，原 trace `.build/desktop/playwright/editor-browser-PCDyWW/results/`。
-
-终端契约见 [Terminal](docs/terminal.md)。以下按现有调用链分批推进；上游行为参照 `terminalActions.ts`、`terminalTabsList.ts`、`terminalContrib/clipboard` 与 `terminalContrib/history`。
-
-- [ ] **复核 · 文件链接扩展**：补工作区搜索型链接、外部 provider 与适用配置的实际入口；工作区外目录打开另需沿原窗口／工作区授权契约处理。工作区内显式目录路径的鼠标／键盘定位已完成，范围与关闭／重连验证见 [Terminal](docs/terminal.md)。
-- [ ] **验收** · 补跨机器 SSH 终端，以及 Linux Desktop 的真实 OS 文件拖入。
-
-高频交互验收同时观察原进程身份、待提交输入、选区和焦点；执行、权限和工具调度继续归 Rust。
 
 ## Stanza 编辑器 · TODO
 
@@ -134,18 +123,6 @@
 
 | 方向                                       | 用途与进入实施的条件                                                                                                                                                                                                                                                                                                                                                                                       |
 | ------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 终端 Suggest                               | 命令／参数／路径候选与接收 UI。先选实际 Shell 和候选 producer，再接已有输入与命令状态；Shell 自身 Tab 补全已经通过 PTY 工作。上游位于 `terminalContrib/suggest`。                                                                                                                                                                                                                                          |
-| 终端 Sticky Scroll／命令引导               | 长输出中保留当前命令及命令范围导航。先用已有命令边界验证滚动、换行、trim 和焦点；上游位于 `terminalContrib/stickyScroll`。                                                                                                                                                                                                                                                                                 |
-| 终端 Quick Fix                             | 根据失败命令及输出展示可执行修正。先确定实际 provider、结果来源和执行授权；现有错误标记仅展示状态。上游位于 `terminalContrib/quickFix`。                                                                                                                                                                                                                                                                   |
-| 终端扩展 API                               | 按真实扩展需要补链接、Quick Fix、补全 provider 和 Shell Execution 事件。已有 Profile／环境变量／自定义 PTY 继续复用；没有消费者时不增加空 API。                                                                                                                                                                                                                                                            |
-| 终端进程属性与 backend port                | 先找到缺失属性、其他信号或 child-process／port 的具体消费者，再扩充 Rust 领域契约；现有 SIGINT 链不表示完整支持。                                                                                                                                                                                                                                                                                          |
-| Fish 增强 Shell Integration                | Fish 启动与增强注入分开；确定支持范围后补命令生命周期、可信 cwd／env 及实机回归。基础 Fish 运行验收仍在当前待办。                                                                                                                                                                                                                                                                                          |
-| Shell 历史文件导入                         | 将 Shell 历史与 Ash 最近命令组合。需要执行宿主侧读取、格式解析、限额和隐私／禁存配置，不让 Renderer 读取另一台机器的历史文件。                                                                                                                                                                                                                                                                             |
-| 鼠标剪贴板偏好                             | 选中即复制、可配置右键复制／粘贴；沿 `TerminalClipboardContribution` 和已有配置链实现，覆盖平台差异、焦点及异步剪贴板失败。多行确认单独保留为当前待办。                                                                                                                                                                                                                                                    |
-| 完成通知／自动回复                         | 分别确认后台命令完成提醒和固定响应规则的产品需求；bell signal 不等于完成通知，自动回复需复用后端输入与权限边界。                                                                                                                                                                                                                                                                                           |
-| 远端本地回显／尺寸提示／独立缩放           | 先量化输入延迟或确认显示需求，再选具体交互，避免用局部回显掩盖真实 PTY 状态。                                                                                                                                                                                                                                                                                                                              |
-| GPU／字符宽度／图片显示                    | 先证明 renderer 性能问题、具体 Unicode／grapheme 兼容用例或图片协议需求；不能仅凭没有 addon 判断现有中文显示缺失。                                                                                                                                                                                                                                                                                         |
-| 终端内嵌 Chat                              | 先确认相对“附加终端到 Chat”的独立使用场景，再设计终端覆盖层及焦点；会话、Agent 执行、审批和工具调度沿原 owner。                                                                                                                                                                                                                                                                                            |
 | 统一诊断包导出                             | IDE 与 Agent Window 已有 [Agent Host 调试日志包](docs/chat.md#调试日志导出)，包含客户端日志、Session 所属本地／SSH 宿主的进程日志与现存轮转文件、当前会话执行证据，以及当前 Chat／子 agent 已录制的请求和响应正文。manifest 记录录制状态、范围、限额和收集问题。更广的通用诊断包仍未排期：`feedback/prepare` 的构建、活动统计、响应诊断和指标快照尚未接入该入口，新增来源须沿其 owner 的真实收集契约接入。 |
 | Sessions 跨客户端审阅与 provider changeset | 当前 read marker 只属于窗口并绑定 revision。需要跨客户端 reviewed-file、transient/provider changeset、隔离或反馈评论时，先确定共享领域契约和真实消费者，不因上游身份模型不同新增 facade。                                                                                                                                                                                                                  |
 | Configuration 其他契约                     | configuration variables、Remote User、缓存默认值／实验覆盖、跨 profile 规则，以及 registry／schema、typed parse/serialize、控件描述与 `ashBinding` 均按具体调用需求复核，不按上游成员表整体补齐；Rust `config.toml` 的编辑入口仍归其宿主。设置呈现与接入规则见 [Settings 接入边界](src/ash/workbench/contrib/preferences/README.md#当前实现)。                                                             |

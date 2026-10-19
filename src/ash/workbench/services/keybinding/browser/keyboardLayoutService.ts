@@ -146,6 +146,10 @@ export class BrowserKeyboardLayoutService extends Disposable implements IKeyboar
 		if (this.hasExplicitLayoutSelection() || this.layout.source === 'native' || this.layout.source === 'user' || !this.navigator.keyboard || !this.mapping || !event.code || event.isComposing) {
 			return;
 		}
+		// Shortcut keys do not produce text. Learning their key value can map an
+		// unshifted binding onto Shift when the browser only reports that shortcut.
+		const isAltGr = event.altGraphKey || (this.configuration.mapAltGrToCtrlAlt && event.ctrlKey && event.altKey);
+		if (event.metaKey || (event.ctrlKey && !isAltGr)) return;
 		// Fixed keys do not describe a text layout. Observing Shift would cancel the current chord as a layout change.
 		if (IMMUTABLE_CODE_TO_KEY_CODE[ScanCodeUtils.toEnum(event.code)] !== KeyCode.DependsOnKeyboardLayout) {
 			return;

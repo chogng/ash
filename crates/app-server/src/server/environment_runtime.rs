@@ -3368,32 +3368,52 @@ impl AppServer {
         if threads.is_empty() {
             return Err(RpcError::new(-32602, AppServerErrorName::InvalidParams));
         }
+        // Session identities cross a path-string boundary. Collapse Windows verbatim
+        // aliases before looking up the grant, while retaining the same permission proof.
+        let root = dunce::canonicalize(root).map_err(|error| {
+            log::warn!("Session terminal directory canonicalization failed: {error}");
+            RpcError::new(-32602, AppServerErrorName::InvalidParams)
+        })?;
         let runtime = self
             .env_runtime
             .read()
             .unwrap_or_else(|poisoned| poisoned.into_inner());
         let authorization = runtime
             .dir_grants
-            .authorize(session_id, root, permission)
-            .map_err(|_| RpcError::new(-32064, AppServerErrorName::TerminalOperationFailed))?;
+            .authorize(session_id, &root, permission)
+            .map_err(|error| {
+                log::warn!(
+                    "Session terminal directory grant rejected {permission:?} for {}: {error}",
+                    root.display()
+                );
+                RpcError::new(-32064, AppServerErrorName::TerminalOperationFailed)
+            })?;
         if let Some(authorization) = authorization {
             return Ok(authorization);
         }
-        let root = dunce::canonicalize(root)
-            .map_err(|_| RpcError::new(-32602, AppServerErrorName::InvalidParams))?;
         // A managed directory is accessible only through a Thread in this Session tree.
         // Do not turn knowing a managed path into a grant for another Session's files.
         for thread in threads {
             if let Some(scope) = runtime
                 .dir_grants
                 .thread_scope(&thread.thread_id, permission)
-                .map_err(|_| RpcError::new(-32064, AppServerErrorName::TerminalOperationFailed))?
+                .map_err(|error| {
+                    log::warn!(
+                        "Session terminal thread grant rejected {permission:?} for {}: {error}",
+                        root.display()
+                    );
+                    RpcError::new(-32064, AppServerErrorName::TerminalOperationFailed)
+                })?
             {
                 if scope.primary().dir().canonical_path() == root {
                     return Ok(scope.primary().clone());
                 }
             }
         }
+        log::warn!(
+            "Session terminal directory has no matching {permission:?} grant: {}",
+            root.display()
+        );
         Err(RpcError::new(
             -32064,
             AppServerErrorName::TerminalOperationFailed,

@@ -40,7 +40,7 @@ export class TerminalAccessibleViewContribution extends Disposable implements IT
 function focusedInstance(accessor: ServicesAccessor): ITerminalInstance | undefined {
 	const instance = accessor.get(ITerminalService).activeInstance;
 	const screen = instance?.xterm;
-	return screen && !screen.isDisposed && screen.raw.textarea === screen.element.ownerDocument.activeElement ? instance : undefined;
+	return screen && !screen.isDisposed && screen.element.contains(screen.element.ownerDocument.activeElement) ? instance : undefined;
 }
 
 registerTerminalContribution(TerminalAccessibleViewContribution.ID, TerminalAccessibleViewContribution);

@@ -324,6 +324,7 @@ export class AppServerExtensionHostService extends Disposable implements IExtens
 }
 
 function selectActivationEvent(declarations: readonly string[], event: string): ExtensionHostActivationEvent | undefined {
+	if (event === 'onTerminal' && declarations.includes('onDemand:terminalLinkProvider')) return { type: 'capability', capability: 'terminalLinkProvider' };
 	if (event === 'onSpeech' && (declarations.includes('onSpeech') || declarations.includes('onDemand:speechProvider'))) return { type: 'speech' };
 	if (event.startsWith('onTerminalProfile:')) {
 		const profileId = event.slice('onTerminalProfile:'.length);

@@ -1377,6 +1377,9 @@ fn registration_allows_operation(registration: &RegistrationKind, operation: &st
                 | "resizeTaskTerminal"
                 | "closeTaskTerminal"
         ),
+        RegistrationKind::TerminalLinkProvider {} => {
+            matches!(operation, "provideTerminalLinks" | "handleTerminalLink")
+        }
         RegistrationKind::TerminalEnvironment {} => operation == "getTerminalEnvironment",
         RegistrationKind::TaskProvider { .. } => matches!(
             operation,

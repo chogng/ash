@@ -14,7 +14,7 @@
 | `TerminalInstance`／`TerminalProcessManager` | 每实例身份与生命周期、输入队列、读取游标、增量 UTF-8 解码、输入与尺寸确认、屏幕解析等待和取消。     |
 | `XtermTerminal` 与屏幕能力模型               | 每实例唯一的 ANSI／VT 屏幕、cells／cursor、选区、搜索、markers、装饰及已提交 Shell 元数据的显示。   |
 | `TerminalViewPane`／组与编辑器服务           | 面板可见性、组成员和几何、标签、焦点、屏幕附着，以及同一实例在面板与编辑区之间的移动。              |
-| `terminalContrib`                            | 按实例拥有查找、链接、剪贴板、历史选择、听写和无障碍交互的资源与释放。                              |
+| `terminalContrib`                            | 查找、链接、剪贴板、历史、建议、Quick Fix、Sticky Scroll、听写和无障碍交互的资源与释放。            |
 
 Agent 执行、审批与终端呈现的详细边界以 [Platform Terminal 的前后端职责](../src/ash/platform/terminal/README.md#前后端职责)为准。前端的命令标记、环境来源可信度和屏幕文字不授予执行权限。
 
@@ -48,9 +48,15 @@ xterm 的文本和原始字节输入经实例进入同一进程输入 owner。`s
 
 剪贴板贡献捕获发起实例和输入 generation，异步读取或确认后核对活动项、连接及屏幕；切换回来也不会发送已失效的粘贴。浏览器 paste 在 xterm 处理之前进入同一贡献，经原实例 `sendText` 发送并等待输入确认，不会同时进入 raw onData。没有文本选区时，Ctrl+C 继续发送给 Shell；Interrupt Active Command 通过执行宿主发送 SIGINT。
 
+`copyOnSelection` 只在终端本身持有焦点时自动复制选区，Find 的匹配选择不覆盖剪贴板。`rightClickBehavior` 支持复制后清除选区／粘贴、仅粘贴、选词、默认菜单和不操作；Shift 保留菜单入口。剪贴板失败不清除选区，鼠标粘贴在焦点离开后也会失效。
+
 `terminal.integrated.enableMultiLinePasteWarning` 由 TypeScript 窗口配置解释，沿现有 `settings.json` 的用户／工作区层解析，默认 `auto`。`auto` 在 bracketed paste 模式下放行，其他情况下移除单条命令末尾的换行及空白，对其余多行文本确认；`always` 对 LF、CRLF 和 CR 换行均确认，即使 Shell 启用了 bracketed paste；`never` 关闭确认。对话框仅展示有界开头预览，接受后发送原文；Escape 取消且恢复有效原实例的焦点。
 
 最近命令选择器从终端历史 owner 读取按 Profile 保存的命令，只在用户明确接受后重跑。最近命令和目录选择都绑定原 PID；切换实例、重连、退出、关闭或工作区替换会退休并关闭选择器，切换回来不能恢复旧选择。目录发送等待确认期间失效时也不再抢回焦点。听写文字进入原实例输入链，由用户按 Enter 执行；切换实例、退出或隐藏面板取消录音。
+
+Ctrl+Space／Trigger Suggest 显式打开建议选择器，读取同 Profile 的可信历史前缀；确认的 Bash／Zsh 还可读取同执行宿主、同授权工作区根下的实际目录项。只有单行、光标位于末尾且没有 ghost text 的普通输入可补全；复杂引号、转义和展开交给 Shell。接受仅追加正确引用的后缀，不发送 Enter；输入、光标、cwd、能力、实例或工作区变化撤回旧选择。Tab 继续由 Shell 处理。
+
+Ctrl/Cmd+.／Show Terminal Quick Fixes 从最新失败命令保留的输出识别 Git 子命令拼写建议和缺失 upstream 的推送建议。只允许空 Shell prompt，拒绝多行、控制字符及 Shell 操作符；用户选择后仅插入建议供检查，仍须自行按 Enter。清屏、输出范围失效、新命令、输入和工作区变化使建议失效；没有匹配输出时不制造修正。
 
 ### 运行编辑器选区
 
@@ -82,6 +88,8 @@ ShellIntegrationAddon 消费已提交事件；`CwdDetectionCapability` 持有已
 
 重跑由同实例的输入贡献承接；未受信文本先确认，确认前后校验实例、输入代次、活动项与 command capability 成员身份。关闭、重连、进程替换或切换后不能把迟到确认交给其他实例。Find 搜索本实例已解析的屏幕和 scrollback；可访问输出从同一屏幕读取，关闭辅助视图后恢复原终端焦点。
 
+Sticky Scroll 由原 CommandDetection markers 和 xterm buffer 投影命令标题，不保存第二份命令历史。命令滚出视口后保留顶部标题，最多显示配置行数且不超过视口的 40%；鼠标、Enter 或 Space 回到原命令，Escape 恢复输入，滚轮继续滚动原屏幕。alternate buffer、trim、清屏和命令范围失效撤回标题；主题和 resize 使用原屏幕的颜色、字体与几何。
+
 ## 视图、分组与资源导航
 
 隐藏面板保留实例、PTY、屏幕、待提交输入、分屏比例与焦点。面板组由 `TerminalGroupService` 管理成员，`TerminalGroup` 按布局服务的 Panel 位置使用 SplitView：顶部／底部横向，左侧／右侧纵向；列表从组模型派生行顺序、连接线与可访问位置描述。标签拖到另一标签之前／之后可加入该组或重排；拖到可见窗格左／右侧使用相同 `moveInstance` 操作，资源只匹配本窗口的存活实例。组内重排将比例与实例一起保留。Join or Reorder Terminals 提供同等键盘选择器，取消、切换实例或关闭后不应用过期结果。
@@ -92,7 +100,11 @@ ShellIntegrationAddon 消费已提交事件；`CwdDetectionCapability` 持有已
 
 编辑区 Split 捕获原终端所在组，通过编辑器组服务调用现有 EditorPart 的相邻组操作。新终端的创建同时携带原实例和准确的目标组，继续使用 TerminalService 的 cwd／Profile 解析；原 PTY 与屏幕不变。父实例代次失效时关闭迟到的新进程；创建失败只清理本次仍为空的目标组。Panel 四方向命令由 Workbench 布局服务移动真实 Grid；位置按工作区保存，横向高度与纵向宽度分别保存。方向和尺寸变化保留分屏比例、屏幕、焦点与 PTY。
 
-文件链接的点击和键盘选择共用 `TerminalLinkContribution` 与路径解析。解析器只产生候选，贡献使用命令所在行的 cwd、执行宿主的 `IPathService` 与原文件服务确认资源，再通过编辑器服务打开文件和行列位置。已确认的目录必须属于该终端 `dirId` 对应的工作区根，再通过原 Explorer View 和选择服务显示目录并接收焦点；链接不会添加工作区根或自动打开其他窗口。远端资源保留所属目录的 authority；文本位置从真实 buffer cells 换算，处理宽字符与自动换行。状态、工作区或实例失效会撤回尚在路径确认、View 打开阶段的结果，目录选择已经交给 Explorer 后由其原 owner 管理；终端不会在失效后追加焦点操作。
+文件链接的点击和键盘选择共用 `TerminalLinkContribution` 与路径解析。解析器只产生候选，贡献使用命令所在行的 cwd、执行宿主的 `IPathService` 与原文件服务确认资源，再通过编辑器服务打开文件和行列位置。属于该终端 `dirId` 对应工作区根的目录通过原 Explorer View 和选择服务显示并接收焦点；确认存在的本地 `file` 目录位于根外时，经原 `IHostService.openWindow` 请求新窗口。Browser 不支持新窗口及 Remote authority 尚无对应宿主入口时明确不可用，不能把远端目录当成本地路径或暗中添加工作区根。远端资源保留所属目录的 authority；文本位置从真实 buffer cells 换算，处理宽字符与自动换行。状态、工作区或实例失效会撤回尚在路径确认、View 打开阶段的结果，目录选择已经交给 Explorer 后由其原 owner 管理；终端不会在失效后追加焦点操作。
+
+`terminal.integrated.enableFileLinks` 控制内置文件检测，`wordSeparators` 同时作用于文本链接分词和 xterm 选词。相对路径未直接命中时，只在实例授权根内搜索：唯一结果直接定位，多个结果要求再次选择。选择器先显示内置链接，外部 provider 按最多四个请求增量填入，取消或卸载后停止调度。
+
+扩展 `window.registerTerminalLinkProvider` 沿已有独立宿主注册和调用链接入窗口唯一 `ITerminalLinkProviderService`。包须获准声明 `terminalLinkProvider`；首次到达终端按 `onTerminal` 懒激活。提供者接收行文本、取消令牌及原终端的名称／PID 快照身份，返回经范围校验的链接；用户激活才调用原扩展对象。缓存有界，选择器保留项的句柄被淘汰时按原行重新解析；重命名／重启刷新快照，工作区、进程或扩展代次失效撤回旧调用。此链不声明 Quick Fix／补全 provider 或 Shell Execution 扩展事件的兼容性。
 
 附加终端到 Chat 时捕获已解析输出、选区及 Shell 元数据，交给原 draft。只读预览显示接受时的快照，源终端关闭或再次选择不改写已接受内容；预览没有 PTY 或输入目的地。
 
@@ -116,6 +128,8 @@ Desktop 的 `enablePersistentSessions` 控制协调 reload 和退出恢复。准
 `workbench.action.terminal.moveIntoNewWindow` 将捕获的终端移至同工作区和执行宿主的新窗口，也可指定已有窗口 ID。源端暂停输入与读取后，Rust 原子 detach 撤销源访问并旋转租约；Main 仅在内存中向指定真实窗口交付屏幕与凭据。目标校验、attach 原 PID 并建立可用屏幕后确认，源端再移除宿主。失败时返回当前有效租约，让源端恢复同一实例；凭据不进入窗口 URL 或持久存储。
 
 `terminal.integrated.persistentSessionReviveProcess` 默认为 `onExit`，也支持 `onExitAndWindowClose` 与 `never`。符合策略的退出先持久保存交互式终端输出、当前 cwd、原始启动意图和布局，再关闭原进程。快照不保存已合并的窗口临时环境；恢复时保留原启动 Profile 的命令、参数和环境覆盖，重新应用当前设置及环境集合，避免沿用旧窗口身份或重复修改 PATH。重新启动按原执行目录建立新 Shell，恢复屏幕、分组比例与活动项；不重跑任务或先前执行的命令，不续接旧 PID。扩展自供 PTY 不参加这种恢复。同工作区的多个原生窗口通过持久窗口身份使用不同 checkpoint；窗口会话恢复按身份重开，关闭后重新打开的工作区只领取未占用的恢复记录，避免相互覆盖和重复启动。
+
+本地自动验证覆盖 Chromium 的实际屏幕、键鼠、选区和焦点，以及真实 Node 扩展宿主；跨机器 SSH 终端和 Linux Desktop 的真实 OS 文件拖入仍没有本轮验收结果。旧 HTTP 首次文档请求挂起的 trace 未加载产品代码，不能据此认定终端实现存在或已经修复该网络问题。
 
 ## 验证入口
 

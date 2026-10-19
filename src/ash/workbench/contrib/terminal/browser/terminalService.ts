@@ -31,6 +31,7 @@ import { TerminalCapability } from '../../../../platform/terminal/common/capabil
 import { getRemoteAuthority } from '../../../../platform/remote/common/remoteHosts.js';
 import type { ITerminalSerializedState } from '../../../services/terminal/common/terminal.js';
 import type { ITerminalReconnectLease } from '../../../../platform/terminal/common/terminal.js';
+import { IPathService } from '../../../../platform/path/common/pathService.js';
 
 /** Browser Workbench owner of terminal instances and their process lifecycle. */
 export class TerminalService extends Disposable implements ITerminalService {
@@ -65,6 +66,7 @@ export class TerminalService extends Disposable implements ITerminalService {
 		@ITerminalGroupService private readonly groups: ITerminalGroupService,
 		@ITerminalEditorService private readonly terminalEditors: ITerminalEditorService,
 		@IContextKeyService contextKeyService: IContextKeyService,
+		@IPathService private readonly paths: IPathService,
 	) {
 		super();
 		this.hasActiveInstanceContext = TerminalHasActiveInstanceContext.bindTo(contextKeyService);
@@ -109,19 +111,24 @@ export class TerminalService extends Disposable implements ITerminalService {
 		const dimensions = options.dimensions ?? parent?.xterm?.dimensions() ?? { rows: 24, cols: 80 };
 		const cwd = options.cwd ?? (options.config && 'cwd' in options.config ? options.config.cwd : undefined);
 		const cwdResource = URI.isUri(cwd) ? cwd : typeof cwd === 'string' && /^(?:[\\/]|[a-z]:[\\/])/i.test(cwd) ? URI.file(cwd) : undefined;
+		// URI.fsPath applies renderer OS rules, which need not match the process
+		// host (for example a Windows window creating a remote POSIX profile).
+		const requestedCwd = URI.isUri(options.cwd) ? await this.paths.getHostPath(options.cwd) : options.cwd;
+		assertCurrent();
+		if (URI.isUri(options.cwd) && requestedCwd === undefined) throw new Error(localize('terminal.path.wrongHost', 'The resource does not belong to this terminal execution host.'));
 		let launch: ITerminalCreateOptions;
 		if (options.config && 'customPtyImplementation' in options.config && options.config.customPtyImplementation) {
 			launch = {
 				...options, dimensions,
 				dirId: options.dirId ?? (cwdResource ? this.workspaceContext.getWorkspaceFolder(cwdResource)?.id : undefined),
-				cwd: typeof options.cwd === 'string' ? options.cwd : options.cwd?.fsPath,
+				cwd: requestedCwd,
 				config: { ...options.config, customPtyImplementation: options.config.customPtyImplementation },
 				profile: undefined,
 			};
 		} else if (options.profile) {
 			// Tasks, Debug and low-level profile callers already carry resolved launch data.
 			// They may opt into revival only with a separate raw revivalLaunch intent.
-			launch = { ...options, dimensions, cwd: typeof options.cwd === 'string' ? options.cwd : options.cwd?.fsPath, config: undefined, profile: options.profile };
+			launch = { ...options, dimensions, cwd: requestedCwd, config: undefined, profile: options.profile };
 		} else {
 			const folders = this.workspaceContext.getWorkspace().folders;
 			const namedRoot = typeof cwd === 'string' ? cwd.match(/^\$\{workspaceFolder:([^}]+)\}/)?.[1] : undefined;
@@ -163,7 +170,7 @@ export class TerminalService extends Disposable implements ITerminalService {
 			const profile = config && 'profileName' in config ? config : !config && !parent?.shellLaunchConfig?.executable ? this.profiles.getDefaultProfile(undefined, folder.id) : undefined;
 			const shell: IShellLaunchConfig = profile ? { name: profile.profileName, executable: profile.path, args: profile.args, env: profile.env, icon: profile.icon, color: profile.color }
 				: { ...(config as IShellLaunchConfig | undefined ?? parent?.shellLaunchConfig) };
-			if (options.cwd !== undefined) shell.cwd = typeof options.cwd === 'string' ? options.cwd : options.cwd.fsPath;
+			if (options.cwd !== undefined) shell.cwd = requestedCwd;
 			else if (parent) {
 				shell.cwd = parent.cwd;
 				if (!shell.cwd) {

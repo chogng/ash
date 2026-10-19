@@ -14,6 +14,24 @@ use std::time::Duration;
 use std::time::Instant;
 
 #[test]
+fn terminal_link_provider_cannot_invoke_terminal_input_or_other_provider_operations() {
+    let links = RegistrationKind::TerminalLinkProvider {};
+    assert!(registration_allows_operation(
+        &links,
+        "provideTerminalLinks"
+    ));
+    assert!(registration_allows_operation(&links, "handleTerminalLink"));
+    for operation in [
+        "inputTaskTerminal",
+        "createTerminalProfile",
+        "execute",
+        "getTerminalEnvironment",
+    ] {
+        assert!(!registration_allows_operation(&links, operation));
+    }
+}
+
+#[test]
 fn lldb_product_provider_is_dormant_until_its_exact_debugger_is_requested() {
     let executable = std::env::current_exe().unwrap();
     let deployment = super::source::product_lldb_deployment(executable.parent().unwrap()).unwrap();

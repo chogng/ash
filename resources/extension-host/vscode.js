@@ -29,6 +29,7 @@ export function createApi(configuration, initialization) {
 	let environmentPersistent = true;
 	let environmentAdmitted = false;
 	let speechAdmitted = false;
+	let terminalLinksAdmitted = false;
 	function requireEnvironmentCapability() {
 		if (!environmentAdmitted) throw new Error('Terminal environment collections require the admitted terminal provider capability');
 	}
@@ -1648,6 +1649,29 @@ export function createApi(configuration, initialization) {
 			},
 		}),
 		window: contract('window', {
+			registerTerminalLinkProvider(provider) {
+				if (!terminalLinksAdmitted) throw new Error('Terminal link providers require the admitted terminalLinkProvider capability');
+				if (typeof provider?.provideTerminalLinks !== 'function' || typeof provider?.handleTerminalLink !== 'function') throw new TypeError('Invalid terminal link provider');
+				const terminals = new Map();
+				const handle = ashTerminals.registerTerminalLinkProvider(`vscode.terminalLinks.${++providerSequence}`, {
+					provideTerminalLinks: (context, payload) => invoke(() => {
+						// Preserve the public object identity for repeated requests from one
+						// terminal without retaining an unbounded set of closed terminals.
+						let entry = terminals.get(payload.terminal.id);
+						if (!entry) {
+							entry = { snapshot: payload.terminal, processId: Promise.resolve(payload.terminal.processId ?? undefined) };
+							entry.terminal = contract('Terminal', { get name() { return entry.snapshot.name; }, get processId() { return entry.processId; } });
+							terminals.set(payload.terminal.id, entry);
+							if (terminals.size > 256) terminals.delete(terminals.keys().next().value);
+						}
+						if (entry.snapshot.processId !== payload.terminal.processId) entry.processId = Promise.resolve(payload.terminal.processId ?? undefined);
+						entry.snapshot = payload.terminal;
+						return provider.provideTerminalLinks({ line: payload.line, terminal: entry.terminal }, context.cancellationToken);
+					}),
+					handleTerminalLink: (_context, link) => invoke(() => provider.handleTerminalLink(link)),
+				});
+				return new Disposable(() => { handle.dispose(); terminals.clear(); });
+			},
 			registerTerminalProfileProvider(id, provider) {
 				const declaration = configuration.manifest?.contributes?.terminalProfiles?.find(profile => profile.id === id);
 				if (!declaration || typeof provider?.provideTerminalProfile !== 'function') throw new TypeError('Terminal profile requires a declared ID and provideTerminalProfile callback');
@@ -1776,6 +1800,7 @@ export function createApi(configuration, initialization) {
 			subscriptions = context.subscriptions;
 			ensureOutputEvents();
 			environmentAdmitted = capabilities.includes('terminalProfileProvider');
+			terminalLinksAdmitted = capabilities.includes('terminalLinkProvider');
 			speechAdmitted = capabilities.includes('speechProvider');
 			if (environmentAdmitted) subscriptions.push(ashTerminals.registerEnvironmentVariableCollection('vscode.terminalEnvironment', snapshotEnvironment));
 			if (initialization) subscriptions.push(ensureWorkspaceEvents());

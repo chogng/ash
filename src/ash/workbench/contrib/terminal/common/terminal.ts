@@ -25,6 +25,8 @@ export interface ITerminalConfiguration {
 	readonly scrollback: number;
 	readonly minimumContrastRatio: number;
 	readonly showLinkHover: boolean;
+	readonly enableFileLinks: 'off' | 'on' | 'notRemote';
+	readonly wordSeparators: string;
 }
 
 export interface ISerializedTerminalInstanceContext {

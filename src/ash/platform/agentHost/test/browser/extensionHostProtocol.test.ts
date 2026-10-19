@@ -33,6 +33,7 @@ test("normalizes one exact isolated Extension Host fleet snapshot", () => {
 				{ registrationId: 'debugConfigurations', kind: 'debugConfigurationProvider', debuggerType: 'example', triggerKind: 2 },
 				{ registrationId: 'window', kind: 'workspaceEvents' },
 				{ registrationId: 'remote:team', kind: 'remoteConnectionResolver', authorityPrefix: 'team' },
+				{ registrationId: 'terminalLinks', kind: 'terminalLinkProvider' },
 			],
 		}],
 	});
@@ -47,6 +48,7 @@ test("normalizes one exact isolated Extension Host fleet snapshot", () => {
 	assert.deepEqual(snapshot.extensions[0]?.registrations[4], { registrationId: 'debugConfigurations', kind: 'debugConfigurationProvider', debuggerType: 'example', triggerKind: 2 });
 	assert.deepEqual(snapshot.extensions[0]?.registrations[5], { registrationId: 'window', kind: 'workspaceEvents' });
 	assert.deepEqual(snapshot.extensions[0]?.registrations[6], { registrationId: 'remote:team', kind: 'remoteConnectionResolver', authorityPrefix: 'team' });
+	assert.deepEqual(snapshot.extensions[0]?.registrations[7], { registrationId: 'terminalLinks', kind: 'terminalLinkProvider' });
 	const language = snapshot.extensions[0]!.registrations[1]!;
 	assert.ok(language.kind === 'languageProvider');
 	assert.deepEqual(language.completionTriggerCharacters, ['.', '😀']);

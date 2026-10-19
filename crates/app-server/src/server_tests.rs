@@ -1650,7 +1650,21 @@ fn terminal_rpc_drives_a_dir_rooted_pty_to_exit() {
     let profile =
         serde_json::json!({"type":"custom","name":"Test shell","path":["/bin/sh"],"args":[]});
     #[cfg(windows)]
-    let profile = serde_json::json!({"type":"default"});
+    let profile = {
+        // A user's default may be cmd.exe, which has no command-boundary
+        // integration. Select the supported shell this assertion exercises.
+        let shell = std::path::PathBuf::from(std::env::var_os("SystemRoot").unwrap())
+            .join("System32/WindowsPowerShell/v1.0/powershell.exe");
+        serde_json::json!({"type":"custom","name":"Test PowerShell","path":[shell],"args":["-NoProfile","-NoLogo","-ExecutionPolicy","RemoteSigned"]})
+    };
+    #[cfg(windows)]
+    let environment = serde_json::json!({
+        // Let Windows PowerShell build its own module path, excluding the
+        // parent tool's bundled modules and publisher trust prompts.
+        "PSModulePath": null
+    });
+    #[cfg(not(windows))]
+    let environment = serde_json::json!({});
     let root = std::env::temp_dir().join(format!(
         "ash-app-server-terminal-{}-{}",
         std::process::id(),
@@ -1672,12 +1686,54 @@ fn terminal_rpc_drives_a_dir_rooted_pty_to_exit() {
             "jsonrpc":"2.0",
             "id":2,
             "method":"terminal/create",
-            "params":{"rows":24,"cols":80,"profile":profile,"lifecycle":{"type":"connectionOwned"}}
+            "params":{"rows":24,"cols":80,"profile":profile,"env":environment,"lifecycle":{"type":"connectionOwned"}}
         }),
     );
     let terminal_id = created["result"]["terminalId"].as_str().unwrap();
+    let mut request_id = 3;
+    let mut after_sequence = 0;
+    let mut after_command_sequence = 0;
+    let mut output = Vec::new();
     #[cfg(windows)]
-    let input = "echo ash-terminal-ready\r\nexit\r\n";
+    {
+        // ConPTY accepts input before PowerShell installs its ReadLine hook.
+        // Wait for the integrated prompt so this also exercises command events.
+        let deadline = Instant::now() + Duration::from_secs(5);
+        let mut saw_input_boundary = false;
+        loop {
+            let read = call(
+                &server,
+                &mut connection,
+                serde_json::json!({
+                    "jsonrpc":"2.0", "id":request_id, "method":"terminal/read",
+                    "params":{"terminalId":terminal_id,"afterSequence":after_sequence,"afterCommandSequence":0,"maxChunks":128}
+                }),
+            );
+            request_id += 1;
+            after_sequence = read["result"]["nextSequence"].as_u64().unwrap();
+            for chunk in read["result"]["chunks"].as_array().unwrap() {
+                saw_input_boundary |= chunk["shellIntegration"]["type"] == "commandStart";
+                output.extend(
+                    base64::engine::general_purpose::STANDARD
+                        .decode(chunk["dataBase64"].as_str().unwrap())
+                        .unwrap(),
+                );
+            }
+            if saw_input_boundary
+                && read["result"]["shellIntegration"]["hasRichCommandDetection"] == true
+            {
+                break;
+            }
+            assert!(
+                Instant::now() < deadline,
+                "PowerShell integration did not reach its prompt: {:?}",
+                String::from_utf8_lossy(&output)
+            );
+            thread::sleep(Duration::from_millis(10));
+        }
+    }
+    #[cfg(windows)]
+    let input = "Write-Output ('ash-terminal-' + 'ready')\rexit\r";
     #[cfg(not(windows))]
     let input = "printf 'ash-terminal-ready\\n\\377'\nexit\n";
     let written = call(
@@ -1685,18 +1741,15 @@ fn terminal_rpc_drives_a_dir_rooted_pty_to_exit() {
         &mut connection,
         serde_json::json!({
             "jsonrpc":"2.0",
-            "id":3,
+            "id":request_id,
             "method":"terminal/writeBinary",
             "params":{"terminalId":terminal_id,"dataBase64":base64::engine::general_purpose::STANDARD.encode(input.as_bytes())}
         }),
     );
+    request_id += 1;
     assert!(written["error"].is_null());
 
     let deadline = Instant::now() + Duration::from_secs(5);
-    let mut request_id = 4;
-    let mut after_sequence = 0;
-    let mut after_command_sequence = 0;
-    let mut output = Vec::new();
     #[cfg(windows)]
     let mut command_statuses = Vec::new();
     let exit_code = loop {
@@ -1750,7 +1803,11 @@ fn terminal_rpc_drives_a_dir_rooted_pty_to_exit() {
     );
     #[cfg(windows)]
     {
-        assert!(command_statuses.iter().any(|status| status == "running"));
+        assert!(
+            command_statuses.iter().any(|status| status == "running"),
+            "missing command events {command_statuses:?}; output={:?}",
+            String::from_utf8_lossy(&output)
+        );
         assert!(
             command_statuses
                 .iter()
@@ -1794,7 +1851,7 @@ fn terminal_rpc_enforces_connection_ownership_and_close() {
     assert!(created["result"]["ready"]["pid"].as_u64().unwrap() > 0);
     assert_eq!(
         created["result"]["ready"]["cwd"],
-        root.canonicalize().unwrap().to_str().unwrap()
+        dunce::canonicalize(&root).unwrap().to_str().unwrap()
     );
     for (index, (method, params)) in [
         (

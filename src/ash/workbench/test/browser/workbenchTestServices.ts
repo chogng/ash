@@ -1,6 +1,6 @@
 import { IWorkbenchLayoutService, Position } from '../../services/layout/browser/layoutService.js';
 import { IDefaultLogLevelsService } from '../../services/log/common/defaultLogLevels.js';
-import { DEFAULT_LOG_LEVEL } from '../../../platform/log/common/log.js';
+import { DEFAULT_LOG_LEVEL, ILogService, NullLoggerService } from '../../../platform/log/common/log.js';
 import { emptyEditorServiceState } from '../common/testEditorService.js';
 import { ICommandService } from '../../../platform/commands/common/commands.js';
 import { CommandService } from '../../services/commands/common/commandService.js';
@@ -12,7 +12,7 @@ import { IUriIdentityService } from '../../../platform/uriIdentity/common/uriIde
 import { JSDOM } from 'jsdom';
 import { Event } from '../../../base/common/event.js';
 import { BrowserTextModelService } from '../../services/textmodelResolver/browser/browserTextModelService.js';
-import { DisposableStore, toDisposable } from '../../../base/common/lifecycle.js';
+import { Disposable, DisposableStore, toDisposable } from '../../../base/common/lifecycle.js';
 import { URI } from '../../../base/common/uri.js';
 import { IModelService } from '../../../editor/common/services/model.js';
 import { ModelService } from '../../../editor/common/services/modelService.js';
@@ -58,6 +58,10 @@ import { TerminalGroupService } from '../../contrib/terminal/browser/terminalGro
 import { TerminalEditorService } from '../../contrib/terminal/browser/terminalEditorService.js';
 import { IEditorService } from '../../services/editor/common/editorService.js';
 import { IPathService } from '../../../platform/path/common/pathService.js';
+import { ISearchService } from '../../services/search/common/search.js';
+import { IHostService } from '../../services/host/browser/host.js';
+import { TestHostService } from '../../services/host/test/browser/testHostService.js';
+import { IExtensionService } from '../../services/extensions/common/extensionService.js';
 import { BrowserPathService } from '../../services/path/browser/pathService.js';
 import { ITerminalProcessService } from '../../../platform/terminal/common/terminal.js';
 import type { IRendererHost } from '../../../platform/renderer/common/rendererHost.js';
@@ -74,6 +78,15 @@ export function registerTestTerminalLifecycleServices(services: InstantiationSer
 
 /** Explicit dependencies for fixtures that instantiate the real terminal creation owner. */
 export function registerTestTerminalCreationServices(services: InstantiationService): void {
+	if (!services.has(ILogService)) services.registerInstance(ILogService, new NullLoggerService());
+	if (!services.has(IExtensionService)) services.registerInstance(IExtensionService, {
+		...Disposable.None, getExtensionPointContributions: () => [], currentCatalog: { generation: 0, extensions: [], diagnostics: [] }, onDidChange: Event.None, activateByEvent: async () => { },
+	} as unknown as IExtensionService);
+	if (!services.has(IHostService)) services.registerInstance(IHostService, new TestHostService());
+	if (!services.has(ISearchService)) services.registerInstance(ISearchService, {
+		fileSearch: async () => ({ results: [], messages: [] }),
+		textSearch: async () => { throw new Error('Terminal creation fixture does not search file contents'); },
+	});
 	registerTestTerminalLifecycleServices(services);
 	if (!services.has(IWorkbenchLayoutService)) services.registerInstance(IWorkbenchLayoutService, {
 		getPanelPosition: () => Position.BOTTOM, onDidChangePanelPosition: Event.None,

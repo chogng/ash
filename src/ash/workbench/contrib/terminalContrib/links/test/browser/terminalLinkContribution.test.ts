@@ -31,11 +31,22 @@ import { TestWorkspaceService } from '../../../../../services/configuration/test
 import type { ITerminalInstance, IXtermTerminal } from '../../../../terminal/browser/terminal.js';
 import { ITerminalConfigurationService } from '../../../../terminal/browser/terminal.js';
 import { TerminalLinkContribution } from '../../browser/terminalLinkContribution.js';
+import { ITerminalLinkProviderService } from '../../browser/links.js';
+import { TerminalLinkProviderService } from '../../browser/terminalLinkProviderService.js';
+import { ISearchService, type IFileQuery, type ISearchComplete } from '../../../../../services/search/common/search.js';
+import { Registry } from '../../../../../../platform/registry/common/platform.js';
+import { Extensions, type IConfigurationRegistry } from '../../../../../../platform/configuration/common/configurationRegistry.js';
+import '../../../../terminal/common/terminalConfiguration.js';
+import type { CancellationToken } from '../../../../../../base/common/cancellation.js';
+import { IHostService } from '../../../../../services/host/browser/host.js';
+import { TestHostService } from '../../../../../services/host/test/browser/testHostService.js';
+import { IExtensionService } from '../../../../../services/extensions/common/extensionService.js';
+import { ILogService, NullLoggerService } from '../../../../../../platform/log/common/log.js';
 
 const { Terminal } = createRequire(import.meta.url)('@xterm/xterm') as typeof import('@xterm/xterm');
 ensureNoDisposablesAreLeakedInTestSuite();
 
-function fixture(lifetime: DisposableStore, root = URI.file('/project'), cwd = '/project', historicalCwd?: string, environment: Readonly<Record<string, string>> = { HOME: '/home/fixture' }) {
+function fixture(lifetime: DisposableStore, root = URI.file('/project'), cwd = '/project', historicalCwd?: string, environment: Readonly<Record<string, string>> = { HOME: '/home/fixture' }, activate?: IExtensionService['activateByEvent']) {
 	const dom = new JSDOM('<main></main>');
 	lifetime.add(toDisposable(() => dom.window.close()));
 	const raw = new Terminal({ cols: 24, rows: 5, allowProposedApi: true });
@@ -49,6 +60,19 @@ function fixture(lifetime: DisposableStore, root = URI.file('/project'), cwd = '
 		return { dispose() { providerDisposed = true; subscription.dispose(); } };
 	};
 	const services = lifetime.add(new InstantiationService());
+	const activations: { event: string; signal: AbortSignal | undefined; }[] = [];
+	services.registerInstance(IExtensionService, { activateByEvent: async (event, signal) => { activations.push({ event, signal }); await activate?.(event, signal); } } as IExtensionService);
+	const activationErrors: unknown[][] = [];
+	const log = new NullLoggerService();
+	log.error = (...args: unknown[]) => activationErrors.push(args);
+	services.registerInstance(ILogService, log);
+	const host = new TestHostService();
+	services.registerInstance(IHostService, host);
+	const providers = lifetime.add(new TerminalLinkProviderService());
+	services.registerInstance(ITerminalLinkProviderService, providers);
+	const searches: IFileQuery[] = [];
+	let search: ISearchService['fileSearch'] = async () => ({ results: [], messages: [] });
+	services.registerInstance(ISearchService, { fileSearch: async (query, token) => { searches.push(query); return search(query, token); } } as ISearchService);
 	const workspace = lifetime.add(new TestWorkspaceService({ id: 'project', uri: root }));
 	services.registerInstance(IWorkspaceContextService, workspace);
 	const api = createDisconnectedRendererApi();
@@ -95,18 +119,21 @@ function fixture(lifetime: DisposableStore, root = URI.file('/project'), cwd = '
 	const warnings: string[] = [];
 	services.registerInstance(INotificationService, { warn: (message: string) => { warnings.push(message); } } as unknown as INotificationService);
 	let pick: IQuickPick<IQuickPickItem> | undefined;
+	let pickCount = 0;
+	const shown = lifetime.add(new Emitter<number>());
 	const accepted = lifetime.add(new Emitter<void>());
 	const hidden = lifetime.add(new Emitter<void>());
 	services.registerInstance(IQuickInputService, {
 		createQuickPick: () => {
 			pick = {
 				...Disposable.None, items: [], selectedItems: [], onDidAccept: accepted.event, onDidHide: hidden.event, onDidBlur: Event.None,
-				show() { },
+				show() { shown.fire(++pickCount); },
 			} as unknown as IQuickPick<IQuickPickItem>;
 			return pick;
 		}
 	} as unknown as IQuickInputService);
-	services.registerInstance(ITerminalConfigurationService, { config: { showLinkHover: true }, onConfigChanged: Event.None } as ITerminalConfigurationService);
+	const config = { showLinkHover: true, enableFileLinks: 'on', wordSeparators: ' ()[]{}\',"`─‘’“”|' };
+	services.registerInstance(ITerminalConfigurationService, { config, onConfigChanged: Event.None } as ITerminalConfigurationService);
 	let focuses = 0;
 	const screen = { raw, isDisposed: false, element: dom.window.document.querySelector('main'), focus: () => focuses++ } as unknown as IXtermTerminal;
 	const instance = {
@@ -118,17 +145,24 @@ function fixture(lifetime: DisposableStore, root = URI.file('/project'), cwd = '
 	raw.options.linkHandler = originalLinkHandler;
 	contribution.xtermReady(screen);
 	return {
-		raw, contribution, opened, didOpen, paths, urls, states, warnings, originalLinkHandler, environmentQueries, revealed, openedViews, view, didFocusExplorer,
+		raw, contribution, opened, didOpen, paths, urls, states, warnings, originalLinkHandler, environmentQueries, revealed, openedViews, view, didFocusExplorer, providers, config, searches, host, activations, activationErrors,
 		get providerDisposed() { return providerDisposed; }, get focuses() { return focuses; },
 		get explorerFocuses() { return explorerFocuses; },
 		setOpenView(value: typeof openView) { openView = value; },
 		setStat(value: typeof stat) { stat = value; },
+		setSearch(value: typeof search) { search = value; },
 		write(text: string) { return new Promise<void>(resolve => raw.write(text, resolve)); },
 		links(line = 1) { return new Promise<ILink[] | undefined>(resolve => provider!.provideLinks(line, resolve)); },
 		accept(index: number) { pick!.selectedItems = [pick!.items[index] as IQuickPickItem]; accepted.fire(); },
 		cancel() { hidden.fire(); },
 		get items() { return pick!.items; },
 		get placeholder() { return pick!.placeholder; },
+		async waitForIdle() { while (pick?.busy) await new Promise<void>(resolve => setImmediate(resolve)); },
+		waitForPicker(count = 1): Promise<void> {
+			return pickCount >= count ? Promise.resolve() : new Promise(resolve => {
+				const listener = lifetime.add(shown.event(value => { if (value >= count) { listener.dispose(); resolve(); } }));
+			});
+		},
 	};
 }
 
@@ -174,16 +208,21 @@ test('Terminal directory links reveal the command directory through the existing
 	}
 });
 
-test('Terminal directory links cannot open a directory outside their workspace grant or bypass a denied stat', async () => {
+test('Terminal local directory links open outside folders through the window host and retain stat authorization', async () => {
 	using lifetime = new DisposableStore();
 	const f = fixture(lifetime);
 	await f.write('../outside/');
 	f.setStat(async resource => ({ resource, kind: FileKind.Directory, sizeBytes: 0, readonly: false, modifiedAtMillis: undefined }));
-	assert.deepEqual(await f.links(), []);
+	const links = await f.links();
+	assert.equal(links?.length, 1);
+	links![0]!.activate({} as MouseEvent, links![0]!.text);
+	await new Promise<void>(resolve => setImmediate(resolve));
+	assert.deepEqual(f.host.opened.map(open => ({ resource: 'folderUri' in open.targets[0]! ? open.targets[0].folderUri.toString() : '', options: open.options })), [{ resource: 'file:///outside', options: { forceNewWindow: true } }]);
 	const selected = f.contribution.showLinkQuickpick();
 	f.accept(0);
 	await selected;
-	assert.equal(f.warnings.length, 1);
+	assert.equal(f.warnings.length, 0);
+	assert.equal(f.host.opened.length, 2);
 	assert.deepEqual(f.openedViews, []);
 	assert.deepEqual(f.revealed, []);
 	f.setStat(async () => { throw new Error('Access denied'); });
@@ -255,7 +294,7 @@ test('Terminal wrapped wide-character output keeps the file link on its actual c
 	using lifetime = new DisposableStore();
 	const f = fixture(lifetime);
 	await f.write('中😀 "/project/my file.ts:9:2"');
-	const links = await f.links(2);
+	const links = (await f.links(2))?.filter(link => link.text.includes('my file.ts'));
 	assert.equal(links?.length, 1);
 	assert.equal(links![0]!.text, '/project/my file.ts:9:2');
 	assert.deepEqual(links![0]!.range.start, { x: 6, y: 1 });
@@ -302,10 +341,10 @@ test('Terminal link keyboard picker opens files and returns focus on cancellatio
 	assert.deepEqual(f.urls, ['https://example.test/help']);
 });
 
-test('Terminal file detection omits missing files and discards async results after disposal', async () => {
+test('Terminal absolute file detection omits missing files and discards async results after disposal', async () => {
 	using lifetime = new DisposableStore();
 	const f = fixture(lifetime);
-	await f.write('src/missing.ts:4');
+	await f.write('/project/src/missing.ts:4');
 	f.setStat(async () => { throw new Error('File not found'); });
 	assert.deepEqual(await f.links(), []);
 	const pendingStat = new DeferredPromise<IFileStat>();
@@ -402,7 +441,7 @@ test('Terminal links preserve a real space at a wrap boundary and omit wide-glyp
 test('Terminal link selection reports unavailable files and drops results during reconnection', async () => {
 	using lifetime = new DisposableStore();
 	const f = fixture(lifetime);
-	await f.write('src/gone.ts:4');
+	await f.write('/project/src/gone.ts:4');
 	f.setStat(async () => { throw new Error('File not found'); });
 	const selected = f.contribution.showLinkQuickpick();
 	f.accept(0);
@@ -427,4 +466,269 @@ test('Terminal link history scan yields and cannot open a picker after its insta
 	await scanning;
 	assert.equal(f.focuses, 0);
 	assert.deepEqual(f.opened, []);
+});
+
+test('Terminal relative link searches its execution workspace and preserves source location', async () => {
+	using lifetime = new DisposableStore();
+	const f = fixture(lifetime);
+	f.setStat(async () => { throw new Error('Not in command cwd'); });
+	f.setSearch(async () => ({
+		results: [
+			{ resource: URI.file('/other/main.ts') },
+			{ resource: URI.file('/project/src/main.ts') },
+		], messages: []
+	}));
+	await f.write('main.ts:12:3');
+	const links = await f.links();
+	assert.equal(f.searches.length, 0, 'Hover detection must not search the workspace');
+	links![0]!.activate({} as MouseEvent, links![0]!.text);
+	await f.didOpen.p;
+	assert.deepEqual(f.searches.map(query => ({ folders: query.folderQueries.map(folder => folder.folder.toString()), pattern: query.filePattern })), [{ folders: ['file:///project'], pattern: 'main.ts' }]);
+	assert.deepEqual(f.opened, [{ resource: 'file:///project/src/main.ts', selection: { startLineNumber: 12, startColumn: 3, endLineNumber: 12, endColumn: 3 } }]);
+});
+
+test('Terminal ambiguous workspace links require selection and cancel returns terminal focus', async () => {
+	using lifetime = new DisposableStore();
+	const f = fixture(lifetime);
+	f.setStat(async () => { throw new Error('Not in command cwd'); });
+	f.setSearch(async () => ({ results: [{ resource: URI.file('/project/a/README') }, { resource: URI.file('/project/b/README') }], messages: [] }));
+	await f.write('README');
+	const links = await f.links();
+	links![0]!.activate({} as MouseEvent, links![0]!.text);
+	await f.waitForPicker();
+	assert.deepEqual(f.items.map(item => item.label), ['/project/a/README', '/project/b/README']);
+	f.cancel();
+	await new Promise<void>(resolve => setImmediate(resolve));
+	assert.equal(f.focuses, 1);
+	assert.equal(f.opened.length, 0);
+	links![0]!.activate({} as MouseEvent, links![0]!.text);
+	await f.waitForPicker(2);
+	f.accept(1);
+	await f.didOpen.p;
+	assert.equal(f.opened[0]?.resource, 'file:///project/b/README');
+});
+
+test('Terminal workspace search ignores late results after reconnect', async () => {
+	using lifetime = new DisposableStore();
+	const f = fixture(lifetime);
+	f.setStat(async () => { throw new Error('Not in command cwd'); });
+	const started = new DeferredPromise<void>();
+	const result = new DeferredPromise<ISearchComplete>();
+	let token: CancellationToken | undefined;
+	f.setSearch((_query, value) => { token = value; void started.complete(); return result.p; });
+	await f.write('main.ts');
+	const links = await f.links();
+	links![0]!.activate({} as MouseEvent, links![0]!.text);
+	await started.p;
+	f.states.fire('reconnecting');
+	assert.equal(token?.isCancellationRequested, true);
+	await result.complete({ results: [{ resource: URI.file('/project/src/main.ts') }], messages: [] });
+	await new Promise<void>(resolve => setImmediate(resolve));
+	assert.deepEqual(f.opened, []);
+	assert.deepEqual(f.warnings, []);
+});
+
+test('Terminal external providers own wrapped pointer and keyboard links and retire on unregister', async () => {
+	using lifetime = new DisposableStore();
+	const f = fixture(lifetime);
+	const activated: string[] = [];
+	const lines: string[] = [];
+	const registration = lifetime.add(f.providers.registerLinkProvider({
+		provideLinks: async (_instance, line) => {
+			lines.push(line);
+			const index = line.indexOf('JOB-123');
+			return index < 0 ? [] : [
+				{ startIndex: index, length: 7, label: 'Build job', activate: text => activated.push(text) },
+				{ startIndex: -1, length: 100, activate() { throw new Error('Invalid provider link activated'); } },
+			];
+		}
+	}));
+	f.raw.resize(12, 5);
+	await f.write('中😀 padding JOB-123');
+	const links = await f.links(2);
+	const external = links!.find(link => link.text === 'JOB-123')!;
+	assert.ok(external);
+	assert.equal(lines[0], '中😀 padding JOB-123');
+	external.activate({} as MouseEvent, external.text);
+	assert.deepEqual(activated, ['JOB-123']);
+	const picker = f.contribution.showLinkQuickpick();
+	await f.waitForPicker();
+	await f.waitForIdle();
+	f.accept(f.items.findIndex(item => item.label === 'Build job'));
+	await picker;
+	assert.deepEqual(activated, ['JOB-123', 'JOB-123']);
+	registration.dispose();
+	external.activate({} as MouseEvent, external.text);
+	assert.deepEqual(activated, ['JOB-123', 'JOB-123']);
+	assert.equal(f.providers.linkProviders.size, 0);
+});
+
+test('Terminal file-link policy and word separators affect detection without disabling URL links', async () => {
+	for (const root of [URI.file('/project'), URI.parse('ash-remote://ssh+build/project')]) {
+		using lifetime = new DisposableStore();
+		const f = fixture(lifetime, root);
+		await f.write('README|LICENSE\r\nhttps://example.test');
+		assert.deepEqual((await f.links())?.map(link => link.text), ['README', 'LICENSE']);
+		f.config.enableFileLinks = 'notRemote';
+		assert.equal((await f.links())?.length, root.scheme === 'file' ? 2 : 0);
+		f.config.enableFileLinks = 'off';
+		assert.deepEqual(await f.links(), []);
+		assert.deepEqual((await f.links(2))?.map(link => link.text), ['https://example.test']);
+	}
+});
+
+test('Terminal link configuration exposes defaults and translated descriptions', () => {
+	using lifetime = new DisposableStore();
+	lifetime.add(toDisposable(() => initializeTestLocalization('en')));
+	initializeTestLocalization('zh-CN');
+	const registry = Registry.as<IConfigurationRegistry>(Extensions.Configuration);
+	const files = registry.getConfiguration('terminal.integrated.enableFileLinks');
+	const words = registry.getConfiguration('terminal.integrated.wordSeparators');
+	assert.equal(files?.defaultValue, 'on');
+	assert.equal(files?.schema?.description, '始终启用、停用终端文件链接，或仅在本地工作区中启用。');
+	assert.equal(words?.schema?.description, '终端选词和工作区文件链接使用的单词分隔字符。');
+	assert.throws(() => files?.parse('sometimes'));
+});
+
+test('Terminal remote outside folders cannot be interpreted as native host paths', async () => {
+	using lifetime = new DisposableStore();
+	const f = fixture(lifetime, URI.parse('ash-remote://ssh+build/project'));
+	f.setStat(async resource => ({ resource, kind: FileKind.Directory, sizeBytes: 0, readonly: false, modifiedAtMillis: undefined }));
+	await f.write('../outside/');
+	assert.deepEqual(await f.links(), []);
+	const picker = f.contribution.showLinkQuickpick();
+	f.accept(0);
+	await picker;
+	assert.equal(f.warnings.length, 1);
+	assert.equal(f.host.opened.length, 0);
+	assert.deepEqual(f.revealed, []);
+});
+
+test('Terminal outside folder links report a host that cannot open a new window', async () => {
+	using lifetime = new DisposableStore();
+	const f = fixture(lifetime);
+	f.host.openWindow = async () => { throw new Error('New window is unavailable'); };
+	f.setStat(async resource => ({ resource, kind: FileKind.Directory, sizeBytes: 0, readonly: false, modifiedAtMillis: undefined }));
+	await f.write('../outside/');
+	const picker = f.contribution.showLinkQuickpick();
+	f.accept(0);
+	await picker;
+	assert.equal(f.warnings.length, 1);
+	assert.equal(f.host.opened.length, 0);
+});
+
+test('Terminal outside folder activation cannot open a window after its instance retires', async () => {
+	for (const retire of ['dispose', 'reconnect'] as const) {
+		using lifetime = new DisposableStore();
+		const f = fixture(lifetime);
+		const directory = { resource: URI.file('/outside'), kind: FileKind.Directory, sizeBytes: 0, readonly: false, modifiedAtMillis: undefined };
+		f.setStat(async () => directory);
+		await f.write('../outside/');
+		const links = await f.links();
+		const started = new DeferredPromise<void>();
+		const pending = new DeferredPromise<IFileStat>();
+		f.setStat(() => { void started.complete(); return pending.p; });
+		links![0]!.activate({} as MouseEvent, links![0]!.text);
+		await started.p;
+		if (retire === 'dispose') f.contribution.dispose();
+		else f.states.fire('reconnecting');
+		await pending.complete(directory);
+		await new Promise<void>(resolve => setImmediate(resolve));
+		assert.equal(f.host.opened.length, 0);
+	}
+});
+
+test('Terminal external history links load incrementally with four requests and stop scheduling on cancellation', async () => {
+	using lifetime = new DisposableStore();
+	const f = fixture(lifetime);
+	const pending: { line: string; result: DeferredPromise<import('../../../../terminal/browser/terminal.js').ITerminalLink[]>; }[] = [];
+	lifetime.add(f.providers.registerLinkProvider({
+		provideLinks: async (_instance, line) => {
+			const result = new DeferredPromise<import('../../../../terminal/browser/terminal.js').ITerminalLink[]>();
+			pending.push({ line, result });
+			return result.p;
+		}
+	}));
+	await f.write(Array.from({ length: 20 }, (_, index) => `JOB-${index}`).join('\r\n'));
+	const picker = f.contribution.showLinkQuickpick();
+	await f.waitForPicker();
+	await new Promise<void>(resolve => setImmediate(resolve));
+	assert.equal(pending.length, 4);
+	assert.ok(f.items.some(item => item.label === 'JOB-19'), 'Built-in links must be usable before providers respond');
+	const finish = async (index: number) => {
+		const request = pending[index]!;
+		await request.result.complete([{ startIndex: 0, length: request.line.length, label: `external ${request.line}`, activate() { } }]);
+		await new Promise<void>(resolve => setImmediate(resolve));
+	};
+	await finish(0);
+	await finish(2);
+	assert.deepEqual(f.items.filter(item => item.label?.startsWith('external ')).map(item => item.label), ['external JOB-17', 'external JOB-19']);
+	const count = pending.length;
+	f.cancel();
+	await picker;
+	for (const request of pending) {
+		if (!request.result.isSettled) await request.result.complete([]);
+	}
+	await new Promise<void>(resolve => setImmediate(resolve));
+	assert.equal(pending.length, count, 'Canceled history lookup must not schedule the remaining lines');
+	assert.equal(f.focuses, 1);
+});
+
+test('Terminal external history lookup closes and stops its workers when the provider unregisters', async () => {
+	using lifetime = new DisposableStore();
+	const f = fixture(lifetime);
+	const pending = new DeferredPromise<import('../../../../terminal/browser/terminal.js').ITerminalLink[]>();
+	let calls = 0;
+	const registration = lifetime.add(f.providers.registerLinkProvider({ provideLinks: async () => { calls++; return pending.p; } }));
+	await f.write(Array.from({ length: 20 }, (_, index) => `JOB-${index}`).join('\r\n'));
+	const picker = f.contribution.showLinkQuickpick();
+	await f.waitForPicker();
+	await new Promise<void>(resolve => setImmediate(resolve));
+	assert.equal(calls, 4);
+	registration.dispose();
+	await picker;
+	await pending.complete([{ startIndex: 0, length: 1, label: 'Stale external', activate() { throw new Error('Stale link activated'); } }]);
+	await new Promise<void>(resolve => setImmediate(resolve));
+	assert.equal(calls, 4);
+	assert.equal(f.items.some(item => item.label === 'Stale external'), false);
+});
+
+test('Terminal reachability activates lazy link providers once while keeping built-in links usable', async () => {
+	using lifetime = new DisposableStore();
+	const pending = new DeferredPromise<void>();
+	const activated: string[] = [];
+	const f = fixture(lifetime, undefined, undefined, undefined, undefined, async () => {
+		await pending.p;
+		lifetime.add(f.providers.registerLinkProvider({ provideLinks: async (_instance, line) => line === 'JOB-123' ? [{ startIndex: 0, length: 7, label: 'Lazy job', activate: text => activated.push(text) }] : [] }));
+	});
+	await f.write('JOB-123');
+	const picker = f.contribution.showLinkQuickpick();
+	await f.waitForPicker();
+	assert.deepEqual(f.activations.map(value => value.event), ['onTerminal']);
+	assert.ok(f.items.some(item => item.label === 'JOB-123'));
+	await f.links();
+	await f.links();
+	assert.equal(f.activations.length, 1, 'Line detection must not request extension activation');
+	await pending.complete();
+	await f.waitForIdle();
+	f.accept(f.items.findIndex(item => item.label === 'Lazy job'));
+	await picker;
+	assert.deepEqual(activated, ['JOB-123']);
+});
+
+test('Terminal lazy link activation failures are logged and disposal cancels pending activation', async () => {
+	using lifetime = new DisposableStore();
+	const failed = fixture(lifetime, undefined, undefined, undefined, undefined, async () => { throw new Error('Provider startup failed'); });
+	await failed.write('README');
+	assert.equal(failed.activationErrors.length, 1);
+	assert.deepEqual(failed.warnings, []);
+	const pending = new DeferredPromise<void>();
+	const canceled = fixture(lifetime, undefined, undefined, undefined, undefined, () => pending.p);
+	await canceled.write('README');
+	assert.equal(canceled.activations.length, 1);
+	canceled.contribution.dispose();
+	assert.equal(canceled.activations[0]?.signal?.aborted, true);
+	await pending.error(new Error('Canceled provider startup'));
+	await new Promise<void>(resolve => setImmediate(resolve));
+	assert.deepEqual(canceled.activationErrors, []);
 });

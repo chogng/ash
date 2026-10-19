@@ -901,6 +901,57 @@ fn projectless_session_terminal_uses_its_grant_without_enabling_an_unscoped_term
             .is_some_and(|profiles| !profiles.is_empty()),
         "{profiles}"
     );
+    let canonical = dunce::canonicalize(&dir.path).unwrap();
+    #[cfg(windows)]
+    assert_ne!(
+        dir.path, canonical,
+        "exercise verbatim and ordinary spellings"
+    );
+    let sibling = TestDir::new("projectless-terminal-ungranted", "fixture.txt");
+    let read_only = TestDir::new("projectless-terminal-read-only", "fixture.txt");
+    let read_grant: serde_json::Value = serde_json::from_str(
+        &server.handle_json(
+            &mut connection,
+            &serde_json::json!({
+                "jsonrpc":"2.0","id":6,"method":"session/dirs/add","params":{
+                    "sessionId":session.session_id,"path":read_only.path,"permissions":["readFiles"]
+                }
+            })
+            .to_string(),
+        ),
+    )
+    .unwrap();
+    assert!(read_grant.get("error").is_none(), "{read_grant}");
+    for (id, path, permitted) in [
+        (32, canonical.as_path(), true),
+        (33, sibling.path.as_path(), false),
+        (34, read_only.path.as_path(), false),
+    ] {
+        let encoded: String =
+            url::form_urlencoded::byte_serialize(path.to_str().unwrap().as_bytes()).collect();
+        let scoped: serde_json::Value = serde_json::from_str(
+            &server.handle_json(
+                &mut connection,
+                &serde_json::json!({
+                    "jsonrpc":"2.0","id":id,"method":"terminal/profile/list","params":{
+                        "dirId":format!("session:{encoded_session}:{encoded}")
+                    }
+                })
+                .to_string(),
+            ),
+        )
+        .unwrap();
+        if permitted {
+            assert!(
+                scoped["result"]["profiles"]
+                    .as_array()
+                    .is_some_and(|profiles| !profiles.is_empty()),
+                "{scoped}"
+            );
+        } else {
+            assert_eq!(scoped["error"]["message"], "TerminalOperationFailed");
+        }
+    }
     let unscoped_profiles: serde_json::Value = serde_json::from_str(
         &server.handle_json(
             &mut connection,
@@ -920,7 +971,7 @@ fn projectless_session_terminal_uses_its_grant_without_enabling_an_unscoped_term
     assert!(created.get("error").is_none(), "{created}");
     assert_eq!(
         created["result"]["ready"]["cwd"],
-        dir.path.to_str().unwrap()
+        dunce::canonicalize(&dir.path).unwrap().to_str().unwrap()
     );
     let terminal_id = created["result"]["terminalId"].as_str().unwrap();
     let unscoped: serde_json::Value = serde_json::from_str(&server.handle_json(&mut connection, &serde_json::json!({

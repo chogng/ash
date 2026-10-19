@@ -1,5 +1,16 @@
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
+import { JSDOM } from 'jsdom';
+import { DeferredPromise } from '../../../../../../base/common/async.js';
+import { Emitter, Event } from '../../../../../../base/common/event.js';
+import { DisposableStore, toDisposable } from '../../../../../../base/common/lifecycle.js';
+import { environment } from '../../../../../../base/common/platform.js';
+import { IClipboardService } from '../../../../../../platform/clipboard/common/clipboardService.js';
+import { ContextKeyService, IContextKeyService } from '../../../../../../platform/contextkey/browser/contextKeyService.js';
+import { INotificationService } from '../../../../../../platform/notification/common/notification.js';
+import { ITerminalService, type ITerminalInstance, type IXtermTerminal } from '../../../../terminal/browser/terminal.js';
+import { TerminalExtensionsRegistry } from '../../../../terminal/browser/terminalExtensions.js';
+import { TerminalClipboardContribution } from '../../browser/terminal.clipboard.contribution.js';
 import { InMemoryConfigurationService } from '../../../../../../platform/configuration/common/inMemoryConfigurationService.js';
 import { IConfigurationService } from '../../../../../../platform/configuration/common/configuration.js';
 import { IDialogService, DialogResult } from '../../../../../../platform/dialogs/common/dialogs.js';
@@ -58,4 +69,157 @@ test('terminal paste confirmation bounds its preview without rewriting accepted 
 	});
 	const text = `${'a'.repeat(3000)}\n${'line\n'.repeat(20)}hidden tail`;
 	assert.equal(await services.invokeFunction(shouldPasteTerminalText, text, false), true);
+});
+
+function clipboardFixture() {
+	const store = new DisposableStore();
+	const dom = new JSDOM('<div><textarea></textarea></div><input>');
+	store.add(toDisposable(() => dom.window.close()));
+	const configuration = store.add(new InMemoryConfigurationService());
+	const services = store.add(new InstantiationService());
+	const contextKeys = store.add(new ContextKeyService());
+	const activeChanged = store.add(new Emitter<ITerminalInstance | undefined>());
+	const selectionChanged = store.add(new Emitter<void>());
+	let selection = '';
+	let selectionX = 0;
+	let activeInstance: ITerminalInstance | undefined;
+	const copied: string[] = [];
+	const sent: string[] = [];
+	const errors: unknown[] = [];
+	const reported = new DeferredPromise<void>();
+	let read: () => Promise<string> = async () => 'pasted';
+	let write: (text: string) => Promise<void> = async text => { copied.push(text); };
+	const element = dom.window.document.querySelector('div')!;
+	const textarea = dom.window.document.querySelector('textarea')!;
+	const instance = {
+		state: 'running', onDidChangeState: Event.None, onDidExit: Event.None,
+		sendText: async (text: string) => { sent.push(text); },
+	} as unknown as ITerminalInstance;
+	activeInstance = instance;
+	const screen = {
+		element, isDisposed: false, onDidRequestRunCommand: Event.None,
+		focus: () => textarea.focus(),
+		raw: {
+			textarea, options: {}, modes: { bracketedPasteMode: false },
+			onSelectionChange: selectionChanged.event,
+			hasSelection: () => !!selection, getSelection: () => selection,
+			getSelectionPosition: () => selection ? { start: { x: selectionX, y: 0 }, end: { x: selectionX + selection.length, y: 0 } } : undefined,
+			clearSelection: () => { selection = ''; selectionChanged.fire(); },
+		},
+	} as unknown as IXtermTerminal;
+	services.registerInstance(IConfigurationService, configuration);
+	services.registerInstance(IContextKeyService, contextKeys);
+	services.registerInstance(IDialogService, store.add(new DialogService()));
+	services.registerInstance(IClipboardService, { readText: () => read(), writeText: (text: string) => write(text) } as IClipboardService);
+	services.registerInstance(INotificationService, { error: (error: unknown) => { errors.push(error); void reported.complete(); } } as INotificationService);
+	services.registerInstance(ITerminalService, {
+		get activeInstance() { return activeInstance; }, onDidChangeActiveInstance: activeChanged.event,
+		setActiveInstance: (value: ITerminalInstance | undefined) => { activeInstance = value; activeChanged.fire(value); },
+	} as ITerminalService);
+	const registration = TerminalExtensionsRegistry.getTerminalContributions().find(item => item.id === TerminalClipboardContribution.ID)!;
+	const contribution = store.add(services.createInstance(registration.ctor, { instance })) as TerminalClipboardContribution;
+	contribution.xtermReady(screen);
+	return {
+		[Symbol.dispose]: () => store.dispose(), configuration, contribution, copied, sent, errors, element, textarea, screen, reported: reported.p,
+		select: (value: string, x = 0) => { selection = value; selectionX = x; selectionChanged.fire(); },
+		selection: () => selection,
+		read: (value: () => Promise<string>) => { read = value; },
+		write: (value: (text: string) => Promise<void>) => { write = value; },
+		switch: () => { activeInstance = undefined; activeChanged.fire(undefined); },
+		outside: () => dom.window.document.querySelector('input')!.focus(),
+		mouse: (type = 'mousedown', shiftKey = false) => {
+			const event = new dom.window.MouseEvent(type, { button: 2, bubbles: true, cancelable: true, shiftKey });
+			element.dispatchEvent(event);
+			return event;
+		},
+	};
+}
+
+test('terminal auto-copy is configurable, ignores empty selections and reports clipboard failures', async () => {
+	using fixture = clipboardFixture();
+	assert.equal(fixture.configuration.getValue(TerminalSettingId.CopyOnSelection), false);
+	assert.equal(fixture.configuration.getValue(TerminalSettingId.RightClickBehavior), environment.os === 'mac' ? 'selectWord' : environment.os === 'windows' ? 'copyPaste' : 'default');
+	fixture.select('disabled');
+	assert.deepEqual(fixture.copied, []);
+	await fixture.configuration.updateValue(TerminalSettingId.CopyOnSelection, true);
+	fixture.select('unfocused');
+	assert.deepEqual(fixture.copied, []);
+	fixture.textarea.focus();
+	fixture.select('enabled');
+	fixture.select('');
+	assert.deepEqual(fixture.copied, ['enabled']);
+	const error = new Error('Write denied');
+	fixture.write(async () => { throw error; });
+	fixture.select('still selected');
+	await fixture.reported;
+	assert.deepEqual(fixture.errors, [error]);
+	assert.equal(fixture.selection(), 'still selected');
+	fixture.switch();
+	fixture.select('background');
+	assert.deepEqual(fixture.copied, ['enabled']);
+});
+
+test('terminal right click copies and clears only after its clipboard write succeeds', async () => {
+	using fixture = clipboardFixture();
+	await fixture.configuration.updateValue(TerminalSettingId.RightClickBehavior, 'copyPaste');
+	fixture.select('original');
+	const pending = new DeferredPromise<void>();
+	fixture.write(() => pending.p);
+	const operation = fixture.contribution.handleMouseEvent({ button: 2, shiftKey: false } as MouseEvent);
+	assert.equal(fixture.selection(), 'original');
+	fixture.select('new selection');
+	await pending.complete();
+	assert.deepEqual(await operation, { handled: true });
+	assert.equal(fixture.selection(), 'new selection');
+	fixture.write(async () => { throw new Error('Write denied'); });
+	await assert.rejects(fixture.contribution.handleMouseEvent({ button: 2, shiftKey: false } as MouseEvent), /Write denied/);
+	assert.equal(fixture.selection(), 'new selection');
+	fixture.write(async () => { });
+	await fixture.contribution.handleMouseEvent({ button: 2, shiftKey: false } as MouseEvent);
+	assert.equal(fixture.selection(), '');
+});
+
+for (const transition of ['focus', 'switch', 'dispose'] as const) {
+	test(`terminal right click drops its delayed clipboard read after ${transition}`, async () => {
+		using fixture = clipboardFixture();
+		await fixture.configuration.updateValue(TerminalSettingId.RightClickBehavior, 'paste');
+		const pending = new DeferredPromise<string>();
+		fixture.read(() => pending.p);
+		const operation = fixture.contribution.handleMouseEvent({ button: 2, shiftKey: false } as MouseEvent);
+		if (transition === 'focus') { fixture.outside(); fixture.textarea.focus(); }
+		else if (transition === 'switch') fixture.switch();
+		else fixture.contribution.dispose();
+		await pending.complete('stale');
+		await operation;
+		assert.deepEqual(fixture.sent, []);
+	});
+}
+
+test('terminal mouse policy preserves Shift and keyboard menus and updates word selection', async () => {
+	using fixture = clipboardFixture();
+	for (const behavior of ['default', 'copyPaste', 'paste', 'selectWord', 'nothing']) {
+		await fixture.configuration.updateValue(TerminalSettingId.RightClickBehavior, behavior);
+		assert.equal(fixture.screen.raw.options.rightClickSelectsWord, behavior === 'selectWord');
+		assert.equal(fixture.mouse('contextmenu').defaultPrevented, ['copyPaste', 'paste', 'nothing'].includes(behavior));
+		assert.equal(fixture.mouse('contextmenu', true).defaultPrevented, false);
+		assert.equal(fixture.mouse('mousedown', true).defaultPrevented, false);
+	}
+	await fixture.configuration.updateValue(TerminalSettingId.RightClickBehavior, 'paste');
+	for (const markup of ['<div class="ash-terminal-widget-overlay"><input></div>', '<div role="button"></div>']) {
+		fixture.element.insertAdjacentHTML('beforeend', markup);
+		const interactive = fixture.element.lastElementChild!;
+		const event = new fixture.element.ownerDocument.defaultView!.MouseEvent('mousedown', { button: 2, bubbles: true, cancelable: true });
+		interactive.dispatchEvent(event);
+		assert.equal(event.defaultPrevented, false);
+		interactive.remove();
+	}
+	const pending = new DeferredPromise<string>();
+	fixture.read(() => pending.p);
+	assert.equal(fixture.mouse().defaultPrevented, true);
+	await pending.error(new Error('Read denied'));
+	await fixture.reported;
+	assert.equal((fixture.errors[0] as Error).message, 'Read denied');
+	assert.deepEqual(fixture.sent, []);
+	fixture.contribution.dispose();
+	assert.equal(fixture.mouse().defaultPrevented, false);
 });

@@ -404,6 +404,23 @@ fn wildcard_activation_matches_the_first_window_bound_startup_event() {
 }
 
 #[test]
+fn terminal_link_demand_activation_cannot_activate_an_unrelated_capability() {
+    let plan = super::ActivationPlan {
+        events: vec!["onDemand:terminalLinkProvider".into()],
+        commands: Vec::new(),
+    };
+    assert!(plan.matches(&super::ActivationEvent::Capability(
+        "terminalLinkProvider".into()
+    )));
+    assert!(!plan.matches(&super::ActivationEvent::Capability(
+        "terminalProfileProvider".into()
+    )));
+    assert!(!plan.matches(&super::ActivationEvent::Command(
+        "terminalLinkProvider".into()
+    )));
+}
+
+#[test]
 fn terminal_profile_activation_matches_declared_identity_and_demand_capability() {
     use super::ActivationEvent;
     use super::ActivationPlan;

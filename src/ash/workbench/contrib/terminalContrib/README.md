@@ -12,6 +12,8 @@ history 贡献持久化最近命令并提供选择重跑。终端输出的帮助
 
 新增贡献之前必须确定下层公共能力、状态 owner 和释放边界。命令与配置由各自 `.contribution.ts` 注册；界面消费前端事件和类型，不导入 Rust DTO。命令检测中的屏幕位置归 xterm，Shell 命令完成状态归执行后端，不能让贡献自行从输出文字猜测 exit code 或重新执行命令。
 
-跨层生命周期见 [Terminal 职责与运行契约](../../../../../docs/terminal.md)，未完成动作和可选增强由 [Terminal TODO](../../../../../TODO.md#terminal--todo) 及[发展候选](../../../../../TODO.md#发展候选未排期)维护。听写样式归 `terminal/browser/media/terminalVoice.css`，听写会话归本目录。
+跨层生命周期与各项能力的适用范围见 [Terminal 职责与运行契约](../../../../../docs/terminal.md)。听写样式归 `terminal/browser/media/terminalVoice.css`，听写会话归本目录。
 
-Clipboard 贡献按实例提供复制、复制并清除、粘贴命令；Linux 另提供 selection clipboard 粘贴。焦点选区键只影响终端复制快捷键，无选区 Ctrl+C 仍发送给 Shell。命令与浏览器 paste 共用 `shouldPasteTerminalText` 的多行决策及 `terminal.integrated.enableMultiLinePasteWarning` 设置。宿主剪贴板读取和确认完成后再次检查实例、连接代次、活动项与屏幕可用性；切换回来也不会发送失效结果。命令标记的复制／选区由 DecorationAddon 读取原 command capability 范围；重跑请求通过 xterm 事件到达本实例贡献，在未受信文本确认前后核对输入代次及原命令成员身份。所有发送复用实例 `sendText` 与输入确认，不复制输入队列。关闭实例释放监听和 DOM 上下文。HTML／资源粘贴、copy-on-selection 与其他 clipboard 偏好仍未实现。
+Clipboard 贡献按实例提供复制、复制并清除、粘贴命令；Linux 另提供 selection clipboard 粘贴。焦点选区键只影响终端复制快捷键，无选区 Ctrl+C 仍发送给 Shell。命令与浏览器 paste 共用 `shouldPasteTerminalText` 的多行决策及 `terminal.integrated.enableMultiLinePasteWarning` 设置。宿主剪贴板读取和确认完成后再次检查实例、连接代次、活动项与屏幕可用性；切换回来也不会发送失效结果。命令标记的复制／选区由 DecorationAddon 读取原 command capability 范围；重跑请求通过 xterm 事件到达本实例贡献，在未受信文本确认前后核对输入代次及原命令成员身份。所有发送复用实例 `sendText` 与输入确认，不复制输入队列。关闭实例释放监听和 DOM 上下文。`copyOnSelection` 和 `rightClickBehavior` 沿原输入、选区与焦点 owner 工作；HTML／资源粘贴不转换为文本执行。
+
+Sticky Scroll 仅投影原命令 markers 与屏幕，不保存命令副本。Suggest 显式读取可信历史和授权目录项，Quick Fix 识别最新失败 Git 命令的保留输出；两者接受后只填入终端，执行仍由用户按 Enter。实例、输入、命令范围和工作区变化撤回过期结果。

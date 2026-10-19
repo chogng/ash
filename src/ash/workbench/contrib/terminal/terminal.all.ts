@@ -9,3 +9,6 @@ import '../terminalContrib/accessibility/browser/terminal.accessibility.contribu
 import '../terminalContrib/history/browser/terminal.history.contribution.js';
 import '../terminalContrib/clipboard/browser/terminal.clipboard.contribution.js';
 import '../terminalContrib/sendSequence/browser/terminal.sendSequence.contribution.js';
+import '../terminalContrib/stickyScroll/browser/terminal.stickyScroll.contribution.js';
+import '../terminalContrib/suggest/browser/terminal.suggest.contribution.js';
+import '../terminalContrib/quickFix/browser/terminal.quickFix.contribution.js';

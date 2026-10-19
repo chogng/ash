@@ -282,6 +282,7 @@ pub enum ExtensionCapability {
     DebugAdapter,
     TaskProvider,
     TerminalProfileProvider,
+    TerminalLinkProvider,
     TestProfileProvider,
     DataChannel,
     SpeechProvider,
@@ -457,6 +458,8 @@ pub enum RegistrationKind {
     },
     /// Extension-owned mutations for future shells; borrows the terminal provider ceiling.
     TerminalEnvironment {},
+    /// Provides line-local links; activation remains an explicit client gesture.
+    TerminalLinkProvider {},
     TestProfileProvider {
         provider_id: String,
         label: String,

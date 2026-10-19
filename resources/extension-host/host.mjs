@@ -476,6 +476,40 @@ export const speech = Object.freeze({
 });
 
 export const terminals = Object.freeze({
+	registerTerminalLinkProvider(registrationId, provider) {
+		if (typeof provider?.provideTerminalLinks !== 'function' || typeof provider?.handleTerminalLink !== 'function') throw new TypeError('Terminal links require provide and handle callbacks');
+		const links = new Map();
+		let sequence = 0;
+		const provide = async (context, payload) => {
+			if (typeof payload.line !== 'string' || payload.line.length > 32768 || !payload.terminal || typeof payload.terminal.id !== 'string' || typeof payload.terminal.name !== 'string') throw new TypeError('Invalid terminal link context');
+			const result = await provider.provideTerminalLinks(context, payload);
+			if (context.cancellationToken.isCancellationRequested || result === undefined || result === null) return [];
+			if (!Array.isArray(result) || result.length > 256) throw new TypeError('Invalid terminal links');
+			for (const link of result) {
+				if (!Number.isSafeInteger(link?.startIndex) || link.startIndex < 0 || !Number.isSafeInteger(link.length) || link.length < 1 || link.startIndex + link.length > payload.line.length || link.tooltip !== undefined && (typeof link.tooltip !== 'string' || link.tooltip.length > 512 || /[\u0000-\u001f\u007f]/.test(link.tooltip))) throw new TypeError('Invalid terminal link range or tooltip');
+			}
+			return result;
+		};
+		return register({
+			registrationId, kind: 'terminalLinkProvider', operation: ['provideTerminalLinks', 'handleTerminalLink'],
+			disposeResources() { links.clear(); },
+			async callback(context, payload, operation) {
+				if (operation === 'handleTerminalLink') {
+					// A picker can outlive the bounded callback cache. Re-resolve its
+					// original line on acceptance rather than silently dropping the click.
+					const entry = links.get(payload.id) ?? (await provide(context, payload)).find(link => link.startIndex === payload.startIndex && link.length === payload.length);
+					if (entry && !context.cancellationToken.isCancellationRequested) await provider.handleTerminalLink(context, entry);
+					return null;
+				}
+				const validated = (await provide(context, payload)).map(link => ({ link, id: String(++sequence) }));
+				for (const entry of validated) links.set(entry.id, entry.link);
+				// Links are callback handles, not terminal history. Bound retained extension
+				// objects even when the user keeps a terminal producing output indefinitely.
+				while (links.size > 2048) links.delete(links.keys().next().value);
+				return { links: validated.map(({ link, id }) => ({ id, startIndex: link.startIndex, length: link.length, ...(link.tooltip === undefined ? {} : { label: link.tooltip }) })) };
+			},
+		});
+	},
 	registerEnvironmentVariableCollection(registrationId, snapshot) {
 		if (typeof snapshot !== 'function') throw new TypeError('Terminal environment collection requires a snapshot callback');
 		return register({ registrationId, kind: 'terminalEnvironment', operation: 'getTerminalEnvironment', callback: snapshot });

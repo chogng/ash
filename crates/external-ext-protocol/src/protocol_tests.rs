@@ -1076,6 +1076,33 @@ fn terminal_profile_registration_requires_capability_and_unique_bounded_identity
 }
 
 #[test]
+fn terminal_link_registration_requires_its_own_admitted_capability() {
+    let registration = json!({"registrationId":"links", "kind":"terminalLinkProvider"});
+    let mut params = activation();
+    params.capabilities = vec![ExtensionCapability::TerminalProfileProvider];
+    let mut request = ExtensionHostRequest {
+        context: RequestContext::new(1, 1, 1),
+        request: HostRequestKind::Activate(params.clone()),
+    };
+    assert_command_registration_rejected(&request, registration.clone());
+    params.capabilities = vec![ExtensionCapability::TerminalLinkProvider];
+    request.request = HostRequestKind::Activate(params);
+    let descriptor: RegistrationDescriptor = serde_json::from_value(registration.clone()).unwrap();
+    let response = ExtensionHostResponse {
+        context: request.context,
+        response: HostResponseKind::Success(HostSuccess::Activated(ActivateResult {
+            registrations: vec![descriptor],
+        })),
+    };
+    response
+        .validate_for(&request, &ProtocolLimits::default())
+        .unwrap();
+    let mut invalid = registration;
+    invalid["operation"] = json!("execute");
+    assert!(serde_json::from_value::<RegistrationDescriptor>(invalid).is_err());
+}
+
+#[test]
 fn terminal_environment_registration_requires_the_admitted_terminal_ceiling() {
     let mut params = activation();
     let registration = json!({"registrationId":"environment", "kind":"terminalEnvironment"});

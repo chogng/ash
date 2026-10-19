@@ -6,6 +6,8 @@ import { isLinux, isWindows } from '../../../../../base/common/platform.js';
 import { localize, localize2 } from '../../../../../nls.js';
 import { Action2, registerAction2 } from '../../../../../platform/actions/common/actions.js';
 import { IClipboardService } from '../../../../../platform/clipboard/common/clipboardService.js';
+import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
+import { INotificationService } from '../../../../../platform/notification/common/notification.js';
 import { IContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
 import { ContextKeyExpr } from '../../../../../platform/contextkey/common/contextkey.js';
 import { IInstantiationService, type ServicesAccessor } from '../../../../../platform/instantiation/common/instantiation.js';
@@ -18,12 +20,14 @@ import { TerminalContextKeys, TerminalHasActiveInstanceContext } from '../../../
 import { shouldPasteTerminalText } from './terminalClipboard.js';
 import { IDialogService } from '../../../../../platform/dialogs/common/dialogs.js';
 import { TerminalCapability } from '../../../../../platform/terminal/common/capabilities/capabilities.js';
+import { TerminalSettingId } from '../../../../../platform/terminal/common/terminal.js';
 
 /** Clipboard operations retain their initiating instance across asynchronous host reads. */
 export class TerminalClipboardContribution extends Disposable implements ITerminalContribution {
 	public static readonly ID = 'terminal.clipboard';
 	private screen: IXtermTerminal | undefined;
 	private inputGeneration = 0;
+	private focusGeneration = 0;
 
 	constructor(
 		private readonly context: ITerminalContributionContext,
@@ -32,6 +36,8 @@ export class TerminalClipboardContribution extends Disposable implements ITermin
 		@ITerminalService private readonly terminals: ITerminalService,
 		@IInstantiationService private readonly instantiation: IInstantiationService,
 		@IDialogService private readonly dialogs: IDialogService,
+		@IConfigurationService private readonly configuration: IConfigurationService,
+		@INotificationService private readonly notifications: INotificationService,
 	) {
 		super();
 		this._register(context.instance.onDidChangeState(() => this.inputGeneration++));
@@ -45,6 +51,13 @@ export class TerminalClipboardContribution extends Disposable implements ITermin
 
 	public xtermReady(screen: IXtermTerminal): void {
 		this.screen = screen;
+		const updateMouseOptions = (): void => {
+			screen.raw.options.rightClickSelectsWord = this.configuration.getValue<string>(TerminalSettingId.RightClickBehavior) === 'selectWord';
+		};
+		updateMouseOptions();
+		this._register(this.configuration.onDidChangeConfiguration(event => {
+			if (event.affectsConfiguration(TerminalSettingId.RightClickBehavior)) updateMouseOptions();
+		}));
 		this._register(screen.onDidRequestRunCommand(async ({ command, noNewLine }) => {
 			const generation = this.inputGeneration;
 			const instance = this.context.instance;
@@ -70,10 +83,33 @@ export class TerminalClipboardContribution extends Disposable implements ITermin
 		const selected = TerminalContextKeys.textSelectedInFocused.bindTo(scope);
 		const updateSelection = (): void => selected.set(screen.raw.hasSelection() && textarea === textarea.ownerDocument.activeElement);
 		updateSelection();
-		const listener = screen.raw.onSelectionChange(updateSelection);
+		const listener = screen.raw.onSelectionChange(() => {
+			updateSelection();
+			if (this.configuration.getValue<boolean>(TerminalSettingId.CopyOnSelection) && this.terminals.activeInstance === this.context.instance
+				&& textarea === textarea.ownerDocument.activeElement) {
+				void this.copySelection().catch(error => { if (!this.isDisposed) this.notifications.error(error); });
+			}
+		});
 		this._register(toDisposable(() => listener.dispose()));
 		this._register(addDisposableListener(textarea, 'focus', updateSelection));
-		this._register(addDisposableListener(textarea, 'blur', () => selected.set(false)));
+		this._register(addDisposableListener(textarea, 'blur', () => { this.focusGeneration++; selected.set(false); }));
+		// Capture before xterm can change the selection on right click. Shift and
+		// keyboard context menus retain their normal menu path.
+		const isScreenTarget = (event: MouseEvent): boolean => !(event.target as Element | null)?.closest?.('.ash-terminal-widget-overlay, [role="button"], button, a');
+		this._register(addDisposableListener(screen.element, 'mousedown', (event: MouseEvent) => {
+			if (!isScreenTarget(event) || !this.shouldHandleRightClick(event)) return;
+			event.preventDefault();
+			event.stopImmediatePropagation();
+			void this.handleMouseEvent(event).catch(error => { if (!this.isDisposed) this.notifications.error(error); });
+		}, true));
+		this._register(addDisposableListener(screen.element, 'contextmenu', (event: MouseEvent) => {
+			if (!isScreenTarget(event) || event.button !== 2 || event.shiftKey) return;
+			const behavior = this.configuration.getValue<string>(TerminalSettingId.RightClickBehavior);
+			if (behavior === 'copyPaste' || behavior === 'paste' || behavior === 'nothing') {
+				event.preventDefault();
+				event.stopImmediatePropagation();
+			}
+		}, true));
 		// xterm listens on both its textarea and root. Capture before either handler
 		// so browser-menu paste uses the same confirmation and acknowledged input path.
 		this._register(addDisposableListener(screen.element, 'paste', (event: ClipboardEvent) => {
@@ -98,16 +134,46 @@ export class TerminalClipboardContribution extends Disposable implements ITermin
 		return this.readAndPaste('selection');
 	}
 
-	private async readAndPaste(type?: string, suppliedText?: string): Promise<void> {
+	private shouldHandleRightClick(event: MouseEvent): boolean {
+		const behavior = this.configuration.getValue<string>(TerminalSettingId.RightClickBehavior);
+		return event.button === 2 && !event.shiftKey && (behavior === 'copyPaste' || behavior === 'paste');
+	}
+
+	public async handleMouseEvent(event: MouseEvent): Promise<{ handled: boolean; } | void> {
+		const screen = this.screen;
+		if (!this.shouldHandleRightClick(event) || this.isDisposed || !screen || screen.isDisposed) return;
+		const instance = this.context.instance;
+		if (this.terminals.activeInstance !== instance) this.terminals.setActiveInstance(instance);
+		screen.focus();
+		if (this.configuration.getValue<string>(TerminalSettingId.RightClickBehavior) === 'copyPaste' && screen.raw.hasSelection()) {
+			const selection = screen.raw.getSelection();
+			const position = screen.raw.getSelectionPosition();
+			const generation = this.inputGeneration;
+			const focusGeneration = this.focusGeneration;
+			await this.copySelection();
+			const current = screen.isDisposed ? undefined : screen.raw.getSelectionPosition();
+			// A failed write, a newer selection or a switch to another terminal must
+			// leave the selection intact, so a retry cannot destroy uncopied text.
+			if (!this.isDisposed && !screen.isDisposed && generation === this.inputGeneration && focusGeneration === this.focusGeneration && screen.raw.getSelection() === selection
+				&& current?.start.x === position?.start.x && current?.start.y === position?.start.y
+				&& current?.end.x === position?.end.x && current?.end.y === position?.end.y) screen.raw.clearSelection();
+		} else {
+			await this.readAndPaste(undefined, undefined, true);
+		}
+		return { handled: true };
+	}
+
+	private async readAndPaste(type?: string, suppliedText?: string, requireFocus = false): Promise<void> {
 		const screen = this.screen;
 		const instance = this.context.instance;
 		const generation = this.inputGeneration;
+		const focusGeneration = this.focusGeneration;
 		const canPaste = (): boolean => !this.isDisposed && !!screen && !screen.isDisposed
 			&& generation === this.inputGeneration && instance.state === 'running' && !instance.isReadOnly
 			&& this.terminals.activeInstance === instance && screen.element.isConnected && !screen.element.hidden;
 		if (!canPaste()) return;
 		const text = suppliedText ?? await this.clipboard.readText(type);
-		if (!text || !canPaste()) return;
+		if (!text || !canPaste() || (requireFocus && focusGeneration !== this.focusGeneration)) return;
 		const decision = await this.instantiation.invokeFunction(shouldPasteTerminalText, text, screen!.raw.modes.bracketedPasteMode);
 		if (!canPaste()) return;
 		screen!.focus();

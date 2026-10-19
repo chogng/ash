@@ -16,6 +16,7 @@ import { IInstantiationService } from '../../../platform/instantiation/common/in
 import { ILogService } from '../../../platform/log/common/log.js';
 import { RequestStore } from '../../../platform/terminal/common/requestStore.js';
 import { addDisposableListener } from '../../../base/browser/dom.js';
+import { ITerminalLinkProviderService } from '../../contrib/terminalContrib/links/browser/links.js';
 
 type ProfileReply = { value: JsonValue; } | { error: unknown; };
 
@@ -33,6 +34,13 @@ export interface ExtensionTerminalEnvironmentRegistration {
 	readonly invoke: ExtensionHostProviderInvoker;
 }
 
+export interface ExtensionTerminalLinkRegistration {
+	readonly runtimeId: string;
+	readonly packageDigest: string;
+	readonly registrationId: string;
+	readonly invoke: ExtensionHostProviderInvoker;
+}
+
 /** Binds incarnation-owned callbacks to the existing terminal profile and instance owners. */
 export class MainThreadTerminalService extends Disposable {
 	private readonly registrations = this._register(new DisposableMap<string, DisposableStore>());
@@ -40,6 +48,8 @@ export class MainThreadTerminalService extends Disposable {
 	private workspaceGeneration = 0;
 	private readonly environmentRegistrations = this._register(new DisposableMap<string, DisposableStore>());
 	private readonly environmentDescriptors = new Map<string, ExtensionTerminalEnvironmentRegistration>();
+	private readonly linkRegistrations = this._register(new DisposableMap<string, DisposableStore>());
+	private readonly linkDescriptors = new Map<string, ExtensionTerminalLinkRegistration>();
 
 	constructor(
 		@ITerminalProfileService private readonly profiles: ITerminalProfileService,
@@ -49,9 +59,89 @@ export class MainThreadTerminalService extends Disposable {
 		@IEnvironmentVariableService private readonly environmentVariables: IEnvironmentVariableService,
 		@IInstantiationService private readonly instantiation: IInstantiationService,
 		@ILogService private readonly log: ILogService,
+		@ITerminalLinkProviderService private readonly links: ITerminalLinkProviderService,
 	) {
 		super();
 		this._register(workspace.onDidChangeWorkspace(() => this.workspaceGeneration++));
+	}
+
+	replaceLinkProviders(next: readonly ExtensionTerminalLinkRegistration[]): void {
+		if (this.isDisposed) throw new CancellationError();
+		const keys = new Set(next.map(descriptor => `${descriptor.runtimeId}/${descriptor.registrationId}`));
+		if (keys.size !== next.length) throw invalid();
+		for (const key of this.linkDescriptors.keys()) {
+			if (keys.has(key)) continue;
+			this.linkRegistrations.deleteAndDispose(key);
+			this.linkDescriptors.delete(key);
+		}
+		for (const descriptor of next) {
+			const key = `${descriptor.runtimeId}/${descriptor.registrationId}`;
+			if (this.linkDescriptors.get(key) === descriptor) continue;
+			if (!this.extensionForRuntime(descriptor)) throw invalid();
+			this.linkRegistrations.deleteAndDispose(key);
+			this.linkDescriptors.delete(key);
+			const lifetime = new DisposableStore();
+			const controller = new AbortController();
+			lifetime.add(toDisposable(() => controller.abort()));
+			const instances = lifetime.add(new DisposableMap<ITerminalInstance, DisposableStore>());
+			const generations = new WeakMap<ITerminalInstance, number>();
+			lifetime.add(this.terminals.onDidDisposeInstance(instance => {
+				instances.deleteAndDispose(instance);
+				generations.delete(instance);
+			}));
+			lifetime.add(this.links.registerLinkProvider({
+				provideLinks: async (instance, line) => {
+					if (!instances.has(instance)) {
+						const listeners = new DisposableStore();
+						generations.set(instance, 0);
+						listeners.add(instance.onDidChangeState(() => generations.set(instance, (generations.get(instance) ?? 0) + 1)));
+						instances.set(instance, listeners);
+					}
+					const generation = this.workspaceGeneration;
+					const instanceGeneration = generations.get(instance);
+					const processId = instance.processId;
+					const request = new AbortController();
+					using pending = new DisposableStore();
+					pending.add(instance.onDidChangeState(() => request.abort()));
+					pending.add(this.workspace.onDidChangeWorkspace(() => request.abort()));
+					const signal = AbortSignal.any([controller.signal, request.signal, AbortSignal.timeout(5_000)]);
+					const valid = (): boolean => !controller.signal.aborted && generation === this.workspaceGeneration
+						&& instanceGeneration === generations.get(instance)
+						&& instance.state === 'running' && instance.processId === processId && this.terminals.instances.includes(instance);
+					if (!valid() || line.length > 32768) return undefined;
+					const result = record(await descriptor.invoke('provideTerminalLinks', {
+						line, terminal: { id: instance.id, name: instance.title, processId: processId ?? null },
+					}, signal), ['links']);
+					if (signal.aborted || !valid()) return undefined;
+					if (!Array.isArray(result.links) || result.links.length > 256) throw invalid();
+					return result.links.map(value => {
+						const link = record(value, ['id', 'startIndex', 'length', 'label']);
+						const id = text(link.id, 256);
+						const startIndex = link.startIndex;
+						const length = link.length;
+						if (typeof startIndex !== 'number' || !Number.isSafeInteger(startIndex) || startIndex < 0
+							|| typeof length !== 'number' || !Number.isSafeInteger(length) || length < 1 || startIndex + length > line.length) throw invalid();
+						const label = link.label === undefined ? undefined : text(link.label, 512);
+						return {
+							startIndex, length, label, activate: (): void => {
+								if (!valid()) return;
+								const activate = async (): Promise<void> => {
+									using activation = new DisposableStore();
+									const cancellation = new AbortController();
+									activation.add(instance.onDidChangeState(() => cancellation.abort()));
+									activation.add(this.workspace.onDidChangeWorkspace(() => cancellation.abort()));
+									await descriptor.invoke('handleTerminalLink', { id, line, startIndex, length, terminal: { id: instance.id, name: instance.title, processId } }, AbortSignal.any([controller.signal, cancellation.signal, AbortSignal.timeout(5_000)]));
+								};
+								void activate()
+									.catch(error => { if (!controller.signal.aborted) this.log.error('terminal', error); });
+							}
+						};
+					});
+				},
+			}));
+			this.linkRegistrations.set(key, lifetime);
+			this.linkDescriptors.set(key, descriptor);
+		}
 	}
 
 	replaceEnvironmentProviders(next: readonly ExtensionTerminalEnvironmentRegistration[]): void {
@@ -183,7 +273,7 @@ export class MainThreadTerminalService extends Disposable {
 								name, icon, color,
 								executable: options.shellPath === undefined ? undefined : text(options.shellPath, 32768),
 								args: options.shellArgs === undefined ? undefined : argumentsList(options.shellArgs),
-								cwd: presentation.cwd !== undefined ? (typeof presentation.cwd === 'string' ? presentation.cwd : presentation.cwd.fsPath) : options.cwd === undefined ? undefined : text(options.cwd, 32768),
+								cwd: typeof presentation.cwd === 'string' ? presentation.cwd : options.cwd === undefined ? undefined : text(options.cwd, 32768),
 								env: environment(options.env),
 								strictEnv: options.strictEnv === undefined ? undefined : boolean(options.strictEnv),
 							};
@@ -216,6 +306,7 @@ export class MainThreadTerminalService extends Disposable {
 	protected override disposeCore(): void {
 		this.descriptors.clear();
 		this.environmentDescriptors.clear();
+		this.linkDescriptors.clear();
 		super.disposeCore();
 	}
 }

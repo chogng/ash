@@ -442,6 +442,7 @@ pub enum ExtensionHostRegistrationKindDto {
         title: String,
     },
     TerminalEnvironment {},
+    TerminalLinkProvider {},
     TaskProvider {
         #[schemars(length(min = 1, max = 256))]
         task_type: String,

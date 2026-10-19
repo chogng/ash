@@ -18,6 +18,19 @@ import type { ITerminalTabLayoutInfoById } from '../../../../platform/terminal/c
 import type { IExtensionTerminalProfile, ITerminalProfile as IShellProfile } from '../../../../platform/terminal/common/terminal.js';
 import type { EditorGroupId } from '../../../services/editor/common/editorState.js';
 
+/** Provider coordinates refer to UTF-16 offsets in the complete wrapped output line. */
+export interface ITerminalExternalLinkProvider {
+	provideLinks(instance: ITerminalInstance, line: string): Promise<ITerminalLink[] | undefined>;
+}
+
+export interface ITerminalLink {
+	/** UTF-16 offset in the complete wrapped line. */
+	startIndex: number;
+	length: number;
+	label?: string;
+	activate(text: string): void;
+}
+
 /** Character-cell dimensions used by Workbench terminal callers. */
 export interface ITerminalDimensions {
 	readonly rows: number;

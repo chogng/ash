@@ -288,6 +288,33 @@ test("browser layout observation preserves a chord ending with Shift+Enter", asy
 	assert.deepEqual({ executions, layoutChanges, chord: keybindings.inChordMode }, { executions: 1, layoutChanges: 0, chord: false });
 });
 
+for (const operatingSystem of [OperatingSystem.Windows, OperatingSystem.Macintosh]) {
+	test(`browser shortcut observation preserves separate copy and copy-and-clear bindings (${operatingSystem})`, async () => {
+		using resources = new DisposableStore();
+		const dom = new JSDOM('<body></body>');
+		resources.add(toDisposable(() => dom.window.close()));
+		const registry = new KeybindingRegistry();
+		const commands = new CommandRegistry();
+		const contexts = resources.add(new ContextKeyService());
+		const layouts = resources.add(new BrowserKeyboardLayoutService({ navigator: fakeNavigator(new Map()), operatingSystem }));
+		await layouts.refreshKeyboardLayout();
+		const mac = operatingSystem === OperatingSystem.Macintosh;
+		const modifiers = { ctrlKey: !mac, metaKey: mac };
+		const executed: string[] = [];
+		for (const [command, shiftKey] of [['copy', true], ['copyAndClear', false]] as const) {
+			resources.add(commands.register(command, () => { executed.push(command); }));
+			resources.add(registry.registerKeybindingRule({ command, keybinding: Keybinding.single(logicalKey('c', { ...modifiers, shiftKey })) }));
+		}
+		const commandService = resources.add(new CommandService(resources.add(new InstantiationService()), commands));
+		const service = resources.add(new WorkbenchKeybindingService({ ownerDocument: dom.window.document, commandService, contextKeyService: contexts, keyboardLayoutService: layouts, registry }, resources.add(new NotificationService()), profileFixture.files, profileFixture.profiles));
+		assert.equal(layouts.getRawKeyboardMapping()?.KeyC, undefined);
+		assert.equal(service.dispatchEvent(keyboardEvent({ key: 'c', code: 'KeyC', keyCode: 67, ...modifiers, shiftKey: true }).event), true);
+		assert.equal(service.dispatchEvent(keyboardEvent({ key: 'c', code: 'KeyC', keyCode: 67, ...modifiers, shiftKey: false }).event), true);
+		assert.deepEqual(executed, ['copy', 'copyAndClear']);
+		assert.equal(layouts.getRawKeyboardMapping()?.KeyC, undefined);
+	});
+}
+
 test("browser service dispatches Ctrl+Shift+P with a shifted key value", async () => {
 	using registrations = new DisposableStore();
 	const dom = new JSDOM("<!doctype html><body></body>");

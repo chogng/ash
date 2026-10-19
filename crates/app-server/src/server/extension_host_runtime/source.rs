@@ -570,10 +570,10 @@ impl ActivationPlan {
             return true;
         }
         match event {
-            ActivationEvent::Capability(channel) => self
-                .events
-                .iter()
-                .any(|event| event == &format!("onCapability:{channel}")),
+            ActivationEvent::Capability(channel) => self.events.iter().any(|event| {
+                event == &format!("onCapability:{channel}")
+                    || event == &format!("onDemand:{channel}")
+            }),
             ActivationEvent::Command(command) => self
                 .events
                 .iter()
@@ -833,6 +833,9 @@ fn extension_capability(capability: EditorExtensionCapability) -> ExtensionCapab
         EditorExtensionCapability::TerminalProfileProvider => {
             ExtensionCapability::TerminalProfileProvider
         }
+        EditorExtensionCapability::TerminalLinkProvider => {
+            ExtensionCapability::TerminalLinkProvider
+        }
         EditorExtensionCapability::TestProfileProvider => ExtensionCapability::TestProfileProvider,
         EditorExtensionCapability::DataChannel => ExtensionCapability::DataChannel,
         EditorExtensionCapability::SpeechProvider => ExtensionCapability::SpeechProvider,
@@ -854,6 +857,7 @@ fn capability_name(capability: EditorExtensionCapability) -> &'static str {
         EditorExtensionCapability::DebugAdapter => "debugAdapter",
         EditorExtensionCapability::TaskProvider => "taskProvider",
         EditorExtensionCapability::TerminalProfileProvider => "terminalProfileProvider",
+        EditorExtensionCapability::TerminalLinkProvider => "terminalLinkProvider",
         EditorExtensionCapability::TestProfileProvider => "testProfileProvider",
         EditorExtensionCapability::DataChannel => "dataChannel",
         EditorExtensionCapability::SpeechProvider => "speechProvider",

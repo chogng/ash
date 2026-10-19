@@ -1,6 +1,5 @@
 import { IEnvironmentVariableService } from '../../common/environmentVariable.js';
 import { EnvironmentVariableService } from '../../common/environmentVariableService.js';
-import { IExtensionService } from '../../../../services/extensions/common/extensionService.js';
 import { ITerminalContributionService } from '../../common/terminal.js';
 import { IContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
 import { TerminalHasActiveInstanceContext } from '../../common/terminalContextKey.js';
@@ -49,6 +48,7 @@ import { GeneralShellType, PosixShellType, type TerminalShellType } from '../../
 import { OperatingSystem } from '../../../../../base/common/platform.js';
 import { createSshRemoteWorkspaceUri } from '../../../../../platform/remote/common/remote.js';
 import { IPathService } from '../../../../../platform/path/common/pathService.js';
+import type { Constructor, SyncDescriptor } from '../../../../../platform/instantiation/common/descriptors.js';
 import { AhpTerminalCommandSource } from '../../browser/ahpTerminalCommandSource.js';
 import { CancellationToken } from '../../../../../base/common/cancellation.js';
 import { Event } from '../../../../../base/common/event.js';
@@ -662,6 +662,18 @@ test('sendPath uses the execution host Windows quoting and supports the matching
 	await assert.rejects(instance.sendPath(URI.file('/work/a.ps1'), true), /execution host/);
 });
 
+test('terminal creation resolves a cwd URI using its execution host path rules', async () => {
+	for (const os of [OperatingSystem.Linux, OperatingSystem.Windows]) {
+		const processes = new TestTerminalProcessService([]);
+		processes.operatingSystem = os;
+		const resource = os === OperatingSystem.Windows ? createSshRemoteWorkspaceUri('windows', 'C:/work') : URI.file('/workspace');
+		using workspace = new TestWorkspaceService({ id: 'cwd-host', folders: [{ id: 'root', name: 'root', uri: resource, index: 0 }] });
+		using services = terminalServices(processes, workspace);
+		await services.get(ITerminalService).createTerminal({ dirId: 'root', profile: { type: 'default' }, cwd: resource });
+		assert.equal(processes.createCalls[0]!.cwd, os === OperatingSystem.Windows ? 'C:\\work' : '/workspace');
+	}
+});
+
 test('sendPath refuses unknown shells and retires a host path conversion when the original process closes', async () => {
 	const processes = new TestTerminalProcessService([]);
 	using workspace = folderWorkspaceContext();
@@ -718,9 +730,15 @@ async function waitFor(condition: () => boolean, timeoutMillis = 1_000): Promise
 	}
 }
 
-function terminalServices(processService: ITerminalProcessService, workspace: IWorkspaceContextService, pathServiceFactory?: () => IPathService, storage?: IStorageService): InstantiationService {
-	const services = new InstantiationService(new ServiceCollection([ITerminalProcessService, processService], [IWorkspaceContextService, workspace]));
-	if (pathServiceFactory) services.registerSingleton(IPathService, pathServiceFactory);
+function terminalServices(processService: ITerminalProcessService, workspace: IWorkspaceContextService, instanceFactoryFailure?: () => never, storage?: IStorageService): InstantiationService {
+	// Fail the instance factory after PTY acquisition. Path resolution is also a
+	// creation-service dependency and must remain usable before that boundary.
+	const services = new class extends InstantiationService {
+		public override createInstance<T>(descriptor: Constructor<T> | SyncDescriptor<T>, ...args: unknown[]): T {
+			if (Object.is(descriptor, TerminalInstance)) instanceFactoryFailure?.();
+			return super.createInstance(descriptor, ...args);
+		}
+	}(new ServiceCollection([ITerminalProcessService, processService], [IWorkspaceContextService, workspace]));
 	if (storage) services.registerInstance(IStorageService, storage);
 	registerTestTerminalCreationServices(services);
 	services.registerSingleton(ITerminalService, () => services.createInstance(TerminalService));
@@ -2356,7 +2374,6 @@ suite('TerminalService process revival after exit', () => {
 
 function revivalServices(...args: Parameters<typeof terminalServices>): InstantiationService {
 	const services = terminalServices(...args);
-	services.registerInstance(IExtensionService, { ...Disposable.None, getExtensionPointContributions: () => [], currentCatalog: { generation: 0, extensions: [], diagnostics: [] }, onDidChange: Event.None, activateByEvent: async () => { } } as unknown as IExtensionService);
 	services.registerInstance(ITerminalContributionService, { terminalProfiles: [], onDidChangeTerminalProfiles: Event.None, ...Disposable.None });
 	services.registerSingleton(IEnvironmentVariableService, () => services.createInstance(EnvironmentVariableService));
 	services.registerInstance(IConfigurationResolverService, { resolveWithEnvironment: async (_env, _folder, value) => value } as IConfigurationResolverService);

@@ -470,6 +470,60 @@ test('command categories and enablement stay separate from menu titles', async t
 	assert.equal((await h.invoke('test.node', []).result).body.body.payload, 'ready');
 });
 
+test('terminal link providers preserve callback objects through the real Node host', { timeout: 15000 }, async t => {
+	const h = await host(t, `const v = require('vscode'); let accepted; let terminal; let latest;
+exports.activate = context => {
+ context.subscriptions.push(v.window.registerTerminalLinkProvider({
+  provideTerminalLinks: async (context, token) => {
+   if (terminal && terminal !== context.terminal) throw new Error('Terminal identity changed');
+   terminal = context.terminal;
+   latest = [terminal.name, await terminal.processId];
+   return [{ startIndex: 2, length: 4, tooltip: 'Open issue', issue: context.line.slice(2, 6) }];
+  },
+  handleTerminalLink: link => { accepted = link.issue; }
+ }));
+ context.subscriptions.push(v.commands.registerCommand('test.node', () => ({ accepted, latest })));
+};`, 'extension.cjs', ['terminalLinkProvider', 'command']);
+	const registration = h.registrations.find(entry => entry.kind === 'terminalLinkProvider');
+	assert.ok(registration);
+	const invoke = (operation, payload) => h.request('invoke', { extensionId: 'test.node', registrationId: registration.registrationId, operation, payload, deadlineUnixMillis: Date.now() + 5000 }).result;
+	const result = await invoke('provideTerminalLinks', { line: '  #123 text', terminal: { id: 'terminal-1', name: 'Shell', processId: 42 } });
+	assert.equal(result.status, 'success', JSON.stringify(result));
+	assert.deepEqual(result.body.body.payload.links.map(({ id, ...link }) => link), [{ startIndex: 2, length: 4, label: 'Open issue' }]);
+	await invoke('handleTerminalLink', { id: result.body.body.payload.links[0].id });
+	assert.deepEqual((await h.invoke('test.node', []).result).body.body.payload, { accepted: '#123', latest: ['Shell', 42] });
+	assert.equal((await invoke('provideTerminalLinks', { line: '  #456', terminal: { id: 'terminal-1', name: 'Renamed', processId: 99 } })).status, 'success');
+	assert.deepEqual((await h.invoke('test.node', []).result).body.body.payload, { accepted: '#123', latest: ['Renamed', 99] });
+});
+
+test('terminal link acceptance re-resolves a picker handle evicted by later output', { timeout: 15000 }, async t => {
+	const h = await host(t, `const v = require('vscode'); let accepted;
+exports.activate = context => {
+ context.subscriptions.push(v.window.registerTerminalLinkProvider({
+  provideTerminalLinks: context => Array.from({ length: 256 }, () => ({ startIndex: 0, length: 4, issue: context.line })),
+  handleTerminalLink: link => { accepted = link.issue; }
+ }));
+ context.subscriptions.push(v.commands.registerCommand('test.node', () => accepted));
+};`, 'extension.cjs', ['terminalLinkProvider', 'command']);
+	const registration = h.registrations.find(entry => entry.kind === 'terminalLinkProvider');
+	const invoke = (operation, payload) => h.request('invoke', { extensionId: 'test.node', registrationId: registration.registrationId, operation, payload, deadlineUnixMillis: Date.now() + 5000 }).result;
+	const terminal = { id: 'terminal-1', name: 'Shell', processId: 42 };
+	const first = await invoke('provideTerminalLinks', { line: '#123', terminal });
+	for (let index = 0; index < 9; index++) await invoke('provideTerminalLinks', { line: '#456', terminal });
+	const accepted = await invoke('handleTerminalLink', { id: first.body.body.payload.links[0].id, line: '#123', terminal, startIndex: 0, length: 4 });
+	assert.equal(accepted.status, 'success', JSON.stringify(accepted));
+	assert.equal((await h.invoke('test.node', []).result).body.body.payload, '#123');
+});
+
+test('terminal link provider rejects ranges outside the requested line', { timeout: 15000 }, async t => {
+	const h = await host(t, `const v = require('vscode'); exports.activate = context => {
+ context.subscriptions.push(v.window.registerTerminalLinkProvider({ provideTerminalLinks: () => [{ startIndex: 0, length: 100 }], handleTerminalLink() {} }));
+};`, 'extension.cjs', ['terminalLinkProvider']);
+	const registration = h.registrations.find(entry => entry.kind === 'terminalLinkProvider');
+	const result = await h.request('invoke', { extensionId: 'test.node', registrationId: registration.registrationId, operation: 'provideTerminalLinks', payload: { line: 'short', terminal: { id: 'terminal-1', name: 'Shell', processId: 42 } }, deadlineUnixMillis: Date.now() + 5000 }).result;
+	assert.equal(result.status, 'failure');
+});
+
 test('terminal profile provider returns literal shell options through the real Node host', { timeout: 15000 }, async t => {
 	const h = await host(t, `const v = require('vscode'); exports.activate = context => {
  context.subscriptions.push(v.window.registerTerminalProfileProvider('shell', { provideTerminalProfile: token => new v.TerminalProfile({ name: 'Profile shell', shellPath: '/bin/sh', shellArgs: ['-c', 'literal;$HOME'], env: { PROFILE: 'with spaces', REMOVED: null }, cwd: '/workspace' }) }));

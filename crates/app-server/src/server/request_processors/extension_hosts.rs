@@ -620,6 +620,9 @@ fn registration_dto(
             RegistrationKind::TerminalEnvironment {} => {
                 ExtensionHostRegistrationKindDto::TerminalEnvironment {}
             }
+            RegistrationKind::TerminalLinkProvider {} => {
+                ExtensionHostRegistrationKindDto::TerminalLinkProvider {}
+            }
             RegistrationKind::TaskProvider { task_type } => {
                 ExtensionHostRegistrationKindDto::TaskProvider { task_type }
             }

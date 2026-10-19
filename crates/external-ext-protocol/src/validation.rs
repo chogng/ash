@@ -292,6 +292,7 @@ pub(super) fn validate_registrations(
                 validate_display_text(title, "terminal profile title")?;
                 ExtensionCapability::TerminalProfileProvider
             }
+            RegistrationKind::TerminalLinkProvider {} => ExtensionCapability::TerminalLinkProvider,
             RegistrationKind::TerminalEnvironment {} => {
                 if has_terminal_environment {
                     return Err(protocol_error(

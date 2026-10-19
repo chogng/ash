@@ -43,7 +43,7 @@ Shell 进程管理器从平台契约消费原始字节和前端退出码，不�
 
 宿主提供的输出 PTY 从 `services/terminal/common/embedderTerminalService.ts` 经 `TerminalMainContribution` 接入同一个实例列表。实例先登记、发布再打开 PTY，保留界面订阅前的输出和退出；标题直接跟随宿主改名，后端连接变化不影响宿主 PTY。xterm 禁止输入，语音输入不启动；关闭与 Relaunch 使用宿主的生命周期，不请求 Rust Shell，也不要求打开 Workspace folder。宿主 PTY 无 OS 子进程，PID 使用 `-1`，cwd 为空。
 
-当前已有多实例、输入、主题、Tab、标题动作、Find、URL、语音与文本剪贴板能力。Find 支持解析后的屏幕与回滚内容、大小写／整词／正则、匹配导航、结果读出和自己的无障碍帮助；终端输出专属 Accessible View、帮助与 verbosity 设置已有 accessibility 贡献接入，扩展自供 PTY、编辑区终端及水平分组分屏已接入下述 owner。查找历史、Shell 文件历史、Quick Fix 和 Sticky Scroll 等扩展能力不因 xterm 可用或上游文件名相同而视为完成，未闭合项集中记录于 Terminal TODO。
+当前已有多实例、输入、主题、Tab、标题动作、Find、URL、语音与文本剪贴板能力。Find 支持解析后的屏幕与回滚内容、大小写／整词／正则、匹配导航、结果读出和自己的无障碍帮助；终端输出专属 Accessible View、帮助与 verbosity 设置已有 accessibility 贡献接入，扩展自供 PTY、编辑区终端及水平分组分屏已接入下述 owner。Sticky Scroll、显式历史／路径 Suggest 和 Git Quick Fix 复用现有屏幕、命令与输入 owner；适用 Shell、候选来源和接受语义见终端运行契约。
 
 `terminalExtensions.ts` 注册实际实例贡献；实例 attach 创建唯一屏幕后通过自己的 DI 作用域装配贡献，屏幕就绪时调用 `xtermReady`，关闭实例统一释放。`TerminalFindContribution` 只承接实例上下文、控件与命令，`TerminalFindWidget` 持有查询和选项，`XtermTerminal.findNext/findPrevious` 持有按需加载的 SearchAddon、高亮与结果事件。关闭 Find 使等待加载的旧查询失效，不向 PTY 发送搜索输入；切换实例不共享查询、匹配或服务作用域。标准贡献的其他进程／布局 hook 仍待真实消费者，当前不创建空能力。
 
@@ -72,7 +72,7 @@ Workbench 与 Sessions 核心入口注册所选 `ITerminalProcessService`；共�
 
 交互关闭通过 `safeDisposeTerminal` 读取实际子进程状态，并按 `confirmOnKill` 的位置策略确认；窗口退出由 `confirmOnExit` 控制。取消不停止输入、输出或进程，窗口关闭取消后恢复原焦点。默认值分别为 `editor` 和 `never`；面板保护需设为 `panel` 或 `always`。
 
-Desktop 默认启用 `enablePersistentSessions`。协调 reload 先冻结原管理器并等待输入及屏幕解析提交，保存原资源身份、输出游标、UTF-8 尾部、VT 屏幕、分屏比例和焦点；租约凭据另存窗口内存 SecretStorage。只有全部 shutdown join 成功才交接客户端，失败恢复原实例读取和输入。新 Renderer 先 attach 原进程、按原网格恢复屏幕，再恢复组布局并续读，避免临时单窗格尺寸破坏历史。隐藏面板同样初始化原屏幕，不抢焦点。应用彻底退出后的 revive 与扩展自供 PTY 恢复仍未实现。
+Desktop 默认启用 `enablePersistentSessions`。协调 reload 先冻结原管理器并等待输入及屏幕解析提交，保存原资源身份、输出游标、UTF-8 尾部、VT 屏幕、分屏比例和焦点；租约凭据另存窗口内存 SecretStorage。只有全部 shutdown join 成功才交接客户端，失败恢复原实例读取和输入。新 Renderer 先 attach 原进程、按原网格恢复屏幕，再恢复组布局并续读，避免临时单窗格尺寸破坏历史。隐藏面板同样初始化原屏幕，不抢焦点。应用退出后的 revive 按原持久化策略启动新 Shell；扩展自供 PTY 不参与进程恢复。
 
 公开契约目前承接 Ash 已有行为；与 VS Code 完整 backend、child process、profile/configuration、group 和 editor terminal API 仍有差异。本批完成对应 owner 与实例装配，不能记为整个 Terminal API 已对齐。
 
@@ -84,7 +84,7 @@ Desktop 默认启用 `enablePersistentSessions`。协调 reload 先冻结原管�
 
 文本剪贴板由 `terminalContrib/clipboard/browser/terminal.clipboard.contribution.ts` 随实例屏幕就绪挂载。复制只读原选区，粘贴调用既有宿主剪贴板服务与 `sendText(text, false, true)`；异步读取期间关闭、断线、退出或切换实例都会作废旧结果。输入不增加 Enter，遵守 child paste mode，并返回进程确认或失败。浏览器原生粘贴仍进入 xterm 原始输入；HTML／资源粘贴、自动复制与多行确认尚未接入。
 
-Browser 列表职责已从 Tabbed View 迁回 `terminalTabsList.ts`，View 仍拥有原屏幕附着与可见性。Shift+F10／鼠标实例菜单使用捕获的数值 instanceId；活动项变更不改变目标，消失的目标在当前窗口命令边界拒绝。原字符串 UI id 保留现有消费者，数值身份从实例编号派生；PID 随 Shell 替换而变化，不能代替实例身份。大 normal 缓冲区的屏幕横向重排经过 `TerminalResizeDebouncer`，focus flush，dispose 取消；PTY 尺寸确认仍由原管理器负责。完整标准列表 hooks、分组分屏、编辑区、其余配置／profile API、状态／hover、其他 xterm Addon 与 backend 仍未完成，完整 browser 路径清单见台账。
+Browser 列表职责已从 Tabbed View 迁回 `terminalTabsList.ts`，View 仍拥有原屏幕附着与可见性。Shift+F10／鼠标实例菜单使用捕获的数值 instanceId；活动项变更不改变目标，消失的目标在当前窗口命令边界拒绝。原字符串 UI id 保留现有消费者，数值身份从实例编号派生；PID 随 Shell 替换而变化，不能代替实例身份。大 normal 缓冲区的屏幕横向重排经过 `TerminalResizeDebouncer`，focus flush，dispose 取消；PTY 尺寸确认仍由原管理器负责。分组、编辑区、Profile、状态与布局按各自 owner 的公开契约接入。
 
 配置链已消费字体、字号、字/行间距、两种光标样式、光标闪烁/宽度、回滚与最小对比度。屏幕首次初始化和配置变化都使用有效值；更新保留屏幕及输出，字体变化触发 fit。当前默认值与 VS Code 对应字段一致（macOS 字号 12、其他平台 14、回滚 1000、光标不闪烁）；回滚缩小时由 xterm 丢弃超限旧行。
 
@@ -100,7 +100,7 @@ Agent 的 openTerminal App Tool 在原 AppToolsHost 采用 agentHostProfile，�
 
 参数契约支持 literal argv 数组和仅限 Windows 的原始 CommandLine 字符串。profile、automation、agentHost、扩展 TerminalProfile 与启动配置共用原 resolver；字符串按整体解析变量，保留引用、空值与空格，经本地/SSH adapter 和 App Server/exec-server 到原 ConPTY。数组继续由 PTY 引用，字符串仅追加在正确引用的 executable 后；执行边界拒绝非 Windows、NUL 与超长命令行。内部 exec-server 协议版本为 5，App Server schema 与 TypeScript 由同一生成器更新。
 
-Windows cmd/PowerShell/WSL/Nu task 以完整 CommandLine 创建进程；Windows Bash/Zsh/Fish 的 argv 保持数组，raw prefix 后的完整 Shell command 则按一个 Windows 参数引用。Tasks 的 shellArgs 仍只接受数组，可不指定 executable 而覆盖所选 profile；显式 executable 不注入默认命令标志。复用与 Relaunch 保留字符串和不可变 argv 快照，仍等待旧 PTY 释放并保留原实例、屏幕和环境覆盖 owner。命令 marker 支持 Ctrl/Cmd+Up/Down 导航；Run Recent Command 按 profile 读取应用级机器本地历史，只有 nonce 验证的完成文本可保存，需用户在 Quick Pick 中明确接受后才运行。`terminal.integrated.shellIntegration.history` 控制每个 profile 的保留上限，0 禁用历史；Task 禁止存储时不记录。Shell env/prompt capability、分组/分屏及编辑器终端使用下文所述的现有 owner；未闭合行为以 Terminal TODO 为准。
+Windows cmd/PowerShell/WSL/Nu task 以完整 CommandLine 创建进程；Windows Bash/Zsh/Fish 的 argv 保持数组，raw prefix 后的完整 Shell command 则按一个 Windows 参数引用。Tasks 的 shellArgs 仍只接受数组，可不指定 executable 而覆盖所选 profile；显式 executable 不注入默认命令标志。复用与 Relaunch 保留字符串和不可变 argv 快照，仍等待旧 PTY 释放并保留原实例、屏幕和环境覆盖 owner。命令 marker 支持 Ctrl/Cmd+Up/Down 导航；Run Recent Command 按 profile 读取应用级机器本地历史，只有 nonce 验证的完成文本可保存，需用户在 Quick Pick 中明确接受后才运行。`terminal.integrated.shellIntegration.history` 控制每个 profile 的保留上限，0 禁用历史；Task 禁止存储时不记录。Shell env/prompt capability、分组/分屏及编辑器终端使用下文所述的现有 owner；各能力的边界以 [Terminal 运行契约](../../../../../docs/terminal.md) 为准。
 
 Shell integration 沿用执行端 `ShellIntegration` 的注入生命周期与 `TerminalCommandStatusTracker`：按 executable 识别自定义 PowerShell/Bash/Zsh profile，消费 OSC 633 的 A/B/C/D 和转义的 P;Cwd。A/B 不创建执行记录，C 建立命令，D 保留真实退出码或未知状态；PowerShell 按 `$?` 上报 0/1，Bash/Zsh 保留数值状态。命令事件保存开始时的 cwd，当前 cwd 独立附带输出序号，经既有 adapter 传给 TerminalProcessManager，等待原 xterm 解析确认后更新；TerminalContext 使用当前 cwd，未检测到时回到启动目录。复用等待旧 PTY 释放，重建进程管理器并丢弃旧轮次的晚到数据，保留实例与屏幕。
 

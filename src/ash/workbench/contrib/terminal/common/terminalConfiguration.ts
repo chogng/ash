@@ -51,6 +51,14 @@ properties[`${TERMINAL_CONFIG_SECTION}.showLinkHover`] = {
 	type: 'boolean', default: true,
 	get description() { return localize('terminal.config.showLinkHover', 'Show a hover with the file path or URL when pointing at a terminal link.'); },
 };
+properties[`${TERMINAL_CONFIG_SECTION}.enableFileLinks`] = {
+	type: 'string', default: 'on', enum: ['off', 'on', 'notRemote'],
+	get description() { return localize('terminal.config.enableFileLinks', 'Enable terminal file links always, never, or only in local workspaces.'); },
+};
+properties[`${TERMINAL_CONFIG_SECTION}.wordSeparators`] = {
+	type: 'string', default: ' ()[]{}\',"`─‘’“”|',
+	get description() { return localize('terminal.config.wordSeparators', 'Characters separating words for terminal word selection and workspace file links.'); },
+};
 for (const [name, defaultValue, choices] of [
 	['cursorStyle', 'block', ['block', 'line', 'underline']],
 	['cursorStyleInactive', 'outline', ['outline', 'block', 'line', 'underline', 'none']],
@@ -100,6 +108,24 @@ properties[`${TERMINAL_CONFIG_SECTION}.persistentSessionReviveProcess`] = {
 properties[TerminalSettingId.EnableMultiLinePasteWarning] = {
 	type: 'string', default: 'auto', enum: ['auto', 'always', 'never'],
 	get description() { return localize('terminal.config.multiLinePasteWarning', 'Use auto to skip confirmation in bracketed paste mode and remove a single command’s trailing newline. Use always to confirm any newline, or never to disable the warning.'); },
+};
+properties[TerminalSettingId.CopyOnSelection] = {
+	type: 'boolean', default: false,
+	get description() { return localize('terminal.config.copyOnSelection', 'Copy text selected in the terminal to the clipboard.'); },
+};
+properties[TerminalSettingId.RightClickBehavior] = {
+	type: 'string', enum: ['default', 'copyPaste', 'paste', 'selectWord', 'nothing'],
+	default: environment.os === 'mac' ? 'selectWord' : environment.os === 'windows' ? 'copyPaste' : 'default',
+	get description() { return localize('terminal.config.rightClickBehavior', 'Controls how the terminal handles right click. Hold Shift to open the context menu.'); },
+	get enumDescriptions() {
+		return [
+			localize('terminal.config.rightClickBehavior.default', 'Show the context menu.'),
+			localize('terminal.config.rightClickBehavior.copyPaste', 'Copy and clear the selection, or paste when there is no selection.'),
+			localize('terminal.config.rightClickBehavior.paste', 'Paste clipboard text.'),
+			localize('terminal.config.rightClickBehavior.selectWord', 'Select the word under the pointer and show the context menu.'),
+			localize('terminal.config.rightClickBehavior.nothing', 'Pass the click to the terminal without opening a context menu.'),
+		];
+	},
 };
 Object.assign(properties, terminalContribConfiguration);
 Registry.as<IConfigurationRegistry>(Extensions.Configuration).updateConfigurations({
