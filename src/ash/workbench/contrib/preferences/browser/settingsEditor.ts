@@ -659,8 +659,15 @@ function localUpdatePolicySetting(setting: ISetting, configuration: IConfigurati
 			onDidChange: listener => configuration.onDidChangeConfiguration(event => {
 				if (event.affectsConfiguration(DESKTOP_UPDATE_POLICY_SETTING)) listener();
 			}),
-			getValue: () => configuration.inspect<DesktopUpdatePolicy>(DESKTOP_UPDATE_POLICY_SETTING).userLocalValue ?? 'latest',
-			isDefault: () => configuration.inspect(DESKTOP_UPDATE_POLICY_SETTING).userLocalValue === undefined,
+			getValue: () => {
+				const value = configuration.inspect<DesktopUpdatePolicy>(DESKTOP_UPDATE_POLICY_SETTING);
+				// This Desktop setting excludes workspace values but still honors OS policy.
+				return value.policyValue ?? value.userLocalValue ?? 'latest';
+			},
+			isDefault: () => {
+				const value = configuration.inspect(DESKTOP_UPDATE_POLICY_SETTING);
+				return value.policyValue === undefined && value.userLocalValue === undefined;
+			},
 			updateValue: (value: string | boolean) => configuration.updateValue(DESKTOP_UPDATE_POLICY_SETTING, value, ConfigurationTarget.USER_LOCAL),
 			resetValue: () => configuration.updateValue(DESKTOP_UPDATE_POLICY_SETTING, undefined, ConfigurationTarget.USER_LOCAL),
 		},
