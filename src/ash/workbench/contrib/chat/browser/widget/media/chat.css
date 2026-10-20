@@ -415,7 +415,8 @@
 
 .ash-chat-input-toolbars.ash-toolbar
 	.ash-action-view-item.ash-chat-input-mode-selector
-	.ash-chat-input-mode-indicator {
+	.ash-chat-input-mode-action
+	> .ash-chat-input-mode-indicator {
 	display: inline-flex;
 }
 
