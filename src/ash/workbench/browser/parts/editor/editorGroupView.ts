@@ -686,6 +686,15 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 	private async showOpenError(input: IResourceEditorInput, options: EditorOpenOptions, error: unknown, existing: EditorGroupEntry | undefined): Promise<IEditorPane> {
 		if (options.ignoreError || isCancellationError(error)) throw error;
 		const displayError = this.resolveOpenError ? this.resolveOpenError(error, input, options, openOptions => this.openEditor(input, openOptions)) : error;
+		// Failed reopens must not release the only owner of unsaved content. Keep its
+		// pane (and normal close confirmation) alive while reporting the open error.
+		if (existing && (getEditorWorkingCopies(existing.paneInstance.pane).some(copy => copy.isDirty) || !await this.confirmCloseEditor(existing.input))) {
+			if (!options.inactive) this.activateEntry(existing, false);
+			await this.onOpenError?.(displayError, input, options);
+			const current = this.entry(input)?.paneInstance.pane;
+			if (!current) throw new CancellationError('The failed editor was closed');
+			return current;
+		}
 		const pane = this.instantiationService.createInstance(ErrorPlaceholderEditor,
 			displayError,
 			() => this.openEditor(input, { ...options, source: EditorOpenSource.USER }),

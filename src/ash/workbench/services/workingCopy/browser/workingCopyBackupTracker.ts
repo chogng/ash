@@ -186,7 +186,9 @@ export class WorkingCopyBackupTracker extends Disposable {
 		if (!this.edited.delete(copy)) return;
 		if (this.paused) { this.pendingResources.set(copy.resource.toString(), copy.resource); return; }
 		const remaining = this.workingCopies.get(copy.resource);
-		void this.persist(copy.resource, remaining.find(candidate => candidate.isDirty) ?? remaining[0]).catch(this.onError);
+		// Unregistration is a lifetime event, not an instruction to discard edits.
+		// Capture the last dirty owner before its model is disposed.
+		void this.persist(copy.resource, remaining.find(candidate => candidate.isDirty) ?? copy).catch(this.onError);
 	}
 
 	private schedule(copy: IWorkingCopy): void {
@@ -232,6 +234,8 @@ export class WorkingCopyBackupTracker extends Disposable {
 				operation = () => this.backups.store(backup);
 			} else {
 				operation = () => {
+					// With no live owner there is no evidence of a save or explicit revert.
+					if (!copy && this.workingCopies.get(resource).length === 0) return Promise.resolve();
 					// Ordinary clean/unregister timers must not discard fault data owned by a pending save.
 					if (this.retainRecovery?.(resource)) {
 						this.pendingResources.set(key, resource);

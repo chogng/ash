@@ -1,4 +1,5 @@
 import { collectDocumentNodeIds, findDocumentNode, type DocumentAttributes, type DocumentNode, type DocumentNodeId } from "../../model/document.js";
+import { localize } from '../../../../../src/ash/nls.js';
 import { isDocumentSelectionValid, nodeSelection, textSelection, type DocumentPoint, type DocumentSelection } from "../../core/documentSelection.js";
 import type { DocumentHistoryEntries, DocumentHistoryEntry } from "../../model/documentHistory.js";
 import { type DocumentSchema } from "../../model/documentSchema.js";
@@ -52,6 +53,7 @@ export function rebaseDocumentTransaction(base: DocumentNode, schema: DocumentSc
 	const remoteApplied = applyDocumentTransaction(base, schema, remote);
 	const remoteChanges = collectTransactionChanges(base, schema, remote);
 	const remoteDocument = remoteApplied.document;
+	assertReinsertedNodesUnchanged(base, remoteDocument, local);
 	const rebasedSteps: DocumentStep[] = [];
 	const droppedSteps: DocumentStep[] = [];
 	const localCreatedIds = new Set<DocumentNodeId>();
@@ -149,6 +151,7 @@ function rebaseHistoryTransaction(base: DocumentNode, schema: DocumentSchema, lo
 function rebaseLocalHistoryTransaction(base: DocumentNode, schema: DocumentSchema, local: DocumentTransaction, remote: DocumentTransaction, insertionOrder: HistoricalInsertionOrder): RebasedDocumentTransaction | undefined {
 	try {
 		const remoteApplied = applyDocumentTransaction(base, schema, remote);
+		assertReinsertedNodesUnchanged(base, remoteApplied.document, local);
 		const remoteChanges = collectTransactionChanges(base, schema, remote);
 		const localCreatedIds = new Set<DocumentNodeId>();
 		const localDeletedIds = new Set<DocumentNodeId>();
@@ -278,6 +281,24 @@ interface RemoteChange {
 	readonly before: DocumentNode;
 	readonly after: DocumentNode;
 	readonly step: DocumentStep;
+}
+
+/** Structural rewrites carry snapshots, so they cannot safely replay a peer's changed node. */
+function assertReinsertedNodesUnchanged(base: DocumentNode, remote: DocumentNode, local: DocumentTransaction): void {
+	const deleted = new Set<DocumentNodeId>();
+	for (const step of local.steps) {
+		if (step.kind === 'deleteNode') {
+			const node = findDocumentNode(base, step.nodeId)?.node;
+			if (node) for (const id of collectDocumentNodeIds(node)) deleted.add(id);
+		} else if (step.kind === 'insertNode') {
+			for (const id of collectDocumentNodeIds(step.node)) {
+				if (!deleted.has(id)) continue;
+				const previous = findDocumentNode(base, id)?.node;
+				const current = findDocumentNode(remote, id)?.node;
+				if (current && JSON.stringify(previous) !== JSON.stringify(current)) throw new DocumentRebaseError(localize('document.collaboration.structuralConflict', "Cannot merge a structural replacement because another collaborator changed node '{0}'. Your local edits have been retained.", id));
+			}
+		}
+	}
 }
 
 function collectTransactionChanges(base: DocumentNode, schema: DocumentSchema, transaction: DocumentTransaction): readonly RemoteChange[] {

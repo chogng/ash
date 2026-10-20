@@ -1,7 +1,9 @@
 import { DocumentTextModel } from '../../../../../extensions/academic/common/model/documentTextModel.js';
+import { readFileSync } from 'node:fs';
+import { resetNlsResolver, setNlsMessages } from '../../../nls.js';
 import assert from "node:assert/strict";
 import { test } from "mocha";
-import { rebaseDocumentHistory, rebaseDocumentTransaction } from "../../../../../extensions/academic/common/contrib/collaboration/rebase.js";
+import { DocumentRebaseError, rebaseDocumentHistory, rebaseDocumentTransaction } from "../../../../../extensions/academic/common/contrib/collaboration/rebase.js";
 import { TextModel } from "../../common/model/textModel.js";
 import { TextModelRemoteHistoryPolicy } from "../../../../../extensions/academic/common/model/textModelBlockState.js";
 import { createDefaultDocumentSchema, type DocumentSchema } from "../../../../../extensions/academic/common/model/documentSchema.js";
@@ -14,6 +16,27 @@ function createDocument(schema: DocumentSchema) {
 		schema.createNode("paragraph", { id: "paragraph-2", content: [schema.createText("Second", { id: "text-2" })] }),
 	], "document-1");
 }
+
+test('Academy structural snapshot replacement reports conflict when a retained node changed remotely', () => {
+	const schema = createDefaultDocumentSchema();
+	const base = createDocument(schema);
+	const local = new DocumentTransaction().deleteNode('text-1').insertNode('paragraph-1', 0, schema.createText('Hxllo', { id: 'text-1' }));
+	const remote = new DocumentTransaction().replaceText('text-1', 0, 0, 'Peer ');
+	assert.throws(() => rebaseDocumentTransaction(base, schema, local, remote), DocumentRebaseError);
+});
+
+test('Academy structural conflict uses the Chinese client translation', () => {
+	setNlsMessages('zh-CN', JSON.parse(readFileSync('extensions/language-pack-zh-cn/translations/workbench.json', 'utf8')));
+	try {
+		const schema = createDefaultDocumentSchema();
+		const base = createDocument(schema);
+		const local = new DocumentTransaction().deleteNode('text-1').insertNode('paragraph-1', 0, schema.createText('Hxllo', { id: 'text-1' }));
+		const remote = new DocumentTransaction().replaceText('text-1', 0, 0, 'Peer ');
+		assert.throws(() => rebaseDocumentTransaction(base, schema, local, remote), { name: 'DocumentRebaseError', message: '其他协作者已修改节点“text-1”，无法合并结构替换。你的本地编辑已保留。' });
+	} finally {
+		resetNlsResolver();
+	}
+});
 
 test("Stanza collaboration rebases text offsets and selections through remote insertion", () => {
 	const schema = createDefaultDocumentSchema();

@@ -10,8 +10,60 @@ import assert from "node:assert/strict";
 import { test } from "mocha";
 import { JSDOM } from "jsdom";
 import { URI } from "../../../base/common/uri.js";
+import { Event } from '../../../base/common/event.js';
+import { toDisposable } from '../../../base/common/lifecycle.js';
+import type { IWorkingCopy } from '../../services/workingCopy/common/workingCopyService.js';
 
 import type { IEditorGroupsService } from "../../services/editor/common/editorGroupsService.js";
+
+test('EditorGroupView retains its dirty pane when a disabled editor fails to reopen and still confirms close', async () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	const originalWindow = Object.getOwnPropertyDescriptor(globalThis, 'window');
+	Object.defineProperty(globalThis, 'window', { configurable: true, value: dom.window });
+	try {
+		const { EditorGroupView } = await import('../../browser/parts/editor/editorGroupView.js');
+		const { EditorPaneMatch } = await import('../../browser/parts/editor/editorPane.js');
+		const { EditorPaneRegistry } = await import('../../browser/editor.js');
+		const registry = new EditorPaneRegistry();
+		const resource = URI.file('/draft.ash-academic');
+		let dirty = true;
+		const copy: IWorkingCopy = {
+			...toDisposable(() => { }), resource, backupKind: 'structuredDocument', get isDirty() { return dirty; }, hasExternalChange: false,
+			onDidChangeDirty: Event.None, onDidChangeContent: Event.None, onDidChangeExternalChange: Event.None,
+			backup: () => 'unsaved document', restoreBackup() { }, async save() { }, async saveAs() { }, async revert() { dirty = false; },
+		};
+		const pane = new class extends TestEditorPane { readonly workingCopy = copy; }();
+		const registration = registry.registerEditorPane({ id: pane.id, name: 'Academy', canOpen: () => EditorPaneMatch.Default, create: () => pane });
+		let confirmations = 0;
+		let errors = 0;
+		let recoveryPending = false;
+		using services = createTestEditorServices(undefined, undefined, dom.window.document);
+		using group = services.createInstance(EditorGroupView, dom.window.document.body, {
+			registry, onOpenError: () => { errors++; }, onWillCloseEditor: () => { confirmations++; return !dirty && !recoveryPending; },
+		});
+		await group.openEditor({ resource }, { pinned: true });
+		registration.dispose();
+		assert.equal(await group.openEditor({ resource }), pane);
+		assert.equal(group.getEditorPane({ resource }), pane);
+		assert.equal(pane.isDisposed, false);
+		assert.equal(copy.backup(), 'unsaved document');
+		assert.equal(errors, 1);
+		assert.equal(await group.closeEditor({ resource }), false);
+		assert.equal(confirmations, 1);
+		await copy.revert(new AbortController().signal);
+		recoveryPending = true;
+		assert.equal(await group.openEditor({ resource }), pane);
+		assert.equal(confirmations, 2);
+		assert.equal(pane.isDisposed, false);
+		recoveryPending = false;
+		assert.equal(await group.closeEditor({ resource }), true);
+		assert.equal(pane.isDisposed, true);
+	} finally {
+		if (originalWindow) Object.defineProperty(globalThis, 'window', originalWindow);
+		else Reflect.deleteProperty(globalThis, 'window');
+		dom.window.close();
+	}
+});
 
 test('EditorGroupView keeps the caller language when resource detection has no language', async () => {
 	const dom = new JSDOM('<!doctype html><body></body>');

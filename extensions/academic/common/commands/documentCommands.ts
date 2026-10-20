@@ -490,6 +490,21 @@ export function createReplaceTextCommand(schema: DocumentSchema, document: Docum
 	if (range.selected.length === 0) return undefined;
 	const startNode = blockLocation.node.content[range.startIndex]!;
 	const endNode = blockLocation.node.content[range.endIndex]!;
+	if (blockLocation.node.type === 'codeBlock' || !marks || marksEqual(marks, startNode.marks)) {
+		// Edit retained runs in place: rebuilding them from this snapshot would
+		// replay stale prefix/suffix text when collaboration rebases the command.
+		let transaction = new DocumentTransaction();
+		for (let index = range.endIndex; index > range.startIndex; index -= 1) {
+			const node = blockLocation.node.content[index]!;
+			transaction = node.text === undefined ? transaction.deleteNode(node.id)
+				: transaction.replaceText(node.id, 0, index === range.endIndex ? range.end.offset : node.text.length, '');
+		}
+		transaction = transaction.replaceText(startNode.id, range.start.offset, range.startIndex === range.endIndex ? range.end.offset : startNode.text!.length, normalizedReplacement);
+		const retainedStart = range.start.offset + normalizedReplacement.length > 0 || (range.startIndex === range.endIndex && range.end.offset < startNode.text!.length);
+		const point = retainedStart ? { nodeId: startNode.id, offset: range.start.offset + normalizedReplacement.length }
+			: range.end.offset < endNode.text!.length ? { nodeId: endNode.id, offset: 0 } : undefined;
+		return { transaction: point ? transaction.withSelection(textSelection(point)) : transaction, focus: { blockId, ...(point ? { point } : {}) } };
+	}
 	const insertionMarks = marks ? [...marks] : startNode.marks;
 	const replacementNodes: DocumentNode[] = [];
 	let prefixNode: DocumentNode | undefined;

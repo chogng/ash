@@ -1,4 +1,5 @@
 import { createDefineParagraphStyleCommand } from '../../../../../extensions/academic/common/commands/documentParagraphCommands.js';
+import { createReplaceDocumentMatchesCommand, findDocumentText } from '../../../../../extensions/academic/common/commands/documentFindCommands.js';
 import { getDocumentParagraphStyles } from '../../../../../extensions/academic/common/model/documentParagraph.js';
 import assert from "node:assert/strict";
 import { test } from "mocha";
@@ -9,6 +10,32 @@ import { DocumentCollaborationSynchronizer, DocumentCollaborationError } from ".
 
 function createDocument(schema: DocumentSchema) {
 	return schema.createDocument([schema.createNode("paragraph", { id: "paragraph-1", content: [schema.createText("Hello", { id: "text-1" })] })], "document-1");
+}
+
+for (const side of ['prefix', 'suffix'] as const) {
+	test(`Academy find replacement across marks retains a concurrent ${side} edit through resubmission`, () => {
+		const schema = createDefaultDocumentSchema();
+		const document = schema.createDocument([schema.createNode('paragraph', {
+			id: 'p', content: [
+				schema.createText('before hello', { id: 'a' }),
+				schema.createText('world after', { id: 'b', marks: [{ type: 'strong', attrs: {} }] }),
+			]
+		})]);
+		using synchronizer = new DocumentCollaborationSynchronizer({ schema, document, clientId: 'local' });
+		const matches = findDocumentText(document, 'helloworld', { matchCase: true, wholeWord: false });
+		assert.equal(matches.length, 1);
+		const command = createReplaceDocumentMatchesCommand(schema, document, matches, 'replacement');
+		assert.ok(command);
+		synchronizer.dispatchLocal(command.transaction);
+		const remote = side === 'prefix' ? new DocumentTransaction().replaceText('a', 0, 6, 'PEER') : new DocumentTransaction().replaceText('b', 6, 11, 'PEER');
+		synchronizer.receiveRemote({ clientId: 'peer', sequence: 1, baseVersion: 0, version: 1, transaction: remote });
+		const submission = synchronizer.takeNextSubmission();
+		assert.ok(submission);
+		assert.equal(submission.baseVersion, 1);
+		synchronizer.acknowledge({ ...submission, version: 2 });
+		assert.equal(synchronizer.canonicalDocument.content[0]!.content.map(node => node.text).join(''), side === 'prefix' ? 'PEER replacement after' : 'before replacement PEER');
+		assert.equal(synchronizer.pending, undefined);
+	});
 }
 
 test("Stanza collaboration synchronizer keeps canonical and optimistic snapshots separate", () => {

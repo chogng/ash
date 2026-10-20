@@ -19,6 +19,23 @@ import { DocumentCollaborationController } from "../../../../../extensions/acade
 import type { DocumentCollaborationEnvelope } from "../../../../../extensions/academic/common/services/documentCollaborationService.js";
 import type { DocumentCollaborationRemoteEnvelope } from "../../../../../extensions/academic/common/services/documentCollaborationService.js";
 
+test('Academy structural replay conflict retains local content and stops resubmission', async () => {
+	const schema = createDefaultDocumentSchema();
+	const document = createDocument(schema);
+	using model = DocumentTextModel.create(schema, document);
+	const connection = new FakeDocumentCollaborationConnection(schema, document);
+	using controller = new DocumentCollaborationController(model, connection);
+	const states: string[] = [];
+	using listener = controller.onDidChangeState(event => states.push(event.message ?? ''));
+	model.dispatch(new DocumentTransaction().deleteNode('text-1').insertNode('paragraph-1', 0, schema.createText('Hxllo', { id: 'text-1' })));
+	connection.conflictWithRemote(0, new DocumentTransaction().replaceText('text-1', 0, 0, 'Peer '), 1);
+	await flushMicrotasks();
+	assert.equal(firstText(model.document), 'Hxllo');
+	assert.equal(controller.state, 'error');
+	assert.equal(connection.submissions.length, 1);
+	assert.match(states[0]!, /Cannot merge a structural replacement/);
+});
+
 test("Stanza collaboration submits only the in-flight snapshot while later typing is buffered", async () => {
 	const schema = createDefaultDocumentSchema();
 	const document = createDocument(schema);

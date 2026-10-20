@@ -236,7 +236,21 @@ test("working-copy backup tracker persists the latest dirty content and deletes 
 	assert.deepEqual(await backups.list(), []);
 });
 
-test("working-copy backup tracker removes a closed draft and keeps another open copy", async () => {
+test('working-copy backup tracker removes a backup when the last owner explicitly reverts before unregistering', async () => {
+	using workingCopies = uriIdentityServices.createInstance(BrowserWorkingCopyService);
+	using backups = new MemoryBackups();
+	using tracker = new WorkingCopyBackupTracker(workingCopies, backups, new TestWindow() as unknown as Window);
+	using copy = new TestWorkingCopy(URI.file('/saved-draft.txt'));
+	using registration = workingCopies.register(copy);
+	copy.change('draft');
+	await tracker.flush();
+	copy.markClean();
+	registration.dispose();
+	await tracker.flush();
+	assert.deepEqual(await backups.list(), []);
+});
+
+test("working-copy backup tracker keeps another open copy and retains the last dirty draft on unregister", async () => {
 	using workingCopies = uriIdentityServices.createInstance(BrowserWorkingCopyService);
 	using backups = new MemoryBackups();
 	const ownerWindow = new TestWindow();
@@ -255,9 +269,14 @@ test("working-copy backup tracker removes a closed draft and keeps another open 
 		await tracker.flush();
 		assert.equal((await backups.list())[0]?.content, 'second draft');
 
+		second.change('last edit before unregister');
 		secondRegistration.dispose();
 		await tracker.flush();
-		assert.deepEqual(await backups.list(), []);
+		const retained = await backups.list();
+		assert.deepEqual(retained.map(backup => backup.content), ['last edit before unregister']);
+		using restored = new TestWorkingCopy(resource);
+		restored.restoreBackup(retained[0]!.content);
+		assert.equal(restored.backup(), 'last edit before unregister');
 	} finally {
 		firstRegistration.dispose();
 		secondRegistration.dispose();
@@ -555,7 +574,7 @@ test('working-copy backup cancellation is idempotent and retracks the current re
 		tracker.cancelShutdown();
 		tracker.cancelShutdown();
 		await tracker.flush();
-		assert.deepEqual((await backups.list()).map(backup => backup.content), ['new draft']);
+		assert.deepEqual((await backups.list()).map(backup => backup.content), ['closed draft', 'new draft']);
 		const second = tracker.shutdown();
 		assert.equal(tracker.shutdown(), second);
 		await second;

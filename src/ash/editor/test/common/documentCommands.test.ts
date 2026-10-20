@@ -7,6 +7,19 @@ import { deserializeDocument, serializeDocument } from '../../../../../extension
 import { nodeSelection, textSelection } from '../../../../../extensions/academic/common/core/documentSelection.js';
 import { createDeleteAdjacentInlineNodeCommand, createDeleteInlineSelectionCommand, createDeleteNodeSelectionCommand, createDeleteTableColumnCommand, createDeleteTableRowCommand, createExitEmptyListItemCommand, createInsertHardBreakCommand, createInsertHorizontalRuleCommand, createInsertImageAtSelectionCommand, createInsertImageCommand, createInsertParagraphAfterCommand, createInsertTableColumnCommand, createInsertTableCommand, createInsertTableRowCommand, createJoinAdjacentBlockCommand, createJoinAdjacentListItemCommand, createJoinAdjacentTextRunCommand, createListItemIndentationCommand, createMoveBlockCommand, createPasteTextCommand, createRemoveMarkCommand, createReplaceTextCommand, createSetBlockTypeCommand, createSetLinkMarkCommand, createSetTextStyleCommand, createSplitBlockCommand, createSplitListItemCommand, createToggleBlockquoteCommand, createToggleListCommand, createToggleMarkCommand, findAdjacentTableCell, findTableCellContext } from '../../../../../extensions/academic/common/commands/documentCommands.js';
 
+test('Academy code block deletion and selection replacement retain one text identity', () => {
+	const schema = createDefaultDocumentSchema();
+	using model = DocumentTextModel.create(schema, schema.createDocument([schema.createNode('codeBlock', { id: 'code', content: [schema.createText('abcdef', { id: 'text' })] })]));
+	for (const [from, to, replacement, expected] of [[2, 3, '', 'abdef'], [1, 4, 'XY', 'aXYf'], [0, 4, '', '']] as const) {
+		const command = createReplaceTextCommand(schema, model.document, 'code', textSelection({ nodeId: 'text', offset: from }, { nodeId: 'text', offset: to }), replacement);
+		assert.ok(command);
+		model.dispatch(command.transaction);
+		assert.equal(model.document.content[0]!.content.length, expected ? 1 : 0);
+		assert.equal(model.document.content[0]!.content[0]?.text ?? '', expected);
+		if (expected) assert.equal(model.document.content[0]!.content[0]!.id, 'text');
+	}
+});
+
 test("Stanza block commands split, join, move, and insert through model transactions", () => {
 	const schema = createDefaultDocumentSchema();
 	const first = schema.createNode("paragraph", {
@@ -313,8 +326,8 @@ test("Stanza inline commands handle selections spanning multiple text runs", () 
 	const replace = createReplaceTextCommand(schema, model.document, "paragraph-1", textSelection({ nodeId: "text-1", offset: 1 }, { nodeId: "text-3", offset: 0 }), "X");
 	assert.ok(replace);
 	model.dispatch(replace.transaction);
-	assert.deepEqual(model.document.content[0]?.content.map(node => node.text), ["H", "X", "o"]);
-	assert.equal(model.selection?.kind, "text");
+	assert.deepEqual(model.document.content[0]?.content.map(node => ({ text: node.text, marks: node.marks })), [{ text: 'HX', marks: [] }, { text: 'o', marks: [] }]);
+	assert.deepEqual(model.selection, textSelection({ nodeId: 'text-1', offset: 2 }));
 });
 
 test("Stanza paste commands turn multiline text into sibling blocks", () => {

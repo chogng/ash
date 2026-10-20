@@ -254,6 +254,28 @@ for (const [locale, name] of [['en', 'Document'], ['zh-CN', '文档']] as const)
 	});
 }
 
+for (const paper of ['A4', 'Letter']) {
+	test(`Academy ${paper} code blocks delete and replace selections without splitting text nodes`, async ({ page }) => {
+		await page.goto('/academic.html');
+		const root = page.locator('#code-block');
+		await chooseParagraphOption(page, root.getByRole('combobox', { name: 'Paper', exact: true }), paper);
+		const input = root.locator('.stanza-document-rich-text-input');
+		await expect(input).toBeVisible();
+		await input.focus();
+		await page.keyboard.press('Home');
+		await page.keyboard.press('ArrowRight');
+		await page.keyboard.press('ArrowRight');
+		await page.keyboard.press('Backspace');
+		await expect.poll(() => page.evaluate(() => window.ashAcademicIntegration.getCodeBlockText())).toBe('cnst editor = 1;');
+		await page.keyboard.press('Shift+ArrowRight');
+		await page.keyboard.press('Shift+ArrowRight');
+		await page.keyboard.type('ODE');
+		await expect.poll(() => page.evaluate(() => window.ashAcademicIntegration.getCodeBlockText())).toBe('cODEt editor = 1;');
+		await page.evaluate(() => window.ashAcademicIntegration.saveCodeBlock());
+		await expect.poll(() => page.evaluate(() => window.ashAcademicIntegration.getSavedCodeBlock())).toContain('cODEt editor = 1;');
+	});
+}
+
 test("TextModel API and Academic code-block editing run in real browsers", async ({ page }) => {
 	await page.goto("/academic.html");
 	await expect(page.locator("#code-block textarea.stanza-document-text-input")).toBeVisible();
