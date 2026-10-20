@@ -260,6 +260,7 @@ test('file requests fail on renderer errors and settle when their window reloads
 	using service = createWindowsService(() => [window], async () => window);
 	window = service.createWindow(options => new TestWindow(1, options.title), {
 		title: 'Workbench',
+		reopen: async () => { },
 		state: { mode: WindowMode.Normal, width: 1000, height: 700 },
 		webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true, preload: '', additionalArguments: [] },
 	}, new DisposableStore()).win;
@@ -287,6 +288,7 @@ test('renderer readiness follows the latest load and rejects a window that close
 	using service = createWindowsService(() => [], async () => undefined);
 	const window = service.createWindow(options => new TestWindow(1, options.title), {
 		title: 'Workbench',
+		reopen: async () => { },
 		state: { mode: WindowMode.Normal, width: 1000, height: 700 },
 		webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true, preload: '', additionalArguments: [] },
 	}, new DisposableStore()).win;
@@ -349,6 +351,7 @@ test('WindowsMainService owns Workbench window resources through close and app d
 	resources.add(toDisposable(() => { released++; }));
 	const host = service.createWindow(options => new TestWindow(1, options.title), {
 		title: 'Workbench',
+		reopen: async () => { },
 		state: { mode: WindowMode.Normal, width: 1000, height: 700 },
 		webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true, preload: '', additionalArguments: [] },
 	}, resources);
@@ -358,6 +361,7 @@ test('WindowsMainService owns Workbench window resources through close and app d
 	nextResources.add(toDisposable(() => { released++; }));
 	const next = service.createWindow(options => new TestWindow(2, options.title), {
 		title: 'Workbench',
+		reopen: async () => { },
 		state: { mode: WindowMode.Normal, width: 1000, height: 700 },
 		webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true, preload: '', additionalArguments: [] },
 	}, nextResources);
@@ -617,9 +621,42 @@ test('WindowsMainService waits for a managed window to close before reopening it
 	assert.equal(windows.length, 2);
 });
 
+for (const failReplacement of [false, true]) {
+	test(`managed recovery creates a fresh native window and ${failReplacement ? 'retains the old host on failure' : 'retires the old host without waiting for close'}`, async () => {
+		windowServices.get(IDialogMainService).showMessageBox = async () => ({ response: 0, checkboxChecked: false });
+		using service = createWindowsService(() => [], async () => undefined);
+		const windows: TestWindow[] = [];
+		let closed = 0;
+		await service.openManagedWindow('agents', options => {
+			const window = new TestWindow(windows.length + 1, options.title);
+			windows.push(window);
+			return window;
+		}, {
+			title: 'Agents', workspace: { id: 'fixture' },
+			state: { mode: WindowMode.Normal, width: 1000, height: 700 },
+			webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true, preload: '', additionalArguments: [] },
+			initialize: async window => {
+				if (failReplacement && windows.length === 2) throw new Error('Replacement failed');
+				await service.getWindowById(window.id)!.load({ file: '/synthetic/sessions.html', url: 'file:///synthetic/sessions.html', useDevelopmentUrl: false });
+			},
+		}, () => { closed++; });
+		const first = windows[0]!;
+		first.deferClose = true;
+		const closing = assert.rejects(service.closeManagedWindow('agents'), /being reopened/);
+		await service.getWindowById(first.id)!.reportWindowError(false);
+		await closing;
+		assert.equal(windows.length, 2);
+		assert.equal(closed, 0);
+		assert.equal(service.managedWindow('agents'), windows[failReplacement ? 0 : 1]);
+		assert.equal(first.isDestroyed(), !failReplacement);
+		assert.equal(windows[1]!.isDestroyed(), failReplacement);
+		assert.equal(service.getWindowById(service.managedWindow('agents')!.id)!.openedWorkspace.id, 'fixture');
+	});
+}
+
 test('WindowsMainService keeps a managed window open after a failed close and permits retry', async () => {
 	using service = createWindowsService(() => [], async () => undefined);
-	using lifecycle = new LifecycleMainService<TestWindow>((window, message) => service.failManagedWindowClose(window, message), window => service.failManagedWindowClose(window, 'Window close was vetoed'), {
+	using lifecycle = new LifecycleMainService<TestWindow>((window, failure) => { if (failure.kind === 'failed') service.failManagedWindowClose(window, failure.message); }, window => service.failManagedWindowClose(window, 'Window close was vetoed'), {
 		getItem: () => undefined,
 		setItem: () => { },
 		removeItem: () => { },
@@ -815,6 +852,7 @@ test('window operation IPC validates commands before dispatching to the window h
 function registerWindow(service: WindowsMainService<TestWindow>, window: TestWindow, workspace: IAnyWorkspaceIdentifier = createEmptyWorkspaceIdentifier()): TestWindow {
 	return service.createWindow(() => window, {
 		workspace,
+		reopen: async () => { },
 		state: { mode: WindowMode.Normal, ...window.bounds },
 		title: window.getTitle(),
 		webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true, preload: '', additionalArguments: [] },

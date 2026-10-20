@@ -21,6 +21,10 @@
 - [ ] **后端前置** · 实现直接保存工作区配置到远端机器；当前 SSH 配置仍保存在 Desktop 本地，内容为远端 URI 根。
 - [ ] **验收** · 补 Windows／Linux 远端多根及 Windows 真实系统文件选择器验证。现有多根 SSH 验证使用 macOS 同机隔离 OpenSSH fixture，远端选择器使用受控返回值；跨机器单独步骤通过不能替代多根场景验证。
 
+## Desktop 启动阻塞根因 · TODO
+
+- [ ] **复核** · 2026-10-20 用户报告启动时出现窗口收尾超时；超时后的等待／重开／关闭交互及替代原生窗口恢复已修复，原始启动阻塞的参与者仍未定位。开发日志 `20261020T121244767-*/window-1.log` 有后端 `initialize` 超时，`20261020T160509919-*/main.log` 仅到连接 `starting`；早前还出现协议 schema 不匹配，不能据此认定同一根因。诊断时系统 `fseventsd` 约 100% CPU，既有隔离启动采样有 `FSEventStreamStart → f2d_register_rpc` 阻塞，尚未与本次弹窗建立因果关系。后续需在复现现场关联 load/reload token、Renderer 生命周期和未完成的 veto/join；已通过的受控窗口恢复场景不能替代原始卡顿的根因验证。
+
 ## Desktop 跨机器验收 · TODO
 
 - [ ] **验收** · 完成指定 Windows 主机真实 Desktop → SSH／Tailscale 全部十步、远端清理和证据 QA；同机 SSH fixture 不能替代跨机器验收。2026-10-19 已通过严格主机校验、公钥登录及原检出的 major10 Windows runtime 构建，真实冷部署一步通过；FILES 在扩展激活超时后的重连中失败，其余步骤未执行。SSH 握手／通道持续不稳定，按用户要求停止重试；待连接稳定后重跑全套并复核远端清理。失败证据保留在 `.build/ash-playwright-mcp/evidence/desktop-cross-machine-windows-major10-2026-10-19T13-46-20-671Z/report.html`，本轮未据此消项。

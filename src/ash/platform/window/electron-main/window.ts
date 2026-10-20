@@ -63,6 +63,7 @@ export interface ICodeWindow<TWindow = Electron.BrowserWindow> extends IDisposab
 	setReady(): void;
 	load(configuration: { readonly file: string; readonly url: string; readonly useDevelopmentUrl: boolean; }): Promise<void>;
 	reload(): Promise<void>;
+	reportWindowError(gone: boolean, shutdownSignal?: AbortSignal): Promise<void>;
 	updateWindowControls(options: { backgroundColor?: string; foregroundColor?: string; backdropColor?: string; dimmed?: boolean; }): void;
 }
 

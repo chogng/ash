@@ -46,6 +46,7 @@
     "window.rendererGone": "窗口意外关闭。",
     "window.unresponsive": "窗口没有响应。",
     "window.recoveryDetail": "重新打开窗口以继续，或关闭窗口。",
+    "window.waitRecoveryDetail": "可以继续等待、重新打开窗口或关闭窗口。重新打开或关闭可能会丢失尚未备份的更改。",
     "window.reopen": "重新打开",
     "window.close": "关闭",
     "window.keepWaiting": "继续等待",

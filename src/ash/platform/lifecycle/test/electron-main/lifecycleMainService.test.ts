@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { suite, test } from 'mocha';
+import { mock } from 'node:test';
 import { DeferredPromise } from '../../../../base/common/async.js';
 import { throwIfCancelled } from '../../../../base/common/cancellation.js';
 import { isCancellationError } from '../../../../base/common/errors.js';
@@ -47,6 +48,70 @@ function createStateService(): IStateService {
 
 suite('LifecycleMainService', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();
+
+	for (const reason of ['load', 'reload', 'windowClose'] as const) {
+		test(`${reason} timeout keeps waiting on the original request and accepts a late completion`, async () => {
+			mock.timers.enable({ apis: ['setTimeout'] });
+			try {
+				const window = new TestWindow();
+				const prompts: AbortSignal[] = [];
+				const choice = new DeferredPromise<void>();
+				using service = new LifecycleMainService<TestWindow>((_, failure) => {
+					assert.equal(failure.kind, 'unresponsive');
+					if (failure.kind !== 'unresponsive') return;
+					prompts.push(failure.signal);
+					return prompts.length === 1 ? Promise.resolve() : choice.p;
+				}, () => { }, createStateService(), 'test');
+				using registration = service.registerWindow(window);
+				service.respondToClose(window, { kind: 'ready' });
+				let completed = false;
+				const unload = reason === 'windowClose' ? undefined : service.unload(window, reason).then(value => { completed = true; return value; });
+				if (reason === 'windowClose') window.close();
+				mock.timers.tick(30_000);
+				await new Promise(resolve => setImmediate(resolve));
+				assert.deepEqual({ prompts: prompts.length, completed, destroyed: window.destroyed, requests: window.messages.length }, {
+					prompts: 1, completed: false, destroyed: false, requests: 1,
+				});
+				mock.timers.tick(30_000);
+				await new Promise(resolve => setImmediate(resolve));
+				assert.equal(prompts.length, 2);
+				service.respondToClose(window, { kind: 'complete', token: 1 });
+				assert.equal(prompts[1]!.aborted, true);
+				if (unload) assert.equal(await unload, true);
+				else assert.equal(window.destroyed, true);
+				await choice.complete();
+				await new Promise(resolve => setImmediate(resolve));
+				mock.timers.tick(60_000);
+				assert.equal(prompts.length, 2);
+			} finally { mock.timers.reset(); }
+		});
+	}
+
+	test('disposing a timed-out window dismisses recovery and settles its load without another request', async () => {
+		mock.timers.enable({ apis: ['setTimeout'] });
+		try {
+			const window = new TestWindow();
+			const shown = new DeferredPromise<AbortSignal>();
+			const choice = new DeferredPromise<void>();
+			using service = new LifecycleMainService<TestWindow>((_, failure) => {
+				assert.equal(failure.kind, 'unresponsive');
+				if (failure.kind === 'unresponsive') void shown.complete(failure.signal);
+				return choice.p;
+			}, () => { }, createStateService(), 'test');
+			const registration = service.registerWindow(window);
+			service.respondToClose(window, { kind: 'ready' });
+			const unloaded = service.unload(window);
+			mock.timers.tick(30_000);
+			const signal = await shown.p;
+			registration.dispose();
+			assert.equal(signal.aborted, true);
+			assert.equal(await unloaded, false);
+			await choice.complete();
+			await new Promise(resolve => setImmediate(resolve));
+			mock.timers.tick(60_000);
+			assert.equal(window.messages.length, 1);
+		} finally { mock.timers.reset(); }
+	});
 
 	test('application quit reaches the renderer as quit and a vetoed quit returns to ordinary window closing', () => {
 		let quitting = true;
@@ -105,7 +170,7 @@ suite('LifecycleMainService', () => {
 	test('main lifecycle waits for renderer shutdown, reports failure, and permits retry', () => {
 		const window = new TestWindow();
 		const failures: string[] = [];
-		using service = new LifecycleMainService<TestWindow>((_window, message) => { failures.push(message); }, () => { }, createStateService(), '1.0.0');
+		using service = new LifecycleMainService<TestWindow>((_window, failure) => { if (failure.kind === 'failed') failures.push(failure.message); }, () => { }, createStateService(), '1.0.0');
 		using registration = service.registerWindow(window);
 		const route = windowCloseResponseIpcRoute(service, window);
 		assert.equal(route.channel, WINDOW_CLOSE_RESPONSE_CHANNEL);
@@ -152,7 +217,7 @@ suite('LifecycleMainService', () => {
 		const window = new TestWindow();
 		const failures: string[] = [];
 		let vetoes = 0;
-		using service = new LifecycleMainService<TestWindow>((_window, message) => { failures.push(message); }, () => { vetoes++; }, createStateService(), '1.0.0');
+		using service = new LifecycleMainService<TestWindow>((_window, failure) => { if (failure.kind === 'failed') failures.push(failure.message); }, () => { vetoes++; }, createStateService(), '1.0.0');
 		using registration = service.registerWindow(window);
 		const route = windowCloseResponseIpcRoute(service, window);
 		route.invoke(route.validate({ kind: 'ready' }));

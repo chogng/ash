@@ -282,7 +282,7 @@ function createLifecycleServices(browser: JSDOM, navigationType = 'navigate'): I
 }
 
 for (const reason of ['windowClose', 'load'] as const) {
-	test(`Electron keeps a committed ${reason} sealed after its token expires and accepts a new token`, async () => {
+	test(`Electron keeps a slow ${reason} sealed and accepts its original token after a timeout`, async () => {
 		const fixture = await createElectronLifecycleFixture();
 		try {
 			const ordinary = new DeferredPromise<void>();
@@ -297,25 +297,20 @@ for (const reason of ['windowClose', 'load'] as const) {
 			await entered.p;
 			assert.equal(fixture.browser.window.document.body.inert, true);
 			fixture.expireRequestDeadline();
-			if (first) assert.equal(await first, false);
+			await new Promise(resolve => setImmediate(resolve));
+			assert.deepEqual(fixture.responses.map(response => response.kind), ['ready']);
+			assert.equal(fixture.window.isDestroyed(), false);
 			await ordinary.complete();
-			await fixture.completionError.p;
+			await fixture.firstCompletion.p;
+			if (first) assert.equal(await first, true);
 			assert.deepEqual({
 				inert: fixture.browser.window.document.body.inert, willShutdown: fixture.lifecycle.willShutdown,
-				responses: fixture.responses.map(response => response.kind), errors: fixture.errors, destroyed: fixture.window.isDestroyed(),
+				responses: fixture.responses.map(response => response.kind), errors: fixture.errors,
+				shutdowns, committed: fixture.committed, destroyed: fixture.window.isDestroyed(),
 			}, {
-				inert: true, willShutdown: true, responses: ['ready', 'complete'],
-				errors: ['Failed to complete window close request Window close request is no longer active'], destroyed: false,
-			});
-			const next = fixture.request(reason);
-			await fixture.secondCompletion.p;
-			if (next) assert.equal(await next, true);
-			assert.deepEqual({ shutdowns, committed: fixture.committed, destroyed: fixture.window.isDestroyed() }, {
+				inert: true, willShutdown: true, responses: ['ready', 'complete'], errors: [],
 				shutdowns: 1, committed: 1, destroyed: reason === 'windowClose',
 			});
-			const completed = fixture.responses.filter(response => response.kind === 'complete');
-			assert.equal(completed.length, 2);
-			assert.notEqual(completed[0]!.token, completed[1]!.token);
 		} finally {
 			fixture.dispose();
 		}
@@ -333,11 +328,14 @@ test('Electron reports completion IPC rejection accurately and keeps the committ
 		assert.deepEqual({ inert: fixture.browser.window.document.body.inert, committed: fixture.committed, responses: fixture.responses.map(response => response.kind), errors: fixture.errors }, {
 			inert: true, committed: 1, responses: ['ready', 'complete'], errors: ['Failed to complete window close request Injected completion transport failure'],
 		});
-		// The main owner retires the unanswered token; only a new user request may retry completion.
+		// The failed transport left Main waiting. A repeated close must not unseal
+		// the committed renderer or start another shutdown while recovery is offered.
 		fixture.expireRequestDeadline();
+		await new Promise(resolve => setImmediate(resolve));
 		fixture.request('windowClose');
-		await fixture.secondCompletion.p;
-		assert.deepEqual({ shutdowns, committed: fixture.committed, destroyed: fixture.window.isDestroyed() }, { shutdowns: 1, committed: 1, destroyed: true });
+		assert.deepEqual({ shutdowns, committed: fixture.committed, destroyed: fixture.window.isDestroyed(), recoveries: fixture.recoveries.length, responses: fixture.responses.map(response => response.kind) }, {
+			shutdowns: 1, committed: 1, destroyed: false, recoveries: 1, responses: ['ready', 'complete'],
+		});
 	} finally {
 		fixture.dispose();
 	}
@@ -399,7 +397,11 @@ async function createElectronLifecycleFixture(completionFailure?: Error) {
 	const listeners = new Map<string, (value: unknown) => void>();
 	const window = new LifecycleTestWindow((channel, token) => listeners.get(channel)?.(token));
 	const reports: string[] = [];
-	const main = new LifecycleMainService((_, message) => { reports.push(message); }, () => { }, {
+	const recoveries: AbortSignal[] = [];
+	const main = new LifecycleMainService((_, failure) => {
+		if (failure.kind === 'failed') reports.push(failure.message);
+		else recoveries.push(failure.signal);
+	}, () => { }, {
 		getItem: () => undefined, setItem: () => { }, removeItem: () => { }, flush: async () => { }, close: async () => { },
 	}, 'test');
 	const registration = main.registerWindow(window);
@@ -407,10 +409,8 @@ async function createElectronLifecycleFixture(completionFailure?: Error) {
 	const responses: WindowCloseResponse[] = [];
 	const errors: string[] = [];
 	const firstError = new DeferredPromise<void>();
-	const completionError = new DeferredPromise<void>();
 	const failedResponse = new DeferredPromise<void>();
 	const firstCompletion = new DeferredPromise<void>();
-	const secondCompletion = new DeferredPromise<void>();
 	const originalSetTimeout = globalThis.setTimeout;
 	const deadlines: Array<{ handle: ReturnType<typeof setTimeout>; fire(): void; }> = [];
 	// Advance only the main owner's 30-second close/load deadline, leaving Mocha and renderer timers intact.
@@ -431,7 +431,7 @@ async function createElectronLifecycleFixture(completionFailure?: Error) {
 			if (response.kind === 'complete' && ++completions === 1 && completionFailure) throw completionFailure;
 			const result = route.invoke(response);
 			if (response.kind === 'failed') void failedResponse.complete();
-			if (response.kind === 'complete') void (completions === 1 ? firstCompletion : secondCompletion).complete();
+			if (response.kind === 'complete') void firstCompletion.complete();
 			return result;
 		},
 	};
@@ -439,12 +439,11 @@ async function createElectronLifecycleFixture(completionFailure?: Error) {
 	console.error = (...values: unknown[]) => {
 		errors.push(values.map(value => value instanceof Error ? value.message : String(value)).join(' '));
 		void firstError.complete();
-		if (values[0] === 'Failed to complete window close request') void completionError.complete();
 	};
 	const { ElectronLifecycleService } = await import('../../electron-browser/lifecycleService.js');
 	const lifecycle = services.createInstance(ElectronLifecycleService, { ownerWindow: browser.window as unknown as Window, onError: (error: unknown) => errors.push(String(error)) });
 	const fixture = {
-		browser, lifecycle, window, reports, responses, errors, firstError, completionError, failedResponse, firstCompletion, secondCompletion, committed: 0,
+		browser, lifecycle, window, reports, recoveries, responses, errors, firstError, failedResponse, firstCompletion, committed: 0,
 		request: (reason: 'windowClose' | 'load') => reason === 'load' ? main.unload(window) : window.close(),
 		expireRequestDeadline: () => {
 			const deadline = deadlines.shift();

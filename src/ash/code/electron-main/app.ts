@@ -411,10 +411,15 @@ export class AshApplication extends Disposable {
 			? join(app.getAppPath(), 'resources', 'win32', 'ash.ico')
 			: undefined;
 
-		this.lifecycleMainService = this._register(new LifecycleMainService<BrowserWindow>(async (window, message) => {
+		this.lifecycleMainService = this._register(new LifecycleMainService<BrowserWindow>(async (window, failure) => {
+			if (failure.kind === 'unresponsive') {
+				this.cancelQuit();
+				await this.windowsMainService.getWindowById(window.id)?.reportWindowError(false, failure.signal);
+				return;
+			}
 			this.cancelQuit();
-			this.windowsMainService.failManagedWindowClose(window, message);
-			await this.dialogs.showMessageBox({ type: 'error', message }, window);
+			this.windowsMainService.failManagedWindowClose(window, failure.message);
+			await this.dialogs.showMessageBox({ type: 'error', message: failure.message }, window);
 		}, window => {
 			this.cancelQuit();
 			this.windowsMainService.failManagedWindowClose(window, 'Window close was vetoed');
@@ -1378,6 +1383,12 @@ export class AshApplication extends Disposable {
 		const windowState = this.windowsMainService.getNewWindowState(windowsStateHandler, this.windowConfigurationValues(), this.lifecycleMainService.wasRestarted);
 		const titleBarStyle = this.titleBarStyle;
 		const windowHost = this.windowsMainService.createWindow(options => new BrowserWindow(options), {
+			reopen: async () => {
+				const replacement = await this.openWorkspace(workspaceContext.getWorkspace(), workspaces, true);
+				if (!replacement) throw new Error('Window recovery did not open a replacement');
+				replacement.window.setBounds(windowHost.getBounds());
+				replacement.window.focus();
+			},
 			workspace: workspaceContext.getWorkspace(),
 			state: windowState,
 			titleBarStyle,
