@@ -224,6 +224,35 @@ class CodeModeHostTests(unittest.TestCase):
                 self.assertEqual(run.call_args.kwargs["env"], environment)
         prepare.assert_not_called()
 
+    @patch.dict(
+        "scripts.cargo.os.environ", {"ASH_TGREP_PATH": "/runtime/tgrep"}, clear=True
+    )
+    @patch("scripts.cargo.subprocess.run")
+    @patch("scripts.cargo.prepare_test_executable", return_value="/runtime/helper")
+    @patch("build.lib.cargo_inputs.resolve_v8_cargo_env", return_value={})
+    @patch("scripts.cargo.cargo_command_packages")
+    def test_real_tui_target_does_not_build_dependency_unit_test_helpers(
+        self, packages, resolve_v8, prepare, run
+    ) -> None:
+        packages.return_value = {
+            "ash-cli",
+            "ash-app-server",
+            "ash-app-server-runtime",
+            "ash-code-mode",
+            "ash-remote-server",
+        }
+        run.return_value = subprocess.CompletedProcess([], 0)
+        arguments = ["test", "-p", "ash-cli", "--test", "tui_real_scenarios"]
+        self.assertEqual(main(arguments), 0)
+        prepare.assert_not_called()
+        self.assertEqual(
+            run.call_args.args[0],
+            ["cargo", "test", "--profile", "ci-test", *arguments[1:]],
+        )
+        # A broader invocation still owns unit tests that require those programs.
+        self.assertEqual(main([*arguments, "--lib"]), 0)
+        self.assertEqual(len(prepare.call_args_list), 4)
+
     @patch("scripts.cargo.subprocess.run")
     def test_uses_reported_executable_with_the_test_build_settings(self, run) -> None:
         run.return_value = subprocess.CompletedProcess(
