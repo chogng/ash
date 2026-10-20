@@ -9,6 +9,9 @@ import { ActivityBarPosition, WorkbenchConfiguration, type SideBarLocation } fro
 import { IsSessionsWindowContext } from '../../common/contextkeys.js';
 import { registerWorkbenchContribution, WorkbenchPhase } from '../../common/contributions.js';
 import { IPreferencesService } from '../../services/preferences/common/preferences.js';
+import { IViewDescriptorService, ViewContainerLocation } from '../../common/views.js';
+import { IViewsService } from '../../services/views/common/viewsService.js';
+import { ToggleSideBarCommandId } from '../parts/titlebar/titlebarActions.js';
 
 export class ConfigureEditorAction extends Action2 {
 	static readonly ID = 'workbench.action.configureEditor';
@@ -27,6 +30,55 @@ export class ConfigureEditorAction extends Action2 {
 registerAction2(ConfigureEditorAction);
 
 export const ActivityBarContextMenu = MenuId.for('ActivityBarContext');
+export const ActivityBarItemContextMenu = MenuId.for('ActivityBarItemContext');
+const moveViewContainerMenu = MenuId.for('MoveViewContainer');
+
+registerAction2(class extends Action2 {
+	constructor() {
+		super({
+			id: 'workbench.action.configureActivityBarKeybinding',
+			title: localize2('quickAccess.configureKeybinding', 'Configure Keybinding'),
+			menu: { id: ActivityBarItemContextMenu, group: '1_keybinding' },
+		});
+	}
+
+	override run(accessor: ServicesAccessor, id: unknown): Promise<void> | undefined {
+		if (typeof id !== 'string') throw new TypeError('Expected a view container ID');
+		if (!accessor.get(IViewDescriptorService).getViewContainerById(id)) return;
+		return accessor.get(IPreferencesService).openGlobalKeybindingSettings(false, { query: `@command:${id}` });
+	}
+});
+
+for (const [location, title] of [
+	[ViewContainerLocation.Sidebar, localize2('workbench.moveViewContainer.sidebar', 'Primary Side Bar')],
+	[ViewContainerLocation.AuxiliaryBar, localize2('workbench.moveViewContainer.auxiliarybar', 'Secondary Side Bar')],
+	[ViewContainerLocation.Panel, localize2('workbench.moveViewContainer.panel', 'Panel')],
+] as const) {
+	registerAction2(class extends Action2 {
+		constructor() {
+			super({
+				id: `workbench.action.moveViewContainer.${location}`,
+				title,
+				menu: { id: moveViewContainerMenu, when: ContextKeyExpr.notEquals('viewContainerLocation', location), group: '1_move' },
+			});
+		}
+
+		override async run(accessor: ServicesAccessor, id: unknown): Promise<void> {
+			if (typeof id !== 'string') throw new TypeError('Expected a view container ID');
+			const descriptors = accessor.get(IViewDescriptorService);
+			const container = descriptors.getViewContainerById(id);
+			if (!container) return;
+			const views = accessor.get(IViewsService);
+			const wasVisible = views.isViewContainerVisible(id);
+			descriptors.moveViewContainerToLocation(container, location, undefined, 'activityBar');
+			const fallback = wasVisible && descriptors.getDefaultViewContainer(container.location);
+			if (fallback) await views.openViewContainer(fallback.id);
+			await views.openViewContainer(id, true);
+		}
+	});
+}
+MenusRegistry.appendMenuItem(ActivityBarItemContextMenu, { submenu: moveViewContainerMenu, title: localize2('workbench.moveViewContainer', 'Move To'), group: '2_move' });
+MenusRegistry.appendMenuItem(MenuId.ViewContainerTitleContext, { submenu: moveViewContainerMenu, title: localize2('workbench.moveViewContainer', 'Move To'), group: '2_move' });
 const activityBarSizeMenu = MenuId.for('ActivityBarSize');
 const locationKey = `config.${WorkbenchConfiguration.activityBarLocation}`;
 const compactKey = `config.${WorkbenchConfiguration.activityBarCompact}`;
@@ -104,7 +156,7 @@ for (const side of ['left', 'right'] as const) {
 				title: side === 'left' ? localize2('workbench.movePrimarySideBarLeft', 'Move Primary Side Bar Left') : localize2('workbench.movePrimarySideBarRight', 'Move Primary Side Bar Right'),
 				f1: true,
 				precondition: IsSessionsWindowContext.isEqualTo(false),
-				menu: [MenuId.ViewContainerTitleContext, ActivityBarContextMenu].map(id => ({ id, group: '3_layout', order: 1, when: ContextKeyExpr.and(ContextKeyExpr.notEquals(sideKey, side), id === MenuId.ViewContainerTitleContext ? ContextKeyExpr.equals('viewContainerLocation', 'sidebar') : undefined) })),
+				menu: [MenuId.ViewContainerTitleContext, ActivityBarContextMenu].map(id => ({ id, group: '3_layout', order: 4, when: ContextKeyExpr.and(ContextKeyExpr.notEquals(sideKey, side), id === MenuId.ViewContainerTitleContext ? ContextKeyExpr.equals('viewContainerLocation', 'sidebar') : undefined) })),
 			});
 		}
 		override run(accessor: ServicesAccessor): Promise<void> {
@@ -130,3 +182,5 @@ for (const id of [MenuId.ViewContainerTitleContext, ActivityBarContextMenu]) {
 	MenusRegistry.appendMenuItem(id, { submenu: MenuId.ActivityBarPositionMenu, title: localize2('workbench.activityBarPosition', 'Activity Bar Position'), group: '3_layout', order: 2, when: sidebar });
 	MenusRegistry.appendMenuItem(id, { submenu: activityBarSizeMenu, title: localize2('workbench.activityBarSize', 'Activity Bar Size'), group: '3_layout', order: 3, when: ContextKeyExpr.and(sidebar, ContextKeyExpr.equals(locationKey, ActivityBarPosition.DEFAULT)) });
 }
+
+MenusRegistry.appendMenuItem(ActivityBarContextMenu, { command: { id: ToggleSideBarCommandId, title: localize2({ bundle: 'ash.actions', key: 'hidePrimarySidebar' }, 'Hide Primary Side Bar') }, group: '3_layout', order: 5 });

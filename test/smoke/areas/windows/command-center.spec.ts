@@ -3,6 +3,57 @@ import { expect, test } from '../../../automation/test.js';
 
 test.use({ openWorkspace: false });
 
+for (const locale of ['en', 'zh-CN']) {
+	test(`activity icon context menu aligns item actions and moves views across hosts (${locale})`, async ({ application, workbench, restartWorkbench, reloadWorkbench, target }, testInfo) => {
+		if (locale === 'zh-CN') {
+			await workbench.quickaccess.runCommand('workbench.action.configureLocale');
+			const picker = workbench.page.getByRole('dialog', { name: 'Select Display Language' });
+			await picker.getByRole('combobox').fill('简体中文');
+			await picker.getByRole('combobox').press('Enter');
+			({ workbench, application } = await restartWorkbench());
+		}
+		const chinese = locale === 'zh-CN';
+		const explorerName = chinese ? '资源管理器' : 'Explorer';
+		const moveLabel = chinese ? '移到' : 'Move To';
+		const panelLabel = chinese ? '面板' : 'Panel';
+		const configureLabel = chinese ? '配置快捷键' : 'Configure Keybinding';
+		const explorer = () => workbench.page.locator('[data-part="activitybar"]').getByRole('tab', { name: explorerName, exact: true });
+		const open = () => explorer().click({ button: 'right' });
+		await explorer().click();
+		const items = await workbench.menus.inspect(application, open);
+		expect(items.slice(0, 4).map(item => item.label)).toEqual([configureLabel, chinese ? '隐藏“资源管理器”' : "Hide 'Explorer'", chinese ? '隐藏徽章' : 'Hide Badge', moveLabel]);
+		const labels = items.map(item => item.label);
+		expect(labels.indexOf(chinese ? '活动栏位置' : 'Activity Bar Position')).toBeLessThan(labels.indexOf(chinese ? '将主侧栏移到右侧' : 'Move Primary Side Bar Right'));
+		expect(labels.at(-1)).toBe(chinese ? '隐藏主侧栏' : 'Hide Primary Side Bar');
+		expect((await workbench.menus.inspect(application, open, [moveLabel])).map(item => item.label).sort()).toEqual([chinese ? '辅助侧栏' : 'Secondary Side Bar', panelLabel].sort());
+		if (target.kind === 'browser') {
+			await open();
+			await workbench.page.getByRole('menu').screenshot({ path: testInfo.outputPath(`activity-icon-menu-${locale}.png`) });
+			await workbench.page.keyboard.press('Escape');
+			await expect(explorer()).toBeFocused();
+		}
+		await workbench.menus.select(application, () => explorer().press('Shift+F10'), [configureLabel]);
+		const shortcuts = workbench.page.locator('.ash-keybindings-editor');
+		await expect(shortcuts.locator('.ash-keybindings-search input')).toHaveValue('@command:ash.sidebar');
+		await expect(shortcuts).toContainText(explorerName);
+		await workbench.page.locator('.ash-modal-editor-close').click();
+		await workbench.menus.select(application, open, [moveLabel, panelLabel]);
+		await expect(explorer()).toHaveCount(0);
+		await expect(workbench.page.locator('[data-part="activitybar"]').getByRole('tab', { name: chinese ? '搜索' : 'Search', exact: true })).toBeVisible();
+		const panel = () => workbench.page.locator('[data-part="panel"]');
+		await expect(panel().getByRole('tab', { name: explorerName, exact: true })).toHaveAttribute('aria-selected', 'true');
+		await expect(panel().locator('[data-view-container-id="ash.sidebar"]')).toBeVisible();
+		({ application, workbench } = await reloadWorkbench());
+		await expect(explorer()).toHaveCount(0);
+		await expect(panel().locator('[data-view-container-id="ash.sidebar"]')).toBeVisible();
+		await workbench.menus.select(application, () => panel().getByRole('tab', { name: explorerName, exact: true }).click({ button: 'right' }), [moveLabel, chinese ? '主侧栏' : 'Primary Side Bar']);
+		await expect(explorer()).toHaveAttribute('aria-selected', 'true');
+		await expect(workbench.page.locator('[data-part="sidebar"] [data-view-container-id="ash.sidebar"]')).toBeVisible();
+		await workbench.menus.select(application, open, [chinese ? '隐藏主侧栏' : 'Hide Primary Side Bar']);
+		await expect(workbench.page.locator('[data-part="sidebar"]')).toBeHidden();
+	});
+}
+
 // Expected titles follow the actual Desktop privilege; Browser has no OS suffix.
 const titleTest = test.extend<{ privilegeSuffix: string; }>({
 	privilegeSuffix: async ({ target, workbench }, use) => {

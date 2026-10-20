@@ -206,7 +206,7 @@ export class ViewPaneContainer extends Composite {
 	}
 
 	public override getContextMenuActions(): readonly IAction[] {
-		return getFlatContextMenuActions(this.titleContextMenu.getActions());
+		return getFlatContextMenuActions(this.titleContextMenu.getActions({ arg: this.id }));
 	}
 
 	private syncPanes(): void {

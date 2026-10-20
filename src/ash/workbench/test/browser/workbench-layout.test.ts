@@ -77,6 +77,7 @@ const { PanelPart } = await import(
 );
 const { IContextMenuService } = await import('../../../platform/contextview/browser/contextView.js');
 const { IContextKeyService } = await import('../../../platform/contextkey/browser/contextKeyService.js');
+const { IKeybindingService } = await import('../../../platform/keybinding/common/keybinding.js');
 const { IViewDescriptorService } = await import('../../../workbench/common/views.js');
 const { ILocalizationService: PanelLocalizationService } = await import('../../../workbench/services/localization/common/localizationService.js');
 const { CompositeBar } = await import("../../../workbench/browser/parts/compositeBar.js");
@@ -403,6 +404,8 @@ test('Activity Bar badge setting applies on startup and preserves per-icon choic
 		bar.toggleBadgeEnablement('second');
 		const globalBar = { domNode: dom.window.document.createElement('div'), getContextMenuActions: () => [] };
 		using activityServices = harness.services.createChild();
+		activityServices.registerInstance(IContextKeyService, contextKeys);
+		activityServices.registerInstance(IKeybindingService, { lookupKeybinding: () => undefined } as unknown as import('../../../platform/keybinding/common/keybinding.js').IKeybindingService);
 		activityServices.registerInstance(IMenuService, new MenuService(disposables.add(new CommandService(activityServices)), contextKeys));
 		disposables.add(activityServices.createInstance(ActivitybarPart, harness.container, bar, globalBar));
 		const first = (): HTMLElement => bar.domNode.querySelector('[data-action-id="first"]')!;
@@ -1873,8 +1876,9 @@ test('Activity Bar context menu persists hidden views and keeps one pinned view'
 	const search = activitybar.domNode.querySelector<HTMLElement>('[data-action-id="ash.search"]');
 	assert.ok(search);
 	search.dispatchEvent(new dom.window.MouseEvent('contextmenu', { bubbles: true }));
-	assert.equal(actions[0]?.label, "Hide 'Search'");
-	actions[0]?.run();
+	assert.equal(actions[0]?.label, 'Configure Keybinding');
+	assert.equal(actions[1]?.label, "Hide 'Search'");
+	await actions[1]?.run();
 	assert.equal(activitybar.domNode.querySelector('[data-action-id="ash.search"]'), null);
 	activitybar.domNode.querySelector<HTMLElement>('[data-action-id="ash.explorer"]')?.dispatchEvent(new dom.window.MouseEvent('contextmenu', { bubbles: true }));
 	assert.equal(actions.find(action => action.id === 'ash.activityBar.togglePinned.ash.explorer')?.enabled, false);
@@ -2425,6 +2429,8 @@ function createTestActivitybar(container: HTMLElement, composites: InstanceType<
 	services.registerInstance(IConfigurationService, configuration);
 	services.registerInstance(PanelLocalizationService, localization);
 	const contexts = new ContextKeyService();
+	services.registerInstance(IContextKeyService, contexts);
+	services.registerInstance(IKeybindingService, { lookupKeybinding: () => undefined } as unknown as import('../../../platform/keybinding/common/keybinding.js').IKeybindingService);
 	const layoutContext = new LayoutActionsContext(configuration, contexts);
 	const commands = new CommandService(services);
 	services.registerInstance(IMenuService, new MenuService(commands, contexts));

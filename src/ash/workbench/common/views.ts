@@ -14,6 +14,7 @@ import { localize2, type LocalizationKey } from "../../nls.js";
 import { Action2, MenuId, MenusRegistry, registerAction2 } from '../../platform/actions/common/actions.js';
 import type { ServicesAccessor } from '../../platform/instantiation/common/instantiation.js';
 import { getVisibleViewContextKey } from './contextkeys.js';
+import { IViewsService } from '../services/views/common/viewsService.js';
 
 MenusRegistry.appendMenuItem(MenuId.ViewContainerTitle, {
 	title: localize2('views', 'Views'),
@@ -195,6 +196,7 @@ export class WorkbenchViewRegistry extends Disposable {
 	private readonly _onDidDeregisterViews = this._register(new Emitter<IViewsChangeEvent>());
 	private nextOrder = 1;
 	private readonly viewActions = this._register(new DisposableMap<string, DisposableStore>());
+	private readonly containerActions = this._register(new DisposableMap<string, IDisposable>());
 
 	readonly onDidRegisterViewContainer:
 		Event<IViewContainerDescriptor> =
@@ -247,6 +249,19 @@ export class WorkbenchViewRegistry extends Disposable {
 			descriptor: Object.freeze({ ...descriptor }),
 			registrationOrder: this.nextOrder++,
 		};
+		this.containerActions.set(descriptor.id, registerAction2(class extends Action2 {
+			constructor() {
+				super({
+					id: descriptor.id,
+					title: descriptor.localizationKey ? localize2(descriptor.localizationKey, descriptor.title) : descriptor.title,
+					f1: true,
+				});
+			}
+
+			override run(accessor: ServicesAccessor): unknown {
+				return accessor.get(IViewsService).openViewContainer(descriptor.id, true);
+			}
+		}));
 		this.containers.set(descriptor.id, registered);
 		this._onDidRegisterViewContainer.fire(registered.descriptor);
 		return registered;
@@ -258,6 +273,7 @@ export class WorkbenchViewRegistry extends Disposable {
 		const views = this.getViews(descriptor.id);
 		for (const view of views) this.views.delete(view.id);
 		this.viewActions.deleteAndDispose(descriptor.id);
+		this.containerActions.deleteAndDispose(descriptor.id);
 		if (views.length > 0) {
 			this._onDidDeregisterViews.fire({
 				container: descriptor,
@@ -493,6 +509,10 @@ export interface IViewDescriptorService {
 	readonly viewContainers: readonly IViewContainerDescriptor[];
 	readonly onDidChangeViewContainers: Event<IViewContainersChangeEvent>;
 	readonly onDidChangeViewContainerOrder: Event<ViewContainerLocation>;
+	readonly onDidChangeContainerLocation: Event<{ viewContainer: IViewContainerDescriptor; from: ViewContainerLocation; to: ViewContainerLocation; }>;
+	getDefaultViewContainerLocation(container: IViewContainerDescriptor): ViewContainerLocation | null;
+	getViewContainerLocation(container: IViewContainerDescriptor): ViewContainerLocation | null;
+	moveViewContainerToLocation(container: IViewContainerDescriptor, location: ViewContainerLocation, requestedIndex?: number, reason?: string): void;
 
 	getViewContainers(
 		location: ViewContainerLocation,

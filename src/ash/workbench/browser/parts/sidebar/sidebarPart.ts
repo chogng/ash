@@ -15,6 +15,7 @@ import type { IViewDescriptorService } from "../../../common/views.js";
 import { PaneCompositePart, type PaneCompositeTitleActions } from "../paneCompositePart.js";
 import { ActivityBarPosition } from '../../../common/configuration.js';
 import type { ICompositeBarOptions } from '../compositeBar.js';
+import type { PartTitleProjection } from '../views/viewPane.js';
 
 /** Construction inputs for a Sidebar Composite host. */
 export interface SidebarPartOptions {
@@ -111,6 +112,19 @@ export class SidebarPart extends PaneCompositePart {
 		super.showComposite(compositeId, focus);
 		this.activeTitleListener.value = this.getComposite(compositeId)?.onTitleAreaUpdate(() => this.updateActiveTitle());
 		this.updateActiveTitle();
+	}
+
+	protected override setTitleProjection(projection: PartTitleProjection | undefined): void {
+		if (!this.activeTitleDomNode) {
+			super.setTitleProjection(projection);
+			return;
+		}
+		// The primary selector belongs to the Activity Bar, including while its active view moves away.
+		if (!this.activeCompositeId) {
+			this.activeTitleListener.clear();
+			this.activeTitleDomNode.textContent = '';
+		}
+		super.setTitleProjection({ ...projection, content: projection?.content ?? this.activeTitleDomNode });
 	}
 
 	private updateActiveTitle(): void {

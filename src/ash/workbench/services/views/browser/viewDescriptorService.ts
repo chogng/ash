@@ -6,6 +6,8 @@ import { ViewContainerModel } from '../common/viewContainerModel.js';
 
 interface ViewDescriptorServiceOptions {
 	readonly registry?: WorkbenchViewRegistry;
+	/** Initial window state, decoded by the host's persistence boundary. */
+	readonly viewContainerLocations?: Readonly<Record<string, ViewContainerLocation>>;
 }
 
 /**
@@ -15,6 +17,9 @@ export class ViewDescriptorService extends Disposable implements IViewDescriptor
 	private readonly registry: WorkbenchViewRegistry;
 	private readonly models = this._register(new DisposableMap<string, ViewContainerModel>());
 	private readonly containerOrders = new Map<ViewContainerLocation, string[]>();
+	private readonly locations: Map<string, ViewContainerLocation>;
+	private readonly locationChanged = this._register(new Emitter<{ viewContainer: IViewContainerDescriptor; from: ViewContainerLocation; to: ViewContainerLocation; }>());
+	public readonly onDidChangeContainerLocation = this.locationChanged.event;
 	private readonly _onDidChangeViewContainers =
 		this._register(new Emitter<IViewContainersChangeEvent>());
 	private readonly _onDidChangeViewContainerOrder =
@@ -28,21 +33,23 @@ export class ViewDescriptorService extends Disposable implements IViewDescriptor
 	constructor(options: ViewDescriptorServiceOptions, @IContextKeyService private readonly contextKeyService: IContextKeyService) {
 		super();
 		this.registry = options.registry ?? ViewsRegistry;
+		this.locations = new Map(Object.entries(options.viewContainerLocations ?? {}));
 		for (const container of this.registry.getViewContainers()) {
 			this.addContainer(container);
 		}
 		this._register(this.registry.onDidRegisterViewContainer((container) => {
 			this.addContainer(container);
 			this._onDidChangeViewContainers.fire({
-				added: [container],
+				added: [this.getViewContainerById(container.id)!],
 				removed: [],
 			});
 		}));
 		this._register(this.registry.onDidDeregisterViewContainer((container) => {
+			const removed = this.getViewContainerById(container.id) ?? this.projectContainer(container);
 			this.removeContainer(container);
 			this._onDidChangeViewContainers.fire({
 				added: [],
-				removed: [container],
+				removed: [removed],
 			});
 		}));
 	}
@@ -50,7 +57,7 @@ export class ViewDescriptorService extends Disposable implements IViewDescriptor
 	public getViewContainers(
 		location: ViewContainerLocation,
 	): readonly IViewContainerDescriptor[] {
-		const registered = this.registry.getViewContainers(location);
+		const registered = this.viewContainers.filter(container => container.location === location);
 		const registeredById = new Map(registered.map((container) => [container.id, container]));
 		const order = (this.containerOrders.get(location) ?? []).filter((id) => registeredById.has(id));
 		for (const container of registered) {
@@ -61,11 +68,12 @@ export class ViewDescriptorService extends Disposable implements IViewDescriptor
 	}
 
 	public get viewContainers(): readonly IViewContainerDescriptor[] {
-		return this.registry.getViewContainers();
+		return this.registry.getViewContainers().map(container => this.projectContainer(container));
 	}
 
 	public getViewContainerById(id: string): IViewContainerDescriptor | null {
-		return this.registry.getViewContainer(id) ?? null;
+		const container = this.registry.getViewContainer(id);
+		return container ? this.projectContainer(container) : null;
 	}
 
 	public getViewDescriptorById(id: string): IViewDescriptor | null {
@@ -75,13 +83,50 @@ export class ViewDescriptorService extends Disposable implements IViewDescriptor
 	public getDefaultViewContainer(
 		location: ViewContainerLocation,
 	): IViewContainerDescriptor | undefined {
-		return this.registry.getDefaultViewContainer(location);
+		const containers = this.getViewContainers(location);
+		const defaultId = this.registry.getDefaultViewContainer(location)?.id;
+		return containers.find(container => container.id === defaultId) ?? containers[0];
 	}
 
 	public getViewContainerForView(
 		viewId: string,
 	): IViewContainerDescriptor | undefined {
-		return this.registry.getViewContainerForView(viewId);
+		const container = this.registry.getViewContainerForView(viewId);
+		return container ? this.getViewContainerById(container.id) ?? undefined : undefined;
+	}
+
+	public getDefaultViewContainerLocation(container: IViewContainerDescriptor): ViewContainerLocation | null {
+		return this.registry.getViewContainer(container.id)?.location ?? null;
+	}
+
+	public getViewContainerLocation(container: IViewContainerDescriptor): ViewContainerLocation | null {
+		return this.getViewContainerById(container.id)?.location ?? null;
+	}
+
+	public moveViewContainerToLocation(container: IViewContainerDescriptor, location: ViewContainerLocation, requestedIndex?: number, _reason?: string): void {
+		const current = this.getViewContainerById(container.id);
+		if (!current || current.location === location) return;
+		if (location === this.getDefaultViewContainerLocation(current)) this.locations.delete(current.id);
+		else this.locations.set(current.id, location);
+		this.containerOrders.set(current.location, (this.containerOrders.get(current.location) ?? []).filter(id => id !== current.id));
+		const order = this.getViewContainers(location).map(item => item.id).filter(id => id !== current.id);
+		let index = requestedIndex ?? order.length;
+		if (requestedIndex === undefined && location === this.getDefaultViewContainerLocation(current)) {
+			const defaults = this.registry.getViewContainers(location).map(item => item.id);
+			const next = defaults.slice(defaults.indexOf(current.id) + 1).find(id => order.includes(id));
+			if (next) index = order.indexOf(next);
+		}
+		order.splice(index, 0, current.id);
+		this.containerOrders.set(location, order);
+		const moved = this.getViewContainerById(current.id)!;
+		// Hosts discard the old presentation, while the view model and visibility choices survive.
+		this._onDidChangeViewContainers.fire({ removed: [current], added: [moved] });
+		this.locationChanged.fire({ viewContainer: moved, from: current.location, to: location });
+	}
+
+	private projectContainer(container: IViewContainerDescriptor): IViewContainerDescriptor {
+		const location = this.locations.get(container.id) ?? container.location;
+		return location === container.location ? container : { ...container, location };
 	}
 
 	public getViewContainerModel(containerId: string): IViewContainerModel {
@@ -107,7 +152,7 @@ export class ViewDescriptorService extends Disposable implements IViewDescriptor
 	}
 
 	public setViewContainerOrder(location: ViewContainerLocation, containerIds: readonly string[]): void {
-		const registered = this.registry.getViewContainers(location).map(container => container.id);
+		const registered = this.getViewContainers(location).map(container => container.id);
 		const order = [...containerIds.filter(id => registered.includes(id)), ...registered.filter(id => !containerIds.includes(id))];
 		if (sameContainerOrder(this.getViewContainers(location).map(container => container.id), order)) { return; }
 		this.containerOrders.set(location, order);

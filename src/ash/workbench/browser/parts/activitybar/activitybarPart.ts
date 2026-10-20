@@ -2,13 +2,16 @@ import { IStorageService } from '../../../../platform/storage/common/storage.js'
 import { IThemeService } from '../../../../platform/theme/common/themeService.js';
 import './media/activitybarpart.css';
 import './media/activityaction.css';
-import { addDisposableListener } from '../../../../base/browser/dom.js';
+import { addDisposableListener, h } from '../../../../base/browser/dom.js';
 import { Separator, type IAction } from '../../../../base/common/actions.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import type { CompositeBar } from '../compositeBar.js';
 import { WorkbenchConfiguration, type SideBarLocation, type WorkbenchLayoutStyle } from '../../../common/configuration.js';
 import { IMenuService } from '../../../../platform/actions/common/actions.js';
-import { ActivityBarContextMenu } from '../../actions/layoutActions.js';
+import { ActivityBarContextMenu, ActivityBarItemContextMenu } from '../../actions/layoutActions.js';
+import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
+import { IKeybindingService } from '../../../../platform/keybinding/common/keybinding.js';
+import { ViewContainerLocation } from '../../../common/views.js';
 import type { GlobalCompositeBar } from '../globalCompositeBar.js';
 import { Part } from '../../part.js';
 
@@ -31,6 +34,8 @@ export class ActivitybarPart extends Part {
 		@IMenuService private readonly menuService: IMenuService,
 		@IThemeService themeService: IThemeService,
 		@IStorageService storageService: IStorageService,
+		@IContextKeyService private readonly contextKeys: IContextKeyService,
+		@IKeybindingService private readonly keybindings: IKeybindingService,
 	) {
 		super(container, 'activitybar', themeService, storageService);
 		this.contentDomNode.classList.add('ash-activity-bar-content');
@@ -47,7 +52,7 @@ export class ActivitybarPart extends Part {
 		}));
 		this._register(addDisposableListener(this.domNode, 'contextmenu', event => this.showContextMenu(event)));
 		this._register(addDisposableListener(compositeBar.domNode, 'contextmenu', event => {
-			if (!this.domNode.contains(compositeBar.domNode)) compositeBar.showContextMenu(event, this.getContextMenuActions());
+			if (!this.domNode.contains(compositeBar.domNode)) this.showContextMenu(event);
 		}));
 		this._register(addDisposableListener(globalCompositeBar.domNode, 'contextmenu', event => {
 			if (!this.domNode.contains(globalCompositeBar.domNode)) this.showContextMenu(event);
@@ -72,7 +77,21 @@ export class ActivitybarPart extends Part {
 	}
 
 	public showContextMenu(event: MouseEvent | KeyboardEvent): void {
-		this.compositeBar.showContextMenu(event, this.getContextMenuActions());
+		this.compositeBar.showContextMenu(event, this.getContextMenuActions(), {
+			transformContextMenuActionsForComposite: (actions, id) => {
+				// Snapshot item-specific menu conditions without changing window context.
+				using context = this.contextKeys.createScoped(h(this.domNode.ownerDocument, 'div'));
+				context.setContext('viewContainerLocation', ViewContainerLocation.Sidebar);
+				const groups = this.menuService.getMenuActions(ActivityBarItemContextMenu, { arg: id }, context);
+				const keybindingActions = groups.filter(([group]) => group === '1_keybinding').flatMap(([, items]) => items);
+				const moveGroups = groups.filter(([group]) => group !== '1_keybinding').map(([, items]) => [...items]);
+				return Separator.join([...keybindingActions, ...actions], ...moveGroups);
+			},
+			getKeyBinding: action => {
+				const prefix = 'ash.activityBar.togglePinned.';
+				return this.keybindings.lookupKeybinding(action.id.startsWith(prefix) ? decodeURIComponent(action.id.slice(prefix.length)) : action.id);
+			},
+		});
 	}
 
 	public setCompact(compact: boolean): void {

@@ -1009,7 +1009,37 @@ export class Workbench extends Disposable {
 		const notificationsCenter = this._register(services.createInstance(NotificationsCenter, workbenchRoot, notificationService.model, feedbackHost, notificationActionRunner, statusbarService, () => services.get(IAccessibleViewService).getOpenAriaHint(AccessibilityVerbositySettingId.Notifications)));
 		services.registerInstance(INotificationsCenter, notificationsCenter);
 		services.registerInstance(IGitHubConnectionService, this._register(services.createInstance(GitHubConnectionService)));
-		const viewDescriptors = this._register(services.createInstance(ViewDescriptorService, {}));
+		const viewContainerLocationsKey = 'workbench.viewContainerLocations';
+		const readViewContainerLocations = (): Record<string, ViewContainerLocation> => {
+			const saved = storage.get(viewContainerLocationsKey, StorageScope.PROFILE);
+			if (saved === undefined) return {};
+			const parsed: unknown = JSON.parse(saved);
+			if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed) || Object.entries(parsed).some(([id, location]) => !id || !Object.values(ViewContainerLocation).includes(location as ViewContainerLocation))) {
+				throw new TypeError(localize('workbench.invalidViewContainerLocations', 'Saved view container locations are invalid.'));
+			}
+			return parsed as Record<string, ViewContainerLocation>;
+		};
+		const viewDescriptors = this._register(services.createInstance(ViewDescriptorService, { viewContainerLocations: readViewContainerLocations() }));
+		let restoringViewContainerLocations = false;
+		this._register(viewDescriptors.onDidChangeContainerLocation(({ viewContainer, to }) => {
+			if (restoringViewContainerLocations) return;
+			const saved = readViewContainerLocations();
+			if (to === viewDescriptors.getDefaultViewContainerLocation(viewContainer)) delete saved[viewContainer.id];
+			else saved[viewContainer.id] = to;
+			storage.store(viewContainerLocationsKey, JSON.stringify(saved), StorageScope.PROFILE, StorageTarget.USER);
+		}));
+		this._register(storage.onDidChangeValue(event => {
+			if (!event.external || event.scope !== StorageScope.PROFILE || event.key !== viewContainerLocationsKey) return;
+			const saved = readViewContainerLocations();
+			restoringViewContainerLocations = true;
+			try {
+				for (const container of viewDescriptors.viewContainers) {
+					viewDescriptors.moveViewContainerToLocation(container, saved[container.id] ?? viewDescriptors.getDefaultViewContainerLocation(container)!);
+				}
+			} finally {
+				restoringViewContainerLocations = false;
+			}
+		}));
 		services.registerInstance(IViewDescriptorService, viewDescriptors);
 		services.registerSingleton(IActivityService, () => services.createInstance(ActivityService));
 		const contributions = this._register(
@@ -1234,6 +1264,10 @@ export class Workbench extends Disposable {
 			const openings: Promise<unknown>[] = [];
 			for (const [location, part] of paneParts) {
 				if (location === ViewContainerLocation.AgentSidebar && !layout.isPartVisible('agentSidebar')) { continue; }
+				if (viewDescriptors.getViewContainers(location).length === 0) {
+					layout.hidePart(panes.getPartId(location));
+					continue;
+				}
 				const visible = layout.isPartVisible(panes.getPartId(location));
 				const container = requiredViewContainerToRestore(viewDescriptors, location, part.getCompositeIdToRestore());
 				// Restore retained content without changing the saved visibility of its region.
