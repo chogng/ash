@@ -31,6 +31,8 @@ jobs:
           install: false
       - name: Install frontend build dependencies
         run: sudo apt-get update && sudo apt-get install --yes libx11-dev libxkbfile-dev libcap-dev libssl-dev pkg-config
+      - name: Install extension fixture build tools
+        uses: ./.github/actions/setup-just
       - name: Cache protocol exporter builds
         uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32
         with:
