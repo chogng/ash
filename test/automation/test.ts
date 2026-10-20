@@ -301,10 +301,10 @@ async function captureRestartDialogs(application: import('@playwright/test').Ele
 
 export { expect } from "@playwright/test";
 
-/** Writes a real VS Code package alongside its Plugin authority envelope. */
+/** Writes an Ash SDK package alongside its Plugin authority envelope. */
 export async function writeEditorExtensionFixture(root: string, source: string, debuggerDefaults?: readonly unknown[]): Promise<void> {
 	const plugin = JSON.parse(await readFile(join(root, '.ash-plugin', 'plugin.json'), 'utf8'));
-	const commands = [...source.matchAll(/commands\.registerCommand\('([^']+)'/g)].flatMap(match => {
+	const commands = [...source.matchAll(/commands\.register\('([^']+)'/g)].flatMap(match => {
 		if (match[1] === 'acme.debugCancellation.descriptor.') return ['undefined', 'null'].map(value => match[1] + value);
 		if (match[1] === 'acme.debugCancellation.') return ['before.undefined', 'before.null', 'after.undefined', 'after.null'].map(value => match[1] + value);
 		return [match[1]];
@@ -312,7 +312,7 @@ export async function writeEditorExtensionFixture(root: string, source: string, 
 	const types = (method: string): string[] => [...source.matchAll(new RegExp(method + "\\(['\"]([^'\"]+)['\"]", 'g'))].map(match => match[1]).filter(value => value !== '*');
 	const contribution = plugin.contributions.editorExtensions[0];
 	await writeFile(join(root, 'package.json'), JSON.stringify({
-		publisher: plugin.id.split('/')[0], name: plugin.id.split('/')[1], version: plugin.version, main: 'extension.js', engines: { vscode: '^1.100.0' },
+		publisher: plugin.id.split('/')[0], name: plugin.id.split('/')[1], version: plugin.version, main: 'extension.js', engines: { ash: '*' },
 		activationEvents: contribution.activationEvents.map((event: { type: string; id?: string; taskType?: string; debugType?: string; }) => event.type === 'startup' ? '*' : event.type === 'onCommand' ? 'onCommand:' + event.id : event.type === 'onTaskType' ? 'onTaskType:' + event.taskType : event.type === 'onDebugType' ? 'onDebugResolve:' + event.debugType : 'onDebug'),
 		contributes: {
 			// Visible titles differ from stable IDs so commands participate in the Command Palette.

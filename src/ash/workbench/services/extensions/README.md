@@ -25,22 +25,20 @@ candidate resource caches, and test pages explicitly inject the prepared resourc
 Installed reads retain the catalog generation. The App Server adapter coalesces identical reads and
 retains up to 64 verified resources of at most 128 KiB each (8 MiB total). It clears them on catalog
 or connection replacement, never retains failures or larger resources, and returns independent byte
-buffers. Gallery reads use the configured Open VSX URL contract
-and Rust-verified VSIX contents without installing, enabling or executing the package. The backend
-returns a connection-owned resource handle; the existing bounded read path verifies and releases it.
-Only universal Open VSX packages are supported, matching the existing provider.
+buffers. Retired source gallery-resource requests and package parsing have been removed.
+Historical installed package identities remain available for disablement and uninstall; they
+cannot enter this catalog, obtain a lease or execute code.
 
-The product direction is TS/JS extensions running in an isolated JS host, with a TS SDK delegating
-editor and UI operations to their TS services and backend operations to Rust. This declarative
-loader remains responsible for resources; it does not become the JS runtime. The TS and Rust author SDKs expose public extension contracts; runtime ownership remains separate. Source
-retirement, the complete TS SDK, and per-extension authorization are not complete; see the
-[direction and current status](../../../../../docs/editor-extensions.md#0-确定的产品方向).
+TS/JS authors use `@ash/sdk` and `ash.*`. The shared `ash.js` facade binds editor and UI
+operations to their client services and authorized backend operations to Rust. This declarative
+loader continues to own resource parsing and registration, while Node, optional V8 and trusted
+Workers own execution. The [extension architecture](../../../../../docs/editor-extensions.md#0-确定的产品方向)
+records actual API coverage, authorization and the remaining runtime/platform limitations.
 
-Open VSX packages enter this same declarative loader after Rust verifies and installs their VSIX.
-The Extensions source remains part of the extension identity. This loader consumes supported
-manifest contributions and resources; it does not execute the downloaded `main` or `browser` entries.
-The server excludes debugger commands and executable entries from this source's catalog manifest.
-Both static contribution loaders refresh on Extensions changes, including removal and updates.
+Built-in and valid Ash-source packages retain their existing resource identities and licenses.
+Their supported manifest contributions share this catalog; executable entries require separate
+runtime admission and never run as a side effect of resource loading. Static loaders refresh on
+Extensions changes, including removal and updates.
 
 ## Ownership
 
@@ -68,7 +66,7 @@ Both static contribution loaders refresh on Extensions changes, including remova
 | `iconThemes`                          | Package-relative fonts and SVG/PNG file icons; selectable through `workbench.iconTheme`                     | File associations and light variants; folder-specific associations are not consumed by the current file label contract       |
 | `productIconThemes`                   | Package-relative SVG artwork for semantic product icon IDs; selectable through `workbench.productIconTheme` | Unspecified IDs keep Ash's built-in SVG artwork                                                                              |
 | `problemMatchers` / `problemPatterns` | Bounded named patterns, matcher inheritance and background declarations enter the task matcher registry     | Search-based file locations remain incomplete                                                                                |
-| `debuggers`                           | Unique type, label, adapter program, and args                                                               | Discovery only; no VS Code Debug Extension API                                                                               |
+| `debuggers`                           | Unique type, label, adapter program, and args                                                               | Discovery only; execution requires an admitted Ash provider                                                                  |
 
 `configurationDefaults`, `semanticTokenScopes`, extension JavaScript, LSP declarations, and dynamic
 UI are not activated by this loader.
@@ -104,7 +102,7 @@ actions. `WebviewEditor` hosts the content, and `CustomTextEditorModel` holds a 
 text state used by the source editor. The host prepares HTML during input loading and creates
 the sandbox document when its pane first becomes visible; this keeps the first navigation out of
 a hidden editor host. Independent custom tabs retain their editor ID in working sets.
-Browser packages use Ash's bounded registration contract, not the complete VS Code extension API.
+Browser packages use the same Ash author API and bounded registration owner as the other hosts.
 
 Browser reconciliation reads the enabled Rust package catalog but retains healthy Workers with the
 same package/manifest digests, version, provenance, execution location/platform and window
@@ -245,8 +243,9 @@ tests separately enumerate all bundled manifests and their referenced files.
 This declarative service has no Editor Extension installer, enablement database, signature
 authority, manifest NLS, or arbitrary extension runtime. Ash's executable Host RPC v1 is a
 separate Plugin-authorized service under `workbench/services/extensionHost`; it is not an evolution
-of this loader and is not a VS Code/Node Extension Host. The executable path remains in the source pending retirement. Its existing contract and the
-TS/JS product direction are distinguished in `docs/editor-extensions.md`.
+of this loader. The shared Ash author API preserves its existing domain and lifecycle owners;
+retired author modules and source adapters are no longer execution paths. The current runtime
+and platform boundaries are documented in `docs/editor-extensions.md`.
 
 Problem contributions are prepared with the complete declarative catalog. Invalid regular
 expressions, missing references, duplicate names and cyclic bases reject replacement before

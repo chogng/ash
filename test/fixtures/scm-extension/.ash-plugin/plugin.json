@@ -8,6 +8,7 @@
 		"editorExtensions": [{
 			"id": "scm",
 			"runtime": "javascript",
+			"api": "ash",
 			"entrypoint": "extension.js",
 			"runtimeApiVersion": 1,
 			"activationEvents": [{ "type": "startup" }],

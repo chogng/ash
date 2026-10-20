@@ -97,16 +97,6 @@ export function createAppServerExtensionApi(connection: AppServerProtocolClient,
 			if (published !== snapshot || snapshot.connectionGeneration !== resourceApi.connectionGeneration) { throw retired(); }
 			// Callers may edit their buffer; the verified cached bytes remain private.
 			return Uint8Array.from(bytes);
-		}, {
-			template: async () => {
-				if (connection.capabilities?.contracts.extensionGalleryResources?.version !== 1) { return undefined; }
-				return (await appServerRequest(connection, 'extensions/gallery', {})).resourceUrlTemplate ?? undefined;
-			},
-			read: async request => {
-				const incarnation = resourceApi.connectionGeneration;
-				const opened = await appServerRequest(connection, 'extensions/gallery/resource/open', request);
-				return readAppServerResource(resourceApi, opened.resource, MAX_EXTENSION_RESOURCE_BYTES, undefined, incarnation);
-			},
 		}),
 	};
 }

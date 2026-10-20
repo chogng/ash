@@ -225,9 +225,6 @@ importers:
       '@types/trusted-types':
         specifier: 2.0.7
         version: 2.0.7
-      '@types/vscode':
-        specifier: 1.110.0
-        version: 1.110.0
       '@vscode/tree-sitter-wasm':
         specifier: 0.3.1
         version: 0.3.1(patch_hash=db89542b8b2621108d0481133f35856d6d703ac84f0714bf86a745bffc68b1d9)
@@ -1010,9 +1007,6 @@ packages:
 
   '@types/trusted-types@2.0.7':
     resolution: {integrity: sha512-ScaPdn1dQczgbl0QFTeTOmVHFULt394XJgOQNoyVhZ6r2vLnMLJfBPd53SB52T/3G36VI1/g2MZaX0cwDuXsfw==}
-
-  '@types/vscode@1.110.0':
-    resolution: {integrity: sha512-AGuxUEpU4F4mfuQjxPPaQVyuOMhs+VT/xRok1jiHVBubHK7lBRvCuOMZG0LKUwxncrPorJ5qq/uil3IdZBd5lA==}
 
   '@typescript/typescript-aix-ppc64@7.0.2':
     resolution: {integrity: sha512-MTKKkWB7p/0E9xi1d1tHtZ5PiLkGEMIq88pK2CubZjOsLtYTLqhgIgi6zepFa+9GHZ6h05NMCkQxGKiPXMxXtQ==}
@@ -2995,8 +2989,6 @@ snapshots:
   '@types/tough-cookie@4.0.5': {}
 
   '@types/trusted-types@2.0.7': {}
-
-  '@types/vscode@1.110.0': {}
 
   '@typescript/typescript-aix-ppc64@7.0.2':
     optional: true

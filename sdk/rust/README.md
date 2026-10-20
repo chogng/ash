@@ -5,9 +5,9 @@
 确定的职责、GitHub 示例和权限边界见
 [`扩展架构与编辑器接入`](../../docs/editor-extensions.md#0-确定的产品方向)。
 
-Rust SDK 是[统一后端扩展接口](../../docs/editor-extensions.md#统一后端扩展接口规范)的 Rust 语言封装，与 TS/JS 的 VS Code / Node 兼容层共用 Host RPC、能力契约、授权及生命周期；专属 TS 作者 SDK 已移除。`ExtensionContext.client` 请求发起客户端的服务，`services` 请求获授权的后端服务，typed `data_channels` 承载领域 Provider 契约；它们是同一双向协议的端口，不是独立后端 API。Workbench 通过产品 adapter 消费同一契约，不直接链接 Rust SDK 或扩展实现。当前语言适配的能力覆盖不相等，完整生成、公共服务绑定及 JS 对等适配仍须按规范闭合。
+Rust SDK 是[统一后端扩展接口](../../docs/editor-extensions.md#统一后端扩展接口规范)的 Rust 语言封装，与 TS/JS 的 [`@ash/sdk`](../typescript/README.md) 共用 Host RPC、能力契约、授权及生命周期。`ExtensionContext.client` 请求发起客户端的服务，`services` 请求获授权的后端服务，typed `data_channels` 承载领域 Provider 契约；它们是同一双向协议的端口，不是独立后端 API。Workbench 通过产品 adapter 消费同一契约，不直接链接 Rust SDK 或扩展实现。当前语言适配的能力覆盖不相等，公共服务绑定及 TS 对等适配仍须按真实消费者逐项闭合。
 
-本 crate 已迁入根目录 `sdk/rust`，包名为 `ash-external-ext-sdk`，Rust 导入名为 `external_ext_sdk`；TS/JS 作者使用标准 `vscode`，私有宿主 adapter 与 Rust SDK 共用 Host RPC。两类扩展共享接入与监管语义，TS/JS 的 VS Code/Node API 兼容不并入 Rust SDK，也不使 Rust 扩展依赖 V8 或 App Server。确定的命名与目录见[共享接入与语言适配的 crate 边界](../../docs/editor-extensions.md#共享接入与语言适配的-crate-边界)；注册、取消、客户端请求与 scoped services 使用同一协议，完整标准运行时兼容仍待完善。
+本 crate 已迁入根目录 `sdk/rust`，包名为 `ash-external-ext-sdk`，Rust 导入名为 `external_ext_sdk`；TS/JS 作者改用 `@ash/sdk` 和 `ash.*`。两个语言 SDK 共享接入与监管语义，不使 Rust 扩展依赖 V8 或 App Server。旧作者兼容层、Open VSX下载和VSIX运行入口已删除；只读退休metadata保留原身份供停用和卸载，不提供执行或重新授权。确定的命名与目录见[共享接入与语言适配的 crate 边界](../../docs/editor-extensions.md#共享接入与语言适配的-crate-边界)。
 
 ## 独立开发
 

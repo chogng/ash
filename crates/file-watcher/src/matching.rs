@@ -67,13 +67,30 @@ pub(crate) fn changed_path_for_event(
     state: &mut SubscriberWatchState,
     event_path: &Path,
 ) -> Option<PathBuf> {
-    if let Some(path) = changed_path_for_namespace(key, state, &key.matched, event_path) {
-        return Some(path);
+    let changed =
+        changed_path_for_namespace(key, state, &key.matched, event_path).or_else(|| {
+            (key.matched.path != key.requested.path)
+                .then(|| changed_path_for_namespace(key, state, &key.requested, event_path))
+                .flatten()
+        })?;
+    #[cfg(target_os = "macos")]
+    {
+        // PollWatcher compares directory mtimes at second resolution. A rename + recreate
+        // can keep that timestamp, while deleted children still reveal the replacement.
+        let identity = root_identity(&key.requested.path);
+        if identity != state.root_identity {
+            state.root_identity = identity;
+        }
     }
-    if key.matched.path == key.requested.path {
-        return None;
-    }
-    changed_path_for_namespace(key, state, &key.requested, event_path)
+    Some(changed)
+}
+
+#[cfg(target_os = "macos")]
+pub(crate) fn root_identity(path: &Path) -> Option<(u64, u64)> {
+    use std::os::unix::fs::MetadataExt;
+    std::fs::metadata(path)
+        .ok()
+        .map(|metadata| (metadata.dev(), metadata.ino()))
 }
 
 fn changed_path_for_namespace(

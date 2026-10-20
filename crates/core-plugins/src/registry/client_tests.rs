@@ -1,34 +1,3 @@
-use tempfile::TempDir;
-use url::Url;
-
-use super::ExtensionsRemoteClient;
-use crate::ExtensionSource;
-use crate::RemoteExtensionsConfig;
-
-#[test]
-fn opening_the_remote_client_never_requires_network_access() {
-    let cache = TempDir::new().unwrap();
-    let config = RemoteExtensionsConfig::new(
-        Url::parse("https://unreachable.invalid/metadata/").unwrap(),
-        Url::parse("https://unreachable.invalid/targets/").unwrap(),
-        b"not-yet-parsed-because-access-is-lazy".to_vec(),
-        cache.path(),
-    )
-    .unwrap();
-
-    let client = ExtensionsRemoteClient::new(config);
-    let result = client
-        .search(crate::SearchPackagesRequest {
-            package_type: Some("editorExtension".into()),
-            ..Default::default()
-        })
-        .unwrap();
-    assert!(
-        result.packages.is_empty(),
-        "VSIX discovery belongs to its own provider, not the signed catalog"
-    );
-}
-
 #[test]
 fn provider_names_preserve_the_signed_registry_identity() {
     for id in ["acme/review", "third-party/code-review-2"] {

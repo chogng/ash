@@ -16,7 +16,7 @@ pub struct EditorExtensionContribution {
     pub id: ManifestLocalId,
     pub entrypoint: PluginPath,
     pub runtime: EditorExtensionRuntime,
-    #[serde(default, skip_serializing_if = "EditorExtensionApi::is_vscode")]
+    #[serde(default, skip_serializing_if = "EditorExtensionApi::is_retired")]
     pub api: EditorExtensionApi,
     pub runtime_api_version: EditorExtensionRuntimeApiVersion,
     pub activation_events: Vec<EditorExtensionActivationEvent>,
@@ -36,13 +36,17 @@ pub enum EditorExtensionRuntime {
 #[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub enum EditorExtensionApi {
+    /// Ash's native TypeScript SDK author contract.
+    Ash,
+    /// Decode-only marker for old installed packages. It never selects an executable API.
     #[default]
-    Vscode,
+    #[serde(rename = "vscode")]
+    Retired,
 }
 
 impl EditorExtensionApi {
-    fn is_vscode(&self) -> bool {
-        *self == Self::Vscode
+    fn is_retired(&self) -> bool {
+        *self == Self::Retired
     }
 }
 

@@ -427,7 +427,7 @@ Server → Client `app/request`，不增加 Main 中的业务分发。
 `contracts.extensionsPaging.version=1`。请求携带 `sourceId`、搜索筛选、`pageSize`（1–200）和可选
 `cursor`，返回包摘要、`total` 与可选 `nextCursor`。来源必须已配置且启用；该能力不隐式启用来源，
 不安装包，不授予权限。游标绑定来源、完整查询及已验证目录内容，30 分钟内有效；查询、页大小、
-来源或目录内容变化后必须从第一页重试。Open VSX 继续使用其编辑器扩展搜索，不承诺签名目录分页。
+来源或目录内容变化后必须从第一页重试。退休来源不进入搜索或分页；旧gallery与资源下载RPC已移除，接口变化由同产品schema fingerprint约束。
 该 RPC 和其他目录读取一样使用后台目录队列，不持有本地安装状态的全局许可。
 
 `extensions/sources/list` 返回来源协议、启停状态、产品所有权和 `revision`。`add` 接收独立来源 ID、HTTPS metadata/targets 地址与发布者提供的 trusted root JSON；地址和信任根固定后不能复用同一 ID 替换。`setEnabled` 暂停或恢复后续发现、下载和更新，保留已安装包及其现有授权。两种写操作都检查 `expectedRevision`，由同一个 profile Manager 持久化并发布 `extensions/changed`。认证 Web 会话与产品宿主均可配置来源；普通协议连接只能读取，不能自报升级身份。

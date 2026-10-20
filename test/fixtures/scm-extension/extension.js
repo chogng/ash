@@ -1,6 +1,4 @@
-import { ash, commands, workspace, Uri, EventEmitter } from 'vscode';
-
-const { scm, editors } = ash;
+import { scm, commands, window, workspace, Uri, EventEmitter } from '@ash/sdk';
 
 export function activate(context) {
 	scm.initialize();
@@ -8,21 +6,17 @@ export function activate(context) {
 	let refreshes = 0;
 	const changes = new EventEmitter();
 	context.subscriptions.push(changes);
-	context.subscriptions.push(commands.registerCommand('ash.scm.fixture.refresh', () => provider.refresh()));
+	context.subscriptions.push(commands.register('ash.scm.fixture.refresh', () => provider.refresh()));
 	const originalBinary = { resource: 'snapshot:/independent/before', contentType: 'application/octet-stream', initialBytes: [0, 255, 1] };
 	const modifiedBinary = { resource: 'snapshot:/independent/after', contentType: 'application/octet-stream', initialBytes: [0, 254, 2] };
-	context.subscriptions.push(commands.registerCommand('ash.scm.fixture.openBinaryDiff', () => editors.request({
-		method: 'open', input: { kind: 'binaryDiff', label: 'Independent binary comparison', original: originalBinary, modified: modifiedBinary },
+	context.subscriptions.push(commands.register('ash.scm.fixture.openBinaryDiff', () => window.openComparison({ kind: 'binaryDiff', label: 'Independent binary comparison', original: originalBinary, modified: modifiedBinary })));
+	context.subscriptions.push(commands.register('ash.scm.fixture.openBinaryChanges', () => window.openComparison({
+		kind: 'multiDiff', resource: 'comparison:/independent/binary', label: 'Independent binary changes', items: [{
+			label: 'image.bin', binary: true,
+			original: originalBinary, modified: modifiedBinary,
+		}],
 	})));
-	context.subscriptions.push(commands.registerCommand('ash.scm.fixture.openBinaryChanges', () => editors.request({
-		method: 'open', input: {
-			kind: 'multiDiff', resource: 'comparison:/independent/binary', label: 'Independent binary changes', items: [{
-				label: 'image.bin', binary: true,
-				original: originalBinary, modified: modifiedBinary,
-			}],
-		},
-	})));
-	context.subscriptions.push(commands.registerCommand('ash.scm.fixture.activate', () => {
+	context.subscriptions.push(commands.register('ash.scm.fixture.activate', () => {
 		if (provider) { scm.selectRepository(provider.id); return; }
 		const root = workspace.workspaceFolders[0].uri;
 		const file = Uri.joinPath(root, 'main.ts');
@@ -35,7 +29,7 @@ export function activate(context) {
 				id: 'changes', label: 'Independent changes', actions: [], resources: [{
 					sourceUri: file, path: 'main.ts', decorations: { badge: 'M', tooltip: 'Independent change', kind: 'modified' },
 					openLabel: 'Open independent diff', actions: [],
-					open: (options, sideBySide) => editors.request({ method: 'open', input: { kind: 'diff', label: 'Independent comparison', original, modified }, options, sideBySide }),
+					open: (options, sideBySide) => window.openComparison({ kind: 'diff', label: 'Independent comparison', original, modified }, options, sideBySide),
 				}]
 			}],
 			input: { value: '', placeholder: 'Independent message', enabled: true, canAccept: true, buttonLabel: 'Record', buttonTooltip: 'Record independent message', async accept() { provider.statusMessage = `Recorded: ${provider.input.value}`; provider.input.value = ''; changes.fire(); } },

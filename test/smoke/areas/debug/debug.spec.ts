@@ -619,7 +619,7 @@ test('installed Debug configuration provider creates launch templates and resolv
 	await writeFile(join(root, '.ash-plugin', 'plugin.json'), JSON.stringify({
 		schemaVersion: 1, id: 'acme/debug-provider-smoke', version: '1.0.0', displayName: 'Debug provider smoke',
 		compatibility: { ash: '>=0.1.0' },
-		contributions: { editorExtensions: [{ id: 'debug', runtime: 'javascript', entrypoint: 'extension.js', runtimeApiVersion: 1, activationEvents: [{ type: 'onDemand', capability: 'debugAdapter' }], capabilities: ['command', 'debugAdapter'] }] },
+		contributions: { editorExtensions: [{ id: 'debug', runtime: 'javascript', api: 'ash', entrypoint: 'extension.js', runtimeApiVersion: 1, activationEvents: [{ type: 'onDemand', capability: 'debugAdapter' }], capabilities: ['command', 'debugAdapter'] }] },
 		permissions: [{ type: 'directory', access: 'read' }],
 	}));
 	const template = {
@@ -631,9 +631,9 @@ test('installed Debug configuration provider creates launch templates and resolv
 		debugAdapter: { program: process.execPath, args: [join(directory, 'debug-adapter.cjs'), join(directory, 'debug-program.js'), join(directory, 'debug-requests.jsonl')] },
 	};
 	await writeEditorExtensionFixture(root, `
-const vscode = require('vscode'); const { commands, debug, window } = vscode;
+const ash = require('@ash/sdk'); const { commands, debug, window } = ash;
 exports.activate = function(context) {
-	context.subscriptions.push(commands.registerCommand('acme.debugProvider.ready', async () => { await window.showInformationMessage('Debug provider registered'); }));
+	context.subscriptions.push(commands.register('acme.debugProvider.ready', async () => { await window.showInformationMessage('Debug provider registered'); }));
 	context.subscriptions.push(debug.registerDebugConfigurationProvider('smoke', {
 		async provideDebugConfigurations(folder) {
 			if (!folder || folder.index !== 0) throw Error('Missing canonical workspace');
@@ -722,11 +722,11 @@ test('Debug type redirection activates a second installed dormant owner before i
 		await writeFile(join(root, '.ash-plugin', 'plugin.json'), JSON.stringify({
 			schemaVersion: 1, id: `acme/${type}`, version: '1.0.0', displayName: type,
 			compatibility: { ash: '>=0.1.0' },
-			contributions: { editorExtensions: [{ id: 'debug', runtime: 'javascript', entrypoint: 'extension.js', runtimeApiVersion: 1, activationEvents: [{ type: 'onDebugType', debugType: type }], capabilities: ['debugAdapter'] }] },
+			contributions: { editorExtensions: [{ id: 'debug', runtime: 'javascript', api: 'ash', entrypoint: 'extension.js', runtimeApiVersion: 1, activationEvents: [{ type: 'onDebugType', debugType: type }], capabilities: ['debugAdapter'] }] },
 			permissions: [{ type: 'directory', access: 'read' }],
 		}));
 		await writeEditorExtensionFixture(root, `
-const vscode = require('vscode'); const { debug, window } = vscode;
+const ash = require('@ash/sdk'); const { debug, window } = ash;
 exports.activate = function(context) {
 	context.subscriptions.push(debug.registerDebugConfigurationProvider(${JSON.stringify(type)}, {
 		resolveDebugConfiguration(folder, configuration) {
@@ -738,7 +738,7 @@ exports.activate = function(context) {
 	context.subscriptions.push(debug.registerDebugAdapterDescriptorFactory(${JSON.stringify(type)}, {
 		createDebugAdapterDescriptor(session) {
    const configuration = session.configuration;
-			${type === 'redirect-source' ? "throw Error('Source descriptor must not start');" : `if (configuration.targetResolved !== ${JSON.stringify(join(directory, 'debug-program.js'))}) throw Error('Target resolver did not run before substitution'); return new vscode.DebugAdapterExecutable(${JSON.stringify(descriptor.program)}, ${JSON.stringify(descriptor.arguments)});`}
+			${type === 'redirect-source' ? "throw Error('Source descriptor must not start');" : `if (configuration.targetResolved !== ${JSON.stringify(join(directory, 'debug-program.js'))}) throw Error('Target resolver did not run before substitution'); return new ash.DebugAdapterExecutable(${JSON.stringify(descriptor.program)}, ${JSON.stringify(descriptor.arguments)});`}
 		},
 	}));
 }`);
@@ -777,13 +777,13 @@ test('installed Debug observer receives early custom events and termination afte
 		schemaVersion: 1, id: 'acme/debug-events-smoke', version: '1.0.0', displayName: 'Debug events smoke', compatibility: { ash: '>=0.1.0' },
 		contributions: {
 			editorExtensions: [{
-				id: 'debug', runtime: 'javascript', entrypoint: 'extension.js', runtimeApiVersion: 1,
+				id: 'debug', runtime: 'javascript', api: 'ash', entrypoint: 'extension.js', runtimeApiVersion: 1,
 				activationEvents: [{ type: 'onDebugType', debugType: 'event-observer' }], capabilities: ['debugAdapter'],
 			}]
 		},
 		permissions: [{ type: 'directory', access: 'read' }],
 	}));
-	await writeEditorExtensionFixture(root, `const vscode = require('vscode'); const { debug, window } = vscode;
+	await writeEditorExtensionFixture(root, `const ash = require('@ash/sdk'); const { debug, window } = ash;
 exports.activate = function(context) {
 	const events = [];
 	const trackerPhases = [];
@@ -826,7 +826,7 @@ exports.activate = function(context) {
   }),
   debug.onDidChangeBreakpoints(async event => {
    for (const point of event.added) {
-    if (!(point instanceof vscode.SourceBreakpoint) || ![1,4].includes(point.location.range.start.line) || typeof point.id !== 'string') throw Error('Breakpoint snapshot changed');
+    if (!(point instanceof ash.SourceBreakpoint) || ![1,4].includes(point.location.range.start.line) || typeof point.id !== 'string') throw Error('Breakpoint snapshot changed');
     if (point.location.range.start.line === 4) { adapterBreakpointId = point.id; await window.showInformationMessage('DEBUG_ADAPTER_BREAKPOINT:new'); }
    }
    if (adapterBreakpointId && event.removed.some(point => point.id === adapterBreakpointId)) await window.showInformationMessage('DEBUG_ADAPTER_BREAKPOINT:removed');
@@ -939,14 +939,14 @@ for (const transport of ['server', 'pipe', 'debugServer'] as const) {
 			await mkdir(join(root, '.ash-plugin'), { recursive: true });
 			await writeFile(join(root, '.ash-plugin', 'plugin.json'), JSON.stringify({
 				schemaVersion: 1, id: 'acme/debug-network', version: '1.0.0', displayName: 'Debug network', compatibility: { ash: '>=0.1.0' },
-				contributions: { editorExtensions: [{ id: 'debug', runtime: 'javascript', entrypoint: 'extension.js', runtimeApiVersion: 1, activationEvents: [{ type: 'onDebugType', debugType: 'network' }], capabilities: ['debugAdapter'] }] },
+				contributions: { editorExtensions: [{ id: 'debug', runtime: 'javascript', api: 'ash', entrypoint: 'extension.js', runtimeApiVersion: 1, activationEvents: [{ type: 'onDebugType', debugType: 'network' }], capabilities: ['debugAdapter'] }] },
 				permissions: [{ type: 'directory', access: 'read' }],
 			}));
 			await writeEditorExtensionFixture(root, `
-const vscode = require('vscode'); const { debug, window } = vscode;
+const ash = require('@ash/sdk'); const { debug, window } = ash;
 exports.activate = function(context) {
  context.subscriptions.push(debug.registerDebugAdapterDescriptorFactory('network', {
-  createDebugAdapterDescriptor() { ${transport === 'debugServer' ? "throw Error('debugServer must bypass the descriptor factory');" : 'return new vscode.' + (connection.type === 'namedPipe' ? 'DebugAdapterNamedPipeServer(' + JSON.stringify(connection.path) + ')' : 'DebugAdapterServer(' + connection.port + ')') + ';'} }
+  createDebugAdapterDescriptor() { ${transport === 'debugServer' ? "throw Error('debugServer must bypass the descriptor factory');" : 'return new ash.' + (connection.type === 'namedPipe' ? 'DebugAdapterNamedPipeServer(' + JSON.stringify(connection.path) + ')' : 'DebugAdapterServer(' + connection.port + ')') + ';'} }
  }));
 }
 `);
@@ -982,20 +982,20 @@ test('installed inline Debug implementation handles DAP and completes disposal b
 	await writeFile(join(root, 'defaults', 'package.json'), JSON.stringify({ name: 'debug-defaults', publisher: 'acme', version: '1.0.0', contributes: { debuggers: [{ type: 'inline', label: 'Inline default', runtime: 'default-must-not-spawn', runtimeArgs: ['$HOME', ''], program: './adapter.cjs', args: ['arg', '$HOME', ''] }, { type: 'pure-inline', label: 'Pure inline' }] } }));
 	await writeFile(join(root, '.ash-plugin', 'plugin.json'), JSON.stringify({
 		schemaVersion: 1, id: 'acme/debug-inline', version: '1.0.0', displayName: 'Debug inline', compatibility: { ash: '>=0.1.0' },
-		contributions: { editorExtensions: [{ id: 'debug', runtime: 'javascript', entrypoint: 'extension.js', runtimeApiVersion: 1, activationEvents: [{ type: 'onDebugType', debugType: 'inline' }], capabilities: ['debugAdapter'] }] },
+		contributions: { editorExtensions: [{ id: 'debug', runtime: 'javascript', api: 'ash', entrypoint: 'extension.js', runtimeApiVersion: 1, activationEvents: [{ type: 'onDebugType', debugType: 'inline' }], capabilities: ['debugAdapter'] }] },
 		permissions: [{ type: 'directory', access: 'read' }],
 	}));
 	await writeEditorExtensionFixture(root, `
-const vscode = require('vscode'); const { debug, window } = vscode;
+const ash = require('@ash/sdk'); const { debug, window } = ash;
 exports.activate = function(context) {
  let sawFrame = false;
  context.subscriptions.push(debug.onDidChangeActiveStackItem(async item => {
-  if (item instanceof vscode.DebugStackFrame) {
+  if (item instanceof ash.DebugStackFrame) {
    if (item.threadId !== 0 || item.frameId !== -1) throw Error('Active stack item changed');
    sawFrame = true; await window.showInformationMessage('DEBUG_STACK_FRAME');
   } else if (item === undefined && sawFrame) await window.showInformationMessage('DEBUG_STACK_CLEAR');
  }), debug.onDidStartDebugSession(async session => {
-  const source = await vscode.workspace.openTextDocument(vscode.debug.asDebugSourceUri({path:'/adapter-only/generated.ts',sourceReference:33}, session));
+  const source = await ash.workspace.openTextDocument(ash.debug.asDebugSourceUri({path:'/adapter-only/generated.ts',sourceReference:33}, session));
   if (source.getText() !== 'const generated = true;') throw Error('Reference source could not be loaded by the extension');
   await window.showInformationMessage('DEBUG_SOURCE_READ');
  }), debug.registerDebugAdapterDescriptorFactory('inline', {
@@ -1004,7 +1004,7 @@ exports.activate = function(context) {
    if (executable?.command !== 'default-must-not-spawn' || executable.args.length !== 6 || executable.args[0] !== '$HOME' || executable.args[1] !== '' || !executable.args[2].endsWith('/defaults/adapter.cjs') || JSON.stringify(executable.args.slice(3)) !== JSON.stringify(['arg', '$HOME', ''])) throw Error('Standard default executable was not passed to the factory');
    const listeners = new Set(); const commands = []; let sequence = 0; let disposed = false;
    function send(message) { for (const listener of listeners) listener({ seq: sequence++, ...message }); }
-   return new vscode.DebugAdapterInlineImplementation({
+   return new ash.DebugAdapterInlineImplementation({
     onDidSendMessage(listener) { listeners.add(listener); return { dispose() { listeners.delete(listener); } }; },
     handleMessage(request) {
      commands.push(request.command);
@@ -1110,19 +1110,19 @@ test('installed standard Debug command aliases activate their owner and resolve 
 	const root = join(directory, 'alias-debug-extension');
 	await mkdir(join(root, '.ash-plugin'), { recursive: true });
 	await mkdir(join(root, 'debugger'), { recursive: true });
-	await writeFile(join(root, '.ash-plugin', 'plugin.json'), JSON.stringify({ schemaVersion: 1, id: 'acme/alias-debug-smoke', version: '1.0.0', displayName: 'Alias debug smoke', compatibility: { ash: '>=0.1.0' }, contributions: { declarativeExtensions: [{ id: 'debugger', path: 'debugger' }], editorExtensions: [{ id: 'commands', runtime: 'javascript', api: 'vscode', entrypoint: 'extension.cjs', runtimeApiVersion: 1, activationEvents: [{ type: 'onCommand', id: 'acme.debugAlias.pick' }], capabilities: ['command'] }] }, permissions: [{ type: 'directory', access: 'read' }] }));
-	await writeFile(join(root, 'package.json'), JSON.stringify({ name: 'debug-alias-command', publisher: 'acme', version: '1.0.0', engines: { vscode: '^1.95.0' }, main: './extension.cjs', contributes: { commands: [{ command: 'acme.debugAlias.pick', title: 'Pick Debug target' }] } }));
+	await writeFile(join(root, '.ash-plugin', 'plugin.json'), JSON.stringify({ schemaVersion: 1, id: 'acme/alias-debug-smoke', version: '1.0.0', displayName: 'Alias debug smoke', compatibility: { ash: '>=0.1.0' }, contributions: { declarativeExtensions: [{ id: 'debugger', path: 'debugger' }], editorExtensions: [{ id: 'commands', runtime: 'javascript', api: 'ash', entrypoint: 'extension.cjs', runtimeApiVersion: 1, activationEvents: [{ type: 'onCommand', id: 'acme.debugAlias.pick' }], capabilities: ['command'] }] }, permissions: [{ type: 'directory', access: 'read' }] }));
+	await writeFile(join(root, 'package.json'), JSON.stringify({ name: 'debug-alias-command', publisher: 'acme', version: '1.0.0', engines: { ash: '*' }, main: './extension.cjs', contributes: { commands: [{ command: 'acme.debugAlias.pick', title: 'Pick Debug target' }] } }));
 	const bootstrapRoot = join(directory, 'bootstrap-debug-extension');
 	await mkdir(join(bootstrapRoot, '.ash-plugin'), { recursive: true });
-	await writeFile(join(bootstrapRoot, '.ash-plugin', 'plugin.json'), JSON.stringify({ schemaVersion: 1, id: 'acme/bootstrap-debug-smoke', version: '1.0.0', displayName: 'Bootstrap debug smoke', compatibility: { ash: '>=0.1.0' }, contributions: { editorExtensions: [{ id: 'commands', runtime: 'javascript', api: 'vscode', entrypoint: 'extension.cjs', runtimeApiVersion: 1, activationEvents: [{ type: 'onCommand', id: 'acme.debugAlias.bootstrap' }], capabilities: ['command'] }] }, permissions: [{ type: 'directory', access: 'read' }] }));
-	await writeFile(join(bootstrapRoot, 'package.json'), JSON.stringify({ name: 'debug-bootstrap-command', publisher: 'acme', version: '1.0.0', engines: { vscode: '^1.95.0' }, main: './extension.cjs', l10n: './l10n', contributes: { commands: [{ command: 'acme.debugAlias.bootstrap', title: 'Debug bootstrap' }] } }));
+	await writeFile(join(bootstrapRoot, '.ash-plugin', 'plugin.json'), JSON.stringify({ schemaVersion: 1, id: 'acme/bootstrap-debug-smoke', version: '1.0.0', displayName: 'Bootstrap debug smoke', compatibility: { ash: '>=0.1.0' }, contributions: { editorExtensions: [{ id: 'commands', runtime: 'javascript', api: 'ash', entrypoint: 'extension.cjs', runtimeApiVersion: 1, activationEvents: [{ type: 'onCommand', id: 'acme.debugAlias.bootstrap' }], capabilities: ['command'] }] }, permissions: [{ type: 'directory', access: 'read' }] }));
+	await writeFile(join(bootstrapRoot, 'package.json'), JSON.stringify({ name: 'debug-bootstrap-command', publisher: 'acme', version: '1.0.0', engines: { ash: '*' }, main: './extension.cjs', l10n: './l10n', contributes: { commands: [{ command: 'acme.debugAlias.bootstrap', title: 'Debug bootstrap' }] } }));
 	await mkdir(join(bootstrapRoot, 'l10n'));
 	await writeFile(join(bootstrapRoot, 'l10n', 'bundle.l10n.zh-cn.json'), JSON.stringify({ 'Target {0}': '目标 {0}' }));
-	await writeFile(join(bootstrapRoot, 'extension.cjs'), `const v = require('vscode'); const message = v.l10n.t('Target {0}', 'worker'); exports.activate = context => context.subscriptions.push(v.commands.registerCommand('acme.debugAlias.bootstrap', () => {
+	await writeFile(join(bootstrapRoot, 'extension.cjs'), `const v = require('@ash/sdk'); const message = v.l10n.t('Target {0}', 'worker'); exports.activate = context => context.subscriptions.push(v.commands.register('acme.debugAlias.bootstrap', () => {
 require('node:fs').writeFileSync(${JSON.stringify(join(directory, 'node-bootstrap-pid.txt'))}, String(process.pid));
 require('node:fs').writeFileSync(${JSON.stringify(join(directory, 'node-localization-proof.json'))}, JSON.stringify({ language: v.env.language, message, bundle: v.l10n.bundle ?? null, uri: v.l10n.uri?.fsPath ?? null }));
 return 'nested activation reached editor API'; }));`);
-	await writeFile(join(root, 'extension.cjs'), `const fs = require('node:fs'); try { const raw = require('vscode'); const v = raw && raw.__esModule ? raw : { ...raw, default: raw }; let calls = 0;
+	await writeFile(join(root, 'extension.cjs'), `const fs = require('node:fs'); try { const raw = require('@ash/sdk'); const v = raw && raw.__esModule ? raw : { ...raw, default: raw }; let calls = 0;
 if (v.default !== raw || v.commands !== raw.commands) throw Error('CommonJS API identity differs');
 class DebugItem extends v.TreeItem { constructor() { super('Debug target', v.TreeItemCollapsibleState.Expanded); this.checkboxState = v.TreeItemCheckboxState.Checked; } }
 const debugItem = new DebugItem();
@@ -1141,9 +1141,9 @@ exports.activate = async context => {
     fs.writeFileSync(${JSON.stringify(join(directory, 'node-config-proof.json'))}, JSON.stringify({ current: v.workspace.getConfiguration('debug').get('saveBeforeStart'), captured: captured.get('saveBeforeStart'), parent: event.affectsConfiguration('debug'), unrelated: event.affectsConfiguration('unrelated') }));
   }));
   await v.window.showInformationMessage('Node activation reached Workbench');
-  const bootstrap = await v.commands.executeCommand('acme.debugAlias.bootstrap');
+  const bootstrap = await v.commands.execute('acme.debugAlias.bootstrap');
   fs.writeFileSync(${JSON.stringify(join(directory, 'node-startup-proof.txt'))}, bootstrap);
-  context.subscriptions.push(v.commands.registerCommand('acme.debugAlias.pick', async config => {
+  context.subscriptions.push(v.commands.register('acme.debugAlias.pick', async config => {
   const server = net.createServer(socket => socket.end('Node network'));
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
   const network = await new Promise((resolve, reject) => { const client = net.connect(server.address().port, '127.0.0.1'); let text = ''; client.on('data', bytes => text += bytes); client.on('end', () => resolve(text)); client.on('error', reject); });
@@ -1276,20 +1276,20 @@ test('installed Debug child shares its parent console and stops both owned adapt
 		schemaVersion: 1, id: 'acme/debug-session-options', version: '1.0.0', displayName: 'Debug session options', compatibility: { ash: '>=0.1.0' },
 		contributions: {
 			editorExtensions: [{
-				id: 'debug', runtime: 'javascript', entrypoint: 'extension.js', runtimeApiVersion: 1,
+				id: 'debug', runtime: 'javascript', api: 'ash', entrypoint: 'extension.js', runtimeApiVersion: 1,
 				activationEvents: [{ type: 'onDebugType', debugType: 'session-options' }], capabilities: ['debugAdapter']
 			}]
 		},
 		permissions: [{ type: 'directory', access: 'read' }],
 	}));
 	await writeEditorExtensionFixture(root, `
-const vscode = require('vscode'); const { debug, window } = vscode;
+const ash = require('@ash/sdk'); const { debug, window } = ash;
 exports.activate = function(context) {
  let parentId;
  context.subscriptions.push(debug.onDidStartDebugSession(async session => {
   if (session.configuration.name !== 'Parent') return;
   parentId = session.id;
-  if (!await debug.startDebugging(undefined, {name:'Child',type:'session-options',request:'launch'}, {parentSession:session,lifecycleManagedByParent:true,consoleMode:vscode.DebugConsoleMode.MergeWithParent})) throw Error('Child startup failed');
+  if (!await debug.startDebugging(undefined, {name:'Child',type:'session-options',request:'launch'}, {parentSession:session,lifecycleManagedByParent:true,consoleMode:ash.DebugConsoleMode.MergeWithParent})) throw Error('Child startup failed');
   await window.showInformationMessage('DEBUG_HIERARCHY_READY');
  }));
  context.subscriptions.push(debug.registerDebugAdapterDescriptorFactory('session-options', {
@@ -1298,7 +1298,7 @@ exports.activate = function(context) {
    if (configuration.noDebug !== true || configuration.name === 'Child' && (session.parentSession?.id !== parentId || session.workspaceFolder !== undefined)) throw Error('Factory session options changed');
    const listeners = new Set(); let sequence = 0; let closed = false;
    function send(message) { for (const listener of listeners) listener({seq:sequence++,...message}); }
-   return new vscode.DebugAdapterInlineImplementation({
+   return new ash.DebugAdapterInlineImplementation({
     onDidSendMessage(listener) { listeners.add(listener); return {dispose(){listeners.delete(listener);}}; },
     handleMessage(request) {
      if (['setBreakpoints','setFunctionBreakpoints','setDataBreakpoints','setInstructionBreakpoints'].includes(request.command)) throw Error('noDebug installed a breakpoint');
@@ -1356,9 +1356,9 @@ test('installed adapter starts a DAP child and acknowledges its independent life
 	const directory = testWorkspace.directory;
 	const root = join(directory, 'debug-reverse-start');
 	await mkdir(join(root, '.ash-plugin'), { recursive: true });
-	await writeFile(join(root, '.ash-plugin', 'plugin.json'), JSON.stringify({ schemaVersion: 1, id: 'acme/debug-reverse', version: '1.0.0', displayName: 'Debug reverse request', compatibility: { ash: '>=0.1.0' }, contributions: { editorExtensions: [{ id: 'debug', runtime: 'javascript', entrypoint: 'extension.js', runtimeApiVersion: 1, activationEvents: [{ type: 'onDebugType', debugType: 'reverse-start' }], capabilities: ['debugAdapter'] }] }, permissions: [{ type: 'directory', access: 'read' }] }));
+	await writeFile(join(root, '.ash-plugin', 'plugin.json'), JSON.stringify({ schemaVersion: 1, id: 'acme/debug-reverse', version: '1.0.0', displayName: 'Debug reverse request', compatibility: { ash: '>=0.1.0' }, contributions: { editorExtensions: [{ id: 'debug', runtime: 'javascript', api: 'ash', entrypoint: 'extension.js', runtimeApiVersion: 1, activationEvents: [{ type: 'onDebugType', debugType: 'reverse-start' }], capabilities: ['debugAdapter'] }] }, permissions: [{ type: 'directory', access: 'read' }] }));
 	await writeEditorExtensionFixture(root, `
-const vscode = require('vscode'); const { debug, window } = vscode;
+const ash = require('@ash/sdk'); const { debug, window } = ash;
 exports.activate = function(context) {
  let parentId; let childId;
  context.subscriptions.push(debug.registerDebugAdapterDescriptorFactory('reverse-start', {
@@ -1371,7 +1371,7 @@ exports.activate = function(context) {
    }
    const listeners = new Set(); let sequence = 0; let closed = false;
    function send(message) { for (const listener of listeners) listener({seq:sequence++,...message}); }
-   return new vscode.DebugAdapterInlineImplementation({
+   return new ash.DebugAdapterInlineImplementation({
     onDidSendMessage(listener) { listeners.add(listener); return {dispose(){listeners.delete(listener);}}; },
     async handleMessage(request) {
      if (request.type === 'response') {
@@ -1440,7 +1440,7 @@ test('Debug provider undefined cancels and null opens the configuration in both 
 	const directory = testWorkspace.directory;
 	const root = join(directory, 'debug-cancellation');
 	await mkdir(join(root, '.ash-plugin'), { recursive: true });
-	await writeFile(join(root, '.ash-plugin', 'plugin.json'), JSON.stringify({ schemaVersion: 1, id: 'acme/debug-cancellation', version: '1.0.0', displayName: 'Debug cancellation', compatibility: { ash: '>=0.1.0' }, contributions: { editorExtensions: [{ id: 'debug', runtime: 'javascript', entrypoint: 'extension.js', runtimeApiVersion: 1, activationEvents: [{ type: 'onDebugType', debugType: 'cancel-provider' }], capabilities: ['command', 'debugAdapter'] }] }, permissions: [{ type: 'directory', access: 'read' }] }));
+	await writeFile(join(root, '.ash-plugin', 'plugin.json'), JSON.stringify({ schemaVersion: 1, id: 'acme/debug-cancellation', version: '1.0.0', displayName: 'Debug cancellation', compatibility: { ash: '>=0.1.0' }, contributions: { editorExtensions: [{ id: 'debug', runtime: 'javascript', api: 'ash', entrypoint: 'extension.js', runtimeApiVersion: 1, activationEvents: [{ type: 'onDebugType', debugType: 'cancel-provider' }], capabilities: ['command', 'debugAdapter'] }] }, permissions: [{ type: 'directory', access: 'read' }] }));
 	await mkdir(join(root, 'defaults'));
 	await writeFile(join(root, 'defaults', 'package.json'), JSON.stringify({ name: 'empty-debug-defaults', publisher: 'acme', version: '1.0.0', contributes: { debuggers: [{ type: 'empty-descriptor', label: 'Empty descriptor', debugAdapter: { program: process.execPath, args: [join(directory, 'debug-adapter.cjs'), join(directory, 'debug-program.js'), join(directory, 'debug-requests.jsonl')] } }] } }));
 	const mustNotRun = join(directory, 'task-must-not-run');
@@ -1448,7 +1448,7 @@ test('Debug provider undefined cancels and null opens the configuration in both 
 	await writeFile(join(directory, '.vscode', 'tasks.json'), JSON.stringify({ version: '2.0.0', tasks: [{ label: 'Must not run', type: 'process', command: process.execPath, args: [join(directory, 'task-must-not-run.cjs')] }] }));
 	const configuration = { name: 'Cancel', type: 'cancel-provider', request: 'launch', program: '${workspaceFolder}/debug-program.js', preLaunchTask: 'Must not run', debugAdapter: { program: process.execPath, args: [join(directory, 'debug-adapter.cjs'), join(directory, 'debug-program.js'), join(directory, 'debug-requests.jsonl')] } };
 	await writeEditorExtensionFixture(root, `
-const vscode = require('vscode'); const { commands, debug, window } = vscode;
+const ash = require('@ash/sdk'); const { commands, debug, window } = ash;
 exports.activate = function(context) {
  let retiredSession;
  context.subscriptions.push(debug.registerDebugAdapterDescriptorFactory('empty-descriptor', {
@@ -1460,10 +1460,10 @@ exports.activate = function(context) {
   }
  }));
  for (const outcome of ['undefined', 'null']) {
-  context.subscriptions.push(commands.registerCommand('acme.debugCancellation.descriptor.' + outcome, async () => {
+  context.subscriptions.push(commands.register('acme.debugCancellation.descriptor.' + outcome, async () => {
    let rejected = false;
    try {
-    await debug.startDebugging(vscode.workspace.workspaceFolders[0], {name:'Empty',type:'empty-descriptor',request:'launch',outcome});
+    await debug.startDebugging(ash.workspace.workspaceFolders[0], {name:'Empty',type:'empty-descriptor',request:'launch',outcome});
    } catch (error) {
     if (error.code !== 'internal') throw error;
     rejected = true;
@@ -1479,16 +1479,16 @@ exports.activate = function(context) {
  }));
  for (const phase of ['before', 'after']) for (const outcome of ['undefined', 'null']) {
   const name = phase + '.' + outcome;
-  context.subscriptions.push(commands.registerCommand('acme.debugCancellation.' + name, async () => {
-   const result = await debug.startDebugging(vscode.workspace.workspaceFolders[0], {...${JSON.stringify(configuration)}, phase, outcome});
+  context.subscriptions.push(commands.register('acme.debugCancellation.' + name, async () => {
+   const result = await debug.startDebugging(ash.workspace.workspaceFolders[0], {...${JSON.stringify(configuration)}, phase, outcome});
    if (result !== false) throw Error('Canceled provider started a session');
    await window.showInformationMessage('ASH_DEBUG_CANCEL_' + name);
   }));
  }
- context.subscriptions.push(commands.registerCommand('acme.debugCancellation.error', async () => {
+ context.subscriptions.push(commands.register('acme.debugCancellation.error', async () => {
   let rejected = false;
   try {
-   await debug.startDebugging(vscode.workspace.workspaceFolders[0], ${JSON.stringify(configuration)}, {parentSession:retiredSession});
+   await debug.startDebugging(ash.workspace.workspaceFolders[0], ${JSON.stringify(configuration)}, {parentSession:retiredSession});
   } catch (error) {
    if (!(error instanceof TypeError)) throw error;
    rejected = true;

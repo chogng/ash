@@ -92,7 +92,6 @@ test('disconnected clients report catalog and resource unavailability without a 
 	assert.deepEqual(catalog.extensions, []);
 	assert.equal(catalog.diagnostics[0].code, 'sourceUnavailable');
 	await assert.rejects(api.resources.readExtensionResourceBytes({ generation: 1, extensionId: 'ash.git', path: 'browser/extension.ts' }), WebAppServerUnavailableError);
-	assert.equal(await api.resources.supportsExtensionGalleryResources(), false);
 });
 
 

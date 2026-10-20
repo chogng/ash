@@ -3,8 +3,6 @@ import { Editor } from '../../../automation/editor.js';
 import { QuickAccess } from '../../../automation/quickaccess.js';
 import { mkdir, writeFile, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { execFile } from 'node:child_process';
-import { promisify } from 'node:util';
 
 test.beforeEach(async ({ workbench }) => {
 	// Fresh profiles restore Welcome after startup services; earlier input can be replaced during restoration.
@@ -198,17 +196,17 @@ test('Local standard extension installs, runs only after grant, survives restart
 		compatibility: { ash: '>=0.1.0' },
 		contributions: {
 			editorExtensions: [{
-				id: 'inspect', runtime: 'javascript', entrypoint: 'extension.js', runtimeApiVersion: 1,
+				id: 'inspect', runtime: 'javascript', api: 'ash', entrypoint: 'extension.js', runtimeApiVersion: 1,
 				activationEvents: [{ type: 'onCommand', id: 'acme.standardSmoke.inspect' }], capabilities: ['command']
 			}]
 		},
 		permissions: [{ type: 'directory', access: 'read' }],
 	}));
 	await writeEditorExtensionFixture(root, `
-const vscode = require('vscode'); const { commands, window } = vscode;
+const ash = require('@ash/sdk'); const { commands, window } = ash;
 exports.activate = function(context) {
-	context.subscriptions.push(commands.registerCommand('acme.standardSmoke.inspect', async () => {
-		const text = new TextDecoder().decode(await vscode.workspace.fs.readFile(vscode.Uri.joinPath(vscode.workspace.workspaceFolders[0].uri, 'main.ts')));
+	context.subscriptions.push(commands.register('acme.standardSmoke.inspect', async () => {
+		const text = new TextDecoder().decode(await ash.workspace.fs.readFile(ash.Uri.joinPath(ash.workspace.workspaceFolders[0].uri, 'main.ts')));
 		await window.showInformationMessage('Standard disk: ' + text.trim() + '; globals: ' + [typeof process, typeof fetch, typeof WebAssembly].join(','));
 		return text;
 	}));
@@ -251,121 +249,6 @@ exports.activate = function(context) {
 	await manage('Uninstall');
 	const empty = await workbench.dialogs.expectMessage(application, 'Information', () => workbench.quickaccess.runCommand('ash.extensions.manageLocal'));
 	expect(empty.message).toContain('No local editor extensions are installed.');
-});
-
-test('Open VSX JavaScript extension starts on first command, survives restart and retires on revoke', { tag: ['@electron-app-server', '@darwin'] }, async ({ target, application, workbench, reloadWorkbench }) => {
-	test.skip(process.env.ASH_PLAYWRIGHT_OPEN_VSX !== '1' || process.platform !== 'darwin' || target.kind !== 'electron' || target.appServerMode !== 'required', 'Explicit live Open VSX execution check requires macOS Electron with App Server');
-	test.setTimeout(120_000);
-	let page = workbench.page;
-	const packageId = 'mark-wiemer.helloworld-2022@open-vsx';
-	if (!('evaluate' in application)) { throw new Error('This scenario requires Electron'); }
-	const profile = await application.evaluate(({ app }) => app.getPath('userData'));
-	const processes = async (): Promise<number> => {
-		const { stdout } = await promisify(execFile)('ps', ['-axo', 'command=']);
-		return stdout.split('\n').filter(line => line.includes('/ash-external-js-ext ') && line.includes(`--extension-id marketplace:${packageId}:vscode`) && line.includes(profile)).length;
-	};
-	await workbench.quickaccess.runCommand('ash.extensions.installed');
-	let extensionManagement = page.locator('.ash-extensions');
-	await extensionManagement.getByRole('button', { name: 'All capabilities', exact: true }).click();
-	await page.getByRole('option', { name: 'Editor extensions (Open VSX)', exact: true }).click();
-	await extensionManagement.getByRole('button', { name: 'Installed', exact: true }).click();
-	await extensionManagement.getByLabel('Search Extensions', { exact: true }).fill('mark-wiemer.helloworld-2022');
-	await extensionManagement.getByLabel('Search Extensions', { exact: true }).press('Enter');
-	await expect(extensionManagement.getByRole('option').filter({ hasText: packageId })).toBeAttached({ timeout: 30_000 });
-	await extensionManagement.getByRole('option').filter({ hasText: packageId }).click();
-	await expect(page.locator('.ash-extension-editor')).toContainText('0.2.3');
-	await workbench.dialogs.confirm(application, 'Install', 'Install', () => page.locator('.ash-extension-editor').getByRole('button', { name: 'Install', exact: true }).click());
-	await page.locator('.ash-extension-editor').getByRole('button', { name: 'Show installed versions', exact: true }).click();
-	await expect(extensionManagement.getByRole('listbox', { name: 'Extensions', exact: true })).toContainText(packageId);
-	const installationId = await extensionManagement.getByRole('option').filter({ hasText: packageId }).getAttribute('data-installation-id');
-	const absent = async (): Promise<void> => {
-		await workbench.quickaccess.open('>helloworld.helloWorld');
-		await expect(workbench.quickaccess.items.filter({ has: page.locator('.ash-quick-pick-row-description').getByText('helloworld.helloWorld', { exact: true }) })).toHaveCount(0);
-		await workbench.quickaccess.close();
-	};
-	const manage = async (button: string): Promise<void> => {
-		const review = await workbench.dialogs.confirm(application, packageId, button, async () => {
-			await workbench.quickaccess.runCommand('ash.extensions.manageExtensions');
-			await page.getByRole('option').filter({ has: page.getByText(packageId, { exact: true }) }).click();
-		});
-		expect(review.detail).toContain('Package digest: sha256:');
-		expect(review.detail).toContain('Node modules, direct file access, networking and child processes are unavailable.');
-	};
-	await absent();
-	await manage('Enable');
-	await absent();
-	await manage('Authorize execution');
-	await workbench.quickaccess.open('>helloworld.helloWorld');
-	await expect(workbench.quickaccess.items.filter({ has: page.locator('.ash-quick-pick-row-description').getByText('helloworld.helloWorld', { exact: true }) })).toHaveCount(1);
-	await workbench.quickaccess.close();
-	// A visible manifest command is not proof of a running extension process.
-	await expect.poll(processes).toBe(0);
-	await workbench.quickaccess.runCommand('helloworld.helloWorld');
-	await expect(page.locator('.ash-notification', { hasText: 'Hello VS Code 2023 (the future!!)' })).toBeVisible();
-	await expect.poll(processes).toBe(1);
-	({ workbench, application } = await reloadWorkbench());
-	page = workbench.page;
-	await expect(page.getByRole('tab', { name: 'Welcome', exact: true })).toBeVisible();
-	await expect.poll(processes).toBe(0);
-	await workbench.quickaccess.runCommand('helloworld.helloWorld');
-	await expect(page.locator('.ash-notification', { hasText: 'Hello VS Code 2023 (the future!!)' })).toBeVisible();
-	await expect.poll(processes).toBe(1);
-	await manage('Revoke execution authorization');
-	await expect.poll(processes).toBe(0);
-	await absent();
-	await manage('Disable');
-	await workbench.quickaccess.runCommand('ash.extensions.installed');
-	extensionManagement = page.locator('.ash-extensions');
-	await extensionManagement.getByRole('listbox', { name: 'Extensions', exact: true }).locator(`[data-installation-id="${installationId}"]`).click();
-	await workbench.dialogs.confirm(application, 'Uninstall extension', 'Uninstall', () => page.locator('.ash-extension-editor').getByRole('button', { name: 'Uninstall', exact: true }).click());
-	await expect(extensionManagement.getByRole('listbox', { name: 'Extensions', exact: true }).getByRole('option')).toHaveCount(0);
-});
-
-test('Open VSX installs a real theme, restores it and removes its contributions', { tag: '@electron-app-server' }, async ({ target, application, workbench, reloadWorkbench }) => {
-	test.skip(process.env.ASH_PLAYWRIGHT_OPEN_VSX !== '1' || target.kind !== 'electron' || target.appServerMode !== 'required', 'Explicit live Open VSX check requires Electron with App Server');
-	test.setTimeout(90_000);
-	let page = workbench.page;
-	await workbench.quickaccess.runCommand('ash.extensions.installed');
-	let extensionManagement = page.locator('.ash-extensions');
-	await extensionManagement.getByRole('button', { name: 'All capabilities', exact: true }).click();
-	await page.getByRole('option', { name: 'Editor extensions (Open VSX)', exact: true }).click();
-	await extensionManagement.getByRole('button', { name: 'Installed', exact: true }).click();
-	await extensionManagement.getByLabel('Search Extensions', { exact: true }).fill('dracula-theme.theme-dracula');
-	await extensionManagement.getByLabel('Search Extensions', { exact: true }).press('Enter');
-	await expect(extensionManagement.getByRole('status')).not.toHaveText('Loading Extensions…', { timeout: 30_000 });
-	const packageId = 'dracula-theme.theme-dracula@open-vsx';
-	await expect(extensionManagement.getByRole('option').filter({ hasText: packageId })).toBeAttached();
-	await extensionManagement.getByRole('option').filter({ hasText: packageId }).click();
-	await expect(page.locator('.ash-extension-editor').getByRole('button', { name: 'Install', exact: true })).toBeEnabled();
-	const confirmation = await workbench.dialogs.confirm(application, 'Install', 'Install', () => page.locator('.ash-extension-editor').getByRole('button', { name: 'Install', exact: true }).click());
-	expect(confirmation.detail).toContain('without running scripts');
-	await page.locator('.ash-extension-editor').getByRole('button', { name: 'Show installed versions', exact: true }).click();
-	await expect(extensionManagement.getByRole('listbox', { name: 'Extensions', exact: true })).toContainText(packageId);
-	const installationId = await extensionManagement.getByRole('option').filter({ hasText: packageId }).getAttribute('data-installation-id');
-
-	await workbench.settingsEditor.openUserSettingsUI();
-	await page.locator('[data-settings-group-id="workbench"]').click();
-	await page.locator('[data-settings-category-id="appearance"]').click();
-	await page.locator('[data-settings-item-id="workbench.colorTheme"]').getByRole('combobox').click();
-	await expect(page.getByRole('option', { name: 'Dracula Theme', exact: true })).toBeVisible();
-	await page.keyboard.press('Escape');
-	await page.locator('.ash-modal-editor-close').click();
-
-	// Reopen the Electron process with the same profile; installation does not request a restart dialog.
-	({ workbench, application } = await reloadWorkbench());
-	page = workbench.page;
-	await workbench.quickaccess.runCommand('ash.extensions.installed');
-	extensionManagement = page.locator('.ash-extensions');
-	await expect(extensionManagement.getByRole('listbox', { name: 'Extensions', exact: true }).locator(`[data-installation-id="${installationId}"]`)).toContainText(packageId);
-	await extensionManagement.getByRole('listbox', { name: 'Extensions', exact: true }).locator(`[data-installation-id="${installationId}"]`).click();
-	await workbench.dialogs.confirm(application, 'Uninstall extension', 'Uninstall', () => page.locator('.ash-extension-editor').getByRole('button', { name: 'Uninstall', exact: true }).click());
-	await expect(extensionManagement.getByRole('listbox', { name: 'Extensions', exact: true }).getByRole('option')).toHaveCount(0);
-	await workbench.settingsEditor.openUserSettingsUI();
-	await page.locator('[data-settings-group-id="workbench"]').click();
-	await page.locator('[data-settings-category-id="appearance"]').click();
-	await page.locator('[data-settings-item-id="workbench.colorTheme"]').getByRole('combobox').click();
-	await expect(page.getByRole('option', { name: 'Dracula Theme', exact: true })).toHaveCount(0);
-	await page.keyboard.press('Escape');
 });
 
 test('Extensions slash commands open their Workbench owners without sending a chat message', async ({ target, application, workbench }) => {
@@ -474,7 +357,7 @@ test('Extensions sources persist and share the same authority between Code and A
 	await new QuickAccess(page).runCommand('ash.extensions.manageSources');
 	const picker = page.getByRole('dialog', { name: 'Manage extension sources', exact: true });
 	if (target.kind === 'electron') {
-		await expect(picker).toContainText('open-vsx');
+		await expect(picker).not.toContainText('open-vsx');
 		await expect(picker).toContainText('ash');
 	}
 	await picker.getByRole('option').filter({ hasText: 'Add Ash open source…' }).click();

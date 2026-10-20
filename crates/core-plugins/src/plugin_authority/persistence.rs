@@ -9,6 +9,7 @@ use serde::Serialize;
 
 use super::ActivePlugin;
 use super::InstalledKey;
+use super::NODE_EXECUTION_CONTRACT_VERSION;
 use crate::InstalledPluginRef;
 use crate::PluginError;
 use crate::PluginErrorKind;
@@ -38,7 +39,7 @@ pub(super) struct PersistedAuthority {
     schema_version: u32,
     pub revision: u64,
     pub activation_generation: u64,
-    // Version zero records predate user-level Node execution and cannot authorize it.
+    // Older author/runtime contracts require new consent before launching package code.
     #[serde(default)]
     pub node_execution_contract_version: u16,
     pub installed: Vec<InstalledPluginRef>,
@@ -70,7 +71,7 @@ impl PersistedAuthority {
             schema_version: AUTHORITY_SCHEMA_VERSION,
             revision: 0,
             activation_generation: 1,
-            node_execution_contract_version: 1,
+            node_execution_contract_version: NODE_EXECUTION_CONTRACT_VERSION,
             installed: Vec::new(),
             enabled: Vec::new(),
             granted: Vec::new(),
@@ -85,7 +86,7 @@ impl PersistedAuthority {
             schema_version: AUTHORITY_SCHEMA_VERSION,
             revision: state.revision,
             activation_generation: state.activation_generation,
-            node_execution_contract_version: 1,
+            node_execution_contract_version: NODE_EXECUTION_CONTRACT_VERSION,
             installed: state.installed.values().cloned().collect(),
             enabled: state.enabled.values().cloned().collect(),
             granted: state.granted.values().cloned().collect(),

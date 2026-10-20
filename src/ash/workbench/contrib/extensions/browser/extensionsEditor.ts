@@ -625,16 +625,7 @@ export class ExtensionsEditor extends EditorPane {
 				const generation = catalog.generation; const extensionId = descriptor.id;
 				resourceFor = async path => toExtensionResourceURI({ generation, extensionId, path });
 				manifest = JSON.parse(descriptor.manifestJson);
-			} else {
-				if (input.source !== ExtensionsInputSource.Registry || !input.summary.id.endsWith('@open-vsx')) { return; }
-				const separator = id.indexOf('.');
-				if (separator < 1) { return; }
-				const identity = { publisher: id.slice(0, separator), name: id.slice(separator + 1), version: input.summary.version };
-				resourceFor = path => api.resources.getExtensionGalleryResourceURL(identity, path);
-				const resource = await resourceFor('package.json');
-				if (!resource) { return; }
-				manifest = JSON.parse(await api.resources.readExtensionResource(resource));
-			}
+			} else { return; }
 			if (!manifest || typeof manifest !== 'object' || Array.isArray(manifest)) { return; }
 		} catch { return; }
 		if (signal.aborted || this.isDisposed || version !== this.loadVersion) { return; }

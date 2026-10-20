@@ -5,7 +5,7 @@
   "displayName": "%referenceManager.displayName%",
   "description": "%referenceManager.description%",
   "engines": {
-    "vscode": "*"
+    "ash": "*"
   },
   "contributes": {
     "customEditors": [

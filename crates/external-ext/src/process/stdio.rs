@@ -83,7 +83,7 @@ impl StdioExtensionHostProcess {
                     windows_sandbox::LockedProcessSources::Package
                 }
                 super::LaunchRuntime::Executable(_)
-                | super::LaunchRuntime::Vscode
+                | super::LaunchRuntime::NodeHost
                 | super::LaunchRuntime::Node(_) => {
                     return Err(ExtensionHostError::IsolationUnavailable);
                 }
@@ -93,7 +93,7 @@ impl StdioExtensionHostProcess {
             return Self::from_child(child, limits, None);
         }
         let binding = launch
-            .is_vscode()
+            .is_node_host()
             .then(NodeControlBinding::new)
             .transpose()?;
         let mut arguments = launch.arguments().to_vec();

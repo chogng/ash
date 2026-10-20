@@ -125,24 +125,6 @@ pub struct ExtensionResourceOpenResult {
     pub resource: ResourceMetadataResult,
 }
 
-#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
-#[serde(rename_all = "camelCase")]
-pub struct ExtensionGalleryResult {
-    pub resource_url_template: Option<String>,
-}
-
-#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct ExtensionGalleryResourceOpenParams {
-    /// Expected configured gallery, fencing a reconnect or source change between URL resolution and reading.
-    pub resource_url_template: String,
-    pub publisher: String,
-    pub name: String,
-    pub version: String,
-    /// Portable path relative to the extension directory in the verified VSIX.
-    pub path: String,
-}
-
 #[cfg(test)]
 #[path = "extensions_tests.rs"]
 mod tests;

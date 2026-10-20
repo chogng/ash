@@ -139,8 +139,7 @@ export class AppServerExtensionManagementService extends Disposable implements I
 			const packages = searchResult.packages;
 			const browsePackages = await Promise.all(packages.map(async summary => ({
 				summary,
-				// VSIX details resolve a verified package. Browsing must not download every result.
-				details: summary.packageType === "editorExtension" ? undefined : await this.packageDetails(summary.id, summary.version).catch(() => undefined),
+				details: await this.packageDetails(summary.id, summary.version).catch(() => undefined),
 			})));
 			const snapshot = Object.freeze({ query, options, unavailableSources: Object.freeze(searchResult.unavailableSources ?? []), packages: Object.freeze(browsePackages), installed: Object.freeze([...installed]) });
 			if (generation === this.browseGeneration) this.browseSnapshots.set(key, snapshot);

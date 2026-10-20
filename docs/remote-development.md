@@ -52,7 +52,7 @@ JSON-RPC，未切换成 VS Code 的 PersistentProtocol。Web 的鉴权 WebSocket
 
 ## 扩展连接入口
 
-Remote 使用[统一后端扩展接口](editor-extensions.md#统一后端扩展接口规范)。标准 TS/JS 扩展使用 `vscode.workspace.registerRemoteAuthorityResolver`，所选宿主提供兼容 API，并把注册、调用、取消和资源释放转换为同一个 Host RPC；Rust 扩展使用 `sdk/rust`。SSH 安装、升级和完整标准 Remote 兼容仍需继续建设，本次不宣称这些能力完成。
+Remote 使用[统一后端扩展接口](editor-extensions.md#统一后端扩展接口规范)。TS/JS 作者的目标接口是 `@ash/sdk` / `ash.*`；旧 `vscode.workspace.registerRemoteAuthorityResolver` 在消费者迁移前保留现有宿主适配，注册、调用、取消和资源释放继续使用同一个 Host RPC，Rust 扩展使用 `sdk/rust`。SSH 安装、升级和 Ash Remote 公共接口按真实消费者继续建设；完整 VS Code Remote 扩展兼容已退出目标。
 
 产品内置 `extensions/remote-ssh` 是独立 Rust 程序，通过 `context.workspace.register_connection_resolver("ssh", callback)` 返回 `SavedConnection { connection_name }`。这是已有保存连接选择行为，使用 `remoteConnectionResolver` / `resolveConnection`，与标准 endpoint resolver 的 `remoteAuthorityResolver` / `resolveAuthority` 区分。标准 JS 作者不能注册产品保留的 `ssh` 前缀。
 
@@ -422,7 +422,7 @@ SSH launcher 使用 `BatchMode=yes`，不会在后台窗口等待密码输入。
 
 ## 运行时安装、升级与回滚
 
-目标运行基础是 Rust + V8：远端和 TUI 的 Code Mode 不依赖 Node 或本机 Electron，后端扩展按[运行时职责与兼容契约](editor-extensions.md#运行时职责与兼容契约)迁移。以下 packaged-node 清单与校验是当前实现；移除随包 Node 仍需同步扩展/LSP 调用方、artifact metadata、安装校验、升级兼容和测试，不能仅修改打包配置就宣称迁移完成。
+目标运行基础是 Rust + V8：远端和 TUI 的 Code Mode 不依赖 Node 或本机 Electron，后端扩展按[运行时职责与 Ash 契约](editor-extensions.md#运行时职责与-ash-契约)迁移。以下 packaged-node 清单与校验是当前实现；移除随包 Node 仍需同步扩展/LSP 调用方、artifact metadata、安装校验、升级兼容和测试，不能仅修改打包配置就宣称迁移完成。
 
 远端分发要求由根目录 [`remote-server/package.json`](../remote-server/package.json) 声明。
 `just remote-package --target <target> --package-dir <directory>` 通过

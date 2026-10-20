@@ -762,6 +762,7 @@ name = "ash-arg0"
 version = "0.1.0"
 dependencies = [
  "ash-file-system",
+ "ash-file-watcher",
  "ash-mxc-sandbox",
 ]
 
@@ -1686,6 +1687,9 @@ dependencies = [
  "log",
  "notify",
  "pretty_assertions",
+ "serde",
+ "serde_json",
+ "tempfile",
  "tokio",
 ]
 

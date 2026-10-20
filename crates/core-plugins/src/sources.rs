@@ -14,7 +14,6 @@ use crate::RemoteExtensionsConfig;
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub enum ExtensionRegistryKind {
-    OpenVsx,
     Ash,
 }
 

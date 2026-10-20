@@ -323,8 +323,7 @@ export class RecommendedExtensionsView extends ExtensionsListViewPane {
 				let summary: ExtensionsPackageSummary | undefined;
 				try {
 					const packages = await this.extensions.search(recommendation.extensionId, { limit: 20 });
-					// Open VSX packages carry a registry suffix while workspace declarations use publisher.name.
-					summary = packages.find(entry => entry.id.toLowerCase() === recommendation.extensionId || entry.id.toLowerCase().replace(/@open-vsx$/u, '') === recommendation.extensionId);
+					summary = packages.find(entry => entry.id.toLowerCase() === recommendation.extensionId);
 				} catch { /* Keep declared IDs visible while their catalog source is unavailable. */ }
 				return {
 					target: { kind: 'recommendation' as const, id: recommendation.extensionId, summary }, name: summary?.displayName ?? recommendation.extensionId,

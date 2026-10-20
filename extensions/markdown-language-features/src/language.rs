@@ -2001,12 +2001,12 @@ pub(crate) fn register(
     let documents = Arc::clone(&runtime);
     context
         .languages
-        .observe_documents("vscode.documents".into(), move |event, token| {
+        .observe_documents("ash.documents".into(), move |event, token| {
             documents.publish_diagnostics(Some(event), &token)
         })?;
     context
         .workspace
-        .observe("vscode.workspace.events".into(), move |event, token| {
+        .observe("ash.workspace.events".into(), move |event, token| {
             if let external_ext_sdk::workspace::WorkspaceEvent::Workspace { workspace_folders } =
                 event
             {

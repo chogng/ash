@@ -29,7 +29,7 @@ class PrepareTests(unittest.TestCase):
                 "build/download/artifacts.py",
                 "build/prepare.py",
                 "resources/extension-host/node.mjs",
-                "resources/extension-host/vscode.js",
+                "resources/extension-host/ash.js",
                 "resources/extension-host/scm.js",
                 "resources/extension-host/host.mjs",
                 "build/desktop/appServer.ts",
@@ -56,6 +56,11 @@ class PrepareTests(unittest.TestCase):
                 first, prepare.package_input_digest(prepare.package_sources(root), {})
             )
             (root / "resources/extension-host/node.mjs").write_text("first")
+            (root / "resources/extension-host/ash.js").write_text("updated Ash SDK")
+            self.assertNotEqual(
+                first, prepare.package_input_digest(prepare.package_sources(root), {})
+            )
+            (root / "resources/extension-host/ash.js").write_text("first")
             (root / "build/lib/package-layout.json").write_text("updated layout")
             self.assertNotEqual(
                 first, prepare.package_input_digest(prepare.package_sources(root), {})

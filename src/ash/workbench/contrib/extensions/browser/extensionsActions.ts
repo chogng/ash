@@ -133,7 +133,7 @@ export function registerExtensionManagementActions(): DisposableStore {
 				{ label: localize({ bundle: 'ash.extensions', key: 'addSource' }, 'Add Ash open source…') },
 				...catalog.sources.map(source => ({
 					label: source.id, sourceId: source.id,
-					description: source.kind === 'openVsx' ? 'Open VSX' : localize({ bundle: 'ash.extensions', key: 'ashSource' }, 'Ash open source'),
+					description: localize({ bundle: 'ash.extensions', key: 'ashSource' }, 'Ash open source'),
 					detail: source.productOwned ? localize({ bundle: 'ash.extensions', key: 'productSource' }, 'Product source') : source.enabled ? localize({ bundle: 'ash.extensions', key: 'sourceEnabled' }, 'Enabled · select to pause') : localize({ bundle: 'ash.extensions', key: 'sourcePaused' }, 'Paused · select to resume'),
 				})),
 			];
@@ -332,7 +332,7 @@ export async function reviewLocalExtensionPermissions(plugin: PluginPackageView,
 	await dialogs.prompt({
 		title: selected.displayName, message: `${selected.id} · ${selected.version}`,
 		detail: [localize({ bundle: 'ash.extensions', key: 'localExtensionPermissions' }, 'Requested permissions: {0}', selected.permissions.length ? selected.permissions.map(describePluginPermission).join('; ') : localize({ bundle: 'ash.extensions', key: 'noPermissions' }, 'None')),
-		localize({ bundle: 'ash.extensions', key: 'localExtensionDocumentNotice' }, 'VS Code extensions use the product Node host with user-level filesystem, network and child-process access and inherited developer environment variables. Editor callbacks can receive unsaved text. Grant permissions only to packages you trust.'),
+		localize({ bundle: 'ash.extensions', key: 'localExtensionDocumentNotice' }, 'Ash extensions use the product Node host with user-level filesystem, network and child-process access and inherited developer environment variables. Editor callbacks can receive unsaved text. Grant permissions only to packages you trust.'),
 		localize({ bundle: 'ash.extensions', key: 'localExtensionDigest' }, 'Package digest: {0}', selected.digest)].join('\n\n'),
 		buttons: [{ label: selected.granted ? localize({ bundle: 'ash.extensions', key: 'revokeLocalExtension' }, 'Revoke permissions') : localize({ bundle: 'ash.extensions', key: 'grantLocalExtension' }, 'Grant permissions'), run: () => selected.granted ? plugins.revokeGrant(selected, catalog.revision) : plugins.grant(selected, catalog.revision) }],
 	});

@@ -165,19 +165,14 @@ pub(crate) fn deployments(
                 }
                 Err(message) => (None, Some(message), Vec::new()),
             };
-        let extension_id = format!("marketplace:{}:vscode", source.package().id);
-        let mut capabilities = vec![
-            ExtensionCapability::Command,
-            ExtensionCapability::LanguageProvider,
-            ExtensionCapability::StatusBar,
-            ExtensionCapability::TaskProvider,
-            ExtensionCapability::TerminalProfileProvider,
-            ExtensionCapability::DebugAdapter,
-        ];
-        match javascript_proposed_capabilities_requested(&source.host_path()) {
-            Ok(requested) => capabilities.extend(requested),
-            Err(message) => activation_failure = Some(message),
-        }
+        let extension_id = format!("marketplace:{}:ash", source.package().id);
+        let capabilities = match javascript_capabilities_requested(&source.host_path()) {
+            Ok(requested) => requested,
+            Err(message) => {
+                activation_failure = Some(message);
+                Vec::new()
+            }
+        };
         let binding = ExtensionsEditorExtensionBinding {
             package: source.package().clone(),
             capability: source.capability().clone(),
@@ -189,7 +184,7 @@ pub(crate) fn deployments(
             .to_str()
             .ok_or("invalid extension source path")?
             .to_string();
-        let command = ExtensionLaunchCommand::vscode(
+        let command = ExtensionLaunchCommand::ash(
             vec![
                 "--extension-id".into(),
                 extension_id.clone(),
@@ -198,7 +193,7 @@ pub(crate) fn deployments(
                 "--entry".into(),
                 entrypoint.clone(),
                 "--api".into(),
-                "vscode".into(),
+                "ash".into(),
             ],
             source.host_path(),
         )
@@ -514,8 +509,8 @@ pub(crate) fn javascript_activation_plan(root: &std::path::Path) -> Result<Activ
     activation_plan(&manifest)
 }
 
-/// Standard proposed-API metadata requests a ceiling; the original package policy grants it.
-fn javascript_proposed_capabilities_requested(
+/// The Ash manifest declares the exact host ceiling; package consent grants it separately.
+fn javascript_capabilities_requested(
     root: &std::path::Path,
 ) -> Result<Vec<ExtensionCapability>, String> {
     let path = root.join("package.json");
@@ -526,37 +521,28 @@ fn javascript_proposed_capabilities_requested(
     let manifest: serde_json::Value =
         serde_json::from_slice(&std::fs::read(path).map_err(|_| "missing extension manifest")?)
             .map_err(|_| "invalid extension manifest")?;
-    let Some(proposals) = manifest.get("enabledApiProposals") else {
-        return Ok(Vec::new());
-    };
-    let proposals = proposals
-        .as_array()
-        .filter(|values| values.len() <= 128)
-        .ok_or("invalid proposed API declarations")?;
-    let mut requested = Vec::new();
-    let mut unique = BTreeSet::new();
-    for proposal in proposals {
-        let name = proposal
-            .as_str()
-            .filter(|name| {
-                !name.is_empty() && name.len() <= 256 && !name.chars().any(char::is_whitespace)
-            })
-            .ok_or("invalid proposed API declaration")?;
-        if !unique.insert(name) {
-            return Err("duplicate proposed API declaration".into());
-        }
-        match name {
-            "speech" => requested.push(ExtensionCapability::SpeechProvider),
-            "terminalCompletionProvider" => {
-                requested.push(ExtensionCapability::TerminalCompletionProvider)
-            }
-            "terminalQuickFixProvider" => {
-                requested.push(ExtensionCapability::TerminalQuickFixProvider)
-            }
-            _ => {}
-        }
+    declared_capabilities(&manifest)
+}
+
+fn declared_capabilities(manifest: &serde_json::Value) -> Result<Vec<ExtensionCapability>, String> {
+    if manifest.get("enabledApiProposals").is_some() {
+        return Err("legacy API proposals are not supported by Ash extensions".into());
     }
-    Ok(requested)
+    let capabilities: Vec<ExtensionCapability> = manifest
+        .get("ashCapabilities")
+        .map(|value| serde_json::from_value(value.clone()))
+        .transpose()
+        .map_err(|_| "invalid Ash capability declarations")?
+        .unwrap_or_default();
+    if capabilities.len() > MAXIMUM_CAPABILITIES
+        || capabilities.iter().collect::<BTreeSet<_>>().len() != capabilities.len()
+    {
+        return Err("duplicate or excessive Ash capability declarations".into());
+    }
+    if capabilities.contains(&ExtensionCapability::ProductRemoteAuthorityResolver) {
+        return Err("product remote authority is not an author capability".into());
+    }
+    Ok(capabilities)
 }
 
 fn activation_plan(manifest: &serde_json::Value) -> Result<ActivationPlan, String> {
@@ -567,18 +553,14 @@ fn activation_plan(manifest: &serde_json::Value) -> Result<ActivationPlan, Strin
             .into_iter()
             .collect(),
     };
-    for proposal in manifest
-        .get("enabledApiProposals")
-        .and_then(serde_json::Value::as_array)
-        .into_iter()
-        .flatten()
-        .filter_map(serde_json::Value::as_str)
-    {
-        if matches!(
-            proposal,
-            "terminalCompletionProvider" | "terminalQuickFixProvider"
-        ) {
-            events.insert(format!("onDemand:{proposal}"));
+    for capability in declared_capabilities(manifest)? {
+        let demand = match capability {
+            ExtensionCapability::TerminalCompletionProvider => Some("terminalCompletionProvider"),
+            ExtensionCapability::TerminalQuickFixProvider => Some("terminalQuickFixProvider"),
+            _ => None,
+        };
+        if let Some(demand) = demand {
+            events.insert(format!("onDemand:{demand}"));
         }
     }
     let mut commands = Vec::new();
@@ -713,6 +695,16 @@ pub(crate) fn javascript_entrypoint(
     let manifest: serde_json::Value =
         serde_json::from_slice(&std::fs::read(path).map_err(|_| "missing extension manifest")?)
             .map_err(|_| "invalid extension manifest")?;
+    // A retired package's declarations remain readable for uninstall. Its JS is not
+    // reinterpreted as an Ash extension merely because a registry supplies those bytes.
+    if manifest
+        .pointer("/engines/ash")
+        .and_then(serde_json::Value::as_str)
+        .is_none()
+        || manifest.pointer("/engines/vscode").is_some()
+    {
+        return Ok(None);
+    }
     // This is a Node extension host: the desktop entry has priority over a web bundle.
     let entry = manifest.get("main").or_else(|| manifest.get("browser"));
     let Some(entry) = entry else {

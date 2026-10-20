@@ -2598,8 +2598,8 @@ fn shared_profile_runtime_owns_exactly_one_extension_packages_authority() {
             vendor,
         ),
     ]);
-    let first = runtime.plugins_manager(first_config.clone(), None).unwrap();
-    let reused = runtime.plugins_manager(first_config, None).unwrap();
+    let first = runtime.plugins_manager(first_config.clone()).unwrap();
+    let reused = runtime.plugins_manager(first_config).unwrap();
     assert!(Arc::ptr_eq(&first, &reused));
     assert!(!profile.path().join("vendor-cache").exists());
 
@@ -2614,7 +2614,7 @@ fn shared_profile_runtime_owns_exactly_one_extension_packages_authority() {
         ash_utils_plugins::ExtensionSourceId::new("ash").unwrap(),
         second_config,
     )]);
-    let error = match runtime.plugins_manager(second_config, None) {
+    let error = match runtime.plugins_manager(second_config) {
         Ok(_) => panic!("a second Extensions authority must be rejected"),
         Err(error) => error,
     };

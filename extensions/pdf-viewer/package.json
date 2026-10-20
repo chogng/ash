@@ -5,7 +5,7 @@
   "displayName": "%pdfViewer.displayName%",
   "description": "%pdfViewer.description%",
   "engines": {
-    "vscode": "*"
+    "ash": "*"
   },
   "contributes": {
     "customEditors": [

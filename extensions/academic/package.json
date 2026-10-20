@@ -5,7 +5,7 @@
   "displayName": "%academic.displayName%",
   "description": "%academic.description%",
   "engines": {
-    "vscode": "*"
+    "ash": "*"
   },
   "contributes": {
     "customEditors": [

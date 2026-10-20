@@ -65,6 +65,140 @@ fn local_manager_persists_the_full_installed_state() {
 }
 
 #[test]
+fn historical_registry_payloads_remain_removable_without_becoming_ash_packages() {
+    let root = tempfile::tempdir().unwrap();
+    let manager =
+        ExtensionPackageManager::open(root.path(), providers(Arc::new(FakeRegistry))).unwrap();
+    let current = manager
+        .install(InstallPackageRequest {
+            package_id: "demo@test".into(),
+            version: Some("1.0.0".into()),
+        })
+        .unwrap();
+    let original = manager
+        .local_capability_sources(CapabilityKind::Skill)
+        .unwrap()
+        .remove(0);
+    let artifact_root = original.package_root();
+    let retired_root = root.path().join("retired-payload");
+    fs::create_dir(&retired_root).unwrap();
+    fs::create_dir(retired_root.join("skill")).unwrap();
+    fs::copy(
+        artifact_root.join("skill/SKILL.md"),
+        retired_root.join("skill/SKILL.md"),
+    )
+    .unwrap();
+    fs::write(
+        retired_root.join("ash-open-vsx.json"),
+        br#"{"registryRecord":"https://retired.invalid/package","archiveSha256":"historical"}"#,
+    )
+    .unwrap();
+    let digest = crate::extension_packages_store::inspect_tree(&retired_root)
+        .unwrap()
+        .digest;
+    let destination = root
+        .path()
+        .join("artifacts")
+        .join(digest.strip_prefix("sha256:").unwrap());
+    fs::rename(retired_root, destination).unwrap();
+    // Preserve the exact historical source-qualified identity in persistence. The current
+    // source deliberately reuses that name, so source-name inference cannot revive the package.
+    let state_path = root.path().join("manager-state.json");
+    let mut state: serde_json::Value =
+        serde_json::from_slice(&fs::read(&state_path).unwrap()).unwrap();
+    let mut expected = current.clone();
+    expected.package.digest = digest;
+    expected.installation_id = crate::extension_packages_store::opaque_id(
+        "ins",
+        &[
+            &expected.package.id,
+            &expected.package.version,
+            &expected.package.digest,
+        ],
+    );
+    expected.capabilities[0].reference.id = crate::extension_packages_store::opaque_id(
+        "cap",
+        &[&expected.installation_id, "skill", "demo"],
+    );
+    let installations = state["installations"].as_object_mut().unwrap();
+    let mut historical = installations.remove(&current.installation_id).unwrap();
+    historical["package"]["digest"] = serde_json::json!(expected.package.digest);
+    historical["installationId"] = serde_json::json!(expected.installation_id);
+    historical["capabilities"][0]["descriptor"]["reference"]["id"] =
+        serde_json::json!(expected.capabilities[0].reference.id);
+    installations.insert(expected.installation_id.clone(), historical);
+    fs::write(&state_path, serde_json::to_vec(&state).unwrap()).unwrap();
+    drop(manager);
+    let mut retired_package = expected.package.clone();
+    retired_package.id = "demo".into();
+    let retired_bytes = fs::metadata(
+        root.path()
+            .join("artifacts")
+            .join(expected.package.digest.strip_prefix("sha256:").unwrap())
+            .join("ash-open-vsx.json"),
+    )
+    .unwrap()
+    .len()
+        + SKILL_CONTENT.len() as u64;
+    let provider = PayloadProvider(Arc::new(move || {
+        let mut payload = FakePayload::new("1.0.0");
+        payload.package = retired_package.clone();
+        payload.file_count = 2;
+        payload.size_bytes = retired_bytes;
+        payload
+    }));
+    let reopened =
+        ExtensionPackageManager::open(root.path(), providers(Arc::new(provider))).unwrap();
+    assert_eq!(
+        reopened.list_installed(ListInstalledRequest {}).unwrap(),
+        vec![expected.clone()]
+    );
+    assert_eq!(expected.package.id, "demo@test");
+    assert!(
+        reopened
+            .local_capability_sources(CapabilityKind::Skill)
+            .unwrap()
+            .is_empty()
+    );
+    assert!(
+        reopened
+            .acquire_capability(AcquireCapabilityRequest {
+                capability: expected.capabilities[0].reference.clone(),
+            })
+            .is_err()
+    );
+    // Existing verified retired bytes must still be rejected if a new source presents them.
+    assert!(
+        reopened
+            .install(InstallPackageRequest {
+                package_id: "demo@test".into(),
+                version: Some("1.0.0".into()),
+            })
+            .is_err()
+    );
+    assert!(
+        reopened
+            .download(DownloadPackageRequest {
+                package_id: "demo@test".into(),
+                version: Some("1.0.0".into()),
+            })
+            .is_err()
+    );
+    reopened
+        .uninstall(UninstallPackageRequest {
+            installation_id: expected.installation_id,
+            mode: UninstallMode::IfUnused,
+        })
+        .unwrap();
+    assert!(
+        reopened
+            .list_installed(ListInstalledRequest {})
+            .unwrap()
+            .is_empty()
+    );
+}
+
+#[test]
 fn local_manager_updates_uninstalls_and_owns_resource_leases() {
     let root = tempfile::tempdir().unwrap();
     let manager =

@@ -264,7 +264,7 @@ test('package artifact capabilities validate targets and cancel conversion when 
 
 test('resource editors validate manifest scope, reserve binary resources and retire without loading a fallback', async () => {
 	const manifest = {
-		name: 'pdf-viewer', publisher: 'ash', version: '1.0.0', engines: { vscode: '*' },
+		name: 'pdf-viewer', publisher: 'ash', version: '1.0.0', engines: { ash: '*' },
 		ashRuntime: { kind: 'rust', entrypoint: 'ash-pdf-viewer' },
 		contributes: { customEditors: [{ viewType: 'ash.workbench.pdfViewer', displayName: 'PDF Reader', priority: 'default', selector: [{ filenamePattern: '*.pdf', mimeType: 'application/pdf' }] }] },
 	};

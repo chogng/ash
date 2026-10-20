@@ -970,11 +970,7 @@ impl AppServer {
     }
 
     fn extension_processor(&self) -> extension_operations::ExtensionRequestProcessor<'_> {
-        extension_operations::ExtensionRequestProcessor::new(
-            &self.extensions,
-            &self.plugins_manager,
-            &self.resources,
-        )
+        extension_operations::ExtensionRequestProcessor::new(&self.extensions, &self.resources)
     }
 
     fn extension_packages_processor(
@@ -3939,12 +3935,6 @@ impl AppServer {
             Some(ClientMethod::ExtensionList) => {
                 self.extension_processor().extension_list(&request.params)
             }
-            Some(ClientMethod::ExtensionGallery) => self
-                .extension_processor()
-                .extension_gallery(&request.params),
-            Some(ClientMethod::ExtensionGalleryResourceOpen) => self
-                .extension_processor()
-                .extension_gallery_resource_open(connection, &request.params),
             Some(ClientMethod::ExtensionResourceOpen) => self
                 .extension_processor()
                 .extension_resource_open(connection, &request.params),

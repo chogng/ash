@@ -26,7 +26,7 @@ description: Align Ash TypeScript source files, browser CSS responsibilities, AP
 | `src/ash/code` | [Code 对齐](references/code.md) |
 | `src/ash/sessions` | [Sessions 对齐](references/sessions.md) |
 
-Rust 文件不使用本 skill，也不以 VS Code 为参照。普通 TypeScript 命名若没有 VS Code 对应关系，同样不使用本 skill。
+Rust 文件不使用本 skill，也不以 VS Code 为参照。普通 TypeScript 命名若没有 VS Code 对应关系，同样不使用本 skill。Ash 已确定采用自有扩展生态：`sdk/typescript`、`@ash/sdk`、`ash.*` 作者契约及其宿主 adapter 属于已获确认的 Ash 专属职责，不按 VS Code 扩展 API 对齐，也不因缺少上游对应物再次请求决定。内部编辑器与 Workbench 的既有 owner、依赖和生命周期仍适用本 skill；扩展 API 迁移不授权删除或改写这些内部职责。
 
 浏览器目标若实际修改 DOM、CSS、主题、焦点或交互，同批还必须读取并应用 `ux-css-layout`、`ux-theming` 和 `accessibility`。这三个 skill 只约束 Ash 如何实现和验证界面，不提供 VS Code DOM、选择器或主题变量的复制许可；没有界面变化时不要为了形式加载或改动它们。
 

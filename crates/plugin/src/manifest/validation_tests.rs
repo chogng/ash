@@ -526,10 +526,14 @@ fn sdk_example_manifest_declares_the_supported_javascript_contract() {
         manifest.contributions.editor_extensions[0].runtime,
         super::super::EditorExtensionRuntime::JavaScript
     );
+    assert_eq!(
+        manifest.contributions.editor_extensions[0].api,
+        super::super::EditorExtensionApi::Ash
+    );
 }
 
 #[test]
-fn javascript_defaults_to_vscode_and_rejects_retired_api_contracts() {
+fn javascript_accepts_ash_and_preserves_legacy_default_for_installed_packages() {
     let mut value = valid_manifest();
     value["contributions"]["editorExtensions"] = json!([{
         "id": "review-runtime", "runtime": "javascript", "api": "vscode", "entrypoint": "extension.cjs",
@@ -540,7 +544,7 @@ fn javascript_defaults_to_vscode_and_rejects_retired_api_contracts() {
     let manifest = parse(&value).unwrap();
     assert_eq!(
         manifest.contributions.editor_extensions[0].api,
-        super::super::EditorExtensionApi::Vscode
+        super::super::EditorExtensionApi::Retired
     );
     assert!(
         serde_json::to_value(&manifest).unwrap()["contributions"]["editorExtensions"][0]
@@ -554,7 +558,22 @@ fn javascript_defaults_to_vscode_and_rejects_retired_api_contracts() {
     value["contributions"]["editorExtensions"][0]["api"] = json!("node");
     assert!(parse(&value).is_err());
     value["contributions"]["editorExtensions"][0]["api"] = json!("ash");
-    assert!(parse(&value).is_err());
+    assert!(
+        parse(&value).is_ok(),
+        "historical Ash manifests remain readable"
+    );
+    value["contributions"]["editorExtensions"][0]["capabilities"] = json!(["command"]);
+    value["contributions"]["editorExtensions"][0]["activationEvents"] =
+        json!([{ "type": "onCommand", "id": "acme.run" }]);
+    let native = parse(&value).unwrap();
+    assert_eq!(
+        native.contributions.editor_extensions[0].api,
+        super::super::EditorExtensionApi::Ash
+    );
+    assert_eq!(
+        serde_json::to_value(&native).unwrap()["contributions"]["editorExtensions"][0]["api"],
+        "ash"
+    );
     value["contributions"]["editorExtensions"][0]
         .as_object_mut()
         .unwrap()
@@ -579,7 +598,7 @@ fn javascript_defaults_to_vscode_and_rejects_retired_api_contracts() {
         parse(&multiple)
             .unwrap_err()
             .to_string()
-            .contains("only one VS Code API entry")
+            .contains("only one JavaScript API entry")
     );
     multiple["contributions"]["editorExtensions"][1]["api"] = json!("ash");
     assert!(parse(&multiple).is_err());

@@ -786,9 +786,6 @@ fn sources_result(snapshot: ash_core_plugins::ExtensionSourcesSnapshot) -> Resul
             .map(|source| ExtensionsSourceDto {
                 id: source.id.to_string(),
                 kind: match source.kind {
-                    ash_core_plugins::ExtensionRegistryKind::OpenVsx => {
-                        ExtensionRegistryKindDto::OpenVsx
-                    }
                     ash_core_plugins::ExtensionRegistryKind::Ash => ExtensionRegistryKindDto::Ash,
                 },
                 enabled: source.enabled,

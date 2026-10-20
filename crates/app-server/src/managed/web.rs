@@ -550,7 +550,9 @@ pub(super) fn serve(
         .worker_threads(2)
         .enable_all()
         .build()?;
-    runtime.block_on(async move {
+    // AppServer owns domain runtimes. Keep this strong reference on the synchronous
+    // stack, including listener setup errors, so its last drop cannot run inside Tokio.
+    runtime.block_on(async {
         let workspaces = Arc::new(WebWorkspaces {
             registry,
             connection: connection.options.clone(),

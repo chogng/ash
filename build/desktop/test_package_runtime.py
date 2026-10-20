@@ -93,7 +93,7 @@ class DesktopRuntimeTests(unittest.TestCase):
                 self.assertFalse((output / "ash-resources/node").exists())
                 self.assertFalse((output / "ash-resources/licenses/node").exists())
                 self.assertTrue((output / "bin" / spec.code_mode_host_name).is_file())
-                for name in ("node.mjs", "host.mjs", "vscode.mjs", "scm.js"):
+                for name in ("node.mjs", "ash.mjs", "host.mjs", "scm.js"):
                     self.assertTrue(
                         (output / "ash-resources/extension-host" / name).is_file()
                     )

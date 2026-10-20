@@ -5,7 +5,7 @@
   "displayName": "GitHub Authentication",
   "description": "Profile-scoped GitHub authentication for Ash App.",
   "engines": {
-    "vscode": "*"
+    "ash": "*"
   },
   "ashRuntime": {
     "kind": "rust",

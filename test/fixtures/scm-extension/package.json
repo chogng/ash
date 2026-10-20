@@ -5,7 +5,7 @@
 	"type": "module",
 	"main": "./extension.js",
 	"browser": "./extension.js",
-	"engines": { "vscode": "^1.100.0" },
+	"engines": { "ash": "*" },
 	"contributes": { "commands": [
 		{ "command": "ash.scm.fixture.activate", "title": "Activate independent SCM fixture" },
 		{ "command": "ash.scm.fixture.refresh", "title": "Refresh independent SCM fixture" },

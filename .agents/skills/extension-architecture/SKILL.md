@@ -10,7 +10,7 @@ description: Design or review Ash core, Electron/Rust-V8 TS/JS extensions, and i
 ## 决策边界
 
 - 核心保留 Agent/Thread/Turn 权威状态、执行契约、最终权限裁决与通用存储、秘密、网络和进程机制。具体服务商认证、API 与可选产品工作流由扩展 Provider 拥有。
-- 两类扩展与 Electron/Rust/V8 的目标分工见[运行时职责与兼容契约](../../../docs/editor-extensions.md#运行时职责与兼容契约)。兼容建设遵循公开契约，不按扩展增加特判；现有 Node 路径按迁移缺口记录。语言不决定业务归属，认证可以由任一种实现。
+- TS/JS 作者统一使用 `@ash/sdk` 和 `ash.*`，Rust 作者使用根目录 Rust SDK；复用现有 Host RPC、授权和监管，不另建 TS 后端协议。两类扩展与 Electron/Rust/V8 的分工见[运行时职责与 Ash 契约](../../../docs/editor-extensions.md#运行时职责与-ash-契约)。旧兼容 facade、Open VSX 下载与 VSIX 运行入口已删除；历史 marker/API metadata decoder 只允许识别、停用和卸载，不能恢复执行或赋予 Ash 身份；不能因此删除内部编辑器或 Workbench 的既有 owner。语言不决定业务归属，认证可以由任一种实现。
 - App/TUI 按相同能力契约消费 Provider，各自拥有交互。App 预装登录扩展不让 TUI 默认加载；跨窗口存活、多客户端复用、IO 或 Rust 实现都不自动要求业务进入核心。
 - App Server 拥有 typed dispatch、发现和授权路由，不链接每个 Provider 实现。核心不依赖具体扩展 crate；Rust 扩展使用版本化协议，不建立稳定进程内 Rust ABI。
 - 各来源的包状态与租约保留唯一 owner，通过产品侧来源 adapter 接入；外部扩展运行体系不归 Plugin bundle 所有，具体命名与依赖方向遵循上述权威文档。安装不隐含执行授权。
@@ -32,7 +32,7 @@ Provider 注册绑定精确包、能力与 scope，重复实现按明确选择�
 
 `github-authentication` 拥有 OAuth/设备码策略、issuer、scope、Enterprise 差异、令牌交换/刷新/撤销和会话有效性。核心拥有 Provider 注册、调用方账号/scope 授权与 SecretStore；App 拥有账号选择和浏览器交互。PR/Issue 业务由 GitHub API Provider 消费认证能力，本地 Git 不依赖 GitHub 登录。
 
-可以复用 TS/JS Provider 经兼容层在选定宿主执行，也可以把现有 Rust 实现拆为独立 Provider 并用 TS 桥接编辑器 API。桥不保存第二份会话，同一 Provider 身份只允许一个有效实现。默认 Ash 契约对消费者使用不透明引用；认证 Provider 获准读取自身令牌。若实现 VS Code `AuthenticationSession.accessToken`，需对消费者明确授权，不能用引用冒充 token 兼容，也不能暴露产品内部凭据。
+TS/JS Provider 通过 `@ash/sdk` 在选定宿主执行，Rust Provider 使用同一能力契约。客户端桥不保存第二份会话，同一 Provider 身份只允许一个有效实现。Ash 契约对消费者使用不透明引用；认证 Provider 获准读取自身令牌。不建设 VS Code `AuthenticationSession.accessToken` 兼容桥，不暴露产品内部凭据。
 
 TUI 默认不加载 App 的 GitHub 登录；未来真实工具需要认证时启用同一能力并提供终端交互。不要把此规则扩大为 TUI 不需要模型认证或 Git 凭据。
 

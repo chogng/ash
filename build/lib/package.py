@@ -38,7 +38,7 @@ LAYOUT_VERSION = LAYOUT["layoutVersion"]
 METADATA_FILE = "ash-package.json"
 EXTENSION_HOST_RESOURCES = (
     ("resources/extension-host/node.mjs", "node.mjs"),
-    ("resources/extension-host/vscode.js", "vscode.mjs"),
+    ("resources/extension-host/ash.js", "ash.mjs"),
     ("resources/extension-host/host.mjs", "host.mjs"),
     ("resources/extension-host/scm.js", "scm.js"),
 )

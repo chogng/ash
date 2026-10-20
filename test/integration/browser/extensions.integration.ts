@@ -153,11 +153,11 @@ const discoveryFixture = new URLSearchParams(location.search).has('marketplace')
 const partialDiscoveryFailure = new URLSearchParams(location.search).has('partialDiscoveryFailure');
 const nativeEditor = new URLSearchParams(location.search).has('nativeEditor');
 const extensionId = nativeEditor ? 'ash.academic' : 'publisher.sample';
-const extensionSummary = { ...summary, id: nativeEditor ? 'ash.academic@ash' : 'publisher.sample@open-vsx', packageType: nativeEditor ? 'editor' : 'editorExtension', displayName: nativeEditor ? 'Academy' : 'Sample editor extension' };
+const extensionSummary = { ...summary, id: nativeEditor ? 'ash.academic@ash' : 'publisher.sample@ash', packageType: 'editor', displayName: nativeEditor ? 'Academy' : 'Sample editor extension' };
 const extensionReference = { ...reference, id: extensionSummary.id };
 const extensionCapabilities = [{ kind: 'editorExtension' as const, id: 'publisher.sample', contractVersion: '1', permissions: [], authenticationProvider: null }];
 const extensionDetails = { ...packageDetails, package: extensionReference, ...extensionSummary, capabilities: extensionCapabilities };
-const galleryOnly = new URLSearchParams(location.search).has('gallery');
+const uninstalled = new URLSearchParams(location.search).has('uninstalled');
 const rustBuiltIn = new URLSearchParams(location.search).has('rustBuiltIn');
 const rustLanguagePackManifest = { publisher: 'ash', name: 'language-pack-zh-cn', version: '1.0.0', displayName: '中文语言包（Rust 目录）', description: 'Rust package snapshot', contributes: { localizations: [{ languageId: 'zh-CN' }] } };
 const extensionManifest = { publisher: 'Fixture publisher', name: 'sample', icon: 'icon.svg', categories: ['Programming Languages'], homepage: 'https://example.invalid/tools' };
@@ -180,14 +180,11 @@ services.registerInstance(IExtensionApi, {
 	list: async () => ({
 		generation: 1, diagnostics: [], extensions: [
 			...(await builtinPackages.list('cached')).extensions.filter(value => !rustBuiltIn || value.id !== 'ash.language-pack-zh-cn'),
-			...galleryOnly ? [] : [{ id: extensionId, name: 'sample', publisher: 'Fixture publisher', version: '1.0.0', displayName: extensionSummary.displayName, sourceKind: 'registry' as const, manifestSha256: reference.digest, packageSha256: reference.digest, manifestJson: JSON.stringify(extensionManifest) }],
+			...uninstalled ? [] : [{ id: extensionId, name: 'sample', publisher: 'Fixture publisher', version: '1.0.0', displayName: extensionSummary.displayName, sourceKind: 'registry' as const, manifestSha256: reference.digest, packageSha256: reference.digest, manifestJson: JSON.stringify(extensionManifest) }],
 			...rustBuiltIn ? [{ id: 'ash.language-pack-zh-cn', ...rustLanguagePackManifest, sourceKind: 'builtIn' as const, manifestSha256: reference.digest, packageSha256: reference.digest, manifestJson: JSON.stringify(rustLanguagePackManifest) }] : [],
 		]
 	}),
-	resources: new ExtensionResourceLoaderService(request => request.extensionId === extensionId || rustBuiltIn && request.extensionId === 'ash.language-pack-zh-cn' ? readPackageResource(request) : builtinPackages.resources.readExtensionResourceBytes(request), galleryOnly ? {
-		template: async () => 'https://registry.invalid/api/{publisher}/{name}/{version}/file/{path}',
-		read: async request => { requests.push(['galleryResource', request]); return readPackageResource({ generation: 1, extensionId: `${request.publisher}.${request.name}`, path: request.path }); },
-	} : undefined),
+	resources: new ExtensionResourceLoaderService(request => request.extensionId === extensionId || rustBuiltIn && request.extensionId === 'ash.language-pack-zh-cn' ? readPackageResource(request) : builtinPackages.resources.readExtensionResourceBytes(request)),
 });
 services.registerInstance(IOpenerService, { open: async (href, options) => { requests.push(['openLink', String(href), options]); return true; } } as IOpenerService);
 services.registerSingleton(IMarkdownRendererService, () => services.createInstance(MarkdownRendererService));
@@ -203,7 +200,7 @@ function editorPolicySnapshot() {
 	};
 }
 let sourceRevision = 0;
-let sources = [{ id: 'ash', kind: 'ash' as const, enabled: true, productOwned: true }, { id: 'open-vsx', kind: 'openVsx' as const, enabled: true, productOwned: true }];
+let sources = [{ id: 'ash', kind: 'ash' as const, enabled: true, productOwned: true }];
 if (partialDiscoveryFailure) { sources.push({ id: 'offline-source', kind: 'ash', enabled: true, productOwned: false }); }
 if (new URLSearchParams(location.search).has('pagedDiscovery')) { sources.push({ id: 'other', kind: 'ash', enabled: true, productOwned: false }); }
 let builtInProviderEnabled = true;
@@ -270,7 +267,7 @@ const api: IExtensionManagementApi = {
 			const entry = params.capabilityKind === 'skill' ? summary : mcpSummary;
 			return { packages: [entry].filter(value => [value.id, value.displayName, value.description].some(text => text.toLowerCase().includes(params.query.toLowerCase()))), unavailableSources: partialDiscoveryFailure ? ['offline-source'] : [] };
 		}
-		return { packages: [params.capabilityKind === 'editorExtension' || params.query === 'publisher.sample' ? extensionSummary : summary], unavailableSources: [] };
+		return { packages: [params.capabilityKind === 'editorExtension' || params.query === 'publisher.sample@ash' ? extensionSummary : summary], unavailableSources: [] };
 	},
 	get: async params => { requests.push(['get', params]); if (offline) { throw new Error('Catalog unavailable'); } const details = params.packageId === extensionSummary.id ? extensionDetails : params.packageId === mcpSummary.id ? mcpDetails : packageDetails; return { ...details, package: { ...details.package, version: params.version ?? '2.0.0' } }; },
 	listInstalled: async () => ({ instanceId: 'fixture', generation, packages: installed.map(entry => ({ ...entry, capabilities: entry.capabilities.map(capability => ({ ...capability, permissions: [...capability.permissions] })) })) }),
@@ -399,7 +396,7 @@ services.registerInstance(IWorkspaceContextService, workspace);
 const recommendationsResource = URI.file('/project/.ash/extensions.json');
 const files = disposables.add(new FileService());
 const recommendationChanges = disposables.add(new Emitter<IFileChangeEvent>());
-const recommendationFiles = new class extends MemoryFileService { public override readonly onDidChangeFiles = recommendationChanges.event; }([[recommendationsResource, '{ "recommendations": ["example/web", "publisher.sample", "excluded/tool"], "unwantedRecommendations": ["excluded/tool"] }']]);
+const recommendationFiles = new class extends MemoryFileService { public override readonly onDidChangeFiles = recommendationChanges.event; }([[recommendationsResource, '{ "recommendations": ["example/web", "publisher.sample@ash", "excluded/tool"], "unwantedRecommendations": ["excluded/tool"] }']]);
 disposables.add(files.registerProvider('file', recommendationFiles));
 services.registerInstance(IFileService, files);
 services.registerInstance(IUriIdentityService, disposables.add(new UriIdentityService(files)));

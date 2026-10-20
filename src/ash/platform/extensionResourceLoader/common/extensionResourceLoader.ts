@@ -7,9 +7,6 @@ export const IExtensionResourceLoaderService = createDecorator<IExtensionResourc
 export interface IExtensionResourceLoaderService {
 	readExtensionResource(uri: URI): Promise<string>;
 	readExtensionResourceBytes(resource: URI | ExtensionResourceRequest): Promise<Uint8Array>;
-	supportsExtensionGalleryResources(): Promise<boolean>;
-	isExtensionGalleryResource(uri: URI): Promise<boolean>;
-	getExtensionGalleryResourceURL(extension: { publisher: string; name: string; version: string; targetPlatform?: string; }, path?: string): Promise<URI | undefined>;
 }
 
 const extensionResourceScheme = 'ash-extension-resource';

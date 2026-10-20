@@ -6,11 +6,14 @@ use notify::RecursiveMode;
 use notify::event::AccessKind;
 use notify::event::AccessMode;
 use notify::event::CreateKind;
+use notify::event::DataChange;
 use notify::event::Flag;
+use notify::event::ModifyKind;
 use pretty_assertions::assert_eq;
 use std::fs;
 use std::path::Path;
 use std::sync::Arc;
+use std::sync::Mutex;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 use std::time::Duration;
@@ -146,6 +149,67 @@ fn dropping_subscriber_removes_all_its_counts() {
 #[test]
 fn live_watcher_requires_a_current_tokio_runtime() {
     assert!(FileWatcher::new().is_err());
+}
+
+#[tokio::test]
+async fn ordinary_file_edits_do_not_restart_the_backend() {
+    let dir = TestDir::new();
+    let file = dir.path.join("gitconfig");
+    fs::write(&file, "initial").unwrap();
+    let operations = Arc::new(Mutex::new(Vec::new()));
+    let watcher = Arc::new(FileWatcher::recording_for_test(Arc::clone(&operations)));
+    let (subscriber, mut events) = watcher.add_subscriber();
+    let _registration = subscriber
+        .register_paths(vec![watch(&file, false)])
+        .unwrap();
+    let registered = operations.lock().unwrap().clone();
+    let (raw_tx, raw_rx) = mpsc::unbounded_channel();
+    watcher.spawn_event_loop_for_test(raw_rx);
+    for edit in 0..6 {
+        fs::write(&file, format!("edit {edit}")).unwrap();
+        raw_tx
+            .send(Ok(notify_event(
+                EventKind::Modify(ModifyKind::Data(DataChange::Content)),
+                vec![file.clone()],
+            )))
+            .unwrap();
+        assert_eq!(
+            timeout(Duration::from_secs(1), events.recv())
+                .await
+                .unwrap(),
+            Some(FileWatcherEvent::PathsChanged {
+                paths: vec![file.clone()]
+            }),
+        );
+    }
+    let after_edits = operations.lock().unwrap().clone();
+    assert_eq!(
+        after_edits, registered,
+        "writing an existing file must notify its subscriber without destroying and recreating its OS watch"
+    );
+}
+
+#[test]
+fn root_batch_and_its_disposal_each_commit_once() {
+    let dir = TestDir::new();
+    let roots = (0..32)
+        .map(|index| dir.create_dir(index.to_string()))
+        .collect::<Vec<_>>();
+    let watcher = Arc::new(FileWatcher::recording_for_test(Arc::default()));
+    let (subscriber, _events) = watcher.add_subscriber();
+    let registration = subscriber
+        .register_paths(roots.iter().map(|path| watch(path, true)).collect())
+        .unwrap();
+    assert_eq!(watcher.backend_commits_for_test(), 1);
+    for root in &roots {
+        assert_eq!(
+            watcher.backend_mode_for_test(root),
+            Some(RecursiveMode::Recursive)
+        );
+    }
+    drop(registration);
+    assert_eq!(watcher.backend_commits_for_test(), 2);
+    assert_eq!(watcher.watch_counts_for_test(&dir.path), None);
 }
 
 #[test]

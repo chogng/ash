@@ -1,0 +1,19 @@
+{
+  "name": "@ash/sdk",
+  "version": "0.1.0",
+  "description": "Public TypeScript extension API for Ash",
+  "type": "module",
+  "types": "./index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./index.d.ts",
+      "default": "./index.js"
+    }
+  },
+  "files": [
+    "index.js",
+    "index.d.ts",
+    "README.md"
+  ],
+  "license": "UNLICENSED"
+}

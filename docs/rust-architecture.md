@@ -104,7 +104,7 @@ crates/
 ├── tool-executor/         # target local process execution boundary
 ```
 
-根 `sdk/rust/` 提供 Rust 作者接口，TS/JS 使用标准 VS Code / Node 契约；Rust SDK 仍是同一 Cargo workspace 的成员。
+根 `sdk/rust/` 提供 Rust 作者接口，`sdk/typescript/` 提供 `@ash/sdk` / `ash.*` TS 作者接口；两者共用 Host RPC 和能力授权，Rust SDK 仍是同一 Cargo workspace 的成员。VS Code 扩展 API 兼容已退出目标，旧 adapter 按[生态迁移顺序](editor-extensions.md#05-ash-自有生态与旧来源退休)退休。
 
 `cli/` 是命令入口，`crates/tui` 与终端辅助 crate 拥有终端呈现。它们和后端共享根 Cargo workspace，但后端不能反向依赖终端呈现或命令入口。
 

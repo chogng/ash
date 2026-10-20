@@ -252,7 +252,7 @@ class CiWorkflowTests(unittest.TestCase):
 
     def test_owned_sources_select_their_real_checks(self) -> None:
         cases = {
-            "resources/extension-host/vscode.js": {
+            "resources/extension-host/ash.js": {
                 "bazel",
                 "frontend",
                 "rust-warnings",
@@ -261,7 +261,10 @@ class CiWorkflowTests(unittest.TestCase):
             "src/ash/editor/browser/view.ts": {"frontend"},
             "third_party/node/runtime-lock.json": {"frontend", "tooling"},
             "sdk/rust/src/lib.rs": {"bazel", "frontend"},
-            "examples/extensions/inspect/extension.cjs": {"bazel", "frontend"},
+            "sdk/typescript/package.json": {"bazel", "frontend"},
+            "sdk/typescript/index.js": {"bazel", "frontend"},
+            "sdk/typescript/index.d.ts": {"bazel", "frontend"},
+            "examples/extensions/inspect/extension.ts": {"bazel", "frontend"},
             "crates/tui/src/app.rs": {
                 "bazel",
                 "frontend",
@@ -295,6 +298,18 @@ class CiWorkflowTests(unittest.TestCase):
                 self.assertTrue(
                     ci_workflows.select([path], self.policy)["rust-warnings"]
                 )
+
+    def test_frontend_runs_the_typescript_sdk_author_contract(self) -> None:
+        frontend = (ROOT / ".github/workflows/frontend.yml").read_text()
+        contracts = frontend.split("\n  contracts:\n")[1].split(
+            "\n  desktop-runtime:\n"
+        )[0]
+        self.assertIn("pnpm --dir build run test:prepared", contracts)
+        build = json.loads((ROOT / "build/package.json").read_text())
+        self.assertEqual(
+            build["scripts"]["test:prepared"], 'node --test "**/*.test.ts"'
+        )
+        self.assertTrue((ROOT / "build/builtin/typescriptSdk.test.ts").is_file())
 
     def test_root_files_globs_and_control_changes(self) -> None:
         self.assertTrue(ci_workflows.matches("**/Cargo.toml", "Cargo.toml"))

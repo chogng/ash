@@ -618,9 +618,10 @@ fn extension_packages_search_supports_capabilities_and_exact_language_routes() {
     capabilities.advertise_contracts();
     assert_eq!(capabilities.contracts["extensionsSearch"].version, 1);
     assert_eq!(capabilities.contracts["extensionsPaging"].version, 1);
-    assert_eq!(
-        capabilities.contracts["extensionGalleryResources"].version,
-        1
+    assert!(
+        !capabilities
+            .contracts
+            .contains_key("extensionGalleryResources")
     );
     let wire = serde_json::json!({
         "query": "tsx",
@@ -644,17 +645,16 @@ fn extension_packages_search_supports_capabilities_and_exact_language_routes() {
 }
 
 #[test]
-fn gallery_resource_requests_bind_the_configured_source_and_reject_extra_fields() {
-    use super::super::extensions::ExtensionGalleryResourceOpenParams;
-    let wire = serde_json::json!({
-        "resourceUrlTemplate":"https://registry.example/api/{publisher}/{name}/universal/{version}/file/{path}",
-        "publisher":"publisher","name":"sample","version":"1.0.0","path":"themes/theme.json"
-    });
-    let params: ExtensionGalleryResourceOpenParams = serde_json::from_value(wire.clone()).unwrap();
-    assert_eq!(serde_json::to_value(params).unwrap(), wire);
-    let mut forged = wire;
-    forged["hostPath"] = serde_json::json!("/private/package.json");
-    assert!(serde_json::from_value::<ExtensionGalleryResourceOpenParams>(forged).is_err());
+fn retired_gallery_methods_are_not_part_of_the_protocol() {
+    for method in ["extensions/gallery", "extensions/gallery/resource/open"] {
+        assert!(super::client_method_definition(method).is_none());
+    }
+    assert!(
+        serde_json::from_value::<super::super::extension_packages::ExtensionRegistryKindDto>(
+            serde_json::json!("openVsx")
+        )
+        .is_err()
+    );
 }
 
 #[test]

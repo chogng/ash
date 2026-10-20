@@ -4,6 +4,6 @@ ash_v8_host(
     name = "ash-external-js-ext",
     crate_name = "ash_external_js_ext",
     crate_root = "src/main.rs",
-    data = ["src/commonjs.js", "src/fixed_buffers.js", "//resources/extension-host:host.mjs", "//resources/extension-host:vscode.js", "//resources/extension-host:scm.js"],
+    data = ["src/commonjs.js", "src/fixed_buffers.js", "//resources/extension-host:host.mjs", "//resources/extension-host:scm.js"],
     deps = [],
 )

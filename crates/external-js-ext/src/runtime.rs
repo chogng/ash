@@ -991,7 +991,7 @@ fn current_invocation(
         // identity; service calls still require the strict form and a live Rust request context.
         result.set_null();
     } else {
-        throw(scope, "VS Code service call has no active invocation");
+        throw(scope, "Ash service call has no active invocation");
     }
 }
 
@@ -1017,7 +1017,7 @@ fn dispatch_client(
         .number_value(scope)
         != Some(parent)
     {
-        return Err("VS Code service call belongs to another invocation".into());
+        return Err("Ash service call belongs to another invocation".into());
     }
     let text = args.get(1).to_rust_string_lossy(scope);
     if text.len() > ProtocolLimits::default().maximum_payload_bytes {

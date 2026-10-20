@@ -866,10 +866,6 @@ struct ProfileExtensionsAuthority {
         BTreeMap<ash_utils_plugins::ExtensionSourceId, ash_core_plugins::RemoteExtensionsConfig>,
     manager: Arc<ash_core_plugins::ExtensionPackageManager>,
     _watcher: Option<crate::server::extension_packages_runtime::ExtensionsChangeWatcher>,
-    open_vsx: Option<(
-        ash_utils_plugins::ExtensionSourceId,
-        ash_core_plugins::OpenVsxConfig,
-    )>,
 }
 
 #[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
@@ -1083,24 +1079,20 @@ impl LocalProfileRuntime {
             ash_utils_plugins::ExtensionSourceId,
             ash_core_plugins::RemoteExtensionsConfig,
         >,
-        open_vsx: Option<(
-            ash_utils_plugins::ExtensionSourceId,
-            ash_core_plugins::OpenVsxConfig,
-        )>,
     ) -> Result<Arc<ash_core_plugins::ExtensionPackageManager>, OpenAppServerError> {
         let mut extension_packages = self
             .extension_packages
             .lock()
             .map_err(|_| OpenAppServerError("profile Extensions lock poisoned".into()))?;
         if let Some(authority) = extension_packages.as_ref() {
-            if authority.config == config && authority.open_vsx == open_vsx {
+            if authority.config == config {
                 return Ok(Arc::clone(&authority.manager));
             }
             return Err(OpenAppServerError(
                 "one profile runtime cannot use multiple Extensions authorities".into(),
             ));
         }
-        let providers = extension_packages_providers(&config, open_vsx.as_ref())?;
+        let providers = extension_packages_providers(&config)?;
         let manager = Arc::new(
             ash_core_plugins::ExtensionPackageManager::open(
                 self.profile_root.join("extensions-manager"),
@@ -1114,7 +1106,6 @@ impl LocalProfileRuntime {
         );
         *extension_packages = Some(ProfileExtensionsAuthority {
             config,
-            open_vsx,
             manager: Arc::clone(&manager),
             _watcher: watcher,
         });
@@ -1225,22 +1216,12 @@ pub fn open_app_server_with_codebase_providers(
             .cloned()
     {
         if let Some(runtime) = &options.profile_runtime {
-            let manager = runtime.plugins_manager(
-                sources,
-                product_services
-                    .as_ref()
-                    .and_then(|services| services.open_vsx.clone()),
-            )?;
+            let manager = runtime.plugins_manager(sources)?;
             let client: Arc<dyn ash_core_plugins::ExtensionPackageService> = manager.clone();
             options.plugin_package_service = Some(client);
             options.plugins_manager = Some(manager);
         } else {
-            options = options.with_plugin_providers(extension_packages_providers(
-                &sources,
-                product_services
-                    .as_ref()
-                    .and_then(|services| services.open_vsx.as_ref()),
-            )?)?;
+            options = options.with_plugin_providers(extension_packages_providers(&sources)?)?;
         }
     }
     let plugin_package_service = options.plugin_package_service.take();
@@ -3459,12 +3440,8 @@ fn extension_packages_providers(
         ash_utils_plugins::ExtensionSourceId,
         ash_core_plugins::RemoteExtensionsConfig,
     >,
-    open_vsx: Option<&(
-        ash_utils_plugins::ExtensionSourceId,
-        ash_core_plugins::OpenVsxConfig,
-    )>,
 ) -> Result<ash_core_plugins::ExtensionSources, OpenAppServerError> {
-    let mut providers = sources
+    let providers = sources
         .iter()
         .map(|(name, config)| {
             let provider = ash_core_plugins::ExtensionsRemoteClient::new(config.clone());
@@ -3474,10 +3451,6 @@ fn extension_packages_providers(
             )
         })
         .collect::<Vec<_>>();
-    if let Some((name, config)) = open_vsx {
-        let provider = ash_core_plugins::OpenVsxClient::new(config.clone()).map_err(open_error)?;
-        providers.push((name.clone(), Arc::new(provider)));
-    }
     ash_core_plugins::ExtensionSources::new(providers).map_err(open_error)
 }
 

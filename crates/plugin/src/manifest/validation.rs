@@ -179,7 +179,7 @@ fn validate_editor_extensions(manifest: &PluginManifest) -> Result<(), PluginErr
         > 1
     {
         return invalid(
-            "A Plugin package may declare only one VS Code API entry for its package-root manifest",
+            "A Plugin package may declare only one JavaScript API entry for its package-root manifest",
         );
     }
 
@@ -215,7 +215,9 @@ fn validate_editor_extension(extension: &EditorExtensionContribution) -> Result<
             .extension()
             .and_then(|extension| extension.to_str());
         let supported = match extension.api {
-            super::EditorExtensionApi::Vscode => matches!(suffix, Some("js" | "mjs" | "cjs")),
+            super::EditorExtensionApi::Ash | super::EditorExtensionApi::Retired => {
+                matches!(suffix, Some("js" | "mjs" | "cjs"))
+            }
         };
         if !supported {
             return invalid(

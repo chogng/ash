@@ -7,7 +7,7 @@ applyTo: "**/src/**/*.ts,**/src/**/*.cts,**/test/**/*.ts"
 
 ## Service contracts
 
-- A DI-managed domain service shared across runtimes puts its contract in the owning domain's `common` layer and names its public interface and identifier `I<Capability>Service`. Preserve an established VS Code counterpart's contract filename when aligning APIs.
+- A DI-managed domain service shared across runtimes puts its contract in the owning domain's `common` layer and names its public interface and identifier `I<Capability>Service`. Preserve an established VS Code counterpart's contract filename when aligning internal editor or Workbench APIs. Ash extension author APIs (`@ash/sdk`, `ash.*`, `sdk/typescript`) follow the Ash capability contract in [extension architecture](../../docs/editor-extensions.md#统一后端扩展接口规范), not VS Code extension API compatibility; existing internal service ownership and dependency injection still apply.
 - Multiple callers or asynchronous work alone do not justify a service class or `common/*Service.ts`. Place provider interfaces, request orchestration and helpers using [source organization](source-code-organization.instructions.md).
 - Runtime implementation filenames match their exported class, including the runtime qualifier: `appServerSyntaxAnalysisService.ts` exports `AppServerSyntaxAnalysisService`. Adapters and tests use the contract or implementation name.
 - Transport APIs and wire validation stay inside the runtime adapter.

@@ -78,7 +78,7 @@ pub(crate) struct EditorExtensionDeployment {
 
 impl EditorExtensionDeployment {
     pub(super) fn is_window_scoped(&self) -> bool {
-        self.command.is_vscode()
+        self.command.is_node_host()
             || self.params.capabilities.iter().any(|capability| {
                 matches!(
                     capability,
@@ -684,6 +684,13 @@ pub(super) fn plugin_deployments(
             .invocation_fence(package)
             .ok_or(ExtensionHostRuntimeError::Internal)?;
         for contribution in &package.manifest().contributions.editor_extensions {
+            // Old package metadata remains readable for management and uninstall. It
+            // cannot select the Ash runtime merely because the package is still enabled.
+            if contribution.runtime == ash_plugin::EditorExtensionRuntime::JavaScript
+                && contribution.api == EditorExtensionApi::Retired
+            {
+                continue;
+            }
             let id = stable_extension_id(package.manifest().id.as_str(), contribution.id.as_str());
             let entry = package
                 .resolve_file(&contribution.entrypoint)
@@ -710,15 +717,10 @@ pub(super) fn plugin_deployments(
                             "--entry".into(),
                             contribution.entrypoint.as_str().into(),
                         ];
-                        if contribution.api == EditorExtensionApi::Vscode {
-                            arguments.extend(["--api".into(), "vscode".into()]);
-                        }
+                        arguments.extend(["--api".into(), "ash".into()]);
                         arguments
                     };
-                    let launch = match contribution.api {
-                        EditorExtensionApi::Vscode => ExtensionLaunchCommand::vscode,
-                    };
-                    launch(arguments, package.package_root())
+                    ExtensionLaunchCommand::ash(arguments, package.package_root())
                 }
             }
             .map_err(ExtensionHostRuntimeError::Host)?;

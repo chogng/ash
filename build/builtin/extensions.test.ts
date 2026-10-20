@@ -91,14 +91,14 @@ test('browser Git packages publish their bundled frontend without a Rust runtime
 		await mkdir(join(directory, 'build/lib'), { recursive: true });
 		await copyFile(resolve(import.meta.dirname, '../lib/preparedInputs.ts'), join(directory, 'build/lib/preparedInputs.ts'));
 		await symlink(resolve(import.meta.dirname, '../node_modules'), join(directory, 'build/node_modules'), process.platform === 'win32' ? 'junction' : 'dir');
-		for (const name of ['node_modules', 'resources']) {
+		for (const name of ['node_modules', 'resources', 'sdk']) {
 			await symlink(resolve(import.meta.dirname, '../../' + name), join(directory, name), process.platform === 'win32' ? 'junction' : 'dir');
 		}
 		await mkdir(join(directory, 'extensions/theme-defaults/themes'), { recursive: true });
 		await writeFile(join(directory, 'extensions/theme-defaults/package.json'), JSON.stringify({ publisher: 'test', name: 'theme-defaults', version: '1.0.0' }));
 		await mkdir(join(directory, 'extensions/git/browser'), { recursive: true });
-		await writeFile(join(directory, 'extensions/git/package.json'), JSON.stringify({ publisher: 'test', name: 'git', version: '1.0.0', browser: 'browser/main.ts' }));
-		await writeFile(join(directory, 'extensions/git/browser/main.ts'), "import { marker } from './helper.js'; export async function activate(): Promise<string> { return marker; }");
+		await writeFile(join(directory, 'extensions/git/package.json'), JSON.stringify({ publisher: 'test', name: 'git', version: '1.0.0', browser: 'browser/main.ts', contributes: { commands: [{ command: 'test.browser.command', title: 'Ash browser command' }] } }));
+		await writeFile(join(directory, 'extensions/git/browser/main.ts'), "import { marker } from './helper.js'; import { commands, window } from '@ash/sdk'; export function activate(context) { context.subscriptions.push(commands.register('test.browser.command', async () => { await window.showInformationMessage('Ash browser command'); return marker; })); }");
 		await writeFile(join(directory, 'extensions/git/browser/helper.ts'), "export const marker: string = 'combined-entry-marker';");
 		await writeFile(join(directory, 'extensions/git/browser/sample.ts'), 'export const sample = 1;');
 		const run = () => {
@@ -118,6 +118,25 @@ test('browser Git packages publish their bundled frontend without a Rust runtime
 		const module = Buffer.from(bundle.resources['test.git']['browser/main.ts'], 'base64').toString('utf8');
 		assert.match(module, /combined-entry-marker/);
 		assert.doesNotMatch(module, /from ['"]\.\/helper\.js['"]|Promise<string>/);
+		const exercised = spawnSync(process.execPath, ['--input-type=module', '-e', `
+import assert from 'node:assert/strict';
+import { pathToFileURL } from 'node:url';
+import { readFile } from 'node:fs/promises';
+const manifest = JSON.parse(await readFile(new URL('../package.json', pathToFileURL(process.argv[1])), 'utf8'));
+globalThis.__ashConfiguration = { extensionId: manifest.publisher + '.' + manifest.name, extensionPath: '/', commands: manifest.contributes.commands, manifest };
+globalThis.__ashInvocation = () => 1;
+const requests = [];
+globalThis.__ashRequest = async (_id, encoded) => { requests.push(JSON.parse(encoded)); return JSON.stringify({result: 'done'}); };
+const runtime = await import(pathToFileURL(process.argv[1]).href);
+const registrations = await runtime.activate();
+assert(registrations.some(value => value.kind === 'command' && value.registrationId === 'test.browser.command'));
+assert.equal(await runtime.invoke('test.browser.command', {arguments: []}, 1, 'execute'), 'combined-entry-marker');
+assert.deepEqual(requests, [{operation: 'showMessage', message: 'Ash browser command', severity: 'information'}]);
+await runtime.deactivate();
+await assert.rejects(runtime.invoke('test.browser.command', {arguments: []}, 1, 'execute'), /not active|disposed/);
+`, preparedEntry], { cwd: directory, encoding: 'utf8', timeout: 15_000 });
+		assert.ifError(exercised.error);
+		assert.equal(exercised.status, 0, exercised.stdout + exercised.stderr);
 		const cache = join(directory, '.build/browser-extensions');
 		const snapshots = async () => Object.fromEntries(await Promise.all((await readdir(cache)).map(async name => [name, (await stat(join(cache, name), { bigint: true })).mtimeNs])));
 		const first = await snapshots();

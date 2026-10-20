@@ -194,7 +194,7 @@ fn node_runtime_requires_its_policy_and_binding_and_rejects_package_executables(
     let launcher =
         crate::ProductNodeLauncher::new(executable.clone(), executable.clone(), BTreeMap::new())
             .unwrap();
-    let node = super::ExtensionLaunchCommand::vscode(std::iter::empty::<String>(), &root).unwrap();
+    let node = super::ExtensionLaunchCommand::ash(std::iter::empty::<String>(), &root).unwrap();
     assert_eq!(node.executable(), None);
     let confined = crate::ExtensionHostLimits {
         isolation: crate::ProcessIsolationPolicy::RequireJavaScriptEnforcement(
@@ -249,7 +249,7 @@ fn a_node_runtime_replaced_after_binding_cannot_start_an_extension() {
     let launcher =
         crate::ProductNodeLauncher::new(executable.clone(), bootstrap, BTreeMap::new()).unwrap();
     std::fs::write(executable, b"replacement installation").unwrap();
-    let command = crate::ExtensionLaunchCommand::vscode(Vec::<String>::new(), root.path()).unwrap();
+    let command = crate::ExtensionLaunchCommand::ash(Vec::<String>::new(), root.path()).unwrap();
     let limits = crate::ExtensionHostLimits {
         isolation: crate::ProcessIsolationPolicy::AuthorizedNode,
         ..Default::default()
@@ -294,8 +294,8 @@ fn product_node_process_speaks_the_shared_protocol_and_uses_real_node() {
             include_str!("../../../resources/extension-host/node.mjs"),
         ),
         (
-            "vscode.mjs",
-            include_str!("../../../resources/extension-host/vscode.js"),
+            "ash.mjs",
+            include_str!("../../../resources/extension-host/ash.js"),
         ),
         (
             "host.mjs",
@@ -317,8 +317,8 @@ fn product_node_process_speaks_the_shared_protocol_and_uses_real_node() {
         }
     }).to_string()).unwrap();
     std::fs::write(package.join("extension.cjs"), r#"
-const v = require('vscode');
-exports.activate = context => context.subscriptions.push(v.commands.registerCommand('test.node', () => {
+const v = require('@ash/sdk');
+exports.activate = context => context.subscriptions.push(v.commands.register('test.node', () => {
   require('node:fs').writeFileSync(__dirname + '/proof.txt', 'real Node');
   require('node:fs').writeSync(1, 'raw extension stdout\n');
   require('node:child_process').execFileSync(process.execPath, ['-e', 'process.stdout.write("inherited debug stdout")'], {stdio: 'inherit'});
@@ -331,7 +331,7 @@ exports.activate = context => context.subscriptions.push(v.commands.registerComm
         .unwrap_or_default();
     let launcher =
         crate::ProductNodeLauncher::new(node, root.join("node.mjs"), environment).unwrap();
-    let command = crate::ExtensionLaunchCommand::vscode(
+    let command = crate::ExtensionLaunchCommand::ash(
         vec![
             "--extension-id".into(),
             "test.node".into(),
@@ -340,7 +340,7 @@ exports.activate = context => context.subscriptions.push(v.commands.registerComm
             "--entry".into(),
             "extension.cjs".into(),
             "--api".into(),
-            "vscode".into(),
+            "ash".into(),
         ],
         &package,
     )
@@ -409,8 +409,8 @@ exports.activate = context => context.subscriptions.push(v.commands.registerComm
     };
     assert_eq!(
         serde_json::to_value(activated.registrations).unwrap(),
-        json!([{"registrationId":"vscode.output.events","kind":"outputEvents"},
-            {"registrationId":"vscode.workspace.events","kind":"workspaceEvents"}, {
+        json!([{"registrationId":"ash.output.events","kind":"outputEvents"},
+            {"registrationId":"ash.workspace.events","kind":"workspaceEvents"}, {
                 "registrationId": "test.node", "kind": "command", "command": "test.node", "title": "Node", "icon": "play",
                 "menus": [{"menu": "editor/title", "when": "editorTextFocus", "group": "navigation@1", "alt": "test.alternate"}]
         }])
@@ -449,19 +449,19 @@ exports.activate = context => context.subscriptions.push(v.commands.registerComm
     std::fs::write(
         package.join("extension.cjs"),
         r#"
-const v = require('vscode');
+const v = require('@ash/sdk');
 require('node:fs').writeFileSync(__dirname + '/initialization.txt', String(v.workspace.getConfiguration().get('nodeIncarnation')));
 exports.activate = async context => {
   await Promise.all(Array.from({ length: 64 }, () => v.window.showInformationMessage('startup')));
-  context.subscriptions.push(v.commands.registerCommand('test.node', async mode => {
+  context.subscriptions.push(v.commands.register('test.node', async mode => {
     if (mode === 'notification') {
       void v.window.showErrorMessage('Git failed', 'Output').then(selected => {
-        if (selected === 'Output') return v.commands.executeCommand('notification.output');
+        if (selected === 'Output') return v.commands.execute('notification.output');
       });
       throw new Error('command failed');
     }
     await Promise.all(Array.from({ length: 64 }, () => v.window.showInformationMessage('foreground')));
-    setTimeout(() => { void v.commands.executeCommand('background.wait'); }, 20);
+    setTimeout(() => { void v.commands.execute('background.wait'); }, 20);
     return 'scheduled';
   }));
 };
@@ -744,9 +744,9 @@ exports.activate = async context => {
 
     // A real crash queries current editor facts before loading the replacement package.
     std::fs::write(package.join("extension.cjs"), r#"
-const v = require('vscode'); const fact = v.workspace.getConfiguration().get('nodeIncarnation');
+const v = require('@ash/sdk'); const fact = v.workspace.getConfiguration().get('nodeIncarnation');
 require('node:fs').writeFileSync(__dirname + '/initialization.txt', String(fact));
-exports.activate = context => context.subscriptions.push(v.commands.registerCommand('test.node', crash => { if (crash) process.exit(1); return fact; }));
+exports.activate = context => context.subscriptions.push(v.commands.register('test.node', crash => { if (crash) process.exit(1); return fact; }));
 "#).unwrap();
     let recovering = crate::ExtensionHostSupervisor::new(
         launcher,

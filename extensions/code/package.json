@@ -5,7 +5,7 @@
   "displayName": "%code.displayName%",
   "description": "%code.description%",
   "engines": {
-    "vscode": "*"
+    "ash": "*"
   },
   "private": true,
   "type": "module",

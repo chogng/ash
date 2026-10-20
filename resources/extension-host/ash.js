@@ -1,7 +1,7 @@
 import { createSCMApi } from './scm.js';
 import { languages as ashLanguages, workspace as ashWorkspace, window as ashWindow, tasks as ashTasks, terminals as ashTerminals, speech as ashSpeech, debug as ashDebug, __runtime as ashRuntime, CancellationTokenSource, ResolvedAuthority, ManagedResolvedAuthority, RemoteAuthorityResolverError } from './host.mjs';
 
-// This is the public editor contract inside the confined process. Editor models and UI
+// This is the public editor contract inside the supervised process. Editor models and UI
 // remain with the initiating client; this module owns only extension callback lifetimes.
 export function createApi(configuration, initialization) {
 	const localization = initialization?.localization ?? configuration.localization;
@@ -123,7 +123,7 @@ export function createApi(configuration, initialization) {
 	let activationPromise;
 	let activationExports;
 	let statusDisposed = false;
-	const statusRegistrationId = 'vscode.statusBar';
+	const statusRegistrationId = 'ash.statusBar';
 	const taskTypes = new Set();
 	const fetchedTaskIds = new WeakMap();
 	const fetchedTaskSnapshots = new WeakMap();
@@ -202,7 +202,7 @@ export function createApi(configuration, initialization) {
 
 	function ensureDebugEvents() {
 		if (debugEventRegistration) return;
-		debugEventRegistration = ashDebug.registerDebugEvents('vscode.debug.events', (_context, event) => invoke(async () => {
+		debugEventRegistration = ashDebug.registerDebugEvents('ash.debug.events', (_context, event) => invoke(async () => {
 			if (!Number.isSafeInteger(event?.sequence) || event.sequence < 0) throw new TypeError('Invalid debug event sequence');
 			if (event.sequence < debugSequence) return;
 			debugSequence = event.sequence;
@@ -548,7 +548,7 @@ export function createApi(configuration, initialization) {
 	}
 	function ensureTaskEvents() {
 		if (taskEventRegistration) return;
-		taskEventRegistration = ashTasks.registerTaskEvents('vscode.tasks.events', (_context, event) => invoke(async () => {
+		taskEventRegistration = ashTasks.registerTaskEvents('ash.tasks.events', (_context, event) => invoke(async () => {
 			if (!Number.isSafeInteger(event.sequence) || event.sequence < 0) throw new TypeError('Invalid task event sequence');
 			if (event.type === 'snapshot') {
 				applyTaskSnapshot(event.executions, event.sequence);
@@ -690,7 +690,7 @@ export function createApi(configuration, initialization) {
 		ensureDocumentEvents();
 		const entries = (Array.isArray(selector) ? selector : [selector]).map(entry => typeof entry === 'string' ? entry : entry.language);
 		if (entries.some(entry => typeof entry !== 'string') || typeof provider?.[method] !== 'function') throw new TypeError('Invalid language provider');
-		const registration = ashRuntime.registerContribution({ kind: 'languageProvider', registrationId: `vscode.${operation}.${++providerSequence}`, languageIds: entries, operations: [operation] }, operation, (call, payload) => invoke(async () => {
+		const registration = ashRuntime.registerContribution({ kind: 'languageProvider', registrationId: `ash.${operation}.${++providerSequence}`, languageIds: entries, operations: [operation] }, operation, (call, payload) => invoke(async () => {
 			const request = coordinates(payload, false);
 			const snapshot = operation === 'workspaceSymbols' ? undefined : document({ uri: payload.resource, ...payload });
 			const point = request.position && new Position(request.position.line, request.position.character);
@@ -745,7 +745,7 @@ export function createApi(configuration, initialization) {
 		return registration;
 	}
 
-	function unsupported(name) { throw new Error(`Unsupported VS Code API: ${name}`); }
+	function unsupported(name) { throw new Error(`Unsupported Ash API: ${name}`); }
 	let workspaceFolders;
 	const workspaceFolderStates = new WeakMap();
 	const workspaceListeners = { configuration: new Set(), workspace: new Set() };
@@ -787,7 +787,7 @@ export function createApi(configuration, initialization) {
 	}
 	function ensureWorkspaceEvents() {
 		if (workspaceRegistration) return workspaceRegistration;
-		workspaceRegistration = ashWorkspace.registerWorkspaceEvents('vscode.workspace.events', (_context, event) => invoke(async () => {
+		workspaceRegistration = ashWorkspace.registerWorkspaceEvents('ash.workspace.events', (_context, event) => invoke(async () => {
 			if (!Object.hasOwn(workspaceRevisions, event.type) || !Number.isSafeInteger(event.revision) || event.revision < 1 || typeof event.emit !== 'boolean') throw new TypeError('Invalid workspace event');
 			if (event.revision <= workspaceRevisions[event.type]) return;
 			const before = windowFacts();
@@ -911,9 +911,9 @@ export function createApi(configuration, initialization) {
 		const id = globalThis.__ashInvocation(false);
 		const owned = pending.get(id);
 		if (!owned && typeof globalThis.__ashBackgroundRequest !== 'function') {
-			// The confined host remains the owner of its invocation authorization and error.
+			// Invocation-bound hosts retain the authorization and error for their own callback.
 			if (id === undefined || id === null) globalThis.__ashInvocation();
-			throw new Error('VS Code callback is no longer active');
+			throw new Error('Ash callback is no longer active');
 		}
 		return owned;
 	}
@@ -962,7 +962,7 @@ export function createApi(configuration, initialization) {
 		}
 		const operation = { operation: 'showMessage', message: text, severity, items: labels };
 		const selection = (async () => {
-			// Node choices outlive the command that produced them; the confined host retains invocation ownership.
+			// Node choices outlive the command that produced them; other hosts retain invocation ownership.
 			if (typeof globalThis.__ashBackgroundRequest !== 'function') return request(operation, 'selection');
 			const result = JSON.parse(await globalThis.__ashBackgroundRequest(JSON.stringify(operation)));
 			if (result.result !== 'selection') throw new Error('Invalid result for showMessage');
@@ -1032,7 +1032,7 @@ export function createApi(configuration, initialization) {
 	class Breakpoint {
 		constructor(enabled = true, condition, hitCondition, logMessage) {
 			if (typeof enabled !== 'boolean' || [condition, hitCondition, logMessage].some(value => value !== undefined && (typeof value !== 'string' || value.length > 32768 || value.includes('\0')))) throw new TypeError('Invalid breakpoint properties');
-			breakpointStates.set(this, { id: `vscode.breakpoint.${configuration.extensionId}.${++breakpointSequence}.${Math.random().toString(36).slice(2)}`, enabled, condition, hitCondition, logMessage });
+			breakpointStates.set(this, { id: `ash.breakpoint.${configuration.extensionId}.${++breakpointSequence}.${Math.random().toString(36).slice(2)}`, enabled, condition, hitCondition, logMessage });
 		}
 		get id() { return breakpointStates.get(this).id; }
 		get enabled() { return breakpointStates.get(this).enabled; }
@@ -1186,7 +1186,7 @@ export function createApi(configuration, initialization) {
 	}
 	function ensureDocumentEvents() {
 		if (!documentRegistration) {
-			documentRegistration = ashWorkspace.registerTextDocumentEvents('vscode.documents', (_call, event) => invoke(async () => {
+			documentRegistration = ashWorkspace.registerTextDocumentEvents('ash.documents', (_call, event) => invoke(async () => {
 				if (!['open', 'change', 'close'].includes(event.type) || !event.document) throw new TypeError('Invalid document event');
 				const value = document(event.document, true);
 				if (event.type === 'close') {
@@ -1209,7 +1209,7 @@ export function createApi(configuration, initialization) {
 	function diagnosticCollection(name = '') {
 		if (typeof name !== 'string' || name.length > 256) throw new TypeError('Invalid diagnostic collection name');
 		ensureDocumentEvents();
-		const id = `vscode.diagnostics.${++collectionSequence}`;
+		const id = `ash.diagnostics.${++collectionSequence}`;
 		let entries = new Map();
 		let disposed = false;
 		function publish(next) {
@@ -1317,7 +1317,7 @@ export function createApi(configuration, initialization) {
 	const LogLevel = Object.freeze({ Trace: 1, Debug: 2, Info: 3, Warning: 4, Error: 5, Off: 0 });
 	function ensureOutputEvents() {
 		if (!outputEvents) {
-			outputEvents = ashRuntime.registerContribution({ kind: 'outputEvents', registrationId: 'vscode.output.events' }, 'outputEvent', (_call, event) => invoke(() => {
+			outputEvents = ashRuntime.registerContribution({ kind: 'outputEvents', registrationId: 'ash.output.events' }, 'outputEvent', (_call, event) => invoke(() => {
 				if (!event || typeof event.channelId !== 'string' || !Number.isInteger(event.level) || event.level < 0 || event.level > 5) throw new TypeError('Invalid output log level');
 				logChannels.get(event.channelId)?.(event.level);
 			}));
@@ -1393,12 +1393,7 @@ export function createApi(configuration, initialization) {
 		return channel;
 	}
 
-	const ashApi = Object.freeze({
-		scm: scmBridge.api,
-		backend: Object.freeze({ request: (capability, method, params = {}) => request({ operation: 'backendRequest', capability, method, params }, 'value').then(result => result.value), state: (capability, after = 0) => request({ operation: 'backendState', capability, after }, 'value').then(result => result.value) }),
-		editors: Object.freeze({ request: payload => request({ operation: 'editorOperation', payload }, 'value').then(result => result.value) }),
-	});
-	const api = contract('vscode', {
+	const api = contract('ash', {
 		LogLevel,
 		SpeechToTextStatus: Object.freeze({ Started: 1, Recognizing: 2, Recognized: 3, Stopped: 4, Error: 5 }),
 		TextToSpeechStatus: Object.freeze({ Started: 1, Stopped: 2, Error: 3 }),
@@ -1406,7 +1401,7 @@ export function createApi(configuration, initialization) {
 		speech: Object.freeze({
 			registerSpeechProvider(identifier, provider) {
 				if (!speechAdmitted) throw new Error('Speech providers require the admitted speechProvider capability');
-				const registration = ashSpeech.registerSpeechProvider(`vscode.speech.${++providerSequence}`, identifier, provider);
+				const registration = ashSpeech.registerSpeechProvider(`ash.speech.${++providerSequence}`, identifier, provider);
 				subscriptions.push(registration);
 				return registration;
 			}
@@ -1418,7 +1413,19 @@ export function createApi(configuration, initialization) {
 		TerminalQuickFixOpener: class TerminalQuickFixOpener { constructor(uri) { this.uri = uri; } },
 		TerminalOutputAnchor: Object.freeze({ Top: 0, Bottom: 1 }),
 		TerminalProfile: class TerminalProfile { constructor(options) { this.options = options; } },
-		ash: ashApi,
+		scm: scmBridge.api,
+		files: Object.freeze({
+			readTextFile(path) {
+				if (typeof path !== 'string' || !path || path.length > 32768 || path.includes('\0')) throw new TypeError('A workspace file requires a valid path');
+				if (ashRuntime.isDisposed || statusDisposed) throw new Error('Ash extension is not active');
+				const id = globalThis.__ashInvocation();
+				if (!pending.has(id)) throw new Error('Ash file requests require an active callback');
+				return request({ operation: 'readWorkspaceFile', path }, 'file').then(response => {
+					if (typeof response.text !== 'string') throw new Error('Invalid Ash file response');
+					return response.text;
+				});
+			},
+		}),
 		env: contract('env', { get language() { return windowFacts().language ?? 'en'; } }),
 		l10n: contract('l10n', {
 			t: localizeMessage,
@@ -1479,7 +1486,7 @@ export function createApi(configuration, initialization) {
 			registerTaskProvider(type, provider) {
 				ensureTaskEvents();
 				if (taskTypes.has(type)) throw new Error(`Task provider '${type}' is already registered`);
-				const registrationId = `vscode.tasks.${++providerSequence}`;
+				const registrationId = `ash.tasks.${++providerSequence}`;
 				const ids = new Map();
 				const customExecutions = new Map();
 				let sequence = 0;
@@ -1569,11 +1576,11 @@ export function createApi(configuration, initialization) {
 				if (provider.provideDebugConfigurations) callbacks.provideDebugConfigurations = (context, value) => invoke(() => provider.provideDebugConfigurations(folder(value), context.cancellationToken));
 				if (provider.resolveDebugConfiguration) callbacks.resolveDebugConfiguration = (context, value, config) => invoke(() => provider.resolveDebugConfiguration(folder(value), config, context.cancellationToken));
 				if (provider.resolveDebugConfigurationWithSubstitutedVariables) callbacks.resolveDebugConfigurationWithSubstitutedVariables = (context, value, config) => invoke(() => provider.resolveDebugConfigurationWithSubstitutedVariables(folder(value), config, context.cancellationToken));
-				return ashDebug.registerDebugConfigurationProvider(`vscode.debugConfiguration.${++providerSequence}`, type, callbacks, triggerKind);
+				return ashDebug.registerDebugConfigurationProvider(`ash.debugConfiguration.${++providerSequence}`, type, callbacks, triggerKind);
 			},
 			registerDebugAdapterTrackerFactory(type, factory) {
 				if (typeof type !== 'string' || !type || typeof factory?.createDebugAdapterTracker !== 'function') { throw new TypeError('Invalid Debug Adapter tracker factory'); }
-				return ashDebug.registerDebugAdapterTrackerFactory(`vscode.debugTracker.${++providerSequence}`, type, {
+				return ashDebug.registerDebugAdapterTrackerFactory(`ash.debugTracker.${++providerSequence}`, type, {
 					createDebugAdapterTracker: (_context, snapshot) => invoke(async () => {
 						const tracker = await factory.createDebugAdapterTracker(debugSession(snapshot));
 						if (!tracker) { return undefined; }
@@ -1589,7 +1596,7 @@ export function createApi(configuration, initialization) {
 			},
 			registerDebugAdapterDescriptorFactory(type, factory) {
 				if (!debuggerTypes.has(type) || registeredDebuggerTypes.has(type)) throw new Error(`Debug adapter type '${type}' is undeclared or already registered`);
-				const handle = ashDebug.registerDebugAdapterDescriptorFactory(`vscode.debug.${++providerSequence}`, type, {
+				const handle = ashDebug.registerDebugAdapterDescriptorFactory(`ash.debug.${++providerSequence}`, type, {
 					createDebugAdapterDescriptor: (_context, value, session, executable) => invoke(async () => {
 						const descriptor = await factory.createDebugAdapterDescriptor(debugSession({ ...session, type: value.type, name: value.name, configuration: value }), executable === undefined ? undefined : new DebugAdapterExecutable(executable.program, executable.arguments, { ...(executable.cwd === undefined ? {} : { cwd: executable.cwd }), ...(executable.env === undefined ? {} : { env: executable.env }) }));
 						if (descriptor === undefined || descriptor === null) return descriptor;
@@ -1624,7 +1631,7 @@ export function createApi(configuration, initialization) {
 		CodeActionKind: class CodeActionKind { constructor(value) { this.value = value; } },
 		Disposable, Position, Range, Location, Breakpoint, SourceBreakpoint, FunctionBreakpoint, DebugThread, DebugStackFrame, Uri, Diagnostic, SnippetString,
 		DiagnosticSeverity: Object.freeze({ Error: 0, Warning: 1, Information: 2, Hint: 3 }),
-		CompletionItemKind: Object.freeze(Object.fromEntries(completionNames.map((name, index) => [name, index]))),
+		CompletionItemKind: Object.freeze(Object.fromEntries(completionNames.flatMap((name, index) => completionKinds[index] ? [[name, index]] : []))),
 		CompletionTriggerKind: Object.freeze({ Invoke: 0, TriggerCharacter: 1, TriggerForIncompleteCompletions: 2 }),
 		CompletionItem: class CompletionItem { constructor(label, kind) { this.label = label; this.kind = kind; } },
 		CompletionList: class CompletionList { constructor(items = [], isIncomplete = false) { this.items = items; this.isIncomplete = isIncomplete; } },
@@ -1636,9 +1643,9 @@ export function createApi(configuration, initialization) {
 			appendMarkdown(value) { this.value += value; return this; }
 		},
 		commands: contract('commands', {
-			async executeCommand(command, ...args) {
-				if (typeof command !== 'string' || !command || command.includes('\0')) throw new TypeError('executeCommand requires a command ID');
-				if (command === 'vscode.openWith') {
+			async execute(command, ...args) {
+				if (typeof command !== 'string' || !command || command.includes('\0')) throw new TypeError('execute requires a command ID');
+				if (command === 'ash.openWith') {
 					const [resource, viewType, options] = args;
 					const editor = editorContexts.get(globalThis.__ashInvocation(false));
 					command = '_workbench.openWith';
@@ -1651,7 +1658,7 @@ export function createApi(configuration, initialization) {
 				const result = await request({ operation: 'executeCommand', command, arguments: args }, 'command');
 				return result.hasValue === false ? undefined : result.value;
 			},
-			registerCommand(command, callback, thisArg) {
+			register(command, callback, thisArg) {
 				if (typeof callback !== 'function' || !titles.has(command)) throw new TypeError('Command must be declared in package.json');
 				const contribution = configuration.manifest?.contributes?.commands?.find(entry => entry.command === command) ?? configuration.commands.find(entry => entry.command === command);
 				const menus = Object.entries(configuration.manifest?.contributes?.menus ?? {}).flatMap(([menu, entries]) => entries.filter(entry => entry.command === command).map(({ command: _command, ...entry }) => ({ menu, ...entry })));
@@ -1664,11 +1671,16 @@ export function createApi(configuration, initialization) {
 			},
 		}),
 		window: contract('window', {
+			async openComparison(input, options, sideBySide = false) {
+				if (!input || typeof input !== 'object' || Array.isArray(input) || !['diff', 'binaryDiff', 'multiDiff'].includes(input.kind)) throw new TypeError('A comparison requires a diff, binaryDiff or multiDiff input');
+				if (typeof sideBySide !== 'boolean') throw new TypeError('Comparison sideBySide must be a boolean');
+				await request({ operation: 'editorOperation', payload: { method: 'open', input, ...(options === undefined ? {} : { options }), sideBySide } }, 'value');
+			},
 			registerTerminalCompletionProvider(provider, ...triggerCharacters) {
 				if (!terminalCompletionsAdmitted) throw new Error('Terminal completions require the admitted terminalCompletionProvider capability');
 				if (typeof provider?.provideTerminalCompletions !== 'function') throw new TypeError('Invalid terminal completion provider');
 				const terminals = new Map();
-				const registration = ashTerminals.registerTerminalCompletionProvider(`vscode.terminalCompletions.${++providerSequence}`, triggerCharacters, (context, payload) => invoke(async () => {
+				const registration = ashTerminals.registerTerminalCompletionProvider(`ash.terminalCompletions.${++providerSequence}`, triggerCharacters, (context, payload) => invoke(async () => {
 					let entry = terminals.get(payload.terminal.id);
 					if (!entry) {
 						entry = { snapshot: payload.terminal };
@@ -1687,15 +1699,15 @@ export function createApi(configuration, initialization) {
 				if (!terminalQuickFixesAdmitted) throw new Error('Terminal quick fixes require the admitted terminalQuickFixProvider capability');
 				const selector = configuration.manifest?.contributes?.terminalQuickFixes?.find(value => value.id === id);
 				if (!selector || typeof provider?.provideTerminalQuickFixes !== 'function') throw new TypeError('Terminal quick fixes require a declared selector and provider');
-				return ashTerminals.registerTerminalQuickFixProvider(`vscode.terminalQuickFixes.${++providerSequence}`, id, selector,
+				return ashTerminals.registerTerminalQuickFixProvider(`ash.terminalQuickFixes.${++providerSequence}`, id, selector,
 					(context, match) => invoke(() => provider.provideTerminalQuickFixes(match, context.cancellationToken)),
-					(_context, command) => invoke(() => api.commands.executeCommand(command.command, ...(command.arguments ?? []))));
+					(_context, command) => invoke(() => api.commands.execute(command.command, ...(command.arguments ?? []))));
 			},
 			registerTerminalLinkProvider(provider) {
 				if (!terminalLinksAdmitted) throw new Error('Terminal link providers require the admitted terminalLinkProvider capability');
 				if (typeof provider?.provideTerminalLinks !== 'function' || typeof provider?.handleTerminalLink !== 'function') throw new TypeError('Invalid terminal link provider');
 				const terminals = new Map();
-				const handle = ashTerminals.registerTerminalLinkProvider(`vscode.terminalLinks.${++providerSequence}`, {
+				const handle = ashTerminals.registerTerminalLinkProvider(`ash.terminalLinks.${++providerSequence}`, {
 					provideTerminalLinks: (context, payload) => invoke(() => {
 						// Preserve the public object identity for repeated requests from one
 						// terminal without retaining an unbounded set of closed terminals.
@@ -1717,7 +1729,7 @@ export function createApi(configuration, initialization) {
 			registerTerminalProfileProvider(id, provider) {
 				const declaration = terminalProfiles.find(profile => profile.id === id);
 				if (!declaration || typeof provider?.provideTerminalProfile !== 'function') throw new TypeError('Terminal profile requires a declared ID and provideTerminalProfile callback');
-				const handle = ashTerminals.registerTerminalProfileProvider(`vscode.terminalProfile.${++providerSequence}`, id, declaration.title, {
+				const handle = ashTerminals.registerTerminalProfileProvider(`ash.terminalProfile.${++providerSequence}`, id, declaration.title, {
 					createTerminalProfile: context => invoke(async () => {
 						const profile = await provider.provideTerminalProfile(context.cancellationToken);
 						if (profile === undefined || profile === null) return undefined;
@@ -1810,7 +1822,7 @@ export function createApi(configuration, initialization) {
 				const entries = Array.isArray(selector) ? selector : [selector];
 				if (entries.some(entry => typeof entry !== 'string')) return unsupported('languages.registerCompletionItemProvider selector filters');
 				if (typeof provider?.provideCompletionItems !== 'function' || provider.resolveCompletionItem !== undefined) return unsupported('CompletionItemProvider missing provideCompletionItems/resolveCompletionItem');
-				const registration = ashLanguages.registerCompletionProvider(`vscode.completion.${++providerSequence}`, entries, {
+				const registration = ashLanguages.registerCompletionProvider(`ash.completion.${++providerSequence}`, entries, {
 					provideCompletionItems: (call, snapshot, coordinate, context) => invoke(async () => {
 						const value = document(snapshot);
 						const position = new Position(coordinate.line, coordinate.character);
@@ -1824,7 +1836,7 @@ export function createApi(configuration, initialization) {
 			registerHoverProvider(selector, provider) {
 				const entries = Array.isArray(selector) ? selector : [selector];
 				if (entries.some(entry => typeof entry !== 'string')) return unsupported('languages.registerHoverProvider selector filters');
-				const registration = ashLanguages.registerHoverProvider(`vscode.hover.${++providerSequence}`, entries, {
+				const registration = ashLanguages.registerHoverProvider(`ash.hover.${++providerSequence}`, entries, {
 					provideHover: (call, snapshot, position) => invoke(async () => {
 						const hover = await provider.provideHover(document(snapshot), new Position(position.line, position.character),
 							call.cancellationToken);
@@ -1846,7 +1858,7 @@ export function createApi(configuration, initialization) {
 			terminalCompletionsAdmitted = capabilities.includes('terminalCompletionProvider');
 			terminalQuickFixesAdmitted = capabilities.includes('terminalQuickFixProvider');
 			speechAdmitted = capabilities.includes('speechProvider');
-			if (environmentAdmitted) subscriptions.push(ashTerminals.registerEnvironmentVariableCollection('vscode.terminalEnvironment', snapshotEnvironment));
+			if (environmentAdmitted) subscriptions.push(ashTerminals.registerEnvironmentVariableCollection('ash.terminalEnvironment', snapshotEnvironment));
 			if (initialization) subscriptions.push(ensureWorkspaceEvents());
 			// The supervisor supplies the admitted ceiling. Optional API observers must
 			// not turn an unrelated command into a rejected registration handshake.

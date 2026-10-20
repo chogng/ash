@@ -17,7 +17,7 @@ async function host(t, source, entry = 'extension.cjs', capabilities = ['command
 	const extension = join(root, 'extension');
 	await mkdir(resources);
 	await mkdir(extension);
-	for (const [from, to] of [['node.mjs', 'node.mjs'], ['vscode.js', 'vscode.mjs'], ['scm.js', 'scm.js']]) {
+	for (const [from, to] of [['node.mjs', 'node.mjs'], ['ash.js', 'ash.mjs'], ['scm.js', 'scm.js']]) {
 		await copyFile(new URL(from, import.meta.url), join(resources, to));
 	}
 	await copyFile(new URL('host.mjs', import.meta.url), join(resources, 'host.mjs'));
@@ -34,7 +34,7 @@ async function host(t, source, entry = 'extension.cjs', capabilities = ['command
 	await once(server, 'listening');
 	const connected = once(server, 'connection');
 	const token = randomBytes(32).toString('hex');
-	const child = spawn(process.execPath, [join(resources, 'node.mjs'), '--extension-id', 'test.node', '--package', extension, '--entry', entry, '--api', 'vscode', '--protocol-address', `127.0.0.1:${server.address().port}`, '--protocol-token', token], { stdio: ['pipe', 'pipe', 'pipe'], env: { ...process.env, ...fixture.inheritedEnvironment } });
+	const child = spawn(process.execPath, [join(resources, 'node.mjs'), '--extension-id', 'test.node', '--package', extension, '--entry', entry, '--api', fixture.api ?? 'ash', '--protocol-address', `127.0.0.1:${server.address().port}`, '--protocol-token', token], { stdio: ['pipe', 'pipe', 'pipe'], env: { ...process.env, ...fixture.inheritedEnvironment } });
 	t.after(() => child.kill());
 	let stderr = '';
 	child.stderr.on('data', bytes => { stderr += bytes; });
@@ -103,6 +103,7 @@ async function host(t, source, entry = 'extension.cjs', capabilities = ['command
 			language: fixture.language ?? 'en',
 			workspaceFolders: [{ uri: pathToFileURL(extension).href, name: 'extension', index: 0 }], workspaceName: 'extension', workspaceFile: null,
 			configurationValues: {}, configurationData: { defaults: { contents: {}, keys: [], overrides: [] }, folders: [] },
+			...(fixture.localization ? { localization: fixture.localization } : {}),
 		}
 	}).result;
 	if (fixture.expectActivationFailure) { assert.equal(activated.status, 'failure'); return activated; }
@@ -114,8 +115,90 @@ async function host(t, source, entry = 'extension.cjs', capabilities = ['command
 	};
 }
 
+test('Ash ESM and CommonJS commands use the same host-bound SDK', { timeout: 10000 }, async t => {
+	for (const commonjs of [false, true]) {
+		const source = commonjs
+			? `const ash = require('@ash/sdk'); exports.activate = context => context.subscriptions.push(ash.commands.register('test.node', path => ash.files.readTextFile(path)));`
+			: `import * as ash from '@ash/sdk'; export function activate(context) { context.subscriptions.push(ash.commands.register('test.node', path => ash.files.readTextFile(path))); }`;
+		const h = await host(t, source, commonjs ? 'extension.cjs' : 'extension.mjs', ['command'], frame => {
+			assert.deepEqual(frame.operation, { operation: 'readWorkspaceFile', path: '/workspace/你好.txt' });
+			return { result: 'file', text: 'Hello, 世界\n' };
+		}, { api: 'ash' });
+		assert.deepEqual(h.registrations.filter(registration => registration.kind === 'command').map(registration => registration.command), ['test.node']);
+		const result = await h.invoke('test.node', ['/workspace/你好.txt']).result;
+		assert.equal(result.status, 'success');
+		assert.equal(result.body.body.payload, 'Hello, 世界\n');
+	}
+});
+
+test('Ash commands retain requests started without awaiting their Promise', { timeout: 10000 }, async t => {
+	let release;
+	let requested;
+	const seen = new Promise(resolve => { requested = resolve; });
+	const h = await host(t, `import * as ash from '@ash/sdk';
+export function activate(context) { context.subscriptions.push(ash.commands.register('test.node', () => { ash.files.readTextFile('/workspace/file.txt'); return 'finished'; })); }`, 'extension.mjs', ['command'], () => {
+		requested();
+		return new Promise(resolve => { release = () => resolve({ result: 'file', text: 'file' }); });
+	}, { api: 'ash' });
+	let completed = false;
+	const invocation = h.invoke('test.node', []).result.then(result => { completed = true; return result; });
+	await seen;
+	await new Promise(resolve => setImmediate(resolve));
+	assert.equal(completed, false);
+	release();
+	assert.equal((await invocation).body.body.payload, 'finished');
+});
+
+test('Ash rejects legacy API imports and undeclared command registrations', { timeout: 10000 }, async t => {
+	await host(t, `import 'vscode'; export function activate() {}`, 'extension.mjs', ['command'], undefined, { api: 'ash', expectActivationFailure: true });
+	await host(t, `import * as ash from '@ash/sdk'; export function activate() { ash.commands.register('undeclared', () => null); }`, 'extension.mjs', ['command'], undefined, { api: 'ash', expectActivationFailure: true });
+});
+
+test('the public Ash SDK exposes every implemented domain and excludes retired and raw interfaces', { timeout: 10000 }, async t => {
+	const published = await import('../../sdk/typescript/index.js');
+	const h = await host(t, `const ash = require('@ash/sdk');
+exports.activate = context => context.subscriptions.push(ash.commands.register('test.node', async () => {
+ const unavailable = [];
+ for (const key of ['ash', 'backend', 'editors']) { try { ash[key]; } catch { unavailable.push(key); } }
+ for (const key of ['registerCommand', 'executeCommand']) { try { ash.commands[key]; } catch { unavailable.push(key); } }
+ return { keys: Object.keys(ash).sort(), unavailable, result: await ash.commands.execute('test.target', 42) };
+}));`, 'extension.cjs', ['command'], frame => {
+		assert.deepEqual(frame.operation, { operation: 'executeCommand', command: 'test.target', arguments: [42] });
+		return { result: 'command', value: 'called' };
+	});
+	assert.deepEqual((await h.invoke('test.node', []).result).body.body.payload, { keys: Object.keys(published).sort(), unavailable: ['ash', 'backend', 'editors', 'registerCommand', 'executeCommand'], result: 'called' });
+});
+
+test('Ash comparison opening accepts existing comparison inputs through a bounded editor operation', { timeout: 10000 }, async t => {
+	const calls = [];
+	const h = await host(t, `const ash = require('@ash/sdk');
+exports.activate = context => context.subscriptions.push(ash.commands.register('test.node', async input => {
+ await ash.window.openComparison(input, { pinned: true }, true); return 'opened';
+}));`, 'extension.cjs', ['command'], frame => { calls.push(frame.operation); return { result: 'value', value: null }; });
+	const original = { resource: 'snapshot:/before', initialBytes: [0, 255], contentType: 'application/octet-stream' };
+	const modified = { resource: 'snapshot:/after', initialBytes: [0, 254], contentType: 'application/octet-stream' };
+	for (const input of [{ kind: 'diff', original: { resource: 'snapshot:/text', initialText: 'before' }, modified: { resource: 'file:/after' } }, { kind: 'binaryDiff', original, modified }, { kind: 'multiDiff', resource: 'comparison:/changes', items: [{ binary: true, original, modified }] }]) {
+		assert.equal((await h.invoke('test.node', [input]).result).body.body.payload, 'opened');
+		assert.deepEqual(calls.at(-1), { operation: 'editorOperation', payload: { method: 'open', input, options: { pinned: true }, sideBySide: true } });
+	}
+	assert.equal((await h.invoke('test.node', [{ kind: 'raw', method: 'dispose' }]).result).status, 'failure');
+	assert.equal(calls.length, 3);
+});
+
+test('Ash manifest command titles follow the initiating client language', { timeout: 10000 }, async t => {
+	const h = await host(t, `import * as ash from '@ash/sdk'; export function activate(context) { context.subscriptions.push(ash.commands.register('test.node', () => null)); }`, 'extension.mjs', ['command'], undefined, {
+		api: 'ash', language: 'zh-CN',
+		manifest: { contributes: { commands: [{ command: 'test.node', title: '%readFile%' }] } },
+		files: {
+			'package.nls.json': JSON.stringify({ readFile: 'Read file' }),
+			'package.nls.zh-CN.json': JSON.stringify({ readFile: '读取文件' }),
+		},
+	});
+	assert.equal(h.registrations.find(registration => registration.command === 'test.node').title, '读取文件');
+});
+
 test('custom text editor asset roles follow HTML instead of URI conversion order', { timeout: 10000 }, async t => {
-	const h = await host(t, `const v = require('vscode');
+	const h = await host(t, `const v = require('@ash/sdk');
 exports.activate = context => context.subscriptions.push(v.window.registerCustomEditorProvider('test.editor', {
  resolveCustomTextEditor(document, panel) {
   const style = panel.webview.asWebviewUri(v.Uri.parse('blob:style')).toString();
@@ -134,11 +217,11 @@ exports.activate = context => context.subscriptions.push(v.window.registerCustom
 });
 
 test('window environment is applied before module evaluation and inherited by Debug children', { timeout: 15000 }, async t => {
-	const source = `const v = require('vscode'); const cp = require('node:child_process');
+	const source = `const v = require('@ash/sdk'); const cp = require('node:child_process');
 const keys = ['ASH_NODE_ENV_VALUE', 'ASH_NODE_ENV_REMOVE', 'ASH_NODE_ENV_EMPTY', 'ASH_NODE_ENV_INHERITED', 'OPENAI_API_KEY'];
 const snapshot = () => Object.fromEntries(keys.map(key => [key, process.env[key] ?? null]));
 const evaluation = snapshot();
-exports.activate = context => context.subscriptions.push(v.commands.registerCommand('test.node', () => ({
+exports.activate = context => context.subscriptions.push(v.commands.register('test.node', () => ({
     evaluation, current: snapshot(), child: JSON.parse(cp.execFileSync(process.execPath, ['-e', 'process.stdout.write(JSON.stringify(Object.fromEntries(' + JSON.stringify(keys) + '.map(key => [key, process.env[key] ?? null]))))'], { encoding: 'utf8' }))
 })));`;
 	const inheritedEnvironment = {
@@ -161,9 +244,9 @@ exports.activate = context => context.subscriptions.push(v.commands.registerComm
 });
 
 test('CJS extension uses real Node filesystem, TCP, child processes and module cache', { timeout: 15000 }, async t => {
-	const h = await host(t, `const v = require('vscode'); const fs = require('node:fs'); const net = require('node:net'); const cp = require('node:child_process');
-if (v !== require('vscode')) throw Error('Editor API identity changed');
-exports.activate = context => context.subscriptions.push(v.commands.registerCommand('test.node', async () => {
+	const h = await host(t, `const v = require('@ash/sdk'); const fs = require('node:fs'); const net = require('node:net'); const cp = require('node:child_process');
+if (v !== require('@ash/sdk')) throw Error('Editor API identity changed');
+exports.activate = context => context.subscriptions.push(v.commands.register('test.node', async () => {
     fs.writeFileSync(__dirname + '/proof.txt', 'Node file');
     const server = net.createServer(socket => { socket.end('Node TCP'); });
     await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
@@ -186,9 +269,9 @@ exports.activate = context => context.subscriptions.push(v.commands.registerComm
 });
 
 test('parent control closure retires a host with retained timers', { timeout: 10000 }, async t => {
-	const h = await host(t, `const v = require('vscode'); exports.activate = context => {
+	const h = await host(t, `const v = require('@ash/sdk'); exports.activate = context => {
 setInterval(() => {}, 1000);
-context.subscriptions.push(v.commands.registerCommand('test.node', () => 'alive'));
+context.subscriptions.push(v.commands.register('test.node', () => 'alive'));
 };`);
 	assert.equal((await h.invoke('test.node', []).result).body.body.payload, 'alive');
 	const exit = once(h.child, 'exit');
@@ -197,29 +280,29 @@ context.subscriptions.push(v.commands.registerCommand('test.node', () => 'alive'
 });
 
 test('ESM extension imports the same editor API and real Node builtins', { timeout: 10000 }, async t => {
-	const h = await host(t, `import v, { commands } from 'vscode'; import { basename } from 'node:path';
-export function activate(context) { if (commands !== v.commands) throw Error('API identity differs'); context.subscriptions.push(commands.registerCommand('test.node', () => basename('/workspace/real-node.js'))); }`, 'extension.mjs');
+	const h = await host(t, `import v, { commands } from '@ash/sdk'; import { basename } from 'node:path';
+export function activate(context) { if (commands !== v.commands) throw Error('API identity differs'); context.subscriptions.push(commands.register('test.node', () => basename('/workspace/real-node.js'))); }`, 'extension.mjs');
 	assert.equal((await h.invoke('test.node', []).result).body.body.payload, 'real-node.js');
 });
 
 test('transpiled CommonJS imports can inspect module metadata without changing API identity', { timeout: 10000 }, async t => {
-	const h = await host(t, `const raw = require('vscode');
+	const h = await host(t, `const raw = require('@ash/sdk');
 const imported = raw && raw.__esModule ? raw : { ...raw, default: raw };
 if (imported.default !== raw || imported.commands !== raw.commands) throw Error('Module identity differs');
 if (raw.commands.__esModule !== undefined) throw Error('Namespace metadata differs');
-exports.activate = context => context.subscriptions.push(imported.commands.registerCommand('test.node', () => {
+exports.activate = context => context.subscriptions.push(imported.commands.register('test.node', () => {
     try { raw.missingPublicApi(); } catch (error) { return error.message; }
     throw Error('Unsupported API was silently accepted');
 }));`);
-	assert.equal((await h.invoke('test.node', []).result).body.body.payload, 'Unsupported VS Code API: vscode.missingPublicApi');
+	assert.equal((await h.invoke('test.node', []).result).body.body.payload, 'Unsupported Ash API: ash.missingPublicApi');
 });
 
 test('debug extension tree item subclasses retain public label and resource values', { timeout: 10000 }, async t => {
-	const h = await host(t, `const v = require('vscode');
+	const h = await host(t, `const v = require('@ash/sdk');
 class BreakpointItem extends v.TreeItem {
     constructor(label) { super(label, v.TreeItemCollapsibleState.Expanded); this.checkboxState = v.TreeItemCheckboxState.Checked; }
 }
-exports.activate = context => context.subscriptions.push(v.commands.registerCommand('test.node', () => {
+exports.activate = context => context.subscriptions.push(v.commands.register('test.node', () => {
     const label = { label: 'Breakpoint', highlights: [[0, 5]] };
     const item = new BreakpointItem(label);
     item.description = 'at line 2';
@@ -233,9 +316,9 @@ exports.activate = context => context.subscriptions.push(v.commands.registerComm
 });
 
 test('window language selects the package translation bundle before CommonJS evaluation', { timeout: 10000 }, async t => {
-	const h = await host(t, `const v = require('vscode');
+	const h = await host(t, `const v = require('@ash/sdk');
 const evaluation = v.l10n.t('Target {0}', 'worker');
-exports.activate = context => context.subscriptions.push(v.commands.registerCommand('test.node', () => ({
+exports.activate = context => context.subscriptions.push(v.commands.register('test.node', () => ({
     language: v.env.language, evaluation, uri: v.l10n.uri.path.endsWith('/l10n/bundle.l10n.zh-cn.json'),
     contents: v.l10n.bundle['Target {0}'], named: v.l10n.t('Ready {name}: {count}', { name: 'worker', count: 0 }),
     comment: v.l10n.t({ message: 'Paused {0}', args: [false], comment: ['debug', ' state'] }),
@@ -259,15 +342,15 @@ test('missing or invalid translation resources fall back to the source without i
 		{ language: 'zh-cn', manifest: { l10n: './l10n' }, files: { 'l10n/bundle.l10n.zh-cn.json': 'invalid json' } },
 		{ language: 'zh-cn', manifest: { l10n: '../outside' }, files: { '../outside/bundle.l10n.zh-cn.json': '{"Target":"outside"}' } },
 	]) {
-		const h = await host(t, `const v = require('vscode'); exports.activate = context => context.subscriptions.push(v.commands.registerCommand('test.node', () => ({ message: v.l10n.t('Target {0}', 0), bundle: v.l10n.bundle === undefined, uri: v.l10n.uri === undefined })));`, 'extension.cjs', ['command'], undefined, fixture);
+		const h = await host(t, `const v = require('@ash/sdk'); exports.activate = context => context.subscriptions.push(v.commands.register('test.node', () => ({ message: v.l10n.t('Target {0}', 0), bundle: v.l10n.bundle === undefined, uri: v.l10n.uri === undefined })));`, 'extension.cjs', ['command'], undefined, fixture);
 		assert.deepEqual((await h.invoke('test.node', []).result).body.body.payload, { message: 'Target 0', bundle: true, uri: true });
 	}
 });
 
 test('concurrent callbacks retain identity and detached Node work uses the activation fence', { timeout: 10000 }, async t => {
-	const h = await host(t, `const v = require('vscode'); exports.activate = context => {
-context.subscriptions.push(v.commands.registerCommand('test.node', async key => { await new Promise(resolve => setTimeout(resolve, key === 'first' ? 15 : 1)); return v.commands.executeCommand('read.identity', key); }));
-context.subscriptions.push(v.commands.registerCommand('test.second', async () => { setTimeout(async () => { const result = await v.commands.executeCommand('background'); require('node:fs').writeFileSync(__dirname + '/background.txt', result); }, 25); return 'finished'; }));
+	const h = await host(t, `const v = require('@ash/sdk'); exports.activate = context => {
+context.subscriptions.push(v.commands.register('test.node', async key => { await new Promise(resolve => setTimeout(resolve, key === 'first' ? 15 : 1)); return v.commands.execute('read.identity', key); }));
+context.subscriptions.push(v.commands.register('test.second', async () => { setTimeout(async () => { const result = await v.commands.execute('background'); require('node:fs').writeFileSync(__dirname + '/background.txt', result); }, 25); return 'finished'; }));
 };`);
 	const first = h.invoke('test.node', ['first']);
 	const second = h.invoke('test.node', ['second']);
@@ -292,14 +375,14 @@ context.subscriptions.push(v.commands.registerCommand('test.second', async () =>
 });
 
 test('cancellation reaches the Debug provider token without retiring other callbacks', { timeout: 10000 }, async t => {
-	const h = await host(t, `const v = require('vscode'); exports.activate = context => {
+	const h = await host(t, `const v = require('@ash/sdk'); exports.activate = context => {
 context.subscriptions.push(v.debug.registerDebugConfigurationProvider('test', {
 resolveDebugConfiguration(folder, config, token) { return new Promise(resolve => {
 require('node:fs').writeFileSync(__dirname + '/waiting.txt', 'waiting');
 token.onCancellationRequested(() => resolve(undefined));
 }); }
 }));
-context.subscriptions.push(v.commands.registerCommand('test.second', () => 'other'));
+context.subscriptions.push(v.commands.register('test.second', () => 'other'));
 };`, 'extension.cjs', ['command', 'debugAdapter']);
 	const registrationId = h.registrations.find(registration => registration.kind === 'debugConfigurationProvider').registrationId;
 	const pending = h.request('invoke', { extensionId: 'test.node', registrationId, operation: 'resolveDebugConfiguration', payload: { configuration: { type: 'test', request: 'launch' } }, deadlineUnixMillis: Date.now() + 30000 });
@@ -312,9 +395,9 @@ context.subscriptions.push(v.commands.registerCommand('test.second', () => 'othe
 
 
 test('late service replies after cancellation cannot revive authority or break other callbacks', { timeout: 10000 }, async t => {
-	const h = await host(t, `const v = require('vscode'); exports.activate = context => {
-context.subscriptions.push(v.commands.registerCommand('test.node', async () => { try { return await v.commands.executeCommand('waiting'); } catch (error) { return error.code; } }));
-context.subscriptions.push(v.commands.registerCommand('test.second', () => 'other'));
+	const h = await host(t, `const v = require('@ash/sdk'); exports.activate = context => {
+context.subscriptions.push(v.commands.register('test.node', async () => { try { return await v.commands.execute('waiting'); } catch (error) { return error.code; } }));
+context.subscriptions.push(v.commands.register('test.second', () => 'other'));
 };`);
 	const pending = h.invoke('test.node', []);
 	while (h.clientCalls.length < 1) { if (t.signal.aborted) throw new Error('Test aborted'); await new Promise(resolve => setTimeout(resolve, 2)); }
@@ -328,10 +411,10 @@ context.subscriptions.push(v.commands.registerCommand('test.second', () => 'othe
 
 test('activation can await editor services before publishing its registrations', { timeout: 10000 }, async t => {
 	const calls = [];
-	const h = await host(t, `const v = require('vscode'); exports.activate = async context => {
+	const h = await host(t, `const v = require('@ash/sdk'); exports.activate = async context => {
         await v.window.showInformationMessage('Node activation');
-        const value = await v.commands.executeCommand('startup.value');
-        context.subscriptions.push(v.commands.registerCommand('test.node', () => value));
+        const value = await v.commands.execute('startup.value');
+        context.subscriptions.push(v.commands.register('test.node', () => value));
     };`, 'extension.cjs', ['command'], frame => {
 		calls.push(frame);
 		return frame.operation.operation === 'showMessage' ? { result: 'done' } : { result: 'command', value: 'activated with editor IO' };
@@ -345,9 +428,9 @@ test('activation can await editor services before publishing its registrations',
 
 for (const [reason, expected] of [['caller', 'cancelled'], ['deadline', 'deadlineExceeded']]) {
 	test(`uncaught service cancellation preserves ${reason} without retiring the host`, { timeout: 10000 }, async t => {
-		const h = await host(t, `const v = require('vscode'); exports.activate = context => {
-context.subscriptions.push(v.commands.registerCommand('test.node', () => v.commands.executeCommand('waiting')));
-context.subscriptions.push(v.commands.registerCommand('test.second', () => 'other'));
+		const h = await host(t, `const v = require('@ash/sdk'); exports.activate = context => {
+context.subscriptions.push(v.commands.register('test.node', () => v.commands.execute('waiting')));
+context.subscriptions.push(v.commands.register('test.second', () => 'other'));
 };`);
 		const pending = h.invoke('test.node', []);
 		while (!h.clientCalls.length) { if (t.signal.aborted) throw new Error('Test aborted'); await new Promise(resolve => setTimeout(resolve, 2)); }
@@ -363,8 +446,8 @@ context.subscriptions.push(v.commands.registerCommand('test.second', () => 'othe
 
 test('Quick Pick preserves item metadata and returns the original item', { timeout: 10000 }, async t => {
 	const item = { label: 'occupied', description: 'origin/occupied', detail: 'Checked out elsewhere' };
-	const h = await host(t, `const v = require('vscode'); exports.activate = context => {
-        context.subscriptions.push(v.commands.registerCommand('test.node', async () => {
+	const h = await host(t, `const v = require('@ash/sdk'); exports.activate = context => {
+        context.subscriptions.push(v.commands.register('test.node', async () => {
             const item = ${JSON.stringify(item)};
             const selected = await v.window.showQuickPick(['main', item], { placeHolder: 'Choose' });
             return selected === item;
@@ -378,9 +461,9 @@ test('Quick Pick preserves item metadata and returns the original item', { timeo
 
 
 test('shutdown cancels detached service requests without unhandled rejection terminating the protocol', { timeout: 10000 }, async t => {
-	const h = await host(t, `const v = require('vscode'); exports.activate = context => {
-        context.subscriptions.push(v.commands.registerCommand('test.node', () => {
-            setTimeout(() => { void v.commands.executeCommand('background.wait'); }, 5);
+	const h = await host(t, `const v = require('@ash/sdk'); exports.activate = context => {
+        context.subscriptions.push(v.commands.register('test.node', () => {
+            setTimeout(() => { void v.commands.execute('background.wait'); }, 5);
             return 'queued';
         }));
     };`);
@@ -396,9 +479,9 @@ test('shutdown cancels detached service requests without unhandled rejection ter
 test('parallel activation IO applies bounded backpressure and completes every request', { timeout: 10000 }, async t => {
 	let activeCalls = 0;
 	let maximumCalls = 0;
-	const h = await host(t, `const v = require('vscode'); exports.activate = async context => {
-        const results = await Promise.all(Array.from({ length: 64 }, (_, index) => v.commands.executeCommand('startup.value', index)));
-        context.subscriptions.push(v.commands.registerCommand('test.node', () => results));
+	const h = await host(t, `const v = require('@ash/sdk'); exports.activate = async context => {
+        const results = await Promise.all(Array.from({ length: 64 }, (_, index) => v.commands.execute('startup.value', index)));
+        context.subscriptions.push(v.commands.register('test.node', () => results));
     };`, 'extension.cjs', ['command'], async frame => {
 		maximumCalls = Math.max(maximumCalls, ++activeCalls);
 		await new Promise(resolve => setTimeout(resolve, 5));
@@ -411,7 +494,7 @@ test('parallel activation IO applies bounded backpressure and completes every re
 });
 
 test('live window events update synchronous snapshots, preserve folder handles and respect configuration scopes', { timeout: 10000 }, async t => {
-	const h = await host(t, `const v = require('vscode');
+	const h = await host(t, `const v = require('@ash/sdk');
 const original = v.workspace.workspaceFolders[0];
 const captured = v.workspace.getConfiguration('sample');
 const receiver = {}; const listeners = []; const changes = []; const folders = [];
@@ -422,8 +505,8 @@ v.workspace.onDidChangeConfiguration(function(event) {
 v.workspace.onDidChangeWorkspaceFolders(event => folders.push({added:event.added.map(folder => folder.uri.toString()),removed:event.removed.map(folder => ({uri:folder.uri.toString(),name:folder.name,index:folder.index}))}), undefined, listeners);
 exports.activate = context => {
  context.subscriptions.push(...listeners);
- context.subscriptions.push(v.commands.registerCommand('test.second', () => { for (const listener of listeners) listener.dispose(); }));
- context.subscriptions.push(v.commands.registerCommand('test.node', () => ({changes,folders,current:v.workspace.getConfiguration('sample').get('enabled','missing'),count:v.workspace.getConfiguration('sample').get('count','missing'),captured:captured.get('enabled','missing'),name:original.name,index:original.index,retained:v.workspace.getWorkspaceFolder(v.Uri.joinPath(original.uri,'source.ts'))===original,empty:v.workspace.workspaceFolders===undefined,workspaceName:v.workspace.name??null}))); };`);
+ context.subscriptions.push(v.commands.register('test.second', () => { for (const listener of listeners) listener.dispose(); }));
+ context.subscriptions.push(v.commands.register('test.node', () => ({changes,folders,current:v.workspace.getConfiguration('sample').get('enabled','missing'),count:v.workspace.getConfiguration('sample').get('count','missing'),captured:captured.get('enabled','missing'),name:original.name,index:original.index,retained:v.workspace.getWorkspaceFolder(v.Uri.joinPath(original.uri,'source.ts'))===original,empty:v.workspace.workspaceFolders===undefined,workspaceName:v.workspace.name??null}))); };`);
 	const folderURI = pathToFileURL(h.extension).href;
 	const empty = () => ({ contents: {}, keys: [], overrides: [] });
 	const data = {
@@ -433,7 +516,7 @@ exports.activate = context => {
 		folders: [[{ scheme: 'file', path: decodeURIComponent(new URL(folderURI).pathname) }, { contents: { sample: { enabled: true } }, keys: ['sample.enabled'], overrides: [] }]],
 	};
 	async function event(payload) {
-		const reply = await h.request('invoke', { extensionId: 'test.node', registrationId: 'vscode.workspace.events', operation: 'workspaceEvent', payload, deadlineUnixMillis: Date.now() + 30000 }).result;
+		const reply = await h.request('invoke', { extensionId: 'test.node', registrationId: 'ash.workspace.events', operation: 'workspaceEvent', payload, deadlineUnixMillis: Date.now() + 30000 }).result;
 		assert.equal(reply.status, 'success', h.stderr());
 	}
 	const config = (revision, emit, enabled, count) => ({ type: 'configuration', revision, emit, configurationValues: { sample: { enabled, count } }, configurationData: data, change: { keys: ['sample.enabled', 'sample.count'], overrides: [] } });
@@ -469,7 +552,7 @@ exports.activate = context => {
 
 
 test('command categories and enablement stay separate from menu titles', async t => {
-	const h = await host(t, `const v = require('vscode'); exports.activate = context => context.subscriptions.push(v.commands.registerCommand('test.node', () => 'ready'));`, 'extension.cjs', ['command'], undefined, {
+	const h = await host(t, `const v = require('@ash/sdk'); exports.activate = context => context.subscriptions.push(v.commands.register('test.node', () => 'ready'));`, 'extension.cjs', ['command'], undefined, {
 		manifest: { contributes: { commands: [{ command: 'test.node', title: 'Run', category: 'Acme', enablement: '!scmBusy' }], menus: { 'scm/title': [{ command: 'test.node', group: 'navigation' }] } } }
 	});
 	const command = h.registrations.find(value => value.command === 'test.node');
@@ -481,7 +564,7 @@ test('command categories and enablement stay separate from menu titles', async t
 });
 
 test('terminal link providers preserve callback objects through the real Node host', { timeout: 15000 }, async t => {
-	const h = await host(t, `const v = require('vscode'); let accepted; let terminal; let latest;
+	const h = await host(t, `const v = require('@ash/sdk'); let accepted; let terminal; let latest;
 exports.activate = context => {
  context.subscriptions.push(v.window.registerTerminalLinkProvider({
   provideTerminalLinks: async (context, token) => {
@@ -492,7 +575,7 @@ exports.activate = context => {
   },
   handleTerminalLink: link => { accepted = link.issue; }
  }));
- context.subscriptions.push(v.commands.registerCommand('test.node', () => ({ accepted, latest })));
+ context.subscriptions.push(v.commands.register('test.node', () => ({ accepted, latest })));
 };`, 'extension.cjs', ['terminalLinkProvider', 'command']);
 	const registration = h.registrations.find(entry => entry.kind === 'terminalLinkProvider');
 	assert.ok(registration);
@@ -507,13 +590,13 @@ exports.activate = context => {
 });
 
 test('terminal link acceptance re-resolves a picker handle evicted by later output', { timeout: 15000 }, async t => {
-	const h = await host(t, `const v = require('vscode'); let accepted;
+	const h = await host(t, `const v = require('@ash/sdk'); let accepted;
 exports.activate = context => {
  context.subscriptions.push(v.window.registerTerminalLinkProvider({
   provideTerminalLinks: context => Array.from({ length: 256 }, () => ({ startIndex: 0, length: 4, issue: context.line })),
   handleTerminalLink: link => { accepted = link.issue; }
  }));
- context.subscriptions.push(v.commands.registerCommand('test.node', () => accepted));
+ context.subscriptions.push(v.commands.register('test.node', () => accepted));
 };`, 'extension.cjs', ['terminalLinkProvider', 'command']);
 	const registration = h.registrations.find(entry => entry.kind === 'terminalLinkProvider');
 	const invoke = (operation, payload) => h.request('invoke', { extensionId: 'test.node', registrationId: registration.registrationId, registrationGeneration: registration.registrationGeneration, operation, payload, deadlineUnixMillis: Date.now() + 5000 }).result;
@@ -526,7 +609,7 @@ exports.activate = context => {
 });
 
 test('terminal link provider rejects ranges outside the requested line', { timeout: 15000 }, async t => {
-	const h = await host(t, `const v = require('vscode'); exports.activate = context => {
+	const h = await host(t, `const v = require('@ash/sdk'); exports.activate = context => {
  context.subscriptions.push(v.window.registerTerminalLinkProvider({ provideTerminalLinks: () => [{ startIndex: 0, length: 100 }], handleTerminalLink() {} }));
 };`, 'extension.cjs', ['terminalLinkProvider']);
 	const registration = h.registrations.find(entry => entry.kind === 'terminalLinkProvider');
@@ -535,7 +618,7 @@ test('terminal link provider rejects ranges outside the requested line', { timeo
 });
 
 test('terminal profile provider returns literal shell options through the real Node host', { timeout: 15000 }, async t => {
-	const h = await host(t, `const v = require('vscode'); exports.activate = context => {
+	const h = await host(t, `const v = require('@ash/sdk'); exports.activate = context => {
  context.subscriptions.push(v.window.registerTerminalProfileProvider('shell', { provideTerminalProfile: token => new v.TerminalProfile({ name: 'Profile shell', shellPath: '/bin/sh', shellArgs: ['-c', 'literal;$HOME'], env: { PROFILE: 'with spaces', REMOVED: null }, cwd: '/workspace' }) }));
 };`, 'extension.cjs', ['terminalProfileProvider'], undefined, { manifest: { contributes: { terminal: { profiles: [{ id: 'shell', title: 'Profile shell' }] } } } });
 	const registration = h.registrations.find(entry => entry.kind === 'terminalProfileProvider');
@@ -547,7 +630,7 @@ test('terminal profile provider returns literal shell options through the real N
 });
 
 test('terminal profile provider preserves Windows raw shell options through the real Node host', { timeout: 15000 }, async t => {
-	const h = await host(t, `const v = require('vscode'); exports.activate = context => {
+	const h = await host(t, `const v = require('@ash/sdk'); exports.activate = context => {
  context.subscriptions.push(v.window.registerTerminalProfileProvider('shell', { provideTerminalProfile: token => new v.TerminalProfile({ name: 'Profile shell', shellPath: 'cmd.exe', shellArgs: '/d /s /c \"echo two words & literal;$HOME\"', env: { PROFILE: 'with spaces', REMOVED: null }, cwd: '/workspace' }) }));
 };`, 'extension.cjs', ['terminalProfileProvider'], undefined, { manifest: { contributes: { terminal: { profiles: [{ id: 'shell', title: 'Profile shell' }] } } } });
 	const registration = h.registrations.find(entry => entry.kind === 'terminalProfileProvider');
@@ -559,9 +642,9 @@ test('terminal profile provider preserves Windows raw shell options through the 
 });
 
 test('terminal profile Pseudoterminal preserves open and input output and releases once', { timeout: 15000 }, async t => {
-	const h = await host(t, `const v = require('vscode'); exports.activate = context => {
+	const h = await host(t, `const v = require('@ash/sdk'); exports.activate = context => {
  const write = new v.EventEmitter(); let closes = 0; let factory;
- context.subscriptions.push(v.commands.registerCommand('test.node', action => { if (action === 'dispose') factory.dispose(); return closes; }));
+ context.subscriptions.push(v.commands.register('test.node', action => { if (action === 'dispose') factory.dispose(); return closes; }));
  context.subscriptions.push(factory = v.window.registerTerminalProfileProvider('pty', { provideTerminalProfile: () => new v.TerminalProfile({ name: 'Profile PTY', pty: { onDidWrite: write.event, open: dimensions => write.fire('open:' + dimensions.columns), handleInput: data => write.fire('input:' + data), close: () => { closes++; } } }) }));
 };`, 'extension.cjs', ['terminalProfileProvider', 'command'], undefined, { manifest: { contributes: { terminal: { profiles: [{ id: 'pty', title: 'Profile PTY' }] }, commands: [{ command: 'test.node', title: 'Close count' }] } } });
 	const registration = h.registrations.find(entry => entry.kind === 'terminalProfileProvider');
@@ -602,13 +685,13 @@ test('terminal profile Pseudoterminal preserves open and input output and releas
 });
 
 test('withdrawn pending profile closes its late PTY without creating a resource lease', { timeout: 15000 }, async t => {
-	const h = await host(t, `const v = require('vscode'); exports.activate = context => {
+	const h = await host(t, `const v = require('@ash/sdk'); exports.activate = context => {
  let release; let closes = 0; let cancelled = 0;
  const factory = v.window.registerTerminalProfileProvider('pty', { provideTerminalProfile: token => {
   token.onCancellationRequested(() => cancelled++);
   return new Promise(resolve => { release = () => resolve(new v.TerminalProfile({ pty: { onDidWrite: new v.EventEmitter().event, open() {}, close() { closes++; } } })); });
  } });
- context.subscriptions.push(factory, v.commands.registerCommand('test.node', action => { if (action === 'dispose') factory.dispose(); if (action === 'release') release(); return { closes, cancelled, pending: !!release }; }));
+ context.subscriptions.push(factory, v.commands.register('test.node', action => { if (action === 'dispose') factory.dispose(); if (action === 'release') release(); return { closes, cancelled, pending: !!release }; }));
 };`, 'extension.cjs', ['terminalProfileProvider', 'command'], undefined, { manifest: { contributes: { terminal: { profiles: [{ id: 'pty', title: 'PTY' }] }, commands: [{ command: 'test.node', title: 'Control' }] } } });
 	const factory = h.registrations.find(value => value.kind === 'terminalProfileProvider');
 	const pending = h.request('invoke', { extensionId: 'test.node', registrationId: factory.registrationId, operation: 'createTerminalProfile', payload: {}, deadlineUnixMillis: Date.now() + 5000 }).result;
@@ -621,12 +704,12 @@ test('withdrawn pending profile closes its late PTY without creating a resource 
 });
 
 test('factory withdrawal during PTY subscription cannot leave an unreturned resource', { timeout: 10000 }, async t => {
-	const h = await host(t, `const v = require('vscode'); exports.activate = context => {
+	const h = await host(t, `const v = require('@ash/sdk'); exports.activate = context => {
  let closes = 0; let factory;
  factory = v.window.registerTerminalProfileProvider('pty', { provideTerminalProfile: () => new v.TerminalProfile({ pty: {
   onDidWrite() { factory.dispose(); return new v.Disposable(() => {}); }, open() {}, close() { closes++; }
  } }) });
- context.subscriptions.push(factory, v.commands.registerCommand('test.node', () => closes));
+ context.subscriptions.push(factory, v.commands.register('test.node', () => closes));
 };`, 'extension.cjs', ['terminalProfileProvider', 'command'], undefined, { manifest: { contributes: { terminal: { profiles: [{ id: 'pty', title: 'PTY' }] }, commands: [{ command: 'test.node', title: 'Closes' }] } } });
 	const factory = h.registrations.find(value => value.kind === 'terminalProfileProvider');
 	const result = await h.request('invoke', { extensionId: 'test.node', registrationId: factory.registrationId, operation: 'createTerminalProfile', payload: {}, deadlineUnixMillis: Date.now() + 5000 }).result;
@@ -636,7 +719,7 @@ test('factory withdrawal during PTY subscription cannot leave an unreturned reso
 });
 
 test('terminal profile can inherit the execution host default shell without inventing an executable', async t => {
-	const h = await host(t, `const v = require('vscode'); exports.activate = context => {
+	const h = await host(t, `const v = require('@ash/sdk'); exports.activate = context => {
  context.subscriptions.push(v.window.registerTerminalProfileProvider('default', { provideTerminalProfile: () => new v.TerminalProfile({ name: 'Default shell', env: { MODE: 'profile value' } }) }));
 };`, 'extension.cjs', ['terminalProfileProvider'], undefined, { manifest: { contributes: { terminal: { profiles: [{ id: 'default', title: 'Default shell' }] } } } });
 	const registration = h.registrations.find(entry => entry.kind === 'terminalProfileProvider');
@@ -646,8 +729,8 @@ test('terminal profile can inherit the execution host default shell without inve
 });
 
 test('terminal profile and link providers can register after activation and withdraw their original handles', { timeout: 15000 }, async t => {
-	const h = await host(t, `const v = require('vscode'); let handles = []; let accepted;
-exports.activate = context => context.subscriptions.push(v.commands.registerCommand('test.node', action => {
+	const h = await host(t, `const v = require('@ash/sdk'); let handles = []; let accepted;
+exports.activate = context => context.subscriptions.push(v.commands.register('test.node', action => {
  if (action === 'register') {
   handles = [v.window.registerTerminalProfileProvider('shell', { provideTerminalProfile: () => new v.TerminalProfile({ name: 'Live shell', env: { LIVE_PROFILE: 'yes' } }) }),
    v.window.registerTerminalLinkProvider({ provideTerminalLinks: () => [{ startIndex: 0, length: 4, value: 'original' }], handleTerminalLink: link => { accepted = link.value; } })];
@@ -677,7 +760,7 @@ exports.activate = context => context.subscriptions.push(v.commands.registerComm
 });
 
 test('terminal environment collections expose immutable mutators through an independent admitted callback', async t => {
-	const h = await host(t, `const v = require('vscode');
+	const h = await host(t, `const v = require('@ash/sdk');
 exports.activate = context => {
  context.environmentVariableCollection.prepend('PATH', '/extension:');
  context.environmentVariableCollection.append('PATH', ':after');
@@ -720,7 +803,7 @@ test('terminal environment options are validated and captured with their declare
 });
 
 test('terminal environment scoped views retain global entries and serialize folder identity', async t => {
-	const h = await host(t, `const v = require('vscode');
+	const h = await host(t, `const v = require('@ash/sdk');
 exports.activate = context => {
  const root = context.environmentVariableCollection;
  root.append('PATH', ':global'); root.description = 'global';
@@ -740,7 +823,7 @@ exports.activate = context => {
 });
 
 test('standard Speech sessions preserve events, tokens, cancellation and registration disposal in Node', { timeout: 10000 }, async t => {
-	const h = await host(t, `const v = require('vscode');
+	const h = await host(t, `const v = require('@ash/sdk');
 let registration; let cancelled = 0; let detached = 0; const sessions = new Map();
 function provide(kind, token, options) {
  const key = options?.language ?? kind; const emitter = new v.EventEmitter();
@@ -756,7 +839,7 @@ exports.activate = context => {
   provideTextToSpeechSession: (token, options) => provide('tts', token, options),
   provideKeywordRecognitionSession: token => provide('keyword', token)
  });
- context.subscriptions.push(registration, v.commands.registerCommand('test.node', (action, key) => {
+ context.subscriptions.push(registration, v.commands.register('test.node', (action, key) => {
   if (action === 'emit') sessions.get(key).emitter.fire({ status: key === 'keyword' ? v.KeywordRecognitionStatus.Recognized : v.SpeechToTextStatus.Recognized, text: '你好' });
   if (action === 'overflow') for (let index = 0; index < 129; index++) sessions.get(key)?.emitter.fire({ status: v.SpeechToTextStatus.Recognized, text: 'phrase' });
   if (action === 'dispose') registration.dispose();
@@ -764,7 +847,7 @@ exports.activate = context => {
  }));
 };`, 'extension.cjs', ['speechProvider', 'command']);
 	const registration = h.registrations.find(value => value.kind === 'speechProvider');
-	assert.deepEqual(registration, { registrationId: 'vscode.speech.1', kind: 'speechProvider', registrationGeneration: 1, identifier: 'test.recognition' });
+	assert.deepEqual(registration, { registrationId: 'ash.speech.1', kind: 'speechProvider', registrationGeneration: 1, identifier: 'test.recognition' });
 	const invoke = (operation, payload) => h.request('invoke', { extensionId: 'test.node', registrationId: registration.registrationId, registrationGeneration: registration.registrationGeneration, operation, payload, deadlineUnixMillis: Date.now() + 30000 });
 	const ids = ['a1234567-1234-1234-1234-123456789abc', 'b1234567-1234-1234-1234-123456789abc', 'c1234567-1234-1234-1234-123456789abc'];
 	for (const [index, kind] of ['speechToText', 'textToSpeech', 'keywordRecognition'].entries()) assert.equal((await invoke('createSpeechSession', { sessionId: ids[index], kind }).result).status, 'success');
@@ -785,7 +868,7 @@ exports.activate = context => {
 });
 
 test('completed Speech creation keeps a persistent token until its exact session is closed', { timeout: 10000 }, async t => {
-	const h = await host(t, `const v = require('vscode');
+	const h = await host(t, `const v = require('@ash/sdk');
 let cancelled = 0;
 function provide(token) {
  const events = new v.EventEmitter();
@@ -798,7 +881,7 @@ exports.activate = context => context.subscriptions.push(
   provideTextToSpeechSession: provide,
   provideKeywordRecognitionSession: provide
  }),
- v.commands.registerCommand('test.node', () => cancelled)
+ v.commands.register('test.node', () => cancelled)
 );`, 'extension.cjs', ['speechProvider', 'command']);
 	const registrationId = h.registrations.find(value => value.kind === 'speechProvider').registrationId;
 	const invoke = (operation, sessionId) => h.request('invoke', { extensionId: 'test.node', registrationId, registrationGeneration: 1, operation, payload: { sessionId, ...(operation === 'createSpeechSession' ? { kind: 'speechToText' } : {}) }, deadlineUnixMillis: Date.now() + 30000 });
@@ -821,7 +904,7 @@ exports.activate = context => context.subscriptions.push(
 
 test('Output channels preserve ordered writes, language, log levels and disposal through the real runtime', { timeout: 15000 }, async t => {
 	const calls = [];
-	const h = await host(t, `const v = require('vscode');
+	const h = await host(t, `const v = require('@ash/sdk');
 exports.activate = context => {
  const text = v.window.createOutputChannel('  Source  ', 'typescript');
  const logs = v.window.createOutputChannel('Logs', { log: true });
@@ -829,14 +912,14 @@ exports.activate = context => {
  context.subscriptions.push(logs.onDidChangeLogLevel(level => levels.push(level)));
  text.append('first'); text.appendLine('second'); text.replace('replacement'); text.show(true); text.hide();
  logs.info('ready %s %d', 'agent', 2); logs.error(new Error('failure'));
- context.subscriptions.push(v.commands.registerCommand('test.node', () => ({ level: logs.logLevel, levels, off: v.LogLevel.Off })));
- context.subscriptions.push(v.commands.registerCommand('test.second', () => { text.dispose(); logs.dispose(); logs.info('ignored'); }));
+ context.subscriptions.push(v.commands.register('test.node', () => ({ level: logs.logLevel, levels, off: v.LogLevel.Off })));
+ context.subscriptions.push(v.commands.register('test.second', () => { text.dispose(); logs.dispose(); logs.info('ignored'); }));
 };`, 'extension.cjs', ['command'], frame => { calls.push(frame.operation.payload); return { result: 'value', value: null }; });
 	assert.deepEqual(calls.filter(call => call.channelId === 'output.1').map(call => call.action), ['create', 'append', 'append', 'replace', 'show', 'hide']);
 	assert.deepEqual(calls[0], { method: 'output', channelId: 'output.1', action: 'create', label: 'Source', kind: 'output', languageId: 'typescript' });
 	assert.equal(calls.find(call => call.action === 'log').text, 'ready agent 2');
 	assert.match(calls.filter(call => call.action === 'log')[1].text, /failure/);
-	const reply = await h.request('invoke', { extensionId: 'test.node', registrationId: 'vscode.output.events', operation: 'outputEvent', payload: { channelId: 'output.2', level: 1 }, deadlineUnixMillis: Date.now() + 30000 }).result;
+	const reply = await h.request('invoke', { extensionId: 'test.node', registrationId: 'ash.output.events', operation: 'outputEvent', payload: { channelId: 'output.2', level: 1 }, deadlineUnixMillis: Date.now() + 30000 }).result;
 	assert.equal(reply.status, 'success', h.stderr());
 	assert.deepEqual((await h.invoke('test.node', []).result).body.body.payload, { level: 1, levels: [1], off: 0 });
 	await h.invoke('test.second', []).result;
@@ -847,7 +930,7 @@ exports.activate = context => {
 test('fetched task terminal groups survive public edits without entering the public presentation API', { timeout: 15000 }, async t => {
 	const snapshot = { id: 'configured', name: 'Configured', source: 'Workspace', scope: 2, definition: { type: 'process' }, execution: { type: 'process', program: 'compiler', args: [] }, presentation: { group: 'build', reveal: 'never' }, options: {}, group: 'build', isBackground: false, problemMatchers: [], detail: null };
 	const executions = [];
-	const h = await host(t, `const v = require('vscode'); exports.activate = context => context.subscriptions.push(v.commands.registerCommand('test.node', async () => {
+	const h = await host(t, `const v = require('@ash/sdk'); exports.activate = context => context.subscriptions.push(v.commands.register('test.node', async () => {
  const [task] = await v.tasks.fetchTasks();
  if ('group' in task.presentationOptions) throw Error('Configuration-only group leaked');
  for (let i = 0; i < 2; i++) { task.name = 'Edited ' + i; task.presentationOptions = { panel: v.TaskPanelKind.New }; await v.tasks.executeTask(task); }
@@ -865,7 +948,7 @@ test('fetched task terminal groups survive public edits without entering the pub
 
 
 test('Speech registrations created after activation update the original registry and retire only their own sessions', { timeout: 15000 }, async t => {
-	const h = await host(t, `const v = require('vscode');
+	const h = await host(t, `const v = require('@ash/sdk');
 let registration, retired, emitter, oldEmitter, cancelled = 0, created = 0;
 function install() {
  registration = v.speech.registerSpeechProvider('test.dynamic', {
@@ -874,7 +957,7 @@ function install() {
  });
 }
 exports.activate = context => {
- context.subscriptions.push(v.commands.registerCommand('test.node', action => {
+ context.subscriptions.push(v.commands.register('test.node', action => {
   if (action === 'retire') { oldEmitter = emitter; retired = registration; registration.dispose(); }
   if (action === 'install') install();
   if (action === 'oldDispose') { retired.dispose(); oldEmitter.fire({ status: 3, text: 'retired event' }); }
@@ -886,28 +969,28 @@ exports.activate = context => {
 	assert.equal(h.registrations.some(value => value.kind === 'speechProvider'), false);
 	const first = await h.registrationEvent(1);
 	assert.deepEqual(first.context, { protocolVersion: 1, incarnation: 2, activationGeneration: 3 });
-	assert.deepEqual(first.speechProviders, [{ registrationId: 'vscode.speech.1', kind: 'speechProvider', registrationGeneration: 1, identifier: 'test.dynamic' }]);
+	assert.deepEqual(first.speechProviders, [{ registrationId: 'ash.speech.1', kind: 'speechProvider', registrationGeneration: 1, identifier: 'test.dynamic' }]);
 	const sessionId = 'a1234567-1234-1234-1234-123456789abc';
 	const speech = (registrationId, operation, payload, registrationGeneration = Number(registrationId.split('.').at(-1))) => h.request('invoke', { extensionId: 'test.node', registrationId, registrationGeneration, operation, payload, deadlineUnixMillis: Date.now() + 5000 }).result;
-	assert.equal((await speech('vscode.speech.1', 'createSpeechSession', { sessionId, kind: 'speechToText' })).status, 'success');
+	assert.equal((await speech('ash.speech.1', 'createSpeechSession', { sessionId, kind: 'speechToText' })).status, 'success');
 	assert.equal((await h.invoke('test.node', ['retire']).result).body.body.payload, 1);
 	assert.deepEqual((await h.registrationEvent(2)).speechProviders, []);
 	await h.invoke('test.node', ['install']).result;
-	assert.equal((await h.registrationEvent(3)).speechProviders[0].registrationId, 'vscode.speech.2');
+	assert.equal((await h.registrationEvent(3)).speechProviders[0].registrationId, 'ash.speech.2');
 	await h.invoke('test.node', ['oldDispose']).result;
 	// A queued request carries its selected generation even if delivered after replacement.
-	assert.equal((await speech('vscode.speech.2', 'createSpeechSession', { sessionId, kind: 'speechToText' }, 1)).status, 'failure');
-	assert.equal((await h.request('invoke', { extensionId: 'test.node', registrationId: 'vscode.speech.2', operation: 'createSpeechSession', payload: { sessionId, kind: 'speechToText' }, deadlineUnixMillis: Date.now() + 5000 }).result).status, 'failure');
+	assert.equal((await speech('ash.speech.2', 'createSpeechSession', { sessionId, kind: 'speechToText' }, 1)).status, 'failure');
+	assert.equal((await h.request('invoke', { extensionId: 'test.node', registrationId: 'ash.speech.2', operation: 'createSpeechSession', payload: { sessionId, kind: 'speechToText' }, deadlineUnixMillis: Date.now() + 5000 }).result).status, 'failure');
 	assert.equal((await h.invoke('test.node', ['created']).result).body.body.payload, 1);
-	assert.equal((await speech('vscode.speech.1', 'readSpeechSession', { sessionId })).status, 'failure');
-	assert.equal((await speech('vscode.speech.2', 'createSpeechSession', { sessionId, kind: 'speechToText' })).status, 'success');
-	assert.deepEqual((await speech('vscode.speech.2', 'readSpeechSession', { sessionId })).body.body.payload, { events: [], closed: false });
+	assert.equal((await speech('ash.speech.1', 'readSpeechSession', { sessionId })).status, 'failure');
+	assert.equal((await speech('ash.speech.2', 'createSpeechSession', { sessionId, kind: 'speechToText' })).status, 'success');
+	assert.deepEqual((await speech('ash.speech.2', 'readSpeechSession', { sessionId })).body.body.payload, { events: [], closed: false });
 	assert.equal((await h.invoke('test.node', []).result).status, 'success');
 	await h.request('shutdown').result;
 });
 
 test('terminal completion public API preserves context, validates ranges and withdraws live providers', { timeout: 15000 }, async t => {
-	const h = await host(t, `const v = require('vscode'); let registration; let terminal;
+	const h = await host(t, `const v = require('@ash/sdk'); let registration; let terminal;
 exports.activate = context => {
  registration = v.window.registerTerminalCompletionProvider({
   async provideTerminalCompletions(current, request, token) {
@@ -917,10 +1000,10 @@ exports.activate = context => {
    return new v.TerminalCompletionList([new v.TerminalCompletionItem(await current.processId + ':' + current.name + ':' + request.commandLine, [0, request.cursorIndex], v.TerminalCompletionItemKind.Argument)]);
   }
  }, '-');
- context.subscriptions.push(registration, v.commands.registerCommand('test.node', () => registration.dispose()));
+ context.subscriptions.push(registration, v.commands.register('test.node', () => registration.dispose()));
 };`, 'extension.cjs', ['terminalCompletionProvider', 'command']);
 	const registration = h.registrations.find(entry => entry.kind === 'terminalCompletionProvider');
-	assert.deepEqual(registration, { registrationId: 'vscode.terminalCompletions.1', kind: 'terminalCompletionProvider', triggerCharacters: ['-'] });
+	assert.deepEqual(registration, { registrationId: 'ash.terminalCompletions.1', kind: 'terminalCompletionProvider', triggerCharacters: ['-'] });
 	const invoke = (commandLine, name = 'Shell') => h.request('invoke', { extensionId: 'test.node', registrationId: registration.registrationId, operation: 'provideTerminalCompletions', payload: { commandLine, cursorIndex: commandLine.length, terminal: { id: 'terminal-1', name, processId: 42 } }, deadlineUnixMillis: Date.now() + 5000 }).result;
 	const first = await invoke('git -');
 	assert.equal(first.status, 'success', JSON.stringify(first));
@@ -933,10 +1016,10 @@ exports.activate = context => {
 });
 
 test('terminal completion cancellation reaches its public cancellation token', { timeout: 15000 }, async t => {
-	const h = await host(t, `const v = require('vscode'); let cancelled = false;
+	const h = await host(t, `const v = require('@ash/sdk'); let cancelled = false;
 exports.activate = context => {
  context.subscriptions.push(v.window.registerTerminalCompletionProvider({ provideTerminalCompletions(terminal, request, token) { return new Promise(resolve => token.onCancellationRequested(() => { cancelled = true; resolve([]); })); } }));
- context.subscriptions.push(v.commands.registerCommand('test.node', () => cancelled));
+ context.subscriptions.push(v.commands.register('test.node', () => cancelled));
 };`, 'extension.cjs', ['terminalCompletionProvider', 'command']);
 	const registration = h.registrations.find(entry => entry.kind === 'terminalCompletionProvider');
 	const pending = h.request('invoke', { extensionId: 'test.node', registrationId: registration.registrationId, operation: 'provideTerminalCompletions', payload: { commandLine: 'git ', cursorIndex: 4, terminal: { id: 'terminal-1', name: 'Shell', processId: 42 } }, deadlineUnixMillis: Date.now() + 5000 });
@@ -946,14 +1029,14 @@ exports.activate = context => {
 });
 
 test('terminal quick fix selectors run before callbacks and retain opaque command actions', { timeout: 15000 }, async t => {
-	const h = await host(t, `const v = require('vscode'); let calls = 0; let accepted; let fix;
+	const h = await host(t, `const v = require('@ash/sdk'); let calls = 0; let accepted; let fix;
 exports.activate = context => {
  fix = v.window.registerTerminalQuickFixProvider('test.fix', { provideTerminalQuickFixes(match, token) {
   calls++;
   if (match.commandLineMatch[1] !== 'bad' || match.outputMatch.regexMatch.groups.option !== 'good') throw new Error('Selector captures lost');
   return [new v.TerminalQuickFixTerminalCommand('tool good', true), new v.TerminalQuickFixOpener(v.Uri.parse('https://example.com/help')), { command: 'test.second', title: 'Explain failure', arguments: ['matched'] }];
  } });
- context.subscriptions.push(fix, v.commands.registerCommand('test.second', value => { accepted = value; }), v.commands.registerCommand('test.node', action => action === 'dispose' ? fix.dispose() : { calls, accepted }));
+ context.subscriptions.push(fix, v.commands.register('test.second', value => { accepted = value; }), v.commands.register('test.node', action => action === 'dispose' ? fix.dispose() : { calls, accepted }));
 };`, 'extension.cjs', ['terminalQuickFixProvider', 'command'], frame => {
 		assert.equal(frame.operation.operation, 'executeCommand');
 		assert.equal(frame.operation.command, 'test.second');
@@ -977,7 +1060,7 @@ exports.activate = context => {
 
 for (const legacy of [false, true]) test(`terminal profile declarations normalize ${legacy ? 'legacy' : 'standard'} package shape at the Node boundary`, async t => {
 	const profiles = [{ id: 'shell', title: 'Shell' }];
-	const h = await host(t, `const v=require('vscode'); exports.activate=context=>context.subscriptions.push(v.window.registerTerminalProfileProvider('shell',{provideTerminalProfile:()=>new v.TerminalProfile({name:'Shell'})}));`, 'extension.cjs', ['terminalProfileProvider'], undefined, { manifest: { contributes: legacy ? { terminalProfiles: profiles } : { terminal: { profiles } } } });
+	const h = await host(t, `const v=require('@ash/sdk'); exports.activate=context=>context.subscriptions.push(v.window.registerTerminalProfileProvider('shell',{provideTerminalProfile:()=>new v.TerminalProfile({name:'Shell'})}));`, 'extension.cjs', ['terminalProfileProvider'], undefined, { manifest: { contributes: legacy ? { terminalProfiles: profiles } : { terminal: { profiles } } } });
 	const registration = h.registrations.find(value => value.kind === 'terminalProfileProvider');
 	assert.equal(registration.profileId, 'shell');
 });
@@ -989,7 +1072,7 @@ test('terminal profile package cannot declare competing standard and legacy owne
 });
 
 test('serialized profile replies retain late cancellation only until first resource IO', { timeout: 10000 }, async t => {
-	const h = await host(t, `const v=require('vscode');exports.activate=context=>{let closes=0;context.subscriptions.push(v.commands.registerCommand('test.node',()=>closes),v.window.registerTerminalProfileProvider('pty',{provideTerminalProfile:()=>new v.TerminalProfile({pty:{onDidWrite:new v.EventEmitter().event,open(){},close(){closes++}}})}));};`, 'extension.cjs', ['terminalProfileProvider', 'command'], undefined, { manifest: { contributes: { terminal: { profiles: [{ id: 'pty', title: 'PTY' }] }, commands: [{ command: 'test.node', title: 'Closes' }] } } });
+	const h = await host(t, `const v=require('@ash/sdk');exports.activate=context=>{let closes=0;context.subscriptions.push(v.commands.register('test.node',()=>closes),v.window.registerTerminalProfileProvider('pty',{provideTerminalProfile:()=>new v.TerminalProfile({pty:{onDidWrite:new v.EventEmitter().event,open(){},close(){closes++}}})}));};`, 'extension.cjs', ['terminalProfileProvider', 'command'], undefined, { manifest: { contributes: { terminal: { profiles: [{ id: 'pty', title: 'PTY' }] }, commands: [{ command: 'test.node', title: 'Closes' }] } } });
 	const factory = h.registrations.find(value => value.kind === 'terminalProfileProvider');
 	const create = deadline => h.request('invoke', { extensionId: 'test.node', registrationId: factory.registrationId, operation: 'createTerminalProfile', payload: {}, deadlineUnixMillis: deadline ?? Date.now() + 5000 });
 	const invoke = (pty, operation) => h.request('invoke', { extensionId: 'test.node', registrationId: pty.registrationId, operation, payload: { ptyId: pty.ptyId, dimensions: { columns: 80, rows: 24 } }, deadlineUnixMillis: Date.now() + 5000 }).result;

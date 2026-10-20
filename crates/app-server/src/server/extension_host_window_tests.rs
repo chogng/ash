@@ -138,7 +138,7 @@ fn install_node_fixture(root: &Path) -> (ProductNodeLauncher, EditorExtensionDep
     let source = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../resources/extension-host");
     for (from, to) in [
         ("node.mjs", "node.mjs"),
-        ("vscode.js", "vscode.mjs"),
+        ("ash.js", "ash.mjs"),
         ("scm.js", "scm.js"),
     ] {
         std::fs::copy(source.join(from), root.join(to)).unwrap();
@@ -159,13 +159,13 @@ fn install_node_fixture(root: &Path) -> (ProductNodeLauncher, EditorExtensionDep
     std::fs::write(
         package.join("extension.cjs"),
         r#"
-const v = require('vscode');
+const v = require('@ash/sdk');
 const name = v.workspace.name;
 const value = v.workspace.getConfiguration('test').get('value');
 exports.activate = context => {
     setInterval(() => {}, 1000);
-    context.subscriptions.push(v.commands.registerCommand('test.node', async () => ({
-        name, value, pid: process.pid, echoed: await v.commands.executeCommand('editor.echo', name)
+    context.subscriptions.push(v.commands.register('test.node', async () => ({
+        name, value, pid: process.pid, echoed: await v.commands.execute('editor.echo', name)
     })));
 };
 "#,
@@ -178,7 +178,7 @@ exports.activate = context => {
         environment.insert("ELECTRON_RUN_AS_NODE".into(), "1".into());
     }
     let launcher = ProductNodeLauncher::new(node, root.join("node.mjs"), environment).unwrap();
-    let command = ExtensionLaunchCommand::vscode(
+    let command = ExtensionLaunchCommand::ash(
         vec![
             "--extension-id".into(),
             "test.node".into(),
@@ -187,7 +187,7 @@ exports.activate = context => {
             "--entry".into(),
             "extension.cjs".into(),
             "--api".into(),
-            "vscode".into(),
+            "ash".into(),
         ],
         &package,
     )
@@ -224,6 +224,338 @@ exports.activate = context => {
             activation_failure: None,
         },
     )
+}
+
+#[test]
+fn ash_sdk_commands_use_rust_workspace_grants_and_retire_on_cancellation_and_disable() {
+    use ash_core_plugins::PluginActivationAuthority;
+    use ash_core_plugins::PluginAuthorityCommand;
+    use ash_core_plugins::PluginAuthorityCommandId;
+    use ash_core_plugins::PluginAuthorityCommandRequest;
+    use ash_core_plugins::PluginPackageStore;
+    use ash_file_system::FileSystem;
+    use ash_file_system::LocalFileSystem;
+    use ash_plugin::LocalPluginPackage;
+
+    for package_read in [true, false] {
+        let directory = tempfile::tempdir().unwrap();
+        let (launcher, _) = install_node_fixture(directory.path());
+        let package = directory.path().join("extension");
+        std::fs::create_dir(package.join(".ash-plugin")).unwrap();
+        std::fs::write(package.join(".ash-plugin/plugin.json"), json!({
+            "schemaVersion": 1, "id": "acme/ash-sdk", "version": "1.0.0", "displayName": "Ash SDK",
+            "compatibility": {"ash": ">=0.1.0"},
+            "permissions": if package_read { json!([{"type": "directory", "access": "read"}]) } else { json!([]) },
+            "contributions": {"editorExtensions": [{"id": "runtime", "runtime": "javascript", "api": "ash",
+                "entrypoint": "extension.mjs", "runtimeApiVersion": 1,
+                "activationEvents": [{"type": "onCommand", "id": "test.node"}], "capabilities": ["command"]}]}
+        }).to_string()).unwrap();
+        std::fs::write(package.join("package.json"), json!({
+            "publisher": "acme", "name": "ash-sdk", "version": "1.0.0", "main": "./extension.mjs",
+            "contributes": {"commands": [
+                {"command": "test.node", "title": "Read with Ash SDK"},
+                {"command": "ash.example.inspect", "title": "Run actual TypeScript example"}
+            ]}
+        }).to_string()).unwrap();
+        std::fs::write(
+            package.join("extension.ts"),
+            r#"
+import * as ash from '@ash/sdk';
+import { activate as activateExample } from './inspect.mjs';
+let release: (() => void) | undefined;
+let resumed: unknown;
+export function activate(context: ash.ExtensionContext): void {
+ activateExample(context);
+ context.subscriptions.push(ash.commands.register('test.node', async (path: unknown) => {
+  if (path === ':status') return { waiting: !!release, resumed };
+  if (path === ':release') { release!(); release = undefined; return {}; }
+  if (typeof path !== 'string') throw new TypeError('Expected a file path');
+  const waiting = path === ':wait';
+  if (waiting) { await new Promise<void>(resolve => { release = resolve; }); path = 'data.txt'; }
+  try {
+   const text = await ash.files.readTextFile(path);
+   if (waiting) resumed = 'unexpected-read';
+   return { text, pid: process.pid };
+  } catch (error: any) {
+   if (waiting) { resumed = error.code; throw error; }
+   return { code: error.code, message: error.message };
+  }
+ }));
+};
+"#,
+        )
+        .unwrap();
+        std::fs::write(
+            package.join("inspect.ts"),
+            include_str!("../../../../examples/extensions/inspect/extension.ts"),
+        )
+        .unwrap();
+        // Exercise the actual TS example without asking extension authors to install Rust.
+        // Type stripping is the Node build step; the product host executes its ESM output.
+        for entry in ["inspect", "extension"] {
+            let output = std::process::Command::new("node")
+                .args([
+                    "--input-type=commonjs",
+                    "-e",
+                    r#"
+const fs = require('node:fs');
+const { stripTypeScriptTypes } = require('node:module');
+fs.writeFileSync(process.argv[2], stripTypeScriptTypes(fs.readFileSync(process.argv[1], 'utf8')));
+"#,
+                ])
+                .arg(package.join(format!("{entry}.ts")))
+                .arg(package.join(format!("{entry}.mjs")))
+                .output()
+                .expect("Node with TypeScript stripping is required for the Ash SDK test");
+            assert!(
+                output.status.success(),
+                "{}",
+                String::from_utf8_lossy(&output.stderr)
+            );
+        }
+        let local = LocalPluginPackage::load(&package).unwrap();
+        let store = tempfile::tempdir().unwrap();
+        let authority =
+            PluginActivationAuthority::in_memory(PluginPackageStore::open(store.path()).unwrap())
+                .unwrap();
+        let installed = authority
+            .install_local(PluginAuthorityCommandId::new("install").unwrap(), 0, &local)
+            .unwrap()
+            .package;
+        let apply = |revision, id: &str, command| {
+            authority
+                .apply(PluginAuthorityCommandRequest {
+                    command_id: PluginAuthorityCommandId::new(id).unwrap(),
+                    expected_revision: revision,
+                    command,
+                })
+                .unwrap();
+        };
+        let activation_grant = Grant::for_environment(
+            Dir::open_local(directory.path()).unwrap(),
+            GrantSource::ExplicitUser,
+            Permissions::new([Permission::DiscoverPlugins]),
+        );
+        // A separate workspace ensures this SDK result comes from the bound Rust service.
+        let workspace = tempfile::tempdir().unwrap();
+        std::fs::write(
+            workspace.path().join("data.txt"),
+            "Rust-owned workspace text",
+        )
+        .unwrap();
+        let read_grant = Grant::for_environment(
+            Dir::open_local(workspace.path()).unwrap(),
+            GrantSource::ExplicitUser,
+            Permissions::new([Permission::ReadFiles]),
+        );
+        let files: Arc<dyn FileSystem> = Arc::new(LocalFileSystem::new(read_grant.clone()));
+        let client = Arc::new(crate::client_host::ClientHost::default());
+        let _peer = EditorPeer::start(client.clone(), 11, "ash-sdk");
+        let runtime = ExtensionHostRuntime::start(
+            BuiltInEditorExtensions::Omitted,
+            Some(authority.clone()),
+            None,
+            None,
+            Arc::new(launcher),
+            ExtensionHostLimits::default(),
+            RestartPolicy::default(),
+            Arc::new(crate::server::update_broker::UpdateBroker::default()),
+            client,
+            None,
+        )
+        .unwrap();
+        runtime
+            .bind_dir(
+                activation_grant
+                    .authorize(Permission::DiscoverPlugins)
+                    .unwrap(),
+            )
+            .unwrap();
+        assert!(runtime.snapshot_for(11).extensions.is_empty());
+        apply(
+            1,
+            "enable",
+            PluginAuthorityCommand::Enable {
+                package: installed.clone(),
+            },
+        );
+        runtime
+            .reconcile(super::super::ExtensionHostReconcileMode::Refresh)
+            .unwrap();
+        assert!(
+            runtime.snapshot_for(11).extensions.is_empty(),
+            "enablement must not grant execution"
+        );
+        apply(
+            2,
+            "grant",
+            PluginAuthorityCommand::Grant {
+                package: installed.clone(),
+            },
+        );
+        runtime
+            .reconcile(super::super::ExtensionHostReconcileMode::Refresh)
+            .unwrap();
+        let dormant = runtime.snapshot_for(11).extensions[0].clone();
+        let active = runtime
+            .activate_by_event(
+                11,
+                &dormant.id,
+                dormant.activation_generation,
+                ActivationEvent::Command("test.node".into()),
+                None,
+                Ok(files.clone()),
+            )
+            .unwrap()
+            .extensions[0]
+            .clone();
+        assert_eq!(
+            active.lifecycle,
+            ExtensionHostLifecycle::Ready,
+            "{:?}",
+            active.failure
+        );
+        let request = |path: &str| ExtensionHostInvocationRequest {
+            extension_id: active.id.clone(),
+            registration_id: "test.node".into(),
+            registration_generation: None,
+            activation_generation: active.activation_generation,
+            incarnation: active.incarnation.unwrap(),
+            operation: "execute".into(),
+            payload: json!({"arguments": [path]}),
+            deadline_unix_millis: std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_millis() as u64
+                + 10_000,
+        };
+        let wait = |id: &str| {
+            let deadline = Instant::now() + Duration::from_secs(10);
+            loop {
+                match runtime.read_invocation(11, id).unwrap() {
+                    ExtensionHostInvocationRead::Succeeded(value) => break value,
+                    ExtensionHostInvocationRead::Pending => {
+                        assert!(Instant::now() < deadline, "Ash SDK command did not finish");
+                        std::thread::sleep(Duration::from_millis(5));
+                    }
+                    ExtensionHostInvocationRead::Failed(failure) => {
+                        panic!("Ash SDK command failed: {failure:?}")
+                    }
+                    ExtensionHostInvocationRead::Cancelled(reason) => {
+                        panic!("Ash SDK command cancelled: {reason:?}")
+                    }
+                }
+            }
+        };
+        let invoke = |path: &str| {
+            let id = runtime
+                .start_invocation(11, request(path), Ok(files.clone()))
+                .unwrap();
+            wait(&id)
+        };
+        let first = invoke("data.txt");
+        if package_read {
+            let mut example = request("data.txt");
+            example.registration_id = "ash.example.inspect".into();
+            let example_id = runtime
+                .start_invocation(11, example, Ok(files.clone()))
+                .unwrap();
+            assert_eq!(wait(&example_id), "Rust-owned workspace text");
+            assert_eq!(first["text"], "Rust-owned workspace text");
+            assert_ne!(
+                first["pid"].as_u64().unwrap(),
+                u64::from(std::process::id())
+            );
+            assert_eq!(invoke("../data.txt")["code"], "invalidRequest");
+            assert_eq!(
+                invoke(workspace.path().join("data.txt").to_str().unwrap())["code"],
+                "invalidRequest"
+            );
+            let absent = runtime
+                .start_invocation(11, request("data.txt"), Err(test_files_unavailable()))
+                .unwrap();
+            assert_eq!(
+                wait(&absent)["code"],
+                "operationNotSupported",
+                "installation cannot manufacture a filesystem service"
+            );
+
+            let pending = runtime
+                .start_invocation(11, request(":wait"), Ok(files.clone()))
+                .unwrap();
+            let deadline = Instant::now() + Duration::from_secs(5);
+            while invoke(":status")["waiting"] != true {
+                assert!(Instant::now() < deadline, "delayed command did not start");
+                std::thread::sleep(Duration::from_millis(5));
+            }
+            runtime
+                .cancel_invocation(11, &pending, super::super::ResultRetention::Retain)
+                .unwrap();
+            invoke(":release");
+            loop {
+                let status = invoke(":status");
+                if status["resumed"] == "cancelled" {
+                    break;
+                }
+                assert!(
+                    Instant::now() < deadline,
+                    "cancelled command retained SDK access: {status}"
+                );
+                std::thread::sleep(Duration::from_millis(5));
+            }
+            loop {
+                match runtime.read_invocation(11, &pending).unwrap() {
+                    ExtensionHostInvocationRead::Cancelled(_) => break,
+                    ExtensionHostInvocationRead::Pending => {
+                        assert!(Instant::now() < deadline, "cancellation was not published");
+                        std::thread::sleep(Duration::from_millis(5));
+                    }
+                    ExtensionHostInvocationRead::Failed(failure) => {
+                        panic!("cancelled command failed instead: {failure:?}")
+                    }
+                    ExtensionHostInvocationRead::Succeeded(value) => {
+                        panic!("cancelled command succeeded instead: {value}")
+                    }
+                }
+            }
+            assert_eq!(invoke("data.txt")["text"], "Rust-owned workspace text");
+            read_grant.revoke();
+            assert_eq!(invoke("data.txt")["code"], "permissionDenied");
+        } else {
+            assert_eq!(
+                first["code"], "permissionDenied",
+                "workspace permission cannot replace package permission"
+            );
+        }
+        let supervisor = runtime
+            .inner
+            .state
+            .lock()
+            .unwrap()
+            .entry(11, &active.id)
+            .unwrap()
+            .supervisor
+            .clone()
+            .unwrap();
+        apply(
+            3,
+            "disable",
+            PluginAuthorityCommand::Disable { package: installed },
+        );
+        runtime
+            .reconcile(super::super::ExtensionHostReconcileMode::Refresh)
+            .unwrap();
+        assert_eq!(
+            supervisor.snapshot().status,
+            ash_external_ext::ExtensionHostStatus::Stopped
+        );
+        assert!(runtime.snapshot_for(11).extensions.is_empty());
+        assert!(matches!(
+            runtime.start_invocation(11, request("data.txt"), Ok(files)),
+            Err(ExtensionHostRuntimeError::Stale)
+        ));
+        runtime.shutdown();
+    }
 }
 
 fn invoke(runtime: &ExtensionHostRuntime, owner: u64) -> Value {
@@ -730,9 +1062,9 @@ fn late_speech_host_events_publish_the_admitted_fleet_without_health_polling() {
         .capabilities
         .push(ExtensionCapability::SpeechProvider);
     std::fs::write(directory.path().join("extension/extension.cjs"), r#"
-        const v = require('vscode'); let registration, cancelled = 0;
+        const v = require('@ash/sdk'); let registration, cancelled = 0;
         const factory = token => { const events = new v.EventEmitter(); token.onCancellationRequested(() => { cancelled++; events.dispose(); }); return { onDidChange: events.event }; };
-        exports.activate = context => context.subscriptions.push(v.commands.registerCommand('test.node', action => {
+        exports.activate = context => context.subscriptions.push(v.commands.register('test.node', action => {
             if (action === 'register') setTimeout(() => { registration = v.speech.registerSpeechProvider('test.dynamic', { provideSpeechToTextSession: factory, provideTextToSpeechSession: factory, provideKeywordRecognitionSession: factory }); }, 20);
             if (action === 'unregister') setTimeout(() => registration.dispose(), 20);
             return cancelled;
@@ -866,20 +1198,20 @@ fn admitted_plugin_terminal_resources_survive_factory_disposal_and_retire_on_rev
     std::fs::write(package.join(".ash-plugin/plugin.json"), json!({
         "schemaVersion": 1, "id": "acme/terminal-followup", "version": "1.0.0",
         "displayName": "Terminal followup", "compatibility": {"ash": ">=0.1.0"}, "permissions": [],
-        "contributions": {"editorExtensions": [{"id": "runtime", "runtime": "javascript",
+        "contributions": {"editorExtensions": [{"id": "runtime", "runtime": "javascript", "api": "ash",
             "entrypoint": "extension.cjs", "runtimeApiVersion": 1,
             "activationEvents": [{"type": "onCommand", "id": "test.node"}],
             "capabilities": ["command", "terminalProfileProvider", "terminalLinkProvider", "speechProvider"]}]}
     }).to_string()).unwrap();
     std::fs::write(package.join("package.json"), json!({
         "publisher": "acme", "name": "terminal-followup", "version": "1.0.0", "main": "./extension.cjs",
-        "enabledApiProposals": ["speech"], "contributes": {
+        "engines": {"ash": "*"}, "contributes": {
             "commands": [{"command": "test.node", "title": "Control"}],
             "terminal": {"profiles": [{"id": "pty", "title": "PTY"}]}
         }
     }).to_string()).unwrap();
     std::fs::write(package.join("extension.cjs"), r#"
-const v = require('vscode');
+const v = require('@ash/sdk');
 exports.activate = context => {
  let factory; let links; let closes = 0; let inputs = []; let delay = false; let pending; let cancelled = 0;
  const install = () => {
@@ -891,7 +1223,7 @@ exports.activate = context => {
   links = v.window.registerTerminalLinkProvider({ provideTerminalLinks: (_, token) => { token.onCancellationRequested(() => cancelled++); const value = [{ startIndex: 0, length: 4, original: 'owner' }]; return delay ? new Promise(resolve => { pending = () => { resolve(value); pending = undefined; }; }) : value; }, handleTerminalLink: link => inputs.push(link.original) });
   context.subscriptions.push(factory, links);
  };
- context.subscriptions.push(v.commands.registerCommand('test.node', action => {
+ context.subscriptions.push(v.commands.register('test.node', action => {
   if (action === 'install') install();
   if (action === 'withdraw') { factory.dispose(); links.dispose(); }
   if (action === 'delay') delay = true;

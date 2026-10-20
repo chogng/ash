@@ -18,14 +18,14 @@ fn product_git_activation_does_not_wait_for_workbench_restoration() {
 }
 
 #[test]
-fn local_vscode_package_waits_for_manifest_activation_and_revocation_retires_authority() {
+fn local_ash_package_waits_for_manifest_activation_and_revocation_retires_authority() {
     for valid_activation in [true, false] {
         let root = tempfile::tempdir().unwrap();
         std::fs::create_dir_all(root.path().join(".ash-plugin")).unwrap();
         std::fs::write(root.path().join(".ash-plugin/plugin.json"), serde_json::json!({
             "schemaVersion": 1, "id": "acme/standard", "version": "1.0.0", "displayName": "Standard",
             "compatibility": {"ash": ">=0.1.0"}, "permissions": [],
-            "contributions": {"editorExtensions": [{"id": "tasks", "runtime": "javascript", "api": "vscode",
+            "contributions": {"editorExtensions": [{"id": "tasks", "runtime": "javascript", "api": "ash",
                 "entrypoint": "extension.cjs", "runtimeApiVersion": 1,
                 "activationEvents": [{"type": "onCommand", "id": "acme.run"}], "capabilities": ["command", "taskProvider"]}]}
         }).to_string()).unwrap();
@@ -111,7 +111,7 @@ fn local_vscode_package_waits_for_manifest_activation_and_revocation_retires_aut
                 "--entry",
                 "extension.cjs",
                 "--api",
-                "vscode"
+                "ash"
             ]
         );
         assert!(deployment.workspace_read == WorkspaceReadAccess::Denied);
@@ -157,13 +157,14 @@ fn effective_javascript_package_launches_product_host_with_exact_identity_and_re
     let root = tempfile::tempdir().unwrap();
     std::fs::create_dir_all(root.path().join(".ash-plugin")).unwrap();
     std::fs::create_dir_all(root.path().join("example")).unwrap();
+    std::fs::create_dir_all(root.path().join("dist")).unwrap();
     std::fs::write(
         root.path().join(".ash-plugin/plugin.json"),
         include_bytes!("../../../../../examples/extensions/inspect/.ash-plugin/plugin.json"),
     )
     .unwrap();
     std::fs::write(
-        root.path().join("extension.cjs"),
+        root.path().join("dist/extension.js"),
         "exports.activate = () => {};",
     )
     .unwrap();
@@ -216,7 +217,7 @@ fn effective_javascript_package_launches_product_host_with_exact_identity_and_re
     assert_eq!(snapshot.deployments.len(), 1);
     let deployment = &snapshot.deployments[0];
     assert_eq!(deployment.id, "ash/inspect-example:inspect");
-    assert!(deployment.command.is_vscode());
+    assert!(deployment.command.is_node_host());
     assert_eq!(deployment.command.executable(), None);
     let arguments: Vec<_> = deployment
         .command
@@ -232,9 +233,9 @@ fn effective_javascript_package_launches_product_host_with_exact_identity_and_re
             "--package",
             deployment.command.working_directory().to_str().unwrap(),
             "--entry",
-            "extension.cjs",
+            "dist/extension.js",
             "--api",
-            "vscode"
+            "ash"
         ]
     );
     assert!(deployment.workspace_read == WorkspaceReadAccess::Read);
@@ -324,6 +325,8 @@ fn standard_task_and_debug_packages_wait_for_their_declared_activation_event() {
         ))
         .unwrap();
         let contribution = &mut manifest["contributions"]["editorExtensions"][0];
+        // Keep coverage for installed providers while these capabilities await Ash SDK migration.
+        contribution["api"] = "ash".into();
         contribution["entrypoint"] = "extension.js".into();
         contribution["activationEvents"] = serde_json::json!([event]);
         contribution["capabilities"] = serde_json::json!([capability]);

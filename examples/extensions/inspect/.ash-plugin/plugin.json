@@ -2,8 +2,8 @@
   "schemaVersion": 1,
   "id": "ash/inspect-example",
   "version": "0.1.0",
-  "displayName": "Ash VS Code API example",
-  "description": "Read a document and provide a plaintext hover through the standard VS Code API.",
+  "displayName": "Ash TypeScript SDK example",
+  "description": "Read an authorized workspace file through the Rust filesystem service.",
   "license": "Apache-2.0",
   "compatibility": {
     "ash": ">=0.1.0"
@@ -13,20 +13,16 @@
       {
         "id": "inspect",
         "runtime": "javascript",
-        "entrypoint": "extension.cjs",
+        "entrypoint": "dist/extension.js",
         "runtimeApiVersion": 1,
         "activationEvents": [
           {
             "type": "onCommand",
             "id": "ash.example.inspect"
-          },
-          {
-            "type": "onLanguage",
-            "id": "plaintext"
           }
         ],
-        "capabilities": ["command", "languageProvider"],
-        "api": "vscode"
+        "capabilities": ["command"],
+        "api": "ash"
       }
     ]
   },

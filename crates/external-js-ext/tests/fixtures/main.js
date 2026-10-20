@@ -1,4 +1,4 @@
-const { commands, workspace, window, Uri } = require('vscode');
+const { commands, workspace, window, Uri } = require('@ash/sdk');
 const { label } = require('./helper.js');
 let deactivated = false;
 let captured;
@@ -29,6 +29,6 @@ exports.activate = context => {
         ['rejectionSpin', () => { throw { toString() { while (true) {} } }; }],
         ['wait', () => new Promise(() => {})],
         ['forge', () => globalThis.__ashRequest(3, JSON.stringify({ operation: 'executeCommand', command: 'danger', arguments: [] }))],
-    ]) context.subscriptions.push(commands.registerCommand(`example.${id}`, callback));
+    ]) context.subscriptions.push(commands.register(`example.${id}`, callback));
 };
 exports.deactivate = () => { deactivated = true; };

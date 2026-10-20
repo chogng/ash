@@ -1076,7 +1076,7 @@ test('first task discovery activates an installed dormant provider and disable r
 	await mkdir(join(root, '.ash-plugin'), { recursive: true });
 	await writeFile(join(root, '.ash-plugin', 'plugin.json'), JSON.stringify({
 		schemaVersion: 1, id: 'acme/lazy-task-smoke', version: '1.0.0', displayName: 'Lazy task smoke', compatibility: { ash: '>=0.1.0' },
-		contributions: { editorExtensions: [{ id: 'tasks', runtime: 'javascript', entrypoint: 'extension.js', runtimeApiVersion: 1, activationEvents: [{ type: 'onTaskType', taskType: 'lazy-build' }], capabilities: ['taskProvider', 'command'] }] },
+		contributions: { editorExtensions: [{ id: 'tasks', runtime: 'javascript', api: 'ash', entrypoint: 'extension.js', runtimeApiVersion: 1, activationEvents: [{ type: 'onTaskType', taskType: 'lazy-build' }], capabilities: ['taskProvider', 'command'] }] },
 		permissions: [{ type: 'directory', access: 'read' }],
 	}));
 	const platform = process.platform === 'win32' ? 'windows' : process.platform === 'darwin' ? 'osx' : 'linux';
@@ -1084,18 +1084,18 @@ test('first task discovery activates an installed dormant provider and disable r
 	await writeFile(join(directory, '.vscode', 'tasks.json'), JSON.stringify({ ...taskDocument, [platform]: { group: 'build' }, tasks: [...taskDocument.tasks, { label: 'Configured platform build', type: 'lazy-build', target: 'configured' }] }));
 	await writeFile(join(directory, 'lazy-task-runs.txt'), '0');
 	await writeFile(join(directory, 'lazy-task-run.cjs'), "const fs = require('node:fs'); const count = Number(fs.readFileSync('lazy-task-runs.txt', 'utf8')) + 1; fs.writeFileSync('lazy-task-runs.txt', String(count)); console.log('LAZY_TASK_RUN_' + count);");
-	await writeEditorExtensionFixture(root, `const vscode = require('vscode'); const { tasks, window } = vscode;
+	await writeEditorExtensionFixture(root, `const ash = require('@ash/sdk'); const { tasks, window } = ash;
 exports.activate = function(context) {
  context.subscriptions.push(tasks.registerTaskProvider('lazy-build', {
   resolveTask(task) {
-   const resolved = new vscode.Task(task.definition, task.scope, task.name, task.source, new vscode.ProcessExecution(${JSON.stringify(process.execPath)}, [${JSON.stringify(join(directory, 'lazy-task-run.cjs'))}], {cwd:${JSON.stringify(directory)}}));
+   const resolved = new ash.Task(task.definition, task.scope, task.name, task.source, new ash.ProcessExecution(${JSON.stringify(process.execPath)}, [${JSON.stringify(join(directory, 'lazy-task-run.cjs'))}], {cwd:${JSON.stringify(directory)}}));
    resolved.group = {id:'test',isDefault:true};
    return resolved;
   },
   provideTasks() {
-   const task = new vscode.Task({type:'lazy-build'}, vscode.TaskScope.Workspace, 'Lazy provider build', 'Lazy task smoke');
-   task.group = vscode.TaskGroup.Build;
-   task.presentationOptions = {panel:vscode.TaskPanelKind.Dedicated,clear:true};
+   const task = new ash.Task({type:'lazy-build'}, ash.TaskScope.Workspace, 'Lazy provider build', 'Lazy task smoke');
+   task.group = ash.TaskGroup.Build;
+   task.presentationOptions = {panel:ash.TaskPanelKind.Dedicated,clear:true};
    return [task];
   }
  }), tasks.onDidStartTask(async event => {
@@ -1147,11 +1147,11 @@ test('a standard command-only extension starts the built-in build Task and recei
 	const directory = testWorkspace.directory;
 	const root = join(directory, 'command-task-extension');
 	await mkdir(join(root, '.ash-plugin'), { recursive: true });
-	await writeFile(join(root, '.ash-plugin', 'plugin.json'), JSON.stringify({ schemaVersion: 1, id: 'acme/command-task-smoke', version: '1.0.0', displayName: 'Command task smoke', compatibility: { ash: '>=0.1.0' }, contributions: { editorExtensions: [{ id: 'commands', runtime: 'javascript', api: 'vscode', entrypoint: 'extension.cjs', runtimeApiVersion: 1, activationEvents: [{ type: 'onCommand', id: 'acme.commandTask.build' }], capabilities: ['command'] }] }, permissions: [{ type: 'directory', access: 'read' }] }));
-	await writeFile(join(root, 'package.json'), JSON.stringify({ name: 'command-task', publisher: 'acme', version: '1.0.0', engines: { vscode: '^1.95.0' }, main: './extension.cjs', contributes: { commands: [{ command: 'acme.commandTask.build', title: 'Build through standard command API' }] } }));
-	await writeFile(join(root, 'extension.cjs'), `const v = require('vscode');
-exports.activate = context => context.subscriptions.push(v.commands.registerCommand('acme.commandTask.build', async () => {
-	const result = await v.commands.executeCommand('workbench.action.tasks.build');
+	await writeFile(join(root, '.ash-plugin', 'plugin.json'), JSON.stringify({ schemaVersion: 1, id: 'acme/command-task-smoke', version: '1.0.0', displayName: 'Command task smoke', compatibility: { ash: '>=0.1.0' }, contributions: { editorExtensions: [{ id: 'commands', runtime: 'javascript', api: 'ash', entrypoint: 'extension.cjs', runtimeApiVersion: 1, activationEvents: [{ type: 'onCommand', id: 'acme.commandTask.build' }], capabilities: ['command'] }] }, permissions: [{ type: 'directory', access: 'read' }] }));
+	await writeFile(join(root, 'package.json'), JSON.stringify({ name: 'command-task', publisher: 'acme', version: '1.0.0', engines: { ash: '*' }, main: './extension.cjs', contributes: { commands: [{ command: 'acme.commandTask.build', title: 'Build through standard command API' }] } }));
+	await writeFile(join(root, 'extension.cjs'), `const v = require('@ash/sdk');
+exports.activate = context => context.subscriptions.push(v.commands.register('acme.commandTask.build', async () => {
+	const result = await v.commands.execute('workbench.action.tasks.build');
 	if (result !== undefined) throw Error('Void command result changed');
 	await v.window.showInformationMessage('STANDARD_TASK_COMMAND_RETURNED_VOID');
 }));`);
@@ -1179,17 +1179,17 @@ test('standard Task command variables receive variable arrays once per process a
 	const directory = testWorkspace.directory;
 	const root = join(directory, 'task-variable-map-extension');
 	await mkdir(join(root, '.ash-plugin'), { recursive: true });
-	await writeFile(join(root, '.ash-plugin', 'plugin.json'), JSON.stringify({ schemaVersion: 1, id: 'acme/task-variable-map-smoke', version: '1.0.0', displayName: 'Task variable map smoke', compatibility: { ash: '>=0.1.0' }, contributions: { editorExtensions: [{ id: 'commands', runtime: 'javascript', api: 'vscode', entrypoint: 'extension.cjs', runtimeApiVersion: 1, activationEvents: ['acme.taskVariables.pick', 'acme.taskVariables.report'].map(id => ({ type: 'onCommand', id })), capabilities: ['command'] }] }, permissions: [{ type: 'directory', access: 'read' }] }));
-	await writeFile(join(root, 'package.json'), JSON.stringify({ name: 'task-variable-map', publisher: 'acme', version: '1.0.0', engines: { vscode: '^1.95.0' }, main: './extension.cjs', contributes: { commands: [{ command: 'acme.taskVariables.pick', title: 'Pick Task argument' }, { command: 'acme.taskVariables.report', title: 'Report Task variable calls' }] } }));
-	await writeFile(join(root, 'extension.cjs'), `const v = require('vscode'); let calls = 0;
+	await writeFile(join(root, '.ash-plugin', 'plugin.json'), JSON.stringify({ schemaVersion: 1, id: 'acme/task-variable-map-smoke', version: '1.0.0', displayName: 'Task variable map smoke', compatibility: { ash: '>=0.1.0' }, contributions: { editorExtensions: [{ id: 'commands', runtime: 'javascript', api: 'ash', entrypoint: 'extension.cjs', runtimeApiVersion: 1, activationEvents: ['acme.taskVariables.pick', 'acme.taskVariables.report'].map(id => ({ type: 'onCommand', id })), capabilities: ['command'] }] }, permissions: [{ type: 'directory', access: 'read' }] }));
+	await writeFile(join(root, 'package.json'), JSON.stringify({ name: 'task-variable-map', publisher: 'acme', version: '1.0.0', engines: { ash: '*' }, main: './extension.cjs', contributes: { commands: [{ command: 'acme.taskVariables.pick', title: 'Pick Task argument' }, { command: 'acme.taskVariables.report', title: 'Report Task variable calls' }] } }));
+	await writeFile(join(root, 'extension.cjs'), `const v = require('@ash/sdk'); let calls = 0;
 exports.activate = context => context.subscriptions.push(
-  v.commands.registerCommand('acme.taskVariables.pick', async vars => {
+  v.commands.register('acme.taskVariables.pick', async vars => {
     if (!Array.isArray(vars) || vars.length !== 2 || vars[0] !== ${JSON.stringify(directory)} || vars[1] !== '\${command:acme.taskVariables.pick}') throw Error('Task command arguments differ from the variable array');
     calls++;
     if (calls === 3) { await v.window.showInformationMessage('TASK_VARIABLE_PICK_CANCELED'); return undefined; }
     return 'picked-' + calls + ' literal value';
   }),
-  v.commands.registerCommand('acme.taskVariables.report', () => v.window.showInformationMessage('TASK_VARIABLE_CALLS_' + calls))
+  v.commands.register('acme.taskVariables.report', () => v.window.showInformationMessage('TASK_VARIABLE_CALLS_' + calls))
 );`);
 	await writeFile(join(directory, 'task-variable-args.jsonl'), '');
 	await writeFile(join(directory, 'task-variables.cjs'), `require('node:fs').appendFileSync(${JSON.stringify(join(directory, 'task-variable-args.jsonl'))}, JSON.stringify(process.argv.slice(2)) + '\\n');`);
@@ -1229,11 +1229,11 @@ test('a standard CommonJS extension preserves configured problem reveal after re
 	const directory = testWorkspace.directory;
 	const root = join(directory, 'fetched-task-extension');
 	await mkdir(join(root, '.ash-plugin'), { recursive: true });
-	await writeFile(join(root, '.ash-plugin', 'plugin.json'), JSON.stringify({ schemaVersion: 1, id: 'acme/fetched-task-smoke', version: '1.0.0', displayName: 'Fetched task smoke', compatibility: { ash: '>=0.1.0' }, contributions: { editorExtensions: [{ id: 'tasks', runtime: 'javascript', api: 'vscode', entrypoint: 'extension.cjs', runtimeApiVersion: 1, activationEvents: [{ type: 'onCommand', id: 'acme.fetchedTask.edit' }], capabilities: ['command', 'taskProvider'] }] }, permissions: [{ type: 'directory', access: 'read' }] }));
-	await writeFile(join(root, 'package.json'), JSON.stringify({ name: 'fetched-task', publisher: 'acme', version: '1.0.0', engines: { vscode: '^1.95.0' }, main: './extension.cjs', activationEvents: ['onCommand:acme.fetchedTask.edit'], contributes: { commands: [{ command: 'acme.fetchedTask.edit', title: 'Edit fetched Task' }], taskDefinitions: [{ type: 'fetched-task', required: [], properties: {} }], configuration: { properties: { 'fetchedTask.argument': { type: 'string', default: 'EXTENSION_DEFAULT' } } }, problemMatchers: [{ name: 'fetched-edit', owner: 'fetched-edit', pattern: { regexp: '^(.+)\\((\\d+),(\\d+)\\): (warning|error) TS([^:]+): (.*)$', file: 1, line: 2, column: 3, severity: 4, code: 5, message: 6 } }] } }));
-	await writeFile(join(root, 'extension.cjs'), `const v = require('vscode');
+	await writeFile(join(root, '.ash-plugin', 'plugin.json'), JSON.stringify({ schemaVersion: 1, id: 'acme/fetched-task-smoke', version: '1.0.0', displayName: 'Fetched task smoke', compatibility: { ash: '>=0.1.0' }, contributions: { editorExtensions: [{ id: 'tasks', runtime: 'javascript', api: 'ash', entrypoint: 'extension.cjs', runtimeApiVersion: 1, activationEvents: [{ type: 'onCommand', id: 'acme.fetchedTask.edit' }], capabilities: ['command', 'taskProvider'] }] }, permissions: [{ type: 'directory', access: 'read' }] }));
+	await writeFile(join(root, 'package.json'), JSON.stringify({ name: 'fetched-task', publisher: 'acme', version: '1.0.0', engines: { ash: '*' }, main: './extension.cjs', activationEvents: ['onCommand:acme.fetchedTask.edit'], contributes: { commands: [{ command: 'acme.fetchedTask.edit', title: 'Edit fetched Task' }], taskDefinitions: [{ type: 'fetched-task', required: [], properties: {} }], configuration: { properties: { 'fetchedTask.argument': { type: 'string', default: 'EXTENSION_DEFAULT' } } }, problemMatchers: [{ name: 'fetched-edit', owner: 'fetched-edit', pattern: { regexp: '^(.+)\\((\\d+),(\\d+)\\): (warning|error) TS([^:]+): (.*)$', file: 1, line: 2, column: 3, severity: 4, code: 5, message: 6 } }] } }));
+	await writeFile(join(root, 'extension.cjs'), `const v = require('@ash/sdk');
 let task; let edits = 0;
-exports.activate = context => context.subscriptions.push(v.commands.registerCommand('acme.fetchedTask.edit', async () => {
+exports.activate = context => context.subscriptions.push(v.commands.register('acme.fetchedTask.edit', async () => {
 	task ??= (await v.tasks.fetchTasks()).find(value => value.name === 'Configured edited task');
 	if (!task || 'revealProblems' in task.presentationOptions) throw Error('Invalid public Task snapshot');
 	task.name = 'Edited task ' + ++edits;
@@ -1299,9 +1299,9 @@ test('a standard extension edits and copies fetched CustomExecution while releas
 	const directory = testWorkspace.directory;
 	const root = join(directory, 'fetched-custom-extension');
 	await mkdir(join(root, '.ash-plugin'), { recursive: true });
-	await writeFile(join(root, '.ash-plugin', 'plugin.json'), JSON.stringify({ schemaVersion: 1, id: 'acme/fetched-custom-smoke', version: '1.0.0', displayName: 'Fetched custom smoke', compatibility: { ash: '>=0.1.0' }, contributions: { editorExtensions: [{ id: 'tasks', runtime: 'javascript', api: 'vscode', entrypoint: 'extension.cjs', runtimeApiVersion: 1, activationEvents: [{ type: 'onCommand', id: 'acme.fetchedCustom.edit' }], capabilities: ['command', 'taskProvider'] }] }, permissions: [{ type: 'directory', access: 'read' }] }));
-	await writeFile(join(root, 'package.json'), JSON.stringify({ name: 'fetched-custom', publisher: 'acme', version: '1.0.0', engines: { vscode: '^1.95.0' }, main: './extension.cjs', contributes: { commands: [{ command: 'acme.fetchedCustom.edit', title: 'Edit fetched CustomExecution' }, { command: 'acme.fetchedCustom.stop', title: 'Stop edited CustomExecution' }], taskDefinitions: [{ type: 'fetched-custom', required: [], properties: {} }] } }));
-	await writeFile(join(root, 'extension.cjs'), `const v = require('vscode');
+	await writeFile(join(root, '.ash-plugin', 'plugin.json'), JSON.stringify({ schemaVersion: 1, id: 'acme/fetched-custom-smoke', version: '1.0.0', displayName: 'Fetched custom smoke', compatibility: { ash: '>=0.1.0' }, contributions: { editorExtensions: [{ id: 'tasks', runtime: 'javascript', api: 'ash', entrypoint: 'extension.cjs', runtimeApiVersion: 1, activationEvents: [{ type: 'onCommand', id: 'acme.fetchedCustom.edit' }], capabilities: ['command', 'taskProvider'] }] }, permissions: [{ type: 'directory', access: 'read' }] }));
+	await writeFile(join(root, 'package.json'), JSON.stringify({ name: 'fetched-custom', publisher: 'acme', version: '1.0.0', engines: { ash: '*' }, main: './extension.cjs', contributes: { commands: [{ command: 'acme.fetchedCustom.edit', title: 'Edit fetched CustomExecution' }, { command: 'acme.fetchedCustom.stop', title: 'Stop edited CustomExecution' }], taskDefinitions: [{ type: 'fetched-custom', required: [], properties: {} }] } }));
+	await writeFile(join(root, 'extension.cjs'), `const v = require('@ash/sdk');
 let task; let fetched; let original; let active; let edits = 0; let creates = 0; let closes = 0; let releasedListeners = 0;
 exports.activate = context => {
 	original = new v.Task({type: 'fetched-custom', target: 'original'}, v.TaskScope.Workspace, 'Original custom', 'Custom provider', new v.CustomExecution(async definition => {
@@ -1316,7 +1316,7 @@ exports.activate = context => {
 		};
 	}));
 	context.subscriptions.push(v.tasks.registerTaskProvider('fetched-custom', {provideTasks() { return [original]; }}));
-	context.subscriptions.push(v.commands.registerCommand('acme.fetchedCustom.edit', async () => {
+	context.subscriptions.push(v.commands.register('acme.fetchedCustom.edit', async () => {
 		fetched ??= (await v.tasks.fetchTasks({type: 'fetched-custom'})).find(value => value.name === 'Original custom');
 		task ??= fetched;
 		if (!task || !(task.execution instanceof v.CustomExecution) || task.execution.callback !== undefined) throw Error('Invalid fetched custom execution');
@@ -1338,7 +1338,7 @@ exports.activate = context => {
 			await v.window.showInformationMessage('CUSTOM_EXECUTION_STARTED_' + edits);
 		} finally { start.dispose(); end.dispose(); processStart.dispose(); }
 	}));
-	context.subscriptions.push(v.commands.registerCommand('acme.fetchedCustom.stop', async () => {
+	context.subscriptions.push(v.commands.register('acme.fetchedCustom.stop', async () => {
 		let handle;
 		const finished = new Promise(resolve => { handle = v.tasks.onDidEndTask(event => { if (event.execution === active) resolve(); }); });
 		try { active.terminate(); await finished; if (creates !== 3 || closes !== 1 || releasedListeners !== 6) throw Error('Termination did not release original PTY'); await v.window.showInformationMessage('CUSTOM_EXECUTION_RELEASED_3'); }
@@ -1376,11 +1376,11 @@ test('installed task observer receives ordered process events after termination 
 	await mkdir(join(root, '.ash-plugin'), { recursive: true });
 	await writeFile(join(root, '.ash-plugin', 'plugin.json'), JSON.stringify({
 		schemaVersion: 1, id: 'acme/task-events-smoke', version: '1.0.0', displayName: 'Task events smoke', compatibility: { ash: '>=0.1.0' },
-		contributions: { editorExtensions: [{ id: 'tasks', runtime: 'javascript', entrypoint: 'extension.js', runtimeApiVersion: 1, activationEvents: [{ type: 'onTaskType', taskType: 'event-watch' }], capabilities: ['taskProvider', 'command'] }] },
+		contributions: { editorExtensions: [{ id: 'tasks', runtime: 'javascript', api: 'ash', entrypoint: 'extension.js', runtimeApiVersion: 1, activationEvents: [{ type: 'onTaskType', taskType: 'event-watch' }], capabilities: ['taskProvider', 'command'] }] },
 		permissions: [{ type: 'directory', access: 'read' }],
 	}));
 	await writeFile(join(directory, 'task-events-run.cjs'), "require('node:fs').writeFileSync('task-events-pid.txt', String(process.pid)); console.log('TASK_EVENTS_READY'); setInterval(() => {}, 1000);");
-	await writeEditorExtensionFixture(root, `const vscode = require('vscode'); const { tasks, window } = vscode;
+	await writeEditorExtensionFixture(root, `const ash = require('@ash/sdk'); const { tasks, window } = ash;
 exports.activate = function(context) {
  const events = []; let execution;
  async function observe(type, event) {
@@ -1392,7 +1392,7 @@ exports.activate = function(context) {
  }
  context.subscriptions.push(tasks.onDidStartTask(event => observe('start', event)), tasks.onDidStartTaskProcess(event => observe('processStart', event)), tasks.onDidEndTaskProcess(event => observe('processEnd', event)), tasks.onDidEndTask(event => observe('end', event)), tasks.registerTaskProvider('event-watch', {
   provideTasks() {
-   const task = new vscode.Task({type:'event-watch'}, vscode.TaskScope.Workspace, 'Event observer watch', 'Task events smoke', new vscode.ProcessExecution(${JSON.stringify(process.execPath)}, [${JSON.stringify(join(directory, 'task-events-run.cjs'))}], {cwd:${JSON.stringify(directory)}}));
+   const task = new ash.Task({type:'event-watch'}, ash.TaskScope.Workspace, 'Event observer watch', 'Task events smoke', new ash.ProcessExecution(${JSON.stringify(process.execPath)}, [${JSON.stringify(join(directory, 'task-events-run.cjs'))}], {cwd:${JSON.stringify(directory)}}));
    task.group = {id:'rebuild',isDefault:true};
    return [task];
   }
@@ -1508,17 +1508,17 @@ test('superseding an extension task query delivers cancellation and retains the 
 	const directory = testWorkspace.directory;
 	const root = join(directory, 'cancellation-extension');
 	await mkdir(join(root, '.ash-plugin'), { recursive: true });
-	await writeFile(join(root, '.ash-plugin', 'plugin.json'), JSON.stringify({ schemaVersion: 1, id: 'acme/task-cancellation', version: '1.0.0', displayName: 'Task cancellation smoke', compatibility: { ash: '>=0.1.0' }, contributions: { editorExtensions: [{ id: 'tasks', runtime: 'javascript', entrypoint: 'extension.js', runtimeApiVersion: 1, activationEvents: [{ type: 'onCommand', id: 'acme.taskCancellation.arm' }], capabilities: ['command', 'taskProvider'] }] }, permissions: [{ type: 'directory', access: 'read' }] }));
+	await writeFile(join(root, '.ash-plugin', 'plugin.json'), JSON.stringify({ schemaVersion: 1, id: 'acme/task-cancellation', version: '1.0.0', displayName: 'Task cancellation smoke', compatibility: { ash: '>=0.1.0' }, contributions: { editorExtensions: [{ id: 'tasks', runtime: 'javascript', api: 'ash', entrypoint: 'extension.js', runtimeApiVersion: 1, activationEvents: [{ type: 'onCommand', id: 'acme.taskCancellation.arm' }], capabilities: ['command', 'taskProvider'] }] }, permissions: [{ type: 'directory', access: 'read' }] }));
 	await writeEditorExtensionFixture(root, `
-const vscode = require('vscode'); const { commands, tasks, window } = vscode;
+const ash = require('@ash/sdk'); const { commands, tasks, window } = ash;
 let armed = false;
 let cancellations = 0;
 exports.activate = function(context) {
-	context.subscriptions.push(commands.registerCommand('acme.taskCancellation.arm', async () => {
+	context.subscriptions.push(commands.register('acme.taskCancellation.arm', async () => {
 		armed = true;
 		await window.showInformationMessage('Task cancellation armed');
 	}));
-	context.subscriptions.push(commands.registerCommand('acme.taskCancellation.probe', async () => {
+	context.subscriptions.push(commands.register('acme.taskCancellation.probe', async () => {
 		await window.showInformationMessage('Task cancellation count: ' + cancellations);
 	}));
 	context.subscriptions.push(tasks.registerTaskProvider('cancellation-smoke', {
@@ -1533,7 +1533,7 @@ exports.activate = function(context) {
 				await window.showInformationMessage('Task query waiting').catch(() => {});
 				await finished;
 			}
-			return [new vscode.Task({type:'cancellation-smoke'}, vscode.TaskScope.Workspace, 'Retained task provider', 'Cancellation smoke', new vscode.ProcessExecution(${JSON.stringify(process.execPath)}, [${JSON.stringify(join(directory, 'smoke-task.cjs'))}]))];
+			return [new ash.Task({type:'cancellation-smoke'}, ash.TaskScope.Workspace, 'Retained task provider', 'Cancellation smoke', new ash.ProcessExecution(${JSON.stringify(process.execPath)}, [${JSON.stringify(join(directory, 'smoke-task.cjs'))}]))];
 		}
 	}));
 }`);

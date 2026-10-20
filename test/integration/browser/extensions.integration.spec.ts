@@ -296,7 +296,7 @@ for (const [locale, detailsLabel, featuresLabel, informationLabel, identifierLab
 		await expect.poll(() => editor.locator('.extension-detail-icon img').evaluate(image => (image as HTMLImageElement).naturalWidth)).toBeGreaterThan(0);
 		await expect(editor.getByRole('tabpanel', { name: detailsLabel, exact: true }).getByRole('heading', { name: 'Getting started', exact: true })).toBeVisible();
 		await expect(editor.getByRole('complementary', { name: informationLabel, exact: true })).toContainText(identifierLabel);
-		await expect(editor.getByRole('complementary')).toContainText('publisher.sample@open-vsx');
+		await expect(editor.getByRole('complementary')).toContainText('publisher.sample@ash');
 		await expect(editor.locator('.extension-detail-content').getByRole('link', { name: 'Unsafe', exact: true })).toHaveCount(0);
 		expect(await page.evaluate(() => (window as any).fixtureUnsafe)).toBeUndefined();
 		const details = editor.getByRole('tab', { name: detailsLabel, exact: true });
@@ -313,19 +313,17 @@ for (const [locale, detailsLabel, featuresLabel, informationLabel, identifierLab
 	});
 }
 
-test('Uninstalled editor extension details read metadata and README through the configured gallery', async ({ page }) => {
-	await page.goto('/extensions.html?gallery&theme=light');
+test('Uninstalled Ash editor details show verified metadata without reading package resources', async ({ page }) => {
+	await page.goto('/extensions.html?uninstalled&theme=light');
 	await page.evaluate(() => window.ashExtensionsIntegration.openEditorExtension());
 	const editor = page.locator('.ash-extension-editor');
-	await expect(editor.locator('.extension-detail-publisher')).toHaveText('Fixture publisher');
-	await expect(editor.locator('.ash-markdown')).toContainText('Getting started');
-	await expect(editor.locator('.extension-detail-icon img')).toBeVisible();
+	await expect(editor.locator('.extension-detail-header')).toContainText('Sample editor extension');
+	await expect(editor.locator('.extension-detail-icon img')).toBeHidden();
+	await expect(editor.locator('.extension-detail-icon img')).not.toHaveAttribute('src');
 	await expect(editor.getByRole('button', { name: 'Install', exact: true })).toBeEnabled();
 	const requests = await page.evaluate(() => window.ashExtensionsIntegration.requests);
-	expect(requests.filter((entry: any) => entry[0] === 'galleryResource')).toEqual(expect.arrayContaining([
-		['galleryResource', expect.objectContaining({ publisher: 'publisher', name: 'sample', version: '1.0.0', path: 'package.json' })],
-		['galleryResource', expect.objectContaining({ publisher: 'publisher', name: 'sample', version: '1.0.0', path: 'README.md' })],
-	]));
+	expect(requests.filter((entry: any) => entry[0] === 'extensionResource')).toEqual([]);
+	expect(requests.some((entry: any) => entry[0] === 'get' && entry[1].packageId === 'publisher.sample@ash')).toBe(true);
 	expect(requests.some((entry: any) => entry[0] === 'install')).toBe(false);
 });
 
@@ -404,7 +402,7 @@ for (const [locale, title, reason] of [['en', 'Recommended', 'Recommended by thi
 		await recommended.getByRole('searchbox').press('ArrowDown');
 		await page.keyboard.press('Enter');
 		await expect(page.locator('.ash-extension-editor')).toContainText('Sample editor extension');
-		expect(await page.evaluate(() => window.ashExtensionsIntegration.requests.some((entry: any) => entry[0] === 'get' && entry[1].packageId === 'publisher.sample@open-vsx'))).toBe(true);
+		expect(await page.evaluate(() => window.ashExtensionsIntegration.requests.some((entry: any) => entry[0] === 'get' && entry[1].packageId === 'publisher.sample@ash'))).toBe(true);
 	});
 }
 
@@ -547,13 +545,13 @@ for (const locale of ['en', 'zh-CN']) {
 		const install = locale === 'en' ? 'Install' : '安装';
 		await editor.getByRole('button', { name: install, exact: true }).click();
 		const review = page.getByRole('dialog', { name: install, exact: true });
-		await expect(review).toContainText('publisher.sample@open-vsx');
+		await expect(review).toContainText('publisher.sample@ash');
 		await review.getByRole('button', { name: install, exact: true }).click();
 		await expect(editor).toContainText(locale === 'en' ? 'Enabled' : '已启用');
 		for (const [action, policyAction] of locale === 'en' ? [['Disable', 'disable'], ['Authorize execution', 'grant'], ['Revoke execution authorization', 'revoke'], ['Enable', 'enable']] : [['禁用', 'disable'], ['授权执行', 'grant'], ['撤销执行授权', 'revoke'], ['启用', 'enable']]) {
 			await editor.getByRole('button', { name: action, exact: true }).click();
 			if (policyAction === 'grant' || policyAction === 'revoke') {
-				await page.getByRole('dialog', { name: 'publisher.sample@open-vsx', exact: true }).getByRole('button', { name: action, exact: true }).click();
+				await page.getByRole('dialog', { name: 'publisher.sample@ash', exact: true }).getByRole('button', { name: action, exact: true }).click();
 			}
 			await expect.poll(() => page.evaluate(() => window.ashExtensionsIntegration.requests.filter((entry: any) => entry[0] === 'editorPolicy').map((entry: any) => entry[1].action).at(-1))).toBe(policyAction);
 		}
@@ -569,11 +567,11 @@ test('Extensions execution can be revoked when its entry becomes unavailable', a
 	await editor.getByRole('button', { name: 'Install', exact: true }).click();
 	await page.getByRole('dialog', { name: 'Install', exact: true }).getByRole('button', { name: 'Install', exact: true }).click();
 	await editor.getByRole('button', { name: 'Authorize execution', exact: true }).click();
-	await page.getByRole('dialog', { name: 'publisher.sample@open-vsx', exact: true }).getByRole('button', { name: 'Authorize execution', exact: true }).click();
+	await page.getByRole('dialog', { name: 'publisher.sample@ash', exact: true }).getByRole('button', { name: 'Authorize execution', exact: true }).click();
 	await expect(editor.getByRole('button', { name: 'Revoke execution authorization', exact: true })).toBeVisible();
 	await page.evaluate(() => window.ashExtensionsIntegration.removeEditorEntrypoint());
 	await editor.getByRole('button', { name: 'Revoke execution authorization', exact: true }).click();
-	await page.getByRole('dialog', { name: 'publisher.sample@open-vsx', exact: true }).getByRole('button', { name: 'Revoke execution authorization', exact: true }).click();
+	await page.getByRole('dialog', { name: 'publisher.sample@ash', exact: true }).getByRole('button', { name: 'Revoke execution authorization', exact: true }).click();
 	await expect(editor.getByRole('button', { name: 'Authorize execution', exact: true })).toHaveCount(0);
 	await editor.getByRole('button', { name: 'Disable', exact: true }).click();
 	await expect(editor.getByRole('button', { name: 'Enable', exact: true })).toBeVisible();
@@ -643,7 +641,7 @@ test('Extensions reviews bundled capabilities and uninstalls a selected version 
 test('Third-party Ash sources can be added, paused and resumed through Extensions', async ({ page }) => {
 	await page.goto('/extensions.html');
 	await page.evaluate(() => window.ashExtensionsIntegration.startCommand('ash.extensions.manageSources'));
-	await expect(page.getByRole('dialog', { name: 'Manage extension sources', exact: true })).toContainText('open-vsx');
+	await expect(page.getByRole('dialog', { name: 'Manage extension sources', exact: true })).not.toContainText('open-vsx');
 	await page.keyboard.press('Enter');
 	const setup = page.getByRole('dialog', { name: 'Add Ash open source…', exact: true });
 	const inputs = setup.getByRole('textbox');

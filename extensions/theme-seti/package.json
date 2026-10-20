@@ -5,7 +5,7 @@
   "displayName": "Seti File Icons",
   "license": "MIT",
   "engines": {
-    "vscode": "*"
+    "ash": "*"
   },
   "categories": [
     "Themes"

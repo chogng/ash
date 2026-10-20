@@ -1,5 +1,5 @@
 /** Loads one captured package without consulting host files after confinement. */
-export function loadCommonJS(sources, root, separator, entry, vscode) {
+export function loadCommonJS(sources, root, separator, entry, ash) {
 	const cache = new Map();
 	const directory = name => name.slice(0, Math.max(0, name.lastIndexOf('/')));
 	const filename = name => root.replace(/[\\/]$/, '') + separator + name.split('/').join(separator);
@@ -34,7 +34,7 @@ export function loadCommonJS(sources, root, separator, entry, vscode) {
 	};
 	const resolve = (name, referrer) => {
 		if (typeof name !== 'string' || !name || name.includes('\0') || name.length > 32768) throw new TypeError('Invalid CommonJS module name');
-		if (name === 'vscode') return name;
+		if (name === '@ash/sdk') return name;
 		if (name.startsWith('node:')) throw new Error('Unsupported extension module: ' + name);
 		const request = separator === '\\' ? name.replaceAll('\\', '/') : name;
 		const packageRoot = root.replaceAll(separator, '/').replace(/\/$/, '');
@@ -62,14 +62,14 @@ export function loadCommonJS(sources, root, separator, entry, vscode) {
 		const module = { id: filename(name), filename: filename(name), exports: {}, loaded: false, parent, children: [] };
 		const require = request => {
 			const target = resolve(request, name);
-			if (target === 'vscode') return vscode;
+			if (target === '@ash/sdk') return ash;
 			const child = load(target, module);
 			if (!module.children.includes(child)) module.children.push(child);
 			return child.exports;
 		};
 		require.resolve = request => {
 			const target = resolve(request, name);
-			return target === 'vscode' ? target : filename(target);
+			return target === '@ash/sdk' ? target : filename(target);
 		};
 		module.require = require;
 		// Publish before evaluating: a cycle observes the same partial exports object.

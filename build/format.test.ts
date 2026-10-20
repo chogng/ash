@@ -25,6 +25,21 @@ test('formatting retains a semicolon inserted at the same offset as a whitespace
 	assert.equal(format('example.ts', expected), expected);
 });
 
+test('the formatting CLI checks TypeScript SDK and extension author sources', t => {
+	for (const root of ['sdk/typescript', 'examples/extensions']) {
+		const directory = mkdtempSync(join(repositoryRoot, root, '.formatter-test-'));
+		t.after(() => rmSync(directory, { recursive: true, force: true }));
+		for (const name of ['entry.ts', 'runtime.js']) writeFileSync(join(directory, name), 'export const value=1\n');
+		const source = relative(repositoryRoot, directory);
+		const checked = spawnSync(process.execPath, [join(repositoryRoot, 'build/format.ts'), '--check', source], { cwd: repositoryRoot, encoding: 'utf8' });
+		assert.equal(checked.status, 1, checked.stdout + checked.stderr);
+		assert.match(checked.stdout, /checked 2 files; 2 unformatted/u);
+		const fixed = spawnSync(process.execPath, [join(repositoryRoot, 'build/format.ts'), '--write', source], { cwd: repositoryRoot, encoding: 'utf8' });
+		assert.equal(fixed.status, 0, fixed.stdout + fixed.stderr);
+		for (const name of ['entry.ts', 'runtime.js']) assert.equal(readFileSync(join(directory, name), 'utf8'), 'export const value = 1;\n');
+	}
+});
+
 test('the CLI checks without writing, fixes both languages, and leaves generated inputs unchanged', t => {
 	const directory = mkdtempSync(join(repositoryRoot, 'test/.formatter-test-'));
 	t.after(() => rmSync(directory, { recursive: true, force: true }));

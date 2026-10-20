@@ -431,7 +431,6 @@ pub struct ExtensionsResourceContentDto {
 #[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub enum ExtensionRegistryKindDto {
-    OpenVsx,
     Ash,
 }
 

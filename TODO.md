@@ -79,16 +79,16 @@
 
 ## 扩展作者 SDK 与开发体验 · TODO
 
-已确定的开发方向：普通扩展作者主要写 TypeScript，通过原生 TS SDK 调用公开能力；Rust SDK 保留给第一方原生扩展和高级能力提供者，无需与 TS SDK 全面对等。能力可由 Rust 共享服务、可选 Provider 或 TS 客户端实现，语言不改变业务归属。文档模型、dirty buffer、撤销和 UI 继续由客户端拥有；DOCX、文献等可选业务不因 SDK 接入而进入核心。用户侧统一称“扩展”，市场按用途标签筛选，MCP／Skills 等技术形式放详情；第一方源码当前同仓维护为独立包，分仓按协作和独立发布收益决定。
+已采用 `@ash/sdk` / `ash.*` 自有作者契约；职责和宿主能力见[扩展架构](docs/editor-extensions.md#0-确定的产品方向)。命令、文档／配置、语言、UI、SCM、Tasks／Debug、Terminal 与 Speech 的已有作者接口及消费者已迁到统一实现，Node、可选 Rust/V8 与可信 Worker 使用同一入口。旧 `vscode` 作者模块、Open VSX 来源、VSIX 扩展安装／运行入口及旧类型依赖已删除；历史记录只保留退休识别、停用、撤权和卸载，不恢复旧授权。纯 TS 示例已通过仓库外安装／编译及真实 App Server 的 Rust 文件读取、授权、越界、取消和停用验证。Rust SDK 继续服务原生能力提供者，文档模型、dirty、撤销与 UI 保持客户端唯一所有权。
 
 按以下顺序实施，以 Academy 验收完整链路：
 
-- [ ] **公开契约与迁移路线**：定义独立于 VS Code API／Open VSX 的原生作者接口，明确共享服务、可选 Provider 与发起客户端的端口、状态 owner 和作用域；同步架构文档中原有作者 API 定位，并为既有兼容路径制定保留或迁移策略。SDK 不暴露完整后端连接、通用 IPC、服务容器或内部 Rust 函数。
-- [ ] **TS SDK 与协议绑定**：从统一、版本化的能力契约生成传输类型、RPC 客户端及 Rust 端绑定，TS SDK 提供稳定的领域 API、类型补全、Promise、事件和使用文档；传输 DTO 留在 adapter。复用现有 Host RPC 与授权机制，覆盖参数校验、权限、取消、deadline、结构化错误、事件释放和版本兼容。TS 作者入口不隐含完整 Node.js／npm 兼容。
-- [ ] **宿主接入**：在现有扩展监管链上接入 TS 作者模块的注册、按需激活和调用；停用、撤权、崩溃恢复及窗口关闭须取消在途调用并释放所属资源。按实际执行位置桥接 Rust 服务、Provider 和客户端，保持唯一业务状态与权限 owner，不另建平行宿主协议。
+- [ ] **复核 · Browser 内置 Provider 管理入口**：当前完整 Browser SCM 场景已越过文件监听启动，并通过安装、授权与比较编辑，在打开内置 Git 详情时被 `ResourceNotOwner` 阻止。既有权限测试明确禁止 Browser 启停内置后端 Provider；需核对这个 UI 入口的可用性与受权宿主路由，不能放宽普通客户端权限来满足烟测。证据 `.build/file-watcher-browser-scm-failure/`。Desktop 完整 SCM 的重启、Renderer 重载两项已通过，监听与 SCM 注册生命周期缺陷已修复，不再作为待办；结果 `.build/ash-sdk-scm-desktop-final.log`。
+- [ ] **复核 · macOS 原生监听故障来源**：已复现原生监听注册／注销阻塞及注册成功却不送事件，并以隔离 helper、限时终止和限定目录轮询恢复修复 Ash 卡住的问题；系统 `fseventsd` 长期高 CPU 的来源仍未证实，不能认定由 Ash 引起。保留 `.build/file-watcher-reproduction-before.json`、`.build/file-watcher-deletion-reproduction.json`，后续需另取现场证据；本轮未重启系统服务。
+- [ ] **TS SDK 后续能力**：按真实消费者接入普通存储、扩展私有秘密、认证及其他可选 Provider。Registry JS 仍未获 `files.readTextFile` 的目录读授权，可信 Worker 没有 Rust 文件服务桥；不能用直接前端 IO 绕过权限。沿现有契约补实际授权、事件、错误、取消和释放，不公开完整后端连接、通用 IPC 或服务容器，也不把 API 迁移算作独立 Node 已退休。
 - [ ] **Academy 作者侧迁移**：由 Manifest、TS SDK 或构建工具承担目前仅用于声明、标签和注册的 Rust 接线，使普通作者无需手写 Rust 即可开发编辑器、提供 Agent 工具并附带 Skill。高级编辑器能力使用明确的公开客户端契约；Agent 结构化写入依赖下方 Work 文档服务任务，不另建模型或编辑历史。确有原生算法需求时再选用 Rust／WASM 等组件。
-- [ ] **本地开发与源码调试**：提供项目脚手架、构建／检查命令及 F5 启动的隔离 Ash 开发实例，显式加载开发目录，无需每次签名安装；接通 TS Source Map、源码断点、单步、变量查看、重新构建／重载和诊断。Rust/V8 宿主的 Inspector 接线按真实运行时实现。开发授权与正式安装信任分开，退出与取消清理宿主及子进程。
-- [ ] **测试、打包与安装**：提供同一开发宿主上的集成测试入口；扩展包按能力声明支持 TS、资源／Skills／MCP 配置及可选原生组件，不强制每包携带 Rust 可执行文件。复用已有包校验、签名、平台选择和原子安装机制，容器格式与作者 API 分开处理。
+- [ ] **本地开发与源码调试**：按用户当前要求暂停，待明确恢复后实施；只读调查已确认可复用现有 F5／DebugService／Rust DAP 链，独立 Node DAP adapter 需要“受管子进程＋私有 socket”启动组合。隔离 Ash 开发实例显式加载开发目录，开发授权与正式安装信任分开；补 TS Source Map、源码断点、单步、变量、构建／重载及诊断。暂停预算归开发会话，普通调用的取消、撤权、deadline 与晚回复墓碑继续生效；不能只扩大 Host RPC 超时。验证暂停超过 30 秒后不误重启、恢复不续旧权限、停止／断连释放宿主和 adapter；Rust/V8 Inspector 另按实际宿主实现。
+- [ ] **测试、打包与安装**：按用户当前要求暂停 `.ashx`，待明确恢复后实施；只读调查已确认可复用 `LocalPluginPackage`、`PluginPackageStore` 和 `PluginActivationAuthority`。计划使用带明确格式标记与内容摘要的 ZIP envelope／payload，严格解压后交同一安装 authority；普通 ZIP／改名 VSIX 拒绝，安装不自动启用或授权，也不冒充签名来源。支持已构建 TS、资源及按平台独立打包的可选原生程序；不在安装时执行构建脚本。补 CLI pack／install 与真实 `pack → install → enable/grant → TS 调 Rust → revoke/uninstall`，覆盖篡改、路径逃逸、重复／链接条目和大小限制。
 - [ ] **端到端验收与文档**：用仓库外 Academy 项目验证“作者只写 TS → SDK 类型检查／构建 → F5 开发窗口加载 → TS 源码断点 → 修改并重载 → 集成测试 → 打包 → 正式安装／授权／撤权／卸载”，覆盖中英文、能力失效和资源释放，并更新 SDK、Academy 与平台文档。已有 [Rust SDK 导出与进程诊断验证](sdk/docs/development.md) 是可复用底座，不代表本项 TS 作者体验或 F5 调试已完成；完成后删除对应待办。
 
 ## Stanza 编辑器 · TODO

@@ -1,22 +1,23 @@
 # Extension hosts
 
-The package and executable are named `ash-external-js-ext`, under `crates/external-js-ext`. Shared extension supervision belongs to `external-ext`; the wire contract remains a separate `external-ext-protocol` crate. The Rust author SDK lives under root `sdk/rust`; JS authors use standard `vscode`, while module loading, VS Code/Node compatibility and V8 execution remain product runtime responsibilities. Node, V8 and browser Workers reuse the standard facade and private Host RPC adapter in [`resources/extension-host`](../../resources/extension-host/README.md). See [the agreed boundaries](../../docs/editor-extensions.md#共享接入与语言适配的-crate-边界).
+The package and executable are named `ash-external-js-ext`, under `crates/external-js-ext`. Shared extension supervision belongs to `external-ext`; the wire contract remains a separate `external-ext-protocol` crate. Author SDKs live under root `sdk/typescript` (`@ash/sdk` / `ash.*`) and `sdk/rust`. Module loading and V8 execution remain product runtime responsibilities. The shared lifecycle and Host RPC adapter live in [`resources/extension-host`](../../resources/extension-host/README.md); `ash.js` is the single author API implementation used by Node, V8 and trusted Workers. See [the agreed boundaries](../../docs/editor-extensions.md#共享接入与语言适配的-crate-边界).
 
-The target architecture runs TS/JS packages through Electron on Desktop and independent Rust/V8 hosts in the shared backend; optional Rust capability providers remain independent Rust executables. The backend target has no standalone Node dependency. Runtime duties and the uniform VS Code/Node compatibility contract are defined in [the extension architecture](../../docs/editor-extensions.md#运行时职责与兼容契约). The shared resources implement the real Node path; this crate implements the limited V8 path; their presence does not establish that the target migration is complete. A Rust process embedding V8 is still a JS host, not a Rust capability extension.
+The target architecture runs TS/JS packages through Electron on Desktop and independent Rust/V8 hosts in the shared backend; optional Rust capability providers remain independent Rust executables. The backend target has no standalone Node dependency. Runtime duties and the Ash author contract are defined in [the extension architecture](../../docs/editor-extensions.md#运行时职责与-ash-契约). The current Node and optional V8 hosts both bind `@ash/sdk` to the same Ash API implementation. Removing standalone Node from the backend is a separate runtime change. Ash does not target VS Code extension or Node API compatibility. A Rust process embedding V8 is still a JS host, not a Rust capability extension.
 
-`ash-external-js-ext` retains the confined Rust/V8 implementation and its process tests. Default development and release packages omit this executable, required Rust CI excludes this crate, and `//:v8_host_binaries` contains only Code Mode. The manual [optional host workflow](../../.github/workflows/external-js-ext.yml) checks the crate and runs its package, isolation and supervised-process tests; `build/app_server.py --external-js-ext-bin` explicitly includes a prebuilt host with component integrity and signing. Supported standard extensions use the product Node-compatible runtime. The private `host.mjs` owns callback registration and lifecycle; `vscode.js` translates supported public APIs to the shared protocol. Neither is a second author SDK. App Server remains free of V8. Code Mode and the optional host share engine initialization through `ash-v8-runtime`, while execution state and permissions remain separate.
+`ash-external-js-ext` retains the confined Rust/V8 implementation and its process tests. Default development and release packages omit this executable, required Rust CI excludes this crate, and `//:v8_host_binaries` contains only Code Mode. The manual [optional host workflow](../../.github/workflows/external-js-ext.yml) checks the crate and runs its package, isolation and supervised-process tests; `build/app_server.py --external-js-ext-bin` explicitly includes a prebuilt host with component integrity and signing. The private `host.mjs` owns callback registration and lifecycle; `ash.js` supplies the shared Ash author facade. These private runtime resources are not separately published author SDKs. App Server remains free of V8. Code Mode and the optional host share engine initialization through `ash-v8-runtime`, while execution state and permissions remain separate.
 
-Standard `api: vscode` extensions run in the product's real Node runtime. The existing
+Admitted `api: ash` Node extensions run in the product's real Node runtime. The existing
 App Server authority gate checks exact-package execution consent before its supervisor
 launches Node directly with the packaged `extension-host/node.mjs` entry point. Node owns
 CJS/ESM module loading, builtin modules, Buffer, filesystem, networking and child processes.
-The host substitutes only `vscode`, using public synchronous Node module
-hooks. Electron uses its frozen executable in Node mode; Web uses the packaged standalone Node.
+The host binds only `@ash/sdk`, using public synchronous Node module hooks. Retired module imports and author API modes are rejected. Electron uses its frozen executable in Node mode; Web uses the packaged standalone Node.
 No ambient PATH lookup selects the runtime. The supervisor retains process-group cleanup,
 framed protocol quotas, cancellation, deadlines, recovery and authority revocation. This runtime
 has user-level IO and does not claim the V8 host's confinement or whole-process resource limits.
-Extensions execution contract 5 requires fresh consent. Local Plugin authority retires only
-legacy VS Code grants and persists that migration; other Plugin grants survive. Retired `api: ash` entries are rejected.
+Registry EditorExtensionPolicy execution contract 6 requires fresh consent. Local Plugin Node consent contract 2
+retires historical JavaScript grants, including old Ash declarations, and persists the migration;
+non-JavaScript Plugin grants survive. New `api: ash` declarations require fresh exact-package
+consent; historical grants do not revive.
 Developer environment inheritance excludes product authentication and inherited Electron controls.
 The environment is frozen when the launcher is created; existing processes retain their copy.
 An authenticated window can supply bounded `ExtensionHostStart.environment` overrides.
@@ -43,18 +44,18 @@ termination shuts down the socket before joining readers. V8 and executable host
 
 Plugin contributions explicitly select
 `runtime: javascript`; an existing `hostRpc` contribution runs its own protocol program.
-Installed extensions supply the admitted extension ID, absolute package root and relative JS entrypoint. Their launch commands leave executable selection to `ProductNodeLauncher`, which freezes the actual Node or Electron executable, bootstrap and environment without borrowing the optional V8 host's path. Packages continue to ship `node.mjs`, `vscode.mjs`, `host.mjs` and `scm.js`.
+Installed extensions supply the admitted extension ID, absolute package root and relative JS entrypoint. Their launch commands leave executable selection to `ProductNodeLauncher`, which freezes the actual Node or Electron executable, bootstrap and environment without borrowing the optional V8 host's path. Packages ship `node.mjs`, `ash.mjs`, `host.mjs` and `scm.js`; no compatibility facade is loaded or packaged.
 The saved-connection SSH resolver runs as the independent `ash-remote-ssh-extension` Rust program,
 using the public Rust SDK and the same Host RPC. Product authority permits no workspace file reads;
 installed packages cannot obtain that authority or register the reserved `ssh` prefix.
-The V8 package loader exposes captured CommonJS modules and `vscode`. Node, Electron,
+The V8 package loader exposes captured CommonJS modules and `@ash/sdk`. Node, Electron,
 filesystem, network, DOM and raw backend connections are absent from that JS context.
 
 Each invocation binds client calls to its exact request, activation generation and process incarnation.
 Rust only accepts the supported protocol operations. Editor snapshots and notifications go to the
 initiating client; workspace reads are executed by App Server's authorized filesystem owner.
 Command, hover, completion and document-event callbacks share the same invocation-bound client services. Provider snapshots retain
-the editor's unsaved text; the compatibility layer converts UTF-16 coordinates and the existing TS language bridge
+the editor's unsaved text; the Ash adapter converts UTF-16 coordinates and the existing TS language bridge
 validates and displays results. Callbacks cannot retain invocation authority after they return.
 Invocation contexts expose a cancellation token and event. Caller cancellation revokes that invocation's
 service authority and rejects pending child calls, then permits its callback to release resources and
@@ -89,27 +90,32 @@ Shared/resizable buffers and WebAssembly are unavailable because they bypass the
 The allocator delegates storage to V8's sandbox allocator; ordinary malloc is unsuitable.
 These limits do not claim a whole-process OS memory cap. Independent executables retain their existing
 whole-process resource requirements and cannot select JS isolation.
-Open VSX scripts are not automatically executed by this host. On macOS and 64-bit Windows the separate Extensions
-execution policy admits exact installed packages after both enablement and execution consent.
+Retired source packages are not admitted by this host. Historical marker and author API metadata only allow identification, disablement and uninstall; they never grant execution.
 
-The product Node host loads the standard package. Extensions deployment selects its
-`main` entry before `browser`; local Plugin declarations select their explicit entrypoint
-with `runtime: javascript` and `api: vscode`, using the package-root `package.json`.
-Automatic Task, Debug and status-bar observers are installed only within the authenticated
-activation capability ceiling. A command-only package can activate without requesting those
-unrelated providers; the supervisor still rejects registrations outside the declared ceiling.
-Node supplies relative modules, JSON, package exports, directory entries, dependencies,
-module metadata, `require.resolve` and its normal per-process module cache. The V8 `--api vscode`
-mode remains an internal facade test harness; it does not provide Node capabilities and is not
-the product route for standard extensions.
-`require('vscode')` supplies an independently implemented public API subset: declared command registration,
-notifications without buttons/options, single-select Quick Pick, read-only document snapshots, document
-open/change/close events, diagnostic collections, Hover and completion providers with trigger characters.
-`commands.executeCommand` uses the initiating client's existing CommandService.
-JSON results preserve explicit null and falsy values; a void result becomes undefined.
-Callback command requests are drained before callback retirement. Node activation and background
-requests use the same client CommandService under the activation's lifetime.
-Non-JSON command values and URI-rich results remain incomplete.
+The product Node host loads the Ash package, selecting `main` before `browser`;
+local Plugin declarations select their explicit `entrypoint` with `runtime: javascript`
+and `api: ash`, using the package-root `package.json`. Signed JS packages require
+`engines.ash` and explicitly enumerate `ashCapabilities`; there is no broad default ceiling.
+Old `engines.vscode` and `enabledApiProposals` declarations are rejected, as is the reserved
+product Remote resolver capability. Retired API declarations may be decoded only for metadata
+and cleanup, never for install, enablement, authorization or execution.
+
+Automatic Task, Debug and status-bar observers stay inside the authenticated capability
+ceiling. Node retains its CJS/ESM, JSON, package exports, dependencies and module cache;
+V8 uses captured modules under `--api ash` and does not gain Node capabilities.
+`@ash/sdk` publishes self-contained declarations matching the implemented domains: commands,
+client-owned workspace documents/configuration, language providers, window UI, tasks, debugging,
+terminal providers, speech and SCM. `commands.register` and `commands.execute` are the only
+public command method names. `files.readTextFile` uses the authorized Rust filesystem for local Plugin deployments with explicit package and directory-read grants; signed registry JS deployments currently deny workspace filesystem reads;
+`window.openComparison` is restricted to text, binary and multiple comparisons. Generic backend
+RPC and editor transport requests are not exported. The [SDK](../../sdk/typescript/README.md)
+and its declarations define actual fields and supported overloads.
+
+JSON command results preserve null and falsy values; void results become undefined.
+Callback requests are drained before retirement. Node activation/background requests use the
+same bound client services under the activation lifetime. Configuration writes, secrets and
+unified authentication author APIs remain unimplemented. Completion resolve callbacks,
+command-bearing items, insert/replace ranges and unsupported kinds are excluded from the API.
 
 The shared facade also translates definition, references, rename, symbols, folding, links,
 code actions, selection ranges and highlights. `WorkspaceEdit` applies through the client's
@@ -190,17 +196,16 @@ immutable snapshots. The document list is populated by event delivery after acti
 reads, so it is not a complete initial document list during activation. Collections capture the version read
 by their invocation, even when a newer event arrives during an await. Workbench owns marker storage, isolates
 collection names by broker-supplied extension identity and removes markers when an incarnation retires.
-Tasks and executable Debug descriptors use Extensions's execution-consent contract version 5; previous consent
+Tasks and executable Debug descriptors use the registry EditorExtensionPolicy execution-consent contract version 6; previous consent
 requires enablement and authorization under the new contract.
 
 V8 continuation-preserved embedder data and Node AsyncLocalStorage respectively bind each
 async callback to its original invocation. The host
 checks that identity on every client request; expired continuations cannot borrow a later invocation.
-Ignored notification Thenables are drained before the callback retires. The V8 test harness passes extension source as a quoted function body;
-standard extensions use the real Node loader.
+Ignored notification Thenables are drained before the callback retires. The V8 test harness passes extension source as a quoted function body; Node extensions use the real Node loader.
 Package bytes remain unchanged; installation and execution consent use separate owners.
 
-App Server schedules Open VSX startup in Rust. An enabled and authorized package waits without a
+App Server schedules admitted Ash package activation in Rust. An enabled and authorized package waits without a
 process or incarnation until `onCommand`, `onLanguage` or `onStartupFinished` matches. Declared
 commands and languages imply their activation events even when `activationEvents` is absent.
 For standard extensions, `*` starts when the first window supplies its initialization facts;
@@ -220,7 +225,7 @@ session, custom-request, name and breakpoint operations. The `debugEvents`
 registration requires the debug-adapter capability. Ordered queues are bounded to
 64 callbacks and belong to one extension incarnation. Custom DAP events are observed
 before initialization completes; termination follows adapter close acknowledgement.
-The standard `vscode.debug` facade preserves session and breakpoint object identity,
+The `ash.debug` facade preserves session and breakpoint object identity,
 start/end/active/custom events, start/stop calls, `DebugSession.customRequest`, mutable
 session names, source/function breakpoint constructors, breakpoint change events,
 and `getDebugProtocolBreakpoint`. Missing DAP bodies remain distinct from JSON null.

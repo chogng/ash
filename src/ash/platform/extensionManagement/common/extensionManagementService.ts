@@ -135,7 +135,7 @@ export interface ExtensionsAcquiredCapability {
 
 export interface ExtensionRegistrySource {
 	readonly id: string;
-	readonly kind: 'openVsx' | 'ash';
+	readonly kind: 'ash';
 	readonly enabled: boolean;
 	readonly productOwned: boolean;
 }

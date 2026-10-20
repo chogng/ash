@@ -30,6 +30,8 @@ use persistence::PersistedAuthority;
 use persistence::PersistedCommandReceipt;
 
 const MAX_COMMAND_ID_BYTES: usize = 128;
+// Reintroducing the Ash author contract must never revive historical API or Node grants.
+const NODE_EXECUTION_CONTRACT_VERSION: u16 = 2;
 
 /// Stable retry identity for one Plugin authority mutation.
 #[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
@@ -237,8 +239,9 @@ impl PluginActivationAuthority {
     ) -> Result<Self, PluginError> {
         persisted.validate()?;
         let mut persisted = persisted.migrate();
-        let legacy_node_consent = persisted.node_execution_contract_version == 0;
-        if persisted.node_execution_contract_version > 1 {
+        let legacy_node_consent =
+            persisted.node_execution_contract_version < NODE_EXECUTION_CONTRACT_VERSION;
+        if persisted.node_execution_contract_version > NODE_EXECUTION_CONTRACT_VERSION {
             return Err(authority_error(
                 PluginErrorKind::PackageConflict,
                 "Unsupported Node execution consent contract",
@@ -253,7 +256,9 @@ impl PluginActivationAuthority {
                     .contributions
                     .editor_extensions
                     .iter()
-                    .any(|extension| extension.api == ash_plugin::EditorExtensionApi::Vscode)
+                    .any(|extension| {
+                        extension.runtime == ash_plugin::EditorExtensionRuntime::JavaScript
+                    })
                 {
                     node_packages.push(package.clone());
                 }
@@ -265,7 +270,7 @@ impl PluginActivationAuthority {
             persisted
                 .active
                 .retain(|record| !node_packages.contains(&record.package));
-            persisted.node_execution_contract_version = 1;
+            persisted.node_execution_contract_version = NODE_EXECUTION_CONTRACT_VERSION;
             if removed_node_grants {
                 // Retiring the old authority also invalidates its command receipts and generations.
                 persisted.revision = persisted.revision.checked_add(1).ok_or_else(|| {
@@ -734,6 +739,30 @@ impl PluginAuthoritySubscription {
     }
 }
 
+/// Admission checks do not apply when reading or removing historical immutable records.
+fn validate_author_api_admission(
+    store: &PluginPackageStore,
+    package: &InstalledPluginRef,
+) -> Result<(), PluginError> {
+    let package = store.read(package)?;
+    if package
+        .manifest()
+        .contributions
+        .editor_extensions
+        .iter()
+        .any(|entry| {
+            entry.runtime == ash_plugin::EditorExtensionRuntime::JavaScript
+                && entry.api == ash_plugin::EditorExtensionApi::Retired
+        })
+    {
+        return Err(authority_error(
+            PluginErrorKind::ManifestInvalid,
+            "retired extension author API cannot be installed, enabled or granted",
+        ));
+    }
+    Ok(())
+}
+
 fn apply_command(
     store: &PluginPackageStore,
     installed: &mut BTreeMap<InstalledKey, InstalledPluginRef>,
@@ -744,7 +773,7 @@ fn apply_command(
 ) -> Result<(), PluginError> {
     match command {
         PluginAuthorityCommand::Install { package } => {
-            store.read(package)?;
+            validate_author_api_admission(store, package)?;
             let key = InstalledKey::from_package(package);
             if revoked.get(&key) == Some(package) {
                 return Err(authority_error(
@@ -776,6 +805,7 @@ fn apply_command(
                     "Plugin enable targets an uninstalled package",
                 ));
             }
+            validate_author_api_admission(store, package)?;
             store.activate(package)?;
             enabled.insert(package.id.clone(), package.clone());
         }
@@ -802,6 +832,7 @@ fn apply_command(
                     "Plugin grant targets an uninstalled package",
                 ));
             }
+            validate_author_api_admission(store, package)?;
             store.activate(package)?;
             granted.insert(key, package.clone());
         }
