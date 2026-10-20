@@ -8,7 +8,7 @@
 
 [PR #57](https://github.com/chogng/ash/pull/57) 已于 2026-10-20 正常 squash merge（`ee3dea640`）。后续仅在当前 main 本地整批修复与验证；不推送、不主动触发远端 CI、不恢复已暂停的 `pr-57-ci` heartbeat。保留其它任务修改，完整批次提交前准确 stage 并执行 `just commit-check origin/main`。
 
-- [ ] **完整 CI 覆盖**：获准发布后，以新 main SHA 核对原失败矩阵及 Windows sandbox acceptance。[此前失败的 CI](https://github.com/chogng/ash/actions/runs/39490567225) 在旧安全门禁后跳过了前端、Bazel 和 Rust 作业；本地证书修复后 `just dependency-security` 的 advisories／licenses／sources 已全部通过，但尚未发布，不能称远端全绿。已有 Linux x64 47 项通过证据不等于旧 hosted 启动失败根因已证实；尚无完整跨平台全绿证据。本地证书验证日志 `/tmp/ash-pr57-certificate-{security,dependencies-final,http-final,bazel-final,app-server-build}.log`。
+- [ ] **完整 CI 覆盖**：获准发布后，以新 main SHA 核对原失败矩阵及 Windows sandbox acceptance。[此前失败的 CI](https://github.com/chogng/ash/actions/runs/39490567225) 在旧安全门禁后跳过了前端、Bazel 和 Rust 作业；本地证书修复后 `just dependency-security` 的 advisories／licenses／sources 已全部通过，但尚未发布，不能称远端全绿。已有 Linux x64 47 项通过证据不等于旧 hosted 启动失败根因已证实；尚无完整跨平台全绿证据。本地证书验证日志 `/tmp/ash-pr57-certificate-{security,dependencies-final,http-final,bazel-final,app-server-build}.log`。本轮 rebase 后 `0d95ccc29` 基线的 macOS 定向复核及首败／修正复验见[验证记录](.build/pr57-rebased/validation.json)；该记录不覆盖随后并行任务的 Activity Bar、Chat 和 Rust 改动。
 
 ## MXC · 跨平台验收
 

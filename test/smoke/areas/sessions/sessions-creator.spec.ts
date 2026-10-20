@@ -458,7 +458,7 @@ test('Sessions Design branches shared vector nodes and paints network regions', 
 	await expect(canvas.locator('[data-network-edge="0"][data-path-point="outgoing"]')).toHaveCount(1);
 	const regionColor = properties.getByRole('textbox', { name: 'Region color', exact: true }); await regionColor.fill('#2266cc'); await regionColor.press('Tab');
 	await expect(canvas.locator('.ash-sessions-design-shapes > g[data-shape-id] > path[fill="#2266cc"]')).toHaveCount(1);
-	if (target.kind === 'browser') { await reopenOutlinedDesign(page, 'network.ash-design'); await canvas.press('Tab'); await expect(nodes.locator('option')).toHaveCount(5); await expect(regionColor).toHaveValue('#2266cc'); }
+	if (target.kind === 'browser') { await reopenOutlinedDesign(page, 'network.ash-design'); await canvas.press('Tab'); await expect(nodes.locator('option')).toHaveCount(5); await expect(regionColor).toHaveValue('2266CC'); }
 	await page.screenshot({ path: testInfo.outputPath('design-vector-network.png') });
 	await canvas.getByRole('button', { name: 'Code', exact: true }).click(); const code = await canvas.getByRole('textbox', { name: 'Generated code', exact: true }).inputValue(); expect(code).toContain('"network"'); expect(code).toContain('fill="#2266cc"');
 });
@@ -635,7 +635,10 @@ test('Sessions Design keeps rich outline colors, truncation and font failures at
 	await properties.getByLabel('Font file for outlines', { exact: true }).setInputFiles('test/smoke/fixtures/design-fonts/NotoSans.ttf');
 	await expect(properties.getByRole('status').filter({ hasText: 'Font loaded.' })).toBeVisible();
 	const weight = properties.getByRole('spinbutton', { name: 'Font weight', exact: true }); await weight.fill('650'); await weight.press('Tab');
-	await canvas.press('Enter'); await page.keyboard.press('ControlOrMeta+a'); await page.keyboard.press('ArrowLeft'); await page.keyboard.press('Shift+ArrowRight');
+	await canvas.press('Enter');
+	await expect(canvas.getByRole('textbox', { name: 'Edit text', exact: true })).toBeFocused();
+	await page.keyboard.press('ControlOrMeta+a'); await page.keyboard.press('ArrowLeft'); await page.keyboard.press('Shift+ArrowRight');
+	await expect(properties.getByText('1 characters selected', { exact: true })).toBeVisible();
 	const color = properties.getByRole('textbox', { name: 'Text color', exact: true }); await color.fill('#cc2200'); await color.press('Tab'); await canvas.press('Escape'); await canvas.press('Tab');
 	await properties.getByRole('button', { name: 'Flatten selection', exact: true }).click();
 	await expect(canvas.locator('.ash-sessions-design-shapes > g[data-shape-id] > path[fill="#cc2200"]')).toHaveCount(1);
@@ -784,7 +787,7 @@ for (const type of ['layer-blur', 'background-blur'] as const) {
 			await exportDialog.getByRole('button', { name: 'OK', exact: true }).click();
 		}
 		await expect(canvas.locator('.ash-sessions-design-message')).toHaveText('Exported progressive.svg');
-		const svg = 'windows' in application ? await readFile(exportPath, 'utf8') : await page.evaluate(async () => {
+		const svg = target.appServerMode === 'required' ? await readFile(exportPath, 'utf8') : await page.evaluate(async () => {
 			const folder = await (window as unknown as { showDirectoryPicker(): Promise<FileSystemDirectoryHandle>; }).showDirectoryPicker();
 			return (await (await folder.getFileHandle('progressive.svg')).getFile()).text();
 		});

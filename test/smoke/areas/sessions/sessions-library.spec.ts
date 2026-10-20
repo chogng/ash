@@ -4,14 +4,7 @@ const image = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 13, 73, 72,
 const longName = 'library-secondary-product-photography-for-the-autumn-brand-campaign-and-design-reference.png';
 
 test('Sessions Library coordinates independent container Views and a retained browsing editor', async ({ application, target, workbench }) => {
-	let page = workbench.page;
-	if (target.kind === 'browser') { await page.locator('[data-action-id="ash.code.open-sessions"] button').click(); }
-	else {
-		if (!('windows' in application)) { throw new Error('Expected Electron windows'); }
-		const opened = application.waitForEvent('window');
-		await page.locator('[data-action-id="workbench.action.chat.openAgentsWindow.titleBar"] button').click();
-		page = await opened;
-	}
+	const page = await workbench.openAgentsWindow(target.kind);
 	const navigation = page.locator('.ash-sessions-activity-content');
 	await navigation.getByRole('button', { name: 'Library', exact: true }).click();
 	const library = page.locator('.ash-library');
@@ -24,6 +17,8 @@ test('Sessions Library coordinates independent container Views and a retained br
 	await expect(page.getByRole('tab', { name: 'Library', exact: true })).toHaveCount(1);
 	await expect(page.locator('[data-part="library"], [data-part="creator"]')).toHaveCount(0);
 	await expect(library.getByRole('heading', { name: 'All', exact: true })).toBeVisible();
+	await expect(library.getByRole('searchbox')).toBeFocused();
+	await expect(library.getByRole('list', { name: 'Library items', exact: true })).toHaveAttribute('aria-busy', 'false');
 	const categories = page.locator('[data-part="sidebar"]').getByRole('navigation', { name: 'Library categories' });
 	await categories.getByRole('button', { name: 'All', exact: true }).focus();
 	await page.keyboard.press('ArrowDown');
@@ -64,19 +59,14 @@ test('Sessions Library coordinates independent container Views and a retained br
 });
 
 test('Sessions Library imports real images and preserves favorites and collections after reload', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ application, target, workbench }) => {
-	let page = workbench.page;
-	if (target.kind === 'browser') { await page.locator('[data-action-id="ash.code.open-sessions"] button').click(); }
-	else {
-		if (!('windows' in application)) { throw new Error('Expected Electron windows'); }
-		const opened = application.waitForEvent('window');
-		await page.locator('[data-action-id="workbench.action.chat.openAgentsWindow.titleBar"] button').click();
-		page = await opened;
-	}
-	const navigation = page.locator('.ash-sessions-activity-content');
+	let page = await workbench.openAgentsWindow(target.kind);
+	let navigation = page.locator('.ash-sessions-activity-content');
 	await navigation.getByRole('button', { name: 'Library', exact: true }).click();
-	const library = page.locator('.ash-library');
+	let library = page.locator('.ash-library');
+	await expect(library.getByRole('searchbox')).toBeFocused();
+	await expect(library.getByRole('list', { name: 'Library items', exact: true })).toHaveAttribute('aria-busy', 'false');
 	await library.locator('input[type=file]').setInputFiles([{ name: 'library-product.png', mimeType: 'image/png', buffer: image }, { name: longName, mimeType: 'image/png', buffer: image }]);
-	const item = library.getByRole('button', { name: 'library-product.png', exact: true });
+	let item = library.getByRole('button', { name: 'library-product.png', exact: true });
 	await expect(item).toBeVisible();
 	const longItem = library.getByRole('button', { name: longName, exact: true });
 	await expect(longItem).toBeVisible();
@@ -84,7 +74,7 @@ test('Sessions Library imports real images and preserves favorites and collectio
 	await expect.poll(() => library.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
 	await expect.poll(() => item.locator('img').evaluate(element => (element as HTMLImageElement).naturalWidth)).toBe(2);
 	await item.click();
-	const details = page.locator('[data-part="auxiliarybar"]').getByRole('complementary', { name: 'Asset details' });
+	let details = page.locator('[data-part="auxiliarybar"]').getByRole('complementary', { name: 'Asset details' });
 	await expect(details).toContainText('file-upload:/library-product.png');
 	await details.getByRole('button', { name: 'Add to favorites', exact: true }).click();
 	await expect(details.getByRole('button', { name: 'Remove from favorites', exact: true })).toBeEnabled();
@@ -104,8 +94,14 @@ test('Sessions Library imports real images and preserves favorites and collectio
 	await library.getByRole('searchbox').fill('product');
 	await expect(item).toBeVisible();
 	await library.getByRole('button', { name: 'List view', exact: true }).click();
-	await page.reload();
-	await navigation.getByRole('button', { name: 'Library', exact: true }).click();
+	page = await workbench.reopenAgentsWindow(application, page);
+	navigation = page.locator('.ash-sessions-activity-content');
+	library = page.locator('.ash-library');
+	item = library.getByRole('button', { name: 'library-product.png', exact: true });
+	details = page.locator('[data-part="auxiliarybar"]').getByRole('complementary', { name: 'Asset details' });
+	await expect(navigation.getByRole('button', { name: 'Library', exact: true })).toHaveAttribute('aria-current', 'page');
+	await expect(library.getByRole('searchbox')).toBeFocused();
+	await expect(library.getByRole('list', { name: 'Library items', exact: true })).toHaveAttribute('aria-busy', 'false');
 	await expect(library).toHaveClass(/list-view/);
 	await page.locator('[data-part="sidebar"]').getByRole('navigation').getByRole('button', { name: 'Brand assets', exact: true }).click();
 	await expect(item).toBeVisible();
