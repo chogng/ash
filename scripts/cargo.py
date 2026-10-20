@@ -265,6 +265,29 @@ def main(arguments: list[str] | None = None) -> int:
     ):
         environment["CARGO_PROFILE_RELEASE_SPLIT_DEBUGINFO"] = "packed"
     packages = cargo_command_packages(args.cargo, cargo_arguments, REPOSITORY_ROOT)
+    # The real PTY target launches the matching programs built by `just test-tui`.
+    # It does not execute the dependency crates' unit-test fixture owners.
+    tui_process_tests = (
+        cargo_arguments[0] == "test"
+        and "ash-cli" in packages
+        and options.count("--test") == 1
+        and options.index("--test") + 1 < len(options)
+        and options[options.index("--test") + 1] == "tui_real_scenarios"
+        and not any(
+            option
+            in {
+                "--lib",
+                "--bins",
+                "--tests",
+                "--all-targets",
+                "--workspace",
+                "--all",
+                "--doc",
+            }
+            or option.startswith(("--bin", "--example", "--bench", "--test="))
+            for option in options
+        )
+    )
     if "ash-app-server-protocol" in packages:
         # Prepare outside Cargo's build lock; the exporter bootstraps without metadata.
         generate_protocol(root=REPOSITORY_ROOT, cargo=args.cargo)
@@ -274,6 +297,7 @@ def main(arguments: list[str] | None = None) -> int:
         environment["CARGO_BUILD_WARNINGS"] = "deny"
     needs_code_mode_host = (
         cargo_arguments[0] == "test"
+        and not tui_process_tests
         and "--no-run" not in cargo_arguments
         and "ASH_CODE_MODE_HOST_BIN" not in environment
         and "ash-code-mode" in packages
@@ -310,6 +334,7 @@ def main(arguments: list[str] | None = None) -> int:
     ):
         if (
             cargo_arguments[0] == "test"
+            and not tui_process_tests
             and "--no-run" not in cargo_arguments
             and "ASH_MARKDOWN_MATH_BIN" not in environment
             and packages.intersection({"ash-app-server", "ash-app-server-runtime"})
@@ -319,6 +344,7 @@ def main(arguments: list[str] | None = None) -> int:
             )
         if (
             cargo_arguments[0] == "test"
+            and not tui_process_tests
             and "--no-run" not in cargo_arguments
             and "ASH_DEBUG_LLDB_BIN" not in environment
             and packages.intersection({"ash-app-server", "ash-app-server-runtime"})
@@ -332,6 +358,7 @@ def main(arguments: list[str] | None = None) -> int:
             )
         if (
             cargo_arguments[0] == "test"
+            and not tui_process_tests
             and "--no-run" not in cargo_arguments
             and "ASH_APP_SERVER_PATH" not in environment
             and "ash-remote-server" in packages

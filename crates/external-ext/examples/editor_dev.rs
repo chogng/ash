@@ -6,6 +6,8 @@ use std::io::BufRead;
 use std::num::NonZeroU64;
 use std::path::PathBuf;
 use std::sync::Arc;
+use std::sync::atomic::AtomicBool;
+use std::sync::atomic::Ordering;
 use std::sync::mpsc;
 use std::thread;
 use std::time::Duration;
@@ -151,17 +153,11 @@ fn main() -> Result<(), Box<dyn Error>> {
     {
         return Err("Invalid development project, relative executable or extension ID".into());
     }
-    let mut signals = signal_hook::iterator::Signals::new([
-        signal_hook::consts::SIGINT,
-        signal_hook::consts::SIGTERM,
-    ])?;
+    // Signal flags also work on Windows, where signal-hook has no iterator API.
+    let interrupted = Arc::new(AtomicBool::new(false));
+    signal_hook::flag::register(signal_hook::consts::SIGINT, Arc::clone(&interrupted))?;
+    signal_hook::flag::register(signal_hook::consts::SIGTERM, Arc::clone(&interrupted))?;
     let (send, receive) = mpsc::channel();
-    let interrupt = send.clone();
-    thread::spawn(move || {
-        if signals.forever().next().is_some() {
-            let _ = interrupt.send(None);
-        }
-    });
     thread::spawn(move || {
         for line in io::stdin().lock().lines() {
             match line {
@@ -177,7 +173,12 @@ fn main() -> Result<(), Box<dyn Error>> {
     });
     let mut running = start(&root, binary, id)?;
     describe(&running, &root, "en")?;
-    while let Some(line) = receive.recv()? {
+    while !interrupted.load(Ordering::Relaxed) {
+        let line = match receive.recv_timeout(Duration::from_millis(50)) {
+            Ok(Some(line)) => line,
+            Ok(None) | Err(mpsc::RecvTimeoutError::Disconnected) => break,
+            Err(mpsc::RecvTimeoutError::Timeout) => continue,
+        };
         let words: Vec<_> = line.split_whitespace().collect();
         let result = match words.as_slice() {
             ["status"] => {

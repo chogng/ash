@@ -16,7 +16,9 @@ sha2 = { workspace = true }
 ash-secrets = { path = "../secrets" }
 
 [target.'cfg(target_os = "linux")'.dependencies]
-keyring = { workspace = true, features = ["linux-native-async-persistent"] }
+# Keep keyring's existing entry/attribute contract while avoiding its old zbus backend.
+# Bundle libdbus so standalone products do not acquire a new shared-library requirement.
+keyring = { workspace = true, features = ["linux-native-sync-persistent", "vendored"] }
 
 [target.'cfg(target_os = "macos")'.dependencies]
 keyring = { workspace = true, features = ["apple-native"] }

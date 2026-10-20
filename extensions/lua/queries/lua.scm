@@ -87,7 +87,7 @@
   "or"
 ] @operator
 
-; Punctuations
+; Punctuation
 [
   ";"
   ":"

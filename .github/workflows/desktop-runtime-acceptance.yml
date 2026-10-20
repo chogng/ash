@@ -72,6 +72,8 @@ jobs:
         run: |
           cargo clean --package v8 --profile dev-small
           cargo clean --package v8 --profile ci-test
+      - name: Prepare bundled extension packages
+        run: pnpm run prepare:extensions
       - name: Build self-contained backend for Web and headless hosts
         run: pnpm run prepare:backend:web
       - name: Build Desktop backend with bundled media

@@ -487,7 +487,11 @@ export class Repl extends FilterViewPane {
 	}
 
 	private updateSuggestionSelection(): void {
-		for (const [index, element] of [...this.suggestions.children].entries()) element.setAttribute('aria-selected', String(index === this.selectedCompletion));
+		for (const [index, element] of [...this.suggestions.children].entries()) {
+			const selected = index === this.selectedCompletion;
+			element.classList.toggle('selected', selected);
+			element.setAttribute('aria-selected', String(selected));
+		}
 		const selected = this.suggestions.children[this.selectedCompletion] as HTMLElement;
 		this.input.setAttribute('aria-activedescendant', selected.id);
 		selected.scrollIntoView?.({ block: 'nearest' });

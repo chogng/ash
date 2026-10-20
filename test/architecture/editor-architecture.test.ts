@@ -662,7 +662,10 @@ test("Code Workbench composes code and Academic document contributions", () => {
 	assert.doesNotMatch(workbenchContributions, /editor\/editor\.academic\.all/u);
 	assert.match(academicContribution, /getEditorProfile/u);
 	assert.doesNotMatch(academicContribution, /registerBuiltinEditorPane/u);
-	assert.match(readFileSync(resolve(desktopRoot, 'extensions/academic/src/lib.rs'), 'utf8'), /editor\.client\.v1/u);
+	const academicRegistration = readFileSync(resolve(desktopRoot, 'extensions/academic/src/lib.rs'), 'utf8');
+	assert.match(academicRegistration, /use external_ext_sdk::editor_client::DOCUMENT_CLIENT_CHANNEL;/u);
+	assert.match(academicRegistration, /context\.data_channels\.register\(\s*DOCUMENT_CLIENT_CHANNEL/u);
+	assert.match(readFileSync(resolve(desktopRoot, 'sdk/rust/src/editor_client.rs'), 'utf8'), /pub const DOCUMENT_CLIENT_CHANNEL: &str = "editor\.client\.v1";/u);
 	assert.doesNotMatch(workbenchContributions, /contrib\/academic\/browser\/academicEditor\.contribution/u);
 	assert.match(workbenchContributions, /contrib\/documentEditor\/browser\/documentEditor\.contribution/u);
 	const documentContribution = readFileSync(join(workbenchRoot, 'contrib/documentEditor/browser/documentEditor.contribution.ts'), 'utf8');

@@ -42,14 +42,14 @@ jobs:
         run: python -B scripts/cargo.py check --locked -p ash-livekit-client -p ash-screen-capture -p ash-voice-agent
       - name: Build the collaboration service
         run: |
-          python -B scripts/cargo.py build --locked -p ash-collab-server --bin ash-collab-server
-          echo "ASH_TEST_COLLABORATION_SERVER=$(node -p 'require("node:path").resolve(".build/cargo/debug/ash-collab-server.exe")')" >> "$GITHUB_ENV"
+          python -B scripts/cargo.py build --locked --profile ci-test -p ash-collab-server --bin ash-collab-server
+          echo "ASH_TEST_COLLABORATION_SERVER=$(node -p 'require("node:path").resolve(".build/cargo/ci-test/ash-collab-server.exe")')" >> "$GITHUB_ENV"
       - name: Build local room and recognition programs separately
         run: |
-          python -B scripts/cargo.py build --locked -p ash-livekit-client --bin ash-livekit-client --features host
-          python -B scripts/cargo.py build --locked -p ash-realtime-voice --bin ash-realtime-voice --features host
-          echo "ASH_LIVEKIT_CLIENT_PATH=$(node -p 'require("node:path").resolve(".build/cargo/debug/ash-livekit-client.exe")')" >> "$GITHUB_ENV"
-          echo "ASH_RECOGNIZER_PATH=$(node -p 'require("node:path").resolve(".build/cargo/debug/ash-realtime-voice.exe")')" >> "$GITHUB_ENV"
+          python -B scripts/cargo.py build --locked --profile ci-test -p ash-livekit-client --bin ash-livekit-client --features host
+          python -B scripts/cargo.py build --locked --profile ci-test -p ash-realtime-voice --bin ash-realtime-voice --features host
+          echo "ASH_LIVEKIT_CLIENT_PATH=$(node -p 'require("node:path").resolve(".build/cargo/ci-test/ash-livekit-client.exe")')" >> "$GITHUB_ENV"
+          echo "ASH_RECOGNIZER_PATH=$(node -p 'require("node:path").resolve(".build/cargo/ci-test/ash-realtime-voice.exe")')" >> "$GITHUB_ENV"
       - name: Test local room and recognition process contracts
         run: |
           python -B scripts/cargo.py test --locked -p ash-livekit-client --features host --lib --test process --test room --test rooms --test channels -- --include-ignored --test-threads=1

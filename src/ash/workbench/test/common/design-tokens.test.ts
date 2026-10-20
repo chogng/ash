@@ -29,6 +29,7 @@ import "../../contrib/preferences/common/settingsEditorColorRegistry.js";
 import '../../contrib/preferences/browser/keybindingsEditor.js';
 import '../../contrib/scm/browser/scmHistory.js';
 import "../../contrib/terminal/common/terminalColorRegistry.js";
+import "../../contrib/terminalContrib/commandGuide/browser/terminal.commandGuide.contribution.js";
 import "../../../sessions/common/theme.js";
 
 test('CSS variable manifest matches registered colors and sizes', async () => {

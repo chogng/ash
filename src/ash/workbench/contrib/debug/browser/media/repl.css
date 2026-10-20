@@ -90,7 +90,7 @@
 	cursor: pointer;
 }
 
-.ash-repl-completion[aria-selected="true"] {
+.ash-repl-completion.selected {
 	color: var(--ash-list-activeSelectionForeground);
 	background: var(--ash-list-activeSelectionBackground);
 	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
@@ -101,7 +101,7 @@
 	color: var(--ash-description-foreground);
 }
 
-.ash-repl-completion[aria-selected="true"] .ash-repl-completion-detail {
+.ash-repl-completion.selected .ash-repl-completion-detail {
 	color: inherit;
 }
 

@@ -29,7 +29,8 @@ import Severity from '../../../../../../base/common/severity.js';
 import { CancellationError, errorHandler } from '../../../../../../base/common/errors.js';
 import { DialogService } from '../../../../../services/dialogs/common/dialogService.js';
 import assert from "node:assert/strict";
-import { test, suite, suiteTeardown } from "mocha";
+import { before, test, suite, suiteTeardown } from "mocha";
+import { prepareAcademyExtension } from '../../../../../../../../test/fixtures/academyExtension.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from "../../../../../../base/test/common/utils.js";
 import { JSDOM } from "jsdom";
 import type {
@@ -126,6 +127,9 @@ import type {
 	IAuxiliaryWindow,
 	IAuxiliaryWindowService,
 } from "../../../../../../workbench/services/auxiliaryWindow/browser/auxiliaryWindowService.js";
+
+// Compile the real provider before runtime assertions start their own deadlines.
+before(function () { this.timeout(600_000); prepareAcademyExtension(); });
 
 const uriIdentityServices = new TestUriIdentityServices();
 suiteTeardown(() => uriIdentityServices.dispose());

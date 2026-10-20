@@ -93,6 +93,7 @@ fn rust_provider_uses_shared_registration_invocation_and_retirement_fences() {
     assert!(matches!(
         supervisor.begin_fenced_invoke(
             host::ExtensionInvocationTarget {
+                registration_generation: None,
                 incarnation: NonZeroU64::new(started.incarnation).unwrap(),
                 activation_generation: NonZeroU64::new(1).unwrap()
             },

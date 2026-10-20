@@ -1,7 +1,7 @@
 import { IChatDebugService } from '../../common/chatDebugService.js';
 import '../../../../../editor/test/browser/testEditorDom.js';
 import assert from 'node:assert/strict';
-import { suite, test } from 'mocha';
+import { setup, teardown, suite, test } from 'mocha';
 import { JSDOM } from 'jsdom';
 import { DeferredPromise } from '../../../../../base/common/async.js';
 import { Emitter, Event } from '../../../../../base/common/event.js';
@@ -757,3 +757,10 @@ function measureTreeViewport(document: Document): void {
 		scrollHeight: { configurable: true, get: () => Number.parseFloat(document.querySelector<HTMLElement>('.ash-agent-trace-tree .ash-list')!.style.height) || 0 },
 	});
 }
+
+// Embedded editors exercise the same admitted feature batch as the product host.
+const { getEditorFeatures } = await import('../../../../../../../extensions/code/browser/editor.js');
+const { EditorExtensionsRegistry } = await import('../../../../../editor/browser/editorExtensions.js');
+let editorFeatures: import('../../../../../base/common/lifecycle.js').IDisposable;
+setup(() => { editorFeatures = EditorExtensionsRegistry.registerEditorFeatures(getEditorFeatures()); });
+teardown(() => editorFeatures.dispose());

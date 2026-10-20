@@ -378,6 +378,8 @@ export function registerAction2(
 				contribution.when,
 			);
 			for (const keybinding of keybindings) {
+				// Numeric zero explicitly disables a shortcut on the selected platform.
+				if (keybinding === 0) continue;
 				registrations.add(KeybindingsRegistry.registerKeybindingRule({
 					command: action.desc.id,
 					keybinding,

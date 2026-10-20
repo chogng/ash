@@ -134,7 +134,7 @@ impl Approval {
                 .position(|choice| *choice == self.selected)
                 .unwrap_or_default();
             if !self.choices.is_empty() {
-                self.selected = self.choices[navigation.offset(index, 1, self.choices.len())];
+                self.selected = self.choices[navigation.offset(index, self.choices.len() - 1, 1)];
             }
             return ApprovalOutcome::Consumed;
         }

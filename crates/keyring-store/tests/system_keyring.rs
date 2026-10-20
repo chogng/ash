@@ -1,4 +1,4 @@
-#![cfg(target_os = "windows")]
+#![cfg(any(target_os = "windows", target_os = "linux"))]
 
 use std::path::Path;
 use std::process::Command;
@@ -36,7 +36,7 @@ impl Drop for Cleanup {
 }
 
 #[test]
-#[ignore = "uses the real Windows Credential Manager; run explicitly in an interactive session"]
+#[ignore = "uses the OS credential store; Linux requires an isolated, unlocked test Secret Service"]
 fn real_keyring_round_trip_and_process_restart() {
     let profile = tempfile::tempdir().unwrap();
     let cleanup = Cleanup(KeyringSecretStore::for_profile(profile.path()).unwrap());
@@ -156,5 +156,85 @@ fn system_keyring_worker() {
             assert!(store.load(&key(VALUE_KEY)).unwrap().is_none());
         }
         phase => panic!("unknown system keyring test phase: {phase}"),
+    }
+}
+
+#[cfg(target_os = "linux")]
+#[test]
+#[ignore = "requires secret-tool and an isolated, unlocked test Secret Service"]
+fn existing_secret_service_attributes_remain_readable() {
+    use std::io::Write;
+    use std::process::Stdio;
+
+    use ash_keyring_store::delete_credential;
+    use ash_keyring_store::read_credential;
+    use ash_keyring_store::write_credential;
+
+    struct EntryCleanup(String);
+    impl Drop for EntryCleanup {
+        fn drop(&mut self) {
+            delete_credential(&self.0, "fixture-account").unwrap();
+        }
+    }
+
+    // Both backends use keyring's same service/username/target identity. Seed items
+    // independently, including the older default-collection form without target,
+    // to catch accidental namespace changes or replacement with a fresh credential.
+    for with_target in [true, false] {
+        let service = format!(
+            "com.ash.migration-fixture.{}.{with_target}",
+            std::process::id()
+        );
+        let _cleanup = EntryCleanup(service.clone());
+        let mut command = Command::new("secret-tool");
+        command.args([
+            "store",
+            "--label",
+            "Ash migration fixture",
+            "service",
+            &service,
+            "username",
+            "fixture-account",
+            "application",
+            "rust-keyring-client",
+        ]);
+        if with_target {
+            command.args(["target", "default"]);
+        }
+        let mut seed = command.stdin(Stdio::piped()).spawn().unwrap();
+        seed.stdin
+            .take()
+            .unwrap()
+            .write_all(b"existing-fixture-secret")
+            .unwrap();
+        assert!(seed.wait().unwrap().success());
+        assert_eq!(
+            read_credential(&service, "fixture-account")
+                .unwrap()
+                .unwrap()
+                .expose(),
+            b"existing-fixture-secret"
+        );
+        write_credential(
+            &service,
+            "fixture-account",
+            &SecretValue::new(b"updated-fixture-secret".to_vec()),
+        )
+        .unwrap();
+        let lookup = Command::new("secret-tool")
+            .args(["lookup", "service", &service, "username", "fixture-account"])
+            .output()
+            .unwrap();
+        assert!(lookup.status.success());
+        assert_eq!(lookup.stdout, b"updated-fixture-secret");
+        assert_eq!(
+            delete_credential(&service, "fixture-account").unwrap(),
+            DeleteSecretOutcome::Deleted
+        );
+        assert!(
+            read_credential(&service, "fixture-account")
+                .unwrap()
+                .is_none()
+        );
     }
 }

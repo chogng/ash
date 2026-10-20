@@ -265,6 +265,7 @@
 		"--ash-terminalCommandDecoration-defaultBackground",
 		"--ash-terminalCommandDecoration-errorBackground",
 		"--ash-terminalCommandDecoration-successBackground",
+		"--ash-terminalCommandGuide-foreground",
 		"--ash-text-codeBlockBackground",
 		"--ash-textLink-activeForeground",
 		"--ash-titleBar-actionForeground",
