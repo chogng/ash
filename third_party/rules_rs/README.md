@@ -3,7 +3,19 @@
 The repository pins `rules_rs 0.0.96` through [Bazel Central Registry](https://github.com/bazelbuild/bazel-central-registry/blob/main/modules/rules_rs/0.0.96/source.json) in the root
 [`MODULE.bazel`](../../MODULE.bazel). The registry owns the source URL, checksum
 and module version metadata patch. `single_version_override` adds only the local
-compatibility patch:
+compatibility patches:
+
+- `nested_platform_features.patch` preserves the dependency's platform set while
+  the resolver consumes a copy to track completed edges. Otherwise a Linux-only
+  consumer of a platform-independent optional dependency loses features enabled
+  by a nested feature in a later resolution round. zbus 6's `comms` feature
+  exposes this through missing zruntime broadcast, event and lock APIs. Remove
+  this patch when upstream keeps the platform predicate immutable. The regression
+  also verifies that these features do not leak into the unselected platform:
+
+  ```bash
+  bazel test //third_party/rules_rs:nested-platform-features-test
+  ```
 
 - `windows_gnullvm_exec_triples.patch`, which makes Windows Rust host tools use
   the same gnullvm ABI as the repository's hermetic LLVM/MinGW C++ toolchain.

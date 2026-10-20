@@ -34,6 +34,7 @@ single_version_override(
     # preserves the exact zlib bytes already pinned by rules_rs.
     patches = [
         "//third_party/rules_rs:immutable_zlib_urls.patch",
+        "//third_party/rules_rs:nested_platform_features.patch",
         "//third_party/rules_rs:windows_gnullvm_exec_triples.patch",
     ],
 )

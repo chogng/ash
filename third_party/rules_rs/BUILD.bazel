@@ -1,9 +1,14 @@
+load(":feature_resolution_test.bzl", "nested_platform_features_test")
+
 package(default_visibility = ["//visibility:public"])
+
+nested_platform_features_test(name = "nested-platform-features-test")
 
 exports_files(["README.md"])
 
 exports_files([
     "immutable_zlib_urls.patch",
+    "nested_platform_features.patch",
     "rust_macos_rtlib.patch",
     "rust_unwind_link_flags.patch",
     "windows_gnullvm_exec_triples.patch",
