@@ -585,13 +585,20 @@ export class ChatViewPane extends ViewPane implements IChatContextTarget {
 	private updateSessionsLayout(): void {
 		const previousMinimum = this.minimumWidth;
 		const orientation = this.configuration.getValue<AgentSessionsOrientation>(AGENT_SESSIONS_ORIENTATION_SETTING);
-		if (this.sessionsSidebarVisible.get() && orientation === AgentSessionsOrientation.SideBySide && this.sessionsPresentation !== orientation && this.body.getBoundingClientRect().width > 0) {
-			this.auxiliaryBarWidthBeforeSessions = this.layoutService.getPartSize('auxiliarybar').width;
-		}
+		const width = this.body.getBoundingClientRect().width;
+		const expand = this.sessionsSidebarVisible.get() && orientation === AgentSessionsOrientation.SideBySide && this.sessionsPresentation !== orientation && width > 0
+			? this.layoutService.getPartSize('auxiliarybar')
+			: undefined;
+		if (expand) this.auxiliaryBarWidthBeforeSessions = expand.width;
 		this.sessionsPresentation = orientation;
 		this.sessionsOrientation.set(this.sessionsPresentation);
 		this.body.classList.toggle('sessions-stacked', this.sessionsPresentation === 'stacked');
 		if (this.minimumWidth !== previousMinimum) this.notifyConstraintsChanged();
+		if (expand) {
+			// Switching back to columns reserves the remembered list width just like opening it.
+			const bodyWidth = Math.max(minimumSideBySideWidth, width + this.sessionsSidebarWidth);
+			this.layoutService.resizePart('auxiliarybar', { width: expand.width + bodyWidth - width, height: expand.height });
+		}
 		if (orientation === AgentSessionsOrientation.Stacked && this.auxiliaryBarWidthBeforeSessions !== undefined) {
 			const size = this.layoutService.getPartSize('auxiliarybar');
 			const previousWidth = this.auxiliaryBarWidthBeforeSessions;
