@@ -87,7 +87,7 @@ export class NewCoworkInputWidget extends ChatInputPart {
 			icon: Lxicon.add,
 			enabled: true,
 			run: () => this.contextAttachments.showPicker(),
-		}], { modePicker: 'hidden', modelPickerPosition: 'trailing', renderSecondaryToolbar: false, draftStorage: 'host' }, instantiationService, speechToText, onboarding, quickInput, menuService);
+		}], { modePicker: 'hidden', modelPickerPosition: 'trailing', renderSecondaryToolbar: false, fileEvents: 'host', draftStorage: 'host' }, instantiationService, speechToText, onboarding, quickInput, menuService);
 		this.draftNotifications = notifications;
 		this.element.classList.add('ash-sessions-cowork-input', 'floating-card');
 		this.element.classList.add('cowork-composer');
