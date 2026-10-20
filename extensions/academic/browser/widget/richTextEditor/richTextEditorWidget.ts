@@ -187,7 +187,7 @@ export class RichTextEditorWidget extends Disposable {
 		layoutContainer.append(container);
 		this.editorDom = editorDom;
 		this.container = container;
-		this.pageView = this._register(new DocumentPageView(container));
+		this.pageView = this._register(new DocumentPageView(container, () => this.relayoutPages()));
 		this.outlineNavigator = outlineNavigator;
 		const onSelectionChange = () => this.syncDocumentSelection();
 		parent.ownerDocument.addEventListener("selectionchange", onSelectionChange);
@@ -323,7 +323,7 @@ export class RichTextEditorWidget extends Disposable {
 		if (pointSelection) {
 			const position = findInlineRunAtOffset(container, pointSelection.head.nodeId, pointSelection.head.offset);
 			if (!position) return;
-			range.setStart(position.run.firstChild ?? position.run, position.offset);
+			range.setStart(position.node, position.offset);
 		} else {
 			const selection = container.ownerDocument.getSelection();
 			if (!selection?.focusNode || !container.contains(selection.focusNode)) return;
@@ -337,6 +337,18 @@ export class RichTextEditorWidget extends Disposable {
 		else if (rect.right > viewport.right) container.scrollLeft += rect.right - viewport.right;
 		if (rect.top < viewport.top) container.scrollTop += rect.top - viewport.top;
 		else if (rect.bottom > viewport.bottom) container.scrollTop += rect.bottom - viewport.bottom;
+	}
+
+	private relayoutPages(): void {
+		const container = this.container;
+		if (!container || !this.model || this.composition || this.isDisposed) return;
+		const active = container.contains(container.ownerDocument.activeElement);
+		const selection = active ? readDocumentTextSelection(container, true)?.selection : undefined;
+		this.pageView?.layout();
+		if (selection) {
+			setInlineDocumentTextSelection(container, selection);
+			this.revealTextSelection();
+		}
 	}
 
 	private disposeNodeViews(): void {
@@ -714,7 +726,10 @@ export class RichTextEditorWidget extends Disposable {
 				replacement = diff.text;
 			}
 		}
-		if (replacement.length === 0 && currentText === composition.baseText) return;
+		if (replacement.length === 0 && currentText === composition.baseText) {
+			this.relayoutPages();
+			return;
+		}
 		const command = createReplaceTextCommand(model.schema, model.document, composition.blockId, selection, replacement, documentInsertionMarks(model, selection));
 		if (!command) {
 			this.render();
@@ -725,9 +740,12 @@ export class RichTextEditorWidget extends Disposable {
 
 	private cancelComposition(element: HTMLTextAreaElement | HTMLDivElement): void {
 		if (this.composition?.element !== element) return;
-		const model = this.composition.model;
+		const { model, selection, version } = this.composition;
 		this.composition = undefined;
-		if (this.model === model) this.render();
+		if (this.model === model) {
+			this.render();
+			this.restoreModelFocus(model, model.version === version ? selection : model.selection);
+		}
 	}
 
 	private handleTextPaste(event: ClipboardEvent, model: DocumentTextModel, blockId: string, textarea: HTMLTextAreaElement): void {
@@ -1958,10 +1976,8 @@ function setInlineDocumentTextSelection(editor: HTMLDivElement, selection: Docum
 	const anchorPosition = findInlineRunAtOffset(editor, selection.anchor.nodeId, selection.anchor.offset);
 	const headPosition = findInlineRunAtOffset(editor, selection.head.nodeId, selection.head.offset);
 	if (!anchorPosition || !headPosition) return;
-	const anchorRun = anchorPosition.run;
-	const headRun = headPosition.run;
-	const anchorText = anchorRun.firstChild ?? anchorRun;
-	const headText = headRun.firstChild ?? headRun;
+	const anchorText = anchorPosition.node;
+	const headText = headPosition.node;
 	const anchorOffset = anchorPosition.offset;
 	const headOffset = headPosition.offset;
 	const domSelection = editor.ownerDocument.getSelection();
@@ -1975,7 +1991,7 @@ function setInlineDocumentTextSelection(editor: HTMLDivElement, selection: Docum
 		}
 	}
 	const range = editor.ownerDocument.createRange();
-	const forward = anchorRun === headRun ? anchorOffset <= headOffset : (anchorRun.compareDocumentPosition(headRun) & 4) !== 0;
+	const forward = anchorText === headText ? anchorOffset <= headOffset : (anchorText.compareDocumentPosition(headText) & 4) !== 0;
 	if (forward) {
 		range.setStart(anchorText, anchorOffset);
 		range.setEnd(headText, headOffset);
@@ -1987,14 +2003,25 @@ function setInlineDocumentTextSelection(editor: HTMLDivElement, selection: Docum
 	domSelection?.addRange(range);
 }
 
-function findInlineRunAtOffset(editor: HTMLDivElement, nodeId: string, offset: number): { readonly run: HTMLElement; readonly offset: number; } | undefined {
+function findInlineRunAtOffset(editor: HTMLDivElement, nodeId: string, offset: number): { readonly node: Node; readonly offset: number; } | undefined {
 	const runs = [...editor.querySelectorAll<HTMLElement>("[data-text-node-id]")].filter(run => run.dataset.textNodeId === nodeId);
 	if (runs.length === 0) return undefined;
 	let remaining = Math.max(0, offset);
 	for (let index = 0; index < runs.length; index += 1) {
 		const run = runs[index]!;
 		const length = run.textContent?.length ?? 0;
-		if (remaining <= length || index === runs.length - 1) return { run, offset: Math.min(remaining, length) };
+		if (remaining < length || index === runs.length - 1) {
+			let localOffset = Math.min(remaining, length);
+			const walker = editor.ownerDocument.createTreeWalker(run, 4 /* Text */);
+			let lastText: Text | undefined;
+			while (walker.nextNode()) {
+				const text = walker.currentNode as Text;
+				if (localOffset < text.length) return { node: text, offset: localOffset };
+				localOffset -= text.length;
+				lastText = text;
+			}
+			return { node: lastText ?? run, offset: lastText?.length ?? 0 };
+		}
 		remaining -= length;
 	}
 	return undefined;

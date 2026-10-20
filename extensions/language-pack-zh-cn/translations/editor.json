@@ -913,7 +913,7 @@
     "document.page.continuous": "连续",
     "document.page.margin": "页边距",
     "document.page.zoom": "页面缩放",
-    "document.accessibility.pages": "“纸张”可选择连续、A4 或 Letter。分页文档以横向排列的单栏页面显示。“页边距”修改会保存到文档中并可撤销；“页面缩放”只改变当前视图。在同一段落内，方向键和选区可连续跨越页界。跨页复制、剪切和粘贴均使用文档位置。"
+    "document.accessibility.pages": "“纸张”可选择连续、A4 或 Letter。分页文档以纵向堆叠的单栏页面显示。“页边距”修改会保存到文档中并可撤销；“页面缩放”只改变当前视图。在同一段落内，方向键和选区可连续跨越页界。跨页复制、剪切和粘贴均使用文档位置。"
   },
   "ash.editor.clipboard": {
     "selection.title": "选区剪贴板",

@@ -720,35 +720,92 @@ for (const theme of ['hc', 'hcLight']) {
 
 // Range and native hit testing read the very DOM fragmented by the installed client.
 // The model is never seeded with page-local offsets or separate per-page documents.
+async function assertVerticalPages(page: Page): Promise<void> {
+	const geometry = await page.locator('#document-editor .ash-document-page-stack').evaluate(stack => {
+		const papers = [...stack.querySelectorAll('.ash-document-page')].map(page => page.getBoundingClientRect());
+		const flow = stack.querySelector<HTMLElement>('.ash-document-page-flow')!;
+		const margin = parseFloat(flow.style.top) * Number((stack as HTMLElement).style.zoom);
+		const failures: { top: number; bottom: number; left: number; right: number; bodyLeft: number; bodyRight: number; }[] = [];
+		const walker = document.createTreeWalker(flow, NodeFilter.SHOW_TEXT);
+		while (walker.nextNode()) {
+			const text = walker.currentNode;
+			if (!text.parentElement?.closest('[data-text-node-id]')) continue;
+			const range = document.createRange();
+			range.selectNodeContents(text);
+			for (const rect of range.getClientRects()) {
+				if (rect.width === 0 || rect.height === 0) continue;
+				const insideBody = papers.some(paper =>
+					rect.top >= paper.top + margin - 1 && rect.bottom <= paper.bottom - margin + 1
+					&& rect.left >= paper.left + margin - 1 && rect.right <= paper.right - margin + 1);
+				if (!insideBody) {
+					failures.push({
+						top: rect.top - papers[0]!.top, bottom: rect.bottom - papers[0]!.top,
+						left: rect.left, right: rect.right,
+						bodyLeft: papers[0]!.left + margin, bodyRight: papers[0]!.right - margin,
+					});
+				}
+			}
+		}
+		return { failures: failures.slice(0, 5), aligned: papers.every((paper, index) => Math.abs(paper.left - papers[0]!.left) < 1 && (index === 0 || paper.top > papers[index - 1]!.bottom)) };
+	});
+	expect(geometry).toEqual({ failures: [], aligned: true });
+}
+
 async function pageBoundary(page: Page): Promise<number> {
 	return page.locator('#document-editor [data-text-node-id="pages-long-text"]').evaluate(run => {
-		const text = run.firstChild!;
-		const flow = run.closest('.ash-document-page-flow') as HTMLElement;
-		const origin = flow.getBoundingClientRect().left;
-		const zoom = Number((flow.parentElement as HTMLElement).style.zoom);
-		const stride = (parseFloat(flow.style.width) + parseFloat(flow.style.columnGap)) * zoom;
-		const rectAt = (offset: number) => {
-			const range = document.createRange();
-			range.setStart(text, offset);
-			range.setEnd(text, offset + 1);
-			return range.getBoundingClientRect();
-		};
-		let low = 0;
-		let high = text.textContent!.length - 1;
-		while (low < high) {
-			const middle = Math.floor((low + high) / 2);
-			if (rectAt(middle).left - origin >= stride - 1) high = middle;
-			else low = middle + 1;
-		}
-		if (low === text.textContent!.length - 1) throw new Error('Long paragraph did not fragment');
-		return low;
+		const gap = run.querySelector('.ash-document-page-gap');
+		if (!gap) throw new Error('Long paragraph did not fragment');
+		const range = document.createRange();
+		range.selectNodeContents(run);
+		range.setEndBefore(gap);
+		return range.toString().length;
 	});
+}
+
+async function pageTextPoint(page: Page, offset: number, scroll = false): Promise<{ x: number; y: number; }> {
+	return page.locator('#document-editor [data-text-node-id="pages-long-text"]').evaluate((run, { offset, scroll }) => {
+		const walker = document.createTreeWalker(run, NodeFilter.SHOW_TEXT);
+		let remaining = offset;
+		while (walker.nextNode()) {
+			const text = walker.currentNode as Text;
+			if (remaining < text.length) {
+				const range = document.createRange();
+				range.setStart(text, remaining);
+				range.setEnd(text, remaining + 1);
+				if (scroll) {
+					const pane = run.closest('.ash-text-editor-widget-pane')!;
+					const viewport = pane.getBoundingClientRect();
+					const rect = range.getBoundingClientRect();
+					pane.scrollTop += rect.top - viewport.top - pane.clientHeight / 2;
+				}
+				const rect = range.getBoundingClientRect();
+				return { x: rect.left + 0.1, y: rect.top + rect.height / 2 };
+			}
+			remaining -= text.length;
+		}
+		throw new Error('Missing DOM text point');
+	}, { offset, scroll });
 }
 
 async function selectPageText(page: Page, anchor: number, head = anchor): Promise<void> {
 	await page.locator('#document-editor [data-text-node-id="pages-long-text"]').evaluate((run, { anchor, head }) => {
 		(run.closest('[contenteditable]') as HTMLElement).focus();
-		document.getSelection()!.setBaseAndExtent(run.firstChild!, anchor, run.firstChild!, head);
+		const point = (offset: number): [Node, number] => {
+			const walker = document.createTreeWalker(run, NodeFilter.SHOW_TEXT);
+			let remaining = offset;
+			let last: Text | undefined;
+			while (walker.nextNode()) {
+				const text = walker.currentNode as Text;
+				if (remaining < text.length) return [text, remaining];
+				remaining -= text.length;
+				last = text;
+			}
+			if (last && remaining === 0) return [last, last.length];
+			throw new Error('Missing DOM selection point');
+		};
+		const [anchorNode, anchorOffset] = point(anchor);
+		const [headNode, headOffset] = point(head);
+		document.getSelection()!.setBaseAndExtent(anchorNode, anchorOffset, headNode, headOffset);
 	}, { anchor, head });
 	await expect.poll(() => page.evaluate(() => window.ashAcademicIntegration.getStructuredSelection())).toMatchObject({
 		kind: 'text', anchor: { nodeId: 'pages-long-text', offset: anchor }, head: { nodeId: 'pages-long-text', offset: head },
@@ -761,46 +818,43 @@ for (const locale of ['en', 'zh-CN'] as const) {
 		const root = page.locator('#document-editor');
 		const paper = root.getByRole('combobox', { name: locale === 'en' ? 'Paper' : '纸张', exact: true });
 		await chooseParagraphOption(page, paper, 'A4');
-		const strip = root.locator('.ash-document-page-strip');
-		await expect.poll(() => strip.getAttribute('data-page-count').then(Number)).toBeGreaterThan(2);
+		const stack = root.locator('.ash-document-page-stack');
+		await expect.poll(() => stack.getAttribute('data-page-count').then(Number)).toBeGreaterThan(2);
 		const original = (await page.evaluate(() => window.ashAcademicIntegration.getStructuredBlockTexts()))[0]!;
 		const boundary = await pageBoundary(page);
 		const version = await page.evaluate(() => window.ashAcademicIntegration.getStructuredVersion());
 		const zoom = root.getByRole('combobox', { name: locale === 'en' ? 'Page zoom' : '页面缩放', exact: true });
 		await chooseParagraphOption(page, zoom, '75%');
 		expect(await pageBoundary(page)).toBe(boundary);
+		await assertVerticalPages(page);
 		await page.setViewportSize({ width: 1100, height: 900 });
 		expect(await pageBoundary(page)).toBe(boundary);
 		expect(await page.evaluate(() => window.ashAcademicIntegration.getStructuredVersion())).toBe(version);
 		// Click a character in the second fragment after scrolling it into view.
-		const point = await root.locator('[data-text-node-id="pages-long-text"]').evaluate((run, offset) => {
-			const pane = run.closest('.ash-text-editor-widget-pane')!;
-			pane.scrollLeft = 650;
-			pane.scrollTop = 0;
-			const range = document.createRange();
-			range.setStart(run.firstChild!, offset);
-			range.setEnd(run.firstChild!, offset + 1);
-			const rect = range.getBoundingClientRect();
-			return { x: rect.left + 1, y: rect.top + rect.height / 2 };
-		}, boundary + 3);
+		const point = await pageTextPoint(page, boundary + 3, true);
 		await page.mouse.click(point.x, point.y);
 		await expect.poll(() => page.evaluate(() => window.ashAcademicIntegration.getStructuredSelection())).toMatchObject({ head: { nodeId: 'pages-long-text', offset: boundary + 3 } });
 		await selectPageText(page, boundary - 1);
+		await page.keyboard.press('ArrowDown');
+		await expect.poll(() => page.evaluate(() => (window.ashAcademicIntegration.getStructuredSelection() as { head: { offset: number; }; }).head.offset)).toBeGreaterThanOrEqual(boundary);
+		await selectPageText(page, boundary - 1);
 		await page.keyboard.press('ArrowRight');
 		await expect.poll(() => page.evaluate(() => window.ashAcademicIntegration.getStructuredSelection())).toMatchObject({ head: { offset: boundary } });
-		await root.locator('[data-text-node-id="pages-long-text"]').evaluate((run, offset) => {
+		await root.locator('[data-text-node-id="pages-long-text"]').evaluate(run => {
 			const editor = run.closest('[contenteditable]')!;
 			editor.dispatchEvent(new CompositionEvent('compositionstart', { bubbles: true }));
-			(run.firstChild as Text).insertData(offset, '中文');
+			const selection = document.getSelection()!;
+			const activeText = selection.focusNode as Text;
+			activeText.insertData(selection.focusOffset, '中文');
 			editor.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertCompositionText', data: '中文', isComposing: true }));
 			// Metric completion during composition must retain the active DOM text node.
-			const activeText = run.firstChild;
 			document.fonts.dispatchEvent(new Event('loadingdone'));
-			if (run.firstChild !== activeText || !run.isConnected) throw new Error('Composition node was replaced');
+			if (!run.contains(activeText) || !run.isConnected) throw new Error('Composition node was replaced');
 			editor.dispatchEvent(new CompositionEvent('compositionend', { bubbles: true, data: '中文' }));
-		}, boundary);
+		});
 		const composed = original.slice(0, boundary) + '中文' + original.slice(boundary);
 		await expect.poll(() => page.evaluate(() => window.ashAcademicIntegration.getStructuredBlockTexts())).toEqual([composed, 'End']);
+		await assertVerticalPages(page);
 		await selectPageText(page, boundary - 5, boundary + 7);
 		const copied = await root.locator('.stanza-document-rich-text-input').first().evaluate(editor => {
 			const data = new DataTransfer();
@@ -827,7 +881,7 @@ for (const locale of ['en', 'zh-CN'] as const) {
 		expect(saved.document.attrs).toEqual({ pageSize: 'a4' });
 		expect(saved.document.content).toHaveLength(2);
 		await page.evaluate(() => window.ashAcademicIntegration.reopenStructured());
-		await expect(strip).toBeVisible();
+		await expect(stack).toBeVisible();
 		await expect.poll(() => page.evaluate(() => window.ashAcademicIntegration.getStructuredBlockTexts())).toEqual([composed, 'End']);
 		await page.screenshot({ path: testInfo.outputPath('academy-pages.png') });
 		await page.evaluate(() => window.ashAcademicIntegration.setAcademicEnabled(false));
@@ -851,17 +905,7 @@ test('Academy M6 pages retain native drag selection, paper settings and empty-pa
 	await chooseParagraphOption(page, root.getByRole('combobox', { name: 'Page zoom', exact: true }), '50%');
 	const boundary = await pageBoundary(page);
 	const version = await page.evaluate(() => window.ashAcademicIntegration.getStructuredVersion());
-	const points = await root.locator('[data-text-node-id="pages-long-text"]').evaluate((run, boundary) => {
-		const pane = run.closest('.ash-text-editor-widget-pane')!;
-		pane.scrollLeft = pane.scrollTop = 0;
-		return [boundary - 3, boundary + 3].map(offset => {
-			const range = document.createRange();
-			range.setStart(run.firstChild!, offset);
-			range.setEnd(run.firstChild!, offset + 1);
-			const rect = range.getBoundingClientRect();
-			return { x: rect.left + 0.1, y: rect.top + rect.height / 2 };
-		});
-	}, boundary);
+	const points = [await pageTextPoint(page, boundary - 3), await pageTextPoint(page, boundary + 3)];
 	await page.mouse.move(points[0]!.x, points[0]!.y);
 	await page.mouse.down();
 	await page.mouse.move(points[1]!.x, points[1]!.y, { steps: 10 });
@@ -870,6 +914,9 @@ test('Academy M6 pages retain native drag selection, paper settings and empty-pa
 		anchor: { nodeId: 'pages-long-text', offset: boundary - 3 }, head: { nodeId: 'pages-long-text', offset: boundary + 3 },
 	});
 	expect(await page.evaluate(() => window.ashAcademicIntegration.getStructuredVersion())).toBe(version);
+	await expect(root.locator('[data-block-id="pages-long"]')).toHaveCSS('outline-width', '0px');
+	await expect(root.locator('.ash-document-page').first()).toHaveCSS('outline-style', 'solid');
+	await expect(root.locator('.ash-document-page').first()).not.toHaveCSS('outline-color', 'rgba(0, 0, 0, 0)');
 	await page.screenshot({ path: testInfo.outputPath('academy-pages-native-drag-hc.png') });
 	await page.evaluate(() => window.ashAcademicIntegration.layoutStructured(900, 600));
 	expect(await pageBoundary(page)).toBe(boundary);
@@ -884,14 +931,14 @@ test('Academy M6 pages retain native drag selection, paper settings and empty-pa
 		const range = document.createRange();
 		range.selectNodeContents(run);
 		const rect = range.getBoundingClientRect();
-		return pane.scrollLeft > 0 && rect.left >= viewport.left && rect.right <= viewport.right;
+		return pane.scrollTop > 0 && rect.top >= viewport.top && rect.bottom <= viewport.bottom;
 	})).toBe(true);
 	await query.press('Escape');
 	await chooseParagraphOption(page, root.getByRole('combobox', { name: 'Paper', exact: true }), 'Continuous');
-	await expect(root.locator('.ash-document-page-strip')).toHaveCount(0);
+	await expect(root.locator('.ash-document-page-stack')).toHaveCount(0);
 	await root.locator('textarea.stanza-document-text-input').first().focus();
 	await page.keyboard.press('Control+z');
-	await expect(root.locator('.ash-document-page-strip')).toBeVisible();
+	await expect(root.locator('.ash-document-page-stack')).toBeVisible();
 	await expect(root.getByRole('combobox', { name: 'Paper', exact: true })).toContainText('Letter');
 	await page.evaluate(() => window.ashAcademicIntegration.saveStructured());
 	expect(JSON.parse(await page.evaluate(() => window.ashAcademicIntegration.getSavedStructured())).document.attrs).toEqual({ pageSize: 'letter', pageMargin: 54 });
@@ -911,4 +958,57 @@ test('Academy M6 pages retain native drag selection, paper settings and empty-pa
 	await expect(root.getByRole('combobox', { name: 'Page margins', exact: true })).toContainText('54 pt');
 	await expect(root.locator('.stanza-document-rich-text-input').last()).toHaveText('New paragraph');
 	await expect(root.locator('[data-block-id="pages-long"]')).toHaveCSS('font-size', '18px');
+});
+
+test('Academy vertical pages preserve reverse selections, deferred font layout, cancelled composition and link ownership', async ({ page }) => {
+	await page.goto('/academic.html?generalDocument&m6Pages&linkedPages');
+	const root = page.locator('#document-editor');
+	await chooseParagraphOption(page, root.getByRole('combobox', { name: 'Paper', exact: true }), 'A4');
+	const boundary = await pageBoundary(page);
+	await selectPageText(page, boundary + 4, boundary - 4);
+	const version = await page.evaluate(() => window.ashAcademicIntegration.getStructuredVersion());
+	const backup = await page.evaluate(() => window.ashAcademicIntegration.getStructuredBackup());
+	// A real font-size change exercises fresh line geometry, including backwards ranges.
+	await root.locator('[data-block-id="pages-long"]').evaluate(editor => {
+		(editor as HTMLElement).style.fontSize = '20px';
+		document.fonts.dispatchEvent(new Event('loadingdone'));
+	});
+	expect(await pageBoundary(page)).not.toBe(boundary);
+	await expect.poll(() => page.evaluate(() => window.ashAcademicIntegration.getStructuredSelection())).toMatchObject({ anchor: { offset: boundary + 4 }, head: { offset: boundary - 4 } });
+	await assertVerticalPages(page);
+	const changedBoundary = await pageBoundary(page);
+	await selectPageText(page, boundary + 4);
+	await root.locator('[data-text-node-id="pages-long-text"]').evaluate(run => {
+		const editor = run.closest('[contenteditable]')!;
+		editor.dispatchEvent(new CompositionEvent('compositionstart', { bubbles: true }));
+		const activeText = document.getSelection()!.focusNode;
+		(editor as HTMLElement).style.fontSize = '24px';
+		document.fonts.dispatchEvent(new Event('loadingdone'));
+		if (document.getSelection()!.focusNode !== activeText || !activeText?.isConnected) throw new Error('Font layout replaced a composing node');
+		editor.dispatchEvent(new CompositionEvent('compositionend', { bubbles: true, data: '' }));
+	});
+	expect(await pageBoundary(page)).not.toBe(changedBoundary);
+	await expect.poll(() => page.evaluate(() => window.ashAcademicIntegration.getStructuredSelection())).toMatchObject({ head: { offset: boundary + 4 } });
+	await assertVerticalPages(page);
+	expect(await page.evaluate(() => window.ashAcademicIntegration.getStructuredVersion())).toBe(version);
+	expect(await page.evaluate(() => window.ashAcademicIntegration.getStructuredBackup())).toBe(backup);
+	const point = await pageTextPoint(page, (await pageBoundary(page)) + 3, true);
+	await page.keyboard.down('ControlOrMeta');
+	await page.mouse.click(point.x, point.y);
+	await page.keyboard.up('ControlOrMeta');
+	await expect.poll(() => page.evaluate(() => window.ashAcademicIntegration.getOpenedLinks())).toEqual(['https://example.test/paged-link']);
+	await selectPageText(page, boundary + 4);
+	await root.locator('[data-block-id="pages-long"]').evaluate(editor => {
+		editor.dispatchEvent(new CompositionEvent('compositionstart', { bubbles: true }));
+		const selection = document.getSelection()!;
+		(selection.focusNode as Text).insertData(selection.focusOffset, '未提交');
+		editor.dispatchEvent(new CompositionEvent('compositioncancel', { bubbles: true }));
+	});
+	await expect(root.locator('[data-block-id="pages-long"]')).toBeFocused();
+	expect(await page.evaluate(() => window.ashAcademicIntegration.getStructuredBackup())).toBe(backup);
+	await page.keyboard.type('A');
+	const original = '分页中文 writing across pages. '.repeat(260);
+	await expect.poll(() => page.evaluate(() => window.ashAcademicIntegration.getStructuredBlockTexts())).toEqual([original.slice(0, boundary + 4) + 'A' + original.slice(boundary + 4), 'End']);
+	await page.keyboard.press('Control+z');
+	await expect.poll(() => page.evaluate(() => window.ashAcademicIntegration.getStructuredBlockTexts())).toEqual([original, 'End']);
 });

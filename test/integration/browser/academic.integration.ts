@@ -201,7 +201,13 @@ const codeBlockDocument = schema.createDocument([schema.createNode("codeBlock", 
 	id: "editor-code-block",
 })], "editor-text-document");
 const codeBlockFiles = new MemoryTextFiles(codeBlockResource, serializeDocument(codeBlockDocument, schema));
-const m6Paragraph = (id: string, text: string) => schema.createNode('paragraph', { id, content: [schema.createText(text, { id: `${id}-text` })] });
+const m6Paragraph = (id: string, text: string) => schema.createNode('paragraph', {
+	id, content: [schema.createText(text, {
+		id: `${id}-text`,
+		marks: id === 'pages-long' && new URLSearchParams(location.search).has('linkedPages')
+			? [{ type: 'link', attrs: { href: 'https://example.test/paged-link' } }, { type: 'strong', attrs: {} }] : [],
+	})],
+});
 const structuredDocument = new URLSearchParams(location.search).has('m6Pages')
 	? schema.createDocument([m6Paragraph('pages-long', '分页中文 writing across pages. '.repeat(260)), m6Paragraph('pages-last', 'End')])
 	: new URLSearchParams(location.search).has('m6Document')

@@ -92,9 +92,11 @@ replacement history is copied into the Rust process or the shared host.
 
 The package also owns the M6 editable body pagination slice. Paper controls select
 continuous layout, A4 or Letter and persist page size and uniform margins through
-the existing model transaction, codec and history. Pages currently form a horizontal
-strip. Native CSS column fragments share the original editable DOM and text IDs;
-Range selection and caret geometry therefore use the same model positions across
-pages. Zoom is view-local and never changes wrapping or document versions.
-Advanced page structures, vertical stacking and viewport virtualization remain
-outside this slice; see the editor roadmap for platform acceptance limits.
+the existing model transaction, codec and history. Pages form a vertical stack.
+The package measures browser lines and inserts empty, non-editable page gaps into
+the original DOM. Text IDs, inline marks and event owners remain intact; UTF-16
+positions resolve across the split DOM Text nodes for native selection and input.
+Metric changes preserve selection and wait for composition to finish. Zoom is
+view-local and never changes wrapping or document versions. Advanced page structures
+and viewport virtualization remain outside this slice; see the editor roadmap for
+platform acceptance limits.

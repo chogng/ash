@@ -2,8 +2,9 @@
 	background: var(--ash-text-codeBlockBackground);
 }
 
-.ash-document-page-strip {
+.ash-document-page-stack {
 	position: relative;
+	margin-inline: auto;
 }
 
 .ash-document-page-backgrounds {
@@ -20,12 +21,30 @@
 
 .ash-document-page-flow {
 	position: absolute;
-	column-count: 1;
-	column-fill: auto;
-	orphans: 1;
-	widows: 1;
 }
 
 .ash-document-page-flow .stanza-document-rich-text-input {
 	min-height: 1em;
+}
+
+.ash-document-page-gap {
+	display: block;
+	pointer-events: none;
+	user-select: none;
+}
+
+.ash-document-page-flow .stanza-document-rich-text-input,
+.ash-document-page-flow .stanza-document-inline-run {
+	white-space: break-spaces;
+	overflow-wrap: anywhere;
+}
+
+/* A long paragraph spans page gaps. Draw its keyboard focus on the paper edges. */
+.ash-document-page-flow .stanza-document-rich-text-input:focus-visible {
+	outline: 0;
+}
+
+.ash-document-page-stack:has(.stanza-document-rich-text-input:focus-visible)
+	.ash-document-page {
+	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
 }
