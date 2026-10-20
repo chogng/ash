@@ -16,9 +16,16 @@
 
 ## Windows 开发实验资源清理
 
+- [ ] 清理 2026-10-21 Rust 模块热更新试验的 `.build/cargo-live`。该独立缓存方案未采用，当前入口已复用正常 Cargo 缓存；目录删除被自动审批以“策略阻止”拒绝，未改用其他方式删除。运行与测量证据另存 `.build/build-health/rust-live-20261021/`。
 - [ ] 清理 Windows 测量实验目录。既有记录 `.build/perf-win-edit-20261018/round4-cleanup.json` 曾核对五个临时目录及 staging 无进程引用，但删除被自动审批拒绝。本轮该记录不在当前检出，未重新验证目录状态或执行删除。
 - 保存 Rust 到 App 可用的 15 秒目标尚未达到。2026-10-19 在 `3df4938da` 暂停开发与同步后完成迁移修复的 20 次匹配尝试：空库成功中位数 20.06 → 19.80 秒（5/5 → 5/5），100 条历史会话 22.27 → 21.15 秒（3/5 → 5/5），历史成功样本快 1.12 秒（5.0%）；仍差 4.80／6.15 秒。空库差异很小，不能用成功样本的条件中位数替代总体延迟或失败率结论。原始样本与阶段成本见 `docs/build.md` 完整循环复测及 `.build/perf-win-edit-20261019-migration/q2-summary.json`。
 - 本轮复测完成，修复内容与正常构建已恢复；此前第五轮的 diff 适配器边界优化仍保留，旧源码上的约 25 秒结果不作为本轮基线。15 秒是体验目标，并非测量推导的性能下限；若继续优化，需根据发布前约 13.7 秒及历史发布后约 7.4 秒的成本选择方向。上述结果仅覆盖 diff 适配器编辑；本机卷均为 NTFS，没有 Dev Drive。
+
+## Rust 函数级增量编译
+
+- [ ] 将已验证的同 crate 跨文件标量图扩展到跨 crate 和非标量 Rust：先闭合准确的 artifact target／feature／cfg 与实例身份，再处理一般语义依赖／布局失效、泛型单态化、引用／堆对象、drop／unwind、间接调用和更多实际注册入口。独占 helper 可直接更新，共享原生调用者与上下文变化退回整模块；路径／Git 依赖及其声明的构建脚本输入已纳入完整 rustc 检查上下文复用，真实 App Server 注册 diff 链路已达数百毫秒；owner 自身 build script 与上述跨 crate／非标量代码生成仍需后续实现。RA MIR 操作数没有公开接口，不能把现有标量链路视为通用 Rust JIT。实现与测量见 [标量 MIR 边界](docs/rust-analysis.md#标量-mir-与本机代码边界)、[跨文件测量](docs/build.md#2026-10-21同-crate-跨文件依赖失效与真实业务函数) 和 [App Server 实测](docs/build.md#2026-10-21路径依赖检查复用与-app-server-真实热更新)。
+
+- [ ] **复核 · 构建工具全量验证**：本轮 `pnpm --dir build run test:prepared` 观察到导出 SDK 的 Academy 类型错误、Windows Host watcher 多余失败通知、Electron 生命周期退出等待及符号链接权限失败；分别沿 `build/builtin/editorClients.test.ts`、`build/desktop/host.test.ts`、`build/desktop/launch/electron.test.ts` 和 `build/testRunners.test.ts` 复核。已补 live builder 的 fixture 文件及后端 Python owner 清单，热更新相关 39 项和 build 类型检查通过，不能将这些定向结果写成全量通过。范围见 [本轮验证](docs/build.md#2026-10-21路径依赖检查复用与-app-server-真实热更新)。
 
 ## Remote / Browser 多根工作区 · TODO
 

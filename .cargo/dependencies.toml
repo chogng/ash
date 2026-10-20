@@ -89,8 +89,8 @@ reason = "Current upstream API families: 0.2.17 via mxc-sdk, ash-app-server, ash
 
 [[multiple_versions]]
 name = "hashbrown"
-versions = ["0.15.5", "0.16.1", "0.17.1"]
-reason = "Current upstream API families: 0.15.5 via cached, lru, petgraph; 0.16.1 via accesskit_consumer, accesskit_macos, accesskit_windows and other importers; 0.17.1 via glifo, hashlink, indexmap and other importers. Review the introducing packages together before changing this set."
+versions = ["0.14.5", "0.15.5", "0.16.1", "0.17.1"]
+reason = "0.14.5 is retained by rust-analyzer's dashmap 6.2.1, rowan 0.17 and ra_ap_intern. Existing consumers use 0.15.5 via cached/lru/petgraph, 0.16.1 via accesskit, and 0.17.1 via glifo/hashlink/indexmap."
 
 [[multiple_versions]]
 name = "heck"
@@ -209,8 +209,8 @@ reason = "Current upstream API families: 1.0.69 via thiserror; 2.0.21 via thiser
 
 [[multiple_versions]]
 name = "toml_datetime"
-versions = ["0.7.5+spec-1.1.0", "1.1.1+spec-1.1.0"]
-reason = "Current upstream API families: 0.7.5+spec-1.1.0 via toml; 1.1.1+spec-1.1.0 via toml_edit. Review the introducing packages together before changing this set."
+versions = ["0.7.5+spec-1.1.0", "1.1.2+spec-1.1.0"]
+reason = "0.7.5 serves existing toml 0.9 consumers; 1.1.2 is required by rust-analyzer's toml 1.1 and is shared with toml_edit."
 
 [[multiple_versions]]
 name = "unicode-width"
@@ -427,3 +427,23 @@ reason = "Matches phf 0.12.1 (chrono-tz) and phf 0.14.0 (katex-rs and its build-
 name = "prettyplease"
 versions = ["0.2.37", "0.3.0"]
 reason = "0.2.37 via bindgen and prost-build uses syn 2; katex-rs -> bon-macros uses prettyplease 0.3.0 with syn 3."
+
+[[multiple_versions]]
+name = "embedded-io"
+versions = ["0.4.0", "0.6.1"]
+reason = "Both optional IO API families are retained by postcard 1.1.3, used by the unmodified rust-analyzer proc-macro protocol. No embedded IO types cross the bridge."
+
+[[multiple_versions]]
+name = "pulldown-cmark"
+versions = ["0.13.4", "0.9.6"]
+reason = "Ash's Markdown consumers use 0.13.4. Upstream rust-analyzer 0.0.358 and pulldown-cmark-to-cmark 10 retain the 0.9 event API inside the standalone analysis process."
+
+[[multiple_versions]]
+name = "rustc-hash"
+versions = ["1.1.0", "2.1.3"]
+reason = "rust-analyzer's rowan 0.17 keeps rustc-hash 1.1; the existing workspace and other rust-analyzer libraries share 2.1.3. Hash types stay within their owning libraries."
+
+[[multiple_versions]]
+name = "toml"
+versions = ["0.9.12+spec-1.1.0", "1.1.8+spec-1.1.0"]
+reason = "Ash configuration and build tools retain toml 0.9; unmodified rust-analyzer 0.0.358 uses toml 1.1 for Cargo configuration. The bridge exchanges JSON, not either TOML value type."

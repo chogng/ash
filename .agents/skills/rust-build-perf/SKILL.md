@@ -9,6 +9,8 @@ Improve the build loop the developer actually uses. Establish which command, pac
 
 Measure whether the change helped. Follow the [measurement limits](../../../docs/build.md#rust-依赖检查与构建测量). Do not relax CI thresholds to hide regressions.
 
+For Ash's function-level compiler, analysis bridge, dependency-check reuse, or running App Server hot updates, use [rust-hot-reload-optimize](../rust-hot-reload-optimize/SKILL.md) to select that pipeline and its real edit-to-RPC measurement.
+
 ## Investigate
 
 1. Read the existing [build commands and measurement limits](../../../docs/build.md#构建测量), [Rust dependency rules](../rust-development/SKILL.md#dependencies), and [Rust validation rules](../rust-development/SKILL.md#validation). Check prior reports under `.build/build-health/` and the command used in the reported workflow. Measure the package and end-to-end build path that can demonstrate the complaint; a package result alone does not establish a speedup for the whole build.

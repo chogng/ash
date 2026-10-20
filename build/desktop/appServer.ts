@@ -1,9 +1,10 @@
 import { type ChildProcess, spawn } from 'node:child_process';
-import { type FSWatcher, readFileSync, watch } from 'node:fs';
+import { type FSWatcher, readFileSync, statSync, watch } from 'node:fs';
 import { isAbsolute, relative, resolve, sep } from 'node:path';
 
 import { generateProtocol, protocolSourceDirectories } from '../protocol/generate.ts';
 import { pythonCommand } from '../python.ts';
+import { LiveBuilder } from './liveBuild.ts';
 
 const repositoryRoot = resolve(import.meta.dirname, '../..');
 const terminalCrates = new Set<string>(JSON.parse(readFileSync(resolve(repositoryRoot, 'build/source-layout.json'), 'utf8')).terminalCrates);
@@ -20,7 +21,7 @@ export async function prepareAppServer(javascriptRuntime: 'host-provided-node' |
 	for (const arguments_ of commands) {
 		const { command, args } = pythonCommand(arguments_);
 		await new Promise<void>((resolvePromise, reject) => {
-			const child = spawn(command, args, { cwd: repositoryRoot, env: process.env, stdio: 'inherit', windowsHide: true });
+			const child = spawn(command, args, { cwd: repositoryRoot, env: process.env, stdio: ['ignore', 'inherit', 'inherit'], windowsHide: true });
 			child.once('error', reject);
 			child.once('close', (code, signal) => {
 				if (code === 0) resolvePromise();
@@ -51,10 +52,11 @@ export function shouldRebuildWorkspaceManifest(file: string | null): boolean {
 	return file === 'Cargo.toml' || file === 'Cargo.lock';
 }
 
-export async function watchAppServer(options: { skipInitial?: boolean; javascriptRuntime?: 'host-provided-node' | 'packaged-node'; onDidBuild?: () => Promise<void>; } = {}): Promise<() => void> {
+export async function watchAppServer(options: { skipInitial?: boolean; javascriptRuntime?: 'host-provided-node' | 'packaged-node'; onDidBuild?: () => Promise<void>; environment?: NodeJS.ProcessEnv; } = {}): Promise<() => void> {
 	let activeBuild: ChildProcess | undefined;
 	let buildRequested = !options.skipInitial;
 	let protocolRequested = buildRequested;
+	let fullBuildRequired = buildRequested;
 	let protocolDirectories: string[] | undefined;
 	let manifestRevision = 0;
 	let protocolManifestRevision = -1;
@@ -64,20 +66,41 @@ export async function watchAppServer(options: { skipInitial?: boolean; javascrip
 	let building = false;
 	const cancellation = new AbortController();
 	const watchers: FSWatcher[] = [];
+	const watchStarted = Date.now();
+	const observedFiles = new Map<string, string>();
+	const environment = options.environment ?? process.env;
+	const liveDirectory = options.javascriptRuntime !== 'packaged-node' && environment.ASH_RUST_LIVE_DIRECTORY?.trim();
+	const liveBuilder = liveDirectory ? new LiveBuilder(repositoryRoot, environment) : undefined;
 
 	// The Rust author SDK remains a backend build input after leaving crates/.
 	for (const source of [sharedRustSource, rustSdkSource]) {
 		const ignoredTarget = relativeWatchedDirectory(source, targetDirectory);
-		watchers.push(watch(source, { recursive: true }, (_event, file) => requestBuild(source, file, fileName => shouldRebuildAppServer(fileName, ignoredTarget))));
+		watchers.push(watch(source, { recursive: true }, (event, file) => requestBuild(source, file, event, fileName => shouldRebuildAppServer(fileName, ignoredTarget))));
 	}
-	watchers.push(watch(repositoryRoot, (_event, file) => requestBuild(repositoryRoot, file, shouldRebuildWorkspaceManifest)));
+	watchers.push(watch(repositoryRoot, (event, file) => requestBuild(repositoryRoot, file, event, shouldRebuildWorkspaceManifest)));
 	console.log('[app-server] Watching Rust App Server sources');
 	if (buildRequested) void drainBuilds();
 	return stop;
 
-	function requestBuild(watchRoot: string, file: string | null, shouldRebuild: (file: string | null) => boolean): void {
+	function requestBuild(watchRoot: string, file: string | null, event: string, shouldRebuild: (file: string | null) => boolean): void {
 		if (stopped || file === null || !shouldRebuild(file)) return;
 		const source = resolve(watchRoot, file.replaceAll('\\', '/'));
+		if (process.platform === 'win32' && event === 'change') {
+			try {
+				// NTFS access-time notifications can accompany RA/source hashing.
+				// Content writes change ctime even when size/mtime are preserved.
+				// Renames and unreadable/deleted inputs always reach the build gate.
+				const stat = statSync(source);
+				const stamp = `${stat.dev}:${stat.ino}:${stat.size}:${stat.mtimeMs}:${stat.ctimeMs}`;
+				const previous = observedFiles.get(source);
+				observedFiles.set(source, stamp);
+				if (stamp === previous || (previous === undefined && stat.mtimeMs < watchStarted && stat.ctimeMs < watchStarted)) return;
+			} catch {
+				observedFiles.delete(source);
+			}
+		} else {
+			observedFiles.delete(source);
+		}
 		changedSources.add(source);
 		if (source.endsWith(`${sep}Cargo.toml`) || source.endsWith(`${sep}Cargo.lock`)) manifestRevision++;
 		clearTimeout(debounce);
@@ -92,12 +115,23 @@ export async function watchAppServer(options: { skipInitial?: boolean; javascrip
 		building = true;
 		try {
 			while (buildRequested && !stopped) {
+				// A timer may have queued this batch while an earlier build ran;
+				// newer saves can already be in it with another debounce pending.
+				// Consuming those saves must also consume their timer.
+				clearTimeout(debounce);
 				buildRequested = false;
 				const sources = [...changedSources];
 				changedSources.clear();
+				fullBuildRequired ||= sources.length === 0 || !liveDirectory || sources.some(source => {
+					const file = relativeWatchedDirectory(resolve(sharedRustSource, 'app-server-diff/src'), source);
+					return file === undefined || !file.endsWith('.rs');
+				});
 				let needsProtocol = protocolRequested || sources.some(source => source.endsWith(`${sep}Cargo.toml`) || source.endsWith(`${sep}Cargo.lock`));
 				protocolRequested = false;
 				try {
+					// Dependency/protocol builds retire the old semantic database before
+					// refreshing Cargo inputs. Adapter-only saves reuse it across edits.
+					if (fullBuildRequired) await liveBuilder?.stop();
 					if (protocolDirectories === undefined || protocolManifestRevision !== manifestRevision) {
 						const revision = manifestRevision;
 						protocolDirectories = await protocolSourceDirectories(cancellation.signal);
@@ -111,9 +145,13 @@ export async function watchAppServer(options: { skipInitial?: boolean; javascrip
 						needsProtocol = false;
 					}
 					cancellation.signal.throwIfAborted();
-					await runBackendBuild();
+					// Only the stateless adapter has a live producer. Shared algorithms,
+					// manifests and protocols may affect other consumers and still rebuild.
+					const liveOnly = !fullBuildRequired;
+					await runBackendBuild(liveOnly);
+					if (!liveOnly) fullBuildRequired = false;
 					cancellation.signal.throwIfAborted();
-					await options.onDidBuild?.();
+					if (!liveOnly) await options.onDidBuild?.();
 				} catch (error) {
 					// A failed export must be retried before the next backend build, even for a business save.
 					protocolRequested ||= needsProtocol || protocolDirectories === undefined || protocolManifestRevision !== manifestRevision;
@@ -125,14 +163,17 @@ export async function watchAppServer(options: { skipInitial?: boolean; javascrip
 		}
 	}
 
-	function runBackendBuild(): Promise<void> {
+	function runBackendBuild(liveOnly: boolean): Promise<void> {
+		if (liveOnly && liveBuilder) return liveBuilder.build();
 		return new Promise<void>((resolvePromise, reject) => {
 			// Web owns a packaged Node runtime; Electron supplies Node from its host.
 			const buildArguments = options.javascriptRuntime === 'packaged-node'
 				? ['-B', 'build/prepare.py', '--javascript-runtime', 'packaged-node']
 				: ['-B', 'build/desktop/develop.py', '--protocol-prepared'];
 			const { command, args } = pythonCommand(buildArguments);
-			const child = spawn(command, args, { cwd: repositoryRoot, env: process.env, stdio: 'inherit', windowsHide: true });
+			// Builds never read terminal input. Inheriting the watcher's active stdin
+			// pipe can stall the Windows Python launcher before it executes the script.
+			const child = spawn(command, args, { cwd: repositoryRoot, env: environment, stdio: ['ignore', 'inherit', 'inherit'], windowsHide: true });
 			activeBuild = child;
 			child.once('error', error => {
 				activeBuild = undefined;
@@ -153,5 +194,6 @@ export async function watchAppServer(options: { skipInitial?: boolean; javascrip
 		clearTimeout(debounce);
 		for (const watcher of watchers) watcher.close();
 		activeBuild?.kill('SIGTERM');
+		void liveBuilder?.stop();
 	}
 }

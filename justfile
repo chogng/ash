@@ -84,6 +84,14 @@ dependency-security *args:
 bench-build *args:
     {{ python }} -B scripts/benchmark.py {{ recipe_args }}
 
+# Publish the opt-in stateless Rust development module without restarting the host.
+live-build:
+    {{ python }} -B build/desktop/live.py
+
+# Query the standalone, unmodified rust-analyzer library bridge.
+analyze-rust *args:
+    {{ python }} -B build/desktop/analyze.py {{ recipe_args }}
+
 # Trim idle Cargo caches immediately, overriding the periodic maintenance budgets.
 prune-build-cache *args:
     {{ python }} -B -m build.lib.cargo_cache {{ recipe_args }}

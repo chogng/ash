@@ -43,6 +43,7 @@ PACKAGE_DIRECTORY = re.compile(r"packages/[0-9A-Za-z][0-9A-Za-z.+-]*/[a-f0-9]{64
 BUILD_ENVIRONMENT_VARIABLES = frozenset(
     {
         "AR",
+        "ASH_RUST_LIVE_DIRECTORY",
         "CC",
         "CXX",
         "CMAKE",

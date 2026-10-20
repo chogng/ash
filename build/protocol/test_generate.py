@@ -5,6 +5,8 @@ import json
 import shutil
 import tempfile
 import unittest
+import io
+from contextlib import redirect_stdout
 from pathlib import Path
 from unittest.mock import patch
 
@@ -12,6 +14,27 @@ from build.protocol.generate import protocol_source_directories
 
 
 class ProtocolWatchInputTests(unittest.TestCase):
+    def test_directory_query_does_not_prepare_or_rewrite_protocol_artifacts(self):
+        from build.protocol.generate import main
+
+        with (
+            patch("sys.argv", ["generate.py", "--source-directories"]),
+            patch(
+                "build.protocol.generate.protocol_source_directories",
+                return_value=["/workspace/crates/protocol"],
+            ) as discovery,
+            patch(
+                "build.protocol.generate.generate_protocol",
+                side_effect=AssertionError(
+                    "directory discovery must not prepare protocols"
+                ),
+            ),
+            redirect_stdout(io.StringIO()) as output,
+        ):
+            main()
+        discovery.assert_called_once_with()
+        self.assertEqual(json.loads(output.getvalue()), ["/workspace/crates/protocol"])
+
     def test_path_contracts_and_macros_are_included_without_registry_or_git_sources(
         self,
     ):

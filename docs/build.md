@@ -69,6 +69,34 @@ pnpm 根据 `devEngines.runtime` 下载并使用固定的 Node 版本，通常�
 
 仅前端、只监听前端、完整 Web 和独立编辑器的区别及对应命令见 [前端启动方式](frontend.md#启动项目)。
 
+#### Rust 模块与叶函数热更新实验
+
+`ash-build` 是 Ash 自有的开发构建器，当前覆盖无状态的 `ash-app-server-diff` 适配器及其中一个登记的标量叶函数 `zero_based_line_index`。完整模块使用当前固定的 Cargo/rustc 检查和增量构建；符合限制的函数体修改会提取成无第三方依赖的临时 crate，由同一 Cargo/rustc 单独检查和编译。不需要安装或运行 rust-analyzer。构建器尚未接入通用函数语义分析、MIR 失效跟踪或 Cranelift JIT，不能当作 ra-jit 的等价替代；独立分析能力见下方桥接入口。
+
+在启动 Electron 开发实例的同一终端设置独立目录，例如 Windows PowerShell：
+
+```powershell
+$env:ASH_RUST_LIVE_DIRECTORY = "$PWD\.build\desktop\dev\rust-live"
+just live-build
+pnpm dev
+```
+
+正常开发构建会启用 App Server 的 `rust-live` feature。此路径还要求 `debug_assertions`，默认 release 配置不编入装载路径。未设置环境变量时保留普通构建流程；退出实验时移除该变量并重新执行正常开发准备。
+
+Electron Rust watcher 仅把 `crates/app-server-diff/src/` 内的 `.rs` 修改交给模块构建器；共享 diff 算法、其他 crate、协议和 Cargo 清单修改仍执行普通后端构建。已有完整构建失败时，后续模块保存也必须先重试该完整构建。Web watcher 保留原来的构建与选择流程。
+
+初始化和 `just live-build` 建立完整模块基线。watcher 的适配器保存会请求常驻 `ash-build` 的函数路径，并通过独立的未修改 RA 桥接更新内存源码、检查类型／布局和 MIR：仅当其余源码、清单、工具链、模块代次以及函数签名和行／列占位保持一致时，单独编译该函数。当前支持参数、整数／布尔字面量、基本运算、条件表达式及列出的 `usize` 饱和／环绕算术方法；局部绑定、宏、外部名字、扩展方法、泛型和其他函数均回到完整模块编译。布局变化也保守回退，以免改变后续 `line!()`／`column!()` 的值。一次性 Python `--functions-only` 参数也通过相同桥接，但每次重载 RA；watcher 使用 `--serve` 复用分析库。依赖／协议保存关闭旧会话后执行完整构建，退出 watcher 通过 EOF 释放子进程及缓存租约。
+
+函数 DLL 只交换 `usize` 和状态码，按完整模块的独立代次隔离。每次 diff 请求选择一次函数镜像，所有行和 hunk 使用同一代；编译错误保留上一版本，函数 panic 则用模块原生实现重新计算整个请求。编译器相关的语法与 TOML 依赖只在 `ash-dev-build` 的 `compiler` feature 下启用，宿主仅依赖装载器。生成 crate 复制实际 `dev`／`dev-small` 配置及 diff 包覆盖值，复用工作区 Cargo 配置中的目标、链接器、CRT 和缓存；自定义编译器／flags 等环境覆盖会保守回到完整模块。
+
+模块通过版本化 C ABI 传递有界 JSON 字节，宿主同步复制返回内容，双方各自释放自己的 Rust 分配。模块发布在协议 schema hash 隔离的目录中，用内容摘要命名 DLL／动态库，校验可装载性和 ABI 后原子更新 `current.json`；借用检查或其他编译错误不会前移指针。请求持有当前模块的引用，更新时旧请求可以完成，之后的新请求使用新模块。加载异常保留上一可用模块；没有可用模块时使用宿主编译时的适配器并记录原因。
+
+模块与函数对象暂不自动回收，清理实验发布目录前先退出加载它的开发宿主。构建产物继续使用现有 Cargo 缓存租约和预算，保持当前静态 CRT、链接器和 profile 参数。本地 ra-jit 提供了失效边界、不可变产物和运行时替换的设计参考；该实现未复制或依赖其 rust-analyzer 分支，也未改动本地 ra-jit 检出。
+
+#### 未修改 rust-analyzer 的分析桥接
+
+`just analyze-rust <源路径> <UTF-8 字节偏移>` 通过独立进程调用上游 `ra_ap_* = 0.0.358`，不依赖 ra-jit 分支。已在真实 Ash 工作区验证函数、类型、布局、结构化 MIR 摘要、引用、声明宏及内存增量分析；过程宏和生成源码通过独立 Cargo fixture 验证。`ash-build` 已将桥接用于已注册标量函数的编译准入；机器码继续由 rustc 生成。使用、JSON 协议和能力缺口见 [Rust 分析桥接](rust-analysis.md)。
+
 #### 构建与维护
 
 | 命令                                              | 结果                                                                       |
@@ -799,6 +827,179 @@ Windows x64 上先用 Core 回归复现原实现加载无关历史的失败，�
 证据位于 `.build/perf-win-edit-20261019-migration/`：`q2-summary.json`、`q2-diagnostics-summary.json`、`q2-progress.json`、`q2-*-edit-ready.json`、watcher 日志、链接进程与 Cargo timings。汇总核对了同一 HEAD、测量脚本、组内源码指纹、归一化输入指纹、种子及前端副本。`edit-ready-q2.mjs` SHA-256 为 `12e16bdb6f53e3bf7401dd3b1a35cc55962728250c525e692543cc30a9206cab`；归一化输入为 `128e784cca53c4c39394d93885c58d4492e3902dfeb23d9839a43e525b9c22fe`。先测基线再测候选，样本量有限，未进行交替随机实验或冷构建／RSS／其他平台测量。
 
 此前的 `candidate-*`、`v2-*`、`retry*`、`frozen-*`、`quiet-*` 尝试均保留。它们分别受到 Git refs 更新、Cargo 锁、前端重建或外部 rebase 的影响，其中 `quiet-*` 在候选空库第 4 次被输入守卫中止；没有将这些组混入本次匹配对照，也没有把不同源码上此前约 25 秒的结果当作本次修复基线。
+
+#### 2026-10-21：Windows x64 Rust 模块热更新原型
+
+在当前检出 `937af130ec21b2c9a213250ce165eee722c078f2` 加本轮修改、同一台 i5-12600KF Windows x64 上验证 `ash-build`。使用固定 Rust 1.98.0、LLD、现有静态 CRT 和 `dev-small` 参数；正式宿主与开发模块均由官方 Cargo/rustc 构建。没有接入 ra-jit 的分析或代码生成核心，没有函数级编译结论。
+
+预热后分别修改 diff 输入上限的常量，每次使用新值。对照通过正常 `scripts/cargo.py` 重建启用 `rust-live` feature 的 App Server，但进程不设置模块目录，再启动 stdio RPC 并确认新上限生效；候选调用模块构建入口，在同一个运行中的 stdio App Server 上确认相同种类的行为变化，同时验证 Unicode UTF-16 范围保持一致。两边各做一次校准后记录三次有效样本，所有长尾保留：
+
+| 路径                      | 保存至新规则生效，三次秒数 |  中位数 | 构建入口耗时中位数 |
+| ------------------------- | -------------------------- | ------: | -----------------: |
+| 宿主重建与 stdio 进程重启 | 79.07 / 14.99 / 18.19      | 18.19 s |             6.93 s |
+| 模块增量构建与原进程装载  | 3.98 / 4.10 / 3.99         |  3.99 s |             3.99 s |
+
+上述构建入口耗时包含包装器、Cargo 和链接，不是纯 rustc 时间。79.07 秒样本中构建入口占 67.70 秒，其长尾原因未定位。候选先测、对照后测，各自的原生依赖图均已预热，未进行随机交替配对，不能用这一组小样本承诺稳定加速比例。对照日志每次仅重编译 diff 适配器和薄 App Server，候选仅重编译适配器与动态模块；完整宿主首次准备和模块首次准备不计入热编辑样本。没有清理共享 Cargo 缓存或改变系统安全设置。
+
+另通过真实 `watchAppServer` 路径分别保存一次输入上限修改和一次 `zero_based_line_index` 函数体修改，从落盘到原 stdio 进程返回新规则／新行号分别为 5.02 秒和 6.08 秒，PID 各自保持不变，宿主未重建或重启。它们是单次功能验收，不能充当稳定延迟上限；也不是 Electron 窗口的完整交互测量。第一轮 watcher 验收失败后定位到 Windows Python 启动器继承正在读取的 stdin 管道而阻塞；后台构建关闭 stdin 后上述两个场景通过，首次失败日志保留。
+
+模块路径实际触发了 rustc 的 E0382 借用检查错误，确认发布指针不变且上一最新规则仍可调用。原生 DLL 回归覆盖并发旧调用跨越替换、ABI 不匹配、校验和损坏、非法／过大／缺失清单和 panic 边界；领域适配器回归核对 JSON ABI 的返回结果与错误。试验常量、函数体和错误源码均已恢复，正常模块及宿主恢复构建通过。此次没有冷构建、RSS、发布构建、其他系统或完整 Electron 窗口的性能结论。
+
+原始计时、构建日志、stdio 日志、PID 和源文件摘要在 `.build/build-health/rust-live-20261021/`，主记录为 `results.json`、`watcher-result.json` 与 `function-watcher-result.json`。复现实验脚本为 `.build/ash-build-eval.py`、`.build/ash-build-watch-eval.mjs` 和 `.build/ash-build-function-watch-eval.mjs`；运行前应使用新的输出目录，避免覆盖本轮证据。
+
+Windows 本机验证通过：`just verify ash-dev-build --lib` 与 `just verify ash-app-server-diff-live --lib` 共执行 4 项 Rust 回归，并完成各自 check／warnings；正常 `scripts/cargo.py build --locked -p ash-app-server --bin ash-app-server --profile dev-small --features rust-live --target x86_64-pc-windows-msvc` 构建通过，`just rust-warnings ash-app-server --profile dev-small --features rust-live --target x86_64-pc-windows-msvc` 全目标检查通过。`node --test build/desktop/appServer.test.ts` 的 26 项回归、`python -B -m unittest build.desktop.test_live build.lib.test_package_binaries build.desktop.test_develop` 的 23 项回归通过；`just test-python scripts` 运行 202 项、跳过 7 项，通过。构建工具 TypeScript 143 文件检查、`just dependencies`（230 个 workspace 成员、85 项已审核多版本）、改动文件格式和 `git diff --check` 均通过；未执行 Bazel 构建。最终源码摘要、二进制摘要和实际重编译单元另存 `validation.json`。
+
+#### 2026-10-21：Windows x64 标量叶函数编译原型
+
+在上述模块原型之后，增加 `zero_based_line_index(usize) -> usize` 的受限函数路径。此处对照为当前实现的完整模块构建，两边均使用同一个运行中的 stdio App Server；不与上一节的重建／重启宿主结果拼接比较。代码基于 `937af130ec21b2c9a213250ce165eee722c078f2` 加本次工作区修改；Windows x64、i5-12600KF、rustc 1.98.0、LLD、静态 CRT 和 `dev-small` 配置保持一致。函数 crate 复制 diff 包的 `opt-level = "s"` 和 `codegen-units = 256`，没有通过关闭检查或降低优化来制造差异。
+
+两条路径预热后，交替三组“函数、模块”保存。每次修改同一函数的 `saturating_sub` 参数为新值，通过九行 diff 的实际行号验证效果，而非仅检查发布日志。顺序固定，未随机化；测量期间无其他 Rust 构建，未清理共享缓存，正常缓存预算维护发生在预热之前。记录从源码写入到实际 RPC 返回新结果的时间，包含 Python 入口、工具准备、Cargo 和装载：
+
+| 当前路径               | 三次秒数           | 中位数 |
+| ---------------------- | ------------------ | -----: |
+| 提取并单独编译叶函数   | 2.93 / 2.87 / 2.79 | 2.87 s |
+| 增量构建完整 diff 模块 | 3.99 / 3.97 / 4.11 | 3.99 s |
+
+函数路径的 Cargo 日志只重编译 `ash-live-function`，完整模块的 `current.json` 字节保持不变；模块路径实际重编译 diff 适配器及其 cdylib。两边始终使用 PID 32500。单独通过实际 `watchAppServer` 保存一次函数体修改，落盘到新结果为 3.71 秒，PID 32052 保持不变；该单次数据包含 watcher 防抖，不能当作稳定上限。没有测量完整 Electron 窗口、RSS、冷构建、其他系统或通用 Rust 函数的性能。
+
+真实边界验证同时覆盖：函数内类型错误 E0308 不改变函数或模块指针，上一函数仍可调用；函数运行时除零 panic 被 DLL 捕获，整份 diff 回到当前完整模块的原生投影；加入局部绑定后选取完整模块构建。所有受控源码均恢复，并重新发布原始模块。原始样本、逐次构建日志、服务日志、脚本及摘要在 `.build/build-health/rust-functions-final-20261021/`，主记录为 `results.json`、`function-watcher-result.json` 与 `validation.json`；早期测量另保留于 `.build/build-health/rust-functions-20261021/`。
+
+本轮 Windows 验证：`just verify ash-dev-build --lib --features compiler`、`just verify ash-app-server-diff --lib`、`just verify ash-app-server-diff-live --lib` 合计 10 项 Rust 回归，并完成各包 check／warnings；正常 App Server 构建及其 `dev-small`／`rust-live` 全目标 warnings 检查通过。watcher 26 项、Python 构建 24 项、脚本 202 项（7 项跳过）通过；构建工具 TypeScript 143 文件、依赖检查、Ruff、改动文件格式与 `git diff --check` 通过。Bazel 仅同步了源资源及编译器 feature 声明，未运行其构建。当前函数选择器仍不是语义数据库；一般 Rust 的宏展开、单态化、依赖／布局失效和常驻 JIT 留在根 `TODO.md`。
+
+#### 2026-10-21：未修改 RA 接入常驻函数构建与热更新
+
+`ash-build` 已通过独立 JSON 进程接入未修改的 `ra_ap_* = 0.0.358`。常驻 watcher 会话按当前修订查询函数、类型、原生标量布局、调用解析和 MIR，再由 Cargo/rustc 编译已注册的 `zero_based_line_index(usize) -> usize`。运行中的 diff 请求按既有 C ABI 选择新函数 DLL。工具链、优化、LLD、静态 CRT 和正确性检查均保留；未增加 Cranelift 后端或修改上游 RA。协议、准入、失效及退出规则见 [Rust 分析桥接](rust-analysis.md#ash-build-构建会话)。
+
+在同一台 Windows x64 i5-12600KF、Rust 1.98.0、`dev-small` 上，对同一函数的减量参数逐次换新值，通过真实 60 行 stdio diff 的所有行号验证行为。五轮轮换函数／模块顺序，后面三轮加入正常宿主重建与重启；所有路径均先预热，正常重启复用同一个已初始化的 `ASH_HOME`。计时从落盘前到新 RPC 结果返回，未计入独立准备，未触碰共享缓存。函数和模块路径始终使用同一 PID 33664，函数路径始终复用编译器 PID 9868；函数分析修订从 2 连续增加到 6，报告源文件摘要逐次与磁盘一致。
+
+| 路径                          | Cargo 编译／链接中位数 | 落盘至新 RPC 结果的全部样本        | 全流程中位数 |
+| ----------------------------- | ---------------------: | ---------------------------------- | -----------: |
+| 正常宿主重建与 stdio 重启     |                 5.28 s | 18.33 / 15.92 / 18.08 s            |      18.08 s |
+| 完整 diff 模块热更新          |                 1.53 s | 4.18 / 4.14 / 4.42 / 4.33 / 4.17 s |       4.18 s |
+| RA 准入后单独编译函数并热更新 |                 0.27 s | 1.20 / 1.00 / 1.09 / 1.05 / 1.20 s |       1.09 s |
+
+Cargo 列取对应日志的 `Finished` 时间：普通路径实际重编译 diff 和薄宿主，模块路径重编译 diff 和 cdylib，函数路径只重编译生成的 `ash-live-function`。它们的输入范围不同，不是更换 rustc 后端的对照。普通构建入口（含包装器）中位数为 7.03 秒；函数分析请求中位数为 7.10 毫秒，完整函数路径仍需约 1.09 秒。各阶段分别取中位数，不能直接相加。全流程相对模块约为 3.8 倍、相对重建／重启约为 16.6 倍；后一个差异包含免重启的收益，不全部来自编译。接入前独立三对基线为函数 2.90 秒、模块 4.51 秒，先后测量，仅用于解释常驻工具减少启动成本，不作为随机受控因果实验。
+
+另从真实 `watchAppServer` 验证连续四次保存：首次 22.54 秒，之后 2.02 / 1.35 / 1.42 秒，预热后中位数 1.42 秒。包含 250 毫秒防抖和 RPC 轮询，四次均未重建／重启宿主，只启动一次分析会话；PID 32608。这个场景使用 stdio 宿主及实际文件 watcher，没有启动 Electron 窗口。
+
+主配对测量后又关闭了 Cargo 子进程继承的 stdin，避免它与常驻服务竞争构建协议管道。最终代码重新通过上述 Rust 验证，并执行三次独立的真实函数更新：1.61 / 1.23 / 1.39 秒，中位数 1.39 秒，同一后端进程返回新结果；记录为 `.build/build-health/rust-bridge-finalcheck-20261021/`。此复核没有同时重测模块和宿主，不能把差异归因为 stdin 改动或混入主配对样本。当前观察应理解为预热后的函数路径约 1.1～1.4 秒，不能承诺每次固定 1.09 秒。
+
+新建分析会话并不便宜：匹配组的工具／工作区准备为 6.08 秒，首次函数请求 16.02 秒（其中分析 13.95 秒），合计约 22.10 秒。预热后的 RA `WorkingSet64` 瞬时约 1.98 GiB、私有提交约 2.02 GiB；这是单独 RA 进程的观测，不是进程树或峰值 RSS。此版本适合作为可选编译实验，不能据此认定它能减少整个应用的内存。首次完整宿主准备、下载和冷构建未纳入性能结论。`just bench-build` 在本机明确拒绝运行，因为 `/usr/bin/time` RSS 入口只支持 macOS／Linux；保留拒绝日志，没有伪造包级 clean／unchanged／touch 或 RSS 样本。
+
+实际故障验收确认：类型错误保留模块和函数的两个指针；除零 panic 回到当前完整模块的原生投影；局部绑定回退模块构建；主动终止 RA 后本次走 Cargo 模块，下一次重新加载桥接并恢复函数路径；EOF 退出编译会话及 RA 子进程。受控源码均恢复为原 SHA-256 `8e3f03bf1f7a6d5686b535087f913a0202c660264a1757ebc15219acb08379c4`，原始模块和正常宿主恢复构建通过。
+
+原始匹配样本、Cargo／分析／服务日志、逐次报告和脚本在 `.build/build-health/rust-bridge-matched-20261021/`；此前使用每次独立用户目录的对照保留在 `.build/build-health/rust-bridge-integrated-20261021/`，其 `watcher-results.json` 保存上述连续保存场景。接入前基线为 `.build/build-health/rust-bridge-before-20261021/`。不同组没有混合计算中位数，首次加载及全部长尾保留。正常回归为 `just verify ash-dev-build --lib --features compiler` 的 6 项测试及 check／全目标 warnings、30 项 Node 构建／watcher 回归、29 项 Python 构建相关回归、202 项脚本测试（7 项跳过）、145 文件 TypeScript 检查及改动文件格式检查。未执行其他操作系统、Bazel、发布或完整 Electron 交互性能验证。
+
+本地 ra-jit 参考固定在干净检出 `49bdeab6b9c6b23bf2f4b9734da3f046b6fe6092`，没有修改它。其编译器将自有 `hir-ty-codegen` 挂入 vendored RA 的 MIR 模块，包含完整 codegen、实例／依赖失效和可执行文件补丁；我们的桥接暂只消费分析结果并保留 rustc。上游 [公开基准](https://github.com/indexable-inc/ra-jit/blob/49bdeab6b9c6b23bf2f4b9734da3f046b6fe6092/docs/benchmarks.md) 中，单函数修改为 48～325 毫秒，但使用 EPYC／Linux、Rust 1.99 和其他项目，不能把其倍数直接套给 Ash。[真实 den 应用记录](https://github.com/indexable-inc/ra-jit/blob/49bdeab6b9c6b23bf2f4b9734da3f046b6fe6092/docs/live.md#in-den) 则将保存到补丁的 1.0～1.5 秒与补丁应用的 0.4～0.6 毫秒分开，说明“应用补丁耗时”不能当作完整编辑循环。
+
+该版本的 [Windows 平台说明](https://github.com/indexable-inc/ra-jit/blob/49bdeab6b9c6b23bf2f4b9734da3f046b6fe6092/docs/platforms.md#windows-x86-64-msvc) 已有 COFF 和 PE 文件补丁，`cargo ra-jit` 在 Windows 仍交回 Cargo，运行中热修改使用 macOS Mach API。本机也只有 Rust 1.98／stable，没有为了对照改动 Ash 工具链或安装 1.99，因此未声称完成 Windows 上与 ra-jit 同项目的对跑。若继续追求几十毫秒，需要验证独立的 MIR→Cranelift、实例／符号桥接、依赖／布局失效以及 Windows 代码发布边界；当前约 7 毫秒的分析查询说明分析不是预热后的主要耗时，但不能推导完整 JIT 的速度上限。
+
+#### 2026-10-21：公开 RA 语义、自有 MIR 与 Cranelift 百毫秒热更新
+
+在同一 Windows x64 i5-12600KF、Rust 1.98.0 和检出上，接通未修改 `ra_ap_* = 0.0.358` 的公开语义 API → 自有标量控制流 MIR → Cranelift 0.135.1 → 可执行映射。RA 的 MIR `Operand.kind` 为私有字段，没有把 debug 文本当 IR；完整上游 MIR 导出仍有接口缺口。局部绑定、分支、循环、整数转换、短路逻辑和同文件直接调用已进入普通标量函数路径，具体范围见 [标量 MIR 边界](rust-analysis.md#标量-mir-与本机代码边界)。宿主不链接 RA 或 Cranelift。
+
+每次先对精确源函数图执行 `rustc --emit=metadata`，再做独立代码生成；发布前重查磁盘快照。Cranelift 使用无优化快速生成，Rustc 对照仍继承 `dev-small` 中 diff 包的 `opt-level = "s"`、256 CGU 和既有链接设置。两者是开发工作流比较，包含消除 Cargo／系统链接的收益，不能当作同优化等级的编译器后端对跑，也没有运行时等速结论。没有跳过 rustc 检查、清理共享缓存、关闭系统安全设置或替换工具链。
+
+预热后六轮交替 Rustc／Cranelift 的先后顺序，逐次修改同一行号函数的减量参数；每次通过真实 60 行 stdio diff 的全部行号确认生效。始终使用 App Server PID 8604、编译器 PID 34224，模块指针不变，函数镜像在 Rustc DLL 与 Cranelift 代码间互换；每次核对分析修订、磁盘源摘要和镜像 SHA-256。随后在函数体中加入局部变量、`while` 和一个同文件 helper 调用，完整建立一次基线，再测五次函数更新。采样期间没有并行 Rust 构建。
+
+| 路径                                | 落盘到新 RPC 的全部样本（毫秒）        |  中位数 |
+| ----------------------------------- | -------------------------------------- | ------: |
+| Rustc 提取叶函数、Cargo 链接        | 1069 / 1107 / 1926 / 997 / 1038 / 1013 | 1054 ms |
+| Cranelift 标量叶函数                | 112 / 136 / 171 / 153 / 139 / 132      |  137 ms |
+| Cranelift 局部变量、循环、helper 图 | 164 / 140 / 132 / 138 / 148            |  140 ms |
+
+此匹配组的叶函数完整循环约快 7.7 倍；Rustc 的 1926 毫秒长尾保留。Cranelift 叶函数的分析、rustc 校验、代码生成、发布中位数分别约 12.55／78.72／3.13／14.84 毫秒；普通标量函数分别约 14.14／69.68／2.63／14.68 毫秒。各阶段分别取中位数，不直接相加。普通标量函数组没有匹配的单函数 Rustc 提取基线，不能沿用叶函数倍数。此前正常宿主重建／重启的 18.08 秒属于另一组历史数据，本轮没有重测，不能拼成新的端到端加速倍数。
+
+真实 `watchAppServer` 路径保持现有 250 毫秒防抖。首轮暴露目录查询顺带执行完整协议准备、引出协议源文件通知并排队重建的问题，后续保存因此退回 4～5 秒；失败记录完整保留在 `.build/build-health/rust-cranelift-watcher-20261021/` 和 `rust-cranelift-watch-diagnostic-20261021/`。将 `--source-directories` 改为只查询 Cargo 图，协议准备仍由原有准备／契约保存入口负责。修复后在新目录重测相同的普通函数场景：首次 32.24 秒，后续 434／405／376／427／409 毫秒，中位数 **409 毫秒**。六次均为函数发布，只启动一个分析会话，没有模块发布、宿主重建或重启，PID 34732 不变。这是实际文件 watcher + stdio 宿主，未启动 Electron 窗口。
+
+毫秒级结果只适用于预热后的受支持标量图。直接配对组新建工具／工作区会话为 6.33 秒，首次函数分析／构建请求为 26.32 秒，合计约 32.65 秒；完整模块发布后的下一次分析请求也为 28.38 秒。首次加载、冷构建和内存问题没有被 Cranelift 消除。本轮没有重新采集 RSS／冷构建；Windows `bench-build` 不支持 `/usr/bin/time` RSS 的既有边界继续适用。
+
+独立小工作区将含多次循环、continue／break、局部遮蔽、短路逻辑、窄整数与有符号转换、嵌套调用及求值顺序的普通函数图交给真实 RA 进程，通过 CLI 生成／执行 Cranelift 代码，五组输入逐项与正常 rustc 可执行文件输出一致。最初探针误用 LF 字符串偏移选择 CRLF 落盘文件中的函数，按实际字节偏移修正后通过；没有把这一探针错误归因于 ABI。原始脚本、rustc 对照和 IR 位于 `.build/build-health/rust-cranelift-source-20261021/`。
+
+故障验收通过：不可变局部重赋值被 rustc E0384 拒绝，模块／函数指针均不变；本机除零返回失败状态，整份 diff 回到完整模块投影；修改 helper 本体使上下文失效并重建模块；不支持的数组／索引走 Cargo。镜像回归还覆盖旧映射保持可调用、错误目标／入口、校验和和损坏清单拒绝。所有临时函数体和 helper 已恢复为原 SHA-256 `8e3f03bf1f7a6d5686b535087f913a0202c660264a1757ebc15219acb08379c4`，原始模块恢复构建通过。
+
+直接配对证据为 `.build/build-health/rust-cranelift-matched-20261021/results.json`、逐次响应、worker／服务日志及 `probe.py`；最终 watcher 证据为 `.build/build-health/rust-cranelift-watcher-final-20261021/watcher-results.json`、日志和 `watcher-probe.mjs`。本机通过 `just verify ash-rust-build-ir --profile ci-test --lib`、`just verify ash-rust-analysis --profile ci-test`、`just verify ash-dev-build --profile ci-test --features compiler --lib` 和 `just verify ash-app-server-diff-live --profile ci-test --lib`，合计 21 项 Rust 测试及对应 check／warnings；无 compiler feature 的 runtime warnings 也通过。协议工具 17 项、Node 构建／watcher 30 项、仓库脚本 202 项（7 跳过）通过；依赖检查为 232 成员／89 项已审核多版本。未运行 Bazel、其他系统或完整 Electron 交互性能验证。
+
+本地 ra-jit 仍是未修改的 `49bdeab6b9c6b23bf2f4b9734da3f046b6fe6092`。我们的 137～140 毫秒受控标量编辑已经处于其公开单函数 48～325 毫秒的量级，但项目、硬件、平台、优化与能力覆盖不同，不能据此宣称追平或超过。ra-jit 覆盖泛型实例、跨 crate 依赖和可执行文件补丁；Ash 当前只热替换一个明确注册的 C ABI 入口，helper 本体仍保守重建，无非标量对象、drop、一般单态化和跨文件失效。下一阶段瓶颈先是 rustc 校验与首次语义加载，能力缺口仍需逐项补齐。
+
+#### 2026-10-21：同 crate 跨文件依赖失效与真实业务函数
+
+继续使用未修改的 RA 0.0.358、Rust 1.98.0、Cranelift 0.135.1 和同一 Windows x64 主机。标量 IR 升至 2，记录函数／常量／模块声明的准确源码、library 根与检查模式；支持同 crate 跨文件调用、别名、模块同名函数、字面量标量常量及 unsigned `div_ceil`。分析前批量覆盖源码，图摘要按源文件失效；共享依赖更新可原子替换多个入口，完全无关的源文件变化可直接复用代码。具体协议与限制见 [分析桥接](rust-analysis.md#多入口依赖失效与执行验证)。
+
+模块语义需要保留原 Cargo owner 的检查上下文：新图执行 `cargo check --locked --offline --package <owner> --lib --profile dev-small`，没有用扁平化函数文本冒充原 crate。编译器核对分析的 library 目标、全部依赖文本、构建配置及发布前的磁盘快照。条件编译暂保守退回 Cargo，`#[cfg(test)]` 测试模块除外；尚未绑定完整 artifact feature／cfg 配置。源文件或配置集合变化会重载 RA。机器码与 MIR 均按摘要不可变保存，多个入口共用一个发布指针；原 owner 检查失败时整组旧入口继续可调用。
+
+真实业务验证选用 `ash-utils-string` 的既有 `approx_bytes_for_tokens` 与 `approx_tokens_from_byte_count`，修改两者共享的 `APPROX_BYTES_PER_TOKEN`，使用含 0、最大 usize 和临界值的 12 个输入，共 24 个结果，逐项比较正常 Cargo 消费者、JIT 和独立整数运算预期。两个函数来自同一实际源文件；跨文件调用另由下方 App Server 和多模块 fixture 验证。JIT 在 `ash-build --serve-functions` 标量宿主执行这些真实函数，没有自动替换 App Server 所有 token 预算调用。
+
+对照的 Cargo 消费者直接依赖实际 `ash-utils-string`，复制根 lockfile 并核对外部依赖版本，使用相同工具链、target 和 `dev-small` 参数。每个 backend 在每轮计时前都先回到原常量 4 并预热，再分别执行相同的 5／6／7 修改；三轮交替先后顺序，测量时没有其他 Rust 构建。每次验证两个图均失效、MIR／机器码摘要及快照与落盘源码一致。
+
+| 路径                       | 保存到 24 个新结果的全部样本 |  中位数 |
+| -------------------------- | ---------------------------- | ------: |
+| Cargo 编译并启动正常消费者 | 1848 / 1681 / 1733 ms        | 1733 ms |
+| 常驻 Cranelift 标量宿主    | 854 / 894 / 843 ms           |  854 ms |
+
+这组完整循环约快 2.03 倍，但 **Cargo 纯构建中位数 844 ms，JIT build 请求中位数 847 ms，编译时间基本持平**。完整循环的收益主要来自避免正常消费者进程启动，不是 Cranelift 后端本身快了两倍。JIT 的分析、Cargo check、代码生成与镜像阶段中位数分别为 9.18／828.74／4.46 ms；保留的 Cargo 检查支配本轮成本。首次图构建 7.65 秒，其中分析 6.78 秒，不属于热更新样本。修复 profile 优先级、配置守卫及 Windows 路径后的该组三轮为最终确认；此前独立六轮为 Cargo 1668 ms／JIT 854 ms，没有合并两组样本或择优删除长尾。
+
+App Server 验证将既有 `zero_based_line_index` 本体暂移到另一个源文件的 `pub(super)` helper，保持原业务行为，随后只编辑该 helper。预热后五次保存到真实 60 行 stdio diff RPC 的全部新行号为 1096／1096／1072／1088／1085 ms，中位数 **1088 ms**；原 App Server PID 4988、编译器 PID 19788 不变，完整模块指针不变，图含两个函数且 helper 引用都在注册图内。分析、owner check、代码生成、发布阶段中位数为 7.59／1041.27／1.45／10.11 ms。随后同宿主五次完整模块更新为 2740／3146／2787／2523／2730 ms，中位数 **2740 ms**。两组按阶段顺序测量，没有交替配对，不据此给出精确加速倍数；本轮也没有重新测 Electron watcher 的 250 ms 防抖。
+
+此场景工具准备 6.64 秒，首次分析／更新请求 15.39 秒，其中分析 14.26 秒。首次 owner check 的未预热失败探测曾耗 36.21 秒，单独保留在 `rust-cross-file-appserver-final-20261021`，不放入预热样本。最初的 Windows 快照反斜杠／语义图正斜杠不一致导致错误退回模块，修复后增加真实快照路径回归。另一探针因默认 GBK 读取包含 UTF-8 的 baseline 失败，显式指定编码后重新完整验收；失败目录未删除。
+
+故障与失效验证通过：跨文件 helper 的 E0384 保留模块和函数指针，旧 RPC 结果不变；恢复合法 helper 后可继续更新；添加注册图外的第二个真实原生调用者后，helper 修改转为完整模块发布。多模块双入口 fixture 验证共享 helper／跨文件常量同时使两个入口失效，无关模块修改复用两份代码（5.54 ms），配置变化重建全部入口，条件导入被拒绝而旧入口保留，EOF 结束全部子进程。fixture 的小图 warm 更新约 138～140 ms，只说明桥接链路可达到该量级，不能代替真实业务包的 Cargo check 成本。
+
+全部业务实验源码已恢复：diff SHA-256 为 `8e3f03bf1f7a6d5686b535087f913a0202c660264a1757ebc15219acb08379c4`，token 源码为 `c8e813907f1a71e720ca2e97668a13af0e2c7b0a6cd2275c5caa65090e5e6144`；临时跨文件 helper 已移除，原始模块和正常业务消费者恢复构建通过。最终业务证据在 `.build/build-health/rust-cross-file-business-final3-20261021/`，此前六轮在 `rust-cross-file-business-complete-20261021/`；App Server 完整证据在 `rust-cross-file-appserver-complete-20261021/`，多模块失效证据在 `rust-cross-file-session-complete-20261021/`，各目录包含脚本、结果、日志及相关 MIR／清单。
+
+验证通过 `just verify ash-rust-build-ir --profile ci-test --lib`（4 项）、`just verify ash-rust-analysis --profile ci-test`（6 项）、`just verify ash-dev-build --profile ci-test --features compiler --lib`（16 项）、`just verify ash-utils-string --profile ci-test --lib`（12 项），包含相应 check／warnings；不启用 compiler 的 `ash-dev-build` runtime warnings 也通过。`just dependencies` 为 232 成员／89 项已审核多版本，`just test-python scripts` 为 202 项、7 跳过。Rust 与文档定向格式及 `git diff --check` 通过。未重新测 RSS、其他系统、Bazel 或完整 Electron UI。
+
+当前交付扩大到同 crate 的闭合标量图和注册入口依赖更新。跨 crate、非标量对象、drop、单态化、完整 cfg 配置及一般业务函数自动插桩仍未实现。继续优化应先解决原 owner 检查和首次语义加载成本，不能为取得几十毫秒而直接省略 rustc 正确性检查。
+
+#### 2026-10-21：复用 Cargo 检查上下文的百毫秒业务热更新
+
+沿用同一 Windows x64、Rust 1.98.0、未修改 RA 0.0.358、Cranelift 和 `dev-small`，优化原 owner 检查的调度成本。诊断中交替修改真实 `ash-utils-string` 共享常量，Cargo 检查为 912／856／802 ms；从 Cargo 捕获的原始完整 crate rustc 命令为 84／100／88 ms。两者都检查原模块树和外部依赖，后者仅把 metadata／incremental 输出改到私有目录。此诊断不包含代码生成或业务执行，也没有将其冒充完整热更新时间。
+
+实现通过 Cargo 的 `RUSTC_WRAPPER` 记录成功 library 检查的真实参数及环境差异。后续依旧启动 rustc 检查完整原 crate，保留 extern／cfg／lint／profile，只复用 Cargo 已确定的上下文，避免每次重新解析、调度整个工作区。没有跳过类型／借用检查，没有用提取函数检查替代业务 crate，也没有修改 RA、工具链或正常开发 profile。复用只在当前会话有效，输出／incremental 不写回 Cargo 缓存。
+
+复用范围先限定为无 owner build script、仅依赖 registry 的包。配置、环境、工具链安装和依赖产物均有失效守卫，registry 包完整文件集合及 build-script 产物也按内容核对；检查前后验证，同一请求的前置票据只复用一次，最多四线程并行摘要。符号链接、路径／Git 依赖、owner build script、外部跟踪输入或预算超限继续走 Cargo；Cargo 重编依赖时拒绝用旧 RA 上下文发布。边界和预算见 [完整 crate 检查](rust-analysis.md#完整-crate-检查与-cargo-上下文复用)。本轮没有通过降低正确性要求换取速度。
+
+真实业务仍为 `approx_bytes_for_tokens` 与 `approx_tokens_from_byte_count`。最后复核使用同一常驻编译器 PID 37064、同一 RA 会话、target、依赖和 profile，三轮交替两种检查策略；每一策略先回到原常量 4 并预热，再修改相同的 5／6／7，计时直到 12 个边界输入的全部 24 个新结果返回。两组均包含依赖守卫、完整 crate 检查、图失效、代码生成、原子发布与调用，不包含工具准备、RA 首次加载或消费者进程启动。另用锁文件版本一致的正常 Cargo 业务消费者逐项核对 24 个结果，全部一致。
+
+| 同链路检查策略                     | 保存到全部新结果的样本 |  中位数 |
+| ---------------------------------- | ---------------------- | ------: |
+| 强制 Cargo owner 检查              | 1140 / 1044 / 1094 ms  | 1094 ms |
+| 复用 Cargo 上下文，完整 rustc 检查 | 337 / 332 / 318 ms     |  332 ms |
+
+该匹配组完整循环约快 3.3 倍，已达到数百毫秒；不是小于 100 ms。复用路径前置分析／依赖核对、完整检查及后置守卫、代码生成／镜像阶段中位数分别为 121.26／189.92／5.96 ms，各阶段中位数不直接相加。899.83 → 189.92 ms 的检查阶段变化包含消除 Cargo 调度的收益，没有将其解释成 rustc 类型检查器本身快了五倍。强制 Cargo 对照也包含新增守卫，因此不能将该组 1094 ms 直接当作上一节约 847 ms 的旧构建请求。此前独立六轮相同并行守卫实现为 1111 → 327 ms；补齐安装身份守卫前的三轮为 1021 → 254 ms，并完成两种故障验证。各组完整保留，不合并或择优删除长尾；更早的串行／重复核对实现为 1299 → 542 ms，显示守卫自身也需优化。
+
+最后复核的首次 build 为 6.99 秒（其中分析 6.18 秒）；首次真正捕获检查命令的 owner 编辑为 917 ms。Cargo 已 fresh 时不会伪造一份命令，会继续用 Cargo，直到实际 owner 检查发生。另三轮的故障场景中，修改 manifest 后重新加载／检查为 7.54 秒，明确返回 `check_backend: cargo` 并使两个入口重编。这些冷成本均不计入预热样本。
+
+故障验证包括：目标函数不可变局部重赋值报 E0384；未进入标量图的 `location.rs` 中加入错误返回类型报 E0308，两者均保留整个发布指针和两个旧入口；配置变化转回 Cargo；单元回归在前置票据形成后改变依赖内容，确认后置守卫拒绝结果；还验证等长文件内容变化、新增文件、缺失配置新建、工具链安装变化和输出隔离。新检查没有因源码图命中缓存而略过完整 crate 检查。
+
+业务测量仍在标量执行宿主中，没有自动替换 App Server 的 token 预算调用。App Server 包含路径依赖，因此本轮不宣称其跨文件更新达到该速度；单独复核运行中 diff 更新、错误保留和图外调用者模块回退，不能拿该复核的一次采样作为新性能基准。首次复核因依赖实际重编而保守退回模块，保存了这次结果；预热后完整复核通过，始终为同一 App Server／编译器 PID。实际修改过的业务源文件和 manifest 均恢复原字节；正常 owner 检查恢复通过。
+
+验证通过 `just verify ash-dev-build --profile ci-test --features compiler --lib`（19 项）、`just verify ash-utils-string --profile ci-test --lib`（12 项）及其 check／warnings；无 compiler feature 的 runtime warnings 也通过。正常 `dev-small` 编译器构建通过；`just dependencies` 为 232 成员／89 项已审核多版本，`just test-python scripts` 为 202 项、7 跳过。Rust／文档定向格式和 `git diff --check` 通过。
+
+证据位于 `.build/build-health/rust-owner-check-diagnostic-20261021/`、`rust-owner-check-business-20261021/`（串行守卫六轮）、`rust-owner-check-business-parallel-20261021/`（并行六轮）、`rust-owner-check-business-final-20261021/`（三轮及故障验证）、`rust-owner-check-business-confirm-20261021/`（最终三轮及正常 Cargo oracle）和 `rust-owner-check-appserver-final-20261021/`，包含脚本、每次响应、完整检查日志、MIR 和镜像清单。Windows 既有基准入口依赖 `/usr/bin/time`，本轮使用真实编辑循环分阶段计时，没有重测 RSS、冷构建或清理共享缓存，也未验证其他平台或完整 Electron UI。
+
+#### 2026-10-21：路径依赖检查复用与 App Server 真实热更新
+
+将上述完整 crate 检查上下文复用扩展到 App Server 的真实路径／Git 依赖图，仍使用 Windows x64、Rust 1.98.0、未修改的 RA 0.0.358、Cranelift 和原 `dev-small`。首次成功 Cargo 检查建立上下文；后续每次启动原完整 library 的 rustc 检查，保留原 extern／cfg／lint／profile，检查前后都读取依赖内容。路径／Git 包跟踪完整文件集合，registry 读取 rustc dep-info 的实际源码闭包；依赖产物、manifest／锁文件、build-script 声明的外部输入及生成目录、native search 目录都参与守卫。实际链路跟踪约 3999 个路径（含缺失配置），每次读取约 357.1 MiB，预算为 16384 个依赖路径／512 MiB。边界见 [完整 crate 检查](rust-analysis.md#完整-crate-检查与-cargo-上下文复用)。
+
+诊断发现排序后按连续片分给线程，会把大产物集中在一个线程；改为最多四线程交错处理元数据和内容，并为每个线程复用 256 KiB 缓冲区，减少 Windows 上反复提交大块内存的成本。没有缓存摘要或改成仅核对 mtime，依赖仍在检查前后完整读取。另修复两处实际链路问题：消费排队批次时取消已被消费保存对应的剩余 timer；Windows 的访问时间通知按文件身份、长度、mtime／ctime 去重，rename／删除／读取失败继续交给构建。实机确认等长写入后恢复 mtime，状态变更时间仍变化；回归覆盖这种编辑，不把只读 RA 扫描误判成整后端源码修改。完整模块的镜像加载验证及函数基线复核均在原子发布前完成，避免 RPC 先看到新模块、随后才报告基线失败。
+
+实际场景把 diff 的 `zero_based_line_index` 委托给独占的跨文件 helper，交替修改其减数，运行真正的 `watchAppServer → LiveBuilder → live.py --serve → ash-build → ash-rust-analysis → Cranelift → 运行中 App Server`。每次保存后轮询真实 `diff/compute`，直到全部 60 行结果符合新减数。保留原 250 ms debounce；计时从文件写入到全部 RPC 新结果，包含检查、代码生成及运行中替换，排除工具准备和首次加载。返回新结果后再等待该次发布完成，避免下一次编辑干扰前一次测量。
+
+| 相同函数编辑、保存至全部 RPC 新结果 | 五次样本                            |  中位数 |
+| ----------------------------------- | ----------------------------------- | ------: |
+| 原 Cargo owner 检查                 | 1394 / 1394 / 1381 / 1370 / 1361 ms | 1381 ms |
+| 路径依赖守卫＋原完整 rustc 检查     | 754 / 789 / 749 / 770 / 750 ms      |  754 ms |
+
+这两组是同机、相同工具链／目标／profile／编辑内容的前后独立会话，约快 1.83 倍，耗时下降约 45.4%，已达到数百毫秒，尚未小于 100 ms。后组 App Server PID 38296、编译器 PID 42600、RA PID 36940 在预热样本中均不变，没有模块或整后端重建。候选每次仍执行约 714 MiB 的两遍依赖内容读取；典型单遍枚举约 10–13 ms，读取／摘要约 136–158 ms，完整检查连同两遍守卫约 454–497 ms，生成机器码约 1.3–1.5 ms。阶段范围用于定位，不直接相加中位数。另一组直接请求编译器并调用常驻真实 App Server 的实测为 501 / 472 / 472 / 481 / 531 ms，中位数 481 ms，包含全部 60 行 RPC 结果，排除 watcher 的 250 ms 等待；这是独立会话，不是从总数减去 debounce 得到的数值。
+
+该组首次保存至 RPC 为 23.71 秒，包含准备及首次语义加载，不计入 warm 样本。真正依赖或协议构建输入改变时，必须重新交给 Cargo、发布完整模块并退休旧分析上下文；下一次语义加载仍有秒级成本。百毫秒结果只覆盖已预热的注册入口及同 crate 独占标量图，路径依赖自身修改不因此获得跨 crate 的 JIT 代码生成；owner build script、一般泛型／非标量／drop 和准确 artifact cfg 绑定仍在已有缺口内。
+
+故障场景在真实常驻 App Server 中验证：helper 不可变局部重赋值报 E0384；路径依赖 `ash-diff` 中加入错误返回类型报 E0308；两者均保留模块／函数发布指针及旧 RPC 结果。恢复后可继续更新；合法路径依赖变化和协议包声明的 `../../.build/protocol/metadata.json` 变化转为完整模块发布，后续重新加载分析后恢复函数更新。实验源码和协议元数据按原字节恢复，临时 helper 删除，正常模块恢复构建通过。
+
+Rust `just verify ash-dev-build --features compiler` 为 22 项并通过 check／全目标 warnings；不启用 compiler feature 的 runtime warnings 也通过。App Server watcher、LiveBuilder 和源码归属定向测试 39 项通过，build TypeScript 为 145 文件无错误；脚本测试 202 项、7 跳过。排队 timer 回归已确认去掉修复时失败。全量 `pnpm --dir build run test:prepared` 首次为 233 项、200 通过、6 失败、27 跳过，另观察到导出 SDK 的 Academy 类型错误、Windows Host watcher 多余失败通知、Electron 生命周期退出等待及符号链接 EPERM。已补 live builder fixture 和后端 Python 清单；定向结果不表示全量通过，余项在根 TODO 记录。
+
+最终 watcher 证据位于 `.build/build-health/rust-path-check-watcher-verified-20261021/`，基线在 `rust-path-check-watcher-baseline-20261021/`；包含全部样本、测量二进制摘要、PID、日志和脚本。早期 `candidate`、`final`、`buffered`、`confirm` 轮次保留了不均衡摘要开销、混入冷依赖重编、基线发布顺序及 Windows 访问通知误触发等失败，均未纳入上述 warm 对比；其中误触发的普通后端构建还遇到运行中扩展可执行文件的 Windows 占用，未停止用户的运行进程或删除该产物。`trace` 的中间实现为 1291 ms，未计作最终结果。直接调用与失效证据位于 `rust-path-check-appserver-20261021/` 和 `rust-path-check-appserver-final-20261021/`。没有清空共享缓存、修改 RA／工具链或降低正确性检查，也未验证其他平台、RSS、Bazel 或完整 Electron UI。
 
 ## 构建源码与仓库脚本边界
 

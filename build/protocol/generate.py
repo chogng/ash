@@ -245,7 +245,7 @@ def write_source_manifest(path: Path, sources: dict, artifacts: dict[str, str]) 
     temporary.replace(path)
 
 
-if __name__ == "__main__":
+def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--source-directories", action="store_true")
     parser.add_argument(
@@ -254,7 +254,14 @@ if __name__ == "__main__":
         help="Backend package with matching protocol artifacts",
     )
     arguments = parser.parse_args()
-    generate_protocol(package_root=arguments.package_root)
     if arguments.source_directories:
-        cache = json.loads((ROOT / ".build/protocol-inputs.json").read_text())
-        print(json.dumps(cache["directories"]))
+        # Watcher discovery only needs Cargo's graph. Preparing artifacts here
+        # reads every protocol source and can enqueue filesystem notifications
+        # while the first live compilation is running on Windows.
+        print(json.dumps(protocol_source_directories()))
+    else:
+        generate_protocol(package_root=arguments.package_root)
+
+
+if __name__ == "__main__":
+    main()

@@ -20,6 +20,7 @@ from build.prepare import (
     development_root,
 )
 from build.lib.targets import TARGETS, default_target
+from build.desktop.live import build_live, live_directory
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -28,6 +29,8 @@ def build_development_server(
     *, root: Path = ROOT, select_prepared: bool = False, protocol_prepared: bool = False
 ) -> tuple[bool, str]:
     spec = TARGETS[default_target()]
+    if live_directory() is not None:
+        build_live(root, protocol_prepared=protocol_prepared)
     package = current_package(development_root(root, spec.target, "host-provided-node"))
     directory = root / ".build/desktop/dev/app-server"
     with ExitStack() as frozen, ThreadPoolExecutor(max_workers=1) as startup:

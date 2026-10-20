@@ -160,6 +160,11 @@ def _build_command(
     # An explicit command override also preserves it in symbol provenance.
     if cargo_profile == "release" and spec.target == "x86_64-pc-windows-msvc":
         command.extend(["--config", "profile.release.codegen-units=1"])
+    if cargo_profile == "dev-small" and "ash-app-server" in missing:
+        from build.desktop.live import live_directory
+
+        if live_directory() is not None:
+            command.extend(["--features", "ash-app-server/rust-live"])
     # Windows packages use MSVC, including their standalone V8 hosts. An
     # implicit host build can inherit a caller's GNU Cargo target and mismatch
     # the locked V8 archive; keep compilation and the cache lease explicit.

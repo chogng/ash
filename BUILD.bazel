@@ -121,8 +121,10 @@ alias(
 )
 
 exports_files([
+    ".cargo/config.toml",
     "Cargo.lock",
     "Cargo.toml",
+    "rust-toolchain.toml",
     "test/fixtures/languages/associations.json",
     "test/fixtures/languages/folding.json",
     "test/fixtures/tree-sitter/languages.json",

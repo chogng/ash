@@ -12,6 +12,9 @@ path = "src/main.rs"
 [lib]
 doctest = false
 
+[features]
+rust-live = ["dep:ash-dev-build", "dep:serde_json", "dep:ash-app-server-protocol"]
+
 [dependencies]
 ash-app-server-runtime = { workspace = true }
 ash-app-server-diff = { workspace = true }
@@ -19,6 +22,9 @@ ash-cloud-codebase = { workspace = true }
 arg0 = { workspace = true }
 process-hardening = { workspace = true }
 ash-package-store = { workspace = true }
+ash-dev-build = { path = "../dev-build", optional = true }
+serde_json = { workspace = true, optional = true }
+ash-app-server-protocol = { workspace = true, optional = true }
 
 [dev-dependencies]
 tempfile = { workspace = true }
