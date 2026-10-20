@@ -35,6 +35,25 @@ test('Markdown imports resolve image identity against the source and decode text
 	assert.equal(documentToPlainText(document), 'A & B © Figure');
 });
 
+for (const [feature, cell] of [
+	['text', 'left\\|right'],
+	['code', '``left\\|`middle\\|right``'],
+	['link destination', '[link](<https://example.com/left\\|right?q=one\\|two>)'],
+	['image destination', '![image](<https://example.com/left\\|right.png>)'],
+] as const) {
+	test(`Markdown table round trips ${feature} pipes without losing later cells`, () => {
+		const schema = createDefaultDocumentSchema();
+		const input = `| ${cell} | Header after pipe |\n| --- | --- |\n| ${cell} | Body after pipe |\n\n${cell.replaceAll('\\|', '|')}\n`;
+		const document = importDocumentText(input, 'markdown', schema, environment.window.document, source);
+		const before = semantics(document);
+		const output = exportDocumentText(document, schema, 'markdown');
+		const restored = importDocumentText(output, 'markdown', schema, environment.window.document, source);
+		assert.deepEqual(semantics(restored), before);
+		assert.deepEqual(semantics(document), before);
+		assert.equal(documentToPlainText(restored), documentToPlainText(document));
+	});
+}
+
 test('Markdown import rejects unsupported content and identifies a source location', () => {
 	const schema = createDefaultDocumentSchema();
 	for (const input of ['First\n\n<div>HTML</div>', '- [x] task', '~~deleted~~', '[label](https://example.com "title")', '![Figure](blob:temporary)']) {

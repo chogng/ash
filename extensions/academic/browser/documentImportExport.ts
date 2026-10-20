@@ -131,12 +131,15 @@ export function exportDocumentText(document: DocumentNode, schema: DocumentSchem
 	const attributes = (node: DocumentNode, allowed: readonly string[]): void => {
 		for (const key of Object.keys(node.attrs)) if (!allowed.includes(key)) fail(node, key);
 	};
-	const inline = (nodes: readonly DocumentNode[]): string => mergeTextRuns(nodes, schema).map(node => {
+	// GFM splits table cells before parsing code spans and link/image destinations.
+	// These literals bypass text escaping, so protect their pipes only inside cells.
+	const escapeTablePipes = (value: string, inTable: boolean): string => inTable ? value.replaceAll('|', '\\|') : value;
+	const inline = (nodes: readonly DocumentNode[], inTable = false): string => mergeTextRuns(nodes, schema).map(node => {
 		if (node.type === 'hardBreak') return '  \n';
 		if (node.type === 'image') {
 			attributes(node, ['src', 'alt']);
 			if (node.marks.length) fail(node, 'image formatting');
-			return `![${escape(String(node.attrs.alt ?? ''))}](<${String(node.attrs.src).replace(/[<>\s]/g, encodeURIComponent)}>)`;
+			return `![${escape(String(node.attrs.alt ?? ''))}](<${escapeTablePipes(String(node.attrs.src).replace(/[<>\s]/g, encodeURIComponent), inTable)}>)`;
 		}
 		if (node.type !== 'text') return fail(node, node.type);
 		attributes(node, []);
@@ -149,12 +152,13 @@ export function exportDocumentText(document: DocumentNode, schema: DocumentSchem
 					const raw = node.text ?? '';
 					if (node.marks.length > 1 || raw.includes('\n')) return fail(node, 'code formatting');
 					const fence = '`'.repeat(Math.max(0, ...[...raw.matchAll(/`+/g)].map(match => match[0].length)) + 1);
-					value = raw.trim().length ? `${fence} ${raw} ${fence}` : `${fence}${raw}${fence}`;
+					const content = escapeTablePipes(raw, inTable);
+					value = raw.trim().length ? `${fence} ${content} ${fence}` : `${fence}${content}${fence}`;
 					break;
 				}
 				case 'link':
 					if (Object.keys(mark.attrs).some(key => key !== 'href')) return fail(node, 'link attributes');
-					value = `[${value}](<${String(mark.attrs.href).replace(/[<>\s]/g, encodeURIComponent)}>)`;
+					value = `[${value}](<${escapeTablePipes(String(mark.attrs.href).replace(/[<>\s]/g, encodeURIComponent), inTable)}>)`;
 					break;
 				default: return fail(node, mark.type);
 			}
@@ -196,7 +200,7 @@ export function exportDocumentText(document: DocumentNode, schema: DocumentSchem
 					return row.content.map(cell => {
 						attributes(cell, []);
 						if (cell.content.length !== 1 || cell.content[0]!.type !== 'paragraph' || Object.keys(cell.content[0]!.attrs).length) return fail(cell, 'table cell structure');
-						const value = inline(cell.content[0]!.content);
+						const value = inline(cell.content[0]!.content, true);
 						if (value.includes('\n')) return fail(cell, 'multiline table cell');
 						return value;
 					});
