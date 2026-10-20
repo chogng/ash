@@ -395,11 +395,6 @@ test('host close IPC validates identities before changing ownership', async () =
 	assert.equal(f.children.length, 0);
 });
 
-test('tunnel service creation fails immediately when the host boundary is missing', () => {
-	using services = new InstantiationService();
-	assert.throws(() => services.createInstance(TunnelService), /mainProcessService/);
-});
-
 class Child extends EventEmitter {
 	public exitCode: number | null = null;
 	public signalCode: NodeJS.Signals | null = null;

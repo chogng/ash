@@ -1,5 +1,3 @@
-import { registerTestCodeEditorFeatures } from '../../../../../../../test/fixtures/codeEditorFeatures.js';
-import { after as afterCodeFeatures } from 'mocha';
 import assert from "node:assert/strict";
 import { test } from "mocha";
 import { BlockCommentCommand } from '../../browser/blockCommentCommand.js';
@@ -68,6 +66,3 @@ function primaryFirst<T>(items: readonly T[], primaryIndex: number): readonly T[
 	if (primaryIndex === 0) return Object.freeze([...items]);
 	return Object.freeze([items[primaryIndex]!, ...items.slice(0, primaryIndex), ...items.slice(primaryIndex + 1)]);
 }
-
-const codeFeatures = registerTestCodeEditorFeatures();
-afterCodeFeatures(() => codeFeatures.dispose());

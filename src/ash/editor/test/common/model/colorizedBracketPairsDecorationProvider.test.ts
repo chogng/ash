@@ -1,5 +1,6 @@
-import { registerTestCodeEditorFeatures } from '../../../../../../test/fixtures/codeEditorFeatures.js';
-import { after as afterCodeFeatures } from 'mocha';
+import { createTextModelFeatures } from '../../../common/model/modelFeatures.js';
+import { registerTextModelFeatures } from '../../../common/model/textModelFeatures.js';
+import { after as afterModelFeatures } from 'mocha';
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { Range } from '../../../common/core/range.js';
@@ -90,5 +91,5 @@ test('Margin and injected text queries do not generate whole-document bracket co
 	assert.ok(bracketQueries > 0);
 });
 
-const codeFeatures = registerTestCodeEditorFeatures();
-afterCodeFeatures(() => codeFeatures.dispose());
+const modelFeatures = registerTextModelFeatures(createTextModelFeatures);
+afterModelFeatures(() => modelFeatures.dispose());

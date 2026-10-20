@@ -1,5 +1,3 @@
-import { registerTestCodeEditorFeatures } from '../../../../../../test/fixtures/codeEditorFeatures.js';
-import { after as afterCodeFeatures } from 'mocha';
 import { Emitter } from '../../../../base/common/event.js';
 import { type URI } from '../../../../base/common/uri.js';
 import { LanguageDiagnosticSeverity } from '../../../common/languages.js';
@@ -111,6 +109,3 @@ test('language diagnostics and platform markers produce one visible decoration',
 	assert.equal(model.getAllDecorations().filter(value => value.options.className === 'squiggly-error').length, 0);
 	assert.equal(navigation.decorations.size, 1);
 });
-
-const codeFeatures = registerTestCodeEditorFeatures();
-afterCodeFeatures(() => codeFeatures.dispose());

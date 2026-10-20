@@ -1,5 +1,3 @@
-import { registerTestCodeEditorFeatures } from '../../../../../../../test/fixtures/codeEditorFeatures.js';
-import { after as afterCodeFeatures } from 'mocha';
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { HierarchicalKind } from '../../../../../base/common/hierarchicalKind.js';
@@ -44,6 +42,3 @@ test('empty and cyclic preferences remain finite', () => {
 	];
 	assert.deepEqual(sortEditsByYieldTo(edits).map(item => item.title), ['a', 'b']);
 });
-
-const codeFeatures = registerTestCodeEditorFeatures();
-afterCodeFeatures(() => codeFeatures.dispose());

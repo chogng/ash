@@ -1,5 +1,3 @@
-import { registerTestCodeEditorFeatures } from '../../../../../../../test/fixtures/codeEditorFeatures.js';
-import { after as afterCodeFeatures } from 'mocha';
 import assert from "node:assert/strict";
 import { test } from "mocha";
 import { EditorFoldingModel } from "../../browser/foldingModel.js";
@@ -250,6 +248,3 @@ test('Manual folds collapse on creation and removal respects cursor and selectio
 	folding.removeManualRanges([new Range(8, 1, 8, 1)]);
 	assert.deepEqual(folding.regions.map(region => region.source), [EditorFoldingRangeSource.Provider]);
 });
-
-const codeFeatures = registerTestCodeEditorFeatures();
-afterCodeFeatures(() => codeFeatures.dispose());

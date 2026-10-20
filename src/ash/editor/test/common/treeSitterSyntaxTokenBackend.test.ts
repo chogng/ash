@@ -1,5 +1,6 @@
-import { registerTestCodeEditorFeatures } from '../../../../../test/fixtures/codeEditorFeatures.js';
-import { after as afterCodeFeatures } from 'mocha';
+import { createTextModelFeatures } from '../../common/model/modelFeatures.js';
+import { registerTextModelFeatures } from '../../common/model/textModelFeatures.js';
+import { after as afterModelFeatures } from 'mocha';
 import { Event } from '../../../base/common/event.js';
 import type { TreeSitterTokenizationMeasure } from '../../common/services/treeSitter/treeSitterLibraryService.js';
 import { strict as assert } from 'node:assert';
@@ -646,5 +647,5 @@ test('Python default queries highlight decorators, functions and Unicode strings
 	await assertFresh(value, model, 'python');
 });
 
-const codeFeatures = registerTestCodeEditorFeatures();
-afterCodeFeatures(() => codeFeatures.dispose());
+const modelFeatures = registerTextModelFeatures(createTextModelFeatures);
+afterModelFeatures(() => modelFeatures.dispose());

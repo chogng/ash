@@ -1,5 +1,3 @@
-import { registerTestCodeEditorFeatures } from '../../../../../../../test/fixtures/codeEditorFeatures.js';
-import { after as afterCodeFeatures } from 'mocha';
 import assert from "node:assert/strict";
 import { test } from "mocha";
 import { Selection } from "../../../../common/core/selection.js";
@@ -40,6 +38,3 @@ test("Smart select prefers the smallest parser scope before lexical pair and lin
 	assert.equal(model.getTextInRange(declaration), "let value = call(1 + 2);");
 	assert.equal(model.getTextInRange(functionScope), model.getText());
 });
-
-const codeFeatures = registerTestCodeEditorFeatures();
-afterCodeFeatures(() => codeFeatures.dispose());

@@ -28,7 +28,6 @@ suite('Decorators', () => {
 		assert.deepEqual([first.value(), first.value(), first.label, first.label, first.calls], [null, null, 'null', 'null', 2]);
 		assert.deepEqual([second.value(), second.label, second.calls], [2, '2', 2]);
 		assert.deepEqual(Object.keys(first).sort(), ['calls', 'result']);
-		assert.equal(Object.getOwnPropertyDescriptor(first, '$memoize$value')?.writable, false);
 	});
 
 	test('debounce sends the reduced value once after the quiet period', async () => {

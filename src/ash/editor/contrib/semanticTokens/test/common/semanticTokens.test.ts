@@ -1,5 +1,6 @@
-import { registerTestCodeEditorFeatures } from '../../../../../../../test/fixtures/codeEditorFeatures.js';
-import { after as afterCodeFeatures } from 'mocha';
+import { createTextModelFeatures } from '../../../../common/model/modelFeatures.js';
+import { registerTextModelFeatures } from '../../../../common/model/textModelFeatures.js';
+import { after as afterModelFeatures } from 'mocha';
 import { setImmediate } from 'node:timers/promises';
 import { DeferredPromise } from '../../../../../base/common/async.js';
 import assert from "node:assert/strict";
@@ -154,5 +155,5 @@ function tokens(tokenType: string, modifiers: readonly string[] = []): LanguageT
 	return { tokens: [{ range: new Range(1, 1, 1, 5), tokenType, modifiers }] };
 }
 
-const codeFeatures = registerTestCodeEditorFeatures();
-afterCodeFeatures(() => codeFeatures.dispose());
+const modelFeatures = registerTextModelFeatures(createTextModelFeatures);
+afterModelFeatures(() => modelFeatures.dispose());

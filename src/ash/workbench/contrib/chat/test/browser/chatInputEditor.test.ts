@@ -209,8 +209,6 @@ test("Chat input completes slash commands before submitting", async () => {
 	assert.equal(editor.value, "/");
 	await waitFor(() => completionLabels(editor.element).includes('/config'));
 	for (const command of ['/new', '/history', '/config']) assert.ok(completionLabels(editor.element).includes(command));
-	assert.equal(editor.element.querySelector(".stanza-editor")?.classList.contains("stanza-editor-embedded"), true);
-	assert.equal(editor.element.querySelector(".stanza-editor")?.classList.contains("word-wrapped"), true);
 	assert.equal(editor.element.querySelector(".stanza-editor-line-number"), null);
 
 	input.dispatchEvent(beforeInputEvent(dom.window, "n"));

@@ -1,5 +1,3 @@
-import { registerTestCodeEditorFeatures } from '../../../../../test/fixtures/codeEditorFeatures.js';
-import { after as afterCodeFeatures } from 'mocha';
 import { strict as assert } from 'node:assert';
 import { test } from 'mocha';
 import { DisposableStore } from '../../../base/common/lifecycle.js';
@@ -381,6 +379,3 @@ test('hypothetical tokens retain an embedded language even when it has no stylin
 	}, new AbortController().signal);
 	assert.deepEqual(result, { lane: SYNTAX_TOKENIZE_LANE, value: { tokens: [{ range: new Range(1, 1, 1, 6), tokenType: 'other', modifiers: [], languageId: 'embedded' }] } });
 });
-
-const codeFeatures = registerTestCodeEditorFeatures();
-afterCodeFeatures(() => codeFeatures.dispose());

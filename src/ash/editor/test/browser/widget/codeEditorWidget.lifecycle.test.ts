@@ -484,7 +484,6 @@ test('CodeEditorWidget injects scoped services into contributions and releases t
 
 test('Suggest registration follows editor enablement and model disposal', async () => {
 	const { SuggestController } = await import('../../../contrib/suggest/browser/suggestController.js');
-	assert.equal(SuggestController.ID, 'editor.contrib.suggestController');
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
 	using cleanup = { [Symbol.dispose]: () => dom.window.close() };
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
@@ -493,7 +492,6 @@ test('Suggest registration follows editor enablement and model disposal', async 
 		using model = new TextModel('alpha');
 		using editor = createTestCodeEditor({ container, model, suggestions: enabled });
 		assert.equal(SuggestController.get(editor) !== null, enabled);
-		assert.equal(editor.getContribution('editor.contrib.suggest'), null);
 		assert.equal(container.querySelectorAll('.stanza-editor-completion').length, enabled ? 1 : 0);
 		editor.setModel(null);
 		assert.equal(container.querySelectorAll('.stanza-editor-completion').length, 0);

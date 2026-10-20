@@ -1,5 +1,3 @@
-import { registerTestCodeEditorFeatures } from '../../../../../../../test/fixtures/codeEditorFeatures.js';
-import { after as afterCodeFeatures } from 'mocha';
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { Color, RGBA } from '../../../../../base/common/color.js';
@@ -40,6 +38,3 @@ test('color picker model retains format choice while provider presentations refr
 	model.selectNextColorPresentation();
 	assert.equal(model.presentation.label, 'rgb(0, 255, 0)');
 });
-
-const codeFeatures = registerTestCodeEditorFeatures();
-afterCodeFeatures(() => codeFeatures.dispose());

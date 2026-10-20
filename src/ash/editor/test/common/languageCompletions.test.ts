@@ -1,5 +1,3 @@
-import { registerTestCodeEditorFeatures } from '../../../../../test/fixtures/codeEditorFeatures.js';
-import { after as afterCodeFeatures } from 'mocha';
 import { strict as assert } from "node:assert";
 import { test } from "mocha";
 import { LanguageResultAcceptance } from '../../common/model/languageResultStore.js';
@@ -214,6 +212,3 @@ function completion(id: string, label: string, startColumn: number, endColumn: n
 		...(overrides.commitCharacters === undefined ? {} : { commitCharacters: overrides.commitCharacters }),
 	};
 }
-
-const codeFeatures = registerTestCodeEditorFeatures();
-afterCodeFeatures(() => codeFeatures.dispose());

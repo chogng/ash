@@ -1,5 +1,6 @@
-import { registerTestCodeEditorFeatures } from '../../../../../test/fixtures/codeEditorFeatures.js';
-import { after as afterCodeFeatures } from 'mocha';
+import { createTextModelFeatures } from '../../common/model/modelFeatures.js';
+import { registerTextModelFeatures } from '../../common/model/textModelFeatures.js';
+import { after as afterModelFeatures } from 'mocha';
 import { strict as assert } from "node:assert";
 import { test } from "mocha";
 import { Emitter, type Event } from "../../../base/common/event.js";
@@ -313,5 +314,5 @@ test('hypothetical syntax wire rejects wrong lanes, line endings and out of docu
 	assert.throws(() => syntaxWireCodec.decodePayload(SYNTAX_TOKENIZE_LANE, { languageId: 'demo' }, snapshot), /lane/);
 });
 
-const codeFeatures = registerTestCodeEditorFeatures();
-afterCodeFeatures(() => codeFeatures.dispose());
+const modelFeatures = registerTextModelFeatures(createTextModelFeatures);
+afterModelFeatures(() => modelFeatures.dispose());

@@ -1,5 +1,3 @@
-import { registerTestCodeEditorFeatures } from '../../../../../../../test/fixtures/codeEditorFeatures.js';
-import { after as afterCodeFeatures } from 'mocha';
 import assert from "node:assert/strict";
 import { test } from "mocha";
 import { Position } from "../../../../common/core/position.js";
@@ -34,6 +32,3 @@ function assertLocation(result: ReturnType<typeof parseStanzaGotoLocation>, posi
 	assert.equal(result.kind, "location");
 	if (result.kind === "location") assert.deepEqual(result.location.position, position);
 }
-
-const codeFeatures = registerTestCodeEditorFeatures();
-afterCodeFeatures(() => codeFeatures.dispose());

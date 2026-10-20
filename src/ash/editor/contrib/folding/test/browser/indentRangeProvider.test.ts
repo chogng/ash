@@ -1,5 +1,3 @@
-import { registerTestCodeEditorFeatures } from '../../../../../../../test/fixtures/codeEditorFeatures.js';
-import { after as afterCodeFeatures } from 'mocha';
 import assert from "node:assert/strict";
 import { test } from "mocha";
 import { EditorFoldingRangeSource } from "../../browser/foldingRanges.js";
@@ -29,8 +27,5 @@ test("Indent folding expands tabs and validates tab size", () => {
 		collapsed: false,
 		source: EditorFoldingRangeSource.Provider,
 	}]);
-	assert.throws(() => computeEditorIndentFoldingRanges(model, { tabSize: 0 }));
+	assert.throws(() => computeEditorIndentFoldingRanges(model, { tabSize: 0 }), RangeError);
 });
-
-const codeFeatures = registerTestCodeEditorFeatures();
-afterCodeFeatures(() => codeFeatures.dispose());

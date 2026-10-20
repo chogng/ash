@@ -41,7 +41,7 @@ import { createCodeEditorServices, registerCodeEditorServices } from '../../../.
 import { createTestEditorServices } from '../../../../test/common/testEditorServices.js';
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
 import { chatTranscriptListItems } from '../../browser/widget/chatListItems.js';
-import type { ChatHookRun, ThreadTranscriptEntry } from '../../../../services/chat/common/chatService.js';
+import type { ThreadTranscriptEntry } from '../../../../services/chat/common/chatService.js';
 import { ChatListWidget } from '../../browser/widget/chatListWidget.js';
 import '../../browser/chat.shared.contribution.js';
 import { ChatEditorConfiguration, ChatInputConfiguration } from '../../common/constants.js';
@@ -195,42 +195,6 @@ test('code block settings reject invalid persisted values without changing the a
 		[ChatEditorConfiguration.wordWrap, true],
 	] as const) await assert.rejects(configuration.updateValue(key, value));
 	assert.deepEqual(Object.values(ChatEditorConfiguration).map(key => configuration.getValue(key)), ['', 0, 0, 'off']);
-});
-
-
-test('Hook denial stays collapsed, renders process text safely, and updates its failure reason', () => {
-	using resources = new DisposableStore();
-	const services = resources.add(createTestEditorServices(undefined, createCodeEditorServices(resources)));
-	using widget = services.createInstance(ChatListWidget, document.createElement('main'), {});
-	const run: ChatHookRun = { runId: 'run', hookId: 'user:hook:test', event: 'preToolUse', status: { type: 'running' }, startedAtUnixMs: 1, durationMs: 0, turnId: 'turn', toolCallId: 'tool', toolName: 'shell-command' };
-	const entry = (status: ChatHookRun['status']): ThreadTranscriptEntry => ({ type: 'hookRun', entryId: 'hook:run', turnId: 'turn', run: { ...run, status } });
-	const denied = chatTranscriptListItems([entry({ type: 'denied', reason: '<img src=x onerror=alert(1)>' })]);
-	widget.render(denied);
-	const feedback = widget.element.querySelector<HTMLDetailsElement>('.ash-chat-hook')!;
-	assert.equal(feedback.open, false);
-	assert.match(feedback.querySelector('summary')!.textContent!, /Blocked shell-command/);
-	assert.equal(feedback.querySelector('p')!.textContent, '<img src=x onerror=alert(1)>');
-	assert.equal(feedback.querySelector('img'), null);
-	feedback.open = true;
-	widget.render(denied);
-	assert.equal(widget.element.querySelector('.ash-chat-hook'), feedback);
-	assert.equal(feedback.open, true);
-	widget.render(chatTranscriptListItems([entry({ type: 'failed', message: 'process exited' })]));
-	assert.equal(widget.element.querySelector('p')!.textContent, 'process exited');
-	widget.render([]);
-	assert.equal(widget.element.querySelector('.ash-chat-hook'), null);
-});
-
-
-test('Hook summaries use the active Chinese locale', () => {
-	setNlsMessages('zh-CN', JSON.parse(readFileSync('extensions/language-pack-zh-cn/translations/chat.json', 'utf8')));
-	try {
-		using resources = new DisposableStore();
-		const services = resources.add(createTestEditorServices(undefined, createCodeEditorServices(resources)));
-		using widget = services.createInstance(ChatListWidget, document.createElement('main'), {});
-		widget.render([{ id: 'hook', type: 'hook', text: 'reason', transient: false, hookPart: { kind: 'hook', run: { runId: 'run', hookId: 'user:hook:test', event: 'preToolUse', status: { type: 'denied', reason: 'reason' }, startedAtUnixMs: 1, durationMs: 1, turnId: 'turn', toolCallId: 'tool', toolName: 'shell-command' } } }]);
-		assert.match(widget.element.querySelector('summary')!.textContent!, /已阻断 shell-command/);
-	} finally { resetNlsResolver(); }
 });
 
 

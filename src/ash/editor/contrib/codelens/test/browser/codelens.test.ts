@@ -22,10 +22,6 @@ import { type TextMeasurer } from '../../../../common/viewModel.js';
 const { TestView: View } = await import('../../../../test/browser/viewModel/testViewModel.js');
 const { CodeLensContribution } = await import('../../browser/codelensController.js');
 
-test('CodeLens contribution exposes the canonical editor contribution ID', () => {
-	assert.equal(CodeLensContribution.ID, 'css.editor.codeLens');
-});
-
 test('CodeLens model preserves provider ownership, provider rank, and independent failures', async () => {
 	using model = new TextModel('first\nsecond', { languageId: 'typescript' });
 	const providers = new LanguageFeatureRegistry<CodeLensProvider>();

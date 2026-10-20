@@ -1,5 +1,5 @@
-import { registerTestCodeEditorFeatures } from '../../../../../../../test/fixtures/codeEditorFeatures.js';
-import { after as afterCodeFeatures } from 'mocha';
+import { createTextModelFeatures } from '../../../../../editor/common/model/modelFeatures.js';
+import { registerTextModelFeatures } from '../../../../../editor/common/model/textModelFeatures.js';
 import { TestThemeService } from '../../../../../platform/theme/test/common/testThemeService.js';
 import { StandardTokenType } from '../../../../../editor/common/encodedTokenAttributes.js';
 import { Event } from '../../../../../base/common/event.js';
@@ -338,5 +338,5 @@ for (const [index, fixture] of structureFixtures.entries()) test(`Structure ${fi
 	} finally { worker.dispose(); }
 });
 
-const codeFeatures = registerTestCodeEditorFeatures();
-afterCodeFeatures(() => codeFeatures.dispose());
+const modelFeatures = registerTextModelFeatures(createTextModelFeatures);
+after(() => modelFeatures.dispose());

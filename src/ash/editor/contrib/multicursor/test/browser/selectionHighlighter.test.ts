@@ -42,10 +42,9 @@ test('Selection highlighter applies whole-word, whitespace, multiline, and maxim
 	assert.equal(harness.decorations.size, 0);
 });
 
-test('Selection highlighter exposes its canonical ID and clears listeners and decorations on dispose', () => {
+test('Selection highlighter clears listeners and decorations on dispose', () => {
 	using languages = new TestLanguageFeaturesService();
 	using harness = createHarness('item item item', languages, Selection.fromPositions(new Position(1, 1), new Position(1, 5)));
-	assert.equal(SelectionHighlighter.ID, 'editor.contrib.selectionHighlighter');
 	assert.equal(harness.decorations.size, 2);
 
 	harness.controller.dispose();

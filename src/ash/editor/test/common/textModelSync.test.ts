@@ -1,5 +1,3 @@
-import { registerTestCodeEditorFeatures } from '../../../../../test/fixtures/codeEditorFeatures.js';
-import { after as afterCodeFeatures } from 'mocha';
 import { strict as assert } from "node:assert";
 import { test } from "mocha";
 import { Emitter, type Event } from "../../../base/common/event.js";
@@ -383,6 +381,3 @@ class TestCompletionWorker extends Disposable implements LanguageCompletionWorke
 		return this.runRequest(request, signal);
 	}
 }
-
-const codeFeatures = registerTestCodeEditorFeatures();
-afterCodeFeatures(() => codeFeatures.dispose());

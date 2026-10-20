@@ -1,5 +1,3 @@
-import { registerTestCodeEditorFeatures } from '../../../../../test/fixtures/codeEditorFeatures.js';
-import { after as afterCodeFeatures } from 'mocha';
 import { strict as assert } from "node:assert";
 import { test } from "mocha";
 import { LanguageCompletionProviderRegistry } from '../../common/languageFeatureRegistry.js';
@@ -153,6 +151,3 @@ function resolveRequest(completionRequestId: number, modelVersion: number): Lang
 		itemId: "console",
 	};
 }
-
-const codeFeatures = registerTestCodeEditorFeatures();
-afterCodeFeatures(() => codeFeatures.dispose());

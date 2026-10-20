@@ -1,5 +1,3 @@
-import { registerTestCodeEditorFeatures } from '../../../../../../../test/fixtures/codeEditorFeatures.js';
-import { after as afterCodeFeatures } from 'mocha';
 import assert from "node:assert/strict";
 import { test } from "mocha";
 import { EditorFoldingModel } from "../../browser/foldingModel.js";
@@ -24,6 +22,3 @@ test("Hidden range model derives visible lines from collapsed folding regions", 
 	assert.equal(folding.setAllCollapsed(false), true);
 	assert.deepEqual(hidden.hiddenRanges, []);
 });
-
-const codeFeatures = registerTestCodeEditorFeatures();
-afterCodeFeatures(() => codeFeatures.dispose());

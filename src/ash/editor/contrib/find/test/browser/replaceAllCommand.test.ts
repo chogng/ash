@@ -1,5 +1,3 @@
-import { registerTestCodeEditorFeatures } from '../../../../../../../test/fixtures/codeEditorFeatures.js';
-import { after as afterCodeFeatures } from 'mocha';
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { Selection } from '../../../../common/core/selection.js';
@@ -30,6 +28,3 @@ test('replace all combines touching matches before editing', () => {
 	cursors.executeCommand(new ReplaceAllCommand(selection, ranges, ['x', 'y', 'z']));
 	assert.equal(model.getText(), 'xyz');
 });
-
-const codeFeatures = registerTestCodeEditorFeatures();
-afterCodeFeatures(() => codeFeatures.dispose());

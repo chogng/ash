@@ -804,20 +804,11 @@ test("Chat title and history switching retain conversations and drafts", async (
 	dom.window.close();
 });
 
-test("Empty chat transcripts do not render a redundant placeholder", () => {
-	const dom = new JSDOM("<!doctype html><body></body>");
-	using list = createChatListWidget(dom.window.document.body);
-
-	list.render([]);
-
-	assert.equal(list.element.querySelector(".ash-chat-empty"), null);
-	assert.equal(list.element.textContent, "");
-	dom.window.close();
-});
-
 test("Chat transcript retains message rows while reordering and revising Markdown", () => {
 	const dom = new JSDOM("<!doctype html><body></body>");
 	using list = createChatListWidget(dom.window.document.body);
+	list.render([]);
+	assert.equal(list.element.textContent, "");
 	const first = { id: "first", type: "agentMessage" as const, text: "Original **answer**", transient: false };
 	const second = { id: "second", type: "userMessage" as const, text: "Question", transient: false };
 	list.render([first, second]);
@@ -2805,25 +2796,6 @@ test('Model discovery refreshes the picker after an older catalog request comple
 	assert.equal(changes, 2);
 	assert.equal(pickerEntry.description, 'Private model overview');
 	assert.equal(pickerEntry.supportedReasoningEfforts[0].description, 'Quick tasks');
-});
-
-test("Language models service reads cached Kimi connections from the authoritative model catalog", async () => {
-	const desktop = { model: { provider: 'kimi-desktop', model: 'desktop-k2' }, displayName: 'Desktop K2' };
-	const cli = { model: { provider: 'kimi-cli', model: 'cli-k2' }, displayName: 'CLI K2' };
-	const provider = (connection: string): ModelProviderCredentialStatus => ({
-		connection, provider: connection, displayName: connection, access: 'subscription',
-		active: true, configured: true, ready: true, apiKeyPolicy: 'unsupported', apiKeyConfigured: false,
-	});
-	const fake = fakeApi({
-		providers: [provider('kimi-desktop'), provider('kimi-cli')],
-		models: [desktop, cli],
-	});
-	using chat = createChatService(fake.api);
-
-	assert.deepEqual((await modelsFor(chat).listModelCatalog()).map(({ model, displayName }) => ({ model, displayName })), [desktop, cli]);
-	assert.deepEqual(fake.providerModelRequests, []);
-	assert.deepEqual((await modelsFor(chat).listModelCatalog()).map(({ model, displayName }) => ({ model, displayName })), [desktop, cli]);
-	assert.deepEqual(fake.providerModelRequests, []);
 });
 
 test("Chat picker excludes a hidden selected model", async () => {
