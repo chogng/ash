@@ -273,6 +273,9 @@ jobs:
 
       - name: Test real TUI terminal scenarios
         timeout-minutes: 20
+        # Issue fixtures also open an App Server inside the test process.
+        env:
+          ASH_USE_INMEMORY_SECRETSTORAGE: "1"
         run: >-
           just test-tui -- --test-threads=4
           --skip actual_tui_sandbox_
