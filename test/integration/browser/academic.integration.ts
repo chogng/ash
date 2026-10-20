@@ -208,7 +208,35 @@ const m6Paragraph = (id: string, text: string) => schema.createNode('paragraph',
 			? [{ type: 'link', attrs: { href: 'https://example.test/paged-link' } }, { type: 'strong', attrs: {} }] : [],
 	})],
 });
-const structuredDocument = new URLSearchParams(location.search).has('m6Pages')
+const complexPagesDocument = schema.createDocument([
+	m6Paragraph('complex-lead', 'Leading text across the first page. '.repeat(58)),
+	schema.createNode('heading', { id: 'complex-heading', attrs: { level: 2, keepWithNext: true }, content: [schema.createText('Heading that stays with its paragraph', { id: 'complex-heading-text' })] }),
+	schema.createNode('paragraph', { id: 'complex-kept', attrs: { keepTogether: true }, content: [schema.createText('Keep this paragraph together. '.repeat(15), { id: 'complex-kept-text' })] }),
+	schema.createNode('table', {
+		id: 'complex-table', content: Array.from({ length: 18 }, (_, row) => schema.createNode('tableRow', {
+			id: `complex-row-${row}`, content: [0, 1].map(column => schema.createNode('tableCell', {
+				content: [
+					m6Paragraph(`complex-cell-${row}-${column}`, `Row ${row}, column ${column}. ` + '单元格 words '.repeat(row === 8 ? (column === 0 ? 220 : 150) : 3)),
+					...(row === 8 && column === 0 ? [schema.createNode('table', { content: [schema.createNode('tableRow', { id: 'complex-nested-row', content: [0, 1].map(index => schema.createNode('tableCell', { content: [m6Paragraph(`complex-nested-${index}`, 'Nested column '.repeat(40))] })) })] })] : []),
+					...(row === 8 && column === 1 ? [schema.createNode('paragraph', { attrs: { pageBreakBefore: true }, content: [schema.createText('Cell paragraph after a manual page break')] })] : []),
+				]
+			}))
+		}))
+	}),
+	schema.createNode('orderedList', { attrs: { order: 3 }, content: Array.from({ length: 4 }, (_, index) => schema.createNode('listItem', { content: [m6Paragraph(`complex-item-${index}`, 'List item '.repeat(45))] })) }),
+	schema.createNode('codeBlock', { id: 'complex-code', content: [schema.createText(Array.from({ length: 100 }, (_, index) => `line ${index} = "中文";`).join('\n'), { id: 'complex-code-text' })] }),
+	schema.createNode('paragraph', { id: 'complex-image', content: [schema.createNode('image', { attrs: { src: 'data:image/svg+xml,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="200" height="1600"><rect width="200" height="1600" fill="teal"/></svg>'), alt: 'Tall diagram' } })] }),
+	m6Paragraph('complex-last', 'End'),
+]);
+const pageRule = new URLSearchParams(location.search).get('pageRule');
+const lineText = (count: number) => Array.from({ length: count }, (_, index) => `Line ${index}`).join('\n');
+const pageRuleDocument = schema.createDocument([
+	m6Paragraph('rule-lead', lineText(pageRule === 'orphan' || pageRule === 'short' ? 32 : pageRule === 'widow' ? 29 : 30)),
+	schema.createNode('paragraph', { id: 'rule-target', attrs: { widowControl: false }, content: [schema.createText(lineText(pageRule === 'short' ? 2 : pageRule === 'widow' ? 5 : pageRule === 'next' || pageRule === 'chain' ? 1 : 6), { id: 'rule-target-text' })] }),
+	...(pageRule === 'chain' ? [schema.createNode('paragraph', { id: 'rule-middle', attrs: { keepWithNext: true }, content: [schema.createText(lineText(1), { id: 'rule-middle-text' })] })] : []),
+	m6Paragraph('rule-next', lineText(3)),
+]);
+const structuredDocument = pageRule ? pageRuleDocument : new URLSearchParams(location.search).has('m6ComplexPages') ? complexPagesDocument : new URLSearchParams(location.search).has('m6Pages')
 	? schema.createDocument([m6Paragraph('pages-long', '分页中文 writing across pages. '.repeat(260)), m6Paragraph('pages-last', 'End')])
 	: new URLSearchParams(location.search).has('m6Document')
 		? schema.createDocument([
@@ -258,9 +286,9 @@ const files: ITextFileService = {
 	save: (request: TextFileSaveRequest, signal: AbortSignal) => (request.resource.toString() === codeBlockResource.toString() ? codeBlockFiles : structuredFiles).save(request, signal),
 };
 services.registerInstance(IDocumentEditorTextModelService, disposables.add(new DocumentEditorTextModelService(files, copies)));
-if (new URLSearchParams(location.search).has('m6Document') || new URLSearchParams(location.search).has('m6Pages')) services.registerInstance(IThemeService, disposables.add(new TestThemeService(new URLSearchParams(location.search).has('hc') ? highContrastDarkColorTheme : new URLSearchParams(location.search).has('hcLight') ? highContrastLightColorTheme : lightColorTheme)));
+if (new URLSearchParams(location.search).has('m6Document') || new URLSearchParams(location.search).has('m6Pages') || new URLSearchParams(location.search).has('m6ComplexPages') || !!pageRule) services.registerInstance(IThemeService, disposables.add(new TestThemeService(new URLSearchParams(location.search).has('hc') ? highContrastDarkColorTheme : new URLSearchParams(location.search).has('hcLight') ? highContrastLightColorTheme : lightColorTheme)));
 registerTestComponentServices(services);
-if (new URLSearchParams(location.search).has('m6Document') || new URLSearchParams(location.search).has('m6Pages')) disposables.add(bindTestColorTheme(services.get(IThemeService), document.documentElement));
+if (new URLSearchParams(location.search).has('m6Document') || new URLSearchParams(location.search).has('m6Pages') || new URLSearchParams(location.search).has('m6ComplexPages') || !!pageRule) disposables.add(bindTestColorTheme(services.get(IThemeService), document.documentElement));
 const codeBlockPane = disposables.add(services.createInstance(DocumentEditorPane, { ...createEditorProfileConfiguration(schema, { outlineNavigator: false, contributions: documentContributions }), contentType: 'application/vnd.ash.document+json' }));
 let academicExtensionService: MainThreadClientEditors | undefined;
 let academicSnapshot: ExtensionHostFleetSnapshot | undefined;

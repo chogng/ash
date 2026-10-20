@@ -1,10 +1,17 @@
 .ash-document-paged {
+	overflow-anchor: none;
 	background: var(--ash-text-codeBlockBackground);
 }
 
-.ash-document-page-stack {
+.ash-document-page-viewport {
 	position: relative;
 	margin-inline: auto;
+	overflow: clip;
+}
+
+.ash-document-page-stack {
+	position: absolute;
+	transform-origin: top left;
 }
 
 .ash-document-page-backgrounds {
@@ -47,4 +54,51 @@
 .ash-document-page-stack:has(.stanza-document-rich-text-input:focus-visible)
 	.ash-document-page {
 	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
+}
+
+/* A row spacer retains native table geometry across every column. */
+tr.ash-document-page-gap {
+	display: table-row;
+}
+
+tr.ash-document-page-gap > td {
+	padding: 0;
+	border: 0;
+}
+
+.ash-document-page-flow .stanza-document-inline-image {
+	object-fit: contain;
+}
+
+.ash-document-page-header,
+.ash-document-page-footer {
+	position: absolute;
+	overflow: hidden;
+	color: var(--ash-description-foreground);
+	font-size: var(--ash-fontSize-body2);
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.ash-document-page-number {
+	float: right;
+	margin-inline-start: 12px;
+}
+
+.ash-document-page-options > summary {
+	cursor: pointer;
+}
+
+.ash-document-page-options > summary:focus-visible {
+	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
+}
+
+.ash-document-page-options[open] {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+}
+
+.ash-document-page-options[open] > summary {
+	flex-basis: 100%;
 }

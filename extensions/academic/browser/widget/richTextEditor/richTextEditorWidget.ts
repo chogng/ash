@@ -449,6 +449,7 @@ export class RichTextEditorWidget extends Disposable {
 			// Persist semantic measurements, then project them onto the existing block.
 			// Defaults also overwrite obsolete styles when undo or remote edits reuse DOM.
 			const attrs = resolveDocumentParagraphAttributes(model.document, node);
+			for (const key of ['pageBreakBefore', 'keepWithNext', 'keepTogether', 'widowControl'] as const) element.dataset[key] = String(attrs[key]);
 			element.style.textAlign = String(attrs.textAlign);
 			element.style.marginBlockStart = `${attrs.spaceBefore}pt`;
 			element.style.marginBlockEnd = `${attrs.spaceAfter}pt`;

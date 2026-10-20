@@ -41,7 +41,7 @@ export function createSplitBlockCommand(schema: DocumentSchema, document: Docume
 	const rightNode = rightText.length > 0 ? schema.createText(rightText, { marks: text.marks }) : undefined;
 	const trailing = location.node.content.slice(textIndex + 1);
 	const newBlock = schema.createNode(location.node.type, {
-		attrs: location.node.attrs,
+		attrs: withoutPageBreak(location.node.attrs),
 		content: rightNode ? [rightNode] : [],
 	});
 	let transaction = new DocumentTransaction();
@@ -68,7 +68,7 @@ export function createSplitListItemCommand(schema: DocumentSchema, document: Doc
 	const rightText = text ? text.text!.slice(offset) : "";
 	const trailingInline = text ? paragraphLocation.node.content.slice(textIndex + 1) : [];
 	const trailingBlocks = itemLocation.node.content.slice(paragraphLocation.index + 1);
-	const rightParagraph = schema.createNode(paragraphLocation.node.type, { attrs: paragraphLocation.node.attrs, content: rightText.length > 0 ? [schema.createText(rightText, { marks: text?.marks ?? [] })] : [] });
+	const rightParagraph = schema.createNode(paragraphLocation.node.type, { attrs: withoutPageBreak(paragraphLocation.node.attrs), content: rightText.length > 0 ? [schema.createText(rightText, { marks: text?.marks ?? [] })] : [] });
 	const newItem = schema.createNode("listItem", { content: [rightParagraph] });
 	let transaction = new DocumentTransaction();
 	if (text && offset === 0) transaction = transaction.deleteNode(text.id);
@@ -1142,4 +1142,10 @@ function mapInlineBoundary(point: DocumentPoint, segments: readonly TextSegment[
 		?? [...segments].reverse().find(candidate => candidate.to === point.offset)
 		?? segments[0]!;
 	return { nodeId: segment.node.id, offset: Math.max(0, Math.min(segment.to - segment.from, point.offset - segment.from)) };
+}
+
+/** A break belongs to the original paragraph boundary, not every paragraph created by Enter. */
+function withoutPageBreak(attrs: DocumentAttributes): DocumentAttributes {
+	const { pageBreakBefore: _break, ...rest } = attrs;
+	return rest;
 }

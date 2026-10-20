@@ -724,8 +724,8 @@ async function assertVerticalPages(page: Page): Promise<void> {
 	const geometry = await page.locator('#document-editor .ash-document-page-stack').evaluate(stack => {
 		const papers = [...stack.querySelectorAll('.ash-document-page')].map(page => page.getBoundingClientRect());
 		const flow = stack.querySelector<HTMLElement>('.ash-document-page-flow')!;
-		const margin = parseFloat(flow.style.top) * Number((stack as HTMLElement).style.zoom);
-		const failures: { top: number; bottom: number; left: number; right: number; bodyLeft: number; bodyRight: number; }[] = [];
+		const margin = parseFloat(flow.style.top) * Number((stack as HTMLElement).dataset.pageZoom);
+		const failures: { nodeId: string | undefined; top: number; bottom: number; left: number; right: number; bodyLeft: number; bodyRight: number; }[] = [];
 		const walker = document.createTreeWalker(flow, NodeFilter.SHOW_TEXT);
 		while (walker.nextNode()) {
 			const text = walker.currentNode;
@@ -739,6 +739,7 @@ async function assertVerticalPages(page: Page): Promise<void> {
 					&& rect.left >= paper.left + margin - 1 && rect.right <= paper.right - margin + 1);
 				if (!insideBody) {
 					failures.push({
+						nodeId: text.parentElement?.closest<HTMLElement>('[data-node-id]')?.dataset.nodeId,
 						top: rect.top - papers[0]!.top, bottom: rect.bottom - papers[0]!.top,
 						left: rect.left, right: rect.right,
 						bodyLeft: papers[0]!.left + margin, bodyRight: papers[0]!.right - margin,
@@ -1012,3 +1013,165 @@ test('Academy vertical pages preserve reverse selections, deferred font layout, 
 	await page.keyboard.press('Control+z');
 	await expect.poll(() => page.evaluate(() => window.ashAcademicIntegration.getStructuredBlockTexts())).toEqual([original, 'End']);
 });
+
+for (const locale of ['en', 'zh-CN'] as const) {
+	test(`Academy M6 pagination intent, running text and read-only recovery stay in the installed document model in ${locale}`, async ({ page }, testInfo) => {
+		await page.setViewportSize({ width: 1600, height: 1200 });
+		await page.goto(`/academic.html?generalDocument&m6Pages&locale=${locale}`);
+		const root = page.locator('#document-editor');
+		await chooseParagraphOption(page, root.getByRole('combobox', { name: locale === 'en' ? 'Paper' : '纸张', exact: true }), 'A4');
+		await root.locator('summary').filter({ hasText: locale === 'en' ? 'Pagination options' : '分页选项' }).click();
+		await page.evaluate(() => window.ashAcademicIntegration.layoutStructured(1400, 650));
+		const labels = locale === 'en'
+			? { orientation: 'Orientation', landscape: 'Landscape', header: 'Page header', footer: 'Page footer', evenHeader: 'Even page header', numbers: 'Page numbers', first: 'Different first page', even: 'Different even pages', on: 'On', before: 'Page break before', together: 'Keep paragraph together' }
+			: { orientation: '纸张方向', landscape: '横向', header: '页眉', footer: '页脚', evenHeader: '偶数页页眉', numbers: '页码', first: '首页不同', even: '奇偶页不同', on: '开启', before: '段前分页', together: '段中不分页' };
+		await chooseParagraphOption(page, root.getByRole('combobox', { name: labels.orientation, exact: true }), labels.landscape);
+		for (const [label, text] of [[labels.header, 'Research 中文'], [labels.footer, 'Draft'], [labels.evenHeader, 'Even header']]) {
+			const input = root.getByRole('textbox', { name: label, exact: true });
+			await input.fill(text!);
+			await input.press('Tab');
+		}
+		await chooseParagraphOption(page, root.getByRole('combobox', { name: labels.numbers, exact: true }), labels.on);
+		await chooseParagraphOption(page, root.getByRole('combobox', { name: labels.even, exact: true }), labels.on);
+		await chooseParagraphOption(page, root.getByRole('combobox', { name: labels.first, exact: true }), labels.on);
+		const papers = root.locator('.ash-document-page');
+		await expect(papers.first().locator('.ash-document-page-header')).toHaveCount(0);
+		await expect(papers.nth(1).locator('.ash-document-page-header')).toHaveText('Even header');
+		await expect(papers.nth(2).locator('.ash-document-page-header')).toHaveText('Research 中文');
+		const pageCount = await papers.count();
+		await expect(papers.nth(1).locator('.ash-document-page-number')).toHaveText(`2 / ${pageCount}`);
+		const dimensions = await papers.first().boundingBox();
+		expect(dimensions!.width).toBeGreaterThan(dimensions!.height);
+		await assertVerticalPages(page);
+		const last = root.locator('[data-block-id="pages-last"]');
+		await last.click();
+		await chooseParagraphOption(page, root.getByRole('combobox', { name: labels.before, exact: true }), labels.on);
+		await chooseParagraphOption(page, root.getByRole('combobox', { name: labels.together, exact: true }), labels.on);
+		await assertVerticalPages(page);
+		const manualTop = await last.evaluate(editor => {
+			const flow = editor.closest('.ash-document-page-flow')!;
+			const range = document.createRange();
+			const walker = document.createTreeWalker(editor.querySelector('[data-text-node-id]')!, NodeFilter.SHOW_TEXT);
+			while (walker.nextNode()) if (walker.currentNode.textContent) break;
+			range.setStart(walker.currentNode, 0);
+			range.setEnd(walker.currentNode, 1);
+			return range.getClientRects()[0]!.top - flow.getBoundingClientRect().top;
+		});
+		const stride = dimensions!.height + 24;
+		expect(Math.min(manualTop % stride, stride - manualTop % stride)).toBeLessThan(5);
+		await last.press('ControlOrMeta+ArrowRight');
+		await expect.poll(() => page.evaluate(() => window.ashAcademicIntegration.getStructuredSelection())).toMatchObject({ head: { nodeId: 'pages-last-text', offset: 3 } });
+		await last.press('Enter');
+		await page.keyboard.type('New body');
+		await page.evaluate(() => window.ashAcademicIntegration.saveStructured());
+		const saved = JSON.parse(await page.evaluate(() => window.ashAcademicIntegration.getSavedStructured()));
+		expect(saved.document.attrs).toMatchObject({ pageOrientation: 'landscape', pageHeader: 'Research 中文', pageNumbers: true, pageDifferentFirst: true, pageDifferentEven: true });
+		expect(saved.document.content[1].attrs).toMatchObject({ pageBreakBefore: true, keepTogether: true });
+		expect(saved.document.content[2].attrs.pageBreakBefore).toBeUndefined();
+		expect(saved.document.content.slice(1).map((node: { content: { text?: string; }[]; }) => node.content.map(child => child.text ?? '').join(''))).toEqual(['End', 'New body']);
+		await page.screenshot({ path: testInfo.outputPath('academy-pagination-options.png') });
+		await page.evaluate(() => window.ashAcademicIntegration.setAcademicEnabled(false));
+		await expect(root.getByRole('combobox', { name: labels.orientation, exact: true })).toBeDisabled();
+		await expect(root.getByRole('textbox', { name: labels.header, exact: true })).toBeDisabled();
+		await page.evaluate(() => window.ashAcademicIntegration.setAcademicEnabled(true));
+		await page.evaluate(() => window.ashAcademicIntegration.reopenStructured());
+		await assertVerticalPages(page);
+		await expect(papers.nth(1).locator('.ash-document-page-header')).toHaveText('Even header');
+		await page.evaluate(() => window.ashAcademicIntegration.saveStructured());
+		expect(JSON.parse(await page.evaluate(() => window.ashAcademicIntegration.getSavedStructured()))).toEqual(saved);
+		await root.locator('summary').filter({ hasText: locale === 'en' ? 'Pagination options' : '分页选项' }).click();
+		await root.getByRole('textbox', { name: labels.header, exact: true }).press('Escape');
+		await expect(root.locator('details')).not.toHaveAttribute('open');
+		await expect(root.locator('.stanza-document-rich-text-input').last()).toBeFocused();
+	});
+}
+
+test('Academy M6 paginates whole table rows, oversized parallel cells, lists, code lines and tall images without losing input identities', async ({ page }, testInfo) => {
+	await page.goto('/academic.html?generalDocument&m6ComplexPages&hcLight');
+	const root = page.locator('#document-editor');
+	await chooseParagraphOption(page, root.getByRole('combobox', { name: 'Paper', exact: true }), 'Letter');
+	await assertVerticalPages(page);
+	const rowPages = await root.locator('.stanza-document-table-row').evaluateAll(rows => {
+		const flow = rows[0]!.closest('.ash-document-page-flow')!.getBoundingClientRect();
+		const papers = [...document.querySelectorAll('#document-editor .ash-document-page')].map(page => page.getBoundingClientRect());
+		return rows.filter(row => !['complex-row-8', 'complex-nested-row'].includes(row.getAttribute('data-node-id') ?? '')).map(row => {
+			const rect = row.getBoundingClientRect();
+			return papers.some(paper => rect.top >= paper.top + flow.top - papers[0]!.top - 1 && rect.bottom <= paper.bottom - (flow.top - papers[0]!.top) + 1);
+		});
+	});
+	expect(rowPages.every(Boolean)).toBe(true);
+	await expect(root.locator('[data-node-id="complex-nested-row"] .ash-document-page-gap').first()).toBeAttached();
+	const tallCell = root.locator('[data-text-node-id="complex-cell-8-1-text"]');
+	await expect(tallCell.locator('.ash-document-page-gap').first()).toBeAttached();
+	await tallCell.evaluate(run => {
+		(run.closest('[contenteditable]') as HTMLElement).focus();
+		const gap = run.querySelector('.ash-document-page-gap')!;
+		const text = gap.nextSibling!;
+		document.getSelection()!.setBaseAndExtent(text, 2, text, 2);
+	});
+	const before = await page.evaluate(() => window.ashAcademicIntegration.getStructuredSelection());
+	await page.keyboard.type('跨页');
+	await page.evaluate(() => window.ashAcademicIntegration.saveStructured());
+	const typed = await page.evaluate(() => window.ashAcademicIntegration.getSavedStructured());
+	expect(typed).toContain('跨页');
+	await assertVerticalPages(page);
+	await page.keyboard.press('ControlOrMeta+z');
+	await expect.poll(() => page.evaluate(() => window.ashAcademicIntegration.getStructuredSelection())).toEqual(before);
+	await page.keyboard.press('ControlOrMeta+Shift+z');
+	await assertVerticalPages(page);
+	const image = root.locator('.stanza-document-inline-image');
+	const imageBounds = await image.boundingBox();
+	expect(imageBounds!.height).toBeLessThanOrEqual(11 * 96 - 192 + 1);
+	await chooseParagraphOption(page, root.getByRole('combobox', { name: 'Page zoom', exact: true }), '50%');
+	await assertVerticalPages(page);
+	await page.screenshot({ path: testInfo.outputPath('academy-table-pages.png') });
+	await page.evaluate(() => window.ashAcademicIntegration.reopenStructured());
+	await assertVerticalPages(page);
+	await page.evaluate(() => window.ashAcademicIntegration.dispose());
+	await expect(root.locator('.ash-document-page-stack')).toHaveCount(0);
+	await expect(page.locator('style[data-ash-editor-client-style]')).toHaveCount(0);
+});
+
+for (const rule of ['orphan', 'short', 'widow', 'together', 'next', 'chain'] as const) {
+	test(`Academy M6 applies ${rule} paragraph rules to measured lines and restores them through undo`, async ({ page }) => {
+		await page.goto(`/academic.html?generalDocument&pageRule=${rule}`);
+		const root = page.locator('#document-editor');
+		await chooseParagraphOption(page, root.getByRole('combobox', { name: 'Paper', exact: true }), 'Letter');
+		const linePages = async (nodeId: string) => root.locator(`[data-text-node-id="${nodeId}"]`).evaluate(run => {
+			const firstPage = document.querySelector('#document-editor .ash-document-page')!.getBoundingClientRect();
+			const stride = firstPage.height + 24;
+			const pages: number[] = [];
+			const walker = document.createTreeWalker(run, NodeFilter.SHOW_TEXT);
+			while (walker.nextNode()) {
+				const range = document.createRange();
+				range.selectNodeContents(walker.currentNode);
+				for (const rect of range.getClientRects()) if (rect.width > 0 && rect.height > 0) pages.push(Math.floor((rect.top - firstPage.top) / stride));
+			}
+			return pages;
+		});
+		const original = await linePages('rule-target-text');
+		await root.locator('[data-block-id="rule-target"]').click();
+		await root.locator('summary').filter({ hasText: 'Pagination options' }).click();
+		const label = rule === 'together' ? 'Keep paragraph together' : rule === 'next' || rule === 'chain' ? 'Keep with next' : 'Widow and orphan control';
+		await chooseParagraphOption(page, root.getByRole('combobox', { name: label, exact: true }), 'On');
+		const changed = await linePages('rule-target-text');
+		if (rule === 'orphan' || rule === 'short') {
+			expect(original.filter(page => page === 0)).toHaveLength(1);
+			expect(changed.every(page => page === 1)).toBe(true);
+		} else if (rule === 'widow') {
+			expect(original.filter(page => page === 1)).toHaveLength(1);
+			expect(changed.filter(page => page === 1)).toHaveLength(2);
+		} else if (rule === 'together') {
+			expect(new Set(original).size).toBe(2);
+			expect(new Set(changed)).toEqual(new Set([1]));
+		} else {
+			expect(original).toEqual([0]);
+			expect(changed).toEqual([1]);
+			expect((await linePages('rule-next-text'))[0]).toBe(1);
+			if (rule === 'chain') expect(await linePages('rule-middle-text')).toEqual([1]);
+		}
+		await assertVerticalPages(page);
+		await root.locator('[data-block-id="rule-target"]').press('ControlOrMeta+z');
+		expect(await linePages('rule-target-text')).toEqual(original);
+	});
+}

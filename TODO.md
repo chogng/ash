@@ -70,7 +70,7 @@
 
 ## Stanza 编辑器 · TODO
 
-- [ ] **验收 · 编辑器扩展平台组合**：Academy 的外置签名包安装装载、Code 的产品预装 Rust 进程注入、既有实现迁移与基础入口退出静态装配已实现，本机真实 Provider／Chromium 组合回归覆盖启停、dirty／恢复及释放；尚需真实 Electron 多窗口／远端环境与物理 IME、屏幕阅读器验收。平台范围见[路线图](docs/design/editor-roadmap.md)，不能用单测或 Chromium 模拟输入替代这些环境证据。
+- [ ] **验收 · 编辑器扩展平台组合**：在真实 Electron 多窗口／远端环境验收 Academy 外置签名包与 Code 产品预装扩展的装载、版本匹配、dirty／恢复及释放，并补物理 IME、屏幕阅读器与跨页输入验收。已完成的迁移、纵向分页及页面规则与本机真实 Provider／Chromium 验证记录归[路线图](docs/design/editor-roadmap.md)维护，不再列作功能待办；这些结果不能替代尚缺的真实环境证据。
 
 后续阶段由[编辑器路线图](docs/design/editor-roadmap.md)维护；本清单不再把整条路线图重复记成一个未完成任务。
 

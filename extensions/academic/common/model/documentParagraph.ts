@@ -1,7 +1,12 @@
+import { validateDocumentPaginationAttributes } from './documentPageLayout.js';
 import type { DocumentAttributes, DocumentNode } from './document.js';
 
 /** Persistent paragraph measurements use points, independent of viewport zoom and UI spacing tokens. */
 export interface DocumentParagraphAttributes {
+	readonly pageBreakBefore?: boolean;
+	readonly keepWithNext?: boolean;
+	readonly keepTogether?: boolean;
+	readonly widowControl?: boolean;
 	readonly textAlign?: 'start' | 'center' | 'end' | 'justify';
 	readonly lineSpacing?: number;
 	readonly spaceBefore?: number;
@@ -17,11 +22,13 @@ export interface DocumentParagraphAttributes {
 
 /** Existing continuous-document defaults; absent attributes keep old documents visually compatible. */
 export const defaultDocumentParagraphAttributes: Required<Omit<DocumentParagraphAttributes, 'fontFamily' | 'fontSize'>> = Object.freeze({
+	pageBreakBefore: false, keepWithNext: false, keepTogether: false, widowControl: true,
 	textAlign: 'start', lineSpacing: 1.6, spaceBefore: 0, spaceAfter: 9, indentStart: 0, indentEnd: 0, firstLineIndent: 0,
 });
 
 /** Schema validation covers files, clipboard fragments, remote transactions and local commands alike. */
 export function validateDocumentParagraphAttributes(attrs: DocumentAttributes): void {
+	validateDocumentPaginationAttributes(attrs);
 	if (attrs.textAlign !== undefined && !['start', 'center', 'end', 'justify'].includes(String(attrs.textAlign))) {
 		throw new TypeError('Paragraph alignment must be start, center, end, or justify');
 	}
@@ -46,7 +53,7 @@ export interface DocumentParagraphStyle {
 	readonly attrs: DocumentParagraphAttributes;
 }
 
-export const documentParagraphFormatKeys = ['textAlign', 'lineSpacing', 'spaceBefore', 'spaceAfter', 'indentStart', 'indentEnd', 'firstLineIndent', 'fontFamily', 'fontSize'] as const;
+export const documentParagraphFormatKeys = ['pageBreakBefore', 'keepWithNext', 'keepTogether', 'widowControl', 'textAlign', 'lineSpacing', 'spaceBefore', 'spaceAfter', 'indentStart', 'indentEnd', 'firstLineIndent', 'fontFamily', 'fontSize'] as const;
 
 /** The scalar JSON attribute keeps the existing document/transaction wire format compatible. */
 export function getDocumentParagraphStyles(document: DocumentNode): readonly DocumentParagraphStyle[] {
