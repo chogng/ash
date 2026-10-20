@@ -329,9 +329,10 @@ impl CodeModeBroker {
         call: &ToolCall,
         updates: Arc<dyn ThreadUpdateSink>,
         hooks: Arc<dyn HookService>,
+        observer: Arc<dyn crate::TurnExecutionObserver>,
     ) -> Result<ToolExecutionOutput, CoreError> {
         match call.name.as_str() {
-            EXEC_TOOL_NAME => self.execute_cell(context, call, updates, hooks),
+            EXEC_TOOL_NAME => self.execute_cell(context, call, updates, hooks, observer),
             WAIT_TOOL_NAME => self.wait_cell(context, call),
             _ => Err(CoreError::InvalidInput(format!(
                 "not a Code Mode control tool: {}",
@@ -346,6 +347,7 @@ impl CodeModeBroker {
         call: &ToolCall,
         updates: Arc<dyn ThreadUpdateSink>,
         hooks: Arc<dyn HookService>,
+        observer: Arc<dyn crate::TurnExecutionObserver>,
     ) -> Result<ToolExecutionOutput, CoreError> {
         let source = required_string(&call.arguments, &["source", "code"], "source")?;
         let parsed_source = parse_exec_source(&source)?;
@@ -415,6 +417,7 @@ impl CodeModeBroker {
             context.cancellation(),
             updates,
             hooks,
+            observer,
             self.inner.threads.next_stream_instance_id(),
         ));
         let started = runtime

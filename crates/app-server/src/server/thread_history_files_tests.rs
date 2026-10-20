@@ -82,6 +82,201 @@ fn conversation_changes(
 }
 
 #[test]
+fn code_mode_nested_write_is_owned_and_can_publish_a_commit_selection() {
+    use core_api::ModelService;
+    use git_turn_changes::TurnCommitStore;
+    use std::sync::Arc;
+    use std::sync::atomic::AtomicUsize;
+    use std::sync::atomic::Ordering;
+
+    struct WriteModel(AtomicUsize);
+    impl ModelService for WriteModel {
+        fn invoke(
+            &self,
+            _: core_api::ModelSelection<'_>,
+            _: &ash_protocol::ModelRequest,
+            _: &ash_async_utils::CancellationToken,
+        ) -> Result<ash_protocol::ModelResponse, core_api::CoreError> {
+            let first = self.0.fetch_add(1, Ordering::SeqCst) == 0;
+            Ok(ash_protocol::ModelResponse {
+                output: if first {
+                    vec![ash_protocol::ResponseItem::ToolCall(
+                        ash_protocol::ToolCall {
+                            id: ash_protocol::ToolCallId::new("nested-write").unwrap(),
+                            name: ash_protocol::ToolName::new("exec").unwrap(),
+                            arguments: serde_json::json!({"source":"await tools.read_file({path: 'note'}); text(await tools.write_file({path: 'note', content: 'nested edit\\n'}));"}),
+                        },
+                    )]
+                } else {
+                    vec![ash_protocol::ResponseItem::Text("done".into())]
+                },
+                usage: None,
+                billing: None,
+                stop_reason: if first {
+                    ash_protocol::StopReason::ToolUse
+                } else {
+                    ash_protocol::StopReason::Completed
+                },
+            })
+        }
+    }
+
+    let profile = tempfile::tempdir().unwrap();
+    let source = tempfile::tempdir().unwrap();
+    std::fs::write(source.path().join("note"), "initial\n").unwrap();
+    for arguments in [
+        vec!["init", "--quiet", "--initial-branch=main"],
+        vec!["config", "user.name", "Nested tool test"],
+        vec!["config", "user.email", "nested@example.invalid"],
+        vec!["config", "commit.gpgsign", "false"],
+        vec!["config", "core.hooksPath", "/dev/null"],
+        vec!["add", "note"],
+        vec!["commit", "--quiet", "-m", "baseline"],
+    ] {
+        let output = std::process::Command::new("git")
+            .current_dir(source.path())
+            .args(arguments)
+            .output()
+            .unwrap();
+        assert!(
+            output.status.success(),
+            "{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+    let server = open_app_server(
+        AppServerOptions::new(profile.path())
+            .without_built_in_skills()
+            .with_dir_root(source.path())
+            .with_agent_model_service(Arc::new(WriteModel(AtomicUsize::new(0)))),
+        ash_app_server_diff::compute,
+    )
+    .unwrap()
+    .with_model_catalog(crate::model_catalog::unavailable_model_catalog());
+    let mut connection = server.product_host_connection();
+    initialize(&server, &mut connection);
+    let created = call(
+        &server,
+        &mut connection,
+        "session/create",
+        serde_json::json!({
+            "commandId":"nested-session", "title":"Nested write", "executionTarget":{"type":"local","root":source.path()}
+        }),
+    );
+    let session = created["session"]["sessionId"].as_str().unwrap();
+    let thread = ash_protocol::ThreadId::new(session).unwrap();
+    call(
+        &server,
+        &mut connection,
+        "session/request",
+        serde_json::json!({
+            "commandId":"nested-turn", "sessionId":session, "request":{
+                "type":"startTurn", "threadId":thread, "expectedSequence":1, "toolMode":"codeModeOnly", "approvalMode":"bypassPermissions",
+                "input":[{"type":"text", "text":"Write note using Code Mode"}]
+            }
+        }),
+    );
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(30);
+    loop {
+        let snapshot = server.threads().read_thread(&thread).unwrap();
+        if snapshot.turns.last().is_some_and(|turn| {
+            matches!(
+                turn.status,
+                ash_protocol::TurnStatus::Completed
+                    | ash_protocol::TurnStatus::Failed
+                    | ash_protocol::TurnStatus::Interrupted
+            )
+        }) {
+            assert_eq!(
+                snapshot.turns.last().unwrap().status,
+                ash_protocol::TurnStatus::Completed,
+                "{snapshot:?}"
+            );
+            break;
+        }
+        assert!(
+            std::time::Instant::now() < deadline,
+            "nested write did not finish"
+        );
+        std::thread::sleep(std::time::Duration::from_millis(10));
+    }
+    let runtime = server.git_turn_changes.as_ref().unwrap();
+    let binding = runtime.binding(&thread).unwrap();
+    assert_eq!(
+        std::fs::read_to_string(binding.dir().join("note")).unwrap(),
+        "nested edit\n",
+        "{:?}",
+        server.threads().read_thread(&thread).unwrap().items
+    );
+    // Turn completion is published before the observer seals its immutable trees.
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(30);
+    let records = loop {
+        let records = runtime
+            .list(&ash_protocol::SessionId::new(session).unwrap(), &thread)
+            .unwrap();
+        if records.len() == 1 && records[0].capture_state == git_turn_changes::CaptureState::Sealed
+        {
+            break records;
+        }
+        assert!(
+            std::time::Instant::now() < deadline,
+            "nested changes were not sealed: {records:?}"
+        );
+        std::thread::sleep(std::time::Duration::from_millis(10));
+    };
+    assert_eq!(records.len(), 1);
+    let record = &records[0];
+    assert!(!record.attribution_incomplete, "{record:?}");
+    let preview = call(
+        &server,
+        &mut connection,
+        "turnChanges/prepareCommit",
+        serde_json::json!({
+            "commandId":"nested-preview", "sessionId":session, "threadId":thread,
+            "selections":[{"changeSetId":record.change_set_id, "expectedRevision":record.revision, "paths":["note"]}],
+            "message":"Preserve nested tool ownership"
+        }),
+    );
+    assert_eq!(preview["files"].as_array().unwrap().len(), 1);
+    call(
+        &server,
+        &mut connection,
+        "turnChanges/commit",
+        serde_json::json!({
+            "commandId":"nested-commit", "sessionId":session, "threadId":thread, "commitId":preview["commitId"]
+        }),
+    );
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(30);
+    loop {
+        let commit = runtime
+            .store
+            .load_commit(preview["commitId"].as_str().unwrap())
+            .unwrap();
+        match commit.state {
+            git_turn_changes::TurnCommitState::Committed { .. } => break,
+            git_turn_changes::TurnCommitState::Queued
+            | git_turn_changes::TurnCommitState::Publishing => {}
+            state => panic!("selection failed: {state:?}"),
+        }
+        assert!(
+            std::time::Instant::now() < deadline,
+            "selection did not publish"
+        );
+        std::thread::sleep(std::time::Duration::from_millis(10));
+    }
+    let committed = std::process::Command::new("git")
+        .current_dir(source.path())
+        .args(["show", "HEAD:note"])
+        .output()
+        .unwrap();
+    assert!(committed.status.success());
+    assert_eq!(
+        String::from_utf8(committed.stdout).unwrap(),
+        "nested edit\n"
+    );
+}
+
+#[test]
 fn git_and_directory_history_restore_files_and_keep_the_same_thread_after_restart() {
     for git in [true, false] {
         let profile = tempfile::tempdir().unwrap();

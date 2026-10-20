@@ -871,7 +871,13 @@ impl ToolScheduler {
                 let updates = Arc::clone(&self.updates);
                 let hooks = Arc::clone(&self.hooks);
                 orchestrator.execute_core_control(context, call, reviewed, authorization, || {
-                    broker.execute(context, &control_call, updates, hooks)
+                    broker.execute(
+                        context,
+                        &control_call,
+                        updates,
+                        hooks,
+                        Arc::clone(&self.execution_observer),
+                    )
                 })?
             }
             None => orchestrator.execute(context, call, reviewed, authorization)?,

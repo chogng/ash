@@ -31,6 +31,7 @@ pub(super) struct BrokerToolInvoker {
     stream_instance_id: ash_protocol::StreamInstanceId,
     next_stream_sequence: AtomicU64,
     hooks: Arc<dyn crate::HookService>,
+    observer: Arc<dyn crate::TurnExecutionObserver>,
 }
 
 impl BrokerToolInvoker {
@@ -40,6 +41,7 @@ impl BrokerToolInvoker {
         cancellation: &CancellationToken,
         updates: Arc<dyn ThreadUpdateSink>,
         hooks: Arc<dyn crate::HookService>,
+        observer: Arc<dyn crate::TurnExecutionObserver>,
         stream_instance_id: ash_protocol::StreamInstanceId,
     ) -> Self {
         let close_source = cancellation.child_source();
@@ -54,6 +56,7 @@ impl BrokerToolInvoker {
             stream_instance_id,
             next_stream_sequence: AtomicU64::new(0),
             hooks,
+            observer,
         }
     }
 }
@@ -89,6 +92,7 @@ impl ToolInvoker for BrokerToolInvoker {
                 &cell_cancellation,
                 Arc::clone(&self.updates),
                 Arc::clone(&self.hooks),
+                Arc::clone(&self.observer),
             )
             .map_err(|error| error.to_string())
     }

@@ -30,6 +30,7 @@ impl CodeModeBrokerInner {
         cancellation: &CancellationToken,
         updates: Arc<dyn ThreadUpdateSink>,
         hooks: Arc<dyn HookService>,
+        observer: Arc<dyn crate::TurnExecutionObserver>,
     ) -> Result<serde_json::Value, CoreError> {
         cancellation
             .check()
@@ -157,7 +158,8 @@ impl CodeModeBrokerInner {
         let item_id = recorded.item.item_id().clone();
         let scheduler = ToolScheduler::new(Arc::clone(&self.threads), tools, policy)
             .with_thread_updates(Arc::clone(&updates))
-            .with_hooks(hooks);
+            .with_hooks(hooks)
+            .with_execution_observer(observer);
 
         loop {
             cancellation
