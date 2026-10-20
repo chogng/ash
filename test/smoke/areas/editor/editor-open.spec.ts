@@ -1761,22 +1761,23 @@ test('Agent document requests use the Agents window model and save closed files 
 	expect(runningApplication.diagnostics.errors).toEqual([]);
 });
 
-test('Agent review commands are available without an App Server connection', { tag: ['@browser-ui', '@electron-ui'] }, async ({ target, workbench, restartWorkbench }) => {
-	await workbench.quickaccess.runCommand('chatEditing.reviewChanges');
-	const picker = workbench.page.getByRole('dialog', { name: 'Review Agent changes', exact: true });
-	await expect(picker).toBeVisible();
-	await expect(picker.getByRole('option')).toHaveCount(0);
-	await workbench.page.keyboard.press('Escape');
-	await expect(picker).toBeHidden();
-	await expect(workbench.page.locator('.ash-chat-editing-overlay:visible')).toHaveCount(0);
+test('Agent review commands are available without an App Server connection', { tag: ['@browser-ui', '@electron-ui'] }, async ({ workbench, restartWorkbench }) => {
+	const runEmptyReview = async (label: string): Promise<void> => {
+		await workbench.quickaccess.open('>chatEditing.reviewChanges');
+		const command = workbench.quickaccess.items.filter({ has: workbench.page.locator('.ash-quick-pick-row-description').getByText('chatEditing.reviewChanges', { exact: true }) });
+		await expect(command.locator('.ash-quick-pick-row-label')).toHaveText(label);
+		await command.click();
+		// With no editing session, the available command closes without an empty review picker.
+		await expect(workbench.quickaccess.element).toBeHidden();
+		await expect(workbench.page.locator('.ash-chat-editing-overlay:visible')).toHaveCount(0);
+	};
+	await runEmptyReview('Review Agent changes');
 	await workbench.quickaccess.runCommand('workbench.action.configureLocale');
 	const language = workbench.page.getByRole('dialog', { name: 'Select Display Language' }).getByRole('combobox');
 	await language.fill('简体中文');
 	await language.press('Enter');
 	({ workbench } = await restartWorkbench());
-	await workbench.quickaccess.runCommand('chatEditing.reviewChanges');
-	await expect(workbench.page.getByRole('dialog', { name: '审核 Agent 修改', exact: true })).toBeVisible();
-	await workbench.page.keyboard.press('Escape');
+	await runEmptyReview('审核 Agent 修改');
 });
 
 test('Agent review accepts individual hunks and rejects the remainder without losing user edits', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, testWorkspace, workbench }) => {
