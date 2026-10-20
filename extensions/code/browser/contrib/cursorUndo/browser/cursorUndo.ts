@@ -6,6 +6,7 @@ import { type ICodeEditor } from '../../../../../../src/ash/editor/browser/edito
 import { EditorAction, EditorContributionInstantiation, registerEditorAction, registerEditorContribution, type ServicesAccessor } from '../../../registration.js';
 import { Selection } from '../../../../../../src/ash/editor/common/core/selection.js';
 import { type IEditorContribution } from '../../../../../../src/ash/editor/common/editorCommon.js';
+import { EditorContextKeys } from '../../../../../../src/ash/editor/common/editorContextKeys.js';
 
 class CursorState {
 	constructor(readonly selections: readonly Selection[]) { }
@@ -91,6 +92,7 @@ export class CursorUndo extends EditorAction {
 			label: nls.localize2('cursor.undo', 'Cursor Undo'),
 			precondition: undefined,
 			kbOpts: {
+				kbExpr: EditorContextKeys.textInputFocus.isEqualTo(true),
 				weight: KeybindingWeight.EditorContrib,
 				primary: KeyMod.CtrlCmd | KeyCode.KeyU,
 			},

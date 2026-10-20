@@ -16,6 +16,7 @@ export class TerminalTypeAheadAddon extends Disposable implements ITerminalAddon
 	private sentAt = 0;
 	private latency = 0;
 	private promptReady = false;
+	private echoConfirmed = false;
 	private generation = 0;
 
 	constructor(
@@ -56,7 +57,10 @@ export class TerminalTypeAheadAddon extends Disposable implements ITerminalAddon
 		this._register(this.instance.onDidChangeState(() => { this.promptReady = false; this.reset(); }));
 		this._register(this.instance.onDidExit(() => { this.promptReady = false; this.reset(); }));
 		this._register(this.instance.onDidWriteData(event => {
-			if (!this.pending) return;
+			if (!this.pending) {
+				if (event.data) this.reset();
+				return;
+			}
 			// Only exact printable echo can confirm a prediction. Redraws, control
 			// sequences, gaps and mismatches discard it; the original bytes still parse.
 			if (!event.trackCommit || !event.data || !this.pending.startsWith(event.data)) { this.reset(); return; }
@@ -65,7 +69,12 @@ export class TerminalTypeAheadAddon extends Disposable implements ITerminalAddon
 			this.element.replaceChildren();
 			const generation = this.generation;
 			void Promise.resolve(event.writePromise).then(() => {
-				if (!this.isDisposed && generation === this.generation) this.render(raw);
+				if (!this.isDisposed && generation === this.generation) {
+					// A prompt can be active while the shell has disabled echo. Do not
+					// project input until this prompt has committed a real printable echo.
+					this.echoConfirmed = true;
+					this.render(raw);
+				}
 			}, () => { if (!this.isDisposed && generation === this.generation) this.reset(); });
 		}));
 		for (const listener of [
@@ -94,12 +103,13 @@ export class TerminalTypeAheadAddon extends Disposable implements ITerminalAddon
 	private reset(): void {
 		this.generation++;
 		this.pending = '';
+		this.echoConfirmed = false;
 		this.element.replaceChildren();
 	}
 
 	private render(raw: Terminal): void {
 		this.element.replaceChildren();
-		if (!this.pending || raw.buffer.active.type !== 'normal' || this.screen.element.hidden || this.screen.isDisposed) return;
+		if (!this.echoConfirmed || !this.pending || raw.buffer.active.type !== 'normal' || this.screen.element.hidden || this.screen.isDisposed) return;
 		const enabled = this.configuration.getValue<string>(TerminalTypeAheadSettingId.LocalEchoEnabled);
 		const threshold = this.configuration.getValue<number>(TerminalTypeAheadSettingId.LocalEchoLatencyThreshold);
 		const folder = this.workspace.getWorkspace().folders.find(folder => folder.id === this.instance.dirId);

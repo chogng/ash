@@ -24,9 +24,10 @@ suite('Terminal accessibility owners', () => {
 		test(`documents workspace directory links in accessibility help (${locale})`, () => {
 			initializeTestLocalization(locale);
 			try {
-				using provider = new TerminalAccessibilityHelpProvider({} as ITerminalInstance);
+				using provider = new TerminalAccessibilityHelpProvider({} as ITerminalInstance, true);
 				const content = provider.provideContent();
 				assert.ok(content.includes(folderHelp));
+				assert.ok(content.includes(locale === 'zh-CN' ? '建议列表保持终端输入焦点' : 'The suggestion list keeps terminal input focused'));
 				assert.ok(content.includes('<keybinding:workbench.action.terminal.openDetectedLink>'));
 				for (const action of locale === 'zh-CN'
 					? ['切换活动终端', '增大字号', '发送信号', '粘贴为一行', '命令参考线', '列数和行数', '自动回复', '本地回显', '显示环境贡献', '录制终端会话', '询问 Chat', 'OSC 99']

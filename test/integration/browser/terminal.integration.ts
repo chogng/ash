@@ -1229,6 +1229,30 @@ if (new URLSearchParams(location.search).has('input')) {
 		const dialogs = services.get(IDialogService) as DialogService;
 		store.add(new DialogHandlerContribution(dialogs.model, new BrowserDialogHandler(document.body)));
 	}
+	// Constructor-injected services must be installed before the first terminal's
+	// contributions are created; replacing this service afterwards only fixes actions.
+	const suggestFiles = new URLSearchParams(location.search).has('suggest') ? (() => {
+		let holdFiles = false;
+		let releaseFiles: (() => void) | undefined;
+		const provider = store.add(new class extends InMemoryFileSystemProvider {
+			override async readDirectory(resource: URI) {
+				if (holdFiles) {
+					holdFiles = false;
+					await new Promise<void>(resolve => { releaseFiles = resolve; });
+				}
+				return super.readDirectory(resource);
+			}
+		}());
+		const files = store.add(new FileService());
+		store.add(files.registerProvider('file', provider));
+		services.registerInstance(IFileService, files);
+		return { files, provider, holdFiles: () => { holdFiles = true; }, filesPending: () => releaseFiles !== undefined, releaseFiles: () => { releaseFiles?.(); releaseFiles = undefined; } };
+	})() : undefined;
+	if (new URLSearchParams(location.search).has('accessibilityHelp')) {
+		const { AccessibleViewService } = await import('../../../src/ash/workbench/contrib/accessibility/browser/accessibleView.js');
+		await import('../../../src/ash/workbench/contrib/accessibility/browser/accessibleViewActions.js');
+		services.registerSingleton(IAccessibleViewService, () => services.createInstance(AccessibleViewService));
+	}
 	const inputCommands = store.add(new CommandService(services));
 	services.registerInstance(ICommandService, inputCommands);
 	installWorkbenchServiceContributions({ container: services, register: value => store.add(value), blockRestorationUntil: () => { } });
@@ -1246,7 +1270,7 @@ if (new URLSearchParams(location.search).has('input')) {
 	screen.focus();
 	if (new URLSearchParams(location.search).has('find') || clipboardFixture || sequenceFixture || groupFixture) {
 		const commands = inputCommands;
-		services.registerInstance(IAccessibleViewService, { getOpenAriaHint: () => undefined } as unknown as IAccessibleViewService);
+		if (!new URLSearchParams(location.search).has('accessibilityHelp')) services.registerInstance(IAccessibleViewService, { getOpenAriaHint: () => undefined } as unknown as IAccessibleViewService);
 		services.registerInstance(ILogService, new NullLoggerService());
 		services.registerInstance(IUserDataProfileService, new UserDataProfileService());
 		const keybindingSource = sequenceFixture ? JSON.stringify([
@@ -1254,22 +1278,9 @@ if (new URLSearchParams(location.search).has('input')) {
 		]) : '[]';
 		if (new URLSearchParams(location.search).has('suggest')) {
 			const { TerminalCommandHistory } = await import('../../../src/ash/workbench/contrib/terminalContrib/history/common/history.js');
-			let holdFiles = false;
-			let releaseFiles: (() => void) | undefined;
-			const provider = store.add(new class extends InMemoryFileSystemProvider {
-				override async readDirectory(resource: URI) {
-					if (holdFiles) {
-						holdFiles = false;
-						await new Promise<void>(resolve => { releaseFiles = resolve; });
-					}
-					return super.readDirectory(resource);
-				}
-			}());
-			const files = store.add(new FileService());
-			store.add(files.registerProvider('file', provider));
+			const { files, provider, holdFiles, filesPending, releaseFiles } = suggestFiles!;
 			const keybindingsResource = services.get(IUserDataProfileService).currentProfile.keybindingsResource;
 			store.add(files.registerProvider(keybindingsResource.scheme, provider));
-			services.registerInstance(IFileService, files);
 			await files.createDirectory(URI.file('/workspace'));
 			await files.createDirectory(URI.joinPath(keybindingsResource, '..'));
 			await files.writeFile({ resource: keybindingsResource, content: keybindingSource }, { create: true, overwrite: true });
@@ -1280,12 +1291,11 @@ if (new URLSearchParams(location.search).has('input')) {
 			let releaseProvider: (() => void) | undefined;
 			store.add(toDisposable(() => { providerRegistration?.dispose(); releaseProvider?.(); }));
 			window.ashTerminalSuggestIntegration = {
+				configure: (key, value) => services.get(IConfigurationService).updateValue(key, value),
 				history: (command, trusted = true, disabled = false) => history.record(terminal.profile.profileId, 'succeeded', command, trusted, disabled),
 				file: async path => { await files.createFile(URI.from({ scheme: 'file', path }), 'overwrite'); },
 				directory: async path => { await files.createDirectory(URI.from({ scheme: 'file', path })); },
-				holdFiles: () => { holdFiles = true; },
-				filesPending: () => releaseFiles !== undefined,
-				releaseFiles: () => { releaseFiles?.(); releaseFiles = undefined; },
+				holdFiles, filesPending, releaseFiles,
 				model: () => terminal.capabilities?.get(TerminalCapability.CommandDetection)?.promptInputModel.getCombinedString(),
 				provider: (items, triggers = [], delayed = false) => {
 					providerRegistration?.dispose();
@@ -1429,7 +1439,7 @@ if (new URLSearchParams(location.search).has('input')) {
 				errors: () => notifications.model.getNotifications().map(item => item.message),
 				help: async () => {
 					const { TerminalAccessibilityHelpProvider } = await import('../../../src/ash/workbench/contrib/terminalContrib/accessibility/browser/terminalAccessibilityHelp.js');
-					using provider = new TerminalAccessibilityHelpProvider(terminal);
+					using provider = new TerminalAccessibilityHelpProvider(terminal, services.get(IConfigurationService).getValue<boolean>('terminal.integrated.suggest.enabled'));
 					return provider.provideContent();
 				},
 			};
@@ -1557,6 +1567,7 @@ declare global {
 			recording(): boolean;
 		};
 		ashTerminalSuggestIntegration: {
+			configure(key: string, value: unknown): Promise<void>;
 			provider(items: readonly import('../../../src/ash/workbench/contrib/terminalContrib/suggest/browser/terminalCompletionService.js').ITerminalCompletion[], triggers?: string[], delayed?: boolean): void;
 			providerRequests(): { value: string; cursorIndex: number; cancelled: boolean; }[];
 			releaseProvider(): void;

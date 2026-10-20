@@ -564,3 +564,25 @@ fn terminal_proposals_request_distinct_capabilities_and_demand_activation() {
         ]
     );
 }
+
+#[test]
+fn terminal_profile_activation_uses_standard_shape_and_rejects_ambiguous_legacy() {
+    let profiles = serde_json::json!([{"id": "acme.shell", "title": "Shell"}]);
+    for manifest in [
+        serde_json::json!({"contributes": {"terminal": {"profiles": profiles}}}),
+        serde_json::json!({"contributes": {"terminalProfiles": profiles}}),
+    ] {
+        assert_eq!(
+            super::activation_plan(&manifest).unwrap().events,
+            ["onTerminalProfile:acme.shell"]
+        );
+    }
+    for manifest in [
+        serde_json::json!({"contributes": {"terminal": {"profiles": profiles}, "terminalProfiles": profiles}}),
+        serde_json::json!({"contributes": {"terminal": []}}),
+        serde_json::json!({"contributes": {"terminal": {"profiles": {}}}}),
+        serde_json::json!({"contributes": {"terminal": {"profiles": [{"id":"invalid profile"}]}}}),
+    ] {
+        assert!(super::activation_plan(&manifest).is_err());
+    }
+}

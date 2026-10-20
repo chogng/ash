@@ -33,7 +33,7 @@ Sticky Scroll 仅投影原命令 markers 与屏幕，不保存命令副本。Sug
 | 悬停已完成命令及输出                                    | `commandGuide/browser/terminal.commandGuide.contribution.ts` → 原 CommandDetection markers 与 buffer                  | 参考线按原保留范围投影；输入、alternate buffer、trim、设置关闭及实例释放撤回，不执行命令。                                                         |
 
 | Auto Replies | `autoReplies` → 原进程 service → `terminal/setAutoReplies` → exec-server 原 PTY drainer | 创建时原子安装，原始字节跨块匹配、有界规则与每规则一秒冷却；隐藏屏幕不影响，detach／连接关闭／退出撤销。 |
-| Local Echo | `typeAhead` → 原 prompt capability、raw key 与 output commit | 仅投影已确认输入态的可打印 ASCII，原输出确认后撤回对应预测；控制、输出不匹配、切换 buffer 或关闭设置清除。Enter 停止预测直到下个 prompt；不更改已解析 buffer 或拦截原输出。默认关闭。 |
+| Local Echo | `typeAhead` → 原 prompt capability、raw key 与 output commit | 当前 prompt 先提交真实可打印字符回显，才投影后续可打印 ASCII，避免在 Shell 关闭 echo 时显示输入。原输出确认后撤回对应预测；控制、输出不匹配、切换 buffer 或关闭设置清除。Enter 停止预测直到下个 prompt；不更改已解析 buffer 或拦截原输出。默认关闭。 |
 | OSC 99 | `notification` → 原 xterm OSC parser → 原 NotificationService → 原实例输入 | 有界 UTF-8／base64 内容，通知更新、关闭、按钮与 query／alive／activation；关闭实例或禁用配置撤销通知及回写。声音、图标和应用过滤不属于通知宿主契约。 |
 | Show Environment Contributions | `environmentChanges` → 原 launch collection 快照与 EnvironmentVariableService → 只读模型 | 对比当前进程启动时应用的扩展贡献与未来配置；重新附着不改原 PTY 环境，显式 Relaunch 才重新解析。未知快照明确标注，临时贡献不写入恢复存储。 |
 | 扩展建议和 Quick Fix | Node Extension Host API → capability admission／动态注册 → MainThreadTerminalService → 窗口唯一 provider registry → 原 prompt／command | 范围替换、触发字符、精确 selector output window、有限结果与取消；卸载、重连、命令或 prompt 变化丢弃迟到结果。 |
@@ -54,4 +54,4 @@ Terminal 的交互 PTY 归原 App Server／exec-server；Agent 的执行工具�
 
 定向单测使用各贡献 `test/` 与原 Terminal/Profile/ExtensionHost 测试；真实屏幕、键盘、通知按钮及扩展补全场景见 `test/integration/browser/terminal*.integration.spec.ts`。真实 Node Extension Host 的注册、撤销与调用测试位于 `resources/extension-host/node.test.mjs`。Rust 终端真实 PTY 测试覆盖信号、首次输出自动回复、连接隔离和租约撤销，App Server 测试覆盖实际 RPC owner。
 
-2026-10-19 macOS 验证覆盖 28 条 Chromium 场景，以及 Electron 和 Web 各 2 条连接实际打包 App Server／PTY 的 smoke，后者验证自动回复、Quick Access 保持实例与前台 SIGTERM。终端单测、扩展桥接／Node／V8 测试、相关 Rust 包检查及正常产品构建通过。Linux 独立虚拟机的原生运行、发现并修复的描述符边界及本轮窗口配对范围见 [跨平台与窗口配对验收](../../../../../docs/terminal.md#跨平台与窗口配对验收2026-10-19)。Windows 按用户本轮要求停止验证，不计为通过。
+2026-10-19 macOS 验证覆盖 28 条 Chromium 场景，以及 Electron 和 Web 各 2 条连接实际打包 App Server／PTY 的 smoke，后者验证自动回复、Quick Access 保持实例与前台 SIGTERM。终端单测、扩展桥接／Node／V8 测试、相关 Rust 包检查及正常产品构建通过。Linux 独立虚拟机的原生运行、发现并修复的描述符边界及本轮窗口配对范围见 [跨平台、窗口配对与自举验收](../../../../../docs/terminal.md)。Windows 按用户本轮要求停止验证，不计为通过。

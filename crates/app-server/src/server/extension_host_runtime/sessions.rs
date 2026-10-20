@@ -1,13 +1,19 @@
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
+use std::num::NonZeroU64;
 use std::sync::Arc;
 use std::time::Duration;
 use std::time::Instant;
 
 use ash_external_ext::CancelReason;
 use ash_external_ext::ExtensionHostError;
+use ash_external_ext::ExtensionHostStatus;
+use ash_external_ext::ExtensionHostSupervisor;
+use ash_external_ext::ExtensionInvocation;
 use ash_external_ext::ExtensionInvocationHandle;
+use ash_external_ext::ExtensionInvocationTarget;
 use ash_external_ext::InvokeResult;
+use ash_external_ext::RegistrationKind;
 use serde_json::Value;
 
 use super::ExtensionHostInvocationCancelDisposition;
@@ -39,10 +45,128 @@ struct InvocationSession {
     terminal_at: Option<Instant>,
     detached: bool,
     cancellation: Option<CancelReason>,
+    result_cleanup: Option<ProfileResultCleanup>,
+}
+
+/// Until successful first resource IO, this invocation owns its issued profile resource.
+/// Discard and expiry release it through the same supervisor and immutable process fence.
+pub(super) struct ProfileResultCleanup {
+    supervisor: ExtensionHostSupervisor,
+    target: ExtensionInvocationTarget,
+}
+
+impl ProfileResultCleanup {
+    pub(super) fn new(
+        supervisor: ExtensionHostSupervisor,
+        target: ExtensionInvocationTarget,
+    ) -> Self {
+        Self { supervisor, target }
+    }
+
+    fn discard(&self, payload: &Value) {
+        if let Some(resource) = ProfilePtyResource::parse(payload) {
+            self.discard_resource(resource);
+        }
+    }
+
+    fn discard_resource(&self, resource: ProfilePtyResource) {
+        let ProfilePtyResource {
+            registration_id,
+            pty_id,
+        } = resource;
+        let supervisor = self.supervisor.clone();
+        let target = self.target;
+        // A session is often dropped under its store lock. Dispatch and wait outside
+        // that lock because a registration event can re-enter the runtime session owner.
+        if std::thread::Builder::new()
+            .name("ash-terminal-profile-cleanup".into())
+            .spawn(move || {
+                let snapshot = supervisor.snapshot();
+                if snapshot.status != ExtensionHostStatus::Ready
+                    || snapshot.incarnation != target.incarnation.get()
+                    || snapshot.activation_generation != target.activation_generation.get()
+                    || !snapshot.registrations.iter().any(|entry| {
+                        entry.registration_id == registration_id
+                            && matches!(entry.kind, RegistrationKind::TerminalPty {})
+                    })
+                {
+                    return;
+                }
+                let deadline = std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap_or_default()
+                    .as_millis() as u64
+                    + 5_000;
+                // The existing fenced entry may recover a crashed host, but this close
+                // can never be replayed into that replacement incarnation.
+                let invocation = ExtensionInvocation {
+                    registration_id,
+                    operation: "closeTaskTerminal".into(),
+                    payload: serde_json::json!({"ptyId": pty_id}),
+                    deadline_unix_millis: NonZeroU64::new(deadline)
+                        .expect("cleanup deadline is positive"),
+                };
+                if let Ok(handle) = supervisor.begin_fenced_invoke(target, invocation) {
+                    let _ = handle.wait();
+                }
+            })
+            .is_err()
+        {
+            log::warn!("failed to start discarded terminal profile cleanup");
+        }
+    }
+}
+
+struct ProfilePtyResource {
+    registration_id: String,
+    pty_id: String,
+}
+
+impl ProfilePtyResource {
+    fn parse(payload: &Value) -> Option<Self> {
+        let pty = payload.get("pty")?.as_object()?;
+        let id = |field| {
+            pty.get(field).and_then(Value::as_str).filter(|value| {
+                !value.is_empty() && value.len() <= 256 && !value.chars().any(char::is_control)
+            })
+        };
+        Some(Self {
+            registration_id: id("registrationId")?.to_owned(),
+            pty_id: id("ptyId")?.to_owned(),
+        })
+    }
+}
+
+/// Moving a delivered lease out of the invocation map frees quota for its first IO.
+/// A failed dispatch still drops and closes the lease; successful dispatch adopts it.
+pub(super) struct ProfileResultLease(InvocationSession);
+impl ProfileResultLease {
+    pub(super) fn adopt(mut self) {
+        self.0.result_cleanup = None;
+    }
+}
+
+impl Drop for InvocationSession {
+    fn drop(&mut self) {
+        let Some(cleanup) = &self.result_cleanup else {
+            return;
+        };
+        match &self.terminal {
+            Some(InvocationTerminal::Succeeded(payload)) => cleanup.discard(payload),
+            Some(InvocationTerminal::DeliveredProfileResource(resource)) => cleanup
+                .discard_resource(ProfilePtyResource {
+                    registration_id: resource.registration_id.clone(),
+                    pty_id: resource.pty_id.clone(),
+                }),
+            None | Some(InvocationTerminal::Failed(_)) | Some(InvocationTerminal::Cancelled(_)) => {
+            }
+        }
+    }
 }
 
 enum InvocationTerminal {
     Succeeded(Value),
+    DeliveredProfileResource(ProfilePtyResource),
     Failed(super::projection::ExtensionHostRuntimeFailure),
     Cancelled(CancelReason),
 }
@@ -84,6 +208,7 @@ impl InvocationSessionStore {
                 terminal_at: None,
                 detached: false,
                 cancellation: None,
+                result_cleanup: None,
             },
         );
         *self.owner_counts.entry(owner).or_default() += 1;
@@ -94,6 +219,7 @@ impl InvocationSessionStore {
         &mut self,
         id: &str,
         handle: Arc<ExtensionInvocationHandle>,
+        result_cleanup: Option<ProfileResultCleanup>,
     ) -> Result<(), ExtensionHostRuntimeError> {
         let session = self
             .sessions
@@ -102,7 +228,42 @@ impl InvocationSessionStore {
         if session.handle.replace(handle).is_some() {
             return Err(ExtensionHostRuntimeError::Internal);
         }
+        session.result_cleanup = result_cleanup;
         Ok(())
+    }
+
+    #[cfg(test)]
+    pub(super) fn is_completed(&self, id: &str) -> bool {
+        self.sessions
+            .get(id)
+            .is_some_and(|session| session.terminal.is_some())
+    }
+
+    pub(super) fn take_profile_resource(
+        &mut self,
+        owner: u64,
+        extension_id: &str,
+        target: ExtensionInvocationTarget,
+        registration_id: &str,
+        pty_id: &str,
+    ) -> Option<ProfileResultLease> {
+        let id = self.sessions.iter().find_map(|(id, session)| {
+            let cleanup = session.result_cleanup.as_ref()?;
+            let InvocationTerminal::DeliveredProfileResource(resource) =
+                session.terminal.as_ref()?
+            else {
+                return None;
+            };
+            (session.owner == owner
+                && session.extension_id == extension_id
+                && cleanup.target == target
+                && resource.registration_id == registration_id
+                && resource.pty_id == pty_id)
+                .then(|| id.clone())
+        })?;
+        let session = self.sessions.remove(&id)?;
+        self.decrement_owner(session.owner);
+        Some(ProfileResultLease(session))
     }
 
     pub(super) fn release(&mut self, id: &str) {
@@ -116,12 +277,6 @@ impl InvocationSessionStore {
         let Some(session) = self.sessions.get_mut(id) else {
             return;
         };
-        if session.detached {
-            let owner = session.owner;
-            self.sessions.remove(id);
-            self.decrement_owner(owner);
-            return;
-        }
         let terminal = match result {
             Ok(result) => InvocationTerminal::Succeeded(result.payload),
             Err(error) => {
@@ -136,6 +291,12 @@ impl InvocationSessionStore {
             }
         };
         session.terminal = Some(terminal);
+        if session.detached {
+            let owner = session.owner;
+            self.sessions.remove(id);
+            self.decrement_owner(owner);
+            return;
+        }
         session.terminal_at = Some(Instant::now());
         session.handle = None;
     }
@@ -153,16 +314,29 @@ impl InvocationSessionStore {
         let Some(terminal) = session.terminal.take() else {
             return Ok(ExtensionHostInvocationRead::Pending);
         };
-        let owner = session.owner;
-        self.sessions.remove(id);
-        self.decrement_owner(owner);
-        Ok(match terminal {
+        let result = match terminal {
             InvocationTerminal::Succeeded(payload) => {
+                if let Some(resource) = session
+                    .result_cleanup
+                    .as_ref()
+                    .and_then(|_| ProfilePtyResource::parse(&payload))
+                {
+                    session.terminal = Some(InvocationTerminal::DeliveredProfileResource(resource));
+                    return Ok(ExtensionHostInvocationRead::Succeeded(payload));
+                }
                 ExtensionHostInvocationRead::Succeeded(payload)
+            }
+            InvocationTerminal::DeliveredProfileResource(resource) => {
+                session.terminal = Some(InvocationTerminal::DeliveredProfileResource(resource));
+                return Err(ExtensionHostRuntimeError::InvocationNotFound);
             }
             InvocationTerminal::Failed(failure) => ExtensionHostInvocationRead::Failed(failure),
             InvocationTerminal::Cancelled(reason) => ExtensionHostInvocationRead::Cancelled(reason),
-        })
+        };
+        let owner = session.owner;
+        self.sessions.remove(id);
+        self.decrement_owner(owner);
+        Ok(result)
     }
 
     pub(super) fn cancel(

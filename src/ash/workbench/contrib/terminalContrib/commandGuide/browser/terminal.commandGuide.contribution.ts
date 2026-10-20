@@ -5,12 +5,13 @@ import { localize } from '../../../../../nls.js';
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
 import { TerminalCapability } from '../../../../../platform/terminal/common/capabilities/capabilities.js';
 import { isFullTerminalCommand } from '../../../../../platform/terminal/common/capabilities/commandDetection/terminalCommand.js';
-import { colorCssVariable, registerColor } from '../../../../../platform/theme/common/colorUtils.js';
+import { registerColor } from '../../../../../platform/theme/common/colorUtils.js';
 import { contrastBorder } from '../../../../../platform/theme/common/colors/baseColors.js';
 import { listInactiveSelectionBackground } from '../../../../../platform/theme/common/colors/listColors.js';
 import type { ITerminalContribution, IXtermTerminal } from '../../../terminal/browser/terminal.js';
 import { registerTerminalContribution, type ITerminalContributionContext } from '../../../terminal/browser/terminalExtensions.js';
 import { TerminalCommandGuideSettingId } from '../common/terminalCommandGuideConfiguration.js';
+import './media/terminalCommandGuide.css';
 
 export const TERMINAL_COMMAND_GUIDE_COLOR = registerColor('terminalCommandGuide.foreground', {
 	dark: listInactiveSelectionBackground,
@@ -46,10 +47,6 @@ class TerminalCommandGuideContribution extends Disposable implements ITerminalCo
 		guide.className = 'ash-terminal-command-guide';
 		guide.setAttribute('aria-hidden', 'true');
 		guide.hidden = true;
-		Object.assign(guide.style, {
-			position: 'absolute', pointerEvents: 'none', boxSizing: 'border-box',
-			borderLeft: `var(--ash-strokeThickness, 1px) solid var(${colorCssVariable(TERMINAL_COMMAND_GUIDE_COLOR)})`,
-		});
 		this._register(toDisposable(() => guide.remove()));
 		const attachment = screen.attachWidget(this);
 		if (attachment) this._register(attachment);

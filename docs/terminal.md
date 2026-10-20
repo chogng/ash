@@ -34,6 +34,10 @@ Agent 执行、审批与终端呈现的详细边界以 [Platform Terminal 的前
 
 `TerminalProfileService` 合并执行端发现、自定义与扩展 Profile；`TerminalProfileResolverService` 解析执行端变量、Shell 参数、cwd、环境和图标，实际可执行文件由后端确认。多根工作区新建终端使用活动文件所属目录，无法确定时由用户选择；Split 继承原实例的目录与启动配置。
 
+扩展 Profile 使用标准 `contributes.terminal.profiles` 声明。旧 `contributes.terminalProfiles` 仅在读取边界转换为同一声明；同时提供两种 Profile 声明会被拒绝。静态菜单声明与动态工厂注册分别管理，撤销工厂后不能再调用它，但不会关闭已创建的自供 PTY。
+
+自供 PTY 的读写绑定独立的内部 `terminalPty` 注册及原 activation／incarnation。工厂只接收创建操作，终端只通过返回的资源注册执行 open、read、input、resize 和 close；Relaunch 必须从仍有效的原工厂申请新资源。创建结果在后台调用会话中保留有界交接租约，首次成功派发资源 IO 才接管；未读取、读取后取消、超期或连接退出均释放未接管资源。前端拒绝显示元数据或收到迟到结果也释放对应资源。关闭始终受原运行实例 fence 约束，不向替代进程重放。
+
 交互终端、Tasks／DAP 和 Agent 的打开终端请求分别采用交互、automation 和 agentHost Profile 策略，共用原实例创建链。交互终端的 Relaunch 从原始启动意图重新解析当前配置及扩展环境；任务终端复用则按新任务替换启动配置并等待旧 PTY 释放。现有 PTY 的重新附着不重新解析或修改进程环境。
 
 启动 schema 由平台唯一注册，屏幕与工作台设置由终端贡献注册，配置值及持久化归配置系统。扩展环境集合由 Workbench 管理生命周期与持久化，平台负责纯解码、快照和合并，resolver 将结果交给 Rust 创建请求。大小写、变量删除、`strictEnv` 和 Shell Integration 环境阶段的规则见 [Platform Terminal](../src/ash/platform/terminal/README.md)。
@@ -45,6 +49,8 @@ Profile 选择器属于单次命令。工作区或执行连接变化会关闭并
 ## 输入与命令
 
 xterm 的文本和原始字节输入经实例进入同一进程输入 owner。`sendText` 负责换行、执行用的 Enter 与 bracketed paste；原始键盘和二进制输入保留原有编码。输入和尺寸操作等待执行端或 provider 确认，关闭会拒绝排队及进行中的操作，迟到回复不能恢复已关闭的输入链。
+
+Cursor Undo 的 Ctrl/Cmd+U 快捷键仅在编辑器文本持有焦点时匹配。Linux 终端中的 Ctrl+U 继续到达 Shell，由 Shell 清除当前输入行；显式的编辑器命令仍保留原光标撤销行为。
 
 剪贴板贡献捕获发起实例和输入 generation，异步读取或确认后核对活动项、连接及屏幕；切换回来也不会发送已失效的粘贴。浏览器 paste 在 xterm 处理之前进入同一贡献，经原实例 `sendText` 发送并等待输入确认，不会同时进入 raw onData。没有文本选区时，Ctrl+C 继续发送给 Shell；Send Signal 通过执行宿主发送 SIGINT、SIGTERM、SIGKILL 或 SIGHUP，POSIX 目标为当前前台进程组。无参打开选择器，显式 `{ signal }` 参数直接发送；取消、切换终端或断线后撤回选择。Shell 本身处于前台时，终止信号也可能结束 Shell；不支持的执行端明确报错。
 
@@ -88,11 +94,15 @@ Rust 输出字节与 typed Shell boundaries 共享顺序信息。协议适配层
 
 ShellIntegrationAddon 消费已提交事件；`CwdDetectionCapability` 持有已提交 cwd，命令能力模型关联屏幕 markers、输入和输出范围。gap、trim、clear、reuse 与禁止历史存储会撤回相应显示状态。实际 Shell 状态、nonce 和权威历史继续归 Rust；PartialCommandDetection 的回退 marker 只用于导航，不猜测命令文本或退出状态。
 
-命令概览装饰复用同一 marker 生命周期，主题变化更新颜色，失败状态显示在概览尺右侧。检测到命令的标记提供按钮菜单；点击或聚焦后按 Enter／Space／Shift+F10，可复制命令、精确输出或两者、选择从命令输入起点到执行点的文本，以及明确重跑。菜单始终引用 capability 原命令对象；输出读取要求原执行／结束端点均保留，trim 撤销 marker 时关闭菜单并释放回调，不把当前屏幕尾部当作完整输出。
+命令概览装饰复用同一 marker 生命周期，主题变化更新颜色，失败状态显示在概览尺右侧。`terminal.integrated.shellIntegration.decorationsEnabled` 默认为 `both`，也可选择 `gutter`、`overviewRuler` 或 `never`；切换显示模式保留原导航 marker。检测到命令的标记提供按钮菜单；点击或聚焦后按 Enter／Space／Shift+F10，可复制命令、精确输出或两者、选择从命令输入起点到执行点的文本，以及明确重跑。菜单始终引用 capability 原命令对象；输出读取要求原执行／结束端点均保留，trim 撤销 marker 时关闭菜单并释放回调，不把当前屏幕尾部当作完整输出。
 
 重跑由同实例的输入贡献承接；未受信文本先确认，确认前后校验实例、输入代次、活动项与 command capability 成员身份。关闭、重连、进程替换或切换后不能把迟到确认交给其他实例。Find 搜索本实例已解析的屏幕和 scrollback；可访问输出从同一屏幕读取，关闭辅助视图后恢复原终端焦点。
 
-Sticky Scroll 由原 CommandDetection markers 和 xterm buffer 投影命令标题，不保存第二份命令历史。命令滚出视口后保留顶部标题，最多显示配置行数且不超过视口的 40%；鼠标、Enter 或 Space 回到原命令，Escape 恢复输入，滚轮继续滚动原屏幕。alternate buffer、trim、清屏和命令范围失效撤回标题；主题和 resize 使用原屏幕的颜色、字体与几何。
+Sticky Scroll 由原 CommandDetection markers 和 xterm buffer 投影命令标题，不保存第二份命令历史。命令滚出视口后保留顶部标题，最多显示配置行数且不超过视口的 40%；鼠标、Enter 或 Space 回到原命令，Escape 恢复输入。标题上的滚动交回 xterm 原 viewport，沿用其小数滚动量累积、灵敏度和鼠标协议。alternate buffer、trim、清屏和命令范围失效撤回标题；主题和 resize 使用原屏幕的颜色、字体与几何。
+
+终端建议共用原历史、工作区文件服务和获准的扩展 completion provider。`terminal.integrated.suggest.enabled` 默认开启；Ctrl+Space 保留显式选择入口。`quickSuggestions` 的 `commands`、`arguments` 默认为 `on`，`unknown` 默认为 `off`；已确认的普通输入在光标附近显示列表，焦点留在终端。`suggestOnTriggerCharacters` 独立控制扩展触发字符，默认关闭。方向键选择，Enter 仅插入候选、不会执行命令，Tab 仍交给 Shell；输入、切换、关闭、provider 撤回及迟到结果不会重新打开旧列表。IME 组合输入不触发建议。路径建议仅处理当前工作区、已知 POSIX Shell 的普通 token，复杂引用与扩展语法交给 Shell。
+
+悬停命令及输出的导引线使用 `terminal.integrated.shellIntegration.showCommandGuide`，位于原命令边栏内，与首个文字单元保持间距。输入语法颜色由 Shell 及其原有插件输出 ANSI 属性，终端保留这些属性；建议列表和命令装饰不替 Shell 解析输入，也不自动安装或重写用户的高亮插件配置。
 
 ## 视图、分组与资源导航
 
@@ -110,7 +120,7 @@ Sticky Scroll 由原 CommandDetection markers 和 xterm buffer 投影命令标�
 
 扩展 `window.registerTerminalLinkProvider` 沿已有独立宿主注册和调用链接入窗口唯一 `ITerminalLinkProviderService`。包须获准声明 `terminalLinkProvider`；首次到达终端按 `onTerminal` 懒激活。提供者接收行文本、取消令牌及原终端的名称／PID 快照身份，返回经范围校验的链接；用户激活才调用原扩展对象。缓存有界，选择器保留项的句柄被淘汰时按原行重新解析；重命名／重启刷新快照，工作区、进程或扩展代次失效撤回旧调用。Completion／Quick Fix 使用同一 Extension Host 的独立 capability admission、注册及取消链，具体行为见 [Terminal 可选贡献](../src/ash/workbench/contrib/terminalContrib/README.md#功能与调用链)。Shell Execution 扩展事件按其原能力契约提供。
 
-附加终端到 Chat 时捕获已解析输出、选区及 Shell 元数据，交给原 draft。Terminal: Ask Chat 还允许输入问题，并将问题与输出快照一起追加到同一个 Chat 草稿，不自动提交；选择期间切换终端或会话取消交付。只读预览显示接受时的快照，源终端关闭或再次选择不改写已接受内容；预览没有 PTY 或输入目的地。
+附加终端到 Chat 时捕获已解析输出、选区及 Shell 元数据，交给原 draft。Terminal: Ask Chat 还允许输入问题，并将问题与输出快照一起追加到同一个 Chat 草稿，不自动提交；选择期间切换终端或会话取消交付。追加只编辑草稿末尾，保留富文本引用的快照元数据和撤销边界。只读预览显示接受时的快照，源终端关闭或再次选择不改写已接受内容；预览没有 PTY 或输入目的地。
 
 ## 关闭与恢复
 
@@ -155,9 +165,11 @@ just verify ash-exec-server
 just test ash-app-server-runtime --lib terminal
 ```
 
-## 跨平台与窗口配对验收（2026-10-19）
+## 跨平台、窗口配对与自举验收（2026-10-19～20）
 
-验证以 `786b887b1` 为基线。Linux 产物包含本次描述符清理修复；窗口焦点与扩展准入修复另在 macOS 重建验证，不将 Linux 结果算作这些增补变更的验证。Linux 构建在当前检出的 Debian 13 arm64 容器中完成，部署时核对可执行文件 SHA-256；执行端验收运行于独立的 Debian 13 arm64 QEMU/HVF 虚拟机，内核为 `6.12.113+deb13-cloud-arm64`、普通用户。虚拟机结果与 Docker Desktop 的 LinuxKit 容器结果分别留证，不以交叉编译或容器结果替代独立内核实跑，也不将虚拟机称为物理机器。
+首阶段以 `786b887b1` 为基线，后续真实调用链验证从 `248e97279` 继续。首阶段 Linux 仅包含当时的描述符清理修复；后续重新构建前端与正常后端包，分别记录源码、包摘要、运行进程及实际执行文件，避免把磁盘上已有的新包误当作 Desktop 正在使用的包。Linux 构建在当前检出的 Debian 13 arm64 容器中完成，执行端验收运行于独立的 Debian 13 arm64 QEMU/HVF 虚拟机，内核为 `6.12.113+deb13-cloud-arm64`、普通用户。虚拟机与 Docker Desktop 的 LinuxKit 容器结果分别留证，虚拟机不代表物理机器。
+
+下表保留首阶段已执行的基础回归；后续调用链、修复及自举结果另列，测试数量不跨阶段相加。
 
 | 环境              | 实际结果                                                                                                                                                                                                                                                              |
 | ----------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -181,6 +193,22 @@ Linux 运行发现的 `EMFILE` 来自降低 `RLIMIT_NOFILE` 并耗尽低位槽�
 
 对应 macOS 定向回归包括 Plugin 34 项、静态目录 24 项、App Server 来源 4 项、DTO 1 项、生成契约一致性 2 项，以及扩展宿主所属前端单测 64 项、目录服务 47 项和焦点／Quick Input／终端命令回归。协议、相关 Rust warnings、正常后端包与渲染器构建通过。测试命令、独立场景结果和产物摘要分别保存在下述证据目录。
 
+后续使用标准 `contributes.terminal.profiles` 的同一公开扩展 producer 验证正常安装、启用、摘要授权、Shell profile、独立自供 PTY、链接与自动补全。实际窗口对照确认：撤回 profile factory 后，已经创建的 PTY 继续读写；重新注册 factory 后创建新 PTY，各资源分别关闭一次。修复将 factory 与已签发资源分开注册和释放；真实 Node 宿主与 App Server 的回归另覆盖在途取消、已交付但未使用结果的回收、撤权、旧 incarnation 及过期句柄拒绝。
+
+真实无回显 Shell 暴露出 Local Echo 将输入展示在预测层的问题。预测现在须先得到当前 prompt 的实际可打印回显确认；新 prompt、控制输入、非匹配输出及旧代次晚到提交会清除确认。macOS 对照和 Linux 实际终端均确认无回显文本不显示；macOS 通过暂停、恢复已核对 PID 的真实 Bash，验证正常回显后的预测与实际输出只保留一份。
+
+终端 Ask Chat 在已有富文本草稿后追加问题时曾重写整个模型，导致终端引用标签仍在、冻结快照的 Preview／Remove 元数据却消失。现在只在模型尾部插入后缀，保留引用及撤销记录。macOS 和 Linux 实际窗口验证已有草稿、冻结输出预览、后续 PTY 输出隔离、取消、切换终端和零消息提交；浏览器回归另覆盖英文与简体中文。
+
+Linux 正常场景清理还发现 daemon 的 `ps lstart` 日历身份随系统时钟变化，误将仍存活的原进程认作 PID 重用。新记录使用 kernel boot ID 与 `/proc/<pid>/stat` 的启动 ticks，旧日历记录仍按旧域严格比较；进程退出后已打开的 proc 文件返回 `ESRCH` 也按进程消失处理。所属包的 macOS 57 项及 Linux 61 项测试、check 和 warnings 检查通过。独立虚拟机另从 Ash 真实 PTY 启动正常后端，实际将系统时钟推进一小时：同一 PID 的日历时间发生变化，原生身份保持，正常 `version` 与 `stop` 成功；pidfd 确认原进程退出、记录删除，随后恢复原时钟与 NTP。
+
+自举使用 Ash 自己的真实交互式终端执行仓库构建和测试，并记录 Node → Bash → App Server → daemon → Electron 的进程祖先链。macOS 的 `pnpm prepare:backend`、`pnpm build` 及 Cursor Undo 回归均由该 PTY 执行。父终端随后通过正常入口启动独立 profile 的子 Ash；完整保留原 bundle、核对执行文件摘要后，以真实窗口新建终端，检查命令输出与独立落盘文件。Linux 同样从 Ash PTY 运行真实 Node 宿主的 46 项测试与 daemon 时钟验证。Cursor Undo 先复现 Linux 终端 Ctrl+U 被全局编辑器快捷键截走，再通过编辑器文本焦点条件修复；父 Ash 终端内两个所属测试套件的 4 项回归和正常渲染器构建通过。Linux 部署最终渲染器后另完成正常扩展准入、真实 Ctrl+U 清行、补全、Quick Fix、disposable 撤回和原生撤权共 6 步，实际 Shell 落盘结果确认清行成功。
+
+自举过程保留了自动化装配失败：嵌套 Playwright Electron 启动在原生文档导航阶段停滞；正常直接入口的独立子窗口成功。另一次诊断复制 bundle 时改写了相对 symlink，导致 ICU 数据加载失败，改用完整保留 symlink 的副本后正常启动。这些失败不混入产品功能通过记录，也未据此放宽启动超时或修改产品权限。
+
+新增交互检查复现了粘性标题对触控板小幅滚动的放大：16 次、每次 0.5 像素的合成输入，正文保持 viewport 30，标题却跳到 46。标题现转发到原 xterm viewport，保留小数累积与原滚动设置。Mac 正常子窗口和 Linux 虚拟机另使用真实 PTY 长输出采集正文的 CDP 滚动及帧间隔；注入事件和虚拟机结果不代表物理触控板硬件测量。Linux 最初的“大 delta 一次返回底部”测试假设与 Chromium 实际 legacy wheel 字段不符，后改为拖动原滚动条并独立确认尾部标记；该失败保留为测试 oracle 问题。
+
+Zsh `precmd` 和 Bash `PROMPT_COMMAND` 每次重设 `PS1` 时，原来只追加一次的 OSC 输入边界会丢失，命令 marker 回退到执行位置，出现图标错行。真实交互式 Shell 测试分别先复现缺失边界，再验证每轮用户提示符钩子之后幂等维护边界，同时保留启动配置及失败退出状态。旧 Mac 窗口同一检查点的图标、命令导引线与概览尺均有非零可见面积或实际状态色像素，因此未将这些已有 UI 误记为完全缺失。新增建议列表覆盖非模态输入、真实路径／扩展 producer、窄面板、取消及中英文帮助；Shell 高亮仍归用户的原 Shell 配置。
+
 Windows 分支按用户本轮“先不管”的要求停止，没有执行新的 Windows 验证，也不记录为通过。原有 Windows API 的明确 `Unsupported` 与键盘 Ctrl-C 是不同契约。
 
-本轮原始日志、产物摘要和窗口证据位于忽略目录 `.build/terminal-cross-platform/`；窗口场景的录屏、截图和 trace 由现有 scenario runner 写入 `.build/ash-playwright-mcp/evidence/`。
+首阶段原始日志、产物摘要和窗口证据位于忽略目录 `.build/terminal-cross-platform/`，后续位于 `.build/terminal-followup-20261019/`。其中 `root/validation-index.json`、`extensions/validation-receipt.json` 和平台结果记录区分单测、受控浏览器 provider 与正常准入后的真实 Desktop 链路；窗口录屏、截图和 trace 由现有 scenario runner 写入 `.build/ash-playwright-mcp/evidence/`。合成 Speech producer 不代表物理麦克风或语音识别模型验收；产品当前装配 `NullTelemetryService`，未宣称外部遥测收集结果。

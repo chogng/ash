@@ -22,7 +22,7 @@ import { IExtensionService } from '../../../../services/extensions/common/extens
 import { IConfigurationResolverService } from '../../../../services/configurationResolver/common/configurationResolver.js';
 import { ITerminalContributionService, ITerminalProfileResolverService, ITerminalProfileService } from '../../common/terminal.js';
 import { BrowserTerminalProfileResolverService } from '../../browser/terminalProfileResolverService.js';
-import { MainThreadTerminalService } from '../../../../api/browser/mainThreadTerminalService.js';
+import { MainThreadTerminalService, type ExtensionTerminalProfileRegistration } from '../../../../api/browser/mainThreadTerminalService.js';
 import assert from 'node:assert/strict';
 import { suite, test } from 'mocha';
 import { DeferredPromise } from '../../../../../base/common/async.js';
@@ -36,6 +36,19 @@ import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/tes
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { IQuickInputService, type IQuickPick, type IQuickPickItem } from '../../../../../platform/quickinput/common/quickInput.js';
+
+/** This transport fixture routes issued resources independently of factory disposal. */
+function withPtyResources(descriptors: readonly ExtensionTerminalProfileRegistration[]): readonly ExtensionTerminalProfileRegistration[] {
+	return descriptors.map(descriptor => ({
+		...descriptor, pty: descriptor.pty ?? {
+			signal: new AbortController().signal,
+			invoker: registrationId => {
+				assert.ok(registrationId.startsWith('resource.'));
+				return descriptor.invoke;
+			},
+		}
+	}));
+}
 import { ITerminalProcessService, type IShellLaunchConfig } from '../../../../../platform/terminal/common/terminal.js';
 import { registerTerminalPlatformConfiguration } from '../../../../../platform/terminal/common/terminalPlatformConfiguration.js';
 import { IWorkspaceContextService } from '../../../../../platform/workspace/common/workspace.js';
@@ -649,10 +662,10 @@ suite('Terminal configuration and interactive profiles', () => {
 		const digest = `sha256:${'a'.repeat(64)}`;
 		Object.assign(services.get(IExtensionService), { currentCatalog: { generation: 1, diagnostics: [], extensions: [{ id: 'acme.extension', packageSha256: digest }] } });
 		const bridge = owner.add(services.createInstance(MainThreadTerminalService));
-		bridge.replaceProfiles([{
+		bridge.replaceProfiles(withPtyResources([{
 			runtimeId: 'runtime', packageDigest: digest, profileId: 'raw', title: 'Raw shell',
 			invoke: async (operation): Promise<import('../../../../../platform/agentHost/common/extensionHostApi.js').JsonValue> => operation === 'getTerminalEnvironment' ? { persistent: true, map: [] } : ({ options: { name: 'Raw shell', shellPath: 'C:\\Windows\\cmd.exe', shellArgs: '/d /s /c "echo ${env:PROFILE_VALUE}"' } }),
-		}]);
+		}]));
 		await profiles.getContributedProfileProvider('acme.extension', 'raw')!.createContributedTerminalProfile({});
 		assert.deepEqual(launches[0].profile, { type: 'custom', name: 'Raw shell', path: ['C:\\Windows\\cmd.exe'], args: '/d /s /c "echo environment value"' });
 		assert.equal(services.get(ITerminalService).instances.length, 1);
@@ -783,9 +796,9 @@ suite('Terminal configuration and interactive profiles', () => {
 		bridge.replaceEnvironmentProviders([{
 			runtimeId: 'ash.git', packageDigest: runtimeDigest, invoke: async () => ({ persistent: false, map: [['GIT_EDITOR', { type: 1, value: 'ash-editor' }]] }),
 		}]);
-		bridge.replaceProfiles([{
+		bridge.replaceProfiles(withPtyResources([{
 			runtimeId: 'ash.git', packageDigest: runtimeDigest, profileId: 'shell', title: 'Product shell', invoke: async () => ({ options: { shellPath: 'C:\\Windows\\cmd.exe' } }),
-		}]);
+		}]));
 		await profiles.getContributedProfileProvider('ash.git', 'shell')!.createContributedTerminalProfile({});
 		assert.equal(launches[0]!.env?.GIT_EDITOR, 'ash-editor');
 		bridge.replaceEnvironmentProviders([]);
@@ -802,7 +815,7 @@ suite('Terminal configuration and interactive profiles', () => {
 		const bridge = owner.add(services.createInstance(MainThreadTerminalService));
 		const descriptor = { runtimeId: 'acme.extension', packageDigest: `sha256:${'a'.repeat(64)}`, invoke: async () => null };
 		assert.throws(() => bridge.replaceEnvironmentProviders([descriptor]), /Invalid terminal profile/);
-		assert.throws(() => bridge.replaceProfiles([{ ...descriptor, profileId: 'shell', title: 'External shell' }]), /provider is unavailable/);
+		assert.throws(() => bridge.replaceProfiles(withPtyResources([{ ...descriptor, profileId: 'shell', title: 'External shell' }])), /provider is unavailable/);
 	});
 
 	test('extension environment snapshots reach the process through the original profile creation entry', async () => {
@@ -822,10 +835,10 @@ suite('Terminal configuration and interactive profiles', () => {
 				]
 			}),
 		}]);
-		bridge.replaceProfiles([{
+		bridge.replaceProfiles(withPtyResources([{
 			runtimeId: 'profile', packageDigest: digest, profileId: 'shell', title: 'Extension shell',
 			invoke: async () => ({ options: { shellPath: 'C:\\Windows\\cmd.exe', env: { Path: 'caller', REMOVED: null } } }),
-		}]);
+		}]));
 		await profiles.getContributedProfileProvider('acme.environment', 'shell')!.createContributedTerminalProfile({});
 		assert.deepEqual(launches[0]!.env, { Path: 'caller;environment value;scoped', REMOVED: null, MODE: 'extension' });
 		assert.equal(services.get(ITerminalService).instances.length, 1);
@@ -851,10 +864,10 @@ suite('Terminal configuration and interactive profiles', () => {
 				]
 			}),
 		}]);
-		bridge.replaceProfiles([{
+		bridge.replaceProfiles(withPtyResources([{
 			runtimeId: 'profile', packageDigest: digest, profileId: 'shell', title: 'Extension shell',
 			invoke: async () => ({ options: { shellPath: 'C:\\Windows\\cmd.exe', strictEnv: strict, env: { Path: '${env:PROFILE_VALUE}', REMOVED: null } } }),
-		}]);
+		}]));
 		await profiles.getContributedProfileProvider('acme.environment', 'shell')!.createContributedTerminalProfile({});
 		assert.deepEqual(launches[0]!.env, { Path: '${env:PROFILE_VALUE}' });
 		assert.equal(launches[0]!.strictEnv, true);
@@ -877,10 +890,10 @@ suite('Terminal configuration and interactive profiles', () => {
 				}]], descriptionMap: []
 			}),
 		}]);
-		bridge.replaceProfiles([{
+		bridge.replaceProfiles(withPtyResources([{
 			runtimeId: 'profile', packageDigest: digest, profileId: 'shell', title: 'Extension shell',
 			invoke: async () => ({ options: { shellPath: '/extension/shell', env: { STAGE: 'process' } } }),
-		}]);
+		}]));
 		await profiles.getContributedProfileProvider('acme.environment', 'shell')!.createContributedTerminalProfile({});
 		assert.deepEqual(launches[0]!.env, { STAGE: 'process', VSCODE_ENV_APPEND: 'STAGE=\\x3aenvironment value' });
 	});
@@ -938,17 +951,17 @@ suite('Terminal configuration and interactive profiles', () => {
 		const digest = `sha256:${'a'.repeat(64)}`;
 		Object.assign(services.get(IExtensionService), { currentCatalog: { generation: 1, diagnostics: [], extensions: [{ id: 'acme.extension', packageSha256: digest }] } });
 		const bridge = owner.add(services.createInstance(MainThreadTerminalService));
-		bridge.replaceProfiles([{
+		bridge.replaceProfiles(withPtyResources([{
 			runtimeId: 'background-runtime', packageDigest: digest, profileId: 'background', title: 'Background',
 			invoke: async (operation): Promise<import('../../../../../platform/agentHost/common/extensionHostApi.js').JsonValue> => {
 				if (operation === 'createTerminalProfile') {
 					await entered.complete();
 					await release.p;
-					return custom ? { options: { name: 'Background' }, pty: { ptyId: 'background-pty', acceptsInput: true } } : { options: { name: 'Background', shellPath: '/extension/shell' } };
+					return custom ? { options: { name: 'Background' }, pty: { ptyId: 'background-pty', registrationId: 'resource.background', acceptsInput: true } } : { options: { name: 'Background', shellPath: '/extension/shell' } };
 				}
 				return { events: [] };
 			},
-		}]);
+		}]));
 		const pending = terminals.createTerminal({ config: profiles.contributedProfiles[0]!, location: { preserveFocus: true } });
 		try {
 			await entered.p;
@@ -1015,21 +1028,21 @@ suite('Terminal configuration and interactive profiles', () => {
 		const requested = new DeferredPromise<void>();
 		const reply = new DeferredPromise<import('../../../../../platform/agentHost/common/extensionHostApi.js').JsonValue>();
 		const bridge = owner.add(services.createInstance(MainThreadTerminalService));
-		bridge.replaceProfiles([{
+		bridge.replaceProfiles(withPtyResources([{
 			runtimeId: 'runtime', packageDigest: digest, profileId: 'background', title: 'Background extension',
 			invoke: async operation => {
 				if (operation === 'createTerminalProfile') { await requested.complete(); return reply.p; }
 				if (operation === 'closeTaskTerminal') return null;
 				return { events: [] };
 			},
-		}]);
+		}]));
 		const changes: (number | undefined)[] = [];
 		owner.add(terminals.onDidChangeActiveInstance(instance => changes.push(instance?.instanceId)));
 		const pending = terminals.createTerminal({ config: profiles.contributedProfiles[0]!, location: { preserveFocus: true } });
 		await requested.p;
 		assert.equal(terminals.activeInstance, original);
 		const selected = await terminals.createTerminal({ profile: { type: 'default' }, deferStart: true });
-		await reply.complete(custom ? { options: { name: 'Background PTY' }, pty: { ptyId: 'background-pty', acceptsInput: true } } : { options: { name: 'Background shell', shellPath: '/extension/shell' } });
+		await reply.complete(custom ? { options: { name: 'Background PTY' }, pty: { ptyId: 'background-pty', registrationId: 'resource.background', acceptsInput: true } } : { options: { name: 'Background shell', shellPath: '/extension/shell' } });
 		const background = await pending;
 		assert.equal(background.target, TerminalLocation.Editor);
 		assert.equal(terminals.activeInstance, selected);
@@ -1087,7 +1100,7 @@ suite('Terminal configuration and interactive profiles', () => {
 		const invoke: import('../../../../api/browser/extensionHostLanguageBridge.js').ExtensionHostProviderInvoker = async (operation, payload, signal): Promise<import('../../../../../platform/agentHost/common/extensionHostApi.js').JsonValue> => {
 			signal.throwIfAborted(); operations.push(operation);
 			if (operation === 'getTerminalEnvironment') return { persistent: true, map: [] };
-			if (operation === 'createTerminalProfile') return custom ? { options: { name: 'Extension PTY' }, pty: { ptyId: 'pty.1', acceptsInput: true } } : { options: { name: 'Extension shell', shellPath: '/extension/shell', shellArgs: ['literal argument'], env: { PROFILE: 'value' } } };
+			if (operation === 'createTerminalProfile') return custom ? { options: { name: 'Extension PTY' }, pty: { ptyId: 'pty.1', registrationId: 'resource.1', acceptsInput: true } } : { options: { name: 'Extension shell', shellPath: '/extension/shell', shellArgs: ['literal argument'], env: { PROFILE: 'value' } } };
 			if (operation === 'openTaskTerminal') return { events: [{ type: 'data', data: 'synchronous open output' }] };
 			if (operation === 'inputTaskTerminal') return { events: [{ type: 'data', data: `echo:${(payload as { data: string; }).data}` }] };
 			if (operation === 'closeTaskTerminal') return null;
@@ -1095,8 +1108,8 @@ suite('Terminal configuration and interactive profiles', () => {
 		};
 		const bridge = owner.add(services.createInstance(MainThreadTerminalService));
 		const descriptor = { runtimeId: 'runtime', packageDigest: digest, profileId: 'test', title: 'Extension test', invoke };
-		bridge.replaceProfiles([descriptor]);
-		bridge.replaceProfiles([descriptor]);
+		bridge.replaceProfiles(withPtyResources([descriptor]));
+		bridge.replaceProfiles(withPtyResources([descriptor]));
 		assert.equal(await profiles.getContributedProfileProvider('acme.extension', 'test')!.createContributedTerminalProfile({}), 73);
 		assert.equal(launches.length, 1);
 		if (custom) {
@@ -1118,7 +1131,14 @@ suite('Terminal configuration and interactive profiles', () => {
 		} else assert.deepEqual(launches[0]!.config, { name: 'Extension shell', executable: '/extension/shell', args: ['literal argument'], cwd: undefined, env: { PROFILE: 'value' }, strictEnv: undefined, icon: undefined, color: undefined });
 		bridge.replaceProfiles([]);
 		assert.equal(profiles.getContributedProfileProvider('acme.extension', 'test'), undefined);
-		if (custom) { assert.deepEqual(exits, [undefined, undefined]); assert.equal(operations.filter(operation => operation === 'closeTaskTerminal').length, 2); }
+		if (custom) {
+			assert.deepEqual(exits, [undefined], 'Withdrawing the factory preserves its already issued PTY');
+			await child!.input!('after withdrawal');
+			assert.equal(operations.filter(operation => operation === 'closeTaskTerminal').length, 1);
+			bridge.clearPtys();
+			assert.deepEqual(exits, [undefined, undefined]);
+			assert.equal(operations.filter(operation => operation === 'closeTaskTerminal').length, 2);
+		}
 	});
 
 	for (const custom of [false, true]) for (const uriCwd of [false, true]) test(`contributed ${custom ? 'PTY' : 'shell'} creation keeps its selected root from ${uriCwd ? 'URI' : 'path'} cwd through the shared owner`, async () => {
@@ -1133,17 +1153,17 @@ suite('Terminal configuration and interactive profiles', () => {
 		Object.assign(services.get(IExtensionService), { currentCatalog: { generation: 1, diagnostics: [], extensions: [{ id: 'acme.extension', packageSha256: digest }] } });
 		const operations: string[] = [];
 		const bridge = owner.add(services.createInstance(MainThreadTerminalService));
-		bridge.replaceProfiles([{
+		bridge.replaceProfiles(withPtyResources([{
 			runtimeId: 'runtime', packageDigest: digest, profileId: 'selected', title: 'Selected extension',
 			invoke: async (operation): Promise<import('../../../../../platform/agentHost/common/extensionHostApi.js').JsonValue> => {
 				operations.push(operation);
 				if (operation === 'createTerminalProfile') return custom
-					? { options: { name: 'Selected extension' }, pty: { ptyId: 'selected-pty', acceptsInput: true } }
+					? { options: { name: 'Selected extension' }, pty: { ptyId: 'selected-pty', registrationId: 'resource.selected', acceptsInput: true } }
 					: { options: { name: 'Selected extension', shellPath: '/extension/shell', env: { ROOT: '${workspaceFolder}' } } };
 				if (operation === 'closeTaskTerminal') return null;
 				return { events: [] };
 			},
-		}]);
+		}]));
 		const terminals = services.get(ITerminalService);
 		const instance = await terminals.createTerminal({ cwd: uriCwd ? folders[1]!.uri : folders[1]!.uri.fsPath, config: profiles.contributedProfiles[0]! });
 		assert.equal(instance.dirId, 'two');
@@ -1176,20 +1196,20 @@ suite('Terminal configuration and interactive profiles', () => {
 		const operations: { operation: string; payload: unknown; }[] = [];
 		let nextPty = 0;
 		const bridge = owner.add(services.createInstance(MainThreadTerminalService));
-		bridge.replaceProfiles([{
+		bridge.replaceProfiles(withPtyResources([{
 			runtimeId: 'runtime', packageDigest: digest, profileId: 'test', title: 'Extension',
 			invoke: async (operation, payload, signal): Promise<import('../../../../../platform/agentHost/common/extensionHostApi.js').JsonValue> => {
 				signal.throwIfAborted();
 				operations.push({ operation, payload });
 				if (operation === 'getTerminalEnvironment') return { persistent: true, map: [] };
 				if (operation === 'createTerminalProfile') return custom
-					? { options: { name: 'Extension PTY' }, pty: { ptyId: `pty.${++nextPty}`, acceptsInput: true } }
+					? { options: { name: 'Extension PTY' }, pty: { ptyId: `pty.${++nextPty}`, registrationId: `resource.${nextPty}`, acceptsInput: true } }
 					: { options: { name: 'Extension shell', shellPath: '/extension/shell', shellArgs: ['${env:PROFILE_VALUE}'], cwd: '${workspaceFolder}/run', env: { CALLER: '${env:PROFILE_VALUE}', REMOVED: null } } };
 				if (operation === 'openTaskTerminal') return { events: [{ type: 'data', data: 'PTY output' }, { type: 'close', code: 0 }] };
 				assert.equal(operation, 'closeTaskTerminal');
 				return null;
 			},
-		}]);
+		}]));
 		await profiles.getContributedProfileProvider('acme.extension', 'test')!.createContributedTerminalProfile({});
 		const instance = terminals.activeInstance!;
 		assert.equal(terminals.instances[0], instance);
@@ -1219,6 +1239,52 @@ suite('Terminal configuration and interactive profiles', () => {
 		assert.deepEqual(closed, custom ? [] : [{ dirId: 'test', terminalId: 'process-1' }]);
 	});
 
+	test('extension profile releases its issued resource when terminal creation fails before process ownership', async () => {
+		using owner = new DisposableStore();
+		const { services, profiles } = createServices(owner);
+		const digest = `sha256:${'a'.repeat(64)}`;
+		Object.assign(services.get(IExtensionService), { currentCatalog: { generation: 1, diagnostics: [], extensions: [{ id: 'acme.extension', packageSha256: digest }] } });
+		const failure = new Error('Terminal target disappeared');
+		Object.assign(services.get(ITerminalService), { createTerminal: async () => { throw failure; } });
+		const closed: unknown[] = [];
+		const bridge = owner.add(services.createInstance(MainThreadTerminalService));
+		bridge.replaceProfiles(withPtyResources([{
+			runtimeId: 'runtime', packageDigest: digest, profileId: 'pty', title: 'PTY',
+			invoke: async (operation, payload) => {
+				if (operation === 'createTerminalProfile') return { options: { name: 'Issued PTY' }, pty: { ptyId: 'pty.1', registrationId: 'resource.1', acceptsInput: true } };
+				assert.equal(operation, 'closeTaskTerminal');
+				closed.push(payload);
+				return null;
+			},
+		}]));
+		await assert.rejects(profiles.getContributedProfileProvider('acme.extension', 'pty')!.createContributedTerminalProfile({}), error => error === failure);
+		assert.deepEqual(closed, [{ ptyId: 'pty.1' }]);
+	});
+
+	for (const malformed of ['name', 'options', 'inputFlag'] as const) test(`extension profile releases its issued PTY after rejecting ${malformed}`, async () => {
+		using owner = new DisposableStore();
+		const { services, profiles } = createServices(owner);
+		const digest = `sha256:${'a'.repeat(64)}`;
+		Object.assign(services.get(IExtensionService), { currentCatalog: { generation: 1, diagnostics: [], extensions: [{ id: 'acme.extension', packageSha256: digest }] } });
+		Object.assign(services.get(ITerminalService), { createTerminal: async () => assert.fail('Rejected profile created a terminal') });
+		const closed: unknown[] = [];
+		const bridge = owner.add(services.createInstance(MainThreadTerminalService));
+		bridge.replaceProfiles(withPtyResources([{
+			runtimeId: 'runtime', packageDigest: digest, profileId: 'pty', title: 'PTY',
+			invoke: async (operation, payload): Promise<import('../../../../../platform/agentHost/common/extensionHostApi.js').JsonValue> => {
+				if (operation === 'createTerminalProfile') return {
+					options: malformed === 'name' ? { name: 'x'.repeat(257) } : malformed === 'options' ? { unknown: true } : { name: 'PTY' },
+					pty: { ptyId: 'pty.1', registrationId: 'resource.1', acceptsInput: malformed === 'inputFlag' ? 'invalid' : true },
+				};
+				assert.equal(operation, 'closeTaskTerminal');
+				closed.push(payload);
+				return null;
+			},
+		}]));
+		await assert.rejects(profiles.getContributedProfileProvider('acme.extension', 'pty')!.createContributedTerminalProfile({}), TypeError);
+		assert.deepEqual(closed, [{ ptyId: 'pty.1' }]);
+	});
+
 	test('extension profile abandons a late PTY result after the workspace changes', async () => {
 		using owner = new DisposableStore();
 		const { services, profiles, workspace } = createServices(owner);
@@ -1228,16 +1294,16 @@ suite('Terminal configuration and interactive profiles', () => {
 		let release!: (value: import('../../../../../platform/agentHost/common/extensionHostApi.js').JsonValue) => void;
 		const closed: unknown[] = [];
 		const bridge = owner.add(services.createInstance(MainThreadTerminalService));
-		bridge.replaceProfiles([{
+		bridge.replaceProfiles(withPtyResources([{
 			runtimeId: 'runtime', packageDigest: digest, profileId: 'pty', title: 'PTY', invoke: async (operation, payload) => {
 				if (operation === 'createTerminalProfile') return new Promise(resolve => { release = resolve; });
 				assert.equal(operation, 'closeTaskTerminal'); closed.push(payload); return null;
 			}
-		}]);
+		}]));
 		const cancelled = assert.rejects(profiles.getContributedProfileProvider('acme.extension', 'pty')!.createContributedTerminalProfile({}), isCancellationError);
 		while (!release) await new Promise(resolve => setTimeout(resolve, 0));
 		workspace.updateWorkspace({ id: 'replacement', uri: URI.file('/replacement') });
-		release({ options: { name: 'Late PTY' }, pty: { ptyId: 'pty.1', acceptsInput: true } });
+		release({ options: { name: 'Late PTY' }, pty: { ptyId: 'pty.1', registrationId: 'resource.1', acceptsInput: true } });
 		await cancelled;
 		assert.deepEqual(closed, [{ ptyId: 'pty.1' }]);
 	});
@@ -1251,7 +1317,7 @@ suite('Terminal configuration and interactive profiles', () => {
 		let signal: AbortSignal | undefined;
 		const closed: unknown[] = [];
 		const bridge = owner.add(services.createInstance(MainThreadTerminalService));
-		bridge.replaceProfiles([{
+		bridge.replaceProfiles(withPtyResources([{
 			runtimeId: 'runtime', packageDigest: digest, profileId: 'pty', title: 'PTY', invoke: async (operation, payload, cancellation) => {
 				if (operation === 'createTerminalProfile') {
 					signal = cancellation;
@@ -1262,13 +1328,13 @@ suite('Terminal configuration and interactive profiles', () => {
 				closed.push(payload);
 				return null;
 			}
-		}]);
+		}]));
 		const cancelled = assert.rejects(profiles.getContributedProfileProvider('acme.extension', 'pty')!.createContributedTerminalProfile({}), isCancellationError);
 		while (!release) await new Promise(resolve => setTimeout(resolve, 0));
 		bridge.replaceProfiles([]);
 		await cancelled;
 		assert.equal(signal?.aborted, true);
-		release({ options: { name: 'Late PTY' }, pty: { ptyId: 'pty.1', acceptsInput: true } });
+		release({ options: { name: 'Late PTY' }, pty: { ptyId: 'pty.1', registrationId: 'resource.1', acceptsInput: true } });
 		await waitFor(() => closed.length === 1);
 		assert.deepEqual(closed, [{ ptyId: 'pty.1' }]);
 	});

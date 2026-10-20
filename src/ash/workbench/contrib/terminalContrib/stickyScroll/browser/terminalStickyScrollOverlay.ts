@@ -57,11 +57,15 @@ export class TerminalStickyScrollOverlay extends Disposable {
 			event.stopPropagation();
 			xterm.focus();
 		}));
-		// The header covers part of xterm's scrollable surface, so keep wheel navigation working there.
+		// Reuse xterm's viewport so fractional trackpad deltas, sensitivity and mouse protocols
+		// follow the same path as the uncovered screen instead of rounding each packet to a row.
 		this._register(addDisposableListener(this.button, 'wheel', event => {
+			const screen = xterm.element.querySelector('.xterm-screen');
+			const window = this.button.ownerDocument.defaultView;
+			if (!screen || !window) return;
 			event.preventDefault();
-			const delta = event.deltaMode === 1 ? event.deltaY : event.deltaMode === 2 ? event.deltaY * xterm.raw.rows : event.deltaY / this.rowHeight();
-			xterm.raw.scrollLines(Math.sign(delta) * Math.max(1, Math.round(Math.abs(delta))));
+			event.stopPropagation();
+			screen.dispatchEvent(new window.WheelEvent(event.type, event));
 		}, { passive: false }));
 		for (const listener of [
 			xterm.raw.onScroll(() => this.render()),

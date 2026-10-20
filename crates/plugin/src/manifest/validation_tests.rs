@@ -487,7 +487,7 @@ fn javascript_terminal_providers_preserve_the_admitted_capability_ceiling() {
         "runtimeApiVersion": 1, "activationEvents": [{"type": "startup"}],
         "capabilities": [
             "command", "terminalProfileProvider", "terminalLinkProvider",
-            "terminalCompletionProvider", "terminalQuickFixProvider"
+            "terminalCompletionProvider", "terminalQuickFixProvider", "speechProvider"
         ]
     }]);
     value["permissions"] = json!([]);
@@ -498,7 +498,7 @@ fn javascript_terminal_providers_preserve_the_admitted_capability_ceiling() {
         manifest.contributions.editor_extensions[0]
             .capabilities
             .len(),
-        5
+        6
     );
 
     // Terminal providers share the JavaScript host, but admitting them must not

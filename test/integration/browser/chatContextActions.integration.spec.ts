@@ -1072,6 +1072,38 @@ for (const storageDisabled of [false, true]) test(`terminal context retains comm
 });
 
 for (const locale of ['en', 'zh-CN']) {
+	test(`appending a question preserves the rich terminal reference and its frozen snapshot in ${locale}`, async ({ page }) => {
+		const chinese = locale === 'zh-CN';
+		await page.goto(`/chatInput.html?inlineCode=1&contextSources=1&locale=${locale}`);
+		await page.waitForFunction(() => Boolean(window.ashChatInputIntegration));
+		await page.evaluate(() => window.ashChatInputIntegration.showModels());
+		const input = page.locator('.ash-chat-input-editor').getByRole('textbox');
+		await input.focus();
+		await page.keyboard.type('Existing draft ');
+		await page.getByRole('button', { name: chinese ? '添加上下文' : 'Add context', exact: true }).press('Enter');
+		const picker = page.getByRole('dialog');
+		await picker.getByRole('option', { name: chinese ? '终端…' : 'Terminal…', exact: true }).click();
+		await picker.getByRole('option', { name: /Shell \/workspace/ }).click();
+		const preview = page.getByRole('button', { name: chinese ? '预览终端快照' : 'Preview terminal snapshot', exact: true });
+		await expect(preview).toBeVisible();
+		await page.evaluate(() => window.ashChatInputIntegration.appendToDraft('Explain the captured output'));
+		await expect(preview).toBeVisible();
+		await expect(page.getByLabel('Submission')).toHaveText('');
+		await input.focus();
+		await input.press('ControlOrMeta+z');
+		await expect(preview).toBeVisible();
+		await page.evaluate(() => window.ashChatInputIntegration.appendToDraft('Explain the captured output'));
+		await page.evaluate(() => window.ashChatInputIntegration.changeContextSources());
+		expect(await page.evaluate(() => window.ashChatInputIntegration.restoreCapturedDraft())).toBe(`Existing draft ${chinese ? '终端：Shell' : 'Terminal: Shell'} \n\nExplain the captured output`);
+		await expect(preview).toBeVisible();
+		await preview.click();
+		await expect(page.locator('.ash-chat-terminal-preview-screen .xterm-rows')).toContainText('context terminal ready');
+		await page.getByRole('button', { name: chinese ? '关闭终端预览' : 'Close terminal preview', exact: true }).press('Escape');
+		await page.getByRole('button', { name: chinese ? '移除 终端：Shell' : 'Remove Terminal: Shell', exact: true }).click();
+		await expect(preview).toHaveCount(0);
+		await expect(page.getByLabel('Submission')).toHaveText('');
+	});
+
 	test(`terminal snapshot preview survives source disposal and draft handoff in ${locale}`, async ({ page }) => {
 		const errors: string[] = [];
 		page.on('pageerror', error => errors.push(error.message));

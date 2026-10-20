@@ -40,6 +40,7 @@ pub(super) use projection::ExtensionHostFleetSnapshot;
 pub(super) use projection::ExtensionHostLifecycle;
 pub(super) use projection::ExtensionHostRuntimeFailure;
 use sessions::InvocationSessionStore;
+use sessions::ProfileResultCleanup;
 pub(super) use sessions::ResultRetention;
 
 const MAXIMUM_FLEET_EXTENSIONS: usize = 128;
@@ -1184,6 +1185,32 @@ impl RuntimeInner {
             activation_generation: NonZeroU64::new(request.activation_generation)
                 .ok_or(ExtensionHostRuntimeError::Stale)?,
         };
+        // First resource IO adopts a delivered profile lease. Keep the moved
+        // lease until dispatch succeeds so quota or transport failure still closes it.
+        let adoption = if matches!(
+            request.operation.as_str(),
+            "openTaskTerminal"
+                | "readTaskTerminal"
+                | "inputTaskTerminal"
+                | "resizeTaskTerminal"
+                | "closeTaskTerminal"
+        ) {
+            request
+                .payload
+                .get("ptyId")
+                .and_then(Value::as_str)
+                .and_then(|pty_id| {
+                    self.sessions.lock().ok()?.take_profile_resource(
+                        owner,
+                        &request.extension_id,
+                        target,
+                        &request.registration_id,
+                        pty_id,
+                    )
+                })
+        } else {
+            None
+        };
         let id = self.allocate_invocation_id(owner)?;
         self.sessions
             .lock()
@@ -1194,6 +1221,10 @@ impl RuntimeInner {
                 request.incarnation,
                 request.extension_id.clone(),
             )?;
+        // This operation is admitted only on a terminal profile factory. Its
+        // returned resource stays with the invocation until successful first resource IO.
+        let result_cleanup = (request.operation == "createTerminalProfile")
+            .then(|| ProfileResultCleanup::new(supervisor.clone(), target));
         let handle = match supervisor.begin_fenced_invoke(
             target,
             ExtensionInvocation {
@@ -1215,7 +1246,7 @@ impl RuntimeInner {
         self.sessions
             .lock()
             .map_err(|_| ExtensionHostRuntimeError::Internal)?
-            .install(&id, Arc::clone(&handle))?;
+            .install(&id, Arc::clone(&handle), result_cleanup)?;
         let weak = Arc::downgrade(self);
         let invocation_id = id.clone();
         let client_host = Arc::clone(&self.client_host);
@@ -1265,6 +1296,9 @@ impl RuntimeInner {
                 .map_err(|_| ExtensionHostRuntimeError::Internal)?
                 .release(&id);
             return Err(ExtensionHostRuntimeError::Internal);
+        }
+        if let Some(adoption) = adoption {
+            adoption.adopt();
         }
         let generation = {
             let mut state = self
@@ -1400,10 +1434,10 @@ fn registration_allows_operation(registration: &RegistrationKind, operation: &st
                 | "resolveDebugConfiguration"
                 | "resolveDebugConfigurationWithSubstitutedVariables"
         ),
-        RegistrationKind::TerminalProfileProvider { .. } => matches!(
+        RegistrationKind::TerminalProfileProvider { .. } => operation == "createTerminalProfile",
+        RegistrationKind::TerminalPty {} => matches!(
             operation,
-            "createTerminalProfile"
-                | "openTaskTerminal"
+            "openTaskTerminal"
                 | "readTaskTerminal"
                 | "inputTaskTerminal"
                 | "resizeTaskTerminal"

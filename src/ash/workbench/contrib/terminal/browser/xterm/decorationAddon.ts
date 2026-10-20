@@ -47,9 +47,11 @@ export class DecorationAddon extends Disposable implements ITerminalAddon {
 	) {
 		super();
 		this._register(configuration.onDidChangeConfiguration(event => {
-			if (!event.affectsConfiguration('terminal.integrated.fontSize') && !event.affectsConfiguration('terminal.integrated.lineHeight')) return;
+			const decorationChanged = event.affectsConfiguration('terminal.integrated.shellIntegration.decorationsEnabled');
+			if (!decorationChanged && !event.affectsConfiguration('terminal.integrated.fontSize') && !event.affectsConfiguration('terminal.integrated.lineHeight')) return;
 			for (const command of this.commands.values()) {
-				if (command.decoration?.element) updateLayout(configuration, command.decoration.element);
+				if (decorationChanged) this.updateOverviewRuler(command);
+				if (command.decoration?.element) this.render(command.decoration.element, command);
 			}
 		}));
 		this._register(themes.onDidColorThemeChange(() => {
@@ -172,7 +174,9 @@ export class DecorationAddon extends Disposable implements ITerminalAddon {
 		if (!hidden) this.menuCommand = item;
 	}
 
-	private overviewRulerOptions(event: ITerminalCommandStatusEvent | undefined): NonNullable<IDecoration['options']['overviewRulerOptions']> {
+	private overviewRulerOptions(event: ITerminalCommandStatusEvent | undefined): IDecoration['options']['overviewRulerOptions'] {
+		const mode = this.configuration.getValue<string>('terminal.integrated.shellIntegration.decorationsEnabled');
+		if (mode === 'gutter' || mode === 'never') return undefined;
 		const failed = event?.status === 'failed' || event?.status === 'canceled';
 		const color = failed ? TERMINAL_COMMAND_DECORATION_ERROR_BACKGROUND_COLOR
 			: event?.status === 'succeeded' ? TERMINAL_COMMAND_DECORATION_SUCCESS_BACKGROUND_COLOR
@@ -202,7 +206,13 @@ export class DecorationAddon extends Disposable implements ITerminalAddon {
 			element.replaceChildren(icon);
 		}
 		const label = event ? getTerminalCommandDecorationTooltip(event) : localize('terminal.command.pending', 'Waiting for a command');
-		const interactive = !!this.commandFor(item);
+		const mode = this.configuration.getValue<string>('terminal.integrated.shellIntegration.decorationsEnabled');
+		const gutter = mode !== 'overviewRuler' && mode !== 'never';
+		// Keep the screen marker for navigation when only its presentation is disabled.
+		element.style.visibility = gutter ? '' : 'hidden';
+		if (gutter) element.removeAttribute('aria-hidden');
+		else element.setAttribute('aria-hidden', 'true');
+		const interactive = gutter && !!this.commandFor(item);
 		element.setAttribute('role', interactive ? 'button' : 'img');
 		element.tabIndex = interactive ? 0 : -1;
 		if (interactive) element.setAttribute('aria-haspopup', 'menu');

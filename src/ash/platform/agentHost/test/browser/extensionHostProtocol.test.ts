@@ -34,6 +34,7 @@ test("normalizes one exact isolated Extension Host fleet snapshot", () => {
 				{ registrationId: 'window', kind: 'workspaceEvents' },
 				{ registrationId: 'remote:team', kind: 'remoteConnectionResolver', authorityPrefix: 'team' },
 				{ registrationId: 'terminalLinks', kind: 'terminalLinkProvider' },
+				{ registrationId: 'issued.1', kind: 'terminalPty' },
 			],
 		}],
 	});
@@ -49,6 +50,11 @@ test("normalizes one exact isolated Extension Host fleet snapshot", () => {
 	assert.deepEqual(snapshot.extensions[0]?.registrations[5], { registrationId: 'window', kind: 'workspaceEvents' });
 	assert.deepEqual(snapshot.extensions[0]?.registrations[6], { registrationId: 'remote:team', kind: 'remoteConnectionResolver', authorityPrefix: 'team' });
 	assert.deepEqual(snapshot.extensions[0]?.registrations[7], { registrationId: 'terminalLinks', kind: 'terminalLinkProvider' });
+	assert.deepEqual(snapshot.extensions[0]?.registrations[8], { registrationId: 'issued.1', kind: 'terminalPty' });
+	assert.throws(() => normalizeExtensionHostSnapshot({
+		generation: 8,
+		extensions: [{ ...snapshot.extensions[0], outputEvents: [], registrations: [{ registrationId: 'issued.1', kind: 'terminalPty', profileId: 'forged' }] }],
+	}), TypeError);
 	const language = snapshot.extensions[0]!.registrations[1]!;
 	assert.ok(language.kind === 'languageProvider');
 	assert.deepEqual(language.completionTriggerCharacters, ['.', '😀']);

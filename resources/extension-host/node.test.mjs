@@ -105,6 +105,7 @@ async function host(t, source, entry = 'extension.cjs', capabilities = ['command
 			configurationValues: {}, configurationData: { defaults: { contents: {}, keys: [], overrides: [] }, folders: [] },
 		}
 	}).result;
+	if (fixture.expectActivationFailure) { assert.equal(activated.status, 'failure'); return activated; }
 	assert.equal(activated.body.result, 'activated', stderr);
 	return {
 		registrationEvent(revision) { return registrationEvents.find(event => event.revision === revision) ?? new Promise(resolve => registrationWaiters.set(revision, resolve)); },
@@ -536,7 +537,7 @@ test('terminal link provider rejects ranges outside the requested line', { timeo
 test('terminal profile provider returns literal shell options through the real Node host', { timeout: 15000 }, async t => {
 	const h = await host(t, `const v = require('vscode'); exports.activate = context => {
  context.subscriptions.push(v.window.registerTerminalProfileProvider('shell', { provideTerminalProfile: token => new v.TerminalProfile({ name: 'Profile shell', shellPath: '/bin/sh', shellArgs: ['-c', 'literal;$HOME'], env: { PROFILE: 'with spaces', REMOVED: null }, cwd: '/workspace' }) }));
-};`, 'extension.cjs', ['terminalProfileProvider'], undefined, { manifest: { contributes: { terminalProfiles: [{ id: 'shell', title: 'Profile shell' }] } } });
+};`, 'extension.cjs', ['terminalProfileProvider'], undefined, { manifest: { contributes: { terminal: { profiles: [{ id: 'shell', title: 'Profile shell' }] } } } });
 	const registration = h.registrations.find(entry => entry.kind === 'terminalProfileProvider');
 	assert.equal(registration.profileId, 'shell');
 	assert.equal(registration.title, 'Profile shell');
@@ -548,7 +549,7 @@ test('terminal profile provider returns literal shell options through the real N
 test('terminal profile provider preserves Windows raw shell options through the real Node host', { timeout: 15000 }, async t => {
 	const h = await host(t, `const v = require('vscode'); exports.activate = context => {
  context.subscriptions.push(v.window.registerTerminalProfileProvider('shell', { provideTerminalProfile: token => new v.TerminalProfile({ name: 'Profile shell', shellPath: 'cmd.exe', shellArgs: '/d /s /c \"echo two words & literal;$HOME\"', env: { PROFILE: 'with spaces', REMOVED: null }, cwd: '/workspace' }) }));
-};`, 'extension.cjs', ['terminalProfileProvider'], undefined, { manifest: { contributes: { terminalProfiles: [{ id: 'shell', title: 'Profile shell' }] } } });
+};`, 'extension.cjs', ['terminalProfileProvider'], undefined, { manifest: { contributes: { terminal: { profiles: [{ id: 'shell', title: 'Profile shell' }] } } } });
 	const registration = h.registrations.find(entry => entry.kind === 'terminalProfileProvider');
 	assert.equal(registration.profileId, 'shell');
 	assert.equal(registration.title, 'Profile shell');
@@ -559,41 +560,120 @@ test('terminal profile provider preserves Windows raw shell options through the 
 
 test('terminal profile Pseudoterminal preserves open and input output and releases once', { timeout: 15000 }, async t => {
 	const h = await host(t, `const v = require('vscode'); exports.activate = context => {
- const write = new v.EventEmitter(); let closes = 0;
- context.subscriptions.push(v.commands.registerCommand('test.node', () => closes));
- context.subscriptions.push(v.window.registerTerminalProfileProvider('pty', { provideTerminalProfile: () => new v.TerminalProfile({ name: 'Profile PTY', pty: { onDidWrite: write.event, open: dimensions => write.fire('open:' + dimensions.columns), handleInput: data => write.fire('input:' + data), close: () => { closes++; } } }) }));
-};`, 'extension.cjs', ['terminalProfileProvider', 'command'], undefined, { manifest: { contributes: { terminalProfiles: [{ id: 'pty', title: 'Profile PTY' }], commands: [{ command: 'test.node', title: 'Close count' }] } } });
+ const write = new v.EventEmitter(); let closes = 0; let factory;
+ context.subscriptions.push(v.commands.registerCommand('test.node', action => { if (action === 'dispose') factory.dispose(); return closes; }));
+ context.subscriptions.push(factory = v.window.registerTerminalProfileProvider('pty', { provideTerminalProfile: () => new v.TerminalProfile({ name: 'Profile PTY', pty: { onDidWrite: write.event, open: dimensions => write.fire('open:' + dimensions.columns), handleInput: data => write.fire('input:' + data), close: () => { closes++; } } }) }));
+};`, 'extension.cjs', ['terminalProfileProvider', 'command'], undefined, { manifest: { contributes: { terminal: { profiles: [{ id: 'pty', title: 'Profile PTY' }] }, commands: [{ command: 'test.node', title: 'Close count' }] } } });
 	const registration = h.registrations.find(entry => entry.kind === 'terminalProfileProvider');
 	const created = await h.request('invoke', { extensionId: 'test.node', registrationId: registration.registrationId, operation: 'createTerminalProfile', payload: {}, deadlineUnixMillis: Date.now() + 5000 }).result;
 	assert.equal(created.status, 'success', JSON.stringify(created));
 	const pty = created.body.body.payload.pty;
 	assert.equal(pty.acceptsInput, true);
-	const opened = await h.request('invoke', { extensionId: 'test.node', registrationId: registration.registrationId, operation: 'openTaskTerminal', payload: { ptyId: pty.ptyId, dimensions: { columns: 80, rows: 24 } }, deadlineUnixMillis: Date.now() + 5000 }).result;
+	assert.equal(typeof pty.registrationId, 'string');
+	for (const [registrationId, operation, payload] of [
+		[registration.registrationId, 'openTaskTerminal', { ptyId: pty.ptyId }],
+		[pty.registrationId, 'createTerminalProfile', {}],
+		[pty.registrationId, 'readTaskTerminal', { ptyId: 'another-resource' }],
+	]) {
+		assert.equal((await h.request('invoke', { extensionId: 'test.node', registrationId, operation, payload, deadlineUnixMillis: Date.now() + 5000 }).result).status, 'failure');
+	}
+
+	const opened = await h.request('invoke', { extensionId: 'test.node', registrationId: pty.registrationId, operation: 'openTaskTerminal', payload: { ptyId: pty.ptyId, dimensions: { columns: 80, rows: 24 } }, deadlineUnixMillis: Date.now() + 5000 }).result;
 	assert.deepEqual(opened.body.body.payload, { events: [{ type: 'data', data: 'open:80' }] });
-	const input = await h.request('invoke', { extensionId: 'test.node', registrationId: registration.registrationId, operation: 'inputTaskTerminal', payload: { ptyId: pty.ptyId, data: 'text' }, deadlineUnixMillis: Date.now() + 5000 }).result;
+	const input = await h.request('invoke', { extensionId: 'test.node', registrationId: pty.registrationId, operation: 'inputTaskTerminal', payload: { ptyId: pty.ptyId, data: 'text' }, deadlineUnixMillis: Date.now() + 5000 }).result;
 	assert.deepEqual(input.body.body.payload, { events: [{ type: 'data', data: 'input:text' }] });
-	await h.request('invoke', { extensionId: 'test.node', registrationId: registration.registrationId, operation: 'closeTaskTerminal', payload: { ptyId: pty.ptyId }, deadlineUnixMillis: Date.now() + 5000 }).result;
-	const retired = await h.request('invoke', { extensionId: 'test.node', registrationId: registration.registrationId, operation: 'readTaskTerminal', payload: { ptyId: pty.ptyId }, deadlineUnixMillis: Date.now() + 5000 }).result;
+	await h.request('invoke', { extensionId: 'test.node', registrationId: pty.registrationId, operation: 'closeTaskTerminal', payload: { ptyId: pty.ptyId }, deadlineUnixMillis: Date.now() + 5000 }).result;
+	const retired = await h.request('invoke', { extensionId: 'test.node', registrationId: pty.registrationId, operation: 'readTaskTerminal', payload: { ptyId: pty.ptyId }, deadlineUnixMillis: Date.now() + 5000 }).result;
 	assert.equal(retired.status, 'failure');
-	await h.request('invoke', { extensionId: 'test.node', registrationId: registration.registrationId, operation: 'closeTaskTerminal', payload: { ptyId: pty.ptyId }, deadlineUnixMillis: Date.now() + 5000 }).result;
+	await h.request('invoke', { extensionId: 'test.node', registrationId: pty.registrationId, operation: 'closeTaskTerminal', payload: { ptyId: pty.ptyId }, deadlineUnixMillis: Date.now() + 5000 }).result;
 	assert.equal((await h.invoke('test.node', []).result).body.body.payload, 1);
 	const replacement = await h.request('invoke', { extensionId: 'test.node', registrationId: registration.registrationId, operation: 'createTerminalProfile', payload: {}, deadlineUnixMillis: Date.now() + 5000 }).result;
 	const nextPty = replacement.body.body.payload.pty;
+	assert.notEqual(nextPty.registrationId, pty.registrationId);
+	assert.equal((await h.invoke('test.node', ['dispose']).result).body.body.payload, 1);
+	const withdrawn = await h.registrationEvent(4);
+	assert.deepEqual(withdrawn.terminalProviders.map(value => value.kind), ['terminalPty']);
+	assert.equal((await h.request('invoke', { extensionId: 'test.node', registrationId: registration.registrationId, operation: 'createTerminalProfile', payload: {}, deadlineUnixMillis: Date.now() + 5000 }).result).status, 'failure');
 	assert.notEqual(nextPty.ptyId, pty.ptyId);
-	const reopened = await h.request('invoke', { extensionId: 'test.node', registrationId: registration.registrationId, operation: 'openTaskTerminal', payload: { ptyId: nextPty.ptyId, dimensions: { columns: 100, rows: 30 } }, deadlineUnixMillis: Date.now() + 5000 }).result;
+	const reopened = await h.request('invoke', { extensionId: 'test.node', registrationId: nextPty.registrationId, operation: 'openTaskTerminal', payload: { ptyId: nextPty.ptyId, dimensions: { columns: 100, rows: 30 } }, deadlineUnixMillis: Date.now() + 5000 }).result;
 	assert.deepEqual(reopened.body.body.payload, { events: [{ type: 'data', data: 'open:100' }] });
-	await h.request('invoke', { extensionId: 'test.node', registrationId: registration.registrationId, operation: 'closeTaskTerminal', payload: { ptyId: nextPty.ptyId }, deadlineUnixMillis: Date.now() + 5000 }).result;
+	await h.request('invoke', { extensionId: 'test.node', registrationId: nextPty.registrationId, operation: 'closeTaskTerminal', payload: { ptyId: nextPty.ptyId }, deadlineUnixMillis: Date.now() + 5000 }).result;
 	assert.equal((await h.invoke('test.node', []).result).body.body.payload, 2);
+});
+
+test('withdrawn pending profile closes its late PTY without creating a resource lease', { timeout: 15000 }, async t => {
+	const h = await host(t, `const v = require('vscode'); exports.activate = context => {
+ let release; let closes = 0; let cancelled = 0;
+ const factory = v.window.registerTerminalProfileProvider('pty', { provideTerminalProfile: token => {
+  token.onCancellationRequested(() => cancelled++);
+  return new Promise(resolve => { release = () => resolve(new v.TerminalProfile({ pty: { onDidWrite: new v.EventEmitter().event, open() {}, close() { closes++; } } })); });
+ } });
+ context.subscriptions.push(factory, v.commands.registerCommand('test.node', action => { if (action === 'dispose') factory.dispose(); if (action === 'release') release(); return { closes, cancelled, pending: !!release }; }));
+};`, 'extension.cjs', ['terminalProfileProvider', 'command'], undefined, { manifest: { contributes: { terminal: { profiles: [{ id: 'pty', title: 'PTY' }] }, commands: [{ command: 'test.node', title: 'Control' }] } } });
+	const factory = h.registrations.find(value => value.kind === 'terminalProfileProvider');
+	const pending = h.request('invoke', { extensionId: 'test.node', registrationId: factory.registrationId, operation: 'createTerminalProfile', payload: {}, deadlineUnixMillis: Date.now() + 5000 }).result;
+	while (!(await h.invoke('test.node', []).result).body.body.payload.pending) await new Promise(resolve => setImmediate(resolve));
+	assert.equal((await h.invoke('test.node', ['dispose']).result).body.body.payload.cancelled, 1);
+	assert.deepEqual((await h.registrationEvent(1)).terminalProviders, []);
+	await h.invoke('test.node', ['release']).result;
+	assert.deepEqual((await pending).body.body.payload, { options: null });
+	assert.equal((await h.invoke('test.node', []).result).body.body.payload.closes, 1);
+});
+
+test('factory withdrawal during PTY subscription cannot leave an unreturned resource', { timeout: 10000 }, async t => {
+	const h = await host(t, `const v = require('vscode'); exports.activate = context => {
+ let closes = 0; let factory;
+ factory = v.window.registerTerminalProfileProvider('pty', { provideTerminalProfile: () => new v.TerminalProfile({ pty: {
+  onDidWrite() { factory.dispose(); return new v.Disposable(() => {}); }, open() {}, close() { closes++; }
+ } }) });
+ context.subscriptions.push(factory, v.commands.registerCommand('test.node', () => closes));
+};`, 'extension.cjs', ['terminalProfileProvider', 'command'], undefined, { manifest: { contributes: { terminal: { profiles: [{ id: 'pty', title: 'PTY' }] }, commands: [{ command: 'test.node', title: 'Closes' }] } } });
+	const factory = h.registrations.find(value => value.kind === 'terminalProfileProvider');
+	const result = await h.request('invoke', { extensionId: 'test.node', registrationId: factory.registrationId, operation: 'createTerminalProfile', payload: {}, deadlineUnixMillis: Date.now() + 5000 }).result;
+	assert.deepEqual(result.body.body.payload, { options: null });
+	assert.deepEqual((await h.registrationEvent(1)).terminalProviders, []);
+	assert.equal((await h.invoke('test.node', []).result).body.body.payload, 1);
 });
 
 test('terminal profile can inherit the execution host default shell without inventing an executable', async t => {
 	const h = await host(t, `const v = require('vscode'); exports.activate = context => {
  context.subscriptions.push(v.window.registerTerminalProfileProvider('default', { provideTerminalProfile: () => new v.TerminalProfile({ name: 'Default shell', env: { MODE: 'profile value' } }) }));
-};`, 'extension.cjs', ['terminalProfileProvider'], undefined, { manifest: { contributes: { terminalProfiles: [{ id: 'default', title: 'Default shell' }] } } });
+};`, 'extension.cjs', ['terminalProfileProvider'], undefined, { manifest: { contributes: { terminal: { profiles: [{ id: 'default', title: 'Default shell' }] } } } });
 	const registration = h.registrations.find(entry => entry.kind === 'terminalProfileProvider');
 	const result = await h.request('invoke', { extensionId: 'test.node', registrationId: registration.registrationId, operation: 'createTerminalProfile', payload: {}, deadlineUnixMillis: Date.now() + 5000 }).result;
 	assert.equal(result.status, 'success', JSON.stringify(result));
 	assert.deepEqual(result.body.body.payload, { options: { name: 'Default shell', env: { MODE: 'profile value' } } });
+});
+
+test('terminal profile and link providers can register after activation and withdraw their original handles', { timeout: 15000 }, async t => {
+	const h = await host(t, `const v = require('vscode'); let handles = []; let accepted;
+exports.activate = context => context.subscriptions.push(v.commands.registerCommand('test.node', action => {
+ if (action === 'register') {
+  handles = [v.window.registerTerminalProfileProvider('shell', { provideTerminalProfile: () => new v.TerminalProfile({ name: 'Live shell', env: { LIVE_PROFILE: 'yes' } }) }),
+   v.window.registerTerminalLinkProvider({ provideTerminalLinks: () => [{ startIndex: 0, length: 4, value: 'original' }], handleTerminalLink: link => { accepted = link.value; } })];
+  context.subscriptions.push(...handles);
+ }
+ if (action === 'dispose') for (const handle of handles) handle.dispose();
+ return { accepted: accepted ?? null };
+}));`, 'extension.cjs', ['terminalProfileProvider', 'terminalLinkProvider', 'command'], undefined, {
+		manifest: { contributes: { commands: [{ command: 'test.node', title: 'Node' }], terminal: { profiles: [{ id: 'shell', title: 'Live shell' }] } } },
+	});
+	assert.equal((await h.invoke('test.node', ['register']).result).status, 'success');
+	const first = await h.registrationEvent(2);
+	assert.deepEqual(first.terminalProviders.map(value => value.kind), ['terminalProfileProvider', 'terminalLinkProvider']);
+	const invoke = (registration, operation, payload) => h.request('invoke', { extensionId: 'test.node', registrationId: registration.registrationId, operation, payload, deadlineUnixMillis: Date.now() + 5000 }).result;
+	assert.deepEqual((await invoke(first.terminalProviders[0], 'createTerminalProfile', {})).body.body.payload, { options: { name: 'Live shell', env: { LIVE_PROFILE: 'yes' } } });
+	const provided = await invoke(first.terminalProviders[1], 'provideTerminalLinks', { line: 'LINK', terminal: { id: 'one', name: 'Shell', processId: 123 } });
+	await invoke(first.terminalProviders[1], 'handleTerminalLink', { id: provided.body.body.payload.links[0].id });
+	assert.equal((await h.invoke('test.node', []).result).body.body.payload.accepted, 'original');
+	await h.invoke('test.node', ['dispose']).result;
+	assert.deepEqual((await h.registrationEvent(4)).terminalProviders, []);
+	assert.equal((await invoke(first.terminalProviders[0], 'createTerminalProfile', {})).status, 'failure');
+	assert.equal((await invoke(first.terminalProviders[1], 'provideTerminalLinks', { line: 'LINK', terminal: { id: 'one', name: 'Shell', processId: 123 } })).status, 'failure');
+	await h.invoke('test.node', ['register']).result;
+	const second = await h.registrationEvent(6);
+	assert.notEqual(second.terminalProviders[0].registrationId, first.terminalProviders[0].registrationId);
+	assert.notEqual(second.terminalProviders[1].registrationId, first.terminalProviders[1].registrationId);
 });
 
 test('terminal environment collections expose immutable mutators through an independent admitted callback', async t => {
@@ -604,7 +684,7 @@ exports.activate = context => {
  context.environmentVariableCollection.replace('MODE', 'extension');
  context.environmentVariableCollection.persistent = false;
  context.subscriptions.push(v.window.registerTerminalProfileProvider('shell', { provideTerminalProfile: () => new v.TerminalProfile({ name: 'Environment shell' }) }));
-};`, 'extension.cjs', ['terminalProfileProvider'], undefined, { manifest: { contributes: { terminalProfiles: [{ id: 'shell', title: 'Environment shell' }] } } });
+};`, 'extension.cjs', ['terminalProfileProvider'], undefined, { manifest: { contributes: { terminal: { profiles: [{ id: 'shell', title: 'Environment shell' }] } } } });
 	const registration = h.registrations.find(entry => entry.kind === 'terminalEnvironment');
 	const result = await h.request('invoke', { extensionId: 'test.node', registrationId: registration.registrationId, operation: 'getTerminalEnvironment', payload: {}, deadlineUnixMillis: Date.now() + 5000 }).result;
 	assert.equal(result.status, 'success', JSON.stringify(result));
@@ -893,4 +973,41 @@ exports.activate = context => {
 	assert.equal(h.clientCalls.length, 1);
 	await h.invoke('test.node', ['dispose']).result;
 	assert.deepEqual((await h.registrationEvent(1)).terminalProviders, []);
+});
+
+for (const legacy of [false, true]) test(`terminal profile declarations normalize ${legacy ? 'legacy' : 'standard'} package shape at the Node boundary`, async t => {
+	const profiles = [{ id: 'shell', title: 'Shell' }];
+	const h = await host(t, `const v=require('vscode'); exports.activate=context=>context.subscriptions.push(v.window.registerTerminalProfileProvider('shell',{provideTerminalProfile:()=>new v.TerminalProfile({name:'Shell'})}));`, 'extension.cjs', ['terminalProfileProvider'], undefined, { manifest: { contributes: legacy ? { terminalProfiles: profiles } : { terminal: { profiles } } } });
+	const registration = h.registrations.find(value => value.kind === 'terminalProfileProvider');
+	assert.equal(registration.profileId, 'shell');
+});
+
+test('terminal profile package cannot declare competing standard and legacy owners', async t => {
+	const profiles = [{ id: 'shell', title: 'Shell' }];
+	const result = await host(t, 'exports.activate=()=>{};', 'extension.cjs', ['terminalProfileProvider'], undefined, { expectActivationFailure: true, manifest: { contributes: { terminal: { profiles }, terminalProfiles: profiles } } });
+	assert.equal(result.body.code, 'activationFailed');
+});
+
+test('serialized profile replies retain late cancellation only until first resource IO', { timeout: 10000 }, async t => {
+	const h = await host(t, `const v=require('vscode');exports.activate=context=>{let closes=0;context.subscriptions.push(v.commands.registerCommand('test.node',()=>closes),v.window.registerTerminalProfileProvider('pty',{provideTerminalProfile:()=>new v.TerminalProfile({pty:{onDidWrite:new v.EventEmitter().event,open(){},close(){closes++}}})}));};`, 'extension.cjs', ['terminalProfileProvider', 'command'], undefined, { manifest: { contributes: { terminal: { profiles: [{ id: 'pty', title: 'PTY' }] }, commands: [{ command: 'test.node', title: 'Closes' }] } } });
+	const factory = h.registrations.find(value => value.kind === 'terminalProfileProvider');
+	const create = deadline => h.request('invoke', { extensionId: 'test.node', registrationId: factory.registrationId, operation: 'createTerminalProfile', payload: {}, deadlineUnixMillis: deadline ?? Date.now() + 5000 });
+	const invoke = (pty, operation) => h.request('invoke', { extensionId: 'test.node', registrationId: pty.registrationId, operation, payload: { ptyId: pty.ptyId, dimensions: { columns: 80, rows: 24 } }, deadlineUnixMillis: Date.now() + 5000 }).result;
+	const abandoned = create();
+	assert.equal((await abandoned.result).status, 'success');
+	await h.request('cancel', { targetRequestId: abandoned.requestId, reason: 'caller' }).result;
+	assert.equal((await h.invoke('test.node', []).result).body.body.payload, 1);
+	const adopted = create(); const pty = (await adopted.result).body.body.payload.pty;
+	assert.equal((await invoke(pty, 'openTaskTerminal')).status, 'success');
+	await h.request('cancel', { targetRequestId: adopted.requestId, reason: 'caller' }).result;
+	assert.equal((await h.invoke('test.node', []).result).body.body.payload, 1, 'old create cancellation cannot kill an adopted PTY');
+	assert.equal((await invoke(pty, 'readTaskTerminal')).status, 'success');
+	await invoke(pty, 'closeTaskTerminal');
+	assert.equal((await h.invoke('test.node', []).result).body.body.payload, 2);
+	const expiring = create(Date.now() + 500); assert.equal((await expiring.result).status, 'success');
+	const deadline = Date.now() + 5000;
+	while ((await h.invoke('test.node', []).result).body.body.payload !== 3) {
+		assert.ok(Date.now() < deadline, 'unused issued resource did not expire');
+		await new Promise(resolve => setTimeout(resolve, 10));
+	}
 });

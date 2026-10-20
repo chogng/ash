@@ -63,15 +63,15 @@ test('terminal extension completion applies a range at the middle of the prompt'
 
 test('terminal extension trigger characters wait for confirmed shell input before opening suggestions', async ({ page }) => {
 	await prompt(page, 'git ');
-	await page.evaluate(() => window.ashTerminalSuggestIntegration.provider([{ label: '--help', replacementRange: [4, 5] }], ['-']));
+	await page.evaluate(async () => { await window.ashTerminalSuggestIntegration.configure('terminal.integrated.suggest.suggestOnTriggerCharacters', true); window.ashTerminalSuggestIntegration.provider([{ label: '--help', replacementRange: [4, 5] }], ['-']); });
 	await page.locator('.xterm-helper-textarea').press('-');
 	expect(await page.evaluate(() => window.ashTerminalSuggestIntegration.providerRequests())).toEqual([]);
 	await page.evaluate(() => window.ashTerminalInputIntegration.feed('-'));
-	const picker = page.getByRole('combobox', { name: 'Terminal suggestions', exact: true });
+	const picker = page.locator('.ash-terminal-suggest');
 	await expect(picker).toBeVisible();
 	await expect(page.getByRole('option')).toContainText('--help');
 	expect(await page.evaluate(() => window.ashTerminalSuggestIntegration.providerRequests())).toEqual([{ value: 'git -', cursorIndex: 5, cancelled: false }]);
-	await picker.press('Escape');
+	await page.locator('.xterm-helper-textarea').press('Escape');
 	expect(await page.evaluate(() => window.ashTerminalInputIntegration.writes)).toEqual(['-']);
 	await page.evaluate(() => window.ashTerminalInputIntegration.close());
 });
@@ -106,5 +106,47 @@ test('terminal extension completion cannot apply a visible item after its provid
 	await picker.press('Enter');
 	await expect(picker).toBeHidden();
 	expect(await page.evaluate(() => window.ashTerminalInputIntegration.writes)).toEqual([]);
+	await page.evaluate(() => window.ashTerminalInputIntegration.close());
+});
+
+test('terminal extension trigger survives fragmented shell echo from an earlier key', async ({ page }) => {
+	await prompt(page, 'git ');
+	await page.evaluate(async () => {
+		await window.ashTerminalSuggestIntegration.configure('terminal.integrated.suggest.quickSuggestions', false);
+		await window.ashTerminalSuggestIntegration.configure('terminal.integrated.suggest.suggestOnTriggerCharacters', true);
+		window.ashTerminalSuggestIntegration.provider([{ label: '--help', replacementRange: [5, 6] }], ['-']);
+	});
+	// The real input owner has accepted both keys, but the shell's first output
+	// frame confirms only the earlier key. Its next frame confirms the trigger.
+	await page.locator('.xterm-helper-textarea').pressSequentially('a-');
+	await page.evaluate(() => window.ashTerminalInputIntegration.feed('a'));
+	await expect.poll(() => page.evaluate(() => window.ashTerminalSuggestIntegration.model())).toBe('git a|');
+	expect(await page.evaluate(() => window.ashTerminalSuggestIntegration.providerRequests())).toEqual([]);
+	await page.evaluate(() => window.ashTerminalInputIntegration.feed('-'));
+	await expect(page.locator('.ash-terminal-suggest')).toBeVisible();
+	await expect.poll(() => page.evaluate(() => window.ashTerminalSuggestIntegration.providerRequests())).toEqual([{ value: 'git a-', cursorIndex: 6, cancelled: false }]);
+	await page.locator('.xterm-helper-textarea').press('Escape');
+	await page.evaluate(() => window.ashTerminalInputIntegration.close());
+});
+
+
+test('terminal extension trigger waits for the whole typed run when an earlier fragment ends with the same trigger', async ({ page }) => {
+	await prompt(page, 'git ');
+	await page.evaluate(async () => {
+		await window.ashTerminalSuggestIntegration.configure('terminal.integrated.suggest.quickSuggestions', false);
+		await window.ashTerminalSuggestIntegration.configure('terminal.integrated.suggest.suggestOnTriggerCharacters', true);
+		window.ashTerminalSuggestIntegration.provider([{ label: '--help', replacementRange: [7, 8] }], ['-']);
+	});
+	await page.locator('.xterm-helper-textarea').pressSequentially('a-a-');
+	await page.evaluate(() => window.ashTerminalInputIntegration.feed('a-'));
+	await expect.poll(() => page.evaluate(() => window.ashTerminalSuggestIntegration.model())).toBe('git a-|');
+	// Wait beyond the real query debounce to prove no early request was queued.
+	await page.waitForTimeout(180);
+	expect(await page.evaluate(() => window.ashTerminalSuggestIntegration.providerRequests())).toEqual([]);
+	await expect(page.locator('.ash-terminal-suggest')).toBeHidden();
+	await page.evaluate(() => window.ashTerminalInputIntegration.feed('a-'));
+	await expect(page.locator('.ash-terminal-suggest')).toBeVisible();
+	await expect.poll(() => page.evaluate(() => window.ashTerminalSuggestIntegration.providerRequests())).toEqual([{ value: 'git a-a-', cursorIndex: 8, cancelled: false }]);
+	await page.locator('.xterm-helper-textarea').press('Escape');
 	await page.evaluate(() => window.ashTerminalInputIntegration.close());
 });

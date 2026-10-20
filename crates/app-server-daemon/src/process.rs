@@ -300,7 +300,7 @@ pub(crate) fn record_is_active(record: &ProcessRecord) -> Result<bool, String> {
         .process_start_identity
         .as_ref()
         .ok_or("managed process record has no start identity")?;
-    Ok(process_start_identity(record.pid)?.as_ref() == Some(expected))
+    Ok(process_start_identity_for_record(record.pid, expected)?.as_ref() == Some(expected))
 }
 
 pub(crate) fn remove_matching_process_record(
@@ -352,16 +352,29 @@ impl SpawnedBackend {
             return Ok(());
         };
         let pid = child.id();
+        let owned_record = read_process_record(&self.endpoint.pid).and_then(|candidate| {
+            let Some(record) =
+                candidate.filter(|record| record.pid == pid && self.start_identity.is_some())
+            else {
+                return Ok(None);
+            };
+            if record.process_start_identity == self.start_identity
+                || (process_start_identity(pid)? == self.start_identity
+                    && record_is_active(&record)?)
+            {
+                Ok(Some(record))
+            } else {
+                Ok(None)
+            }
+        });
         if child.try_wait().map_err(io_error)?.is_none() {
             child.kill().map_err(io_error)?;
         }
         child.wait().map_err(io_error)?;
         self.child.take();
-        if let Some(record) = read_process_record(&self.endpoint.pid)?
-            && record.pid == pid
-            && self.start_identity.is_some()
-            && record.process_start_identity == self.start_identity
-        {
+        // An older backend may publish the calendar representation. Verify it
+        // while the owned child is still live, then remove only that exact record.
+        if let Some(record) = owned_record? {
             remove_matching_process_record(&self.endpoint.pid, &record)?;
             // Only the failed child's generation may lose its stale socket.
             if read_process_record(&self.endpoint.pid)?.is_none()
@@ -474,7 +487,7 @@ pub(crate) fn force_terminate(record: &ProcessRecord) -> Result<(), String> {
     let Some(expected_start) = &record.process_start_identity else {
         return Err("managed daemon has no process start identity".into());
     };
-    match process_start_identity(record.pid)?.as_ref() {
+    match process_start_identity_for_record(record.pid, expected_start)?.as_ref() {
         // The daemon may finish naturally between the stop poll and this check.
         None => return Ok(()),
         Some(actual) if actual == expected_start => {}
@@ -488,7 +501,7 @@ pub(crate) fn force_terminate(record: &ProcessRecord) -> Result<(), String> {
     if !status.success() {
         // Natural exit can also win the race after identity verification but
         // before kill runs. A live different generation must still be rejected.
-        if process_start_identity(record.pid)?.is_none() {
+        if process_start_identity_for_record(record.pid, expected_start)?.is_none() {
             return Ok(());
         }
         return Err(format!(
@@ -510,9 +523,13 @@ pub(crate) fn force_terminate(record: &ProcessRecord) -> Result<(), String> {
 
 #[cfg(unix)]
 fn wait_for_process_exit(record: &ProcessRecord) -> Result<(), String> {
+    let expected = record
+        .process_start_identity
+        .as_deref()
+        .ok_or("managed backend has no process start identity")?;
     let deadline = std::time::Instant::now() + PROCESS_EXIT_TIMEOUT;
     while std::time::Instant::now() < deadline {
-        if process_start_identity(record.pid)?.as_ref() != record.process_start_identity.as_ref() {
+        if process_start_identity_for_record(record.pid, expected)?.as_deref() != Some(expected) {
             return Ok(());
         }
         thread::sleep(PROCESS_EXIT_POLL_INTERVAL);
@@ -523,8 +540,109 @@ fn wait_for_process_exit(record: &ProcessRecord) -> Result<(), String> {
     ))
 }
 
-#[cfg(unix)]
+// A record's identity domain must stay fixed when a newer controller reads it.
+// Legacy calendar records remain strict; a clock jump must never authorize a PID.
+fn process_start_identity_for_record(pid: u32, expected: &str) -> Result<Option<String>, String> {
+    #[cfg(target_os = "linux")]
+    if !expected.starts_with("linux:") {
+        return calendar_process_start_identity(pid);
+    }
+    #[cfg(not(target_os = "linux"))]
+    let _ = expected;
+    process_start_identity(pid)
+}
+
+#[cfg(target_os = "linux")]
 fn process_start_identity(pid: u32) -> Result<Option<String>, String> {
+    let read_bounded = |path: &Path, maximum: u64| -> io::Result<String> {
+        let mut contents = String::new();
+        File::open(path)?
+            .take(maximum + 1)
+            .read_to_string(&mut contents)?;
+        if contents.len() as u64 > maximum {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "process identity exceeds its bound",
+            ));
+        }
+        Ok(contents)
+    };
+    let boot_id =
+        read_bounded(Path::new("/proc/sys/kernel/random/boot_id"), 128).map_err(io_error)?;
+    let Some(stat) = linux_process_stat_result(read_bounded(
+        &Path::new("/proc").join(pid.to_string()).join("stat"),
+        4096,
+    ))?
+    else {
+        return Ok(None);
+    };
+    parse_linux_process_start_identity(pid, &boot_id, &stat)
+}
+
+#[cfg(target_os = "linux")]
+fn linux_process_stat_result(result: io::Result<String>) -> Result<Option<String>, String> {
+    match result {
+        Ok(stat) => Ok(Some(stat)),
+        // An opened proc file returns ESRCH if its task exits before the read.
+        Err(error)
+            if error.kind() == io::ErrorKind::NotFound
+                || error.raw_os_error() == Some(libc::ESRCH) =>
+        {
+            Ok(None)
+        }
+        Err(error) => Err(io_error(error)),
+    }
+}
+
+#[cfg(any(target_os = "linux", test))]
+fn parse_linux_process_start_identity(
+    pid: u32,
+    boot_id: &str,
+    stat: &str,
+) -> Result<Option<String>, String> {
+    let boot_id = boot_id.trim();
+    if boot_id.len() != 36
+        || !boot_id.bytes().enumerate().all(|(index, byte)| {
+            if matches!(index, 8 | 13 | 18 | 23) {
+                byte == b'-'
+            } else {
+                byte.is_ascii_hexdigit()
+            }
+        })
+    {
+        return Err("invalid Linux boot identity".into());
+    }
+    let (record_pid, remainder) = stat.split_once(' ').ok_or("invalid Linux process stat")?;
+    if record_pid.parse::<u32>().ok() != Some(pid) || !remainder.starts_with('(') {
+        return Err("Linux process stat belongs to another PID".into());
+    }
+    // comm may contain whitespace and ')' characters; only its last closing
+    // parenthesis separates it from the fixed-position kernel fields.
+    let (_, fields) = remainder
+        .rsplit_once(") ")
+        .ok_or("invalid Linux process stat")?;
+    let mut fields = fields.split_ascii_whitespace();
+    let state = fields.next().ok_or("missing Linux process state")?;
+    if matches!(state, "Z" | "X") {
+        return Ok(None);
+    }
+    if state.len() != 1 || !state.as_bytes()[0].is_ascii_alphabetic() {
+        return Err("invalid Linux process state".into());
+    }
+    let start_ticks = fields
+        .nth(18)
+        .and_then(|value| value.parse::<u64>().ok())
+        .ok_or("invalid Linux process start ticks")?;
+    Ok(Some(format!("linux:{boot_id}:{start_ticks}")))
+}
+
+#[cfg(all(unix, not(target_os = "linux")))]
+fn process_start_identity(pid: u32) -> Result<Option<String>, String> {
+    calendar_process_start_identity(pid)
+}
+
+#[cfg(unix)]
+fn calendar_process_start_identity(pid: u32) -> Result<Option<String>, String> {
     let output = Command::new("ps")
         .args(["-p", &pid.to_string(), "-o", "stat=", "-o", "lstart="])
         .output()

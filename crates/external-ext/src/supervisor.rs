@@ -509,7 +509,16 @@ impl ExtensionHostSupervisor {
                     terminate_confirmed(&process)?;
                     return Err(ExtensionHostError::HostRestarted);
                 }
-                state.terminal_registration_ids.extend(registrations.iter().filter(|registration| matches!(registration.kind, external_ext_protocol::RegistrationKind::TerminalCompletionProvider { .. } | external_ext_protocol::RegistrationKind::TerminalQuickFixProvider { .. })).map(|registration| registration.registration_id.clone()));
+                state.terminal_registration_ids.extend(
+                    registrations.iter().filter(|registration| {
+                        matches!(registration.kind,
+                            external_ext_protocol::RegistrationKind::TerminalProfileProvider { .. }
+                            | external_ext_protocol::RegistrationKind::TerminalPty {}
+                            | external_ext_protocol::RegistrationKind::TerminalLinkProvider {}
+                            | external_ext_protocol::RegistrationKind::TerminalCompletionProvider { .. }
+                            | external_ext_protocol::RegistrationKind::TerminalQuickFixProvider { .. })
+                    }).map(|registration| registration.registration_id.clone())
+                );
                 state.registrations = registrations;
                 state.speech_registration_generation = state.speech_registration_generation.max(
                     state
@@ -864,6 +873,9 @@ impl SupervisorInner {
                 !matches!(
                     registration.kind,
                     external_ext_protocol::RegistrationKind::SpeechProvider { .. }
+                        | external_ext_protocol::RegistrationKind::TerminalProfileProvider { .. }
+                        | external_ext_protocol::RegistrationKind::TerminalPty {}
+                        | external_ext_protocol::RegistrationKind::TerminalLinkProvider {}
                         | external_ext_protocol::RegistrationKind::TerminalCompletionProvider { .. }
                         | external_ext_protocol::RegistrationKind::TerminalQuickFixProvider { .. }
                 )

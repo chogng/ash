@@ -302,6 +302,7 @@ pub(super) fn validate_registrations(
                 validate_display_text(title, "terminal profile title")?;
                 ExtensionCapability::TerminalProfileProvider
             }
+            RegistrationKind::TerminalPty {} => ExtensionCapability::TerminalProfileProvider,
             RegistrationKind::TerminalLinkProvider {} => ExtensionCapability::TerminalLinkProvider,
             RegistrationKind::TerminalCompletionProvider { trigger_characters } => {
                 if trigger_characters.len() > 64

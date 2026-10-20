@@ -1,5 +1,9 @@
 import { registerSingleton, InstantiationType } from '../../../../../platform/instantiation/common/extensions.js';
-import { ITerminalCompletionService, TerminalCompletionService } from './terminalCompletionService.js';
+import { ITerminalCompletionService, TerminalCompletionService, type ITerminalCompletion } from './terminalCompletionService.js';
+import { RunOnceScheduler } from '../../../../../base/common/async.js';
+import { addDisposableListener } from '../../../../../base/browser/dom.js';
+import { TerminalSuggestWidget } from './terminalSuggestWidget.js';
+import { TerminalSuggestSettingId, type TerminalQuickSuggestions } from '../common/terminalSuggestConfiguration.js';
 import { IExtensionService } from '../../../../services/extensions/common/extensionService.js';
 
 import { KeyCode, KeyMod } from '../../../../../base/common/keyCodes.js';
@@ -22,7 +26,6 @@ import { escapeNonWindowsPath } from '../../../../../platform/terminal/common/te
 import { IWorkspaceContextService, type IWorkspaceFolder } from '../../../../../platform/workspace/common/workspace.js';
 import { ITerminalService, type ITerminalContribution, type IXtermTerminal } from '../../../terminal/browser/terminal.js';
 import { registerTerminalContribution, type ITerminalContributionContext } from '../../../terminal/browser/terminalExtensions.js';
-import { ICommandService } from '../../../../../platform/commands/common/commands.js';
 import { TerminalContextKeys } from '../../../terminal/common/terminalContextKey.js';
 import { TerminalCommandHistory } from '../../history/common/history.js';
 import { TerminalSuggestCommandId } from '../common/terminal.suggest.js';
@@ -52,6 +55,7 @@ registerAction2(class TerminalTriggerSuggestAction extends Action2 {
 
 	public override async run(accessor: ServicesAccessor, triggerCharacter?: string): Promise<void> {
 		if (triggerCharacter !== undefined && (typeof triggerCharacter !== 'string' || [...triggerCharacter].length !== 1)) return;
+		if (!accessor.get(IConfigurationService).getValue<boolean>(TerminalSuggestSettingId.Enabled)) return;
 		const terminals = accessor.get(ITerminalService);
 		const instance = terminals.activeInstance;
 		const screen = instance?.xterm;
@@ -74,10 +78,7 @@ registerAction2(class TerminalTriggerSuggestAction extends Action2 {
 		const workspace = accessor.get(IWorkspaceContextService);
 		const folder = workspace.getWorkspace().folders.find(folder => folder.id === instance.dirId);
 		const history = new TerminalCommandHistory(accessor.get(IConfigurationService), accessor.get(IStorageService));
-		const items: CompletionPick[] = history.getCommands(profileId)
-			.filter(entry => cursorIndex === prefix.length && entry.command.startsWith(prefix) && entry.command.length > prefix.length && !/[\x00-\x1f\x7f]/.test(entry.command))
-			.slice(0, 200)
-			.map(entry => ({ label: entry.command, inputData: entry.command.slice(prefix.length), description: localize('terminal.suggest.history', 'Command history') }));
+		const items = historyPicks(history, profileId, prefix, cursorIndex);
 		using lifetime = new DisposableStore();
 		const picker = lifetime.add(accessor.get(IQuickInputService).createQuickPick<CompletionPick>());
 		picker.ariaLabel = localize('terminal.suggest.ariaLabel', 'Terminal suggestions');
@@ -108,14 +109,7 @@ registerAction2(class TerminalTriggerSuggestAction extends Action2 {
 		picker.busy = true;
 		void extensions.activateByEvent('onTerminal:terminalCompletionProvider', request.signal).then(() => completionService.provideCompletions(instance, prefix, cursorIndex, request.signal, triggerCharacter)).then(completions => {
 			if (!canSend()) return;
-			const providerItems: CompletionPick[] = completions.map((item): CompletionPick | undefined => {
-				const [start, end] = item.replacementRange;
-				// Shell line editing consumes characters rather than UTF-16 code units.
-				// Do not let an extension split a surrogate pair at either range boundary.
-				if ([start, end].some(index => index > 0 && index < prefix.length && /[\uDC00-\uDFFF]/.test(prefix[index]!))) return undefined;
-				const movement = end < cursorIndex ? '\x1b[D'.repeat([...prefix.slice(end, cursorIndex)].length) : '\x1b[C'.repeat([...prefix.slice(cursorIndex, end)].length);
-				return { label: item.label, description: item.detail, detail: item.documentation, isValid: item.isValid, inputData: movement + '\x7f'.repeat([...prefix.slice(start, end)].length) + (item.insertText ?? item.label) };
-			}).filter((item): item is CompletionPick => item !== undefined);
+			const providerItems = providerPicks(completions, prefix, cursorIndex);
 			picker.items = [...picker.items, ...providerItems];
 		}).catch(() => undefined).finally(() => { if (canSend()) picker.busy = false; });
 		// The file provider may complete after Escape, input changes or a terminal switch.
@@ -139,6 +133,24 @@ registerAction2(class TerminalTriggerSuggestAction extends Action2 {
 		if (canSend()) screen.focus();
 	}
 });
+
+function historyPicks(history: TerminalCommandHistory, profileId: string, prefix: string, cursorIndex: number): CompletionPick[] {
+	if (cursorIndex !== prefix.length) return [];
+	return history.getCommands(profileId)
+		.filter(entry => entry.command.startsWith(prefix) && entry.command.length > prefix.length && !/[\x00-\x1f\x7f]/.test(entry.command))
+		.slice(0, 200).map(entry => ({ label: entry.command, inputData: entry.command.slice(prefix.length), description: localize('terminal.suggest.history', 'Command history') }));
+}
+
+function providerPicks(completions: readonly ITerminalCompletion[], prefix: string, cursorIndex: number): CompletionPick[] {
+	return completions.map((item): CompletionPick | undefined => {
+		const [start, end] = item.replacementRange;
+		// Shell line editing consumes characters rather than UTF-16 code units.
+		// Do not let an extension split a surrogate pair at either range boundary.
+		if ([start, end].some(index => index > 0 && index < prefix.length && /[\uDC00-\uDFFF]/.test(prefix[index]!))) return undefined;
+		const movement = end < cursorIndex ? '\x1b[D'.repeat([...prefix.slice(end, cursorIndex)].length) : '\x1b[C'.repeat([...prefix.slice(cursorIndex, end)].length);
+		return { label: item.label, description: item.detail, detail: item.documentation, isValid: item.isValid, inputData: movement + '\x7f'.repeat([...prefix.slice(start, end)].length) + (item.insertText ?? item.label) };
+	}).filter((item): item is CompletionPick => item !== undefined);
+}
 
 async function pathCompletions(prefix: string, cwd: string, folder: IWorkspaceFolder, paths: IPathService, files: IFileService): Promise<CompletionPick[]> {
 	// A partial quote, expansion, escape or shell operator needs a shell-owned parser.
@@ -171,40 +183,131 @@ async function pathCompletions(prefix: string, cwd: string, folder: IWorkspaceFo
 }
 
 
-/** Only shell-confirmed prompt changes trigger providers; raw key input alone is not a prompt snapshot. */
+/** Queries only shell-confirmed input; the popup never takes ownership of PTY input. */
 class TerminalSuggestContribution extends Disposable implements ITerminalContribution {
 	static readonly ID = 'terminal.suggest';
+	readonly id = TerminalSuggestContribution.ID;
 	private readonly promptListeners = this._register(new DisposableStore());
-	private pendingCharacter: string | undefined;
+	private readonly scheduler = this._register(new RunOnceScheduler(() => { void this.query(); }, 120));
+	private readonly inputExpiry = this._register(new RunOnceScheduler(() => { this.pendingInput = undefined; }, 5000));
+	private pendingInput: { readonly prefix: string; readonly value: string; } | undefined;
+	private triggerCharacter: string | undefined;
+	private composing = false;
+	private screen: IXtermTerminal | undefined;
+	private widget: TerminalSuggestWidget<CompletionPick> | undefined;
+	private request: AbortController | undefined;
 	constructor(
 		private readonly context: ITerminalContributionContext,
 		@ITerminalCompletionService private readonly completions: ITerminalCompletionService,
 		@ITerminalService private readonly terminals: ITerminalService,
 		@IExtensionService private readonly extensions: IExtensionService,
-		@ICommandService private readonly commands: ICommandService,
+		@IConfigurationService private readonly configuration: IConfigurationService,
+		@IStorageService private readonly storage: IStorageService,
+		@IWorkspaceContextService private readonly workspace: IWorkspaceContextService,
+		@IPathService private readonly paths: IPathService,
+		@IFileService private readonly files: IFileService,
 	) { super(); }
 	xtermReady(screen: IXtermTerminal): void {
+		this.screen = screen;
+		this.widget = this._register(new TerminalSuggestWidget<CompletionPick>(screen, () => this.retire()));
 		void this.extensions.activateByEvent('onTerminal:terminalCompletionProvider').catch(() => undefined);
 		const input = screen.raw.onData(data => {
-			this.pendingCharacter = [...data].length === 1 && !/[\x00-\x1f\x7f]/.test(data) ? data : undefined;
+			const pending = this.pendingInput;
+			this.clearQuery();
+			const model = this.context.instance.capabilities?.get(TerminalCapability.CommandDetection)?.promptInputModel;
+			if (this.composing || [...data].length !== 1 || /[\x00-\x1f\x7f]/.test(data)
+				|| model?.state !== PromptInputState.Input || model.cursorIndex !== model.value.length || model.ghostTextIndex >= 0) {
+				this.retire(); return;
+			}
+			const unconfirmed = pending && model.value !== pending.prefix + pending.value;
+			this.pendingInput = unconfirmed ? { prefix: pending.prefix, value: pending.value + data } : { prefix: model.value, value: data };
+			if (this.pendingInput.value.length > 1024) { this.retire(); return; }
+			this.inputExpiry.schedule();
 		});
 		this._register(toDisposable(() => input.dispose()));
+		for (const listener of [screen.raw.onScroll(() => this.retire()), screen.raw.onResize(() => this.retire()), screen.raw.buffer.onBufferChange(() => this.retire())]) this._register(toDisposable(() => listener.dispose()));
+		this._register(addDisposableListener(screen.element, 'compositionstart', () => { this.composing = true; this.retire(); }));
+		this._register(addDisposableListener(screen.element, 'compositionend', () => { this.composing = false; }));
+		this._register(addDisposableListener(screen.element, 'focusout', () => this.retire()));
+		for (const event of [this.terminals.onDidChangeActiveInstance, this.context.instance.onDidChangeState, this.context.instance.onDidExit, this.workspace.onDidChangeWorkspace, this.workspace.onDidChangeWorkspaceFolders, this.completions.onDidChangeProviders]) this._register(event(() => this.retire()));
+		this._register(this.configuration.onDidChangeConfiguration(event => { if (event.affectsConfiguration('terminal.integrated.suggest')) this.retire(); }));
 		const bind = (): void => {
-			this.promptListeners.clear();
-			this.pendingCharacter = undefined;
+			this.promptListeners.clear(); this.retire();
 			const model = this.context.instance.capabilities?.get(TerminalCapability.CommandDetection)?.promptInputModel;
 			if (!model) return;
+			for (const event of [model.onDidStartInput, model.onDidFinishInput, model.onDidInterrupt]) this.promptListeners.add(event(() => this.retire()));
 			this.promptListeners.add(model.onDidChangeInput(() => {
-				const character = this.pendingCharacter;
-				this.pendingCharacter = undefined;
-				if (!character || this.terminals.activeInstance !== this.context.instance || model.state !== PromptInputState.Input || !model.value.slice(0, model.cursorIndex).endsWith(character)
-					|| !screen.raw.textarea?.matches(':focus') || ![...this.completions.providers].some(provider => provider.triggerCharacters?.includes(character))) return;
-				void this.commands.executeCommand(TerminalSuggestCommandId.TriggerSuggest, character).catch(() => undefined);
+				const pending = this.pendingInput;
+				const character = pending?.value && [...pending.value].at(-1);
+				// A shell may echo an earlier key before the latest typed trigger.
+				// Match the complete bounded input run, not only its last character:
+				// an earlier echo fragment may already end in the same trigger.
+				this.clearQuery();
+				if (!pending || !character || !this.eligible() || model.value !== pending.prefix + pending.value) return;
+				const triggered = this.configuration.getValue<boolean>(TerminalSuggestSettingId.SuggestOnTriggerCharacters)
+					&& [...this.completions.providers].some(provider => provider.triggerCharacters?.includes(character));
+				const quick = this.configuration.getValue<boolean | TerminalQuickSuggestions>(TerminalSuggestSettingId.QuickSuggestions);
+				const category = /^[\p{L}\p{N}._/@%+=~ -]*$/u.test(model.value) ? /\s/.test(model.value.slice(0, model.cursorIndex)) ? 'arguments' : 'commands' : 'unknown';
+				const automatic = typeof quick === 'boolean' ? quick && category !== 'unknown' : quick?.[category] === 'on';
+				if (!triggered && !automatic) return;
+				this.triggerCharacter = triggered ? character : undefined;
+				this.scheduler.schedule();
 			}));
 		};
 		if (this.context.instance.capabilities) this._register(this.context.instance.capabilities.onDidChangeCapabilities(bind));
-		this._register(this.context.instance.onDidChangeState(() => { this.pendingCharacter = undefined; }));
+		this._register(toDisposable(() => this.retire()));
 		bind();
+	}
+	private eligible(): boolean {
+		const instance = this.context.instance;
+		const model = instance.capabilities?.get(TerminalCapability.CommandDetection)?.promptInputModel;
+		return !!this.screen && !this.screen.isDisposed && !this.screen.element.hidden && this.screen.element.isConnected
+			&& !this.composing && this.configuration.getValue<boolean>(TerminalSuggestSettingId.Enabled)
+			&& this.terminals.activeInstance === instance && instance.state === 'running' && !instance.isReadOnly
+			&& this.screen.raw.buffer.active.type === 'normal' && !!this.screen.raw.textarea?.matches(':focus')
+			&& model?.state === PromptInputState.Input && model.ghostTextIndex < 0 && model.value.length > 0
+			&& model.cursorIndex === model.value.length && !/[\x00-\x1f\x7f]/.test(model.value);
+	}
+	private retire(): void {
+		this.pendingInput = undefined; this.inputExpiry.cancel(); this.clearQuery();
+	}
+	private clearQuery(): void {
+		this.scheduler.cancel(); this.triggerCharacter = undefined;
+		this.request?.abort(); this.request = undefined; this.widget?.hide();
+	}
+	private async query(): Promise<void> {
+		if (!this.eligible()) return;
+		const instance = this.context.instance;
+		const screen = this.screen!;
+		const capability = instance.capabilities!.get(TerminalCapability.CommandDetection)!;
+		const model = capability.promptInputModel;
+		const prefix = model.value, cursor = model.cursorIndex, processId = instance.processId, profileId = instance.profile.profileId;
+		const cwd = capability.cwd ?? instance.cwd ?? instance.initialCwd;
+		const request = this.request = new AbortController();
+		const trigger = this.triggerCharacter;
+		const valid = (): boolean => this.request === request && !request.signal.aborted && this.eligible()
+			&& instance.xterm === screen && instance.processId === processId && instance.profile.profileId === profileId
+			&& instance.capabilities?.get(TerminalCapability.CommandDetection) === capability
+			&& model.value === prefix && model.cursorIndex === cursor && (capability.cwd ?? instance.cwd ?? instance.initialCwd) === cwd;
+		let items = historyPicks(new TerminalCommandHistory(this.configuration, this.storage), profileId, prefix, cursor);
+		const publish = (): void => {
+			if (!valid()) return;
+			this.widget?.show(items, item => {
+				if (!valid() || item.isValid?.() === false) { this.retire(); return; }
+				this.retire();
+				void instance.sendText(item.inputData, false).catch(() => undefined);
+			});
+		};
+		publish();
+		const folder = this.workspace.getWorkspace().folders.find(folder => folder.id === instance.dirId);
+		const paths = folder && (instance.shellType === PosixShellType.Bash || instance.shellType === PosixShellType.Zsh)
+			? pathCompletions(prefix, cwd, folder, this.paths, this.files) : Promise.resolve([]);
+		const providers = this.extensions.activateByEvent('onTerminal:terminalCompletionProvider', request.signal)
+			.then(() => this.completions.provideCompletions(instance, prefix, cursor, request.signal, trigger));
+		await Promise.allSettled([
+			paths.then(results => { if (valid() && results.length) { items = [...items, ...results]; publish(); } }),
+			providers.then(results => { if (valid() && results.length) { items = [...items, ...providerPicks(results, prefix, cursor)]; publish(); } }),
+		]);
 	}
 }
 registerTerminalContribution(TerminalSuggestContribution.ID, TerminalSuggestContribution);

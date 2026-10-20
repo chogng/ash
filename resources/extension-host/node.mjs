@@ -237,7 +237,7 @@ async function dispatch(frame) {
 				active.set(ctx.requestId, owned);
 				try {
 					const payload = await invocation.run(ctx, () => runtime.invoke(frame.params.registrationId,
-						JSON.stringify(frame.params.payload), ctx.requestId, frame.params.operation, frame.params.registrationGeneration));
+						JSON.stringify(frame.params.payload), ctx.requestId, frame.params.operation, frame.params.registrationGeneration, frame.params.deadlineUnixMillis));
 					success = { result: 'invoked', body: { payload: JSON.parse(payload) } };
 				} finally {
 					active.delete(ctx.requestId);

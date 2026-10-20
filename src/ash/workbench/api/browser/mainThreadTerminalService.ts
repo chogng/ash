@@ -4,7 +4,7 @@ import { match } from '../../../base/common/glob.js';
 import { FileKind, IFileService } from '../../../platform/files/common/files.js';
 import { ITerminalCompletionService, type ITerminalCompletion } from '../../contrib/terminalContrib/suggest/browser/terminalCompletionService.js';
 import { ITerminalQuickFixService, type ITerminalQuickFix } from '../../contrib/terminalContrib/quickFix/browser/quickFix.js';
-import { TerminalProcessExtHostProxy } from '../../contrib/terminal/browser/terminalProcessExtHostProxy.js';
+import { TerminalProcessExtHostProxy, type ExtensionTerminalPty } from '../../contrib/terminal/browser/terminalProcessExtHostProxy.js';
 import { IEnvironmentVariableService } from '../../contrib/terminal/common/environmentVariable.js';
 import { deserializeEnvironmentDescriptionMap, deserializeEnvironmentVariableCollection } from '../../../platform/terminal/common/environmentVariableShared.js';
 import { CancellationError } from '../../../base/common/errors.js';
@@ -33,6 +33,11 @@ export interface ExtensionTerminalProfileRegistration {
 	readonly profileId: string;
 	readonly title: string;
 	readonly invoke: ExtensionHostProviderInvoker;
+	/** Only custom profiles need a resource invoker; shell profiles create no host PTY. */
+	readonly pty?: {
+		readonly signal: AbortSignal;
+		readonly invoker: (registrationId: string) => ExtensionHostProviderInvoker;
+	};
 }
 
 export interface ExtensionTerminalEnvironmentRegistration {
@@ -55,6 +60,7 @@ export interface ExtensionTerminalQuickFixRegistration extends ExtensionTerminal
 
 /** Binds incarnation-owned callbacks to the existing terminal profile and instance owners. */
 export class MainThreadTerminalService extends Disposable {
+	private readonly processes = this._register(new DisposableStore());
 	private readonly registrations = this._register(new DisposableMap<string, DisposableStore>());
 	private readonly descriptors = new Map<string, ExtensionTerminalProfileRegistration>();
 	private workspaceGeneration = 0;
@@ -365,8 +371,11 @@ export class MainThreadTerminalService extends Disposable {
 					if (signal.aborted) {
 						// A provider can ignore cancellation. Its late opaque PTY is still
 						// an owned resource and must be closed before discarding the reply.
-						const result = record(value, ['options', 'pty']);
-						if (result.pty !== undefined) await descriptor.invoke('closeTaskTerminal', { ptyId: text(record(result.pty).ptyId, 256) }, AbortSignal.timeout(5_000));
+						const result = record(value);
+						if (result.pty !== undefined) {
+							const pty = profilePtyHandle(descriptor, result.pty);
+							await this.releasePty(pty);
+						}
 						return;
 					}
 					cancellation.dispose();
@@ -391,56 +400,72 @@ export class MainThreadTerminalService extends Disposable {
 							throw error;
 						}
 						if ('error' in reply) throw reply.error;
-						const result = record(reply.value, ['options', 'pty']);
-						if (lifetime.isDisposed || generation !== this.workspaceGeneration) {
-							if (result.pty !== undefined) await descriptor.invoke('closeTaskTerminal', { ptyId: text(record(result.pty).ptyId, 256) }, AbortSignal.timeout(5_000));
-							throw new CancellationError();
+						const value = record(reply.value);
+						// Claim the opaque resource before validating display metadata so every
+						// rejected reply has a release path, including malformed options.
+						let unclaimed = value.pty === undefined ? undefined : profilePtyHandle(descriptor, value.pty);
+						try {
+							const result = record(value, ['options', 'pty']);
+							if (lifetime.isDisposed || generation !== this.workspaceGeneration) throw new CancellationError();
+							if (result.options === null) return undefined;
+							const options = record(result.options, ['name', 'shellPath', 'shellArgs', 'cwd', 'env', 'strictEnv', 'icon', 'color']);
+							const name = text(options.name ?? descriptor.title, 256);
+							const icon = presentation.icon ?? (options.icon === undefined ? undefined : ThemeIcon.fromId(text(options.icon, 256)));
+							const color = presentation.color ?? (options.color === undefined ? undefined : text(options.color, 256));
+							let instance: ITerminalInstance;
+							if (result.pty !== undefined) {
+								const pty = profilePty(descriptor, result.pty);
+								let initialPty: ExtensionTerminalPty | undefined = pty;
+								instance = await this.terminals.createTerminal({
+									cwd: presentation.cwd, location: presentation.location, preserveFocus: presentation.preserveFocus, dimensions: { cols: 80, rows: 24 }, config: {
+										name, icon, color, customPtyImplementation: (terminalId, cols, rows) => {
+											if (descriptor.pty!.signal.aborted || generation !== this.workspaceGeneration) throw new CancellationError();
+											const resource = initialPty;
+											initialPty = undefined;
+											const childLifetime = new DisposableStore();
+											const child = new TerminalProcessExtHostProxy(terminalId, resource?.ptyId, pty.acceptsInput, cols, rows, resource?.invoke ?? pty.invoke, () => {
+												this.processes.delete(childLifetime);
+												childLifetime.dispose();
+											}, async signal => {
+												// Relaunch asks the original factory for a new resource;
+												// existing IO never goes back through that factory.
+												const value = record(await descriptor.invoke('createTerminalProfile', {}, signal));
+												const resource = value.pty === undefined ? undefined : profilePtyHandle(descriptor, value.pty);
+												try {
+													const reply = record(value, ['options', 'pty']);
+													return profilePty(descriptor, reply.pty);
+												} catch (error) {
+													if (resource) await this.releasePty(resource);
+													throw error;
+												}
+											});
+											childLifetime.add(addDisposableListener(descriptor.pty!.signal, 'abort', () => child.shutdown(true), { once: true }));
+											childLifetime.add(toDisposable(() => child.shutdown(true)));
+											this.processes.add(childLifetime);
+											unclaimed = undefined;
+											return child;
+										},
+									}
+								});
+							} else {
+								const shell: IShellLaunchConfig = {
+									name, icon, color,
+									executable: options.shellPath === undefined ? undefined : text(options.shellPath, 32768),
+									args: options.shellArgs === undefined ? undefined : argumentsList(options.shellArgs),
+									cwd: typeof presentation.cwd === 'string' ? presentation.cwd : options.cwd === undefined ? undefined : text(options.cwd, 32768),
+									env: environment(options.env),
+									strictEnv: options.strictEnv === undefined ? undefined : boolean(options.strictEnv),
+								};
+								instance = await this.terminals.createTerminal({ config: shell, cwd: presentation.cwd, location: presentation.location, preserveFocus: presentation.preserveFocus, skipContributedProfileCheck: true });
+							}
+							if (descriptor.pty?.signal.aborted || generation !== this.workspaceGeneration) {
+								await this.terminals.closeTerminal(instance);
+								throw new CancellationError();
+							}
+							return instance.instanceId;
+						} finally {
+							if (unclaimed) await this.releasePty(unclaimed);
 						}
-						if (result.options === null) return undefined;
-						const options = record(result.options, ['name', 'shellPath', 'shellArgs', 'cwd', 'env', 'strictEnv', 'icon', 'color']);
-						const name = text(options.name ?? descriptor.title, 256);
-						const icon = presentation.icon ?? (options.icon === undefined ? undefined : ThemeIcon.fromId(text(options.icon, 256)));
-						const color = presentation.color ?? (options.color === undefined ? undefined : text(options.color, 256));
-						let instance: ITerminalInstance;
-						if (result.pty !== undefined) {
-							const pty = record(result.pty, ['ptyId', 'acceptsInput']);
-							const id = text(pty.ptyId, 256);
-							if (typeof pty.acceptsInput !== 'boolean') throw invalid();
-							let nextPtyId: string | undefined = id;
-							instance = await this.terminals.createTerminal({
-								cwd: presentation.cwd, location: presentation.location, preserveFocus: presentation.preserveFocus, dimensions: { cols: 80, rows: 24 }, config: {
-									name, icon, color, customPtyImplementation: (terminalId, cols, rows) => {
-										if (lifetime.isDisposed || generation !== this.workspaceGeneration) throw new CancellationError();
-										let registration: IDisposable | undefined;
-										const child = new TerminalProcessExtHostProxy(terminalId, nextPtyId, pty.acceptsInput === true, cols, rows, descriptor.invoke, () => {
-											if (registration) {
-												lifetime.delete(registration);
-												registration.dispose();
-												registration = undefined;
-											}
-										});
-										nextPtyId = undefined;
-										registration = lifetime.add(toDisposable(() => child.shutdown(true)));
-										return child;
-									},
-								}
-							});
-						} else {
-							const shell: IShellLaunchConfig = {
-								name, icon, color,
-								executable: options.shellPath === undefined ? undefined : text(options.shellPath, 32768),
-								args: options.shellArgs === undefined ? undefined : argumentsList(options.shellArgs),
-								cwd: typeof presentation.cwd === 'string' ? presentation.cwd : options.cwd === undefined ? undefined : text(options.cwd, 32768),
-								env: environment(options.env),
-								strictEnv: options.strictEnv === undefined ? undefined : boolean(options.strictEnv),
-							};
-							instance = await this.terminals.createTerminal({ config: shell, cwd: presentation.cwd, location: presentation.location, preserveFocus: presentation.preserveFocus, skipContributedProfileCheck: true });
-						}
-						if (lifetime.isDisposed || generation !== this.workspaceGeneration) {
-							await this.terminals.closeTerminal(instance);
-							throw new CancellationError();
-						}
-						return instance.instanceId;
 					},
 				}));
 				this.registrations.set(key, lifetime);
@@ -450,6 +475,14 @@ export class MainThreadTerminalService extends Disposable {
 				throw error;
 			}
 		}
+	}
+
+	/** Connection clear and authority rollback retire resources as well as factories. */
+	clearPtys(): void { this.processes.clear(); }
+
+	private async releasePty(pty: Pick<ExtensionTerminalPty, 'ptyId' | 'invoke'>): Promise<void> {
+		await pty.invoke('closeTaskTerminal', { ptyId: pty.ptyId }, AbortSignal.timeout(5_000))
+			.catch(error => this.log.error('terminal', localize('terminal.profile.lateReleaseFailed', 'Failed to release a late extension terminal profile.'), error));
 	}
 
 	private extensionForRuntime(descriptor: ExtensionTerminalEnvironmentRegistration) {
@@ -475,6 +508,18 @@ export class MainThreadTerminalService extends Disposable {
 	}
 }
 
+
+function profilePty(descriptor: ExtensionTerminalProfileRegistration, value: JsonValue | undefined): ExtensionTerminalPty {
+	const pty = record(value, ['ptyId', 'acceptsInput', 'registrationId']);
+	if (typeof pty.acceptsInput !== 'boolean') throw invalid();
+	return { ...profilePtyHandle(descriptor, value), acceptsInput: pty.acceptsInput };
+}
+
+function profilePtyHandle(descriptor: ExtensionTerminalProfileRegistration, value: JsonValue | undefined): Pick<ExtensionTerminalPty, 'ptyId' | 'invoke'> {
+	const pty = record(value);
+	if (!descriptor.pty) throw invalid();
+	return { ptyId: text(pty.ptyId, 256), invoke: descriptor.pty.invoker(text(pty.registrationId, 256)) };
+}
 
 function invalid(): TypeError {
 	return new TypeError(localize('terminal.profile.invalidProviderResult', 'Invalid terminal profile provider response.'));

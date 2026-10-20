@@ -459,6 +459,8 @@ pub enum RegistrationKind {
         profile_id: String,
         title: String,
     },
+    /// A created profile PTY outlives its factory registration until terminal or host closure.
+    TerminalPty {},
     /// Extension-owned mutations for future shells; borrows the terminal provider ceiling.
     TerminalEnvironment {},
     /// Provides line-local links; activation remains an explicit client gesture.
@@ -531,7 +533,10 @@ impl ExtensionHostRegistrationEvent {
         if self.terminal_providers.iter().any(|registration| {
             !matches!(
                 registration.kind,
-                RegistrationKind::TerminalCompletionProvider { .. }
+                RegistrationKind::TerminalProfileProvider { .. }
+                    | RegistrationKind::TerminalPty {}
+                    | RegistrationKind::TerminalLinkProvider {}
+                    | RegistrationKind::TerminalCompletionProvider { .. }
                     | RegistrationKind::TerminalQuickFixProvider { .. }
             )
         }) {
@@ -543,6 +548,8 @@ impl ExtensionHostRegistrationEvent {
             &self.terminal_providers,
             limits.maximum_registrations,
             &[
+                ExtensionCapability::TerminalProfileProvider,
+                ExtensionCapability::TerminalLinkProvider,
                 ExtensionCapability::TerminalCompletionProvider,
                 ExtensionCapability::TerminalQuickFixProvider,
             ],

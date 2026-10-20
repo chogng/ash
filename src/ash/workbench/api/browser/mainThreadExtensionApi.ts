@@ -395,6 +395,7 @@ export class MainThreadExtensionApi extends Disposable {
 		this.workspaceApi.clear();
 		this.taskApi.clear();
 		this.terminalApi.replaceProfiles([]);
+		this.terminalApi.clearPtys();
 		this.terminalApi.replaceEnvironmentProviders([]);
 		this.terminalApi.replaceLinkProviders([]);
 		this.terminalApi.replaceCompletionProviders([]);
@@ -586,7 +587,16 @@ export class MainThreadExtensionApi extends Disposable {
 					continue;
 				}
 				if (registration.kind === 'terminalProfileProvider') {
-					terminalProfiles.push({ runtimeId: runtime.id, packageDigest: runtime.packageDigest, profileId: registration.profileId, title: registration.title, invoke });
+					// Issued PTYs use their own backend registration and the runtime's
+					// authority signal; withdrawing this factory must not cancel their IO.
+					const fence = { id: runtime.id, activationGeneration: runtime.activationGeneration, incarnation: runtime.incarnation };
+					terminalProfiles.push({
+						runtimeId: runtime.id, packageDigest: runtime.packageDigest, profileId: registration.profileId, title: registration.title, invoke,
+						pty: {
+							signal: controller.signal,
+							invoker: registrationId => this.registrationInvoker(fence, { kind: 'terminalPty', registrationId }, controller.signal),
+						},
+					});
 					continue;
 				}
 				if (registration.kind === "taskProvider") {
@@ -624,7 +634,7 @@ export class MainThreadExtensionApi extends Disposable {
 		return input ? { resource: input.resource.toJSON(), groupId: group!.id, editorIndex: group!.inputs.indexOf(input) } : null;
 	}
 
-	private registrationInvoker(runtime: ExtensionHostRuntime, registration: ExtensionHostRegistration, generationSignal: AbortSignal): ExtensionHostProviderInvoker {
+	private registrationInvoker(runtime: Pick<ExtensionHostRuntime, 'id' | 'activationGeneration' | 'incarnation'>, registration: Pick<ExtensionHostRegistration, 'registrationId' | 'kind'>, generationSignal: AbortSignal): ExtensionHostProviderInvoker {
 		// Provider callbacks outlive UI snapshots. Retain only their process fence,
 		// so replacing a status value can release its previous command arguments.
 		const { id: extensionId, activationGeneration, incarnation } = runtime;
@@ -645,7 +655,9 @@ export class MainThreadExtensionApi extends Disposable {
 					// follows this launch and the registration's activation generation.
 					deadlineUnixMillis: Date.now() + (registration.kind === 'debugAdapter' ? Math.max(this.invocationTimeoutMillis, 300_000) : this.invocationTimeoutMillis),
 				}, combined.signal);
-				combined.signal.throwIfAborted();
+				// A completed profile may already own an issued PTY. Let its caller
+				// release that late result instead of hiding the resource on cancellation.
+				if (operation !== 'createTerminalProfile') combined.signal.throwIfAborted();
 				return result;
 			} finally {
 				combined.dispose();
@@ -714,6 +726,7 @@ export class MainThreadExtensionApi extends Disposable {
 				this.testRegistration.replace([]);
 				this.remoteRegistration.replace([]);
 				this.terminalApi.replaceProfiles([]);
+				this.terminalApi.clearPtys();
 				this.terminalApi.replaceEnvironmentProviders([]);
 				this.terminalApi.replaceLinkProviders([]);
 				this.terminalApi.replaceCompletionProviders([]);
@@ -748,6 +761,7 @@ export class MainThreadExtensionApi extends Disposable {
 		this.testRegistration.replace([]);
 		this.remoteRegistration.replace([]);
 		this.terminalApi.replaceProfiles([]);
+		this.terminalApi.clearPtys();
 		this.terminalApi.replaceEnvironmentProviders([]);
 		this.terminalApi.replaceLinkProviders([]);
 		this.terminalApi.replaceCompletionProviders([]);
@@ -971,6 +985,7 @@ function ownsExecutableContribution(registration: ExtensionHostRegistration): re
 		case 'outputEvents': case 'remoteAuthorityResolver': case 'workspaceEvents': case 'statusBar':
 		case 'sourceControl': case 'textDocumentEvents': case 'taskEvents': case 'debugEvents':
 		case 'customTextEditor': case 'dataChannel': case 'speechProvider': case 'linkPresentationProvider': case 'externalUriOpener':
+		case 'terminalPty':
 			return false;
 	}
 }

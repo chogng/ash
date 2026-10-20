@@ -618,7 +618,16 @@ fn activation_plan(manifest: &serde_json::Value) -> Result<ActivationPlan, Strin
             events.insert(format!("onLanguage:{id}"));
         }
     }
-    if let Some(entries) = manifest.pointer("/contributes/terminalProfiles") {
+    let terminal = manifest.pointer("/contributes/terminal");
+    if terminal.is_some_and(|value| !value.is_object()) {
+        return Err("invalid terminal contributions".into());
+    }
+    let standard_profiles = terminal.and_then(|value| value.get("profiles"));
+    let legacy_profiles = manifest.pointer("/contributes/terminalProfiles");
+    if standard_profiles.is_some() && legacy_profiles.is_some() {
+        return Err("conflicting terminal profile declarations".into());
+    }
+    if let Some(entries) = standard_profiles.or(legacy_profiles) {
         for entry in entries.as_array().ok_or("invalid terminal profiles")? {
             let id = entry
                 .get("id")

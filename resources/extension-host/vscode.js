@@ -14,6 +14,13 @@ export function createApi(configuration, initialization) {
 		};
 		configuration = { ...configuration, commands: visit(configuration.commands), manifest: visit(configuration.manifest) };
 	}
+	const terminalContribution = configuration.manifest?.contributes?.terminal;
+	if (terminalContribution !== undefined && (!terminalContribution || typeof terminalContribution !== 'object' || Array.isArray(terminalContribution))) throw new TypeError('Invalid terminal contributions');
+	const declaredProfiles = terminalContribution?.profiles;
+	const legacyProfiles = configuration.manifest?.contributes?.terminalProfiles;
+	if (declaredProfiles !== undefined && legacyProfiles !== undefined) throw new TypeError('Conflicting terminal profile declarations');
+	const terminalProfiles = declaredProfiles ?? legacyProfiles ?? [];
+	if (!Array.isArray(terminalProfiles) || terminalProfiles.length > 128) throw new TypeError('Invalid terminal profile declarations');
 	const titles = new Map();
 	if (!Array.isArray(configuration.commands)) throw new TypeError('Invalid command contributions');
 	for (const entry of configuration.commands) {
@@ -1708,7 +1715,7 @@ export function createApi(configuration, initialization) {
 				return new Disposable(() => { handle.dispose(); terminals.clear(); });
 			},
 			registerTerminalProfileProvider(id, provider) {
-				const declaration = configuration.manifest?.contributes?.terminalProfiles?.find(profile => profile.id === id);
+				const declaration = terminalProfiles.find(profile => profile.id === id);
 				if (!declaration || typeof provider?.provideTerminalProfile !== 'function') throw new TypeError('Terminal profile requires a declared ID and provideTerminalProfile callback');
 				const handle = ashTerminals.registerTerminalProfileProvider(`vscode.terminalProfile.${++providerSequence}`, id, declaration.title, {
 					createTerminalProfile: context => invoke(async () => {

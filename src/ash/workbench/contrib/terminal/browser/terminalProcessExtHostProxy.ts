@@ -7,6 +7,12 @@ import { BasePty } from '../common/basePty.js';
 import { Emitter } from '../../../../base/common/event.js';
 import { TerminalDataBufferer } from '../../../../platform/terminal/common/terminalDataBuffering.js';
 
+export interface ExtensionTerminalPty {
+	readonly ptyId: string;
+	readonly acceptsInput: boolean;
+	readonly invoke: (operation: string, payload: JsonValue, signal: AbortSignal) => Promise<JsonValue>;
+}
+
 /** The instance owns its screen; this child owns only an extension's bounded opaque PTY stream. */
 export class TerminalProcessExtHostProxy extends BasePty {
 	private readonly sendInput = (data: string) => this.dispatch('inputTaskTerminal', { data });
@@ -18,18 +24,18 @@ export class TerminalProcessExtHostProxy extends BasePty {
 	private readonly incomingData = this._register(new Emitter<string>());
 	private readonly bufferer = this._register(new TerminalDataBufferer((_id, data) => this.handleData(data)));
 
-	constructor(id: number, private ptyId: string | undefined, private acceptsInput: boolean, private cols: number, private rows: number, private readonly invoke: (operation: string, payload: JsonValue, signal: AbortSignal) => Promise<JsonValue>, private readonly releaseOwner: () => void) {
+	constructor(id: number, private ptyId: string | undefined, private acceptsInput: boolean, private cols: number, private rows: number, private invoke: ExtensionTerminalPty['invoke'], private readonly releaseOwner: () => void, private readonly createPty?: (signal: AbortSignal) => Promise<ExtensionTerminalPty>) {
 		super(id, false);
 		this._register(this.bufferer.startBuffering(id, this.incomingData.event));
 	}
 
 	async start(): Promise<void> {
 		if (this.ptyId === undefined) {
-			const result = record(await this.invoke('createTerminalProfile', {}, this.controller.signal), ['options', 'pty']);
-			const pty = record(result.pty, ['ptyId', 'acceptsInput']);
-			this.ptyId = text(pty.ptyId, 256);
-			if (typeof pty.acceptsInput !== 'boolean') throw invalid();
+			if (!this.createPty) throw invalid();
+			const pty = await this.createPty(this.controller.signal);
+			this.ptyId = pty.ptyId;
 			this.acceptsInput = pty.acceptsInput;
+			this.invoke = pty.invoke;
 			if (this.closed) {
 				await this.releasePty();
 				throw new CancellationError();

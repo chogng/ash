@@ -604,7 +604,7 @@ require('node:readline').createInterface({ input: process.stdin }).on('line', li
     sessions
         .reserve("one".into(), 7, 1, "test.extension".into())
         .unwrap();
-    sessions.install("one", handle.clone()).unwrap();
+    sessions.install("one", handle.clone(), None).unwrap();
     sessions
         .cancel(
             7,
@@ -636,7 +636,9 @@ require('node:readline').createInterface({ input: process.stdin }).on('line', li
             })
             .unwrap(),
     );
-    sessions.install("replacement", handle.clone()).unwrap();
+    sessions
+        .install("replacement", handle.clone(), None)
+        .unwrap();
     supervisor.shutdown().unwrap();
     assert!(
         sessions

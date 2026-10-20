@@ -2619,8 +2619,17 @@ for (const locale of ['en', 'zh-CN']) {
 		});
 		expect(geometry).toEqual({ left: 0, top: 0, width: 0 });
 		await page.locator('.ash-terminal-instance:visible').screenshot({ path: testInfo.outputPath('sticky-scroll.png') });
-		await header.dispatchEvent('wheel', { deltaY: 1, deltaMode: 1 });
-		expect(await page.evaluate(() => window.ashTerminalStreamIntegration.stickyScroll.position().viewport)).toBe(9);
+		const screen = page.locator('.ash-terminal-instance:visible .xterm-screen');
+		await screen.evaluate(element => {
+			for (let packet = 0; packet < 16; packet++) element.dispatchEvent(new WheelEvent('wheel', { deltaY: 1, deltaMode: WheelEvent.DOM_DELTA_LINE, bubbles: true, cancelable: true }));
+		});
+		await expect.poll(() => page.evaluate(() => window.ashTerminalStreamIntegration.stickyScroll.position().viewport)).not.toBe(8);
+		const wheelPosition = await page.evaluate(() => window.ashTerminalStreamIntegration.stickyScroll.position().viewport);
+		await page.evaluate(() => window.ashTerminalStreamIntegration.stickyScroll.scroll(8));
+		await header.evaluate(element => {
+			for (let packet = 0; packet < 16; packet++) element.dispatchEvent(new WheelEvent('wheel', { deltaY: 1, deltaMode: WheelEvent.DOM_DELTA_LINE, bubbles: true, cancelable: true }));
+		});
+		await expect.poll(() => page.evaluate(() => window.ashTerminalStreamIntegration.stickyScroll.position().viewport)).toBe(wheelPosition);
 		await page.evaluate(() => window.ashTerminalStreamIntegration.stickyScroll.scroll(8));
 		await header.focus();
 		await header.press('Escape');
@@ -2652,6 +2661,36 @@ for (const locale of ['en', 'zh-CN']) {
 		expect(errors).toEqual([]);
 	});
 }
+
+test('terminal sticky header preserves fractional trackpad wheel input through the xterm viewport', async ({ page }) => {
+	await page.goto('/terminal.html?stream&commandModel');
+	await expect.poll(() => page.evaluate(() => window.ashTerminalStreamIntegration?.model().input)).toBe('|');
+	await page.evaluate(() => {
+		const fixture = window.ashTerminalStreamIntegration;
+		fixture.environmentFrame({ type: 'hasRichCommandDetection', value: true });
+		fixture.feedModel('echo fractional-wheel\r\n');
+		fixture.environmentFrame({ type: 'commandExecuted', commandId: 'wheel-command', command: 'echo fractional-wheel', isTrusted: true, cwd: '/workspace', timestampMillis: 1 });
+		fixture.feedModel('wheel-output\r\n'.repeat(120));
+	});
+	await expect.poll(() => page.evaluate(() => window.ashTerminalStreamIntegration.observed())).toContain('wheel-output');
+	const header = page.locator('.ash-terminal-sticky-scroll');
+	const viewport = () => page.evaluate(() => window.ashTerminalStreamIntegration.stickyScroll.position().viewport);
+	const positions: number[] = [];
+	for (const selector of ['.xterm-screen', '.ash-terminal-sticky-scroll']) {
+		await page.evaluate(() => window.ashTerminalStreamIntegration.stickyScroll.scroll(30));
+		await expect(header).toBeVisible();
+		await expect.poll(viewport).toBe(30);
+		await page.locator(`.ash-terminal-instance:visible ${selector}`).evaluate(element => {
+			// Pixel packets intentionally omit legacy wheelDelta fields used for physical mouse wheels.
+			for (let packet = 0; packet < 16; packet++) element.dispatchEvent(new WheelEvent('wheel', { deltaY: 0.5, deltaMode: WheelEvent.DOM_DELTA_PIXEL, bubbles: true, cancelable: true }));
+		});
+		await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
+		positions.push(await viewport());
+	}
+	expect(positions[0]).toBeLessThanOrEqual(32);
+	expect(positions[1]).toBe(positions[0]);
+	await page.evaluate(() => window.ashTerminalStreamIntegration.close());
+});
 
 test('terminal sticky scroll caps wrapped command rows and releases trimmed command markers', async ({ page }) => {
 	await page.goto('/terminal.html?stream&commandModel');
@@ -3302,11 +3341,12 @@ for (const theme of ['dark', 'light', 'hcDark', 'hcLight'] as const) {
 		const geometry = await guide.evaluate(element => {
 			const bounds = element.getBoundingClientRect();
 			const screen = element.closest('.ash-terminal-instance')!.querySelector('.xterm-screen')!.getBoundingClientRect();
-			return { top: bounds.top, height: bounds.height, left: Math.abs(bounds.left - screen.left), pointerEvents: getComputedStyle(element).pointerEvents };
+			const terminal = element.closest('.ash-terminal-instance')!.getBoundingClientRect();
+			return { top: bounds.top, height: bounds.height, inGutter: bounds.left >= terminal.left && bounds.right < screen.left, pointerEvents: getComputedStyle(element).pointerEvents };
 		});
 		expect(geometry.top).toBeCloseTo(commandBounds!.y, 0);
 		expect(geometry.height).toBeCloseTo(commandBounds!.height * 3, 0);
-		expect(geometry.left).toBeLessThanOrEqual(1);
+		expect(geometry.inGutter).toBe(true);
 		expect(geometry.pointerEvents).toBe('none');
 		const color = await guide.evaluate(element => getComputedStyle(element).borderLeftColor);
 		expect(color).not.toBe('rgba(0, 0, 0, 0)');

@@ -5,16 +5,20 @@ import type { ExtensionManifest } from '../../../services/extensions/common/exte
 import { ITerminalContributionService } from './terminal.js';
 import { isValidTerminalProfileContribution, TerminalContributionService } from './terminalExtensionPoints.js';
 
-ExtensionsRegistry.registerExtensionPoint<ExtensionManifest['contributes']['terminalProfiles']>({
-	extensionPoint: 'terminalProfiles',
+ExtensionsRegistry.registerExtensionPoint<ExtensionManifest['contributes']['terminal']>({
+	extensionPoint: 'terminal',
 	validate: value => {
-		if (!Array.isArray(value) || value.length > 128) throw invalid();
+		if (!value || typeof value !== 'object' || Array.isArray(value)) throw invalid();
+		const profiles = (value as Record<string, unknown>).profiles;
+		if (!Array.isArray(profiles) || profiles.length > 128) throw invalid();
 		const ids = new Set<string>();
-		return Object.freeze(value.map(profile => {
-			if (!isValidTerminalProfileContribution(profile) || ids.has(profile.id)) throw invalid();
-			ids.add(profile.id);
-			return Object.freeze({ id: profile.id, title: profile.title, icon: profile.icon, color: profile.color });
-		}));
+		return Object.freeze({
+			profiles: Object.freeze(profiles.map(profile => {
+				if (!isValidTerminalProfileContribution(profile) || ids.has(profile.id)) throw invalid();
+				ids.add(profile.id);
+				return Object.freeze({ id: profile.id, title: profile.title, icon: profile.icon, color: profile.color });
+			}))
+		});
 	},
 });
 

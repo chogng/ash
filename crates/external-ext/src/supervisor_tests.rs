@@ -800,6 +800,8 @@ fn dynamic_terminal_providers_revoke_pending_calls_and_keep_activation_authority
         Arc::new(TestAuthority::authorized()),
         vec![
             ExtensionCapability::Command,
+            ExtensionCapability::TerminalProfileProvider,
+            ExtensionCapability::TerminalLinkProvider,
             ExtensionCapability::TerminalCompletionProvider,
             ExtensionCapability::TerminalQuickFixProvider,
         ],
@@ -813,6 +815,21 @@ fn dynamic_terminal_providers_revoke_pending_calls_and_keep_activation_authority
         .clone()
         .unwrap();
     let providers = vec![
+        RegistrationDescriptor {
+            registration_id: "profile.1".into(),
+            kind: RegistrationKind::TerminalProfileProvider {
+                profile_id: "shell".into(),
+                title: "Shell".into(),
+            },
+        },
+        RegistrationDescriptor {
+            registration_id: "profile.1.pty.1".into(),
+            kind: RegistrationKind::TerminalPty {},
+        },
+        RegistrationDescriptor {
+            registration_id: "links.1".into(),
+            kind: RegistrationKind::TerminalLinkProvider {},
+        },
         RegistrationDescriptor {
             registration_id: "completion.1".into(),
             kind: RegistrationKind::TerminalCompletionProvider {
@@ -833,9 +850,9 @@ fn dynamic_terminal_providers_revoke_pending_calls_and_keep_activation_authority
         terminal_providers,
     };
     handler(event(HostEventContext::new(1, 9), 1, providers.clone())).unwrap();
-    assert_eq!(host.snapshot().registrations.len(), 3);
+    assert_eq!(host.snapshot().registrations.len(), 6);
     handler(event(HostEventContext::new(1, 8), 2, vec![])).unwrap();
-    assert_eq!(host.snapshot().registrations.len(), 3);
+    assert_eq!(host.snapshot().registrations.len(), 6);
     process.hang_invocations.store(true, Ordering::Release);
     let mut request = invocation();
     request.registration_id = "completion.1".into();

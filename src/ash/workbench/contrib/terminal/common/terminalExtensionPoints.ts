@@ -5,7 +5,7 @@ import type { IExtensionTerminalProfile } from '../../../../platform/terminal/co
 import { IExtensionService, type ExtensionManifest } from '../../../services/extensions/common/extensionService.js';
 import type { ITerminalContributionService } from './terminal.js';
 
-type TerminalProfileContribution = ExtensionManifest['contributes']['terminalProfiles'][number];
+type TerminalProfileContribution = ExtensionManifest['contributes']['terminal']['profiles'][number];
 
 /** Terminal-domain declarations derived from the extension owner's committed, validated manifests. */
 export class TerminalContributionService extends Disposable implements ITerminalContributionService {
@@ -21,7 +21,7 @@ export class TerminalContributionService extends Disposable implements ITerminal
 	}
 
 	private update(): void {
-		this.profiles = Object.freeze(this.extensions.getExtensionPointContributions<readonly TerminalProfileContribution[]>('terminalProfiles').flatMap(user => user.value.map(profile => Object.freeze({
+		this.profiles = Object.freeze(this.extensions.getExtensionPointContributions<ExtensionManifest['contributes']['terminal']>('terminal').flatMap(user => user.value.profiles.map(profile => Object.freeze({
 			extensionIdentifier: user.description.id,
 			id: profile.id,
 			title: profile.title,

@@ -10,11 +10,12 @@ let activation;
 let registrationListener;
 let registrationRevision = 0;
 let speechRegistrationGeneration = 0;
-const dynamicRegistration = kind => ['speechProvider', 'terminalCompletionProvider', 'terminalQuickFixProvider'].includes(kind);
+const dynamicTerminalRegistration = kind => ['terminalProfileProvider', 'terminalPty', 'terminalLinkProvider', 'terminalCompletionProvider', 'terminalQuickFixProvider'].includes(kind);
+const dynamicRegistration = kind => kind === 'speechProvider' || dynamicTerminalRegistration(kind);
 
 function publishDynamicRegistrations() {
 	if (phase !== 'active') return;
-	registrationListener?.(JSON.stringify({ revision: ++registrationRevision, speechProviders: [...registrations.values()].filter(value => value.kind === 'speechProvider').map(({ registrationId, kind, identifier, registrationGeneration }) => ({ registrationId, kind, identifier, registrationGeneration })), terminalProviders: [...registrations.values()].filter(value => value.kind === 'terminalCompletionProvider' || value.kind === 'terminalQuickFixProvider').map(({ registrationId, kind, triggerCharacters, providerId }) => ({ registrationId, kind, ...(triggerCharacters ? { triggerCharacters } : {}), ...(providerId ? { providerId } : {}) })) }));
+	registrationListener?.(JSON.stringify({ revision: ++registrationRevision, speechProviders: [...registrations.values()].filter(value => value.kind === 'speechProvider').map(({ registrationId, kind, identifier, registrationGeneration }) => ({ registrationId, kind, identifier, registrationGeneration })), terminalProviders: [...registrations.values()].filter(value => dynamicTerminalRegistration(value.kind)).map(({ registrationId, kind, triggerCharacters, providerId, profileId, title }) => ({ registrationId, kind, ...(triggerCharacters ? { triggerCharacters } : {}), ...(providerId ? { providerId } : {}), ...(profileId ? { profileId, title } : {}) })) }));
 }
 
 export class CancellationTokenSource {
@@ -316,16 +317,18 @@ export const workspace = Object.freeze({
 function registerPseudoterminalCallbacks(registration, provider) {
 	const terminals = new Map();
 	let sequence = 0;
+	const independentResources = registration.kind === 'terminalProfileProvider';
 	function release(id) {
 		const state = terminals.get(id);
 		if (!state) return;
 		terminals.delete(id);
 		let failure;
+		try { state.creationLease?.(); state.handle?.dispose(); } catch (error) { failure = error; }
 		for (const listener of state.listeners) { try { listener?.dispose?.(); } catch (error) { failure ??= error; } }
 		if (!state.closed) { state.closed = true; try { state.pty.close(); } catch (error) { failure ??= error; } }
 		if (failure) throw failure;
 	}
-	async function retainPty(pty) {
+	async function retainPty(pty, creationToken, retainCancellation) {
 		if (terminals.size >= 64) throw new Error('Pseudoterminal quota exceeded');
 		if (typeof pty?.onDidWrite !== 'function' || typeof pty.open !== 'function' || typeof pty.close !== 'function') throw new TypeError('CustomExecution requires a Pseudoterminal');
 		const id = `pty.${++sequence}`;
@@ -351,48 +354,74 @@ function registerPseudoterminalCallbacks(registration, provider) {
 			if (pty.onDidChangeName) state.listeners.push(pty.onDidChangeName(name => { if (!state.closed && typeof name === 'string') enqueue({ type: 'name', name }); }));
 			if (state.listeners.some(listener => typeof listener?.dispose !== 'function')) throw new TypeError('Pseudoterminal events require disposable listeners');
 		} catch (error) { try { release(id); } finally { throw error; } }
-		return { ptyId: id, acceptsInput: typeof pty.handleInput === 'function' };
+		if (creationToken?.isCancellationRequested) { release(id); return undefined; }
+		// The factory can be unregistered while its already-created terminal remains open.
+		// Keep that resource in the same owner and route IO through its own admitted handle.
+		let registrationId;
+		if (independentResources) {
+			registrationId = `${registration.registrationId}.${id}`;
+			try {
+				state.handle = register({
+					registrationId, kind: 'terminalPty', operation: terminalOperations,
+					disposeResources() { release(id); },
+					callback(context, payload, operation) {
+						if (payload.ptyId !== id) throw new TypeError('Pseudoterminal handle does not own this resource');
+						return terminalCallback(context, payload, operation);
+					},
+				});
+			} catch (error) { try { release(id); } finally { throw error; } }
+		}
+		// Keep late Host RPC cancellation addressable until the client first uses
+		// the issued resource. Factory withdrawal no longer owns a serialized reply.
+		if (retainCancellation) state.creationLease = retainCancellation(registrations.get(registrationId));
+		if (creationToken) state.listeners.push(creationToken.onCancellationRequested(() => release(id)));
+		return { ptyId: id, acceptsInput: typeof pty.handleInput === 'function', ...(registrationId ? { registrationId } : {}) };
 	}
 
+	const terminalOperations = ['openTaskTerminal', 'readTaskTerminal', 'inputTaskTerminal', 'resizeTaskTerminal', 'closeTaskTerminal'];
+	async function terminalCallback(context, payload, operation) {
+		if (operation === 'taskEvent') return await provider.onTaskEvent(context, payload);
+		if (operation === 'provideTasks') return { tasks: await provider.provideTasks(context) ?? [] };
+		if (operation === 'resolveTask') {
+			const task = await provider.resolveTask?.(context, payload.task);
+			return task === undefined ? null : { task };
+		}
+		if (operation === 'createTerminalProfile') {
+			const profile = await provider.createTerminalProfile(context);
+			if (!profile) return { options: null };
+			const { pty, ...options } = profile;
+			if (context.cancellationToken.isCancellationRequested) { pty?.close(); return { options: null }; }
+			if (!pty) return { options };
+			const retained = await retainPty(pty, context.cancellationToken, context.retainCancellation);
+			return retained && !context.cancellationToken.isCancellationRequested ? { options, pty: retained } : { options: null };
+		}
+		if (operation === 'createTaskTerminal') {
+			if (terminals.size >= 64 || typeof provider.createTaskTerminal !== 'function') throw new Error('Custom task terminal is unavailable');
+			return retainPty(await provider.createTaskTerminal(context, payload.executionId, payload.definition));
+		}
+		const state = terminals.get(payload.ptyId);
+		if (operation === 'closeTaskTerminal') { release(payload.ptyId); return null; }
+		if (!state) throw new Error('Custom task terminal has been released');
+		state.creationLease?.();
+		state.creationLease = undefined;
+		if (operation === 'openTaskTerminal' && !state.opened && !state.closed) { state.opened = true; state.pty.open(payload.dimensions ?? undefined); }
+		if (operation === 'inputTaskTerminal' && !state.closed) {
+			if (typeof payload.data !== 'string' || payload.data.length > 32768) throw new TypeError('Invalid task input');
+			state.pty.handleInput?.(payload.data);
+		}
+		if (operation === 'resizeTaskTerminal' && !state.closed) {
+			if (!Number.isInteger(payload.dimensions?.columns) || !Number.isInteger(payload.dimensions?.rows) || payload.dimensions.columns < 1 || payload.dimensions.rows < 1 || payload.dimensions.columns > 65535 || payload.dimensions.rows > 65535) throw new TypeError('Invalid task dimensions');
+			state.pty.setDimensions?.(payload.dimensions);
+		}
+		const events = state.events.splice(0);
+		state.bytes = 0;
+		return { events };
+	}
 	const handle = register({
-		...registration, operation: [
-			...(registration.kind === 'taskEvents' ? ['taskEvent'] : registration.kind === 'terminalProfileProvider' ? ['createTerminalProfile'] : ['provideTasks', 'resolveTask']),
-			'createTaskTerminal', 'openTaskTerminal', 'readTaskTerminal', 'inputTaskTerminal', 'resizeTaskTerminal', 'closeTaskTerminal',
-		],
-		async callback(context, payload, operation) {
-			if (operation === 'taskEvent') return await provider.onTaskEvent(context, payload);
-			if (operation === 'provideTasks') return { tasks: await provider.provideTasks(context) ?? [] };
-			if (operation === 'resolveTask') {
-				const task = await provider.resolveTask?.(context, payload.task);
-				return task === undefined ? null : { task };
-			}
-			if (operation === 'createTerminalProfile') {
-				const profile = await provider.createTerminalProfile(context);
-				if (!profile) return { options: null };
-				const { pty, ...options } = profile;
-				if (context.cancellationToken.isCancellationRequested) { pty?.close(); return { options: null }; }
-				return pty ? { options, pty: await retainPty(pty) } : { options };
-			}
-			if (operation === 'createTaskTerminal') {
-				if (terminals.size >= 64 || typeof provider.createTaskTerminal !== 'function') throw new Error('Custom task terminal is unavailable');
-				return retainPty(await provider.createTaskTerminal(context, payload.executionId, payload.definition));
-			}
-			const state = terminals.get(payload.ptyId);
-			if (operation === 'closeTaskTerminal') { release(payload.ptyId); return null; }
-			if (!state) throw new Error('Custom task terminal has been released');
-			if (operation === 'openTaskTerminal' && !state.opened && !state.closed) { state.opened = true; state.pty.open(payload.dimensions ?? undefined); }
-			if (operation === 'inputTaskTerminal' && !state.closed) {
-				if (typeof payload.data !== 'string' || payload.data.length > 32768) throw new TypeError('Invalid task input');
-				state.pty.handleInput?.(payload.data);
-			}
-			if (operation === 'resizeTaskTerminal' && !state.closed) {
-				if (!Number.isInteger(payload.dimensions?.columns) || !Number.isInteger(payload.dimensions?.rows) || payload.dimensions.columns < 1 || payload.dimensions.rows < 1 || payload.dimensions.columns > 65535 || payload.dimensions.rows > 65535) throw new TypeError('Invalid task dimensions');
-				state.pty.setDimensions?.(payload.dimensions);
-			}
-			const events = state.events.splice(0);
-			state.bytes = 0;
-			return { events };
-		},
+		...registration, operation: independentResources ? ['createTerminalProfile'] : [
+			...(registration.kind === 'taskEvents' ? ['taskEvent'] : ['provideTasks', 'resolveTask']),
+			'createTaskTerminal', ...terminalOperations,
+		], callback: terminalCallback,
 	});
 	const disposable = Object.freeze({
 		dispose() {
@@ -403,7 +432,7 @@ function registerPseudoterminalCallbacks(registration, provider) {
 		}
 	});
 	activation.subscriptions.push(disposable);
-	return disposable;
+	return independentResources ? handle : disposable;
 }
 
 /** Provider sessions use the existing bounded invocation protocol, not a product audio transport. */
@@ -785,7 +814,7 @@ export const __runtime = Object.freeze({
 	registerContribution(descriptor, operation, callback) {
 		return register(Object.defineProperties({ operation, callback, invokePayload: true }, Object.getOwnPropertyDescriptors(descriptor)));
 	},
-	async invoke(registrationId, payloadJson, requestId, operation, registrationGeneration) {
+	async invoke(registrationId, payloadJson, requestId, operation, registrationGeneration, deadlineUnixMillis) {
 		if (phase !== 'active') { throw new Error('Extension is not active'); }
 		const registration = registrations.get(registrationId);
 		if (!registration) { throw new Error(`Registration '${registrationId}' is disposed`); }
@@ -796,8 +825,21 @@ export const __runtime = Object.freeze({
 		const source = new CancellationTokenSource();
 		source.registration = registration;
 		invocations.set(requestId, source);
+		let succeeded = false;
+		let retentionTimer;
+		const release = () => {
+			if (retentionTimer !== undefined) clearTimeout(retentionTimer);
+			source.retained = undefined;
+			if (invocations.get(requestId) === source) invocations.delete(requestId);
+			source.dispose();
+		};
 		try {
-			const context = Object.freeze({ cancellationToken: source.token });
+			const context = Object.freeze({
+				cancellationToken: source.token, retainCancellation(resource) {
+					source.retained = resource;
+					return release;
+				}
+			});
 			let result;
 			if (registration.dispatch) {
 				result = await registration.dispatch(payload, operation);
@@ -809,10 +851,21 @@ export const __runtime = Object.freeze({
 			}
 			const encoded = JSON.stringify(result === undefined ? null : result);
 			if (encoded === undefined) { throw new TypeError('Command result must be a JSON value'); }
+			succeeded = true;
 			return encoded;
 		} finally {
-			invocations.delete(requestId);
-			source.dispose();
+			if (succeeded && source.retained) {
+				source.registration = source.retained;
+				// The product Node host also bounds an unused resource when no caller
+				// returns to cancel it. Other hosts retain the broker's bounded lease.
+				if (typeof setTimeout === 'function') {
+					const remaining = Number.isSafeInteger(deadlineUnixMillis) ? Math.max(0, deadlineUnixMillis - Date.now()) : 60_000;
+					retentionTimer = setTimeout(() => { try { source.cancel(); } catch { /* Resource release remains idempotent. */ } }, Math.min(60_000, remaining));
+				}
+			} else {
+				try { if (source.retained) source.cancel(); }
+				finally { release(); }
+			}
 		}
 	},
 	cancel(requestId) {

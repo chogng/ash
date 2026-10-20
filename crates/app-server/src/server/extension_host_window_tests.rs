@@ -848,3 +848,462 @@ fn late_speech_host_events_publish_the_admitted_fleet_without_health_polling() {
         ExtensionHostLifecycle::Dormant
     );
 }
+
+#[test]
+fn admitted_plugin_terminal_resources_survive_factory_disposal_and_retire_on_revoke() {
+    use ash_core_plugins::PluginActivationAuthority;
+    use ash_core_plugins::PluginAuthorityCommand;
+    use ash_core_plugins::PluginAuthorityCommandId;
+    use ash_core_plugins::PluginAuthorityCommandRequest;
+    use ash_core_plugins::PluginPackageStore;
+    use ash_plugin::LocalPluginPackage;
+    use external_ext_protocol::RegistrationKind;
+
+    let directory = tempfile::tempdir().unwrap();
+    let (launcher, _) = install_node_fixture(directory.path());
+    let package = directory.path().join("extension");
+    std::fs::create_dir(package.join(".ash-plugin")).unwrap();
+    std::fs::write(package.join(".ash-plugin/plugin.json"), json!({
+        "schemaVersion": 1, "id": "acme/terminal-followup", "version": "1.0.0",
+        "displayName": "Terminal followup", "compatibility": {"ash": ">=0.1.0"}, "permissions": [],
+        "contributions": {"editorExtensions": [{"id": "runtime", "runtime": "javascript",
+            "entrypoint": "extension.cjs", "runtimeApiVersion": 1,
+            "activationEvents": [{"type": "onCommand", "id": "test.node"}],
+            "capabilities": ["command", "terminalProfileProvider", "terminalLinkProvider", "speechProvider"]}]}
+    }).to_string()).unwrap();
+    std::fs::write(package.join("package.json"), json!({
+        "publisher": "acme", "name": "terminal-followup", "version": "1.0.0", "main": "./extension.cjs",
+        "enabledApiProposals": ["speech"], "contributes": {
+            "commands": [{"command": "test.node", "title": "Control"}],
+            "terminal": {"profiles": [{"id": "pty", "title": "PTY"}]}
+        }
+    }).to_string()).unwrap();
+    std::fs::write(package.join("extension.cjs"), r#"
+const v = require('vscode');
+exports.activate = context => {
+ let factory; let links; let closes = 0; let inputs = []; let delay = false; let pending; let cancelled = 0;
+ const install = () => {
+  factory = v.window.registerTerminalProfileProvider('pty', { provideTerminalProfile: () => {
+   const write = new v.EventEmitter(); const end = new v.EventEmitter();
+   return new v.TerminalProfile({ name: 'Owned PTY', pty: { onDidWrite: write.event, onDidClose: end.event,
+    open: () => write.fire('READY'), handleInput: text => { inputs.push(text); write.fire('ACK:' + text); if (text === 'exit') end.fire(0); }, close: () => closes++ } });
+  }});
+  links = v.window.registerTerminalLinkProvider({ provideTerminalLinks: (_, token) => { token.onCancellationRequested(() => cancelled++); const value = [{ startIndex: 0, length: 4, original: 'owner' }]; return delay ? new Promise(resolve => { pending = () => { resolve(value); pending = undefined; }; }) : value; }, handleTerminalLink: link => inputs.push(link.original) });
+  context.subscriptions.push(factory, links);
+ };
+ context.subscriptions.push(v.commands.registerCommand('test.node', action => {
+  if (action === 'install') install();
+  if (action === 'withdraw') { factory.dispose(); links.dispose(); }
+  if (action === 'delay') delay = true;
+  if (action === 'release') { delay = false; pending(); }
+  return { closes, inputs, pid: process.pid, pending: !!pending, cancelled };
+ }));
+};
+"#).unwrap();
+    let local = LocalPluginPackage::load(&package).unwrap();
+    let store = tempfile::tempdir().unwrap();
+    let authority =
+        PluginActivationAuthority::in_memory(PluginPackageStore::open(store.path()).unwrap())
+            .unwrap();
+    let installed = authority
+        .install_local(PluginAuthorityCommandId::new("install").unwrap(), 0, &local)
+        .unwrap()
+        .package;
+    let apply = |revision, id: &str, command| {
+        authority
+            .apply(PluginAuthorityCommandRequest {
+                command_id: PluginAuthorityCommandId::new(id).unwrap(),
+                expected_revision: revision,
+                command,
+            })
+            .unwrap();
+    };
+    let grant = Grant::for_environment(
+        Dir::open_local(directory.path()).unwrap(),
+        GrantSource::ExplicitUser,
+        Permissions::new([Permission::DiscoverPlugins]),
+    );
+    let client = Arc::new(crate::client_host::ClientHost::default());
+    let _peer = EditorPeer::start(client.clone(), 11, "normal-grant");
+    let runtime = ExtensionHostRuntime::start(
+        BuiltInEditorExtensions::Omitted,
+        Some(authority.clone()),
+        None,
+        None,
+        Arc::new(launcher),
+        ExtensionHostLimits::default(),
+        RestartPolicy::default(),
+        Arc::new(crate::server::update_broker::UpdateBroker::default()),
+        client,
+        None,
+    )
+    .unwrap();
+    runtime
+        .bind_dir(grant.authorize(Permission::DiscoverPlugins).unwrap())
+        .unwrap();
+    assert!(
+        runtime.snapshot_for(11).extensions.is_empty(),
+        "installation must not authorize execution"
+    );
+    apply(
+        1,
+        "enable",
+        PluginAuthorityCommand::Enable {
+            package: installed.clone(),
+        },
+    );
+    runtime
+        .reconcile(super::super::ExtensionHostReconcileMode::Refresh)
+        .unwrap();
+    assert!(
+        runtime.snapshot_for(11).extensions.is_empty(),
+        "enablement must not imply execution grant"
+    );
+    apply(
+        2,
+        "grant",
+        PluginAuthorityCommand::Grant {
+            package: installed.clone(),
+        },
+    );
+    runtime
+        .reconcile(super::super::ExtensionHostReconcileMode::Refresh)
+        .unwrap();
+    let snapshot = runtime.snapshot_for(11);
+    let extension_id = snapshot.extensions[0].id.clone();
+    assert_eq!(extension_id, "acme/terminal-followup:runtime");
+    runtime
+        .activate_by_event(
+            11,
+            &extension_id,
+            snapshot.extensions[0].activation_generation,
+            ActivationEvent::Command("test.node".into()),
+            None,
+            Err(test_files_unavailable()),
+        )
+        .unwrap();
+    let control = |action: &str| {
+        invoke_registration(
+            &runtime,
+            11,
+            "test.node",
+            "execute",
+            json!({"arguments": [action]}),
+        )
+    };
+    let first_pid = control("")["pid"].as_u64().unwrap();
+    control("install");
+    let wait_kind = |kind: fn(&RegistrationKind) -> bool| {
+        let deadline = Instant::now() + Duration::from_secs(5);
+        loop {
+            let snapshot = runtime.snapshot_for(11);
+            if let Some(registration) = snapshot.extensions[0]
+                .registrations
+                .iter()
+                .find(|entry| kind(&entry.kind))
+            {
+                break registration.registration_id.clone();
+            }
+            assert!(
+                Instant::now() < deadline,
+                "registration event did not reach fleet"
+            );
+            std::thread::sleep(Duration::from_millis(5));
+        }
+    };
+    let factory =
+        wait_kind(|kind| matches!(kind, RegistrationKind::TerminalProfileProvider { .. }));
+    let links = wait_kind(|kind| matches!(kind, RegistrationKind::TerminalLinkProvider {}));
+    let provided = invoke_registration(
+        &runtime,
+        11,
+        &links,
+        "provideTerminalLinks",
+        json!({"line": "LINK", "terminal": {"id": "one", "name": "Shell", "processId": 1}}),
+    );
+    invoke_registration(
+        &runtime,
+        11,
+        &links,
+        "handleTerminalLink",
+        json!({"id": provided["links"][0]["id"]}),
+    );
+    let start_profile = || {
+        let active = runtime.snapshot_for(11).extensions[0].clone();
+        runtime
+            .start_invocation(
+                11,
+                ExtensionHostInvocationRequest {
+                    extension_id: extension_id.clone(),
+                    registration_id: factory.clone(),
+                    registration_generation: None,
+                    activation_generation: active.activation_generation,
+                    incarnation: active.incarnation.unwrap(),
+                    operation: "createTerminalProfile".into(),
+                    payload: json!({}),
+                    deadline_unix_millis: std::time::SystemTime::now()
+                        .duration_since(std::time::UNIX_EPOCH)
+                        .unwrap()
+                        .as_millis() as u64
+                        + 10_000,
+                },
+                Err(test_files_unavailable()),
+            )
+            .unwrap()
+    };
+    let abandoned = start_profile();
+    let deadline = Instant::now() + Duration::from_secs(5);
+    while !runtime
+        .inner
+        .sessions
+        .lock()
+        .unwrap()
+        .is_completed(&abandoned)
+    {
+        assert!(
+            Instant::now() < deadline,
+            "profile invocation did not complete"
+        );
+        std::thread::sleep(Duration::from_millis(5));
+    }
+    assert!(matches!(
+        runtime
+            .cancel_invocation(11, &abandoned, super::super::ResultRetention::Discard)
+            .unwrap(),
+        super::super::ExtensionHostInvocationCancelDisposition::AlreadyTerminal
+    ));
+    while control("")["closes"] != 1 {
+        assert!(
+            Instant::now() < deadline,
+            "discarded completed profile leaked its PTY"
+        );
+        std::thread::sleep(Duration::from_millis(5));
+    }
+    while runtime.snapshot_for(11).extensions[0]
+        .registrations
+        .iter()
+        .any(|entry| matches!(entry.kind, RegistrationKind::TerminalPty {}))
+    {
+        assert!(
+            Instant::now() < deadline,
+            "discarded PTY registration was not retired"
+        );
+        std::thread::sleep(Duration::from_millis(5));
+    }
+    let delivered = start_profile();
+    let deadline = Instant::now() + Duration::from_secs(5);
+    while !runtime
+        .inner
+        .sessions
+        .lock()
+        .unwrap()
+        .is_completed(&delivered)
+    {
+        assert!(Instant::now() < deadline);
+        std::thread::sleep(Duration::from_millis(5));
+    }
+    assert!(matches!(
+        runtime.read_invocation(11, &delivered).unwrap(),
+        ExtensionHostInvocationRead::Succeeded(_)
+    ));
+    assert!(
+        matches!(
+            runtime.read_invocation(11, &delivered),
+            Err(ExtensionHostRuntimeError::InvocationNotFound)
+        ),
+        "a delivered result is never replayed"
+    );
+    assert!(matches!(
+        runtime
+            .cancel_invocation(11, &delivered, super::super::ResultRetention::Discard)
+            .unwrap(),
+        super::super::ExtensionHostInvocationCancelDisposition::AlreadyTerminal
+    ));
+    while control("")["closes"] != 2 {
+        assert!(
+            Instant::now() < deadline,
+            "read-but-unadopted profile leaked after discard"
+        );
+        std::thread::sleep(Duration::from_millis(5));
+    }
+    for (index, expiry) in [true, false].into_iter().enumerate() {
+        let unread = start_profile();
+        let deadline = Instant::now() + Duration::from_secs(5);
+        while !runtime.inner.sessions.lock().unwrap().is_completed(&unread) {
+            assert!(Instant::now() < deadline);
+            std::thread::sleep(Duration::from_millis(5));
+        }
+        {
+            let mut sessions = runtime.inner.sessions.lock().unwrap();
+            if expiry {
+                sessions.sweep_expired(Instant::now() + Duration::from_secs(61));
+            } else {
+                assert!(
+                    sessions
+                        .detach_owner(11, ash_external_ext::CancelReason::Caller)
+                        .is_empty()
+                );
+            }
+        }
+        while control("")["closes"] != index + 3 {
+            assert!(
+                Instant::now() < deadline,
+                "unread profile resource survived expiry or owner detachment"
+            );
+            std::thread::sleep(Duration::from_millis(5));
+        }
+    }
+    control("delay");
+    let active = runtime.snapshot_for(11).extensions[0].clone();
+    let pending_id = runtime.start_invocation(11, ExtensionHostInvocationRequest {
+        extension_id: extension_id.clone(), registration_id: links.clone(), registration_generation: None,
+        activation_generation: active.activation_generation, incarnation: active.incarnation.unwrap(),
+        operation: "provideTerminalLinks".into(), payload: json!({"line": "LINK", "terminal": {"id": "one", "name": "Shell", "processId": 1}}),
+        deadline_unix_millis: std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_millis() as u64 + 10000,
+    }, Err(test_files_unavailable())).unwrap();
+    let deadline = Instant::now() + Duration::from_secs(5);
+    while control("")["pending"] != true {
+        assert!(Instant::now() < deadline);
+        std::thread::sleep(Duration::from_millis(5));
+    }
+    runtime
+        .cancel_invocation(11, &pending_id, super::super::ResultRetention::Discard)
+        .unwrap();
+    while control("")["cancelled"] != 1 {
+        assert!(Instant::now() < deadline);
+        std::thread::sleep(Duration::from_millis(5));
+    }
+    control("release");
+    assert!(
+        runtime.read_invocation(11, &pending_id).is_err(),
+        "late result must not revive a discarded invocation"
+    );
+    let adopted = start_profile();
+    let deadline = Instant::now() + Duration::from_secs(5);
+    while !runtime
+        .inner
+        .sessions
+        .lock()
+        .unwrap()
+        .is_completed(&adopted)
+    {
+        assert!(Instant::now() < deadline);
+        std::thread::sleep(Duration::from_millis(5));
+    }
+    let ExtensionHostInvocationRead::Succeeded(created) =
+        runtime.read_invocation(11, &adopted).unwrap()
+    else {
+        panic!("profile creation failed");
+    };
+
+    let pty = &created["pty"];
+    let resource = pty["registrationId"].as_str().unwrap();
+    assert_ne!(resource, factory);
+    assert_eq!(
+        wait_kind(|kind| matches!(kind, RegistrationKind::TerminalPty {})),
+        resource
+    );
+    control("withdraw");
+    let deadline = Instant::now() + Duration::from_secs(5);
+    while runtime.snapshot_for(11).extensions[0]
+        .registrations
+        .iter()
+        .any(|entry| entry.registration_id == factory)
+    {
+        assert!(Instant::now() < deadline);
+        std::thread::sleep(Duration::from_millis(5));
+    }
+    assert_eq!(control("")["closes"], 4);
+    let opened = invoke_registration(
+        &runtime,
+        11,
+        resource,
+        "openTaskTerminal",
+        json!({"ptyId": pty["ptyId"], "dimensions": {"columns": 80, "rows": 24}}),
+    );
+    assert_eq!(
+        opened,
+        json!({"events": [{"type": "data", "data": "READY"}]})
+    );
+    assert!(
+        matches!(
+            runtime.cancel_invocation(11, &adopted, super::super::ResultRetention::Discard),
+            Err(ExtensionHostRuntimeError::InvocationNotFound)
+        ),
+        "opening adopts the lease; old result cancellation must not close the live terminal"
+    );
+    assert_eq!(control("")["closes"], 4);
+    let accepted = invoke_registration(
+        &runtime,
+        11,
+        resource,
+        "inputTaskTerminal",
+        json!({"ptyId": pty["ptyId"], "data": "exit"}),
+    );
+    assert_eq!(
+        accepted,
+        json!({"events": [{"type": "data", "data": "ACK:exit"}, {"type": "close", "code": 0}]})
+    );
+    assert_eq!(control("")["inputs"], json!(["owner", "exit"]));
+    assert_eq!(control("")["pid"], first_pid);
+    let old = runtime.snapshot_for(11).extensions[0].clone();
+    let stale = || ExtensionHostInvocationRequest {
+        extension_id: extension_id.clone(),
+        registration_id: resource.into(),
+        registration_generation: None,
+        activation_generation: old.activation_generation,
+        incarnation: old.incarnation.unwrap(),
+        operation: "readTaskTerminal".into(),
+        payload: json!({"ptyId": pty["ptyId"]}),
+        deadline_unix_millis: std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_millis() as u64
+            + 10_000,
+    };
+    apply(
+        3,
+        "revoke",
+        PluginAuthorityCommand::RevokeGrant {
+            package: installed.clone(),
+        },
+    );
+    runtime
+        .reconcile(super::super::ExtensionHostReconcileMode::Refresh)
+        .unwrap();
+    assert!(matches!(
+        runtime.start_invocation(11, stale(), Err(test_files_unavailable())),
+        Err(ExtensionHostRuntimeError::Stale)
+    ));
+    apply(
+        4,
+        "regrant",
+        PluginAuthorityCommand::Grant { package: installed },
+    );
+    runtime
+        .reconcile(super::super::ExtensionHostReconcileMode::Refresh)
+        .unwrap();
+    let fresh = runtime.snapshot_for(11);
+    runtime
+        .activate_by_event(
+            11,
+            &extension_id,
+            fresh.extensions[0].activation_generation,
+            ActivationEvent::Command("test.node".into()),
+            None,
+            Err(test_files_unavailable()),
+        )
+        .unwrap();
+    assert_ne!(control("")["pid"], first_pid);
+    assert!(matches!(
+        runtime.start_invocation(11, stale(), Err(test_files_unavailable())),
+        Err(ExtensionHostRuntimeError::Stale)
+    ));
+    assert!(
+        runtime.snapshot_for(11).extensions[0]
+            .registrations
+            .iter()
+            .all(|entry| !matches!(entry.kind, RegistrationKind::TerminalPty {}))
+    );
+    runtime.close_owner(11);
+}

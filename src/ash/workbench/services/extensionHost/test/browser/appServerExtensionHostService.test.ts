@@ -1816,6 +1816,64 @@ suite('Extension terminal environment reader lifecycle', () => {
 suite('Extension terminal trusted runtime binding', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();
 
+	test('catalog arrival retries a rejected ready terminal profile at the same fleet generation', async () => {
+		const api = new FakeExtensionHostApi(snapshot(1, 'acme.catalogReady', [{ kind: 'terminalProfileProvider', registrationId: 'shell', profileId: 'shell', title: 'Followup Shell' }]));
+		let lists = 0;
+		api.list = async () => { lists++; return api.current; };
+		using languages = new LanguageFeaturesService();
+		const manifestJson = JSON.stringify({ name: 'demo', publisher: 'acme', version: '1.0.0', contributes: { terminal: { profiles: [{ id: 'shell', title: 'Followup Shell' }] } } });
+		const descriptor = { id: 'acme.demo', name: 'demo', publisher: 'acme', version: '1.0.0', displayName: 'Demo', sourceKind: 'plugin' as const, manifestSha256: `sha256:${createHash('sha256').update(manifestJson).digest('hex')}`, packageSha256: `sha256:${'c'.repeat(64)}`, manifestJson };
+		let catalog: Awaited<ReturnType<IExtensionApi['list']>> = { generation: 1, diagnostics: [], extensions: [descriptor] };
+		const extensionApi: IExtensionApi = {
+			resources: new ExtensionResourceLoaderService(async () => assert.fail('Unexpected extension resource request')),
+			list: async () => catalog,
+		};
+		using services = createServices(api, languages, new ProviderSink<TaskProvider>(), new ProviderSink<TestProfileProvider>(), undefined, undefined, undefined, extensionApi);
+		const commands = CommandsRegistry;
+		using host = services.createInstance(AppServerExtensionHostService, commands, 1_000);
+		const failures: string[] = [];
+		using failed = host.onDidFail(failure => failures.push(failure.message));
+		await host.start();
+		assert.equal(host.state, 'failed');
+		assert.ok(failures.some(message => message.includes('Followup Shell')));
+		assert.equal(commands.hasCommand('acme.catalogReady'), false, 'An unattested profile must roll back the entire executable batch');
+		const readsBeforeCatalog = lists;
+		catalog = { generation: 2, diagnostics: [], extensions: [{ ...descriptor, runtimeBinding: { runtimeId: 'acme.demo', packageDigest: DIGEST } }] };
+		await services.get(IExtensionService).reload();
+		// No fleet notification or generation change: the declarative owner alone
+		// supplies the attested identity that the earlier projection was missing.
+		await waitFor(() => commands.hasCommand('acme.catalogReady'));
+		assert.ok(lists > readsBeforeCatalog, 'Catalog publication retries through the existing list refresh');
+		assert.equal(api.reconciles, 1, 'Catalog changes do not restart or reconcile the executable host');
+		assert.equal(host.currentSnapshot.fleetGeneration, 1);
+		assert.equal(host.state, 'ready');
+		assert.ok(MenusRegistry.getMenuItems(MenuId.CommandPalette).some(item => 'command' in item && item.command.id === 'acme.catalogReady'));
+		api.invocationResult = Promise.resolve({ options: null });
+		await services.get(ITerminalProfileService).getContributedProfileProvider('acme.demo', 'shell')!.createContributedTerminalProfile({});
+		assert.equal(api.invocations.at(-1)?.operation, 'createTerminalProfile');
+		assert.equal(api.invocations.at(-1)?.activationGeneration, 11);
+		assert.equal(api.invocations.at(-1)?.incarnation, 3);
+	});
+
+	for (const retirement of ['stop', 'disconnect', 'dispose'] as const) test(`catalog arrival does not refresh a ${retirement} host`, async () => {
+		const api = new FakeExtensionHostApi(snapshot(1, 'acme.catalogLifecycle'));
+		let lists = 0;
+		api.list = async () => { lists++; return api.current; };
+		using languages = new LanguageFeaturesService();
+		using services = createServices(api, languages, new ProviderSink<TaskProvider>(), new ProviderSink<TestProfileProvider>());
+		const commands = CommandsRegistry;
+		using host = services.createInstance(AppServerExtensionHostService, commands, 1_000);
+		await host.start();
+		if (retirement === 'stop') await host.stop();
+		else if (retirement === 'disconnect') api.emitConnection('stopped');
+		else host.dispose();
+		const readsBeforeCatalog = lists;
+		await services.get(IExtensionService).reload();
+		await new Promise(resolve => setTimeout(resolve, 0));
+		assert.equal(lists, readsBeforeCatalog);
+		assert.equal(commands.hasCommand('acme.catalogLifecycle'), false);
+	});
+
 	for (const scenario of [
 		{ name: 'accepts the admitted runtime across different digest domains', catalogDigest: `sha256:${'c'.repeat(64)}`, runtimeId: 'acme.demo', runtimeDigest: DIGEST, admitted: true },
 		{ name: 'rejects a different runtime identity', catalogDigest: `sha256:${'c'.repeat(64)}`, runtimeId: 'other.runtime', runtimeDigest: DIGEST, admitted: false },
@@ -1850,6 +1908,82 @@ suite('Extension terminal trusted runtime binding', () => {
 
 suite('Extension terminal profile registration lifecycle', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();
+
+	test('an issued PTY keeps its exact runtime fence after factory withdrawal and closes on connection retirement', async () => {
+		class ResourceApi extends FakeExtensionHostApi {
+			private nextPty = 0;
+			override async invoke(request: ExtensionHostInvocationRequest, signal: AbortSignal): Promise<JsonValue> {
+				signal.throwIfAborted();
+				this.invocations.push(request);
+				if (request.operation === 'createTerminalProfile') return this.invocationResult ?? { options: { name: 'Issued PTY' }, pty: { ptyId: `pty.${++this.nextPty}`, registrationId: `issued.${this.nextPty}`, acceptsInput: true } };
+				assert.ok(/^issued\.[123]$/.test(request.registrationId));
+				assert.equal(request.activationGeneration, 11);
+				assert.equal(request.incarnation, 3);
+				return { events: [] };
+			}
+		}
+		const api = new ResourceApi(snapshot(1, 'acme.run', [{ kind: 'terminalProfileProvider', registrationId: 'shell', profileId: 'shell', title: 'Extension Shell' }]));
+		using resources = new DisposableStore();
+		const languages = resources.add(new LanguageFeaturesService());
+		const manifestJson = JSON.stringify({ name: 'demo', publisher: 'acme', version: '1.0.0', contributes: { terminal: { profiles: [{ id: 'shell', title: 'Extension Shell' }] } } });
+		const manifestSha256 = `sha256:${createHash('sha256').update(manifestJson).digest('hex')}`;
+		const extensionApi: IExtensionApi = {
+			resources: new ExtensionResourceLoaderService(async () => assert.fail('Unexpected extension resource request')),
+			list: async () => ({ generation: 1, diagnostics: [], extensions: [{ id: 'acme.demo', name: 'demo', publisher: 'acme', version: '1.0.0', displayName: 'Demo', sourceKind: 'user', manifestSha256, packageSha256: DIGEST, manifestJson }] }),
+		};
+		const services = resources.add(createServices(api, languages, new ProviderSink<TaskProvider>(), new ProviderSink<TestProfileProvider>(), undefined, undefined, undefined, extensionApi));
+		let child: import('../../../../../platform/terminal/common/terminal.js').ITerminalChildProcess | undefined;
+		let createPty: NonNullable<import('../../../../../platform/terminal/common/terminal.js').IShellLaunchConfig['customPtyImplementation']> | undefined;
+		const exits: (number | undefined)[] = [];
+		Object.assign(services.get(ITerminalService), {
+			onDidDisposeInstance: Event.None,
+			createTerminal: async (options: import('../../../../contrib/terminal/browser/terminal.js').ITerminalCreateOptions) => {
+				createPty = options.config!.customPtyImplementation!;
+				child = resources.add(createPty(1, 80, 24));
+				resources.add(child.onProcessExit(code => exits.push(code)));
+				await child.start();
+				return { instanceId: 1 };
+			},
+		});
+		await services.get(IExtensionService).start();
+		const host = resources.add(services.createInstance(AppServerExtensionHostService, CommandsRegistry, 1_000));
+		await host.start();
+		const profiles = services.get(ITerminalProfileService);
+		await profiles.getContributedProfileProvider('acme.demo', 'shell')!.createContributedTerminalProfile({});
+		api.current = snapshot(2, 'acme.run', [
+			{ kind: 'terminalProfileProvider', registrationId: 'shell', profileId: 'shell', title: 'Extension Shell' },
+			{ kind: 'terminalLinkProvider', registrationId: 'late-links' },
+			{ kind: 'terminalPty', registrationId: 'issued.1' },
+		], '', [], 11);
+		api.emitChanged(2);
+		await waitFor(() => host.currentSnapshot.fleetGeneration === 2);
+		child!.shutdown(true);
+		child = resources.add(createPty!(1, 80, 24));
+		resources.add(child.onProcessExit(code => exits.push(code)));
+		await child.start();
+		assert.equal(api.invocations.filter(request => request.operation === 'createTerminalProfile').length, 2, 'Unrelated provider updates preserve the live factory for relaunch');
+		const late = deferred<JsonValue>();
+		api.invocationResult = late.promise;
+		const cancelled = assert.rejects(profiles.getContributedProfileProvider('acme.demo', 'shell')!.createContributedTerminalProfile({}));
+		await waitFor(() => api.invocations.filter(request => request.operation === 'createTerminalProfile').length === 3);
+		api.current = snapshot(3, 'acme.run', [{ kind: 'terminalPty', registrationId: 'issued.2' }], '', [], 11);
+		api.emitChanged(3);
+		await waitFor(() => host.currentSnapshot.fleetGeneration === 3);
+		await cancelled;
+		late.resolve({ options: { name: 'Late PTY' }, pty: { ptyId: 'pty.3', registrationId: 'issued.3', acceptsInput: true } });
+		await waitFor(() => api.invocations.some(request => request.operation === 'closeTaskTerminal' && request.registrationId === 'issued.3'));
+		// Declarative profile metadata remains discoverable, but the retired
+		// executable factory cannot create another terminal.
+		await assert.rejects(profiles.getContributedProfileProvider('acme.demo', 'shell')!.createContributedTerminalProfile({}), /provider is unavailable/);
+		await child!.input!('still owned by the terminal');
+		assert.deepEqual(exits, [undefined]);
+		assert.equal(api.invocations.at(-1)?.registrationId, 'issued.2');
+		api.emitConnection('stopped');
+		assert.deepEqual(exits, [undefined, undefined]);
+		const count = api.invocations.length;
+		await assert.rejects(async () => child!.input!('retired'));
+		assert.equal(api.invocations.length, count);
+	});
 
 	test('commits the exact package provider into TerminalProfileService and retires it with the host', async () => {
 		const api = new FakeExtensionHostApi(snapshot(1, 'acme.run', [{ kind: 'terminalProfileProvider', registrationId: 'shell', profileId: 'shell', title: 'Extension Shell' }]));

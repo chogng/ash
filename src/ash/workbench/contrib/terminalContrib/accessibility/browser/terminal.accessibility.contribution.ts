@@ -10,6 +10,7 @@ import { registerTerminalContribution, type ITerminalContributionContext } from 
 import { TerminalContextKeys } from '../../../terminal/common/terminalContextKey.js';
 import { TerminalAccessibilityHelpProvider } from './terminalAccessibilityHelp.js';
 import { TerminalAccessibleBufferProvider } from './terminalAccessibleBufferProvider.js';
+import { TerminalSuggestSettingId } from '../../suggest/common/terminalSuggestConfiguration.js';
 import { TextAreaSyncAddon } from './textAreaSyncAddon.js';
 
 export class TerminalAccessibleViewContribution extends Disposable implements ITerminalContribution {
@@ -48,7 +49,7 @@ AccessibleViewRegistry.register({
 	name: 'terminal', type: AccessibleViewType.Help, priority: 90, when: TerminalContextKeys.focus.isEqualTo(true),
 	getProvider: accessor => {
 		const instance = focusedInstance(accessor);
-		return instance ? new TerminalAccessibilityHelpProvider(instance) : undefined;
+		return instance ? new TerminalAccessibilityHelpProvider(instance, accessor.get(IConfigurationService).getValue<boolean>(TerminalSuggestSettingId.Enabled)) : undefined;
 	},
 });
 AccessibleViewRegistry.register({

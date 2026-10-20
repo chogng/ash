@@ -65,7 +65,7 @@ export interface ExtensionManifest {
 	readonly displayName: string;
 	readonly contributes: {
 		readonly speechProviders: readonly { readonly name: string; readonly description?: string; }[];
-		readonly terminalProfiles: readonly { readonly id: string; readonly title: string; readonly icon?: string; readonly color?: string; }[];
+		readonly terminal: { readonly profiles: readonly { readonly id: string; readonly title: string; readonly icon?: string; readonly color?: string; }[]; };
 		readonly localizations: readonly ILocalizationContribution[];
 		readonly configuration: readonly IConfigurationNode[];
 		readonly submenus: readonly { id: string; label: string; placements: readonly { menu: string; when?: string; group?: string; }[]; }[];
@@ -133,7 +133,7 @@ export function parseExtensionManifest(manifestJson: string, descriptor: Extensi
 		displayName,
 		contributes: Object.freeze({
 			speechProviders: parseSpeechProviders(contributes.speechProviders),
-			terminalProfiles: parseTerminalProfiles(contributes.terminalProfiles),
+			terminal: parseTerminalContribution(contributes.terminal, contributes.terminalProfiles),
 			localizations: parseLocalizations(contributes.localizations),
 			configuration: parseConfigurations(contributes.configuration, Object.freeze({ id: descriptor.id, displayName })),
 			submenus: parseSubmenus(contributes.submenus, contributes.menus),
@@ -625,11 +625,18 @@ function parseSubmenus(value: unknown, placements: unknown): ExtensionManifest['
 	});
 }
 
-function parseTerminalProfiles(value: unknown): ExtensionManifest['contributes']['terminalProfiles'] {
-	if (value === undefined) return Object.freeze([]);
-	const point = ExtensionsRegistry.getExtensionPoint<ExtensionManifest['contributes']['terminalProfiles']>('terminalProfiles');
+function parseTerminalContribution(value: unknown, legacyProfiles: unknown): ExtensionManifest['contributes']['terminal'] {
+	const invalid = () => new TypeError(localize('terminal.profile.invalidDeclaration', 'Invalid terminal profile contribution.'));
+	if (value !== undefined && (!value || typeof value !== 'object' || Array.isArray(value))) throw invalid();
+	const terminal = value as Record<string, unknown> | undefined;
+	// Normalize the old Ash input once. Two declarations cannot compete for a
+	// profile identity, even when their current values happen to be identical.
+	if (terminal?.profiles !== undefined && legacyProfiles !== undefined) throw invalid();
+	const profiles = terminal?.profiles === undefined ? legacyProfiles : terminal.profiles;
+	if (profiles === undefined) return Object.freeze({ profiles: Object.freeze([]) });
+	const point = ExtensionsRegistry.getExtensionPoint<ExtensionManifest['contributes']['terminal']>('terminal');
 	if (!point) throw new TypeError(localize('terminal.profile.invalidDeclaration', 'Invalid terminal profile contribution.'));
-	return point.validate(value);
+	return point.validate({ profiles });
 }
 
 function parseSpeechProviders(value: unknown): ExtensionManifest['contributes']['speechProviders'] {

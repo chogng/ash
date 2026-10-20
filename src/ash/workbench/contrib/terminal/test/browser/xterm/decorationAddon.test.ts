@@ -21,7 +21,7 @@ import '../../../common/terminalConfiguration.js';
 const menus: IContextMenuService = { contextMenuStyle: 'custom', onDidShowContextMenu: Event.None, onDidHideContextMenu: Event.None, showContextMenu() { assert.fail('Unexpected command menu'); }, hideContextMenu() { } };
 
 function rendererBoundary(lifetime: DisposableStore) {
-	const created: { marker: IMarker; trimmed: Emitter<void>; render: Emitter<HTMLElement>; disposed: boolean; options?: IDecorationOptions; }[] = [];
+	const created: { marker: IMarker; trimmed: Emitter<void>; render: Emitter<HTMLElement>; disposed: boolean; element?: HTMLElement; options?: IDecorationOptions; }[] = [];
 	const terminal = {
 		registerMarker() {
 			const trimmed = lifetime.add(new Emitter<void>());
@@ -39,7 +39,7 @@ function rendererBoundary(lifetime: DisposableStore) {
 		registerDecoration(options: IDecorationOptions) {
 			const item = created.find(item => item.marker === options.marker)!;
 			item.options = options;
-			return { options, element: undefined, onRender: item.render.event, dispose() { item.disposed = true; } };
+			return { options, get element() { return item.element; }, onRender: (listener: (element: HTMLElement) => void) => item.render.event(element => { item.element = element; listener(element); }), dispose() { item.disposed = true; } };
 		},
 	};
 	return { terminal: terminal as unknown as Terminal, created };
@@ -110,6 +110,42 @@ suite('Terminal command decoration lifecycle', () => {
 		addon.registerCommandDecoration({ commandId: '1', status: 'succeeded', exitCode: 0 }, 10, marker);
 		assert.deepEqual(boundary.created[0]!.options?.overviewRulerOptions, { color: '#0969da', position: 'left' });
 		assert.deepEqual(addon.markers, [marker]);
+	});
+
+	test('decoration modes update both surfaces without withdrawing the navigation marker', async () => {
+		const dom = new JSDOM('<!doctype html><body></body>');
+		try {
+			using lifetime = new DisposableStore();
+			setIconResolver(dom.window.document, icon => getIconDefinition(icon));
+			const boundary = rendererBoundary(lifetime);
+			const capabilities = lifetime.add(new TerminalCapabilityStore());
+			capabilities.add(TerminalCapability.BufferMarkDetection, lifetime.add(new BufferMarkCapability(boundary.terminal)));
+			const configuration = lifetime.add(new TestConfigurationService());
+			const addon = lifetime.add(new DecorationAddon(capabilities, configuration, lifetime.add(new TestThemeService(lightColorTheme)), lifetime.add(new BrowserClipboardService(undefined)), menus));
+			addon.activate(boundary.terminal);
+			const marker = boundary.terminal.registerMarker(0)!;
+			lifetime.add(toDisposable(() => marker.dispose()));
+			const command = { marker, id: 'one', command: 'echo test', getOutput: () => undefined } as ITerminalCommand;
+			capabilities.add(TerminalCapability.CommandDetection, { commands: [command] } as unknown as ICommandDetectionCapability);
+			addon.registerCommandDecoration({ commandId: 'one', status: 'succeeded', exitCode: 0 }, 10, marker);
+			const element = dom.window.document.createElement('div');
+			const item = boundary.created[0]!;
+			item.render.fire(element);
+			for (const [mode, gutter, overview] of [['both', true, true], ['gutter', true, false], ['overviewRuler', false, true], ['never', false, false], ['both', true, true]] as const) {
+				await configuration.updateValue('terminal.integrated.shellIntegration.decorationsEnabled', mode);
+				assert.equal(element.style.visibility !== 'hidden', gutter, mode);
+				assert.equal(element.getAttribute('aria-hidden'), gutter ? null : 'true', mode);
+				assert.equal(element.tabIndex, gutter ? 0 : -1, mode);
+				assert.equal(!!item.options?.overviewRulerOptions, overview, mode);
+				assert.deepEqual(addon.markers, [marker]);
+				assert.equal(item.disposed, false);
+			}
+			marker.dispose();
+			assert.equal(item.disposed, true);
+			assert.deepEqual(addon.markers, []);
+		} finally {
+			dom.window.close();
+		}
 	});
 
 	test('buffer mark indexing withdraws trimmed marks and distinguishes created from borrowed markers', () => {

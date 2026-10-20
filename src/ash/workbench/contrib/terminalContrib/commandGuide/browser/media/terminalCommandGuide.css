@@ -1,0 +1,17 @@
+.ash-terminal-command-guide {
+	position: absolute;
+	pointer-events: none;
+	box-sizing: border-box;
+	border-left: var(--ash-strokeThickness, 1px) solid
+		var(--ash-terminalCommandGuide-foreground);
+	/* Keep the range cue in the command gutter, clear of the first text cell. */
+	transform: translateX(
+		calc(
+			var(--ash-spacing-size40, 4px) -
+				var(
+					--ash-terminal-command-gutter-width,
+					var(--ash-spacing-size200, 20px)
+				)
+		)
+	);
+}

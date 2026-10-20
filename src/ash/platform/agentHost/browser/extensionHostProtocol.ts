@@ -347,6 +347,10 @@ function normalizeRegistration(value: unknown): ExtensionHostRegistration {
 		exactKeys(input, 'Extension Host terminal profile registration', ['kind', 'registrationId', 'profileId', 'title']);
 		return Object.freeze({ kind, registrationId, profileId: boundedText(input.profileId, 'Terminal profile ID', 256), title: boundedText(input.title, 'Terminal profile title', 512) });
 	}
+	if (kind === 'terminalPty') {
+		exactKeys(input, 'Extension Host terminal PTY resource', ['kind', 'registrationId']);
+		return Object.freeze({ kind, registrationId });
+	}
 	if (kind === 'terminalCompletionProvider') {
 		exactKeys(input, 'Extension Host terminal completion registration', ['kind', 'registrationId', 'triggerCharacters']);
 		const triggerCharacters = boundedArray(input.triggerCharacters, 'Terminal completion triggers', 64).map(value => {

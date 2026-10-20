@@ -7,6 +7,7 @@ import { terminalCommandGuideConfiguration } from '../terminalContrib/commandGui
 
 import { terminalAutoRepliesConfiguration } from '../terminalContrib/autoReplies/common/terminalAutoRepliesConfiguration.js';
 import { terminalOscNotificationsConfiguration } from '../terminalContrib/notification/common/terminalNotificationConfiguration.js';
+import { terminalSuggestConfiguration } from '../terminalContrib/suggest/common/terminalSuggestConfiguration.js';
 import { terminalTypeAheadConfiguration } from '../terminalContrib/typeAhead/common/terminalTypeAheadConfiguration.js';
 
 /** Installed terminal enhancements contribute to the terminal's single configuration registration. */
@@ -19,4 +20,5 @@ export const terminalContribConfiguration: Readonly<Record<string, IConfiguratio
 	...terminalAutoRepliesConfiguration,
 	...terminalOscNotificationsConfiguration,
 	...terminalTypeAheadConfiguration,
+	...terminalSuggestConfiguration,
 });

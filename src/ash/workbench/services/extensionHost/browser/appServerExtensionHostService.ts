@@ -64,6 +64,11 @@ export class AppServerExtensionHostService extends Disposable implements IExtens
 		this.extensionApi = this._register(instantiationService.createInstance(MainThreadExtensionApi, commands, timeout, this.fleetOutput));
 		this.clientEditors = this._register(instantiationService.createInstance(MainThreadClientEditors, timeout, loadExtensionEditorModule));
 		this._register(extensions.registerActivationHandler((event, signal) => this.activateByEvent(event, signal)));
+		// Runtime registrations can arrive before their attested catalog identity.
+		// Retry that same fleet when the declarative owner commits its catalog.
+		this._register(extensions.onDidChange(() => {
+			if (this.started && this.connectionReady) void this.requestRefresh('list').catch(reportExtensionHostError);
+		}));
 		this._register(models.onModelAdded(() => this.activateEditorEvents()));
 		this._register(models.onModelLanguageChanged(() => this.activateEditorEvents()));
 		void lifecycle.when(LifecyclePhase.Restored).then(() => this.activateEditorEvents());

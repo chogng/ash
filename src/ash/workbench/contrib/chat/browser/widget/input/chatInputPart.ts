@@ -703,7 +703,14 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 
 	appendToDraft(text: string): void {
 		const previous = this.input.value;
-		this.setInputValue(previous ? `${previous}\n\n${text}` : text);
+		const suffix = previous ? `\n\n${text}` : text;
+		if (suffix) {
+			this.logDictationSample(false);
+			// Replacing the rich model would retire inline references and their
+			// captured snapshots even when their visible labels stay unchanged.
+			this.input.setSelection({ anchor: previous.length, active: previous.length });
+			this.input.insertText(suffix);
+		}
 		this.renderToolbar();
 	}
 

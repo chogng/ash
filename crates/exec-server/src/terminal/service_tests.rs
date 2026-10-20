@@ -1012,8 +1012,8 @@ fn interactive_shell_commands_report_real_boundaries_and_keep_user_configuration
                 "export ZDOTDIR=\"$HOME/configured\"\n",
             )
             .unwrap();
-            std::fs::write(home.path().join("configured/.zshrc"), "PS1='ASH_PROMPT> '; PS2='ASH_CONTINUE> '; export ASH_RC_LOADED=yes\nexport STARSHIP_SESSION_KEY=prompt-framework-test\nprecmd() { return 0; }\nuser_precmd() { printf '%s\\n' \"$?\" >> \"$HOME/prompt-status\"; }\nprecmd_functions=(user_precmd)\nset -u\n").unwrap();
-            std::fs::write(home.path().join(".bashrc"), "PS1='ASH_PROMPT> '; PS2='ASH_CONTINUE> '; export ASH_RC_LOADED=yes\nexport STARSHIP_SESSION_KEY=prompt-framework-test\nPROMPT_COMMAND='printf \"%s\\n\" \"$?\" >> \"$HOME/prompt-status\"'\nset -u\n").unwrap();
+            std::fs::write(home.path().join("configured/.zshrc"), "PS1='ASH_PROMPT> '; PS2='ASH_CONTINUE> '; export ASH_RC_LOADED=yes\nexport STARSHIP_SESSION_KEY=prompt-framework-test\nprecmd() { PS1='ASH_PROMPT> '; }\nuser_precmd() { local user_status=$?; PS1='ASH_PROMPT> '; printf '%s\\n' \"$user_status\" >> \"$HOME/prompt-status\"; }\nprecmd_functions=(user_precmd)\nset -u\n").unwrap();
+            std::fs::write(home.path().join(".bashrc"), "PS1='ASH_PROMPT> '; PS2='ASH_CONTINUE> '; export ASH_RC_LOADED=yes\nexport STARSHIP_SESSION_KEY=prompt-framework-test\nPROMPT_COMMAND='printf \"%s\\n\" \"$?\" >> \"$HOME/prompt-status\"; PS1=\"ASH_PROMPT> \"'\nset -u\n").unwrap();
             std::fs::write(
                 home.path().join(".bash_profile"),
                 "export ASH_LOGIN_LOADED=yes\nsource \"$HOME/.bashrc\"\n",

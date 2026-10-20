@@ -233,6 +233,7 @@ fn validate_editor_extension(extension: &EditorExtensionContribution) -> Result<
                     | super::EditorExtensionCapability::StatusBar
                     | super::EditorExtensionCapability::TaskProvider
                     | super::EditorExtensionCapability::DebugAdapter
+                    | super::EditorExtensionCapability::SpeechProvider
                     | super::EditorExtensionCapability::TerminalProfileProvider
                     | super::EditorExtensionCapability::TerminalLinkProvider
                     | super::EditorExtensionCapability::TerminalCompletionProvider

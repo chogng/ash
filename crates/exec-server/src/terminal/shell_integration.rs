@@ -382,10 +382,16 @@ if [[ -n $__ash_prompt_type ]]; then
 fi
 unset __ash_prompt_type
 builtin printf '\033]633;P;HasRichCommandDetection=True\007'
+__ash_prompt() {
+    local result=$?
+    # Prompt frameworks replace PS1 in precmd. Decorate their final prompt on
+    # every cycle, without accumulating markers when they keep the prior PS1.
+    [[ ${PS1-} == *$'%{\e]633;B\a%}' ]] || PS1="${PS1-}"$'%{\e]633;B\a%}'
+    return "$result"
+}
 typeset -ga preexec_functions precmd_functions
 preexec_functions=(__ash_command_started ${preexec_functions:#__ash_command_started})
-precmd_functions=(__ash_command_finished ${${precmd_functions:#__ash_command_finished}:#__ash_environment} __ash_environment)
-PS1="${PS1-}"$'%{\e]633;B\a%}'
+precmd_functions=(__ash_command_finished ${${${precmd_functions:#__ash_command_finished}:#__ash_environment}:#__ash_prompt} __ash_environment __ash_prompt)
 "#;
 
 const BASH_RC: &str = r#"
@@ -476,6 +482,9 @@ __ash_prompt() {
         eval "$command"
         result=$?
     done
+    # PROMPT_COMMAND may replace PS1 on every cycle; keep its final prompt and
+    # append exactly one invisible input boundary after those user hooks.
+    [[ ${PS1-} == *$'\[\e]633;B\a\]' ]] || PS1="${PS1-}"$'\[\e]633;B\a\]'
     builtin printf '\033]633;P;Cwd=%s;%s\007' "$(__ash_osc_value "$PWD")" "$__ash_nonce"
     __ash_environment
     __ash_inside_prompt=0
@@ -509,7 +518,6 @@ if [[ -n $__ash_prompt_type ]]; then
 fi
 unset __ash_prompt_type
 PROMPT_COMMAND=__ash_prompt
-PS1="${PS1-}"$'\[\e]633;B\a\]'
 "#;
 
 // PSConsoleHostReadLine returns a complete accepted command, including multiline

@@ -631,6 +631,7 @@ fn registration_dto(
             RegistrationKind::TerminalQuickFixProvider { provider_id } => {
                 ExtensionHostRegistrationKindDto::TerminalQuickFixProvider { provider_id }
             }
+            RegistrationKind::TerminalPty {} => ExtensionHostRegistrationKindDto::TerminalPty {},
             RegistrationKind::TerminalLinkProvider {} => {
                 ExtensionHostRegistrationKindDto::TerminalLinkProvider {}
             }

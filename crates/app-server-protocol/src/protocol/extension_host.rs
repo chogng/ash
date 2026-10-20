@@ -444,6 +444,7 @@ pub enum ExtensionHostRegistrationKindDto {
         #[schemars(length(min = 1, max = 512))]
         title: String,
     },
+    TerminalPty {},
     TerminalEnvironment {},
     TerminalLinkProvider {},
     TerminalCompletionProvider {

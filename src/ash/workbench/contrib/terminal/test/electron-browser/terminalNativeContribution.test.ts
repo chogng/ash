@@ -386,7 +386,7 @@ suite('Desktop terminal move command transaction', () => {
 		const f = transferCommandFixture(owner);
 		using localization = toDisposable(resetNlsResolver);
 		initializeTestLocalization('zh-CN');
-		using help = new TerminalAccessibilityHelpProvider(f.instance);
+		using help = new TerminalAccessibilityHelpProvider(f.instance, true);
 		assert.match(help.provideContent(), /将终端移入新窗口/);
 		f.instance.shellLaunchConfig = { customPtyImplementation: () => { throw new Error('unused'); } };
 		await assert.rejects(f.commands.executeCommand(TerminalCommandId.MoveIntoNewWindow), /此终端无法将其进程移至其他窗口/);

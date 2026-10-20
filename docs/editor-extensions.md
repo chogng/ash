@@ -44,12 +44,15 @@ package 原始 bytes/digest 保持不变。通用 `asset` 不会被自动解释�
 | 可执行扩展崩溃                                         | 清除旧 incarnation 注册，按有界预算重新握手和激活；超限进入 crash loop                                                | 不无限重启，不把旧请求重绑定到新进程                          |
 | 调用超时或取消后没有 terminal response                 | 结果标为 unknown outcome，终止旧 incarnation 后恢复                                                                   | 不声称副作用没有发生                                          |
 | 需要 VS Code Extension API                             | 真实 Node 宿主提供已实现的命令、语言、Tasks/Debug、配置和工作区 API 子集                                              | 包可安装不代表全部 API 可用；完整兼容仍需真实扩展验证         |
-| 本地标准 JS 包                                         | 工作区相对路径安装；分别启用、授权后，macOS 或 64 位 Windows 产品宿主执行                                             | 不自动授权，也不放宽独立可执行扩展的限制                      |
+| 本地标准 JS 包                                         | 工作区相对路径安装；分别启用、授权后，由产品绑定的 Node 宿主执行                                                      | 不自动授权，也不放宽独立可执行扩展的限制                      |
 | 生产平台不支持 V8 所需隔离                             | 受限 V8 包运行失败并报告 isolation unavailable；Node 包按单独的精确包执行授权运行                                     | 不把 Node 的用户级 IO 声称为 V8 系统沙箱                      |
 
 当前声明式装载链已接入 App Server 与 Workbench。Legacy Plugin 与 Extensions executable source 都会
 先规范化为 Host deployment，Host runtime 不解析任何 package manifest。App Server broker 以及
 Workbench 的 Commands/Language/Tasks/task-backed Testing、数据通道和链接展示接入已实现。标准包由产品绑定的 Node 兼容宿主执行，Desktop 使用 Electron 的 Node 模式。受限 Rust/V8 实现保留测试与显式预编译打包入口，默认包省略该扩展宿主；Code Mode 的 Rust/V8 宿主继续随包提供。
+
+可执行 fleet 与声明式 catalog 可以独立到达。终端贡献只用后端确认的 runtime ID 与包摘要绑定目录身份；目录晚到使早先投影拒绝时，运行中的已连接窗口通过原 list 刷新队列重试，即使 fleet generation 没有变化。目录更新不重启扩展进程，不放宽摘要或权限检查；Host 停止、断线或释放后不发起该重试。
+
 V8 的第三方系统隔离在 macOS 与 64 位 Windows 实现；标准 Node 包需单独的精确包执行授权。独立可执行扩展仍要求整个进程的系统硬限制，目前产品 launcher 拒绝启动它们。
 后续章节说明这些流程、所有权、信任与失败边界、完成度及演进。
 
@@ -990,6 +993,8 @@ Open VSX 安装与基础 JS 执行已接入，不表示全部扩展 API、平台
 - 请求、响应和 registration 绑定扩展、声明的状态 scope、调用客户端、激活代次与当前运行实例；共享 Provider 不因 UI 请求而复制状态，恢复不重用旧身份或授权。
 - Workbench 消费领域类型，transport DTO 留在 adapter；各 contribution 由自己的领域 registry 拥有。
 - Extension Host 服务注册和 MainThread Terminal bridge 消费 `workbench/services/terminal` 的 profile/resolver 与浏览器实例契约；服务层不导入 Terminal contribution 或具体 xterm 实现。原 Terminal contribution 注册并实现服务，resolver、窗口实例和 Rust/扩展 PTY 的生命周期继续由现有 owner 管理。
+- 终端 Profile 的规范声明为 `contributes.terminal.profiles`；旧 `terminalProfiles` 只在边界归一化，同时声明两者拒绝。Profile／Link 支持 capability ceiling 内的动态注册和撤回。自供 PTY 使用同一宿主资源表中的独立 `terminalPty` 注册，要求既有 `terminalProfileProvider` 能力；工厂撤回不关闭已发出的资源，撤权或原运行实例退出才统一退休。内部资源结果必须带 `registrationId`；工厂拒绝 PTY IO，缺失资源身份的旧结果也拒绝。现有生产者是随产品打包并同步更新的宿主适配器，未提供旧工厂 IO 的兼容入口。
+- Profile 创建结果在原调用会话内保留交接租约，首次匹配 owner、扩展、activation／incarnation、registration 和 PTY 的资源 IO 成功派发后接管。Discard、TTL、连接退出与前端拒绝结果均回收未接管资源；读取结果不可重放，接管后取消旧调用不能关闭正在使用的终端。清理只针对原进程 fence，不把迟到 close 重放到重启后的进程。
 - 扩展业务、核心机制与客户端交互各有唯一 owner。服务商认证和 API 可以由 TS/JS 或 Rust 扩展提供，秘密存储和最终授权仍由核心服务管理。
 - 包完整性、声明式资源可读和代码可执行分别检查；共享产品 UI 不合并这些授权。
 

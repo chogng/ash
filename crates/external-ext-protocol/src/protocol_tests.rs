@@ -1277,7 +1277,7 @@ fn terminal_completion_and_quick_fix_registrations_require_distinct_capabilities
 
 #[test]
 fn dynamic_terminal_registrations_are_a_bounded_provider_subset() {
-    let value = json!({"context":{"protocolVersion":1,"incarnation":2,"activationGeneration":3},"revision":1,"speechProviders":[],"terminalProviders":[{"registrationId":"completion.1","kind":"terminalCompletionProvider","triggerCharacters":[]},{"registrationId":"fix.1","kind":"terminalQuickFixProvider","providerId":"acme.fix"}]});
+    let value = json!({"context":{"protocolVersion":1,"incarnation":2,"activationGeneration":3},"revision":1,"speechProviders":[],"terminalProviders":[{"registrationId":"profile.1","kind":"terminalProfileProvider","profileId":"shell","title":"Shell"},{"registrationId":"pty.1","kind":"terminalPty"},{"registrationId":"links.1","kind":"terminalLinkProvider"},{"registrationId":"completion.1","kind":"terminalCompletionProvider","triggerCharacters":[]},{"registrationId":"fix.1","kind":"terminalQuickFixProvider","providerId":"acme.fix"}]});
     let event: super::ExtensionHostRegistrationEvent =
         serde_json::from_value(value.clone()).unwrap();
     event.validate(&ProtocolLimits::default()).unwrap();
@@ -1286,4 +1286,31 @@ fn dynamic_terminal_registrations_are_a_bounded_provider_subset() {
         json!([{"registrationId":"command","kind":"command","command":"unsafe","title":"Unsafe"}]);
     let event: super::ExtensionHostRegistrationEvent = serde_json::from_value(invalid).unwrap();
     assert!(event.validate(&ProtocolLimits::default()).is_err());
+}
+
+#[test]
+fn terminal_pty_resource_requires_profile_authority_and_strict_descriptor() {
+    let value =
+        json!({"registrations":[{"registrationId":"profile.1.pty.1","kind":"terminalPty"}]});
+    let result: super::ActivateResult = serde_json::from_value(value.clone()).unwrap();
+    result
+        .validate(
+            &[ExtensionCapability::TerminalProfileProvider],
+            &ProtocolLimits::default(),
+        )
+        .unwrap();
+    for capabilities in [
+        vec![],
+        vec![ExtensionCapability::TaskProvider],
+        vec![ExtensionCapability::TerminalLinkProvider],
+    ] {
+        assert!(
+            result
+                .validate(&capabilities, &ProtocolLimits::default())
+                .is_err()
+        );
+    }
+    let mut forged = value;
+    forged["registrations"][0]["profileId"] = json!("untrusted");
+    assert!(serde_json::from_value::<super::ActivateResult>(forged).is_err());
 }

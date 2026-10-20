@@ -57,6 +57,18 @@ properties[`${TERMINAL_CONFIG_SECTION}.enableFileLinks`] = {
 	type: 'string', default: 'on', enum: ['off', 'on', 'notRemote'],
 	get description() { return localize('terminal.config.enableFileLinks', 'Enable terminal file links always, never, or only in local workspaces.'); },
 };
+properties[`${TERMINAL_CONFIG_SECTION}.shellIntegration.decorationsEnabled`] = {
+	type: 'string', default: 'both', enum: ['both', 'gutter', 'overviewRuler', 'never'],
+	get description() { return localize('terminal.config.decorations', 'Controls command decorations when shell integration is enabled.'); },
+	get enumDescriptions() {
+		return [
+			localize('terminal.config.decorations.both', 'Show command decorations in the gutter and overview ruler.'),
+			localize('terminal.config.decorations.gutter', 'Show command decorations in the gutter.'),
+			localize('terminal.config.decorations.overviewRuler', 'Show command decorations in the overview ruler.'),
+			localize('terminal.config.decorations.never', 'Hide command decorations.'),
+		];
+	},
+};
 properties[`${TERMINAL_CONFIG_SECTION}.wordSeparators`] = {
 	type: 'string', default: ' ()[]{}\',"`─‘’“”|',
 	get description() { return localize('terminal.config.wordSeparators', 'Characters separating words for terminal word selection and workspace file links.'); },
