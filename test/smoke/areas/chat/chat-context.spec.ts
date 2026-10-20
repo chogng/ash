@@ -165,7 +165,7 @@ test('host clipboard image becomes a decoded context attachment in Workbench and
 	}
 });
 
-test('host screenshot captures a PNG and releases the browser capture stream', async ({ workbench, target }) => {
+test('host screenshot captures a PNG and releases the browser capture stream', async ({ workbench, target, application }) => {
 	const page = workbench.page;
 	if (!await page.locator('.ash-chat-view-pane').isVisible()) {
 		await page.getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();
@@ -180,21 +180,55 @@ test('host screenshot captures a PNG and releases the browser capture stream', a
 			(window as Window & { ashContextCapture?: MediaStream; }).ashContextCapture = stream;
 		});
 	}
-	const chat = page.locator('.ash-chat-view-pane .ash-chat:visible');
-	await chat.getByRole('button', { name: 'Add context', exact: true }).press('Enter');
-	await page.getByRole('dialog').getByRole('option', { name: target.kind === 'browser' ? 'Screenshot…' : 'Screenshot Window', exact: true }).click();
-	const image = chat.getByRole('img', { name: 'Screenshot', exact: true });
-	await expect(image).toHaveAttribute('src', /^data:image\/png;base64,/);
-	await expect.poll(() => image.evaluate(element => (element as HTMLImageElement).naturalWidth)).toBeGreaterThan(0);
-	if (target.kind === 'browser') {
-		await expect.poll(() => page.evaluate(() => (window as Window & { ashContextCapture?: MediaStream; }).ashContextCapture!.getTracks().map(track => track.readyState))).toEqual(['ended']);
-		await expect.poll(() => image.evaluate(element => [(element as HTMLImageElement).naturalWidth, (element as HTMLImageElement).naturalHeight])).toEqual([48, 36]);
+	let restoreCapture: (() => Promise<void>) | undefined;
+	if (target.kind === 'electron') {
+		if (!('windows' in application)) throw new Error('Expected Electron windows');
+		const desktop = application;
+		// Replace the OS capture boundary with test-owned pixels; never request screen permission.
+		const saved = await desktop.evaluateHandle(({ desktopCapturer, systemPreferences, screen, nativeImage }) => {
+			const original = { capture: desktopCapturer.getSources, access: systemPreferences.getMediaAccessStatus };
+			systemPreferences.getMediaAccessStatus = media => media === 'screen' ? 'granted' : original.access.call(systemPreferences, media);
+			desktopCapturer.getSources = async () => screen.getAllDisplays().map(display => ({
+				id: `screen:${display.id}`, name: 'Synthetic screenshot', display_id: String(display.id), appIcon: nativeImage.createEmpty(),
+				thumbnail: nativeImage.createFromBitmap(Buffer.alloc(48 * 36 * 4, 255), { width: 48, height: 36 }),
+			}));
+			return original;
+		});
+		restoreCapture = async () => {
+			try { await desktop.evaluate(({ desktopCapturer, systemPreferences }, original) => { desktopCapturer.getSources = original.capture; systemPreferences.getMediaAccessStatus = original.access; }, saved); }
+			finally { await saved.dispose(); }
+		};
 	}
-	await expect(page.getByRole('dialog')).toHaveCount(0);
-	await expect(chat.locator('.stanza-editor-input')).toBeFocused();
-	await chat.getByRole('button', { name: 'Remove Screenshot', exact: true }).press('Enter');
-});
+	try {
+		const chat = page.locator('.ash-chat-view-pane .ash-chat:visible');
+		await chat.getByRole('button', { name: 'Add context', exact: true }).press('Enter');
+		await page.getByRole('dialog').getByRole('option', { name: 'Screenshot…', exact: true }).click();
+		if (target.kind === 'electron') {
+			if (!('windows' in application)) throw new Error('Expected Electron windows');
+			await expect.poll(() => application.windows().filter(window => window.url().includes('/screenshot/screenshot.html')).length).toBeGreaterThan(0);
+			const overlay = application.windows().find(window => window.url().includes('/screenshot/screenshot.html'))!;
+			await overlay.getByRole('button', { name: 'Entire screen', exact: true }).click();
+			await overlay.getByRole('button', { name: 'Add to Chat', exact: true }).click().catch(error => { if (!overlay.isClosed()) throw error; });
+			await expect.poll(() => application.windows().filter(window => window.url().includes('/screenshot/screenshot.html')).length).toBe(0);
+		} else {
+			const overlay = page.getByRole('dialog', { name: 'Screen Capture', exact: true });
+			await overlay.getByRole('button', { name: 'Entire screen', exact: true }).click();
+			await overlay.getByRole('button', { name: 'Add to Chat', exact: true }).click();
+			await expect(overlay).toBeHidden();
+		}
+		const image = chat.getByRole('img', { name: 'Screenshot', exact: true });
+		await expect(image).toHaveAttribute('src', /^data:image\/png;base64,/);
+		await expect.poll(() => image.evaluate(element => (element as HTMLImageElement).naturalWidth)).toBeGreaterThan(0);
+		if (target.kind === 'browser') {
+			await expect.poll(() => page.evaluate(() => (window as Window & { ashContextCapture?: MediaStream; }).ashContextCapture!.getTracks().map(track => track.readyState))).toEqual(['ended']);
+		}
+		await expect.poll(() => image.evaluate(element => [(element as HTMLImageElement).naturalWidth, (element as HTMLImageElement).naturalHeight])).toEqual([48, 36]);
+		await expect(page.getByRole('dialog')).toHaveCount(0);
+		await expect(chat.locator('.stanza-editor-input')).toBeFocused();
+		await chat.getByRole('button', { name: 'Remove Screenshot', exact: true }).press('Enter');
 
+	} finally { await restoreCapture?.(); }
+});
 
 test('browser screen chooser cancellation closes the picker and restores the message', { tag: ['@browser-ui', '@browser-app-server'] }, async ({ workbench }) => {
 	const page = workbench.page;
