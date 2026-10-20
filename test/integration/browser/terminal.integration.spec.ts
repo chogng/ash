@@ -2422,7 +2422,7 @@ for (const [theme, locale] of [['dark', 'en'], ['hcDark', 'en'], ['hcLight', 'zh
 		await page.waitForFunction(() => Boolean(window.ashTerminalInputIntegration));
 		await page.evaluate(theme => {
 			window.ashTerminalFindIntegration.theme(theme);
-			window.ashTerminalInputIntegration.feed('\x1b[2J\x1b[Hhttps://example.com/terminal\r\n');
+			window.ashTerminalInputIntegration.feed('\x1b[2J\x1b[H' + 'https://example.com/terminal\r\n');
 		}, theme);
 		await expect.poll(() => page.evaluate(() => window.ashTerminalInputIntegration.snapshot())).toContain('https://example.com/terminal');
 		const screen = await page.locator('.xterm-screen').boundingBox();

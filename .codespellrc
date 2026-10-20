@@ -10,9 +10,17 @@ skip =
     # Language grammars, separate non-English catalogs, and captured source data.
     **/syntaxes/*,localization/zh-*/*,localization/fr/*,localization/ja/*,
     docs/tools/*,
+    # Immutable research excerpts and extracted benchmark source, hashed by their manifest.
+    docs/research/codex-owl-2026-10-17/ipc-js-evidence.txt,
+    docs/research/codex-owl-2026-10-17/json-ipc-evidence.txt,
+    docs/research/codex-owl-2026-10-17/process-architecture-evidence.txt,
+    docs/research/codex-owl-2026-10-17/runtime-api-evidence.txt,
+    docs/research/codex-owl-2026-10-17/workload-placement-evidence.txt,
+    docs/research/codex-owl-2026-10-17/json-ipc-bench.cjs,
     # Copied dependencies and generated contracts; the ConPTY file credits WezTerm.
     third_party/*,**/vendor/*,
     crates/file-system/src/text_encoding_tables.LICENSE,
+    extensions/git-base/tree-sitter/musl.LICENSE.txt,
     src/ash/base/browser/dompurify/*,src/ash/base/common/marked/*,
     src/ash/base/common/productIcons.ts,crates/app-server-protocol/schema/*,schemas/*,
     crates/utils/pty/src/win/psuedocon.rs

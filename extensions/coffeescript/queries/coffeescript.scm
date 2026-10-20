@@ -103,7 +103,7 @@
 "or" @operator
 "not" @operator
 "is" @operator
-"isnt" @operator
+"isnt" @operator ; codespell:ignore isnt
 "in" @operator
 "of" @operator
 "instanceof" @operator
