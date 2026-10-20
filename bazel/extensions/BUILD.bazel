@@ -1,3 +1,6 @@
 package(default_visibility = ["//visibility:public"])
 
-exports_files(["ash_release_archive.bzl"])
+exports_files([
+    "ash_release_archive.bzl",
+    "system_wayland.bzl",
+])

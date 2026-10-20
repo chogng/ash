@@ -186,6 +186,8 @@ bazel test //cli:tui-real-scenarios --test_output=errors --test_env=PATH
 
 `--test_env=PATH` 将固定版本 Node 的路径传给测试进程。`//cli:tui-real-scenarios` 运行同一组 CLI/TUI PTY 场景；先将锁定的 `rg`、`tgrep` 路径设为 `ASH_RG_PATH`、`ASH_TGREP_PATH`。Linux CI 无法运行的真实沙箱场景由 macOS 作业覆盖。
 
+Linux 构建需安装 `pkg-config` 和 `libwayland-dev`。Bazel 只导入宿主的 Wayland client 共享库，不把 pkg-config 返回的整个系统库目录加入链接路径，避免宿主 libc 覆盖固定工具链的 libc；运行时仍由操作系统提供 Wayland。
+
 ### Dev Container：Linux Desktop、Web 与后端
 
 安装 Docker 和 VS Code Dev Containers 扩展，执行 **Dev Containers: Reopen in Container**。配置见 [`.devcontainer/`](../.devcontainer)，首次创建需联网安装工具、项目依赖、Chromium 和后端资源。
