@@ -1,6 +1,6 @@
 import { expect, test } from '../../../automation/test.js';
 
-test('editor color picker uses shared controls and applies one undoable color edit', async ({ workbench }) => {
+test('editor color picker uses shared controls and applies one undoable color edit', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ workbench }) => {
 	const page = workbench.page;
 	await page.keyboard.press('ControlOrMeta+N');
 	const editor = workbench.editors.groupAt(0).editor;
@@ -36,7 +36,7 @@ test('editor color picker uses shared controls and applies one undoable color ed
 	await expect(picker).toBeHidden();
 });
 
-test('editor color hover commits directly and standalone Enter applies with one undo', async ({ workbench }) => {
+test('editor color hover commits directly and standalone Enter applies with one undo', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ workbench }) => {
 	const page = workbench.page;
 	await page.keyboard.press('ControlOrMeta+N');
 	const editor = workbench.editors.groupAt(0).editor;
@@ -73,7 +73,7 @@ test('editor color hover commits directly and standalone Enter applies with one 
 	await editor.waitForEditorContents(text => text.trim() === '#ff000080');
 });
 
-test('opening find focuses its input and leaves editor text unchanged', async ({ workbench }) => {
+test('opening find focuses its input and leaves editor text unchanged', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ workbench }) => {
 	const page = workbench.page;
 	await page.keyboard.press('ControlOrMeta+N');
 	const editor = workbench.editors.groupAt(0).editor;
@@ -92,7 +92,7 @@ test('opening find focuses its input and leaves editor text unchanged', async ({
 	await expect(editor.input).toBeFocused();
 });
 
-test('closed find options show a checked button when toggled from the editor', async ({ workbench }) => {
+test('closed find options show a checked button when toggled from the editor', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ workbench }) => {
 	const page = workbench.page;
 	await page.keyboard.press('ControlOrMeta+N');
 	const editor = workbench.editors.groupAt(0).editor;
@@ -114,7 +114,7 @@ test('closed find options show a checked button when toggled from the editor', a
 	await expect(matchCase).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
 });
 
-test('editor breadcrumbs use the base widget for keyboard focus and activation', async ({ workbench }) => {
+test('editor breadcrumbs use the base widget for keyboard focus and activation', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ workbench }) => {
 	const page = workbench.page;
 	await page.keyboard.press('ControlOrMeta+N');
 	const breadcrumbs = workbench.editors.groupAt(0).title.getByRole('navigation', { name: 'Editor breadcrumbs' });
@@ -203,7 +203,7 @@ test('Code exposes editor view actions in the command palette', async ({ workben
 	expect(colors.restored).toBe(colors.initial);
 	const query = picker.getByRole('combobox');
 	for (const label of ['Toggle Minimap', 'Toggle Render Whitespace', 'Toggle Control Characters', 'View: Toggle Word Wrap', 'Go to Line/Column...']) {
-		await query.fill(label);
+		await query.fill(`>${label}`);
 		await expect(picker.locator('.ash-quick-pick-row-label').filter({ hasText: label })).toBeVisible();
 	}
 });
