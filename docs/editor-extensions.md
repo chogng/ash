@@ -25,6 +25,8 @@ Rust 作者继续使用 `sdk/rust` 的 Host RPC v1 接口。文档客户端的 `
 
 ## 快速理解
 
+通用 Code 编辑功能由客户端 `src/ash/editor` 内置，不属于可执行扩展，不需要 App Server 提供模块描述。Academy、PDF 与文献编辑器保持独立安装包；其资源加载与 Provider 生命周期仍沿公开 SDK 和客户端桥。
+
 Ash 的共享核心服务 App、TUI 与其他客户端，拥有 Agent 执行、权威状态、权限裁决和通用资源机制。服务商认证、托管平台 API 和特定产品工作流由可选扩展提供；实现需要 Rust、后台执行或跨窗口存活，都不能单独成为进入核心的理由。
 
 TS/JS 扩展改用 Ash 自有契约：作者安装 `@ash/sdk`，通过 `ash.*` 调用获授权的客户端与 Rust 服务；运行时职责按第 0.1 节分配给 Electron、Rust 和 V8。Rust 扩展承接从核心拆出的可选后端能力，运行编译后的独立程序，不需要 Node、V8 或 JS 包装。App 和 TUI 经公开能力契约按需使用同一个 Provider；客户端只选择和呈现能力，不复制其业务状态。编辑器文档、未保存文本和撤销仍由 TS 编辑器服务拥有。
@@ -670,6 +672,18 @@ Ash JS 扩展由 App Server 在 Rust 中匹配激活事件。启用且授权后�
 等待中的扩展，匹配事件也不能绕过精确包授权。切换目录后激活代际仍单调递增，迟到的旧事件
 不能使用新目录中的扩展。其他激活事件类型仍需按实际支持范围验证，独立
 可执行扩展沿用自身声明的启动方式。`ash-external-ext` 只监管进程，不监听编辑器事件。
+
+内置可选能力按消费者启动：SSH 等待 `onResolveRemoteAuthority:ssh`；Markdown 等待语言、命令或
+`onCapability:customEditor:<viewType>`，不在普通窗口恢复完成时启动。GitHub 认证保持 profile 级唯一
+实例，但直到账号服务首次调用才创建进程。Academy、PDF 和 Reference Manager 的客户端包使用
+`onDemand:dataChannel`；声明式编辑器选择器和文档类型先注册，恢复标签页、创建文档或首次打开才
+激活程序并校验、加载客户端模块。启动过程保留首次请求，停用、摘要或进程代际变化撤销旧调用。
+Code 的通用编辑能力由 `src/ash/editor/editor.code.all.ts` 在客户端直接装配，不需要扩展进程。
+会话快照同时保存输入和选中的编辑器视图，未保存文本仍由客户端 working copy 与备份服务恢复。
+
+Git 的变更等待在真实事件发生时唤醒，20 秒空闲续期；编辑器变化发送轻量版本信号，仓库／配置
+变化才重做发现。Blame 先读活动文档元数据，签名变化时才取完整未保存文本。认证与编辑器 helper
+共用的 broker 首次需要时创建，阻塞等待连接；释放用本地唤醒连接退出，不再按 50 毫秒轮询。
 
 标准 resolver 使用 `ResolvedAuthority(host, port, token)` 或 `ManagedResolvedAuthority(makeConnection, token)`。
 Desktop 的 `NativeExtensionService` 在远端 Workbench 启动前选择本地扩展，`ExtensionHostManager`

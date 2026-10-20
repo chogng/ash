@@ -31,7 +31,7 @@ import { URI } from '../../../src/ash/base/common/uri.js';
 import { InMemoryConfigurationService } from '../../../src/ash/platform/configuration/common/inMemoryConfigurationService.js';
 import { DiffEditorWidget } from '../../../src/ash/editor/browser/widget/diffEditor/diffEditorWidget.js';
 import { EmbeddedDiffEditorWidget } from '../../../src/ash/editor/browser/widget/diffEditor/embeddedDiffEditorWidget.js';
-import '../../../extensions/code/browser/contrib/diffEditorBreadcrumbs/browser/contribution.js';
+import '../../../src/ash/editor/contrib/diffEditorBreadcrumbs/browser/contribution.js';
 import { StandaloneServices } from '../../../src/ash/editor/standalone/browser/standaloneServices.js';
 import { registerCodeEditorServices } from '../../../src/ash/editor/test/browser/testCodeEditor.js';
 import { MultiDiffEditorWidget } from '../../../src/ash/editor/browser/widget/multiDiffEditor/multiDiffEditorWidget.js';
@@ -358,8 +358,8 @@ function createSessionChangesPane(): SessionChangesEditor {
 	return pane;
 }
 
-import '../../../extensions/code/browser/contrib/indentation/browser/indentation.js';
-import '../../../extensions/code/browser/contrib/quickAccess/browser/quickAccessController.js';
+import '../../../src/ash/editor/contrib/indentation/browser/indentation.js';
+import '../../../src/ash/editor/contrib/quickAccess/browser/quickAccessController.js';
 import '../../../src/ash/workbench/contrib/codeEditor/browser/quickaccess/gotoLineQuickAccess.js';
 import { EditorStatusContribution, ChangeLanguageAction, ChangeEOLAction, ChangeEncodingAction } from '../../../src/ash/workbench/browser/parts/editor/editorStatus.js';
 import { StatusbarService } from '../../../src/ash/workbench/services/statusbar/browser/statusbar.js';

@@ -7,6 +7,28 @@ import { expect, test } from '../../../automation/test.js';
 
 const run = promisify(execFile);
 
+test.describe('Git blame live documents', () => {
+	test.use({ gitRepository: true, electronUserSettings: { 'git.blame.statusBarItem.enabled': true, 'git.blame.statusBarItem.template': '${subject}' } });
+	test('Git blame follows unsaved edits and undo without an idle discovery tick', { tag: ['@electron-app-server'] }, async ({ workbench, testWorkspace }) => {
+		await workbench.quickaccess.runCommand('workbench.action.closeAllEditors');
+		await workbench.openExplorer();
+		await workbench.page.locator('.ash-explorer').getByRole('treeitem', { name: 'main.ts', exact: true }).dblclick();
+		const editor = workbench.editors.groupAt(0).editor;
+		await editor.waitForEditorContents(text => text.includes('const value = 1;'));
+		await workbench.quickaccess.runCommand('git.refresh');
+		const status = workbench.page;
+		await expect(status.getByRole('button', { name: 'Initial', exact: true })).toBeVisible();
+		await editor.input.focus();
+		await workbench.page.keyboard.press('ControlOrMeta+a');
+		await workbench.page.keyboard.insertText('const value = 2;\n');
+		await workbench.page.keyboard.press('ControlOrMeta+Home');
+		await expect(status.getByRole('button', { name: 'Uncommitted Changes', exact: true })).toBeVisible();
+		expect(await readFile(testWorkspace.file, 'utf8')).toBe('const value = 1;\n');
+		await workbench.page.keyboard.press('ControlOrMeta+z');
+		await expect(status.getByRole('button', { name: 'Initial', exact: true })).toBeVisible();
+	});
+});
+
 test.describe('Git repository operations', () => {
 	test.use({ gitRepository: true });
 

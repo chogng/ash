@@ -41,7 +41,7 @@ import '../../../src/ash/base/browser/ui/scrollbar/scrollbar.css';
 import '../../../src/ash/base/browser/ui/tree/tree.css';
 import '../../../src/ash/base/browser/ui/list/list.css';
 import '../../../extensions/academic/browser/widget/richTextEditor/richTextEditorWidget.css';
-import '../../../extensions/code/browser/contrib/hover/browser/hover.css';
+import '../../../src/ash/editor/contrib/hover/browser/hover.css';
 import '../../../src/ash/platform/actionWidget/browser/actionWidget.css';
 import '../../../src/ash/sessions/browser/parts/titlebar/media/titlebarpart.css';
 import '../../../src/ash/workbench/browser/parts/editor/media/modalEditorPart.css';

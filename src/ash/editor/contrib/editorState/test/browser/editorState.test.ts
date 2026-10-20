@@ -9,8 +9,8 @@ import { TextModel } from '../../../../common/model/textModel.js';
 import { Position } from '../../../../common/core/position.js';
 import { Selection } from '../../../../common/core/selection.js';
 import { Range } from '../../../../common/core/range.js';
-import { CodeEditorStateFlag, EditorStateCancellationTokenSource } from '../../../../../../../extensions/code/browser/contrib/editorState/browser/editorState.js';
-import { EditorKeybindingCancellationTokenSource } from '../../../../../../../extensions/code/browser/contrib/editorState/browser/keybindingCancellation.js';
+import { CodeEditorStateFlag, EditorStateCancellationTokenSource } from '../../browser/editorState.js';
+import { EditorKeybindingCancellationTokenSource } from '../../browser/keybindingCancellation.js';
 
 const { createTestCodeEditor } = await import('../../../../test/browser/testCodeEditor.js');
 

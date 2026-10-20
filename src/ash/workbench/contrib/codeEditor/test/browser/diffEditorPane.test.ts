@@ -55,7 +55,7 @@ for (const [name, value] of Object.entries({
 
 const { EditorStatusContribution } = await import('../../../../browser/parts/editor/editorStatus.js');
 const { TextDiffEditor: DiffEditorPane } = await import("../../../../browser/parts/editor/textDiffEditor.js");
-await import('../../../../../../../extensions/code/browser/contrib/diffEditorBreadcrumbs/browser/contribution.js');
+await import('../../../../../editor/contrib/diffEditorBreadcrumbs/browser/contribution.js');
 await import('../../../../../editor/browser/widget/diffEditor/diffEditor.contribution.js');
 await import('../../../../contrib/accessibility/browser/accessibilityConfiguration.js');
 await import('../../browser/toggleWordWrap.js');

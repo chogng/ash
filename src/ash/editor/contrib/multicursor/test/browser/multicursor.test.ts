@@ -3,7 +3,7 @@ import { after as afterCodeFeatures } from 'mocha';
 import assert from "node:assert/strict";
 import { test } from "mocha";
 import { OperatingSystem } from "../../../../../base/common/platform.js";
-import { resolveStanzaAdjacentCursorDirection } from "../../../../../../../extensions/code/browser/contrib/multicursor/browser/multicursor.js";
+import { resolveStanzaAdjacentCursorDirection } from "../../browser/multicursor.js";
 
 test("Multi-cursor chord selection follows platform-specific non-conflicting bindings", () => {
 	assert.equal(resolveStanzaAdjacentCursorDirection(

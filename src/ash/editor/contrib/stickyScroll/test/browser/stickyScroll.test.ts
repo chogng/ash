@@ -12,8 +12,8 @@ import type { LanguageDocumentSymbol } from '../../../../common/languages.js';
 import { TextModel } from '../../../../common/model/textModel.js';
 import { ILanguageFeaturesService } from '../../../../common/services/languageFeatures.js';
 import { LanguageFeaturesService } from '../../../../common/services/languageFeaturesService.js';
-import { EditorFoldingModel } from '../../../../../../../extensions/code/browser/contrib/folding/browser/foldingModel.js';
-import { StickyModelProvider } from '../../../../../../../extensions/code/browser/contrib/stickyScroll/browser/stickyScrollModelProvider.js';
+import { EditorFoldingModel } from '../../../folding/browser/foldingModel.js';
+import { StickyModelProvider } from '../../browser/stickyScrollModelProvider.js';
 
 suite('Sticky scroll scope sources', () => {
 	test('folding ancestors retain one-based bounds and parent ownership', async () => {

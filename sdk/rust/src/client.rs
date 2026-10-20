@@ -621,7 +621,7 @@ impl BackgroundClient {
             wait_for_change: None,
         })
     }
-    /// Waits for the window's next admitted backend notification or a bounded idle tick.
+    /// Waits for admitted backend/editor changes, renewing before the service deadline.
     /// Closing the activation interrupts the wait before background tasks are joined.
     pub fn wait_for_backend_state(
         &self,

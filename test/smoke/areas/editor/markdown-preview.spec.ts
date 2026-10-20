@@ -471,3 +471,35 @@ test('Markdown rich editor localizes its toolbar and accessibility help in Chine
 	await page.keyboard.press('Escape');
 	await expect(group.content.locator('iframe.ash-webview:visible')).toBeFocused();
 });
+
+test('Markdown preview restores an unsaved custom tab through a cold provider start', { tag: ['@electron-app-server'] }, async ({ workbench, testWorkspace, reloadWorkbench }) => {
+	const file = join(testWorkspace.directory, 'restore-preview.md');
+	await writeFile(file, '# Persisted heading\n\nSaved text\n');
+	await workbench.quickaccess.runCommand('workbench.action.closeAllEditors');
+	await workbench.page.keyboard.press('ControlOrMeta+N');
+	const group = workbench.editors.groupAt(0);
+	const transfer = await workbench.page.evaluateHandle(uri => {
+		const value = new DataTransfer();
+		value.setData('text/uri-list', uri);
+		return value;
+	}, pathToFileURL(file).href);
+	try {
+		await group.title.locator('.ash-tab-list:visible [role="tablist"]').dispatchEvent('drop', { dataTransfer: transfer });
+	} finally { await transfer.dispose(); }
+	await group.editor.waitForEditorContents(text => text.includes('# Persisted heading'));
+	await group.editor.input.focus();
+	await workbench.page.keyboard.press('ControlOrMeta+a');
+	await workbench.page.keyboard.insertText('# Unsaved restored heading\n\nRetained draft\n');
+	await workbench.quickaccess.runCommand('markdown.reopenAsPreview');
+	const preview = () => workbench.editors.groupAt(0).content.frameLocator('iframe.ash-webview:visible').frameLocator('iframe');
+	await expect(preview().getByRole('heading', { name: 'Unsaved restored heading', exact: true })).toBeVisible();
+	({ workbench } = await reloadWorkbench());
+	await expect(preview().getByRole('heading', { name: 'Unsaved restored heading', exact: true })).toBeVisible();
+	await expect(preview().locator('body')).toContainText('Retained draft');
+	await workbench.quickaccess.runCommand('markdown.reopenAsSource');
+	// Viewport empty lines contain layout placeholders; persisted bytes below verify the exact text.
+	await workbench.editors.groupAt(0).editor.waitForEditorContents(text => text.includes('Unsaved restored heading') && text.includes('Retained draft'));
+	expect(await readFile(file, 'utf8')).toBe('# Persisted heading\n\nSaved text\n');
+	await workbench.page.keyboard.press('ControlOrMeta+s');
+	await expect.poll(() => readFile(file, 'utf8')).toBe('# Unsaved restored heading\n\nRetained draft\n');
+});

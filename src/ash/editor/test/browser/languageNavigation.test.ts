@@ -6,8 +6,8 @@ import { URI } from '../../../base/common/uri.js';
 import { Range } from '../../common/core/range.js';
 import { ICodeEditorService } from '../../browser/services/codeEditorService.js';
 import { createLanguageFeatureEditor } from './testLanguageFeatureEditor.js';
-import type { ReferencesController } from '../../../../../extensions/code/browser/contrib/gotoSymbol/browser/peek/referencesController.js';
-await import('../../../../../extensions/code/browser/contrib/gotoSymbol/browser/peek/referencesController.js');
+import type { ReferencesController } from '../../contrib/gotoSymbol/browser/peek/referencesController.js';
+await import('../../contrib/gotoSymbol/browser/peek/referencesController.js');
 
 test('definition navigation sends the requested side group and target selection to the editor service', async () => {
 	using fixture = createLanguageFeatureEditor();

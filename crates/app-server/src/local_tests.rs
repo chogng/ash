@@ -5898,6 +5898,47 @@ fn shared_profile_owns_one_lazy_github_api_runtime_across_directory_hosts() {
 }
 
 #[test]
+fn shared_profile_keeps_github_authentication_dormant_until_account_demand() {
+    let profile = tempfile::tempdir().unwrap();
+    let first_dir = tempfile::tempdir().unwrap();
+    let second_dir = tempfile::tempdir().unwrap();
+    let runtime = Arc::new(LocalProfileRuntime::open(profile.path()).unwrap());
+    // A process that cannot speak the protocol is safe here: composition must not launch it.
+    let executable = std::env::current_exe().unwrap();
+    let open = |dir: &Path| {
+        open_app_server(
+            AppServerOptions::new(profile.path())
+                .with_profile_runtime(runtime.clone())
+                .with_dir_root(dir)
+                .with_github_authentication_extension(&executable)
+                .without_built_in_skills(),
+            ash_app_server_diff::compute,
+        )
+        .unwrap()
+    };
+    let first = open(first_dir.path());
+    let first_auth = runtime
+        .github_authentication
+        .lock()
+        .unwrap()
+        .clone()
+        .unwrap();
+    let second = open(second_dir.path());
+    let second_auth = runtime
+        .github_authentication
+        .lock()
+        .unwrap()
+        .clone()
+        .unwrap();
+    assert!(Arc::ptr_eq(&first_auth, &second_auth));
+    use ash_external_ext::BuiltInExtensionRuntime;
+    assert!(!first_auth.is_running());
+    drop(first);
+    assert!(!second_auth.is_running());
+    drop(second);
+}
+
+#[test]
 fn production_review_model_bridge_preserves_streaming_for_guardian_metrics() {
     struct StreamingReview;
     impl ModelInvoker for StreamingReview {

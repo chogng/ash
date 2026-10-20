@@ -1,5 +1,3 @@
-import { registerTestCodeEditorFeatures } from '../../fixtures/codeEditorFeatures.js';
-const codeFeatures = registerTestCodeEditorFeatures();
 import { ICommandService } from '../../../src/ash/platform/commands/common/commands.js';
 import { CommandService } from '../../../src/ash/workbench/services/commands/common/commandService.js';
 import { INotificationService } from '../../../src/ash/platform/notification/common/notification.js';

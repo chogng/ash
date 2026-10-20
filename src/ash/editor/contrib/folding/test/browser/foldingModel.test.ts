@@ -2,12 +2,12 @@ import { registerTestCodeEditorFeatures } from '../../../../../../../test/fixtur
 import { after as afterCodeFeatures } from 'mocha';
 import assert from "node:assert/strict";
 import { test } from "mocha";
-import { EditorFoldingModel } from "../../../../../../../extensions/code/browser/contrib/folding/browser/foldingModel.js";
-import { EditorFoldingRangeSource } from "../../../../../../../extensions/code/browser/contrib/folding/browser/foldingRanges.js";
+import { EditorFoldingModel } from "../../browser/foldingModel.js";
+import { EditorFoldingRangeSource } from "../../browser/foldingRanges.js";
 import { Position } from "../../../../common/core/position.js";
 import { Range } from "../../../../common/core/range.js";
 import { TextModel } from "../../../../common/model/textModel.js";
-import { EditorHiddenRangeModel } from '../../../../../../../extensions/code/browser/contrib/folding/browser/hiddenRangeModel.js';
+import { EditorHiddenRangeModel } from '../../browser/hiddenRangeModel.js';
 
 test('column edits and unchanged provider results retain fold state without rereading all tracked coordinates', () => {
 	using model = new TextModel('header\nbody\nend\nother');

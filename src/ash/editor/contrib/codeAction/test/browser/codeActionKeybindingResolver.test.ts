@@ -10,7 +10,7 @@ import { KeyMod, KeyCode } from '../../../../../base/common/keyCodes.js';
 import { decodeKeybinding } from '../../../../../base/common/keybindings.js';
 import { operatingSystem } from '../../../../../base/common/platform.js';
 import { getKeybindingLabel } from '../../../../../base/common/keybindingLabels.js';
-import { CodeActionKeybindingResolver } from '../../../../../../../extensions/code/browser/contrib/codeAction/browser/codeActionKeybindingResolver.js';
+import { CodeActionKeybindingResolver } from '../../browser/codeActionKeybindingResolver.js';
 
 test('code action shortcut resolves the most specific kind and respects preferred-only rules', () => {
 	using fixture = createLanguageFeatureEditor();

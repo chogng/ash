@@ -12,7 +12,10 @@ impl GitRuntime {
     /// Polls only editor facts. Git IO runs when resource, line, model version, policy or HEAD
     /// changes; the client checks the same model version before applying the annotation.
     pub(crate) fn update_blame(&self) -> Result<(), ExtensionError> {
-        let active = self.api.editor(json!({"method":"activeEditor"}), None)?;
+        let active = self.api.editor(
+            json!({"method":"activeEditor","includeContents":false}),
+            None,
+        )?;
         let resource = active["input"]["resource"].as_str();
         let repository = resource.and_then(|resource| {
             self.lock()
@@ -76,13 +79,24 @@ impl GitRuntime {
         }
         let path = relative_resource(&repository, resource)
             .ok_or_else(|| invalid("Active file is outside the Git repository"))?;
+        // Fetch unsaved text only after metadata proves this blame view changed.
+        let document = self.api.editor(
+            json!({"method":"activeEditor","includeContents":true}),
+            None,
+        )?;
+        if document["input"] != active["input"]
+            || document["version"] != active["version"]
+            || document["selection"] != active["selection"]
+        {
+            return Ok(());
+        }
         let response = self
             .api
             .blame(
                 &repository,
                 &path,
                 active["selection"]["startLineNumber"].as_u64().unwrap_or(1) as usize,
-                active["contents"].as_str(),
+                document["contents"].as_str(),
                 None,
             )
             .map(|line| json!(line));

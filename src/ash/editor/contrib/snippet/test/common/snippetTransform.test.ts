@@ -2,7 +2,7 @@ import { registerTestCodeEditorFeatures } from '../../../../../../../test/fixtur
 import { after as afterCodeFeatures } from 'mocha';
 import assert from "node:assert/strict";
 import { test } from "mocha";
-import { applySnippetTransform, createSnippetTransform } from "../../../../../../../extensions/code/browser/contrib/snippet/common/snippetTransform.js";
+import { applySnippetTransform, createSnippetTransform } from "../../common/snippetTransform.js";
 
 test("Completion snippet transforms expand captures, case modifiers, conditionals, and global matches", () => {
 	const caseTransform = createSnippetTransform("(?<first>alpha)_(beta)", "${1:/upcase}-${2:/pascalcase}", "i");

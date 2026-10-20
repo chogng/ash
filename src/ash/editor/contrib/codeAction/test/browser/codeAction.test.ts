@@ -17,7 +17,7 @@ import { URI } from '../../../../../base/common/uri.js';
 import { toDisposable } from '../../../../../base/common/lifecycle.js';
 import { ICommandService } from '../../../../../platform/commands/common/commands.js';
 
-await import('../../../../../../../extensions/code/browser/contrib/codeAction/browser/codeActionContributions.js');
+await import('../../browser/codeActionContributions.js');
 const { createTestCodeEditor } = await import('../../../../test/browser/testCodeEditor.js');
 
 for (const [command, kind] of [['editor.action.refactor', 'refactor.extract'], ['editor.action.sourceAction', 'source.organizeImports']] as const) {

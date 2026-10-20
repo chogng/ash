@@ -2,7 +2,7 @@ import { registerTestCodeEditorFeatures } from '../../../../../../../test/fixtur
 import { after as afterCodeFeatures } from 'mocha';
 import assert from "node:assert/strict";
 import { test } from "mocha";
-import { LineCommentCommand, Type } from '../../../../../../../extensions/code/browser/contrib/comment/browser/lineCommentCommand.js';
+import { LineCommentCommand, Type } from '../../browser/lineCommentCommand.js';
 import { Selection } from "../../../../common/core/selection.js";
 import { Position } from "../../../../common/core/position.js";
 import { Range } from "../../../../common/core/range.js";

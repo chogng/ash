@@ -10,7 +10,7 @@ import { LanguageFeaturesService } from '../../../../common/services/languageFea
 import type { LanguageParameterHints, LanguageParameterHintsRequest } from '../../../../common/languages.js';
 import { IContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
 
-await import('../../../../../../../extensions/code/browser/contrib/parameterHints/browser/parameterHints.js');
+await import('../../browser/parameterHints.js');
 const { createTestCodeEditor } = await import('../../../../test/browser/testCodeEditor.js');
 
 const hints: LanguageParameterHints = {

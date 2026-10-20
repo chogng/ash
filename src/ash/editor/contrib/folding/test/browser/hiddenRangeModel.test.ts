@@ -2,9 +2,9 @@ import { registerTestCodeEditorFeatures } from '../../../../../../../test/fixtur
 import { after as afterCodeFeatures } from 'mocha';
 import assert from "node:assert/strict";
 import { test } from "mocha";
-import { EditorFoldingModel } from "../../../../../../../extensions/code/browser/contrib/folding/browser/foldingModel.js";
-import { EditorFoldingRangeSource } from "../../../../../../../extensions/code/browser/contrib/folding/browser/foldingRanges.js";
-import { EditorHiddenRangeModel } from "../../../../../../../extensions/code/browser/contrib/folding/browser/hiddenRangeModel.js";
+import { EditorFoldingModel } from "../../browser/foldingModel.js";
+import { EditorFoldingRangeSource } from "../../browser/foldingRanges.js";
+import { EditorHiddenRangeModel } from "../../browser/hiddenRangeModel.js";
 import { Range } from "../../../../common/core/range.js";
 import { TextModel } from "../../../../common/model/textModel.js";
 

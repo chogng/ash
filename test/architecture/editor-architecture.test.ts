@@ -53,7 +53,7 @@ test('Cursor owner files expose their canonical API names', () => {
 	const typeEditOperations = readFileSync(join(editorRoot, 'common/cursor/cursorTypeEditOperations.ts'), 'utf8');
 	assert.match(typeEditOperations, /export class TypeWithoutInterceptorsOperation\b/u);
 	assert.doesNotMatch(typeEditOperations, /class AutoClosingOvertypeOperation\b/u);
-	assert.match(readFileSync(resolve(desktopRoot, 'extensions/code/browser/editingPolicy.ts'), 'utf8'), /class AutoClosingOvertypeOperation\b/u);
+	assert.match(readFileSync(resolve(desktopRoot, 'src/ash/editor/common/model/editingPolicy.ts'), 'utf8'), /class AutoClosingOvertypeOperation\b/u);
 	const cursorSources = collectFiles(join(editorRoot, 'common/cursor')).map(file => readFileSync(file, 'utf8')).join('\n');
 	assert.doesNotMatch(cursorSources, /export (?:class|function|interface|type|enum) (?:EditorSelectionController|createEditorColumnSelectionSet|navigateEditorCursors|createTypeTextCommand|createBackspaceCommand)\b/u);
 });
@@ -738,7 +738,7 @@ test("Editor widgets delegate optional feature composition to contributions", ()
 	const academicPaneContribution = readFileSync(resolve(desktopRoot, "extensions/academic/browser/editor.ts"), "utf8");
 	const textModel = readFileSync(editorSource("common/model/textModel.ts"), "utf8");
 	const codeBundle = readFileSync(editorSource("editor.code.all.ts"), "utf8");
-	const standardBundle = readFileSync(resolve(desktopRoot, 'extensions/code/browser/features.ts'), 'utf8') + readFileSync(resolve(desktopRoot, 'extensions/code/browser/editor.ts'), 'utf8');
+	const standardBundle = readFileSync(resolve(desktopRoot, 'src/ash/editor/editor.contrib.ts'), 'utf8') + readFileSync(resolve(desktopRoot, 'src/ash/editor/browser/editorFeatures.ts'), 'utf8');
 	const editorExtensionRegistry = readFileSync(editorSource("browser/editorExtensions.ts"), "utf8");
 	const codeEditorContributions = readFileSync(editorSource("browser/widget/codeEditor/codeEditorContributions.ts"), "utf8");
 	const optionalControllerPattern = /(?:AnchorSelect|BlockComment|BracketEditing|BracketMatch|BracketNavigation|CodeAction|CodeLens|ColorPicker|ContextMenu|CursorUndo|DiagnosticHover|DiagnosticNavigation|EditorState|Folding|FontZoom|Format|GotoLine|GotoSymbol|Hover|InPlaceReplace|InlayHints|InlineCompletions|InlineProgress|LineComment|LineJoin|LineOperations|LinkedEditing|Links|Message|MiddleScroll|MultiCursor|OccurrenceHighlight|OccurrenceSelection|ParameterHints|ReadOnlyMessage|Rename|SectionHeaders|SmartSelect|StickyScroll|SymbolIcons|TextDrop|ToggleTabFocusMode|Tokenization|Transpose|UnicodeHighlighter|UnusualLineTerminators|WordWrap)Controller/u;
@@ -846,15 +846,5 @@ function isTestFile(file: string): boolean {
 }
 
 function editorSource(file: string): string {
-	if (file.startsWith('browser/viewParts/minimap/') || file.startsWith('browser/viewParts/indentGuides/')) return resolve(desktopRoot, 'extensions/code', file);
-	if (file === 'common/viewModel/minimapTokensColorTracker.ts') return resolve(desktopRoot, 'extensions/code/browser/viewParts/minimap/minimapTokensColorTracker.ts');
-	if (['common/languages/autoIndent.ts', 'common/languages/enterAction.ts', 'common/languages/supports/indentationLineProcessor.ts'].includes(file)) return resolve(desktopRoot, 'extensions/code/browser/languages', file.slice('common/languages/'.length));
-	if (file.startsWith('contrib/placeholderText/browser/')) return resolve(desktopRoot, 'extensions/code/browser/contrib/placeholderText', file.slice('contrib/placeholderText/browser/'.length));
-	if (file.startsWith('contrib/')) return resolve(desktopRoot, 'extensions/code/browser', file);
-	if (file.startsWith('common/model/tokens/') || file.startsWith('common/model/bracketPairsTextModelPart/') || file === 'common/model/guidesTextModelPart.ts') {
-		return resolve(desktopRoot, 'extensions/code/browser/model', file.slice('common/model/'.length));
-	}
-	if (file === 'browser/services/contribution.ts') return resolve(desktopRoot, 'extensions/code/browser/markerDecorations.contribution.ts');
-	if (file === 'browser/services/markerDecorations.ts') return resolve(desktopRoot, 'extensions/code/browser/markerDecorations.ts');
 	return join(editorRoot, file);
 }

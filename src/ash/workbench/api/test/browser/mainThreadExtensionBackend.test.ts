@@ -1,5 +1,10 @@
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
+import { mock } from 'node:test';
+import type { ICodeEditor } from '../../../../editor/browser/editorBrowser.js';
+import type { ICodeEditorService } from '../../../../editor/browser/services/codeEditorService.js';
+import type { IEditorPart } from '../../../browser/parts/editor/editorPart.js';
+import { URI } from '../../../../base/common/uri.js';
 import { NotificationService } from '../../../services/notification/common/notificationService.js';
 import { CommandService } from '../../../services/commands/common/commandService.js';
 import { DeferredPromise } from '../../../../base/common/async.js';
@@ -20,7 +25,7 @@ import { MainThreadExtensionBackend } from '../../browser/mainThreadExtensionBac
 
 const source = { extensionId: 'ash.git', activationGeneration: 1, incarnation: 1 };
 const manifest = { ashFrontend: { capabilities: { 'git.repository': { methods: { read: { route: 'config/read', fields: [], resultFields: ['revision', 'git', 'gitConfigured'] }, write: { route: 'config/update', fields: ['commandId', 'expectedRevision', 'git'] }, transport: { route: 'git/transport', cancellationRoute: 'git/transport/cancel', fields: ['operationId'] } }, notifications: ['config/changed'] } } } };
-function fixture(sourceKind = 'builtIn', request?: IExtensionBackendApi['request'], progress?: IProgressService) {
+function fixture(sourceKind = 'builtIn', request?: IExtensionBackendApi['request'], progress?: IProgressService, editor?: ICodeEditor) {
 	const calls: { method: string; params: unknown; }[] = [];
 	const extensions = { list: async () => ({ extensions: [{ id: 'ash.git', sourceKind, manifestJson: JSON.stringify(manifest) }] }) } as unknown as IExtensionApi;
 	const backend = { request: async (method, params, signal) => { calls.push({ method, params }); if (request) return request(method, params, signal); return { revision: 1, git: { autofetch: 'off', autofetchPeriod: 180 }, gitConfigured: true, providers: { token: 'private' } }; } } satisfies IExtensionBackendApi;
@@ -30,7 +35,9 @@ function fixture(sourceKind = 'builtIn', request?: IExtensionBackendApi['request
 	const workspace = { getWorkspace: () => ({ folders: [] }), onDidChangeWorkspace: Event.None } as unknown as IWorkspaceContextService;
 	const configurationChanges = new Emitter<IConfigurationChangeEvent>();
 	const configuration = { onDidChangeConfiguration: configurationChanges.event } as unknown as IConfigurationService;
-	return { bridge: new MainThreadExtensionBackend(extensions, backend, connection, events, workspace, configuration, progress ?? { withProgress: async (_options, task) => task({ report() { } }) }), calls, notifications, configurationChanges };
+	const editors = { activeGroup: { activeInput: { resource: URI.file('/file.ts') } }, onDidChangeEditors: Event.None } as unknown as IEditorPart;
+	const codeEditors = { listCodeEditors: () => editor ? [editor] : [], onCodeEditorAdd: Event.None, onCodeEditorRemove: Event.None } as unknown as ICodeEditorService;
+	return { bridge: new MainThreadExtensionBackend(extensions, backend, connection, events, workspace, configuration, progress ?? { withProgress: async (_options, task) => task({ report() { } }) }, editors, codeEditors), calls, notifications, configurationChanges };
 }
 
 test('client settings invalidate backend state without fabricating a server configuration notification', async () => {
@@ -132,4 +139,49 @@ for (const retire of [false, true]) test(`backend cancellation retains its exact
 		else assert.deepEqual(await result, { backendError: { name: 'RequestCancelled', message: 'cancelled' } });
 		assert.deepEqual(notifications.model.getNotifications(), []);
 	} finally { resetNlsResolver(); }
+});
+
+
+test('idle backend waits renew at the service deadline rather than polling editor state', async () => {
+	mock.timers.enable({ apis: ['setTimeout'] });
+	try {
+		const value = fixture(); using bridge = value.bridge; using notifications = value.notifications; using changes = value.configurationChanges;
+		let completed = false;
+		const waiting = bridge.handle(source, 'git.repository', undefined, {}, 0, new AbortController().signal, undefined, true);
+		void waiting.then(() => { completed = true; });
+		await Promise.resolve(); await Promise.resolve();
+		mock.timers.tick(19_999);
+		await Promise.resolve(); await Promise.resolve();
+		assert.equal(completed, false);
+		mock.timers.tick(1);
+		await waiting;
+		assert.equal(completed, true);
+	} finally { mock.timers.reset(); }
+});
+
+test('cursor and unsaved text changes wake blame without invalidating repository discovery', async () => {
+	mock.timers.enable({ apis: ['setTimeout'] });
+	try {
+		using cursor = new Emitter<void>();
+		using content = new Emitter<void>();
+		const editor = { getModel: () => ({ uri: URI.file('/file.ts') }), onDidChangeCursorPosition: cursor.event, onDidChangeModelContent: content.event, onDidChangeModel: Event.None } as unknown as ICodeEditor;
+		const value = fixture('builtIn', undefined, undefined, editor);
+		using bridge = value.bridge; using notifications = value.notifications; using changes = value.configurationChanges;
+		const signal = new AbortController().signal;
+		let sequence = 0;
+		for (const event of [cursor, content]) {
+			const waiting = bridge.handle(source, 'git.repository', undefined, {}, sequence, signal, undefined, true);
+			await Promise.resolve(); await Promise.resolve();
+			event.fire(); event.fire();
+			mock.timers.tick(75);
+			const result = await waiting as { reset: boolean; sequence: number; events: JsonValue[]; };
+			assert.deepEqual(result.events, []);
+			assert.equal(result.reset, false);
+			assert.equal(result.sequence, ++sequence, 'One cursor revision per burst');
+		}
+		// A change arriving between requests must also wake the next subscription.
+		cursor.fire(); mock.timers.tick(75);
+		const replay = await bridge.handle(source, 'git.repository', undefined, {}, sequence, signal, undefined, true) as { sequence: number; };
+		assert.equal(replay.sequence, sequence + 1);
+	} finally { mock.timers.reset(); }
 });

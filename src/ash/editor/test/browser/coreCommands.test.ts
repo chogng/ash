@@ -22,7 +22,7 @@ import { type TextMeasurer } from '../../common/viewModel.js';
 const { TestView: View } = await import("./viewModel/testViewModel.js");
 const { installCoreTextEditorCommands } = await import("../../browser/coreCommands.js");
 const { KeyboardNavigationController } = await import('../../browser/view/viewController.js');
-await import('../../../../../extensions/code/browser/contrib/lineSelection/browser/lineSelection.js');
+await import('../../contrib/lineSelection/browser/lineSelection.js');
 const { CodeEditorWidget } = await import('../../browser/widget/codeEditor/codeEditorWidget.js');
 const { createTestCodeEditor } = await import('./testCodeEditor.js');
 const { SelectAllCommand } = await import('../../browser/editorExtensions.js');

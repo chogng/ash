@@ -477,7 +477,6 @@
     ]
   },
   "activationEvents": [
-    "onStartupFinished",
     "onLanguage:markdown"
   ]
 }

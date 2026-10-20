@@ -34,7 +34,7 @@ import { registerAction2 } from '../../../../../../platform/actions/common/actio
 import { resetNlsResolver, setNlsMessages } from '../../../../../../nls.js';
 import { productLanguagePackCatalogs } from '../../../../../services/localization/common/localizationCatalogs.js';
 const { createCodeEditorServices, createTestCodeEditor } = await import('../../../../../../editor/test/browser/testCodeEditor.js');
-const { IndentUsingSpaces } = await import('../../../../../../../../extensions/code/browser/contrib/indentation/browser/indentation.js');
+const { IndentUsingSpaces } = await import('../../../../../../editor/contrib/indentation/browser/indentation.js');
 await import('../../../../../../editor/editor.code.all.js');
 registerAction2(ChangeLanguageAction);
 registerAction2(ChangeEOLAction);

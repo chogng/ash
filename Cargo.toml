@@ -55,7 +55,6 @@ members = [
     "extensions/academic",
     "extensions/pdf-viewer",
     "extensions/reference-manager",
-    "extensions/code",
     "crates/utils/editor-client-build",
     "extensions/markdown-language-features",
     "extensions/markdown-math",

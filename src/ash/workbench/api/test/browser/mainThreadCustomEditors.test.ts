@@ -25,7 +25,7 @@ test('Rust custom editor resources stay within their enabled package and follow 
 		list: async () => ({ generation, diagnostics: [], extensions: enabled ? [{ id: 'test.rust', version: '1', sourceKind: 'builtIn' } as ExtensionDescriptor] : [] }),
 		resources: { readExtensionResourceBytes: async (request: unknown) => { reads.push(request); return new TextEncoder().encode('/* view */'); } },
 	} as unknown as IExtensionApi;
-	using adapter = new MainThreadCustomEditors(30000, { createInstance: (_ctor: unknown, value: CustomTextEditorProvider) => { provider = value; return {}; } } as unknown as IInstantiationService, {} as IExtensionHostApi, packages);
+	using adapter = new MainThreadCustomEditors(30000, { createInstance: (_ctor: unknown, value: CustomTextEditorProvider) => { provider = value; return {}; } } as unknown as IInstantiationService, {} as IExtensionHostApi, packages, { getExtensionPointContributions: () => [] } as unknown as import('../../../services/extensions/common/extensionService.js').IExtensionService);
 	using registration = adapter.registerCustomTextEditorProvider({ kind: 'customTextEditor', registrationId: 'test.rust.editor', viewType: 'test.rust.editor', displayName: 'Test', selectors: ['*.md'], priority: 'option' }, async () => ({ html: '<main></main>', resources: { script: path, style: 'media/view.css' } }), { id: 'test.rust', version: '1' });
 	await EditorPanes.getEditorPanes().find(pane => pane.id === 'test.rust.editor')!.create({});
 	const document = { uri: 'untitled:/view.md', version: 1, languageId: 'markdown', text: '', readOnly: false };
@@ -591,4 +591,48 @@ test('an interrupted Markdown diagnostic publication rebuilds dependencies from 
 	assert.equal(publications[0].merge, undefined);
 	assert.deepEqual(publications[0].entries.map((entry: any) => [entry.uri, entry.version]), documents.slice().reverse().map(document => [document.uri, document.version]));
 	assert.equal(publications[0].entries[0].diagnostics[0].code, 'link.no-such-header-in-file');
+});
+
+test('a restored custom editor activates on first render and survives dormant-to-ready publication', async () => {
+	let provider: CustomTextEditorProvider | undefined;
+	let starts = 0;
+	let calls = 0;
+	const declaration = { viewType: 'test.lazy.editor', displayName: 'Lazy editor', priority: 'option', selector: [{ filenamePattern: '*.md' }] };
+	const ready = normalizeExtensionHostSnapshot({ generation: 2, extensions: [{ id: 'test.lazy', version: '1', packageDigest: `sha256:${'a'.repeat(64)}`, runtimeApiVersion: 1, activationGeneration: 1, incarnation: 7, lifecycle: 'ready', failure: null, stderr: '', outputEvents: [], registrations: [{ kind: 'customTextEditor', registrationId: 'actual-view', viewType: declaration.viewType, displayName: declaration.displayName, selectors: ['*.md'], priority: 'option' }] }] });
+	const dormant = { ...ready, generation: 1, extensions: ready.extensions.map(runtime => ({ ...runtime, lifecycle: 'dormant' as const, incarnation: undefined, registrations: [], activation: { events: [`onCapability:customEditor:${declaration.viewType}`], commands: [] } })) };
+	const packages = { list: async () => ({ generation: 1, extensions: [], diagnostics: [] }) } as unknown as IExtensionApi;
+	const host = {
+		activateByEvent: async (request: Parameters<IExtensionHostApi['activateByEvent']>[0]) => {
+			starts++;
+			assert.deepEqual(request.event, { type: 'capability', capability: 'customEditor:test.lazy.editor' });
+			adapter.update({ ...dormant, extensions: dormant.extensions.map(runtime => ({ ...runtime, lifecycle: 'starting' as const })) });
+			adapter.update(ready);
+			return ready;
+		},
+		invoke: async (request: Parameters<IExtensionHostApi['invoke']>[0]) => {
+			calls++;
+			assert.equal(request.incarnation, 7);
+			assert.equal(request.registrationId, 'actual-view');
+			return { html: '<main>restored unsaved document</main>' };
+		},
+	} as unknown as IExtensionHostApi;
+	using adapter = new MainThreadCustomEditors(30_000,
+		{ createInstance: (_ctor: unknown, value: CustomTextEditorProvider) => { provider = value; return {}; } } as unknown as IInstantiationService,
+		host, packages,
+		{ getExtensionPointContributions: () => [{ description: { id: 'test.lazy' }, value: [declaration] }] } as unknown as import('../../../services/extensions/common/extensionService.js').IExtensionService);
+	adapter.update(dormant);
+	assert.equal(starts, 0);
+	const descriptor = EditorPanes.getEditorPanes().find(pane => pane.id === declaration.viewType)!;
+	assert.ok(descriptor, 'Restoration discovers the declared view before a process exists');
+	await descriptor.create({});
+	const document = { uri: 'untitled:/draft.md', version: 3, languageId: 'markdown', text: 'unsaved', readOnly: false };
+	const signal = new AbortController().signal;
+	assert.equal((await provider!.render(document, signal)).html, '<main>restored unsaved document</main>');
+	assert.strictEqual(EditorPanes.getEditorPanes().find(pane => pane.id === declaration.viewType), descriptor);
+	await provider!.render(document, signal);
+	assert.equal(starts, 1);
+	assert.equal(calls, 2);
+	adapter.clear();
+	await assert.rejects(provider!.render(document, signal));
+	assert.equal(calls, 2, 'A retired declaration cannot reactivate the provider');
 });

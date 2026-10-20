@@ -9,7 +9,7 @@ import { InstantiationService } from '../../../../../platform/instantiation/comm
 import type { ICodeEditor, IContentWidget } from '../../../../browser/editorBrowser.js';
 import { Position } from '../../../../common/core/position.js';
 
-const { InlineProgressManager } = await import('../../../../../../../extensions/code/browser/contrib/inlineProgress/browser/inlineProgress.js');
+const { InlineProgressManager } = await import('../../browser/inlineProgress.js');
 
 
 test('InlineProgressManager delays, positions, cancels, and releases its widget', async () => {

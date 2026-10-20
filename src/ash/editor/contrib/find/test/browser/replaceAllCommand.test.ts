@@ -7,7 +7,7 @@ import { Position } from '../../../../common/core/position.js';
 import { TextModel } from '../../../../common/model/textModel.js';
 import { findTextMatches } from '../../../../common/model/textModelSearch.js';
 import { createTestCursorsController } from '../../../../test/common/testCursorConfiguration.js';
-import { ReplaceAllCommand } from '../../../../../../../extensions/code/browser/contrib/find/browser/replaceAllCommand.js';
+import { ReplaceAllCommand } from '../../browser/replaceAllCommand.js';
 
 test('replace all preserves the editor selection and undoes as one edit', () => {
 	using model = new TextModel('a a a');

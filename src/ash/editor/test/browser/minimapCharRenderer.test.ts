@@ -2,8 +2,8 @@ import { registerTestCodeEditorFeatures } from '../../../../../test/fixtures/cod
 import { after as afterCodeFeatures } from 'mocha';
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
-import { MinimapCharRendererFactory } from '../../../../../extensions/code/browser/viewParts/minimap/minimapCharRendererFactory.js';
-import { Constants, getCharIndex } from '../../../../../extensions/code/browser/viewParts/minimap/minimapCharSheet.js';
+import { MinimapCharRendererFactory } from '../../browser/viewParts/minimap/minimapCharRendererFactory.js';
+import { Constants, getCharIndex } from '../../browser/viewParts/minimap/minimapCharSheet.js';
 import { RGBA8 } from '../../common/core/misc/rgba.js';
 
 test('Minimap character renderer downsamples one glyph sheet into deterministic pixels', () => {

@@ -7,7 +7,7 @@ import { CancellationToken } from '../../../../../base/common/cancellation.js';
 import { TestLanguageFeaturesService } from '../../../../test/common/testLanguageFeaturesService.js';
 import { TextModel } from '../../../../common/model/textModel.js';
 import { type DocumentFormattingEditProvider } from '../../../../common/languages.js';
-import { FormattingConflicts, FormattingKind, FormattingMode, getRealAndSyntheticDocumentFormattersOrdered } from '../../../../../../../extensions/code/browser/contrib/format/browser/format.js';
+import { FormattingConflicts, FormattingKind, FormattingMode, getRealAndSyntheticDocumentFormattersOrdered } from '../../browser/format.js';
 
 const options = { tabSize: 4, insertSpaces: true };
 

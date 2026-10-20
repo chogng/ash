@@ -5,7 +5,7 @@ import { test } from 'mocha';
 import { Color, RGBA } from '../../../../../base/common/color.js';
 import { Position } from '../../../../common/core/position.js';
 import { Range } from '../../../../common/core/range.js';
-import { ColorPickerModel } from '../../../../../../../extensions/code/browser/contrib/colorPicker/browser/colorPickerModel.js';
+import { ColorPickerModel } from '../../browser/colorPickerModel.js';
 
 test('selecting a document presentation flushes only the final selection', () => {
 	using model = new ColorPickerModel(Color.white, [{ label: 'rgb' }, { label: 'hsl' }, { label: 'hex' }], 0);

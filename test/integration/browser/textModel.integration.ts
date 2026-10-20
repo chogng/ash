@@ -1,6 +1,4 @@
 import { IWebWorkerService } from '../../../src/ash/platform/webWorker/browser/webWorkerService.js';
-import { registerTestCodeEditorFeatures } from '../../fixtures/codeEditorFeatures.js';
-const codeFeatures = registerTestCodeEditorFeatures();
 import { WebWorkerService } from '../../../src/ash/platform/webWorker/browser/webWorkerServiceImpl.js';
 import { TreeSitterLibraryService, TreeSitterSyntaxProviders, createTreeSitterSyntaxSession } from '../../../src/ash/workbench/services/treeSitter/browser/treeSitterLibraryService.js';
 import { rustSyntaxFixture } from './rustSyntaxHostFixture.js';
@@ -70,7 +68,7 @@ import { registerCodeEditorServices } from '../../../src/ash/editor/test/browser
 import { IKeybindingService } from '../../../src/ash/platform/keybinding/common/keybinding.js';
 import { IQuickInputService } from '../../../src/ash/platform/quickinput/common/quickInput.js';
 import { TestQuickInputService } from '../../../src/ash/platform/quickinput/test/browser/testQuickInputService.js';
-import { ZoneWidget } from '../../../extensions/code/browser/contrib/zoneWidget/browser/zoneWidget.js';
+import { ZoneWidget } from '../../../src/ash/editor/contrib/zoneWidget/browser/zoneWidget.js';
 import { setIconResolver } from '../../../src/ash/base/browser/ui/lxicons/lxicon.js';
 import { getIconDefinition } from '../../../src/ash/platform/theme/common/iconRegistry.js';
 

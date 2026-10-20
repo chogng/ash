@@ -6,9 +6,9 @@ import { Position } from '../../../../common/core/position.js';
 import { Selection } from '../../../../common/core/selection.js';
 import { createTestLanguageConfigurationService } from '../../../../test/common/modes/testLanguageConfigurationService.js';
 import { TextModel } from '../../../../common/model/textModel.js';
-import { IndentationToSpacesCommand, IndentationToTabsCommand } from '../../../../../../../extensions/code/browser/contrib/indentation/browser/indentation.js';
-import { getReindentEditOperations } from '../../../../../../../extensions/code/browser/contrib/indentation/common/indentation.js';
-import { generateIndent, getSpaceCnt } from '../../../../../../../extensions/code/browser/contrib/indentation/common/indentUtils.js';
+import { IndentationToSpacesCommand, IndentationToTabsCommand } from '../../browser/indentation.js';
+import { getReindentEditOperations } from '../../common/indentation.js';
+import { generateIndent, getSpaceCnt } from '../../common/indentUtils.js';
 import { createTestCursorsController } from '../../../../test/common/testCursorConfiguration.js';
 
 test('indent utilities validate widths and generate compact indentation', () => {

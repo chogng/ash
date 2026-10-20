@@ -217,7 +217,7 @@ test('Tree-sitter publishes newly visible rows once so view token caches refresh
 // Exercise the Worker boundary against real grammars, not a second fake parser.
 import { TreeSitterWorker } from '../../common/services/treeSitter/treeSitterWorker.js';
 import { getLanguageFoldingRules } from '../../../platform/language/common/languageFolding.generated.js';
-import { TreeSitterSyntaxTokenBackend } from '../../../../../extensions/code/browser/model/tokens/treeSitter/treeSitterSyntaxTokenBackend.js';
+import { TreeSitterSyntaxTokenBackend } from '../../common/model/tokens/treeSitter/treeSitterSyntaxTokenBackend.js';
 
 test('a changed viewport preempts structure work without rejecting its shared consumers', async () => {
 	using model = new TextModel('function first() {}\nfunction second() {}');

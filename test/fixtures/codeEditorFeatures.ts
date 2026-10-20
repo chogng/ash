@@ -1,7 +1,7 @@
-import { getEditorFeatures } from '../../extensions/code/browser/editor.js';
+import { getEditorFeatures } from '../../src/ash/editor/browser/editorFeatures.js';
 import { EditorExtensionsRegistry } from '../../src/ash/editor/browser/editorExtensions.js';
 
-/** Isolated editor fixtures explicitly opt in to the same package declarations used by the live bridge. */
+/** Isolated editor fixtures select the same client-owned features installed by product bootstrap. */
 export function registerTestCodeEditorFeatures(contributionIds?: readonly string[]) {
     const features = getEditorFeatures();
     return EditorExtensionsRegistry.registerEditorFeatures(contributionIds ? {

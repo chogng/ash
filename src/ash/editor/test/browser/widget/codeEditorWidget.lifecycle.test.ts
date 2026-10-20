@@ -34,10 +34,10 @@ const { createTestCodeEditor } = await import('../testCodeEditor.js');
 const { EditorContributionInstantiation } = await import('../../../browser/editorExtensions.js');
 const { InstantiationService } = await import("../../../../platform/instantiation/common/instantiationService.js");
 const { ILogService, NullLoggerService } = await import('../../../../platform/log/common/log.js');
-const { PlaceholderTextContribution } = await import("../../../../../../extensions/code/browser/contrib/placeholderText/placeholderTextContribution.js");
+const { PlaceholderTextContribution } = await import("../../../contrib/placeholderText/browser/placeholderTextContribution.js");
 const { VersionedEditorWorkerClient } = await import('../../../browser/services/editorWorkerService.js');
 const { EditorWorker } = await import('../../../common/services/editorWebWorker.js');
-await import('../../../../../../extensions/code/browser/contrib/inPlaceReplace/browser/inPlaceReplace.js');
+await import('../../../contrib/inPlaceReplace/browser/inPlaceReplace.js');
 
 const enabledAccessibilityService: IAccessibilityService = {
 	onDidChangeScreenReaderOptimized: EditorEvent.None,
@@ -483,7 +483,7 @@ test('CodeEditorWidget injects scoped services into contributions and releases t
 });
 
 test('Suggest registration follows editor enablement and model disposal', async () => {
-	const { SuggestController } = await import('../../../../../../extensions/code/browser/contrib/suggest/browser/suggestController.js');
+	const { SuggestController } = await import('../../../contrib/suggest/browser/suggestController.js');
 	assert.equal(SuggestController.ID, 'editor.contrib.suggestController');
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
 	using cleanup = { [Symbol.dispose]: () => dom.window.close() };
@@ -531,8 +531,8 @@ test('content events follow the attached model and retain edit, undo, redo, and 
 
 test('Contribution selection distinguishes defaults, an empty list, and an explicit subset', async () => {
 	const { EditorExtensionsRegistry } = await import('../../../browser/editorExtensions.js');
-	const { FindController, FindStartFocusAction } = await import('../../../../../../extensions/code/browser/contrib/find/browser/findController.js');
-	await import('../../../../../../extensions/code/browser/contrib/find/browser/findController.js');
+	const { FindController, FindStartFocusAction } = await import('../../../contrib/find/browser/findController.js');
+	await import('../../../contrib/find/browser/findController.js');
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	using model = new TextModel('alpha');
@@ -579,7 +579,7 @@ test('Contribution selection distinguishes defaults, an empty list, and an expli
 
 test('Disabled and configuration-only contributions do not expose placeholder instances', async () => {
 	const { EditorExtensionsRegistry } = await import('../../../browser/editorExtensions.js');
-	await import('../../../../../../extensions/code/browser/contrib/unicodeHighlighter/browser/unicodeHighlighter.contribution.js');
+	await import('../../../contrib/unicodeHighlighter/browser/unicodeHighlighter.contribution.js');
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	using model = new TextModel('alpha');

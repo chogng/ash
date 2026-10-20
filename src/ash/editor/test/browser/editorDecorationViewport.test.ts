@@ -7,7 +7,7 @@ import assert from "node:assert/strict";
 import { test } from "mocha";
 import { JSDOM } from "jsdom";
 import { TextDecorationCollection } from "../../common/model/decorationCollection.js";
-import { LanguageDiagnosticDecorationBridge } from "../../../../../extensions/code/browser/contrib/gotoError/common/diagnosticDecorations.js";
+import { LanguageDiagnosticDecorationBridge } from "../../contrib/gotoError/common/diagnosticDecorations.js";
 import { LanguageResultAcceptance, createLanguageDiagnosticStore } from '../../common/model/languageResultStore.js';
 import { LanguageDiagnosticSeverity } from '../../common/languages.js';
 import { Position } from "../../common/core/position.js";

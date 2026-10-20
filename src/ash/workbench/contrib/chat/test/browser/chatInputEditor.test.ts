@@ -399,7 +399,7 @@ function requiredElement<T extends Element = HTMLElement>(root: ParentNode, sele
 }
 
 // Embedded editors exercise the same admitted feature batch as the product host.
-const { getEditorFeatures } = await import('../../../../../../../extensions/code/browser/editor.js');
+const { getEditorFeatures } = await import('../../../../../editor/browser/editorFeatures.js');
 const { EditorExtensionsRegistry } = await import('../../../../../editor/browser/editorExtensions.js');
 let editorFeatures: import('../../../../../base/common/lifecycle.js').IDisposable;
 setup(() => { editorFeatures = EditorExtensionsRegistry.registerEditorFeatures(getEditorFeatures()); });

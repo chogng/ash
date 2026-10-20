@@ -33,7 +33,7 @@
     }
   },
   "activationEvents": [
-    "*"
+    "onDemand:dataChannel"
   ],
   "type": "module",
   "dependencies": {

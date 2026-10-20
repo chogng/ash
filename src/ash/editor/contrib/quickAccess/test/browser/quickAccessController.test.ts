@@ -13,7 +13,7 @@ import { h } from "../../../../../base/browser/dom.js";
 import { type TextMeasurer } from '../../../../common/viewModel.js';
 
 const { TestView: View } = await import("../../../../test/browser/viewModel/testViewModel.js");
-const { GotoLineController, isStanzaGotoLineChord } = await import("../../../../../../../extensions/code/browser/contrib/quickAccess/browser/quickAccessController.js");
+const { GotoLineController, isStanzaGotoLineChord } = await import("../../browser/quickAccessController.js");
 
 test("Go to Line previews locally, accepts a line and column, and cancels without changing selections", () => {
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");

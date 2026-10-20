@@ -251,7 +251,7 @@ fn markdown_product_registration_owns_views_and_obeys_profile_policy() {
     assert!(markdown.credential_providers.is_empty());
     let activation = markdown.activation.as_ref().unwrap();
     assert!(activation.matches(&super::source::ActivationEvent::Language("markdown".into())));
-    assert!(activation.matches(&super::source::ActivationEvent::StartupFinished));
+    assert!(!activation.matches(&super::source::ActivationEvent::StartupFinished));
     for (command, _) in &activation.commands {
         assert!(activation.matches(&super::source::ActivationEvent::Command(command.clone())));
     }
@@ -267,27 +267,7 @@ fn markdown_product_registration_owns_views_and_obeys_profile_policy() {
         Some("ash.markdown-math")
     );
     assert!(deployments.iter().all(|entry| entry.id != "ash.academic"));
-    let code = deployments
-        .iter()
-        .find(|entry| entry.id == "ash.code")
-        .unwrap();
-    assert_eq!(
-        code.params.capabilities,
-        [ash_external_ext::ExtensionCapability::DataChannel]
-    );
-    assert!(matches!(
-        code.workspace_read,
-        super::source::WorkspaceReadAccess::Denied
-    ));
-    assert!(code.backend_channels.is_empty());
-    assert!(code.credential_providers.is_empty());
-    assert!(!code.authority.authorizes());
-    assert!(
-        code.activation
-            .as_ref()
-            .unwrap()
-            .matches(&super::source::ActivationEvent::StartupFinished)
-    );
+    assert!(deployments.iter().all(|entry| entry.id != "ash.code"));
     let math = deployments
         .iter()
         .find(|entry| entry.id == "ash.markdown-math")
@@ -302,10 +282,6 @@ fn markdown_product_registration_owns_views_and_obeys_profile_policy() {
     assert!(math.backend_channels.is_empty());
     assert!(!math.authority.authorizes());
     for (deployment, manifest) in [
-        (
-            code,
-            include_str!("../../../../extensions/code/package.json"),
-        ),
         (
             markdown,
             include_str!("../../../../extensions/markdown-language-features/package.json"),
@@ -979,9 +955,21 @@ fn product_ssh_is_available_without_a_directory_and_is_rebound_after_unbind() {
         .find(|extension| extension.id == "ash.remote-ssh")
         .unwrap();
     assert_eq!(
-        initial_ssh.failure.as_ref().unwrap().code,
-        ExtensionHostFailureKind::CrashLoop
+        initial_ssh.lifecycle,
+        super::projection::ExtensionHostLifecycle::Dormant
     );
+    assert!(initial_ssh.incarnation.is_none());
+    assert_eq!(launcher.0.0.load(Ordering::SeqCst), 0);
+    runtime
+        .activate_by_event(
+            1,
+            "ash.remote-ssh",
+            initial_ssh.activation_generation,
+            super::source::ActivationEvent::ResolveAuthority("ssh".into()),
+            None,
+            Err(test_files_unavailable()),
+        )
+        .unwrap();
     let attempts = RestartPolicy::default().maximum_restarts + 1;
     assert_eq!(launcher.0.0.load(Ordering::SeqCst), attempts);
     let directory = tempfile::tempdir().unwrap();
@@ -1001,7 +989,11 @@ fn product_ssh_is_available_without_a_directory_and_is_rebound_after_unbind() {
         .find(|extension| extension.id == "ash.remote-ssh")
         .unwrap();
     assert!(after_ssh.activation_generation > initial_ssh.activation_generation);
-    assert_eq!(launcher.0.0.load(Ordering::SeqCst), 3 * attempts);
+    assert_eq!(
+        after_ssh.lifecycle,
+        super::projection::ExtensionHostLifecycle::Dormant
+    );
+    assert_eq!(launcher.0.0.load(Ordering::SeqCst), attempts);
 }
 
 #[test]

@@ -117,7 +117,6 @@ class PackageTests(unittest.TestCase):
                 "ash-code-mode-host",
                 "ash-git-extension",
                 "ash-markdown-math",
-                "ash-code-editor",
                 "ash-markdown-language-features",
                 "ash-github-authentication",
                 "ash-github-extension",
@@ -306,7 +305,6 @@ class PackageTests(unittest.TestCase):
         "bat",
         "bazel",
         "clojure",
-        "code",
         "coffeescript",
         "cpp",
         "csharp",
@@ -462,9 +460,6 @@ class PackageTests(unittest.TestCase):
                 markdown_math_binary=executable_file(
                     root / "math-extension", b"math-extension"
                 ),
-                code_editor_extension_binary=executable_file(
-                    root / "code-editor", b"code-editor-extension"
-                ),
                 markdown_extension_binary=executable_file(
                     root / "markdown-language-features", b"markdown-extension"
                 ),
@@ -616,10 +611,6 @@ class PackageTests(unittest.TestCase):
             self.assertFalse((git_extension / "Cargo.toml").exists())
             self.assertEqual(
                 b"git-extension", (output / "bin" / "ash-git-extension").read_bytes()
-            )
-            self.assertEqual(
-                b"code-editor-extension",
-                (output / "bin" / "ash-code-editor").read_bytes(),
             )
             self.assertFalse((output / "bin/ash-academy").exists())
             self.assertFalse((output / "bin/ash-pdf-viewer").exists())
@@ -813,9 +804,6 @@ class PackageTests(unittest.TestCase):
                 protocol_metadata=generated_protocol,
                 markdown_math_binary=executable_file(
                     root / "math-extension", b"math-extension"
-                ),
-                code_editor_extension_binary=executable_file(
-                    root / "code-editor", b"code-editor-extension"
                 ),
                 markdown_extension_binary=executable_file(
                     root / "markdown-language-features", b"markdown-extension"
@@ -1136,9 +1124,6 @@ class PackageTests(unittest.TestCase):
                 markdown_math_binary=executable_file(
                     root / "math-extension", b"math-extension"
                 ),
-                code_editor_extension_binary=executable_file(
-                    root / "code-editor", b"code-editor-extension"
-                ),
                 markdown_extension_binary=executable_file(
                     root / "markdown-language-features", b"markdown-extension"
                 ),
@@ -1234,9 +1219,6 @@ class PackageTests(unittest.TestCase):
                 ),
                 markdown_math_binary=executable_file(
                     root / "math-extension", b"math-extension"
-                ),
-                code_editor_extension_binary=executable_file(
-                    root / "code-editor", b"code-editor-extension"
                 ),
                 markdown_extension_binary=executable_file(
                     root / "markdown-language-features", b"markdown-extension"

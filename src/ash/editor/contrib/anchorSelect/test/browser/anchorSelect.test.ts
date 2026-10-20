@@ -18,7 +18,7 @@ import { createTestCursorsController } from '../../../../test/common/testCursorC
 import { type TextMeasurer } from '../../../../common/viewModel.js';
 
 const { TestView: View } = await import('../../../../test/browser/viewModel/testViewModel.js');
-const { SelectionAnchorController } = await import('../../../../../../../extensions/code/browser/contrib/anchorSelect/browser/anchorSelect.js');
+const { SelectionAnchorController } = await import('../../browser/anchorSelect.js');
 
 test('Selection anchor follows edits and supports set, go to, select, and cancel', async () => {
 	const fixture = createFixture('abcd');

@@ -5,8 +5,8 @@ import { browserEnvironment } from '../../../../test/browser/testEditorDom.js';
 import assert from "node:assert/strict";
 import { test } from "mocha";
 import { JSDOM } from "jsdom";
-import { SuggestModel } from "../../../../../../../extensions/code/browser/contrib/suggest/browser/suggestModel.js";
-import { LanguageCompletionService } from '../../../../../../../extensions/code/browser/contrib/suggest/browser/suggest.js';
+import { SuggestModel } from "../../browser/suggestModel.js";
+import { LanguageCompletionService } from '../../browser/suggest.js';
 import { LanguageCompletionProviderRegistry } from '../../../../common/languageFeatureRegistry.js';
 import { LanguageCompletionTriggerKind, type LanguageCompletionProvider, type LanguageCompletionProviderRequest, type LanguageCompletionProviderResult, LanguageCompletionItemKind } from '../../../../common/languages.js';
 
@@ -14,7 +14,7 @@ import { Position } from "../../../../common/core/position.js";
 import { Range } from "../../../../common/core/range.js";
 import { TextModel } from "../../../../common/model/textModel.js";
 import { LanguageService } from '../../../../common/services/languageService.js';
-import { SuggestController } from "../../../../../../../extensions/code/browser/contrib/suggest/browser/suggestController.js";
+import { SuggestController } from "../../browser/suggestController.js";
 
 const { createTestCodeEditor } = await import("../../../../test/browser/testCodeEditor.js");
 const { ViewController } = await import('../../../../browser/view/viewController.js');

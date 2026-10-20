@@ -1,6 +1,5 @@
 {
   "ash": {
-    "extensions.clientEditor.moduleUnavailable": "此版本的 Ash 无法提供该编辑器组件。",
     "extensions.clientEditor.versionMismatch": "编辑器组件与扩展的版本不匹配。",
     "extensions.clientEditor.packageUnavailable": "编辑器扩展包不可用。",
     "extensions.clientEditor.packageRetired": "编辑器扩展包已失效。",

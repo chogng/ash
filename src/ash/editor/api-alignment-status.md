@@ -1,6 +1,6 @@
 # Editor API 对齐状态
 
-2026-10-19 所有权迁移：既有 Code contrib／资源及 token、bracket、guide、diagnostic 实现已迁入 `extensions/code`，Academy 既有富文档实现位于 `extensions/academic`。两者均经独立 Rust Provider、公共 SDK 与共享客户端桥装配；基础入口只装配纯文本原语。下文的历史 API 对齐结论不代表这些实现仍由内核静态装配，原有测试目录保留。
+2026-10-20 所有权修正：通用 Code contrib、模型分析、语言编辑策略及视图实现归 `src/ash/editor`，由客户端入口直接装配，不依赖 Rust Provider。Academy 富文档实现仍位于 `extensions/academic`，通过独立扩展接入；基础文本、版本、撤销、dirty 与保存的 owner 保持不变。下文历史验证结果不代表本次迁移已经重新验收。
 
 ## 2026-10-19：Academy 能力迁移
 

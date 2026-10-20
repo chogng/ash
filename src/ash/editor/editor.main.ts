@@ -1,5 +1,5 @@
-// Plain-text Stanza entrypoint with standalone host controls. Optional editor behavior is provider-owned.
-import "./editor.all.js";
+// Full standalone text editor with client-owned editing features.
+import "./editor.code.all.js";
 import './standalone/browser/iPadShowKeyboard/iPadShowKeyboard.js';
 import './standalone/browser/inspectTokens/inspectTokens.js';
 import './standalone/browser/quickAccess/standaloneGotoLineQuickAccess.js';

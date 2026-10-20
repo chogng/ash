@@ -2,7 +2,7 @@ import { registerTestCodeEditorFeatures } from '../../../../../../../test/fixtur
 import { after as afterCodeFeatures } from 'mocha';
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
-import { ReplacePattern, ReplacePiece, parseReplaceString } from '../../../../../../../extensions/code/browser/contrib/find/browser/replacePattern.js';
+import { ReplacePattern, ReplacePiece, parseReplaceString } from '../../browser/replacePattern.js';
 
 test('replacement parser keeps literal escapes and captures distinct', () => {
 	assert.deepEqual(parseReplaceString('a$$b\\n$1'), new ReplacePattern([

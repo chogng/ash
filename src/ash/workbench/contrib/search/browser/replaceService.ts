@@ -4,7 +4,7 @@ import { extUri } from '../../../../base/common/resources.js';
 import type { IContentSearchQuery } from '../../../../platform/search/common/search.js';
 import { IBulkEditService, WorkspaceEditConflictError } from '../../../../editor/browser/services/bulkEditService.js';
 import type { LanguageTextDocumentEdit } from '../../../../editor/common/languages.js';
-import { parseReplaceString, ReplacePattern } from '../../../../../../extensions/code/browser/contrib/find/browser/replacePattern.js';
+import { parseReplaceString, ReplacePattern } from '../../../../editor/contrib/find/browser/replacePattern.js';
 import { ITextModelResourceService, type TextModelReference } from '../../../services/textmodelResolver/common/textModelResourceService.js';
 import { IWorkingCopyService } from '../../../services/workingCopy/common/workingCopyService.js';
 import { localize } from '../../../../nls.js';

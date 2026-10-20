@@ -6,7 +6,7 @@ import { Emitter, type Event } from "../../../base/common/event.js";
 import { Disposable, DisposableStore, toDisposable } from "../../../base/common/lifecycle.js";
 import { createLanguageCompletionInvokeContext, type LanguageCompletionRequest, LanguageCompletionItemKind, LANGUAGE_COMPLETION_LANE, type LanguageCompletionWorker } from '../../common/languages.js';
 import { LanguageCompletionProviderRegistry } from '../../common/languageFeatureRegistry.js';
-import { LanguageCompletionProviderWorker, LanguageCompletionService } from '../../../../../extensions/code/browser/contrib/suggest/browser/suggest.js';
+import { LanguageCompletionProviderWorker, LanguageCompletionService } from '../../contrib/suggest/browser/suggest.js';
 import { languageCompletionWireCodec, createLanguageWordCompletionProvider } from '../../common/services/editorWebWorker.js';
 import { LanguageRequestStatus, type LanguageWorkerRequest } from '../../common/model/languageRequestCoordinator.js';
 import { Position } from "../../common/core/position.js";

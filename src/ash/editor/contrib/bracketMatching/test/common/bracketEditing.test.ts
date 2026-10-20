@@ -3,7 +3,7 @@ import { after as afterCodeFeatures } from 'mocha';
 import { registerTestTokens } from '../../../../test/common/testTokenization.js';
 import assert from "node:assert/strict";
 import { test } from "mocha";
-import { createRemoveMatchingBracketsCommand } from "../../../../../../../extensions/code/browser/contrib/bracketMatching/common/bracketEditing.js";
+import { createRemoveMatchingBracketsCommand } from "../../common/bracketEditing.js";
 import { TestLanguageConfigurationService } from '../../../../test/common/modes/testLanguageConfigurationService.js';
 import { Selection } from "../../../../common/core/selection.js";
 import { Position } from "../../../../common/core/position.js";

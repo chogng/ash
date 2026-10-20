@@ -1,3 +1,4 @@
+import { IExtensionService } from '../../../src/ash/workbench/services/extensions/common/extensionService.js';
 import { DisposableStore, toDisposable } from '../../../src/ash/base/common/lifecycle.js';
 import { Emitter, Event } from '../../../src/ash/base/common/event.js';
 import { URI } from '../../../src/ash/base/common/uri.js';
@@ -50,6 +51,7 @@ const packages: IExtensionApi = {
 	list: async mode => { const catalog = await fixture.list(mode); return { ...catalog, extensions: catalog.extensions.filter(extension => extension.id === 'ash.markdown-language-features') }; },
 };
 services.registerInstance(IExtensionApi, packages);
+services.registerInstance(IExtensionService, { getExtensionPointContributions: () => [] } as unknown as IExtensionService);
 const host = {
 	...createDisconnectedExtensionHostApi(operation => { throw new Error(`Unexpected backend call ${operation}`); }),
 	async reconcile() {

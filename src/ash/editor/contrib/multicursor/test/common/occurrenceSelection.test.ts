@@ -2,7 +2,7 @@ import { registerTestCodeEditorFeatures } from '../../../../../../../test/fixtur
 import { after as afterCodeFeatures } from 'mocha';
 import assert from "node:assert/strict";
 import { test } from "mocha";
-import { addOccurrenceSelection, EditorOccurrenceDirection, selectAllOccurrences } from "../../../../../../../extensions/code/browser/contrib/multicursor/common/occurrenceSelection.js";
+import { addOccurrenceSelection, EditorOccurrenceDirection, selectAllOccurrences } from "../../common/occurrenceSelection.js";
 import { Selection } from "../../../../common/core/selection.js";
 import { Position } from "../../../../common/core/position.js";
 import { TextModel } from "../../../../common/model/textModel.js";

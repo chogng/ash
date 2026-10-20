@@ -32,7 +32,7 @@ const installedGlobals = installEditorTestDom(environment, [
 
 const { CodeEditorWidget } = await import('../../../../browser/widget/codeEditor/codeEditorWidget.js');
 const { createTestCodeEditor } = await import('../../../../test/browser/testCodeEditor.js');
-const { CopyAction, CutAction, PasteAction } = await import('../../../../../../../extensions/code/browser/contrib/clipboard/browser/clipboard.js');
+const { CopyAction, CutAction, PasteAction } = await import('../../browser/clipboard.js');
 assert.ok(CopyAction);
 assert.ok(CutAction);
 assert.ok(PasteAction);

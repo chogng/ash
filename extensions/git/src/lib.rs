@@ -66,17 +66,11 @@ impl Extension for GitExtension {
             terminal_edits: Mutex::new(BTreeMap::new()),
             stopped: AtomicBool::new(false),
         });
-        let broker = interaction::Broker::start(Arc::downgrade(&runtime))
-            .map_err(|_| invalid("Git interaction broker could not start"))?;
-        *runtime
+        runtime
             .api
             .interaction
-            .lock()
-            .map_err(|_| invalid("Git broker failed"))? = Some(broker.connection.clone());
-        *runtime
-            .broker
-            .lock()
-            .map_err(|_| invalid("Git broker failed"))? = Some(broker);
+            .set(Arc::downgrade(&runtime))
+            .map_err(|_| invalid("Git interaction owner already exists"))?;
         let terminal = Arc::clone(&runtime);
         context
             .terminal
@@ -325,6 +319,21 @@ impl GitRuntime {
             .is_some_and(|sequence| sequence < after)
         {
             return Ok(());
+        }
+        // Editor-only changes and long-poll renewals do not invalidate discovery or settings.
+        // The monitor still updates blame after this returns, using lightweight editor metadata.
+        {
+            let mut state = self.lock();
+            if facts["reset"] != true
+                && matches!(facts["connection"].as_str(), Some("ready" | "connected"))
+                && facts["events"].as_array().is_some_and(Vec::is_empty)
+                && state.discovery_signature.as_ref().is_some_and(|signature| {
+                    signature[0] == facts["generation"] && signature[1] == facts["folders"]
+                })
+            {
+                state.sequence = facts["sequence"].as_u64().unwrap_or(after);
+                return Ok(());
+            }
         }
         // A status notification already contains the backend owner's complete snapshot.
         // Keep configuration/discovery changes on the full path; ordinary file changes

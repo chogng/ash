@@ -3,7 +3,7 @@ import { after as afterCodeFeatures } from 'mocha';
 import { strict as assert } from "node:assert";
 import { test } from "mocha";
 import { TextDecorationChangeReason } from "../../../../common/model/decorationCollection.js";
-import { LanguageDiagnosticDecorationBridge } from "../../../../../../../extensions/code/browser/contrib/gotoError/common/diagnosticDecorations.js";
+import { LanguageDiagnosticDecorationBridge } from "../../common/diagnosticDecorations.js";
 import { LanguageResultAcceptance, createLanguageDiagnosticStore } from '../../../../common/model/languageResultStore.js';
 import { LanguageDiagnosticSeverity, type LanguageDiagnostic } from '../../../../common/languages.js';
 import { Position } from "../../../../common/core/position.js";

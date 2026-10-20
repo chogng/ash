@@ -1,5 +1,3 @@
-import { registerTestCodeEditorFeatures } from '../../fixtures/codeEditorFeatures.js';
-const codeFeatures = registerTestCodeEditorFeatures();
 import { WebWorkerService } from '../../../src/ash/platform/webWorker/browser/webWorkerServiceImpl.js';
 import { rustSyntaxFixture, disconnectRustSyntaxFixture, reconnectRustSyntaxFixture } from './rustSyntaxHostFixture.js';
 import { createDisconnectedSyntaxApi } from '../../../src/ash/platform/syntax/browser/syntaxApi.js';

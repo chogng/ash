@@ -6,9 +6,9 @@ import { Disposable } from '../../../base/common/lifecycle.js';
 import { EditorContributionInstantiation, EditorExtensionsRegistry } from '../../browser/editorExtensions.js';
 import { TriggerInlineEditCommandsRegistry } from '../../browser/triggerInlineEditCommandsRegistry.js';
 
-await import('../../editor.code.all.js');
+await import('../../editor.all.js');
 const unadmittedBaseline = EditorExtensionsRegistry.getEditorContributions();
-const { getEditorFeatures } = await import('../../../../../extensions/code/browser/editor.js');
+const { getEditorFeatures } = await import('../../browser/editorFeatures.js');
 
 suite('Admitted editor contribution batches', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();

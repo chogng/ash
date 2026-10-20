@@ -26,8 +26,10 @@ interface ILifecycleWindow {
 	isDestroyed(): boolean;
 	close(): void;
 	readonly webContents: {
-		on(event: 'did-start-loading' | 'render-process-gone', listener: () => void): unknown;
-		off(event: 'did-start-loading' | 'render-process-gone', listener: () => void): unknown;
+		on(event: 'render-process-gone', listener: () => void): unknown;
+		on(event: 'did-start-navigation', listener: (event: unknown, url: string, inPlace: boolean, mainFrame: boolean) => void): unknown;
+		off(event: 'render-process-gone', listener: () => void): unknown;
+		off(event: 'did-start-navigation', listener: (event: unknown, url: string, inPlace: boolean, mainFrame: boolean) => void): unknown;
 		send(channel: string, token: number): void;
 	};
 }
@@ -122,15 +124,19 @@ export class LifecycleMainService<TWindow extends ILifecycleWindow> extends Disp
 			window.webContents.send(this.getCloseReason() === 'quit' ? WINDOW_PREPARE_QUIT_CHANNEL : WINDOW_PREPARE_CLOSE_CHANNEL, token);
 		};
 		const onRendererLoading = (): void => { state.ready = false; clearPending(); };
+		const onNavigation = (_event: unknown, _url: string, inPlace: boolean, mainFrame: boolean): void => {
+			// Webviews navigate independently of the Workbench document and its shutdown participants.
+			if (mainFrame && !inPlace) { onRendererLoading(); }
+		};
 		window.on('close', onClose);
-		window.webContents.on('did-start-loading', onRendererLoading);
+		window.webContents.on('did-start-navigation', onNavigation);
 		window.webContents.on('render-process-gone', onRendererLoading);
 		this.windowRegistrations.set(window, toDisposable(() => {
 			clearPending();
 			this.closeStates.delete(window);
 			window.off('close', onClose);
 			if (!window.isDestroyed()) {
-				window.webContents.off('did-start-loading', onRendererLoading);
+				window.webContents.off('did-start-navigation', onNavigation);
 				window.webContents.off('render-process-gone', onRendererLoading);
 			}
 		}));

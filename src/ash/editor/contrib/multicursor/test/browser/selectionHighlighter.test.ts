@@ -13,8 +13,8 @@ import { TestLanguageFeaturesService } from '../../../../test/common/testLanguag
 
 const { CodeEditorWidget } = await import('../../../../browser/widget/codeEditor/codeEditorWidget.js');
 const { createTestCodeEditor } = await import('../../../../test/browser/testCodeEditor.js');
-const { TextualMultiDocumentHighlightFeature } = await import('../../../../../../../extensions/code/browser/contrib/wordHighlighter/browser/textualHighlightProvider.js');
-const { SelectionHighlighter } = await import('../../../../../../../extensions/code/browser/contrib/multicursor/browser/multicursor.js');
+const { TextualMultiDocumentHighlightFeature } = await import('../../../wordHighlighter/browser/textualHighlightProvider.js');
+const { SelectionHighlighter } = await import('../../browser/multicursor.js');
 
 test('Selection highlighter owns non-empty textual matches and excludes active selections', () => {
 	using languages = new TestLanguageFeaturesService();

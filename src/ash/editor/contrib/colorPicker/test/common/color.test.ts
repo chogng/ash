@@ -6,7 +6,7 @@ import { Position } from '../../../../common/core/position.js';
 import { Range } from '../../../../common/core/range.js';
 import { TextModel } from '../../../../common/model/textModel.js';
 import { LanguageFeatureRegistry } from '../../../../common/languageFeatureRegistry.js';
-import { ColorService, DefaultDocumentColorProvider } from '../../../../../../../extensions/code/browser/contrib/colorPicker/common/languageColors.js';
+import { ColorService, DefaultDocumentColorProvider } from '../../common/languageColors.js';
 import { type LanguageColorProvider, createLanguageFeatureRequest } from '../../../../common/languages.js';
 
 test('presentation queries aggregate providers without requiring document color detection and honor default enablement', async () => {

@@ -1,11 +1,11 @@
 import { Emitter } from '../../../../base/common/event.js';
 import { IKeybindingService } from '../../../../platform/keybinding/common/keybinding.js';
-import { pasteAsCommandId } from '../../../../../../extensions/code/browser/contrib/dropOrPasteInto/browser/copyPasteContribution.js';
+import { pasteAsCommandId } from '../../../../editor/contrib/dropOrPasteInto/browser/copyPasteContribution.js';
 import { Disposable } from '../../../../base/common/lifecycle.js';
 import { type JsonSchema } from '../../../../base/common/jsonSchema.js';
 import { ILanguageFeaturesService } from '../../../../editor/common/services/languageFeatures.js';
-import { pasteAsPreferenceConfig } from '../../../../../../extensions/code/browser/contrib/dropOrPasteInto/browser/copyPasteController.js';
-import { dropAsPreferenceConfig } from '../../../../../../extensions/code/browser/contrib/dropOrPasteInto/browser/dropIntoEditorController.js';
+import { pasteAsPreferenceConfig } from '../../../../editor/contrib/dropOrPasteInto/browser/copyPasteController.js';
+import { dropAsPreferenceConfig } from '../../../../editor/contrib/dropOrPasteInto/browser/dropIntoEditorController.js';
 import { localize } from '../../../../nls.js';
 import { ConfigurationScope, type IConfigurationKeyDefinition } from '../../../../platform/configuration/common/configurationRegistry.js';
 import { type IWorkbenchContribution } from '../../../common/contributions.js';

@@ -3,7 +3,7 @@ import { after as afterCodeFeatures } from 'mocha';
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { JSDOM } from 'jsdom';
-import { Minimap } from '../../../../../extensions/code/browser/viewParts/minimap/minimap.js';
+import { Minimap } from '../../browser/viewParts/minimap/minimap.js';
 import { PartFingerprint, PartFingerprints } from '../../browser/view/viewPart.js';
 import { TextModel } from '../../common/model/textModel.js';
 import { type ViewContext } from '../../common/viewModel/viewContext.js';

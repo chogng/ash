@@ -39,6 +39,8 @@ import { type ExtensionClientOperation, type ExtensionClientResult } from '../..
 import { TestWorkspaceService } from '../../../src/ash/workbench/services/configuration/test/common/testServices.js';
 import { InMemoryConfigurationService } from '../../../src/ash/platform/configuration/common/inMemoryConfigurationService.js';
 import { MainThreadSCM } from '../../../src/ash/workbench/api/browser/mainThreadSCM.js';
+import type { IEditorPart } from '../../../src/ash/workbench/browser/parts/editor/editorPart.js';
+import type { ICodeEditorService } from '../../../src/ash/editor/browser/services/codeEditorService.js';
 import { MainThreadExtensionBackend } from '../../../src/ash/workbench/api/browser/mainThreadExtensionBackend.js';
 import { SCMService } from '../../../src/ash/workbench/contrib/scm/common/scmService.js';
 import { SCMViewService } from '../../../src/ash/workbench/contrib/scm/browser/scmViewService.js';
@@ -247,7 +249,9 @@ const backend = lifetime.add(new MainThreadExtensionBackend(catalog, {
 			default: throw new Error(`Unexpected domain request ${method}`);
 		}
 	}
-}, { getConnectionState: async () => 'ready', getSlashCommands: async () => [], onConnectionState: () => ({ dispose() { } }), connectionGeneration: 1 } satisfies IAppServerApi, { subscribe: listener => configurationEvents.event(listener) }, workspace, configuration, lifetime.add(new ProgressService(lifetime.add(new StatusbarService()), backendNotifications, progressCommands))));
+}, { getConnectionState: async () => 'ready', getSlashCommands: async () => [], onConnectionState: () => ({ dispose() { } }), connectionGeneration: 1 } satisfies IAppServerApi, { subscribe: listener => configurationEvents.event(listener) }, workspace, configuration, lifetime.add(new ProgressService(lifetime.add(new StatusbarService()), backendNotifications, progressCommands)),
+	{ onDidChangeEditors: Event.None } as unknown as IEditorPart,
+	{ listCodeEditors: () => [], onCodeEditorAdd: Event.None, onCodeEditorRemove: Event.None } as unknown as ICodeEditorService));
 const unavailable = (method: string): never => { throw new Error(`Unexpected remote host request ${method}`); };
 const workerCatalog = { ...catalog, list: async () => { const snapshot = await catalog.list('cached'); return { ...snapshot, extensions: snapshot.extensions.filter(extension => extension.id !== 'ash.git') }; } };
 const genericHost = lifetime.add(services.createInstance(BrowserExtensionHostApi, workerCatalog, createDisconnectedExtensionHostApi(unavailable)));
@@ -282,7 +286,7 @@ const clientHandler = host.registerClientHandler(async (raw, signal, source): Pr
 			startupStateReads++;
 			await startupStateGate?.p;
 			signal.throwIfAborted();
-			return { result: 'value', value: await backend.handle(source, operation.capability, undefined, {}, operation.after, signal) };
+			return { result: 'value', value: await backend.handle(source, operation.capability, undefined, {}, operation.after, signal, undefined, operation.waitForChange === true) };
 		case 'editorOperation': {
 			requests.push(operation.payload);
 			const request = operation.payload as { method: string; uri?: string; text?: string; };

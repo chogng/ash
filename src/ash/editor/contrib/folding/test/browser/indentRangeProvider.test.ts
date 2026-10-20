@@ -2,8 +2,8 @@ import { registerTestCodeEditorFeatures } from '../../../../../../../test/fixtur
 import { after as afterCodeFeatures } from 'mocha';
 import assert from "node:assert/strict";
 import { test } from "mocha";
-import { EditorFoldingRangeSource } from "../../../../../../../extensions/code/browser/contrib/folding/browser/foldingRanges.js";
-import { computeEditorIndentFoldingRanges } from "../../../../../../../extensions/code/browser/contrib/folding/browser/indentRangeProvider.js";
+import { EditorFoldingRangeSource } from "../../browser/foldingRanges.js";
+import { computeEditorIndentFoldingRanges } from "../../browser/indentRangeProvider.js";
 import { TextModel } from "../../../../common/model/textModel.js";
 
 test("Indent folding creates nested ranges and keeps blank lines in their parent body", () => {

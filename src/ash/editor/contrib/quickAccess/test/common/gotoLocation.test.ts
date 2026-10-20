@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import { test } from "mocha";
 import { Position } from "../../../../common/core/position.js";
 import { TextModel } from "../../../../common/model/textModel.js";
-import { parseStanzaGotoLocation } from "../../../../../../../extensions/code/browser/contrib/quickAccess/common/gotoLocation.js";
+import { parseStanzaGotoLocation } from "../../common/gotoLocation.js";
 
 test("Go to Line parses one-based line and column inputs with clamping", () => {
 	using model = new TextModel("zero\none\ntwo");

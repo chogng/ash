@@ -11,8 +11,8 @@ import { TextModel } from '../../../../common/model/textModel.js';
 const { CodeEditorWidget } = await import('../../../../browser/widget/codeEditor/codeEditorWidget.js');
 const { createTestCodeEditor } = await import('../../../../test/browser/testCodeEditor.js');
 const { EditorExtensionsRegistry } = await import('../../../../browser/editorExtensions.js');
-await import('../../../../../../../extensions/code/browser/contrib/caretOperations/browser/transpose.js');
-await import('../../../../../../../extensions/code/browser/contrib/linesOperations/browser/linesOperations.js');
+await import('../../../caretOperations/browser/transpose.js');
+await import('../../../linesOperations/browser/linesOperations.js');
 
 
 test('Transpose Letters runs directly through its canonical action', () => {

@@ -1,2 +1,2 @@
-// Shared plain-text editor entry. Optional features are admitted through the extension bridge.
+// Minimal plain-text editor entry for hosts that explicitly select their feature composition.
 import "./browser/coreCommands.js";

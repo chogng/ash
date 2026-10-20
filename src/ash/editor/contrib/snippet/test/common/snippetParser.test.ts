@@ -2,7 +2,7 @@ import { registerTestCodeEditorFeatures } from '../../../../../../../test/fixtur
 import { after as afterCodeFeatures } from 'mocha';
 import assert from "node:assert/strict";
 import { test } from "mocha";
-import { parseSnippet } from "../../../../../../../extensions/code/browser/contrib/snippet/common/snippetParser.js";
+import { parseSnippet } from "../../common/snippetParser.js";
 
 test("Completion snippets expand tabstops, defaults, mirrors, nesting, and final cursor order", () => {
 	const snippet = parseSnippet("fn ${1:name}(${2:${1}}) { $0 }");

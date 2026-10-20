@@ -3,7 +3,7 @@ import { after as afterCodeFeatures } from 'mocha';
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { HierarchicalKind } from '../../../../../base/common/hierarchicalKind.js';
-import { sortEditsByYieldTo } from '../../../../../../../extensions/code/browser/contrib/dropOrPasteInto/browser/edit.js';
+import { sortEditsByYieldTo } from '../../browser/edit.js';
 
 interface Edit {
 	readonly title: string;

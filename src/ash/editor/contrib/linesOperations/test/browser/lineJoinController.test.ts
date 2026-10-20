@@ -17,7 +17,7 @@ const installedGlobals = installEditorTestDom(moduleDom, [
 });
 const { CodeEditorWidget } = await import('../../../../browser/widget/codeEditor/codeEditorWidget.js');
 const { createTestCodeEditor } = await import('../../../../test/browser/testCodeEditor.js');
-const { JoinLinesAction } = await import('../../../../../../../extensions/code/browser/contrib/linesOperations/browser/linesOperations.js');
+const { JoinLinesAction } = await import('../../browser/linesOperations.js');
 suiteTeardown(() => {
 	installedGlobals.dispose();
 	moduleDom.window.close();

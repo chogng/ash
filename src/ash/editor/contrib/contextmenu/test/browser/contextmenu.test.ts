@@ -25,7 +25,7 @@ const installedGlobals = installEditorTestDom(environment, [
 
 const { CodeEditorWidget } = await import('../../../../browser/widget/codeEditor/codeEditorWidget.js');
 const { createTestCodeEditor } = await import('../../../../test/browser/testCodeEditor.js');
-const { ContextMenuController } = await import('../../../../../../../extensions/code/browser/contrib/contextmenu/browser/contextmenu.js');
+const { ContextMenuController } = await import('../../browser/contextmenu.js');
 const { IContextMenuService } = await import('../../../../../platform/contextview/browser/contextView.js');
 
 suiteTeardown(() => {

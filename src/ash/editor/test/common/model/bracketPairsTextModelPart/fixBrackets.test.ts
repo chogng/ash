@@ -2,7 +2,7 @@ import { registerTestCodeEditorFeatures } from '../../../../../../../test/fixtur
 import { after as afterCodeFeatures } from 'mocha';
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
-import { fixBracketsInLine } from '../../../../../../../extensions/code/browser/model/bracketPairsTextModelPart/fixBrackets.js';
+import { fixBracketsInLine } from '../../../../common/model/bracketPairsTextModelPart/fixBrackets.js';
 import { LineTokens } from '../../../../common/tokens/lineTokens.js';
 import { MetadataConsts, StandardTokenType, type LanguageId } from '../../../../common/encodedTokenAttributes.js';
 import { type ILanguageIdCodec } from '../../../../common/languages.js';

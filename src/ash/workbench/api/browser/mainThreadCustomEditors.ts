@@ -1,8 +1,11 @@
+import { localize } from '../../../nls.js';
 import { match } from '../../../base/common/glob.js';
 import { Event } from '../../../base/common/event.js';
 import { basename } from '../../../base/common/resources.js';
 import { Disposable, DisposableMap, DisposableStore, toDisposable, type IDisposable } from '../../../base/common/lifecycle.js';
-import { IExtensionHostApi, type ExtensionHostFleetSnapshot, type ExtensionHostCustomEditorRegistration, type JsonValue } from '../../../platform/agentHost/common/extensionHostApi.js';
+import { IExtensionService } from '../../services/extensions/common/extensionService.js';
+import type { ExtensionCustomEditorContribution } from '../../services/extensions/common/extensionManifest.js';
+import { IExtensionHostApi, type ExtensionHostRuntime, type ExtensionHostFleetSnapshot, type ExtensionHostCustomEditorRegistration, type JsonValue } from '../../../platform/agentHost/common/extensionHostApi.js';
 import { IInstantiationService } from '../../../platform/instantiation/common/instantiation.js';
 import { EditorPanes } from '../../browser/editor.js';
 import { EditorPaneMatch } from '../../browser/parts/editor/editorPane.js';
@@ -14,76 +17,94 @@ import { IExtensionApi } from '../../../platform/extensions/common/extensionApi.
 /** Connects one activated extension provider to the existing editor pane registry. */
 export class MainThreadCustomEditors extends Disposable {
 	private readonly providers = this._register(new DisposableMap<string, DisposableStore>());
-	private readonly identities = new Map<string, string>();
+	private readonly bindings = new Map<string, {
+		readonly identity: string;
+		runtime: ExtensionHostRuntime;
+		registration: ExtensionHostCustomEditorRegistration;
+		incarnation: number | undefined;
+	}>();
 	constructor(
 		private readonly timeout: number,
 		@IInstantiationService private readonly instantiation: IInstantiationService,
 		@IExtensionHostApi private readonly api: IExtensionHostApi,
 		@IExtensionApi private readonly packages: IExtensionApi,
+		@IExtensionService private readonly extensions: IExtensionService,
 	) {
 		super();
 	}
 
 	public update(snapshot: ExtensionHostFleetSnapshot): void {
-		const viewTypes = new Set<string>();
-		for (const runtime of snapshot.extensions) {
-			if (runtime.lifecycle !== 'ready') {
-				continue;
+		const declarations = this.extensions.getExtensionPointContributions<readonly ExtensionCustomEditorContribution[]>('customEditors');
+		const entries = snapshot.extensions.flatMap(runtime => {
+			if (runtime.lifecycle === 'ready' && runtime.incarnation !== undefined) {
+				return runtime.registrations.flatMap(registration => registration.kind === 'customTextEditor' ? [{ runtime, registration }] : []);
 			}
-			for (const registration of runtime.registrations) {
-				if (registration.kind !== 'customTextEditor') {
-					continue;
-				}
-				if (viewTypes.has(registration.viewType)) {
-					throw new TypeError(`Duplicate custom editor '${registration.viewType}'`);
-				}
-				viewTypes.add(registration.viewType);
-			}
-		}
+			if (!['dormant', 'starting', 'handshaking'].includes(runtime.lifecycle)) { return []; }
+			return declarations.filter(owner => owner.description.id === runtime.id).flatMap(owner => owner.value.flatMap(editor => {
+				if (editor.priority === 'explicit' || !runtime.activation?.events.includes(`onCapability:customEditor:${editor.viewType}`)) { return []; }
+				const registration: ExtensionHostCustomEditorRegistration = {
+					kind: 'customTextEditor', registrationId: `lazy:${editor.viewType}`, viewType: editor.viewType,
+					displayName: editor.displayName, priority: editor.priority,
+					selectors: editor.selector.flatMap(selector => selector.filenamePattern ? [selector.filenamePattern] : []),
+				};
+				return [{ runtime, registration }];
+			}));
+		});
 		const active = new Set<string>();
-		for (const runtime of snapshot.extensions) {
-			if (runtime.lifecycle !== 'ready' || runtime.incarnation === undefined) {
+		for (const { registration } of entries) {
+			if (active.has(registration.viewType)) { throw new TypeError(`Duplicate custom editor '${registration.viewType}'`); }
+			active.add(registration.viewType);
+		}
+		for (const { runtime, registration } of entries) {
+			const identity = JSON.stringify([runtime.id, runtime.version, runtime.packageDigest, runtime.activationGeneration, registration.viewType]);
+			const previous = this.bindings.get(registration.viewType);
+			if (previous?.identity === identity && (previous.incarnation === undefined || previous.incarnation === runtime.incarnation)) {
+				previous.runtime = runtime;
+				previous.registration = registration;
+				previous.incarnation = runtime.incarnation;
 				continue;
 			}
-			for (const registration of runtime.registrations) {
-				if (registration.kind !== 'customTextEditor') {
-					continue;
+			this.providers.deleteAndDispose(registration.viewType);
+			const lifetime = new DisposableStore();
+			this.providers.set(registration.viewType, lifetime);
+			const controller = new AbortController();
+			lifetime.add(toDisposable(() => controller.abort()));
+			const binding = { identity, runtime, registration, incarnation: runtime.incarnation };
+			this.bindings.set(registration.viewType, binding);
+			lifetime.add(this.registerCustomTextEditorProvider(registration, async (operation, payload, signal) => {
+				const requestSignal = AbortSignal.any([controller.signal, signal]);
+				requestSignal.throwIfAborted();
+				if (binding.runtime.lifecycle !== 'ready') {
+					const activated = await this.api.activateByEvent({
+						extensionId: runtime.id, activationGeneration: runtime.activationGeneration,
+						event: { type: 'capability', capability: `customEditor:${registration.viewType}` },
+					});
+					requestSignal.throwIfAborted();
+					const current = activated.extensions.find(candidate => candidate.id === runtime.id && candidate.activationGeneration === runtime.activationGeneration && candidate.packageDigest === runtime.packageDigest && candidate.lifecycle === 'ready');
+					const actual = current?.registrations.find(candidate => candidate.kind === 'customTextEditor' && candidate.viewType === registration.viewType);
+					if (!current || actual?.kind !== 'customTextEditor') { throw new TypeError(localize('extensions.clientEditor.packageUnavailable', 'The editor extension package is unavailable.')); }
+					binding.runtime = current;
+					binding.registration = actual;
+					binding.incarnation = current.incarnation;
 				}
-				const key = JSON.stringify([runtime.id, runtime.activationGeneration, runtime.incarnation, registration.registrationId]);
-				active.add(registration.viewType);
-				if (this.identities.get(registration.viewType) === key) {
-					continue;
-				}
-				// Release a retired provider before registering its replacement's view type.
-				this.providers.deleteAndDispose(registration.viewType);
-				const lifetime = new DisposableStore();
-				this.providers.set(registration.viewType, lifetime);
-				const controller = new AbortController();
-				lifetime.add(toDisposable(() => controller.abort()));
-				const request = { extensionId: runtime.id, registrationId: registration.registrationId, activationGeneration: runtime.activationGeneration, incarnation: runtime.incarnation };
-				lifetime.add(this.registerCustomTextEditorProvider(registration, async (operation, payload, signal) => {
-					controller.signal.throwIfAborted();
-					return this.api.invoke({
-						...request,
-						operation,
-						payload,
-						deadlineUnixMillis: Date.now() + this.timeout,
-					}, AbortSignal.any([controller.signal, signal]));
-				}, runtime));
-				this.identities.set(registration.viewType, key);
-			}
+				return this.api.invoke({
+					extensionId: runtime.id, registrationId: binding.registration.registrationId,
+					activationGeneration: binding.runtime.activationGeneration, incarnation: binding.runtime.incarnation!,
+					operation, payload, deadlineUnixMillis: Date.now() + this.timeout,
+				}, requestSignal);
+			}, runtime));
 		}
 		for (const key of this.providers.keys()) {
 			if (!active.has(key)) {
 				this.providers.deleteAndDispose(key);
-				this.identities.delete(key);
+				this.bindings.delete(key);
 			}
 		}
 	}
 
 	public clear(): void {
 		this.providers.clearAndDisposeAll();
-		this.identities.clear();
+		this.bindings.clear();
 	}
 
 	public registerCustomTextEditorProvider(

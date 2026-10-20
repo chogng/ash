@@ -178,9 +178,8 @@ impl GitHubAuthenticationRuntime {
             next_login: AtomicU64::new(1),
             attempts: Arc::new(Mutex::new(BTreeMap::new())),
         });
-        if runtime.policy.is_extension_enabled(EXTENSION_ID) {
-            runtime.start().map_err(|_| unavailable())?;
-        }
+        // Composition registers the shared profile owner; the first account or credential
+        // request starts it through call(), including account restoration at startup.
         Ok(runtime)
     }
     fn start(&self) -> Result<(), ash_external_ext::ExtensionHostError> {

@@ -43,7 +43,7 @@ const installedGlobals = installEditorTestDom(browserEnvironment, [
 ], { ResizeObserver: TestResizeObserver });
 setIconResolver(browserEnvironment.window.document, icon => getIconDefinition(icon));
 
-await import('../../../../../../extensions/code/browser/contrib/diffEditorBreadcrumbs/browser/contribution.js');
+await import('../../../contrib/diffEditorBreadcrumbs/browser/contribution.js');
 const { DiffEditorWidget } = await import('../../../browser/widget/diffEditor/diffEditorWidget.js');
 const { DiffModel } = await import('../../../common/diff/diffModel.js');
 const { registerCodeEditorServices } = await import('../testCodeEditor.js');

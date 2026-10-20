@@ -53,7 +53,7 @@ Academy 的 [`ash-academy`](../../extensions/academic/README.md) 经公共 Rust 
 
 富文档 Schema、结构事务／历史、命令、行投影、协作算法、codec、富文本 Widget 与段落贡献由 `extensions/academic/common`、`browser` 唯一拥有。Academy 的 `DocumentTextModel` 使用基础 `TextModel` 的通用扩展快照提交边界；基础模型不导入富文档结构或包实现。宿主保留文件、资源引用、dirty、备份和网络连接，使用 profile 提供的 codec／Widget／导入导出端口。停用冻结旧视图并保留工作副本；显式重开复用模型与历史。声明路由在停用时仍保护结构化文件，缺少运行能力时拒绝自动回退普通文本。
 
-- Code 的既有 contrib、控件、命令与模型分析已迁入 `extensions/code`；独立 `ash-code-editor` Rust Provider 经 `editor.contributions.v1` 和共享桥提供客户端模块。`editor.all.ts` 保留基础文本命令，Provider 租约装配与退出可选行为。输入配对／缩进、Minimap 与缩进引导同样由包内策略／视图租约安装。基础入口的静态依赖闭包、真实 Rust 注入及 Chromium 组合回归已通过；Electron／远端与物理输入验收单独记录。
+- 通用 Code contrib、控件、命令、模型分析和语言编辑策略归 `src/ash/editor`，由客户端入口装配；`editor.all.ts` 保留可单独使用的基础文本原语，`editor.code.all.ts` 和 standalone 产品入口安装完整编辑功能。Academy 继续作为独立扩展。Code 不再通过 Rust 描述进程或扩展授权加载；本轮验证以实际记录为准。
 - Academy 现有连续正文、段落样式、基本格式、表格、图片、论文引用与保存／协作路径已经迁移。M6 的首版写作与样式现已补齐自定义段落／标题样式、局部覆盖、缩进、列表编号和富文档查找替换，并已闭合纵向单栏分页、段落分页规则、表格行处理及文档级基础页眉页脚；本轮补齐分节、页面图像 PDF、DOCX 文件往返和块级审阅；脚注、复杂排版与目标 Word／物理平台验收仍按下文记录。
 - 旧的段落属性、命令和控件已随同迁入包内；各 profile 为自己的视图安装和释放控件。共享 SelectBox 的 active descendant 已修复，迁移验证以根 TODO 的实际运行日志为准。历史基线不替代新边界与平台验收。
 

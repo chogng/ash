@@ -12,7 +12,7 @@ import { TestLanguageConfigurationService } from '../../../../test/common/modes/
 const { CodeEditorWidget } = await import('../../../../browser/widget/codeEditor/codeEditorWidget.js');
 const { createTestCodeEditor } = await import('../../../../test/browser/testCodeEditor.js');
 const { EditorExtensionsRegistry } = await import('../../../../browser/editorExtensions.js');
-await import('../../../../../../../extensions/code/browser/contrib/comment/browser/comment.js');
+await import('../../browser/comment.js');
 
 
 test('Toggle Line Comment runs through the canonical editor action', () => {

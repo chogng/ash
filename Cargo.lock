@@ -570,7 +570,6 @@ dependencies = [
  "ash-debug-manager",
  "ash-diagnostics",
  "ash-diff",
- "ash-editor-client-build",
  "ash-exec-server",
  "ash-exec-server-protocol",
  "ash-execpolicy",
@@ -1012,16 +1011,6 @@ dependencies = [
  "serde_json",
  "tempfile",
  "thiserror 2.0.21",
-]
-
-[[package]]
-name = "ash-code-editor"
-version = "0.1.0"
-dependencies = [
- "ash-editor-client-build",
- "ash-external-ext-sdk",
- "serde",
- "serde_json",
 ]
 
 [[package]]

@@ -2,7 +2,7 @@ import { registerTestCodeEditorFeatures } from '../../../../../../../test/fixtur
 import { after as afterCodeFeatures } from 'mocha';
 import assert from "node:assert/strict";
 import { test } from "mocha";
-import { jumpToMatchingBrackets, selectToMatchingBrackets } from "../../../../../../../extensions/code/browser/contrib/bracketMatching/common/bracketNavigation.js";
+import { jumpToMatchingBrackets, selectToMatchingBrackets } from "../../common/bracketNavigation.js";
 import { TestLanguageConfigurationService } from '../../../../test/common/modes/testLanguageConfigurationService.js';
 import { Selection } from "../../../../common/core/selection.js";
 import { Position } from "../../../../common/core/position.js";

@@ -5,7 +5,7 @@ import { suite, test } from 'mocha';
 import { URI } from '../../../../../base/common/uri.js';
 import { Position } from '../../../../common/core/position.js';
 import { Range } from '../../../../common/core/range.js';
-import { ReferencesModel } from '../../../../../../../extensions/code/browser/contrib/gotoSymbol/browser/referencesModel.js';
+import { ReferencesModel } from '../../browser/referencesModel.js';
 
 suite('Reference results', () => {
 	test('groups targets by resource and preserves the first provider result after sorting', () => {

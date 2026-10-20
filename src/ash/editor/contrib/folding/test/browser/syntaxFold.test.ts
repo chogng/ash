@@ -6,7 +6,7 @@ import { Range } from '../../../../common/core/range.js';
 import { TextModel } from '../../../../common/model/textModel.js';
 import { TestLanguageConfigurationService } from '../../../../test/common/modes/testLanguageConfigurationService.js';
 import { registerTestTokens } from '../../../../test/common/testTokenization.js';
-import { computeEditorLanguageFoldingRanges, mergeEditorFoldingRanges } from '../../../../../../../extensions/code/browser/contrib/folding/browser/syntaxRangeProvider.js';
+import { computeEditorLanguageFoldingRanges, mergeEditorFoldingRanges } from '../../browser/syntaxRangeProvider.js';
 
 test('syntax folding merge keeps deterministic nested and disjoint ranges', () => {
 	const merged = mergeEditorFoldingRanges(

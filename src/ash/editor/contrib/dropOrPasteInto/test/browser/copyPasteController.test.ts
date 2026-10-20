@@ -22,15 +22,15 @@ import { Range } from '../../../../common/core/range.js';
 import { type DocumentPasteEditProvider } from '../../../../common/languages.js';
 import { TextModel } from '../../../../common/model/textModel.js';
 import { LanguageFeaturesService } from '../../../../common/services/languageFeaturesService.js';
-import { SnippetController2 } from '../../../../../../../extensions/code/browser/contrib/snippet/browser/snippetController2.js';
+import { SnippetController2 } from '../../../snippet/browser/snippetController2.js';
 import type { browserEnvironment } from '../../../../test/browser/testEditorDom.js';
 
 const previousClipboard = Object.getOwnPropertyDescriptor(navigator, 'clipboard');
 Object.defineProperty(navigator, 'clipboard', { configurable: true, value: {} });
 suiteTeardown(() => { if (previousClipboard) Object.defineProperty(navigator, 'clipboard', previousClipboard); else Reflect.deleteProperty(navigator, 'clipboard'); });
-await import('../../../../../../../extensions/code/browser/contrib/clipboard/browser/clipboard.js');
-await import('../../../../../../../extensions/code/browser/contrib/dropOrPasteInto/browser/copyPasteContribution.js');
-const { CopyPasteController } = await import('../../../../../../../extensions/code/browser/contrib/dropOrPasteInto/browser/copyPasteController.js');
+await import('../../../clipboard/browser/clipboard.js');
+await import('../../browser/copyPasteContribution.js');
+const { CopyPasteController } = await import('../../browser/copyPasteController.js');
 const { createTestCodeEditor, registerCodeEditorServices } = await import('../../../../test/browser/testCodeEditor.js');
 
 test('URI-list paste inserts paths before duplicate plain text', async () => {

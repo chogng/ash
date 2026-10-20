@@ -6,7 +6,7 @@
 
 ## 迁移状态（2026-10-19）
 
-Academy 的既有富文档闭环与 Code 的既有 contrib／模型分析、语言编辑策略、Minimap／缩进引导均已迁入独立能力包，真实 Rust 程序经共享桥提供客户端模块，见 [Code 包说明](../../extensions/code/README.md)、[Academy 包说明](../../extensions/academic/README.md)与[路线图状态](editor-roadmap.md#当前基线与待迁移状态)。命令、菜单、快捷键、控制器与分析请求按 Provider 租约退出，正文、dirty 与撤销仍由原模型／宿主持有。以下 649 文件、A01–A22 和装配链保留 M0 历史清单；链接随当前 owner 更新。真实 Electron／远端及物理输入的平台验收与 M6 新功能单独记录。
+Academy 的富文档实现位于独立能力包，见 [Academy 包说明](../../extensions/academic/README.md)。通用 Code contrib、模型分析、语言编辑策略及 Minimap／缩进引导归客户端编辑器，见 [编辑器所有权与入口](../../src/ash/editor/README.md)。Code 不依赖扩展进程；正文、dirty、保存与撤销仍由原模型／宿主持有。以下文件清单和 A01–A22 保留历史审计用途，当前验证范围以本轮结果为准。
 
 ## 审计范围与证据口径
 
