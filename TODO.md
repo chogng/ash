@@ -41,6 +41,10 @@
 
 - [ ] **复核 · 自举场景的完整外部 Codex 目录接入**：相同普通代码目录在无外部账号连接的对照场景中启动通过；使用完整外部 Codex home 时重复出现初始化或 `env/dirs/set` 超时，仅引用认证文件的隔离目录则可启动并调用真实模型。尚未证明是模型目录导入、认证路径还是其他初始化问题；排查前保留失败日志，补启动失败时的证据收集，不将有限启动重试当作通过。记录见上述场景目录的 `startup-attempt*.log` 与 `preflight-no-auth.log`。临时认证文件引用已移除，重跑需重新显式准备只读引用，不能复制凭证进入证据。
 
+- [ ] **复核 · 共享 Codex 登录记录兼容性**：`crates/chatgpt/src/storage.rs` 的新登录写入尚无 `oauth_provenance`／`login_owner_id`，`maintenance.rs` 刷新固定使用默认 client 与 endpoint。参考 [Codex 登录来源与登录标识](https://github.com/openai/codex/pull/55397)（2026-10-19 已合并，未确认稳定版包含），核对当前共享文件契约再补齐 Ash 托管登录的兼容路径；这是源码层面的新格式缺口，未复现真实登录故障。普通刷新已保留未知 JSON 字段，不重复列为字段丢失问题。
+  - 范围与前提：只记录当前登录流程实际使用的可信 issuer／client，并为每次完成的新登录生成独立标识；刷新保留标识，不从未经验证的 token 声明推断来源。只对已经明确允许的来源／client 按记录刷新，其他来源在发送凭据前拒绝，不扩大 issuer 信任范围；保留旧记录兼容回退及 Codex 托管模式不刷新共享凭据的边界。不借此支持任意 issuer、企业 MCP、运行时注册或新凭据共享。
+  - 验收：沿 `crates/chatgpt/src/storage_tests.rs`、`maintenance_tests.rs` 用合成记录覆盖旧格式、新登录／同账户重登、轮换时保留标识与其他字段、外部替换竞争、已允许来源按记录刷新、不可信 issuer 或未支持 client 的发送前拒绝、托管模式、登出与错误脱敏；对照上游解析器验证新记录，不使用真实凭据。若上游契约或实际消费需求变化，先调整本项，不改变已有账号生命周期 owner。
+
 已完成的统一宿主、多 Provider Session／Chat、附件快照、查询过滤及历史仓库契约见 [通用服务端到端记录](agenthost-todo.md#通用服务端到端闭合--2026-10-18)。下面保留产品能力和真实环境验收缺口；文件台账不表示上游 AHP wire protocol 兼容。
 
 - [ ] **新产品 · Agent SDK／Codex 续接／本地模型／独立 Web 启用**（用户决定先列缺口）：SDK 下载／重载、Codex 专属账号与配额续接、模型安装／server lifecycle、Web 启用设置／context owner 均须先闭合领域契约与生产入口；保留现有多 provider 账号和 Web transport 可用性，不新增空服务。准确文件清单见上述 Workbench 记录。
@@ -89,6 +93,10 @@
 
 ## Stanza 编辑器 · TODO
 
+- [ ] **候选／链路补齐（未排期）· Desktop 文件粘贴的路径回退**：现有 `src/ash/editor/browser/controller/editContext/clipboardUtils.ts` 在无文本、无编辑器元数据而有文件时只插入 `File.name`；EditContext 与 TextArea 共用此入口。补齐文件管理器复制文件后在普通文本编辑器粘贴可定位路径的操作链路，参考 [VS Code 文件粘贴路径回退](https://github.com/microsoft/vscode/pull/342695)（2026-10-19 已合并，未确认稳定版包含）。这是现有文件名回退的增强，不是已复现的文件内容丢失缺陷。
+  - 范围与前提：复用 `src/ash/platform/dnd/browser/dnd.ts` 的既有宿主 File 路径解析边界，保持 editor → platform 依赖方向，不直接引入 Electron；不让浏览器读取本地路径，不读取文件内容、不自动打开文件、不改变 URI-list provider、普通文本及编辑器元数据的优先级。无宿主路径时仍回退文件名。
+  - 验收：扩展 `src/ash/editor/contrib/dropOrPasteInto/test/browser/copyPasteController.test.ts`，覆盖单／多文件、空格与非 ASCII 路径、宿主无路径或异常、文本与元数据优先，并保留“不读取文件内容”断言；分别走 EditContext／TextArea，补真实 Electron 文件管理器复制粘贴与 Web 回退验收，记录平台差异。
+
 - [ ] **功能 · 文献检索扩展**：后续实现查询、元数据获取及向文献管理扩展入库的工具／Skill 链路，PDF 阅读复用独立查看器；作者接入遵循上方扩展 SDK 任务。Agent 结构化文档写入仍按下方 Work 文档服务契约另行实施。尚未新增检索代码或迁仓。
 
 - [ ] **验收 · 编辑器扩展平台组合**：在真实 Electron 多窗口／远端环境验收 Academy、可选 Reference Manager／PDF Viewer 外置签名包与 Code 产品预装扩展的装载、版本匹配、dirty／恢复及释放，并补物理 IME、屏幕阅读器、跨页输入以及目标 Word 打开／编辑／再次保存的互通验收。PDF 查看器独立包迁移及本机验证见[扩展说明](extensions/pdf-viewer/README.md)，拆分本身不再列为待办。文献管理的本机验证范围见 [Reference Manager](extensions/reference-manager/README.md)。已完成的迁移、纵向分页、分节、DOCX／页面图像 PDF 与块级审阅，以及本机真实 Provider／Chromium 验证记录归[路线图](docs/design/editor-roadmap.md)维护，不再列作功能待办；这些结果不能替代尚缺的真实环境证据。
@@ -122,6 +130,10 @@
   - 范围与风险：仅处理同一冻结 catalog 的重复副本，保留 Core 的唯一 owner、精确 generation／binder、工具 scope 及每次调用的提示内容；不把动态过滤结果共享为可变缓存，不顺带重构整个上下文系统。
   - 验收：相同输入下比对最终工具 schema、顺序及预算结果；覆盖配置热更后旧 invocation 仍绑定旧 generation、新 invocation 使用新 catalog，以及 Code Mode 和 Handoff。记录优化前后重复样本；只有复制成本实际下降且上述行为不变才保留改动，局部结果不替代整条 Desktop 性能结论。
 
+- [ ] **测量 · 流式文件路径索引的重复存储**：`crates/file-search/src/lib.rs` 的 `walker_worker` 为每条路径同时保存 `Arc<str>` 与 Nucleo 的 `Utf32String` 列，`build_snapshot` 再从原路径计算排名与高亮。参考 [Codex 减少路径索引副本](https://github.com/openai/codex/pull/55351)（2026-10-19 已合并，未确认稳定版包含），先量化 TUI `@file` 与独立文件搜索 CLI 所用 `Service::start` 在大目录的分配字节、峰值内存、扫描和连续查询耗时，再决定是否让纯 ASCII 路径复用匹配列；尚无 Ash 收益测量，不泛化到使用 tgrep 的 Desktop 搜索。
+  - 范围与风险：保留单根、仅普通文件、目录准入、取消和 `query_revision` 契约，不引入多根索引或第二份缓存。Unicode 匹配列并非原路径的无损表示，组合字符与 emoji 不能由该列重建；非 ASCII 路径仍须保留可精确返回的原串。
+  - 验收：在 `crates/file-search/src/file_search_tests.rs`、`ranking_tests.rs` 及 TUI／CLI 消费链覆盖 ASCII、中文、组合字符、emoji、同分排序、截断、快速改查询和取消；对比原路径、分数、顺序与高亮索引，并记录相同目录与查询的重复样本。仅在内存确有下降且延迟及行为不退化时采用，不把局部测量当作整条 IDE 性能结论。
+
 ## 发展候选（未排期）
 
 保留后续发展方向，不作为当前交付缺口或已承诺范围。选中一项后，按实际用户入口、唯一 owner、依赖和验收场景转入上面的功能待办。下表中的前置条件尚未完成，不能据此宣称已有对应能力。
@@ -139,3 +151,10 @@
 
 - 进入条件与范围：先确认 `#N` 与纯数字 `N` 精确匹配关联 PR 号的产品语义，再在现有 Sessions 列表 owner 内实现；仅消费已有分支关联／手动附加 PR 数据，不新增网络请求、第二份关联状态或通用搜索层。
 - 风险与验收：在 `src/ash/sessions/test/browser/sessions-list.test.ts` 和真实列表场景覆盖两种输入、同号跨仓库的全部匹配、多个 PR、无 PR、关联解除／刷新以及不存在的号码；标题、provider、分组、焦点与清空查询行为保持可用。PR-only 命中不能伪造标题高亮；仅有现有关联数据的会话可按 PR 查找，不承诺尚未提供元数据的外部 provider。
+
+### Workbench 模型选择器容错搜索
+
+未排期的查找体验增强。`src/ash/platform/actionWidget/browser/actionList.ts` 目前按空格拆词、匹配名称与详情的连续子串并保留目录顺序；Workbench `modelPickerItems.ts` 已包含 provider 与模型 ID，不能把这些搜索能力列为缺失。参考 [Zed 模型选择器搜索](https://github.com/zed-industries/zed/pull/64147)（2026-10-20 已合并，未确认稳定版包含），补充 `gpt6.1` 对 `GPT-6.1 Sol` 这类非连续匹配，并让名称命中优先于仅详情命中；现有 `GPT 6.1` 分词查询本就可用。
+
+- 进入条件与范围：先确定查询及排序语义，再在 `src/ash/workbench/contrib/chat/browser/widget/input/modelPicker/modelPickerWidget.ts` 的 owner 内接入；可评估既有 `src/ash/base/common/fuzzyScorer.ts`，但 ActionList 尚无领域专用评分入口，须先提供窄范围的可选接入，不全局替换通用列表语义、不新建平行 picker、不顺带扩张到独立 Sessions picker 或后端模型目录。
+- 风险与验收：保留 provider／模型 ID、跨字段及不同词序的既有查询；名称和详情分别评分、同分稳定、空查询恢复原顺序，元数据命中不伪造名称高亮。由 `src/ash/workbench/contrib/chat/test/browser/modelPickerWidget.test.ts` 与真实输入场景覆盖精确名称、紧凑输入、非拉丁文字、同名跨 provider、目录刷新／移除、已选身份、禁用项、Auto、键盘与焦点；通用 ActionList 行为保持不变。不移植上游 GPUI 任务模型或把其基准当作 Ash 性能收益。
