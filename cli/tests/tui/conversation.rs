@@ -236,6 +236,11 @@ fn actual_tui_sandbox_approves_and_declines_real_file_tool_calls() {
     decline.submit("请尝试创建 declined-by-tui.txt");
     decline.wait_for_screen("Approval required");
     decline.down();
+    decline.wait_for_screen("> Approve same action this session");
+    decline.down();
+    decline.wait_for_screen("> Save approval for this exact action");
+    decline.down();
+    decline.wait_for_screen("> Decline");
     decline.assert_snapshot("real/03-approval/02-decline-selected");
     decline.enter();
     decline_gate.wait_until_reached();

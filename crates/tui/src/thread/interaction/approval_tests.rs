@@ -171,6 +171,20 @@ fn reusable_approval_choices_render_and_submit_the_advertised_authority() {
     let visible = text.replace(' ', "");
     assert!(visible.contains("本会话内批准同一操作"));
     assert!(visible.contains("保存此精确操作的批准"));
+    for decision in [
+        ApprovalDecision::ApproveOnce,
+        ApprovalDecision::ApproveForSession,
+        ApprovalDecision::ApproveAndSaveRule,
+        ApprovalDecision::Decline,
+    ] {
+        assert_eq!(approval.view().selected, decision);
+        approval.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
+    }
+    assert_eq!(approval.view().selected, ApprovalDecision::Decline);
+    approval.handle_key(KeyEvent::new(KeyCode::Home, KeyModifiers::NONE));
+    assert_eq!(approval.view().selected, ApprovalDecision::ApproveOnce);
+    approval.handle_key(KeyEvent::new(KeyCode::End, KeyModifiers::NONE));
+    assert_eq!(approval.view().selected, ApprovalDecision::Decline);
     assert_eq!(
         approval.activate(2),
         ApprovalOutcome::Respond(ApprovalDecision::ApproveAndSaveRule)
