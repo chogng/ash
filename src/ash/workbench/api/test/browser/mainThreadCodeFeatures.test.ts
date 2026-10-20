@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict';
-import { suite, test } from 'mocha';
+import { before, suite, test } from 'mocha';
 import '../../../../editor/test/browser/testEditorDom.js';
 import manifest from '../../../../../../extensions/code/package.json' with { type: 'json' };
-import { startCodeExtension } from '../../../../../../test/fixtures/codeExtension.js';
+import { prepareCodeExtension, startCodeExtension } from '../../../../../../test/fixtures/codeExtension.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../base/test/common/utils.js';
 import { TextModel } from '../../../../editor/common/model/textModel.js';
 import { Range } from '../../../../editor/common/core/range.js';
@@ -24,6 +24,7 @@ const runtime: ExtensionHostRuntime = {
 
 suite('Independent Rust Code provider', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();
+	before(function () { this.timeout(600_000); prepareCodeExtension(); });
 	test('real capability activates every feature and retires without replacing text, version or undo', async function () {
 		this.timeout(120_000);
 		const process = await startCodeExtension();
