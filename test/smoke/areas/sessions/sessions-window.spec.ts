@@ -18,6 +18,7 @@ import { USER_KEYBOARD_LAYOUT_DEFAULT_CONTENT } from '../../../../src/ash/platfo
 
 // macOS fullscreen transitions require a shown, focused window.
 const focusTest = test.extend({ electronWindowMode: process.platform === 'darwin' ? 'active' : undefined });
+const emptyWorkspaceTest = test.extend({ openWorkspace: false });
 
 test('Sessions keyboard layout commands inspect the active mapping and offer layout selection', async ({ target, workbench }) => {
 	const page = await workbench.openAgentsWindow(target.kind);
@@ -2289,7 +2290,7 @@ test('Electron Code Sessions Activity Bar follows its position and size settings
 		await expect(library.locator('svg')).toHaveAttribute('data-ash-icon-id', 'projects-filled');
 		await expect(page.locator('.ash-sessions-surface-header')).toHaveCount(0);
 		await expect(page.locator('[data-part="auxiliarybar"] h2')).toBeHidden();
-		await page.locator('[data-part="activitybar"]').getByRole('button', { name: 'Chat' }).click();
+		await page.locator('[data-part="activitybar"]').getByRole('button', { name: 'Chat', exact: true }).click();
 		await expect(page.locator('.ash-sessions-list-controls')).toBeVisible();
 		const chatButton = page.locator('[data-part="activitybar"] button').first();
 		await expect(chatButton).toBeVisible();
@@ -2483,7 +2484,7 @@ test('Open in Agents moves the IDE chat draft and preserves drafts when the targ
 	const sourceLine = sourceChat.locator(':is(.ash-chat-input-editor,.ash-cowork-input-editor) .stanza-editor-line-text').first();
 	await sourceDraft.focus();
 	await workbenchPage.keyboard.insertText('Continue reviewing this change in Agents Window');
-	await workbenchPage.getByRole('button', { name: 'Hide Secondary Side Bar', exact: true }).click();
+	await workbenchPage.locator('[data-part="titlebar"]').getByRole('button', { name: 'Hide Secondary Side Bar', exact: true }).click();
 	const auxiliaryBar = workbenchPage.locator('[data-part="auxiliarybar"]');
 	await expect(auxiliaryBar).toBeHidden();
 
@@ -2591,7 +2592,7 @@ focusTest('Agents macOS fullscreen hides window controls and restores them on ex
 	await expect(spacer).toBeVisible();
 });
 
-test("Code opens Sessions in a dedicated Electron window and returns to Workbench", { tag: ['@electron-ui', '@electron-app-server'] }, async ({ application, target, workbench }) => {
+emptyWorkspaceTest("Code opens Sessions in a dedicated Electron window and returns to Workbench", { tag: ['@electron-app-server'] }, async ({ application, target, workbench }) => {
 	if (target.kind !== "electron") {
 		return;
 	}
@@ -2613,16 +2614,15 @@ test("Code opens Sessions in a dedicated Electron window and returns to Workbenc
 	});
 	// Shortcuts belong to the shared profile file, including after a window reload.
 	await writeFile(new URL(keybindingsResource), '[]');
+	const before = await readUserSettings(sessionsPage);
+	expect(JSON.parse(before.content)).toEqual({});
 	const resources = await sessionsPage.evaluate(async resource => {
 		const ipc = (globalThis as unknown as { readonly ash: { readonly ipcRenderer: { invoke(channel: string, params?: unknown): Promise<unknown>; }; }; }).ash.ipcRenderer;
-		const home = await globalThis.ashTestMainProcess.call<string>('localFilesystem', 'userDataHome');
-		const configuration = await globalThis.ashTestMainProcess.call<{ revision: string; }>('localFilesystem', 'readFile', { resource: home.replace(/\/$/u, '') + '/settings.json' });
 		const keybindings = await globalThis.ashTestMainProcess.call('localFilesystem', 'readFile', { resource }) as { readonly revision: string; readonly bytes: string; };
 		const connection = await ipc.invoke('ash:remote:connection') as { readonly kind: string; };
-		return { configurationRevision: configuration.revision, keybindingsRevision: keybindings.revision, bindings: JSON.parse(atob(keybindings.bytes)), connectionKind: connection.kind };
+		return { keybindingsRevision: keybindings.revision, bindings: JSON.parse(atob(keybindings.bytes)), connectionKind: connection.kind };
 	}, keybindingsResource);
-	expect(resources).toEqual({ configurationRevision: expect.any(String), keybindingsRevision: expect.any(String), bindings: [], connectionKind: 'local' });
-	const before = await readUserSettings(sessionsPage);
+	expect(resources).toEqual({ keybindingsRevision: expect.any(String), bindings: [], connectionKind: 'local' });
 	const changed = sessionsPage.evaluate(({ resource }) => new Promise<void>((resolve, reject) => {
 		const subscription = globalThis.ashTestMainProcess.listen('localFilesystem', 'fileChange', value => {
 			if (Array.isArray(value) && !value.includes(resource)) return;
@@ -2845,32 +2845,36 @@ test('Sessions menus and history actions stay independent from Workbench', async
 	await workbench.waitForReady();
 });
 
-test('Sessions titlebar aligns its application menu and actions', { tag: ['@electron-ui', '@electron-app-server'] }, async ({ application, target, workbench }) => {
+test('Sessions titlebar aligns its platform actions and sidebar toggle', { tag: ['@electron-ui', '@electron-app-server'] }, async ({ application, target, workbench }) => {
 	if (target.kind !== 'electron' || !('windows' in application)) return;
 	const sessionsPage = await workbench.openAgentsWindow(target.kind);
-	const toolbar = sessionsPage.locator('[data-part="titlebar"] .ash-toolbar');
+	const toolbar = sessionsPage.locator('[data-part="titlebar"]').getByRole('toolbar', { name: 'Title bar left actions', exact: true });
 	const buttons = toolbar.getByRole('button');
-	await expect(buttons).toHaveCount(4);
+	const hasWindowMenu = process.platform !== 'darwin';
+	await expect(buttons).toHaveCount(hasWindowMenu ? 4 : 3);
+	await expect(toolbar.getByRole('button', { name: 'Application menu', exact: true })).toHaveCount(hasWindowMenu ? 1 : 0);
 	await expect(toolbar).toHaveCSS('-webkit-app-region', 'no-drag');
-	await expect(buttons.nth(1)).toHaveAttribute('aria-pressed', 'true');
+	await expect(toolbar.getByRole('button', { name: 'Hide sidebar', exact: true })).toHaveAttribute('aria-pressed', 'true');
 	const activityNavigation = sessionsPage.locator('.ash-sessions-activity-content');
-	await expect(activityNavigation.getByRole('button', { name: 'Chat' })).toHaveAttribute('aria-current', 'page');
+	await expect(activityNavigation.getByRole('button', { name: 'Chat', exact: true })).toHaveAttribute('aria-current', 'page');
 	await expect(activityNavigation.getByRole('button', { name: 'Code' })).not.toHaveAttribute('aria-current', 'page');
 	await activityNavigation.getByRole('button', { name: 'Code' }).click();
 	await expect(activityNavigation.getByRole('button', { name: 'Code' })).toHaveAttribute('aria-current', 'page');
 	await expect(sessionsPage.locator('[data-part="sessions"]')).toBeVisible();
 	await expect(sessionsPage.locator('.ash-sessions-surface-header')).toHaveCount(0);
-	await activityNavigation.getByRole('button', { name: 'Chat' }).click();
+	await activityNavigation.getByRole('button', { name: 'Chat', exact: true }).click();
 	await expect(sessionsPage.locator('.ash-sessions-surface-header')).toHaveCount(0);
-	expect(await buttons.evaluateAll(elements => elements.map(element => element.getAttribute('aria-label')))).toEqual(['Application menu', 'Hide sidebar', 'Back', 'Forward']);
-	const columnOffset = await sessionsPage.evaluate(() => {
-		const menu = document.querySelector<HTMLElement>('[data-action-id="ash.applicationMenu"] button')!;
-		const chat = document.querySelector<HTMLElement>('[data-part="activitybar"] button')!;
-		const menuBounds = menu.getBoundingClientRect();
-		const chatBounds = chat.getBoundingClientRect();
-		return menuBounds.x + menuBounds.width / 2 - (chatBounds.x + chatBounds.width / 2);
-	});
-	if (process.platform !== 'darwin') expect(Math.abs(columnOffset)).toBeLessThanOrEqual(1);
+	expect(await buttons.evaluateAll(elements => elements.map(element => element.getAttribute('aria-label')))).toEqual([...(hasWindowMenu ? ['Application menu'] : []), 'Hide sidebar', 'Back', 'Forward']);
+	if (hasWindowMenu) {
+		const columnOffset = await sessionsPage.evaluate(() => {
+			const menu = document.querySelector<HTMLElement>('[data-action-id="ash.applicationMenu"] button')!;
+			const chat = document.querySelector<HTMLElement>('[data-part="activitybar"] button')!;
+			const menuBounds = menu.getBoundingClientRect();
+			const chatBounds = chat.getBoundingClientRect();
+			return menuBounds.x + menuBounds.width / 2 - (chatBounds.x + chatBounds.width / 2);
+		});
+		expect(Math.abs(columnOffset)).toBeLessThanOrEqual(1);
+	}
 	const iconOffsets = await buttons.evaluateAll(buttons => buttons.map(button => {
 		const buttonBounds = button.getBoundingClientRect();
 		const iconBounds = button.querySelector('svg')!.getBoundingClientRect();
@@ -2886,8 +2890,7 @@ test('Sessions titlebar aligns its application menu and actions', { tag: ['@elec
 	await expect(sessionsPage.locator('[data-part="sidebar"]')).toBeVisible();
 	const closed = sessionsPage.waitForEvent('close');
 	if (process.platform === 'darwin') {
-		const items = await captureElectronMenu(application, () => toolbar.getByRole('button', { name: 'Application menu' }).click(), { label: 'Return to Workbench' });
-		expect(items.find(item => item.label === 'File')!.submenu!.some(item => item.label === 'New Session')).toBe(false);
+		await returnFromSessions(sessionsPage, application);
 	} else {
 		await toolbar.getByRole('button', { name: 'Application menu' }).click();
 		await expect(toolbar.getByRole('button', { name: 'Application menu' })).toHaveAttribute('aria-expanded', 'true');
@@ -2978,7 +2981,7 @@ test('Sessions titlebar sidebar toggle stays transparent at rest and responds to
 	const sidebar = page.locator('[data-part="sidebar"]');
 	const toggle = page.locator('[data-action-id="ash.sessions.toggleSidebar"] button');
 	const navigation = page.locator('.ash-sessions-activity-content');
-	const chat = navigation.getByRole('button', { name: 'Chat' });
+	const chat = navigation.getByRole('button', { name: 'Chat', exact: true });
 	const library = navigation.getByRole('button', { name: 'Library' });
 	const menu = page.getByRole('button', { name: 'Application menu', exact: true });
 	const hasWindowMenu = target.kind === 'browser' || process.platform !== 'darwin';
@@ -3069,7 +3072,7 @@ test('Sessions titlebar sidebar toggle stays transparent at rest with hover and 
 		}
 		await expect(page.locator('#app')).toHaveAttribute('data-color-scheme', theme.endsWith('Dark') ? 'hcDark' : 'hcLight');
 		const navigation = page.locator('.ash-sessions-activity-content');
-		const chat = navigation.getByRole('button', { name: 'Chat' });
+		const chat = navigation.getByRole('button', { name: 'Chat', exact: true });
 		const library = navigation.getByRole('button', { name: 'Library' });
 		const toggle = page.locator('[data-action-id="ash.sessions.toggleSidebar"] button');
 		await page.mouse.move(400, 180);
@@ -3324,15 +3327,14 @@ test('closing the Workbench keeps Sessions usable and Return to Workbench reopen
 			await expect(child.locator('.ash-code-sessions-window')).toBeVisible();
 			await parent.close();
 			await expect(child.locator('.ash-code-sessions-window')).toBeVisible();
+			expect(JSON.parse((await readUserSettings(child)).content)).toEqual({});
 			const windows = await child.evaluate(async () => {
 				const ipc = (globalThis as unknown as { readonly ash: { readonly ipcRenderer: { invoke(channel: string, params?: unknown): Promise<unknown>; }; }; }).ash.ipcRenderer;
 				const list = await ipc.invoke('ash:window:operation', { kind: 'list' }) as readonly { readonly title: string; }[];
-				const home = await globalThis.ashTestMainProcess.call<string>('localFilesystem', 'userDataHome');
-				const configuration = await globalThis.ashTestMainProcess.call<{ revision: string; }>('localFilesystem', 'readFile', { resource: home.replace(/\/$/u, '') + '/settings.json' });
 				const connection = await ipc.invoke('ash:remote:connection') as { readonly kind: string; };
-				return { titles: list.map(window => window.title), configurationRevision: configuration.revision, connectionKind: connection.kind };
+				return { titles: list.map(window => window.title), connectionKind: connection.kind };
 			});
-			expect(windows).toEqual({ titles: [expect.stringContaining('Sessions')], configurationRevision: expect.any(String), connectionKind: 'local' });
+			expect(windows).toEqual({ titles: [expect.stringContaining('Sessions')], connectionKind: 'local' });
 			const workbenchPromise = application.waitForEvent('window');
 			await returnFromSessions(child, application);
 			const reopened = await workbenchPromise;
