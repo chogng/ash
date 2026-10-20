@@ -102,6 +102,8 @@ export interface ExtensionsBuiltInProvider {
 
 export interface ExtensionsBuiltInProviders {
 	readonly revision: number;
+	/** The connected backend decides whether this connection may change provider enablement. */
+	readonly canChangeEnablement: boolean;
 	readonly providers: readonly ExtensionsBuiltInProvider[];
 }
 

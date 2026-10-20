@@ -206,7 +206,7 @@ if (new URLSearchParams(location.search).has('pagedDiscovery')) { sources.push({
 let builtInProviderEnabled = true;
 let builtInProviderRunning = true;
 function builtInProviders() {
-	return { revision: editorPolicyRevision, providers: [{ id: 'ash.github-authentication', enabled: builtInProviderEnabled, running: builtInProviderRunning }] };
+	return { revision: editorPolicyRevision, canChangeEnablement: !new URLSearchParams(location.search).has('readOnlyProviders'), providers: [{ id: 'ash.github-authentication', enabled: builtInProviderEnabled, running: builtInProviderRunning }] };
 }
 const api: IExtensionManagementApi = {
 	searchPage: async params => {
@@ -224,6 +224,7 @@ const api: IExtensionManagementApi = {
 	builtInProviders: async () => builtInProviders(),
 	setBuiltInProviderEnablement: async params => {
 		requests.push(['builtInPolicy', params]);
+		if (!builtInProviders().canChangeEnablement) { throw new Error('ResourceNotOwner'); }
 		if (params.id !== 'ash.github-authentication' || params.expectedRevision !== editorPolicyRevision) { throw new Error('Policy revision conflict'); }
 		builtInProviderEnabled = params.enabled;
 		builtInProviderRunning = false;

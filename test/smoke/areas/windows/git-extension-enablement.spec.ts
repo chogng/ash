@@ -3,12 +3,28 @@ import { join, resolve } from 'node:path';
 import { expect, test } from '../../../automation/test.js';
 import type { Workbench } from '../../../automation/workbench.js';
 
-async function toggleGit(workbench: Workbench, state: 'Enabled' | 'Disabled'): Promise<void> {
+async function openGitDetails(workbench: Workbench) {
 	await workbench.quickaccess.runCommand('ash.extensions.manageBuiltIn');
 	await workbench.page.getByRole('searchbox', { name: 'Search Extensions', exact: true }).fill('ash.git');
 	const extension = workbench.page.getByRole('listbox', { name: 'Extensions', exact: true }).locator('[data-package-id="ash.git"]');
 	await extension.getByText('ash.git', { exact: true }).first().click();
-	const details = workbench.page.locator('.ash-extension-editor:visible').filter({ hasText: 'ash.git' });
+	return workbench.page.locator('.ash-extension-editor:visible').filter({ hasText: 'ash.git' });
+}
+
+async function expectReadOnlyGit(workbench: Workbench, screenshotPath: string): Promise<void> {
+	const details = await openGitDetails(workbench);
+	await expect(details.getByRole('status')).toContainText('Enabled');
+	await expect(details.getByRole('status')).toContainText('This connection cannot enable or disable backend providers.');
+	await expect(details.getByRole('button', { name: 'Disable', exact: true })).toBeDisabled();
+	const row = workbench.page.getByRole('listbox', { name: 'Extensions', exact: true }).locator('[data-package-id="ash.git"]');
+	await expect(row.getByRole('button')).toHaveCount(0);
+	await workbench.page.screenshot({ path: screenshotPath });
+	await workbench.editors.groupAt(0).tabs.filter({ hasText: 'Independent comparison' }).click();
+	await workbench.git.open();
+}
+
+async function toggleGit(workbench: Workbench, state: 'Enabled' | 'Disabled'): Promise<void> {
+	const details = await openGitDetails(workbench);
 	await expect(details).toContainText(state);
 	await details.getByRole('button', { name: state === 'Enabled' ? 'Disable' : 'Enable', exact: true }).click();
 	await expect(details).toContainText(state === 'Enabled' ? 'Disabled' : 'Enabled');
@@ -19,9 +35,14 @@ async function toggleGit(workbench: Workbench, state: 'Enabled' | 'Disabled'): P
 test.describe('Git extension enablement in the full product', () => {
 	test.use({ gitRepository: true });
 
-	for (const reloadMode of ['restart', 'renderer reload'] as const) {
-		const title = reloadMode === 'restart' ? 'disabled Git preserves independent SCM, editable diff, undo and saving through enablement and reload' : 'disabled Git preserves independent SCM, editable diff, undo and saving through enablement and renderer reload';
-		test(title, { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ application, testWorkspace, workbench, reloadWorkbench }, testInfo) => {
+	for (const { reloadMode, canManageGit, tag } of [
+		{ reloadMode: 'restart', canManageGit: true, tag: '@electron-app-server' },
+		{ reloadMode: 'renderer reload', canManageGit: true, tag: '@electron-app-server' },
+		{ reloadMode: 'restart', canManageGit: false, tag: '@browser-app-server' },
+		{ reloadMode: 'renderer reload', canManageGit: false, tag: '@browser-app-server' },
+	] as const) {
+		const title = `${canManageGit ? 'disabled Git' : 'read-only Git management'} preserves independent SCM, editable diff, undo and saving through ${reloadMode}`;
+		test(title, { tag: [tag] }, async ({ application, testWorkspace, workbench, reloadWorkbench }, testInfo) => {
 			test.slow(); // Installs a provider, exercises editing, and restores two windows.
 			// Exercise an admitted package through the public install flow. Merely exposing a
 			// package in ASH_WEB_EXTENSION_PATHS does not authorize its scripts to execute.
@@ -71,8 +92,10 @@ test.describe('Git extension enablement in the full product', () => {
 			await modified.press('ControlOrMeta+a');
 			await workbench.page.keyboard.insertText('const value = 3;\n');
 			await expect(group.tabs.filter({ hasText: 'Independent comparison' })).toHaveAttribute('aria-label', /unsaved/u);
-			await toggleGit(workbench, 'Enabled');
-			await expect(workbench.page.getByRole('button', { name: 'Open main.ts for Changes', exact: true })).toHaveCount(0);
+			if (canManageGit) { await toggleGit(workbench, 'Enabled'); }
+			else { await expectReadOnlyGit(workbench, testInfo.outputPath('git-read-only-details.png')); }
+			if (canManageGit) { await expect(workbench.page.getByRole('button', { name: 'Open main.ts for Changes', exact: true })).toHaveCount(0); }
+			else { await expect(workbench.page.locator('.ash-scm-repository-name')).toHaveCount(2); }
 			await expect(workbench.page.getByRole('button', { name: 'Open independent diff', exact: true })).toBeVisible();
 			await expect(changes.locator('.stanza-editor-placeholder-text')).toHaveText('Independent message');
 			await expect(diff).toBeVisible();
@@ -101,23 +124,27 @@ test.describe('Git extension enablement in the full product', () => {
 			await expect(binary.nth(1)).toContainText('00 fe 02');
 			await expect.poll(() => readFile(testWorkspace.file, 'utf8')).toBe('const value = 3;\n');
 			await group.tabs.filter({ hasText: 'Independent comparison' }).click();
-			await workbench.page.screenshot({ path: testInfo.outputPath('git-disabled-independent-scm.png') });
+			await workbench.page.screenshot({ path: testInfo.outputPath(canManageGit ? 'git-disabled-independent-scm.png' : 'git-read-only-independent-scm.png') });
 			await reload();
 			await workbench.git.open();
-			await expect(workbench.page.locator('.ash-scm-commit-form')).toBeHidden();
-			await expect(workbench.page.getByRole('button', { name: 'Clone Repository', exact: true })).toHaveCount(0);
+			if (canManageGit) {
+				await expect(workbench.page.locator('.ash-scm-commit-form')).toBeHidden();
+				await expect(workbench.page.getByRole('button', { name: 'Clone Repository', exact: true })).toHaveCount(0);
+			}
 			if (reloadMode === 'restart') {
 				await expect(workbench.editors.groupAt(0).content.locator('.stanza-diff-editor:visible .modified .stanza-editor-line-text')).toContainText(['const value = 3;']);
 			}
 			await workbench.quickaccess.runCommand('ash.scm.fixture.activate');
-			await expect(workbench.page.getByRole('button', { name: 'Open main.ts for Changes', exact: true })).toHaveCount(0);
+			if (canManageGit) { await expect(workbench.page.getByRole('button', { name: 'Open main.ts for Changes', exact: true })).toHaveCount(0); }
+			else { await expect(workbench.page.locator('.ash-scm-repository-name')).toHaveCount(2); }
 			await expect(workbench.page.getByRole('button', { name: 'Open independent diff', exact: true })).toBeVisible();
 			if (reloadMode === 'renderer reload') {
 				// CDP reload bypasses the Desktop shutdown handshake; exercise editors again in the new realm.
 				await workbench.page.getByRole('button', { name: 'Open independent diff', exact: true }).click();
 				await expect(workbench.editors.groupAt(0).content.locator('.stanza-diff-editor:visible .modified .stanza-editor-line-text')).toContainText(['const value = 3;']);
 			}
-			await toggleGit(workbench, 'Disabled');
+			if (canManageGit) { await toggleGit(workbench, 'Disabled'); }
+			else { await expectReadOnlyGit(workbench, testInfo.outputPath('git-read-only-details-restored.png')); }
 			await expect(workbench.page.locator('.ash-scm-repository-name')).toHaveCount(2);
 			await reload();
 			await workbench.git.open();

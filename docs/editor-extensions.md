@@ -622,6 +622,10 @@ Worker 执行权限。`ASH_WEB_EXTENSION_PATHS` 开发包保持 user 来源，�
 扩展列表和详情页消费该接口，不另读浏览器目录；
 管理查询可包含禁用包，激活查询继续过滤它们。无查询或能力筛选时默认展示已安装扩展，包含内置包；
 输入查询或能力筛选继续浏览扩展源。语言包由显示语言设置管理。
+内置后端 Provider 的状态查询允许已认证的 Browser、Desktop 与 Remote 宿主，返回当前连接的
+`canChangeEnablement`；普通客户端仍被拒绝。启停只允许已有管理权限的 Product／Remote Host，
+查询不会授予执行或管理权限。列表与详情使用该能力决定动作是否可用；只读连接仍显示状态、
+禁用详情中的启停按钮并说明需要已授权宿主。该新增结果字段由同一版本的协议生成器和客户端共同消费。
 外部包描述保留受授权包的 location 和平台，供 Debug 等 owner 解析程序入口。客户端再以“目录代次 + 扩展 ID + 包内相对路径”请求资源。
 App Server 把有界 bytes 放入 connection-owned `ResourceStore`，前端通过分块 API 读取并释放临时
 资源。Workbench 最后把声明式贡献投影到各自领域 registry。

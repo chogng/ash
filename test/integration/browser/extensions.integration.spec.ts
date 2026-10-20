@@ -734,6 +734,24 @@ for (const [locale, disable, enable, disabled, running, onDemand] of [
 			['builtInPolicy', { id: 'ash.github-authentication', enabled: true, expectedRevision: 2 }],
 		]);
 	});
+
+	test(`Built-in Rust provider details remain readable without management authority in ${locale}`, async ({ page }) => {
+		await page.goto(`/extensions.html?locale=${locale}&readOnlyProviders`);
+		await page.evaluate(() => window.ashExtensionsIntegration.executeCommand('ash.extensions.manageBuiltIn'));
+		const provider = page.locator('[data-view-id="ash.extensions.view"] .ash-extensions').getByRole('option').filter({ hasText: 'ash.github-authentication' });
+		await expect(provider).toHaveAccessibleName(new RegExp(locale === 'en' ? 'Enabled' : '已启用', 'u'));
+		await expect(provider.getByRole('button')).toHaveCount(0);
+		await provider.click();
+		const editor = page.locator('.ash-extension-editor');
+		const reason = locale === 'en' ? 'This connection cannot enable or disable backend providers.' : '此连接无权启用或禁用后端提供程序。';
+		await expect(editor.getByRole('status')).toContainText(running);
+		await expect(editor.getByRole('status')).toContainText(reason);
+		await expect(editor.getByRole('button', { name: disable, exact: true })).toBeDisabled();
+		// A native disabled control must also reject keyboard activation.
+		await editor.getByRole('button', { name: disable, exact: true }).press('Enter');
+		await expect(editor.getByRole('status')).toContainText(running);
+		expect(await page.evaluate(() => window.ashExtensionsIntegration.requests.filter((entry: any) => entry[0] === 'builtInPolicy'))).toEqual([]);
+	});
 }
 
 for (const [locale, skillsTitle, disable, enable, openInstructions] of [

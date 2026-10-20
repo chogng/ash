@@ -279,6 +279,8 @@ pub struct ExtensionsBuiltInProviderDto {
 pub struct ExtensionsBuiltInProvidersResult {
     #[ts(type = "number")]
     pub revision: u64,
+    /// Whether this authenticated connection may change backend provider enablement.
+    pub can_change_enablement: bool,
     pub providers: Vec<ExtensionsBuiltInProviderDto>,
 }
 

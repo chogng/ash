@@ -194,7 +194,7 @@ export class ExtensionsEditor extends EditorPane {
 				getProvider: () => {
 					const focused = mainWindow.document.activeElement;
 					if (!this.currentInput || !(focused instanceof HTMLElement) || !this.domNode.contains(focused)) { return undefined; }
-					return new AccessibleContentProvider(AccessibleViewProviderId.Extensions, { type }, () => type === AccessibleViewType.View ? this.domNode.innerText : localize({ bundle: 'ash.extensions', key: 'detailsHelp' }, 'These are the selected extension, plugin, skill or MCP server details. The header contains identity and actions. Use Tab to reach the tabs, then Left and Right to move and Enter to select. Details shows the description or README; other tabs show features, permissions, tools or skill instructions and diagnostics. Additional information is beside the content and moves below it in a narrow editor. Open package opens the owning package for installation and permission management. MCP server details show backend connection status and diagnostics. Refresh reloads server status. Add MCP server opens a transport choice and configuration dialog. Independent server details provide Edit, Enable or Disable, Connect, Disconnect and Remove. Enablement is saved; Connect and Disconnect affect this running instance. Operations refresh backend state. Escape cancels a dialog.'), () => focused.focus(), AccessibilityVerbositySettingId.Extensions);
+					return new AccessibleContentProvider(AccessibleViewProviderId.Extensions, { type }, () => type === AccessibleViewType.View ? this.domNode.innerText : localize({ bundle: 'ash.extensions', key: 'detailsHelp' }, 'These are the selected extension, plugin, skill or MCP server details. The header contains identity and actions. Use Tab to reach the tabs, then Left and Right to move and Enter to select. Details shows the description or README; other tabs show features, permissions, tools or skill instructions and diagnostics. Additional information is beside the content and moves below it in a narrow editor. Open package opens the owning package for installation and permission management. Backend provider status remains readable when this connection cannot change enablement; unavailable actions are disabled and the status explains why. MCP server details show backend connection status and diagnostics. Refresh reloads server status. Add MCP server opens a transport choice and configuration dialog. Independent server details provide Edit, Enable or Disable, Connect, Disconnect and Remove. Enablement is saved; Connect and Disconnect affect this running instance. Operations refresh backend state. Escape cancels a dialog.'), () => focused.focus(), AccessibilityVerbositySettingId.Extensions);
 				},
 			}));
 		}
@@ -450,7 +450,10 @@ export class ExtensionsEditor extends EditorPane {
 				if (!provider) { this.status.textContent = localize({ bundle: 'ash.extensions', key: 'backendUnavailable' }, 'This provider is unavailable on the connected backend.'); return; }
 				this.status.textContent = provider.enabled ? provider.running ? localize({ bundle: 'ash.extensions', key: 'providerRunning' }, 'Enabled · running') : localize({ bundle: 'ash.extensions', key: 'providerStopped' }, 'Enabled · starts on demand') : localize({ bundle: 'ash.extensions', key: 'disabledState' }, 'Disabled');
 				this.capabilities.textContent = (manifest.ashRuntime?.capabilities ?? manifest.ashLanguageServers?.servers?.map((server: { id: string; }) => server.id) ?? []).join('\n');
-				button(extensionEnablementLabel(provider.enabled), toggle);
+				if (!catalog.canChangeEnablement) {
+					this.status.textContent += '\n' + localize({ bundle: 'ash.extensions', key: 'providerEnablementReadOnly' }, 'This connection cannot enable or disable backend providers. Use an authorized desktop or remote host to manage this provider.');
+				}
+				button(extensionEnablementLabel(provider.enabled), toggle, catalog.canChangeEnablement === true);
 				return;
 			}
 			const enabled = !this.enablement.getDisabledExtensions().some(value => value.id === extension.id.toLowerCase());

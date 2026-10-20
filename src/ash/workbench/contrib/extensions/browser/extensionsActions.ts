@@ -288,6 +288,9 @@ export async function changeExtensionEnablement(input: ExtensionsInput, enableme
 		const manifest = JSON.parse(descriptor.manifestJson);
 		if ((manifest.ashRuntime?.kind === 'rust' && !manifest.browser) || !!manifest.ashLanguageServers) {
 			const catalog = await management.listBuiltInProviders();
+			if (!catalog.canChangeEnablement) {
+				throw new Error(localize({ bundle: 'ash.extensions', key: 'providerEnablementReadOnly' }, 'This connection cannot enable or disable backend providers. Use an authorized desktop or remote host to manage this provider.'));
+			}
 			const provider = catalog.providers.find(value => value.id === descriptor.id);
 			if (!provider) { throw new Error(localize({ bundle: 'ash.extensions', key: 'backendUnavailable' }, 'This provider is unavailable on the connected backend.')); }
 			await management.setBuiltInProviderEnabled(provider.id, !provider.enabled, catalog.revision);

@@ -91,14 +91,16 @@ impl<'a> ExtensionPackagesRequestProcessor<'a> {
 impl<'a> ExtensionPackagesRequestProcessor<'a> {
     pub(super) fn extension_packages_built_in_providers(
         &self,
+        connection: &ConnectionState,
         params: &Value,
     ) -> Result<Value, RpcError> {
         let _: EmptyParams = decode(params)?;
-        result(&self.built_in_providers_snapshot()?)
+        result(&self.built_in_providers_snapshot(connection)?)
     }
 
     pub(super) fn extension_packages_set_built_in_provider_enablement(
         &self,
+        connection: &ConnectionState,
         params: &Value,
     ) -> Result<Value, RpcError> {
         use ash_app_server_protocol::protocol::extension_packages::ExtensionsBuiltInProviderEnablementParams;
@@ -166,11 +168,12 @@ impl<'a> ExtensionPackagesRequestProcessor<'a> {
             .reconcile_extensions(&snapshot, Some(policy))
             .map_err(|_| RpcError::new(-32042, AppServerErrorName::PluginOperationFailed))?;
         self.updates.publish_extension_packages_changed();
-        result(&self.built_in_providers_snapshot()?)
+        result(&self.built_in_providers_snapshot(connection)?)
     }
 
     fn built_in_providers_snapshot(
         &self,
+        connection: &ConnectionState,
     ) -> Result<
         ash_app_server_protocol::protocol::extension_packages::ExtensionsBuiltInProvidersResult,
         RpcError,
@@ -195,6 +198,7 @@ impl<'a> ExtensionPackagesRequestProcessor<'a> {
             .map_err(|_| RpcError::new(-32000, AppServerErrorName::ServerOverloaded))?;
         Ok(ExtensionsBuiltInProvidersResult {
             revision: policy.generation(),
+            can_change_enablement: connection.allows_product_host_capabilities(),
             providers: self
                 .built_in_extension_runtimes
                 .iter()

@@ -3756,21 +3756,26 @@ impl AppServer {
             Some(ClientMethod::ExtensionsAcquireCapability) => self
                 .extension_packages_processor()
                 .extension_packages_acquire_capability(connection, &request.params),
-            Some(
-                ClientMethod::ExtensionsBuiltInProviders
-                | ClientMethod::ExtensionsSetBuiltInProviderEnablement,
-            ) => {
+            Some(ClientMethod::ExtensionsBuiltInProviders) => {
+                // Authenticated Browser clients may inspect shared provider state without
+                // receiving the product host's authority to change it.
+                if !connection.allows_product_host_capabilities()
+                    && connection.authority != ConnectionAuthority::Browser
+                {
+                    return Err(RpcError::new(-32000, AppServerErrorName::ResourceNotOwner));
+                }
+                self.extension_packages_processor()
+                    .extension_packages_built_in_providers(connection, &request.params)
+            }
+            Some(ClientMethod::ExtensionsSetBuiltInProviderEnablement) => {
                 if !connection.allows_product_host_capabilities() {
                     return Err(RpcError::new(-32000, AppServerErrorName::ResourceNotOwner));
                 }
-                if client_method(&request.method) == Some(ClientMethod::ExtensionsBuiltInProviders)
-                {
-                    self.extension_packages_processor()
-                        .extension_packages_built_in_providers(&request.params)
-                } else {
-                    self.extension_packages_processor()
-                        .extension_packages_set_built_in_provider_enablement(&request.params)
-                }
+                self.extension_packages_processor()
+                    .extension_packages_set_built_in_provider_enablement(
+                        connection,
+                        &request.params,
+                    )
             }
             Some(ClientMethod::ExtensionsReleaseCapability) => self
                 .extension_packages_processor()

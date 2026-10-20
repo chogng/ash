@@ -33,6 +33,7 @@ fn github_managed_settings_is_account_bound_read_only_and_cancellable() {
 #[test]
 fn built_in_provider_enablement_roundtrips_and_uses_global_serialization() {
     use crate::protocol::extension_packages::ExtensionsBuiltInProviderEnablementParams;
+    use crate::protocol::extension_packages::ExtensionsBuiltInProvidersResult;
     let read = super::client_method_definition("extensions/builtInProviders").unwrap();
     assert_eq!(
         read.serialization_scope(&serde_json::json!({})).unwrap(),
@@ -45,6 +46,13 @@ fn built_in_provider_enablement_roundtrips_and_uses_global_serialization() {
     let request: ExtensionsBuiltInProviderEnablementParams =
         serde_json::from_value(value.clone()).unwrap();
     assert_eq!(serde_json::to_value(request).unwrap(), value);
+    let snapshot = serde_json::json!({
+        "revision":7, "canChangeEnablement":false,
+        "providers":[{"id":"ash.git", "enabled":true, "running":false}]
+    });
+    let response: ExtensionsBuiltInProvidersResult =
+        serde_json::from_value(snapshot.clone()).unwrap();
+    assert_eq!(serde_json::to_value(response).unwrap(), snapshot);
     assert_eq!(
         write.serialization_scope(&value).unwrap(),
         Some(ClientRequestSerializationScope::Global {

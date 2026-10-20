@@ -30,7 +30,7 @@ test("Extensions browse snapshots survive view recreation and invalidate after l
 	const installed = { installationId: "installed-1", package: packageReference, state: "installed" as const, capabilities: [] };
 	const api = {
 		searchPage: async () => { throw new Error('This test exercises the existing browse API'); },
-		builtInProviders: async () => ({ revision: 1, providers: [] }),
+		builtInProviders: async () => ({ revision: 1, canChangeEnablement: true, providers: [] }),
 		setBuiltInProviderEnablement: async () => { throw new Error('unused'); },
 		sources: async () => ({ revision: 0, sources: [] }),
 		addSource: async () => ({ revision: 1, sources: [] }),

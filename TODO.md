@@ -83,7 +83,6 @@
 
 按以下顺序实施，以 Academy 验收完整链路：
 
-- [ ] **复核 · Browser 内置 Provider 管理入口**：当前完整 Browser SCM 场景已越过文件监听启动，并通过安装、授权与比较编辑，在打开内置 Git 详情时被 `ResourceNotOwner` 阻止。既有权限测试明确禁止 Browser 启停内置后端 Provider；需核对这个 UI 入口的可用性与受权宿主路由，不能放宽普通客户端权限来满足烟测。证据 `.build/file-watcher-browser-scm-failure/`。Desktop 完整 SCM 的重启、Renderer 重载两项已通过，监听与 SCM 注册生命周期缺陷已修复，不再作为待办；结果 `.build/ash-sdk-scm-desktop-final.log`。
 - [ ] **复核 · macOS 原生监听故障来源**：已复现原生监听注册／注销阻塞及注册成功却不送事件，并以隔离 helper、限时终止和限定目录轮询恢复修复 Ash 卡住的问题；系统 `fseventsd` 长期高 CPU 的来源仍未证实，不能认定由 Ash 引起。保留 `.build/file-watcher-reproduction-before.json`、`.build/file-watcher-deletion-reproduction.json`，后续需另取现场证据；本轮未重启系统服务。
 - [ ] **TS SDK 后续能力**：按真实消费者接入普通存储、扩展私有秘密、认证及其他可选 Provider。Registry JS 仍未获 `files.readTextFile` 的目录读授权，可信 Worker 没有 Rust 文件服务桥；不能用直接前端 IO 绕过权限。沿现有契约补实际授权、事件、错误、取消和释放，不公开完整后端连接、通用 IPC 或服务容器，也不把 API 迁移算作独立 Node 已退休。
 - [ ] **Academy 作者侧迁移**：由 Manifest、TS SDK 或构建工具承担目前仅用于声明、标签和注册的 Rust 接线，使普通作者无需手写 Rust 即可开发编辑器、提供 Agent 工具并附带 Skill。高级编辑器能力使用明确的公开客户端契约；Agent 结构化写入依赖下方 Work 文档服务任务，不另建模型或编辑历史。确有原生算法需求时再选用 Rust／WASM 等组件。
