@@ -55,6 +55,8 @@ import { IGitHubService as IGitHubApi } from '../../../platform/github/common/gi
 import { IAccountService } from '../../../platform/accounts/common/accountService.js';
 import { IOpenerService } from '../../../platform/opener/common/opener.js';
 import { ICommandService } from '../../../platform/commands/common/commands.js';
+import { IChecksOperationService } from '../../contrib/changes/common/checksOperationService.js';
+import { ChecksOperationService } from '../../contrib/changes/browser/checksOperationService.js';
 
 for (const locale of ['en', 'zh-CN']) test(`Changes preserves file selection and immutable review across refresh and ownership changes (${locale})`, async () => {
 	setNlsMessages(locale, productLanguagePackCatalogs.find(catalog => catalog.locale === locale)!.bundles);
@@ -229,6 +231,7 @@ function selected(id: string): SessionsViewSelection {
 }
 
 function registerChecksServices(services: InstantiationService): void {
+	services.registerSingleton(IChecksOperationService, () => services.createInstance(ChecksOperationService));
 	services.registerSingleton(ISessionChangesService, () => services.createInstance(SessionChangesService));
 	services.registerInstance(ISessionsManagementService, {
 		get sessions() {

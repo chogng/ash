@@ -20,6 +20,7 @@ import { formatNlsMessage, localize, setNlsResolver, resetNlsResolver } from '..
 import { approvalModeDefinitions, type ApprovalMode } from '../../../platform/agentHost/common/approvalModes.js';
 import { IDialogService } from '../../../platform/dialogs/common/dialogs.js';
 import type { IChatWidgetModel } from '../../../workbench/contrib/chat/browser/widget/chatWidget.js';
+import { ISessionsProvidersService, SessionsProvidersService } from '../../services/sessions/browser/sessionsProvidersService.js';
 
 test('permission commands use shared Chinese copy and require confirmation only for Bypass', async () => {
 	const chinese = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
@@ -79,6 +80,8 @@ test("Sessions owns the local New Chat command without requiring regular Workben
 	};
 	const services = new InstantiationService();
 	services.registerInstance(ISessionsService, viewService);
+	using providers = new SessionsProvidersService();
+	services.registerInstance(ISessionsProvidersService, providers);
 	using commands = new CommandService(services);
 
 	await commands.executeCommand(NEW_CHAT_COMMAND_ID);

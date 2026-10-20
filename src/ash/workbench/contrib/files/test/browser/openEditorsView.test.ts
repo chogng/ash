@@ -22,6 +22,8 @@ import { DirtyFilesIndicator } from '../../common/dirtyFilesIndicator.js';
 import { formatNlsMessage, setNlsResolver, resetNlsResolver } from '../../../../../nls.js';
 import { productLanguagePackCatalogs } from '../../../../services/localization/common/localizationCatalogs.js';
 
+const { OpenEditorsView } = await import('../../browser/views/openEditorsView.js');
+
 const uriIdentityServices = new TestUriIdentityServices();
 suiteTeardown(() => uriIdentityServices.dispose());
 
@@ -64,7 +66,6 @@ test('Open Editors follows editor groups, dirty state, activation, and close', a
 	using decorationProvider = services.get(IDecorationsService).registerDecorationsProvider({ label: 'Test', onDidChange: decorationChanges.event, provideDecorations: resource => resource.toString() === first.input.resource.toString() ? decoration : undefined });
 
 	try {
-		const { OpenEditorsView } = await import('../../browser/views/openEditorsView.js');
 		using view = services.createInstance(OpenEditorsView, browser.window.document.body, { id: OpenEditorsView.ID, title: 'Open Editors' });
 		browser.window.document.body.append(view.element);
 		assert.match(view.getAccessibleContent(), /first\.ts/);
