@@ -829,6 +829,329 @@ fn host_request_route_restores_the_issuing_server_id() {
     assert_eq!(original["id"], "browser-host:1:2");
 }
 
+#[test]
+fn document_read_routes_preserve_nested_gateway_proofs() {
+    let request = serde_json::json!({
+        "jsonrpc":"2.0", "id":"document-read", "method":"textDocument/read",
+        "params":{"path":"/workspace/file.txt", "readAccess":"operation-proof"}
+    });
+    let inner = tag_host_request(request.to_string(), 0);
+    let outer: Value = serde_json::from_str(&tag_host_request(inner, 7)).unwrap();
+    let callback = serde_json::json!({"params":outer["params"]});
+    let (route, access) = GatewayHandleKind::DocumentRead
+        .decode(callback["params"]["readAccess"].as_str().unwrap())
+        .unwrap();
+    assert_eq!(route, 7);
+    let (route, access) = GatewayHandleKind::DocumentRead.decode(access).unwrap();
+    assert_eq!(route, 0);
+    assert_eq!(access, "operation-proof");
+}
+
+#[cfg(unix)]
+#[test]
+fn document_tools_read_and_edit_through_the_issuing_directory_gateway() {
+    run_gateway_file_tools(crate::client_host::TextDocumentMode::Client);
+}
+
+#[cfg(unix)]
+#[test]
+fn file_tools_run_without_an_editor_host() {
+    run_gateway_file_tools(crate::client_host::TextDocumentMode::FileSystem);
+}
+
+#[cfg(unix)]
+fn run_gateway_file_tools(document_mode: crate::client_host::TextDocumentMode) {
+    use serde_json::json;
+    use std::io::Write;
+    use std::time::Duration;
+    use tokio::io::AsyncBufReadExt;
+    use tokio::io::AsyncReadExt;
+    use tokio::io::AsyncWriteExt;
+
+    // A scripted provider selects real tools; the client below supplies only the
+    // editor callbacks. There is no observer connection or direct tool invocation.
+    let model_runtime = tokio::runtime::Runtime::new().unwrap();
+    let listener = model_runtime
+        .block_on(tokio::net::TcpListener::bind("127.0.0.1:0"))
+        .unwrap();
+    let endpoint = listener.local_addr().unwrap();
+    let model = model_runtime.spawn(async move {
+        for (index, (name, arguments)) in [
+            ("read_file", json!({"path":"file.txt","offset":null,"limit":null})),
+            ("apply_patch", json!({"patch":"*** Begin Patch\n*** Update File: file.txt\n@@\n-baseline\n+patched\n*** End Patch\n"})),
+            ("read_file", json!({"path":"file.txt","offset":null,"limit":null})),
+            ("edit", json!({"path":"file.txt","old_string":"patched","new_string":"edited","replace_all":false})),
+            ("", Value::Null),
+        ].into_iter().enumerate() {
+            let (socket, _) = listener.accept().await.unwrap();
+            let mut socket = tokio::io::BufReader::new(socket);
+            let mut length = 0;
+            loop {
+                let mut line = String::new();
+                socket.read_line(&mut line).await.unwrap();
+                if line == "\r\n" { break; }
+                if let Some((key, value)) = line.split_once(':') {
+                    if key.eq_ignore_ascii_case("content-length") {
+                        length = value.trim().parse::<usize>().unwrap();
+                    }
+                }
+            }
+            assert!(length < 1024 * 1024);
+            let mut body = vec![0; length];
+            socket.read_exact(&mut body).await.unwrap();
+            let request: Value = serde_json::from_slice(&body).unwrap();
+            assert_eq!(request["model"], "fixture-model");
+            let (delta, finish) = if name.is_empty() {
+                (json!({"content":"done"}), "stop")
+            } else {
+                let tools = request["tools"].as_array().unwrap();
+                let (name, arguments) = if tools.iter().any(|tool| tool["function"]["name"] == name) {
+                    (name, arguments)
+                } else {
+                    assert!(tools.iter().any(|tool| tool["function"]["name"] == "exec"), "missing {name}: {:?}", tools.iter().map(|tool| &tool["function"]["name"]).collect::<Vec<_>>());
+                    ("exec", json!({"source":format!("const entry = ALL_TOOLS.find(t => t.toolName === {name:?} || t.name === {name:?} || t.name.endsWith('_' + {name:?})); if (!entry) throw new Error('Missing tool'); text(await tools[entry.name]({arguments}));"),"yieldTimeMs":10000,"maxOutputTokens":2000}))
+                };
+                (json!({"tool_calls":[{"index":0,"id":format!("tool-{index}"),"type":"function","function":{"name":name,"arguments":arguments.to_string()}}]}), "tool_calls")
+            };
+            let body = format!("data: {}\n\ndata: [DONE]\n\n", json!({"id":format!("response-{index}"),"object":"chat.completion.chunk","model":"fixture-model","choices":[{"index":0,"delta":delta,"finish_reason":finish}]}));
+            socket.write_all(format!("HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",body.len()).as_bytes()).await.unwrap();
+        }
+    });
+    let profile = tempfile::tempdir().unwrap();
+    let source = tempfile::tempdir().unwrap();
+    std::fs::write(source.path().join("file.txt"), "baseline\n").unwrap();
+    std::fs::write(profile.path().join("config.toml"), format!(
+        "schemaVersion = 10\n[connections.custom-documents]\nprovider = \"custom-documents\"\nconnection = \"custom-documents\"\nbaseUrl = \"http://{endpoint}/v1\"\n[connections.custom-documents.custom]\nmodel = \"fixture-model\"\nname = \"Document routing fixture\"\nprotocol = \"chatCompletions\"\ncontextWindow = 272000\norder = 0\n"
+    )).unwrap();
+    let options = ash_app_server_daemon::ConnectionOptions::new(
+        profile.path(),
+        None,
+        ash_app_server_daemon::GrantSource::HostConfiguration,
+        None,
+    );
+    let registry = Arc::new(
+        ProfileAppServerRegistry::open(options.clone(), ash_app_server_diff::compute).unwrap(),
+    );
+    let server = registry.server_for(options).unwrap();
+    let (mut client, stream) = crate::server::request_dispatch::tests::Client::pair();
+    client
+        .writer
+        .set_read_timeout(Some(Duration::from_secs(20)))
+        .unwrap();
+    let served = thread::spawn(move || {
+        let (reader, writer) = ash_app_server_transport::LocalStream::pair(stream).unwrap();
+        let result = serve(
+            registry,
+            server,
+            BufReader::new(reader),
+            writer,
+            RemoteLaunch::from_environment(),
+        );
+        assert!(
+            result.is_ok()
+                || result
+                    .as_ref()
+                    .is_err_and(crate::managed::is_peer_disconnect)
+        );
+    });
+    let mut next_id = 0;
+    let mut snapshots = BTreeMap::<String, PathBuf>::new();
+    let mut reads = Vec::new();
+    let mut read_errors = Vec::new();
+    let mut applied = 0;
+    let mut call = |method: &str, params: Value| {
+        next_id += 1;
+        let id = next_id;
+        client.send(id, method, params);
+        loop {
+            let message = client.read();
+            if message["id"] == id {
+                break message;
+            }
+            let mut pending_response = None;
+            let response = match message["method"].as_str() {
+                Some("textDocument/read") => {
+                    next_id += 1;
+                    let read_id = next_id;
+                    client.send(read_id, "fs/readFile", message["params"].clone());
+                    let read = loop {
+                        let response = client.read();
+                        if response["id"] == read_id {
+                            break response;
+                        }
+                        if response["id"] == id {
+                            pending_response = Some(response);
+                        }
+                    };
+                    if read.get("error").is_some() {
+                        read_errors.push(read.clone());
+                        json!({"kind":"failed","message":read["error"].to_string()})
+                    } else {
+                        reads.push(message["params"].clone());
+                        let snapshot = format!("snapshot-{}", reads.len());
+                        snapshots.insert(
+                            snapshot.clone(),
+                            PathBuf::from(message["params"]["path"].as_str().unwrap()),
+                        );
+                        json!({"kind":"document","snapshot":snapshot,"text":read["result"]["content"]})
+                    }
+                }
+                Some("textDocument/apply") => {
+                    for change in message["params"]["changes"].as_array().unwrap() {
+                        assert_eq!(change["kind"], "update");
+                        let path = &snapshots[change["snapshot"].as_str().unwrap()];
+                        std::fs::write(path, change["text"].as_str().unwrap()).unwrap();
+                        applied += 1;
+                    }
+                    json!({"kind":"applied"})
+                }
+                Some("textDocument/release") => Value::Null,
+                Some("textDocument/list") => json!({"kind":"documents","documents":[]}),
+                _ => continue,
+            };
+            writeln!(
+                client.writer,
+                "{}",
+                json!({"jsonrpc":"2.0","id":message["id"],"result":response})
+            )
+            .unwrap();
+            if let Some(response) = pending_response {
+                break response;
+            }
+        }
+    };
+    let capabilities = match document_mode {
+        crate::client_host::TextDocumentMode::Client => {
+            json!({"textDocuments":{"version":2},"directoryGrantsHost":{"version":1}})
+        }
+        crate::client_host::TextDocumentMode::FileSystem => {
+            json!({"directoryGrantsHost":{"version":1}})
+        }
+    };
+    let initialized = call(
+        "initialize",
+        json!({"clientInfo":{"name":"document-gateway-test","version":"1"},"capabilities":capabilities}),
+    );
+    assert!(initialized.get("result").is_some(), "{initialized}");
+    let configured = call(
+        "config/update",
+        json!({"commandId":"document-model","expectedRevision":0,"model":{"provider":"custom-documents","model":"fixture-model"},"execution":{"approvalMode":"bypassPermissions","commandFileAccess":"directoryWrite","commandNetworkAccess":"denied"}}),
+    );
+    assert!(configured.get("result").is_some(), "{configured}");
+    for access in [
+        "unqualified-proof",
+        "gateway-document:invalid:proof",
+        "gateway-document:999:proof",
+        "gateway-document:0:proof",
+    ] {
+        let denied = call(
+            "fs/readFile",
+            json!({
+                "path":source.path().join("file.txt"), "readAccess":access
+            }),
+        );
+        assert_eq!(
+            denied["error"]["data"]["kind"], "FileSystemOperationFailed",
+            "{denied}"
+        );
+    }
+    let granted = call(
+        "config/directoryGrants/set",
+        json!({
+            "commandId":"document-grant", "expectedRevision":configured["result"]["revision"],
+            "path":source.path(), "permissions":[
+                "readFiles", "writeFiles", "executeCommands", "browseFiles", "searchFiles",
+                "loadInstructions", "inspectRepository", "mutateRepository"
+            ]
+        }),
+    );
+    assert!(granted.get("result").is_some(), "{granted}");
+    let created = call(
+        "session/create",
+        json!({"commandId":"document-session","title":"Documents","agent":{"type":"default"},"executionTarget":{"type":"local","root":source.path()}}),
+    );
+    assert!(created.get("result").is_some(), "{created}");
+    let session = created["result"]["session"]["sessionId"].clone();
+    let thread = created["result"]["session"]["threads"][0]["threadId"].clone();
+    let identity = json!({"sessionId":session,"threadId":thread});
+    let initial = call("session/thread/read", identity.clone());
+    let root = PathBuf::from(initial["result"]["directory"]["root"].as_str().unwrap());
+    let started = call(
+        "session/request",
+        json!({"commandId":"document-turn","sessionId":session,"request":{"type":"startTurn","threadId":thread,"expectedSequence":initial["result"]["thread"]["sequence"],"input":[{"type":"text","text":"Read file.txt, patch baseline to patched, then edit patched to edited."}]}}),
+    );
+    assert!(started.get("result").is_some(), "{started}");
+    let deadline = std::time::Instant::now() + Duration::from_secs(20);
+    let final_thread = loop {
+        let read = call("session/thread/read", identity.clone());
+        let turn = &read["result"]["thread"]["turns"][0];
+        if matches!(
+            turn["status"].as_str(),
+            Some("completed" | "failed" | "cancelled")
+        ) {
+            break read;
+        }
+        assert!(std::time::Instant::now() < deadline, "{read}");
+        thread::sleep(Duration::from_millis(10));
+    };
+    drop(call);
+    for params in &reads {
+        next_id += 1;
+        client.send(next_id, "fs/readFile", params.clone());
+        loop {
+            let response = client.read();
+            if response["id"] == next_id {
+                assert_eq!(
+                    response["error"]["data"]["kind"], "FileSystemOperationFailed",
+                    "{response}"
+                );
+                break;
+            }
+        }
+    }
+    drop(client);
+    served.join().unwrap();
+    model_runtime.block_on(async {
+        tokio::time::timeout(Duration::from_secs(5), model)
+            .await
+            .unwrap()
+            .unwrap();
+    });
+    assert!(
+        read_errors.is_empty(),
+        "document read callbacks reached the wrong runtime: {read_errors:?}"
+    );
+    match document_mode {
+        crate::client_host::TextDocumentMode::Client => {
+            assert!(!reads.is_empty(), "{final_thread}");
+            assert_eq!(applied, 2, "{final_thread}");
+        }
+        crate::client_host::TextDocumentMode::FileSystem => {
+            assert!(reads.is_empty(), "unexpected editor reads: {reads:?}");
+            assert_eq!(applied, 0, "unexpected editor commits: {final_thread}");
+        }
+    }
+    assert_eq!(
+        std::fs::read_to_string(root.join("file.txt")).unwrap(),
+        "edited\n"
+    );
+    assert_eq!(
+        std::fs::read_to_string(source.path().join("file.txt")).unwrap(),
+        "baseline\n"
+    );
+    let results = final_thread["result"]["thread"]["turns"][0]["items"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|item| item["type"] == "toolResult")
+        .collect::<Vec<_>>();
+    assert_eq!(results.len(), 4, "{final_thread}");
+    assert!(
+        results.iter().all(|result| result["isError"] == false),
+        "{results:?}"
+    );
+}
+
 #[cfg(unix)]
 fn remote_initialize_result() -> String {
     let server = crate::server::request_dispatch::tests::server();
@@ -1098,6 +1421,7 @@ fn directory_resources_remain_on_their_creating_gateway_connection() {
     let profile = tempfile::tempdir().unwrap();
     let root = tempfile::tempdir().unwrap();
     std::fs::write(root.path().join("bytes.bin"), b"directory resource").unwrap();
+    std::fs::write(root.path().join("profile.bin"), b"profile resource").unwrap();
     let options = ash_app_server_daemon::ConnectionOptions::new(
         profile.path(),
         None,
@@ -1142,6 +1466,27 @@ fn directory_resources_remain_on_their_creating_gateway_connection() {
         }
     };
     let (mut owner, served) = start();
+    let configured = call(
+        &mut owner,
+        20,
+        "env/dirs/set",
+        serde_json::json!({"dirs":[{"id":"profile-files","path":root.path(),"grant":{"type":"host","permissions":["readFiles"]}}]}),
+    );
+    assert!(configured.get("result").is_some(), "{configured}");
+    let profile_opened = call(
+        &mut owner,
+        21,
+        "fs/readBinaryFile",
+        serde_json::json!({"dirId":"profile-files","path":"profile.bin"}),
+    );
+    assert!(profile_opened.get("result").is_some(), "{profile_opened}");
+    let profile_resource = profile_opened["result"]["resource"]["resourceId"].clone();
+    assert!(
+        profile_resource
+            .as_str()
+            .unwrap()
+            .starts_with("gateway-resource:0:")
+    );
     let created = call(
         &mut owner,
         2,
@@ -1184,6 +1529,42 @@ fn directory_resources_remain_on_their_creating_gateway_connection() {
             .unwrap(),
         b"directory resource"
     );
+    // Older clients can still qualify a bare backend ID with its opening Session.
+    let legacy_id = resource.as_str().unwrap().splitn(3, ':').nth(2).unwrap();
+    let legacy_read = call(
+        &mut owner,
+        26,
+        "resource/read",
+        serde_json::json!({"sessionId":session_id,"resourceId":legacy_id,"offset":0,"maxBytes":1}),
+    );
+    assert_eq!(
+        legacy_read["result"]["resourceId"], resource,
+        "{legacy_read}"
+    );
+    // An optional Session selector must not override the handle's opening connection,
+    // including Profile route zero. Release must reach that same owner as well.
+    for (id, method) in (22..).zip(["resource/metadata", "resource/read", "resource/release"]) {
+        let response = call(
+            &mut owner,
+            id,
+            method,
+            serde_json::json!({"resourceId":profile_resource,"sessionId":session_id,"offset":0,"maxBytes":1}),
+        );
+        assert!(response.get("result").is_some(), "{method}: {response}");
+        if method != "resource/release" {
+            assert_eq!(response["result"]["resourceId"], profile_resource);
+        }
+        if method == "resource/read" {
+            assert_eq!(response["result"]["dataBase64"], "cA==");
+        }
+    }
+    let still_owned = call(
+        &mut owner,
+        25,
+        "resource/read",
+        serde_json::json!({"resourceId":resource,"offset":0,"maxBytes":1}),
+    );
+    assert_eq!(still_owned["result"]["dataBase64"], "ZA==", "{still_owned}");
     let (mut other, other_served) = start();
     // Open the same directory route on a second client; the route tag grants no ownership.
     let second = call(&mut other, 2, "fs/readBinaryFile", read_params);
@@ -1266,15 +1647,99 @@ fn ssh_resources_route_back_to_the_live_connection_without_a_session_parameter()
     assert_eq!(read["result"]["dataBase64"], "eA==");
     let forwarded: Value = serde_json::from_str(&wait_for_ssh(&gateway.marker)).unwrap();
     assert_eq!(forwarded["params"]["resourceId"], "remote-bytes");
-    gateway.client.send(
-        5,
-        "resource/metadata",
-        serde_json::json!({"resourceId":"gateway-resource:999:remote-bytes"}),
-    );
+    for (id, resource) in (5..).zip([
+        "gateway-resource:999:remote-bytes",
+        "gateway-resource:invalid:remote-bytes",
+        "gateway-resource:0:",
+    ]) {
+        gateway.client.send(
+            id,
+            "resource/metadata",
+            serde_json::json!({"sessionId":"remote-session","resourceId":resource}),
+        );
+        assert_eq!(
+            gateway.client.read()["error"]["message"],
+            "ResourceNotOwner"
+        );
+    }
+    gateway.close();
+    gateway
+        .completed
+        .recv_timeout(std::time::Duration::from_secs(3))
+        .unwrap()
+        .unwrap();
+}
+
+#[cfg(unix)]
+#[test]
+fn ssh_document_callbacks_preserve_nested_owners_and_fail_after_route_close() {
+    use std::io::Write;
+    let initialize = remote_initialize_result();
+    let catalog =
+        serde_json::json!({"jsonrpc":"2.0","id":catalog_request_id(1),"result":{"sessions":[]}});
+    let callback = serde_json::json!({
+        "jsonrpc":"2.0", "id":"browser-host:gateway:4:read", "method":"textDocument/read",
+        "params":{"path":"/workspace/file.txt","readAccess":"gateway-document:4:proof"}
+    });
+    let result = serde_json::json!({"jsonrpc":"2.0","id":3,"result":{"content":"remote content","revision":"revision"}});
+    let mut gateway = gateway_with_ssh(std::time::Duration::from_secs(10), |marker| {
+        format!(
+            r#"IFS= read -r initialize
+printf '%s\n' '{initialize}'
+IFS= read -r catalog
+printf '%s\n' '{catalog}' '{callback}'
+IFS= read -r request
+printf '%s\n' "$request" > '{marker}'
+printf '%s\n' '{result}'
+IFS= read -r reply
+printf '%s\n' "$reply" >> '{marker}'
+"#,
+            initialize = initialize.replace('\'', "'\"'\"'"),
+            marker = marker.display(),
+        )
+    });
+    gateway
+        .client
+        .send(2, "session/list", serde_json::json!({}));
+    // The Profile catalog and remote notifications can finish in either order.
+    let first = gateway.client.read();
+    let second = gateway.client.read();
+    let (catalog, forwarded_callback) = if first["id"] == 2 {
+        (first, second)
+    } else {
+        (second, first)
+    };
+    assert_eq!(catalog["id"], 2);
+    assert!(catalog["result"]["sessions"].is_array());
+    assert_eq!(forwarded_callback["method"], "textDocument/read");
     assert_eq!(
-        gateway.client.read()["error"]["message"],
-        "ResourceNotOwner"
+        forwarded_callback["params"]["readAccess"],
+        "gateway-document:1:gateway-document:4:proof"
     );
+    gateway
+        .client
+        .send(3, "fs/readFile", forwarded_callback["params"].clone());
+    assert_eq!(gateway.client.read(), result);
+    let forwarded: Value = serde_json::from_str(&wait_for_ssh(&gateway.marker)).unwrap();
+    assert_eq!(
+        forwarded["params"]["readAccess"],
+        "gateway-document:4:proof"
+    );
+    writeln!(
+        gateway.client.writer,
+        "{}",
+        serde_json::json!({"jsonrpc":"2.0","id":forwarded_callback["id"],"result":{"kind":"notFound"}})
+    )
+    .unwrap();
+    gateway
+        .client
+        .send(4, "fs/readFile", forwarded_callback["params"].clone());
+    let stale = gateway.client.read();
+    assert_eq!(stale["id"], 4);
+    assert!(stale.get("error").is_some(), "{stale}");
+    let messages = std::fs::read_to_string(&gateway.marker).unwrap();
+    let reply: Value = serde_json::from_str(messages.lines().nth(1).unwrap()).unwrap();
+    assert_eq!(reply["id"], callback["id"]);
     gateway.close();
     gateway
         .completed

@@ -568,38 +568,57 @@ pub(super) fn serve<R: BufRead, W: Write + Send>(
                     )?;
                     continue;
                 }
-                // Resource handles belong to the backend connection that created them. A
-                // Session route cannot be inferred from a subsequent resource-only request.
-                if matches!(
-                    method,
-                    Some("resource/metadata" | "resource/read" | "resource/release")
-                ) {
-                    if let Some((route_id, resource_id)) = routed_resource(&request) {
-                        request["params"]["resourceId"] = Value::String(resource_id);
-                        raw = request.to_string().into();
-                        if route_id != 0 {
-                            let sent = if let Some(target) =
-                                local.values().find(|target| target.route_id == route_id)
-                            {
-                                target.send(raw, &request)
-                            } else if let Some(target) =
-                                remote.values().find(|target| target.route_id == route_id)
-                            {
-                                target.send(request.clone())
-                            } else {
-                                outbound
-                                    .send(resource_owner_error(id).into())
-                                    .map_err(|_| io::Error::from(io::ErrorKind::BrokenPipe))?;
-                                continue;
-                            };
-                            if let Err(error) = sent {
-                                outbound
-                                    .send(local_request_error(id, &error).into())
-                                    .map_err(|_| io::Error::from(io::ErrorKind::BrokenPipe))?;
-                            }
-                            continue;
-                        }
+                // Qualified handles retain the creating connection even when a later
+                // request also supplies a Session selector. Route zero is an owner too;
+                // reselecting by Session can alias a different runtime's resource ID.
+                if let Some(kind) = GatewayHandleKind::for_request(&request) {
+                    let Some((route_id, handle)) = request
+                        .pointer(kind.field())
+                        .and_then(Value::as_str)
+                        .and_then(|value| kind.decode(value))
+                    else {
+                        outbound
+                            .send(kind.owner_error(id).into())
+                            .map_err(|_| io::Error::from(io::ErrorKind::BrokenPipe))?;
+                        continue;
+                    };
+                    *request.pointer_mut(kind.field()).expect("decoded handle") =
+                        Value::String(handle.to_owned());
+                    raw = request.to_string().into();
+                    if route_id == 0 {
+                        let output = outbound.clone();
+                        requests.dispatch(
+                            Arc::clone(&profile.server),
+                            &profile.connection,
+                            raw,
+                            move |response| {
+                                output
+                                    .send(tag_resource_response(response, 0).into())
+                                    .map_err(|_| io::Error::from(io::ErrorKind::BrokenPipe))
+                            },
+                        )?;
+                        continue;
                     }
+                    let sent = if let Some(target) =
+                        local.values().find(|target| target.route_id == route_id)
+                    {
+                        target.send(raw, &request)
+                    } else if let Some(target) =
+                        remote.values().find(|target| target.route_id == route_id)
+                    {
+                        target.send(request.clone())
+                    } else {
+                        outbound
+                            .send(kind.owner_error(id).into())
+                            .map_err(|_| io::Error::from(io::ErrorKind::BrokenPipe))?;
+                        continue;
+                    };
+                    if let Err(error) = sent {
+                        outbound
+                            .send(local_request_error(id, &error).into())
+                            .map_err(|_| io::Error::from(io::ErrorKind::BrokenPipe))?;
+                    }
+                    continue;
                 }
                 let execution_target =
                     match selected_execution_target(&registry, &remote_sessions, &request) {
@@ -823,7 +842,7 @@ fn tag_resource_handles(message: &mut Value, route_id: usize) {
         }
         if let Some(value) = message.pointer_mut(path) {
             if let Some(id) = value.as_str() {
-                *value = Value::String(format!("gateway-resource:{route_id}:{id}"));
+                *value = Value::String(GatewayHandleKind::Resource.encode(route_id, id));
             }
         }
     }
@@ -837,7 +856,7 @@ fn tag_resource_handles(message: &mut Value, route_id: usize) {
             }
             if let Some(id) = file.pointer_mut("/resource/resourceId") {
                 if let Some(value) = id.as_str() {
-                    *id = Value::String(format!("gateway-resource:{route_id}:{value}"));
+                    *id = Value::String(GatewayHandleKind::Resource.encode(route_id, value));
                 }
             }
         }
@@ -871,18 +890,67 @@ fn tag_resource_response(response: String, route_id: usize) -> String {
     }
 }
 
-fn routed_resource(request: &Value) -> Option<(usize, String)> {
-    let id = request.pointer("/params/resourceId")?.as_str()?;
-    let (route, id) = id.strip_prefix("gateway-resource:")?.split_once(':')?;
-    Some((route.parse().ok()?, id.to_owned()))
+/// Routing only: the backend still checks connection ownership, path, policy and lifetime.
+/// Each gateway wraps one layer so nested local/remote gateways keep their own authority.
+#[derive(Clone, Copy)]
+enum GatewayHandleKind {
+    Resource,
+    DocumentRead,
 }
 
-fn resource_owner_error(id: Value) -> String {
-    serde_json::to_string(&JsonRpcFailure::new(
-        serde_json::from_value(id).expect("gateway validated request ID"),
-        AppServerError::new(-32000, AppServerErrorName::ResourceNotOwner),
-    ))
-    .expect("valid resource owner error")
+impl GatewayHandleKind {
+    fn prefix(self) -> &'static str {
+        match self {
+            Self::Resource => "gateway-resource:",
+            Self::DocumentRead => "gateway-document:",
+        }
+    }
+
+    fn field(self) -> &'static str {
+        match self {
+            Self::Resource => "/params/resourceId",
+            Self::DocumentRead => "/params/readAccess",
+        }
+    }
+
+    fn encode(self, route_id: usize, value: &str) -> String {
+        format!("{}{route_id}:{value}", self.prefix())
+    }
+
+    fn decode(self, value: &str) -> Option<(usize, &str)> {
+        let (route, inner) = value.strip_prefix(self.prefix())?.split_once(':')?;
+        if inner.is_empty() {
+            return None;
+        }
+        Some((route.parse().ok()?, inner))
+    }
+
+    fn for_request(request: &Value) -> Option<Self> {
+        let kind = match request.get("method")?.as_str()? {
+            "fs/readFile" => Self::DocumentRead,
+            "resource/metadata" | "resource/read" | "resource/release" => Self::Resource,
+            _ => return None,
+        };
+        let value = request.pointer(kind.field())?.as_str()?;
+        // Unqualified resource IDs retain legacy Session routing. Proof reads always
+        // require a gateway-qualified owner; malformed qualified resources never fall back.
+        match kind {
+            Self::Resource if !value.starts_with(kind.prefix()) => None,
+            Self::Resource | Self::DocumentRead => Some(kind),
+        }
+    }
+
+    fn owner_error(self, id: Value) -> String {
+        let (code, name) = match self {
+            Self::Resource => (-32000, AppServerErrorName::ResourceNotOwner),
+            Self::DocumentRead => (-32041, AppServerErrorName::FileSystemOperationFailed),
+        };
+        serde_json::to_string(&JsonRpcFailure::new(
+            serde_json::from_value(id).expect("gateway validated request ID"),
+            AppServerError::new(code, name),
+        ))
+        .expect("valid handle owner error")
+    }
 }
 
 fn remote_key(profile: &RemoteProfile) -> RemoteKey {
@@ -1149,6 +1217,14 @@ fn tag_host_request(raw: String, route_id: usize) -> String {
         if let Some(id) = message.get("id").and_then(Value::as_str) {
             let tagged = format!("browser-host:gateway:{route_id}:{id}");
             message["id"] = Value::String(tagged);
+            if message["method"] == "textDocument/read" {
+                if let Some(access) = message.pointer_mut("/params/readAccess") {
+                    if let Some(value) = access.as_str() {
+                        *access =
+                            Value::String(GatewayHandleKind::DocumentRead.encode(route_id, value));
+                    }
+                }
+            }
             return message.to_string();
         }
     }
