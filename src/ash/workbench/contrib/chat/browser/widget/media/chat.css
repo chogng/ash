@@ -516,8 +516,11 @@
 @container (max-width: 360px) {
 	.ash-chat-input-toolbars.ash-toolbar
 		.ash-chat-input-mode-selector
-		.ash-chat-input-action.ash-chat-input-mode-action {
+		.ash-chat-input-action.ash-chat-input-mode-action,
+	.ash-chat-input-toolbars
+		.ash-chat-model-picker-control
+		> .ash-chat-input-picker-button {
 		padding-inline: var(--ash-spacing-size60);
-		font-size: 12px;
+		font-size: var(--ash-fontSize-label1);
 	}
 }
