@@ -198,7 +198,7 @@ test('Desktop Chat guides a missing local model to Dictation settings without op
 	}
 });
 
-test('Chat input grows upward with wrapped text and retains keyboard focus', { tag: ['@browser-ui', '@electron-ui'] }, async ({ target, workbench }) => {
+test('Chat input grows upward with wrapped text and retains keyboard focus', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, workbench }) => {
 	const page = workbench.page;
 	if (!await page.locator('.ash-chat-view-pane').isVisible()) {
 		await page.getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();
@@ -235,7 +235,7 @@ test('Chat input grows upward with wrapped text and retains keyboard focus', { t
 	expect(restoredBounds).toEqual(initialBounds);
 });
 
-test('Chat input explicitly opens slash suggestions from the keyboard', { tag: ['@browser-ui', '@electron-ui'] }, async ({ target, workbench }) => {
+test('Chat input explicitly opens slash suggestions from the keyboard', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, workbench }) => {
 	const page = workbench.page;
 	if (!await page.locator('.ash-chat-view-pane').isVisible()) {
 		await page.getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();
@@ -271,7 +271,7 @@ test('Chat input returns to the empty message state when a slash command is dele
 	await expect(input).toBeFocused();
 });
 
-test('Chat input suggests and completes a command with a missing character', { tag: ['@browser-ui', '@electron-ui'] }, async ({ target, workbench }) => {
+test('Chat input suggests and completes a command with a missing character', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, workbench }) => {
 	const page = workbench.page;
 	if (!await page.locator('.ash-chat-view-pane').isVisible()) {
 		await page.getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();
@@ -283,17 +283,18 @@ test('Chat input suggests and completes a command with a missing character', { t
 	await expect(editor.locator('.stanza-editor-completion-label').getByText('/config', { exact: true })).toBeVisible();
 	await page.keyboard.type('cofig');
 
-	await expect(editor.locator('.stanza-editor-completion-label')).toHaveText(['/config']);
+	await expect(editor.locator('.stanza-editor-completion-label')).toHaveText(['/config', '/advisor', '/init']);
 	await expect(editor.locator('.stanza-editor-completion-option.focused')).toHaveCount(0);
-	await expect(editor.locator('.stanza-editor-completion-option')).toHaveAttribute('aria-selected', 'false');
-	await expect(editor.locator('.stanza-editor-completion-label strong')).toHaveText(['c', 'o', 'f', 'i', 'g']);
+	expect(await editor.locator('.stanza-editor-completion-option').evaluateAll(options => options.map(option => option.getAttribute('aria-selected')))).toEqual(['false', 'false', 'false']);
+	const command = editor.locator('.stanza-editor-completion-option').filter({ has: page.locator('.stanza-editor-completion-label').getByText('/config', { exact: true }) });
+	await expect(command.locator('.stanza-editor-completion-label strong')).toHaveText(['c', 'o', 'f', 'i', 'g']);
 	await expect(editor.locator('.stanza-editor-line-text')).toHaveText('/cofig');
 	await page.keyboard.press('ArrowDown');
 	await page.keyboard.press('Enter');
 	await expect(editor.locator('.stanza-editor-line-text')).toHaveText('/config');
 });
 
-test('Chat input matches slash command descriptions without selecting a command', { tag: ['@browser-ui', '@electron-ui'] }, async ({ target, workbench }) => {
+test('Chat input matches slash command descriptions without selecting a command', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, workbench }) => {
 	const page = workbench.page;
 	if (!await page.locator('.ash-chat-view-pane').isVisible()) {
 		await page.getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();
@@ -303,8 +304,9 @@ test('Chat input matches slash command descriptions without selecting a command'
 	await input.focus();
 	await page.keyboard.insertText('/');
 	await page.keyboard.type('settings');
-	await expect(editor.locator('.stanza-editor-completion-label')).toHaveText(['/config']);
+	await expect(editor.locator('.stanza-editor-completion-label')).toHaveText(['/config', '/team']);
 	await expect(editor.locator('.stanza-editor-completion-option.focused')).toHaveCount(0);
-	await expect(editor.locator('.stanza-editor-completion-option')).toHaveAttribute('aria-selected', 'false');
-	await expect(editor.locator('.stanza-editor-completion-detail strong')).toHaveText([...'settings']);
+	expect(await editor.locator('.stanza-editor-completion-option').evaluateAll(options => options.map(option => option.getAttribute('aria-selected')))).toEqual(['false', 'false']);
+	const command = editor.locator('.stanza-editor-completion-option').filter({ has: page.locator('.stanza-editor-completion-label').getByText('/config', { exact: true }) });
+	await expect(command.locator('.stanza-editor-completion-detail strong')).toHaveText([...'settings']);
 });

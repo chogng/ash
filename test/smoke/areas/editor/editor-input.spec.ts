@@ -1,7 +1,7 @@
 import { expect, test } from '../../../automation/test.js';
 import type { ElectronApplication } from '@playwright/test';
 
-test('editor Enter preserves indentation and undo restores the input position', async ({ workbench }) => {
+test('editor Enter preserves indentation and undo restores the input position', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ workbench }) => {
 	const page = workbench.page;
 	await page.keyboard.press('ControlOrMeta+N');
 	const editor = workbench.editors.groupAt(0).editor;
@@ -124,83 +124,88 @@ test('editor and Chat input font settings apply independently and persist in Chi
 	await expect.poll(() => restoredChat.evaluate(element => getComputedStyle(element).fontFamily)).toBe(chatFamily);
 });
 
-test('editor context menu preserves the right-click selection and runs matching edits and Copy As', async ({ target, application, workbench }) => {
-	const page = workbench.page;
-	await page.keyboard.press('ControlOrMeta+N');
-	const editor = workbench.editors.groupAt(0).editor;
-	await editor.waitForEditorFocus();
-	await page.keyboard.insertText('alpha beta alpha');
-	await editor.input.press('Home');
-	for (let index = 0; index < 5; index++) await editor.input.press('Shift+ArrowRight');
-	if (target.kind === 'browser') await page.context().grantPermissions(['clipboard-read', 'clipboard-write']);
-	const readClipboard = (): Promise<string> => target.kind === 'electron'
-		? (application as ElectronApplication).evaluate(({ clipboard }) => clipboard.readText())
-		: page.evaluate(() => navigator.clipboard.readText());
-	const previousClipboard = await readClipboard();
-	try {
-		await editor.lines.first().click({ button: 'right', position: { x: 10, y: 5 } });
-		const copy = page.getByRole('menuitem', { name: 'Copy', exact: true });
-		if (target.kind === 'electron') {
-			const modifier = process.platform === 'darwin' ? '⌘' : 'Ctrl+';
-			await expect(copy.locator('.ash-menu-keybinding')).toHaveText(`${modifier}C`);
-			await expect(page.getByRole('menuitem', { name: 'Cut', exact: true }).locator('.ash-menu-keybinding')).toHaveText(`${modifier}X`);
-			await expect(page.getByRole('menuitem', { name: 'Paste', exact: true }).locator('.ash-menu-keybinding')).toHaveText(`${modifier}V`);
+test.describe('custom editor context menus', () => {
+	test.use({ electronUserSettings: { 'window.menuStyle': 'custom' } });
+
+	test('editor context menu preserves the right-click selection and runs matching edits and Copy As', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, application, workbench }) => {
+		const page = workbench.page;
+		await page.keyboard.press('ControlOrMeta+N');
+		const editor = workbench.editors.groupAt(0).editor;
+		await editor.waitForEditorFocus();
+		await page.keyboard.insertText('alpha beta alpha');
+		await editor.input.press('Home');
+		for (let index = 0; index < 5; index++) await editor.input.press('Shift+ArrowRight');
+		if (target.kind === 'browser') await page.context().grantPermissions(['clipboard-read', 'clipboard-write']);
+		const readClipboard = (): Promise<string> => target.kind === 'electron'
+			? (application as ElectronApplication).evaluate(({ clipboard }) => clipboard.readText())
+			: page.evaluate(() => navigator.clipboard.readText());
+		const previousClipboard = await readClipboard();
+		try {
+			await editor.lines.first().click({ button: 'right', position: { x: 10, y: 5 } });
+			const copy = page.getByRole('menuitem', { name: 'Copy', exact: true });
+			if (target.kind === 'electron') {
+				const modifier = process.platform === 'darwin' ? '⌘' : 'Ctrl+';
+				await expect(copy.locator('.ash-menu-keybinding')).toHaveText(`${modifier}C`);
+				await expect(page.getByRole('menuitem', { name: 'Cut', exact: true }).locator('.ash-menu-keybinding')).toHaveText(`${modifier}X`);
+				await expect(page.getByRole('menuitem', { name: 'Paste', exact: true }).locator('.ash-menu-keybinding')).toHaveText(`${modifier}V`);
+			}
+			await copy.click();
+			await expect.poll(readClipboard).toBe('alpha');
+			await expect(editor.input).toBeFocused();
+			await editor.input.press('Shift+F10');
+			const copyAs = page.getByRole('menuitem', { name: 'Copy As', exact: true });
+			await copyAs.focus();
+			await copyAs.press('ArrowRight');
+			const highlight = page.getByRole('menuitem', { name: 'Copy with Syntax Highlighting', exact: true });
+			await expect(highlight).toBeFocused();
+			await highlight.press('Enter');
+			await expect.poll(readClipboard).toBe('alpha');
+			await expect(editor.input).toBeFocused();
+			await editor.input.press('Shift+F10');
+			await page.getByRole('menuitem', { name: 'Change All Occurrences', exact: true }).click();
+			await page.keyboard.insertText('gamma');
+			await expect(editor.lines).toHaveText(['gamma beta gamma']);
+			await editor.input.press('ControlOrMeta+z');
+			await expect(editor.lines).toHaveText(['alpha beta alpha']);
+			await expect(editor.input).toBeFocused();
+			await editor.input.press('Shift+F10');
+			await page.getByRole('menuitem', { name: 'Command Palette...', exact: true }).click();
+			await expect(page.locator('.ash-quick-pick').getByRole('combobox')).toBeFocused();
+			await page.keyboard.press('Escape');
+			await expect(editor.input).toBeFocused();
+		} finally {
+			if (target.kind === 'electron') {
+				await (application as ElectronApplication).evaluate(({ clipboard }, text) => clipboard.writeText(text), previousClipboard);
+			} else {
+				await page.evaluate(text => navigator.clipboard.writeText(text), previousClipboard);
+			}
 		}
-		await copy.click();
-		await expect.poll(readClipboard).toBe('alpha');
-		await expect(editor.input).toBeFocused();
+	});
+
+	test('editor context menu initializes Chinese actions and accessibility help after restart', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ workbench, restartWorkbench }) => {
+		await workbench.quickaccess.runCommand('workbench.action.configureLocale');
+		const picker = workbench.page.getByRole('dialog', { name: 'Select Display Language' });
+		await picker.getByRole('combobox').fill('简体中文');
+		await picker.getByRole('combobox').press('Enter');
+		({ workbench } = await restartWorkbench());
+		const page = workbench.page;
+		await page.keyboard.press('ControlOrMeta+N');
+		const editor = workbench.editors.groupAt(0).editor;
+		await editor.waitForEditorFocus();
+		await page.keyboard.insertText('alpha beta alpha');
+		await editor.input.press('Home');
 		await editor.input.press('Shift+F10');
-		const copyAs = page.getByRole('menuitem', { name: 'Copy As', exact: true });
-		await copyAs.focus();
-		await copyAs.press('ArrowRight');
-		const highlight = page.getByRole('menuitem', { name: 'Copy with Syntax Highlighting', exact: true });
-		await expect(highlight).toBeFocused();
-		await highlight.press('Enter');
-		await expect.poll(readClipboard).toBe('alpha');
-		await expect(editor.input).toBeFocused();
-		await editor.input.press('Shift+F10');
-		await page.getByRole('menuitem', { name: 'Change All Occurrences', exact: true }).click();
-		await page.keyboard.insertText('gamma');
-		await expect(editor.lines).toHaveText(['gamma beta gamma']);
-		await editor.input.press('ControlOrMeta+z');
-		await expect(editor.lines).toHaveText(['alpha beta alpha']);
-		await expect(editor.input).toBeFocused();
-		await editor.input.press('Shift+F10');
-		await page.getByRole('menuitem', { name: 'Command Palette...', exact: true }).click();
-		await expect(page.locator('.ash-quick-pick').getByRole('combobox')).toBeFocused();
+		await expect(page.getByRole('menuitem', { name: '更改所有匹配项', exact: true })).toBeVisible();
+		await page.keyboard.press('Escape');
+		await editor.input.press('Alt+F1');
+		await expect(page.getByRole('dialog', { name: '无障碍帮助', exact: true }).getByRole('textbox')).toHaveValue(/Shift\+F10.*速览.*匹配/u);
 		await page.keyboard.press('Escape');
 		await expect(editor.input).toBeFocused();
-	} finally {
-		if (target.kind === 'electron') {
-			await (application as ElectronApplication).evaluate(({ clipboard }, text) => clipboard.writeText(text), previousClipboard);
-		} else {
-			await page.evaluate(text => navigator.clipboard.writeText(text), previousClipboard);
-		}
-	}
+	});
+
 });
 
-test('editor context menu initializes Chinese actions and accessibility help after restart', async ({ workbench, restartWorkbench }) => {
-	await workbench.quickaccess.runCommand('workbench.action.configureLocale');
-	const picker = workbench.page.getByRole('dialog', { name: 'Select Display Language' });
-	await picker.getByRole('combobox').fill('简体中文');
-	await picker.getByRole('combobox').press('Enter');
-	({ workbench } = await restartWorkbench());
-	const page = workbench.page;
-	await page.keyboard.press('ControlOrMeta+N');
-	const editor = workbench.editors.groupAt(0).editor;
-	await editor.waitForEditorFocus();
-	await page.keyboard.insertText('alpha beta alpha');
-	await editor.input.press('Home');
-	await editor.input.press('Shift+F10');
-	await expect(page.getByRole('menuitem', { name: '更改所有匹配项', exact: true })).toBeVisible();
-	await page.keyboard.press('Escape');
-	await editor.input.press('Alt+F1');
-	await expect(page.getByRole('dialog', { name: '无障碍帮助', exact: true }).getByRole('textbox')).toHaveValue(/Shift\+F10.*速览.*匹配/u);
-	await page.keyboard.press('Escape');
-	await expect(editor.input).toBeFocused();
-});
-
-test('editor preserves space and tab indentation and places input at the rendered text', async ({ workbench }) => {
+test('editor preserves space and tab indentation and places input at the rendered text', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ workbench }) => {
 	const page = workbench.page;
 	await page.keyboard.press('ControlOrMeta+N');
 	const editor = workbench.editors.groupAt(0).editor;
@@ -403,7 +408,7 @@ test('built-in themes apply scrollbar and minimap colors through hover and dragg
 		},
 		{
 			name: 'Ash Light', id: 'ash-light',
-			colors: ['rgba(100, 100, 100, 0.75)', 'rgba(100, 100, 100, 0.82)', 'rgba(100, 100, 100, 0.88)'],
+			colors: ['rgba(100, 100, 100, 0.25)', 'rgba(100, 100, 100, 0.4)', 'rgba(100, 100, 100, 0.5)'],
 			shadow: 'rgba(0, 0, 0, 0.08) 0px 0px 6px 0px',
 		},
 		{
@@ -451,7 +456,7 @@ test('built-in themes apply scrollbar and minimap colors through hover and dragg
 	}
 });
 
-test('text editor automation follows input, replacement, and folding in its group', async ({ workbench }) => {
+test('text editor automation follows input, replacement, and folding in its group', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ workbench }) => {
 	const page = workbench.page;
 	await page.keyboard.press('ControlOrMeta+N');
 	const editor = workbench.editors.groupAt(0).editor;
