@@ -30,7 +30,7 @@
 - **Extensions（扩展）：** [产品层级与扩展架构](editor-extensions.md#extensions-的产品层级)；包含 [Skills](skills.md)、[MCP](mcp.md)、[Connectors](connectors.md)、[LSP / 语言服务器](lsp.md)、编辑器扩展、主题和语言包等能力。[包管理](../crates/docs/core-plugins.md)与 [Plugin 包及来源授权](plugins.md)说明底层安装和授权契约。
 - **权限与安全：** [权限](permissions.md)、[沙箱](sandboxing.md)、[环境访问](environment-access.md)、[工作区安全](workspace-security.md)、[凭据](secrets.md)。
 - **界面开发：** [浏览器基础](browser-foundation.md)、[Preferences 与 Settings](preferences-and-settings.md)、[样式职责](ui-styling-ownership.md)、[主题变量](design-tokens.md)、[面板与布局](pane-composites.md)、[菜单](menu-system.md)、[本地化](localization.md)。
-- **Trace 与评测：** [执行 Trace](trace.md)、[执行 Trace 当前行为](chat-session-inspector.md#执行-trace)、[任务评测](../test/agent-eval/README.md)。
+- **Agent 诊断与评测：** [rollout-trace、Chat Debug 与评测分工](trace.md)、[Agent Debug Logs 用法](chat-session-inspector.md#agent-debug-logs)、[任务评测](../test/agent-eval/README.md)。
 - **外部运行时研究：** [Codex Owl 运行时调查与 Ash 性能优化参考](codex-owl-runtime-investigation.md)，包含定版安装包、进程与事件循环、任务分配、JSON／IPC、证据快照和隔离小测。
 - **数据链路性能：** [Ash app-server 到 Renderer 的大响应链路审计](ash-app-server-data-path-audit.md)，记录解析、复制和背压的实际问题与优化优先级。
 

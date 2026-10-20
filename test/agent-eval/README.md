@@ -213,7 +213,7 @@ holdout 若用于下一轮修改或选择候选，应转为 development 并补�
   `snapshotDigest` 是对完整组合进行键排序、紧凑 UTF-8 JSON 编码后的 SHA-256；不复制提示词正文，
   不替代协议摘要，也不证明某次请求实际包含全部指导，实际输入仍须查语义请求。
 - `observations` 保留上述问题的 Thread、Turn、事件 ID、sequence 和持久／诊断来源。
-  Markdown 报告每次最多展示 40 项并标明数量，完整列表保存在 `result.json`；导入 Trace 后按事件 ID 过滤。
+  Markdown 报告每次最多展示 40 项并标明数量，完整列表保存在 `result.json`；导入 Chat Debug 后按事件 ID 过滤。
 
 汇总的 `repeatReliability` 展示本批次“至少一次通过”和“每次都通过”的任务比例，明确列出重复次数。
 这些是有限试次的实际观察，不当作 pass@k／pass^k 概率估计或泛化结论。

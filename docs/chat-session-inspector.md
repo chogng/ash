@@ -19,16 +19,17 @@ Session Inspector 始终跟随 Chat 当前选中的 `Session + Thread`，正式�
 再开一条 Thread 订阅。旧的 Chat 私有 Agent Sidebar ViewContainer、View 和全局开关已经移除；
 Workbench 通用 Agent Sidebar 不受影响。
 
-## 执行 Trace
+## Agent Debug Logs
 
-执行 Trace 编辑器、命令和无障碍支持由 `workbench/contrib/trace` 共享提供。普通 Workbench 的
+Chat Debug 编辑器、命令和无障碍支持由 `workbench/contrib/chat` 共享提供，界面名称为 Agent Debug Logs；
+后端执行证据由 Rust `rollout-trace` 提供。普通 Workbench 的
 “开发人员：打开 Agent 调试日志”（`workbench.action.chat.openAgentDebugPanel`）打开可导入的页面；命令传入 Session ID 时读取
 该会话。也可传入 `{ sessionId, threadId, turnId?, eventId? }`，定位所属 Thread 的 Turn 或持久事件
 （包括诊断事件）；Turn 或 event 定位必须带 Thread ID。定位参数随编辑器 URI 保存，重开恢复同一目标。
 Sessions 的“显示 Agent 调试日志”（`sessions.trace.open`）取得当前 Session 与 Thread，并用已有 agent tree
-中的最近 Turn 身份定位，打开独立 Trace 页面；没有当前会话时仍可导入 Trace。
+中的最近 Turn 身份定位，打开同一个 Chat Debug 编辑器；没有当前会话时仍可导入 rollout Trace。
 
-Trace 从对话菜单或命令面板打开，按需加载完整编辑器，不注册 Activity Bar 或侧栏导航入口。Sessions 的
+Chat Debug 从对话菜单或命令面板打开，按需加载完整编辑器，不注册 Activity Bar 或侧栏导航入口。Sessions 的
 `sessions.open.trace` 恢复上次复查的 Session／Thread／Turn，不会因切换 Chat 自动替换复查上下文。
 “显示 Agent 调试日志”显式定位当前 Chat；`sessions.trace.import` 打开导入页。复查位置随窗口恢复；
 导入文件正文只保留在编辑器生命周期内，关闭窗口后需要重新导入。
@@ -36,9 +37,9 @@ Workbench 的 `ash.agentTrace.resume` 同样恢复有效位置；无有效位置
 
 Sessions 的 Output 提供 Agent 通道，标明被查看的会话标题与 ID。首次有会话时绑定该会话，之后只通过
 对话菜单或命令面板的“显示 Agent 输出”（`sessions.trace.showOutput`）显式切换。通道只在被选中且
-Output 可见时，分页读取已有 Trace 服务的执行事实，显示模型尝试、循环决策、工具调用、子任务、
+Output 可见时，通过 `IChatDebugService` 分页读取执行事实，显示模型尝试、循环决策、工具调用、子任务、
 失败、取消及已有耗时摘要；不读取请求/响应正文或关系图，也不改变记录设置。每条事件附带精确的
-Trace 定位链接。有界文本缓存由 Output 拥有；隐藏或关闭停止读取，晚到结果不会覆盖新的会话。
+Chat Debug 定位链接。有界文本缓存由 Output 拥有；隐藏或关闭停止读取，晚到结果不会覆盖新的会话。
 清空保留读取游标与持久 Trace，包括跳过尚未读完的旧历史；跟随只控制滚动，不影响执行或采集。
 
 页面逐页查找目标，命中后选中并滚动到事件；读取完成仍没有对应事实时明确显示未找到，不自动用第一条

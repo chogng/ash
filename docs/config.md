@@ -118,7 +118,7 @@ directory = "/absolute/path/to/recordings"
 修改只在重启拥有 Thread 的 App Server 后生效，不中断进行中的 Turn。重开窗口可能复用原后端。
 没有 `[agent.trace]` 时沿用启动环境变量 `ASH_ROLLOUT_TRACE_ROOT`；一旦显式保存配置，即以该配置为准，
 关闭记录也覆盖环境变量。`config/update.trace = null` 写入显式关闭，避免重置操作重新启用环境变量。
-记录范围、大小上限和缺失证据的语义见 [执行 Trace](chat-session-inspector.md#执行-trace)。
+记录范围、大小上限和缺失证据的语义见 [Agent Debug Logs](chat-session-inspector.md#agent-debug-logs)。
 
 ## 模型接入配置
 

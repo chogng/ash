@@ -943,7 +943,7 @@ def render_report(report: dict) -> str:
                 "",
                 f"Loop decision evidence: `{trace['loopDecisionEvidence']}`. Loop actions: `{json.dumps(trace['loopActions'], sort_keys=True)}`. Loop reasons: `{json.dumps(trace['loopReasons'], sort_keys=True)}`. Pending tool results: {trace['pendingToolResults']}; unmatched results: {trace['unmatchedToolResults']}.",
                 "",
-                f"Frozen instruction selections and all evidence references are in [result]({directory}/result.json). Import [trace]({directory}/trace.json) into Execution Trace and filter by the event ID below.",
+                f"Frozen instruction selections and all evidence references are in [result]({directory}/result.json). Import [trace]({directory}/trace.json) into Agent Debug Logs (Chat Debug) and filter by the event ID below.",
             ]
         )
         observations = trace["observations"]

@@ -35,8 +35,8 @@ Hooks 在指定事件发生时执行用户配置的程序。Ash 提供 33 种事
 同时具备 `LoadConfig` 和 `DiscoverHooks` 时，其声明才进入列表。页面只浏览和协助编辑配置，
 不执行 Hook，也不授予执行权限。
 
-运行反馈显示在 Chat 的折叠摘要中；完整状态和耗时进入 **Execution Trace**。启用
-`agent.trace` 录制后，Trace 还能按需显示命令、输入输出和退出码。状态随 Thread 历史恢复，
+运行反馈显示在 Chat 的折叠摘要中；完整状态和耗时可在 **Agent Debug Logs（Chat Debug）** 中查看。启用
+`agent.trace` 录制后，Chat Debug 还能按需显示命令、输入输出和退出码。状态随 Thread 历史恢复，
 重启不会重新执行 Hook。范围与限制见 [运行状态与日志](docs/runtime.md#运行状态与日志)。
 
 ### 终端 `/hooks`

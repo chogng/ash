@@ -286,7 +286,7 @@ suite 摘要 V2 只冻结语义任务声明、实际文件、参考成果和评�
 
 Rust 实现后端与 TS 实现界面是职责分工，不自动要求新的插件类型。`crates/ext` 的 Agent 贡献与可安装的 TS/JS Editor Extension 采用不同契约；采集不需要额外工具或提示词。当前公共 SDK 没有 Trace API，仅搬目录不能完成扩展运行。本次已解除 Core／core-api 对具体 Trace 实现的生产依赖，使用中立观察契约，由 App Server 组合采集与只读查询；以后再以实际需求决定是否提取官方 TS 扩展。
 
-完整[Trace 架构与改造方案](docs/trace.md)记录设计依据、已实现的依赖、关闭与后台写入、生效时机、证据关联、界面与评测职责。采集现已使用有界非阻塞准入和后台序列化、摘要及存储；删除先停用句柄再清理，迟到结果不能复活捕获。TS 的独立 `ITraceService` 复用现有连接，编辑器和解析器按需加载，默认导航不显示 Trace。业务历史、Changes 的 fail-closed 边界、RPC 方法和外层 V3 格式保留。
+[Agent 诊断与评测](docs/trace.md)记录设计依据、依赖、采集生命周期和证据边界。`rollout-trace` 负责后端采集与派生读取，前端统一由 Chat Debug 承载，`IChatDebugService` 复用现有连接；编辑器和解析器按需加载，不保留独立 Agent Trace 服务或常驻导航。评测 runner 独立验收成果并消费 rollout Trace。OTel Trace viewer 继续负责性能 span，业务历史、Changes 的 fail-closed 边界、RPC 方法和外层 V3 格式保留。
 
 `modelAttemptAccounted` 来自真实提交后的 invocation ID 和历史序号，原因是数量相等或时间接近不能证明两条证据属于同一次调用。V2 诊断和分析保留待写数量、未关联 attempt 与未观察到账目的缺口；旧 V1 不补造关联。`--experiment` 明确假设、变体和允许变化的模型／产品／配置条件，未声明的变化拒绝比较；配置叶项仅记录语义哈希，评分设施失败单独计数。这样才能区分一次可复核实验与多项变化后的印象。真实模型质量集、独立元数据策略与公开 SDK 提取仍需后续证据。
 
@@ -308,13 +308,13 @@ Rust 实现后端与 TS 实现界面是职责分工，不自动要求新的插�
 
 真实产品契约测试显示，失败或取消的 attempt 不一定产生持久用量账目；一次失败后重试成功可以同时有三个 attempt 和两个用量账目。`usageComplete` 因而只描述保留账目的字段覆盖，不能证明整段执行的总用量已知。分析另外使用 `usageComparisonComplete` 排除含失败／取消／放弃或证据缺口的运行，保留实报小计供审阅。已补的关联由现有模型调用与计量 owner 提供提交回执；缺少回执或旧证据没有关联时，仍不凭计数或时间戳补造账目。
 
-报告保留每项观察的 Thread、Turn、事件 ID、本地 sequence 和来源，读者可以从报告进入对应文件，再在执行 Trace 中按事件 ID 过滤。显示页最多列出每次运行的 40 项观察并标明数量，完整证据位置保留在 `result.json`。比较另外列出实际记录到的模型、产品摘要与环境变化；多项同时变化时不归因于单一提示词。重复编号只是对应实验样本的身份，不使随机模型输出成为同一随机样本，也不提供显著性证明。
+报告保留每项观察的 Thread、Turn、事件 ID、本地 sequence 和来源，读者可以从报告进入对应文件，再在 Chat Debug 中按事件 ID 过滤。显示页最多列出每次运行的 40 项观察并标明数量，完整证据位置保留在 `result.json`。比较另外列出实际记录到的模型、产品摘要与环境变化；多项同时变化时不归因于单一提示词。重复编号只是对应实验样本的身份，不使随机模型输出成为同一随机样本，也不提供显著性证明。
 
 下一阶段仍需真实失败与成功但低效的任务、人工审阅和保留测试集。三个当前用例只覆盖 `ash exec` 编码任务；IDE 的编辑器状态、TUI 交互、Agents Window 的 chat／cowork／design／assistant 需要不同验收与宿主上下文证据。现有分析不声称已经测得这些界面的质量、完整货币成本、HTTP 重试或执行关键路径。
 
 ### 已有的证据链与覆盖边界
 
-[任务评测 runner](test/agent-eval/README.md) 已保存配置、`events.jsonl`、`trace.json`、本轮不可变文件变更、还原后的成果及独立 verifier 结果。报告中的运行可以关联到对应 Trace，并在 Workbench 的执行 Trace 编辑器中导入查看。验收依据是保存成果的实际属性，模型自己的完成声明不能代替 verifier。
+[任务评测 runner](test/agent-eval/README.md) 已保存配置、`events.jsonl`、`trace.json`、本轮不可变文件变更、还原后的成果及独立 verifier 结果。报告中的运行可以关联到对应 rollout Trace，并在 Chat Debug 中导入查看。验收依据是保存成果的实际属性，模型自己的完成声明不能代替 verifier。
 
 [Rollout Trace](crates/rollout-trace/README.md) 汇集同一 Session tree 中各 Thread 的持久事件和保留的历史前缀，保留各流原有顺序。详细诊断可另外保存 Core 请求、ModelService 准备后的语义请求、模型响应和失败或取消前的部分输出；执行关系图从这些证据派生。`ModelResponseEvaluated` 中的循环动作、停止原因和消息阶段属于持久历史，关闭详细诊断仍可检查。导出条件与不可变成果的边界见 [Exec](docs/exec.md)。
 

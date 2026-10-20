@@ -114,8 +114,8 @@ Runtime 在每次执行前后通知 `HookRunObserver`。App Server 把带 Sessio
 贯穿实时更新和历史回放。Session 事件挂到根 Thread，无 Turn 的记录不插入对话。User 全局
 事件没有 Thread 归属，只保留 runtime 的有界内存记录。
 
-Chat 显示拒绝、失败和取消的折叠摘要，正常继续执行不新增提示。Execution Trace 显示所有
-已归属 Thread 的运行状态、耗时和工具名称。启用既有 `agent.trace` 录制后，Trace 的 Input /
+Chat 显示拒绝、失败和取消的折叠摘要，正常继续执行不新增提示。Agent Debug Logs（Chat Debug）显示所有
+已归属 Thread 的运行状态、耗时和工具名称。启用既有 `agent.trace` 录制后，Chat Debug 的 Input /
 Output 可读取命令、参数、目录、stdin、stdout、stderr、退出码及截断标记；正文复用已有大小
 上限与按需加载机制。未启用录制时只保存运行状态和反馈，不保存进程输入输出。启动、策略、
 超时或取消错误可能没有进程输出和退出码，不伪造缺失证据。
