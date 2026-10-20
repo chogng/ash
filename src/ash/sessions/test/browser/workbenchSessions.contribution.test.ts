@@ -44,6 +44,19 @@ await import('../../contrib/providers/agentHost/browser/workbenchSessionsService
 await import('../../browser/workbenchChat.contribution.js');
 await import('../../browser/turnMultiDiffSource.contribution.js');
 await import('../../contrib/changes/browser/changesMultiDiffSourceResolver.js');
+const { SESSIONS_FILES_CONTAINER_ID } = await import('../../contrib/files/browser/files.contribution.js');
+
+test('Sessions Files contribution loads and opens its container through the invoking window', async () => {
+	using services = new InstantiationService();
+	const opened: unknown[][] = [];
+	services.registerInstance(IViewsService, {
+		openViewContainer: async (...args: unknown[]) => { opened.push(args); return null; },
+	} as unknown as IViewsService);
+	const command = CommandsRegistry.getCommand(SESSIONS_FILES_CONTAINER_ID);
+	assert.ok(command);
+	await services.invokeFunction(command);
+	assert.deepEqual(opened, [[SESSIONS_FILES_CONTAINER_ID, true]]);
+});
 
 test('Sessions registers its regular Workbench service and starts its catalog', async () => {
 	let subscriptions = 0;

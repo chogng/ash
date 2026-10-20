@@ -4,6 +4,7 @@ import '../../../../workbench/contrib/files/browser/media/explorerviewlet.css';
 import { SyncDescriptor } from '../../../../platform/instantiation/common/descriptors.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
 import { Keybinding, logicalKey } from '../../../../base/common/keybindings.js';
+import { KeybindingsRegistry } from '../../../../platform/keybinding/common/keybindingsRegistry.js';
 import { IWorkspaceContextService } from '../../../../platform/workspace/common/workspace.js';
 import { ViewContainerLocation } from '../../../../workbench/common/views.js';
 import { SessionsViewRegistry } from '../../../common/views.js';
@@ -50,21 +51,12 @@ SessionsViewRegistry.registerStaticViews(SESSIONS_FILES_CONTAINER_ID, [{
 	canToggleVisibility: false,
 }]);
 
-registerAction2(class extends Action2 {
-	constructor() {
-		super({
-			id: SESSIONS_FILES_CONTAINER_ID,
-			title: localize2({ bundle: 'ash', key: 'sessions.files.title' }, 'Files'),
-			precondition: IsSessionsWindowContext.isEqualTo(true),
-			f1: true,
-			keybinding: { primary: Keybinding.single(logicalKey('e', { primaryKey: true, shiftKey: true })) },
-		});
-	}
-
-	public override run(accessor: ServicesAccessor): Promise<boolean> {
-		const folders = accessor.get(IWorkspaceContextService).getWorkspace().folders;
-		return accessor.get(IViewsService).focusView(folders.length > 0 ? SESSIONS_FILES_VIEW_ID : SESSIONS_FILES_EMPTY_VIEW_ID);
-	}
+// The container registry owns its open/focus command; contribute only the
+// Sessions shortcut so loading this contribution cannot register it twice.
+KeybindingsRegistry.registerKeybindingRule({
+	command: SESSIONS_FILES_CONTAINER_ID,
+	keybinding: Keybinding.single(logicalKey('e', { primaryKey: true, shiftKey: true })),
+	when: IsSessionsWindowContext.isEqualTo(true),
 });
 
 registerAction2(class extends Action2 {
