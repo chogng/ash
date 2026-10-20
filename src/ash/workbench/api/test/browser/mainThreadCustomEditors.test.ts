@@ -116,6 +116,15 @@ for (const [language, explanation, limitExplanation] of [['en', 'This formula co
 		}
 	});
 }
+test('Markdown fixture drains the shutdown response after the process exits', async () => {
+	const runtime = await startMarkdownExtension();
+	// Keep the reply in the pipe until exit, reproducing delayed stdout delivery.
+	runtime.child.stdout.pause();
+	runtime.child.once('exit', () => runtime.child.stdout.resume());
+	await runtime.dispose();
+	assert.equal(runtime.child.exitCode, 0);
+});
+
 let activeRuntime: Awaited<ReturnType<typeof startMarkdownExtension>> | undefined;
 before(function () { this.timeout(600000); prepareMarkdownExtension(); });
 afterEach(async () => { await activeRuntime?.dispose(); activeRuntime = undefined; });

@@ -62,7 +62,8 @@ export async function startExtensionProcess(binary: string, extensionId: string,
 	});
 	const fail = (error: Error) => { for (const call of pending.values()) { clearTimeout(call.timer); call.reject(error); } pending.clear(); };
 	child.on('error', fail);
-	child.on('exit', code => fail(new Error(`Markdown extension exited: ${code}`)));
+	// exit can precede stdout draining the successful shutdown response.
+	child.on('close', code => fail(new Error(`Markdown extension exited: ${code}`)));
 	child.stderr.resume();
 	const request = (method: string, params?: unknown, signal?: AbortSignal): Promise<any> => new Promise((resolve, reject) => {
 		signal?.throwIfAborted();
@@ -94,7 +95,7 @@ export async function startExtensionProcess(binary: string, extensionId: string,
 			return invocation.body.payload;
 		};
 		return {
-			registrations, invoke, clientCalls,
+			child, registrations, invoke, clientCalls,
 			async dispose() {
 				try { await request('shutdown'); }
 				finally { child.stdin.end(); child.kill(); reader.close(); fail(new Error('Markdown fixture closed')); }
