@@ -1015,6 +1015,32 @@ per-platform artifact selector、跨重启 invocation 恢复或多个扩展共�
 
 旧生态兼容执行已删除，不作为Ash生态验收路径。Ash API 只有经过真实入口、领域 owner、授权和释放验证才计为可用；接口改名、类型检查或旧扩展兼容测试不能替代验证。
 
+### 现有扩展的实际需求核对
+
+2026-10-20 按现有消费者的实现、注册和构建入口核对；本轮没有新增 SDK 接口或修改运行时。以下“未发现阻碍”仅指本轮核对的调用链，不代表所有功能和平台均已验收。声明式主题、语法和 snippet 包不调用可执行 SDK，不据其资源种类推导新增 API。
+
+| 现有消费者                           | 实际调用与边界                                                                                                                                                                                                                                    | 本轮结论                                                                                                                                                     |
+| ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Markdown / Markdown Math             | Markdown 使用 Rust SDK 的语言 Provider、自定义文本编辑器和客户端文档观察；公式通过已有 DataChannel 调用独立 Math 扩展。见 [Markdown](../extensions/markdown-language-features/README.md) 与 [Math 实现](../extensions/markdown-math/src/lib.rs)。 | 未发现该链路要求 completion resolve、更多诊断字段或新的文件写入 API。编辑、dirty 和撤销继续归客户端。                                                        |
+| Git / GitHub / GitHub Authentication | 当前 Git Rust 实现通过 [Api](../extensions/git/src/api.rs) 调用既有客户端交互和 `git.repository`；GitHub API 与认证各有独立 Provider，见 [GitHub](../extensions/github/README.md) 和 [认证](../extensions/github-authentication/README.md)。      | Git 尚无 remote-source publisher / push-error handler 注册表，但未找到需要这些注册表的现有 Provider 调用方；不因此开放注册接口或通用 TS 认证 API。           |
+| Debug LLDB                           | [现有扩展](../extensions/debug-lldb/README.md) 已使用 Debug 描述符、Output 和状态栏完成安装进度、取消与重试；缓存下载由其现有产品准入拥有。                                                                                                       | 未发现当前流程需要新增 Debug 会话 API；第三方通用下载服务和 TS 对等接口不由此自动排期。                                                                      |
+| Remote SSH / Dev Containers          | [SSH 实现](../extensions/remote-ssh/src/main.rs) 注册已有连接 resolver；[Dev Containers](../extensions/dev-containers/README.md) 使用 `sessionRuntime.v1`。                                                                                       | 原有远端／容器真实环境验收仍保留；没有据此确认新的 SDK API 缺口。                                                                                            |
+| Academy                              | [独立开发流程](../sdk/docs/development.md) 已提供 SDK 导出、仓库外项目和 `editor.client.v1` 开发宿主；普通 TS 作者接线仍是根 TODO 中的迁移需求。                                                                                                  | 不把现有 Rust 声明接线直接解释为缺一组运行时 API；F5 和 `.ashx` 继续暂停。                                                                                   |
+| PDF Viewer                           | [客户端入口](../extensions/pdf-viewer/browser/editor.ts) 等源码仍使用 `../../../src/ash/...`；[Rust 程序](../extensions/pdf-viewer/src/lib.rs) 注册 `editor.resource.v1`。                                                                        | 仓库外构建是维护工具缺口，不足以确定下一项用户功能。范围修正为查看、批注与 AI 读取，见 [PDF Viewer 独立方案](../extensions/pdf-viewer/docs/pdf-content.md)。 |
+| Reference Manager                    | [客户端](../extensions/reference-manager/browser/referenceLibraryEditor.ts) 同样依赖仓库路径，还引用 `extensionEditor.js` 中的 `EditorClientInstantiation` 类型；Rust 程序也注册 `editor.resource.v1`。                                           | 与 PDF 共用开发链缺口；改成公开导入后仍被类型模块边界拒绝。先确认能否用包内函数类型表达该需求，不把整个内部模块加入公开白名单。                              |
+
+#### 仓库外开发链的核对证据
+
+以下保留已取得的开发工具证据，撤回将其排为下一项 SDK 功能需求的结论。PDF Viewer 的实际范围是查看、扩展自有批注及 AI 读取文字／页面图，不需要通用文档编辑能力；与 Skill、Plugin 的独立准备归 [PDF Viewer 方案](../extensions/pdf-viewer/docs/pdf-content.md)。只有实际维护需求受阻时，再复核仓库外开发链。
+
+- **构建证据**：直接调用 [compileEditorClient](../build/builtin/editorClients.ts)，Reference Manager、PDF Viewer 在仓库内均构建成功。将各自 `browser/`、`common/` 和 manifest 复制到仓库外临时目录，提供与 SDK 一致的 `experimentalDecorators` 配置，并复用已安装的第三方 Node 依赖后，两者均因仓库相对导入被拒绝，报 `Editor client dependency escapes its package`。
+- **能力边界证据**：只在临时副本把仓库相对导入改成已有 `ash:editor/*`，PDF Viewer 构建成功；Reference Manager 报 `Editor client import is outside its host contract: workbench/services/extensions/browser/extensionEditor.js`。该类型模块不在 [公开模块／类型清单](../build/builtin/editorClientApi.ts) 中。没有修改清单、宿主绑定或实际扩展源码。
+- **开发宿主证据（源码核对）**：[editor_dev 的 describe](../crates/external-ext/examples/editor_dev.rs) 固定请求 `editor.client.v1`，启动后会立即 describe；PDF Viewer 与 Reference Manager 注册的是 `editor.resource.v1`。[SDK 导出工具](../build/builtin/extensionSdk.ts) 也只生成 Academy 项目。尚未运行资源编辑器的独立 Rust build／开发宿主流程，不能把源码判断写成端到端通过。
+- **维护工具候选（未排期）**：确需仓库外维护时，再迁移 PDF Viewer 所需的已有公开导入，复用现有 SDK 声明和构建 helper，闭合开发宿主对既有资源编辑器契约的调用。保持描述、摘要校验、包准入与生命周期 owner；不放开服务容器、原始 IPC、任意 Renderer 执行、通用认证或新的文件接口，不恢复 F5／`.ashx` 工作。
+- **该维护候选的验证条件**：仓库外 PDF 项目仅依赖导出的 SDK 和声明的第三方包完成类型检查与构建；真实资源扩展进程的 describe、中文标签、修改重载、摘要不匹配拒绝、取消和退出释放通过。之后再复核 Reference Manager 的类型依赖，不能仅靠重命名导入或客户端 bundle 成功宣布整条开发链完成。
+
+临时副本已清理；本轮仅取得上述客户端构建结果和源码证据，没有重跑产品 UI、跨平台或系统 keyring 验收。
+
 ## 9. 长期不变量
 
 - TS/JS 扩展按第 0.1 节分配运行时职责，Rust 能力扩展使用独立程序；共享后端目标不依赖独立 Node。宿主支持范围以 Ash API 契约和实际验证为准，不承诺 VS Code/Node 兼容。实现语言、后台存活或跨客户端复用不决定能力必须进入核心。
