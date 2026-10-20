@@ -133,7 +133,7 @@ function inputPart(notifications: NotificationService, dictation?: TestDictation
 		discoverProviderModels: async () => [],
 	} satisfies ILanguageModelsService);
 	partServices.registerInstance(IAccessibleViewService, { getOpenAriaHint: () => undefined } as unknown as IAccessibleViewService);
-	const part = partServices.createInstance(ObservableInputPart, container, { ...delegate, selectMode: selected => { state = { ...state, mode: selected }; part.render(state); } } as ChatInputDelegate, {} as IContextMenuService, { container: document.body } as IContextViewService, { getOpenAriaHint: () => undefined } as unknown as IAccessibleViewService, notifications, ChatInputEditors, [], { modePicker: 'visible', modelPickerPosition: 'leading' });
+	const part = partServices.createInstance(ObservableInputPart, container, { ...delegate, selectMode: delegate.selectMode ?? (selected => { state = { ...state, mode: selected }; part.render(state); }) } as ChatInputDelegate, {} as IContextMenuService, { container: document.body } as IContextViewService, { getOpenAriaHint: () => undefined } as unknown as IAccessibleViewService, notifications, ChatInputEditors, [], { modePicker: 'visible', modelPickerPosition: 'leading' });
 	part.render(state);
 	return part;
 }
@@ -1135,6 +1135,33 @@ test('peer-chat navigation isolates drafts and references while first-send mater
 	assert.deepEqual((await part.captureDraft())!.draft.contexts, []);
 });
 
+
+for (const mode of ['ask', 'plan'] as const) test(`peer-chat round trips restore ${mode} drafts and send mode independently of approvals`, async () => {
+	let state: ChatInputState = { mode, queuedMessages: 0, approvalMode: 'manual', phase: 'ready', canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false, draftIdentity: { id: 'A', generation: 0 } };
+	const requests: unknown[] = [];
+	using part = inputPart(sharedNotifications, undefined, mode, {
+		selectMode: selected => { state = { ...state, mode: selected }; part.render(state); },
+		send: async (text, selected) => { requests.push({ text, mode: selected, approval: state.approvalMode }); },
+	});
+	part.render(state);
+	part.appendToDraft('Draft A');
+	state = { ...state, mode: 'agent', approvalMode: 'auto', draftIdentity: { id: 'B', generation: 1 } };
+	part.render(state);
+	part.appendToDraft('Draft B');
+	state = { ...state, draftIdentity: { id: 'A', generation: 2 } };
+	part.render(state);
+	assert.equal(state.mode, mode, 'Restored mode is published to the owning model');
+	assert.equal(state.approvalMode, 'auto', 'Draft restoration does not restore approval policy');
+	assert.equal((await part.captureDraft())!.draft.mode, mode);
+	state = { ...state, approvalMode: 'manual', draftIdentity: { id: 'B', generation: 3 } };
+	part.render(state);
+	assert.equal(state.mode, 'agent');
+	await part.acceptInput();
+	state = { ...state, draftIdentity: { id: 'A', generation: 4 } };
+	part.render(state);
+	await part.acceptInput();
+	assert.deepEqual(requests, [{ text: 'Draft B', mode: 'agent', approval: 'manual' }, { text: 'Draft A', mode, approval: 'manual' }]);
+});
 
 test('persistent Chat drafts retire consumed attachments when an untitled composer is promoted', async () => {
 	using changes = new Emitter<void>();

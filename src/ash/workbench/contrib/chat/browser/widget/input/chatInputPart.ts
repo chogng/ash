@@ -154,7 +154,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 	private draftSkills: { readonly text: string; readonly references: readonly SkillReference[]; } | undefined;
 	private persistentDrafts = false;
 	private draftIdentity: ChatInputState['draftIdentity'];
-	private readonly conversationDrafts = new Map<string, InputHistoryDraft>();
+	private readonly conversationDrafts = new Map<string, InputHistoryDraft & { readonly mode: ChatInputMode; }>();
 	private readonly inputChanges = this._register(new Emitter<void>());
 	protected readonly onDidChangeInput = this.inputChanges.event;
 	private readonly delegate: ChatInputDelegate;
@@ -844,7 +844,9 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 	}
 
 	render(state: ChatInputState): void {
-		this.selectDraft(state.draftIdentity);
+		const draftMode = this.selectDraft(state.draftIdentity);
+		const restoreMode = draftMode !== undefined && draftMode !== state.mode;
+		if (restoreMode) state = { ...state, mode: draftMode };
 		if (this.serverSlashCommands !== state.slashCommands) {
 			this.slashCommands.setServerCommands(state.slashCommands);
 			this.serverSlashCommands = state.slashCommands;
@@ -858,6 +860,8 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 		this.renderStatus();
 		this.renderInteraction(state);
 		this.renderToolbar();
+		// Publish only after installing the new identity and state: the owner can render synchronously.
+		if (restoreMode) this.delegate.selectMode(draftMode);
 	}
 
 
@@ -944,7 +948,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 		}));
 	}
 
-	private selectDraft(identity: ChatInputState['draftIdentity']): void {
+	private selectDraft(identity: ChatInputState['draftIdentity']): ChatInputMode | undefined {
 		if (!identity || this.persistentDrafts || this.options.draftStorage === 'host') return;
 		const previous = this.draftIdentity;
 		this.draftIdentity = identity;
@@ -953,7 +957,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 		// Park user-owned references with their draft; live App context never follows navigation.
 		const snapshot = this.snapshotDraftReferences();
 		if (snapshot.text || snapshot.contexts.length) {
-			this.conversationDrafts.set(previous.id, { ...this.captureHistoryDraft(), text: snapshot.text, attachments: snapshot.contexts });
+			this.conversationDrafts.set(previous.id, { ...this.captureHistoryDraft(), mode: this.mode, text: snapshot.text, attachments: snapshot.contexts });
 		} else {
 			this.conversationDrafts.delete(previous.id);
 		}
@@ -964,6 +968,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 		this.applyHistoryDraft(draft ?? { text: '', selection: { anchor: 0, active: 0 }, attachments: [], skills: [] });
 		this.draftRevision++;
 		this.inputChanges.fire();
+		return draft?.mode;
 	}
 
 	/** Persistent tool configuration labels must not enable Send or obscure a leading slash command. */
