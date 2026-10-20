@@ -5,7 +5,9 @@ cargo_build_script(
     name = "build_script",
     srcs = ["build.rs"],
     crate_root = "build.rs",
-    data = ["//extensions/code:client_sources"],
+    data = ["Cargo.toml", "//extensions/code:client_sources"],
+    # The digest reads a sibling package; the isolated manifest runfiles flatten this layout.
+    build_script_env = {"CARGO_MANIFEST_DIR": "crates/app-server"},
     deps = ["//crates/utils/editor-client-build"],
     edition = "2024",
 )

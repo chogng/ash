@@ -34,6 +34,17 @@ fn client_identity_matches_normalized_source_paths_and_rejects_stale_content() {
         before,
         "41fd4bce3e782b963b8ad93f0b63830890166b52327e99f4de8162f338f6dfe3"
     );
+    #[cfg(unix)]
+    {
+        // Build-system input links must retain the package-relative identity and source bytes.
+        std::fs::rename(root.join("browser/a.ts"), root.join("input.ts"))
+            .expect("relocate module input");
+        std::os::unix::fs::symlink("../input.ts", root.join("browser/a.ts"))
+            .expect("link module input");
+        std::fs::rename(root.join("common"), root.join("shared")).expect("relocate common inputs");
+        std::os::unix::fs::symlink("shared", root.join("common")).expect("link common inputs");
+        assert_eq!(source_digest(root), before);
+    }
     std::fs::write(root.join("browser/readme.md"), "Updated documentation")
         .expect("documentation edit");
     assert_eq!(source_digest(root), before);
