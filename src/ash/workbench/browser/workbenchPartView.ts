@@ -4,6 +4,7 @@ import { type IPositionedRectangle } from "../../base/browser/geometry.js";
 import type { Event } from "../../base/common/event.js";
 import type { WorkbenchPartId } from "../services/layout/browser/layoutService.js";
 import type { Part } from "./part.js";
+import type { IBoundarySashes } from '../../base/browser/ui/sash/sash.js';
 
 export interface WorkbenchPartFrameInsets {
 	readonly top: number;
@@ -85,6 +86,10 @@ export class WorkbenchPartView<TPartId extends string = WorkbenchPartId> {
 
 	setVisible(visible: boolean): void {
 		this.part.setVisible(visible);
+	}
+
+	setBoundarySashes(sashes: IBoundarySashes): void {
+		this.part.setBoundarySashes(sashes);
 	}
 
 	setFrameInsets(insets: WorkbenchPartFrameInsets): void {

@@ -26,6 +26,7 @@ class TestWorkbenchLayoutService extends BrowserLayoutService implements IWorkbe
 	public readonly styles: WorkbenchLayoutStyle[] = [];
 	public readonly onDidChangePartVisibility = Event.None;
 	readonly onDidChangePanelPosition = Event.None;
+	getSideBarPosition(): PanelPosition { return Position.LEFT; }
 	getPanelPosition(): PanelPosition { return Position.BOTTOM; }
 	setPanelPosition(): void { }
 

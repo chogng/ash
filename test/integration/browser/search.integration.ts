@@ -62,6 +62,7 @@ import { Part } from '../../../src/ash/workbench/browser/part.js';
 import { ViewPane, type IViewPaneOptions } from '../../../src/ash/workbench/browser/parts/views/viewPane.js';
 import { SyncDescriptor } from '../../../src/ash/platform/instantiation/common/descriptors.js';
 import { Dimension } from '../../../src/ash/base/browser/dom.js';
+import { WorkbenchConfiguration, type SideBarLocation } from '../../../src/ash/workbench/common/configuration.js';
 import '../../../src/ash/workbench/browser/media/style.css';
 import { SearchCommandIds } from '../../../src/ash/workbench/contrib/search/common/constants.js';
 import { SearchAccessibilityHelp } from '../../../src/ash/workbench/contrib/search/browser/searchAccessibilityHelp.js';
@@ -291,6 +292,8 @@ window.ashSearchIntegration = {
 	closeWorkspace: () => workspace.updateWorkspace({ id: 'empty', folders: [] }),
 	setTheme: name => theme.setColorTheme(themes[name]),
 	setWidth: width => layout.resizePart('sidebar', new Dimension(width, 600)),
+	setSidebarPosition: position => configuration.updateValue(WorkbenchConfiguration.sideBarLocation, position),
+	disposeSidebar: () => sidebar.dispose(),
 };
 
 declare global {
@@ -320,6 +323,8 @@ declare global {
 			closeWorkspace(): void;
 			setTheme(name: keyof typeof themes): void;
 			setWidth(width: number): void;
+			setSidebarPosition(position: SideBarLocation): Promise<void>;
+			disposeSidebar(): void;
 		};
 	}
 }

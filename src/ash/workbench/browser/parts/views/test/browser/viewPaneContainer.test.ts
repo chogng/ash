@@ -314,6 +314,7 @@ function registerContainerServices(services: InstanceType<typeof InstantiationSe
 
 
 test('Pane Composite combines scoped container and View actions while retaining the global title menu', async () => {
+	const { IWorkbenchLayoutService, Position } = await import('../../../../../../workbench/services/layout/browser/layoutService.js');
 	const { WorkbenchViewRegistry, IViewDescriptorService } = await import('../../../../../../workbench/common/views.js');
 	const { ViewDescriptorService } = await import('../../../../../../workbench/services/views/browser/viewDescriptorService.js');
 	const { ViewPane } = await import('../../viewPane.js');
@@ -340,6 +341,9 @@ test('Pane Composite combines scoped container and View actions while retaining 
 	resources.add(registry.registerViewContainer(empty));
 	resources.add(registry.registerViews(active.id, [{ id: 'fixture.action-view', title: 'View', canToggleVisibility: false, ctorDescriptor: new SyncDescriptor(ActionView) }]));
 	const descriptors = resources.add(new ViewDescriptorService({ registry }, context));
+	services.registerInstance(IWorkbenchLayoutService, {
+		getSideBarPosition: () => Position.LEFT,
+	} as import('../../../../../../workbench/services/layout/browser/layoutService.js').IWorkbenchLayoutService);
 	services.registerInstance(IViewDescriptorService, descriptors);
 	if (!services.has(IActivityService)) services.registerSingleton(IActivityService, () => services.createInstance(ActivityService));
 	const menus = registerContainerServices(services).get(IMenuService);

@@ -1022,6 +1022,7 @@ function sameWorkspace(first: SessionWorkspaceSelection, second: SessionWorkspac
 }
 
 export interface IAgentWorkbenchLayoutService extends ILayoutService {
+	getSideBarPosition(): Position;
 	getPanelPosition(): Position;
 	setPanelPosition(position: Position): void;
 	readonly onDidChangePanelPosition: Event<string>;

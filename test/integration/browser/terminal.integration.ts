@@ -134,6 +134,7 @@ setIconResolver(document, icon => getIconDefinition(icon));
 function createTerminalFixtureLayout(root: HTMLElement, lifetime: DisposableStore): IWorkbenchLayoutService {
 	return Object.assign(lifetime.add(new BrowserLayoutService({ root })), {
 		getPanelPosition: () => Position.BOTTOM, setPanelPosition: () => { }, onDidChangePanelPosition: Event.None,
+		getSideBarPosition: () => Position.LEFT,
 		onDidChangeAuxiliaryBarMaximized: Event.None, isAuxiliaryBarMaximized: () => false,
 		toggleMaximizedAuxiliaryBar: () => { }, setAuxiliaryBarMaximized: () => false,
 		onDidChangePartVisibility: Event.None, isPartVisible: () => true, hidePart: () => { }, hasFocus: () => false,
@@ -613,6 +614,7 @@ if (new URLSearchParams(location.search).has('pane') || new URLSearchParams(loca
 		}));
 		const paneLayout = Object.assign(lifetime.add(new BrowserLayoutService({ root })), {
 			onDidChangePanelPosition: Event.None, getPanelPosition: () => Position.BOTTOM, setPanelPosition: () => { },
+			getSideBarPosition: () => Position.LEFT,
 			onDidChangePartVisibility: visibility.event,
 			onDidChangeAuxiliaryBarMaximized: Event.None, isAuxiliaryBarMaximized: () => false,
 			toggleMaximizedAuxiliaryBar: () => { }, setAuxiliaryBarMaximized: () => false,

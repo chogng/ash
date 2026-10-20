@@ -23,6 +23,7 @@ import { SESSION_SIDEBAR_DEFAULT_WIDTH } from '../../../common/layoutConstants.j
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { IViewsService } from '../../../../workbench/services/views/common/viewsService.js';
 import { IGitHubService } from '../../../contrib/github/browser/githubService.js';
+import { IWorkbenchLayoutService } from '../../../../workbench/services/layout/browser/layoutService.js';
 
 export const SESSIONS_NAVIGATION_CONTAINER_ID = 'sessions.navigation.chats';
 export const TEAMS_NAVIGATION_CONTAINER_ID = 'sessions.navigation.teams';
@@ -101,11 +102,12 @@ export class SidebarPart extends WorkbenchSidebarPart {
 		@IActivityService activityService: IActivityService,
 		@IInstantiationService instantiationService: IInstantiationService,
 		@IThemeService themeService: IThemeService,
+		@IWorkbenchLayoutService layoutService: Pick<IWorkbenchLayoutService, 'getSideBarPosition'>,
 	) {
 		super(container, {
 			viewDescriptorService: descriptors, contextKeyService: contextKeys, compositeBarVisible: false,
 			openComposite: (id, preserveFocus) => instantiationService.invokeFunction(accessor => accessor.get(IViewsService).openViewContainer(id, !preserveFocus)),
-		}, themeService, storage, activityService);
+		}, themeService, storage, activityService, layoutService);
 		this.topActivityBarHost = h(container.ownerDocument, 'div');
 		this.topActivityBarHost.className = 'ash-sessions-activity-host top';
 		this.topActivityBarHost.hidden = true;

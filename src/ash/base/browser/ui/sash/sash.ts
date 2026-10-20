@@ -7,6 +7,14 @@ import { isFiniteNumber } from "../../../common/numbers.js";
 
 export type SashOrientation = "vertical" | "horizontal";
 
+/** Separators surrounding a view, in physical screen directions. Borrowed from its Grid. */
+export interface IBoundarySashes {
+	readonly top?: Sash;
+	readonly right?: Sash;
+	readonly bottom?: Sash;
+	readonly left?: Sash;
+}
+
 /** The directions in which a Sash can currently resize its owner. */
 export enum SashState {
 	Disabled,

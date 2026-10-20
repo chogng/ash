@@ -86,6 +86,7 @@ test('Sessions moves the retained Panel to all four edges and restores normal si
 	parts.get('panel')!.domNode.append(input);
 	try {
 		using layout = createLayout(dom.window.document.body, parts, { initialDimension: new Dimension(1_600, 1_000) });
+		assert.equal(layout.getSideBarPosition(), Position.LEFT);
 		layout.layout(new Dimension(1_600, 1_000));
 		layout.showPart('panel');
 		layout.resizePart('panel', new Dimension(layout.getPartSize('panel').width, 280));

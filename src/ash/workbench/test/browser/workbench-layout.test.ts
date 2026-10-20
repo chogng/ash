@@ -64,6 +64,9 @@ const { InMemoryConfigurationService } = await import('../../../platform/configu
 const { IConfigurationService } = await import('../../../platform/configuration/common/configuration.js');
 const { TestQuickInputService } = await import('../../../platform/quickinput/test/browser/testQuickInputService.js');
 const componentServices = createTestComponentServices(paneStorage);
+componentServices.registerInstance(IWorkbenchLayoutService, {
+	getSideBarPosition: () => Position.LEFT,
+} as import('../../../workbench/services/layout/browser/layoutService.js').IWorkbenchLayoutService);
 suiteTeardown(() => componentServices.dispose());
 const { Part } = await import("../../../workbench/browser/part.js");
 const { SidebarPart } = await import(
@@ -1505,6 +1508,9 @@ test("Pane Composite Parts restore workspace selections with Registry fallback",
 
 	const firstStorage = createStorage("workspace-a");
 	using firstServices = createTestComponentServices(firstStorage, undefined, dom.window.document);
+	firstServices.registerInstance(IWorkbenchLayoutService, {
+		getSideBarPosition: () => Position.LEFT,
+	} as import('../../../workbench/services/layout/browser/layoutService.js').IWorkbenchLayoutService);
 	firstServices.registerInstance(IViewDescriptorService, viewDescriptors);
 	const first = firstServices.createInstance(SidebarPart, dom.window.document.body, {
 		openComposite: async () => null,
@@ -1519,6 +1525,9 @@ test("Pane Composite Parts restore workspace selections with Registry fallback",
 
 	const restoredStorage = createStorage("workspace-a");
 	using restoredServices = createTestComponentServices(restoredStorage, undefined, dom.window.document);
+	restoredServices.registerInstance(IWorkbenchLayoutService, {
+		getSideBarPosition: () => Position.LEFT,
+	} as import('../../../workbench/services/layout/browser/layoutService.js').IWorkbenchLayoutService);
 	restoredServices.registerInstance(IViewDescriptorService, viewDescriptors);
 	const restored = restoredServices.createInstance(SidebarPart, dom.window.document.body, {
 		openComposite: async () => null,
@@ -1537,6 +1546,9 @@ test("Pane Composite Parts restore workspace selections with Registry fallback",
 
 	const defaultStorage = createStorage("workspace-a");
 	using fallbackServices = createTestComponentServices(defaultStorage, undefined, dom.window.document);
+	fallbackServices.registerInstance(IWorkbenchLayoutService, {
+		getSideBarPosition: () => Position.LEFT,
+	} as import('../../../workbench/services/layout/browser/layoutService.js').IWorkbenchLayoutService);
 	fallbackServices.registerInstance(IViewDescriptorService, viewDescriptors);
 	const fallback = fallbackServices.createInstance(SidebarPart, dom.window.document.body, {
 		openComposite: async () => null,

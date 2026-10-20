@@ -52,6 +52,7 @@ export interface IWorkbenchLayoutService extends ILayoutService {
 	isPartVisible(partId: WorkbenchPartId): boolean;
 	hasFocus(partId: WorkbenchPartId): boolean;
 	getVisibleNeighborPart(partId: WorkbenchPartId, direction: Direction): WorkbenchPartId | undefined;
+	getSideBarPosition(): Position;
 	readonly onDidChangePanelPosition: Event<string>;
 	getPanelPosition(): Position;
 	setPanelPosition(position: Position): void;

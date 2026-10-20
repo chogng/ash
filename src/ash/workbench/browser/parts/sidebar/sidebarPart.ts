@@ -4,7 +4,9 @@ import { IThemeService } from '../../../../platform/theme/common/themeService.js
 import type { IActivityHoverOptions } from "../compositeBarActions.js";
 import "./sidebarpart.css";
 import { h } from "../../../../base/browser/dom.js";
-import { MutableDisposable } from "../../../../base/common/lifecycle.js";
+import { MutableDisposable, toDisposable } from "../../../../base/common/lifecycle.js";
+import type { IBoundarySashes } from '../../../../base/browser/ui/sash/sash.js';
+import { IWorkbenchLayoutService, Position } from '../../../services/layout/browser/layoutService.js';
 import type { IContextMenuProvider } from '../../../../base/browser/contextmenu.js';
 import { ViewContainerLocation, type IViewContainerDescriptor } from "../../../common/views.js";
 import { IStorageService } from "../../../../platform/storage/common/storage.js";
@@ -43,6 +45,7 @@ export class SidebarPart extends PaneCompositePart {
 	private readonly topCompositeBarDomNode: HTMLDivElement | undefined;
 	private readonly bottomCompositeBarDomNode: HTMLDivElement | undefined;
 	private readonly activeTitleListener = this._register(new MutableDisposable());
+	private readonly boundarySashPresentation = this._register(new MutableDisposable());
 	override get minimumWidth(): number { return 180; }
 	override get maximumWidth(): number { return 600; }
 	override get preferredWidth(): number | undefined {
@@ -57,6 +60,7 @@ export class SidebarPart extends PaneCompositePart {
 		@IThemeService themeService: IThemeService,
 		@IStorageService storageService: IStorageService,
 		@IActivityService activityService: IActivityService,
+		@IWorkbenchLayoutService private readonly layoutService: Pick<IWorkbenchLayoutService, 'getSideBarPosition'>,
 	) {
 		const location = options.location ?? ViewContainerLocation.Sidebar;
 		super(container, {
@@ -92,6 +96,16 @@ export class SidebarPart extends PaneCompositePart {
 			this.activeTitleDomNode.className = "ash-sidebar-title-label";
 			this.titleContentDomNode.replaceChildren(this.activeTitleDomNode);
 		}
+	}
+
+	override setBoundarySashes(sashes: IBoundarySashes): void {
+		this.boundarySashPresentation.clear();
+		// Agent Sidebar reuses this host, but only the primary sidebar identifies this boundary.
+		if (this.getId() !== 'sidebar') return;
+		const sash = this.layoutService.getSideBarPosition() === Position.LEFT ? sashes.right : sashes.left;
+		if (!sash) return;
+		sash.element.classList.add('ash-primary-sidebar-sash');
+		this.boundarySashPresentation.value = toDisposable(() => sash.element.classList.remove('ash-primary-sidebar-sash'));
 	}
 
 	public setActivityBarLocation(location: ActivityBarPosition): void {

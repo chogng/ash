@@ -208,6 +208,7 @@ class VisibleAuxiliarybarLayoutService extends BrowserLayoutService implements I
 	setAuxiliaryBarMaximized(): boolean { return false; }
 	readonly onDidChangePanelPosition = Event.None;
 	getPanelPosition(): Position { return Position.BOTTOM; }
+	getSideBarPosition(): Position { return Position.LEFT; }
 	setPanelPosition(): void { }
 	isPanelMaximized(): boolean { return false; }
 	toggleMaximizedPanel(): void { }
