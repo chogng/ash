@@ -526,8 +526,53 @@ fn non_selected_directory_grant_revocation_invalidates_cached_services() {
         .unwrap();
     assert!(!secondary.is_active());
     assert!(files.read_file(Path::new("second.txt"), 1024).is_err());
-    assert!(server.file_system_service_for(Some("second")).is_err());
+    let readonly = server.file_system_service_for(Some("second")).unwrap();
+    assert_eq!(
+        readonly.read_file(Path::new("second.txt"), 1024).unwrap(),
+        std::fs::read(second.path.join("second.txt")).unwrap()
+    );
+    assert!(
+        readonly
+            .write_file(Path::new("denied.txt"), b"no", 1024)
+            .is_err()
+    );
     assert!(server.terminal_service_for(Some("second")).is_err());
+    assert!(Arc::ptr_eq(
+        &selected,
+        &server.file_system_service_for(Some("first")).unwrap()
+    ));
+}
+
+#[test]
+fn directory_revocation_does_not_require_restarting_a_watch_on_a_removed_root() {
+    let first = TestDir::new("revocation-primary", "first.txt");
+    let second = TestDir::new("revocation-removed", "second.txt");
+    let server = server().with_local_env_host(None, host_policy()).unwrap();
+    let secondary = Grant::for_environment(
+        second.root(),
+        GrantSource::ExplicitUser,
+        Permissions::new([
+            Permission::ReadFiles,
+            Permission::WriteFiles,
+            Permission::BrowseFiles,
+            Permission::WatchFiles,
+        ]),
+    );
+    server
+        .activate_local_dirs(vec![
+            ("first".into(), first.authorization()),
+            ("second".into(), secondary.clone()),
+        ])
+        .unwrap();
+    let selected = server.file_system_service_for(Some("first")).unwrap();
+    std::fs::remove_dir_all(&second.path).unwrap();
+    server
+        .env_runtime_control()
+        .unwrap()
+        .reconcile_user_directory_grants(&ash_config::ResolvedConfig::default())
+        .unwrap();
+    assert!(!secondary.is_active());
+    assert!(server.file_system_service_for(Some("second")).is_ok());
     assert!(Arc::ptr_eq(
         &selected,
         &server.file_system_service_for(Some("first")).unwrap()
@@ -4727,6 +4772,146 @@ fn browser_workspace_explicit_revocation_retires_exact_handles_and_narrows_rollb
             .resolve_file_path(&dir.path.join("team.ash-workspace"))
             .is_err()
     );
+}
+
+#[test]
+fn web_readonly_reconciliation_preserves_directory_ids_and_other_roots() {
+    for restricted_index in [0, 1] {
+        let first = TestDir::new("readonly-route-first", "original.txt");
+        let second = TestDir::new("readonly-route-second", "original.txt");
+        let config = Arc::new(ConfigStore::open(first.path.join("permissions.sqlite3")).unwrap());
+        let server = server()
+            .with_config_store(Arc::clone(&config))
+            .with_local_env_host(None, DirGrantPolicy::WebSession(Arc::clone(&config)))
+            .unwrap();
+        let roots = [first.root(), second.root()];
+        server
+            .bind_web_workspace(
+                None,
+                roots
+                    .iter()
+                    .map(|root| (root.clone(), String::new()))
+                    .collect(),
+            )
+            .unwrap();
+        let ids = roots.each_ref().map(|root| root.id().to_string());
+        let mut bindings = {
+            let runtime = server.env_runtime.read().unwrap();
+            ids.iter()
+                .map(|id| (id.clone(), runtime.dirs[id].grant.clone()))
+                .collect::<Vec<_>>()
+        };
+        // An alias can carry less authority than the selected route for the same root.
+        bindings.push((
+            "limited-alias".into(),
+            Grant::for_environment(
+                roots[restricted_index].clone(),
+                GrantSource::ExplicitUser,
+                Permissions::new([Permission::BrowseFiles]),
+            ),
+        ));
+        server.activate_local_dirs(bindings).unwrap();
+        let old_files = ids
+            .each_ref()
+            .map(|id| server.file_system_service_for(Some(id)).unwrap());
+        let mut connection = server.product_host_connection();
+        let request_id = AtomicUsize::new(1);
+        let rpc = |connection: &mut ConnectionState,
+                   method: &str,
+                   params: serde_json::Value|
+         -> serde_json::Value {
+            serde_json::from_str(
+                &server.handle_json(
+                    connection,
+                    &serde_json::json!({
+                        "jsonrpc": "2.0", "id": request_id.fetch_add(1, Ordering::SeqCst),
+                        "method": method, "params": params,
+                    })
+                    .to_string(),
+                ),
+            )
+            .unwrap()
+        };
+        let initialized = rpc(
+            &mut connection,
+            "initialize",
+            serde_json::json!({"clientInfo": {"name": "readonly-route-test", "version": "1"}}),
+        );
+        assert!(initialized.get("error").is_none(), "{initialized}");
+        for id in &ids {
+            let result = rpc(
+                &mut connection,
+                "fs/writeFile",
+                serde_json::json!({
+                    "dirId": id, "path": "saved.txt", "content": "before restriction",
+                    "options": { "mode": "create" },
+                }),
+            );
+            assert!(result.get("error").is_none(), "{result}");
+        }
+        config
+            .apply(ConfigCommandRequest {
+                command_id: CommandId::new("restrict-web-route").unwrap(),
+                expected_revision: ConfigRevision::INITIAL,
+                command: UserConfigCommand::SetDirectoryGrant {
+                    dir: roots[restricted_index].id(),
+                    permissions: inspection_permissions(),
+                    display_path: None,
+                },
+            })
+            .unwrap();
+        // The routed request itself reconciles policy, without a rebind or background watcher.
+        for id in &ids {
+            let result = rpc(
+                &mut connection,
+                "fs/readFile",
+                serde_json::json!({
+                    "dirId": id, "path": "saved.txt",
+                }),
+            );
+            assert!(result.get("error").is_none(), "{result}");
+            assert_eq!(result["result"]["content"], "before restriction");
+        }
+        let limited = rpc(
+            &mut connection,
+            "fs/readFile",
+            serde_json::json!({"dirId": "limited-alias", "path": "saved.txt"}),
+        );
+        assert!(limited.get("error").is_some(), "{limited}");
+        assert!(
+            old_files[restricted_index]
+                .write_file(Path::new("stale.txt"), b"no", 1024)
+                .is_err()
+        );
+        let other_index = 1 - restricted_index;
+        assert!(Arc::ptr_eq(
+            &old_files[other_index],
+            &server
+                .file_system_service_for(Some(&ids[other_index]))
+                .unwrap()
+        ));
+        for (index, id) in ids.iter().enumerate() {
+            let result = rpc(
+                &mut connection,
+                "fs/writeFile",
+                serde_json::json!({
+                    "dirId": id, "path": "after.txt", "content": "after restriction",
+                    "options": { "mode": "create" },
+                }),
+            );
+            assert_eq!(
+                result.get("error").is_some(),
+                index == restricted_index,
+                "{result}"
+            );
+        }
+        let paths = [&first.path, &second.path];
+        assert!(!paths[restricted_index].join("after.txt").exists());
+        assert_eq!(
+            std::fs::read_to_string(paths[other_index].join("after.txt")).unwrap(),
+            "after restriction"
+        );
+    }
 }
 
 #[test]

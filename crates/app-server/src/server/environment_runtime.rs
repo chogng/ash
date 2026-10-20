@@ -110,6 +110,26 @@ pub(super) struct DirRuntime {
 }
 
 impl DirRuntime {
+    /// Replace the same directory's file capabilities without a fallible watcher startup
+    /// delaying revocation. Existing authorized watches keep their route; executable
+    /// services require an explicit rebind. The caller retires the returned old grant.
+    fn replace_file_access(&mut self, grant: Grant) -> Self {
+        let watcher = if grant.permissions().allows(Permission::WatchFiles) {
+            self._file_system_watcher.take()
+        } else {
+            None
+        };
+        let replacement = Self {
+            file_system: Arc::new(LocalFileSystem::new(grant.clone())),
+            grant,
+            _file_system_watcher: watcher,
+            content_search: None,
+            terminals: None,
+            debug_adapters: None,
+        };
+        std::mem::replace(self, replacement)
+    }
+
     fn retire(
         self,
         retained_search: Option<&Arc<ContentSearchService>>,
@@ -630,8 +650,7 @@ impl EnvRuntimeControl {
         Ok(())
     }
 
-    /// Invalidates changed non-selected routes before their cached services can reuse old grants.
-    /// Installing the replacement capabilities remains the explicit directory-binding operation.
+    /// Replaces changed non-selected file routes before cached services can reuse old grants.
     pub(crate) fn reconcile_user_directory_routes(
         &self,
         config: &ash_config::ResolvedConfig,
@@ -652,21 +671,32 @@ impl EnvRuntimeControl {
         let stale = runtime
             .dirs
             .iter()
-            .filter(|(_, dir)| {
+            .filter_map(|(id, dir)| {
                 let grant = &dir.grant;
-                self.grant_policy
-                    .reconciled_permissions(grant, config)
-                    .is_some_and(|permissions| permissions != *grant.permissions())
-                    && !runtime
-                        .selected_grant
-                        .as_ref()
-                        .is_some_and(|selected| selected.dir() == grant.dir())
+                if runtime
+                    .selected_grant
+                    .as_ref()
+                    .is_some_and(|selected| selected.dir() == grant.dir())
+                {
+                    return None;
+                }
+                let permissions = self.grant_policy.reconciled_permissions(grant, config)?;
+                (permissions != *grant.permissions()).then(|| {
+                    let replacement =
+                        Grant::for_environment(grant.dir().clone(), grant.source(), permissions)
+                            .with_path_policy(grant.path_policy().clone());
+                    (id.clone(), replacement)
+                })
             })
-            .map(|(id, _)| id.clone())
             .collect::<Vec<_>>();
         let retired = stale
             .into_iter()
-            .filter_map(|id| runtime.dirs.remove(&id))
+            .filter_map(|(id, grant)| {
+                runtime
+                    .dirs
+                    .get_mut(&id)
+                    .map(|route| route.replace_file_access(grant))
+            })
             .collect::<Vec<_>>();
         for dir in &retired {
             dir.grant.revoke();
@@ -713,7 +743,8 @@ impl EnvRuntimeControl {
 
         let root = authorization.dir().clone();
         let replacement =
-            Grant::for_environment(root.clone(), authorization.source(), permissions.clone());
+            Grant::for_environment(root.clone(), authorization.source(), permissions.clone())
+                .with_path_policy(authorization.path_policy().clone());
         let git_permission = if permissions.allows(Permission::MutateRepository) {
             Permission::MutateRepository
         } else {
@@ -735,13 +766,36 @@ impl EnvRuntimeControl {
                     .collect(),
             )
         });
+        // Retain every alias of the selected root, and leave unrelated workspace roots intact.
+        let replacements = runtime
+            .dirs
+            .iter()
+            .filter(|(_, directory)| directory.grant.dir() == &root)
+            .map(|(id, directory)| {
+                let permissions = self
+                    .grant_policy
+                    .reconciled_permissions(&directory.grant, config)
+                    .unwrap_or_else(|| directory.grant.permissions().clone());
+                let route_grant =
+                    Grant::for_environment(root.clone(), directory.grant.source(), permissions)
+                        .with_path_policy(directory.grant.path_policy().clone());
+                (id.clone(), route_grant)
+            })
+            .collect::<Vec<_>>();
         if let Some(extension_hosts) = &self.extension_hosts {
             extension_hosts.unbind_dir();
         }
         authorization.revoke();
         self.hooks.unbind_dir();
-        let directories = std::mem::take(&mut runtime.dirs);
-        runtime.primary_dir_id = None;
+        let directories = replacements
+            .into_iter()
+            .filter_map(|(id, grant)| {
+                runtime
+                    .dirs
+                    .get_mut(&id)
+                    .map(|route| route.replace_file_access(grant))
+            })
+            .collect::<Vec<_>>();
         let cloud_codebase = runtime.workspace.cloud_codebase.clone();
         let old_file_system_watcher = runtime.workspace._file_system_watcher.take();
         let codebase = runtime.workspace.codebase.clone();
@@ -766,7 +820,7 @@ impl EnvRuntimeControl {
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .retain_dir_roots(&language_roots);
 
-        for (_, directory) in directories {
+        for directory in directories {
             directory.retire(None, None, None);
         }
         drop(old_file_system_watcher);
