@@ -235,6 +235,7 @@ test("PaneView lays out once per toggle and retains its resize boundary", () => 
 	view.addPane(first, 200);
 	view.addPane(second, 200);
 	view.layout(400, 280);
+	using constraints = second.onDidChangeExpansionState(() => view.layout(400, 280));
 	const sash = view.element.querySelector<HTMLElement>(".ash-sash")!;
 	const layouts = first.layouts;
 	for (let index = 0; index < 10; index += 1) {
@@ -255,8 +256,16 @@ test("PaneView lays out once per toggle and retains its resize boundary", () => 
 		resizable: "false",
 		sizes: [200, 200],
 	});
+	assert.equal(view.element.querySelector(".ash-split-view")!.classList.contains("animated"), true);
 	sash.focus();
 	sash.dispatchEvent(new browserEnvironment.window.KeyboardEvent("keydown", { key: "ArrowUp", bubbles: true }));
 	assert.deepEqual([view.getPaneSize(first), view.getPaneSize(second)], [190, 210]);
 	assert.equal(document.activeElement, sash);
+	assert.equal(view.element.querySelector(".ash-split-view")!.classList.contains("animated"), false);
+	second.setCollapsed(true);
+	second.setCollapsed(false);
+	assert.equal(view.element.querySelector(".ash-split-view")!.classList.contains("animated"), true);
+	view.layout(420, 300);
+	assert.equal(view.element.querySelector(".ash-split-view")!.classList.contains("animated"), false);
+	assert.equal(view.getPaneSize(first) + view.getPaneSize(second), 420);
 });

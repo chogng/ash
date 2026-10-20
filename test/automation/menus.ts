@@ -101,9 +101,18 @@ export async function captureElectronMenu(application: ElectronApplication, trig
 			const items = snapshot(this.items);
 			try {
 				if (selection) {
+					// Chords are rendered in the native label because Electron's accelerator column cannot display them.
+					const selectLabel = (items: typeof this.items, label: string): typeof this.items[number] | undefined => {
+						const exact = items.find(item => item.label === label);
+						if (exact) return exact;
+						const matches = items.filter(item => item.label.startsWith(`${label} [`) && item.label.endsWith(']'));
+						if (matches.length > 1) throw new Error(`Ambiguous menu label: ${label}`);
+						return matches[0];
+					};
 					const find = (items: typeof this.items): typeof this.items[number] | undefined => {
+						const match = selectLabel(items, selection.label);
+						if (match) return match;
 						for (const item of items) {
-							if (item.label === selection.label) return item;
 							const nested = item.submenu && find(item.submenu.items);
 							if (nested) return nested;
 						}
@@ -112,7 +121,7 @@ export async function captureElectronMenu(application: ElectronApplication, trig
 					if (selection.path) {
 						let items = this.items;
 						for (const label of selection.path) {
-							item = items.find(item => item.label === label);
+							item = selectLabel(items, label);
 							if (!item) throw new Error(`Expected menu path: ${selection.path.join(' > ')}`);
 							items = item.submenu?.items ?? [];
 						}
@@ -136,7 +145,7 @@ export async function captureElectronMenu(application: ElectronApplication, trig
 		await trigger();
 		await expect.poll(() => application.evaluate(() => Boolean((globalThis as MenuCaptureGlobal).ashTestMenuCapture!.result))).toBe(true);
 		const result = await application.evaluate(() => (globalThis as MenuCaptureGlobal).ashTestMenuCapture!.result!);
-		if (result.error) throw new Error(result.error);
+		if (result.error) throw new Error(`${result.error}; actual menu: ${JSON.stringify(result.items)}`);
 		return result.items;
 	} finally {
 		await application.evaluate(() => {

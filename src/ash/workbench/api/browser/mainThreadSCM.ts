@@ -292,8 +292,14 @@ export class MainThreadSCM extends Disposable {
 	private async invoke(owner: SCMRegistration, method: string, payload: Record<string, unknown>, requestSignal?: AbortSignal): Promise<JsonValue> {
 		owner.controller.signal.throwIfAborted();
 		const signal = requestSignal ? AbortSignal.any([owner.controller.signal, requestSignal]) : owner.controller.signal;
-		const run = (): Promise<JsonValue> => {
+		const run = async (): Promise<JsonValue> => {
 			signal.throwIfAborted();
+			// A published repository may start a graph or decoration read while discovery is still in flight.
+			// Keep consumers behind the registration's initializer and retain caller/retirement cancellation.
+			if (method !== 'initialize' && owner.initialization === 'initializing') {
+				await raceCancellationError(this.initialize(owner), signal);
+				signal.throwIfAborted();
+			}
 			// Queueing does not consume the invocation's backend deadline or an admission slot.
 			return this.api.invoke({ ...owner.source, registrationId: owner.registrationId, operation: 'scm', payload: normalizeExtensionHostPayload(JSON.parse(JSON.stringify({ method, ...payload }))), deadlineUnixMillis: Date.now() + this.timeout }, signal);
 		};

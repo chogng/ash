@@ -1476,6 +1476,8 @@ test("Code restores an untitled draft and opens the next document separately", {
 
 	const page = workbench.page;
 	const group = workbench.editors.groupAt(0);
+	await workbench.quickaccess.runCommand("workbench.action.closeAllEditors");
+	await expect(group.tabs).toHaveCount(0);
 	await page.keyboard.press("ControlOrMeta+N");
 	const input = group.content.locator(".stanza-editor-input");
 	await expect(input).toBeVisible();
@@ -1484,13 +1486,15 @@ test("Code restores an untitled draft and opens the next document separately", {
 	await expect.poll(() => hasWorkingCopyBackup(page, "recovered untitled draft"), { message: "untitled draft reaches IndexedDB" }).toBe(true);
 
 	await page.reload({ waitUntil: "domcontentloaded" });
-	await expect(page.locator(".ash-workbench")).toBeVisible();
+	await workbench.waitForReady();
 	const restoredTab = group.tabs.filter({ hasText: "Untitled-1" });
 	await expect(restoredTab).toHaveCount(1);
 	await expect(group.content.locator(".stanza-editor-line-text").first()).toContainText("recovered untitled draft");
 
+	await expect(group.tabs.filter({ hasText: /^Untitled-/u })).toHaveCount(1);
+	await group.editor.input.focus();
 	await page.keyboard.press("ControlOrMeta+N");
-	await expect(group.tabs).toHaveCount(2);
+	await expect(group.tabs.filter({ hasText: /^Untitled-/u })).toHaveCount(2);
 	await expect(group.tabs.filter({ hasText: "Untitled-2" })).toHaveCount(1);
 	await restoredTab.click();
 	await expect(group.content.locator(".stanza-editor-line-text").first()).toContainText("recovered untitled draft");

@@ -227,7 +227,7 @@ test.describe('editor group lifecycle saved state', () => {
 });
 
 for (const groupCount of [1, 2]) {
-	test(`sash dragging reuses document rendering with ${groupCount} editor groups`, async ({ driver, workbench }, testInfo) => {
+	test(`sash dragging reuses document rendering with ${groupCount} editor groups`, { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ driver, workbench }, testInfo) => {
 		const page = workbench.page;
 		await driver.setWindowSize({ width: 1500, height: 900 });
 		const sidebar = page.locator('[data-part="sidebar"]');
@@ -373,12 +373,16 @@ test.describe('startup layout defaults', () => {
 		await expect(group.tabs).toHaveCount(1);
 	});
 
-	test('Git explains empty windows and folders without repositories', async ({ target, workbench }) => {
+	test('Source Control explains missing providers and empty workspaces', async ({ target, workbench }) => {
 		const page = workbench.page;
 		await page.getByRole('tab', { name: /^Source Control(?:,|$)/u }).click();
 		await expect(page.locator('[data-view-container-id="ash.git"]')).toHaveClass(/ash-scm-viewlet/u);
-		await expect(page.locator('.ash-scm-status')).toHaveText(target.kind === 'browser' && target.appServerMode === 'required'
-			? 'No source control repository found in the open folder.' : 'Open a folder to use source control.');
+		const welcome = page.locator('[data-view-id="ash.gitView"]').getByRole('region', { name: 'Welcome', exact: true });
+		await expect(welcome).toContainText(target.appServerMode === 'disabled'
+			? 'No source control providers registered.'
+			: target.kind === 'browser'
+				? 'The open folder does not contain a Git repository.'
+				: 'Open a folder containing a Git repository to use source control.');
 		await expect(page.locator('.ash-scm-change')).toHaveCount(0);
 		const sidebar = page.locator('[data-part="sidebar"]');
 		const sash = sidebar.locator('xpath=../../..').locator(':scope > .ash-sash').first();
@@ -490,11 +494,11 @@ test.describe('welcome brand', () => {
 		await expect(shortcuts).toBeVisible();
 
 		await page.keyboard.press('F1');
-		await page.locator('.ash-quick-pick').getByRole('combobox').fill('Ash Settings');
+		await page.locator('.ash-quick-pick').getByRole('combobox').fill('>Ash Settings');
 		await page.keyboard.press('Enter');
 		const settings = page.locator('.ash-settings-editor');
-		await settings.locator('[data-settings-group-id="workbench"]').click();
-		await settings.locator('[data-settings-category-id="appearance"]').click();
+		await workbench.settingsEditor.selectGroup('workbench');
+		await workbench.settingsEditor.selectCategory('appearance');
 		const tips = settings.getByRole('switch', { name: 'Empty editor tips', exact: true });
 		await expect(tips).toBeChecked();
 		await tips.focus();
@@ -512,14 +516,14 @@ test.describe('welcome brand', () => {
 		await group.element.locator('.ash-tab-close-action button').click();
 		await expect(shortcuts).toBeHidden();
 		await page.keyboard.press('F1');
-		await page.locator('.ash-quick-pick').getByRole('combobox').fill('Welcome');
+		await page.locator('.ash-quick-pick').getByRole('combobox').fill('>Welcome');
 		await page.keyboard.press('Enter');
 		await expect(group.welcome).toBeVisible();
 		await page.keyboard.press('F1');
-		await page.locator('.ash-quick-pick').getByRole('combobox').fill('Ash Settings');
+		await page.locator('.ash-quick-pick').getByRole('combobox').fill('>Ash Settings');
 		await page.keyboard.press('Enter');
-		await settings.locator('[data-settings-group-id="workbench"]').click();
-		await settings.locator('[data-settings-category-id="appearance"]').click();
+		await workbench.settingsEditor.selectGroup('workbench');
+		await workbench.settingsEditor.selectCategory('appearance');
 		await expect(tips).not.toBeChecked();
 		await tips.focus();
 		await page.keyboard.press('Space');
@@ -544,7 +548,7 @@ test.describe('welcome brand', () => {
 		await expect(openFolder).toBeFocused();
 	});
 
-	test('Clone repo and the Git command open the repository URL input in a desktop window', async ({ target, workbench }) => {
+	test('Clone repo and the Git command open the repository URL input in a desktop window', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, workbench }) => {
 		const clone = workbench.editors.groupAt(0).welcome.getByRole('button', { name: 'Clone repo' });
 		if (target.kind !== 'electron') {
 			await expect(clone).toBeDisabled();
@@ -557,9 +561,7 @@ test.describe('welcome brand', () => {
 		await workbench.page.keyboard.press('Escape');
 		await expect(workbench.page.locator('.ash-quick-pick')).toHaveCount(0);
 		await expect(clone).toBeFocused();
-		await workbench.page.keyboard.press('F1');
-		await workbench.page.locator('.ash-quick-pick').getByRole('combobox').fill('Git: Clone Repository');
-		await workbench.page.keyboard.press('Enter');
+		await workbench.quickaccess.runCommand('git.clone');
 		await expect(input).toBeFocused();
 		await workbench.page.keyboard.press('Escape');
 	});
@@ -664,7 +666,7 @@ test("split editor groups keep visible boundaries", async ({ workbench }) => {
 	for (const command of ["Split Editor Horizontal", "Split Editor Vertical"]) {
 		await page.keyboard.press("F1");
 		const picker = page.locator(".ash-quick-pick");
-		await picker.getByRole("combobox").fill(command);
+		await picker.getByRole("combobox").fill(`>${command}`);
 		await expect(picker.locator(".ash-quick-pick-row-label").filter({ hasText: command })).toBeVisible();
 		await page.keyboard.press("Enter");
 	}

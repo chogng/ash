@@ -575,7 +575,7 @@ test('double-clicking Welcome keeps it in the ordinary row and preserves an expl
 	expect(await welcome.locator('.ash-icon-label-text').evaluate((element, original) => element === original, originalText)).toBe(true);
 	await originalLabel?.dispose();
 	await originalText?.dispose();
-	await expect(workbench.editors.groupAt(0).content.getByRole('button').first()).toBeFocused();
+	await expect(workbench.editors.groupAt(0).welcome).toBeFocused();
 	await welcome.dblclick();
 	await expect(ordinary).toHaveCount(1);
 	await welcome.press('Alt+Enter');
@@ -583,7 +583,7 @@ test('double-clicking Welcome keeps it in the ordinary row and preserves an expl
 	await expect(sticky).toHaveCount(1);
 	await welcome.dblclick();
 	await expect(sticky).toHaveCount(1);
-	await expect(workbench.editors.groupAt(0).content.getByRole('button').first()).toBeFocused();
+	await expect(workbench.editors.groupAt(0).welcome).toBeFocused();
 	await welcome.press('ControlOrMeta+k');
 	await welcome.press('Shift+Enter');
 	await expect(ordinary).toHaveCount(1);

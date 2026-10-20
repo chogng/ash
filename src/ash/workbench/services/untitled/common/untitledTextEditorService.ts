@@ -71,9 +71,10 @@ export class UntitledTextEditorService extends Disposable implements IUntitledTe
 				this.nextUntitledNumber = Math.max(this.nextUntitledNumber, Number(number[1]) + 1);
 			}
 		} else {
+			// Session restoration can open a draft through a resource input before this service creates its model.
 			do {
 				resource = URI.parse(`${Schemas.untitled}:/Untitled-${this.nextUntitledNumber++}`);
-			} while (this.editors.has(extUri.getComparisonKey(resource)));
+			} while (this.editors.has(extUri.getComparisonKey(resource)) || this.workingCopies.get(resource).length > 0);
 		}
 		const name = options.label ?? (basename(resource) || resource.authority || resource.toString());
 		const model = this.instantiationService.createInstance(UntitledTextEditorModel, resource, name, options.initialValue ?? '', options.languageId);

@@ -18,7 +18,7 @@ import { IHostService } from '../../../../../services/host/browser/host.js';
 import { IWorkspaceContextService } from '../../../../../../platform/workspace/common/workspace.js';
 import { TestWorkspaceService } from '../../../../../services/configuration/test/common/testServices.js';
 import { createTestWorkbenchContextKeysHandler } from '../../../../../test/common/testWorkbenchContextKeys.js';
-import { ActiveEditorFirstInGroupContext, ActiveEditorLastInGroupContext, EditorGroupEditorsCountContext, EditorsVisibleContext, MultipleEditorsSelectedInGroupContext } from '../../../../../common/contextkeys.js';
+import { ActiveEditorFirstInGroupContext, ActiveEditorLastInGroupContext, EditorGroupEditorsCountContext, EditorPartMultipleEditorGroupsContext, EditorsVisibleContext, MultipleEditorGroupsContext, MultipleEditorsSelectedInGroupContext } from '../../../../../common/contextkeys.js';
 import type { IEditorGroup } from '../../../../../services/editor/common/editorGroupsService.js';
 import { Direction } from '../../../../../../base/browser/ui/grid/grid.js';
 import { IHistoryService } from '../../../../../services/history/common/history.js';
@@ -164,10 +164,12 @@ test('tab close and split menus operate on the clicked group and selected editor
 	context.setContext(MultipleEditorsSelectedInGroupContext.key, false);
 	const menus = new MenuService(commands, context);
 	const fileCloseItems = () => menus.getMenuActions(MenuId.MenubarFileMenu).flatMap(([, actions]) => actions).filter(action => [CloseAllEditorsCommandId, 'workbench.action.closeActiveEditor'].includes(action.id)).map(action => ({ id: action.id, enabled: action.enabled }));
-	for (const visible of [true, false, true]) {
+	for (const [visible, multipleGroups, multiplePartGroups] of [[true, false, false], [false, false, false], [false, true, false], [false, false, true], [true, false, false]]) {
 		context.setContext(EditorsVisibleContext.key, visible);
+		context.setContext(MultipleEditorGroupsContext.key, multipleGroups);
+		context.setContext(EditorPartMultipleEditorGroupsContext.key, multiplePartGroups);
 		assert.deepEqual(fileCloseItems(), [
-			{ id: CloseAllEditorsCommandId, enabled: visible },
+			{ id: CloseAllEditorsCommandId, enabled: visible || multipleGroups || multiplePartGroups },
 			{ id: 'workbench.action.closeActiveEditor', enabled: visible },
 		]);
 	}

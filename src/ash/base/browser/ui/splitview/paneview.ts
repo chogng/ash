@@ -270,6 +270,7 @@ export class PaneView extends Disposable {
 		this.splitView.element.classList.remove("animated");
 	}, UI_ANIMATION_DURATION.normal));
 	private height = 0;
+	private width = 0;
 	private didLayout = false;
 	readonly onDidSashChange: Event<void>;
 	readonly onDidSashReset: Event<number>;
@@ -365,7 +366,11 @@ export class PaneView extends Disposable {
 	}
 
 	layout(height: number, width: number): void {
+		// Expansion notifies the parent constraints after SplitView has started its transition.
+		// A repeated allocation must not cancel that transition or lay out every body again.
+		if (this.didLayout && this.height === height && this.width === width) return;
 		this.height = height;
+		this.width = width;
 		this.element.style.height = `${height}px`;
 		this.didLayout = true;
 		this.animationReset.cancel();

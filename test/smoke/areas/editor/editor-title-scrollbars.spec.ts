@@ -5,6 +5,13 @@ test.use({ openWorkspace: false });
 
 test('editor title scrollbars preserve overflow, focus and clipping through size and visibility changes', async ({ workbench }) => {
 	const page = workbench.page;
+	await workbench.settingsEditor.openUserSettingsUI();
+	await workbench.settingsEditor.selectEditorCategory('editor-opening');
+	const settings = page.locator('.ash-settings-editor');
+	await settings.getByRole('searchbox', { name: 'Search settings' }).fill('workbench.experimental.modernUIEditorTabStyle');
+	await settings.locator('[data-configuration-key="workbench.experimental.modernUIEditorTabStyle"]').getByRole('combobox').click();
+	await page.getByRole('option', { name: 'Connected', exact: true }).click();
+	await page.locator('.ash-modal-editor-close').click();
 	for (let i = 1; i <= 9; i++) {
 		await page.keyboard.press('ControlOrMeta+N');
 		await expect(page.getByRole('tab', { name: `Untitled-${i}`, exact: true })).toHaveAttribute('aria-selected', 'true');
@@ -13,7 +20,7 @@ test('editor title scrollbars preserve overflow, focus and clipping through size
 	const tabs = group.title.locator('.ash-ordinary-editor-tabs-row .ash-tab-list');
 	const breadcrumbs = group.title.locator('.ash-breadcrumbs-widget');
 	await tabs.evaluate(element => { (element as HTMLElement).style.width = '220px'; });
-	await breadcrumbs.evaluate(element => { (element as HTMLElement).style.width = '60px'; });
+	await breadcrumbs.evaluate(element => { Object.assign((element as HTMLElement).style, { width: '60px', flex: 'none' }); });
 	const tabViewport = tabs.locator('.ash-scrollbar-viewport');
 	const breadcrumbViewport = breadcrumbs.locator('.ash-scrollbar-viewport');
 	const tabBar = tabs.getByRole('scrollbar', { name: 'Horizontal scrollbar', includeHidden: true });
