@@ -1,0 +1,31 @@
+.ash-document-paged {
+	background: var(--ash-text-codeBlockBackground);
+}
+
+.ash-document-page-strip {
+	position: relative;
+}
+
+.ash-document-page-backgrounds {
+	pointer-events: none;
+}
+
+.ash-document-page {
+	position: absolute;
+	box-sizing: border-box;
+	border: var(--ash-strokeThickness) solid var(--ash-border);
+	outline: var(--ash-strokeThickness) solid var(--ash-contrastBorder);
+	background: var(--ash-editor-background);
+}
+
+.ash-document-page-flow {
+	position: absolute;
+	column-count: 1;
+	column-fill: auto;
+	orphans: 1;
+	widows: 1;
+}
+
+.ash-document-page-flow .stanza-document-rich-text-input {
+	min-height: 1em;
+}

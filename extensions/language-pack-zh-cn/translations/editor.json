@@ -905,7 +905,15 @@
     "document.find.replace": "替换",
     "document.find.replaceAll": "全部替换",
     "document.find.close": "关闭查找",
-    "document.find.count": "第 {0} 个，共 {1} 个匹配"
+    "document.find.count": "第 {0} 个，共 {1} 个匹配",
+    "document.page.group": "页面布局",
+    "document.page.paper": "纸张",
+    "document.page.letter": "Letter",
+    "document.page.percent": "{0}%",
+    "document.page.continuous": "连续",
+    "document.page.margin": "页边距",
+    "document.page.zoom": "页面缩放",
+    "document.accessibility.pages": "“纸张”可选择连续、A4 或 Letter。分页文档以横向排列的单栏页面显示。“页边距”修改会保存到文档中并可撤销；“页面缩放”只改变当前视图。在同一段落内，方向键和选区可连续跨越页界。跨页复制、剪切和粘贴均使用文档位置。"
   },
   "ash.editor.clipboard": {
     "selection.title": "选区剪贴板",

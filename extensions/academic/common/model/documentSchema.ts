@@ -1,4 +1,5 @@
 import { createDocumentNode, createDocumentRoot, createTextNode, type DocumentAttributeValue, type DocumentAttributes, type DocumentMark, type DocumentNode, type DocumentNodeId } from "./document.js";
+import { validateDocumentPageAttributes } from './documentPageLayout.js';
 import { validateDocumentParagraphAttributes, validateDocumentParagraphStyles } from './documentParagraph.js';
 
 /** Structural layers available to Stanza schemas. */
@@ -149,6 +150,7 @@ export class DocumentSchema {
 		}
 		this.validateNode(document, new Set(), true, false);
 		validateDocumentParagraphStyles(document);
+		validateDocumentPageAttributes(document.attrs);
 	}
 
 	/** Validates a node fragment without requiring it to be the document root. */

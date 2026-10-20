@@ -1,3 +1,4 @@
+import type { TextModelWorkingCopyReference } from '../../../src/ash/workbench/services/textmodelResolver/common/textModelResourceService.js';
 import { bindTestColorTheme } from './themeFixture.js';
 import { IThemeService } from '../../../src/ash/platform/theme/common/themeService.js';
 import { TestThemeService } from '../../../src/ash/platform/theme/test/common/testThemeService.js';
@@ -86,6 +87,8 @@ interface AcademicIntegrationHarness {
 	getStructuredBlockTexts(): readonly string[];
 	getStructuredFirstTextMarks(): readonly { readonly type: string; readonly attrs: Readonly<Record<string, string | number | boolean | null>>; }[];
 	getStructuredSelection(): unknown;
+	getStructuredVersion(): number;
+	layoutStructured(width: number, height: number): void;
 	getOpenedLinks(): readonly string[];
 	saveCodeBlock(): Promise<void>;
 	getSavedCodeBlock(): string;
@@ -199,16 +202,18 @@ const codeBlockDocument = schema.createDocument([schema.createNode("codeBlock", 
 })], "editor-text-document");
 const codeBlockFiles = new MemoryTextFiles(codeBlockResource, serializeDocument(codeBlockDocument, schema));
 const m6Paragraph = (id: string, text: string) => schema.createNode('paragraph', { id, content: [schema.createText(text, { id: `${id}-text` })] });
-const structuredDocument = new URLSearchParams(location.search).has('m6Document')
-	? schema.createDocument([
-		schema.createNode('paragraph', { id: 'm6-first', content: [schema.createText('Hel', { id: 'm6-a', marks: [{ type: 'strong', attrs: {} }] }), schema.createText('lo Hello', { id: 'm6-b', marks: [{ type: 'em', attrs: {} }] })] }),
-		schema.createNode('orderedList', { id: 'm6-list', content: [schema.createNode('listItem', { content: [m6Paragraph('m6-item', 'Hello item')] })] }),
-		schema.createNode('table', { content: [schema.createNode('tableRow', { content: [schema.createNode('tableCell', { content: [m6Paragraph('m6-cell', 'Hello cell')] })] })] }),
-		schema.createNode('codeBlock', { id: 'm6-code', content: [schema.createText('Hello code', { id: 'm6-code-text' })] }),
-	])
-	: new URLSearchParams(location.search).has('richParagraphs')
-		? schema.createDocument(['Title', 'Body'].map(text => schema.createNode('paragraph', { content: [schema.createText(text, { marks: [{ type: 'strong', attrs: {} }] })] })))
-		: documentFromPlainText(schema, "Title\nBody");
+const structuredDocument = new URLSearchParams(location.search).has('m6Pages')
+	? schema.createDocument([m6Paragraph('pages-long', '分页中文 writing across pages. '.repeat(260)), m6Paragraph('pages-last', 'End')])
+	: new URLSearchParams(location.search).has('m6Document')
+		? schema.createDocument([
+			schema.createNode('paragraph', { id: 'm6-first', content: [schema.createText('Hel', { id: 'm6-a', marks: [{ type: 'strong', attrs: {} }] }), schema.createText('lo Hello', { id: 'm6-b', marks: [{ type: 'em', attrs: {} }] })] }),
+			schema.createNode('orderedList', { id: 'm6-list', content: [schema.createNode('listItem', { content: [m6Paragraph('m6-item', 'Hello item')] })] }),
+			schema.createNode('table', { content: [schema.createNode('tableRow', { content: [schema.createNode('tableCell', { content: [m6Paragraph('m6-cell', 'Hello cell')] })] })] }),
+			schema.createNode('codeBlock', { id: 'm6-code', content: [schema.createText('Hello code', { id: 'm6-code-text' })] }),
+		])
+		: new URLSearchParams(location.search).has('richParagraphs')
+			? schema.createDocument(['Title', 'Body'].map(text => schema.createNode('paragraph', { content: [schema.createText(text, { marks: [{ type: 'strong', attrs: {} }] })] })))
+			: documentFromPlainText(schema, "Title\nBody");
 // Extension scenarios open a legacy Academic file and must save it as typed v2.
 const structuredText = new URLSearchParams(location.search).has('academicExtension')
 	? JSON.stringify({ format: 'ash.document', version: 1, document: structuredDocument })
@@ -247,9 +252,9 @@ const files: ITextFileService = {
 	save: (request: TextFileSaveRequest, signal: AbortSignal) => (request.resource.toString() === codeBlockResource.toString() ? codeBlockFiles : structuredFiles).save(request, signal),
 };
 services.registerInstance(IDocumentEditorTextModelService, disposables.add(new DocumentEditorTextModelService(files, copies)));
-if (new URLSearchParams(location.search).has('m6Document')) services.registerInstance(IThemeService, disposables.add(new TestThemeService(new URLSearchParams(location.search).has('hc') ? highContrastDarkColorTheme : new URLSearchParams(location.search).has('hcLight') ? highContrastLightColorTheme : lightColorTheme)));
+if (new URLSearchParams(location.search).has('m6Document') || new URLSearchParams(location.search).has('m6Pages')) services.registerInstance(IThemeService, disposables.add(new TestThemeService(new URLSearchParams(location.search).has('hc') ? highContrastDarkColorTheme : new URLSearchParams(location.search).has('hcLight') ? highContrastLightColorTheme : lightColorTheme)));
 registerTestComponentServices(services);
-if (new URLSearchParams(location.search).has('m6Document')) disposables.add(bindTestColorTheme(services.get(IThemeService), document.documentElement));
+if (new URLSearchParams(location.search).has('m6Document') || new URLSearchParams(location.search).has('m6Pages')) disposables.add(bindTestColorTheme(services.get(IThemeService), document.documentElement));
 const codeBlockPane = disposables.add(services.createInstance(DocumentEditorPane, { ...createEditorProfileConfiguration(schema, { outlineNavigator: false, contributions: documentContributions }), contentType: 'application/vnd.ash.document+json' }));
 let academicExtensionService: MainThreadClientEditors | undefined;
 let academicSnapshot: ExtensionHostFleetSnapshot | undefined;
@@ -353,9 +358,11 @@ window.ashAcademicIntegration = {
 	apiDocumentType: apiModel.document.type,
 	getBundleIds: () => EditorExtensionsRegistry.getEditorContributions().map(contribution => contribution.id),
 	getCodeBlockText: () => codeBlockPane.getDocument().content[0]?.content[0]?.text,
-	getStructuredBlockTexts: () => structuredPane.getDocument().content.map(block => block.content.find(child => child.text !== undefined)?.text ?? ""),
+	getStructuredBlockTexts: () => structuredPane.getDocument().content.map(block => block.content.map(child => child.text ?? "").join("")),
 	getStructuredFirstTextMarks: () => structuredPane.getDocument().content[0]?.content[0]?.marks ?? [],
 	getStructuredSelection: () => structuredPane.getDocumentSelection(),
+	getStructuredVersion: () => (structuredPane.workingCopy as TextModelWorkingCopyReference).model.getVersionId(),
+	layoutStructured: (width, height) => structuredPane.layout({ width, height }),
 	getOpenedLinks: () => openedLinks,
 	saveCodeBlock: () => codeBlockPane.save(),
 	getSavedCodeBlock: () => codeBlockFiles.read(codeBlockResource),

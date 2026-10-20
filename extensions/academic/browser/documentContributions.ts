@@ -4,6 +4,7 @@ import type { DocumentNode } from '../common/model/document.js';
 import type { DocumentSchema, DocumentTextStyleAttributes } from '../common/model/documentSchema.js';
 import type { DocumentSelection } from '../common/core/documentSelection.js';
 import type { DocumentCommand } from '../common/commands/documentCommands.js';
+import { PageLayoutContribution } from './contrib/pageLayout/pageLayout.js';
 import { FormattingContribution } from './contrib/formatting/formattingContribution.js';
 import { ParagraphStyleContribution } from './contrib/paragraphStyle/paragraphStyle.js';
 import { ListNumberingContribution } from './contrib/paragraphFormatting/listNumbering.js';
@@ -13,6 +14,7 @@ import { ParagraphFormattingContribution } from './contrib/paragraphFormatting/p
 export interface DocumentFormattingState {
 	/** Immutable selected paragraphs; controls derive mixed values instead of caching document state. */
 	readonly document?: DocumentNode;
+	readonly pageZoom?: number;
 	readonly blockId?: string;
 	readonly selection?: DocumentSelection;
 	readonly paragraphs?: readonly DocumentNode[];
@@ -45,6 +47,7 @@ export interface DocumentEditorContributionContext {
 	/** Resolve the current model/selection at invocation; contributors never retain a mutable model. */
 	readonly selectText: (blockId: string, selection: Extract<DocumentSelection, { kind: 'text'; }>) => void;
 	readonly invalidateView: () => void;
+	readonly setPageZoom: (zoom: number) => void;
 	readonly focusEditor: () => void;
 	readonly runDocumentCommand: (create: (schema: DocumentSchema, document: DocumentNode, blockId: string, selection: DocumentSelection | undefined) => DocumentCommand | undefined) => void;
 }
@@ -58,4 +61,5 @@ export const documentContributions: readonly DocumentContribution[] = Object.fre
 	context => context.addFormattingContribution(new ParagraphFormattingContribution(context)),
 	context => context.addFormattingContribution(new ListNumberingContribution(context)),
 	context => context.addFormattingContribution(new DocumentFindContribution(context)),
+	context => context.addFormattingContribution(new PageLayoutContribution(context)),
 ]);

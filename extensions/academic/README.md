@@ -39,7 +39,7 @@ the same working copy and history through the replacement capability.
 `ash.editor.document`, the general document MIME type, `ash.collaboration.notes`
 and the channel-note MIME type also remain compatible. Paragraph contributions
 are installed per profile/view, never through the global Code contribution registry.
-Complete product/platform acceptance and new Word features such as pagination,
+Complete product/platform acceptance and additional Word features such as advanced page layout,
 DOCX or PDF remain separate roadmap work. See the [roadmap](../../docs/design/editor-roadmap.md).
 
 Validate with `just verify ash-academy`, the MainThreadClientEditors / Academic
@@ -89,3 +89,12 @@ Command+F opens search, Enter/Shift+Enter navigate, and Escape restores editor f
 Collaboration replays fully validated atomic transactions and merges independent
 paragraph attributes and style definitions by stable identity. No style state or
 replacement history is copied into the Rust process or the shared host.
+
+The package also owns the M6 editable body pagination slice. Paper controls select
+continuous layout, A4 or Letter and persist page size and uniform margins through
+the existing model transaction, codec and history. Pages currently form a horizontal
+strip. Native CSS column fragments share the original editable DOM and text IDs;
+Range selection and caret geometry therefore use the same model positions across
+pages. Zoom is view-local and never changes wrapping or document versions.
+Advanced page structures, vertical stacking and viewport virtualization remain
+outside this slice; see the editor roadmap for platform acceptance limits.

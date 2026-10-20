@@ -717,3 +717,198 @@ for (const theme of ['hc', 'hcLight']) {
 		await expect(root.locator('[data-node-id="m6-code"] textarea')).toBeFocused();
 	});
 }
+
+// Range and native hit testing read the very DOM fragmented by the installed client.
+// The model is never seeded with page-local offsets or separate per-page documents.
+async function pageBoundary(page: Page): Promise<number> {
+	return page.locator('#document-editor [data-text-node-id="pages-long-text"]').evaluate(run => {
+		const text = run.firstChild!;
+		const flow = run.closest('.ash-document-page-flow') as HTMLElement;
+		const origin = flow.getBoundingClientRect().left;
+		const zoom = Number((flow.parentElement as HTMLElement).style.zoom);
+		const stride = (parseFloat(flow.style.width) + parseFloat(flow.style.columnGap)) * zoom;
+		const rectAt = (offset: number) => {
+			const range = document.createRange();
+			range.setStart(text, offset);
+			range.setEnd(text, offset + 1);
+			return range.getBoundingClientRect();
+		};
+		let low = 0;
+		let high = text.textContent!.length - 1;
+		while (low < high) {
+			const middle = Math.floor((low + high) / 2);
+			if (rectAt(middle).left - origin >= stride - 1) high = middle;
+			else low = middle + 1;
+		}
+		if (low === text.textContent!.length - 1) throw new Error('Long paragraph did not fragment');
+		return low;
+	});
+}
+
+async function selectPageText(page: Page, anchor: number, head = anchor): Promise<void> {
+	await page.locator('#document-editor [data-text-node-id="pages-long-text"]').evaluate((run, { anchor, head }) => {
+		(run.closest('[contenteditable]') as HTMLElement).focus();
+		document.getSelection()!.setBaseAndExtent(run.firstChild!, anchor, run.firstChild!, head);
+	}, { anchor, head });
+	await expect.poll(() => page.evaluate(() => window.ashAcademicIntegration.getStructuredSelection())).toMatchObject({
+		kind: 'text', anchor: { nodeId: 'pages-long-text', offset: anchor }, head: { nodeId: 'pages-long-text', offset: head },
+	});
+}
+
+for (const locale of ['en', 'zh-CN'] as const) {
+	test(`Academy M6 pages map native coordinates, Chinese input, clipboard and history through the installed package in ${locale}`, async ({ page }, testInfo) => {
+		await page.goto(`/academic.html?generalDocument&m6Pages&locale=${locale}`);
+		const root = page.locator('#document-editor');
+		const paper = root.getByRole('combobox', { name: locale === 'en' ? 'Paper' : '纸张', exact: true });
+		await chooseParagraphOption(page, paper, 'A4');
+		const strip = root.locator('.ash-document-page-strip');
+		await expect.poll(() => strip.getAttribute('data-page-count').then(Number)).toBeGreaterThan(2);
+		const original = (await page.evaluate(() => window.ashAcademicIntegration.getStructuredBlockTexts()))[0]!;
+		const boundary = await pageBoundary(page);
+		const version = await page.evaluate(() => window.ashAcademicIntegration.getStructuredVersion());
+		const zoom = root.getByRole('combobox', { name: locale === 'en' ? 'Page zoom' : '页面缩放', exact: true });
+		await chooseParagraphOption(page, zoom, '75%');
+		expect(await pageBoundary(page)).toBe(boundary);
+		await page.setViewportSize({ width: 1100, height: 900 });
+		expect(await pageBoundary(page)).toBe(boundary);
+		expect(await page.evaluate(() => window.ashAcademicIntegration.getStructuredVersion())).toBe(version);
+		// Click a character in the second fragment after scrolling it into view.
+		const point = await root.locator('[data-text-node-id="pages-long-text"]').evaluate((run, offset) => {
+			const pane = run.closest('.ash-text-editor-widget-pane')!;
+			pane.scrollLeft = 650;
+			pane.scrollTop = 0;
+			const range = document.createRange();
+			range.setStart(run.firstChild!, offset);
+			range.setEnd(run.firstChild!, offset + 1);
+			const rect = range.getBoundingClientRect();
+			return { x: rect.left + 1, y: rect.top + rect.height / 2 };
+		}, boundary + 3);
+		await page.mouse.click(point.x, point.y);
+		await expect.poll(() => page.evaluate(() => window.ashAcademicIntegration.getStructuredSelection())).toMatchObject({ head: { nodeId: 'pages-long-text', offset: boundary + 3 } });
+		await selectPageText(page, boundary - 1);
+		await page.keyboard.press('ArrowRight');
+		await expect.poll(() => page.evaluate(() => window.ashAcademicIntegration.getStructuredSelection())).toMatchObject({ head: { offset: boundary } });
+		await root.locator('[data-text-node-id="pages-long-text"]').evaluate((run, offset) => {
+			const editor = run.closest('[contenteditable]')!;
+			editor.dispatchEvent(new CompositionEvent('compositionstart', { bubbles: true }));
+			(run.firstChild as Text).insertData(offset, '中文');
+			editor.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertCompositionText', data: '中文', isComposing: true }));
+			// Metric completion during composition must retain the active DOM text node.
+			const activeText = run.firstChild;
+			document.fonts.dispatchEvent(new Event('loadingdone'));
+			if (run.firstChild !== activeText || !run.isConnected) throw new Error('Composition node was replaced');
+			editor.dispatchEvent(new CompositionEvent('compositionend', { bubbles: true, data: '中文' }));
+		}, boundary);
+		const composed = original.slice(0, boundary) + '中文' + original.slice(boundary);
+		await expect.poll(() => page.evaluate(() => window.ashAcademicIntegration.getStructuredBlockTexts())).toEqual([composed, 'End']);
+		await selectPageText(page, boundary - 5, boundary + 7);
+		const copied = await root.locator('.stanza-document-rich-text-input').first().evaluate(editor => {
+			const data = new DataTransfer();
+			editor.dispatchEvent(new ClipboardEvent('copy', { bubbles: true, cancelable: true, clipboardData: data }));
+			return data.getData('text/plain');
+		});
+		expect(copied).toBe(composed.slice(boundary - 5, boundary + 7));
+		await page.keyboard.press('Backspace');
+		const deleted = composed.slice(0, boundary - 5) + composed.slice(boundary + 7);
+		await expect.poll(() => page.evaluate(() => window.ashAcademicIntegration.getStructuredBlockTexts())).toEqual([deleted, 'End']);
+		await page.keyboard.press('Control+z');
+		await expect.poll(() => page.evaluate(() => window.ashAcademicIntegration.getStructuredBlockTexts())).toEqual([composed, 'End']);
+		await page.keyboard.press('Control+Shift+z');
+		await expect.poll(() => page.evaluate(() => window.ashAcademicIntegration.getStructuredBlockTexts())).toEqual([deleted, 'End']);
+		await selectPageText(page, boundary - 5);
+		await root.locator('.stanza-document-rich-text-input').first().evaluate((editor, text) => {
+			const data = new DataTransfer();
+			data.setData('text/plain', text);
+			editor.dispatchEvent(new ClipboardEvent('paste', { bubbles: true, cancelable: true, clipboardData: data }));
+		}, copied);
+		await expect.poll(() => page.evaluate(() => window.ashAcademicIntegration.getStructuredBlockTexts())).toEqual([composed, 'End']);
+		await page.evaluate(() => window.ashAcademicIntegration.saveStructured());
+		const saved = JSON.parse(await page.evaluate(() => window.ashAcademicIntegration.getSavedStructured()));
+		expect(saved.document.attrs).toEqual({ pageSize: 'a4' });
+		expect(saved.document.content).toHaveLength(2);
+		await page.evaluate(() => window.ashAcademicIntegration.reopenStructured());
+		await expect(strip).toBeVisible();
+		await expect.poll(() => page.evaluate(() => window.ashAcademicIntegration.getStructuredBlockTexts())).toEqual([composed, 'End']);
+		await page.screenshot({ path: testInfo.outputPath('academy-pages.png') });
+		await page.evaluate(() => window.ashAcademicIntegration.setAcademicEnabled(false));
+		await expect(root.locator('.stanza-document-rich-text-input').first()).toHaveAttribute('contenteditable', 'false');
+		expect(await page.evaluate(() => window.ashAcademicIntegration.getStructuredBackup())).toContain('中文');
+		await page.evaluate(() => window.ashAcademicIntegration.setAcademicEnabled(true));
+		await page.evaluate(() => window.ashAcademicIntegration.reopenStructured());
+		await expect(root.locator('.stanza-document-rich-text-input').first()).toHaveAttribute('contenteditable', 'true');
+	});
+}
+
+test('Academy M6 pages retain native drag selection, paper settings and empty-paragraph typing in high contrast', async ({ page }, testInfo) => {
+	await page.setViewportSize({ width: 2000, height: 1600 });
+	await page.goto('/academic.html?generalDocument&m6Pages&hc');
+	const root = page.locator('#document-editor');
+	await page.waitForFunction(() => !!window.ashAcademicIntegration);
+	await page.evaluate(() => window.ashAcademicIntegration.layoutStructured(1800, 1100));
+	await chooseParagraphOption(page, root.getByRole('combobox', { name: 'Paragraph font size', exact: true }), '18');
+	await chooseParagraphOption(page, root.getByRole('combobox', { name: 'Paper', exact: true }), 'Letter');
+	await chooseParagraphOption(page, root.getByRole('combobox', { name: 'Page margins', exact: true }), '54 pt');
+	await chooseParagraphOption(page, root.getByRole('combobox', { name: 'Page zoom', exact: true }), '50%');
+	const boundary = await pageBoundary(page);
+	const version = await page.evaluate(() => window.ashAcademicIntegration.getStructuredVersion());
+	const points = await root.locator('[data-text-node-id="pages-long-text"]').evaluate((run, boundary) => {
+		const pane = run.closest('.ash-text-editor-widget-pane')!;
+		pane.scrollLeft = pane.scrollTop = 0;
+		return [boundary - 3, boundary + 3].map(offset => {
+			const range = document.createRange();
+			range.setStart(run.firstChild!, offset);
+			range.setEnd(run.firstChild!, offset + 1);
+			const rect = range.getBoundingClientRect();
+			return { x: rect.left + 0.1, y: rect.top + rect.height / 2 };
+		});
+	}, boundary);
+	await page.mouse.move(points[0]!.x, points[0]!.y);
+	await page.mouse.down();
+	await page.mouse.move(points[1]!.x, points[1]!.y, { steps: 10 });
+	await page.mouse.up();
+	await expect.poll(() => page.evaluate(() => window.ashAcademicIntegration.getStructuredSelection())).toMatchObject({
+		anchor: { nodeId: 'pages-long-text', offset: boundary - 3 }, head: { nodeId: 'pages-long-text', offset: boundary + 3 },
+	});
+	expect(await page.evaluate(() => window.ashAcademicIntegration.getStructuredVersion())).toBe(version);
+	await page.screenshot({ path: testInfo.outputPath('academy-pages-native-drag-hc.png') });
+	await page.evaluate(() => window.ashAcademicIntegration.layoutStructured(900, 600));
+	expect(await pageBoundary(page)).toBe(boundary);
+	await page.keyboard.press('Control+f');
+	const query = root.getByRole('searchbox', { name: 'Find text', exact: true });
+	await query.fill('End');
+	await query.press('Enter');
+	await expect(query).toBeFocused();
+	await expect.poll(() => root.locator('[data-text-node-id="pages-last-text"]').evaluate(run => {
+		const pane = run.closest('.ash-text-editor-widget-pane')!;
+		const viewport = pane.getBoundingClientRect();
+		const range = document.createRange();
+		range.selectNodeContents(run);
+		const rect = range.getBoundingClientRect();
+		return pane.scrollLeft > 0 && rect.left >= viewport.left && rect.right <= viewport.right;
+	})).toBe(true);
+	await query.press('Escape');
+	await chooseParagraphOption(page, root.getByRole('combobox', { name: 'Paper', exact: true }), 'Continuous');
+	await expect(root.locator('.ash-document-page-strip')).toHaveCount(0);
+	await root.locator('textarea.stanza-document-text-input').first().focus();
+	await page.keyboard.press('Control+z');
+	await expect(root.locator('.ash-document-page-strip')).toBeVisible();
+	await expect(root.getByRole('combobox', { name: 'Paper', exact: true })).toContainText('Letter');
+	await page.evaluate(() => window.ashAcademicIntegration.saveStructured());
+	expect(JSON.parse(await page.evaluate(() => window.ashAcademicIntegration.getSavedStructured())).document.attrs).toEqual({ pageSize: 'letter', pageMargin: 54 });
+	const last = root.locator('[data-block-id="pages-last"]');
+	await last.evaluate(editor => {
+		(editor as HTMLElement).focus();
+		const text = editor.querySelector('[data-text-node-id]')!.firstChild!;
+		document.getSelection()!.setBaseAndExtent(text, 3, text, 3);
+	});
+	await expect.poll(() => page.evaluate(() => window.ashAcademicIntegration.getStructuredSelection())).toMatchObject({ head: { nodeId: 'pages-last-text', offset: 3 } });
+	await page.keyboard.press('Enter');
+	await page.keyboard.type('New paragraph');
+	await expect.poll(() => page.evaluate(() => window.ashAcademicIntegration.getStructuredBlockTexts())).toEqual(['分页中文 writing across pages. '.repeat(260), 'End', 'New paragraph']);
+	await expect(root.locator('.stanza-document-rich-text-input').last()).toBeFocused();
+	await page.evaluate(() => window.ashAcademicIntegration.saveStructured());
+	await page.evaluate(() => window.ashAcademicIntegration.reopenStructured());
+	await expect(root.getByRole('combobox', { name: 'Page margins', exact: true })).toContainText('54 pt');
+	await expect(root.locator('.stanza-document-rich-text-input').last()).toHaveText('New paragraph');
+	await expect(root.locator('[data-block-id="pages-long"]')).toHaveCSS('font-size', '18px');
+});

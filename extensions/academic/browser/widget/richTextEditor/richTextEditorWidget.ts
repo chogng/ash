@@ -1,4 +1,6 @@
 import './richTextEditorWidget.css';
+import { DocumentPageView } from '../../contrib/pageLayout/documentPageView.js';
+import { documentPageDimensions } from '../../../common/model/documentPageLayout.js';
 import { Disposable, DisposableStore, MutableDisposable, combinedDisposable, type IDisposable, toDisposable } from '../../../../../src/ash/base/common/lifecycle.js';
 import { isSafeInteger } from '../../../../../src/ash/base/common/numbers.js';
 import { assertDefined } from '../../../../../src/ash/base/common/types.js';
@@ -126,6 +128,9 @@ export class RichTextEditorWidget extends Disposable {
 	private input: RichTextEditorInput | undefined;
 	private activeBlockId: string | undefined;
 	private composition: DocumentComposition | undefined;
+	private pageView: DocumentPageView | undefined;
+	private pageZoom = 1;
+	private restoringFocus = false;
 	private remotePresences: readonly DocumentCollaborationPresence[] = [];
 	private dimension: IDimension = { width: 0, height: 0 };
 
@@ -153,7 +158,14 @@ export class RichTextEditorWidget extends Disposable {
 					this.activeBlockId = blockId;
 					model.setSelection(selection);
 					this.render();
-					findBlockEditor(this.requireContainer(), blockId)?.scrollIntoView({ block: 'nearest' });
+					if (documentPageDimensions(model.document)) this.revealTextSelection(selection);
+					else findBlockEditor(this.requireContainer(), blockId)?.scrollIntoView({ block: 'nearest' });
+				},
+				setPageZoom: zoom => {
+					if (!Number.isFinite(zoom) || zoom < 0.5 || zoom > 2 || this.isDisposed) return;
+					this.pageZoom = zoom;
+					this.pageView?.setZoom(zoom);
+					this.updateToolbar();
 				},
 				focusEditor: () => { if (this.model && !this.isDisposed) this.restoreModelFocus(this.model, this.model.selection); },
 				runDocumentCommand: create => this.runContributionCommand(create),
@@ -175,6 +187,7 @@ export class RichTextEditorWidget extends Disposable {
 		layoutContainer.append(container);
 		this.editorDom = editorDom;
 		this.container = container;
+		this.pageView = this._register(new DocumentPageView(container));
 		this.outlineNavigator = outlineNavigator;
 		const onSelectionChange = () => this.syncDocumentSelection();
 		parent.ownerDocument.addEventListener("selectionchange", onSelectionChange);
@@ -235,6 +248,7 @@ export class RichTextEditorWidget extends Disposable {
 			});
 			contribution.element.hidden = true;
 		}
+		this.pageView?.clear();
 		this.container?.replaceChildren();
 	}
 
@@ -244,7 +258,7 @@ export class RichTextEditorWidget extends Disposable {
 	}
 
 	focus(): void {
-		this.container?.querySelector<HTMLTextAreaElement>("textarea")?.focus();
+		this.container?.querySelector<HTMLElement>("textarea, .stanza-document-rich-text-input")?.focus();
 	}
 
 	getDocument(): DocumentNode {
@@ -278,7 +292,7 @@ export class RichTextEditorWidget extends Disposable {
 	private render(): void {
 		const container = this.requireContainer();
 		const model = this.model;
-		if (!model) return;
+		if (!model || this.composition) return;
 		const previousElements = new Map<string, HTMLElement>();
 		for (const element of container.querySelectorAll<HTMLElement>("[data-node-id]")) {
 			if (element.dataset.nodeId) previousElements.set(element.dataset.nodeId, element);
@@ -290,7 +304,7 @@ export class RichTextEditorWidget extends Disposable {
 		]);
 		const fragment = createFragment(container.ownerDocument);
 		for (const node of model.document.content) fragment.append(this.renderNode(node, model, previousElements, activeNodeIds, decorations));
-		container.replaceChildren(fragment);
+		this.pageView!.render(fragment, model.document);
 		this.outlineNavigator?.setOutline(this.getOutline());
 		for (const [nodeId, slot] of this.nodeViewSlots) {
 			if (activeNodeIds.has(nodeId)) continue;
@@ -299,6 +313,30 @@ export class RichTextEditorWidget extends Disposable {
 		}
 		this.updateToolbar();
 		this.updateInlineNodeSelection();
+	}
+
+	/** Reveal the focus position rather than a paragraph's bounding box spanning several pages. */
+	private revealTextSelection(pointSelection?: DocumentTextSelection): void {
+		const container = this.container;
+		if (!container) return;
+		const range = container.ownerDocument.createRange();
+		if (pointSelection) {
+			const position = findInlineRunAtOffset(container, pointSelection.head.nodeId, pointSelection.head.offset);
+			if (!position) return;
+			range.setStart(position.run.firstChild ?? position.run, position.offset);
+		} else {
+			const selection = container.ownerDocument.getSelection();
+			if (!selection?.focusNode || !container.contains(selection.focusNode)) return;
+			range.setStart(selection.focusNode, selection.focusOffset);
+		}
+		range.collapse(true);
+		const rect = range.getClientRects()[0];
+		if (!rect) return;
+		const viewport = container.getBoundingClientRect();
+		if (rect.left < viewport.left) container.scrollLeft += rect.left - viewport.left;
+		else if (rect.right > viewport.right) container.scrollLeft += rect.right - viewport.right;
+		if (rect.top < viewport.top) container.scrollTop += rect.top - viewport.top;
+		else if (rect.bottom > viewport.bottom) container.scrollTop += rect.bottom - viewport.bottom;
 	}
 
 	private disposeNodeViews(): void {
@@ -425,7 +463,7 @@ export class RichTextEditorWidget extends Disposable {
 	}
 
 	private appendEditableText(element: HTMLElement, node: DocumentNode, model: DocumentTextModel, decorations: readonly ViewDecoration[]): void {
-		if (usesRichTextSurface(node) || hasRenderableDecoration(model, node, decorations)) {
+		if ((documentPageDimensions(model.document) && node.content.some(child => child.text !== undefined && child.text.length > 0)) || usesRichTextSurface(node) || hasRenderableDecoration(model, node, decorations)) {
 			this.appendRichText(element, node, model, decorations);
 			return;
 		}
@@ -492,6 +530,7 @@ export class RichTextEditorWidget extends Disposable {
 				currentModel.dispatch(transaction.withHistoryGroup("typing"));
 			}
 			const nextTextarea = findTextArea(this.requireContainer(), node.id);
+			if (!nextTextarea) this.restoreModelFocus(currentModel, currentModel.selection);
 			nextTextarea?.focus();
 			if (nextTextarea) {
 				nextTextarea.setSelectionRange(Math.min(selectionStart, nextTextarea.value.length), Math.min(selectionEnd, nextTextarea.value.length));
@@ -527,6 +566,8 @@ export class RichTextEditorWidget extends Disposable {
 			element.replaceChildren(createdEditor);
 		}
 		editor.dataset.blockId = node.id;
+		editor.contentEditable = this.isReadOnly() ? "false" : "true";
+		editor.setAttribute("aria-readonly", String(this.isReadOnly()));
 		editor.setAttribute("aria-label", editableBlockAriaLabel(node));
 		this.renderInlineContent(editor, node, model, decorations);
 	}
@@ -911,7 +952,7 @@ export class RichTextEditorWidget extends Disposable {
 	}
 
 	private syncRichDocumentTextSelection(editor: HTMLDivElement, model: DocumentTextModel, force = false): void {
-		if (this.model !== model) return;
+		if (this.model !== model || this.restoringFocus) return;
 		const inlineSelection = readDocumentTextSelection(this.requireContainer(), true);
 		if (inlineSelection && !isDocumentTextSelectionInDocument(model.document, inlineSelection.selection)) return;
 		this.activeBlockId = inlineSelection?.blockId ?? editor.dataset.blockId;
@@ -1072,6 +1113,13 @@ export class RichTextEditorWidget extends Disposable {
 		return true;
 	}
 
+	/** focus() fires synchronously before the saved DOM range has been restored. */
+	private focusEditorElement(editor: HTMLElement): void {
+		this.restoringFocus = true;
+		try { editor.focus(); }
+		finally { this.restoringFocus = false; }
+	}
+
 	private restoreModelFocus(model: DocumentTextModel, selection: DocumentSelection | undefined): void {
 		let blockId: string | undefined;
 		if (selection?.kind === "text") blockId = findTextBearingBlockId(model.document, selection.anchor.nodeId);
@@ -1089,7 +1137,7 @@ export class RichTextEditorWidget extends Disposable {
 			this.updateInlineNodeSelection();
 			return;
 		}
-		editor.focus();
+		this.focusEditorElement(editor);
 		if (selection?.kind === "text" && editor.tagName === "TEXTAREA") {
 			const textarea = editor as HTMLTextAreaElement;
 			const block = findNode(model.document, blockId);
@@ -1101,6 +1149,7 @@ export class RichTextEditorWidget extends Disposable {
 			}
 		} else if (selection?.kind === "text" && editor.classList.contains("stanza-document-rich-text-input")) {
 			setInlineDocumentTextSelection(this.requireContainer(), selection);
+			this.revealTextSelection();
 		}
 		this.updateToolbar();
 		this.updateInlineNodeSelection();
@@ -1108,7 +1157,7 @@ export class RichTextEditorWidget extends Disposable {
 
 	private selectInlineNode(model: DocumentTextModel, blockId: string, nodeId: string, editor: HTMLDivElement): void {
 		if (this.model !== model) return;
-		editor.focus();
+		this.focusEditorElement(editor);
 		model.setSelection(nodeSelection(nodeId));
 		this.activeBlockId = blockId;
 		this.updateInlineNodeSelection();
@@ -1150,7 +1199,7 @@ export class RichTextEditorWidget extends Disposable {
 		const editor = findBlockEditor(this.requireContainer(), blockId);
 		if (!editor) return;
 		this.activeBlockId = blockId;
-		editor.focus();
+		this.focusEditorElement(editor);
 		const node = findNode(model.document, blockId);
 		const textNode = node ? findFirstTextNode(node) : undefined;
 		if (editor.tagName === "TEXTAREA") {
@@ -1177,13 +1226,14 @@ export class RichTextEditorWidget extends Disposable {
 		}
 		const editor = findBlockEditor(this.requireContainer(), command.focus.blockId);
 		if (!editor) return;
-		editor.focus();
+		this.focusEditorElement(editor);
 		if (editor.tagName === "TEXTAREA") {
 			const textarea = editor as HTMLTextAreaElement;
 			const offset = command.focus.point?.offset ?? 0;
 			textarea.setSelectionRange(Math.min(offset, textarea.value.length), Math.min(offset, textarea.value.length));
 		} else if (editor.classList.contains("stanza-document-rich-text-input") && model.selection?.kind === "text") {
 			setInlineDocumentTextSelection(this.requireContainer(), model.selection);
+			this.revealTextSelection();
 		}
 		this.updateToolbar();
 	}
@@ -1346,7 +1396,7 @@ export class RichTextEditorWidget extends Disposable {
 		const textContext = isTypographyBlock(block);
 		const activeSelection = textContext ? this.readActiveDocumentTextSelection(model, block!.id) ?? selection : undefined;
 		for (const toolbar of this.formattingContributions) toolbar.setState({
-			document: model.document, blockId, selection: model.selection,
+			document: model.document, pageZoom: this.pageZoom, blockId, selection: model.selection,
 			paragraphs: blockId ? getSelectedDocumentParagraphs(model.document, blockId, model.selection) : [],
 			context: block?.type === "codeBlock" ? "code" : textContext ? "text" : "none",
 			readOnly,
