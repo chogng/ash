@@ -919,7 +919,10 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 			event.join((async () => {
 				// File selection can still be preparing its snapshot when the window closes.
 				while (this.attachmentModel.hasPendingContext) await this.attachmentModel.resolvePendingContext();
-				save();
+				// A mode switch clears the retained renderer after transferring its draft.
+				// Its shutdown must not overwrite the active renderer's persisted input.
+				const draft = this.snapshotDraftReferences();
+				if (this.visible || draft.text.length > 0 || draft.contexts.length > 0) save();
 				await Promise.all([...pending]);
 				await storage.flush();
 			})(), 'Chat composer draft');

@@ -190,6 +190,7 @@ ALL_PROXY → all_proxy → HTTPS_PROXY → https_proxy → HTTP_PROXY → http_
 TLS 使用 rustls：
 
 - HTTP、WebSocket 与 SDK TLS 配置及其 verifier 显式选择 AWS-LC，支持企业代理使用的 P-521/SHA-512 签名；不依赖进程全局 provider 或 Cargo feature 自动选择；
+- 同步 ureq transport 通过私有 connector 复用共享 rustls 配置，关闭 ureq 内置 TLS 与独立证书包；底层 socket 仍交给 ureq 更新请求和响应体 deadline；
 - `SystemRoots` 在首次 HTTPS route 创建系统证书验证器；
 - `SystemPlus` 在系统信任规则上增加 DER CA；
 - `CustomOnly` 只使用 supplied DER CA；

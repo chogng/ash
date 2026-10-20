@@ -5,9 +5,12 @@ import { join } from 'node:path';
 import { test as browserTest } from '@playwright/test';
 import { QuickAccess } from '../../../automation/quickaccess.js';
 import { Workbench } from '../../../automation/workbench.js';
-import { captureElectronMenu } from '../../../automation/menus.js';
+import { Menus } from '../../../automation/menus.js';
 import { installMainChannelTestClient } from '../../../automation/mainProcessIpc.js';
 import type { IBrowserViewInfo } from '../../../../src/ash/platform/browserView/common/browserView.js';
+
+// Native application menus follow OS focus on macOS.
+const focusTest = test.extend({ electronWindowMode: process.platform === 'darwin' ? 'active' : undefined });
 
 for (const locale of ['en', 'zh-CN']) {
 	test(`Sessions browser tabs support keyboard selection, reload and Main cleanup in ${locale}`, { tag: ['@electron-ui', '@electron-app-server'] }, async ({ target, workbench, restartWorkbench }) => {
@@ -163,7 +166,7 @@ test('Code panel stays below the main region and retains its views across sessio
 	await expect(toggle).toHaveCount(0);
 });
 
-test('Code connects layout commands to View, Add tab and the panel shortcut', async ({ application, target, workbench }) => {
+focusTest('Code connects layout commands to View, Add tab and the panel shortcut', async ({ application, target, workbench }) => {
 	const page = await workbench.openAgentsWindow(target.kind);
 	const navigation = page.locator('.ash-sessions-activity-content');
 	await navigation.getByRole('button', { name: 'Code', exact: true }).click();
@@ -171,52 +174,23 @@ test('Code connects layout commands to View, Add tab and the panel shortcut', as
 	const title = editor.locator('.ash-editor-title-control:visible');
 	const content = editor.locator('.ash-editor-group:visible > .ash-editor-group-content');
 	const panel = page.locator('[data-part="panel"]');
-	const menuButton = page.locator('[data-part="titlebar"]').getByRole('button', { name: 'Application menu', exact: true });
-	const usesSystemMenu = 'windows' in application && process.platform === 'darwin';
-	const openViewMenu = async (): Promise<void> => {
-		await menuButton.click();
-		await page.getByRole('menuitem', { name: 'View', exact: true }).hover();
-	};
-	const selectViewAction = async (name: string, checkbox = false): Promise<void> => {
-		if (usesSystemMenu) {
-			await captureElectronMenu(application, () => menuButton.click(), { label: name });
-			await expect(menuButton).toHaveAttribute('aria-expanded', 'false');
-		} else {
-			await openViewMenu();
-			await page.getByRole(checkbox ? 'menuitemcheckbox' : 'menuitem', { name, exact: true }).click();
-		}
-	};
-	const addChangesTab = async (): Promise<void> => {
-		if (usesSystemMenu) {
-			await captureElectronMenu(application, () => title.getByRole('button', { name: 'Add tab', exact: true }).click(), { label: 'Open Changes tab' });
-		} else {
-			await title.getByRole('button', { name: 'Add tab', exact: true }).click();
-			await page.getByRole('menuitem', { name: 'Open Changes tab', exact: true }).click();
-		}
-	};
+	const menus = new Menus(page);
+	const selectViewAction = (name: string): Promise<void> => menus.selectApplication(application, ['View', name]);
+	const addChangesTab = (): Promise<void> => menus.select(application, () => title.getByRole('button', { name: 'Add tab', exact: true }).click(), ['Open Changes tab']);
 	await expect(content).toBeHidden();
-	await selectViewAction('Toggle details', true);
+	await selectViewAction('Toggle details');
 	await expect(content).toBeVisible();
 	await expect(page.locator('[data-part="auxiliarybar"]')).toBeHidden();
-	await selectViewAction('Toggle details', true);
+	await selectViewAction('Toggle details');
 	await expect(page.locator('[data-part="auxiliarybar"]')).toBeVisible();
 	await selectViewAction('Hide editor');
 	await expect(content).toBeHidden();
 	await selectViewAction('Show editor');
 	await expect(content).toBeVisible();
-	if (usesSystemMenu) {
-		const items = await captureElectronMenu(application, () => menuButton.click());
-		const view = items.find(item => item.label === 'View')!.submenu!;
-		expect(view.find(item => item.label === 'Hide editor')?.enabled).toBe(true);
-		expect(view.some(item => item.label === 'Show editor')).toBe(false);
-		await expect(menuButton).toHaveAttribute('aria-expanded', 'false');
-		await selectViewAction('Toggle Code panel', true);
-	} else {
-		await openViewMenu();
-		await expect(page.getByRole('menuitem', { name: 'Hide editor', exact: true })).toBeVisible();
-		await expect(page.getByRole('menuitem', { name: 'Show editor', exact: true })).toHaveCount(0);
-		await page.getByRole('menuitemcheckbox', { name: 'Toggle Code panel', exact: true }).click();
-	}
+	const view = await menus.inspectApplication(application, ['View']);
+	expect(view.find(item => item.label === 'Hide editor')?.enabled).toBe(true);
+	expect(view.some(item => item.label === 'Show editor')).toBe(false);
+	await selectViewAction('Toggle Code panel');
 	await expect(panel).toBeVisible();
 	await page.keyboard.press('Control+`');
 	await expect(panel).toBeHidden();
@@ -242,15 +216,7 @@ test('Code connects layout commands to View, Add tab and the panel shortcut', as
 	await expect(title.getByRole('tab', { name: 'Files', exact: true })).toHaveAttribute('aria-selected', 'true');
 	await navigation.getByRole('button', { name: /^Chat(?:\.|$)/u }).click();
 	const codeActions = ['Toggle Code panel', 'Toggle Code side panel', 'Toggle details', 'Hide editor', 'Show editor', 'Open Files tab', 'Open Changes tab'];
-	if (usesSystemMenu) {
-		const items = await captureElectronMenu(application, () => menuButton.click());
-		expect(items.find(item => item.label === 'View')!.submenu!.filter(item => codeActions.includes(item.label))).toEqual([]);
-		await expect(menuButton).toHaveAttribute('aria-expanded', 'false');
-	} else {
-		await openViewMenu();
-		for (const name of codeActions) await expect(page.getByRole('menu').getByText(name, { exact: true })).toHaveCount(0);
-		await page.keyboard.press('Escape');
-	}
+	await expect.poll(async () => (await menus.inspectApplication(application, ['View'])).filter(item => codeActions.includes(item.label))).toEqual([]);
 });
 
 test('Code shares its tabs across all four editor and Details states', async ({ application, target, workbench }) => {

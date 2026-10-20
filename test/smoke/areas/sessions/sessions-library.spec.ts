@@ -33,7 +33,7 @@ test('Sessions Library coordinates independent container Views and a retained br
 	await library.getByRole('searchbox').fill('Retained search');
 	await library.getByRole('button', { name: 'List view', exact: true }).click();
 	await expect(library).toHaveClass(/list-view/);
-	await navigation.getByRole('button', { name: /^Chat/, exact: false }).click();
+	await navigation.getByRole('button', { name: 'Chat', exact: true }).click();
 	await expect(library).toBeHidden();
 	await navigation.getByRole('button', { name: 'Library', exact: true }).click();
 	await expect(library.getByRole('searchbox')).toHaveValue('Retained search');

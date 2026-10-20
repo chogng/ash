@@ -1211,3 +1211,22 @@ test('Chat shutdown waits for file preparation and retains the draft when the st
 	assert.equal(flushes, 2);
 	assert.equal(sends, 0);
 });
+
+test('a hidden cleared composer does not overwrite the active renderer draft during shutdown', async () => {
+	using shutdown = new Emitter<IWillShutdownEvent>();
+	const drafts = new Map<string, Parameters<IChatDraftStorage['write']>[1]>();
+	using part = inputPart(sharedNotifications);
+	part.bindDraftStorage({ threadId: 'shared-thread', onDidChange: AshEvent.None } as IChatWidgetModel, {
+		read: id => drafts.get(id), write: (id, draft) => { drafts.set(id, draft); }, flush: async () => { },
+	}, shutdown.event);
+	edit(part, 'Transfer to the other renderer');
+	const transferred = (await part.captureDraft())!;
+	transferred.clear();
+	part.setVisible(false);
+	const activeDraft = { ...transferred.draft, text: 'Continue in the active renderer' };
+	drafts.set('shared-thread', activeDraft);
+	const operations: Promise<unknown>[] = [];
+	shutdown.fire({ reason: 'windowClose', join: operation => { operations.push(typeof operation === 'function' ? operation() : operation); } });
+	await Promise.all(operations);
+	assert.deepEqual(drafts.get('shared-thread'), activeDraft);
+});

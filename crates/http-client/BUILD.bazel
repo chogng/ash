@@ -4,6 +4,9 @@ ash_rust_crate(
     name = "http-client",
     crate_name = "ash_http_client",
     data = [
+        "//crates/http-test-support:fixtures/server.der",
+        "//crates/http-test-support:fixtures/server-key.der",
+        "tests/fixtures/client.der",
         "tests/fixtures/system-trust-ca.der",
         "tests/fixtures/system-trust-server.der",
     ],

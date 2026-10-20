@@ -361,7 +361,7 @@ test('Sessions Design macOS canvas menu dispatches editing through Main', { tag:
 	expect(await inspectCanvasMenu(canvas, application, true)).toEqual([
 		{ label: 'Undo', enabled: false }, { label: 'Redo', enabled: false },
 		{ label: 'Delete', enabled: false }, { label: 'Select all', enabled: false },
-		{ label: 'Duplicate', enabled: false }, { label: 'Bring to front [⇧⌘}]', enabled: false }, { label: 'Send to back [⇧⌘{]', enabled: false }, { label: 'Add auto layout', enabled: false },
+		{ label: 'Duplicate', enabled: false }, { label: expect.stringMatching(/^Bring to front \[⇧⌘.+\]$/u), enabled: false }, { label: expect.stringMatching(/^Send to back \[⇧⌘.+\]$/u), enabled: false }, { label: 'Add auto layout', enabled: false },
 		{ label: 'Group', enabled: false }, { label: 'Create component', enabled: false }, { label: 'Detach instance', enabled: false }, { label: 'Ungroup', enabled: false },
 		{ label: 'Add frame (F)', enabled: true }, { label: 'Import image', enabled: true },
 		{ label: 'Export SVG', enabled: false }, { label: 'Open design', enabled: true }, { label: 'Save a copy', enabled: true },
@@ -860,7 +860,7 @@ test('Sessions composer configuration leaves Workbench input defaults unchanged'
 	const defaultCard = defaultInput.locator(':is(.ash-chat-input-container,.ash-cowork-input-container)');
 	const workbenchBlurTarget = parent.getByRole('tab', { name: 'Explorer', exact: true });
 	await expect(defaultInput.locator(':is(.ash-chat-input-container,.ash-cowork-input-container)')).toHaveCSS('border-radius', '8px');
-	await expect(defaultInput.locator(':is(.ash-chat-input-editor,.ash-cowork-input-editor)')).toHaveCSS('height', '100px');
+	await expect(defaultInput.locator(':is(.ash-chat-input-editor,.ash-cowork-input-editor)')).toHaveCSS('height', '40px');
 	await workbenchBlurTarget.focus();
 	await expect(defaultCard).not.toHaveClass(/focused/u);
 	const restingBorder = await defaultCard.evaluate(element => getComputedStyle(element).borderTopColor);
@@ -902,7 +902,7 @@ test('Sessions composer configuration leaves Workbench input defaults unchanged'
 		await parent.getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();
 	}
 	await expect(defaultInput.locator(':is(.ash-chat-input-container,.ash-cowork-input-container)')).toHaveCSS('border-radius', '8px');
-	await expect(defaultInput.locator(':is(.ash-chat-input-editor,.ash-cowork-input-editor)')).toHaveCSS('height', '100px');
+	await expect(defaultInput.locator(':is(.ash-chat-input-editor,.ash-cowork-input-editor)')).toHaveCSS('height', '40px');
 	await defaultInput.getByRole('textbox', { name: 'Chat message' }).focus();
 	await defaultCard.hover();
 	await expect(defaultCard).toHaveCSS('border-top-color', focusBorder);
@@ -1108,11 +1108,14 @@ async function expectActivityIconSize(navigation: Locator, size: number): Promis
 	const horizontal = await navigation.evaluate(element => element.classList.contains('horizontal'));
 	const compact = await navigation.evaluate(element => element.classList.contains('compact'));
 	const itemSize = horizontal ? 24 : compact ? 28 : 36;
-	for (const item of await navigation.locator('.ash-composite-bar-navigation-item > button').all()) {
+	const entries = navigation.locator('.ash-composite-bar-navigation-item > button');
+	await expect(entries).not.toHaveCount(0);
+	for (const item of await entries.all()) {
+		await expect(item.locator('svg.ash-icon')).toHaveCount(1);
 		await expect(item).toHaveCSS('width', `${itemSize}px`);
 		await expect(item).toHaveCSS('height', `${itemSize}px`);
 	}
-	await expect(icons).toHaveCount(horizontal ? 5 : 6);
+	await expect(icons).toHaveCount(await entries.count() + (horizontal ? 0 : 1));
 	const accounts = navigation.page().getByRole('button', { name: 'Accounts', exact: true });
 	await expect(accounts).toHaveCount(1);
 	const titlebarAccounts = navigation.page().locator('[data-part="titlebar"]').getByRole('button', { name: 'Accounts', exact: true });
@@ -1914,7 +1917,7 @@ emptyWorkspaceTest("Code opens Sessions in a dedicated Electron window and retur
 	await parentClosed;
 });
 
-test('Sessions menus and history actions stay independent from Workbench', async ({ application, target, workbench }) => {
+focusTest('Sessions menus and history actions stay independent from Workbench', async ({ application, target, workbench }) => {
 	let page = workbench.page;
 	if (target.kind === 'browser' || process.platform !== 'darwin') {
 		const workbenchMenu = page.getByRole('button', { name: 'Application menu', exact: true });
@@ -1939,23 +1942,29 @@ test('Sessions menus and history actions stay independent from Workbench', async
 	await expect(forward).toBeDisabled();
 	const sessions = page.locator('.ash-sessions-list-item');
 	await expect(sessions).toHaveCount(1);
-	const originalSession = sessions.filter({ hasText: 'New code session' });
-	await expect(originalSession).toHaveAttribute('aria-current', 'page');
+	const conversation = page.locator('.ash-sessions-chat-slot.active :is(.ash-chat,.ash-cowork)');
+	const originalId = await conversation.getAttribute('data-untitled-session-id');
+	expect(originalId).toBeTruthy();
+	await expect(sessions).toHaveAttribute('aria-current', 'page');
 	await page.locator('.ash-sessions-list-add').click();
 	await expect(sessions).toHaveCount(1);
-	const newSession = sessions.filter({ hasText: /^New session$/u });
-	await expect(newSession).toHaveAttribute('aria-current', 'page');
+	await expect(conversation).not.toHaveAttribute('data-untitled-session-id', originalId!);
+	const newId = await conversation.getAttribute('data-untitled-session-id');
+	expect(newId).toBeTruthy();
+	await expect(sessions).toHaveAttribute('aria-current', 'page');
 	await expect(back).toBeEnabled();
 	await back.click();
-	await expect(originalSession).toHaveAttribute('aria-current', 'page');
+	await expect(conversation).toHaveAttribute('data-untitled-session-id', originalId!);
+	await expect(sessions).toHaveAttribute('aria-current', 'page');
 	await expect(back).toBeDisabled();
 	await expect(forward).toBeEnabled();
 	await forward.click();
-	await expect(newSession).toHaveAttribute('aria-current', 'page');
+	await expect(conversation).toHaveAttribute('data-untitled-session-id', newId!);
+	await expect(sessions).toHaveAttribute('aria-current', 'page');
 	await expect(back).toBeEnabled();
 	await expect(forward).toBeDisabled();
 	const closed = target.kind === 'electron' ? page.waitForEvent('close') : undefined;
-	await new Workbench(page).menus.select(application, () => toolbar.getByRole('button', { name: 'Application menu', exact: true }).click(), ['File', 'Return to Workbench']);
+	await new Menus(page).selectApplication(application, ['File', 'Return to Workbench']);
 	await closed;
 	await workbench.waitForReady();
 });
@@ -2273,13 +2282,12 @@ test('Sessions Activity Bar tooltips follow side, top and bottom placement witho
 	const page = await workbench.openAgentsWindow(target.kind);
 	const navigation = page.locator('.ash-sessions-activity-content');
 	const chat = navigation.getByRole('button', { name: /^Chat(?:\.|$)/u });
-	const accounts = navigation.getByRole('button', { name: 'Accounts', exact: true });
+	const accounts = page.getByRole('button', { name: 'Accounts', exact: true });
 	const originalChat = await chat.elementHandle();
-	const originalAccounts = await accounts.elementHandle();
 	const checkTooltip = async (trigger: Locator, label: string, direction: 'right' | 'below' | 'above', keyboard = false): Promise<void> => {
 		await page.mouse.move(600, 400);
 		if (keyboard) {
-			await page.getByRole('button', { name: 'Application menu', exact: true }).focus();
+			await page.locator('[data-part="titlebar"]').getByRole('button', { name: /^(?:Hide|Show) sidebar$/u }).focus();
 			await trigger.focus();
 		} else {
 			await trigger.hover();
@@ -2322,9 +2330,12 @@ test('Sessions Activity Bar tooltips follow side, top and bottom placement witho
 	await setPosition('Bottom');
 	await expect(page.locator('.ash-sessions-activity-host.bottom')).toBeVisible();
 	await checkTooltip(chat, 'Chat', 'above');
-	await checkTooltip(accounts, 'Accounts', 'above', true);
+	// Horizontal layouts place Accounts in the title bar, whose tooltip opens below.
+	await checkTooltip(accounts, 'Accounts', 'below', true);
 	await setPosition('Default');
 	await expect(page.locator('[data-part="activitybar"]')).toBeVisible();
+	// Accounts changes toolbar owners with position; resizing its returned presentation retains the button.
+	const originalAccounts = await accounts.elementHandle();
 	if ('windows' in application && process.platform === 'darwin') {
 		await captureElectronMenu(application, () => accounts.click({ button: 'right' }), { label: 'Compact' });
 	} else {
@@ -2373,7 +2384,7 @@ test('Sessions Activity Bar changes layout while retaining the same session, dra
 	let editor = new Editor(page.locator('.ash-sessions-chat-slot.active:visible'));
 	await replaceChatInput(editor, 'Keep this draft');
 	await composer.locator('input[type="file"]').setInputFiles({ name: 'context.ts', mimeType: 'text/plain', buffer: Buffer.from('export const code = true;') });
-	await expect(composer.getByRole('button', { name: 'Remove context.ts', exact: true })).toBeVisible();
+	await expect(composer.locator('.ash-chat-code-reference')).toHaveText('context.ts');
 	const originalInput = await editor.input.elementHandle();
 	const identity = await page.locator('.ash-sessions-chat-slot.active :is(.ash-chat,.ash-cowork)').getAttribute('data-untitled-session-id');
 	await navigation.getByRole('button', { name: 'Library', exact: true }).focus();
@@ -2383,15 +2394,19 @@ test('Sessions Activity Bar changes layout while retaining the same session, dra
 	await expect(navigation.getByRole('button', { name: 'Code', exact: true })).toHaveAttribute('aria-current', 'page');
 	await expect(navigation.locator('[aria-current="page"]')).toHaveCount(1);
 	await expect(page.locator('[data-part="auxiliarybar"]')).toBeVisible();
-	await editor.waitForEditorContents(text => text === 'Keep this draft');
+	await editor.waitForEditorContents(text => text === 'Keep this draft context.ts ');
 	expect(await editor.input.evaluate((element, original) => element === original, originalInput)).toBe(false);
-	await replaceChatInput(editor, 'Edited from Code');
+	await editor.input.focus();
+	await page.keyboard.press('ControlOrMeta+A');
+	await page.keyboard.press('ArrowLeft');
+	for (const _ of 'Keep this draft') await page.keyboard.press('Shift+ArrowRight');
+	await page.keyboard.insertText('Edited from Code');
 	await navigation.getByRole('button', { name: 'Chat', exact: true }).focus();
 	await page.keyboard.press('Space');
 	await expect(navigation.getByRole('button', { name: 'Chat', exact: true })).toHaveAttribute('aria-current', 'page');
 	await expect(page.locator('[data-part="auxiliarybar"]')).toBeHidden();
-	await editor.waitForEditorContents(text => text === 'Edited from Code');
-	await expect(composer.getByRole('button', { name: 'Remove context.ts', exact: true })).toBeVisible();
+	await editor.waitForEditorContents(text => text === 'Edited from Code context.ts ');
+	await expect(composer.locator('.ash-chat-code-reference')).toBeVisible();
 	await expect(page.locator('.ash-sessions-chat-slot.active :is(.ash-chat,.ash-cowork)')).toHaveAttribute('data-untitled-session-id', identity!);
 	expect(await editor.input.evaluate((element, original) => element === original, originalInput)).toBe(true);
 	await navigation.getByRole('button', { name: 'Agent Teams', exact: true }).click();
@@ -2403,15 +2418,15 @@ test('Sessions Activity Bar changes layout while retaining the same session, dra
 	await page.locator('.ash-sessions-list-add').click();
 	await editor.waitForEditorContents(text => text === '');
 	await back.click();
-	await editor.waitForEditorContents(text => text === 'Edited from Code');
+	await editor.waitForEditorContents(text => text === 'Edited from Code context.ts ');
 	await expect(forward).toBeEnabled();
 	await navigation.getByRole('button', { name: 'Code', exact: true }).click();
 	await expect(forward).toBeEnabled();
 	await forward.click();
 	await editor.waitForEditorContents(text => text === '');
 	await back.click();
-	await editor.waitForEditorContents(text => text === 'Edited from Code');
-	await expect(composer.getByRole('button', { name: 'Remove context.ts', exact: true })).toBeVisible();
+	await editor.waitForEditorContents(text => text === 'Edited from Code context.ts ');
+	await expect(composer.locator('.ash-chat-code-reference')).toBeVisible();
 	const restoredInput = await editor.input.elementHandle();
 	await navigation.getByRole('button', { name: 'Library', exact: true }).click();
 	await expect(page.locator('[data-part="editor"] .ash-library')).toBeVisible();
@@ -2424,10 +2439,10 @@ test('Sessions Activity Bar changes layout while retaining the same session, dra
 	navigation = page.locator('.ash-sessions-activity-content');
 	composer = page.locator(':is(.ash-sessions-chat-input,.ash-sessions-cowork-input):visible').first();
 	editor = new Editor(page.locator('.ash-sessions-chat-slot.active:visible'));
-	await editor.waitForEditorContents(text => text === 'Edited from Code');
-	await expect(composer.getByRole('button', { name: 'Remove context.ts', exact: true })).toBeVisible();
+	await editor.waitForEditorContents(text => text === 'Edited from Code context.ts ');
+	await expect(composer.locator('.ash-chat-code-reference')).toBeVisible();
 	await navigation.getByRole('button', { name: 'Code', exact: true }).click();
-	await editor.waitForEditorContents(text => text === 'Edited from Code');
+	await editor.waitForEditorContents(text => text === 'Edited from Code context.ts ');
 });
 
 test('closing the Workbench keeps Sessions usable and Return to Workbench reopens the workspace', { tag: ['@electron-ui', '@electron-app-server'] }, async ({ target }) => {

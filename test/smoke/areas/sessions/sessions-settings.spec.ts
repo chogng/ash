@@ -378,6 +378,8 @@ test('Workbench and Sessions keep one settings document across edits and window 
 test('Sessions preferences opens shared shortcuts and retains the profile after reopening', async ({ application, target, workbench, runningApplication }, testInfo) => {
 	let page = await workbench.openAgentsWindow(target.kind);
 	const openPreferences = async (): Promise<void> => {
+		const shortcuts = page.getByRole('dialog', { name: 'Keyboard Shortcuts', exact: true });
+		if (await shortcuts.isVisible()) await shortcuts.getByRole('button', { name: 'Close Keyboard Shortcuts', exact: true }).click();
 		const accounts = page.getByRole('button', { name: 'Accounts', exact: true });
 		if ('windows' in application && process.platform === 'darwin') {
 			await captureElectronMenu(application, () => accounts.click(), { label: 'Settings' });
@@ -396,23 +398,27 @@ test('Sessions preferences opens shared shortcuts and retains the profile after 
 		await expect(page.locator('.ash-keybindings-editor')).toBeVisible();
 	};
 	await openShortcuts();
+	await expect(page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Chat', exact: true })).toHaveAttribute('aria-current', 'page');
 	let shortcuts = page.locator('.ash-keybindings-editor');
 	await shortcuts.getByRole('searchbox').fill('workbench.action.openSettings');
-	const defaultRow = shortcuts.locator('.ash-keybindings-row:not(.is-user)').filter({ has: page.locator('.ash-keybindings-command-id', { hasText: /^workbench\.action\.openSettings$/u }) });
-	const addShortcut = defaultRow.getByRole('button', { name: 'Add', exact: true });
+	const userRows = () => shortcuts.locator('.ash-keybindings-row').filter({ has: page.locator('.ash-keybindings-source', { hasText: /^User$/u }) });
+	const defaultRow = shortcuts.locator('.ash-keybindings-row').filter({ has: page.locator('.ash-keybindings-source', { hasText: /^System$/u }) }).filter({ has: page.locator('.ash-keybindings-command-id', { hasText: /^workbench\.action\.openSettings$/u }) });
+	const addShortcut = defaultRow.getByRole('button', { name: /^Edit keybinding for /u });
 	await addShortcut.click();
 	const recorder = shortcuts.getByRole('textbox', { name: 'Record keybinding', exact: true });
 	await expect(recorder).toBeFocused();
 	await recorder.press('Control+Alt+Y');
-	await shortcuts.getByRole('button', { name: 'Cancel', exact: true }).click();
+	await recorder.press('Escape');
+	await expect(recorder).toHaveValue('');
+	await recorder.press('Escape');
 	await expect(shortcuts.locator('.ash-keybindings-recorder')).toBeHidden();
-	await expect(shortcuts.locator('.ash-keybindings-row.is-user')).toHaveCount(0);
+	await expect(userRows()).toHaveCount(0);
 	await expect(addShortcut).toBeFocused();
 	await addShortcut.click();
 	await recorder.press('Control+Alt+Y');
-	await shortcuts.getByRole('button', { name: 'Save', exact: true }).click();
+	await recorder.press('Enter');
 	await expect(shortcuts.locator('.ash-keybindings-recorder')).toBeHidden();
-	await expect(shortcuts.locator('.ash-keybindings-row.is-user')).toHaveCount(1);
+	await expect(userRows()).toHaveCount(1);
 	await openPreferences();
 	const settings = page.getByRole('dialog', { name: 'Sessions Settings' });
 	await settings.getByRole('searchbox').fill('compact');
@@ -429,11 +435,11 @@ test('Sessions preferences opens shared shortcuts and retains the profile after 
 	await openShortcuts();
 	shortcuts = page.locator('.ash-keybindings-editor');
 	await shortcuts.getByRole('searchbox').fill('workbench.action.openSettings');
-	const userRow = shortcuts.locator('.ash-keybindings-row.is-user');
+	const userRow = userRows();
 	await expect(userRow).toHaveCount(1);
 	await expect(userRow.locator('.ash-keybindings-key')).toHaveText(/Y/u);
-	await userRow.getByRole('button', { name: 'Remove', exact: true }).click();
-	await expect(shortcuts.locator('.ash-keybindings-row.is-user')).toHaveCount(0);
+	await userRow.getByRole('button', { name: /^Remove keybinding for /u }).click();
+	await expect(userRows()).toHaveCount(0);
 	await openPreferences();
 	await page.locator('[data-settings-category-id="keyboard-shortcuts"]').click();
 	await page.locator('.ash-sessions-settings-page').getByRole('button', { name: 'Preferences: Open Keyboard Shortcuts (JSON)', exact: true }).click();

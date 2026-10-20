@@ -1,5 +1,13 @@
 load("//:defs.bzl", "ash_rust_crate")
 
+exports_files(
+    [
+        "fixtures/server.der",
+        "fixtures/server-key.der",
+    ],
+    visibility = ["//crates/http-client:__pkg__"],
+)
+
 ash_rust_crate(
     name = "http-test-support",
     crate_name = "ash_http_test_support",

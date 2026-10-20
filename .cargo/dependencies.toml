@@ -220,7 +220,7 @@ reason = "Current upstream API families: 0.1.14 via unicode-truncate; 0.2.0 via 
 [[multiple_versions]]
 name = "ureq"
 versions = ["2.12.1", "3.4.2"]
-reason = "2.12 remains inside ash-http-client's custom rustls/SSRF connector adapter; the ureq-update workspace alias uses 3.4 for product-update, app-server-daemon and CLI updates with OS trust. Old native-certs is disabled and rustls-pemfile is removed."
+reason = "2.12 remains inside ash-http-client's TLS/SSRF adapter with its builtin TLS disabled; the connector uses the shared outbound-network rustls config without bundled roots. The ureq-update alias uses 3.4 for product-update, app-server-daemon and CLI updates with OS trust."
 
 [[multiple_versions]]
 name = "untrusted"
@@ -229,8 +229,8 @@ reason = "Current upstream API families: 0.7.1 via aws-lc-rs, tough; 0.9.0 via r
 
 [[multiple_versions]]
 name = "webpki-roots"
-versions = ["0.26.11", "1.0.9"]
-reason = "Current upstream API families: 0.26.11 via ureq; 1.0.9 via webpki-roots. Review the introducing packages together before changing this set."
+versions = ["0.26.11", "1.0.10"]
+reason = "0.26.11 remains locked for tokio-tungstenite 0.29's inactive optional bundled-roots feature; it is absent from the all-target workspace feature graph. Active TLS consumers use patched 1.0.10. ash-http-client disables ureq's builtin TLS and uses its own shared certificate policy."
 
 [[multiple_versions]]
 name = "windows-sys"

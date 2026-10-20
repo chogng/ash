@@ -444,8 +444,9 @@ uds_windows = "1.2.1"
 zbus = { version = "6", default-features = false }
 url = "2"
 urlencoding = "2"
-# ash-http-client supplies its own OS verifier, custom roots and client identity.
-ureq = { version = "2.12", features = ["json"] }
+# ash-http-client supplies TLS through its shared outbound-network config.
+# Keep gzip/JSON without ureq's independent TLS backend and bundled roots.
+ureq = { version = "2.12", default-features = false, features = ["gzip", "json"] }
 # Update hosts use the maintained HTTP API without changing the shared transport
 # adapter's custom TLS/SSRF connector contract. Configure OS trust in every agent.
 ureq-update = { package = "ureq", version = "3.4.2", features = ["json", "platform-verifier"] }

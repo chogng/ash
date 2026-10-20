@@ -1,7 +1,8 @@
-import { paintColor, paintPixel } from '../../../automation/design.js';
-import { readFile, readdir } from 'node:fs/promises';
+import { clickCanvasMenu, paintColor, paintPixel } from '../../../automation/design.js';
+import { readFile, readdir, realpath } from 'node:fs/promises';
 import { join } from 'node:path';
 import { Menus } from '../../../automation/menus.js';
+import type { PlaywrightApplication } from '../../../automation/playwrightDriver.js';
 import type { Page } from '@playwright/test';
 import { expect, test } from '../../../automation/test.js';
 import { Editor } from '../../../automation/editor.js';
@@ -35,7 +36,9 @@ test('Sessions mode and page-tab activation reuse Parts while retaining the conv
 	await page.locator('[data-part="editor"]').getByRole('tab', { name: 'Creator', exact: true }).click();
 	await expect(navigation.getByRole('button', { name: 'Creator', exact: true })).toHaveAttribute('aria-current', 'page');
 	await expect(page.locator('[data-part="sidebar"]')).toContainText('Layers');
-	await page.locator('[data-part="editor"]').getByRole('tab', { name: 'Library', exact: true }).click();
+	await navigation.getByRole('button', { name: 'Library', exact: true }).focus();
+	// Creator hides its tab strip; use the entry action to reveal the retained Library page.
+	await navigation.getByRole('button', { name: 'Library', exact: true }).press('Enter');
 	await expect(navigation.getByRole('button', { name: 'Library', exact: true })).toHaveAttribute('aria-current', 'page');
 	await expect(page.locator('[data-part="sidebar"]').getByRole('navigation', { name: 'Library categories' })).toBeVisible();
 	await expect(page.locator('[data-part="auxiliarybar"]')).toContainText('Asset details');
@@ -177,8 +180,9 @@ test('Sessions Creator Make runs preview and prepares a Code draft with source a
 	await make.getByRole('textbox', { name: 'Describe what to build' }).fill('Add a sign-in form to this page');
 	await make.getByRole('button', { name: 'Build with Agent', exact: true }).click();
 	await expect(navigation.getByRole('button', { name: 'Code', exact: true })).toHaveAttribute('aria-current', 'page');
-	await new Editor(page.locator('.ash-sessions-chat-slot.active:visible')).waitForEditorContents(text => text === 'Add a sign-in form to this page');
-	await expect(page.locator('.ash-sessions-chat-slot.active:visible')).toContainText('creator.html');
+	const prepared = new Editor(page.locator('.ash-sessions-chat-slot.active:visible'));
+	await expect(prepared.lines.last()).toHaveText('Add a sign-in form to this page');
+	await expect(prepared.element.locator('.ash-chat-code-reference')).toHaveText('creator.html');
 	await navigation.getByRole('button', { name: 'Creator', exact: true }).click();
 	await creator.getByRole('button', { name: 'Make', exact: true }).click();
 	await expect(make.getByRole('textbox', { name: 'Describe what to build' })).toHaveValue('Add a sign-in form to this page');
@@ -592,15 +596,28 @@ test('Sessions Design converts shaped variable-font text to editable outlines an
 	await page.screenshot({ path: testInfo.outputPath('design-text-outlines.png') });
 });
 
-async function reopenOutlinedDesign(page: Page, name: string): Promise<void> {
+async function reopenOutlinedDesign(page: Page, name: string, application?: PlaywrightApplication, filePath?: string): Promise<void> {
 	const canvas = page.getByRole('region', { name: 'Design canvas', exact: true });
-	await page.evaluate(async () => { const folder = await (await navigator.storage.getDirectory()).getDirectoryHandle(`ash-outline-${crypto.randomUUID()}`, { create: true }); Object.defineProperty(window, 'showDirectoryPicker', { configurable: true, value: async () => folder }); });
-	await canvas.press('Shift+F10'); await page.getByRole('menuitem', { name: 'Save a copy', exact: true }).click();
-	const dialog = page.getByRole('dialog', { name: 'Save a copy', exact: true });
-	await dialog.getByRole('textbox', { name: 'File name, field 1' }).fill(name); await dialog.getByRole('button', { name: 'OK', exact: true }).click();
+	if (application && 'windows' in application) {
+		if (!filePath) throw new Error('Desktop persistence requires a test-owned path');
+		// Replace the OS choice; save, reopen and document decoding still use the real host.
+		await application.evaluate(({ dialog }, path) => {
+			dialog.showSaveDialog = async () => ({ canceled: false, filePath: path });
+			dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [path] });
+		}, filePath);
+	} else {
+		await page.evaluate(async () => { const folder = await (await navigator.storage.getDirectory()).getDirectoryHandle(`ash-outline-${crypto.randomUUID()}`, { create: true }); Object.defineProperty(window, 'showDirectoryPicker', { configurable: true, value: async () => folder }); });
+	}
+	await clickCanvasMenu(canvas, 'Save a copy', application);
+	if (!application || !('windows' in application)) {
+		const dialog = page.getByRole('dialog', { name: 'Save a copy', exact: true });
+		await dialog.getByRole('textbox', { name: 'File name, field 1' }).fill(name);
+		await dialog.getByRole('button', { name: 'OK', exact: true }).click();
+	}
 	await expect(canvas.locator('.ash-sessions-design-message')).toHaveText(`Saved ${name}`);
-	await canvas.press('Escape'); await canvas.press('Shift+F10'); await page.getByRole('menuitem', { name: 'Open design', exact: true }).click();
-	await page.locator('.ash-quick-pick-row-label').getByText(name, { exact: true }).click();
+	await canvas.press('Escape');
+	await clickCanvasMenu(canvas, 'Open design', application);
+	if (!application || !('windows' in application)) await page.locator('.ash-quick-pick-row-label').getByText(name, { exact: true }).click();
 	await expect(canvas.locator('.ash-sessions-design-message')).toHaveText(`Opened ${name}`);
 }
 
@@ -635,7 +652,7 @@ test('Sessions Design keeps rich outline colors, truncation and font failures at
 	await page.screenshot({ path: testInfo.outputPath('design-rich-text-outlines.png') });
 });
 
-test('Sessions Design stacks shadow and blur effects with cutouts, spread, undo and persistence', async ({ target, workbench }, testInfo) => {
+test('Sessions Design stacks shadow and blur effects with cutouts, spread, undo and persistence', { tag: ['@browser-ui', '@browser-app-server', '@electron-app-server'] }, async ({ application, target, workbench, testWorkspace }, testInfo) => {
 	const page = await workbench.openAgentsWindow(target.kind);
 	await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Creator', exact: true }).click();
 	await page.locator('.ash-creator').getByRole('button', { name: 'Design', exact: true }).click();
@@ -671,14 +688,14 @@ test('Sessions Design stacks shadow and blur effects with cutouts, spread, undo 
 	await action('Add effect'); await properties.getByRole('combobox', { name: 'Effect type', exact: true }).selectOption('background-blur');
 	await action('Add effect');
 	await expect(properties.getByRole('combobox', { name: 'Effect', exact: true }).locator('option')).toHaveCount(4);
-	await reopenOutlinedDesign(page, 'Effects stack.ash-design');
+	await reopenOutlinedDesign(page, 'Effects stack.ash-design', application, join(await realpath(testWorkspace.directory), 'Effects stack.ash-design'));
 	await canvas.press('ControlOrMeta+a');
 	await expect(properties.getByRole('combobox', { name: 'Effect', exact: true }).locator('option')).toHaveCount(4);
 	await page.screenshot({ path: testInfo.outputPath('design-effects-stack.png') });
 });
 
 for (const type of ['layer-blur', 'background-blur'] as const) {
-	test(`Sessions Design progressive ${type} interpolates pixels and preserves editing, persistence and export`, async ({ target, workbench }, testInfo) => {
+	test(`Sessions Design progressive ${type} interpolates pixels and preserves editing, persistence and export`, { tag: ['@browser-ui', '@browser-app-server', '@electron-app-server'] }, async ({ application, target, workbench, testWorkspace }, testInfo) => {
 		const page = await workbench.openAgentsWindow(target.kind);
 		await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Creator', exact: true }).click();
 		await page.locator('.ash-creator').getByRole('button', { name: 'Design', exact: true }).click();
@@ -748,7 +765,7 @@ for (const type of ['layer-blur', 'background-blur'] as const) {
 		await canvas.press('ControlOrMeta+z');
 		await canvas.press('Escape'); await expect(end).toHaveCount(0);
 		await field('Blur start X (%)', '-50'); await field('Blur end X (%)', '-50');
-		await reopenOutlinedDesign(page, `Progressive ${type}.ash-design`);
+		await reopenOutlinedDesign(page, `Progressive ${type}.ash-design`, application, join(await realpath(testWorkspace.directory), `Progressive ${type}.ash-design`));
 		await page.getByRole('tree', { name: 'Layers', exact: true }).getByRole('treeitem', { name: 'Progressive blur', exact: true }).click();
 		await expect(properties.getByRole('combobox', { name: 'Blur mode', exact: true })).toHaveValue('progressive');
 		await expect(properties.getByRole('spinbutton', { name: 'Blur start X (%)', exact: true })).toHaveValue('-50');
@@ -758,20 +775,33 @@ for (const type of ['layer-blur', 'background-blur'] as const) {
 			await canvas.press('ControlOrMeta+d'); await field('X', '100'); await field('Y', '100');
 			await expect.poll(async () => Math.abs((await pixel(112, 200))[0] - blurred)).toBeLessThanOrEqual(2);
 		}
-		await canvas.press('Shift+F10');
-		await page.getByRole('menuitem', { name: 'Export SVG', exact: true }).click();
-		const exportDialog = page.getByRole('dialog', { name: 'Export SVG', exact: true });
-		await exportDialog.getByRole('textbox', { name: 'File name, field 1' }).fill('progressive.svg');
-		await exportDialog.getByRole('button', { name: 'OK', exact: true }).click();
+		const exportPath = join(await realpath(testWorkspace.directory), 'progressive.svg');
+		if ('windows' in application) await application.evaluate(({ dialog }, path) => { dialog.showSaveDialog = async () => ({ canceled: false, filePath: path }); }, exportPath);
+		await clickCanvasMenu(canvas, 'Export SVG', application);
+		if (!('windows' in application)) {
+			const exportDialog = page.getByRole('dialog', { name: 'Export SVG', exact: true });
+			await exportDialog.getByRole('textbox', { name: 'File name, field 1' }).fill('progressive.svg');
+			await exportDialog.getByRole('button', { name: 'OK', exact: true }).click();
+		}
 		await expect(canvas.locator('.ash-sessions-design-message')).toHaveText('Exported progressive.svg');
-		const svg = await page.evaluate(async () => {
+		const svg = 'windows' in application ? await readFile(exportPath, 'utf8') : await page.evaluate(async () => {
 			const folder = await (window as unknown as { showDirectoryPicker(): Promise<FileSystemDirectoryHandle>; }).showDirectoryPicker();
 			return (await (await folder.getFileHandle('progressive.svg')).getFile()).text();
 		});
 
 		await canvas.getByRole('button', { name: 'Code', exact: true }).click();
 		const code = await canvas.getByRole('textbox', { name: 'Generated code', exact: true }).inputValue();
-		const preview = await page.context().newPage();
+		let preview: Page;
+		if ('windows' in application) {
+			const opened = application.waitForEvent('window');
+			await application.evaluate(async ({ BrowserWindow }) => {
+				const window = new BrowserWindow({ show: false, width: 800, height: 600, webPreferences: { sandbox: true, contextIsolation: true, nodeIntegration: false } });
+				await window.loadURL('about:blank');
+			});
+			preview = await opened;
+		} else {
+			preview = await page.context().newPage();
+		}
 		try {
 			await preview.setContent(code);
 			const exported = await preview.locator('[data-design-kind="rectangle"]').last().boundingBox(); expect(exported).toBeTruthy();

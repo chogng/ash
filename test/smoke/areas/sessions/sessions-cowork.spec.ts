@@ -53,10 +53,15 @@ test('Cowork shared input toolbar and help use the Chinese display language', as
 	const page = await restarted.workbench.openAgentsWindow(target.kind);
 	const composer = page.locator('.ash-sessions-cowork-input');
 	await expect(composer.getByRole('toolbar', { name: '聊天输入操作', exact: true })).toBeVisible();
-	await new Editor(composer).input.focus();
+	const editor = new Editor(composer);
+	await editor.waitForEditorFocus();
+	await page.keyboard.insertText('中文输入帮助');
+	const send = composer.locator('[data-action-id="ash.chat.input.send"] button');
+	await send.focus();
 	await page.keyboard.press('Alt+F1');
 	await expect(page.locator('.ash-accessible-view-content')).toHaveValue(/模型、模型选项、听写和发送位于右侧/u);
 	await page.keyboard.press('Escape');
+	await editor.waitForEditorFocus();
 });
 
 test('Cowork and Code retain separate editors while transferring the selected draft and attachments', async ({ application, target, workbench }) => {
@@ -71,25 +76,28 @@ test('Cowork and Code retain separate editors while transferring the selected dr
 	const coworkInput = await editor.input.elementHandle();
 	const composer = conversation.locator('.ash-sessions-cowork-input');
 	await composer.locator('input[type="file"]').setInputFiles({ name: 'brief.txt', mimeType: 'text/plain', buffer: Buffer.from('Presentation brief') });
-	await expect(composer.getByRole('button', { name: 'Remove brief.txt', exact: true })).toBeVisible();
+	await expect(composer.locator('.ash-chat-code-reference')).toHaveText('brief.txt');
 	const identity = await conversation.locator('.ash-cowork').getAttribute('data-untitled-session-id');
 	await navigation.getByRole('button', { name: 'Code', exact: true }).click();
 	await expect(conversation.locator('.ash-chat')).toBeVisible();
 	await expect(conversation.locator('.ash-cowork')).toHaveCount(0);
-	await editor.waitForEditorContents(text => text === 'Prepare a presentation');
+	await editor.waitForEditorContents(text => text === 'Prepare a presentation brief.txt ');
 	await expect(conversation.locator('.ash-chat')).toHaveAttribute('data-untitled-session-id', identity!);
 	expect(await editor.input.evaluate((input, previous) => input === previous, coworkInput)).toBe(false);
 	await editor.input.focus();
+	// References are atomic message text; replace only the prompt and retain its file.
 	await page.keyboard.press('ControlOrMeta+A');
+	await page.keyboard.press('ArrowLeft');
+	for (const _ of 'Prepare a presentation') await page.keyboard.press('Shift+ArrowRight');
 	await page.keyboard.insertText('Updated presentation brief');
 	await navigation.getByRole('button', { name: 'Chat', exact: true }).click();
 	await expect(conversation.locator('.ash-cowork')).toBeVisible();
-	await editor.waitForEditorContents(text => text === 'Updated presentation brief');
-	await expect(composer.getByRole('button', { name: 'Remove brief.txt', exact: true })).toBeVisible();
+	await editor.waitForEditorContents(text => text === 'Updated presentation brief brief.txt ');
+	await expect(composer.locator('.ash-chat-code-reference')).toHaveText('brief.txt');
 	expect(await editor.input.evaluate((input, previous) => input === previous, coworkInput)).toBe(true);
 	await navigation.getByRole('button', { name: 'Collaboration', exact: true }).click();
 	await expect(conversation.locator('.ash-cowork')).toBeVisible();
-	await expect(page.locator('.ash-teams-panel')).toBeVisible();
+	await expect(page.locator('[data-part="sidebar"] [data-view-container-id="ash.collaboration"]')).toBeVisible();
 	await navigation.getByRole('button', { name: 'Chat', exact: true }).click();
 	await editor.input.focus();
 	await page.keyboard.press('Alt+F1');
@@ -99,6 +107,6 @@ test('Cowork and Code retain separate editors while transferring the selected dr
 	await coworkInput?.dispose();
 	page = await workbench.reopenAgentsWindow(application, page);
 	await expect(page.locator('[data-part="sessions"] .ash-cowork')).toBeVisible();
-	await new Editor(page.locator('[data-part="sessions"]')).waitForEditorContents(text => text === 'Updated presentation brief');
-	await expect(page.locator('.ash-sessions-cowork-input').getByRole('button', { name: 'Remove brief.txt', exact: true })).toBeVisible();
+	await new Editor(page.locator('[data-part="sessions"]')).waitForEditorContents(text => text === 'Updated presentation brief brief.txt ');
+	await expect(page.locator('.ash-sessions-cowork-input .ash-chat-code-reference')).toHaveText('brief.txt');
 });
