@@ -848,6 +848,20 @@ export function createApi(configuration, initialization) {
 		return values;
 	}
 	function copyConfig(value) { return value === undefined ? undefined : JSON.parse(JSON.stringify(value)); }
+	function jsonValue(value) {
+		// Reject lossy JSON conversion before crossing the private host boundary.
+		const ancestors = [];
+		return JSON.parse(JSON.stringify(value, function (_key, entry) {
+			while (ancestors.length && ancestors.at(-1) !== this) ancestors.pop();
+			if (entry && typeof entry === 'object') {
+				if (ancestors.length >= 64) throw new TypeError('JSON value is too deeply nested');
+				ancestors.push(entry);
+			}
+			if (entry === null || typeof entry === 'string' || typeof entry === 'boolean' || typeof entry === 'number' && Number.isFinite(entry)
+				|| typeof entry === 'object' && (Array.isArray(entry) || Object.getPrototypeOf(entry) === Object.prototype || Object.getPrototypeOf(entry) === null)) return entry;
+			throw new TypeError('Value must be JSON');
+		}));
+	}
 	function mergeConfig(left, right) {
 		if (!left || !right || typeof left !== 'object' || typeof right !== 'object' || Array.isArray(left) || Array.isArray(right)) return copyConfig(right);
 		const result = Object.assign(Object.create(null), copyConfig(left));
@@ -879,6 +893,16 @@ export function createApi(configuration, initialization) {
 			...(contents && typeof contents === 'object' && !Array.isArray(contents) ? copyConfig(contents) : {}),
 			get(key, fallback) { const value = configValue(values, fullKey(key)); return value === undefined ? fallback : copyConfig(value); },
 			has(key) { return configValue(values, fullKey(key)) !== undefined; },
+			async update(key, value, target) {
+				if (typeof key !== 'string' || !fullKey(key) || fullKey(key).length > 1024 || fullKey(key).includes('\0')) throw new TypeError('Invalid configuration key');
+				if (target !== 'user' && target !== 'workspace') throw new TypeError('Configuration target must be user or workspace');
+				if (language !== undefined) return unsupported('Configuration language override writes');
+				if (value === undefined) {
+					await request({ operation: 'resetConfiguration', section: fullKey(key), target }, 'done');
+				} else {
+					await request({ operation: 'updateConfiguration', section: fullKey(key), value: jsonValue(value), target }, 'done');
+				}
+			},
 			inspect(key) {
 				const name = fullKey(key);
 				if (!models.some(model => model.keys?.includes(name)) && configValue(values, name) === undefined) return undefined;
@@ -932,6 +956,62 @@ export function createApi(configuration, initialization) {
 		owned?.push(settled);
 		return promise;
 	}
+
+	function storageKey(key) {
+		if (typeof key !== 'string' || !key || key.length > 1024 || /[\u0000-\u001f\u007f-\u009f]/.test(key)) throw new TypeError('Invalid extension state key');
+		return key;
+	}
+	const storage = Object.freeze({
+		async get(key) {
+			const { response } = await request({ operation: 'coreService', request: { service: 'storageGet', key: storageKey(key) } }, 'coreService');
+			if (response?.service !== 'storageValue' || typeof response.found !== 'boolean') throw new Error('Invalid extension state response');
+			return response.found ? jsonValue(response.value) : undefined;
+		},
+		async update(key, value) {
+			storageKey(key);
+			const service = value === undefined ? { service: 'storageDelete', key } : { service: 'storageSet', key, value: jsonValue(value) };
+			const { response } = await request({ operation: 'coreService', request: service }, 'coreService');
+			if (response?.service !== 'storageUpdated') throw new Error('Invalid extension state response');
+		},
+	});
+
+	// Use ECMAScript primitives: the restricted V8 host does not supply browser text codecs.
+	function secretBytes(value) {
+		try { return Array.from(encodeURIComponent(value).matchAll(/%([0-9a-f]{2})|(.)/gi), match => match[1] ? parseInt(match[1], 16) : match[2].charCodeAt(0)); }
+		catch { throw new TypeError('Invalid extension secret text'); }
+	}
+	function secretKey(key) {
+		if (typeof key !== 'string' || !key || key.length > 256 || secretBytes(key).length > 256 || /[\u0000-\u001f\u007f-\u009f]/.test(key)) throw new TypeError('Invalid extension secret key');
+		return key;
+	}
+	async function secretRequest(service, resultKind) {
+		const { response } = await request({ operation: 'coreService', request: service }, 'coreService');
+		if (response?.service !== resultKind) throw new Error('Invalid extension secret response');
+		return response;
+	}
+	const secrets = Object.freeze({
+		async get(key) {
+			const { value } = await secretRequest({ service: 'secretLoad', key: secretKey(key) }, 'secretLoaded');
+			if (value === null) return undefined;
+			if (!Array.isArray(value) || value.length > 65536 || value.some(byte => !Number.isInteger(byte) || byte < 0 || byte > 255)) throw new Error('Invalid extension secret response');
+			try { return decodeURIComponent(value.map(byte => '%' + byte.toString(16).padStart(2, '0')).join('')); }
+			catch { throw new Error('Invalid extension secret response'); }
+		},
+		async store(key, value) {
+			secretKey(key);
+			if (typeof value !== 'string') throw new TypeError('Extension secret must be a string');
+			if (value.length > 65536) throw new TypeError('Invalid extension secret value');
+			const bytes = secretBytes(value);
+			if (bytes.length > 65536) throw new TypeError('Invalid extension secret value');
+			await secretRequest({ service: 'secretStore', key, value: bytes }, 'secretStored');
+		},
+		async delete(key) {
+			const { deleted } = await secretRequest({ service: 'secretDelete', key: secretKey(key) }, 'secretDeleted');
+			if (typeof deleted !== 'boolean') throw new Error('Invalid extension secret response');
+			return deleted;
+		},
+
+	});
 
 	async function invoke(callback) {
 		const id = globalThis.__ashInvocation();
@@ -1890,6 +1970,7 @@ export function createApi(configuration, initialization) {
 			// Keep the runtime subscription array: host retirement disposes this exact owner.
 			const publicContext = Object.freeze({
 				subscriptions,
+				storage, secrets,
 				environmentVariableCollection,
 				extensionUri,
 				extensionPath: extensionUri.fsPath,

@@ -5,7 +5,7 @@
 确定的职责、GitHub 示例和权限边界见
 [`扩展架构与编辑器接入`](../../docs/editor-extensions.md#0-确定的产品方向)。
 
-Rust SDK 是[统一后端扩展接口](../../docs/editor-extensions.md#统一后端扩展接口规范)的 Rust 语言封装，与 TS/JS 的 [`@ash/sdk`](../typescript/README.md) 共用 Host RPC、能力契约、授权及生命周期。`ExtensionContext.client` 请求发起客户端的服务，`services` 请求获授权的后端服务，typed `data_channels` 承载领域 Provider 契约；它们是同一双向协议的端口，不是独立后端 API。Workbench 通过产品 adapter 消费同一契约，不直接链接 Rust SDK 或扩展实现。当前语言适配的能力覆盖不相等，公共服务绑定及 TS 对等适配仍须按真实消费者逐项闭合。
+Rust SDK 是[统一后端扩展接口](../../docs/editor-extensions.md#统一后端扩展接口规范)的 Rust 语言封装，与 TS/JS 的 [`@ash/sdk`](../typescript/README.md) 共用 Host RPC、能力契约、授权及生命周期。`ExtensionContext.client` 请求发起客户端的服务，`services` 请求获授权的后端服务，typed `data_channels` 承载领域 Provider 契约；它们是同一双向协议的端口，不是独立后端 API。Workbench 通过产品 adapter 消费同一契约，不直接链接 Rust SDK 或扩展实现。新增绑定遵循[SDK 能力开放原则](../../docs/editor-extensions.md#sdk-能力开放原则)，由现有扩展的具体需求驱动并经该消费者验证；当前 TS/Rust 覆盖差异本身不形成补齐任务。
 
 本 crate 已迁入根目录 `sdk/rust`，包名为 `ash-external-ext-sdk`，Rust 导入名为 `external_ext_sdk`；TS/JS 作者改用 `@ash/sdk` 和 `ash.*`。两个语言 SDK 共享接入与监管语义，不使 Rust 扩展依赖 V8 或 App Server。旧作者兼容层、Open VSX下载和VSIX运行入口已删除；只读退休metadata保留原身份供停用和卸载，不提供执行或重新授权。确定的命名与目录见[共享接入与语言适配的 crate 边界](../../docs/editor-extensions.md#共享接入与语言适配的-crate-边界)。
 
@@ -32,6 +32,17 @@ Rust SDK 是[统一后端扩展接口](../../docs/editor-extensions.md#统一后
 
 `data_channels.rs` 复用现有 DataChannel 注册和 `receiveData` 调用，要求闭合的请求／响应类型。`services.rs` 复用有界反向请求，绑定 profile activation 的 incarnation／generation；Host 逐 Provider 授予秘密命名空间与 HTTP 端点，不开放完整后端连接。现有 `client.rs` 的窗口编辑器调用仍需按各自能力独立验证。
 
+普通 profile JSON 状态使用 `Client::storage_get(key, token)` 和
+`Client::storage_update(key, value, token)`；`None` 删除，`Some(Value::Null)` 保存 JSON null。
+SQLite 对最新数据执行单 key 事务，不让不同窗口的不同 key 更新互相覆盖；没有值缓存、
+公开快照、revision/CAS 或变更等待接口。
+
+`Client::secret_load/secret_store/secret_delete` 复用已有 profile SecretStore，返回/接收
+不透明 bytes；TS 接口只读写 UTF-8 字符串。Host 绑定扩展自己的命名空间，不允许选择产品
+或其他包的凭据。key 最多 256 UTF-8 字节，单个秘密最多 64 KiB。
+调用继承取消、deadline 与具体实例隔离；撤权/停用/卸载保留值，重新精确授权只准入新实例。
+失败不降级存储，不重放不确定写入；没有秘密通知日志、cursor 或 reset 作者接口。
+
 | 现有部分                                  | 当前职责                               | 目标处理                                                                    |
 | ----------------------------------------- | -------------------------------------- | --------------------------------------------------------------------------- |
 | `src/lib.rs`、`languages.rs`、`window.rs` | Rust 回调、注册与 Output 接口          | 能力注册用于 Rust Provider；编辑器模型与 UI 保持客户端所有权                |
@@ -39,7 +50,7 @@ Rust SDK 是[统一后端扩展接口](../../docs/editor-extensions.md#统一后
 | `client.rs`                               | 绑定发起窗口的编辑器服务调用           | 按公开能力接口补验证；不开放 App Server 私有方法或完整后端连接              |
 | `ash-external-ext-protocol`               | 现有可执行 Host v1 的共享 wire 定义    | 按生产调用方清理；目标业务协议继续由 Rust owner 生成                        |
 
-包安装、授权记录和资源目录继续由共享基础设施拥有。GitHub 认证已进入产品 Rust 扩展，API 业务拆分仍是后续工作；通用 Git、存储、SecretStore 和最终授权仍由共享服务拥有。静态目录实现属于
+包安装、授权记录和资源目录继续由共享基础设施拥有。GitHub 认证和 API 业务分别由现有 `github-authentication` 与 `github` 扩展提供；通用 Git、存储、SecretStore 和最终授权仍由共享服务拥有。静态目录实现属于
 [`ash-external-ext::packages`](../../crates/external-ext/src/packages/README.md)；现有进程 Host 的记录属于
 [`ash-external-ext`](../../crates/external-ext/README.md)。
 

@@ -845,6 +845,7 @@ pub struct LocalProfileRuntime {
     symphony: Arc<ash_symphony::Store>,
     profile_root: PathBuf,
     state: Arc<ash_state::StateRuntime>,
+    extension_state: Arc<ash_state::SqliteExtensionStateStore>,
     threads: Arc<ThreadController>,
     trace_recorder: Arc<ash_rollout_trace::TraceRecorder>,
     history: Arc<ash_state::SqliteThreadStore>,
@@ -994,6 +995,9 @@ impl LocalProfileRuntime {
             symphony: Arc::new(ash_symphony::Store::open(&database_path).map_err(open_error)?),
             queue: Arc::new(queue::QueueStore::open(&database_path).map_err(open_error)?),
             state,
+            extension_state: Arc::new(
+                ash_state::SqliteExtensionStateStore::open(&database_path).map_err(open_error)?,
+            ),
             threads,
             trace_recorder,
             history,
@@ -1260,6 +1264,13 @@ pub fn open_app_server_with_codebase_providers(
     let state_runtime = match &profile_runtime {
         Some(runtime) => runtime.state_runtime(),
         None => Arc::new(ash_state::StateRuntime::open(&options.profile_root).map_err(open_error)?),
+    };
+    let extension_state = match &profile_runtime {
+        Some(runtime) => Arc::clone(&runtime.extension_state),
+        None => Arc::new(
+            ash_state::SqliteExtensionStateStore::open(state_runtime.database_path())
+                .map_err(open_error)?,
+        ),
     };
     let network_policy = profile_runtime
         .as_ref()
@@ -1882,6 +1893,7 @@ pub fn open_app_server_with_codebase_providers(
     .with_approval_review_model(Some(approval_review_model))
     .with_capability_network_policy(network_policy.clone())
     .with_config_store(Arc::clone(&config))
+    .with_extension_state_store(extension_state)
     .with_backup_store(Arc::new(
         ash_state::SqliteBackupStore::open(&database_path).map_err(open_error)?,
     ))

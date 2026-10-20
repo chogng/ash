@@ -104,6 +104,89 @@ impl Client {
         }
     }
 
+    /// Reads one ordinary value in the host-bound profile namespace; no local cache.
+    pub fn storage_get(
+        &self,
+        key: String,
+        token: &CancellationToken,
+    ) -> Result<Option<Value>, ExtensionError> {
+        if let crate::services::CoreServiceResponse::StorageValue { value, found } = self
+            .core_service(
+                crate::services::CoreServiceRequest::StorageGet { key },
+                token,
+            )?
+        {
+            Ok(found.then_some(value))
+        } else {
+            Err(unexpected_result())
+        }
+    }
+    /// Sets one ordinary value, or deletes it with None. Does not replay an uncertain write.
+    pub fn storage_update(
+        &self,
+        key: String,
+        value: Option<Value>,
+        token: &CancellationToken,
+    ) -> Result<(), ExtensionError> {
+        let request = match value {
+            Some(value) => crate::services::CoreServiceRequest::StorageSet { key, value },
+            None => crate::services::CoreServiceRequest::StorageDelete { key },
+        };
+        if let crate::services::CoreServiceResponse::StorageUpdated =
+            self.core_service(request, token)?
+        {
+            Ok(())
+        } else {
+            Err(unexpected_result())
+        }
+    }
+
+    /// Loads bytes from this extension's private profile namespace, never a product credential key.
+    pub fn secret_load(
+        &self,
+        key: String,
+        token: &CancellationToken,
+    ) -> Result<Option<Vec<u8>>, ExtensionError> {
+        if let crate::services::CoreServiceResponse::SecretLoaded { value } = self.core_service(
+            crate::services::CoreServiceRequest::SecretLoad { key },
+            token,
+        )? {
+            Ok(value)
+        } else {
+            Err(unexpected_result())
+        }
+    }
+    /// Stores private bytes without replaying an uncertain write.
+    pub fn secret_store(
+        &self,
+        key: String,
+        value: Vec<u8>,
+        token: &CancellationToken,
+    ) -> Result<(), ExtensionError> {
+        if let crate::services::CoreServiceResponse::SecretStored = self.core_service(
+            crate::services::CoreServiceRequest::SecretStore { key, value },
+            token,
+        )? {
+            Ok(())
+        } else {
+            Err(unexpected_result())
+        }
+    }
+    /// Deletes one private key; returns false when it was already absent.
+    pub fn secret_delete(
+        &self,
+        key: String,
+        token: &CancellationToken,
+    ) -> Result<bool, ExtensionError> {
+        if let crate::services::CoreServiceResponse::SecretDeleted { deleted } = self.core_service(
+            crate::services::CoreServiceRequest::SecretDelete { key },
+            token,
+        )? {
+            Ok(deleted)
+        } else {
+            Err(unexpected_result())
+        }
+    }
     /// Calls one package-declared capability without exposing the host connection.
     pub fn request_backend(
         &self,

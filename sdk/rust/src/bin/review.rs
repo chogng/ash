@@ -23,10 +23,23 @@ impl Extension for ReviewExtension {
             .window
             .create_output_channel("review", "Review extension")?;
         let echo_output = output.clone();
+        let client = context.client.clone();
         context.commands.register_command(
             Command::new("review.echo", "Review: Echo arguments"),
             move |invocation, token| {
                 token.check_cancelled()?;
+                if invocation.arguments.first() == Some(&json!("storage")) {
+                    client.storage_update("count".into(), Some(json!(1)), &token)?;
+                    let count = client.storage_get("count".into(), &token)?;
+                    client.storage_update("count".into(), None, &token)?;
+                    return Ok(json!({"count":count,"cleared":client.storage_get("count".into(), &token)?.is_none()}));
+                }
+                if invocation.arguments.first() == Some(&json!("secrets")) {
+                    client.secret_store("token".into(), b"synthetic".to_vec(), &token)?;
+                    let restored = client.secret_load("token".into(), &token)? == Some(b"synthetic".to_vec());
+                    let deleted = client.secret_delete("token".into(), &token)?;
+                    return Ok(json!({"restored":restored,"deleted":deleted}));
+                }
                 echo_output.append_line("echo")?;
                 Ok(json!(invocation.arguments))
             },

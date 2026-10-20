@@ -15,7 +15,22 @@
 
 用户侧统一称“扩展”，市场按用途标签筛选；MCP、Skills、Rust 程序和客户端资源等技术形式属于详情与内部能力契约。第一方扩展当前同仓维护为独立包，是否分仓按独立发布和协作收益决定。
 
-TS 作者入口是 [`@ash/sdk`](../sdk/typescript/README.md)，通过 `import * as ash from '@ash/sdk'` 使用自带类型的公共接口；普通扩展不需要 Rust 工具链。Node、可选 Rust/V8 与可信 Worker 已使用同一作者 API，现有领域能力与限制见[Ash TypeScript API 的实际范围](#06-ash-typescript-api-的实际范围)。命令调用内的 `ash.files.readTextFile` 经已有 Host RPC 的 `ReadWorkspaceFile` 进入 Rust 文件 owner，当前只在具备包级和目录读授权的本地 Plugin 部署开放，不返回未保存编辑器内容。Secrets、认证和完整文件 API 尚未开放。纯 TS 项目见 [`inspect`](../examples/extensions/inspect/README.md)；实际验证和未覆盖范围见[实现证据与验证](#10-实现证据与验证)。
+### SDK 能力开放原则
+
+从现有扩展的实际需求出发，逐步开放完成该需求所需的最小 SDK 能力。未开放的接口记录为能力边界或待复核需求；不因上游存在同名 API、内部服务可调用或 TS/Rust 覆盖不同就排入实施队列。
+
+新增能力先明确以下内容：
+
+1. 具体扩展、用户场景和调用位置，以及现有 SDK 无法完成的行为。
+2. 该行为能否由扩展自身实现；确需宿主支持时，复用哪个现有领域 owner、权限和生命周期。
+3. 完成该场景所需的操作和数据。SDK 提供领域契约，内部存储格式、连接、通用 IPC 和最终授权机制留在宿主。
+4. 真实扩展的验证入口，覆盖正常调用、权限拒绝、取消、释放及撤权后的旧实例隔离；持久化和多窗口按实际使用范围验证。
+
+优先修复现有消费者的契约错误、权限或生命周期问题，再按实际阻碍决定新增能力的顺序。示例和测试用于验证已选契约，不能单独成为新增作者接口的理由；语言适配和平台扩展同样需要具体消费者。
+
+### 当前开发入口
+
+TS 作者入口是 [`@ash/sdk`](../sdk/typescript/README.md)，通过 `import * as ash from '@ash/sdk'` 使用自带类型的公共接口；普通扩展不需要 Rust 工具链。Node、可选 Rust/V8 与可信 Worker 已使用同一作者 API，现有领域能力与限制见[Ash TypeScript API 的实际范围](#06-ash-typescript-api-的实际范围)。命令调用内的 `ash.files.readTextFile` 经已有 Host RPC 的 `ReadWorkspaceFile` 进入 Rust 文件 owner，当前只在具备包级和目录读授权的本地 Plugin 部署开放，不返回未保存编辑器内容。扩展私有 Secrets 已经由受授权的 Node/V8 宿主接入已有 SecretStore；统一认证和完整文件 API 尚未开放。纯 TS 项目见 [`inspect`](../examples/extensions/inspect/README.md)；实际验证和未覆盖范围见[实现证据与验证](#10-实现证据与验证)。
 
 Rust 作者继续使用 `sdk/rust` 的 Host RPC v1 接口。文档客户端的 `editor.client.v1` 请求、声明与边界校验已进入 `editor_client` 模块，Academy 是真实消费者。客户端通过有限的 `ash:editor/<module>.js` 命名空间导入宿主机制；编译器根据实际宿主导入生成可调用绑定清单，声明文件只提供类型。未知模块、私有值、命名空间及通配重新导出不能绕过构建边界。该入口只覆盖已准入的编辑器客户端；它不是普通 TS 扩展的 `@ash/sdk`，也不把 Workbench 私有服务暴露给扩展。
 
@@ -31,7 +46,7 @@ Ash 的共享核心服务 App、TUI 与其他客户端，拥有 Agent 执行、�
 
 TS/JS 扩展改用 Ash 自有契约：作者安装 `@ash/sdk`，通过 `ash.*` 调用获授权的客户端与 Rust 服务；运行时职责按第 0.1 节分配给 Electron、Rust 和 V8。Rust 扩展承接从核心拆出的可选后端能力，运行编译后的独立程序，不需要 Node、V8 或 JS 包装。App 和 TUI 经公开能力契约按需使用同一个 Provider；客户端只选择和呈现能力，不复制其业务状态。编辑器文档、未保存文本和撤销仍由 TS 编辑器服务拥有。
 
-作者 API 已统一为 `@ash/sdk` / `ash.*`。Node、可选的受限 Rust/V8 与可信浏览器 Worker 使用同一个 `ash.js` 实现和私有 `host.mjs` 生命周期 owner；Rust 作者继续使用 `sdk/rust` 与既有 Host RPC。独立 GitHub 认证已复用 Rust SDK 与产品 launcher；通用第三方 Rust 包安装、隔离与其余服务商迁移尚未完成。
+作者 API 已统一为 `@ash/sdk` / `ash.*`。Node、可选的受限 Rust/V8 与可信浏览器 Worker 使用同一个 `ash.js` 实现和私有 `host.mjs` 生命周期 owner；Rust 作者继续使用 `sdk/rust` 与既有 Host RPC。独立 GitHub 认证已复用 Rust SDK 与产品 launcher；通用第三方 Rust 包安装、隔离尚未完成，其他服务商是否迁移按其消费者需求决定。
 
 现有安装、启用、精确授权、注册、取消、恢复和释放继续由原 owner 维护。普通 TS 示例通过 `ash.files.readTextFile` 调用真实 Rust 工作区文件服务；文档、配置、语言、Tasks/Debug、终端、Speech 和 SCM 的既有能力已经迁入 Ash API。公共声明只覆盖实际支持的操作和字段，宿主差异仍由执行位置和能力准入约束。
 
@@ -421,7 +436,7 @@ Host RPC 与 App Server 客户端协议是两个真实传输边界，允许机�
 
 **迁移顺序与验收**
 
-`ash.commands.register(id, callback)`、`context.subscriptions` 和 `ash.files.readTextFile(path)` 已通过真实 TS 包、Node Host 与 Host RPC 的 `ReadWorkspaceFile` 调用 Rust 文件 owner，验证成功读取、目录授权拒绝、越界拒绝、取消和停用。已有文档读取／编辑等领域接口已迁入同一 SDK；SecretStore/HTTP、认证等按真实消费者另行接入，接口存在于 Rust 端不代表 TS 已开放。后续能力先核对 wire 源，再接 SDK 与现有 adapter，不以 Remote 或单个服务商私有 RPC 跳过公共机制。
+`ash.commands.register(id, callback)`、`context.subscriptions` 和 `ash.files.readTextFile(path)` 已通过真实 TS 包、Node Host 与 Host RPC 的 `ReadWorkspaceFile` 调用 Rust 文件 owner，验证成功读取、目录授权拒绝、越界拒绝、取消和停用。已有文档读取／编辑等领域接口已迁入同一 SDK；扩展私有 Secrets 已沿同一私有 CoreService 接入现有 SecretStore；通用 HTTP 和认证作者接口仍按真实消费者另行接入，接口存在于 Rust 端不代表 TS 已开放。后续能力先核对 wire 源，再接 SDK 与现有 adapter，不以 Remote 或单个服务商私有 RPC 跳过公共机制。
 
 此前 `@ash/extension` 的退出已经把 Host RPC 注册、回调和生命周期归入 `resources/extension-host`，Node、V8 与可信 Worker 复用其内部 adapter。这些机制继续作为 `@ash/sdk` 的宿主实现基础；不恢复旧 SDK 的私有产品入口，不为新包名复制注册、权限或业务状态。现有消费者和示例已改用 `@ash/sdk`，兼容facade已删除，后续能力沿同一个Ash实现扩展。
 
@@ -527,17 +542,17 @@ App 可预装并按认证请求激活 GitHub 扩展；TUI 默认不加载、不�
 
 ### 0.4 当前状态与验收要求
 
-| 项目                                    | 当前状态                                                                                                        |
-| --------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
-| 内置或显式可信包的浏览器 Worker 执行    | 已有实现；当前同源 Worker 不代表第三方权限隔离已完成                                                            |
-| Rust GitHub 领域能力与 TS 产品服务调用  | 已有实现；尚未开放为逐扩展授权的统一作者 API                                                                    |
-| 产品窗口禁用 Node、开启上下文隔离和沙箱 | 已有基础设置；preload 仍有按 `ash:` 前缀过滤的通用 IPC                                                          |
-| `@ash/sdk` / `api: ash`                 | Node、可信 Worker 与可选 V8 共用唯一 Ash 实现；纯 TS 命令经 Host RPC 调用 Rust 文件服务，保留已有能力与生命周期 |
-| Ash API 与独立 Rust/V8 宿主             | 共用 `ash.js` 与 `host.mjs`；实际验证结果按当前平台与定向目标报告，不据此声明跨平台验收完成                     |
-| 受限 V8 执行与系统隔离                  | macOS 与 64 位 Windows JS 扩展已接通；系统沙箱、V8 堆和 ArrayBuffer 预算在独立进程实施；其余平台尚未开放        |
-| Ash TS API 范围                         | 已有实际能力与自包含类型；Secrets、统一认证作者接口和完整文件写入仍未开放；可信 Worker 不属于第三方隔离边界     |
-| 历史 Open VSX / 旧作者 API 包           | 下载、解析、来源和运行入口已删除；旧 marker/metadata decoder 只提供退休识别、停用和卸载                         |
-| Rust 能力扩展与作者接口                 | GitHub 认证已用公共 Rust SDK／Host RPC v1 和产品 launcher 实现独立程序；通用第三方安装／授权仍待完成            |
+| 项目                                    | 当前状态                                                                                                                  |
+| --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| 内置或显式可信包的浏览器 Worker 执行    | 已有实现；当前同源 Worker 不代表第三方权限隔离已完成                                                                      |
+| Rust GitHub 领域能力与 TS 产品服务调用  | 已有实现；尚未开放为逐扩展授权的统一作者 API                                                                              |
+| 产品窗口禁用 Node、开启上下文隔离和沙箱 | 已有基础设置；preload 仍有按 `ash:` 前缀过滤的通用 IPC                                                                    |
+| `@ash/sdk` / `api: ash`                 | Node、可信 Worker 与可选 V8 共用唯一 Ash 实现；纯 TS 命令经 Host RPC 调用 Rust 文件服务，保留已有能力与生命周期           |
+| Ash API 与独立 Rust/V8 宿主             | 共用 `ash.js` 与 `host.mjs`；实际验证结果按当前平台与定向目标报告，不据此声明跨平台验收完成                               |
+| 受限 V8 执行与系统隔离                  | macOS 与 64 位 Windows JS 扩展已接通；系统沙箱、V8 堆和 ArrayBuffer 预算在独立进程实施；其余平台尚未开放                  |
+| Ash TS API 范围                         | 已有实际能力与自包含类型及 Node/V8 私有 Secrets；统一认证作者接口和完整文件写入仍未开放；可信 Worker 不属于第三方隔离边界 |
+| 历史 Open VSX / 旧作者 API 包           | 下载、解析、来源和运行入口已删除；旧 marker/metadata decoder 只提供退休识别、停用和卸载                                   |
+| Rust 能力扩展与作者接口                 | GitHub 认证已用公共 Rust SDK／Host RPC v1 和产品 launcher 实现独立程序；通用第三方安装／授权仍待完成                      |
 
 后续实现必须通过真实扩展入口验证：正常授权操作成功；伪造扩展身份、越界文件或仓库、未授权命令、
 受限 V8 的直接 Node 访问及所有扩展的产品 IPC/后端越权访问失败；授权 Node 包的真实文件、网络和子进程调用成功；撤销授权后在途和后续调用停止；关闭窗口释放注册与任务；文档编辑
@@ -566,20 +581,41 @@ Ash 不再兼容 VS Code 扩展，不要求第一方功能继续使用 `vscode` 
 
 公共入口是 `@ash/sdk`，由宿主绑定到当前扩展。`commands.register` 只注册清单中声明的命令；`commands.execute` 交给发起窗口的命令 owner。Node 支持真实 CJS/ESM 加载，V8 使用已捕获的模块，可信 Worker 使用单文件构建快照。入口是 `activate(context)` 与可选 `deactivate()`，订阅归同一实例释放。
 
-| 领域       | 已实现能力与边界                                                                                                                                                                                                                                                            |
-| ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 文件与文档 | `files.readTextFile` 当前通过具备包级与目录read授权的本地Plugin读取持久UTF-8，最多256 KiB；签名registry JS部署的工作区文件读取仍固定拒绝。`workspace` 的文档读取、事件、编辑、诊断与 URI 文件读/stat/目录查询保留客户端模型和撤销 owner；`ctime` 为 0，不提供文件写入 API。 |
-| 窗口与配置 | 消息和按钮、单选 Quick Pick、状态栏、输出/日志与受限文本自定义编辑器；配置提供 get/has/inspect、scope 和变更事件，配置写入未开放。`window.openComparison` 只允许 text/binary/multiple comparison 输入，不开放任意 editor request。                                          |
-| 语言       | 已有悬停、补全、定义、引用、重命名、符号、折叠、链接、代码操作、结构选区和高亮。补全支持简单替换范围、snippet 和附加文本编辑，不开放 resolve、命令、insert/replace 双范围或未实现的 kind；诊断不开放 relatedInformation、tags 和 code target。                              |
-| 任务与调试 | 复用现有 Task/Debug service，保留 Provider、执行、会话、描述符、断点、Tracker、事件、取消与释放；能力准入与执行同一 owner。                                                                                                                                                 |
-| 终端与语音 | 提供已有终端 profile/PTY、链接、补全、quick fix、环境变量集合及 Speech 会话。注册受包的 capability ceiling 约束，媒体与具体识别业务归 Provider。                                                                                                                            |
-| SCM        | 根 `ash.scm` 提供已有资源、输入、历史、diff 与装饰桥；共享注册、发布和取消 owner。没有嵌套兼容对象或公开 backend/raw IPC。                                                                                                                                                  |
+| 领域       | 已实现能力与边界                                                                                                                                                                                                                                                                                                                                       |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 文件与文档 | `files.readTextFile` 当前通过具备包级与目录read授权的本地Plugin读取持久UTF-8，最多256 KiB；签名registry JS部署的工作区文件读取仍固定拒绝。`workspace` 的文档读取、事件、编辑、诊断与 URI 文件读/stat/目录查询保留客户端模型和撤销 owner；`ctime` 为 0，不提供文件写入 API。                                                                            |
+| 窗口与配置 | 消息和按钮、单选 Quick Pick、状态栏、输出/日志与受限文本自定义编辑器；配置提供 get/has/inspect、scope 和变更事件，`update(key, value, target)` 经现有客户端 owner 写入显式 user/workspace 层，undefined 重置该层。语言 override 和 folder 写入未开放。`window.openComparison` 只允许 text/binary/multiple comparison 输入，不开放任意 editor request。 |
+| 语言       | 已有悬停、补全、定义、引用、重命名、符号、折叠、链接、代码操作、结构选区和高亮。补全支持简单替换范围、snippet 和附加文本编辑，不开放 resolve、命令、insert/replace 双范围或未实现的 kind；诊断不开放 relatedInformation、tags 和 code target。                                                                                                         |
+| 任务与调试 | 复用现有 Task/Debug service，保留 Provider、执行、会话、描述符、断点、Tracker、事件、取消与释放；能力准入与执行同一 owner。                                                                                                                                                                                                                            |
+| 终端与语音 | 提供已有终端 profile/PTY、链接、补全、quick fix、环境变量集合及 Speech 会话。注册受包的 capability ceiling 约束，媒体与具体识别业务归 Provider。                                                                                                                                                                                                       |
+| SCM        | 根 `ash.scm` 提供已有资源、输入、历史、diff 与装饰桥；共享注册、发布和取消 owner。没有嵌套兼容对象或公开 backend/raw IPC。                                                                                                                                                                                                                             |
 
 `WorkspaceEdit.renameFile` 可用于语言Provider的编辑结果；`workspace.applyEdit` 只接受文本编辑，明确拒绝文件操作。签名registry resolver目前固定Workspace scope，本地Plugin可声明Profile scope；不能从API名称推断无工作区支持或两类来源具有相同授权。
 
 声明只包含实现接受的操作与字段；宿主缺少的环境能力明确拒绝。Node 的直接文件、网络与子进程仍是用户级 Node 能力，不能据此宣称受限 V8 或可信 Worker 具有同样环境。Node 的激活与后台监听器可以请求已绑定窗口的服务；V8 保持调用级权限。纯 TS 扩展不需要 Rust 编译器即可调用 SDK 已开放的 Rust 服务。
 
-文档事件更新已有 handle，语言 Provider 使用固定请求快照；`workspace.textDocuments` 在事件送达或显式读取后建立，不是激活时完整初始列表。状态栏在停用、重启、卸载或断连时释放；不同调用和进程代次不能借用旧权限。扩展的持久 memento、Secrets 和统一认证作者接口仍待真实消费者驱动实现。
+文档事件更新已有 handle，语言 Provider 使用固定请求快照；`workspace.textDocuments` 在事件送达或显式读取后建立，不是激活时完整初始列表。状态栏在停用、重启、卸载或断连时释放；不同调用和进程代次不能借用旧权限。扩展私有 Secrets 的宿主接口见下文；统一认证作者接口仍待真实消费者驱动实现。
+
+`context.storage.get(key)` 读取该扩展 profile 命名空间的最新 JSON 值，缺失返回 undefined；
+`update(key, value)` 更新单个 key，undefined 删除、null 保留为值。SQLite 写事务基于最新数据
+更新对应 key，避免不同窗口的不同 key 写入互相覆盖。SDK 不保存值缓存，作者不接触整份快照、
+revision/CAS、轮询或恢复协议；需要一起保存的字段放在同一个 JSON 值中。
+每命名空间最多 256 key，key 最多 1024 UTF-8 字节，总 JSON 数据最多 256 KiB，嵌套最多 64 层。
+`LocalProfileRuntime` 复用 `SqliteExtensionStateStore`；schema v2 从此前开发版 v1 移除 revision
+列并保留值。Workspace/Environment 需要各自稳定身份，不混用 Directory 或窗口 ID。
+
+`context.secrets.get/store/delete` 复用现有 profile SecretStore，TS 读写 UTF-8 字符串，Rust
+`Client::secret_load/secret_store/secret_delete` 使用不透明 bytes。key 是非秘密标识，最多
+256 UTF-8 字节且不含控制字符；单值最多 64 KiB，空串有效。没有额外的秘密 adapter、值缓存、
+通知日志或 cursor/reset 契约；保留已有默认加密和用户明确选择的私有文件模式，失败不降级或
+请求系统授权。普通 JSON 和秘密分别使用各自 owner，不把秘密放入 settings 或普通 KV。
+
+两类存储的 namespace 均由宿主按已准入来源和扩展身份绑定，不包含窗口、版本或摘要，
+不允许作者选择其他包、profile 或产品凭据 key。私有服务统一检查具体实例身份、进程代次、
+来源及必要的目录授权，取消/deadline 与撤权收尾沿用现有 supervisor/lease。
+撤权/停用/卸载保留已存值；重新精确授权只准入新实例，不能复活旧句柄。底层已经提交的 IO
+不能通过丢弃回复回滚，不确定的写入不重放；恢复后可重新读取对应 key。秘密读出的迟到结果
+在取消或退休后不能交付，协议 Debug 继续隐藏 payload。独立可信 Worker 尚无这些持久后端。
 
 历史来源的执行不再恢复。现有包管理保留精确身份、禁用和卸载状态；内置主题、语言、grammar、snippet 与合法来源声明式资源继续由原 loader 使用，保留上游许可和资源身份。`ash.github-authentication` 停用时取消登录与共享实例，保留凭据；重新启用由消费者按原契约恢复。
 
@@ -765,7 +801,7 @@ Git 的显示设置与 Markdown 的语言功能在配置事件后更新；Markdo
 TypeScript、XML、YAML 和四个默认主题文档。Manifest 中的 `%...%` 本地化占位符当前没有 NLS
 解析；未解析占位符使用 theme document 自身的 name 或稳定 manifest ID 回退。
 
-Theme document 当前必须是自包含资源：`include` 会被拒绝，`uiTheme` 只接受 `vs`、`vs-dark`、
+Theme document 支持包内相对 JSON `include`，解析器拒绝路径逃逸、循环与超过 16 层的引用；`uiTheme` 只接受 `vs`、`vs-dark`、
 `hc-black` 或 `hc-light`，颜色必须是合法十六进制值，token settings 只允许
 `foreground`、`background` 和受支持的 `fontStyle`。未知 Workbench color token ID 可以保留在
 catalog 中，但投影为产品主题时会被忽略。
@@ -920,26 +956,26 @@ Host exit、invalid protocol 或 unknown outcome 会清空旧 registration，终
 
 ## 7. 当前实现状态与明确限制
 
-| 子系统                                                           | 状态                           | 实现证据或缺口                                                                                                        |
-| ---------------------------------------------------------------- | ------------------------------ | --------------------------------------------------------------------------------------------------------------------- |
-| 静态 package discovery、snapshot、digest、资源读取               | 已实现                         | `ash-external-ext::packages` + App Server extension operations                                                        |
-| Plugin 声明式 Extension 分发与 live activation                   | 已实现                         | `declarativeExtensions[]`、dynamic source provider、Workbench Plugin generation refresh                               |
-| 声明式语言、grammar、snippet、theme、debugger 投影               | 已实现                         | `AppServerExtensionService` 与领域 registry tests                                                                     |
-| Plugin executable declaration 与 exact process permission        | 已实现                         | `ash-plugin` manifest/package tests                                                                                   |
-| Plugin executable authority                                      | 已实现                         | `ash-core-plugins` authority tests                                                                                    |
-| Extensions executable consumer adapter 与独立 admission          | 已实现                         | exact sidecar/executable binding、双 lease 与 deferred uninstall tests                                                |
-| Host RPC v1、独立进程监管、取消、配额、restart                   | 已实现                         | `ash-external-ext` standalone tests                                                                                   |
-| Ash TS SDK 与宿主 adapter                                        | 已实现已有能力迁移             | `@ash/sdk` 自包含类型；Node/V8/Worker共用Ash实现，保留原注册、授权、取消和释放owner                                   |
-| 旧作者兼容层                                                     | 已删除                         | 无旧模块、别名或可选旧执行模式；metadata decoder只支持退休清理                                                        |
-| Rust 能力扩展 SDK 与业务 Provider contract                       | 认证试点已接入，通用支持待补齐 | SDK 已迁入 `sdk/rust`；独立 GitHub 认证程序与产品 launcher 已组合，第三方安装、隔离与其他能力契约仍需各自验证         |
-| 扩展命名 Output event stream                                     | 已实现                         | process-fenced create/append/replace/clear/show/dispose、bounded retention 与 Workbench sequence projection tests     |
-| App Server Host fleet、目录 Grant gate、async invoke/cancel/read | 已实现                         | exact operation broker、连接配额/TTL、退役取消与 changed notification                                                 |
-| Workbench Commands/Language/Tasks/Testing bridge                 | 已实现（窄契约）               | 原子投影、取消、stale fence 与 last-good 测试；Testing 仅 task-backed profile                                         |
-| Workbench DataChannel/LinkPresentation bridge                    | 已实现                         | 按扩展进程注册订阅、有序发送、取消与重连；Chat 链接语义和键盘行为由 Playwright 验证                                   |
-| Workbench executable Debug bridge                                | 已实现（窄契约）               | Host-broker executable descriptor 与配置 provider 接入现有 Debug owner                                                |
-| 生产第三方 launcher                                              | 部分具备                       | macOS 与 64 位 Windows JS 已实现系统隔离和独立内存预算；其余平台和独立可执行扩展缺少所需 launcher 时 capability=false |
-| Ash JS 按事件启动                                                | 已实现（限定事件）             | 复用Rust事件调度，等待状态无进程，首次调用绑定实际注册                                                                |
-| Open VSX 来源与VSIX运行入口                                      | 已删除                         | 历史marker保留原身份供停用和卸载，不进入发现、下载、租约或执行                                                        |
+| 子系统                                                           | 状态                             | 实现证据或缺口                                                                                                          |
+| ---------------------------------------------------------------- | -------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| 静态 package discovery、snapshot、digest、资源读取               | 已实现                           | `ash-external-ext::packages` + App Server extension operations                                                          |
+| Plugin 声明式 Extension 分发与 live activation                   | 已实现                           | `declarativeExtensions[]`、dynamic source provider、Workbench Plugin generation refresh                                 |
+| 声明式语言、grammar、snippet、theme、debugger 投影               | 已实现                           | `AppServerExtensionService` 与领域 registry tests                                                                       |
+| Plugin executable declaration 与 exact process permission        | 已实现                           | `ash-plugin` manifest/package tests                                                                                     |
+| Plugin executable authority                                      | 已实现                           | `ash-core-plugins` authority tests                                                                                      |
+| Extensions executable consumer adapter 与独立 admission          | 已实现                           | exact sidecar/executable binding、双 lease 与 deferred uninstall tests                                                  |
+| Host RPC v1、独立进程监管、取消、配额、restart                   | 已实现                           | `ash-external-ext` standalone tests                                                                                     |
+| Ash TS SDK 与宿主 adapter                                        | 已实现已有能力迁移               | `@ash/sdk` 自包含类型；Node/V8/Worker共用Ash实现，保留原注册、授权、取消和释放owner                                     |
+| 旧作者兼容层                                                     | 已删除                           | 无旧模块、别名或可选旧执行模式；metadata decoder只支持退休清理                                                          |
+| Rust 能力扩展 SDK 与业务 Provider contract                       | 认证试点已接入，其他能力按需复核 | SDK 已迁入 `sdk/rust`；独立 GitHub 认证程序与产品 launcher 已组合，第三方安装、隔离与其他能力契约须由具体消费者确定范围 |
+| 扩展命名 Output event stream                                     | 已实现                           | process-fenced create/append/replace/clear/show/dispose、bounded retention 与 Workbench sequence projection tests       |
+| App Server Host fleet、目录 Grant gate、async invoke/cancel/read | 已实现                           | exact operation broker、连接配额/TTL、退役取消与 changed notification                                                   |
+| Workbench Commands/Language/Tasks/Testing bridge                 | 已实现（窄契约）                 | 原子投影、取消、stale fence 与 last-good 测试；Testing 仅 task-backed profile                                           |
+| Workbench DataChannel/LinkPresentation bridge                    | 已实现                           | 按扩展进程注册订阅、有序发送、取消与重连；Chat 链接语义和键盘行为由 Playwright 验证                                     |
+| Workbench executable Debug bridge                                | 已实现（窄契约）                 | Host-broker executable descriptor 与配置 provider 接入现有 Debug owner                                                  |
+| 生产第三方 launcher                                              | 部分具备                         | macOS 与 64 位 Windows JS 已实现系统隔离和独立内存预算；其余平台和独立可执行扩展缺少所需 launcher 时 capability=false   |
+| Ash JS 按事件启动                                                | 已实现（限定事件）               | 复用Rust事件调度，等待状态无进程，首次调用绑定实际注册                                                                  |
+| Open VSX 来源与VSIX运行入口                                      | 已删除                           | 历史marker保留原身份供停用和卸载，不进入发现、下载、租约或执行                                                          |
 
 | Ash API支持范围 | 按实际能力维护 | 声明和运行时共同拒绝不支持操作；不承诺旧生态兼容 |
 | 扩展直接使用 Node / Electron 能力 | 分运行时 | 精确授权的标准 Node 包具有用户级 IO；V8 的 Node API 覆盖仍有限，所有扩展均隔离产品 Electron/IPC |
@@ -953,19 +989,29 @@ per-platform artifact selector、跨重启 invocation 恢复或多个扩展共�
 任意 Webview/UI contribution、任意 App Server method registration 和扩展直接 filesystem/network access
 也不属于 v1 provider bridge。
 
-## 8. 后续实现按确定方向推进
+## 8. 按现有扩展需求演进
 
-目标分工由第 0 节维护。实现时完成以下内容：
+### 现有能力与待复核需求
 
-- 按第 0.1 节维护统一 `@ash/sdk` / `ash.*` 和已有消费者，保持授权、取消、释放与身份 fencing；JS 引擎与独立 Node 退休分别验证。
-- 沿两种语言 SDK 与认证试点完善 Provider 契约、来源 adapter、第三方 launcher 和资源限制；独立协议继续保留，不为 TS SDK 复制后端服务或进程通信。
-- 将 GitHub 认证与托管平台业务从内置服务接入可选扩展；共享核心保留通用 Git、HTTP、SecretStore、执行与授权机制。复用已有业务实现，但改变其组合与状态 owner，不在核心和扩展各维护一份。
-- 自有扩展使用 Ash 来源与包管理生命周期，完成`.ashx`工具与发行流程。旧安装记录只保留退休清理，不能恢复来源、精确包租约或运行授权。
-- 完成宿主身份绑定、逐扩展授权和 Rust 操作检查；收紧 preload、通用命令调用、浏览器来源、
-  网络、存储和凭据入口，不能让扩展借用产品的完整权限。
-- 在同一扩展调用链中补命令、文档与事件、语言 Provider、配置、扩展存储、账号、界面和任务 API；
-  只有注册、实际调用、取消和释放都经过真实 owner 并通过测试，才计为可用。
-- 产品组合根按客户端能力与默认策略选扩展；App 预装 GitHub 不使 TUI 默认加载。完成账号数据迁移、唯一 Provider 切换与全部消费者迁移后，移除核心对具体扩展实现的构建和运行依赖。
+本节按 SDK 声明、宿主实现、来源 adapter 与现有消费者记录当前边界，遵循上文的 [SDK 能力开放原则](#sdk-能力开放原则)。表中的未开放能力均不是默认实施项，也不沿用按 API 类别排列的 P1/P2/P3 队列。只有定位到具体扩展的实际阻碍后，才将所需最小能力及验证范围转入根 TODO；实施优先级由该阻碍的用户影响、权限或生命周期风险和依赖决定。
+
+| 主题 / 状态                        | 当前证据与能力边界                                                                                                                                                       | 唯一 owner 与接入位置                                                                                                                          | 回归或确认需求后的验证范围                                                                                                                                                                               |
+| ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 已有契约 · 宿主一致性              | `ash.js` 已提供文本 `workspace.applyEdit`，V8 `request_client` 原允许列表遗漏 `ApplyEdit`；本次同步加入文本编辑及配置 update/reset，进程验证见第 10 节。                 | [`external-js-ext/runtime.rs`](../crates/external-js-ext/src/runtime.rs) 仅准入 typed operation；文本版本、dirty 与 undo 仍归客户端 BulkEdit。 | 同一公开调用在 Node/V8/可信 Worker 保留结果、拒绝、UTF-16、取消及实例退休语义；不能因 API 共用实现就声称宿主覆盖相同。                                                                                   |
+| 准入前置 · 第三方执行              | 受限 V8 已有 macOS/Windows x64 隔离；通用第三方 Rust executable 及其余平台 launcher 尚未闭合。产品受信任 executable 是独立路径。                                         | `ash-external-ext` launcher、Manager exact package/grant/lease 和来源 adapter。                                                                | 扩大来源或平台前验证真实包的授权拒绝、撤权、资源硬限、崩溃恢复和卸载；隔离不可用继续拒绝。此项不阻止已有授权 Node 包使用已准入的客户端服务。                                                             |
+| 已有能力 · 配置写入                | `WorkspaceConfiguration.update` 已接入现有 `UpdateConfiguration` / `ResetConfiguration`；language override、folder target 和远端用户层选择尚未开放，按具体扩展需求复核。 | [`ash.js`](../resources/extension-host/ash.js) 与 `MainThreadExtensionApi` → `IConfigurationService`；SDK 不维护第二份值。                     | 显式 user/workspace、undefined 与 null 区别、非法 JSON、owner 错误、取消不重放、真实文件落盘/重载/重置。确需新增 scope 时，同批处理协议、配置 overrides 和测试。                                         |
+| 已有能力 · profile 状态            | profile 级 `context.storage.get/update` 和 Rust Client 已提供单 key 读写；不公开快照、revision/CAS 或等待接口。Workspace/Environment 独立状态及可信 Worker 后端未开放。  | `LocalProfileRuntime` 复用 SQLite owner；Host 绑定 namespace 与精确实例/来源授权。                                                             | 保留不同 key 并发、null/删除、配额、重启恢复和撤权隔离；复合值可作为一个 key 原子保存。                                                                                                                  |
+| 已有能力 · 私有 Secrets            | Node/V8 的 `context.secrets.get/store/delete` 与 Rust Client 复用现有秘密存储；不提供通知日志或 cursor/reset。                                                           | 现有 profile SecretStore 保持唯一值 owner，Host 使用公共私有服务 admission 检查。                                                              | 验证跨包/profile 隔离、缺失/空值、删除、加密重开、撤权后的在途结果及旧实例拒绝；不触发系统授权弹窗。                                                                                                     |
+| 需求复核 · 认证消费与 Provider     | 独立 GitHub 认证与 GitHub API Provider 已完成产品组合。源码核对尚未找到通用 TS 认证消费/Provider 作者接口的真实生产调用方；不因类型缺失预建统一 SDK。                    | 现有 `ash-login::extension`、认证 Provider 会话 owner 和核心消费者授权继续拥有认证；不透明账号/grant 不等于必须新增作者接口。                  | 先明确具体扩展的业务调用，再开放最小领域契约，并验证多窗口、取消、登出撤权和旧实例隔离；禁止返回 token 或复制现有认证会话。                                                                              |
+| 需求复核 · 文件授权与写入          | registry JS 的 `files.readTextFile` 固定拒绝，可信 Worker 无 Rust 文件服务桥；`workspace.fs` 仅 read/stat/readDirectory，`applyEdit` 仅文本。                            | 来源 adapter 负责实际包级目录授权；Rust FileSystem 拥有磁盘 IO；客户端 working copy/BulkEdit 拥有编辑事务。                                    | 若现有扩展确需新增文件操作，先闭合来源与目录 grant；写入/create/delete/rename 须处理 readonly、dirty 冲突、覆盖策略、撤销、远端/虚拟 URI、取消及不确定结果。不能用 Node 或前端直接 IO 代替 broker 授权。 |
+| 需求复核 · 语言与诊断              | 缺 completion resolve/command/insert-replace、部分 kind，以及 diagnostic relatedInformation/tags/code target；现有语言消费者、codec 和 registry 是接入点。               | 语言 Provider 契约 → `extensionHostLanguageBridge` → 既有 LanguageFeatures/Markers owner。                                                     | 先定位真实语言扩展的阻碍，再选择必要操作；resolve handle 绑定文档版本与实例、取消和释放，命令走既有授权；先扩展契约/codec，再开放类型。                                                                  |
+| 需求复核 · Tasks / Debug / Testing | Tasks 的 presentation、自动运行/并发策略不完整；Debug 尚缺 UI 抑制及测试关联等会话选项；Testing 只有 task-backed profile，没有完整 test tree。                           | 既有 TaskService / DebugService / Testing 领域 owner 与其 bridge。                                                                             | 按现有任务和调试扩展的具体调用选择必要操作；验证 catalog/运行身份、取消、工作区切换、结束事件与资源释放；不另建调度器或 DAP 会话。                                                                       |
+| 需求复核 · 客户端 UI 与声明式贡献  | 普通作者只有受限 CustomTextEditor，完整 Webview/TreeView 等动态 UI 未开放；`configurationDefaults` / `semanticTokenScopes` 尚未投影。                                    | 客户端对应 registry、资源通道及可访问性 owner；文档高级客户端维持独立准入。                                                                    | 每个新增 UI 先确定消费者和资源/消息权限，完成键盘/NLS/可访问性及真实浏览器验证；静态贡献覆盖注销、代次替换与最后有效目录。不是承诺任意 Renderer 或服务容器。                                             |
+| 需求复核 · 激活、scope 与语言适配  | 可信 Worker reconcile 仍立即创建，未按 manifest 事件延迟；Node 每窗口/每扩展独立进程；跨扩展 exports 和通用 TS profile Provider 未闭合，Rust/TS 覆盖不等。               | `WebWorkerExtensionHost` / Host supervisor / profile composition / 两个语言 SDK。                                                              | 能力发现、冲突选择、首次激活、缺失能力、窗口断连与 scope owner 关闭分别测试；不共享业务状态副本，不自动让 TUI 加载 App 预装扩展。共享进程是独立优化，不是接口正确性的前置条件。                          |
+| 验收与按需迁移 · JS 运行时         | 后端独立 Node 路径仍在；受限 V8 的环境能力与 Node 不等。已有 macOS Code/Agents 双窗口状态与秘密存储验证；不覆盖所有能力、Remote/TUI 或其他 OS。                          | 产品 launcher/打包与执行主机；作者 API 保持同一契约。                                                                                          | 按实际消费者的运行目标验证结果/错误/释放；迁移前确认该扩展可由目标宿主承载，再退休对应 Node 依赖；外部语言服务器自身需要 Node 与此分开。                                                                 |
+| 开发体验 · Academy、调试与发行     | 独立 Rust SDK 导出和开发宿主已有；作者只写 TS 的 Academy 接线、F5/Source Map、`.ashx` 工具与完整安装链仍未闭合。                                                         | SDK/build 工具、Manager 与现有 Debug/开发宿主，不另建安装 authority。                                                                          | F5 和 `.ashx` 保留根 TODO 中此前暂停状态；恢复后按仓库外 TS 编译、调试/重载、打包、安装、enable/grant、撤权/卸载验收。注册表签名与来源信任继续复用 Manager。                                             |
+
+当前实现与限制分别由第 0.6、3、4、7 节维护；上表用于定位现有契约、准入前置和待复核需求，不承诺补齐全部列项。普通 profile 状态与扩展私有 Secrets 已接入现有持久化和授权 owner，作者公开面仅保留单 key 读写，快照/revision、轮询 cursor/reset 已移除。统一认证作者接口先复核具体消费者，不作为默认实施项；Workspace/Environment 另先固定身份，不公开无 owner 的接口。GitHub 认证及 REST/GraphQL 已分别在独立扩展中，不再作为“尚待拆出”的任务。
 
 旧生态兼容执行已删除，不作为Ash生态验收路径。Ash API 只有经过真实入口、领域 owner、授权和释放验证才计为可用；接口改名、类型检查或旧扩展兼容测试不能替代验证。
 
@@ -1028,6 +1074,29 @@ node --test resources/extension-host/node.test.mjs
 node --test build/builtin/typescriptSdk.test.ts
 ```
 
+2026-10-20 在 macOS arm64 完成配置写入与 V8 文本编辑切片：
+
+- `node --test resources/extension-host/node.test.mjs`：55 项通过，包括新增的显式配置 target、重置/null、快照/事件、非法 JSON 与 scope、owner 拒绝、取消及迟到结果不重放。
+- `node --test build/builtin/typescriptSdk.test.ts`：仓库外安装 SDK 并严格编译作者代码通过，验证新增方法与不支持的参数在类型层拒绝；`node --test --test-name-pattern='browser Git packages' build/builtin/extensions.test.ts` 验证实际浏览器打包产物的配置 update/reset 和释放。这是打包模块执行测试，不是独立浏览器 Worker 验收。
+- `just test ash-external-js-ext --test host --profile ci-test ash_configuration_writes -- --nocapture` 与同入口的 `ash_workspace_text_edits`：各 1 项真实 V8 进程测试通过，覆盖 typed 配置请求/权限拒绝、文档版本、UTF-16 范围、编辑拒绝与禁止重放。`just rust-warnings ash-external-js-ext --profile ci-test` 全目标通过。
+- `pnpm run test:smoke:desktop test/smoke/areas/chat/extensions.spec.ts --grep 'Local standard extension installs' --max-failures=1` 完成当前源码的开发后端、Electron 与 Renderer 正常构建。首次场景暴露原测试仍假设旧管理弹窗，修正为实际详情页和授权流程后，使用同参数的 `test:smoke:desktop:no-compile` 完整通过 1 项：未授权不可运行、用户/工作区配置落盘、重载后读取并重置、撤权与卸载后命令消失。构建保留既有第三方 WASM/eval 警告。
+- `./node_modules/bun/bin/bun.exe check -p build/tsconfig.json --all` 与 `-p test/automation/tsconfig.json --all` 通过；目标源码格式、修改文档格式和 `git diff --check` 通过。
+
+配置写入切片没有新建配置状态 owner、扩展 Host RPC operation 或 App Server schema；复用已有客户端配置/BulkEdit 和进程授权/取消机制。该切片没有新增语言 override/folder 配置写入、文件操作、Secrets 或认证作者接口，也未扩展第三方来源/平台准入。普通 profile 状态的后续实现使用上文独立 CoreService 契约及 SQLite owner。
+
+普通状态与 Secrets 的当前公开面已收缩为单 key 读写。此前开发切片的快照、CAS 与变更等待
+协议已删除，不保留兼容别名；其测试改为验证 key 数据和宿主生命周期，不再为验收新增作者接口。
+此前配置写入与 V8 编辑验证仍适用；存储切片以本次收缩后的验证为准。
+
+2026-10-20 同机完成本次接口收缩的定向验证：
+
+- Node 进程契约 59 项、仓库外打包安装与 TypeScript 严格编译 1 项通过；验证单 key API、null/缺失/删除、UTF-8/空秘密、非法输入、拒绝与取消后迟到结果。
+- `just test ash-state --lib --profile ci-test extension_state`：4 项通过，覆盖 v1→v2 数据保留、不同连接并发写、配额、退休前提交检查和异常持久内容拒绝。
+- App Server runtime 的 `ordinary_state_is_shared` 与 `private_secrets`：各 1 项真实 Node 多实例测试通过，覆盖共享读写、秘密跨包/profile 隔离、加密存储重开、撤权时在途读结果被抑制，以及重新授权后旧绑定仍被拒绝。加密测试使用既有 ProfileSecretStore 和注入的内存 keyring，不触发系统弹窗。
+- 独立 Rust SDK 程序的 `independent_rust_sdk_uses_simple_profile_state_and_private_secrets`、真实 V8 的 `ash_profile_storage` 与 `ash_private_secrets` 各 1 项通过。私有协议定向测试 1 项、App Server protocol 159 项通过；`just generate-protocol` 和协议／构建工具／自动化 Bun 类型检查通过。
+- `just rust-warnings ash-state -p ash-external-ext-protocol -p ash-external-ext-sdk -p ash-external-js-ext -p ash-app-server-protocol -p ash-app-server-runtime --profile ci-test`：6 个修改包的全目标检查通过。
+- `pnpm run test:smoke:desktop test/smoke/areas/chat/extensions.spec.ts --grep 'Local standard extension' --max-failures=1`：正常后端、Electron 和 Renderer 构建后 1 项通过（50.1 秒），验证真实 Code／Agents 双窗口、状态与秘密共享／删除、关闭重开恢复、撤权取消旧回调、重新授权只准入新实例及卸载。此场景在隔离 profile 显式使用已有私有文件模式；默认加密重开由上面的真实 Node 后端测试覆盖，不代表已完成 Windows／Linux 或真实系统 keyring 验收。构建仍有既有第三方 WASM/eval 警告。
+
 声明式 debugger 的默认可执行程序与同类型动态 descriptor factory 共用一个注册表；默认程序不会阻止动态工厂注册。工厂接收已解析的默认 DebugAdapterExecutable，实际 descriptor 决定执行路径；debugServer 和显式 debugAdapter 优先。只声明类型的 debugger 可用于动态工厂激活。标准 package.json 的 program/runtime/runtimeArgs/args 默认执行链已接入；win、windows、winx86、osx 和 linux 覆盖使用扩展执行主机的平台。程序相对路径基于目录服务验证的扩展包位置，带路径的相对 runtime 同样基于该包，普通 runtime 名称通过执行主机 PATH 查找。runtimeArgs、程序路径、args 按顺序组合，空参数和美元符号保持字面值。目录协议传递 extensionLocation 和 targetPlatform，前端不根据 Web/Electron 客户端 OS 猜测这些值。跨扩展同类型声明合并、Node 运行时特殊选择与完整 DebugSessionOptions 仍需继续对齐。父会话、受父会话管理的重启/停止、noDebug 继承与覆盖、父子控制台合并已接入标准 API 和同一会话 owner；工厂、tracker 与事件使用相同父会话标识。noDebug 不安装各类断点，合并控制台保留各适配器输出并向当前选中的存活会话求值。无目录配置启动保持 workspaceFolder 为空，绝对适配器/源路径与执行主机环境变量可用；无目录时未限定目录的工作区变量会拒绝。UI 抑制选项与测试运行关联仍待补齐。
 
 ## Git 内置能力与构建
@@ -1042,7 +1111,7 @@ Git 设置均有运行时消费者；安装版本支持由[共享 Git 契约](..
 扩展使用公共 Rust SDK 的 SCM、command、terminal 与 Client/Services 契约。通用 TS 桥拥有
 编辑器、working copy、UI 和配置服务，依据内置包来源及能力 grant 路由调用。凭据服务只在后端
 授予内置 Git 消费端，复用已有 Rust GitHub 认证 Provider；令牌不经过 Renderer RPC。GitHub
-PR/Issue 业务尚未拆成新的扩展。`git.getRepositoryContexts` 与 `git.executeRepositoryCommand`
+PR/Issue 业务由独立的 [`github`](../extensions/github/README.md) Rust 扩展提供。`git.getRepositoryContexts` 与 `git.executeRepositoryCommand`
 保留为可选消费者命令，核心不导入 Git 扩展实现。
 
 后台发现和合并后的 SCM 发布不等待 UI 确认；命令重新读取目录级策略。草稿版本、HEAD、

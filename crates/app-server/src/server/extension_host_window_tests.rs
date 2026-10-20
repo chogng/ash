@@ -41,6 +41,9 @@ use super::super::source::WorkspaceReadAccess;
 use super::AllowedActivation;
 use super::test_files_unavailable;
 
+#[path = "extension_host_storage_tests.rs"]
+mod storage_tests;
+
 struct EditorPeer {
     queue: crate::server::notification_queue::NotificationQueue,
     worker: Option<JoinHandle<()>>,

@@ -1047,10 +1047,23 @@ fn dispatch_client(
             | ExtensionClientOperation::StatResource { .. }
             | ExtensionClientOperation::ReadResourceDirectory { .. }
             | ExtensionClientOperation::ReadWorkspaceFile { .. }
+            | ExtensionClientOperation::ApplyEdit { .. }
+            | ExtensionClientOperation::UpdateConfiguration { .. }
+            | ExtensionClientOperation::ResetConfiguration { .. }
             | ExtensionClientOperation::ShowMessage { .. }
             | ExtensionClientOperation::ShowQuickPick { .. }
             | ExtensionClientOperation::SetDiagnostics { .. }
             | ExtensionClientOperation::SetStatusBarEntries { .. }
+    ) && !matches!(
+        &operation,
+        ExtensionClientOperation::CoreService {
+            request: external_ext_protocol::services::CoreServiceRequest::StorageGet { .. }
+                | external_ext_protocol::services::CoreServiceRequest::StorageSet { .. }
+                | external_ext_protocol::services::CoreServiceRequest::StorageDelete { .. }
+                | external_ext_protocol::services::CoreServiceRequest::SecretLoad { .. }
+                | external_ext_protocol::services::CoreServiceRequest::SecretStore { .. }
+                | external_ext_protocol::services::CoreServiceRequest::SecretDelete { .. }
+        }
     ) && !matches!(&operation, ExtensionClientOperation::EditorOperation { payload } if payload.get("method").and_then(Value::as_str) == Some("output"))
     {
         return Err("operation is outside JavaScript host contract v1".into());

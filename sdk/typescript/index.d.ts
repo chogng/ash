@@ -13,7 +13,18 @@ export interface CancellationToken { readonly isCancellationRequested: boolean; 
 export class CancellationTokenSource implements Disposable { readonly token: CancellationToken; cancel(): void; dispose(): void; }
 export interface Extension<T = unknown> { readonly id: string; readonly extensionUri: Uri; readonly extensionPath: string; readonly packageJSON: Readonly<Record<string, unknown>>; readonly extensionKind: ExtensionKind; readonly isActive: boolean; readonly exports: T; activate(): Promise<T>; }
 /** Activation resources are retired with this exact extension instance. */
-export interface ExtensionContext { readonly subscriptions: Disposable[]; readonly extensionUri: Uri; readonly extensionPath: string; readonly extensionMode: ExtensionMode; readonly extension: Extension; readonly environmentVariableCollection: EnvironmentVariableCollection; asAbsolutePath(path: string): string; }
+export interface ExtensionContext { readonly subscriptions: Disposable[]; readonly storage: ExtensionStorage; readonly secrets: SecretStorage; readonly extensionUri: Uri; readonly extensionPath: string; readonly extensionMode: ExtensionMode; readonly extension: Extension; readonly environmentVariableCollection: EnvironmentVariableCollection; asAbsolutePath(path: string): string; }
+/** Ordinary JSON values in this extension's profile namespace. Reads are fresh; undefined deletes. */
+export interface ExtensionStorage {
+	get(key: string): Promise<JsonValue | undefined>;
+	update(key: string, value: JsonValue | undefined): Promise<void>;
+}
+/** Private UTF-8 secrets in this extension's profile namespace. */
+export interface SecretStorage {
+	get(key: string): Promise<string | undefined>;
+	store(key: string, value: string): Promise<void>;
+	delete(key: string): Promise<boolean>;
+}
 export enum ExtensionMode { Production = 1, Development = 2, Test = 3 }
 export enum ExtensionKind { UI = 1, Workspace = 2 }
 export namespace commands {
@@ -53,7 +64,18 @@ export interface TextEditor { readonly document: TextDocument; readonly viewColu
 export interface WorkspaceFolder { readonly uri: Uri; readonly name: string; readonly index: number; }
 export interface ConfigurationScope { readonly uri?: Uri; readonly languageId?: string; }
 export interface ConfigurationInspection<T> { key: string; defaultValue?: T; globalValue?: T; workspaceValue?: T; workspaceFolderValue?: T; defaultLanguageValue?: T; globalLanguageValue?: T; workspaceLanguageValue?: T; workspaceFolderLanguageValue?: T; languageIds?: string[]; }
-export interface WorkspaceConfiguration { get<T>(key: string): T | undefined; get<T>(key: string, defaultValue: T): T; has(key: string): boolean; inspect<T>(key: string): ConfigurationInspection<T> | undefined; }
+export interface WorkspaceConfiguration {
+	get<T>(key: string): T | undefined;
+	get<T>(key: string, defaultValue: T): T;
+	has(key: string): boolean;
+	inspect<T>(key: string): ConfigurationInspection<T> | undefined;
+	/**
+	 * Persist a value, or remove the selected override with undefined. Select the target explicitly;
+	 * language overrides and folder targets are not supported. Reads retain this object's original
+	 * snapshot; obtain a new configuration after its change event to observe committed values.
+	 */
+	update(key: string, value: JsonValue | undefined, target: 'user' | 'workspace'): Promise<void>;
+}
 export enum FileType { Unknown = 0, File = 1, Directory = 2, SymbolicLink = 64 }
 export interface FileStat { type: FileType; size: number; mtime: number; ctime: number; }
 export interface TextDocumentChangeEvent { document: TextDocument; contentChanges: readonly { range: Range; rangeOffset: number; rangeLength: number; text: string }[]; }

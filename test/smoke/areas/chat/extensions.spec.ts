@@ -1,6 +1,8 @@
 import { expect, test, writeEditorExtensionFixture } from '../../../automation/test.js';
 import { Editor } from '../../../automation/editor.js';
 import { QuickAccess } from '../../../automation/quickaccess.js';
+import { readUserSettings } from '../../../automation/settings.js';
+import { parseJsonc } from '../../../../src/ash/base/common/jsonc.js';
 import { mkdir, writeFile, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
@@ -188,8 +190,26 @@ test('Extensions view tab uses the extensions icon', async ({ workbench }) => {
 	await expect(search).toBeFocused();
 });
 
-test('Local standard extension installs, runs only after grant, survives restart and retires on revoke', { tag: ['@electron-app-server', '@darwin'] }, async ({ target, testWorkspace, application, workbench, reloadWorkbench }) => {
-	test.setTimeout(90_000);
+const durableExtensionTest = test.extend({
+	useInMemorySecretStorage: false,
+	backendFixture: async ({ testWorkspace }, use) => {
+		const productServicesPath = join(testWorkspace.directory, 'private-services.json');
+		await writeFile(productServicesPath, JSON.stringify({ schemaVersion: 3 }));
+		await use({
+			productServicesPath,
+			async prepareProfile(profileDirectory) {
+				// Explicit private-file mode in this disposable profile avoids OS prompts.
+				// Encrypted recovery is covered separately with an injected keyring.
+				const secrets = join(profileDirectory, 'secrets');
+				await mkdir(secrets, { recursive: true, mode: 0o700 });
+				await writeFile(join(secrets, 'storage-mode'), 'file', { mode: 0o600 });
+			},
+		});
+	},
+});
+
+durableExtensionTest('Local standard extension shares durable state and private secrets across windows and restart, and retires on revoke', { tag: ['@electron-app-server', '@darwin'] }, async ({ target, testWorkspace, application, workbench, reloadWorkbench, runningApplication }) => {
+	test.setTimeout(120_000);
 	const root = join(testWorkspace.directory, 'standard-extension');
 	await mkdir(join(root, '.ash-plugin'), { recursive: true });
 	await writeFile(join(root, '.ash-plugin', 'plugin.json'), JSON.stringify({
@@ -198,17 +218,38 @@ test('Local standard extension installs, runs only after grant, survives restart
 		contributions: {
 			editorExtensions: [{
 				id: 'inspect', runtime: 'javascript', api: 'ash', entrypoint: 'extension.js', runtimeApiVersion: 1,
-				activationEvents: [{ type: 'onCommand', id: 'acme.standardSmoke.inspect' }], capabilities: ['command']
+				activationEvents: ['inspect', 'stateFirst', 'stateSecond', 'stateRegrant', 'stateRead', 'secretStore', 'secretRead', 'secretDelete', 'secretHold'].map(name => ({ type: 'onCommand', id: 'acme.standardSmoke.' + name })), capabilities: ['command']
 			}]
 		},
 		permissions: [{ type: 'directory', access: 'read' }],
 	}));
 	await writeEditorExtensionFixture(root, `
 const ash = require('@ash/sdk'); const { commands, window } = ash;
-exports.activate = function(context) {
+exports.activate = async function(context) {
+	const secretRestored = (await context.secrets.get('token')) === 'synthetic-extension-private-你好';
+	context.subscriptions.push(commands.register('acme.standardSmoke.secretStore', async () => { await context.secrets.store('token', 'synthetic-extension-private-你好'); await window.showInformationMessage('Private secret stored'); }));
+	context.subscriptions.push(commands.register('acme.standardSmoke.secretRead', async () => { const matched = (await context.secrets.get('token')) === 'synthetic-extension-private-你好'; await window.showInformationMessage('Private secret matched: ' + matched + '; activation: ' + secretRestored); }));
+	context.subscriptions.push(commands.register('acme.standardSmoke.secretDelete', async () => { await window.showInformationMessage('Private secret deleted: ' + await context.secrets.delete('token')); }));
+	context.subscriptions.push(commands.register('acme.standardSmoke.secretHold', async () => {
+		await window.showInformationMessage('Private access pending');
+		await new Promise(resolve => { const timer = setInterval(() => { if (require('node:fs').existsSync(${JSON.stringify(join(testWorkspace.directory, 'resume-private-call'))})) { clearInterval(timer); resolve(); } }, 25); });
+		await context.secrets.get('token');
+		require('node:fs').writeFileSync(${JSON.stringify(join(testWorkspace.directory, 'retired-private-result'))}, 'accessed');
+	}));
+	const readState = async () => ({first:await context.storage.get('first'), second:await context.storage.get('second'), afterRegrant:await context.storage.get('afterRegrant')});
+	const report = async label => { await window.showInformationMessage(label + ': ' + JSON.stringify(await readState())); };
+	context.subscriptions.push(commands.register('acme.standardSmoke.stateFirst', async () => { await context.storage.update('first', '你好'); await report('First state'); }));
+	context.subscriptions.push(commands.register('acme.standardSmoke.stateSecond', async () => { await context.storage.update('second', null); await report('Second state'); }));
+	context.subscriptions.push(commands.register('acme.standardSmoke.stateRegrant', async () => { await context.storage.update('afterRegrant', true); await report('Regranted state'); }));
+	context.subscriptions.push(commands.register('acme.standardSmoke.stateRead', async () => report('Read state')));
 	context.subscriptions.push(commands.register('acme.standardSmoke.inspect', async () => {
 		const text = new TextDecoder().decode(await ash.workspace.fs.readFile(ash.Uri.joinPath(ash.workspace.workspaceFolders[0].uri, 'main.ts')));
-		await window.showInformationMessage('Standard disk: ' + text.trim() + '; globals: ' + [typeof process, typeof fetch, typeof WebAssembly].join(','));
+		const configuration = ash.workspace.getConfiguration('editor');
+		const inspection = configuration.inspect('fontSize');
+		const restored = inspection.globalValue === 19 && inspection.workspaceValue === 22;
+		await configuration.update('fontSize', restored ? undefined : 19, 'user');
+		await configuration.update('fontSize', restored ? undefined : 22, 'workspace');
+		await window.showInformationMessage('Standard disk: ' + text.trim() + '; globals: ' + [typeof process, typeof fetch, typeof WebAssembly].join(',') + '; settings: ' + (restored ? 'restored and reset' : 'created'));
 		return text;
 	}));
 }`);
@@ -220,36 +261,122 @@ exports.activate = function(context) {
 	expect(installed.message).toContain('Installed acme/standard-smoke 1.0.0');
 
 	const absent = async (): Promise<void> => {
+		await page.bringToFront();
 		await workbench.quickaccess.open('>acme.standardSmoke.inspect');
 		await expect(workbench.quickaccess.items.filter({ has: page.locator('.ash-quick-pick-row-description').getByText('acme.standardSmoke.inspect', { exact: true }) })).toHaveCount(0);
 		await workbench.quickaccess.close();
 	};
 	const manage = async (button: string): Promise<void> => {
-		const review = await workbench.dialogs.confirm(application, 'Standard extension smoke', button, async () => {
-			await workbench.quickaccess.runCommand('ash.extensions.manageLocal');
-			await page.getByRole('option').filter({ has: page.getByText('Standard extension smoke', { exact: true }) }).click();
-		});
-		expect(review.detail).toContain('Read workspace files');
-		expect(review.detail).toContain('Package digest: sha256:');
+		await page.bringToFront();
+		await workbench.quickaccess.runCommand('ash.extensions.manageLocal');
+		await page.getByRole('listbox', { name: 'Installed Extensions', exact: true }).locator('[data-package-id="acme/standard-smoke"]').click();
+		const details = page.locator('.ash-extension-editor:visible').filter({ hasText: 'acme/standard-smoke' });
+		const action = () => details.getByRole('button', { name: button, exact: true }).click();
+		if (button === 'Grant permissions' || button === 'Revoke permissions') {
+			const review = await workbench.dialogs.confirm(application, 'Standard extension smoke', button, action);
+			expect(review.detail).toContain('Read workspace files');
+			expect(review.detail).toContain('Package digest: sha256:');
+		} else if (button === 'Uninstall') {
+			await workbench.dialogs.confirm(application, 'Uninstall extension', button, action);
+		} else {
+			await action();
+			await expect(details.getByRole('button', { name: button === 'Enable' ? 'Disable' : 'Enable', exact: true })).toBeVisible();
+		}
 	};
 	await absent();
 	await manage('Enable');
 	await absent();
 	await manage('Grant permissions');
 	await workbench.quickaccess.runCommand('acme.standardSmoke.inspect');
-	await expect(page.locator('.ash-notification', { hasText: 'Standard disk: const value = 1;; globals: object,function,object' })).toBeVisible();
+	await expect(page.locator('.ash-notification', { hasText: 'Standard disk: const value = 1;; globals: object,function,object; settings: created' })).toBeVisible();
+	const userFontSize = async () => (parseJsonc((await readUserSettings(page)).content) as Record<string, unknown>)['editor.fontSize'];
+	const workspaceSettings = join(testWorkspace.directory, '.vscode', 'settings.json');
+	const workspaceFontSize = async () => (parseJsonc(await readFile(workspaceSettings, 'utf8')) as Record<string, unknown>)['editor.fontSize'];
+	await expect.poll(userFontSize).toBe(19);
+	await expect.poll(workspaceFontSize).toBe(22);
+	let agents = await workbench.openAgentsWindow(target.kind);
+	let agentsCommands = new QuickAccess(agents);
+	await page.bringToFront();
+	await workbench.quickaccess.runCommand('acme.standardSmoke.stateFirst');
+	await expect(page.locator('.ash-notification', { hasText: 'First state:' })).toBeVisible();
+	await agents.bringToFront();
+	await agentsCommands.runCommand('acme.standardSmoke.stateSecond');
+	await expect(agents.locator('.ash-notification', { hasText: 'Second state:' })).toBeVisible();
+	const savedState = '{"first":"你好","second":null}';
+	for (const [commands, windowPage] of [[workbench.quickaccess, page], [agentsCommands, agents]] as const) {
+		await windowPage.bringToFront();
+		await commands.runCommand('acme.standardSmoke.stateRead');
+		await expect(windowPage.locator('.ash-notification', { hasText: 'Read state: ' + savedState })).toBeVisible();
+	}
+	await page.bringToFront();
+	await workbench.quickaccess.runCommand('acme.standardSmoke.secretStore');
+	await expect(page.locator('.ash-notification', { hasText: 'Private secret stored' })).toBeVisible();
+	await agents.bringToFront();
+	await agentsCommands.runCommand('acme.standardSmoke.secretRead');
+	await expect(agents.locator('.ash-notification', { hasText: 'Private secret matched: true; activation: false' })).toBeVisible();
+	await page.bringToFront();
+	await workbench.quickaccess.runCommand('acme.standardSmoke.secretDelete');
+	await expect(page.locator('.ash-notification', { hasText: 'Private secret deleted: true' })).toBeVisible();
+	await agents.bringToFront();
+	await agentsCommands.runCommand('notifications.clearAll');
+	await agentsCommands.runCommand('acme.standardSmoke.secretRead');
+	await expect(agents.locator('.ash-notification', { hasText: 'Private secret matched: false; activation: false' })).toBeVisible();
+	await page.bringToFront();
+	await workbench.quickaccess.runCommand('acme.standardSmoke.secretRead');
+	await expect(page.locator('.ash-notification', { hasText: 'Private secret matched: false; activation: false' })).toBeVisible();
+	await workbench.quickaccess.runCommand('notifications.clearAll');
+	await workbench.quickaccess.runCommand('acme.standardSmoke.secretStore');
+	await expect(page.locator('.ash-notification', { hasText: 'Private secret stored' })).toBeVisible();
 
 	({ workbench, application } = await reloadWorkbench());
 	page = workbench.page;
 	await expect(page.getByRole('tab', { name: 'Welcome', exact: true })).toBeVisible();
 	await workbench.quickaccess.runCommand('acme.standardSmoke.inspect');
-	await expect(page.locator('.ash-notification', { hasText: 'Standard disk: const value = 1;; globals: object,function,object' })).toBeVisible();
+	await expect(page.locator('.ash-notification', { hasText: 'Standard disk: const value = 1;; globals: object,function,object; settings: restored and reset' })).toBeVisible();
+	await expect.poll(userFontSize).toBeUndefined();
+	await expect.poll(workspaceFontSize).toBeUndefined();
+	await workbench.quickaccess.runCommand('acme.standardSmoke.stateRead');
+	await expect(page.locator('.ash-notification', { hasText: 'Read state: ' + savedState })).toBeVisible();
+	await workbench.quickaccess.runCommand('acme.standardSmoke.secretRead');
+	await expect(page.locator('.ash-notification', { hasText: 'Private secret matched: true; activation: true' })).toBeVisible();
+	agents = await workbench.openAgentsWindow(target.kind);
+	agentsCommands = new QuickAccess(agents);
+	await agentsCommands.runCommand('acme.standardSmoke.secretHold');
+	await expect(agents.locator('.ash-notification', { hasText: 'Private access pending' })).toBeVisible();
 	await manage('Revoke permissions');
+	// Revoking the extension ends the pending command through the normal
+	// command error dialog; acknowledge it before using that window again.
+	const retiredCommand = agents.getByRole('dialog', { name: 'Error', exact: true });
+	await expect(retiredCommand).toContainText('acme.standardSmoke.secretHold');
+	await expect(retiredCommand).toContainText('ExtensionHostInvocationNotFound');
+	await retiredCommand.getByRole('button', { name: 'OK', exact: true }).click();
 	await absent();
+	await agents.bringToFront();
+	await agentsCommands.open('>acme.standardSmoke.stateFirst');
+	await expect(agentsCommands.items.filter({ has: agents.locator('.ash-quick-pick-row-description').getByText('acme.standardSmoke.stateFirst', { exact: true }) })).toHaveCount(0);
+	await agentsCommands.close();
+	await manage('Grant permissions');
+	await writeFile(join(testWorkspace.directory, 'resume-private-call'), 'resume');
+	await workbench.quickaccess.runCommand('notifications.clearAll');
+	await workbench.quickaccess.runCommand('acme.standardSmoke.stateRead');
+	await expect(page.locator('.ash-notification', { hasText: 'Read state: ' + savedState })).toBeVisible();
+	await workbench.quickaccess.runCommand('acme.standardSmoke.secretRead');
+	await expect(page.locator('.ash-notification', { hasText: 'Private secret matched: true; activation: true' })).toBeVisible();
+	await workbench.quickaccess.runCommand('acme.standardSmoke.secretStore');
+	await expect(page.locator('.ash-notification', { hasText: 'Private secret stored' })).toBeVisible();
+	await workbench.quickaccess.runCommand('acme.standardSmoke.stateRegrant');
+	await expect(page.locator('.ash-notification', { hasText: 'Regranted state: {"first":"你好","second":null,"afterRegrant":true}' })).toBeVisible();
+	await manage('Revoke permissions');
 	await manage('Disable');
 	await manage('Uninstall');
-	const empty = await workbench.dialogs.expectMessage(application, 'Information', () => workbench.quickaccess.runCommand('ash.extensions.manageLocal'));
-	expect(empty.message).toContain('No local editor extensions are installed.');
+	await workbench.quickaccess.runCommand('ash.extensions.manageLocal');
+	await expect(page.getByRole('listbox', { name: 'Installed Extensions', exact: true }).locator('[data-package-id="acme/standard-smoke"]')).toHaveCount(0);
+	await absent();
+	for (const windowPage of [page, agents]) await expect(windowPage.locator('body')).not.toContainText('synthetic-extension-private-你好');
+	expect(await readFile(join(testWorkspace.directory, 'retired-private-result'), 'utf8').catch(error => { if (error.code !== 'ENOENT') throw error; return undefined; })).toBeUndefined();
+	expect(runningApplication.diagnostics.consoleErrors.join('\n')).not.toContain('synthetic-extension-private-你好');
+	expect(runningApplication.diagnostics.pageErrors.join('\n')).not.toContain('synthetic-extension-private-你好');
+	expect(await readFile(workspaceSettings, 'utf8')).not.toContain('synthetic-extension-private-你好');
 });
 
 test('Extensions slash commands open their Workbench owners without sending a chat message', async ({ target, application, workbench }) => {

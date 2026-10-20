@@ -98,7 +98,16 @@ test('browser Git packages publish their bundled frontend without a Rust runtime
 		await writeFile(join(directory, 'extensions/theme-defaults/package.json'), JSON.stringify({ publisher: 'test', name: 'theme-defaults', version: '1.0.0' }));
 		await mkdir(join(directory, 'extensions/git/browser'), { recursive: true });
 		await writeFile(join(directory, 'extensions/git/package.json'), JSON.stringify({ publisher: 'test', name: 'git', version: '1.0.0', browser: 'browser/main.ts', contributes: { commands: [{ command: 'test.browser.command', title: 'Ash browser command' }] } }));
-		await writeFile(join(directory, 'extensions/git/browser/main.ts'), "import { marker } from './helper.js'; import { commands, window } from '@ash/sdk'; export function activate(context) { context.subscriptions.push(commands.register('test.browser.command', async () => { await window.showInformationMessage('Ash browser command'); return marker; })); }");
+		await writeFile(join(directory, 'extensions/git/browser/main.ts'), `import { marker } from './helper.js'; import { commands, window, workspace } from '@ash/sdk';
+export function activate(context) {
+ context.subscriptions.push(commands.register('test.browser.command', async () => {
+  const configuration = workspace.getConfiguration('sample');
+  await configuration.update('enabled', false, 'workspace');
+  await configuration.update('enabled', undefined, 'user');
+  await window.showInformationMessage('Ash browser command');
+  return marker;
+ }));
+}`);
 		await writeFile(join(directory, 'extensions/git/browser/helper.ts'), "export const marker: string = 'combined-entry-marker';");
 		await writeFile(join(directory, 'extensions/git/browser/sample.ts'), 'export const sample = 1;');
 		const run = () => {
@@ -124,6 +133,7 @@ import { pathToFileURL } from 'node:url';
 import { readFile } from 'node:fs/promises';
 const manifest = JSON.parse(await readFile(new URL('../package.json', pathToFileURL(process.argv[1])), 'utf8'));
 globalThis.__ashConfiguration = { extensionId: manifest.publisher + '.' + manifest.name, extensionPath: '/', commands: manifest.contributes.commands, manifest };
+globalThis.__ashInitialization = { workspaceFolders: [], workspaceName: null, workspaceFile: null, configurationValues: {}, configurationData: { defaults: {contents: {}, keys: [], overrides: []}, folders: []} };
 globalThis.__ashInvocation = () => 1;
 const requests = [];
 globalThis.__ashRequest = async (_id, encoded) => { requests.push(JSON.parse(encoded)); return JSON.stringify({result: 'done'}); };
@@ -131,7 +141,11 @@ const runtime = await import(pathToFileURL(process.argv[1]).href);
 const registrations = await runtime.activate();
 assert(registrations.some(value => value.kind === 'command' && value.registrationId === 'test.browser.command'));
 assert.equal(await runtime.invoke('test.browser.command', {arguments: []}, 1, 'execute'), 'combined-entry-marker');
-assert.deepEqual(requests, [{operation: 'showMessage', message: 'Ash browser command', severity: 'information'}]);
+assert.deepEqual(requests, [
+ {operation: 'updateConfiguration', section: 'sample.enabled', value: false, target: 'workspace'},
+ {operation: 'resetConfiguration', section: 'sample.enabled', target: 'user'},
+ {operation: 'showMessage', message: 'Ash browser command', severity: 'information'}
+]);
 await runtime.deactivate();
 await assert.rejects(runtime.invoke('test.browser.command', {arguments: []}, 1, 'execute'), /not active|disposed/);
 `, preparedEntry], { cwd: directory, encoding: 'utf8', timeout: 15_000 });

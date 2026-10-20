@@ -31,6 +31,39 @@ test('a TypeScript author installs the packed Ash SDK and builds outside the che
 		assert(!packed[0].files.some(file => /(?:^|\/)(?:Cargo\.(?:toml|lock)|crates|resources\/extension-host)(?:\/|$)/u.test(file.path)), 'Rust and host implementations stay in the Ash product');
 		await writeFile(join(project, 'extension.ts'), `import * as ash from '@ash/sdk';
 export function activate(context: ash.ExtensionContext): void {
+  context.subscriptions.push(ash.commands.register('example.state', async () => {
+    await context.storage.update('count', 1);
+    await context.storage.update('deleted', undefined);
+    const value: ash.JsonValue | undefined = await context.storage.get('count');
+    await context.secrets.store('account-token', 'synthetic');
+    const secret: string | undefined = await context.secrets.get('account-token');
+    const deleted: boolean = await context.secrets.delete('account-token');
+    // @ts-expect-error No public state snapshot or revision protocol.
+    await context.storage.read();
+    // @ts-expect-error No public state change polling.
+    await context.storage.waitForChange(0);
+    // @ts-expect-error No public secret cursor/reset protocol.
+    await context.secrets.waitForChange();
+    // @ts-expect-error Secrets have no caller-selected namespace.
+    await context.secrets.get('token', 'another-extension');
+    // @ts-expect-error Only JSON values can be persisted.
+    await context.storage.update('callback', () => true);
+    // @ts-expect-error TS secrets accept strings.
+    await context.secrets.store('token', {value: true});
+    return value;
+
+  }));
+  context.subscriptions.push(ash.commands.register('example.configure', async () => {
+    const configuration = ash.workspace.getConfiguration('example');
+    await configuration.update('enabled', true, 'workspace');
+    await configuration.update('enabled', undefined, 'user');
+    // @ts-expect-error A configuration write requires an explicit target.
+    await configuration.update('enabled', true);
+    // @ts-expect-error Folder writes are not supported by this contract.
+    await configuration.update('enabled', true, 'folder');
+    // @ts-expect-error Functions cannot cross the configuration JSON boundary.
+    await configuration.update('enabled', () => true, 'user');
+  }));
   context.subscriptions.push(ash.commands.register('example.read', async (path: string) => {
     const text: string = await ash.files.readTextFile(path);
     return text.toUpperCase();

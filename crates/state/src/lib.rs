@@ -1,7 +1,10 @@
 //! Profile-local database runtime, durable state adapters, and rebuildable index leases.
 
 mod assets;
+mod extension_state;
 pub use assets::SqliteAssetStore;
+pub use extension_state::ExtensionStateError;
+pub use extension_state::SqliteExtensionStateStore;
 mod backup;
 pub use backup::BackupContent;
 pub use backup::BackupError;

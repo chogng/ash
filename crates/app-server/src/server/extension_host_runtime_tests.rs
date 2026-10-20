@@ -144,6 +144,7 @@ fn declared_capability_calls_activate_the_exact_real_provider_and_obey_cancellat
     );
     let mut binding = super::EditorClientBinding {
         runtime: Arc::downgrade(&runtime.inner),
+        activation: std::sync::Weak::new(),
         backend_channels: BTreeMap::new(),
         credential_providers: Vec::new(),
         credential_services: Arc::new(Mutex::new(BTreeMap::new())),
@@ -1465,6 +1466,7 @@ fn credentials_are_private_to_admitted_consumers_and_never_relayed_to_the_render
     });
     let mut binding = super::EditorClientBinding {
         runtime: std::sync::Weak::new(),
+        activation: std::sync::Weak::new(),
         backend_channels: BTreeMap::new(),
         credential_providers: Vec::new(),
         credential_services: Arc::new(Mutex::new(BTreeMap::from([("github".into(), handler)]))),

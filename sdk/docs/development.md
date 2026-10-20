@@ -2,6 +2,8 @@
 
 This workflow is for extensions that provide their own Rust program or admitted editor client. Ordinary TypeScript extensions use [`@ash/sdk`](../typescript/README.md) and `ash.*`; calling an existing Ash Rust service does not require a Rust toolchain. The two SDKs share Host RPC and authorization, with different current capability coverage.
 
+When an existing extension is blocked by a missing capability, apply the [SDK capability opening principles](../../docs/editor-extensions.md#sdk-能力开放原则) before adding a contract. This development workflow validates the selected consumer's needs; it does not require matching all APIs across languages or hosts.
+
 The development SDK contains the Rust SDK, versioned Host RPC types, the client source-digest build helper, TypeScript declarations, a closed-client compiler and a native development host. It does not contain Ash runtime implementations. Its editor API is `editor.client.v1` / client API v1; imports use `ash:editor/<module>.js` and the exported allowlist. Only the runtime exports in `editor-api.json` are callable. Type declarations do not grant runtime authority.
 
 From the Ash checkout, build the development host and export into **new sibling directories**:

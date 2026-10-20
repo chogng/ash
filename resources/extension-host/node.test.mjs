@@ -493,6 +493,160 @@ test('parallel activation IO applies bounded backpressure and completes every re
 	assert.deepEqual((await h.invoke('test.node', []).result).body.body.payload, Array.from({ length: 64 }, (_, index) => index));
 });
 
+test('private secrets provide only fresh UTF-8 get/store/delete, including empty values', { timeout: 10000 }, async t => {
+	let value = null;
+	const h = await host(t, `const ash = require('@ash/sdk'); exports.activate = context => context.subscriptions.push(ash.commands.register('test.node', async (action,input) => {
+ if (action === 'store') { await context.secrets.store('token',input); return null; }
+ if (action === 'delete') return context.secrets.delete('token');
+ if (action === 'methods') return Object.keys(context.secrets).sort();
+ return {value:await context.secrets.get('token')};
+}));`, 'extension.cjs', ['command'], frame => {
+		const request = frame.operation.request;
+		let response;
+		if (request.service === 'secretLoad') response = { service: 'secretLoaded', value };
+		if (request.service === 'secretStore') { assert.equal(request.key, 'token'); value = request.value; response = { service: 'secretStored' }; }
+		if (request.service === 'secretDelete') { const deleted = value !== null; value = null; response = { service: 'secretDeleted', deleted }; }
+		assert.ok(response); return { result: 'coreService', response };
+	});
+	assert.deepEqual((await h.invoke('test.node', ['get']).result).body.body.payload, {});
+	await h.invoke('test.node', ['store', '你好']).result;
+	assert.deepEqual(value, [...new TextEncoder().encode('你好')]);
+	assert.deepEqual((await h.invoke('test.node', ['get']).result).body.body.payload, { value: '你好' });
+	value = [...new TextEncoder().encode('changed elsewhere')];
+	assert.deepEqual((await h.invoke('test.node', ['get']).result).body.body.payload, { value: 'changed elsewhere' });
+	await h.invoke('test.node', ['store', '']).result;
+	assert.deepEqual((await h.invoke('test.node', ['get']).result).body.body.payload, { value: '' });
+	assert.equal((await h.invoke('test.node', ['delete']).result).body.body.payload, true);
+	assert.equal((await h.invoke('test.node', ['delete']).result).body.body.payload, false);
+	assert.deepEqual((await h.invoke('test.node', ['methods']).result).body.body.payload, ['delete', 'get', 'store']);
+});
+
+test('ordinary state provides only key get/update and distinguishes null from deletion', { timeout: 10000 }, async t => {
+	const values = new Map();
+	const h = await host(t, `const ash=require('@ash/sdk'); exports.activate=context=>context.subscriptions.push(ash.commands.register('test.node',async(action,key,value)=>{
+ if(action==='methods') return Object.keys(context.storage).sort();
+ if(action==='get') return {value:await context.storage.get(key)};
+ await context.storage.update(key,action==='delete'?undefined:value); return null;
+}));`, 'extension.cjs', ['command'], frame => {
+		const r = frame.operation.request;
+		if (r.service === 'storageGet') return { result: 'coreService', response: { service: 'storageValue', found: values.has(r.key), value: values.get(r.key) ?? null } };
+		if (r.service === 'storageSet') values.set(r.key, r.value);
+		else if (r.service === 'storageDelete') values.delete(r.key);
+		else assert.fail('Unexpected private operation');
+		return { result: 'coreService', response: { service: 'storageUpdated' } };
+	});
+	assert.deepEqual((await h.invoke('test.node', ['get', 'nothing']).result).body.body.payload, {});
+	await h.invoke('test.node', ['set', 'nothing', null]).result;
+	assert.deepEqual((await h.invoke('test.node', ['get', 'nothing']).result).body.body.payload, { value: null });
+	values.set('nothing', 'changed elsewhere');
+	assert.deepEqual((await h.invoke('test.node', ['get', 'nothing']).result).body.body.payload, { value: 'changed elsewhere' });
+	await h.invoke('test.node', ['delete', 'nothing']).result;
+	assert.deepEqual((await h.invoke('test.node', ['get', 'nothing']).result).body.body.payload, {});
+	assert.deepEqual((await h.invoke('test.node', ['methods']).result).body.body.payload, ['get', 'update']);
+});
+
+test('state and secrets reject invalid values without sending private requests', { timeout: 10000 }, async t => {
+	const h = await host(t, `const ash=require('@ash/sdk'); exports.activate=context=>context.subscriptions.push(ash.commands.register('test.node',async()=>{
+ const s=context.secrets, v=context.storage;
+ const invalid=[()=>s.get(''),()=>s.get('x'.repeat(257)),()=>s.get('bad\\0key'),()=>s.get(1),()=>s.store('token',{}),()=>s.store('token','x'.repeat(65537)),()=>s.delete(null),()=>v.get(''),()=>v.update('bad\\0key',1),()=>v.update('x',NaN),()=>v.update('x',{lost:undefined}),()=>v.update('x',()=>{})];
+ let count=0; for(const call of invalid){try{await call();}catch{count++;}} return count;
+}));`);
+	assert.equal((await h.invoke('test.node', []).result).body.body.payload, 12);
+	assert.deepEqual(h.clientCalls, []);
+});
+
+test('state and secrets cancellation suppress late replies and never replay writes', { timeout: 10000 }, async t => {
+	for (const kind of ['storage', 'secrets']) {
+		const call = kind === 'storage' ? "context.storage.update('key',true)" : "context.secrets.store('key','synthetic')";
+		const h = await host(t, `const ash=require('@ash/sdk'); exports.activate=context=>{
+ context.subscriptions.push(ash.commands.register('test.node',async()=>{try{await ${call}; return 'written';}catch(error){return error.code;}}));
+ context.subscriptions.push(ash.commands.register('test.second',()=> 'alive'));
+};`);
+		const pending = h.invoke('test.node', []);
+		while (!h.clientCalls.length) { if (t.signal.aborted) throw new Error('Test aborted'); await new Promise(resolve => setTimeout(resolve, 2)); }
+		const request = h.clientCalls[0];
+		await h.request('cancel', { targetRequestId: pending.requestId, reason: 'caller' }).result;
+		assert.equal((await pending.result).body.body.payload, 'cancelled');
+		h.send({ context: request.context, callId: request.callId, outcome: { Ok: { result: 'coreService', response: { service: kind === 'storage' ? 'storageUpdated' : 'secretStored' } } } });
+		assert.equal((await h.invoke('test.second', []).result).body.body.payload, 'alive');
+		const denied = h.invoke('test.node', []);
+		while (h.clientCalls.length < 2) { if (t.signal.aborted) throw new Error('Test aborted'); await new Promise(resolve => setTimeout(resolve, 2)); }
+		const next = h.clientCalls[1]; h.send({ context: next.context, callId: next.callId, outcome: { Err: { code: 'permissionDenied', message: 'retired' } } });
+		assert.equal((await denied.result).body.body.payload, 'permissionDenied');
+		assert.equal(h.clientCalls.length, 2);
+	}
+});
+
+test('configuration writes use explicit owner targets, resets and authoritative change events', { timeout: 10000 }, async t => {
+	const h = await host(t, `import * as ash from '@ash/sdk';
+const captured = ash.workspace.getConfiguration('sample');
+const changes = [];
+export function activate(context) {
+ context.subscriptions.push(ash.workspace.onDidChangeConfiguration(event => changes.push(event.affectsConfiguration('sample.enabled'))));
+ context.subscriptions.push(ash.commands.register('test.node', async (target, value, reset) => {
+  await captured.update('enabled', reset ? undefined : value, target);
+  return { captured: captured.get('enabled', 'missing'), current: ash.workspace.getConfiguration('sample').get('enabled', 'missing'), changes: [...changes] };
+ }));
+ context.subscriptions.push(ash.commands.register('test.second', () => ({ captured: captured.get('enabled', 'missing'), current: ash.workspace.getConfiguration('sample').get('enabled', 'missing'), changes: [...changes] })));
+}`, 'extension.mjs', ['command'], () => ({ result: 'done' }));
+	assert.deepEqual((await h.invoke('test.node', ['workspace', false, false]).result).body.body.payload, { captured: 'missing', current: 'missing', changes: [] });
+	assert.deepEqual(h.clientCalls[0].operation, { operation: 'updateConfiguration', section: 'sample.enabled', value: false, target: 'workspace' });
+	// A successful write does not create a second configuration owner in the SDK.
+	const data = { defaults: { contents: {}, keys: [], overrides: [] }, workspace: { contents: { sample: { enabled: false } }, keys: ['sample.enabled'], overrides: [] }, folders: [] };
+	assert.equal((await h.request('invoke', { extensionId: 'test.node', registrationId: 'ash.workspace.events', operation: 'workspaceEvent', payload: { type: 'configuration', revision: 1, emit: true, configurationValues: { sample: { enabled: false } }, configurationData: data, change: { keys: ['sample.enabled'], overrides: [] } }, deadlineUnixMillis: Date.now() + 30000 }).result).status, 'success');
+	assert.deepEqual((await h.invoke('test.second', []).result).body.body.payload, { captured: 'missing', current: false, changes: [true] });
+	await h.invoke('test.node', ['user', { label: '你好', values: [0, '', null] }, false]).result;
+	assert.deepEqual(h.clientCalls[1].operation, { operation: 'updateConfiguration', section: 'sample.enabled', value: { label: '你好', values: [0, '', null] }, target: 'user' });
+	await h.invoke('test.node', ['workspace', null, true]).result;
+	assert.deepEqual(h.clientCalls[2].operation, { operation: 'resetConfiguration', section: 'sample.enabled', target: 'workspace' });
+	await h.invoke('test.node', ['user', null, false]).result;
+	assert.deepEqual(h.clientCalls[3].operation, { operation: 'updateConfiguration', section: 'sample.enabled', value: null, target: 'user' });
+});
+
+test('configuration writes reject unsupported scopes and lossy JSON without sending requests', { timeout: 10000 }, async t => {
+	const h = await host(t, `const ash = require('@ash/sdk'); exports.activate = context => context.subscriptions.push(ash.commands.register('test.node', async () => {
+ const config = ash.workspace.getConfiguration('sample');
+ const circular = {}; circular.self = circular;
+ const invalid = [
+  () => config.update('enabled', true),
+  () => config.update('enabled', true, 'folder'),
+  () => config.update('enabled', true, false),
+  () => config.update(null, true, 'user'),
+  () => config.update('bad\\0key', true, 'user'),
+  () => ash.workspace.getConfiguration().update('', true, 'user'),
+  () => ash.workspace.getConfiguration('sample', {languageId:'typescript'}).update('enabled', true, 'workspace'),
+  ...[NaN, Infinity, {nested:undefined}, [undefined], () => {}, Symbol('value'), 1n, circular, new Map()].map(value => () => config.update('enabled', value, 'user')),
+ ];
+ let rejected = 0;
+ for (const update of invalid) { try { await update(); } catch { rejected++; } }
+ return { rejected, total: invalid.length };
+}));`);
+	const { rejected, total } = (await h.invoke('test.node', []).result).body.body.payload;
+	assert.equal(rejected, total);
+	assert.equal(total, 16);
+	assert.deepEqual(h.clientCalls, []);
+});
+
+test('configuration owner failures and cancellation propagate without replaying writes', { timeout: 10000 }, async t => {
+	const h = await host(t, `const ash = require('@ash/sdk'); exports.activate = context => {
+ context.subscriptions.push(ash.commands.register('test.node', async () => { try { await ash.workspace.getConfiguration('sample').update('enabled', true, 'workspace'); } catch(error) { return {code:error.code, message:error.message}; } }));
+ context.subscriptions.push(ash.commands.register('test.second', () => 'alive'));
+};`);
+	const first = h.invoke('test.node', []);
+	while (h.clientCalls.length < 1) { if (t.signal.aborted) throw new Error('Test aborted'); await new Promise(resolve => setTimeout(resolve, 2)); }
+	const rejected = h.clientCalls[0];
+	h.send({ context: rejected.context, callId: rejected.callId, outcome: { Err: { code: 'denied', message: 'Configuration is managed by policy' } } });
+	assert.deepEqual((await first.result).body.body.payload, { code: 'denied', message: 'Configuration is managed by policy' });
+	const pending = h.invoke('test.node', []);
+	while (h.clientCalls.length < 2) { if (t.signal.aborted) throw new Error('Test aborted'); await new Promise(resolve => setTimeout(resolve, 2)); }
+	const cancelled = h.clientCalls[1];
+	await h.request('cancel', { targetRequestId: pending.requestId, reason: 'caller' }).result;
+	assert.equal((await pending.result).body.body.payload.code, 'cancelled');
+	h.send({ context: cancelled.context, callId: cancelled.callId, outcome: { Ok: { result: 'done' } } });
+	assert.equal((await h.invoke('test.second', []).result).body.body.payload, 'alive');
+	assert.equal(h.clientCalls.length, 2);
+});
+
 test('live window events update synchronous snapshots, preserve folder handles and respect configuration scopes', { timeout: 10000 }, async t => {
 	const h = await host(t, `const v = require('@ash/sdk');
 const original = v.workspace.workspaceFolders[0];

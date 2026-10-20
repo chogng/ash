@@ -113,8 +113,10 @@ and its declarations define actual fields and supported overloads.
 
 JSON command results preserve null and falsy values; void results become undefined.
 Callback requests are drained before retirement. Node activation/background requests use the
-same bound client services under the activation lifetime. Configuration writes, secrets and
-unified authentication author APIs remain unimplemented. Completion resolve callbacks,
+same bound client services under the activation lifetime. Configuration writes explicitly select
+the user or workspace layer through the existing client configuration owner; undefined resets
+that layer. Folder and language-override writes and unified authentication author APIs
+remain unimplemented. Completion resolve callbacks,
 command-bearing items, insert/replace ranges and unsupported kinds are excluded from the API.
 
 The shared facade also translates definition, references, rename, symbols, folding, links,
@@ -186,8 +188,12 @@ Activation receives the existing lifetime-owned `subscriptions`, the captured pa
 `extensionUri`/`extensionPath`, `asAbsolutePath`, production mode and its own Extension
 metadata. Its activation promise and exported API keep their identity; exports become
 available after activation completes. `Uri.joinPath` resolves resource paths while
-preserving URI query and fragment. Persistent mementos, storage directories, secrets
-and environment-variable collections remain ExtensionContext gaps.
+preserving URI query and fragment. `context.storage.get/update` supplies ordinary profile
+JSON values through private key operations. SQLite owns each atomic key update and values
+are read without caching. `context.secrets.get/store/delete` uses the existing SecretStore
+with host-bound extension namespaces. No snapshot, revision/CAS or change cursor API is
+exposed. Revocation retires old access even after regrant; uncertain writes are never replayed.
+Workspace state and storage directories remain ExtensionContext gaps.
 Service calls require an active command, provider or document-event
 callback. Missing module/API accesses fail explicitly.
 
@@ -265,7 +271,8 @@ Public change events update synchronous reads before firing. Configuration objec
 creation snapshots, scoped `affectsConfiguration` compares effective values including policy and
 language overrides, and surviving workspace folders retain their handles when name/index change.
 Each supervised Node incarnation queries the bound window again before package evaluation,
-including crash recovery. Configuration mutation and full ExtensionContext remain incomplete.
+including crash recovery. Configuration update/reset and text-only `workspace.applyEdit` use
+the same typed client operations in V8 and Node. Full ExtensionContext remains incomplete.
 
 The standard Node host loads the manifest's `l10n` directory for that window language before
 evaluating the extension. `env.language` comes from the Workbench NLS owner. `l10n.t` supports

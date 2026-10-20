@@ -341,6 +341,8 @@ pub struct AppServer {
     pub(super) plugins: Option<ash_core_plugins::PluginActivationAuthority>,
     extension_hosts: Option<extension_host_runtime::ExtensionHostRuntime>,
     built_in_editor_extensions: extension_host_runtime::source::BuiltInEditorExtensions,
+    extension_state: Option<Arc<ash_state::SqliteExtensionStateStore>>,
+    extension_secrets: Option<Arc<dyn ash_secrets::SecretStore>>,
     pub(super) plugin_package_service: Option<Arc<dyn ash_core_plugins::ExtensionPackageService>>,
     plugins_manager: Option<Arc<ash_core_plugins::ExtensionPackageManager>>,
     extension_packages_editor_extension_admission:
@@ -645,6 +647,14 @@ impl ConnectionNotifications {
 }
 
 impl AppServer {
+    pub(crate) fn with_extension_state_store(
+        mut self,
+        store: Arc<ash_state::SqliteExtensionStateStore>,
+    ) -> Self {
+        self.extension_state = Some(store);
+        self
+    }
+
     fn task_delivery_processor(&self) -> task_delivery_processor::TaskDeliveryRequestProcessor<'_> {
         task_delivery_processor::TaskDeliveryRequestProcessor::new(
             &self.task_delivery,
@@ -1301,6 +1311,8 @@ impl AppServer {
             mcp_oauth: None,
             plugins: None,
             extension_hosts: None,
+            extension_state: None,
+            extension_secrets: None,
             built_in_editor_extensions:
                 extension_host_runtime::source::BuiltInEditorExtensions::Omitted,
             plugin_package_service: None,
@@ -2162,6 +2174,12 @@ impl AppServer {
             Default::default(),
         )
         .map_err(|error| error.to_string())?;
+        if let Some(storage) = &self.extension_state {
+            runtime.bind_storage(Arc::clone(storage));
+        }
+        if let Some(secrets) = &self.extension_secrets {
+            runtime.bind_secrets(Arc::clone(secrets));
+        }
         if let Some(authorization) = self.extension_dir_authorization() {
             runtime
                 .bind_dir(authorization)
@@ -2481,6 +2499,10 @@ impl AppServer {
     }
 
     pub(crate) fn with_secret_store(mut self, store: Arc<dyn ash_secrets::SecretStore>) -> Self {
+        self.extension_secrets = Some(store.clone());
+        if let Some(runtime) = &self.extension_hosts {
+            runtime.bind_secrets(store.clone());
+        }
         self.channels.set_secret_store(store.clone());
         self.secret_processor = secret_operations::SecretRequestProcessor::new(store);
         self

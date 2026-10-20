@@ -8,6 +8,46 @@ use serde_json::Value;
 use serde_json::json;
 
 #[test]
+fn private_storage_contract_has_only_key_operations_and_redacts_secrets() {
+    for request in [
+        json!({"service":"storageGet","key":"one"}),
+        json!({"service":"storageSet","key":"one","value":null}),
+        json!({"service":"storageDelete","key":"one"}),
+        json!({"service":"secretLoad","key":"token"}),
+        json!({"service":"secretStore","key":"token","value":[1,2,3]}),
+        json!({"service":"secretDelete","key":"token"}),
+    ] {
+        let wire = json!({"operation":"coreService","request":request});
+        let operation: ExtensionClientOperation = serde_json::from_value(wire.clone()).unwrap();
+        assert_eq!(serde_json::to_value(&operation).unwrap(), wire);
+        assert!(!format!("{operation:?}").contains("token"));
+        let mut forged = wire;
+        forged["request"]["namespace"] = json!("other");
+        assert!(serde_json::from_value::<ExtensionClientOperation>(forged).is_err());
+    }
+    for service in ["storageRead", "storageUpdate", "secretChanges"] {
+        assert!(
+            serde_json::from_value::<ExtensionClientOperation>(
+                json!({"operation":"coreService","request":{"service":service}})
+            )
+            .is_err()
+        );
+    }
+    let response = crate::services::CoreServiceResponse::StorageValue {
+        value: Value::Null,
+        found: true,
+    };
+    assert_eq!(
+        serde_json::to_value(response).unwrap(),
+        json!({"service":"storageValue","value":null,"found":true})
+    );
+    let response = crate::services::CoreServiceResponse::SecretLoaded {
+        value: Some(b"synthetic-secret".to_vec()),
+    };
+    assert_eq!(format!("{response:?}"), "CoreServiceResponse([REDACTED])");
+}
+
+#[test]
 fn backend_state_watch_is_opt_in_and_keeps_legacy_calls_unchanged() {
     for wire in [
         json!({"operation":"backendState","capability":"git.repository","after":3}),

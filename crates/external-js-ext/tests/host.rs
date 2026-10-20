@@ -1,3 +1,4 @@
+use std::collections::BTreeMap;
 use std::num::NonZeroU64;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -3432,6 +3433,216 @@ fn ash_workspace_and_configuration_are_synchronous_during_package_evaluation_and
     assert_eq!(
         value,
         serde_json::json!({"top":false,"uri":"file:///workspace","name":"Workspace","index":0})
+    );
+}
+
+#[test]
+fn ash_configuration_writes_use_the_client_owner_and_preserve_denials() {
+    let running = start_ash(r#"
+        const ash = require('@ash/sdk');
+        exports.activate = context => context.subscriptions.push(ash.commands.register('example.probe', async () => {
+            const configuration = ash.workspace.getConfiguration('sample');
+            try {
+                await configuration.update('enabled', true, 'user');
+                await configuration.update('enabled', undefined, 'workspace');
+                return configuration.get('enabled');
+            } catch (error) { return { code: error.code }; }
+        }));
+    "#).unwrap();
+    let mut operations = Vec::new();
+    let result = running
+        .supervisor
+        .begin_invoke(invocation("probe", json!([]), Duration::from_secs(5)))
+        .unwrap()
+        .wait_with_client(|operation, _, _| {
+            operations.push(serde_json::to_value(operation).unwrap());
+            Ok(ExtensionClientResult::Done)
+        })
+        .unwrap();
+    assert_eq!(
+        result.payload,
+        json!(false),
+        "writes do not mutate the SDK read snapshot"
+    );
+    assert_eq!(
+        operations,
+        vec![
+            json!({"operation":"updateConfiguration","section":"sample.enabled","value":true,"target":"user"}),
+            json!({"operation":"resetConfiguration","section":"sample.enabled","target":"workspace"}),
+        ]
+    );
+    let mut rejected = 0;
+    let result = running
+        .supervisor
+        .begin_invoke(invocation("probe", json!([]), Duration::from_secs(5)))
+        .unwrap()
+        .wait_with_client(|_, _, _| {
+            rejected += 1;
+            Err(external_ext_protocol::HostFailure {
+                code: HostErrorCode::PermissionDenied,
+                message: "managed configuration".into(),
+            })
+        })
+        .unwrap();
+    assert_eq!(result.payload, json!({"code":"permissionDenied"}));
+    assert_eq!(
+        rejected, 1,
+        "failed writes are not retried and do not reset another target"
+    );
+    assert_eq!(
+        running.supervisor.snapshot().status,
+        ExtensionHostStatus::Ready
+    );
+}
+
+#[test]
+fn ash_workspace_text_edits_reach_the_client_with_document_version_and_utf16_ranges() {
+    let running = start_ash(r#"
+        const ash = require('@ash/sdk');
+        exports.activate = context => context.subscriptions.push(ash.commands.register('example.probe', async () => {
+            const edit = new ash.WorkspaceEdit();
+            edit.replace(ash.Uri.file('/workspace/data.ts'), new ash.Range(0, 2, 0, 4), '你好');
+            return ash.workspace.applyEdit(edit);
+        }));
+    "#).unwrap();
+    for applied in [true, false] {
+        let mut edits = 0;
+        let result = running
+            .supervisor
+            .begin_invoke(invocation("probe", json!([]), Duration::from_secs(5)))
+            .unwrap()
+            .wait_with_client(|operation, _, _| match operation {
+                ExtensionClientOperation::ReadDocument { uri } => {
+                    assert_eq!(uri, "file:///workspace/data.ts");
+                    Ok(ExtensionClientResult::Document {
+                        document: ExtensionDocumentSnapshot {
+                            uri,
+                            version: 7,
+                            language_id: "typescript".into(),
+                            text: "😀ab".into(),
+                        },
+                    })
+                }
+                ExtensionClientOperation::ApplyEdit { documents } => {
+                    edits += 1;
+                    assert_eq!(serde_json::to_value(documents).unwrap(), json!([
+                        {"uri":"file:///workspace/data.ts","version":7,"edits":[
+                            {"start":{"line":0,"character":2},"end":{"line":0,"character":4},"text":"你好"}
+                        ]}
+                    ]));
+                    Ok(ExtensionClientResult::Applied { applied })
+                }
+                other => panic!("unexpected client operation: {other:?}"),
+            })
+            .unwrap();
+        assert_eq!(result.payload, json!(applied));
+        assert_eq!(edits, 1, "client edit rejection must not cause a replay");
+    }
+}
+
+#[test]
+fn ash_profile_storage_uses_only_key_operations_in_the_real_v8_host() {
+    use external_ext_protocol::services::CoreServiceRequest;
+    use external_ext_protocol::services::CoreServiceResponse;
+    let running = start_ash(r#"
+const ash = require('@ash/sdk');
+exports.activate = context => context.subscriptions.push(ash.commands.register('example.probe', async () => {
+ await context.storage.update('nothing', null);
+ const nothing = await context.storage.get('nothing');
+ await context.storage.update('old', undefined);
+ const missing = (await context.storage.get('old')) === undefined;
+ let blocked = false;
+ try { await globalThis.__ashRequest(globalThis.__ashInvocation(), JSON.stringify({operation:'coreService',request:{service:'credentialGet',providerId:'not-yours',host:'example.com',accountId:null}})); } catch { blocked = true; }
+ return { nothing, missing, blocked, methods:Object.keys(context.storage).sort() };
+}));
+"#).unwrap();
+    let mut values = BTreeMap::new();
+    let result = running
+        .supervisor
+        .begin_invoke(invocation("probe", json!([]), Duration::from_secs(5)))
+        .unwrap()
+        .wait_with_client(|operation, _, _| {
+            let response = match operation {
+                ExtensionClientOperation::CoreService {
+                    request: CoreServiceRequest::StorageSet { key, value },
+                } => {
+                    values.insert(key, value);
+                    CoreServiceResponse::StorageUpdated
+                }
+                ExtensionClientOperation::CoreService {
+                    request: CoreServiceRequest::StorageDelete { key },
+                } => {
+                    values.remove(&key);
+                    CoreServiceResponse::StorageUpdated
+                }
+                ExtensionClientOperation::CoreService {
+                    request: CoreServiceRequest::StorageGet { key },
+                } => {
+                    let value = values.get(&key).cloned();
+                    CoreServiceResponse::StorageValue {
+                        found: value.is_some(),
+                        value: value.unwrap_or(Value::Null),
+                    }
+                }
+                other => panic!("unexpected operation: {other:?}"),
+            };
+            Ok(ExtensionClientResult::CoreService { response })
+        })
+        .unwrap();
+    assert_eq!(
+        result.payload,
+        json!({"nothing":null,"missing":true,"blocked":true,"methods":["get","update"]})
+    );
+}
+
+#[test]
+fn ash_private_secrets_use_only_get_store_delete_in_the_real_v8_host() {
+    use external_ext_protocol::services::CoreServiceRequest;
+    use external_ext_protocol::services::CoreServiceResponse;
+    let running = start_ash(r#"
+const ash = require('@ash/sdk');
+exports.activate = context => context.subscriptions.push(ash.commands.register('example.probe', async () => {
+ await context.secrets.store('token', '你好');
+ const matched = (await context.secrets.get('token')) === '你好';
+ const deleted = await context.secrets.delete('token');
+ return { matched, deleted, methods:Object.keys(context.secrets).sort() };
+}));
+"#).unwrap();
+    let result = running
+        .supervisor
+        .begin_invoke(invocation("probe", json!([]), Duration::from_secs(5)))
+        .unwrap()
+        .wait_with_client(|operation, _, _| {
+            let response = match operation {
+                ExtensionClientOperation::CoreService {
+                    request: CoreServiceRequest::SecretStore { key, value },
+                } => {
+                    assert_eq!(key, "token");
+                    assert_eq!(value, "你好".as_bytes());
+                    CoreServiceResponse::SecretStored
+                }
+                ExtensionClientOperation::CoreService {
+                    request: CoreServiceRequest::SecretLoad { key },
+                } => {
+                    assert_eq!(key, "token");
+                    CoreServiceResponse::SecretLoaded {
+                        value: Some("你好".as_bytes().to_vec()),
+                    }
+                }
+                ExtensionClientOperation::CoreService {
+                    request: CoreServiceRequest::SecretDelete { key },
+                } => {
+                    assert_eq!(key, "token");
+                    CoreServiceResponse::SecretDeleted { deleted: true }
+                }
+                other => panic!("unexpected operation: {other:?}"),
+            };
+            Ok(ExtensionClientResult::CoreService { response })
+        })
+        .unwrap();
+    assert_eq!(
+        result.payload,
+        json!({"matched":true,"deleted":true,"methods":["delete","get","store"]})
     );
 }
 
