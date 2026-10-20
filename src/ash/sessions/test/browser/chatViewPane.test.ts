@@ -122,6 +122,7 @@ import { productLanguagePackCatalogs } from '../../../workbench/services/localiz
 import { ChatTipService, IChatTipService } from '../../../workbench/contrib/chat/browser/chatTipService.js';
 import { BrowserLifecycleService } from '../../../workbench/services/lifecycle/browser/lifecycleService.js';
 import { ILifecycleService } from '../../../workbench/services/lifecycle/common/lifecycle.js';
+import { IChatWidgetService } from '../../../workbench/contrib/chat/browser/chat.js';
 
 const inputResources = new DisposableStore();
 const userDataProfile = new UserDataProfileService();
@@ -1135,6 +1136,7 @@ test('sending from one session preserves a later draft during first-session crea
 		editorServices,
 		recordingDialogService([]),
 		editorServices.get(IQuickInputService),
+		editorServices.get(IChatWidgetService),
 	);
 	widget.setVisible(true);
 	const input = widget.element.querySelector<HTMLElement>('.ash-chat-input-part');
@@ -1156,7 +1158,7 @@ test('sending from one session preserves a later draft during first-session crea
 	const chatModel = createWidgetModel(chat, { kind: 'untitled', session: chatSelection.session }, sessions);
 	using chatWidget = new ChatWidget(dom.window.document.body, 'separate-chat', chatModel, () => view.openNewSession(),
 		{ showContextMenu: () => undefined } as unknown as IContextMenuService, contextViewService, commands,
-		unavailableAccessibleViewService, notifications, undefined, undefined, undefined, (container, delegate) => editorServices.createInstance(NewChatInputWidget, container, delegate, chatModel), editorServices, recordingDialogService([]), editorServices.get(IQuickInputService));
+		unavailableAccessibleViewService, notifications, undefined, undefined, undefined, (container, delegate) => editorServices.createInstance(NewChatInputWidget, container, delegate, chatModel), editorServices, recordingDialogService([]), editorServices.get(IQuickInputService), editorServices.get(IChatWidgetService));
 	chatWidget.setVisible(true);
 	const chatDraft = { mode: 'agent' as const, text: 'Keep my Chat draft', contexts: [{ id: 'chat-file', kind: 'file', name: 'chat.txt', content: 'Chat context', resource: 'file:///workspace/chat.txt' }] };
 	chatWidget.restoreDraft(chatDraft);
@@ -4352,7 +4354,7 @@ test('Chat footer permission changes use the current model and confirm full acce
 		undefined, undefined, undefined, (container, delegate) => {
 			delegates.push(delegate);
 			return services.createInstance(ChatInputPart, container, delegate, {} as IContextMenuService, contextView, unavailableAccessibleViewService, notifications, ChatInputEditors, [], { modePicker: 'visible', modelPickerPosition: 'leading' });
-		}, services, dialogs, services.get(IQuickInputService));
+		}, services, dialogs, services.get(IQuickInputService), services.get(IChatWidgetService));
 	const delegate = delegates[0]!;
 	assert.ok(delegate.selectApprovalMode);
 	await delegate.selectApprovalMode('auto');

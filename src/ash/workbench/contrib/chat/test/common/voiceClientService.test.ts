@@ -7,6 +7,32 @@ import { isCancellationError } from '../../../../../base/common/errors.js';
 import type { IAgentVoiceService } from '../../../../../platform/agentHost/common/agentService.js';
 import type { AgentVoiceSessionState, AgentVoiceSource, AgentVoiceTaskRequest } from '../../../../../platform/agentHost/common/agent.js';
 import { VoiceSessionController } from '../../browser/voiceClient/voiceSessionController.js';
+import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
+import { JSDOM } from 'jsdom';
+import { Event } from '../../../../../base/common/event.js';
+import { toDisposable } from '../../../../../base/common/lifecycle.js';
+import { ChatWidgetService } from '../../browser/widget/chatWidgetService.js';
+import type { IChatWidget } from '../../browser/chat.js';
+
+ensureNoDisposablesAreLeakedInTestSuite();
+
+test('Chat widget targeting belongs to one window and releases each registered focus listener', () => {
+	const dom = new JSDOM('<!doctype html><body><input></body>');
+	using close = toDisposable(() => dom.window.close());
+	using firstWindow = new ChatWidgetService();
+	using secondWindow = new ChatWidgetService();
+	const input = dom.window.document.querySelector('input')!;
+	const widget: IChatWidget = { domNode: input, visible: true, inputEditor: undefined, isTranscriptProgressActive: false, onDidHide: Event.None, onDidChangeViewModel: Event.None, startVoiceConversation: async () => { throw new Error('Unexpected voice mode'); } };
+	using registration = firstWindow.register(widget);
+	input.focus();
+	assert.equal(firstWindow.lastFocusedWidget, widget);
+	assert.equal(secondWindow.lastFocusedWidget, undefined);
+	registration.dispose();
+	input.blur();
+	input.focus();
+	assert.equal(firstWindow.lastFocusedWidget, undefined);
+	assert.deepEqual(firstWindow.getAllWidgets(), []);
+});
 
 class Voice extends Disposable implements IAgentVoiceService {
 	readonly changes = this._register(new Emitter<void>()); readonly onDidChange = this.changes.event;
@@ -127,4 +153,38 @@ test('Voice tasks arriving before the start receipt are delivered only for its a
 	using voice = new EarlyVoice(); const sent: string[] = [];
 	using client = new VoiceSessionController(async task => { sent.push(task.commandId); }, error => { throw error; }, undefined, voice); client.setSource(source);
 	await client.connect(gesture); await Promise.resolve(); assert.deepEqual(sent, ['command']);
+});
+
+test('a retired Voice lookup cannot clear a replacement connection receipt during disconnect', async () => {
+	const receipt = new DeferredPromise<AgentVoiceSessionState>();
+	const entered = new DeferredPromise<void>();
+	class PendingVoice extends Voice {
+		override async start(): Promise<AgentVoiceSessionState> {
+			this.starts++;
+			void entered.complete();
+			return receipt.p;
+		}
+	}
+	using voice = new PendingVoice();
+	const options = new DeferredPromise<Awaited<ReturnType<Voice['getOptions']>>>();
+	voice.options = options.p;
+	using owner = new VoiceSessionController(async () => { }, error => { throw error; }, undefined, voice);
+	owner.setSource(source);
+	const first = owner.connect(gesture);
+	const rejectedFirst = assert.rejects(first, isCancellationError);
+	await owner.disconnect();
+	voice.options = Promise.resolve([{ connectionId: 'voice', name: 'Voice', defaultModel: 'speech', models: [] }]);
+	const second = owner.connect(gesture);
+	const rejectedSecond = assert.rejects(second, isCancellationError);
+	await entered.p;
+	await options.complete([]);
+	await rejectedFirst;
+	let disconnected = false;
+	const stopping = owner.disconnect().then(() => { disconnected = true; });
+	await Promise.resolve();
+	await Promise.resolve();
+	assert.equal(disconnected, false, 'disconnect must wait for its own start receipt');
+	await receipt.complete({ ...source, resourceId: 'replacement', mediaEpoch: 1, sequence: 1, state: 'ended', inputMode: 'openMic', muted: false, listening: false, inputSequence: 0, usageMilliseconds: 0 });
+	await Promise.all([stopping, rejectedSecond]);
+	assert.equal(owner.isActive, false);
 });

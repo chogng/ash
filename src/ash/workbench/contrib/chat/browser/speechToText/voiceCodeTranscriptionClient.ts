@@ -32,7 +32,7 @@ export interface IVoiceCodeTranscriptionClient {
 	readonly onDidClose: Event<number>;
 	readonly isConnected: boolean;
 	connect(window: Window & typeof globalThis, authToken: string): Promise<void>;
-	startSession(): Promise<void>;
+	startSession(options?: { readonly backend: DictationBackend; readonly language: string | null; }): Promise<void>;
 	sendPttStart(turnId: string): void;
 	sendPttAudioChunk(turnId: string, audio: string): void;
 	sendPttEnd(turnId: string): void;
@@ -43,6 +43,8 @@ interface TranscriptionTurn {
 	readonly id: string;
 	readonly resourceId: string;
 	operations: Promise<void>;
+	started: Promise<void>;
+	accepted: boolean;
 	queuedBytes: number;
 	revision: number;
 	text: string;
@@ -113,12 +115,12 @@ export class VoiceCodeTranscriptionClient extends Disposable implements IVoiceCo
 		this.connected = true;
 	}
 
-	public async startSession(): Promise<void> {
+	public async startSession(options?: { readonly backend: DictationBackend; readonly language: string | null; }): Promise<void> {
 		this.requireConnection();
 		if (this.active) throw new Error(localize('dictation.alreadyActive', 'Dictation is already active'));
 		if (this.session && !this.session.claimed) throw new Error(localize('dictation.alreadyActive', 'Dictation is already active'));
-		const backend = dictationBackend(this.configuration);
-		const language = dictationInputOptions(this.configuration, backend.type).language;
+		const backend = options?.backend ?? dictationBackend(this.configuration);
+		const language = options ? options.language : dictationInputOptions(this.configuration, backend.type).language;
 		const resourceId = generateUuid();
 		const session: NonNullable<VoiceCodeTranscriptionClient['session']> = {
 			backend, language, resourceId, claimed: false, operations: this.release.then(() => {
@@ -147,12 +149,14 @@ export class VoiceCodeTranscriptionClient extends Disposable implements IVoiceCo
 		if (session.error) throw new Error(session.error);
 		const primed = !session.claimed;
 		session.claimed = true;
-		const turn: TranscriptionTurn = { id: turnId, resourceId: primed ? session.resourceId : generateUuid(), operations: primed ? session.operations : this.release, queuedBytes: 0, revision: 0, text: '', stopping: false };
+		const turn: TranscriptionTurn = { id: turnId, resourceId: primed ? session.resourceId : generateUuid(), operations: primed ? session.operations : this.release, started: primed ? session.operations : this.release, accepted: primed, queuedBytes: 0, revision: 0, text: '', stopping: false };
 		this.active = turn;
 		if (!primed) this.enqueue(turn, async () => {
 			await this.backend!.start(turn.resourceId, { backend: session.backend, language: session.language });
+			turn.accepted = true;
 			if (this.active !== turn) await this.backend!.cancel(turn.resourceId);
 		});
+		turn.started = turn.operations;
 	}
 
 	public sendPttAudioChunk(turnId: string, audio: string): void {
@@ -192,7 +196,12 @@ export class VoiceCodeTranscriptionClient extends Disposable implements IVoiceCo
 		this.active = undefined;
 		if (turn && this.backend) {
 			// Cancel bypasses queued audio and stop, including a pending subscription upload.
-			this.release = Promise.all([turn.operations, this.backend.cancel(turn.resourceId).catch(() => undefined)]).then(() => undefined);
+			const backend = this.backend;
+			this.release = Promise.all([
+				backend.cancel(turn.resourceId).catch(() => undefined),
+				// Wait only for acquisition. A cancelled stop/upload is no longer a release barrier.
+				turn.accepted ? undefined : turn.started.then(() => backend.cancel(turn.resourceId)).catch(() => undefined),
+			]).then(() => undefined);
 		} else if (session && !session.claimed && this.backend) {
 			const backend = this.backend;
 			this.release = Promise.all([

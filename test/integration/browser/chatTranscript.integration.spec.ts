@@ -1533,3 +1533,64 @@ for (const cowork of [false, true]) {
 		});
 	}
 }
+
+for (const locale of ['en', 'zh-CN']) for (const cowork of [false, true]) {
+	test(`${cowork ? 'Cowork' : 'Chat'} dictation commands target their retained input and cancel on navigation in ${locale}`, async ({ page }) => {
+		await page.goto(`/chatTranscript.html?locale=${locale}&richInput`);
+		await page.evaluate(cowork => window.ashChatTranscriptIntegration.prepareDictation(cowork), cowork);
+		const input = page.locator('#app-chat .ash-chat-input-part .stanza-editor-input');
+		await input.focus();
+		await page.evaluate(() => window.ashChatTranscriptIntegration.runDictation(true));
+		expect((await page.evaluate(() => window.ashChatTranscriptIntegration.dictationState())).starts).toBe(1);
+		const originalFile = (await page.evaluate(() => window.ashChatTranscriptIntegration.dictationState())).file;
+		await page.evaluate(() => window.ashChatTranscriptIntegration.dictationEvent('spoken draft'));
+		await expect.poll(() => page.evaluate(() => window.ashChatTranscriptIntegration.chatDraft())).toBe('spoken draft');
+		await expect.poll(() => page.evaluate(() => window.ashChatTranscriptIntegration.dictationState())).toMatchObject({ widgets: 1, focused: true, busy: true, file: originalFile });
+		await page.evaluate(() => window.ashChatTranscriptIntegration.retireChat());
+		await expect.poll(() => page.evaluate(() => window.ashChatTranscriptIntegration.dictationState())).toMatchObject({ cancels: 1, busy: false });
+		const replacementDraft = await page.evaluate(() => window.ashChatTranscriptIntegration.chatDraft());
+		await page.evaluate(() => window.ashChatTranscriptIntegration.dictationEvent('late old speech'));
+		await expect.poll(() => page.evaluate(() => window.ashChatTranscriptIntegration.chatDraft())).toBe(replacementDraft);
+		expect(await page.evaluate(() => window.ashChatTranscriptIntegration.chatMessages())).toEqual([]);
+		await page.evaluate(() => window.ashChatTranscriptIntegration.setChatVisible(false));
+		await page.evaluate(() => window.ashChatTranscriptIntegration.runDictation());
+		expect((await page.evaluate(() => window.ashChatTranscriptIntegration.dictationState())).starts).toBe(1);
+	});
+}
+
+for (const locale of ['en', 'zh-CN']) for (const cowork of [false, true]) for (const backend of ['local', 'cloud'] as const) {
+	test(`${cowork ? 'Cowork' : 'Chat'} built-in ${backend} ASR flushes before final writeback and cancels a stalled stop in ${locale}`, async ({ page }) => {
+		await page.goto(`/chatTranscript.html?locale=${locale}&richInput&builtinBackend=${backend}`);
+		await page.evaluate(({ cowork, backend }) => window.ashChatTranscriptIntegration.prepareBuiltinDictation(cowork, backend), { cowork, backend });
+		const input = page.locator('#app-chat .ash-chat-input-part .stanza-editor-input');
+		await input.focus();
+		await page.evaluate(() => window.ashChatTranscriptIntegration.runDictation());
+		await page.evaluate(() => {
+			window.ashChatTranscriptIntegration.builtinDictationEvent('interim only');
+			window.ashChatTranscriptIntegration.builtinAudioTail();
+		});
+		expect(await page.evaluate(() => window.ashChatTranscriptIntegration.chatDraft())).toBeUndefined();
+		await page.evaluate(() => window.ashChatTranscriptIntegration.runDictation());
+		await expect.poll(() => page.evaluate(() => window.ashChatTranscriptIntegration.chatDraft())).toBe('built-in final');
+		expect((await page.evaluate(() => window.ashChatTranscriptIntegration.builtinDictationState())).operations.slice(0, 3)).toEqual(['start', 'audio:6', 'stop']);
+		await page.evaluate(() => window.ashChatTranscriptIntegration.runDictation());
+		await page.evaluate(() => window.ashChatTranscriptIntegration.holdBuiltinStop());
+		const stopping = page.evaluate(() => window.ashChatTranscriptIntegration.runDictation());
+		await expect.poll(() => page.evaluate(() => window.ashChatTranscriptIntegration.builtinDictationState())).toMatchObject({ state: 'transcribing' });
+		await page.evaluate(() => window.ashChatTranscriptIntegration.retireChat());
+		await stopping;
+		await expect.poll(() => page.evaluate(() => window.ashChatTranscriptIntegration.builtinDictationState())).toMatchObject({ busy: false });
+		await input.focus();
+		await page.evaluate(() => window.ashChatTranscriptIntegration.runDictation());
+		const replacementDraft = await page.evaluate(() => window.ashChatTranscriptIntegration.chatDraft());
+		await page.evaluate(() => {
+			window.ashChatTranscriptIntegration.builtinDictationEvent('late retired transcript', true);
+			window.ashChatTranscriptIntegration.finishBuiltinStop();
+		});
+		await expect.poll(() => page.evaluate(() => window.ashChatTranscriptIntegration.builtinDictationState())).toMatchObject({ state: 'recording', busy: true });
+		expect(await page.evaluate(() => window.ashChatTranscriptIntegration.chatDraft())).toBe(replacementDraft);
+		expect(await page.evaluate(() => window.ashChatTranscriptIntegration.chatMessages())).toEqual([]);
+		await page.evaluate(() => window.ashChatTranscriptIntegration.setChatVisible(false));
+		await expect.poll(() => page.evaluate(() => window.ashChatTranscriptIntegration.builtinDictationState())).toMatchObject({ busy: false });
+	});
+}

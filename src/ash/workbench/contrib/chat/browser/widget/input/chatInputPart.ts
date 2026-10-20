@@ -117,6 +117,7 @@ export interface IChatDraftStorage {
 
 /** Input operations consumed by a Chat pane, independent of its product's composer layout. */
 export interface IChatInputPart extends IDisposable {
+	readonly inputEditor?: IChatInputEditor['codeEditor'];
 	readonly attachmentModel: ChatAttachmentModel;
 	readonly element: HTMLElement;
 	/** Retires asynchronous input work without clearing or restoring the next conversation’s draft. */
@@ -550,6 +551,8 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 	focus(): void {
 		this.input.focus();
 	}
+
+	get inputEditor(): IChatInputEditor['codeEditor'] { return this.input.codeEditor; }
 
 	addContext(attachment: ChatContextAttachment): void {
 		if (attachment.lifetime === 'source') this.attachmentModel.addContext(attachment);

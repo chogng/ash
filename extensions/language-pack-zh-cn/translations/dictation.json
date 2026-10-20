@@ -1,5 +1,7 @@
 {
   "ash": {
+    "dictation.finalizationTimeout": "转写超时，未返回文字。请重新录音。",
+    "dictation.chatCommandHelp": "“启动语音模式”会在最近聚焦且可见的 Chat 中开启实时模型对话。“听写消息”只将录音文字写入该 Chat 输入，不会发送。为“听写：按住录音”设置快捷键后，按住至少半秒再松开即可完成；短按会丢弃录音。隐藏或切换对话会取消该次录音。",
     "dictation.resetIntroduction": "听写：重置入门引导",
     "dictation.cloudModel.title": "转写模型",
     "dictation.cloudModel.description": "转写模型随所选服务切换。语音输入独立于聊天模型。",

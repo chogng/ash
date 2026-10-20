@@ -47,6 +47,7 @@ export function createAppServerLocalTranscriptionBackendService(client: AppServe
 		},
 		pushAudio: async (resourceId, chunk) => { await client.request(APP_SERVER_METHODS['dictation/audio'], { resourceId, audio: encodeBase64(chunk) }); },
 		stop: async resourceId => (await client.request(APP_SERVER_METHODS['dictation/stop'], { resourceId })).text,
+		cancel: async resourceId => { await client.request(APP_SERVER_METHODS['dictation/cancel'], { resourceId }); },
 	};
 }
 

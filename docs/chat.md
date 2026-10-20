@@ -62,6 +62,14 @@ Hook 事件类型归 `common/promptSyntax/hookTypes.ts`，读取与变更通知�
 
 ## Speech、听写与朗读
 
+内置语音有两条产品链：听写将麦克风音频交给 ASR，按配置使用本地、云端或订阅后端，只把转写写入当前输入，不自动发送；语音模式将音频交给实时语音大模型并播放回复，需要执行任务时通过原 Chat 模型交给 Core。标准扩展 Speech provider 是可选的听写／朗读后端，语音模式不依赖该扩展。上游 VoiceClient 的私有 transport 兼容不作为这两条内置产品链的前置条件。
+
+窗口级 `IChatWidgetService` 只登记活着的 Chat／Cowork widget 和最近焦点，不拥有模型或音频状态。Desktop 的 `workbench.action.chat.startVoiceChat` 通过该服务进入原 widget 的语音模式；听写 toggle／hold 命令使用同一目标选择，拒绝隐藏、已释放、准备阻塞、AI 禁用或其他窗口的目标。输入切换、隐藏和释放取消本次准备与录音。hold 在准备前监听松键：不足半秒取消，长按结束后转写，旧松键不能停止替代录音；脱离按键上下文调用 hold 不启动录音。provider 创建完成但尚未报告 Started 时保留输入绑定。
+
+模型无关的听写链路由现有 owner 闭合：配置在本次录音发布前解析并固定为领域选项，服务协调准备、启动、采音、转写、停止与取消，输入 owner 负责写回及会话隔离。PCM16 使用有符号小端编码，停止先 flush 尾包并排空上传，再取最终结果；本地／云端结果是累计快照，扩展结果按已确认片段累积。最终返回的空文字也具有权威性，本地最终事件等待停止回执；本地等待最终结果最多 8 秒，云端最多 35 秒，超时保留已流式返回的文字，无文字则报告错误并取消资源。取消绕过积压的音频或停止请求，新的后端获取等待旧取消回执；浏览器尚未返回的麦克风权限请求独立清理，迟到媒体流和旧会话事件不能影响替代录音。异步切换麦克风以最新选择为准，退休流立即释放。
+
+Ash 保留现有模型、供应商、推理运行时和凭据归属。当前本地默认是 Rust 后端的 Paraformer 模型包，云端选择是 OpenAI／xAI API 或 Codex 订阅，`dictation.model` 只表示本地模型包；本地服务使用受管缓存并拒绝尚不支持的 Foundry runtime、代理及语言参数。模型准备与缓存操作仍走原服务，未加入运行时或模型迁移。真实账户、物理设备与音质的验收范围见 TODO。
+
 | 职责             | 唯一 owner 与范围                                                                                                                                                  |
 | ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | 听写编排         | `browser/speechToText/chatSpeechToTextService.ts` 处理会话与累计转写，配置解析归 common constants                                                                  |
@@ -85,7 +93,7 @@ Desktop 只给已完成 Agent 回答提供 Read Aloud。`voiceChatActions.ts` �
 
 Profile 拥有媒体、模型及供应商；目录 Thread 通过原 gateway 的 canonical executionTarget 找到同一个 Core，不复制 Thread。开始设备前校验来源、archived 和取消；远端 SSH Core bridge 没有现成端口时明确拒绝，不把远端麦克风当作本机设备。每个 Widget 只有取得自己 resource receipt 后才可 stop／interrupt；pending start 用自己的 AbortSignal，早到任务有界缓冲并按 resource／epoch／source 交付。
 
-打断关闭原房间／模型并建立新媒体代次，从 Core 恢复有界上下文。关闭等待 bounded model close，只排空最终 Usage／Closed，拒绝迟到转写／提议；同一 resource 累计 SDK 权威时长，不推断价格。原来错误归到 common VoiceClient 的 Widget 控制器和 platform/voice 已退出；这些 Ash 自有行为不能当成上游 PTT／audio／session-context transport 已兼容。
+启动与清理按原请求身份匹配，旧连接的迟到完成不能清除新连接的启动凭据。打断关闭原房间／模型并建立新媒体代次，从 Core 恢复有界上下文。关闭等待 bounded model close，只排空最终 Usage／Closed，拒绝迟到转写／提议；同一 resource 累计 SDK 权威时长，不推断价格。原来错误归到 common VoiceClient 的 Widget 控制器和 platform/voice 已退出；这些 Ash 自有行为不能当成上游 PTT／audio／session-context transport 已兼容。
 
 ## 调试日志导出
 
@@ -99,7 +107,9 @@ ZIP 的 `manifest.json` 格式为 2，记录目标、来源、正文索引、录
 
 ## 历史验证与复测入口
 
-以下均是原实现批次的记录，本次文档整理未重跑产品测试，不据此声称当前 HEAD 或完整上游 API 通过：
+2026-10-20 的内置语音入口验证：macOS 定向单测 324 项／9 文件、分层检查 15 项通过。Chromium 内置 ASR 8 项覆盖中英文 Chat／Cowork 的生产听写服务、本地／云端适配器和原输入，验证 PCM 尾包、停止写回、积压取消及迟到结果隔离；后端识别和物理采音使用受控替身。听写命令 4 项、语音模式 10 项及既有 MCP App 回归 40 项也已通过。Renderer 4445 文件类型检查和触及格式检查通过。对应入口为 `pnpm test:unit --run <file>`、`pnpm test:browser:integration chatTranscript.integration.spec.ts --project=chromium --grep <scenario>` 与 `bun check -p tsconfig.renderer.json --all`；不代替真实账户、物理设备或音质验收，也不表示缺失的 MCP capability 已实现。
+
+下表保留更早实现批次的验证范围，不据此声称当前 HEAD 或完整上游 API 通过：
 
 | 功能／批次             | 记录的通过范围与限制                                                                                                                                                                                                                    |
 | ---------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |

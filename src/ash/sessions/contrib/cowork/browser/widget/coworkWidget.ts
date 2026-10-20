@@ -13,7 +13,8 @@ import './media/chat.css';
 import './media/chatListWidget.css';
 import type { IChatMcpAppDelegate } from '../../../../../workbench/contrib/chat/browser/widget/chatContentParts/toolInvocationParts/chatMcpAppSubPart.js';
 import { Disposable, DisposableStore, toDisposable, type IDisposable } from "../../../../../base/common/lifecycle.js";
-import type { Event } from "../../../../../base/common/event.js";
+import { Emitter, type Event } from "../../../../../base/common/event.js";
+import { IChatWidgetService, type IChatWidget } from '../../../../../workbench/contrib/chat/browser/chat.js';
 import type { ICommandService } from "../../../../../platform/commands/common/commands.js";
 import type { AgentResponse, ApprovalMode, ChatAgent, ChatMode, ModelRef, SessionId, ThreadGoal, ThreadId } from "../../../../../workbench/services/chat/common/chatService.js";
 import type { ChatInputDelegate } from "../../../../../workbench/contrib/chat/browser/widget/input/chatInput.js";
@@ -65,8 +66,10 @@ export interface ICoworkWidgetModel extends IDisposable {
 }
 
 /** Owns the content and interaction state for one local or durable conversation. */
-export class CoworkWidget<TModel extends ICoworkWidgetModel = ICoworkWidgetModel> extends Disposable {
+export class CoworkWidget<TModel extends ICoworkWidgetModel = ICoworkWidgetModel> extends Disposable implements IChatWidget {
 	readonly element: HTMLElement;
+	private readonly hidden = this._register(new Emitter<void>());
+	readonly onDidHide = this.hidden.event;
 	readonly model: TModel;
 	private listWidget: ChatListWidget;
 	private readonly inputPart: IChatInputPart;
@@ -89,6 +92,7 @@ export class CoworkWidget<TModel extends ICoworkWidgetModel = ICoworkWidgetModel
 		@IInstantiationService instantiationService: IInstantiationService,
 		@IQuickInputService private readonly quickInput: IQuickInputService,
 		@INotificationService private readonly notifications: INotificationService,
+		@IChatWidgetService widgets: IChatWidgetService,
 	) {
 		super();
 		const ownerDocument = container.ownerDocument;
@@ -179,6 +183,7 @@ export class CoworkWidget<TModel extends ICoworkWidgetModel = ICoworkWidgetModel
 			resolveInteraction: (response) => this.model.resolveInteraction(response),
 		};
 		this.inputPart = this._register(createInputPart(this.element, inputDelegate));
+		this._register(widgets.register(this));
 		const voiceContainer = h(ownerDocument, 'div');
 		let hold: string | undefined;
 		this.voiceWidget = this._register(instantiationService.createInstance(AgentsVoiceWidget, voiceContainer, {
@@ -223,7 +228,9 @@ export class CoworkWidget<TModel extends ICoworkWidgetModel = ICoworkWidgetModel
 	}
 
 	setVisible(visible: boolean): void {
+		const wasVisible = this.visible;
 		this.element.hidden = !visible;
+		if (wasVisible && !visible) this.hidden.fire();
 		if (!visible && this.voiceSessionController.isActive) void this.runVoice(() => this.voiceSessionController.disconnect());
 		this.inputPart.setVisible(visible);
 		this.listWidget.setVisible(visible);
@@ -232,6 +239,12 @@ export class CoworkWidget<TModel extends ICoworkWidgetModel = ICoworkWidgetModel
 	focus(): void {
 		this.inputPart.focus();
 	}
+
+	get domNode(): HTMLElement { return this.element; }
+	get visible(): boolean { return !this.element.hidden; }
+	get inputEditor() { return this.inputPart.inputEditor; }
+	get isTranscriptProgressActive(): boolean { return this.model.inputState.inputBlocked === true || this.model.inputState.aiDisabled === true; }
+	get onDidChangeViewModel(): Event<void> { return this.model.onDidChangeComposer; }
 
 	addContext(attachment: ChatContextAttachment): void {
 		this.inputPart.addContext(attachment);

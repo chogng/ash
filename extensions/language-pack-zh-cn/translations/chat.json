@@ -1,5 +1,6 @@
 {
   "ash": {
+    "chat.voice.startCommand": "启动语音模式",
     "exportAgentHostDebugLogs": "导出 Agent Host 调试日志…",
     "debugLogs.developer": "开发人员",
     "debugLogs.connectionChanged": "导出期间 App Server 连接发生了变化。",

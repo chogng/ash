@@ -9,7 +9,7 @@ import { OPEN_SESSION_LINK_SCHEME } from '../../../../../platform/agentHost/comm
 import { localize } from '../../../../../nls.js';
 import './media/chat.css';
 import { Disposable, DisposableStore, toDisposable, type IDisposable } from "../../../../../base/common/lifecycle.js";
-import type { Event } from "../../../../../base/common/event.js";
+import { Emitter, type Event } from "../../../../../base/common/event.js";
 import { canceled, isCancellationError } from "../../../../../base/common/errors.js";
 import type { ICommandService } from "../../../../../platform/commands/common/commands.js";
 import type { IAccessibleViewService } from '../../../../../platform/accessibility/browser/accessibleView.js';
@@ -48,6 +48,7 @@ import type { IOpenAgentsWindowOptions } from '../../../../../platform/native/co
 import type { IChatMcpAppDelegate } from './chatContentParts/toolInvocationParts/chatMcpAppSubPart.js';
 import { VoiceSessionController, pickVoiceConversation } from '../voiceClient/voiceSessionController.js';
 import type { AgentVoiceTaskRequest } from '../../../../../platform/agentHost/common/agent.js';
+import { IChatWidgetService, type IChatWidget } from '../chat.js';
 
 /** The presentation consumes one conversation model owned by its product. */
 export interface IChatWidgetModel extends IDisposable {
@@ -80,8 +81,10 @@ export interface IChatWidgetModel extends IDisposable {
 }
 
 /** Owns the content and interaction state for one local or durable Chat tab. */
-export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> extends Disposable {
+export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> extends Disposable implements IChatWidget {
 	readonly element: HTMLElement;
+	private readonly hidden = this._register(new Emitter<void>());
+	readonly onDidHide = this.hidden.event;
 	private readonly voiceSessionController: VoiceSessionController;
 	private readonly voiceWidget: AgentsVoiceWidget;
 	readonly model: TModel;
@@ -115,6 +118,7 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 		@IInstantiationService instantiationService: IInstantiationService,
 		@IDialogService dialogs: IDialogService,
 		@IQuickInputService private readonly quickInput: IQuickInputService,
+		@IChatWidgetService widgets: IChatWidgetService,
 	) {
 		super();
 		this.model = this._register(model);
@@ -268,6 +272,7 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 		this.inputPart = this._register(createInputPart
 			? createInputPart(this.element, inputDelegate)
 			: instantiationService.createInstance(ChatInputPart, this.element, inputDelegate, contextMenuService, contextViewService, accessibleViewService, notifications, ChatInputEditors, [], { modePicker: 'visible', modelPickerPosition: 'leading' }));
+		this._register(widgets.register(this));
 		const voiceContainer = h(ownerDocument, 'div');
 		let hold: string | undefined;
 		this.voiceWidget = this._register(instantiationService.createInstance(AgentsVoiceWidget, voiceContainer, {
@@ -311,6 +316,12 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 		return this.model.threadId;
 	}
 
+	get domNode(): HTMLElement { return this.element; }
+	get visible(): boolean { return !this.element.hidden; }
+	get inputEditor() { return this.inputPart.inputEditor; }
+	get isTranscriptProgressActive(): boolean { return this.model.inputState.inputBlocked === true || this.model.inputState.aiDisabled === true; }
+	get onDidChangeViewModel(): Event<void> { return this.model.onDidChangeComposer; }
+
 	setTabId(tabId: string | undefined): void {
 		if (tabId) {
 			this.element.setAttribute("aria-labelledby", tabId);
@@ -322,7 +333,9 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 	}
 
 	setVisible(visible: boolean): void {
+		const wasVisible = this.visible;
 		this.element.hidden = !visible;
+		if (wasVisible && !visible) this.hidden.fire();
 		if (!visible && this.voiceSessionController.isActive) void this.runVoice(() => this.voiceSessionController.disconnect());
 		this.inputPart.setVisible(visible);
 		this.listWidget.setVisible(visible);

@@ -1,5 +1,5 @@
 import { createTestDictationBackend, installTestDictationAudio, type TestDictationSession, type TestDictationCapture } from '../../../../test/common/testDictationServices.js';
-import { IVoiceCodeTranscriptionClient } from '../../browser/speechToText/voiceCodeTranscriptionClient.js';
+import { IVoiceCodeTranscriptionClient, VoiceCodeTranscriptionClient } from '../../browser/speechToText/voiceCodeTranscriptionClient.js';
 import { INotificationService } from '../../../../../platform/notification/common/notification.js';
 import { NotificationService } from '../../../../services/notification/common/notificationService.js';
 import { ITelemetryService } from '../../../../../platform/telemetry/common/telemetry.js';
@@ -13,7 +13,8 @@ import '../../../speech/browser/speech.contribution.js';
 import { DeferredPromise } from '../../../../../base/common/async.js';
 import { isCancellationError } from '../../../../../base/common/errors.js';
 import { Emitter, Event } from '../../../../../base/common/event.js';
-import { Disposable, DisposableStore } from '../../../../../base/common/lifecycle.js';
+import { Disposable, DisposableStore, toDisposable } from '../../../../../base/common/lifecycle.js';
+import { decodeBase64 } from '../../../../../base/common/buffer.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
 import { IAccessibilitySignalService } from '../../../../../platform/accessibilitySignal/browser/accessibilitySignalService.js';
 import { CommandsRegistry } from '../../../../../platform/commands/common/commands.js';
@@ -84,7 +85,7 @@ suite('Builtin dictation ownership', () => {
 	});
 	const captureWindow = { navigator: {}, URL, Blob, setTimeout, clearTimeout } as unknown as Window & typeof globalThis;
 
-	function services(owner: DisposableStore, start: (onTranscript: (text: string, final: boolean) => void, onEnded: (error?: string) => void) => Promise<TestDictationSession>, options: { source?: string; local?: ILocalTranscriptionService & ILocalTranscriptionModelService; start?: TestDictationCapture['start']; } = {}) {
+	function services(owner: DisposableStore, start: (onTranscript: (text: string, final: boolean) => void, onEnded: (error?: string) => void) => Promise<TestDictationSession>, options: { source?: string; local?: ILocalTranscriptionService & ILocalTranscriptionModelService; start?: TestDictationCapture['start']; window?: Window & typeof globalThis; } = {}) {
 		const registrations = getSingletonServiceDescriptors().filter(([id]) => id === IChatSpeechToTextService || id === ISpeechService || id === IVoiceCodeTranscriptionClient);
 		assert.equal(registrations.length, 3);
 		const services = owner.add(new InstantiationService(new ServiceCollection(...registrations)));
@@ -93,7 +94,7 @@ suite('Builtin dictation ownership', () => {
 		services.registerSingleton(ILocalTranscriptionService, () => options.local ?? new NullLocalTranscriptionService());
 		services.registerSingleton(ILocalTranscriptionModelService, () => options.local ?? new NullLocalTranscriptionService());
 		services.registerSingleton(IContextKeyService, () => new ContextKeyService());
-		const audio = owner.add(installTestDictationAudio(captureWindow));
+		const audio = owner.add(installTestDictationAudio(options.window ?? captureWindow));
 		const notifications = owner.add(new NotificationService());
 		services.registerInstance(INotificationService, notifications);
 		services.registerInstance(ITelemetryService, NullTelemetryService);
@@ -125,7 +126,12 @@ suite('Builtin dictation ownership', () => {
 		readonly starts: Parameters<ILocalTranscriptionService['start']>[0][] = [];
 		readonly reads: string[] = [];
 		cancels = 0;
+		stops = 0;
+		readonly acquired = new DeferredPromise<void>();
 		pending = Promise.resolve();
+		stopPending = Promise.resolve();
+		cancelPending = Promise.resolve();
+		finalText = 'final local text';
 		async getModelStatus() { return { state: LocalTranscriptionModelState.Idle }; }
 		async getCacheDirectory() { return "C:/models"; }
 		async getModel(model: string): Promise<ILocalTranscriptionModelSnapshot> {
@@ -138,11 +144,228 @@ suite('Builtin dictation ownership', () => {
 		prepareModel(): never { assert.fail('Input must not prepare models'); }
 		importPackage(): never { assert.fail('Input must not import models'); }
 		async importModel(): Promise<never> { assert.fail("Input must not import models"); }
-		async start(options: Parameters<ILocalTranscriptionService['start']>[0]) { this.starts.push(options); await this.pending; }
+		async start(options: Parameters<ILocalTranscriptionService['start']>[0]) { this.starts.push(options); void this.acquired.complete(); await this.pending; }
 		async pushAudio() { }
-		async stop() { this.transcribed.fire({ text: 'final local text', isFinal: true }); this.modelStatus.fire({ state: LocalTranscriptionModelState.Idle }); return 'final local text'; }
-		async cancel() { this.cancels++; this.modelStatus.fire({ state: LocalTranscriptionModelState.Idle }); }
+		async stop() { this.stops++; await this.stopPending; this.transcribed.fire({ text: this.finalText, isFinal: true }); this.modelStatus.fire({ state: LocalTranscriptionModelState.Idle }); return this.finalText; }
+		async cancel() { this.cancels++; await this.cancelPending; this.modelStatus.fire({ state: LocalTranscriptionModelState.Idle }); }
 	}
+
+	function deadlineWindow() {
+		const timers = new Map<number, { delay: number; run: () => void; }>();
+		let next = 0;
+		const target = { ...captureWindow, navigator: {}, setTimeout: (run: () => void, delay: number) => { const id = ++next; timers.set(id, { delay, run }); return id; }, clearTimeout: (id: number) => timers.delete(id) } as unknown as Window & typeof globalThis;
+		return {
+			target, timers, expire: (delay: number) => {
+				const timer = [...timers].find(([, value]) => value.delay === delay);
+				assert.ok(timer, `Missing deadline ${delay}`);
+				timers.delete(timer[0]);
+				timer[1].run();
+			}
+		};
+	}
+
+	test('freezes backend, language and microphone selection before publishing startup', async () => {
+		using owner = new DisposableStore();
+		let received: unknown;
+		const fixture = services(owner, async () => assert.fail('Unexpected capture'), {
+			source: '{"dictation.backend":"cloud","dictation.language":"zh","dictation.inputDevice":"mic-2"}',
+			start: async options => { received = options; return { stop: async () => { }, cancel: async () => { } }; },
+		});
+		const configuration = fixture.services.get(IConfigurationService);
+		const read = configuration.getValue.bind(configuration);
+		let changed = false;
+		Object.assign(configuration, { getValue: (key: string) => changed && key === 'dictation.backend' ? 'codex' : changed && key === 'dictation.language' ? 'en' : read(key) });
+		owner.add(fixture.speech.onDidChangeState(() => { if (fixture.speech.isBusy) changed = true; }));
+		await fixture.speech.start(captureWindow);
+		assert.deepEqual(received, { backend: { type: 'cloud', provider: 'openAi', modelId: 'gpt-live-transcribe' }, language: 'zh' });
+		assert.equal(fixture.speech.currentBackend, 'cloud');
+		assert.equal(fixture.audio.requests[0]!.audio && typeof fixture.audio.requests[0]!.audio === 'object' && (fixture.audio.requests[0]!.audio as MediaTrackConstraints).deviceId !== undefined, true);
+		await fixture.speech.cancel();
+		await fixture.speech.start(captureWindow);
+		assert.deepEqual(received, { backend: { type: 'codex' }, language: 'en' });
+		await fixture.speech.cancel();
+	});
+
+	for (const final of ['', 'returned final']) test(`uses an authoritative local stop result ${JSON.stringify(final)} without requiring a final event`, async () => {
+		using owner = new DisposableStore();
+		const local = new LocalCapture();
+		local.stop = async () => final;
+		const fixture = services(owner, async () => assert.fail('Unexpected cloud capture'), { source: '{"dictation.backend":"local"}', local });
+		const updates: IChatDictationTranscript[] = [];
+		owner.add(fixture.speech.onDidUpdateTranscript(update => updates.push(update)));
+		await fixture.speech.start(captureWindow);
+		local.transcribed.fire({ text: 'partial hypothesis', isFinal: false });
+		assert.equal(await fixture.speech.stopAndTranscribe(), final);
+		assert.deepEqual(updates.at(-1), { text: final, finalizedText: final });
+	});
+
+	test('treats local ASR updates as cumulative snapshots while extension phrases remain segmented', async () => {
+		using owner = new DisposableStore();
+		const local = new LocalCapture();
+		local.finalText = 'first second final';
+		const fixture = services(owner, async () => assert.fail('Unexpected cloud capture'), { source: '{"dictation.backend":"local"}', local });
+		const updates: IChatDictationTranscript[] = [];
+		owner.add(fixture.speech.onDidUpdateTranscript(update => updates.push(update)));
+		await fixture.speech.start(captureWindow);
+		local.transcribed.fire({ text: 'first', isFinal: true });
+		local.transcribed.fire({ text: 'first second', isFinal: false });
+		assert.equal(await fixture.speech.stopAndTranscribe(), 'first second final');
+		assert.deepEqual(updates.map(update => update.text), ['first', 'first second', 'first second final']);
+	});
+
+	test('flushes the PCM tail as signed little-endian audio before sending stop', async () => {
+		using owner = new DisposableStore();
+		let stops = 0;
+		const fixture = services(owner, async transcript => ({ stop: async () => { stops++; transcript('tail accepted', true); }, cancel: async () => { } }));
+		const packet = new DeferredPromise<void>();
+		const accepted = new DeferredPromise<void>();
+		const chunks: number[][] = [];
+		Object.assign(fixture.services.get(IVoiceCodeTranscriptionBackendService)!, {
+			pushAudio: async (_resource: string, audio: string) => {
+				chunks.push([...decodeBase64(audio).buffer]); void packet.complete(); await accepted.p;
+			}
+		});
+		await fixture.speech.start(captureWindow);
+		fixture.audio.emit(new Float32Array([0, 1, -1]));
+		const stopping = fixture.speech.stopAndTranscribe();
+		await packet.p;
+		assert.equal(stops, 0);
+		assert.deepEqual(chunks, [[0, 0, 255, 127, 0, 128]]);
+		await accepted.complete();
+		assert.equal(await stopping, 'tail accepted');
+		assert.equal(stops, 1);
+		assert.ok(fixture.audio.tracks.every(track => track.stopped));
+	});
+
+	for (const backend of ['local', 'cloud'] as const) for (const partial of ['', 'streamed fallback']) {
+		test(`${backend} finalization deadline ${partial ? 'preserves streamed text' : 'reports missing text'} and waits for cancellation before replacement`, async () => {
+			using owner = new DisposableStore();
+			const clock = deadlineWindow();
+			const final = new DeferredPromise<void>();
+			const release = new DeferredPromise<void>();
+			const entered = new DeferredPromise<void>();
+			const local = new LocalCapture();
+			let transcript: ((text: string, final: boolean) => void) | undefined;
+			let starts = 0;
+			local.cancelPending = release.p;
+			local.stop = async () => { void entered.complete(); await final.p; return 'late final'; };
+			const fixture = services(owner, async onTranscript => {
+				starts++; transcript = onTranscript;
+				return { stop: async () => { void entered.complete(); await final.p; onTranscript('late final', true); }, cancel: async () => { await release.p; } };
+			}, { source: JSON.stringify({ 'dictation.backend': backend }), local, window: clock.target });
+			const updates: IChatDictationTranscript[] = [];
+			owner.add(fixture.speech.onDidUpdateTranscript(update => updates.push(update)));
+			await fixture.speech.start(clock.target);
+			if (partial) {
+				if (backend === 'local') local.transcribed.fire({ text: partial, isFinal: false });
+				else transcript!(partial, false);
+			}
+			const stopping = fixture.speech.stopAndTranscribe();
+			await entered.p;
+			clock.expire(backend === 'local' ? 8000 : 35000);
+			if (partial) assert.equal(await stopping, partial);
+			else await assert.rejects(stopping, /timed out without returning text/);
+			assert.equal(fixture.speech.isBusy, false);
+			assert.equal(clock.timers.size, 0);
+			assert.ok(fixture.audio.tracks.every(track => track.stopped));
+			const replacement = fixture.speech.start(clock.target);
+			await Promise.resolve();
+			assert.equal(backend === 'local' ? local.starts.length : starts, 1);
+			await release.complete();
+			await replacement;
+			const beforeLate = [...updates];
+			await final.complete();
+			await Promise.resolve();
+			assert.deepEqual(updates, beforeLate);
+			assert.equal(fixture.speech.state, ChatSpeechToTextState.Recording);
+			await fixture.speech.cancel();
+		});
+	}
+
+	for (const backend of ['local', 'cloud'] as const) test(`${backend} cancellation retires a pending browser microphone request without blocking the next capture`, async () => {
+		using owner = new DisposableStore();
+		const local = new LocalCapture();
+		const fixture = services(owner, async () => ({ stop: async () => { }, cancel: async () => { } }), { source: JSON.stringify({ 'dictation.backend': backend }), local });
+		const media = captureWindow.navigator.mediaDevices;
+		const acquire = media.getUserMedia.bind(media);
+		const stream = new DeferredPromise<MediaStream>();
+		const requested = new DeferredPromise<void>();
+		Object.assign(media, { getUserMedia: () => { void requested.complete(); return stream.p; } });
+		const starting = fixture.speech.start(captureWindow);
+		const cancelledStart = assert.rejects(starting, isCancellationError);
+		await requested.p;
+		await fixture.speech.cancel();
+		await cancelledStart;
+		assert.equal(fixture.speech.isBusy, false);
+		Object.assign(media, { getUserMedia: acquire });
+		await fixture.speech.start(captureWindow);
+		let stopped = false;
+		await stream.complete({ getTracks: () => [{ stop: () => { stopped = true; } }] } as unknown as MediaStream);
+		// Let the retired acquisition close its stream while a new capture is already active.
+		await Promise.resolve();
+		await Promise.resolve();
+		assert.equal(stopped, true);
+		assert.equal(fixture.speech.state, ChatSpeechToTextState.Recording);
+		await fixture.speech.cancel();
+	});
+
+	test('a disconnected cloud owner is unavailable before microphone acquisition', async () => {
+		using owner = new DisposableStore();
+		const fixture = services(owner, async () => assert.fail('Unexpected capture'));
+		Object.assign(fixture.services.get(IVoiceCodeTranscriptionBackendService)!, { isConnected: false });
+		assert.equal(fixture.speech.isConfigured, false);
+		await assert.rejects(fixture.speech.start(captureWindow), /unavailable/);
+		assert.deepEqual(fixture.audio.requests, []);
+	});
+
+	test('a cancelled cloud connection continuation cannot acquire a session from its replacement', async () => {
+		using owner = new DisposableStore();
+		const connected = new DeferredPromise<void>();
+		const release = new DeferredPromise<void>();
+		const connect = VoiceCodeTranscriptionClient.prototype.connect;
+		const startSession = VoiceCodeTranscriptionClient.prototype.startSession;
+		using restore = toDisposable(() => { VoiceCodeTranscriptionClient.prototype.connect = connect; VoiceCodeTranscriptionClient.prototype.startSession = startSession; });
+		let connections = 0, acquisitions = 0;
+		VoiceCodeTranscriptionClient.prototype.connect = async function (...args) {
+			await connect.apply(this, args);
+			if (++connections === 1) { void connected.complete(); await release.p; }
+		};
+		VoiceCodeTranscriptionClient.prototype.startSession = async function (options) { acquisitions++; await startSession.call(this, options); };
+		const fixture = services(owner, async () => ({ stop: async () => { }, cancel: async () => { } }));
+		const starting = fixture.speech.start(captureWindow);
+		const rejected = assert.rejects(starting, isCancellationError);
+		await connected.p;
+		await fixture.speech.cancel();
+		await rejected;
+		await fixture.speech.start(captureWindow);
+		await release.complete();
+		await Promise.resolve();
+		await Promise.resolve();
+		assert.equal(acquisitions, 1);
+		assert.equal(fixture.speech.state, ChatSpeechToTextState.Recording);
+		await fixture.speech.cancel();
+	});
+
+	test('a stale microphone selection releases its stream without replacing the latest device', async () => {
+		using owner = new DisposableStore();
+		const fixture = services(owner, async transcript => ({ stop: async () => transcript('done', true), cancel: async () => { } }));
+		await fixture.speech.start(captureWindow);
+		const first = new DeferredPromise<MediaStream>();
+		const second = new DeferredPromise<MediaStream>();
+		let requests = 0;
+		Object.assign(captureWindow.navigator.mediaDevices, { getUserMedia: () => ++requests === 1 ? first.p : second.p });
+		let oldStopped = false, latestStopped = false;
+		const old = fixture.speech.switchMicrophone(captureWindow, 'old-device');
+		const latest = fixture.speech.switchMicrophone(captureWindow, 'latest-device');
+		await second.complete({ getTracks: () => [{ stop: () => { latestStopped = true; } }] } as unknown as MediaStream);
+		assert.ok(await latest);
+		await first.complete({ getTracks: () => [{ stop: () => { oldStopped = true; } }] } as unknown as MediaStream);
+		assert.equal(await old, undefined);
+		assert.equal(oldStopped, true);
+		assert.equal(latestStopped, false);
+		await fixture.speech.stopAndTranscribe();
+		assert.equal(latestStopped, true);
+	});
 
 	test('switching microphones retains the analyser and releases every track and context on stop', async () => {
 		using owner = new DisposableStore();
@@ -237,6 +460,7 @@ suite('Builtin dictation ownership', () => {
 		const updates: IChatDictationTranscript[] = [];
 		owner.add(fixture.speech.onDidUpdateTranscript(event => updates.push(event)));
 		const starting = fixture.speech.start(captureWindow);
+		await local.acquired.p;
 		const cancelled = fixture.speech.cancel();
 		await ready.complete();
 		await assert.rejects(starting, isCancellationError); await cancelled;
@@ -301,12 +525,14 @@ suite('Builtin dictation ownership', () => {
 	test('cancel during acquisition closes the acquired handle and suppresses final text', async () => {
 		using owner = new DisposableStore();
 		const acquired = new DeferredPromise<TestDictationSession>();
+		const acquiring = new DeferredPromise<void>();
 		let transcript!: (text: string, final: boolean) => void;
 		let cancels = 0;
-		const fixture = services(owner, onTranscript => { transcript = onTranscript; return acquired.p; });
+		const fixture = services(owner, onTranscript => { transcript = onTranscript; void acquiring.complete(); return acquired.p; });
 		const updates: IChatDictationTranscript[] = [];
 		owner.add(fixture.speech.onDidUpdateTranscript(event => updates.push(event)));
 		const starting = fixture.speech.start(captureWindow);
+		await acquiring.p;
 		assert.equal((fixture.speech.isBusy && fixture.speech.state === ChatSpeechToTextState.Idle), true);
 		const cancelled = fixture.speech.cancel();
 		await acquired.complete({ stop: async () => assert.fail('Cancelled recording must not flush'), cancel: async () => { cancels++; transcript('discarded', true); } });
