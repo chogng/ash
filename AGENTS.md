@@ -39,5 +39,6 @@ If need, read the local refers: `../mxc`, `../tgrep`, `../vscode`, `../codex`, `
 - Do not generate staged workflow records unless the user explicitly invokes `/develop`.
 - Before ending any conversation turn with unfinished work, create or update the repository-root `TODO.md` with progress, remaining steps and blockers for handoff, regardless of whether `/develop` was invoked.Once completed, remove from TODO.
 - Modify the requested checkout; do not substitute another checkout or only a remote branch. Preserve unrelated changes.
+- Select validation for the changed behavior and runtime boundary using the [testing guidelines](.github/instructions/testing.instructions.md#验证选择).
 - Before committing or publishing, run `just commit-check <base-ref>` and handle its result as defined in the [commit workflow](.agents/skills/commit-pr/SKILL.md#prepare-the-exact-change). CI checks the full repository.
 - A PR is optional for repository-owner changes; use PR review for external contributions or security-sensitive changes.
