@@ -442,7 +442,7 @@ ash-grammars = { git = "https://github.com/chogng/ash-grammars", rev = "35c271b7
 unicode-segmentation = "1"
 unicode-width = "0.2"
 uds_windows = "1.2.1"
-zbus = "5.19"
+zbus = { version = "6", default-features = false }
 url = "2"
 urlencoding = "2"
 # ash-http-client supplies its own OS verifier, custom roots and client identity.

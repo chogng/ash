@@ -45,7 +45,7 @@ SecretStore::{load,store,delete}
 
 - macOS：Apple native Keychain；
 - Windows：Windows Credential Manager；
-- Linux：native async persistent Secret Service；
+- Linux：native sync persistent Secret Service，使用 keyring 的 libdbus 后端并静态构建 libdbus；
 - FreeBSD/OpenBSD：同步 Secret Service；
 - 其他 target：构造时返回 `BackendUnavailable`。
 
@@ -60,23 +60,33 @@ macOS 的普通读取、写入、删除及显式命名条目复用均关闭 Keyc
 构造成功只表示平台 adapter 已编译；实际 desktop session/keyring daemon 拒绝访问时，具体 operation
 仍会 fail closed。这里不实现自动文件 fallback，避免 backend 暂时不可用时读取另一份过期 credential。
 
+Linux 从 zbus 后端切换到 libdbus 后端时，仍使用 keyring 3 的同一份条目查找和写入实现：
+`service`、`username`、`target` 属性及旧默认 collection 的兼容查找保持一致，不重命名条目或轮换主密钥。
+Cargo.lock 仍包含 keyring 的可选 async／OpenSSL 依赖，但所有目标和 workspace features 的活动
+依赖图均不选择它们；依赖安全门禁继续检查实际依赖，不为旧 zbus 公告添加例外。
+
 ## 验证与扩展点
 
 ```text
-cargo test -p ash-keyring-store
-cargo clippy -p ash-keyring-store --all-targets --no-deps -- -D warnings
+just verify ash-keyring-store
 ```
 
 普通测试使用 private fake backend，不访问开发者真实 keyring，覆盖 binary round trip、replace/delete、
 profile isolation、metadata hashing、error sanitization 和 size limit。新增平台 adapter 时必须继续实现
 完整三操作，并同步本文与 [`docs/secrets.md`](../../docs/secrets.md)。
 
-Windows 的真实 keyring 验证需显式运行：
+Windows 的真实 keyring 验证需显式运行；Linux 也使用同一测试，但必须在隔离、已解锁的测试
+Secret Service 中执行，不能连接开发者的日常 keyring：
 
 ```text
 just test ash-keyring-store --test system_keyring -- --ignored --exact real_keyring_round_trip_and_process_restart
 ```
 
-该测试使用独立临时 profile，通过三个独立子进程验证 WinCred 二进制读写、覆盖、删除及加密
+该测试使用独立临时 profile，通过三个独立子进程验证平台二进制读写、覆盖、删除及加密
 profile 的重启恢复，并确认主密钥没有轮换。父进程在成功或失败后清理两个测试条目，再删除
 临时目录；普通 App Server 单元测试的密钥则随临时目录清理，不能使用持久 OS keyring。
+
+Linux 的 `existing_secret_service_attributes_remain_readable` 测试还使用 `secret-tool` 独立写入
+带有／没有默认 `target` 的已有条目，验证 Ash 能读取、原位更新和删除它们。需要 `dbus-run-session`、
+`gnome-keyring-daemon` 和 `secret-tool`；测试会访问当前 session bus，因此只能显式运行在临时 HOME
+与 XDG 目录的隔离会话中。
