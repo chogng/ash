@@ -1,8 +1,8 @@
-import { isNonNegativeSafeInteger } from "../../../../src/ash/base/common/numbers.js";
+import { isNonNegativeSafeInteger } from "ash:editor/base/common/numbers.js";
 import { findDocumentNode, type DocumentNode, type DocumentNodeId } from "../model/document.js";
 
-import type { DocumentPoint, DocumentTextSelection, NodeSelection, AllSelection, DocumentSelection } from '../../../../src/ash/workbench/services/documentEditor/common/documentCodec.js';
-export type { DocumentPoint, DocumentTextSelection, NodeSelection, AllSelection, DocumentSelection } from '../../../../src/ash/workbench/services/documentEditor/common/documentCodec.js';
+import type { DocumentPoint, DocumentTextSelection, NodeSelection, AllSelection, DocumentSelection } from 'ash:editor/workbench/services/documentEditor/common/documentCodec.js';
+export type { DocumentPoint, DocumentTextSelection, NodeSelection, AllSelection, DocumentSelection } from 'ash:editor/workbench/services/documentEditor/common/documentCodec.js';
 
 export function textSelection(anchor: DocumentPoint, head = anchor): DocumentTextSelection {
 	validatePoint(anchor);

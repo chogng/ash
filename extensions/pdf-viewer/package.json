@@ -1,0 +1,42 @@
+{
+  "name": "pdf-viewer",
+  "publisher": "ash",
+  "version": "1.0.0",
+  "displayName": "%pdfViewer.displayName%",
+  "description": "%pdfViewer.description%",
+  "engines": {
+    "vscode": "*"
+  },
+  "contributes": {
+    "customEditors": [
+      {
+        "viewType": "ash.workbench.pdfViewer",
+        "displayName": "%pdfViewer.editor%",
+        "priority": "default",
+        "selector": [
+          {
+            "filenamePattern": "*.pdf",
+            "mimeType": "application/pdf"
+          }
+        ]
+      }
+    ]
+  },
+  "private": true,
+  "ashRuntime": {
+    "kind": "rust",
+    "entrypoint": "ash-pdf-viewer",
+    "client": {
+      "apiVersion": 1,
+      "entry": "dist/editor.js",
+      "style": "dist/editor.css"
+    }
+  },
+  "activationEvents": [
+    "*"
+  ],
+  "type": "module",
+  "dependencies": {
+    "pdfjs-dist": "6.1.200"
+  }
+}

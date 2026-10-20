@@ -25,7 +25,7 @@ export interface DocumentType {
 }
 
 /** Shared file routing consumes type declarations without depending on document contributions. */
-export const DocumentTypes = new class {
+class DocumentTypeRegistry {
 	private readonly types = new Map<string, DocumentType>();
 	private readonly reservations = new Set<readonly Pick<DocumentType, 'contentType' | 'extensions'>[]>();
 
@@ -67,7 +67,9 @@ export const DocumentTypes = new class {
 		const path = input.resource.path.toLowerCase();
 		return [...this.types.values()].find(type => type.extensions.some(extension => path.endsWith(extension)));
 	}
-};
+}
+
+export const DocumentTypes = new DocumentTypeRegistry();
 
 export interface IDocumentEditorTextModelService extends ITextModelResourceService<TextModelBlockInput, TextModelWorkingCopyReference> {
 	/** A remote authority saved this exact snapshot; newer local edits remain dirty. */

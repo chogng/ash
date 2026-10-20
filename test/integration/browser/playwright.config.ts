@@ -6,6 +6,8 @@ import { defineConfig } from "@playwright/test";
 const editorSpecs = [
 	"codeExtension.integration.spec.ts",
 	"academic.integration.spec.ts",
+	"pdfExtension.integration.spec.ts",
+	"referenceManager.integration.spec.ts",
 	"diff.integration.spec.ts",
 	"gpuText.integration.spec.ts",
 	"iPadShowKeyboard.integration.spec.ts",

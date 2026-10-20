@@ -1,5 +1,6 @@
 import type { DocumentAttributes } from "../../../../common/model/document.js";
 import type { DocumentNodeSpec } from "../../../../common/model/documentSchema.js";
+import { localize } from 'ash:editor/nls.js';
 
 export const CITATION_NODE_TYPE = "citation";
 export const BIBLIOGRAPHY_NODE_TYPE = "bibliography";
@@ -25,5 +26,6 @@ export const referenceNodeSpec: DocumentNodeSpec = Object.freeze({
 	content: [{ type: "paragraph", min: 1, max: 1 }],
 	validateAttributes: (attrs: DocumentAttributes) => {
 		if (typeof attrs.key !== "string" || attrs.key.length === 0) throw new TypeError("Reference key must be a non-empty string");
+		if ((attrs.libraryId === undefined) !== (attrs.libraryEntryId === undefined) || attrs.libraryId !== undefined && (typeof attrs.libraryId !== 'string' || !attrs.libraryId || attrs.libraryId.length > 128 || typeof attrs.libraryEntryId !== 'string' || !attrs.libraryEntryId || attrs.libraryEntryId.length > 128)) throw new TypeError(localize('document.library.invalidIdentity', 'Invalid reference library identity.'));
 	},
 });

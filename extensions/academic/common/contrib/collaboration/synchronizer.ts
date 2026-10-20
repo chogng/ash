@@ -1,5 +1,5 @@
-import { Emitter, type Event } from "../../../../../src/ash/base/common/event.js";
-import { Disposable } from "../../../../../src/ash/base/common/lifecycle.js";
+import { Emitter, type Event } from "ash:editor/base/common/event.js";
+import { Disposable } from "ash:editor/base/common/lifecycle.js";
 import { validateDocumentSelection } from "../../core/documentSelection.js";
 import { freezeDocumentNode, type DocumentNode } from "../../model/document.js";
 import { DocumentSchema } from "../../model/documentSchema.js";

@@ -1,9 +1,9 @@
 import './documentReview.css';
-import { h } from '../../../../../src/ash/base/browser/dom.js';
-import { DisposableStore } from '../../../../../src/ash/base/common/lifecycle.js';
-import { Button } from '../../../../../src/ash/base/browser/ui/button/button.js';
-import { defaultButtonStyles } from '../../../../../src/ash/platform/theme/browser/defaultStyles.js';
-import { localize } from '../../../../../src/ash/nls.js';
+import { h } from 'ash:editor/base/browser/dom.js';
+import { DisposableStore } from 'ash:editor/base/common/lifecycle.js';
+import { Button } from 'ash:editor/base/browser/ui/button/button.js';
+import { defaultButtonStyles } from 'ash:editor/platform/theme/browser/defaultStyles.js';
+import { localize } from 'ash:editor/nls.js';
 import { createCommentCommand, createResolveRevisionCommand } from '../../../common/model/documentReview.js';
 import { DocumentTransaction } from '../../../common/model/documentTransaction.js';
 import { findDocumentNode, type DocumentNode } from '../../../common/model/document.js';

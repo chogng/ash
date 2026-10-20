@@ -1,3 +1,4 @@
+import type { IEditorExtensionApi } from 'ash:editor/workbench/common/editor.js';
 import { getDocumentReviewAccessibleText } from '../../contrib/review/documentReview.js';
 import { getDocumentPageOwner } from '../../../common/model/documentSections.js';
 import { exportDocx } from '../../contrib/documentOutput/docx.js';
@@ -5,11 +6,11 @@ import { exportDocumentPdf } from '../../contrib/documentOutput/pdf.js';
 import './richTextEditorWidget.css';
 import { DocumentPageView } from '../../contrib/pageLayout/documentPageView.js';
 import { documentPageDimensions } from '../../../common/model/documentPageLayout.js';
-import { Disposable, DisposableStore, MutableDisposable, combinedDisposable, type IDisposable, toDisposable } from '../../../../../src/ash/base/common/lifecycle.js';
-import { isSafeInteger } from '../../../../../src/ash/base/common/numbers.js';
-import { assertDefined } from '../../../../../src/ash/base/common/types.js';
-import { URI } from '../../../../../src/ash/base/common/uri.js';
-import type { IDimension } from '../../../../../src/ash/editor/common/core/2d/dimension.js';
+import { Disposable, DisposableStore, MutableDisposable, combinedDisposable, type IDisposable, toDisposable } from 'ash:editor/base/common/lifecycle.js';
+import { isSafeInteger } from 'ash:editor/base/common/numbers.js';
+import { assertDefined } from 'ash:editor/base/common/types.js';
+import { URI } from 'ash:editor/base/common/uri.js';
+import type { IDimension } from 'ash:editor/editor/common/core/2d/dimension.js';
 import { DocumentTextModel } from '../../../common/model/documentTextModel.js';
 import { containsDocumentNode, findDocumentNode, type DocumentMark, type DocumentNode, type DocumentNodeId } from '../../../common/model/document.js';
 import { createDocumentDecoration, type DocumentDecoration } from '../../../common/model/documentDecoration.js';
@@ -20,23 +21,30 @@ import { type DocumentNodeKind, type DocumentSchema, type DocumentTextStyleAttri
 import { documentToPlainText, documentSelectionToText, extractDocumentFragment, DOCUMENT_FRAGMENT_CLIPBOARD_MIME, deserializeDocumentFragment, serializeDocumentFragment } from '../../../common/model/documentSerialization.js';
 import { allSelection, nodeSelection, textSelection, type DocumentSelection, type DocumentTextSelection } from '../../../common/core/documentSelection.js';
 import { DocumentTransaction } from '../../../common/model/documentTransaction.js';
-import { EditorDom } from '../../../../../src/ash/editor/browser/editorDom.js';
+import { EditorDom } from 'ash:editor/editor/browser/editorDom.js';
 import type { DocumentContribution, DocumentFormattingContribution } from '../../documentContributions.js';
 import { DocumentOutlineNavigator } from '../documentOutlineNavigator.js';
 import { DocumentCollaborationController } from '../../../common/contrib/collaboration/controller.js';
 import { createDocumentFragmentFromHtml } from './htmlDocumentFragment.js';
 import type { DocumentCollaborationConnection, DocumentCollaborationPresence } from '../../../common/services/documentCollaborationService.js';
-import { addDisposableListener, h, fragment as createFragment } from '../../../../../src/ash/base/browser/dom.js';
-import { IDialogService } from '../../../../../src/ash/platform/dialogs/common/dialogs.js';
-import { IOpenerService } from '../../../../../src/ash/platform/opener/common/opener.js';
-import { onUnexpectedError } from '../../../../../src/ash/base/common/errors.js';
-import { isMacintosh } from '../../../../../src/ash/base/common/platform.js';
-import { localize } from '../../../../../src/ash/nls.js';
+import { addDisposableListener, h, fragment as createFragment } from 'ash:editor/base/browser/dom.js';
+import { IDialogService } from 'ash:editor/platform/dialogs/common/dialogs.js';
+import { IOpenerService } from 'ash:editor/platform/opener/common/opener.js';
+import { onUnexpectedError } from 'ash:editor/base/common/errors.js';
+import { isMacintosh } from 'ash:editor/base/common/platform.js';
+import { localize } from 'ash:editor/nls.js';
 import { getSelectedDocumentParagraphs } from '../../../common/commands/documentParagraphCommands.js';
 import type { DocumentEditorContributionContext } from '../../documentContributions.js';
 import { resolveDocumentParagraphAttributes } from '../../../common/model/documentParagraph.js';
 
+export interface EditorExtensionOperationContext {
+	readonly model: DocumentTextModel;
+	readonly blockId: string;
+	readonly selection: DocumentSelection | undefined;
+}
+
 export interface RichTextEditorOptions {
+	readonly extensionApis?: Readonly<Record<string, (context: EditorExtensionOperationContext, payload: unknown) => { readonly command?: DocumentCommand; readonly result: unknown; }>>;
 	readonly contributions?: readonly DocumentContribution[];
 	/** Configures the generic heading query exposed by the pane. */
 	readonly outline?: DocumentOutlineOptions;
@@ -282,6 +290,28 @@ export class RichTextEditorWidget extends Disposable {
 
 	getDocument(): DocumentNode {
 		return this.requireModel().document;
+	}
+
+	/** Captures a document-version handle without exposing the mutable model to its caller. */
+	getExtensionApi(id: string): IEditorExtensionApi | undefined {
+		const handler = this.options.extensionApis?.[id];
+		const model = this.model;
+		if (!handler || !model) return undefined;
+		const version = model.version;
+		return {
+			version, readOnly: this.isReadOnly(), invoke: async (payload, signal) => {
+				signal.throwIfAborted();
+				if (this.isDisposed || this.model !== model || model.version !== version) throw new Error(localize('document.api.stale', 'The document changed. Refresh the target and try again.'));
+				if (this.isReadOnly() || this.composition) throw new Error(localize('document.api.readOnly', 'The document is read-only or input is still being composed.'));
+				const blockId = this.activeBlockId ?? findTextBearingBlockId(model.document, model.selection?.kind === 'text' ? model.selection.anchor.nodeId : undefined) ?? findFirstEditableBlock(model.document)?.id;
+				if (!blockId) throw new Error(localize('document.api.selection', 'Choose an editable document position first.'));
+				const selection = model.selection?.kind === 'all' || model.selection?.kind === 'node' ? model.selection : this.readActiveDocumentTextSelection(model, blockId) ?? model.selection;
+				const result = handler({ model, blockId, selection }, payload);
+				signal.throwIfAborted();
+				if (result.command) this.dispatchCommand(model, result.command, undefined, 'preserve-focus');
+				return result.result;
+			}
+		};
 	}
 
 	/** Returns the current block-document selection, if the editor has input. */
@@ -1003,6 +1033,9 @@ export class RichTextEditorWidget extends Disposable {
 		const model = this.model;
 		const container = this.container;
 		if (!model || !container) return;
+		// A keyboard-focused atom owns its node selection; the surrounding
+		// contenteditable may still report the previous text caret.
+		if (model.selection?.kind === 'node' && container.ownerDocument.activeElement?.getAttribute('data-inline-node-id') === model.selection.nodeId) return;
 		const inlineSelection = readDocumentTextSelection(container, true);
 		if (!inlineSelection) return;
 		if (!isDocumentTextSelectionInDocument(model.document, inlineSelection.selection)) return;

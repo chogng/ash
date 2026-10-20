@@ -8,7 +8,7 @@ import { preparePrototypeCodec } from './protobufPrototype/generate.js';
 
 export default defineConfig({
 	define: { __ASH_WEB_APP_SERVER__: 'false' },
-	resolve: { alias: rendererDependencyAliases },
+	resolve: { alias: [{ find: /^ash:editor\//u, replacement: resolve(import.meta.dirname, '../../../src/ash') + '/' }, ...rendererDependencyAliases] },
 	root: resolve(import.meta.dirname),
 	plugins: [webUpdatePlugin(), { name: 'ash-app-server-codec-prototype', buildStart: preparePrototypeCodec }, workbenchEntryPlugin('/themeEditor.html', [{
 		url: '/browser/theme-preview/themePreview.html',
@@ -93,6 +93,8 @@ export default defineConfig({
 				standalone: resolve(import.meta.dirname, 'standalone.html'),
 				gpuText: resolve(import.meta.dirname, "gpuText.html"),
 				academic: resolve(import.meta.dirname, "academic.html"),
+				pdfExtension: resolve(import.meta.dirname, "pdfExtension.html"),
+				referenceManager: resolve(import.meta.dirname, "referenceManager.html"),
 			},
 		},
 	},

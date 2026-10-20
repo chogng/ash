@@ -10,12 +10,12 @@ import { CancellationError } from "../../../../../base/common/errors.js";
 import { URI } from "../../../../../base/common/uri.js";
 import { FileKind } from "../../../../../platform/files/common/files.js";
 import { EditorPaneMatch } from '../../../../../workbench/browser/parts/editor/editorPane.js';
-import { PdfEditorPane } from "../../../../../workbench/contrib/pdf/browser/pdfEditorPane.js";
-import type { IPdfAnnotationStore, PdfAnnotationSnapshot } from "../../../../../workbench/contrib/pdf/browser/pdfAnnotationStore.js";
-import { WorkspacePdfDocumentLoader } from "../../../../../workbench/contrib/pdf/browser/pdfDocumentLoader.js";
-import type { IPdfRenderResult, IPdfRenderer, PdfRenderRequest } from "../../../../../workbench/contrib/pdf/browser/pdfRenderer.js";
-import { matchPdfEditor } from "../../../../../workbench/contrib/pdf/browser/pdfEditorInput.js";
-import { emptyPdfAnnotationDocument, type PdfAnnotationDocument } from "../../../../../workbench/contrib/pdf/common/pdfAnnotations.js";
+import { PdfEditorPane } from "../../../../../../../extensions/pdf-viewer/browser/pdfEditorPane.js";
+import type { IPdfAnnotationStore, PdfAnnotationSnapshot } from "../../../../../../../extensions/pdf-viewer/browser/pdfAnnotationStore.js";
+import { WorkspacePdfDocumentLoader } from "../../../../../../../extensions/pdf-viewer/browser/pdfDocumentLoader.js";
+import type { IPdfRenderResult, IPdfRenderer, PdfRenderRequest } from "../../../../../../../extensions/pdf-viewer/browser/pdfRenderer.js";
+import { matchPdfEditor } from "../../../../../../../extensions/pdf-viewer/browser/pdfEditorInput.js";
+import { emptyPdfAnnotationDocument, type PdfAnnotationDocument } from "../../../../../../../extensions/pdf-viewer/common/pdfAnnotations.js";
 import { h } from "../../../../../base/browser/dom.js";
 
 test("PDF editor matching selects only application/pdf and .pdf resources", () => {

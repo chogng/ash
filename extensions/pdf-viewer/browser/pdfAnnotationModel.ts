@@ -1,5 +1,5 @@
-import { Emitter, type Event } from "../../../../base/common/event.js";
-import { createUuid } from "../../../../base/common/uuid.js";
+import { Emitter, type Event } from "../../../src/ash/base/common/event.js";
+import { createUuid } from "../../../src/ash/base/common/uuid.js";
 import { emptyPdfAnnotationDocument, parsePdfAnnotationDocument, serializePdfAnnotationDocument, type PdfAnnotation, type PdfAnnotationDocument, type PdfAnnotationPoint, type PdfAnnotationRect, type PdfHighlightAnnotation, type PdfInkAnnotation, type PdfNoteAnnotation } from "../common/pdfAnnotations.js";
 import type { PdfAnnotationSnapshot } from "./pdfAnnotationStore.js";
 

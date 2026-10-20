@@ -1,0 +1,43 @@
+{
+  "name": "reference-manager",
+  "publisher": "ash",
+  "version": "1.0.0",
+  "displayName": "%referenceManager.displayName%",
+  "description": "%referenceManager.description%",
+  "engines": {
+    "vscode": "*"
+  },
+  "contributes": {
+    "customEditors": [
+      {
+        "viewType": "ash.workbench.referenceLibrary",
+        "displayName": "%referenceManager.editor%",
+        "priority": "default",
+        "selector": [
+          {
+            "filenamePattern": "*.ash-library",
+            "mimeType": "application/vnd.ash.reference-library+json"
+          },
+          {
+            "filenamePattern": "*.ris",
+            "mimeType": "application/x-research-info-systems"
+          }
+        ]
+      }
+    ]
+  },
+  "private": true,
+  "ashRuntime": {
+    "kind": "rust",
+    "entrypoint": "ash-reference-manager",
+    "client": {
+      "apiVersion": 1,
+      "entry": "dist/editor.js",
+      "style": "dist/editor.css"
+    }
+  },
+  "activationEvents": [
+    "*"
+  ],
+  "type": "module"
+}

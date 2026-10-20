@@ -1,5 +1,5 @@
-import { localize } from '../../../../../src/ash/nls.js';
-import type { SelectBox, SelectOption } from '../../../../../src/ash/base/browser/ui/selectbox/selectbox.js';
+import { localize } from 'ash:editor/nls.js';
+import type { SelectBox, SelectOption } from 'ash:editor/base/browser/ui/selectbox/selectbox.js';
 import { type DocumentEditorContributionContext, type DocumentFormattingContribution, type DocumentFormattingState } from '../../documentContributions.js';
 import { DocumentFormattingControls } from '../../widget/documentFormattingControls.js';
 import { createSetParagraphFormatCommand } from '../../../common/commands/documentParagraphCommands.js';

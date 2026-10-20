@@ -1,5 +1,5 @@
-import type { DocumentNodeId, DocumentAttributeValue, DocumentAttributes, DocumentMark, DocumentNode } from '../../../../src/ash/workbench/services/documentEditor/common/documentCodec.js';
-export type { DocumentNodeId, DocumentAttributeValue, DocumentAttributes, DocumentMark, DocumentNode } from '../../../../src/ash/workbench/services/documentEditor/common/documentCodec.js';
+import type { DocumentNodeId, DocumentAttributeValue, DocumentAttributes, DocumentMark, DocumentNode } from 'ash:editor/workbench/services/documentEditor/common/documentCodec.js';
+export type { DocumentNodeId, DocumentAttributeValue, DocumentAttributes, DocumentMark, DocumentNode } from 'ash:editor/workbench/services/documentEditor/common/documentCodec.js';
 
 export interface DocumentNodeOptions {
 	readonly id: DocumentNodeId;

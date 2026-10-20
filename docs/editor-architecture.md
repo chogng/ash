@@ -108,6 +108,10 @@ EOL 和保存基线。授权期间的后续编辑保持 dirty；提交前取消�
 写入回执更新基线。无法确认结果时保留 dirty，重读后再由用户选择后续操作。Ash 目录授权
 拒绝与配置只读策略不能通过 OS 提权绕过。
 
+独立 [Reference Manager](../extensions/reference-manager/README.md) 拥有 RIS 与 `.ash-library` 工作副本，经带文档版本和 pane／Provider 生命周期的通用调用句柄请求 Academy 插入／更新引用；Academy 保持正文、事务与历史的唯一 owner。共享宿主不解析文献请求。
+
+PDF 的渲染与批注实现归可选 `extensions/pdf-viewer` 包，主工作台和 Agent Window 不导入 PDF 业务代码；Chat 附件也通过通用资源编辑器注册表获取只读预览。
+
 `preferredEditorId` 只是 Workbench 在 code、document、diff、PDF 等现有 pane 间做显式选择的通用机制，不再承载旧 editor 兼容入口。
 
 语言能力采用与 VS Code 相同的两条入口、一个内部注册表：`editor.api.ts` 的 `languages` 对象供 standalone 调用者注册语言、编辑规则和 provider；Workbench 不经过公开对象转发，而是直接把 App Server、Tree-sitter 和扩展贡献注册到同一组 Editor service contract。语言身份由 `LanguageService` 管理，编辑规则由 `LanguageConfigurationService` 管理，provider 由 `LanguageFeaturesService` 管理；Hover、补全、折叠等 contribution 自己构造面向当前 `TextModel` 的执行服务。
@@ -1285,7 +1289,7 @@ catalog，也不启动分词 Worker。文件读写和工作副本生命周期仍
 
 Stanza 已从独立内核演进为由真实 `IEditorPane` 宿主的编辑器能力，但仍保持“Workbench 负责资源与宿主、
 编辑器域负责模型和交互语义”的单向依赖。Code 与 Academic 产品通过 Workbench contribution 注册 Stanza 为
-普通文本的默认 editor；document、diff 和 PDF 继续通过各自明确的 pane descriptor 参与选择。
+普通文本的默认 editor；document、diff 通过各自明确的 pane descriptor 参与选择；PDF 仅在独立 `ash.pdf-viewer` 扩展安装、启用且获准后注册资源 pane。
 
 `IEditorPart.openEditor` 是产品调用面，`workbench/browser/editor.ts` 中的 `IEditorPaneDescriptor` 和
 `IEditorPaneRegistry` 定义声明与选择边界，`EditorPaneRegistry` 是唯一实现，`IEditorPane` 是

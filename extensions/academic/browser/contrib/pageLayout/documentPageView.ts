@@ -1,6 +1,6 @@
 import './pageLayout.css';
-import { addDisposableListener, h } from '../../../../../src/ash/base/browser/dom.js';
-import { Disposable, DisposableStore, toDisposable } from '../../../../../src/ash/base/common/lifecycle.js';
+import { addDisposableListener, h } from 'ash:editor/base/browser/dom.js';
+import { Disposable, DisposableStore, toDisposable } from 'ash:editor/base/common/lifecycle.js';
 import type { DocumentNode } from '../../../common/model/document.js';
 import { documentPageDimensions } from '../../../common/model/documentPageLayout.js';
 

@@ -1,9 +1,9 @@
-import type { SelectBox } from '../../../../../src/ash/base/browser/ui/selectbox/selectbox.js';
-import { localize } from '../../../../../src/ash/nls.js';
+import type { SelectBox } from 'ash:editor/base/browser/ui/selectbox/selectbox.js';
+import { localize } from 'ash:editor/nls.js';
 import { type DocumentEditorContributionContext, type DocumentFormattingContribution, type DocumentFormattingState } from '../../documentContributions.js';
 import { DocumentFormattingControls } from '../../widget/documentFormattingControls.js';
-import type { InputBox } from '../../../../../src/ash/base/browser/ui/inputbox/inputbox.js';
-import type { Button } from '../../../../../src/ash/base/browser/ui/button/button.js';
+import type { InputBox } from 'ash:editor/base/browser/ui/inputbox/inputbox.js';
+import type { Button } from 'ash:editor/base/browser/ui/button/button.js';
 import { getDocumentParagraphStyles } from '../../../common/model/documentParagraph.js';
 import { createApplyParagraphStyleCommand, createClearParagraphOverridesCommand, createDefineParagraphStyleCommand, createDeleteParagraphStyleCommand, createSetParagraphStyleCommand } from '../../../common/commands/documentParagraphCommands.js';
 

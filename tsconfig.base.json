@@ -10,7 +10,8 @@
     "resolveJsonModule": true,
     "skipLibCheck": true,
     "paths": {
-      "ash": ["./sdk/browser/ash.d.ts"]
+      "ash": ["./sdk/browser/ash.d.ts"],
+      "ash:editor/*": ["./src/ash/*"]
     }
   }
 }

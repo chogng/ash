@@ -6,7 +6,6 @@ import '../../../../../editor/common/core/editorColorRegistry.js';
 import '../../../../../editor/browser/widget/multiDiffEditor/colors.js';
 import '../../../../common/theme.js';
 import '../../../chat/common/widget/chatColors.js';
-import '../../../pdf/common/pdfColors.js';
 import '../../../preferences/common/settingsEditorColorRegistry.js';
 import '../../../preferences/browser/keybindingsEditor.js';
 import '../../../scm/browser/scmHistory.js';

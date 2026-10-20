@@ -1,7 +1,7 @@
 import { resolveDocumentParagraphAttributes } from './documentParagraph.js';
 import type { DocumentAttributes, DocumentMark, DocumentNode } from './document.js';
 import type { DocumentSchema } from './documentSchema.js';
-import { createLineDocumentSnapshot, linePoint, type InlineAtom, type LineDocumentSnapshot, type LineFacet, type LineId, type LineRegion, type LineRelation, type LineSemanticAttributes, type LineSemanticValue, type ModelLine, type PersistentMark } from '../../../../src/ash/editor/common/model/lineDocument.js';
+import { createLineDocumentSnapshot, linePoint, type InlineAtom, type LineDocumentSnapshot, type LineFacet, type LineId, type LineRegion, type LineRelation, type LineSemanticAttributes, type LineSemanticValue, type ModelLine, type PersistentMark } from 'ash:editor/editor/common/model/lineDocument.js';
 
 /** Converts a schema document into the line-first snapshot consumed by TextModel. */
 export function projectDocumentToLines(schema: DocumentSchema, document: DocumentNode): LineDocumentSnapshot {

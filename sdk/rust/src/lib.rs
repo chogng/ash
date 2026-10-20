@@ -19,6 +19,7 @@ mod cancellation;
 pub mod client;
 pub mod data_channels;
 pub mod debug;
+pub mod editor_client;
 pub mod editors;
 pub mod languages;
 mod runtime;

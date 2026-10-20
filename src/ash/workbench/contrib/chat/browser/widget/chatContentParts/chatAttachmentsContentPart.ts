@@ -11,7 +11,9 @@ import { IAgentThreadService } from '../../../../../../platform/agentHost/common
 import { type ChatContentPart } from '../../../../../../platform/agentHost/common/agent.js';
 import type { IChatListItem } from '../chatListItems.js';
 import { IWebviewService, type IWebviewElement } from '../../../../webview/browser/webview.js';
-import { PdfJsRenderer, type IPdfRenderResult } from '../../../../pdf/browser/pdfRenderer.js';
+import { EditorPanes } from '../../../../../browser/editor.js';
+import type { IEditorPane } from '../../../../../common/editor.js';
+import { IInstantiationService } from '../../../../../../platform/instantiation/common/instantiation.js';
 
 /** A provider-owned resource; only its reader knows authentication or protocol coordinates. */
 export interface IChatAttachmentResource {
@@ -42,7 +44,7 @@ class MediaRow extends Disposable {
 	public readonly media: HTMLElement;
 	public readonly downloadButton: HTMLButtonElement;
 	public blob: Blob | undefined;
-	public readonly preview = this._register(new MutableDisposable<IWebviewElement | IPdfRenderResult>());
+	public readonly preview = this._register(new MutableDisposable<IWebviewElement | IEditorPane>());
 	public readonly objectUrl = this._register(new MutableDisposable());
 	public readonly resources = this._register(new DisposableStore());
 	public readonly controller = new AbortController();
@@ -109,7 +111,7 @@ export class ChatAttachmentsContentPart extends Disposable {
 	private readonly _onDidChangeHeight = this._register(new Emitter<void>());
 	public readonly onDidChangeHeight = this._onDidChangeHeight.event;
 
-	constructor(private readonly options: IChatAttachmentsContentPartOptions, @IAgentThreadService private readonly threads: IAgentThreadService, @IChatResponseResourceFileSystemProvider private readonly files: IChatResponseResourceFileSystemProvider, @IEditorService private readonly editors: IEditorService, @IWebviewService private readonly webviews: IWebviewService) {
+	constructor(private readonly options: IChatAttachmentsContentPartOptions, @IAgentThreadService private readonly threads: IAgentThreadService, @IChatResponseResourceFileSystemProvider private readonly files: IChatResponseResourceFileSystemProvider, @IEditorService private readonly editors: IEditorService, @IWebviewService private readonly webviews: IWebviewService, @IInstantiationService private readonly instantiation: IInstantiationService) {
 		super();
 		this.domNode = h(options.ownerDocument, 'div');
 		this.domNode.className = 'ash-chat-media-attachments';
@@ -231,15 +233,24 @@ export class ChatAttachmentsContentPart extends Disposable {
 				view.setHtml(new TextDecoder().decode(bytes));
 				view.mountTo(row.media, getWindow(row.element));
 				row.media.classList.add('ash-chat-html-preview');
-			} else if (mime === 'application/pdf') {
-				row.preview.value = await new PdfJsRenderer().render({ bytes, container: row.media, scale: 1, signal: row.controller.signal });
-				if (row.isDisposed || this.isDisposed) { row.preview.clear(); return; }
 			} else if (row.part.presentation === 'document') {
 				if (/^(?:text\/|application\/(?:json|xml))/u.test(mime)) {
 					const text = h(row.element.ownerDocument, 'pre');
 					text.textContent = new TextDecoder().decode(bytes);
 					row.media.append(text);
-				} else { row.media.textContent = localize('chat.resource.binary', 'Binary resource ({0} bytes)', bytes.length); }
+				} else {
+					const input = { resource: row.association.value!.resource, contentType: mime, readOnly: true, initialBytes: bytes };
+					const descriptor = EditorPanes.getEditorPanesForInput(input).find(pane => pane.resourceEditor);
+					if (descriptor) {
+						const pane = await descriptor.create({ input, instantiationService: this.instantiation });
+						if (row.isDisposed || this.isDisposed) { pane.dispose(); return; }
+						row.preview.value = pane;
+						row.media.classList.add('ash-chat-resource-preview');
+						pane.create(row.media);
+						await pane.setInput(input, row.controller.signal);
+						if (row.isDisposed || this.isDisposed) { row.preview.clear(); return; }
+					} else { row.media.textContent = localize('chat.resource.binary', 'Binary resource ({0} bytes)', bytes.length); }
+				}
 			} else {
 				const url = createObjectUrl(this.options.ownerDocument.defaultView!, blob);
 				row.objectUrl.value = url.registration;

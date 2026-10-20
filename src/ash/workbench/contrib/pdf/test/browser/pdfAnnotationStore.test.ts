@@ -6,8 +6,8 @@ import { test } from "mocha";
 import { toDisposable, Disposable, type IDisposable } from "../../../../../base/common/lifecycle.js";
 import { URI } from "../../../../../base/common/uri.js";
 import { FileKind, type IFileWriteRequest } from "../../../../../platform/files/common/files.js";
-import { WorkspacePdfAnnotationStore, pdfAnnotationSidecarResource } from "../../../../../workbench/contrib/pdf/browser/pdfAnnotationStore.js";
-import { emptyPdfAnnotationDocument, parsePdfAnnotationDocument } from "../../../../../workbench/contrib/pdf/common/pdfAnnotations.js";
+import { WorkspacePdfAnnotationStore, pdfAnnotationSidecarResource } from "../../../../../../../extensions/pdf-viewer/browser/pdfAnnotationStore.js";
+import { emptyPdfAnnotationDocument, parsePdfAnnotationDocument } from "../../../../../../../extensions/pdf-viewer/common/pdfAnnotations.js";
 
 test("PDF annotation store returns an empty document when no sidecar exists", async () => {
 	const resource = URI.file("/workspace/paper.pdf");
@@ -83,3 +83,21 @@ class TestFileService implements IFileSystemProvider {
 	async rename(): Promise<never> { throw new Error("PDF annotation tests do not rename files"); }
 	async delete(): Promise<never> { throw new Error("PDF annotation tests do not delete files"); }
 }
+
+test('provider retirement cancels a sidecar write through the authorized file service', async () => {
+	const controller = new AbortController();
+	let entered!: () => void;
+	const writing = new Promise<void>(resolve => { entered = resolve; });
+	const files = new TestFileService();
+	files.writeFile = async (_resource, _bytes, _options, signal?: AbortSignal) => {
+		assert.ok(signal);
+		entered();
+		return new Promise((_resolve, reject) => signal.addEventListener('abort', () => reject(new Error('sidecar write cancelled')), { once: true }));
+	};
+	using service = createTestFileService(files);
+	const store = new WorkspacePdfAnnotationStore(service);
+	const saved = assert.rejects(store.save(URI.file('/workspace/paper.pdf'), emptyPdfAnnotationDocument(), undefined, controller.signal), /cancelled/);
+	await writing;
+	controller.abort();
+	await saved;
+});

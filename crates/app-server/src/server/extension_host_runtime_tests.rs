@@ -1539,6 +1539,46 @@ fn credentials_are_private_to_admitted_consumers_and_never_relayed_to_the_render
 #[test]
 #[ignore = "requires ASH_ACADEMY_DISTRIBUTION and ASH_ACADEMY_TRUSTED_ROOT signed package fixture"]
 fn signed_installed_academy_uses_product_launcher_and_exact_revocable_consent() {
+    signed_installed_editor_uses_product_launcher_and_exact_revocable_consent(
+        "ASH_ACADEMY_DISTRIBUTION",
+        "ASH_ACADEMY_TRUSTED_ROOT",
+        "academic",
+        "editor.client.v1",
+        [("en", "Academic Document"), ("zh-CN", "学术论文文档")],
+    );
+}
+
+#[test]
+#[ignore = "requires ASH_PDF_VIEWER_DISTRIBUTION and ASH_PDF_VIEWER_TRUSTED_ROOT signed package fixture"]
+fn signed_installed_pdf_viewer_uses_product_launcher_and_exact_revocable_consent() {
+    signed_installed_editor_uses_product_launcher_and_exact_revocable_consent(
+        "ASH_PDF_VIEWER_DISTRIBUTION",
+        "ASH_PDF_VIEWER_TRUSTED_ROOT",
+        "pdf-viewer",
+        "editor.resource.v1",
+        [("en", "PDF Reader"), ("zh-CN", "PDF 阅读器")],
+    );
+}
+
+#[test]
+#[ignore = "requires ASH_REFERENCE_MANAGER_DISTRIBUTION and ASH_REFERENCE_MANAGER_TRUSTED_ROOT signed package fixture"]
+fn signed_installed_reference_manager_uses_product_launcher_and_exact_revocable_consent() {
+    signed_installed_editor_uses_product_launcher_and_exact_revocable_consent(
+        "ASH_REFERENCE_MANAGER_DISTRIBUTION",
+        "ASH_REFERENCE_MANAGER_TRUSTED_ROOT",
+        "reference-manager",
+        "editor.resource.v1",
+        [("en", "Reference Library"), ("zh-CN", "文献库")],
+    );
+}
+
+fn signed_installed_editor_uses_product_launcher_and_exact_revocable_consent(
+    distribution_env: &str,
+    trusted_root_env: &str,
+    name: &str,
+    channel: &str,
+    localized_names: [(&str, &str); 2],
+) {
     use ash_core_plugins::CapabilityKind;
     use ash_core_plugins::EditorExtensionPolicy;
     use ash_core_plugins::EditorExtensionPolicyAction;
@@ -1551,11 +1591,12 @@ fn signed_installed_academy_uses_product_launcher_and_exact_revocable_consent() 
     use ash_core_plugins::RemoteExtensionsConfig;
     use std::sync::Arc;
 
+    let runtime_id = format!("ash.{name}");
+    let package_id = format!("{runtime_id}@editor-smoke");
     let root = tempfile::tempdir().unwrap();
     let config = RemoteExtensionsConfig::from_directory(
-        std::env::var_os("ASH_ACADEMY_DISTRIBUTION").expect("signed distribution path"),
-        std::fs::read(std::env::var_os("ASH_ACADEMY_TRUSTED_ROOT").expect("pinned root path"))
-            .unwrap(),
+        std::env::var_os(distribution_env).expect("signed distribution path"),
+        std::fs::read(std::env::var_os(trusted_root_env).expect("pinned root path")).unwrap(),
         root.path().join("cache"),
     )
     .unwrap()
@@ -1565,7 +1606,7 @@ fn signed_installed_academy_uses_product_launcher_and_exact_revocable_consent() 
         ExtensionPackageManager::open(
             root.path().join("manager"),
             ExtensionSources::new([(
-                ash_utils_plugins::ExtensionSourceId::new("academic-smoke").unwrap(),
+                ash_utils_plugins::ExtensionSourceId::new("editor-smoke").unwrap(),
                 Arc::new(ExtensionsRemoteClient::new(config)) as Arc<dyn ExtensionSource>,
             )])
             .unwrap(),
@@ -1574,7 +1615,7 @@ fn signed_installed_academy_uses_product_launcher_and_exact_revocable_consent() 
     );
     let found = manager
         .search(ash_core_plugins::SearchPackagesRequest {
-            query: "academic".into(),
+            query: name.into(),
             capability_kind: Some(CapabilityKind::EditorExtension),
             ..Default::default()
         })
@@ -1583,12 +1624,11 @@ fn signed_installed_academy_uses_product_launcher_and_exact_revocable_consent() 
         found
             .packages
             .iter()
-            .any(|package| package.id == "ash.academic@academic-smoke"
-                && package.package_type == "editor")
+            .any(|package| package.id == package_id && package.package_type == "editor")
     );
     let details = manager
         .get(ash_core_plugins::GetPackageRequest {
-            package_id: "ash.academic@academic-smoke".into(),
+            package_id: package_id.clone(),
             version: Some("1.0.0".into()),
         })
         .unwrap();
@@ -1601,7 +1641,7 @@ fn signed_installed_academy_uses_product_launcher_and_exact_revocable_consent() 
     );
     let installed = manager
         .install(InstallPackageRequest {
-            package_id: "ash.academic@academic-smoke".into(),
+            package_id: package_id.clone(),
             version: Some("1.0.0".into()),
         })
         .unwrap();
@@ -1611,7 +1651,7 @@ fn signed_installed_academy_uses_product_launcher_and_exact_revocable_consent() 
         .into_iter()
         .find(|source| {
             crate::extension_packages_editor_extensions::product_runtime_extension_id(source)
-                .is_ok_and(|id| id.as_deref() == Some("ash.academic"))
+                .is_ok_and(|id| id.as_deref() == Some(runtime_id.as_str()))
         })
         .unwrap();
     assert!(executable.is_product_runtime());
@@ -1677,7 +1717,7 @@ fn signed_installed_academy_uses_product_launcher_and_exact_revocable_consent() 
     let activated = runtime
         .activate_by_event(
             1,
-            "ash.academic",
+            &runtime_id,
             generation,
             super::source::ActivationEvent::StartupFinished,
             None,
@@ -1689,14 +1729,14 @@ fn signed_installed_academy_uses_product_launcher_and_exact_revocable_consent() 
         super::projection::ExtensionHostLifecycle::Ready
     );
     assert_eq!(activated.extensions[0].registrations.len(), 1);
-    let supervisor = runtime.inner.state.lock().unwrap().entries["ash.academic"]
+    let supervisor = runtime.inner.state.lock().unwrap().entries[&runtime_id]
         .supervisor
         .clone()
         .unwrap();
-    for (language, expected) in [("en", "Academic Document"), ("zh-CN", "学术论文文档")] {
+    for (language, expected) in localized_names {
         let result = supervisor
             .begin_data_channel(
-                "editor.client.v1",
+                channel,
                 json!({"operation":"describe", "language":language}),
                 Duration::from_secs(10),
             )

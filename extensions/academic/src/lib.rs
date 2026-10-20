@@ -4,42 +4,11 @@ use external_ext_sdk::Extension;
 use external_ext_sdk::ExtensionContext;
 use external_ext_sdk::ExtensionError;
 use external_ext_sdk::HostErrorCode;
-use serde::Deserialize;
-use serde::Serialize;
-
-/// A product-owned client component is selected through the shared extension transport.
-/// Its independently built module requires verified package admission before client execution.
-#[derive(Deserialize)]
-#[serde(deny_unknown_fields)]
-struct Request {
-    operation: Operation,
-    language: String,
-}
-
-#[derive(Deserialize)]
-#[serde(rename_all = "camelCase")]
-enum Operation {
-    Describe,
-}
-
-#[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
-struct Editor {
-    editor_id: &'static str,
-    display_name: String,
-    selectors: &'static [&'static str],
-    document_type: &'static str,
-    content_type: &'static str,
-}
-
-#[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
-struct Contribution {
-    version: u8,
-    client_module: &'static str,
-    client_digest: &'static str,
-    editors: Vec<Editor>,
-}
+use external_ext_sdk::editor_client::DOCUMENT_CLIENT_CHANNEL;
+use external_ext_sdk::editor_client::DescribeClientOperation;
+use external_ext_sdk::editor_client::DescribeClientRequest;
+use external_ext_sdk::editor_client::DocumentClientContribution;
+use external_ext_sdk::editor_client::DocumentClientEditor;
 
 pub struct AcademyExtension;
 
@@ -57,20 +26,14 @@ impl Extension for AcademyExtension {
             serde_json::from_str(include_str!("../package.nls.zh-CN.json")).map_err(|_| {
                 ExtensionError::new(HostErrorCode::InvalidRequest, "Invalid Academy messages")
             })?;
-        context
-            .data_channels
-            .register("editor.client.v1", move |request: Request, token| {
+        context.data_channels.register(
+            DOCUMENT_CLIENT_CHANNEL,
+            move |request: DescribeClientRequest, token| {
                 token.check_cancelled()?;
-                let Request {
-                    operation: Operation::Describe,
+                let DescribeClientRequest {
+                    operation: DescribeClientOperation::Describe,
                     language,
                 } = request;
-                if language.is_empty() || language.len() > 64 {
-                    return Err(ExtensionError::new(
-                        HostErrorCode::InvalidRequest,
-                        "Invalid client language",
-                    ));
-                }
                 // The process can serve multiple windows; labels follow the initiating client.
                 let messages = if language == "zh-CN" {
                     &chinese
@@ -85,34 +48,34 @@ impl Extension for AcademyExtension {
                         )
                     })
                 };
-                Ok(Contribution {
-                    version: 1,
-                    client_module: "dist/editor.js",
-                    client_digest: env!("ASH_EDITOR_CLIENT_DIGEST"),
-                    editors: vec![
-                        Editor {
-                            editor_id: "stanza.editor.document",
+                DocumentClientContribution::new(
+                    "dist/editor.js",
+                    env!("ASH_EDITOR_CLIENT_DIGEST"),
+                    vec![
+                        DocumentClientEditor {
+                            editor_id: "stanza.editor.document".into(),
                             display_name: label("academic.editor")?,
-                            selectors: &["*.ash-academic", "*.ash-paper"],
-                            document_type: "academic",
-                            content_type: "application/vnd.ash.academic-document+json",
+                            selectors: vec!["*.ash-academic".into(), "*.ash-paper".into()],
+                            document_type: "academic".into(),
+                            content_type: "application/vnd.ash.academic-document+json".into(),
                         },
-                        Editor {
-                            editor_id: "ash.editor.document",
+                        DocumentClientEditor {
+                            editor_id: "ash.editor.document".into(),
                             display_name: label("academic.generalEditor")?,
-                            selectors: &["*.ash-doc"],
-                            document_type: "general",
-                            content_type: "application/vnd.ash.document+json",
+                            selectors: vec!["*.ash-doc".into()],
+                            document_type: "general".into(),
+                            content_type: "application/vnd.ash.document+json".into(),
                         },
-                        Editor {
-                            editor_id: "ash.collaboration.notes",
+                        DocumentClientEditor {
+                            editor_id: "ash.collaboration.notes".into(),
                             display_name: label("academic.channelNotes")?,
-                            selectors: &[],
-                            document_type: "ash.collaboration.notes",
-                            content_type: "application/vnd.ash.channel-notes+json",
+                            selectors: vec![],
+                            document_type: "ash.collaboration.notes".into(),
+                            content_type: "application/vnd.ash.channel-notes+json".into(),
                         },
                     ],
-                })
-            })
+                )
+            },
+        )
     }
 }

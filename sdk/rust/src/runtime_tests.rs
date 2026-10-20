@@ -107,6 +107,7 @@ fn oversized_callback_returns_a_quota_error_and_keeps_the_runtime_usable() {
                 external_ext_protocol::InvokeParams {
                     extension_id: "example.commands".into(),
                     registration_id: "example.echo".into(),
+                    registration_generation: None,
                     operation: "execute".into(),
                     payload: serde_json::json!({"arguments":[argument]}),
                     deadline_unix_millis: 1_900_000_000_000,
@@ -196,7 +197,8 @@ fn responses(buffer: &Buffer) -> Vec<ExtensionHostResponse> {
                 external_ext_protocol::ExtensionHostStdoutFrame::Response(response) => {
                     Some(response)
                 }
-                external_ext_protocol::ExtensionHostStdoutFrame::ClientRequest(_)
+                external_ext_protocol::ExtensionHostStdoutFrame::Registrations(_)
+                | external_ext_protocol::ExtensionHostStdoutFrame::ClientRequest(_)
                 | external_ext_protocol::ExtensionHostStdoutFrame::BackgroundClientRequest(_)
                 | external_ext_protocol::ExtensionHostStdoutFrame::Output(_) => None,
             }

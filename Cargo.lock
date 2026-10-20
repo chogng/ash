@@ -235,7 +235,6 @@ version = "0.1.0"
 dependencies = [
  "ash-editor-client-build",
  "ash-external-ext-sdk",
- "serde",
  "serde_json",
 ]
 
@@ -1521,6 +1520,7 @@ dependencies = [
  "getrandom 0.2.17",
  "serde_json",
  "sha2 0.10.9",
+ "signal-hook",
  "tempfile",
  "thiserror 2.0.21",
 ]
@@ -2536,6 +2536,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "ash-pdf-viewer"
+version = "0.1.0"
+dependencies = [
+ "ash-editor-client-build",
+ "ash-external-ext-sdk",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "ash-plugin"
 version = "0.1.0"
 dependencies = [
@@ -2650,6 +2660,16 @@ dependencies = [
  "sherpa-onnx",
  "tempfile",
  "tokio",
+]
+
+[[package]]
+name = "ash-reference-manager"
+version = "0.1.0"
+dependencies = [
+ "ash-editor-client-build",
+ "ash-external-ext-sdk",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]

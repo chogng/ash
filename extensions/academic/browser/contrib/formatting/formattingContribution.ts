@@ -1,11 +1,11 @@
-import { defaultButtonStyles } from '../../../../../src/ash/platform/theme/browser/defaultStyles.js';
-import type { IContextMenuProvider } from "../../../../../src/ash/base/browser/contextmenu.js";
-import { ToolBar } from "../../../../../src/ash/base/browser/ui/toolbar/toolbar.js";
-import type { IAction } from "../../../../../src/ash/base/common/actions.js";
-import { Lxicon } from "../../../../../src/ash/base/common/lxicons.js";
-import { Disposable, toDisposable } from "../../../../../src/ash/base/common/lifecycle.js";
+import { defaultButtonStyles } from 'ash:editor/platform/theme/browser/defaultStyles.js';
+import type { IContextMenuProvider } from "ash:editor/base/browser/contextmenu.js";
+import { ToolBar } from "ash:editor/base/browser/ui/toolbar/toolbar.js";
+import type { IAction } from "ash:editor/base/common/actions.js";
+import { Lxicon } from "ash:editor/base/common/lxicons.js";
+import { Disposable, toDisposable } from "ash:editor/base/common/lifecycle.js";
 import type { DocumentTextStyleFontFamily } from "../../../common/model/documentSchema.js";
-import { addDisposableListener, h } from "../../../../../src/ash/base/browser/dom.js";
+import { addDisposableListener, h } from "ash:editor/base/browser/dom.js";
 import type { DocumentEditorContributionContext, DocumentFormattingContribution, DocumentFormattingState } from '../../documentContributions.js';
 
 type FormattingContributionOptions = Pick<DocumentEditorContributionContext, 'documentActions' | 'onToggleMark' | 'onSetTextStyle' | 'onClearTextStyle' | 'onRunDocumentAction'>;

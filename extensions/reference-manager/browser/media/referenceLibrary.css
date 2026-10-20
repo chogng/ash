@@ -1,0 +1,91 @@
+.stanza-reference-library {
+	block-size: 100%;
+	min-block-size: 0;
+	min-inline-size: 0;
+	display: flex;
+	flex-direction: column;
+	gap: var(--ash-spacing-size80);
+	padding: var(--ash-spacing-size120);
+	box-sizing: border-box;
+	background: var(--ash-editor-background);
+	color: var(--ash-editor-foreground);
+	font-size: var(--ash-fontSize-body2);
+}
+.reference-library-toolbar {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: var(--ash-spacing-size80);
+}
+.reference-library-toolbar label {
+	display: flex;
+	align-items: center;
+	gap: var(--ash-spacing-size80);
+}
+.stanza-reference-library button,
+.stanza-reference-library select,
+.stanza-reference-library input {
+	font: inherit;
+	color: var(--ash-input-foreground);
+	background: var(--ash-input-background);
+	border: var(--ash-strokeThickness) solid var(--ash-input-border);
+	border-radius: var(--ash-cornerRadius-xSmall);
+	padding: var(--ash-spacing-size40) var(--ash-spacing-size80);
+}
+.stanza-reference-library button:disabled {
+	opacity: 0.5;
+	cursor: default;
+}
+.stanza-reference-library :focus-visible {
+	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
+	outline-offset: var(--ash-strokeThickness);
+}
+.reference-library-content {
+	display: flex;
+	flex: 1;
+	min-block-size: 0;
+	min-inline-size: 0;
+	gap: var(--ash-spacing-size160);
+}
+.reference-library-list {
+	flex: 1;
+	min-inline-size: 0;
+	overflow: auto;
+	display: flex;
+	flex-direction: column;
+	gap: var(--ash-spacing-size40);
+}
+.reference-library-entry {
+	flex: 0 0 auto;
+	text-align: start;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+.reference-library-entry[aria-selected="true"] {
+	background: var(--ash-list-activeSelectionBackground);
+	color: var(--ash-list-activeSelectionForeground);
+	border-color: var(--ash-contrastBorder);
+}
+.reference-library-detail {
+	flex: 1;
+	min-inline-size: 0;
+	overflow: auto;
+	overflow-wrap: anywhere;
+}
+.reference-library-detail h2 {
+	font-size: var(--ash-fontSize-heading3);
+	margin: 0;
+}
+.reference-library-detail p {
+	white-space: pre-wrap;
+}
+.reference-library-status {
+	color: var(--ash-description-foreground);
+	font-size: var(--ash-fontSize-label2);
+}
+@media (max-width: 640px) {
+	.reference-library-content {
+		flex-direction: column;
+	}
+}

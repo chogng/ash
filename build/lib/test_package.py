@@ -622,6 +622,12 @@ class PackageTests(unittest.TestCase):
                 (output / "bin" / "ash-code-editor").read_bytes(),
             )
             self.assertFalse((output / "bin/ash-academy").exists())
+            self.assertFalse((output / "bin/ash-pdf-viewer").exists())
+            self.assertFalse((output / "ash-resources/extensions/pdf-viewer").exists())
+            self.assertFalse((output / "bin/ash-reference-manager").exists())
+            self.assertFalse(
+                (output / "ash-resources/extensions/reference-manager").exists()
+            )
             self.assertFalse((output / "ash-resources/extensions/academic").exists())
             self.assertEqual(
                 b"markdown-extension",

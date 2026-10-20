@@ -1,6 +1,8 @@
-import { throwIfCancelled } from "../../../../base/common/cancellation.js";
-import type { IDisposable } from "../../../../base/common/lifecycle.js";
-import { h } from "../../../../base/browser/dom.js";
+import { getDocument, GlobalWorkerOptions } from 'pdfjs-dist';
+import workerSource from 'pdfjs-dist/build/pdf.worker.min.mjs?raw';
+import { throwIfCancelled } from "../../../src/ash/base/common/cancellation.js";
+import type { IDisposable } from "../../../src/ash/base/common/lifecycle.js";
+import { h } from "../../../src/ash/base/browser/dom.js";
 
 /** One rendered PDF page surface with its DOM anchor for annotation overlays. */
 export interface PdfRenderedPage {
@@ -14,6 +16,9 @@ export interface PdfRenderedPage {
 export interface IPdfRenderResult extends IDisposable {
 	readonly pages: readonly PdfRenderedPage[];
 	readonly pageCount: number;
+	readonly text?: string;
+	/** Release parser/worker resources while retaining the already painted pages. */
+	freeze?(): void;
 }
 
 /** Renders immutable PDF bytes into page surfaces that can host annotation layers. */
@@ -32,23 +37,28 @@ export interface PdfRenderRequest {
 export class PdfJsRenderer implements IPdfRenderer {
 	async render(request: PdfRenderRequest): Promise<IPdfRenderResult> {
 		throwIfCancelled(request.signal, "PDF rendering was cancelled");
-		const [{ getDocument, GlobalWorkerOptions }, { default: workerUrl }] = await Promise.all([
-			import("pdfjs-dist"),
-			// URL imports are copied as assets; use the upstream minified worker in releases.
-			import("pdfjs-dist/build/pdf.worker.min.mjs?url"),
-		]);
-		throwIfCancelled(request.signal, "PDF rendering was cancelled");
+		const workerUrl = URL.createObjectURL(new Blob([workerSource], { type: 'text/javascript' }));
 		GlobalWorkerOptions.workerSrc = workerUrl;
-		const loadingTask = getDocument({ data: request.bytes.slice() });
-		const cancel = () => { void loadingTask.destroy(); };
+		const loadingTask = getDocument({ data: request.bytes.slice(), useWasm: false });
+		let destroying = false;
+		const destroy = () => {
+			if (destroying) return;
+			destroying = true;
+			void loadingTask.destroy().catch(() => undefined).finally(() => URL.revokeObjectURL(workerUrl));
+		};
+		const cancel = () => { destroy(); };
 		request.signal.addEventListener("abort", cancel, { once: true });
 		try {
 			const document = await loadingTask.promise;
 			throwIfCancelled(request.signal, "PDF rendering was cancelled");
 			const pages: PdfRenderedPage[] = [];
+			const texts: string[] = [];
 			for (let pageNumber = 1; pageNumber <= document.numPages; pageNumber += 1) {
 				throwIfCancelled(request.signal, "PDF rendering was cancelled");
 				const page = await document.getPage(pageNumber);
+				const text = await page.getTextContent();
+				throwIfCancelled(request.signal, "PDF rendering was cancelled");
+				texts.push(text.items.flatMap(item => 'str' in item ? [item.str + (item.hasEOL ? '\n' : ' ')] : []).join(''));
 				const viewport = page.getViewport({ scale: request.scale });
 				const element = h(request.container.ownerDocument, "div");
 				element.className = "ash-pdf-page";
@@ -69,9 +79,9 @@ export class PdfJsRenderer implements IPdfRenderer {
 				await page.render({ canvas, canvasContext: context, viewport, transform: pixelRatio === 1 ? undefined : [pixelRatio, 0, 0, pixelRatio, 0, 0] }).promise;
 				pages.push(Object.freeze({ pageNumber, element, width: viewport.width, height: viewport.height }));
 			}
-			return new PdfJsRenderResult(pages, () => { void loadingTask.destroy(); });
+			return new PdfJsRenderResult(pages, destroy, texts.join('\n\n'));
 		} catch (error) {
-			void loadingTask.destroy();
+			destroy();
 			throw error;
 		} finally {
 			request.signal.removeEventListener("abort", cancel);
@@ -81,8 +91,9 @@ export class PdfJsRenderer implements IPdfRenderer {
 
 class PdfJsRenderResult implements IPdfRenderResult {
 	private disposed = false;
+	private released = false;
 
-	constructor(readonly pages: readonly PdfRenderedPage[], private readonly releaseDocument: () => void) { }
+	constructor(readonly pages: readonly PdfRenderedPage[], private readonly releaseDocument: () => void, readonly text: string) { }
 
 	get pageCount(): number {
 		return this.pages.length;
@@ -92,6 +103,12 @@ class PdfJsRenderResult implements IPdfRenderResult {
 		if (this.disposed) return;
 		this.disposed = true;
 		for (const page of this.pages) page.element.remove();
+		this.freeze();
+	}
+
+	freeze(): void {
+		if (this.released) return;
+		this.released = true;
 		this.releaseDocument();
 	}
 

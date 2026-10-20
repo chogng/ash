@@ -195,8 +195,6 @@
 		"--ash-multiDiffEditor-headerBackground",
 		"--ash-muted-foreground",
 		"--ash-panel-background",
-		"--ash-pdf-annotationNoteShadow",
-		"--ash-pdf-pageShadow",
 		"--ash-quickInput-background",
 		"--ash-sash-hoverBackground",
 		"--ash-scmGraph-historyItemHoverLabelForeground",

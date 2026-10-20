@@ -1,3 +1,4 @@
+import type { IEditorExtensionApi } from '../../../common/editor.js';
 import type { DocumentEditorConfiguration, DocumentEditorWidget } from '../../../services/documentEditor/browser/documentEditorProfile.js';
 import type { DocumentCodec, DocumentTextFormat } from '../../../services/documentEditor/common/documentCodec.js';
 import { IChannelService, type ChannelReference } from '../../../../platform/collaboration/common/channelService.js';
@@ -190,6 +191,19 @@ export class DocumentEditorPane extends EditorPane implements IEditorPane {
 
 	public override focus(): void {
 		this.requireEditor().focus();
+	}
+
+	getExtensionApi(id: string): IEditorExtensionApi | undefined {
+		const api = this.editor?.getExtensionApi?.(id);
+		if (!api || this.isDisposed || this.options.providerSignal?.aborted) return undefined;
+		const lifetime = this.artifactLifetime.signal;
+		return {
+			version: api.version, readOnly: api.readOnly, invoke: async (payload, signal) => {
+				const request = AbortSignal.any([signal, lifetime, ...(this.options.providerSignal ? [this.options.providerSignal] : [])]);
+				request.throwIfAborted();
+				return api.invoke(payload, request);
+			}
+		};
 	}
 
 	async save(): Promise<void> {

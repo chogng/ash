@@ -53,6 +53,8 @@ members = [
     "extensions/github",
     "extensions/remote-ssh",
     "extensions/academic",
+    "extensions/pdf-viewer",
+    "extensions/reference-manager",
     "extensions/code",
     "crates/utils/editor-client-build",
     "extensions/markdown-language-features",

@@ -7,7 +7,6 @@ publish.workspace = true
 
 [dependencies]
 external-ext-sdk = { package = "ash-external-ext-sdk", path = "../../sdk/rust" }
-serde = { workspace = true, features = ["derive"] }
 serde_json.workspace = true
 
 [build-dependencies]

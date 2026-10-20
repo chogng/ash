@@ -1,4 +1,4 @@
-import { isNonNegativeSafeInteger } from "../../../../src/ash/base/common/numbers.js";
+import { isNonNegativeSafeInteger } from "ash:editor/base/common/numbers.js";
 import type { DocumentNode } from "../model/document.js";
 import type { DocumentPoint } from "./documentSelection.js";
 import type { DocumentSchema } from "../model/documentSchema.js";

@@ -1,12 +1,12 @@
 import { importDocxDocument } from './contrib/documentOutput/docx.js';
-import { localize } from '../../../src/ash/nls.js';
+import { localize } from 'ash:editor/nls.js';
 import { bindDocumentCodec } from '../common/model/documentCodec.js';
 import { RichTextEditorWidget, type RichTextEditorOptions } from './widget/richTextEditor/richTextEditorWidget.js';
 import { importDocumentText, exportDocumentText } from './documentImportExport.js';
 import { documentContributions } from './documentContributions.js';
-import type { EditorProfile, DocumentEditorConfiguration } from '../../../src/ash/workbench/services/documentEditor/browser/documentEditorProfile.js';
-import { IDialogService } from '../../../src/ash/platform/dialogs/common/dialogs.js';
-import { IOpenerService } from '../../../src/ash/platform/opener/common/opener.js';
+import type { EditorProfile, DocumentEditorConfiguration } from 'ash:editor/workbench/services/documentEditor/browser/documentEditorProfile.js';
+import { IDialogService } from 'ash:editor/platform/dialogs/common/dialogs.js';
+import { IOpenerService } from 'ash:editor/platform/opener/common/opener.js';
 import { createDefaultDocumentSchema, type DocumentSchema } from '../common/model/documentSchema.js';
 import type { DocumentPlugin } from '../common/model/documentPlugin.js';
 import type { DocumentNode } from '../common/model/document.js';

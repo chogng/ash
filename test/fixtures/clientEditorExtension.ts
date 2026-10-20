@@ -11,7 +11,7 @@ export function prepareClientEditorExtension(packageName: string): void {
 	prepared.add(packageName);
 }
 
-export function startClientEditorExtension(packageName: string, extensionId: string, language: string) {
+export function startClientEditorExtension(packageName: string, extensionId: string, language: string, binaryDirectory?: string) {
 	return startExtensionProcess(packageName, extensionId, ['dataChannel'], language, [], {}, [], async () => ({ result: 'done' }),
-		() => prepareClientEditorExtension(packageName), resolve('.build/cargo/ci-test'));
+		() => { if (!binaryDirectory) prepareClientEditorExtension(packageName); }, binaryDirectory ?? resolve('.build/cargo/ci-test'));
 }

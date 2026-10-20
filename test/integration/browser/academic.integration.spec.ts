@@ -22,8 +22,12 @@ async function chooseParagraphOption(page: Page, control: Locator, label: string
 test.beforeAll(async () => {
 	test.setTimeout(120_000);
 	prepareAcademyExtension();
-	academyClient = await compileEditorClient(resolve('extensions/academic'));
-	academyManifest = JSON.parse(await readFile('extensions/academic/package.json', 'utf8'));
+	const project = resolve(process.env.ASH_ACADEMY_DEVELOPMENT_PROJECT ?? 'extensions/academic');
+	academyClient = process.env.ASH_ACADEMY_DEVELOPMENT_PROJECT ? {
+		client: JSON.parse(await readFile(resolve(project, 'dist/client.json'), 'utf8')),
+		resources: { 'dist/editor.js': await readFile(resolve(project, 'dist/editor.js'), 'utf8'), 'dist/editor.css': await readFile(resolve(project, 'dist/editor.css'), 'utf8') },
+	} : await compileEditorClient(project);
+	academyManifest = JSON.parse(await readFile(resolve(project, 'package.json'), 'utf8'));
 });
 
 test.beforeEach(async ({ page }) => {
@@ -103,6 +107,90 @@ test.afterEach(async ({ page }) => {
 	await academyProcesses.get(page)?.dispose();
 	academyProcesses.delete(page);
 	expect(pageErrors.get(page) ?? []).toEqual([]);
+});
+
+for (const locale of ['en', 'zh-CN'] as const) test(`Academy references edit, renumber and recover through the installed package in ${locale}`, async ({ page }, testInfo) => {
+	await page.goto(`/academic.html?academicExtension&locale=${locale}`);
+	await page.waitForFunction(() => !!window.ashAcademicIntegration);
+	const chinese = locale === 'zh-CN';
+	const ok = chinese ? '确定' : 'OK';
+	const editor = page.locator('#document-editor');
+	await editor.locator('textarea.stanza-document-text-input').last().focus();
+	const action = (id: string) => editor.locator(`[data-action-id="${id}"] button`);
+	const add = async (key: string, text: string) => {
+		await action('reference').click();
+		const dialog = page.getByRole('dialog', { name: chinese ? '参考文献' : 'Reference', exact: true });
+		await dialog.getByRole('textbox').nth(0).fill(key);
+		await dialog.getByRole('textbox').nth(1).fill(text);
+		await dialog.getByRole('button', { name: ok, exact: true }).click();
+	};
+	await add('first', 'First reference');
+	await add('second', 'Second reference');
+	await expect(editor.locator('.ash-citation-reference')).toHaveCount(2);
+	const body = editor.locator('textarea.stanza-document-text-input').last();
+	await body.evaluate(element => {
+		const input = element as HTMLTextAreaElement;
+		input.focus(); input.setSelectionRange(input.value.length, input.value.length);
+		input.dispatchEvent(new Event('select', { bubbles: true }));
+	});
+	await action('citation').click();
+	const citationDialog = page.getByRole('dialog', { name: chinese ? '引用' : 'Citation', exact: true });
+	await citationDialog.getByRole('textbox').first().fill('second');
+	await citationDialog.getByRole('button', { name: ok, exact: true }).click();
+	const citation = editor.locator('.ash-citation');
+	await expect(citation).toHaveText('[2]');
+	await expect(citation).toHaveAttribute('aria-label', /Second reference/);
+
+	await action('editReference').click();
+	let dialog = page.getByRole('dialog', { name: chinese ? '编辑参考文献' : 'Edit reference', exact: true });
+	await dialog.getByRole('textbox').fill('second');
+	await dialog.getByRole('button', { name: ok, exact: true }).click();
+	dialog = page.getByRole('dialog', { name: chinese ? '编辑参考文献' : 'Edit reference', exact: true });
+	await expect(dialog.getByRole('textbox').nth(0)).toHaveValue('second');
+	await dialog.getByRole('textbox').nth(0).fill('renamed');
+	await dialog.getByRole('textbox').nth(1).fill('Updated reference');
+	await dialog.getByRole('button', { name: ok, exact: true }).click();
+	await expect(citation).toHaveAttribute('data-citation-key', 'renamed');
+	await expect(citation).toHaveAttribute('aria-label', /Updated reference/);
+	await body.focus(); await body.press('ControlOrMeta+z');
+	await expect(citation).toHaveAttribute('data-citation-key', 'second');
+	await body.press('ControlOrMeta+Shift+z');
+	await expect(citation).toHaveAttribute('data-citation-key', 'renamed');
+	await page.evaluate(() => window.ashAcademicIntegration.saveStructured());
+	const saved = await page.evaluate(() => window.ashAcademicIntegration.getSavedStructured());
+	expect(saved).toContain('Updated reference');
+	await page.evaluate(() => window.ashAcademicIntegration.reopenStructured());
+	await expect(citation).toHaveText('[2]');
+	await expect(citation).toHaveAttribute('data-citation-key', 'renamed');
+
+	const beforeDuplicate = await page.evaluate(() => window.ashAcademicIntegration.getStructuredVersion());
+	await add('renamed', 'Duplicate must not replace the existing entry');
+	await expect(page.getByRole('dialog')).toContainText(chinese ? '请输入非空且唯一的文献键' : 'Enter a non-empty, unique reference key');
+	await page.getByRole('dialog').getByRole('button', { name: ok, exact: true }).click();
+	expect(await page.evaluate(() => window.ashAcademicIntegration.getStructuredVersion())).toBe(beforeDuplicate);
+	await expect(editor.locator('.ash-citation-reference')).toHaveCount(2);
+
+	const remove = async (key: string) => {
+		await action('deleteReference').click();
+		const choose = page.getByRole('dialog', { name: chinese ? '删除参考文献' : 'Delete reference', exact: true });
+		await choose.getByRole('textbox').fill(key);
+		await choose.getByRole('button', { name: ok, exact: true }).click();
+		await page.getByRole('dialog').getByRole('button', { name: chinese ? '删除参考文献' : 'Delete reference', exact: true }).click();
+	};
+	await remove('first');
+	await expect(citation).toHaveText('[1]');
+	await remove('renamed');
+	await expect(editor.locator('.ash-citation-bibliography')).toHaveCount(0);
+	await expect(citation).toHaveText('[renamed]');
+	await expect(citation).toHaveAttribute('aria-invalid', 'true');
+	await expect(citation).toHaveAttribute('aria-label', chinese ? '未解析的引用 renamed' : 'Unresolved citation renamed');
+	await citation.focus();
+	await expect(citation).toBeFocused();
+	await citation.press('Enter');
+	await expect(citation).toHaveClass(/stanza-document-inline-node-selected/);
+	await page.screenshot({ path: testInfo.outputPath(`academy-references-${locale}.png`), fullPage: true });
+	await page.evaluate(() => window.ashAcademicIntegration.setAcademicEnabled(false));
+	for (const id of ['citation', 'reference', 'editReference', 'deleteReference']) await expect(action(id)).toBeDisabled();
 });
 
 for (const kind of ['academic', 'general'] as const) for (const locale of ['en', 'zh-CN'] as const) {

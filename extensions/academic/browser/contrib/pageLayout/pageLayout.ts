@@ -1,11 +1,11 @@
-import type { Button } from '../../../../../src/ash/base/browser/ui/button/button.js';
+import type { Button } from 'ash:editor/base/browser/ui/button/button.js';
 import { getDocumentPageOwner, createDocumentSectionCommand, createRemoveSectionCommand } from '../../../common/model/documentSections.js';
 import { resolveDocumentParagraphAttributes } from '../../../common/model/documentParagraph.js';
-import { addDisposableListener, h } from '../../../../../src/ash/base/browser/dom.js';
-import type { InputBox } from '../../../../../src/ash/base/browser/ui/inputbox/inputbox.js';
+import { addDisposableListener, h } from 'ash:editor/base/browser/dom.js';
+import type { InputBox } from 'ash:editor/base/browser/ui/inputbox/inputbox.js';
 import { createSetParagraphFormatCommand } from '../../../common/commands/documentParagraphCommands.js';
-import type { SelectBox } from '../../../../../src/ash/base/browser/ui/selectbox/selectbox.js';
-import { localize } from '../../../../../src/ash/nls.js';
+import type { SelectBox } from 'ash:editor/base/browser/ui/selectbox/selectbox.js';
+import { localize } from 'ash:editor/nls.js';
 import { DocumentTransaction } from '../../../common/model/documentTransaction.js';
 import type { DocumentEditorContributionContext, DocumentFormattingContribution, DocumentFormattingState } from '../../documentContributions.js';
 import { DocumentFormattingControls } from '../../widget/documentFormattingControls.js';

@@ -1,5 +1,5 @@
-import { TextModel } from '../../../../src/ash/editor/common/model/textModel.js';
-import type { Event } from '../../../../src/ash/base/common/event.js';
+import { TextModel } from 'ash:editor/editor/common/model/textModel.js';
+import type { Event } from 'ash:editor/base/common/event.js';
 import type { DocumentSelection } from '../core/documentSelection.js';
 import type { DocumentMark, DocumentNode } from './document.js';
 import type { DocumentHistoryEntries } from './documentHistory.js';

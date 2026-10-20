@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { test } from "mocha";
 import { Position } from '../../common/core/position.js';
 import { createDefaultDocumentSchema, DocumentSchema } from "../../../../../extensions/academic/common/model/documentSchema.js";
-import { createInsertCitationCommand, createInsertReferenceCommand } from "../../../../../extensions/academic/browser/contrib/citation/common/citationCommands.js";
+import { createDeleteReferenceCommand, createInsertCitationCommand, createInsertReferenceCommand, createUpdateReferenceCommand } from "../../../../../extensions/academic/browser/contrib/citation/common/citationCommands.js";
 import { buildReferenceIndex, createReferenceIndexPlugin, REFERENCE_INDEX_KEY } from "../../../../../extensions/academic/browser/contrib/citation/common/references.js";
 import { createAcademicDocumentSchema, createEmptyAcademicDocument } from "../../../../../extensions/academic/browser/contrib/academic/common/schema.js";
 import { TextModel } from "../../common/model/textModel.js";
@@ -564,6 +564,190 @@ test("Citation reference command creates and appends a bibliography", () => {
 	model.dispatch(second.transaction);
 	const updatedBibliography = model.document.content.find(node => node.type === "bibliography");
 	assert.deepEqual(updatedBibliography?.content.map(node => node.attrs.key), ["smith-2024", "doe-2023"]);
+});
+
+test("Citation insertion trims keys and reference insertion rejects normalized duplicates", () => {
+	const schema = createAcademicDocumentSchema();
+	const paragraph = schema.createNode("paragraph", { content: [schema.createText("Body", { id: "trim-body" })] });
+	using model = DocumentTextModel.create(schema, schema.createDocument([paragraph]));
+	const selection = textSelection({ nodeId: "trim-body", offset: 4 });
+	assert.equal(createInsertCitationCommand(schema, model.document, paragraph.id, selection, " \t "), undefined);
+	assert.equal(createInsertReferenceCommand(schema, model.document, " \n ", "Blank"), undefined);
+	const citation = createInsertCitationCommand(schema, model.document, paragraph.id, selection, " smith \t", "[Explicit]");
+	assert.ok(citation);
+	assert.ok(model.dispatch(citation.transaction));
+	assert.equal(model.document.content[0]?.content.find(node => node.type === "citation")?.attrs.key, "smith");
+	const reference = createInsertReferenceCommand(schema, model.document, " smith ", " Smith entry ");
+	assert.ok(reference);
+	assert.ok(model.dispatch(reference.transaction));
+	const before = model.document;
+	assert.equal(createInsertReferenceCommand(schema, before, "\tsmith ", "Duplicate"), undefined);
+	assert.equal(model.document, before);
+	assert.deepEqual(buildReferenceIndex(before).references.map(entry => [entry.key, entry.label]), [["smith", "Smith entry"]]);
+});
+
+test("Reference rename updates all nested citation keys atomically and preserves identities and labels", () => {
+	const schema = createAcademicDocumentSchema();
+	const explicit = schema.createNode("citation", { id: "rename-explicit", attrs: { key: "old", label: "[Custom label]", source: "keep" } });
+	const implicit = schema.createNode("citation", { id: "rename-implicit", attrs: { key: "old" } });
+	const unrelated = schema.createNode("citation", { id: "rename-unrelated", attrs: { key: "other", label: "[Other]" } });
+	const body = schema.createNode("blockquote", { content: [schema.createNode("paragraph", { content: [schema.createText("Keep", { marks: [{ type: "strong", attrs: {} }] }), explicit, implicit, unrelated] })] });
+	const label = schema.createNode("paragraph", { id: "rename-label", attrs: { alignment: "center" }, content: [schema.createText("Old label", { marks: [{ type: "strong", attrs: {} }] })] });
+	const reference = schema.createNode("reference", { id: "rename-reference", attrs: { key: "old", source: "retained" }, content: [label] });
+	const bibliography = schema.createNode("bibliography", { id: "rename-bibliography", attrs: { source: "retained" }, content: [reference] });
+	const document = schema.createDocument([bibliography, body]);
+	const snapshots: string[][] = [];
+	const audit = createDocumentPlugin(new DocumentPluginKey<number>("reference-rename-audit"), {
+		init: () => 0,
+		apply: (value, context) => {
+			const index = buildReferenceIndex(context.document);
+			snapshots.push([index.references[0]!.key, ...index.citations.map(entry => entry.key)]);
+			return value + 1;
+		},
+	});
+	using model = DocumentTextModel.create(schema, document, { plugins: [createReferenceIndexPlugin(), audit] });
+	const command = createUpdateReferenceCommand(schema, model.document, " old ", " new ", " New label ");
+	assert.ok(command);
+	const decoded = deserializeDocumentTransaction(serializeDocumentTransaction(command.transaction, schema), schema);
+	assert.deepEqual(decoded.steps, command.transaction.steps);
+	assert.ok(model.dispatch(decoded));
+	assert.equal(model.version, 2);
+	assert.deepEqual(snapshots, [["new", "new", "new", "other"]]);
+	const updated = model.document;
+	assert.deepEqual(updated.content[0]?.attrs, bibliography.attrs);
+	assert.equal(updated.content[0]?.id, bibliography.id);
+	const updatedReference = updated.content[0]!.content[0]!;
+	assert.equal(updatedReference.id, reference.id);
+	assert.deepEqual(updatedReference.attrs, { ...reference.attrs, key: "new" });
+	assert.equal(updatedReference.content[0]?.id, label.id);
+	assert.deepEqual(updatedReference.content[0]?.attrs, label.attrs);
+	assert.deepEqual(updatedReference.content[0]?.content.map(node => [node.text, node.marks]), [["New label", []]]);
+	const updatedBody = updated.content[1]!.content[0]!.content;
+	assert.deepEqual(updatedBody[0], body.content[0]!.content[0]);
+	assert.deepEqual(updatedBody[1], { ...explicit, attrs: { ...explicit.attrs, key: "new" } });
+	assert.deepEqual(updatedBody[2], { ...implicit, attrs: { ...implicit.attrs, key: "new" } });
+	assert.deepEqual(updatedBody[3], unrelated);
+	assert.deepEqual(model.getPluginState(REFERENCE_INDEX_KEY)?.unresolvedKeys, ["other"]);
+	assert.deepEqual(deserializeDocument(serializeDocument(updated, schema), schema), updated);
+	assert.ok(model.undoBlocks());
+	assert.deepEqual(model.document, document);
+	assert.equal(model.canUndoBlocks, false);
+	assert.ok(model.redoBlocks());
+	assert.deepEqual(model.document, updated);
+});
+
+test("Reference label-only edits preserve keys and reject blank, missing, colliding and ambiguous keys without mutation", () => {
+	const schema = createAcademicDocumentSchema();
+	const reference = schema.createNode("reference", { attrs: { key: "old" }, content: [schema.createNode("paragraph", { id: "label-only-paragraph", content: [schema.createText("Before")] })] });
+	const other = schema.createNode("reference", { attrs: { key: " occupied " }, content: [schema.createNode("paragraph")] });
+	const citation = schema.createNode("citation", { attrs: { key: "old", label: "" } });
+	const document = schema.createDocument([schema.createNode("bibliography", { content: [reference, other] }), schema.createNode("paragraph", { content: [citation] })]);
+	using model = DocumentTextModel.create(schema, document);
+	const before = model.document;
+	for (const [key, newKey] of [["old", " occupied "], ["old", " \t "], [" \n ", "new"], ["missing", "new"]]) {
+		assert.equal(createUpdateReferenceCommand(schema, model.document, key, newKey, "Changed"), undefined);
+	}
+	for (const key of ["", " \t ", "missing"]) assert.equal(createDeleteReferenceCommand(schema, model.document, key), undefined);
+	assert.equal(model.document, before);
+	assert.equal(model.version, 1);
+	assert.equal(model.canUndoBlocks, false);
+	const labelOnly = createUpdateReferenceCommand(schema, model.document, " old ", " old ", " After ");
+	assert.ok(labelOnly);
+	assert.ok(model.dispatch(labelOnly.transaction));
+	assert.deepEqual(model.document.content[1]?.content[0], citation);
+	assert.equal(model.document.content[0]?.content[0]?.attrs.key, "old");
+	assert.equal(model.document.content[0]?.content[0]?.content[0]?.id, "label-only-paragraph");
+	assert.equal(model.document.content[0]?.content[0]?.content[0]?.content[0]?.text, "After");
+	const clear = createUpdateReferenceCommand(schema, model.document, "old", "old", " \t ");
+	assert.ok(clear);
+	assert.ok(model.dispatch(clear.transaction));
+	assert.deepEqual(model.document.content[0]?.content[0]?.content[0]?.content, []);
+
+	const duplicate = schema.createNode("reference", { attrs: { key: " old " }, content: [schema.createNode("paragraph")] });
+	const ambiguous = schema.createDocument([schema.createNode("bibliography", { content: [reference, duplicate] })]);
+	using duplicateModel = DocumentTextModel.create(schema, ambiguous);
+	const beforeAmbiguous = duplicateModel.document;
+	assert.equal(createInsertReferenceCommand(schema, beforeAmbiguous, "old", "Duplicate"), undefined);
+	assert.equal(createUpdateReferenceCommand(schema, beforeAmbiguous, " old ", "new", "Changed"), undefined);
+	assert.equal(createDeleteReferenceCommand(schema, beforeAmbiguous, "old"), undefined);
+	assert.equal(duplicateModel.document, beforeAmbiguous);
+	assert.equal(duplicateModel.canUndoBlocks, false);
+	assert.equal(buildReferenceIndex(ambiguous).references.length, 2);
+	assert.deepEqual(deserializeDocument(serializeDocument(ambiguous, schema), schema), ambiguous);
+});
+
+test("Reference key-only edits preserve formatted label runs and empty labels stay empty", () => {
+	const schema = createAcademicDocumentSchema();
+	const paragraph = schema.createNode('paragraph', { content: [schema.createText('Styled', { marks: [{ type: 'strong', attrs: {} }] }), schema.createText(' entry')] });
+	const reference = schema.createNode('reference', { attrs: { key: 'old' }, content: [paragraph] });
+	const empty = schema.createNode('reference', { attrs: { key: 'empty' }, content: [schema.createNode('paragraph')] });
+	using model = DocumentTextModel.create(schema, schema.createDocument([schema.createNode('bibliography', { content: [reference, empty] })]));
+	const update = createUpdateReferenceCommand(schema, model.document, 'old', 'new', 'Styled entry');
+	assert.ok(update);
+	model.dispatch(update.transaction);
+	assert.deepEqual(model.document.content[0]!.content[0]!.content[0], paragraph);
+	assert.equal(createUpdateReferenceCommand(schema, model.document, 'empty', 'empty', ''), undefined);
+	assert.equal(buildReferenceIndex(model.document).references[1]!.text, '');
+	model.undoBlocks();
+	assert.equal(model.document.content[0]!.content[0]!.attrs.key, 'old');
+});
+
+test("Reference deletion keeps remaining definitions and last deletion leaves unresolved citations through history and codec", () => {
+	const schema = createAcademicDocumentSchema();
+	const first = schema.createNode("reference", { attrs: { key: "first" }, content: [schema.createNode("paragraph", { content: [schema.createText("First")] })] });
+	const last = schema.createNode("reference", { attrs: { key: "last" }, content: [schema.createNode("paragraph", { content: [schema.createText("Last")] })] });
+	const bibliography = schema.createNode("bibliography", { content: [first, last] });
+	const paragraph = schema.createNode("paragraph", { content: [schema.createNode("citation", { attrs: { key: "first", label: "[First]" } }), schema.createNode("citation", { attrs: { key: "last" } })] });
+	const document = schema.createDocument([bibliography, paragraph]);
+	using model = DocumentTextModel.create(schema, document, { plugins: [createReferenceIndexPlugin()] });
+	const deletion = createDeleteReferenceCommand(schema, model.document, " first ");
+	assert.ok(deletion);
+	assert.ok(model.dispatch(deletion.transaction));
+	assert.deepEqual(model.document.content[0], { ...bibliography, content: [last] });
+	assert.deepEqual(model.document.content[1], paragraph);
+	assert.deepEqual(model.getPluginState(REFERENCE_INDEX_KEY)?.unresolvedKeys, ["first"]);
+	const beforeLast = model.document;
+	const deleteLast = createDeleteReferenceCommand(schema, beforeLast, " last ");
+	assert.ok(deleteLast);
+	const decoded = deserializeDocumentTransaction(serializeDocumentTransaction(deleteLast.transaction, schema), schema);
+	assert.ok(model.dispatch(decoded));
+	assert.deepEqual(model.document.content, [paragraph]);
+	assert.deepEqual(model.getPluginState(REFERENCE_INDEX_KEY)?.unresolvedKeys, ["first", "last"]);
+	assert.deepEqual(deserializeDocument(serializeDocument(model.document, schema), schema), model.document);
+	assert.ok(model.undoBlocks());
+	assert.deepEqual(model.document, beforeLast);
+	assert.ok(model.undoBlocks());
+	assert.deepEqual(model.document, document);
+	assert.ok(model.redoBlocks());
+	assert.deepEqual(model.document, beforeLast);
+	assert.ok(model.redoBlocks());
+	assert.deepEqual(model.document.content, [paragraph]);
+});
+
+test('References reuse a bibliography inside a section and last deletion keeps its owner editable', () => {
+	const schema = createAcademicDocumentSchema();
+	for (const inSection of [false, true]) {
+		const reference = schema.createNode('reference', { attrs: { key: 'one' }, content: [schema.createNode('paragraph')] });
+		const bibliography = schema.createNode('bibliography', { content: [reference] });
+		const document = schema.createDocument([inSection ? schema.createNode('documentSection', { content: [bibliography] }) : bibliography]);
+		using model = DocumentTextModel.create(schema, document);
+		const append = createInsertReferenceCommand(schema, model.document, 'two', 'Second');
+		assert.ok(append);
+		model.dispatch(append.transaction);
+		const index = buildReferenceIndex(model.document);
+		assert.deepEqual(index.references.map(entry => entry.key), ['one', 'two']);
+		assert.equal(model.document.content.length, 1);
+		model.undoBlocks();
+		const deletion = createDeleteReferenceCommand(schema, model.document, 'one');
+		assert.ok(deletion);
+		model.dispatch(deletion.transaction);
+		const owner = inSection ? model.document.content[0]! : model.document;
+		assert.equal(owner.content[0]!.type, 'paragraph');
+		assert.equal(deletion.focus!.blockId, owner.content[0]!.id);
+		schema.validate(model.document);
+		model.undoBlocks();
+		assert.deepEqual(model.document, document);
+	}
 });
 
 test("TextModel handles insertion, attributes, movement, and deletion as one history unit", () => {

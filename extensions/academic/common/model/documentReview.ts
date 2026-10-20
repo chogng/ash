@@ -1,4 +1,4 @@
-import { generateUuid } from '../../../../src/ash/base/common/uuid.js';
+import { generateUuid } from 'ash:editor/base/common/uuid.js';
 import { createDocumentNode, findDocumentNode, type DocumentAttributes, type DocumentNode } from './document.js';
 import { DocumentTransaction, applyDocumentTransaction } from './documentTransaction.js';
 import type { DocumentSchema } from './documentSchema.js';

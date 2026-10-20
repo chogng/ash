@@ -1,5 +1,5 @@
 import { createHash, createPrivateKey, generateKeyPairSync, sign, type KeyObject } from 'node:crypto';
-import { mkdir, readFile, readdir, writeFile } from 'node:fs/promises';
+import { cp, mkdir, readFile, readdir, writeFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { createServer, type Server } from 'node:https';
 import type { BackendFixture } from './test.js';
@@ -14,21 +14,20 @@ interface Release {
 }
 
 /** A test-owned signed HTTPS distribution, consumed by the real Rust registry and package manager. */
-export class LanguagePackRegistry implements BackendFixture {
+export class SignedExtensionRegistry implements BackendFixture {
 	public readonly productServicesPath: string;
-	public readonly packageId = 'ash.language-pack-zh-cn@ash';
 	public readonly releases: readonly Release[];
 	private profileDirectory: string | undefined;
 	private publishedRelease = 1;
 	private server: Server | undefined;
 	public readonly requests: { path: string; release: number; status: number; bytes: number; }[] = [];
 
-	private constructor(private readonly root: string, releases: readonly Release[]) {
+	private constructor(private readonly root: string, releases: readonly Release[], public readonly packageId = 'ash.language-pack-zh-cn@ash', private readonly productRuntimePublishers: readonly string[] = []) {
 		this.productServicesPath = join(root, 'product-services.json');
 		this.releases = releases;
 	}
 
-	public static async create(root: string): Promise<LanguagePackRegistry> {
+	public static async createLanguagePack(root: string): Promise<SignedExtensionRegistry> {
 		await mkdir(root, { recursive: true });
 		const files = await readTree(resolve('.build/desktop/localization/extensions/ash.language-pack-zh-cn'));
 		const releases = ['2.0.0', '3.0.0'].map((version, index) => {
@@ -95,7 +94,17 @@ export class LanguagePackRegistry implements BackendFixture {
 			await writeFile(join(metadata, 'snapshot.json'), snapshot);
 			await writeFile(join(metadata, 'timestamp.json'), envelope({ _type: 'timestamp', spec_version: '1.0.0', version: count, expires, meta: { 'snapshot.json': { version: count, ...fileMetadata(snapshot) } } }));
 		}
-		const registry = new LanguagePackRegistry(root, releases);
+		const registry = new SignedExtensionRegistry(root, releases);
+		try { await registry.start(); } catch (error) { await registry.close(); throw error; }
+		return registry;
+	}
+
+	/** Serves a separately built signed editor submission; installation and exact consent stay product actions. */
+	public static async createEditor(root: string, distribution: string, trustedRoot: string, packageId: string): Promise<SignedExtensionRegistry> {
+		await mkdir(root, { recursive: true });
+		await cp(distribution, join(root, 'release-1'), { recursive: true, errorOnExist: true, force: false });
+		await writeFile(join(root, 'root.json'), await readFile(trustedRoot));
+		const registry = new SignedExtensionRegistry(root, [], packageId, ['ash']);
 		try { await registry.start(); } catch (error) { await registry.close(); throw error; }
 		return registry;
 	}
@@ -147,7 +156,7 @@ export class LanguagePackRegistry implements BackendFixture {
 		const origin = `https://127.0.0.1:${address.port}`;
 		await writeFile(this.productServicesPath, JSON.stringify({
 			schemaVersion: 3,
-			extensionSources: [{ name: 'ash', metadataBaseUrl: origin + '/metadata/', targetsBaseUrl: origin + '/targets/', trustedRoot: 'root.json', tlsRootCertificates: ['tls-ca.der'], allowedPublishers: ['ash'] }],
+			extensionSources: [{ name: 'ash', metadataBaseUrl: origin + '/metadata/', targetsBaseUrl: origin + '/targets/', trustedRoot: 'root.json', tlsRootCertificates: ['tls-ca.der'], allowedPublishers: ['ash'], ...(this.productRuntimePublishers.length ? { productRuntimePublishers: this.productRuntimePublishers } : {}) }],
 		}));
 	}
 

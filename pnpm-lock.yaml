@@ -344,6 +344,12 @@ importers:
         specifier: 0.18.2
         version: 0.18.2
 
+  extensions/pdf-viewer:
+    dependencies:
+      pdfjs-dist:
+        specifier: 6.1.200
+        version: 6.1.200
+
   test/scenario:
     dependencies:
       '@playwright/test':

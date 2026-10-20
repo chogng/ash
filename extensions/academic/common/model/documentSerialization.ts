@@ -1,10 +1,10 @@
 import { resolveDocumentParagraphAttributes } from './documentParagraph.js';
 import { type DocumentSelection } from "../core/documentSelection.js";
-import { isRecord } from "../../../../src/ash/base/common/types.js";
-import { isFiniteNumber } from "../../../../src/ash/base/common/numbers.js";
+import { isRecord } from "ash:editor/base/common/types.js";
+import { isFiniteNumber } from "ash:editor/base/common/numbers.js";
 import { getDocumentBodyContent, createDocumentNode, findDocumentNode, type DocumentNodeId, type DocumentAttributeValue, type DocumentAttributes, type DocumentMark, type DocumentNode } from "./document.js";
 import { type DocumentSchema, type DocumentValidationOptions } from "./documentSchema.js";
-import { localize } from "../../../../src/ash/nls.js";
+import { localize } from "ash:editor/nls.js";
 
 export const DOCUMENT_SERIALIZATION_FORMAT = "ash.document";
 export const DOCUMENT_SERIALIZATION_VERSION = 2;

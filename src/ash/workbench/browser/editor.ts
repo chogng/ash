@@ -12,6 +12,8 @@ export interface IEditorPaneDescriptor {
 	readonly id: string;
 	readonly name: string;
 	readonly documentType?: DocumentType;
+	/** Package-provided binary/resource views can also host read-only attachment previews. */
+	readonly resourceEditor?: boolean;
 	canOpen(input: IResourceEditorInput): EditorPaneMatch;
 	/** Creates a distinct tab identity when this editor opens beside the source. */
 	createInput?(source: IResourceEditorInput): IResourceEditorInput;

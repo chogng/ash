@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "mocha";
-import { emptyPdfAnnotationDocument, parsePdfAnnotationDocument, serializePdfAnnotationDocument } from "../../../../../workbench/contrib/pdf/common/pdfAnnotations.js";
+import { emptyPdfAnnotationDocument, parsePdfAnnotationDocument, serializePdfAnnotationDocument } from "../../../../../../../extensions/pdf-viewer/common/pdfAnnotations.js";
 
 test("PDF annotation documents round-trip through the versioned durable format", () => {
 	const source = {

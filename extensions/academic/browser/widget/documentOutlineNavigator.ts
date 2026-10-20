@@ -1,7 +1,7 @@
-import { Disposable, toDisposable } from "../../../../src/ash/base/common/lifecycle.js";
+import { Disposable, toDisposable } from "ash:editor/base/common/lifecycle.js";
 import type { DocumentNodeId } from "../../common/model/document.js";
 import type { DocumentOutline } from "../../common/model/documentOutline.js";
-import { h, fragment as createFragment } from "../../../../src/ash/base/browser/dom.js";
+import { h, fragment as createFragment } from "ash:editor/base/browser/dom.js";
 
 export interface DocumentOutlineNavigatorOptions {
 	readonly onSelect: (nodeId: DocumentNodeId) => void;

@@ -3,7 +3,7 @@ import type { DocumentMark } from '../../../common/model/document.js';
 import type { DocumentNode } from '../../../common/model/document.js';
 import type { DocumentFragment } from '../../../common/model/documentSerialization.js';
 import type { DocumentSchema } from '../../../common/model/documentSchema.js';
-import { sanitizeHtmlToFragment } from '../../../../../src/ash/base/browser/domSanitize.js';
+import { sanitizeHtmlToFragment } from 'ash:editor/base/browser/domSanitize.js';
 
 const MAX_HTML_CLIPBOARD_CHARACTERS = 1_000_000;
 

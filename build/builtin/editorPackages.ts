@@ -1,7 +1,8 @@
-import { chmod, copyFile, mkdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
+import { chmod, copyFile, lstat, mkdir, readFile, realpath, rename, rm, stat, writeFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { compileEditorClient } from './editorClients.ts';
+import type { EditorClientApi } from './editorClientApi.ts';
 
 export interface EditorPackageBinary {
 	readonly targetPlatform: string;
@@ -9,7 +10,7 @@ export interface EditorPackageBinary {
 }
 
 /** Stage one immutable market submission. Signing and publication remain with the registry. */
-export async function buildEditorPackage(packageRoot: string, binaries: readonly EditorPackageBinary[], output: string): Promise<void> {
+export async function buildEditorPackage(packageRoot: string, binaries: readonly EditorPackageBinary[], output: string, sdk?: { api: EditorClientApi; licenseFile: string; }): Promise<void> {
 	if (!binaries.length) throw new Error('An editor package needs at least one platform executable');
 	const manifest = JSON.parse(await readFile(resolve(packageRoot, 'package.json'), 'utf8'));
 	if (manifest.ashRuntime?.kind !== 'rust' || !manifest.ashRuntime.client || !/^[a-z0-9-]+$/u.test(manifest.ashRuntime.entrypoint) || !/^[a-z0-9-]+$/u.test(manifest.publisher) || !/^[a-z0-9-]+$/u.test(manifest.name)) throw new Error('Invalid editor source manifest');
@@ -20,8 +21,8 @@ export async function buildEditorPackage(packageRoot: string, binaries: readonly
 		platforms.add(binary.targetPlatform);
 		if (!(await stat(binary.path)).isFile()) throw new Error('Editor executable must be a regular file');
 	}
-	try { await stat(output); throw new Error('Refusing to replace an existing editor package'); } catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error; }
-	const compiled = await compileEditorClient(packageRoot);
+	try { await lstat(output); throw new Error('Refusing to replace an existing editor package'); } catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error; }
+	const compiled = await compileEditorClient(packageRoot, sdk?.api);
 	const staging = `${output}.partial-${crypto.randomUUID()}`;
 	const payload = resolve(staging, 'package');
 	const assets = resolve(payload, 'editor');
@@ -41,7 +42,7 @@ export async function buildEditorPackage(packageRoot: string, binaries: readonly
 		}
 		await copyFile(resolve(packageRoot, 'README.md'), resolve(payload, 'README.md'));
 		for (const name of ['README.md', 'package.nls.json', 'package.nls.zh-CN.json']) await copyFile(resolve(packageRoot, name), resolve(assets, name));
-		await copyFile(resolve(import.meta.dirname, '../../LICENSE'), resolve(payload, 'LICENSE'));
+		await copyFile(sdk?.licenseFile ?? resolve(import.meta.dirname, '../../LICENSE'), resolve(payload, 'LICENSE'));
 		await writeFile(resolve(assets, 'package.json'), JSON.stringify(manifest, null, 2) + '\n');
 		for (const [path, content] of Object.entries(compiled.resources)) {
 			await mkdir(dirname(resolve(assets, path)), { recursive: true });
@@ -58,7 +59,7 @@ export async function buildEditorPackage(packageRoot: string, binaries: readonly
 	}
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
+if (import.meta.url.endsWith('/editorPackages.ts') && process.argv[1] && import.meta.url === pathToFileURL(await realpath(process.argv[1]).catch(() => '')).href) {
 	const [source, output, ...arguments_] = process.argv.slice(2);
 	if (!source || !output || !arguments_.length || arguments_.some(value => !/^[a-z0-9-]+=.+$/u.test(value))) throw new Error('Usage: package:editor <source> <output> <target-platform>=<executable> ...');
 	await buildEditorPackage(resolve(source), arguments_.map(value => ({ targetPlatform: value.slice(0, value.indexOf('=')), path: resolve(value.slice(value.indexOf('=') + 1)) })), resolve(output));

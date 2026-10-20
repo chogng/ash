@@ -1,5 +1,6 @@
 packages:
   - build
+  - extensions/pdf-viewer
   - extensions/markdown-math
   - extensions/markdown-language-features
   - test/scenario

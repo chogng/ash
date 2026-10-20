@@ -1,4 +1,4 @@
-import { generateUuid } from '../../../../src/ash/base/common/uuid.js';
+import { generateUuid } from 'ash:editor/base/common/uuid.js';
 import { containsDocumentNode, createDocumentNode, findDocumentNode, type DocumentNode } from '../model/document.js';
 import type { DocumentSelection } from '../core/documentSelection.js';
 import type { DocumentSchema } from '../model/documentSchema.js';

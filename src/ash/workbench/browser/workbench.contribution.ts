@@ -31,7 +31,6 @@ import "../contrib/bulkEdit/browser/preview/bulkEdit.contribution.js";
 import "../contrib/markdown/browser/markdown.contribution.js";
 import '../contrib/webviewPanel/browser/webviewPanel.contribution.js';
 import "../contrib/multiDiffEditor/browser/multiDiffEditor.contribution.js";
-import "../contrib/pdf/browser/pdf.contribution.js";
 import "../contrib/preferences/browser/preferences.contribution.js";
 import "../contrib/quickaccess/browser/quickAccess.contribution.js";
 import "../contrib/themes/browser/themes.contribution.js";

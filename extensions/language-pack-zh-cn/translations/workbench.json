@@ -1161,8 +1161,6 @@
     "color.modernActivityBarItem.activeBackground": "活动栏中已选中项目的背景色。",
     "color.modernActivityBarItem.activeForeground": "活动栏中已选中图标的前景色。",
     "color.modernActivityBarItem.hoverBackground": "活动栏项目悬停时的背景色。",
-    "color.pdf.annotationNoteShadow": "PDF 批注便笺周围的阴影颜色。",
-    "color.pdf.pageShadow": "PDF 页面周围的阴影颜色。",
     "color.terminal.background": "终端的背景色。未设置时，跟随所在面板或编辑器的背景色。",
     "color.terminal.cursorForeground": "终端光标的前景色。",
     "color.terminal.foreground": "终端的默认前景色。",
@@ -2407,7 +2405,12 @@
     "document.accessibility.review": "选择文字并填写批注内容，然后选择添加批注。审阅作者用于记录后续修订的作者。跟踪块级修订保存块的修改前基线；接受保留当前内容，拒绝恢复整个块。批注可定位、解决、重新打开或删除。这些操作均支持撤销。",
     "document.accessibility.artifacts": "在此开始新节为当前块及后续内容建立独立页面设置；删除分节符合并到上一节。导入文档文件将 DOCX 转为新草稿；导出文档文件生成单独的 DOCX 或页面图像 PDF。PDF 中的文字不可检索，导出保留开始时的内容版本。",
     "document.output.import": "导入文档文件…",
-    "document.output.export": "导出文档文件…"
+    "document.output.export": "导出文档文件…",
+    "resourceEditor.invalidVerbosity": "资源编辑器无障碍提示设置必须为布尔值。",
+    "resourceEditor.verbosityTitle": "资源编辑器无障碍帮助",
+    "resourceEditor.verbosityDescription": "在资源编辑器中提示如何打开无障碍帮助。",
+    "resourceEditor.helpHint": "使用“打开无障碍帮助”查看键盘操作说明，使用“打开无障碍视图”以文字读取此资源。",
+    "extensions.clientEditor.resourceDeclarationMismatch": "资源编辑器与其扩展包声明不匹配。"
   },
   "ash.menu": {
     "file": "文件",

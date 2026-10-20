@@ -1,11 +1,11 @@
-import { lexer, type MarkedToken, type Tokens } from '../../../src/ash/base/common/marked/marked.js';
-import { URI } from '../../../src/ash/base/common/uri.js';
+import { lexer, type MarkedToken, type Tokens } from 'ash:editor/base/common/marked/marked.js';
+import { URI } from 'ash:editor/base/common/uri.js';
 import type { DocumentNode, DocumentMark } from '../common/model/document.js';
 import type { DocumentSchema } from '../common/model/documentSchema.js';
 import { documentFromPlainText, documentToPlainText } from '../common/model/documentSerialization.js';
-import { localize } from '../../../src/ash/nls.js';
+import { localize } from 'ash:editor/nls.js';
 
-import type { DocumentTextFormat } from '../../../src/ash/workbench/services/documentEditor/common/documentCodec.js';
+import type { DocumentTextFormat } from 'ash:editor/workbench/services/documentEditor/common/documentCodec.js';
 
 /** Conversion errors identify the original source or node; they never flatten unsupported structure. */
 export class DocumentConversionError extends Error {

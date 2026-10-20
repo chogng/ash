@@ -1,6 +1,6 @@
-import { throwIfCancelled } from "../../../../base/common/cancellation.js";
-import { type URI } from "../../../../base/common/uri.js";
-import { FileKind, type IFileService } from "../../../../platform/files/common/files.js";
+import { throwIfCancelled } from "../../../src/ash/base/common/cancellation.js";
+import { type URI } from "../../../src/ash/base/common/uri.js";
+import { FileKind, type IFileService } from "../../../src/ash/platform/files/common/files.js";
 import { emptyPdfAnnotationDocument, parsePdfAnnotationDocument, serializePdfAnnotationDocument, type PdfAnnotationDocument } from "../common/pdfAnnotations.js";
 
 /** Annotation sidecar data plus its conditional-write revision. */
@@ -35,7 +35,7 @@ export class WorkspacePdfAnnotationStore implements IPdfAnnotationStore {
 	async save(resource: URI, document: PdfAnnotationDocument, expectedRevision: string | undefined, signal: AbortSignal): Promise<PdfAnnotationSnapshot> {
 		throwIfCancelled(signal, "PDF annotation saving was cancelled");
 		const content = serializePdfAnnotationDocument(document);
-		const saved = await this.files.writeFile({ resource: pdfAnnotationSidecarResource(resource), content, ...(expectedRevision === undefined ? {} : { expectedRevision }) });
+		const saved = await this.files.writeFile({ resource: pdfAnnotationSidecarResource(resource), content, ...(expectedRevision === undefined ? {} : { expectedRevision }) }, { create: true, overwrite: true }, signal);
 		throwIfCancelled(signal, "PDF annotation saving was cancelled");
 		return Object.freeze({ document: parsePdfAnnotationDocument(content), revision: saved.revision });
 	}

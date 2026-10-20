@@ -1,5 +1,5 @@
-import { isRecord } from "../../../../src/ash/base/common/types.js";
-import { isFiniteNumber, isSafeInteger } from "../../../../src/ash/base/common/numbers.js";
+import { isRecord } from "ash:editor/base/common/types.js";
+import { isFiniteNumber, isSafeInteger } from "ash:editor/base/common/numbers.js";
 import type { DocumentAttributes, DocumentMark, DocumentNode } from "./document.js";
 import { decodeDocumentNode, DocumentSerializationError, encodeDocumentNode, type SerializedDocumentNode } from "./documentSerialization.js";
 import { type DocumentSchema } from "./documentSchema.js";

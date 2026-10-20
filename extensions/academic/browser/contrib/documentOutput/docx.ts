@@ -1,12 +1,13 @@
 import { createDefaultDocumentSchema } from '../../../common/model/documentSchema.js';
 import { createAcademicDocumentSchema } from '../academic/common/schema.js';
-import { localize } from '../../../../../src/ash/nls.js';
+import { localize } from 'ash:editor/nls.js';
 import { findDocumentNode, type DocumentNode, type DocumentAttributes, type DocumentMark } from '../../../common/model/document.js';
 import type { DocumentSchema } from '../../../common/model/documentSchema.js';
 import { serializeDocument, deserializeDocument } from '../../../common/model/documentSerialization.js';
 import { resolveDocumentParagraphAttributes, getDocumentParagraphStyles } from '../../../common/model/documentParagraph.js';
 import { documentPageDimensions } from '../../../common/model/documentPageLayout.js';
 import { zipFiles, unzipFiles } from './zip.js';
+import { buildReferenceIndex } from '../citation/common/references.js';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const R = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
@@ -38,6 +39,7 @@ async function digest(bytes: Uint8Array): Promise<string> { return [...new Uint8
 /** OOXML parts and relationships stay package-owned. Ash metadata is used only when all interoperable parts are unchanged. */
 export async function exportDocx(document: DocumentNode, schema: DocumentSchema, signal: AbortSignal): Promise<Uint8Array> {
 	schema.validate(document); signal.throwIfAborted();
+	const citationOrdinals = new Map(buildReferenceIndex(document).citations.map(entry => [entry.nodeId, entry.ordinal]));
 	const files = new Map<string, Uint8Array>();
 	const relationships: string[] = [];
 	const overrides: string[] = [];
@@ -88,7 +90,10 @@ export async function exportDocx(document: DocumentNode, schema: DocumentSchema,
 			return result + run(node.text.slice(at), marks);
 		}
 		if (node.type === 'hardBreak') return '<w:r><w:br/></w:r>';
-		if (node.type === 'citation') return run(String(node.attrs.label ?? `[${node.attrs.key}]`), []);
+		if (node.type === 'citation') {
+			const label = typeof node.attrs.label === 'string' && node.attrs.label.length > 0 ? node.attrs.label : `[${citationOrdinals.get(node.id) ?? node.attrs.key}]`;
+			return run(label, []);
+		}
 		if (node.type === 'image') {
 			const width = Number(node.attrs.width ?? 320) * 9525, height = Number(node.attrs.height ?? 180) * 9525;
 			return `<w:r><w:drawing><wp:inline><wp:extent cx="${width}" cy="${height}"/><wp:docPr id="${drawing++}" name="Image" descr="${escape(node.attrs.alt)}"/><a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture"><pic:pic><pic:nvPicPr><pic:cNvPr id="0" name="Image"/><pic:cNvPicPr/></pic:nvPicPr><pic:blipFill><a:blip r:embed="${images.get(node.id)}"/><a:stretch><a:fillRect/></a:stretch></pic:blipFill><pic:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="${width}" cy="${height}"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></pic:spPr></pic:pic></a:graphicData></a:graphic></wp:inline></w:drawing></w:r>`;

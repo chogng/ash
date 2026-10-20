@@ -25,7 +25,6 @@ import "../../../editor/common/core/editorColorRegistry.js";
 import "../../../editor/browser/widget/multiDiffEditor/colors.js";
 import "../../common/theme.js";
 import "../../contrib/chat/common/widget/chatColors.js";
-import "../../contrib/pdf/common/pdfColors.js";
 import "../../contrib/preferences/common/settingsEditorColorRegistry.js";
 import '../../contrib/preferences/browser/keybindingsEditor.js';
 import '../../contrib/scm/browser/scmHistory.js';

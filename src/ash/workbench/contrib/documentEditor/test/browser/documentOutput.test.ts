@@ -84,6 +84,26 @@ test('DOCX native Academic imports preserve their profile, paper structure and c
 	assert.equal(result.documentType, 'academic'); assert.deepEqual(result.document, document);
 });
 
+test('DOCX citation output uses current bibliography ordinals and retains explicit and unresolved labels', async () => {
+	const { createAcademicDocumentSchema } = await import('../../../../../../../extensions/academic/browser/contrib/academic/common/schema.js');
+	const academic = createAcademicDocumentSchema();
+	const document = academic.createDocument([
+		academic.createNode('bibliography', { content: ['first', 'second'].map(key => academic.createNode('reference', { attrs: { key }, content: [academic.createNode('paragraph', { content: [academic.createText(key)] })] })) }),
+		academic.createNode('paragraph', {
+			content: [
+				academic.createNode('citation', { attrs: { key: 'second' } }),
+				academic.createNode('citation', { attrs: { key: 'first', label: '[Custom]' } }),
+				academic.createNode('citation', { attrs: { key: 'missing', label: '' } }),
+			]
+		}),
+	]);
+	const files = await unzipFiles(await exportDocx(document, academic, signal()), signal());
+	const xml = decode(files.get('word/document.xml')!);
+	for (const label of ['[2]', '[Custom]', '[missing]']) assert.ok(xml.includes(label));
+	assert.ok(!xml.includes('[second]'));
+	assert.deepEqual(await importDocx(zipFiles(files), academic, owner, signal()), document);
+});
+
 test('DOCX resolves used style inheritance, materializes character marks and ignores unused unsupported styles', async () => {
 	const document = await importDocx(foreign(`<w:p><w:pPr><w:pStyle w:val="Child"/></w:pPr><w:r><w:t>Styled</w:t></w:r></w:p>`, {
 		'word/_rels/document.xml.rels': `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="styles" Type="${R}/styles" Target="styles.xml"/></Relationships>`,

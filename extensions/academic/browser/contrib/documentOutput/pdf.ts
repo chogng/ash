@@ -1,6 +1,6 @@
 import { DocumentPageView } from '../pageLayout/documentPageView.js';
 import type { DocumentNode } from '../../../common/model/document.js';
-import { localize } from '../../../../../src/ash/nls.js';
+import { localize } from 'ash:editor/nls.js';
 
 /** Capture synchronously before any await; further editing cannot change this output version. */
 export function exportDocumentPdf(source: HTMLElement, document: DocumentNode, signal: AbortSignal): Promise<Uint8Array> {

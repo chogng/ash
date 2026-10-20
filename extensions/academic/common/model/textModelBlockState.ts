@@ -1,6 +1,6 @@
 import { trackDocumentTransaction } from './documentReview.js';
-import { Emitter, type Event } from "../../../../src/ash/base/common/event.js";
-import { Disposable } from "../../../../src/ash/base/common/lifecycle.js";
+import { Emitter, type Event } from "ash:editor/base/common/event.js";
+import { Disposable } from "ash:editor/base/common/lifecycle.js";
 import { DocumentDecorationSet } from "./documentDecoration.js";
 import { DocumentHistory, type DocumentHistoryEntries } from "./documentHistory.js";
 import { type DocumentPlugin, type DocumentPluginApplyContext, type DocumentPluginChangeOrigin, type DocumentPluginDecorationContext, type DocumentPluginInitContext, type DocumentPluginKey, type DocumentPluginSelectionContext, type DocumentPluginTransactionContext } from "./documentPlugin.js";
@@ -8,8 +8,8 @@ import { isDocumentSelectionValid, selectionsEqual, validateDocumentSelection, t
 import { freezeDocumentNode, type DocumentMark, type DocumentNode } from "./document.js";
 import { DocumentSchema } from "./documentSchema.js";
 import { applyDocumentTransaction, DocumentTransaction } from "./documentTransaction.js";
-import type { TextModelChange } from "../../../../src/ash/editor/common/core/textChange.js";
-import type { LineDocumentSnapshot } from "../../../../src/ash/editor/common/model/lineDocument.js";
+import type { TextModelChange } from "ash:editor/editor/common/core/textChange.js";
+import type { LineDocumentSnapshot } from "ash:editor/editor/common/model/lineDocument.js";
 import { projectDocumentToLines } from "./lineDocumentProjection.js";
 
 export type DocumentChangeOrigin = DocumentPluginChangeOrigin;

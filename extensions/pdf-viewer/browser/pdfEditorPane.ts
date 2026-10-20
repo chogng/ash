@@ -1,19 +1,20 @@
-import { defaultButtonStyles } from '../../../../platform/theme/browser/defaultStyles.js';
-import { IStorageService } from '../../../../platform/storage/common/storage.js';
-import { IThemeService } from '../../../../platform/theme/common/themeService.js';
-import type { IResourceEditorInput, IEditorPane } from '../../../common/editor.js';
-import { addDisposableListener, h, svg as createSvgElement } from "../../../../base/browser/dom.js";
-import type { IDimension } from "../../../../base/browser/dom.js";
-import type { IContextMenuProvider } from "../../../../base/browser/contextmenu.js";
-import type { IAction } from "../../../../base/common/actions.js";
-import { Separator } from "../../../../base/common/actions.js";
-import { throwIfCancelled } from "../../../../base/common/cancellation.js";
-import { DisposableStore, toDisposable } from "../../../../base/common/lifecycle.js";
-import { Lxicon } from "../../../../base/common/lxicons.js";
-import { clamp } from "../../../../base/common/numbers.js";
-import { assertDefined } from "../../../../base/common/types.js";
-import { ToolBar } from "../../../../base/browser/ui/toolbar/toolbar.js";
-import { EditorPaneMatch, EditorPane } from '../../../browser/parts/editor/editorPane.js';
+import { localize } from '../../../src/ash/nls.js';
+import { defaultButtonStyles } from '../../../src/ash/platform/theme/browser/defaultStyles.js';
+import { IStorageService } from '../../../src/ash/platform/storage/common/storage.js';
+import { IThemeService } from '../../../src/ash/platform/theme/common/themeService.js';
+import type { IResourceEditorInput, IEditorPane } from '../../../src/ash/workbench/common/editor.js';
+import { addDisposableListener, h, svg as createSvgElement } from "../../../src/ash/base/browser/dom.js";
+import type { IDimension } from "../../../src/ash/base/browser/dom.js";
+import type { IContextMenuProvider } from "../../../src/ash/base/browser/contextmenu.js";
+import type { IAction } from "../../../src/ash/base/common/actions.js";
+import { Separator } from "../../../src/ash/base/common/actions.js";
+import { throwIfCancelled } from "../../../src/ash/base/common/cancellation.js";
+import { DisposableStore, toDisposable } from "../../../src/ash/base/common/lifecycle.js";
+import { Lxicon } from "../../../src/ash/base/common/lxicons.js";
+import { clamp } from "../../../src/ash/base/common/numbers.js";
+import { assertDefined } from "../../../src/ash/base/common/types.js";
+import { ToolBar } from "../../../src/ash/base/browser/ui/toolbar/toolbar.js";
+import { EditorPaneMatch, EditorPane } from '../../../src/ash/workbench/browser/parts/editor/editorPane.js';
 import type { PdfAnnotationPoint, PdfAnnotationRect, PdfNoteAnnotation } from "../common/pdfAnnotations.js";
 import { PdfAnnotationModel } from "./pdfAnnotationModel.js";
 import type { IPdfAnnotationStore } from "./pdfAnnotationStore.js";
@@ -22,7 +23,7 @@ import type { IPdfRenderResult, IPdfRenderer, PdfRenderedPage } from "./pdfRende
 import { matchPdfEditor, PDF_EDITOR_ID } from "./pdfEditorInput.js";
 
 const defaultAnnotationColor = "#f6c945";
-const defaultNoteText = "New note";
+const defaultNoteText = () => localize('pdf.viewer.newNote', "New note");
 
 type PdfAnnotationMode = "select" | "highlight" | "ink" | "note";
 
@@ -69,9 +70,11 @@ export class PdfEditorPane extends EditorPane implements IEditorPane {
 	private input: IResourceEditorInput | undefined;
 	private mode: PdfAnnotationMode = "select";
 	private color = defaultAnnotationColor;
-	private noteDraft = defaultNoteText;
+	private noteDraft = defaultNoteText();
 	private selectedAnnotationId: string | undefined;
 	private activeAnnotation: ActiveAnnotation | undefined;
+	private inputController: AbortController | undefined;
+	private providerSignal: AbortSignal | undefined;
 	private saveOperation: Promise<void> | undefined;
 	private statusMessage: string | undefined;
 
@@ -105,11 +108,11 @@ export class PdfEditorPane extends EditorPane implements IEditorPane {
 		const container = h(ownerDocument, "div");
 		container.className = "ash-pdf-editor";
 		container.setAttribute("role", "region");
-		container.setAttribute("aria-label", "PDF reader");
+		container.setAttribute("aria-label", localize('pdf.viewer.reader', "PDF reader"));
 
 		const toolbar = this._register(new ToolBar(container, {
 			buttonStyles: defaultButtonStyles,
-			ariaLabel: "PDF annotation actions",
+			ariaLabel: localize('pdf.viewer.actions', "PDF annotation actions"),
 			contextMenuProvider: noSecondaryContextMenuProvider,
 			highlightToggledItems: true,
 		}));
@@ -120,39 +123,39 @@ export class PdfEditorPane extends EditorPane implements IEditorPane {
 		const pages = h(ownerDocument, "div");
 		pages.className = "ash-pdf-pages";
 		pages.tabIndex = 0;
-		pages.setAttribute("aria-label", "PDF pages");
+		pages.setAttribute("aria-label", localize('pdf.viewer.pages', "PDF pages"));
 		const sidebar = h(ownerDocument, "aside");
 		sidebar.className = "ash-pdf-annotation-sidebar";
-		sidebar.setAttribute("aria-label", "PDF annotations");
+		sidebar.setAttribute("aria-label", localize('pdf.viewer.annotationsAria', "PDF annotations"));
 
 		const heading = h(ownerDocument, "h2");
 		heading.className = "ash-pdf-annotation-heading";
-		heading.textContent = "Annotations";
+		heading.textContent = localize('pdf.viewer.annotations', "Annotations");
 		const colorLabel = h(ownerDocument, "label");
 		colorLabel.className = "ash-pdf-annotation-field";
-		colorLabel.textContent = "Color";
+		colorLabel.textContent = localize('pdf.viewer.color', "Color");
 		const colorInput = h(ownerDocument, "input");
 		colorInput.className = "ash-pdf-annotation-color";
 		colorInput.type = "color";
 		colorInput.value = this.color;
-		colorInput.setAttribute("aria-label", "Annotation color");
+		colorInput.setAttribute("aria-label", localize('pdf.viewer.annotationColor', "Annotation color"));
 		colorLabel.append(colorInput);
 
 		const annotationTextLabel = h(ownerDocument, "label");
 		annotationTextLabel.className = "ash-pdf-annotation-field";
-		annotationTextLabel.textContent = "New note";
+		annotationTextLabel.textContent = localize('pdf.viewer.newNote', "New note");
 		const annotationText = h(ownerDocument, "textarea");
 		annotationText.className = "ash-pdf-annotation-text";
 		annotationText.rows = 4;
 		annotationText.maxLength = 10_000;
 		annotationText.value = this.noteDraft;
-		annotationText.setAttribute("aria-label", "Annotation note");
+		annotationText.setAttribute("aria-label", localize('pdf.viewer.annotationNote', "Annotation note"));
 		annotationTextLabel.append(annotationText);
 
 		const annotationList = h(ownerDocument, "div");
 		annotationList.className = "ash-pdf-annotation-list";
 		annotationList.setAttribute("role", "listbox");
-		annotationList.setAttribute("aria-label", "Saved annotations");
+		annotationList.setAttribute("aria-label", localize('pdf.viewer.savedList', "Saved annotations"));
 		const status = h(ownerDocument, "div");
 		status.className = "ash-pdf-annotation-status";
 		status.setAttribute("role", "status");
@@ -182,20 +185,41 @@ export class PdfEditorPane extends EditorPane implements IEditorPane {
 		this.renderSidebar();
 	}
 
+	/** Retirement freezes an existing view and its draft; a replacement provider opens a new pane. */
+	bindProvider(signal: AbortSignal): void {
+		if (this.providerSignal) throw new ReferenceError('PDF provider is already bound');
+		this.providerSignal = signal;
+		const retire = () => {
+			this.inputController?.abort();
+			this.activeAnnotation?.preview.remove();
+			this.activeAnnotation = undefined;
+			this.renderResult?.freeze?.();
+			this.statusMessage = undefined;
+			this.renderToolbar();
+			this.renderSidebar();
+		};
+		this._register(addDisposableListener(signal, 'abort', retire, { once: true }));
+		if (signal.aborted) retire();
+	}
+
 	public override async setInput(input: IResourceEditorInput, signal: AbortSignal): Promise<void> {
 		if (matchPdfEditor(input) === EditorPaneMatch.None) {
 			throw new RangeError(`PDF editor cannot open ${input.resource}`);
 		}
 		const pages = this.requirePages();
 		this.clearInput();
+		const controller = new AbortController();
+		this.inputController = controller;
+		signal = AbortSignal.any([signal, controller.signal, ...(this.providerSignal ? [this.providerSignal] : [])]);
+		throwIfCancelled(signal, "PDF document loading was cancelled");
 		this.input = input;
-		this.statusMessage = "Loading PDF and annotations…";
+		this.statusMessage = localize('pdf.viewer.loading', "Loading PDF and annotations…");
 		this.renderToolbar();
 		this.renderSidebar();
 		try {
 			const [bytes, snapshot] = await Promise.all([
 				this.documentLoader.load(input, signal),
-				this.annotationStore.load(input.resource, signal),
+				input.readOnly ? Promise.resolve({ document: { version: 1 as const, annotations: [] }, revision: undefined }) : this.annotationStore.load(input.resource, signal),
 			]);
 			throwIfCancelled(signal, "PDF document loading was cancelled");
 			const renderResult = await this.renderer.render({ bytes, container: pages, scale: 1.25, signal });
@@ -210,12 +234,14 @@ export class PdfEditorPane extends EditorPane implements IEditorPane {
 			this.renderToolbar();
 			this.renderSidebar();
 		} catch (error) {
-			this.clearInput();
+			if (this.inputController === controller) this.clearInput();
 			throw error;
 		}
 	}
 
 	public override clearInput(): void {
+		this.inputController?.abort();
+		this.inputController = undefined;
 		this.activeAnnotation?.preview.remove();
 		this.activeAnnotation = undefined;
 		this.annotationInteractions.clear();
@@ -238,10 +264,10 @@ export class PdfEditorPane extends EditorPane implements IEditorPane {
 	}
 
 	async save(): Promise<void> {
-		if (!this.input || !this.annotationModel.isDirty) return;
+		if (!this.canAnnotate() || !this.input || !this.annotationModel.isDirty) return;
 		if (this.saveOperation) return this.saveOperation;
 		const input = this.input;
-		this.statusMessage = "Saving annotations…";
+		this.statusMessage = localize('pdf.viewer.saving', "Saving annotations…");
 		this.renderToolbar();
 		this.renderSidebar();
 		this.saveOperation = this.persistAnnotations(input).finally(() => {
@@ -254,39 +280,40 @@ export class PdfEditorPane extends EditorPane implements IEditorPane {
 
 	private async persistAnnotations(input: IResourceEditorInput): Promise<void> {
 		try {
-			const controller = new AbortController();
-			const snapshot = await this.annotationStore.save(input.resource, this.annotationModel.snapshot, this.annotationModel.revision, controller.signal);
+			const signal = AbortSignal.any([this.inputController!.signal, ...(this.providerSignal ? [this.providerSignal] : [])]);
+			throwIfCancelled(signal, "PDF document loading was cancelled");
+			const snapshot = await this.annotationStore.save(input.resource, this.annotationModel.snapshot, this.annotationModel.revision, signal);
+			throwIfCancelled(signal, "PDF document loading was cancelled");
 			if (this.input !== input) return;
 			this.annotationModel.markSaved(snapshot);
-			this.statusMessage = "Annotations saved";
+			this.statusMessage = localize('pdf.viewer.saved', "Annotations saved");
 		} catch (error) {
-			this.statusMessage = error instanceof Error ? `Could not save annotations: ${error.message}` : "Could not save annotations";
+			if (this.input !== input || this.providerSignal?.aborted) throw error;
+			this.statusMessage = error instanceof Error ? localize('pdf.viewer.saveError', 'Could not save annotations: {0}', error.message) : localize('pdf.viewer.saveFailed', "Could not save annotations");
 			throw error;
 		}
 	}
 
 	private onAnnotationsChanged(): void {
-		if (this.statusMessage === "Annotations saved" || this.statusMessage?.startsWith("Could not save")) {
-			this.statusMessage = undefined;
-		}
+		this.statusMessage = undefined;
 		this.renderAnnotations();
 		this.renderToolbar();
 		this.renderSidebar();
 	}
 
 	private renderToolbar(): void {
-		const available = this.input !== undefined;
+		const available = this.canAnnotate();
 		this.toolbar?.setActions([
-			action("ash.pdf.annotations.select", "Select", "Select annotations", Lxicon.check, available, this.mode === "select", () => this.setMode("select")),
-			action("ash.pdf.annotations.highlight", "Highlight", "Draw a highlight", Lxicon.bold, available, this.mode === "highlight", () => this.setMode("highlight")),
-			action("ash.pdf.annotations.ink", "Draw", "Draw freehand ink", Lxicon.italics, available, this.mode === "ink", () => this.setMode("ink")),
-			action("ash.pdf.annotations.note", "Note", "Place a note", Lxicon.chat4, available, this.mode === "note", () => this.setMode("note")),
+			action("ash.pdf.annotations.select", localize('pdf.viewer.select', "Select"), localize('pdf.viewer.selectHint', "Select annotations"), Lxicon.check, available, this.mode === "select", () => this.setMode("select")),
+			action("ash.pdf.annotations.highlight", localize('pdf.viewer.highlight', "Highlight"), localize('pdf.viewer.highlightHint', "Draw a highlight"), Lxicon.bold, available, this.mode === "highlight", () => this.setMode("highlight")),
+			action("ash.pdf.annotations.ink", localize('pdf.viewer.draw', "Draw"), localize('pdf.viewer.drawHint', "Draw freehand ink"), Lxicon.italics, available, this.mode === "ink", () => this.setMode("ink")),
+			action("ash.pdf.annotations.note", localize('pdf.viewer.note', "Note"), localize('pdf.viewer.noteHint', "Place a note"), Lxicon.chat4, available, this.mode === "note", () => this.setMode("note")),
 			new Separator(),
-			action("ash.pdf.annotations.undo", "Undo", "Undo annotation change", Lxicon.history, available && this.annotationModel.canUndo, false, () => this.annotationModel.undo()),
-			action("ash.pdf.annotations.redo", "Redo", "Redo annotation change", Lxicon.history, available && this.annotationModel.canRedo, false, () => this.annotationModel.redo()),
-			action("ash.pdf.annotations.delete", "Delete", "Delete selected annotation", Lxicon.trash, available && this.selectedAnnotationId !== undefined, false, () => this.deleteSelectedAnnotation()),
+			action("ash.pdf.annotations.undo", localize('pdf.viewer.undo', "Undo"), localize('pdf.viewer.undoHint', "Undo annotation change"), Lxicon.history, available && this.annotationModel.canUndo, false, () => { if (this.canAnnotate()) this.annotationModel.undo(); }),
+			action("ash.pdf.annotations.redo", localize('pdf.viewer.redo', "Redo"), localize('pdf.viewer.redoHint', "Redo annotation change"), Lxicon.history, available && this.annotationModel.canRedo, false, () => { if (this.canAnnotate()) this.annotationModel.redo(); }),
+			action("ash.pdf.annotations.delete", localize('pdf.viewer.delete', "Delete"), localize('pdf.viewer.deleteHint', "Delete selected annotation"), Lxicon.trash, available && this.selectedAnnotationId !== undefined, false, () => this.deleteSelectedAnnotation()),
 			new Separator(),
-			action("ash.pdf.annotations.save", "Save", "Save annotations", Lxicon.check, available && this.annotationModel.isDirty && !this.saveOperation, false, () => this.save().catch(() => undefined)),
+			action("ash.pdf.annotations.save", localize('pdf.viewer.save', "Save"), localize('pdf.viewer.saveHint', "Save annotations"), Lxicon.check, available && this.annotationModel.isDirty && !this.saveOperation, false, () => this.save().catch(() => undefined)),
 		]);
 	}
 
@@ -297,11 +324,13 @@ export class PdfEditorPane extends EditorPane implements IEditorPane {
 		const status = this.statusElement;
 		if (!annotationList || !annotationText || !annotationTextLabel || !status) return;
 		const selectedNote = this.selectedAnnotation();
-		annotationTextLabel.firstChild!.textContent = selectedNote ? "Selected note" : "New note";
-		annotationText.disabled = this.input === undefined;
+		annotationTextLabel.firstChild!.textContent = selectedNote ? localize('pdf.viewer.selectedNote', "Selected note") : localize('pdf.viewer.newNote', "New note");
+		annotationText.disabled = !this.canAnnotate();
+		if (this.colorInput) this.colorInput.disabled = !this.canAnnotate();
 		if (annotationText.ownerDocument.activeElement !== annotationText) {
 			annotationText.value = selectedNote?.text ?? this.noteDraft;
 		}
+		this.sidebarInteractions.clear();
 		annotationList.replaceChildren(...this.annotationModel.annotations.map((annotation, index) => {
 			const item = h(annotationList.ownerDocument, "button");
 			item.className = "ash-pdf-annotation-list-item";
@@ -309,8 +338,15 @@ export class PdfEditorPane extends EditorPane implements IEditorPane {
 			item.setAttribute("role", "option");
 			item.classList.toggle("selected", annotation.id === this.selectedAnnotationId);
 			item.setAttribute("aria-selected", String(annotation.id === this.selectedAnnotationId));
-			item.textContent = annotation.kind === "note" ? `Note ${index + 1}: ${annotation.text || "(empty)"}` : `${annotation.kind === "highlight" ? "Highlight" : "Ink"} ${index + 1} · page ${annotation.page}`;
+			item.textContent = annotation.kind === "note" ? localize('pdf.viewer.noteItem', 'Note {0}: {1}', index + 1, annotation.text || localize('pdf.viewer.empty', '(empty)')) : localize('pdf.viewer.markItem', '{0} {1} · page {2}', annotation.kind === 'highlight' ? localize('pdf.viewer.highlight', 'Highlight') : localize('pdf.viewer.ink', 'Ink'), index + 1, annotation.page);
 			this.sidebarInteractions.add(addDisposableListener(item, "click", () => this.selectAnnotation(annotation.id)));
+			this.sidebarInteractions.add(addDisposableListener(item, 'keydown', event => {
+				const target = event.key === 'ArrowDown' ? index + 1 : event.key === 'ArrowUp' ? index - 1 : event.key === 'Home' ? 0 : event.key === 'End' ? this.annotationModel.annotations.length - 1 : -1;
+				if (target < 0 || target >= this.annotationModel.annotations.length) return;
+				event.preventDefault();
+				this.selectAnnotation(this.annotationModel.annotations[target].id);
+				annotationList.querySelectorAll<HTMLElement>('button')[target]?.focus();
+			}));
 			return item;
 		}));
 		status.textContent = this.statusMessage ?? this.annotationStatus();
@@ -325,6 +361,32 @@ export class PdfEditorPane extends EditorPane implements IEditorPane {
 			const layer = h(page.element.ownerDocument, "div");
 			layer.className = "ash-pdf-annotation-layer";
 			layer.dataset.annotationMode = this.mode;
+			layer.tabIndex = 0;
+			layer.setAttribute('role', 'group');
+			layer.setAttribute('aria-label', localize('pdf.viewer.page', 'Page {0} annotations', page.pageNumber));
+			const cursorElement = h(layer.ownerDocument, 'span');
+			cursorElement.className = 'ash-pdf-annotation-cursor';
+			cursorElement.setAttribute('aria-hidden', 'true');
+			layer.append(cursorElement);
+			let cursor = { x: 0.5, y: 0.5 };
+			const pointer = () => {
+				const bounds = layer.getBoundingClientRect();
+				return new PointerEvent('pointermove', { pointerId: -1, button: 0, clientX: bounds.left + cursor.x * bounds.width, clientY: bounds.top + cursor.y * bounds.height });
+			};
+			this.annotationInteractions.add(addDisposableListener(layer, 'keydown', event => {
+				if (event.target !== layer || !this.canAnnotate()) return;
+				if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(event.key)) {
+					cursor = { x: clamp(cursor.x + (event.key === 'ArrowRight' ? 0.02 : event.key === 'ArrowLeft' ? -0.02 : 0), 0, 1), y: clamp(cursor.y + (event.key === 'ArrowDown' ? 0.02 : event.key === 'ArrowUp' ? -0.02 : 0), 0, 1) };
+					cursorElement.style.left = `${cursor.x * 100}%`;
+					cursorElement.style.top = `${cursor.y * 100}%`;
+					this.updateAnnotation(pointer());
+				} else if (event.key === 'Enter' || event.key === 'Escape') {
+					if (this.activeAnnotation?.pointerId === -1) this.finishAnnotation(pointer(), event.key === 'Enter');
+					else if (event.key === 'Enter') this.beginAnnotation(page, layer, pointer());
+					page.element.querySelector<HTMLElement>('.ash-pdf-annotation-layer')?.focus();
+				} else return;
+				event.preventDefault();
+			}));
 			for (const annotation of this.annotationModel.annotations) {
 				if (annotation.page !== page.pageNumber) continue;
 				if (annotation.kind === "highlight") {
@@ -341,8 +403,8 @@ export class PdfEditorPane extends EditorPane implements IEditorPane {
 					const marker = h(page.element.ownerDocument, "button");
 					marker.className = "ash-pdf-annotation-note";
 					marker.type = "button";
-					marker.title = annotation.text || "Note";
-					marker.setAttribute("aria-label", `Note: ${annotation.text || "empty"}`);
+					marker.title = annotation.text || localize('pdf.viewer.note', "Note");
+					marker.setAttribute("aria-label", localize('pdf.viewer.noteAccessible', 'Note: {0}', annotation.text || localize('pdf.viewer.empty', '(empty)')));
 					marker.classList.toggle("selected", annotation.id === this.selectedAnnotationId);
 					marker.style.left = `${annotation.point.x * 100}%`;
 					marker.style.top = `${annotation.point.y * 100}%`;
@@ -363,10 +425,10 @@ export class PdfEditorPane extends EditorPane implements IEditorPane {
 	}
 
 	private beginAnnotation(page: PdfRenderedPage, layer: HTMLDivElement, event: PointerEvent): void {
-		if (!this.input || event.button !== 0 || this.activeAnnotation || this.mode === "select") return;
+		if (!this.canAnnotate() || event.button !== 0 || this.activeAnnotation || this.mode === "select") return;
 		const point = annotationPoint(layer, event);
 		if (this.mode === "note") {
-			const note = this.annotationModel.addNote(page.pageNumber, point, this.noteDraft || defaultNoteText, this.color);
+			const note = this.annotationModel.addNote(page.pageNumber, point, this.noteDraft || defaultNoteText(), this.color);
 			this.selectedAnnotationId = note.id;
 			this.renderAnnotations();
 			this.renderToolbar();
@@ -386,7 +448,7 @@ export class PdfEditorPane extends EditorPane implements IEditorPane {
 			layer.append(preview);
 			this.activeAnnotation = { kind: "ink", pointerId: event.pointerId, page, points: [point], preview };
 		}
-		layer.setPointerCapture?.(event.pointerId);
+		if (event.pointerId >= 0) layer.setPointerCapture?.(event.pointerId);
 		event.preventDefault();
 	}
 
@@ -427,13 +489,14 @@ export class PdfEditorPane extends EditorPane implements IEditorPane {
 			}
 		}
 		active.preview.remove();
-		if (isAnnotationLayer(layer)) layer.releasePointerCapture?.(event.pointerId);
+		if (isAnnotationLayer(layer) && event.pointerId >= 0) layer.releasePointerCapture?.(event.pointerId);
 		this.renderAnnotations();
 		this.renderToolbar();
 		this.renderSidebar();
 	}
 
 	private setMode(mode: PdfAnnotationMode): void {
+		if (!this.canAnnotate()) return;
 		this.mode = mode;
 		this.renderAnnotations();
 		this.renderToolbar();
@@ -448,6 +511,7 @@ export class PdfEditorPane extends EditorPane implements IEditorPane {
 	}
 
 	private deleteSelectedAnnotation(): void {
+		if (!this.canAnnotate()) return;
 		const id = this.selectedAnnotationId;
 		if (!id) return;
 		this.selectedAnnotationId = undefined;
@@ -455,6 +519,7 @@ export class PdfEditorPane extends EditorPane implements IEditorPane {
 	}
 
 	private commitSelectedNote(): void {
+		if (!this.canAnnotate()) return;
 		const selected = this.selectedAnnotation();
 		const annotationText = this.annotationText;
 		if (!selected || !annotationText) return;
@@ -467,10 +532,23 @@ export class PdfEditorPane extends EditorPane implements IEditorPane {
 	}
 
 	private annotationStatus(): string {
-		if (!this.input) return "No PDF selected";
-		if (this.annotationModel.isDirty) return "Unsaved annotations";
+		if (this.providerSignal?.aborted) return localize('pdf.viewer.retired', 'PDF Viewer is unavailable. This view and its unsaved annotations are preserved. Re-enable the extension and reopen the file.');
+		if (!this.input) return localize('pdf.viewer.none', "No PDF selected");
+		if (this.annotationModel.isDirty) return localize('pdf.viewer.unsaved', "Unsaved annotations");
 		const count = this.annotationModel.annotations.length;
-		return `${count} annotation${count === 1 ? "" : "s"} saved`;
+		return localize('pdf.viewer.count', '{0} annotations saved', count);
+	}
+
+	getAccessibleContent(): string {
+		return [this.renderResult?.text || localize('pdf.viewer.noText', 'This PDF has no extractable text.'), this.annotationList?.textContent ?? '', this.annotationStatus()].join('\n\n');
+	}
+
+	getAccessibilityHelp(): string {
+		return localize('pdf.viewer.help', 'PDF Viewer keeps the original PDF unchanged. Tab moves between tools, page annotation surfaces, and annotation controls. Select a tool, focus a page, and use arrow keys to position the annotation cursor. Enter places a note, or starts and finishes a highlight or ink stroke; Escape cancels it. The annotation list supports arrow keys, Home and End. Select a note to edit its text, then leave the field to apply it. Undo, Redo, Delete and Save are toolbar actions. Save writes a companion annotations file. Open Accessible View reads extracted PDF text and annotations. Scanned pages without text need a separate OCR capability. Disabling the extension freezes this view; save annotations before disabling or closing it.');
+	}
+
+	private canAnnotate(): boolean {
+		return this.input !== undefined && !this.input.readOnly && !this.providerSignal?.aborted;
 	}
 
 	private requirePages(): HTMLDivElement {

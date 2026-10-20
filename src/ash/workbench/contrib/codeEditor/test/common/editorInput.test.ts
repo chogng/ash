@@ -21,7 +21,7 @@ for (const [name, value] of Object.entries({
 
 const { EditorPaneRegistry } = await import("../../../../browser/editor.js");
 const { binaryEditorDescriptor, BINARY_EDITOR_ID } = await import("../../../../browser/parts/editor/binaryEditor.js");
-const { matchPdfEditor, PDF_EDITOR_ID } = await import("../../../pdf/browser/pdfEditorInput.js");
+const { matchPdfEditor, PDF_EDITOR_ID } = await import("../../../../../../../extensions/pdf-viewer/browser/pdfEditorInput.js");
 const { EditorPaneMatch } = await import("../../../../browser/parts/editor/editorPane.js");
 const { languageForEditorInput, matchCodeEditor, matchDiffEditor } = await import("../../browser/codeEditorInput.js");
 const { CODE_EDITOR_ID } = await import("../../../../browser/parts/editor/textResourceEditor.js");

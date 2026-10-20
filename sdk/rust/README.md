@@ -9,6 +9,10 @@ Rust SDK 是[统一后端扩展接口](../../docs/editor-extensions.md#统一后
 
 本 crate 已迁入根目录 `sdk/rust`，包名为 `ash-external-ext-sdk`，Rust 导入名为 `external_ext_sdk`；TS/JS 作者使用标准 `vscode`，私有宿主 adapter 与 Rust SDK 共用 Host RPC。两类扩展共享接入与监管语义，TS/JS 的 VS Code/Node API 兼容不并入 Rust SDK，也不使 Rust 扩展依赖 V8 或 App Server。确定的命名与目录见[共享接入与语言适配的 crate 边界](../../docs/editor-extensions.md#共享接入与语言适配的-crate-边界)；注册、取消、客户端请求与 scoped services 使用同一协议，完整标准运行时兼容仍待完善。
 
+## 独立开发
+
+[独立扩展开发](../docs/development.md) 提供 SDK 导出、仓库外 Academy 项目、构建检查、本地加载／重载诊断及中立提交包流程。公开 `editor_client` 模块承载文档客户端 v1 的请求和经过校验的声明，Academy 已直接消费；源码 workspace 仍集中维护，导出时将依赖与 package 元数据物化为独立 Cargo manifests。导出 SDK 不携带生产 Host 实现或签名密钥。
+
 ## 当前源码及验证状态
 
 此前实现了命令、Hover、文档快照、Output、合作式取消和激活作用域释放。

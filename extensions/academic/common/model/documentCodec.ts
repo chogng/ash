@@ -1,4 +1,4 @@
-import type { DocumentCodec } from '../../../../src/ash/workbench/services/documentEditor/common/documentCodec.js';
+import type { DocumentCodec } from 'ash:editor/workbench/services/documentEditor/common/documentCodec.js';
 import type { DocumentSchema } from './documentSchema.js';
 import type { DocumentNode } from './document.js';
 import type { DocumentPlugin } from './documentPlugin.js';

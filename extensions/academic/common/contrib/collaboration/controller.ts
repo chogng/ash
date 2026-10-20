@@ -1,6 +1,6 @@
 import type { DocumentNode } from '../../model/document.js';
-import { Emitter, type Event } from "../../../../../src/ash/base/common/event.js";
-import { Disposable } from "../../../../../src/ash/base/common/lifecycle.js";
+import { Emitter, type Event } from "ash:editor/base/common/event.js";
+import { Disposable } from "ash:editor/base/common/lifecycle.js";
 import { DocumentTextModel } from "../../model/documentTextModel.js";
 import { TextModelRemoteHistoryPolicy } from "../../model/textModelBlockState.js";
 import { serializeDocument } from "../../model/documentSerialization.js";

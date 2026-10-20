@@ -2,14 +2,14 @@ import { readUserSettings, writeUserSettings } from '../../../automation/setting
 import { expect, test } from '../../../automation/test.js';
 import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
-import { LanguagePackRegistry } from '../../../automation/extensionRegistry.js';
+import { SignedExtensionRegistry } from '../../../automation/extensionRegistry.js';
 
 test.use({ openWorkspace: false });
 
 test.describe('signed language pack installation', () => {
 	test.use({
 		backendFixture: async ({ testWorkspace }, use, testInfo) => {
-			const registry = await LanguagePackRegistry.create(resolve(testWorkspace.directory, 'language-pack-registry'));
+			const registry = await SignedExtensionRegistry.createLanguagePack(resolve(testWorkspace.directory, 'language-pack-registry'));
 			try { await use(registry); } finally {
 				try { await testInfo.attach('https-extension-source-requests', { body: JSON.stringify(registry.requests, undefined, 2), contentType: 'application/json' }); }
 				finally { await registry.close(); }
@@ -19,7 +19,7 @@ test.describe('signed language pack installation', () => {
 
 	test('Chinese language pack downloads over HTTPS, really installs, independently updates and restores the preinstalled version on uninstall', { tag: ['@electron-app-server'] }, async ({ target, backendFixture, application, workbench, restartWorkbench, reloadWorkbench }) => {
 		test.setTimeout(90_000);
-		const registry = backendFixture as LanguagePackRegistry;
+		const registry = backendFixture as SignedExtensionRegistry;
 		if ('windows' in application) { expect(await application.evaluate(() => process.env.ASH_PRODUCT_SERVICES_PATH)).toBe(registry.productServicesPath); }
 		const [installedRelease, updatedRelease] = registry.releases;
 		const bundled = JSON.parse(await readFile(resolve('.build/desktop/localization/extensions/ash.language-pack-zh-cn/localization/package.json'), 'utf8'));

@@ -261,3 +261,34 @@ test('package artifact capabilities validate targets and cancel conversion when 
 	await entered; bridge.clear(); await outcome;
 	assert.throws(() => profile.create(), /abort/i);
 });
+
+test('resource editors validate manifest scope, reserve binary resources and retire without loading a fallback', async () => {
+	const manifest = {
+		name: 'pdf-viewer', publisher: 'ash', version: '1.0.0', engines: { vscode: '*' },
+		ashRuntime: { kind: 'rust', entrypoint: 'ash-pdf-viewer' },
+		contributes: { customEditors: [{ viewType: 'ash.workbench.pdfViewer', displayName: 'PDF Reader', priority: 'default', selector: [{ filenamePattern: '*.pdf', mimeType: 'application/pdf' }] }] },
+	};
+	const installed = { ...owner, id: 'ash.pdf-viewer', name: 'pdf-viewer', manifestJson: JSON.stringify(manifest) };
+	const resourceRuntime = { ...runtime, id: installed.id, registrations: [{ kind: 'dataChannel' as const, registrationId: 'editor.resource.v1', channelId: 'editor.resource.v1' }] };
+	const editor = { editorId: 'ash.workbench.pdfViewer', displayName: 'PDF Reader', selectors: ['*.pdf'], contentType: 'application/pdf' };
+	let value: JsonValue = { ...declaration, editors: [editor] };
+	const packages = { list: async () => ({ generation: 1, extensions: [installed], diagnostics: [] }) } as unknown as IExtensionApi;
+	using bridge = new MainThreadClientEditors(30_000, async () => { throw new Error('no static implementation'); }, { invoke: async () => value } as unknown as IExtensionHostApi, packages);
+	let generation = 1;
+	for (const invalid of [{ ...editor, selectors: ['*.txt'] }, { ...editor, contentType: 'text/plain' }, { ...editor, documentType: 'pdf' }]) {
+		value = { ...declaration, editors: [invalid] };
+		await assert.rejects(bridge.update({ generation: generation++, extensions: [resourceRuntime] }));
+		assert.equal(EditorPanes.getEditorPanesForInput({ resource: URI.file('/scope.pdf') }).length, 0);
+	}
+	value = { ...declaration, editors: [editor] };
+	await bridge.update({ generation: generation++, extensions: [resourceRuntime] });
+	const input = { resource: URI.file('/scope.PDF') };
+	const descriptor = EditorPanes.getEditorPane(input)!;
+	assert.equal(descriptor.resourceEditor, true);
+	assert.equal(descriptor.documentType, undefined);
+	assert.equal(EditorPanes.getEditorPane({ resource: URI.file('/scope.bin'), contentType: 'Application/PDF; charset=binary' }), descriptor);
+	await assert.rejects(async () => descriptor.create({ input, instantiationService: {} as IInstantiationService }), /no static implementation/);
+	await bridge.update({ generation: generation++, extensions: [] });
+	assert.throws(() => EditorPanes.getEditorPane(input), /unavailable/);
+	await assert.rejects(async () => descriptor.create({ input }), /abort/i);
+});

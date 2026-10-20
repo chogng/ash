@@ -1,3 +1,4 @@
+import { SignedExtensionRegistry } from '../../../automation/extensionRegistry.js';
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { expect, test as base } from "../../../automation/test.js";
@@ -5,6 +6,13 @@ import { academicPdfCorpus, downloadAcademicPdfCorpus } from "../../../automatio
 import { createTestWorkspace, disposeTestWorkspace, type TestWorkspace } from "../../../automation/testWorkspace.js";
 
 const test = base.extend<{ readonly testWorkspace: TestWorkspace; }>({
+	backendFixture: async ({ testWorkspace }, use) => {
+		const distribution = process.env.ASH_PDF_VIEWER_DISTRIBUTION;
+		const trustedRoot = process.env.ASH_PDF_VIEWER_TRUSTED_ROOT;
+		if (!distribution || !trustedRoot) throw new Error('The optional PDF corpus requires ASH_PDF_VIEWER_DISTRIBUTION and ASH_PDF_VIEWER_TRUSTED_ROOT from a signed PDF Viewer package for this host. See extensions/pdf-viewer/README.md.');
+		const registry = await SignedExtensionRegistry.createEditor(join(testWorkspace.directory, 'pdf-registry'), distribution, trustedRoot, 'ash.pdf-viewer@ash');
+		try { await use(registry); } finally { await registry.close(); }
+	},
 	testWorkspace: async ({ target }, use) => {
 		const workspace = await createTestWorkspace();
 		try {
@@ -20,7 +28,24 @@ const test = base.extend<{ readonly testWorkspace: TestWorkspace; }>({
 
 test.setTimeout(420_000);
 
-test("Code renders and annotates the open-access academic PDF corpus", { tag: ['@electron-app-server'] }, async ({ target, testWorkspace, workbench }) => {
+test("Installed optional PDF Viewer renders and annotates the open-access academic PDF corpus", { tag: ['@electron-app-server'] }, async ({ application, backendFixture, testWorkspace, workbench }) => {
+	const registry = backendFixture as SignedExtensionRegistry;
+	await workbench.quickaccess.runCommand('ash.extensions.open');
+	const extensions = workbench.page.locator('.ash-extensions');
+	await extensions.getByRole('searchbox').fill('pdf-viewer');
+	await extensions.getByRole('searchbox').press('Enter');
+	const row = extensions.locator(`[data-package-id="${registry.packageId}"]`);
+	await workbench.dialogs.confirm(application, 'Install', 'Install', () => row.getByRole('button', { name: 'Install', exact: true }).click());
+	await expect.poll(() => registry.installations()).toMatchObject([{ package: { id: registry.packageId }, state: 'installed' }]);
+	const installation = (await registry.installations())[0];
+	await workbench.quickaccess.runCommand('ash.extensions.installed');
+	await extensions.locator(`[data-installation-id="${installation.installationId}"]`).click();
+	const editor = workbench.page.locator('.ash-extension-editor');
+	const enable = editor.getByRole('button', { name: 'Enable', exact: true });
+	if (await enable.count()) await enable.click();
+	await workbench.dialogs.confirm(application, registry.packageId, 'Authorize execution', () => editor.getByRole('button', { name: 'Authorize execution', exact: true }).click());
+	await expect(editor.getByRole('button', { name: 'Revoke execution authorization', exact: true })).toBeVisible();
+	await workbench.quickaccess.runCommand('workbench.view.explorer');
 	const explorer = workbench.page.locator(".ash-explorer");
 	const group = workbench.editors.groupAt(0);
 	for (const document of academicPdfCorpus) {

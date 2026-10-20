@@ -1,10 +1,10 @@
-import { addDisposableListener, h } from '../../../../../src/ash/base/browser/dom.js';
-import type { Button } from '../../../../../src/ash/base/browser/ui/button/button.js';
-import type { InputBox } from '../../../../../src/ash/base/browser/ui/inputbox/inputbox.js';
+import { addDisposableListener, h } from 'ash:editor/base/browser/dom.js';
+import type { Button } from 'ash:editor/base/browser/ui/button/button.js';
+import type { InputBox } from 'ash:editor/base/browser/ui/inputbox/inputbox.js';
 import { createDocumentDecoration } from '../../../common/model/documentDecoration.js';
 import type { DocumentNode } from '../../../common/model/document.js';
 import { selectionsEqual, type DocumentSelection } from '../../../common/core/documentSelection.js';
-import { localize } from '../../../../../src/ash/nls.js';
+import { localize } from 'ash:editor/nls.js';
 import type { DocumentFormattingContribution, DocumentFormattingState, DocumentEditorContributionContext } from '../../documentContributions.js';
 import { DocumentFormattingControls } from '../../widget/documentFormattingControls.js';
 import { createReplaceDocumentMatchesCommand, findDocumentText, getDocumentFindMatchIndex, type DocumentFindMatch } from '../../../common/commands/documentFindCommands.js';

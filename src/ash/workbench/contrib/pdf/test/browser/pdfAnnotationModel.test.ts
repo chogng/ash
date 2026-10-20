@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "mocha";
-import { PdfAnnotationModel } from "../../../../../workbench/contrib/pdf/browser/pdfAnnotationModel.js";
-import { emptyPdfAnnotationDocument } from "../../../../../workbench/contrib/pdf/common/pdfAnnotations.js";
+import { PdfAnnotationModel } from "../../../../../../../extensions/pdf-viewer/browser/pdfAnnotationModel.js";
+import { emptyPdfAnnotationDocument } from "../../../../../../../extensions/pdf-viewer/common/pdfAnnotations.js";
 
 test("PDF annotation model tracks mutations, undo/redo, and the saved revision", () => {
 	const model = new PdfAnnotationModel();

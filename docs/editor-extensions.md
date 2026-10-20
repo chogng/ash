@@ -11,6 +11,16 @@
 > Extensions 安装由 [`core-plugins.md`](../crates/docs/core-plugins.md) 维护，
 > Plugin 来源授权由 [`plugins.md`](plugins.md) 维护。
 
+## 公开 SDK 与本地开发
+
+用户侧统一称“扩展”，市场按用途标签筛选；MCP、Skills、Rust 程序和客户端资源等技术形式属于详情与内部能力契约。第一方扩展当前同仓维护为独立包，是否分仓按独立发布和协作收益决定。
+
+Rust 作者继续使用 `sdk/rust` 的 Host RPC v1 接口。文档客户端的 `editor.client.v1` 请求、声明与边界校验已进入 `editor_client` 模块，Academy 是真实消费者。客户端通过有限的 `ash:editor/<module>.js` 命名空间导入宿主机制；编译器根据实际宿主导入生成可调用绑定清单，声明文件只提供类型。未知模块、私有值、命名空间及通配重新导出不能绕过构建边界。该入口只覆盖已准入的编辑器客户端；它与标准 `vscode` API 的兼容层职责不同。
+
+`pnpm extension:sdk` 可导出自包含 Rust SDK、协议、摘要构建 helper、客户端声明、编译工具及本机开发宿主，同时生成独立 Academy 项目。导出后的项目使用自身 Cargo／TypeScript 配置，构建无需访问 Ash checkout。当前为与同版宿主配套的开发 SDK；Host RPC 和客户端 API 均携带版本，破坏契约的变更须升级相应版本，不能靠包名认定兼容。
+
+开发宿主复用 `ExtensionHostSupervisor`，显式 `--allow-local-code` 授予不经 OS 隔离的本地代码执行；提供声明调用、诊断、重载、摘要匹配及进程释放。它不写入已安装扩展来源，也不授予 Renderer 权限。正式包仍须注册表签名、可信来源准入和精确执行授权。完整命令、验证范围与限制见 [独立扩展开发](../sdk/docs/development.md)。
+
 ## 快速理解
 
 Ash 的共享核心服务 App、TUI 与其他客户端，拥有 Agent 执行、权威状态、权限裁决和通用资源机制。服务商认证、托管平台 API 和特定产品工作流由可选扩展提供；实现需要 Rust、后台执行或跨窗口存活，都不能单独成为进入核心的理由。
@@ -116,6 +126,14 @@ Markdown 识别行内、块级公式和 `math` 围栏，按文档顺序一次提
 Academy 使用中立 `editor` 市场包，`editor/` 的标准扩展 manifest 和资源由包拥有，Rust executable 仍经公共 SDK／Host RPC 注册。Manager 的安装、来源校验、精确执行授权与租约保持唯一 owner。产品固定来源可用 `productRuntimePublishers` 选择可信发布者；此权限依据 pinned root 和已验证 publisher delegation，用户新增来源或包自报标识不能获得。
 
 已安装的精确包获准后，App Server 才投影 `rendererClient`；Renderer 在校验同代资源、摘要、API 版本及当前准入后运行独立模块工厂。模块只取得有限宿主机制，Schema、codec 与视图语义留在包内；宿主拥有模型资源、dirty、历史与恢复。该路径在 Renderer 执行可信第一方代码，不作为任意第三方客户端隔离机制，也不扩大普通 Rust executable 的生产执行权限。构建、升级、样式租约和验证范围见[编辑器路线图 6.7](design/editor-roadmap.md#67-贡献装配与市场扩展)。
+
+### 可选文献管理与 PDF 资源编辑器
+
+PDF 查看器由独立的 [`ash.pdf-viewer`](../extensions/pdf-viewer/README.md) 包提供，Code／Agents 产品均不预装；Agent Window、工作台组合入口和 Chat 不静态导入 PDF 实现。Academy 负责写作与文档编辑事务，文献检索由包含工具与 Skills 的 Plugin 提供，独立 [`ash.reference-manager`](../extensions/reference-manager/README.md) 已支持 RIS 导入、去重、文献库管理和稳定 ID 关联的引用插入／更新；BibTeX 和 CSL 样式不在首版范围。文献管理通过 Academy 的版本绑定 `academy.citations.v1` 提交一次可撤销文档事务，不能另存一份正文状态。Academy 的 PDF 导出不依赖 PDF 查看器。
+
+PDF 包使用已安装第一方客户端的相同签名、精确授权与资源校验链，经 `editor.resource.v1` 注册二进制资源 pane。`describe` 的 `version: 1`、`clientModule`、`clientDigest` 与 `editors` 字段沿用客户端声明；每个 editor 含 `editorId`、`displayName`、`selectors` 和 `contentType`，不含文本 `documentType`。声明必须匹配包 manifest 的 custom editor。模块通过 `getResourceEditor(editorId, createInstance)` 提供构造器，宿主经 DI 构造并传入 Provider 的终止信号。`createInstance` 是随 Provider 终止失效的窄构造回调，不提供服务查找、注册或容器访问；资源 pane 用它构造自己拥有的工作副本。资源 pane 负责观察信号、取消 I/O 和冻结已有视图；宿主负责撤销路由及按 pane 生命周期释放样式。Chat 附件通过通用 `resourceEditor` 能力提供只读预览，不依赖具体 PDF 类型。
+
+PDF.js 和 Worker 随扩展客户端打包，JS／CSS 摘要覆盖其字节。打包器仅接受声明的 npm 依赖及限定的宿主机制，不允许依赖越出根目录或导入私有服务容器。原 PDF 文件不变，批注仍使用既有配套 JSON 格式；禁用时保留当前只读页面和未保存草稿，保存后的批注可在重新打开时恢复。具体安装、构建、键盘与验证范围见扩展 README。
 
 ### 浏览器 Worker 与后端宿主的生命周期
 
@@ -438,7 +456,7 @@ flowchart TD
 
 当前标准 JS API 支持命令、文档事件与快照、诊断集合、Markdown 所需语言 Provider、Tasks/Debug 和 workspace/configuration 子集。`workspace.fs.readFile/stat/readDirectory` 对应 typed `readResourceFile/statResource/readResourceDirectory`，Rust SDK 提供同一组操作；Workbench 文件服务拥有资源 provider，App Server 验证调用窗口、工作区授权与身份。`stat.ctime` 当前无来源而为 0，写入与完整文件系统 API 仍不支持。打开的 dirty model 始终先于磁盘，改动保留版本、原文前置条件和已有撤销 owner。
 
-内置 `ash.academic` 使用声明式 `customEditors` 选择现有 Stanza Academic profile。扩展启用决定文件关联和新 editor 注册；停用不销毁已打开 tab 的模型、撤销或未保存内容。schema、引用视图和 reference-index plugin 仍由可信 TS renderer 组合；这是可停用的产品扩展，不向第三方开放内部 DOM/model API，也不包含分页或 PDF 导出。
+可选安装的 `ash.academic` 经声明式 `customEditors` 和 `editor.client.v1` 选择包内 Stanza Academic profile。扩展启用及精确授权决定新 editor 注册；停用后已打开 tab 保留模型、撤销与未保存内容并冻结编辑。schema、引用视图、分页和 DOCX／PDF 输出均由包拥有；共享宿主提供文档与生命周期机制，不向任意第三方开放内部 DOM/model API。PDF 阅读另由可选 `ash.pdf-viewer` 的资源 pane 提供，详见上面的独立能力边界。
 
 文本自定义编辑器通过 `customTextEditor` 注册，包声明决定 viewType、显示名称和 selector；provider 的标准 `resolveCustomTextEditor` 经统一 invocation 返回 HTML。Workbench 保留模型、readonly、撤销和消息路由。可信 Worker 的库资产沿有界对象 URL 传递，窗口在停用和关闭时回收；该路径不是完整 VS Code Webview API。
 

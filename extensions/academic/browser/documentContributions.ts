@@ -1,5 +1,5 @@
 import { DocumentReviewContribution } from './contrib/review/documentReview.js';
-import type { IDisposable } from '../../../src/ash/base/common/lifecycle.js';
+import type { IDisposable } from 'ash:editor/base/common/lifecycle.js';
 import type { DocumentDecoration } from '../common/model/documentDecoration.js';
 import type { DocumentNode } from '../common/model/document.js';
 import type { DocumentSchema, DocumentTextStyleAttributes } from '../common/model/documentSchema.js';

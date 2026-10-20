@@ -17,7 +17,7 @@ Stanza 底层保留**通用文本编辑内核**，Code 编辑器与 Academy 富�
 | Academy 扩展        | 富文档 Schema、样式与结构语义、命令、输入策略、富文档视图、工具栏、表格／图片、分页、审阅及格式 codec               | 整条能力链由扩展提供；页面片段及其到模型位置的映射由扩展计算，通过通用契约接入。                                   |
 | Sessions 产品消费层 | 产品入口、编辑器选择、菜单投影、布局／恢复及会话关联                                                                | 消费共享宿主已注册的编辑能力；不拥有 Academy 注册、装载或能力实现，也不预设专用 contrib；不新增 IDE Academy 接线。 |
 | 共享宿主基础设施    | 扩展目录与启停、DI、EditorPart／Pane、资源引用、工作副本、保存、备份、恢复、冲突与协作连接                          | Sessions 复用现有 Workbench 下层领域服务；格式语义由能力包提供，不复制服务或反向依赖 Sessions。                    |
-| Academic 论文配置   | Academy 内的论文结构、引用、文献、模板与投稿规则                                                                    | 复用 Academy 的富文档、样式、分页和输出，不在内核维护论文特判。                                                    |
+| Academic 论文配置   | Academy 内的论文结构、文档内引用节点与文献表、模板与投稿规则                                                        | 复用 Academy 的富文档、样式、分页和输出；跨文档文献库、检索、元数据和引用样式由独立文献扩展提供。                  |
 
 能力接入方向为：**Academy 独立 Rust 扩展 → 公共 Rust SDK／Host RPC → 共享扩展宿主与通用编辑器桥 → Stanza 公开契约**。Sessions 经共享宿主服务消费注册结果，源码依赖仍遵守 **Sessions → Workbench → Editor**；Rust Provider 不链接进 App Server，通用桥不反向导入 Sessions。宿主装载已启用包并交付能力，内核只消费注册结果；内核及其基础 bundle 不导入具体扩展实现，也不通过全局服务定位器寻找指定扩展。Workbench 不反向导入 Sessions，Sessions core／services 不导入 Academy 实现；产品装配可以选择默认能力，通用承载层不根据包名硬编码功能。
 
@@ -74,6 +74,12 @@ Academy 仍以 Word 的文档工作流为目标：新建、写作、样式、对
 | M6 扩展内功能演进             | 迁移闭环验收后，继续 Academy 写作、分页、输出与审阅，以及各自 Code 功能                                                                                        | 新能力由所属扩展内部 contrib 实现，核心只补实际需要且语义通用的机制；不把业务重新写回内核。                                                                      |
 
 M3 与 M4 都依赖 M1／M2，可按各自闭合切片推进；M5 对每个切片及时收敛，最后复核整体依赖。M2 必须同时验证 Code 和 Academy，避免接入端口只服务一种视图。M0 静态审计已完成；Academy 的注册、通用快照提交与既有富文档／codec 迁移已实施；Code 的注入、既有贡献与模型／输入／可选视图迁移已实施，M1–M5 的首次本机回归覆盖产品预装包；后续 Academy 外置包实现和验证范围另见 6.7。M6 的写作样式、纵向正文分页与基础页面规则已实现；本轮补齐下面明确范围内的分节、输出、DOCX 和块级审阅；复杂页面结构和目标应用验收不由这些结果推导完成。真实 Electron 多窗口、远端、物理 IME 与屏幕阅读器验收仍按根 TODO 跟踪。详细顺序、共享消费者与退出条件以[边界审计](editor-boundary-audit.md#实施顺序及每步交付)为准。
+
+### 学术工作流的独立能力边界
+
+文献查询／检索属于组合工具与 Skills 的 Plugin；Academy 拥有写作、文档状态与引用插入／更新事务；RIS／BibTeX、文献库、引用样式和附件关联属于独立文献管理扩展；PDF 阅读与批注属于可选的 [`ash.pdf-viewer`](../../extensions/pdf-viewer/README.md)。这些能力独立安装和启停，文献管理不复制 Academy 的文档状态，PDF 导出也不依赖查看器。首版 [`ash.reference-manager`](../../extensions/reference-manager/README.md) 已实现 RIS 导入、去重、元数据与附件关联、独立 `.ash-library` 工作副本及向 Academy 插入／更新引用；BibTeX、CSL 样式与在线检索仍属于后续范围，不作为首版已交付能力。
+
+2026-10-20 已将 PDF pane、PDF.js／Worker、批注模型和配套文件存储移入 PDF 包，退出 Agent Window／主工作台的静态注册。Chat 通过通用资源编辑器能力预览附件；未安装时保留二进制附件操作。宿主只保留资源注册、准入、DI、生命周期、样式和无障碍呈现机制。独立包使用 `editor.resource.v1`，保留旧 editor ID 与批注文件格式。验证范围和安装包命令归扩展 README，不将本地 Chromium 结果当作跨平台窗口验收。
 
 ## API 名称与契约怎么对齐
 
@@ -206,7 +212,15 @@ Academy 的布局 contrib 提供 A4／Letter、页边距、单栏正文、缩放
 
 “跟踪块级修订”按根级内容块保存首个修改前的只读基线及发起作者。后续同块编辑合并到该审阅单元，接受保留当前内容，拒绝恢复整个块；它不是逐字作者归属。跨根块移动、分节或删除使独立基线互相依赖时，提升为明确的文档结构修订，一次接受／拒绝整体处理。协作中同一目标的记录合并处理，接受不丢弃同伴当前内容；拒绝会恢复该单元的基线，操作本身仍可撤销。文件保存、备份、只读／Provider 停用和唯一历史共用原路径。
 
-原生 DOCX 往返保留完整审阅元数据，标准 OOXML 以段落插入／删除呈现文字对照和批注；复杂结构审阅仍以 Ash 基线为准，不承诺 Word 与 Ash 审阅粒度相同。Academic 配置继续回归论文结构、引用和文献；公式、文献样式、模板与投稿规则仍按各自功能范围演进。
+原生 DOCX 往返保留完整审阅元数据，标准 OOXML 以段落插入／删除呈现文字对照和批注；复杂结构审阅仍以 Ash 基线为准，不承诺 Word 与 Ash 审阅粒度相同。
+
+Academy 拥有文档内的引用节点、文献表快照、插入／更新事务、位置映射、渲染及保存／撤销／协作。文献库、跨文档检索、元数据同步、引用样式及文献表生成策略属于独立的文献管理扩展；该扩展提交带文档身份与版本的编辑提案，由 Academy 校验后原子更新，不能直接修改 DOM、持有另一份可写正文或自建撤销历史。当前只有包内命令与基础手工入口，尚无独立文献管理 Provider 消费者，不把这些命令宣称为已经开放的宿主 RPC，也不预建无调用方的注册或接口。公式、模板与投稿规则另按实际消费者推进。
+
+2026-10-20 补齐文档内引用闭环：空标签按当前文献表顺序编号，显式标签保持不变；插入拒绝重复键，文献改键与所有关联引用一次提交，未改正文时保留原格式。删除保留未解析引用、清理空文献表，并保证空节与仅含文献表的文档仍可编辑。分节中的既有文献表继续复用。中英文手工入口、键盘选择、停用只读、保存重开及 DOCX 的编号输出已回归；这些文档操作不构成跨文档文献管理器。
+
+独立文献管理首版现使用库／条目 UUID 持久关联原生文献表，支持引用键互换、元数据更新及一次事务撤销；缺失文献保留正文并报告，冲突键拒绝整次操作。RIS 原文件不改写，库保存有修订冲突保护，停用后的 dirty 工作副本可由新 Provider 接管。PDF 附件通过已注册的独立查看器打开，未安装时给出安装提示。范围、构建与定向验证入口见 [Reference Manager](../../extensions/reference-manager/README.md)。 2026-10-20 本机 macOS arm64 已通过真实 Rust 进程与 Chromium 的英中 RIS／引用／PDF 组合场景、并发修订冲突与停用恢复、定向单测、正常 Renderer 构建和默认包业务实现缺席检查；最终签名包另通过真实 Manager 的安装、精确授权、产品 launcher、撤权与卸载。Ash `exec` 实际生成扩展骨架和 RIS 解析器，执行记录位于 `.build/reference-manager-selfhost/`；验证命令和产物归 `.build/reference-manager-validation.md`。这是本机交付验证，未发布线上市场，也未替代根 TODO 的 Electron 多窗口／远端及物理设备验收。
+
+本机 macOS arm64、检出 `f69caf618` 加工作树修改：`pnpm test:browser:integration academic.integration.spec.ts --project=chromium` 的 53 项通过；最后的文献表边界调整后定向复验引用英中两项，49 项模型／DOCX／架构单测与 `pnpm build:renderer` 通过，NLS 检查无中文缺项。命令、截图及 trace 路径见 `.build/academy-citations-{browser-regression,browser-verified,unit-verified,renderer-verified,nls}.log`。通过当前源码构建的 `ash exec` 真实模型完成引用命令与四项测试的修改，记录在 `.build/academy-citations-selfhost/trace.json`；其内置 shell 验证先遇沙箱目录重叠，外置隔离 profile 的复核命令又超时，不能把 Ash 的完成报告或退出码当作测试通过。上述通过结果均由外层独立命令取得，认证只读引用已移除。该范围已收尾；根 TODO 中 Electron／远端／物理输入和 Word 的实机验收继续保留。
 
 本轮实现验证记录：相关模型／宿主单测、真实外置 Rust Provider 与独立客户端资源的 Chromium 场景、中英文入口、PDF 独立解码和页面渲染、正常 Renderer 构建与资源边界测试。命令和最终数量以本轮提交记录为准；日志保存在 `.build/academy-m6-rest-*.log`。这些结果不替代真实 Electron 多窗口、远端、物理 IME、屏幕阅读器或目标 Word 的验收证据。
 

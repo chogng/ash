@@ -157,7 +157,7 @@ export default defineConfig(({ mode, command }) => {
 		optimizeDeps: {
 			// The dependency scanner parses source before Vite transforms parameter decorators.
 			noDiscovery: true,
-			include: ["@xterm/xterm", "@xterm/addon-fit", "pdfjs-dist"],
+			include: ["@xterm/xterm", "@xterm/addon-fit"],
 		},
 		resolve: { alias: rendererDependencyAliases },
 		server: {

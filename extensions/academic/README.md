@@ -39,8 +39,9 @@ the same working copy and history through the replacement capability.
 `ash.editor.document`, the general document MIME type, `ash.collaboration.notes`
 and the channel-note MIME type also remain compatible. Paragraph contributions
 are installed per profile/view, never through the global Code contribution registry.
-Complete product/platform acceptance and additional Word features such as advanced page layout,
-DOCX or PDF remain separate roadmap work. See the [roadmap](../../docs/design/editor-roadmap.md).
+Complete product/platform acceptance and advanced Word layout remain separate roadmap
+work. The supported DOCX and page-image PDF formats are described below and in the
+[roadmap](../../docs/design/editor-roadmap.md).
 
 Validate with `just verify ash-academy`, the MainThreadClientEditors / Academic
 profile / DocumentEditorPane unit suites, and
@@ -57,6 +58,12 @@ output contains `catalog.json` and `package/`, ready for the registry's `editors
 family; signing and online publication belong to the registry release workflow.
 A new output directory is required. Sources and build files are not payload assets.
 Source maintenance remains in this repository until a separate move is chosen.
+Academy's native description uses the public SDK `editor_client` types; browser
+sources import only the declared `ash:editor/*` host API and package-owned modules.
+The [independent development guide](../../sdk/docs/development.md) exports a complete
+SDK and a separate Academy project, then builds, typechecks, loads/reloads and stages
+that project without referring back to Ash source. Development code requires explicit
+local-code authorization; normal package trust and execution consent still apply.
 See [distribution and validation](../../docs/design/editor-roadmap.md#67-贡献装配与市场扩展).
 
 M6 writing and styles are owned by this package. Paragraphs and headings can reference
@@ -89,6 +96,24 @@ Command+F opens search, Enter/Shift+Enter navigate, and Escape restores editor f
 Collaboration replays fully validated atomic transactions and merges independent
 paragraph attributes and style definitions by stable identity. No style state or
 replacement history is copied into the Rust process or the shared host.
+
+Academic citations resolve against bibliography keys. An empty citation label uses
+the current reference ordinal; explicit labels remain unchanged. Reference insertion
+rejects duplicate keys. Edit reference changes its key, text and every matching
+citation in one undo step, while preserving reference and citation identities.
+Delete reference removes an empty bibliography container and leaves its citations
+visibly unresolved; undo restores resolution. Dialogs and citation labels are
+localized, and citations support Tab focus and Enter/Space selection. Legacy files
+with duplicate keys remain readable; ambiguous edits are rejected.
+[Reference Manager](../reference-manager/README.md) owns the independent RIS library
+and submits insertion/update requests through `academy.citations.v1`. Academy links
+bibliography entries by library and entry IDs, validates a version-bound request,
+and commits one transaction and history unit. Key changes update matching citations;
+missing library entries remain in the document. Stale handles, read-only/composing
+inputs, cancellation and retired providers reject edits. The shared pane exposes
+only an opaque lifetime-bound call; no model or service container crosses it.
+Literature search and PDF reading remain separate optional capabilities. This trusted
+installed-client contract does not expose a general Host RPC document editor.
 
 The package also owns the M6 editable body pagination slice. Paper controls select
 continuous layout, A4 or Letter and persist page size and uniform margins through

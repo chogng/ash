@@ -17,6 +17,15 @@ import type { IEditorCloseHandler } from './editor/editorInput.js';
 /** Format-specific control exposed by a Workbench editor pane. */
 export interface IEditorControl extends ICompositeControl { }
 
+/** A version-bound, package-defined editor operation. No model or service escapes this port. */
+export interface IEditorExtensionApi {
+	/** Document version captured by this handle; a later edit requires a fresh handle. */
+	readonly version: number;
+	readonly readOnly: boolean;
+	/** The owning editor validates the opaque request and cancellation before committing. */
+	invoke(payload: unknown, signal: AbortSignal): Promise<unknown>;
+}
+
 /** One retained editor implementation; its host owns creation, visibility and disposal. */
 export interface IEditorPane extends IComposite, IDisposable {
 	readonly id: string;
@@ -34,6 +43,7 @@ export interface IEditorPane extends IComposite, IDisposable {
 	getWorkingCopies?(): readonly IWorkingCopy[];
 	readonly onDidChangeWorkingCopies?: Event<void>;
 	getControl(): IEditorControl | undefined;
+	getExtensionApi?(id: string): IEditorExtensionApi | undefined;
 	setInput(input: IResourceEditorInput, signal: AbortSignal): Promise<void>;
 	setOptions?(options: IEditorOptions): void;
 	clearInput(): void;

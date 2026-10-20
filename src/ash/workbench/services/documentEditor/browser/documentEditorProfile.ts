@@ -1,3 +1,4 @@
+import type { IEditorExtensionApi } from '../../../common/editor.js';
 import type { DocumentCodec, DocumentNode, DocumentTextFormat, DocumentTextModel, DocumentSelection, DocumentOutline } from '../common/documentCodec.js';
 import type { Constructor } from '../../../../platform/instantiation/common/descriptors.js';
 import type { URI } from '../../../../base/common/uri.js';
@@ -16,6 +17,7 @@ export interface DocumentEditorWidget extends IDisposable {
 	focus(): void;
 	exportArtifact?(format: string, signal: AbortSignal): Promise<Uint8Array>;
 	getAccessibleContent?(): string;
+	getExtensionApi?(id: string): IEditorExtensionApi | undefined;
 	getDocument(): DocumentNode;
 	getDocumentSelection(): DocumentSelection | undefined;
 	getOutline(): DocumentOutline;

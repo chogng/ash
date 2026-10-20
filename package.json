@@ -186,6 +186,7 @@
     "language:generate": "node build/languageRegistry.ts",
     "tree-sitter:verify": "node build/treeSitterRegistry.ts --check && node build/python.ts -B -m build.lib.grammars --wasm --verify",
     "tree-sitter:prepare": "node build/treeSitter.ts",
+    "extension:sdk": "node build/builtin/extensionSdk.ts",
     "package:editor": "node build/builtin/editorPackages.ts"
   },
   "devDependencies": {

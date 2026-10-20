@@ -1,5 +1,5 @@
 import { collectDocumentNodeIds, findDocumentNode, type DocumentAttributes, type DocumentNode, type DocumentNodeId } from "../../model/document.js";
-import { localize } from '../../../../../src/ash/nls.js';
+import { localize } from 'ash:editor/nls.js';
 import { isDocumentSelectionValid, nodeSelection, textSelection, type DocumentPoint, type DocumentSelection } from "../../core/documentSelection.js";
 import type { DocumentHistoryEntries, DocumentHistoryEntry } from "../../model/documentHistory.js";
 import { type DocumentSchema } from "../../model/documentSchema.js";

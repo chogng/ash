@@ -4,24 +4,25 @@ import { createRequire } from 'node:module';
 import { dirname, isAbsolute, relative, resolve } from 'node:path';
 import ts from 'typescript';
 import { build, normalizePath, type Plugin } from 'vite';
+import { readEditorClientApi, validateEditorClientApi, type EditorClientApi } from './editorClientApi.ts';
 
 const repositoryRoot = normalizePath(await realpath(resolve(import.meta.dirname, '../..')));
-const hostFile = normalizePath(resolve(repositoryRoot, 'src/ash/workbench/services/extensions/browser/editorClientHost.ts'));
 const sha256 = (bytes: string): string => `sha256:${createHash('sha256').update(bytes).digest('hex')}`;
 
 /** Independent client resources for a product-authorized editor package, without Ash business modules. */
-export async function compileEditorClient(packageRoot: string): Promise<{ resources: Record<string, string>; client: Record<string, string | number>; }> {
+export async function compileEditorClient(packageRoot: string, publicApi?: EditorClientApi): Promise<{ resources: Record<string, string>; client: Record<string, string | number>; }> {
 	packageRoot = normalizePath(await realpath(resolve(packageRoot)));
-	const hostSource = ts.createSourceFile(hostFile, await readFile(hostFile, 'utf8'), ts.ScriptTarget.Latest, true);
-	const bindings = new Map<string, string[]>();
-	for (const statement of hostSource.statements) {
-		if (!ts.isImportDeclaration(statement) || !ts.isStringLiteral(statement.moduleSpecifier)) continue;
-		if (statement.moduleSpecifier.text.endsWith('.css')) continue;
-		const binding = statement.importClause?.namedBindings;
-		if (!binding || !ts.isNamedImports(binding)) throw new Error('Editor host bindings must be named imports');
-		const path = normalizePath(resolve(dirname(hostFile), statement.moduleSpecifier.text)).replace(/\.js$/u, '.ts');
-		bindings.set(path, binding.elements.map(element => (element.propertyName ?? element.name).text));
+	const manifest = JSON.parse(await readFile(resolve(packageRoot, 'package.json'), 'utf8').catch(error => { if (error.code === 'ENOENT') return '{}'; throw error; }));
+	const packageRequire = createRequire(resolve(packageRoot, 'package.json'));
+	const dependencies = new Map<string, string>();
+	for (const name of Object.keys(manifest.dependencies ?? {})) {
+		if (!/^(?:@[a-z0-9._-]+\/)?[a-z0-9._-]+$/iu.test(name)) throw new Error('Invalid editor client dependency');
+		dependencies.set(name, normalizePath(await realpath(dirname(packageRequire.resolve(`${name}/package.json`)))));
 	}
+	const dependencySource = (path: string) => [...dependencies.values()].some(root => path.startsWith(root + '/'));
+	const api = validateEditorClientApi(publicApi ?? await readEditorClientApi(repositoryRoot));
+	const bindings = new Map(Object.entries(api.modules).map(([key, names]) => [normalizePath(resolve(repositoryRoot, 'src/ash', key)).replace(/\.js$/u, '.ts'), names]));
+	const publicModule = (source: string) => source.startsWith('ash:editor/') ? source.slice('ash:editor/'.length) : undefined;
 	const inputs: string[] = [];
 	async function collect(directory: string): Promise<void> {
 		for (const entry of await readdir(directory, { withFileTypes: true })) {
@@ -40,7 +41,7 @@ export async function compileEditorClient(packageRoot: string): Promise<{ resour
 	const hostId = (path: string): string => relative(resolve(repositoryRoot, 'src/ash'), path).replaceAll('\\', '/').replace(/\.ts$/u, '.js');
 	const assertClientSource = (id: string): string => {
 		const path = normalizePath(id).split('?')[0];
-		if (isAbsolute(path) && !path.startsWith(packageRoot + '/')) throw new Error(`Editor client dependency escapes its package: ${path}`);
+		if (isAbsolute(path) && !path.startsWith(packageRoot + '/') && !dependencySource(path)) throw new Error(`Editor client dependency escapes its package: ${path}`);
 		if (path.startsWith(packageRoot + '/') && path !== `${packageRoot}/package.json` && !/\.(?:ts|css)$/u.test(path)) {
 			throw new Error(`Editor client source is outside its TS/CSS contract: ${path}`);
 		}
@@ -51,7 +52,24 @@ export async function compileEditorClient(packageRoot: string): Promise<{ resour
 		enforce: 'pre',
 		async resolveId(source, importer) {
 			if (!importer) return;
-			if (!source.startsWith('.') && !isAbsolute(source)) throw new Error(`Unsupported editor client dependency: ${source}`);
+			const key = publicModule(source);
+			if (key !== undefined) {
+				if (key.endsWith('.css') && ['base/browser/ui/selectbox/selectbox.css', 'base/browser/ui/dropdown/dropdown.css'].includes(key)) return '\0ash-editor-host-style';
+				if (!Object.hasOwn(api.modules, key)) throw new Error(`Editor client import is outside its host contract: ${source}`);
+				return { id: `ash-editor-host:${key}`, external: true };
+			}
+			if (!source.startsWith('.') && !isAbsolute(source)) {
+				const dependency = [...dependencies.keys()].find(name => source === name || source.startsWith(name + '/'));
+				if (!dependency) throw new Error(`Unsupported editor client dependency: ${source}`);
+				const result = await this.resolve(source, importer, { skipSelf: true });
+				if (!result || !dependencySource(normalizePath(result.id).split('?')[0])) throw new Error(`Editor client dependency escapes its package: ${source}`);
+				return result;
+			}
+			if (dependencySource(normalizePath(importer).split('?')[0])) {
+				const result = await this.resolve(source, importer, { skipSelf: true });
+				if (!result || !dependencySource(normalizePath(result.id).split('?')[0])) throw new Error(`Editor client dependency escapes its package: ${source}`);
+				return result;
+			}
 			const path = normalizePath(resolve(dirname(normalizePath(importer).split('?')[0]), source)).replace(/\.js$/u, '.ts');
 			if (path.startsWith(normalizePath(resolve(repositoryRoot, 'src')) + '/')) {
 				if (['base/browser/ui/selectbox/selectbox.css', 'base/browser/ui/dropdown/dropdown.css'].includes(normalizePath(relative(resolve(repositoryRoot, 'src/ash'), path)))) return '\0ash-editor-host-style';
@@ -74,12 +92,15 @@ export async function compileEditorClient(packageRoot: string): Promise<{ resour
 			};
 			rejectDynamicImports(source);
 			for (const statement of source.statements) {
-				if (!ts.isImportDeclaration(statement) || !ts.isStringLiteral(statement.moduleSpecifier) || statement.importClause?.isTypeOnly) continue;
+				if ((!ts.isImportDeclaration(statement) && !ts.isExportDeclaration(statement)) || !statement.moduleSpecifier || !ts.isStringLiteral(statement.moduleSpecifier)) continue;
+				const key = publicModule(statement.moduleSpecifier.text);
+				if (key !== undefined && !Object.hasOwn(api.modules, key) && !api.types.includes(key) && !key.endsWith('.css')) throw new Error(`Editor client import is outside its host contract: ${key}`);
+				if (ts.isImportDeclaration(statement) ? statement.importClause?.isTypeOnly : statement.isTypeOnly) continue;
 				const path = normalizePath(resolve(dirname(id), statement.moduleSpecifier.text)).replace(/\.js$/u, '.ts');
-				const names = bindings.get(path);
+				const names = key === undefined ? bindings.get(path) : api.modules[key];
 				if (!names) continue;
-				const imported = statement.importClause?.namedBindings;
-				if (!imported || !ts.isNamedImports(imported) || statement.importClause?.name) throw new Error('Editor host imports must use named bindings');
+				const imported = ts.isImportDeclaration(statement) ? statement.importClause?.namedBindings : statement.exportClause;
+				if (!imported || (!ts.isNamedImports(imported) && !ts.isNamedExports(imported)) || ts.isImportDeclaration(statement) && statement.importClause?.name) throw new Error('Editor host imports must use named bindings');
 				for (const element of imported.elements) {
 					if (!element.isTypeOnly && !names.includes((element.propertyName ?? element.name).text)) throw new Error(`Unsupported editor host binding: ${element.name.text}`);
 				}
@@ -87,10 +108,10 @@ export async function compileEditorClient(packageRoot: string): Promise<{ resour
 		},
 	};
 	const output = await build({
-		configFile: false, logLevel: 'error', plugins: [plugin],
+		root: packageRoot, configFile: false, logLevel: 'error', plugins: [plugin],
 		build: {
 			write: false, minify: true, assetsInlineLimit: Infinity,
-			lib: { entry: resolve(packageRoot, 'browser/editor.ts'), formats: ['iife'], name: 'editorClient' },
+			lib: { entry: resolve(packageRoot, 'browser/editor.ts'), formats: ['iife'], name: 'editorClient', cssFileName: 'editor' },
 			rolldownOptions: { output: { globals: id => `host[${JSON.stringify(id.slice('ash-editor-host:'.length))}]` } },
 		},
 	});

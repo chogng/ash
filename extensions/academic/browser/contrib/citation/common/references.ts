@@ -5,6 +5,8 @@ export interface ReferenceEntry {
 	readonly key: string;
 	readonly nodeId: DocumentNodeId;
 	readonly label: string;
+	/** Bibliography text without the display fallback used for an empty entry. */
+	readonly text: string;
 	readonly ordinal: number;
 }
 
@@ -40,7 +42,8 @@ export function buildReferenceIndex(document: DocumentNode): ReferenceIndex {
 	const citationNodes: Array<{ readonly key: string; readonly nodeId: DocumentNodeId; }> = [];
 	const visit = (node: DocumentNode): void => {
 		if (node.type === "reference" && typeof node.attrs.key === "string" && node.attrs.key.length > 0) {
-			references.push({ key: node.attrs.key, nodeId: node.id, label: readNodeText(node).trim() || node.attrs.key, ordinal: references.length + 1 });
+			const text = readNodeText(node);
+			references.push({ key: node.attrs.key, nodeId: node.id, text, label: text.trim() || node.attrs.key, ordinal: references.length + 1 });
 		} else if (node.type === "citation" && typeof node.attrs.key === "string" && node.attrs.key.length > 0) {
 			citationNodes.push({ key: node.attrs.key, nodeId: node.id });
 		}

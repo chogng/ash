@@ -4,8 +4,8 @@ import type {
 	DocumentCollaborationEnvelope as HostEnvelope,
 	DocumentCollaborationRemoteEnvelope as HostRemoteEnvelope,
 	DocumentCollaborationSubmitOutcome as HostSubmitOutcome,
-} from '../../../../src/ash/workbench/services/documentCollaboration/common/documentCollaborationService.js';
-export type { DocumentCollaborationSnapshot, DocumentCollaborationPresence } from '../../../../src/ash/workbench/services/documentCollaboration/common/documentCollaborationService.js';
+} from 'ash:editor/workbench/services/documentCollaboration/common/documentCollaborationService.js';
+export type { DocumentCollaborationSnapshot, DocumentCollaborationPresence } from 'ash:editor/workbench/services/documentCollaboration/common/documentCollaborationService.js';
 
 /** Academy specializes opaque host transport values with its validated semantic transaction. */
 export type DocumentCollaborationConnection = HostConnection<DocumentTransaction>;

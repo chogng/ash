@@ -1,6 +1,6 @@
 import { ACADEMIC_NODE_TYPES } from "../common/schema.js";
 import type { NodeViewContext, NodeViewFactory } from "../../../widget/richTextEditor/richTextEditorWidget.js";
-import { h } from "../../../../../../src/ash/base/browser/dom.js";
+import { h } from "ash:editor/base/browser/dom.js";
 
 /** Browser projections for Academic wrapper nodes; child editing stays editor-owned. */
 export const nodeViews: Readonly<Record<string, NodeViewFactory>> = Object.freeze({
