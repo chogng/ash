@@ -174,15 +174,16 @@ test('Extensions view tab uses the extensions icon', async ({ workbench }) => {
 	const extensionManagementTab = page.getByRole('tab', { name: 'Extensions', exact: true });
 	await expect(extensionManagementTab.locator('svg[data-ash-icon-id="extensions"]')).toBeVisible();
 	await extensionManagementTab.click();
-	await expect(page.locator('.ash-extensions')).toBeVisible();
+	const extensions = page.locator('[data-view-id="ash.extensions.view"] .ash-extensions');
+	await expect(extensions).toBeVisible();
 	await expect(extensionManagementTab).toHaveAttribute('aria-selected', 'true');
-	const search = page.locator('.ash-extensions').getByRole('searchbox', { name: 'Search Extensions', exact: true });
+	const search = extensions.getByRole('searchbox', { name: 'Search Extensions', exact: true });
 	await search.focus();
 	await search.press('Alt+F1');
 	const help = page.getByRole('dialog', { name: 'Accessibility Help', exact: true });
-	await expect(help.getByRole('textbox')).toHaveValue(/Installation includes all capabilities in a package/u);
-	await expect(help.getByRole('textbox')).toHaveValue(/Execution and permissions are managed separately/u);
-	await expect(help.getByRole('textbox')).toHaveValue(/Use Sources to add or pause an Ash open source/u);
+	await expect(help.getByRole('textbox')).toHaveValue(/Enable or Disable.*whole editor extension.*scripts, themes, syntax and snippets/u);
+	await expect(help.getByRole('textbox')).toHaveValue(/Execution authorization and permissions are reviewed separately in details/u);
+	await expect(help.getByRole('textbox')).toHaveValue(/Install extension from Git repository.*repository revision and package directory/u);
 	await page.keyboard.press('Escape');
 	await expect(search).toBeFocused();
 });
@@ -267,7 +268,10 @@ test('Extensions slash commands open their Workbench owners without sending a ch
 		await page.keyboard.press('Enter');
 		await expect(page.locator(selector)).toBeVisible();
 		if (command === '/skills') { await expect(page.locator('.ash-settings-editor')).toHaveCount(0); }
-		if (command === '/plugins') { await expect(page.locator(selector).getByRole('button', { name: 'Installed', exact: true })).toHaveAttribute('aria-pressed', 'true'); }
+		if (command === '/plugins') {
+			await expect(page.locator(selector).getByRole('searchbox', { name: 'Search installed extensions', exact: true })).toBeFocused();
+			await expect(page.locator(selector).getByRole('listbox', { name: 'Installed Extensions', exact: true })).toBeAttached();
+		}
 		if (command === '/extensions rust tools') { await expect(page.locator(selector).getByLabel('Search Extensions', { exact: true })).toHaveValue('rust tools'); }
 		if (command === '/extensions') { await expect(page.locator(selector).getByLabel('Search Extensions', { exact: true })).toHaveValue(''); }
 		if (command.startsWith('/lsp')) {
@@ -310,7 +314,7 @@ test('Extensions slash commands open their Workbench owners without sending a ch
 	}
 });
 
-test('Language server Settings replaces the sidebar and saves backend configuration', async ({ target, workbench, restartWorkbench }) => {
+test('Language server Settings replaces the sidebar and saves backend configuration', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, workbench, restartWorkbench }) => {
 	let page = workbench.page;
 	await workbench.quickaccess.runCommand('ash.languageServers.open');
 	let settings = page.locator('.ash-settings-editor');
@@ -318,7 +322,7 @@ test('Language server Settings replaces the sidebar and saves backend configurat
 	await expect(lsp).toBeVisible();
 	await expect(settings.locator('[data-settings-container]')).toHaveAttribute('data-active-settings-category', 'editor-language');
 	await expect(page.getByRole('tab', { name: 'Language servers', exact: true })).toHaveCount(0);
-	await expect(settings.getByRole('heading', { name: 'Language Servers', exact: true })).toBeInViewport();
+	await expect(settings.getByRole('region', { name: /^Language Servers/u })).toBeInViewport();
 	await expect(lsp).toHaveAttribute('aria-busy', 'false');
 	if (target.appServerMode === 'required') {
 		await expect(lsp.getByRole('status')).not.toContainText('Could not load');
@@ -334,7 +338,8 @@ test('Language server Settings replaces the sidebar and saves backend configurat
 		await expect(lsp).toHaveAttribute('aria-busy', 'false');
 		await expect(lsp.getByRole('button', { name: 'Use default configuration', exact: true })).toBeDisabled();
 	}
-	await settings.locator('[data-settings-category-id="general"]').click();
+	await workbench.settingsEditor.selectGroup('workbench');
+	await workbench.settingsEditor.selectCategory('general');
 	const locale = settings.locator('[data-settings-item-id="workbench.locale"]').getByRole('combobox');
 	await locale.click();
 	await page.getByRole('option', { name: '简体中文', exact: true }).click();
@@ -343,12 +348,14 @@ test('Language server Settings replaces the sidebar and saves backend configurat
 	settings = page.locator('.ash-settings-editor');
 	lsp = settings.locator('.ash-language-server-settings');
 	await workbench.quickaccess.runCommand('ash.languageServers.open');
-	await expect(settings.getByRole('heading', { name: '语言服务器', exact: true })).toBeInViewport();
+	await expect(settings.getByRole('region', { name: /^语言服务器/u })).toBeInViewport();
 	await expect(lsp).toHaveAttribute('aria-busy', 'false');
 	await lsp.getByLabel('语言 ID', { exact: true }).fill('python');
 	await lsp.getByRole('button', { name: '在 Extensions 中查找语言服务器', exact: true }).click();
 	await expect(settings).toBeHidden();
-	await expect(page.locator('.ash-extensions').getByRole('button', { name: '提供程序 · python', exact: true })).toBeVisible();
+	const extensions = page.locator('[data-view-id="ash.extensions.view"] .ash-extensions');
+	await expect(extensions).toBeVisible();
+	await expect(extensions.getByRole('searchbox', { name: '搜索扩展', exact: true })).toBeFocused();
 });
 
 
