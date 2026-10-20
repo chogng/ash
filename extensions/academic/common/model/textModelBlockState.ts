@@ -1,3 +1,4 @@
+import { trackDocumentTransaction } from './documentReview.js';
 import { Emitter, type Event } from "../../../../src/ash/base/common/event.js";
 import { Disposable } from "../../../../src/ash/base/common/lifecycle.js";
 import { DocumentDecorationSet } from "./documentDecoration.js";
@@ -141,6 +142,7 @@ export class TextModelBlockState extends Disposable {
 	dispatch(transaction: DocumentTransaction): TextModelBlockChange | undefined {
 		this.assertNotDisposed();
 		if (transaction.steps.length === 0 && !transaction.selectionSet && !transaction.storedMarksSet) return undefined;
+		transaction = trackDocumentTransaction(this.schema, this._document, transaction, this._selection);
 		if (!this.acceptsTransaction(transaction, "user")) return undefined;
 		if (transaction.steps.length === 0) {
 			const selectionBefore = this._selection;

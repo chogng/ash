@@ -234,3 +234,30 @@ test('disabled installed declarations protect document routing and uninstall rem
 	await bridge.update({ generation: 2, extensions: [] });
 	assert.equal(DocumentTypes.requiresProvider(input), false);
 });
+
+test('package artifact capabilities validate targets and cancel conversion when the provider retires', async () => {
+	const api = { invoke: async () => declaration } as unknown as IExtensionHostApi;
+	const packages = { list: async () => ({ generation: 1, extensions: [owner], diagnostics: [] }) } as unknown as IExtensionApi;
+	let invalid = true, started!: () => void;
+	const entered = new Promise<void>(resolve => { started = resolve; });
+	const load: ExtensionEditorModuleLoader = async () => ({
+		packageId: owner.id, packageVersion: owner.version, getEditorProfile: () => ({
+			...generalProfile, id: 'academic', contentType: 'application/vnd.ash.academic-document+json',
+			create: () => ({
+				...generalProfile.create(), artifactFormats: [{ id: 'test', label: 'Test', extension: invalid ? '../escape' : 'test', mimeType: 'application/test', canImport: true }], importBinary: async (_bytes, _format, _owner, signal) => {
+					started(); await new Promise<void>((_resolve, reject) => signal.addEventListener('abort', () => reject(signal.reason), { once: true }));
+					throw new Error('must cancel');
+				}
+			}),
+		})
+	});
+	using bridge = new MainThreadClientEditors(30_000, load, api, packages);
+	await bridge.update({ generation: 1, extensions: [runtime] });
+	const profile = await EditorPanes.getEditorPane({ resource: URI.file('/paper.ash-paper') })!.resolveDocumentProfile!();
+	assert.throws(() => profile.create(), /Invalid document artifact format/);
+	invalid = false;
+	const conversion = profile.create().importBinary!(new Uint8Array(), 'test', {} as Document, new AbortController().signal);
+	const outcome = assert.rejects(conversion, /abort/i);
+	await entered; bridge.clear(); await outcome;
+	assert.throws(() => profile.create(), /abort/i);
+});

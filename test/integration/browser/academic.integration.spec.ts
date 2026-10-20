@@ -1,3 +1,4 @@
+import { getDocument as loadPdf, OPS } from 'pdfjs-dist/legacy/build/pdf.mjs';
 import { compileEditorClient } from '../../../build/builtin/editorClients.ts';
 import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
@@ -1175,3 +1176,66 @@ for (const rule of ['orphan', 'short', 'widow', 'together', 'next', 'chain'] as 
 		expect(await linePages('rule-target-text')).toEqual(original);
 	});
 }
+
+for (const kind of ['general', 'academic']) for (const locale of ['en', 'zh-CN']) test(`M6 sections, review and binary document output use the installed ${kind} provider in ${locale}`, async ({ page }, testInfo) => {
+	await page.goto(`/academic.html?${kind === 'general' ? 'generalDocument' : 'academicExtension'}&m6Pages&locale=${locale}`);
+	await page.waitForFunction(() => !!window.ashAcademicIntegration);
+	await page.evaluate(() => window.ashAcademicIntegration.layoutStructured(1000, 700));
+	const editor = page.locator('#document-editor');
+	const last = page.locator('#document-editor [data-node-id="pages-last"]');
+	await last.click();
+	await editor.getByRole('button', { name: locale === 'en' ? 'Start section here' : '在此开始新节', exact: true }).click();
+	await expect(page.locator('#document-editor .ash-document-page-section')).toHaveCount(2);
+	await chooseParagraphOption(page, editor.getByRole('combobox', { name: locale === 'en' ? 'Paper' : '纸张', exact: true }), 'Letter');
+	await editor.locator('summary').filter({ hasText: locale === 'en' ? 'Pagination options' : '分页选项' }).click();
+	await chooseParagraphOption(page, editor.getByRole('combobox', { name: locale === 'en' ? 'Orientation' : '纸张方向', exact: true }), locale === 'en' ? 'Landscape' : '横向');
+	await editor.locator('summary').filter({ hasText: locale === 'en' ? 'Pagination options' : '分页选项' }).click();
+	const editable = page.locator('#document-editor [data-node-id="pages-last"] [contenteditable="true"]');
+	await editable.click(); await page.keyboard.press('End'); await page.keyboard.type(' Section');
+	await editor.getByRole('textbox', { name: locale === 'en' ? 'Comment text' : '批注内容', exact: true }).fill('Check section');
+	await editor.getByRole('button', { name: locale === 'en' ? 'Add comment' : '添加批注', exact: true }).click();
+	await chooseParagraphOption(page, editor.getByRole('combobox', { name: locale === 'en' ? 'Track block revisions' : '跟踪块级修订', exact: true }), locale === 'en' ? 'On' : '开启');
+	await editable.click(); await page.keyboard.press('End'); await page.keyboard.type(' reviewed');
+	await expect(editor.getByRole('button', { name: locale === 'en' ? 'Reject block revision' : '拒绝块级修订', exact: true })).toHaveCount(1);
+	const before = await page.evaluate(() => window.ashAcademicIntegration.getStructuredBackup());
+	const docx = await page.evaluate(() => window.ashAcademicIntegration.exportArtifact('docx'));
+	expect(docx.slice(0, 4)).toEqual([80, 75, 3, 4]);
+	const imported = await page.evaluate(bytes => window.ashAcademicIntegration.importArtifact(bytes), docx);
+	expect(imported).toMatchObject({ backup: before, scheme: 'untitled', dirty: true, source: before });
+	expect(await page.evaluate(() => window.ashAcademicIntegration.exportArtifact('docx', true))).toEqual(docx);
+	const pdf = await page.evaluate(() => window.ashAcademicIntegration.exportArtifact('pdf'));
+	expect(Buffer.from(pdf).subarray(0, 8).toString()).toBe('%PDF-1.4');
+	const loading = loadPdf({ data: new Uint8Array(pdf), isImageDecoderSupported: false });
+	try {
+		const output = await loading.promise;
+		expect(output.numPages).toBe(4);
+		for (let index = 1; index <= output.numPages; index++) {
+			const paper = await output.getPage(index), operations = await paper.getOperatorList();
+			const at = operations.fnArray.indexOf(OPS.paintImageXObject);
+			expect(at).toBeGreaterThanOrEqual(0);
+			const image = paper.objs.get(operations.argsArray[at]![0]) as { data: Uint8Array; };
+			expect(image.data.filter(value => value < 180).length).toBeGreaterThan(100);
+			if (index === 4) { expect(paper.view[2]).toBeCloseTo(792, 0); expect(paper.view[3]).toBeCloseTo(612, 0); }
+		}
+	} finally { await loading.destroy(); }
+	const frozen = await page.evaluate(async () => {
+		const pending = window.ashAcademicIntegration.exportArtifact('pdf');
+		const changed = JSON.parse(window.ashAcademicIntegration.getStructuredBackup());
+		const append = (node: { text?: string; content: typeof node[]; }): boolean => { if (node.text?.includes('End Section')) { node.text += ' later edit'; return true; } return node.content.some(append); };
+		append(changed.document);
+		window.ashAcademicIntegration.restoreStructuredBackup(JSON.stringify(changed));
+		return pending;
+	});
+	expect(Buffer.from(frozen)).toEqual(Buffer.from(pdf));
+	expect(await page.evaluate(() => window.ashAcademicIntegration.getStructuredBackup())).toContain('later edit');
+	await page.evaluate(backup => window.ashAcademicIntegration.restoreStructuredBackup(backup), before);
+	await testInfo.attach('academy-m6.pdf', { body: Buffer.from(pdf), contentType: 'application/pdf' });
+	await testInfo.attach('academy-m6.docx', { body: Buffer.from(docx), contentType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
+	expect(await page.evaluate(() => window.ashAcademicIntegration.getStructuredBackup())).toBe(before);
+	await editor.getByRole('button', { name: locale === 'en' ? 'Reject block revision' : '拒绝块级修订', exact: true }).first().click();
+	await expect(editable).toHaveText('End Section');
+	await page.evaluate(() => window.ashAcademicIntegration.saveStructured());
+	await page.evaluate(() => window.ashAcademicIntegration.reopenStructured());
+	await expect(page.locator('#document-editor .ash-document-page-section')).toHaveCount(2);
+	await expect(page.locator('#document-editor .ash-document-review-record')).toHaveCount(1);
+});

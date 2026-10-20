@@ -102,3 +102,7 @@ tr.ash-document-page-gap > td {
 .ash-document-page-options[open] > summary {
 	flex-basis: 100%;
 }
+
+.ash-document-page-section {
+	margin-block-end: 24px;
+}

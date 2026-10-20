@@ -14,6 +14,8 @@ export interface DocumentEditorWidget extends IDisposable {
 	clearInput(): void;
 	layout(dimension: IDimension): void;
 	focus(): void;
+	exportArtifact?(format: string, signal: AbortSignal): Promise<Uint8Array>;
+	getAccessibleContent?(): string;
 	getDocument(): DocumentNode;
 	getDocumentSelection(): DocumentSelection | undefined;
 	getOutline(): DocumentOutline;
@@ -27,6 +29,8 @@ export interface DocumentEditorWidget extends IDisposable {
 
 /** Package-private schema, plugins and UI options are already captured by these closures. */
 export interface DocumentEditorConfiguration {
+	readonly artifactFormats?: readonly { readonly id: string; readonly label: string; readonly extension: string; readonly mimeType: string; readonly canImport: boolean; }[];
+	importBinary?(bytes: Uint8Array, format: string, ownerDocument: Document, signal: AbortSignal): Promise<{ readonly document: DocumentNode; readonly documentType: string; }>;
 	readonly codec: DocumentCodec;
 	readonly widget: Constructor<DocumentEditorWidget>;
 	readonly createEmptyDocument?: () => DocumentNode;

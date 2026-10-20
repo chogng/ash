@@ -1,3 +1,4 @@
+import { DocumentReviewContribution } from './contrib/review/documentReview.js';
 import type { IDisposable } from '../../../src/ash/base/common/lifecycle.js';
 import type { DocumentDecoration } from '../common/model/documentDecoration.js';
 import type { DocumentNode } from '../common/model/document.js';
@@ -48,6 +49,7 @@ export interface DocumentEditorContributionContext {
 	readonly selectText: (blockId: string, selection: Extract<DocumentSelection, { kind: 'text'; }>) => void;
 	readonly invalidateView: () => void;
 	readonly setPageZoom: (zoom: number) => void;
+	readonly setReviewAuthor: (author: string) => void;
 	readonly focusEditor: () => void;
 	readonly runDocumentCommand: (create: (schema: DocumentSchema, document: DocumentNode, blockId: string, selection: DocumentSelection | undefined) => DocumentCommand | undefined) => void;
 }
@@ -62,4 +64,5 @@ export const documentContributions: readonly DocumentContribution[] = Object.fre
 	context => context.addFormattingContribution(new ListNumberingContribution(context)),
 	context => context.addFormattingContribution(new DocumentFindContribution(context)),
 	context => context.addFormattingContribution(new PageLayoutContribution(context)),
+	context => context.addFormattingContribution(new DocumentReviewContribution(context)),
 ]);

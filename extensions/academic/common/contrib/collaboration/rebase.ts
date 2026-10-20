@@ -2,7 +2,7 @@ import { collectDocumentNodeIds, findDocumentNode, type DocumentAttributes, type
 import { isDocumentSelectionValid, nodeSelection, textSelection, type DocumentPoint, type DocumentSelection } from "../../core/documentSelection.js";
 import type { DocumentHistoryEntries, DocumentHistoryEntry } from "../../model/documentHistory.js";
 import { type DocumentSchema } from "../../model/documentSchema.js";
-import { applyDocumentTransaction, DocumentTransaction, type DocumentStep, type ReplaceTextStep } from "../../model/documentTransaction.js";
+import { applyDocumentTransaction, DocumentTransaction, DocumentTransactionMapping, type DocumentStep, type ReplaceTextStep } from "../../model/documentTransaction.js";
 
 export interface RebasedDocumentTransaction {
 	readonly transaction: DocumentTransaction;
@@ -183,6 +183,7 @@ function mapHistoryStepThroughRemote(step: DocumentStep, changes: readonly Remot
 	let mapped: DocumentStep | undefined = step;
 	for (const change of changes) {
 		if (!mapped) return undefined;
+		mapped = mapReviewAnchor(mapped, change, localCreatedIds);
 		if (mapped.kind === "replaceText") {
 			mapped = mapHistoryReplaceTextThroughRemote(mapped, [change], remoteDocument, insertionOrder, localCreatedIds);
 			if (!mapped) return undefined;
@@ -337,7 +338,7 @@ function mapStepThroughRemote(step: DocumentStep, changes: readonly RemoteChange
 	let mapped: DocumentStep | undefined = step;
 	for (const change of changes) {
 		if (!mapped) return undefined;
-		mapped = mapStepThroughChange(mapped, change, remoteDocument, localCreatedIds);
+		mapped = mapStepThroughChange(mapReviewAnchor(mapped, change, localCreatedIds), change, remoteDocument, localCreatedIds);
 	}
 	return mapped;
 }
@@ -420,4 +421,17 @@ function normalizePoint(original: DocumentPoint, mapped: DocumentPoint | undefin
 
 function normalizeText(text: string): string {
 	return text.replaceAll("\r\n", "\n").replaceAll("\r", "\n");
+}
+
+/** A comment created before a peer edit must travel through the same position mapping as selections. */
+function mapReviewAnchor(step: DocumentStep, change: RemoteChange, created: ReadonlySet<DocumentNodeId>): DocumentStep {
+	const node = step.kind === 'insertNode' ? step.node : undefined;
+	const attrs = node?.type === 'reviewComment' ? node.attrs : (step.kind === 'setNodeAttributes' && findDocumentNode(change.before, step.nodeId)?.node.type === 'reviewComment') ? step.attrs : undefined;
+	if (!attrs?.anchor) return step;
+	const selection = JSON.parse(String(attrs.anchor)) as Extract<DocumentSelection, { kind: 'text'; }>;
+	if (created.has(selection.anchor.nodeId) || created.has(selection.head.nodeId)) return step;
+	const mapped = new DocumentTransactionMapping([change]).mapSelection(selection);
+	const { anchor: _anchor, ...rest } = attrs;
+	const next = { ...rest, ...(mapped ? { anchor: JSON.stringify(mapped) } : {}) };
+	return step.kind === 'insertNode' ? { ...step, node: { ...step.node, attrs: next } } : step.kind === 'setNodeAttributes' ? { ...step, attrs: next } : step;
 }

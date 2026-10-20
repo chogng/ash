@@ -202,6 +202,7 @@ export function applyDocumentTransaction(
 	let mappedSelection = selection;
 	const inverse: DocumentStep[] = [];
 	const mapping: DocumentStepMapping[] = [];
+	const anchors = new Map<string, DocumentAttributes>();
 	for (const step of transaction.steps) {
 		const previous = current;
 		switch (step.kind) {
@@ -260,9 +261,45 @@ export function applyDocumentTransaction(
 				break;
 			}
 		}
+		for (const comment of previous.content.filter(node => node.type === 'reviewComment' && node.attrs.anchor)) {
+			const next = findDocumentNode(current, comment.id)?.node;
+			if (!next || (step.kind === 'setNodeAttributes' && step.nodeId === comment.id)) continue;
+			const anchor = JSON.parse(String(comment.attrs.anchor)) as DocumentSelection;
+			const mapped = mapDocumentSelectionThroughStep(anchor, previous, current, step);
+			const { anchor: _anchor, ...rest } = next.attrs;
+			const attrs: DocumentAttributes = { ...rest, ...(mapped ? { anchor: JSON.stringify(mapped) } : {}) };
+			if (attrs.anchor !== comment.attrs.anchor) {
+				const original = findDocumentNode(document, comment.id)?.node;
+				if (original && !anchors.has(comment.id)) anchors.set(comment.id, original.attrs);
+				current = replaceDocumentNode(current, comment.id, createDocumentNode({ ...next, attrs }));
+			}
+		}
 		mappedSelection = mapDocumentSelectionThroughStep(mappedSelection, previous, current, step);
 		mapping.push({ before: previous, after: current, step });
 	}
+	// Formatting can atomically replace several runs. When the paragraph text did
+	// not change, retain the original linear offsets across the new run identities.
+	for (const comment of document.content.filter(node => node.type === 'reviewComment' && node.attrs.anchor)) {
+		if (transaction.steps.some(step => step.kind === 'setNodeAttributes' && step.nodeId === comment.id)) continue;
+		const next = findDocumentNode(current, comment.id)?.node; if (!next) continue;
+		const original = JSON.parse(String(comment.attrs.anchor)) as Extract<DocumentSelection, { kind: 'text'; }>;
+		const mapped = next.attrs.anchor ? JSON.parse(String(next.attrs.anchor)) as Extract<DocumentSelection, { kind: 'text'; }> : undefined;
+		const stable = (point: DocumentPoint): DocumentPoint | undefined => {
+			const block = findDocumentNode(document, point.nodeId)?.parent, after = block && findDocumentNode(current, block.id)?.node;
+			const value = (node: DocumentNode) => node.content.map(child => child.text ?? '\uFFFC').join('');
+			if (!block || !after || value(block) !== value(after)) return undefined;
+			let offset = point.offset;
+			for (const child of block.content) { if (child.id === point.nodeId) break; offset += child.text?.length ?? 1; }
+			for (const child of after.content) { if (child.text !== undefined && offset <= child.text.length) return { nodeId: child.id, offset }; offset -= child.text?.length ?? 1; }
+			return undefined;
+		};
+		const anchor = stable(original.anchor) ?? mapped?.anchor, head = stable(original.head) ?? mapped?.head;
+		if (!anchor || !head) continue;
+		const attrs = { ...next.attrs, anchor: JSON.stringify(textSelection(anchor, head)) };
+		if (attrs.anchor !== next.attrs.anchor) { if (!anchors.has(comment.id)) anchors.set(comment.id, comment.attrs); current = replaceDocumentNode(current, comment.id, createDocumentNode({ ...next, attrs })); }
+	}
+
+	for (const [nodeId, attrs] of anchors) if (findDocumentNode(current, nodeId)) inverse.push({ kind: "setNodeAttributes", nodeId, attrs });
 	schema.validate(current);
 	return Object.freeze({ document: current, inverse: new DocumentTransaction(inverse, { addToHistory: false, label: transaction.label }), selection: mappedSelection, mapping: new DocumentTransactionMapping(mapping) });
 }

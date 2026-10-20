@@ -1,3 +1,8 @@
+import { InMemoryFileSystemProvider } from '../../../src/ash/platform/files/common/inMemoryFilesystemProvider.js';
+import { exportDocumentArtifact, importDocumentArtifact } from '../../../src/ash/workbench/contrib/documentEditor/browser/documentActions.js';
+import { IEditorPart } from '../../../src/ash/workbench/browser/parts/editor/editorPart.js';
+import { IFileDialogService } from '../../../src/ash/platform/dialogs/common/dialogs.js';
+import { IFileService } from '../../../src/ash/platform/files/common/files.js';
 import type { TextModelWorkingCopyReference } from '../../../src/ash/workbench/services/textmodelResolver/common/textModelResourceService.js';
 import { bindTestColorTheme } from './themeFixture.js';
 import { IThemeService } from '../../../src/ash/platform/theme/common/themeService.js';
@@ -102,6 +107,8 @@ interface AcademicIntegrationHarness {
 	reopenStructured(): Promise<void>;
 	getStructuredDirty(): boolean;
 	getStructuredBackup(): string;
+	exportArtifact(format: string, imported?: boolean): Promise<number[]>;
+	importArtifact(bytes: number[]): Promise<{ backup: string; scheme: string; dirty: boolean; source: string; }>;
 	getStructuredCollaborationSubmissions(): readonly string[];
 	restoreStructuredBackup(text: string): void;
 	dispose(): void;
@@ -342,6 +349,29 @@ structuredPane.layout({ width: 900, height: 300 });
 await codeBlockPane.setInput({ resource: codeBlockResource, label: "snippet.ts" }, new AbortController().signal);
 await structuredPane.setInput({ resource: structuredResource, label: "paper", readOnly: new URLSearchParams(location.search).has('readOnly') }, new AbortController().signal);
 
+const artifactFiles = disposables.add(new InMemoryFileSystemProvider());
+await artifactFiles.createDirectory(URI.parse('artifact:/'));
+disposables.add(services.get(IFileService).registerProvider('artifact', artifactFiles));
+let artifactTarget = URI.parse('artifact:/export.docx');
+let importedPane: DocumentEditorPane | undefined;
+let artifactActivePane: DocumentEditorPane | undefined;
+services.registerInstance(IFileDialogService, {
+	showSaveDialog: async (options: { defaultUri?: URI; }) => { if (options.defaultUri?.scheme !== 'file') throw new Error('Save dialog requires a file default URI'); return artifactTarget; },
+	showOpenDialog: async () => [artifactTarget],
+} as unknown as IFileDialogService);
+services.registerInstance(IEditorPart, {
+	get activePane() { return artifactActivePane ?? structuredPane; },
+	domNode: document.body,
+	openEditor: async (input: IResourceEditorInput) => {
+		const container = document.createElement('section'); container.id = 'imported-document'; document.body.append(container);
+		disposables.add(toDisposable(() => container.remove()));
+		const descriptor = EditorPanes.getEditorPane(input)!;
+		importedPane = disposables.add(await descriptor.create({ input, instantiationService: services, documentCollaborationApi, serverEvents }) as DocumentEditorPane);
+		importedPane.create(container); await importedPane.setInput(input, new AbortController().signal); importedPane.layout({ width: 900, height: 600 });
+		return importedPane;
+	},
+} as unknown as IEditorPart);
+
 let callDocuments: readonly CallDocument[] = [];
 let joinedDocumentPane: DocumentEditorPane | undefined;
 if (new URLSearchParams(location.search).has('callDocuments')) {
@@ -444,6 +474,18 @@ window.ashAcademicIntegration = {
 	},
 	getStructuredDirty: () => structuredPane.isDirty,
 	getStructuredBackup: () => structuredPane.workingCopy!.backup(),
+	exportArtifact: async (format, imported = false) => {
+		artifactActivePane = imported ? importedPane : structuredPane;
+		artifactTarget = URI.parse('artifact:/export.' + format);
+		try { await services.invokeFunction(accessor => exportDocumentArtifact(accessor, format)); } finally { artifactActivePane = undefined; }
+		return [...(await services.get(IFileService).readFileBytes(artifactTarget)).bytes];
+	},
+	importArtifact: async bytes => {
+		artifactTarget = URI.parse('artifact:/import.docx');
+		await services.get(IFileService).writeFileBytes(artifactTarget, new Uint8Array(bytes), { create: true, overwrite: true });
+		await services.invokeFunction(accessor => importDocumentArtifact(accessor));
+		return { backup: importedPane!.workingCopy!.backup(), scheme: importedPane!.workingCopy!.resource.scheme, dirty: importedPane!.isDirty, source: structuredPane.workingCopy!.backup() };
+	},
 	getStructuredCollaborationSubmissions: () => [...collaborationSubmissions],
 	restoreStructuredBackup: text => structuredPane.workingCopy!.restoreBackup(text),
 	dispose: () => {

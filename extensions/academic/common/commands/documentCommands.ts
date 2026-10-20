@@ -1,4 +1,4 @@
-import { containsDocumentNode, findDocumentNode, type DocumentAttributes, type DocumentMark, type DocumentNode, type DocumentNodeId } from "../model/document.js";
+import { getDocumentBodyContent, containsDocumentNode, findDocumentNode, type DocumentAttributes, type DocumentMark, type DocumentNode, type DocumentNodeId } from "../model/document.js";
 import { type DocumentFragment } from "../model/documentSerialization.js";
 import { nodeSelection, type DocumentPoint, type DocumentSelection, textSelection } from "../core/documentSelection.js";
 import { type DocumentSchema, type DocumentTextStyleAttributes } from "../model/documentSchema.js";
@@ -563,6 +563,8 @@ function createReplaceCrossBlockTextCommand(schema: DocumentSchema, document: Do
 	for (const child of startContent) transaction = transaction.deleteNode(child.id);
 	for (let index = range.start.parentIndex + 1; index < range.end.parentIndex; index += 1) transaction = transaction.deleteNode(range.start.parent.content[index]!.id);
 	transaction = transaction.deleteNode(range.end.block.id);
+	const removed = new Set(range.start.parent.content.slice(range.start.parentIndex + 1, range.end.parentIndex + 1).map(node => node.id));
+	for (const section of document.content) if (section.type === 'documentSection' && section.content.every(node => removed.has(node.id))) transaction = transaction.deleteNode(section.id);
 	for (let index = 0; index < replacementNodes.length; index += 1) transaction = transaction.insertNode(range.start.block.id, index, replacementNodes[index]!);
 	const point = insertedNode
 		? { nodeId: insertedNode.id, offset: insertedNode.text!.length }
@@ -644,9 +646,12 @@ function createPasteCrossBlockTextCommand(schema: DocumentSchema, document: Docu
 	for (const child of startContent) transaction = transaction.deleteNode(child.id);
 	for (let index = range.start.parentIndex + 1; index < range.end.parentIndex; index += 1) transaction = transaction.deleteNode(range.start.parent.content[index]!.id);
 	transaction = transaction.deleteNode(range.end.block.id);
+	const removed = new Set(range.start.parent.content.slice(range.start.parentIndex + 1, range.end.parentIndex + 1).map(node => node.id));
+	for (const section of document.content) if (section.type === 'documentSection' && section.content.every(node => removed.has(node.id))) transaction = transaction.deleteNode(section.id);
 	for (let index = 0; index < lineContents[0]!.length; index += 1) transaction = transaction.insertNode(range.start.block.id, index, lineContents[0]![index]!);
 	const blocks = lineContents.slice(1).map(content => schema.createNode(range.start.block.type, { attrs: range.start.block.attrs, content }));
-	for (let index = 0; index < blocks.length; index += 1) transaction = transaction.insertNode(range.start.parent.id, range.start.parentIndex + index + 1, blocks[index]!);
+	const insertion = findDocumentNode(document, range.start.block.id)!;
+	for (let index = 0; index < blocks.length; index += 1) transaction = transaction.insertNode(insertion.parent!.id, insertion.index + index + 1, blocks[index]!);
 	const lastBlock = blocks.at(-1);
 	const focusNode = lastTextNode(lastBlock?.content ?? []) ?? lastTextNode(lineContents[0]!);
 	const focusBlockId = lastBlock?.id ?? range.start.block.id;
@@ -1091,7 +1096,9 @@ function findTextBearingBlockLocation(root: DocumentNode, textNodeId: DocumentNo
 	if (!block || !isTextBearingBlock(block)) return undefined;
 	const blockLocation = findDocumentNode(root, block.id);
 	if (!blockLocation?.parent) return undefined;
-	return { block, parent: blockLocation.parent, parentIndex: blockLocation.index };
+	const linear = blockLocation.parent === root || (blockLocation.parent.type === 'documentSection' && root.content.includes(blockLocation.parent));
+	const parent = linear ? { ...root, content: getDocumentBodyContent(root) } : blockLocation.parent;
+	return { block, parent, parentIndex: linear ? parent.content.indexOf(block) : blockLocation.index };
 }
 
 function resolveInlineRange(block: DocumentNode, selection: Extract<DocumentSelection, { kind: "text"; }>): InlineRange | undefined {

@@ -1,3 +1,7 @@
+import { getDocumentReviewAccessibleText } from '../../contrib/review/documentReview.js';
+import { getDocumentPageOwner } from '../../../common/model/documentSections.js';
+import { exportDocx } from '../../contrib/documentOutput/docx.js';
+import { exportDocumentPdf } from '../../contrib/documentOutput/pdf.js';
 import './richTextEditorWidget.css';
 import { DocumentPageView } from '../../contrib/pageLayout/documentPageView.js';
 import { documentPageDimensions } from '../../../common/model/documentPageLayout.js';
@@ -13,7 +17,7 @@ import { buildDocumentOutline, type DocumentOutline, type DocumentOutlineOptions
 import { documentPointToPosition } from '../../../common/core/documentPosition.js';
 import { createDeleteAdjacentInlineNodeCommand, createDeleteInlineSelectionCommand, createDeleteNodeSelectionCommand, createDeleteTableColumnCommand, createDeleteTableRowCommand, createExitEmptyListItemCommand, createInsertFragmentCommand, createInsertHardBreakCommand, createInsertHorizontalRuleCommand, createInsertImageAtSelectionCommand, createInsertImageCommand, createInsertParagraphAfterCommand, createInsertTableColumnCommand, createInsertTableCommand, createInsertTableRowCommand, createJoinAdjacentBlockCommand, createJoinAdjacentListItemCommand, createJoinAdjacentTextRunCommand, createListItemIndentationCommand, createMoveBlockCommand, createRemoveMarkCommand, createPasteTextCommand, createReplaceTextCommand, createSetBlockTypeCommand, createSetLinkMarkCommand, createSetTextStyleCommand, createSplitBlockCommand, createSplitListItemCommand, createToggleBlockquoteCommand, createToggleListCommand, createToggleMarkCommand, findAdjacentTableCell, findTableCellContext, type DocumentCommand } from '../../../common/commands/documentCommands.js';
 import { type DocumentNodeKind, type DocumentSchema, type DocumentTextStyleAttributes } from '../../../common/model/documentSchema.js';
-import { documentSelectionToText, extractDocumentFragment, DOCUMENT_FRAGMENT_CLIPBOARD_MIME, deserializeDocumentFragment, serializeDocumentFragment } from '../../../common/model/documentSerialization.js';
+import { documentToPlainText, documentSelectionToText, extractDocumentFragment, DOCUMENT_FRAGMENT_CLIPBOARD_MIME, deserializeDocumentFragment, serializeDocumentFragment } from '../../../common/model/documentSerialization.js';
 import { allSelection, nodeSelection, textSelection, type DocumentSelection, type DocumentTextSelection } from '../../../common/core/documentSelection.js';
 import { DocumentTransaction } from '../../../common/model/documentTransaction.js';
 import { EditorDom } from '../../../../../src/ash/editor/browser/editorDom.js';
@@ -130,6 +134,7 @@ export class RichTextEditorWidget extends Disposable {
 	private composition: DocumentComposition | undefined;
 	private pageView: DocumentPageView | undefined;
 	private pageZoom = 1;
+	private reviewAuthor = localize('document.review.authorDefault', 'Author');
 	private restoringFocus = false;
 	private remotePresences: readonly DocumentCollaborationPresence[] = [];
 	private dimension: IDimension = { width: 0, height: 0 };
@@ -167,6 +172,7 @@ export class RichTextEditorWidget extends Disposable {
 					this.pageView?.setZoom(zoom);
 					this.updateToolbar();
 				},
+				setReviewAuthor: author => { this.reviewAuthor = author.trim().slice(0, 80) || localize('document.review.authorDefault', 'Author'); },
 				focusEditor: () => { if (this.model && !this.isDisposed) this.restoreModelFocus(this.model, this.model.selection); },
 				runDocumentCommand: create => this.runContributionCommand(create),
 			});
@@ -261,6 +267,19 @@ export class RichTextEditorWidget extends Disposable {
 		this.container?.querySelector<HTMLElement>("textarea, .stanza-document-rich-text-input")?.focus();
 	}
 
+	exportArtifact(format: string, signal: AbortSignal): Promise<Uint8Array> {
+		if (this.composition) return Promise.reject(new Error(localize('document.output.composing', 'Finish text composition before exporting.')));
+		const model = this.requireModel();
+		if (format === 'docx') return exportDocx(model.document, model.schema, signal);
+		if (format === 'pdf') return exportDocumentPdf(this.requireContainer(), model.document, signal);
+		return Promise.reject(new TypeError('Unsupported document output'));
+	}
+
+	getAccessibleContent(): string {
+		const model = this.requireModel();
+		return [documentToPlainText(model.document, model.schema), getDocumentReviewAccessibleText(model.document)].filter(Boolean).join('\n\n');
+	}
+
 	getDocument(): DocumentNode {
 		return this.requireModel().document;
 	}
@@ -303,7 +322,7 @@ export class RichTextEditorWidget extends Disposable {
 			...this.formattingContributions.flatMap(contribution => contribution.getDecorations?.(model.document, model.selection) ?? []),
 		]);
 		const fragment = createFragment(container.ownerDocument);
-		for (const node of model.document.content) fragment.append(this.renderNode(node, model, previousElements, activeNodeIds, decorations));
+		for (const node of model.document.content.filter(node => node.type !== 'reviewComment' && node.type !== 'reviewChange')) fragment.append(this.renderNode(node, model, previousElements, activeNodeIds, decorations));
 		this.pageView!.render(fragment, model.document);
 		this.outlineNavigator?.setOutline(this.getOutline());
 		for (const [nodeId, slot] of this.nodeViewSlots) {
@@ -476,7 +495,7 @@ export class RichTextEditorWidget extends Disposable {
 	}
 
 	private appendEditableText(element: HTMLElement, node: DocumentNode, model: DocumentTextModel, decorations: readonly ViewDecoration[]): void {
-		if ((documentPageDimensions(model.document) && node.content.some(child => child.text !== undefined && child.text.length > 0)) || usesRichTextSurface(node) || hasRenderableDecoration(model, node, decorations)) {
+		if ((documentPageDimensions({ ...model.document, attrs: { ...model.document.attrs, ...getDocumentPageOwner(model.document, node.id).attrs } }) && node.content.some(child => child.text !== undefined && child.text.length > 0)) || usesRichTextSurface(node) || hasRenderableDecoration(model, node, decorations)) {
 			this.appendRichText(element, node, model, decorations);
 			return;
 		}
@@ -540,7 +559,7 @@ export class RichTextEditorWidget extends Disposable {
 			} else {
 				let transaction = new DocumentTransaction().replaceText(currentText.id, 0, currentText.text?.length ?? 0, textarea.value, documentInsertionMarks(currentModel, currentModel.selection));
 				if (textarea.value.length > 0) transaction = transaction.withSelection(textSelection({ nodeId: currentText.id, offset: selectionEnd }));
-				currentModel.dispatch(transaction.withHistoryGroup("typing"));
+				currentModel.dispatch(transaction.withHistoryGroup("typing").withMeta('review.author', this.reviewAuthor));
 			}
 			const nextTextarea = findTextArea(this.requireContainer(), node.id);
 			if (!nextTextarea) this.restoreModelFocus(currentModel, currentModel.selection);
@@ -690,14 +709,14 @@ export class RichTextEditorWidget extends Disposable {
 				const nextText = (runsById.get(textNode.id) ?? []).map(run => run.textContent ?? "").join("");
 				if (nextText !== textNode.text) transaction = transaction.replaceText(textNode.id, 0, textNode.text!.length, nextText);
 			}
-			if (transaction.steps.length > 0) model.dispatch(transaction.withHistoryGroup("typing"));
+			if (transaction.steps.length > 0) model.dispatch(transaction.withHistoryGroup("typing").withMeta('review.author', this.reviewAuthor));
 			return;
 		}
 		const text = editor.textContent ?? "";
 		let transaction = new DocumentTransaction();
 		for (const textNode of textNodes) transaction = transaction.deleteNode(textNode.id);
 		if (text.length > 0) transaction = transaction.insertNode(node.id, 0, model.schema.createText(text, textNodes[0] ? { id: textNodes[0].id } : {}));
-		if (transaction.steps.length > 0) model.dispatch(transaction.withHistoryGroup("typing"));
+		if (transaction.steps.length > 0) model.dispatch(transaction.withHistoryGroup("typing").withMeta('review.author', this.reviewAuthor));
 	}
 
 	private beginComposition(model: DocumentTextModel, blockId: string, element: HTMLTextAreaElement | HTMLDivElement, selection: DocumentTextSelection | undefined): void {
@@ -1237,7 +1256,7 @@ export class RichTextEditorWidget extends Disposable {
 	private dispatchCommand(model: DocumentTextModel, command: DocumentCommand, historyGroup?: string, focusBehavior: CommandFocusBehavior = "focus-editor"): void {
 		if (this.isReadOnly() || this.model !== model) return;
 		this.activeBlockId = command.focus.blockId;
-		model.dispatch(historyGroup ? command.transaction.withHistoryGroup(historyGroup) : command.transaction);
+		model.dispatch((historyGroup ? command.transaction.withHistoryGroup(historyGroup) : command.transaction).withMeta('review.author', this.reviewAuthor));
 		if (focusBehavior === "preserve-focus") {
 			this.updateToolbar();
 			this.updateInlineNodeSelection();

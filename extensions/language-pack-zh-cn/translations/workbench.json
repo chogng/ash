@@ -2388,7 +2388,16 @@
     "terminal.environmentChanges.launchPhase": "创建进程时应用。",
     "terminal.environmentChanges.show": "终端：显示环境贡献",
     "terminal.environmentChanges.snapshotMeaning": "此快照记录启动时选择的扩展修改，不是对进程环境值的实时读取。",
-    "document.accessibility.find": "按 Ctrl+F 或 Command+F 打开查找与替换。查找可跨同一块内的字符格式，并支持区分大小写与全字匹配。Enter 和 Shift+Enter 切换匹配。“全部替换”只占一个撤销步骤，并保留其他格式与对象。Escape 关闭查找并返回当前匹配。只读文档支持查找与导航。"
+    "document.accessibility.find": "按 Ctrl+F 或 Command+F 打开查找与替换。查找可跨同一块内的字符格式，并支持区分大小写与全字匹配。Enter 和 Shift+Enter 切换匹配。“全部替换”只占一个撤销步骤，并保留其他格式与对象。Escape 关闭查找并返回当前匹配。只读文档支持查找与导航。",
+    "document.output.unavailable": "此文档提供程序不支持所选输出。",
+    "document.output.tooLarge": "文档输出超过 64 MiB。",
+    "document.output.sourceTarget": "请选择单独的输出文件，以保留打开的文档。",
+    "document.output.unsupportedInput": "此文档提供程序不支持所选文件格式。",
+    "document.output.choose": "选择文档输出格式",
+    "document.accessibility.review": "选择文字并填写批注内容，然后选择添加批注。审阅作者用于记录后续修订的作者。跟踪块级修订保存块的修改前基线；接受保留当前内容，拒绝恢复整个块。批注可定位、解决、重新打开或删除。这些操作均支持撤销。",
+    "document.accessibility.artifacts": "在此开始新节为当前块及后续内容建立独立页面设置；删除分节符合并到上一节。导入文档文件将 DOCX 转为新草稿；导出文档文件生成单独的 DOCX 或页面图像 PDF。PDF 中的文字不可检索，导出保留开始时的内容版本。",
+    "document.output.import": "导入文档文件…",
+    "document.output.export": "导出文档文件…"
   },
   "ash.menu": {
     "file": "文件",

@@ -1,3 +1,5 @@
+import { importDocxDocument } from './contrib/documentOutput/docx.js';
+import { localize } from '../../../src/ash/nls.js';
 import { bindDocumentCodec } from '../common/model/documentCodec.js';
 import { RichTextEditorWidget, type RichTextEditorOptions } from './widget/richTextEditor/richTextEditorWidget.js';
 import { importDocumentText, exportDocumentText } from './documentImportExport.js';
@@ -15,6 +17,11 @@ export function createEditorProfileConfiguration(schema: DocumentSchema, options
 		constructor(@IDialogService dialogs: IDialogService, @IOpenerService opener: IOpenerService) { super(options, dialogs, opener); }
 	}
 	return {
+		artifactFormats: [
+			{ id: 'docx', extension: 'docx', mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', canImport: true, label: localize('document.output.docx', 'Word document (DOCX)') },
+			{ id: 'pdf', extension: 'pdf', mimeType: 'application/pdf', canImport: false, label: localize('document.output.pdf', 'PDF (page images)') },
+		],
+		importBinary: (bytes, format, ownerDocument, signal) => { if (format !== 'docx') throw new TypeError('Unsupported document input'); return importDocxDocument(bytes, ownerDocument, signal); },
 		codec: bindDocumentCodec(schema, plugins), widget: ProfileWidget, createEmptyDocument,
 		importText: (text, format, ownerDocument, source) => importDocumentText(text, format, schema, ownerDocument, source),
 		exportText: (document, format) => exportDocumentText(document, schema, format),

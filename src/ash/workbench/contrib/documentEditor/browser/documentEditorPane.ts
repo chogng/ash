@@ -30,7 +30,7 @@ import type { CallDocument } from '../../../../platform/call/common/callService.
 import { localize } from '../../../../nls.js';
 
 /** Workbench-only services that complement one document editor. */
-export interface EditorPaneOptions extends Pick<DocumentEditorConfiguration, 'codec' | 'widget' | 'exportText' | 'createEmptyDocument'> {
+export interface EditorPaneOptions extends Pick<DocumentEditorConfiguration, 'codec' | 'widget' | 'exportText' | 'createEmptyDocument' | 'importBinary' | 'artifactFormats'> {
 	readonly codec: DocumentCodec;
 	readonly modelCompatibility?: string;
 	readonly editorId?: string;
@@ -49,6 +49,7 @@ export class DocumentEditorPane extends EditorPane implements IEditorPane {
 
 	private readonly modelReference = this._register(new MutableDisposable<TextModelWorkingCopyReference>());
 	private inputGeneration = 0;
+	private artifactLifetime = new AbortController();
 	private readonly options: EditorPaneOptions;
 	private collaborationService: IDocumentCollaborationService | undefined;
 	private collaboration: CollaborationContribution | undefined;
@@ -76,16 +77,25 @@ export class DocumentEditorPane extends EditorPane implements IEditorPane {
 		this.id = options.editorId ?? DOCUMENT_EDITOR_ID;
 		this.options = options;
 		const retire = () => {
+			this.artifactLifetime.abort();
 			this.stopCollaboration();
 			this.editor?.setReadOnly(true);
 		};
 		options.providerSignal?.addEventListener('abort', retire, { once: true });
 		this._register(toDisposable(() => options.providerSignal?.removeEventListener('abort', retire)));
-		this._register(toDisposable(() => this.stopCollaboration()));
+		this._register(toDisposable(() => { this.artifactLifetime.abort(); this.stopCollaboration(); }));
 		this._register(toDisposable(() => {
 			this.container?.remove();
 			this.container = undefined;
 		}));
+	}
+
+	public getArtifactFormats(): NonNullable<DocumentEditorConfiguration['artifactFormats']> { return this.options.artifactFormats ?? []; }
+
+	public exportArtifact(format: string, signal: AbortSignal): Promise<Uint8Array> {
+		this.options.providerSignal?.throwIfAborted();
+		if (!this.editor?.exportArtifact || !this.getArtifactFormats().some(candidate => candidate.id === format)) throw new Error(localize('document.output.unavailable', 'This document provider does not support the selected output.'));
+		return this.editor.exportArtifact(format, AbortSignal.any([signal, this.artifactLifetime.signal, ...(this.options.providerSignal ? [this.options.providerSignal] : [])]));
 	}
 
 	public exportText(format: DocumentTextFormat): string {
@@ -93,7 +103,7 @@ export class DocumentEditorPane extends EditorPane implements IEditorPane {
 	}
 
 	public getAccessibleContent(): string {
-		return this.options.codec.toPlainText(this.getDocument());
+		return this.editor?.getAccessibleContent?.() ?? this.options.codec.toPlainText(this.getDocument());
 	}
 
 	/** A conversion populates the already-open untitled working copy without acquiring a second model. */
@@ -134,6 +144,8 @@ export class DocumentEditorPane extends EditorPane implements IEditorPane {
 		this.options.providerSignal?.throwIfAborted();
 		const editor = this.requireEditor();
 		const generation = ++this.inputGeneration;
+		this.artifactLifetime.abort();
+		this.artifactLifetime = new AbortController();
 		const reference = await this.modelService.acquire({
 			resource: input.resource,
 			contentType: this.options.contentType,
@@ -164,6 +176,7 @@ export class DocumentEditorPane extends EditorPane implements IEditorPane {
 
 	public override clearInput(): void {
 		this.inputGeneration += 1;
+		this.artifactLifetime.abort();
 		this.stopCollaboration();
 		if (this.collaboration) this.collaboration.element.hidden = true;
 		this.requireEditor().clearInput();

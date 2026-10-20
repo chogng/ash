@@ -100,3 +100,24 @@ Metric changes preserve selection and wait for composition to finish. Zoom is
 view-local and never changes wrapping or document versions. Advanced page structures
 and viewport virtualization remain outside this slice; see the editor roadmap for
 platform acceptance limits.
+
+Sections, review and file conversion remain package-owned. Root `documentSection`
+containers override page intent without changing descendant identities. Comments use
+mapped document positions; block revision baselines are immutable evidence in the
+same v2 document, not another editable model. Structural changes promote dependent
+baselines to one document revision; rejection restores that entire review unit.
+
+The optional host artifact port carries format descriptors, bytes, cancellation and
+the imported document type. It never interprets OOXML or PDF. DOCX standard parts
+include supported text, styles, lists, tables, embedded images, sections, running text,
+comments and paragraph insert/delete revisions. Native roundtrips also preserve a
+v2 snapshot only while every standard-part digest matches. Modified Word content
+uses the OOXML parser instead. Unsupported features fail before creating a draft;
+imports preserve the source and resolve the admitted general or Academic profile.
+
+PDF output is a frozen 192 dpi page-image document, with mixed page dimensions and
+running text. Text is not searchable. It shares the page view, waits for resources,
+and cleans up on completion, failure or cancellation. Limits are 256 pages and
+64 MiB; DOCX also bounds expanded ZIP data to 64 MiB and 2,000 parts. See the
+[roadmap](../../docs/design/editor-roadmap.md#64-打印与-pdf) for supported semantics
+and remaining target-application/platform acceptance evidence.

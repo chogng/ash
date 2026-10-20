@@ -1,6 +1,6 @@
 import './pageLayout.css';
 import { addDisposableListener, h } from '../../../../../src/ash/base/browser/dom.js';
-import { Disposable, toDisposable } from '../../../../../src/ash/base/common/lifecycle.js';
+import { Disposable, DisposableStore, toDisposable } from '../../../../../src/ash/base/common/lifecycle.js';
 import type { DocumentNode } from '../../../common/model/document.js';
 import { documentPageDimensions } from '../../../common/model/documentPageLayout.js';
 
@@ -23,6 +23,10 @@ interface LineGroup {
  * consume their actual browser height rather than a sum of parallel cell lines.
  */
 export class DocumentPageView extends Disposable {
+	private readonly sectionViews = new Map<HTMLElement, DocumentPageView>();
+	private readonly sectionStore = this._register(new DisposableStore());
+	private pageOffset = 0;
+	private pageTotal: number | undefined;
 	private viewport: HTMLDivElement | undefined;
 	private shell: HTMLDivElement | undefined;
 	private flow: HTMLDivElement | undefined;
@@ -31,22 +35,57 @@ export class DocumentPageView extends Disposable {
 	private document: DocumentNode | undefined;
 	private zoom = 1;
 
-	constructor(private readonly container: HTMLDivElement, onMetricsChanged: () => void) {
+	constructor(private readonly container: HTMLDivElement, onMetricsChanged: () => void, watchMetrics = true) {
 		super();
 		this._register(toDisposable(() => this.clear()));
-		this._register(addDisposableListener(container, 'load', onMetricsChanged, true));
+		if (watchMetrics) this._register(addDisposableListener(container, 'load', onMetricsChanged, true));
 		const fonts = container.ownerDocument.fonts;
-		if (fonts) this._register(addDisposableListener(fonts, 'loadingdone', onMetricsChanged));
+		if (fonts && watchMetrics) this._register(addDisposableListener(fonts, 'loadingdone', onMetricsChanged));
 	}
 
 	clear(): void {
+		this.sectionStore.clear();
+		this.sectionViews.clear();
 		this.viewport = this.shell = this.flow = this.backgrounds = undefined;
 		this.paper = this.document = undefined;
 		this.container.classList.remove('ash-document-paged');
 	}
 
 	render(fragment: DocumentFragment, document: DocumentNode): void {
+		this.sectionStore.clear();
+		this.sectionViews.clear();
 		this.document = document;
+		if (document.content.some(node => node.type === 'documentSection')) {
+			this.viewport = this.shell = this.flow = this.backgrounds = undefined;
+			this.paper = undefined;
+			const elements = [...fragment.children] as HTMLElement[];
+			let nodes: DocumentNode[] = [];
+			const flush = (section?: DocumentNode): void => {
+				if (!nodes.length && !section) return;
+				const container = h(this.container.ownerDocument, 'div');
+				container.className = 'ash-document-page-section';
+				if (section) container.dataset.nodeId = section.id;
+				const content = this.container.ownerDocument.createDocumentFragment();
+				if (section) content.append(...elements.find(element => element.dataset.nodeId === section.id)!.childNodes);
+				else for (const node of nodes) content.append(elements.find(element => element.dataset.nodeId === node.id)!);
+				const view = this.sectionStore.add(new DocumentPageView(container, () => { }, false));
+				view.setZoom(this.zoom);
+				this.sectionViews.set(container, view);
+				// Attach before measuring; detached ranges do not carry line geometry.
+				this.container.append(container);
+				view.render(content, { ...document, attrs: { ...document.attrs, ...section?.attrs }, content: section?.content ?? nodes });
+				nodes = [];
+			};
+			this.container.replaceChildren();
+			for (const node of document.content) {
+				if (node.type === 'documentSection') { flush(); flush(node); }
+				else if (node.type !== 'reviewComment' && node.type !== 'reviewChange') nodes.push(node);
+			}
+			flush();
+			this.container.classList.add('ash-document-paged');
+			this.layout();
+			return;
+		}
 		this.paper = documentPageDimensions(document);
 		this.container.classList.toggle('ash-document-paged', !!this.paper);
 		for (const image of fragment.querySelectorAll<HTMLElement>('.stanza-document-inline-image')) {
@@ -80,6 +119,7 @@ export class DocumentPageView extends Disposable {
 
 	setZoom(zoom: number): void {
 		this.zoom = zoom;
+		for (const view of this.sectionViews.values()) view.setZoom(zoom);
 		if (!this.shell || !this.viewport || !this.paper) return;
 		// Transform only the painted view. CSS zoom changes Chromium's table and
 		// line-height rounding, which can otherwise move glyphs across page edges.
@@ -91,6 +131,17 @@ export class DocumentPageView extends Disposable {
 
 	/** Called outside composition; the Widget restores the active model selection. */
 	layout(): void {
+		if (this.sectionViews.size) {
+			let total = 0;
+			for (const view of this.sectionViews.values()) { view.layout(); total += Number(view.shell?.dataset.pageCount ?? 0); }
+			let offset = 0;
+			for (const view of this.sectionViews.values()) {
+				view.pageOffset = offset; view.pageTotal = total;
+				for (const [index, page] of [...(view.backgrounds?.children ?? [])].entries()) view.renderRunningText(page as HTMLElement, index, total, view.paper!.margin);
+				offset += Number(view.shell?.dataset.pageCount ?? 0);
+			}
+			return;
+		}
 		if (this.isDisposed || !this.paper || !this.flow || !this.shell || !this.backgrounds) return;
 		const { width, height, margin } = this.paper;
 		for (const gap of this.flow.querySelectorAll('.ash-document-page-gap')) gap.remove();
@@ -223,7 +274,7 @@ export class DocumentPageView extends Disposable {
 		page.replaceChildren();
 		const attrs = this.document!.attrs;
 		if (index === 0 && attrs.pageDifferentFirst === true) return;
-		const even = attrs.pageDifferentEven === true && (index + 1) % 2 === 0;
+		const even = attrs.pageDifferentEven === true && (this.pageOffset + index + 1) % 2 === 0;
 		for (const [position, value] of [
 			['header', even ? attrs.pageEvenHeader : attrs.pageHeader],
 			['footer', even ? attrs.pageEvenFooter : attrs.pageFooter],
@@ -236,7 +287,7 @@ export class DocumentPageView extends Disposable {
 			if (position === 'footer' && attrs.pageNumbers === true) {
 				const number = h(page.ownerDocument, 'span');
 				number.className = 'ash-document-page-number';
-				number.textContent = `${index + 1} / ${count}`;
+				number.textContent = `${this.pageOffset + index + 1} / ${this.pageTotal ?? count}`;
 				text.append(number);
 			}
 			page.append(text);

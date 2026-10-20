@@ -2045,3 +2045,36 @@ test('a confirmed channel snapshot clears only the matching document baseline', 
 	assert.deepEqual(reference.model.document, confirmed);
 	assert.equal(reference.isDirty, false);
 });
+
+test('closing a document cancels its package artifact task', async () => {
+	const environment = new JSDOM('<!doctype html><div id="editor"></div>', { pretendToBeVisual: true });
+	let started = false;
+	class WaitingWidget extends generalProfile.create().widget {
+		override exportArtifact(_format: string, signal: AbortSignal): Promise<Uint8Array> {
+			started = true;
+			return new Promise((_resolve, reject) => signal.addEventListener('abort', () => reject(signal.reason), { once: true }));
+		}
+	}
+	try {
+		using pane = new EditorPane(environment.window.document, new MemoryTextFiles('Output snapshot'), { widget: WaitingWidget });
+		pane.create(environment.window.document.querySelector('#editor')!);
+		await pane.setInput({ resource: URI.file('/output.ash-doc') }, new AbortController().signal);
+		const pending = pane.exportArtifact('docx', new AbortController().signal);
+		const rejected = assert.rejects(pending, /abort/i);
+		assert.equal(started, true); pane.clearInput(); await rejected;
+	} finally { environment.window.close(); }
+});
+
+test('document Accessible View includes review evidence without changing the body text', async () => {
+	const environment = new JSDOM('<!doctype html><body></body>');
+	const schema = createDefaultDocumentSchema();
+	const document = schema.createDocument([schema.createNode('paragraph', { content: [schema.createText('Body')] }), schema.createNode('reviewComment', { attrs: { author: 'Reader', createdAt: '', body: 'Check this claim', quote: 'Body', resolved: false } })]);
+	try {
+		using pane = new EditorPane(environment.window.document, new MemoryTextFiles(serializeDocument(document, schema)));
+		pane.create(environment.window.document.body);
+		await pane.setInput({ resource: URI.file('/review.ash-doc') }, new AbortController().signal);
+		assert.match(pane.getAccessibleContent(), /Body\n\nReader: Check this claim/);
+		assert.match(pane.getAccessibleContent(), /Status: Open/);
+		assert.equal(pane.exportText('text'), 'Body');
+	} finally { environment.window.close(); }
+});

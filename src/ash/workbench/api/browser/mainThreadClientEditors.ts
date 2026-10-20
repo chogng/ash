@@ -186,7 +186,30 @@ export class MainThreadClientEditors extends Disposable {
 					if (profile.id !== editor.documentType || profile.contentType !== editor.contentType) {
 						throw new Error(localize('extensions.clientEditor.profileMismatch', 'The editor profile does not match its extension declaration.'));
 					}
-					return { ...profile, editorId: editor.editorId };
+					return {
+						...profile, editorId: editor.editorId, create: () => {
+							signal.throwIfAborted();
+							const configuration = profile.create();
+							const formats = configuration.artifactFormats;
+							if (formats !== undefined) {
+								if (!Array.isArray(formats) || formats.length > 16) throw new TypeError('Invalid document artifact formats');
+								const ids = new Set<string>();
+								for (const format of formats) {
+									if (!format || typeof format.id !== 'string' || !/^[a-z][a-z0-9-]{0,39}$/.test(format.id) || ids.has(format.id) || typeof format.extension !== 'string' || !/^[a-z0-9]{1,12}$/.test(format.extension) || typeof format.label !== 'string' || !format.label || format.label.length > 200 || typeof format.mimeType !== 'string' || !/^[a-z0-9.+-]+\/[a-z0-9.+-]+$/i.test(format.mimeType) || typeof format.canImport !== 'boolean') throw new TypeError('Invalid document artifact format');
+									ids.add(format.id);
+								}
+							}
+							const importBinary = configuration.importBinary;
+							if (importBinary !== undefined && typeof importBinary !== 'function' || formats?.some(format => format.canImport) && !importBinary) throw new TypeError('Invalid document artifact importer');
+							return {
+								...configuration, artifactFormats: formats?.map(format => Object.freeze({ ...format })), importBinary: importBinary ? async (bytes: Uint8Array, format: string, ownerDocument: Document, requestSignal: AbortSignal) => {
+									const lifetime = AbortSignal.any([signal, requestSignal]); lifetime.throwIfAborted();
+									const document = await importBinary.call(configuration, bytes, format, ownerDocument, lifetime);
+									lifetime.throwIfAborted(); return document;
+								} : undefined
+							};
+						}
+					};
 				};
 				return {
 					id: editor.editorId,

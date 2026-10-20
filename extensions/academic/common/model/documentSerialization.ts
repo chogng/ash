@@ -2,7 +2,7 @@ import { resolveDocumentParagraphAttributes } from './documentParagraph.js';
 import { type DocumentSelection } from "../core/documentSelection.js";
 import { isRecord } from "../../../../src/ash/base/common/types.js";
 import { isFiniteNumber } from "../../../../src/ash/base/common/numbers.js";
-import { createDocumentNode, findDocumentNode, type DocumentNodeId, type DocumentAttributeValue, type DocumentAttributes, type DocumentMark, type DocumentNode } from "./document.js";
+import { getDocumentBodyContent, createDocumentNode, findDocumentNode, type DocumentNodeId, type DocumentAttributeValue, type DocumentAttributes, type DocumentMark, type DocumentNode } from "./document.js";
 import { type DocumentSchema, type DocumentValidationOptions } from "./documentSchema.js";
 import { localize } from "../../../../src/ash/nls.js";
 
@@ -178,7 +178,7 @@ export function extractDocumentFragment(schema: DocumentSchema, document: Docume
 }
 
 function extractDocumentFragmentContent(schema: DocumentSchema, document: DocumentNode, selection: DocumentSelection): DocumentFragment | undefined {
-	if (selection.kind === "all") return Object.freeze({ content: Object.freeze([...document.content]) });
+	if (selection.kind === "all") return Object.freeze({ content: Object.freeze([...getDocumentBodyContent(document)]) });
 	if (selection.kind !== "text") return undefined;
 	const anchor = findTextBearingBlockLocation(document, selection.anchor.nodeId);
 	const head = findTextBearingBlockLocation(document, selection.head.nodeId);
@@ -282,7 +282,9 @@ function findTextBearingBlockLocation(root: DocumentNode, textNodeId: DocumentNo
 	const blockLocation = findDocumentNode(root, block.id);
 	const index = block.content.findIndex(child => child.id === textNodeId && child.text !== undefined);
 	if (!blockLocation?.parent || index < 0) return undefined;
-	return { block, parent: blockLocation.parent, parentIndex: blockLocation.index, index };
+	const linear = blockLocation.parent === root || (blockLocation.parent.type === 'documentSection' && root.content.includes(blockLocation.parent));
+	const parent = linear ? { ...root, content: getDocumentBodyContent(root) } : blockLocation.parent;
+	return { block, parent, parentIndex: linear ? parent.content.indexOf(block) : blockLocation.index, index };
 }
 
 function textFromBlock(block: DocumentNode): string {

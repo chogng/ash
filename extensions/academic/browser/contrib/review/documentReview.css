@@ -1,0 +1,12 @@
+.ash-document-review-list {
+	width: 100%;
+	max-height: 180px;
+	overflow: auto;
+}
+.ash-document-review-record {
+	padding: 8px;
+	border: var(--ash-strokeThickness) solid var(--ash-border);
+}
+.ash-document-review-record pre {
+	white-space: pre-wrap;
+}

@@ -1,3 +1,4 @@
+import { validateReviewAttributes } from './documentReview.js';
 import { createDocumentNode, createDocumentRoot, createTextNode, type DocumentAttributeValue, type DocumentAttributes, type DocumentMark, type DocumentNode, type DocumentNodeId } from "./document.js";
 import { validateDocumentPageAttributes } from './documentPageLayout.js';
 import { validateDocumentParagraphAttributes, validateDocumentParagraphStyles } from './documentParagraph.js';
@@ -149,7 +150,16 @@ export class DocumentSchema {
 			throw new TypeError(`Document root must be '${this.topNodeType}'`);
 		}
 		this.validateNode(document, new Set(), true, false);
+		if (document.attrs.trackChanges !== undefined && typeof document.attrs.trackChanges !== "boolean") throw new TypeError("Invalid track changes option");
+		if (document.content.filter(node => node.type === "reviewComment" || node.type === "reviewChange").length > 1000) throw new TypeError("Too many review records");
 		validateDocumentParagraphStyles(document);
+		const visitSections = (node: DocumentNode): void => {
+			for (const child of node.content) {
+				if ((child.type === "documentSection" || child.type === "reviewComment" || child.type === "reviewChange") && node !== document) throw new TypeError("Document metadata and sections must be root children");
+				visitSections(child);
+			}
+		};
+		visitSections(document);
 		validateDocumentPageAttributes(document.attrs);
 	}
 
@@ -260,7 +270,10 @@ function defaultNodeSpecs(): Readonly<Record<string, DocumentNodeSpec>> {
 	const listBlocks = ["paragraph", "heading", "blockquote", "bulletList", "orderedList", "codeBlock", "table"] as const;
 	const tableCellBlocks = ["paragraph", "heading", "blockquote", "bulletList", "orderedList", "codeBlock", "table"] as const;
 	return {
-		doc: { kind: "root", allowedChildren: blocks },
+		doc: { kind: "root", allowedChildren: [...blocks, "documentSection", "reviewComment", "reviewChange"] },
+		reviewComment: { kind: "group", groups: ["block"], validateAttributes: attrs => validateReviewAttributes("reviewComment", attrs) },
+		reviewChange: { kind: "group", groups: ["block"], validateAttributes: attrs => validateReviewAttributes("reviewChange", attrs) },
+		documentSection: { kind: "group", groups: ["block"], allowedChildren: blocks, minChildren: 1, validateAttributes: validateDocumentPageAttributes },
 		paragraph: { kind: "block", allowedChildren: ["text", "hardBreak", "image"], validateAttributes: validateDocumentParagraphAttributes },
 		heading: {
 			kind: "block", allowedChildren: ["text", "hardBreak", "image"], defaultAttrs: { level: 1 }, validateAttributes: attrs => {

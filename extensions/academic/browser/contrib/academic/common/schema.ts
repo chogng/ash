@@ -40,6 +40,7 @@ export function createAcademicDocumentSchema(): DocumentSchema {
 				: spec;
 		}
 	}
+	nodes.documentSection = { ...nodes.documentSection!, allowedChildren: undefined, allowedChildGroups: ["block", "academic-meta", "academic-section", "citation-bibliography"] };
 	nodes[ACADEMIC_NODE_TYPES.title] = {
 		kind: "group",
 		groups: ["academic-meta"],

@@ -226,3 +226,8 @@ function assertNodeIdentity(id: string): void {
 		throw new TypeError("Document node id must be a non-empty string");
 	}
 }
+
+/** A section boundary changes page intent, not the linear order used by text selections. */
+export function getDocumentBodyContent(document: DocumentNode): readonly DocumentNode[] {
+	return document.content.flatMap(node => node.type === 'documentSection' ? node.content : node.type === 'reviewComment' || node.type === 'reviewChange' ? [] : [node]);
+}
