@@ -397,8 +397,8 @@ test.describe('Sessions from an Electron Workbench', () => {
 	});
 });
 
-browserTest('Browser Sessions production embedder owns its container and releases both ready and opening instances', async ({ page }, testInfo) => {
-	browserTest.skip(testInfo.project.name !== 'browser-ui' || process.env.ASH_PLAYWRIGHT_SERVER === 'development', 'Exercises exported production assets; development uses the generated Vite host.');
+browserTest('Browser Sessions production embedder owns its container and releases both ready and opening instances', { tag: ['@browser-ui'] }, async ({ page }) => {
+	browserTest.skip(process.env.ASH_PLAYWRIGHT_SERVER === 'development', 'Exercises exported production assets; development uses the generated Vite host.');
 	const failures: string[] = [];
 	page.on('pageerror', error => failures.push((error.stack ?? error.message).slice(0, 5000)));
 	await page.goto('/browser/sessions/sessions.html');
@@ -447,8 +447,7 @@ browserTest('Browser Sessions production embedder owns its container and release
 	expect(failures).toEqual([]);
 });
 
-browserTest('Browser Sessions Code shows Files and Changes and retains the selected view across pages and reload', async ({ page }, testInfo) => {
-	browserTest.skip(testInfo.project.name !== 'browser-ui');
+browserTest('Browser Sessions Code shows Files and Changes and retains the selected view across pages and reload', { tag: ['@browser-ui'] }, async ({ page }) => {
 	const failures: string[] = [];
 	page.on('pageerror', error => failures.push(error.message));
 	await page.goto('/browser/sessions/sessions.html');
@@ -469,15 +468,15 @@ browserTest('Browser Sessions Code shows Files and Changes and retains the selec
 	await expect(page.locator('.ash-accessible-view-content')).toHaveValue(/Files follow the selected session directory[\s\S]*Collapse folders/u);
 	await page.keyboard.press('Escape');
 	await expect(auxiliary.locator('[data-view-id="sessions.files.explorer.empty"]')).toBeFocused();
-	const commands = new QuickAccess(page);
-	for (const [theme, scheme] of [['Ash Light', 'light'], ['Ash Dark', 'dark'], ['Ash High Contrast Dark', 'hcDark'], ['Ash High Contrast Light', 'hcLight']]) {
+	// This empty, disconnected embedder uses the host's bootstrap palette.
+	// Installed extension themes are covered by the connected theme scenarios.
+	for (const [scheme, colorScheme, forcedColors] of [
+		['light', 'light', 'none'], ['dark', 'dark', 'none'],
+		['hcDark', 'dark', 'active'], ['hcLight', 'light', 'active'],
+	] as const) {
+		await page.emulateMedia({ colorScheme, forcedColors });
 		await page.goto('/browser/workbench/workbench.html');
 		await new Workbench(page).waitForReady();
-		await commands.runCommand('workbench.action.selectTheme');
-		const picker = page.locator('.ash-quick-pick');
-		await picker.getByRole('combobox').fill(theme);
-		await commands.select(theme);
-		await expect(picker).toHaveCount(0);
 		await expect(page.locator('#app')).toHaveAttribute('data-color-scheme', scheme);
 		await page.goto('/browser/sessions/sessions.html');
 		await navigation.getByRole('button', { name: 'Code', exact: true }).click();
