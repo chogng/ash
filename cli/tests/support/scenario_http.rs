@@ -375,12 +375,18 @@ impl Gate {
     }
 }
 
+// Child-process signals can interrupt socket reads without closing the HTTP request.
 fn read_http_request(stream: &mut TcpStream) -> String {
     stream.set_read_timeout(Some(STATE_TIMEOUT)).unwrap();
     let mut bytes = Vec::new();
     let mut buffer = [0_u8; 8_192];
     let header_end = loop {
-        let read = stream.read(&mut buffer).unwrap();
+        let read = loop {
+            match stream.read(&mut buffer) {
+                Err(error) if error.kind() == std::io::ErrorKind::Interrupted => continue,
+                result => break result.unwrap(),
+            }
+        };
         assert!(read > 0, "HTTP client disconnected before sending headers");
         bytes.extend_from_slice(&buffer[..read]);
         if let Some(index) = bytes.windows(4).position(|part| part == b"\r\n\r\n") {
@@ -397,7 +403,12 @@ fn read_http_request(stream: &mut TcpStream) -> String {
         })
         .unwrap_or(0);
     while bytes.len() < header_end + content_length {
-        let read = stream.read(&mut buffer).unwrap();
+        let read = loop {
+            match stream.read(&mut buffer) {
+                Err(error) if error.kind() == std::io::ErrorKind::Interrupted => continue,
+                result => break result.unwrap(),
+            }
+        };
         assert!(read > 0, "HTTP client disconnected before sending its body");
         bytes.extend_from_slice(&buffer[..read]);
     }
