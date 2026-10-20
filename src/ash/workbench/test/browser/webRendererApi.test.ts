@@ -169,8 +169,8 @@ test('Skill body reading opens exact authorized bytes lazily and releases the co
 	assert.equal(body, '# Review\n审阅 changes\n');
 	assert.deepEqual(transport.requests.filter(request => request.method === 'skill/resource/open' || request.method === 'resource/read' || request.method === 'resource/release').map(request => [request.method, request.params]), [
 		['skill/resource/open', { sessionId: 'skill-session', skillId: pinnedSkill.id, skillContentDigest: pinnedSkill.version.digest, path: 'SKILL.md' }],
-		['resource/read', { resourceId: 'resource_0000000000000001', offset: 0, maxBytes: Buffer.byteLength(body), sessionId: 'skill-session' }],
-		['resource/release', { resourceId: 'resource_0000000000000001', sessionId: 'skill-session' }],
+		['resource/read', { resourceId: 'resource_0000000000000001', offset: 0, maxBytes: Buffer.byteLength(body) }],
+		['resource/release', { resourceId: 'resource_0000000000000001' }],
 	]);
 });
 
@@ -181,7 +181,7 @@ test('Skill reference reading uses the same exact identity and connection resour
 	await client.connect();
 	assert.equal(await createAppServerSkillOperations(client).readTextResource(pinnedSkill, 'references/checks.md', new AbortController().signal, 'reference-session'), 'Reference text');
 	assert.deepEqual(transport.requests.find(request => request.method === 'skill/resource/open')?.params, { sessionId: 'reference-session', skillId: pinnedSkill.id, skillContentDigest: pinnedSkill.version.digest, path: 'references/checks.md' });
-	assert.deepEqual(transport.requests.at(-1)?.params, { resourceId: 'resource_0000000000000001', sessionId: 'reference-session' });
+	assert.deepEqual(transport.requests.at(-1)?.params, { resourceId: 'resource_0000000000000001' });
 });
 
 test('Cancellation while opening a Skill releases its late handle without requesting chunks', async () => {

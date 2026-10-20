@@ -83,7 +83,7 @@ test('Session debug logs verify routed resources and release every handle on com
 		const controller = new AbortController();
 		const bytes = Buffer.from('remote process log\n');
 		let generation = 1;
-		const calls: { method: string; params: { sessionId: string; resourceId?: string; }; }[] = [];
+		const calls: { method: string; params: { sessionId?: string; resourceId?: string; }; }[] = [];
 		const files = Array.from({ length: mode === 'overBudget' ? 5 : 2 }, (_, index) => `gateway-resource:7:log-${index}`).map(resourceId => ({
 			name: 'app-server.log', truncated: false,
 			resource: { resourceId, mimeType: 'text/plain', size: mode === 'overBudget' ? 16 * 1024 * 1024 : bytes.length, sha256: `sha256:${createHash('sha256').update(bytes).digest('hex')}` },
@@ -111,7 +111,8 @@ test('Session debug logs verify routed resources and release every handle on com
 			assert.deepEqual(result.files.map(file => file.bytes), [new Uint8Array(bytes), new Uint8Array(bytes)]);
 		} else if (mode === 'overBudget') await assert.rejects(operation, /collection byte limit/);
 		else await assert.rejects(operation);
-		assert(calls.every(call => call.params.sessionId === 'remote-session'));
+		assert.deepEqual(calls[0], { method: 'session/debugLogs/collect', params: { sessionId: 'remote-session' } });
+		for (const call of calls.slice(1)) assert.equal(Object.hasOwn(call.params, 'sessionId'), false);
 		assert.equal(calls.filter(call => call.method === 'resource/read').length, mode === 'read' ? 2 : mode === 'corrupt' ? 1 : 0);
 		assert.deepEqual(calls.filter(call => call.method === 'resource/release').map(call => call.params.resourceId).sort(), mode === 'replace' ? [] : files.map(file => file.resource.resourceId).sort());
 	}
@@ -609,7 +610,7 @@ test('Agent attachment reads use the exact Item scope, verified resources and ca
 		else await assert.rejects(read);
 		assert.deepEqual(requests[0], { method: 'attachment/resource/open', params: source });
 		assert.equal(requests.filter(request => request.method === 'resource/release').length, mode === 'replace' ? 0 : 1);
-		for (const request of requests.filter(request => request.method === 'resource/read' || request.method === 'resource/release')) assert.equal((request.params as { sessionId: string; }).sessionId, source.sessionId);
+		for (const request of requests.filter(request => request.method === 'resource/read' || request.method === 'resource/release')) assert.equal(Object.hasOwn(request.params as object, 'sessionId'), false);
 		assert.equal(requests.filter(request => request.method === 'resource/read').length, mode === 'abort' ? 0 : 1);
 	}
 });
@@ -684,7 +685,7 @@ test('Agent linked and App resource reads keep their provider scope and release 
 		assert.deepEqual(Object.keys(requests[0].params as object).sort(), ['contentIndex', 'itemId', 'operationId', 'sessionId', 'threadId', ...(selection === 'app' ? ['uri'] : [])]);
 		if (selection === 'app') assert.equal((requests[0].params as { uri: string; }).uri, 'file:///server/report.md');
 		assert.equal(requests.filter(request => request.method === 'resource/release').length, mode === 'replace' ? 0 : 1);
-		for (const request of requests.filter(request => request.method === 'resource/read' || request.method === 'resource/release')) assert.equal((request.params as { sessionId: string; }).sessionId, source.sessionId);
+		for (const request of requests.filter(request => request.method === 'resource/read' || request.method === 'resource/release')) assert.equal(Object.hasOwn(request.params as object, 'sessionId'), false);
 		const cancellations = requests.filter(request => request.method === 'tool/resource/cancel');
 		assert.equal(cancellations.length, mode === 'abort' ? 1 : 0);
 		if (mode === 'abort') assert.deepEqual(cancellations[0].params, { sessionId: source.sessionId, threadId: source.threadId, operationId: (requests[0].params as { operationId: string; }).operationId });

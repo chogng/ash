@@ -1256,7 +1256,10 @@ safe point 从受控 source 按 frozen digest 重载。
 重新验证当前 enablement、compatibility、Skill digest、source containment 和文件 identity，再将有界
 bytes 写入当前 connection 的 Resource store。图片/PDF MIME 只有在扩展名与文件签名匹配时发布；
 HTML/SVG 等 active content 返回 `application/octet-stream`。后续读取和释放统一使用
-`resource/read`、`resource/metadata` 与 `resource/release`。
+`resource/read`、`resource/metadata` 与 `resource/release`。这三个操作只接受原连接返回的完整
+opaque `resourceId`，不再接受 `sessionId`；调用方不得拆解或重建句柄。网关按句柄保存的来源
+转发，裸资源 ID、未知路由和失效连接均不能回退到 Session 或 Profile。直连 runtime 的客户端
+同样原样使用该连接返回的句柄。生成 schema 指纹变化会阻止旧协议客户端与新后端混用。
 
 Resource bytes 使用标准 RFC 4648 Base64；`decodedLength` 是原始 byte 数，单 chunk 最大
 262,144 bytes。客户端用 `decodedLength` 推进 offset，并在结束后校验 size 与 SHA-256。

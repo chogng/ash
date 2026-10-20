@@ -1451,7 +1451,6 @@ impl<T: JsonRpcTransport> AppServerClient<T> {
             while bytes.len() < metadata.size {
                 let chunk = self
                     .read_resource(ResourceReadParams {
-                        session_id: None,
                         resource_id: metadata.resource_id.clone(),
                         offset: bytes.len(),
                         max_bytes: 262144,
@@ -1472,7 +1471,6 @@ impl<T: JsonRpcTransport> AppServerClient<T> {
         })();
         let released = self
             .release_resource(ResourceReleaseParams {
-                session_id: None,
                 resource_id: metadata.resource_id,
             })
             .map_err(|error| error.to_string());

@@ -805,6 +805,14 @@ fn dto_driven_schema_contains_registered_rpc_envelopes() {
         definitions["ResourceReadParams"]["properties"]["maxBytes"]["maximum"],
         262_144
     );
+    for name in [
+        "ResourceMetadataParams",
+        "ResourceReadParams",
+        "ResourceReleaseParams",
+    ] {
+        assert!(definitions[name]["properties"].get("sessionId").is_none());
+        assert_eq!(definitions[name]["additionalProperties"], false);
+    }
     assert!(definitions["ResourceReadResult"]["properties"]["dataBase64"].is_object());
     assert_eq!(
         definitions["ResourceReadResult"]["properties"]["decodedLength"]["maximum"],
@@ -814,6 +822,22 @@ fn dto_driven_schema_contains_registered_rpc_envelopes() {
         definitions["ResourceReadResult"]["properties"]
             .get("data")
             .is_none()
+    );
+}
+
+#[test]
+fn resource_requests_reject_the_removed_session_selector() {
+    use crate::protocol::resources::ResourceMetadataParams;
+    use crate::protocol::resources::ResourceReadParams;
+    use crate::protocol::resources::ResourceReleaseParams;
+    let legacy = serde_json::json!({"resourceId":"resource", "sessionId":"session"});
+    assert!(serde_json::from_value::<ResourceMetadataParams>(legacy.clone()).is_err());
+    assert!(serde_json::from_value::<ResourceReleaseParams>(legacy).is_err());
+    assert!(
+        serde_json::from_value::<ResourceReadParams>(serde_json::json!({
+            "resourceId":"resource", "sessionId":"session", "offset":0, "maxBytes":1
+        }))
+        .is_err()
     );
 }
 

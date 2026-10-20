@@ -128,7 +128,7 @@ export function createAppServerAgentSessionService(connection: AppServerProtocol
 			if (signal?.aborted) throw canceled();
 			const generation = connection.generation;
 			const result = await appServerRequest(connection, 'session/debugLogs/collect', params);
-			const resources = createAppServerResourceApi(connection, params);
+			const resources = createAppServerResourceApi(connection);
 			const pending = new Set(result.files.map(file => file.resource.resourceId));
 			const files: { name: string; bytes: Uint8Array; truncated: boolean; }[] = [];
 			let failed = false;
@@ -283,7 +283,7 @@ async function readToolResource(connection: AppServerProtocolClient, source: Par
 	if (signal?.aborted) cancel();
 	try {
 		const { appCsp, encoding, resourceMetadata, ...resource } = await request;
-		const bytes = await readAppServerResource(createAppServerResourceApi(connection, { sessionId: source.sessionId }), resource, 262_144, signal, generation);
+		const bytes = await readAppServerResource(createAppServerResourceApi(connection), resource, 262_144, signal, generation);
 		return { bytes, mimeType: resource.mimeType, ...(encoding ? { encoding } : {}), ...(resourceMetadata === undefined ? {} : { resourceMetadata }), ...(appCsp ? { appCsp: { connectDomains: [...appCsp.connectDomains], resourceDomains: [...appCsp.resourceDomains], frameDomains: [...appCsp.frameDomains], baseUriDomains: [...appCsp.baseUriDomains] } } : {}) };
 	} finally { signal?.removeEventListener('abort', cancel); }
 }
@@ -329,7 +329,7 @@ export function createAppServerAgentThreadService(connection: AppServerProtocolC
 			if (signal?.aborted) throw canceled();
 			const generation = connection.generation;
 			const resource = await appServerRequest(connection, 'attachment/resource/open', { ...source });
-			const bytes = await readAppServerResource(createAppServerResourceApi(connection, { sessionId: source.sessionId }), resource, 16 * 1024 * 1024, signal, generation);
+			const bytes = await readAppServerResource(createAppServerResourceApi(connection), resource, 16 * 1024 * 1024, signal, generation);
 			return { bytes, mimeType: resource.mimeType };
 		},
 		listAppTools: async (source, signal) => {

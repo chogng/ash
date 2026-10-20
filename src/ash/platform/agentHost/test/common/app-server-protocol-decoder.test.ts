@@ -268,6 +268,14 @@ test('App Server server-request decoding validates method, request ID, and param
 	);
 });
 
+test('Resource operations reject the removed Session selector', () => {
+	for (const method of ['resource/metadata', 'resource/read', 'resource/release'] as const) {
+		const params = { resourceId: 'gateway-resource:0:resource-1', ...(method === 'resource/read' ? { offset: 0, maxBytes: 1024 } : {}) };
+		assert.deepEqual(decodeAppServerRequestParams(method, params), params);
+		assert.throws(() => decodeAppServerRequestParams(method, { ...params, sessionId: 'session' }), AppServerProtocolDecodeError);
+	}
+});
+
 test('App Server params decoding rejects integers that JSON cannot preserve exactly', () => {
 	assert.deepEqual(
 		decodeAppServerRequestParams('resource/read', { resourceId: 'resource-1', offset: 0, maxBytes: 1024 }),

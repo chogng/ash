@@ -568,9 +568,9 @@ pub(super) fn serve<R: BufRead, W: Write + Send>(
                     )?;
                     continue;
                 }
-                // Qualified handles retain the creating connection even when a later
-                // request also supplies a Session selector. Route zero is an owner too;
-                // reselecting by Session can alias a different runtime's resource ID.
+                // Handles retain the creating connection, including Profile route zero.
+                // Never infer their owner from a Session: another runtime can issue the
+                // same internal ID for a different resource.
                 if let Some(kind) = GatewayHandleKind::for_request(&request) {
                     let Some((route_id, handle)) = request
                         .pointer(kind.field())
@@ -926,17 +926,12 @@ impl GatewayHandleKind {
     }
 
     fn for_request(request: &Value) -> Option<Self> {
-        let kind = match request.get("method")?.as_str()? {
-            "fs/readFile" => Self::DocumentRead,
-            "resource/metadata" | "resource/read" | "resource/release" => Self::Resource,
-            _ => return None,
-        };
-        let value = request.pointer(kind.field())?.as_str()?;
-        // Unqualified resource IDs retain legacy Session routing. Proof reads always
-        // require a gateway-qualified owner; malformed qualified resources never fall back.
-        match kind {
-            Self::Resource if !value.starts_with(kind.prefix()) => None,
-            Self::Resource | Self::DocumentRead => Some(kind),
+        match request.get("method")?.as_str()? {
+            "fs/readFile" if request.pointer(Self::DocumentRead.field())?.is_string() => {
+                Some(Self::DocumentRead)
+            }
+            "resource/metadata" | "resource/read" | "resource/release" => Some(Self::Resource),
+            _ => None,
         }
     }
 

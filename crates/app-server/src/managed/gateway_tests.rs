@@ -132,7 +132,7 @@ fn session_directory_file_requests_route_to_the_session_execution_authority() {
 }
 
 #[test]
-fn resource_handles_keep_their_opening_session_runtime_for_reads_and_release() {
+fn resource_openers_follow_the_session_execution_authority() {
     let profile = tempfile::tempdir().unwrap();
     let directory = tempfile::tempdir().unwrap();
     let options = ash_app_server_daemon::ConnectionOptions::new(
@@ -169,9 +169,6 @@ fn resource_handles_keep_their_opening_session_runtime_for_reads_and_release() {
         "attachment/resource/open",
         "skill/resource/open",
         "session/debugLogs/collect",
-        "resource/metadata",
-        "resource/read",
-        "resource/release",
     ] {
         for (session, expected) in [
             ("local-resource", target.clone()),
@@ -1529,27 +1526,43 @@ fn directory_resources_remain_on_their_creating_gateway_connection() {
             .unwrap(),
         b"directory resource"
     );
-    // Older clients can still qualify a bare backend ID with its opening Session.
+    // A bare backend ID is never an alternate gateway entrypoint, with or without
+    // the removed Session selector. Rejected release must leave the resource live.
     let legacy_id = resource.as_str().unwrap().splitn(3, ':').nth(2).unwrap();
-    let legacy_read = call(
-        &mut owner,
-        26,
-        "resource/read",
-        serde_json::json!({"sessionId":session_id,"resourceId":legacy_id,"offset":0,"maxBytes":1}),
-    );
-    assert_eq!(
-        legacy_read["result"]["resourceId"], resource,
-        "{legacy_read}"
-    );
-    // An optional Session selector must not override the handle's opening connection,
-    // including Profile route zero. Release must reach that same owner as well.
+    let mut next_denied_id = 30;
+    for method in ["resource/metadata", "resource/read", "resource/release"] {
+        let mut params = serde_json::json!({"resourceId":legacy_id});
+        if method == "resource/read" {
+            params["offset"] = serde_json::json!(0);
+            params["maxBytes"] = serde_json::json!(1);
+        }
+        for selector in [None, Some(session_id.clone())] {
+            let mut params = params.clone();
+            if let Some(selector) = selector {
+                params["sessionId"] = selector;
+            }
+            let denied = call(&mut owner, next_denied_id, method, params);
+            next_denied_id += 1;
+            assert_eq!(denied["error"]["message"], "ResourceNotOwner", "{denied}");
+        }
+        let mut params = serde_json::json!({"resourceId":profile_resource,"sessionId":session_id});
+        if method == "resource/read" {
+            params["offset"] = serde_json::json!(0);
+            params["maxBytes"] = serde_json::json!(1);
+        }
+        let denied = call(&mut owner, next_denied_id, method, params);
+        next_denied_id += 1;
+        assert_eq!(denied["error"]["message"], "InvalidParams", "{denied}");
+    }
+    // Profile operations use their opening handle, including release, without a
+    // Session selector or a second route lookup.
     for (id, method) in (22..).zip(["resource/metadata", "resource/read", "resource/release"]) {
-        let response = call(
-            &mut owner,
-            id,
-            method,
-            serde_json::json!({"resourceId":profile_resource,"sessionId":session_id,"offset":0,"maxBytes":1}),
-        );
+        let mut params = serde_json::json!({"resourceId":profile_resource});
+        if method == "resource/read" {
+            params["offset"] = serde_json::json!(0);
+            params["maxBytes"] = serde_json::json!(1);
+        }
+        let response = call(&mut owner, id, method, params);
         assert!(response.get("result").is_some(), "{method}: {response}");
         if method != "resource/release" {
             assert_eq!(response["result"]["resourceId"], profile_resource);

@@ -41,12 +41,12 @@ export function createAppServerAppServerApi(connection: AppServerProtocolClient,
 	};
 }
 
-export function createAppServerResourceApi(connection: AppServerProtocolClient, scope?: { readonly sessionId: string; }): IResourceApi {
+export function createAppServerResourceApi(connection: AppServerProtocolClient): IResourceApi {
 	return {
 		get connectionGeneration() { return connection.generation; },
-		metadata: (params) => appServerRequest(connection, "resource/metadata", { ...params, ...scope }),
-		read: (params) => appServerRequest(connection, "resource/read", { ...params, ...scope }),
-		release: (params) => voidResult(appServerRequest(connection, "resource/release", { ...params, ...scope })),
+		metadata: (params) => appServerRequest(connection, "resource/metadata", params),
+		read: (params) => appServerRequest(connection, "resource/read", params),
+		release: (params) => voidResult(appServerRequest(connection, "resource/release", params)),
 	};
 }
 
@@ -116,7 +116,7 @@ export function createAppServerSkillOperations(connection: AppServerProtocolClie
 		},
 		readTextResource: async (reference, path, signal, sessionId) => {
 			throwIfCancelled(signal);
-			const resources = createAppServerResourceApi(connection, sessionId ? { sessionId } : undefined);
+			const resources = createAppServerResourceApi(connection);
 			const generation = resources.connectionGeneration;
 			const opened = await appServerRequest(connection, 'skill/resource/open', { sessionId, skillId: reference.id, skillContentDigest: reference.version.digest, path });
 			const bytes = await readAppServerResource(resources, opened.resource, 256 * 1024, signal, generation);
