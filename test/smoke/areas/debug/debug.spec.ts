@@ -1587,7 +1587,7 @@ const developerEnvironmentTest = test.extend({
 	},
 });
 
-developerEnvironmentTest('developer environment reaches the debug adapter and shared launch variable resolution', async ({ workbench, testWorkspace }) => {
+developerEnvironmentTest('developer environment reaches the debug adapter and shared launch variable resolution', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ workbench, testWorkspace }) => {
 	const directory = testWorkspace.directory;
 	await writeFile(join(directory, 'debug-adapter.cjs'), `require('node:fs').writeFileSync('debug-environment.json', JSON.stringify({ credential: process.env.OPENAI_API_KEY, removed: process.env.ASH_DEVELOPER_REMOVED === undefined, privateExcluded: process.env.CODEX_EXEC_SERVER_NOISE_AUTH_TOKEN === undefined }));\n` + adapter);
 	const resource = join(directory, '.vscode', 'launch.json');

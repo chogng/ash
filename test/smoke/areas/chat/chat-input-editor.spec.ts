@@ -1,7 +1,7 @@
 import { readUserSettings, writeUserSettings } from '../../../automation/settings.js';
 import { expect, test } from '../../../automation/test.js';
 
-test('Empty chat anchors its input to the bottom pane edge', async ({ workbench }) => {
+test('Empty chat anchors its input and secondary toolbar to the bottom pane edge', async ({ workbench }) => {
 	const page = workbench.page;
 	if (!await page.locator('.ash-chat-view-pane').isVisible()) {
 		await page.getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();
@@ -16,7 +16,8 @@ test('Empty chat anchors its input to the bottom pane edge', async ({ workbench 
 		const toolbar = element.querySelector<HTMLElement>('.ash-chat-input-toolbars');
 		const editor = element.querySelector<HTMLElement>('.ash-chat-input-editor');
 		const action = element.querySelector<HTMLElement>('.ash-chat-input-mode-action');
-		if (!list || !input || !composer || !toolbar || !editor || !action) throw new Error('Chat layout is incomplete');
+		const secondary = element.querySelector<HTMLElement>('.ash-chat-secondary-toolbar');
+		if (!list || !input || !composer || !toolbar || !editor || !action || !secondary) throw new Error('Chat layout is incomplete');
 		const chatBounds = element.getBoundingClientRect();
 		const inputBounds = input.getBoundingClientRect();
 		const composerBounds = composer.getBoundingClientRect();
@@ -27,6 +28,9 @@ test('Empty chat anchors its input to the bottom pane edge', async ({ workbench 
 			inputBottomInset: chatBounds.bottom - inputBounds.bottom,
 			composerTopInset: composerBounds.top - inputBounds.top,
 			composerBottomInset: inputBounds.bottom - composerBounds.bottom,
+			secondaryHeight: secondary.getBoundingClientRect().height,
+			secondaryTopInset: secondary.getBoundingClientRect().top - composerBounds.bottom,
+			secondaryBottomInset: inputBounds.bottom - secondary.getBoundingClientRect().bottom,
 			composerLeftInset: composerBounds.left - inputBounds.left,
 			composerRightInset: inputBounds.right - composerBounds.right,
 			composerHeight: composerBounds.height,
@@ -44,7 +48,10 @@ test('Empty chat anchors its input to the bottom pane edge', async ({ workbench 
 		listHeight: 0,
 		inputBottomInset: 0,
 		composerTopInset: 4,
-		composerBottomInset: 4,
+		composerBottomInset: 30,
+		secondaryHeight: 22,
+		secondaryTopInset: 4,
+		secondaryBottomInset: 4,
 		composerLeftInset: 12,
 		composerRightInset: 12,
 		composerHeight: 84,
@@ -253,7 +260,7 @@ test('Chat input explicitly opens slash suggestions from the keyboard', { tag: [
 	await expect(input).toBeFocused();
 });
 
-test('Chat input returns to the empty message state when a slash command is deleted', { tag: ['@browser-ui', '@electron-ui'] }, async ({ target, workbench }) => {
+test('Chat input returns to the empty message state when a slash command is deleted', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, workbench }) => {
 	const page = workbench.page;
 	if (!await page.locator('.ash-chat-view-pane').isVisible()) {
 		await page.getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();
