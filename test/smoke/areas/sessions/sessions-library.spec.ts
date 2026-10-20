@@ -137,7 +137,7 @@ test('Sessions Library imports real images and preserves favorites and collectio
 	await expect(canvas.locator('svg image')).toHaveCount(2);
 });
 
-test('Sessions Library keeps text and keyboard focus readable across themes', async ({ application, target, workbench }) => {
+test('Sessions Library keeps text and keyboard focus readable across themes', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ application, target, workbench }) => {
 	let page = workbench.page;
 	for (const [theme, scheme] of [['Ash Light', 'light'], ['Ash Dark', 'dark'], ['Ash High Contrast Dark', 'hcDark'], ['Ash High Contrast Light', 'hcLight']]) {
 		if (target.kind === 'browser') {

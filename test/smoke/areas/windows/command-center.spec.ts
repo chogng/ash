@@ -78,7 +78,7 @@ titleTest('window title template and separator settings update the title and com
 	await expect(page).toHaveTitle(`Ash Code | Untitled-2${privilegeSuffix}`);
 });
 
-test('activity bar badges stay over the icon and can be hidden independently through the menu', async ({ application, workbench }) => {
+test('activity bar badges stay over the icon and can be hidden independently through the menu', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ application, workbench }) => {
 	const page = workbench.page;
 	const activitybar = page.locator('[data-part="activitybar"]');
 	const explorer = workbench.element.locator('.ash-composite-bar-destination[data-action-id="ash.sidebar"]');
@@ -151,7 +151,7 @@ test('activity bar badges stay over the icon and can be hidden independently thr
 	}
 });
 
-test('activity bar badge colors follow theme customizations and survive reopening', async ({ application, workbench, reloadWorkbench }) => {
+test('activity bar badge colors follow theme customizations and survive reopening', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ application, workbench, reloadWorkbench }) => {
 	const badge = (): Locator => workbench.element.locator('.ash-composite-bar-destination[data-action-id="ash.sidebar"] .ash-composite-bar-badge');
 	await workbench.openExplorer();
 	await workbench.quickaccess.runCommand('workbench.action.files.newUntitledFile');
@@ -411,7 +411,7 @@ test('primary sidebar toggle sits immediately after the application menu', { tag
 	}
 });
 
-test('activity bar remains visible and reopens a selected sidebar view in the light theme', async ({ application, target, workbench }) => {
+test('activity bar remains visible and reopens a selected sidebar view in the light theme', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ application, target, workbench }) => {
 	const page = workbench.page;
 	await page.emulateMedia({ colorScheme: 'light' });
 	await workbench.quickaccess.runCommand('workbench.action.selectTheme');

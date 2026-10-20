@@ -50,7 +50,7 @@ test('Opening Sessions reserves workbench width without manually resizing Chat',
 	await expect.poll(async () => (await auxiliary.boundingBox())!.width).toBeCloseTo(originalAuxiliary.width, 2);
 });
 
-test('Agent Sessions list shares Chat space and closes with Escape in Web and Electron', { tag: ['@browser-ui', '@electron-ui'] }, async ({ driver, target, workbench }, testInfo) => {
+test('Agent Sessions list shares Chat space and closes with Escape in Web and Electron', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ driver, target, workbench }, testInfo) => {
 	const page = workbench.page;
 	if (!await page.locator(".ash-chat-view-pane").isVisible()) {
 		await page.getByRole("button", { name: "Show Secondary Side Bar", exact: true }).click();

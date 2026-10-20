@@ -3,7 +3,7 @@ import { join } from 'node:path';
 import { QuickAccess } from '../../../automation/quickaccess.js';
 import { expect, test } from '../../../automation/test.js';
 
-test('Hooks management opens from Settings with keyboard search and accessibility help', async ({ target, workbench }) => {
+test('Hooks management opens from Settings with keyboard search and accessibility help', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, workbench }) => {
 	const page = workbench.page;
 	await workbench.settingsEditor.openUserSettingsUI();
 	const settings = page.getByRole('dialog', { name: 'Ash Settings' });

@@ -346,7 +346,7 @@ test('Explorer keeps selection distinct from hover and reflects keyboard focus',
 	}
 });
 
-test('Modern Activity Bar keeps selected styling above hover in high contrast', async ({ workbench }) => {
+test('Modern Activity Bar keeps selected styling above hover in high contrast', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ workbench }) => {
 	const page = workbench.page;
 	await workbench.openExplorer();
 	const bar = page.locator('[data-part="activitybar"]');

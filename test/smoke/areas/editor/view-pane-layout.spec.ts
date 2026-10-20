@@ -34,7 +34,7 @@ test('Activity Bar unpins the active view, switches to another view and retains 
 	await expect(rail().getByRole('tab', { name: 'Search', exact: true })).toHaveAttribute('aria-selected', 'true');
 });
 for (const locale of ['en', 'zh-CN']) {
-	test(`panel labels stay separated and expose selection and overflow in ${locale}`, async ({ workbench, runningApplication, application, restartWorkbench }, testInfo) => {
+	test(`panel labels stay separated and expose selection and overflow in ${locale}`, { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ workbench, runningApplication, application, restartWorkbench }, testInfo) => {
 		if (locale === 'zh-CN') {
 			await workbench.quickaccess.runCommand('workbench.action.configureLocale');
 			const picker = workbench.page.getByRole('dialog', { name: 'Select Display Language' });
@@ -154,7 +154,7 @@ test('region navigation visits editor splits, skips hidden parts and follows sid
 	await expect(second).toBeFocused();
 });
 
-test('panel commands focus the retained view and restore editor geometry after maximizing', async ({ workbench }) => {
+test('panel commands focus the retained view and restore editor geometry after maximizing', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ workbench }) => {
 	const page = workbench.page;
 	const panel = page.locator('[data-part="panel"]');
 	const editor = page.locator('[data-part="editor"]');

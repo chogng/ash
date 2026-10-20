@@ -408,7 +408,7 @@ test('Sessions startup notification copies through its window clipboard after re
 	}
 });
 
-test('notification toast controls stay legible and fit the card in light, dark, and high contrast themes', async ({ workbench }, testInfo) => {
+test('notification toast controls stay legible and fit the card in light, dark, and high contrast themes', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ workbench }, testInfo) => {
 	const page = workbench.page;
 	await workbench.quickaccess.runCommand('notifications.clearAll');
 	await workbench.quickaccess.runCommand('showEditorScreenReaderNotification');

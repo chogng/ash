@@ -17,7 +17,7 @@ test('Quick Access runs an exact command ID and can reopen for another command',
 	await expect(quickaccess.element).toHaveCount(0);
 });
 
-test('Quick Access hands off to the picker opened by a command', async ({ workbench }) => {
+test('Quick Access hands off to the picker opened by a command', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ workbench }) => {
 	const quickaccess = workbench.quickaccess;
 	await quickaccess.runCommand('workbench.action.selectTheme');
 	await expect(quickaccess.input).toBeFocused();

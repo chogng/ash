@@ -45,7 +45,7 @@ test.describe('SCM welcome', () => {
 		await expect(open).toBeFocused();
 	});
 
-	test('SCM welcome wraps in a narrow pane and uses theme colors and keyboard focus', async ({ workbench }) => {
+	test('SCM welcome wraps in a narrow pane and uses theme colors and keyboard focus', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ workbench }) => {
 		const page = workbench.page;
 		await page.getByRole('tab', { name: /^Source Control(?:,|$)/u }).click();
 		const welcome = page.locator('[data-view-id="ash.gitView"] .ash-view-welcome');

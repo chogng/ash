@@ -5,7 +5,7 @@ import { expect, test } from '../../../automation/test.js';
 
 test.use({ openWorkspace: false });
 
-test('selected standard editor tabs join the editor surface without a separator', async ({ workbench }, testInfo) => {
+test('selected standard editor tabs join the editor surface without a separator', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ workbench }, testInfo) => {
 	const page = workbench.page;
 	await workbench.quickaccess.runCommand('workbench.action.closeAllEditors');
 	await page.keyboard.press('ControlOrMeta+N');
@@ -202,7 +202,7 @@ test('editor tab width settings resize existing tabs and persist after reload', 
 	await expect.poll(() => restored.workbench.editors.groupAt(0).title.locator('.ash-tab').last().evaluate(tab => Math.round(tab.getBoundingClientRect().width * 100) / 100)).toBe(120);
 });
 
-test('editor pill style includes the action in tab width and survives reload', async ({ workbench, reloadWorkbench }) => {
+test('editor pill style includes the action in tab width and survives reload', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ workbench, reloadWorkbench }) => {
 	const page = workbench.page;
 	await page.keyboard.press('ControlOrMeta+N');
 	const group = workbench.editors.groupAt(0);
@@ -280,7 +280,7 @@ test('editor pill style includes the action in tab width and survives reload', a
 	await expect(restored.workbench.editors.groupAt(0).title.locator('.ash-ordinary-editor-tabs-row')).not.toHaveClass(/ash-connected-editor-tabs/u);
 });
 
-test('unsaved tab indicators stay round and centered until the close button is hovered or focused', async ({ application, workbench }) => {
+test('unsaved tab indicators stay round and centered until the close button is hovered or focused', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ application, workbench }) => {
 	const page = workbench.page;
 	await page.keyboard.press('ControlOrMeta+N');
 	const group = workbench.editors.groupAt(0);
@@ -617,7 +617,7 @@ test('tab command groups close and split the clicked tabs from mouse and keyboar
 	await expect(source.tabs).toHaveCount(2);
 });
 
-test('editor tabs distinguish the active document from the tab strip across themes', async ({ workbench }) => {
+test('editor tabs distinguish the active document from the tab strip across themes', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ workbench }) => {
 	const page = workbench.page;
 	await page.keyboard.press('ControlOrMeta+N');
 	await page.keyboard.press('ControlOrMeta+N');

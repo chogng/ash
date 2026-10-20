@@ -146,7 +146,7 @@ test('Chat mode picker exposes all five modes with one checked selection', { tag
 	}
 });
 
-test('Chat mode choices use the shared action widget and floating elevation across themes', async ({ workbench }) => {
+test('Chat mode choices use the shared action widget and floating elevation across themes', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ workbench }) => {
 	const page = workbench.page;
 	if (!await page.locator('.ash-chat-view-pane').isVisible()) {
 		await page.getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();

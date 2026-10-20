@@ -583,7 +583,7 @@ test.describe('welcome brand', () => {
 		}
 	});
 
-	test('welcome actions use gray cards and a black GitHub card in the light theme', async ({ workbench }) => {
+	test('welcome actions use gray cards and a black GitHub card in the light theme', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ workbench }) => {
 		await workbench.quickaccess.runCommand('workbench.action.selectTheme');
 		await workbench.quickaccess.search('Ash Light');
 		await workbench.quickaccess.select('Ash Light');

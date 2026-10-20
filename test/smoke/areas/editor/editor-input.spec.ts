@@ -435,7 +435,7 @@ test('minimap reflects equal-length text edits in the workbench', async ({ workb
 	await expect(editor.element.locator('.minimap')).toHaveAttribute('aria-hidden', 'true');
 });
 
-test('built-in themes apply scrollbar and minimap colors through hover and dragging', async ({ workbench }) => {
+test('built-in themes apply scrollbar and minimap colors through hover and dragging', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ workbench }) => {
 	const page = workbench.page;
 	await page.keyboard.press('ControlOrMeta+N');
 	const editor = workbench.editors.groupAt(0).editor;

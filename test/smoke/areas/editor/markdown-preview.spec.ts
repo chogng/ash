@@ -33,7 +33,7 @@ test('Markdown preview loads an image relative to a workspace document', { tag: 
 	await expect.poll(() => content.getByRole('img', { name: 'Workspace diagram', exact: true }).evaluate((image: HTMLImageElement) => ({ width: image.naturalWidth, height: image.naturalHeight }))).toEqual({ width: 24, height: 16 });
 });
 
-test('Markdown extension owns preview commands and shares unsaved text across editor views', async ({ workbench, application }) => {
+test('Markdown extension owns preview commands and shares unsaved text across editor views', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ workbench, application }) => {
 	const page = workbench.page;
 	await workbench.quickaccess.runCommand('workbench.action.closeAllEditors');
 	await page.keyboard.press('ControlOrMeta+N');
@@ -162,7 +162,7 @@ test('Markdown tab menus reopen the clicked document while another tab is active
 	await group.editor.waitForEditorContents(text => text.includes('# Second document'));
 });
 
-test('Markdown rich editor follows theme colors and shows keyboard focus in every theme', async ({ workbench }) => {
+test('Markdown rich editor follows theme colors and shows keyboard focus in every theme', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ workbench }) => {
 	const page = workbench.page;
 	await workbench.quickaccess.runCommand('workbench.action.closeAllEditors');
 	await page.keyboard.press('ControlOrMeta+N');
@@ -237,7 +237,7 @@ test('Markdown rich editor follows theme colors and shows keyboard focus in ever
 	}
 });
 
-test('Markdown rich editor shares text and history with the source editor', async ({ workbench }) => {
+test('Markdown rich editor shares text and history with the source editor', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ workbench }) => {
 	const page = workbench.page;
 	await workbench.quickaccess.runCommand('workbench.action.closeAllEditors');
 	await page.keyboard.press('ControlOrMeta+N');

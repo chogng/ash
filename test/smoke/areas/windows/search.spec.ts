@@ -439,7 +439,7 @@ test('Search title and input geometry remain usable while resizing the actual Si
 	await originalToolbar!.dispose();
 });
 
-test('Search keeps query options and preserves collapsed file filters', async ({ workbench }) => {
+test('Search keeps query options and preserves collapsed file filters', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ workbench }) => {
 	await workbench.search.open();
 	const page = workbench.page;
 	const search = workbench.search.element;

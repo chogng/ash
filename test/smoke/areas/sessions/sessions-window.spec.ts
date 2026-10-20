@@ -265,7 +265,7 @@ async function expectFloatingComposerHover(card: Locator, input: Locator, blurTa
 	await expect(card).toHaveCSS('box-shadow', raisedShadow);
 }
 
-test('Sessions Design canvas keeps grid and cursor readable across themes', async ({ application, target, workbench }) => {
+test('Sessions Design canvas keeps grid and cursor readable across themes', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ application, target, workbench }) => {
 	for (const [theme, scheme] of [
 		['Ash Light', 'light'],
 		['Ash Dark', 'dark'],
@@ -1832,7 +1832,7 @@ test('Sessions empty chat centers a growing input card and keeps the draft acros
 	await editor.waitForEditorContents(contents => contents === 'Keep this draft\n');
 });
 
-test('Sessions input card keeps a visible border without shadow or focus outline in high contrast', async ({ application, target, workbench }) => {
+test('Sessions input card keeps a visible border without shadow or focus outline in high contrast', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ application, target, workbench }) => {
 	for (const theme of ['Ash High Contrast Dark', 'Ash High Contrast Light']) {
 		await workbench.quickaccess.runCommand('workbench.action.selectTheme');
 		const picker = workbench.page.locator('.ash-quick-pick');
@@ -2898,7 +2898,7 @@ test('Sessions titlebar aligns its application menu and actions', { tag: ['@elec
 	await closed;
 });
 
-test('Workbench and Sessions tooltips keep separate colors across themes', async ({ application, target, workbench }) => {
+test('Workbench and Sessions tooltips keep separate colors across themes', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ application, target, workbench }) => {
 	for (const [theme, scheme, background, foreground] of [
 		['Ash Light', 'light', 'rgb(243, 243, 243)', 'rgb(97, 97, 97)'],
 		['Ash Dark', 'dark', 'rgb(37, 37, 38)', 'rgb(204, 204, 204)'],
@@ -3051,7 +3051,7 @@ test('Sessions titlebar sidebar toggle stays transparent at rest and responds to
 	}
 });
 
-test('Sessions titlebar sidebar toggle stays transparent at rest with hover and keyboard outlines in high contrast', async ({ application, target, workbench }) => {
+test('Sessions titlebar sidebar toggle stays transparent at rest with hover and keyboard outlines in high contrast', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ application, target, workbench }) => {
 	for (const theme of ['Ash High Contrast Dark', 'Ash High Contrast Light']) {
 		await workbench.quickaccess.runCommand('workbench.action.selectTheme');
 		const search = workbench.page.locator('.ash-quick-pick').getByRole('combobox');

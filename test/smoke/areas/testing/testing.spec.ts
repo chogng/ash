@@ -116,7 +116,7 @@ test.describe('testing without a backend', () => {
 test.describe('Run and Debug sidebar layout', () => {
 	test.use({ openWorkspace: false });
 
-	test('debug sidebar has a compact launch row, keyboard collapsible sections and readable themes', async ({ workbench, restartWorkbench }) => {
+	test('debug sidebar has a compact launch row, keyboard collapsible sections and readable themes', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ workbench, restartWorkbench }) => {
 		let page = workbench.page;
 		const tab = page.getByRole('tab', { name: 'Run and Debug', exact: true }).first();
 		await tab.click();

@@ -248,7 +248,7 @@ test('Sessions registered pages coordinate Parts and retain drafts through drag 
 });
 
 for (const theme of ['Ash High Contrast Dark', 'Ash High Contrast Light']) {
-	test(`Sessions registered navigation retains selection and exposes hover and keyboard focus in ${theme}`, async ({ application, target, workbench }) => {
+	test(`Sessions registered navigation retains selection and exposes hover and keyboard focus in ${theme}`, { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ application, target, workbench }) => {
 		await workbench.quickaccess.runCommand('workbench.action.selectTheme');
 		const search = workbench.page.locator('.ash-quick-pick').getByRole('combobox');
 		await search.fill(theme);

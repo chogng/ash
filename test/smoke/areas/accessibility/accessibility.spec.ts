@@ -81,7 +81,7 @@ test('editor accessibility help and screen reader status use the selected Chines
 	await expect(workbench.editors.groupAt(0).editor.input).toBeFocused();
 });
 
-test('unfocused view dimming follows keyboard focus and preserves the focused high contrast part', async ({ workbench }) => {
+test('unfocused view dimming follows keyboard focus and preserves the focused high contrast part', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ workbench }) => {
 	const page = workbench.page;
 	await workbench.quickaccess.runCommand('workbench.action.openSettingsJson');
 	const settings = workbench.editors.groupAt(0).editor;

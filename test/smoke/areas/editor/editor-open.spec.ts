@@ -1580,7 +1580,7 @@ test('Code replaces a selection with multiline text and remains editable', { tag
 	await expect.poll(() => readFile(testWorkspace.file, 'utf8')).toBe(content + '!');
 });
 
-test('file open failures stay in the editor and binary actions work with an existing file open', { tag: ['@browser-ui', '@browser-app-server', '@electron-app-server'] }, async ({ target, testWorkspace, workbench }) => {
+test('file open failures stay in the editor and binary actions work with an existing file open', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, testWorkspace, workbench }) => {
 	const page = workbench.page;
 	if (target.kind === 'browser' && target.appServerMode === 'disabled') {
 		await page.evaluate(async () => {
