@@ -218,6 +218,35 @@ test("registerAction2 routes VS Code numeric keybindings through the canonical r
 	assert.equal(rule.priority, KeybindingWeight.EditorContrib);
 });
 
+test('registerAction2 preserves commands and secondary shortcuts when zero disables a binding', async () => {
+	const commandId = 'test.actions.disabled-primary';
+	using registration = registerAction2(class extends Action2 {
+		constructor() {
+			super({
+				id: commandId,
+				title: 'Disabled primary binding',
+				keybinding: [
+					{ primary: 0 },
+					{
+						primary: KeyCode.KeyM,
+						mac: { primary: 0 }, win: { primary: 0 }, linux: { primary: 0 },
+						secondary: [0, KeyCode.KeyK],
+					},
+				],
+			});
+		}
+		override run(): string { return 'command remains available'; }
+	});
+	const rules = KeybindingsRegistry.getKeybindings().filter(rule => rule.kind === KeybindingRuleKind.Command && rule.command === commandId);
+	assert.equal(rules.length, 1);
+	assert.equal(resolveKeybinding(rules[0]!.keybinding, operatingSystem).chords[0].key, 'k');
+	using services = new InstantiationService();
+	assert.equal(await services.invokeFunction(accessor => CommandsRegistry.getCommand(commandId)!(accessor)), 'command remains available');
+	registration.dispose();
+	assert.equal(CommandsRegistry.getCommand(commandId), undefined);
+	assert.equal(KeybindingsRegistry.getKeybindings().some(rule => rule.kind === KeybindingRuleKind.Command && rule.command === commandId), false);
+});
+
 test("menu actions react to visibility, enablement, and toggle context", () => {
 	using registrations = new DisposableStore();
 	const menuId = new MenuId("test.actions.context");
