@@ -6,8 +6,6 @@
 		"editor.tabSize": 4,
 		"editor.formatOnSave": true
 	},
-	"js/ts.tsdk.path": "build/node_modules/typescript/lib",
-	"js/ts.tsdk.promptToUseWorkspaceVersion": true,
 	"js/ts.preferences.quoteStyle": "single",
 	"js/ts.format.insertSpaceAfterFunctionKeywordForAnonymousFunctions": true,
 	"js/ts.format.insertSpaceAfterOpeningAndBeforeClosingEmptyBraces": true,
