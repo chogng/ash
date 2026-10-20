@@ -14,7 +14,7 @@ import { TextModel } from '../../../../../editor/common/model/textModel.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { TerminalLocation } from '../../../../../platform/terminal/common/terminal.js';
 import { CommandService } from '../../../../services/commands/common/commandService.js';
-import { ITerminalEditorService, ITerminalGroupService, ITerminalService, type ITerminalInstance, type TerminalInstanceState } from '../../browser/terminal.js';
+import { ITerminalEditorService, ITerminalGroupService, ITerminalService, type ITerminalInstance, type IXtermTerminal, type TerminalInstanceState } from '../../browser/terminal.js';
 import { IViewsService } from '../../../../services/views/common/viewsService.js';
 import { registerTerminalActions } from '../../browser/terminalActions.js';
 import { TerminalCommandId } from '../../common/terminal.js';
@@ -28,12 +28,64 @@ class InputTerminal {
 	state: TerminalInstanceState = 'running';
 	isReadOnly = false;
 	target = TerminalLocation.Panel;
+	xterm: IXtermTerminal | undefined;
 	readonly input: unknown[][] = [];
 	readonly paths: unknown[][] = [];
 	readonly instance = this as unknown as ITerminalInstance;
 	async sendText(...args: unknown[]): Promise<void> { this.input.push(args); }
 	async sendPath(...args: unknown[]): Promise<void> { this.paths.push(args); }
 }
+
+suite('Terminal retained screen commands', () => {
+	ensureNoDisposablesAreLeakedInTestSuite();
+
+	for (const [command, expected] of [
+		[TerminalCommandId.ScrollUpLine, ['lines', -1]],
+		[TerminalCommandId.ScrollDownLine, ['lines', 1]],
+		[TerminalCommandId.ScrollUpPage, ['pages', -1]],
+		[TerminalCommandId.ScrollDownPage, ['pages', 1]],
+		[TerminalCommandId.ScrollToTop, ['top']],
+		[TerminalCommandId.ScrollToBottom, ['bottom']],
+		[TerminalCommandId.SelectAll, ['selectAll']],
+		[TerminalCommandId.ClearSelection, ['clearSelection']],
+	] as const) {
+		test(`${command} acts on the active retained screen without process input`, async () => {
+			using fixture = new SelectionFixture();
+			const calls: unknown[][] = [];
+			const raw = {
+				buffer: { active: { type: 'normal' } },
+				scrollLines: (count: number) => calls.push(['lines', count]),
+				scrollPages: (count: number) => calls.push(['pages', count]),
+				scrollToTop: () => calls.push(['top']),
+				scrollToBottom: () => calls.push(['bottom']),
+				selectAll: () => calls.push(['selectAll']),
+				hasSelection: () => true,
+				clearSelection: () => calls.push(['clearSelection']),
+			};
+			const original = new InputTerminal();
+			original.xterm = { raw, isDisposed: false } as unknown as IXtermTerminal;
+			fixture.add(original);
+			await fixture.commands.executeCommand(command);
+			assert.deepEqual(calls, [expected]);
+			calls.length = 0;
+			// Output remains navigable after exit and for read-only embedder terminals.
+			original.state = 'exited';
+			original.isReadOnly = true;
+			await fixture.commands.executeCommand(command);
+			assert.deepEqual(calls, [expected]);
+			calls.length = 0;
+			fixture.add(new InputTerminal());
+			await fixture.commands.executeCommand(command);
+			assert.deepEqual(calls, []);
+			fixture.active = original.instance;
+			Reflect.set(original.xterm, 'isDisposed', true);
+			await fixture.commands.executeCommand(command);
+			assert.deepEqual(calls, []);
+			assert.deepEqual(original.input, []);
+			assert.deepEqual(fixture.effects, []);
+		});
+	}
+});
 
 class SelectionFixture extends Disposable {
 	readonly model = this._register(new TextModel('  echo first  \r\necho second', { resource: URI.file('/workspace/run.sh') }));

@@ -118,7 +118,7 @@ registerAction2(class ShowTerminalQuickFixesAction extends Action2 {
 		if (command && !command.wasReplayed && command.exitCode !== undefined && emptyInput() && !detection?.executingCommandObject) {
 			picker.busy = true;
 			void extensionService.activateByEvent('onTerminal:terminalQuickFixProvider', request.signal).then(() => providers.provideTerminalQuickFixes(instance, command, request.signal)).then(results => {
-				if (retired || request.signal.aborted || !emptyInput()) return;
+				if (retired || request.signal.aborted || !emptyInput() || !results.length) return;
 				picker.items = [...picker.items, ...results.map(fix => ({ label: fix.label, fix }))];
 				if (picker.items.length) picker.placeholder = localize('terminal.quickFix.chooseAction', 'Choose a quick fix');
 			}).catch(() => undefined).finally(() => { if (!request.signal.aborted) picker.busy = false; });

@@ -1,6 +1,6 @@
 import { addDisposableListener } from '../../../../../base/browser/dom.js';
 import { KeyCode, KeyMod } from '../../../../../base/common/keyCodes.js';
-import { Disposable, MutableDisposable } from '../../../../../base/common/lifecycle.js';
+import { Disposable, MutableDisposable, toDisposable } from '../../../../../base/common/lifecycle.js';
 import { localize2 } from '../../../../../nls.js';
 import { AccessibleViewRegistry } from '../../../../../platform/accessibility/browser/accessibleViewRegistry.js';
 import { Action2, MenuId, registerAction2 } from '../../../../../platform/actions/common/actions.js';
@@ -44,6 +44,10 @@ export class TerminalFindContribution extends Disposable implements ITerminalCon
 		const scope = this._register(this.contextKeys.createScoped(xterm.element));
 		this.rendererServices = this._register(this.instantiation.createChild(new ServiceCollection([IContextKeyService, scope])));
 		const focused = TerminalContextKeys.focus.bindTo(scope);
+		const alternate = TerminalContextKeys.altBufferActive.bindTo(scope);
+		alternate.set(xterm.raw.buffer.active.type === 'alternate');
+		const bufferChanged = xterm.raw.buffer.onBufferChange(buffer => alternate.set(buffer.type === 'alternate'));
+		this._register(toDisposable(() => bufferChanged.dispose()));
 		const textarea = xterm.raw.textarea;
 		// A newly created screen can receive its requested focus before this hook runs.
 		focused.set(textarea === xterm.element.ownerDocument.activeElement);

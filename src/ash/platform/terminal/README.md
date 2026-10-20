@@ -20,7 +20,7 @@ Rust 领域服务拥有完整 Agent loop：模型调用、工具选择与调度�
 
 ## 当前接线
 
-`common/terminal.ts` 同时提供宿主输出 PTY 的启动配置、进程事件、标题属性和启动/关闭契约，供 `services/terminal/common/embedderTerminalService.ts` 与 Terminal contribution 共享。宿主输出 PTY 不声明输入或工作目录；交互 child process 按真实能力提供 input/processBinary/resize/getCwd。原始字节输入不降级为文本输入。扩展 PTY 的 input/resize 等待 provider 回复，关闭撤回排队与进行中的输入，原始错误传回调用方；Shell 的读取结果保留原始字节，原 ProcessManager 增量解码为标准 string `IProcessDataEvent`，并用 `trackCommit` / `writePromise` 连接 xterm 解析与 Renderer 续读。Shell 的输入与尺寸已走原 Rust 进程链；SIGINT 与服务器输出背压已接入；完整 child process 的通用属性仍待补全，没有添加空操作实现。
+`common/terminal.ts` 同时提供宿主输出 PTY 的启动配置、进程事件、标题属性和启动/关闭契约，供 `services/terminal/common/embedderTerminalService.ts` 与 Terminal contribution 共享。宿主输出 PTY 不声明输入或工作目录；交互 child process 按真实能力提供 input/processBinary/resize/getCwd。原始字节输入不降级为文本输入。扩展 PTY 的 input/resize 等待 provider 回复，关闭撤回排队与进行中的输入，原始错误传回调用方；Shell 的读取结果保留原始字节，原 ProcessManager 增量解码为标准 string `IProcessDataEvent`，并用 `trackCommit` / `writePromise` 连接 xterm 解析与 Renderer 续读。Shell 的输入、尺寸、信号与服务器输出背压走原 Rust 进程链。属性契约提供实际消费的 Title 与 HasChildProcesses，后者用于关闭保护；不预建没有消费者的通用属性端口。
 
 | 文件                                             | 职责与生产入口                                                                                                                                                                          |
 | ------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -59,6 +59,6 @@ Rust 领域服务拥有完整 Agent loop：模型调用、工具选择与调度�
 
 能力 store multiplexer 合并原 process/screen store，并通过 disposable lease 控制登记生命周期。PartialCommandDetection 只由可输入的 xterm screen 登记，负责 Enter 回退导航位置；Shell history 仍在 Rust。NaiveCwdDetection 供 Split 查询真实 `terminal/processInfo`，无 shell cwd 时优先使用查询结果，失败才采用创建时目录。查询不会创建另一个进程；开始关闭或执行宿主被替换后，迟到 cwd 不能供 Split 使用。
 
-PromptType 的 producer 与 parser 都在 exec-server；App Server 和两个前端协议适配器只映射可选字段。原 command source 等关联 byte sequence 完成 screen commit 后才更新 PromptTypeDetectionCapability，字段不参与 nonce 信任或审批。三个 Browser 适配器只补本批必要端口，迁移、收敛和删除仍后置。
+PromptType 的 producer 与 parser 都在 exec-server；App Server 和两个前端协议适配器只映射可选字段。原 command source 等关联 byte sequence 完成 screen commit 后才更新 PromptTypeDetectionCapability，字段不参与 nonce 信任或审批。Browser 适配器按各自连接与租约契约提供实际消费的进程端口。
 
 `strictEnv` 已贯穿扩展 profile、启动快照、首次创建/重启与 Rust spawn。严格模式仅采用显式非 null 环境值，不展开 env 中的配置变量，不合入配置、profile 或扩展 mutations；Rust 从空环境开始应用 overrides。PTY 工具不再在清空后补回 SHELL；普通启动仍采用原冻结宿主环境。当前服务端 startup wrapper 的必要控制变量仍由 Rust 拥有。

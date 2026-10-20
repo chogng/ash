@@ -48,6 +48,8 @@ Profile 选择器属于单次命令。工作区或执行连接变化会关闭并
 
 ## 输入与命令
 
+标准 Scroll Up／Down 按行或页操作原 xterm 的 retained buffer，Scroll to Top／Bottom 到达两端；已退出和只读终端也可使用，不发送进程输入。滚动快捷键仅在聚焦终端的 normal buffer 生效，alternate buffer 中的按键继续交给终端应用。Select All 选择屏幕与 scrollback，Escape 可清除选区；Find 打开时保留自己的 Escape 行为。macOS 使用 Cmd+A，Linux／Windows 不覆盖 Shell 的 Ctrl+A。
+
 xterm 的文本和原始字节输入经实例进入同一进程输入 owner。`sendText` 负责换行、执行用的 Enter 与 bracketed paste；原始键盘和二进制输入保留原有编码。输入和尺寸操作等待执行端或 provider 确认，关闭会拒绝排队及进行中的操作，迟到回复不能恢复已关闭的输入链。
 
 Cursor Undo 的 Ctrl/Cmd+U 快捷键仅在编辑器文本持有焦点时匹配。Linux 终端中的 Ctrl+U 继续到达 Shell，由 Shell 清除当前输入行；显式的编辑器命令仍保留原光标撤销行为。
@@ -143,7 +145,7 @@ Desktop 的 `enablePersistentSessions` 控制协调 reload 和退出恢复。准
 
 `terminal.integrated.persistentSessionReviveProcess` 默认为 `onExit`，也支持 `onExitAndWindowClose` 与 `never`。符合策略的退出先持久保存交互式终端输出、当前 cwd、原始启动意图和布局，再关闭原进程。快照不保存已合并的窗口临时环境；恢复时保留原启动 Profile 的命令、参数和环境覆盖，重新应用当前设置及环境集合，避免沿用旧窗口身份或重复修改 PATH。重新启动按原执行目录建立新 Shell，恢复屏幕、分组比例与活动项；不重跑任务或先前执行的命令，不续接旧 PID。扩展自供 PTY 不参加这种恢复。同工作区的多个原生窗口通过持久窗口身份使用不同 checkpoint；窗口会话恢复按身份重开，关闭后重新打开的工作区只领取未占用的恢复记录，避免相互覆盖和重复启动。
 
-本地自动验证覆盖 Chromium 的实际屏幕、键鼠、选区和焦点，以及真实 Node 扩展宿主；跨机器 SSH 终端和 Linux Desktop 的真实 OS 文件拖入仍没有本轮验收结果。旧 HTTP 首次文档请求挂起的 trace 未加载产品代码，不能据此认定终端实现存在或已经修复该网络问题。
+本地自动验证覆盖 Chromium 的实际屏幕、键鼠、选区和焦点，以及真实 Node 扩展宿主；跨机器 SSH 终端和 Linux Desktop 的真实 OS 文件拖入尚缺真实环境验证。
 
 ## 验证入口
 
@@ -164,51 +166,3 @@ pnpm run smoketest test/smoke/areas/windows/terminal.spec.ts
 just verify ash-exec-server
 just test ash-app-server-runtime --lib terminal
 ```
-
-## 跨平台、窗口配对与自举验收（2026-10-19～20）
-
-首阶段以 `786b887b1` 为基线，后续真实调用链验证从 `248e97279` 继续。首阶段 Linux 仅包含当时的描述符清理修复；后续重新构建前端与正常后端包，分别记录源码、包摘要、运行进程及实际执行文件，避免把磁盘上已有的新包误当作 Desktop 正在使用的包。Linux 构建在当前检出的 Debian 13 arm64 容器中完成，执行端验收运行于独立的 Debian 13 arm64 QEMU/HVF 虚拟机，内核为 `6.12.113+deb13-cloud-arm64`、普通用户。虚拟机与 Docker Desktop 的 LinuxKit 容器结果分别留证，虚拟机不代表物理机器。
-
-下表保留首阶段已执行的基础回归；后续调用链、修复及自举结果另列，测试数量不跨阶段相加。
-
-| 环境              | 实际结果                                                                                                                                                                                                                                                              |
-| ----------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 独立 Linux 虚拟机 | PTY 26 项、终端执行端 66 项、App Server `terminal_` 过滤回归 23 项、真实 Electron/App Server smoke 2 项通过；覆盖四种信号送达前台进程组后原 Shell PID 保持、启动时自动回复、连接隔离、租约、尺寸、输出与回放。Smoke 从界面验证自动回复／Quick Access 和前台 SIGTERM。 |
-| LinuxKit 容器     | 当前源码的 `ash-utils-pty`、`ash-exec-server` 验证通过；正常产品包构建成功，Electron/App Server smoke 2 项通过。此行仅作为容器补充覆盖。                                                                                                                              |
-| macOS             | `just verify ash-utils-pty` 的 check、26 项测试及 warnings 检查通过；`ash-plugin` 的 34 项测试、焦点回归、Quick Input 生命周期、渲染器与正常后端包构建通过。真实窗口重跑 Quick Access 行内重命名、关闭、重新接受原实例，确认焦点、PID 和 Shell 变量均保持。           |
-
-Linux 运行发现的 `EMFILE` 来自降低 `RLIMIT_NOFILE` 并耗尽低位槽后的启动清理：旧实现还要打开 `/proc/self/fd`，导致 spawn 在清理前失败。回归先以旧实现确定性复现，再验证分段 `close_range(CLOSE_RANGE_CLOEXEC)` 可在无可用描述符槽时标记高位 FD，并保留乱序、重复例外及 exec-error 管道。旧内核不支持该 syscall／flag 时继续使用原有 `/proc` 回退；回归仅在子进程探测到该能力后才耗尽槽位，旧内核继续核对稀疏高位 FD，不宣称回退也能处理完全耗尽的描述符表。
-
-窗口配对使用 macOS arm64 的 Ash 实际 Desktop／App Server 与已安装的 VS Code `1.142.0`（`6d62b1d5dace93a33b3a6d3eca1317bd5e15bcb1`），分别使用隔离 profile 和合成工作区。配对从真实 Shell 检查自动回复、Quick Access 保持 PID、字号缩放及重置、OSC 99 通知、开发者写屏不注入输入、尺寸覆盖层消失、环境详情编辑器、会话录制，以及原生粘贴取消和单行粘贴。单行粘贴使用真实 PTY 的 `cat` 消费者核对字节，确认只移除换行而保留空格与 Tab；避免把 Shell readline 的 Tab 补全行为误算为产品差异。失败的自动化选择器、焦点归属和 Shell oracle 诊断单独保留，不计为通过。
-
-配对另发现重命名完成后的焦点竞态：重命名写入仍在等待时，用户已打开新的 Quick Access，旧操作的 `finally` 却重新聚焦终端。终端编辑 owner 现在只在没有新的 Quick Input 时恢复焦点；同一 prompt 的 accept／hide／error 订阅也随 prompt 释放。回归通过延迟重命名 Promise、打开实际 Quick Input，再完成旧操作，验证新输入框持续保有焦点，并由 disposable tracker 核对释放。
-
-新建命令也有独立的晚到聚焦请求：创建 PTY 后的 `showPanel(true)` 会在后续 F1 已打开时重新聚焦终端。该命令现在将显示结果与恢复焦点分开，记录操作期间后续 Quick Input 的接管，避免创建或显示尚未完成时抢走新的输入焦点。
-
-真实扩展包安装还暴露出准入列表缺项：JavaScript 宿主已经实现终端 profile、link、completion 和 quick fix，但 Plugin manifest 校验尚未允许这些声明。修复位于原 manifest validator，只接受已有宿主契约；安装、启用、精确包摘要授权和撤权仍由原 Plugin owner 处理，不以直接注册 provider 代替正常准入。
-
-扩展目录的文件完整性摘要与 Plugin 执行授权摘要属于不同域。目录现在通过可选 `runtimeBinding` 携带来源 authority 提供的准确 runtime ID 和包摘要，终端桥接据此识别同一已授权 provider；静态 `packageSha256`、执行端原有包 fence 与显式 Grant 均保留。该绑定不从扩展 manifest 自报。断连、清理及失败回滚也撤销环境 collection reader 与缓存，避免旧运行时取消后继续影响下一次启动。
-
-两产品的同一真实 JavaScript producer 已分别验证环境启动快照、显式 Relaunch、新 PID 应用新值、补全回调与范围替换、Quick Fix 插入和命令回调，以及公开 disposable 撤回注册。Ash 另从正常安装、启用、精确摘要授权进入扩展宿主，确认授权前命令不可用；最后通过正常权限详情及原生菜单撤权，原 PTY 保留启动环境，新 PTY 不再注入扩展变量。全程使用公开扩展 API 与产品准入操作。
-
-对应 macOS 定向回归包括 Plugin 34 项、静态目录 24 项、App Server 来源 4 项、DTO 1 项、生成契约一致性 2 项，以及扩展宿主所属前端单测 64 项、目录服务 47 项和焦点／Quick Input／终端命令回归。协议、相关 Rust warnings、正常后端包与渲染器构建通过。测试命令、独立场景结果和产物摘要分别保存在下述证据目录。
-
-后续使用标准 `contributes.terminal.profiles` 的同一公开扩展 producer 验证正常安装、启用、摘要授权、Shell profile、独立自供 PTY、链接与自动补全。实际窗口对照确认：撤回 profile factory 后，已经创建的 PTY 继续读写；重新注册 factory 后创建新 PTY，各资源分别关闭一次。修复将 factory 与已签发资源分开注册和释放；真实 Node 宿主与 App Server 的回归另覆盖在途取消、已交付但未使用结果的回收、撤权、旧 incarnation 及过期句柄拒绝。
-
-真实无回显 Shell 暴露出 Local Echo 将输入展示在预测层的问题。预测现在须先得到当前 prompt 的实际可打印回显确认；新 prompt、控制输入、非匹配输出及旧代次晚到提交会清除确认。macOS 对照和 Linux 实际终端均确认无回显文本不显示；macOS 通过暂停、恢复已核对 PID 的真实 Bash，验证正常回显后的预测与实际输出只保留一份。
-
-终端 Ask Chat 在已有富文本草稿后追加问题时曾重写整个模型，导致终端引用标签仍在、冻结快照的 Preview／Remove 元数据却消失。现在只在模型尾部插入后缀，保留引用及撤销记录。macOS 和 Linux 实际窗口验证已有草稿、冻结输出预览、后续 PTY 输出隔离、取消、切换终端和零消息提交；浏览器回归另覆盖英文与简体中文。
-
-Linux 正常场景清理还发现 daemon 的 `ps lstart` 日历身份随系统时钟变化，误将仍存活的原进程认作 PID 重用。新记录使用 kernel boot ID 与 `/proc/<pid>/stat` 的启动 ticks，旧日历记录仍按旧域严格比较；进程退出后已打开的 proc 文件返回 `ESRCH` 也按进程消失处理。所属包的 macOS 57 项及 Linux 61 项测试、check 和 warnings 检查通过。独立虚拟机另从 Ash 真实 PTY 启动正常后端，实际将系统时钟推进一小时：同一 PID 的日历时间发生变化，原生身份保持，正常 `version` 与 `stop` 成功；pidfd 确认原进程退出、记录删除，随后恢复原时钟与 NTP。
-
-自举使用 Ash 自己的真实交互式终端执行仓库构建和测试，并记录 Node → Bash → App Server → daemon → Electron 的进程祖先链。macOS 的 `pnpm prepare:backend`、`pnpm build` 及 Cursor Undo 回归均由该 PTY 执行。父终端随后通过正常入口启动独立 profile 的子 Ash；完整保留原 bundle、核对执行文件摘要后，以真实窗口新建终端，检查命令输出与独立落盘文件。Linux 同样从 Ash PTY 运行真实 Node 宿主的 46 项测试与 daemon 时钟验证。Cursor Undo 先复现 Linux 终端 Ctrl+U 被全局编辑器快捷键截走，再通过编辑器文本焦点条件修复；父 Ash 终端内两个所属测试套件的 4 项回归和正常渲染器构建通过。Linux 部署最终渲染器后另完成正常扩展准入、真实 Ctrl+U 清行、补全、Quick Fix、disposable 撤回和原生撤权共 6 步，实际 Shell 落盘结果确认清行成功。
-
-自举过程保留了自动化装配失败：嵌套 Playwright Electron 启动在原生文档导航阶段停滞；正常直接入口的独立子窗口成功。另一次诊断复制 bundle 时改写了相对 symlink，导致 ICU 数据加载失败，改用完整保留 symlink 的副本后正常启动。这些失败不混入产品功能通过记录，也未据此放宽启动超时或修改产品权限。
-
-新增交互检查复现了粘性标题对触控板小幅滚动的放大：16 次、每次 0.5 像素的合成输入，正文保持 viewport 30，标题却跳到 46。标题现转发到原 xterm viewport，保留小数累积与原滚动设置。Mac 正常子窗口和 Linux 虚拟机另使用真实 PTY 长输出采集正文的 CDP 滚动及帧间隔；注入事件和虚拟机结果不代表物理触控板硬件测量。Linux 最初的“大 delta 一次返回底部”测试假设与 Chromium 实际 legacy wheel 字段不符，后改为拖动原滚动条并独立确认尾部标记；该失败保留为测试 oracle 问题。
-
-Zsh `precmd` 和 Bash `PROMPT_COMMAND` 每次重设 `PS1` 时，原来只追加一次的 OSC 输入边界会丢失，命令 marker 回退到执行位置，出现图标错行。真实交互式 Shell 测试分别先复现缺失边界，再验证每轮用户提示符钩子之后幂等维护边界，同时保留启动配置及失败退出状态。旧 Mac 窗口同一检查点的图标、命令导引线与概览尺均有非零可见面积或实际状态色像素，因此未将这些已有 UI 误记为完全缺失。新增建议列表覆盖非模态输入、真实路径／扩展 producer、窄面板、取消及中英文帮助；Shell 高亮仍归用户的原 Shell 配置。
-
-Windows 分支按用户本轮“先不管”的要求停止，没有执行新的 Windows 验证，也不记录为通过。原有 Windows API 的明确 `Unsupported` 与键盘 Ctrl-C 是不同契约。
-
-首阶段原始日志、产物摘要和窗口证据位于忽略目录 `.build/terminal-cross-platform/`，后续位于 `.build/terminal-followup-20261019/`。其中 `root/validation-index.json`、`extensions/validation-receipt.json` 和平台结果记录区分单测、受控浏览器 provider 与正常准入后的真实 Desktop 链路；窗口录屏、截图和 trace 由现有 scenario runner 写入 `.build/ash-playwright-mcp/evidence/`。合成 Speech producer 不代表物理麦克风或语音识别模型验收；产品当前装配 `NullTelemetryService`，未宣称外部遥测收集结果。

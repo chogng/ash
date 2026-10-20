@@ -1,6 +1,65 @@
 import { expect, test, type Page } from '@playwright/test';
 
 for (const locale of ['en', 'zh-CN']) {
+	test(`terminal screen commands navigate retained output and clear selection from the keyboard in ${locale}`, async ({ page }) => {
+		await page.goto(`/terminal.html?input&groups&clipboard&browser&locale=${locale}`);
+		await page.waitForFunction(() => Boolean(window.ashTerminalInputIntegration));
+		await page.evaluate(() => {
+			window.ashTerminalInputIntegration.feed(Array.from({ length: 120 }, (_, index) => `screen-row-${index}\r\n`).join(''));
+		});
+		await expect.poll(() => page.evaluate(() => window.ashTerminalInputIntegration.snapshot())).toContain('screen-row-119');
+		await page.evaluate(() => window.ashTerminalInputIntegration.clear());
+		const command = async (id: string): Promise<void> => { await page.evaluate(id => window.ashTerminalInputIntegration.command(id), `workbench.action.terminal.${id}`); };
+		await command('scrollToTop');
+		await expect.poll(() => page.evaluate(() => window.ashTerminalInputIntegration.viewport().top)).toBe(0);
+		await command('scrollDown');
+		await expect.poll(() => page.evaluate(() => window.ashTerminalInputIntegration.viewport().top)).toBe(1);
+		await command('scrollUp');
+		await expect.poll(() => page.evaluate(() => window.ashTerminalInputIntegration.viewport().top)).toBe(0);
+		await command('scrollDownPage');
+		await expect.poll(() => page.evaluate(() => window.ashTerminalInputIntegration.viewport().top)).toBeGreaterThan(1);
+		await command('scrollUpPage');
+		await expect.poll(() => page.evaluate(() => window.ashTerminalInputIntegration.viewport().top)).toBe(0);
+		await command('scrollToBottom');
+		await expect.poll(() => page.evaluate(() => {
+			const viewport = window.ashTerminalInputIntegration.viewport();
+			return viewport.top === viewport.bottom;
+		})).toBe(true);
+		const textarea = page.locator('.xterm-helper-textarea').first();
+		await textarea.focus();
+		await textarea.press(process.platform === 'darwin' ? 'PageUp' : 'Shift+PageUp');
+		await expect.poll(() => page.evaluate(() => {
+			const viewport = window.ashTerminalInputIntegration.viewport();
+			return viewport.top < viewport.bottom;
+		})).toBe(true);
+		await command('selectAll');
+		await expect.poll(() => page.evaluate(() => window.ashTerminalClipboardIntegration.selection())).toContain('screen-row-0');
+		await textarea.press('Escape');
+		await expect.poll(() => page.evaluate(() => window.ashTerminalClipboardIntegration.selection())).toBe('');
+		await expect(textarea).toBeFocused();
+		expect(await page.evaluate(() => window.ashTerminalInputIntegration.writes)).toEqual([]);
+		const help = await page.evaluate(() => window.ashTerminalClipboardIntegration.help());
+		expect(help).toContain(locale === 'zh-CN' ? '只读终端' : 'read-only terminals');
+		await page.evaluate(() => window.ashTerminalInputIntegration.close());
+	});
+}
+
+test('terminal scroll shortcuts retire in the alternate buffer and resume with normal output', async ({ page }) => {
+	await page.goto('/terminal.html?input&groups&clipboard&browser');
+	await page.waitForFunction(() => Boolean(window.ashTerminalInputIntegration));
+	await page.evaluate(() => window.ashTerminalInputIntegration.feed('\x1b[?1049halternate-app'));
+	await expect.poll(() => page.evaluate(() => window.ashTerminalInputIntegration.alternateContext())).toBe(true);
+	await page.evaluate(() => window.ashTerminalInputIntegration.clear());
+	const textarea = page.locator('.xterm-helper-textarea').first();
+	await textarea.focus();
+	await textarea.press(process.platform === 'linux' ? 'Control+Shift+ArrowUp' : process.platform === 'darwin' ? 'Meta+Alt+PageUp' : 'Control+Alt+PageUp');
+	await expect.poll(() => page.evaluate(() => window.ashTerminalInputIntegration.writes.length)).toBeGreaterThan(0);
+	await page.evaluate(() => window.ashTerminalInputIntegration.feed('\x1b[?1049l'));
+	await expect.poll(() => page.evaluate(() => window.ashTerminalInputIntegration.alternateContext())).toBe(false);
+	await page.evaluate(() => window.ashTerminalInputIntegration.close());
+});
+
+for (const locale of ['en', 'zh-CN']) {
 	test(`terminal path drops insert literal filenames and recent directories support keyboard acceptance and cancellation in ${locale}`, async ({ page }) => {
 		await page.goto(`/terminal.html?input&groups&clipboard&browser&locale=${locale}`);
 		await page.waitForFunction(() => Boolean(window.ashTerminalInputIntegration));
@@ -1387,11 +1446,11 @@ test('terminal browser list menu keeps its captured instance after active select
 	const tabs = page.getByRole('tablist', { name: 'Terminal instances' });
 	await expect(tabs.getByRole('tab')).toHaveCount(2);
 	const ids = await page.evaluate(() => window.ashTerminalPaneIntegration.ids());
-	expect((await page.evaluate(() => window.ashTerminalPaneIntegration.menuActions())).slice().sort()).toEqual(['Change Terminal Icon', 'Clear Terminal', 'Focus Terminal', 'Join or Reorder Terminals...', 'Kill Terminal', 'Move Terminal into Editor Area', 'Rename Terminal', 'Split Terminal', 'Terminal: Attach to Chat', 'Unsplit Terminal'].sort());
+	expect((await page.evaluate(() => window.ashTerminalPaneIntegration.menuActions())).slice().sort()).toEqual(['Change Terminal Icon', 'Clear Terminal', 'Focus Terminal', 'Join or Reorder Terminals...', 'Kill Terminal', 'Move Terminal into Editor Area', 'Relaunch Terminal', 'Rename Terminal', 'Split Terminal', 'Terminal: Attach to Chat', 'Unsplit Terminal'].sort());
 	await page.evaluate(id => window.ashTerminalPaneIntegration.activate(id), ids[0]!);
 	await tabs.getByRole('tab').first().click({ button: 'right' });
 	await expect(page.getByRole('menu')).toBeVisible();
-	await expect(page.getByRole('menuitem', { name: 'Relaunch Terminal', exact: true })).toHaveCount(0);
+	await expect(page.getByRole('menuitem', { name: 'Relaunch Terminal', exact: true })).toBeVisible();
 	await page.evaluate(id => window.ashTerminalPaneIntegration.activate(id), ids[1]!);
 	await page.getByRole('menuitem', { name: 'Clear Terminal', exact: true }).click();
 	await expect.poll(() => page.evaluate(() => window.ashTerminalPaneIntegration.operations().cleared)).toEqual([ids[0]]);
@@ -1412,7 +1471,7 @@ test('terminal browser list menu supports keyboard dismissal and Chinese labels'
 	await page.evaluate(() => window.ashTerminalPaneIntegration.command('workbench.action.terminal.new'));
 	const tab = page.getByRole('tablist', { name: '终端实例' }).getByRole('tab').first();
 	await tab.focus();
-	expect((await page.evaluate(() => window.ashTerminalPaneIntegration.menuActions())).slice().sort()).toEqual(['取消终端拆分', '合并或调整终端顺序...', '拆分终端', '清除终端', '终止终端', '聚焦终端', '重命名终端', '更改终端图标', '将终端移入编辑区', '终端：附加到聊天'].sort());
+	expect((await page.evaluate(() => window.ashTerminalPaneIntegration.menuActions())).slice().sort()).toEqual(['取消终端拆分', '合并或调整终端顺序...', '拆分终端', '清除终端', '终止终端', '聚焦终端', '重命名终端', '更改终端图标', '将终端移入编辑区', '终端：附加到聊天', '重新启动终端'].sort());
 	await tab.press('Shift+F10');
 	await expect(page.getByRole('menu')).toBeVisible();
 	await expect(page.getByRole('menuitem', { name: '聚焦终端', exact: true })).toBeVisible();
@@ -3413,13 +3472,17 @@ for (const locale of ['en', 'zh-CN']) {
 		const prediction = screen.locator('.ash-terminal-typeahead');
 		const input = screen.locator('.xterm-helper-textarea');
 		const rows = screen.locator('.xterm-rows');
-		await input.pressSequentially('abc');
-		await expect(prediction).toHaveText('abc');
+		await input.press('a');
+		await expect(prediction).toBeEmpty();
+		await page.evaluate(() => window.ashTerminalInputIntegration.feed('a'));
+		await expect(rows).toContainText('next prompta');
+		await input.pressSequentially('bc');
+		await expect(prediction).toHaveText('bc');
 		await expect(prediction).toHaveAttribute('aria-hidden', 'true');
 		await expect(rows).not.toContainText('abc');
-		await page.evaluate(() => window.ashTerminalInputIntegration.feed('a'));
-		await expect(prediction).toHaveText('bc');
-		await page.evaluate(() => window.ashTerminalInputIntegration.feed('bc'));
+		await page.evaluate(() => window.ashTerminalInputIntegration.feed('b'));
+		await expect(prediction).toHaveText('c');
+		await page.evaluate(() => window.ashTerminalInputIntegration.feed('c'));
 		await expect(prediction).toBeEmpty();
 		await expect(rows).toContainText('abc');
 		expect(await page.evaluate(() => window.ashTerminalInputIntegration.writes.join(''))).toBe('abc');
@@ -3442,6 +3505,10 @@ test('terminal typeahead discards predictions on controls, alternate buffer and 
 	const enable = async (): Promise<void> => {
 		await seedScreenCommand(page);
 		await page.evaluate(() => window.ashTerminalInputIntegration.configure('terminal.integrated.localEchoEnabled', 'on'));
+		await input.press('a');
+		await expect(prediction).toBeEmpty();
+		await page.evaluate(() => window.ashTerminalInputIntegration.feed('a'));
+		await expect.poll(() => page.evaluate(() => window.ashTerminalInputIntegration.snapshot())).toContain('next prompta');
 	};
 	await enable();
 	await input.pressSequentially('pending');

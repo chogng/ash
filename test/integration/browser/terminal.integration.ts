@@ -1289,8 +1289,23 @@ if (new URLSearchParams(location.search).has('input')) {
 			const providerRequests: { value: string; cursorIndex: number; signal: AbortSignal; }[] = [];
 			let providerRegistration: import('../../../src/ash/base/common/lifecycle.js').IDisposable | undefined;
 			let releaseProvider: (() => void) | undefined;
-			store.add(toDisposable(() => { providerRegistration?.dispose(); releaseProvider?.(); }));
+			let releaseActivation: (() => void) | undefined;
+			let activationSignal: AbortSignal | undefined;
+			store.add(toDisposable(() => { providerRegistration?.dispose(); releaseProvider?.(); releaseActivation?.(); }));
 			window.ashTerminalSuggestIntegration = {
+				holdActivation: () => {
+					const extensions = services.get(IExtensionService);
+					const activate = extensions.activateByEvent.bind(extensions);
+					const pending = new Promise<void>(resolve => { releaseActivation = resolve; });
+					extensions.activateByEvent = async (event, signal) => {
+						if (event !== 'onTerminal:terminalCompletionProvider') return activate(event, signal);
+						if (signal) activationSignal ??= signal;
+						await pending;
+					};
+					store.add(toDisposable(() => { extensions.activateByEvent = activate; }));
+				},
+				activationCancelled: () => activationSignal?.aborted,
+				releaseActivation: () => { releaseActivation?.(); releaseActivation = undefined; },
 				configure: (key, value) => services.get(IConfigurationService).updateValue(key, value),
 				history: (command, trusted = true, disabled = false) => history.record(terminal.profile.profileId, 'succeeded', command, trusted, disabled),
 				file: async path => { await files.createFile(URI.from({ scheme: 'file', path }), 'overwrite'); },
@@ -1511,6 +1526,8 @@ if (new URLSearchParams(location.search).has('input')) {
 		writes,
 		path: (resource, execute) => terminal.sendPath(URI.parse(resource), execute),
 		cwd: () => terminal.cwd,
+		viewport: () => ({ top: screen.raw.buffer.active.viewportY, bottom: screen.raw.buffer.active.baseY, rows: screen.raw.rows, type: screen.raw.buffer.active.type }),
+		alternateContext: () => services.get(IContextKeyService).getContext(screen.raw.textarea!).getValue<boolean>('terminalAltBufferActive'),
 		visit: path => { currentDirectory = path; },
 		command: id => services.get(ICommandService).executeCommand(id),
 		configure: (key, value) => services.get(IConfigurationService).updateValue(key, value),
@@ -1567,6 +1584,9 @@ declare global {
 			recording(): boolean;
 		};
 		ashTerminalSuggestIntegration: {
+			holdActivation(): void;
+			activationCancelled(): boolean | undefined;
+			releaseActivation(): void;
 			configure(key: string, value: unknown): Promise<void>;
 			provider(items: readonly import('../../../src/ash/workbench/contrib/terminalContrib/suggest/browser/terminalCompletionService.js').ITerminalCompletion[], triggers?: string[], delayed?: boolean): void;
 			providerRequests(): { value: string; cursorIndex: number; cancelled: boolean; }[];
@@ -1650,6 +1670,8 @@ declare global {
 		ashTerminalInputIntegration: {
 			path(resource: string, execute: boolean): Promise<void>;
 			cwd(): string | undefined;
+			viewport(): { top: number; bottom: number; rows: number; type: 'normal' | 'alternate'; };
+			alternateContext(): boolean | undefined;
 			visit(path: string): void;
 			command(id: string): Promise<unknown>;
 			configure(key: string, value: unknown): Promise<void>;

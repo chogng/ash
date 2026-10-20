@@ -1,6 +1,6 @@
 import { registerSingleton, InstantiationType } from '../../../../../platform/instantiation/common/extensions.js';
 import { ITerminalCompletionService, TerminalCompletionService, type ITerminalCompletion } from './terminalCompletionService.js';
-import { RunOnceScheduler } from '../../../../../base/common/async.js';
+import { raceCancellationError, RunOnceScheduler } from '../../../../../base/common/async.js';
 import { addDisposableListener } from '../../../../../base/browser/dom.js';
 import { TerminalSuggestWidget } from './terminalSuggestWidget.js';
 import { TerminalSuggestSettingId, type TerminalQuickSuggestions } from '../common/terminalSuggestConfiguration.js';
@@ -67,10 +67,6 @@ registerAction2(class TerminalTriggerSuggestAction extends Action2 {
 		const cursorIndex = model.cursorIndex;
 		const completionService = accessor.get(ITerminalCompletionService);
 		const extensions = accessor.get(IExtensionService);
-		if (cursorIndex !== prefix.length) {
-			await extensions.activateByEvent('onTerminal:terminalCompletionProvider');
-			if (![...completionService.providers].length || model.value !== prefix || model.cursorIndex !== cursorIndex) return;
-		}
 		const processId = instance.processId;
 		const profileId = instance.profile.profileId;
 		const shell = instance.shellType;
@@ -106,8 +102,16 @@ registerAction2(class TerminalTriggerSuggestAction extends Action2 {
 			&& instance.capabilities?.get(TerminalCapability.CommandDetection) === capability && model.state === PromptInputState.Input
 			&& model.value === prefix && model.cursorIndex === cursorIndex && model.ghostTextIndex < 0
 			&& (capability.cwd ?? instance.cwd ?? instance.initialCwd) === cwd && screen.raw.buffer.active.type === 'normal';
+		const activation = extensions.activateByEvent('onTerminal:terminalCompletionProvider', request.signal);
+		if (cursorIndex !== prefix.length) {
+			// Mid-prompt completion needs an extension provider. Establish the prompt
+			// lifetime first, so switching away cannot revive this activation later.
+			try { await raceCancellationError(activation, request.signal); }
+			catch (error) { if (request.signal.aborted) return; throw error; }
+			if (!canSend() || ![...completionService.providers].length) return;
+		}
 		picker.busy = true;
-		void extensions.activateByEvent('onTerminal:terminalCompletionProvider', request.signal).then(() => completionService.provideCompletions(instance, prefix, cursorIndex, request.signal, triggerCharacter)).then(completions => {
+		void activation.then(() => completionService.provideCompletions(instance, prefix, cursorIndex, request.signal, triggerCharacter)).then(completions => {
 			if (!canSend()) return;
 			const providerItems = providerPicks(completions, prefix, cursorIndex);
 			picker.items = [...picker.items, ...providerItems];
@@ -211,11 +215,13 @@ class TerminalSuggestContribution extends Disposable implements ITerminalContrib
 		this.screen = screen;
 		this.widget = this._register(new TerminalSuggestWidget<CompletionPick>(screen, () => this.retire()));
 		void this.extensions.activateByEvent('onTerminal:terminalCompletionProvider').catch(() => undefined);
-		const input = screen.raw.onData(data => {
+		// Only keyboard events initiate automatic suggestions. IME commits,
+		// paste and terminal replies also produce onData and can arrive after a key.
+		const input = screen.raw.onKey(({ key: data, domEvent }) => {
 			const pending = this.pendingInput;
 			this.clearQuery();
 			const model = this.context.instance.capabilities?.get(TerminalCapability.CommandDetection)?.promptInputModel;
-			if (this.composing || [...data].length !== 1 || /[\x00-\x1f\x7f]/.test(data)
+			if (this.composing || domEvent.isComposing || [...data].length !== 1 || /[\x00-\x1f\x7f]/.test(data)
 				|| model?.state !== PromptInputState.Input || model.cursorIndex !== model.value.length || model.ghostTextIndex >= 0) {
 				this.retire(); return;
 			}

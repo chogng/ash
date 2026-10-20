@@ -29,6 +29,9 @@ suite('Terminal accessibility owners', () => {
 				assert.ok(content.includes(folderHelp));
 				assert.ok(content.includes(locale === 'zh-CN' ? '建议列表保持终端输入焦点' : 'The suggestion list keeps terminal input focused'));
 				assert.ok(content.includes('<keybinding:workbench.action.terminal.openDetectedLink>'));
+				assert.ok(content.includes('<keybinding:workbench.action.terminal.selectAll>'));
+				assert.ok(content.includes('<keybinding:workbench.action.terminal.clearSelection>'));
+				assert.ok(content.includes(locale === 'zh-CN' ? '只读终端' : 'read-only terminals'));
 				for (const action of locale === 'zh-CN'
 					? ['切换活动终端', '增大字号', '发送信号', '粘贴为一行', '命令参考线', '列数和行数', '自动回复', '本地回显', '显示环境贡献', '录制终端会话', '询问 Chat', 'OSC 99']
 					: ['Switch Active Terminal', 'Increase Font Size', 'Send Signal', 'Paste as One Line', 'Show Command Guide', 'column and row counts', 'Auto Replies', 'Local Echo', 'Show Environment Contributions', 'Record Terminal Session', 'Ask Chat', 'OSC 99']) {

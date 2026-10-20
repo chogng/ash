@@ -45,7 +45,7 @@ Shell 进程管理器从平台契约消费原始字节和前端退出码，不�
 
 当前已有多实例、输入、主题、Tab、标题动作、Find、URL、语音与文本剪贴板能力。Find 支持解析后的屏幕与回滚内容、大小写／整词／正则、匹配导航、结果读出和自己的无障碍帮助；终端输出专属 Accessible View、帮助与 verbosity 设置已有 accessibility 贡献接入，扩展自供 PTY、编辑区终端及水平分组分屏已接入下述 owner。Sticky Scroll、显式历史／路径 Suggest 和 Git Quick Fix 复用现有屏幕、命令与输入 owner；适用 Shell、候选来源和接受语义见终端运行契约。
 
-`terminalExtensions.ts` 注册实际实例贡献；实例 attach 创建唯一屏幕后通过自己的 DI 作用域装配贡献，屏幕就绪时调用 `xtermReady`，关闭实例统一释放。`TerminalFindContribution` 只承接实例上下文、控件与命令，`TerminalFindWidget` 持有查询和选项，`XtermTerminal.findNext/findPrevious` 持有按需加载的 SearchAddon、高亮与结果事件。关闭 Find 使等待加载的旧查询失效，不向 PTY 发送搜索输入；切换实例不共享查询、匹配或服务作用域。标准贡献的其他进程／布局 hook 仍待真实消费者，当前不创建空能力。
+`terminalExtensions.ts` 注册实际实例贡献；实例 attach 创建唯一屏幕后通过自己的 DI 作用域装配贡献，屏幕就绪时调用 `xtermReady`，关闭实例统一释放。`TerminalFindContribution` 只承接实例上下文、控件与命令，`TerminalFindWidget` 持有查询和选项，`XtermTerminal.findNext/findPrevious` 持有按需加载的 SearchAddon、高亮与结果事件。关闭 Find 使等待加载的旧查询失效，不向 PTY 发送搜索输入；切换实例不共享查询、匹配或服务作用域。贡献按自身需要订阅原实例或屏幕的进程／布局事件，不预建没有消费者的生命周期 hook。
 
 跨层的状态归属、调用链与关闭／恢复边界见 [Terminal 职责与运行契约](../../../../../docs/terminal.md)。
 
@@ -74,17 +74,17 @@ Workbench 与 Sessions 核心入口注册所选 `ITerminalProcessService`；共�
 
 Desktop 默认启用 `enablePersistentSessions`。协调 reload 先冻结原管理器并等待输入及屏幕解析提交，保存原资源身份、输出游标、UTF-8 尾部、VT 屏幕、分屏比例和焦点；租约凭据另存窗口内存 SecretStorage。只有全部 shutdown join 成功才交接客户端，失败恢复原实例读取和输入。新 Renderer 先 attach 原进程、按原网格恢复屏幕，再恢复组布局并续读，避免临时单窗格尺寸破坏历史。隐藏面板同样初始化原屏幕，不抢焦点。应用退出后的 revive 按原持久化策略启动新 Shell；扩展自供 PTY 不参与进程恢复。
 
-公开契约目前承接 Ash 已有行为；与 VS Code 完整 backend、child process、profile/configuration、group 和 editor terminal API 仍有差异。本批完成对应 owner 与实例装配，不能记为整个 Terminal API 已对齐。
+终端后端使用 Ash 的 Rust 进程、字节流与租约契约；VS Code 的 Node PtyHost 不在此产品宿主中装配。前端能力沿现有实例、配置、组和编辑器服务接入，不能用同路径文件存在推断全部 API 或行为等价。
 
-本轮迁回八个已确认的 UI 文件，并拆出实例、Tab、菜单与动作 owner；独立的主题、滚动和 profile 图标实现保持原有行为。`XtermTerminal.raw` 暴露已初始化的真实解析器，初始化前与释放后访问会失败。`clearBuffer` 控制屏幕。实例旧 stdin `write` 已退出；`sendText(text, shouldExecute, bracketedPasteMode?)` 归一 CRLF/LF、按需追加一次 Enter，并仅在 Shell 开启模式时包装粘贴。原始键盘、鼠标和终端应答不经过文本归一。管理器 `write`/`processBinary`/`setDimensions` 返回 Promise；这表示 RPC 接受输入或尺寸，不表示命令执行完成。Tasks 等待进程创建与输出/退出，创建失败不发布运行；DAP 确认终端创建后才回复成功。其余完整 VS Code 构造与公开契约、profile 选择参数仍有差异。
+`XtermTerminal.raw` 暴露已初始化的真实解析器，初始化前与释放后访问会失败。`clearBuffer` 控制屏幕。`sendText(text, shouldExecute, bracketedPasteMode?)` 归一 CRLF/LF、按需追加一次 Enter，并仅在 Shell 开启模式时包装粘贴。原始键盘、鼠标和终端应答不经过文本归一。管理器 `write`/`processBinary`/`setDimensions` 返回 Promise；这表示 RPC 接受输入或尺寸，不表示命令执行完成。Tasks 等待进程创建与输出/退出，创建失败不发布运行；DAP 确认终端创建后才回复成功。
 
 `IShellLaunchConfig.waitOnExit` 由实例持有，可为布尔值、文本或退出码回调。任务完成提示只写入显示队列，不产生进程数据或 stdin；普通字符键和 Enter 关闭已退出的等待终端，工作台快捷键继续可用。任务复用完整替换退出策略；后台读取产生的终端应答不能触发关闭。
 
 终端无障碍贡献读取已解析的屏幕和滚动历史，提供随输出更新的只读视图与帮助，关闭后回到终端输入。`accessibility.verbosity.terminal` 控制输入标签中的帮助提示。贡献与屏幕同生命周期，内容提供者由无障碍对话框释放；查找贡献继续拥有终端焦点上下文。
 
-文本剪贴板由 `terminalContrib/clipboard/browser/terminal.clipboard.contribution.ts` 随实例屏幕就绪挂载。复制只读原选区，粘贴调用既有宿主剪贴板服务与 `sendText(text, false, true)`；异步读取期间关闭、断线、退出或切换实例都会作废旧结果。输入不增加 Enter，遵守 child paste mode，并返回进程确认或失败。浏览器原生粘贴仍进入 xterm 原始输入；HTML／资源粘贴、自动复制与多行确认尚未接入。
+文本剪贴板由 `terminalContrib/clipboard/browser/terminal.clipboard.contribution.ts` 随实例屏幕就绪挂载。复制只读原选区，粘贴调用既有宿主剪贴板服务与 `sendText(text, false, true)`；异步读取期间关闭、断线、退出或切换实例都会作废旧结果。输入不增加 Enter，遵守 child paste mode，并返回进程确认或失败。浏览器原生粘贴在 xterm 原始输入前进入同一贡献，与命令粘贴共用多行确认和实例代次检查；自动复制及右键行为沿原选区和焦点 owner 接入。HTML／资源粘贴不转为文本执行。
 
-Browser 列表职责已从 Tabbed View 迁回 `terminalTabsList.ts`，View 仍拥有原屏幕附着与可见性。Shift+F10／鼠标实例菜单使用捕获的数值 instanceId；活动项变更不改变目标，消失的目标在当前窗口命令边界拒绝。原字符串 UI id 保留现有消费者，数值身份从实例编号派生；PID 随 Shell 替换而变化，不能代替实例身份。大 normal 缓冲区的屏幕横向重排经过 `TerminalResizeDebouncer`，focus flush，dispose 取消；PTY 尺寸确认仍由原管理器负责。分组、编辑区、Profile、状态与布局按各自 owner 的公开契约接入。
+`terminalTabsList.ts` 拥有 Browser 列表，View 拥有原屏幕附着与可见性。Shift+F10／鼠标实例菜单使用捕获的数值 instanceId；活动项变更不改变目标，消失的目标在当前窗口命令边界拒绝。原字符串 UI id 保留现有消费者，数值身份从实例编号派生；PID 随 Shell 替换而变化，不能代替实例身份。大 normal 缓冲区的屏幕横向重排经过 `TerminalResizeDebouncer`，focus flush，dispose 取消；PTY 尺寸确认仍由原管理器负责。分组、编辑区、Profile、状态与布局按各自 owner 的公开契约接入。
 
 配置链已消费字体、字号、字/行间距、两种光标样式、光标闪烁/宽度、回滚与最小对比度。屏幕首次初始化和配置变化都使用有效值；更新保留屏幕及输出，字体变化触发 fit。当前默认值与 VS Code 对应字段一致（macOS 字号 12、其他平台 14、回滚 1000、光标不闪烁）；回滚缩小时由 xterm 丢弃超限旧行。
 
@@ -112,7 +112,7 @@ Bash/Zsh 保留用户启动文件与 prompt hooks，Bash 登录配置通过原 r
 
 Send Sequence 由 `terminalContrib/sendSequence` 的单一 contribution 入口注册。`workbench.action.terminal.sendSequence` 接受 `{ text: string }`，或使用 Quick Input 输入支持 `\n`、`\r`、`\xNN` 的序列；参数文本不再做反斜线解码。变量使用实例所属工作区文件夹，由原 ConfigurationResolverService 解析。发送调用原 `sendText(text, false)` 并等待后端确认；不追加执行回车，也不包裹 bracketed paste。提示或解析期间切换活动实例、重连、复用、关闭或更换工作区会使原调用失效。
 
-`terminalGroupService.ts` 现在拥有 panel 组成员，活动组从唯一 TerminalService 派生；`terminalGroup.ts` 使用现有 SplitView 分配组内水平窗格。Split 创建独立 Shell，继承原实例的启动 profile/argv/env 与当前 cwd；当前不拆分扩展自供 PTY。Focus Next/Previous Pane 与 focusAtIndex1–9 使用原实例选择，Unsplit 保留原进程和屏幕。组布局按容器内容尺寸更新字符网格，键盘 sash 使用原 SplitView，移动屏幕不复制输出。关闭一侧后聚焦剩余窗格，最后一个实例关闭才隐藏 panel。reload 已保留组成员和宽度；完整垂直布局仍待补。
+`terminalGroupService.ts` 拥有 panel 组成员，活动组从唯一 TerminalService 派生；`terminalGroup.ts` 使用现有 SplitView，顶部／底部 Panel 横向排列，左侧／右侧纵向排列。Split 创建独立 Shell，继承原实例的启动 profile/argv/env 与当前 cwd；当前不拆分扩展自供 PTY。Focus Next/Previous Pane 与 focusAtIndex1–9 使用原实例选择，Unsplit 保留原进程和屏幕。组布局按容器内容尺寸更新字符网格，键盘 sash 使用原 SplitView，移动屏幕不复制输出。关闭一侧后聚焦剩余窗格，最后一个实例关闭才隐藏 panel。Panel 位置变化保留相对尺寸和焦点，reload 保留组成员和比例。
 
 `terminalStatusList.ts` 只保存进程错误的 UI 消息，Shell/连接状态仍归原实例与进程管理器；`terminalTooltip.ts` 将 profile、PID、cwd、退出码与当前消息提供给列表。Relaunch 清除旧进程错误。`terminalIcons.ts` 给菜单与列表提供语义图标，仍使用产品 icon registry/主题解析。Search addon 构造由 `xtermAddonImporter.ts` 加载，addon 实例仍归原屏幕；`terminalFontRendering.ts` 消费 fontRendering 设置，在 macOS 切换灰度字体平滑并刷新字形缓存，保留原屏幕和内容。
 
@@ -124,7 +124,7 @@ Rename 和 Change Icon 使用现有 Quick Input，目标关闭时取消。原实
 
 `decorationAddon.ts` 只拥有已提交命令事件的屏幕 marker/decoration；xterm 缓存淘汰标记时立即释放 UI listeners。`markNavigationAddon.ts` 只读取这些 marker，不建立第二份 Shell history；`decorationStyles.ts` 提供中英文 tooltip/ARIA 状态。屏幕样式由 `media/xterm.css` 拥有。`terminal.all.ts` 是 Desktop/Web 共用装载入口，核心与增强各自只注册一次。
 
-`common/basePty.ts` 提供当前实际消费的 string-output child-process 事件端口；`terminalProcessExtHostProxy.ts` 接原扩展 provider 的 opaque PTY，拥有轮询/输入队列和取消，不创建 Shell 或屏幕。MainThread 继续拥有 profile 注册与 extension incarnation，实际工厂直接创建此代理；旧内嵌 PTY 类已退出。插件响应在代理边界校验，typed 内部 payload 不重复校验；关闭后忽略晚到数据并只发一次释放请求。完整 Rust byte-stream child-process/replay/backend API 仍待补。
+`common/basePty.ts` 提供当前实际消费的 string-output child-process 事件端口；`terminalProcessExtHostProxy.ts` 接原扩展 provider 的 opaque PTY，拥有轮询/输入队列和取消，不创建 Shell 或屏幕。MainThread 继续拥有 profile 注册与 extension incarnation，实际工厂直接创建此代理；旧内嵌 PTY 类已退出。插件响应在代理边界校验，typed 内部 payload 不重复校验；关闭后忽略晚到数据并只发一次释放请求。Shell 的原始字节、消费确认和重连仍由平台进程适配与 Rust owner 承担，不经过扩展文本代理。
 
 平台 Common 接线已迁回真实能力模型：已提交 cwd 由 `CwdDetectionCapability` 唯一持有，实例标准能力存储登记该实现；装饰 addon 使用 `BufferMarkCapability` 管理同一屏幕 marker，仍自己拥有装饰渲染。扩展 PTY 文本流经 `TerminalDataBufferer`，初始输出、标题与退出保序；Shell 输出不进入这个定时缓冲器。启动配置 schema 和已消费的配置 key/prefix 由平台声明，环境合并仍属于本层的启动组合。
 

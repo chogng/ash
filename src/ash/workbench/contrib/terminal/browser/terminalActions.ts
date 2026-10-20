@@ -30,10 +30,96 @@ import { ICodeEditorService } from '../../../../editor/browser/services/codeEdit
 import { EndOfLinePreference } from '../../../../editor/common/model.js';
 import { IQuickInputService } from '../../../../platform/quickinput/common/quickInput.js';
 import { Schemas } from '../../../../base/common/network.js';
+import type { Terminal } from '@xterm/xterm';
 
 
 /** Command definitions use the invoking window's services, never a retained View callback. */
 export function registerTerminalActions(): void {
+	const normalBufferFocused = ContextKeyExpr.and(TerminalContextKeys.focus.isEqualTo(true), TerminalContextKeys.altBufferActive.isEqualTo(false));
+	// These operations use the retained screen, including exited and read-only terminals.
+	for (const action of [
+		{
+			id: TerminalCommandId.ScrollUpLine,
+			title: localize2('terminal.scrollUpLine', 'Terminal: Scroll Up (Line)'),
+			operation: (raw: Terminal) => raw.scrollLines(-1),
+			keybinding: { primary: KeyMod.CtrlCmd | KeyMod.Alt | KeyCode.PageUp, linux: { primary: KeyMod.CtrlCmd | KeyMod.Shift | KeyCode.UpArrow } },
+		},
+		{
+			id: TerminalCommandId.ScrollDownLine,
+			title: localize2('terminal.scrollDownLine', 'Terminal: Scroll Down (Line)'),
+			operation: (raw: Terminal) => raw.scrollLines(1),
+			keybinding: { primary: KeyMod.CtrlCmd | KeyMod.Alt | KeyCode.PageDown, linux: { primary: KeyMod.CtrlCmd | KeyMod.Shift | KeyCode.DownArrow } },
+		},
+		{
+			id: TerminalCommandId.ScrollUpPage,
+			title: localize2('terminal.scrollUpPage', 'Terminal: Scroll Up (Page)'),
+			operation: (raw: Terminal) => raw.scrollPages(-1),
+			keybinding: { primary: KeyMod.Shift | KeyCode.PageUp, mac: { primary: KeyCode.PageUp } },
+		},
+		{
+			id: TerminalCommandId.ScrollDownPage,
+			title: localize2('terminal.scrollDownPage', 'Terminal: Scroll Down (Page)'),
+			operation: (raw: Terminal) => raw.scrollPages(1),
+			keybinding: { primary: KeyMod.Shift | KeyCode.PageDown, mac: { primary: KeyCode.PageDown } },
+		},
+		{
+			id: TerminalCommandId.ScrollToTop,
+			title: localize2('terminal.scrollToTop', 'Terminal: Scroll to Top'),
+			operation: (raw: Terminal) => raw.scrollToTop(),
+			keybinding: { primary: KeyMod.CtrlCmd | KeyCode.Home, linux: { primary: KeyMod.Shift | KeyCode.Home } },
+		},
+		{
+			id: TerminalCommandId.ScrollToBottom,
+			title: localize2('terminal.scrollToBottom', 'Terminal: Scroll to Bottom'),
+			operation: (raw: Terminal) => raw.scrollToBottom(),
+			keybinding: { primary: KeyMod.CtrlCmd | KeyCode.End, linux: { primary: KeyMod.Shift | KeyCode.End } },
+		},
+	]) {
+		registerAction2(class ScrollTerminalAction extends Action2 {
+			constructor() {
+				super({
+					id: action.id,
+					title: action.title,
+					f1: true,
+					precondition: TerminalHasActiveInstanceContext.isEqualTo(true),
+					keybinding: { ...action.keybinding, when: normalBufferFocused, weight: KeybindingWeight.WorkbenchContrib },
+				});
+			}
+			override run(accessor: ServicesAccessor): void {
+				const screen = accessor.get(ITerminalService).activeInstance?.xterm;
+				if (screen && !screen.isDisposed && screen.raw.buffer.active.type === 'normal') action.operation(screen.raw);
+			}
+		});
+	}
+	registerAction2(class SelectAllTerminalAction extends Action2 {
+		constructor() {
+			super({
+				id: TerminalCommandId.SelectAll, title: localize2('terminal.selectAll', 'Terminal: Select All'), f1: true,
+				precondition: TerminalHasActiveInstanceContext.isEqualTo(true),
+				keybinding: { primary: 0, mac: { primary: KeyMod.CtrlCmd | KeyCode.KeyA }, when: TerminalContextKeys.focus.isEqualTo(true), weight: KeybindingWeight.WorkbenchContrib },
+			});
+		}
+		override run(accessor: ServicesAccessor): void {
+			const screen = accessor.get(ITerminalService).activeInstance?.xterm;
+			if (screen && !screen.isDisposed) screen.raw.selectAll();
+		}
+	});
+	registerAction2(class ClearTerminalSelectionAction extends Action2 {
+		constructor() {
+			super({
+				id: TerminalCommandId.ClearSelection, title: localize2('terminal.clearSelection', 'Terminal: Clear Selection'), f1: true,
+				precondition: TerminalHasActiveInstanceContext.isEqualTo(true),
+				keybinding: {
+					primary: KeyCode.Escape, weight: KeybindingWeight.WorkbenchContrib,
+					when: ContextKeyExpr.and(TerminalContextKeys.focus.isEqualTo(true), TerminalContextKeys.textSelectedInFocused.isEqualTo(true), TerminalContextKeys.findVisible.isEqualTo(false)),
+				},
+			});
+		}
+		override run(accessor: ServicesAccessor): void {
+			const screen = accessor.get(ITerminalService).activeInstance?.xterm;
+			if (screen && !screen.isDisposed && screen.raw.hasSelection()) screen.raw.clearSelection();
+		}
+	});
 	registerAction2(class RunActiveFileTerminalAction extends Action2 {
 		constructor() {
 			super({ id: TerminalCommandId.RunActiveFile, title: localize2('terminal.runActiveFile', 'Terminal: Run Active File in Active Terminal'), f1: true, precondition: AppServerAvailableContext.isEqualTo(true) });

@@ -61,6 +61,31 @@ test('terminal extension completion applies a range at the middle of the prompt'
 	await page.evaluate(() => window.ashTerminalInputIntegration.close());
 });
 
+test('terminal completion cancels mid-prompt activation before a terminal switch can revive it', async ({ page }) => {
+	await prompt(page, 'git --he tail');
+	await page.evaluate(() => {
+		window.ashTerminalSuggestIntegration.provider([{ label: '--help', replacementRange: [4, 8] }]);
+		window.ashTerminalInputIntegration.feed('\x1b[5D');
+	});
+	await expect.poll(() => page.evaluate(() => window.ashTerminalSuggestIntegration.model())).toBe('git --he| tail');
+	await page.evaluate(() => {
+		window.ashTerminalSuggestIntegration.holdActivation();
+		void window.ashTerminalInputIntegration.command('workbench.action.terminal.triggerSuggest');
+	});
+	const picker = page.getByRole('combobox', { name: 'Terminal suggestions', exact: true });
+	await expect.poll(() => page.evaluate(() => window.ashTerminalSuggestIntegration.activationCancelled())).toBe(false);
+	await page.evaluate(async () => {
+		await window.ashTerminalClipboardIntegration.switchAway();
+		window.ashTerminalClipboardIntegration.switchBack();
+	});
+	await expect.poll(() => page.evaluate(() => window.ashTerminalSuggestIntegration.activationCancelled())).toBe(true);
+	await page.evaluate(() => window.ashTerminalSuggestIntegration.releaseActivation());
+	await expect(picker).toBeHidden();
+	expect(await page.evaluate(() => window.ashTerminalSuggestIntegration.providerRequests())).toEqual([]);
+	expect(await page.evaluate(() => window.ashTerminalInputIntegration.writes)).toEqual([]);
+	await page.evaluate(() => window.ashTerminalInputIntegration.close());
+});
+
 test('terminal extension trigger characters wait for confirmed shell input before opening suggestions', async ({ page }) => {
 	await prompt(page, 'git ');
 	await page.evaluate(async () => { await window.ashTerminalSuggestIntegration.configure('terminal.integrated.suggest.suggestOnTriggerCharacters', true); window.ashTerminalSuggestIntegration.provider([{ label: '--help', replacementRange: [4, 5] }], ['-']); });

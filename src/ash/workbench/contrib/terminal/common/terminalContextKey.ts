@@ -10,6 +10,7 @@ export namespace TerminalContextKeys {
 	export const tabsNarrow = new RawContextKey<boolean>('terminalTabsNarrow', false);
 	export const textSelectedInFocused = new RawContextKey<boolean>('terminalTextSelectedInFocused', false);
 	export const focus = new RawContextKey<boolean>('terminalFocus', false);
+	export const altBufferActive = new RawContextKey<boolean>('terminalAltBufferActive', false);
 	export const findFocus = new RawContextKey<boolean>('terminalFindFocused', false);
 	export const findVisible = new RawContextKey<boolean>('terminalFindVisible', false);
 }

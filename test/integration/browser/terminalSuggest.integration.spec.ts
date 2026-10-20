@@ -15,7 +15,11 @@ async function prompt(page: Page, locale = 'en'): Promise<void> {
 }
 
 async function confirmed(page: Page, key: string): Promise<void> {
+	const before = await page.evaluate(() => window.ashTerminalInputIntegration.writes.join(''));
 	await page.locator('.xterm-helper-textarea').press(key);
+	// Native composition can defer xterm input. A real execution host cannot echo
+	// a key before receiving it, so the fixture must observe that same boundary.
+	await expect.poll(() => page.evaluate(() => window.ashTerminalInputIntegration.writes.join(''))).toBe(before + key);
 	await page.evaluate(key => window.ashTerminalInputIntegration.feed(key), key);
 }
 

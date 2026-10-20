@@ -1,10 +1,11 @@
-import { ITerminalQuickFixService } from '../../browser/quickFix.js';
+import { ITerminalQuickFixService, type ITerminalQuickFixProvider } from '../../browser/quickFix.js';
 import { TerminalQuickFixService } from '../../browser/terminalQuickFixService.js';
 import { IExtensionService } from '../../../../../services/extensions/common/extensionService.js';
 import { IOpenerService } from '../../../../../../platform/opener/common/opener.js';
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { DeferredPromise } from '../../../../../../base/common/async.js';
+import { isCancellationError } from '../../../../../../base/common/errors.js';
 import { Emitter, Event } from '../../../../../../base/common/event.js';
 import { DisposableStore } from '../../../../../../base/common/lifecycle.js';
 import { CommandsRegistry } from '../../../../../../platform/commands/common/commands.js';
@@ -256,4 +257,103 @@ test('Terminal Quick Fixes cannot execute an already visible action after its pr
 	state.accept();
 	await operation;
 	assert.deepEqual(state.sent, []);
+});
+
+test('Terminal Quick Fixes isolates synchronous and asynchronous provider failures', async () => {
+	using state = fixture(completedCommand('tool bad', 'failed'));
+	using broken = state.quickFixes.registerQuickFixProvider('extension/broken', {
+		provideTerminalQuickFixes: () => { throw new Error('Provider failed'); },
+	});
+	using rejected = state.quickFixes.registerQuickFixProvider('extension/rejected', {
+		provideTerminalQuickFixes: async () => { throw new Error('Provider rejected'); },
+	});
+	using healthy = state.quickFixes.registerQuickFixProvider('extension/healthy', {
+		provideTerminalQuickFixes: async () => [{ label: 'tool good', terminalCommand: 'tool good' }],
+	});
+	const operation = state.run();
+	await state.waitForItems(items => items.some(item => item.label === 'tool good'));
+	state.accept();
+	await operation;
+	assert.deepEqual(state.sent, [{ text: 'tool good', execute: false, paste: true }]);
+});
+
+test('Terminal Quick Fixes does not revive a visible action when its provider is registered again', async () => {
+	using state = fixture(completedCommand('tool bad', 'failed'));
+	const provider: ITerminalQuickFixProvider = {
+		provideTerminalQuickFixes: async () => [{ label: 'tool good', terminalCommand: 'tool good', shouldExecute: true }],
+	};
+	using original = state.quickFixes.registerQuickFixProvider('extension/fix', provider);
+	const operation = state.run();
+	await state.waitForItems(items => items.some(item => item.label === 'tool good'));
+	original.dispose();
+	using replacement = state.quickFixes.registerQuickFixProvider('extension/fix', provider);
+	state.accept();
+	await operation;
+	assert.deepEqual(state.sent, []);
+});
+
+test('Terminal Quick Fixes discards a pending result from a replaced registration', async () => {
+	using state = fixture(completedCommand('tool bad', 'failed'));
+	const pending = new DeferredPromise<readonly import('../../browser/quickFix.js').ITerminalQuickFix[]>();
+	const provider: ITerminalQuickFixProvider = { provideTerminalQuickFixes: () => pending.p };
+	using original = state.quickFixes.registerQuickFixProvider('extension/fix', provider);
+	const operation = state.quickFixes.provideTerminalQuickFixes(state.instance, state.commands[0]!, new AbortController().signal);
+	original.dispose();
+	using replacement = state.quickFixes.registerQuickFixProvider('extension/fix', provider);
+	await pending.complete([{ label: 'stale', terminalCommand: 'stale', shouldExecute: true }]);
+	assert.deepEqual(await operation, []);
+});
+
+test('Terminal Quick Fixes invalidates only the revoked registration of a shared provider', async () => {
+	using state = fixture(completedCommand('tool bad', 'failed'));
+	const provider: ITerminalQuickFixProvider = {
+		provideTerminalQuickFixes: async () => [{ label: 'tool good', terminalCommand: 'tool good' }],
+	};
+	using first = state.quickFixes.registerQuickFixProvider('extension/first', provider);
+	using second = state.quickFixes.registerQuickFixProvider('extension/second', provider);
+	const results = await state.quickFixes.provideTerminalQuickFixes(state.instance, state.commands[0]!, new AbortController().signal);
+	assert.equal(results.length, 2);
+	first.dispose();
+	assert.deepEqual(results.map(result => result.isValid?.()), [false, true]);
+});
+
+test('Terminal Quick Fixes does not dispatch a cancelled request', async () => {
+	using quickFixes = new TerminalQuickFixService();
+	let calls = 0;
+	using registration = quickFixes.registerQuickFixProvider('extension/fix', {
+		provideTerminalQuickFixes: async () => { calls++; return []; },
+	});
+	const request = new AbortController();
+	request.abort();
+	assert.deepEqual(await quickFixes.provideTerminalQuickFixes({} as ITerminalInstance, completedCommand('tool bad', 'failed'), request.signal), []);
+	assert.equal(calls, 0);
+});
+
+for (const transition of ['cancel', 'unregister', 'dispose'] as const) {
+	test(`Terminal Quick Fixes settles after ${transition} even when a provider ignores cancellation`, async () => {
+		using state = fixture(completedCommand('tool bad', 'failed'));
+		const pending = new DeferredPromise<readonly import('../../browser/quickFix.js').ITerminalQuickFix[]>();
+		let providerSignal: AbortSignal | undefined;
+		using registration = state.quickFixes.registerQuickFixProvider('extension/pending', {
+			provideTerminalQuickFixes: (_instance, _command, signal) => { providerSignal = signal; return pending.p; },
+		});
+		using healthy = state.quickFixes.registerQuickFixProvider('extension/healthy', {
+			provideTerminalQuickFixes: async () => [{ label: 'healthy', terminalCommand: 'healthy' }],
+		});
+		const request = new AbortController();
+		const operation = state.quickFixes.provideTerminalQuickFixes(state.instance, state.commands[0]!, request.signal);
+		if (transition === 'cancel') request.abort();
+		else if (transition === 'unregister') registration.dispose();
+		else state.quickFixes.dispose();
+		const result = await operation;
+		assert.equal(providerSignal?.aborted, true);
+		assert.deepEqual(result.map(item => item.label), transition === 'unregister' ? ['healthy'] : []);
+		await pending.error(new Error('Late provider failure'));
+	});
+}
+
+test('Terminal Quick Fixes rejects registration after the window service is disposed', () => {
+	using service = new TerminalQuickFixService();
+	service.dispose();
+	assert.throws(() => service.registerQuickFixProvider('extension/late', { provideTerminalQuickFixes: async () => [] }), isCancellationError);
 });
