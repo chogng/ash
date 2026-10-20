@@ -56,6 +56,28 @@ test('notification rows share standard controls, preserve focus, and fit narrow 
 	await page.evaluate(() => window.ashNotificationsIntegration.clear());
 	await expect(page.locator('.ash-notifications-center')).toBeHidden();
 	await expect.poll(() => page.evaluate(() => window.ashNotificationsIntegration.history())).toEqual([]);
+	await page.evaluate(() => {
+		const origin = document.createElement('button');
+		origin.textContent = 'Notification focus origin';
+		document.body.append(origin);
+	});
+	const origin = page.getByRole('button', { name: 'Notification focus origin', exact: true, includeHidden: true });
+	for (const property of ['display', 'visibility'] as const) {
+		await origin.focus();
+		const id = await page.evaluate(() => window.ashNotificationsIntegration.notify('Retain history without restoring hidden focus'));
+		await page.locator(`[data-notification-close="${id}"]`).focus();
+		await origin.evaluate((element, property) => element.style.setProperty(property, property === 'display' ? 'none' : 'hidden'), property);
+		try {
+			await page.keyboard.press('Escape');
+			await expect(page.locator('.ash-notification')).toHaveCount(0);
+			expect(await page.evaluate(() => document.activeElement === document.body)).toBe(true);
+			expect(await page.evaluate(() => window.ashNotificationsIntegration.history())).toEqual([id]);
+		} finally {
+			await origin.evaluate((element, property) => element.style.removeProperty(property), property);
+			await page.evaluate(() => window.ashNotificationsIntegration.clear());
+		}
+	}
+	await origin.evaluate(element => element.remove());
 });
 
 test('scheduled toasts are cancelled on removal and center opening while a rapid burst retains only three controls', async ({ page }) => {

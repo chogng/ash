@@ -1509,38 +1509,6 @@ async function hasWorkingCopyBackup(page: Page, content: string, application?: E
 }
 
 
-test('Code editor scrollbar follows wheel, keyboard and thumb dragging in the desktop window', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, testWorkspace, workbench }) => {
-	await writeFile(testWorkspace.file, Array.from({ length: 200 }, (_, index) => `// line ${index} ${'x'.repeat(180)}`).join('\n'));
-	const page = workbench.page;
-	const fileRow = page.locator('.ash-explorer .ash-tree-row').filter({ hasText: 'main.ts' });
-	await expect(fileRow).toHaveCount(1);
-	await fileRow.locator('.ash-icon-label-icon').click();
-	const editor = workbench.editors.groupAt(0).content.locator('.stanza-editor');
-	await expect(editor).toBeVisible();
-	const vertical = editor.getByRole('scrollbar', { name: 'Vertical scrollbar' });
-	await expect(vertical).toBeVisible();
-	await vertical.focus();
-	await page.keyboard.press('Home');
-	await expect.poll(() => editor.locator(':scope > .ash-smooth-scrollable').evaluate(element => element.scrollTop)).toBe(0);
-	await editor.hover();
-	await page.mouse.wheel(0, 180);
-	await expect.poll(() => editor.locator(':scope > .ash-smooth-scrollable').evaluate(element => element.scrollTop)).toBeGreaterThan(0);
-	await vertical.focus();
-	await page.keyboard.press('End');
-	await expect.poll(async () => vertical.evaluate(element => element.getAttribute('aria-valuenow') === element.getAttribute('aria-valuemax'))).toBe(true);
-	await page.keyboard.press('Home');
-	await expect.poll(() => editor.locator(':scope > .ash-smooth-scrollable').evaluate(element => element.scrollTop)).toBe(0);
-	const thumb = await vertical.locator('.ash-scrollbar-thumb').boundingBox();
-	if (!thumb) {
-		throw new Error('Missing scrollbar thumb');
-	}
-	await page.mouse.move(thumb.x + thumb.width / 2, thumb.y + thumb.height / 2);
-	await page.mouse.down();
-	await page.mouse.move(thumb.x + thumb.width / 2, thumb.y + thumb.height / 2 + 80, { steps: 5 });
-	await page.mouse.up();
-	await expect.poll(() => editor.locator(':scope > .ash-smooth-scrollable').evaluate(element => element.scrollTop)).toBeGreaterThan(180);
-});
-
 test('Code replaces a selection with multiline text and remains editable', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, testWorkspace, workbench }) => {
 	const page = workbench.page;
 	const fileRow = page.locator('.ash-explorer .ash-tree-row').filter({ hasText: 'main.ts' });

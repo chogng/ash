@@ -1259,6 +1259,21 @@ test('editor title scrollbars preserve overflow, focus and clipping through size
 	const title = page.locator('#editor-tabs-host .ash-editor-title-control');
 	const tabs = title.locator('.ash-ordinary-editor-tabs-row .ash-tab-list');
 	const breadcrumbs = title.locator('.ash-breadcrumbs-widget');
+	const current = breadcrumbs.getByRole('button').last();
+	for (const theme of ['ash-light', 'ash-dark', 'ash-high-contrast-dark', 'ash-high-contrast-light']) {
+		await page.evaluate(theme => window.ashCompositeIntegration.setEditorTheme(theme), theme);
+		await current.focus();
+		await current.press('End');
+		await expect(current).toBeFocused();
+		await expect(current).toHaveCSS('outline-style', 'solid');
+		expect(await current.evaluate(element => {
+			const probe = document.createElement('span');
+			probe.style.color = 'var(--ash-focusBorder)';
+			element.append(probe);
+			try { return getComputedStyle(element).outlineColor === getComputedStyle(probe).color; }
+			finally { probe.remove(); }
+		})).toBe(true);
+	}
 	await tabs.evaluate(element => { (element as HTMLElement).style.width = '220px'; });
 	await breadcrumbs.evaluate(element => { Object.assign((element as HTMLElement).style, { width: '60px', flex: 'none' }); });
 	const tabViewport = tabs.locator('.ash-scrollbar-viewport');

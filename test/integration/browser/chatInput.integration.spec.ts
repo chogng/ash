@@ -771,11 +771,24 @@ test('Mode picker keeps its Tab stop and shares menu activation, placement and d
 		await page.keyboard.press('Escape');
 		await expect(mode).toBeFocused();
 	}
+	const modes: Record<string, { icon: string; color?: string; }> = {
+		Agent: { icon: 'unlimited' }, Plan: { icon: 'plan', color: '--ash-charts-orange' }, Debug: { icon: 'debug', color: '--ash-charts-red' },
+		Multitask: { icon: 'multitask', color: '--ash-charts-purple' }, Ask: { icon: 'chat-4', color: '--ash-charts-green' },
+	};
 	for (const name of ['Plan', 'Agent', 'Debug', 'Multitask', 'Ask']) {
 		await mode.press('ArrowDown');
-		await menu.getByRole('menuitemradio', { name, exact: true }).click();
+		const item = menu.getByRole('menuitemradio', { name, exact: true });
+		await expect(item.locator(`svg[data-ash-icon-id="${modes[name]!.icon}"]`)).toBeVisible();
+		await item.click();
 		await expect(menu).toBeHidden();
 		await expect(mode).toHaveText(name);
+		await expect(mode.locator(`svg[data-ash-icon-id="${modes[name]!.icon}"]`)).toBeVisible();
+		if (modes[name]!.color) {
+			expect(await mode.evaluate((button, variable) => {
+				const probe = document.createElement('span'); probe.style.color = `var(${variable})`; button.append(probe);
+				try { return getComputedStyle(button).color === getComputedStyle(probe).color; } finally { probe.remove(); }
+			}, modes[name]!.color!)).toBe(true);
+		}
 		await mode.press('ArrowDown');
 		await expect(menu.getByRole('menuitemradio', { name, exact: true })).toBeFocused();
 		await expect(menu.getByRole('menuitemradio').and(menu.locator('[aria-checked="true"]'))).toHaveCount(1);

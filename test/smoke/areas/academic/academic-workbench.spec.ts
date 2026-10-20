@@ -38,16 +38,3 @@ test('disconnected browser preserves and saves Academic source beside code', { t
 	await group.tabs.filter({ hasText: 'paper.ash-academic' }).click();
 	await group.editor.waitForEditorContents(contents => contents.startsWith(paper));
 });
-
-for (const retiredMode of ['academic', 'unregistered']) {
-	test(`browser opens the fixed Workbench and Sessions from a ${retiredMode} mode link`, { tag: ['@browser-ui', '@browser-app-server'] }, async ({ target, workbench }) => {
-		const url = new URL(workbench.page.url());
-		url.searchParams.set('ash-workbench-mode', retiredMode);
-		await workbench.page.goto(url.href);
-		await workbench.waitForReady();
-		await expect(workbench.page).toHaveTitle(/Ash Code/u);
-		const sessions = await workbench.openAgentsWindow('browser');
-		expect(new URL(sessions.url()).pathname).toMatch(/sessions\/sessions\.html$/u);
-		await expect(sessions.locator('.ash-sessions-window')).toBeVisible();
-	});
-}

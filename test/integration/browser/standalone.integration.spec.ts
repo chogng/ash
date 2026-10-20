@@ -29,6 +29,15 @@ test('editor auto scrollbars hide while text retains focus and reveal on hover o
 	await expect(track).toHaveCSS('outline-style', 'solid');
 	await track.press('ArrowDown');
 	await expect(track).toBeFocused();
+	await track.press('End');
+	await expect.poll(() => track.evaluate(element => element.getAttribute('aria-valuenow') === element.getAttribute('aria-valuemax'))).toBe(true);
+	await track.press('Home');
+	await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readScrollGeometry().logicalTop)).toBe(0);
+	await editor.hover();
+	await page.mouse.wheel(0, 180);
+	await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readScrollGeometry().logicalTop)).toBeGreaterThan(0);
+	await page.mouse.move(900, 600);
+	await page.clock.runFor(800);
 	await input.focus();
 	await expect(track).toHaveCSS('opacity', '0');
 	await editor.hover();

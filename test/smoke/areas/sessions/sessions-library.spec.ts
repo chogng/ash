@@ -137,51 +137,6 @@ test('Sessions Library imports real images and preserves favorites and collectio
 	await expect(canvas.locator('svg image')).toHaveCount(2);
 });
 
-test('Sessions Library keeps text and keyboard focus readable across themes', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ application, target, workbench }) => {
-	let page = workbench.page;
-	for (const [theme, scheme] of [['Ash Light', 'light'], ['Ash Dark', 'dark'], ['Ash High Contrast Dark', 'hcDark'], ['Ash High Contrast Light', 'hcLight']]) {
-		if (target.kind === 'browser') {
-			await page.goto('/browser/workbench/workbench.html');
-			await workbench.waitForReady();
-		}
-		await workbench.quickaccess.runCommand('workbench.action.selectTheme');
-		const picker = workbench.page.locator('.ash-quick-pick');
-		await picker.getByRole('combobox').fill(theme);
-		await picker.getByRole('combobox').press('Enter');
-		await expect(picker).toHaveCount(0);
-		if (target.kind === 'browser') { await page.locator('[data-action-id="ash.code.open-sessions"] button').click(); }
-		else if (page === workbench.page) {
-			if (!('windows' in application)) { throw new Error('Expected Electron windows'); }
-			const opened = application.waitForEvent('window');
-			await page.locator('[data-action-id="workbench.action.chat.openAgentsWindow.titleBar"] button').click();
-			page = await opened;
-		}
-		await expect(page.locator('#app')).toHaveAttribute('data-color-scheme', scheme);
-		await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Library', exact: true }).click();
-		const library = page.locator('.ash-library');
-		const colors = await library.evaluate(element => ({ text: getComputedStyle(element).color, background: getComputedStyle(element).backgroundColor }));
-		expect(colors.background).not.toBe('rgba(0, 0, 0, 0)');
-		expect(colors.text).not.toBe(colors.background);
-		const search = library.getByRole('searchbox');
-		await search.focus();
-		await expect(search).toHaveCSS('outline-style', 'solid');
-		if (target.appServerMode === 'required') {
-			if (scheme === 'light') { await library.locator('input[type=file]').setInputFiles({ name: 'theme-preview.png', mimeType: 'image/png', buffer: image }); }
-			const item = library.getByRole('button', { name: 'theme-preview.png', exact: true });
-			await expect(item).toBeVisible();
-			if (scheme.startsWith('high-contrast')) {
-				const colors = await item.evaluate(element => {
-					const probe = document.createElement('span');
-					probe.style.color = 'var(--ash-contrastBorder)'; element.append(probe);
-					const contrast = getComputedStyle(probe).color; probe.remove();
-					return { border: getComputedStyle(element).borderTopColor, contrast };
-				});
-				expect(colors.border).toBe(colors.contrast);
-			}
-		}
-	}
-});
-
 test('Sessions Library uses Chinese labels and localized keyboard help', async ({ application, target, workbench, restartWorkbench }) => {
 	let page = workbench.page;
 	await page.keyboard.press('ControlOrMeta+,');

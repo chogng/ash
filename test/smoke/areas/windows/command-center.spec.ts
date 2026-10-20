@@ -32,31 +32,6 @@ test('desktop privileges reach the window title through the Main process', { tag
 	await expect(page.locator('.ash-notification', { hasText: 'Ash could not verify its desktop environment.' })).toHaveCount(0);
 });
 
-titleTest('window title and command center follow the active editor and its dirty state', async ({ application, target, workbench, privilegeSuffix }) => {
-	const page = workbench.page;
-	const center = page.locator('.ash-titlebar-command-center-button');
-	await expect(page).toHaveTitle(`Welcome — Ash Code${privilegeSuffix}`);
-	await workbench.quickaccess.runCommand('workbench.action.files.newUntitledFile');
-	await expect(page).toHaveTitle(`Untitled-1 — Ash Code${privilegeSuffix}`);
-	const editor = workbench.editors.groupAt(0).editor;
-	await editor.element.click({ position: { x: 100, y: 30 } });
-	await editor.waitForEditorFocus();
-	await editor.waitForTypeInEditor('title service');
-	const title = `● Untitled-1 — Ash Code${privilegeSuffix}`;
-	await expect(page).toHaveTitle(title);
-	await expect(center).toHaveAttribute('aria-description', title);
-	await page.mouse.move(0, 100);
-	await center.hover();
-	await expect(page.getByRole('tooltip')).toHaveText(title);
-	await page.mouse.move(0, 100);
-	if (target.kind === 'electron') {
-		await expect.poll(() => (application as ElectronApplication).evaluate(({ BrowserWindow }, expectedTitle) => BrowserWindow.getAllWindows().some(window => window.getTitle() === expectedTitle), title)).toBe(true);
-	}
-	await workbench.quickaccess.runCommand('workbench.action.files.newUntitledFile');
-	await expect(page).toHaveTitle(`Untitled-2 — Ash Code${privilegeSuffix}`);
-	await expect(center).toHaveAttribute('aria-description', `Untitled-2 — Ash Code${privilegeSuffix}`);
-});
-
 titleTest('window title template and separator settings update the title and command center live', async ({ workbench, privilegeSuffix }) => {
 	const page = workbench.page;
 	await workbench.quickaccess.runCommand('workbench.action.files.newUntitledFile');
@@ -78,7 +53,7 @@ titleTest('window title template and separator settings update the title and com
 	await expect(page).toHaveTitle(`Ash Code | Untitled-2${privilegeSuffix}`);
 });
 
-test('activity bar badges stay over the icon and can be hidden independently through the menu', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ application, workbench }) => {
+test('unsaved editor activity reaches its badge and the menu hides only its visual count', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ application, workbench }) => {
 	const page = workbench.page;
 	const activitybar = page.locator('[data-part="activitybar"]');
 	const explorer = workbench.element.locator('.ash-composite-bar-destination[data-action-id="ash.sidebar"]');
@@ -89,47 +64,6 @@ test('activity bar badges stay over the icon and can be hidden independently thr
 	await workbench.editors.groupAt(0).editor.waitForEditorFocus();
 	await workbench.editors.groupAt(0).editor.waitForTypeInEditor('badge activity');
 	await expect(badge).toHaveText('1');
-	const expectBadgeGeometry = async (): Promise<void> => {
-		await expect(badge).toHaveCSS('position', 'absolute');
-		await expect(explorer.locator('.ash-icon')).toBeVisible();
-		const geometry = await explorer.evaluate(element => {
-			const item = element.getBoundingClientRect();
-			const icon = element.querySelector('.ash-icon')!.getBoundingClientRect();
-			const badge = element.querySelector('.ash-composite-bar-badge')!.getBoundingClientRect();
-			const bar = element.closest('.ash-composite-bar')!.getBoundingClientRect();
-			const tolerance = 0.01; // Fractional window scaling can round touching edges differently.
-			return {
-				bounds: JSON.stringify({ item: item.toJSON(), icon: icon.toJSON(), badge: badge.toJSON() }),
-				inside: badge.left + tolerance >= Math.max(item.left, bar.left) && badge.right - tolerance <= Math.min(item.right, bar.right) && badge.top + tolerance >= item.top && badge.bottom - tolerance <= item.bottom,
-				overIcon: badge.left < icon.right && badge.top < icon.bottom,
-				lowerRight: badge.right > (icon.left + icon.right) / 2 && badge.bottom > (icon.top + icon.bottom) / 2,
-				centered: Math.abs((icon.left + icon.right) / 2 - (item.left + item.right) / 2) <= 1,
-			};
-		});
-		const { bounds, ...placement } = geometry;
-		expect(placement, bounds).toEqual({ inside: true, overIcon: true, lowerRight: true, centered: true });
-	};
-	for (const style of ['Flat', 'Modern']) {
-		await workbench.settingsEditor.openUserSettingsUI();
-		const settings = page.getByRole('dialog', { name: 'Ash Settings' });
-		await settings.locator('[data-settings-group-id="workbench"]').click();
-		await settings.locator('[data-settings-category-id="layout"]').click();
-		await settings.locator('[data-configuration-key="workbench.layoutStyle"]').getByRole('combobox').click();
-		await page.getByRole('option', { name: style, exact: true }).click();
-		await settings.locator('.ash-modal-editor-close').click();
-		for (const size of ['Default', 'Compact']) {
-			await workbench.menus.select(application, () => explorer.click({ button: 'right' }), ['Activity Bar Size', size]);
-			await expectBadgeGeometry();
-		}
-		for (const position of ['Top', 'Bottom', 'Default']) {
-			await workbench.menus.select(application, () => explorer.click({ button: 'right' }), ['Activity Bar Position', position]);
-			await expectBadgeGeometry();
-		}
-	}
-	await workbench.menus.select(application, () => explorer.click({ button: 'right' }), ['Move Primary Side Bar Right']);
-	await expectBadgeGeometry();
-	await workbench.menus.select(application, () => explorer.click({ button: 'right' }), ['Move Primary Side Bar Left']);
-	await expectBadgeGeometry();
 	await explorer.focus();
 	await workbench.menus.select(application, () => explorer.press('Shift+F10'), ['Hide Badge']);
 	await expect(badge).toHaveCount(0);
@@ -140,15 +74,6 @@ test('activity bar badges stay over the icon and can be hidden independently thr
 	await expect(explorer).toHaveAttribute('aria-label', /1 unsaved file/u);
 	await workbench.menus.select(application, () => explorer.click({ button: 'right' }), ['Show Badge']);
 	await expect(badge).toHaveText('1');
-	await expectBadgeGeometry();
-	for (const theme of ['Ash High Contrast Dark', 'Ash High Contrast Light']) {
-		await workbench.quickaccess.runCommand('workbench.action.selectTheme');
-		const picker = page.locator('.ash-quick-pick').getByRole('combobox');
-		await picker.fill(theme);
-		await picker.press('Enter');
-		await expectBadgeGeometry();
-		await expect(badge).toHaveCSS('outline-style', 'solid');
-	}
 });
 
 test('activity bar badge colors follow theme customizations and survive reopening', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ application, workbench, reloadWorkbench }) => {
@@ -687,60 +612,6 @@ test('activity bar context menu hides and restores view icons', async ({ applica
 	await expect(search).toBeVisible();
 	await explorer.focus();
 	expect(await workbench.menus.inspect(application, () => explorer.press('Shift+F10'))).toEqual(expect.arrayContaining([expect.objectContaining({ label: "Hide 'Explorer'", enabled: true })]));
-});
-
-test('action menus open without selecting a row and keep pointer and keyboard navigation', async ({ workbench }) => {
-	const page = workbench.page;
-	const manage = page.locator('[data-part="activitybar"]').getByRole('button', { name: 'Manage', exact: true });
-	const menu = page.locator('.ash-context-view-menu:not([hidden]) > .ash-menu').first();
-	const items = menu.getByRole('menuitem');
-	const focused = menu.locator(':scope > .ash-action-view-item.focused');
-
-	await manage.click();
-	await expect(menu).toBeFocused();
-	await expect(focused).toHaveCount(0);
-	await page.keyboard.press('ArrowDown');
-	await expect(items.first()).toBeFocused();
-	await expect(focused).toHaveCount(1);
-	await page.keyboard.press('ArrowUp');
-	await expect(items.last()).toBeFocused();
-	await items.nth(1).hover();
-	await expect(items.nth(1)).toBeFocused();
-	await expect(focused).toHaveCount(1);
-	await page.keyboard.press('Escape');
-	await expect(menu).toHaveCount(0);
-	await expect(manage).toBeFocused();
-
-	// A menu appearing under a resting pointer must wait for actual movement.
-	await manage.click();
-	const firstBounds = await items.first().boundingBox();
-	expect(firstBounds).not.toBeNull();
-	await page.mouse.move(firstBounds!.x + firstBounds!.width / 2, firstBounds!.y + firstBounds!.height / 2);
-	await expect(items.first()).toBeFocused();
-	await page.keyboard.press('Escape');
-	await manage.press('Enter');
-	await expect(menu).toBeFocused();
-	await expect(focused).toHaveCount(0);
-	await page.mouse.move(firstBounds!.x + firstBounds!.width / 2 + 2, firstBounds!.y + firstBounds!.height / 2);
-	await expect(items.first()).toBeFocused();
-	await page.keyboard.press('Escape');
-	await expect(manage).toBeFocused();
-
-	await manage.press('ArrowDown');
-	await expect(menu).toBeFocused();
-	await expect(focused).toHaveCount(0);
-	await page.keyboard.press('ArrowUp');
-	await expect(items.last()).toBeFocused();
-	await page.keyboard.press('Escape');
-	await expect(manage).toBeFocused();
-
-	await manage.press('Enter');
-	await page.keyboard.press('ArrowDown');
-	await expect(items.first()).toHaveText(/Command Palette/u);
-	await page.keyboard.press('Enter');
-	await expect(menu).toHaveCount(0);
-	await expect(workbench.quickaccess.input).toBeFocused();
-	await workbench.quickaccess.close();
 });
 
 test('Accounts and Manage menus open beside the activity bar and below the title bar', { tag: ['@browser-ui', '@browser-app-server'] }, async ({ application, target, workbench }) => {

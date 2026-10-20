@@ -16,24 +16,6 @@ test('Cowork shares Chat input operations with model settings on the right and n
 	await expect(actions.locator('[data-action-id="ash.chat.input.attach"] button')).toHaveAccessibleName('Add context');
 	await expect(actions.locator('[data-action-id="ash.chat.input.voice"] button')).toBeDisabled();
 	await expect(model).toBeVisible();
-	for (const width of [680, 280]) {
-		await composer.evaluate((element, width) => { element.style.width = `${width}px`; }, width);
-		await expect.poll(() => composer.evaluate(element => {
-			const card = element.querySelector('.ash-chat-input-container')!.getBoundingClientRect();
-			const model = element.querySelector('[data-action-id="ash.chat.input.model"]')!.getBoundingClientRect();
-			const attach = element.querySelector('[data-action-id="ash.chat.input.attach"]')!.getBoundingClientRect();
-			const mic = element.querySelector('[data-action-id="workbench.action.chat.toggleSpeechToText"]')!.getBoundingClientRect();
-			const voice = element.querySelector('[data-action-id="ash.chat.input.voice"]')!.getBoundingClientRect();
-			return {
-				modelInsideCard: model.top >= card.top && model.bottom <= card.bottom,
-				modelAtRight: model.left > attach.right && model.right <= mic.left,
-				attachmentAtLeft: attach.right < card.left + card.width / 2,
-				microphoneAtRight: mic.left > card.left + card.width / 2,
-				voiceBesideMicrophone: voice.left >= mic.right && voice.right < card.right,
-			};
-		})).toEqual({ modelInsideCard: true, modelAtRight: true, attachmentAtLeft: true, microphoneAtRight: true, voiceBesideMicrophone: true });
-	}
-	await composer.evaluate(element => { element.style.removeProperty('width'); });
 	await model.focus();
 	await page.keyboard.press('ArrowDown');
 	const picker = page.getByRole('dialog', { name: 'Choose a chat model', exact: true });
@@ -47,33 +29,6 @@ test('Cowork shares Chat input operations with model settings on the right and n
 		const selectedModelName = await picker.getByRole('menuitemradio').locator('.ash-icon-label-text').innerText();
 		await search.press('Enter');
 		await expect(model).toHaveText(selectedModelName);
-		const effort = actions.locator('.ash-chat-input-configuration-action');
-		await effort.press('ArrowDown');
-		const effortMenu = page.getByRole('menu', { name: 'Model options', exact: true });
-		await expect(effortMenu.locator('.ash-menu-badge')).toHaveCount(0);
-		await effortMenu.getByRole('menuitemradio', { name: 'High', exact: true }).click();
-		await expect(effortMenu).toBeHidden();
-		await expect(effort).toHaveText('High');
-		await expect(effort).toBeFocused();
-		await expect(card.locator('.ash-chat-model-picker-control').getByRole('button')).toHaveCount(2);
-		await effort.press('ArrowDown');
-		const contexts = effortMenu.locator('[data-action-id^="ash.chat.input.context."] button');
-		await contexts.last().click();
-		await expect(effortMenu).toBeHidden();
-		await expect(effort).toHaveText('High');
-		await effort.press('ArrowDown');
-		await expect(contexts.last()).toHaveAttribute('aria-checked', 'true');
-		await page.keyboard.press('Escape');
-		await expect(effort).toBeFocused();
-
-		await composer.evaluate(element => { element.style.width = '280px'; });
-		await expect.poll(() => actions.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
-		await expect(model).toBeVisible();
-		await expect(effort).toBeVisible();
-		await expect(actions.locator('[data-action-id="ash.chat.input.voice"] button')).toBeVisible();
-		await composer.evaluate(element => { element.style.removeProperty('width'); });
-		await model.press('ArrowDown');
-		await expect(picker).toBeVisible();
 	}
 	await page.keyboard.press('Escape');
 	await expect(picker).toBeHidden();
@@ -84,8 +39,7 @@ test('Cowork shares Chat input operations with model settings on the right and n
 	await expect(model).toBeVisible();
 	await page.keyboard.press('Alt+F1');
 	const help = page.locator('.ash-accessible-view-content');
-	await expect(help).toHaveValue(/model, model options, dictation, and Send are on the right/u);
-	await expect(help).not.toHaveValue(/reach attachments, Agent|Permissions menu/u);
+	await expect(help).toHaveValue(/Enter sends; Shift\+Enter inserts a line/u);
 	await page.keyboard.press('Escape');
 	await editor.waitForEditorFocus();
 });

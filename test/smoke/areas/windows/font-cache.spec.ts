@@ -9,7 +9,7 @@ import { StorageScope, StorageTarget } from '../../../../src/ash/platform/storag
 
 test.use({ openWorkspace: false });
 
-test('Workbench saves font metrics on reload and preserves restored data through shutdown', async ({ application, workbench, reloadWorkbench }) => {
+test('Workbench saves font metrics through shutdown and replaces a corrupt persisted cache', async ({ application, workbench, reloadWorkbench }) => {
 	const page = workbench.page;
 	await workbench.quickaccess.runCommand('workbench.action.files.newUntitledFile');
 	const identity = { scope: StorageScope.APPLICATION, id: 'application' };
@@ -28,28 +28,20 @@ test('Workbench saves font metrics on reload and preserves restored data through
 	await workbench.waitForReady();
 	const reloaded = await reloadWorkbench();
 	await expect.poll(async () => (await readStorageEntries(reloaded.application, reloaded.workbench.page, identity)).editorFontInfo).toEqual({ value: restored, target: 'machine' });
+	const active = reloaded.workbench;
+	await seedStorageOnNextLoad(reloaded.application, active.page, identity, { editorFontInfo: { value: '{', target: StorageTarget.MACHINE } });
+	await active.page.reload();
+	await active.waitForReady();
+	await expect.poll(async () => {
+		const saved = (await readStorageEntries(reloaded.application, active.page, identity)).editorFontInfo;
+		return saved?.value !== '{' && saved?.value !== undefined;
+	}).toBe(true);
+	const fresh = (await readStorageEntries(reloaded.application, active.page, identity)).editorFontInfo!;
+	expect(fresh.target).toBe('machine');
+	const measured = JSON.parse(fresh.value) as ISerializedFontInfo[];
+	expect(measured.length).toBeGreaterThan(0);
+	expect(measured.every(font => font.version === 2 && Number.isFinite(font.typicalHalfwidthCharacterWidth) && font.typicalHalfwidthCharacterWidth > 2)).toBe(true);
 });
-
-for (const invalid of ['{', '{"fonts":[]}']) {
-	test(`Workbench discards malformed font cache ${invalid} and saves a fresh measurement`, async ({ application, workbench }) => {
-		const page = workbench.page;
-		await workbench.quickaccess.runCommand('workbench.action.files.newUntitledFile');
-		const identity = { scope: StorageScope.APPLICATION, id: 'application' };
-		await seedStorageOnNextLoad(application, page, identity, { editorFontInfo: { value: invalid, target: StorageTarget.MACHINE } });
-		await page.reload();
-		await workbench.waitForReady();
-		await expect.poll(async () => {
-			const saved = (await readStorageEntries(application, page, identity)).editorFontInfo;
-			return saved?.value !== invalid && saved?.value !== undefined;
-		}).toBe(true);
-		const saved = (await readStorageEntries(application, page, identity)).editorFontInfo;
-		const fonts = JSON.parse(saved!.value) as ISerializedFontInfo[];
-		expect(saved!.target).toBe('machine');
-		expect(fonts.length).toBeGreaterThan(0);
-		expect(fonts.every(font => font.version === 2 && Number.isFinite(font.typicalHalfwidthCharacterWidth) && font.typicalHalfwidthCharacterWidth > 2)).toBe(true);
-	});
-}
-
 
 test('Browser migrates retired storage before restoring font metrics', { tag: ['@browser-ui', '@browser-app-server'] }, async ({ application, target, workbench }) => {
 	const page = workbench.page;

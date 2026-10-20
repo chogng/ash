@@ -470,7 +470,10 @@ wire bytes 上限不是 RSS／JS heap 上限，UTF-16 字符串、Worker 输入�
 
 ### 9.3 真实 Chromium 前后对比
 
-新增 `appServerDecode.integration.spec.ts` 与专用构建页面。两种方案经过相同生产
+2026-10-17 新增的 `appServerDecode.integration.spec.ts` 与专用构建页面曾包含下述性能对照。
+2026-10-20 测试收敛后移除诊断采样与同步基线，只保留真实 Worker 的完整结果、浏览器任务让出、
+通知顺序和 EOF 排空回归；下述数字属于历史测量，当前 spec 不再重新采集这些性能样本。
+当时两种方案经过相同生产
 `AppServerProtocolClient`、真实生成 schema 与 response 分发；优化前方案注入同步 decoder，
 等价复现 `c77786dee` 的 JSON.parse＋对应 schema 操作，优化后使用真正的 Web Worker。
 旧协议／transport 源码备份保留在本机 investigation 的 `baseline/`。
@@ -504,7 +507,7 @@ TaskDuration 也包含准备与验证的主线程工作，不等于表内派发�
 
 样本与日志：`.build/investigations/app-server-decode-p1-2026-10-17/`，包括
 `comparison-results.json`、`comparison-summary.json`、`verification.json`、源码备份、检查及失败修复日志。
-重现入口：
+当前功能回归入口（不复现历史性能采样）：
 
 ```sh
 pnpm test:browser:integration appServerDecode.integration.spec.ts --project=chromium
@@ -644,7 +647,11 @@ own-property 与 closed record 契约，并复测生产 Worker 及协议客户�
 [Ajv standalone](https://ajv.js.org/standalone.html) 提供构建时生成校验函数的后续候选。
 这些资料支撑方案选择，未把外部 benchmark 的倍数套用到 Ash。
 
-## 11. Protobuf 原型与优化后 JSON 的同数据对比
+## 11. Protobuf 原型与优化后 JSON 的同数据对比（历史实验，已退役）
+
+本节保留 2026-10-17 的实验方法、数据和结论。2026-10-20 测试收敛时删除了原型及其测试专用
+codec、Worker、生成器和构建入口，并移除 Protobuf 开发依赖。原型从未成为产品协议；现有生产
+JSON decoder、协议单元测试与真实 Worker 组件回归继续保留。本节原型文件路径均为历史记录。
 
 ### 11.1 原型范围与不变的协议 owner
 
@@ -652,7 +659,7 @@ own-property 与 closed record 契约，并复测生产 Worker 及协议客户�
 提交门禁执行后被范围外 13 个未暂存 TypeScript 文件的格式问题阻断；4 个提交文件的定向格式、
 working-tree／staged whitespace 检查和第 10 节测试通过，按仓库本地提交流程完成。
 
-本原型只进入 `test/integration/browser/protobufPrototype/` 与专用浏览器 fixture，未切换产品 wire
+该原型当时只进入 `test/integration/browser/protobufPrototype/` 与专用浏览器 fixture，未切换产品 wire
 协议，未增加实验 method、版本协商或 gRPC。Main relay、JSON 行 framing、Electron IPC、后端及
 生产 Worker 默认实现保持原路径。唯一生产代码整理是把 `decodeAppServerFrame` 的 JSON.parse
 之后部分提取为 `decodeAppServerMessage`，由原函数及原型复用。请求路由、pending 生命周期、
@@ -663,8 +670,8 @@ working-tree／staged whitespace 检查和第 10 节测试通过，按仓库本�
 token 不做 base64、不 stringify 已解码的 Protobuf 结果，也不向生产 transport 暴露新入口。
 消费或连接退休时释放输入记录，没有创建第二份业务 pending map。
 
-使用 **protobufjs 8.8.1／protobufjs-cli 2.7.1**，均为 devDependencies。`model.ts` 是测试 wire
-模型的唯一输入，由现有 browser Vite buildStart 生成 `.build/protobuf-prototype/wire.proto` 和 fixture
+实验当时使用 **protobufjs 8.8.1／protobufjs-cli 2.7.1** 开发依赖，两者现已移除。`model.ts` 曾是测试 wire
+模型的唯一输入，由当时的 browser Vite buildStart 生成 `.build/protobuf-prototype/wire.proto` 和 fixture
 目录下 ignored 的 `codec.js`；`codec.d.ts` 声明实际生成 runtime 的接口。静态代码生成在构建阶段执行，
 Worker 不解析 `.proto` 或运行动态代码生成。两种 codec 使用同一个 Worker bundle；冷启动数字
 不能当作分别打包后的产品加载成本。
@@ -791,13 +798,9 @@ JSON 路径已经很短；长正文不因字段编号编码而消失；数值数
 虽通过，但 runner 清理阶段的系统 ps 查询超时，按失败保留日志；随后使用仓库 Node runner
 重新完成构建、7 项测试及正常退出。没有修改系统安全设置或用户应用进程。
 
-复现入口：
-
-```sh
-pnpm test:browser:integration appServerCodec.integration.spec.ts appServerDecode.integration.spec.ts --project=chromium
-# 复用已生成的协议／资源时，仍执行完整 integration typecheck：
-pnpm test:browser:integration:prepared appServerCodec.integration.spec.ts appServerDecode.integration.spec.ts --project=chromium
-```
+原型的 `appServerCodec.integration.spec.ts` 已删除，当前 checkout 不再提供该对比的执行入口。
+复现历史采样需要检出退役前版本，并使用该版本的原型依赖与 fixture；当前功能验证运行第 9 节的
+真实 Worker 回归，不能据其结果宣称重测了下述历史性能对比。
 
 原始样本、首次使用数据、各次失败和最终报告保存在
 `.build/investigations/app-server-protobuf-p1-2026-10-17/`：`final-app-server-codec-comparison.json`、

@@ -119,6 +119,32 @@ test('Sessions navigation icons and surface controls follow the selected compone
 	await expect(page.locator('.ash-sessions-surface-header')).toHaveCount(0);
 	await expect(chat).toHaveCSS('background-color', 'rgb(240, 240, 240)');
 	await expect(page.locator('.ash-sessions-list-item.selected').first()).toHaveCSS('background-color', 'rgb(240, 240, 240)');
+	for (const theme of ['ash-light', 'ash-dark', 'ash-high-contrast-dark', 'ash-high-contrast-light']) {
+		await page.evaluate(theme => window.ashSessionsIntegration.setTheme(theme), theme);
+		await chat.click();
+		await page.mouse.move(400, 180);
+		const background = await chat.evaluate(button => getComputedStyle(button).backgroundColor);
+		await chat.hover();
+		await expect(chat).toHaveCSS('background-color', background);
+		await library.hover();
+		await expect(library).not.toHaveAttribute('aria-current');
+		await chat.focus();
+		await chat.press('ArrowDown');
+		await expect(chat).not.toBeFocused();
+		await expect(chat).toHaveAttribute('aria-current', 'page');
+		if (theme.includes('high-contrast')) {
+			await expect(chat).toHaveCSS('outline-style', 'solid');
+			await expect(library).toHaveCSS('outline-style', 'solid');
+			await expect(activityNavigation.locator('button:focus')).toHaveCSS('outline-style', 'solid');
+		}
+		await library.click();
+		const surface = page.locator('.ash-library');
+		await expect(surface).toBeVisible();
+		await expect(surface).not.toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+		expect(await surface.evaluate(element => getComputedStyle(element).color !== getComputedStyle(element).backgroundColor)).toBe(true);
+		await surface.getByRole('searchbox').focus();
+		await expect(surface.getByRole('searchbox')).toHaveCSS('outline-style', 'solid');
+	}
 });
 
 test('Sessions can directly dispose and recreate a restored window without capturing released editor grids', async ({ page }) => {

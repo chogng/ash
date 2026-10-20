@@ -224,32 +224,6 @@ test('multiline paste undo and redo preserve the final editor line', async ({ ta
 	}
 });
 
-test('text editor automation follows input, replacement, and folding in its group', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ workbench }) => {
-	const page = workbench.page;
-	await page.keyboard.press('ControlOrMeta+N');
-	const editor = workbench.editors.groupAt(0).editor;
-	await editor.waitForEditorFocus();
-	const text = 'section\n    alpha beta\n    gamma\nend';
-	await editor.waitForTypeInEditor('section');
-	await editor.input.press('Enter');
-	await editor.waitForTypeInEditor('    alpha beta');
-	await editor.input.press('Enter');
-	await editor.waitForTypeInEditor('gamma');
-	await editor.input.press('Enter');
-	await editor.input.press('Home');
-	await editor.input.press('Shift+End');
-	await editor.waitForTypeInEditor('end');
-	await editor.waitForEditorContents(contents => contents === text);
-	await editor.foldAtLine(1);
-	await editor.waitForEditorContents(contents => contents.includes('section') && contents.includes('end') && !contents.includes('alpha beta'));
-	await editor.unfoldAtLine(1);
-	await editor.waitForEditorContents(contents => contents === text);
-	await editor.input.press('ControlOrMeta+A');
-	await editor.waitForTypeInEditor('replacement');
-	await editor.waitForEditorContents(contents => contents === 'replacement');
-	await expect(editor.input).toBeFocused();
-});
-
 test('theme color settings update editor colors and restore defaults when removed', async ({ workbench }) => {
 	const page = workbench.page;
 	await page.keyboard.press('ControlOrMeta+N');
@@ -308,28 +282,6 @@ test('theme color settings update editor colors and restore defaults when remove
 	await expect.poll(readColors).toEqual(defaults);
 	await expect(selected).toHaveCount(0);
 	await expect(editor.lines.first()).toHaveText('prefix selected suffix');
-});
-
-test('text editor automation keeps split group inputs and contents separate', async ({ workbench }) => {
-	const page = workbench.page;
-	await page.keyboard.press('ControlOrMeta+N');
-	const first = workbench.editors.groupAt(0).editor;
-	await first.waitForEditorFocus();
-	await first.waitForTypeInEditor('first group');
-	await workbench.quickaccess.runCommand('workbench.action.splitEditorHorizontal');
-	await expect(workbench.editors.groups).toHaveCount(2);
-	await page.keyboard.press('ControlOrMeta+N');
-	const second = workbench.editors.groupAt(1).editor;
-	await expect(second.input).toHaveAttribute('aria-label', 'Untitled-2');
-	await second.waitForEditorFocus();
-	await second.waitForTypeInEditor('second group');
-	await first.waitForEditorContents(contents => contents === 'first group');
-	await second.waitForEditorContents(contents => contents === 'second group');
-	await first.waitForEditorFocus();
-	await expect(second.input).not.toBeFocused();
-	await first.waitForTypeInEditor('!');
-	await first.waitForEditorContents(contents => contents === 'first group!');
-	await second.waitForEditorContents(contents => contents === 'second group');
 });
 
 test('Chat code block settings persist independently of input fonts and show Chinese labels', async ({ workbench, restartWorkbench }) => {

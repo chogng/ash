@@ -129,18 +129,26 @@ test('Chat Debug shows backend coverage and keeps capture metrics stable across 
 	const viewer = page.locator('.ash-agent-trace');
 	const ledger = (invocationId: string, usage: unknown, outcome: string) => ({ type: 'modelInvocationRecorded', record: { invocationId, outcome, usage } });
 	const first = ledger('first', { inputTokens: 100, outputTokens: 20, cachedInputTokens: 80 }, 'completed');
+	const decisions = [
+		{ action: 'executeTools', reason: 'toolRequests', stopReason: { type: 'toolUse' }, messagePhases: ['final_answer'], toolCallCount: 1 },
+		{ action: 'continue', reason: 'nonterminalMessage', stopReason: { type: 'completed' }, messagePhases: ['partial_answer'], toolCallCount: 0 },
+		{ action: 'complete', reason: 'compatibleCompletion', stopReason: { type: 'completed' }, messagePhases: [null], toolCallCount: 0 },
+		{ action: 'fail', reason: 'truncatedOutput', stopReason: { type: 'maxOutputTokens' }, messagePhases: ['partial_answer'], toolCallCount: 0 },
+		{ action: 'superseded', reason: 'newInput', stopReason: { type: 'completed' }, messagePhases: ['final_answer'], toolCallCount: 0 },
+	];
 	const events = [
 		{ type: 'threadCreated', title: 'Coverage fixture' }, first, first,
 		ledger('second', { inputTokens: null, outputTokens: 0, cachedInputTokens: null }, 'failed'),
 		{ type: 'itemCompleted', item: { type: 'toolCall', toolCallId: 'call', name: 'shell-command' } },
 		{ type: 'itemCompleted', item: { type: 'toolResult', toolCallId: 'call', text: 'private output', isError: true } },
 		{ type: 'turnFailed', error: { message: 'Failed Turn' } },
+		...decisions.map(decision => ({ type: 'modelResponseEvaluated', sourceThreadSequence: 0, decision })),
 	].map((event, index) => ({ eventId: `coverage-${index}`, sequence: index + 1, recordedAt: Date.UTC(2026, 9, 18, 12) + index, event: { ...event, threadId: 'root', turnId: event.type === 'threadCreated' ? undefined : 't' } }));
 	const metric = (reported: string | null, reportedCalls: number, missingCalls: number) => ({ reported, reportedCalls, missingCalls });
 	const artifact = {
 		formatVersion: 3, sessionId: 'coverage', historyPrefixes: [], threads: [{ threadId: 'root', events }],
 		overview: {
-			formatVersion: 1, threadCursors: { root: 7 }, eventCount: 7, modelCalls: 2, toolCalls: 1, failedModelCalls: 1, cancelledModelCalls: 0, excludedModelCalls: 0,
+			formatVersion: 1, threadCursors: { root: 12 }, eventCount: 12, modelCalls: 2, toolCalls: 1, failedModelCalls: 1, cancelledModelCalls: 0, excludedModelCalls: 0,
 			inputTokens: metric('100', 1, 1), outputTokens: metric('20', 2, 0), cachedInputTokens: metric('80', 1, 1), totalTokens: metric('120', 1, 1)
 		},
 		diagnostics: { formatVersion: 2, captureId: null, recordingStatus: 'incomplete', droppedRecords: 2, pendingRecords: 1, events: [] },
@@ -167,7 +175,12 @@ test('Chat Debug shows backend coverage and keeps capture metrics stable across 
 	await viewer.getByRole('button', { name: 'Clear filters', exact: true }).click();
 	await expect(search).not.toHaveAttribute('aria-invalid');
 	await expect(viewer.getByRole('button', { name: 'Models', exact: true })).toHaveAttribute('aria-pressed', 'true');
-	await expect(viewer.locator('.ash-agent-trace-event')).toHaveCount(7);
+	await expect(viewer.locator('.ash-agent-trace-event')).toHaveCount(12);
+	const timeline = viewer.locator('.ash-agent-trace-tree');
+	await expect(timeline).toContainText('Execute tools · Pending tool requests · stop: Tool use · phases: Final answer');
+	await expect(timeline).toContainText('Continue generation · Nonterminal message received');
+	await expect(timeline).toContainText('Complete Turn · Completed without a known phase');
+	await expect(timeline).toContainText('Superseded by new input · New input arrived during generation');
 	await testInfo.attach('chat-debug-overview-wide', { body: await viewer.screenshot(), contentType: 'image/png' });
 	await page.evaluate(() => window.agentTraceIntegration.layout(500, 650));
 	await expect(overview).not.toHaveAttribute('open');

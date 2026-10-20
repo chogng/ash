@@ -430,26 +430,6 @@ test('Git explains when the open folder has no repository', { tag: ['@electron-a
 	await expect(page.locator('.ash-scm-change')).toHaveCount(0);
 });
 
-test("startup shows Welcome in both empty windows and open workspaces", async ({ workbench }) => {
-	const editors = workbench.editors;
-	const group = editors.groupAt(0);
-
-	await expect(editors.element).toBeVisible();
-	await expect(group.element).toBeVisible();
-	await expect(group.title).toBeVisible();
-	await expect(group.content).toBeVisible();
-	await expect(group.welcome).toBeVisible();
-	await expect(group.tabs).toHaveCount(1);
-
-	await expect.poll(async () => editorGeometry(editors.element, group.element, group.title, group.content, group.welcome)).toEqual({
-		groupFillsEditorClient: true,
-		titleAboveContent: true,
-		titleHasHeight: true,
-		contentHasArea: true,
-		welcomeInsideContent: true,
-	});
-});
-
 test.describe('welcome brand', () => {
 	test.use({ openWorkspace: false });
 

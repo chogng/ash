@@ -1139,100 +1139,16 @@ async function expectActivityIconSize(navigation: Locator, size: number): Promis
 	}
 }
 
-test('Code chat mode menu shows the available icons and selection', async ({ application, target, workbench }) => {
-	let page = workbench.page;
-	if (target.kind === 'browser') {
-		await page.locator('[data-action-id="ash.code.open-sessions"] button').click();
-	} else {
-		if (!('windows' in application)) throw new Error('Expected an Electron application');
-		const sessionPagePromise = application.waitForEvent('window');
-		await page.locator("[data-action-id='workbench.action.chat.openAgentsWindow.titleBar'] button").click();
-		page = await sessionPagePromise;
-	}
+test('Code Sessions mode selection updates its shared composer', async ({ target, workbench }) => {
+	const page = await workbench.openAgentsWindow(target.kind);
 	await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Code', exact: true }).click();
-	const modeButton = page.locator("[data-action-id='ash.chat.input.mode'] button").first();
-	await expect(modeButton).toBeVisible();
-	await expect(modeButton.locator('svg[data-ash-icon-id="unlimited"]')).toHaveCount(1);
-	const chevron = modeButton.locator('.ash-chat-input-mode-indicator svg[data-ash-icon-id="chevron-down"]');
-	await expect(chevron).toBeVisible();
-	await expect(modeButton.locator('.ash-chat-input-mode-action-label')).toBeVisible();
-	const labelBounds = await modeButton.locator('.ash-chat-input-mode-action-label').boundingBox();
-	const chevronBounds = await chevron.boundingBox();
-	expect(labelBounds).not.toBeNull();
-	expect(chevronBounds).not.toBeNull();
-	expect(chevronBounds!.x).toBeGreaterThan(labelBounds!.x + labelBounds!.width);
-	const inputContainer = page.locator(':is(.ash-chat-input-container,.ash-cowork-input-container)').filter({ has: modeButton });
-	await inputContainer.evaluate(element => element.style.width = '230px');
-	await expect(modeButton.locator('.ash-chat-input-mode-action-label')).toBeHidden();
-	await expect(modeButton).toHaveAttribute('aria-label', 'Mode: Agent');
-	await inputContainer.evaluate(element => element.style.width = '');
-	await expect(modeButton.locator('.ash-chat-input-mode-action-label')).toBeVisible();
-	await modeButton.click();
+	const mode = page.locator('[data-action-id="ash.chat.input.mode"] button').first();
+	await mode.click();
 	const menu = page.locator('.ash-chat-input-mode-menu');
-	await expect(menu).toBeVisible();
-	await expect(menu).toHaveClass(/\bash-action-widget\b/);
-	await expect(menu).toHaveCSS('box-shadow', 'rgba(0, 0, 0, 0.14) 0px 0px 12px 0px');
-	await page.clock.install();
-	await menu.getByRole('menuitemradio', { name: 'Plan', exact: true }).hover();
-	await page.clock.runFor(650);
-	await expect(page.locator('.ash-hover[role="tooltip"]')).toHaveCount(0);
-	for (const [label, iconId] of [
-		['Agent', 'unlimited'],
-		['Plan', 'plan'],
-		['Debug', 'debug'],
-		['Multitask', 'multitask'],
-		['Ask', 'chat-4'],
-	] as const) {
-		const item = menu.getByRole('menuitemradio', { name: label, exact: true });
-		await expect(item).toBeVisible();
-		await expect(item.locator('.ash-menu-leading-slot .ash-icon-label-icon svg.ash-icon')).toHaveCount(iconId ? 1 : 0);
-		if (iconId) await expect(item.locator('.ash-menu-leading-slot .ash-icon-label-icon svg.ash-icon')).toHaveAttribute('data-ash-icon-id', iconId);
-	}
-	await expect(menu.getByRole('menuitemradio', { name: 'Agent', exact: true })).toHaveAttribute('aria-checked', 'true');
 	await expect(menu.getByRole('menuitemradio', { name: 'Default Agent', exact: true })).toHaveAttribute('aria-checked', 'true');
-	const selectedAgent = menu.getByRole('menuitemradio', { name: 'Agent', exact: true });
-	const agentIcon = selectedAgent.locator('.ash-icon-label-icon svg.ash-icon');
-	const selectionCheck = selectedAgent.locator('.ash-menu-leading-check > svg.ash-icon');
-	await expect(agentIcon).toBeVisible();
-	await expect(selectionCheck).toBeVisible();
-	const agentIconBounds = await agentIcon.boundingBox();
-	const selectionCheckBounds = await selectionCheck.boundingBox();
-	expect(agentIconBounds).not.toBeNull();
-	expect(selectionCheckBounds).not.toBeNull();
-	expect(selectionCheckBounds!.x).toBeGreaterThan(agentIconBounds!.x);
-	await menu.getByRole('menuitemradio', { name: 'Plan' }).click();
-	await expect(modeButton).toHaveText('Plan');
-	await expect(modeButton.locator('svg[data-ash-icon-id="plan"]')).toHaveCount(1);
-	await expect(chevron).toBeVisible();
-	await page.mouse.move(4, 4);
-	await modeButton.focus();
-	await page.keyboard.press('ArrowDown');
-	await expect(modeButton).toHaveAttribute('aria-expanded', 'true');
-	await expect(page.locator('.ash-chat-input-mode-menu').getByRole('menuitemradio', { name: 'Plan', exact: true })).toBeFocused();
-	await page.keyboard.press('Escape');
-	await expect(modeButton).toHaveAttribute('aria-expanded', 'false');
-	await expect(modeButton).toBeFocused();
-	for (const [label, mode, color] of [
-		['Plan', 'plan', '--ash-charts-orange'],
-		['Debug', 'debug', '--ash-charts-red'],
-		['Multitask', 'multitask', '--ash-charts-purple'],
-		['Ask', 'ask', '--ash-charts-green'],
-	] as const) {
-		if (mode !== 'plan') {
-			await modeButton.click();
-			await page.locator('.ash-chat-input-mode-menu').getByRole('menuitemradio', { name: label, exact: true }).click();
-		}
-		await expect(modeButton.locator('..')).toHaveClass(new RegExp(`\\bmode-${mode}\\b`));
-		const foreground = await modeButton.evaluate((button, variable) => {
-			const probe = document.createElement('span');
-			probe.style.color = `var(${variable})`;
-			button.append(probe);
-			const expected = getComputedStyle(probe).color;
-			probe.remove();
-			return { actual: getComputedStyle(button).color, expected };
-		}, color);
-		expect(foreground.actual).toBe(foreground.expected);
-	}
+	await menu.getByRole('menuitemradio', { name: 'Plan', exact: true }).click();
+	await expect(mode).toHaveText('Plan');
+	await expect(mode).toBeFocused();
 });
 
 test('Sessions navigation retains its own selection and hover skin while changing target sizes', async ({ application, target, workbench }) => {

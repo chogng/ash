@@ -1,5 +1,3 @@
-import { registerTestCodeEditorFeatures } from '../../../../../../../test/fixtures/codeEditorFeatures.js';
-import { after as afterCodeFeatures } from 'mocha';
 import { WebWorkerService } from '../../../../../platform/webWorker/browser/webWorkerServiceImpl.js';
 import { IWebWorkerService } from '../../../../../platform/webWorker/browser/webWorkerService.js';
 import { IDialogService, DialogResult, ConfirmResult, IFileDialogService } from '../../../../../platform/dialogs/common/dialogs.js';
@@ -1074,6 +1072,3 @@ test('code editor creation rejects a missing language configuration registration
 	pane.create(parent);
 	await assert.rejects(pane.setInput({ resource: URI.file('/project/missing-service.ts') }, new AbortController().signal), /languageConfigurationService/);
 });
-
-const codeFeatures = registerTestCodeEditorFeatures();
-afterCodeFeatures(() => codeFeatures.dispose());

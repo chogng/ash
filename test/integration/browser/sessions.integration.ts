@@ -26,19 +26,17 @@ globalThis.ashWebWorkbenchHost = {
 		github: { ...disconnectedApi.github, listAccounts: async () => [] },
 	}
 };
-if (new URL(location.href).searchParams.has('creator')) {
-	// Creator scenarios need startup workspace reads, never a debugger process.
-	const unexpectedTransport = async (): Promise<never> => { throw new Error('Creator component tests must not launch or use a debug adapter'); };
-	globalThis.ashWebWorkbenchHost = {
-		api: {
-			...globalThis.ashWebWorkbenchHost.api,
-			debugAdapter: installDebugClientFixture({
-				start: unexpectedTransport, send: unexpectedTransport, read: unexpectedTransport, close: unexpectedTransport,
-				getConnectionState: async () => 'stopped', onConnectionState: Event.None,
-			}),
-		},
-	};
-}
+// Sessions Parts need startup workspace storage while debugger processes remain outside this fixture.
+const unexpectedTransport = async (): Promise<never> => { throw new Error('Sessions component tests must not launch or use a debug adapter'); };
+globalThis.ashWebWorkbenchHost = {
+	api: {
+		...globalThis.ashWebWorkbenchHost.api,
+		debugAdapter: installDebugClientFixture({
+			start: unexpectedTransport, send: unexpectedTransport, read: unexpectedTransport, close: unexpectedTransport,
+			getConnectionState: async () => 'stopped', onConnectionState: Event.None,
+		}),
+	},
+};
 if (new URL(location.href).searchParams.has('automations')) {
 	globalThis.ashWebWorkbenchHost = {
 		api: {
