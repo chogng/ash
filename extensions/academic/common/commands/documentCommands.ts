@@ -172,7 +172,8 @@ export function createListItemIndentationCommand(schema: DocumentSchema, documen
 export function createSetBlockTypeCommand(document: DocumentNode, blockId: DocumentNodeId, type: "paragraph" | "heading"): DocumentCommand | undefined {
 	const location = findDocumentNode(document, blockId);
 	if (!location?.parent || !isTextBearingBlock(location.node) || location.node.type === type) return undefined;
-	const attrs = type === "heading" ? { ...location.node.attrs, level: typeof location.node.attrs.level === "number" ? location.node.attrs.level : 1 } : location.node.attrs;
+	const { styleId: _styleId, level, ...format } = location.node.attrs;
+	const attrs = type === "heading" ? { ...format, level: typeof level === "number" ? level : 1 } : format;
 	return { transaction: new DocumentTransaction().setNodeType(blockId, type, attrs), focus: { blockId } };
 }
 

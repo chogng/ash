@@ -2308,7 +2308,7 @@
     "debug.invalidCompletionField": "调试适配器返回了无效的补全字段：{0}。",
     "debug.invalidCompletionLabel": "调试适配器返回了无效的补全标签。",
     "debug.invalidCompletionRange": "调试适配器返回了无效的补全编辑范围。",
-    "document.accessibility.paragraph": "段落样式控件可设置正文或标题 1 到 6；段落排版控件可设置对齐、行距和段前后间距。这些操作作用于选中的段落，保留字符格式，并可通过标准撤销命令恢复。",
+    "document.accessibility.paragraph": "段落样式控件可选择正文、标题 1 到 6 或自定义文档样式。输入样式名称后选择“创建样式”可记录段落格式。“从段落更新样式”会更新所有引用；“删除样式”会保留外观。“重置段落局部格式”恢复继承的段落格式，并保留字符格式。段落控件可设置字体、对齐、间距、起始端与末端缩进，以及首行或悬挂缩进。列表编号控件可设置当前有序列表的起始值与编号格式。这些操作均支持标准撤销。",
     "document.model.incompatible": "文档正由另一编辑器版本打开。请先保存或恢复现有内容，再重新打开。",
     "terminal.clipboard.pasteAsOneLine": "粘贴为一行",
     "terminal.clipboard.doNotAskAgain": "不再询问",
@@ -2376,7 +2376,8 @@
     "terminal.environmentChanges.shellPhase": "包含 Shell 启动时的修改；此内容不是实时环境读取。",
     "terminal.environmentChanges.launchPhase": "创建进程时应用。",
     "terminal.environmentChanges.show": "终端：显示环境贡献",
-    "terminal.environmentChanges.snapshotMeaning": "此快照记录启动时选择的扩展修改，不是对进程环境值的实时读取。"
+    "terminal.environmentChanges.snapshotMeaning": "此快照记录启动时选择的扩展修改，不是对进程环境值的实时读取。",
+    "document.accessibility.find": "按 Ctrl+F 或 Command+F 打开查找与替换。查找可跨同一块内的字符格式，并支持区分大小写与全字匹配。Enter 和 Shift+Enter 切换匹配。“全部替换”只占一个撤销步骤，并保留其他格式与对象。Escape 关闭查找并返回当前匹配。只读文档支持查找与导航。"
   },
   "ash.menu": {
     "file": "文件",

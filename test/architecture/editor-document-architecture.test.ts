@@ -129,9 +129,12 @@ test("document editing keeps lines and orthogonal rich semantics in one TextMode
 	const roomService = readFileSync(join(workbenchRoot, "services/documentCollaboration/common/documentCollaborationService.ts"), "utf8");
 	assert.match(roomService, /export interface IDocumentCollaborationService/u);
 	assert.match(roomService, /createInvite|listMembers/u);
-	assert.match(collaborationService, /export interface DocumentCollaborationEnvelope/u);
+	assert.match(collaborationService, /export type DocumentCollaborationEnvelope = HostEnvelope<DocumentTransaction>/u);
+	assert.match(collaborationService, /export type DocumentCollaborationConnection = HostConnection<DocumentTransaction>/u);
+	assert.match(collaborationService, /workbench\/services\/documentCollaboration\/common\/documentCollaborationService\.js/u);
+	assert.doesNotMatch(collaborationService, /^import\s+(?!type\b)/mu);
 	assert.doesNotMatch(collaborationService, /from\s+["'][^"']*contrib\//u);
-	assert.doesNotMatch(collaborationService, /from\s+["'][^"']*(?:platform|workbench|electron|generated)[^"']*["']/u);
+	assert.doesNotMatch(collaborationService, /from\s+["'][^"']*(?:platform|electron|generated)[^"']*["']/u);
 	assert.doesNotMatch(collaborationService, /DocumentCollaborationTarget|endpoint|bearerToken/u);
 	assert.match(documentPane, /new CollaborationContribution/u);
 	assert.doesNotMatch(collaborationWidget, /createInvite|listMembers|accessToken|RoomRole/u);

@@ -1,4 +1,4 @@
-import { collectDocumentNodeIds, findDocumentNode, type DocumentNode, type DocumentNodeId } from "../../model/document.js";
+import { collectDocumentNodeIds, findDocumentNode, type DocumentAttributes, type DocumentNode, type DocumentNodeId } from "../../model/document.js";
 import { isDocumentSelectionValid, nodeSelection, textSelection, type DocumentPoint, type DocumentSelection } from "../../core/documentSelection.js";
 import type { DocumentHistoryEntries, DocumentHistoryEntry } from "../../model/documentHistory.js";
 import { type DocumentSchema } from "../../model/documentSchema.js";
@@ -48,26 +48,24 @@ export function rebaseDocumentHistory(document: DocumentNode, schema: DocumentSc
  */
 export function rebaseDocumentTransaction(base: DocumentNode, schema: DocumentSchema, local: DocumentTransaction, remote: DocumentTransaction): RebasedDocumentTransaction {
 	schema.validate(base);
-	applyDocumentTransaction(base, schema, local);
+	const localChanges = collectTransactionChanges(base, schema, local);
 	const remoteApplied = applyDocumentTransaction(base, schema, remote);
-	const remoteChanges = collectRemoteChanges(base, schema, remote);
+	const remoteChanges = collectTransactionChanges(base, schema, remote);
 	const remoteDocument = remoteApplied.document;
 	const rebasedSteps: DocumentStep[] = [];
 	const droppedSteps: DocumentStep[] = [];
 	const localCreatedIds = new Set<DocumentNodeId>();
+	const localDeletedIds = new Set<DocumentNodeId>();
 
-	for (const originalStep of local.steps) {
-		const step = mapStepThroughRemote(originalStep, remoteChanges, remoteDocument, localCreatedIds);
+	const attributes = new Map<string, DocumentAttributes>();
+	for (const [index, originalStep] of local.steps.entries()) {
+		let step = mapStepThroughRemote(originalStep, remoteChanges, remoteDocument, localCreatedIds);
 		if (!step) {
 			droppedSteps.push(originalStep);
 			continue;
 		}
-		if (step.kind === "insertNode") {
-			for (const id of collectDocumentNodeIds(step.node)) {
-				if (findDocumentNode(remoteDocument, id) || localCreatedIds.has(id)) throw new DocumentRebaseError(`Local node id '${id}' collides with the remote document`);
-				localCreatedIds.add(id);
-			}
-		}
+		trackMappedNodeIds(step, localChanges[index]!.before, remoteDocument, localCreatedIds, localDeletedIds);
+		step = mergeMappedAttributes(step, localChanges[index]!.before, remoteDocument, attributes);
 		rebasedSteps.push(step);
 	}
 
@@ -151,18 +149,17 @@ function rebaseHistoryTransaction(base: DocumentNode, schema: DocumentSchema, lo
 function rebaseLocalHistoryTransaction(base: DocumentNode, schema: DocumentSchema, local: DocumentTransaction, remote: DocumentTransaction, insertionOrder: HistoricalInsertionOrder): RebasedDocumentTransaction | undefined {
 	try {
 		const remoteApplied = applyDocumentTransaction(base, schema, remote);
-		const remoteChanges = collectRemoteChanges(base, schema, remote);
+		const remoteChanges = collectTransactionChanges(base, schema, remote);
 		const localCreatedIds = new Set<DocumentNodeId>();
+		const localDeletedIds = new Set<DocumentNodeId>();
 		const steps: DocumentStep[] = [];
-		for (const originalStep of local.steps) {
-			const step = mapHistoryStepThroughRemote(originalStep, remoteChanges, remoteApplied.document, localCreatedIds, insertionOrder);
+		const localChanges = collectTransactionChanges(base, schema, local);
+		const attributes = new Map<string, DocumentAttributes>();
+		for (const [index, originalStep] of local.steps.entries()) {
+			let step = mapHistoryStepThroughRemote(originalStep, remoteChanges, remoteApplied.document, localCreatedIds, insertionOrder);
 			if (!step) return undefined;
-			if (step.kind === "insertNode") {
-				for (const id of collectDocumentNodeIds(step.node)) {
-					if (findDocumentNode(remoteApplied.document, id) || localCreatedIds.has(id)) throw new DocumentRebaseError(`Local node id '${id}' collides with the remote document`);
-					localCreatedIds.add(id);
-				}
-			}
+			trackMappedNodeIds(step, localChanges[index]!.before, remoteApplied.document, localCreatedIds, localDeletedIds);
+			step = mergeMappedAttributes(step, localChanges[index]!.before, remoteApplied.document, attributes);
 			steps.push(step);
 		}
 		const transaction = new DocumentTransaction(steps, {
@@ -282,19 +279,58 @@ interface RemoteChange {
 	readonly step: DocumentStep;
 }
 
-function collectRemoteChanges(base: DocumentNode, schema: DocumentSchema, transaction: DocumentTransaction): readonly RemoteChange[] {
-	let current = base;
+function collectTransactionChanges(base: DocumentNode, schema: DocumentSchema, transaction: DocumentTransaction): readonly RemoteChange[] {
 	const changes: RemoteChange[] = [];
-	for (const step of transaction.steps) {
-		const before = current;
-		try {
-			current = applyDocumentTransaction(current, schema, new DocumentTransaction([step], { addToHistory: false })).document;
-		} catch (error) {
-			throw new DocumentRebaseError("The remote transaction must be replayable one step at a time for rebasing", { cause: error });
+	applyDocumentTransaction(base, schema, transaction).mapping.forEachStep((before, after, step) => changes.push({ before, after, step }));
+	return changes;
+}
+
+/** Atomic marked-run replacement may delete and reinsert the same identity. */
+function trackMappedNodeIds(step: DocumentStep, before: DocumentNode, remote: DocumentNode, created: Set<DocumentNodeId>, deleted: Set<DocumentNodeId>): void {
+	if (step.kind === 'deleteNode') {
+		const node = findDocumentNode(before, step.nodeId)?.node;
+		if (node) {
+			for (const id of collectDocumentNodeIds(node)) {
+				deleted.add(id);
+				created.delete(id);
+			}
 		}
-		changes.push(Object.freeze({ before, after: current, step }));
+	} else if (step.kind === 'insertNode') {
+		for (const id of collectDocumentNodeIds(step.node)) {
+			if (created.has(id) || (findDocumentNode(remote, id) && !deleted.has(id))) throw new DocumentRebaseError(`Local node id '${id}' collides with the remote document`);
+			created.add(id);
+			deleted.delete(id);
+		}
 	}
-	return Object.freeze(changes);
+}
+
+/** Merge only authored attribute changes, retaining unrelated remote formatting and definitions. */
+function mergeMappedAttributes(step: DocumentStep, before: DocumentNode, remote: DocumentNode, attributes: Map<string, DocumentAttributes>): DocumentStep {
+	if (step.kind !== 'setNodeAttributes' && step.kind !== 'setNodeType') return step;
+	const previous = findDocumentNode(before, step.nodeId)?.node.attrs ?? {};
+	const current = attributes.get(step.nodeId) ?? findDocumentNode(remote, step.nodeId)?.node.attrs ?? previous;
+	const merged = { ...current };
+	for (const key of new Set([...Object.keys(previous), ...Object.keys(step.attrs)])) {
+		if (previous[key] === step.attrs[key]) continue;
+		if (step.nodeId === before.id && key === 'paragraphStyles') {
+			// Definitions have stable ids. Independent creations/updates can coexist,
+			// while server order resolves edits to the same definition.
+			const parse = (value: DocumentAttributes[string] | undefined): readonly { readonly id: string; }[] => value === undefined ? [] : JSON.parse(String(value));
+			const oldStyles = new Map(parse(previous[key]).map(style => [style.id, style]));
+			const localStyles = new Map(parse(step.attrs[key]).map(style => [style.id, style]));
+			const result = new Map(parse(current[key]).map(style => [style.id, style]));
+			for (const id of new Set([...oldStyles.keys(), ...localStyles.keys()])) {
+				if (JSON.stringify(oldStyles.get(id)) === JSON.stringify(localStyles.get(id))) continue;
+				const style = localStyles.get(id);
+				if (style) result.set(id, style); else result.delete(id);
+			}
+			if (result.size || step.attrs[key] !== undefined) merged[key] = JSON.stringify([...result.values()]);
+			else delete merged[key];
+		} else if (step.attrs[key] === undefined) delete merged[key];
+		else merged[key] = step.attrs[key]!;
+	}
+	attributes.set(step.nodeId, merged);
+	return { ...step, attrs: merged };
 }
 
 function mapStepThroughRemote(step: DocumentStep, changes: readonly RemoteChange[], remoteDocument: DocumentNode, localCreatedIds: ReadonlySet<DocumentNodeId>): DocumentStep | undefined {

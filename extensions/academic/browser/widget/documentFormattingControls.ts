@@ -1,10 +1,12 @@
 import './documentFormattingControls.css';
 import '../../../../src/ash/base/browser/ui/selectbox/selectbox.css';
 import '../../../../src/ash/base/browser/ui/dropdown/dropdown.css';
-import { h } from '../../../../src/ash/base/browser/dom.js';
+import { addDisposableListener, h } from '../../../../src/ash/base/browser/dom.js';
 import { Disposable, toDisposable } from '../../../../src/ash/base/common/lifecycle.js';
 import { SelectBox, type SelectOption } from '../../../../src/ash/base/browser/ui/selectbox/selectbox.js';
-import { defaultSelectBoxStyles } from '../../../../src/ash/platform/theme/browser/defaultStyles.js';
+import { Button } from '../../../../src/ash/base/browser/ui/button/button.js';
+import { InputBox } from '../../../../src/ash/base/browser/ui/inputbox/inputbox.js';
+import { defaultButtonStyles, defaultInputBoxStyles, defaultSelectBoxStyles } from '../../../../src/ash/platform/theme/browser/defaultStyles.js';
 
 /** Shared control mechanics only; each contribution owns its choices, commands and derived state. */
 export class DocumentFormattingControls extends Disposable {
@@ -39,6 +41,26 @@ export class DocumentFormattingControls extends Disposable {
 			else select.value = this.displayedValues.get(select) ?? '';
 		}));
 		return select;
+	}
+
+	protected addButton(label: string, run: () => void): Button {
+		const button = this._register(new Button(this.element, { ...defaultButtonStyles, label, size: 'small' }));
+		this._register(button.onDidClick(() => { if (button.enabled) run(); }));
+		return button;
+	}
+
+	protected addInput(label: string, type: 'text' | 'number' | 'search' = 'text'): InputBox {
+		const wrapper = h(this.element.ownerDocument, 'label');
+		wrapper.className = 'stanza-document-format-control';
+		const text = h(this.element.ownerDocument, 'span');
+		text.textContent = label;
+		wrapper.append(text);
+		this.element.append(wrapper);
+		return this._register(new InputBox(wrapper, { ariaLabel: label, type, inputBoxStyles: defaultInputBoxStyles }));
+	}
+
+	protected onInputCommit(input: InputBox, run: (value: string) => void): void {
+		this._register(addDisposableListener(input.inputElement, 'change', () => { if (input.enabled) run(input.value); }));
 	}
 
 	protected setSelectValue(select: SelectBox, value: string): void {

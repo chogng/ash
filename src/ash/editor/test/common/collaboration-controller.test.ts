@@ -1,3 +1,6 @@
+import { createReplaceDocumentMatchesCommand, findDocumentText } from '../../../../../extensions/academic/common/commands/documentFindCommands.js';
+import { createDefineParagraphStyleCommand } from '../../../../../extensions/academic/common/commands/documentParagraphCommands.js';
+import { getDocumentParagraphStyles } from '../../../../../extensions/academic/common/model/documentParagraph.js';
 import { DocumentTextModel } from '../../../../../extensions/academic/common/model/documentTextModel.js';
 import assert from "node:assert/strict";
 import { test } from "mocha";
@@ -279,3 +282,58 @@ class Deferred<T> {
 		this._resolve?.(value);
 	}
 }
+
+test('Academy style creation and undo preserve remote paragraph formatting through the collaboration controller', async () => {
+	const schema = createDefaultDocumentSchema();
+	const document = createDocument(schema);
+	using model = DocumentTextModel.create(schema, document);
+	const connection = new FakeDocumentCollaborationConnection(schema, document);
+	using controller = new DocumentCollaborationController(model, connection);
+	model.dispatch(createDefineParagraphStyleCommand(model.document, 'paragraph-1', 'Essay')!.transaction);
+	const styleId = getDocumentParagraphStyles(model.document)[0]!.id;
+	connection.accept(0, 1);
+	await flushMicrotasks();
+	connection.receiveRemote(new DocumentTransaction().setNodeAttributes('paragraph-1', { styleId, indentEnd: 18 }), 2);
+	assert.equal(model.canUndoBlocks, true);
+	assert.ok(model.undoBlocks());
+	await flushMicrotasks();
+	assert.deepEqual({ ...model.document.content[0]!.attrs }, { indentEnd: 18 });
+	assert.equal(getDocumentParagraphStyles(model.document).length, 0);
+	connection.accept(1, 3);
+	await flushMicrotasks();
+	assert.ok(model.redoBlocks());
+	await flushMicrotasks();
+	connection.accept(2, 4);
+	await flushMicrotasks();
+	assert.equal(model.document.content[0]!.attrs.styleId, styleId);
+	assert.equal(model.document.content[0]!.attrs.indentEnd, 18);
+	assert.equal(controller.state, 'connected');
+});
+
+
+test('Academy replace-all collaboration rebases atomic marked-run edits and retains remote formatting on undo', async () => {
+	const schema = createDefaultDocumentSchema();
+	const document = schema.createDocument([schema.createNode('paragraph', { id: 'paragraph-1', content: [schema.createText('Hel', { id: 'text-1', marks: [{ type: 'strong', attrs: {} }] }), schema.createText('lo Hello', { id: 'text-2' })] })]);
+	using model = DocumentTextModel.create(schema, document);
+	const connection = new FakeDocumentCollaborationConnection(schema, document);
+	using controller = new DocumentCollaborationController(model, connection);
+	const matches = findDocumentText(model.document, 'Hello', { matchCase: true, wholeWord: false });
+	model.dispatch(createReplaceDocumentMatchesCommand(schema, model.document, matches, 'World')!.transaction);
+	connection.accept(0, 1);
+	await flushMicrotasks();
+	connection.receiveRemote(new DocumentTransaction().setNodeAttributes('paragraph-1', { indentEnd: 18 }), 2);
+	assert.equal(model.canUndoBlocks, true);
+	assert.ok(model.undoBlocks());
+	await flushMicrotasks();
+	assert.equal(findDocumentText(model.document, 'Hello', { matchCase: true, wholeWord: false }).length, 2);
+	assert.deepEqual({ ...model.document.content[0]!.attrs }, { indentEnd: 18 });
+	connection.accept(1, 3);
+	await flushMicrotasks();
+	assert.ok(model.redoBlocks());
+	await flushMicrotasks();
+	connection.accept(2, 4);
+	await flushMicrotasks();
+	assert.equal(findDocumentText(model.document, 'World', { matchCase: true, wholeWord: false }).length, 2);
+	assert.equal(model.document.content[0]!.attrs.indentEnd, 18);
+	assert.equal(controller.state, 'connected');
+});

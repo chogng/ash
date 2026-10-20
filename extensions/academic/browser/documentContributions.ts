@@ -1,14 +1,20 @@
 import type { IDisposable } from '../../../src/ash/base/common/lifecycle.js';
+import type { DocumentDecoration } from '../common/model/documentDecoration.js';
 import type { DocumentNode } from '../common/model/document.js';
 import type { DocumentSchema, DocumentTextStyleAttributes } from '../common/model/documentSchema.js';
 import type { DocumentSelection } from '../common/core/documentSelection.js';
 import type { DocumentCommand } from '../common/commands/documentCommands.js';
 import { FormattingContribution } from './contrib/formatting/formattingContribution.js';
 import { ParagraphStyleContribution } from './contrib/paragraphStyle/paragraphStyle.js';
+import { ListNumberingContribution } from './contrib/paragraphFormatting/listNumbering.js';
+import { DocumentFindContribution } from './contrib/find/documentFind.js';
 import { ParagraphFormattingContribution } from './contrib/paragraphFormatting/paragraphFormatting.js';
 
 export interface DocumentFormattingState {
 	/** Immutable selected paragraphs; controls derive mixed values instead of caching document state. */
+	readonly document?: DocumentNode;
+	readonly blockId?: string;
+	readonly selection?: DocumentSelection;
 	readonly paragraphs?: readonly DocumentNode[];
 	readonly context: 'none' | 'text' | 'code';
 	readonly readOnly: boolean;
@@ -22,6 +28,8 @@ export interface DocumentFormattingState {
 export interface DocumentFormattingContribution extends IDisposable {
 	readonly element: HTMLElement;
 	setState(state: DocumentFormattingState): void;
+	getDecorations?(document: DocumentNode, selection: DocumentSelection | undefined): readonly DocumentDecoration[];
+	handleKeydown?(event: KeyboardEvent): void;
 }
 
 export interface DocumentEditorContributionContext {
@@ -35,6 +43,9 @@ export interface DocumentEditorContributionContext {
 	/** The Widget owns each control's mounting, state updates and disposal. */
 	readonly addFormattingContribution: (contribution: DocumentFormattingContribution) => void;
 	/** Resolve the current model/selection at invocation; contributors never retain a mutable model. */
+	readonly selectText: (blockId: string, selection: Extract<DocumentSelection, { kind: 'text'; }>) => void;
+	readonly invalidateView: () => void;
+	readonly focusEditor: () => void;
 	readonly runDocumentCommand: (create: (schema: DocumentSchema, document: DocumentNode, blockId: string, selection: DocumentSelection | undefined) => DocumentCommand | undefined) => void;
 }
 
@@ -45,4 +56,6 @@ export const documentContributions: readonly DocumentContribution[] = Object.fre
 	context => context.addFormattingContribution(new FormattingContribution(context.container, context)),
 	context => context.addFormattingContribution(new ParagraphStyleContribution(context)),
 	context => context.addFormattingContribution(new ParagraphFormattingContribution(context)),
+	context => context.addFormattingContribution(new ListNumberingContribution(context)),
+	context => context.addFormattingContribution(new DocumentFindContribution(context)),
 ]);

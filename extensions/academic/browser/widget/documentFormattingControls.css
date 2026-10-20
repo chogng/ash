@@ -20,3 +20,15 @@
 	gap: var(--ash-spacing-size40);
 	min-width: 0;
 }
+
+.stanza-document-find-fields {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: var(--ash-spacing-size80);
+	min-width: 0;
+}
+
+.stanza-document-find-fields[hidden] {
+	display: none;
+}

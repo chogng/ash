@@ -14,7 +14,7 @@ const digest = (value: string) => `sha256:${createHash('sha256').update(value).d
 
 async function chooseParagraphOption(page: Page, control: Locator, label: string): Promise<void> {
 	await control.click();
-	await page.getByRole('option', { name: label, exact: true }).click();
+	await page.getByRole('listbox').getByRole('option', { name: label, exact: true }).click();
 }
 
 // Compile the real provider before the UI scenario timer starts.
@@ -557,5 +557,163 @@ for (const [locale, link] of [['en', 'Link current document'], ['zh-CN', '关联
 		await expect(calls.locator('.call-document')).toHaveCount(0);
 		await expect(calls.getByRole('button', { name: link, exact: true })).toBeFocused();
 		await expect(page.locator('#call-document-editor textarea.stanza-document-text-input').first()).toHaveValue('Unsaved local research');
+	});
+}
+
+for (const locale of ['en', 'zh-CN'] as const) {
+	test(`Academy M6 custom style definitions and overrides survive input and reopening in ${locale}`, async ({ page }) => {
+		await page.goto(`/academic.html?generalDocument&locale=${locale}`);
+		const root = page.locator('#document-editor');
+		const label = (en: string, zh: string) => locale === 'en' ? en : zh;
+		const control = (en: string, zh: string) => root.getByRole('combobox', { name: label(en, zh), exact: true });
+		const baseline = await root.locator('.stanza-document-paragraph').first().boundingBox();
+		await chooseParagraphOption(page, control('Paragraph font', '段落字体'), label('Serif', '衬线体'));
+		await chooseParagraphOption(page, control('Paragraph font size', '段落字号'), '18');
+		await chooseParagraphOption(page, control('Start indent', '起始端缩进'), label('36 pt', '36 磅'));
+		await chooseParagraphOption(page, control('First line indent', '首行缩进'), label('-18 pt', '-18 磅'));
+		await root.getByRole('textbox', { name: label('Style name', '样式名称'), exact: true }).fill('Essay');
+		await root.getByRole('button', { name: label('Create style', '创建样式'), exact: true }).click();
+		await expect(control('Paragraph style', '段落样式')).toContainText('Essay');
+		const first = root.locator('.stanza-document-paragraph').first();
+		await expect(first).toHaveCSS('padding-inline-start', '48px');
+		expect((await first.boundingBox())!.x).toBe(baseline!.x);
+		expect((await first.boundingBox())!.width).toBe(baseline!.width);
+		await expect(first.locator('textarea')).toHaveCSS('text-indent', '-24px');
+		await expect(first.locator('textarea')).toHaveCSS('padding-inline-start', '24px');
+		await expect(first.locator('textarea')).toHaveCSS('margin-inline-start', '-24px');
+		await expect(first.locator('textarea')).toHaveCSS('font-size', '18px');
+		await first.locator('textarea').fill('Edited essay');
+		await chooseParagraphOption(page, control('Start indent', '起始端缩进'), label('54 pt', '54 磅'));
+		await expect(first).toHaveCSS('padding-inline-start', '72px');
+		await root.getByRole('button', { name: label('Reset paragraph overrides', '重置段落局部格式'), exact: true }).click();
+		await expect(first).toHaveCSS('padding-inline-start', '48px');
+		await page.evaluate(() => window.ashAcademicIntegration.saveStructured());
+		const saved = JSON.parse(await page.evaluate(() => window.ashAcademicIntegration.getSavedStructured()));
+		expect(JSON.parse(saved.document.attrs.paragraphStyles)[0]).toMatchObject({ name: 'Essay', attrs: { indentStart: 36, firstLineIndent: -18 } });
+		expect(saved.document.content[0].attrs).toEqual({ styleId: JSON.parse(saved.document.attrs.paragraphStyles)[0].id });
+		await page.evaluate(() => window.ashAcademicIntegration.reopenStructured());
+		await expect(first.locator('textarea')).toHaveValue('Edited essay');
+		await expect(first).toHaveCSS('padding-inline-start', '48px');
+		await root.getByRole('button', { name: label('Delete style', '删除样式'), exact: true }).click();
+		await expect(first).toHaveCSS('padding-inline-start', '48px');
+		await first.locator('textarea').focus();
+		await page.keyboard.press('Control+z');
+		await expect(control('Paragraph style', '段落样式')).toContainText('Essay');
+	});
+}
+
+for (const locale of ['en', 'zh-CN'] as const) {
+	test(`Academy M6 rich find replaces marked text, list, table and parent-model code atomically in ${locale}`, async ({ page }) => {
+		await page.goto(`/academic.html?generalDocument&m6Document&locale=${locale}`);
+		const root = page.locator('#document-editor');
+		const label = (en: string, zh: string) => locale === 'en' ? en : zh;
+		const button = (en: string, zh: string) => root.getByRole('button', { name: label(en, zh), exact: true });
+		await root.locator('.stanza-document-rich-text-input').first().focus();
+		await page.keyboard.press('Control+f');
+		const query = root.getByRole('searchbox', { name: label('Find text', '查找文本'), exact: true });
+		await expect(query).toBeFocused();
+		await query.fill('hello');
+		await expect(root.locator('.stanza-document-find-fields [role=status]')).toContainText(locale === 'en' ? 'of 5 matches' : '共 5 个匹配');
+		await button('Match case', '区分大小写').click();
+		await expect(root.locator('.stanza-document-find-fields [role=status]')).toContainText(locale === 'en' ? 'of 0 matches' : '共 0 个匹配');
+		await button('Match case', '区分大小写').click();
+		await query.fill('Hel');
+		await button('Whole word', '全字匹配').click();
+		await expect(button('Replace all', '全部替换')).toBeDisabled();
+		await query.fill('Hello');
+		await query.press('Enter');
+		await expect(query).toBeFocused();
+		await expect(root.locator('.stanza-document-find-current')).toHaveCount(2);
+		await expect(root.locator('.stanza-document-find-current').first()).not.toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+		await root.getByRole('textbox', { name: label('Replace with', '替换为'), exact: true }).fill('World');
+		await page.screenshot({ path: `.build/academy-m6-find-${locale}.png`, fullPage: true });
+		await button('Replace', '替换').click();
+		await expect(root.locator('.stanza-document-find-fields [role=status]')).toContainText(locale === 'en' ? 'of 4 matches' : '共 4 个匹配');
+		await button('Replace all', '全部替换').click();
+		await expect(button('Replace all', '全部替换')).toBeDisabled();
+		await button('Close find', '关闭查找').click();
+		await page.keyboard.press('Control+z');
+		await page.evaluate(() => window.ashAcademicIntegration.saveStructured());
+		const saved = JSON.parse(await page.evaluate(() => window.ashAcademicIntegration.getSavedStructured()));
+		expect(saved.document.content[0].content.map((node: { text: string; }) => node.text).join('')).toBe('World Hello');
+		expect(saved.document.content[0].content[0].marks).toEqual([{ type: 'strong', attrs: {} }]);
+		expect(saved.document.content[3].content).toHaveLength(1);
+		expect(saved.document.content[3].content[0].text).toBe('Hello code');
+		await page.keyboard.press('Control+Shift+z');
+		await page.evaluate(() => window.ashAcademicIntegration.saveStructured());
+		await page.evaluate(() => window.ashAcademicIntegration.reopenStructured());
+		await button('Find and replace', '查找与替换').click();
+		await root.getByRole('searchbox', { name: label('Find text', '查找文本'), exact: true }).fill('World');
+		await expect(root.locator('.stanza-document-find-fields [role=status]')).toContainText(locale === 'en' ? 'of 5 matches' : '共 5 个匹配');
+		await page.keyboard.press('Escape');
+		await expect(root.locator('.stanza-document-find-fields')).toBeHidden();
+	});
+}
+
+test('Academy M6 list numbering persists native markers, typing, undo and restart values', async ({ page }) => {
+	await page.goto('/academic.html?generalDocument&m6Document');
+	const root = page.locator('#document-editor');
+	const input = root.locator('[data-node-id="m6-item"] textarea');
+	await input.focus();
+	const order = root.getByRole('spinbutton', { name: 'Start numbering at', exact: true });
+	await order.fill('5');
+	await order.press('Tab');
+	await chooseParagraphOption(page, root.getByRole('combobox', { name: 'Number format', exact: true }), 'I, II, III');
+	const list = root.locator('ol[data-node-id="m6-list"]');
+	await expect(list).toHaveAttribute('start', '5');
+	await expect(list).toHaveCSS('list-style-type', 'upper-roman');
+	await input.focus();
+	await input.press('End');
+	await page.keyboard.press('Enter');
+	await expect(list.locator('li')).toHaveCount(2);
+	await page.keyboard.type('Next');
+	await page.evaluate(() => window.ashAcademicIntegration.saveStructured());
+	await page.evaluate(() => window.ashAcademicIntegration.reopenStructured());
+	await expect(list).toHaveAttribute('start', '5');
+	await expect(list).toHaveCSS('list-style-type', 'upper-roman');
+	await input.focus();
+	await order.fill('1');
+	await order.press('Tab');
+	await expect(list).toHaveAttribute('start', '1');
+	await input.focus();
+	await page.keyboard.press('Control+z');
+	await expect(list).toHaveAttribute('start', '5');
+});
+
+test('Academy M6 read-only and retired packages allow search but reject retained replacement actions', async ({ page }) => {
+	await page.goto('/academic.html?generalDocument&readOnly');
+	const root = page.locator('#document-editor');
+	await root.getByRole('button', { name: 'Find and replace', exact: true }).click();
+	const query = root.getByRole('searchbox', { name: 'Find text', exact: true });
+	await query.fill('Title');
+	await query.press('Enter');
+	await expect(root.getByRole('button', { name: 'Next match', exact: true })).toBeEnabled();
+	await expect(root.getByRole('button', { name: 'Replace all', exact: true })).toBeDisabled();
+	await expect(root.getByRole('textbox', { name: 'Style name', exact: true })).toBeDisabled();
+	await expect.poll(() => page.evaluate(() => window.ashAcademicIntegration.getStructuredDirty())).toBe(false);
+	await page.evaluate(() => window.ashAcademicIntegration.setAcademicEnabled(false));
+	await expect(root.getByRole('button', { name: 'Replace', exact: true })).toBeDisabled();
+	await page.evaluate(() => window.ashAcademicIntegration.dispose());
+	await expect(root.locator('.stanza-document-find-fields')).toHaveCount(0);
+});
+
+
+for (const theme of ['hc', 'hcLight']) {
+	test(`Academy M6 search keyboard navigation retains visible match boundaries in ${theme}`, async ({ page }) => {
+		await page.goto(`/academic.html?generalDocument&m6Document&${theme}`);
+		const root = page.locator('#document-editor');
+		await root.locator('.stanza-document-rich-text-input').first().focus();
+		await page.keyboard.press('Control+f');
+		const query = root.getByRole('searchbox', { name: 'Find text', exact: true });
+		await query.fill('Hello');
+		await query.press('Enter');
+		const highlight = root.locator('.stanza-document-find-current').first();
+		await expect(highlight).toHaveCSS('outline-style', 'solid');
+		await expect(highlight).toHaveCSS('outline-width', '1px');
+		await expect(highlight).not.toHaveCSS('outline-color', 'rgba(0, 0, 0, 0)');
+		await query.press('Shift+Enter');
+		await expect(root.locator('.stanza-document-find-fields [role=status]')).toHaveText('5 of 5 matches');
+		await query.press('Escape');
+		await expect(root.locator('[data-node-id="m6-code"] textarea')).toBeFocused();
 	});
 }

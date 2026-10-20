@@ -178,6 +178,11 @@ export class DocumentTransactionMapping {
 		this.entries = Object.freeze(entries.map(entry => Object.freeze(entry)));
 	}
 
+	/** Visits the actual intermediate trees of a fully validated atomic transaction. */
+	forEachStep(visit: (before: DocumentNode, after: DocumentNode, step: DocumentStep) => void): void {
+		for (const entry of this.entries) visit(entry.before, entry.after, entry.step);
+	}
+
 	mapSelection(selection: DocumentSelection | undefined): DocumentSelection | undefined {
 		let mapped = selection;
 		for (const entry of this.entries) mapped = mapDocumentSelectionThroughStep(mapped, entry.before, entry.after, entry.step);

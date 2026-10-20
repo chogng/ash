@@ -58,3 +58,34 @@ family; signing and online publication belong to the registry release workflow.
 A new output directory is required. Sources and build files are not payload assets.
 Source maintenance remains in this repository until a separate move is chosen.
 See [distribution and validation](../../docs/design/editor-roadmap.md#67-贡献装配与市场扩展).
+
+M6 writing and styles are owned by this package. Paragraphs and headings can reference
+named document styles, retain local paragraph and character overrides, update a style
+from the current paragraph, reset paragraph overrides, or delete a definition while
+keeping its effective appearance. Style definitions live in the root's scalar
+`paragraphStyles` JSON attribute; paragraphs retain a stable `styleId`. The existing
+v2 document envelope and transaction steps remain unchanged. Older files without
+these attributes retain their defaults. The schema rejects malformed definitions,
+unknown references and invalid measurements before a model version is committed.
+The first version supports up to 100 flat styles, with names up to 80 characters;
+style inheritance chains and character-style definitions are outside this writing slice.
+
+Paragraph fonts, spacing, logical start/end indents and first-line/hanging indents
+project onto the existing input surfaces. Ordered lists use native markers with an
+editable start and decimal, alphabetic or Roman format; existing nested-list input
+continues through the same model. Clipboard fragments materialize named paragraph
+formatting so pasting into another document does not require a second style registry.
+Markdown export reports unsupported style/numbering semantics instead of silently
+losing them; plain-text export remains explicitly plain.
+
+Find and replace searches literal text across character marks within a block, including
+list items, table cells and code in the parent document. Images, citations, hard breaks
+and block boundaries separate search runs. Match case, Unicode whole-word matching,
+wraparound navigation and visible matches work in read-only documents. Replace and
+Replace all preserve unrelated marks and structure; each action is one undo step.
+Search intent and highlights belong to the view and are never persisted. Ctrl+F or
+Command+F opens search, Enter/Shift+Enter navigate, and Escape restores editor focus.
+
+Collaboration replays fully validated atomic transactions and merges independent
+paragraph attributes and style definitions by stable identity. No style state or
+replacement history is copied into the Rust process or the shared host.

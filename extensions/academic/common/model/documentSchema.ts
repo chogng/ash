@@ -1,5 +1,5 @@
 import { createDocumentNode, createDocumentRoot, createTextNode, type DocumentAttributeValue, type DocumentAttributes, type DocumentMark, type DocumentNode, type DocumentNodeId } from "./document.js";
-import { validateDocumentParagraphAttributes } from './documentParagraph.js';
+import { validateDocumentParagraphAttributes, validateDocumentParagraphStyles } from './documentParagraph.js';
 
 /** Structural layers available to Stanza schemas. */
 export type DocumentNodeKind = "root" | "group" | "block" | "line" | "inline" | "text";
@@ -148,6 +148,7 @@ export class DocumentSchema {
 			throw new TypeError(`Document root must be '${this.topNodeType}'`);
 		}
 		this.validateNode(document, new Set(), true, false);
+		validateDocumentParagraphStyles(document);
 	}
 
 	/** Validates a node fragment without requiring it to be the document root. */
@@ -267,7 +268,12 @@ function defaultNodeSpecs(): Readonly<Record<string, DocumentNodeSpec>> {
 		},
 		blockquote: { kind: "block", allowedChildren: listBlocks, minChildren: 1 },
 		bulletList: { kind: "block", allowedChildren: ["listItem"], minChildren: 1 },
-		orderedList: { kind: "block", allowedChildren: ["listItem"], minChildren: 1, defaultAttrs: { order: 1 }, validateAttributes: attrs => validateIntegerAttribute(attrs, "order", 1, Number.MAX_SAFE_INTEGER) },
+		orderedList: {
+			kind: "block", allowedChildren: ["listItem"], minChildren: 1, defaultAttrs: { order: 1 }, validateAttributes: attrs => {
+				validateIntegerAttribute(attrs, "order", 1, Number.MAX_SAFE_INTEGER);
+				if (attrs.numbering !== undefined && !['decimal', 'lower-alpha', 'upper-alpha', 'lower-roman', 'upper-roman'].includes(String(attrs.numbering))) throw new TypeError('Invalid list numbering format');
+			}
+		},
 		listItem: { kind: "block", allowedChildren: listBlocks, minChildren: 1 },
 		codeBlock: { kind: "block", content: [{ type: "text", min: 0, max: 1 }], defaultAttrs: { language: "text" }, validateAttributes: attrs => validateStringAttribute(attrs, "language", false) },
 		table: { kind: "block", allowedChildren: ["tableRow"], minChildren: 1 },

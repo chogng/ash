@@ -1,10 +1,11 @@
+import { resolveDocumentParagraphAttributes } from './documentParagraph.js';
 import type { DocumentAttributes, DocumentMark, DocumentNode } from './document.js';
 import type { DocumentSchema } from './documentSchema.js';
 import { createLineDocumentSnapshot, linePoint, type InlineAtom, type LineDocumentSnapshot, type LineFacet, type LineId, type LineRegion, type LineRelation, type LineSemanticAttributes, type LineSemanticValue, type ModelLine, type PersistentMark } from '../../../../src/ash/editor/common/model/lineDocument.js';
 
 /** Converts a schema document into the line-first snapshot consumed by TextModel. */
 export function projectDocumentToLines(schema: DocumentSchema, document: DocumentNode): LineDocumentSnapshot {
-	const projection = new DocumentLineProjection(schema, document.id);
+	const projection = new DocumentLineProjection(schema, document);
 	projection.visit(document, []);
 	return projection.finish();
 }
@@ -18,7 +19,7 @@ class DocumentLineProjection {
 	private readonly relations: LineRelation[] = [];
 	private readonly lineIds = new Set<LineId>();
 
-	constructor(private readonly schema: DocumentSchema, private readonly documentId: string) { }
+	constructor(private readonly schema: DocumentSchema, private readonly document: DocumentNode) { }
 
 	public visit(node: DocumentNode, ancestors: readonly DocumentNode[]): void {
 		const kind = this.schema.getNodeSpec(node.type)?.kind;
@@ -80,7 +81,7 @@ class DocumentLineProjection {
 	}
 
 	public finish(): LineDocumentSnapshot {
-		if (this.lines.length === 0) this.lines.push({ id: this.allocateLineId(`${this.documentId}:line`, 0), text: '' });
+		if (this.lines.length === 0) this.lines.push({ id: this.allocateLineId(`${this.document.id}:line`, 0), text: '' });
 		return createLineDocumentSnapshot({
 			lines: this.lines,
 			marks: this.marks,
@@ -162,7 +163,7 @@ class DocumentLineProjection {
 				id: `${node.id}:facet:${lineId}`,
 				kind: node.type,
 				lineId,
-				attrs: { nodeId: node.id, ...toSemanticAttributes(node.attrs) },
+				attrs: { nodeId: node.id, ...toSemanticAttributes(node.attrs.styleId !== undefined && (node.type === 'paragraph' || node.type === 'heading') ? resolveDocumentParagraphAttributes(this.document, node) : node.attrs) },
 			});
 		}
 	}

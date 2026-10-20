@@ -381,3 +381,13 @@
 .stanza-document-table-cell > .stanza-document-heading {
 	margin-bottom: 0;
 }
+
+.stanza-document-find-match {
+	background: var(--ash-search-matchBackground);
+	outline: var(--ash-strokeThickness) solid var(--ash-contrastBorder);
+}
+
+.stanza-document-find-current {
+	background: var(--ash-search-matchBackground);
+	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
+}

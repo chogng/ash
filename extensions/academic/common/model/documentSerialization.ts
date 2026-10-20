@@ -1,3 +1,4 @@
+import { resolveDocumentParagraphAttributes } from './documentParagraph.js';
 import { type DocumentSelection } from "../core/documentSelection.js";
 import { isRecord } from "../../../../src/ash/base/common/types.js";
 import { isFiniteNumber } from "../../../../src/ash/base/common/numbers.js";
@@ -161,6 +162,22 @@ export function documentToPlainText(document: DocumentNode, schema?: DocumentSch
 
 /** Extracts a validated block fragment from a text selection. */
 export function extractDocumentFragment(schema: DocumentSchema, document: DocumentNode, selection: DocumentSelection): DocumentFragment | undefined {
+	const fragment = extractDocumentFragmentContent(schema, document, selection);
+	if (!fragment) return undefined;
+	// Clipboard fragments have no document-level style registry. Materialize only
+	// named references so cross-document paste retains appearance and is self-contained.
+	const materialize = (node: DocumentNode): DocumentNode => {
+		let attrs = node.attrs;
+		if ((node.type === 'paragraph' || node.type === 'heading') && attrs.styleId !== undefined) {
+			const { styleId: _styleId, ...resolved } = resolveDocumentParagraphAttributes(document, node);
+			attrs = resolved;
+		}
+		return createDocumentNode({ ...node, attrs, content: node.content.map(materialize) });
+	};
+	return Object.freeze({ content: Object.freeze(fragment.content.map(materialize)) });
+}
+
+function extractDocumentFragmentContent(schema: DocumentSchema, document: DocumentNode, selection: DocumentSelection): DocumentFragment | undefined {
 	if (selection.kind === "all") return Object.freeze({ content: Object.freeze([...document.content]) });
 	if (selection.kind !== "text") return undefined;
 	const anchor = findTextBearingBlockLocation(document, selection.anchor.nodeId);

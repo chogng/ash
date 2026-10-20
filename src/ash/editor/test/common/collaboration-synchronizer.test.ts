@@ -1,3 +1,5 @@
+import { createDefineParagraphStyleCommand } from '../../../../../extensions/academic/common/commands/documentParagraphCommands.js';
+import { getDocumentParagraphStyles } from '../../../../../extensions/academic/common/model/documentParagraph.js';
 import assert from "node:assert/strict";
 import { test } from "mocha";
 import { createDefaultDocumentSchema, type DocumentSchema } from "../../../../../extensions/academic/common/model/documentSchema.js";
@@ -97,4 +99,20 @@ test("Stanza collaboration synchronizer reports dropped pending steps after remo
 	assert.equal(change.droppedSteps.length, 1);
 	assert.equal(synchronizer.pending, undefined);
 	assert.deepEqual(synchronizer.document.content.map(node => node.id), ["paragraph-1"]);
+});
+
+test('Academy concurrent style definitions keep independent identities and references during rebase', () => {
+	const schema = createDefaultDocumentSchema();
+	const document = schema.createDocument(['one', 'two'].map((value, i) => schema.createNode('paragraph', { id: `p${i}`, content: [schema.createText(value, { id: `t${i}` })] })));
+	using synchronizer = new DocumentCollaborationSynchronizer({ schema, document, clientId: 'local' });
+	const local = createDefineParagraphStyleCommand(document, 'p0', 'Local')!;
+	const remote = createDefineParagraphStyleCommand(document, 'p1', 'Remote')!;
+	synchronizer.dispatchLocal(local.transaction);
+	synchronizer.receiveRemote({ clientId: 'remote', sequence: 1, baseVersion: 0, version: 1, transaction: remote.transaction });
+	assert.deepEqual(getDocumentParagraphStyles(synchronizer.document).map(style => style.name).sort(), ['Local', 'Remote']);
+	assert.notEqual(synchronizer.document.content[0]!.attrs.styleId, synchronizer.document.content[1]!.attrs.styleId);
+	const submission = synchronizer.takeNextSubmission()!;
+	synchronizer.acknowledge({ clientId: 'local', sequence: submission.sequence, baseVersion: submission.baseVersion, version: 2, transaction: submission.transaction });
+	assert.deepEqual(synchronizer.document, synchronizer.canonicalDocument);
+	assert.equal(synchronizer.pending, undefined);
 });

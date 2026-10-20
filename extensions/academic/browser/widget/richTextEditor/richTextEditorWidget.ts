@@ -20,7 +20,7 @@ import { DocumentOutlineNavigator } from '../documentOutlineNavigator.js';
 import { DocumentCollaborationController } from '../../../common/contrib/collaboration/controller.js';
 import { createDocumentFragmentFromHtml } from './htmlDocumentFragment.js';
 import type { DocumentCollaborationConnection, DocumentCollaborationPresence } from '../../../common/services/documentCollaborationService.js';
-import { h, fragment as createFragment } from '../../../../../src/ash/base/browser/dom.js';
+import { addDisposableListener, h, fragment as createFragment } from '../../../../../src/ash/base/browser/dom.js';
 import { IDialogService } from '../../../../../src/ash/platform/dialogs/common/dialogs.js';
 import { IOpenerService } from '../../../../../src/ash/platform/opener/common/opener.js';
 import { onUnexpectedError } from '../../../../../src/ash/base/common/errors.js';
@@ -28,7 +28,7 @@ import { isMacintosh } from '../../../../../src/ash/base/common/platform.js';
 import { localize } from '../../../../../src/ash/nls.js';
 import { getSelectedDocumentParagraphs } from '../../../common/commands/documentParagraphCommands.js';
 import type { DocumentEditorContributionContext } from '../../documentContributions.js';
-import { defaultDocumentParagraphAttributes } from '../../../common/model/documentParagraph.js';
+import { resolveDocumentParagraphAttributes } from '../../../common/model/documentParagraph.js';
 
 export interface RichTextEditorOptions {
 	readonly contributions?: readonly DocumentContribution[];
@@ -146,9 +146,22 @@ export class RichTextEditorWidget extends Disposable {
 				onClearTextStyle: () => this.handleClearTextStyleAction(),
 				onRunDocumentAction: actionId => this.handleToolbarAction(actionId),
 				addFormattingContribution: value => this.formattingContributions.push(this._register(value)),
+				invalidateView: () => { if (this.model && !this.isDisposed && !this.composition) this.render(); },
+				selectText: (blockId, selection) => {
+					const model = this.model;
+					if (!model || this.isDisposed || this.composition) return;
+					this.activeBlockId = blockId;
+					model.setSelection(selection);
+					this.render();
+					findBlockEditor(this.requireContainer(), blockId)?.scrollIntoView({ block: 'nearest' });
+				},
+				focusEditor: () => { if (this.model && !this.isDisposed) this.restoreModelFocus(this.model, this.model.selection); },
 				runDocumentCommand: create => this.runContributionCommand(create),
 			});
 		}
+		this._register(addDisposableListener(parent, 'keydown', event => {
+			for (const contribution of this.formattingContributions) contribution.handleKeydown?.(event);
+		}));
 		const editorDom = this._register(new EditorDom({
 			rootClassName: "ash-text-editor-widget-layout",
 			contentClassName: "ash-text-editor-widget-pane",
@@ -214,7 +227,14 @@ export class RichTextEditorWidget extends Disposable {
 		this.input = undefined;
 		this.activeBlockId = undefined;
 		this.outlineNavigator?.setOutline([]);
-		for (const contribution of this.formattingContributions) contribution.element.hidden = true;
+		// Release immutable document projections as soon as their model leaves the view.
+		for (const contribution of this.formattingContributions) {
+			contribution.setState({
+				context: 'none', readOnly: true, bold: false, italic: false,
+				fontFamily: undefined, fontSize: undefined, checkedDocumentActionIds: new Set(),
+			});
+			contribution.element.hidden = true;
+		}
 		this.container?.replaceChildren();
 	}
 
@@ -264,7 +284,10 @@ export class RichTextEditorWidget extends Disposable {
 			if (element.dataset.nodeId) previousElements.set(element.dataset.nodeId, element);
 		}
 		const activeNodeIds = new Set<string>();
-		const decorations = resolveViewDecorations(model, remotePresenceDecorations(model.document, this.remotePresences));
+		const decorations = resolveViewDecorations(model, [
+			...remotePresenceDecorations(model.document, this.remotePresences),
+			...this.formattingContributions.flatMap(contribution => contribution.getDecorations?.(model.document, model.selection) ?? []),
+		]);
 		const fragment = createFragment(container.ownerDocument);
 		for (const node of model.document.content) fragment.append(this.renderNode(node, model, previousElements, activeNodeIds, decorations));
 		container.replaceChildren(fragment);
@@ -344,6 +367,10 @@ export class RichTextEditorWidget extends Disposable {
 			case "bulletList":
 			case "orderedList":
 				element.className = node.type === "bulletList" ? "stanza-document-list stanza-document-list-bullet" : "stanza-document-list stanza-document-list-ordered";
+				if (node.type === 'orderedList') {
+					(element as HTMLOListElement).start = Number(node.attrs.order ?? 1);
+					element.style.listStyleType = String(node.attrs.numbering ?? 'decimal');
+				}
 				this.renderChildren(element, node, model, previousElements, activeNodeIds, decorations);
 				break;
 			case "listItem":
@@ -371,13 +398,27 @@ export class RichTextEditorWidget extends Disposable {
 		if (node.type === 'paragraph' || node.type === 'heading') {
 			// Persist semantic measurements, then project them onto the existing block.
 			// Defaults also overwrite obsolete styles when undo or remote edits reuse DOM.
-			element.style.textAlign = String(node.attrs.textAlign ?? defaultDocumentParagraphAttributes.textAlign);
-			element.style.marginBlockStart = `${node.attrs.spaceBefore ?? defaultDocumentParagraphAttributes.spaceBefore}pt`;
-			element.style.marginBlockEnd = `${node.attrs.spaceAfter ?? defaultDocumentParagraphAttributes.spaceAfter}pt`;
+			const attrs = resolveDocumentParagraphAttributes(model.document, node);
+			element.style.textAlign = String(attrs.textAlign);
+			element.style.marginBlockStart = `${attrs.spaceBefore}pt`;
+			element.style.marginBlockEnd = `${attrs.spaceAfter}pt`;
+			// Insets stay inside the centered writing column, including on wide viewports.
+			element.style.boxSizing = 'border-box';
+			element.style.paddingInlineStart = `${attrs.indentStart}pt`;
+			element.style.paddingInlineEnd = `${attrs.indentEnd}pt`;
 			const input = element.querySelector<HTMLElement>('textarea, .stanza-document-rich-text-input');
 			if (input) {
 				input.style.textAlign = 'inherit';
-				input.style.lineHeight = String(node.attrs.lineSpacing ?? defaultDocumentParagraphAttributes.lineSpacing);
+				input.style.textIndent = `${attrs.firstLineIndent}pt`;
+				// Native textareas clip negative text-indent. Expand into the hanging
+				// area and pad it back so subsequent lines retain the paragraph inset.
+				const hanging = Math.min(0, Number(attrs.firstLineIndent));
+				input.style.marginInlineStart = `${hanging}pt`;
+				input.style.paddingInlineStart = `${-hanging}pt`;
+				input.style.width = hanging ? `calc(100% + ${-hanging}pt)` : '';
+				input.style.fontFamily = attrs.fontFamily ? documentFontFamilyCss(String(attrs.fontFamily)) : '';
+				input.style.fontSize = attrs.fontSize ? `${attrs.fontSize}px` : '';
+				input.style.lineHeight = String(attrs.lineSpacing);
 			}
 		}
 		return element;
@@ -1305,6 +1346,7 @@ export class RichTextEditorWidget extends Disposable {
 		const textContext = isTypographyBlock(block);
 		const activeSelection = textContext ? this.readActiveDocumentTextSelection(model, block!.id) ?? selection : undefined;
 		for (const toolbar of this.formattingContributions) toolbar.setState({
+			document: model.document, blockId, selection: model.selection,
 			paragraphs: blockId ? getSelectedDocumentParagraphs(model.document, blockId, model.selection) : [],
 			context: block?.type === "codeBlock" ? "code" : textContext ? "text" : "none",
 			readOnly,
@@ -1964,4 +2006,8 @@ function documentInsertionMarks(model: DocumentTextModel, selection: DocumentSel
 	if (!selection || selection.kind !== "text" || !isCollapsedDocumentTextSelection(selection)) return undefined;
 	const node = findNode(model.document, selection.anchor.nodeId);
 	return node?.text === undefined ? undefined : node.marks;
+}
+
+function documentFontFamilyCss(family: string): string {
+	return family === 'serif' ? 'serif' : family === 'monospace' ? 'monospace' : 'sans-serif';
 }
