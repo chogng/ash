@@ -436,18 +436,19 @@ contextWindow = 128000
 impl Drop for Fixture {
     fn drop(&mut self) {
         if thread::panicking() {
-            if let Ok(entries) = fs::read_dir(self.profile.join("run")) {
-                for entry in entries.flatten() {
-                    if entry
-                        .path()
-                        .extension()
-                        .is_some_and(|extension| extension == "log")
-                    {
-                        if let Ok(log) = fs::read_to_string(entry.path()) {
-                            eprintln!("Test daemon log ({}):\n{log}", entry.path().display());
-                        }
+            match ash_app_server_daemon::read_process_logs(&self.profile) {
+                Ok((logs, omitted)) => {
+                    for log in logs {
+                        eprintln!(
+                            "Test daemon log ({}; truncated={}):\n{}",
+                            log.name,
+                            log.truncated,
+                            String::from_utf8_lossy(&log.bytes)
+                        );
                     }
+                    eprintln!("Test daemon logs omitted: {omitted}");
                 }
+                Err(error) => eprintln!("Could not read test daemon logs: {error}"),
             }
         }
         // Stop only the daemon belonging to this isolated fixture before deleting it.
