@@ -3,6 +3,8 @@ import { Pane, PaneView } from '../../../src/ash/base/browser/ui/splitview/panev
 import { URI } from '../../../src/ash/base/common/uri.js';
 import { Lxicon } from '../../../src/ash/base/common/lxicons.js';
 import { getKeybindingLabelParts, KeybindingLabelStyle, getKeybindingLabel } from '../../../src/ash/base/common/keybindingLabels.js';
+import { Keybinding, logicalKey } from '../../../src/ash/base/common/keybindings.js';
+import { KeybindingsRegistry, KeybindingSource } from '../../../src/ash/platform/keybinding/common/keybindingsRegistry.js';
 import { IContextKeyService } from '../../../src/ash/platform/contextkey/browser/contextKeyService.js';
 import { BrowserContextViewService } from '../../../src/ash/platform/contextview/browser/contextViewService.js';
 import { BrowserContextMenuService } from '../../../src/ash/platform/contextview/browser/contextMenuService.js';
@@ -106,6 +108,7 @@ services.registerInstance(IContextViewService, views);
 const menus = lifetime.add(services.createInstance(BrowserContextMenuService));
 services.registerInstance(IContextMenuService, menus);
 if (new URLSearchParams(location.search).has('applicationMenu')) {
+	await import('../../../src/ash/workbench/browser/parts/titlebar/titlebarpart.css');
 	// Render controlled states through the production titlebar control and menu services.
 	// Real command dispatch and Workbench visibility remain covered by application smoke.
 	const rootMenu = new MenuId('integration.application');
@@ -123,8 +126,13 @@ if (new URLSearchParams(location.search).has('applicationMenu')) {
 	] as const) {
 		lifetime.add(MenusRegistry.appendMenuItem(fileMenu, { command: { id, title, icon, toggled } }));
 	}
+	for (const [command, key] of [['fixture.icon', 'n'], ['fixture.plain', 'a']] as const) {
+		lifetime.add(KeybindingsRegistry.registerKeybindingRule({ command, source: KeybindingSource.Workbench, keybinding: Keybinding.single(logicalKey(key, { primaryKey: true })) }));
+	}
+	lifetime.add(MenusRegistry.appendMenuItem(titlebarMenu, { command: { id: 'fixture.sidebar', title: 'Toggle sidebar', icon: Lxicon.layoutSidebarLeft1 }, group: 'navigation' }));
 	lifetime.add(MenusRegistry.appendMenuItem(editMenu, { command: { id: 'fixture.edit', title: 'Edit item' } }));
 	const host = document.body.insertBefore(document.createElement('div'), document.body.firstChild);
+	host.classList.add('ash-workbench-titlebar');
 	lifetime.add(new BrowserMenubarControl(host, services.get(IMenuService), menus, undefined, { applicationMenuId: rootMenu, titlebarMenuId: titlebarMenu }));
 	lifetime.add(toDisposable(() => host.remove()));
 }

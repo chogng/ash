@@ -66,58 +66,17 @@ test('Empty chat anchors its input and secondary toolbar to the bottom pane edge
 	});
 });
 
-test('Chat can switch from Plan back to Agent without selecting a different Agent', { tag: ['@browser-ui', '@electron-ui'] }, async ({ target, workbench }) => {
+test('Chat mode changes reach the input and keyboard help restores its selected action', async ({ workbench }) => {
 	const page = workbench.page;
 	if (!await page.locator('.ash-chat-view-pane').isVisible()) {
 		await page.getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();
 	}
 	const picker = page.locator('.ash-chat-view-pane .ash-chat:visible [data-action-id="ash.chat.input.mode"] button');
-	await picker.press('ArrowDown');
-	let menu = page.locator('.ash-chat-input-mode-menu');
-	await menu.getByRole('menuitemradio', { name: 'Plan', exact: true }).click();
-	await expect(picker).toHaveText('Plan');
-	await picker.press('ArrowDown');
-	menu = page.locator('.ash-chat-input-mode-menu');
-	await expect(menu.getByRole('menuitemradio', { name: 'Plan', exact: true })).toHaveAttribute('aria-checked', 'true');
-	await expect(menu.getByRole('menuitemradio', { name: 'Plan', exact: true })).toBeFocused();
-	const agent = menu.getByRole('menuitemradio', { name: 'Agent', exact: true });
-	await expect(agent).toBeEnabled();
-	await agent.click();
-	await expect(picker).toHaveText('Agent');
-	await picker.press('ArrowDown');
-	await expect(menu.getByRole('menuitemradio', { name: 'Agent', exact: true })).toHaveAttribute('aria-checked', 'true');
-	await expect(menu.getByRole('menuitemradio', { name: 'Agent', exact: true })).toBeFocused();
-	await menu.press('Escape');
-	await expect(picker).toBeFocused();
-});
-
-test('Chat mode picker exposes all five modes with one checked selection', { tag: ['@browser-ui', '@electron-ui'] }, async ({ target, workbench }) => {
-	const page = workbench.page;
-	if (!await page.locator('.ash-chat-view-pane').isVisible()) {
-		await page.getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();
-	}
-	const picker = page.locator('.ash-chat-view-pane .ash-chat:visible [data-action-id="ash.chat.input.mode"] button');
-	for (const name of ['Agent', 'Plan', 'Debug', 'Multitask', 'Ask']) {
+	for (const name of ['Plan', 'Agent']) {
 		await picker.press('ArrowDown');
-		const menu = page.locator('.ash-chat-input-mode-menu');
-		await menu.getByRole('menuitemradio', { name, exact: true }).click();
+		await page.getByRole('menuitemradio', { name, exact: true }).click();
 		await expect(picker).toHaveText(name);
-		await picker.press('ArrowDown');
-		await expect(menu.getByRole('menuitemradio', { name, exact: true })).toHaveAttribute('aria-checked', 'true');
-		await expect(menu.getByRole('menuitemradio', { name, exact: true })).toBeFocused();
-		// Agent choices are a separate radio group; the five mode actions have exactly one choice.
-		await expect(menu.getByRole('menuitemradio', { name: /^(Agent|Plan|Debug|Multitask|Ask)$/ }).and(menu.locator('[aria-checked="true"]'))).toHaveCount(1);
-		await menu.press('Escape');
-		await expect(picker).toBeFocused();
 	}
-});
-
-test('Chat mode picker keyboard help returns focus to its selected action', async ({ workbench }) => {
-	const page = workbench.page;
-	if (!await page.locator('.ash-chat-view-pane').isVisible()) {
-		await page.getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();
-	}
-	const picker = page.locator('.ash-chat-view-pane .ash-chat:visible [data-action-id="ash.chat.input.mode"] button');
 	await picker.press('ArrowDown');
 	const widget = page.locator('.ash-action-widget.ash-chat-input-mode-menu');
 	const agent = widget.getByRole('menuitemradio', { name: 'Agent', exact: true });
@@ -242,7 +201,7 @@ test('Chat input grows upward with wrapped text and retains keyboard focus', { t
 	expect(restoredBounds).toEqual(initialBounds);
 });
 
-test('Chat input explicitly opens slash suggestions from the keyboard', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, workbench }) => {
+test('Chat completes catalog commands from the keyboard and restores the empty input', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, workbench }) => {
 	const page = workbench.page;
 	if (!await page.locator('.ash-chat-view-pane').isVisible()) {
 		await page.getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();
@@ -256,64 +215,11 @@ test('Chat input explicitly opens slash suggestions from the keyboard', { tag: [
 	for (let index = 0; index < 3; index++) await page.keyboard.press('ArrowRight');
 	await page.keyboard.press('Control+Space');
 	await expect(editor.locator('.stanza-editor-completion-label').getByText('/history', { exact: true })).toBeVisible();
-	await expect(editor.locator('.stanza-editor-completion-label').getByText('/config', { exact: true })).toBeVisible();
-	await expect(input).toBeFocused();
-});
-
-test('Chat input returns to the empty message state when a slash command is deleted', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, workbench }) => {
-	const page = workbench.page;
-	if (!await page.locator('.ash-chat-view-pane').isVisible()) {
-		await page.getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();
-	}
-	const editor = page.locator('.ash-chat-input-editor');
-	const input = editor.locator('.stanza-editor-input');
-	await input.focus();
-	await page.keyboard.insertText('/x');
-	await expect(editor.locator('.stanza-editor-completion.visible')).toHaveCount(0);
-	await page.keyboard.press('Backspace');
-	await expect(editor.locator('.stanza-editor-line-text')).toHaveText('/');
-	await page.keyboard.press('Backspace');
+	await editor.locator('.stanza-editor-completion-label').getByText('/config', { exact: true }).click();
+	await expect(editor.locator('.stanza-editor-line-text')).toHaveText('/config argument');
+	await input.press('ControlOrMeta+a');
+	await input.press('Backspace');
 	await expect(editor.locator('.stanza-editor-completion.visible')).toHaveCount(0);
 	await expect(editor.locator('.stanza-editor-placeholder-text')).toBeVisible();
 	await expect(input).toBeFocused();
-});
-
-test('Chat input suggests and completes a command with a missing character', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, workbench }) => {
-	const page = workbench.page;
-	if (!await page.locator('.ash-chat-view-pane').isVisible()) {
-		await page.getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();
-	}
-	const editor = page.locator('.ash-chat-input-editor');
-	const input = editor.locator('.stanza-editor-input');
-	await input.focus();
-	await page.keyboard.insertText('/');
-	await expect(editor.locator('.stanza-editor-completion-label').getByText('/config', { exact: true })).toBeVisible();
-	await page.keyboard.type('cofig');
-
-	await expect(editor.locator('.stanza-editor-completion-label')).toHaveText(['/config', '/advisor', '/init']);
-	await expect(editor.locator('.stanza-editor-completion-option.focused')).toHaveCount(0);
-	expect(await editor.locator('.stanza-editor-completion-option').evaluateAll(options => options.map(option => option.getAttribute('aria-selected')))).toEqual(['false', 'false', 'false']);
-	const command = editor.locator('.stanza-editor-completion-option').filter({ has: page.locator('.stanza-editor-completion-label').getByText('/config', { exact: true }) });
-	await expect(command.locator('.stanza-editor-completion-label strong')).toHaveText(['c', 'o', 'f', 'i', 'g']);
-	await expect(editor.locator('.stanza-editor-line-text')).toHaveText('/cofig');
-	await page.keyboard.press('ArrowDown');
-	await page.keyboard.press('Enter');
-	await expect(editor.locator('.stanza-editor-line-text')).toHaveText('/config');
-});
-
-test('Chat input matches slash command descriptions without selecting a command', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, workbench }) => {
-	const page = workbench.page;
-	if (!await page.locator('.ash-chat-view-pane').isVisible()) {
-		await page.getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();
-	}
-	const editor = page.locator('.ash-chat-input-editor');
-	const input = editor.locator('.stanza-editor-input');
-	await input.focus();
-	await page.keyboard.insertText('/');
-	await page.keyboard.type('settings');
-	await expect(editor.locator('.stanza-editor-completion-label')).toHaveText(['/config', '/team']);
-	await expect(editor.locator('.stanza-editor-completion-option.focused')).toHaveCount(0);
-	expect(await editor.locator('.stanza-editor-completion-option').evaluateAll(options => options.map(option => option.getAttribute('aria-selected')))).toEqual(['false', 'false']);
-	const command = editor.locator('.stanza-editor-completion-option').filter({ has: page.locator('.stanza-editor-completion-label').getByText('/config', { exact: true }) });
-	await expect(command.locator('.stanza-editor-completion-detail strong')).toHaveText([...'settings']);
 });

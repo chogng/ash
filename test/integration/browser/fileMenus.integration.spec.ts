@@ -168,6 +168,20 @@ test("application menu switches its root submenus on pointer entry", async ({ pa
 	await page.goto('/fileMenus.html?applicationMenu');
 	await page.waitForFunction(() => !!window.ashFileMenusIntegration);
 	const trigger = page.getByRole('toolbar', { name: 'Title bar left actions' }).getByRole('button', { name: 'Application menu' });
+	await expect(trigger).toHaveCount(1);
+	await expect(trigger).toHaveAccessibleName('Application menu');
+	await expect(trigger.locator('.ash-icon')).toBeVisible();
+	await expect(trigger.locator('.ash-button-label')).toBeHidden();
+	await expect(trigger).toHaveCSS('width', '22px');
+	await expect(trigger).toHaveCSS('height', '22px');
+	await expect(page.getByRole('toolbar', { name: 'Title bar left actions' }).getByRole('menubar')).toHaveCount(0);
+	const adjacentAction = page.getByRole('button', { name: 'Toggle sidebar', exact: true });
+	const [triggerBounds, actionBounds] = await Promise.all([trigger.boundingBox(), adjacentAction.boundingBox()]);
+	expect(triggerBounds).not.toBeNull();
+	expect(actionBounds).not.toBeNull();
+	expect({ width: triggerBounds!.width, height: triggerBounds!.height }).toEqual({ width: actionBounds!.width, height: actionBounds!.height });
+	await trigger.hover();
+	await expect(trigger).not.toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
 	await trigger.click();
 	const mainMenu = page.getByRole('menu').first();
 	const fileMenuItem = mainMenu.getByRole('menuitem', { name: 'File' });
@@ -217,6 +231,15 @@ test("application menu aligns command labels with and without icons", async ({ p
 	await expect(fileMenu.locator('..')).toHaveCSS('border-radius', '8px');
 	const iconLabel = fileMenu.getByRole('menuitem', { name: 'With icon' }).locator('.ash-button-label');
 	const plainLabel = fileMenu.getByRole('menuitem', { name: 'Without icon' }).locator('.ash-button-label');
+	for (const [name, shortcut] of [['With icon', process.platform === 'darwin' ? '⌘N' : 'Ctrl+N'], ['Without icon', process.platform === 'darwin' ? '⌘A' : 'Ctrl+A']] as const) {
+		const item = fileMenu.getByRole('menuitem', { name, exact: true });
+		await expect(item.locator('.ash-button-label')).toHaveText(name);
+		await expect(item.locator('.ash-menu-keybinding')).toHaveClass(/ash-keybinding-label-plain/u);
+		const key = item.locator('.ash-menu-keybinding kbd');
+		await expect(key).toHaveText(shortcut);
+		const font = (element: Element) => ({ family: getComputedStyle(element).fontFamily, size: getComputedStyle(element).fontSize });
+		expect(await key.evaluate(font)).toEqual(await item.evaluate(font));
+	}
 	const [iconBounds, plainBounds] = await Promise.all([iconLabel.boundingBox(), plainLabel.boundingBox()]);
 	expect(iconBounds).not.toBeNull();
 	expect(plainBounds).not.toBeNull();

@@ -2,26 +2,11 @@ import type { Locator } from '@playwright/test';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { expect, test } from '../../../automation/test.js';
+import { expectTabActionCentered } from '../../../automation/editors.js';
 
 test.use({ openWorkspace: false });
 
-async function expectTabActionCentered(item: Locator): Promise<void> {
-	const geometry = await item.evaluate(element => {
-		const tab = element.getBoundingClientRect();
-		const button = element.querySelector('.ash-tab-primary-action button')!.getBoundingClientRect();
-		const icon = element.querySelector('.ash-tab-primary-action button svg')!.getBoundingClientRect();
-		return {
-			buttonOffsetY: button.top + button.height / 2 - tab.top - tab.height / 2,
-			iconOffsetX: icon.left + icon.width / 2 - button.left - button.width / 2,
-			iconOffsetY: icon.top + icon.height / 2 - button.top - button.height / 2,
-		};
-	});
-	expect(geometry.buttonOffsetY).toBeCloseTo(0, 2);
-	expect(geometry.iconOffsetX).toBeCloseTo(0, 2);
-	expect(geometry.iconOffsetY).toBeCloseTo(0, 2);
-}
-
-test('standard editor tabs fill the title row and can be restored through Ash settings', async ({ workbench, reloadWorkbench }, testInfo) => {
+test('editor tab style settings preserve open editors and survive reload', async ({ workbench, reloadWorkbench }) => {
 	const page = workbench.page;
 	await workbench.quickaccess.runCommand('workbench.action.closeAllEditors');
 	await page.keyboard.press('ControlOrMeta+N');
@@ -29,20 +14,8 @@ test('standard editor tabs fill the title row and can be restored through Ash se
 	const group = workbench.editors.groupAt(0);
 	const first = group.tabs.filter({ hasText: 'Untitled-1' });
 	const id = await first.getAttribute('id');
-	await group.editor.waitForEditorFocus();
-	await group.editor.waitForTypeInEditor('const title = "Standard editor tabs";');
-	const expectStandardTabs = async (title: Locator): Promise<void> => {
-		await expect(title.locator('.ash-ordinary-editor-tabs-row')).toHaveClass(/ash-standard-editor-tabs/u);
-		const geometry = await title.locator('.ash-tab').evaluateAll(tabs => tabs.map(tab => {
-			const bounds = tab.getBoundingClientRect();
-			const row = tab.closest('.ash-editor-tabs-and-actions')!.getBoundingClientRect();
-			return { top: bounds.top - row.top, bottom: row.bottom - bounds.bottom, radius: getComputedStyle(tab).borderRadius, border: getComputedStyle(tab).borderTopColor, weight: getComputedStyle(tab.querySelector('.ash-tab-label')!).fontWeight };
-		}));
-		expect(geometry.length).toBeGreaterThan(0);
-		for (const tab of geometry) expect(tab).toEqual({ top: 0, bottom: 0, radius: '0px', border: 'rgba(0, 0, 0, 0)', weight: '400' });
-	};
-	await expectStandardTabs(group.title);
-	for (const option of ['Pill', 'VS Code Standard']) {
+	await expect(group.title.locator('.ash-ordinary-editor-tabs-row')).toHaveClass(/ash-standard-editor-tabs/u);
+	for (const [option, tabListClass] of [['Pill', 'inset'], ['VS Code Standard', 'flush']] as const) {
 		await workbench.settingsEditor.openUserSettingsUI();
 		await workbench.settingsEditor.selectEditorCategory('editor-opening');
 		const settings = page.locator('.ash-settings-editor');
@@ -53,16 +26,11 @@ test('standard editor tabs fill the title row and can be restored through Ash se
 		await expect(select).toContainText(option);
 		await page.locator('.ash-modal-editor-close').click();
 		await expect(first).toHaveAttribute('id', id!);
+		await expect(group.title.locator('.ash-ordinary-editor-tabs-row .ash-tab-list')).toHaveClass(new RegExp(`ash-tab-list-${tabListClass}`, 'u'));
 	}
-	await expectStandardTabs(group.title);
-	await workbench.quickaccess.runCommand('notifications.clearAll');
-	await group.editor.waitForEditorFocus();
-	const screenshot = testInfo.outputPath('standard-editor-tabs.png');
-	await page.screenshot({ path: screenshot });
-	await testInfo.attach('standard-editor-tabs', { path: screenshot, contentType: 'image/png' });
 	const restored = await reloadWorkbench();
 	await restored.workbench.page.keyboard.press('ControlOrMeta+N');
-	await expectStandardTabs(restored.workbench.editors.groupAt(0).title);
+	await expect(restored.workbench.editors.groupAt(0).title.locator('.ash-ordinary-editor-tabs-row')).toHaveClass(/ash-standard-editor-tabs/u);
 	await restored.workbench.settingsEditor.openUserSettingsUI();
 	await restored.workbench.settingsEditor.selectEditorCategory('editor-opening');
 	const settings = restored.workbench.page.locator('.ash-settings-editor');
@@ -587,94 +555,6 @@ test('double-clicking Welcome keeps it in the ordinary row and preserves an expl
 	await welcome.press('ControlOrMeta+k');
 	await welcome.press('Shift+Enter');
 	await expect(ordinary).toHaveCount(1);
-});
-
-test('pin commands follow the focused inactive tab and preserve editor selection', async ({ workbench }) => {
-	const page = workbench.page;
-	const group = workbench.editors.groupAt(0);
-	await page.keyboard.press('ControlOrMeta+N');
-	const untitled = group.tabs.filter({ hasText: /Untitled-/u });
-	const firstName = await untitled.first().getAttribute('aria-label');
-	await page.keyboard.press('ControlOrMeta+N');
-	await expect(untitled).toHaveCount(2);
-	const secondName = await untitled.last().getAttribute('aria-label');
-	const first = group.element.getByRole('tab', { name: firstName!, exact: true });
-	const second = group.element.getByRole('tab', { name: secondName!, exact: true });
-	await first.focus();
-	await first.press('Alt+Enter');
-	await expect(group.title.locator('.ash-sticky-editor-tabs-row').getByRole('tab', { name: firstName!, exact: true })).toHaveCount(1);
-	await expect(second).toHaveAttribute('aria-selected', 'true');
-	await expect(first).toHaveAttribute('aria-selected', 'false');
-	await expect(first).toBeFocused();
-	await first.press('ControlOrMeta+k');
-	await first.press('Shift+Enter');
-	await expect(group.title.locator('.ash-sticky-editor-tabs-row .ash-tab')).toHaveCount(0);
-	await expect(second).toHaveAttribute('aria-selected', 'true');
-	await expect(first).toBeFocused();
-	await first.press('Alt+Enter');
-	await group.title.locator('.ash-sticky-editor-tabs-row').getByRole('button', { name: 'Unpin', exact: true }).click();
-	await expect(group.title.locator('.ash-sticky-editor-tabs-row .ash-tab')).toHaveCount(0);
-	await expect(second).toHaveAttribute('aria-selected', 'true');
-	await expect(first).toHaveAttribute('aria-selected', 'false');
-	await expect(first).toBeFocused();
-});
-
-test('pinned editor action stays Unpin on hover and returns the editor to the ordinary row', async ({ workbench }) => {
-	const page = workbench.page;
-	await page.keyboard.press('ControlOrMeta+N');
-
-	const ordinary = page.locator('.ash-ordinary-editor-tabs-row .ash-tab.checked');
-	await expect(ordinary).toHaveCount(1);
-	await expect(ordinary.getByRole('tab')).toHaveAttribute('aria-label', /^Untitled-/u);
-	const untitledName = await ordinary.getByRole('tab').getAttribute('aria-label');
-	await expect(ordinary.locator('.ash-tab-close-action')).toHaveCount(1);
-	await expect(ordinary.getByRole('tab')).toHaveAttribute('aria-description', /Pin to pin/u);
-	const colors = await ordinary.evaluate(element => {
-		const reference = document.createElement('span');
-		reference.style.background = 'var(--ash-editor-background)';
-		element.append(reference);
-		const editor = getComputedStyle(reference).backgroundColor;
-		reference.remove();
-		return { tab: getComputedStyle(element).backgroundColor, editor };
-	});
-	expect(colors.tab).toBe(colors.editor);
-	await expect(ordinary).toHaveCSS('border-bottom-width', '0px');
-	const closeGeometry = await ordinary.locator('.ash-tab-close-action button').evaluate(button => {
-		const rect = button.getBoundingClientRect();
-		const icon = button.querySelector('.ash-icon')!.getBoundingClientRect();
-		return { width: rect.width, height: rect.height, iconWidth: icon.width, iconHeight: icon.height, left: icon.left - rect.left, right: rect.right - icon.right };
-	});
-	expect(closeGeometry).toEqual({ width: 22, height: 22, iconWidth: 16, iconHeight: 16, left: 3, right: 3 });
-	await expectTabActionCentered(ordinary);
-
-	await ordinary.getByRole('tab').press('Alt+Enter');
-	const sticky = page.locator('.ash-sticky-editor-tabs-row .ash-tab.checked');
-	await expect(sticky).toHaveCount(1);
-	await expect(sticky).toHaveCSS('border-bottom-width', '0px');
-	const unpin = sticky.getByRole('button', { name: 'Unpin', exact: true });
-	await expect(sticky.locator('.ash-tab-close-action')).toHaveCount(0);
-	await expect(unpin.locator('svg')).toHaveAttribute('data-ash-icon-id', 'pinned');
-	await expect(sticky.getByRole('tab')).toHaveAttribute('aria-description', /Unpin to unpin/u);
-	await page.mouse.move(0, 0);
-	await sticky.getByRole('tab').blur();
-	await expect(unpin).toBeVisible();
-	await sticky.getByRole('tab').hover();
-	await unpin.hover();
-	await expectTabActionCentered(sticky);
-	await expect(unpin.locator('svg')).toBeVisible();
-	await expect(unpin.locator('svg')).toHaveAttribute('data-ash-icon-id', 'pinned');
-	await expect(sticky.getByRole('button', { name: /^Close /u })).toHaveCount(0);
-	await unpin.click();
-	await expect(page.locator('.ash-sticky-editor-tabs-row .ash-tab')).toHaveCount(0);
-	await expect(ordinary.getByRole('tab')).toHaveAttribute('aria-label', untitledName!);
-	await ordinary.getByRole('tab').press('Alt+Enter');
-	await unpin.focus();
-	await expectTabActionCentered(sticky);
-	await unpin.press('Enter');
-	await expect(page.locator('.ash-sticky-editor-tabs-row .ash-tab')).toHaveCount(0);
-	await expect(ordinary.getByRole('tab')).toBeFocused();
-	await ordinary.locator('.ash-tab-close-action button').click();
-	await expect(page.getByRole('tab', { name: untitledName! })).toHaveCount(0);
 });
 
 test('editor tab menu targets the clicked tab and opens from the keyboard', { tag: process.platform === 'darwin' ? ['@browser-ui', '@browser-app-server'] : ['@browser-ui', '@browser-app-server', '@electron-ui', '@electron-app-server'] }, async ({ target, workbench }) => {

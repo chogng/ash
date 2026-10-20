@@ -7371,3 +7371,247 @@ test('minimap slider has modern corners and reaches the scrollbar bottom', async
 	await expect.poll(() => editor.element.locator(':scope > .ash-smooth-scrollable').evaluate(element => element.scrollTop)).toBe(0);
 	await expect(editor.element.locator('.stanza-editor-input')).toBeFocused();
 });
+
+test('editor Enter preserves indentation and undo restores the input position', async ({ page }) => {
+	await page.goto('/standalone.html');
+	await page.evaluate(() => window.ashStandaloneIntegration.prepareGuides(''));
+	const editor = new Editor(page.locator('#caller'));
+	await editor.waitForEditorFocus();
+	await page.keyboard.insertText('  value');
+	await editor.input.press('Enter');
+	await expect(editor.lines).toHaveText(['  value', '  ']);
+	await expect(editor.input).toBeFocused();
+	await editor.input.press('ControlOrMeta+z');
+	await expect(editor.lines).toHaveText(['  value']);
+	await page.keyboard.insertText('!');
+	await expect(editor.lines).toHaveText(['  value!']);
+	await expect(editor.input).toBeFocused();
+});
+
+test('editor preserves space and tab indentation and places input at the rendered text', async ({ page }) => {
+	await page.goto('/standalone.html');
+	await page.evaluate(() => window.ashStandaloneIntegration.prepareGuides(''));
+	const editor = new Editor(page.locator('#caller'));
+	await editor.waitForEditorFocus();
+	const lines = ['plain', '    spaces', '\ttab', ' \t mixed  text ', '\t\tnested'];
+	await page.keyboard.insertText(lines.join('\n'));
+	await expect.poll(() => editor.lines.allTextContents()).toEqual(lines);
+	const measurements = await editor.lines.evaluateAll(elements => {
+		return elements.map(element => {
+			const text = element.textContent!;
+			const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT);
+			const nodes: Text[] = [];
+			for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+				nodes.push(node as Text);
+			}
+			const boundsAt = (offset: number) => {
+				let remaining = offset;
+				for (const node of nodes) {
+					if (remaining <= node.length) {
+						const range = document.createRange();
+						range.setStart(node, remaining);
+						range.collapse(true);
+						return range.getBoundingClientRect();
+					}
+					remaining -= node.length;
+				}
+				throw new Error(`Missing rendered offset ${offset}`);
+			};
+			const start = boundsAt(0);
+			const content = boundsAt(text.search(/\S/u));
+			const last = boundsAt(text.length - 1);
+			const end = boundsAt(text.length);
+			return {
+				indent: content.left - start.left,
+				width: end.left - start.left,
+				lastWidth: end.left - last.left,
+				x: content.left + 0.25,
+				y: content.top + content.height / 2,
+				tabSize: Number(getComputedStyle(element).tabSize),
+			};
+		});
+	});
+	const characterWidth = measurements[0]!.lastWidth;
+	const tabSize = measurements[0]!.tabSize;
+	const columns = [5, 10, tabSize + 3, tabSize + 13, tabSize * 2 + 6];
+	const indentation = [0, 4, tabSize, tabSize + 1, tabSize * 2];
+	for (let index = 0; index < lines.length; index++) {
+		expect(Math.abs(measurements[index]!.indent - indentation[index]! * characterWidth)).toBeLessThan(1);
+		expect(Math.abs(measurements[index]!.width - columns[index]! * characterWidth)).toBeLessThan(1);
+	}
+	const point = measurements[4]!;
+	await page.mouse.click(point.x, point.y);
+	await expect.poll(() => editor.element.locator('.stanza-editor-caret.primary').evaluate((element, point) => {
+		const bounds = element.getBoundingClientRect();
+		return Math.abs(bounds.left + parseFloat(getComputedStyle(element).paddingLeft) - point.x);
+	}, point)).toBeLessThan(1);
+	await page.keyboard.insertText('!');
+	await expect.poll(() => editor.lines.allTextContents()).toEqual([...lines.slice(0, 4), '\t\t!nested']);
+	await editor.input.press('ControlOrMeta+z');
+	await expect.poll(() => editor.lines.allTextContents()).toEqual(lines);
+	await expect(editor.input).toBeFocused();
+});
+
+test('line numbers stay aligned while scrolling and gutter clicks edit the visible line', async ({ page }) => {
+	await page.goto('/standalone.html');
+	await page.evaluate(() => window.ashStandaloneIntegration.prepareGuides(''));
+	const editor = new Editor(page.locator('#caller'));
+	await editor.waitForEditorFocus();
+	await page.keyboard.insertText(Array.from({ length: 160 }, (_, index) => `line-${index + 1} ${'text '.repeat(40)}`).join('\n'));
+	await editor.input.press('ControlOrMeta+Home');
+	const scrollContainer = editor.element.locator(':scope > .ash-smooth-scrollable');
+	await expect.poll(() => scrollContainer.evaluate(element => element.scrollTop)).toBe(0);
+	await editor.element.hover();
+	await page.mouse.wheel(0, 600);
+	await expect.poll(() => scrollContainer.evaluate(element => element.scrollTop)).toBe(600);
+	await expect.poll(() => editor.element.evaluate(root => {
+		const bounds = root.getBoundingClientRect();
+		const rows = [...root.querySelectorAll<HTMLElement>('.view-lines > .view-line')]
+			.filter(row => row.getBoundingClientRect().top >= bounds.top && row.getBoundingClientRect().bottom <= bounds.bottom);
+		return {
+			hasVisibleLines: rows.length > 0,
+			aligned: rows.every(row => {
+				const number = root.querySelector<HTMLElement>(`.margin-view-overlays > .view-overlay-line[data-line-index="${row.dataset.lineIndex}"]`)!;
+				return number.querySelector('.line-numbers')!.textContent === String(Number(row.dataset.lineIndex) + 1)
+					&& number.getBoundingClientRect().top === row.getBoundingClientRect().top;
+			}),
+			scrollTop: root.scrollTop,
+		};
+	})).toEqual({ hasVisibleLines: true, aligned: true, scrollTop: 0 });
+	const lineIndex = await editor.element.evaluate(root => {
+		const bounds = root.getBoundingClientRect();
+		return [...root.querySelectorAll<HTMLElement>('.view-lines > .view-line')]
+			.find(row => row.getBoundingClientRect().top >= bounds.top)!.dataset.lineIndex!;
+	});
+	// Gutter overlays ignore pointer events; the editor resolves the clicked
+	// position through its hit-test controller rather than a number element handler.
+	const numberBounds = (await editor.element.locator(`.margin-view-overlays > .view-overlay-line[data-line-index="${lineIndex}"] .line-numbers`).boundingBox())!;
+	await page.mouse.click(numberBounds.x + numberBounds.width / 2, numberBounds.y + numberBounds.height / 2);
+	await page.keyboard.press('Home');
+	await page.keyboard.insertText('!');
+	await expect(editor.element.locator(`.view-lines > .view-line[data-line-index="${lineIndex}"] .stanza-editor-line-text`))
+		.toHaveText(`!line-${Number(lineIndex) + 1} ${'text '.repeat(40)}`);
+	await expect(editor.input).toBeFocused();
+});
+
+test('multiline text input is restored by one undo in the editor', async ({ page }) => {
+	await page.goto('/standalone.html');
+	await page.evaluate(() => window.ashStandaloneIntegration.prepareGuides(''));
+	const editor = new Editor(page.locator('#caller'));
+	await editor.waitForEditorFocus();
+	await page.keyboard.insertText('one\ntwo\nthree');
+	await editor.waitForEditorContents(contents => contents === 'one\ntwo\nthree');
+	await editor.input.press('ControlOrMeta+z');
+	await expect(editor.lines).toHaveText(['']);
+	await editor.input.press('ControlOrMeta+Shift+z');
+	await expect(editor.lines).toHaveText(['one', 'two', 'three']);
+	await expect(editor.input).toBeFocused();
+});
+
+test('browser range replacement restores its text and selection through undo and redo', async ({ page }) => {
+	await page.goto('/standalone.html');
+	await page.evaluate(() => window.ashStandaloneIntegration.prepareGuides(''));
+	const editor = new Editor(page.locator('#caller'));
+	await editor.waitForEditorFocus();
+	await page.keyboard.insertText('hello\nworld');
+	await editor.input.press('ControlOrMeta+Home');
+	await editor.input.press('End');
+	await editor.input.evaluate(element => {
+		const context = (element as HTMLElement & { editContext?: EventTarget; }).editContext;
+		if (!context) throw new Error('Browser EditContext is unavailable');
+		context.dispatchEvent(Object.assign(new Event('textupdate'), {
+			text: 'hi', updateRangeStart: 0, updateRangeEnd: 5, selectionStart: 0, selectionEnd: 2,
+		}));
+	});
+	await expect(editor.lines).toHaveText(['hi', 'world']);
+	await page.keyboard.insertText('!');
+	await expect(editor.lines).toHaveText(['!', 'world']);
+	await editor.input.press('ControlOrMeta+z');
+	await expect(editor.lines).toHaveText(['hi', 'world']);
+	await editor.input.press('ControlOrMeta+z');
+	await expect(editor.lines).toHaveText(['hello', 'world']);
+	await editor.input.press('ControlOrMeta+Shift+z');
+	await expect(editor.lines).toHaveText(['hi', 'world']);
+	await page.keyboard.insertText('!');
+	await expect(editor.lines).toHaveText(['!', 'world']);
+	await expect(editor.input).toBeFocused();
+});
+
+test('built-in themes apply scrollbar and minimap colors through hover and dragging', async ({ page }) => {
+	await page.goto('/standalone.html');
+	await page.evaluate(() => {
+		window.ashStandaloneIntegration.registerBundledThemes();
+		window.ashStandaloneIntegration.prepareGuides('');
+	});
+	const editor = new Editor(page.locator('#caller'));
+	await editor.waitForEditorFocus();
+	await page.keyboard.insertText(Array.from({ length: 120 }, () => 'long text '.repeat(100)).join('\n'));
+	await page.keyboard.press('ControlOrMeta+Home');
+	const vertical = editor.element.locator('.ash-scrollbar-track-vertical');
+	const thumb = vertical.locator('.ash-scrollbar-thumb');
+	const minimap = editor.element.locator('.minimap');
+	const slider = minimap.locator('.stanza-editor-minimap-slider');
+	for (const { id, colors, shadow } of [
+		{
+			id: 'ash-dark',
+			colors: ['rgba(168, 169, 170, 0.52)', 'rgba(168, 169, 170, 0.56)', 'rgba(168, 169, 170, 0.61)'],
+			shadow: 'rgba(0, 0, 0, 0.08) 0px 0px 6px 0px',
+		},
+		{
+			id: 'ash-light',
+			colors: ['rgba(100, 100, 100, 0.25)', 'rgba(100, 100, 100, 0.4)', 'rgba(100, 100, 100, 0.5)'],
+			shadow: 'rgba(0, 0, 0, 0.08) 0px 0px 6px 0px',
+		},
+		{
+			id: 'ash-high-contrast-dark',
+			colors: ['rgb(255, 255, 255)', 'rgb(255, 255, 255)', 'rgb(255, 255, 0)'], shadow: 'none',
+		},
+		{
+			id: 'ash-high-contrast-light',
+			colors: ['rgb(0, 0, 0)', 'rgb(0, 0, 0)', 'rgb(0, 0, 238)'], shadow: 'none',
+		},
+	] as const) {
+		const [background, hover, active] = colors;
+		await page.evaluate(theme => window.ashStandaloneIntegration.setActionMenuTheme(theme), id);
+		await expect(page.locator('html')).toHaveAttribute('data-color-theme', id);
+		await page.mouse.move(0, 0);
+		await expect(thumb).toHaveCSS('background-color', background);
+		await expect(slider).toHaveCSS('background-color', background);
+		await expect(vertical).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+		await expect.poll(() => editor.element.locator('canvas.decorationsOverviewRuler').evaluate((element: HTMLCanvasElement) => {
+			const pixels = element.getContext('2d')!.getImageData(2, Math.floor(element.height / 2), 1, 1).data;
+			const probe = document.createElement('canvas').getContext('2d')!;
+			probe.fillStyle = getComputedStyle(element.closest('.stanza-editor')!).backgroundColor;
+			probe.fillRect(0, 0, 1, 1);
+			return Array.from(pixels).join(',') === Array.from(probe.getImageData(0, 0, 1, 1).data).join(',');
+		})).toBe(true);
+		await expect.poll(() => minimap.evaluate(element => getComputedStyle(element, '::after').boxShadow)).toBe(shadow);
+		await minimap.hover();
+		await expect(slider).toHaveCSS('background-color', hover);
+		await vertical.hover();
+		await expect(thumb).toHaveCSS('background-color', hover);
+		const bounds = (await thumb.boundingBox())!;
+		await page.mouse.move(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2);
+		await page.mouse.down();
+		try {
+			await page.mouse.move(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2 + 20);
+			await expect(thumb).toHaveCSS('background-color', active);
+			await expect.poll(() => editor.element.locator(':scope > .ash-smooth-scrollable').evaluate(element => element.scrollTop)).toBeGreaterThan(0);
+		} finally {
+			await page.mouse.up();
+		}
+		await editor.input.press('ControlOrMeta+Home');
+	}
+
+	const colors = await slider.evaluate(element => {
+		const minimap = element.parentElement!;
+		const initial = getComputedStyle(element).backgroundColor;
+		minimap.style.setProperty('--ash-minimapSlider-background', '#123456');
+		const overridden = getComputedStyle(element).backgroundColor;
+		minimap.style.removeProperty('--ash-minimapSlider-background');
+		return { initial, overridden, restored: getComputedStyle(element).backgroundColor };
+	});
+	expect(colors.initial).not.toBe('rgba(0, 0, 0, 0)');
+	expect(colors.overridden).toBe('rgb(18, 52, 86)');
+	expect(colors.restored).toBe(colors.initial);
+});

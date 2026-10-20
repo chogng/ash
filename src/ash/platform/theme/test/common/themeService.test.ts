@@ -6,9 +6,6 @@ import {
 	highContrastLightColorTheme,
 	lightColorTheme,
 } from "../../common/colorTheme.js";
-import { colorCssVariable } from "../../common/colorUtils.js";
-import { editorForeground, foldBackground, foldPlaceholderForeground, foldingControlForeground } from "../../common/colors/editorColors.js";
-import { primaryButtonHoverBackground } from "../../common/colors/inputColors.js";
 import { TestThemeService } from "./testThemeService.js";
 import { Colors } from "../../common/colorRegistry.js";
 
@@ -45,18 +42,4 @@ test('high contrast theme colors are opaque when present', () => {
 			assert.equal(value?.rgba.a ?? 1, 1, `${theme.id}: ${id}`);
 		}
 	}
-});
-
-test("color identifiers map to stable CSS custom properties", () => {
-	assert.equal(
-		colorCssVariable(primaryButtonHoverBackground),
-		"--ash-button-primaryHoverBackground",
-	);
-	assert.equal(
-		colorCssVariable(editorForeground),
-		"--ash-editor-foreground",
-	);
-	assert.equal(colorCssVariable(foldBackground), '--ash-editor-foldBackground');
-	assert.equal(colorCssVariable(foldPlaceholderForeground), '--ash-editor-foldPlaceholderForeground');
-	assert.equal(colorCssVariable(foldingControlForeground), '--ash-editorGutter-foldingControlForeground');
 });

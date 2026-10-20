@@ -330,6 +330,17 @@ if (parameters.has('shortcuts')) {
 	await import('../../../src/ash/workbench/contrib/preferences/browser/preferencesActions.js');
 }
 const executions: string[] = [];
+if (parameters.has('scrollRows')) {
+	for (let index = 0; index < 60; index++) {
+		const id = `test.quickAccess.scroll${index}`;
+		const title = index < 58 ? `Scroll row ${String(index).padStart(2, '0')}` : `Narrow scroll result ${index}`;
+		commandBindings.set(id, resolveKeybinding(Keybinding.single(physicalKey('F1')), shortcutOS));
+		resources.add(registerAction2(class extends Action2 {
+			constructor() { super({ id, title, f1: true }); }
+			public override run(): void { executions.push(title); }
+		}));
+	}
+}
 for (const label of ['Alpha Format', 'Zulu Format', 'Format', 'Unbound command']) {
 	resources.add(registerAction2(class extends Action2 {
 		constructor() { super({ id: `test.quickAccess.${label.replaceAll(' ', '')}`, title: label, f1: true }); }

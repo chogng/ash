@@ -1,5 +1,3 @@
-import { registerTestCodeEditorFeatures } from '../../../../../../../test/fixtures/codeEditorFeatures.js';
-import { after as afterCodeFeatures } from 'mocha';
 import assert from 'node:assert/strict';
 import { suite, test } from 'mocha';
 import { URI } from '../../../../../base/common/uri.js';
@@ -41,6 +39,3 @@ suite('Reference results', () => {
 		assert.equal(model.nearestReference(URI.file('/src/other.ts'), new Position(1, 1))?.uri.path, '/src/entry.ts');
 	});
 });
-
-const codeFeatures = registerTestCodeEditorFeatures();
-afterCodeFeatures(() => codeFeatures.dispose());

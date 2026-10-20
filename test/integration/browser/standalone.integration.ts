@@ -1,3 +1,7 @@
+import bundledDarkTheme from '../../../extensions/theme-defaults/themes/ash-dark.json' with { type: 'json' };
+import bundledLightTheme from '../../../extensions/theme-defaults/themes/ash-light.json' with { type: 'json' };
+import bundledHighContrastDarkTheme from '../../../extensions/theme-defaults/themes/ash-high-contrast-dark.json' with { type: 'json' };
+import bundledHighContrastLightTheme from '../../../extensions/theme-defaults/themes/ash-high-contrast-light.json' with { type: 'json' };
 import { TestUriIdentityServices } from '../../../src/ash/platform/uriIdentity/test/common/uriIdentityTestServices.js';
 import { createTestFileService, registerTestComponentServices } from '../../../src/ash/workbench/test/common/testEditorServices.js';
 import { MultiDiffEditor } from '../../../src/ash/workbench/contrib/multiDiffEditor/browser/multiDiffEditor.js';
@@ -415,6 +419,7 @@ interface StandaloneHarness {
 	enableCodeActions(kind?: 'single' | 'navigation' | 'grouped'): void;
 	prepareCodeActionPreview(kind?: 'single' | 'multiple'): void;
 	setActionMenuLanguage(locale: 'en' | 'zh-CN'): void;
+	registerBundledThemes(): void;
 	setActionMenuTheme(theme: string): void;
 	prepareLineIdentity(): LineIdentityState;
 	splitLineIdentity(): LineIdentityState;
@@ -2883,6 +2888,18 @@ window.ashStandaloneIntegration = {
 		return readSelectionUndo();
 	},
 	readSelectionUndo,
+	registerBundledThemes: () => {
+		// Standalone defaults omit extension overrides. Use the shipped color maps
+		// when verifying the bundled themes rather than duplicating them here.
+		for (const [id, theme, colorScheme] of [
+			['ash-dark', bundledDarkTheme, stanza.ColorScheme.Dark],
+			['ash-light', bundledLightTheme, stanza.ColorScheme.Light],
+			['ash-high-contrast-dark', bundledHighContrastDarkTheme, stanza.ColorScheme.HighContrastDark],
+			['ash-high-contrast-light', bundledHighContrastLightTheme, stanza.ColorScheme.HighContrastLight],
+		] as const) {
+			stanza.editor.defineNamedTheme(id, { label: theme.name, colorScheme, colors: theme.colors });
+		}
+	},
 	setActionMenuTheme: theme => stanza.editor.setTheme(theme),
 	setActionMenuLanguage: locale => {
 		const catalog = productLanguagePackCatalogs.find(candidate => candidate.locale === locale)!;

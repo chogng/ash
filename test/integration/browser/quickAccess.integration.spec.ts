@@ -854,3 +854,105 @@ test('Quick Open applies configured path filters before filename results are lim
 	await picker.getByRole('combobox').press('Enter');
 	await expect(page.locator('output')).toHaveText('file:///workspace/src/long_needle.ts');
 });
+
+test('Quick Access scrolls its results within the list', async ({ page }) => {
+	await page.goto('/quickAccess.html?scrollRows');
+	await page.getByRole('button', { name: 'Open commands' }).click();
+	const picker = page.locator('.ash-quick-pick');
+	const colors = await picker.evaluate(element => {
+		const initial = getComputedStyle(element).backgroundColor;
+		(element as HTMLElement).style.setProperty('--ash-quickInput-background', '#123456');
+		const overridden = getComputedStyle(element).backgroundColor;
+		(element as HTMLElement).style.removeProperty('--ash-quickInput-background');
+		return { initial, overridden, restored: getComputedStyle(element).backgroundColor };
+	});
+	expect(colors.initial).not.toBe('rgba(0, 0, 0, 0)');
+	expect(colors.overridden).toBe('rgb(18, 52, 86)');
+	expect(colors.restored).toBe(colors.initial);
+
+	const listContainer = picker.locator('.ash-quick-pick-list');
+	const scrollable = picker.locator('.ash-quick-pick-list-scrollable');
+	const viewport = scrollable.locator('.ash-scrollbar-viewport');
+	const scrollbar = scrollable.locator('.ash-scrollbar-track-vertical');
+	await picker.getByRole('combobox').fill('>');
+	await expect(picker.locator('.ash-list-row').nth(20)).toBeVisible();
+	const initial = await listContainer.evaluate(container => {
+		const viewport = container.querySelector<HTMLElement>('.ash-scrollbar-viewport')!;
+		const scrollbar = container.querySelector<HTMLElement>('.ash-scrollbar-track-vertical')!;
+		const thumb = scrollbar.querySelector<HTMLElement>('.ash-scrollbar-thumb')!;
+		const picker = container.closest('.ash-quick-pick')!;
+		return {
+			containerOverflow: getComputedStyle(container).overflowY,
+			containerScrollHeight: container.scrollHeight,
+			containerHeight: container.clientHeight,
+			listScrollHeight: viewport.scrollHeight,
+			listHeight: viewport.clientHeight,
+			rowHeight: container.querySelector<HTMLElement>('.ash-list-row')!.getBoundingClientRect().height,
+			scrollbarRightInset: picker.getBoundingClientRect().right - scrollbar.getBoundingClientRect().right,
+			thumbBorder: getComputedStyle(thumb).borderRightWidth,
+			thumbWidth: thumb.getBoundingClientRect().width,
+			trackWidth: scrollbar.getBoundingClientRect().width,
+		};
+	});
+	expect(initial.containerOverflow).toBe('hidden');
+	expect(initial.containerScrollHeight).toBeLessThanOrEqual(initial.containerHeight + 1);
+	expect(initial.listScrollHeight).toBeGreaterThan(initial.listHeight);
+	expect(Math.abs(initial.listHeight / initial.rowHeight - Math.round(initial.listHeight / initial.rowHeight))).toBeLessThan(0.03);
+	expect(initial.scrollbarRightInset).toBeLessThanOrEqual(2);
+	expect(initial.thumbBorder).toBe('0px');
+	expect(initial.thumbWidth).toBe(initial.trackWidth);
+	const [rowBounds, trackBounds] = await Promise.all([
+		picker.locator('.ash-list-row.is-active').boundingBox(),
+		scrollbar.boundingBox(),
+	]);
+	expect(rowBounds).not.toBeNull();
+	expect(trackBounds).not.toBeNull();
+	// Rows keep the component's six-pixel inset before the edge scrollbar.
+	expect(trackBounds!.x - rowBounds!.x - rowBounds!.width).toBe(6);
+	const [bindingBounds, scrollbarBounds] = await Promise.all([
+		picker.locator('.ash-quick-pick-row-keybinding').first().boundingBox(),
+		scrollbar.boundingBox(),
+	]);
+	expect(bindingBounds).not.toBeNull();
+	expect(scrollbarBounds).not.toBeNull();
+	expect(bindingBounds!.x + bindingBounds!.width).toBeLessThanOrEqual(scrollbarBounds!.x - 4);
+	const combobox = picker.getByRole('combobox');
+	const firstId = await combobox.getAttribute('aria-activedescendant');
+	await combobox.press('PageDown');
+	await expect.poll(() => picker.locator('.ash-list-row.is-active').evaluate(row => Number((row as HTMLElement).dataset.index))).toBeGreaterThan(1);
+	await expect(picker.locator('.ash-list-row.is-active')).toBeInViewport();
+	await expect(combobox).toBeFocused();
+	await expect(combobox).toHaveValue('>');
+	await combobox.press('PageUp');
+	await expect(combobox).toHaveAttribute('aria-activedescendant', firstId!);
+	for (let index = 0; index < 20; index++) {
+		await picker.getByRole('combobox').press('ArrowDown');
+	}
+	const scrolled = await viewport.evaluate(element => element.scrollTop);
+	expect(scrolled).toBeGreaterThan(0);
+	expect(await listContainer.evaluate(element => element.scrollTop)).toBe(0);
+	const active = picker.locator('.ash-list-row.is-active');
+	await expect(active).toBeInViewport();
+	await expect(scrollbar).toHaveAttribute('aria-orientation', 'vertical');
+	await picker.getByRole('combobox').fill('>Narrow scroll result');
+	await expect(picker.locator('.ash-list-row')).toHaveCount(2);
+	await expect.poll(() => scrollable.evaluate(element => element.getBoundingClientRect().height)).toBeLessThan(initial.listHeight);
+	await picker.getByRole('combobox').fill('>no-such-command-quick-access-scroll');
+	await expect(scrollable).toBeHidden();
+	await expect(picker.locator('.ash-quick-pick-empty')).toBeVisible();
+	await picker.getByRole('combobox').fill('>');
+	await expect(picker.locator('.ash-list-row').nth(20)).toBeVisible();
+	await expect.poll(() => viewport.evaluate(element => element.clientHeight)).toBe(initial.listHeight);
+	await page.setViewportSize({ width: 900, height: 400 });
+	await expect(async () => {
+		const compactListHeight = await viewport.evaluate(element => element.clientHeight);
+		expect(compactListHeight).toBeGreaterThan(0);
+		expect(compactListHeight).toBeLessThan(initial.listHeight);
+		expect(Math.abs(compactListHeight / initial.rowHeight - Math.round(compactListHeight / initial.rowHeight))).toBeLessThan(0.03);
+		const resized = await picker.evaluate(element => ({
+			bottom: element.getBoundingClientRect().bottom,
+			viewportHeight: window.innerHeight,
+		}));
+		expect(resized.bottom).toBeLessThanOrEqual(resized.viewportHeight);
+	}).toPass({ timeout: 10_000 });
+});

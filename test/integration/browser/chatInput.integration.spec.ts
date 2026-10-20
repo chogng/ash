@@ -652,68 +652,15 @@ test('question controls resolve the editor background variable for each palette'
 });
 
 for (const { locale, surface } of ['en', 'zh-CN'].flatMap(locale => ['chat', 'cowork'].map(surface => ({ locale, surface })))) {
-	test(`model picker shows the catalog description and retains keyboard state in ${surface} ${locale}`, async ({ page }) => {
-		const errors: string[] = [];
-		page.on('pageerror', error => errors.push(error.message));
-		await page.goto(`/chatInput.html?locale=${locale}&surface=${surface}`);
-		expect(errors).toEqual([]);
-		await page.evaluate(() => window.ashChatInputIntegration.showModels());
-		const trigger = page.locator('.ash-chat-input-model-action');
-		await trigger.press('ArrowDown');
-		const picker = page.locator('.ash-chat-model-picker');
-		const search = picker.getByRole('combobox');
-		await expect(picker.getByRole('menuitemradio', { name: 'Test Model', exact: true })).toHaveText('Test Model');
-		await expect(picker).toHaveClass(/ash-action-widget/);
-		expect(await picker.evaluate(element => element.getBoundingClientRect().width)).toBeLessThan(320);
-		await expect(picker.locator('.ash-quick-pick-row-description')).toHaveCount(0);
-		await expect(picker).not.toContainText('A model for everyday tasks');
-		await search.press('ArrowRight');
-		const card = picker.locator('.ash-chat-model-card');
-		const description = 'A model for everyday tasks';
-		await expect(card.locator('.ash-chat-model-card-description')).toHaveText(description);
-		await expect(card).toHaveAttribute('aria-description', description);
-		await expect(card).toBeFocused();
-		await expect(card.locator('input, button')).toHaveCount(0);
-		await page.setViewportSize({ width: 320, height: 600 });
-		const explanation = card.locator('.ash-chat-model-card-description');
-		expect(await explanation.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
-		await card.press('Escape');
-		await expect(picker).toHaveCount(0);
-		await expect(trigger).toBeFocused();
-	});
-}
-
-for (const { locale, surface } of ['en', 'zh-CN'].flatMap(locale => ['chat', 'cowork'].map(surface => ({ locale, surface })))) {
-	test(`thinking levels retain catalog descriptions and keyboard selection in ${surface} ${locale}`, async ({ page }) => {
-		await page.goto(`/chatInput.html?locale=${locale}&surface=${surface}`);
-		await page.evaluate(() => window.ashChatInputIntegration.showModels());
-		const trigger = page.locator('.ash-chat-input-configuration-action');
-		const lowCopy = locale === 'zh-CN' ? '较轻的推理，更快的响应' : 'Fast responses with lighter reasoning';
-		const highCopy = locale === 'zh-CN' ? '为复杂问题提供更深入的推理' : 'Greater reasoning depth for complex problems';
-		await expect(trigger).toHaveAttribute('aria-description', lowCopy);
-		await trigger.press('ArrowDown');
-		const menu = page.locator('.ash-chat-model-configuration-menu');
-		const low = menu.locator('[data-action-id="ash.chat.input.effort.low"] button');
-		const high = menu.locator('[data-action-id="ash.chat.input.effort.high"] button');
-		await expect(low).toBeFocused();
-		await expect(low).toHaveAttribute('aria-description', lowCopy);
-		await page.keyboard.press('ArrowDown');
-		await expect(high).toBeFocused();
-		await expect(high).toHaveAttribute('aria-description', highCopy);
-		await page.keyboard.press('Enter');
-		await expect(menu).toHaveCount(0);
-		await expect(trigger).toBeFocused();
-		await expect(trigger).toHaveAttribute('aria-description', highCopy);
-	});
-}
-
-for (const { locale, surface } of ['en', 'zh-CN'].flatMap(locale => ['chat', 'cowork'].map(surface => ({ locale, surface })))) {
 	test(`model options select effort and context independently in ${surface} ${locale}`, async ({ page }) => {
 		await page.goto(`/chatInput.html?locale=${locale}&surface=${surface}`);
 		await page.evaluate(() => window.ashChatInputIntegration.showModels());
 		const chinese = locale === 'zh-CN';
 		const trigger = page.locator('.ash-chat-input-configuration-action');
 		const menu = page.locator('.ash-chat-model-configuration-menu');
+		const lowCopy = chinese ? '较轻的推理，更快的响应' : 'Fast responses with lighter reasoning';
+		const highCopy = chinese ? '为复杂问题提供更深入的推理' : 'Greater reasoning depth for complex problems';
+		await expect(trigger).toHaveAttribute('aria-description', lowCopy);
 		await expect(trigger).toHaveText(chinese ? '低' : 'Low');
 		await trigger.press('ArrowDown');
 		await expect(menu.locator('.ash-chat-model-configuration-heading')).toHaveText(chinese ? ['推理强度', '上下文大小'] : ['Thinking Level', 'Context Size']);
@@ -724,9 +671,12 @@ for (const { locale, surface } of ['en', 'zh-CN'].flatMap(locale => ['chat', 'co
 		await expect(contextDefault).toHaveText(chinese ? '关闭长上下文' : 'Long context off');
 		await expect(expanded).toHaveText(chinese ? '开启长上下文' : 'Long context on');
 		const high = menu.locator('[data-action-id="ash.chat.input.effort.high"] button');
+		await expect(menu.locator('[data-action-id="ash.chat.input.effort.low"] button')).toHaveAttribute('aria-description', lowCopy);
+		await expect(high).toHaveAttribute('aria-description', highCopy);
 		await page.keyboard.press('ArrowDown');
 		await expect(high).toBeFocused();
 		await page.keyboard.press('Enter');
+		await expect(trigger).toHaveAttribute('aria-description', highCopy);
 		await expect(trigger).toHaveText(chinese ? '高' : 'High');
 		await expect(trigger).toBeFocused();
 		await trigger.press('ArrowDown');
@@ -821,9 +771,22 @@ test('Mode picker keeps its Tab stop and shares menu activation, placement and d
 		await page.keyboard.press('Escape');
 		await expect(mode).toBeFocused();
 	}
-	await mode.press('ArrowDown');
-	await menu.getByRole('menuitemradio', { name: 'Plan', exact: true }).click();
-	await expect(menu).toBeHidden();
+	for (const name of ['Plan', 'Agent', 'Debug', 'Multitask', 'Ask']) {
+		await mode.press('ArrowDown');
+		await menu.getByRole('menuitemradio', { name, exact: true }).click();
+		await expect(menu).toBeHidden();
+		await expect(mode).toHaveText(name);
+		await mode.press('ArrowDown');
+		await expect(menu.getByRole('menuitemradio', { name, exact: true })).toBeFocused();
+		await expect(menu.getByRole('menuitemradio').and(menu.locator('[aria-checked="true"]'))).toHaveCount(1);
+		await expect(menu.getByRole('menuitemradio', { name, exact: true })).toHaveAttribute('aria-checked', 'true');
+		await page.keyboard.press('Escape');
+		await expect(mode).toBeFocused();
+	}
+	await model.press('Enter');
+	await expect(page.getByRole('dialog', { name: 'Choose a chat model' })).toBeVisible();
+	await page.keyboard.press('Escape');
+	await expect(model).toBeFocused();
 });
 
 for (const surface of ['chat', 'cowork']) {
@@ -858,6 +821,21 @@ for (const surface of ['chat', 'cowork']) {
 		const width = await picker.evaluate(element => element.getBoundingClientRect().width);
 		expect(width).toBeGreaterThan(320);
 		expect(width).toBeLessThanOrEqual(page.viewportSize()!.width * 0.8);
+		await expect(search).toHaveCSS('outline-style', 'none');
+		await expect(search).toHaveCSS('border-top-width', '0px');
+		await expect(search).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+		const edges = await picker.evaluate(element => {
+			const items = element.querySelector<HTMLElement>('.ash-action-widget-items')!;
+			items.style.maxHeight = '28px';
+			const row = items.querySelector('.ash-button')!.getBoundingClientRect();
+			const footer = element.querySelector('.ash-chat-model-picker-footer .ash-button')!.getBoundingClientRect();
+			const result = { scrolls: items.scrollHeight > items.clientHeight, rowLeft: row.left, rowRight: row.right, footerLeft: footer.left, footerRight: footer.right };
+			items.style.removeProperty('max-height');
+			return result;
+		});
+		expect(edges.scrolls).toBe(true);
+		expect(edges.rowLeft).toBe(edges.footerLeft);
+		expect(edges.rowRight).toBe(edges.footerRight);
 		await search.fill('test-model');
 		await expect(picker.getByRole('menuitemradio')).toHaveCount(1);
 		await expect(picker.getByRole('menuitemradio')).toHaveText('Test Model');
@@ -923,6 +901,8 @@ for (const locale of ['en', 'zh-CN']) {
 		await search.press('ArrowRight');
 		await expect(card).toHaveText('Restored provider description');
 		await expect(card).toBeFocused();
+		await page.setViewportSize({ width: 320, height: 600 });
+		expect(await card.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
 		expect(await page.evaluate(() => window.ashChatInputIntegration.modelState())).toEqual(initial);
 		await card.press('Escape');
 		await expect(page.locator('.ash-chat-model-picker')).toHaveCount(0);

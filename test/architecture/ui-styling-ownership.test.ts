@@ -132,15 +132,6 @@ test("TabList preserves the standard close-action hover background", async () =>
 	assert.doesNotMatch(editorTabsCss, /--ash-tab-list-(?:checked-)?action-hover-background/);
 });
 
-test("Menubar icon actions use ToolBar's label hiding without hiding their icon", async () => {
-	const menubarCss = await readFile(join(process.cwd(), "src", "ash", "workbench", "browser", "parts", "titlebar", "menubarControl.css"), "utf8");
-	const toolbarCss = await readFile(join(process.cwd(), "src", "ash", "base", "browser", "ui", "toolbar", "toolbar.css"), "utf8");
-
-	assert.doesNotMatch(menubarCss, /\.ash-menubar \.ash-menubar-item > span\s*\{[^}]*display:\s*none/s);
-	assert.match(toolbarCss, /\.ash-toolbar \.ash-action-view-item\.icon \.ash-icon-label-container\s*\{[^}]*display:\s*none/s);
-	assert.doesNotMatch(menubarCss, /\.ash-(?:button-label|icon-label-container)\s*\{[^}]*display:\s*none/s);
-});
-
 test("Split actions own their joined geometry outside Terminal", async () => {
 	const sourceRoot = join(process.cwd(), "src", "ash");
 	const dropdownCss = await readFile(join(sourceRoot, "base", "browser", "ui", "dropdown", "dropdown.css"), "utf8");

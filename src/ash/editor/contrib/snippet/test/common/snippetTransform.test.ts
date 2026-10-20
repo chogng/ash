@@ -1,5 +1,3 @@
-import { registerTestCodeEditorFeatures } from '../../../../../../../test/fixtures/codeEditorFeatures.js';
-import { after as afterCodeFeatures } from 'mocha';
 import assert from "node:assert/strict";
 import { test } from "mocha";
 import { applySnippetTransform, createSnippetTransform } from "../../common/snippetTransform.js";
@@ -17,6 +15,3 @@ test("Completion snippet transforms reject invalid patterns and options", () => 
 	assert.throws(() => createSnippetTransform("[", "text", ""), SyntaxError);
 	assert.throws(() => createSnippetTransform("x", "text", "zz"), SyntaxError);
 });
-
-const codeFeatures = registerTestCodeEditorFeatures();
-afterCodeFeatures(() => codeFeatures.dispose());

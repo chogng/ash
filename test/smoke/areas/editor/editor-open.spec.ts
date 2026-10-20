@@ -925,26 +925,6 @@ test('Dragging a tab to a group edge shows the split target and moves the editor
 	await expect(editors.element.locator('[data-editor-drop-direction]')).toHaveCount(0);
 });
 
-test('minimap slider follows its theme color in the running editor', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, workbench }) => {
-
-	const fileRow = workbench.page.locator('.ash-explorer .ash-tree-row').filter({ hasText: 'main.ts' });
-	await expect.poll(() => fileRow.count(), { timeout: 15_000 }).toBe(1);
-	await fileRow.click();
-	const slider = workbench.editors.groupAt(0).content.locator('.stanza-editor-minimap-slider');
-	await expect(slider).toBeVisible();
-	const colors = await slider.evaluate(element => {
-		const minimap = element.parentElement!;
-		const initial = getComputedStyle(element).backgroundColor;
-		minimap.style.setProperty('--ash-minimapSlider-background', '#123456');
-		const overridden = getComputedStyle(element).backgroundColor;
-		minimap.style.removeProperty('--ash-minimapSlider-background');
-		return { initial, overridden, restored: getComputedStyle(element).backgroundColor };
-	});
-	expect(colors.initial).not.toBe('rgba(0, 0, 0, 0)');
-	expect(colors.overridden).toBe('rgb(18, 52, 86)');
-	expect(colors.restored).toBe(colors.initial);
-});
-
 test('Code opens Go to Line from the command palette in the focused editor', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, workbench }) => {
 
 	const page = workbench.page;

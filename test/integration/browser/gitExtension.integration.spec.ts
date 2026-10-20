@@ -197,17 +197,31 @@ test('SCM delivers changes queued while its initialization update is in flight',
 	}
 });
 
-test('SCM commit form stays borderless with and without resource groups across themes', async ({ page }, testInfo) => {
+test('SCM commit form follows themes and input height with and without resource groups', async ({ page }, testInfo) => {
 	await page.goto('/gitExtension.html');
 	try {
 		await page.evaluate(() => window.gitExtensionIntegration.activate('en'));
 		await expect.poll(() => page.evaluate(() => window.gitExtensionIntegration.state().repositories[0]?.paths)).toEqual(['one.ts']);
 		await page.evaluate(() => window.gitScmPaneIntegration.mount());
 		const form = page.locator('#scm-pane .ash-scm-commit-form');
+		const input = page.locator('#scm-pane .ash-scm-input');
+		const editor = input.getByRole('textbox', { name: /^Commit message/u });
 		const tree = page.locator('#scm-pane').getByRole('tree', { name: 'Source control changes', exact: true });
 		await expect(form).toBeVisible();
 		for (const theme of ['dark', 'light', 'hcDark', 'hcLight'] as const) {
 			await page.evaluate(theme => window.gitScmPaneIntegration.setTheme(theme), theme);
+			await editor.focus();
+			await expect(input).toHaveCSS('outline-style', 'solid');
+			expect(await input.evaluate(element => {
+				const probe = document.createElement('span');
+				probe.style.backgroundColor = 'var(--ash-input-background)';
+				probe.style.color = 'var(--ash-input-foreground)';
+				element.append(probe);
+				try {
+					const expected = getComputedStyle(probe), actual = getComputedStyle(element);
+					return actual.backgroundColor === expected.backgroundColor && actual.color === expected.color;
+				} finally { probe.remove(); }
+			})).toBe(true);
 			await expect(tree.locator('.ash-scm-change')).toHaveCount(1);
 			const rowGeometry = await tree.getByRole('treeitem').evaluateAll(elements => elements.map(element => ({
 				height: element.getBoundingClientRect().height,
@@ -271,6 +285,25 @@ test('SCM commit form stays borderless with and without resource groups across t
 			expect(groupGeometry.actionsRight).toBeLessThanOrEqual(groupGeometry.countLeft);
 			await testInfo.attach(`source-control-${theme}`, { body: await page.locator('#scm-pane').screenshot(), contentType: 'image/png' });
 		}
+		await editor.focus();
+		await page.keyboard.insertText('Subject');
+		await editor.press('Enter');
+		await page.keyboard.insertText('Body');
+		await expect(input).toHaveCSS('height', '46px');
+		await editor.press('ControlOrMeta+z');
+		await expect(input.locator('.view-lines')).not.toContainText('Body');
+		await editor.press('ControlOrMeta+Shift+z');
+		await expect(input.locator('.view-lines')).toContainText('Body');
+		await editor.press('ControlOrMeta+a');
+		await page.keyboard.insertText('Long commit message '.repeat(50));
+		await expect.poll(() => input.evaluate(element => element.getBoundingClientRect().height)).toBeGreaterThan(46);
+		await editor.press('ControlOrMeta+a');
+		await page.keyboard.insertText(Array.from({ length: 12 }, (_, index) => `Message line ${index + 1}`).join('\n'));
+		await expect(input).toHaveCSS('height', '206px');
+		await editor.press('ControlOrMeta+a');
+		await editor.press('Backspace');
+		await expect(input).toHaveCSS('height', '26px');
+		await expect.poll(() => page.evaluate(() => window.gitScmPaneIntegration.draft())).toBe('');
 	} finally { await page.evaluate(() => window.gitExtensionIntegration.dispose()); }
 });
 

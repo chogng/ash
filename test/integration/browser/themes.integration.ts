@@ -81,6 +81,7 @@ import { defaultButtonStyles, getButtonStyles, defaultCheckboxStyles, defaultCou
 declare global {
 	interface Window {
 		mountDefaultStyleProbes(): void;
+		openStyledTreeFind(): void;
 		openStyledDialog(): void;
 		changeIconModelLanguage(id: string): void;
 		releaseIconModels(): void;
@@ -215,9 +216,10 @@ window.mountDefaultStyleProbes = () => {
 			return label;
 		},
 	}));
-	tree.setChildren([{ element: 'Styled tree item' }]);
+	tree.setChildren([{ element: 'Styled tree item' }, { element: 'Hovered tree item' }]);
+	tree.setSelection(['Styled tree item']);
 	tree.setFocus('Styled tree item');
-	tree.openFind();
+	window.openStyledTreeFind = () => tree.openFind();
 	window.openStyledDialog = () => {
 		const dialog = resources.add(new Dialog(host, {
 			title: 'Styled dialog', content: 'Style inheritance probe',

@@ -28,7 +28,10 @@ test('history rows retain identity and reserve title width when the pane resizes
 		expect(geometry.rowHeight).toBe(22);
 		expect(geometry.graphHeight).toBe(22);
 	}
+	const subject = commit.locator('.ash-scm-graph-subject');
+	const restingTitle = await subject.boundingBox();
 	await commit.locator('.ash-scm-graph-row').hover({ position: { x: 80, y: 10 } });
+	expect(await subject.boundingBox()).toEqual(restingTitle);
 	const overlay = commit.locator('.ash-scm-graph-overlay');
 	await expect(overlay.locator('.ash-scm-graph-actions')).toBeVisible();
 	await expect.poll(() => overlay.evaluate(element => {
@@ -51,6 +54,15 @@ test('floating history actions preserve the complete keyboard focus outline acro
 		await expect(commit.locator('.ash-scm-graph-actions')).toBeVisible();
 		await expectVisibleFocusOutline(row);
 		await commit.locator('.ash-scm-graph-actions button').first().click({ trial: true });
+		if (theme === 0) {
+			await commit.press('Tab');
+			await expect(commit.getByRole('button', { name: 'metadata-topic', exact: true })).toBeFocused();
+			await page.keyboard.press('Tab');
+			await expect(commit.getByRole('button', { name: 'metadata-v1', exact: true })).toBeFocused();
+			await page.keyboard.press('Tab');
+			await expect(commit.locator('.ash-scm-graph-actions button').first()).toBeFocused();
+			await commit.focus();
+		}
 		await test.info().attach(`history-focus-${theme}`, { body: await row.screenshot(), contentType: 'image/png' });
 	}
 });

@@ -40,8 +40,8 @@
 
 /* Menus live in the context-view host, outside the canvas DOM. */
 .ash-context-view-menu:has(> .ash-design-menu) {
-	--ash-editor-background: var(--ash-sessions-design-chromeBackground);
-	--ash-foreground: var(--ash-sessions-design-chromeForeground);
+	--ash-menu-background: var(--ash-sessions-design-chromeBackground);
+	--ash-menu-foreground: var(--ash-sessions-design-chromeForeground);
 	--ash-button-foreground: var(--ash-sessions-design-chromeForeground);
 	--ash-border: color-mix(
 		in srgb,

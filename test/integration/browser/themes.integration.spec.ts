@@ -10,7 +10,7 @@ test('host styles reach nested inputs, select popups, submenus, tree find and di
 	const select = page.getByRole('combobox', { name: 'Styled select', exact: true });
 	const retainedInput = await input.elementHandle();
 	for (const id of ['ash-dark', 'ash-light', 'ash-high-contrast-dark', 'ash-high-contrast-light']) {
-		await page.evaluate(id => window.selectColorTheme(id), id);
+		await page.evaluate(id => { window.selectColorTheme(id); window.openStyledTreeFind(); }, id);
 		const colors = await page.locator('#root').evaluate(root => {
 			const probe = document.createElement('span');
 			root.append(probe);
@@ -18,6 +18,7 @@ test('host styles reach nested inputs, select popups, submenus, tree find and di
 				return Object.fromEntries([
 					'error-foreground', 'selection-background', 'accent-background',
 					'foreground', 'badge-background', 'widget-border',
+					'list-activeSelectionBackground', 'list-activeSelectionForeground', 'list-inactiveSelectionBackground', 'list-hoverBackground',
 				].map(id => {
 					probe.style.color = `var(--ash-${id})`;
 					return [id, getComputedStyle(probe).color];
@@ -30,8 +31,21 @@ test('host styles reach nested inputs, select popups, submenus, tree find and di
 		await expect(page.locator('#styled-tree .ash-tree-find-widget')).toHaveCSS('border-top-color', colors['error-foreground']!);
 		await find.fill('');
 		await expect(page.locator('#styled-tree .ash-tree-find-widget')).toHaveCSS('border-top-color', colors['widget-border']!);
+		await find.press('Escape');
 		await page.locator('#styled-tree .ash-tree').focus();
 		await expect(page.locator('#styled-tree .ash-tree-row.focused')).toHaveCSS('outline-color', colors['error-foreground']!);
+		const selected = page.locator('#styled-tree .ash-tree-row.selected');
+		await expect(selected).toHaveAttribute('aria-selected', 'true');
+		await selected.hover();
+		await expect(selected).toHaveCSS('background-color', colors['list-activeSelectionBackground']!);
+		await expect(selected).toHaveCSS('color', colors['list-activeSelectionForeground']!);
+		await input.focus();
+		await expect(selected).toHaveCSS('background-color', colors['list-inactiveSelectionBackground']!);
+		await selected.hover();
+		await expect(selected).toHaveCSS('background-color', colors['list-inactiveSelectionBackground']!);
+		const hovered = page.locator('#styled-tree .ash-tree-row').nth(1);
+		await hovered.hover();
+		await expect(hovered).toHaveCSS('background-color', colors['list-hoverBackground']!);
 		await expect(page.locator('#default-style-probes .ash-count-badge')).toHaveCSS('background-color', colors['badge-background']!);
 		await expect(page.locator('#default-style-probes progress')).toHaveCSS('accent-color', colors['accent-background']!);
 		await expect(page.getByRole('checkbox', { name: 'Styled checkbox' })).toHaveCSS('accent-color', colors['accent-background']!);

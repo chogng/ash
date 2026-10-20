@@ -78,11 +78,13 @@ export const test = base.extend<PlaywrightFixtures>({
 	target: async ({ }, use, testInfo) => {
 		await use(playwrightTargetForProject(testInfo.project.name));
 	},
-	webAppServer: [async ({ testWorkspace, reportIssueUrl, backendConfiguration, githubAccount }, use, testInfo) => {
+	webAppServer: [async ({ testWorkspace, reportIssueUrl, backendConfiguration, githubAccount, useInMemorySecretStorage }, use, testInfo) => {
 		if (testInfo.project.name !== 'browser-app-server') { await use(undefined); return; }
 		// The full smoke prehook (or CI's explicit preparation) owns this build.
 		// no-compile runs reuse it without compiling again in each test fixture.
-		const server = await launchWeb(testWorkspace.directory, { reportIssueUrl, backendConfiguration, githubAccount, preparedBackend: true });
+		const server = await launchWeb(testWorkspace.directory, {
+			reportIssueUrl, backendConfiguration, githubAccount, preparedBackend: true, useInMemorySecretStorage,
+		});
 		try { await use(server); } finally { await server.close(); }
 	}, { timeout: 75_000 }],
 	testWorkspace: async ({ includeLargeTestFile, gitRepository, gitMergeConflict }, use) => {

@@ -181,6 +181,7 @@ declare global {
 			setWatermarkBinding(command: string, key: string | null): void;
 			readonly watermarkCommands: readonly string[];
 			configureEditorTabs(style: ModernUIEditorTabStyle, sizing?: EditorTabSizing, breadcrumbs?: boolean): Promise<void>;
+			setEditorConfiguration(key: string, value: unknown): Promise<void>;
 			setActiveEditorSticky(sticky: boolean): void;
 			setEditorTheme(id: string): void;
 			closeEditor(name: string): Promise<void>;
@@ -523,6 +524,7 @@ const badgeBars: CompositeBar[] = [];
 const badgeActivities: ActivityService[] = [];
 const badgeHandles = resources.add(new MutableDisposable<DisposableStore>());
 if (new URLSearchParams(location.search).has('badges')) {
+	if (new URLSearchParams(location.search).has('modernBadges')) resources.add(bindTestColorTheme(editorServices.get(IThemeService), document.body));
 	for (const presentation of ['icon', 'label'] as const) {
 		const host = h(document, 'div');
 		host.id = `badge-${presentation}`;
@@ -540,6 +542,7 @@ if (new URLSearchParams(location.search).has('badges')) {
 			activityHoverOptions: { position: () => HoverPosition.BELOW },
 			openComposite: id => views.openViewContainer(id),
 		}, activity));
+		if (presentation === 'icon' && new URLSearchParams(location.search).has('modernBadges')) bar.setActiveComposite('first');
 		badgeBars.push(bar);
 		badgeActivities.push(activity);
 	}
@@ -687,6 +690,7 @@ window.ashCompositeIntegration = {
 			editor.activeGroup.unstickEditor();
 		}
 	},
+	setEditorConfiguration: (key, value) => editorServices.get(IConfigurationService).updateValue(key, value),
 	configureEditorTabs: async (style, sizing = 'fit', breadcrumbs) => {
 		const configuration = editorServices.get(IConfigurationService);
 		await configuration.updateValue(WorkbenchConfiguration.modernUIEditorTabStyle, style);

@@ -1,4 +1,5 @@
-import { test, expect } from '@playwright/test';
+import { test, expect, type Locator } from '@playwright/test';
+import { expectTabActionCentered } from '../../automation/editors.js';
 import { expectVisibleFocusOutline } from './focusOutline.js';
 import type { } from './composite.integration.js';
 
@@ -316,8 +317,22 @@ test('modern activity badges preserve focus above the icon stacking context', as
 		window.ashCompositeIntegration.setBadge(50);
 	});
 	const tab = page.locator('#badge-icon [data-action-id="first"]');
+	const other = page.locator('#badge-icon [data-action-id="second"]');
+	const readSelection = () => tab.evaluate(element => {
+		const style = getComputedStyle(element, '::after');
+		return { background: style.backgroundColor, outline: style.outlineStyle, color: style.outlineColor };
+	});
 	for (const theme of ['ash-light', 'ash-dark', 'ash-high-contrast-dark', 'ash-high-contrast-light']) {
 		await page.evaluate(theme => window.ashCompositeIntegration.setEditorTheme(theme), theme);
+		await page.mouse.move(700, 600);
+		const selectedStyle = await readSelection();
+		await tab.hover();
+		await expect.poll(readSelection).toEqual(selectedStyle);
+		if (theme.includes('high-contrast')) {
+			expect(selectedStyle.outline).toBe('solid');
+			await other.hover();
+			await expect.poll(() => other.evaluate(element => getComputedStyle(element, '::after').outlineStyle)).toBe('dashed');
+		}
 		await tab.focus();
 		await tab.hover();
 		await expectVisibleFocusOutline(tab);
@@ -1142,4 +1157,181 @@ test('editor tabs distinguish active, inactive and pinned surfaces across themes
 		await expect(strip).toHaveCSS('background-color', stripColor);
 		await active.getByRole('button', { name: 'Unpin', exact: true }).click();
 	}
+});
+
+test('pin commands follow the focused inactive tab and preserve editor selection', async ({ page }) => {
+	await page.goto('/composite.html?editorTabs&editorMenu');
+	await page.waitForFunction(() => !!window.ashEditorTitleIntegration);
+	await page.evaluate(async () => {
+		await window.ashEditorTitleIntegration.open('first');
+		await window.ashEditorTitleIntegration.open('second');
+	});
+	const title = page.locator('#editor-tabs-host .ash-editor-title-control');
+	const firstName = 'first.ts';
+	const secondName = 'second.ts';
+	const first = title.getByRole('tab', { name: firstName, exact: true });
+	const second = title.getByRole('tab', { name: secondName, exact: true });
+	await first.focus();
+	await first.press('Alt+Enter');
+	await expect(title.locator('.ash-sticky-editor-tabs-row').getByRole('tab', { name: firstName!, exact: true })).toHaveCount(1);
+	await expect(second).toHaveAttribute('aria-selected', 'true');
+	await expect(first).toHaveAttribute('aria-selected', 'false');
+	await expect(first).toBeFocused();
+	await first.press('ControlOrMeta+k');
+	await first.press('Shift+Enter');
+	await expect(title.locator('.ash-sticky-editor-tabs-row .ash-tab')).toHaveCount(0);
+	await expect(second).toHaveAttribute('aria-selected', 'true');
+	await expect(first).toBeFocused();
+	await first.press('Alt+Enter');
+	await title.locator('.ash-sticky-editor-tabs-row').getByRole('button', { name: 'Unpin', exact: true }).click();
+	await expect(title.locator('.ash-sticky-editor-tabs-row .ash-tab')).toHaveCount(0);
+	await expect(second).toHaveAttribute('aria-selected', 'true');
+	await expect(first).toHaveAttribute('aria-selected', 'false');
+	await expect(first).toBeFocused();
+});
+
+test('pinned editor action stays Unpin on hover and returns the editor to the ordinary row', async ({ page }) => {
+	await page.goto('/composite.html?editorTabs&editorMenu');
+	await page.waitForFunction(() => !!window.ashEditorTitleIntegration);
+	await page.evaluate(() => window.ashEditorTitleIntegration.open('pinned'));
+
+	const ordinary = page.locator('.ash-ordinary-editor-tabs-row .ash-tab.checked');
+	await expect(ordinary).toHaveCount(1);
+	await expect(ordinary.getByRole('tab')).toHaveAttribute('aria-label', 'pinned.ts');
+	const untitledName = await ordinary.getByRole('tab').getAttribute('aria-label');
+	await expect(ordinary.locator('.ash-tab-close-action')).toHaveCount(1);
+	await expect(ordinary.getByRole('tab')).toHaveAttribute('aria-description', /Pin to pin/u);
+	const colors = await ordinary.evaluate(element => {
+		const reference = document.createElement('span');
+		reference.style.background = 'var(--ash-editor-background)';
+		element.append(reference);
+		const editor = getComputedStyle(reference).backgroundColor;
+		reference.remove();
+		return { tab: getComputedStyle(element).backgroundColor, editor };
+	});
+	expect(colors.tab).toBe(colors.editor);
+	await expect(ordinary).toHaveCSS('border-bottom-width', '0px');
+	const closeGeometry = await ordinary.locator('.ash-tab-close-action button').evaluate(button => {
+		const rect = button.getBoundingClientRect();
+		const icon = button.querySelector('.ash-icon')!.getBoundingClientRect();
+		return { width: rect.width, height: rect.height, iconWidth: icon.width, iconHeight: icon.height, left: icon.left - rect.left, right: rect.right - icon.right };
+	});
+	expect(closeGeometry).toEqual({ width: 22, height: 22, iconWidth: 16, iconHeight: 16, left: 3, right: 3 });
+	await expectTabActionCentered(ordinary);
+
+	await ordinary.getByRole('tab').press('Alt+Enter');
+	const sticky = page.locator('.ash-sticky-editor-tabs-row .ash-tab.checked');
+	await expect(sticky).toHaveCount(1);
+	await expect(sticky).toHaveCSS('border-bottom-width', '0px');
+	const unpin = sticky.getByRole('button', { name: 'Unpin', exact: true });
+	await expect(sticky.locator('.ash-tab-close-action')).toHaveCount(0);
+	await expect(unpin.locator('svg')).toHaveAttribute('data-ash-icon-id', 'pinned');
+	await expect(sticky.getByRole('tab')).toHaveAttribute('aria-description', /Unpin to unpin/u);
+	await page.mouse.move(0, 0);
+	await sticky.getByRole('tab').blur();
+	await expect(unpin).toBeVisible();
+	await sticky.getByRole('tab').hover();
+	await unpin.hover();
+	await expectTabActionCentered(sticky);
+	await expect(unpin.locator('svg')).toBeVisible();
+	await expect(unpin.locator('svg')).toHaveAttribute('data-ash-icon-id', 'pinned');
+	await expect(sticky.getByRole('button', { name: /^Close /u })).toHaveCount(0);
+	await unpin.click();
+	await expect(page.locator('.ash-sticky-editor-tabs-row .ash-tab')).toHaveCount(0);
+	await expect(ordinary.getByRole('tab')).toHaveAttribute('aria-label', untitledName!);
+	await ordinary.getByRole('tab').press('Alt+Enter');
+	await unpin.focus();
+	await expectTabActionCentered(sticky);
+	await unpin.press('Enter');
+	await expect(page.locator('.ash-sticky-editor-tabs-row .ash-tab')).toHaveCount(0);
+	await expect(ordinary.getByRole('tab')).toBeFocused();
+	await ordinary.locator('.ash-tab-close-action button').click();
+	await expect(page.getByRole('tab', { name: untitledName! })).toHaveCount(0);
+});
+
+test('editor title scrollbars preserve overflow, focus and clipping through size and visibility changes', async ({ page }) => {
+	await page.goto('/composite.html?editorTabs&editorMenu');
+	await page.waitForFunction(() => !!window.ashCompositeIntegration);
+	await page.evaluate(async () => {
+		await window.ashCompositeIntegration.configureEditorTabs('connected', 'fit', true);
+		for (let index = 1; index <= 9; index++) await window.ashCompositeIntegration.openEditor(`tab-${index}`);
+	});
+	const title = page.locator('#editor-tabs-host .ash-editor-title-control');
+	const tabs = title.locator('.ash-ordinary-editor-tabs-row .ash-tab-list');
+	const breadcrumbs = title.locator('.ash-breadcrumbs-widget');
+	await tabs.evaluate(element => { (element as HTMLElement).style.width = '220px'; });
+	await breadcrumbs.evaluate(element => { Object.assign((element as HTMLElement).style, { width: '60px', flex: 'none' }); });
+	const tabViewport = tabs.locator('.ash-scrollbar-viewport');
+	const breadcrumbViewport = breadcrumbs.locator('.ash-scrollbar-viewport');
+	const tabBar = tabs.getByRole('scrollbar', { name: 'Horizontal scrollbar', includeHidden: true });
+	const breadcrumbBar = breadcrumbs.getByRole('scrollbar', { name: 'Horizontal scrollbar', includeHidden: true });
+	const selected = tabs.locator('.ash-tab.checked');
+	const identity = await selected.getByRole('tab').getAttribute('id');
+	const originalViewport = await tabViewport.elementHandle();
+	for (const [viewport, bar] of [[tabViewport, tabBar], [breadcrumbViewport, breadcrumbBar]]) {
+		await expect.poll(() => viewport.evaluate(element => ({ width: element.clientWidth, scroll: element.scrollWidth, overflow: element.scrollWidth > element.clientWidth }))).toMatchObject({ overflow: true });
+		await expect(bar).toHaveCSS('height', '3px');
+	}
+	const changeSetting = async (key: string, option: string): Promise<void> => {
+		await page.evaluate(({ key, value }) => window.ashCompositeIntegration.setEditorConfiguration(`workbench.editor.titleScrollbar${key}`, value), { key, value: option.toLowerCase() });
+	};
+	const exercise = async (viewport: Locator, bar: Locator): Promise<void> => {
+		await viewport.evaluate(element => { element.scrollLeft = 0; });
+		await viewport.hover();
+		await page.mouse.wheel(0, 60);
+		await expect.poll(() => viewport.evaluate(element => element.scrollLeft)).toBeGreaterThan(0);
+		await bar.focus();
+		await expect(bar).toHaveCSS('opacity', '1');
+		await bar.press('Home');
+		await expect.poll(() => viewport.evaluate(element => element.scrollLeft)).toBe(0);
+		const thumb = await bar.locator('.ash-scrollbar-thumb').boundingBox();
+		expect(thumb).not.toBeNull();
+		await page.mouse.move(thumb!.x + thumb!.width / 2, thumb!.y + thumb!.height / 2);
+		await page.mouse.down();
+		await page.mouse.move(thumb!.x + thumb!.width / 2 + 30, thumb!.y + thumb!.height / 2);
+		await page.mouse.move(thumb!.x + thumb!.width / 2 + 30, thumb!.y + 50);
+		await expect(bar).toHaveCSS('opacity', '1');
+		await page.mouse.up();
+		await expect.poll(() => viewport.evaluate(element => element.scrollLeft)).toBeGreaterThan(0);
+	};
+	await exercise(tabViewport, tabBar);
+	await exercise(breadcrumbViewport, breadcrumbBar);
+	await changeSetting('Sizing', 'Large');
+	await expect(tabBar).toHaveCSS('height', '10px');
+	await expect(breadcrumbBar).toHaveCSS('height', '8px');
+	await expect(selected.getByRole('tab')).toHaveAttribute('id', identity!);
+	expect(await tabViewport.evaluate((element, previous) => element === previous, originalViewport)).toBe(true);
+
+	await page.mouse.move(0, 0);
+	await page.getByRole('button', { name: 'Outside content', exact: true }).focus();
+	await expect(tabBar).toHaveCSS('opacity', '0');
+	await expect(breadcrumbBar).toHaveCSS('opacity', '0');
+	await exercise(tabViewport, tabBar);
+	await exercise(breadcrumbViewport, breadcrumbBar);
+	await tabViewport.evaluate(element => { element.scrollLeft = 0; });
+	await expect(selected).toHaveClass(/connected-tab-right-clipped/u);
+	await selected.getByRole('tab').focus();
+	await expect.poll(() => selected.evaluate(tab => {
+		const viewport = tab.closest('.ash-scrollbar-viewport')!.getBoundingClientRect();
+		const bounds = tab.getBoundingClientRect();
+		return bounds.left >= viewport.left - 1 && bounds.right <= viewport.right + 1;
+	})).toBe(true);
+	await expect(selected).not.toHaveClass(/connected-tab-right-clipped/u);
+	await expect(selected).toHaveCSS('border-bottom-width', '0px');
+	await changeSetting('Visibility', 'Visible');
+	await page.mouse.move(0, 0);
+	await page.getByRole('button', { name: 'Outside content', exact: true }).focus();
+	await expect(tabBar).toHaveCSS('opacity', '1');
+	await expect(breadcrumbBar).toHaveCSS('opacity', '1');
+	await changeSetting('Visibility', 'Hidden');
+	await expect(tabBar).toBeHidden();
+	await expect(breadcrumbBar).toBeHidden();
+	await selected.getByRole('tab').press('Alt+Enter');
+	const sticky = title.locator('.ash-sticky-editor-tabs-row .ash-tab-list');
+	await expect(sticky).toHaveCSS('--ash-scrollbar-size', '10px');
+	await expect(sticky.locator('.ash-scrollbar-track-horizontal')).toBeHidden();
+	await changeSetting('Sizing', 'Default');
+	await expect(sticky).toHaveCSS('--ash-scrollbar-size', '3px');
+	await changeSetting('Visibility', 'Auto');
+	await expect(tabBar).not.toBeHidden();
 });

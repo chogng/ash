@@ -1,5 +1,3 @@
-import { registerTestCodeEditorFeatures } from '../../../../../test/fixtures/codeEditorFeatures.js';
-import { after as afterCodeFeatures } from 'mocha';
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { MinimapCharRendererFactory } from '../../browser/viewParts/minimap/minimapCharRendererFactory.js';
@@ -63,6 +61,3 @@ test('Minimap maps non-ASCII characters to an existing glyph at every font scale
 		}
 	}
 });
-
-const codeFeatures = registerTestCodeEditorFeatures();
-afterCodeFeatures(() => codeFeatures.dispose());

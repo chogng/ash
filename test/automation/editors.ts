@@ -1,4 +1,4 @@
-import type { Locator, Page } from "@playwright/test";
+import { expect, type Locator, type Page } from "@playwright/test";
 import { Editor } from './editor.js';
 
 /** Product-level automation surface for one editor group. */
@@ -45,4 +45,20 @@ export class Editors {
 		await this.element.waitFor({ state: "visible" });
 		await this.groupAt(0).waitForReady();
 	}
+}
+
+export async function expectTabActionCentered(item: Locator): Promise<void> {
+	const geometry = await item.evaluate(element => {
+		const tab = element.getBoundingClientRect();
+		const button = element.querySelector('.ash-tab-primary-action button')!.getBoundingClientRect();
+		const icon = element.querySelector('.ash-tab-primary-action button svg')!.getBoundingClientRect();
+		return {
+			buttonOffsetY: button.top + button.height / 2 - tab.top - tab.height / 2,
+			iconOffsetX: icon.left + icon.width / 2 - button.left - button.width / 2,
+			iconOffsetY: icon.top + icon.height / 2 - button.top - button.height / 2,
+		};
+	});
+	expect(geometry.buttonOffsetY).toBeCloseTo(0, 2);
+	expect(geometry.iconOffsetX).toBeCloseTo(0, 2);
+	expect(geometry.iconOffsetY).toBeCloseTo(0, 2);
 }

@@ -1,5 +1,3 @@
-import { registerTestCodeEditorFeatures } from '../../../../../../../test/fixtures/codeEditorFeatures.js';
-import { after as afterCodeFeatures } from 'mocha';
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { Range } from '../../../../common/core/range.js';
@@ -34,6 +32,3 @@ test('find state announces effective option changes and clamps match navigation'
 		{ regex: true, position: false, count: false },
 	]);
 });
-
-const codeFeatures = registerTestCodeEditorFeatures();
-afterCodeFeatures(() => codeFeatures.dispose());

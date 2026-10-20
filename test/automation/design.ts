@@ -1,4 +1,6 @@
-import type { Page } from '@playwright/test';
+import { expect, type Page, type Locator } from '@playwright/test';
+import type { PlaywrightApplication } from './playwrightDriver.js';
+import { captureElectronMenu } from './menus.js';
 
 export async function paintColor(page: Page, value: string): Promise<void> {
 	await page.locator('[data-part="auxiliarybar"]').getByRole('button', { name: 'Fill', exact: true }).click();
@@ -21,4 +23,49 @@ export async function paintPixel(page: Page, x: number, y: number): Promise<numb
 		context.drawImage(image, 0, 0);
 		return [...context.getImageData(Math.round(x * devicePixelRatio), Math.round(y * devicePixelRatio), 1, 1).data];
 	}, { png: png.toString('base64'), x, y });
+}
+
+export async function clickCanvasMenu(canvas: Locator, name: string, application?: PlaywrightApplication): Promise<void> {
+	const trigger = async (): Promise<void> => { await canvas.focus(); await canvas.press('Shift+F10'); };
+	if (application && 'windows' in application && process.platform === 'darwin') {
+		await captureElectronMenu(application, trigger, { label: name });
+	} else {
+		await trigger();
+		await canvas.page().getByRole('menuitem', { name, exact: true }).click();
+	}
+}
+
+
+export async function inspectCanvasMenu(canvas: Locator, application?: PlaywrightApplication, pointer = false): Promise<readonly { label: string; enabled: boolean; }[]> {
+	const trigger = async (): Promise<void> => {
+		await canvas.focus();
+		if (pointer) await canvas.locator('.ash-canvas-viewport').click({ button: 'right', position: { x: 20, y: 20 } });
+		else await canvas.press('Shift+F10');
+	};
+	if (application && 'windows' in application && process.platform === 'darwin') {
+		return (await captureElectronMenu(application, trigger)).map(({ label, enabled }) => ({ label, enabled }));
+	}
+	await trigger();
+	const menu = canvas.page().getByRole('menu');
+	await expect(menu).toBeVisible();
+	const items = await menu.getByRole('menuitem').evaluateAll(items => items.map(item => ({ label: item.querySelector('.ash-button-label')!.textContent!, enabled: !(item as HTMLButtonElement).disabled })));
+	await canvas.page().keyboard.press('Escape');
+	return items;
+}
+
+
+export async function drawBezierPath(canvas: Locator): Promise<void> {
+	await canvas.press('Escape'); await canvas.press('p');
+	const viewport = canvas.locator('.ash-canvas-viewport'), bounds = await viewport.boundingBox();
+	await viewport.click({ position: { x: bounds!.width * .3, y: bounds!.height * .3 } });
+	await viewport.click({ position: { x: bounds!.width * .5, y: bounds!.height * .5 } });
+	await canvas.press('Enter'); await canvas.press('v'); await canvas.press('Enter');
+}
+
+
+export async function rightClickCanvasShape(shape: Locator): Promise<void> {
+	const bounds = await shape.boundingBox();
+	expect(bounds).not.toBeNull();
+	// The viewport owns pointer input; SVG objects deliberately do not receive it.
+	await shape.page().mouse.click(bounds!.x + bounds!.width / 2, bounds!.y + bounds!.height / 2, { button: 'right' });
 }
