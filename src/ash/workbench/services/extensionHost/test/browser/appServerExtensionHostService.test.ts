@@ -1,3 +1,6 @@
+import { ITerminalCompletionService, TerminalCompletionService } from '../../../../contrib/terminalContrib/suggest/browser/terminalCompletionService.js';
+import { ITerminalQuickFixService } from '../../../../contrib/terminalContrib/quickFix/browser/quickFix.js';
+import { TerminalQuickFixService } from '../../../../contrib/terminalContrib/quickFix/browser/terminalQuickFixService.js';
 import { ITerminalLinkProviderService } from '../../../../contrib/terminalContrib/links/browser/links.js';
 import { TerminalLinkProviderService } from '../../../../contrib/terminalContrib/links/browser/terminalLinkProviderService.js';
 import { IAdapterManager, IDebugService, type IDebugConfigurationProvider, type DebugConfigurationProviderRegistration, type IDebugAdapterTrackerFactory, type DebugAdapterTrackerFactoryRegistration } from '../../../../contrib/debug/common/debug.js';
@@ -983,6 +986,7 @@ class FakeExtensionHostApi implements IExtensionHostApi {
 		assert.ok(this.activationResult, 'Unexpected activation request');
 		return this.activationResult;
 	}
+	terminalQuickFixMatcher: JsonValue = { matches: true, outputMatcher: null };
 	invocationResult: Promise<JsonValue> | undefined;
 	readonly invocationSignals: AbortSignal[] = [];
 	available = true;
@@ -1007,6 +1011,7 @@ class FakeExtensionHostApi implements IExtensionHostApi {
 		signal.throwIfAborted();
 		this.invocations.push(request);
 		this.invocationSignals.push(signal);
+		if (request.operation === 'provideTerminalQuickFixes' && request.payload !== null && typeof request.payload === 'object' && !Array.isArray(request.payload) && (request.payload as { readonly [key: string]: JsonValue; }).phase === 'matcher') return this.terminalQuickFixMatcher;
 		if (this.invocationResult) return this.invocationResult;
 		if (request.operation === 'outputEvent' || request.operation === 'documentEvent' || request.operation === 'workspaceEvent') return null;
 		if (request.operation === 'resolveConnection') return { connectionName: 'build' };
@@ -1134,6 +1139,8 @@ function createServices(api: IExtensionHostApi, languages: ILanguageFeaturesServ
 	services.registerSingleton(IExtensionService, () => new TestExtensionService(extensionApi, services.get(IAdapterManager)));
 	services.registerInstance(ITerminalProcessService, { onConnectionState: Event.None, listProfiles: async () => [] } as unknown as ITerminalProcessService);
 	services.registerInstance(ITerminalService, { ...Disposable.None } as unknown as ITerminalService);
+	services.registerSingleton(ITerminalCompletionService, () => services.createInstance(TerminalCompletionService));
+	services.registerSingleton(ITerminalQuickFixService, () => services.createInstance(TerminalQuickFixService));
 	services.registerSingleton(ITerminalLinkProviderService, () => services.createInstance(TerminalLinkProviderService));
 	services.registerSingleton(IEnvironmentVariableService, () => services.createInstance(EnvironmentVariableService));
 	services.registerSingleton(ITerminalContributionService, () => services.createInstance(TerminalContributionService));
@@ -1772,6 +1779,75 @@ test('terminal link registrations reach the shared owner and retire callbacks wi
 	assert.equal(api.invocations.length, 4);
 });
 
+suite('Extension terminal environment reader lifecycle', () => {
+	ensureNoDisposablesAreLeakedInTestSuite();
+
+	for (const retirement of ['clear', 'disconnect'] as const) test(`withdraws cached environment contributions and their reader on ${retirement}`, async () => {
+		const api = new FakeExtensionHostApi(snapshot(1, 'acme.run', [{ kind: 'terminalEnvironment', registrationId: 'environment' }]));
+		api.invocationResult = Promise.resolve({ persistent: false, map: [['EXTENSION_VALUE', { type: 1, value: 'active' }]] });
+		using languages = new LanguageFeaturesService();
+		const manifestJson = JSON.stringify({ name: 'demo', publisher: 'acme', version: '1.0.0' });
+		const manifestSha256 = `sha256:${createHash('sha256').update(manifestJson).digest('hex')}`;
+		const extensionApi: IExtensionApi = {
+			resources: new ExtensionResourceLoaderService(async () => assert.fail('Unexpected extension resource request')),
+			list: async () => ({ generation: 1, diagnostics: [], extensions: [{ id: 'acme.demo', name: 'demo', publisher: 'acme', version: '1.0.0', displayName: 'Demo', sourceKind: 'user', manifestSha256, packageSha256: DIGEST, manifestJson }] }),
+		};
+		using services = createServices(api, languages, new ProviderSink<TaskProvider>(), new ProviderSink<TestProfileProvider>(), undefined, undefined, undefined, extensionApi);
+		await services.get(IExtensionService).start();
+		using output = retirement === 'clear' ? services.get(IOutputService).createChannel({ id: 'terminal-environment-lifecycle', label: 'Terminal environment lifecycle' }) : undefined;
+		using bridge = output ? services.createInstance(MainThreadExtensionApi, CommandsRegistry, 1_000, output) : undefined;
+		using host = retirement === 'disconnect' ? services.createInstance(AppServerExtensionHostService, CommandsRegistry, 1_000) : undefined;
+		if (host) await host.start();
+		else bridge!.update(api.current);
+		const environment = services.get(IEnvironmentVariableService);
+		await environment.refreshCollections();
+		assert.equal(environment.collections.get('acme.demo')?.map.get('EXTENSION_VALUE')?.value, 'active');
+		const reads = api.invocations.filter(request => request.operation === 'getTerminalEnvironment').length;
+		assert.equal(reads, 1);
+
+		if (host) api.emitConnection('stopped');
+		else bridge!.clear();
+		assert.equal(environment.collections.has('acme.demo'), false, 'Retirement removes the cached extension collection synchronously');
+		await environment.refreshCollections();
+		assert.equal(api.invocations.filter(request => request.operation === 'getTerminalEnvironment').length, reads, 'A future terminal launch cannot invoke the retired reader');
+	});
+});
+
+suite('Extension terminal trusted runtime binding', () => {
+	ensureNoDisposablesAreLeakedInTestSuite();
+
+	for (const scenario of [
+		{ name: 'accepts the admitted runtime across different digest domains', catalogDigest: `sha256:${'c'.repeat(64)}`, runtimeId: 'acme.demo', runtimeDigest: DIGEST, admitted: true },
+		{ name: 'rejects a different runtime identity', catalogDigest: `sha256:${'c'.repeat(64)}`, runtimeId: 'other.runtime', runtimeDigest: DIGEST, admitted: false },
+		{ name: 'rejects a different admitted runtime digest', catalogDigest: `sha256:${'c'.repeat(64)}`, runtimeId: 'acme.demo', runtimeDigest: `sha256:${'d'.repeat(64)}`, admitted: false },
+		{ name: 'does not bypass a declared binding through a matching catalog digest', catalogDigest: DIGEST, runtimeId: 'other.runtime', runtimeDigest: DIGEST, admitted: false },
+	]) test(scenario.name, async () => {
+		const api = new FakeExtensionHostApi(snapshot(1, 'acme.run', [
+			{ kind: 'terminalEnvironment', registrationId: 'environment' },
+			{ kind: 'terminalCompletionProvider', registrationId: 'completion', triggerCharacters: ['-'] },
+		]));
+		api.invocationResult = Promise.resolve({ persistent: false, map: [['EXTENSION_VALUE', { type: 1, value: 'bound' }]] });
+		using languages = new LanguageFeaturesService();
+		const manifestJson = JSON.stringify({ name: 'demo', publisher: 'acme', version: '1.0.0' });
+		const manifestSha256 = `sha256:${createHash('sha256').update(manifestJson).digest('hex')}`;
+		const extensionApi: IExtensionApi = {
+			resources: new ExtensionResourceLoaderService(async () => assert.fail('Unexpected extension resource request')),
+			list: async () => ({ generation: 1, diagnostics: [], extensions: [{ id: 'acme.demo', name: 'demo', publisher: 'acme', version: '1.0.0', displayName: 'Demo', sourceKind: 'plugin', manifestSha256, packageSha256: scenario.catalogDigest, manifestJson, runtimeBinding: { runtimeId: scenario.runtimeId, packageDigest: scenario.runtimeDigest } }] }),
+		};
+		using services = createServices(api, languages, new ProviderSink<TaskProvider>(), new ProviderSink<TestProfileProvider>(), undefined, undefined, undefined, extensionApi);
+		await services.get(IExtensionService).start();
+		using output = services.get(IOutputService).createChannel({ id: 'terminal-runtime-binding', label: 'Terminal runtime binding' });
+		using bridge = services.createInstance(MainThreadExtensionApi, CommandsRegistry, 1_000, output);
+		if (scenario.admitted) bridge.update(api.current);
+		else assert.throws(() => bridge.update(api.current), /Invalid terminal profile provider response/);
+		const environment = services.get(IEnvironmentVariableService);
+		await environment.refreshCollections();
+		assert.equal(environment.collections.get('acme.demo')?.map.get('EXTENSION_VALUE')?.value, scenario.admitted ? 'bound' : undefined);
+		assert.equal([...services.get(ITerminalCompletionService).providers].length, scenario.admitted ? 1 : 0);
+		assert.equal(api.invocations.filter(request => request.operation === 'getTerminalEnvironment').length, scenario.admitted ? 1 : 0);
+	});
+});
+
 suite('Extension terminal profile registration lifecycle', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();
 
@@ -1801,11 +1877,29 @@ suite('Extension terminal profile registration lifecycle', () => {
 	});
 });
 
+test('fleet notifications dynamically register, replace and unregister Speech through the production client owner', async () => {
+	const api = new FakeExtensionHostApi(snapshot(1, 'acme.run', [], '', [], 11));
+	using languages = new LanguageFeaturesService();
+	using services = createServices(api, languages, new ProviderSink<TaskProvider>(), new ProviderSink<TestProfileProvider>());
+	using host = services.createInstance(AppServerExtensionHostService, new CommandRegistry(), 1_000);
+	await host.start();
+	const speech = services.get(ISpeechService); assert.equal(speech.hasSpeechProvider, false);
+	api.current = snapshot(2, 'acme.run', [{ kind: 'speechProvider', registrationId: 'late', identifier: 'acme.dynamic', registrationGeneration: 1 }], '', [], 11);
+	api.emitChanged(2); await waitFor(() => host.currentSnapshot.fleetGeneration === 2);
+	assert.equal(speech.hasSpeechProvider, true);
+	api.current = snapshot(3, 'acme.run', [{ kind: 'speechProvider', registrationId: 'replacement', identifier: 'acme.dynamic', registrationGeneration: 2 }], '', [], 11);
+	api.emitChanged(3); await waitFor(() => host.currentSnapshot.fleetGeneration === 3);
+	assert.equal(speech.hasSpeechProvider, true);
+	api.current = snapshot(4, 'acme.run', [], '', [], 11);
+	api.emitChanged(4); await waitFor(() => host.currentSnapshot.fleetGeneration === 4);
+	assert.equal(speech.hasSpeechProvider, false);
+});
+
 test('onSpeech activates the exact dormant provider and commits it through MainThreadSpeech', async () => {
 	for (const event of ['onSpeech', 'onDemand:speechProvider']) {
 		const api = new FakeExtensionHostApi(dormantSnapshot([event]));
 		const ready = snapshot(2, 'acme.lazy', [], '', [], 11);
-		api.activationResult = Promise.resolve({ ...ready, extensions: ready.extensions.map(runtime => ({ ...runtime, registrations: [{ kind: 'speechProvider' as const, registrationId: 'speech', identifier: 'acme.recognition' }] })) });
+		api.activationResult = Promise.resolve({ ...ready, extensions: ready.extensions.map(runtime => ({ ...runtime, registrations: [{ kind: 'speechProvider' as const, registrationGeneration: 1, registrationId: 'speech', identifier: 'acme.recognition' }] })) });
 		using languages = new LanguageFeaturesService();
 		using services = createServices(api, languages, new ProviderSink<TaskProvider>(), new ProviderSink<TestProfileProvider>());
 		using host = services.createInstance(AppServerExtensionHostService, new CommandRegistry(), 1_000);
@@ -1846,4 +1940,70 @@ test('large extension outlines share one document budget and index snapshot line
 	await assert.rejects(async () => provider.provideDocumentSymbols(request, signal), /Extension symbols/);
 	result = [{ ...wireSymbol(0), selectionRange: { start: { lineIndex: 0, columnIndex: 0 }, end: { lineIndex: 0, columnIndex: 2 } } }];
 	await assert.rejects(async () => provider.provideDocumentSymbols(request, signal), /outside the document snapshot/);
+});
+
+test('terminal completion and quick fix registrations bind the original instance, ranges and cancellation', async () => {
+	const api = new FakeExtensionHostApi(snapshot(1, 'acme.terminal', [
+		{ kind: 'terminalCompletionProvider', registrationId: 'completion', triggerCharacters: ['-'] },
+		{ kind: 'terminalQuickFixProvider', registrationId: 'fix', providerId: 'acme.fix' },
+	]));
+	using languages = new LanguageFeaturesService();
+	const manifestJson = JSON.stringify({ name: 'demo', publisher: 'acme', version: '1.0.0' });
+	const extensionApi: IExtensionApi = {
+		resources: new ExtensionResourceLoaderService(async () => assert.fail('Unexpected extension resource request')),
+		list: async () => ({ generation: 1, diagnostics: [], extensions: [{ id: 'acme.demo', name: 'demo', publisher: 'acme', version: '1.0.0', displayName: 'Demo', sourceKind: 'user', manifestSha256: `sha256:${createHash('sha256').update(manifestJson).digest('hex')}`, packageSha256: DIGEST, manifestJson }] }),
+	};
+	using services = createServices(api, languages, new ProviderSink<TaskProvider>(), new ProviderSink<TestProfileProvider>(), undefined, undefined, undefined, extensionApi);
+	await services.get(IExtensionService).start();
+	using stateChanged = new Emitter<import('../../../../contrib/terminal/browser/terminal.js').TerminalInstanceState>();
+	using removed = new Emitter<import('../../../../contrib/terminal/browser/terminal.js').ITerminalInstance>();
+	const instance = { id: 'terminal-1', title: 'Shell', processId: 42, state: 'running', onDidChangeState: stateChanged.event } as import('../../../../contrib/terminal/browser/terminal.js').ITerminalInstance;
+	Object.assign(services.get(ITerminalService), { instances: [instance], onDidDisposeInstance: removed.event });
+	using host = services.createInstance(AppServerExtensionHostService, new CommandRegistry(), 1_000);
+	await host.start();
+	const completions = services.get(ITerminalCompletionService);
+	const source = new AbortController();
+	api.invocationResult = Promise.resolve({ items: [{ label: '--help', replacementRange: [4, 5], detail: 'Help' }] });
+	assert.deepEqual((await completions.provideCompletions(instance, 'git -', 5, source.signal)).map(({ isValid, ...item }) => item), [{ label: '--help', replacementRange: [4, 5], detail: 'Help' }]);
+	assert.deepEqual(api.invocations.at(-1)?.payload, { commandLine: 'git -', cursorIndex: 5, terminal: { id: 'terminal-1', name: 'Shell', processId: 42 } });
+	assert.equal(api.invocations.at(-1)?.operation, 'provideTerminalCompletions');
+	assert.deepEqual(await completions.provideCompletions(instance, 'git -', 5, source.signal, '/'), []);
+	assert.equal(api.invocations.length, 1);
+	api.invocationResult = Promise.resolve({ items: [{ label: 'bad', replacementRange: [0, 6] }] });
+	assert.deepEqual(await completions.provideCompletions(instance, 'git -', 5, source.signal), []);
+	api.terminalQuickFixMatcher = { matches: true, outputMatcher: { anchor: 'bottom', offset: 42, length: 2 } };
+	const command = { command: 'tool bad', exitCode: 1, getOutputMatch: (matcher: { offset: number; length: number; anchor: string; }) => { assert.equal(matcher.offset, 42); assert.equal(matcher.length, 2); assert.equal(matcher.anchor, 'bottom'); return { regexMatch: [''], outputLines: ['failed', 'try good'] }; } } as unknown as import('../../../../../platform/terminal/common/capabilities/capabilities.js').ITerminalCommand;
+	const quickFixes = services.get(ITerminalQuickFixService);
+	api.invocationResult = Promise.resolve<JsonValue>({
+		fixes: [
+			{ kind: 'terminalCommand', label: 'tool good', shouldExecute: true },
+			{ kind: 'opener', label: 'https://example.com/help' },
+			{ kind: 'command', label: 'Explain', id: 'opaque-1' },
+		]
+	});
+	const fixes = await quickFixes.provideTerminalQuickFixes(instance, command, source.signal);
+	assert.equal(fixes.length, 3);
+	const { isValid, ...commandFix } = fixes[0]!;
+	assert.equal(isValid?.(), true);
+	assert.deepEqual(commandFix, { label: 'tool good', terminalCommand: 'tool good', shouldExecute: true });
+	assert.equal(fixes[1]?.uri?.toString(), 'https://example.com/help');
+	assert.deepEqual(api.invocations.at(-1)?.payload, { commandLine: 'tool bad', exitCode: 1, outputLines: ['failed', 'try good'], terminalId: 'terminal-1', phase: 'provide' });
+	api.invocationResult = Promise.resolve(null);
+	await fixes[2]!.run!();
+	assert.equal(api.invocations.at(-1)?.operation, 'handleTerminalQuickFix');
+	assert.deepEqual(api.invocations.at(-1)?.payload, { id: 'opaque-1', terminalId: 'terminal-1', commandLine: 'tool bad' });
+	const pending = deferred<JsonValue>();
+	api.invocationResult = pending.promise;
+	const reading = completions.provideCompletions(instance, 'pending', 7, source.signal);
+	const signal = api.invocationSignals.at(-1)!;
+	stateChanged.fire('reconnecting');
+	assert.equal(signal.aborted, true);
+	pending.resolve({ items: [{ label: 'late', replacementRange: [0, 7] }] });
+	assert.deepEqual(await reading, []);
+	api.emitConnection('stopped');
+	assert.deepEqual(await completions.provideCompletions(instance, 'git -', 5, source.signal), []);
+	assert.deepEqual(await quickFixes.provideTerminalQuickFixes(instance, command, source.signal), []);
+	const count = api.invocations.length;
+	await fixes[2]!.run!();
+	assert.equal(api.invocations.length, count);
 });

@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 export function parseLaunchArguments(args: readonly string[]): IParsedLaunchArguments {
 	const log: string[] = [];
 	let verbose = false;
+	let useInMemorySecretStorage = false;
 	const paths: string[] = [];
 	const urls: string[] = [];
 	const workspaceArgs: string[] = [];
@@ -58,6 +59,10 @@ export function parseLaunchArguments(args: readonly string[]): IParsedLaunchArgu
 			return value;
 		};
 		switch (name) {
+			case '--use-inmemory-secretstorage':
+				if (separator >= 0) throw new Error('--use-inmemory-secretstorage does not accept a value');
+				useInMemorySecretStorage = true;
+				break;
 			case '--log':
 				log.push(takeValue());
 				break;
@@ -113,7 +118,7 @@ export function parseLaunchArguments(args: readonly string[]): IParsedLaunchArgu
 		}
 		workspaceArgs.push('--folder', paths.pop()!);
 	}
-	return { ...(log.length ? { log } : {}), ...(verbose ? { verbose } : {}), paths, urls, workspace: parseWorkspaceLaunchArguments(workspaceArgs), newWindow, reuseWindow, goto, wait, waitMarkerFilePath };
+	return { ...(log.length ? { log } : {}), ...(verbose ? { verbose } : {}), ...(useInMemorySecretStorage ? { useInMemorySecretStorage } : {}), paths, urls, workspace: parseWorkspaceLaunchArguments(workspaceArgs), newWindow, reuseWindow, goto, wait, waitMarkerFilePath };
 }
 
 /** Parses one project target from desktop launch arguments. */

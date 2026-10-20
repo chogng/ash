@@ -109,8 +109,15 @@ file-system 实施；编辑器的未保存内容和外部变更冲突仍由前�
 不使用启动目录替代。成功 resize/attach 后才更新服务持有的尺寸。
 
 `write_binary` 接收 1–65536 个原始字节，走文本输入同一有界 writer channel，不参与命令文本检测。
-`send_signal(Interrupt)` 在 Unix PTY 中断当前前台进程组；Windows 返回 Unsupported，
+`send_signal` 在 Unix PTY 向当前前台进程组发送 Interrupt / Terminate / Kill / Hangup（SIGINT / SIGTERM / SIGKILL / SIGHUP）；Windows 返回 Unsupported，
 不把键盘输入伪装成进程信号。查询、输入与控制均验证当前 connection owner 和目录授权。
+
+`set_auto_replies` 原子替换当前 connection 的精确 raw-output 规则；创建请求也可携带规则，
+匹配器在首个输出 drainer 运行前安装。执行端逐字节保留模式前缀，跨 PTY chunk 和 UTF-8
+边界匹配，不依赖 Renderer 或可见屏幕。最多 32 条规则、每个 match/reply 4096 字节、
+总计 65536 字节，同一条回复每秒最多一次。回复使用原 PTY 有界输入队列；队列已满时
+不阻塞输出，也不保留延迟回复。撤销、detach、connection close 和进程移除清除规则与
+匹配前缀；重新 attach 或复用新进程必须使用新 owner 的当前配置。
 
 解析后 ACK、完整属性集合、显式 detach、跨窗口进程发现与屏幕重播尚未实现。连接关闭时的
 30 秒租约仅在同一个存活的服务进程内允许持有 bearer token 的客户端重新 attach；

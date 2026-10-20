@@ -89,13 +89,6 @@ export function registerTerminalActions(): void {
 			}
 		}
 	});
-	registerAction2(class SendSignalTerminalAction extends Action2 {
-		constructor() { super({ id: TerminalCommandId.SendSignal, title: localize2('terminal.signal.command', 'Terminal: Interrupt Active Command'), f1: true, precondition: TerminalHasActiveInstanceContext.isEqualTo(true) }); }
-		override async run(accessor: ServicesAccessor): Promise<void> {
-			const instance = accessor.get(ITerminalService).activeInstance;
-			if (instance && !instance.isReadOnly && instance.state === 'running') await instance.sendSignal('SIGINT');
-		}
-	});
 	registerAction2(class AttachTerminalToChatAction extends Action2 {
 		constructor() {
 			super({
@@ -189,9 +182,17 @@ export function registerTerminalActions(): void {
 		override async run(accessor: ServicesAccessor): Promise<void> {
 			const terminals = accessor.get(ITerminalService);
 			const groups = accessor.get(ITerminalGroupService);
+			const quickInput = accessor.get(IQuickInputService);
 			const instance = await terminals.createTerminal();
+			// Creation may itself ask for a workspace folder. That completed prompt
+			// belongs to this action; a picker still open now owns the user's focus.
+			let focus = !quickInput.currentQuickInput;
+			using focusRequest = quickInput.onShow(() => { focus = false; });
 			terminals.setActiveInstance(instance);
-			await groups.showPanel(true);
+			// Reveal without deferring focus inside openView: a newer picker may
+			// open while process creation or view restoration is still pending.
+			await groups.showPanel(false);
+			if (focus && !quickInput.currentQuickInput && terminals.activeInstance === instance) instance.xterm?.focus();
 		}
 	});
 	registerAction2(class NewTerminalWindowAction extends Action2 {
@@ -392,7 +393,7 @@ export function registerTerminalActions(): void {
 	CommandsRegistry.register(TerminalCommandId.Relaunch, async (accessor, context) => {
 		if (context === undefined && accessor.get(ITerminalService).activeInstance?.target !== TerminalLocation.Editor) return terminalView(accessor).relaunchActive();
 		const instance = resolveInstance(accessor, context);
-		if (!instance || instance.state === 'running' || instance.state === 'reconnecting') return;
+		if (!instance || instance.state === 'reconnecting') return;
 		await accessor.get(ITerminalService).relaunchTerminal(instance, instance.xterm?.dimensions() ?? { cols: 80, rows: 24 });
 	});
 	CommandsRegistry.register(TerminalCommandId.Kill, (accessor, context) => {

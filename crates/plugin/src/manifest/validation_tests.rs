@@ -480,6 +480,43 @@ fn javascript_entry_uses_sdk_without_requesting_execution_of_its_source_file() {
 }
 
 #[test]
+fn javascript_terminal_providers_preserve_the_admitted_capability_ceiling() {
+    let mut value = valid_manifest();
+    value["contributions"]["editorExtensions"] = json!([{
+        "id": "terminal-runtime", "runtime": "javascript", "entrypoint": "extension.js",
+        "runtimeApiVersion": 1, "activationEvents": [{"type": "startup"}],
+        "capabilities": [
+            "command", "terminalProfileProvider", "terminalLinkProvider",
+            "terminalCompletionProvider", "terminalQuickFixProvider"
+        ]
+    }]);
+    value["permissions"] = json!([]);
+    value["credentialSlots"] = json!([]);
+    let manifest = parse(&value).unwrap();
+    assert!(manifest.permissions.is_empty());
+    assert_eq!(
+        manifest.contributions.editor_extensions[0]
+            .capabilities
+            .len(),
+        5
+    );
+
+    // Terminal providers share the JavaScript host, but admitting them must not
+    // authorize unrelated registrations or remove activation's capability bound.
+    for unsupported in ["dataChannel", "testProfileProvider", "externalUriOpener"] {
+        let mut rejected = value.clone();
+        rejected["contributions"]["editorExtensions"][0]["capabilities"] =
+            json!(["terminalCompletionProvider", unsupported]);
+        assert!(parse(&rejected).is_err(), "{unsupported}");
+    }
+    value["contributions"]["editorExtensions"][0]["capabilities"] =
+        json!(["terminalCompletionProvider"]);
+    value["contributions"]["editorExtensions"][0]["activationEvents"] =
+        json!([{"type": "onDemand", "capability": "terminalQuickFixProvider"}]);
+    assert!(parse(&value).is_err());
+}
+
+#[test]
 fn sdk_example_manifest_declares_the_supported_javascript_contract() {
     let manifest = PluginManifest::from_json(include_bytes!(
         "../../../../examples/extensions/inspect/.ash-plugin/plugin.json"

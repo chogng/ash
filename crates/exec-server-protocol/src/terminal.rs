@@ -10,6 +10,13 @@ pub enum TerminalArguments {
     CommandLine(String),
 }
 
+/// Exact raw-output text and the input sent when it is observed on one PTY.
+#[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq)]
+pub struct TerminalAutoReply {
+    pub match_text: String,
+    pub reply: String,
+}
+
 /// One server-owned shell profile available to interactive terminal clients.
 #[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq)]
 pub struct TerminalProfile {
@@ -62,6 +69,8 @@ pub enum TerminalExecution {
 /// Starts one interactive terminal at the server's authorized directory.
 #[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq)]
 pub struct TerminalCreateRequest {
+    #[serde(default)]
+    pub auto_replies: Vec<TerminalAutoReply>,
     pub rows: u16,
     pub cols: u16,
     pub profile: TerminalProfileSelection,
@@ -120,6 +129,9 @@ pub struct TerminalProcessInfo {
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, Eq, PartialEq)]
 pub enum TerminalSignal {
     Interrupt,
+    Terminate,
+    Kill,
+    Hangup,
 }
 
 /// Identity allocated for one interactive terminal.

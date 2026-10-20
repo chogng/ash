@@ -1082,6 +1082,8 @@ use crate::protocol::extensions::ExtensionResourceOpenParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::extensions::ExtensionResourceOpenResult;
 #[cfg(any(test, feature = "export"))]
+use crate::protocol::extensions::ExtensionRuntimeBindingDto;
+#[cfg(any(test, feature = "export"))]
 use crate::protocol::extensions::ExtensionSourceKindDto;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::fs::FsCancelElevatedWriteParams;
@@ -1550,6 +1552,14 @@ use crate::protocol::github::GitHubShareLinkParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::github::GitHubShareLinkResult;
 
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::github::GitHubCheckDetailsParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::github::GitHubCheckDetailsResult;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::github::GitHubCheckLogResult;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::github::GitHubCheckParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::github::GitHubChecksParams;
 #[cfg(any(test, feature = "export"))]
@@ -2334,6 +2344,8 @@ use crate::protocol::terminal::TerminalAttachParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::terminal::TerminalAttachResult;
 #[cfg(any(test, feature = "export"))]
+use crate::protocol::terminal::TerminalAutoReply;
+#[cfg(any(test, feature = "export"))]
 use crate::protocol::terminal::TerminalCloseParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::terminal::TerminalCommandStatus;
@@ -2385,6 +2397,8 @@ use crate::protocol::terminal::TerminalReconnectLease;
 use crate::protocol::terminal::TerminalResizeParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::terminal::TerminalSendSignalParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::terminal::TerminalSetAutoRepliesParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::terminal::TerminalShellIntegration;
 #[cfg(any(test, feature = "export"))]
@@ -5194,6 +5208,9 @@ client_methods! {
     GitHubPullRequestReview => "github/pullRequest/review" { params: GitHubPullRequestReviewParams, response: GitHubPullRequestReview, serialization: HostedRepositoryExclusive, cancellation: "operationId" => PreserveOutcome, },
     GitHubPullRequestMerge => "github/pullRequest/merge" { params: GitHubPullRequestMergeParams, response: GitHubMergeResult, serialization: HostedRepositoryExclusive, cancellation: "operationId" => PreserveOutcome, },
     GitHubPullRequestAutoMerge => "github/pullRequest/autoMerge" { params: GitHubPullRequestMergeParams, response: (), serialization: HostedRepositoryExclusive, cancellation: "operationId" => PreserveOutcome, },
+    GitHubCheckDetails => "github/check/details" { params: GitHubCheckDetailsParams, response: GitHubCheckDetailsResult, serialization: HostedRepositorySharedRead, cancellation: "operationId", },
+    GitHubCheckLog => "github/check/log" { params: GitHubCheckParams, response: GitHubCheckLogResult, serialization: HostedRepositorySharedRead, cancellation: "operationId", },
+    GitHubCheckRerun => "github/check/rerun" { params: GitHubCheckParams, response: (), serialization: HostedRepositoryExclusive, cancellation: "operationId" => PreserveOutcome, },
     GitHubChecks => "github/checks" { params: GitHubChecksParams, response: GitHubChecksResult, serialization: HostedRepositorySharedRead, cancellation: "operationId", },
     GitHubLabelsList => "github/labels/list" { params: GitHubRepositoryParams, response: GitHubLabelsResult, serialization: HostedRepositorySharedRead, cancellation: "operationId", },
     GitHubLabelCreate => "github/label/create" { params: GitHubLabelParams, response: GitHubLabel, serialization: HostedRepositoryExclusive, cancellation: "operationId" => PreserveOutcome, },
@@ -5578,6 +5595,11 @@ client_methods! {
     },
     TerminalSendSignal => "terminal/sendSignal" {
         params: TerminalSendSignalParams,
+        response: (),
+        serialization: None,
+    },
+    TerminalSetAutoReplies => "terminal/setAutoReplies" {
+        params: TerminalSetAutoRepliesParams,
         response: (),
         serialization: None,
     },
@@ -6150,6 +6172,11 @@ typescript_bindings! {
     crate::protocol::github::GitHubPullRequestMergeParams,
     crate::protocol::github::GitHubMergeResult,
     crate::protocol::github::GitHubChecksParams,
+    crate::protocol::github::GitHubCheckParams,
+    crate::protocol::github::GitHubCheckDetailsParams,
+    crate::protocol::github::GitHubCheckDetailsResult,
+    crate::protocol::github::GitHubCheckAnnotation,
+    crate::protocol::github::GitHubCheckLogResult,
     crate::protocol::github::GitHubCommitParams,
     crate::protocol::github::GitHubCommit,
     crate::protocol::github::GitHubCommitStatus,
@@ -6679,6 +6706,7 @@ typescript_bindings! {
     ExtensionDiagnosticCodeDto,
     ExtensionDto,
     ExtensionRendererClientDto,
+    ExtensionRuntimeBindingDto,
     ExtensionDiagnosticDto,
     ExtensionListParams,
     ExtensionListResult,
@@ -7616,6 +7644,8 @@ typescript_bindings! {
     TerminalProcessInfoParams,
     TerminalSignal,
     TerminalSendSignalParams,
+    TerminalAutoReply,
+    TerminalSetAutoRepliesParams,
     TerminalResizeParams,
     TerminalReadParams,
     TerminalOutputChunk,

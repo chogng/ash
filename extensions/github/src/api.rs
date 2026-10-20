@@ -105,6 +105,71 @@ impl GitHub {
         body: Option<Value>,
         operation: Operation,
     ) -> Result<ApiResponse<T>> {
+        let response = self
+            .request_raw(host, method, endpoint, body, operation)
+            .await?;
+        let headers = response.headers().to_vec();
+        let data = decode_response(response, endpoint == "graphql", operation)?;
+        Ok(ApiResponse { data, headers })
+    }
+
+    /// A log capability is returned only on explicit request; bearer credentials never follow it.
+    pub(crate) async fn log_link(&self, repository: &Repository, endpoint: &str) -> Result<String> {
+        let response = self
+            .request_raw(
+                &repository.host,
+                HttpMethod::Get,
+                endpoint,
+                None,
+                Operation::Read,
+            )
+            .await?;
+        if response.status() != 302 {
+            crate::error::validate_status(
+                response.status(),
+                response
+                    .headers()
+                    .iter()
+                    .map(|header| (header.name(), header.value())),
+            )?;
+            return Err(Error::InvalidResponse("Missing GitHub log redirect".into()));
+        }
+        let location = response
+            .headers()
+            .iter()
+            .find(|header| header.name().eq_ignore_ascii_case("location"))
+            .map(|header| header.value())
+            .ok_or_else(|| Error::InvalidResponse("Missing GitHub log location".into()))?;
+        let url = url::Url::parse(location)
+            .map_err(|_| Error::InvalidResponse("Invalid GitHub log location".into()))?;
+        let host = url.host_str().unwrap_or_default().to_ascii_lowercase();
+        let allowed = host.ends_with(".blob.core.windows.net")
+            || host.ends_with(".actions.githubusercontent.com")
+            || host == "logs.githubusercontent.com"
+            || (!repository.host.eq_ignore_ascii_case("github.com")
+                && host.eq_ignore_ascii_case(&repository.host));
+        if !allowed
+            || location.len() > 16384
+            || url.port_or_known_default() != Some(443)
+            || url.scheme() != "https"
+            || url.host_str().is_none()
+            || !url.username().is_empty()
+            || url.password().is_some()
+            || url.fragment().is_some()
+        {
+            return Err(Error::InvalidResponse("Invalid GitHub log location".into()));
+        }
+        Ok(url.to_string())
+    }
+
+    pub(crate) async fn request_raw(
+        &self,
+        host: &str,
+        method: HttpMethod,
+        endpoint: &str,
+        body: Option<Value>,
+        operation: Operation,
+    ) -> Result<HttpResponse> {
         if !host.eq_ignore_ascii_case(&self.authorization.host) {
             return Err(Error::AuthenticationRequired);
         }
@@ -201,9 +266,7 @@ impl GitHub {
         if endpoint == "copilot_internal/managed_settings" && response.status() == 466 {
             return Err(Error::ManagedSettingsUpdateRequired);
         }
-        let headers = response.headers().to_vec();
-        let data = decode_response(response, endpoint == "graphql", operation)?;
-        Ok(ApiResponse { data, headers })
+        Ok(response)
     }
 }
 

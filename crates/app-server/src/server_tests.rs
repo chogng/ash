@@ -1818,6 +1818,100 @@ fn terminal_rpc_drives_a_dir_rooted_pty_to_exit() {
     std::fs::remove_dir_all(root).unwrap();
 }
 
+#[cfg(unix)]
+#[test]
+fn terminal_auto_reply_rpc_updates_the_execution_owner_and_replies_to_initial_output() {
+    let root = tempfile::tempdir().unwrap();
+    let server = server()
+        .with_terminal_root(dir_authorization(
+            root.path(),
+            DirPermission::ExecuteCommands,
+        ))
+        .unwrap();
+    let mut owner = server.connection();
+    initialize(&server, &mut owner);
+    let created = call(
+        &server,
+        &mut owner,
+        serde_json::json!({
+            "jsonrpc": "2.0", "id": 2, "method": "terminal/create",
+            "params": {
+                "rows": 24, "cols": 80, "profile": { "type": "default" },
+                "lifecycle": { "type": "connectionOwned" },
+                "autoReplies": [{ "matchText": "Initial prompt?", "reply": "initial\r" }],
+                "execution": { "type": "process", "program": "/bin/sh", "args": ["-c",
+                    "stty -echo; printf 'Initial prompt?'; IFS= read -r initial; printf '\\nFIRST:%s\\n' \"$initial\"; IFS= read -r gate; printf 'Updated prompt?'; IFS= read -r updated; printf '\\nSECOND:%s\\n' \"$updated\""
+                ] }
+            }
+        }),
+    );
+    let terminal_id = created["result"]["terminalId"].as_str().unwrap();
+    let mut sequence = 0;
+    let mut request_id = 3;
+    let mut output = Vec::new();
+    for marker in ["FIRST:initial", "SECOND:updated"] {
+        let deadline = Instant::now() + Duration::from_secs(5);
+        loop {
+            let read = call(
+                &server,
+                &mut owner,
+                serde_json::json!({
+                    "jsonrpc": "2.0", "id": request_id, "method": "terminal/read",
+                    "params": { "terminalId": terminal_id, "afterSequence": sequence, "afterCommandSequence": 0, "maxChunks": 128 }
+                }),
+            );
+            request_id += 1;
+            sequence = read["result"]["nextSequence"].as_u64().unwrap();
+            for chunk in read["result"]["chunks"].as_array().unwrap() {
+                output.extend(
+                    base64::engine::general_purpose::STANDARD
+                        .decode(chunk["dataBase64"].as_str().unwrap())
+                        .unwrap(),
+                );
+            }
+            if String::from_utf8_lossy(&output).contains(marker) {
+                break;
+            }
+            assert!(
+                Instant::now() < deadline,
+                "RPC auto reply missing {marker}: {:?}",
+                String::from_utf8_lossy(&output)
+            );
+            thread::sleep(Duration::from_millis(10));
+        }
+        if marker == "FIRST:initial" {
+            let updated = call(
+                &server,
+                &mut owner,
+                serde_json::json!({
+                    "jsonrpc": "2.0", "id": request_id, "method": "terminal/setAutoReplies",
+                    "params": { "terminalId": terminal_id, "rules": [{ "matchText": "Updated prompt?", "reply": "updated\r" }] }
+                }),
+            );
+            request_id += 1;
+            assert!(updated["error"].is_null(), "{updated}");
+            let written = call(
+                &server,
+                &mut owner,
+                serde_json::json!({
+                    "jsonrpc": "2.0", "id": request_id, "method": "terminal/write",
+                    "params": { "terminalId": terminal_id, "data": "continue\r" }
+                }),
+            );
+            request_id += 1;
+            assert!(written["error"].is_null(), "{written}");
+        }
+    }
+    let closed = call(
+        &server,
+        &mut owner,
+        serde_json::json!({
+            "jsonrpc": "2.0", "id": request_id, "method": "terminal/close", "params": { "terminalId": terminal_id }
+        }),
+    );
+    assert!(closed["error"].is_null(), "{closed}");
+}
+
 #[test]
 fn terminal_rpc_enforces_connection_ownership_and_close() {
     let root = std::env::temp_dir().join(format!(
@@ -1859,12 +1953,28 @@ fn terminal_rpc_enforces_connection_ownership_and_close() {
             serde_json::json!({"terminalId":terminal_id}),
         ),
         (
+            "terminal/setAutoReplies",
+            serde_json::json!({"terminalId":terminal_id,"rules":[{"matchText":"Confirm?","reply":"yes\r"}]}),
+        ),
+        (
             "terminal/writeBinary",
             serde_json::json!({"terminalId":terminal_id,"dataBase64":"AP8="}),
         ),
         (
             "terminal/sendSignal",
             serde_json::json!({"terminalId":terminal_id,"signal":"interrupt"}),
+        ),
+        (
+            "terminal/sendSignal",
+            serde_json::json!({"terminalId":terminal_id,"signal":"terminate"}),
+        ),
+        (
+            "terminal/sendSignal",
+            serde_json::json!({"terminalId":terminal_id,"signal":"kill"}),
+        ),
+        (
+            "terminal/sendSignal",
+            serde_json::json!({"terminalId":terminal_id,"signal":"hangup"}),
         ),
     ]
     .into_iter()

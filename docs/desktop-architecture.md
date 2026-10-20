@@ -664,7 +664,9 @@ Main 已替换工作区而 Renderer 尚未收到事件时，旧配置读取返�
 `contrib/workspace/common/workspace.ts`、`platform/workspaces/common/workspaceIdentifier.ts` 与
 `platform/workspaces/electron-main/workspacesMainService.ts` 仍没有对应实现。
 它们涉及其他领域能力或尚未闭合的统一管理端口；当前本地命令链不以空壳实现这些文件。
-连接 App Server 的 Web 多根由原 WorkspaceEditingService/BrowserHost 链提交到 listener 独立运行域，准确配置文件 proof 与目录授权分别释放。Apply/Finish 事务只在窗口接受后发布会话元数据；窗口提交前失败恢复原授权，已提交后的网络错误按记录的操作身份恢复。完整上游编辑 API、复制工作区到新窗口和直接保存到远端机器的工作区配置文件仍未实现。
+连接 App Server 的 Web 多根由原 WorkspaceEditingService/BrowserHost 链提交到 listener 独立运行域，准确配置文件 proof 与目录授权分别释放。原生逐根确认仅授予该 Web 会话的文件读写与检查能力，不持久化目录权限，也不授予命令执行或目录配置加载；已有显式权限继续作为上限，权限收紧后旧句柄失效，删除限制不自动恢复本会话权限。撤销工作区配置文件的观察权限会退休其独立文件能力（包括读取），需用户再次明确绑定该工作区后恢复。Apply/Finish 事务只在窗口接受后发布会话元数据；窗口提交前失败恢复原授权，已提交后的网络错误按记录的操作身份恢复。回滚期间权限版本变化且记录已消失时按检查权限恢复，避免复活已撤回的写入权限。完整上游编辑 API、复制工作区到新窗口和直接保存到远端机器的工作区配置文件仍未实现。
+
+2026-10-19 在 Linux ARM64 Dev Container 的正常 Web／Desktop 产物（协议 major10）完成认证 Web 八步验收：真实 No／Yes 授权、多根读写、脏文件拒绝移除、移除配置根后保存、重载、只读草稿、显式撤权和关闭；取消保存恢复后不再重复报错。GTK 原生选择器另完成取消、打开双根工作区和中文／空格路径另存为四步，通过真实原生返回、窗口身份和独立磁盘读取共同验证。Web 证据及源码／媒体 SHA256 见 `.build/todo-finish/linux-web-workspace-save-cancel-final/results.json`，GTK 报告见 `.build/ash-playwright-mcp/evidence/linux-native-picker-2026-10-19T10-55-49-898Z/report.html`。该结果不覆盖 Windows 原生选择器、跨机器 SSH 多根或 macOS 完整 Web 流程；macOS 仅另行实测了原生目录批准与脏文件拒绝。
 
 Remote 与独立 Browser 的扩展沿上述 owner 实现，没有新增平行 workspace 状态：
 

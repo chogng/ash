@@ -74,17 +74,27 @@
 		previousPasswordPageState = hasPasswordForm;
 		send('passwordPageState', { action: location.href, hasPasswordForm });
 	}
-	function passwordSubmit(root: HTMLElement): void {
+	function passwordSubmit(root: HTMLElement, afterClick = false): void {
 		if (passwordGesture?.root !== root || performance.now() - passwordGesture.at > 1500) { return; }
 		const fields = passwordFields(root);
 		if (!fields || fields.password && !fields.password.value || !fields.password && !fields.username?.value) { return; }
 		passwordGesture = undefined;
-		if (fields.password) {
-			send('passwordSubmitted', { action: passwordAction(root), username: fields.username?.value ?? '', hasUsername: !!fields.username, password: fields.password.value });
-			// A SPA may add and remove the password step within the same animation frame.
-			previousPasswordPageState = undefined;
-			queueMicrotask(reportPasswordPageState);
-		} else { send('passwordIdentitySubmitted', { action: passwordAction(root), username: fields.username!.value }); }
+		const action = passwordAction(root);
+		const username = fields.username?.value ?? '';
+		const password = fields.password?.value;
+		const report = (): void => {
+			// SPA handlers can disable/remove their inputs before this runs. Retain
+			// the submitted values, but a password-to-text switch is a visibility toggle.
+			if (afterClick && fields.password && fields.password.type !== 'password') { return; }
+			if (password !== undefined) {
+				send('passwordSubmitted', { action, username, hasUsername: !!fields.username, password });
+				// A SPA may add and remove the password step within the same animation frame.
+				previousPasswordPageState = undefined;
+				queueMicrotask(reportPasswordPageState);
+			} else { send('passwordIdentitySubmitted', { action, username }); }
+		};
+		if (afterClick) { setTimeout(report, 0); }
+		else { report(); }
 	}
 	if (window === window.top) {
 		for (const eventName of ['pointerdown', 'keydown'] as const) {
@@ -93,7 +103,9 @@
 				const root = passwordRoot(event.target);
 				if (root) {
 					passwordGesture = { root, at: performance.now() };
-					if (event instanceof KeyboardEvent && event.key === 'Enter' && !event.isComposing && event.target instanceof HTMLInputElement) { passwordSubmit(root); }
+					// Native forms report a real submit event after validation. SPA panels
+					// have no such event, so retain their explicit Enter submission path.
+					if (!(root instanceof HTMLFormElement) && event instanceof KeyboardEvent && event.key === 'Enter' && !event.isComposing && event.target instanceof HTMLInputElement) { passwordSubmit(root); }
 				}
 			}, true);
 		}
@@ -119,7 +131,12 @@
 			if (!event.isTrusted || event.button !== 0 || !(event.target instanceof Element)) { return; }
 			const control = event.target.closest('button,input[type="submit"],[role="button"]');
 			if (!control || control.getAttribute('type') === 'reset' || control.getAttribute('aria-disabled') === 'true') { return; }
-			const root = passwordRoot(control); if (root) { passwordSubmit(root); }
+			const root = passwordRoot(control);
+			if (!root || root instanceof HTMLFormElement) { return; }
+			// Toggle/disclosure controls do not submit a custom login panel. For
+			// other SPA buttons, let the page handler run before classifying the action.
+			if (control.hasAttribute('aria-pressed') || control.hasAttribute('aria-expanded')) { return; }
+			passwordSubmit(root, true);
 		}, true);
 		document.addEventListener('submit', event => {
 			if (event.isTrusted && event.target instanceof HTMLFormElement) { passwordSubmit(event.target); }

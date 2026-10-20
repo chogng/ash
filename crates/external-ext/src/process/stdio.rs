@@ -51,6 +51,7 @@ pub(super) struct StdioExtensionHostProcess {
     stderr: Arc<Mutex<Vec<u8>>>,
     output_events: Arc<Mutex<OutputEventQueue>>,
     background: Arc<Mutex<BackgroundClientQueue>>,
+    registration_handler: Arc<Mutex<Option<Arc<super::ExtensionRegistrationHandler>>>>,
     writer_thread: Mutex<Option<JoinHandle<()>>>,
     stdout_thread: Mutex<Option<JoinHandle<()>>>,
     stderr_thread: Mutex<Option<JoinHandle<()>>>,
@@ -131,6 +132,7 @@ impl StdioExtensionHostProcess {
         let stderr = Arc::new(Mutex::new(Vec::new()));
         let output_events = Arc::new(Mutex::new(OutputEventQueue::default()));
         let background = Arc::new(Mutex::new(BackgroundClientQueue::default()));
+        let registration_handler = Arc::new(Mutex::new(None));
         let control = binding
             .map(|binding| binding.accept(&mut child, limits.startup_timeout))
             .transpose()?;
@@ -159,6 +161,7 @@ impl StdioExtensionHostProcess {
             Arc::clone(&exited),
             Arc::clone(&output_events),
             Arc::clone(&background),
+            Arc::clone(&registration_handler),
             node || limits.isolation == crate::ProcessIsolationPolicy::AuthorizedProduct,
             limits.clone(),
         );
@@ -175,6 +178,7 @@ impl StdioExtensionHostProcess {
             stderr,
             output_events,
             background,
+            registration_handler,
             writer_thread: Mutex::new(Some(writer_thread)),
             stdout_thread: Mutex::new(Some(stdout_thread)),
             stderr_thread: Mutex::new(Some(stderr_thread)),
@@ -208,6 +212,12 @@ impl StdioExtensionHostProcess {
 }
 
 impl ExtensionHostProcess for StdioExtensionHostProcess {
+    fn set_registration_handler(&self, handler: Arc<super::ExtensionRegistrationHandler>) {
+        *self
+            .registration_handler
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(handler);
+    }
     fn respond_client(
         &self,
         response: external_ext_protocol::ExtensionClientResponse,
@@ -442,6 +452,7 @@ fn spawn_stdout_reader(
     exited: Arc<AtomicBool>,
     output_events: Arc<Mutex<OutputEventQueue>>,
     background: Arc<Mutex<BackgroundClientQueue>>,
+    registration_handler: Arc<Mutex<Option<Arc<super::ExtensionRegistrationHandler>>>>,
     node: bool,
     limits: ExtensionHostLimits,
 ) -> JoinHandle<()> {
@@ -474,6 +485,24 @@ fn spawn_stdout_reader(
                         break;
                     }
                 };
+                if let ExtensionHostStdoutFrame::Registrations(event) = frame {
+                    let result = event
+                        .validate(&limits.protocol_limits())
+                        .map_err(|error| error.to_string())
+                        .and_then(|()| {
+                            let handler = registration_handler
+                                .lock()
+                                .map_err(|_| "registration handler lock poisoned".to_owned())?
+                                .clone()
+                                .ok_or("registration event has no owner")?;
+                            handler(event).map_err(|error| error.to_string())
+                        });
+                    if let Err(error) = result {
+                        fail(PendingFailure::Protocol(error));
+                        break;
+                    }
+                    continue;
+                }
                 if let ExtensionHostStdoutFrame::BackgroundClientRequest(request) = frame {
                     let forwarded = (|| {
                         request

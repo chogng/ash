@@ -23,6 +23,7 @@ use super::source::DynamicExtensionSourceSnapshot;
 use super::source::ExtensionRendererClient;
 use super::source::ExtensionRoot;
 use super::source::ExtensionRootKind;
+use super::source::ExtensionRuntimeBinding;
 
 const MAX_EXTENSION_ID_LENGTH: usize = 160;
 const MAX_MANIFEST_FIELD_LENGTH: usize = 256;
@@ -61,6 +62,8 @@ pub struct ExtensionDescriptor {
     pub package_sha256: String,
     /// Host-authorized executable client admission, independent of manifest declarations.
     pub renderer_client: Option<ExtensionRendererClient>,
+    /// Trusted executable package identity, independent of the frozen-resource hash domain.
+    pub runtime_binding: Option<ExtensionRuntimeBinding>,
 }
 
 /// Provenance attached to a discovered extension descriptor.
@@ -577,6 +580,9 @@ fn publish_package(
                 }
                 extension.descriptor.renderer_client = source.renderer_client.clone();
             }
+            extension.descriptor.runtime_binding = dynamic_source
+                .as_ref()
+                .and_then(|source| source.runtime_binding.clone());
             extension.dynamic_source = dynamic_source;
             publish_discovered(
                 root,
@@ -770,6 +776,7 @@ fn discover_package(
             manifest_sha256,
             package_sha256,
             renderer_client: None,
+            runtime_binding: None,
         },
     })
 }

@@ -10,7 +10,7 @@
 
 ## Windows 开发实验资源清理
 
-- [ ] 清理 Windows 测量实验目录。已找到 `.build/perf-win-edit-20261018/round4-cleanup.json`；其中五个临时目录及 staging 目录均存在、无进程引用。2026-10-19 按准确路径执行原生 PowerShell 删除仍被自动审批策略拒绝，未删除。
+- [ ] 清理 Windows 测量实验目录。既有记录 `.build/perf-win-edit-20261018/round4-cleanup.json` 曾核对五个临时目录及 staging 无进程引用，但删除被自动审批拒绝。本轮该记录不在当前检出，未重新验证目录状态或执行删除。
 - 保存 Rust 到 App 可用的 15 秒目标尚未达到。2026-10-19 在 `3df4938da` 暂停开发与同步后完成迁移修复的 20 次匹配尝试：空库成功中位数 20.06 → 19.80 秒（5/5 → 5/5），100 条历史会话 22.27 → 21.15 秒（3/5 → 5/5），历史成功样本快 1.12 秒（5.0%）；仍差 4.80／6.15 秒。空库差异很小，不能用成功样本的条件中位数替代总体延迟或失败率结论。原始样本与阶段成本见 `docs/build.md` 完整循环复测及 `.build/perf-win-edit-20261019-migration/q2-summary.json`。
 - 本轮复测完成，修复内容与正常构建已恢复；此前第五轮的 diff 适配器边界优化仍保留，旧源码上的约 25 秒结果不作为本轮基线。15 秒是体验目标，并非测量推导的性能下限；若继续优化，需根据发布前约 13.7 秒及历史发布后约 7.4 秒的成本选择方向。上述结果仅覆盖 diff 适配器编辑；本机卷均为 NTFS，没有 Dev Drive。
 
@@ -18,38 +18,22 @@
 
 工作区契约见 `docs/desktop-architecture.md` §4.2。
 
-- [ ] **验收** · Web 多目录授权、listener 独立运行域和 Apply／Finish 会话转换已实现，并复用原 WorkspaceEditingService／BrowserHost 链，Browser 不取得 `directoryGrantsHost`。后端工作区／撤权回归与前端 26 项定向测试通过；仍需在真实 Web 编辑器中经服务端可信逐根确认，验收新增、移除、脏文件拒绝和重载恢复。
-- [ ] **验收** · Web 准确配置文件的独立 read／atomic write／watch、只读与显式撤权、关闭和失败回滚已实现；ExactFS、授权上限和后端撤权测试通过。仍需真实 Web 编辑器移除配置所在根后保存同一配置文件，验证拒绝、脏文件与连接关闭流程；现有自动回归不替代这条完整交互链。
 - [ ] **后端前置** · 实现直接保存工作区配置到远端机器；当前 SSH 配置仍保存在 Desktop 本地，内容为远端 URI 根。
-- [ ] **验收** · 补 Windows／Linux 远端多根及真实系统文件选择器验证。现有多根 SSH 验证使用 macOS 同机隔离 OpenSSH fixture，选择器使用受控返回值；跨机器单独步骤通过不能替代多根场景验证。
+- [ ] **验收** · 补 Windows／Linux 远端多根及 Windows 真实系统文件选择器验证。现有多根 SSH 验证使用 macOS 同机隔离 OpenSSH fixture，远端选择器使用受控返回值；跨机器单独步骤通过不能替代多根场景验证。
 
 ## Desktop 跨机器验收 · TODO
 
-- [ ] **验收** · Complete one real Desktop → selected Windows host run over SSH/Tailscale with all 10 steps, cleanup and evidence QA. The implementation is committed in `7cfdccd9b`; end-to-end acceptance remains unfinished. Preserve concurrent changes in both requested original checkouts; do not reset or substitute another checkout.
-- Current status and machine-specific connection/build details are in ignored `.build/remote-desktop-acceptance/cross-machine/status.json` and `.build/ash-playwright-mcp/cross-machine/`. No passed acceptance report has been written.
-- Final Windows package is the dedicated-cache `runtime-desktop-84d5912d-isolated-git`, buildId `3595725c14837525c7385b4e02d3e62c46de7ac8385f86674790a2e52b441152`; actual executable protocol major8/schema `25796190…a61a1eb4` matched its manifest and Desktop. `artifact.json` and `source-pin.json` are current. Source base `84d5912dea1d9279aedf785381322b41eecd2271`; exact runtime patches/source SHAs in runtime-cwd.patch, runtime-git.patch and metadata. Do not reuse rejected shared-cache cwd/cwd-protocol packages (manifest257, actual513); direct probe exposed that mismatch.
-- Normal frozen client: `.build/remote-desktop-acceptance/desktop-client-84d5912d-fixed`, inventory2915files/critical Mac binary hashes/reachable247moduleRenderer graph verified in client-snapshot.json. Retained Mac backend73061 has schema257; independent direct backup/workspaces probe passed. Diagnostic copies are separate. Fixed exported build input is client-input-84d5912d; it contains only task fixes plus documented filename-case correction. It is a build input, not a replacement for root edits.
-- Latest useful full run: evidence `desktop-cross-machine-windows-2026-10-18T05-35-43-184Z` PASSED DEPLOY, FILES and AGENT on final359runtime; DEBUG failed before adapter process (adapter-host absent, DAP requests empty), console only `[application] unavailable`. Cause remains unknown. Earlier provisional packages passed task/PTY/ports/Browser/recovery and an earlier diagnostic passed Debug; these do not constitute all10 on the final package.
-- Final Git UI is still unaccepted. Before ResourceUri fix it failed HostRPC invalid protocol; afterward UI initialization hit invocation deadline. Scenario now waits120s for Git's existing3×30s bounded initialization retries (mutations/index assertions remain30s). Need verify Desktop stage/unstage through independent Windows index reads.
-- Fixture setup now uses seed-profile.cjs: same packaged app-server direct stdio owning RPCs configure synthetic model/private-file secrets BEFORE Desktop, then exit. It asserts ZERO managed package manifests before Desktop so cold runtime installation remains tested. This removed live setup/catalog race; Agent passed. Run.mjs holds real Windows Node fixture through its SSH owner, verifies health, seeds, launches scenario, finally cleans exact profile/service/PTY. Cleanup JSON records nonce/profile. App-server direct fixture is not CLI/TUI product host.
-- Debug diagnostics: scenario-debug-after-agent.mjs currently selects DEPLOY/FILES/DEBUG; attaches CDP pause-on-exceptions only during Debug, resumes immediately and writes debug-exceptions.json. Last diagnostic `desktop-cross-machine-debug-exceptions-2026-10-18T06-00-35-621Z` failed DEPLOY on management SSH loss, so did NOT reach CDP capture. Prior diagnostic selected Agent first but failed extensions/list during Agent. Do not claim an exception stack was captured.
-- Resumed diagnostics after the user selected “暂时关闭 Meta TUN 后重试”: isolated DEBUG run `desktop-cross-machine-debug-logs-2026-10-18T10-48-53-582Z` passed DEPLOY/FILES/DEBUG, including Windows DAP launch, breakpoint, source path, and `answer=42`; it is still only a partial run. Full runs `desktop-cross-machine-windows-2026-10-18T10-55-05-749Z` and `desktop-cross-machine-windows-2026-10-18T11-03-23-236Z` both lost the Desktop App Server stdout around 33 seconds into startup and remained connecting; increasing the ready wait to 180 seconds did not help. The first trace had `extensions/list` pending before a repeated `initialize`; the second had only `initialize` before transport ended. A direct post-failure initialize against the same Windows runtime returned the expected protocol 8/schema, so that does not establish a Desktop pass. On the last retry, one Tailscale ping answered in 325 ms; the Meta TUN/SSH verification command was canceled at the user's handoff, so its disabled state and sustained network stability remain unverified. No source, proxy, firewall, or persistent Tailscale settings were changed in these retries.
-- Optional ASH_CROSS_TRACE_PROTOCOL=1 routes only test SSH connect stdio through trace-ssh.py; logs ONLY id/method/error code/message, never request bodies/keys. Byte forwarding handles partial writes. Normal env does not enable this. Trace `ssh-protocol-trace-0dc4cdbe.jsonl` and RPC latency JSON show slow nested calls during that failed diagnostic; timings are diagnostic, not a performance benchmark. No new performance/cache core fix was implemented.
-- Network repeatedly lost packets and changed public endpoints despite both hosts sharing a LAN. The user selected temporarily disabling Windows Meta TUN while retaining Tailscale; one later ping answered in 325 ms, but the resumed verification was stopped before confirming the adapter/process state. Network is NOT proven the sole cause of Debug unavailable or Desktop startup loss. Agent did not edit proxy config files. Only transient Tailscale rebind/DERP reconnect diagnostics occurred; no persistent Tailscale preference change.
-- A temporary Windows peer-only outbound UDP restriction was ineffective and REMOVED. Independent verification returned absent; temporary-relay.json has restored/removalVerified=true. No temporary firewall rule remains. All last fixture processes were stopped, remote scan found no owned profile/service processes, Mac test processes absent, observer93962 stopped, owned SSH Master socket already absent. No active test/build/monitor remained at that recorded handoff; the ongoing acceptance chat has since resumed diagnostics.
-- Resume: incorporate the user's Meta TUN change, then verify Tailscale and management SSH stability without editing persistent network settings. Capture the Desktop App Server/SSH exit and remote daemon log before cleanup if startup fails again; distinguish app-server acquisition, protocol initialize, and workspace readiness. Preserve the normal client. Then run fresh prepare-fixture.mjs + default run.mjs all10 with normal client, no diagnostic tracing. Collect gather-proofs.mjs, review per-step PNG/browser capture and ALL WebM recordings (review-video.mjs handles all), inspect trace/cleanup, then report.mjs (guards all10/identity/model request count/seed cold state/network restoration). Stop observer/Master and remove only this TODO section when complete.
-- Scope: explicit development runtime, deterministic model SSE and DAP peers while Desktop/backend/Agent/processes/SSH real; supported isolated file secret mode (OS vault not accepted); no signed feed/autodownload, real provider or WAN reliability claim. Raw WebM/trace/screenshots; no captioned-video tooling. Machine-specific details remain in ignored artifacts.
+- [ ] **验收** · 完成指定 Windows 主机真实 Desktop → SSH／Tailscale 全部十步、远端清理和证据 QA；同机 SSH fixture 不能替代跨机器验收。2026-10-19 已通过严格主机校验、公钥登录及原检出的 major10 Windows runtime 构建，真实冷部署一步通过；FILES 在扩展激活超时后的重连中失败，其余步骤未执行。SSH 握手／通道持续不稳定，按用户要求停止重试；待连接稳定后重跑全套并复核远端清理。失败证据保留在 `.build/ash-playwright-mcp/evidence/desktop-cross-machine-windows-major10-2026-10-19T13-46-20-671Z/report.html`，本轮未据此消项。
 
 ## 系统授权保存 · TODO
 
 - [ ] **验收** · Windows 交互桌面按 [UAC 验收手册](docs/windows-system-authorization.md) 分别完成真实取消和批准。使用未提升权限的进程、开启 UAC，记录实际弹窗、程序／发布者、两次各 `1 passed` 及日志；自动断言须覆盖字节／BOM／CRLF、dirty、ACL 和焦点。管理员成员普通终端与标准用户输入另一管理员凭据分别验收；skipped 或通用保存失败不算通过。
-- [ ] **验收** · macOS 密码授权和 Linux pkexec 各自完成对应系统验收；Windows UAC 结果不覆盖其他系统。
+- [ ] **验收** · macOS 密码授权和 Linux pkexec 各自完成对应系统验收；当前 Dev Container 缺 pkexec／polkit／图形认证 agent，不能用免密规则或 root 执行代替真实系统授权。Windows UAC 结果不覆盖其他系统。
 
 ## Configuration / Preferences · TODO
 
-- [ ] **验收** · 在 macOS／Linux 验收真实系统 Policy 来源；补两个真实 GitHub 身份切换及非空组织策略的保留／撤回，当前仅有个人账号。2026-10-19 Windows 隔离 profile 已通过个人账号真实刷新、进程内隧道断连失败、键盘显式重试恢复和退出清空；证据 `.build/ash-playwright-mcp/evidence/real-github-managed-policy-2026-10-18T20-45-26-513Z/report.html`，整套场景因缺上述账号覆盖标为 aborted，不能当作完整验收通过。强制新鲜度门禁不纳入本轮。Windows 固定注册表只读探测和受控账户链不能代替其他 OS／非空组织策略结果。
+- [ ] **验收** · 在 macOS 验收真实系统 Policy 来源；补两个真实 GitHub 身份切换及非空组织策略的保留／撤回，当前仅有个人账号。2026-10-19 Windows 隔离 profile 已通过个人账号真实刷新、进程内隧道断连失败、键盘显式重试恢复和退出清空；证据 `.build/ash-playwright-mcp/evidence/real-github-managed-policy-2026-10-18T20-45-26-513Z/report.html`，整套场景因缺上述账号覆盖标为 aborted，不能当作完整验收通过。强制新鲜度门禁不纳入本轮。Windows 固定注册表只读探测和受控账户链不能代替 macOS／非空组织策略结果。
 - [ ] **验收 · Preferences 上游窗口配对**：以本地 VS Code `a2acc8c864a` 对照用户／Workspace／Folder、`@lang:` 与 `@modified` 组合、重置、JSON 草稿、侧边／指定组和焦点语义。Ash 中英文真实 Chromium 已通过单根与多根读写、重载、高对比度和字号实际生效，macOS Desktop 的用户／单目录 Workspace 真实 App Server 文件链也已通过；本地 VS Code 尚无可运行构建，源码／上游测试核对不能代替窗口配对。当前实现与证据范围见 [Preferences](docs/preferences-and-settings.md#已有验证与限制)。
-- [ ] **验收 · 快捷键跨平台**：补 Linux 的录制、JSONC 保存、立即重载、完整组合恰好执行一次、失败重试与 pending-close。
 
 当前存储、配置层和设置入口见 [Preferences 与 Configuration](docs/preferences-and-settings.md)。
 
@@ -62,7 +46,7 @@
 - [ ] **新产品 · Cloud Sandbox**（用户决定先 TODO）：先确定服务端实例／仓库 producer、账号和凭证刷新、Session／文件权限及 Provider 归属，再实现连接、目录、模型和会话入口；当前没有对应生产 producer，具体路径见清单 `todo-by-user`。
 - [ ] **新产品 · Tunnel／WSL**（用户决定先 TODO）：分别确定网关／认证／重连／存储与 WSL runtime 启停／分发／authority 契约，再接既有 Remote owner；当前 SSH／Dev Container 不作为这些能力已实现的证据。
 - [ ] **新产品 · Mission Control**（用户决定先 TODO）：先确定后端控制与会话事实、认证／credential delegation、共享权限及 Provider 归属，再实现环境与会话入口；不预建镜像状态或转发类。
-- [ ] **验收 · 跨平台**：取得 Windows/Linux 当前实现的实际运行结果；新增 Desktop runtime acceptance 的 Windows/macOS MCP 进程回归步骤尚未在远端执行。
+- [ ] **验收 · 跨平台**：Desktop runtime acceptance 的 macOS MCP 进程回归步骤尚未在远端执行。
 - [ ] **验收 · 真实外部账号**：使用专用测试账号验收 Kimi Desktop/CLI 身份切换、同身份 token 轮换、旧结果隔离及临时发现失败，观察已打开的模型 picker。合成 scope/账号回归不能替代此结果。
 - [ ] **验收 · 系统休眠恢复**：在可中断的测试机器运行实际 OS sleep/wake，核对连接恢复、重新鉴权、订阅和工具权限；尚未在日常开发机器执行系统休眠。
 - [ ] **验收 · B2 TUI 与真实外部模型**：继续补真实外部账号的模型 picker 与 TUI 场景。本机已重新验证当前 CLI 缓存契约，并通过真实 Rust observer 的完整 10 分钟 Web Code／Cowork metadata 更新和失败保留场景；该合成账号结果不覆盖外部服务或真实 TUI，证据范围见 [AgentHost 台账](agenthost-todo.md)。
@@ -70,16 +54,14 @@
 
 ## Sessions · TODO
 
-- [ ] **验收 · Dev Container 产品入口** · 从 Agents 窗口验收宿主 gateway 准入、窗口关闭／重开及持久容器控制清单，并补 authenticated Remote catalog 自动安装；入口与环境要求见 [Docker Provider](extensions/dev-containers/README.md)。
+- [ ] **验收 · Dev Container 产品入口** · 从 Agents 窗口验收宿主 gateway 准入、窗口关闭／重开及持久容器控制清单，并补 authenticated Remote catalog 自动安装；当前测试容器缺 Docker daemon／CLI、Dev Container CLI 与认证 runtime catalog，受控脚本不替代这些产品前提。入口与环境要求见 [Docker Provider](extensions/dev-containers/README.md)。
 - [ ] **后端前置** · 为 Agent PR 的持续合并策略与 request metadata 补后端工作流契约；当前只闭合请求提交／排队、直接创建 PR、Draft 和 auto-merge，任务提交成功不能视为 PR 已创建。
-- [ ] **后端前置** · 为 CI rerun、logs／annotations 和 Fix CI 请求闭合领域端口及 UI 生命周期；当前只读 checks／statuses 不代表这些操作已实现。
-- [ ] **验收** · 对已接通的提交／会话切换、Changes 审阅与 PR 表单执行上游窗口配对场景，观察仓库身份、修订、焦点、取消和关闭后的结果；现有 Ash Electron、浏览器和架构回归仅覆盖原有范围。尚未接入的 CI 操作和后台合并不纳入这次已实现行为的验收。
+- [ ] **验收** · 对已接通的提交／会话切换、Changes 审阅与 PR 表单执行上游窗口配对场景，观察仓库身份、修订、焦点、取消和关闭后的结果；现有 Ash Electron、浏览器和架构回归仅覆盖原有范围。后台持续合并不纳入这次已实现行为的验收。
 
 布局、工作集、Common 与 Changes 契约见 [Sessions](docs/sessions.md)。
 
 ## Chat / Speech · TODO
 
-- [ ] **后端前置** · Speech 动态注册：Host 当前 `sealActivation` 冻结注册，`host.mjs` 只允许 activating 期间 register。先为原 admitted registry 定义晚注册／注销与后端 fleet 更新端口，覆盖精确 registration／activation generation、退休清理和迟到事件；不用前端轮询或另一张 provider 表替代。
 - [ ] **后端前置** · 标准 Voice／hold 命令先闭合聚焦 Chat widget 与输入生命周期的 `IChatWidgetService` 调用链；PTT／audio／session-context 的完整 VoiceClient 仍缺兼容 producer。现有 Ash Call／VoiceAgent 验证不代表上游 API 对齐；远端自有 Voice/Core bridge 不继续扩展为本轮对齐任务。
 - [ ] **后端前置** · MCP App sampling、media context 与双向 App tools 按原 Core 权限和能力契约逐项补齐；现有 tools/call、资源、消息/context、CSP、导出、诊断和 fullscreen 保持回归，缺失 capability 不宣告。
 - [ ] **验收** · 补真实账户、物理音频设备与音质验收；现有本地 Call/LiveKit、模拟 Live wire 和 AudioHost 设备替身不能代替该结果。本地转写的 Foundry Local cacheDir／下载／代理契约与完整 Prompt／Agent 格式按真实调用需求另核对。
@@ -99,7 +81,6 @@
 
 - [ ] **Ash 产品** · Agent 结构化文档编辑经统一文档服务校验模型版本／文件修订、权限和 schema，一次事务可撤销；覆盖打开和未打开资源及过期拒绝。现有 `AppServerTextDocumentHost` 仅闭合普通文本快照和 WorkspaceEdit；须先定义结构化编辑的真实 producer／领域端口及审阅行为，不能把 `.ash-doc` 的共享模型再解析成第二份普通文本模型。
 - [ ] **Ash 产品** · 增加 Work 产品入口和默认布局，复用现有生命周期，明确 Code／Work 的资源、未保存内容、会话与状态恢复，不恢复模式注册表或第二份配置。
-- [ ] **Ash 产品** · Chat 主画布与辅助栏共用会话、附件和草稿状态，接通 Move Chat to Editor Area；验证布局切换、重启、并排焦点及不误发送。分页、docx／PDF 输出仍属另行设计范围。
 
 ## Desktop 启动性能 · TODO
 

@@ -106,6 +106,8 @@ export type TerminalProcessExecution =
 	| { readonly type: 'shell'; readonly commandLine: string; };
 
 export interface ITerminalProcessCreateOptions {
+	/** Installed atomically before startup output is read. */
+	readonly autoReplies?: readonly ITerminalAutoReply[];
 	readonly dirId?: string;
 	readonly rows: number;
 	readonly cols: number;
@@ -239,6 +241,15 @@ export interface ITerminalProcessCloseOptions {
 	readonly terminalId: string;
 }
 
+export type TerminalProcessSignal = 'interrupt' | 'terminate' | 'kill' | 'hangup';
+
+/** Literal raw PTY output and process input; the execution owner enforces limits. */
+export interface ITerminalAutoReply {
+	readonly matchText: string;
+	readonly reply: string;
+}
+
+
 /** Platform contract for creating and communicating with terminal processes. */
 export interface ITerminalProcessService {
 	/** Initialized execution host OS; unavailable before connection readiness. */
@@ -256,7 +267,8 @@ export interface ITerminalProcessService {
 	prepareForReload?(): void;
 	attach?(lease: ITerminalReconnectLease, dimensions: { readonly rows: number; readonly cols: number; }, profile: ITerminalProcessProfile): Promise<ITerminalProcessCreation>;
 	write(options: ITerminalProcessWriteOptions): Promise<void>;
-	sendSignal(options: ITerminalProcessCloseOptions & { readonly signal: 'interrupt'; }): Promise<void>;
+	sendSignal(options: ITerminalProcessCloseOptions & { readonly signal: TerminalProcessSignal; }): Promise<void>;
+	setAutoReplies(options: ITerminalProcessCloseOptions & { readonly rules: readonly ITerminalAutoReply[]; }): Promise<void>;
 	resize(options: ITerminalProcessResizeOptions): Promise<void>;
 	read(options: ITerminalProcessReadOptions): Promise<ITerminalProcessReadResult>;
 	close(options: ITerminalProcessCloseOptions): Promise<void>;
@@ -270,6 +282,10 @@ export type WaitOnExitValue = boolean | string | ((exitCode: number) => string);
 
 /** Launch information shared with providers that supply their own terminal output. */
 export interface IShellLaunchConfig {
+	/** Extension mutations captured with this resolved launch, separate from inherited host values. */
+	environmentVariableCollections?: import('./environmentVariable.js').ISerializableEnvironmentVariableCollections;
+	/** False for snapshots containing transient extension values; never persist them. */
+	environmentVariableCollectionsPersistable?: boolean;
 	executable?: string | readonly string[];
 	args?: TerminalArguments;
 	name?: string;

@@ -343,6 +343,9 @@ export class AppServerExtensionHostService extends Disposable implements IExtens
 }
 
 function selectActivationEvent(declarations: readonly string[], event: string): ExtensionHostActivationEvent | undefined {
+	for (const capability of ['terminalCompletionProvider', 'terminalQuickFixProvider']) {
+		if (event === `onTerminal:${capability}` && declarations.includes(`onDemand:${capability}`)) return { type: 'capability', capability };
+	}
 	if (event === 'onTerminal' && declarations.includes('onDemand:terminalLinkProvider')) return { type: 'capability', capability: 'terminalLinkProvider' };
 	if (event === 'onSpeech' && (declarations.includes('onSpeech') || declarations.includes('onDemand:speechProvider'))) return { type: 'speech' };
 	if (event.startsWith('onTerminalProfile:')) {

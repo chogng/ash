@@ -264,7 +264,7 @@ const speechSnapshot = (admitted: boolean): ExtensionHostFleetSnapshot => ({
 	generation: 1, extensions: [{
 		id: 'example.speech', version: '1', packageDigest: `sha256:${'a'.repeat(64)}`, runtimeApiVersion: 1,
 		incarnation: 1, activationGeneration: 1, lifecycle: 'ready', failure: undefined, stderr: '', outputEvents: [],
-		registrations: admitted ? [{ registrationId: 'speech', kind: 'speechProvider', identifier: 'example.recognition' }] : [],
+		registrations: admitted ? [{ registrationId: 'speech', kind: 'speechProvider', registrationGeneration: 1, identifier: 'example.recognition' }] : [],
 	}]
 });
 const speechApi: IExtensionHostApi = {

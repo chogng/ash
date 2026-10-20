@@ -23,6 +23,7 @@ const CONFIGURATION_ROUTE: &str = "web-workspace-configuration";
 
 pub(crate) struct WebWorkspaceRollback {
     dirs: Vec<(String, Grant)>,
+    authority_revision: Option<ash_config::ConfigRevision>,
     configuration: Option<ConfigurationRollback>,
 }
 
@@ -48,7 +49,6 @@ impl Drop for ConfigurationRollback {
 pub(super) struct ConfigurationFile {
     path: PathBuf,
     grant: Grant,
-    ceiling: Permissions,
     files: Arc<dyn FileSystem>,
     _watcher: Option<FileSystemWatcher>,
     authority: Option<Arc<ash_config::ConfigStore>>,
@@ -66,20 +66,19 @@ impl ConfigurationFile {
         let Some(file) = slot.as_ref() else {
             return Ok(());
         };
-        if file.grant.source() != GrantSource::ExplicitUser {
+        if !file.grant.is_active() {
+            // An observed revocation is final for this exact-file proof, including when its
+            // restricting Config entry is later forgotten before another request arrives.
+            *slot = None;
             return Ok(());
         }
-        let configured = config
-            .directory_grants
-            .explicit_permissions_for(&file.grant.dir().id())
-            .cloned()
-            .unwrap_or_else(super::environment_runtime::inspection_permissions);
-        let permissions = Permissions::new(
-            file.ceiling
-                .entries()
-                .filter(|permission| configured.allows(*permission)),
-        );
-        if file.grant.is_active() && file.grant.permissions() == &permissions {
+        let permissions = match file.grant.source() {
+            GrantSource::HostConfiguration | GrantSource::ExplicitUser => {
+                super::environment_runtime::web_session_permissions(&file.grant, config)
+            }
+            GrantSource::OrganizationPolicy => return Ok(()),
+        };
+        if file.grant.permissions() == &permissions {
             return Ok(());
         }
         // Revoke the old operation handles first, including a removed-root configuration whose
@@ -88,16 +87,13 @@ impl ConfigurationFile {
         if !permissions.allows(Permission::ReadFiles)
             || !permissions.allows(Permission::BrowseFiles)
         {
+            *slot = None;
             return Ok(());
         }
-        let grant = Grant::for_environment(
-            file.grant.dir().clone(),
-            GrantSource::ExplicitUser,
-            permissions,
-        )
-        .with_path_policy(file.grant.path_policy().clone());
-        let mut next = Self::open(file.path.clone(), grant, updates, file.authority.clone())?;
-        next.ceiling = file.ceiling.clone();
+        let grant =
+            Grant::for_environment(file.grant.dir().clone(), file.grant.source(), permissions)
+                .with_path_policy(file.grant.path_policy().clone());
+        let next = Self::open(file.path.clone(), grant, updates, file.authority.clone())?;
         *slot = Some(next);
         Ok(())
     }
@@ -132,7 +128,6 @@ impl ConfigurationFile {
         };
         Ok(Self {
             path,
-            ceiling: grant.permissions().clone(),
             grant,
             files,
             _watcher: watcher,
@@ -158,6 +153,12 @@ fn independent_grant(source: &Grant) -> Grant {
 
 impl AppServer {
     pub(crate) fn snapshot_web_workspace(&self) -> Result<WebWorkspaceRollback, EnvRuntimeError> {
+        let authority_revision = self
+            .config
+            .as_ref()
+            .map(|store| store.read_snapshot().map(|snapshot| snapshot.revision))
+            .transpose()
+            .map_err(|error| EnvRuntimeError::Failed(error.0))?;
         let runtime = self
             .env_runtime
             .read()
@@ -188,6 +189,7 @@ impl AppServer {
             });
         Ok(WebWorkspaceRollback {
             dirs,
+            authority_revision,
             configuration,
         })
     }
@@ -200,7 +202,7 @@ impl AppServer {
             .dirs
             .iter()
             .map(|(id, grant)| {
-                self.refresh_web_rollback_grant(grant)
+                self.refresh_web_rollback_grant(grant, snapshot.authority_revision)
                     .map(|grant| (id.clone(), grant))
             })
             .collect::<Result<Vec<_>, _>>()?;
@@ -208,7 +210,8 @@ impl AppServer {
             .configuration
             .as_ref()
             .map(|file| {
-                let grant = self.refresh_web_rollback_grant(&file.grant)?;
+                let grant =
+                    self.refresh_web_rollback_grant(&file.grant, snapshot.authority_revision)?;
                 if grant.authorize(Permission::ReadFiles).is_err() {
                     return Ok(None);
                 }
@@ -230,12 +233,53 @@ impl AppServer {
         Ok(())
     }
 
-    fn refresh_web_rollback_grant(&self, previous: &Grant) -> Result<Grant, EnvRuntimeError> {
+    fn refresh_web_rollback_grant(
+        &self,
+        previous: &Grant,
+        authority_revision: Option<ash_config::ConfigRevision>,
+    ) -> Result<Grant, EnvRuntimeError> {
         previous
             .dir()
             .directory()
             .ensure_current()
             .map_err(|_| EnvRuntimeError::PermissionRequired)?;
+        if previous.source() == GrantSource::HostConfiguration
+            && self
+                .local_env_host
+                .as_ref()
+                .is_some_and(|host| host.grants.is_web_session())
+        {
+            let snapshot = self
+                .config
+                .as_ref()
+                .ok_or(EnvRuntimeError::Unavailable)?
+                .read_snapshot()
+                .map_err(|error| EnvRuntimeError::Failed(error.0))?;
+            let mut permissions =
+                super::environment_runtime::web_session_permissions(previous, &snapshot.values);
+            // A detached proof cannot observe an intervening restrict-then-forget. After any
+            // authority change, absence is no evidence that its original write consent survived.
+            if authority_revision != Some(snapshot.revision)
+                && snapshot
+                    .values
+                    .directory_grants
+                    .explicit_permissions_for(&previous.dir().id())
+                    .is_none()
+            {
+                let inspection = super::environment_runtime::inspection_permissions();
+                permissions = Permissions::new(
+                    permissions
+                        .entries()
+                        .filter(|permission| inspection.allows(*permission)),
+                );
+            }
+            return Ok(Grant::for_environment(
+                previous.dir().clone(),
+                previous.source(),
+                permissions,
+            )
+            .with_path_policy(previous.path_policy().clone()));
+        }
         if previous.source() != GrantSource::ExplicitUser {
             return Ok(independent_grant(previous));
         }
@@ -281,7 +325,7 @@ impl AppServer {
                 .map(|entry| entry.grant.clone());
             let grant = match retained {
                 Some(grant) => grant,
-                None => self.authorize_local_dir_root(dir.canonical_path().to_path_buf(), None)?,
+                None => self.approve_web_directory(dir.clone())?,
             };
             if grant.dir() != &dir || !grant.is_active() {
                 return Err(EnvRuntimeError::PermissionRequired);

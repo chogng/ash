@@ -1,0 +1,24 @@
+.ash-terminal-resize-dimensions-overlay {
+	position: absolute;
+	top: 50%;
+	left: 50%;
+	transform: translate(-50%, -50%);
+	max-width: calc(100% - 2 * var(--ash-spacing-size80));
+	box-sizing: border-box;
+	padding: var(--ash-spacing-size60) var(--ash-spacing-size100);
+	border: var(--ash-strokeThickness) solid
+		var(--ash-contrastBorder, var(--ash-widget-border));
+	border-radius: var(--ash-cornerRadius-large);
+	background: var(--ash-editor-background);
+	color: var(--ash-foreground);
+	font-size: var(--ash-fontSize-label1);
+	font-weight: var(--ash-fontWeight-regular);
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	pointer-events: none;
+}
+
+.ash-terminal-resize-dimensions-overlay[hidden] {
+	display: none;
+}

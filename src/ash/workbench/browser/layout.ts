@@ -236,6 +236,7 @@ export class WorkbenchLayout
 			);
 		}
 		const initialState = this.stateModel.state;
+		this.domNode.dataset.panelPosition = positionToString(this.panelPosition);
 		this.projectPartFrameInsets(
 			initialState.sidebar.visible,
 			initialState.auxiliarybar.visible,
@@ -304,6 +305,7 @@ export class WorkbenchLayout
 		if (this.panelPosition === position) return;
 		const state = this.state;
 		this.panelPosition = position;
+		this.domNode.dataset.panelPosition = positionToString(position);
 		if (this.panelSizeBeforeMaximize !== undefined) this.panelSizeBeforeMaximize = isHorizontal(position) ? state.panel.height : state.panel.width;
 		this.rebuildGrid({ ...state, panel: { ...state.panel, position } });
 		this.saveState();
@@ -520,6 +522,7 @@ export class WorkbenchLayout
 		this.panelRestoredHeight = state.panel.height;
 		if (this.panelPosition !== state.panel.position) {
 			this.panelPosition = state.panel.position;
+			this.domNode.dataset.panelPosition = positionToString(this.panelPosition);
 			this.rebuildGrid(state);
 			this.panelPositionEmitter.fire(positionToString(this.panelPosition));
 		}

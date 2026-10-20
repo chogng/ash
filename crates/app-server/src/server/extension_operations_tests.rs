@@ -19,6 +19,7 @@ fn renderer_admission_is_projected_from_the_catalog_proof_and_omitted_after_revo
         manifest_json: r#"{"rendererClient":{"runtimeId":"untrusted"}}"#.into(),
         manifest_sha256: digest.clone(),
         package_sha256: digest.clone(),
+        runtime_binding: None,
         renderer_client: Some(ExtensionRendererClient {
             runtime_id: "ash.academic".into(),
             api_version: 1,

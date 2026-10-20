@@ -23,6 +23,7 @@ interface RunningApplication {
 interface PlaywrightFixtures {
 	readonly testTargetSupport: void;
 	readonly electronWindowMode: ElectronWindowMode | undefined;
+	readonly useInMemorySecretStorage: boolean;
 	/** Product arguments for a test-owned Electron launch, such as --agents-window. */
 	readonly electronArgs: readonly string[];
 	/** JSON settings seeded in this Electron fixture's isolated profile before launch. */
@@ -61,6 +62,7 @@ export const test = base.extend<PlaywrightFixtures>({
 		await use();
 	}, { auto: true }],
 	electronWindowMode: [undefined, { option: true }],
+	useInMemorySecretStorage: [true, { option: true }],
 	electronArgs: [[], { option: true }],
 	electronUserSettings: [undefined, { option: true }],
 	includeLargeTestFile: [false, { option: true }],
@@ -93,7 +95,7 @@ export const test = base.extend<PlaywrightFixtures>({
 	},
 	// Startup (30s), process exit (10s), and daemon stop (30s) have independent
 	// owned budgets. Keep them inside the fixture budget; test actions retain 45s.
-	runningApplication: [async ({ target, testWorkspace, openWorkspace, webAppServer, baseURL, backendConfiguration, backendFixture, githubAccount, video, electronWindowMode, electronArgs, electronUserSettings }, use, testInfo) => {
+	runningApplication: [async ({ target, testWorkspace, openWorkspace, webAppServer, baseURL, backendConfiguration, backendFixture, githubAccount, video, electronWindowMode, electronArgs, electronUserSettings, useInMemorySecretStorage }, use, testInfo) => {
 		if (backendFixture && githubAccount) { throw new Error('Backend fixture and GitHub account fixture both select product services'); }
 		// Evidence scenarios opt into full recording; the launchers own every page until cleanup.
 		const videoOptions = typeof video === 'string' ? { mode: video, size: undefined } : video;
@@ -165,6 +167,7 @@ export const test = base.extend<PlaywrightFixtures>({
 			appServerMode: target.appServerMode, userDataDirectory, recordVideo,
 			productServicesPath: backendFixture?.productServicesPath ?? (githubAccount ? join(userDataDirectory, 'product-services.json') : undefined),
 			windowMode: electronWindowMode,
+			useInMemorySecretStorage,
 			extraArgs: electronArgs,
 			workspaceDirectory: openWorkspace ? testWorkspace.directory : undefined,
 			workspacePermissions: openWorkspace ? 'development' as const : undefined,

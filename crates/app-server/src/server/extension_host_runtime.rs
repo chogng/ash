@@ -183,6 +183,7 @@ enum ReconcileScope {
 pub(super) struct ExtensionHostInvocationRequest {
     pub(super) extension_id: String,
     pub(super) registration_id: String,
+    pub(super) registration_generation: Option<u64>,
     pub(super) activation_generation: u64,
     pub(super) incarnation: u64,
     pub(super) operation: String,
@@ -536,6 +537,30 @@ impl ExtensionHostRuntime {
             (supervisor, handler)
         };
         drop(gate);
+        let runtime = Arc::downgrade(&self.inner);
+        let registered_extension = extension_id.to_owned();
+        supervisor.set_registration_listener(Arc::new(move |context| {
+            let Some(runtime) = runtime.upgrade() else {
+                return;
+            };
+            let published = {
+                let Ok(mut state) = runtime.state.lock() else {
+                    return;
+                };
+                let current = state
+                    .entry(owner, &registered_extension)
+                    .and_then(|entry| entry.supervisor.as_ref())
+                    .map(ExtensionHostSupervisor::snapshot);
+                if !current.is_some_and(|snapshot| {
+                    snapshot.incarnation == context.incarnation
+                        && snapshot.activation_generation == context.activation_generation
+                }) {
+                    return;
+                }
+                runtime.refresh_generation_locked(&mut state).ok().flatten()
+            };
+            runtime.publish(published);
+        }));
         let failure = supervisor
             .start_with_client(initialization, handler)
             .err()
@@ -748,6 +773,7 @@ impl ExtensionHostRuntime {
                     };
                     if let Ok(handle) = supervisor.begin_fenced_invoke(
                         ExtensionInvocationTarget {
+                            registration_generation: None,
                             incarnation,
                             activation_generation,
                         },
@@ -916,6 +942,7 @@ impl EditorClientBinding {
         let handle = supervisor
             .begin_fenced_invoke(
                 ExtensionInvocationTarget {
+                    registration_generation: None,
                     incarnation: NonZeroU64::new(snapshot.incarnation).ok_or_else(|| {
                         failure(
                             HostErrorCode::RegistrationNotFound,
@@ -1121,6 +1148,10 @@ impl RuntimeInner {
                 return Err(ExtensionHostRuntimeError::Stale);
             }
             let registration = registration.ok_or(ExtensionHostRuntimeError::Stale)?;
+            if matches!(registration.kind, RegistrationKind::SpeechProvider { registration_generation, .. } if request.registration_generation != Some(registration_generation))
+            {
+                return Err(ExtensionHostRuntimeError::Stale);
+            }
             if !registration_allows_operation(&registration.kind, &request.operation) {
                 return Err(ExtensionHostRuntimeError::Stale);
             }
@@ -1147,6 +1178,7 @@ impl RuntimeInner {
         let deadline = NonZeroU64::new(request.deadline_unix_millis)
             .ok_or(ExtensionHostRuntimeError::Stale)?;
         let target = ExtensionInvocationTarget {
+            registration_generation: request.registration_generation,
             incarnation: NonZeroU64::new(request.incarnation)
                 .ok_or(ExtensionHostRuntimeError::Stale)?,
             activation_generation: NonZeroU64::new(request.activation_generation)
@@ -1376,6 +1408,13 @@ fn registration_allows_operation(registration: &RegistrationKind, operation: &st
                 | "inputTaskTerminal"
                 | "resizeTaskTerminal"
                 | "closeTaskTerminal"
+        ),
+        RegistrationKind::TerminalCompletionProvider { .. } => {
+            operation == "provideTerminalCompletions"
+        }
+        RegistrationKind::TerminalQuickFixProvider { .. } => matches!(
+            operation,
+            "provideTerminalQuickFixes" | "handleTerminalQuickFix"
         ),
         RegistrationKind::TerminalLinkProvider {} => {
             matches!(operation, "provideTerminalLinks" | "handleTerminalLink")

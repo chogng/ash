@@ -34,7 +34,7 @@ Agent 执行、审批与终端呈现的详细边界以 [Platform Terminal 的前
 
 `TerminalProfileService` 合并执行端发现、自定义与扩展 Profile；`TerminalProfileResolverService` 解析执行端变量、Shell 参数、cwd、环境和图标，实际可执行文件由后端确认。多根工作区新建终端使用活动文件所属目录，无法确定时由用户选择；Split 继承原实例的目录与启动配置。
 
-交互终端、Tasks／DAP 和 Agent 的打开终端请求分别采用交互、automation 和 agentHost Profile 策略，共用原实例创建链。Relaunch 复用首次启动的配置快照；任务终端复用则按新任务替换启动配置并等待旧 PTY 释放。
+交互终端、Tasks／DAP 和 Agent 的打开终端请求分别采用交互、automation 和 agentHost Profile 策略，共用原实例创建链。交互终端的 Relaunch 从原始启动意图重新解析当前配置及扩展环境；任务终端复用则按新任务替换启动配置并等待旧 PTY 释放。现有 PTY 的重新附着不重新解析或修改进程环境。
 
 启动 schema 由平台唯一注册，屏幕与工作台设置由终端贡献注册，配置值及持久化归配置系统。扩展环境集合由 Workbench 管理生命周期与持久化，平台负责纯解码、快照和合并，resolver 将结果交给 Rust 创建请求。大小写、变量删除、`strictEnv` 和 Shell Integration 环境阶段的规则见 [Platform Terminal](../src/ash/platform/terminal/README.md)。
 
@@ -46,7 +46,7 @@ Profile 选择器属于单次命令。工作区或执行连接变化会关闭并
 
 xterm 的文本和原始字节输入经实例进入同一进程输入 owner。`sendText` 负责换行、执行用的 Enter 与 bracketed paste；原始键盘和二进制输入保留原有编码。输入和尺寸操作等待执行端或 provider 确认，关闭会拒绝排队及进行中的操作，迟到回复不能恢复已关闭的输入链。
 
-剪贴板贡献捕获发起实例和输入 generation，异步读取或确认后核对活动项、连接及屏幕；切换回来也不会发送已失效的粘贴。浏览器 paste 在 xterm 处理之前进入同一贡献，经原实例 `sendText` 发送并等待输入确认，不会同时进入 raw onData。没有文本选区时，Ctrl+C 继续发送给 Shell；Interrupt Active Command 通过执行宿主发送 SIGINT。
+剪贴板贡献捕获发起实例和输入 generation，异步读取或确认后核对活动项、连接及屏幕；切换回来也不会发送已失效的粘贴。浏览器 paste 在 xterm 处理之前进入同一贡献，经原实例 `sendText` 发送并等待输入确认，不会同时进入 raw onData。没有文本选区时，Ctrl+C 继续发送给 Shell；Send Signal 通过执行宿主发送 SIGINT、SIGTERM、SIGKILL 或 SIGHUP，POSIX 目标为当前前台进程组。无参打开选择器，显式 `{ signal }` 参数直接发送；取消、切换终端或断线后撤回选择。Shell 本身处于前台时，终止信号也可能结束 Shell；不支持的执行端明确报错。
 
 `copyOnSelection` 只在终端本身持有焦点时自动复制选区，Find 的匹配选择不覆盖剪贴板。`rightClickBehavior` 支持复制后清除选区／粘贴、仅粘贴、选词、默认菜单和不操作；Shift 保留菜单入口。剪贴板失败不清除选区，鼠标粘贴在焦点离开后也会失效。
 
@@ -54,9 +54,13 @@ xterm 的文本和原始字节输入经实例进入同一进程输入 owner。`s
 
 最近命令选择器从终端历史 owner 读取按 Profile 保存的命令，只在用户明确接受后重跑。最近命令和目录选择都绑定原 PID；切换实例、重连、退出、关闭或工作区替换会退休并关闭选择器，切换回来不能恢复旧选择。目录发送等待确认期间失效时也不再抢回焦点。听写文字进入原实例输入链，由用户按 Enter 执行；切换实例、退出或隐藏面板取消录音。
 
-Ctrl+Space／Trigger Suggest 显式打开建议选择器，读取同 Profile 的可信历史前缀；确认的 Bash／Zsh 还可读取同执行宿主、同授权工作区根下的实际目录项。只有单行、光标位于末尾且没有 ghost text 的普通输入可补全；复杂引号、转义和展开交给 Shell。接受仅追加正确引用的后缀，不发送 Enter；输入、光标、cwd、能力、实例或工作区变化撤回旧选择。Tab 继续由 Shell 处理。
+Ctrl+Space／Trigger Suggest 合并同 Profile 可信历史、已确认 Bash／Zsh 同授权根下的目录项与 Extension Host 的 completion provider。内置历史和路径只追加单行提示符末尾；扩展可指定提示符内替换范围与触发字符。接受不发送 Enter，Tab 继续由 Shell 处理；输入、光标、cwd、能力、实例、provider 或工作区变化撤回旧选择。
 
-Ctrl/Cmd+.／Show Terminal Quick Fixes 从最新失败命令保留的输出识别 Git 子命令拼写建议和缺失 upstream 的推送建议。只允许空 Shell prompt，拒绝多行、控制字符及 Shell 操作符；用户选择后仅插入建议供检查，仍须自行按 Enter。清屏、输出范围失效、新命令、输入和工作区变化使建议失效；没有匹配输出时不制造修正。
+Ctrl/Cmd+.／Show Terminal Quick Fixes 在空 Shell prompt 展示最新命令的内置 Git 修正和扩展 selector 匹配结果。内置修正仍仅插入经过检查的建议；扩展按其动作类型插入／执行命令、打开 URI 或执行扩展注册命令。扩展 outputMatcher 从原 command 提取准确的 anchor／offset／length 窗口，跨宿主仅传有界文本。清屏、输出范围失效、新命令、输入或宿主代次变化取消请求。
+
+Auto Replies 规则通过原进程 service 安装到 exec-server PTY 输出 drainer，创建时原子安装，跨字节块精确匹配，每条规则每秒最多发送一次，detach、连接关闭、退出均清空规则。Local Echo 默认关闭；启用后仅在已检测的 shell prompt 投影可打印输入，保留原输出流与输入 owner，不修改已解析 buffer。原始输出确认预测，控制或不匹配输出清除预测；Enter 后停止直到下个 prompt。
+
+OSC 99 经原 parser 进入通知中心，通知按钮及 query／alive／activation 回写绑定原实例。禁用设置或关闭实例会撤销该实例的待处理通知。Developer 写入只改显示，录制沿原输入／输出与 TerminalRecorder 生成有界记录。完整功能及宿主边界见 [Terminal 可选贡献](../src/ash/workbench/contrib/terminalContrib/README.md)。
 
 ### 运行编辑器选区
 
@@ -92,7 +96,7 @@ Sticky Scroll 由原 CommandDetection markers 和 xterm buffer 投影命令标�
 
 ## 视图、分组与资源导航
 
-隐藏面板保留实例、PTY、屏幕、待提交输入、分屏比例与焦点。面板组由 `TerminalGroupService` 管理成员，`TerminalGroup` 按布局服务的 Panel 位置使用 SplitView：顶部／底部横向，左侧／右侧纵向；列表从组模型派生行顺序、连接线与可访问位置描述。标签拖到另一标签之前／之后可加入该组或重排；拖到可见窗格左／右侧使用相同 `moveInstance` 操作，资源只匹配本窗口的存活实例。组内重排将比例与实例一起保留。Join or Reorder Terminals 提供同等键盘选择器，取消、切换实例或关闭后不应用过期结果。
+隐藏面板保留实例、PTY、屏幕、待提交输入、分屏比例与焦点。面板组由 `TerminalGroupService` 管理成员，`TerminalGroup` 按窗口布局服务的真实 Panel 位置分屏：顶部／底部横向排列，左侧／右侧纵向排列；移动面板保留相对尺寸和焦点。列表从组模型派生行顺序、连接线与可访问位置描述。标签拖到另一标签之前／之后可加入该组或重排；拖到可见窗格沿分屏轴的前／后半部使用相同 `moveInstance` 操作，资源只匹配本窗口的存活实例。组内重排将比例与实例一起保留。Join or Reorder Terminals 提供同等键盘选择器，取消、切换实例或关闭后不应用过期结果。
 
 `TerminalEditorService` 将同一个 TerminalInstance 移入或移出编辑区，编辑器 pane 只承载原 xterm。移动不复制屏幕或重建进程；同一终端可由多个编辑器组承载；关闭单个宿主保留原进程，最后一个宿主关闭后才释放实例。批量关闭先按准确关闭集合完成确认，取消不提前关闭任何进程。重命名和图标变化由实例保存，标签与编辑器通过原事件更新。
 
@@ -104,9 +108,9 @@ Sticky Scroll 由原 CommandDetection markers 和 xterm buffer 投影命令标�
 
 `terminal.integrated.enableFileLinks` 控制内置文件检测，`wordSeparators` 同时作用于文本链接分词和 xterm 选词。相对路径未直接命中时，只在实例授权根内搜索：唯一结果直接定位，多个结果要求再次选择。选择器先显示内置链接，外部 provider 按最多四个请求增量填入，取消或卸载后停止调度。
 
-扩展 `window.registerTerminalLinkProvider` 沿已有独立宿主注册和调用链接入窗口唯一 `ITerminalLinkProviderService`。包须获准声明 `terminalLinkProvider`；首次到达终端按 `onTerminal` 懒激活。提供者接收行文本、取消令牌及原终端的名称／PID 快照身份，返回经范围校验的链接；用户激活才调用原扩展对象。缓存有界，选择器保留项的句柄被淘汰时按原行重新解析；重命名／重启刷新快照，工作区、进程或扩展代次失效撤回旧调用。此链不声明 Quick Fix／补全 provider 或 Shell Execution 扩展事件的兼容性。
+扩展 `window.registerTerminalLinkProvider` 沿已有独立宿主注册和调用链接入窗口唯一 `ITerminalLinkProviderService`。包须获准声明 `terminalLinkProvider`；首次到达终端按 `onTerminal` 懒激活。提供者接收行文本、取消令牌及原终端的名称／PID 快照身份，返回经范围校验的链接；用户激活才调用原扩展对象。缓存有界，选择器保留项的句柄被淘汰时按原行重新解析；重命名／重启刷新快照，工作区、进程或扩展代次失效撤回旧调用。Completion／Quick Fix 使用同一 Extension Host 的独立 capability admission、注册及取消链，具体行为见 [Terminal 可选贡献](../src/ash/workbench/contrib/terminalContrib/README.md#功能与调用链)。Shell Execution 扩展事件按其原能力契约提供。
 
-附加终端到 Chat 时捕获已解析输出、选区及 Shell 元数据，交给原 draft。只读预览显示接受时的快照，源终端关闭或再次选择不改写已接受内容；预览没有 PTY 或输入目的地。
+附加终端到 Chat 时捕获已解析输出、选区及 Shell 元数据，交给原 draft。Terminal: Ask Chat 还允许输入问题，并将问题与输出快照一起追加到同一个 Chat 草稿，不自动提交；选择期间切换终端或会话取消交付。只读预览显示接受时的快照，源终端关闭或再次选择不改写已接受内容；预览没有 PTY 或输入目的地。
 
 ## 关闭与恢复
 
@@ -121,7 +125,7 @@ Sticky Scroll 由原 CommandDetection markers 和 xterm buffer 投影命令标�
 
 `confirmOnKill` 默认为 `editor`，`confirmOnExit` 默认为 `never`；设置及枚举值由原配置 schema 定义。子进程状态通过 Rust `terminal/processInfo` 查询，OS 无法确定时保守确认，取消关闭不停止进程、输出或待提交输入。
 
-Desktop 的 `enablePersistentSessions` 控制协调 reload 和退出恢复。准备阶段等待输入队列与屏幕解析提交，保存输出游标、UTF-8 尾部、终端资源、VT 屏幕、组成员／比例及活动／焦点项。普通工作区存储保存 UI checkpoint，租约 token 通过窗口级内存 SecretStorage 短期交接；准备或其他生命周期 join 失败时撤销交接并恢复同一实例读写。
+Desktop 的 `enablePersistentSessions` 控制协调 reload 和退出恢复。准备阶段等待输入队列与屏幕解析提交，保存输出游标、UTF-8 尾部、终端资源、VT 屏幕、组成员／比例及活动／焦点项。普通工作区存储保存 UI checkpoint，租约 token 通过窗口级内存 SecretStorage 短期交接；准备或其他生命周期 join 失败时撤销交接并恢复同一实例读写。 恢复屏幕等首次可见布局再打开渲染器；保存的焦点请求保留到这一步，期间用户移至其他控件时取消，避免启动时面板仍为零尺寸而丢失焦点或随后抢回焦点。
 
 新 Renderer 按原执行目录与租约 attach 并验证 PID，恢复原字符网格与屏幕，等待布局和工作台恢复后续读，避免临时尺寸改写历史。实际窗口关闭清空内存凭据；扩展自供 PTY 没有恢复协议时阻止不安全的 reload，并反馈原因。
 
@@ -150,3 +154,33 @@ pnpm run smoketest test/smoke/areas/windows/terminal.spec.ts
 just verify ash-exec-server
 just test ash-app-server-runtime --lib terminal
 ```
+
+## 跨平台与窗口配对验收（2026-10-19）
+
+验证以 `786b887b1` 为基线。Linux 产物包含本次描述符清理修复；窗口焦点与扩展准入修复另在 macOS 重建验证，不将 Linux 结果算作这些增补变更的验证。Linux 构建在当前检出的 Debian 13 arm64 容器中完成，部署时核对可执行文件 SHA-256；执行端验收运行于独立的 Debian 13 arm64 QEMU/HVF 虚拟机，内核为 `6.12.113+deb13-cloud-arm64`、普通用户。虚拟机结果与 Docker Desktop 的 LinuxKit 容器结果分别留证，不以交叉编译或容器结果替代独立内核实跑，也不将虚拟机称为物理机器。
+
+| 环境              | 实际结果                                                                                                                                                                                                                                                              |
+| ----------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 独立 Linux 虚拟机 | PTY 26 项、终端执行端 66 项、App Server `terminal_` 过滤回归 23 项、真实 Electron/App Server smoke 2 项通过；覆盖四种信号送达前台进程组后原 Shell PID 保持、启动时自动回复、连接隔离、租约、尺寸、输出与回放。Smoke 从界面验证自动回复／Quick Access 和前台 SIGTERM。 |
+| LinuxKit 容器     | 当前源码的 `ash-utils-pty`、`ash-exec-server` 验证通过；正常产品包构建成功，Electron/App Server smoke 2 项通过。此行仅作为容器补充覆盖。                                                                                                                              |
+| macOS             | `just verify ash-utils-pty` 的 check、26 项测试及 warnings 检查通过；`ash-plugin` 的 34 项测试、焦点回归、Quick Input 生命周期、渲染器与正常后端包构建通过。真实窗口重跑 Quick Access 行内重命名、关闭、重新接受原实例，确认焦点、PID 和 Shell 变量均保持。           |
+
+Linux 运行发现的 `EMFILE` 来自降低 `RLIMIT_NOFILE` 并耗尽低位槽后的启动清理：旧实现还要打开 `/proc/self/fd`，导致 spawn 在清理前失败。回归先以旧实现确定性复现，再验证分段 `close_range(CLOSE_RANGE_CLOEXEC)` 可在无可用描述符槽时标记高位 FD，并保留乱序、重复例外及 exec-error 管道。旧内核不支持该 syscall／flag 时继续使用原有 `/proc` 回退；回归仅在子进程探测到该能力后才耗尽槽位，旧内核继续核对稀疏高位 FD，不宣称回退也能处理完全耗尽的描述符表。
+
+窗口配对使用 macOS arm64 的 Ash 实际 Desktop／App Server 与已安装的 VS Code `1.142.0`（`6d62b1d5dace93a33b3a6d3eca1317bd5e15bcb1`），分别使用隔离 profile 和合成工作区。配对从真实 Shell 检查自动回复、Quick Access 保持 PID、字号缩放及重置、OSC 99 通知、开发者写屏不注入输入、尺寸覆盖层消失、环境详情编辑器、会话录制，以及原生粘贴取消和单行粘贴。单行粘贴使用真实 PTY 的 `cat` 消费者核对字节，确认只移除换行而保留空格与 Tab；避免把 Shell readline 的 Tab 补全行为误算为产品差异。失败的自动化选择器、焦点归属和 Shell oracle 诊断单独保留，不计为通过。
+
+配对另发现重命名完成后的焦点竞态：重命名写入仍在等待时，用户已打开新的 Quick Access，旧操作的 `finally` 却重新聚焦终端。终端编辑 owner 现在只在没有新的 Quick Input 时恢复焦点；同一 prompt 的 accept／hide／error 订阅也随 prompt 释放。回归通过延迟重命名 Promise、打开实际 Quick Input，再完成旧操作，验证新输入框持续保有焦点，并由 disposable tracker 核对释放。
+
+新建命令也有独立的晚到聚焦请求：创建 PTY 后的 `showPanel(true)` 会在后续 F1 已打开时重新聚焦终端。该命令现在将显示结果与恢复焦点分开，记录操作期间后续 Quick Input 的接管，避免创建或显示尚未完成时抢走新的输入焦点。
+
+真实扩展包安装还暴露出准入列表缺项：JavaScript 宿主已经实现终端 profile、link、completion 和 quick fix，但 Plugin manifest 校验尚未允许这些声明。修复位于原 manifest validator，只接受已有宿主契约；安装、启用、精确包摘要授权和撤权仍由原 Plugin owner 处理，不以直接注册 provider 代替正常准入。
+
+扩展目录的文件完整性摘要与 Plugin 执行授权摘要属于不同域。目录现在通过可选 `runtimeBinding` 携带来源 authority 提供的准确 runtime ID 和包摘要，终端桥接据此识别同一已授权 provider；静态 `packageSha256`、执行端原有包 fence 与显式 Grant 均保留。该绑定不从扩展 manifest 自报。断连、清理及失败回滚也撤销环境 collection reader 与缓存，避免旧运行时取消后继续影响下一次启动。
+
+两产品的同一真实 JavaScript producer 已分别验证环境启动快照、显式 Relaunch、新 PID 应用新值、补全回调与范围替换、Quick Fix 插入和命令回调，以及公开 disposable 撤回注册。Ash 另从正常安装、启用、精确摘要授权进入扩展宿主，确认授权前命令不可用；最后通过正常权限详情及原生菜单撤权，原 PTY 保留启动环境，新 PTY 不再注入扩展变量。全程使用公开扩展 API 与产品准入操作。
+
+对应 macOS 定向回归包括 Plugin 34 项、静态目录 24 项、App Server 来源 4 项、DTO 1 项、生成契约一致性 2 项，以及扩展宿主所属前端单测 64 项、目录服务 47 项和焦点／Quick Input／终端命令回归。协议、相关 Rust warnings、正常后端包与渲染器构建通过。测试命令、独立场景结果和产物摘要分别保存在下述证据目录。
+
+Windows 分支按用户本轮“先不管”的要求停止，没有执行新的 Windows 验证，也不记录为通过。原有 Windows API 的明确 `Unsupported` 与键盘 Ctrl-C 是不同契约。
+
+本轮原始日志、产物摘要和窗口证据位于忽略目录 `.build/terminal-cross-platform/`；窗口场景的录屏、截图和 trace 由现有 scenario runner 写入 `.build/ash-playwright-mcp/evidence/`。

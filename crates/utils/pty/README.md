@@ -42,6 +42,8 @@ tests 审查行为；不能用“来自上游”替代本地 correctness review�
 | `TerminalSize`                | rows/cols                                   | 默认 24 × 80                                       |
 | `combine_output_receivers`    | split mpsc → one broadcast stream           | 不保证 stdout/stderr total order                   |
 
+`ProcessSignal` 还支持 Terminate / Kill / Hangup，对应 SIGTERM / SIGKILL / SIGHUP；Unix PTY 始终定位当前前台进程组。
+
 `spawn_*` 参数包括 program、args、cwd、完整 env map 与 optional arg0；PTY 额外接收
 `TerminalSize`，pipe 额外接收 Unix inherited FDs。PTY 不支持额外的 FD 继承；当前生产调用没有
 该需求。Spawn 前 `env_clear`，因此 child 只看到 caller 显式提供的 environment。
@@ -105,9 +107,12 @@ spawn_pipe_process / spawn_pipe_process_no_stdin
 Unix pipe child 进入独立 session/process group；terminate/interrupt 作用于 group。Linux
 `set_parent_death_signal` 在 `pre_exec` 设置 SIGTERM 并复查 parent PID，降低 fork/exec race。
 
-Linux 的 `pre_exec` 从 `/proc/self/fd` 用栈缓冲区读取描述符，并用 `fcntl` 设置 `CLOEXEC`；
-不在 fork 后分配内存。读取或设置失败会终止 spawn。macOS 的 `pre_exec` 描述符清理只使用
-内核查询、`fcntl` 与 `close`，不枚举目录或分配内存。
+Linux 的 `pre_exec` 优先使用 `close_range(CLOSE_RANGE_CLOEXEC)`，按显式保留的描述符分段；
+不需要额外描述符、排序或 fork 后内存分配。这样即使子进程降低 `RLIMIT_NOFILE` 后所有低位槽都已占用，
+仍能覆盖已打开的稀疏高位描述符。内核不支持该 syscall 或 CLOEXEC flag 时，保留原有
+`/proc/self/fd` 栈缓冲区枚举和 `fcntl` 回退；该回退仍需要一个可打开的描述符槽。
+读取或设置失败会终止 spawn。macOS 的 `pre_exec` 描述符清理只使用内核查询、`fcntl` 与 `close`，
+不枚举目录或分配内存。
 遍历上限来自当前子进程的描述符表容量，覆盖稀疏高位 FD，也覆盖降低 `RLIMIT_NOFILE` 后仍然
 打开的 FD。保留 stdio、显式传入的 FD 与用于报告 exec 失败的 CLOEXEC 管道；清理失败会让
 spawn 返回错误。
@@ -228,8 +233,8 @@ resize。Windows-only tests 覆盖 job/ConPTY descendant behavior、foreground i
 normalization。
 
 `lifecycle_tests.rs` 覆盖 pipe terminate/Drop 回收、PTY 等待任务排队时回收、后台 child 保持 slave
-打开、输入/输出背压下取消、关闭输出后 drain、大输入与 EOF，以及 driver 转发清理。macOS
-另验证降低 FD limit 后仍能清理高位描述符并保留指定 FD。
+打开、输入/输出背压下取消、关闭输出后 drain、大输入与 EOF，以及 driver 转发清理。Unix 验证降低
+FD limit 后仍能清理稀疏高位描述符并保留指定 FD；Linux 还会耗尽所有低位槽，并验证乱序、重复的保留列表。
 
 部分 integration tests 依赖 Python、`setsid` 或特定 OS capability，会在环境不满足时 skip。当前
 Unix pipe inherited-FD cases 还要求 child 能打开 `/dev/fd/<n>`；禁止该访问的 managed sandbox 会使

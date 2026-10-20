@@ -1,3 +1,4 @@
+import type { GitHubCheckDetails, GitHubCheckTarget } from '../common/githubService.js';
 import type { GitHubRemoteRepository, GitHubRepositoryVisibility, GitHubRepositoryBranch, GitHubBranchProtection, GitHubShareLink } from '../common/githubService.js';
 import { CancellationToken } from '../../../base/common/cancellation.js';
 import { CancellationError, onUnexpectedError } from '../../../base/common/errors.js';
@@ -199,6 +200,16 @@ export class AppServerGitHubService implements IGitHubService {
 	public async enableAutoMerge(repository: GitHubRepository, number: number, merge: GitHubMerge, token?: CancellationToken): Promise<void> {
 		await this.request('github/pullRequest/autoMerge', { repository, number, ...merge }, RequestKind.Write, token);
 	}
+	public async readCheckDetails(repository: GitHubRepository, target: GitHubCheckTarget, page: number, token?: CancellationToken): Promise<GitHubCheckDetails> {
+		const details = await this.request('github/check/details', { repository, ...target, page }, RequestKind.Read, token);
+		return { ...details, annotations: details.annotations.map(annotation => ({ ...annotation })) };
+	}
+	public async readCheckLog(repository: GitHubRepository, target: GitHubCheckTarget, token?: CancellationToken): Promise<string> {
+		return (await this.request('github/check/log', { repository, ...target }, RequestKind.Read, token)).url;
+	}
+	public async rerunCheck(repository: GitHubRepository, target: GitHubCheckTarget, token?: CancellationToken): Promise<void> {
+		await this.request('github/check/rerun', { repository, ...target }, RequestKind.Write, token);
+	}
 	public async readChecks(repository: GitHubRepository, commit: string, page: number, token?: CancellationToken): Promise<GitHubChecks> {
 		const result = await this.request('github/checks', { repository, commit, page }, RequestKind.Read, token);
 		return { state: result.state, statuses: result.statuses.map(status => ({ ...status })), checks: result.checks.map(check => ({ ...check })), nextPage: result.nextPage };
@@ -262,7 +273,7 @@ export function createDisconnectedGitHubService(): IGitHubService {
 		listPullRequests: unavailable, readPullRequest: unavailable, createPullRequest: unavailable, updatePullRequest: unavailable,
 		listPullRequestFiles: unavailable, listPullRequestReviews: unavailable, reviewPullRequest: unavailable, mergePullRequest: unavailable, enableAutoMerge: unavailable,
 		readReviewDiff: unavailable, readFile: unavailable, listReviewThreads: unavailable, readReviewThreadComments: unavailable, replyReviewThread: unavailable, resolveReviewThread: unavailable,
-		readChecks: unavailable, listLabels: unavailable, createLabel: unavailable, updateLabelColor: unavailable, listAssignees: unavailable,
+		readCheckDetails: unavailable, readCheckLog: unavailable, rerunCheck: unavailable, readChecks: unavailable, listLabels: unavailable, createLabel: unavailable, updateLabelColor: unavailable, listAssignees: unavailable,
 	};
 }
 

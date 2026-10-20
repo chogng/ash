@@ -38,19 +38,17 @@ struct PipeChildTerminator {
 
 impl ChildTerminator for PipeChildTerminator {
     fn signal(&mut self, signal: ProcessSignal) -> io::Result<()> {
-        match signal {
-            ProcessSignal::Interrupt => {
-                #[cfg(unix)]
-                {
-                    crate::process_group::interrupt_process_group(self.process_group_id)
-                }
-
-                #[cfg(not(unix))]
-                {
-                    Err(crate::process::unsupported_signal(signal))
-                }
-            }
+        #[cfg(unix)]
+        {
+            let process_group_id = self.process_group_id;
+            return crate::process_group::signal_process_group_id(
+                process_group_id as libc::pid_t,
+                signal.unix_number(),
+            )
+            .map(|_| ());
         }
+        #[cfg(not(unix))]
+        Err(crate::process::unsupported_signal(signal))
     }
 
     fn kill(&mut self) -> io::Result<()> {

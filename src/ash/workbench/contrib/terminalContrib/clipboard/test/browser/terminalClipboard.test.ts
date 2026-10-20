@@ -65,11 +65,28 @@ test('terminal paste confirmation bounds its preview without rewriting accepted 
 		assert.ok(item.request.detail!.length < 2200);
 		assert.ok(item.request.detail!.split('\n').length <= 12);
 		assert.ok(!item.request.detail!.includes('hidden tail'));
-		item.close({ button: DialogResult.Primary });
+		item.close({ button: DialogResult.Primary, buttonIndex: 0 });
 	});
 	const text = `${'a'.repeat(3000)}\n${'line\n'.repeat(20)}hidden tail`;
 	assert.equal(await services.invokeFunction(shouldPasteTerminalText, text, false), true);
 });
+
+for (const policy of [false, true, 123, 'unknown']) {
+	test(`terminal paste respects legacy or invalid warning policy ${JSON.stringify(policy)}`, async () => {
+		using services = new InstantiationService();
+		using dialogs = new DialogService();
+		services.registerInstance(IConfigurationService, { getValue: () => policy } as unknown as IConfigurationService);
+		services.registerInstance(IDialogService, dialogs);
+		let confirmations = 0;
+		using listener = dialogs.model.onWillShowDialog(item => {
+			confirmations++;
+			item.close({ button: DialogResult.Cancel });
+		});
+		assert.equal(await services.invokeFunction(shouldPasteTerminalText, 'first\nsecond', false), policy === false);
+		assert.equal(confirmations, policy === false ? 0 : 1);
+		assert.equal(await services.invokeFunction(shouldPasteTerminalText, 'first\nsecond', true), true);
+	});
+}
 
 function clipboardFixture() {
 	const store = new DisposableStore();
@@ -79,12 +96,16 @@ function clipboardFixture() {
 	const services = store.add(new InstantiationService());
 	const contextKeys = store.add(new ContextKeyService());
 	const activeChanged = store.add(new Emitter<ITerminalInstance | undefined>());
+	const stateChanged = store.add(new Emitter<ITerminalInstance['state']>());
 	const selectionChanged = store.add(new Emitter<void>());
 	let selection = '';
 	let selectionX = 0;
 	let activeInstance: ITerminalInstance | undefined;
 	const copied: string[] = [];
 	const sent: string[] = [];
+	const sendCalls: Array<{ text: string; shouldExecute: boolean; bracketedPaste: boolean | undefined; }> = [];
+	const sendStarted = new DeferredPromise<void>();
+	let sendGate: Promise<void> | undefined;
 	const errors: unknown[] = [];
 	const reported = new DeferredPromise<void>();
 	let read: () => Promise<string> = async () => 'pasted';
@@ -92,8 +113,13 @@ function clipboardFixture() {
 	const element = dom.window.document.querySelector('div')!;
 	const textarea = dom.window.document.querySelector('textarea')!;
 	const instance = {
-		state: 'running', onDidChangeState: Event.None, onDidExit: Event.None,
-		sendText: async (text: string) => { sent.push(text); },
+		state: 'running', onDidChangeState: stateChanged.event, onDidExit: Event.None,
+		sendText: async (text: string, shouldExecute: boolean, bracketedPaste?: boolean) => {
+			sent.push(text);
+			sendCalls.push({ text, shouldExecute, bracketedPaste });
+			await sendStarted.complete();
+			await sendGate;
+		},
 	} as unknown as ITerminalInstance;
 	activeInstance = instance;
 	const screen = {
@@ -109,7 +135,8 @@ function clipboardFixture() {
 	} as unknown as IXtermTerminal;
 	services.registerInstance(IConfigurationService, configuration);
 	services.registerInstance(IContextKeyService, contextKeys);
-	services.registerInstance(IDialogService, store.add(new DialogService()));
+	const dialogs = store.add(new DialogService());
+	services.registerInstance(IDialogService, dialogs);
 	services.registerInstance(IClipboardService, { readText: () => read(), writeText: (text: string) => write(text) } as IClipboardService);
 	services.registerInstance(INotificationService, { error: (error: unknown) => { errors.push(error); void reported.complete(); } } as INotificationService);
 	services.registerInstance(ITerminalService, {
@@ -120,11 +147,13 @@ function clipboardFixture() {
 	const contribution = store.add(services.createInstance(registration.ctor, { instance })) as TerminalClipboardContribution;
 	contribution.xtermReady(screen);
 	return {
-		[Symbol.dispose]: () => store.dispose(), configuration, contribution, copied, sent, errors, element, textarea, screen, reported: reported.p,
+		[Symbol.dispose]: () => store.dispose(), configuration, contribution, copied, sent, sendCalls, errors, element, textarea, screen, dialogs, sendStarted: sendStarted.p, reported: reported.p,
 		select: (value: string, x = 0) => { selection = value; selectionX = x; selectionChanged.fire(); },
 		selection: () => selection,
 		read: (value: () => Promise<string>) => { read = value; },
 		write: (value: (text: string) => Promise<void>) => { write = value; },
+		delaySend: (gate: Promise<void>) => { sendGate = gate; },
+		reconnect: () => { stateChanged.fire('reconnecting'); stateChanged.fire('running'); },
 		switch: () => { activeInstance = undefined; activeChanged.fire(undefined); },
 		outside: () => dom.window.document.querySelector('input')!.focus(),
 		mouse: (type = 'mousedown', shiftKey = false) => {
@@ -133,6 +162,71 @@ function clipboardFixture() {
 			return event;
 		},
 	};
+}
+
+for (const newline of ['\n', '\r\n', '\r']) {
+	test(`terminal Paste as One Line preserves whitespace and waits for acknowledged input with ${JSON.stringify(newline)}`, async () => {
+		using fixture = clipboardFixture();
+		fixture.read(async () => ` echo first ${newline}\techo second ${newline}`);
+		const acknowledged = new DeferredPromise<void>();
+		fixture.delaySend(acknowledged.p);
+		using listener = fixture.dialogs.model.onWillShowDialog(item => {
+			assert.equal(item.request.kind, 'choice');
+			assert.deepEqual(item.request.kind === 'choice' && item.request.buttons, ['Paste', 'Paste as One Line']);
+			item.close({ button: DialogResult.Secondary, buttonIndex: 1 });
+		});
+		let completed = false;
+		const paste = fixture.contribution.paste().then(() => { completed = true; });
+		await fixture.sendStarted;
+		assert.deepEqual(fixture.sendCalls, [{ text: ' echo first \techo second ', shouldExecute: false, bracketedPaste: true }]);
+		assert.equal(completed, false);
+		await acknowledged.complete();
+		await paste;
+		assert.equal(completed, true);
+		assert.equal(fixture.configuration.getValue(TerminalSettingId.EnableMultiLinePasteWarning), 'auto');
+	});
+}
+
+test('terminal paste remembers an accepted warning choice and preserves original newlines', async () => {
+	using fixture = clipboardFixture();
+	const text = 'first\r\nsecond\n';
+	fixture.read(async () => text);
+	let confirmations = 0;
+	using listener = fixture.dialogs.model.onWillShowDialog(item => {
+		confirmations++;
+		item.close({ button: DialogResult.Primary, buttonIndex: 0, checkboxChecked: true });
+	});
+	await fixture.contribution.paste();
+	assert.equal(fixture.configuration.getValue(TerminalSettingId.EnableMultiLinePasteWarning), 'never');
+	await fixture.contribution.paste();
+	assert.equal(confirmations, 1);
+	assert.deepEqual(fixture.sent, [text, text]);
+});
+
+test('terminal paste cancel leaves input and warning preferences untouched', async () => {
+	using fixture = clipboardFixture();
+	fixture.read(async () => 'first\nsecond');
+	using listener = fixture.dialogs.model.onWillShowDialog(item => {
+		item.close({ button: DialogResult.Cancel, checkboxChecked: true });
+	});
+	await fixture.contribution.paste();
+	assert.deepEqual(fixture.sent, []);
+	assert.equal(fixture.configuration.getValue(TerminalSettingId.EnableMultiLinePasteWarning), 'auto');
+});
+
+for (const transition of ['switch', 'reconnect', 'dispose'] as const) {
+	test(`terminal paste drops an accepted single-line choice after ${transition}`, async () => {
+		using fixture = clipboardFixture();
+		fixture.read(async () => 'first\nsecond');
+		using listener = fixture.dialogs.model.onWillShowDialog(item => {
+			if (transition === 'switch') fixture.switch();
+			else if (transition === 'reconnect') fixture.reconnect();
+			else fixture.contribution.dispose();
+			item.close({ button: DialogResult.Secondary, buttonIndex: 1 });
+		});
+		await fixture.contribution.paste();
+		assert.deepEqual(fixture.sent, []);
+	});
 }
 
 test('terminal auto-copy is configurable, ignores empty selections and reports clipboard failures', async () => {

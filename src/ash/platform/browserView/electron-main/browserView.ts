@@ -151,9 +151,11 @@ export class BrowserView extends Disposable {
 		this.cancelAuthentication();
 		this.resetFormPasswords();
 		await this.passwords.clearSession(this.session.id);
-		const snapshot = await this.storage.getItems(authenticationStorage);
-		for (const key of Object.keys(snapshot.entries)) {
-			if (key.startsWith(this.authenticationPrefix)) { await this.storage.updateItems(authenticationStorage, key, null); }
+		if (!this.passwords.useInMemoryStorage) {
+			const snapshot = await this.storage.getItems(authenticationStorage);
+			for (const key of Object.keys(snapshot.entries)) {
+				if (key.startsWith(this.authenticationPrefix)) { await this.storage.updateItems(authenticationStorage, key, null); }
+			}
 		}
 		await this.session.electronSession.clearAuthCache();
 		this.attemptedAuthentication.clear();
@@ -201,7 +203,9 @@ export class BrowserView extends Disposable {
 		if (this.attemptedAuthentication.size >= 64 && !this.attemptedAuthentication.has(key)) { deny(); return; }
 		if ([...this.authenticationRequests.values()].some(request => request.key === key)) { deny(); return; }
 		const requestId = randomUUID();
-		const persistent = this.session.storageScope === 'global' || this.session.storageScope === 'workspace';
+		// In memory mode Chromium's auth cache owns credentials for this process;
+		// remembered disk records must remain unread and untouched.
+		const persistent = !this.passwords.useInMemoryStorage && (this.session.storageScope === 'global' || this.session.storageScope === 'workspace');
 		let canRemember = false;
 		let storageFailed = false;
 		const finish = (credentials?: { username: string; password: string; }): void => {

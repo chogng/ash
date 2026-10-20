@@ -236,6 +236,8 @@ export interface IFileSystemProviderCopyScope extends IDisposable {
 	readFile(resource: URI, token?: CancellationToken): Promise<IFileBytes>;
 	writeFile(resource: URI, content: Uint8Array, options: IFileWriteOptions, token?: CancellationToken): Promise<IFileWriteResult>;
 	createDirectory(resource: URI, token?: CancellationToken): Promise<IFileStat>;
+	/** Publishes a staged copy without replacing an existing destination on the pinned connection. */
+	rename(source: URI, target: URI, existing: FileExistingTargetBehavior, token?: CancellationToken): Promise<void>;
 	delete(resource: URI, missing: FileMissingTargetBehavior, mode: FileDeleteMode, token?: CancellationToken): Promise<void>;
 }
 

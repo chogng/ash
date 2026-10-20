@@ -16,8 +16,24 @@ import { isCancellationError } from '../../../../../base/common/errors.js';
 
 /** Speech only edits shell input. Enter and terminal control sequences must stay user actions. */
 export function postProcessTerminalDictation(text: string): string {
-	return text.replace(/[\r\n]+/g, ' ').replace(/[\x00-\x1f\x7f-\x9f]/g, '');
+	const safe = text.replace(/[\r\n]+/g, ' ').replace(/[\x00-\x1f\x7f-\x9f]/g, '');
+	return safe.replace(/[.,?;!]/g, '').replace(spokenSymbolPattern, phrase => spokenSymbols.get(phrase.toLowerCase().replace(/\s+/g, ' '))!)
+		.replace(/^(\s*)([A-Z])/, (_match, whitespace: string, firstLetter: string) => whitespace + firstLetter.toLowerCase());
 }
+
+// Phrase matching runs once with the longest alternatives first. Unicode word
+// boundaries keep an English symbol name inside a non-English word untouched.
+const spokenSymbols = new Map(Object.entries({
+	'$': ['dollar sign', 'dollar'], '"': ['double quote'], "'": ['quote'],
+	'(': ['open parenthesis', 'open paren'], ')': ['close parenthesis', 'close paren'],
+	'[': ['open bracket'], ']': ['close bracket'], '{': ['open brace'], '}': ['close brace'],
+	'<': ['open angle bracket', 'less than'], '>': ['close angle bracket', 'greater than'],
+	'&': ['ampersand'], '%': ['percent'], '*': ['asterisk', 'star'], '+': ['plus'], '=': ['equals'],
+	'!': ['exclamation'], '/': ['forward slash', 'slash'], '\\': ['backslash'], '|': ['pipe'],
+	'~': ['tilde'], '^': ['caret'], '@': ['at sign'], '#': ['hashtag', 'pound', 'hash'],
+	':': ['colon'], ';': ['semicolon'], '_': ['underscore'], '-': ['hyphen', 'dash'], '.': ['dot', 'period'],
+}).flatMap(([symbol, phrases]) => phrases.map(phrase => [phrase, symbol] as const)));
+const spokenSymbolPattern = new RegExp(`(?<![\\p{L}\\p{N}_])(?:${[...spokenSymbols.keys()].sort((left, right) => right.length - left.length).map(phrase => phrase.replaceAll(' ', '\\s+')).join('|')})(?![\\p{L}\\p{N}_])`, 'giu');
 
 /** Capture remains bound to the instance selected at start; switching or hiding discards it. */
 export class TerminalVoiceSession extends Disposable {

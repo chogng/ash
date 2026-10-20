@@ -2815,6 +2815,28 @@ test('HistoryService restores cursor, edit, and navigation locations', async () 
 	dom.window.close();
 });
 
+test('singleton canvases reveal their original group and cannot create an empty split', async () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	try {
+		const registry = new EditorPaneRegistry();
+		using registration = registry.registerEditorPane(descriptor('stanza.editor.code', '.ts', () => new TestEditorPane('stanza.editor.code')));
+		using editor = createEditorPart(dom.window.document.body, { registry });
+		dom.window.document.body.append(editor.domNode);
+		editor.layout({ width: 960, height: 640 });
+		const canvas = { ...input('/project/canvas.ts'), capabilities: EditorInputCapabilities.Singleton };
+		const pane = await editor.openEditor(canvas);
+		const original = editor.activeGroup;
+		await editor.splitEditors(original.id, [canvas], Direction.Right);
+		assert.equal(editor.groups.length, 1);
+		const other = editor.addGroup(original.id, Direction.Right);
+		editor.activateGroup(other.id);
+		assert.equal(await editor.openEditor(canvas, {}, { groupId: other.id }), pane);
+		assert.equal(editor.activeGroup, original);
+		assert.deepEqual(other.inputs, []);
+		assert.deepEqual(original.inputs, [canvas]);
+	} finally { dom.window.close(); }
+});
+
 test('tab split commands copy multiple inactive tabs beside their source group', async () => {
 	const dom = new JSDOM('<!doctype html><body></body>');
 	try {
@@ -3592,6 +3614,26 @@ test("EditorParts moves an editor to an auxiliary window without changing its in
 	main.dispose();
 	workingCopy.dispose();
 	dom.window.close();
+});
+
+test('copying a singleton canvas cannot open another window or remove its source', async () => {
+	const dom = new JSDOM('<!doctype html><body></body>', { url: 'http://localhost' });
+	try {
+		using registry = new EditorPaneRegistry();
+		using registration = registry.registerEditorPane(descriptor('test.canvas', '.ts', () => new TestEditorPane('test.canvas')));
+		using main = createEditorPart(dom.window.document.body, { registry });
+		using windows = new TestAuxiliaryWindowService();
+		using storage = new BrowserStorageService({ ownerWindow: dom.window as unknown as Window, workspaceId: 'workspace', flushInterval: 0 });
+		using parts = createEditorParts(main, windows, container => createAuxiliaryPart(container, registry), {
+			onDidChangeScreenReaderOptimized: Event.None, isScreenReaderOptimized: () => false,
+		} as unknown as IAccessibilityService, storage);
+		const canvas = { ...input('/project/canvas.ts'), capabilities: EditorInputCapabilities.Singleton };
+		const pane = await main.openEditor(canvas);
+		assert.equal(await parts.openEditorsInNewWindow(main.activeGroup.editors, 'copy'), undefined);
+		assert.equal(windows.lastWindow, undefined);
+		assert.equal(main.activePane, pane);
+		assert.deepEqual(main.activeGroup.inputs, [canvas]);
+	} finally { dom.window.close(); }
 });
 
 for (const mode of ['move', 'copy'] as const) {

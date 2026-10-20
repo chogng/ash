@@ -1,3 +1,4 @@
+import type { ITerminalAutoReply, TerminalProcessSignal } from '../common/terminal.js';
 import { APP_SERVER_METHODS, type TerminalAttachResult, type TerminalReconnectLease } from "../../../../../.build/protocol/typescript/index.js";
 import { timeout } from "../../../base/common/async.js";
 import { CancellationError, isCancellationError } from '../../../base/common/errors.js';
@@ -91,6 +92,7 @@ export class ReconnectableTerminalProcessService extends Disposable implements I
 		const execution = params.execution?.type === 'process' ? { ...params.execution, args: typeof params.execution.args === 'string' ? params.execution.args : [...params.execution.args] } : params.execution;
 		const result = await this.supervisor.request(APP_SERVER_METHODS["terminal/create"], {
 			...params,
+			autoReplies: params.autoReplies && [...params.autoReplies],
 			profile: profileSelection(params.profile),
 			execution,
 			lifecycle: { type: "reconnectable" },
@@ -205,10 +207,16 @@ export class ReconnectableTerminalProcessService extends Disposable implements I
 		await this.supervisor.request(APP_SERVER_METHODS["terminal/resize"], params);
 	}
 
-	async sendSignal(params: ITerminalProcessCloseOptions & { readonly signal: 'interrupt'; }): Promise<void> {
+	async sendSignal(params: ITerminalProcessCloseOptions & { readonly signal: TerminalProcessSignal; }): Promise<void> {
 		const record = await this.ensureAttached(params.terminalId);
 		this.assertAttached(record);
 		await this.supervisor.request(APP_SERVER_METHODS['terminal/sendSignal'], params);
+	}
+
+	async setAutoReplies(params: ITerminalProcessCloseOptions & { readonly rules: readonly ITerminalAutoReply[]; }): Promise<void> {
+		const record = await this.ensureAttached(params.terminalId);
+		this.assertAttached(record);
+		await this.supervisor.request(APP_SERVER_METHODS['terminal/setAutoReplies'], { ...params, rules: [...params.rules] });
 	}
 
 	async read(params: ITerminalProcessReadOptions): Promise<ITerminalProcessReadResult> {

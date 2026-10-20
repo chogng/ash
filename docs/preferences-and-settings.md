@@ -205,16 +205,18 @@ Web / Desktop 构建、Renderer 与自动化类型检查、formatter 和定向 C
 
 存储迁移与跨平台验收的历史范围如下；设置渲染的检查范围另列于表后：
 
-| 范围                        | 已有证据与适用限制                                                                                                                                                                                                                                                                      |
-| --------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 配置文件与迁移              | 模型、文件 IPC、Sessions、Settings JSONC、层级边界和真实 Chromium 旧 IndexedDB 迁移已有定向验证，包含冲突、非法输入、中断重试；历史类型检查、构建与中英文回归不代表当前 HEAD 全部通过                                                                                                   |
-| Workspace / Folder / Policy | 定向测试覆盖优先级、inspection、作用域、JSONC、切换、迟到读取、冲突与脏保护；系统 / 账户链和 Windows 固定注册表只读探测已有验证，macOS / Linux OS 来源及真实登录账户仍待验收                                                                                                            |
-| 快捷键录制                  | 保存一致性基线 `2cc6ab4e` 上通过 13 项 recorder 单测、macOS Web 7 项及 Electron 6 项严格场景，覆盖两段 / 四段、JSONC / 参数保留、立即重载、失败重试、中文、焦点与 pending-close；2026-10-18 Docker Linux ARM64 的完整 Keybindings UI 9 项通过，包含真实重启后的中文场景与 Sessions 入口 |
-| 配置迁移窗口复核            | 辅助 live 选区文本滞后已修复；缺失主题回退、已安装主题选择及文件更新／脏草稿／冲突场景已通过上方本批 Browser 与 macOS Desktop 验证。旧准备阶段的 App Server 文件访问 API 类型错误此前已通过重新生成协议解除；本批不扩展到其他 OS 或真实账号验收                                         |
+| 范围                        | 已有证据与适用限制                                                                                                                                                                                                                                                                          |
+| --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 配置文件与迁移              | 模型、文件 IPC、Sessions、Settings JSONC、层级边界和真实 Chromium 旧 IndexedDB 迁移已有定向验证，包含冲突、非法输入、中断重试；历史类型检查、构建与中英文回归不代表当前 HEAD 全部通过                                                                                                       |
+| Workspace / Folder / Policy | 定向测试覆盖优先级、inspection、作用域、JSONC、切换、迟到读取、冲突与脏保护；系统 / 账户链、Windows 固定注册表只读探测及 Linux 固定系统文件的真实 Desktop 链已有验证；macOS OS 来源及真实组织账号仍待验收                                                                                   |
+| 快捷键录制                  | 保存一致性基线 `2cc6ab4e` 上通过 13 项 recorder 单测、macOS Web 7 项及 Electron 6 项严格场景，覆盖两段 / 四段、JSONC / 参数保留、立即重载、失败重试、中文、焦点与 pending-close；2026-10-19 在当前 Dev Container 重跑完整 Keybindings UI 9 项通过，包含真实重启后的中文场景与 Sessions 入口 |
+| 配置迁移窗口复核            | 辅助 live 选区文本滞后已修复；缺失主题回退、已安装主题选择及文件更新／脏草稿／冲突场景已通过上方本批 Browser 与 macOS Desktop 验证。旧准备阶段的 App Server 文件访问 API 类型错误此前已通过重新生成协议解除；本批不扩展到其他 OS 或真实账号验收                                             |
 
 快捷键早期 Web 重载失败由 editor / backup owner 修复，原 recorder 场景与不打开 recorder 的对照随后通过；没有增加保存后等待备份删除或放宽文本断言。该批 Web / Electron 仍记录既有 Session catalog 与 syntax document 关闭期 console 错误，不能描述为所有 console 均无错误。
 
-2026-10-18 Linux 运行保留 Chromium sandbox，容器提供 1 GiB 共享内存并使用用户的实际 Bash shell。`keybindings-json.spec.ts` 为 9 passed（23.7s，无 skipped／flaky）；固定控制键的原生占位符修复另通过 31 项 keybinding 单测。日志为 `.build/todo-linux-keybindings-final.log`，报告为 `.build/todo-linux-product-evidence/report-todo-linux-keybindings-final/`。这次快捷键结果不扩大到系统 Policy、真实 managed settings 账户或其他设置 UI。
+2026-10-19 通过仓库 `.devcontainer` 的 Debian Trixie 镜像、当前 checkout 和 Linux 专用依赖／构建卷复验：保留 Chromium sandbox，使用 1 GiB 共享内存及实际 Bash shell；`keybindings-json.spec.ts` 9 项通过（24.0s，无 skipped／flaky），覆盖录制、JSONC 保存、立即重载、四段组合恰好执行一次、失败重试与 pending-close。实际 App Server `git/version` 返回可用的 Git 2.47.3。日志为 `.build/todo-linux-trixie-ui-final.log`。
+
+同一 Linux ARM64 容器的真实 Desktop 另通过固定 `/etc/ash/policies.json` 验收：管理员维护 root-owned 文件，非 root Electron 经 Main、只读 IPC 与原配置 owner 将 `DesktopUpdateChannel` 显示到 Settings；原子替换实时生效，非法值保留上次有效值，删除撤回策略，重建恢复。修复 Desktop 更新渠道控件忽略 `policyValue` 的显示错误；配置 owner 继续拒绝策略控制下的写入。完整 App Server 五步录制另通过，已检查的 PNG、原始 WebM、带步骤字幕的 MP4、trace 和报告位于 `.build/ash-playwright-mcp/evidence/linux-system-policy-2026-10-19T09-56-21-229Z/`；管理员临时文件和进程均已清理。该结果不覆盖 macOS 系统来源、非空组织策略、外部身份切换或物理设备验收。
 
 验证入口包括 [Settings 单测](../src/ash/workbench/contrib/preferences/test/browser/settings.test.ts)、[快捷键单测](../src/ash/workbench/contrib/preferences/test/browser/keybindingsEditor.test.ts)、[Settings smoke](../test/smoke/areas/windows/settings.spec.ts)、[Settings JSON smoke](../test/smoke/areas/windows/settings-json.spec.ts)、[快捷键 JSON smoke](../test/smoke/areas/windows/keybindings-json.spec.ts) 和 [Sessions Settings smoke](../test/smoke/areas/sessions/sessions-settings.spec.ts)。测试源码存在不等于当前运行通过。
 

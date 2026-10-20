@@ -8,6 +8,11 @@ use std::sync::Arc;
 use std::sync::mpsc;
 use std::time::Duration;
 
+/// Delivers validated registration events on the process reader, without owning another registry.
+pub type ExtensionRegistrationHandler = dyn Fn(external_ext_protocol::ExtensionHostRegistrationEvent) -> Result<(), ExtensionHostError>
+    + Send
+    + Sync;
+
 use crate::ExtensionHostError;
 use crate::ExtensionHostLimits;
 use crate::ExtensionHostOutputEvent;
@@ -210,6 +215,8 @@ pub trait ExtensionHostLauncher: Send + Sync {
 /// Control requests can be dispatched while an earlier invocation is pending. An accepted callback
 /// reply transfers ownership to the bounded transport until delivery or incarnation retirement.
 pub trait ExtensionHostProcess: Send + Sync {
+    /// Installs the supervisor's registration owner before the initial handshake.
+    fn set_registration_handler(&self, _handler: Arc<ExtensionRegistrationHandler>) {}
     /// Completes a client request previously received through an invocation waiter.
     fn respond_client(
         &self,

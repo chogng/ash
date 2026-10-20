@@ -1,3 +1,6 @@
+import { ChatEditor } from '../../../workbench/contrib/chat/browser/widgetHosts/editor/chatEditor.js';
+import { ChatEditorInput } from '../../../workbench/contrib/chat/browser/widgetHosts/editor/chatEditorInput.js';
+import { EditorInputSerializers } from '../../../workbench/services/editor/common/editorInputSerializer.js';
 import { emptyEditorGroupsService } from '../../../workbench/test/common/testWorkbenchContextKeys.js';
 import { IWorkspaceContextService } from '../../../platform/workspace/common/workspace.js';
 import { IChatSpeechToTextService, ChatSpeechToTextService } from '../../../workbench/contrib/chat/browser/speechToText/chatSpeechToTextService.js';
@@ -122,9 +125,11 @@ import { ILifecycleService } from '../../../workbench/services/lifecycle/common/
 
 const inputResources = new DisposableStore();
 const userDataProfile = new UserDataProfileService();
+const testLifecycle = { onWillShutdown: Event.None } as unknown as ILifecycleService;
 suiteTeardown(() => inputResources.dispose());
 function createInputServices(contextView: IContextViewService, chat: IChatService, menus?: IMenuService, contextMenus?: IContextMenuService): InstantiationService {
 	const services = inputResources.add(createTestEditorServices(configurationServices.get(chat), createCodeEditorServices(inputResources)));
+	services.registerInstance(ILifecycleService, { onWillShutdown: Event.None } as unknown as ILifecycleService);
 	services.registerInstance(IEditorService, { ...emptyEditorServiceState, openEditor: async () => { }, focusActiveEditor() { } });
 	services.registerSingleton(IPromptsService, () => services.createInstance(PromptsService));
 	services.registerInstance(IAppServerHookApi, { onDidChangeHooks: Event.None, list: async () => { throw new Error('Unexpected Hook read in Skill fixture'); } });
@@ -307,7 +312,7 @@ test('Chat loads an Ash remote workspace image through the file service', async 
 			fileService,
 			unavailableAccessibleViewService,
 			notifications,
-			createInputServices(contextViewService, paneChat, menuService, contextMenuService), inputResources.add(new WorkbenchConfigurationService()), inputResources.add(createTestStorage()), userDataProfile, contextKeys,
+			createInputServices(contextViewService, paneChat, menuService, contextMenuService), inputResources.add(new WorkbenchConfigurationService()), inputResources.add(createTestStorage()), userDataProfile, testLifecycle, contextKeys,
 		);
 		dom.window.document.body.append(pane.element);
 		await sessions.initialize();
@@ -362,7 +367,7 @@ test('100 catalog sessions instantiate only opened conversations and reconnect t
 		dom.window.document.body, { id: CHAT_VIEW_ID, title: 'Chat' }, chat, sessions,
 		menus, services.get(IContextMenuService), contextView, services.get(ICommandService),
 		testLayoutService(), unavailableFileService, unavailableAccessibleViewService, notifications,
-		services, services.get(IConfigurationService), services.get(IStorageService), userDataProfile,
+		services, services.get(IConfigurationService), services.get(IStorageService), userDataProfile, testLifecycle,
 	);
 	dom.window.document.body.append(pane.element);
 	await sessions.initialize();
@@ -467,7 +472,7 @@ test("Chat title and history switching retain conversations and drafts", async (
 		unavailableFileService,
 		unavailableAccessibleViewService,
 		notifications,
-		createInputServices(contextViewService, chat, menuService, contextMenuService), configuration, inputResources.add(createTestStorage()), userDataProfile, contextKeys,
+		createInputServices(contextViewService, chat, menuService, contextMenuService), configuration, inputResources.add(createTestStorage()), userDataProfile, testLifecycle, contextKeys,
 	);
 	chatView = pane;
 	const title = h(dom.window.document, "div");
@@ -1240,7 +1245,7 @@ test("an empty Session list opens an untitled session and persists it on its fir
 		createInputServices(contextViewService, paneChat, menuService, contextMenuService),
 		inputResources.add(new WorkbenchConfigurationService()),
 		inputResources.add(createTestStorage()),
-		userDataProfile,
+		userDataProfile, testLifecycle,
 	);
 	dom.window.document.body.append(pane.element);
 
@@ -1368,7 +1373,7 @@ test("the New Chat slash command opens an untitled session", async () => {
 		createInputServices(contextViewService, paneChat, menuService, contextMenuService),
 		inputResources.add(new WorkbenchConfigurationService()),
 		inputResources.add(createTestStorage()),
-		userDataProfile,
+		userDataProfile, testLifecycle,
 	);
 	dom.window.document.body.append(pane.element);
 
@@ -1442,7 +1447,7 @@ test("failed first send keeps the untitled session and its input draft", async (
 		createInputServices(contextViewService, paneChat, menuService, contextMenuService),
 		inputResources.add(new WorkbenchConfigurationService()),
 		inputResources.add(createTestStorage()),
-		userDataProfile,
+		userDataProfile, testLifecycle,
 	);
 	dom.window.document.body.append(pane.element);
 
@@ -1528,7 +1533,7 @@ test("one Session retains one Chat pane while its selected Thread changes", asyn
 		createInputServices(contextViewService, paneChat, menuService, contextMenuService),
 		inputResources.add(new WorkbenchConfigurationService()),
 		inputResources.add(createTestStorage()),
-		userDataProfile,
+		userDataProfile, testLifecycle,
 	);
 	dom.window.document.body.append(pane.element);
 
@@ -4551,7 +4556,7 @@ function navigationThreadSnapshot(threadId: string): import('../../../platform/a
 }
 
 
-async function createNavigationInputPane(configurationSource = '{}', configurationFiles?: IFileService, threadApi: Partial<IAgentThreadService> = {}) {
+async function createNavigationInputPane(configurationSource = '{}', configurationFiles?: IFileService, threadApi: Partial<IAgentThreadService> = {}, restoredStorage?: InstanceType<typeof BrowserStorageService>, initialization?: Promise<void>) {
 	const resources = new DisposableStore();
 	const dom = new JSDOM('<!doctype html><body></body>');
 	const contextView = resources.add(new BrowserContextViewService(dom.window.document.body));
@@ -4573,6 +4578,7 @@ async function createNavigationInputPane(configurationSource = '{}', configurati
 		},
 	};
 	const sessions = resources.add(new SessionsManagementService(api));
+	if (initialization) sessions.initialize = () => initialization;
 	const contextKeys = resources.add(new ContextKeyService());
 	resources.add(new ViewDescriptorService({ registry: new WorkbenchViewRegistry() }, contextKeys));
 	const commandServices = resources.add(new InstantiationService());
@@ -4583,18 +4589,109 @@ async function createNavigationInputPane(configurationSource = '{}', configurati
 	const contextMenus = { showContextMenu: () => { } } as unknown as IContextMenuService;
 	const chat = resources.add(createChatService(api, configuration));
 	const inputServices = createInputServices(contextView, chat, menu, contextMenus);
+	const storage = restoredStorage ?? inputResources.add(createTestStorage());
+	const layout = testLayoutService();
 	const pane = resources.add(new ChatViewPane(dom.window.document.body, { id: CHAT_VIEW_ID, title: 'Chat' }, chat, sessions,
-		menu, contextMenus, contextView, commands, testLayoutService(), configurationFiles ?? configuration.fileService, unavailableAccessibleViewService, notifications,
-		inputServices, configuration, inputResources.add(createTestStorage()), userDataProfile));
+		menu, contextMenus, contextView, commands, layout, configurationFiles ?? configuration.fileService, unavailableAccessibleViewService, notifications,
+		inputServices, configuration, storage, userDataProfile, testLifecycle));
+	inputServices.registerInstance(IViewsService, { openView: async () => pane } as unknown as IViewsService);
 	dom.window.document.body.append(pane.element);
-	await sessions.initialize();
+	if (!initialization) await sessions.initialize();
 	await nextTask();
 	const chatPane = pane.element.querySelector<HTMLElement>('.ash-chat-pane-host > .ash-chat')!;
 	const input = chatPane.querySelector<HTMLTextAreaElement>('.ash-chat-textarea-input')!;
 	assert.ok(input);
 	resources.add(toDisposable(() => dom.window.close()));
-	return { resources, dom, fake, pane, sessions, chatPane, input, configuration, commands };
+	return { resources, dom, fake, pane, sessions, chatPane, input, configuration, commands, inputServices, storage, layout };
 }
+
+test('moving Chat after attachment preparation cannot follow A-B-A navigation', async () => {
+	const fixture = await createNavigationInputPane();
+	using resources = fixture.resources;
+	const snapshot = new DeferredPromise<{ name: string; content: string; }>();
+	fixture.pane.addContext({ id: 'moving-snapshot', kind: 'file', name: 'moving.txt', resolve: () => snapshot.p });
+	const moving = fixture.pane.moveToEditor();
+	fixture.sessions.selectThread('session-1', 'thread-2');
+	fixture.sessions.selectThread('session-1', 'thread-1');
+	await snapshot.complete({ name: 'moving.txt', content: 'Selected snapshot' });
+	await moving;
+	assert.equal(fixture.pane.element.querySelector('.ash-chat-textarea-input'), fixture.input);
+	assert.equal(fixture.fake.turnStartRequests.length, 0);
+});
+
+test('late Chat initialization failure cannot freeze a new explicit selection', async () => {
+	using storage = createTestStorage();
+	storage.store('chat.viewState', JSON.stringify({ version: 1, drafts: [] }), StorageScope.WORKSPACE, StorageTarget.MACHINE);
+	const pending = new DeferredPromise<void>();
+	const fixture = await createNavigationInputPane('{}', undefined, {}, storage, pending.p);
+	using resources = fixture.resources;
+	const next = fixture.sessions.createUntitledSession();
+	fixture.sessions.selectUntitledSession(next.untitledSessionId);
+	await pending.error(new Error('Catalog unavailable'));
+	await nextTask();
+	const saved = JSON.parse(storage.get('chat.viewState', StorageScope.WORKSPACE)!);
+	assert.deepEqual(saved.active, { kind: 'untitled', id: next.untitledSessionId });
+});
+
+test('failed stored Chat selection remains recoverable and a new selection resumes persistence', async () => {
+	using storage = createTestStorage();
+	const original = JSON.stringify({ version: 1, drafts: [], active: { kind: 'session', sessionId: 'missing-session', threadId: 'missing-thread' } });
+	storage.store('chat.viewState', original, StorageScope.WORKSPACE, StorageTarget.MACHINE);
+	const fixture = await createNavigationInputPane('{}', undefined, {}, storage);
+	using resources = fixture.resources;
+	await nextTask();
+	assert.equal(storage.get('chat.viewState', StorageScope.WORKSPACE), original);
+	const next = fixture.sessions.createUntitledSession();
+	fixture.sessions.selectUntitledSession(next.untitledSessionId);
+	const saved = JSON.parse(storage.get('chat.viewState', StorageScope.WORKSPACE)!);
+	assert.deepEqual(saved.active, { kind: 'untitled', id: next.untitledSessionId });
+});
+
+for (const locale of ['en', 'zh-CN']) test(`Chat editor borrows one composer and restores its persisted draft in ${locale}`, async () => {
+	initializeTestLocalization(locale);
+	try {
+		const fixture = await createNavigationInputPane();
+		const { pane, sessions, input, dom, fake, storage, inputServices } = fixture;
+		using resources = fixture.resources;
+		const beforeSession = sessions.active!.session.sessionId;
+		const beforeThread = sessions.active!.threadId;
+		typeChatText(dom.window, input, 'Keep the unsent draft');
+		let resolutions = 0;
+		pane.addContext({ id: 'canvas-snapshot', kind: 'file', name: 'draft.txt', resolve: async () => { resolutions++; return { name: 'draft.txt', content: 'Captured unsaved code' }; } });
+		await waitFor(() => readNewChatDraftState(storage, beforeThread)?.contexts.length === 1);
+		const draft = (await pane.captureActiveDraft())!.draft;
+		const host = dom.window.document.createElement('div');
+		dom.window.document.body.append(host);
+		using editor = inputServices.createInstance(ChatEditor);
+		editor.create(host);
+		const savedInput = EditorInputSerializers.serialize(new ChatEditorInput());
+		await editor.setInput(EditorInputSerializers.deserialize(savedInput), new AbortController().signal);
+		editor.setVisible(true);
+		editor.layout(new Dimension(900, 600));
+		editor.focus();
+		assert.equal(host.querySelector('textarea'), input);
+		assert.equal(dom.window.document.activeElement, input);
+		assert.equal(sessions.active!.session.sessionId, beforeSession);
+		assert.equal(sessions.active!.threadId, beforeThread);
+		assert.deepEqual((await pane.captureActiveDraft())!.draft, draft);
+		editor.setVisible(false);
+		editor.setVisible(true);
+		editor.focus();
+		assert.equal(dom.window.document.activeElement, input);
+		editor.clearInput();
+		assert.equal(pane.element.querySelector('textarea'), input);
+		assert.deepEqual((await pane.captureActiveDraft())!.draft, draft);
+		assert.equal(fake.turnStartRequests.length, 0);
+		assert.equal(resolutions, 1);
+		await storage.flush();
+		pane.dispose();
+		const restored = await createNavigationInputPane('{}', undefined, {}, storage);
+		using restoredResources = restored.resources;
+		await waitFor(() => restored.sessions.active?.threadId === beforeThread);
+		assert.deepEqual((await restored.pane.captureActiveDraft())!.draft, draft);
+		assert.equal(restored.fake.turnStartRequests.length, 0);
+	} finally { initializeTestLocalization('en'); }
+});
 
 for (const locale of ['en', 'zh-CN']) {
 	test(`Chat history recovery preserves the draft and attachments without sending in ${locale}`, async () => {
@@ -4993,7 +5090,7 @@ for (const navigate of [false, true]) {
 		const chat = resources.add(createChatService(fake.api));
 		const pane = resources.add(new ChatViewPane(dom.window.document.body, { id: CHAT_VIEW_ID, title: 'Chat' }, chat, sessions,
 			menu, contextMenus, contextView, commands, testLayoutService(), unavailableFileService, unavailableAccessibleViewService, notifications,
-			createInputServices(contextView, chat, menu, contextMenus), inputResources.add(new WorkbenchConfigurationService()), inputResources.add(createTestStorage()), userDataProfile));
+			createInputServices(contextView, chat, menu, contextMenus), inputResources.add(new WorkbenchConfigurationService()), inputResources.add(createTestStorage()), userDataProfile, testLifecycle));
 		dom.window.document.body.append(pane.element);
 		await nextTask();
 		const original = pane.element.querySelector<HTMLElement>('.ash-chat-pane-host > .ash-chat')!;

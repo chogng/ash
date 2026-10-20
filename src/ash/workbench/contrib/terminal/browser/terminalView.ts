@@ -121,11 +121,14 @@ export class TerminalViewPane extends ViewPane {
 			if (workspace.folders.length > 0 && this.terminalService.instances.length === 0) void this.initialize();
 		}));
 
-		this._register(observeResize([this.tabsLayout.element, this.widgetsElement], () => {
+		const layoutTerminals = (): void => {
 			const bounds = this.tabsLayout.element.getBoundingClientRect();
 			this.tabsLayout.layout(bounds.width, bounds.height);
 			this.layoutGroups();
-		}));
+		};
+		this._register(observeResize([this.tabsLayout.element, this.widgetsElement], layoutTerminals));
+		// Position changes also matter when the new Panel happens to have the same bounds.
+		this._register(layoutService.onDidChangePanelPosition(layoutTerminals));
 		this.render();
 		queueMicrotask(() => {
 			this.updateInstances();
@@ -213,7 +216,7 @@ export class TerminalViewPane extends ViewPane {
 	public async relaunchActive(): Promise<void> {
 		const instance = this.terminalService.activeInstance;
 		const item = instance ? this.items.get(instance) : undefined;
-		if (!instance || !item || instance.state === "running" || instance.state === "reconnecting") return;
+		if (!instance || !item || instance.state === "reconnecting") return;
 		if (this.isBodyVisible()) super.focus();
 		const focusSource = this.element.ownerDocument.activeElement;
 		this.setStatus(undefined);

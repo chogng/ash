@@ -491,6 +491,8 @@ export class AshApplication extends Disposable {
 			if ((error as NodeJS.ErrnoException).code !== 'ENOENT') this.logService.error('logs', localize('logs.readFailed', 'Could not read startup log levels.'), error);
 		}
 		const launch = parseLaunchArguments(this.workspaceLaunchArguments(process.argv));
+		// The managed backend inherits this choice before its profile runtime opens.
+		if (launch.useInMemorySecretStorage) process.env.ASH_USE_INMEMORY_SECRETSTORAGE = '1';
 		let defaults = parseDefaultLogLevels(undefined);
 		try { defaults = parseDefaultLogLevels(savedLevels); }
 		catch (error) { this.logService.error('logs', localize('logs.parseFailed', 'Could not parse startup log levels.'), error); }
@@ -631,7 +633,7 @@ export class AshApplication extends Disposable {
 		throwIfCancelled(token);
 		this.windowServices.registerInstance(IApplicationStorageMainService, storage);
 		this.windowServices.registerInstance(IEncryptionMainService, new EncryptionMainService(safeStorage));
-		const browserPasswords = this._register(this.windowServices.createInstance(BrowserPasswordMainService));
+		const browserPasswords = this._register(this.windowServices.createInstance(BrowserPasswordMainService, !!launch.useInMemorySecretStorage));
 		this.windowServices.registerInstance(IBrowserPasswordMainService, browserPasswords);
 		this.mainProcessIpcServer.registerChannel('browserPasswords', browserPasswordChannel(browserPasswords));
 		this.windowServices.registerInstance(ILogService, this.logService);

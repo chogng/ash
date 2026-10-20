@@ -8,6 +8,7 @@
     "VNC_PASSWORD": "vscode"
   },
   "overrideCommand": false,
+  "init": true,
   "privileged": true,
   "runArgs": ["--shm-size=1g"],
   "workspaceFolder": "/workspaces/ash",

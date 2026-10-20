@@ -1,6 +1,6 @@
 import { dirname, join, resolve } from "node:path";
 import { mkdirSync } from 'node:fs';
-import { createTestEnvironment } from './testEnvironment.js';
+import { createTestEnvironment } from './testEnvironment.ts';
 import type { AppServerTestMode } from "./testTarget.js";
 import { resolveDevelopmentElectronExecutable } from '../../build/desktop/electron.ts';
 
@@ -8,6 +8,8 @@ export type ElectronWindowMode = 'hidden' | 'inactive' | 'active';
 
 export interface ElectronLaunchOptions {
 	readonly appServerMode: AppServerTestMode;
+	/** Ordinary tests keep credentials in memory. Persistence scenarios opt out explicitly. */
+	readonly useInMemorySecretStorage?: boolean;
 	/** Ordinary runs hide windows; system focus/fullscreen tests opt into active. */
 	readonly windowMode?: ElectronWindowMode;
 	/** Scenario-specific host inputs; the launcher still isolates the test home/profile. */
@@ -75,6 +77,7 @@ export function resolveElectronConfiguration(options: ElectronLaunchOptions): El
 	delete environment.ASH_PROFILE_ROOT;
 	delete environment.ELECTRON_RUN_AS_NODE;
 	delete environment.ASH_RENDERER_URL;
+	delete environment.ASH_USE_INMEMORY_SECRETSTORAGE;
 	const isDebug = Boolean(environment.PWDEBUG && environment.PWDEBUG !== '0');
 	const windowMode = options.windowMode ?? (isDebug ? 'active' : 'hidden');
 	delete environment.ASH_TEST_WINDOW_MODE;
@@ -85,6 +88,10 @@ export function resolveElectronConfiguration(options: ElectronLaunchOptions): El
 		args: [
 			"--disable-gpu",
 			"--in-process-gpu",
+			...(options.useInMemorySecretStorage === false ? [] : ['--use-inmemory-secretstorage']),
+			// Chromium cookie encryption bypasses the application's credential service.
+			// Test profiles use the native test facility rather than a system keychain.
+			...(process.platform === 'darwin' ? ['--use-mock-keychain'] : process.platform === 'linux' ? ['--password-store=basic'] : []),
 			// Keep the preload value in the switch: packaged Electron can retain Node
 			// switches in argv, where a separate value would become a file to open.
 			...(windowMode === 'active' ? [] : [`--require=${join(desktopDirectory, 'test', 'automation', 'electronWindow.cjs')}`]),

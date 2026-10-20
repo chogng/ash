@@ -1,3 +1,7 @@
+import { IFileService } from '../../../../../platform/files/common/files.js';
+import { ITerminalCompletionService, TerminalCompletionService } from '../../../terminalContrib/suggest/browser/terminalCompletionService.js';
+import { ITerminalQuickFixService } from '../../../terminalContrib/quickFix/browser/quickFix.js';
+import { TerminalQuickFixService } from '../../../terminalContrib/quickFix/browser/terminalQuickFixService.js';
 import { ITerminalLinkProviderService } from '../../../terminalContrib/links/browser/links.js';
 import { TerminalLinkProviderService } from '../../../terminalContrib/links/browser/terminalLinkProviderService.js';
 import { ITerminalGroupService } from '../../browser/terminal.js';
@@ -25,7 +29,7 @@ import { DeferredPromise } from '../../../../../base/common/async.js';
 import { Emitter, Event } from '../../../../../base/common/event.js';
 import { isCancellationError } from '../../../../../base/common/errors.js';
 import { Disposable, DisposableStore, toDisposable } from '../../../../../base/common/lifecycle.js';
-import { TerminalLocation } from '../../../../../platform/terminal/common/terminal.js';
+import { GeneralShellType, PosixShellType, TerminalLocation, WindowsShellType, type TerminalShellType } from '../../../../../platform/terminal/common/terminal.js';
 import { OperatingSystem } from '../../../../../base/common/platform.js';
 import { URI } from '../../../../../base/common/uri.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
@@ -38,7 +42,7 @@ import { IWorkspaceContextService } from '../../../../../platform/workspace/comm
 import { TestConfigurationService as WorkbenchConfigurationService } from '../../../../services/configuration/test/common/testServices.js';
 import { TestWorkspaceService } from '../../../../services/configuration/test/common/testServices.js';
 
-import { ITerminalService, type ITerminalProfile } from '../../browser/terminal.js';
+import { ITerminalService, type ITerminalInstance, type ITerminalProfile } from '../../browser/terminal.js';
 import { TerminalConfigurationService } from '../../browser/terminalConfigurationService.js';
 import '../../../codeEditor/common/editorConfiguration.js';
 import { TerminalProfileService } from '../../browser/terminalProfileService.js';
@@ -53,9 +57,12 @@ const shells = [
 	{ profileId: 'pwsh', title: 'PowerShell', isDefault: false },
 ];
 
-function createServices(owner: DisposableStore, useInstances = false, openEditor: IEditorService['openEditor'] = async () => { }, checkpoint?: { state: string; credentials?: string; }) {
+function createServices(owner: DisposableStore, useInstances = false, openEditor: IEditorService['openEditor'] = async () => { }, checkpoint?: { state: string; credentials?: string; }, operatingSystem = OperatingSystem.Windows) {
 	const services = owner.add(new InstantiationService());
 	services.registerInstance(ICommandService, owner.add(new CommandService(services)));
+	const files = owner.add(new FileService());
+	owner.add(files.registerProvider('file', owner.add(new InMemoryFileSystemProvider())));
+	services.registerInstance(IFileService, files);
 	services.registerInstance(ILogService, new NullLoggerService());
 	const configuration = owner.add(new WorkbenchConfigurationService());
 	const connection = owner.add(new Emitter<import('../../../../../platform/terminal/common/terminal.js').TerminalProcessConnectionState>());
@@ -65,7 +72,7 @@ function createServices(owner: DisposableStore, useInstances = false, openEditor
 	const closed: ITerminalProcessCloseOptions[] = [];
 	let read: () => Promise<readonly ITerminalProfile[]> = async () => shells;
 	const processes = {
-		operatingSystem: OperatingSystem.Windows as OperatingSystem | undefined, onConnectionState: connection.event,
+		operatingSystem: operatingSystem as OperatingSystem | undefined, onConnectionState: connection.event,
 		listProfiles: async () => { calls++; return read(); },
 		getEnvironment: async () => ({ HOME: '/execution/home', PATH: '/execution/bin', PROFILE_VALUE: 'environment value' }),
 		resolveProfile: async (selection: import('../../../../../platform/terminal/common/terminal.js').TerminalProcessProfileSelection) => ({
@@ -95,6 +102,8 @@ function createServices(owner: DisposableStore, useInstances = false, openEditor
 	const stored = new Map<string, string>();
 	services.registerInstance(IStorageService, { get: (key: string) => stored.get(key), store: (key: string, value: string) => { stored.set(key, value); } } as unknown as IStorageService);
 	services.registerInstance(ITerminalProcessService, processes);
+	services.registerInstance(ITerminalCompletionService, owner.add(services.createInstance(TerminalCompletionService)));
+	services.registerInstance(ITerminalQuickFixService, owner.add(services.createInstance(TerminalQuickFixService)));
 	services.registerSingleton(ITerminalLinkProviderService, () => services.createInstance(TerminalLinkProviderService));
 	services.registerInstance(IEnvironmentVariableService, owner.add(services.createInstance(EnvironmentVariableService)));
 	const profiles = owner.add(services.createInstance(TerminalProfileService));
@@ -678,7 +687,31 @@ suite('Terminal configuration and interactive profiles', () => {
 		assert.equal(split.revivalLaunch, undefined);
 	});
 
-	for (const mode of ['revive', 'reload', 'transfer'] as const) for (const strict of [false, true]) test(`${mode} retains raw intent and refreshes transient provider environment exactly once (strict=${strict})`, async () => {
+	test('explicit running relaunch applies current extension mutations once and preserves raw launch intent', async () => {
+		using owner = new DisposableStore();
+		const { services, configuration, launches } = createServices(owner, true);
+		await configuration.updateValue('terminal.integrated.confirmOnKill', 'never');
+		const environment = services.get(IEnvironmentVariableService);
+		let prefix = 'old:';
+		owner.add(environment.registerCollectionProvider('dynamic', async () => ({
+			persistent: false,
+			map: new Map([['PATH', { variable: 'PATH', type: 3, value: prefix }]])
+		})));
+		const terminal = await services.get(ITerminalService).createTerminal({ config: { executable: '/shell', env: { PATH: 'caller' } }, deferStart: true });
+		const intent = terminal.revivalLaunch;
+		assert.equal(terminal.state, 'running');
+		assert.equal(launches[0]!.env!.PATH, 'old:caller');
+		prefix = 'new:';
+		await services.get(ITerminalService).relaunchTerminal(terminal, { rows: 31, cols: 91 });
+		assert.equal(launches.length, 2);
+		assert.equal(launches[1]!.env!.PATH, 'new:caller');
+		assert.equal(terminal.revivalLaunch, intent);
+		assert.equal(terminal.extEnvironmentVariableCollection!.getVariableMap(undefined).get('PATH')![0]!.value, 'new:');
+		assert.equal('environmentVariableCollections' in launches[1]!, false, 'UI metadata does not enter the process transport');
+		assert.equal('environmentVariableCollectionsPersistable' in launches[1]!, false);
+	});
+
+	for (const mode of ['revive', 'reload', 'transfer'] as const) for (const strict of [false, true]) test(`${mode} retains raw intent, reattaches without environment mutation and refreshes only new processes (strict=${strict})`, async () => {
 		using owner = new DisposableStore();
 		const first = createServices(owner, true);
 		const create = first.processes.create.bind(first.processes);
@@ -702,6 +735,7 @@ suite('Terminal configuration and interactive profiles', () => {
 		const snapshot = await terminal.serializeState();
 		assert.ok(snapshot.launch, 'The interactive config must retain a raw revival intent');
 		assert.deepEqual(snapshot.launch.env, raw);
+		assert.equal(snapshot.environmentVariableCollections === undefined, !strict, 'Transient collections stay in memory and are not persisted');
 		const checkpoint = JSON.stringify({ version: 1, ...(mode === 'revive' ? { kind: 'revive' } : {}), workspaceId: first.workspace.getWorkspace().id, instances: [snapshot], groups: [] });
 		assert.equal(checkpoint.includes('original-window-token'), false);
 		assert.equal(checkpoint.includes('original-prefix;'), false);
@@ -724,15 +758,18 @@ suite('Terminal configuration and interactive profiles', () => {
 		assert.ok(restored);
 		assert.equal(second.launches.length, mode === 'revive' ? 1 : 0, 'Only revival starts a new process');
 		const liveEnvironment = restored.shellLaunchConfig!.env!;
-		assert.equal(liveEnvironment.PATH, strict ? 'caller' : 'current-prefix;caller');
-		assert.equal(liveEnvironment.USER_VALUE, strict ? '${env:PROFILE_VALUE}' : 'environment value');
-		assert.equal(liveEnvironment.TRANSIENT_TOKEN, strict ? undefined : 'new-window-token');
-		assert.equal(refreshes, strict ? 0 : 1);
+		const startsNewProcess = mode === 'revive';
+		assert.equal(liveEnvironment.PATH, !strict && startsNewProcess ? 'current-prefix;caller' : 'caller');
+		assert.equal(liveEnvironment.USER_VALUE, !strict && startsNewProcess ? 'environment value' : '${env:PROFILE_VALUE}');
+		assert.equal(liveEnvironment.TRANSIENT_TOKEN, !strict && startsNewProcess ? 'new-window-token' : undefined);
+		assert.equal(refreshes, !strict && startsNewProcess ? 1 : 0);
+		if (!startsNewProcess && !strict) assert.equal(restored.extEnvironmentVariableCollection, undefined, 'The original process is retained with an unknown transient snapshot');
 		assert.deepEqual(restored.revivalLaunch!.env, raw);
 		restored.start();
 		await waitFor(() => restored.state === 'exited');
 		await second.services.get(ITerminalService).relaunchTerminal(restored, { rows: 24, cols: 80 });
-		assert.deepEqual(second.launches.at(-1)!.env, liveEnvironment);
+		assert.deepEqual(second.launches.at(-1)!.env, strict ? { USER_VALUE: '${env:PROFILE_VALUE}', PATH: 'caller' } : { USER_VALUE: 'environment value', PATH: 'current-prefix;caller', REMOVED: null, TRANSIENT_TOKEN: 'new-window-token' });
+		assert.equal(refreshes, strict ? 0 : mode === 'revive' ? 2 : 1);
 		await restored.reuseTerminal({ executable: '/replacement', env: { REUSED: 'literal' }, deferStart: true });
 		assert.equal(restored.revivalLaunch, undefined);
 	});
@@ -1086,7 +1123,7 @@ suite('Terminal configuration and interactive profiles', () => {
 
 	for (const custom of [false, true]) for (const uriCwd of [false, true]) test(`contributed ${custom ? 'PTY' : 'shell'} creation keeps its selected root from ${uriCwd ? 'URI' : 'path'} cwd through the shared owner`, async () => {
 		using owner = new DisposableStore();
-		const { services, workspace, profiles, launches } = createServices(owner, true);
+		const { services, workspace, profiles, launches } = createServices(owner, true, async () => { }, undefined, OperatingSystem.Linux);
 		const folders = [
 			{ id: 'one', name: 'one', uri: URI.file('/workspace'), index: 0 },
 			{ id: 'two', name: 'two', uri: URI.file('/second'), index: 1 },
@@ -1290,4 +1327,72 @@ suite('Terminal creation owner', () => {
 		assert.equal(terminals.instances.length, 0);
 		assert.equal(closed.length, 1);
 	});
+});
+
+
+suite('Extension terminal resource completion escaping', () => {
+	ensureNoDisposablesAreLeakedInTestSuite();
+
+	async function complete(owner: DisposableStore, shellType: TerminalShellType, commandLine = 'cat sp') {
+		const { services } = createServices(owner);
+		const digest = `sha256:${'a'.repeat(64)}`;
+		Object.assign(services.get(IExtensionService), { currentCatalog: { generation: 1, diagnostics: [], extensions: [{ id: 'acme.extension', packageSha256: digest }] } });
+		const instance = {
+			id: 'terminal', processId: 42, state: 'running', dirId: 'test', shellType, onDidChangeState: Event.None,
+		} as unknown as ITerminalInstance;
+		Object.assign(services.get(ITerminalService), { instances: [instance], onDidDisposeInstance: Event.None });
+		const files = services.get(IFileService);
+		await files.createDirectory(URI.file('/workspace'));
+		for (const name of ["sp ace'$(literal);&`literal`\\[x].txt", 'special.txt', 'sp\nunsafe']) {
+			await files.createFile(URI.from({ scheme: 'file', path: `/workspace/${name}` }), 'overwrite');
+		}
+		await files.createDirectory(URI.from({ scheme: 'file', path: '/workspace/sp dir$(literal)' }));
+		const bridge = owner.add(services.createInstance(MainThreadTerminalService));
+		bridge.replaceCompletionProviders([{
+			runtimeId: 'runtime', packageDigest: digest, registrationId: 'resources', triggerCharacters: [],
+			invoke: async operation => {
+				assert.equal(operation, 'provideTerminalCompletions');
+				return {
+					items: [{ label: 'provider $(syntax)', replacementRange: [4, commandLine.length] }],
+					resourceOptions: { showFiles: true, showDirectories: true, cwd: 'file:///workspace' },
+				};
+			},
+		}]);
+		return services.get(ITerminalCompletionService).provideCompletions(instance, commandLine, commandLine.length, new AbortController().signal);
+	}
+
+	for (const { shell, insertText } of [
+		{ shell: PosixShellType.Bash, insertText: "'sp ace'\"'\"'$(literal);&`literal`\\[x].txt'" },
+		{ shell: PosixShellType.Zsh, insertText: "'sp ace'\"'\"'$(literal);&`literal`\\[x].txt'" },
+		{ shell: PosixShellType.Sh, insertText: "'sp ace'\"'\"'$(literal);&`literal`\\[x].txt'" },
+		{ shell: PosixShellType.Ksh, insertText: "'sp ace'\"'\"'$(literal);&`literal`\\[x].txt'" },
+		{ shell: WindowsShellType.GitBash, insertText: "'sp ace'\"'\"'$(literal);&`literal`\\[x].txt'" },
+		{ shell: PosixShellType.Fish, insertText: "'sp ace\\'$(literal);&`literal`\\\\[x].txt'" },
+		{ shell: GeneralShellType.PowerShell, insertText: "'sp ace''$(literal);&`literal`\\[x].txt'" },
+	]) {
+		test(`keeps resource labels literal and generates ${shell} insertion text through the extension bridge`, async () => {
+			using owner = new DisposableStore();
+			const result = await complete(owner, shell);
+			assert.deepEqual(result.map(({ label, insertText, replacementRange }) => ({ label, insertText, replacementRange })).sort((a, b) => a.label.localeCompare(b.label)), [
+				{ label: 'provider $(syntax)', insertText: undefined, replacementRange: [4, 6] },
+				{ label: "sp ace'$(literal);&`literal`\\[x].txt", insertText, replacementRange: [4, 6] },
+				{ label: 'sp dir$(literal)/', insertText: "'sp dir$(literal)/'", replacementRange: [4, 6] },
+				{ label: 'special.txt', insertText: "'special.txt'", replacementRange: [4, 6] },
+			].sort((a, b) => a.label.localeCompare(b.label)));
+		});
+	}
+
+	for (const { shell, commandLine } of [
+		{ shell: undefined, commandLine: 'cat sp' },
+		{ shell: WindowsShellType.CommandPrompt, commandLine: 'cat sp' },
+		{ shell: GeneralShellType.Python, commandLine: 'cat sp' },
+		{ shell: PosixShellType.Bash, commandLine: "cat 'sp" },
+		{ shell: PosixShellType.Bash, commandLine: 'cat $(sp' },
+	]) {
+		test(`leaves resource parsing to ${shell ?? 'unknown shell'} for ${JSON.stringify(commandLine)}`, async () => {
+			using owner = new DisposableStore();
+			const result = await complete(owner, shell, commandLine);
+			assert.deepEqual(result.map(({ label, insertText }) => ({ label, insertText })), [{ label: 'provider $(syntax)', insertText: undefined }]);
+		});
+	}
 });

@@ -1,4 +1,3 @@
-import { IWorkbenchLayoutService, Position } from '../../services/layout/browser/layoutService.js';
 import { IDefaultLogLevelsService } from '../../services/log/common/defaultLogLevels.js';
 import { DEFAULT_LOG_LEVEL, ILogService, NullLoggerService } from '../../../platform/log/common/log.js';
 import { emptyEditorServiceState } from '../common/testEditorService.js';
@@ -65,6 +64,7 @@ import { IExtensionService } from '../../services/extensions/common/extensionSer
 import { BrowserPathService } from '../../services/path/browser/pathService.js';
 import { ITerminalProcessService } from '../../../platform/terminal/common/terminal.js';
 import type { IRendererHost } from '../../../platform/renderer/common/rendererHost.js';
+import { IWorkbenchLayoutService, Position } from '../../services/layout/browser/layoutService.js';
 
 /** Explicit window dependencies for fixtures that construct the real terminal owner. */
 export function registerTestTerminalLifecycleServices(services: InstantiationService): void {
@@ -88,8 +88,11 @@ export function registerTestTerminalCreationServices(services: InstantiationServ
 		textSearch: async () => { throw new Error('Terminal creation fixture does not search file contents'); },
 	});
 	registerTestTerminalLifecycleServices(services);
+	// Process-only fixtures have no movable Panel; group consumers still receive
+	// the explicit layout contract rather than inferring a position from geometry.
 	if (!services.has(IWorkbenchLayoutService)) services.registerInstance(IWorkbenchLayoutService, {
-		getPanelPosition: () => Position.BOTTOM, onDidChangePanelPosition: Event.None,
+		getPanelPosition: () => Position.BOTTOM,
+		onDidChangePanelPosition: Event.None,
 	} as unknown as IWorkbenchLayoutService);
 	if (!services.has(IPathService)) services.registerSingleton(IPathService, () => new BrowserPathService({ hasAppServer: true, appServer: { operatingSystem: services.get(ITerminalProcessService).operatingSystem } } as IRendererHost, services.get(IWorkspaceContextService)));
 	if (!services.has(ICommandService)) services.registerSingleton(ICommandService, () => new CommandService(services));

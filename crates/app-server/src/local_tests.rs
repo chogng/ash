@@ -2194,7 +2194,7 @@ fn user_network_config_is_loaded_before_start_and_reconciled_on_edit() {
 fn default_profile_secrets_keep_unit_test_keys_inside_the_fixture() {
     let profile = tempfile::tempdir().unwrap();
     let name = ash_secrets::SecretKey::new("test/profile-credential").unwrap();
-    let store = open_profile_secrets(profile.path()).unwrap();
+    let store = open_profile_secrets(profile.path(), Err(std::env::VarError::NotPresent)).unwrap();
     store
         .store(&name, &ash_secrets::SecretValue::new(b"fixture".to_vec()))
         .unwrap();
@@ -2206,8 +2206,25 @@ fn default_profile_secrets_keep_unit_test_keys_inside_the_fixture() {
         "unit-test master keys must be owned by the temporary fixture"
     );
     drop(store);
-    let reopened = open_profile_secrets(profile.path()).unwrap();
+    let reopened =
+        open_profile_secrets(profile.path(), Err(std::env::VarError::NotPresent)).unwrap();
     assert_eq!(reopened.load(&name).unwrap().unwrap().expose(), b"fixture");
+}
+
+#[test]
+fn in_memory_profile_secrets_do_not_touch_disk_or_survive_reopening() {
+    let profile = tempfile::tempdir().unwrap();
+    let name = ash_secrets::SecretKey::new("test/profile-credential").unwrap();
+    let store = open_profile_secrets(profile.path(), Ok("1".into())).unwrap();
+    store
+        .store(&name, &ash_secrets::SecretValue::new(b"fixture".to_vec()))
+        .unwrap();
+    assert_eq!(store.load(&name).unwrap().unwrap().expose(), b"fixture");
+    drop(store);
+    let reopened = open_profile_secrets(profile.path(), Ok("1".into())).unwrap();
+    assert!(reopened.load(&name).unwrap().is_none());
+    assert_eq!(std::fs::read_dir(profile.path()).unwrap().count(), 0);
+    assert!(open_profile_secrets(profile.path(), Ok("true".into())).is_err());
 }
 
 #[test]
@@ -5971,4 +5988,43 @@ fn production_review_model_bridge_preserves_streaming_for_guardian_metrics() {
             .unwrap()
             .contains("private")
     );
+}
+
+#[test]
+fn native_web_directory_consent_does_not_load_directory_configuration() {
+    let profile = tempfile::tempdir().unwrap();
+    let root = tempfile::tempdir().unwrap();
+    let directory = Dir::open_local(root.path()).unwrap();
+    let config = ConfigStore::open(profile.path().join("permissions.sqlite3")).unwrap();
+    config
+        .apply(ConfigCommandRequest {
+            command_id: CommandId::new("web-existing-config-access").unwrap(),
+            expected_revision: ConfigRevision::INITIAL,
+            command: UserConfigCommand::SetDirectoryGrant {
+                dir: directory.id(),
+                permissions: ash_file_access::Permissions::new([
+                    DirPermission::ReadFiles,
+                    DirPermission::BrowseFiles,
+                    DirPermission::LoadConfig,
+                ]),
+                display_path: None,
+            },
+        })
+        .unwrap();
+    let path = root.path().join("config.toml");
+    std::fs::write(&path, "this is not a config document").unwrap();
+    let snapshot = config.read_snapshot().unwrap();
+    let tracker = DirConfigTracker::new(
+        DirConfigStore::open(path, DirConfigScope::new(directory.id())),
+        InitialDirGrantPolicy::WebSession {
+            dir: directory,
+            permissions: ash_file_access::Permissions::new([
+                DirPermission::ReadFiles,
+                DirPermission::BrowseFiles,
+                DirPermission::WriteFiles,
+            ]),
+            authority_revision: snapshot.revision,
+        },
+    );
+    assert!(tracker.read_authorized(&snapshot).unwrap().is_none());
 }

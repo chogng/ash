@@ -271,6 +271,7 @@ impl<'ctx, C: ExtensionHostRequestProcessorContext + ?Sized>
             .start_invocation(
                 connection.connection_id,
                 ExtensionHostInvocationRequest {
+                    registration_generation: params.registration_generation,
                     extension_id: params.extension_id,
                     registration_id: params.registration_id,
                     activation_generation: params.activation_generation,
@@ -553,9 +554,13 @@ fn registration_dto(
                     label,
                 }
             }
-            RegistrationKind::SpeechProvider { identifier } => {
-                ExtensionHostRegistrationKindDto::SpeechProvider { identifier }
-            }
+            RegistrationKind::SpeechProvider {
+                identifier,
+                registration_generation,
+            } => ExtensionHostRegistrationKindDto::SpeechProvider {
+                identifier,
+                registration_generation,
+            },
             RegistrationKind::DataChannel { channel_id } => {
                 ExtensionHostRegistrationKindDto::DataChannel { channel_id }
             }
@@ -619,6 +624,12 @@ fn registration_dto(
             }
             RegistrationKind::TerminalEnvironment {} => {
                 ExtensionHostRegistrationKindDto::TerminalEnvironment {}
+            }
+            RegistrationKind::TerminalCompletionProvider { trigger_characters } => {
+                ExtensionHostRegistrationKindDto::TerminalCompletionProvider { trigger_characters }
+            }
+            RegistrationKind::TerminalQuickFixProvider { provider_id } => {
+                ExtensionHostRegistrationKindDto::TerminalQuickFixProvider { provider_id }
             }
             RegistrationKind::TerminalLinkProvider {} => {
                 ExtensionHostRegistrationKindDto::TerminalLinkProvider {}

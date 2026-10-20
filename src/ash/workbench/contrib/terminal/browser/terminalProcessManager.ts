@@ -1,10 +1,11 @@
+import type { ITerminalAutoReply } from '../../../../platform/terminal/common/terminal.js';
 import { VSBuffer } from '../../../../base/common/buffer.js';
 import { CancellationError, isCancellationError } from '../../../../base/common/errors.js';
 import { DeferredPromise, raceCancellationError, timeout } from '../../../../base/common/async.js';
 import { CancellationTokenSource, cancelOnDispose, type CancellationToken } from '../../../../base/common/cancellation.js';
 import { Emitter } from '../../../../base/common/event.js';
 import { Disposable, DisposableStore, MutableDisposable } from '../../../../base/common/lifecycle.js';
-import { ITerminalProcessService, type IProcessDataEvent, type TerminalShellIntegrationEvent, type ITerminalProcessCloseOptions, type ITerminalProcessReadResult } from '../../../../platform/terminal/common/terminal.js';
+import { ITerminalProcessService, type IProcessDataEvent, type TerminalShellIntegrationEvent, type ITerminalProcessCloseOptions, type TerminalProcessSignal, type ITerminalProcessReadResult } from '../../../../platform/terminal/common/terminal.js';
 import { AhpTerminalCommandSource } from './ahpTerminalCommandSource.js';
 import { localize } from '../../../../nls.js';
 
@@ -163,8 +164,21 @@ export class TerminalProcessManager extends Disposable {
 	public async sendSignal(signal: string): Promise<void> {
 		this.assertNotDisposed();
 		if (!this.acceptingInput || this.suspending) throw new CancellationError();
-		if (signal !== 'SIGINT') throw new Error(localize('terminal.signal.unsupported', 'Only SIGINT is supported by this terminal host.'));
-		await this.processService.sendSignal({ ...this.identity, signal: 'interrupt' });
+		let processSignal: TerminalProcessSignal;
+		switch (signal) {
+			case 'SIGINT': processSignal = 'interrupt'; break;
+			case 'SIGTERM': processSignal = 'terminate'; break;
+			case 'SIGKILL': processSignal = 'kill'; break;
+			case 'SIGHUP': processSignal = 'hangup'; break;
+			default: throw new Error(localize('terminal.signal.unsupported', 'Unsupported terminal process signal: {0}', signal));
+		}
+		await this.processService.sendSignal({ ...this.identity, signal: processSignal });
+	}
+
+	public async setAutoReplies(rules: readonly ITerminalAutoReply[]): Promise<void> {
+		this.assertNotDisposed();
+		if (!this.acceptingInput || this.suspending) throw new CancellationError();
+		await this.processService.setAutoReplies({ ...this.identity, rules });
 	}
 
 	/** Resolves after every UTF-8 batch containing this input is acknowledged by the process. */

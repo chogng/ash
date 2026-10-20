@@ -21,6 +21,7 @@ export type IWorkspaceOpenTarget = ILocalWorkspaceOpenTarget | IRemoteFolderWork
 
 /** Validated desktop requests, independent of Electron's process arguments. */
 export interface IParsedLaunchArguments {
+	readonly useInMemorySecretStorage?: boolean;
 	readonly log?: readonly string[];
 	readonly verbose?: boolean;
 	readonly paths: readonly string[];

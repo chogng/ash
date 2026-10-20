@@ -890,6 +890,12 @@ fn extension_capability(capability: EditorExtensionCapability) -> ExtensionCapab
         EditorExtensionCapability::TerminalProfileProvider => {
             ExtensionCapability::TerminalProfileProvider
         }
+        EditorExtensionCapability::TerminalCompletionProvider => {
+            ExtensionCapability::TerminalCompletionProvider
+        }
+        EditorExtensionCapability::TerminalQuickFixProvider => {
+            ExtensionCapability::TerminalQuickFixProvider
+        }
         EditorExtensionCapability::TerminalLinkProvider => {
             ExtensionCapability::TerminalLinkProvider
         }
@@ -915,6 +921,8 @@ fn capability_name(capability: EditorExtensionCapability) -> &'static str {
         EditorExtensionCapability::TaskProvider => "taskProvider",
         EditorExtensionCapability::TerminalProfileProvider => "terminalProfileProvider",
         EditorExtensionCapability::TerminalLinkProvider => "terminalLinkProvider",
+        EditorExtensionCapability::TerminalCompletionProvider => "terminalCompletionProvider",
+        EditorExtensionCapability::TerminalQuickFixProvider => "terminalQuickFixProvider",
         EditorExtensionCapability::TestProfileProvider => "testProfileProvider",
         EditorExtensionCapability::DataChannel => "dataChannel",
         EditorExtensionCapability::SpeechProvider => "speechProvider",

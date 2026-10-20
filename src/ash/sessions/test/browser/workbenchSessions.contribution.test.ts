@@ -1,3 +1,4 @@
+import { ISessionsProvidersService, SessionsProvidersService } from '../../services/sessions/browser/sessionsProvidersService.js';
 import { IRendererHostService } from '../../../platform/renderer/common/rendererHost.js';
 import { quickInputServiceTestControls } from '../../../platform/quickinput/test/browser/testQuickInputService.js';
 import { CommandsRegistry, ICommandService } from '../../../platform/commands/common/commands.js';
@@ -57,6 +58,8 @@ test('Sessions registers its regular Workbench service and starts its catalog', 
 		events: { subscribe() { subscriptions++; return { dispose() { } }; } },
 	} as unknown as IRendererHost;
 	using services = new InstantiationService();
+	using providers = new SessionsProvidersService();
+	services.registerInstance(ISessionsProvidersService, providers);
 	if (!services.has(IRendererHostService)) services.registerInstance(IRendererHostService, api);
 	services.registerInstance(IAgentSessionService, api.session);
 	services.registerInstance(IAgentModelsService, api.model);

@@ -2,6 +2,16 @@ import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { parseMainProcessArgv, windowsCommandLine } from '../../node/argvHelper.js';
 
+test('memory credential storage is an explicit process flag and does not become a file request', async () => {
+	const { parseLaunchArguments } = await import('../../node/argvHelper.js');
+	const request = parseLaunchArguments(['--use-inmemory-secretstorage', '/project']);
+	assert.equal(request.useInMemorySecretStorage, true);
+	assert.deepEqual(request.paths, ['/project']);
+	assert.equal(parseLaunchArguments([]).useInMemorySecretStorage, undefined);
+	assert.throws(() => parseLaunchArguments(['--use-inmemory-secretstorage=false']), /does not accept a value/);
+	assert.equal(parseLaunchArguments(['--', '--use-inmemory-secretstorage']).useInMemorySecretStorage, undefined);
+});
+
 test("packaged second-instance arguments retain the Workspace target without process-only switches", () => {
 	assert.deepEqual(parseMainProcessArgv({
 		arguments: ["/Applications/Ash.app/Contents/MacOS/Ash", "--user-data-dir", "/tmp/ash", "--remote-ssh", "build", "--folder", "/srv/project"],

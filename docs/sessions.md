@@ -137,26 +137,30 @@ Provider 缺失时 probe 返回不可用，操作失败，不创建本地执行�
 
 Turn 内容、修订和提交状态继续由 ChatService 与后端账本拥有。以下入口已走生产调用链，UI 状态不改写账本证据：
 
-| 用户入口                      | 唯一 owner 与当前行为                                                                                                                                                                                                   |
-| ----------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 列表、摘要、失败重试          | ChangesViewPane 从账本读取文件；同一会话刷新保留焦点和选择，失败清除旧行，隐藏后忽略迟到结果。                                                                                                                          |
-| Turn 筛选、List / Tree        | changesViewRenderer 独立构建按 Turn 和目录分组的树，重复路径可独立选择。changesViewActions 注册显示模式命令，ChangesViewService 保存展示状态。                                                                          |
-| 逐文件审阅                    | 标记绑定 Session、Thread、ChangeSet、文件和具体 revision；只保留在当前窗口，修订变化不会继承标记，也不改变提交条件。                                                                                                    |
-| 视图恢复                      | profile UI state 保存显示模式；窗口内分别保存会话、Turn 筛选和模式的选区、焦点、折叠及滚动快照。Checks 折叠状态按会话恢复。                                                                                             |
-| Sync / Publish / working tree | Git 命令绑定会话目录下的确切仓库；pull 后重新核对 branch / remote，失败或切换会话阻止后续 push。Git 提供方返回真实 upstream 和未提交计数，命令边界验证非负安全整数；旧提供方缺失的计数不显示为 0。                      |
-| CI checks                     | 可取消地读取关联开放 PR 当前 head 的全部分页 checks 和 commit statuses；账号变更清除旧数据，隐藏释放读取，普通刷新保留链接焦点。                                                                                        |
-| 直接创建 PR                   | 准备与写入分离；提交前重核 local head、remote、账号和工作目录。创建后附加到发起会话，附加 / 自动合并失败仅作为已创建结果的警告；不同 published head 不启用自动合并。                                                    |
-| Agent 创建 PR                 | createPullRequestChatRequest 在准备上下文复核后向发起 Thread 提交用户显示的字段。空闲 Thread 使用 startTurn，活动 Turn 使用 queueTurn，沿用正常权限。档案状态检查和准备失败不会提交；无法确认写入结果时禁用同表单重试。 |
-| PR 表单偏好                   | profile UI state 仅保存 Draft、合并方式和主操作，不保存标题、正文、路径或账号。恢复时受当前仓库能力限制，未支持的合并方式及 Agent 入口不会恢复为有效操作。                                                              |
-| Help / Accessible View        | 使用实际表单、树和状态内容，中英文覆盖新增控制。键盘支持树折叠、文件选择、表单焦点循环和取消后的焦点恢复。                                                                                                              |
+| 用户入口                      | 唯一 owner 与当前行为                                                                                                                                                                                                                          |
+| ----------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 列表、摘要、失败重试          | ChangesViewPane 从账本读取文件；同一会话刷新保留焦点和选择，失败清除旧行，隐藏后忽略迟到结果。                                                                                                                                                 |
+| Turn 筛选、List / Tree        | changesViewRenderer 独立构建按 Turn 和目录分组的树，重复路径可独立选择。changesViewActions 注册显示模式命令，ChangesViewService 保存展示状态。                                                                                                 |
+| 逐文件审阅                    | 标记绑定 Session、Thread、ChangeSet、文件和具体 revision；只保留在当前窗口，修订变化不会继承标记，也不改变提交条件。                                                                                                                           |
+| 视图恢复                      | profile UI state 保存显示模式；窗口内分别保存会话、Turn 筛选和模式的选区、焦点、折叠及滚动快照。Checks 折叠状态按会话恢复。                                                                                                                    |
+| Sync / Publish / working tree | Git 命令绑定会话目录下的确切仓库；pull 后重新核对 branch / remote，失败或切换会话阻止后续 push。Git 提供方返回真实 upstream 和未提交计数，命令边界验证非负安全整数；旧提供方缺失的计数不显示为 0。                                             |
+| CI checks                     | 可取消地读取关联开放 PR 当前 head 的全部分页 checks 和 commit statuses，以及纯文本输出和分页注释；GitHub Actions 作业可下载日志、显式重新运行，失败检查可请求当前对话的 Agent 修复。账号／会话改变或隐藏后退休旧请求；不确定提交禁止直接重试。 |
+| 直接创建 PR                   | 准备与写入分离；提交前重核 local head、remote、账号和工作目录。创建后附加到发起会话，附加 / 自动合并失败仅作为已创建结果的警告；不同 published head 不启用自动合并。                                                                           |
+| Agent 创建 PR                 | createPullRequestChatRequest 在准备上下文复核后向发起 Thread 提交用户显示的字段。空闲 Thread 使用 startTurn，活动 Turn 使用 queueTurn，沿用正常权限。档案状态检查和准备失败不会提交；无法确认写入结果时禁用同表单重试。                        |
+| PR 表单偏好                   | profile UI state 仅保存 Draft、合并方式和主操作，不保存标题、正文、路径或账号。恢复时受当前仓库能力限制，未支持的合并方式及 Agent 入口不会恢复为有效操作。                                                                                     |
+| Help / Accessible View        | 使用实际表单、树和状态内容，中英文覆盖新增控制。键盘支持树折叠、文件选择、表单焦点循环和取消后的焦点恢复。                                                                                                                                     |
 
 ChangesViewService 当前只拥有上述展示状态及修订绑定的 read marker；它不是上游 provider changeset / isolation / feedback 的聚合服务。`reviewedFilesObs` 由树和无障碍内容消费，没有第二份业务账本。Agent 请求成功只表示任务已提交，不表示 PR 已创建，也不提供后台合并策略。
 
 共享 multi-diff 的来源替换会取消旧模型的就绪等待；等待捕获所属代次的取消信号，防止已经释放的模型让编辑器一直停在 pending。SessionChangesEditor 在加载子比较前提供视口，并传递宿主输入取消信号。Turn / commit 源、来源操作和内容标签仍在已确认的共享 Sessions core 中，服务 Code 和 Cowork。
 
+CI 操作沿 `ChecksViewModel → IGitHubService → AppServerGitHubService → GitHubRequestProcessor → github.api.v1 Provider` 执行，GitHub HTTP 仅由独立扩展拥有。每次操作捕获账号、仓库、PR、head SHA 与 check ID；扩展重新读取 PR 和 check 身份。重新运行还确认 Actions job 的 `check_run_url`、仓库及 SHA，GitHub 决定该账号的 Actions 写权限。普通 commit statuses 和外部检查没有伪造的 Actions 操作。
+
+Read annotations 展示纯文本输出及文件行号，沿现有 Changes Accessible View 读取。Download logs 仅在用户点击时取得 GitHub Actions 的一分钟下载能力链接；不保存到会话、Agent 上下文或持久存储，也不携带 Bearer 跟随跨域跳转。Ask agent to fix CI 显式把捕获的失败检查、head 和有界注释交给发起 Thread；先核对可写状态及 sequence，空闲时 startTurn、已有 Turn 时 queueTurn，沿用普通权限。读取检查不会提交消息；会话／账号变化或迟到读取不能转投其他对话。
+
 ## 契约边界与验证
 
-ChangesViewService 只拥有 Turn 展示状态和修订绑定的 read marker。Ash 的 Session／Thread、稳定 EditorInput 与上游 session URI／provider changeset 模型不同；共享 multi-diff 来源和标签保留在 Sessions core，服务 Code 与 Cowork。没有对应 DOM 的 label 样式、没有消费者的 facade 和独立 Part 不创建外壳。持续合并策略与 CI 操作仍需后端工作流契约，见 [Sessions TODO](../TODO.md#sessions--todo)。跨客户端审阅、provider changeset、隔离与反馈评论保留在[发展候选（未排期）](../TODO.md#发展候选未排期)，尚未实现，不要求按上游身份模型批量补 API。
+ChangesViewService 只拥有 Turn 展示状态和修订绑定的 read marker。Ash 的 Session／Thread、稳定 EditorInput 与上游 session URI／provider changeset 模型不同；共享 multi-diff 来源和标签保留在 Sessions core，服务 Code 与 Cowork。没有对应 DOM 的 label 样式、没有消费者的 facade 和独立 Part 不创建外壳。持续合并策略仍需后端工作流契约，见 [Sessions TODO](../TODO.md#sessions--todo)。跨客户端审阅、provider changeset、隔离与反馈评论保留在[发展候选（未排期）](../TODO.md#发展候选未排期)，尚未实现，不要求按上游身份模型批量补 API。
 
 扩展宿主注册在 `workbench/api/browser/extensionHost.contribution.ts`，按依赖就绪顺序装配。Sessions 使用窗口唯一 Plugin 实例及 disconnected API；AppTools 复用 Task／Terminal，入口装配 Task、Output 和 Marker registry，各窗口自行选择视图注册表。Sessions 加载标准 editor.all，避免 Diff breadcrumbs 缺少注册；窗口错误与 rejected promise 终止于日志服务，释放时恢复原处理器，防止错误重新抛出形成消息递归。
 

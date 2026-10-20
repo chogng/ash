@@ -69,6 +69,9 @@ fn standard_package_declarations_share_runtime_enablement_and_revocation() {
     let sources = provider.snapshot().unwrap();
     assert_eq!(sources.packages.len(), 1);
     assert_eq!(sources.packages[0].subject, "acme/standard:tasks");
+    let binding = sources.packages[0].runtime_binding.as_ref().unwrap();
+    assert_eq!(binding.runtime_id, "acme/standard:tasks");
+    assert_eq!(binding.package_digest, local.package_digest().as_str());
     let snapshot = catalog.list(ash_external_ext::packages::ExtensionPackagesReload::Cached);
     assert!(
         snapshot.diagnostics.is_empty(),
@@ -77,6 +80,14 @@ fn standard_package_declarations_share_runtime_enablement_and_revocation() {
     );
     assert_eq!(snapshot.extensions.len(), 1);
     assert_eq!(snapshot.extensions[0].id, "acme.standard");
+    assert_eq!(
+        snapshot.extensions[0].runtime_binding.as_ref(),
+        Some(binding)
+    );
+    assert_ne!(
+        snapshot.extensions[0].package_sha256,
+        binding.package_digest
+    );
     assert_eq!(
         serde_json::from_str::<serde_json::Value>(&snapshot.extensions[0].manifest_json).unwrap(),
         manifest
@@ -141,11 +152,90 @@ fn projects_only_effective_declarative_extension_packages() {
     assert_eq!(active_snapshot.generation, 2);
     assert_eq!(active_snapshot.packages.len(), 1);
     assert_eq!(active_snapshot.packages[0].subject, "acme/theme:theme");
+    assert!(active_snapshot.packages[0].runtime_binding.is_none());
     assert!(
         active_snapshot.packages[0]
             .path
             .ends_with("extensions/theme")
     );
+}
+
+#[test]
+fn mixed_package_binding_selects_javascript_and_preserves_host_rpc_only_catalogs() {
+    for javascript in [true, false] {
+        let source = tempfile::tempdir().unwrap();
+        fs::create_dir_all(source.path().join(".ash-plugin")).unwrap();
+        let mut entries = vec![serde_json::json!({
+            "id": "host", "runtime": "hostRpc", "entrypoint": "host-program",
+            "runtimeApiVersion": 1, "activationEvents": [{"type": "startup"}],
+            "capabilities": ["command"]
+        })];
+        if javascript {
+            entries.push(serde_json::json!({
+                "id": "standard", "runtime": "javascript", "entrypoint": "extension.js",
+                "runtimeApiVersion": 1, "activationEvents": [{"type": "startup"}],
+                "capabilities": ["terminalProfileProvider"]
+            }));
+        }
+        fs::write(
+            source.path().join(".ash-plugin/plugin.json"),
+            serde_json::json!({
+                "schemaVersion": 1, "id": "acme/mixed", "version": "1.0.0", "displayName": "Mixed",
+                "compatibility": {"ash": ">=0.1.0"},
+                "permissions": [{"type": "process", "executable": "host-program"}],
+                "contributions": {"editorExtensions": entries}
+            })
+            .to_string(),
+        )
+        .unwrap();
+        fs::write(source.path().join("host-program"), "synthetic host fixture").unwrap();
+        fs::write(
+            source.path().join("extension.js"),
+            "exports.activate = () => {};",
+        )
+        .unwrap();
+        fs::write(
+            source.path().join("package.json"),
+            r#"{"publisher":"acme","name":"mixed","version":"1.0.0","main":"extension.js"}"#,
+        )
+        .unwrap();
+        let local = LocalPluginPackage::load(source.path()).unwrap();
+        let store = tempfile::tempdir().unwrap();
+        let authority =
+            PluginActivationAuthority::in_memory(PluginPackageStore::open(store.path()).unwrap())
+                .unwrap();
+        let installed = authority
+            .install_local(PluginAuthorityCommandId::new("install").unwrap(), 0, &local)
+            .unwrap()
+            .package;
+        apply(
+            &authority,
+            1,
+            "enable",
+            PluginAuthorityCommand::Enable {
+                package: installed.clone(),
+            },
+        );
+        apply(
+            &authority,
+            2,
+            "grant",
+            PluginAuthorityCommand::Grant { package: installed },
+        );
+        let snapshot = PluginExtensionSourceProvider::new(authority)
+            .snapshot()
+            .unwrap();
+        assert_eq!(snapshot.packages.len(), 1);
+        if javascript {
+            let binding = snapshot.packages[0].runtime_binding.as_ref().unwrap();
+            assert_eq!(binding.runtime_id, "acme/mixed:standard");
+            assert_eq!(binding.package_digest, local.package_digest().as_str());
+            assert_eq!(snapshot.packages[0].subject, binding.runtime_id);
+        } else {
+            assert_eq!(snapshot.packages[0].subject, "acme/mixed:host");
+            assert!(snapshot.packages[0].runtime_binding.is_none());
+        }
+    }
 }
 
 fn apply(

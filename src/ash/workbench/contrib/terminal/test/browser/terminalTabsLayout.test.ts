@@ -1,4 +1,3 @@
-import { IWorkbenchLayoutService, Position, positionToString } from '../../../../services/layout/browser/layoutService.js';
 import { IEnvironmentVariableService } from '../../common/environmentVariable.js';
 import { EnvironmentVariableService } from '../../common/environmentVariableService.js';
 import { IWorkspaceContextService } from '../../../../../platform/workspace/common/workspace.js';
@@ -19,9 +18,11 @@ import { ICommandService } from '../../../../../platform/commands/common/command
 import { CommandService } from '../../../../services/commands/common/commandService.js';
 import { ITerminalService, ITerminalGroupService, type ITerminalInstance } from '../../browser/terminal.js';
 import { TerminalGroupService } from '../../browser/terminalGroupService.js';
+import { TerminalGroup } from '../../browser/terminalGroup.js';
 import { IViewsService } from '../../../../services/views/common/viewsService.js';
 import { Emitter, Event } from '../../../../../base/common/event.js';
 import { Disposable } from '../../../../../base/common/lifecycle.js';
+import { IWorkbenchLayoutService, Position, positionToString } from '../../../../services/layout/browser/layoutService.js';
 
 import assert from "node:assert/strict";
 import { test, suite, suiteTeardown } from "mocha";
@@ -56,6 +57,106 @@ suiteTeardown(() => {
 	}
 });
 
+suite('Terminal Panel orientation', () => {
+	ensureNoDisposablesAreLeakedInTestSuite();
+
+	test('four Panel positions preserve three pane proportions, screen identity, selection and hidden layout', () => {
+		const document = browserEnvironment.window.document;
+		const host = document.createElement('main');
+		const reopened = document.createElement('main');
+		const outside = document.createElement('button');
+		document.body.append(host, reopened, outside);
+		using positionChanged = new Emitter<string>();
+		let position = Position.BOTTOM;
+		const inputs: HTMLInputElement[] = [];
+		const instances = ['first', 'second', 'third'].map((id, index) => {
+			const element = document.createElement('div');
+			const input = document.createElement('input');
+			input.value = `pending ${id}`;
+			element.append(input);
+			inputs.push(input);
+			return {
+				id, instanceId: index + 1, title: id, processId: index + 100,
+				xterm: { element, fit() { }, setVisible() { }, focus: () => input.focus() },
+				attachToElement: (pane: HTMLElement) => pane.append(element),
+				detachFromElement: () => element.remove(),
+			} as unknown as ITerminalInstance;
+		});
+		let active: ITerminalInstance | undefined = instances[1];
+		using services = new InstantiationService();
+		services.registerInstance(ITerminalService, {
+			instances, get activeInstance() { return active; },
+			setActiveInstance: (instance: ITerminalInstance | undefined) => { active = instance; },
+		} as unknown as ITerminalService);
+		services.registerInstance(IWorkbenchLayoutService, {
+			getPanelPosition: () => position, onDidChangePanelPosition: positionChanged.event,
+		} as IWorkbenchLayoutService);
+		using group = services.createInstance(TerminalGroup, instances[0]!);
+		group.addInstance(instances[1]!);
+		group.addInstance(instances[2]!);
+		group.layout(1_200, 900);
+		group.attachToElement(host);
+		group.setVisible(true);
+		group.resizePanes([2, 3, 5]);
+		const screens = instances.map(instance => instance.xterm!.element);
+		const assertState = (orientation: string): void => {
+			assert.equal(host.querySelector('.ash-terminal-group')?.classList.contains(`ash-split-view-${orientation}`), true);
+			assert.deepEqual(group.terminalInstances, instances);
+			assert.equal(group.activeInstance, instances[1]);
+			assert.deepEqual(instances.map(instance => instance.xterm!.element), screens);
+			assert.deepEqual(inputs.map(input => input.value), ['pending first', 'pending second', 'pending third']);
+			assert.deepEqual(group.getLayoutInfo(true).terminals.map(pane => pane.relativeSize), [0.2, 0.3, 0.5]);
+		};
+		try {
+			inputs[1]!.focus();
+			group.layout(1_200, 180);
+			position = Position.LEFT;
+			positionChanged.fire('left');
+			// Applying the old bottom height to the new axis would clamp all three
+			// panes to their minimum and erase the unequal proportions.
+			assert.deepEqual(group.getLayoutInfo(true).terminals.map(pane => pane.relativeSize), [0.2, 0.3, 0.5]);
+			group.layout(400, 900);
+			assertState('vertical');
+			assert.equal(document.activeElement, inputs[1]);
+			for (const [next, orientation] of [[Position.LEFT, 'vertical'], [Position.RIGHT, 'vertical'], [Position.TOP, 'horizontal'], [Position.BOTTOM, 'horizontal']] as const) {
+				position = next;
+				// Part layout can precede the host's position notification.
+				group.layout(orientation === 'vertical' ? 400 : 1_200, 900);
+				positionChanged.fire(positionToString(next));
+				group.layout(1_200, 900);
+				assertState(orientation);
+				assert.equal(document.activeElement, inputs[1]);
+			}
+			group.setVisible(false);
+			outside.focus();
+			group.layout(0, 0);
+			position = Position.RIGHT;
+			positionChanged.fire('right');
+			assertState('horizontal');
+			assert.equal(document.activeElement, outside);
+			assert.equal(host.querySelector<HTMLElement>('.ash-terminal-group')!.hidden, true);
+			group.layout(600, 1_200);
+			assertState('vertical');
+			group.setVisible(true);
+			group.attachToElement(reopened);
+			assert.equal(reopened.querySelector('.ash-terminal-group')?.classList.contains('ash-split-view-vertical'), true);
+			assert.deepEqual(group.getLayoutInfo(true).terminals.map(pane => pane.relativeSize), [0.2, 0.3, 0.5]);
+			assert.equal(document.activeElement, outside);
+			const sash = reopened.querySelector<HTMLElement>('.ash-sash')!;
+			sash.focus();
+			position = Position.TOP;
+			positionChanged.fire('top');
+			group.layout(1_200, 600);
+			assert.equal(document.activeElement, reopened.querySelector('.ash-sash'));
+		} finally {
+			group.dispose();
+			host.remove();
+			reopened.remove();
+			outside.remove();
+		}
+	});
+});
+
 test("Terminal instance list sash resizes the right column within its bounds", () => {
 	const dom = new JSDOM("<!doctype html><body></body>");
 	setIconResolver(dom.window.document, icon => getIconDefinition(icon));
@@ -67,7 +168,7 @@ test("Terminal instance list sash resizes the right column within its bounds", (
 		...Disposable.None, id, instanceId: id === 'one' ? 1 : id === 'two' ? 2 : 3, dirId: 'folder', processId: 1, initialCwd: '/folder', title: id,
 		profile: { profileId: 'shell', title: 'Shell', isDefault: true }, state: 'running', exitCode: undefined,
 		onDidWriteData: Event.None, onDidChangeCommandStatus: Event.None, onDidExit: Event.None, onDidChangeState: Event.None,
-		xterm: undefined, xtermReadyPromise: Promise.resolve(undefined), getContribution: () => null, start() { }, attachToElement() { }, detachFromElement() { }, async sendSignal() { }, async sendText() { }, async sendPath() { throw new Error('Layout fixture does not insert file paths'); }, processBinary: async () => { }, resize() { }, clearBuffer() { }, reuseTerminal: async () => { throw new Error('Layout fixture does not replace processes'); }, close: async () => { }, refreshProperty: async () => { throw new Error("No OS process in layout fixture"); }, serializeState: async () => { throw new Error("No process checkpoint in layout fixture"); },
+		xterm: undefined, xtermReadyPromise: Promise.resolve(undefined), getContribution: () => null, start() { }, attachToElement() { }, detachFromElement() { }, async setAutoReplies() { }, async sendSignal() { }, async sendText() { }, async sendPath() { throw new Error('Layout fixture does not insert file paths'); }, processBinary: async () => { }, resize() { }, clearBuffer() { }, reuseTerminal: async () => { throw new Error('Layout fixture does not replace processes'); }, close: async () => { }, refreshProperty: async () => { throw new Error("No OS process in layout fixture"); }, serializeState: async () => { throw new Error("No process checkpoint in layout fixture"); },
 	});
 	const instances = [createInstance('one'), createInstance('two')];
 	const terminals: ITerminalService = {

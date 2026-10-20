@@ -111,11 +111,13 @@ export class QuickInputController extends Disposable {
 			return Promise.resolve(undefined);
 		}
 		let cancellation: IDisposable | undefined;
+		const listeners = new DisposableStore();
 		const input = new InputQuickInput(this.host, options, {
 			onShow: candidate => this.show(candidate),
 			onHide: candidate => this.hide(candidate),
 			onDispose: candidate => {
 				cancellation?.dispose();
+				listeners.dispose();
 				this.quickInputs.delete(candidate);
 				this.hide(candidate);
 			},
@@ -142,9 +144,9 @@ export class QuickInputController extends Disposable {
 				input.dispose();
 				reject(error);
 			};
-			input.onDidAccept(value => finish(value));
-			input.onDidHide(() => finish(undefined));
-			input.onDidError(fail);
+			input.onDidAccept(value => finish(value), undefined, listeners);
+			input.onDidHide(() => finish(undefined), undefined, listeners);
+			input.onDidError(fail, undefined, listeners);
 			cancellation = token.onCancellationRequested(() => finish(undefined));
 			if (token.isCancellationRequested) {
 				finish(undefined);

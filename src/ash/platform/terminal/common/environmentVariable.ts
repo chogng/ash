@@ -43,6 +43,9 @@ export interface IMergedEnvironmentVariableCollectionDiff {
 export type ISerializableEnvironmentVariableCollection = [string, IEnvironmentVariableMutator][];
 export type ISerializableEnvironmentDescriptionMap = [string, IEnvironmentVariableCollectionDescription][];
 
+/** Immutable launch metadata; this does not contain the host's inherited environment. */
+export type ISerializableEnvironmentVariableCollections = readonly (readonly [string, ISerializableEnvironmentVariableCollection, ISerializableEnvironmentDescriptionMap?])[];
+
 export interface IEnvironmentVariableCollection {
 	readonly map: ReadonlyMap<string, IEnvironmentVariableMutator>;
 	readonly descriptionMap?: ReadonlyMap<string, IEnvironmentVariableCollectionDescription>;

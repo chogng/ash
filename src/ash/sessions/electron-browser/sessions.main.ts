@@ -42,6 +42,8 @@ import { ProxyChannel } from '../../base/parts/ipc/common/ipc.js';
 import { IBrowserPasswordService } from '../../platform/browserView/common/browserPasswordService.js';
 import { IBrowserViewService, ipcBrowserViewChannelName } from '../../platform/browserView/common/browserView.js';
 import { IMainProcessService } from '../../platform/ipc/common/mainProcessService.js';
+import { ISecretStorageService } from '../../platform/secrets/common/secrets.js';
+import { SecretStorageService } from '../../workbench/services/secrets/electron-browser/secretStorageService.js';
 import { ServiceCollection } from '../../platform/instantiation/common/serviceCollection.js';
 import { ElectronIPCMainProcessService } from '../../platform/ipc/electron-browser/mainProcessService.js';
 import { WINDOW_FULLSCREEN_CHANGED_CHANNEL, WINDOW_OPERATION_CHANNEL, WINDOW_ZOOM_CHANGED_CHANNEL } from '../../platform/window/common/window.js';
@@ -110,6 +112,7 @@ export async function main(profile: SessionsProfile): Promise<IDisposable> {
 		profileServices.registerInstance(IWorkbenchEnvironmentService, environment);
 		const playwrightService = profileServices.get(IPlaywrightService);
 		serviceCollection.set(IMainProcessService, mainProcessService);
+		serviceCollection.set(ISecretStorageService, sessions.add(profileServices.createInstance(SecretStorageService)));
 		serviceCollection.set(IWorkbenchEnvironmentService, environment);
 		serviceCollection.set(IPolicyService, sessions.add(new PolicyChannelClient(mainProcessService.getChannel('policy'))));
 		serviceCollection.set(IPlaywrightService, playwrightService);
@@ -160,11 +163,14 @@ export async function main(profile: SessionsProfile): Promise<IDisposable> {
 			} : undefined,
 			contributionIds: [
 				'chatResponseResourceWorkbenchContribution',
+				'terminalAutoReplies',
+				'terminalTelemetry',
 				'workbench.contrib.settingsChangeRelauncher',
 				'workbench.contrib.partsSplash',
 				'workbench.contrib.preferences',
 				'workbench.contrib.snippets',
 				'workbench.contrib.sessionsLayout',
+				'terminal.native',
 				'workbench.contrib.call',
 				'sessions.contrib.multiDiffSource',
 				'sessions.contrib.automationsCustomView',

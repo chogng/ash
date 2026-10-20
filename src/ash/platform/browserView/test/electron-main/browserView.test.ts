@@ -33,6 +33,25 @@ import type { INativeContextMenuRequest, INativeContextMenuResult } from '../../
 import { IClipboardService } from '../../../clipboard/common/clipboardService.js';
 
 suite('Browser form passwords', () => {
+	test('memory credentials support save, fill and update without encryption or disk and disappear with the owner', async () => {
+		using services = new InstantiationService();
+		using configuration = new InMemoryConfigurationService();
+		const forbidden = { get: () => { throw new Error('Memory credentials touched persistence'); } };
+		services.registerInstance(IEncryptionMainService, new Proxy({} as IEncryptionMainService, forbidden));
+		services.registerInstance(IApplicationStorageMainService, new Proxy({} as IApplicationStorageMainService, forbidden));
+		services.registerInstance(IConfigurationService, configuration);
+		using vault = services.createInstance(BrowserPasswordMainService, true);
+		const value = { session: 'a'.repeat(64), scope: 'global' as const, origin: 'https://example.test', username: 'account', password: 'synthetic-password' };
+		await vault.save(value);
+		const [saved] = await vault.find(value.session, value.origin);
+		assert.equal(saved?.password, value.password);
+		await vault.update(saved!.id, value.username, 'updated-password');
+		assert.equal((await vault.find(value.session, value.origin))[0]?.password, 'updated-password');
+		using reopened = services.createInstance(BrowserPasswordMainService, true);
+		assert.deepEqual(await reopened.readState(), { available: true, entries: [], corrupted: 0 });
+		await vault.clearSession(value.session);
+		assert.deepEqual(await vault.readState(), { available: true, entries: [], corrupted: 0 });
+	});
 	ensureNoDisposablesAreLeakedInTestSuite();
 	const application = { scope: StorageScope.APPLICATION, id: 'application' };
 	async function page(f: ReturnType<typeof fixture>, scope: BrowserViewStorageScope.Global | BrowserViewStorageScope.Workspace | BrowserViewStorageScope.Ephemeral = BrowserViewStorageScope.Global) {
@@ -596,7 +615,7 @@ test('sharing grants only the chosen thread and revocation cancels its operation
 	assert.ok(f.manager.tryGetBrowserView(id));
 });
 
-export function fixture(storageOverride?: IApplicationStorageMainService, provideEncryption = true) {
+export function fixture(storageOverride?: IApplicationStorageMainService, provideEncryption = true, useInMemorySecretStorage = false) {
 	const store = new DisposableStore();
 	const events: BrowserViewEvent[] = [];
 	const children = new Set<WebContentsView>();
@@ -668,7 +687,7 @@ export function fixture(storageOverride?: IApplicationStorageMainService, provid
 	const passwordConfiguration = store.add(new InMemoryConfigurationService());
 	instantiation.registerInstance(IConfigurationService, passwordConfiguration);
 	// Construct the vault only when encryption is registered, preserving the missing-registration test.
-	if (provideEncryption) { instantiation.registerInstance(IBrowserPasswordMainService, store.add(instantiation.createInstance(BrowserPasswordMainService))); }
+	if (provideEncryption) { instantiation.registerInstance(IBrowserPasswordMainService, store.add(instantiation.createInstance(BrowserPasswordMainService, useInMemorySecretStorage))); }
 	const manager = store.add(instantiation.createInstance(BrowserViewMainService, {
 		window, getWorkspaceId: () => 'workspace-one',
 		contextMenu: {
@@ -751,6 +770,25 @@ suite('Browser authentication', () => {
 	test('production page construction requires the Main encryption registration', async () => {
 		using f = fixture(undefined, false);
 		await assert.rejects(create(f), /Unknown service: encryptionMainService/);
+	});
+
+	test('memory mode authenticates without native encryption and leaves saved HTTP credentials untouched', async () => {
+		using f = fixture(undefined, true, true); await create(f);
+		const key = `browser.credentials.${f.manager.tryGetBrowserView(id)!.session.id}.preserved`;
+		await f.storage.updateItems(application, key, { value: 'preserved-ciphertext', target: StorageTarget.MACHINE });
+		let nativeCalls = 0;
+		f.instantiation.get(IEncryptionMainService).isEncryptionAvailable = async () => { nativeCalls++; throw new Error('Unexpected native encryption'); };
+		const calls = challenge(f);
+		const request = await prompt(f);
+		assert.equal(request.canRemember, false);
+		assert.equal(request.storageFailed, false);
+		await response(f, request.requestId, credentials);
+		assert.deepEqual(calls, [[credentials.username, credentials.password]]);
+		await f.manager.tryGetBrowserView(id)!.clearAuthentication();
+		assert.equal(nativeCalls, 0);
+		const entries = (await f.storage.getItems(application)).entries;
+		assert.deepEqual(Object.keys(entries).filter(key => key.startsWith('browser.credentials.')), [key]);
+		assert.equal(entries[key]!.value, 'preserved-ciphertext');
 	});
 
 	test('unreadable encrypted credentials are preserved, and failed saving never blocks a one-time sign-in', async () => {

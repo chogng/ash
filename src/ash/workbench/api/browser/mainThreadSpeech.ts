@@ -28,18 +28,24 @@ export class MainThreadSpeech extends Disposable {
 	) { super(); }
 
 	public update(snapshot: ExtensionHostFleetSnapshot): void {
-		const active = new Set<string>();
+		const active = new Map<string, string>();
+		for (const runtime of snapshot.extensions) {
+			if (runtime.lifecycle !== 'ready' || runtime.incarnation === undefined) continue;
+			for (const registration of runtime.registrations) if (registration.kind === 'speechProvider') active.set(JSON.stringify([runtime.id, registration.registrationId]), JSON.stringify([runtime.incarnation, runtime.activationGeneration, registration]));
+		}
+		// Retire all changed identities before registering any replacement: two live handles can
+		// exchange provider identifiers in one snapshot without colliding in SpeechService.
+		for (const [key, binding] of this.bindings) if (active.get(key) !== binding.identity) this.bindings.deleteAndDispose(key);
 		for (const runtime of snapshot.extensions) {
 			if (runtime.lifecycle !== 'ready' || runtime.incarnation === undefined) continue;
 			for (const registration of runtime.registrations) {
 				if (registration.kind !== 'speechProvider') continue;
-				const key = JSON.stringify([runtime.id, registration.registrationId]); active.add(key);
+				const key = JSON.stringify([runtime.id, registration.registrationId]);
 				const identity = JSON.stringify([runtime.incarnation, runtime.activationGeneration, registration]);
 				if (this.bindings.get(key)?.identity === identity) continue;
-				this.bindings.deleteAndDispose(key);
 				const lifetime: Binding = Object.assign(new DisposableStore(), { identity });
 				const owner = new AbortController(); lifetime.add(toDisposable(() => owner.abort()));
-				const source = { extensionId: runtime.id, registrationId: registration.registrationId, incarnation: runtime.incarnation, activationGeneration: runtime.activationGeneration };
+				const source = { extensionId: runtime.id, registrationId: registration.registrationId, registrationGeneration: registration.registrationGeneration, incarnation: runtime.incarnation, activationGeneration: runtime.activationGeneration };
 				const invoke: Invoke = async (operation, payload, signal) => {
 					const combined = AbortSignal.any([owner.signal, signal]); combined.throwIfAborted();
 					const value = await this.api.invoke({ ...source, operation, payload, deadlineUnixMillis: Date.now() + this.timeout }, combined);
@@ -72,7 +78,6 @@ export class MainThreadSpeech extends Disposable {
 				}
 			}
 		}
-		for (const [key] of this.bindings) if (!active.has(key)) this.bindings.deleteAndDispose(key);
 	}
 	public clear(): void { this.bindings.clearAndDisposeAll(); }
 }

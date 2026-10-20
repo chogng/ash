@@ -1,3 +1,8 @@
+import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
+import { getTerminalAutoReplyRules } from '../common/terminalConfiguration.js';
+import { MergedEnvironmentVariableCollection } from '../../../../platform/terminal/common/environmentVariableCollection.js';
+import { serializeEnvironmentVariableCollections } from '../../../../platform/terminal/common/environmentVariableShared.js';
+import type { ITerminalAutoReply } from '../../../../platform/terminal/common/terminal.js';
 import { TerminalEscapeSequences } from './terminalEscapeSequences.js';
 import type { ThemeIcon } from '../../../../base/common/themables.js';
 import { generateUuid } from '../../../../base/common/uuid.js';
@@ -52,6 +57,7 @@ export interface CustomTerminalProcessOptions {
 }
 
 export class TerminalInstance extends Disposable implements ITerminalInstance {
+	private environmentVariableCollection: MergedEnvironmentVariableCollection | undefined;
 	private readonly processCapabilities = this._register(new TerminalCapabilityStore());
 	readonly capabilities = this._register(new TerminalCapabilityStoreMultiplexer());
 	readonly resource: URI;
@@ -128,7 +134,7 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 		onClosed: () => void,
 		private readonly onTitleChanged: () => void,
 		private custom: CustomTerminalProcessOptions | undefined,
-		private launch: Pick<ITerminalProcessCreateOptions, 'env' | 'strictEnv' | 'cwd' | 'execution' | 'profile'> | undefined,
+		private launch: (Pick<ITerminalProcessCreateOptions, 'env' | 'strictEnv' | 'cwd' | 'execution' | 'profile'> & Pick<IShellLaunchConfig, 'environmentVariableCollections' | 'environmentVariableCollectionsPersistable'>) | undefined,
 		private initialText: IShellLaunchConfig['initialText'],
 		private waitOnExit: IShellLaunchConfig['waitOnExit'],
 		private dimensions: ITerminalDimensions,
@@ -138,9 +144,15 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 		@IInstantiationService private readonly instantiationService: IInstantiationService,
 		@IPathService private readonly paths: IPathService,
 		@IWorkspaceContextService private readonly workspace: IWorkspaceContextService,
+		@IConfigurationService private readonly configuration: IConfigurationService,
 		@ITerminalProcessService private readonly processes: ITerminalProcessService,
 	) {
 		super();
+		if (launch) {
+			const { environmentVariableCollections, environmentVariableCollectionsPersistable, ...processLaunch } = launch;
+			this.launch = processLaunch;
+			this.captureEnvironmentVariableCollections(environmentVariableCollections ?? restored?.environmentVariableCollections, environmentVariableCollectionsPersistable ?? (restored?.environmentVariableCollections !== undefined));
+		}
 		this.shellProcessManager = child;
 		try {
 			this._register(this.capabilities.add(this.processCapabilities));
@@ -202,11 +214,24 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 		return this.processReady.pid;
 	}
 
+	get extEnvironmentVariableCollection(): MergedEnvironmentVariableCollection | undefined { return this.environmentVariableCollection; }
+
+	private environmentVariableCollectionsPersistable = false;
+
+	private captureEnvironmentVariableCollections(value: IShellLaunchConfig['environmentVariableCollections'], persistable = false): void {
+		this.environmentVariableCollectionsPersistable = value?.length === 0 || persistable;
+		this.environmentVariableCollection = value && new MergedEnvironmentVariableCollection(new Map(value.map(([extension, map, descriptions]) => [extension, {
+			map: new Map(map), descriptionMap: new Map(descriptions ?? []),
+		}])), this.processes.operatingSystem !== OperatingSystem.Windows);
+	}
+
 	/** A fresh view of the immutable launch snapshot; split callers cannot mutate relaunch data. */
 	public get shellLaunchConfig(): Readonly<IShellLaunchConfig> {
 		const profile = this.launch?.profile;
 		return Object.freeze({
 			name: this.title,
+			environmentVariableCollections: this.environmentVariableCollection && serializeEnvironmentVariableCollections(this.environmentVariableCollection.collections),
+			environmentVariableCollectionsPersistable: this.environmentVariableCollectionsPersistable,
 			executable: profile?.type === 'custom' ? profile.path : undefined,
 			args: profile?.type === 'custom' ? profile.args : undefined,
 			env: this.launch?.env,
@@ -471,6 +496,11 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 		await process.input(data);
 	}
 
+	public async setAutoReplies(rules: readonly ITerminalAutoReply[]): Promise<void> {
+		if (this.custom || this.closed || this._state !== 'running' || !this.shellProcessManager) return;
+		await this.shellProcessManager.setAutoReplies(rules);
+	}
+
 	public async sendSignal(signal: string): Promise<void> {
 		const process: ITerminalChildProcess | undefined = this.customProcess ?? this.shellProcessManager;
 		if (this.isReadOnly || this.closed || this._state !== 'running' || !process?.sendSignal) throw new CancellationError();
@@ -616,6 +646,7 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 		if (this.closed) throw new CancellationError();
 		return {
 			instanceId: this.instanceId, resource: this.resource.toString(), dirId: this.dirId, processDirId: this.processWorkspaceFolderId,
+			environmentVariableCollections: this.environmentVariableCollectionsPersistable && this.environmentVariableCollection ? serializeEnvironmentVariableCollections(this.environmentVariableCollection.collections) : undefined,
 			process: child.creation, title: this.title, customTitle: this.customTitle, target: this.target ?? TerminalLocation.Panel,
 			cols: screen.raw.cols, rows: screen.raw.rows, ...checkpoint, vt, cwd,
 			launch: this.launch?.execution ? undefined : this._revivalLaunch,
@@ -689,25 +720,26 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 		void this.poll(generation, "reconnecting");
 	}
 
-	public relaunch(dimensions: ITerminalDimensions): Promise<void> {
+	public relaunch(dimensions: ITerminalDimensions, replacement?: IShellLaunchConfig): Promise<void> {
 		if (this.relaunchTask) {
 			return this.relaunchTask;
 		}
-		if (this.closed || this._state === 'running' || this._state === 'reconnecting') {
+		if (this.closed || this._state === 'reconnecting') {
 			return Promise.resolve();
 		}
-		this.relaunchTask = this.performRelaunch(dimensions).finally(() => {
+		this.relaunchTask = this.performRelaunch(dimensions, replacement, this._revivalLaunch).finally(() => {
 			this.relaunchTask = undefined;
 		});
 		return this.relaunchTask;
 	}
 
-	private async performRelaunch(dimensions: ITerminalDimensions, replacement?: IShellLaunchConfig): Promise<void> {
+	private async performRelaunch(dimensions: ITerminalDimensions, replacement?: IShellLaunchConfig, revivalLaunch?: ITerminalSerializedState['launch']): Promise<void> {
 		this.dimensions = dimensions;
+		this.pollGeneration++;
+		this.shellProcessManager?.stop();
+		if (this._state === 'running') this.setState('disconnected');
 		if (replacement) {
 			// Old reads must stop before release yields; the retained screen belongs to the new process next.
-			this.pollGeneration++;
-			this.shellProcessManager?.stop();
 			try { await this.closeProcess(); }
 			catch (error) { this.setState('error'); throw error; }
 		} else {
@@ -718,8 +750,9 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 		}
 		try {
 			if (replacement) {
-				// Reuse supplies resolved execution data, without an admitted revival intent.
-				this._revivalLaunch = undefined;
+				this.captureEnvironmentVariableCollections(replacement.environmentVariableCollections, replacement.environmentVariableCollectionsPersistable);
+				// Explicit reuse has no raw intent; relaunch retains its original intent.
+				this._revivalLaunch = revivalLaunch;
 				this.shellLifetime.clear();
 				this.customLifetime.clear();
 				this.shellProcessManager = undefined;
@@ -759,7 +792,9 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 				if (!replacement?.deferStart) this.start();
 				return;
 			}
+			const autoReplies = getTerminalAutoReplyRules(this.configuration);
 			const child = await this.backend.createProcess({
+				...(autoReplies.length ? { autoReplies } : {}),
 				...processWorkspaceFolder(this.processWorkspaceFolderId),
 				...this.launch,
 				rows: dimensions.rows,

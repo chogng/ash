@@ -2,6 +2,9 @@ import { registerTestCodeEditorFeatures } from '../../../../../../../test/fixtur
 import { after as afterCodeFeatures } from 'mocha';
 import { WebWorkerService } from '../../../../../platform/webWorker/browser/webWorkerServiceImpl.js';
 import { IWebWorkerService } from '../../../../../platform/webWorker/browser/webWorkerService.js';
+import { IDialogService, DialogResult, ConfirmResult, IFileDialogService } from '../../../../../platform/dialogs/common/dialogs.js';
+import { DialogService } from '../../../../services/dialogs/common/dialogService.js';
+import { IFilesConfigurationService } from '../../../../services/filesConfiguration/common/filesConfigurationService.js';
 import { ILanguageService } from '../../../../../editor/common/languages/language.js';
 import { TestQuickInputService } from '../../../../../platform/quickinput/test/browser/testQuickInputService.js';
 import { TestUriIdentityServices } from '../../../../../platform/uriIdentity/test/common/uriIdentityTestServices.js';
@@ -92,6 +95,7 @@ await import('../../browser/toggleMinimap.js');
 await import('../../browser/toggleRenderWhitespace.js');
 await import('../../browser/toggleRenderControlCharacter.js');
 const { TextResourceEditor: EditorPane } = await import("../../../../browser/parts/editor/textResourceEditor.js");
+const { TextFileEditor } = await import("../../../files/browser/editors/textFileEditor.js");
 const { createBrowserEditorPart } = await import('../../browser/browserEditorPart.js');
 const { CodeEditorWidget } = await import('../../../../../editor/browser/widget/codeEditor/codeEditorWidget.js');
 const { createTestCodeEditor, registerCodeEditorServices } = await import('../../../../../editor/test/browser/testCodeEditor.js');
@@ -877,9 +881,48 @@ test("Workbench owns the code editor save shortcut and reports failures", async 
 	await waitFor(() => errors.length === 1);
 	assert.equal(failedResources[0]?.toString(), pane.workingCopy?.resource.toString());
 	assert.equal(parent.querySelector(".stanza-editor-accessibility-status")?.textContent, "Save failed: conflict");
+	await assert.rejects(pane.save(), error => error instanceof Error && error.message === "conflict" && !isCancellationError(error));
 
 	pane.dispose();
 	dom.window.close();
+});
+
+for (const configuredReadonly of [false, true]) test(`dismissing a ${configuredReadonly ? 'configured read-only' : 'failed file'} save keeps dirty content and rejects as cancellation`, async () => {
+	const dom = createTestDom('<!doctype html><body><main></main></body>');
+	using browser = toDisposable(() => dom.window.close());
+	const textFiles = new ImmediateTextFiles('on disk');
+	const resourceStore = new BrowserTextResourceStore(textFiles);
+	using models = uriIdentityServices.createInstance(BrowserTextModelService, resourceStore, {});
+	using parentServices = paneServices(models);
+	using services = parentServices.createChild();
+	using dialogs = new DialogService();
+	services.registerInstance(IDialogService, dialogs);
+	let readonly = false;
+	services.registerInstance(IFilesConfigurationService, { onDidChangeReadonly: Event.None, isReadonly: () => readonly });
+	services.registerInstance(IFileDialogService, {
+		pickFolderAndOpen: async () => assert.fail('Unexpected folder dialog'), pickWorkspaceAndOpen: async () => assert.fail('Unexpected workspace dialog'),
+		pickFileToSave: async () => assert.fail('Unexpected Save As'), showSaveConfirm: async () => ConfirmResult.CANCEL,
+		showSaveDialog: async () => assert.fail('Unexpected save dialog'), showOpenDialog: async () => assert.fail('Unexpected open dialog'),
+	});
+	using pane = registerTestComponentServices(services).createInstance(TextFileEditor, resourceStore, { createPart: createInertEditorPart });
+	pane.create(dom.window.document.querySelector<HTMLElement>('main')!);
+	const resource = URI.file('/project/readonly.txt');
+	await pane.setInput({ resource }, new AbortController().signal);
+	using reference = await models.acquire({ resource }, new AbortController().signal);
+	reference.model.setValue('unsaved edits');
+	assert.equal(pane.isDirty, true);
+	textFiles.failSave = true; readonly = configuredReadonly;
+	const rejected = assert.rejects(pane.save(), error => isCancellationError(error) && error.cause instanceof Error && (configuredReadonly ? /read-only/.test(error.cause.message) : error.cause.message === 'conflict'));
+	await waitFor(() => dialogs.model.dialogs.length === 1);
+	assert.equal(dialogs.model.dialogs[0]!.request.title, 'Could not save file');
+	dialogs.model.dialogs[0]!.close({ button: DialogResult.Cancel });
+	await rejected;
+	assert.equal(dialogs.model.dialogs.length, 0);
+	assert.equal(pane.isDirty, true); assert.equal(reference.model.getValue(), 'unsaved edits');
+	assert.deepEqual(textFiles.savedTexts, []);
+	// A subsequent explicit save still works; dismissing did not mark the copy saved.
+	textFiles.failSave = false; readonly = false;
+	await pane.save(); assert.equal(pane.isDirty, false); assert.deepEqual(textFiles.savedTexts, ['unsaved edits']);
 });
 
 class ImmediateTextFiles implements ITextFileService {

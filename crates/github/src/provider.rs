@@ -200,6 +200,25 @@ pub enum GitHubRequest {
         commit: String,
         page: u32,
     },
+    CheckDetails {
+        repository: Repository,
+        number: u64,
+        commit: String,
+        check_id: u64,
+        page: u32,
+    },
+    CheckLog {
+        repository: Repository,
+        number: u64,
+        commit: String,
+        check_id: u64,
+    },
+    RerunCheck {
+        repository: Repository,
+        number: u64,
+        commit: String,
+        check_id: u64,
+    },
     PullRequest {
         repository: Repository,
         number: u64,
@@ -312,6 +331,7 @@ impl GitHubRequest {
             | Self::ReviewPullRequest { .. }
             | Self::MergePullRequest { .. }
             | Self::EnableAutoMerge { .. }
+            | Self::RerunCheck { .. }
             | Self::CreatePullRequest { .. }
             | Self::UpdatePullRequest { .. }
             | Self::ChangeReviewers { .. }
@@ -345,6 +365,8 @@ impl GitHubRequest {
             | Self::MergeOptions { .. }
             | Self::FindPullRequest { .. }
             | Self::Checks { .. }
+            | Self::CheckDetails { .. }
+            | Self::CheckLog { .. }
             | Self::PullRequest { .. }
             | Self::RequestedReviewers { .. }
             | Self::ReviewDiff { .. }
@@ -403,6 +425,9 @@ pub enum GitHubResponse {
     MergeOptions(MergeOptions),
     FindPullRequest(Option<PullRequest>),
     Checks(CheckStatus),
+    CheckDetails(CheckDetails),
+    CheckLog(String),
+    RerunCheck(()),
     PullRequest(PullRequest),
     CreatePullRequest(PullRequest),
     UpdatePullRequest(PullRequest),

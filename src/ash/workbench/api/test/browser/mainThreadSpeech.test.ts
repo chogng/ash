@@ -61,7 +61,7 @@ function snapshot(incarnation: number, admitted = true): ExtensionHostFleetSnaps
 		generation: incarnation, extensions: [{
 			id: 'example.speech', version: '1', packageDigest: `sha256:${'a'.repeat(64)}`, runtimeApiVersion: 1,
 			incarnation, activationGeneration: incarnation, lifecycle: 'ready', failure: null, stderr: '', outputEvents: [],
-			registrations: admitted ? [{ registrationId: 'speech', kind: 'speechProvider', identifier: 'example.recognition' }] : [],
+			registrations: admitted ? [{ registrationId: 'speech', kind: 'speechProvider', registrationGeneration: 1, identifier: 'example.recognition' }] : [],
 		}]
 	});
 }
@@ -120,6 +120,62 @@ suite('MainThreadSpeech admitted provider lifecycle', () => {
 		assert.equal(currentRead.request.incarnation, 2);
 		assert.deepEqual(events, [{ status: SpeechToTextStatus.Stopped }]);
 		await cancelRecognition(owner, currentSession, current); await currentRead.result.complete({ events: [], closed: true });
+	});
+	for (const replacementId of ['speech', 'speech.replacement']) test(`late registration and ${replacementId} replacement retire the exact old stream`, async () => {
+		using owner = new DisposableStore(); const host = owner.add(new Host()); const speech = owner.add(new SpeechService(undefined));
+		const bridge = owner.add(new MainThreadSpeech(1000, host, speech));
+		bridge.update(snapshot(1, false)); assert.equal(speech.hasSpeechProvider, false);
+		bridge.update(snapshot(1)); assert.equal(speech.hasSpeechProvider, true);
+		const old = owner.add(new CancellationTokenSource());
+		const first = await speech.createSpeechToTextSession(old.token);
+		const events: ISpeechToTextEvent[] = []; owner.add(first.onDidChange(event => events.push(event)));
+		const oldRead = await host.nextRead();
+		const replacement = snapshot(1);
+		bridge.update({ ...replacement, extensions: replacement.extensions.map(runtime => ({ ...runtime, registrations: [{ registrationId: replacementId, kind: 'speechProvider', identifier: 'example.recognition', registrationGeneration: 2 }] })) });
+		assert.equal(oldRead.signal.aborted, true);
+		await oldRead.result.complete({ events: [{ status: 3, text: 'late old stream' }], closed: false });
+		assert.deepEqual(events, [{ status: SpeechToTextStatus.Stopped }]);
+		const current = owner.add(new CancellationTokenSource()); const session = await speech.createSpeechToTextSession(current.token);
+		const read = await host.nextRead(); assert.equal(read.request.registrationId, replacementId); assert.equal(read.request.registrationGeneration, 2);
+		assert.equal(host.requests.find(request => request.operation === 'closeSpeechSession')?.registrationGeneration, 1);
+		old.cancel(); assert.equal(read.signal.aborted, false);
+		await cancelRecognition(owner, session, current); await read.result.complete({ events: [], closed: true });
+		bridge.update(snapshot(1, false)); assert.equal(speech.hasSpeechProvider, false);
+	});
+	test('all changed bindings retire before two providers exchange identifiers', async () => {
+		using owner = new DisposableStore(); const host = owner.add(new Host());
+		const providers = new Map<string, ISpeechProvider>();
+		const speech = owner.add(new class extends SpeechService {
+			public override registerSpeechProvider(identifier: string, provider: ISpeechProvider) {
+				const registration = super.registerSpeechProvider(identifier, provider);
+				providers.set(identifier, provider); return registration;
+			}
+		}(undefined));
+		const bridge = owner.add(new MainThreadSpeech(1000, host, speech));
+		const original = snapshot(1);
+		const fleet = (swapped: boolean): ExtensionHostFleetSnapshot => ({
+			...original, extensions: original.extensions.map(runtime => ({
+				...runtime, registrations: [
+					{ registrationId: 'a', kind: 'speechProvider', identifier: swapped ? 'second' : 'first', registrationGeneration: swapped ? 3 : 1 },
+					{ registrationId: 'b', kind: 'speechProvider', identifier: swapped ? 'first' : 'second', registrationGeneration: swapped ? 4 : 2 },
+				]
+			}))
+		});
+		bridge.update(fleet(false));
+		const old = owner.add(new CancellationTokenSource());
+		providers.get('example.speech/first')!.createSpeechToTextSession(old.token);
+		const oldRead = await host.nextRead();
+		bridge.update(fleet(true)); assert.equal(oldRead.signal.aborted, true);
+		await oldRead.result.complete({ events: [{ status: 3, text: 'retired' }], closed: false });
+		for (const [identifier, id, generation] of [['first', 'b', 4], ['second', 'a', 3]] as const) {
+			const current = owner.add(new CancellationTokenSource());
+			providers.get(`example.speech/${identifier}`)!.createSpeechToTextSession(current.token);
+			const read = await host.nextRead();
+			assert.equal(read.request.registrationId, id); assert.equal(read.request.registrationGeneration, generation);
+			current.cancel(); assert.equal(read.signal.aborted, true);
+			await read.result.complete({ events: [], closed: true });
+		}
+		bridge.clear(); assert.equal(speech.hasSpeechProvider, false);
 	});
 	test('invalid provider event rejects the session and closes its exact transport lease', async () => {
 		using owner = new DisposableStore(); const host = owner.add(new Host()); const speech = owner.add(new SpeechService(undefined));

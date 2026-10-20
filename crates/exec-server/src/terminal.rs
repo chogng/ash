@@ -1,10 +1,12 @@
 //! Authorized interactive PTY sessions, bounded output, and reconnect leases.
 
+mod auto_replies;
 mod command_status;
 mod environment;
 mod profiles;
 mod shell_integration;
 
+use crate::terminal::auto_replies::AutoReplies;
 use crate::terminal::command_status::CommandStatusMode;
 use crate::terminal::command_status::ParsedTerminalOutput;
 use crate::terminal::command_status::TerminalCommandStatusTracker;
@@ -24,6 +26,7 @@ pub use environment::safe_process_environment;
 pub use exec_server_protocol::terminal::TerminalArguments;
 pub use exec_server_protocol::terminal::TerminalAttachRequest;
 pub use exec_server_protocol::terminal::TerminalAttachResult;
+pub use exec_server_protocol::terminal::TerminalAutoReply;
 pub use exec_server_protocol::terminal::TerminalCommandStatus;
 pub use exec_server_protocol::terminal::TerminalCommandStatusEvent;
 pub use exec_server_protocol::terminal::TerminalCreateRequest;
@@ -195,6 +198,7 @@ impl TerminalService {
     ) -> Result<TerminalCreateResult, TerminalError> {
         validate_authorization(&authorization)?;
         validate_size(params.rows, params.cols)?;
+        let auto_replies = AutoReplies::new(params.auto_replies)?;
         let reconnect = match params.lifecycle {
             TerminalLifecycle::ConnectionOwned => None,
             TerminalLifecycle::Reconnectable => Some(new_reconnect_lease()?),
@@ -377,8 +381,14 @@ impl TerminalService {
                 .and_then(|integration| integration.nonce.clone()),
             profile.shell_kind(),
         )));
-        let (process, output_task) =
-            spawn_output_drainers(&self.runtime, spawned, state.clone(), integration);
+        state.lock().map_err(|_| TerminalError::Busy)?.auto_replies = auto_replies;
+        let (process, output_task) = spawn_output_drainers(
+            &self.runtime,
+            spawned,
+            state.clone(),
+            integration,
+            authorization.clone(),
+        );
         sessions.insert(
             terminal_id.clone(),
             TerminalSession {
@@ -418,6 +428,12 @@ impl TerminalService {
         let session = sessions
             .get_mut(terminal_id)
             .expect("terminal ownership was just validated");
+        session
+            .state
+            .lock()
+            .map_err(|_| TerminalError::Busy)?
+            .auto_replies
+            .clear();
         session.reconnect_token = Some(reconnect.reconnect_token.clone());
         session.owner = TerminalOwner::Detached {
             expires_at: Instant::now() + RECONNECT_GRACE_PERIOD,
@@ -526,6 +542,32 @@ impl TerminalService {
         Ok(())
     }
 
+    /// Atomically replaces this attached screen's execution-side output rules.
+    /// Rules are revoked on detach and never migrate to another connection.
+    pub fn set_auto_replies(
+        &self,
+        owner_connection_id: u64,
+        terminal_id: &str,
+        rules: Vec<TerminalAutoReply>,
+    ) -> Result<(), TerminalError> {
+        self.ensure_active()?;
+        let replies = AutoReplies::new(rules)?;
+        let sessions = self.owned_sessions(owner_connection_id, terminal_id)?;
+        let session = sessions
+            .get(terminal_id)
+            .expect("terminal ownership was just validated");
+        if session.process.has_exited() {
+            return Err(TerminalError::OperationFailed);
+        }
+        session
+            .state
+            .lock()
+            .map_err(|_| TerminalError::Busy)?
+            .auto_replies
+            .replace(replies);
+        Ok(())
+    }
+
     pub fn send_signal(
         &self,
         owner_connection_id: u64,
@@ -543,6 +585,9 @@ impl TerminalService {
         }
         let signal = match signal {
             TerminalSignal::Interrupt => ProcessSignal::Interrupt,
+            TerminalSignal::Terminate => ProcessSignal::Terminate,
+            TerminalSignal::Kill => ProcessSignal::Kill,
+            TerminalSignal::Hangup => ProcessSignal::Hangup,
         };
         process.signal(signal).map_err(|error| {
             if error.kind() == std::io::ErrorKind::Unsupported {
@@ -673,6 +718,9 @@ impl TerminalService {
             if session.owner != TerminalOwner::Attached(owner_connection_id) {
                 return true;
             }
+            if let Ok(mut state) = session.state.lock() {
+                state.auto_replies.clear();
+            }
             if session.reconnect_token.is_some() {
                 session.owner = TerminalOwner::Detached {
                     expires_at: Instant::now() + RECONNECT_GRACE_PERIOD,
@@ -783,6 +831,7 @@ struct TerminalState {
     output_bytes: usize,
     output_consumed: Arc<Notify>,
     command_status: TerminalCommandStatusTracker,
+    auto_replies: AutoReplies,
     exited: bool,
     output_closed: bool,
     exit_code: Option<i32>,
@@ -802,6 +851,7 @@ impl TerminalState {
             output_bytes: 0,
             output_consumed: Arc::new(Notify::new()),
             command_status: TerminalCommandStatusTracker::new(command_status_mode, nonce),
+            auto_replies: AutoReplies::default(),
             exited: false,
             output_closed: false,
             exit_code: None,
@@ -846,6 +896,7 @@ fn spawn_output_drainers(
     spawned: SpawnedProcess,
     state: Arc<Mutex<TerminalState>>,
     integration: Option<ShellIntegration>,
+    authorization: Authorization,
 ) -> (Arc<ProcessHandle>, AbortHandle) {
     let SpawnedProcess {
         session,
@@ -860,6 +911,7 @@ fn spawn_output_drainers(
         .unwrap_or_else(|poisoned| poisoned.into_inner())
         .output_consumed
         .clone();
+    let input = session.writer_sender();
     let output_task = runtime.spawn(async move {
         loop {
             if !wait_for_output_capacity(&output_state, &output_consumed).await {
@@ -869,7 +921,18 @@ fn spawn_output_drainers(
                 break;
             };
             let parsed = match output_state.lock() {
-                Ok(mut state) => state.command_status.parse_output(bytes),
+                Ok(mut state) => {
+                    // Match raw bytes before shell metadata is removed. Never await input
+                    // capacity here: a full PTY input queue must not deadlock its output.
+                    if authorization.ensure_active().is_ok() {
+                        state.auto_replies.process(&bytes, Instant::now(), |reply| {
+                            input.try_send(reply.to_vec()).is_ok()
+                        });
+                    } else {
+                        state.auto_replies.clear();
+                    }
+                    state.command_status.parse_output(bytes)
+                }
                 Err(_) => return,
             };
             for item in parsed {
@@ -993,6 +1056,7 @@ fn spawn_output_drainers(
         if let Ok(mut state) = output_state.lock() {
             let pending_output = state.command_status.flush_output();
             push_output(&mut state, pending_output);
+            state.auto_replies.clear();
             state.output_closed = true;
             state.exited = state.exit_code.is_some();
             if state.exited {
@@ -1016,6 +1080,7 @@ fn spawn_output_drainers(
         if let Ok(mut state) = state.lock() {
             // OSC command markers can still be queued when OS exit arrives.
             // Finish the active command only after its output has been drained.
+            state.auto_replies.clear();
             state.exit_code = Some(exit_code);
             state.exited = state.output_closed;
             if state.exited {

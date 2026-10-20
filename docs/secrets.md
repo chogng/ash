@@ -160,6 +160,10 @@ profile 存储方式由唯一 `ProfileSecretStore` 保存于 `<profile>/secrets/
 
 Desktop 的通用存储状态与错误契约位于 `src/ash/platform/secrets/common/secrets.ts`。`ISecretStorageStatusService.readState()` 由同目录的 App Server adapter 对接 `secrets/status`，在 Editor 和 Agents 窗口各自的服务容器中注册；模型设置页直接消费该服务及其授权和存储切换操作。模型等领域的 RPC adapter 通过 secrets adapter 统一转换结构化存储错误，领域接口不转发通用存储状态。当前没有通用凭据存取或变更事件接口，待真实消费者需要时再补充。
 
+Electron 自动化默认传入 `--use-inmemory-secretstorage`：网站密码只保存在 Main 进程内，HTTP/Proxy 认证只使用 Chromium 的进程内缓存，窗口内临时凭据仍由既有内存服务拥有；Main 将 `ASH_USE_INMEMORY_SECRETSTORAGE=1` 传给托管后端，使 profile runtime 选择同一个 `MemorySecretStore` 供各领域共享。凭据不会落盘，进程退出后丢失，内存模式不读取、迁移或删除已有持久凭据。独立 App Server host 也可显式选择该环境变量（`0` 或未设置保留默认加密存储，其他值拒绝启动）。
+
+普通 Electron 测试不创建系统或临时钥匙串。Chromium cookie 加密绕过应用凭据服务，因此测试启动器在 macOS 另传 `--use-mock-keychain`，Linux 使用 `--password-store=basic`，测试数据仍限于隔离 profile。密码加密落盘及重启场景显式设置 `useInMemorySecretStorage: false`，验证生产编码和持久化流程，仍使用测试替身；这不代表验证了操作系统钥匙串集成。
+
 ### Electron 内置浏览器认证
 
 内置浏览器的 HTTP／代理认证由 Main 进程的 `BrowserView` 接收 Chromium `login` 事件，并通过现有 Workbench 输入对话框收集用户名和密码。`src/ash/platform/encryption/common/encryptionService.ts` 定义加密契约，`electron-main/encryptionMainService.ts` 封装 Electron `safeStorage`；Main 启动时注册唯一 `IEncryptionMainService`，浏览器通过构造注入使用它。该服务只处理加解密，不保存业务凭据，也不替代 Rust profile `SecretStore`。

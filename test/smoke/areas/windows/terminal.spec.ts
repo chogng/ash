@@ -2,6 +2,8 @@ import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import { expect, test } from '../../../automation/test.js';
 import type { Locator } from '@playwright/test';
+import { QuickAccess } from '../../../automation/quickaccess.js';
+import { readUserSettings, writeUserSettings } from '../../../automation/settings.js';
 
 const windowsPowerShellSettings = process.platform === 'win32' ? {
 	'terminal.integrated.profiles.windows': {
@@ -938,5 +940,165 @@ test.describe('terminal revival keeps independent windows of the same workspace 
 		await a.page.screenshot({ path: testInfo.outputPath('terminal-revive-window-a.png') });
 		await b.page.screenshot({ path: testInfo.outputPath('terminal-revive-window-b.png') });
 		expect(runningApplication.diagnostics.errors).toEqual([]);
+	});
+});
+
+for (const locale of ['en', 'zh-CN'] as const) for (const host of ['workbench', 'sessions'] as const) test.describe(`terminal panel positions (${host}, ${locale})`, () => {
+	test.use({ electronUserSettings: { ...windowsPowerShellSettings, 'workbench.locale': locale } });
+
+	test('moving a real panel preserves split proportions, shell input and focus through hiding and reload', { tag: ['@electron-app-server'] }, async ({ target, workbench, testWorkspace, driver }) => {
+		test.setTimeout(90000);
+		const zh = locale === 'zh-CN';
+		const page = host === 'sessions' ? await workbench.openAgentsWindow(target.kind) : workbench.page;
+		if (host === 'sessions') await page.locator('.ash-sessions-activity-content').getByRole('button', { name: zh ? '代码' : 'Code', exact: true }).click();
+		const commands = new QuickAccess(page);
+		await commands.runCommand('workbench.action.terminal.focus');
+		await commands.runCommand('workbench.action.terminal.split');
+		const panes = page.locator('.ash-terminal-group-pane:visible');
+		await expect(panes).toHaveCount(2);
+		const ids = await panes.evaluateAll(nodes => nodes.map(node => node.getAttribute('data-instance-id')));
+		const input = () => panes.nth(1).locator('.xterm-helper-textarea');
+		const sash = () => page.getByRole('separator', { name: zh ? '调整终端窗格大小' : 'Resize terminal panes', exact: true });
+		const share = async (horizontal: boolean): Promise<number> => panes.evaluateAll((nodes, horizontal) => {
+			const sizes = nodes.map(node => horizontal ? node.getBoundingClientRect().width : node.getBoundingClientRect().height);
+			return sizes[0]! / sizes.reduce((sum, value) => sum + value, 0);
+		}, horizontal);
+		const beforeResize = await share(true);
+		await sash().focus();
+		await sash().press('ArrowRight');
+		await expect.poll(() => share(true)).toBeGreaterThan(beforeResize);
+		const ratio = await share(true);
+		const execution = join(testWorkspace.directory, `panel-executed-${host}.txt`);
+		const shellIdentity = join(testWorkspace.directory, `panel-shell-${host}.txt`);
+		const encodedPath = Buffer.from(execution).toString('base64');
+		const encodedIdentity = Buffer.from(shellIdentity).toString('base64');
+		await input().focus();
+		await input().pressSequentially(`node -e "require('fs').writeFileSync(Buffer.from('${encodedIdentity}','base64').toString(),String(process.ppid));console.log(['panel','retained-buffer'].join('-'))"`);
+		await input().press('Enter');
+		await expect(panes.nth(1).locator('.xterm-rows')).toContainText('panel-retained-buffer');
+		const shellPid = await readFile(shellIdentity, 'utf8');
+		await input().pressSequentially(`node -e "require('fs').writeFileSync(Buffer.from('${encodedPath}','base64').toString(),'once:'+process.ppid)"`);
+		for (const [position, suffix, horizontal] of [['left', 'Left', false], ['top', 'Top', true], ['right', 'Right', false], ['bottom', 'Bottom', true], ['right', 'Right', false]] as const) {
+			const commandId = `workbench.action.positionPanel${suffix}`;
+			await commands.open(`>${commandId}`);
+			const option = commands.items.filter({ has: page.locator('.ash-quick-pick-row-description').getByText(commandId, { exact: true }) });
+			const titles = zh
+				? { left: '将面板移到左侧', right: '将面板移到右侧', top: '将面板移到顶部', bottom: '将面板移到底部' }
+				: { left: 'Move Panel Left', right: 'Move Panel Right', top: 'Move Panel to Top', bottom: 'Move Panel to Bottom' };
+			await expect(option.locator('.ash-quick-pick-row-label')).toHaveText(titles[position]);
+			await option.click();
+			await expect(page.locator('[data-panel-position]')).toHaveAttribute('data-panel-position', position);
+			await expect(sash()).toHaveAttribute('aria-orientation', horizontal ? 'vertical' : 'horizontal');
+			const panel = (await page.locator('[data-part="panel"]').boundingBox())!;
+			const borders = await page.locator('[data-part="panel"]').evaluate(element => {
+				const style = getComputedStyle(element);
+				return { top: parseFloat(style.borderTopWidth), bottom: parseFloat(style.borderBottomWidth), left: parseFloat(style.borderLeftWidth), right: parseFloat(style.borderRightWidth) };
+			});
+			expect(borders[position === 'top' ? 'bottom' : position === 'bottom' ? 'top' : position === 'left' ? 'right' : 'left']).toBeGreaterThan(0);
+			const centers = await page.locator('[data-part="editor"]:visible, [data-part="sessions"]:visible').evaluateAll(nodes => nodes.map(node => {
+				const rect = node.getBoundingClientRect();
+				return { x: rect.x, y: rect.y, width: rect.width, height: rect.height };
+			}));
+			expect(centers.length).toBeGreaterThan(0);
+			for (const center of centers) {
+				if (position === 'left') expect(panel.x + panel.width).toBeLessThanOrEqual(center.x + 1);
+				if (position === 'right') expect(center.x + center.width).toBeLessThanOrEqual(panel.x + 1);
+				if (position === 'top') expect(panel.y + panel.height).toBeLessThanOrEqual(center.y + 1);
+				if (position === 'bottom') expect(center.y + center.height).toBeLessThanOrEqual(panel.y + 1);
+			}
+			await expect(input()).toBeFocused();
+			await expect.poll(async () => Math.abs(await share(horizontal) - ratio)).toBeLessThan(0.03);
+			await expect.poll(() => panes.evaluateAll(nodes => nodes.map(node => node.getAttribute('data-instance-id')))).toEqual(ids);
+			const first = (await panes.nth(0).boundingBox())!;
+			const second = (await panes.nth(1).boundingBox())!;
+			if (horizontal) expect(second.x).toBeGreaterThanOrEqual(first.x + first.width - 1);
+			else expect(second.y).toBeGreaterThanOrEqual(first.y + first.height - 1);
+			expect(await readFile(execution, 'utf8').catch(() => undefined)).toBeUndefined();
+		}
+		await input().press('Alt+F1');
+		const help = page.locator('.ash-accessible-view-content');
+		await expect(help).toHaveValue(zh ? /窗格左右并排/u : /Panes are side by side/u);
+		await help.press('Escape');
+		await expect(input()).toBeFocused();
+		const restoredPanel = (await page.locator('[data-part="panel"]').boundingBox())!;
+		await commands.runCommand('workbench.action.toggleMaximizedPanel');
+		await expect(panes).toHaveCount(2);
+		await expect.poll(async () => (await page.locator('[data-part="panel"]').boundingBox())!.width).toBeGreaterThan(restoredPanel.width + 20);
+		await expect.poll(async () => Math.abs(await share(false) - ratio)).toBeLessThan(0.03);
+		await commands.runCommand('workbench.action.toggleMaximizedPanel');
+		await expect.poll(async () => Math.abs((await page.locator('[data-part="panel"]').boundingBox())!.width - restoredPanel.width)).toBeLessThan(2);
+		await expect.poll(async () => Math.abs(await share(false) - ratio)).toBeLessThan(0.03);
+		await commands.runCommand('workbench.action.closePanel');
+		await expect(panes).toHaveCount(0);
+		await commands.runCommand('workbench.action.terminal.focus');
+		await expect(panes).toHaveCount(2);
+		await expect(input()).toBeFocused();
+		await expect.poll(async () => Math.abs(await share(false) - ratio)).toBeLessThan(0.03);
+		const loaded = page.waitForEvent('domcontentloaded');
+		await commands.runCommand('workbench.action.reloadWindow');
+		await loaded;
+		if (host === 'workbench') await workbench.waitForReady();
+		await expect(page.locator('[data-panel-position]')).toHaveAttribute('data-panel-position', 'right');
+		await expect(panes).toHaveCount(2);
+		await expect.poll(() => panes.evaluateAll(nodes => nodes.map(node => node.getAttribute('data-instance-id')))).toEqual(ids);
+		await expect(sash()).toHaveAttribute('aria-orientation', 'horizontal');
+		await expect.poll(async () => Math.abs(await share(false) - ratio)).toBeLessThan(0.03);
+		await expect(input()).toBeFocused();
+		expect(await readFile(execution, 'utf8').catch(() => undefined)).toBeUndefined();
+		await input().press('Alt+F2');
+		const buffer = page.locator('.ash-accessible-view-content');
+		await expect(buffer).toHaveValue(/panel-retained-buffer/u);
+		await buffer.press('Escape');
+		await expect(input()).toBeFocused();
+		await input().press('Enter');
+		await expect.poll(() => readFile(execution, 'utf8').catch(() => '')).toBe(`once:${shellPid}`);
+		expect(driver.diagnostics.errors).toEqual([]);
+	});
+});
+
+test.describe('terminal contributions execution chain', () => {
+	test.use({
+		electronUserSettings: {
+			...windowsPowerShellSettings,
+			'terminal.integrated.autoReplies': { 'ASH-AUTO-REPLY>': 'accepted\r' },
+		}
+	});
+
+	test('replies on the execution host and keeps the existing terminal through Quick Access', { tag: ['@electron-app-server', '@browser-app-server'] }, async ({ workbench, testWorkspace, driver }) => {
+		if (await workbench.page.evaluate(() => document.querySelector<HTMLElement>('#app')?.dataset.runtime !== 'electron')) {
+			const settings = await readUserSettings(workbench.page);
+			await writeUserSettings(workbench.page, JSON.stringify({ ...JSON.parse(settings.content), 'terminal.integrated.autoReplies': { 'ASH-AUTO-REPLY>': 'accepted\r' } }), settings.revision);
+			await workbench.reloadWindow();
+			await workbench.waitForReady();
+		}
+		await workbench.quickaccess.runCommand('workbench.action.terminal.new');
+		await expect(workbench.terminal.activeInstance).toBeVisible();
+		const instance = workbench.terminal.activeInstance;
+		const pane = workbench.page.locator('.ash-terminal-group-pane:visible');
+		const identity = await pane.getAttribute('data-instance-id');
+		expect(identity).not.toBeNull();
+		await workbench.terminal.runCommand(process.platform === 'win32'
+			? "$answer=Read-Host ('ASH-'+'AUTO-REPLY>'); [IO.File]::WriteAllText((Join-Path (Get-Location) 'auto-reply-result.txt'),$answer)"
+			: "printf 'ASH-%s>' AUTO-REPLY; read answer; printf '%s' \"$answer\" > auto-reply-result.txt");
+		await expect.poll(() => readFile(join(testWorkspace.directory, 'auto-reply-result.txt'), 'utf8').catch(() => '')).toBe('accepted');
+		await workbench.quickaccess.runCommand('workbench.action.quickOpenTerm');
+		await workbench.page.getByRole('combobox', { name: 'Type the name of a terminal to open', exact: true }).press('Enter');
+		await expect(instance.locator('.xterm-helper-textarea')).toBeFocused();
+		await expect(workbench.terminal.instances).toHaveCount(1);
+		await expect(pane).toHaveAttribute('data-instance-id', identity!);
+		expect(driver.diagnostics.errors).toEqual([]);
+	});
+
+	test('sends a foreground signal through the real terminal process chain', { tag: ['@electron-app-server', '@browser-app-server'] }, async ({ workbench, testWorkspace, driver }) => {
+		test.skip(process.platform === 'win32', 'The ConPTY backend explicitly reports process signals as unsupported.');
+		await workbench.quickaccess.runCommand('workbench.action.terminal.new');
+		await expect(workbench.terminal.activeInstance).toBeVisible();
+		await workbench.terminal.runCommand('node -e "require(\'fs\').writeFileSync(\'signal-ready.txt\',\'ready\');process.on(\'SIGTERM\',()=>{require(\'fs\').writeFileSync(\'signal-result.txt\',\'terminated\');process.exit(0)});setInterval(()=>{},1000)"');
+		await expect.poll(() => readFile(join(testWorkspace.directory, 'signal-ready.txt'), 'utf8').catch(() => '')).toBe('ready');
+		await workbench.quickaccess.runCommand('workbench.action.terminal.sendSignal');
+		await workbench.page.getByRole('option', { name: /SIGTERM/ }).click();
+		await expect.poll(() => readFile(join(testWorkspace.directory, 'signal-result.txt'), 'utf8').catch(() => '')).toBe('terminated');
+		await expect(workbench.terminal.instances).toHaveCount(1);
+		expect(driver.diagnostics.errors).toEqual([]);
 	});
 });

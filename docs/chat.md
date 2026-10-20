@@ -14,7 +14,9 @@ Profile 输入历史沿 `platform/messageHistory` 领域服务 → App Server �
 
 已接受请求的“编辑消息”沿 `ChatListWidget` → `workbench.action.chat.resendRequest` → `IChatService.rewriteRequest` → `RewriteThread`，从原请求前创建新聊天并提交修改后的文本，保留原上下文、图片和音频。Enter 换行，Ctrl／Command+Enter 发送，Escape 取消；失败保留编辑内容，同一内容重试复用命令身份。原聊天与未发送草稿仍可恢复，后续 steering 和工具输出不会重放。
 
-IDE 与 Agent Window 均提供 Fork Conversation 和 New Chat in Session。Fork 通过 `IAgentThreadService.fork` 复制当前历史，IDE 创建新 Session，Agent Window 在当前 Session 新建 Thread；新增聊天通过 `CreateThread` 创建同 Session 的空 Thread。后端拥有复制与执行，窗口导航修订阻止迟到结果抢回选择。IDE 输入在自身生命周期内按 Thread 保留草稿和附件，Agent Window 继续使用原持久草稿 owner。
+IDE 与 Agent Window 均提供 Fork Conversation 和 New Chat in Session。Fork 通过 `IAgentThreadService.fork` 复制当前历史，IDE 创建新 Session，Agent Window 在当前 Session 新建 Thread；新增聊天通过 `CreateThread` 创建同 Session 的空 Thread。后端拥有复制与执行，窗口导航修订阻止迟到结果抢回选择。IDE 与 Agent Window 的输入按 Thread 复用原持久草稿存储，保留文本、模式和用户选择的附件快照；实时来源上下文仍归其生产者。
+
+普通 Workbench 的“Move Chat to Editor Area”与“Move Chat to Side Bar”借用同一个 Chat 画布、会话模型和输入框。Chat 可与文档分组并排；切换布局、隐藏、关闭标签和重启均不会提交消息，重启恢复当前聊天及草稿。画布只能存在于一个编辑器组，分屏或复制到新窗口不会生成第二份 Chat 状态。关闭窗口等待附件准备与存储写入，失败保留草稿并允许重试；输入的 Alt+F1 帮助说明这些操作。
 
 ### 截图
 

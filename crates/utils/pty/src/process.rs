@@ -19,15 +19,28 @@ use tokio::task::JoinHandle;
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ProcessSignal {
     Interrupt,
+    Terminate,
+    Kill,
+    Hangup,
+}
+
+impl ProcessSignal {
+    #[cfg(unix)]
+    pub(crate) fn unix_number(self) -> libc::c_int {
+        match self {
+            Self::Interrupt => libc::SIGINT,
+            Self::Terminate => libc::SIGTERM,
+            Self::Kill => libc::SIGKILL,
+            Self::Hangup => libc::SIGHUP,
+        }
+    }
 }
 
 pub(crate) fn unsupported_signal(signal: ProcessSignal) -> io::Error {
-    match signal {
-        ProcessSignal::Interrupt => io::Error::new(
-            io::ErrorKind::Unsupported,
-            "process interrupt is not supported by this process backend",
-        ),
-    }
+    io::Error::new(
+        io::ErrorKind::Unsupported,
+        format!("process signal {signal:?} is not supported by this process backend"),
+    )
 }
 
 pub(crate) fn exit_code_from_status(status: ExitStatus) -> i32 {
@@ -292,9 +305,7 @@ impl ProcessHandle {
                 if group <= 0 {
                     return Err(io::Error::last_os_error());
                 }
-                let number = match signal {
-                    ProcessSignal::Interrupt => libc::SIGINT,
-                };
+                let number = signal.unix_number();
                 if unsafe { libc::kill(-group, number) } == -1 {
                     return Err(io::Error::last_os_error());
                 }

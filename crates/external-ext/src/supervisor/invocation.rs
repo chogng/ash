@@ -54,6 +54,7 @@ impl ExtensionHostSupervisor {
         let snapshot = self.snapshot();
         self.begin_fenced_invoke(
             ExtensionInvocationTarget {
+                registration_generation: None,
                 incarnation: NonZeroU64::new(snapshot.incarnation)
                     .ok_or(ExtensionHostError::HostExited)?,
                 activation_generation: NonZeroU64::new(snapshot.activation_generation)
@@ -93,6 +94,7 @@ impl ExtensionHostSupervisor {
         invocation: ExtensionInvocation,
     ) -> Result<ExtensionInvocationHandle, ExtensionHostError> {
         self.ensure_ready()?;
+
         let lease = self
             .inner
             .activation
@@ -105,7 +107,7 @@ impl ExtensionHostSupervisor {
         let deadline = Instant::now()
             .checked_add(wait_timeout)
             .ok_or(ExtensionHostError::RequestTimedOut)?;
-        let (process, incarnation, request_id, request) = {
+        let (process, incarnation, request_id, request, registration) = {
             let mut state = self
                 .inner
                 .state
@@ -124,6 +126,21 @@ impl ExtensionHostSupervisor {
             {
                 return Err(ExtensionHostError::RegistrationNotFound);
             }
+            let registration = state
+                .registrations
+                .iter()
+                .find(|registration| registration.registration_id == invocation.registration_id)
+                .cloned()
+                .ok_or(ExtensionHostError::RegistrationNotFound)?;
+            if target.is_some_and(|target| match registration.kind {
+                crate::RegistrationKind::SpeechProvider {
+                    registration_generation,
+                    ..
+                } => target.registration_generation != Some(registration_generation),
+                _ => target.registration_generation.is_some(),
+            }) {
+                return Err(ExtensionHostError::RegistrationNotFound);
+            }
             let process = state
                 .process
                 .clone()
@@ -136,13 +153,20 @@ impl ExtensionHostSupervisor {
                 request: HostRequestKind::Invoke(InvokeParams {
                     extension_id: self.inner.activation.params().extension_id.clone(),
                     registration_id: invocation.registration_id,
+                    registration_generation: match registration.kind {
+                        crate::RegistrationKind::SpeechProvider {
+                            registration_generation,
+                            ..
+                        } => Some(registration_generation),
+                        _ => None,
+                    },
                     operation: invocation.operation,
                     payload: invocation.payload,
                     deadline_unix_millis: invocation.deadline_unix_millis.get(),
                 }),
             };
             state.invocation_leases.insert(request_id, lease);
-            (process, incarnation, request_id, request)
+            (process, incarnation, request_id, request, registration)
         };
         let pending = match process.dispatch(request) {
             Ok(pending) => pending,
@@ -152,6 +176,7 @@ impl ExtensionHostSupervisor {
             }
         };
         Ok(ExtensionInvocationHandle {
+            registration,
             client_cancellation: ash_async_utils::CancellationSource::new(),
             supervisor: self.clone(),
             process,
@@ -175,12 +200,14 @@ impl ExtensionHostSupervisor {
 /// Exact advertised process incarnation and activation generation required for one dispatch.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct ExtensionInvocationTarget {
+    pub registration_generation: Option<u64>,
     pub incarnation: NonZeroU64,
     pub activation_generation: NonZeroU64,
 }
 
 /// In-flight invocation that can be cancelled from another thread while `wait` is blocked.
 pub struct ExtensionInvocationHandle {
+    registration: crate::RegistrationDescriptor,
     client_cancellation: ash_async_utils::CancellationSource,
     supervisor: ExtensionHostSupervisor,
     process: Arc<dyn ExtensionHostProcess>,
@@ -193,6 +220,16 @@ pub struct ExtensionInvocationHandle {
 }
 
 impl ExtensionInvocationHandle {
+    fn registration_is_current(&self) -> bool {
+        self.supervisor.inner.state.lock().is_ok_and(|state| {
+            state.incarnation == self.incarnation
+                && state
+                    .registrations
+                    .iter()
+                    .any(|registration| registration == &self.registration)
+        })
+    }
+
     pub fn request_id(&self) -> u64 {
         self.request_id
     }
@@ -244,6 +281,9 @@ impl ExtensionInvocationHandle {
             .take()
             .ok_or(ExtensionHostError::HostExited)?;
         let response = loop {
+            if !self.registration_is_current() {
+                let _ = self.cancel(CancelReason::Caller);
+            }
             let remaining = self.deadline.saturating_duration_since(Instant::now());
             if remaining.is_zero() || self.cancelled.load(Ordering::Acquire) {
                 let reason = if self.cancelled.load(Ordering::Acquire) {
@@ -339,6 +379,11 @@ impl ExtensionInvocationHandle {
                 | Err(ExtensionHostError::HostExited)
                 | Err(ExtensionHostError::InvalidProtocol(_))
         );
+        let result = if !self.registration_is_current() {
+            Err(ExtensionHostError::RegistrationNotFound)
+        } else {
+            result
+        };
         if requires_recovery {
             let _ = self.process.terminate();
         }

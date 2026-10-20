@@ -16,4 +16,5 @@ export namespace Schemas {
 	export const vscodeRemote = 'vscode-remote';
 	export const vscodeRemoteResource = 'vscode-remote-resource';
 	export const vscodeNotebookCell = 'vscode-notebook-cell';
+	export const vscodeChatEditor = 'ash-chat-editor';
 }

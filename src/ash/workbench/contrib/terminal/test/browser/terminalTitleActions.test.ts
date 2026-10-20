@@ -195,7 +195,7 @@ test("Terminal profile menu launches the selected shell profile", async () => {
 	assert.equal(activeTerminal.getAttribute('aria-expanded'), 'true');
 	assert.ok(shownProfileActions.find(action => action.id === TerminalCommandId.Rename));
 	assert.ok(shownProfileActions.find(action => action.id === TerminalCommandId.Split));
-	assert.equal(shownProfileActions.some(action => action.id === TerminalCommandId.Relaunch), false);
+	assert.equal(shownProfileActions.some(action => action.id === TerminalCommandId.Relaunch), true);
 	await shownProfileActions.find(action => action.id === TerminalCommandId.Focus)!.run();
 	assert.equal(focusCount, 1);
 	activeTerminal.dispatchEvent(new browserEnvironment.window.MouseEvent('click', { bubbles: true, altKey: true }));
@@ -215,6 +215,11 @@ test("Terminal profile menu launches the selected shell profile", async () => {
 	assert.equal(shownProfileActions.some((action) => action.id.startsWith("ash.compositeBar.open.")), false);
 	await clearTerminal.run();
 	assert.equal(clearCount, 1);
+	titleActions.setActiveInstance({ ...activeInstance, state: 'reconnecting' }, 'title');
+	shownProfileActions = [];
+	toolbar.querySelector<HTMLButtonElement>('.ash-terminal-active-action .ash-action-label')!.click();
+	await Promise.resolve();
+	assert.equal(shownProfileActions.some(action => action.id === TerminalCommandId.Relaunch), false, 'Reattachment must preserve its existing process');
 	titleActions.setActiveInstance(activeInstance, "list");
 	assert.equal(toolbar.querySelector(".ash-terminal-active-action"), null);
 	assert.equal(toolbar.textContent?.includes("Kill Terminal"), false);
@@ -405,7 +410,7 @@ suite('Terminal context command lifecycle', () => {
 			profile: { profileId: 'shell', title: 'Shell', isDefault: true }, exitCode: 0,
 			onDidWriteData: Event.None, onDidChangeCommandStatus: Event.None, onDidExit: Event.None, onDidChangeState: Event.None,
 			xtermReadyPromise: Promise.resolve(undefined), getContribution: () => null,
-			start() { }, attachToElement() { }, detachFromElement() { }, async sendSignal() { }, async sendText() { }, async sendPath() { throw new Error('Title fixture does not insert file paths'); }, async processBinary() { }, resize() { },
+			start() { }, attachToElement() { }, detachFromElement() { }, async setAutoReplies() { }, async sendSignal() { }, async sendText() { }, async sendPath() { throw new Error('Title fixture does not insert file paths'); }, async processBinary() { }, resize() { },
 			async reuseTerminal() { }, async close() { }, clearBuffer: () => { effects.push(['clear', instanceId]); },
 			refreshProperty: async () => { throw new Error("No OS process in action fixture"); }, serializeState: async () => { throw new Error("No process checkpoint in action fixture"); },
 		} satisfies ITerminalInstance);

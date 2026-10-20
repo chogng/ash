@@ -30,6 +30,8 @@ export function createApi(configuration, initialization) {
 	let environmentAdmitted = false;
 	let speechAdmitted = false;
 	let terminalLinksAdmitted = false;
+	let terminalCompletionsAdmitted = false;
+	let terminalQuickFixesAdmitted = false;
 	function requireEnvironmentCapability() {
 		if (!environmentAdmitted) throw new Error('Terminal environment collections require the admitted terminal provider capability');
 	}
@@ -1402,6 +1404,12 @@ export function createApi(configuration, initialization) {
 				return registration;
 			}
 		}),
+		TerminalCompletionItem: class TerminalCompletionItem { constructor(label, replacementRange, kind) { this.label = label; this.replacementRange = replacementRange; this.kind = kind; } },
+		TerminalCompletionList: class TerminalCompletionList { constructor(items, resourceOptions) { this.items = items; this.resourceOptions = resourceOptions; } },
+		TerminalCompletionItemKind: Object.freeze({ File: 0, Folder: 1, Method: 2, Alias: 3, Argument: 4, Option: 5, OptionValue: 6, Flag: 7, SymbolicLinkFile: 8, SymbolicLinkFolder: 9, ScmCommit: 10, ScmBranch: 11, ScmTag: 12, ScmStash: 13, ScmRemote: 14, PullRequest: 15, PullRequestDone: 16 }),
+		TerminalQuickFixTerminalCommand: class TerminalQuickFixTerminalCommand { constructor(terminalCommand, shouldExecute) { this.terminalCommand = terminalCommand; this.shouldExecute = shouldExecute; } },
+		TerminalQuickFixOpener: class TerminalQuickFixOpener { constructor(uri) { this.uri = uri; } },
+		TerminalOutputAnchor: Object.freeze({ Top: 0, Bottom: 1 }),
 		TerminalProfile: class TerminalProfile { constructor(options) { this.options = options; } },
 		ash: ashApi,
 		env: contract('env', { get language() { return windowFacts().language ?? 'en'; } }),
@@ -1649,6 +1657,33 @@ export function createApi(configuration, initialization) {
 			},
 		}),
 		window: contract('window', {
+			registerTerminalCompletionProvider(provider, ...triggerCharacters) {
+				if (!terminalCompletionsAdmitted) throw new Error('Terminal completions require the admitted terminalCompletionProvider capability');
+				if (typeof provider?.provideTerminalCompletions !== 'function') throw new TypeError('Invalid terminal completion provider');
+				const terminals = new Map();
+				const registration = ashTerminals.registerTerminalCompletionProvider(`vscode.terminalCompletions.${++providerSequence}`, triggerCharacters, (context, payload) => invoke(async () => {
+					let entry = terminals.get(payload.terminal.id);
+					if (!entry) {
+						entry = { snapshot: payload.terminal };
+						entry.terminal = contract('Terminal', { get name() { return entry.snapshot.name; }, get processId() { return Promise.resolve(entry.snapshot.processId ?? undefined); } });
+						terminals.set(payload.terminal.id, entry);
+						if (terminals.size > 256) terminals.delete(terminals.keys().next().value);
+					}
+					entry.snapshot = payload.terminal;
+					const result = await provider.provideTerminalCompletions(entry.terminal, { commandLine: payload.commandLine, cursorIndex: payload.cursorIndex }, context.cancellationToken);
+					if (!result?.resourceOptions) return result;
+					return { items: result.items, resourceOptions: { ...result.resourceOptions, cwd: result.resourceOptions.cwd.toString() } };
+				}));
+				return new Disposable(() => { registration.dispose(); terminals.clear(); });
+			},
+			registerTerminalQuickFixProvider(id, provider) {
+				if (!terminalQuickFixesAdmitted) throw new Error('Terminal quick fixes require the admitted terminalQuickFixProvider capability');
+				const selector = configuration.manifest?.contributes?.terminalQuickFixes?.find(value => value.id === id);
+				if (!selector || typeof provider?.provideTerminalQuickFixes !== 'function') throw new TypeError('Terminal quick fixes require a declared selector and provider');
+				return ashTerminals.registerTerminalQuickFixProvider(`vscode.terminalQuickFixes.${++providerSequence}`, id, selector,
+					(context, match) => invoke(() => provider.provideTerminalQuickFixes(match, context.cancellationToken)),
+					(_context, command) => invoke(() => api.commands.executeCommand(command.command, ...(command.arguments ?? []))));
+			},
 			registerTerminalLinkProvider(provider) {
 				if (!terminalLinksAdmitted) throw new Error('Terminal link providers require the admitted terminalLinkProvider capability');
 				if (typeof provider?.provideTerminalLinks !== 'function' || typeof provider?.handleTerminalLink !== 'function') throw new TypeError('Invalid terminal link provider');
@@ -1801,6 +1836,8 @@ export function createApi(configuration, initialization) {
 			ensureOutputEvents();
 			environmentAdmitted = capabilities.includes('terminalProfileProvider');
 			terminalLinksAdmitted = capabilities.includes('terminalLinkProvider');
+			terminalCompletionsAdmitted = capabilities.includes('terminalCompletionProvider');
+			terminalQuickFixesAdmitted = capabilities.includes('terminalQuickFixProvider');
 			speechAdmitted = capabilities.includes('speechProvider');
 			if (environmentAdmitted) subscriptions.push(ashTerminals.registerEnvironmentVariableCollection('vscode.terminalEnvironment', snapshotEnvironment));
 			if (initialization) subscriptions.push(ensureWorkspaceEvents());

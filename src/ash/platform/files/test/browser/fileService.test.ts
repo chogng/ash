@@ -675,7 +675,7 @@ test('FileService disposal releases registrations without disposing caller-owned
 });
 
 test('FileService copies directory bytes across file system providers', async () => {
-	using workspace = new TestFileProvider('workspace');
+	using workspace = new InMemoryFileSystemProvider();
 	using virtual = new TestFileProvider('virtual');
 	using service = new FileService();
 	using workspaceRegistration = service.registerProvider('file', workspace);
@@ -694,7 +694,7 @@ test('FileService copies directory bytes across file system providers', async ()
 });
 
 test('FileService removes an incomplete cross-provider copy', async () => {
-	using workspace = new TestFileProvider('workspace');
+	using workspace = new InMemoryFileSystemProvider();
 	using virtual = new TestFileProvider('virtual');
 	using service = new FileService();
 	using workspaceRegistration = service.registerProvider('file', workspace);
@@ -716,6 +716,44 @@ test('FileService removes an incomplete cross-provider copy', async () => {
 	await assert.rejects(workspace.stat(URI.joinPath(target, 'first.bin')), FileNotFoundError);
 	assert.equal((await virtual.stat(first)).kind, FileKind.File);
 });
+
+for (const failure of ['read', 'publish'] as const) {
+	test(`FileService preserves a concurrent directory copy when another copy fails to ${failure}`, async () => {
+		using source = new InMemoryFileSystemProvider();
+		using destination = new InMemoryFileSystemProvider();
+		using service = new FileService();
+		using from = service.registerProvider('source', source);
+		using to = service.registerProvider('target', destination);
+		const first = URI.parse('source:/first');
+		const second = URI.parse('source:/second');
+		const target = URI.parse('target:/copied');
+		await destination.createDirectory(URI.parse('target:/'));
+		for (const folder of [first, second]) {
+			await source.createDirectory(folder);
+			await source.writeFile(URI.joinPath(folder, 'file.bin'), new Uint8Array([folder === first ? 1 : 2]), { create: true, overwrite: false });
+		}
+		const reading = new DeferredPromise<void>();
+		const resume = new DeferredPromise<void>();
+		const read = source.readFile.bind(source);
+		source.readFile = async resource => {
+			if (resource.path.startsWith('/first/')) {
+				void reading.complete();
+				await resume.p;
+				if (failure === 'read') throw new Error('source read failed');
+			}
+			return read(resource);
+		};
+		const copying = service.copy(first, target);
+		const rejected = assert.rejects(copying, failure === 'read' ? /source read failed/ : /exists/);
+		try {
+			await reading.p;
+			await service.copy(second, target);
+		} finally { await resume.complete(); }
+		await rejected;
+		assert.deepEqual((await destination.readFile(URI.joinPath(target, 'file.bin'))).bytes, new Uint8Array([2]));
+		assert.deepEqual((await destination.readDirectory(URI.parse('target:/'))).map(entry => entry.name), ['copied']);
+	});
+}
 
 suite('FileService capability and watch ownership', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();
@@ -1164,13 +1202,12 @@ test('FileService rolls back a failed mounted directory copy without replaying n
 	const sourceHost = copyConnection(sourceStorage, sourceRoot, 'source');
 	const targetHost = copyConnection(targetStorage, targetRoot, 'target');
 	const failure = new Error('Publication failed after storage accepted the bytes');
-	const failedPath = 'copied/second.bin';
 	const write = targetHost.connection.api.writeBinaryFile;
 	const attempts: string[] = [];
 	targetHost.connection.api.writeBinaryFile = async params => {
-		attempts.push(params.path);
+		attempts.push(params.path.split('/').at(-1)!);
 		const written = await write(params);
-		if (params.path === failedPath) { throw failure; }
+		if (params.path.endsWith('/second.bin')) { throw failure; }
 		return written;
 	};
 	using provider = new AgentHostFileSystemProvider({ api: unavailableFileApi(), resourceApi: unavailableResourceApi() });
@@ -1186,8 +1223,9 @@ test('FileService rolls back a failed mounted directory copy without replaying n
 	const target = URI.joinPath(targetRoot, 'copied');
 
 	await assert.rejects(files.copy(source, target), error => error === failure);
-	assert.deepEqual(attempts, ['copied/first.bin', failedPath]);
+	assert.deepEqual(attempts, ['first.bin', 'second.bin']);
 	await assert.rejects(targetStorage.stat(target), FileNotFoundError);
+	assert.deepEqual(await targetStorage.readDirectory(targetRoot), []);
 	assert.equal((await sourceStorage.readDirectory(source)).length, 2);
 	assert.equal(sourceHost.nativeCopies + targetHost.nativeCopies, 0);
 	assert.equal(sourceHost.resources.size + targetHost.resources.size, 0);
@@ -1274,6 +1312,7 @@ function copyConnection(storage: InMemoryFileSystemProvider, root: URI, id: stri
 				return { metadata: metadata(written.stat), revision: written.revision };
 			},
 			createDirectory: async params => metadata(await storage.createDirectory(resource(params))),
+			rename: async params => storage.rename(resource({ ...params, path: params.source }), resource({ ...params, path: params.target }), params.existing),
 			delete: async params => storage.delete(resource(params), params.missing, params.mode),
 			copy: async () => { nativeCopies++; throw new Error('Mounted connection must use generic copying'); },
 		},

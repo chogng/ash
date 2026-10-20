@@ -174,9 +174,8 @@ pub(crate) fn deployments(
             ExtensionCapability::TerminalProfileProvider,
             ExtensionCapability::DebugAdapter,
         ];
-        match javascript_speech_provider_requested(&source.host_path()) {
-            Ok(true) => capabilities.push(ExtensionCapability::SpeechProvider),
-            Ok(false) => {}
+        match javascript_proposed_capabilities_requested(&source.host_path()) {
+            Ok(requested) => capabilities.extend(requested),
             Err(message) => activation_failure = Some(message),
         }
         let binding = ExtensionsEditorExtensionBinding {
@@ -516,7 +515,9 @@ pub(crate) fn javascript_activation_plan(root: &std::path::Path) -> Result<Activ
 }
 
 /// Standard proposed-API metadata requests a ceiling; the original package policy grants it.
-fn javascript_speech_provider_requested(root: &std::path::Path) -> Result<bool, String> {
+fn javascript_proposed_capabilities_requested(
+    root: &std::path::Path,
+) -> Result<Vec<ExtensionCapability>, String> {
     let path = root.join("package.json");
     let metadata = std::fs::symlink_metadata(&path).map_err(|_| "missing extension manifest")?;
     if !metadata.is_file() || metadata.len() > 4 * 1024 * 1024 {
@@ -526,13 +527,13 @@ fn javascript_speech_provider_requested(root: &std::path::Path) -> Result<bool, 
         serde_json::from_slice(&std::fs::read(path).map_err(|_| "missing extension manifest")?)
             .map_err(|_| "invalid extension manifest")?;
     let Some(proposals) = manifest.get("enabledApiProposals") else {
-        return Ok(false);
+        return Ok(Vec::new());
     };
     let proposals = proposals
         .as_array()
         .filter(|values| values.len() <= 128)
         .ok_or("invalid proposed API declarations")?;
-    let mut speech = false;
+    let mut requested = Vec::new();
     let mut unique = BTreeSet::new();
     for proposal in proposals {
         let name = proposal
@@ -544,9 +545,18 @@ fn javascript_speech_provider_requested(root: &std::path::Path) -> Result<bool, 
         if !unique.insert(name) {
             return Err("duplicate proposed API declaration".into());
         }
-        speech |= name == "speech";
+        match name {
+            "speech" => requested.push(ExtensionCapability::SpeechProvider),
+            "terminalCompletionProvider" => {
+                requested.push(ExtensionCapability::TerminalCompletionProvider)
+            }
+            "terminalQuickFixProvider" => {
+                requested.push(ExtensionCapability::TerminalQuickFixProvider)
+            }
+            _ => {}
+        }
     }
-    Ok(speech)
+    Ok(requested)
 }
 
 fn activation_plan(manifest: &serde_json::Value) -> Result<ActivationPlan, String> {
@@ -557,6 +567,20 @@ fn activation_plan(manifest: &serde_json::Value) -> Result<ActivationPlan, Strin
             .into_iter()
             .collect(),
     };
+    for proposal in manifest
+        .get("enabledApiProposals")
+        .and_then(serde_json::Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter_map(serde_json::Value::as_str)
+    {
+        if matches!(
+            proposal,
+            "terminalCompletionProvider" | "terminalQuickFixProvider"
+        ) {
+            events.insert(format!("onDemand:{proposal}"));
+        }
+    }
     let mut commands = Vec::new();
     if let Some(entries) = manifest.pointer("/contributes/commands") {
         for entry in entries.as_array().ok_or("invalid command contributions")? {
@@ -921,6 +945,8 @@ enum ManifestCapability {
     TaskProvider,
     TerminalProfileProvider,
     TerminalLinkProvider,
+    TerminalCompletionProvider,
+    TerminalQuickFixProvider,
     TestProfileProvider,
     DataChannel,
     SpeechProvider,
@@ -938,6 +964,8 @@ impl ManifestCapability {
             Self::TaskProvider => ExtensionCapability::TaskProvider,
             Self::TerminalProfileProvider => ExtensionCapability::TerminalProfileProvider,
             Self::TerminalLinkProvider => ExtensionCapability::TerminalLinkProvider,
+            Self::TerminalCompletionProvider => ExtensionCapability::TerminalCompletionProvider,
+            Self::TerminalQuickFixProvider => ExtensionCapability::TerminalQuickFixProvider,
             Self::TestProfileProvider => ExtensionCapability::TestProfileProvider,
             Self::DataChannel => ExtensionCapability::DataChannel,
             Self::SpeechProvider => ExtensionCapability::SpeechProvider,
@@ -955,6 +983,8 @@ impl ManifestCapability {
             Self::TaskProvider => "taskProvider",
             Self::TerminalProfileProvider => "terminalProfileProvider",
             Self::TerminalLinkProvider => "terminalLinkProvider",
+            Self::TerminalCompletionProvider => "terminalCompletionProvider",
+            Self::TerminalQuickFixProvider => "terminalQuickFixProvider",
             Self::TestProfileProvider => "testProfileProvider",
             Self::DataChannel => "dataChannel",
             Self::SpeechProvider => "speechProvider",

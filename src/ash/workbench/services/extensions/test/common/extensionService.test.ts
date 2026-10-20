@@ -1151,3 +1151,37 @@ test('custom editor declarations accept MIME-only channel resources and reject e
 	assert.deepEqual(parse({ mimeType: 'application/vnd.ash.channel-notes+json' }).contributes.customEditors[0]!.selector, [{ mimeType: 'application/vnd.ash.channel-notes+json' }]);
 	assert.throws(() => parse({}), /filename pattern or MIME type/);
 });
+
+test('Plugin executable binding survives catalog projection and refresh without replacing the resource digest', async () => {
+	const packageDigest = `sha256:${'c'.repeat(64)}`;
+	let runtimeBinding = { runtimeId: 'acme/terminal-pairing-producer:producer', packageDigest };
+	const manifestJson = JSON.stringify({ publisher: 'ash', name: 'demo', version: '1.0.0' });
+	using service = new AppServerExtensionService({
+		api: {
+			list: async () => normalizeExtensionCatalog({ generation: 1, diagnostics: [], extensions: [{ ...descriptor, sourceKind: 'plugin', manifestJson, manifestSha256: digestText(manifestJson), runtimeBinding }] }),
+			resources: new ExtensionResourceLoaderService(async () => { throw new Error('No contribution resources'); }),
+		}
+	}, createEmptyTestLanguagePacks(), adapters);
+	await service.start();
+	assert.deepEqual(service.currentCatalog.extensions[0].runtimeBinding, runtimeBinding);
+	assert.equal(service.currentCatalog.extensions[0].packageSha256, descriptor.packageSha256);
+	assert.ok(Object.isFrozen(service.currentCatalog.extensions[0].runtimeBinding));
+	// A source authority change must publish even if the declarative package and
+	// snapshot generation remain identical.
+	runtimeBinding = { ...runtimeBinding, packageDigest: `sha256:${'d'.repeat(64)}` };
+	await service.reload();
+	assert.deepEqual(service.currentCatalog.extensions[0].runtimeBinding, runtimeBinding);
+	assert.equal(service.currentCatalog.extensions[0].packageSha256, descriptor.packageSha256);
+});
+
+test('catalog boundary rejects malformed or non-Plugin executable bindings', () => {
+	const valid = { runtimeId: 'acme/terminal-pairing-producer:producer', packageDigest: `sha256:${'c'.repeat(64)}` };
+	const catalog = (runtimeBinding: unknown, sourceKind = 'plugin') => ({ generation: 1, diagnostics: [], extensions: [{ ...descriptor, sourceKind, runtimeBinding }] });
+	for (const binding of [null, {}, { ...valid, unknown: true }, { ...valid, runtimeId: '' }, { ...valid, runtimeId: 'x'.repeat(257) }, { ...valid, runtimeId: 'acme\nproducer' }, { ...valid, packageDigest: 'sha256:invalid' }]) {
+		assert.throws(() => normalizeExtensionCatalog(catalog(binding)), TypeError);
+	}
+	for (const sourceKind of ['builtIn', 'user', 'registry']) {
+		assert.throws(() => normalizeExtensionCatalog(catalog(valid, sourceKind)), /Plugin source/);
+	}
+	assert.deepEqual(normalizeExtensionCatalog(catalog(valid)).extensions[0].runtimeBinding, valid);
+});

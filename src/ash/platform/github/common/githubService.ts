@@ -161,6 +161,10 @@ export interface GitHubCommit {
 	readonly deletions: number;
 }
 export interface GitHubCheckRun { readonly id: number; readonly name: string; readonly status: string; readonly conclusion: string | null; readonly detailsUrl: string | null; }
+export interface GitHubCheckAnnotation { readonly path: string; readonly startLine: number; readonly endLine: number; readonly annotationLevel: string; readonly message: string; readonly title: string | null; }
+export interface GitHubCheckDetails { readonly title: string; readonly summary: string; readonly text: string; readonly annotations: readonly GitHubCheckAnnotation[]; readonly nextPage: number | null; readonly actionsJob: boolean; }
+/** Captures both the PR head and its check; operations reject a moved PR. */
+export interface GitHubCheckTarget { readonly number: number; readonly commit: string; readonly checkId: number; }
 export interface GitHubChecks { readonly state: string; readonly statuses: readonly GitHubCommitStatus[]; readonly checks: readonly GitHubCheckRun[]; readonly nextPage: number | null; }
 export interface GitHubLabel { readonly name: string; readonly color: string; }
 
@@ -216,6 +220,9 @@ export interface IGitHubService {
 	reviewPullRequest(repository: GitHubRepository, number: number, review: GitHubReview, token?: CancellationToken): Promise<GitHubPullRequestReview>;
 	mergePullRequest(repository: GitHubRepository, number: number, merge: GitHubMerge, token?: CancellationToken): Promise<GitHubMergeResult>;
 	enableAutoMerge(repository: GitHubRepository, number: number, merge: GitHubMerge, token?: CancellationToken): Promise<void>;
+	readCheckDetails(repository: GitHubRepository, target: GitHubCheckTarget, page: number, token?: CancellationToken): Promise<GitHubCheckDetails>;
+	readCheckLog(repository: GitHubRepository, target: GitHubCheckTarget, token?: CancellationToken): Promise<string>;
+	rerunCheck(repository: GitHubRepository, target: GitHubCheckTarget, token?: CancellationToken): Promise<void>;
 	readChecks(repository: GitHubRepository, commit: string, page: number, token?: CancellationToken): Promise<GitHubChecks>;
 	listLabels(repository: GitHubRepository, token?: CancellationToken): Promise<readonly GitHubLabel[]>;
 	createLabel(repository: GitHubRepository, label: GitHubLabel, token?: CancellationToken): Promise<GitHubLabel>;

@@ -4728,3 +4728,358 @@ fn browser_workspace_explicit_revocation_retires_exact_handles_and_narrows_rollb
             .is_err()
     );
 }
+
+#[test]
+fn web_session_native_proofs_follow_readonly_policy_and_never_regain_removed_permissions() {
+    let dir = TestDir::new("native-web-policy", "team.ash-workspace");
+    let config = Arc::new(ConfigStore::open(dir.path.join("permissions.sqlite3")).unwrap());
+    let server = server()
+        .with_config_store(Arc::clone(&config))
+        .with_local_env_host(None, DirGrantPolicy::WebSession(Arc::clone(&config)))
+        .unwrap();
+    let uri = url::Url::from_file_path(dir.path.join("team.ash-workspace"))
+        .unwrap()
+        .to_string();
+    server
+        .bind_web_workspace(Some(uri), vec![(dir.root(), String::new())])
+        .unwrap();
+    let old_files = server.file_system_service_for(None).unwrap();
+    let old_exact = server
+        .file_system_service_for(Some("web-workspace-configuration"))
+        .unwrap();
+    old_files
+        .write_file(Path::new("saved.txt"), b"allowed", 1024)
+        .unwrap();
+    old_exact
+        .write_file(Path::new("team.ash-workspace"), b"metadata", 1024)
+        .unwrap();
+    let native = server
+        .env_runtime
+        .read()
+        .unwrap()
+        .selected_grant
+        .clone()
+        .unwrap();
+    assert!(native.permissions().allows(Permission::WriteFiles));
+    for permission in [
+        Permission::ExecuteCommands,
+        Permission::MutateRepository,
+        Permission::LoadConfig,
+        Permission::DiscoverHooks,
+        Permission::DiscoverPlugins,
+    ] {
+        assert!(!native.permissions().allows(permission));
+    }
+    assert!(
+        config
+            .read_snapshot()
+            .unwrap()
+            .values
+            .directory_grants
+            .entries
+            .is_empty()
+    );
+    let mut rollback = server.snapshot_web_workspace().unwrap();
+    let restricted = config
+        .apply(ConfigCommandRequest {
+            command_id: CommandId::new("native-readonly").unwrap(),
+            expected_revision: ConfigRevision::INITIAL,
+            command: UserConfigCommand::SetDirectoryGrant {
+                dir: dir.root().id(),
+                permissions: inspection_permissions(),
+                display_path: None,
+            },
+        })
+        .unwrap();
+    // A real filesystem boundary observes policy without waiting for the profile watcher.
+    let readonly = server.file_system_service_for(None).unwrap();
+    let readonly_exact = server
+        .file_system_service_for(Some("web-workspace-configuration"))
+        .unwrap();
+    assert!(
+        old_files
+            .write_file(Path::new("saved.txt"), b"stale", 1024)
+            .is_err()
+    );
+    assert!(
+        old_exact
+            .write_file(Path::new("team.ash-workspace"), b"stale", 1024)
+            .is_err()
+    );
+    assert!(
+        readonly
+            .write_file(Path::new("saved.txt"), b"readonly", 1024)
+            .is_err()
+    );
+    assert_eq!(
+        readonly.read_file(Path::new("saved.txt"), 1024).unwrap(),
+        b"allowed"
+    );
+    assert!(
+        readonly_exact
+            .write_file(Path::new("team.ash-workspace"), b"readonly", 1024)
+            .is_err()
+    );
+    let forgotten = config
+        .apply(ConfigCommandRequest {
+            command_id: CommandId::new("native-forget").unwrap(),
+            expected_revision: restricted.revision,
+            command: UserConfigCommand::ForgetDirectoryGrant {
+                dir: dir.root().id(),
+            },
+        })
+        .unwrap();
+    assert!(
+        server
+            .file_system_service_for(None)
+            .unwrap()
+            .write_file(Path::new("saved.txt"), b"unset", 1024)
+            .is_err()
+    );
+    server.restore_web_workspace(&mut rollback).unwrap();
+    assert!(
+        server
+            .file_system_service_for(None)
+            .unwrap()
+            .write_file(Path::new("saved.txt"), b"rollback", 1024)
+            .is_err()
+    );
+    assert!(
+        server
+            .file_system_service_for(Some("web-workspace-configuration"))
+            .unwrap()
+            .write_file(Path::new("team.ash-workspace"), b"rollback", 1024)
+            .is_err()
+    );
+    let emptied = config
+        .apply(ConfigCommandRequest {
+            command_id: CommandId::new("native-empty").unwrap(),
+            expected_revision: forgotten.revision,
+            command: UserConfigCommand::SetDirectoryGrant {
+                dir: dir.root().id(),
+                permissions: Permissions::default(),
+                display_path: None,
+            },
+        })
+        .unwrap();
+    let _ = server.file_system_service_for(Some("web-workspace-configuration"));
+    assert!(
+        readonly_exact
+            .read_file(Path::new("team.ash-workspace"), 1024)
+            .is_err()
+    );
+    config
+        .apply(ConfigCommandRequest {
+            command_id: CommandId::new("native-forget-empty").unwrap(),
+            expected_revision: emptied.revision,
+            command: UserConfigCommand::ForgetDirectoryGrant {
+                dir: dir.root().id(),
+            },
+        })
+        .unwrap();
+    assert!(
+        server
+            .file_system_service_for(Some("web-workspace-configuration"))
+            .is_err()
+    );
+    assert!(
+        server
+            .file_system_service_for(None)
+            .unwrap()
+            .read_file(Path::new("saved.txt"), 1024)
+            .is_err()
+    );
+    server.close_web_workspace();
+    assert!(readonly.read_file(Path::new("saved.txt"), 1024).is_err());
+}
+
+#[test]
+fn web_session_native_approval_respects_existing_empty_and_readonly_user_grants() {
+    let dir = TestDir::new("native-web-existing", "readable.txt");
+    let config = Arc::new(ConfigStore::open(dir.path.join("permissions.sqlite3")).unwrap());
+    let readonly = config
+        .apply(ConfigCommandRequest {
+            command_id: CommandId::new("existing-web-readonly").unwrap(),
+            expected_revision: ConfigRevision::INITIAL,
+            command: UserConfigCommand::SetDirectoryGrant {
+                dir: dir.root().id(),
+                permissions: inspection_permissions(),
+                display_path: None,
+            },
+        })
+        .unwrap();
+    let server = server()
+        .with_config_store(Arc::clone(&config))
+        .with_local_env_host(None, DirGrantPolicy::WebSession(Arc::clone(&config)))
+        .unwrap();
+    server
+        .bind_web_workspace(None, vec![(dir.root(), String::new())])
+        .unwrap();
+    let files = server.file_system_service_for(None).unwrap();
+    assert!(files.read_file(Path::new("readable.txt"), 1024).is_ok());
+    assert!(
+        files
+            .write_file(Path::new("saved.txt"), b"denied", 1024)
+            .is_err()
+    );
+    config
+        .apply(ConfigCommandRequest {
+            command_id: CommandId::new("existing-web-empty").unwrap(),
+            expected_revision: readonly.revision,
+            command: UserConfigCommand::SetDirectoryGrant {
+                dir: dir.root().id(),
+                permissions: Permissions::default(),
+                display_path: None,
+            },
+        })
+        .unwrap();
+    let proof = server.approve_web_directory(dir.root()).unwrap();
+    assert_eq!(proof.permissions(), &Permissions::default());
+    assert_eq!(
+        config
+            .read_snapshot()
+            .unwrap()
+            .values
+            .directory_grants
+            .explicit_permissions_for(&dir.root().id()),
+        Some(&Permissions::default())
+    );
+}
+
+#[test]
+fn desktop_host_configuration_authority_keeps_its_existing_scope() {
+    let dir = TestDir::new("desktop-host-authority", "readable.txt");
+    let config = Arc::new(ConfigStore::open(dir.path.join("permissions.sqlite3")).unwrap());
+    config
+        .apply(ConfigCommandRequest {
+            command_id: CommandId::new("desktop-readonly").unwrap(),
+            expected_revision: ConfigRevision::INITIAL,
+            command: UserConfigCommand::SetDirectoryGrant {
+                dir: dir.root().id(),
+                permissions: inspection_permissions(),
+                display_path: None,
+            },
+        })
+        .unwrap();
+    let server = server()
+        .with_config_store(Arc::clone(&config))
+        .with_local_env_host(None, DirGrantPolicy::UserConfig(Arc::clone(&config)))
+        .unwrap();
+    server
+        .initialize_local_dir_root(dir.path.clone(), InitialDirGrantPolicy::HostConfiguration)
+        .unwrap();
+    server
+        .env_runtime_control()
+        .unwrap()
+        .reconcile_user_directory_grants(&config.read_snapshot().unwrap().values)
+        .unwrap();
+    let grant = server
+        .env_runtime
+        .read()
+        .unwrap()
+        .selected_grant
+        .clone()
+        .unwrap();
+    assert!(grant.permissions().allows(Permission::ExecuteCommands));
+    server
+        .file_system_service_for(None)
+        .unwrap()
+        .write_file(Path::new("desktop.txt"), b"host authority", 1024)
+        .unwrap();
+}
+
+#[test]
+fn web_session_exact_watcher_observed_withdrawal_cannot_revive_after_forget() {
+    for retain_write in [true, false] {
+        let first = TestDir::new("native-watcher-withdrawal", "team.ash-workspace");
+        let second = TestDir::new("native-watcher-other", "other.txt");
+        let profile = tempfile::tempdir().unwrap();
+        let config =
+            Arc::new(ConfigStore::open(profile.path().join("permissions.sqlite3")).unwrap());
+        let server = server()
+            .with_config_store(Arc::clone(&config))
+            .with_local_env_host(None, DirGrantPolicy::WebSession(Arc::clone(&config)))
+            .unwrap();
+        let path = first.path.join("team.ash-workspace");
+        let uri = url::Url::from_file_path(&path).unwrap().to_string();
+        server
+            .bind_web_workspace(
+                Some(uri.clone()),
+                vec![
+                    (first.root(), String::new()),
+                    (second.root(), String::new()),
+                ],
+            )
+            .unwrap();
+        server
+            .bind_web_workspace(Some(uri), vec![(second.root(), String::new())])
+            .unwrap();
+        let exact = server
+            .file_system_service_for(Some("web-workspace-configuration"))
+            .unwrap();
+        assert!(
+            exact
+                .read_file(Path::new("team.ash-workspace"), 1024)
+                .is_ok()
+        );
+        let permissions = Permissions::new(
+            [Permission::ReadFiles, Permission::BrowseFiles]
+                .into_iter()
+                .chain(retain_write.then_some(Permission::WriteFiles)),
+        );
+        let restricted = config
+            .apply(ConfigCommandRequest {
+                command_id: CommandId::new("watcher-restrict").unwrap(),
+                expected_revision: ConfigRevision::INITIAL,
+                command: UserConfigCommand::SetDirectoryGrant {
+                    dir: first.root().id(),
+                    permissions,
+                    display_path: None,
+                },
+            })
+            .unwrap();
+        std::fs::write(&path, "after restriction").unwrap();
+        // There is no profile reconciler in this fixture, and no AppServer filesystem request
+        // runs before Forget. This proves that the real watcher observed and retired its proof.
+        let deadline = Instant::now() + Duration::from_secs(10);
+        while exact
+            .read_file(Path::new("team.ash-workspace"), 1024)
+            .is_ok()
+        {
+            assert!(
+                Instant::now() < deadline,
+                "exact watcher did not observe withdrawal (retain_write={retain_write})"
+            );
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        config
+            .apply(ConfigCommandRequest {
+                command_id: CommandId::new("watcher-forget").unwrap(),
+                expected_revision: restricted.revision,
+                command: UserConfigCommand::ForgetDirectoryGrant {
+                    dir: first.root().id(),
+                },
+            })
+            .unwrap();
+        // Watch withdrawal conservatively retires this detached exact-file proof, including
+        // its Read capability. Only another explicit workspace binding can restore that scope.
+        assert!(
+            exact
+                .read_file(Path::new("team.ash-workspace"), 1024)
+                .is_err()
+        );
+        assert!(
+            exact
+                .write_file(Path::new("team.ash-workspace"), b"stale write", 1024)
+                .is_err()
+        );
+        assert!(
+            server
+                .file_system_service_for(Some("web-workspace-configuration"))
+                .is_err()
+        );
+        assert!(server.resolve_file_path(&path).is_err());
+        assert_eq!(std::fs::read(&path).unwrap(), b"after restriction");
+        server.close_web_workspace();
+    }
+}

@@ -93,7 +93,7 @@ suite('reconnectable terminal operations after retirement', () => {
 	});
 
 	for (const retirement of ['close', 'dispose', 'replacement'] as const) {
-		for (const operation of ['write', 'read', 'resize', 'signal', 'processInfo', 'lease'] as const) {
+		for (const operation of ['write', 'read', 'resize', 'signal', 'autoReplies', 'processInfo', 'lease'] as const) {
 			test(`${operation} waiting for recovery cannot dispatch after ${retirement}`, async () => {
 				const supervisor = new TestSupervisor();
 				const reply = new DeferredPromise<void>();
@@ -110,6 +110,7 @@ suite('reconnectable terminal operations after retirement', () => {
 					read: () => service.read({ ...identity, afterSequence: 0, afterCommandSequence: 0, maxChunks: 1 }),
 					resize: () => service.resize({ ...identity, rows: 30, cols: 100 }),
 					signal: () => service.sendSignal({ ...identity, signal: 'interrupt' }),
+					autoReplies: () => service.setAutoReplies({ ...identity, rules: [{ matchText: 'Confirm?', reply: 'yes\r' }] }),
 					processInfo: () => service.getProcessInfo(identity),
 					lease: () => service.getReconnectLease(identity.terminalId),
 				};

@@ -140,6 +140,8 @@ docker run --rm --name ash-sandbox-linux --privileged --cpus 3 \
 
 本机 Docker Desktop 的 Debian 12 arm64 容器（LinuxKit 7.0.12、Rust 1.98.0、Bubblewrap 0.8.0、slirp4netns 1.2.0）在当前 checkout 运行上述脚本通过：`ash-sandboxing` 26 项、MXC 21 项单元与 6 项 PTY、执行服务 83 项单元与 18 项 RPC／PTY 集成测试，以及各包 check／全目标 warnings 均通过。另显式运行被默认忽略的 Linux Managed 代理、真实 Docker／GPG socket 四项和网络矩阵；socket 测试先通过 daemon `/_ping` 或 GPG `GETINFO version` 普通进程对照，再确认受限连接失败。GPG 分别覆盖旧变量、无旧变量及仅在最终 workload 环境提供 agent home。临时 agent 已清理，Docker socket 权限保持原值。
 
+2026-10-19 在仓库 Dev Container 的 Debian 12 Linux ARM64 环境与原 checkout 复跑 SDK pin `f1e8694b`：`ASH_BWRAP_PATH=/usr/bin/bwrap just test ash-mxc-sandbox --lib --test pty` 通过 21 项适配器测试和 6 项真实 PTY 测试，覆盖输入、resize、环境、退出、前台中断及回收。日志为 `.build/todo-linux-mxc-adapter-current.log`；该结果不替代独立 Linux／x64 或公网 IPv6 验收。
+
 该真实对照发现旧实现仅配置 `GPG_AGENT_INFO` 时才能阻止 GPG agent；取消该变量后，受限命令仍能访问真实 agent。宿主适配修复后四项 socket 测试通过，未改 SDK fork。原始失败记录为 `.build/mxc-linux-gpg-baseline.log`，最终完整记录为 `.build/mxc-linux-docker-acceptance-final.log`；macOS 的 `just verify ash-mxc-sandbox` 和 `just verify ash-sandboxing` 也通过。
 
 容器内安装 x64 Rust 目标后，以下全部测试目标编译检查通过，包含真实目标 C 工具链调用；记录为 `.build/mxc-linux-x64-check.log`。它没有执行 x64 测试程序，也没有编译完整 workspace。

@@ -1,6 +1,6 @@
 # Work / Code 工作台与文档编辑器目标设计
 
-> 状态：目标设计，部分基础已完成。当前只有 Code 工作台；普通 `.ash-doc` 文档、实验性的 Academic、共享模型、严格读取和旧存储迁移已接入。Work 界面组合、Chat 主画布及 Agent 结构化文档修改尚未实施。本文用于后续修改 Ash Desktop 的 Workbench 与 Stanza Editor；当前实现以 [Workbench 装配说明](../workbench.md)、[Stanza 目录说明](../../src/ash/editor/README.md)和[富文档设计](../../src/ash/editor/document-engine.md)为准。本文不宣称 Work 界面组合已经存在。
+> 状态：目标设计，部分基础已完成。当前只有 Code 工作台；普通 `.ash-doc` 文档、实验性的 Academic、共享模型、严格读取和旧存储迁移已接入。普通 Chat 已能将同一会话画布移入编辑器区域，与文档并排显示并在重启后恢复草稿；Work 界面组合及 Agent 结构化文档修改尚未实施。本文用于后续修改 Ash Desktop 的 Workbench 与 Stanza Editor；当前实现以 [Workbench 装配说明](../workbench.md)、[Stanza 目录说明](../../src/ash/editor/README.md)和[富文档设计](../../src/ash/editor/document-engine.md)为准。本文不宣称 Work 界面组合已经存在。
 
 ## 结论
 

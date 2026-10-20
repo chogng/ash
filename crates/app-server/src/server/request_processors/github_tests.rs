@@ -153,3 +153,111 @@ fn every_registered_github_network_method_has_execution() {
         }
     }
 }
+
+struct CiCredentials;
+impl github::GitHubCredentialProvider for CiCredentials {
+    fn authorization(&self) -> Result<github::GitHubAuthorization, ash_login::LoginError> {
+        Ok(github::GitHubAuthorization {
+            host: "github.com".into(),
+            account_id: "42".into(),
+            grant_id: "captured-grant".into(),
+        })
+    }
+    fn token(
+        &self,
+        grant: &github::GitHubAuthorization,
+    ) -> Result<ash_secrets::SecretValue, ash_login::LoginError> {
+        assert_eq!(grant.account_id, "42");
+        Ok(ash_secrets::SecretValue::new(b"fixture-only".to_vec()))
+    }
+}
+struct CiProvider;
+impl github::GitHubProvider for CiProvider {
+    fn call(
+        &self,
+        authorization: Option<github::GitHubAuthorization>,
+        request: github::GitHubRequest,
+        _: &CancellationToken,
+    ) -> github::Result<github::GitHubResponse> {
+        assert_eq!(authorization.unwrap().grant_id, "captured-grant");
+        match request {
+            github::GitHubRequest::CheckDetails {
+                repository,
+                number,
+                commit,
+                check_id,
+                page,
+            } => {
+                assert_eq!(
+                    (
+                        repository.owner.as_str(),
+                        repository.name.as_str(),
+                        number,
+                        check_id,
+                        page
+                    ),
+                    ("team", "repo", 7, 9, 2)
+                );
+                assert_eq!(commit, "a".repeat(40));
+                Ok(github::GitHubResponse::CheckDetails(github::CheckDetails {
+                    title: "Build failure".into(),
+                    summary: "Compiler error".into(),
+                    text: "Diagnostic output".into(),
+                    next_page: None,
+                    actions_job: true,
+                    annotations: vec![github::CheckAnnotation {
+                        path: "src/main.rs".into(),
+                        start_line: 3,
+                        end_line: 4,
+                        annotation_level: "failure".into(),
+                        message: "Error".into(),
+                        title: None,
+                    }],
+                }))
+            }
+            github::GitHubRequest::CheckLog { .. } => Ok(github::GitHubResponse::CheckLog(
+                "https://productionresults.blob.core.windows.net/logs".into(),
+            )),
+            github::GitHubRequest::RerunCheck { .. } => Err(github::Error::PermissionDenied),
+            _ => panic!("Unexpected CI provider operation"),
+        }
+    }
+}
+
+#[test]
+fn ci_requests_cross_the_real_domain_provider_and_return_generated_dto_fields() {
+    let processor = GitHubRequestProcessor::new(Arc::new(CiCredentials), Arc::new(CiProvider));
+    let source = ash_async_utils::CancellationSource::new();
+    let params = serde_json::json!({"operationId":"ci-fixture","accountId":"42","repository":{"host":"github.com","owner":"team","name":"repo"},"number":7,"commit":"a".repeat(40),"checkId":9});
+    let runtime = tokio::runtime::Builder::new_current_thread()
+        .build()
+        .unwrap();
+    runtime.block_on(async {
+        let mut details_params = params.clone();
+        details_params["page"] = 2.into();
+        let details = processor
+            .request(
+                ClientMethod::GitHubCheckDetails,
+                &details_params,
+                &source.token(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(details["actionsJob"], true);
+        assert_eq!(details["annotations"][0]["startLine"], 3);
+        assert!(details["annotations"][0].get("start_line").is_none());
+        let logs = processor
+            .request(ClientMethod::GitHubCheckLog, &params, &source.token())
+            .await
+            .unwrap();
+        assert_eq!(
+            logs["url"],
+            "https://productionresults.blob.core.windows.net/logs"
+        );
+        let refusal = processor
+            .request(ClientMethod::GitHubCheckRerun, &params, &source.token())
+            .await
+            .unwrap_err();
+        assert_eq!(refusal.message, AppServerErrorName::GitHubPermissionDenied);
+    });
+}

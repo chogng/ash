@@ -416,6 +416,7 @@ exports.activate = context => context.subscriptions.push(v.commands.registerComm
         }])
     );
     let invoked = request(crate::HostRequestKind::Invoke(crate::InvokeParams {
+        registration_generation: None,
         extension_id: "test.node".into(),
         registration_id: "test.node".into(),
         operation: "execute".into(),

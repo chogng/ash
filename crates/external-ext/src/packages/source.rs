@@ -76,6 +76,17 @@ pub struct DynamicExtensionPackageSource {
     pub verified_package_sha256: Option<String>,
     /// Execution admission supplied by the host; manifest fields cannot create this fact.
     pub renderer_client: Option<ExtensionRendererClient>,
+    /// Optional executable identity selected by the same trusted package authority.
+    /// This is host metadata, never a field read from the extension's manifest.
+    pub runtime_binding: Option<ExtensionRuntimeBinding>,
+}
+
+/// Connects an authority-owned executable package to its declarative catalog snapshot.
+/// The runtime package digest retains its own domain; it does not replace the catalog hash.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ExtensionRuntimeBinding {
+    pub runtime_id: String,
+    pub package_digest: String,
 }
 
 impl DynamicExtensionPackageSource {
@@ -88,6 +99,7 @@ impl DynamicExtensionPackageSource {
             normalized_manifest_json: None,
             verified_package_sha256: None,
             renderer_client: None,
+            runtime_binding: None,
         }
     }
 
@@ -100,6 +112,7 @@ impl DynamicExtensionPackageSource {
             normalized_manifest_json: None,
             verified_package_sha256: None,
             renderer_client: None,
+            runtime_binding: None,
         }
     }
 
@@ -116,6 +129,7 @@ impl DynamicExtensionPackageSource {
             normalized_manifest_json: Some(normalized_manifest_json.into()),
             verified_package_sha256: None,
             renderer_client: None,
+            runtime_binding: None,
         }
     }
 }

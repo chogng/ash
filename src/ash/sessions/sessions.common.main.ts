@@ -5,6 +5,8 @@ import '../workbench/api/browser/extensionHost.contribution.js';
 import '../workbench/contrib/logs/common/logs.contribution.js';
 import '../workbench/contrib/debug/browser/debugAdapterManager.js';
 import '../workbench/contrib/terminal/terminal.all.js';
+import '../workbench/browser/actions/layoutActions.js';
+import '../workbench/browser/parts/panel/panelActions.js';
 // Register this renderer's Sessions colors before Workbench theme initialization.
 import './common/theme.js';
 import './common/sessionConfig.js';

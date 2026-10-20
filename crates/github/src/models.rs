@@ -742,3 +742,23 @@ pub enum SharePathKind {
     File,
     Directory,
 }
+
+/// Text output and one page of annotations for an immutable PR check.
+#[derive(Clone, Debug, serde::Deserialize, Eq, PartialEq, serde::Serialize)]
+pub struct CheckDetails {
+    pub title: String,
+    pub summary: String,
+    pub text: String,
+    pub annotations: Vec<CheckAnnotation>,
+    pub next_page: Option<u32>,
+    pub actions_job: bool,
+}
+#[derive(Clone, Debug, serde::Deserialize, Eq, PartialEq, serde::Serialize)]
+pub struct CheckAnnotation {
+    pub path: String,
+    pub start_line: u32,
+    pub end_line: u32,
+    pub annotation_level: String,
+    pub message: String,
+    pub title: Option<String>,
+}

@@ -1,9 +1,11 @@
+import { ITerminalCompletionService, TerminalCompletionService } from '../../../src/ash/workbench/contrib/terminalContrib/suggest/browser/terminalCompletionService.js';
+import { ITerminalQuickFixService } from '../../../src/ash/workbench/contrib/terminalContrib/quickFix/browser/quickFix.js';
+import { TerminalQuickFixService } from '../../../src/ash/workbench/contrib/terminalContrib/quickFix/browser/terminalQuickFixService.js';
 import { ITerminalLinkProviderService } from '../../../src/ash/workbench/contrib/terminalContrib/links/browser/links.js';
 import { TerminalLinkProviderService } from '../../../src/ash/workbench/contrib/terminalContrib/links/browser/terminalLinkProviderService.js';
 import { ISearchService } from '../../../src/ash/workbench/services/search/common/search.js';
 import { IHostService } from '../../../src/ash/workbench/services/host/browser/host.js';
 import { TestHostService } from '../../../src/ash/workbench/services/host/test/browser/testHostService.js';
-import { IWorkbenchLayoutService, Position } from '../../../src/ash/workbench/services/layout/browser/layoutService.js';
 import { IWorkbenchEnvironmentService } from '../../../src/ash/workbench/services/environment/common/environmentService.js';
 import { ILabelService } from '../../../src/ash/platform/label/common/label.js';
 import { LabelService } from '../../../src/ash/workbench/services/label/common/labelService.js';
@@ -50,7 +52,7 @@ import { TestWorkspaceService } from '../../../src/ash/workbench/services/config
 import { ITerminalContributionService, ITerminalProfileResolverService, ITerminalProfileService } from '../../../src/ash/workbench/contrib/terminal/common/terminal.js';
 import { BrowserTerminalProfileResolverService } from '../../../src/ash/workbench/contrib/terminal/browser/terminalProfileResolverService.js';
 import { MainThreadTerminalService } from '../../../src/ash/workbench/api/browser/mainThreadTerminalService.js';
-import { IWorkspaceContextService } from '../../../src/ash/platform/workspace/common/workspace.js';
+import { IWorkspaceContextService, WorkbenchState } from '../../../src/ash/platform/workspace/common/workspace.js';
 import { TestConfigurationService as WorkbenchConfigurationService } from '../../../src/ash/workbench/services/configuration/test/common/testServices.js';
 import { InMemoryConfigurationService } from '../../../src/ash/platform/configuration/common/inMemoryConfigurationService.js';
 import { TerminalConfigurationService } from '../../../src/ash/workbench/contrib/terminal/browser/terminalConfigurationService.js';
@@ -101,6 +103,11 @@ import { Emitter, Event } from '../../../src/ash/base/common/event.js';
 import { Disposable, DisposableStore, toDisposable } from '../../../src/ash/base/common/lifecycle.js';
 import { extUri } from '../../../src/ash/base/common/resources.js';
 import { BrowserLayoutService } from '../../../src/ash/platform/layout/browser/layoutService.js';
+import { Dimension, type IDimension } from '../../../src/ash/base/browser/dom.js';
+import { WorkbenchLayout } from '../../../src/ash/workbench/browser/layout.js';
+import { Part } from '../../../src/ash/workbench/browser/part.js';
+import { IWorkbenchLayoutService, Position, workbenchPartIds, type WorkbenchPartId } from '../../../src/ash/workbench/services/layout/browser/layoutService.js';
+import { BrowserAuxiliaryWindowService, IAuxiliaryWindowService } from '../../../src/ash/workbench/services/auxiliaryWindow/browser/auxiliaryWindowService.js';
 import { createCodeEditorServices } from '../../../src/ash/editor/test/browser/testCodeEditor.js';
 import { IQuickInputService } from '../../../src/ash/platform/quickinput/common/quickInput.js';
 import { XtermTerminal } from '../../../src/ash/workbench/contrib/terminal/browser/xterm/xtermTerminal.js';
@@ -124,7 +131,19 @@ if (new URLSearchParams(location.search).has('workbench')) {
 }
 store.add(installTestDictationAudio(window));
 setIconResolver(document, icon => getIconDefinition(icon));
-function setupTerminalFixtureServices(services: import('../../../src/ash/platform/instantiation/common/instantiationService.js').InstantiationService, lifetime: DisposableStore, fallbackProcess = true): void {
+function createTerminalFixtureLayout(root: HTMLElement, lifetime: DisposableStore): IWorkbenchLayoutService {
+	return Object.assign(lifetime.add(new BrowserLayoutService({ root })), {
+		getPanelPosition: () => Position.BOTTOM, setPanelPosition: () => { }, onDidChangePanelPosition: Event.None,
+		onDidChangeAuxiliaryBarMaximized: Event.None, isAuxiliaryBarMaximized: () => false,
+		toggleMaximizedAuxiliaryBar: () => { }, setAuxiliaryBarMaximized: () => false,
+		onDidChangePartVisibility: Event.None, isPartVisible: () => true, hidePart: () => { }, hasFocus: () => false,
+		setLayoutStyle: () => { }, getVisibleNeighborPart: () => undefined, isPanelMaximized: () => false,
+		toggleMaximizedPanel: () => { }, getPartSize: () => ({ width: root.clientWidth, height: root.clientHeight }),
+		resizePart: () => { }, showPart: () => { }, showParts: () => { }, hideParts: () => { },
+	});
+}
+
+function setupTerminalFixtureServices(services: import('../../../src/ash/platform/instantiation/common/instantiationService.js').InstantiationService, lifetime: DisposableStore, fallbackProcess = true, provideLayout = true): void {
 	if (!services.has(IHostService)) services.registerInstance(IHostService, new TestHostService());
 	// Filename discovery is an explicit boundary of the terminal-only fixture.
 	if (!services.has(ISearchService)) services.registerInstance(ISearchService, {
@@ -137,12 +156,15 @@ function setupTerminalFixtureServices(services: import('../../../src/ash/platfor
 		expectsTerminalTransfer: new URLSearchParams(location.search).has('transfer'),
 	});
 	// Keep the concrete owner observable after scope disposal for cleanup assertions.
+	if (provideLayout && !services.has(IWorkbenchLayoutService)) services.registerInstance(IWorkbenchLayoutService, createTerminalFixtureLayout(document.querySelector<HTMLElement>('#terminal')!, lifetime));
 	if (!services.has(ITerminalService)) services.registerSingleton(ITerminalService, () => services.createInstance(TerminalService), { instantiation: InstantiationType.Delayed });
 	if (!services.has(IDialogService)) services.registerSingleton(IDialogService, () => services.createInstance(DialogService));
 	if (!services.has(ISecretStorageService)) services.registerInstance(ISecretStorageService, lifetime.add(new BaseSecretStorageService()));
 	if (!services.has(ITerminalGroupService)) services.registerSingleton(ITerminalGroupService, () => services.createInstance(TerminalGroupService), { instantiation: InstantiationType.Delayed });
 	if (!services.has(ITerminalEditorService)) services.registerSingleton(ITerminalEditorService, () => services.createInstance(TerminalEditorService), { instantiation: InstantiationType.Delayed });
 	if (!services.has(IStorageService)) services.registerInstance(IStorageService, lifetime.add(new BrowserStorageService({ ownerWindow: window, workspaceId: 'terminal-integration', flushInterval: 0 })));
+	if (!services.has(ITerminalCompletionService)) services.registerInstance(ITerminalCompletionService, lifetime.add(services.createInstance(TerminalCompletionService)));
+	if (!services.has(ITerminalQuickFixService)) services.registerInstance(ITerminalQuickFixService, lifetime.add(services.createInstance(TerminalQuickFixService)));
 	if (!services.has(ITerminalLinkProviderService)) services.registerSingleton(ITerminalLinkProviderService, () => services.createInstance(TerminalLinkProviderService));
 	if (!services.has(IEnvironmentVariableService)) services.registerSingleton(IEnvironmentVariableService, () => services.createInstance(EnvironmentVariableService));
 	if (!services.has(IHoverService)) services.registerInstance(IHoverService, lifetime.add(new HoverService(services.get(IConfigurationService), lifetime.add(new BrowserContextViewService(document.body)), { contextMenuStyle: 'custom', onDidShowContextMenu: Event.None, onDidHideContextMenu: Event.None, showContextMenu: () => { }, hideContextMenu: () => { } })));
@@ -200,7 +222,7 @@ function createFixtureInstance(id: string) {
 		start: () => { },
 		clearBuffer: () => screen?.clearBuffer(),
 		reuseTerminal: async () => { throw new Error('Screen-only fixture has no process to reuse'); },
-		sendSignal: async () => { }, sendText: async (data, shouldExecute) => { writes.push(data + (shouldExecute ? '\r' : '')); },
+		setAutoReplies: async () => { }, sendSignal: async () => { }, sendText: async (data, shouldExecute) => { writes.push(data + (shouldExecute ? '\r' : '')); },
 		sendPath: async () => { throw new Error('Screen-only fixture has no path input'); },
 		processBinary: async data => { binaryWrites.push(Array.from(data, character => character.charCodeAt(0))); },
 		resize: dimensions => { resizes.push(dimensions); },
@@ -251,7 +273,7 @@ function setTerminalTestTheme(mode: 'dark' | 'light' | 'hcDark' | 'hcLight', ove
 	const base = { dark: darkColorTheme, light: lightColorTheme, hcDark: highContrastDarkColorTheme, hcLight: highContrastLightColorTheme }[mode];
 	themeService.setColorTheme(overrides ? createColorTheme({ id: 'terminal-test', label: 'Terminal test', colorScheme: base.colorScheme, baseTheme: base, colorOverrides: overrides }) : base);
 }
-if (new URLSearchParams(location.search).has('find') || new URLSearchParams(location.search).has('browser')) { store.add(bindTestColorTheme(themeService, document.body)); }
+if (new URLSearchParams(location.search).has('find') || new URLSearchParams(location.search).has('browser') || new URLSearchParams(location.search).has('panelLayout')) { store.add(bindTestColorTheme(themeService, document.body)); }
 widgetServices.registerInstance(IThemeService, themeService);
 widgetServices.registerInstance(ITerminalLogService, new NullLoggerService());
 widgetServices.registerInstance(ITerminalConfigurationService, store.add(widgetServices.createInstance(TerminalConfigurationService)));
@@ -260,6 +282,26 @@ instance.attachToElement(document.querySelector<HTMLElement>('#terminal')!);
 const widget = instance.xterm!;
 widget.setVisible(true);
 if (new URLSearchParams(location.search).has('browser')) widget.element.style.height = '100%';
+if (new URLSearchParams(location.search).has('deferredFocus')) {
+	const root = document.createElement('section');
+	root.id = 'terminal-deferred-focus';
+	root.style.cssText = 'width:0;height:300px;overflow:hidden';
+	document.body.append(root);
+	for (const label of ['Focus source', 'Other focus target']) {
+		const button = document.createElement('button');
+		button.textContent = label;
+		document.body.append(button);
+	}
+	const screen = store.add(widgetServices.createInstance(XtermTerminal, root, instance));
+	screen.element.style.height = '100%';
+	await screen.initialize({ cols: 80, rows: 24, vt: 'retained deferred output\r\n' });
+	screen.setVisible(true);
+	window.ashTerminalDeferredFocusIntegration = {
+		focus: () => screen.focus(),
+		reveal: () => { root.style.width = '600px'; screen.fit(); },
+	};
+}
+
 let completion: Promise<void> | undefined;
 
 window.ashTerminalIntegration = {
@@ -293,6 +335,7 @@ window.ashTerminalIntegration = {
 
 declare global {
 	interface Window {
+		ashTerminalDeferredFocusIntegration: { focus(): void; reveal(): void; };
 		ashTerminalIntegration: {
 			configure(key: string, value: unknown): Promise<void>;
 			sequence(event: import('../../../src/ash/platform/terminal/common/terminal.js').TerminalShellIntegrationEvent, text?: string): Promise<void>;
@@ -496,10 +539,10 @@ if (new URLSearchParams(location.search).has('pane') || new URLSearchParams(loca
 				return { terminalId: options.terminalId, chunks: [], nextSequence: 0, outputGap: false, commandEvents: [], nextCommandSequence: 0, commandEventGap: false, exited: new URLSearchParams(location.search).has('exited'), exitCode: undefined };
 			},
 			write: async options => { if (typeof options.data === 'string' && !options.data.startsWith('\x1b[?')) writes.push(options.data); },
-			resize: async () => { }, sendSignal: async () => { },
+			resize: async () => { }, setAutoReplies: async () => { }, sendSignal: async () => { },
 			close: async options => { closed.push(Number(options.terminalId.slice(5))); },
 		});
-		setupTerminalFixtureServices(services, lifetime);
+		setupTerminalFixtureServices(services, lifetime, true, false);
 		services.registerSingleton(ISpeechService, () => services.createInstance(SpeechService));
 		services.registerSingleton(IChatSpeechToTextService, () => services.createInstance(ChatSpeechToTextService));
 		services.registerSingleton(IVoiceCodeTranscriptionClient, () => services.createInstance(VoiceCodeTranscriptionClient));
@@ -708,7 +751,7 @@ if (new URLSearchParams(location.search).has('assembly')) {
 			getProcessInfo: async () => ({ ready: { pid: 1234, cwd: '/backend/workspace' }, cwd: '/backend/current', rows: 24, cols: 80 }),
 			getConnectionState: async () => 'ready',
 			onConnectionState: () => Disposable.None,
-			sendSignal: async () => { }, resolveProfile: async (profile: import('../../../src/ash/platform/terminal/common/terminal.js').TerminalProcessProfileSelection) => ({ profile: profile.type === 'custom' ? { profileId: `custom:${profile.name}`, title: profile.name, isDefault: false } : instance.profile, executable: profile.type === 'custom' ? profile.path.at(-1)! : '/bin/sh', args: profile.type === 'custom' ? (typeof profile.args === 'string' ? profile.args : [...profile.args]) : [] }), getEnvironment: async () => ({}), listProfiles: async () => [instance.profile],
+			setAutoReplies: async () => { }, sendSignal: async () => { }, resolveProfile: async (profile: import('../../../src/ash/platform/terminal/common/terminal.js').TerminalProcessProfileSelection) => ({ profile: profile.type === 'custom' ? { profileId: `custom:${profile.name}`, title: profile.name, isDefault: false } : instance.profile, executable: profile.type === 'custom' ? profile.path.at(-1)! : '/bin/sh', args: profile.type === 'custom' ? (typeof profile.args === 'string' ? profile.args : [...profile.args]) : [] }), getEnvironment: async () => ({}), listProfiles: async () => [instance.profile],
 			create: async () => {
 				const terminalId = `backend-${nextProcess++}`;
 				calls.push(`create:${terminalId}`);
@@ -908,7 +951,7 @@ if (new URLSearchParams(location.search).has('stream')) {
 	const processes: import('../../../src/ash/platform/terminal/common/terminal.js').ITerminalProcessService = {
 		operatingSystem: reviveHistory ? OperatingSystem.Windows : undefined,
 		getProcessInfo: async () => ({ ready: { pid: 1234, cwd: '/workspace' }, cwd: '/workspace/current', rows: 24, cols: 80 }),
-		sendSignal: async () => { }, resolveProfile: async (profile: import('../../../src/ash/platform/terminal/common/terminal.js').TerminalProcessProfileSelection) => ({ profile: profile.type === 'custom' ? { profileId: `custom:${profile.name}`, title: profile.name, isDefault: false } : instance.profile, executable: profile.type === 'custom' ? profile.path.at(-1)! : '/bin/sh', args: profile.type === 'custom' ? (typeof profile.args === 'string' ? profile.args : [...profile.args]) : [] }), getEnvironment: async () => ({}), listProfiles: async () => [profile],
+		setAutoReplies: async () => { }, sendSignal: async () => { }, resolveProfile: async (profile: import('../../../src/ash/platform/terminal/common/terminal.js').TerminalProcessProfileSelection) => ({ profile: profile.type === 'custom' ? { profileId: `custom:${profile.name}`, title: profile.name, isDefault: false } : instance.profile, executable: profile.type === 'custom' ? profile.path.at(-1)! : '/bin/sh', args: profile.type === 'custom' ? (typeof profile.args === 'string' ? profile.args : [...profile.args]) : [] }), getEnvironment: async () => ({}), listProfiles: async () => [profile],
 		create: async () => { launch++; return { terminalId: reuseCommands ? `stream-shell-${launch}` : 'stream-shell', ready: { pid: reuseCommands ? 1234 + launch : 1234, cwd: '/workspace' }, profile, connectionPersistence: 'connectionOwned' }; },
 		write: async options => {
 			if (typeof options.data === 'string') streamInputWrites.push(options.data);
@@ -1097,15 +1140,20 @@ if (new URLSearchParams(location.search).has('input')) {
 	const launchDirectories: (string | undefined)[] = [];
 	const sizes: { terminalId: string; cols: number; rows: number; }[] = [];
 	const queuedOutput: { data: Uint8Array; shellIntegration?: import('../../../src/ash/platform/terminal/common/terminal.js').TerminalShellIntegrationEvent; }[] = [{ data: new TextEncoder().encode('retained screen\r\n\x1b[c') }];
+	const directedOutput = new Map<string, { data: Uint8Array; }[]>();
+	const processPids = new Map<string, number>();
 	let sequence = 0;
 	const profile = { profileId: 'shell', title: 'Shell', isDefault: true };
 	const processes: import('../../../src/ash/platform/terminal/common/terminal.js').ITerminalProcessService = {
 		operatingSystem: OperatingSystem.Linux,
-		getProcessInfo: async () => ({ ready: { pid: 1234, cwd: '/workspace' }, cwd: '/workspace/current', rows: 24, cols: 80 }),
-		sendSignal: async () => { }, resolveProfile: async (profile: import('../../../src/ash/platform/terminal/common/terminal.js').TerminalProcessProfileSelection) => ({ profile: profile.type === 'custom' ? { profileId: `custom:${profile.name}`, title: profile.name, isDefault: false } : instance.profile, executable: profile.type === 'custom' ? profile.path.at(-1)! : '/bin/sh', args: profile.type === 'custom' ? (typeof profile.args === 'string' ? profile.args : [...profile.args]) : [] }), getEnvironment: async () => ({}), listProfiles: async () => [profile],
+		getProcessInfo: async options => ({ ready: { pid: processPids.get(options.terminalId) ?? 1234, cwd: '/workspace' }, cwd: '/workspace/current', rows: 24, cols: 80 }),
+		setAutoReplies: async () => { }, sendSignal: async () => { }, resolveProfile: async (profile: import('../../../src/ash/platform/terminal/common/terminal.js').TerminalProcessProfileSelection) => ({ profile: profile.type === 'custom' ? { profileId: `custom:${profile.name}`, title: profile.name, isDefault: false } : instance.profile, executable: profile.type === 'custom' ? profile.path.at(-1)! : '/bin/sh', args: profile.type === 'custom' ? (typeof profile.args === 'string' ? profile.args : [...profile.args]) : [] }), getEnvironment: async () => ({}), listProfiles: async () => [profile],
 		create: async options => {
 			launchDirectories.push(options.cwd);
-			return { terminalId: `input-shell-${++nextTerminal}`, ready: { pid: 1234, cwd: '/workspace', shellType: PosixShellType.Bash }, profile, connectionPersistence: 'connectionOwned' };
+			const terminalId = `input-shell-${++nextTerminal}`;
+			const pid = new URLSearchParams(location.search).has('osc99') ? 1234 + nextTerminal : 1234;
+			processPids.set(terminalId, pid);
+			return { terminalId, ready: { pid, cwd: '/workspace', shellType: PosixShellType.Bash }, profile, connectionPersistence: 'connectionOwned' };
 		},
 		write: async options => {
 			writes.push(typeof options.data === 'string' ? options.data : [...options.data]);
@@ -1117,7 +1165,7 @@ if (new URLSearchParams(location.search).has('input')) {
 		},
 		resize: async options => { sizes.push({ terminalId: options.terminalId, cols: options.cols, rows: options.rows }); }, close: async options => { closedProcesses.push(options.terminalId); }, getConnectionState: async () => 'ready', onConnectionState: connectionChanged.event,
 		read: async options => ({
-			terminalId: options.terminalId, chunks: queuedOutput.splice(0).map(chunk => ({ sequence: ++sequence, ...chunk })), nextSequence: sequence,
+			terminalId: options.terminalId, chunks: [...queuedOutput.splice(0), ...(directedOutput.get(options.terminalId)?.splice(0) ?? [])].map(chunk => ({ sequence: ++sequence, ...chunk })), nextSequence: sequence,
 			outputGap: false, commandEvents: [], nextCommandSequence: 0, commandEventGap: false, exited: false, exitCode: undefined,
 			...(currentDirectory ? {
 				cwd: { value: currentDirectory, isTrusted: true, afterOutputSequence: sequence },
@@ -1128,7 +1176,17 @@ if (new URLSearchParams(location.search).has('input')) {
 	let currentDirectory: string | undefined;
 	const workspace = store.add(new TestWorkspaceService({ id: 'input', uri: URI.file('/workspace') }));
 	const services = store.add(widgetServices.createChild(new ServiceCollection([ITerminalProcessService, processes], [IWorkspaceContextService, workspace])));
+	const notifications = store.add(new NotificationService());
+	services.registerInstance(INotificationService, notifications);
 	let groupPane: import('../../../src/ash/workbench/contrib/terminal/browser/terminalView.js').TerminalViewPane | undefined;
+	if (groupFixture) {
+		// Quick Access constructs its providers in this window's terminal scope.
+		// The parent fixture's input service has an independent editor-only scope.
+		const { TestQuickInputService } = await import('../../../src/ash/platform/quickinput/test/browser/testQuickInputService.js');
+		services.registerInstance(IQuickInputService, store.add(new TestQuickInputService({
+			container: document.body, instantiationService: services, contextKeyService: services.get(IContextKeyService),
+		})));
+	}
 	// Contributions are constructed with the first instance, before the optional pane.
 	services.registerInstance(IViewsService, {
 		openView: async (id: string) => {
@@ -1139,11 +1197,40 @@ if (new URLSearchParams(location.search).has('input')) {
 		},
 		getViewWithId: (id: string) => id === TERMINAL_VIEW_ID ? groupPane ?? null : null,
 	} as unknown as IViewsService);
-	setupTerminalFixtureServices(services, store);
+	setupTerminalFixtureServices(services, store, true, !new URLSearchParams(location.search).has('panelLayout'));
+	let paneHost = document.querySelector<HTMLElement>('#terminal')!;
+	let panelLayout: WorkbenchLayout | undefined;
+	if (new URLSearchParams(location.search).has('panelLayout')) {
+		await import('../../../src/ash/workbench/browser/media/style.css');
+		const root = document.querySelector<HTMLElement>('#terminal')!;
+		root.style.width = '1000px'; root.style.height = '700px';
+		services.registerInstance(IAuxiliaryWindowService, store.add(services.createInstance(BrowserAuxiliaryWindowService, window, root)));
+		panelLayout = store.add(services.createInstance(WorkbenchLayout, root, { workbenchState: WorkbenchState.FOLDER, initialDimension: new Dimension(1000, 700), defaultLayout: { parts: { panel: true } } }));
+		services.registerInstance(IWorkbenchLayoutService, panelLayout);
+		class FixturePart extends Part {
+			constructor(private readonly partId: WorkbenchPartId) { super(root, partId, themeService, services.get(IStorageService)); }
+			get content(): HTMLElement { return this.contentDomNode; }
+			override get minimumHeight(): number { return this.partId === 'panel' ? 180 : 0; }
+			override layout(dimension: IDimension): void {
+				if (this.partId === 'panel') groupPane?.layout(dimension.height, 0, dimension.width);
+			}
+			override setVisible(visible: boolean): void {
+				super.setVisible(visible);
+				if (this.partId === 'panel') groupPane?.setVisible(visible);
+			}
+		}
+		const parts = new Map<WorkbenchPartId, Part>();
+		for (const id of workbenchPartIds) parts.set(id, store.add(new FixturePart(id)));
+		paneHost = (parts.get('panel') as FixturePart).content;
+		panelLayout.createParts(parts);
+		await import('../../../src/ash/workbench/browser/parts/panel/panelActions.js');
+	}
 	if (clipboardFixture || new URLSearchParams(location.search).has('editor')) {
 		const dialogs = services.get(IDialogService) as DialogService;
 		store.add(new DialogHandlerContribution(dialogs.model, new BrowserDialogHandler(document.body)));
 	}
+	const inputCommands = store.add(new CommandService(services));
+	services.registerInstance(ICommandService, inputCommands);
 	installWorkbenchServiceContributions({ container: services, register: value => store.add(value), blockRestorationUntil: () => { } });
 	const terminals = services.get(ITerminalService);
 	store.add(terminals.onDidCreateInstance(instance => {
@@ -1158,12 +1245,9 @@ if (new URLSearchParams(location.search).has('input')) {
 	screen.setVisible(true);
 	screen.focus();
 	if (new URLSearchParams(location.search).has('find') || clipboardFixture || sequenceFixture || groupFixture) {
-		const commands = store.add(new CommandService(services));
-		services.registerInstance(ICommandService, commands);
+		const commands = inputCommands;
 		services.registerInstance(IAccessibleViewService, { getOpenAriaHint: () => undefined } as unknown as IAccessibleViewService);
 		services.registerInstance(ILogService, new NullLoggerService());
-		const notifications = store.add(new NotificationService());
-		services.registerInstance(INotificationService, notifications);
 		services.registerInstance(IUserDataProfileService, new UserDataProfileService());
 		const keybindingSource = sequenceFixture ? JSON.stringify([
 			{ key: 'ctrl+alt+y', command: 'workbench.action.terminal.sendSequence', args: { text: '\u001b[1;5D${workspaceFolder}' }, when: 'terminalFocus' },
@@ -1190,6 +1274,11 @@ if (new URLSearchParams(location.search).has('input')) {
 			await files.createDirectory(URI.joinPath(keybindingsResource, '..'));
 			await files.writeFile({ resource: keybindingsResource, content: keybindingSource }, { create: true, overwrite: true });
 			const history = new TerminalCommandHistory(services.get(IConfigurationService), services.get(IStorageService));
+			const { ITerminalCompletionService } = await import('../../../src/ash/workbench/contrib/terminalContrib/suggest/browser/terminalCompletionService.js');
+			const providerRequests: { value: string; cursorIndex: number; signal: AbortSignal; }[] = [];
+			let providerRegistration: import('../../../src/ash/base/common/lifecycle.js').IDisposable | undefined;
+			let releaseProvider: (() => void) | undefined;
+			store.add(toDisposable(() => { providerRegistration?.dispose(); releaseProvider?.(); }));
 			window.ashTerminalSuggestIntegration = {
 				history: (command, trusted = true, disabled = false) => history.record(terminal.profile.profileId, 'succeeded', command, trusted, disabled),
 				file: async path => { await files.createFile(URI.from({ scheme: 'file', path }), 'overwrite'); },
@@ -1198,6 +1287,19 @@ if (new URLSearchParams(location.search).has('input')) {
 				filesPending: () => releaseFiles !== undefined,
 				releaseFiles: () => { releaseFiles?.(); releaseFiles = undefined; },
 				model: () => terminal.capabilities?.get(TerminalCapability.CommandDetection)?.promptInputModel.getCombinedString(),
+				provider: (items, triggers = [], delayed = false) => {
+					providerRegistration?.dispose();
+					providerRegistration = services.get(ITerminalCompletionService).registerTerminalCompletionProvider('fixture.extension', 'completion', {
+						provideCompletions: async (_instance, value, cursorIndex, signal) => {
+							providerRequests.push({ value, cursorIndex, signal });
+							if (delayed) await new Promise<void>(resolve => { releaseProvider = resolve; });
+							return items;
+						},
+					}, ...triggers);
+				},
+				providerRequests: () => providerRequests.map(({ value, cursorIndex, signal }) => ({ value, cursorIndex, cancelled: signal.aborted })),
+				releaseProvider: () => { releaseProvider?.(); releaseProvider = undefined; },
+				disposeProvider: () => { providerRegistration?.dispose(); providerRegistration = undefined; },
 			};
 		} else {
 			services.registerInstance(IFileService, { onDidChangeFiles: Event.None, readFile: async resource => ({ resource, content: keybindingSource, revision: '1' }) } as IFileService);
@@ -1224,18 +1326,11 @@ if (new URLSearchParams(location.search).has('input')) {
 			services.registerInstance(IPreferencesService, { openSettings: async () => { } } as unknown as IPreferencesService);
 
 			services.registerInstance(IMenuService, new MenuService(commands, services.get(IContextKeyService)));
-			const layout = Object.assign(store.add(new BrowserLayoutService({ root })), {
-				onDidChangePanelPosition: Event.None, getPanelPosition: () => Position.BOTTOM, setPanelPosition: () => { },
-				onDidChangeAuxiliaryBarMaximized: Event.None, isAuxiliaryBarMaximized: () => false,
-				toggleMaximizedAuxiliaryBar: () => { }, setAuxiliaryBarMaximized: () => false,
-				onDidChangePartVisibility: Event.None, isPartVisible: () => true, hidePart: () => { }, hasFocus: () => false,
-				setLayoutStyle: () => { }, getVisibleNeighborPart: () => undefined, isPanelMaximized: () => false,
-				toggleMaximizedPanel: () => { }, getPartSize: () => ({ width: root.clientWidth, height: root.clientHeight }),
-				resizePart: () => { }, showPart: () => { }, showParts: () => { }, hideParts: () => { },
-			});
-			services.registerInstance(IWorkbenchLayoutService, layout);
-			groupPane = store.add(services.createInstance(TerminalViewPane, root, { id: 'ash.terminal', title: 'Terminal' }));
-			groupPane.setVisible(true); groupPane.setExpanded(true); groupPane.layout(root.clientHeight, 0, root.clientWidth);
+
+			groupPane = store.add(services.createInstance(TerminalViewPane, paneHost, { id: 'ash.terminal', title: 'Terminal' }));
+			groupPane.setVisible(true); groupPane.setExpanded(true);
+			if (panelLayout) panelLayout.layout(new Dimension(1000, 700));
+			else groupPane.layout(root.clientHeight, 0, root.clientWidth);
 			if (new URLSearchParams(location.search).has('editor')) {
 				// Individual scenarios enable the shared confirmation policy when testing close preflight.
 				await services.get(IConfigurationService).updateValue('terminal.integrated.confirmOnKill', 'never');
@@ -1349,6 +1444,12 @@ if (new URLSearchParams(location.search).has('input')) {
 				copied,
 				setText: text => { clipboardText = text; },
 				reads: () => clipboardReads,
+				warningPolicy: async () => {
+					const configuration = services.get(IConfigurationService) as WorkbenchConfigurationService;
+					await configuration.reloadConfiguration();
+					const key = 'terminal.integrated.enableMultiLinePasteWarning';
+					return { value: configuration.getValue<string>(key), persisted: JSON.parse((await configuration.read()).source)[key] ?? null };
+				},
 				select: (start, length) => screen.raw.select(start, 0, length),
 				selection: () => screen.raw.getSelection(),
 				selectedContext: () => services.get(IContextKeyService).getContext(document.activeElement).getValue<boolean>('terminalTextSelectedInFocused') === true,
@@ -1420,11 +1521,46 @@ if (new URLSearchParams(location.search).has('input')) {
 		hasScreen: () => terminal.xterm !== undefined,
 		close: () => terminal.close(),
 	};
+	if (new URLSearchParams(location.search).has('osc99')) {
+		const { IStatusbarService, StatusbarService, StatusbarAlignment } = await import('../../../src/ash/workbench/services/statusbar/browser/statusbar.js');
+		const [{ NotificationsToasts }, { NotificationActionRunner }] = await Promise.all([
+			import('../../../src/ash/workbench/browser/parts/notifications/notificationsToasts.js'),
+			import('../../../src/ash/workbench/browser/parts/notifications/notificationsCommands.js'),
+		]);
+		const statusbar = store.add(new StatusbarService());
+		services.registerInstance(IStatusbarService, statusbar);
+		const actionRunner = store.add(services.createInstance(NotificationActionRunner));
+		store.add(services.createInstance(NotificationsToasts, document.body, notifications.model, actionRunner));
+		window.ashTerminalOscIntegration = {
+			notifications: () => notifications.model.getNotifications().map(item => ({ id: item.id, message: item.message, labels: item.actions?.primary?.map(action => action.label) ?? [] })),
+			snapshotActive: async () => terminals.activeInstance?.xterm?.getBufferText(100000, new AbortController().signal),
+			feedActive: text => {
+				const id = [...processPids].find(([, pid]) => pid === terminals.activeInstance!.processId)?.[0];
+				if (!id) throw new Error('No process owns the active terminal');
+				const queue = directedOutput.get(id) ?? [];
+				directedOutput.set(id, queue);
+				queue.push({ data: new TextEncoder().encode(text) });
+			},
+			stopRecording: () => statusbar.getEntries(StatusbarAlignment.Left)[0]?.entry.run?.(),
+			recording: () => statusbar.getEntries(StatusbarAlignment.Left).length > 0,
+		};
+	}
 }
 
 declare global {
 	interface Window {
+		ashTerminalOscIntegration: {
+			notifications(): { id: number; message: string; labels: readonly string[]; }[];
+			snapshotActive(): Promise<string | undefined>;
+			feedActive(text: string): void;
+			stopRecording(): unknown;
+			recording(): boolean;
+		};
 		ashTerminalSuggestIntegration: {
+			provider(items: readonly import('../../../src/ash/workbench/contrib/terminalContrib/suggest/browser/terminalCompletionService.js').ITerminalCompletion[], triggers?: string[], delayed?: boolean): void;
+			providerRequests(): { value: string; cursorIndex: number; cancelled: boolean; }[];
+			releaseProvider(): void;
+			disposeProvider(): void;
 			history(command: string, trusted?: boolean, disabled?: boolean): void;
 			file(path: string): Promise<void>;
 			directory(path: string): Promise<void>;
@@ -1439,6 +1575,7 @@ declare global {
 			readonly copied: readonly string[];
 			setText(text: string): void;
 			reads(): number;
+			warningPolicy(): Promise<{ value: string; persisted: string | null; }>;
 			select(start: number, length: number): void;
 			selection(): string;
 			selectedContext(): boolean;

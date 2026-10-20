@@ -190,13 +190,15 @@ bazel test //cli:tui-real-scenarios --test_output=errors --test_env=PATH
 
 安装 Docker 和 VS Code Dev Containers 扩展，执行 **Dev Containers: Reopen in Container**。配置见 [`.devcontainer/`](../.devcontainer)，首次创建需联网安装工具、项目依赖、Chromium 和后端资源。
 
-当前容器镜像未预装 uv。若首次初始化提示缺少 uv，在容器中安装 `scripts/pyproject.toml` 要求的版本并加入 PATH，再执行 `sh .devcontainer/post-create.sh` 完成初始化。
+镜像基于 Debian 13（trixie），保留仓库固定的 Node、Rust 和 Just，并从官方镜像安装与 `scripts/pyproject.toml` 一致的 uv；LLVM 包含构建预检所需的符号工具，Zenity 及 AT-SPI 提供 Web 服务端工作区审批的原生对话框和 GTK 无障碍运行环境。系统 Git 须满足[共享最低版本要求](../crates/git/README.md#git-版本要求)。切换基础系统后重新执行 `sh .devcontainer/post-create.sh`，让旧 Python 环境卷按新系统解释器重新同步。
 
 在容器终端执行 `just ash` 启动 Electron，在宿主机打开转发的 6080 端口，使用 VNC 密码 `vscode` 查看桌面。容器启用 `privileged` 并配置 Electron 沙箱权限；依赖和产物使用容器卷，与宿主机隔离。`/dev/shm` 配置为 1 GiB：Chromium 并发加载本地 Renderer 模块和样式时会占用共享内存，Docker 默认的 64 MiB 会导致 `net::ERR_FAILED`。修改该配置后须重建容器。手动创建测试容器时保留 `--shm-size=1g` 和 namespace 能力（本机 Linux Docker 已验证 `--cap-add SYS_ADMIN`），再运行 `.devcontainer/configure-electron-sandbox.sh` 配置沙箱权限；不要用 `--no-sandbox` 绕过启动失败。
 
+容器启用 Docker init 回收退出的 Electron 后代进程。镜像显式保留 `XAUTHORITY=/home/node/.Xauthority`，使隔离测试的临时 `HOME` 仍能连接受认证的 VNC X11 桌面；手动创建容器时同时保留 `--init` 和该环境变量。TigerVNC 使用 `~/.config/tigervnc`，入口等待受认证的 X11 就绪后再启动 noVNC，桌面启动失败会退出容器。构建输出卷与源码 bind mount 可以属于不同文件系统，需原子发布到源码目录的生成文件必须在目标目录旁创建临时文件，再 `rename`；不能从 `.build` 卷直接重命名跨卷文件。
+
 镜像将 `SHELL=/bin/bash` 声明为 `node` 用户的实际登录 shell。手动通过 `docker exec` 启动产品或测试时须保留该环境，旧容器可显式传入 `-e SHELL=/bin/bash`；没有 `SHELL` 时终端后端会回退到 `/bin/sh`，不会获得 Bash 的路径转义与 shell integration 能力。
 
-仅前端 Web 模式执行 `pnpm dev:web --host 0.0.0.0`，打开转发的 5173 端口。完整 Web 模式和 App Server 只监听容器回环地址，须在容器内运行 Playwright，不能通过端口转发在宿主机浏览器访问。Browser 测试执行 `pnpm test:desktop:smoke:browser` 或 `pnpm test:web-integration`；Electron Playwright 使用容器桌面。
+仅前端 Web 模式执行 `pnpm dev:web --host 0.0.0.0`，打开转发的 5173 端口。完整 Web 模式和 App Server 只监听容器回环地址，须在容器内运行 Playwright，不能通过端口转发在宿主机浏览器访问。Browser 测试执行 `pnpm run test:smoke:browser` 或 `pnpm test:browser:integration`；Electron Playwright 使用容器桌面。
 
 ## 输出布局
 

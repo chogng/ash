@@ -73,7 +73,9 @@ pub(super) fn validate_registrations(
     let mut debugger_types = BTreeSet::new();
     let mut task_types = BTreeSet::new();
     let mut terminal_profiles = BTreeSet::new();
+    let mut terminal_quick_fixes = BTreeSet::new();
     let mut speech_providers = BTreeSet::new();
+    let mut speech_generations = BTreeSet::new();
     let mut has_terminal_environment = false;
     let mut test_profile_providers = BTreeSet::new();
     for registration in registrations {
@@ -154,7 +156,15 @@ pub(super) fn validate_registrations(
                 validate_display_text(label, "external URI opener label")?;
                 ExtensionCapability::ExternalUriOpener
             }
-            RegistrationKind::SpeechProvider { identifier } => {
+            RegistrationKind::SpeechProvider {
+                identifier,
+                registration_generation,
+            } => {
+                if *registration_generation == 0
+                    || !speech_generations.insert(registration_generation)
+                {
+                    return Err(protocol_error("invalid Speech registration generation"));
+                }
                 validate_identifier(identifier)?;
                 require_unique(
                     &mut speech_providers,
@@ -293,6 +303,32 @@ pub(super) fn validate_registrations(
                 ExtensionCapability::TerminalProfileProvider
             }
             RegistrationKind::TerminalLinkProvider {} => ExtensionCapability::TerminalLinkProvider,
+            RegistrationKind::TerminalCompletionProvider { trigger_characters } => {
+                if trigger_characters.len() > 64
+                    || trigger_characters.iter().any(|value| {
+                        value.chars().count() != 1 || value.chars().any(char::is_control)
+                    })
+                {
+                    return Err(protocol_error("invalid terminal completion triggers"));
+                }
+                if !trigger_characters.is_empty() {
+                    validate_unique_selectors(
+                        trigger_characters,
+                        64,
+                        "terminal completion triggers",
+                    )?;
+                }
+                ExtensionCapability::TerminalCompletionProvider
+            }
+            RegistrationKind::TerminalQuickFixProvider { provider_id } => {
+                validate_selector(provider_id, "terminal quick fix provider ID")?;
+                require_unique(
+                    &mut terminal_quick_fixes,
+                    provider_id,
+                    "terminal quick fix provider IDs",
+                )?;
+                ExtensionCapability::TerminalQuickFixProvider
+            }
             RegistrationKind::TerminalEnvironment {} => {
                 if has_terminal_environment {
                     return Err(protocol_error(

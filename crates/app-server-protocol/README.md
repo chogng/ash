@@ -67,6 +67,19 @@ Path Service 的资源路径 provider 注册仍没有生产调用方，未扩展
 `github/issue/read` 验证访问，实时状态仍按当前账号读取。移除只取消关联，不向 GitHub
 提交关闭或删除操作。关联随根 Thread 删除、恢复和历史迁移；不依赖工作区目录。
 
+`github/check/details`、`github/check/log` 与 `github/check/rerun` 共用明确的
+`operationId`、可选 `accountId`、`repository`、PR `number`、完整 head `commit` 和
+`checkId`；详情另外接收 `page`。详情返回纯文本 title／summary／text、带文件行号的
+annotations、下一页和 Actions job 识别结果。注释最多读取 100 页；最后一页仍满额时明确报告
+上限，不制造不可请求的下一页。Provider 每次核对 PR head 与 check SHA，Actions 操作还核对
+同仓库 job 的 `check_run_url`，拒绝跨仓库、跨主机或非默认 HTTPS 端口目标。
+
+详情及日志请求使用共享读作用域；重新运行使用托管仓库独占作用域和 `PreserveOutcome`。
+取消仍经 connection 内 `github/cancel`，取消回执不能替代原写入终态，不自动重放。
+日志响应只含短时 HTTPS 下载链接；扩展不跟随带 Bearer 的重定向，仅允许已知 GitHub Actions
+日志存储主机或 Enterprise 自身主机，拒绝 URL 凭据、片段及非 443 端口。
+权限拒绝与可能已提交分别使用 `GitHubPermissionDenied`、`GitHubSubmissionUncertain`。
+
 ## 编译与导出
 
 `file/search/fuzzy` 与 `file/search/glob` 都要求显式选择已授权的 Workspace 或 Session 目录，
@@ -244,8 +257,10 @@ owner 的版本迁移规则。无效会话、获准来源的读取失败或配�
 | `terminal/processInfo`      | 按 terminalId/dirId 查询 ready、当前 cwd 和最后成功应用的 rows/cols；当前 cwd 在 macOS/Linux 查询，在无法查询的平台或退出后为 null。 |
 | `terminal/write`            | 1–65536 字节 UTF-8 输入，保留现有命令状态检测。                                                                                      |
 | `terminal/writeBinary`      | base64 包装的 1–65536 个原始字节；编码长度最多 87384，不解码成文本，不推断命令。                                                     |
-| `terminal/sendSignal`       | signal 为 interrupt；Unix PTY 中断当前前台进程组，Windows 返回 TerminalUnsupported（-32066）。                                       |
+| `terminal/sendSignal`       | interrupt / terminate / kill / hangup；Unix 发送到当前前台进程组；Windows 返回 TerminalUnsupported（-32066）。                       |
 | `terminal/resize`           | 成功应用字符尺寸后更新进程属性；非法尺寸不更新。                                                                                     |
+
+signal 值依次对应 SIGINT / SIGTERM / SIGKILL / SIGHUP。
 
 以上查询与控制只允许当前附着 connection，并重新检查目录执行授权；错误连接返回 TerminalNotOwner。
 非法 base64、超大输入和未知 signal 返回 InvalidParams。decoder、method map 和 schema 从 Rust 定义生成。

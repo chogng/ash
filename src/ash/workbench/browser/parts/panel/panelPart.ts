@@ -12,7 +12,7 @@ import { PaneCompositePart } from "../paneCompositePart.js";
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { IViewsService } from '../../../services/views/common/viewsService.js';
 
-/** Bottom tool region with Panel tabs and a contextual title toolbar. */
+/** Movable tool region with Panel tabs and a contextual title toolbar. */
 export class PanelPart extends PaneCompositePart {
 	override get minimumWidth(): number { return 300; }
 	override get minimumHeight(): number { return 77; }

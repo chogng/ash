@@ -95,6 +95,7 @@ impl DynamicExtensionSourceProvider for PreparedExtensionSourceProvider {
                     normalized_manifest_json: None,
                     verified_package_sha256: None,
                     renderer_client: None,
+                    runtime_binding: None,
                 });
             }
         }

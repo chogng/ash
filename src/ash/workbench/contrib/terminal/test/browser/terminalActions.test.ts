@@ -19,6 +19,8 @@ import { IViewsService } from '../../../../services/views/common/viewsService.js
 import { registerTerminalActions } from '../../browser/terminalActions.js';
 import { TerminalCommandId } from '../../common/terminal.js';
 import { URI } from '../../../../../base/common/uri.js';
+import { Event } from '../../../../../base/common/event.js';
+import { IQuickInputService } from '../../../../../platform/quickinput/common/quickInput.js';
 
 registerTerminalActions();
 
@@ -219,17 +221,20 @@ suite('Terminal dropdown commands', () => {
 	for (const initialized of [true, false]) {
 		test(`New Terminal creates before revealing a ${initialized ? 'populated' : 'hidden'} panel`, async () => {
 			using services = new InstantiationService();
-			const terminal = new InputTerminal().instance;
-			const instances: ITerminalInstance[] = initialized ? [new InputTerminal().instance] : [];
 			const effects: unknown[] = [];
+			const terminal = { xterm: { focus: () => { effects.push('focus'); } } } as ITerminalInstance;
+			const instances: ITerminalInstance[] = initialized ? [new InputTerminal().instance] : [];
+			let active: ITerminalInstance | undefined;
 			services.registerInstance(ITerminalService, {
+				get activeInstance() { return active; },
 				createTerminal: async () => { effects.push('create'); instances.push(terminal); return terminal; },
-				setActiveInstance: (instance: ITerminalInstance) => assert.equal(instance, terminal),
+				setActiveInstance: (instance: ITerminalInstance) => { assert.equal(instance, terminal); active = instance; },
 			} as unknown as ITerminalService);
+			services.registerInstance(IQuickInputService, { onShow: Event.None, currentQuickInput: undefined } as unknown as IQuickInputService);
 			services.registerInstance(ITerminalGroupService, { showPanel: async (focus: boolean) => { effects.push(['panel', focus]); } } as ITerminalGroupService);
 			using commands = new CommandService(services);
 			await commands.executeCommand(TerminalCommandId.New);
-			assert.deepEqual(effects, ['create', ['panel', true]]);
+			assert.deepEqual(effects, ['create', ['panel', false], 'focus']);
 			assert.equal(instances.length, initialized ? 2 : 1);
 		});
 	}

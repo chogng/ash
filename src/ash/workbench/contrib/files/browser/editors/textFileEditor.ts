@@ -1,3 +1,4 @@
+import { CancellationError } from '../../../../../base/common/errors.js';
 import { IStorageService } from '../../../../../platform/storage/common/storage.js';
 import { IThemeService } from '../../../../../platform/theme/common/themeService.js';
 import type { IResourceEditorInput, ISaveOptions } from '../../../../common/editor.js';
@@ -52,8 +53,8 @@ export class TextFileEditor extends TextResourceEditor {
 	public override async save(options?: ISaveOptions): Promise<void> {
 		if (this.fileInput && this.filesConfiguration.isReadonly(this.fileInput.resource)) {
 			const error = new Error(localize('files.configuredReadonly', 'This file is read-only because it matches the configured read-only patterns.'));
-			await this.handleSaveError(error);
-			throw error;
+			if (await this.handleSaveError(error)) { return; }
+			throw new CancellationError(undefined, error);
 		}
 		await super.save(options);
 	}

@@ -115,6 +115,7 @@ pub struct AppServerOptions {
     pub built_in_skills: BuiltInSkillRoot,
     pub session_state_mode: SessionStateMode,
     initial_dir_grant_policy: InitialDirGrantPolicy,
+    directory_authority: DirectoryAuthority,
     agent_model_service: Option<Arc<dyn ModelService>>,
     model_operation_client: Option<Arc<dyn OperationClient>>,
     web_search_backend: Option<Arc<dyn ash_web_search_extension::WebSearchBackend>>,
@@ -133,11 +134,22 @@ pub struct AppServerOptions {
     pty_helper: Option<std::path::PathBuf>,
 }
 
-#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub(crate) enum InitialDirGrantPolicy {
     #[default]
     HostConfiguration,
     UserConfig,
+    WebSession {
+        dir: ash_file_access::Dir,
+        permissions: ash_file_access::Permissions,
+        authority_revision: ash_config::ConfigRevision,
+    },
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum DirectoryAuthority {
+    UserConfig,
+    WebSession,
 }
 
 impl AppServerOptions {
@@ -177,6 +189,7 @@ impl AppServerOptions {
             built_in_skills: BuiltInSkillRoot::AutoDetect,
             session_state_mode: SessionStateMode::Durable,
             initial_dir_grant_policy: InitialDirGrantPolicy::HostConfiguration,
+            directory_authority: DirectoryAuthority::UserConfig,
             agent_model_service: None,
             model_operation_client: None,
             web_search_backend: None,
@@ -241,6 +254,26 @@ impl AppServerOptions {
     pub fn with_user_config_dir_root(mut self, dir_root: impl Into<PathBuf>) -> Self {
         self.dir_root = Some(dir_root.into());
         self.initial_dir_grant_policy = InitialDirGrantPolicy::UserConfig;
+        self
+    }
+
+    /// Keeps native folder approvals local to this listener, before recovered execution starts.
+    pub(crate) fn with_web_directory_authority(mut self) -> Self {
+        self.directory_authority = DirectoryAuthority::WebSession;
+        self
+    }
+
+    pub(crate) fn with_native_web_directory(
+        mut self,
+        grant: ash_file_access::Grant,
+        authority_revision: ash_config::ConfigRevision,
+    ) -> Self {
+        self.directory_authority = DirectoryAuthority::WebSession;
+        self.initial_dir_grant_policy = InitialDirGrantPolicy::WebSession {
+            dir: grant.dir().clone(),
+            permissions: grant.permissions().clone(),
+            authority_revision,
+        };
         self
     }
 
@@ -427,6 +460,7 @@ impl fmt::Debug for AppServerOptions {
             .field("slash_commands", &self.slash_commands)
             .field("dir_root", &self.dir_root)
             .field("initial_dir_grant_policy", &self.initial_dir_grant_policy)
+            .field("directory_authority", &self.directory_authority)
             .field("built_in_skills", &self.built_in_skills)
             .field("session_state_mode", &self.session_state_mode)
             .field(
@@ -481,6 +515,7 @@ impl PartialEq for AppServerOptions {
             && self.slash_commands == other.slash_commands
             && self.dir_root == other.dir_root
             && self.initial_dir_grant_policy == other.initial_dir_grant_policy
+            && self.directory_authority == other.directory_authority
             && self.built_in_skills == other.built_in_skills
             && self.session_state_mode == other.session_state_mode
             && match (&self.agent_model_service, &other.agent_model_service) {
@@ -919,7 +954,10 @@ impl LocalProfileRuntime {
                 config.clone(),
             )))
             .map_err(open_error)?;
-        let secrets = open_profile_secrets(&profile_root)?;
+        let secrets = open_profile_secrets(
+            &profile_root,
+            std::env::var("ASH_USE_INMEMORY_SECRETSTORAGE"),
+        )?;
         let diagnostics = diagnostics::Diagnostics::default();
         let telemetry = ash_otel::Telemetry::new(diagnostics.clone());
         let plugin_authority = PluginActivationAuthority::open(profile_root.join("plugins"))
@@ -1109,7 +1147,17 @@ impl CodebaseProviders {
     }
 }
 
-fn open_profile_secrets(profile_root: &Path) -> Result<Arc<dyn SecretStore>, OpenAppServerError> {
+fn open_profile_secrets(
+    profile_root: &Path,
+    memory_setting: Result<String, std::env::VarError>,
+) -> Result<Arc<dyn SecretStore>, OpenAppServerError> {
+    match memory_setting.as_deref() {
+        Ok("1") => return Ok(Arc::new(ash_secrets::MemorySecretStore::default())),
+        Ok("0") | Err(std::env::VarError::NotPresent) => {}
+        Ok(_) | Err(std::env::VarError::NotUnicode(_)) => {
+            return Err(open_error("ASH_USE_INMEMORY_SECRETSTORAGE must be 0 or 1"));
+        }
+    }
     #[cfg(not(test))]
     let keyring =
         ash_keyring_store::KeyringSecretStore::for_profile(profile_root).map_err(open_error)?;
@@ -1325,7 +1373,7 @@ pub fn open_app_server_with_codebase_providers(
     let dir_config_access = if options.dir_config.is_some() {
         InitialDirGrantPolicy::HostConfiguration
     } else {
-        options.initial_dir_grant_policy
+        options.initial_dir_grant_policy.clone()
     };
     if options.dir_config.is_none()
         && let Some(dir_root) = &options.dir_root
@@ -1344,7 +1392,10 @@ pub fn open_app_server_with_codebase_providers(
         }
         (Some(runtime), None) => Arc::clone(&runtime.secrets),
         (None, Some(connectors)) => Arc::clone(&connectors.secrets),
-        (None, None) => open_profile_secrets(&options.profile_root)?,
+        (None, None) => open_profile_secrets(
+            &options.profile_root,
+            std::env::var("ASH_USE_INMEMORY_SECRETSTORAGE"),
+        )?,
     };
     let mut connector_runtime = match options.connector_runtime.take() {
         Some(runtime) => Some(runtime),
@@ -2165,7 +2216,13 @@ pub fn open_app_server_with_codebase_providers(
         .map_err(OpenAppServerError)?;
     server = server
         .with_env_config(&runtime_config)
-        .with_local_env_host(mcp, DirGrantPolicy::UserConfig(Arc::clone(&config)))
+        .with_local_env_host(
+            mcp,
+            match options.directory_authority {
+                DirectoryAuthority::WebSession => DirGrantPolicy::WebSession(Arc::clone(&config)),
+                DirectoryAuthority::UserConfig => DirGrantPolicy::UserConfig(Arc::clone(&config)),
+            },
+        )
         .map_err(|error| OpenAppServerError(error.to_string()))?;
     if let Some(hooks) = server.local_hook_runtime() {
         mcp_updates.bind_hooks(hooks);
@@ -3176,12 +3233,19 @@ impl DirConfigTracker {
     ) -> Result<Option<(DirConfigDocument, DirConfigRevision)>, ash_config::ConfigError> {
         // Permission is part of each resolution, not a startup decision. In particular,
         // revocation must stop both filesystem reads and directory model/policy overrides.
-        if self.access == InitialDirGrantPolicy::UserConfig
-            && !user
-                .values
-                .directory_grants
-                .permissions_for(&self.scope().dir_id)
-                .allows(DirPermission::LoadConfig)
+        if let InitialDirGrantPolicy::WebSession { permissions, .. } = &self.access
+            && !permissions.allows(DirPermission::LoadConfig)
+        {
+            return Ok(None);
+        }
+        if matches!(
+            self.access,
+            InitialDirGrantPolicy::UserConfig | InitialDirGrantPolicy::WebSession { .. }
+        ) && !user
+            .values
+            .directory_grants
+            .permissions_for(&self.scope().dir_id)
+            .allows(DirPermission::LoadConfig)
         {
             return Ok(None);
         }

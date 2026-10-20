@@ -1739,3 +1739,42 @@ fn signed_installed_academy_uses_product_launcher_and_exact_revocable_consent() 
             .is_empty()
     );
 }
+
+#[test]
+fn terminal_completion_and_quick_fix_operations_are_capability_scoped() {
+    let completion = RegistrationKind::TerminalCompletionProvider {
+        trigger_characters: vec!["-".into()],
+    };
+    let fix = RegistrationKind::TerminalQuickFixProvider {
+        provider_id: "acme.fix".into(),
+    };
+    assert!(registration_allows_operation(
+        &completion,
+        "provideTerminalCompletions"
+    ));
+    assert!(registration_allows_operation(
+        &fix,
+        "provideTerminalQuickFixes"
+    ));
+    assert!(registration_allows_operation(
+        &fix,
+        "handleTerminalQuickFix"
+    ));
+    for operation in [
+        "inputTaskTerminal",
+        "execute",
+        "createTerminalProfile",
+        "provideTerminalLinks",
+    ] {
+        assert!(!registration_allows_operation(&completion, operation));
+        assert!(!registration_allows_operation(&fix, operation));
+    }
+    assert!(!registration_allows_operation(
+        &completion,
+        "provideTerminalQuickFixes"
+    ));
+    assert!(!registration_allows_operation(
+        &fix,
+        "provideTerminalCompletions"
+    ));
+}

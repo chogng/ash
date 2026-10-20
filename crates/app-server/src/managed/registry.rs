@@ -144,6 +144,25 @@ impl ProfileAppServerRegistry {
             options,
             Arc::clone(&self.profile_runtime),
             self.diff_handler,
+            DirectoryRuntimeScope::WebSession,
+        )
+        .map(AppServer::into_shared)
+    }
+
+    pub(crate) fn open_native_web_workspace(
+        &self,
+        options: &ConnectionOptions,
+        grant: ash_file_access::Grant,
+        authority_revision: ash_config::ConfigRevision,
+    ) -> Result<Arc<AppServer>, String> {
+        open_server_with_profile_runtime(
+            options,
+            Arc::clone(&self.profile_runtime),
+            self.diff_handler,
+            DirectoryRuntimeScope::ApprovedWeb {
+                grant,
+                authority_revision,
+            },
         )
         .map(AppServer::into_shared)
     }
@@ -629,8 +648,13 @@ fn server_for(
     drop(opening);
     finish_directory(
         &runtime,
-        open_server_with_profile_runtime(&options, Arc::clone(profile_runtime), diff_handler)
-            .map(AppServer::into_shared),
+        open_server_with_profile_runtime(
+            &options,
+            Arc::clone(profile_runtime),
+            diff_handler,
+            DirectoryRuntimeScope::ProductHost,
+        )
+        .map(AppServer::into_shared),
     )
 }
 
@@ -688,8 +712,13 @@ fn open_queued_directory(
     if start {
         let _ = finish_directory(
             &runtime,
-            open_server_with_profile_runtime(&options, Arc::clone(profile_runtime), diff_handler)
-                .map(AppServer::into_shared),
+            open_server_with_profile_runtime(
+                &options,
+                Arc::clone(profile_runtime),
+                diff_handler,
+                DirectoryRuntimeScope::ProductHost,
+            )
+            .map(AppServer::into_shared),
         );
     }
 }
@@ -766,10 +795,20 @@ impl ash_automation::AutomationExecutor for ProfileAppServerRegistry {
     }
 }
 
+enum DirectoryRuntimeScope {
+    ProductHost,
+    WebSession,
+    ApprovedWeb {
+        grant: ash_file_access::Grant,
+        authority_revision: ash_config::ConfigRevision,
+    },
+}
+
 fn open_server_with_profile_runtime(
     host: &ConnectionOptions,
     profile_runtime: Arc<LocalProfileRuntime>,
     diff_handler: crate::DiffRequestHandler,
+    scope: DirectoryRuntimeScope,
 ) -> Result<AppServer, String> {
     let mut options = AppServerOptions::new(host.profile_root())
         .with_host_grok_auth()
@@ -781,6 +820,14 @@ fn open_server_with_profile_runtime(
             GrantSource::UserConfig => options.with_user_config_dir_root(dir_root),
             GrantSource::HostConfiguration => options.with_dir_root(dir_root),
         };
+    }
+    match scope {
+        DirectoryRuntimeScope::ProductHost => {}
+        DirectoryRuntimeScope::WebSession => options = options.with_web_directory_authority(),
+        DirectoryRuntimeScope::ApprovedWeb {
+            grant,
+            authority_revision,
+        } => options = options.with_native_web_directory(grant, authority_revision),
     }
     if let Some(executable) = crate::github_authentication::product_executable() {
         options = options.with_github_authentication_extension(executable);

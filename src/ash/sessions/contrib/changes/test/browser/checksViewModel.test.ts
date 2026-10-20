@@ -1,3 +1,4 @@
+import { IChatService } from '../../../../../workbench/services/chat/common/chatService.js';
 import assert from 'node:assert/strict';
 import { suite, test } from 'mocha';
 import { DeferredPromise } from '../../../../../base/common/async.js';
@@ -7,31 +8,34 @@ import type { CancellationToken } from '../../../../../base/common/cancellation.
 import { URI } from '../../../../../base/common/uri.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
 import { IAccountService, type AccountState } from '../../../../../platform/accounts/common/accountService.js';
-import { IGitHubService as IGitHubApi, type GitHubChecks } from '../../../../../platform/github/common/githubService.js';
+import { IGitHubService as IGitHubApi, GitHubError, GitHubErrorCode, type GitHubChecks, type GitHubCheckDetails } from '../../../../../platform/github/common/githubService.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { ISessionsService } from '../../../../services/sessions/browser/sessionsService.js';
 import { IGitHubService } from '../../../github/browser/githubService.js';
-import { ChecksViewModel } from '../../browser/checksViewModel.js';
+import { ChecksViewModel, type ChecksEntry } from '../../browser/checksViewModel.js';
 import { getCheckStateLabel } from '../../browser/checksActions.js';
 
-function fixture(api: Partial<IGitHubApi> = {}) {
+function fixture(api: Partial<IGitHubApi> = {}, chat: Partial<IChatService> = {}) {
 	const resources = new DisposableStore();
 	const associations = resources.add(new Emitter<void>());
 	const accounts = resources.add(new Emitter<AccountState>());
 	const services = resources.add(new InstantiationService());
-	services.registerInstance(ISessionsService, { onDidChange: Event.None, activeSelection: { kind: 'session', active: { session: { sessionId: 'session' }, threadId: 'thread' } } } as unknown as ISessionsService);
+	const selected = resources.add(new Emitter<void>());
+	let sessionId = 'session';
+	services.registerInstance(ISessionsService, { onDidChange: selected.event, get activeSelection() { return { kind: 'session', active: { session: { sessionId }, threadId: 'thread' } }; } } as unknown as ISessionsService);
 	services.registerInstance(IGitHubService, {
 		onDidChange: associations.event,
 		getSessionPullRequests: () => [{ uri: URI.parse('https://ghe.example/team/repo/pull/7'), owner: 'team', repo: 'repo', number: 7, state: 'open' }],
 	} as unknown as IGitHubService);
+	services.registerInstance(IChatService, chat as IChatService);
 	services.registerInstance(IAccountService, { onDidChangeAccounts: accounts.event } as unknown as IAccountService);
 	services.registerInstance(IGitHubApi, {
-		listAccounts: async () => [{ id: 'enterprise', host: 'ghe.example', status: 'ready' }],
+		listAccounts: async () => [{ id: 'enterprise', host: 'ghe.example', login: 'user', status: 'ready', credentialRevision: 1n }],
 		readPullRequest: async () => ({ headCommit: 'reviewed-head' }),
 		...api,
 	} as IGitHubApi);
 	const model = resources.add(services.createInstance(ChecksViewModel));
-	return { resources, model, accounts, associations };
+	return { resources, model, accounts, associations, selectSession: (id: string) => { sessionId = id; selected.fire(); } };
 }
 
 async function ready(model: ChecksViewModel): Promise<void> {
@@ -97,5 +101,181 @@ suite('Session Changes CI reads', () => {
 		await ready(context.model);
 		assert.equal(reads, 1);
 		assert.deepEqual(context.model.checksObs.get(), { loading: false, checks: [], error: 'Could not read all check results.' });
+	});
+});
+
+const details: GitHubCheckDetails = { title: 'Build failure', summary: 'Compilation failed', text: '<script>untrusted</script>', annotations: [{ path: 'src/main.rs', startLine: 3, endLine: 4, annotationLevel: 'failure', title: null, message: 'Compiler error' }], nextPage: null, actionsJob: true };
+const failingChecks = async (): Promise<GitHubChecks> => ({ state: 'failure', statuses: [], nextPage: null, checks: [{ id: 9, name: 'Build', status: 'completed', conclusion: 'failure', detailsUrl: 'https://ghe.example/team/repo/actions/runs/7/job/45' }] });
+
+suite('Session Changes CI actions', () => {
+	ensureNoDisposablesAreLeakedInTestSuite();
+
+	test('paginates annotation reads with the captured account, PR, head and check identity', async () => {
+		const calls: unknown[] = [];
+		const f = fixture({
+			readChecks: failingChecks, readCheckDetails: async (repository, target, page) => {
+				calls.push({ repository, target, page });
+				return { ...details, nextPage: page === 1 ? 2 : null };
+			}
+		});
+		using owner = f.resources;
+		await ready(f.model);
+		const result = await f.model.details(f.model.checksObs.get().checks[0]!);
+		assert.equal(result.annotations.length, 2);
+		assert.deepEqual(calls, [1, 2].map(page => ({ repository: { host: 'ghe.example', owner: 'team', name: 'repo', accountId: 'enterprise' }, target: { number: 7, commit: 'reviewed-head', checkId: 9 }, page })));
+	});
+
+	test('account changes cancel live detail reads and discard private late results', async () => {
+		const response = new DeferredPromise<GitHubCheckDetails>();
+		const started = new DeferredPromise<CancellationToken>();
+		const f = fixture({ readChecks: failingChecks, readCheckDetails: async (_repository, _target, _page, token) => { started.complete(token!); return response.p; } });
+		using owner = f.resources;
+		await ready(f.model);
+		const pending = assert.rejects(f.model.details(f.model.checksObs.get().checks[0]!), error => error instanceof Error && (error.name === 'Canceled' || error.name === 'CancellationError'));
+		const token = await started.p;
+		f.accounts.fire({ revision: 2n, accounts: [] });
+		assert.equal(token.isCancellationRequested, true);
+		await response.complete(details);
+		await pending;
+		f.model.dispose();
+		assert.deepEqual(f.model.checksObs.get().checks, []);
+	});
+
+	test('uncertain reruns are not repeated and permission failures remain explicit', async () => {
+		for (const code of [GitHubErrorCode.SubmissionUncertain, GitHubErrorCode.PermissionDenied]) {
+			let writes = 0;
+			const f = fixture({ readChecks: failingChecks, rerunCheck: async () => { writes++; throw new GitHubError(code); } });
+			using owner = f.resources;
+			await ready(f.model);
+			const entry = f.model.checksObs.get().checks[0]!;
+			await assert.rejects(f.model.rerun(entry), error => error instanceof GitHubError && error.code === code);
+			assert.equal(f.model.retryBlocked(entry, 'rerun'), code === GitHubErrorCode.SubmissionUncertain);
+			if (code === GitHubErrorCode.SubmissionUncertain) await f.model.rerun(entry);
+			assert.equal(writes, 1);
+		}
+	});
+
+	for (const running of [false, true]) test(`explicit Fix CI uses the captured Thread and normal ${running ? 'queue' : 'turn'} contract`, async () => {
+		const requests: unknown[] = [];
+		const f = fixture({ readChecks: failingChecks, readCheckDetails: async () => details }, {
+			readThread: async () => ({ thread: { status: 'active', sequence: 12, turns: running ? [{ status: 'inProgress' }] : [] } }) as never,
+			startTurn: async options => { requests.push(['start', options]); }, queueTurn: async options => { requests.push(['queue', options]); },
+		});
+		using owner = f.resources;
+		await ready(f.model);
+		assert.deepEqual(requests, [], 'Reading checks never submits a message');
+		await f.model.fix(f.model.checksObs.get().checks[0]!);
+		assert.equal(requests.length, 1);
+		const [kind, submission] = requests[0] as [string, { sessionId: string; threadId: string; expectedSequence: number; text: string; }];
+		assert.equal(kind, running ? 'queue' : 'start');
+		assert.equal(submission.sessionId, 'session'); assert.equal(submission.threadId, 'thread'); assert.equal(submission.expectedSequence, 12);
+		assert.match(submission.text, /untrusted CI output/); assert.match(submission.text, /src\/main.rs:3-4/); assert.match(submission.text, /reviewed-head/);
+	});
+
+	test('account invalidation while preparing Fix CI prevents submission', async () => {
+		const read = new DeferredPromise<never>();
+		const started = new DeferredPromise<void>();
+		let submitted = 0;
+		const f = fixture({ readChecks: failingChecks, readCheckDetails: async () => details }, {
+			readThread: async () => { started.complete(); return read.p; }, startTurn: async () => { submitted++; }, queueTurn: async () => { submitted++; },
+		});
+		using owner = f.resources;
+		await ready(f.model);
+		const pending = assert.rejects(f.model.fix(f.model.checksObs.get().checks[0]!));
+		await started.p;
+		f.accounts.fire({ revision: 2n, accounts: [] });
+		read.complete({ thread: { status: 'active', sequence: 1, turns: [] } } as never);
+		await pending;
+		f.model.dispose();
+		assert.equal(submitted, 0);
+	});
+});
+
+async function renamedEntry(model: ChecksViewModel, name: string): Promise<ChecksEntry> {
+	return new Promise(resolve => {
+		const listener = model.checksObs.onDidChange(state => {
+			const entry = state.checks.find(entry => entry.check.name === name);
+			if (entry) { listener.dispose(); resolve(entry); }
+		});
+	});
+}
+
+suite('CI operation identity across refreshes', () => {
+	ensureNoDisposablesAreLeakedInTestSuite();
+
+	test('an uncertain rerun stays blocked after metadata changes and a new head has a new identity', async () => {
+		let name = 'Build'; let commit = 'reviewed-head'; let writes = 0;
+		const f = fixture({
+			readPullRequest: async () => ({ headCommit: commit }) as never,
+			readChecks: async () => ({ ...await failingChecks(), checks: [{ ...(await failingChecks()).checks[0]!, name }] }),
+			rerunCheck: async () => { writes++; throw new GitHubError(GitHubErrorCode.SubmissionUncertain); },
+		});
+		using owner = f.resources;
+		await ready(f.model);
+		await assert.rejects(f.model.rerun(f.model.checksObs.get().checks[0]!));
+		name = 'Renamed build';
+		const changed = renamedEntry(f.model, name); f.associations.fire(); const entry = await changed;
+		assert.equal(f.model.retryBlocked(entry, 'rerun'), true);
+		await f.model.rerun(entry); assert.equal(writes, 1);
+		commit = 'b'.repeat(40); name = 'Build on new head';
+		const next = renamedEntry(f.model, name); f.associations.fire(); const current = await next;
+		assert.equal(f.model.retryBlocked(current, 'rerun'), false);
+		await assert.rejects(f.model.rerun(current)); assert.equal(writes, 2);
+	});
+
+	test('a pending write cannot be dispatched again after a check label refresh', async () => {
+		let name = 'Build'; let writes = 0;
+		const response = new DeferredPromise<void>();
+		const started = new DeferredPromise<void>();
+		const f = fixture({ readChecks: async () => ({ ...await failingChecks(), checks: [{ ...(await failingChecks()).checks[0]!, name }] }), rerunCheck: async () => { writes++; started.complete(); return response.p; } });
+		using owner = f.resources;
+		await ready(f.model);
+		const pending = assert.rejects(f.model.rerun(f.model.checksObs.get().checks[0]!));
+		await started.p;
+		name = 'Updated label'; const changed = renamedEntry(f.model, name); f.associations.fire(); const entry = await changed;
+		assert.equal(f.model.retryBlocked(entry, 'rerun'), true);
+		await f.model.rerun(entry); assert.equal(writes, 1);
+		response.complete(); await pending;
+	});
+
+	test('an uncertain agent submission stays blocked after same-check refresh', async () => {
+		let name = 'Build'; let writes = 0;
+		const f = fixture({ readChecks: async () => ({ ...await failingChecks(), checks: [{ ...(await failingChecks()).checks[0]!, name }] }), readCheckDetails: async () => details }, {
+			readThread: async () => ({ thread: { status: 'active', sequence: 1, turns: [] } }) as never,
+			startTurn: async () => { writes++; throw new Error('reply lost'); },
+		});
+		using owner = f.resources;
+		await ready(f.model);
+		await assert.rejects(f.model.fix(f.model.checksObs.get().checks[0]!), /could not be confirmed/);
+		name = 'Updated failure'; const changed = renamedEntry(f.model, name); f.associations.fire(); const entry = await changed;
+		assert.equal(f.model.retryBlocked(entry, 'fix'), true);
+		assert.equal(f.model.retryBlocked(entry, 'rerun'), false);
+		await f.model.fix(entry); assert.equal(writes, 1);
+	});
+});
+
+async function selectedSessionEntry(model: ChecksViewModel, sessionId: string): Promise<ChecksEntry> {
+	return new Promise(resolve => {
+		const listener = model.checksObs.onDidChange(state => {
+			const entry = state.checks.find(entry => entry.sessionId === sessionId);
+			if (entry) { listener.dispose(); resolve(entry); }
+		});
+	});
+}
+
+suite('CI uncertainty across session navigation', () => {
+	ensureNoDisposablesAreLeakedInTestSuite();
+
+	test('A to B to A navigation cannot retry the same uncertain operation', async () => {
+		let writes = 0;
+		const f = fixture({ readChecks: failingChecks, rerunCheck: async () => { writes++; throw new GitHubError(GitHubErrorCode.SubmissionUncertain); } });
+		using owner = f.resources;
+		await ready(f.model);
+		await assert.rejects(f.model.rerun(f.model.checksObs.get().checks[0]!));
+		const other = selectedSessionEntry(f.model, 'other'); f.selectSession('other'); await other;
+		const back = selectedSessionEntry(f.model, 'session'); f.selectSession('session'); const original = await back;
+		assert.equal(f.model.retryBlocked(original, 'rerun'), true);
+		await f.model.rerun(original);
+		assert.equal(writes, 1);
 	});
 });

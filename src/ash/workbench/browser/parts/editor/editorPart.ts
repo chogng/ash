@@ -1,3 +1,4 @@
+import { EditorInputCapabilities } from '../../../common/editor.js';
 import { IStorageService } from '../../../../platform/storage/common/storage.js';
 import { IThemeService } from '../../../../platform/theme/common/themeService.js';
 import { IUriIdentityService } from '../../../../platform/uriIdentity/common/uriIdentity.js';
@@ -527,7 +528,7 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 			return pane;
 		}
 		if (!await this.closeActiveModalEditor()) throw new CancellationError("Opening the editor was cancelled");
-		if (target === undefined && options.revealIfOpened) {
+		if ((target === undefined && options.revealIfOpened) || ((input.capabilities ?? EditorInputCapabilities.None) & EditorInputCapabilities.Singleton)) {
 			const group = [this._activeGroup, ...this._groups.map(({ group }) => group)].find(group => group.inputs.some(candidate => this.isSameEditor(candidate, input)));
 			if (group) {
 				const pane = await group.openEditor(input, options);
@@ -792,12 +793,14 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 	}
 
 	async splitEditors(groupId: EditorGroupId, inputs: readonly IResourceEditorInput[], direction: GridDirection): Promise<void> {
+		const splittable = inputs.filter(input => !((input.capabilities ?? EditorInputCapabilities.None) & EditorInputCapabilities.Singleton));
+		if (inputs.length > 0 && splittable.length === 0) return;
 		const source = this.groupHosts.get(groupId)!.group;
 		const previousActive = this._activeGroup;
 		const created = this.insertGroup(source, direction);
 		this.setActiveGroup(created.group);
 		try {
-			for (const input of inputs) {
+			for (const input of splittable) {
 				const preferredEditorId = source.editors.find(editor => editor.input === input)?.paneId;
 				const viewState = source.saveEditorViewState(input);
 				await created.group.openEditor(input, { pinned: true, preferredEditorId });

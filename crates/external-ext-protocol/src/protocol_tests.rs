@@ -311,6 +311,7 @@ fn request_round_trip_preserves_all_stale_response_fences() {
         request: HostRequestKind::Invoke(InvokeParams {
             extension_id: "acme.review".into(),
             registration_id: "review.command".into(),
+            registration_generation: None,
             operation: "execute".into(),
             payload: json!({"uri": "opaque-resource-1"}),
             deadline_unix_millis: 1000,
@@ -320,6 +321,23 @@ fn request_round_trip_preserves_all_stale_response_fences() {
     let encoded = serde_json::to_string(&request).unwrap();
     let decoded: ExtensionHostRequest = serde_json::from_str(&encoded).unwrap();
     assert_eq!(decoded, request);
+    assert!(!encoded.contains("registrationGeneration"));
+    let mut speech = request.clone();
+    let HostRequestKind::Invoke(params) = &mut speech.request else {
+        unreachable!()
+    };
+    params.registration_generation = Some(3);
+    speech.validate(&ProtocolLimits::default()).unwrap();
+    assert_eq!(
+        serde_json::from_str::<ExtensionHostRequest>(&serde_json::to_string(&speech).unwrap())
+            .unwrap(),
+        speech
+    );
+    let HostRequestKind::Invoke(params) = &mut speech.request else {
+        unreachable!()
+    };
+    params.registration_generation = Some(0);
+    assert!(speech.validate(&ProtocolLimits::default()).is_err());
     assert!(encoded.contains("\"protocolVersion\":1"));
     assert!(encoded.contains("\"incarnation\":3"));
     assert!(encoded.contains("\"activationGeneration\":11"));
@@ -579,6 +597,7 @@ fn invoke_response_payload_obeys_the_narrow_payload_quota() {
         request: HostRequestKind::Invoke(InvokeParams {
             extension_id: "acme.review".into(),
             registration_id: "review.command".into(),
+            registration_generation: None,
             operation: "execute".into(),
             payload: json!({}),
             deadline_unix_millis: 1000,
@@ -1142,8 +1161,7 @@ fn terminal_environment_registration_requires_the_admitted_terminal_ceiling() {
 #[test]
 fn speech_registration_requires_capability_and_unique_bounded_identifier() {
     let mut params = activation();
-    let registration =
-        json!({"registrationId":"speech", "kind":"speechProvider", "identifier":"example.speech"});
+    let registration = json!({"registrationId":"speech", "kind":"speechProvider", "registrationGeneration":1, "identifier":"example.speech"});
     let mut request = ExtensionHostRequest {
         context: RequestContext::new(1, 1, 1),
         request: HostRequestKind::Activate(params.clone()),
@@ -1180,4 +1198,92 @@ fn speech_registration_requires_capability_and_unique_bounded_identifier() {
         invalid["identifier"] = json!(identifier);
         assert_command_registration_rejected(&request, invalid);
     }
+}
+
+#[test]
+fn dynamic_speech_frames_reject_other_registrations_and_invalid_fences() {
+    let value = json!({ "context": { "protocolVersion": 1, "incarnation": 2, "activationGeneration": 3 }, "revision": 1,
+        "speechProviders": [{ "registrationId": "speech.1", "kind": "speechProvider", "registrationGeneration":1, "identifier": "example.recognition" }] });
+    let event: super::ExtensionHostRegistrationEvent =
+        serde_json::from_value(value.clone()).unwrap();
+    event.validate(&ProtocolLimits::default()).unwrap();
+    assert!(matches!(
+        serde_json::from_value::<ExtensionHostStdoutFrame>(value.clone()).unwrap(),
+        ExtensionHostStdoutFrame::Registrations(_)
+    ));
+    for (key, invalid) in [
+        ("revision", json!(0)),
+        (
+            "speechProviders",
+            json!([{"registrationId":"other", "kind":"workspaceEvents"}]),
+        ),
+    ] {
+        let mut invalid_value = value.clone();
+        invalid_value[key] = invalid;
+        let invalid: super::ExtensionHostRegistrationEvent =
+            serde_json::from_value(invalid_value).unwrap();
+        assert!(invalid.validate(&ProtocolLimits::default()).is_err());
+    }
+    let mut invalid = event.clone();
+    invalid.context.activation_generation = 0;
+    assert!(invalid.validate(&ProtocolLimits::default()).is_err());
+    invalid = event;
+    invalid
+        .speech_providers
+        .push(invalid.speech_providers[0].clone());
+    assert!(invalid.validate(&ProtocolLimits::default()).is_err());
+}
+
+#[test]
+fn terminal_completion_and_quick_fix_registrations_require_distinct_capabilities() {
+    for (value, capability) in [
+        (
+            json!({"registrationId":"completion", "kind":"terminalCompletionProvider", "triggerCharacters":["-"]}),
+            ExtensionCapability::TerminalCompletionProvider,
+        ),
+        (
+            json!({"registrationId":"fix", "kind":"terminalQuickFixProvider", "providerId":"acme.fix"}),
+            ExtensionCapability::TerminalQuickFixProvider,
+        ),
+    ] {
+        let mut params = activation();
+        params.capabilities = vec![ExtensionCapability::TerminalLinkProvider];
+        let mut request = ExtensionHostRequest {
+            context: RequestContext::new(1, 1, 1),
+            request: HostRequestKind::Activate(params.clone()),
+        };
+        assert_command_registration_rejected(&request, value.clone());
+        params.capabilities = vec![capability];
+        request.request = HostRequestKind::Activate(params);
+        let descriptor: RegistrationDescriptor = serde_json::from_value(value.clone()).unwrap();
+        let response = ExtensionHostResponse {
+            context: request.context,
+            response: HostResponseKind::Success(HostSuccess::Activated(ActivateResult {
+                registrations: vec![descriptor],
+            })),
+        };
+        response
+            .validate_for(&request, &ProtocolLimits::default())
+            .unwrap();
+        let mut invalid = value;
+        if capability == ExtensionCapability::TerminalCompletionProvider {
+            invalid["triggerCharacters"] = json!(["too long"]);
+        } else {
+            invalid["providerId"] = json!("");
+        }
+        assert_command_registration_rejected(&request, invalid);
+    }
+}
+
+#[test]
+fn dynamic_terminal_registrations_are_a_bounded_provider_subset() {
+    let value = json!({"context":{"protocolVersion":1,"incarnation":2,"activationGeneration":3},"revision":1,"speechProviders":[],"terminalProviders":[{"registrationId":"completion.1","kind":"terminalCompletionProvider","triggerCharacters":[]},{"registrationId":"fix.1","kind":"terminalQuickFixProvider","providerId":"acme.fix"}]});
+    let event: super::ExtensionHostRegistrationEvent =
+        serde_json::from_value(value.clone()).unwrap();
+    event.validate(&ProtocolLimits::default()).unwrap();
+    let mut invalid = value;
+    invalid["terminalProviders"] =
+        json!([{"registrationId":"command","kind":"command","command":"unsafe","title":"Unsafe"}]);
+    let event: super::ExtensionHostRegistrationEvent = serde_json::from_value(invalid).unwrap();
+    assert!(event.validate(&ProtocolLimits::default()).is_err());
 }

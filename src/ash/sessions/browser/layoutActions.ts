@@ -7,7 +7,8 @@ import { DisposableStore, toDisposable, type IDisposable } from '../../base/comm
 import { MenusRegistry, MenuId, Action2, registerAction2 } from '../../platform/actions/common/actions.js';
 import { CommandsRegistry } from '../../platform/commands/common/commands.js';
 import { RawContextKey, type IContextKeyService } from '../../platform/contextkey/common/contextkey.js';
-import { SideBarVisibleContext, PanelVisibleContext } from '../../workbench/common/contextkeys.js';
+import { SideBarVisibleContext, PanelVisibleContext, PanelMaximizedContext, PanelPositionContext } from '../../workbench/common/contextkeys.js';
+import { positionToString } from '../../workbench/services/layout/browser/layoutService.js';
 import { Keybinding, logicalKey } from '../../base/common/keybindings.js';
 import type { ISessionsService } from '../services/sessions/browser/sessionsService.js';
 import type { IAgentWorkbenchLayoutService } from './workbench.js';
@@ -24,15 +25,20 @@ export function registerLayoutActions(layout: IAgentWorkbenchLayoutService, sess
 	const forwardEnabled = CanGoForwardContext.bindTo(contextKeys);
 	const codeAvailable = sessionTools.bindTo(contextKeys);
 	const panelVisible = PanelVisibleContext.bindTo(contextKeys);
+	const panelMaximized = PanelMaximizedContext.bindTo(contextKeys);
+	const panelPosition = PanelPositionContext.bindTo(contextKeys);
 	const updateContext = (): void => contextKeys.bufferChangeEvents(() => {
 		sidebarVisible.set(layout.isPartVisible('sidebar'));
 		backEnabled.set(sessions.canNavigateBack);
 		forwardEnabled.set(sessions.canNavigateForward);
-		codeAvailable.set(layout.isPartVisible('sessions') && layout.isPartAvailable('panel'));
+		codeAvailable.set((layout.isPartVisible('sessions') || layout.isPanelMaximized()) && layout.isPartAvailable('panel'));
 		panelVisible.set(layout.isPartVisible('panel'));
+		panelMaximized.set(layout.isPanelMaximized());
+		panelPosition.set(positionToString(layout.getPanelPosition()));
 	});
 	updateContext();
 	disposables.add(layout.onDidChangePartVisibility(updateContext));
+	disposables.add(layout.onDidChangePanelPosition(updateContext));
 	disposables.add(sessions.onDidChange(updateContext));
 	disposables.add(layout.onDidLayoutMainContainer(updateContext));
 	disposables.add(toDisposable(() => contextKeys.bufferChangeEvents(() => {
@@ -41,6 +47,8 @@ export function registerLayoutActions(layout: IAgentWorkbenchLayoutService, sess
 		forwardEnabled.reset();
 		codeAvailable.reset();
 		panelVisible.reset();
+		panelMaximized.reset();
+		panelPosition.reset();
 	})));
 	disposables.add(CommandsRegistry.register('ash.sessions.toggleSidebar', () => {
 		if (layout.isPartVisible('sidebar')) {
@@ -69,7 +77,7 @@ export function registerLayoutActions(layout: IAgentWorkbenchLayoutService, sess
 			});
 		}
 		override async run(accessor: ServicesAccessor): Promise<void> {
-			if (!layout.isPartVisible('sessions') || !layout.isPartAvailable('panel')) {
+			if ((!layout.isPartVisible('sessions') && !layout.isPanelMaximized()) || !layout.isPartAvailable('panel')) {
 				return;
 			}
 			if (layout.isPartVisible('panel')) {

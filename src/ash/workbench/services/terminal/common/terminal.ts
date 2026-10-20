@@ -7,6 +7,7 @@ export interface ITerminalProcessOwnership {
 
 /** One immutable screen checkpoint, never a second live process or layout model. */
 export interface ITerminalSerializedState {
+	readonly environmentVariableCollections?: import('../../../../platform/terminal/common/environmentVariable.js').ISerializableEnvironmentVariableCollections;
 	readonly instanceId: number;
 	readonly resource: string;
 	readonly dirId: string;

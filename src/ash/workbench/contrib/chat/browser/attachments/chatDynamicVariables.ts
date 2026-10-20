@@ -81,7 +81,11 @@ export class ChatDynamicVariableModel extends Disposable {
 		const cursor = reference.end + trailing.length;
 		this.input.setSelection({ anchor: cursor, active: cursor });
 		// One file can occur more than once, with a different snapshot at each insertion.
-		const entry = { ...context, id: this.references.some(entry => entry.id === context.id) ? `${context.id}:${createUuid()}` : context.id, reference };
+		// User references represent the selected snapshot. Persistence and sending
+		// share its acquisition, while failed acquisitions remain explicitly retryable.
+		let snapshot: ReturnType<ChatContextAttachment['resolve']> | undefined;
+		const resolve = context.lifetime === 'source' ? () => context.resolve() : () => snapshot ??= context.resolve().catch(error => { snapshot = undefined; throw error; });
+		const entry = { ...context, resolve, id: this.references.some(entry => entry.id === context.id) ? `${context.id}:${createUuid()}` : context.id, reference };
 		this.references = [...this.references, entry].sort((a, b) => a.reference.start - b.reference.start);
 		this.refresh();
 		if (focus) this.input.focus();

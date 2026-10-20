@@ -44,6 +44,7 @@ struct ClientCall {
 
 struct Bridge {
     writer: Writer,
+    activation: Option<external_ext_protocol::HostEventContext>,
     contexts: BTreeMap<u64, RequestContext>,
     active: ActiveRequests,
     calls: BTreeMap<u64, ClientCall>,
@@ -214,6 +215,7 @@ pub(crate) fn run(package: Package, confinement: Option<MemoryLimits>) -> Result
         fixed_buffer_context(scope)?;
         scope.set_slot(Bridge {
             writer: writer.clone(),
+            activation: None,
             contexts: BTreeMap::new(),
             active,
             calls: BTreeMap::new(),
@@ -520,6 +522,12 @@ fn run_engine(
                                 .ok_or("cannot initialize extension environment")?;
                         }
                         fence = Some(binding);
+                        scope
+                            .get_slot_mut::<Bridge>()
+                            .expect("bridge exists")
+                            .activation = Some(external_ext_protocol::HostEventContext::new(
+                            binding.0, binding.1,
+                        ));
                         phase = Phase::Initialized;
                         respond(
                             writer,
@@ -559,6 +567,14 @@ fn run_engine(
                         let runtime_object = property(scope, adapter_namespace, "__runtime")?;
                         let runtime_object = v8::Local::<v8::Object>::try_from(runtime_object)
                             .map_err(|_| "invalid adapter runtime")?;
+                        let registration_listener = v8::Function::new(scope, registration_changed)
+                            .ok_or("cannot create registration event bridge")?;
+                        call(
+                            scope,
+                            runtime_object,
+                            "onRegistrationsChanged",
+                            &[registration_listener.into()],
+                        )?;
                         let id = v8::String::new(scope, &package.extension_id)
                             .ok_or("cannot allocate extension identity")?;
                         let context = call(scope, runtime_object, "beginActivation", &[id.into()])?;
@@ -618,6 +634,9 @@ fn run_engine(
                                     | "createTerminalProfile"
                                     | "getTerminalEnvironment"
                                     | "provideTerminalLinks"
+                                    | "provideTerminalCompletions"
+                                    | "provideTerminalQuickFixes"
+                                    | "handleTerminalQuickFix"
                                     | "handleTerminalLink"
                                     | "provideTasks"
                                     | "resolveTask"
@@ -676,6 +695,12 @@ fn run_engine(
                         let id = v8::Number::new(scope, context.request_id as f64);
                         let operation = v8::String::new(scope, &params.operation)
                             .ok_or("cannot allocate invocation operation")?;
+                        let registration_generation: v8::Local<v8::Value> = match params
+                            .registration_generation
+                        {
+                            Some(generation) => v8::Number::new(scope, generation as f64).into(),
+                            None => v8::undefined(scope).into(),
+                        };
                         watchdog.set(Some(params.deadline_unix_millis))?;
                         // V8 carries this value through Promise/await continuations. The extension
                         // cannot read or change it, so overlapping callbacks keep their own caller.
@@ -690,6 +715,7 @@ fn run_engine(
                                 payload.into(),
                                 id.into(),
                                 operation.into(),
+                                registration_generation,
                             ],
                         )?;
                         let promise = as_promise(scope, result)?;
@@ -901,6 +927,48 @@ fn client_request(
     mut result: v8::ReturnValue,
 ) {
     if let Err(error) = dispatch_client(scope, args, &mut result) {
+        throw(scope, &error);
+    }
+}
+
+fn registration_changed(
+    scope: &mut v8::PinScope<'_, '_>,
+    args: v8::FunctionCallbackArguments,
+    _result: v8::ReturnValue,
+) {
+    let result = (|| -> Result<(), String> {
+        let encoded = args.get(0).to_rust_string_lossy(scope);
+        let mut payload: Value =
+            serde_json::from_str(&encoded).map_err(|error| error.to_string())?;
+        let bridge = scope
+            .get_slot::<Bridge>()
+            .ok_or("missing registration bridge")?;
+        let context = bridge
+            .activation
+            .ok_or("registration event has no activation")?;
+        payload
+            .as_object_mut()
+            .ok_or("invalid registration event")?
+            .insert(
+                "context".into(),
+                serde_json::to_value(context).map_err(|error| error.to_string())?,
+            );
+        let event: external_ext_protocol::ExtensionHostRegistrationEvent =
+            serde_json::from_value(payload).map_err(|error| error.to_string())?;
+        event
+            .validate(&ProtocolLimits::default())
+            .map_err(|error| error.to_string())?;
+        external_ext_protocol::write_frame(
+            &mut *bridge
+                .writer
+                .lock()
+                .map_err(|_| "registration writer poisoned")?,
+            &event,
+            ProtocolLimits::default().maximum_frame_bytes,
+        )
+        .map_err(|error| error.to_string())
+    })();
+    if let Err(error) = result {
         throw(scope, &error);
     }
 }

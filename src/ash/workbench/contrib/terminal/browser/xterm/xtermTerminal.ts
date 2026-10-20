@@ -191,8 +191,7 @@ export class XtermTerminal extends Disposable implements IXtermTerminal {
 		for (const write of this.pendingWrites) write(terminal);
 		this.pendingWrites.length = 0;
 		this.fit();
-		if (this.visible && this.focusSource !== undefined && this.element.ownerDocument.activeElement === this.focusSource) terminal.focus();
-		this.focusSource = undefined;
+		this.restoreFocus();
 	}
 
 	private screenOptions(): ITerminalOptions {
@@ -248,10 +247,17 @@ export class XtermTerminal extends Disposable implements IXtermTerminal {
 
 	focus(): void {
 		if (!this.visible || this.isDisposed) return;
+		this.focusSource = this.element.ownerDocument.activeElement;
 		this.fit();
 		this.resizeDebouncer.flush();
-		this.focusSource = this.element.ownerDocument.activeElement;
-		this.terminal?.focus();
+		this.restoreFocus();
+	}
+
+	// Restored buffers open on their first visible layout; a later user focus change cancels the request.
+	private restoreFocus(): void {
+		if (!this.visible || !this.opened || this.focusSource === undefined) return;
+		if (this.element.ownerDocument.activeElement === this.focusSource) this.terminal?.focus();
+		this.focusSource = undefined;
 	}
 
 	handleShellIntegration(event: TerminalShellIntegrationEvent): void {
@@ -379,6 +385,7 @@ export class XtermTerminal extends Disposable implements IXtermTerminal {
 			this.opened = true;
 			updateTerminalFontRendering(this.raw, this.configuration.config.fontRendering);
 			this._onDidOpen.fire();
+			this.restoreFocus();
 		}
 		try {
 			const dimensions = this.fitAddon.proposeDimensions();

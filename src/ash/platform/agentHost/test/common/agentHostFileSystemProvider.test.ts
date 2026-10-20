@@ -202,6 +202,22 @@ suite('Agent Host filesystem authority routes', () => {
 		});
 	}
 
+	test('a staged sibling cannot publish or recursively clean through a newly mounted descendant', async () => {
+		const mutations: unknown[] = [];
+		using provider = new AgentHostFileSystemProvider(connection(URI.file('/workspace'), 'primary'));
+		using parent = provider.registerAuthority(root.authority, connection(root, 'parent', {
+			rename: async params => { mutations.push(params); },
+			delete: async params => { mutations.push(params); },
+		}));
+		const target = URI.joinPath(root, 'copied');
+		const temporary = URI.joinPath(root, '.ash-copy-private');
+		using scope = provider.acquireCopyScope(target);
+		using nested = provider.registerAuthority(root.authority, connection(URI.joinPath(temporary, 'nested'), 'nested'));
+		await assert.rejects(scope.rename(temporary, target, 'error'), isCancellationError);
+		await assert.rejects(scope.delete(temporary, 'ignore', 'recursive'), isCancellationError);
+		assert.deepEqual(mutations, []);
+	});
+
 	test('source retirement blocks a late target dispatch while its original cleanup scope remains usable', async () => {
 		using provider = new AgentHostFileSystemProvider(connection(URI.file('/workspace'), 'primary'));
 		const sourceRoot = root.with({ authority: 'ssh+source' });

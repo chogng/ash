@@ -60,10 +60,11 @@ export function normalizeExtensionHostPayload(value: unknown): JsonValue {
 }
 
 export function normalizeExtensionHostInvocationRequest(value: ExtensionHostInvocationRequest): ExtensionHostInvocationRequest {
-	const request = exactRecord(value, "Extension Host invocation", ["activationGeneration", "deadlineUnixMillis", "extensionId", "incarnation", "operation", "payload", "registrationId"]);
+	const request = exactRecord(value, "Extension Host invocation", ["activationGeneration", "deadlineUnixMillis", "extensionId", "incarnation", "operation", "payload", "registrationId"], ["registrationGeneration"]);
 	return Object.freeze({
 		extensionId: boundedText(request.extensionId, "Extension Host extension ID", 256),
 		registrationId: boundedText(request.registrationId, "Extension Host registration ID", 256),
+		...(request.registrationGeneration === undefined ? {} : { registrationGeneration: positiveSafeInteger(request.registrationGeneration, "Speech registration generation") }),
 		activationGeneration: positiveSafeInteger(request.activationGeneration, "Extension Host activation generation"),
 		incarnation: positiveSafeInteger(request.incarnation, "Extension Host incarnation"),
 		operation: boundedText(request.operation, "Extension Host operation", 128),
@@ -346,6 +347,20 @@ function normalizeRegistration(value: unknown): ExtensionHostRegistration {
 		exactKeys(input, 'Extension Host terminal profile registration', ['kind', 'registrationId', 'profileId', 'title']);
 		return Object.freeze({ kind, registrationId, profileId: boundedText(input.profileId, 'Terminal profile ID', 256), title: boundedText(input.title, 'Terminal profile title', 512) });
 	}
+	if (kind === 'terminalCompletionProvider') {
+		exactKeys(input, 'Extension Host terminal completion registration', ['kind', 'registrationId', 'triggerCharacters']);
+		const triggerCharacters = boundedArray(input.triggerCharacters, 'Terminal completion triggers', 64).map(value => {
+			const character = boundedText(value, 'Terminal completion trigger', 8);
+			if ([...character].length !== 1 || /[\x00-\x1f\x7f]/.test(character)) throw new TypeError('Invalid terminal completion trigger');
+			return character;
+		});
+		assertUnique(triggerCharacters, 'Terminal completion triggers');
+		return Object.freeze({ kind, registrationId, triggerCharacters: Object.freeze(triggerCharacters) });
+	}
+	if (kind === 'terminalQuickFixProvider') {
+		exactKeys(input, 'Extension Host terminal quick fix registration', ['kind', 'registrationId', 'providerId']);
+		return Object.freeze({ kind, registrationId, providerId: boundedText(input.providerId, 'Terminal quick fix provider ID', 256) });
+	}
 	if (kind === 'terminalLinkProvider') {
 		exactKeys(input, 'Extension Host terminal link registration', ['kind', 'registrationId']);
 		return Object.freeze({ kind, registrationId });
@@ -363,10 +378,10 @@ function normalizeRegistration(value: unknown): ExtensionHostRegistration {
 		return Object.freeze({ kind, registrationId, providerId: boundedText(input.providerId, "Extension Host Test Profile provider ID", 256), label: boundedText(input.label, "Extension Host Test Profile provider label", 512) });
 	}
 	if (kind === 'speechProvider') {
-		exactKeys(input, 'Extension Host speech registration', ['kind', 'registrationId', 'identifier']);
+		exactKeys(input, 'Extension Host speech registration', ['kind', 'registrationId', 'identifier', 'registrationGeneration']);
 		const identifier = boundedText(input.identifier, 'Speech provider identifier', 256);
 		if (/\s/u.test(identifier)) throw new TypeError('Invalid Speech provider identifier');
-		return Object.freeze({ kind, registrationId, identifier });
+		return Object.freeze({ kind, registrationId, identifier, registrationGeneration: positiveSafeInteger(input.registrationGeneration, 'Speech registration generation') });
 	}
 	if (kind === 'dataChannel') {
 		exactKeys(input, 'Extension Host data channel registration', ['channelId', 'kind', 'registrationId']);

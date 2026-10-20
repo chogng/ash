@@ -1,3 +1,4 @@
+import type { ITerminalAutoReply } from '../../../../platform/terminal/common/terminal.js';
 import type { ITerminalProcessOwnership } from '../../../services/terminal/common/terminal.js';
 import { localize } from '../../../../nls.js';
 import type { URI } from '../../../../base/common/uri.js';
@@ -93,6 +94,8 @@ export type ITerminalProfileSelection = TerminalProcessProfileSelection;
 
 /** Complete caller-facing input for creating one terminal. */
 export type ITerminalCreateOptions = {
+	readonly environmentVariableCollections?: import('../../../../platform/terminal/common/environmentVariable.js').ISerializableEnvironmentVariableCollections;
+	readonly environmentVariableCollectionsPersistable?: boolean;
 	readonly dirId?: string;
 	readonly dimensions: ITerminalDimensions;
 	readonly title?: string;
@@ -145,6 +148,7 @@ export class TerminalTransferError extends Error {
 
 /** One interactive terminal independently of its transport representation. */
 export interface ITerminalInstance extends IDisposable {
+	readonly extEnvironmentVariableCollection?: import('../../../../platform/terminal/common/environmentVariable.js').IMergedEnvironmentVariableCollection;
 	readonly revivalLaunch?: ITerminalSerializedState['launch'];
 	readonly isReadOnly?: boolean;
 	readonly resource?: URI;
@@ -183,6 +187,8 @@ export interface ITerminalInstance extends IDisposable {
 	/** Quotes a host path for the spawn-confirmed shell; URI inputs must belong to this execution host. */
 	sendPath(originalPath: string | URI, shouldExecute: boolean): Promise<void>;
 	sendSignal(signal: string): Promise<void>;
+	/** Installs execution-side rules on a backed process; virtual PTYs ignore them. */
+	setAutoReplies(rules: readonly ITerminalAutoReply[]): Promise<void>;
 	processBinary(data: string): Promise<void>;
 	resize(dimensions: ITerminalDimensions): void;
 	clearBuffer(): void;

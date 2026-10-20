@@ -26,6 +26,7 @@ fn transport() -> (StdioExtensionHostProcess, BufReader<TcpStream>) {
     let exited = Arc::new(AtomicBool::new(false));
     let output_events = Arc::new(Mutex::new(OutputEventQueue::default()));
     let background = Arc::new(Mutex::new(BackgroundClientQueue::default()));
+    let registration_handler = Arc::new(Mutex::new(None));
     let limits = ExtensionHostLimits::default();
     let reader = spawn_stdout_reader(
         Box::new(stream.try_clone().unwrap()),
@@ -33,6 +34,7 @@ fn transport() -> (StdioExtensionHostProcess, BufReader<TcpStream>) {
         exited.clone(),
         output_events.clone(),
         background.clone(),
+        registration_handler.clone(),
         false,
         limits.clone(),
     );
@@ -44,6 +46,7 @@ fn transport() -> (StdioExtensionHostProcess, BufReader<TcpStream>) {
     );
     (
         StdioExtensionHostProcess {
+            registration_handler,
             child: Mutex::new(None),
             writer: Mutex::new(Some(writer)),
             pending,
@@ -71,6 +74,7 @@ fn cancelled_invocation_keeps_its_client_reply_until_the_host_callback_finishes(
         request: HostRequestKind::Invoke(InvokeParams {
             extension_id: "test.extension".into(),
             registration_id: "scm".into(),
+            registration_generation: None,
             operation: "decoration".into(),
             payload: Value::Null,
             deadline_unix_millis: u64::MAX,
@@ -191,6 +195,7 @@ fn blocked_stdin_does_not_block_dispatch_or_termination() {
             request: HostRequestKind::Invoke(InvokeParams {
                 extension_id: "test.extension".into(),
                 registration_id: "test".into(),
+                registration_generation: None,
                 operation: "execute".into(),
                 payload: Value::String("x".repeat(2 * 1024 * 1024)),
                 deadline_unix_millis: u64::MAX,

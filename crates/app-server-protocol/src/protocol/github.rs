@@ -968,3 +968,58 @@ pub enum GitHubSharePathKind {
     File,
     Directory,
 }
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct GitHubCheckParams {
+    pub operation_id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub account_id: Option<String>,
+    pub repository: IssueRepository,
+    #[ts(type = "number")]
+    pub number: u64,
+    pub commit: String,
+    #[ts(type = "number")]
+    pub check_id: u64,
+}
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct GitHubCheckDetailsParams {
+    pub operation_id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub account_id: Option<String>,
+    pub repository: IssueRepository,
+    #[ts(type = "number")]
+    pub number: u64,
+    pub commit: String,
+    #[ts(type = "number")]
+    pub check_id: u64,
+    pub page: u32,
+}
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct GitHubCheckAnnotation {
+    pub path: String,
+    pub start_line: u32,
+    pub end_line: u32,
+    pub annotation_level: String,
+    pub message: String,
+    pub title: Option<String>,
+}
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct GitHubCheckDetailsResult {
+    pub title: String,
+    pub summary: String,
+    pub text: String,
+    pub annotations: Vec<GitHubCheckAnnotation>,
+    pub next_page: Option<u32>,
+    pub actions_job: bool,
+}
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct GitHubCheckLogResult {
+    pub url: String,
+}
