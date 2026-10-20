@@ -13,7 +13,12 @@ applyTo: "src/ash/**/test/**/*.ts, src/ash/**/*.test.ts,test/**/*.ts"
 | Browser integration tests | `.integration.spec.ts` | `test/integration/browser/` | Chromium via Playwright |
 | Smoke tests | `.spec.ts` | `test/smoke/areas/` | Browser or Electron via Playwright |
 
-Test sorting and serialization in unit tests, real layout and input in browser integration, and startup, IPC, backend persistence and restart in smoke tests. Keep a real product flow when moving detailed rule coverage to unit tests.
+## Test scope
+
+- Test sorting, serialization and other pure rules in unit tests. Test rendered layout, styles and component input in browser integration using the real production component and its required host styles and theme setup; reuse an existing fixture where possible.
+- Do not add a full-application smoke test solely to check icon size, color, spacing or corner radius. Keep these checks automated with computed CSS and rendered geometry assertions; a screenshot alone does not replace those assertions.
+- Use smoke tests for startup, IPC, native windows, real filesystem or process wiring, backend persistence and restart, and representative complete user flows. Keep smoke coverage for layout or interaction that depends on actual Workbench or native-window composition and cannot be exercised in an isolated component.
+- When moving coverage, map the old behavior and assertions to the destination, pass the destination tests before removing the old cases, and retain the affected real product flow. Remove an existing duplicate only after confirming equivalent coverage; merely checking that a retired button is absent does not prove a feature works.
 
 ## Running Tests
 

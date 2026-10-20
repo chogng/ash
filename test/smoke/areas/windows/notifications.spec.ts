@@ -408,68 +408,6 @@ test('Sessions startup notification copies through its window clipboard after re
 	}
 });
 
-test('notification toast controls stay legible and fit the card in light, dark, and high contrast themes', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ workbench }, testInfo) => {
-	const page = workbench.page;
-	await workbench.quickaccess.runCommand('notifications.clearAll');
-	await workbench.quickaccess.runCommand('showEditorScreenReaderNotification');
-	const toast = page.locator('.ash-notification-host .ash-notification');
-	const close = toast.getByRole('button', { name: 'Remove notification', exact: true });
-	const action = toast.getByRole('button', { name: 'Always Enable', exact: true });
-	for (const theme of ['Ash Light', 'Ash Dark', 'Ash High Contrast Dark', 'Ash High Contrast Light']) {
-		await workbench.quickaccess.runCommand('workbench.action.selectTheme');
-		const search = page.locator('.ash-quick-pick').getByRole('combobox');
-		await search.fill(theme);
-		await search.press('Enter');
-		await expect(page.locator('.ash-quick-pick')).toHaveCount(0);
-		await page.mouse.move(400, 180);
-		await expect(close).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
-		await expect(close).toHaveCSS('border-top-width', '0px');
-		await expect(close.locator('svg')).toHaveCount(1);
-		await expect(toast).toHaveCSS('border-radius', '8px');
-		await expect(action).toHaveCSS('min-height', '28px');
-		const geometry = await toast.evaluate(element => {
-			const close = element.querySelector('.ash-notification-close')!;
-			const message = element.querySelector('.ash-notification-message')!;
-			const bounds = element.getBoundingClientRect();
-			const closeBounds = close.getBoundingClientRect();
-			const messageBounds = message.getBoundingClientRect();
-			return {
-				width: bounds.width,
-				closeWidth: closeBounds.width,
-				closeHeight: closeBounds.height,
-				messageBeforeClose: messageBounds.right <= closeBounds.left,
-				closeInside: closeBounds.right <= bounds.right && closeBounds.top >= bounds.top,
-				noOverflow: element.scrollWidth <= element.clientWidth,
-				border: getComputedStyle(element).borderTopColor,
-			};
-		});
-		expect(geometry.width).toBeLessThanOrEqual(420);
-		expect(geometry.closeWidth).toBe(22);
-		expect(geometry.closeHeight).toBe(22);
-		expect(geometry.messageBeforeClose).toBe(true);
-		expect(geometry.closeInside).toBe(true);
-		expect(geometry.noOverflow).toBe(true);
-		if (theme.includes('High Contrast')) {
-			expect(geometry.border).toBe(theme.endsWith('Dark') ? 'rgb(255, 255, 255)' : 'rgb(0, 0, 0)');
-		}
-		await close.hover();
-		await expect(close).not.toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
-		await toast.getByRole('button', { name: 'Disable', exact: true }).focus();
-		await page.keyboard.press('Tab');
-		await expect(close).toBeFocused();
-		await expect(close).toHaveCSS('outline-style', 'solid');
-		await expect(close).toHaveCSS('outline-width', '1px');
-		await page.mouse.move(400, 180);
-		const screenshot = testInfo.outputPath(`${theme.replaceAll(' ', '-').toLowerCase()}.png`);
-		await page.screenshot({ path: screenshot });
-		await testInfo.attach(theme, { path: screenshot, contentType: 'image/png' });
-	}
-	await page.keyboard.press('Enter');
-	await expect(toast).toHaveCount(0);
-	await workbench.quickaccess.runCommand('notifications.showList');
-	await expect(page.getByRole('region', { name: 'Notification Center', exact: true }).getByText('No notifications', { exact: true })).toBeVisible();
-});
-
 test('clearing one notification toast updates the center while hiding toasts retains other records', async ({ workbench }) => {
 	const page = workbench.page;
 	await workbench.quickaccess.runCommand('notifications.clearAll');

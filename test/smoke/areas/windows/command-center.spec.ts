@@ -1171,15 +1171,6 @@ test('top activity bar places the view selector inside the sidebar', async ({ ap
 	await expect.poll(leftInsets).toEqual({ tab: 0, title: 12, paneTwisty: 6 });
 });
 
-test('command center opens without a first-run guide', async ({ workbench }) => {
-	const page = workbench.page;
-	const search = page.getByRole('button', { name: 'Search commands' });
-	await expect(search).toBeVisible();
-	await expect(page.getByRole('dialog', { name: 'Find commands quickly' })).toHaveCount(0);
-	await search.click();
-	await expect(page.locator('.ash-quick-pick').getByRole('combobox')).toBeFocused();
-});
-
 test('macOS sidebar toggle starts at the window control safe area', { tag: ['@electron-ui', '@electron-app-server', '@darwin'] }, async ({ target, workbench }) => {
 	const titlebar = workbench.page.locator('.ash-electron-titlebar');
 	const toggle = titlebar.locator('[data-action-id="workbench.action.toggleSideBar"] button');

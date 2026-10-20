@@ -5,65 +5,6 @@ import { expect, test } from '../../../automation/test.js';
 
 test.use({ openWorkspace: false });
 
-test('selected standard editor tabs join the editor surface without a separator', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ workbench }, testInfo) => {
-	const page = workbench.page;
-	await workbench.quickaccess.runCommand('workbench.action.closeAllEditors');
-	await page.keyboard.press('ControlOrMeta+N');
-	await page.keyboard.press('ControlOrMeta+N');
-	await workbench.settingsEditor.openUserSettingsUI();
-	await workbench.settingsEditor.selectEditorCategory('editor-display');
-	const settings = page.locator('.ash-settings-editor');
-	await settings.getByRole('searchbox', { name: 'Search settings' }).fill('breadcrumbs.enabled');
-	const breadcrumbs = settings.locator('[data-configuration-key="breadcrumbs.enabled"]');
-	await breadcrumbs.focus();
-	await breadcrumbs.press('Space');
-	await expect(breadcrumbs).not.toBeChecked();
-	await page.locator('.ash-modal-editor-close').click();
-	const group = workbench.editors.groupAt(0);
-	await expect(group.title).not.toHaveClass(/ash-editor-title-with-breadcrumbs/u);
-	for (const theme of ['Ash Light', 'Ash Dark', 'Ash High Contrast Light', 'Ash High Contrast Dark']) {
-		await workbench.quickaccess.runCommand('workbench.action.selectTheme');
-		const picker = page.locator('.ash-quick-pick').getByRole('combobox');
-		await picker.fill(theme);
-		await picker.press('Enter');
-		await expect(page.locator('.ash-quick-pick')).toHaveCount(0);
-		for (const name of ['Untitled-1', 'Untitled-2']) {
-			const tab = group.tabs.filter({ hasText: name });
-			await tab.click();
-			await expect(tab).toHaveAttribute('aria-selected', 'true');
-			await group.editor.waitForEditorFocus();
-			await page.mouse.move(0, 0);
-			const screenshot = await group.title.screenshot({ scale: 'css' });
-			const colors = await group.title.evaluate(async (title, png) => {
-				const image = new Image();
-				image.src = `data:image/png;base64,${png}`;
-				await image.decode();
-				const canvas = document.createElement('canvas');
-				canvas.width = image.width;
-				canvas.height = image.height;
-				const context = canvas.getContext('2d')!;
-				context.drawImage(image, 0, 0);
-				const titleBounds = title.getBoundingClientRect();
-				return Array.from(title.querySelectorAll('.ash-tab')).map(item => {
-					const bounds = item.getBoundingClientRect();
-					const x = Math.floor(bounds.left + bounds.width / 2 - titleBounds.left);
-					const y = Math.floor(bounds.bottom - titleBounds.top) - 1;
-					const actual = Array.from(context.getImageData(x, y, 1, 1).data);
-					const expectedColor = item.classList.contains('checked')
-						? getComputedStyle(item).backgroundColor
-						: getComputedStyle(title, '::after').backgroundColor;
-					context.fillStyle = expectedColor;
-					context.fillRect(0, 0, 1, 1);
-					return { actual, expected: Array.from(context.getImageData(0, 0, 1, 1).data) };
-				});
-			}, screenshot.toString('base64'));
-			expect(colors).toHaveLength(2);
-			for (const color of colors) expect(color.actual).toEqual(color.expected);
-		}
-	}
-	await testInfo.attach('selected-tab-separator', { body: await group.title.screenshot(), contentType: 'image/png' });
-});
-
 async function expectTabActionCentered(item: Locator): Promise<void> {
 	const geometry = await item.evaluate(element => {
 		const tab = element.getBoundingClientRect();
@@ -615,38 +556,6 @@ test('tab command groups close and split the clicked tabs from mouse and keyboar
 	await expect(first).toHaveCount(1);
 	await expect(dirty).toHaveCount(1);
 	await expect(source.tabs).toHaveCount(2);
-});
-
-test('editor tabs distinguish the active document from the tab strip across themes', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ workbench }) => {
-	const page = workbench.page;
-	await page.keyboard.press('ControlOrMeta+N');
-	await page.keyboard.press('ControlOrMeta+N');
-	const group = workbench.editors.groupAt(0);
-	const strip = group.title.locator('.ash-editor-tabs-and-actions');
-	const active = strip.locator('.ash-tab.checked');
-	const inactive = strip.locator('.ash-tab:not(.checked):not(.selected)').first();
-	for (const [theme, documentColor, stripColor, inactiveColor] of [
-		['Ash Dark', 'rgb(30, 30, 30)', 'rgb(37, 37, 38)', 'rgb(37, 37, 38)'],
-		['Ash Light', 'rgb(255, 255, 255)', 'rgb(243, 243, 243)', 'rgb(238, 238, 238)'],
-		['Ash High Contrast Dark', 'rgb(0, 0, 0)', 'rgb(0, 0, 0)', 'rgb(0, 0, 0)'],
-		['Ash High Contrast Light', 'rgb(255, 255, 255)', 'rgb(255, 255, 255)', 'rgb(255, 255, 255)'],
-	] as const) {
-		await workbench.quickaccess.runCommand('workbench.action.selectTheme');
-		const picker = page.locator('.ash-quick-pick').getByRole('combobox');
-		await picker.fill(theme);
-		await picker.press('Enter');
-		await expect(page.locator('.ash-quick-pick')).toHaveCount(0);
-		await expect(strip).toHaveCSS('background-color', stripColor);
-		await expect(active).toHaveCSS('background-color', documentColor);
-		await expect(inactive).toHaveCSS('background-color', inactiveColor);
-		const tab = active.getByRole('tab');
-		await tab.focus();
-		await expect(tab).toHaveCSS('outline-style', 'solid');
-		await tab.press('Alt+Enter');
-		await expect(group.title.locator('.ash-sticky-editor-tabs-row .ash-tab.checked')).toHaveCSS('background-color', documentColor);
-		await expect(strip).toHaveCSS('background-color', stripColor);
-		await active.getByRole('button', { name: 'Unpin', exact: true }).click();
-	}
 });
 
 test('double-clicking Welcome keeps it in the ordinary row and preserves an explicit pin', async ({ workbench }) => {

@@ -69,6 +69,11 @@ import { IDialogService } from '../../../src/ash/platform/dialogs/common/dialogs
 import { Event as EventUtils } from '../../../src/ash/base/common/event.js';
 import { bindTestColorTheme } from './themeFixture.js';
 import { IThemeService } from '../../../src/ash/platform/theme/common/themeService.js';
+if (new URLSearchParams(location.search).has('workbenchStyles')) {
+	await import('../../../src/ash/workbench/browser/media/style.css');
+	await import('../../../src/ash/workbench/contrib/modernUI/browser/media/roundedCorners.css');
+	document.body.classList.add('ash-workbench', 'modern-ui');
+}
 import '../../../src/ash/workbench/contrib/bulkEdit/browser/preview/bulkEdit.css';
 import type { IQuickPickItem } from '../../../src/ash/platform/quickinput/common/quickInput.js';
 import { CommandsQuickAccessProvider } from '../../../src/ash/workbench/contrib/quickaccess/browser/commandsQuickAccess.js';

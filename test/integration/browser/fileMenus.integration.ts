@@ -1,13 +1,16 @@
 import { DisposableStore, toDisposable } from '../../../src/ash/base/common/lifecycle.js';
 import { Pane, PaneView } from '../../../src/ash/base/browser/ui/splitview/paneview.js';
 import { URI } from '../../../src/ash/base/common/uri.js';
+import { Lxicon } from '../../../src/ash/base/common/lxicons.js';
 import { getKeybindingLabelParts, KeybindingLabelStyle, getKeybindingLabel } from '../../../src/ash/base/common/keybindingLabels.js';
 import { IContextKeyService } from '../../../src/ash/platform/contextkey/browser/contextKeyService.js';
 import { BrowserContextViewService } from '../../../src/ash/platform/contextview/browser/contextViewService.js';
 import { BrowserContextMenuService } from '../../../src/ash/platform/contextview/browser/contextMenuService.js';
 import { IContextMenuService, IContextViewService } from '../../../src/ash/platform/contextview/browser/contextView.js';
 import { IFileService, FileKind, type IFileSystemProvider } from '../../../src/ash/platform/files/common/files.js';
-import { MenuId, IMenuService } from '../../../src/ash/platform/actions/common/actions.js';
+import { MenuId, IMenuService, MenusRegistry } from '../../../src/ash/platform/actions/common/actions.js';
+import { ContextKeyExpr } from '../../../src/ash/platform/contextkey/common/contextkey.js';
+import { BrowserMenubarControl } from '../../../src/ash/workbench/browser/parts/titlebar/menubarControl.js';
 import { MenuService } from '../../../src/ash/platform/actions/common/menuService.js';
 import { IKeybindingService } from '../../../src/ash/platform/keybinding/common/keybinding.js';
 import { INotificationService } from '../../../src/ash/platform/notification/common/notification.js';
@@ -102,6 +105,29 @@ const views = lifetime.add(new BrowserContextViewService(document.body));
 services.registerInstance(IContextViewService, views);
 const menus = lifetime.add(services.createInstance(BrowserContextMenuService));
 services.registerInstance(IContextMenuService, menus);
+if (new URLSearchParams(location.search).has('applicationMenu')) {
+	// Render controlled states through the production titlebar control and menu services.
+	// Real command dispatch and Workbench visibility remain covered by application smoke.
+	const rootMenu = new MenuId('integration.application');
+	const fileMenu = new MenuId('integration.application.file');
+	const editMenu = new MenuId('integration.application.edit');
+	const titlebarMenu = new MenuId('integration.application.titlebar');
+	for (const [title, submenu] of [['File', fileMenu], ['Edit', editMenu]] as const) {
+		lifetime.add(MenusRegistry.appendMenuItem(rootMenu, { title, submenu }));
+	}
+	for (const [id, title, icon, toggled] of [
+		['fixture.icon', 'With icon', Lxicon.add, undefined],
+		['fixture.plain', 'Without icon', undefined, undefined],
+		['fixture.checked', 'Checked', Lxicon.layoutSidebarLeft1, ContextKeyExpr.true()],
+		['fixture.unchecked', 'Unchecked', Lxicon.layoutSidebarLeft1, ContextKeyExpr.false()],
+	] as const) {
+		lifetime.add(MenusRegistry.appendMenuItem(fileMenu, { command: { id, title, icon, toggled } }));
+	}
+	lifetime.add(MenusRegistry.appendMenuItem(editMenu, { command: { id: 'fixture.edit', title: 'Edit item' } }));
+	const host = document.body.insertBefore(document.createElement('div'), document.body.firstChild);
+	lifetime.add(new BrowserMenubarControl(host, services.get(IMenuService), menus, undefined, { applicationMenuId: rootMenu, titlebarMenuId: titlebarMenu }));
+	lifetime.add(toDisposable(() => host.remove()));
+}
 services.registerInstance(IHoverService, lifetime.add(new HoverService(services.get(IConfigurationService), views, menus)));
 services.registerInstance(IAccessibleViewService, {
 	show: () => false, getOpenAriaHint: () => undefined,

@@ -228,62 +228,6 @@ test('macOS menu style switches context menus without a titlebar menu button', {
 	}
 });
 
-test('application menu switches its root submenus on pointer entry', { tag: process.platform === 'darwin' ? ['@browser-ui', '@browser-app-server'] : ['@browser-ui', '@browser-app-server', '@electron-ui', '@electron-app-server'] }, async ({ target, workbench }) => {
-	const page = workbench.page;
-	const trigger = page.getByRole('toolbar', { name: 'Title bar left actions' }).getByRole('button', { name: 'Application menu' });
-	await trigger.click();
-	const mainMenu = page.getByRole('menu').first();
-	const fileMenuItem = mainMenu.getByRole('menuitem', { name: 'File' });
-	const editMenuItem = mainMenu.getByRole('menuitem', { name: 'Edit' });
-
-	await fileMenuItem.hover();
-	await expect(fileMenuItem).toHaveAttribute('aria-expanded', 'true');
-	await editMenuItem.hover();
-	await expect(fileMenuItem).toHaveAttribute('aria-expanded', 'false');
-	await expect(editMenuItem).toHaveAttribute('aria-expanded', 'true');
-	const bounds = await editMenuItem.boundingBox();
-	expect(bounds).not.toBeNull();
-	await page.keyboard.press('Escape');
-	await page.keyboard.press('Escape');
-	await trigger.press('Enter');
-	await expect(mainMenu).toBeFocused();
-	await expect(editMenuItem).toHaveAttribute('aria-expanded', 'false');
-	await expect(mainMenu.locator('.ash-action-view-item.focused')).toHaveCount(0);
-	await page.mouse.move(bounds!.x + bounds!.width / 2 + 2, bounds!.y + bounds!.height / 2);
-	await expect(editMenuItem).toHaveAttribute('aria-expanded', 'true');
-});
-
-test('application menu keeps submenu arrows inside their menu rows', { tag: process.platform === 'darwin' ? ['@browser-ui', '@browser-app-server'] : ['@browser-ui', '@browser-app-server', '@electron-ui', '@electron-app-server'] }, async ({ target, workbench }) => {
-	const page = workbench.page;
-	await page.getByRole('button', { name: 'Application menu' }).click();
-	const mainMenu = page.getByRole('menu').first();
-	const fileItem = mainMenu.getByRole('menuitem', { name: 'File' });
-	await fileItem.hover();
-	await expect(fileItem).toHaveAttribute('aria-expanded', 'true');
-	const arrow = fileItem.locator('.ash-submenu-indicator > .ash-icon');
-	const [itemBounds, arrowBounds] = await Promise.all([fileItem.boundingBox(), arrow.boundingBox()]);
-	expect(itemBounds).not.toBeNull();
-	expect(arrowBounds).not.toBeNull();
-	expect(arrowBounds!.width).toBe(12);
-	expect(itemBounds!.x + itemBounds!.width - arrowBounds!.x - arrowBounds!.width).toBeGreaterThanOrEqual(8);
-});
-
-test('application menu aligns command labels with and without icons', { tag: process.platform === 'darwin' ? ['@browser-ui', '@browser-app-server'] : ['@browser-ui', '@browser-app-server', '@electron-ui', '@electron-app-server'] }, async ({ target, workbench }) => {
-	const page = workbench.page;
-	await page.getByRole('button', { name: 'Application menu' }).click();
-	const fileItem = page.getByRole('menu').first().getByRole('menuitem', { name: 'File' });
-	await fileItem.hover();
-	await expect(fileItem).toHaveAttribute('aria-expanded', 'true');
-	const fileMenu = page.getByRole('menu').last();
-	await expect(fileMenu.locator('..')).toHaveCSS('border-radius', '8px');
-	const iconLabel = fileMenu.getByRole('menuitem', { name: 'New Untitled Text Editor' }).locator('.ash-button-label');
-	const plainLabel = fileMenu.getByRole('menuitem', { name: 'New File from Template' }).locator('.ash-button-label');
-	const [iconBounds, plainBounds] = await Promise.all([iconLabel.boundingBox(), plainLabel.boundingBox()]);
-	expect(iconBounds).not.toBeNull();
-	expect(plainBounds).not.toBeNull();
-	expect(Math.abs(iconBounds!.x - plainBounds!.x)).toBeLessThanOrEqual(1);
-});
-
 test('application menu shows clean labels and readable shortcuts', { tag: process.platform === 'darwin' ? ['@browser-ui', '@browser-app-server'] : ['@browser-ui', '@browser-app-server', '@electron-ui', '@electron-app-server'] }, async ({ target, workbench }) => {
 	const page = workbench.page;
 	await page.getByRole('button', { name: 'Application menu' }).click();
@@ -317,7 +261,7 @@ test('application menu shows clean labels and readable shortcuts', { tag: proces
 	await expect(editMenu.getByRole('menuitem', { name: 'Redo' }).locator('.ash-button-label')).toHaveText('Redo');
 });
 
-test('checked View menu icons stay inside the leading slot', { tag: process.platform === 'darwin' ? ['@browser-ui', '@browser-app-server'] : ['@browser-ui', '@browser-app-server', '@electron-ui', '@electron-app-server'] }, async ({ target, workbench }) => {
+test('View menu reflects actual sidebar visibility', { tag: process.platform === 'darwin' ? ['@browser-ui', '@browser-app-server'] : ['@browser-ui', '@browser-app-server', '@electron-ui', '@electron-app-server'] }, async ({ target, workbench }) => {
 	const page = workbench.page;
 	const sidebarToggle = page.locator('.ash-titlebar-left-actions [data-action-id="workbench.action.toggleSideBar"] button');
 	if (await sidebarToggle.getAttribute('aria-label') === 'Show Primary Side Bar') await sidebarToggle.click();
@@ -328,24 +272,12 @@ test('checked View menu icons stay inside the leading slot', { tag: process.plat
 	await view.hover();
 	await expect(view).toHaveAttribute('aria-expanded', 'true');
 	const viewMenu = page.getByRole('menu').last();
-	for (const [actionId, checked, iconSelector] of [
-		['workbench.action.toggleSideBar', 'true', '.ash-menu-leading-check > .ash-icon'],
-		['workbench.action.toggleAuxiliaryBar', 'false', '.ash-menu-leading-check > .ash-icon-label-icon > .ash-icon'],
+	for (const [actionId, checked] of [
+		['workbench.action.toggleSideBar', 'true'],
+		['workbench.action.toggleAuxiliaryBar', 'false'],
 	] as const) {
 		const item = viewMenu.locator(`[data-action-id="${actionId}"] button`);
 		await expect(item).toHaveAttribute('aria-checked', checked);
-		const slot = item.locator('.ash-menu-leading-slot');
-		const icon = item.locator(iconSelector);
-		const label = item.locator('.ash-button-label');
-		const [slotBounds, iconBounds, labelBounds] = await Promise.all([
-			slot.boundingBox(), icon.boundingBox(), label.boundingBox(),
-		]);
-		expect(slotBounds).not.toBeNull();
-		expect(iconBounds).not.toBeNull();
-		expect(labelBounds).not.toBeNull();
-		expect(iconBounds!.x).toBeGreaterThanOrEqual(slotBounds!.x);
-		expect(iconBounds!.x + iconBounds!.width).toBeLessThanOrEqual(slotBounds!.x + slotBounds!.width);
-		expect(labelBounds!.x).toBeGreaterThanOrEqual(iconBounds!.x + iconBounds!.width + 4);
 	}
 });
 
@@ -403,19 +335,38 @@ test('application menu opens real commands and updates Go when an editor opens',
 	await newEditorItem.click();
 
 	await expect(page.getByText('Untitled-1', { exact: true }).first()).toBeVisible();
+	const editor = workbench.editors.groupAt(0).editor;
+	await editor.waitForEditorFocus();
+	await page.keyboard.insertText('first\nsecond\nthird');
 	await trigger.focus();
 	await trigger.press('ArrowDown');
 	await expect(goMenuItem).toBeVisible();
 	await goMenuItem.focus();
 	await goMenuItem.press('ArrowRight');
 	await page.getByRole('menu').last().getByRole('menuitem', { name: 'Go to Line/Column...' }).click();
-	await expect(page.getByRole('dialog', { name: 'Go to Line or Column' })).toBeVisible();
-	await page.keyboard.press('Escape');
+	const location = page.locator('.ash-quick-pick').getByRole('combobox');
+	await expect(location).toBeFocused();
+	await expect(location).toHaveValue(':');
+	await location.fill(':2:3');
+	await location.press('Enter');
+	await expect(page.locator('.ash-quick-pick')).toHaveCount(0);
+	await expect(editor.input).toBeFocused();
+	await page.keyboard.insertText('Z');
+	await editor.waitForEditorContents(contents => contents === 'first\nseZcond\nthird');
 
 	await trigger.click();
 	await hoverMenuItem(mainMenu.getByRole('menuitem', { name: 'Terminal' }));
-	await page.getByRole('menu').last().getByRole('menuitem', { name: 'Focus Terminal' }).click();
-	await expect(page.locator('.ash-terminal-view')).toBeVisible();
+	const focusTerminal = page.getByRole('menu').last().getByRole('menuitem', { name: 'Focus Terminal' });
+	if (target.appServerMode === 'required') {
+		await expect(focusTerminal).toBeEnabled();
+		await focusTerminal.click();
+		await expect(page.locator('.ash-terminal-view')).toBeVisible();
+	} else {
+		await expect(focusTerminal).toBeDisabled();
+		await page.keyboard.press('Escape');
+		await page.keyboard.press('Escape');
+		await expect(mainMenu).toHaveCount(0);
+	}
 });
 
 test('Browser workspace files persist multiple authorized handles across save, close, reopen and reload', { tag: ['@browser-ui'] }, async ({ workbench }, testInfo) => {

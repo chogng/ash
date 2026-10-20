@@ -182,27 +182,6 @@ test('Chat pickers remain reachable through Tab and restore focus on Escape', as
 	await expect(model).toBeFocused();
 });
 
-test('Model widget hover uses the same background as the input toolbar', async ({ workbench }) => {
-	const page = workbench.page;
-	if (!await page.locator('.ash-chat-view-pane').isVisible()) {
-		await page.getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();
-	}
-	const control = page.locator('.ash-chat-model-picker-control');
-	const selector = control.locator('.ash-chat-input-model-action');
-	const contextSelector = page.locator("[data-action-id='ash.chat.input.attach'] button");
-	await page.mouse.move(0, 0);
-	await expect(control).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
-	await contextSelector.hover();
-	const hoverBackground = await contextSelector.evaluate(element => getComputedStyle(element).backgroundColor);
-	expect(hoverBackground).not.toBe('rgba(0, 0, 0, 0)');
-	await selector.hover();
-	await expect(selector).toHaveCSS('background-color', hoverBackground);
-	await expect(control).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
-	await page.mouse.move(0, 0);
-	await expect(selector).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
-	await expect(control).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
-});
-
 test('Disconnected model picker explains the empty catalog and opens settings', { tag: ['@browser-ui', '@electron-ui'] }, async ({ target, workbench }) => {
 	const page = workbench.page;
 	if (!await page.locator('.ash-chat-view-pane').isVisible()) {

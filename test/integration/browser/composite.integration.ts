@@ -180,7 +180,8 @@ declare global {
 			resizeEditor(width: number, height: number): void;
 			setWatermarkBinding(command: string, key: string | null): void;
 			readonly watermarkCommands: readonly string[];
-			configureEditorTabs(style: ModernUIEditorTabStyle, sizing?: EditorTabSizing): Promise<void>;
+			configureEditorTabs(style: ModernUIEditorTabStyle, sizing?: EditorTabSizing, breadcrumbs?: boolean): Promise<void>;
+			setActiveEditorSticky(sticky: boolean): void;
 			setEditorTheme(id: string): void;
 			closeEditor(name: string): Promise<void>;
 			openFileAliases(target?: 'modalGroup'): Promise<{ tabs: number; models: number; retained: boolean; text: string; }>;
@@ -679,10 +680,18 @@ window.ashCompositeIntegration = {
 		editorHost.style.height = `${height}px`;
 		editor.layout({ width, height });
 	},
-	configureEditorTabs: async (style, sizing = 'fit') => {
+	setActiveEditorSticky: sticky => {
+		if (sticky) {
+			editor.activeGroup.stickEditor();
+		} else {
+			editor.activeGroup.unstickEditor();
+		}
+	},
+	configureEditorTabs: async (style, sizing = 'fit', breadcrumbs) => {
 		const configuration = editorServices.get(IConfigurationService);
 		await configuration.updateValue(WorkbenchConfiguration.modernUIEditorTabStyle, style);
 		await configuration.updateValue(EditorTabSizingConfiguration, sizing);
+		if (breadcrumbs !== undefined) await configuration.updateValue('breadcrumbs.enabled', breadcrumbs);
 	},
 	setEditorTheme: id => {
 		const theme = [darkColorTheme, lightColorTheme, highContrastDarkColorTheme, highContrastLightColorTheme].find(theme => theme.id === id);

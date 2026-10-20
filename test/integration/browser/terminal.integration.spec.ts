@@ -1690,6 +1690,15 @@ test('terminal split action layers the hovered half over its shared background',
 	const dropdown = toolbar.getByRole('button', { name: 'Select Terminal Profile', exact: true });
 	await expect(primary).toBeEnabled();
 	await expect(dropdown).toBeEnabled();
+	await expect(split).toHaveCSS('gap', '0px');
+	await expect(split).toHaveCSS('border-radius', '4px');
+	await expect(primary).toHaveCSS('border-radius', '4px 0px 0px 4px');
+	await expect(dropdown).toHaveCSS('border-radius', '0px 4px 4px 0px');
+	const [left, right] = await Promise.all([primary.boundingBox(), dropdown.boundingBox()]);
+	expect(left).not.toBeNull();
+	expect(right).not.toBeNull();
+	expect(right!.x).toBeCloseTo(left!.x + left!.width, 1);
+	expect(right!.height).toBe(left!.height);
 	for (const theme of ['light', 'dark', 'hcLight', 'hcDark'] as const) {
 		await page.evaluate(theme => window.ashTerminalPaneIntegration.theme(theme), theme);
 		await page.getByRole('textbox', { name: 'Outside terminal', exact: true }).hover();

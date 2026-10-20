@@ -475,9 +475,7 @@ test.describe('welcome brand', () => {
 		await expect(group.tabs).toHaveCount(0);
 		await expect(group.welcome).toHaveCount(0);
 		await expect(group.content.locator('.ash-editor-group-watermark-shortcuts')).toBeVisible();
-		await workbench.page.keyboard.press('F1');
-		await workbench.page.locator('.ash-quick-pick').getByRole('combobox').fill('Welcome');
-		await workbench.page.keyboard.press('Enter');
+		await workbench.quickaccess.runCommand('workbench.action.openWelcome');
 		await expect(group.tabs).toHaveCount(1);
 		await expect(group.welcome).toBeVisible();
 		await expect(group.title.getByRole('button', { name: 'Reveal in File Explorer' })).toHaveCount(0);
@@ -546,13 +544,6 @@ test.describe('welcome brand', () => {
 		await expect(openFolder).toBeFocused();
 	});
 
-	test('welcome displays only the Ash name above the actions', async ({ workbench }) => {
-		const welcome = workbench.editors.groupAt(0).welcome;
-		await expect(welcome.locator('.ash-getting-started-name')).toHaveText('ASH');
-		await expect(welcome.locator('.ash-getting-started-plan')).toHaveCount(0);
-		await expect(welcome.getByRole('button', { name: 'Open folder' })).toBeVisible();
-	});
-
 	test('Clone repo and the Git command open the repository URL input in a desktop window', async ({ target, workbench }) => {
 		const clone = workbench.editors.groupAt(0).welcome.getByRole('button', { name: 'Clone repo' });
 		if (target.kind !== 'electron') {
@@ -583,34 +574,6 @@ test.describe('welcome brand', () => {
 		}
 	});
 
-	test('welcome actions use gray cards and a black GitHub card in the light theme', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ workbench }) => {
-		await workbench.quickaccess.runCommand('workbench.action.selectTheme');
-		await workbench.quickaccess.search('Ash Light');
-		await workbench.quickaccess.select('Ash Light');
-		await expect(workbench.page.locator('#app')).toHaveAttribute('data-color-theme', 'ash-light');
-		const cards = workbench.editors.groupAt(0).welcome.locator('.ash-getting-started-card');
-		await expect(cards).toHaveCount(4);
-		await expect(cards.locator('.ash-getting-started-card-label')).toHaveText(['Open folder', 'Clone repo', 'Connect via SSH', 'Connect GitHub']);
-		for (const index of [0, 1, 2]) {
-			const card = cards.nth(index);
-			await expect(card).toHaveCSS('background-color', 'rgb(243, 243, 243)');
-			await expect(card).toHaveCSS('border-color', 'rgb(212, 212, 212)');
-			await expect(card).toHaveCSS('opacity', '1');
-			await expect(card.locator('svg.ash-icon')).toHaveCSS('width', '16px');
-			await card.hover();
-			await expect(card).toHaveCSS('background-color', 'rgb(228, 228, 228)');
-		}
-		const github = cards.nth(3);
-		await expect(github).toBeEnabled();
-		await expect(github.locator('.ash-getting-started-card-arrow')).toHaveCount(0);
-		await expect(github).toHaveCSS('background-color', 'rgb(0, 0, 0)');
-		await expect(github).toHaveCSS('color', 'rgb(255, 255, 255)');
-		await expect(github.locator('svg.ash-icon')).toHaveCSS('color', 'rgb(255, 255, 255)');
-		await expect(github.locator('svg.ash-icon path').first()).toHaveCSS('fill', 'rgb(255, 255, 255)');
-		await github.hover();
-		await expect(github).toHaveCSS('background-color', 'rgb(38, 38, 38)');
-	});
-
 	test('Connect GitHub reports when account service is unavailable', { tag: ['@browser-ui'] }, async ({ target, workbench }) => {
 		await workbench.editors.groupAt(0).welcome.getByRole('button', { name: 'Connect GitHub' }).click();
 		const dialog = workbench.page.getByRole('dialog', { name: 'Connect GitHub' });
@@ -622,24 +585,6 @@ test.describe('welcome brand', () => {
 			centered: Math.abs(bounds.x + bounds.width / 2 - viewport.width / 2) < 8,
 			clearOfTitlebar: bounds.y > titlebarBounds.y + titlebarBounds.height,
 		} : null).toEqual({ centered: true, clearOfTitlebar: true });
-	});
-
-	test('welcome actions have compact, even spacing', async ({ workbench }) => {
-		const cards = workbench.editors.groupAt(0).welcome.locator('.ash-getting-started-card');
-		await expect(cards).toHaveCount(4);
-		const boxes = await Promise.all([0, 1, 2, 3].map(index => cards.nth(index).boundingBox()));
-		const [topLeft, topRight, bottomLeft, bottomRight] = boxes;
-		expect(topLeft && topRight && bottomLeft && bottomRight ? {
-			columnGap: Math.round(topRight.x - topLeft.x - topLeft.width),
-			rowGap: Math.round(bottomLeft.y - topLeft.y - topLeft.height),
-			leftColumnAligned: topLeft.x === bottomLeft.x,
-			rightColumnAligned: topRight.x === bottomRight.x,
-		} : null).toEqual({
-			columnGap: 12,
-			rowGap: 12,
-			leftColumnAligned: true,
-			rightColumnAligned: true,
-		});
 	});
 
 	test('secondary sidebar narrows welcome cards without rearranging them', async ({ driver, workbench }) => {
@@ -690,82 +635,6 @@ test.describe('welcome brand', () => {
 			secondCardOnFirstRow: true,
 		});
 	});
-
-	test('welcome cards shrink before wrapping in a narrow editor', async ({ workbench }) => {
-		const welcome = workbench.editors.groupAt(0).welcome;
-		const cardGeometry = async () => welcome.evaluate(element => {
-			const cards = [...element.querySelectorAll<HTMLElement>('.ash-getting-started-card')];
-			const [first, second] = cards.map(card => card.getBoundingClientRect());
-			return {
-				cardWidth: Math.round(first.width),
-				secondCardOnFirstRow: first.top === second.top,
-				labelOverflow: Math.max(0, ...cards.map(card => {
-					const label = card.querySelector<HTMLElement>('.ash-getting-started-card-label')!;
-					return label.getBoundingClientRect().right - card.getBoundingClientRect().right;
-				})),
-			};
-		});
-
-		await welcome.evaluate(element => { element.style.width = '364px'; });
-		expect(await cardGeometry()).toEqual({ cardWidth: 160, secondCardOnFirstRow: true, labelOverflow: 0 });
-		await welcome.evaluate(element => { element.style.width = '350px'; });
-		expect(await cardGeometry()).toEqual({ cardWidth: 180, secondCardOnFirstRow: false, labelOverflow: 0 });
-	});
-
-	test('welcome uses the theme-colored mark without a filled icon tile', async ({ workbench }) => {
-		const mark = workbench.editors.groupAt(0).welcome.locator('.ash-getting-started-mark');
-		await expect(mark).toBeVisible();
-		await expect(mark).toHaveAttribute('aria-hidden', 'true');
-		await expect(mark).toHaveCSS('mask-image', /ash-mark.*\.svg/u);
-		await expect(mark).toHaveCSS('background-image', 'none');
-		await expect(mark).toHaveCSS('background-color', await mark.evaluate(element => getComputedStyle(element).color));
-	});
-});
-
-test('recent projects align with the welcome action cards', { tag: ['@electron-ui', '@electron-app-server'] }, async ({ target, workbench }, testInfo) => {
-	const page = workbench.page;
-	await page.keyboard.press('F1');
-	await page.locator('.ash-quick-pick').getByRole('combobox').fill('Welcome');
-	await page.keyboard.press('Enter');
-	const welcome = workbench.editors.groupAt(0).welcome;
-	const recent = welcome.locator('.ash-getting-started-recent');
-	await expect(recent).toBeVisible();
-	await expect(recent.locator('.ash-getting-started-recent-item')).toHaveCount(1);
-	const [leftCard, rightCard, heading, row, name, path] = await Promise.all([
-		welcome.locator('.ash-getting-started-card').first().boundingBox(),
-		welcome.locator('.ash-getting-started-card').nth(1).boundingBox(),
-		recent.locator('h2').boundingBox(),
-		recent.locator('.ash-getting-started-recent-item').boundingBox(),
-		recent.locator('.ash-getting-started-recent-name').boundingBox(),
-		recent.locator('.ash-getting-started-recent-path').boundingBox(),
-	]);
-	expect(leftCard && rightCard && heading && row && name && path ? {
-		headingLeft: Math.round(heading.x - leftCard.x),
-		rowLeft: Math.round(row.x - leftCard.x),
-		rowRight: Math.round(row.x + row.width - rightCard.x - rightCard.width),
-		nameLeft: Math.round(name.x - leftCard.x),
-		pathRight: Math.round(path.x + path.width - rightCard.x - rightCard.width),
-	} : null).toEqual({ headingLeft: 0, rowLeft: 0, rowRight: 0, nameLeft: 8, pathRight: -8 });
-	await expect(recent.locator('.ash-getting-started-recent-path')).toHaveCSS('text-align', 'right');
-	const item = recent.locator('.ash-getting-started-recent-item');
-	const remove = item.locator('.ash-getting-started-recent-actions button');
-	for (const state of ['hover', 'focus'] as const) {
-		if (state === 'hover') await item.hover();
-		else await remove.focus();
-		await expect(item.locator('.ash-getting-started-recent-actions')).toHaveCSS('opacity', '1');
-		const rowBox = (await item.boundingBox())!;
-		const buttonBox = (await remove.boundingBox())!;
-		const iconBox = (await remove.locator('svg').boundingBox())!;
-		expect(rowBox.height).toBe(22);
-		expect(buttonBox.width).toBe(20);
-		expect(buttonBox.height).toBe(20);
-		expect(iconBox.x + iconBox.width / 2).toBeCloseTo(buttonBox.x + buttonBox.width / 2, 2);
-		expect(iconBox.y + iconBox.height / 2).toBeCloseTo(buttonBox.y + buttonBox.height / 2, 2);
-		expect(rowBox.x + rowBox.width - buttonBox.x - buttonBox.width).toBeCloseTo(1, 2);
-		expect(rowBox.x).toBe(leftCard!.x);
-		expect(rowBox.x + rowBox.width).toBe(rightCard!.x + rightCard!.width);
-		await item.screenshot({ path: testInfo.outputPath(`recents-${state}.png`) });
-	}
 });
 
 test("editor layout remains valid across workbench window sizes", async ({ driver, workbench }) => {

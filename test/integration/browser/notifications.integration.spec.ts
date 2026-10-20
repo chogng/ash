@@ -14,14 +14,29 @@ test('notification rows share standard controls, preserve focus, and fit narrow 
 		await expect(close).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
 		await expect(close).toHaveCSS('width', '22px');
 		await expect(close).toHaveCSS('height', '22px');
+		await expect(close).toHaveCSS('border-top-width', '0px');
 		expect(await close.boundingBox()).toMatchObject({ width: 22, height: 22 });
 		await expect(close.locator('svg')).toHaveCount(1);
 		await expect(toast).toHaveCSS('border-radius', '8px');
+		await expect(toast.getByRole('button', { name: 'Run action', exact: true })).toHaveCSS('min-height', '28px');
+		const geometry = await toast.evaluate(element => {
+			const bounds = element.getBoundingClientRect();
+			const close = element.querySelector('.ash-notification-close')!.getBoundingClientRect();
+			const message = element.querySelector('.ash-notification-message')!.getBoundingClientRect();
+			return { width: bounds.width, messageBeforeClose: message.right <= close.left, closeInside: close.right <= bounds.right && close.top >= bounds.top, border: getComputedStyle(element).borderTopColor };
+		});
+		expect(geometry.width).toBeLessThanOrEqual(420);
+		expect(geometry.messageBeforeClose).toBe(true);
+		expect(geometry.closeInside).toBe(true);
+		if (theme >= 2) expect(geometry.border).toBe(theme === 2 ? 'rgb(255, 255, 255)' : 'rgb(0, 0, 0)');
 		expect(await toast.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
+		await close.hover();
+		await expect(close).not.toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
 		await toast.getByRole('button', { name: 'Run action', exact: true }).focus();
 		await page.keyboard.press('Tab');
 		await expect(close).toBeFocused();
 		await expect(close).toHaveCSS('outline-style', 'solid');
+		await expect(close).toHaveCSS('outline-width', '1px');
 		await testInfo.attach(`theme-${theme}`, { body: await page.screenshot(), contentType: 'image/png' });
 	}
 	const id = await toast.getAttribute('data-notification-id');

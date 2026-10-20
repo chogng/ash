@@ -1,10 +1,6 @@
 import { expect, test } from '../../../automation/test.js';
 import { readFile } from 'node:fs/promises';
 
-test('Academic is a document contribution in the Code Workbench', async ({ workbench }) => {
-	await expect(workbench.page.locator("[data-action-id='ash.academic.open-sessions']")).toHaveCount(0);
-});
-
 test('disconnected browser preserves and saves Academic source beside code', { tag: ['@browser-ui'] }, async ({ testWorkspace, workbench }) => {
 	const paper = await readFile(testWorkspace.academicFile, 'utf8');
 	const page = workbench.page;
@@ -37,7 +33,8 @@ test('disconnected browser preserves and saves Academic source beside code', { t
 		return (await (await folder.getFileHandle('paper.ash-academic')).getFile()).text();
 	})).toBe(paper + '\n');
 	await explorer.getByRole('treeitem', { name: 'main.ts', exact: true }).dblclick();
-	await expect(group.content.locator('.stanza-editor')).toBeVisible();
+	await expect(group.editor.element).toHaveAttribute('aria-label', 'main.ts');
+	await group.editor.waitForEditorContents(contents => contents === 'const main = 1;');
 	await group.tabs.filter({ hasText: 'paper.ash-academic' }).click();
 	await group.editor.waitForEditorContents(contents => contents.startsWith(paper));
 });

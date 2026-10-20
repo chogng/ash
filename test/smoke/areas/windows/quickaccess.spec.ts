@@ -2,9 +2,6 @@ import { expect, test } from '../../../automation/test.js';
 
 test.use({ openWorkspace: false });
 
-test.beforeEach(async ({ }) => {
-});
-
 test('Quick Access runs an exact command ID and can reopen for another command', async ({ workbench }) => {
 	const quickaccess = workbench.quickaccess;
 	const tabs = workbench.editors.groupAt(0).tabs;
@@ -44,11 +41,12 @@ test('Quick Access keeps an empty search open and accepts a matching command wit
 	await expect(workbench.editors.groupAt(0).tabs.filter({ hasText: 'Untitled-1' })).toHaveAttribute('aria-selected', 'true');
 });
 
-test('Quick Access cancellation restores focus without running the filtered command', async ({ workbench }) => {
+test('Quick Access opens from its title button and cancellation restores focus without running the command', async ({ workbench }) => {
 	const quickaccess = workbench.quickaccess;
 	const search = workbench.page.getByRole('button', { name: 'Search commands', exact: true });
-	await search.focus();
-	await quickaccess.open('>workbench.action.files.newUntitledFile');
+	await search.click();
+	await expect(quickaccess.input).toBeFocused();
+	await quickaccess.search('>workbench.action.files.newUntitledFile');
 	await expect(quickaccess.items).toHaveCount(1);
 	await quickaccess.close();
 

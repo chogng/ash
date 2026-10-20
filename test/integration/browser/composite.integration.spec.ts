@@ -1061,3 +1061,85 @@ for (const locale of ['en', 'zh-CN']) {
 		expect(errors).toEqual([]);
 	});
 }
+
+test('selected standard editor tabs join the editor surface without a separator', async ({ page }, testInfo) => {
+	await page.goto('/composite.html?editorTabs');
+	await page.waitForFunction(() => !!window.ashCompositeIntegration);
+	await page.evaluate(async () => {
+		await window.ashCompositeIntegration.configureEditorTabs('standard', 'fit', false);
+		await window.ashCompositeIntegration.openEditor('alpha');
+		await window.ashCompositeIntegration.openEditor('beta');
+	});
+	const title = page.locator('#editor-tabs-host .ash-editor-title-control');
+	const tabs = title.getByRole('tab');
+	for (const theme of ['ash-light', 'ash-dark', 'ash-high-contrast-light', 'ash-high-contrast-dark']) {
+		await page.evaluate(theme => window.ashCompositeIntegration.setEditorTheme(theme), theme);
+		for (const name of ['alpha.ts', 'beta.ts']) {
+			const tab = tabs.filter({ hasText: name });
+			await tab.click();
+			await expect(tab).toHaveAttribute('aria-selected', 'true');
+			await page.locator('#editor-tabs-host .stanza-editor:visible .stanza-editor-input').focus();
+			await page.mouse.move(0, 0);
+			const screenshot = await title.screenshot({ scale: 'css' });
+			const colors = await title.evaluate(async (title, png) => {
+				const image = new Image();
+				image.src = `data:image/png;base64,${png}`;
+				await image.decode();
+				const canvas = document.createElement('canvas');
+				canvas.width = image.width;
+				canvas.height = image.height;
+				const context = canvas.getContext('2d')!;
+				context.drawImage(image, 0, 0);
+				const titleBounds = title.getBoundingClientRect();
+				return Array.from(title.querySelectorAll('.ash-tab')).map(item => {
+					const bounds = item.getBoundingClientRect();
+					const x = Math.floor(bounds.left + bounds.width / 2 - titleBounds.left);
+					const y = Math.floor(bounds.bottom - titleBounds.top) - 1;
+					const actual = Array.from(context.getImageData(x, y, 1, 1).data);
+					const expectedColor = item.classList.contains('checked')
+						? getComputedStyle(item).backgroundColor
+						: getComputedStyle(title, '::after').backgroundColor;
+					context.fillStyle = expectedColor;
+					context.fillRect(0, 0, 1, 1);
+					return { actual, expected: Array.from(context.getImageData(0, 0, 1, 1).data) };
+				});
+			}, screenshot.toString('base64'));
+			expect(colors).toHaveLength(2);
+			for (const color of colors) expect(color.actual).toEqual(color.expected);
+		}
+	}
+	await testInfo.attach('selected-tab-separator', { body: await title.screenshot(), contentType: 'image/png' });
+});
+
+test('editor tabs distinguish active, inactive and pinned surfaces across themes', async ({ page }) => {
+	await page.goto('/composite.html?editorTabs');
+	await page.waitForFunction(() => !!window.ashCompositeIntegration);
+	await page.evaluate(async () => {
+		await window.ashCompositeIntegration.configureEditorTabs('standard');
+		await window.ashCompositeIntegration.openEditor('alpha');
+		await window.ashCompositeIntegration.openEditor('beta');
+	});
+	const title = page.locator('#editor-tabs-host .ash-editor-title-control');
+	const strip = title.locator('.ash-editor-tabs-and-actions');
+	const active = strip.locator('.ash-tab.checked');
+	const inactive = strip.locator('.ash-tab:not(.checked):not(.selected)').first();
+	for (const [theme, documentColor, stripColor, inactiveColor] of [
+		['ash-dark', 'rgb(30, 30, 30)', 'rgb(37, 37, 38)', 'rgb(37, 37, 38)'],
+		['ash-light', 'rgb(255, 255, 255)', 'rgb(243, 243, 243)', 'rgb(238, 238, 238)'],
+		['ash-high-contrast-dark', 'rgb(0, 0, 0)', 'rgb(0, 0, 0)', 'rgb(0, 0, 0)'],
+		['ash-high-contrast-light', 'rgb(255, 255, 255)', 'rgb(255, 255, 255)', 'rgb(255, 255, 255)'],
+	] as const) {
+		await page.evaluate(theme => window.ashCompositeIntegration.setEditorTheme(theme), theme);
+		await expect(strip).toHaveCSS('background-color', stripColor);
+		await expect(active).toHaveCSS('background-color', documentColor);
+		await expect(inactive).toHaveCSS('background-color', inactiveColor);
+		const tab = active.getByRole('tab');
+		await page.keyboard.press('Tab');
+		await tab.focus();
+		await expect(tab).toHaveCSS('outline-style', 'solid');
+		await page.evaluate(() => window.ashCompositeIntegration.setActiveEditorSticky(true));
+		await expect(title.locator('.ash-sticky-editor-tabs-row .ash-tab.checked')).toHaveCSS('background-color', documentColor);
+		await expect(strip).toHaveCSS('background-color', stripColor);
+		await active.getByRole('button', { name: 'Unpin', exact: true }).click();
+	}
+});
