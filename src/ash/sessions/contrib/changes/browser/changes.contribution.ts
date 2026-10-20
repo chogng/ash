@@ -19,9 +19,12 @@ import { IChangesViewService } from '../common/changesViewService.js';
 import { ChangesViewService } from './changesViewService.js';
 import { ISessionChangesService } from '../common/sessionChangesService.js';
 import { SessionChangesService } from './sessionChangesService.js';
+import { IChecksOperationService } from '../common/checksOperationService.js';
+import { ChecksOperationService } from './checksOperationService.js';
 
 registerSingleton(IChangesViewService, ChangesViewService, InstantiationType.Delayed);
 registerSingleton(ISessionChangesService, SessionChangesService, InstantiationType.Delayed);
+registerSingleton(IChecksOperationService, ChecksOperationService, InstantiationType.Delayed);
 
 registerEditorPane({
 	id: SessionChangesEditor.ID,

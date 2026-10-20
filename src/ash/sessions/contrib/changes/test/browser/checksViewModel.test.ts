@@ -14,12 +14,15 @@ import { ISessionsService } from '../../../../services/sessions/browser/sessions
 import { IGitHubService } from '../../../github/browser/githubService.js';
 import { ChecksViewModel, type ChecksEntry } from '../../browser/checksViewModel.js';
 import { getCheckStateLabel } from '../../browser/checksActions.js';
+import { IChecksOperationService } from '../../common/checksOperationService.js';
+import { ChecksOperationService } from '../../browser/checksOperationService.js';
 
-function fixture(api: Partial<IGitHubApi> = {}, chat: Partial<IChatService> = {}) {
+function fixture(api: Partial<IGitHubApi> = {}, chat: Partial<IChatService> = {}, registerOperations = true) {
 	const resources = new DisposableStore();
 	const associations = resources.add(new Emitter<void>());
 	const accounts = resources.add(new Emitter<AccountState>());
 	const services = resources.add(new InstantiationService());
+	if (registerOperations) services.registerSingleton(IChecksOperationService, () => services.createInstance(ChecksOperationService));
 	const selected = resources.add(new Emitter<void>());
 	let sessionId = 'session';
 	services.registerInstance(ISessionsService, { onDidChange: selected.event, get activeSelection() { return { kind: 'session', active: { session: { sessionId }, threadId: 'thread' } }; } } as unknown as ISessionsService);
@@ -34,8 +37,10 @@ function fixture(api: Partial<IGitHubApi> = {}, chat: Partial<IChatService> = {}
 		readPullRequest: async () => ({ headCommit: 'reviewed-head' }),
 		...api,
 	} as IGitHubApi);
-	const model = resources.add(services.createInstance(ChecksViewModel));
-	return { resources, model, accounts, associations, selectSession: (id: string) => { sessionId = id; selected.fire(); } };
+	const createModel = () => resources.add(services.createInstance(ChecksViewModel));
+	let model: ChecksViewModel;
+	try { model = createModel(); } catch (error) { resources.dispose(); throw error; }
+	return { resources, model, createModel, accounts, associations, selectSession: (id: string) => { sessionId = id; selected.fire(); } };
 }
 
 async function ready(model: ChecksViewModel): Promise<void> {
@@ -110,6 +115,48 @@ const failingChecks = async (): Promise<GitHubChecks> => ({ state: 'failure', st
 suite('Session Changes CI actions', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();
 
+	test('construction requires the window-scoped operation owner', () => {
+		assert.throws(() => fixture({}, {}, false), /checksOperationService/);
+	});
+
+	for (const running of [false, true]) test(`a ${running ? 'queued' : 'started'} CI fix stays guarded while hidden and after a lost reply`, async () => {
+		let writes = 0;
+		let revision = 1n;
+		const reply = new DeferredPromise<void>();
+		const started = new DeferredPromise<void>();
+		const submit = async () => { writes++; started.complete(); return reply.p; };
+		const f = fixture({
+			listAccounts: async () => [{ id: 'enterprise', host: 'ghe.example', login: 'user', status: 'ready', credentialRevision: revision }],
+			readChecks: failingChecks, readCheckDetails: async () => details,
+		}, {
+			readThread: async () => ({ thread: { status: 'active', sequence: 1, turns: running ? [{ status: 'inProgress' }] : [] } }) as never,
+			startTurn: submit, queueTurn: submit,
+		});
+		using owner = f.resources;
+		await ready(f.model);
+		const pending = assert.rejects(f.model.fix(f.model.checksObs.get().checks[0]!), /could not be confirmed/);
+		await started.p;
+		f.model.dispose();
+		const reopened = f.createModel();
+		await ready(reopened);
+		let entry = reopened.checksObs.get().checks[0]!;
+		assert.equal(reopened.retryBlocked(entry, 'fix'), true);
+		await reopened.fix(entry);
+		assert.equal(writes, 1);
+		await reply.error(new Error('reply lost after acceptance'));
+		await pending;
+		reopened.dispose();
+		// Reauthentication cannot confirm or undo a request already accepted by Chat.
+		revision++;
+		const restored = f.createModel();
+		await ready(restored);
+		entry = restored.checksObs.get().checks[0]!;
+		assert.equal(restored.retryBlocked(entry, 'fix'), true);
+		assert.equal(restored.retryBlocked(entry, 'rerun'), false);
+		await restored.fix(entry);
+		assert.equal(writes, 1);
+	});
+
 	test('paginates annotation reads with the captured account, PR, head and check identity', async () => {
 		const calls: unknown[] = [];
 		const f = fixture({
@@ -123,6 +170,59 @@ suite('Session Changes CI actions', () => {
 		const result = await f.model.details(f.model.checksObs.get().checks[0]!);
 		assert.equal(result.annotations.length, 2);
 		assert.deepEqual(calls, [1, 2].map(page => ({ repository: { host: 'ghe.example', owner: 'team', name: 'repo', accountId: 'enterprise' }, target: { number: 7, commit: 'reviewed-head', checkId: 9 }, page })));
+	});
+
+	test('a confirmed fix releases its guard even when the original panel closes', async () => {
+		let writes = 0;
+		const reply = new DeferredPromise<void>();
+		const started = new DeferredPromise<void>();
+		const f = fixture({ readChecks: failingChecks, readCheckDetails: async () => details }, {
+			readThread: async () => ({ thread: { status: 'active', sequence: 1, turns: [] } }) as never,
+			startTurn: async () => { writes++; started.complete(); if (writes === 1) return reply.p; },
+		});
+		using owner = f.resources;
+		await ready(f.model);
+		const pending = assert.rejects(f.model.fix(f.model.checksObs.get().checks[0]!));
+		await started.p;
+		f.model.dispose();
+		const reopened = f.createModel();
+		await ready(reopened);
+		const entry = reopened.checksObs.get().checks[0]!;
+		assert.equal(reopened.retryBlocked(entry, 'fix'), true);
+		await reply.complete();
+		await pending;
+		assert.equal(reopened.retryBlocked(entry, 'fix'), false);
+		await reopened.fix(entry);
+		assert.equal(writes, 2);
+	});
+
+	test('closing a panel before submission releases the guard without blocking a later fix', async () => {
+		let writes = 0;
+		let reads = 0;
+		const response = new DeferredPromise<GitHubCheckDetails>();
+		const started = new DeferredPromise<void>();
+		const f = fixture({
+			readChecks: failingChecks,
+			readCheckDetails: async () => { if (++reads === 1) { started.complete(); return response.p; } return details; },
+		}, {
+			readThread: async () => ({ thread: { status: 'active', sequence: 1, turns: [] } }) as never,
+			startTurn: async () => { writes++; },
+		});
+		using owner = f.resources;
+		await ready(f.model);
+		const pending = assert.rejects(f.model.fix(f.model.checksObs.get().checks[0]!));
+		await started.p;
+		f.model.dispose();
+		const reopened = f.createModel();
+		await ready(reopened);
+		const entry = reopened.checksObs.get().checks[0]!;
+		assert.equal(reopened.retryBlocked(entry, 'fix'), true);
+		await response.complete(details);
+		await pending;
+		assert.equal(writes, 0);
+		assert.equal(reopened.retryBlocked(entry, 'fix'), false);
+		await reopened.fix(entry);
+		assert.equal(writes, 1);
 	});
 
 	test('account changes cancel live detail reads and discard private late results', async () => {

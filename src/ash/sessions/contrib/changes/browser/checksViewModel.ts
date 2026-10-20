@@ -9,6 +9,7 @@ import { IChatService } from '../../../../workbench/services/chat/common/chatSer
 import { localize } from '../../../../nls.js';
 import { ISessionsService } from '../../../services/sessions/browser/sessionsService.js';
 import { IGitHubService } from '../../github/browser/githubService.js';
+import { IChecksOperationService } from '../common/checksOperationService.js';
 
 export interface ChecksEntry {
 	readonly pullRequest: string;
@@ -34,7 +35,6 @@ export class ChecksViewModel extends Disposable {
 	private readonly refresh = this._register(new RunOnceScheduler(() => { void this.load(); }, 60_000));
 	private owner: string | undefined;
 	private readonly actions = this._register(new DisposableStore());
-	private readonly operations = observableValue<{ readonly writing: ReadonlySet<string>; readonly blocked: ReadonlySet<string>; }>(this, { writing: new Set(), blocked: new Set() });
 
 
 	constructor(
@@ -43,6 +43,7 @@ export class ChecksViewModel extends Disposable {
 		@IGitHubApi private readonly github: IGitHubApi,
 		@IAccountService accounts: IAccountService,
 		@IChatService private readonly chat: IChatService,
+		@IChecksOperationService private readonly operations: IChecksOperationService,
 	) {
 		super();
 		this._register(toDisposable(() => this.pending.value?.cancel()));
@@ -58,7 +59,6 @@ export class ChecksViewModel extends Disposable {
 		this._register(associations.onDidChange(invalidate));
 		this._register(accounts.onDidChangeAccounts(() => {
 			this.owner = undefined;
-			this.operations.set({ ...this.operations.get(), blocked: new Set() }, undefined);
 			this.state.set({ loading: false, checks: [] }, undefined);
 			invalidate();
 		}));
@@ -67,20 +67,14 @@ export class ChecksViewModel extends Disposable {
 
 	private operationKey(entry: ChecksEntry, kind: 'rerun' | 'fix'): string {
 		const repository = entry.repository;
-		return JSON.stringify([kind, entry.sessionId, entry.threadId, repository.accountId, entry.credentialRevision, repository.host.toLowerCase(), repository.owner.toLowerCase(), repository.name.toLowerCase(), entry.target.number, entry.target.commit.toLowerCase(), entry.target.checkId]);
+		// A Chat submission remains uncertain even when the GitHub credentials used to read its context change.
+		const credentials = kind === 'rerun' ? [repository.accountId, entry.credentialRevision] : [];
+		return JSON.stringify([kind, entry.sessionId, entry.threadId, ...credentials, repository.host.toLowerCase(), repository.owner.toLowerCase(), repository.name.toLowerCase(), entry.target.number, entry.target.commit.toLowerCase(), entry.target.checkId]);
 	}
 
 	public retryBlocked(entry: ChecksEntry, kind: 'rerun' | 'fix', reader?: IReader): boolean {
 		const key = this.operationKey(entry, kind);
-		const state = this.operations.read(reader);
-		return state.blocked.has(key) || state.writing.has(key);
-	}
-
-	private markOperation(field: 'writing' | 'blocked', key: string, enabled: boolean): void {
-		const state = this.operations.get();
-		const values = new Set(state[field]);
-		if (enabled) values.add(key); else values.delete(key);
-		this.operations.set({ ...state, [field]: values }, undefined);
+		return this.operations.isBlocked(key, reader);
 	}
 
 	private assertCurrent(entry: ChecksEntry, token: CancellationToken): void {
@@ -122,22 +116,20 @@ export class ChecksViewModel extends Disposable {
 	}
 
 	public async rerun(entry: ChecksEntry): Promise<void> {
-		if (this.retryBlocked(entry, 'rerun')) return;
 		const key = this.operationKey(entry, 'rerun');
-		this.markOperation('writing', key, true);
+		if (!this.operations.tryStart(key)) return;
 		try {
 			await this.operation(entry, token => this.github.rerunCheck(entry.repository, entry.target, token));
 			this.refresh.schedule(0);
 		} catch (error) {
-			if (error instanceof GitHubError && error.code === GitHubErrorCode.SubmissionUncertain) this.markOperation('blocked', key, true);
+			if (error instanceof GitHubError && error.code === GitHubErrorCode.SubmissionUncertain) this.operations.markUncertain(key);
 			throw error;
-		} finally { this.markOperation('writing', key, false); }
+		} finally { this.operations.finish(key); }
 	}
 
 	public async fix(entry: ChecksEntry): Promise<void> {
-		if (this.retryBlocked(entry, 'fix')) return;
 		const key = this.operationKey(entry, 'fix');
-		this.markOperation('writing', key, true);
+		if (!this.operations.tryStart(key)) return;
 		try {
 			await this.operation(entry, async token => {
 				const details = await this.details(entry);
@@ -152,11 +144,11 @@ export class ChecksViewModel extends Disposable {
 					if (thread.turns.some(turn => !['completed', 'failed', 'interrupted'].includes(turn.status))) await this.chat.queueTurn(submission);
 					else await this.chat.startTurn(submission);
 				} catch (error) {
-					this.markOperation('blocked', key, true);
+					this.operations.markUncertain(key);
 					throw new Error(localize('sessions.changes.checkFixUncertain', 'The CI fix request could not be confirmed. Check the initiating conversation before sending it again.'), { cause: error });
 				}
 			});
-		} finally { this.markOperation('writing', key, false); }
+		} finally { this.operations.finish(key); }
 	}
 
 	private selectionKey(): string | undefined {
