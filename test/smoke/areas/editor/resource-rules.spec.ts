@@ -1,16 +1,29 @@
 import type { Workbench } from '../../../automation/workbench.js';
 import { expect, test } from '../../../automation/test.js';
 
-test('resource pattern settings validate structured rules and persist their types', async ({ workbench }) => {
-	await setRule(workbench, 'explorer.autoRevealExclude', '**/*.ts', '{"when":42}', false);
-	const rules = workbench.page.locator('[data-configuration-key="explorer.autoRevealExclude"]');
-	await expect(workbench.settingsEditor.element).toContainText('Invalid rule');
-	const value = rules.locator('[data-pattern-part="value"]');
-	await value.fill('{"when":"$(basename).js"}');
-	await value.press('Tab');
+test('resource pattern settings validate path rules and persist structured types', async ({ workbench }) => {
+	await workbench.settingsEditor.openUserSettingsUI();
+	const settings = workbench.settingsEditor.element;
+	await settings.getByRole('searchbox').fill('explorer.autoRevealExclude');
+	const rules = settings.locator('[data-configuration-key="explorer.autoRevealExclude"]');
+	await rules.getByRole('button', { name: 'Add pattern', exact: true }).click();
+	const pattern = rules.getByRole('textbox', { name: 'Path pattern', exact: true });
+	await rules.getByRole('button', { name: 'Save', exact: true }).click();
+	await expect(pattern).toHaveAttribute('aria-invalid', 'true');
+	await expect(settings).toContainText('Enter a path pattern.');
+	await pattern.fill('**/*.ts');
+	await rules.getByRole('textbox', { name: 'When a sibling matches (optional)', exact: true }).fill('$(basename).js');
+	await rules.getByRole('button', { name: 'Save', exact: true }).click();
+	await expect(rules.locator('.ash-pattern-row').filter({ hasText: '**/*.ts' })).toContainText('When: $(basename).js');
+	await rules.getByRole('button', { name: 'Add pattern', exact: true }).click();
+	await pattern.fill('**/*.ts');
+	await rules.getByRole('button', { name: 'Save', exact: true }).click();
+	await expect(pattern).toHaveAttribute('aria-invalid', 'true');
+	await expect(rules.locator('.ash-pattern-row').filter({ hasText: '**/*.ts' })).toHaveCount(1);
+	await rules.getByRole('button', { name: 'Cancel', exact: true }).click();
 	await expect(rules.locator('.ash-settings-indicators')).toBeHidden();
-	await workbench.settingsEditor.element.locator('.ash-modal-editor-close').click();
-	await setRule(workbench, 'files.readonlyExclude', '**/main.ts', 'true');
+	await settings.locator('.ash-modal-editor-close').click();
+	await setRule(workbench, 'files.readonlyExclude', '**/main.ts', true);
 	await workbench.quickaccess.runCommand('workbench.action.openSettingsJson');
 	await workbench.editors.groupAt(0).editor.waitForEditorContents(source => {
 		const configuration = JSON.parse(source);
@@ -54,12 +67,12 @@ test('resource rules control readonly editing, automatic reveal and saved histor
 	await page.keyboard.insertText('forbidden');
 	await editor.waitForEditorContents(text => text === 'const saved = 2;');
 	await group.element.getByRole('tab', { name: 'main.ts', exact: true }).click();
-	await setRule(workbench, 'files.readonlyInclude', '**/*.ts', 'true');
+	await setRule(workbench, 'files.readonlyInclude', '**/*.ts', true);
 	await editor.waitForEditorFocus();
 	await page.keyboard.insertText('forbidden');
 	await editor.waitForEditorContents(text => text === 'const saved = 2;');
-	await setRule(workbench, 'files.readonlyExclude', '**/main.ts', 'true');
-	await setRule(workbench, 'workbench.localHistory.exclude', '**/*.ts', 'true');
+	await setRule(workbench, 'files.readonlyExclude', '**/main.ts', true);
+	await setRule(workbench, 'workbench.localHistory.exclude', '**/*.ts', true);
 	await editor.waitForEditorFocus();
 	await page.keyboard.press('ControlOrMeta+A');
 	await page.keyboard.insertText('const saved = 3;');
@@ -67,30 +80,32 @@ test('resource rules control readonly editing, automatic reveal and saved histor
 	await workbench.quickaccess.runCommand('workbench.action.localHistory.open');
 	await expect(versions).toHaveCount(1);
 	await workbench.quickaccess.close();
-	await setRule(workbench, 'explorer.autoRevealExclude', '**/main.ts', 'true');
+	await setRule(workbench, 'explorer.autoRevealExclude', '**/main.ts', true);
 	await other.dblclick();
 	await expect(other).toHaveAttribute('aria-selected', 'true');
 	await group.element.getByRole('tab', { name: 'main.ts', exact: true }).click();
 	await editor.waitForEditorFocus();
 	await expect(other).toHaveAttribute('aria-selected', 'true');
 	await expect(editor.input).toBeFocused();
-	await setRule(workbench, 'explorer.autoRevealExclude', '**/main.ts', 'false');
+	await setRule(workbench, 'explorer.autoRevealExclude', '**/main.ts', false);
 	await expect(file).toHaveAttribute('aria-selected', 'true');
 });
 
-async function setRule(workbench: Workbench, key: string, pattern: string, rule: string, close = true): Promise<void> {
+async function setRule(workbench: Workbench, key: string, pattern: string, enabled: boolean): Promise<void> {
 	await workbench.settingsEditor.openUserSettingsUI();
 	const settings = workbench.settingsEditor.element;
 	await settings.getByRole('searchbox').fill(key);
 	const control = settings.locator(`[data-configuration-key="${key}"]`);
 	await expect(control).toBeVisible();
-	if (await control.locator('[data-pattern-part="key"]').count() === 0) await control.getByRole('button', { name: 'Add pattern', exact: true }).click();
-	await control.locator('[data-pattern-part="key"]').fill(pattern);
-	const value = control.locator('[data-pattern-part="value"]');
-	await value.fill(rule);
-	await value.press('Tab');
-	if (close) {
-		await expect(control.locator('.ash-settings-indicators')).toBeHidden();
-		await settings.locator('.ash-modal-editor-close').click();
+	if (enabled) {
+		await control.getByRole('button', { name: 'Add pattern', exact: true }).click();
+		await control.getByRole('textbox', { name: 'Path pattern', exact: true }).fill(pattern);
+		await control.getByRole('button', { name: 'Save', exact: true }).click();
+		await expect(control.getByText(pattern, { exact: true })).toBeVisible();
+	} else {
+		await control.getByRole('listitem', { name: pattern, exact: true }).press('Delete');
+		await expect(control.getByText(pattern, { exact: true })).toHaveCount(0);
 	}
+	await expect(control.locator('.ash-settings-indicators')).toBeHidden();
+	await settings.locator('.ash-modal-editor-close').click();
 }
