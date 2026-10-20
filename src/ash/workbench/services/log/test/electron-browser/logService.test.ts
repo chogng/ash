@@ -5,6 +5,7 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { suite, test } from 'mocha';
+import { DisposableStore } from '../../../../../base/common/lifecycle.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { IMainProcessService } from '../../../../../platform/ipc/common/mainProcessService.js';
@@ -24,6 +25,8 @@ suite('Workbench Desktop logging', () => {
 				await owner.initialize();
 				const channel = new LoggerChannel(owner, { initialLogLevel: LogLevel.Debug, extensionLogLevel: [] });
 				using services = new InstantiationService();
+				using startup = new DisposableStore();
+				using workbench = new DisposableStore();
 				services.registerInstance(IWorkbenchEnvironmentService, new ElectronWorkbenchEnvironmentService(await channel.call('window:7', 'getDefaultLogLevels', undefined)));
 				assert.throws(() => services.createInstance(NativeLogService, category), /mainProcessService/);
 				services.registerInstance(IMainProcessService, {
@@ -34,7 +37,13 @@ suite('Workbench Desktop logging', () => {
 					}),
 					registerChannel: () => { throw new Error('Unexpected channel registration'); },
 				});
-				using logger = services.createInstance(NativeLogService, category);
+				const logger = startup.add(services.createInstance(NativeLogService, category));
+				// Native startup retains failure cleanup until the factory takes ownership.
+				assert.throws(() => workbench.add(logger), /NativeLogService already belongs to DisposableStore/);
+				startup.delete(logger);
+				workbench.add(logger);
+				startup.dispose();
+				assert.equal(logger.isDisposed, false);
 				assert.equal(logger.getLevel(), LogLevel.Debug);
 				logger.setLevel(LogLevel.Info);
 				logger.debug('filtered');
@@ -63,7 +72,8 @@ suite('Workbench Desktop logging', () => {
 					['window-7', 'connection', LogLevel.Trace, 'connected'],
 					['window-7', 'language-server', LogLevel.Debug, 'child recorded'],
 				]);
-				logger.dispose();
+				workbench.dispose();
+				assert.equal(logger.isDisposed, true);
 				assert.equal(child.isDisposed, true);
 				child.info('ignored after disposal');
 				assert.equal(logger.getLogger('language-server'), undefined);

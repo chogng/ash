@@ -174,7 +174,11 @@ export class DesktopMain extends Disposable {
 					return hosts;
 				} : undefined,
 				createBrowserHost: documentClient ? services => registerAppServerBrowserHost(documentClient!, playwrightService, mainProcessService, services.get(IConfigurationService)) : undefined,
-				createLogService: () => logger,
+				createLogService: () => {
+					// The factory owns failure cleanup and transfers the logger to the Workbench.
+					this._store.delete(logger);
+					return logger;
+				},
 				createWorkingCopyBackupService: (services, workspaceId) => {
 					if (!api.backup) return new IndexedDbWorkingCopyBackupService(workspaceId);
 					return services.createChild(new ServiceCollection([IBackupService, api.backup])).createInstance(WorkingCopyBackupService);

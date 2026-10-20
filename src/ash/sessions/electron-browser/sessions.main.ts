@@ -198,7 +198,11 @@ export async function main(profile: SessionsProfile): Promise<IDisposable> {
 				'workbench.contrib.speechAccessibilitySignal',
 				'workbench.contrib.saveAccessibilitySignals',
 			],
-			createLogService: () => logger,
+			createLogService: () => {
+				// The factory owns failure cleanup and transfers the logger to the Workbench.
+				sessions.delete(logger);
+				return logger;
+			},
 			createStorageService: async options => {
 				const storage = profileServices.createInstance(NativeWorkbenchStorageService, options);
 				try { await storage.initialize(); return storage; }
