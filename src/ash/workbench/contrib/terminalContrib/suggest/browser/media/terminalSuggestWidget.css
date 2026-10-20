@@ -5,33 +5,17 @@
 	max-width: min(100%, 44em);
 	min-width: min(100%, 24em);
 	border: var(--ash-strokeThickness) solid
-		var(
-			--ash-editorSuggestWidget-border,
-			var(--ash-contrastBorder, var(--ash-widget-border))
-		);
+		var(--ash-contrastBorder, var(--ash-widget-border));
 	border-radius: var(--ash-cornerRadius-medium);
-	background: var(
-		--ash-editorSuggestWidget-background,
-		var(--ash-editor-background)
-	);
-	color: var(
-		--ash-editorSuggestWidget-foreground,
-		var(--ash-editor-foreground)
-	);
+	background: var(--ash-editor-background);
+	color: var(--ash-editor-foreground);
 	box-shadow: var(--ash-shadow-lg);
 }
 
 .ash-terminal-suggest .ash-list-row.focused {
-	color: var(
-		--ash-editorSuggestWidget-selectedForeground,
-		var(--ash-list-activeSelectionForeground)
-	);
-	background: var(
-		--ash-editorSuggestWidget-selectedBackground,
-		var(--ash-list-activeSelectionBackground)
-	);
-	outline: var(--ash-strokeThickness) solid
-		var(--ash-editorSuggestWidget-selectedBorder, var(--ash-focusBorder));
+	color: var(--ash-list-activeSelectionForeground);
+	background: var(--ash-list-activeSelectionBackground);
+	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
 	outline-offset: calc(-1 * var(--ash-strokeThickness));
 }
 
@@ -51,7 +35,7 @@
 }
 
 .ash-terminal-suggest-detail {
-	color: var(--ash-descriptionForeground);
+	color: var(--ash-description-foreground);
 }
 
 .ash-terminal-suggest-instructions {
@@ -60,7 +44,7 @@
 	overflow: hidden;
 	text-overflow: ellipsis;
 	font-size: var(--ash-fontSize-label1);
-	color: var(--ash-descriptionForeground);
+	color: var(--ash-description-foreground);
 }
 
 .ash-terminal-suggest[hidden] {

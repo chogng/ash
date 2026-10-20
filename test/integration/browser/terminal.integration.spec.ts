@@ -2505,6 +2505,47 @@ for (const locale of ['en', 'zh-CN']) {
 	});
 }
 
+for (const theme of ['dark', 'light', 'hcDark', 'hcLight'] as const) {
+	test(`terminal suggest follows registered theme colors and preserves keyboard dismissal in ${theme}`, async ({ page }) => {
+		await seedSuggestPrompt(page, 'echo ');
+		await page.evaluate(theme => {
+			window.ashTerminalFindIntegration.theme(theme, {
+				'editor.background': '#123456',
+				'editor.foreground': '#abcdef',
+				'description.foreground': '#789abc',
+				'list.activeSelectionBackground': '#654321',
+				'list.activeSelectionForeground': '#fedcba',
+				'focusBorder': '#112233',
+			});
+			window.ashTerminalSuggestIntegration.history('echo accepted');
+		}, theme);
+		// Automatic suggestions follow a typed key confirmed by the shell echo.
+		// Control+Space deliberately opens the separate, accessible quick picker.
+		await page.locator('.xterm-helper-textarea').press('a');
+		await page.evaluate(() => window.ashTerminalInputIntegration.feed('a'));
+		const picker = page.locator('.ash-terminal-suggest');
+		await expect(picker).toBeVisible();
+		await page.evaluate(() => window.ashTerminalInputIntegration.clear());
+		await expect(picker).toHaveCSS('background-color', 'rgb(18, 52, 86)');
+		await expect(picker).toHaveCSS('color', 'rgb(171, 205, 239)');
+		const selected = picker.locator('.ash-list-row.focused');
+		await expect(selected).toHaveCSS('background-color', 'rgb(101, 67, 33)');
+		await expect(selected).toHaveCSS('color', 'rgb(254, 220, 186)');
+		await expect(selected).toHaveCSS('outline-color', 'rgb(17, 34, 51)');
+		await expect(picker.locator('.ash-terminal-suggest-detail')).toHaveCSS('color', 'rgb(120, 154, 188)');
+		await expect(picker.locator('.ash-terminal-suggest-instructions')).toHaveCSS('color', 'rgb(120, 154, 188)');
+		if (theme === 'hcDark' || theme === 'hcLight') {
+			await expect(picker).toHaveCSS('box-shadow', 'none');
+			await expect(picker).toHaveCSS('border-top-color', theme === 'hcDark' ? 'rgb(255, 255, 255)' : 'rgb(0, 0, 0)');
+		}
+		await page.keyboard.press('Escape');
+		await expect(picker).toBeHidden();
+		await expect(page.locator('.xterm-helper-textarea')).toBeFocused();
+		expect(await page.evaluate(() => window.ashTerminalInputIntegration.writes)).toEqual([]);
+		await page.evaluate(() => window.ashTerminalInputIntegration.close());
+	});
+}
+
 test('terminal suggest quotes path suffixes literally and keeps Tab owned by the shell', async ({ page }) => {
 	await seedSuggestPrompt(page, 'cat ./sp');
 	await page.evaluate(async () => {
