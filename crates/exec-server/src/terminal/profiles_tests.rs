@@ -2,19 +2,70 @@ use super::*;
 use crate::terminal::shell_integration::ShellEnvironmentMode;
 
 #[test]
-fn discovered_profiles_have_one_default_and_unique_programs() {
+fn discovered_profiles_have_one_default_and_unique_launches() {
     let catalog = TerminalProfileCatalog::discover();
     let profiles = catalog.list();
     assert_eq!(
         profiles.iter().filter(|profile| profile.is_default).count(),
         1
     );
-    let programs = catalog
-        .profiles
+    for (index, profile) in catalog.profiles.iter().enumerate() {
+        assert!(!catalog.profiles[..index].iter().any(|previous| {
+            normalized_program(&previous.program) == normalized_program(&profile.program)
+                && previous.args == profile.args
+        }));
+    }
+}
+
+#[cfg(windows)]
+#[test]
+fn wsl_distributions_keep_distinct_launch_arguments_and_reject_invalid_registrations() {
+    struct RegistrationFixture(String);
+    impl Drop for RegistrationFixture {
+        fn drop(&mut self) {
+            winreg::RegKey::predef(winreg::enums::HKEY_CURRENT_USER)
+                .delete_subkey_all(&self.0)
+                .unwrap();
+        }
+    }
+    let directory = tempfile::tempdir().unwrap();
+    let fixture = RegistrationFixture(format!(
+        r"Software\Ash\Tests\{}",
+        directory.path().file_name().unwrap().to_str().unwrap()
+    ));
+    let (registrations, _) = winreg::RegKey::predef(winreg::enums::HKEY_CURRENT_USER)
+        .create_subkey(&fixture.0)
+        .unwrap();
+    for (index, name) in ["Ubuntu", "AshBuild", "Ubuntu", "", "bad\nname", "开发环境"]
         .iter()
-        .map(|profile| normalized_program(&profile.program))
-        .collect::<HashSet<_>>();
-    assert_eq!(programs.len(), profiles.len());
+        .enumerate()
+    {
+        registrations
+            .create_subkey(index.to_string())
+            .unwrap()
+            .0
+            .set_value("DistributionName", name)
+            .unwrap();
+    }
+    registrations.create_subkey("missing-name").unwrap();
+    let launcher = Path::new(r"C:\Windows\System32\wsl.exe");
+    let profiles = wsl_profiles(launcher, &registrations);
+    assert_eq!(
+        profiles
+            .iter()
+            .map(|profile| profile.title.as_str())
+            .collect::<Vec<_>>(),
+        ["AshBuild (WSL)", "Ubuntu (WSL)", "开发环境 (WSL)"]
+    );
+    for profile in profiles {
+        let name = profile.profile_id.strip_prefix("wsl:").unwrap();
+        assert_eq!(Path::new(&profile.program), launcher);
+        assert_eq!(
+            profile.launch_args(),
+            TerminalArguments::Argv(vec!["--distribution".into(), name.into()])
+        );
+        assert!(!profile.is_default);
+    }
 }
 
 #[test]

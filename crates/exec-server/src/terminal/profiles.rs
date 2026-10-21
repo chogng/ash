@@ -5,7 +5,6 @@ use crate::terminal::command_status::CommandStatusMode;
 use crate::terminal::environment::TerminalEnvironment;
 use std::borrow::Cow;
 use std::collections::HashMap;
-use std::collections::HashSet;
 use std::path::Path;
 use std::path::PathBuf;
 
@@ -171,11 +170,17 @@ fn discover_profiles(environment: &HashMap<String, String>) -> Vec<TerminalProfi
     let default_program = default_shell(environment);
     let mut candidates = vec![profile_for_program(default_program, true)];
     candidates.extend(platform_profiles(environment));
-    let mut paths = HashSet::new();
-    candidates
-        .into_iter()
-        .filter(|profile| paths.insert(normalized_program(&profile.program)))
-        .collect()
+    let mut profiles: Vec<TerminalProfileSpec> = Vec::new();
+    for candidate in candidates {
+        // Distributions share wsl.exe; launch arguments are part of shell identity.
+        if !profiles.iter().any(|profile| {
+            normalized_program(&profile.program) == normalized_program(&candidate.program)
+                && profile.args == candidate.args
+        }) {
+            profiles.push(candidate);
+        }
+    }
+    profiles
 }
 
 #[cfg(windows)]
@@ -229,7 +234,45 @@ fn platform_profiles(environment: &HashMap<String, String>) -> Vec<TerminalProfi
     if let Some(program) = resolve_on_path(environment, "zsh.exe") {
         profiles.push(profile("zsh", "Zsh", program));
     }
+    if let Some(system_root) = environment_value(environment, "SYSTEMROOT") {
+        let launcher = Path::new(system_root).join("System32/wsl.exe");
+        if launcher.is_file() {
+            // Reading the execution user's registrations avoids starting WSL (or
+            // waiting for its first-run installer) while opening a terminal menu.
+            if let Ok(registrations) = winreg::RegKey::predef(winreg::enums::HKEY_CURRENT_USER)
+                .open_subkey(r"Software\Microsoft\Windows\CurrentVersion\Lxss")
+            {
+                profiles.extend(wsl_profiles(&launcher, &registrations));
+            }
+        }
+    }
     profiles
+}
+
+#[cfg(windows)]
+fn wsl_profiles(launcher: &Path, registrations: &winreg::RegKey) -> Vec<TerminalProfileSpec> {
+    let mut names = registrations
+        .enum_keys()
+        .take(128)
+        .filter_map(Result::ok)
+        .filter_map(|key| registrations.open_subkey(key).ok())
+        .filter_map(|key| key.get_value::<String, _>("DistributionName").ok())
+        .filter(|name| {
+            !name.trim().is_empty() && name.len() <= 230 && !name.chars().any(char::is_control)
+        })
+        .collect::<Vec<_>>();
+    names.sort();
+    names.dedup();
+    names
+        .into_iter()
+        .map(|name| TerminalProfileSpec {
+            profile_id: format!("wsl:{name}"),
+            title: format!("{name} (WSL)"),
+            program: launcher.to_string_lossy().into_owned(),
+            args: TerminalArguments::Argv(vec!["--distribution".into(), name]),
+            is_default: false,
+        })
+        .collect()
 }
 
 #[cfg(not(windows))]

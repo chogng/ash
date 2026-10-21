@@ -60,6 +60,8 @@ import { TerminalConfigurationService } from '../../browser/terminalConfiguratio
 import '../../../codeEditor/common/editorConfiguration.js';
 import { TerminalProfileService } from '../../browser/terminalProfileService.js';
 import { TerminalProfileQuickpick } from '../../browser/terminalProfileQuickpick.js';
+import { TerminalMainContribution } from '../../browser/terminalMainContribution.js';
+import { IEmbedderTerminalService } from '../../../../services/terminal/common/embedderTerminalService.js';
 import { TerminalService } from '../../browser/terminalService.js';
 import type { ITerminalProcessCreateOptions, ITerminalProcessCloseOptions } from '../../../../../platform/terminal/common/terminal.js';
 import { FileService } from '../../../../../platform/files/common/fileService.js';
@@ -105,6 +107,8 @@ function createServices(owner: DisposableStore, useInstances = false, openEditor
 			nextSequence: 1, outputGap: false, commandEvents: [], nextCommandSequence: 0,
 			commandEventGap: false, exited: true, exitCode: 0,
 		}),
+		// Restoring a retained PTY synchronizes its dimensions before reading output.
+		resize: async () => { },
 		close: async (options: ITerminalProcessCloseOptions) => { closed.push(options); },
 	} as unknown as ITerminalProcessService;
 	services.registerInstance(IConfigurationService, configuration);
@@ -164,6 +168,59 @@ async function waitFor(check: () => boolean): Promise<void> {
 }
 
 suite('Terminal configuration and interactive profiles', () => {
+	for (const locale of ['en', 'zh-CN']) test(`agent host profile creates the configured shell and retires with its connection (${locale})`, async () => {
+		using owner = new DisposableStore();
+		owner.add(toDisposable(resetNlsResolver));
+		initializeTestLocalization(locale);
+		const { services, configuration, profiles, connection, launches } = createServices(owner, true);
+		services.registerInstance(IEmbedderTerminalService, { onDidCreateTerminal: Event.None, createTerminal: () => { } });
+		await configuration.updateValue('terminal.integrated.agentHostProfile.windows', {
+			path: '/agent/shell', args: ['--login'], env: { AGENT: 'configured' },
+		});
+		using contribution = services.createInstance(TerminalMainContribution);
+		await profiles.profilesReady;
+		const profile = profiles.contributedProfiles.find(profile => profile.extensionIdentifier === 'ash.agent-host');
+		assert.ok(profile);
+		assert.equal(profile.title, locale === 'zh-CN' ? '智能体主机（本地）' : 'Agent Host (Local)');
+		const terminals = services.get(ITerminalService);
+		const instance = await terminals.createTerminal({ config: profile });
+		assert.equal(instance.title, profile.title);
+		assert.deepEqual(launches[0]?.profile, { type: 'custom', name: profile.title, path: ['/agent/shell'], args: ['--login'] });
+		assert.equal(launches[0]?.env?.AGENT, 'configured');
+		const provider = profiles.getContributedProfileProvider(profile.extensionIdentifier, profile.id)!;
+		connection.fire('crashed');
+		assert.deepEqual(profiles.contributedProfiles, []);
+		await assert.rejects(provider.createContributedTerminalProfile({}), /Terminal profile provider is unavailable|终端配置提供程序不可用/);
+		connection.fire('ready');
+		assert.equal(profiles.contributedProfiles.length, 1);
+		contribution.dispose();
+		assert.deepEqual(profiles.contributedProfiles, []);
+	});
+
+	for (const retirement of ['connection', 'workspace', 'dispose']) test(`agent host profile releases a terminal after ${retirement} retirement`, async () => {
+		using owner = new DisposableStore();
+		const { services, profiles, connection, workspace } = createServices(owner, true);
+		services.registerInstance(IEmbedderTerminalService, { onDidCreateTerminal: Event.None, createTerminal: () => { } });
+		using contribution = services.createInstance(TerminalMainContribution);
+		await profiles.profilesReady;
+		const provider = profiles.getContributedProfileProvider('ash.agent-host', 'local')!;
+		const entered = new DeferredPromise<void>();
+		const completed = new DeferredPromise<ITerminalInstance>();
+		const closed: ITerminalInstance[] = [];
+		const terminals = services.get(ITerminalService);
+		terminals.createTerminal = async () => { entered.complete(); return completed.p; };
+		terminals.closeTerminal = async instance => { closed.push(instance); };
+		const creating = provider.createContributedTerminalProfile({});
+		const rejected = assert.rejects(creating, isCancellationError);
+		await entered.p;
+		if (retirement === 'connection') connection.fire('crashed');
+		else if (retirement === 'workspace') workspace.updateWorkspace({ id: 'replacement', uri: URI.file('/replacement') });
+		else contribution.dispose();
+		const instance = { instanceId: 123 } as ITerminalInstance;
+		completed.complete(instance);
+		await rejected;
+		assert.deepEqual(closed, [instance]);
+	});
 	ensureNoDisposablesAreLeakedInTestSuite();
 
 	test('second-root launches use that directory for workspace variables, folder cwd and backend resolution', async () => {
@@ -1170,14 +1227,16 @@ suite('Terminal configuration and interactive profiles', () => {
 			},
 		}]));
 		const terminals = services.get(ITerminalService);
-		const instance = await terminals.createTerminal({ cwd: uriCwd ? folders[1]!.uri : folders[1]!.uri.fsPath, config: profiles.contributedProfiles[0]! });
+		// This fixture executes on Linux, regardless of the test runner's OS.
+		const cwd = '/second';
+		const instance = await terminals.createTerminal({ cwd: uriCwd ? folders[1]!.uri : cwd, config: profiles.contributedProfiles[0]! });
 		assert.equal(instance.dirId, 'two');
 		assert.equal(terminals.instances.length, 1);
 		assert.equal(terminals.activeInstance, instance);
 		if (!custom) {
 			assert.equal(launches[0]!.dirId, 'two');
 			assert.equal(launches[0]!.env?.ROOT, '/second');
-			assert.equal(launches[0]!.cwd, folders[1]!.uri.fsPath);
+			assert.equal(launches[0]!.cwd, cwd);
 		}
 		await terminals.closeTerminal(instance);
 		assert.deepEqual(terminals.instances, []);

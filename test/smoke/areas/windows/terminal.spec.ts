@@ -1,4 +1,5 @@
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
+import { execFileSync } from 'node:child_process';
 import { join } from 'node:path';
 import { expect, test } from '../../../automation/test.js';
 import type { Locator } from '@playwright/test';
@@ -18,6 +19,76 @@ const windowsPowerShellSettings = process.platform === 'win32' ? {
 	'terminal.integrated.defaultProfile.windows': 'Smoke PowerShell',
 } : {};
 test.use({ electronUserSettings: windowsPowerShellSettings });
+
+for (const locale of ['en', 'zh-CN'] as const) test.describe(`terminal profile dropdown (${locale})`, () => {
+	const shell = {
+		path: join(process.env.SystemRoot ?? 'C:\\Windows', 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe'),
+		args: ['-NoLogo', '-NoProfile', '-ExecutionPolicy', 'RemoteSigned'],
+	};
+	test.use({
+		electronUserSettings: {
+			...windowsPowerShellSettings,
+			'workbench.locale': locale,
+			'window.menuStyle': 'custom',
+			'terminal.integrated.profiles.windows': { 'Smoke PowerShell': shell, 'Copilot Test CLI': shell },
+			'terminal.integrated.agentHostProfile.windows': { ...shell, env: { ASH_AGENT_PROFILE: 'agent-shell' } },
+		}
+	});
+
+	test('groups AI profiles and launches the agent host shell from the keyboard menu', { tag: ['@electron-app-server'] }, async ({ workbench, testWorkspace, driver }, testInfo) => {
+		test.skip(process.platform !== 'win32', 'Windows shell discovery and launch');
+		const page = workbench.page;
+		const zh = locale === 'zh-CN';
+		await workbench.quickaccess.runCommand('workbench.action.terminal.focus');
+		await expect(workbench.terminal.activeInstance.locator('.ash-terminal-command-status.pending')).toBeVisible();
+		const trigger = page.locator('.ash-terminal-title-toolbar .ash-dropdown-with-primary-dropdown button');
+		await trigger.focus();
+		await trigger.press('ArrowDown');
+		const menu = page.getByRole('menu');
+		const ai = menu.getByRole('menuitem', { name: 'Copilot Test CLI', exact: true });
+		await expect(ai).toBeVisible();
+		const entries = await menu.locator('[role="menuitem"], [role="separator"]').evaluateAll(rows => rows.map(row => ({
+			role: row.getAttribute('role'), label: row.getAttribute('aria-label') ?? row.textContent?.trim(),
+		})));
+		const aiIndex = entries.findIndex(entry => entry.label === 'Copilot Test CLI');
+		expect(entries[aiIndex + 1]?.role).toBe('separator');
+		await page.keyboard.press('Escape');
+		await expect(trigger).toBeFocused();
+		await trigger.press('ArrowDown');
+		const agent = menu.getByRole('menuitem', { name: zh ? '智能体主机（本地）' : 'Agent Host (Local)', exact: true });
+		await agent.focus();
+		await page.screenshot({ path: testInfo.outputPath(`terminal-profiles-${locale}.png`) });
+		await agent.press('Enter');
+		await expect(menu).toHaveCount(0);
+		await expect(workbench.terminal.instances).toHaveCount(2);
+		await expect(workbench.terminal.activeInstance.locator('.xterm-helper-textarea')).toBeFocused();
+		await workbench.terminal.runCommand('node -e "require(\'fs\').writeFileSync(\'agent-profile.txt\', process.env.ASH_AGENT_PROFILE)"');
+		await expect.poll(() => readFile(join(testWorkspace.directory, 'agent-profile.txt'), 'utf8').catch(() => '')).toBe('agent-shell');
+		expect(driver.diagnostics.errors).toEqual([]);
+	});
+});
+
+test('installed WSL distributions appear as distinct profiles and launch their own shell', { tag: ['@electron-app-server'] }, async ({ workbench }) => {
+	test.skip(process.platform !== 'win32', 'WSL discovery is Windows-only');
+	const launcher = join(process.env.SystemRoot ?? 'C:\\Windows', 'System32', 'wsl.exe');
+	const distributions = execFileSync(launcher, ['--list', '--quiet'], {
+		encoding: 'utf16le', windowsHide: true, timeout: 5000, env: { ...process.env, WSL_UTF8: '0' },
+	}).split(/\r?\n/).map(name => name.trim()).filter(Boolean);
+	test.skip(distributions.length === 0, 'No WSL distributions installed');
+	await workbench.terminal.show();
+	const trigger = workbench.page.locator('.ash-terminal-title-toolbar .ash-dropdown-with-primary-dropdown button');
+	await trigger.click();
+	const menu = workbench.page.getByRole('menu');
+	for (const distribution of distributions) {
+		await expect(menu.getByRole('menuitem', { name: `${distribution} (WSL)`, exact: true })).toBeVisible();
+	}
+	await menu.getByRole('menuitem', { name: `${distributions[0]} (WSL)`, exact: true }).click();
+	await expect(workbench.terminal.instances).toHaveCount(2);
+	// A newly installed distribution may provision its user before accepting input.
+	await expect(workbench.terminal.activeInstance.locator('.xterm-rows')).toContainText(/[$#%>❯]\s*$/u, { timeout: 30000 });
+	await workbench.terminal.runCommand('printf "ASH_WSL_PROFILE:%s\\n" "$WSL_DISTRO_NAME"');
+	await expect(workbench.terminal.activeInstance.locator('.xterm-rows > div').filter({ hasText: `ASH_WSL_PROFILE:${distributions[0]}` })).toBeVisible();
+});
 
 async function revealSavedHistory(pane: Locator, text: string): Promise<void> {
 	const input = pane.locator('.xterm-helper-textarea');

@@ -53,6 +53,7 @@ process-hardening = { workspace = true, optional = true }
 
 [target.'cfg(windows)'.dependencies]
 windows-sandbox = { workspace = true, optional = true }
+winreg = { workspace = true }
 
 [lints]
 workspace = true

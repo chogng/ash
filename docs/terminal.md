@@ -34,6 +34,8 @@ Agent 执行、审批与终端呈现的详细边界以 [Platform Terminal 的前
 
 `TerminalProfileService` 合并执行端发现、自定义与扩展 Profile；`TerminalProfileResolverService` 解析执行端变量、Shell 参数、cwd、环境和图标，实际可执行文件由后端确认。多根工作区新建终端使用活动文件所属目录，无法确定时由用户选择；Split 继承原实例的目录与启动配置。
 
+Windows 执行端从当前用户的 WSL 注册读取发行版，并以独立的 `wsl:<发行版>` 配置保留 `wsl.exe --distribution <发行版>` 的启动参数；同一可执行文件的不同参数不会互相去重。发现期间不启动 WSL，注册信息在该执行服务启动时读取。下拉菜单将 Copilot／Claude 配置独立分组；扩展配置仍由原提供者创建。`TerminalMainContribution` 在执行连接就绪时注册“智能体主机”配置，使用 `terminal.integrated.agentHostProfile`，未配置时回到交互 Shell。断线撤销配置，工作区变更使在途创建失效并回收迟到的实例；重连重新注册，不终止已存在的终端。
+
 扩展 Profile 使用标准 `contributes.terminal.profiles` 声明。旧 `contributes.terminalProfiles` 仅在读取边界转换为同一声明；同时提供两种 Profile 声明会被拒绝。静态菜单声明与动态工厂注册分别管理，撤销工厂后不能再调用它，但不会关闭已创建的自供 PTY。
 
 自供 PTY 的读写绑定独立的内部 `terminalPty` 注册及原 activation／incarnation。工厂只接收创建操作，终端只通过返回的资源注册执行 open、read、input、resize 和 close；Relaunch 必须从仍有效的原工厂申请新资源。创建结果在后台调用会话中保留有界交接租约，首次成功派发资源 IO 才接管；未读取、读取后取消、超期或连接退出均释放未接管资源。前端拒绝显示元数据或收到迟到结果也释放对应资源。关闭始终受原运行实例 fence 约束，不向替代进程重放。
