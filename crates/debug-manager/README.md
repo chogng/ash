@@ -2,7 +2,7 @@
 
 Directory-authorized DAP client and transport lifetime owner. App Server adds the
 authenticated connection binding; Workbench consumes it through its domain adapter.
-The [system design](../../docs/debugging.md#已确认的目标分层) describes the full
+The [system design](../../docs/debugging.md#目标分层) describes the full
 manager target. The manager owns request dispatch, transport resources,
 initialization/configuration gates, normalized capabilities (including incremental
 capabilities events), session execution state and inspection-result invalidation.

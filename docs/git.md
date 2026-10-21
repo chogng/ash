@@ -380,14 +380,13 @@ stderr 和非 UTF-8 path 不进入 Renderer；工作树的绝对目录路径是�
 
 这些限制必须在 UI 中保持可见：未实现的 mutation 不注册空命令，也不显示会误导用户的按钮。
 
-## 分阶段演进
+## 后续能力的接入条件
 
-近期扩展顺序：
+后续能力按实际消费者选择，不以已有协议推断 UI 已接入：
 
 1. 为长时间 remote operation 增加 progress、queue state 和 caller cancellation；
-2. 为工作树 change row 接入 diff/open，并补充更细粒度的错误 UI；
-3. 在明确的 connector/权限 contract 下接入 GitHub PR、Checks 等 provider data；
-4. 按明确产品语义增加 branch lifecycle 等额外 mutation，并让已接受该产品需求的
+2. 在明确的 connector/权限 contract 下接入 GitHub PR、Checks 等 provider data；
+3. 按明确产品语义增加 branch lifecycle 等额外 mutation，并让已接受该产品需求的
    UI consumer 消费同一协议。协议存在不自动使其成为 TUI 功能。
 
 长期不变量是：Desktop、Native 与 TUI 不直接执行 Git；App Server adapter 不复制 Git

@@ -149,36 +149,17 @@ connection generation；任何状态变化都必须同时推进 snapshot generat
 - MCP tool 仍经过普通 registry collision、policy、approval、durable Tool Call/Result 和 recovery。
 - Extensions/Plugin 验证只证明 declaration/package 合法，不证明外部服务可信或未来调用已批准。
 
-## 6. 当前状态与后续阶段
+## 6. 产品接入与部署边界
 
-| 能力                                                             | 状态                                                                                                                      |
-| ---------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
-| 纯 Connector identity/definition/binding                         | ✅ 已实现                                                                                                                 |
-| connection transition 与双 generation 防 stale                   | ✅ 已实现                                                                                                                 |
-| Plugin manifest → Connector domain projection                    | ✅ 已实现                                                                                                                 |
-| disconnected discovery / connected ready binding projection      | ✅ 已实现                                                                                                                 |
-| SQLite connection authority + exact retry receipts               | ✅ 已实现                                                                                                                 |
-| definition/package digest 变化触发 reauthorization               | ✅ 重启恢复与 live Plugin activation 更新均已实现                                                                         |
-| API-token connect/disconnect + local secret cleanup              | ✅ 已实现                                                                                                                 |
-| OAuth state/PKCE/exchange 编排                                   | ✅ 已实现 provider port、App Server RPC 与 Desktop loopback callback                                                      |
-| refresh、远端 revoke                                             | ✅ 已实现通用 lifecycle 与 GitHub adapter；远端失败保留本地连接供重试                                                     |
-| `ash-secrets` memory/unavailable backend                         | ✅ 已实现                                                                                                                 |
-| profile 加密文件 + keyring 主密钥 backend                        | ✅ 已实现并作为本地默认 Connector persistence                                                                             |
-| 系统钥匙串 backend                                               | ✅ 保留为显式 host 注入选项；daemon 默认不请求钥匙串许可                                                                  |
-| App Server list/connect/disconnect + changed notification        | ✅ 已实现                                                                                                                 |
-| Desktop API-token UI；TUI 列表/断开/通知刷新                     | ✅ 已实现                                                                                                                 |
-| OAuth browser/device interaction                                 | ✅ Desktop browser+device、browser host device、TUI device 已实现                                                         |
-| ready binding → `ash-mcp-extension` composition + dispatch fence | ✅ 已实现（host-injected provider）                                                                                       |
-| exact legacy Plugin activation → Connector/MCP runtime provider  | ✅ 已实现，支持 live install/enable/disable authority reconcile                                                           |
-| Extensions bundle → Connector/MCP runtime provider               | ✅ 已实现，同 digest exact binding、HTTP/packaged stdio 校验、Manager invocation lease 与 install/update/uninstall 热重建 |
-| MCP `tools/list_changed` → safe-point rebuild                    | ✅ 已实现                                                                                                                 |
+Connector 的 identity、双 generation、SQLite authority、exact retry receipts、重新授权和 secret cleanup 由前文维护。已接入 API-token、OAuth state/PKCE/exchange 与 refresh/revoke；远端 revoke 失败保留本地连接供重试。Desktop 提供 browser/device 交互，Browser host 与 TUI 提供 device 交互，TUI 另支持列表、断开与通知刷新。
+
+本地默认 persistence 使用 profile 加密文件与 keyring 主密钥；系统钥匙串保留为显式 host 注入选项，daemon 默认不请求许可。legacy Plugin 与 Extensions bundle 通过 exact package/digest、Manager lease 和 activation 接入 Connector/MCP runtime；安装、更新、卸载与 `tools/list_changed` 使用现有 safe-point rebuild 和 dispatch fence，不另建状态机。
 
 产品部署入口为 `LocalProductServicesConfig` / `--product-services PATH` /
 `ASH_PRODUCT_SERVICES_PATH`。该只读 JSON 可声明通用 Extensions Manager registry、broker URL 和 public client ID，不允许
 client secret；`trustedRoot` 必须是配置文件目录内的普通相对路径，distribution/broker base URL 必须是无
 credential/query/fragment 且以 `/` 结尾的 HTTPS URL。普通 Plugin manifest 和 user config 不能提供这些发行信任材料。官方 Extensions 的配置和 root 已由
-package 从 `resources/product-services/` 携带，远端签名 metadata 与 package 由独立 registry 发布。下一阶段
-是部署真实 broker 并增加其他服务 adapter；它们必须复用现有 authority、SecretStore、App
+package 从 `resources/product-services/` 携带，远端签名 metadata 与 package 由独立 registry 发布。真实 broker 部署和其他服务 adapter 仍需按各自接入条件完成；它们必须复用现有 authority、SecretStore、App
 Server safe point 和 MCP dispatch fence，不得创建第二套 Connector 状态机。
 
 ```json

@@ -39,7 +39,7 @@ Main 仍负责 runtime 准备与窗口生命周期，业务协议帧透明转发
 留在本地，远端执行连接只处理文件与进程。配置入口见
 [`ash-exec-server`](../crates/exec-server/README.md#启动与连接)。这项能力尚未替换 Desktop Remote
 默认入口。历史迁移操作及调用顺序见
-[`ash-remote-server`](../remote-server/README.md#history-ownership-transfer)；Desktop 尚未自动
+[`ash-remote-server`](../remote-server/runtime.md#history-ownership-transfer)；Desktop 尚未自动
 调用迁移，已有用户历史未被修改。迁移完成的远端 profile 重启后只开启执行服务，不恢复旧 Agent、
 Queue 或 Automation，也不接受旧 Agent 写入入口。
 
@@ -636,8 +636,6 @@ Ports 通过 `src/ash/platform/tunnel/common/tunnel.ts` 的 `ITunnelService` 查
 Ports 中已经列出的端口再次 Forward 不增加引用；关闭面板保留用户打开的转发。显式 Stop 经 `closeTunnel` 关闭整个端点并使旧句柄失效，之后释放旧句柄不会影响新建端点。工作区切换取消尚未发布的共享启动并关闭全部转发，窗口关闭释放协调器。
 
 Browser 当前无转发 provider，工作台入口返回空 catalog 和不可用结果。当前契约只覆盖实际 SSH Ports 调用链；provider、公开监听、提权和协议切换仍需在真实消费者接入时扩展。Main 的 SOCKS5 BrowserSession 网络能力由独立会话资源持有，不消费 Ports 的引用。
-
-## 实现证据
 
 ## 后续演进
 

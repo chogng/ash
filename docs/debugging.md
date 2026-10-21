@@ -2,13 +2,13 @@
 
 > 状态：已确认的 Rust Debug 领域迁移和 Workbench 职责拆分已接入生产。Rust 拥有 DAP client、初始化／执行状态、断点绑定、检查编排、工作区定义与 SQLite 持久化、实时异常选择、父子会话和结构化输出。TS 保留配置／编辑器／Tasks／Terminal 接入、v1/v2 Memento 单向迁移和窗口 UI。SSH 资源绑定执行 Environment；Academic 不组装 Tasks、Testing 或 Debug。真实环境验收按实际记录区分，不以源码接通代替。具体实现见 [client](../crates/debug-client/README.md)、[manager](../crates/debug-manager/README.md)、[transport](../crates/debug-adapter/README.md) 和 [Workbench](../src/ash/workbench/contrib/debug/README.md)。
 
-## 本轮复核补齐
+## 编辑器检查与交互
 
 暂停源码的悬浮检查和行内值共用现有 editor hover/decorations；异常详情使用同一编辑器坐标与独立无障碍帮助。Loaded Scripts 独立视图和命令查询适配器的源码目录，也能打开 sourceReference 虚拟脚本。Variables 的“查看内存”及同名命令通过 FileService 以十六进制显示原始字节，保存会写入适配器；继续执行或检查代次变化后必须重新打开，旧视图不能继续读写。
 
 适配器进度接入共享通知；可选 `accessibility.debugWatchVariableAnnouncements` 播报当前 Watch 值变化，`debug.confirmOnExit` 控制退出确认。Chat 的添加上下文提供暂停帧和变量快照，不自动发送。变量可视化提供有界变量树及 Ash 扩展命令输出；扩展声明见 [SDK 说明](../sdk/typescript/README.md)。状态栏颜色使用可释放的主题样式；F9/gutter 共用断点语言及 when 策略，`debug.allowBreakpointsEverywhere` 保留现有默认行为。
 
-原“不适用”30 项已逐项重判；真实能力缺口、已有承接及架构差异分别记录在 [53 路径复核](../src/ash/workbench/contrib/debug/README.md#53-path-responsibility-review)，不以没有调用方排除未实现功能。
+具体路径的职责、能力缺口与架构差异由 [Workbench 路径复核](../src/ash/workbench/contrib/debug/README.md#53-path-responsibility-review)维护，不以没有调用方排除未实现功能。
 
 ## 快速理解
 
@@ -214,10 +214,10 @@ Debug 前端定向 171 项通过；两个 Rust provider、SDK、manager 与 App 
 
 2026-10-21 自动附加操作入口补验：macOS arm64 的真实 Desktop 已通过命令／状态栏键盘操作、用户与工作区模式持久化、暂停时保留已有会话、同终端及暂停期间新建终端恢复附加、重载清除暂停、停用撤销旧凭据、中英文显示和无障碍帮助。Rust 策略／helper 8 项及产品部署授权 1 项定向测试通过；Desktop 3 项回归和 5 步录屏场景通过。证据、构建来源与校验值见 [自动附加验收](../.build/ash-playwright-mcp/evidence/debug-auto-attach-controls-2026-10-21T23-31-52-960Z/validation.json)，[录屏报告](../.build/ash-playwright-mcp/evidence/debug-auto-attach-controls-2026-10-21T23-31-52-960Z/report.html) 保留实际 UI 断言与视频。本次未执行 Windows、Linux 或 SSH 的运行验收。
 
-## 本轮验证边界
+## 验证范围与限制
 
-macOS 上已完成 `just verify ash-debug-manager`（51 项测试及 check/warnings）、protocol 定向测试（156 项单元、3 项边界、1 项 hash）、Debug RPC 与领域契约回归，以及 `just dependencies`（223 个 workspace member）。前端 Debug 定向单元回归共覆盖 219 项：合并暂停状态约束后修正旧 fixture，相关 7 项重跑通过；其余 212 项在同次回归通过。浏览器集成最终 11 项控制台／布局场景通过，覆盖真实编辑器、多行与撤销、UTF-16 补全、历史／过滤、树展开与批量输出、焦点、中文和高对比主题。Desktop、Web 的正常构建均通过。
+已有 macOS 验证覆盖 Debug manager／protocol／领域契约、浏览器控制台与布局，以及 Desktop/Web 的正常构建。真实 Desktop/Web 场景覆盖检查、Watch、单步、observer、inline 清理、父子终止、实时异常、结构化输出、配置取消、空 descriptor、停用／卸载回收、控制台过滤与历史恢复、多行 UTF-16 补全和所选帧求值；浏览器另覆盖焦点、中文和高对比主题。具体入口与证据由 [Workbench 验证记录](../src/ash/workbench/contrib/debug/README.md#desktop-acceptance-closure-2026-10-21)维护，不在本文重复测试数量与构建批次。
 
-真实 Desktop 冒烟已覆盖检查／Watch／单步、observer、inline 清理、父子终止、实时异常与结构化输出；扩展配置取消、空 descriptor、停用／卸载回收的修正后定向测试通过。控制台过滤、重载后输入／过滤历史恢复、草稿、多行 UTF-16 补全和所选栈帧求值的最终 Desktop 与 Web 场景均通过。Web 曾在进入场景前发生一次后端 socket deadline，单独重试正常启动；重载测试随后修正了误点已选活动栏导致侧栏关闭的步骤。同机隔离 OpenSSH 场景在最新构建通过，独立确认远端 profile／进程、栈帧检查、多行控制台与进程回收；这不是跨机器网络验收。首次失败日志与修正后结果均保留在本地构建诊断中。
+同机隔离 OpenSSH 场景确认了远端 profile／进程、栈帧检查、多行控制台与进程回收；这不是跨机器网络验收。Web 首次启动曾遇到后端 socket deadline，单独重试正常；重载步骤也曾误点已选活动栏而关闭侧栏。首次失败及修正结果保留在原构建诊断中，不计作产品故障已归因的证据。
 
-上述早期验证没有启动真实 LLDB debuggee。2026-10-21 的补充 Desktop 验收已通过 CodeLLDB 对真实 Rust 测试的断点、继续执行和会话清理，且未更改系统 Developer Mode。系统 Apple LLDB 在本机 macOS 27.0.1 上加载 `/bin/echo` 和 Rust 测试时仍会在符号解析中崩溃，该独立工具链问题不记为已修复；Rust Testing 已退出强制选择系统 `lldb-dap` 的路径。完整扩展 namespace 和跨进程活动会话恢复仍按 Workbench README 的兼容边界处理。
+2026-10-21 的 CodeLLDB Desktop 验收通过真实 Rust 测试的断点、继续执行和会话清理，未更改系统 Developer Mode。系统 Apple LLDB 在本机 macOS 27.0.1 上加载 `/bin/echo` 和 Rust 测试时仍会在符号解析中崩溃，该独立工具链问题未修复；Rust Testing 已退出强制选择系统 `lldb-dap` 的路径。完整扩展 namespace 和跨进程活动会话恢复仍按 Workbench README 的兼容边界处理。

@@ -2,7 +2,7 @@
 
 > 类型：设计。状态：Current implementation + gated roadmap。本文 canonical 拥有编辑器语法事实、
 > Language Server、工作区符号索引、代码检索与未来代码图之间的跨系统边界，以及已完成纵向链路
-> 和仍需证据才能启动的阶段。
+> 和仍需证据才能开放的能力。
 > 当前检索实现见 [`codebase.md`](codebase.md)，编辑器语法能力见
 > [`syntax-analysis.md`](syntax-analysis.md)，精确语言语义见 [`lsp.md`](lsp.md)。各 crate 的内部接口
 > 继续由对应 README 拥有；本文不复制其实现细节。
@@ -26,7 +26,7 @@ Ash 不用一个巨型数据库同时冒充语法树、语言服务器、搜索�
 | 结构化编辑                     | Smart Select 按当前 revision/selection 请求有限 parser scopes，并保留 lexical fallback/shrink history | 继续增加 select declaration，之后才评审原子 mutation plan   | 部分 Current    |
 
 继续阅读：[当前基线](#1-当前基线)、[目标架构](#2-目标架构)、[数据与失效](#4-数据身份与失效)、
-[阶段计划](#8-阶段计划)、[验收门](#9-测试性能与验收门)。
+[演进条件](#8-演进的准入条件)、[验收门](#9-测试性能与验收门)。
 
 ## 1. 当前基线
 
@@ -71,10 +71,9 @@ verified excerpt 交汇，而不是共享存储。当前系统仍不保存 occur
 | 坐标转换                    | 全系统共用一个 LineIndex                                     | 每个 authority 内部使用 canonical coordinate，协议边界显式转换并验证 Unicode                         | 避免把 Editor/LSP/source revision 生命周期绑成共享 mutable service |
 | AI retrieval                | graph/semantic/context store 统一读取                        | retrieval 独立融合 symbol/FTS/vector/cloud，并在发给模型前由 Codebase 复核 exact excerpt             | candidate provider 不拥有最终上下文                                |
 
-实现顺序也不同。Ash 在本计划前已经具备 LSP、SQLite lexical、semantic vector/rerank 和 Agent
-retrieval，因此没有按“先 FileShard、再 LSP、最后 semantic search”重建已有系统；本轮补的是实际缺口：
-本轮落地顺序是 symbol index → dirty overlay → symbol-aware retrieval → metrics/cancellation → on-demand Smart Select。Graph、
-resolver 和 cache 继续由证据门控制。
+Ash 已具备 LSP、SQLite lexical、semantic vector/rerank、symbol index、dirty overlay 和 Agent
+retrieval；各 projection 通过 source identity 协作，不按统一 FileShard 重建已有系统。Graph、resolver
+和 navigation cache 继续由证据门控制。
 
 ## 2. 目标架构
 
@@ -279,57 +278,11 @@ range 用到新 Buffer 上。
 本地 symbol database 与 lexical/semantic Codebase 一样只是可重建 projection，不提升为源码 authority。
 Unix persistent file 使用普通文件和 `0600`。路径、错误和日志不得输出源码正文或 embedding payload。
 
-## 8. 阶段计划
+## 8. 演进的准入条件
 
-### P0：冻结文档与基线（已完成）
+已实现的 symbol index、dirty overlay 与 symbol-aware retrieval 由前文维护；以下说明扩展能力所需的证据与验证条件。
 
-- 建立本文并加入文档导航与文档站。
-- 从 `codebase.md`、`syntax-analysis.md` 和 `lsp.md` 链回本文。
-- 固定当前状态、owner、non-goal、测试和性能验收口径。
-
-完成状态：已建立 canonical 边界、文档导航和 owner/non-goal；产品 Workbench 只安装 contribution。
-
-### P1：本地 Symbol 索引纵向链路（已完成）
-
-- 新增 `ash-codebase` crate、README、Cargo/Bazel target。
-- 定义 revision-bound symbol types、limits、error 和 storage。
-- 实现 manifest reconcile、syntax extraction、SQLite publication、persistent reuse。
-- 实现内存 Nucleo matcher、exact/fuzzy Top K 和 query cancellation。
-- 在 App Server 中随 Codebase generation 调度 symbol reconcile。
-- 增加 `codebase/symbols/status` 与 `codebase/symbols/search`。
-- Desktop 增加 `ICodebaseSymbolsService`、App Server implementation 和 workspace-symbol provider。
-- Workspace Symbol service 支持并发 provider 和阶段性结果。
-
-完成状态：`ash-codebase`、App Server status/search RPC、Desktop service/provider 和 staged
-Workspace Symbol fusion 已接通。Language Server 缺席或单个 provider 失败时本地结果仍可用；旧 query
-generation 不会发布，接受结果前以 SHA-256 对当前文件进行复核。
-
-### P2：未保存 Buffer 浮层（已完成）
-
-- 建立 App Server ephemeral `WorkspaceDocumentOverlay`。
-- host 把 open/change/close snapshot 同步投影给 overlay 与 LSP。
-- `ash-codebase` 查询合并 overlay symbols 并抑制同路径磁盘 rows。
-- `ash-codebase` 增加 canonical in-memory chunk overlay。
-- `ash-codebase` 对 dirty paths 抑制全部持久化/remote candidates，并从 overlay 复核正文。
-- 实现 save handoff：content hash 相同的磁盘 generation ready 后才删除 overlay。
-
-完成状态：Editor snapshot 通过 `codeIntelligence/document/synchronize|close` 同步；Codebase
-拥有 canonical text overlay，SymbolIndex 投影其声明；retrieval 对 dirty path 抑制所有磁盘与远端候选，
-只物化当前 overlay。相同 content hash 的磁盘 generation 发布后才 handoff。
-
-### P3：Symbol-aware AI retrieval（已完成）
-
-- 为 retrieval 增加 exact path/name 和 symbol fuzzy candidate source。
-- 将 declaration span 转为由绑定 `Dir` 的 Codebase 复核的 excerpt reference。
-- 对 symbol、FTS、vector 和 remote 同范围命中执行 identity dedupe。
-- 在 Core evidence 中保留 source/path/range/revision/provenance，不泄漏内部 store ID。
-- 明确当前选择、显式文件/符号线索与普通 semantic match 的预算优先级。
-
-完成状态：local symbol 已成为独立 retrieval origin；声明范围通过
-`Codebase::materialize_verified_excerpt` 变成 content-addressed `SourceExcerptReference` 后参与融合。
-所有模型输入仍经过 overlay/disk current-source verification。
-
-### P4：导航指标与可选会话缓存（指标已完成；缓存 gated）
+### 导航指标与可选会话缓存
 
 - 记录 request kind、server incarnation、cold/warm latency、结果数、取消率与配置 generation。
 - 只有指标证明重复请求成本显著时，增加 `ash-lsp-manager` 内存 cache。
@@ -344,7 +297,7 @@ result count，以及 delivered/empty/failed/cancelled/stale-discarded/rejected 
 缓存结论：当前不安装 cache。先收集重复请求与冷暖延迟；只有收益显著且 key/失效测试可证明不会跨
 server incarnation、configuration generation 或 document revision 时，才进入独立设计评审。
 
-### P5：Semantic graph 与 SCIP（gated）
+### Semantic graph 与 SCIP
 
 - 在第一个真实 indexer/resolver 与消费场景同时出现时建立 `ash-code-graph`。
 - 定义 semantic symbol、occurrence、typed edge、origin、evidence、confidence 和 freshness identity。
@@ -352,10 +305,10 @@ server incarnation、configuration generation 或 document revision 时，才进
 - 同名和路径启发式只产生候选，不产生精确跳转。
 
 仓库审计结论：当前没有 SCIP/compiler occurrence 数据源，也没有能提供 current fact identity 的 graph
-consumer。因此本阶段不创建空壳 crate，不用 Tree-sitter 同名关系伪造语义图。启动门仍是：真实
+consumer。因此不创建空壳 crate，不用 Tree-sitter 同名关系伪造语义图。启动门仍是：真实
 indexer/resolver、真实 consumer、可追溯 freshness 和 failure tests 同时存在。
 
-### P6：跨语言解析器与图感知上下文（gated）
+### 跨语言解析器与图感知上下文
 
 - 按真实项目需求逐个增加 schema/generated-code、FFI、route 或 ORM resolver。
 - 为 traversal 设置 hop、edge-per-node、confidence、文件和内容预算。
@@ -365,7 +318,7 @@ indexer/resolver、真实 consumer、可追溯 freshness 和 failure tests 同�
 仓库审计结论：未发现当前 Protobuf/OpenAPI/GraphQL/source-map 等 concrete resolver consumer。待具体
 项目关系进入产品需求后逐个接入；没有图时现有 symbol/lexical/semantic retrieval 保持完整。
 
-### P7：Syntax-aware editing（第一条只读纵向链路已完成）
+### Syntax-aware editing
 
 - 不暴露原始 Tree-sitter `Node`，先按真实命令增加 revision-bound operation。
 - 已实现 `syntax/selectionRanges`：只按当前最多 1,024 个 selection 请求，每个 selection 最多返回

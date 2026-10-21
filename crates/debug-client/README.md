@@ -15,7 +15,7 @@ response. Late responses cannot replace a timeout. There are at most 128 retaine
 requests/results and 128 outstanding reverse requests. `close` fails all waiting
 requests and rejects further input or requests; it never replays an operation.
 
-This first migration slice does not yet own launch/configurationDone orchestration,
-capability normalization, breakpoint semantics or execution state. Their transfer
-is described in [the system design](../../docs/debugging.md#已确认的目标分层).
+Launch/configurationDone orchestration, capability normalization, breakpoint
+semantics and execution state belong to `ash-debug-manager`, as described in
+[the system design](../../docs/debugging.md#目标分层).
 Run `just verify ash-debug-client` for protocol and resource-boundary tests.

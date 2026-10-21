@@ -12,7 +12,7 @@
 | 修改快捷键       | profile `keybindings.json`                     | 设置浮层写入 `config.toml` 的 `[gui].keybindings`；配置变化后重读 `[gui]` | `/shortcuts` 写入 `config.toml` 的 `[tui].keybindings`；配置变化后重读 `[tui]` |
 | 执行命令         | Renderer 内执行命令或产生编辑意图              | App host 执行 `AppCommandId`                                              | TUI 主循环执行 `AppCommand` 或局部 component intent                            |
 
-后续章节依次说明[一次按键的流程](#2-端到端流程)、[所有权](#3-所有权与依赖方向)、[一致性边界](#5-跨语言一致性)和[当前状态与演进](#8-当前状态与演进)。
+后续章节依次说明[一次按键的流程](#2-端到端流程)、[所有权](#3-所有权与依赖方向)、[一致性边界](#5-跨语言一致性)和[实现与回归边界](#8-实现与回归边界)。
 
 ## 1. 决策
 
@@ -209,18 +209,11 @@ App 和 TUI 连接 App Server 后分别读取 `[gui].keybindings` 与 `[tui].key
 - AltGr、死键和 IME 由拥有原始图形窗口事件的 Ash/App adapter 处理；TUI 消费终端已经解释后的结果。
 - Ctrl-C、Ctrl-D、Ctrl-Z 等终端保留语义由 Ash Code 产品 Keymap 明确注册，不能由共享 core 隐式决定。
 
-## 8. 当前状态与演进
+## 8. 实现与回归边界
 
-| 阶段                                                           | 状态    | 退出条件                                                                                                |
-| -------------------------------------------------------------- | ------- | ------------------------------------------------------------------------------------------------------- |
-| Ash TypeScript layout、Mapper、Resolver 和 profile resource    | Current | 浏览器与 Electron 测试持续覆盖布局和快捷键                                                              |
-| App Rust Resolver、输入 adapter、`[gui].keybindings` 与设置 UI | Current | 配置通知、完整替换、坏更新保留旧规则和录制写入持续通过测试                                              |
-| 提升无 UI 的 `ash-keybinding` 到 `crates/keybinding`           | Current | crate 不含产品/UI/platform 依赖，App 继续通过测试                                                       |
-| Ash Code 应用级固定 Keymap 与 Chord lifecycle                  | Current | 现有 Ctrl/BackTab/Esc 行为由共享 Resolver 驱动；pending/超时/取消/提示完整，局部 component key 不上移   |
-| TS/Rust parser conformance fixtures                            | Current | 两个实现读取同一 fixture 并通过                                                                         |
-| TS/Rust Resolver precedence fixtures                           | Current | Builtin/Workbench/User 来源、极值优先级、后注册覆盖、condition、blocker 和 prefix 读取同一 fixture      |
-| Ash Code 用户可配置 Keymap                                     | Current | `[tui].keybindings`、User precedence/blocker、`when`、平台覆盖、Chord、配置刷新和坏更新恢复持续通过测试 |
-| Ash Code Keymap editor 与录制保存                              | Current | 可搜索、来源/诊断可见；保存后直接安装同一份已校验规则，不建立第二套 Resolver                            |
+TypeScript 的布局／Mapper／Resolver 与 Electron adapter、Rust App 的 `[gui].keybindings` 和 Ash Code 的 `[tui].keybindings` 均已有运行时消费者。用户编辑、录制保存和配置刷新使用同一份校验规则；坏更新保留旧规则，Chord 的 pending、超时、取消和提示由所属客户端生命周期管理，局部 component key 不上移为应用级命令。
+
+TS/Rust 共用 parser conformance 与 Resolver precedence fixtures，覆盖 Builtin/Workbench/User 来源、极值优先级、后注册覆盖、condition、blocker 与 prefix。浏览器、Electron 和各 Rust 客户端分别验证其输入 adapter，不以共享 core 测试代替宿主行为。
 
 当前 Rust 路径只有一套纯 core：App 的快捷键设置页面由 `ash-settings` 管，工作界面的组合键提示由 `ash-workbench` 管，Ash Code 根级 Keymap 直接接入共享 Resolver。adapter 只做单向转换，不保留第二套 Resolver。
 

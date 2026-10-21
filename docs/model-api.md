@@ -721,50 +721,13 @@ Luna 能验证 OpenAI 订阅通道和共享执行链，不能证明 Gemini、Cla
 Byte fragmentation、CRLF/LF、multiline data 和 retry timing 的测试属于 `ash-client`；transport
 idle deadline、proxy/TLS、pool 和 HTTP diagnostics 的测试属于 `ash-http-client`。
 
-## 16. 迁移计划
+## 16. 协议能力的接入边界
 
-### 阶段 1：建立共享客户端分层
+共享客户端分层、endpoint/request 拆分和首批 HTTP/SSE 端点已有实现，支持范围由前文的端点章节与 [crate README](../crates/ash-api/README.md) 维护。
 
-- 在 `ash-http-client` 建立 HTTP request/response/config port；
-- 把 `HttpHeader`、raw request/response bytes 和 `UreqHttpClient` 迁入底层 crate；
-- `ash-client` 保留 operation retry 与 framing；
-- 保住现有同步 unary 行为；
-- `ash-api` 开始依赖 operation client port。
+NDJSON、Google native profiles、目录端点及其他兼容差异按各自真实协议和调用方逐项验证 error/cache/stream fixtures；不能从一种 Responses 或 OpenAI-compatible 实现推断其他端点已支持。目录 request/response codec 归本层，catalog source 归 model-provider，refresh/cache/merge 归 models manager。
 
-### 阶段 2：拆端点与请求
-
-- 已将 `Api` Provider enum 的分派移到 model-provider；
-- 已建立 OpenAI Responses、Anthropic Messages、OpenAI Chat endpoint；
-- 已把现有 JSON conversion 物理移入 `requests/`；
-- 已删除 Provider 级空 facade。
-
-### 阶段 3：SSE 纵向切片（已完成首批端点）
-
-- 在 client 实现 SSE framing；
-- 已在 API 实现 OpenAI Responses `sse/` decoder；
-- 已接 Anthropic Messages decoder 与 `ping`/content-block lifecycle；
-- 已接 OpenAI-compatible Chat Completions decoder、Tool Call fragment assembly 与 `[DONE]`；
-- 三种 endpoint 均由 model-provider 暴露 canonical stream，并返回 terminal response。
-
-### 阶段 4：兼容差异与 NDJSON
-
-- DeepSeek comment heartbeat/usage；
-- Ollama native NDJSON；
-- Google native profiles；
-- 逐家补 error/cache/stream fixtures。
-
-### 阶段 4.5：ChatGPT 订阅服务接口面
-
-- 建立 [`ash-chatgpt`](models/chatgpt.md)，提供设备码授权、Codex 兼容凭据管理与固定请求目标；
-- 将 Platform API key、ChatGPT subscription OAuth 和 custom-compatible target 设为互斥 binding；
-- 复用已验证的 Responses codec，并为 subscription target、headers、refresh 和 streaming 建立脱敏 contract fixture；
-- 其他 endpoint 必须逐项验证，不能从 Responses 兼容性推断。
-
-### 阶段 5：目录协议格式
-
-- 实现 list endpoint/request/response codec；
-- model-provider 实现 models manager source；
-- manager 负责 refresh/cache/merge。
+ChatGPT subscription 的设备码、凭据和固定请求目标归 [`ash-chatgpt`](models/chatgpt.md)；与 Platform API key、custom-compatible target 保持互斥 binding。新增端点复用经过验证的 codec，并验证 target、headers、refresh、streaming 及脱敏契约。
 
 ## 17. 固定决策
 

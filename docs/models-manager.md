@@ -100,7 +100,7 @@ model provider 负责“如何用已选模型执行一次调用”
 | Agent 启动时的继承、覆盖和跨 provider 替换           | 尚未完成 | 当前 `resolve` 只校验一个准确 `ModelRef`；尚无统一候选选择、替换记录和客户端警告         |
 | persisted observation cache                          | ✅       | profile 内的 `cache/models/<provider>.json`，按供应商分文件、按账户 scope 隔离、原子写入 |
 | backoff/jitter、并发总闸                             | 尚未完成 | 后续 core hardening                                                                      |
-| `model/refresh`、`model/updated`、完整 snapshot DTO  | 尚未完成 | Phase 3                                                                                  |
+| `model/refresh`、`model/updated`、完整 snapshot DTO  | 尚未完成 | App Server／客户端协议，见第 16 节                                                       |
 
 现有 `ModelInfo` 也存在后续需要修正的语义缺口：
 
@@ -993,58 +993,13 @@ model/list(stale)
 不在普通 CI 依赖真实 provider 网络或真实 API key。真实 provider smoke test 必须 opt-in、限频且不
 执行 inference。
 
-## 16. 分阶段落地
+## 16. 能力接入与验证条件
 
-### 阶段 1：纯目录核心
+已实现目录核心、cache 和 discovery adapter 的状态由第 2 节维护；不同 provider 的证据见第 6.2 节，不按旧供应商接入顺序推断覆盖范围。新增动态来源先取得官方、可验证的 authenticated endpoint 证据，再实现 adapter；wire DTO/fixture 放在对应协议层，manager 不增加 provider switch。
 
-- ✅ 创建 `ash-models-manager`；
-- ✅ 定义 source port、scope、snapshot、read/refresh policy；
-- ✅ 从 `ProviderDefinition.models` 读取 seed；
-- ✅ 实现 memory cache、singleflight、merge/filter/resolve；
-- ✅ 接入 fake source/fake clock 单元测试；
-- 部分具备：protocol 已补 availability/freshness/lifecycle/quality；完整 snapshot wrapper 随 Phase 3
-  App Server API 一并落地，当前 snapshot 是 manager 的进程内 immutable value。
+尚未完成的完整 snapshot DTO、`model/refresh`、`model/updated` 与各产品 picker 接入，需要同时校验 scope、配置／凭据 revision、稳定排序、warning 及跨客户端一致性。Agent 模型继承、兼容替换和选择记录按第 10.3 节的目标契约处理；refresh 不修改已开始的 Agent 运行或 in-flight invocation。
 
-当前结果：无网络可以从统一 manager 获得确定 catalog，provider runtime 与 Local App Server 已迁移；
-其他产品 picker 尚未接入，因此跨 Desktop/CLI/TUI 的完成条件仍留在 Phase 3。
-
-### 阶段 2：高价值动态供应商
-
-按 metadata 质量和现有产品价值优先接入：
-
-1. OpenAI、Anthropic；
-2. Gemini、DeepSeek；
-3. ✅ Ollama；
-4. xAI；
-5. Kimi、Z.AI 等先使用 curated/static source，在有官方、可验证
-   authenticated endpoint 后再接动态 discovery。
-
-每接入一个 provider，先建立第 6.2 节的验证记录，再实现 adapter。同时把 wire DTO/fixture 放到
-正确层，不在 manager 中写 provider switch。
-
-完成条件：动态列表失败时可稳定回退静态 snapshot；各 provider 的 coverage 与 Unknown 语义经过
-contract test；未文档化 cache header 不成为正确性依赖。
-
-### 阶段 3：App Server 与客户端
-
-- 增加 `model/list`、`model/refresh`、`model/updated`；
-- Desktop/CLI/TUI picker 迁移到统一 snapshot；
-- provider 配置或凭据 revision 触发新 scope；
-- 增加统一 `ModelSelectionRequest` 与 `ModelSelectionDecision`，让 Agent 启动按“准确模型 → 同 scope → 同 provider 的其他允许 scope → 其他允许 provider”选择；
-- App Server 冻结请求模型、实际模型、替换原因、推理配置与目录 generation，并让客户端显示非阻塞警告；
-- Agent runtime 在安全点使用已经冻结的准确模型，不在调用失败后重新选择。
-
-完成条件：所有产品入口看到相同目录、相同 warning 和相同排序；同一选择请求得到确定结果；同 provider 与跨 provider 替换均有契约测试；refresh 不影响已开始的 Agent 运行或 in-flight invocation。
-
-### 阶段 4：持久缓存与维护流程
-
-- ✅ 增加可删除的 persisted observation cache；
-- 内置 metadata 加 source URL、reviewed_at 和维护校验；
-- 建立官方文档变化的人工/自动审计流程；
-- 根据真实指标调整 TTL、backoff 和 warm-up 范围。
-
-完成条件：重启/离线仍能快速展示 last-known catalog，cache 损坏可删除重建且不影响 durable
-产品状态。
+持久缓存是可删除的 observation projection，损坏时可重建且不影响 durable 产品状态。metadata 的 source URL、reviewed_at 与维护校验，以及 TTL、backoff、warm-up 的调整按真实证据推进；动态列表失败须保持静态回退和 Unknown 语义，未经验证的 cache header 不成为正确性依赖。
 
 ## 17. 固定决策
 

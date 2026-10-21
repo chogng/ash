@@ -37,7 +37,7 @@ Desktop UI、Electron IPC、`ash-code` 的 TUI 宿主和第三方网页 UI 不�
 
 ## 2. crate 边界
 
-外部扩展的目标运行 crate 为 `external-ext`、`external-js-ext` 和独立 `external-ext-protocol`；Rust 作者 SDK 已迁入根 `sdk/rust`，包名为 `ash-external-ext-sdk`，仍属于 Cargo workspace。产品监管不进入作者 SDK，协议不并入根 `ash-protocol`，运行层不直接依赖 `core-plugins`；名称、目录与相关构建引用已迁移；来源解耦和运行时兼容改造尚未实施。确定的职责与现有入口见[扩展接入边界](editor-extensions.md#共享接入与语言适配的-crate-边界)，以下树形图记录当前布局。
+外部扩展使用 `external-ext`、`external-js-ext` 和独立 `external-ext-protocol`；Rust 作者 SDK 位于根 `sdk/rust`，包名为 `ash-external-ext-sdk`，属于 Cargo workspace。产品监管不进入作者 SDK，扩展协议不并入根 `ash-protocol`。来源 adapter、运行层与 App Server 组合的职责及尚未完成的提取见[扩展接入边界](editor-extensions.md#共享接入与语言适配的-crate-边界)，运行时支持范围由该文档维护。以下树形图记录当前布局。
 
 ```text
 crates/
@@ -100,18 +100,18 @@ crates/
 ├── websocket-client/      # provider-neutral WebSocket handshake/message transport
 ├── ash-client/           # API operation retry 与 SSE framing layer
 ├── arg0/                  # shared internal helper dispatch
-├── exec/                  # target headless Agent runner
-├── tool-executor/         # target local process execution boundary
+├── exec/                  # headless Agent runner
+├── tool-executor/         # local process execution boundary
 ```
 
-根 `sdk/rust/` 提供 Rust 作者接口，`sdk/typescript/` 提供 `@ash/sdk` / `ash.*` TS 作者接口；两者共用 Host RPC 和能力授权，Rust SDK 仍是同一 Cargo workspace 的成员。VS Code 扩展 API 兼容已退出目标，旧 adapter 按[生态迁移顺序](editor-extensions.md#05-ash-自有生态与旧来源退休)退休。
+根 `sdk/rust/` 提供 Rust 作者接口，`sdk/typescript/` 提供 `@ash/sdk` / `ash.*` TS 作者接口；两者共用 Host RPC 和能力授权，Rust SDK 仍是同一 Cargo workspace 的成员。VS Code 扩展 API 兼容已退出目标，旧来源与作者接口只保留[退休识别和清理](editor-extensions.md#05-ash-自有生态与旧来源退休)。
 
 `cli/` 是命令入口，`crates/tui` 与终端辅助 crate 拥有终端呈现。它们和后端共享根 Cargo workspace，但后端不能反向依赖终端呈现或命令入口。
 
 `crates/terminal` 保留 CLI 测试使用的 ANSI/VT 模型；终端进程与字节传输仍由 `crates/utils/pty` 负责。编辑器模型、文件编辑生命周期与 HTML/CSS 界面由 `src/` 的对应前端模块负责。
 
-当前 `exec/` 仍实现 process `ToolExecutor`。它迁移为 `tool-executor/` 后，`exec/` 名称用于
-[`exec.md`](exec.md) 定义的 headless Agent runner；迁移完成前不能把目标目录注释理解为现状。
+`tool-executor/` 拥有 process `ToolExecutor`；`exec/` 是 [`exec.md`](exec.md) 定义的 headless
+Agent runner，二者使用各自的包身份和入口。
 
 不建立职责含糊的 `common`、`service` 或总括式执行 crate。Agent loop 先在 Core 内按模块
 分层；只有具备第二个真实消费者、独立 typed port 与测试 vertical slice 时才提取 crate。

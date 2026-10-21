@@ -2,7 +2,7 @@
 
 > 物理位置：`crates/skills/`
 > Rust crate：`ash_skills`
-> 当前状态：Phase S0、S1 显式选择、可信 built-in metadata 自动 selector、模型按需读取、通用 package resource、有界文本模型切片与 binary asset Resource materialization 已实现；Renderer preview、script execution adapter 与 S3–S4 仍为 Proposed。TUI 与 Desktop 已把
+> 当前状态：目录发现、显式选择、可信 built-in metadata 自动 selector、模型按需读取、Extensions/Plugin 来源、通用 package resource、有界文本模型切片与 binary asset Resource materialization 已实现；Renderer preview、script execution adapter、依赖要求和大目录检索仍有设计或验证缺口。TUI 与 Desktop 已把
 > 可直接调用的 Skill 通过独立的 `$name` 选择器调用；`/skills` 只承担目录管理。
 > Crate 实现契约：[`crates/skills/README.md`](../crates/skills/README.md)
 > Runtime extension 实现契约：[`crates/ext/skills/README.md`](../crates/ext/skills/README.md)
@@ -822,87 +822,18 @@ crates/skills/src/
 catalog/selection/activation 拆分；新 trait 必须有职责和实现约束 doc comment；新测试模块使用
 显式 sibling `#[path = "..._tests.rs"]`。
 
-## 19. 分阶段实施
+## 19. 当前限制与能力开放条件
 
-### 阶段 S0：format、目录与运行时 browser（当前状态）
+目录发现、显式选择、可信自动 selector、模型按需读取、资源加载及来源接入分别由前文维护。尚未完成的能力不因旧阶段编号成为默认实施队列：
 
-- Agent Skills frontmatter/parser/validator；
-- BuiltIn + controlled user + Directory source；
-- metadata-only scan、digest 和 immutable catalog；
-- path/size/cycle security fixtures；
-- App Server `skills/list`、`skills/changed` 与 watcher refresh；
-- durable per-Skill enablement overlay 和 TUI catalog browser/toggle。
+| 范围            | 当前边界与进入条件                                                                                                                                                                                  |
+| --------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 同名 Skill 选择 | 名称有歧义时不提供无来源限定的 `$name`；typed protocol 可指定 exact source。CLI `/skills` 提供目录管理，`$` 候选的来源限定交互仍需完善；与 `/name` 命令同名不冲突                                   |
+| 预览与脚本      | Renderer sanitized/sandboxed preview、script execution adapter 和 active-content policy 仍为设计；loader 不执行脚本，脚本必须进入标准 exec/tool/approval/sandbox 与 durable Tool Call/Result        |
+| 包依赖与更新    | Extensions/Plugin exact source 已接入；machine-readable MCP/tool requirements 及 Plugin update/disable 的 frozen Turn snapshot drain 仍需专项实现或验证，不能按名称碰撞绑定工具                     |
+| 大目录检索      | 仅在目录规模证明需要时增加有界 lexical retrieval，验证 threshold、ambiguity、显式 opt-out、候选解释和离线质量；检索只缩小可见目录，最终由模型调用 `skills-read`，有证据后再评审 embedding retrieval |
 
-完成条件：启动不会加载所有 Skill body，坏 entry 不会逃出 root 或拖垮整个 catalog；source
-变化与 enablement 变化只发布新的 metadata projection。
-
-### 阶段 S1：显式选择纵向切片（核心、TUI 与 Desktop 已实现）
-
-- `SkillRef`/version contract 与 raw path rejection；
-- 激活时完整、安全地加载 `SKILL.md` 并冻结 digest；
-- `TurnAccepted` durable provenance 与 recovery fail-closed；
-- Core ContextAssembler layering、budget 和 provenance；
-- App Server/generated contract，以及 TUI/Desktop 独立 `$name` Skill selector；
-- TUI `/skills` 目录管理和 enablement mutation。
-
-完成条件：客户端不能通过 raw path 激活 catalog 外文件，已开始 invocation 使用 frozen digest。
-
-当前限制：同名 Skill 不提供无歧义的 `$name`；调用这类 Skill 需要未来带来源限定的选择交互。与 local/server command 同名不影响 `$name` 选择。CLI 的 `/skills` 提供目录管理，但当前 `$` 候选本身不展示来源限定；typed protocol 入口不受影响。
-
-### 阶段 S1.5：模型按需读取（当前状态）
-
-- 每个模型 safe point 注入 metadata-only `<available-skills>`，固定上限 8 KiB；
-- `ReadOnlyToolContributor` 把 `skills-read` 接入共享 Tool registry/policy/runtime；
-- exact source/name、enablement、compatibility 与 content digest 由 `SkillRuntime` 校验；
-- 成功读取通过标准 durable Tool Call/Result 进入下一次模型调用；
-- 同一个 `skills-read` 使用 tagged target 区分完整说明与 package resource；resource target 必须提交
-  exact source/name + pinned Skill digest 和完整 package-relative path；
-- 模型选择不被伪装为 pre-Turn activation；受信任 automatic selector 是独立、可解释入口。
-
-完成条件：模型只看到目录元数据，正文必须经 exact read 才进入上下文；只有具备
-`DiscoverSkills` 的目录才参与发现，且 App Server 不拥有 Skill 选择或文件加载逻辑。
-
-### 阶段 S1.6：可信自动 selector（当前状态）
-
-- 只使用 immutable metadata 与有界 Turn 文本；
-- 只允许 `BuiltInVerified`、enabled、compatible 候选；
-- 唯一高置信才冻结 pinned `SkillRef`，歧义时不激活；
-- exact body 加载后持久化 digest、generation 与 `Automatic` reason；
-- 显式选择优先并从自动候选中排除。
-
-完成条件：catalog 增长不加载更多正文或线性扩写 selector prompt，任何非可信 Skill 都不能仅凭
-description 获得自动 activation。
-
-### 阶段 S2：资源与脚本（资源读取、文本切片与 binary materialization 已实现）
-
-- ✅ rooted package resource reader、kind/digest/bytes 与统一模型工具接入；
-- ✅ 模型工具只把 UTF-8 资源作为文本返回，binary asset 明确拒绝注入文本上下文；
-- ✅ assets 的安全 MIME 投影与 connection-owned Resource integration；
-- Renderer 的 sanitized/sandboxed preview；
-- scripts 只通过 exec/tool/approval/sandbox；
-- reference cycle、MIME 和 active-content policy。
-
-完成条件：读取 Skill 不产生副作用，运行脚本一定产生标准 durable Tool Call/Result。
-
-### 阶段 S3：包来源与 MCP 依赖（Extensions/Plugin 来源纵向切片已完成）
-
-- ✅ Extensions Skill exact source、独立 provenance 与 Manager generation refresh；
-- ✅ Plugin Skill exact source；
-- ✅ Plugin activation generation 触发 catalog composition refresh；
-- machine-readable MCP/tool requirements；
-- Plugin Skill update/disable 的 frozen Turn snapshot drain 仍需专项验证。
-
-完成条件：Skill 不能按名称碰撞绑定错误工具，Plugin update 不改变 in-flight invocation。
-
-### 阶段 S4：大目录候选检索
-
-- 仅在元数据目录规模需要时增加 bounded lexical retrieval；
-- threshold、ambiguity 和 explicit opt-out；
-- 候选解释与 quality evaluation；
-- 检索只缩小模型可见目录，不直接激活 Skill；有证据后再评审 embedding retrieval。
-
-完成条件：候选检索有稳定离线评测，低置信度时保留“不推荐候选”，context 不随 catalog 数量
-线性增长，最终选择仍由模型显式调用 `skills-read`。
+正文只经 exact read 或已冻结的 activation 进入上下文；读取 Skill 不产生副作用，更新不改变 in-flight invocation。新增能力继续验证这些约束。
 
 ## 20. 验证门
 

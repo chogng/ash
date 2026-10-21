@@ -712,4 +712,4 @@ also retains reproduction and build logs. No system debugging permissions were
 changed; no test-owned adapter/debugserver processes remained after teardown.
 These two entries have been removed from root TODO. Architecture recommendations
 for automatic attachment and server readiness are in
-[`docs/debugging.md`](../../../../../docs/debugging.md#自动附加与服务就绪的设计建议).
+[`docs/debugging.md`](../../../../../docs/debugging.md#javascript-调试自动附加与服务就绪).
