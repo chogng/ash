@@ -318,8 +318,9 @@ export class PaneView extends Disposable {
 					this.animationReset.schedule();
 				}
 				wasCollapsed = collapsed;
-				if (this.didLayout) this.updateContentHeight();
+				const contentHeightChanged = this.didLayout && this.updateContentHeight();
 				listener(requestedSize);
+				if (contentHeightChanged) this.scrollable.layout();
 				this.updateSashLabels();
 			}),
 			layout: (height, offset, width) => {
@@ -328,7 +329,7 @@ export class PaneView extends Disposable {
 			},
 		}, size, index);
 		this.panes.splice(index, 0, pane);
-		if (this.didLayout) this.updateContentHeight();
+		if (this.didLayout && this.updateContentHeight()) this.scrollable.layout();
 		this.updateSashLabels();
 	}
 
@@ -339,7 +340,7 @@ export class PaneView extends Disposable {
 		this.panes.splice(index, 1);
 		this.splitView.removeView(index);
 		pane.element.remove();
-		if (this.didLayout) this.updateContentHeight();
+		if (this.didLayout && this.updateContentHeight()) this.scrollable.layout();
 		this.updateSashLabels();
 	}
 
@@ -382,9 +383,12 @@ export class PaneView extends Disposable {
 		this.updateSashLabels();
 	}
 
-	private updateContentHeight(): void {
-		this.splitView.element.style.height = `${Math.max(this.height, this.splitView.minimumSize)}px`;
-		this.scrollable.layout();
+	private updateContentHeight(): boolean {
+		const height = `${Math.max(this.height, this.splitView.minimumSize)}px`;
+		if (this.splitView.element.style.height === height) return false;
+		this.splitView.element.style.height = height;
+		// Pane toggles only change the scroll extent with this height; measure after SplitView writes its geometry.
+		return true;
 	}
 
 	private updateSashLabels(): void {

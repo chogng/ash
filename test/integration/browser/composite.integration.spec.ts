@@ -710,6 +710,97 @@ for (const reducedMotion of ['no-preference', 'reduce'] as const) {
 	});
 }
 
+test('disposing a pane view cancels its pending geometry animations', async ({ page }) => {
+	await page.emulateMedia({ reducedMotion: 'no-preference' });
+	await page.goto('/composite.html?paneTransitions');
+	await page.waitForFunction(() => !!window.ashCompositeIntegration);
+	const states = await page.locator('#pane-transitions').evaluate(host => {
+		host.querySelectorAll<HTMLButtonElement>('.ash-pane-view-header-button')[1]!.click();
+		const animations = host.getAnimations({ subtree: true });
+		window.ashCompositeIntegration.disposePaneTransitions();
+		return animations.map(animation => animation.playState);
+	});
+	expect(states.length).toBeGreaterThan(0);
+	expect(states.every(state => state === 'idle')).toBe(true);
+});
+
+test('short pane toggles synchronously update their overflow scrollbar', async ({ page }) => {
+	await page.emulateMedia({ reducedMotion: 'reduce' });
+	await page.goto('/composite.html?paneTransitions&shortPanes');
+	await page.waitForFunction(() => !!window.ashCompositeIntegration);
+	const samples = await page.locator('#pane-transitions').evaluate(host => {
+		const view = host.querySelector<HTMLElement>('.ash-pane-view-container')!;
+		const viewport = view.querySelector<HTMLElement>('.ash-scrollbar-viewport')!;
+		const scrollbar = view.querySelector<HTMLElement>('.ash-scrollbar-track-vertical')!;
+		const buttons = host.querySelectorAll<HTMLButtonElement>('.ash-pane-view-header-button');
+		const sample = () => ({
+			height: viewport.scrollHeight,
+			maximum: Number(scrollbar.getAttribute('aria-valuemax')),
+			disabled: scrollbar.getAttribute('aria-disabled'),
+		});
+		const states = [sample()];
+		for (const index of [1, 0, 1, 0]) {
+			buttons[index]!.click();
+			states.push(sample());
+		}
+		return states;
+	});
+	expect(samples).toEqual([
+		{ height: 204, maximum: 84, disabled: 'false' },
+		{ height: 324, maximum: 204, disabled: 'false' },
+		{ height: 204, maximum: 84, disabled: 'false' },
+		{ height: 120, maximum: 0, disabled: 'true' },
+		{ height: 204, maximum: 84, disabled: 'false' },
+	]);
+});
+
+test('pane bodies retain their allocated height while a sibling expands', async ({ page }) => {
+	await page.emulateMedia({ reducedMotion: 'no-preference' });
+	await page.goto('/composite.html?paneTransitions');
+	await page.waitForFunction(() => !!window.ashCompositeIntegration);
+	const samples = await page.locator('#pane-transitions').evaluate(async host => {
+		const body = host.querySelector<HTMLElement>('.ash-pane-view-content')!;
+		const pane = body.closest<HTMLElement>('.ash-split-view-pane')!;
+		const before = body.getBoundingClientRect().height;
+		host.querySelectorAll<HTMLButtonElement>('.ash-pane-view-header-button')[1]!.click();
+		const allocated = Number.parseFloat(body.style.height);
+		const heights: number[] = [];
+		do {
+			await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
+			heights.push(body.getBoundingClientRect().height);
+		} while (pane.getAnimations().length > 0);
+		return { before, allocated, heights };
+	});
+	expect(samples.allocated).toBeLessThan(samples.before - 100);
+	for (const height of samples.heights) {
+		expect(height).toBeCloseTo(samples.allocated, 0);
+	}
+});
+
+test('pane expansion starts from the visible boundary after synchronous content work', async ({ page }) => {
+	await page.emulateMedia({ reducedMotion: 'no-preference' });
+	await page.goto('/composite.html?paneTransitions');
+	await page.waitForFunction(() => !!window.ashCompositeIntegration);
+	const result = await page.locator('#pane-transitions').evaluate(async host => {
+		await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
+		// A header click runs in an input task, outside the frame's animation callbacks.
+		await new Promise<void>(resolve => setTimeout(resolve, 0));
+		const button = host.querySelectorAll<HTMLButtonElement>('.ash-pane-view-header-button')[1]!;
+		const pane = button.closest<HTMLElement>('.ash-split-view-pane')!;
+		const before = pane.getBoundingClientRect().height;
+		button.click();
+		// Expansion can synchronously create or lay out a view before its first paint.
+		const workEnds = performance.now() + 40;
+		while (performance.now() < workEnds) { /* Simulate that work without yielding a frame. */ }
+		await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
+		const firstFrame = pane.getBoundingClientRect().height;
+		await Promise.all(pane.getAnimations().map(animation => animation.finished));
+		return { before, firstFrame, final: pane.getBoundingClientRect().height };
+	});
+	expect(result.firstFrame).toBeCloseTo(result.before, 0);
+	expect(result.final).toBeGreaterThan(result.before + 100);
+});
+
 test('keyboard resizing cancels an in-progress pane transition and keeps the focused separator', async ({ page }) => {
 	await page.emulateMedia({ reducedMotion: 'no-preference' });
 	await page.goto('/composite.html?paneTransitions');

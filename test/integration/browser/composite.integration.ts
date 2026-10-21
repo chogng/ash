@@ -172,6 +172,7 @@ declare global {
 			hide(): void;
 			openView(id: string): Promise<void>;
 			dispose(): void;
+			disposePaneTransitions(): void;
 			flushPaneState(): Promise<number | undefined>;
 			reattachDisposed(): void;
 			readonly editorEvents: readonly string[];
@@ -390,20 +391,22 @@ if (new URLSearchParams(location.search).has('partWidth')) {
 		state: () => ({ minimum: part.minimumWidth, frameMinimum: auxiliaryView.minimumWidth, width: auxiliaryView.element.getBoundingClientRect().width }),
 	};
 }
+let transitionPaneView: PaneView | undefined;
 if (new URLSearchParams(location.search).has('paneTransitions')) {
 	await import('../../../src/ash/base/browser/ui/sash/sash.css');
 	const paneHost = h(document, 'div');
 	paneHost.id = 'pane-transitions';
-	paneHost.style.cssText = 'position:fixed;top:0;right:0;width:300px;height:600px';
+	const height = new URLSearchParams(location.search).has('shortPanes') ? 120 : 600;
+	paneHost.style.cssText = `position:fixed;top:0;right:0;width:300px;height:${height}px`;
 	document.body.append(paneHost);
 	resources.add(toDisposable(() => paneHost.remove()));
 	resources.add(bindTestColorTheme(services.get(IThemeService), paneHost));
-	const paneView = resources.add(new PaneView(paneHost));
+	const paneView = transitionPaneView = resources.add(new PaneView(paneHost));
 	for (const title of ['Changes', 'Agent Review', 'Graph']) {
 		const pane = resources.add(new Pane(paneHost, { id: `transition.${title}`, title, collapsed: title !== 'Changes' }));
 		paneView.addPane(pane, title === 'Changes' ? 544 : 28);
 	}
-	paneView.layout(600, 300);
+	paneView.layout(height, 300);
 }
 panel.domNode.style.cssText = 'position:relative;width:800px;height:160px;overflow:hidden';
 panel.layout({ width: 800, height: 160 });
@@ -737,6 +740,7 @@ window.ashCompositeIntegration = {
 	hide: () => views.closeViewContainer(panes.getActivePaneComposite(ViewContainerLocation.Panel)!.getId()),
 	openView: async id => { await views.openView(id, true); },
 	dispose: () => panel.dispose(),
+	disposePaneTransitions: () => transitionPaneView?.dispose(),
 	flushPaneState: async () => {
 		const key = 'workbench.viewContainer.first.first.view.size';
 		storage.remove(key, StorageScope.WORKSPACE);
