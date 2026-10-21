@@ -1,6 +1,9 @@
 import { createTestLanguageModelToolsService } from '../../../src/ash/workbench/contrib/chat/test/common/tools/testLanguageModelToolsService.js';
 import { BrowserClipboardService } from '../../../src/ash/platform/clipboard/browser/clipboardService.js';
 import { IClipboardService } from '../../../src/ash/platform/clipboard/common/clipboardService.js';
+import { BrowserContextMenuService } from '../../../src/ash/platform/contextview/browser/contextMenuService.js';
+import type { IKeybindingService } from '../../../src/ash/platform/keybinding/common/keybinding.js';
+import { NotificationService } from '../../../src/ash/workbench/services/notification/common/notificationService.js';
 import { IContextMenuService } from '../../../src/ash/platform/contextview/browser/contextView.js';
 import { TestConfigurationService as WorkbenchConfigurationService } from '../../../src/ash/workbench/services/configuration/test/common/testServices.js';
 import { ConfigurationRegistry } from '../../../src/ash/platform/configuration/common/configurationRegistry.js';
@@ -69,8 +72,12 @@ import { IAppServerRemoteAgentService } from '../../../src/ash/workbench/service
 import { createSettingsEditorInput } from '../../../src/ash/workbench/services/preferences/common/settingsEditorInput.js';
 import { CLOSE_EDITOR_COMMAND_ID } from '../../../src/ash/workbench/browser/parts/editor/editorCommands.js';
 import { AppServerExtensionManagementService } from '../../../src/ash/workbench/services/extensionManagement/browser/appServerExtensionManagementService.js';
-import { ViewsRegistry } from '../../../src/ash/workbench/common/views.js';
-import { ExtensionsViewPane } from '../../../src/ash/workbench/contrib/extensions/browser/extensionsViewlet.js';
+import { IMenuService } from '../../../src/ash/platform/actions/common/actions.js';
+import { WorkbenchToolBar } from '../../../src/ash/platform/actions/browser/toolbar.js';
+import '../../../src/ash/workbench/browser/parts/paneCompositePart.css';
+import { MenuService } from '../../../src/ash/platform/actions/common/menuService.js';
+import { type IViewContainerModel, ViewsRegistry } from '../../../src/ash/workbench/common/views.js';
+import { ExtensionsViewPane, ExtensionsViewPaneContainer } from '../../../src/ash/workbench/contrib/extensions/browser/extensionsViewlet.js';
 import '../../../src/ash/workbench/contrib/extensions/browser/extensions.contribution.js';
 import { WorkbenchContributionsRegistry, WorkbenchPhase } from '../../../src/ash/workbench/common/contributions.js';
 import { CommandService } from '../../../src/ash/workbench/services/commands/common/commandService.js';
@@ -84,7 +91,7 @@ import { canceled } from '../../../src/ash/base/common/errors.js';
 import { ILogService, NullLoggerService } from '../../../src/ash/platform/log/common/log.js';
 import { IQuickInputService } from '../../../src/ash/platform/quickinput/common/quickInput.js';
 import { TestQuickInputService } from '../../../src/ash/platform/quickinput/test/browser/testQuickInputService.js';
-import { SkillsViewPane, McpServersViewPane, RecommendedExtensionsView } from '../../../src/ash/workbench/contrib/extensions/browser/extensionsViews.js';
+import { McpServersViewPane } from '../../../src/ash/workbench/contrib/extensions/browser/extensionsViews.js';
 import { IFileService, type IFileChangeEvent } from '../../../src/ash/platform/files/common/files.js';
 import { FileService } from '../../../src/ash/platform/files/common/fileService.js';
 import { MemoryFileService } from '../../../src/ash/workbench/contrib/bulkEdit/test/browser/bulkEditTestServices.js';
@@ -102,7 +109,8 @@ import { AppServerMcpServerManagementService } from '../../../src/ash/platform/m
 import { IMcpServerManagementService, type McpServerConfiguration } from '../../../src/ash/platform/mcp/common/mcpServerManagementService.js';
 import { AppServerRemoteError } from '../../../src/ash/platform/agentHost/common/appServerError.js';
 import type { AppServerProtocolClient } from '../../../src/ash/platform/agentHost/browser/appServerProtocolClient.js';
-import { PaneView } from '../../../src/ash/base/browser/ui/splitview/paneview.js';
+import { ViewContainerModel } from '../../../src/ash/workbench/services/views/common/viewContainerModel.js';
+import { IConnectorService, type ConnectorView } from '../../../src/ash/platform/connectors/common/connectorService.js';
 import { registerSkillActions } from '../../../src/ash/workbench/contrib/chat/browser/promptSyntax/skillActions.js';
 import { LanguageServerSettingsRenderer } from '../../../src/ash/workbench/contrib/preferences/browser/languageServerSettingsRenderer.js';
 import { setNlsMessages } from '../../../src/ash/nls.js';
@@ -132,6 +140,7 @@ let activeSessionId: string | undefined;
 services.registerInstance(IChatSessionNavigationService, { getActiveConversation: () => activeSessionId ? { sessionId: activeSessionId, threadId: 'fixture-thread' } : undefined } as IChatSessionNavigationService);
 const changed = disposables.add(new Emitter<void>());
 const requests: unknown[] = [];
+const managementReads = { installed: 0, skills: 0, connectors: 0 };
 let offline = false;
 let holdSearch = false;
 let rejectSearch: ((error: Error) => void) | undefined;
@@ -145,6 +154,7 @@ const reference = { id: summary.id, version: summary.version, digest: 'sha256:' 
 const capabilities = [
 	{ kind: 'executable' as const, id: 'typescript-language-server', contractVersion: '1', permissions: ['process'], authenticationProvider: null },
 	{ kind: 'skill' as const, id: 'review', contractVersion: '1', permissions: [], authenticationProvider: null },
+	...(new URLSearchParams(location.search).has('connectorBundle') ? [{ kind: 'connector' as const, id: 'github', contractVersion: '1', permissions: [], authenticationProvider: null }] : []),
 ];
 const packageDetails = { package: reference, packageType: summary.packageType, displayName: summary.displayName, description: summary.description, license: 'MIT', source: 'thirdParty' as const, upstream: null, capabilities };
 const mcpSummary = { id: 'catalog/docs@ash', version: '1.0.0', packageType: 'mcp', displayName: 'Docs MCP', description: 'Documentation tools' };
@@ -271,7 +281,7 @@ const api: IExtensionManagementApi = {
 		return { packages: [params.capabilityKind === 'editorExtension' || params.query === 'publisher.sample@ash' ? extensionSummary : summary], unavailableSources: [] };
 	},
 	get: async params => { requests.push(['get', params]); if (offline) { throw new Error('Catalog unavailable'); } const details = params.packageId === extensionSummary.id ? extensionDetails : params.packageId === mcpSummary.id ? mcpDetails : packageDetails; return { ...details, package: { ...details.package, version: params.version ?? '2.0.0' } }; },
-	listInstalled: async () => ({ instanceId: 'fixture', generation, packages: installed.map(entry => ({ ...entry, capabilities: entry.capabilities.map(capability => ({ ...capability, permissions: [...capability.permissions] })) })) }),
+	listInstalled: async () => (managementReads.installed++, { instanceId: 'fixture', generation, packages: installed.map(entry => ({ ...entry, capabilities: entry.capabilities.map(capability => ({ ...capability, permissions: [...capability.permissions] })) })) }),
 	download: async () => { throw new Error('Install owns downloading'); },
 	install: async params => {
 		requests.push(['install', params]);
@@ -297,7 +307,7 @@ const dialogs = disposables.add(new DialogService());
 services.registerInstance(IDialogService, dialogs);
 services.registerInstance(IDialogsModel, dialogs.model);
 services.registerInstance(IWorkbenchDialogHandler, new BrowserDialogHandler(document.body));
-services.registerInstance(ICommandService, { executeCommand: async (id: string, options: ExtensionsOpenOptions) => { requests.push(['command', id, options]); if (id === CLOSE_EDITOR_COMMAND_ID) { return; } if (id === 'ash.extensions.installed') { await plugins.open({ ...options, mode: 'installed' }); } else if (id === OPEN_EXTENSIONS_COMMAND_ID) { await commands.executeCommand(id, options); } else { await commands.executeCommand(id, options); } } } as unknown as ICommandService);
+services.registerInstance(ICommandService, { executeCommand: async (id: string, options: ExtensionsOpenOptions) => { requests.push(['command', id, options]); if (id === CLOSE_EDITOR_COMMAND_ID) { return; } if (id === OPEN_EXTENSIONS_COMMAND_ID) { await commands.executeCommand(id, options); } else { await commands.executeCommand(id, options); } } } as unknown as ICommandService);
 let instructionSignal: AbortSignal | undefined;
 let holdInstructions = false;
 let completeInstructions: ((text: string) => void) | undefined;
@@ -308,8 +318,30 @@ services.registerInstance(IAppServerSkillApi, {
 	onDidChangeSkills: Event.None,
 	readTextResource: async (_reference, _path, signal) => { instructionSignal = signal; if (holdInstructions) { return new Promise<string>(resolve => { completeInstructions = resolve; }); } return '---\r\nname: review\r\ndescription: Review changes\r\n---\r\n# Review\r\nReview changes carefully.'; },
 	list: async () => ({ generation: 1, skills: [] }),
-	read: async () => ({ revision, catalog: { generation: 1, skills: [{ id: skillId, description: 'Review changes', enabled, compatible: true, contentDigest: 'digest' }] }, diagnostics: [{ source: 'workspace', subject: 'bad-skill', message: 'Invalid metadata' }] }),
+	read: async () => (managementReads.skills++, { revision, catalog: { generation: 1, skills: [{ id: skillId, description: 'Review changes', enabled, compatible: true, contentDigest: 'digest' }] }, diagnostics: [{ source: 'workspace', subject: 'bad-skill', message: 'Invalid metadata' }] }),
 	setEnabled: async (id, value, expectedRevision, sessionId) => { requests.push(sessionId ? ['skill', id, value, expectedRevision, sessionId] : ['skill', id, value, expectedRevision]); if (expectedRevision !== revision) { throw new Error('Configuration changed. Refresh before saving.'); } enabled = value; revision++; },
+});
+const connectorChanges = disposables.add(new Emitter<number>());
+let connectorGeneration = 1;
+let connectorEntries: ConnectorView[] = [];
+services.registerInstance(IConnectorService, {
+	onDidChange: connectorChanges.event,
+	list: async () => (managementReads.connectors++, { generation: connectorGeneration, connectors: structuredClone(connectorEntries) }),
+	connectOAuth: async () => { throw new Error('OAuth is not configured in this fixture'); },
+	connectApiToken: async (connector, generation, input) => {
+		if (generation !== connectorGeneration) { throw new Error('Connection changed. Refresh before saving.'); }
+		requests.push(['connector/connect', connector.id, input.accountId]);
+		connectorEntries = connectorEntries.map(entry => entry.id === connector.id ? { ...entry, state: { status: 'connected', account: { id: input.accountId, displayName: input.accountDisplayName } }, canDisconnect: true } : entry);
+		connectorChanges.fire(++connectorGeneration);
+	},
+	disconnect: async (connector, generation) => {
+		if (generation !== connectorGeneration) { throw new Error('Connection changed. Refresh before saving.'); }
+		requests.push(['connector/disconnect', connector.id]);
+		connectorEntries = connectorEntries.map(entry => entry.id === connector.id ? { ...entry, state: { status: 'disconnected' }, canDisconnect: false } : entry);
+		connectorChanges.fire(++connectorGeneration);
+	},
+	refreshOAuth: async () => { },
+	revokeOAuth: async () => { },
 });
 services.registerInstance(ILanguageServerService, {
 	read: async () => ({ revision, configurations: {}, servers: [{ id: 'typescript-language-server', languageIds: ['typescriptreact'] }] }),
@@ -495,25 +527,47 @@ const paneLayout = new URLSearchParams(location.search).has('paneLayout');
 const previewHeight = new URLSearchParams(location.search).has('preview') ? 780 : 650;
 if (new URLSearchParams(location.search).has('preview')) { document.getElementById('lsp')!.hidden = true; document.getElementById('details')!.style.width = '850px'; document.getElementById('details')!.style.height = `${previewHeight}px`; }
 host.style.width = paneLayout ? '280px' : '360px'; host.style.height = paneLayout ? '260px' : `${previewHeight}px`;
-const panes = disposables.add(new PaneView(host));
-// Use the localized product descriptors shared by IDE and Agents.
+// The product model drives the classification scenarios; component scenarios mount every list independently.
 const contributions = disposables.add(WorkbenchContributionsRegistry.createHost(services, error => { throw error; }));
 contributions.advance(WorkbenchPhase.BlockStartup);
-const extensionManagement = disposables.add(services.createInstance(ExtensionsViewPane, host, ViewsRegistry.getView('ash.extensions.view')!));
-const plugins = disposables.add(services.createInstance(ExtensionsViewPane, host, ViewsRegistry.getView('ash.extensions.plugins')!));
-const skills = disposables.add(services.createInstance(SkillsViewPane, host, ViewsRegistry.getView('ash.extensions.skills')!));
-const mcp = disposables.add(services.createInstance(McpServersViewPane, host, ViewsRegistry.getView('ash.extensions.mcp')!));
-const recommended = disposables.add(services.createInstance(RecommendedExtensionsView, host, ViewsRegistry.getView('ash.extensions.recommended')!));
-for (const pane of [extensionManagement, plugins, skills, mcp, recommended]) { panes.addPane(pane, 350); pane.setVisible(true); }
-// Installation scenarios explicitly browse the fixture registry. Opening the product command
-// without filters is tested separately and shows installed packages, including built-ins.
-void extensionManagement.open({ mode: 'browse' });
-panes.layout(paneLayout ? 260 : previewHeight, paneLayout ? 280 : 360);
+const classification = new URLSearchParams(location.search).has('classification');
+const descriptor = ViewsRegistry.getViewContainer('ash.extensions')!;
+const componentViews = ViewsRegistry.getViews(descriptor.id).map(view => ({ ...view, collapsed: view.id === 'ash.extensions.view' ? false : true }));
+const model: IViewContainerModel = classification
+	? disposables.add(new ViewContainerModel(descriptor, ViewsRegistry, services.get(IContextKeyService)))
+	: {
+		viewContainer: descriptor, allViewDescriptors: componentViews, activeViewDescriptors: componentViews, visibleViewDescriptors: componentViews,
+		onDidChangeAllViewDescriptors: Event.None, onDidChangeActiveViewDescriptors: Event.None, onDidChangeVisibleViewDescriptors: Event.None,
+		isVisible: () => true, setVisible: () => { },
+	};
+services.registerInstance(IMenuService, new MenuService(services.get(ICommandService), services.get(IContextKeyService)));
+const titleMenus = disposables.add(new BrowserContextMenuService(services.get(IMenuService), services.get(IContextKeyService),
+	{ lookupKeybinding: () => undefined } as unknown as IKeybindingService, services.get(IContextViewService), disposables.add(new NotificationService())));
+services.registerInstance(IContextMenuService, titleMenus);
+const extensionsContainer = disposables.add(services.createInstance(ExtensionsViewPaneContainer, host, {
+	viewContainer: descriptor, model, instantiationService: services, contextKeyService: services.get(IContextKeyService),
+}));
+host.classList.add('ash-workbench-part');
+host.dataset.activeComposite = descriptor.id;
+host.style.display = 'flex'; host.style.flexDirection = 'column';
+const title = document.createElement('div');
+title.className = 'ash-pane-composite-title';
+const titleLabel = document.createElement('div'); titleLabel.className = 'ash-pane-composite-title-content'; titleLabel.textContent = descriptor.title;
+const titleActions = document.createElement('div'); titleActions.className = 'ash-pane-composite-title-actions';
+title.append(titleLabel, titleActions); host.prepend(title);
+
+const titleToolbar = disposables.add(new WorkbenchToolBar(titleActions, titleMenus, { ariaLabel: descriptor.title }));
+const updateTitleActions = () => titleToolbar.setActions(extensionsContainer.getActions(), extensionsContainer.getSecondaryActions());
+disposables.add(extensionsContainer.onTitleAreaUpdate(updateTitleActions));
+updateTitleActions();
+titleToolbar.element.classList.add('ash-pane-composite-title-menu-actions');
+extensionsContainer.setVisible(true);
+extensionsContainer.layout({ height: paneLayout ? 260 : previewHeight, width: paneLayout ? 280 : 360 });
+if (!classification) { void extensionsContainer.open({ mode: 'browse' }); }
 services.registerInstance(IViewsService, {
-	openView: (id: string) => {
-		const pane = [extensionManagement, plugins, skills, mcp, recommended].find(pane => pane.id === id)!;
-		pane.setExpanded(true); pane.focus(); return pane;
-	}
+	openViewContainer: async () => extensionsContainer,
+	getActiveViewPaneContainerWithId: () => extensionsContainer,
+	openView: async (id: string) => extensionsContainer.openView(id, true),
 } as unknown as IViewsService);
 registerSkillActions();
 const commands = disposables.add(new CommandService(services));
@@ -602,13 +656,19 @@ window.ashExtensionsIntegration = {
 	failMcpStatus: () => { mcpStatusFailure = true; },
 	failMcpTools: () => { mcpToolsFailure = true; },
 	setMcpSupported: supported => { mcpCapabilities.mcp = supported; },
-	refreshMcp: () => mcp.refresh(),
+	refreshMcp: () => (extensionsContainer.getView('ash.extensions.mcp') as McpServersViewPane).refresh(),
 	holdMcpStatus: () => { holdMcpStatus = true; completeMcpStatus = undefined; },
 	mcpStatusStarted: () => !!completeMcpStatus,
 	completeMcpStatus: () => { completeMcpStatus?.(); completeMcpStatus = undefined; },
 	prepareSettings,
 	readSetting: (key: string) => settingsConfiguration!.getValue(key),
 	requests,
+	installationSnapshot: () => structuredClone(installed),
+	managementReads: () => ({ ...managementReads }),
+	addConnector: () => {
+		connectorEntries.push({ id: 'github', displayName: 'GitHub account', description: 'Review repository changes', connectionGeneration: 1, state: { status: 'connected', account: { id: 'octocat', displayName: 'Octocat' } }, oauthMethods: [], canConnectApiToken: true, canConnectOAuth: false, canDisconnect: true, canRefreshOAuth: false, canRevokeOAuth: false });
+		connectorChanges.fire(++connectorGeneration);
+	},
 	setRecommendations: async (content: string) => { await files.writeFile({ resource: recommendationsResource, content }); recommendationChanges.fire({ resources: [recommendationsResource] }); },
 	leaveWorkspace: () => workspace.updateWorkspace({ id: 'empty', folders: [] }),
 	startCommand: id => { commandCompletion = commands.executeCommand(id).catch((error: unknown) => requests.push(['commandError', String(error)])); },
@@ -616,7 +676,7 @@ window.ashExtensionsIntegration = {
 	changePluginRevision: () => { pluginRevision++; },
 	removeEditorEntrypoint: () => { editorEntrypoint = null; },
 	localPackages: () => structuredClone(localPackages),
-	open: options => extensionManagement.open(options),
+	open: options => extensionsContainer.open(options),
 	openEditorExtension: () => services.get(IEditorService).openEditor(new ExtensionsInput(extensionSummary)),
 	holdReadme: () => { holdReadme = true; },
 	readmeStarted: () => !!heldReadme,
@@ -630,7 +690,7 @@ window.ashExtensionsIntegration = {
 	addSkillOnlyPlugin: () => { localPackages.push({ id: 'acme/skills', version: '1.0.0', digest: 'sha256:' + 'c'.repeat(64), displayName: 'Skill-only plugin', permissions: [], hasEditorExtensions: false, enabled: false, granted: false, effective: false, revoked: false }); },
 	setOffline: () => { offline = true; },
 	changeRevision: () => { revision++; },
-	startHeldSearch: () => { holdSearch = true; heldOpen = extensionManagement.open({ query: 'old query' }); },
+	startHeldSearch: () => { holdSearch = true; heldOpen = extensionsContainer.open({ query: 'old query' }); },
 	holdDiscoverySearch: () => { holdSearch = true; },
 	discoverySearchStarted: () => !!rejectSearch,
 	setDiscoveryEnabled: value => {
@@ -647,7 +707,7 @@ window.ashExtensionsIntegration = {
 declare global {
 	interface Window {
 
-		ashExtensionsIntegration: { enableMcpOAuth(): void; completeMcpLogin(): void; mcpLoginWaiting(): boolean; holdDiscoverySearch(): void; discoverySearchStarted(): boolean; setDiscoveryEnabled(value: boolean): void; changeMcpRevision(): void; setMcpConnectFailure(): void; deferMcpConnection(): void; configureMcp(server: McpServerConfiguration): void; setMcpServers(servers: readonly McpServerStatus[]): void; failMcpStatus(): void; failMcpTools(): void; setMcpSupported(supported: boolean): void; refreshMcp(): Promise<void>; holdMcpStatus(): void; mcpStatusStarted(): boolean; completeMcpStatus(): void; prepareSettings(): void; readSetting(key: string): unknown; openEditorExtension(): Promise<void>; holdReadme(): void; readmeStarted(): boolean; completeReadme(): void; setRecommendations(content: string): Promise<void>; leaveWorkspace(): void; holdInstructions(): void; instructionsStarted(): boolean; instructionsAborted(): boolean; completeInstructions(): void; setSession(id: string): void; addMcpPackage(): void; addSkillOnlyPlugin(): void; requests: unknown[]; startCommand(id: string): void; waitCommand(): Promise<void>; changePluginRevision(): void; removeEditorEntrypoint(): void; localPackages(): PluginPackageDto[]; open(options: ExtensionsOpenOptions): Promise<void>; setOffline(): void; changeRevision(): void; startHeldSearch(): void; startHeldCommand(): Promise<void>; executeCommand(id: string): Promise<void>; failHeldSearch(): Promise<void>; addOtherPackage(): void; addSecondVersion(): void; dispose(): void; };
+		ashExtensionsIntegration: { managementReads(): { installed: number; skills: number; connectors: number; }; installationSnapshot(): ExtensionsInstalledPackage[]; addConnector(): void; enableMcpOAuth(): void; completeMcpLogin(): void; mcpLoginWaiting(): boolean; holdDiscoverySearch(): void; discoverySearchStarted(): boolean; setDiscoveryEnabled(value: boolean): void; changeMcpRevision(): void; setMcpConnectFailure(): void; deferMcpConnection(): void; configureMcp(server: McpServerConfiguration): void; setMcpServers(servers: readonly McpServerStatus[]): void; failMcpStatus(): void; failMcpTools(): void; setMcpSupported(supported: boolean): void; refreshMcp(): Promise<void>; holdMcpStatus(): void; mcpStatusStarted(): boolean; completeMcpStatus(): void; prepareSettings(): void; readSetting(key: string): unknown; openEditorExtension(): Promise<void>; holdReadme(): void; readmeStarted(): boolean; completeReadme(): void; setRecommendations(content: string): Promise<void>; leaveWorkspace(): void; holdInstructions(): void; instructionsStarted(): boolean; instructionsAborted(): boolean; completeInstructions(): void; setSession(id: string): void; addMcpPackage(): void; addSkillOnlyPlugin(): void; requests: unknown[]; startCommand(id: string): void; waitCommand(): Promise<void>; changePluginRevision(): void; removeEditorEntrypoint(): void; localPackages(): PluginPackageDto[]; open(options: ExtensionsOpenOptions): Promise<void>; setOffline(): void; changeRevision(): void; startHeldSearch(): void; startHeldCommand(): Promise<void>; executeCommand(id: string): Promise<void>; failHeldSearch(): Promise<void>; addOtherPackage(): void; addSecondVersion(): void; dispose(): void; };
 	}
 }
 

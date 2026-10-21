@@ -32,10 +32,11 @@ test('Extensions restores built-in and local sources separately and accepts olde
 	assert.throws(() => EditorInputSerializers.deserialize({ typeId: 'ash.extensions.input', value: { ...summary, source: 'untrusted' } }), TypeError);
 });
 
-test('Capability tabs restore skill Session and MCP installation identities without catalog state', () => {
+test('Capability tabs restore Skill, Connector and MCP identities without catalog state', () => {
 	for (const target of [
 		{ kind: 'skill' as const, source: 'workspace:review', name: 'review', sessionId: 'session-one' },
 		{ kind: 'mcp' as const, serverId: 'fixture-server', installationId: 'installation-one', capabilityId: 'capability-one' },
+		{ kind: 'connector' as const, connectorId: 'github-account' },
 	]) {
 		using input = new ExtensionsCapabilityInput(target);
 		const serialized = JSON.parse(JSON.stringify(EditorInputSerializers.serialize(input)));
@@ -45,5 +46,6 @@ test('Capability tabs restore skill Session and MCP installation identities with
 		assert.ok(input.matches(restored));
 	}
 	assert.throws(() => EditorInputSerializers.deserialize({ typeId: 'ash.extensions.capabilityInput', value: { kind: 'skill', name: 'review', source: 12 } }), TypeError);
+	assert.throws(() => EditorInputSerializers.deserialize({ typeId: 'ash.extensions.capabilityInput', value: { kind: 'connector', connectorId: 12 } }), TypeError);
 	assert.throws(() => EditorInputSerializers.deserialize({ typeId: 'ash.extensions.capabilityInput', value: { kind: 'other' } }), TypeError);
 });

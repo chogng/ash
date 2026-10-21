@@ -24,10 +24,11 @@ import { IExtensionApi, type ExtensionDescriptor } from '../../../../platform/ex
 import { toExtensionResourceURI } from '../../../../platform/extensionResourceLoader/common/extensionResourceLoader.js';
 import { IOpenerService } from '../../../../platform/opener/common/opener.js';
 import { URI } from '../../../../base/common/uri.js';
-import { changeExtensionEnablement, configureMcpServer, describeMcpServerState, describePluginPermission, extensionEnablementLabel, reviewExtensionExecution, reviewLocalExtensionPermissions } from './extensionsActions.js';
+import { changeExtensionEnablement, configureMcpServer, describeConnectorState, describeMcpServerState, describePluginPermission, extensionEnablementLabel, reviewExtensionExecution, reviewLocalExtensionPermissions } from './extensionsActions.js';
 import type { ParsedPromptFile } from '../../chat/common/promptSyntax/promptFileParser.js';
 import { IPromptsService } from '../../chat/common/promptSyntax/service/promptsService.js';
 import { ILanguageModelToolsService } from '../../chat/common/tools/languageModelToolsService.js';
+import { IConnectorService } from '../../../../platform/connectors/common/connectorService.js';
 import { IMcpServerStatusService } from '../../../../platform/mcp/common/mcpServerStatusService.js';
 import { IMcpServerManagementService, McpOAuthClientRequiredError } from '../../../../platform/mcp/common/mcpServerManagementService.js';
 import { IEditorService } from '../../../services/editor/common/editorService.js';
@@ -123,6 +124,7 @@ export class ExtensionsEditor extends EditorPane {
 		@ILanguageModelToolsService private readonly languageModelTools: ILanguageModelToolsService,
 		@IMcpServerStatusService private readonly mcpStatus: IMcpServerStatusService,
 		@IMcpServerManagementService private readonly mcpManagement: IMcpServerManagementService,
+		@IConnectorService private readonly connectors: IConnectorService,
 		@IEditorService private readonly editors: IEditorService,
 		@IExtensionApi private readonly editorExtensions: IExtensionApi,
 		@IOpenerService private readonly opener: IOpenerService,
@@ -141,6 +143,7 @@ export class ExtensionsEditor extends EditorPane {
 		this._register(plugins.onDidChange(refresh));
 		this._register(prompts.onDidChangeSkills(refresh));
 		this._register(mcpManagement.onDidChange(refresh));
+		this._register(connectors.onDidChange(refresh));
 	}
 
 	public override create(container: HTMLElement): void {
@@ -194,7 +197,7 @@ export class ExtensionsEditor extends EditorPane {
 				getProvider: () => {
 					const focused = mainWindow.document.activeElement;
 					if (!this.currentInput || !(focused instanceof HTMLElement) || !this.domNode.contains(focused)) { return undefined; }
-					return new AccessibleContentProvider(AccessibleViewProviderId.Extensions, { type }, () => type === AccessibleViewType.View ? this.domNode.innerText : localize({ bundle: 'ash.extensions', key: 'detailsHelp' }, 'These are the selected extension, plugin, skill or MCP server details. The header contains identity and actions. Use Tab to reach the tabs, then Left and Right to move and Enter to select. Details shows the description or README; other tabs show features, permissions, tools or skill instructions and diagnostics. Additional information is beside the content and moves below it in a narrow editor. Open package opens the owning package for installation and permission management. Backend provider status remains readable when this connection cannot change enablement; unavailable actions are disabled and the status explains why. MCP server details show backend connection status and diagnostics. Refresh reloads server status. Add MCP server opens a transport choice and configuration dialog. Independent server details provide Edit, Enable or Disable, Connect, Disconnect and Remove. Enablement is saved; Connect and Disconnect affect this running instance. Operations refresh backend state. Escape cancels a dialog.'), () => focused.focus(), AccessibilityVerbositySettingId.Extensions);
+					return new AccessibleContentProvider(AccessibleViewProviderId.Extensions, { type }, () => type === AccessibleViewType.View ? this.domNode.innerText : localize({ bundle: 'ash.extensions', key: 'detailsHelp' }, 'These are the selected plugin, skill, connector or MCP server details. The header contains identity and actions. Use Tab to reach the tabs, then Left and Right to move and Enter to select. Details shows the description or README; other tabs show features, permissions, tools or skill instructions and diagnostics. Additional information moves below the content in a narrow editor. Open package opens the owning package for installation and permissions. Disable skill affects only that skill. Connector details offer sign-in, API token connection, disconnect or sign-out according to the service. Disconnect keeps the package installed. MCP server details show runtime status and diagnostics, with Edit, Enable or Disable, Connect, Disconnect and Remove for independent servers. Enablement is saved; connection actions control the running instance. Operations refresh the owning service state. Escape cancels a dialog.'), () => focused.focus(), AccessibilityVerbositySettingId.Extensions);
 				},
 			}));
 		}
@@ -214,14 +217,14 @@ export class ExtensionsEditor extends EditorPane {
 		this.metadata.textContent = input instanceof ExtensionsInput ? `${input.summary.id} · ${input.summary.version}` : '';
 		this.description.textContent = input instanceof ExtensionsInput ? input.summary.description : '';
 		this.renderOverview();
-		this.featuresLabel = input instanceof ExtensionsCapabilityInput ? input.target.kind === 'skill' ? localize({ bundle: 'ash.extensions', key: 'detailDiagnostics' }, 'Diagnostics') : localize({ bundle: 'ash.extensions', key: 'mcpToolsHeading' }, 'Tools') : input.source === ExtensionsInputSource.Local ? localize({ bundle: 'ash.extensions', key: 'pluginPermissionsHeading' }, 'Permissions') : localize({ bundle: 'ash.extensions', key: 'detailFeatures' }, 'Features');
+		this.featuresLabel = input instanceof ExtensionsCapabilityInput ? input.target.kind === 'connector' ? localize({ bundle: 'ash.extensions', key: 'installedConnectors' }, 'Connectors') : input.target.kind === 'skill' ? localize({ bundle: 'ash.extensions', key: 'detailDiagnostics' }, 'Diagnostics') : localize({ bundle: 'ash.extensions', key: 'mcpToolsHeading' }, 'Tools') : input.source === ExtensionsInputSource.Local ? localize({ bundle: 'ash.extensions', key: 'pluginPermissionsHeading' }, 'Permissions') : localize({ bundle: 'ash.extensions', key: 'detailFeatures' }, 'Features');
 		this.hasInstructions = input instanceof ExtensionsCapabilityInput && input.target.kind === 'skill'; this.renderTabs();
 		this.renderInfo([{
 			label: localize({ bundle: 'ash.extensions', key: 'detailInstallation' }, 'Installation'), rows: input instanceof ExtensionsInput ? [
 				{ label: localize({ bundle: 'ash.extensions', key: 'detailIdentifier' }, 'Identifier'), value: input.summary.id },
 				{ label: localize({ bundle: 'ash.extensions', key: 'detailVersion' }, 'Version'), value: input.summary.version },
 				{ label: localize({ bundle: 'ash.extensions', key: 'detailSource' }, 'Source'), value: input.source === ExtensionsInputSource.BuiltIn ? localize({ bundle: 'ash.extensions', key: 'builtInFilter' }, 'Built-in') : input.source === ExtensionsInputSource.Local ? localize({ bundle: 'ash.extensions', key: 'localPlugin' }, 'Local plugin') : localize({ bundle: 'ash.extensions', key: 'detailRegistry' }, 'Extensions registry') },
-			] : [{ label: localize({ bundle: 'ash.extensions', key: 'detailIdentifier' }, 'Identifier'), value: input.target.kind === 'skill' ? input.target.name : input.target.serverId }]
+			] : [{ label: localize({ bundle: 'ash.extensions', key: 'detailIdentifier' }, 'Identifier'), value: input.getName() }]
 		}]);
 		this.capabilities.textContent = '';
 		this.contentHeading.textContent = localize({ bundle: 'ash.extensions', key: 'capabilities' }, 'Capabilities');
@@ -243,6 +246,68 @@ export class ExtensionsEditor extends EditorPane {
 		};
 		if (input instanceof ExtensionsCapabilityInput) {
 			const target = input.target;
+			if (target.kind === 'connector') {
+				const catalog = await this.connectors.list();
+				if (signal.aborted || this.isDisposed || version !== this.loadVersion) { return; }
+				const connector = catalog.connectors.find(entry => entry.id === target.connectorId);
+				if (!connector) { this.status.textContent = localize({ bundle: 'ash.extensions', key: 'connectorMissing' }, 'This connection is no longer available. Refresh Connectors.'); return; }
+				this.title.textContent = connector.displayName;
+				this.metadata.textContent = connector.id;
+				this.description.textContent = connector.description;
+				this.status.textContent = describeConnectorState(connector.state);
+				this.renderOverview();
+				this.contentHeading.textContent = localize({ bundle: 'ash.extensions', key: 'installedConnectors' }, 'Connectors');
+				this.capabilities.textContent = [
+					localize({ bundle: 'ash.extensions', key: 'connectorLifecycle' }, 'Connecting or disconnecting this service keeps its package installed. Skills are managed separately.'),
+					connector.state.status === 'unavailable' ? connector.state.reason : '',
+				].filter(Boolean).join('\n\n');
+				this.renderInfo([{
+					label: localize({ bundle: 'ash.extensions', key: 'installedConnectors' }, 'Connectors'), rows: [
+						{ label: localize({ bundle: 'ash.extensions', key: 'detailIdentifier' }, 'Identifier'), value: connector.id },
+						{ label: localize({ bundle: 'ash.extensions', key: 'mcpState' }, 'Status'), value: describeConnectorState(connector.state) },
+					]
+				}]);
+				const apply = async (operation: () => Promise<void | false>): Promise<void> => {
+					let failure: unknown;
+					try { if (await operation() === false) { return; } } catch (error) { failure = error; }
+					if (signal.aborted || this.isDisposed || version !== this.loadVersion) { return; }
+					const refresh = this.setInput(input, signal);
+					const refreshVersion = this.loadVersion;
+					await refresh;
+					if (signal.aborted || this.isDisposed || refreshVersion !== this.loadVersion) { return; }
+					if (failure !== undefined) {
+						const message = failure instanceof Error ? failure.message : String(failure);
+						this.status.textContent = `${this.status.textContent} · ${message}`;
+						alert(message);
+					} else { announceStatus(this.status.textContent ?? ''); }
+					this.focus();
+				};
+				if (connector.canConnectOAuth) {
+					button(localize({ bundle: 'ash.extensions', key: 'mcpSignIn' }, 'Sign in'), () => apply(() => this.connectors.connectOAuth(connector, catalog.generation)));
+				}
+				if (connector.canConnectApiToken) {
+					button(localize({ bundle: 'ash.extensions', key: 'connectorConnectToken' }, 'Connect with API token'), () => apply(async () => {
+						const result = await this.dialogs.input({
+							title: connector.displayName,
+							message: localize({ bundle: 'ash.extensions', key: 'connectorTokenPrompt' }, 'Enter the account and API token for this connection.'),
+							inputs: [
+								{ placeholder: localize({ bundle: 'ash.extensions', key: 'connectorAccountId' }, 'Account ID') },
+								{ placeholder: localize({ bundle: 'ash.extensions', key: 'connectorAccountName' }, 'Account name') },
+								{ type: 'password', placeholder: localize({ bundle: 'ash.extensions', key: 'connectorApiToken' }, 'API token') },
+							],
+							primaryButton: localize({ bundle: 'ash.extensions', key: 'mcpConnect' }, 'Connect'),
+						});
+						if (!result.confirmed || signal.aborted || this.isDisposed || version !== this.loadVersion) { return false; }
+						const [accountId, accountDisplayName, token] = result.values ?? [];
+						if (!accountId?.trim() || !accountDisplayName?.trim() || !token?.trim()) { throw new Error(localize({ bundle: 'ash.extensions', key: 'connectorTokenRequired' }, 'Enter an account ID, account name and API token.')); }
+						await this.connectors.connectApiToken(connector, catalog.generation, { accountId: accountId.trim(), accountDisplayName: accountDisplayName.trim(), token });
+					}));
+				}
+				if (connector.canDisconnect) { button(localize({ bundle: 'ash.extensions', key: 'mcpDisconnect' }, 'Disconnect'), () => apply(() => this.connectors.disconnect(connector, catalog.generation))); }
+				if (connector.canRefreshOAuth) { button(localize({ bundle: 'ash.extensions', key: 'refresh' }, 'Refresh'), () => apply(() => this.connectors.refreshOAuth(connector))); }
+				if (connector.canRevokeOAuth) { button(localize({ bundle: 'ash.extensions', key: 'mcpSignOut' }, 'Sign out'), () => apply(() => this.connectors.revokeOAuth(connector, catalog.generation))); }
+				return;
+			}
 			if (target.kind === 'skill') {
 				this.contentHeading.textContent = localize({ bundle: 'ash.extensions', key: 'detailDiagnostics' }, 'Diagnostics');
 				const snapshot = await this.prompts.readSkillManagement(target.sessionId);

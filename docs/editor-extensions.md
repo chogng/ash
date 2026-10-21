@@ -13,7 +13,7 @@
 
 ## 公开 SDK 与本地开发
 
-用户侧统一称“扩展”，市场按用途标签筛选；MCP、Skills、Rust 程序和客户端资源等技术形式属于详情与内部能力契约。第一方扩展当前同仓维护为独立包，是否分仓按独立发布和协作收益决定。
+用户侧入口与分类见 [Extensions 的产品层级](#extensions-的产品层级)。第一方扩展当前同仓维护为独立包，是否分仓按独立发布和协作收益决定。
 
 ### SDK 能力开放原则
 
@@ -181,26 +181,25 @@ provider 的首次状态读取，避免仓库或状态尚未就绪时静默无�
 
 ### Extensions 的产品层级
 
-Extensions（扩展）是 Ash 增加和管理可选能力的总类，覆盖 IDE 和 Agent Window；它不只指编辑器扩展。以下都是 Extensions 中的能力或接入类型，而不是与 Extensions 平级的产品体系：
+Extensions（扩展）是 Ash 可选能力的统一管理和市场入口，覆盖 Code 和 Agent Window。默认直接显示已安装内容的三个分类，下方是 Recommended；不另设 Installed 或 Editor Extensions 窗格。
 
-| 类型                        | 提供什么                               |
-| --------------------------- | -------------------------------------- |
-| [Skills](skills.md)         | Agent 的工作方法、指令和配套资源       |
-| [MCP](mcp.md)               | 通过 MCP 协议接入的工具、资源和提示    |
-| [Connectors](connectors.md) | 外部服务与账号连接、认证和连接状态     |
-| [LSP / 语言服务器](lsp.md)  | 语言分析、补全、诊断和其他语言能力     |
-| 编辑器扩展                  | 编辑器命令、视图、语言支持、调试等功能 |
-| 主题、语言包及其他静态资源  | 外观、界面翻译和资源贡献               |
+| 产品分类            | 职责                                              | 例子                                                   |
+| ------------------- | ------------------------------------------------- | ------------------------------------------------------ |
+| [Skills](skills.md) | 告诉 Agent 如何完成工作                           | 代码审查、论文分析                                     |
+| Plugins             | 为 Ash 增加功能或可执行能力；管理功能包和多能力包 | Academy、编辑器增强、调试、语言支持、主题              |
+| Connectors          | 外部服务与工具服务器的连接管理                    | GitHub、Google Drive、手动配置的本地或 HTTP MCP Server |
 
-这些名称描述不同职责：MCP 和 LSP 是协议，Connector 管连接，Skill 管指令，不能把它们当作互斥的包格式。一个扩展可以组合多种能力；Plugin 是功能包或集成 bundle 的技术名称，TS/JS 与 Rust 是执行形态。统一产品分类不要求所有扩展使用 MCP，也不合并各领域的状态、授权或生命周期。
+Academy 属于 Plugins，可标记为 Editor；Editor、Debugger、Language、Document 等属于功能标签，不增加顶级窗格。MCP 是接入协议，服务器配置和运行状态在 Connectors 中管理；连接账户不是必需条件。Connector 账号与 MCP 会话继续由不同领域 owner 持有，不因同一视图展示而合并身份或生命周期。
 
-Marketplace 是 Extensions 中发现、搜索和安装扩展的场所，Installed Extensions（已安装扩展）负责管理已安装内容。用户搜索所需服务或功能，再审阅和安装对应扩展；技术类型在详情和领域配置中保留。
+扩展标题栏右侧提供全局刷新和“更多操作”菜单；菜单按浏览、扩展源和安装分组，复用命令面板中的浏览市场、显示已安装、管理内置插件、管理扩展源、从工作区安装和从 Git 安装命令。下方常驻一个搜索框，右侧内嵌清除和筛选图标。输入文字搜索 Marketplace；筛选菜单可选择已安装、Skills、Plugins、Connectors、内置插件和推荐，分别写入 `@installed`、`@skills`、`@plugins`、`@connectors`、`@builtin`、`@recommended`，并保留已有关键词。清除或按 Escape 移除关键词和筛选，返回三个分类与推荐。刷新重新读取当前分类，保留搜索、选中项和折叠状态。各窗格不再提供独立搜索或刷新；添加 MCP 等领域操作在悬停或键盘焦点进入时显示。技术类型、来源与授权在详情中保留，市场不常驻为额外窗格。
+
+产品中的 Plugin 表达功能扩展，底层按 `Package → Capabilities → 各领域 Runtime` 分工；既有技术类型中的 Plugin bundle 名称不建立第二套包状态。一个包可提供多个 Skill、Connector 和编辑器能力：安装记录只有一份，能力可同时出现在不同分类中。单独禁用 Skill 或断开 Connector 不卸载包；包级卸载则在详情中说明其全部能力。
 
 ### Extensions 包管理与开放来源
 
 产品统一使用 Extensions / 扩展作为获取、安装、更新和管理入口。目标远端来源采用 Ash 开放扩展源，提供 TS/JS 扩展、Rust Provider、Skills、MCP、Connectors、主题、语言和多能力 Plugin bundle。Ash 官方源、社区源和企业内部源使用同一个开放协议，可配置多个命名来源。Open VSX 来源与 VSIX 安装已删除，历史包只保留退休识别和卸载路径。Rust 是执行形态，不是来源类型；内置和本地内容保留来源身份，通过相同领域契约消费。
 
-IDE 和 Agent Window 共用 Extensions 入口，当前界面包含可折叠的 Extensions、Installed Extensions、Skills、Connections 和 Recommended 窗格，选中项在右侧编辑器打开详情；Connections 当前承载 MCP 服务器列表，详情和手动配置保留 MCP 技术名称。产品分类不意味着所有能力已有独立窗格或共用运行状态。前端本地 Plugin 包管理契约归 `platform/extensionManagement`，后端仍拥有安装、启用和授权状态。
+IDE 和 Agent Window 共用 Extensions 入口，默认包含可折叠的 Skills、Plugins、Connectors 和 Recommended 窗格，选中项在右侧编辑器打开详情；Connectors 同时展示外部服务连接与 MCP 服务器，详情和手动配置保留 MCP 技术名称。产品分类不意味着所有能力已有独立窗格或共用运行状态。前端本地 Plugin 包管理契约归 `platform/extensionManagement`，后端仍拥有安装、启用和授权状态。
 
 四类详情共用已注册的 Extensions Editor：头部展示身份与操作，标签栏切换详情、功能、权限、工具或技能说明与诊断，主内容旁展示安装／来源等信息；窄编辑器把信息栏移到内容下方。编辑器扩展通过现有资源加载服务读取 README、图标和发布者信息，README 经过 Markdown 清理且不执行命令链接；资源缺失时展示目录简介。缺少下载量、评分等元数据时不生成对应统计。Skills 说明按需读取，安装和授权动作继续使用原有领域服务。
 

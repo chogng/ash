@@ -1,8 +1,10 @@
 import { localize, localize2 } from '../../../../nls.js';
 import { DisposableStore } from '../../../../base/common/lifecycle.js';
-import { Action2, registerAction2 } from '../../../../platform/actions/common/actions.js';
+import { Action2, MenuId, registerAction2 } from '../../../../platform/actions/common/actions.js';
+import { ContextKeyExpr } from '../../../../platform/contextkey/common/contextkey.js';
+import { Lxicon } from '../../../../base/common/lxicons.js';
 import { type ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
-import { IExtensionManagementService, OPEN_EXTENSIONS_COMMAND_ID, type ExtensionsEditorExtensionPolicy } from '../../../../platform/extensionManagement/common/extensionManagementService.js';
+import { IExtensionManagementService, OPEN_EXTENSIONS_COMMAND_ID, OPEN_INSTALLED_EXTENSIONS_COMMAND_ID, type ExtensionsEditorExtensionPolicy } from '../../../../platform/extensionManagement/common/extensionManagementService.js';
 import { ICommandService } from '../../../../platform/commands/common/commands.js';
 import { IDialogService } from '../../../../platform/dialogs/common/dialogs.js';
 import { IPluginManagementService, type PluginPackageView, type PluginPermission } from '../../../../platform/extensionManagement/common/pluginManagementService.js';
@@ -13,6 +15,7 @@ import { ExtensionsInputSource, type ExtensionsInput } from '../common/extension
 import { IWorkspaceContextService } from '../../../../platform/workspace/common/workspace.js';
 import { isCancellationError } from '../../../../base/common/errors.js';
 import type { McpServerRuntimeState } from '../../../../platform/mcp/common/mcpServerStatusService.js';
+import type { ConnectorState } from '../../../../platform/connectors/common/connectorService.js';
 import type { IMcpServerManagementService, McpServerConfiguration, McpServerConfigurationSnapshot } from '../../../../platform/mcp/common/mcpServerManagementService.js';
 
 /** The dialog edits one revision-bound declaration; changing transports never changes its identity. */
@@ -111,17 +114,58 @@ export function describeMcpServerState(state: McpServerRuntimeState): string {
 	}
 }
 
+export function describeConnectorState(state: ConnectorState): string {
+	switch (state.status) {
+		case 'disconnected': return localize({ bundle: 'ash.extensions', key: 'mcpDisconnected' }, 'Disconnected');
+		case 'connecting': return localize({ bundle: 'ash.extensions', key: 'connectorConnecting' }, 'Connecting');
+		case 'connected': return localize({ bundle: 'ash.extensions', key: 'connectorAccountConnected' }, 'Connected · {0}', state.account.displayName);
+		case 'unavailable': return localize({ bundle: 'ash.extensions', key: 'mcpUnavailable' }, 'Unavailable');
+		case 'reauthorizationRequired': return localize({ bundle: 'ash.extensions', key: 'connectorReauthorization' }, 'Sign in again · {0}', state.account.displayName);
+	}
+}
+
 /** Both product windows use the same source, package and execution operations. */
 export function registerExtensionManagementActions(): DisposableStore {
 	const registrations = new DisposableStore();
+	const extensionsTitle = ContextKeyExpr.equals('viewContainer', 'ash.extensions');
+	for (const marketplace of [true, false]) {
+		registrations.add(registerAction2(class SwitchExtensionsPresentation extends Action2 {
+			constructor() {
+				super({
+					id: marketplace ? 'ash.extensions.browse' : 'ash.extensions.showInstalled',
+					title: marketplace ? localize2({ bundle: 'ash.extensions', key: 'browseMarketplace' }, 'Browse Marketplace') : localize2({ bundle: 'ash.extensions', key: 'showInstalledResources' }, 'Show installed'),
+					icon: marketplace ? Lxicon.search : Lxicon.arrowLeft,
+					f1: true,
+					menu: { id: MenuId.ViewContainerTitle, when: extensionsTitle, group: '1_discovery', order: marketplace ? 1 : 2 },
+				});
+			}
+			public override async run(accessor: ServicesAccessor): Promise<void> {
+				await accessor.get(ICommandService).executeCommand(marketplace ? OPEN_EXTENSIONS_COMMAND_ID : OPEN_INSTALLED_EXTENSIONS_COMMAND_ID, marketplace ? { mode: 'browse' } : undefined);
+			}
+		}));
+	}
 	registrations.add(registerAction2(class ManageBuiltInExtensions extends Action2 {
-		constructor() { super({ id: 'ash.extensions.manageBuiltIn', get title() { return localize2({ bundle: 'ash.extensions', key: 'manageBuiltInExtensions' }, 'Manage built-in editor extensions'); }, f1: true }); }
+		constructor() {
+			super({
+				id: 'ash.extensions.manageBuiltIn',
+				get title() { return localize2({ bundle: 'ash.extensions', key: 'manageBuiltInExtensions' }, 'Manage built-in editor extensions'); },
+				f1: true,
+				menu: { id: MenuId.ViewContainerTitle, when: extensionsTitle, group: '1_discovery', order: 3 },
+			});
+		}
 		public override async run(accessor: ServicesAccessor): Promise<void> {
 			await accessor.get(ICommandService).executeCommand(OPEN_EXTENSIONS_COMMAND_ID, { mode: 'builtIn' });
 		}
 	}));
 	registrations.add(registerAction2(class ManageExtensionSources extends Action2 {
-		constructor() { super({ id: 'ash.extensions.manageSources', title: localize2({ bundle: 'ash.extensions', key: 'manageSources' }, 'Manage extension sources'), f1: true }); }
+		constructor() {
+			super({
+				id: 'ash.extensions.manageSources',
+				title: localize2({ bundle: 'ash.extensions', key: 'manageSources' }, 'Manage extension sources'),
+				f1: true,
+				menu: { id: MenuId.ViewContainerTitle, when: extensionsTitle, group: '2_sources', order: 1 },
+			});
+		}
 		public override async run(accessor: ServicesAccessor): Promise<void> {
 			const service = accessor.get(IExtensionManagementService);
 			const dialogs = accessor.get(IDialogService);
@@ -171,7 +215,14 @@ export function registerExtensionManagementActions(): DisposableStore {
 		}
 	}));
 	registrations.add(registerAction2(class InstallLocalExtension extends Action2 {
-		constructor() { super({ id: 'ash.extensions.installLocal', get title() { return localize2({ bundle: 'ash.extensions', key: 'installLocalExtension' }, 'Install extension from workspace'); }, f1: true }); }
+		constructor() {
+			super({
+				id: 'ash.extensions.installLocal',
+				get title() { return localize2({ bundle: 'ash.extensions', key: 'installLocalExtension' }, 'Install extension from workspace'); },
+				f1: true,
+				menu: { id: MenuId.ViewContainerTitle, when: extensionsTitle, group: '3_install', order: 1 },
+			});
+		}
 		public override async run(accessor: ServicesAccessor): Promise<void> {
 			const plugins = accessor.get(IPluginManagementService);
 			const dialogs = accessor.get(IDialogService);
@@ -190,7 +241,11 @@ export function registerExtensionManagementActions(): DisposableStore {
 	}));
 	registrations.add(registerAction2(class InstallGitExtension extends Action2 {
 		constructor() {
-			super({ id: 'ash.extensions.installFromGit', title: localize2({ bundle: 'ash.extensions', key: 'installGitExtension' }, 'Install extension from Git repository'), f1: true });
+			super({
+				id: 'ash.extensions.installFromGit', title: localize2({ bundle: 'ash.extensions', key: 'installGitExtension' }, 'Install extension from Git repository'),
+				f1: true,
+				menu: { id: MenuId.ViewContainerTitle, when: extensionsTitle, group: '3_install', order: 2 },
+			});
 		}
 
 		public override async run(accessor: ServicesAccessor): Promise<void> {

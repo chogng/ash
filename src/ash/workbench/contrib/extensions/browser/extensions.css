@@ -6,6 +6,67 @@
 	height: 100%;
 	font-size: var(--ash-fontSize-body1);
 }
+.ash-extensions-view-container {
+	height: 100%;
+}
+.extensions-global-search {
+	display: flex;
+	align-items: center;
+	flex: 0 0 auto;
+	gap: var(--ash-spacing-size40);
+	padding: var(--ash-spacing-size80) var(--ash-spacing-size120);
+	min-width: 0;
+}
+.extensions-global-search > .ash-input-box {
+	flex: 1;
+	min-width: 0;
+}
+.extensions-search-input {
+	display: flex;
+	align-items: center;
+}
+.extensions-search-input > input {
+	flex: 1;
+	min-width: 0;
+}
+.extensions-search-input:focus-within {
+	border-color: var(--ash-focusBorder);
+}
+.extensions-search-input input::-webkit-search-cancel-button {
+	display: none;
+}
+.extensions-search-actions {
+	flex-shrink: 0;
+	padding-inline-end: var(--ash-spacing-size20);
+}
+/* The Part owns title actions; only this container's refresh waits for pointer or keyboard intent. */
+.ash-workbench-part[data-active-composite="ash.extensions"]
+	.ash-pane-composite-title-menu-actions
+	[data-action-id="ash.extensions.refresh"] {
+	visibility: hidden;
+}
+.ash-workbench-part[data-active-composite="ash.extensions"]:is(
+		:hover,
+		:focus-within
+	)
+	.ash-pane-composite-title-menu-actions
+	[data-action-id="ash.extensions.refresh"] {
+	visibility: visible;
+}
+.ash-pane-view.ash-extensions-view
+	> .ash-pane-view-header
+	> .ash-pane-view-header-actions {
+	visibility: hidden;
+}
+.ash-pane-view.ash-extensions-view:is(
+		:hover,
+		:focus-within,
+		.extensions-action-running
+	)
+	> .ash-pane-view-header
+	> .ash-pane-view-header-actions {
+	visibility: visible;
+}
 .ash-extensions .extensions-search {
 	padding: 8px 12px 4px;
 }

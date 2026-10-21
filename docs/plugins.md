@@ -1,6 +1,6 @@
 # Plugin 包与来源授权
 
-本页中的 Plugin 是包格式、来源授权和集成 bundle 的技术概念；所属产品分类见 [Extensions 的产品层级](editor-extensions.md#extensions-的产品层级)。
+本页中的 Plugin 是既有包格式、来源授权和集成 bundle 的技术概念；产品 Plugins 表达功能扩展，包管理仍只有一个 authority，所属产品分类见 [Extensions 的产品层级](editor-extensions.md#extensions-的产品层级)。
 
 > 物理位置：`crates/utils/plugins/`、`crates/plugin/`、`crates/core-plugins/`
 > Rust crate：`ash_utils_plugins`、`ash_plugin`、`ash_core_plugins`
