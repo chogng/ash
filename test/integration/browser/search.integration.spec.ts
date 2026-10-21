@@ -1,4 +1,60 @@
 import { expect, test } from '@playwright/test';
+import type { ActivityBarPosition } from '../../../src/ash/workbench/common/configuration.js';
+import type { ViewContainerLocation } from '../../../src/ash/workbench/common/views.js';
+
+for (const locale of ['en', 'zh-CN']) {
+	test(`Sidebar auto hide follows active containers, moves and settings without losing focus (${locale})`, async ({ page }, testInfo) => {
+		const errors: string[] = [];
+		page.on('pageerror', error => errors.push(error.message));
+		await page.goto(`/search.html?locale=${locale}`);
+		await page.waitForFunction(() => !!window.ashSearchIntegration);
+		const setting = await page.evaluate(() => window.ashSearchIntegration.autoHideSetting());
+		expect(setting).toEqual({
+			title: locale === 'en' ? 'Auto Hide Activity Bar' : '自动隐藏活动栏',
+			description: locale === 'en'
+				? 'Hide the primary side bar view switcher when it is at the top or bottom and at most one container has active views.'
+				: '主侧边栏的视图切换栏位于顶部或底部，且最多只有一个容器具有可用视图时，隐藏该切换栏。',
+			value: false,
+		});
+		const sidebar = page.locator('[data-part="sidebar"]');
+		const content = sidebar.locator(':scope > .ash-composite-content');
+		const switcher = sidebar.locator('.ash-composite-bar');
+		const query = page.getByRole('textbox', { name: locale === 'en' ? 'Search workspace' : '搜索工作区', exact: true });
+		for (const position of ['top', 'bottom']) {
+			await page.evaluate(position => window.ashSearchIntegration.setActivityBarLocation(position as ActivityBarPosition), position);
+			await expect(switcher).toBeVisible();
+			await page.evaluate(() => window.ashSearchIntegration.setAutoHide(true));
+			await expect(switcher).toBeVisible();
+			const before = await content.evaluate(element => element.clientHeight);
+			await switcher.getByRole('tab').first().focus();
+			await page.evaluate(() => window.ashSearchIntegration.setExplorerActive(false));
+			await expect(switcher).toBeHidden();
+			await expect(query).toBeFocused();
+			expect(await content.evaluate(element => element.clientHeight)).toBe(before + 36);
+			for (const theme of ['light', 'dark', 'hcDark', 'hcLight'] as const) {
+				await page.evaluate(theme => window.ashSearchIntegration.setTheme(theme), theme);
+				await expect(switcher).toBeHidden();
+				await expect(query).toBeVisible();
+			}
+			await sidebar.screenshot({ path: testInfo.outputPath(`auto-hidden-${position}-${locale}.png`) });
+			await page.evaluate(() => window.ashSearchIntegration.setAutoHide(false));
+			await expect(switcher).toBeVisible();
+			expect(await content.evaluate(element => element.clientHeight)).toBe(before);
+			await page.evaluate(() => window.ashSearchIntegration.setAutoHide(true));
+			await expect(switcher).toBeHidden();
+			await page.evaluate(() => window.ashSearchIntegration.setExplorerActive(true));
+			await expect(switcher).toBeVisible();
+			await page.evaluate(() => window.ashSearchIntegration.moveExplorer('auxiliarybar' as ViewContainerLocation));
+			await expect(switcher).toBeHidden();
+			await page.evaluate(() => window.ashSearchIntegration.moveExplorer('sidebar' as ViewContainerLocation));
+			await expect(switcher).toBeVisible();
+		}
+		await page.evaluate(() => window.ashSearchIntegration.setExplorerActive(false));
+		await page.evaluate(() => window.ashSearchIntegration.setActivityBarLocation('default' as ActivityBarPosition));
+		await expect(switcher).not.toHaveAttribute('hidden');
+		expect(errors).toEqual([]);
+	});
+}
 
 test('Sidebar boundary follows the production Grid across position changes and releases on disposal', async ({ page }) => {
 	const errors: string[] = [];

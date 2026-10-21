@@ -199,6 +199,22 @@ export const WorkbenchConfiguration = Object.freeze({
 			},
 		},
 	}),
+	activityBarAutoHide: configurationRegistry.registerConfiguration<boolean>({
+		key: 'workbench.activityBar.autoHide',
+		defaultValue: false,
+		scope: ConfigurationScope.WINDOW,
+		agentsWindow: { default: false, readOnly: true },
+		schema: { type: 'boolean' },
+		parse(value: unknown): boolean {
+			if (typeof value === 'boolean') return value;
+			throw new TypeError(localize('workbench.activityBar.autoHide.invalid', 'Activity Bar auto hide must be true or false.'));
+		},
+		setting: {
+			valueType: 'boolean',
+			get title() { return localize('workbench.activityBar.autoHide.title', 'Auto Hide Activity Bar'); },
+			get description() { return localize('workbench.activityBar.autoHide.description', 'Hide the primary side bar view switcher when it is at the top or bottom and at most one container has active views.'); },
+		},
+	}),
 	activityBarBadges: configurationRegistry.registerConfiguration<boolean>({
 		key: 'workbench.activityBar.badges',
 		defaultValue: true,

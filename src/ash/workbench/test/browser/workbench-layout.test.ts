@@ -1512,7 +1512,7 @@ test("Pane Composite Parts restore workspace selections with Registry fallback",
 		getSideBarPosition: () => Position.LEFT,
 	} as import('../../../workbench/services/layout/browser/layoutService.js').IWorkbenchLayoutService);
 	firstServices.registerInstance(IViewDescriptorService, viewDescriptors);
-	const first = firstServices.createInstance(SidebarPart, dom.window.document.body, {
+	const first = registerContainerServices(firstServices).createInstance(SidebarPart, dom.window.document.body, {
 		openComposite: async () => null,
 		viewDescriptorService: viewDescriptors,
 	});
@@ -1529,7 +1529,7 @@ test("Pane Composite Parts restore workspace selections with Registry fallback",
 		getSideBarPosition: () => Position.LEFT,
 	} as import('../../../workbench/services/layout/browser/layoutService.js').IWorkbenchLayoutService);
 	restoredServices.registerInstance(IViewDescriptorService, viewDescriptors);
-	const restored = restoredServices.createInstance(SidebarPart, dom.window.document.body, {
+	const restored = registerContainerServices(restoredServices).createInstance(SidebarPart, dom.window.document.body, {
 		openComposite: async () => null,
 		viewDescriptorService: viewDescriptors,
 	});
@@ -1550,7 +1550,7 @@ test("Pane Composite Parts restore workspace selections with Registry fallback",
 		getSideBarPosition: () => Position.LEFT,
 	} as import('../../../workbench/services/layout/browser/layoutService.js').IWorkbenchLayoutService);
 	fallbackServices.registerInstance(IViewDescriptorService, viewDescriptors);
-	const fallback = fallbackServices.createInstance(SidebarPart, dom.window.document.body, {
+	const fallback = registerContainerServices(fallbackServices).createInstance(SidebarPart, dom.window.document.body, {
 		openComposite: async () => null,
 		viewDescriptorService: viewDescriptors,
 	});
@@ -2497,6 +2497,7 @@ const titleMenuResources = new DisposableStore();
 suiteTeardown(() => titleMenuResources.dispose());
 
 function registerContainerServices(services: InstanceType<typeof InstantiationService>): InstanceType<typeof InstantiationService> {
+	if (!services.has(IConfigurationService)) services.registerInstance(IConfigurationService, titleMenuResources.add(new InMemoryConfigurationService()));
 	if (!services.has(IContextKeyService)) services.registerInstance(IContextKeyService, titleMenuResources.add(new ContextKeyService()));
 	if (!services.has(IViewDescriptorService)) services.registerInstance(IViewDescriptorService, titleMenuResources.add(services.createInstance(ViewDescriptorService, {})));
 	registerTestComponentServices(services);

@@ -62,7 +62,10 @@ import { Part } from '../../../src/ash/workbench/browser/part.js';
 import { ViewPane, type IViewPaneOptions } from '../../../src/ash/workbench/browser/parts/views/viewPane.js';
 import { SyncDescriptor } from '../../../src/ash/platform/instantiation/common/descriptors.js';
 import { Dimension } from '../../../src/ash/base/browser/dom.js';
-import { WorkbenchConfiguration, type SideBarLocation } from '../../../src/ash/workbench/common/configuration.js';
+import { ActivityBarPosition, WorkbenchConfiguration, type SideBarLocation } from '../../../src/ash/workbench/common/configuration.js';
+import { ContextKeyExpr } from '../../../src/ash/platform/contextkey/common/contextkey.js';
+import { Registry } from '../../../src/ash/platform/registry/common/platform.js';
+import { Extensions as ConfigurationExtensions, type IConfigurationRegistry } from '../../../src/ash/platform/configuration/common/configurationRegistry.js';
 import '../../../src/ash/workbench/browser/media/style.css';
 import { SearchCommandIds } from '../../../src/ash/workbench/contrib/search/common/constants.js';
 import { SearchAccessibilityHelp } from '../../../src/ash/workbench/contrib/search/browser/searchAccessibilityHelp.js';
@@ -220,7 +223,8 @@ class FixtureView extends ViewPane {
 	constructor(container: HTMLElement, options: IViewPaneOptions) { super(container, options); this.contentElement.textContent = options.title; }
 }
 registry.registerStaticViewContainer({ id: 'fixture.explorer', title: 'Explorer', location: ViewContainerLocation.Sidebar });
-registry.registerStaticViews('fixture.explorer', [{ id: 'fixture.explorer.view', title: 'Files', ctorDescriptor: new SyncDescriptor(FixtureView) }]);
+instantiation.get(IContextKeyService).setContext('fixture.explorerActive', true);
+registry.registerStaticViews('fixture.explorer', [{ id: 'fixture.explorer.view', title: 'Files', when: ContextKeyExpr.has('fixture.explorerActive'), ctorDescriptor: new SyncDescriptor(FixtureView) }]);
 const host = document.querySelector<HTMLElement>('#search')!;
 instantiation.registerInstance(IThemeService, theme);
 instantiation.registerInstance(ILocalizationService, { whenReady: Promise.resolve(), translate: (bundle, key, fallback) => localize({ bundle, key }, fallback) });
@@ -238,6 +242,11 @@ const sidebar = store.add(instantiation.createInstance(SidebarPart, layout.domNo
 	localizationService: instantiation.get(ILocalizationService),
 	compositeBarContextMenuProvider: menus,
 	openComposite: (id: string, focus?: boolean) => panes.openPaneComposite(id, ViewContainerLocation.Sidebar, focus).then(composite => composite ?? null),
+}));
+store.add(configuration.onDidChangeConfiguration(event => {
+	if (event.affectsConfiguration(WorkbenchConfiguration.activityBarLocation)) {
+		sidebar.setActivityBarLocation(configuration.getValue<ActivityBarPosition>(WorkbenchConfiguration.activityBarLocation));
+	}
 }));
 // Unrelated regions use empty Parts; Search, its Sidebar, construction, visibility, title and geometry use their production owners.
 class FixturePart extends Part {
@@ -293,6 +302,14 @@ window.ashSearchIntegration = {
 	setTheme: name => theme.setColorTheme(themes[name]),
 	setWidth: width => layout.resizePart('sidebar', new Dimension(width, 600)),
 	setSidebarPosition: position => configuration.updateValue(WorkbenchConfiguration.sideBarLocation, position),
+	setActivityBarLocation: position => configuration.updateValue(WorkbenchConfiguration.activityBarLocation, position),
+	setAutoHide: value => configuration.updateValue(WorkbenchConfiguration.activityBarAutoHide, value),
+	setExplorerActive: value => instantiation.get(IContextKeyService).setContext('fixture.explorerActive', value),
+	moveExplorer: location => descriptors.moveViewContainerToLocation(descriptors.getViewContainerById('fixture.explorer')!, location),
+	autoHideSetting: () => {
+		const setting = Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration).getConfiguration(WorkbenchConfiguration.activityBarAutoHide)!;
+		return { title: setting.setting!.title, description: setting.setting!.description, value: configuration.getValue<boolean>(setting.key) };
+	},
 	disposeSidebar: () => sidebar.dispose(),
 };
 
@@ -324,6 +341,11 @@ declare global {
 			setTheme(name: keyof typeof themes): void;
 			setWidth(width: number): void;
 			setSidebarPosition(position: SideBarLocation): Promise<void>;
+			setActivityBarLocation(position: ActivityBarPosition): Promise<void>;
+			setAutoHide(value: boolean): Promise<void>;
+			setExplorerActive(value: boolean): void;
+			moveExplorer(location: ViewContainerLocation): void;
+			autoHideSetting(): { title: string; description: string; value: boolean; };
 			disposeSidebar(): void;
 		};
 	}

@@ -146,7 +146,7 @@ export const SettingsNavigation = [
 					id: 'layout',
 					label: localize('settings.workbench.layout.group.label', 'Workbench layout'),
 					description: localize('settings.workbench.layout.description', 'Configure the Workbench layout and window zoom.'),
-					settings: ['workbench.layoutStyle', 'workbench.activityBar.location', 'workbench.activityBar.badges', 'workbench.activityBar.compact', 'workbench.sideBar.location', 'workbench.panel.defaultLocation', 'workbench.statusBar.visible', 'chat.viewSessions.orientation', 'chat.experimental.sessionArchiveActionWording', 'window.title', 'window.titleSeparator', 'window.titleBarStyle', 'window.menuStyle', 'window.zoomLevel', 'window.zoomPerWindow', 'workbench.tree.*', 'workbench.list.smoothScrolling'],
+					settings: ['workbench.layoutStyle', 'workbench.activityBar.location', 'workbench.activityBar.autoHide', 'workbench.activityBar.badges', 'workbench.activityBar.compact', 'workbench.sideBar.location', 'workbench.panel.defaultLocation', 'workbench.statusBar.visible', 'chat.viewSessions.orientation', 'chat.experimental.sessionArchiveActionWording', 'window.title', 'window.titleSeparator', 'window.titleBarStyle', 'window.menuStyle', 'window.zoomLevel', 'window.zoomPerWindow', 'workbench.tree.*', 'workbench.list.smoothScrolling'],
 				}],
 			},
 			{
@@ -267,7 +267,7 @@ export const SettingsNavigation = [
 						id: 'editing',
 						label: localize('settings.editor.editing.label', 'Indentation and formatting'),
 						description: localize('settings.editor.editing.description', 'Configure indentation and save-time formatting.'),
-						settings: ['editor.indentation', 'editor.tabSize', 'editor.formatOnSave', 'editor.selectionClipboard'],
+						settings: ['editor.indentation', 'editor.tabSize', 'editor.formatOnSave', 'editor.formatOnType', 'editor.selectionClipboard'],
 					},
 				],
 			},

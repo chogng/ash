@@ -9,12 +9,16 @@ import { IViewDescriptorService, ViewContainerLocation } from '../../../../commo
 import { IWorkbenchLayoutService, Position } from '../../../../services/layout/browser/layoutService.js';
 import { ViewDescriptorService } from '../../../../services/views/browser/viewDescriptorService.js';
 import { createTestComponentServices } from '../../../common/testEditorServices.js';
+import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
+import { InMemoryConfigurationService } from '../../../../../platform/configuration/common/inMemoryConfigurationService.js';
+import { WorkbenchConfiguration } from '../../../../common/configuration.js';
 
 function createFixture(resources: DisposableStore) {
 	const container = document.createElement('div');
 	document.body.append(container);
 	resources.add(toDisposable(() => container.remove()));
 	const services = resources.add(createTestComponentServices());
+	services.registerInstance(IConfigurationService, resources.add(new InMemoryConfigurationService()));
 	services.registerInstance(IContextKeyService, resources.add(new ContextKeyService()));
 	const descriptors = resources.add(services.createInstance(ViewDescriptorService, {}));
 	services.registerInstance(IViewDescriptorService, descriptors);
@@ -22,6 +26,16 @@ function createFixture(resources: DisposableStore) {
 }
 
 suite('SidebarPart boundary sashes', () => {
+	test('auto hide defaults off and rejects invalid persisted values', async () => {
+		using configuration = new InMemoryConfigurationService();
+		assert.equal(configuration.getValue(WorkbenchConfiguration.activityBarAutoHide), false);
+		await configuration.updateValue(WorkbenchConfiguration.activityBarAutoHide, true);
+		await assert.rejects(configuration.updateValue(WorkbenchConfiguration.activityBarAutoHide, 'true'), /must be true or false/);
+		assert.equal(configuration.getValue(WorkbenchConfiguration.activityBarAutoHide), true);
+		await configuration.updateValue(WorkbenchConfiguration.activityBarAutoHide, undefined);
+		assert.equal(configuration.getValue(WorkbenchConfiguration.activityBarAutoHide), false);
+	});
+
 	test('marks the inward edge, releases replaced boundaries and clears presentation on disposal', () => {
 		using resources = new DisposableStore();
 		const { container, services, descriptors } = createFixture(resources);
