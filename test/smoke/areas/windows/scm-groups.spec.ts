@@ -2,6 +2,8 @@ import { execFile } from 'node:child_process';
 import { cp, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
+import { parseJsonc } from '../../../../src/ash/base/common/jsonc.js';
+import { readUserSettings } from '../../../automation/settings.js';
 import { expect, test } from '../../../automation/test.js';
 import type { Workbench } from '../../../automation/workbench.js';
 
@@ -55,6 +57,125 @@ test.describe('SCM editor groups', () => {
 	test.use({ gitRepository: true });
 	test.beforeEach(async ({ target, testWorkspace }) => {
 		await writeFile(testWorkspace.file, 'const value = 2;\n');
+	});
+
+	test.describe('Markdown wrapping defaults', () => {
+		test('Markdown source and SCM diff inherit language wrapping across process restart and honor explicit overrides', { tag: ['@electron-app-server'] }, async ({ application, workbench, runningApplication, testWorkspace, reloadWorkbench }, testInfo) => {
+			const paragraph = 'Markdown 长行按窗口宽度换行，继承语言设置并尊重用户覆盖。'.repeat(20);
+			const markdown = join(testWorkspace.directory, 'TODO.md');
+			await writeFile(markdown, '# Wrapping defaults\n\nOriginal paragraph.\n');
+			await run('git', ['add', '--', 'TODO.md'], { cwd: testWorkspace.directory });
+			await run('git', ['commit', '-m', 'Markdown wrapping baseline'], { cwd: testWorkspace.directory });
+			await writeFile(markdown, `# Wrapping defaults\n\n${paragraph}\n`);
+			await writeFile(testWorkspace.file, `const value = "${paragraph}";\n`);
+			let page = workbench.page;
+			let coldOpenRetries = 0;
+			const comparison = () => page.locator('.ash-editor-pane-host:not([hidden]) .stanza-diff-editor');
+			const rows = (logicalLine: number) => page.locator('.ash-editor-pane-host:not([hidden]) .stanza-editor').last().evaluate((editor, logicalLine) => {
+				const tops = new Set<number>();
+				for (const line of editor.querySelectorAll(`[data-logical-line-index="${logicalLine}"] .stanza-editor-line-text`)) {
+					const range = document.createRange();
+					range.selectNodeContents(line);
+					for (const box of range.getClientRects()) if (box.width > 0) tops.add(Math.round(box.top));
+				}
+				return tops.size;
+			}, logicalLine);
+			const openDiff = async (name: string) => {
+				await workbench.git.open();
+				await page.getByRole('button', { name: `Open ${name} for Changes`, exact: true }).click();
+				const coldOpenError = page.getByText('Syntax backend was disposed', { exact: true });
+				await expect.poll(async () => await comparison().isVisible() || await coldOpenError.isVisible()).toBe(true);
+				if (await coldOpenError.isVisible()) {
+					// This scenario verifies configuration, independently of the tracked
+					// syntax-backend cold-open failure. Retain and report its real UI recovery.
+					coldOpenRetries++;
+					testInfo.annotations.push({ type: 'known-issue', description: 'Syntax backend was disposed; recovered through one Retry click' });
+					await testInfo.attach(`cold-open-${coldOpenRetries}`, { body: await page.screenshot(), contentType: 'image/png' });
+					await page.getByRole('button', { name: 'Retry', exact: true }).click();
+				}
+				await expect(comparison()).toBeVisible();
+			};
+			const openFile = async (name: string) => {
+				const change = page.getByRole('button', { name: `Open ${name} for Changes`, exact: true });
+				await change.hover();
+				await change.locator('xpath=..').getByRole('button', { name: `Open File: ${name}`, exact: true }).click();
+				await expect(comparison()).toHaveCount(0);
+			};
+			const checkMarkdown = async () => {
+				await openDiff('TODO.md');
+				await expect(comparison()).toHaveClass(/word-wrapped/);
+				await expect.poll(() => rows(2)).toBeGreaterThan(3);
+				await openFile('TODO.md');
+				await expect.poll(() => rows(2)).toBeGreaterThan(3);
+			};
+			const screenshot = async (name: string) => {
+				const path = testInfo.outputPath(`${name}.png`);
+				await page.screenshot({ path });
+				await testInfo.attach(name, { path, contentType: 'image/png' });
+			};
+			await runningApplication.driver.setWindowSize({ width: 1440, height: 900 });
+			await page.context().tracing.startChunk({ title: 'Markdown defaults before process restart' });
+			await checkMarkdown();
+			await screenshot('markdown-source-default');
+			await workbench.settingsEditor.openUserSettingsUI();
+			await workbench.settingsEditor.selectEditorCategory('editor-diff');
+			await expect(workbench.settingsEditor.element.locator('[data-settings-item-id="diffEditor.wordWrap"]').getByRole('combobox')).toHaveText('Inherit');
+			await workbench.settingsEditor.element.locator('.ash-modal-editor-close').click();
+			const persisted = await readUserSettings(page);
+			const settings = parseJsonc(persisted.content) as Record<string, unknown>;
+			expect(settings).not.toHaveProperty('diffEditor.wordWrap');
+			expect(settings).not.toHaveProperty('editor.wordWrap');
+			const firstPid = 'process' in application ? application.process().pid : undefined;
+			const beforeTrace = testInfo.outputPath('before-restart-trace.zip');
+			await page.context().tracing.stopChunk({ path: beforeTrace });
+			await testInfo.attach('before-restart-trace', { path: beforeTrace, contentType: 'application/zip' });
+			({ application, workbench } = await reloadWorkbench('quit'));
+			page = workbench.page;
+			await page.context().tracing.startChunk({ title: 'Markdown defaults and language settings after process restart' });
+			const secondPid = 'process' in application ? application.process().pid : undefined;
+			expect(secondPid).toBeDefined();
+			expect(secondPid).not.toBe(firstPid);
+			const restored = await readUserSettings(page);
+			expect(restored.resource).toBe(persisted.resource);
+			expect(restored.content).toBe(persisted.content);
+			await runningApplication.driver.setWindowSize({ width: 1440, height: 900 });
+			await checkMarkdown();
+			await screenshot('markdown-source-after-restart');
+			await openDiff('TODO.md');
+			await screenshot('markdown-diff-after-restart');
+			await runningApplication.driver.setWindowSize({ width: 2048, height: 1100 });
+			await expect(comparison()).not.toHaveClass(/inline-view/);
+			await expect(comparison()).toHaveClass(/word-wrapped/);
+			await expect.poll(() => rows(2)).toBeGreaterThan(3);
+			await screenshot('markdown-diff-default-two-columns');
+			await openDiff('main.ts');
+			await expect(comparison()).not.toHaveClass(/word-wrapped/);
+			await expect.poll(() => rows(0)).toBe(1);
+			await openFile('main.ts');
+			await expect.poll(() => rows(0)).toBe(1);
+			await screenshot('typescript-default-unwrapped');
+			await openDiff('TODO.md');
+			await workbench.settingsEditor.openUserSettingsUI();
+			await workbench.settingsEditor.element.getByRole('searchbox').fill('@lang:markdown @id:editor.wordWrap');
+			await expect(workbench.settingsEditor.element.locator('.ash-settings-layout')).toHaveAttribute('data-settings-language', 'markdown');
+			const wrap = workbench.settingsEditor.element.locator('[data-settings-item-id="editor.wordWrap"]').getByRole('combobox');
+			await expect(wrap).toHaveText('Viewport');
+			await screenshot('markdown-language-setting');
+			await wrap.click();
+			await page.getByRole('option', { name: 'Off', exact: true }).click();
+			await expect(wrap).toHaveText('Off');
+			await expect.poll(async () => (parseJsonc((await readUserSettings(page)).content) as Record<string, unknown>)['[markdown]']).toEqual({ 'editor.wordWrap': 'off' });
+			await workbench.settingsEditor.element.locator('.ash-modal-editor-close').click();
+			await expect(comparison()).not.toHaveClass(/word-wrapped/);
+			await expect.poll(() => rows(2)).toBe(1);
+			await openFile('TODO.md');
+			await expect.poll(() => rows(2)).toBe(1);
+			await screenshot('markdown-explicit-off');
+			await testInfo.attach('restart-verification', { body: JSON.stringify({ firstPid, secondPid, sameProfile: restored.resource === persisted.resource, userSettings: settings, diffDefault: 'inherit', markdownDefault: 'on', typescriptDefault: 'off', explicitMarkdownOffRespected: true, languageSettingEditedThroughUI: true, forcedInlineLayout: false, temporaryWrapCommandUsed: false, coldOpenRetries }), contentType: 'application/json' });
+			const afterTrace = testInfo.outputPath('after-restart-trace.zip');
+			await page.context().tracing.stopChunk({ path: afterTrace });
+			await testInfo.attach('after-restart-trace', { path: afterTrace, contentType: 'application/zip' });
+		});
 	});
 
 	test('SCM Changes reserves a file viewport when Graph expands and the commit draft grows', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ workbench }) => {
@@ -406,9 +527,13 @@ test.describe('SCM editor groups', () => {
 			const page = workbench.page;
 			await page.getByRole('tab', { name: locale === 'zh-CN' ? /^源代码管理(?:,|$)/u : /^Source Control(?:,|$)/u }).click();
 			const tree = page.getByRole('tree', { name: locale === 'zh-CN' ? '源代码管理更改' : 'Source control changes', exact: true });
+			const tabs = workbench.editors.groupAt(0).tabs;
+			await tree.getByRole('button', { name: locale === 'zh-CN' ? '打开 更改 的main.ts' : 'Open main.ts for Changes', exact: true }).click();
+			await expect(tabs.filter({ hasText: 'main.ts' })).toHaveAttribute('aria-label', locale === 'zh-CN' ? /^main\.ts（工作树）/u : /^main\.ts \(Working Tree\)/u);
 			const staged = tree.getByRole('button', { name: locale === 'zh-CN' ? '打开 暂存的更改 的main.ts' : 'Open main.ts for Staged Changes', exact: true });
 			await staged.click();
 			await expect(page.locator('.stanza-diff-editor')).toBeVisible();
+			await expect(tabs.filter({ hasText: 'main.ts' })).toHaveAttribute('aria-label', locale === 'zh-CN' ? /^main\.ts（索引）/u : /^main\.ts \(Index\)/u);
 			const tabCount = await workbench.editors.groupAt(0).tabs.count();
 			await tree.focus();
 			await tree.press('Alt+F1');
@@ -428,6 +553,7 @@ test.describe('SCM editor groups', () => {
 			}
 			await expect(page.locator('.stanza-diff-editor')).toBeHidden();
 			await expect(workbench.editors.groupAt(0).tabs).toHaveCount(tabCount);
+			await expect(tabs.filter({ hasText: 'main.ts' })).toHaveAttribute('aria-label', /^main\.ts(?:[,，]|$)/u);
 			const editor = workbench.editors.groupAt(0).editor;
 			await editor.waitForEditorContents(content => content === 'const value = 3;\n');
 			await editor.waitForEditorFocus();

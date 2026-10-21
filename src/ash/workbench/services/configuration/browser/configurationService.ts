@@ -250,7 +250,10 @@ export class WorkspaceService extends Disposable implements IConfigurationServic
 			...(inspection.userValue === undefined ? [] : [ConfigurationTarget.USER_LOCAL]),
 		];
 		const targets = target === undefined ? value === undefined ? defined : [defined[0] ?? ConfigurationTarget.USER_LOCAL] : [target];
-		if (targets.length === 1 && (targets[0] === ConfigurationTarget.USER || targets[0] === ConfigurationTarget.USER_LOCAL) && equals(parsed, this.defaultValue(configuration))) serialized = undefined;
+		const matchesDefault = identifiers.length
+			? identifiers.every(identifier => equals(parsed, this.defaultConfiguration.override(identifier).getValue(key)))
+			: equals(parsed, this.defaultConfiguration.getValue(key));
+		if (targets.length === 1 && (targets[0] === ConfigurationTarget.USER || targets[0] === ConfigurationTarget.USER_LOCAL) && matchesDefault) serialized = undefined;
 		// Resolve all resources and validate all scopes before any removal crosses multiple targets.
 		const writes = targets.map(target => {
 			this.validateTargetScope(configuration, target);
@@ -284,7 +287,7 @@ export class WorkspaceService extends Disposable implements IConfigurationServic
 	inspect<T>(key: string, overrides?: IConfigurationOverrides): IConfigurationValue<Readonly<T>> {
 		if (overrides !== undefined && !isConfigurationOverrides(overrides)) throw new TypeError('Configuration overrides are invalid');
 		this.requireConfiguration(key);
-		const defaultValue = this.defaultConfiguration.getValue<Readonly<T>>(key);
+		const defaultValue = (overrides?.overrideIdentifier ? this.defaultConfiguration.override(overrides.overrideIdentifier) : this.defaultConfiguration).getValue<Readonly<T>>(key);
 		const base = this.userConfiguration.getValue<Readonly<T>>(key);
 		const hasBase = base !== undefined;
 		const override = overrides?.overrideIdentifier
@@ -453,6 +456,9 @@ export class WorkspaceService extends Disposable implements IConfigurationServic
 			}
 			if (blockValues.size === 0) continue;
 			overrideBlocks.push({ key: entry.key, identifiers: [...entry.identifiers], values: blockValues });
+		}
+		for (const [key, override] of this.registry.getConfigurationDefaultsOverrides()) {
+			if (!this.defaults.has(key)) defaults.set(key, override.value);
 		}
 		this.defaultConfiguration = configurationModel(defaults);
 		this.userConfiguration = configurationModel(configuredValues, overrideBlocks);

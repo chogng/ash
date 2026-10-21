@@ -73,8 +73,8 @@ export class SettingsTreeModel<T> extends ObjectTreeModel<SettingsTreeElement<T>
 		return this.searchQuery.text;
 	}
 
-	get hasModifiedFilter(): boolean {
-		return this.searchQuery.hasModifiedFilter;
+	get isSearching(): boolean {
+		return !this.searchQuery.isEmpty;
 	}
 
 	get navigationTarget(): string | undefined {

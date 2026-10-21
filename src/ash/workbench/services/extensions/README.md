@@ -68,7 +68,12 @@ Extensions changes, including removal and updates.
 | `problemMatchers` / `problemPatterns` | Bounded named patterns, matcher inheritance and background declarations enter the task matcher registry     | Search-based file locations remain incomplete                                                                                |
 | `debuggers`                           | Unique type, label, adapter program, and args                                                               | Discovery only; execution requires an admitted Ash provider                                                                  |
 
-`configurationDefaults`, `semanticTokenScopes`, extension JavaScript, LSP declarations, and dynamic
+`configurationDefaults` enters the configuration registry with the extension's schemas in one
+validated replacement. Language defaults such as Markdown word wrapping participate in normal
+configuration precedence; they do not write user settings. Disabling or removing the extension
+withdraws its defaults along with its schemas.
+
+`semanticTokenScopes`, extension JavaScript, LSP declarations, and dynamic
 UI are not activated by this loader.
 
 Built-in `customEditors` declarations can select product renderers registered through

@@ -2232,6 +2232,79 @@ test('inline diff keeps removed text readable and restores side by side text', a
 	await expect(editor).not.toHaveClass(/inline-view/);
 });
 
+test('inline deletion indicators follow wrapped display lines through resize and scrolling', async ({ page }) => {
+	await openDiffPage(page);
+	await page.evaluate(() => {
+		const prefix = Array.from({ length: 4 }, (_, index) => `prefix ${index}`);
+		const suffix = Array.from({ length: 60 }, (_, index) => `suffix ${index}`);
+		const removed = '已删除长行，验证窗口缩放和滚动的删除标记。'.repeat(12);
+		window.ashDiffIntegration.setComparisonText([...prefix, removed, ...suffix].join('\n'), [...prefix, 'replacement', ...suffix].join('\n'));
+		window.ashDiffIntegration.setViewMode(false, false, 900);
+		window.ashDiffIntegration.setWrapping('on', 80);
+	});
+	await expect.poll(() => page.evaluate(() => window.ashDiffIntegration.read().state)).toBe('ready');
+	const host = page.locator('#single');
+	const editor = host.locator('.stanza-diff-editor');
+	const measure = () => editor.evaluate(root => {
+		const text = root.querySelector<HTMLElement>('.stanza-diff-inline-original-line')!;
+		const margin = root.querySelector<HTMLElement>('.ash-diff-inline-original-margin')!;
+		const textRows = new Map<number, number>();
+		const walker = document.createTreeWalker(text, NodeFilter.SHOW_TEXT);
+		for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+			const range = document.createRange();
+			range.selectNodeContents(node);
+			for (const box of range.getClientRects()) {
+				if (box.width > 0) textRows.set(Math.round(box.top * 100), box.top + box.height / 2);
+			}
+		}
+		const centers = [...margin.querySelectorAll<HTMLElement>('.stanza-diff-remove-sign')].map(node => {
+			const box = node.getBoundingClientRect();
+			return box.top + box.height / 2;
+		});
+		const rows = [...textRows.values()].sort((left, right) => left - right);
+		return {
+			rows: rows.length,
+			markers: centers.length,
+			centers,
+			offsets: centers.map((center, index) => center - (rows[index] ?? Infinity)),
+		};
+	});
+	const expectAligned = async () => {
+		await expect.poll(async () => {
+			const geometry = await measure();
+			return geometry.markers - geometry.rows;
+		}).toBe(0);
+		await expect.poll(async () => Math.max(...(await measure()).offsets.map(Math.abs))).toBeLessThan(2);
+		return measure();
+	};
+	await host.evaluate(node => { node.style.width = '720px'; });
+	const wide = await expectAligned();
+	expect(wide.rows).toBeGreaterThan(3);
+	await expect(editor.locator('.ash-diff-inline-original-margin')).toHaveAttribute('aria-hidden', 'true');
+	await host.evaluate(node => { node.style.width = '420px'; });
+	await expect.poll(async () => (await measure()).rows).toBeGreaterThan(wide.rows);
+	const narrow = await expectAligned();
+	expect(narrow.rows).toBeGreaterThan(wide.rows);
+	await page.evaluate(() => window.ashDiffIntegration.scrollModified(100));
+	const scrolled = await expectAligned();
+	expect(scrolled.markers).toBe(narrow.markers);
+	expect(scrolled.centers[0]).toBeCloseTo(narrow.centers[0]! - 100, 1);
+	await page.evaluate(() => {
+		window.ashDiffIntegration.scrollModified(0);
+		window.ashDiffIntegration.setEditorFeatures({ fontSize: 16, lineHeight: 26 });
+	});
+	await expect(editor.locator('.stanza-diff-inline-original-line')).toHaveCSS('line-height', '26px');
+	await expectAligned();
+	await page.evaluate(() => window.ashDiffIntegration.setDiffIndicators(false));
+	await expect(editor.locator('.ash-diff-inline-original-margin .stanza-diff-remove-sign')).toHaveCount(0);
+	await page.evaluate(() => window.ashDiffIntegration.setDiffIndicators(true));
+	await expectAligned();
+	await page.evaluate(() => window.ashDiffIntegration.setWrapping('off', 80));
+	await expect(editor.locator('.ash-diff-inline-original-margin .stanza-diff-remove-sign')).toHaveCount(1);
+	await page.evaluate(() => window.ashDiffIntegration.setComparisonText('same', 'same'));
+	await expect(editor.locator('.ash-diff-inline-original-margin')).toHaveCount(0);
+});
+
 for (const locale of ['en', 'zh-CN'] as const) {
 	test(`inline deletion indicators share the editor margin and respect live configuration (${locale})`, async ({ page }) => {
 		await openDiffPage(page, locale);

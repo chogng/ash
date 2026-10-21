@@ -1,7 +1,7 @@
 import { ExtensionsRegistry } from './extensionsRegistry.js';
 import { localize } from '../../../../nls.js';
 import { validateJsonValue } from '../../../../base/common/jsonValue.js';
-import { ConfigurationScope, type IConfigurationNode, type IConfigurationPropertySchema } from '../../../../platform/configuration/common/configurationRegistry.js';
+import { ConfigurationScope, type IConfigurationDefaults, type IConfigurationNode, type IConfigurationPropertySchema } from '../../../../platform/configuration/common/configurationRegistry.js';
 import { URI } from '../../../../base/common/uri.js';
 import { posix, win32 } from '../../../../base/common/path.js';
 import { validateTokenId, type ColorContribution } from '../../../../platform/theme/common/colorRegistry.js';
@@ -69,6 +69,7 @@ export interface ExtensionManifest {
 		readonly terminal: { readonly profiles: readonly { readonly id: string; readonly title: string; readonly icon?: string; readonly color?: string; }[]; };
 		readonly localizations: readonly ILocalizationContribution[];
 		readonly configuration: readonly IConfigurationNode[];
+		readonly configurationDefaults: readonly IConfigurationDefaults[];
 		readonly submenus: readonly { id: string; label: string; placements: readonly { menu: string; when?: string; group?: string; }[]; }[];
 		readonly viewsWelcome: readonly { view: string; contents: string; when?: string; precondition?: string; group?: string; order?: number; }[];
 		readonly languages: readonly ExtensionLanguageContribution[];
@@ -136,6 +137,10 @@ export function parseExtensionManifest(manifestJson: string, descriptor: Extensi
 			terminal: parseTerminalContribution(contributes.terminal, contributes.terminalProfiles),
 			localizations: parseLocalizations(contributes.localizations),
 			configuration: parseConfigurations(contributes.configuration, Object.freeze({ id: descriptor.id, displayName })),
+			configurationDefaults: contributes.configurationDefaults === undefined ? [] : [{
+				overrides: validateJsonValue(record(contributes.configurationDefaults, 'contributes.configurationDefaults')) as Readonly<Record<string, unknown>>,
+				source: { id: descriptor.id, displayName },
+			}],
 			submenus: parseSubmenus(contributes.submenus, contributes.menus),
 			viewsWelcome: parseViewsWelcome(contributes.viewsWelcome),
 			languages: Object.freeze(contributes.languages === undefined ? [] : parseLanguages(contributes.languages, descriptor.id)),

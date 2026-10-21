@@ -25,6 +25,7 @@ import { WorkerBasedDiffProviderFactoryService } from '../../../../../editor/bro
 import { QuickDiffDecorator } from '../../browser/quickDiffDecorator.js';
 import { QuickDiffModelService } from '../../browser/quickDiffModel.js';
 import { QuickDiffService } from '../../common/quickDiffService.js';
+import { createTestCodeEditor } from '../../../../../editor/test/browser/testCodeEditor.js';
 import { CodeEditorConfiguration } from '../../../codeEditor/common/editorConfiguration.js';
 
 test('Quick Diff resolves registered window services and rejects a missing diff dependency', async () => {
@@ -64,7 +65,9 @@ test('Quick Diff shares one resource model and projects configurable editor targ
 	firstReference.dispose();
 	await configuration.updateValue('scm.diffDecorations', 'all');
 
-	using source = new QuickDiffDecorator(model, secondReference, configuration);
+	using editor = createTestCodeEditor({ container: document.createElement('main'), model, contributions: [] });
+	using otherEditor = createTestCodeEditor({ container: document.createElement('main'), model, contributions: [], inDiffEditor: true });
+	using source = new QuickDiffDecorator(editor, secondReference, configuration);
 	await waitFor(() => model.getAllDecorations().length === 2);
 	const decorations = model.getAllDecorations();
 
@@ -73,6 +76,13 @@ test('Quick Diff shares one resource model and projects configurable editor targ
 		['ash-quick-diff-gutter ash-quick-diff-deleted', 3],
 	]);
 	assert.ok(decorations.every(decoration => decoration.options.overviewRuler && decoration.options.minimap));
+	assert.equal(editor.getLineDecorations(2)?.length, 1);
+	assert.deepEqual(otherEditor.getLineDecorations(2), [], 'Git decorations do not leak into another editor sharing the working copy');
+	await configuration.updateValue('scm.diffDecorations', 'none');
+	assert.deepEqual(editor.getLineDecorations(2), []);
+	await configuration.updateValue('scm.diffDecorations', 'gutter');
+	assert.equal(editor.getLineDecorations(2)?.length, 1);
+	assert.deepEqual(otherEditor.getLineDecorations(2), [], 'configuration updates retain the editor owner');
 	assert.ok(secondReference.object.findChangeAtLine(2), 'the deletion gutter line resolves to its containing hunk');
 	const baselineRequests = fixture.requests.length;
 	model.setValue('same\nold\nremoved\nlast');
@@ -170,15 +180,22 @@ test('Registered Quick Diff creates after first render and releases decorations 
 		services.registerInstance(IQuickDiffEditorControllerService, controllers);
 		using model = new TextModel('same\nnew\nlast', { resource: URI.file('/workspace/src/file.ts') });
 		const errors: unknown[] = [];
+		const onContributionError = (error: unknown): void => { errors.push(error); };
 		using editor = createTestCodeEditor({
 			container: dom.window.document.querySelector('main')!, model,
-			instantiationService: services, onContributionError: error => errors.push(error),
+			instantiationService: services, onContributionError,
 		});
 		assert.deepEqual(fixture.requests, [], 'deferred construction must not fetch during attach');
 		await waitFor(() => errors.length > 0 || model.getAllDecorations().some(decoration => decoration.options.linesDecorationsClassName?.includes('ash-quick-diff-gutter')));
 		assert.deepEqual(errors, []);
 		const controller = editor.getContribution('workbench.contrib.quickDiffEditorController');
 		assert.ok(controller instanceof QuickDiffEditorController);
+		using diffEditor = createTestCodeEditor({
+			container: dom.window.document.createElement('main'), model, inDiffEditor: true,
+			instantiationService: services, onContributionError,
+		});
+		assert.equal(diffEditor.getContribution('workbench.contrib.quickDiffEditorController'), null);
+		assert.deepEqual(diffEditor.getLineDecorations(2), [], 'registered Quick Diff skips diff editor internals even with a shared working copy');
 		editor.getDomNode().dispatchEvent(new dom.window.FocusEvent('focusin'));
 		assert.equal(controllers.activeController, controller);
 		assert.deepEqual(errors, []);

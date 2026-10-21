@@ -304,6 +304,8 @@
   "color.gitDecoration.untrackedResourceForeground": "Foreground color for untracked files in Git.",
   "color.gitDecoration.conflictingResourceForeground": "Foreground color for files with Git conflicts.",
   "color.gitDecoration.ignoredResourceForeground": "Foreground color for files ignored by Git.",
+  "git.diff.indexTitle": "{0} (Index)",
+  "git.diff.workingTreeTitle": "{0} (Working Tree)",
   "git.diff.stageHunk": "Stage change",
   "git.diff.stageSelection": "Stage selected lines",
   "git.diff.unstageHunk": "Unstage change",

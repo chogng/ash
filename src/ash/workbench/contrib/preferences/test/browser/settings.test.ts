@@ -1429,6 +1429,26 @@ test('Settings table of contents follows modified result counts through reset', 
 	assert.ok(categories().includes('editor-fonts'), 'clearing the query restores the browsing directory');
 });
 
+test('Settings search categories follow matched settings for text and ID filters', () => {
+	using tree = new SettingsTreeModel<ISetting | SettingsSectionReference>();
+	tree.setChildren(settingsRootNodes(createSettingsLayout(new DefaultSettings().all)));
+	const toc = new TOCTreeModel(tree);
+	const categories = () => toc.children.flatMap(node => node.children ?? [node]).map(node => node.element.id);
+	tree.setQuery('@id:editor.wordWrap');
+	assert.equal(tree.isSearching, true);
+	assert.deepEqual(categories(), ['editor-display']);
+	assert.equal(tree.countVisibleItems(), 1);
+	tree.setQuery('word wrap');
+	assert.ok(categories().includes('editor-display'));
+	tree.setQuery('@id:ash.nonexistent.setting');
+	assert.deepEqual(categories(), []);
+	tree.setQuery('@id:editor.fontSize');
+	assert.deepEqual(categories(), ['editor-fonts']);
+	tree.setQuery('');
+	assert.equal(tree.isSearching, false);
+	assert.ok(categories().includes('general'));
+});
+
 test('Models Settings requires a separately registered secret storage status service', () => {
 	using services = new InstantiationService();
 	services.registerInstance(ILanguageModelsService, {} as ILanguageModelsService);
@@ -2383,7 +2403,25 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 
 	const search = root.querySelector<HTMLInputElement>('.ash-settings-search input');
 	assert.ok(search);
-	search.value = 'subagent';
+	const searchFor = (query: string) => {
+		search.value = query;
+		search.dispatchEvent(new browserEnvironment.window.Event('input', { bubbles: true }));
+	};
+	searchFor('@id:editor.wordWrap');
+	assert.equal(root.querySelector('.ash-settings-page h3')?.textContent, 'Search results');
+	assert.ok(root.querySelector('[data-settings-item-id="editor.wordWrap"]'));
+	assert.equal(root.querySelector<HTMLElement>('.ash-settings-content-empty')?.hidden, true);
+	assert.equal(root.querySelector('[data-settings-tree-group-id="editor-display"] > h4')?.textContent, 'Display');
+	assert.equal(root.querySelector('[data-settings-category-id="teams"]'), null);
+	searchFor('@id:ash.nonexistent.setting');
+	assert.equal(root.querySelector<HTMLElement>('.ash-settings-content-empty')?.hidden, false);
+	assert.equal(root.querySelector('.ash-settings-content-empty')?.textContent, 'No settings found.');
+	searchFor('@id:editor.fontSize');
+	assert.ok(root.querySelector('[data-settings-item-id="editor.fontSize"]'));
+	assert.equal(root.querySelector<HTMLElement>('.ash-settings-content-empty')?.hidden, true);
+	searchFor('');
+	assert.equal(root.querySelector('.ash-settings-page h3')?.textContent, 'Teams');
+	search.value = 'advisor';
 	search.dispatchEvent(new browserEnvironment.window.Event('input', { bubbles: true }));
 	assert.equal(root.querySelector('[data-settings-category-id="agents"]')?.textContent, 'Agents');
 	assert.equal(root.querySelector('[data-settings-category-id="teams"]'), null);
@@ -2415,7 +2453,7 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	assert.equal(ownerDocument.activeElement, fontFamily, 'accepted writes retain focus on rows that still match');
 	await configuration.updateValue(CodeEditorConfiguration.fontFamily, undefined);
 	assert.equal(root.querySelector(`[data-settings-item-id="${CodeEditorConfiguration.fontFamily}"]`), null);
-	assert.equal(root.querySelector<HTMLElement>('.ash-settings-page [role="status"]')?.hidden, false);
+	assert.equal(root.querySelector<HTMLElement>('.ash-settings-content-empty')?.hidden, false);
 	await configuration.updateValue(CodeEditorConfiguration.fontFamily, 'Fira Code');
 	assert.equal(root.querySelector(`[data-configuration-key="${CodeEditorConfiguration.fontFamily}"]`), fontFamily);
 	search.value = '';

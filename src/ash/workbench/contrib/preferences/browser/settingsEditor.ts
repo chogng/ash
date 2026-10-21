@@ -232,6 +232,7 @@ export class SettingsEditor extends EditorPane implements IEditorPane {
 		settingsContent.className = 'ash-settings-content';
 		settingsContent.dataset.settingsContent = '';
 		this.contentEmpty = h(ownerDocument, 'p');
+		this.contentEmpty.className = 'ash-settings-content-empty';
 		this.contentEmpty.setAttribute('role', 'status');
 		this.contentEmpty.hidden = true;
 		this.contentStatus = h(ownerDocument, 'p');
@@ -300,6 +301,7 @@ export class SettingsEditor extends EditorPane implements IEditorPane {
 			updateItem: item => { if (!('rendererId' in item.value)) settingsRenderer.update(item.value); },
 			disposeItem: item => { if (!('rendererId' in item.value)) settingsRenderer.disposeSetting(item.id); },
 		}));
+		this._register(this.treeModel.onDidChange(() => this.updateSearchPresentation()));
 		this.agentCapabilitiesSettings = this._register(new AgentCapabilitiesSettings(settingsContent, this.agentCapabilitiesService, this.remoteAgentService, this.workspaceTrust, this.localizationService, this.executionSettings));
 		this.renderCategory(initialCategory);
 		this._register(configurationRegistry.onDidUpdateConfiguration(({ properties }) => {
@@ -339,7 +341,7 @@ export class SettingsEditor extends EditorPane implements IEditorPane {
 		}));
 		this._register(this.tocTree.onDidOpen(entry => this.openNavigationEntry(entry)));
 		this._register(this.tocTree.onDidChangeFind(({ pattern, matches }) => {
-			this.navigationEmpty.hidden = this.treeModel.hasModifiedFilter ? this.treeModel.countVisibleItems() !== 0 : !pattern || matches.length !== 0;
+			this.navigationEmpty.hidden = this.treeModel.isSearching || !pattern || matches.length !== 0;
 		}));
 		this._register(this.tocTree.onDidChangeCollapseState(({ element, collapsed }) => {
 			if (element.kind !== 'group') return;
@@ -498,13 +500,18 @@ export class SettingsEditor extends EditorPane implements IEditorPane {
 			: this.target === ConfigurationTarget.WORKSPACE ? this.localized('target.workspace', 'Workspace') : this.localized('target.user', 'User');
 		this.targetButton!.label = query.languageFilter ? localize({ bundle: 'ash.settings', key: 'target.language' }, '{0} · {1}', label, this.languageService.getLanguageName(query.languageFilter) ?? query.languageFilter) : label;
 		this.targetButton!.setTitle(this.targetButton!.label);
+		// Search is global: release the browsing scope before deriving results or empty state.
+		this.settingsTree.setNavigationTarget(undefined);
 		this.treeModel.setQuery(query);
 		this.rebuildContent();
 		this.settingsTree.setNavigationTarget(query.isEmpty && this.treeModel.has(this.activeCategory.id) ? this.activeCategory.id : undefined);
+		this.updateSearchPresentation();
 		this.updateContentVisibility();
 		this.agentCapabilitiesSettings.setView(query.isEmpty && this.activeCategory.id === 'sandbox' ? this.activeCategory.id : undefined);
 		this.navigationScrollable.scrollTo(0, 0);
 		this.navigationScrollable.layout();
+		this.contentScrollable.scrollTo(0, 0);
+		this.contentScrollable.layout();
 	}
 
 	private registeredSettings(): readonly ISetting[] {
@@ -556,11 +563,27 @@ export class SettingsEditor extends EditorPane implements IEditorPane {
 			],
 		}));
 		this.treeModel.setChildren(nodes);
+	}
+
+	private updateSearchPresentation(): void {
+		const searching = this.treeModel.isSearching;
+		this.contentHeading.textContent = searching ? this.localized('chrome.searchResults', 'Search results') : this.localizedCategoryLabel(this.activeCategory);
+		this.contentDescription.textContent = searching ? '' : this.localizedCategoryDescription(this.activeCategory);
+		this.contentDescription.hidden = searching;
 		this.contentEmpty.textContent = this.localized('chrome.noResults', 'No settings found.');
-		this.contentEmpty.hidden = query.isEmpty || this.treeModel.visibleItems.some(item => !('rendererId' in item.value) || !item.value.hidden);
+		this.contentEmpty.hidden = !searching || this.treeModel.visibleItems.some(item => !('rendererId' in item.value) || !item.value.hidden);
 		this.tocTree.refresh();
-		this.tocTree.setFindPattern(query.text);
-		if (query.hasModifiedFilter) this.navigationEmpty.hidden = this.treeModel.countVisibleItems() !== 0;
+		this.tocTree.setFindPattern(this.treeModel.query);
+		if (searching) {
+			for (const category of this.settingsLayout) {
+				if (this.treeModel.countVisibleItems(category.id)) this.tocTree.expandTo(category.id);
+			}
+			this.tocTree.setSelection([]);
+			this.navigationEmpty.hidden = true;
+		} else {
+			this.tocTree.expandTo(this.activeCategory.id);
+			this.tocTree.setSelection([this.activeCategory.id]);
+		}
 	}
 
 	private updateContentVisibility(): void {
@@ -583,10 +606,14 @@ export class SettingsEditor extends EditorPane implements IEditorPane {
 		this.settingsTree.setNavigationTarget(new SettingsSearchQuery(this.searchWidget?.value ?? '').isEmpty ? category.id : undefined);
 		this.updateContentVisibility();
 		this.agentCapabilitiesSettings.setView(!this.searchWidget?.value && category.id === 'sandbox' ? category.id : undefined);
-		this.contentHeading.textContent = this.localizedCategoryLabel(category);
-		this.contentDescription.textContent = this.localizedCategoryDescription(category);
+		this.updateSearchPresentation();
+		this.tocTree.setSelection([category.id]);
 		this.contentScrollable.scrollTo(0, 0);
 		this.contentScrollable.layout();
+		if (this.treeModel.isSearching) {
+			this.sectionToReveal = category.id;
+			this.revealSection();
+		}
 	}
 
 	private openNavigationEntry(entry: SettingsTOCOpenEntry): void {
@@ -596,8 +623,7 @@ export class SettingsEditor extends EditorPane implements IEditorPane {
 	private updateLocalizedChrome(): void {
 		this.navigationEmpty.textContent = this.localized('chrome.noResults', 'No settings found.');
 		this.tocTree.rerender();
-		this.contentHeading.textContent = this.localizedCategoryLabel(this.activeCategory);
-		this.contentDescription.textContent = this.localizedCategoryDescription(this.activeCategory);
+		this.updateSearchPresentation();
 	}
 
 	private localized(key: string, fallback: string): string {

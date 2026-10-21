@@ -158,19 +158,19 @@ export class SettingsTree<T> extends Disposable {
 		const items = h(document, "div");
 		items.className = this.options.itemsClassName;
 		const rootId = settingsRootId(node);
-		let heading: HTMLHeadingElement | undefined;
+		const heading = h(document, "h4");
+		heading.className = "ash-settings-tree-group-title";
+		element.append(heading);
 		let description: HTMLParagraphElement | undefined;
 		if (!node.parent || node.parent.element === undefined) {
 			element.classList.add("is-settings-root", `ash-${rootId}-settings`, "ash-configuration-settings");
 		} else {
-			heading = h(document, "h4");
-			heading.className = "ash-settings-tree-group-title";
 			description = h(document, "p");
 			description.className = `ash-settings-tree-group-description ${this.options.groupDescriptionClassName}`;
 			element.classList.add(`ash-${rootId}-settings-group`);
 			description.classList.add(`ash-${rootId}-settings-group-description`);
 			items.classList.add(`ash-${rootId}-settings-list`, 'ash-settings-card');
-			element.append(heading, description);
+			element.append(description);
 		}
 		element.append(items);
 		return { kind: "group", element, heading, description, items, group };

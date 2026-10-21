@@ -27,8 +27,8 @@ export interface TOCTreeOptions {
 export class TOCTreeModel {
 	constructor(private readonly content: SettingsTreeModel<ISetting | SettingsSectionReference>, private readonly navigation: () => readonly SettingsNavigationDescriptor[] = () => SettingsNavigation) { }
 
-	public get hasModifiedFilter(): boolean {
-		return this.content.hasModifiedFilter;
+	public get isSearching(): boolean {
+		return this.content.isSearching;
 	}
 
 	public get children(): readonly ObjectTreeElement<SettingsTOCEntry>[] {
@@ -68,7 +68,7 @@ export class TOCTreeModel {
 	}
 
 	private categoryElement(category: SettingsCategoryDescriptor): ObjectTreeElement<SettingsTOCEntry> | undefined {
-		if (this.content.hasModifiedFilter && this.content.countVisibleItems(category.id) === 0) return undefined;
+		if (this.content.isSearching && this.content.countVisibleItems(category.id) === 0) return undefined;
 		// Page sections stay in the content pane; the sidebar stops at categories.
 		return {
 			element: { kind: 'category', id: category.id, category, searchKeywords: this.contentSearchKeywords(category.id) },
@@ -138,16 +138,17 @@ export class TOCTree extends Disposable {
 	}
 
 	public expandTo(id: string): boolean {
-		return this.tree.expandTo(id);
+		return this.tree.model.has(id) && this.tree.expandTo(id);
 	}
 
 	public setSelection(ids: readonly string[]): void {
-		this.tree.setSelection(ids);
+		this.tree.setSelection(ids.filter(id => this.tree.model.has(id)));
 	}
 
 	public setFindPattern(pattern: string): void {
-		// Modified results own visibility; ordinary searches still discover category-only keywords and empty pages.
-		this.tree.findMode = this.model.hasModifiedFilter ? TreeFindMode.Highlight : TreeFindMode.Filter;
+		// Matching settings already determine category membership. A second text
+		// filter would discard valid categories for queries containing only filters.
+		this.tree.findMode = this.model.isSearching ? TreeFindMode.Highlight : TreeFindMode.Filter;
 		this.tree.setFindPattern(pattern);
 	}
 

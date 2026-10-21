@@ -8,6 +8,11 @@
     "ash": "*"
   },
   "contributes": {
+    "configurationDefaults": {
+      "[markdown]": {
+        "editor.wordWrap": "on"
+      }
+    },
     "commands": [
       {
         "command": "markdown.showPreview",

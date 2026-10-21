@@ -337,6 +337,8 @@
   "git.autofetch.all": "所有远端",
   "git.autofetchPeriod.title": "自动获取间隔",
   "git.autofetchPeriod.description": "每个仓库两次自动获取之间的秒数。",
+  "git.diff.indexTitle": "{0}（索引）",
+  "git.diff.workingTreeTitle": "{0}（工作树）",
   "git.diff.stageHunk": "暂存更改",
   "git.diff.stageSelection": "暂存选中行",
   "git.diff.unstageHunk": "取消暂存更改",

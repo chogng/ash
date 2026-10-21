@@ -28,6 +28,7 @@ interface DiffViewZone {
 
 interface InlineOriginalLine {
 	readonly element: HTMLElement;
+	readonly margin: InlineDiffDeletedCodeMargin;
 	readonly lineNumber: number;
 	inlineDecorations?: readonly InlineDecoration[];
 	rendered?: RenderLinesResult;
@@ -51,6 +52,7 @@ export class DiffEditorViewZones extends Disposable {
 	private originalZones: string[] = [];
 	private modifiedZones: string[] = [];
 	private readonly inlineMargins = this._register(new DisposableStore());
+	private readonly inlineMarginObserver: ResizeObserver;
 	private inlineOriginalLines: { readonly version: number; readonly lines: InlineOriginalLine[]; } | undefined;
 	private unwrappedZoneLayout: UnwrappedZoneLayout | undefined;
 
@@ -63,6 +65,11 @@ export class DiffEditorViewZones extends Disposable {
 		@IClipboardService clipboardService: IClipboardService,
 	) {
 		super();
+		this.inlineMarginObserver = new ResizeObserver(entries => {
+			const resized = new Set(entries.map(entry => entry.target));
+			this.updateInlineMargins(this.inlineOriginalLines?.lines.filter(line => resized.has(line.element)) ?? []);
+		});
+		this._register(toDisposable(() => this.inlineMarginObserver.disconnect()));
 		this._register(enableCopySelection({
 			domNode: modifiedEditor.getDomNode(),
 			originalModel: model.original,
@@ -123,10 +130,12 @@ export class DiffEditorViewZones extends Disposable {
 				return;
 			}
 		}
+		this.inlineMarginObserver.disconnect();
 		this.inlineOriginalLines = undefined;
 		this.inlineMargins.clear();
 		if (inlineView) {
 			const layout = this.modifiedEditor.getLayoutInfo();
+			const originalLineHeight = this.originalEditor.getOption(EditorOption.lineHeight);
 			const lines: InlineOriginalLine[] = [];
 			const original: DiffViewZone[] = [];
 			const modified: DiffViewZone[] = [];
@@ -153,9 +162,13 @@ export class DiffEditorViewZones extends Disposable {
 						line.className = 'stanza-diff-inline-original-line';
 						line.textContent = this.model.original.getLineContent(row.originalLineIndex + 1);
 						line.setAttribute('aria-label', localize('diffEditor.removedLine', 'Removed line {0}: {1}', row.originalLineIndex + 1, line.textContent));
-						lines.push({ element: line, lineNumber: row.originalLineIndex + 1 });
 						// Deleted text has no modified-model line; its marker must share the zone's scroll and disposal lifecycle.
-						const margin = this.inlineMargins.add(new InlineDiffDeletedCodeMargin(line.ownerDocument, layout.decorationsWidth, renderIndicators));
+						const margin = this.inlineMargins.add(new InlineDiffDeletedCodeMargin(
+							line.ownerDocument, layout.decorationsWidth, renderIndicators,
+							originalLineHeight, Math.max(1, Math.round(originalHeight / originalLineHeight)),
+						));
+						lines.push({ element: line, margin, lineNumber: row.originalLineIndex + 1 });
+						this.inlineMarginObserver.observe(line);
 						this.modifiedZones.push(accessor.addZone({
 							afterLineNumber: row.modifiedLineIndex ?? precedingModifiedLine,
 							heightInPx: originalHeight,
@@ -223,6 +236,7 @@ export class DiffEditorViewZones extends Disposable {
 
 	private clear(): void {
 		this.unwrappedZoneLayout = undefined;
+		this.inlineMarginObserver.disconnect();
 		this.inlineOriginalLines = undefined;
 		this.inlineMargins.clear();
 		this.originalEditor.changeViewZones(accessor => {
@@ -243,6 +257,7 @@ export class DiffEditorViewZones extends Disposable {
 		const preference = this.configurationService.getValue<boolean | 'configuredByTheme'>(EditorSemanticHighlightingConfiguration);
 		const semanticHighlighting = preference === true || (preference !== false && theme.semanticHighlighting === true);
 		const options = RenderOptions.fromEditor(this.originalEditor);
+		const renderedLines: InlineOriginalLine[] = [];
 		for (const line of snapshot.lines) {
 			const { element, lineNumber } = line;
 			// Lexical batches often concern newly visible lines, while most deleted
@@ -258,7 +273,32 @@ export class DiffEditorViewZones extends Disposable {
 				content: this.model.original.getLineContent(lineNumber),
 				tokens: this.model.original.tokenization.renderedTokens.getLineTokens(lineNumber - 1).map(token => ({ ...token, syntaxPresentation: resolveSemanticTokenPresentation(token, theme, semanticHighlighting) })),
 			}]), options, inlineDecorations, element);
+			renderedLines.push(line);
 		}
+		this.updateInlineMargins(renderedLines);
+	}
+
+	private updateInlineMargins(lines: readonly InlineOriginalLine[]): void {
+		const lineHeight = this.originalEditor.getOption(EditorOption.lineHeight);
+		// Native wrapping can differ from the model estimate. Read all visible text
+		// fragments before mutating margins, including zones revealed by scrolling.
+		const updates: { margin: InlineDiffDeletedCodeMargin; count: number; }[] = [];
+		for (const line of lines) {
+			let firstTop = Infinity;
+			let lastTop = -Infinity;
+			for (const part of line.element.children) {
+				for (const box of part.getClientRects()) {
+					if (box.width === 0) continue;
+					firstTop = Math.min(firstTop, box.top);
+					lastTop = Math.max(lastTop, box.top);
+				}
+			}
+			// Detached and hidden zones retain their initial geometry until visible.
+			if (Number.isFinite(firstTop)) {
+				updates.push({ margin: line.margin, count: Math.round((lastTop - firstTop) / lineHeight) + 1 });
+			}
+		}
+		for (const update of updates) update.margin.setDisplayLineCount(update.count);
 	}
 
 	private lineHeightFor(editor: CodeEditorWidget, lineNumber: number, wordWrap: boolean): number {
