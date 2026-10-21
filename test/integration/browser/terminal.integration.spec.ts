@@ -44,6 +44,89 @@ for (const locale of ['en', 'zh-CN']) {
 	});
 }
 
+test('terminal empty writes and pending screen reads finish across synchronous resize', async ({ page }) => {
+	await page.goto('/terminal.html?browser');
+	await page.evaluate(async () => { window.ashTerminalIntegration.start(); await window.ashTerminalIntegration.ready(); });
+	const text = await page.evaluate(async () => {
+		const terminal = window.ashTerminalIntegration;
+		const pending = terminal.snapshot(10000);
+		await Promise.resolve();
+		terminal.write('');
+		terminal.write('output-after-empty-write');
+		const { cols, rows } = terminal.dimensions();
+		terminal.resize(cols + 1, rows);
+		return pending;
+	});
+	expect(text).toContain('output-after-empty-write');
+	await expect(page.locator('.xterm-rows')).toContainText('output-after-empty-write');
+	await page.evaluate(() => window.ashTerminalIntegration.dispose());
+});
+
+test('terminal ConPTY height expansion retains history before a full viewport repaint', async ({ page }) => {
+	await page.goto('/terminal.html?stream&commandModel&os=windows');
+	await page.waitForFunction(() => Boolean(window.ashTerminalStreamIntegration));
+	await page.evaluate(() => window.ashTerminalStreamIntegration.start());
+	await expect.poll(() => page.evaluate(() => window.ashTerminalStreamIntegration.snapshot())).toContain('result 中文🙂');
+	await page.evaluate(async () => {
+		const terminal = window.ashTerminalStreamIntegration;
+		terminal.stickyScroll.resize(80, 10);
+		terminal.feedModel('\r\n' + Array.from({ length: 180 }, (_, index) => `pty-row-${index}\r\n`).join('') + 'prompt>');
+	});
+	await expect.poll(() => page.evaluate(() => window.ashTerminalStreamIntegration.snapshot())).toContain('pty-row-179');
+	await page.evaluate(() => {
+		const terminal = window.ashTerminalStreamIntegration;
+		terminal.stickyScroll.resize(80, 12);
+		terminal.feedModel('\x1b[H\x1b[2J' + Array.from({ length: 9 }, (_, index) => `pty-row-${171 + index}\r\n`).join('') + 'prompt>');
+	});
+	await expect.poll(() => page.evaluate(() => window.ashTerminalStreamIntegration.observed())).toContain('\x1b[H\x1b[2J');
+	const text = await page.evaluate(() => window.ashTerminalStreamIntegration.snapshot());
+	expect([...text!.matchAll(/^pty-row-(\d+)$/gmu)].map(match => Number(match[1]))).toEqual(Array.from({ length: 180 }, (_, index) => index));
+	await page.evaluate(() => window.ashTerminalStreamIntegration.close());
+});
+
+test('terminal ConPTY narrowing retains output when a long prompt wraps during repaint', async ({ page }) => {
+	await page.goto('/terminal.html?stream&commandModel&os=windows');
+	await page.waitForFunction(() => Boolean(window.ashTerminalStreamIntegration));
+	await page.evaluate(() => window.ashTerminalStreamIntegration.start());
+	await expect.poll(() => page.evaluate(() => window.ashTerminalStreamIntegration.snapshot())).toContain('result 中文🙂');
+	await page.evaluate(() => {
+		const terminal = window.ashTerminalStreamIntegration;
+		terminal.stickyScroll.resize(80, 10);
+		terminal.feedModel('\r\n' + Array.from({ length: 180 }, (_, index) => `pty-row-${index}\r\n`).join('') + 'PS ' + '/folder'.repeat(11) + '> ');
+	});
+	await expect.poll(() => page.evaluate(() => window.ashTerminalStreamIntegration.snapshot())).toContain('pty-row-179');
+	await page.evaluate(() => {
+		const terminal = window.ashTerminalStreamIntegration;
+		terminal.stickyScroll.resize(37, 10);
+		terminal.feedModel('\x1b[H\x1b[2J' + Array.from({ length: 7 }, (_, index) => `pty-row-${173 + index}\r\n`).join('') + 'PS ' + '/folder'.repeat(11) + '> ');
+	});
+	await expect.poll(() => page.evaluate(() => window.ashTerminalStreamIntegration.observed())).toContain('\x1b[H\x1b[2J');
+	const text = await page.evaluate(() => window.ashTerminalStreamIntegration.snapshot());
+	expect([...text!.matchAll(/^pty-row-(\d+)$/gmu)].map(match => Number(match[1]))).toEqual(Array.from({ length: 180 }, (_, index) => index));
+	await page.evaluate(() => window.ashTerminalStreamIntegration.close());
+});
+
+test('terminal follows new output after erasing retained scrollback while scrolled up', async ({ page }) => {
+	const errors: string[] = [];
+	page.on('pageerror', error => errors.push(error.message));
+	page.on('console', message => { if (message.type() === 'error') errors.push(message.text()); });
+	await page.goto('/terminal.html?input&groups&clipboard&browser');
+	await expect.poll(async () => ({ ready: await page.evaluate(() => Boolean(window.ashTerminalInputIntegration)), errors })).toEqual({ ready: true, errors: [] });
+	await page.evaluate(() => window.ashTerminalInputIntegration.feed('retained-row\r\n'.repeat(120)));
+	await expect.poll(() => page.evaluate(() => window.ashTerminalInputIntegration.viewport().bottom)).toBeGreaterThan(0);
+	await page.evaluate(() => window.ashTerminalInputIntegration.command('workbench.action.terminal.scrollToTop'));
+	await expect.poll(() => page.evaluate(() => window.ashTerminalInputIntegration.viewport().top)).toBe(0);
+	await page.evaluate(() => window.ashTerminalInputIntegration.feed('\x1b[3J'));
+	await expect.poll(() => page.evaluate(() => window.ashTerminalInputIntegration.viewport().bottom)).toBe(0);
+	await page.evaluate(() => window.ashTerminalInputIntegration.feed('fresh-row\r\n'.repeat(120) + 'following-new-output'));
+	await expect(page.locator('.ash-terminal-instance:visible .xterm-rows')).toContainText('following-new-output');
+	await expect.poll(() => page.evaluate(() => {
+		const { top, bottom } = window.ashTerminalInputIntegration.viewport();
+		return bottom > 0 && top === bottom;
+	})).toBe(true);
+	await page.evaluate(() => window.ashTerminalInputIntegration.close());
+});
+
 test('terminal scroll shortcuts retire in the alternate buffer and resume with normal output', async ({ page }) => {
 	await page.goto('/terminal.html?input&groups&clipboard&browser');
 	await page.waitForFunction(() => Boolean(window.ashTerminalInputIntegration));
@@ -889,7 +972,7 @@ test('terminal commands stay in their window after another view is created and d
 
 
 test('terminal screen follows light, dark and high contrast themes after initialization', async ({ page }) => {
-	await page.goto('/terminal.html');
+	await page.goto('/terminal.html?browser');
 	await page.waitForFunction(() => Boolean(window.ashTerminalIntegration));
 	await page.evaluate(async () => { window.ashTerminalIntegration.start(); await window.ashTerminalIntegration.ready(); });
 	for (const [mode, expected] of [
@@ -899,7 +982,9 @@ test('terminal screen follows light, dark and high contrast themes after initial
 		['hcLight', { background: '#ffffff', foreground: '#000000', red: '#a00000' }],
 	] as const) {
 		expect(await page.evaluate(mode => window.ashTerminalIntegration.theme(mode), mode)).toEqual(expected);
-		await expect(page.locator('.xterm-scrollable-element')).toHaveCSS('background-color', mode === 'hcDark' ? 'rgb(0, 0, 0)' : mode === 'dark' ? 'rgb(37, 37, 38)' : mode === 'light' ? 'rgb(248, 248, 248)' : 'rgb(255, 255, 255)');
+		const background = mode === 'hcDark' ? 'rgb(0, 0, 0)' : mode === 'dark' ? 'rgb(37, 37, 38)' : mode === 'light' ? 'rgb(248, 248, 248)' : 'rgb(255, 255, 255)';
+		await expect(page.locator('.xterm-scrollable-element')).toHaveCSS('background-color', background);
+		await expect(page.locator('.xterm-viewport')).toHaveCSS('background-color', background);
 	}
 	await page.evaluate(() => window.ashTerminalIntegration.dispose());
 });
@@ -910,8 +995,8 @@ for (const mode of ['light', 'dark', 'hcDark', 'hcLight'] as const) {
 		await seedScreenCommand(page, true, 'zh-CN');
 		await page.evaluate(mode => window.ashTerminalFindIntegration.theme(mode), mode);
 		const terminal = page.locator('.ash-terminal-instance:visible');
-		const track = terminal.locator('.xterm-scrollable-element > .scrollbar.vertical');
-		const slider = track.locator('.slider');
+		const track = terminal.locator('.xterm-scrollable-element > .xterm-scrollbar.xterm-vertical');
+		const slider = track.locator('.xterm-slider');
 		await expect(terminal.locator('.xterm-viewport')).toHaveCSS('overflow-y', 'hidden');
 		await expect(track).toHaveCSS('opacity', '0');
 		await page.evaluate(() => window.ashTerminalInputIntegration.feed('scrollbar-row\r\n'.repeat(120)));

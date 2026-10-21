@@ -2507,6 +2507,32 @@ test('terminal title and icon editing survive process replacement and reset thro
 suite('TerminalService process revival after exit', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();
 
+	test('holds restored PTY dimensions until final pane layout and acknowledges resize before reading', async () => {
+		const processes = new TestTerminalProcessService([], 'reconnectable');
+		using workspace = folderWorkspaceContext();
+		using services = revivalServices(processes, workspace);
+		const snapshot = reviveSnapshot(workspace);
+		services.get(IStorageService).store(TerminalStorageKeys.Revive, JSON.stringify(reviveState(workspace, snapshot)), StorageScope.WORKSPACE, StorageTarget.MACHINE);
+		const terminals = services.get(ITerminalService);
+		await terminals.whenConnected;
+		const instance = terminals.instances[0]!;
+		instance.resize({ cols: 180, rows: 30 });
+		instance.resize({ cols: 60, rows: 30 });
+		assert.deepEqual(processes.resizeCalls, []);
+		const acknowledged = deferred<void>();
+		const resize = processes.resize.bind(processes);
+		processes.resize = async options => { await resize(options); await acknowledged.promise; };
+		instance.start();
+		await waitFor(() => processes.resizeCalls.length === 1);
+		assert.deepEqual(processes.resizeCalls, [{ terminalId: 'terminal-1', dirId: snapshot.dirId, cols: 60, rows: 30 }]);
+		assert.deepEqual(processes.readCursors, []);
+		acknowledged.resolve();
+		await waitFor(() => processes.readCursors.length > 0);
+		instance.resize({ cols: 65, rows: 30 });
+		await waitFor(() => processes.resizeCalls.length === 2);
+		assert.deepEqual(processes.resizeCalls.at(-1), { terminalId: 'terminal-1', dirId: snapshot.dirId, cols: 65, rows: 30 });
+	});
+
 	test('revives a new shell from the saved profile, environment and current cwd without attaching or replaying task input', async () => {
 		const processes = new TestTerminalProcessService([], 'reconnectable');
 		using workspace = folderWorkspaceContext();

@@ -166,6 +166,9 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 			this._title = title;
 			this.resource = restored ? URI.parse(restored.resource) : getTerminalUri(generateUuid(), instanceNumber, title);
 			if (restored) {
+				// Keep the PTY at its saved grid while singleton panes are regrouped.
+				// Intermediate resizes would queue repaints for a grid we no longer show.
+				this.frozen = true;
 				this.hostTarget = restored.target;
 				child?.restoreState(restored);
 			}
@@ -294,9 +297,10 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 		if (this.closed || this.isDisposed) {
 			return;
 		}
-		if (this.frozen && this.screen) {
+		const resumeDimensions = this.frozen ? this.dimensions : undefined;
+		if (this.frozen) {
 			this.frozen = false;
-			this.screen.raw.options.disableStdin = this.isReadOnly;
+			if (this.screen) this.screen.raw.options.disableStdin = this.isReadOnly;
 		}
 		if (this.customProcess) {
 			const process = this.customProcess;
@@ -314,7 +318,7 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 			return;
 		}
 		const generation = ++this.pollGeneration;
-		void this.poll(generation);
+		void this.poll(generation, 'running', resumeDimensions);
 	}
 
 	private createCustomProcess(custom: CustomTerminalProcessOptions): void {
@@ -358,6 +362,14 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 		}
 		const screen = this._register(this.instantiationService.createInstance(XtermTerminal, container, this));
 		this.screen = screen;
+		this._register(screen.onDidOpen(() => {
+			// ConPTY repaints in viewport coordinates after a resize. Configure its
+			// blank-row expansion and cursor-line reflow even without shell integration;
+			// otherwise a wrapped prompt's repaint can overwrite retained output.
+			const windowsPty = !this.custom && this.processes.operatingSystem === OperatingSystem.Windows;
+			screen.raw.options.windowsPty = windowsPty ? { backend: 'conpty' } : undefined;
+			screen.raw.options.reflowCursorLine = windowsPty;
+		}));
 		// Establish the instance scope before any contribution creates a nested
 		// scope. Keyboard routing must not depend on contribution registration order.
 		const scope = this._register(this.contextKeys.createScoped(screen.element));
@@ -410,7 +422,7 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 			if (truncated) screen.raw.write(`\r\n${localize('terminal.outputTruncated', '[terminal output truncated]')}\r\n`);
 			for (const entry of restored ? [] : replay.events) {
 				if (entry.cols > 0 && entry.rows > 0) screen.raw.resize(entry.cols, entry.rows);
-				await new Promise<void>(resolve => screen.raw.write(entry.data, resolve));
+				await new Promise<void>(resolve => screen.write(entry.data, resolve));
 				if (entry.shellIntegration) screen.handleShellIntegration(entry.shellIntegration);
 				if (this.isDisposed || screen.isDisposed) return undefined;
 			}
@@ -543,7 +555,7 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 			}
 			return;
 		}
-		if (!this.closed && this._state === 'running') {
+		if (!this.closed && !this.frozen && this._state === 'running') {
 			void this.shellProcessManager?.resize(dimensions.cols, dimensions.rows).catch(onUnexpectedError);
 		}
 	}
@@ -898,8 +910,12 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 
 	}
 
-	private async poll(generation: number, initialState: "running" | "reconnecting" = "running"): Promise<void> {
+	private async poll(generation: number, initialState: "running" | "reconnecting" = "running", resumeDimensions?: ITerminalDimensions): Promise<void> {
 		try {
+			if (resumeDimensions) {
+				await this.shellProcessManager!.resize(resumeDimensions.cols, resumeDimensions.rows);
+				if (this.closed || this.isDisposed || generation !== this.pollGeneration) return;
+			}
 			await this.shellProcessManager!.start(initialState === "reconnecting");
 		} catch (error) {
 			if (!isCancellationError(error) && !this.closed && generation === this.pollGeneration) {

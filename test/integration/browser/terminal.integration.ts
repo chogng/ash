@@ -317,6 +317,7 @@ window.ashTerminalIntegration = {
 	binaryWrites,
 	resizes,
 	fit: () => widget.fit(),
+	resize: (cols, rows) => widget.raw.resize(cols, rows),
 	write: text => widget.write(text),
 	sequence: async (event, text) => {
 		if (text) await new Promise<void>(resolve => widget.write(text, resolve));
@@ -347,6 +348,7 @@ declare global {
 			readonly binaryWrites: readonly number[][];
 			readonly resizes: readonly ITerminalDimensions[];
 			fit(): void;
+			resize(cols: number, rows: number): void;
 			write(text: string): void;
 			start(): boolean;
 			ready(): Promise<void>;
@@ -951,7 +953,7 @@ if (new URLSearchParams(location.search).has('stream')) {
 	if (overflow) await widgetServices.get(IConfigurationService).updateValue('terminal.integrated.scrollback', 5000);
 	const profile = { profileId: 'shell', title: 'Shell', isDefault: true };
 	const processes: import('../../../src/ash/platform/terminal/common/terminal.js').ITerminalProcessService = {
-		operatingSystem: reviveHistory ? OperatingSystem.Windows : undefined,
+		operatingSystem: reviveHistory || new URLSearchParams(location.search).get('os') === 'windows' ? OperatingSystem.Windows : undefined,
 		getProcessInfo: async () => ({ ready: { pid: 1234, cwd: '/workspace' }, cwd: '/workspace/current', rows: 24, cols: 80 }),
 		setAutoReplies: async () => { }, sendSignal: async () => { }, resolveProfile: async (profile: import('../../../src/ash/platform/terminal/common/terminal.js').TerminalProcessProfileSelection) => ({ profile: profile.type === 'custom' ? { profileId: `custom:${profile.name}`, title: profile.name, isDefault: false } : instance.profile, executable: profile.type === 'custom' ? profile.path.at(-1)! : '/bin/sh', args: profile.type === 'custom' ? (typeof profile.args === 'string' ? profile.args : [...profile.args]) : [] }), getEnvironment: async () => ({}), listProfiles: async () => [profile],
 		create: async () => { launch++; return { terminalId: reuseCommands ? `stream-shell-${launch}` : 'stream-shell', ready: { pid: reuseCommands ? 1234 + launch : 1234, cwd: '/workspace' }, profile, connectionPersistence: 'connectionOwned' }; },
