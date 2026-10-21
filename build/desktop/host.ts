@@ -1,6 +1,6 @@
 import { spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { createReadStream, readdirSync } from 'node:fs';
+import { createReadStream, readdirSync, readFileSync, statSync, watch, type FSWatcher } from 'node:fs';
 import { lstat, mkdir, readFile, readdir, realpath, symlink, unlink, writeFile } from 'node:fs/promises';
 import { join, relative, resolve } from 'node:path';
 import { createInterface } from 'node:readline';
@@ -104,11 +104,25 @@ export async function watchHost(onReady: (ready: boolean, output?: string) => vo
 	// runtime files. Watch source inputs here and invoke its incremental build once.
 	const roots = ['src', '.build/protocol/typescript', '.build/desktop/localization'].map(path => resolve(sourceRoot, path));
 	const directories = new Map<string, ts.FileWatcher>();
+	const nativeDirectories: FSWatcher[] = [];
 	const files = new Map<string, ts.FileWatcher>();
+	const observedFiles = new Map<string, string>();
+	const builtInputs = new Map<string, { mtime: number; content: string; }>();
+	const changedInputs = new Set<string>();
+	const watchStarted = Date.now();
 	try {
+		for (const root of process.platform === 'win32' ? roots : []) {
+			// Windows timestamp polling cannot see equal-size saves with a restored
+			// mtime; native change events also let us compare their content digest.
+			const watcher = watch(root, { recursive: true }, (event, file) => {
+				if (file === null || event === 'rename' || /\.(?:[cm]?ts|json)$/u.test(file)) requestBuild(file === null ? root : resolve(root, file), event);
+			});
+			watcher.on('error', error => { if (!closing) fail(error); });
+			nativeDirectories.push(watcher);
+		}
 		updateFileWatches();
 	} catch (error) {
-		for (const watcher of [...directories.values(), ...files.values()]) watcher.close();
+		for (const watcher of [...nativeDirectories, ...directories.values(), ...files.values()]) watcher.close();
 		throw error;
 	}
 	onReady(false);
@@ -167,13 +181,33 @@ export async function watchHost(onReady: (ready: boolean, output?: string) => vo
 			if (!paths.has(path)) { watcher.close(); files.delete(path); }
 		}
 		for (const path of paths) {
-			if (!files.has(path)) files.set(path, ts.sys.watchFile!(path, () => requestBuild(path), 250));
+			if (process.platform === 'win32' && !builtInputs.has(path)) {
+				const input = readInput(path);
+				if (input) builtInputs.set(path, input);
+			}
+			if (!files.has(path)) files.set(path, ts.sys.watchFile!(path, () => requestBuild(path, 'change'), 250));
 		}
 		return changed;
 	}
 
-	function requestBuild(path: string): void {
+	function requestBuild(path: string, event?: string): void {
 		if (closing) return;
+		if (process.platform === 'win32' && event === 'change') {
+			try {
+				// NTFS can report reads as changes. Include ctime so equal-size edits
+				// with a restored mtime still invalidate the running build.
+				const stat = statSync(path);
+				const stamp = `${stat.dev}:${stat.ino}:${stat.size}:${stat.mtimeMs}:${stat.ctimeMs}`;
+				const previous = observedFiles.get(path);
+				observedFiles.set(path, stamp);
+				if (stamp === previous || (previous === undefined && stat.mtimeMs < watchStarted && stat.ctimeMs < watchStarted)) return;
+			} catch {
+				observedFiles.delete(path);
+			}
+		} else {
+			observedFiles.delete(path);
+		}
+		if (process.platform === 'win32') changedInputs.add(path);
 		revision++;
 		if (!pending) onReady(false);
 		pending = true;
@@ -192,11 +226,25 @@ export async function watchHost(onReady: (ready: boolean, output?: string) => vo
 
 	async function build(): Promise<void> {
 		pending = false;
+		// Check settled timestamps after debouncing: a Windows write can report a
+		// transient truncation. Compare with the last compiled snapshot, not that
+		// notification, before bypassing TS7's mtime-based incremental gate.
+		const inputs = new Map<string, { mtime: number; content: string; }>();
+		for (const path of changedInputs) {
+			const input = readInput(path);
+			if (input) inputs.set(path, input);
+			else builtInputs.delete(path);
+		}
+		changedInputs.clear();
+		const force = [...inputs].some(([path, input]) => {
+			const previous = builtInputs.get(path);
+			return previous?.mtime === input.mtime && previous.content !== input.content;
+		});
 		const current = revision;
 		console.log('[host] Starting incremental compilation...');
 		const run = new ProcessRun(sourceRoot, undefined, 5_000);
 		compilerRun = run;
-		const child = spawn(process.execPath, [compiler, '--build', ...projects, '--pretty', 'false'], {
+		const child = spawn(process.execPath, [compiler, '--build', ...projects, '--pretty', 'false', ...(force ? ['--force'] : [])], {
 			cwd: sourceRoot, stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true, detached: process.platform !== 'win32',
 		});
 		const stdout = createInterface({ input: child.stdout });
@@ -212,8 +260,16 @@ export async function watchHost(onReady: (ready: boolean, output?: string) => vo
 		finally { await run.close(); compilerRun = undefined; }
 		if (closing) return;
 		updateFileWatches();
+		if (succeeded && current === revision) {
+			for (const [path, input] of inputs) builtInputs.set(path, input);
+		}
 		if (succeeded) await validate(current);
 		else if (current === revision) onReady(false);
+	}
+
+	function readInput(path: string): { mtime: number; content: string; } | undefined {
+		try { return { mtime: statSync(path).mtime.getTime(), content: createHash('sha256').update(readFileSync(path)).digest('hex') }; }
+		catch { return undefined; }
 	}
 
 	async function validate(current: number): Promise<void> {
@@ -252,7 +308,7 @@ export async function watchHost(onReady: (ready: boolean, output?: string) => vo
 		if (closing) return closing;
 		clearTimeout(timer);
 		clearTimeout(structureTimer);
-		for (const watcher of [...directories.values(), ...files.values()]) watcher.close();
+		for (const watcher of [...nativeDirectories, ...directories.values(), ...files.values()]) watcher.close();
 		closing = Promise.resolve(compilerRun?.stop('SIGTERM')).then(async () => { await building; completion.resolve(); });
 		return closing;
 	}

@@ -18,7 +18,7 @@
 
 当前职责、运行契约和验证入口按功能阅读：[Chat／Speech](chat.md)、[Terminal](terminal.md)、[Sessions／Changes／Docker](sessions.md)、[Preferences／Configuration](preferences-and-settings.md)。未完成动作与验收缺口集中在[根 TODO](../TODO.md)，按“功能 · TODO”组织，完成后移除。文档中的通用审查清单、接口模板和可选目标设计保留各自用途，不自动转为实施任务。
 
-[Windows UAC 手册](windows-system-authorization.md)与[上传文件验证](browser-foundation.md#浏览器上传文件访问验证)保留可重复的操作步骤；平台待验收状态由 TODO 维护。编辑器和 Work 的目标契约继续保留在 [design](design/editor-roadmap.md) 中，研究快照与测量证据保留原路径。
+[提权保存](../src/ash/workbench/services/textfile/README.md#windows-uac-regression)与[上传文件验证](browser-foundation.md#浏览器上传文件访问验证)的回归步骤随功能维护，平台剩余验收由 TODO 维护。编辑器和 Work 的目标契约继续保留在 [design](design/editor-roadmap.md) 中，研究快照与测量证据保留原路径。
 
 ## 理解系统
 

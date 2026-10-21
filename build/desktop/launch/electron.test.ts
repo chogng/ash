@@ -5,9 +5,10 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 import test from 'node:test';
+import { isProcessRunning, ProcessRun } from '../../processes.ts';
 
 for (const profile of ['default', 'custom'] as const) {
-	test(`Electron starts once after valid compilation and restarts only after valid rebuilds (${profile} profile)`, { timeout: 20_000 }, async t => {
+	test(`Electron starts once after valid compilation and restarts only after valid rebuilds (${profile} profile)`, { timeout: process.platform === 'win32' ? 60_000 : 20_000 }, async t => {
 		const root = await realpath(await mkdtemp(join(tmpdir(), 'ash-electron-')));
 		const desktop = join(root, '.');
 		let phaseRevision = 0;
@@ -73,11 +74,13 @@ for (const profile of ['default', 'custom'] as const) {
 		child.stdout.on('data', chunk => { output += chunk; });
 		child.stderr.on('data', chunk => { output += chunk; });
 		const closed = new Promise(resolvePromise => child.once('close', resolvePromise));
+		const run = new ProcessRun(root, undefined, 5_000);
 		t.after(async () => {
-			child.kill('SIGTERM');
+			await run.stop('SIGTERM');
 			await closed;
 			await rm(root, { recursive: true, force: true });
 		});
+		await run.own(child);
 		async function lines(file: string): Promise<string[]> {
 			const text = await readFile(join(desktop, file), 'utf8').catch(error => {
 				if (error.code !== 'ENOENT') throw error;
@@ -86,7 +89,8 @@ for (const profile of ['default', 'custom'] as const) {
 			return text.trim().split('\n').filter(Boolean);
 		}
 		async function until(predicate: () => Promise<boolean> | boolean): Promise<void> {
-			for (let attempt = 0; attempt < 120; attempt++) {
+			const deadline = Date.now() + (process.platform === 'win32' ? 15_000 : 6_000);
+			while (Date.now() < deadline) {
 				if (await predicate()) return;
 				assert.equal(child.exitCode, null, output);
 				await delay(50);
@@ -122,7 +126,13 @@ for (const profile of ['default', 'custom'] as const) {
 			assert.equal((await lines('launches.log')).length, 1);
 		}
 		await setPhase('recovered');
-		await until(async () => (await lines('stops.log')).length === 1);
+		if (process.platform === 'win32') {
+			// Windows termination cannot run the fixture's POSIX signal handler.
+			const [{ pid }] = (await lines('launches.log')).map(line => JSON.parse(line));
+			await until(() => !isProcessRunning(pid));
+		} else {
+			await until(async () => (await lines('stops.log')).length === 1);
+		}
 		// A no-op build while the old process exits must not cancel the pending replacement.
 		await setPhase('recovered-unchanged');
 		await until(async () => (await lines('launches.log')).length === 2);
@@ -135,9 +145,10 @@ for (const profile of ['default', 'custom'] as const) {
 			assert.ok(pid > 0);
 			assert.deepEqual(launch, { cwd: desktop, args: ['--fixture', `--user-data-dir=${userData}`], home });
 		}
-		child.kill('SIGTERM');
+		await run.stop('SIGTERM');
 		await closed;
-		assert.equal(child.exitCode, 143, 'Stopping the launch task closes its input watcher and active processes');
+		if (process.platform === 'win32') assert.equal(child.signalCode, 'SIGTERM');
+		else assert.equal(child.exitCode, 143, 'Stopping the launch task closes its input watcher and active processes');
 		for (const { pid } of [...launches, ...allCompilers]) assert.throws(() => process.kill(pid, 0), { code: 'ESRCH' });
 	});
 }

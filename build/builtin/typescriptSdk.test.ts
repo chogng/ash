@@ -17,7 +17,9 @@ test('a TypeScript author installs the packed Ash SDK and builds outside the che
 		// pnpm's pinned Node runtime need not contain npm. Resolve the host npm CLI
 		// from PATH, avoiding npm.cmd's shell requirement on Windows.
 		let npm: string | undefined;
-		for (const bin of [dirname(process.execPath), ...(process.env.PATH ?? '').split(delimiter).filter(Boolean)]) {
+		// pnpm can hardlink Node into node_modules/.bin, which has no adjacent npm.
+		const node = await realpath(process.env.npm_node_execpath ?? process.execPath);
+		for (const bin of [dirname(node), dirname(process.execPath), ...(process.env.PATH ?? '').split(delimiter).filter(Boolean)]) {
 			try {
 				npm = await realpath(resolve(bin, process.platform === 'win32' ? 'node_modules/npm/bin/npm-cli.js' : 'npm'));
 				break;

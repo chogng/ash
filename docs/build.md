@@ -997,7 +997,7 @@ App Server 验证将既有 `zero_based_line_index` 本体暂移到另一个源�
 
 故障场景在真实常驻 App Server 中验证：helper 不可变局部重赋值报 E0384；路径依赖 `ash-diff` 中加入错误返回类型报 E0308；两者均保留模块／函数发布指针及旧 RPC 结果。恢复后可继续更新；合法路径依赖变化和协议包声明的 `../../.build/protocol/metadata.json` 变化转为完整模块发布，后续重新加载分析后恢复函数更新。实验源码和协议元数据按原字节恢复，临时 helper 删除，正常模块恢复构建通过。
 
-Rust `just verify ash-dev-build --features compiler` 为 22 项并通过 check／全目标 warnings；不启用 compiler feature 的 runtime warnings 也通过。App Server watcher、LiveBuilder 和源码归属定向测试 39 项通过，build TypeScript 为 145 文件无错误；脚本测试 202 项、7 跳过。排队 timer 回归已确认去掉修复时失败。全量 `pnpm --dir build run test:prepared` 首次为 233 项、200 通过、6 失败、27 跳过，另观察到导出 SDK 的 Academy 类型错误、Windows Host watcher 多余失败通知、Electron 生命周期退出等待及符号链接 EPERM。已补 live builder fixture 和后端 Python 清单；当时的定向结果不表示全量通过；本机整套回归补验见下文，Windows 缺口仍在根 TODO。
+Rust `just verify ash-dev-build --features compiler` 为 22 项并通过 check／全目标 warnings；不启用 compiler feature 的 runtime warnings 也通过。App Server watcher、LiveBuilder 和源码归属定向测试 39 项通过，build TypeScript 为 145 文件无错误；脚本测试 202 项、7 跳过。排队 timer 回归已确认去掉修复时失败。全量 `pnpm --dir build run test:prepared` 首次为 233 项、200 通过、6 失败、27 跳过，另观察到导出 SDK 的 Academy 类型错误、Windows Host watcher 多余失败通知、Electron 生命周期退出等待及符号链接 EPERM。已补 live builder fixture 和后端 Python 清单；当时的定向结果不表示全量通过；macOS 整套回归补验见下文，Windows 补验见后续 [Windows 构建工具全量复核](#2026-10-21windows-构建工具全量复核)。
 
 2026-10-20 在当前 macOS 检出复核上述失败所属的四个文件：`node --test build/builtin/editorClients.test.ts build/desktop/host.test.ts build/desktop/launch/electron.test.ts build/testRunners.test.ts`，22 项全部通过，无失败或跳过，用时 15.94 秒。包括仓库外 Academy SDK 类型检查、Host watch、两种 profile 的 Electron 启停和符号链接 fixture；Electron 使用受控 Node 进程替身，没有启动真实 Electron 窗口。该次未修改实现，也未重跑全量或 Windows；不能单独据此关闭验证缺口。日志为 `/tmp/ash-rust-todo-review-20261020.log`。
 
@@ -1005,9 +1005,29 @@ Rust `just verify ash-dev-build --features compiler` 为 22 项并通过 check�
 
 Host 的真实监听缺口也在本机复现：递归目录事件漏收文件内容写入，延迟到达的初始条目又可能造成空编译。现按原有源码／协议／本地化根预先注册文件监听，以自适应目录时间戳轮询发现增删；同一待编译批次只发布一次未就绪。现有 Host／Electron 回归覆盖生成输入、正常与失败保存、编译中排队、配置修改、缓存排除与进程回收，并补新增文件、修改、删除和失败编译实际读取无效源码的断言。`pnpm build` 正常 Desktop 构建通过；build 146 文件、Renderer 4446 文件、automation 2994 文件类型检查通过。这里只确认行为，不宣称监听性能收益。
 
-最终日志及本轮 patch／构建摘要保存在 `.build/local-acceptance-20261021/validation.json`。16 项跳过涉及独立 Academy 原生开发宿主、Windows 特有行为、浏览器调试器 F5、Windows 进程及显式启用的产品取消场景，均不算通过；原 Windows 失败与远端完整 CI 仍未验收。Electron launcher 的构建工具测试使用受控 Node 替身；另一次真实 Desktop 冷启动及进程重启通过，范围见 [语法会话](editor-architecture.md#语法会话与主题样式)。
+最终日志及本轮 patch／构建摘要保存在 `.build/local-acceptance-20261021/validation.json`。16 项跳过涉及独立 Academy 原生开发宿主、Windows 特有行为、浏览器调试器 F5、Windows 进程及显式启用的产品取消场景，均不算通过；该次 macOS 结果不覆盖 Windows 与远端完整 CI；Windows 已在后续本机复核中补验。Electron launcher 的构建工具测试使用受控 Node 替身；另一次真实 Desktop 冷启动及进程重启通过，范围见 [语法会话](editor-architecture.md#语法会话与主题样式)。
 
 最终 watcher 证据位于 `.build/build-health/rust-path-check-watcher-verified-20261021/`，基线在 `rust-path-check-watcher-baseline-20261021/`；包含全部样本、测量二进制摘要、PID、日志和脚本。早期 `candidate`、`final`、`buffered`、`confirm` 轮次保留了不均衡摘要开销、混入冷依赖重编、基线发布顺序及 Windows 访问通知误触发等失败，均未纳入上述 warm 对比；其中误触发的普通后端构建还遇到运行中扩展可执行文件的 Windows 占用，未停止用户的运行进程或删除该产物。`trace` 的中间实现为 1291 ms，未计作最终结果。直接调用与失效证据位于 `rust-path-check-appserver-20261021/` 和 `rust-path-check-appserver-final-20261021/`。没有清空共享缓存、修改 RA／工具链或降低正确性检查，也未验证其他平台、RSS、Bazel 或完整 Electron UI。
+
+### 2026-10-21：Windows 构建工具全量复核
+
+在当前 Windows 11 x64、build 22631 的普通权限进程中，以 `b2cbfdac794596616d6ed024085978b442dd5539` 加本轮修改验收，Node 为仓库固定的 `v24.21.0`。首先对原待办的四个文件复跑，22 项中 15 通过、5 失败、2 跳过，确认 SDK 导出、Host watcher、两种 Electron profile 和文件符号链接 fixture 均仍有失败。全量检查又暴露了 npm 定位、启动恢复 fixture 和 Academic 场景收集的旧接线问题。
+
+SDK 导出现在按相对路径识别并复制声明文件，避免 Windows 路径分隔符造成 `marked.d.ts` 等依赖遗漏；仓库外 Academy 类型检查验证了完整导出链。独立 TS 作者安装测试从 pnpm 提供的原 Node 路径定位 npm，避免把 `node_modules/.bin` 中的 Node 硬链接当作完整安装目录。所有安装仍只使用离线本地归档。
+
+Host watcher 合并同一待处理批次的失效通知，Windows 按文件身份、大小、mtime／ctime 排除重复读取通知。保留 mtime 的内容修改与上次编译完成的输入快照比较，必要时才绕过 TS7 的 mtime 增量门禁；回归同时验证普通修改不重编无变化的 preload，以及等长修改恢复 mtime 后仍产生新输出。Electron fixture 在 Windows 验证原进程退出，不等待不会执行的 POSIX 信号处理器，并由既有 `ProcessRun` 收尾；Windows 进程回收测试持有原生进程句柄，避免把复用后的 PID 算作残留。链接拒绝用例在 Windows 使用普通权限可创建的 junction，保留 Unix 文件符号链接覆盖。启动恢复 fixture 补齐当前查询接口，CI 收集断言改为当前宿主实际支持的场景，没有靠跳过失败测试消项。
+
+最终 `pnpm --dir test/scenario compile`、构建工具 146 文件类型检查和 10 个修改文件的格式检查通过；`pnpm --dir build run test:prepared` 为 **236 项、209 通过、0 失败、27 跳过**，跳过项受平台或显式启用条件限制，不计作通过。`pnpm run build:host` 正常构建通过，随后执行：
+
+```powershell
+pnpm run smoketest-no-compile test/smoke/areas/windows/home.spec.ts --grep 'Desktop development startup opens Agents with prepared runtime resources' --output .build/build-tools-acceptance-20261021/desktop-startup
+```
+
+该真实 Electron／App Server 启动及打开 Agents 窗口场景为 **1 passed (22.6s)**。Host 使用本轮构建的 `.build/desktop/main/src/main.js`，Renderer 复用未修改的已准备产物，后端使用 `host-provided-node/dev-small` 开发包 `3a85f92b9d35183f2203e04428aebc69faaa185d9974fbbc686f1882cd033886`。测试命令已退出，检查时没有本轮 Host／Electron fixture 残留进程。本项已从根 TODO 移除；结论仅覆盖本机 Windows，不代表其他平台或远端 CI 全绿。
+
+随后检出更新至 `f274d7a8f`，合并上游文件监听和目录成员轮询改动，Windows 保留原生内容事件以检测恢复 mtime 的保存；npm 定位同时保留原 Node 路径和 PATH 回退。合并后的全量构建测试再次为 **236 项、209 passed、27 skipped、0 failed**，build 146 文件类型检查及三处合并代码格式检查通过。Host 回归新增文件增删步骤后，Windows 单跑约 17 秒、全量并发约 35 秒，测试截止时间调整为 60 秒，全部行为断言保留。正常 Desktop 重建及 automation 3003 文件检查通过；复核日志在 `.build/process-recovery-windows-20261021/build-merge-final.log`、`build-merge-typecheck.log` 和 `preparation-merged.log`。
+
+证据位于 `.build/build-tools-acceptance-20261021/`：`source.diff`、`runtime.json`、`focused-initial.log`、`full.log`、`full-fixed.log`、最终 `full-final.log`、`host-build.log` 及 `desktop-startup-final.log`。修正前失败、诊断探针和首次启动命令零匹配的选择记录均保留，未计入最终通过结果。
 
 ## 构建源码与仓库脚本边界
 

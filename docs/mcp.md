@@ -620,6 +620,8 @@ OAuth coordinator；complete/refresh 强制 reconcile 为 connect，revoke 先�
 继续使用 `CommandId` 和 exact typed payload replay；connect/disconnect 是 runtime intent，不占用
 Session/Thread sequence。
 
+运行意图优先于持久 enablement：显式 Connect 可以临时启动保存为 Disabled 的声明，显式 Disconnect 可以停止保存为 Enabled 的声明；配置保持不变。停止当前运行连接应使用 Disconnect，不能把保存 Disable 当成撤销已有 Connect 意图。进程回收验收按实际调用的 Server PID 及其启动器／后代关联当前实例；同一配置在其他仍使用的运行上下文中可以有独立连接。
+
 ## 14. 错误与可观测性
 
 错误至少分为：
@@ -749,3 +751,18 @@ security 和 identity。resources/prompts/auth/reconnect 落地时按独立 owne
 
 实现必须使用 deterministic fake clock/transport/server；单元测试不能依赖公网 MCP server 或真实
 OAuth provider。
+
+### 2026-10-22 Windows 搜索与 stdio MCP 生命周期验收
+
+本轮按用户确认的共享后台生命周期验收：窗口关闭释放 UI 连接，仍存活的 managed App Server 可以保留目录及 MCP runtime；同目录重开应复用缓存，显式 Disconnect 应回收所断连接的启动器与后代。最后客户端退出且无后台工作时，由后台默认闲置退出负责最终回收。当前[空闲目录缓存容量为 4](../crates/app-server/src/managed/registry.rs)，[后台默认闲置超时为 5 分钟](../crates/app-server/src/managed.rs)；本轮没有改变这些策略，也不将“Main 退出 10 秒后所有进程清零”作为通过条件。
+
+验证使用本检出 `f274d7a8f70850f0961e024d8893b8bc5df9ad4a` 加工作区修复的正常 Windows x64 Desktop，Ash 0.1.0、Electron 44.4.5。实际后端 package 为 `0392ab781a866b7f02d5ef5d07a1c617bc481050ed6e6c637944e95fac45e3fb`，发布 module 为 `ef55514f901da1fa147844ebf8f3cd8b6a473075c443b51d437f3af72ef78476`。`just verify ash-tgrep` 为 42 passed／2 ignored（手动性能测量），`just verify ash-rmcp-client` 为 14 passed，均通过 check 与全目标 warnings；另有运行意图优先级回归 1 项通过。tgrep 本轮修复及负向验证见 [tgrep 验证](../crates/tgrep/README.md#验证)。
+
+| 场景                  | 实际结果与证据                                                                                                                                                                                                                                                                                                                                                                                                 |
+| --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 搜索与目录重开        | 20 轮 Current UI 搜索及 20 轮真实 indexed 请求，包含替换、取消与结果上限；断言 indexed freshness，空闲 tgrep 数量稳定为 2，停止 10 秒后不增长；关闭并重开同一仓库后搜索可用。[搜索报告](../.build/ash-playwright-mcp/evidence/windows-search-recovery-acceptance-2026-10-21T16-31-45-145Z/report.html)。                                                                                                       |
+| stdio 连接循环        | 10 轮 Connect → 真实 Core 工具调用 → Disconnect。每轮同时核对 durable 工具结果及 fixture 实际 tools/call token；按被调用 Server PID 找到当前 npm／cmd／Node 进程树，断开后该树全部退出；其他上下文的独立连接继续存活。[MCP 报告](../.build/ash-playwright-mcp/evidence/windows-mcp-recovery-preflight-2026-10-21T15-55-58-128Z/report.html)。                                                                  |
+| 窗口缓存复用          | 关闭第二工作区窗口 10 秒后，保留进程均能追溯到活着的 managed backend；另一窗口仍能搜索并调用 MCP。重开第二工作区复用原 tgrep 身份，总数维持 tgrep 2／MCP 启动器及后代 15；再次关闭后另一窗口真实调用仍通过。[窗口报告](../.build/ash-playwright-mcp/evidence/windows-workspace-cache-lifetime-2026-10-21T16-29-32-534Z/report.html)。                                                                          |
+| 正常退出与 owner 回收 | 独立 profile 的 Main 正常退出，exit code 0；10 秒时保留的 2 个 tgrep 与 10 个 MCP 启动器／后代仍属后台所有。在 289.847 秒快照仍存活，305.454 秒快照中所属 managed owner 及全部 12 个目标均消失，且未出现替代进程；该观察发生在 fixture 清理之前。另一 profile 随后真实 MCP 调用通过。[退出报告](../.build/ash-playwright-mcp/evidence/windows-managed-owner-retirement-2026-10-21T16-19-21-337Z/report.html)。 |
+
+测试只使用合成 Git 仓库、离线本地 npm 包与本地模型 fixture，经真实 Desktop、Core 和 MCP stdio 链路执行；原生传输类型选择和文件夹选择器返回值受控，不覆盖公网 MCP、外部账号或真实模型服务。普通权限桌面启动避免了验证命令本身的限制性 Job 干扰独立宿主生命周期。每份进程快照保留时间、PID、父 PID、CreationDate、实际 executable 和完整命令行，用 PID 加创建时间区分实例，未按进程名称终止其他应用。汇总与来源补丁见 [acceptance.json](../.build/process-recovery-windows-20261021/acceptance.json) 及同目录日志；早期失败报告保留，不计作通过。报告附原始 WebM、PNG 与 Playwright trace；本机缺 ffmpeg／ffprobe，未生成字幕视频。

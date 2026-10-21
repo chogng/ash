@@ -328,8 +328,11 @@ impl Server {
                             && !info.namespace.is_empty()
                             && !info.instance.is_empty()
                             && !info.repository.is_empty()
-                            && dunce::canonicalize(&info.storage)?
-                                .starts_with(dunce::canonicalize(index)?)
+                            // Keep the same Windows path prefix on both sides: dunce
+                            // strips it only below MAX_PATH, so a longer child can
+                            // otherwise fail containment against its own parent.
+                            && std::fs::canonicalize(&info.storage)?
+                                .starts_with(std::fs::canonicalize(index)?)
                         {
                             let mut credentials = Command::new(&executable.0);
                             credentials.arg("managed-identity").arg(root);
@@ -745,9 +748,10 @@ fn capture_selected(
                     Err(mpsc::RecvTimeoutError::Timeout) => {
                         // Descendants can inherit the pipes after the launcher exits. Observe
                         // the leader independently of EOF so cleanup can release those pipes.
-                        if child.try_wait()?.is_some() {
-                            break;
-                        }
+                        // Reaping the tree releases inherited pipes, but the reader
+                        // may still be delivering buffered output or its final line.
+                        // Drain through channel EOF before returning those results.
+                        let _ = child.try_wait()?;
                     }
                     Err(mpsc::RecvTimeoutError::Disconnected) => break,
                 }

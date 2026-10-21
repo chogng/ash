@@ -24,7 +24,10 @@ test('scenario cold-start fixtures copy only declared synthetic persistence', as
 	assert.equal(await readFile(join(destination, 'state.sqlite3'), 'utf8'), 'state.sqlite3');
 	await assert.rejects(readFile(join(destination, 'secrets')), { code: 'ENOENT' });
 	await rm(join(fixture, 'settings.json'));
-	await symlink(join(fixture, 'secrets'), join(fixture, 'settings.json'));
+	// Directory junctions exercise Windows reparse-point rejection without symlink privileges.
+	const linked = process.platform === 'win32' ? join(fixture, 'private') : join(fixture, 'secrets');
+	if (process.platform === 'win32') await mkdir(linked);
+	await symlink(linked, join(fixture, 'settings.json'), process.platform === 'win32' ? 'junction' : 'file');
 	await assert.rejects(seedScenarioProfile(fixture, destination), /regular file/);
 	await writeFile(join(fixture, 'fixture.json'), JSON.stringify({ format: 'ash-ui-profile-fixture-v1', synthetic: false }));
 	await assert.rejects(seedScenarioProfile(fixture, destination), /declare synthetic/);

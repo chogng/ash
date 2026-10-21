@@ -124,8 +124,9 @@ test('exported SDK typechecks Academy outside the checkout with no workspace inh
 		await writeFile(binary, 'development host fixture, never executed');
 		const sdk = join(directory, 'sdk'); const project = join(directory, 'academy');
 		await exportExtensionSdk(sdk, project, binary);
+		assert.equal(await readFile(join(sdk, 'types/internal/src/ash/base/common/marked/marked.d.ts'), 'utf8'), await readFile(join(repository, 'src/ash/base/common/marked/marked.d.ts'), 'utf8'), 'Declaration-only dependencies must survive SDK export on every platform');
 		const require = createRequire(import.meta.url);
-		execFileSync(process.execPath, [resolve(dirname(require.resolve('typescript/package.json')), Object.values(require('typescript/package.json').bin)[0] as string), '-p', join(project, 'tsconfig.json'), '--noEmit'], { cwd: directory, stdio: 'pipe' });
+		execFileSync(process.execPath, [resolve(dirname(require.resolve('typescript/package.json')), Object.values(require('typescript/package.json').bin)[0] as string), '-p', join(project, 'tsconfig.json'), '--noEmit'], { cwd: directory, stdio: 'pipe', encoding: 'utf8' });
 		for (const manifest of [join(project, 'Cargo.toml'), ...['rust', 'protocol', 'editor-client-build'].map(name => join(sdk, name, 'Cargo.toml'))]) {
 			const content = await readFile(manifest, 'utf8');
 			assert.doesNotMatch(content, /workspace\s*=\s*true|\/Volumes\/|crates\/external-ext/u);

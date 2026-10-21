@@ -87,8 +87,10 @@ export async function exportExtensionSdk(sdk: string, project: string, devHost: 
 		const emitted = program.emit();
 		if (emitted.emitSkipped) throw new Error(`Cannot emit editor API declarations: ${ts.formatDiagnostics(emitted.diagnostics, { getCanonicalFileName: path => path, getCurrentDirectory: () => repository, getNewLine: () => '\n' })}`);
 		for (const source of program.getSourceFiles()) {
-			if (!source.isDeclarationFile || !source.fileName.startsWith(repository + '/src/')) continue;
-			const destination = resolve(sdkStage, 'types/internal', relative(repository, source.fileName));
+			// TypeScript normalizes source paths to '/', including on Windows.
+			const path = relative(repository, source.fileName);
+			if (!source.isDeclarationFile || !path.replaceAll('\\', '/').startsWith('src/')) continue;
+			const destination = resolve(sdkStage, 'types/internal', path);
 			await mkdir(dirname(destination), { recursive: true });
 			await copyFile(source.fileName, destination);
 		}

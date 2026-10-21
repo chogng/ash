@@ -37,6 +37,41 @@ fn commit(root: &Path) {
         ],
     );
 }
+
+#[cfg(windows)]
+#[test]
+fn managed_search_works_with_profile_depth_storage_paths() {
+    let root = tempfile::tempdir().unwrap();
+    git(root.path(), &["init", "-b", "main"]);
+    fs::write(root.path().join("source.rs"), "profile_depth_marker\n").unwrap();
+    commit(root.path());
+    let storage = tempfile::tempdir().unwrap();
+    let index = storage
+        .path()
+        .join("profile/cache/dirs")
+        .join("a".repeat(64))
+        .join("indexes/grep")
+        .join(format!("tgrep-{}", crate::VERSION))
+        .join("tgrep-managed-v2");
+    fs::create_dir_all(&index).unwrap();
+    let token = CancellationSource::new().token();
+    let session = SearchSession::open(
+        Executable::resolve(&InstallContext::current()).unwrap(),
+        root.path(),
+        &index,
+        &token,
+    )
+    .unwrap();
+    assert_eq!(
+        session
+            .file_fuzzy("source", 10, &token)
+            .unwrap()
+            .matches
+            .len(),
+        1
+    );
+    assert_eq!(search(&session, "profile_depth_marker").matches.len(), 1);
+}
 fn search(session: &SearchSession, pattern: &str) -> crate::SearchResult {
     session
         .search(

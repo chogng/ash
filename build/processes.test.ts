@@ -44,20 +44,34 @@ setInterval(() => {}, 1000);
 `], { windowsHide: true, stdio: ['ignore', 'ignore', 'ignore', 'ipc'] });
 	const ready = new Promise<number>(resolveReady => child.once('message', pid => resolveReady(Number(pid))));
 	const run = new ProcessRun(repository, undefined, 100);
-	let helper: number | undefined;
+	let holder: ChildProcessWithoutNullStreams | undefined;
 	t.after(async () => {
 		try { await run.close(); }
 		finally {
-			for (const pid of [child.pid, helper]) {
-				if (!pid) continue;
-				try { process.kill(pid, 'SIGKILL'); } catch (error) { if (error.code !== 'ESRCH') throw error; }
+			if (holder?.exitCode === null) {
+				holder.stdin.end('check\n');
+				await once(holder, 'close');
 			}
 		}
 	});
-	helper = await ready;
+	const helper = await ready;
 	await run.own(child);
+	// Retain both original process objects: high-concurrency tests can reuse a
+	// recently exited helper's PID before a PID-only assertion runs.
+	holder = spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', `$held = @(${child.pid}, ${helper}) | ForEach-Object { [System.Diagnostics.Process]::GetProcessById($_) }; $handles = @($held | ForEach-Object { $_.Handle }); try { [Console]::WriteLine('ready'); [Console]::ReadLine() | Out-Null; @($held | ForEach-Object { $_.Refresh(); $_.HasExited }) | ConvertTo-Json -Compress } finally { $held | ForEach-Object { $_.Dispose() } }`], { windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] });
+	let output = '';
+	holder.stdout.on('data', chunk => { output += chunk; });
+	await new Promise<void>((resolveReady, reject) => {
+		holder!.stdout.once('data', () => resolveReady());
+		holder!.once('error', reject);
+		holder!.once('exit', code => { if (code !== 0) reject(new Error(`Handle holder exited with ${code}`)); });
+	});
 	await run.close();
-	for (const pid of [child.pid!, helper]) assert.throws(() => process.kill(pid, 0), { code: 'ESRCH' });
+	const closed = once(holder, 'close');
+	holder.stdin.end('check\n');
+	const [code] = await closed;
+	assert.equal(code, 0, output);
+	assert.deepEqual(JSON.parse(output.trim().split(/\r?\n/u).at(-1)!), [true, true], 'Both original process objects have exited');
 });
 
 for (const ignoresSignal of [false, true]) {

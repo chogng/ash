@@ -18,25 +18,6 @@
 
 - [ ] **验收 · Windows／Linux**：终端已迁到 profile 独立的 `--terminal-host` 进程，App Server 重启后恢复原 PTY；macOS 的超过 35 秒后端中断、每命令 2 MiB 输出、原 PID 保留、窗口存活连接、关闭／reload／跨窗口转移及 Main 强杀回收均已通过；中英文 6 项清理场景记录的 38 个 PID 无残留，验收见 [.build/terminal-host/cleanup-validation.json](.build/terminal-host/cleanup-validation.json)。补两平台 `just rust-warnings ash-exec-server -p ash-app-server-runtime -p ash-utils-pty`、终端 Rust 测试及 `terminal.spec.ts --grep 'independent terminal host|terminal window lifetime cleanup'` 真实 Desktop 验收；验证后端父进程／Job 退出不结束 PTY 宿主，且窗口／Main 退出时 owner 辅助进程、Shell、任务及子进程全部回收。当前本机 Linux 交叉检查缺 `x86_64-linux-gnu-gcc`，Windows 交叉检查缺 SDK 的 `stdlib.h`，均在 C 依赖构建处停止，不能算通过。日志为 `.build/terminal-host-{linux,windows}-check.log`。
 
-## 搜索与 MCP 进程回收 · Windows 验收
-
-已修复 tgrep／MCP 仅终止直接子进程的缺口，改用 Unix session／Windows Job Object 回收后代；同时修复 tgrep 启动器退出后，后代继承输出管道导致搜索无法结束的问题。macOS 此前两包 `just verify` 通过；提交前 MCP 再验 14 项通过，tgrep 首跑 54 passed／1 failed／2 ignored（managed daemon 重启报 `view-not-found`），该失败用例单独复跑通过，两包警告检查与依赖检查通过。首次与复跑日志见 `/tmp/ash-commit-tgrep{,-retry}.log`；tgrep 的 Windows x64 全目标警告检查通过。MCP 交叉编译被本机缺少 Windows SDK 的 `stdlib.h`／`windows.h` 阻塞，以下 Windows 项目尚未验收。
-
-- [ ] **构建来源**：Windows 检出须包含本次进程树回收提交中的 `crates/tgrep`、`crates/rmcp-client` 和 `Cargo.lock` 修改；按现有 Windows 构建入口重建并启动 Ash。记录 commit、工作区修改、版本和实际运行路径，确认使用的是新构建。
-- [ ] **包验证**：执行下列命令，保存完整输出；不得把编译失败、超时或跳过当作通过。
-
-  ```powershell
-  just verify ash-tgrep
-  just verify ash-rmcp-client
-  ```
-
-- [ ] **搜索循环**：在同一仓库连续进行至少 20 轮搜索，包含快速更换查询、取消、达到结果上限；再关闭并重新打开仓库。记录开始前、过程中、停止操作 10 秒后的进程快照。搜索应正常完成或取消；同一工作区在相同空闲状态下，tgrep 数量不得随轮次持续增加。
-- [ ] **MCP 循环**：使用一个已授权的本地 stdio MCP，优先覆盖 `npm exec`／`npx` 启动 Node 服务的配置，连续进行至少 10 轮连接、调用、断开或禁用、重新启用。每轮确认旧连接所属的启动器和后代退出；`process_tests` 回归须覆盖初始化超时、取消及反复 shutdown／Drop，不使用公网故障模拟超时。
-- [ ] **窗口与退出**：关闭一个工作区窗口，确认其独占的搜索／MCP 进程退出，其他仍打开窗口的搜索和工具继续可用；最后正常退出 Ash，等待 10 秒，确认本次 Ash 启动的 tgrep、npm／npx、node 后代均已退出。
-- [ ] **现场证据与结论**：每次快照保存时间、`ProcessId`、`ParentProcessId`、`CreationDate`、`ExecutablePath`、完整 `CommandLine`，与新构建路径及父子关系关联。附测试输出、操作轮数和各阶段计数；若失败，保留残留 PID、命令行、日志及最短复现步骤。仅统计本次 Ash 所属进程，不能按名称把其他应用的 Node 进程算进来；全部通过后移除此待办。
-
-macOS 现场检查未发现 tgrep；所见多组 `npm exec @playwright/mcp` 的父进程属于 ChatGPT/Codex，不能视为 Ash 泄漏的现场证据，本轮未终止这些进程。
-
 ## Windows 开发实验资源清理
 
 - 保存 Rust 到 App 可用的 15 秒目标尚未达到。2026-10-19 在 `3df4938da` 暂停开发与同步后完成迁移修复的 20 次匹配尝试：空库成功中位数 20.06 → 19.80 秒（5/5 → 5/5），100 条历史会话 22.27 → 21.15 秒（3/5 → 5/5），历史成功样本快 1.12 秒（5.0%）；仍差 4.80／6.15 秒。空库差异很小，不能用成功样本的条件中位数替代总体延迟或失败率结论。原始样本与阶段成本见 `docs/build.md` 完整循环复测及 `.build/perf-win-edit-20261019-migration/q2-summary.json`。
@@ -45,8 +26,6 @@ macOS 现场检查未发现 tgrep；所见多组 `npm exec @playwright/mcp` 的�
 ## Rust 函数级增量编译
 
 - [ ] **后端前置 · 跨 crate／非标量函数热更新**：先闭合准确的 artifact target／feature／cfg 与实例身份，再处理一般语义依赖／布局失效、泛型单态化、引用／堆对象、drop／unwind、间接调用和更多实际注册入口；完整检查上下文复用还缺 owner 自身 build script。当前源码明确拒绝跨 crate 调用，现有同 crate 标量链路不能视为通用 Rust JIT。已完成范围与测量见 [标量 MIR 边界](docs/rust-analysis.md#标量-mir-与本机代码边界) 和 [App Server 实测](docs/build.md#2026-10-21路径依赖检查复用与-app-server-真实热更新)。
-
-- [ ] **验收 · 构建工具 Windows**：在 Windows 复核 `build/builtin/editorClients.test.ts`、`build/desktop/host.test.ts`、`build/desktop/launch/electron.test.ts` 和 `build/testRunners.test.ts` 的原失败目标，并运行完整 `pnpm --dir build run test:prepared`。macOS arm64 已于 2026-10-21 完成整套回归（220 通过、0 失败、16 跳过），并修复本机暴露的 Host 监听、测试夹具和工具定位问题；本机结果不覆盖 Windows、独立开发宿主或 F5 调试环境。命令、首败与最终证据见 [构建验证](docs/build.md#2026-10-21路径依赖检查复用与-app-server-真实热更新)。
 
 ## Remote / Browser 多根工作区 · TODO
 

@@ -68,7 +68,26 @@ test('Search lifecycle cancels creation and partial results, refreshes a running
 		const pending = new Map<number, { method: string; searchId?: string; }>();
 		const observers = new Map<WebSocket | MessagePort, EventListener>();
 		const held: (() => void)[] = [];
-		const frame = (value: unknown): string | undefined => typeof value === 'string' ? value : value && typeof value === 'object' && 'frame' in value && typeof value.frame === 'string' ? value.frame : undefined;
+		const frame = (value: unknown): string | undefined => {
+			if (typeof value === 'string') { return value; }
+			if (!value || typeof value !== 'object') { return undefined; }
+			if ('frame' in value && typeof value.frame === 'string') { return value.frame; }
+			if ('data' in value && value.data instanceof Uint8Array) { return new TextDecoder().decode(value.data).trimEnd(); }
+			return undefined;
+		};
+		const streams = new WeakMap<WebSocket | MessagePort, { decoder: TextDecoder; pending: string; }>();
+		const responseFrames = (transport: WebSocket | MessagePort, value: unknown): string[] => {
+			if (value && typeof value === 'object' && 'data' in value && value.data instanceof Uint8Array) {
+				let stream = streams.get(transport);
+				if (!stream) { streams.set(transport, stream = { decoder: new TextDecoder(), pending: '' }); }
+				stream.pending += stream.decoder.decode(value.data, { stream: true });
+				const lines = stream.pending.split('\n');
+				stream.pending = lines.pop()!;
+				return lines.filter(line => line.trim());
+			}
+			const source = frame(value);
+			return source ? [source] : [];
+		};
 		const state: SearchLifecycleBoundary = {
 			holdStart: true, holdRead: false, blocked: [], created: [], released: [], readErrors: 0,
 			release() { state.holdStart = false; state.holdRead = false; for (const send of held.splice(0)) { send(); } },
@@ -90,16 +109,16 @@ test('Search lifecycle cancels creation and partial results, refreshes a running
 			if (!observers.has(transport)) {
 				const observer: EventListener = event => {
 					if (!(event instanceof MessageEvent)) { return; }
-					const source = frame(event.data);
-					if (!source) { return; }
-					const response = JSON.parse(source) as { id?: number; result?: { searchId?: string; }; error?: unknown; };
-					if (typeof response.id !== 'number') { return; }
-					const request = pending.get(response.id);
-					if (!request) { return; }
-					pending.delete(response.id);
-					if (request.method === 'grep/search/start' && response.result?.searchId) { state.created.push(response.result.searchId); }
-					if (request.method === 'grep/search/cancel' && !response.error && request.searchId) { state.released.push(request.searchId); }
-					if (request.method === 'grep/search/read' && response.error) { state.readErrors++; }
+					for (const source of responseFrames(transport, event.data)) {
+						const response = JSON.parse(source) as { id?: number; result?: { searchId?: string; }; error?: unknown; };
+						if (typeof response.id !== 'number') { continue; }
+						const request = pending.get(response.id);
+						if (!request) { continue; }
+						pending.delete(response.id);
+						if (request.method === 'grep/search/start' && response.result?.searchId) { state.created.push(response.result.searchId); }
+						if (request.method === 'grep/search/cancel' && !response.error && request.searchId) { state.released.push(request.searchId); }
+						if (request.method === 'grep/search/read' && response.error) { state.readErrors++; }
+					}
 				};
 				observers.set(transport, observer);
 				transport.addEventListener('message', observer);
