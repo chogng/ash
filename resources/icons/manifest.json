@@ -1202,6 +1202,11 @@
       "rendering": "symbolic"
     },
     {
+      "id": "symbol-method",
+      "file": "symbol-method.svg",
+      "rendering": "symbolic"
+    },
+    {
       "id": "sync",
       "file": "sync.svg",
       "rendering": "symbolic"
