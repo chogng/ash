@@ -38,6 +38,7 @@ export class DiskFileSystemProviderClient extends Disposable implements IFileSys
 	private readonly changes = this._register(new Emitter<IFileChangeEvent>());
 	public readonly onDidChangeFiles = this.changes.event;
 	private readonly reads = this._register(new DisposableMap<object, DisposableStore>());
+	private readonly watches = this._register(new DisposableStore());
 
 	constructor(private readonly channel: IChannel) {
 		super();
@@ -99,11 +100,12 @@ export class DiskFileSystemProviderClient extends Disposable implements IFileSys
 		} catch (error) { fail(error instanceof Error ? error : new Error(String(error))); }
 		return stream;
 	}
-	public watch(resource: URI, _options: IWatchOptions): IDisposable {
+	public watch(resource: URI, options: IWatchOptions): IDisposable {
 		this.assertNotDisposed();
 		if (resource.scheme !== 'file' || resource.query || resource.fragment) throw new TypeError('Expected a local file resource');
-		// The window's host provider continuously watches its granted profile root.
-		return Disposable.None;
+		// The subscription owns the Main-side watch; notifications use the shared fileChange event.
+		const watch = this.watches.add(this.channel.listen<void>('watch', { resource: resource.toString(), options })(() => { }));
+		return toDisposable(() => { this.watches.delete(watch); watch.dispose(); });
 	}
 	public async writeFile(resource: URI, bytes: Uint8Array, options: IFileWriteOptions): Promise<IFileWriteResult> {
 		const result = await this.call<IFileWriteResult>('writeFile', resource, { bytes: encodeBase64(VSBuffer.wrap(Uint8Array.from(bytes))), options });

@@ -1,6 +1,6 @@
 import { isLinux } from '../../../base/common/platform.js';
 import { createHash, randomUUID } from 'node:crypto';
-import { copyFile, link, lstat, mkdir, open, readdir, rm, rmdir, writeFile, type FileHandle } from 'node:fs/promises';
+import { copyFile, link, lstat, mkdir, open, readdir, realpath, rm, rmdir, writeFile, type FileHandle } from 'node:fs/promises';
 import { constants, watch } from 'node:fs';
 import { basename, dirname, isAbsolute, relative, resolve, sep } from 'node:path';
 import { Emitter, Event } from '../../../base/common/event.js';
@@ -65,7 +65,8 @@ export class DiskFileSystemProvider extends Disposable implements IFileSystemPro
 		const resources = new DisposableStore();
 		this.watchers.set(id, resources);
 		void this.path(resource).then(async path => {
-			const directoryWatch = resources.add(new MutableDisposable<DisposableStore>());
+			const entryWatch = resources.add(new MutableDisposable<DisposableStore>());
+			let entryIdentity: string | undefined;
 			let revision = 0;
 			const fail = (error: unknown): void => {
 				if (!resources.isDisposed) {
@@ -73,21 +74,48 @@ export class DiskFileSystemProvider extends Disposable implements IFileSystemPro
 					this.watchers.deleteAndDispose(id);
 				}
 			};
-			const bindDirectory = async (): Promise<void> => {
+			const bindEntry = async (): Promise<void> => {
 				const current = ++revision;
-				directoryWatch.clear();
 				// Recheck the filesystem boundary: a restored root may now be a symlink.
 				await this.path(resource);
-				let isDirectory = false;
-				try { isDirectory = (await lstat(path)).isDirectory(); }
+				let metadata: Awaited<ReturnType<typeof lstat>> | undefined;
+				try { metadata = await lstat(path); }
 				catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error; }
-				if (resources.isDisposed || current !== revision || !isDirectory) return;
+				if (resources.isDisposed || current !== revision) return;
+				if (!metadata || (!metadata.isDirectory() && !metadata.isFile())) {
+					entryWatch.clear();
+					entryIdentity = undefined;
+					return;
+				}
+				const identity = `${metadata.dev}:${metadata.ino}`;
+				// Parent events also describe content changes. Replacing a live watch for
+				// the same inode can discard its queued child notifications on macOS.
+				if (entryWatch.value && entryIdentity === identity) return;
+				const isDirectory = metadata.isDirectory();
+				const owner = new DisposableStore();
 				let watcher: ReturnType<typeof watch>;
 				try {
-					watcher = watch(path, { persistent: false, recursive: options.recursive }, (_event, filename) => {
-						if (resources.isDisposed || current !== revision) return;
+					// Native directory events use the physical path on macOS (for example
+					// /private/var). Publish changes using the caller's granted resource spelling.
+					const physicalPath = await realpath(path);
+					if (resources.isDisposed || current !== revision) { owner.dispose(); return; }
+					watcher = watch(physicalPath, { persistent: false, recursive: isDirectory && options.recursive }, (event, filename) => {
+						if (resources.isDisposed || entryWatch.value !== owner) return;
+						if (!isDirectory) {
+							this.changes.fire({ resources: [resource] });
+							// File watches follow an inode; rebind after deletion or atomic replacement.
+							if (event === 'rename') void bindEntry().catch(fail);
+							return;
+						}
 						if (filename === null) { this.changes.fire({ resources: [resource] }); return; }
 						const name = filename.toString();
+						// macOS can report the watched directory's own name for inode changes.
+						// Recheck that entry instead of publishing a nonexistent child of it.
+						if (name === basename(path)) {
+							this.changes.fire({ resources: [resource] });
+							void bindEntry().catch(fail);
+							return;
+						}
 						// Root replacement can produce synthetic names on Windows. A watcher hint
 						// cannot escape its root or turn into an invalid file URI; rescan that root.
 						if (isAbsolute(name) || name.split(/[\\/]/u).some(segment => segment === '..' || (process.platform === 'win32' && /[<>:"|?*]/u.test(segment)))) {
@@ -98,35 +126,49 @@ export class DiskFileSystemProvider extends Disposable implements IFileSystemPro
 						this.changes.fire({ resources: [URI.file(resolve(path, name))] });
 					});
 				} catch (error) {
+					owner.dispose();
 					// Deletion can win the race between stat and opening the watch. Keep
-					// the parent alive so recreation can bind this directory again.
+					// the parent alive so recreation can bind this entry again.
 					if (resources.isDisposed || current !== revision || (error as NodeJS.ErrnoException).code === 'ENOENT') return;
 					throw error;
 				}
-				const owner = new DisposableStore();
 				owner.add(toDisposable(() => watcher.close()));
 				const onError = (error: Error): void => {
-					void lstat(path).then(() => {
-						if (!resources.isDisposed && current === revision) fail(error);
+					void lstat(path).then(metadata => {
+						if (resources.isDisposed || entryWatch.value !== owner) return;
+						// The old inode can fail after its replacement already exists.
+						if (`${metadata.dev}:${metadata.ino}` !== identity) void bindEntry().catch(fail);
+						else fail(error);
 					}, missing => {
-						if (resources.isDisposed || current !== revision) return;
+						if (resources.isDisposed || entryWatch.value !== owner) return;
 						if ((missing as NodeJS.ErrnoException).code !== 'ENOENT') { fail(error); return; }
 						// The parent watch will attach the replacement. Genuine I/O failures
 						// remain visible instead of entering an unlimited watcher restart loop.
 						revision++;
-						directoryWatch.clear();
+						entryWatch.clear();
+						entryIdentity = undefined;
 						this.changes.fire({ resources: [resource] });
 					});
 				};
 				watcher.on('error', onError);
 				owner.add(toDisposable(() => watcher.off('error', onError)));
-				directoryWatch.value = owner;
+				entryWatch.value = owner;
+				entryIdentity = identity;
 			};
 			if (resources.isDisposed) return;
+			// A provider write can create a previously absent settings file before the
+			// host's parent-directory watcher reports it. Bind that entry without polling.
+			resources.add(this.onDidChangeFiles(event => {
+				if (!entryWatch.value && (!event.resources || event.resources.some(changed => extUriBiasedIgnorePathCase.isEqualOrParent(resource, changed)))) {
+					void bindEntry().catch(fail);
+				}
+			}));
 			// Observe only this entry in its parent. Files survive atomic replacement and
 			// directory roots can be rebound after deletion without exposing sibling changes.
 			if (dirname(path) !== path) {
-				const parentWatch = watch(dirname(path), { persistent: false }, (_event, filename) => {
+				const parentPath = await realpath(dirname(path));
+				if (resources.isDisposed) return;
+				const parentWatch = watch(parentPath, { persistent: false }, (_event, filename) => {
 					if (resources.isDisposed) return;
 					if (filename !== null) {
 						const name = filename.toString();
@@ -134,13 +176,13 @@ export class DiskFileSystemProvider extends Disposable implements IFileSystemPro
 						if (excludes.some(matches => matches(name) || matches(path))) return;
 					}
 					this.changes.fire({ resources: [resource] });
-					void bindDirectory().catch(fail);
+					void bindEntry().catch(fail);
 				});
 				resources.add(toDisposable(() => parentWatch.close()));
 				parentWatch.on('error', fail);
 				resources.add(toDisposable(() => parentWatch.off('error', fail)));
 			}
-			await bindDirectory();
+			await bindEntry();
 		}).catch(error => {
 			if (!resources.isDisposed) {
 				this.watchErrors.fire(String(error));

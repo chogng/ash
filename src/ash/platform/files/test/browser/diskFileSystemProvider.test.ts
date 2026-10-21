@@ -1,9 +1,13 @@
 import { Schemas } from '../../../../base/common/network.js';
 import { spawn } from 'node:child_process';
-import { once } from 'node:events';
+import { EventEmitter, once } from 'node:events';
+import fs, { type FSWatcher, type WatchEventType } from 'node:fs';
+import { syncBuiltinESMExports } from 'node:module';
+import { mock } from 'node:test';
+import { DeferredPromise } from '../../../../base/common/async.js';
 import { FileUserDataProvider } from '../../../userData/common/fileUserDataProvider.js';
 import assert from 'node:assert/strict';
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, realpath, rename, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { suite, test } from 'mocha';
@@ -57,6 +61,71 @@ test('profile files map root, content and exact changes while ignoring workspace
 suite('Disk provider byte publication and watch disposal', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();
 
+	test('file watches bind newly created files, survive atomic replacement and preserve the granted path spelling', async () => {
+		const directory = await mkdtemp(join(tmpdir(), 'ash-file-watch-'));
+		try {
+			const physical = join(directory, 'physical');
+			const alias = join(directory, 'alias');
+			await mkdir(join(physical, 'profile'), { recursive: true });
+			await symlink(physical, alias, process.platform === 'win32' ? 'junction' : 'dir');
+			const root = URI.file(join(alias, 'profile'));
+			const resource = URI.joinPath(root, 'settings.json');
+			using files = new DiskFileSystemProvider([root]);
+			const errors: string[] = [];
+			const changes: string[] = [];
+			using errorListener = files.onDidWatchError(error => errors.push(error));
+			using listener = files.onDidChangeFiles(event => changes.push(...event.resources?.map(item => item.toString()) ?? []));
+			const watcher = files.watch(resource, { recursive: false, excludes: [] });
+			try {
+				await files.writeFile(resource, new TextEncoder().encode('created'), { create: true, overwrite: false });
+				const observe = (action: () => Promise<void>, probeReadiness = false): Promise<void> => new Promise((resolve, reject) => {
+					let finished = false;
+					let observed = false;
+					let writing = false;
+					const finish = (error?: unknown): void => {
+						if (finished) return;
+						finished = true;
+						clearTimeout(deadline);
+						clearInterval(probe);
+						event.dispose();
+						if (error) reject(error); else resolve();
+					};
+					const event = files.onDidChangeFiles(event => {
+						if (event.resources?.some(item => item.toString() === resource.toString())) {
+							observed = true;
+							clearInterval(probe);
+							if (!writing) finish();
+						}
+					});
+					const deadline = setTimeout(() => finish(new Error(`No exact-file notification: ${JSON.stringify({ errors, changes })}`)), 10_000);
+					const run = (): void => {
+						if (finished || writing) return;
+						writing = true;
+						void action().then(() => { writing = false; if (observed) finish(); }, finish);
+					};
+					// The native watch binds asynchronously; establish readiness before the one-shot assertions.
+					const probe = probeReadiness ? setInterval(run, 20) : undefined;
+					run();
+				});
+				const path = join(physical, 'profile', 'settings.json');
+				await observe(() => writeFile(path, 'ready'), true);
+				await observe(() => writeFile(path, 'external'));
+				const replacement = join(physical, 'profile', 'replacement.json');
+				await writeFile(replacement, 'replacement');
+				await observe(() => rename(replacement, path));
+				await observe(() => writeFile(path, 'rebound'), true);
+				await observe(() => writeFile(path, 'after replacement'));
+				watcher.dispose();
+				const before = changes.length;
+				await writeFile(path, 'after disposal');
+				await new Promise<void>(resolve => setImmediate(resolve));
+				assert.deepEqual(changes.slice(before), []);
+				assert.ok(changes.every(change => change === resource.toString()));
+				assert.deepEqual(errors, []);
+			} finally { watcher.dispose(); }
+		} finally { await rm(directory, { recursive: true, force: true }); }
+	});
+
 	(process.platform === 'win32' ? test : test.skip)('an occupied directory rename fails promptly after its child reports ready', async function () {
 		this.timeout(15_000);
 		const directory = await mkdtemp(join(tmpdir(), 'ash-held-directory-'));
@@ -89,68 +158,77 @@ suite('Disk provider byte publication and watch disposal', () => {
 		}
 	});
 
-	test('a recreated watched root resumes nested changes without publishing its siblings', async () => {
-		const directory = await mkdtemp(join(tmpdir(), 'ash-root-watch-'));
+	test('directory-root hints rebind the native adapter after deletion and replacement without publishing siblings', async () => {
+		const directory = await realpath(await mkdtemp(join(tmpdir(), 'ash-root-watch-')));
 		const rootPath = join(directory, 'workspace');
 		const root = URI.file(rootPath);
+		const handles: NativeWatch[] = [];
+		let nextRoot = new DeferredPromise<NativeWatch>();
+		class NativeWatch extends EventEmitter {
+			readonly closed = new DeferredPromise<void>();
+			constructor(readonly path: string, readonly notify: (event: WatchEventType, filename: string) => void) { super(); }
+			close(): void { void this.closed.complete(); }
+		}
+		// Only control OS hints. Real stat/realpath calls still resolve the directory's
+		// replacement inode and the provider still owns every native handle and listener.
+		const patched = mock.method(fs, 'watch', ((path, _options, listener) => {
+			const handle = new NativeWatch(String(path), listener as fs.WatchListener<string>);
+			handles.push(handle);
+			if (handle.path === rootPath) void nextRoot.complete(handle);
+			return handle as unknown as FSWatcher;
+		}) as typeof fs.watch);
+		syncBuiltinESMExports();
 		try {
 			await mkdir(rootPath);
 			using files = new DiskFileSystemProvider([root]);
-			const changes: URI[][] = [];
+			const changes: string[][] = [];
 			const errors: string[] = [];
 			using errorListener = files.onDidWatchError(error => errors.push(error));
-			using listener = files.onDidChangeFiles(event => changes.push([...(event.resources ?? [])]));
+			using listener = files.onDidChangeFiles(event => changes.push(event.resources?.map(item => item.toString()) ?? []));
 			using watcher = files.watch(root, { recursive: true, excludes: [] });
-			const observe = (resource: URI, action: () => Promise<unknown>, retry = false): Promise<void> => new Promise((resolve, reject) => {
-				let finished = false;
-				let observed = false;
-				let pendingActions = 0;
-				const finish = (error?: unknown): void => {
-					if (finished) return;
-					finished = true;
-					clearTimeout(timeout);
-					clearInterval(probe);
-					change.dispose();
-					if (error) reject(error); else resolve();
-				};
-				const change = files.onDidChangeFiles(event => {
-					if (event.resources?.some(item => extUriBiasedIgnorePathCase.isEqual(item, resource))) {
-						observed = true;
-						clearInterval(probe);
-						if (pendingActions === 0) finish();
-					}
-				});
-				const timeout = setTimeout(() => finish(new Error(`No filesystem change for ${resource.toString()}: ${JSON.stringify({ errors, recent: changes.slice(-5).map(resources => resources.map(item => item.toString())) })}`)), 10_000);
-				// Deletion can notify watchers before recursive rm finishes. Wait for
-				// the action too, so recreation cannot race the old directory.
-				const run = (): void => {
-					pendingActions++;
-					void action().then(() => {
-						pendingActions--;
-						if (observed && pendingActions === 0) finish();
-					}, finish);
-				};
-				const probe = retry ? setInterval(run, 20) : undefined;
-				run();
-			});
-			const first = join(rootPath, 'ready.txt');
-			await observe(URI.file(first), () => writeFile(first, 'ready'), true);
-			await observe(root, () => rm(rootPath, { recursive: true }));
-			await observe(root, () => mkdir(rootPath));
-			const nested = join(rootPath, 'nested');
-			await mkdir(nested);
-			const restored = join(nested, 'restored.txt');
-			await writeFile(join(directory, 'sibling.txt'), 'outside');
-			await observe(URI.file(restored), () => writeFile(restored, 'restored'), true);
-			watcher.dispose();
+			const first = await nextRoot.p;
+			const parent = handles.find(handle => handle.path === directory)!;
+			assert.ok(parent);
+			first.notify('rename', 'ready.txt');
+			assert.deepEqual(changes.pop(), [URI.joinPath(root, 'ready.txt').toString()]);
+
+			await rm(rootPath, { recursive: true });
+			first.notify('rename', 'workspace');
+			assert.deepEqual(changes.pop(), [root.toString()]);
+			await first.closed.p;
+			nextRoot = new DeferredPromise<NativeWatch>();
+			await mkdir(rootPath);
+			parent.notify('rename', 'workspace');
+			const recreated = await nextRoot.p;
+			await mkdir(join(rootPath, 'nested'));
+			await writeFile(join(rootPath, 'nested', 'restored.txt'), 'restored');
+			recreated.notify('rename', 'nested/restored.txt');
+			assert.deepEqual(changes.pop(), [URI.joinPath(root, 'nested/restored.txt').toString()]);
+
+			// Replacement can happen between OS callbacks, with no observed missing state.
+			await rename(rootPath, join(directory, 'retired'));
+			await mkdir(rootPath);
+			nextRoot = new DeferredPromise<NativeWatch>();
+			recreated.emit('error', Object.assign(new Error('The retired directory is no longer watchable'), { code: 'EPERM' }));
+			const replacement = await nextRoot.p;
+			assert.equal(recreated.closed.isSettled, true);
+			replacement.notify('rename', 'after-replacement.txt');
+			assert.deepEqual(changes.pop(), [URI.joinPath(root, 'after-replacement.txt').toString()]);
 			const before = changes.length;
-			await writeFile(join(directory, 'sibling.txt'), 'outside');
-			await writeFile(restored, 'after disposal');
-			await new Promise<void>(resolve => setImmediate(resolve));
+			parent.notify('rename', 'sibling.txt');
+			first.notify('rename', 'retired-event.txt');
+			recreated.notify('rename', 'retired-event.txt');
 			assert.equal(changes.length, before);
+			watcher.dispose();
+			parent.notify('rename', 'workspace');
+			replacement.notify('rename', 'after-disposal.txt');
+			assert.equal(changes.length, before);
+			assert.ok(handles.every(handle => handle.closed.isSettled && handle.listenerCount('error') === 0));
 			assert.deepEqual(errors, []);
-			assert.deepEqual(changes.flat().filter(resource => !extUriBiasedIgnorePathCase.isEqualOrParent(resource, root)).map(resource => resource.toString()), []);
+			assert.ok(changes.flat().every(value => extUriBiasedIgnorePathCase.isEqualOrParent(URI.parse(value), root)));
 		} finally {
+			patched.mock.restore();
+			syncBuiltinESMExports();
 			await rm(directory, { recursive: true, force: true });
 		}
 	});

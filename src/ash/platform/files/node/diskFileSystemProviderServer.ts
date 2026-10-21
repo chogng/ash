@@ -20,6 +20,7 @@ import {
 /** Owns file operation validation and serialization independently of the IPC host. */
 export abstract class AbstractDiskFileSystemProviderChannel<TContext> extends Disposable implements IServerChannel<TContext> {
 	private readonly streams = this._register(new DisposableMap<object, DisposableStore>());
+	private readonly watches = this._register(new DisposableMap<object, DisposableStore>());
 
 	constructor(private readonly provider: IFileSystemProvider) {
 		super();
@@ -27,6 +28,24 @@ export abstract class AbstractDiskFileSystemProviderChannel<TContext> extends Di
 
 	public listen<T>(_context: TContext, event: string, value?: unknown): Event<T> {
 		this.assertNotDisposed();
+		if (event === 'watch') {
+			if (!isRecord(value) || !isRecord(value.options) || typeof value.options.recursive !== 'boolean'
+				|| !Array.isArray(value.options.excludes) || value.options.excludes.some(pattern => typeof pattern !== 'string')) {
+				throw new TypeError('Invalid file watch request');
+			}
+			const resource = this.resource(value.resource);
+			const options = { recursive: value.options.recursive, excludes: value.options.excludes as string[] };
+			return (_listener, _thisArgs, disposables) => {
+				this.assertNotDisposed();
+				const lifetime = new DisposableStore();
+				this.watches.set(lifetime, lifetime);
+				lifetime.add(toDisposable(() => this.watches.deleteAndDispose(lifetime)));
+				try { lifetime.add(this.provider.watch(resource, options)); }
+				catch (error) { lifetime.dispose(); throw error; }
+				if (Array.isArray(disposables)) { disposables.push(lifetime); } else { disposables?.add(lifetime); }
+				return lifetime;
+			};
+		}
 		if (event === 'readFileStream') {
 			if (!isRecord(value) || !hasFileReadStreamCapability(this.provider)) { throw new TypeError('Invalid file stream request'); }
 			const provider = this.provider;

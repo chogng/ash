@@ -2,21 +2,76 @@ import assert from 'node:assert/strict';
 import { mkdtemp, readFile, rm, writeFile, symlink } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { test } from 'mocha';
+import { suite, test } from 'mocha';
 import { URI } from '../../../../base/common/uri.js';
 import { extUriBiasedIgnorePathCase } from '../../../../base/common/resources.js';
 import { DiskFileSystemProviderClient, LOCAL_FILE_SYSTEM_CHANNEL_NAME } from '../../common/diskFileSystemProviderClient.js';
 import { Emitter, Event } from '../../../../base/common/event.js';
 import { VSBuffer } from '../../../../base/common/buffer.js';
 import { IPCClient } from '../../../../base/parts/ipc/common/ipc.js';
-import { toDisposable } from '../../../../base/common/lifecycle.js';
+import { toDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
 import { CancellationToken, CancellationTokenSource } from '../../../../base/common/cancellation.js';
 import { DeferredPromise } from '../../../../base/common/async.js';
 import { consumeStream, listenStream } from '../../../../base/common/stream.js';
 import { FileSystemProviderErrorCode, toFileSystemProviderErrorCode } from '../../common/files.js';
-import { FileKind, FileNotFoundError, FileRevisionConflictError } from '../../common/files.js';
+import { FileKind, FileNotFoundError, FileRevisionConflictError, type IWatchOptions } from '../../common/files.js';
 import { DiskFileSystemProviderChannel } from '../../electron-main/diskFileSystemProviderServer.js';
 import { DiskFileSystemProvider } from '../../node/diskFileSystemProvider.js';
+import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../base/test/common/utils.js';
+
+suite('Desktop watch subscription ownership', () => {
+	ensureNoDisposablesAreLeakedInTestSuite();
+
+	test('consumer, client, channel and connection disposal release Main-side watches', async () => {
+		for (const owner of ['consumer', 'client', 'channel', 'connection']) {
+			const resource = URI.file(join(tmpdir(), 'ash-watch-settings.json'));
+			const options = { recursive: false, excludes: ['**/*.tmp'] };
+			const started = new DeferredPromise<void>();
+			const closed = new DeferredPromise<void>();
+			let closes = 0;
+			class TrackingProvider extends DiskFileSystemProvider {
+				public override watch(actual: URI, actualOptions: IWatchOptions): IDisposable {
+					assert.equal(actual.toString(), resource.toString());
+					assert.deepEqual(actualOptions, options);
+					void started.complete();
+					return toDisposable(() => { closes++; void closed.complete(); });
+				}
+			}
+			using provider = new TrackingProvider([URI.file(tmpdir())]);
+			using incoming = new Emitter<VSBuffer>();
+			using outgoing = new Emitter<VSBuffer>();
+			using server = new IPCClient({ onMessage: incoming.event, send: value => outgoing.fire(value) }, 'window:watch');
+			using peer = new IPCClient({ onMessage: outgoing.event, send: value => incoming.fire(value) }, 'window:watch');
+			using channel = new DiskFileSystemProviderChannel(provider, URI.file(tmpdir()), URI.file(tmpdir()));
+			server.registerChannel(LOCAL_FILE_SYSTEM_CHANNEL_NAME, channel);
+			using client = new DiskFileSystemProviderClient(peer.getChannel(LOCAL_FILE_SYSTEM_CHANNEL_NAME));
+			using watcher = client.watch(resource, options);
+			await started.p;
+			assert.equal(closes, 0);
+			if (owner === 'consumer') watcher.dispose();
+			else if (owner === 'client') client.dispose();
+			else if (owner === 'channel') channel.dispose();
+			else server.dispose();
+			await closed.p;
+			watcher.dispose();
+			client.dispose();
+			channel.dispose();
+			assert.equal(closes, 1);
+		}
+	});
+
+	test('watch requests validate resources and options at the IPC boundary', () => {
+		using provider = new DiskFileSystemProvider([URI.file(tmpdir())]);
+		using channel = new DiskFileSystemProviderChannel(provider, URI.file(tmpdir()), URI.file(tmpdir()));
+		const resource = URI.file(join(tmpdir(), 'settings.json')).toString();
+		for (const options of [undefined, {}, { recursive: 'true', excludes: [] }, { recursive: false, excludes: [42] }]) {
+			assert.throws(() => channel.listen('window:watch', 'watch', { resource, options }), /Invalid file watch/);
+		}
+		assert.throws(() => channel.listen('window:watch', 'watch', {
+			resource: 'https://example.test/settings.json', options: { recursive: false, excludes: [] },
+		}), /local file resource/);
+	});
+});
 
 test('desktop file transport preserves resources, revisions, and root boundaries', async () => {
 	const directory = await mkdtemp(join(tmpdir(), 'ash-local-files-'));

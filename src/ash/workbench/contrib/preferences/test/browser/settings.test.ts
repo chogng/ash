@@ -944,6 +944,20 @@ test('Chinese setting actions, search filters and pending saves expose translate
 	assert.equal(search.value, 'font @stable');
 });
 
+test('Workspace permission banner registration participates in the complete Settings layout', () => {
+	const registry = new ConfigurationRegistry();
+	registry.registerConfiguration({
+		key: 'security.workspace.trust.banner',
+		defaultValue: 'untilDismissed',
+		parse: value => String(value),
+		setting: { valueType: 'select', title: 'Workspace permissions banner', description: 'Controls the workspace permissions banner.', options: [{ value: 'untilDismissed', label: 'Until dismissed' }] },
+	});
+	const defaults = new DefaultSettings(registry);
+	const setting = defaults.get('security.workspace.trust.banner');
+	assert.equal(setting.valueType, 'select');
+	assert.equal(findSettingCategory(createSettingsLayout(defaults.all), setting.id), 'layout');
+});
+
 test('Activity Bar badges expose a translated profile setting with strict boolean validation', () => {
 	const chinese = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
 	try {

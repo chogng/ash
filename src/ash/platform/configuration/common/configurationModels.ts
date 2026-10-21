@@ -114,6 +114,8 @@ export class UserSettings extends Disposable {
 		super();
 		this.parser = new ConfigurationModelParser(resource.toString(), logService);
 		this._register(fileService.watch(extUri.dirname(resource)));
+		// Keep an exact-file watch as well: some hosts report content changes only on the file.
+		this._register(fileService.watch(resource));
 		this._register(fileService.onDidChangeFiles(event => {
 			if (event.resources && !event.resources.some(candidate => extUri.isEqualOrParent(resource, candidate))) return;
 			this.generation++;

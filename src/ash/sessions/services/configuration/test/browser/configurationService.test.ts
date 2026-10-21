@@ -401,8 +401,20 @@ test('Late contributions apply current Sessions defaults and read-only rules acr
 	await sessions.updateValue('editor.dynamic', 'changed', { overrideIdentifier: 'typescript' });
 	assert.equal(sessions.getValue('editor.dynamic', { overrideIdentifier: 'typescript' }), 'changed');
 	registry.updateConfigurations({ add: [], remove: [editable] });
-	assert.equal(sessions.getValue('editor.dynamic'), undefined);
-	assert.deepEqual(changes, [ConfigurationTarget.DEFAULT, ConfigurationTarget.DEFAULT, ConfigurationTarget.USER_LOCAL, ConfigurationTarget.DEFAULT]);
+	// Unregistration removes the schema and window rules, not the user's stored values.
+	assert.deepEqual([
+		sessions.getValue('editor.dynamic'), sessions.getValue('editor.dynamic', { overrideIdentifier: 'typescript' }),
+		workbench.getValue('editor.dynamic'), workbench.getValue('editor.dynamic', { overrideIdentifier: 'typescript' }),
+	], ['user', 'changed', 'user', 'language']);
+	assert.deepEqual(sessions.getConfigurationData().defaults.contents, {});
+	await assert.rejects(sessions.updateValue('editor.dynamic', 'unregistered'), /Unknown configuration key/);
+	registry.updateConfigurations({ add: [fixed], remove: [] });
+	assert.deepEqual([
+		sessions.getValue('editor.dynamic'), sessions.getValue('editor.dynamic', { overrideIdentifier: 'typescript' }),
+	], ['sessions', 'sessions']);
+	await assert.rejects(sessions.updateValue('editor.dynamic', 'read-only again'), /read-only/);
+	assert.deepEqual(JSON.parse((await sessions.read()).source), { 'editor.dynamic': 'user', '[typescript]': { 'editor.dynamic': 'changed' } });
+	assert.deepEqual(changes, [ConfigurationTarget.DEFAULT, ConfigurationTarget.DEFAULT, ConfigurationTarget.USER_LOCAL, ConfigurationTarget.DEFAULT, ConfigurationTarget.DEFAULT]);
 });
 
 test('Late typed registrations use Sessions defaults while invalid contribution defaults leave the registry unchanged', () => {
