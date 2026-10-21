@@ -75,6 +75,27 @@ test('browser integration preserves filters and rejects discarded or empty selec
 	}
 });
 
+test('editor browser prepares a selected Rust Git fixture before building or launching the browser', { timeout: 20_000 }, async t => {
+	const directory = await mkdtemp(join(repository, 'test/.integration-runner-'));
+	t.after(() => rm(directory, { recursive: true, force: true }));
+	const config = join(directory, 'playwright.config.ts');
+	await writeFile(config, `export default { testDir: '.', outputDir: './results', projects: [{ name: 'chromium' }], reporter: 'list' };`);
+	await writeFile(join(directory, 'diff.integration.spec.ts'), `import { test } from '@playwright/test'; test('requires Rust Git', () => { throw Error('must not run before Git preparation'); });`);
+	const missingPython = join(directory, 'missing-python');
+	for (const prefix of [[], ['--editor']]) {
+		await assert.rejects(execute(process.execPath, ['test/integration/browser/run.ts', ...prefix, '--config', config, 'diff.integration.spec.ts'], {
+			cwd: repository, env: { ...process.env, PYTHON: missingPython }, timeout: 10_000,
+		}), error => {
+			assert.ok(error instanceof Error);
+			const failure = error as Error & { stdout: string; stderr: string; };
+			assert.match(failure.stdout, /Test selection: 1 tests/);
+			assert.ok((failure.stdout + failure.stderr).includes(`spawn ${missingPython} ENOENT`), failure.stdout + failure.stderr);
+			assert.doesNotMatch(failure.stdout, /Browser integration server|Running 1 test/);
+			return true;
+		});
+	}
+});
+
 test('CI rejects exclusive tests during collection before browser or smoke launches', { timeout: 20_000 }, async t => {
 	const directory = await mkdtemp(join(repository, 'test/.exclusive-runner-'));
 	t.after(() => rm(directory, { recursive: true, force: true }));

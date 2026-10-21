@@ -25,9 +25,10 @@ await withProcessRun(desktopDirectory, async (run, environment) => {
 	if (!await collectTests(run, testArgs, playwrightArgs, testEnv)) return;
 	const files = playwrightArgs.filter(argument => /\.spec\.[jt]s$/u.test(argument));
 	let gitExecutable: string | undefined;
-	if (!editorOnly && (files.length === 0 || files.some(file => /(?:gitExtension|diff)\.integration\.spec\.[jt]s$/u.test(file)))) {
+	if (files.length === 0 || files.some(file => /(?:gitExtension|diff)\.integration\.spec\.[jt]s$/u.test(file))) {
 		// A fresh checkout has no SDK executable. Use Cargo's reported artifact so
 		// custom target directories and source changes follow the same build owner.
+		// Editor-only selections also include Diff cases backed by this executable.
 		const { command, args } = pythonCommand(['-B', 'scripts/cargo.py', 'build', '-p', 'ash-git-extension', '--bin', 'ash-git-extension', '--profile', 'ci-test', '--locked', '--message-format=json-render-diagnostics']);
 		const prepared = await run.command(command, args, testEnv, true);
 		if (prepared.code !== 0) { process.exitCode = prepared.code; return; }

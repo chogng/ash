@@ -752,8 +752,9 @@ non-overlapping additional edits，以及 `$n`/`${n}`/`${n:default}`/`${n|a,b|}`
 tabstop 会话，都通过同一 item contract、Worker transport 与 isolated undo 交付。
 choice 的镜像 occurrence 通过 `Alt+↑/↓` 原子循环替换；session 为 `${TM_FILENAME}`、
 `${TM_FILENAME_BASE}`、`${TM_DIRECTORY}` 与 `${TM_FILEPATH}` 注入 editor input
-变量，未知变量必须有显式 default。transform 仍不在 Stanza 当前受支持 grammar，
-不能被静默降级。provider 生产和触发链见 Current 26；completion Worker wire
+变量，未知变量必须有显式 default。当前 parser 与 session 支持正则 transform、
+choice 镜像、前向引用和嵌套占位符，并通过文本事务保持一次撤销；嵌套插入新 snippet 时的会话合并及其他插入选项尚未实现，需先明确真实消费者。
+provider 生产和触发链见 Current 26；completion Worker wire
 transport 见 Current 27。
 
 ### Current 26：Completion provider registry、host 与触发链
@@ -1443,6 +1444,72 @@ hit-test、pointer selection、keyboard navigation、普通 textarea 编辑、
 差异、macOS clause presentation 与跨平台辅助技术验收；富
 decoration 与 versioned language result 沿 language boundary 演进。
 每增加一种输入路径，都必须生成同一种 Ash transaction。
+
+## 2026-10-21 配置、补全与格式化本机验收
+
+在 macOS arm64、Node 24.21.0、Ash 0.1.0／Electron 44.4.5、检出 `7be261cccb` 上完成定向验收。
+生产源码未变，Desktop 复用上一轮正常 `pnpm run build` 和后端准备的产物；仅修正 Settings smoke 的旧 DOM 断言，
+没有用安装版本替代本检出。完整命令、退出码和日志见 `.build/local-editor-acceptance/validation.json`。
+
+配置目录和语言入口复核确认：平台 `Registry` 持有唯一配置 registry，编辑器 schema 与 Workbench 的 typed key 均注册到该实例；
+`AppServerExtensionService.replaceContributions()` 通过同一 registry 的 `deltaConfiguration()` 提交配置和语言默认 override。
+语言身份／文件关联归 `LanguageService`，编辑规则归 `LanguageConfigurationService`，功能 provider 归 `LanguageFeaturesService`；
+Workbench 将同一组实例传入模型、编辑器和扩展，standalone 的独立宿主作用域不构成同一窗口的第二份语言状态。
+已验证默认 override 的合并、用户优先级、非法替换回滚、撤回不写用户设置，语言识别／配置撤销，及真实产品设置即时生效、重载保留和重置。
+根 TODO 的“配置与语言身份”复核项据此移除；不覆盖另列的真实系统 Policy 或上游窗口配对。
+
+| 定向范围                                                                   | 结果           | 证据日志                          |
+| -------------------------------------------------------------------------- | -------------- | --------------------------------- |
+| Suggest、Inline Completions、Snippet、格式化单元                           | 59 通过        | `unit.log`                        |
+| 配置 registry、computed options、语言规则／身份单元                        | 56 通过        | `configuration-unit.log`          |
+| 扩展配置／语言生产 owner 与 Worker 传输                                    | 10 通过        | `extensions-worker-unit.log`      |
+| Chromium 补全、提示、片段与格式化                                          | 101 通过       | `browser.log`                     |
+| Chromium 语言激活、配置更新及布局                                          | 7 通过         | `configuration-browser.log`       |
+| Electron／真实 App Server 的 LSP 补全、格式化撤销、Inlay、Snippet 保存清理 | 4 通过         | `desktop.log`                     |
+| Electron 配置首跑：Bazel 语言识别／Settings 更新、重载和重置               | 1 通过／1 失败 | `configuration-desktop.log`       |
+| 修正旧 Settings 断言后的定向复验                                           | 1 通过         | `configuration-desktop-retry.log` |
+
+Settings 首败等待关闭行号后的空 `.line-numbers` 节点；当前 `LineNumbersOverlay` 的 Off 分支不生成该节点，
+截图亦确认编辑正文仍在且行号已关闭。测试现检查零个行号节点，并在即时更新和重载后分别断言原编辑正文仍存在；
+保留设置持久化与重置恢复行号的断言。automation 2994 文件类型检查和该文件格式检查通过。
+没有新增重复测试：现有测试已覆盖触发、请求取消、只读、模型／语言变化、迟到结果、节点释放和撤销。
+
+以上通过范围不代表两项尚缺契约已实现：
+
+- **格式化产品接线**：`FormattingConflicts.setFormatterSelector()` 只有测试调用，默认仍取第一个 provider；产品未消费 `editor.defaultFormatter`，也未将 `formatOnType`／on-type provider 接到输入链。选择扩展点测试不能代替真实冲突选择界面。
+- **Inlay 行内布局与 Snippet 插入**：Inlay 现以绝对坐标定位，并未把提示宽度／padding 纳入行几何；通过的是显示和生命周期。Snippet 的现有 completion／paste 链已通过，但 `SnippetController2.startSession()` 替换旧 session，未验证或实现嵌套插入的合并契约。
+
+根 TODO 已收窄到上述具体缺口；本次未修改其产品实现，不涉及 Windows／Linux、物理 IME 或屏幕阅读器验收。
+
+## 2026-10-21 Widget 与批量编辑复核
+
+本轮仍在 macOS arm64、检出 `7be261cccb` 上验证，未修改产品源码，复用本检出此前正常准备的 Desktop 与后端。
+`TextResourceEditor`、`TextDiffEditor`、`MultiDiffEditor` 分别通过现有实例化作用域创建 Widget，
+调用方持有文本模型；模型切换释放原 View、贡献和模型级服务，编辑器身份保持稳定。
+MultiDiff source resolver 负责实时 Git 来源更新，不能由 Widget 再维护一份仓库状态。
+
+批量编辑的现有消费者是 Rename／Code Action、WorkspaceEdit 等真实编辑入口：
+`BulkEditPreviewContribution` 将 `IBulkEditService` 接到预览 Pane，按文件／操作类型分组并保留逐条选择；
+选择变化重新计算展开文本，Open changes 为当前选择创建只读 MultiDiff 快照。
+源文件变化走 `ConflictDetector` 禁用提交，要求重新执行重构，不把已批准快照静默换成新内容。
+`BulkEditService` 负责有序事务、失败回滚和精确逆操作；成组撤销先核对所有最新快照，再逆序恢复。
+`TextModel` 和保留模型历史仍是文本撤销 owner。源码检索未发现 `IUndoRedoService`／`UndoRedoSource` 消费者，
+不为补齐上游成员新增并行撤销服务。因此“批量编辑预览与撤销”的当前消费者复核结束，根 TODO 移除此项；
+这里不宣称实现了任意资源的通用平台撤销服务或自动重基预览。
+
+定向单元共 90 项通过：Widget 生命周期、Diff／MultiDiff、预览服务／Pane／冲突、保留模型历史 87 项，
+另补 canonical 编辑面、装饰集合及 content／glyph Widget 的 3 项。浏览器初跑 15 通过／4 失败；
+4 项 MultiDiff Git 用例因 `test:editor:browser` 的 `--editor` 分支跳过 SDK 可执行程序准备而报 `ENOENT`。
+修复 runner 的准备条件后，它从本检出用 `ci-test` 正常构建 `ash-git-extension`，读取 Cargo 报告的产物路径；
+只复跑失败的中英文配置／实时 Git 刷新 4 项，全部通过。新 runner 回归在旧入口失败，修复后连同过滤参数回归 2 项通过；
+覆盖普通／editor 两种入口在缺少 Python 时先停在准备阶段，禁止继续构建页面或启动浏览器。
+build 146 文件类型检查和改动文件格式检查通过。
+
+真实 Desktop 的 SCM 定向命令选择 5 项，但整批未通过：单文件 Diff 的中英文标题 `Open File` 查找超时，
+英文 MultiDiff 的 `View All Changes` 查找超时；向实际 runner 发送 SIGINT 并确认退出后，结果为 3 失败、
+1 中断、1 未执行（退出码 130）。这些现象尚未区分产品接线缺陷与动作已迁移后的旧测试，不修改断言掩盖它们；
+Widget 根待办收窄到对应标题／菜单入口。首败截图、trace、日志与精确命令见 `.build/local-widget-acceptance/validation.json`。
+本轮结果不覆盖 Windows／Linux，也不代表所有 SCM Desktop 用例通过。
 
 ## 评估与迁移门槛
 

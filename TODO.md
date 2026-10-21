@@ -127,15 +127,13 @@ macOS 现场检查未发现 tgrep；所见多组 `npm exec @playwright/mcp` 的�
 
 当前 Editor 待办统一维护于本节，完成后移除；不再续写 API 对齐台账或维护声明完成数量。以下由旧记录归并，尚未逐项重跑；复核项先确认当前调用方与行为，历史失败和成员差异不直接视为现存缺陷。
 
-- [ ] **复核 · 配置与语言身份**：核对配置节点／默认 override、语言身份及语言配置的生产调用链，确认是否仍有并行 owner；已完成的配置 registry 迁移不重复实施。
 - [ ] **复核 · 文本模型与光标**：沿 `TextModel`、`ViewModel`、`CursorsController` 检查编辑、选区与撤销的剩余公开契约，保留唯一模型与历史 owner；只补真实消费者需要的行为，不为上游私有结构或成员数量增加转发层。
 - [ ] **复核 · 输入生命周期与辅助阅读**：确认输入实例的构造／释放已完整归属 `View`，再核对 Native EditContext、Textarea fallback、简单／富屏幕阅读内容的构造与事件链；验证 IME、失焦取消、剪贴板、系统选区及迟到事件。物理 IME 与屏幕阅读器现场验收沿下方平台组合任务执行。
 - [ ] **布局前置 · 视图与滚动**：从真实布局、指针和滚轮入口核对 `ViewLayout`、`ViewLine`、覆盖层、小地图、滚动条和 Overview Ruler 的 owner 与缺失契约；不得为 `getDomNode` 等成员新造 DOM wrapper 或第二份滚动状态。
-- [ ] **复核 · Widget 与 Diff／MultiDiff 宿主**：核对 `CodeEditorWidget` 的模型切换、稳定身份、贡献与外部 Widget 释放，以及 Diff／MultiDiff 的实际服务调用；按行为确认旧记录中的同名职责问题是否仍存在。
+- [ ] **复核 · Desktop Diff／MultiDiff 标题动作**：`CodeEditorWidget` 的身份、模型切换、贡献／外部 Widget 释放，以及 Diff／MultiDiff 的实例化、配置和 Git source 刷新链已于 2026-10-21 本机通过定向单元及浏览器验证。真实 Desktop 的 SCM 标题动作验收仍未通过：中英文单文件 Diff 用例在标题栏找不到 `Open File`／“打开文件”，英文 MultiDiff 用例找不到 `View All Changes`；本轮停止后另一变体中断、拆分用例未执行。需核对当前菜单／标题动作契约并修复接线或过时测试，再复跑这些场景。入口缺失、首败 trace 和已通过范围见 [Widget 与批量编辑复核](docs/editor-architecture.md#2026-10-21-widget-与批量编辑复核)。
 - [ ] **复核 · 语言功能控件**：按现有生产入口逐项核对 Peek、Code Action、CodeLens、Find、Folding、颜色检测／选择和 Sticky Scroll 的剩余契约；重点确认 Sticky Scroll 的定义查询与高度事件消费者，避免重复实现已接通能力。
-- [ ] **复核 · 格式化与资源级 Worker**：确认默认格式化器选择、冲突选择界面、输入格式化自动触发及资源级 worker 的当前生产链；旧记录存在先后修正，须先核对实际缺口，再验证取消、语言切换、多选区和一次撤销。
-- [ ] **验收 · 补全、提示与片段**：验证 Suggest 的触发／调度／事件、Inline Completions 的接受与取消、Inlay Hints 的行内布局／展示选项，以及 Snippet 的合并和插入选项；覆盖模型切换、只读和撤销。
-- [ ] **复核 · 批量编辑预览与撤销**：确认批量预览的分类／实时差异及平台 UndoRedoService／UndoRedoSource 接入是否有当前产品消费者，再确定实施范围；保留现有事务、回滚与顺序快照的唯一 owner。
+- [ ] **功能 · 格式化产品接线**：`FormattingConflicts` 已有选择扩展点，但产品未注册 selector，也未消费 `editor.defaultFormatter`；`editor.formatOnType` 与 on-type provider 目前仅有声明／注册，缺输入触发链。按现有配置、选择控件与输入 owner 接线，再验默认选择、冲突选择及自动触发。手动文档／多选区格式化、取消、只读、迟到结果、一次撤销及模型级 Worker 链已于 2026-10-21 本机通过定向验证，不重复列为缺口。范围见 [编辑器本机验收](docs/editor-architecture.md#2026-10-21-配置补全与格式化本机验收)。
+- [ ] **布局前置／复核 · Inlay 行内布局与 Snippet 插入契约**：Inlay 已通过展示模式、节点复用、语言／模型变化和取消验证，但当前 `InlayHintsController` 仅将提示绝对定位到文字坐标，尚未预留行内宽度或消费左右 padding，需沿现有行投影／坐标 owner 闭合布局。Snippet 已通过现有 completion／paste 的插入、变量、choice／transform／镜像与撤销；`startSession()` 会替换旧会话，嵌套插入／合并及其他插入选项仍须从真实消费者明确范围，不为上游 API 名称预建接口。Suggest／Inline Completions 的触发、取消、只读、语言／模型切换及接受撤销已通过，不再作为待验收项。范围见 [编辑器本机验收](docs/editor-architecture.md#2026-10-21-配置补全与格式化本机验收)。
 - [ ] **复核 · Editor 完整回归**：复跑受本轮范围影响的现有 Editor 检查，确认旧 Windows URI-list 路径断言、测试产物缺失及 Electron 中文重启关闭超时是否仍可复现；已被后续修复覆盖的旧失败直接移除，不把历史记录当作当前阻塞。新行为通过 Ash 自身对应入口验收。
 
 - [ ] **功能 · 文献检索扩展**：后续实现查询、元数据获取及向文献管理扩展入库的工具／Skill 链路，PDF 阅读复用独立查看器；作者接入遵循上方扩展 SDK 任务。Agent 结构化文档写入仍按下方 Work 文档服务契约另行实施。尚未新增检索代码或迁仓。
