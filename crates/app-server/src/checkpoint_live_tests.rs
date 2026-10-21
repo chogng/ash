@@ -27,6 +27,8 @@ struct Exchange {
     request: ModelRequest,
     usage: ModelUsage,
     elapsed_ms: u128,
+    first_text_us: Option<u64>,
+    text_delta_count: u64,
 }
 
 struct Luna {
@@ -34,9 +36,28 @@ struct Luna {
     exchanges: Mutex<Vec<Exchange>>,
 }
 
-struct IgnoreDeltas;
-impl ModelEventSink for IgnoreDeltas {
-    fn emit(&mut self, _: ash_protocol::ModelStreamEvent) -> Result<(), ModelProviderError> {
+struct ForwardDeltas<'a> {
+    sink: &'a mut dyn core_api::ModelStreamSink,
+    started: Instant,
+    first_text_us: Option<u64>,
+    text_delta_count: u64,
+}
+impl ModelEventSink for ForwardDeltas<'_> {
+    fn emit(&mut self, event: ash_protocol::ModelStreamEvent) -> Result<(), ModelProviderError> {
+        if matches!(&event, ash_protocol::ModelStreamEvent::TextDelta(text) | ash_protocol::ModelStreamEvent::MessageDelta { text, .. } if !text.is_empty())
+        {
+            self.first_text_us
+                .get_or_insert(self.started.elapsed().as_micros() as u64);
+            self.text_delta_count += 1;
+        }
+        self.sink.emit(event).map_err(|_| {
+            ModelProviderError::InvalidResponse("live test stream rejected output".into())
+        })
+    }
+}
+struct IgnoreCoreDeltas;
+impl core_api::ModelStreamSink for IgnoreCoreDeltas {
+    fn emit(&mut self, _: ash_protocol::ModelStreamEvent) -> Result<(), CoreError> {
         Ok(())
     }
 }
@@ -227,11 +248,33 @@ fn manual_compaction_persists_before_restart_and_preserves_the_next_request() {
 }
 
 impl ModelService for Luna {
+    fn output_transport(
+        &self,
+        _: ModelSelection<'_>,
+    ) -> Result<ash_protocol::ModelOutputTransport, CoreError> {
+        Ok(self.model.output_transport())
+    }
+
     fn invoke(
         &self,
         _: ModelSelection<'_>,
         request: &ModelRequest,
         cancellation: &CancellationToken,
+    ) -> Result<ModelResponse, CoreError> {
+        self.stream(
+            ModelSelection::ConfiguredDefault,
+            request,
+            cancellation,
+            &mut IgnoreCoreDeltas,
+        )
+    }
+
+    fn stream(
+        &self,
+        _: ModelSelection<'_>,
+        request: &ModelRequest,
+        cancellation: &CancellationToken,
+        sink: &mut dyn core_api::ModelStreamSink,
     ) -> Result<ModelResponse, CoreError> {
         let mut request = request.clone();
         request.reasoning = Some(ash_protocol::ReasoningConfig {
@@ -239,9 +282,15 @@ impl ModelService for Luna {
             summary: false,
         });
         let started = Instant::now();
+        let mut observer = ForwardDeltas {
+            sink,
+            started,
+            first_text_us: None,
+            text_delta_count: 0,
+        };
         let response = self
             .model
-            .stream_with_cancellation(&request, cancellation, &mut IgnoreDeltas)
+            .stream_with_cancellation(&request, cancellation, &mut observer)
             .map_err(|_| {
                 CoreError::Model("Luna live request failed; no provider details are logged".into())
             })?;
@@ -253,6 +302,8 @@ impl ModelService for Luna {
             request,
             usage,
             elapsed_ms: started.elapsed().as_millis(),
+            first_text_us: observer.first_text_us,
+            text_delta_count: observer.text_delta_count,
         });
         Ok(response)
     }
@@ -267,6 +318,118 @@ impl ash_client::OperationClient for ReadOnlyAuth {
         Err(ash_client::ClientError::Transport(
             "live tests cannot refresh authentication".into(),
         ))
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, serde::Serialize)]
+struct CacheRoutingIdentity {
+    account_fingerprint: String,
+    session_id: String,
+    prompt_cache_key: String,
+    request_prefix_fingerprint: String,
+}
+
+struct ObserveCacheRouting {
+    client: ash_client::AshClient,
+    identities: Arc<Mutex<Vec<CacheRoutingIdentity>>>,
+    usages: Arc<Mutex<Vec<serde_json::Value>>>,
+}
+
+struct ObserveCacheUsage<'a> {
+    sink: &'a mut dyn ash_client::OperationStreamSink,
+    decoder: ash_client::SseDecoder,
+    usages: &'a Mutex<Vec<serde_json::Value>>,
+}
+
+impl ash_client::OperationStreamSink for ObserveCacheUsage<'_> {
+    fn emit(&mut self, chunk: &[u8]) -> Result<(), ash_client::ClientError> {
+        for frame in self.decoder.push(chunk)? {
+            let ash_client::SseFrame::Event(event) = frame else {
+                continue;
+            };
+            let Ok(payload) = serde_json::from_str::<serde_json::Value>(&event.data) else {
+                continue;
+            };
+            if payload["type"] == "response.completed" {
+                // Preserve only usage counters from the wire, independently of Ash's decoder.
+                // Response text, encrypted content, and credentials never enter the evidence.
+                let mut usage = payload["response"]["usage"].clone();
+                usage.as_object_mut().unwrap().remove("attribution");
+                self.usages.lock().unwrap().push(usage);
+            }
+        }
+        self.sink.emit(chunk)
+    }
+}
+
+impl ash_client::OperationClient for ObserveCacheRouting {
+    fn execute(
+        &self,
+        _: &ash_client::ClientRequest,
+    ) -> Result<ash_client::ClientResponse, ash_client::ClientError> {
+        Err(ash_client::ClientError::InvalidRequest(
+            "cache probe only sends Responses streams".into(),
+        ))
+    }
+
+    fn execute_streaming_with_cancellation(
+        &self,
+        request: &ash_client::ClientRequest,
+        cancellation: &CancellationToken,
+        sink: &mut dyn ash_client::OperationStreamSink,
+    ) -> Result<ash_client::ClientResponse, ash_client::ClientError> {
+        assert_eq!(
+            request.url(),
+            "https://chatgpt.com/backend-api/codex/responses"
+        );
+        let header = |name: &str| {
+            let values = request
+                .headers()
+                .iter()
+                .filter(|header| header.name().eq_ignore_ascii_case(name))
+                .map(|header| header.value())
+                .collect::<Vec<_>>();
+            assert_eq!(values.len(), 1, "expected one {name} header");
+            values[0]
+        };
+        assert!(header("authorization").starts_with("Bearer "));
+        let body: serde_json::Value = serde_json::from_slice(request.body()).unwrap();
+        assert_eq!(body["model"], "gpt-5.6-luna");
+        assert_eq!(body["reasoning"]["effort"], "low");
+        assert_eq!(body["stream"], true);
+        assert_eq!(body["store"], false);
+        assert!(body.get("prompt_cache_options").is_none());
+        assert!(body.get("prompt_cache_retention").is_none());
+        let prefix = serde_json::json!({
+            "model":body["model"],
+            "instructions":body["instructions"],
+            "firstInputItem":body["input"][0],
+            "reasoning":body["reasoning"],
+            "tools":body["tools"],
+            "toolChoice":body["tool_choice"],
+            "parallelToolCalls":body["parallel_tool_calls"],
+            "text":body["text"]
+        });
+        // Observe the production request unchanged. Retain only an account digest, never tokens.
+        let identity = CacheRoutingIdentity {
+            account_fingerprint: ContentDigest::sha256(header("chatgpt-account-id").as_bytes())
+                .to_string(),
+            session_id: header("session-id").to_owned(),
+            prompt_cache_key: body["prompt_cache_key"].as_str().unwrap().to_owned(),
+            request_prefix_fingerprint: ContentDigest::sha256(
+                &serde_json::to_vec(&prefix).unwrap(),
+            )
+            .to_string(),
+        };
+        assert_eq!(identity.session_id, identity.prompt_cache_key);
+        self.identities.lock().unwrap().push(identity);
+        let mut observer = ObserveCacheUsage {
+            sink,
+            decoder: ash_client::SseDecoder::new(1024 * 1024)?,
+            usages: &self.usages,
+        };
+        self.client
+            .execute_streaming_with_cancellation(request, cancellation, &mut observer)
     }
 }
 
@@ -359,6 +522,243 @@ fn run(
         }
         std::thread::sleep(Duration::from_millis(20));
     }
+}
+
+#[test]
+#[ignore = "Live Luna / low only; three synthetic requests and a complete local runtime reopen"]
+fn luna_cache_and_routing_identity_survive_same_thread_restart() {
+    let exchanges = observe_luna_usage_after_same_thread_restart();
+    assert!(
+        exchanges[1..].iter().all(|exchange| exchange
+            .usage
+            .cached_input_tokens
+            .is_some_and(|tokens| tokens > 0)),
+        "continuation or resumed conversation missed cache; inspect LUNA_RESUME measurements"
+    );
+}
+
+#[test]
+#[ignore = "Live Luna / low only; three synthetic requests compare wire usage with persisted totals"]
+fn luna_usage_matches_wire_and_persisted_totals_after_restart() {
+    observe_luna_usage_after_same_thread_restart();
+}
+
+fn observe_luna_usage_after_same_thread_restart() -> Vec<Exchange> {
+    let home = ash_chatgpt::codex_home().unwrap();
+    let fingerprint = auth_fingerprint(&home);
+    let identities = Arc::new(Mutex::new(Vec::new()));
+    let wire_usages = Arc::new(Mutex::new(Vec::new()));
+    let build_model = || {
+        let secrets = Arc::new(ash_secrets::MemorySecretStore::default());
+        let auth = ash_chatgpt::ChatGptOAuth::with_client(
+            home.clone(),
+            secrets.clone(),
+            Arc::new(ReadOnlyAuth),
+            ash_chatgpt::ChatGptAuthManagement::Codex,
+        );
+        let runtime = ash_model_provider::ModelProviderRuntime::with_client_and_secrets(
+            model_provider_info::ProviderConfigRegistry::builtin(),
+            Arc::new(ObserveCacheRouting {
+                client: ash_client::AshClient::new(Arc::new(
+                    ash_http_client::UreqHttpClient::new().unwrap(),
+                )),
+                identities: identities.clone(),
+                usages: wire_usages.clone(),
+            }),
+            secrets,
+        )
+        .with_chatgpt_oauth(auth);
+        Arc::new(Luna {
+            model: runtime
+                .build_model(
+                    &model_provider_info::ModelProviderConfig::for_connection(
+                        ash_protocol::ModelConnectionId::new(
+                            ash_chatgpt::CHATGPT_SUBSCRIPTION_PROVIDER_ID,
+                        )
+                        .unwrap(),
+                    ),
+                    &model_ref(),
+                )
+                .unwrap(),
+            exchanges: Mutex::new(Vec::new()),
+        })
+    };
+    let directory = tempfile::tempdir().unwrap();
+    let database = directory.path().join("history.sqlite");
+    let open_threads = || {
+        Arc::new(ThreadController::with_store(Arc::new(
+            ash_state::SqliteThreadStore::open(&database).unwrap(),
+        )))
+    };
+    let threads = open_threads();
+    let luna = build_model();
+    let executor = TurnExecutor::without_tools(threads.clone(), luna.clone());
+    let nonce = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_nanos();
+    let root = threads
+        .start_thread(
+            &NoThreadWorktreeBinder,
+            core_api::StartThreadRequest {
+                execution_target: None,
+                branch_name: None,
+                agent_id: None,
+                agent: None,
+                command_id: CommandId::new(format!("luna-resume-{nonce}")).unwrap(),
+                title: "Synthetic same-thread cache resume".into(),
+            },
+        )
+        .unwrap();
+    let corpus = (0..400).map(|index| format!("Record {index:03}: the copper archive stores a green tile, two paper maps, and a numbered wooden box.\n")).collect::<String>();
+    run(
+        &threads,
+        &executor,
+        &root.thread_id,
+        "seed",
+        format!("Fixture {nonce}. Read this synthetic reference and reply ACK.\n{corpus}"),
+    );
+    let continued = run(
+        &threads,
+        &executor,
+        &root.thread_id,
+        "continue",
+        "Continue this conversation; reply ACK.".into(),
+    );
+    let mut exchanges = std::mem::take(&mut *luna.exchanges.lock().unwrap());
+    // Discard model/auth/HTTP state as well as the loaded history. Only SQLite and observations
+    // cross this boundary, so a hit after reopening cannot rely on a retained model connection.
+    drop(executor);
+    drop(threads);
+    drop(luna);
+    let threads = open_threads();
+    let restored = threads.read_thread(&root.thread_id).unwrap();
+    assert_eq!(restored.thread_id, root.thread_id);
+    assert_eq!(restored.session_id, root.session_id);
+    assert_eq!(restored.items, continued.items);
+    assert_eq!(restored.usage, continued.usage);
+    let luna = build_model();
+    let executor = TurnExecutor::without_tools(threads.clone(), luna.clone());
+    let resumed = run(
+        &threads,
+        &executor,
+        &root.thread_id,
+        "resume",
+        "Resume this conversation after reopening history; reply ACK.".into(),
+    );
+    exchanges.append(&mut luna.exchanges.lock().unwrap());
+    assert!(
+        fingerprint == auth_fingerprint(&home),
+        "Codex credentials must remain unchanged"
+    );
+    let store = ash_state::SqliteThreadStore::open(&database).unwrap();
+    let records = thread_store::ThreadStore::load(&store, &root.thread_id)
+        .unwrap()
+        .into_iter()
+        .filter_map(|event| match event.event {
+            ash_protocol::ThreadEvent::ModelInvocationRecorded { record, .. } => Some(record),
+            _ => None,
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(records.len(), exchanges.len());
+    for (record, exchange) in records.iter().zip(&exchanges) {
+        let timing = record
+            .timing
+            .as_ref()
+            .expect("new model calls persist client timing");
+        assert_eq!(timing.text_delta_count, exchange.text_delta_count);
+        assert!(timing.text_delta_count > 0);
+        assert!(timing.first_text_us.unwrap() <= timing.total_us);
+        assert!(
+            timing
+                .first_text_us
+                .unwrap()
+                .abs_diff(exchange.first_text_us.unwrap())
+                < 250_000
+        );
+        assert!(timing.total_us.abs_diff(exchange.elapsed_ms as u64 * 1000) < 250_000);
+        eprintln!(
+            "LUNA_TIMING {}",
+            serde_json::json!({"invocationId":record.invocation_id,"timing":timing,"usage":record.usage,"independentFirstTextUs":exchange.first_text_us,"independentTotalMs":exchange.elapsed_ms,"independentTextDeltas":exchange.text_delta_count})
+        );
+    }
+    drop(store);
+    let identities = identities.lock().unwrap();
+    let wire_usages = wire_usages.lock().unwrap();
+    assert_eq!(exchanges.len(), 3);
+    assert_eq!(identities.len(), exchanges.len());
+    assert_eq!(wire_usages.len(), exchanges.len());
+    for (((label, exchange), identity), wire) in ["seed", "continue", "resume"]
+        .into_iter()
+        .zip(&exchanges)
+        .zip(identities.iter())
+        .zip(wire_usages.iter())
+    {
+        eprintln!(
+            "LUNA_RESUME {}",
+            serde_json::json!({"case":label,"threadId":root.thread_id,"sessionId":root.session_id,"routing":identity,"inputTokens":exchange.usage.input_tokens,"cachedTokens":exchange.usage.cached_input_tokens,"cacheWriteTokens":exchange.usage.cache_write_input_tokens,"outputTokens":exchange.usage.output_tokens,"reasoningTokens":exchange.usage.reasoning_tokens,"rawUsage":wire,"elapsedMs":exchange.elapsed_ms})
+        );
+        for (normalized, pointer) in [
+            (exchange.usage.input_tokens, "/input_tokens"),
+            (exchange.usage.output_tokens, "/output_tokens"),
+            (
+                exchange.usage.cached_input_tokens,
+                "/input_tokens_details/cached_tokens",
+            ),
+            (
+                exchange.usage.cache_write_input_tokens,
+                "/input_tokens_details/cache_write_tokens",
+            ),
+            (
+                exchange.usage.reasoning_tokens,
+                "/output_tokens_details/reasoning_tokens",
+            ),
+        ] {
+            assert_eq!(
+                normalized,
+                wire.pointer(pointer).and_then(serde_json::Value::as_u64)
+            );
+        }
+        assert_eq!(
+            wire["total_tokens"].as_u64(),
+            Some(wire["input_tokens"].as_u64().unwrap() + wire["output_tokens"].as_u64().unwrap())
+        );
+        assert_eq!(identity, &identities[0]);
+        assert_eq!(identity.session_id, root.session_id.as_str());
+        assert_eq!(
+            exchange.request.prompt_cache_key.as_deref(),
+            Some(identity.prompt_cache_key.as_str())
+        );
+    }
+    assert_eq!(resumed.usage.model_invocations, 3);
+    for (metric, pointer) in [
+        (&resumed.usage.input_tokens, "/input_tokens"),
+        (&resumed.usage.output_tokens, "/output_tokens"),
+        (
+            &resumed.usage.cached_input_tokens,
+            "/input_tokens_details/cached_tokens",
+        ),
+        (
+            &resumed.usage.cache_write_input_tokens,
+            "/input_tokens_details/cache_write_tokens",
+        ),
+        (
+            &resumed.usage.reasoning_tokens,
+            "/output_tokens_details/reasoning_tokens",
+        ),
+    ] {
+        let values = wire_usages
+            .iter()
+            .map(|wire| wire.pointer(pointer).and_then(serde_json::Value::as_u64))
+            .collect::<Vec<_>>();
+        assert_eq!(metric.reported, values.iter().flatten().sum::<u64>());
+        assert_eq!(metric.complete, values.iter().all(Option::is_some));
+    }
+    eprintln!(
+        "LUNA_ACCOUNTING {}",
+        serde_json::to_string(&resumed.usage).unwrap()
+    );
+    exchanges
 }
 
 #[test]

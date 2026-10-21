@@ -1777,6 +1777,57 @@ fn provider_measurement_capability_is_model_specific() {
 }
 
 #[test]
+fn meta_remote_input_count_requires_the_declared_public_endpoint() {
+    let transport = Arc::new(CapturingTransport::new(json!({"input_tokens": 200})));
+    let runtime = ModelProviderRuntime::builtin_with_client(transport.clone());
+    let model = runtime
+        .build_model(
+            &provider_config("meta"),
+            &model_ref("meta", "muse-spark-1.3"),
+        )
+        .unwrap();
+    assert_eq!(
+        model.input_token_measurement_capability(),
+        ContextTokenMeasurementCapability::Remote
+    );
+    let ContextTokenMeasurementOutcome::Measured(measurement) =
+        model.measure_input(&ModelRequest::text("hello")).unwrap()
+    else {
+        panic!("expected remote count");
+    };
+    assert_eq!(measurement.measured_input().get(), 200);
+    assert_eq!(measurement.accounted_input().get(), 232);
+    let (endpoint, _, body) = transport.request.lock().unwrap().clone().unwrap();
+    assert_eq!(endpoint, "https://api.meta.ai/v1/responses/input_tokens");
+    assert_eq!(body["model"], "muse-spark-1.3");
+    for (provider, model) in [
+        ("meta", "muse-spark-1.3"),
+        ("deepseek", "deepseek-chat"),
+        ("xai", "grok-4.7"),
+    ] {
+        let custom = runtime
+            .build_model(
+                &provider_config_with_endpoint(provider, "https://proxy.test/v1"),
+                &model_ref(provider, model),
+            )
+            .unwrap();
+        assert_eq!(
+            custom.input_token_measurement_capability(),
+            ContextTokenMeasurementCapability::Unavailable
+        );
+        assert_eq!(
+            custom.measure_input(&ModelRequest::text("hello")).unwrap(),
+            ContextTokenMeasurementOutcome::Unavailable
+        );
+    }
+    // No hidden preflight was sent for a compatible endpoint without declared support.
+    assert_eq!(
+        transport.request.lock().unwrap().as_ref().unwrap().0,
+        endpoint
+    );
+}
+
+#[test]
 fn google_custom_invocation_endpoint_does_not_guess_a_native_count_url() {
     let runtime = ModelProviderRuntime::builtin();
     let model = runtime

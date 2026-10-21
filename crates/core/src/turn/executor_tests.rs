@@ -3031,6 +3031,7 @@ impl ContextCompactionService for FixedOverflowCompaction {
         _: &CancellationToken,
         _: &mut dyn FnMut(
             Option<ModelUsage>,
+            Option<ash_protocol::ModelInvocationTiming>,
         ) -> Result<core_api::ModelInvocationReceipt, CoreError>,
     ) -> Result<crate::ContextCompactionResult, CoreError> {
         self.calls.fetch_add(1, Ordering::Relaxed);
@@ -3072,6 +3073,7 @@ impl ContextCompactionService for BlockingOverflowCompaction {
         cancellation: &CancellationToken,
         _: &mut dyn FnMut(
             Option<ModelUsage>,
+            Option<ash_protocol::ModelInvocationTiming>,
         ) -> Result<core_api::ModelInvocationReceipt, CoreError>,
     ) -> Result<crate::ContextCompactionResult, CoreError> {
         self.entered.store(true, Ordering::Relaxed);

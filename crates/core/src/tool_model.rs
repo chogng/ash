@@ -174,15 +174,18 @@ impl ToolModel {
             },
             &model_request,
         );
+        let mut timing = crate::diagnostic_model::InvocationTimer::start();
         let response = model.stream(
             selection,
             &model_request,
             cancellation,
             &mut crate::diagnostic_model::DiagnosticStream {
+                timing: &mut timing,
                 attempt: &mut attempt,
                 downstream: None,
             },
         );
+        let timing = timing.finish(response.as_ref().ok());
         crate::diagnostic_model::finish_attempt(&mut attempt, &response);
         let completed = timestamp()?;
         let receipt = self.threads.record_model_invocation_for_tool(
@@ -202,6 +205,7 @@ impl ToolModel {
             None,
             started,
             completed,
+            Some(timing),
             Some(request.call_id.clone()),
             match &response {
                 Ok(_) => ash_protocol::ModelInvocationOutcome::Completed,

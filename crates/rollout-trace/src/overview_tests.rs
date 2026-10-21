@@ -28,6 +28,7 @@ fn trace(events: Vec<StoredEvent>) -> RolloutTrace {
         diagnostics: None,
         graph: None,
         overview: None,
+        performance: None,
     }
 }
 

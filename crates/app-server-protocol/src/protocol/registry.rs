@@ -2789,6 +2789,8 @@ use ash_protocol::ModelInvocationOutcome;
 #[cfg(any(test, feature = "export"))]
 use ash_protocol::ModelInvocationRecord;
 #[cfg(any(test, feature = "export"))]
+use ash_protocol::ModelInvocationTiming;
+#[cfg(any(test, feature = "export"))]
 use ash_protocol::ModelMoneyAmount;
 #[cfg(any(test, feature = "export"))]
 use ash_protocol::ModelOutputTransport;
@@ -6953,6 +6955,7 @@ typescript_bindings! {
     ModelInvocationId,
     ModelInvocationOutcome,
     ModelInvocationRecord,
+    ModelInvocationTiming,
     ModelMoneyAmount,
     ModelReferenceCostReason,
     ModelReferenceCostRecord,

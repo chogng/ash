@@ -1335,15 +1335,18 @@ impl TurnExecutor {
                     },
                     &request,
                 );
+                let mut timing = crate::diagnostic_model::InvocationTimer::start();
                 let response = self.model.stream(
                     model,
                     &request,
                     cancellation,
                     &mut crate::diagnostic_model::DiagnosticStream {
+                        timing: &mut timing,
                         attempt: &mut attempt,
                         downstream: Some(&mut stream),
                     },
                 );
+                let timing = timing.finish(response.as_ref().ok());
                 crate::diagnostic_model::finish_attempt(&mut attempt, &response);
                 match response {
                     Ok(response) => {
@@ -1360,6 +1363,7 @@ impl TurnExecutor {
                                 harness_context.time_context().cloned(),
                                 started_at_unix_ms,
                                 current_unix_ms().map_err(ExecutionFailure::model)?,
+                                Some(timing),
                             )
                             .map_err(ExecutionFailure::persistence)?;
                         if let Some(attempt) = &mut attempt {
@@ -1750,7 +1754,7 @@ impl TurnExecutor {
             .map_err(ExecutionFailure::service)?;
         let started_at_unix_ms = current_unix_ms().map_err(ExecutionFailure::model)?;
         let result = {
-            let mut record_model_usage = |usage| {
+            let mut record_model_usage = |usage, timing| {
                 let recorded = self.threads.record_model_invocation(
                     thread_id,
                     turn_id,
@@ -1762,6 +1766,7 @@ impl TurnExecutor {
                     None,
                     started_at_unix_ms,
                     current_unix_ms()?,
+                    timing,
                 );
                 match recorded {
                     Ok(receipt) => {

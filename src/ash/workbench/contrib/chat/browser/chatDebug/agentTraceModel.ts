@@ -2,7 +2,7 @@ import type { ChatDebugFilterState } from './chatDebugFilters.js';
 import { isRecord } from '../../../../../base/common/types.js';
 import { localize } from '../../../../../nls.js';
 import type { ObjectTreeElement } from '../../../../../base/browser/ui/tree/objectTreeModel.js';
-import { diagnosticPayload, type AgentTrace, type AgentTraceEvent, type AgentTraceDiagnosticEvent, type AgentTraceNode, type AgentTracePayloadRef } from '../../common/chatDebugEvents.js';
+import { diagnosticPayload, performanceKey, type InvocationPerformance, type PerformanceDuration, type PerformanceUnknownReason, type AgentTrace, type AgentTraceEvent, type AgentTraceDiagnosticEvent, type AgentTraceNode, type AgentTracePayloadRef } from '../../common/chatDebugEvents.js';
 
 export interface SavedTraceRelation {
 	readonly kind: string;
@@ -20,6 +20,7 @@ export interface TraceEntry {
 	readonly key?: string;
 	readonly record?: AgentTraceEvent;
 	readonly diagnostic?: AgentTraceDiagnosticEvent;
+	readonly performance?: InvocationPerformance;
 	readonly failed: boolean;
 }
 
@@ -44,6 +45,7 @@ export class AgentTraceViewModel {
 		this.entriesByKey.clear();
 		this.eventCount = 0;
 		this.savedRelations.clear();
+		const performance = new Map(trace?.performance?.calls.map(call => [performanceKey(call.threadId, call.eventId), call]));
 		const threads = new Map<string, { element: TraceEntry; children: ObjectTreeElement<TraceEntry>[]; collapsed: boolean; }>();
 		for (const thread of trace?.threads ?? []) {
 			const created = thread.events.find(record => record.event.type === 'threadCreated')?.event;
@@ -61,10 +63,11 @@ export class AgentTraceViewModel {
 		const turns = new Map<string, { element: TraceEntry; children: ObjectTreeElement<TraceEntry>[]; collapsed: boolean; }>();
 		const add = (threadId: string, raw: AgentTraceEvent | AgentTraceDiagnosticEvent, diagnostic: boolean): void => {
 			let entry = this.records.get(raw);
-			if (!entry) {
+			const metrics = diagnostic ? undefined : performance.get(performanceKey(threadId, raw.eventId));
+			if (!entry || entry.performance !== metrics) {
 				const turnId = diagnostic ? (raw as AgentTraceDiagnosticEvent).turnId ?? undefined : typeof raw.event.turnId === 'string' ? raw.event.turnId : isRecord(raw.event.run) && typeof raw.event.run.turnId === 'string' ? raw.event.run.turnId : isRecord(raw.event.seed) && typeof raw.event.seed.parentTurnId === 'string' ? raw.event.seed.parentTurnId : undefined;
 				const record: AgentTraceEvent = diagnostic ? { ...raw, event: { ...raw.event, threadId, turnId } } : raw as AgentTraceEvent;
-				entry = { id: JSON.stringify([diagnostic ? 'diagnostic' : 'durable', threadId, raw.sequence]), kind: 'event', threadId, turnId, key: diagnostic ? `diagnostic:${raw.sequence}` : `${threadId}:${raw.sequence}`, record, diagnostic: diagnostic ? raw as AgentTraceDiagnosticEvent : undefined, label: compactEventLabel(record), failed: eventIsError(record) };
+				entry = { id: JSON.stringify([diagnostic ? 'diagnostic' : 'durable', threadId, raw.sequence]), kind: 'event', threadId, turnId, key: diagnostic ? `diagnostic:${raw.sequence}` : `${threadId}:${raw.sequence}`, record, diagnostic: diagnostic ? raw as AgentTraceDiagnosticEvent : undefined, performance: metrics, label: compactEventLabel(record, metrics), failed: eventIsError(record) };
 				this.records.set(raw, entry);
 			}
 			this.entries.set(entry.id, entry);
@@ -129,7 +132,7 @@ export class AgentTraceViewModel {
 			if (!entry.record) { continue; }
 			let text = this.searchText.get(entry);
 			if (state.hasTextTerms && text === undefined) {
-				text = `${entry.threadId} ${entry.turnId ?? ''} ${eventLabel(entry.record)} ${JSON.stringify(entry.record)}`.toLowerCase();
+				text = `${entry.threadId} ${entry.turnId ?? ''} ${eventLabel(entry.record, entry.performance)} ${JSON.stringify(entry.record)}`.toLowerCase();
 				this.searchText.set(entry, text);
 			}
 			if (state.matches(entry.record, entry.turnId, entry.failed, text ?? '')) {
@@ -263,8 +266,8 @@ export class AgentTraceViewModel {
 	}
 }
 
-function compactEventLabel(record: AgentTraceEvent): string {
-	const full = eventLabel(record);
+function compactEventLabel(record: AgentTraceEvent, performance?: InvocationPerformance): string {
+	const full = eventLabel(record, performance);
 	const label = full.slice(full.indexOf(' · ') + 3, full.lastIndexOf(' · ' + new Date(record.recordedAt).toISOString()));
 	if (record.event.type.startsWith('modelAttempt') || record.event.type === 'modelRequestPrepared' || (isRecord(record.event.item) && record.event.item.type === 'toolResult')) { return label.split(' · ')[0]; }
 	return label;
@@ -276,7 +279,7 @@ function eventIsError(record: AgentTraceEvent): boolean {
 	return event.type === 'modelAttemptFailed' || event.type === 'modelAttemptAbandoned' || event.type === 'turnFailed' || (event.type === 'modelResponseEvaluated' && isRecord(event.decision) && event.decision.action === 'fail') || (event.type === 'turnInterrupted' && isRecord(event.error)) || (isRecord(event.item) && event.item.isError === true) || (isRecord(event.record) && event.record.outcome === 'failed');
 }
 
-export function eventLabel(record: AgentTraceEvent): string {
+export function eventLabel(record: AgentTraceEvent, performance?: InvocationPerformance): string {
 	const event = record.event;
 	const item = isRecord(event.item) ? event.item : undefined;
 	const invocation = isRecord(event.record) ? event.record : undefined;
@@ -329,12 +332,42 @@ export function eventLabel(record: AgentTraceEvent): string {
 			if (typeof usage?.inputTokens === 'number' && typeof usage.outputTokens === 'number') {
 				detail += localize('agentTrace.tokens', ' · {0} input / {1} output tokens', usage.inputTokens, usage.outputTokens);
 			}
+			detail += ' · ' + invocationTimingLabel(performance);
 			break;
 		}
 		default: detail = typeof item?.type === 'string' ? item.type : event.type;
 	}
-	const duration = invocation && typeof invocation.startedAtUnixMs === 'number' && typeof invocation.completedAtUnixMs === 'number' && invocation.completedAtUnixMs >= invocation.startedAtUnixMs ? ` · ${invocation.completedAtUnixMs - invocation.startedAtUnixMs} ms` : '';
-	return `${record.sequence} · ${detail} · ${new Date(record.recordedAt).toISOString()}${duration}`;
+	return `${record.sequence} · ${detail} · ${new Date(record.recordedAt).toISOString()}`;
+}
+
+export function invocationTimingLabel(performance: InvocationPerformance | undefined): string {
+	const unknown = (reason: PerformanceUnknownReason | undefined) => localize('agentTrace.performanceUnknown', 'unknown ({0})', performanceUnknownLabel(reason));
+	const duration = (metric: PerformanceDuration | undefined): string => {
+		if (!metric || metric.type === 'unknown') { return unknown(metric?.reason); }
+		// Unit formatting only. All eligibility, intervals and rate rounding belong to rollout-trace.
+		const tenths = (BigInt(metric.microseconds) + 50n) / 100n;
+		return localize('agentTrace.metricMs', '{0} ms', `${tenths / 10n}.${tenths % 10n}`);
+	};
+	const rate = performance?.textTps;
+	return localize('agentTrace.clientTiming', 'Client timing: first text {0} / generation {1} / total {2} · Text TPS (estimate): {3}', duration(performance?.firstText), duration(performance?.generation), duration(performance?.total), rate?.type === 'estimated' ? localize('agentTrace.metricTps', '{0} tok/s', rate.tokensPerSecond) : unknown(rate?.reason));
+}
+
+function performanceUnknownLabel(reason: PerformanceUnknownReason | undefined): string {
+	switch (reason) {
+		case undefined: return localize('agentTrace.performanceNotIncluded', 'performance not included in capture');
+		case 'missingTiming': return localize('agentTrace.performanceMissingTiming', 'timing not recorded');
+		case 'noTextDeltas': return localize('agentTrace.performanceNoText', 'no body text deltas');
+		case 'inconsistentTiming': return localize('agentTrace.performanceInvalidTiming', 'inconsistent timing');
+		case 'requestNotCompleted': return localize('agentTrace.performanceNotCompleted', 'request did not complete');
+		case 'singleTextDelta': return localize('agentTrace.performanceSingleDelta', 'only one body text delta');
+		case 'toolOutput': return localize('agentTrace.performanceToolOutput', 'output includes tool arguments');
+		case 'missingUsage': return localize('agentTrace.performanceMissingUsage', 'usage not reported');
+		case 'missingOutputTokens': return localize('agentTrace.performanceMissingOutput', 'output tokens not reported');
+		case 'missingReasoningTokens': return localize('agentTrace.performanceMissingReasoning', 'reasoning tokens not reported');
+		case 'inconsistentTokenUsage': return localize('agentTrace.performanceInvalidTokens', 'inconsistent token usage');
+		case 'noTextOutputTokens': return localize('agentTrace.performanceNoTokens', 'no non-reasoning output tokens');
+		case 'zeroGenerationDuration': return localize('agentTrace.performanceZeroDuration', 'zero generation duration');
+	}
 }
 
 function phaseLabel(phase: unknown): string {

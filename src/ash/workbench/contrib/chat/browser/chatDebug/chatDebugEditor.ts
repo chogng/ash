@@ -50,7 +50,7 @@ import type { ITextModel } from '../../../../../editor/common/model.js';
 import { CodeEditorWidget } from '../../../../../editor/browser/widget/codeEditor/codeEditorWidget.js';
 import { ChatDebugFilterState, type ChatDebugEventKind } from './chatDebugFilters.js';
 import { ChatDebugOverviewView } from './chatDebugOverviewView.js';
-import { AgentTraceViewModel, eventLabel, recordingLabel, evidenceLabel, hookStatusLabel, relationLabel, type TraceEntry } from './agentTraceModel.js';
+import { AgentTraceViewModel, eventLabel, invocationTimingLabel, recordingLabel, evidenceLabel, hookStatusLabel, relationLabel, type TraceEntry } from './agentTraceModel.js';
 
 type DetailTab = 'overview' | 'input' | 'output' | 'relations' | 'raw';
 interface TraceRelation { readonly id: string; readonly label: string; readonly target?: TraceEntry; readonly kind?: string; readonly outgoing?: boolean; }
@@ -273,7 +273,7 @@ export class ChatDebugEditor extends EditorPane implements IEditorPane {
 				if (entry.key) { root.dataset.key = entry.key; }
 				if (entry.record) { root.dataset.eventId = entry.record.eventId; }
 				const type = entry.record?.event.type;
-				const label = new IconLabel(root, { label: entry.label, description: entry.description, icon: entry.kind === 'thread' ? Lxicon.chat1 : type?.startsWith('model') ? Lxicon.sparkle : isRecord(entry.record?.event.item) && String(entry.record.event.item.type).startsWith('tool') ? Lxicon.terminal : Lxicon.history, title: [entry.threadId, entry.turnId, entry.record?.eventId, entry.record && eventLabel(entry.record)].filter(Boolean).join(' · ') });
+				const label = new IconLabel(root, { label: entry.label, description: entry.description, icon: entry.kind === 'thread' ? Lxicon.chat1 : type?.startsWith('model') ? Lxicon.sparkle : isRecord(entry.record?.event.item) && String(entry.record.event.item.type).startsWith('tool') ? Lxicon.terminal : Lxicon.history, title: [entry.threadId, entry.turnId, entry.record?.eventId, entry.record && eventLabel(entry.record, entry.performance)].filter(Boolean).join(' · ') });
 				this.rowLabels.set(root, label);
 				if (entry.failed) {
 					const failure = h(document, 'span', { className: 'ash-agent-trace-failure' });
@@ -642,7 +642,7 @@ export class ChatDebugEditor extends EditorPane implements IEditorPane {
 				const error = event.error ?? (isRecord(event.item) && event.item.isError ? event.item.text : undefined);
 				field(localize('agentTrace.errorField', 'Error'), isRecord(error) ? error.message ?? error.type : error);
 				if (isRecord(event.decision)) {
-					field(localize('agentTrace.decisionField', 'Decision'), eventLabel(entry.record));
+					field(localize('agentTrace.decisionField', 'Decision'), eventLabel(entry.record, entry.performance));
 				}
 				if (entry.diagnostic?.event.type === 'hookRunRecorded') {
 					field(localize('agentTrace.hookRunId', 'Hook run ID'), entry.diagnostic.event.runId);
@@ -659,7 +659,7 @@ export class ChatDebugEditor extends EditorPane implements IEditorPane {
 				}
 				field(localize('agentTrace.modelField', 'Model'), invocation?.resolvedModel);
 				field(localize('agentTrace.outcomeField', 'Outcome'), invocation?.outcome);
-				if (typeof invocation?.startedAtUnixMs === 'number' && typeof invocation.completedAtUnixMs === 'number' && invocation.completedAtUnixMs >= invocation.startedAtUnixMs) { field(localize('agentTrace.durationField', 'Model duration (ms)'), invocation.completedAtUnixMs - invocation.startedAtUnixMs); }
+				if (event.type === 'modelInvocationRecorded') { field(localize('agentTrace.performanceField', 'Performance'), invocationTimingLabel(entry.performance)); }
 				if (isRecord(invocation?.usage)) {
 					for (const [key, value] of Object.entries(invocation.usage)) { if (typeof value === 'number') { field(key, value); } }
 				}
@@ -818,7 +818,7 @@ export class ChatDebugEditor extends EditorPane implements IEditorPane {
 		const visit = (nodes: readonly import('../../../../../base/browser/ui/tree/objectTreeModel.js').ObjectTreeNode<TraceEntry>[]): void => {
 			for (const node of nodes) {
 				if (!node.visible) { continue; }
-				lines.push(node.element.record ? eventLabel(node.element.record) : node.element.label);
+				lines.push(node.element.record ? eventLabel(node.element.record, node.element.performance) : node.element.label);
 				visit(node.children);
 			}
 		};

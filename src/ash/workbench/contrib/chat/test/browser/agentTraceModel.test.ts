@@ -3,10 +3,31 @@ import assert from 'node:assert/strict';
 import { suite, test } from 'mocha';
 import { resetNlsResolver, setNlsMessages } from '../../../../../nls.js';
 import { productLanguagePackCatalogs } from '../../../../services/localization/common/localizationCatalogs.js';
-import { AgentTraceViewModel, evidenceLabel, hookStatusLabel, recordingLabel, relationLabel } from '../../browser/chatDebug/agentTraceModel.js';
-import type { AgentTrace } from '../../common/chatDebugEvents.js';
+import { AgentTraceViewModel, eventLabel, evidenceLabel, hookStatusLabel, recordingLabel, relationLabel } from '../../browser/chatDebug/agentTraceModel.js';
+import type { AgentTrace, AgentTraceEvent, InvocationPerformance } from '../../common/chatDebugEvents.js';
 
 suite('Execution Trace saved execution flow', () => {
+
+	test('renders backend performance and reasons without recalculating raw invocation facts', () => {
+		const record: AgentTraceEvent = { eventId: 'e', sequence: 1, recordedAt: 0, event: { type: 'modelInvocationRecorded', threadId: 'thread', turnId: 'turn', record: { invocationId: 'call', timing: { totalUs: 1, firstTextUs: 10 }, usage: { outputTokens: 1, reasoningTokens: 999 } } } };
+		const performance: InvocationPerformance = { threadId: 'thread', turnId: 'turn', eventId: 'e', invocationId: 'call', total: { type: 'measured', microseconds: '2500000' }, firstText: { type: 'measured', microseconds: '500000' }, generation: { type: 'measured', microseconds: '2000000' }, textTps: { type: 'estimated', tokensPerSecond: '50.0' } };
+		assert.match(eventLabel(record, performance), /first text 500.0 ms \/ generation 2000.0 ms \/ total 2500.0 ms.*50.0 tok\/s/);
+		assert.match(eventLabel(record, { ...performance, textTps: { type: 'unknown', reason: 'missingReasoningTokens' } }), /unknown \(reasoning tokens not reported\)/);
+		assert.match(eventLabel(record), /unknown \(performance not included in capture\)/);
+		const model = new AgentTraceViewModel();
+		const trace: AgentTrace = { formatVersion: 3, sessionId: 's', threads: [{ threadId: 'thread', events: [record] }], historyPrefixes: [] };
+		model.update(trace);
+		assert.match(model.findEvent('thread', 'turn', 'e')!.label, /performance not included/);
+		model.update({ ...trace, performance: { formatVersion: 1, calls: [performance] } });
+		assert.match(model.findEvent('thread', 'turn', 'e')!.label, /50.0 tok\/s/);
+		const catalog = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
+		setNlsMessages(catalog.locale, catalog.bundles);
+		try {
+			assert.match(eventLabel(record, performance), /客户端计时：首正文 500.0 毫秒 \/ 生成 2000.0 毫秒 \/ 总计 2500.0 毫秒.*正文 TPS（估算）：50.0 token\/秒/);
+			assert.match(eventLabel(record, { ...performance, textTps: { type: 'unknown', reason: 'missingReasoningTokens' } }), /未知（未上报思考 token）/);
+		} finally { resetNlsResolver(); }
+	});
+
 	test('links receipts to the exact committed invocation and leaves mismatches unknown', () => {
 		const model = new AgentTraceViewModel();
 		const ledger = { eventId: 'ledger', sequence: 9, recordedAt: 1, event: { type: 'modelInvocationRecorded', threadId: 'root', turnId: 'turn', record: { invocationId: 'committed' } } };

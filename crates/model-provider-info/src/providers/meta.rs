@@ -1,5 +1,9 @@
 use super::default_provider;
-use crate::{ApiProfile, ProviderAdapter, ProviderDefinition};
+use crate::ApiProfile;
+use crate::InputTokenCountDefinition;
+use crate::InputTokenCountProfile;
+use crate::ProviderAdapter;
+use crate::ProviderDefinition;
 
 pub(super) fn definition() -> ProviderDefinition {
     // Meta documents Responses compatibility, including streaming and tool calls:
@@ -12,4 +16,8 @@ pub(super) fn definition() -> ProviderDefinition {
         "https://api.meta.ai/v1",
     )
     .with_native_streaming()
+    .with_input_token_count(InputTokenCountDefinition::provider_default(
+        InputTokenCountProfile::OpenAiResponses,
+        "https://api.meta.ai/v1",
+    ))
 }

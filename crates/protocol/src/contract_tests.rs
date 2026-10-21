@@ -416,6 +416,7 @@ fn model_invocation_fact_keeps_exact_cost_strings() {
             }),
             started_at_unix_ms: 100,
             completed_at_unix_ms: 120,
+            timing: None,
             outcome: ModelInvocationOutcome::Completed,
             usage: None,
             input_estimate: None,
@@ -434,6 +435,16 @@ fn model_invocation_fact_keeps_exact_cost_strings() {
 
     let json = serde_json::to_value(event).unwrap();
     assert_eq!(json["type"], "modelInvocationRecorded");
+    let legacy: ThreadEvent = serde_json::from_value(json.clone()).unwrap();
+    let ThreadEvent::ModelInvocationRecorded { record, .. } = legacy else {
+        panic!("invocation event");
+    };
+    assert_eq!(record.timing, None);
+    let mut timed_json = json.clone();
+    timed_json["record"]["timing"] = serde_json::json!({"totalUs":20000,"firstTextUs":5000,"textDeltaCount":2,"toolCallCount":0});
+    let timed: ThreadEvent = serde_json::from_value(timed_json.clone()).unwrap();
+    assert_eq!(serde_json::to_value(timed).unwrap(), timed_json);
+
     assert_eq!(
         json["record"]["referenceCost"]["cost"]["amount"]["picoUnits"],
         "2548000000"
