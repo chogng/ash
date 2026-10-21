@@ -122,11 +122,25 @@ macOS 现场检查未发现 tgrep；所见多组 `npm exec @playwright/mcp` 的�
 
 ## Stanza 编辑器 · TODO
 
+当前 Editor 待办统一维护于本节，完成后移除；不再续写 API 对齐台账或维护声明完成数量。以下由旧记录归并，尚未逐项重跑；复核项先确认当前调用方与行为，历史失败和成员差异不直接视为现存缺陷。
+
+- [ ] **复核 · 配置与语言身份**：核对配置节点／默认 override、语言身份及语言配置的生产调用链，确认是否仍有并行 owner；已完成的配置 registry 迁移不重复实施。
+- [ ] **复核 · 文本模型与光标**：沿 `TextModel`、`ViewModel`、`CursorsController` 检查编辑、选区与撤销的剩余公开契约，保留唯一模型与历史 owner；只补真实消费者需要的行为，不为上游私有结构或成员数量增加转发层。
+- [ ] **复核 · 输入生命周期与辅助阅读**：确认输入实例的构造／释放已完整归属 `View`，再核对 Native EditContext、Textarea fallback、简单／富屏幕阅读内容的构造与事件链；验证 IME、失焦取消、剪贴板、系统选区及迟到事件。物理 IME 与屏幕阅读器现场验收沿下方平台组合任务执行。
+- [ ] **布局前置 · 视图与滚动**：从真实布局、指针和滚轮入口核对 `ViewLayout`、`ViewLine`、覆盖层、小地图、滚动条和 Overview Ruler 的 owner 与缺失契约；不得为 `getDomNode` 等成员新造 DOM wrapper 或第二份滚动状态。
+- [ ] **复核 · Widget 与 Diff／MultiDiff 宿主**：核对 `CodeEditorWidget` 的模型切换、稳定身份、贡献与外部 Widget 释放，以及 Diff／MultiDiff 的实际服务调用；按行为确认旧记录中的同名职责问题是否仍存在。
+- [ ] **复核 · 语言功能控件**：按现有生产入口逐项核对 Peek、Code Action、CodeLens、Find、Folding、颜色检测／选择和 Sticky Scroll 的剩余契约；重点确认 Sticky Scroll 的定义查询与高度事件消费者，避免重复实现已接通能力。
+- [ ] **复核 · 格式化与资源级 Worker**：确认默认格式化器选择、冲突选择界面、输入格式化自动触发及资源级 worker 的当前生产链；旧记录存在先后修正，须先核对实际缺口，再验证取消、语言切换、多选区和一次撤销。
+- [ ] **验收 · 补全、提示与片段**：验证 Suggest 的触发／调度／事件、Inline Completions 的接受与取消、Inlay Hints 的行内布局／展示选项，以及 Snippet 的合并和插入选项；覆盖模型切换、只读和撤销。
+- [ ] **复核 · 批量编辑预览与撤销**：确认批量预览的分类／实时差异及平台 UndoRedoService／UndoRedoSource 接入是否有当前产品消费者，再确定实施范围；保留现有事务、回滚与顺序快照的唯一 owner。
+- [ ] **验收 · GPU 渲染**：补 GPU 样式缓存中 `undefined` 与 `false`／`0` 的区分场景，连同行几何、字体与主题变化检查；旧文件和成员差异报告不作为渲染通过证据。
+- [ ] **复核 · Editor 完整回归**：复跑受本轮范围影响的现有 Editor 检查，确认旧 Windows URI-list 路径断言、测试产物缺失及 Electron 中文重启关闭超时是否仍可复现；已被后续修复覆盖的旧失败直接移除，不把历史记录当作当前阻塞。新行为通过 Ash 自身对应入口验收。
+
 - [ ] **功能 · 文献检索扩展**：后续实现查询、元数据获取及向文献管理扩展入库的工具／Skill 链路，PDF 阅读复用独立查看器；作者接入遵循上方扩展 SDK 任务。Agent 结构化文档写入仍按下方 Work 文档服务契约另行实施。尚未新增检索代码或迁仓。
 
-- [ ] **验收 · 编辑器扩展平台组合**：在真实 Electron 多窗口／远端环境验收 Academy、可选 Reference Manager／PDF Viewer 外置签名包与 Code 产品预装扩展的装载、版本匹配、dirty／恢复及释放，并补物理 IME、屏幕阅读器、跨页输入以及目标 Word 打开／编辑／再次保存的互通验收。PDF 查看器独立包迁移及本机验证见[扩展说明](extensions/pdf-viewer/README.md)，拆分本身不再列为待办。文献管理的本机验证范围见 [Reference Manager](extensions/reference-manager/README.md)。已完成的迁移、纵向分页、分节、DOCX／页面图像 PDF 与块级审阅，以及本机真实 Provider／Chromium 验证记录归[路线图](docs/design/editor-roadmap.md)维护，不再列作功能待办；这些结果不能替代尚缺的真实环境证据。
+- [ ] **验收 · 编辑器扩展平台组合**：在真实 Electron 多窗口／远端环境验收 Academy、可选 Reference Manager／PDF Viewer 外置签名包的装载、版本匹配、dirty／恢复及释放，同时验收客户端内置 Code 的编辑与共享宿主生命周期，并补物理 IME、屏幕阅读器、跨页输入以及目标 Word 打开／编辑／再次保存的互通验收。PDF 查看器独立包迁移及本机验证见[扩展说明](extensions/pdf-viewer/README.md)，拆分本身不再列为待办。文献管理的本机验证范围见 [Reference Manager](extensions/reference-manager/README.md)。已完成的迁移、纵向分页、分节、DOCX／页面图像 PDF 与块级审阅的支持范围见 [Academy 包说明](extensions/academic/README.md)，不再列作功能待办；本机结果不能替代尚缺的真实环境证据。
 
-后续阶段由[编辑器路线图](docs/design/editor-roadmap.md)维护；本清单不再把整条路线图重复记成一个未完成任务。
+设计边界与功能依赖见[编辑器设计与演进](docs/design/editor-roadmap.md)；具体工作仅维护于本清单，不把整篇设计当作一个未完成任务。
 
 ## Work / 通用文档 · TODO
 
@@ -165,6 +179,20 @@ macOS 现场检查未发现 tgrep；所见多组 `npm exec @playwright/mcp` 的�
 | Sessions 跨客户端审阅与 provider changeset | 当前 read marker 只属于窗口并绑定 revision。需要跨客户端 reviewed-file、transient/provider changeset、隔离或反馈评论时，先确定共享领域契约和真实消费者，不因上游身份模型不同新增 facade。                                                                                                                                                                                                                  |
 | Configuration 其他契约                     | configuration variables、Remote User、缓存默认值／实验覆盖、跨 profile 规则，以及 registry／schema、typed parse/serialize、控件描述与 `ashBinding` 均按具体调用需求复核，不按上游成员表整体补齐；Rust `config.toml` 的编辑入口仍归其宿主。设置呈现与接入规则见 [Settings 接入边界](src/ash/workbench/contrib/preferences/README.md#当前实现)。                                                             |
 | 托管策略强制新鲜度门禁                     | 当前生产账户映射仅 `ChatDefaultModel`；未接入 `forceRemoteSettingsRefresh`、跨重启的刷新要求或执行端门禁。若纳入企业治理，先确定 Ash 管理来源、作用域、启动／重载要求及 App Server 执行 owner，再贯通 pending／blocked／satisfied、显式恢复和跨端校验；普通网络失败不自动升级为全产品 AI 禁用，Renderer 禁用输入不作为执行端强制保证。                                                                     |
+
+### 文本存储与语言覆盖
+
+未排期候选：增量压缩与更广的 parser 级语言覆盖。分别先取得文本存储的空间／编辑延迟数据，或明确某种语言与真实 Provider 消费者的能力缺口，再决定是否进入实施；不因上游 API 存在而补接口，不让解析进入同步输入热路径。
+
+### Academy 后续能力
+
+以下由旧路线图归并，均未排期；选择具体用户场景后再转为上方可执行任务，不能按整份功能清单直接实施。
+
+| 方向                  | 用途与进入实施的条件                                                                                                                                                                                                 |
+| --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 复杂页面与写作语义    | 富文本页眉页脚、重复表头／行拆分策略、脚注／尾注、题注、目录／交叉引用、浮动对象／环绕、多栏，以及公式、模板与投稿规则；从具体文档消费者确定 Schema、布局、位置映射与 DOCX 支持范围，沿 Academy 唯一模型与历史实施。 |
+| 可检索 PDF 与系统打印 | 现有 PDF 为页面图像；需要可检索文本或真实打印时，先确定字体、文字与页面映射、输出限制和系统宿主契约，再验证固定版本输出、取消与资源释放。                                                                            |
+| 长文档布局性能        | 可见区域虚拟化与增量重排尚未实现。先测量长文档首部插入、字体／图片变化和密集表格的重排范围、交互延迟及内存，再按数据选择优化；保留组合输入节点、跨页选区与唯一正文。                                                 |
 
 ### Sessions 按关联 PR 号查找
 

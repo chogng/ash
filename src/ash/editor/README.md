@@ -4,7 +4,7 @@
 
 ## 快速理解
 
-Stanza 以 VS Code `src/vs/editor` 为职责参照：`common` 拥有编辑器公共契约与内核，`browser` 拥有浏览器编辑器实现，`contrib` 拥有通用文本编辑功能与对应回归测试，`test` 保存内核级回归测试。Academy 的完整既有富文档实现由 [`extensions/academic`](../../../extensions/academic/README.md) 拥有，经独立 Rust 扩展和共享宿主注入；基础 `TextModel` 不导入 Academy；客户端内置 Code 通过 `textModelFeatures` 的可释放端口接入，并保持事件与 token 来源对象稳定。运行环境不代替职责判断：功能自己的纯算法可以留在其 `browser` 目录，不要求每个 contribution 建立 `common`。当前代码的归属缺口见[对齐台账](./api-alignment-status.md)。Stanza 只有一个源码域、一套公开入口和一个同步权威：按行存储的 `TextModel`。代码与富文档使用同一模型，Academic 是富文档的一种配置。
+Stanza 以 VS Code `src/vs/editor` 为职责参照：`common` 拥有编辑器公共契约与内核，`browser` 拥有浏览器编辑器实现，`contrib` 拥有通用文本编辑功能与对应回归测试，`test` 保存内核级回归测试。Academy 的完整既有富文档实现由 [`extensions/academic`](../../../extensions/academic/README.md) 拥有，经独立 Rust 扩展和共享宿主注入；基础 `TextModel` 不导入 Academy；客户端内置 Code 通过 `textModelFeatures` 的可释放端口接入，并保持事件与 token 来源对象稳定。运行环境不代替职责判断：功能自己的纯算法可以留在其 `browser` 目录，不要求每个 contribution 建立 `common`。当前代码的归属缺口见[Editor TODO](../../../TODO.md#stanza-编辑器--todo)。Stanza 只有一个源码域、一套公开入口和一个同步权威：按行存储的 `TextModel`。代码与富文档使用同一模型，Academic 是富文档的一种配置。
 
 | 产品或调用方式       | 加载入口             | 得到的能力                                                                                                                                                                                                                                                                             |
 | -------------------- | -------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -13,9 +13,9 @@ Stanza 以 VS Code `src/vs/editor` 为职责参照：`common` 拥有编辑器公
 | 程序化调用           | `editor.api.ts`      | `editor.create/createModel`、`editor.addCommand/addEditorAction/addKeybindingRule/addKeybindingRules`、`languages.register/registerLanguages/registerProviderBatch/registerLanguage*Provider`、命名主题、standalone model registry、`TextModel`、transaction 和坐标值对象；不注册 pane |
 | 基础 standalone 入口 | `editor.main.ts`     | 装配客户端内置 Code 与独立宿主控件，再导出 `editor.api.ts`                                                                                                                                                                                                                             |
 
-Code 包内的 Code Action、Hover、Sticky Scroll 分别通过 `codeActionContributions.ts`、`hoverContribution.ts`、`stickyScrollContribution.ts` 注册。注册入口负责装配；Code Action 控制器拥有请求取消、解析和编辑提交，动作菜单的 DOM、键盘导航与关闭生命周期由 `platform/actionWidget` 统一管理。Hover 与 Sticky Scroll 控制器继续拥有各自的界面状态和释放逻辑。独立注册文件是否保留取决于对应职责，不统一套用 `.contribution.ts` 后缀。
+客户端 Code 的 Code Action、Hover、Sticky Scroll 分别通过 `codeActionContributions.ts`、`hoverContribution.ts`、`stickyScrollContribution.ts` 注册。注册入口负责装配；Code Action 控制器拥有请求取消、解析和编辑提交，动作菜单的 DOM、键盘导航与关闭生命周期由 `platform/actionWidget` 统一管理。Hover 与 Sticky Scroll 控制器继续拥有各自的界面状态和释放逻辑。独立注册文件是否保留取决于对应职责，不统一套用 `.contribution.ts` 后缀。
 
-Standalone 宿主用 `editor.addEditorAction` 注册全局编辑器动作，可提供快捷键、执行条件和右键菜单位置；动作会出现在 `getAction()` 与 F1 命令列表中。`editor.addKeybindingRule(s)` 可以单独注册带条件的快捷键，`command: null` 表示拦截该按键。两个入口都返回注销句柄。宿主通过 `languages.registerLanguages` 和 `languages.setLanguageConfiguration` 注册语言数据；Code 包的可选输入策略消费这些数据实现配对、缩进与其他语言交互，停用后基础输入继续按纯文本工作。
+Standalone 宿主用 `editor.addEditorAction` 注册全局编辑器动作，可提供快捷键、执行条件和右键菜单位置；动作会出现在 `getAction()` 与 F1 命令列表中。`editor.addKeybindingRule(s)` 可以单独注册带条件的快捷键，`command: null` 表示拦截该按键。两个入口都返回注销句柄。宿主通过 `languages.registerLanguages` 和 `languages.setLanguageConfiguration` 注册语言数据；客户端 Code 的可选输入策略消费这些数据实现配对、缩进与其他语言交互，停用后基础输入继续按纯文本工作。
 
 Standalone 的 F1 快捷入口支持直接筛选命令，也支持 `>` 命令、`?` 帮助和 `@` 文档符号前缀。切换前缀会保留已输入的查询；关闭符号列表会取消尚未完成的符号请求。
 
@@ -25,13 +25,13 @@ Standalone 的 F1 快捷入口支持直接筛选命令，也支持 `>` 命令、
 
 Editor 维护以下核心入口。实现 README 可以补充局部细节，但不得复制核心规范。
 
-| 文档                                                   | Canonical responsibility                                                                                                              | 不负责                                           |
-| ------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------ |
-| [`README.md`](./README.md)                             | 扁平目录、单一 TextModel、依赖方向和 Workbench 贡献装配                                                                               | 单套功能实现的完整行为和实现台账                 |
-| [`text-engine.md`](./text-engine.md)                   | 行式文本内核、view 架构、input、Contribution、当前状态和演进                                                                          | Workbench pane、文件协议和 App Server transport  |
-| [`text-engine-geometry.md`](./text-engine-geometry.md) | 文本几何、浏览器渲染后端、测量、输入坐标和长期目标契约；中文翻译见 [`text-engine-geometry.zh-CN.md`](./text-engine-geometry.zh-CN.md) | 不拥有完整行式 engine、Workbench pane 或文件协议 |
-| [`document-engine.md`](./document-engine.md)           | Schema-backed Block、transaction、browser projection、profile 和 collaboration                                                        | TextBuffer 语义和产品 pane 生命周期              |
-| [`api-alignment-status.md`](./api-alignment-status.md) | 全量 VS Code API/owner 扫描结果、已清除的误导性同名职责和真实能力缺口                                                                 | 不把尚未实现的上游能力标记为已完成               |
+| 文档                                                       | Canonical responsibility                                                                                                              | 不负责                                           |
+| ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------ |
+| [`README.md`](./README.md)                                 | 扁平目录、单一 TextModel、依赖方向和 Workbench 贡献装配                                                                               | 单套功能实现的完整行为和实现台账                 |
+| [`text-engine.md`](./text-engine.md)                       | 行式文本内核、view 架构、input、Contribution 与生命周期契约                                                                           | Workbench pane、文件协议和 App Server transport  |
+| [`text-engine-geometry.md`](./text-engine-geometry.md)     | 文本几何、浏览器渲染后端、测量、输入坐标和长期目标契约；中文翻译见 [`text-engine-geometry.zh-CN.md`](./text-engine-geometry.zh-CN.md) | 不拥有完整行式 engine、Workbench pane 或文件协议 |
+| [`document-engine.md`](./document-engine.md)               | Schema-backed Block、transaction、browser projection、profile 和 collaboration                                                        | TextBuffer 语义和产品 pane 生命周期              |
+| [根目录 Editor TODO](../../../TODO.md#stanza-编辑器--todo) | 当前未完成的用户行为、owner 复核与验收事项                                                                                            | 不把尚未实现的上游能力标记为已完成               |
 
 跨系统的 editor/file/language/Workbench/App Server 关系只在 [`docs/editor-architecture.md`](../../../docs/editor-architecture.md) 详细说明。[`browser/README.md`](./browser/README.md) 和其他子目录 README 面向实现维护者，记录局部调用路径、DOM ownership、failure semantics 和测试影响。
 
@@ -89,7 +89,7 @@ Contribution 必须满足以下条件：
 - 依赖 engine contract，而不是读取产品 ID；
 - schema-bearing 能力通过 `EditorProfile` 稳定组合，不能在打开文档后任意开关；
 - 贡献只依赖所需实现，不读取工作台模式决定编辑规则。
-- `editor.all.ts` 当前装配 Code 贡献；Academy 由独立 Rust 扩展注册并按需装载其客户端包。
+- `editor.all.ts` 仅装配基础文本命令，`editor.code.all.ts` 装配客户端 Code 贡献；Academy 由独立 Rust 扩展注册并按需装载其客户端包。
 
 因此 transaction、selection mapping、IME commit、schema validation 和 model lifecycle 属于 engine；find、folding、suggest、citation toolbar 与 collaboration projection 等属于 contribution 或 profile composition。
 
@@ -103,7 +103,7 @@ Academy Rust extension → public SDK / Host RPC → shared client-editor bridge
 Shared Workbench ─────────→ document pane / model references / dirty / backup / file and collaboration transport
 
 editor.api.ts ─────────────→ editor.create/createModel + languages.register/registerLanguage*Provider + TextModel + generic line snapshots
-editor.main.ts ────────────→ editor.all.ts + editor.api.ts
+editor.main.ts ────────────→ editor.code.all.ts + editor.api.ts
 standalone/{common,browser} ─→ window services + model/editor/language/theme registries; never Workbench persistence
 ```
 

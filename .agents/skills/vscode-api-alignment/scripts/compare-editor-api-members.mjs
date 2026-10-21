@@ -6,11 +6,23 @@ import ts from '../../../../node_modules/typescript/lib/typescript.js';
 const repositoryRoot = resolve(import.meta.dirname, '../../../..');
 const ashEditorRoot = resolve(repositoryRoot, 'src/ash/editor');
 const vscodeEditorRoot = resolve(repositoryRoot, '../vscode/src/vs/editor');
-const ledgerPath = resolve(ashEditorRoot, 'api-alignment-status.md');
 const sourceCache = new Map();
 if (process.argv[1] && fileURLToPath(import.meta.url) === resolve(process.argv[1])) {
-	const ledger = readFileSync(ledgerPath, 'utf8');
-	const declarations = readDeclarations(ledger, '尚未补齐的同名契约');
+	const targets = process.argv.slice(2);
+	if (targets.length === 0 || targets.includes('--help')) {
+		process.stdout.write('Usage: node compare-editor-api-members.mjs <editor-relative-file.ts>::<declaration> [...]\n');
+		process.exit(targets.includes('--help') ? 0 : 2);
+	}
+	const declarations = targets.map(target => {
+		const separator = target.indexOf('::');
+		const file = target.slice(0, separator);
+		const declaration = target.slice(separator + 2);
+		if (separator < 1 || !file.endsWith('.ts') || !/^[A-Za-z_$][\w$]*$/u.test(declaration)
+			|| isAbsolute(file) || file.split(/[\\/]/u).includes('..')) {
+			throw new Error(`Invalid Editor declaration target: ${target}`);
+		}
+		return { file, declaration };
+	});
 	const results = declarations.map(({ file, declaration }) => compareDeclaration(file, declaration)).sort((left, right) => {
 		const difference = value => value.missing.length + value.extra.length;
 		return difference(left) - difference(right) || left.file.localeCompare(right.file) || left.declaration.localeCompare(right.declaration);
@@ -172,25 +184,4 @@ function memberName(member) {
 	if (ts.isConstructorDeclaration(member)) return 'constructor';
 	if (!('name' in member) || !member.name) return undefined;
 	return member.name.getText();
-}
-
-function readDeclarations(markdown, heading) {
-	const start = markdown.indexOf(`## ${heading}`);
-	if (start < 0) throw new Error(`Missing ledger heading: ${heading}`);
-	const sectionStart = markdown.indexOf('\n', start);
-	const nextHeading = markdown.indexOf('\n## ', sectionStart + 1);
-	const section = markdown.slice(sectionStart, nextHeading < 0 ? markdown.length : nextHeading);
-	const result = [];
-	for (const line of section.split(/\r?\n/u)) {
-		if (!line.startsWith('| `')) continue;
-		const cells = line.split('|').slice(1, -1).map(cell => cell.trim());
-		if (cells.length < 2) continue;
-		const file = unwrapCode(cells[0]);
-		for (const declaration of cells[1].split('、').map(unwrapCode)) result.push({ file, declaration });
-	}
-	return result;
-}
-
-function unwrapCode(value) {
-	return value.startsWith('`') && value.endsWith('`') ? value.slice(1, -1) : value;
 }

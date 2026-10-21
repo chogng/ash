@@ -13,7 +13,7 @@ const knownTestModes = new Set(['unit', 'browser', 'all']);
 
 if (process.argv.includes('--help')) {
 	process.stdout.write(`Usage: node .agents/skills/vscode-api-alignment/scripts/check-editor-alignment.mjs [--full] [--structure-only]\n\n`);
-	process.stdout.write(`  --full            Print complete file-set, CSS ownership, and member reports.\n`);
+	process.stdout.write(`  --full            Print complete file-set and CSS ownership reports.\n`);
 	process.stdout.write(`  --structure-only  Skip repository typecheck and behavior tests.\n`);
 	process.stdout.write(`  --test=unit       Run Editor unit tests.\n`);
 	process.stdout.write(`  --test=browser    Run Editor browser behavior tests.\n`);
@@ -34,10 +34,8 @@ if (testMode && !knownTestModes.has(testMode)) {
 const initialJavaScript = readUntrackedJavaScript();
 let failed = false;
 
-failed = !runLedgerCheck() || failed;
 failed = !runFileSetAudit() || failed;
 failed = !runCssOwnershipAudit() || failed;
-failed = !runMemberAudit() || failed;
 failed = !runDiffCheck() || failed;
 if (!structureOnly) {
 	failed = !runTypecheck() || failed;
@@ -61,12 +59,6 @@ if (generatedJavaScript.length > 0) {
 
 process.exitCode = failed ? 1 : 0;
 
-function runLedgerCheck() {
-	const result = runNodeScript('verify-editor-api-ledger.mjs');
-	printResult('ledger', result);
-	return result.status === 0;
-}
-
 function runFileSetAudit() {
 	const result = runNodeScript('audit-editor-file-set.mjs');
 	process.stdout.write(`\n[file set]${result.status === 0 ? '' : ' FAILED'}\n`);
@@ -83,26 +75,6 @@ function runFileSetAudit() {
 function runCssOwnershipAudit() {
 	const result = runNodeScript('audit-editor-css-ownership.mjs', full ? ['--full'] : []);
 	printResult('CSS ownership', result);
-	return result.status === 0;
-}
-
-function runMemberAudit() {
-	const result = runNodeScript('compare-editor-api-members.mjs');
-	process.stdout.write(`\n[API members]${result.status === 0 ? '' : ' FAILED'}\n`);
-	if (full || result.status !== 0) {
-		process.stdout.write(result.stdout);
-	} else {
-		const records = parseMemberRecords(result.stdout);
-		const missing = records.filter(record => record.kind.startsWith('missing-'));
-		const exact = records.filter(record => record.difference === 0 && !record.kind.startsWith('missing-'));
-		const different = records.filter(record => record.difference > 0 && !record.kind.startsWith('missing-'));
-		process.stdout.write(`exact member names: ${exact.length}\n`);
-		process.stdout.write(`member differences: ${different.length}\n`);
-		process.stdout.write(`missing files or declarations: ${missing.length}\n`);
-		for (const record of [...missing, ...different].slice(0, 20)) process.stdout.write(`${record.lines.join('\n')}\n`);
-		if (missing.length + different.length > 20) process.stdout.write(`... ${missing.length + different.length - 20} more; rerun with --full\n`);
-	}
-	if (result.stderr) process.stderr.write(result.stderr);
 	return result.status === 0;
 }
 
@@ -184,19 +156,4 @@ function readUntrackedJavaScript() {
 		.split(/\r?\n/u)
 		.filter(line => line.startsWith('?? ') && line.slice(3).endsWith('.js'))
 		.map(line => line.slice(3)));
-}
-
-function parseMemberRecords(output) {
-	const records = [];
-	let current;
-	for (const line of output.split(/\r?\n/u)) {
-		const match = /^\s*(\d+)\s+(.+?)\s+\[([^\]]+)\]$/u.exec(line);
-		if (match) {
-			current = { difference: Number(match[1]), target: match[2], kind: match[3], lines: [line] };
-			records.push(current);
-		} else if (current && /^\s+(missing|extra):/u.test(line)) {
-			current.lines.push(line);
-		}
-	}
-	return records;
 }
