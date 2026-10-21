@@ -980,6 +980,28 @@ test('Activity Bar badges expose a translated profile setting with strict boolea
 	}
 });
 
+test('view header action visibility exposes a window setting with translated metadata', () => {
+	const key = 'workbench.view.alwaysShowHeaderActions';
+	const definition = configurationRegistry.getConfiguration(key)!;
+	assert.equal(definition.defaultValue, false);
+	assert.equal(definition.scope, ConfigurationScope.WINDOW);
+	assert.equal(definition.parse(true), true);
+	assert.equal(definition.serialize(false), false);
+	assert.throws(() => definition.parse('true'), /true or false/);
+	const chinese = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
+	try {
+		setNlsResolver((bundle, key, fallback, parameters) => formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters));
+		const setting = new DefaultSettings().get(key);
+		assert.equal(setting.valueType, 'boolean');
+		assert.equal(setting.title, '视图：始终显示标题操作');
+		assert.match(setting.description, /视图展开时始终显示标题操作/);
+		assert.equal(findSettingCategory(createSettingsLayout(new DefaultSettings().all), key), 'layout');
+		assert.throws(() => definition.parse('false'), /视图标题操作可见性必须为 true 或 false/);
+	} finally {
+		resetNlsResolver();
+	}
+});
+
 test('empty-editor tips expose translated settings metadata', () => {
 	const chinese = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
 	try {

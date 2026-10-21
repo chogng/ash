@@ -81,7 +81,7 @@ test('content-sized ViewPanes retain profile collapse state across workspaces wi
 	finally { restored.resources.dispose(); }
 });
 
-test("ViewPaneContainer opens a fixed visible view without toggling its visibility", () => {
+test("ViewPaneContainer opens a fixed visible view without toggling its visibility", async () => {
 	using storage = createStorage("fixed");
 	using services = new InstantiationService();
 	services.registerInstance(IStorageService, storage);
@@ -110,7 +110,14 @@ test("ViewPaneContainer opens a fixed visible view without toggling its visibili
 	};
 	registerTestComponentServices(services);
 	assert.throws(() => services.createInstance(ViewPaneContainer, browserEnvironment.window.document.body, options), /Unknown service:.*menuService/i);
-	using container = registerContainerServices(services).createInstance(ViewPaneContainer, browserEnvironment.window.document.body, options);
+	registerContainerServices(services);
+	const { IThemeService } = await import('../../../../../../platform/theme/common/themeService.js');
+	using incompleteServices = new InstantiationService();
+	incompleteServices.registerInstance(IStorageService, storage);
+	incompleteServices.registerInstance(IThemeService, services.get(IThemeService));
+	incompleteServices.registerInstance(IMenuService, services.get(IMenuService));
+	assert.throws(() => incompleteServices.createInstance(ViewPaneContainer, browserEnvironment.window.document.body, { ...options, instantiationService: incompleteServices }), /Unknown service:.*configurationService/i);
+	using container = services.createInstance(ViewPaneContainer, browserEnvironment.window.document.body, options);
 
 	assert.doesNotThrow(() => container.openView("test.fixed-view"));
 	assert.equal(visibilityChanges, 0);
@@ -306,6 +313,7 @@ suiteTeardown(() => titleMenuResources.dispose());
 
 function registerContainerServices(services: InstanceType<typeof InstantiationService>): InstanceType<typeof InstantiationService> {
 	registerTestComponentServices(services);
+	if (!services.has(IConfigurationService)) services.registerInstance(IConfigurationService, titleMenuResources.add(new InMemoryConfigurationService()));
 	if (!services.has(IMenuService)) {
 		const context = titleMenuResources.add(new ContextKeyService());
 		const commands = titleMenuResources.add(new CommandService(services));
@@ -348,8 +356,8 @@ test('Pane Composite combines scoped container and View actions while retaining 
 	} as import('../../../../../../workbench/services/layout/browser/layoutService.js').IWorkbenchLayoutService);
 	services.registerInstance(IViewDescriptorService, descriptors);
 	if (!services.has(IActivityService)) services.registerSingleton(IActivityService, () => services.createInstance(ActivityService));
-	const menus = registerContainerServices(services).get(IMenuService);
 	services.registerInstance(IConfigurationService, resources.add(new InMemoryConfigurationService()));
+	const menus = registerContainerServices(services).get(IMenuService);
 	resources.add(MenusRegistry.appendMenuItem(MenuId.ViewContainerTitle, { command: { id: 'fixture.containerAction', title: 'Container action' }, group: 'navigation', when: ContextKeyExpr.equals('viewContainer', active.id) }));
 	resources.add(MenusRegistry.appendMenuItem(MenuId.ViewContainerTitleContext, { command: { id: 'fixture.containerContext', title: 'Container context' }, when: ContextKeyExpr.equals('viewContainer', active.id) }));
 	resources.add(MenusRegistry.appendMenuItem(MenuId.SidebarTitle, { command: { id: 'fixture.globalAction', title: 'Global action' }, group: 'navigation' }));

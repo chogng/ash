@@ -38,7 +38,7 @@ import { ISCMService, ISCMViewService } from '../common/scm.js';
 import { IViewsService } from '../../../services/views/common/viewsService.js';
 import { IEditorService } from "../../../services/editor/common/editorService.js";
 import type { IViewPaneOptions } from "../../../browser/parts/views/viewPane.js";
-import { ViewPane } from "../../../browser/parts/views/viewPane.js";
+import { ViewPane, ViewPaneShowActions } from "../../../browser/parts/views/viewPane.js";
 import { createBinaryDiffEditorInput, createDiffEditorInput } from "../../../common/editor/diffEditorInput.js";
 import { SWIMLANE_HEIGHT, renderSCMHistoryItemGraph, toISCMHistoryItemViewModelArray } from './scmHistory.js';
 import { SCMHistoryBusyContext, SCMHistoryProviderIdContext } from '../common/scm.js';
@@ -279,7 +279,7 @@ export class SCMHistoryViewPane extends ViewPane {
 	public get repositoryId(): string | undefined { return this.graphRepositoryId; }
 
 	constructor(container: HTMLElement, options: IViewPaneOptions, @ISCMViewService scmViewService: ISCMViewService, @IMenuService private readonly menuService: IMenuService, @IContextMenuService private readonly contextMenuService: IContextMenuService, @IContextKeyService private readonly contextKeyService: IContextKeyService, @IHoverService private readonly hoverService: IHoverService, @IEditorService private readonly editorService: IEditorService, @IResourceLabelService resourceLabelService: IResourceLabelService, @IAccessibleViewService private readonly accessibleView: IAccessibleViewService, @IContextViewService private readonly contextViewService: IContextViewService, @IClipboardService private readonly clipboardService: IClipboardService, @IOpenerService private readonly openerService: IOpenerService, @IConfigurationService private readonly configurationService: IConfigurationService, @IQuickInputService private readonly quickInputService: IQuickInputService, @IStorageService private readonly storageService: IStorageService, @ISCMService private readonly scmService: ISCMService) {
-		super(container, { ...options, headerActionsVisibility: "whenExpanded" });
+		super(container, { ...options, showActions: ViewPaneShowActions.WhenExpanded });
 		this.resourceLabels = this._register(resourceLabelService.createGroup());
 		this.scmViewService = scmViewService;
 		this.graphLabel = options.title;

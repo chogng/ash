@@ -1,10 +1,12 @@
 import { IThemeService } from '../../../../platform/theme/common/themeService.js';
+import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { Disposable, DisposableMap, toDisposable } from "../../../../base/common/lifecycle.js";
 import { Emitter } from "../../../../base/common/event.js";
 import type { IContextKeyService } from "../../../../platform/contextkey/browser/contextKeyService.js";
 import type { IInstantiationService } from "../../../../platform/instantiation/common/instantiation.js";
 import { localize, type ILocalizationService } from "../../../services/localization/common/localizationService.js";
 import type { IViewContainerDescriptor, IViewContainerModel, IViewDescriptor } from "../../../common/views.js";
+import { WorkbenchConfiguration } from '../../../common/configuration.js';
 import { ViewPane } from "./viewPane.js";
 import { h } from "../../../../base/browser/dom.js";
 import { PaneView } from "../../../../base/browser/ui/splitview/paneview.js";
@@ -80,6 +82,7 @@ export class ViewPaneContainer extends Composite {
 		@IStorageService private readonly storageService: IStorageService,
 		@IThemeService themeService: IThemeService,
 		@IMenuService menuService: IMenuService,
+		@IConfigurationService configurationService: IConfigurationService,
 	) {
 		super(options.viewContainer.id, themeService, storageService);
 		const ownerDocument = container.ownerDocument;
@@ -87,6 +90,14 @@ export class ViewPaneContainer extends Composite {
 		this.element = element;
 		this._register(toDisposable(() => element.remove()));
 		element.className = "ash-view-pane-container";
+		// One inherited presentation policy covers retained and newly created views.
+		const updateHeaderActions = (): void => {
+			element.classList.toggle('always-show-header-actions', configurationService.getValue<boolean>(WorkbenchConfiguration.alwaysShowHeaderActions));
+		};
+		updateHeaderActions();
+		this._register(configurationService.onDidChangeConfiguration(event => {
+			if (event.affectsConfiguration(WorkbenchConfiguration.alwaysShowHeaderActions)) { updateHeaderActions(); }
+		}));
 		element.dataset.viewContainerId = options.viewContainer.id;
 		container.append(element);
 		super.create(element);

@@ -1,4 +1,5 @@
 import { IThemeService } from '../../../../platform/theme/common/themeService.js';
+import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { compositePanelId, compositeTabId } from "../compositeBar.js";
 import { localize } from "../../../services/localization/common/localizationService.js";
 import { ViewPaneContainer, type ViewPaneContainerOptions } from "./viewPaneContainer.js";
@@ -34,8 +35,9 @@ export class PaneComposite extends ViewPaneContainer implements IPaneComposite {
 		@IStorageService storageService: IStorageService,
 		@IThemeService themeService: IThemeService,
 		@IMenuService menuService: IMenuService,
+		@IConfigurationService configurationService: IConfigurationService,
 	) {
-		super(container, options, storageService, themeService, menuService);
+		super(container, options, storageService, themeService, menuService, configurationService);
 		this.title = localize(options.localizationService, options.viewContainer.localizationKey, options.viewContainer.title);
 		this.element.classList.add("ash-pane-composite");
 		this.element.classList.toggle("ash-pane-composite-pane-headers-hidden", options.paneHeaders === "hidden");

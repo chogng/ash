@@ -57,7 +57,7 @@ export class ChatGPTNavigationViewPaneContainer extends PaneComposite {
 		@IThemeService theme: IThemeService,
 		@IMenuService menus: IMenuService,
 	) {
-		super(parent, { ...options, paneHeaders: 'visible', paneLayout: 'content', stateScope: StorageScope.PROFILE, mergeViewWithContainerWhenSingleView: false }, storage, theme, menus);
+		super(parent, { ...options, paneHeaders: 'visible', paneLayout: 'content', stateScope: StorageScope.PROFILE, mergeViewWithContainerWhenSingleView: false }, storage, theme, menus, configuration);
 		const root = this.element;
 		const document = root.ownerDocument;
 		root.classList.add('ash-chatgpt-navigation');

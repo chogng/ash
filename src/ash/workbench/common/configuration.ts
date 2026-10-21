@@ -38,6 +38,23 @@ export function getConfigurationMigrations(): readonly ConfigurationMigration[] 
 /** Typed configuration keys owned by the workbench layer. */
 export const WorkbenchConfiguration = Object.freeze({
 	...AccessibilityConfiguration,
+	alwaysShowHeaderActions: configurationRegistry.registerConfiguration<boolean>({
+		key: 'workbench.view.alwaysShowHeaderActions',
+		defaultValue: false,
+		scope: ConfigurationScope.WINDOW,
+		schema: { type: 'boolean' },
+		parse(value: unknown): boolean {
+			if (typeof value !== 'boolean') {
+				throw new TypeError(localize('workbench.view.alwaysShowHeaderActions.invalid', 'View header action visibility must be true or false.'));
+			}
+			return value;
+		},
+		setting: {
+			valueType: 'boolean',
+			get title() { return localize('workbench.view.alwaysShowHeaderActions.title', 'View: Always Show Header Actions'); },
+			get description() { return localize('workbench.view.alwaysShowHeaderActions.description', 'Keep view header actions visible while a view is expanded. When disabled, actions appear on hover or focus unless the view keeps them visible.'); },
+		},
+	}),
 	settingsEditor: configurationRegistry.registerConfiguration<'ui' | 'json'>({
 		key: 'workbench.settings.editor', defaultValue: 'ui', scope: ConfigurationScope.WINDOW,
 		schema: { type: 'string', enum: ['ui', 'json'] },

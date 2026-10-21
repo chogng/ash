@@ -7,6 +7,7 @@ import { IInstantiationService } from '../../../../platform/instantiation/common
 import { IMenuService } from '../../../../platform/actions/common/actions.js';
 import { IStorageService } from '../../../../platform/storage/common/storage.js';
 import { IThemeService } from '../../../../platform/theme/common/themeService.js';
+import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { IWorkspaceContextService } from '../../../../platform/workspace/common/workspace.js';
 import { INotificationService } from '../../../../platform/notification/common/notification.js';
 import { PaneComposite, type PaneCompositeOptions } from '../../../browser/parts/views/paneComposite.js';
@@ -35,8 +36,9 @@ export class DebugViewPaneContainer extends PaneComposite {
 		@IInstantiationService private readonly instantiation: IInstantiationService,
 		@ICommandService private readonly commands: ICommandService,
 		@INotificationService private readonly notifications: INotificationService,
+		@IConfigurationService configuration: IConfigurationService,
 	) {
-		super(container, { ...options, mergeViewWithContainerWhenSingleView: true }, storage, theme, menus);
+		super(container, { ...options, mergeViewWithContainerWhenSingleView: true }, storage, theme, menus, configuration);
 		this.element.classList.add('ash-debug-viewlet');
 		const startLabel = localize('debug.start', 'Start Debugging');
 		this.startAction = {

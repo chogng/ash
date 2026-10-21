@@ -296,7 +296,7 @@ export class ExtensionsViewPaneContainer extends PaneComposite {
 		@IMenuService menus: IMenuService,
 		@IContextMenuService contextMenus: IContextMenuService,
 	) {
-		super(container, { ...options, mergeViewWithContainerWhenSingleView: false }, storage, theme, menus);
+		super(container, { ...options, mergeViewWithContainerWhenSingleView: false }, storage, theme, menus, configuration);
 		this.element.classList.add('ash-extensions-view-container');
 		this.searchRegion = h(container.ownerDocument, 'div');
 		this.searchRegion.className = 'extensions-global-search';

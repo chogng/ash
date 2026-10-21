@@ -1,3 +1,13 @@
+.ash-view-pane-container.always-show-header-actions
+	.ash-view-pane:not(.collapsed)
+	> .ash-pane-view-header
+	> .ash-pane-view-header-actions,
+.ash-pane-view.ash-view-pane.show-actions
+	> .ash-pane-view-header
+	> .ash-pane-view-header-actions {
+	visibility: visible;
+}
+
 .ash-view-filter {
 	display: flex;
 	align-items: center;

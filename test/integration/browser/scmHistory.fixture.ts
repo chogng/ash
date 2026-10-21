@@ -1,7 +1,7 @@
 import '../../../src/ash/base/browser/ui/styles.css';
 import '../../../src/ash/workbench/browser/media/style.css';
 import '../../../src/ash/workbench/contrib/scm/browser/scm.contribution.js';
-import { PaneView } from '../../../src/ash/base/browser/ui/splitview/paneview.js';
+import { Button } from '../../../src/ash/base/browser/ui/button/button.js';
 import { Event } from '../../../src/ash/base/common/event.js';
 import { DisposableStore } from '../../../src/ash/base/common/lifecycle.js';
 import { observableValue } from '../../../src/ash/base/common/observable.js';
@@ -17,7 +17,10 @@ import { BrowserContextMenuService } from '../../../src/ash/platform/contextview
 import { BrowserContextViewService } from '../../../src/ash/platform/contextview/browser/contextViewService.js';
 import { HoverService, IHoverService } from '../../../src/ash/platform/hover/browser/hoverService.js';
 import { ILayoutService } from '../../../src/ash/platform/layout/browser/layoutService.js';
+import { IContextKeyService } from '../../../src/ash/platform/contextkey/browser/contextKeyService.js';
+import { SyncDescriptor } from '../../../src/ash/platform/instantiation/common/descriptors.js';
 import { bindTestColorTheme } from './themeFixture.js';
+import { defaultButtonStyles } from '../../../src/ash/platform/theme/browser/defaultStyles.js';
 import { IThemeService } from '../../../src/ash/platform/theme/common/themeService.js';
 import { darkColorTheme, lightColorTheme, highContrastDarkColorTheme, highContrastLightColorTheme } from '../../../src/ash/platform/theme/common/colorTheme.js';
 import { TestThemeService } from '../../../src/ash/platform/theme/test/common/testThemeService.js';
@@ -26,6 +29,10 @@ import { createTestEditorServices } from '../../../src/ash/workbench/test/common
 import { TestConfigurationService as WorkbenchConfigurationService } from '../../../src/ash/workbench/services/configuration/test/common/testServices.js';
 import { IEditorService } from '../../../src/ash/workbench/services/editor/common/editorService.js';
 import { SCMHistoryViewPane } from '../../../src/ash/workbench/contrib/scm/browser/scmHistoryViewPane.js';
+import { ViewPane, ViewPaneShowActions, type IViewPaneOptions } from '../../../src/ash/workbench/browser/parts/views/viewPane.js';
+import { ViewPaneContainer } from '../../../src/ash/workbench/browser/parts/views/viewPaneContainer.js';
+import { ViewContainerLocation, WorkbenchViewRegistry } from '../../../src/ash/workbench/common/views.js';
+import { ViewDescriptorService } from '../../../src/ash/workbench/services/views/browser/viewDescriptorService.js';
 import { SCMViewService } from '../../../src/ash/workbench/contrib/scm/browser/scmViewService.js';
 import { SCMService } from '../../../src/ash/workbench/contrib/scm/common/scmService.js';
 import { ISCMViewService } from '../../../src/ash/workbench/contrib/scm/common/scm.js';
@@ -73,14 +80,31 @@ resources.add(scm.registerSCMProvider({
 	activeRepositoryName: undefined, statusBarCommands: [], statusMessage: '', isBusy: false, historyProvider: provider,
 	refresh: async () => { }, activate: async () => { },
 }));
-const panes = resources.add(new PaneView(root));
-const history = resources.add(services.createInstance(SCMHistoryViewPane, root, { id: 'fixture.history', title: 'History' }));
-panes.addPane(history, 600);
-panes.layout(600, 560);
-history.setVisible(true);
+const registry = new WorkbenchViewRegistry();
+const viewContainer = { id: 'fixture.history.container', title: 'History fixture', location: ViewContainerLocation.Sidebar };
+resources.add(registry.registerViewContainer(viewContainer));
+resources.add(registry.registerViews(viewContainer.id, [{ id: 'fixture.history', title: 'History', ctorDescriptor: new SyncDescriptor(SCMHistoryViewPane) }]));
+class HeaderActionsPane extends ViewPane {
+	constructor(container: HTMLElement, options: IViewPaneOptions) {
+		super(container, { ...options, showActions: options.id === 'always' ? ViewPaneShowActions.Always : ViewPaneShowActions.Default });
+		this._register(new Button(this.headerActionsElement, { ...defaultButtonStyles, label: 'Fixture action' }));
+	}
+}
+if (new URLSearchParams(location.search).has('headerActions')) {
+	resources.add(registry.registerViews(viewContainer.id, ['default', 'always'].map(id => ({ id, title: id, ctorDescriptor: new SyncDescriptor(HeaderActionsPane) }))));
+}
+const descriptors = resources.add(services.createInstance(ViewDescriptorService, { registry }));
+const panes = resources.add(services.createInstance(ViewPaneContainer, root, {
+	viewContainer, model: descriptors.getViewContainerModel(viewContainer.id)!,
+	instantiationService: services, contextKeyService: services.get(IContextKeyService),
+}));
+panes.layout({ height: 600, width: 560 });
+panes.setVisible(true);
 const fixture = {
 	hash, timestamp, subject, message,
-	resize(width: number): void { root.style.width = `${width}px`; panes.layout(600, width); },
+	resize(width: number): void { root.style.width = `${width}px`; panes.layout({ height: 600, width }); },
+	setAlwaysShowHeaderActions(value: unknown): Promise<void> { return configuration.updateValue('workbench.view.alwaysShowHeaderActions', value); },
+	addDefaultView(): void { resources.add(registry.registerViews(viewContainer.id, [{ id: 'late-default', title: 'Late default', ctorDescriptor: new SyncDescriptor(HeaderActionsPane) }])); },
 	setTheme(index: number): void { themes.setColorTheme([darkColorTheme, lightColorTheme, highContrastDarkColorTheme, highContrastLightColorTheme][index]!); },
 };
 declare global { interface Window { ashSCMHistoryIntegration: typeof fixture; } }

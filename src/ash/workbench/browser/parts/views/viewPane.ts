@@ -1,5 +1,6 @@
 import { defaultButtonStyles } from '../../../../platform/theme/browser/defaultStyles.js';
 import "./views.css";
+import './media/views.css';
 import { Emitter } from "../../../../base/common/event.js";
 import { Pane, type IPaneOptions } from "../../../../base/browser/ui/splitview/paneview.js";
 import type { IView } from "../../../common/views.js";
@@ -18,8 +19,19 @@ import type { IAction } from '../../../../base/common/actions.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { FilterWidget, type IFilterWidgetOptions } from './viewFilter.js';
 
+export enum ViewPaneShowActions {
+	/** Reveal expanded-pane actions on hover or focus. */
+	Default,
+	/** Keep actions visible while the pane is expanded. */
+	WhenExpanded,
+	/** Keep actions visible in both expansion states. */
+	Always,
+}
+
 /** Runtime inputs supplied by a browser view container to every pane. */
-export type IViewPaneOptions = IPaneOptions;
+export interface IViewPaneOptions extends IPaneOptions {
+	readonly showActions?: ViewPaneShowActions;
+}
 
 export interface IFilterViewPaneOptions extends IViewPaneOptions {
 	readonly filterOptions: IFilterWidgetOptions;
@@ -109,8 +121,16 @@ export abstract class ViewPane extends Pane implements IView {
 	public readonly onDidChangeVisibility = this.visibility.event;
 
 	protected constructor(container: HTMLElement, options: IViewPaneOptions) {
-		super(container, options);
+		let headerActionsVisibility = options.headerActionsVisibility ?? 'whenExpanded';
+		if (options.showActions === ViewPaneShowActions.WhenExpanded) {
+			headerActionsVisibility = 'whenExpanded';
+		} else if (options.showActions === ViewPaneShowActions.Always) {
+			headerActionsVisibility = 'always';
+		}
+		super(container, { ...options, headerActionsVisibility });
 		this.element.classList.add("ash-view-pane");
+		// Pane owns collapse visibility; this variant bypasses its hover/focus reveal.
+		this.element.classList.toggle('show-actions', options.showActions === ViewPaneShowActions.WhenExpanded || options.showActions === ViewPaneShowActions.Always);
 		this.element.dataset.viewId = options.id;
 		this.element.hidden = true;
 	}
