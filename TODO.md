@@ -35,8 +35,6 @@ macOS 现场检查未发现 tgrep；所见多组 `npm exec @playwright/mcp` 的�
 
 ## Windows 开发实验资源清理
 
-- [ ] 清理 2026-10-21 Rust 模块热更新试验的 `.build/cargo-live`。该独立缓存方案未采用，当前入口已复用正常 Cargo 缓存；目录删除被自动审批以“策略阻止”拒绝，未改用其他方式删除。运行与测量证据另存 `.build/build-health/rust-live-20261021/`。
-- [ ] 清理 Windows 测量实验目录。既有记录 `.build/perf-win-edit-20261018/round4-cleanup.json` 曾核对五个临时目录及 staging 无进程引用，但删除被自动审批拒绝。本轮该记录不在当前检出，未重新验证目录状态或执行删除。
 - 保存 Rust 到 App 可用的 15 秒目标尚未达到。2026-10-19 在 `3df4938da` 暂停开发与同步后完成迁移修复的 20 次匹配尝试：空库成功中位数 20.06 → 19.80 秒（5/5 → 5/5），100 条历史会话 22.27 → 21.15 秒（3/5 → 5/5），历史成功样本快 1.12 秒（5.0%）；仍差 4.80／6.15 秒。空库差异很小，不能用成功样本的条件中位数替代总体延迟或失败率结论。原始样本与阶段成本见 `docs/build.md` 完整循环复测及 `.build/perf-win-edit-20261019-migration/q2-summary.json`。
 - 本轮复测完成，修复内容与正常构建已恢复；此前第五轮的 diff 适配器边界优化仍保留，旧源码上的约 25 秒结果不作为本轮基线。15 秒是体验目标，并非测量推导的性能下限；若继续优化，需根据发布前约 13.7 秒及历史发布后约 7.4 秒的成本选择方向。上述结果仅覆盖 diff 适配器编辑；本机卷均为 NTFS，没有 Dev Drive。
 
@@ -63,7 +61,6 @@ macOS 现场检查未发现 tgrep；所见多组 `npm exec @playwright/mcp` 的�
 
 ## 系统授权保存 · TODO
 
-- [ ] **验收** · Windows 交互桌面按 [UAC 验收手册](docs/windows-system-authorization.md) 分别完成真实取消和批准。使用未提升权限的进程、开启 UAC，记录实际弹窗、程序／发布者、两次各 `1 passed` 及日志；自动断言须覆盖字节／BOM／CRLF、dirty、ACL 和焦点。管理员成员普通终端与标准用户输入另一管理员凭据分别验收；skipped 或通用保存失败不算通过。
 - [ ] **验收** · macOS 密码授权和 Linux pkexec 各自完成对应系统验收；当前 Dev Container 缺 pkexec／polkit／图形认证 agent，不能用免密规则或 root 执行代替真实系统授权。Windows UAC 结果不覆盖其他系统。
 
 ## Configuration / Preferences · TODO

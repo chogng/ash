@@ -1575,6 +1575,58 @@ fn explicit_unlock_cannot_change_permissions_through_a_hard_link() {
     assert_eq!(fs::read(&target).unwrap(), b"old");
 }
 
+#[cfg(windows)]
+#[test]
+fn acl_denied_write_is_reported_as_os_permission_denied() {
+    let dir = TestDir::new();
+    let protected = dir.path.join("protected");
+    fs::create_dir(&protected).unwrap();
+    let target = protected.join("file.txt");
+    fs::write(&target, b"old").unwrap();
+    let files = dir.file_system();
+    let identity = std::process::Command::new("whoami").output().unwrap();
+    assert!(identity.status.success());
+    let identity = String::from_utf8(identity.stdout).unwrap();
+    let identity = identity.trim();
+    let restricted = std::process::Command::new("icacls")
+        .arg(&protected)
+        .args([
+            "/inheritance:r",
+            "/grant:r",
+            &format!("{identity}:(OI)(CI)RX"),
+            "*S-1-5-18:(OI)(CI)F",
+        ])
+        .output()
+        .unwrap();
+    let denied = fs::write(&target, b"unexpected");
+    let result = files.write_file_with_condition(
+        Path::new("protected/file.txt"),
+        b"new",
+        1024,
+        &FileWriteCondition::ExpectedRevision(file_revision(b"old")),
+    );
+    let restored = std::process::Command::new("icacls")
+        .arg(&protected)
+        .args([
+            "/inheritance:e",
+            "/grant:r",
+            &format!("{identity}:(OI)(CI)F"),
+        ])
+        .output()
+        .unwrap();
+    assert!(restricted.status.success(), "{restricted:?}");
+    assert!(restored.status.success(), "{restored:?}");
+    assert_eq!(
+        denied.unwrap_err().kind(),
+        std::io::ErrorKind::PermissionDenied
+    );
+    assert!(
+        matches!(result, Err(FileSystemError::OsPermissionDenied(_))),
+        "{result:?}"
+    );
+    assert_eq!(fs::read(&target).unwrap(), b"old");
+}
+
 #[cfg(unix)]
 #[test]
 fn explicit_unlock_restores_readonly_mode_when_publication_is_denied() {

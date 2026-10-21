@@ -422,3 +422,51 @@ fn a_launcher_exiting_without_connecting_is_a_failure_and_cleans_private_logs() 
     assert!(!log_path.unwrap().exists());
     assert_eq!(std::fs::read_dir(directory.path()).unwrap().count(), 0);
 }
+
+#[test]
+fn helper_subprocess_entry() {
+    let Some(port) = std::env::var_os("ASH_TEST_ELEVATED_HELPER_PORT") else {
+        return;
+    };
+    let credential = std::env::var_os("ASH_TEST_ELEVATED_HELPER_CREDENTIAL").unwrap();
+    run_elevated_file_helper([port, credential]).unwrap();
+}
+
+#[test]
+fn exchange_confirms_publication_from_another_process() {
+    let directory = tempfile::tempdir().unwrap();
+    let target = directory.path().join("notes.txt");
+    std::fs::write(&target, b"old").unwrap();
+    let dir = Dir::open_local(directory.path()).unwrap();
+    let source = CancellationSource::new();
+    let bytes = b"\xef\xbb\xbfeditor\r\n";
+    let result = exchange(
+        &dir,
+        &job(&dir, Some(file_revision(b"old"))),
+        bytes,
+        &source.token(),
+        |port, credential| {
+            let diagnostics = tempfile::NamedTempFile::new().unwrap();
+            let child = Command::new(std::env::current_exe().unwrap())
+                .args([
+                    "--exact",
+                    "elevated::tests::helper_subprocess_entry",
+                    "--nocapture",
+                ])
+                .env("ASH_TEST_ELEVATED_HELPER_PORT", port.to_string())
+                .env("ASH_TEST_ELEVATED_HELPER_CREDENTIAL", credential)
+                .stdout(Stdio::from(diagnostics.as_file().try_clone().unwrap()))
+                .stderr(Stdio::from(diagnostics.as_file().try_clone().unwrap()))
+                .spawn()
+                .unwrap();
+            Ok(HelperProcess {
+                child,
+                diagnostics,
+                credential_path: credential.into(),
+            })
+        },
+    );
+    assert_eq!(result.unwrap().size_bytes, bytes.len() as u64);
+    assert_eq!(std::fs::read(&target).unwrap(), bytes);
+    assert_eq!(std::fs::read_dir(directory.path()).unwrap().count(), 1);
+}
