@@ -674,7 +674,6 @@ export class DiffEditorWidget extends DelegatingEditor implements IDiffEditor {
 			}
 		}
 		this.updateOverview();
-		this.gutter.layout(this.inlineView ? 0 : this.sash.left);
 	}
 
 	private updateOverview(): void {

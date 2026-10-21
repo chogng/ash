@@ -1726,6 +1726,51 @@ test('diff editors preserve source indentation on both sides', async ({ page }) 
 	}
 });
 
+for (const locale of ['en', 'zh-CN'] as const) {
+	test(`diff scrolling keeps the center gutter clear of both line-number columns (${locale})`, async ({ page }, testInfo) => {
+		await openDiffPage(page, locale);
+		const text = Array.from({ length: 160 }, (_, index) => `shared line ${index + 1}`).join('\n');
+		await page.evaluate(async text => {
+			await window.ashDiffIntegration.openTitleComparison();
+			window.ashDiffIntegration.setTitleComparisonText(text, `${text}\nadded`);
+			await window.ashDiffIntegration.updateTitleEditorConfiguration('editor.fontSize', 17);
+			await window.ashDiffIntegration.updateTitleEditorConfiguration('diffEditor.useInlineViewWhenSpaceIsLimited', false);
+		}, text);
+		const host = page.locator('#title-comparison');
+		await host.scrollIntoViewIfNeeded();
+		const input = host.locator('.modified .stanza-editor-input');
+		await input.focus();
+		for (const width of [1000, 840]) {
+			await page.evaluate(width => window.ashDiffIntegration.resizeTitleComparison(width), width);
+			for (const key of ['ControlOrMeta+End', 'PageUp', 'ControlOrMeta+Home']) {
+				await input.press(key);
+				await expect.poll(() => host.evaluate(root => {
+					const original = root.querySelector('.stanza-diff-editor-side.original')!.getBoundingClientRect();
+					const modified = root.querySelector('.stanza-diff-editor-side.modified')!.getBoundingClientRect();
+					const gutter = root.querySelector('.ash-diff-gutter')!.getBoundingClientRect();
+					return gutter.width > 0 && gutter.left >= original.right - 1 && gutter.right <= modified.left;
+				})).toBe(true);
+			}
+		}
+		await input.press('ControlOrMeta+End');
+		for (const side of ['original', 'modified']) {
+			const numbers = host.locator(`.stanza-diff-editor-side.${side} .line-numbers`);
+			await expect.poll(() => numbers.evaluateAll(nodes => {
+				const visible = nodes.filter(node => /^\d{3}$/.test(node.textContent ?? ''));
+				return visible.length > 0 && visible.every(node => {
+					const range = document.createRange();
+					range.selectNodeContents(node);
+					const text = range.getBoundingClientRect();
+					const margin = node.closest('.margin')!.getBoundingClientRect();
+					return text.left >= margin.left && text.right <= margin.right;
+				});
+			})).toBe(true);
+		}
+		await page.evaluate(() => window.ashDiffIntegration.setTitleTheme('vs'));
+		await host.screenshot({ path: testInfo.outputPath(`diff-line-numbers-${locale}.png`) });
+	});
+}
+
 test('both diff scroll viewports start after their fixed line-number gutter', async ({ page }) => {
 	await openDiffPage(page);
 	await page.evaluate(() => window.ashDiffIntegration.setComparisonText('long line '.repeat(100), `${'long line '.repeat(100)}changed`));
