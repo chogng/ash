@@ -18,6 +18,8 @@ import type { IViewPaneOptions, PartTitleProjection } from "../../../workbench/b
 import { ContextKeyService } from "../../../platform/contextkey/browser/contextKeyService.js";
 import { h } from "../../../base/browser/dom.js";
 import type { ILocalizationService } from "../../../workbench/services/localization/common/localizationService.js";
+import { HoverService, IHoverService } from '../../../platform/hover/browser/hoverService.js';
+import { BrowserContextViewService } from '../../../platform/contextview/browser/contextViewService.js';
 
 const browserEnvironment = new JSDOM("<!doctype html><body></body>");
 for (const [name, value] of Object.entries({
@@ -1990,7 +1992,7 @@ test("CompositeBar retains the startup language of View Container labels", () =>
 	dom.window.close();
 });
 
-test("Auxiliary Bar retains its fixed View as a standard Pane Composite", () => {
+test("Auxiliary Bar retains its View and exposes container selection as a standard Pane Composite", () => {
 	const dom = new JSDOM("<!doctype html><body></body>");
 	const disposables = new DisposableStore();
 	const registry = new WorkbenchViewRegistry();
@@ -2027,6 +2029,8 @@ test("Auxiliary Bar retains its fixed View as a standard Pane Composite", () => 
 	const commands = disposables.add(new CommandService(auxiliaryServices));
 	auxiliaryServices.registerInstance(IMenuService, new MenuService(commands, contextKeys));
 	auxiliaryServices.registerInstance(IContextMenuService, { contextMenuStyle: 'custom', showContextMenu() { }, hideContextMenu() { }, onDidShowContextMenu: BaseEvent.None, onDidHideContextMenu: BaseEvent.None });
+	const contextViews = disposables.add(new BrowserContextViewService(dom.window.document.body));
+	auxiliaryServices.registerInstance(IHoverService, disposables.add(new HoverService(auxiliaryServices.get(IConfigurationService), contextViews, auxiliaryServices.get(IContextMenuService))));
 	const auxiliarybar = disposables.add(auxiliaryServices.createInstance(AuxiliaryBarPart, dom.window.document.body));
 	auxiliarybar.addComposite(composite);
 	auxiliarybar.showComposite(descriptor.id);
@@ -2040,7 +2044,7 @@ test("Auxiliary Bar retains its fixed View as a standard Pane Composite", () => 
 	assert.equal(contextKeys.getValue('activeAuxiliary'), descriptor.id);
 	const compositeBar = auxiliarybar.domNode.querySelector<HTMLElement>(".ash-composite-bar");
 	assert.ok(compositeBar);
-	assert.equal(compositeBar.hidden, true);
+	assert.equal(compositeBar.hidden, false);
 	const action = auxiliarybar.domNode.querySelector<HTMLButtonElement>(".ash-pane-composite-title-view-actions button");
 	assert.ok(action);
 	action.focus();

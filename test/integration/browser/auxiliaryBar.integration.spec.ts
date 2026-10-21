@@ -1,4 +1,67 @@
 import { test, expect } from '@playwright/test';
+import type { ActivityBarPosition } from '../../../src/ash/workbench/common/configuration.js';
+import type { ViewContainerLocation } from '../../../src/ash/workbench/common/views.js';
+
+for (const chinese of [false, true]) {
+	test(`Auxiliary Bar selector follows position and active containers while retaining custom title controls (${chinese ? 'zh-CN' : 'en'})`, async ({ page }, testInfo) => {
+		const errors: string[] = [];
+		page.on('pageerror', error => errors.push(error.message));
+		await page.goto(`/auxiliaryBar.html${chinese ? '?chinese' : ''}`);
+		await page.waitForFunction(() => !!window.ashAuxiliaryBarIntegration);
+		const bar = page.locator('[data-part="auxiliarybar"]');
+		const selector = bar.locator('.ash-composite-bar');
+		const row = bar.locator('.ash-auxiliarybar-view-selector');
+		const content = bar.locator(':scope > .ash-auxiliarybar-content');
+		const draft = bar.getByRole('textbox', { name: 'Chat draft', exact: true });
+		const title = bar.getByRole('button', { name: 'Chat title control', exact: true });
+		await draft.fill('Retained draft');
+		await expect(selector).toBeVisible();
+		await expect(title).toBeVisible();
+		await page.evaluate(() => window.ashAuxiliaryBarIntegration.setAutoHide(true));
+		await expect(selector).toBeVisible();
+		for (const position of ['top', 'bottom']) {
+			await page.evaluate(position => window.ashAuxiliaryBarIntegration.setLocation(position as ActivityBarPosition), position);
+			await expect(selector).toBeHidden();
+			await expect(title).toBeVisible();
+			await page.evaluate(() => window.ashAuxiliaryBarIntegration.setAutoHide(false));
+			await expect(selector).toBeVisible();
+			const before = await content.evaluate(element => element.clientHeight);
+			const rowBounds = (await row.boundingBox())!;
+			const contentBounds = (await content.boundingBox())!;
+			if (position === 'top') expect(rowBounds.y + rowBounds.height).toBeLessThanOrEqual(contentBounds.y);
+			else expect(rowBounds.y).toBeGreaterThanOrEqual(contentBounds.y + contentBounds.height);
+			await selector.getByRole('tab', { name: 'Chat', exact: true }).focus();
+			await page.evaluate(() => window.ashAuxiliaryBarIntegration.setAutoHide(true));
+			await expect(selector).toBeHidden();
+			await expect(draft).toBeFocused();
+			expect(await content.evaluate(element => element.clientHeight)).toBe(before + 36);
+			for (const theme of [0, 1, 2, 3]) {
+				await page.evaluate(theme => window.ashAuxiliaryBarIntegration.setTheme(theme), theme);
+				await expect(title).toBeVisible();
+				await expect(draft).toHaveValue('Retained draft');
+			}
+			await page.evaluate(() => window.ashAuxiliaryBarIntegration.setOtherActive(true));
+			await expect(selector).toBeVisible();
+			await expect(selector.getByRole('tab', { name: 'Other', exact: true })).toBeVisible();
+			await page.evaluate(() => window.ashAuxiliaryBarIntegration.moveOther('sidebar' as ViewContainerLocation));
+			await expect(selector).toBeHidden();
+			await page.evaluate(() => window.ashAuxiliaryBarIntegration.moveOther('auxiliarybar' as ViewContainerLocation));
+			await expect(selector).toBeVisible();
+			await page.evaluate(() => window.ashAuxiliaryBarIntegration.setOtherActive(false));
+			await expect(selector).toBeHidden();
+			await expect(title).toBeVisible();
+		}
+		await page.evaluate(() => window.ashAuxiliaryBarIntegration.setLocation('hidden' as ActivityBarPosition));
+		await expect(selector).toBeHidden();
+		await expect(title).toBeVisible();
+		await page.evaluate(() => window.ashAuxiliaryBarIntegration.setLocation('default' as ActivityBarPosition));
+		await expect(selector).toBeVisible();
+		await bar.getByRole('button', { name: 'Clear draft', exact: true }).press('Enter');
+		await expect(draft).toHaveValue('');
+		await bar.screenshot({ path: testInfo.outputPath('auxiliary-container-selector.png') });
+		expect(errors).toEqual([]);
+	});
+}
 
 test('Auxiliary Bar title buttons maximize, restore and close without losing the retained draft', async ({ page }, testInfo) => {
 	const errors: string[] = [];

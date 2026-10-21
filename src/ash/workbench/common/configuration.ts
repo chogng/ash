@@ -212,7 +212,7 @@ export const WorkbenchConfiguration = Object.freeze({
 		setting: {
 			valueType: 'boolean',
 			get title() { return localize('workbench.activityBar.autoHide.title', 'Auto Hide Activity Bar'); },
-			get description() { return localize('workbench.activityBar.autoHide.description', 'Hide the primary side bar view switcher when it is at the top or bottom and at most one container has active views.'); },
+			get description() { return localize('workbench.activityBar.autoHide.description', 'Hide each side bar view switcher when it is at the top or bottom and at most one container at that location has active views.'); },
 		},
 	}),
 	activityBarBadges: configurationRegistry.registerConfiguration<boolean>({

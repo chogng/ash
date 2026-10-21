@@ -12,6 +12,7 @@ import { createTestComponentServices } from '../../../common/testEditorServices.
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
 import { InMemoryConfigurationService } from '../../../../../platform/configuration/common/inMemoryConfigurationService.js';
 import { WorkbenchConfiguration } from '../../../../common/configuration.js';
+import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
 
 function createFixture(resources: DisposableStore) {
 	const container = document.createElement('div');
@@ -26,6 +27,8 @@ function createFixture(resources: DisposableStore) {
 }
 
 suite('SidebarPart boundary sashes', () => {
+	ensureNoDisposablesAreLeakedInTestSuite();
+
 	test('auto hide defaults off and rejects invalid persisted values', async () => {
 		using configuration = new InMemoryConfigurationService();
 		assert.equal(configuration.getValue(WorkbenchConfiguration.activityBarAutoHide), false);

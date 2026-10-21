@@ -500,7 +500,7 @@ test('Two windows share the profile file while ignored settings still notify fil
 });
 
 test('Production window settings keep Workbench values and report a localized Sessions write error', async () => {
-	const source = JSON.stringify({ [WorkbenchConfiguration.windowTitle]: 'Custom', [WorkbenchConfiguration.sideBarLocation]: 'right', [WorkbenchConfiguration.activityBarLocation]: 'top', [WorkbenchConfiguration.activityBarCompact]: true });
+	const source = JSON.stringify({ [WorkbenchConfiguration.windowTitle]: 'Custom', [WorkbenchConfiguration.sideBarLocation]: 'right', [WorkbenchConfiguration.activityBarLocation]: 'top', [WorkbenchConfiguration.activityBarCompact]: true, [WorkbenchConfiguration.activityBarAutoHide]: true });
 	const initialSnapshot = { revision: 1, document: { version: 1 as const, source } };
 	using sessions = new ConfigurationService({ source });
 	using workbench = new WorkspaceService({ source });
@@ -508,10 +508,12 @@ test('Production window settings keep Workbench values and report a localized Se
 		sessions.getValue(WorkbenchConfiguration.windowTitle), sessions.getValue(WorkbenchConfiguration.sideBarLocation), sessions.getValue(WorkbenchConfiguration.activityBarLocation), sessions.getValue(WorkbenchConfiguration.activityBarCompact),
 		workbench.getValue(WorkbenchConfiguration.windowTitle), workbench.getValue(WorkbenchConfiguration.sideBarLocation), workbench.getValue(WorkbenchConfiguration.activityBarLocation), workbench.getValue(WorkbenchConfiguration.activityBarCompact),
 	], ['${appName}', 'left', ActivityBarPosition.DEFAULT, false, 'Custom', 'right', ActivityBarPosition.TOP, true]);
+	assert.deepEqual([sessions.getValue(WorkbenchConfiguration.activityBarAutoHide), workbench.getValue(WorkbenchConfiguration.activityBarAutoHide)], [false, true]);
 	const chinese = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
 	setNlsMessages('zh-CN', chinese.bundles);
 	try {
 		await assert.rejects(sessions.updateValue(WorkbenchConfiguration.sideBarLocation, 'right'), { message: '设置 workbench.sideBar.location 在此窗口中为只读。' });
+		await assert.rejects(sessions.updateValue(WorkbenchConfiguration.activityBarAutoHide, true), { message: '设置 workbench.activityBar.autoHide 在此窗口中为只读。' });
 	} finally {
 		resetNlsResolver();
 	}

@@ -10,12 +10,15 @@ import { ViewPane, type IViewPaneOptions } from '../../../browser/parts/views/vi
 import { VisibleViewContainersTracker } from '../../../browser/parts/visibleViewContainersTracker.js';
 import { IViewDescriptorService, ViewContainerLocation, WorkbenchViewRegistry } from '../../../common/views.js';
 import { ViewDescriptorService } from '../../../services/views/browser/viewDescriptorService.js';
+import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../base/test/common/utils.js';
 
 class FixtureView extends ViewPane {
 	constructor(container: HTMLElement, options: IViewPaneOptions) { super(container, options); }
 }
 
 suite('VisibleViewContainersTracker', () => {
+	ensureNoDisposablesAreLeakedInTestSuite();
+
 	function fixture(resources: DisposableStore) {
 		const registry = resources.add(new WorkbenchViewRegistry());
 		const context = resources.add(new ContextKeyService());
