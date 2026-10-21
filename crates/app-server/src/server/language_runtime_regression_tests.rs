@@ -296,3 +296,52 @@ fn directory_reset_accepts_the_new_authorized_root_and_discards_old_documents() 
     );
     fixture.server.close_connection(connection);
 }
+
+#[test]
+fn client_settings_restart_only_the_owning_connections_server_and_clear_on_removal() {
+    let fixture = Fixture::new();
+    let mut first = fixture.connection();
+    let mut second = fixture.connection();
+    fixture.configure(&mut first, "fixture", "demo", true, "settings");
+    let settings = json!({"settings":{"fixture":{"enabled":true}}});
+    assert!(
+        fixture
+            .call(&mut first, "language/servers", settings.clone())
+            .get("result")
+            .is_some()
+    );
+    let before = fixture.hover(&mut first, "demo", 1, "alpha");
+    let peer = fixture.hover(&mut second, "demo", 1, "beta");
+    assert!(
+        fixture
+            .call(&mut first, "language/servers", settings)
+            .get("result")
+            .is_some()
+    );
+    assert_eq!(
+        contents(&fixture.hover(&mut first, "demo", 1, "alpha")),
+        contents(&before)
+    );
+    assert!(
+        fixture
+            .call(&mut first, "language/servers", json!({"settings":{}}))
+            .get("result")
+            .is_some()
+    );
+    let after = fixture.hover(&mut first, "demo", 1, "alpha");
+    assert_ne!(
+        contents(&after),
+        contents(&before),
+        "removing settings replaces the launch"
+    );
+    assert!(
+        contents(&after).starts_with("alpha||"),
+        "the document is replayed after replacing the server"
+    );
+    assert_eq!(
+        contents(&fixture.hover(&mut second, "demo", 1, "beta")),
+        contents(&peer)
+    );
+    fixture.server.close_connection(first);
+    fixture.server.close_connection(second);
+}

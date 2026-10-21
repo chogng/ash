@@ -149,7 +149,7 @@ server 选定的位置编码。
   definition navigation；
 - ✅ Desktop 已把 completion resolve/commands、additional edits、semantic tokens 和文档特性接入现有 Editor contract；多 definition target 复用 Peek 列表；
 - 尚未完成：diagnostic result-id/partial-result/refresh；
-- ✅ App Server 消费已验证的 Node/direct 语言包；Workbench 通过 Extensions 安装服务器，日志、消息与进度接入 Output、Dialog 和状态栏；
+- ✅ App Server 消费已验证的 Node/direct 语言包；Workbench 通过 Extensions 安装服务器，日志、消息与进度接入 Output、通知中心和状态栏；
 - 尚未安装：references/navigation session cache；先由现有指标证明重复成本，再设计 incarnation/revision
   完整绑定的 key 与失效规则；
 - ✅ server execution 已由 App Server 承载，目录授权与客户端连接生命周期由产品宿主检查；跨系统远程体验仍需各平台验收。
@@ -158,6 +158,13 @@ server 选定的位置编码。
 
 宿主把规范化的 profile 参数、初始化选项和 settings 放进 `LanguageServerDefinition`。
 `ProtocolEventBridge` 按请求顺序解析 settings 的 section，缺失 section 返回 null。
+Desktop 的配置 service 保留由语言服务器解释、尚无 Workbench schema 的 JSON 设置，按用户、工作区和目录层合并。
+窗口等待配置初始化后，通过 `language/servers.settings` 发送每个目录的 `rust-analyzer` section；
+该快照只属于当前 connection 的目录 session，不写回 App Server profile。Rust section 同时进入
+initialize options 和 `workspace/configuration`；外部修改或移除设置后，退役该目录受影响的实例，
+等待新实例就绪并重放打开的文档。`window/showMessage` 使用对应严重性的非模态通知，附带“显示输出”操作。
+本仓库的 Rust 检查命令通过 Just 调用 `scripts/cargo.py`，复用校验过的 grammar、V8 与 Sherpa 原生依赖；
+保存检查使用 rust-analyzer 的 `{label}` 包标识，避免把目录设置改成全工作区检查。
 每个目录 session 在 initialize 中发布自己的 workspace folder。静态与动态 capability 的触发字符
 随 incarnation 的 capability snapshot 发布，客户端按实际声明注册补全和签名帮助。
 `save_document(path, saved_text)` 在同一 supervisor 队列发送 didSave，不覆盖更新的 dirty snapshot。

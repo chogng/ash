@@ -243,6 +243,13 @@ impl<'ctx, C: LanguageRequestProcessorContext + ?Sized> LanguageRequestProcessor
 
     pub(super) fn language_servers(&self, params: &Value) -> Result<Value, RpcError> {
         let params: LanguageServersParams = decode(params)?;
+        if let Some(settings) = &params.settings
+            && (settings.len() > 128
+                || settings.keys().any(|key| key.is_empty() || key.len() > 256)
+                || serde_json::to_vec(settings).map_or(true, |value| value.len() > 256 * 1024))
+        {
+            return Err(RpcError::new(-32602, AppServerErrorName::InvalidParams));
+        }
         let dir = self
             .context
             .language_dir_root_for(params.dir_id.as_deref(), params.session_directory.as_ref())?;
@@ -252,7 +259,10 @@ impl<'ctx, C: LanguageRequestProcessorContext + ?Sized> LanguageRequestProcessor
             .ok_or_else(|| language_error(AppServerErrorName::LanguageServiceUnavailable))?
             .read_snapshot()
             .map_err(|_| language_error(AppServerErrorName::LanguageServiceUnavailable))?;
-        let runtime = self.runtime()?;
+        let mut runtime = self.runtime()?;
+        if let Some(settings) = params.settings {
+            runtime.configure_workspace_settings(dir.canonical_path(), settings);
+        }
         let definitions = runtime
             .definitions(dir.canonical_path(), &snapshot.values.language_servers)
             .map_err(|_| language_error(AppServerErrorName::LanguageServiceUnavailable))?;

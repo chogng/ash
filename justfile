@@ -132,6 +132,10 @@ test-tui *args:
 check *args:
     {{ python }} -B scripts/cargo.py check -p {{ recipe_args }}
 
+# Language-server checks need the same verified native inputs as normal builds.
+check-workspace *args:
+    {{ python }} -B scripts/cargo.py check --workspace {{ recipe_args }}
+
 # Compile every target in one Rust package and reject compiler warnings.
 rust-warnings *args:
     {{ python }} -B scripts/cargo.py --deny-warnings check -p {{ recipe_args }} --all-targets

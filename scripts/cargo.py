@@ -387,6 +387,23 @@ def main(arguments: list[str] | None = None) -> int:
             cargo_arguments[0] == "test"
             and not tui_process_tests
             and "--no-run" not in cargo_arguments
+            and "ASH_MANAGED_LIFECYCLE_TEST_HOST" not in environment
+            and "ash-app-server-runtime" in packages
+        ):
+            # The library test binary cannot dispatch --terminal-host. Build a matching
+            # host that exercises the real managed entrypoint and acknowledges its return.
+            environment["ASH_MANAGED_LIFECYCLE_TEST_HOST"] = prepare_test_executable(
+                args.cargo,
+                cargo_arguments,
+                environment,
+                "ash-app-server-runtime",
+                target_name="managed_lifecycle",
+                target_kind="example",
+            )
+        if (
+            cargo_arguments[0] == "test"
+            and not tui_process_tests
+            and "--no-run" not in cargo_arguments
             and "ASH_APP_SERVER_PATH" not in environment
             and "ash-remote-server" in packages
         ):

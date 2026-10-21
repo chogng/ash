@@ -251,7 +251,7 @@ class CodeModeHostTests(unittest.TestCase):
         )
         # A broader invocation still owns unit tests that require those programs.
         self.assertEqual(main([*arguments, "--lib"]), 0)
-        self.assertEqual(len(prepare.call_args_list), 4)
+        self.assertEqual(len(prepare.call_args_list), 5)
 
     @patch("scripts.cargo.subprocess.run")
     def test_uses_reported_executable_with_the_test_build_settings(self, run) -> None:
@@ -323,13 +323,27 @@ class CodeModeHostTests(unittest.TestCase):
                 self.assertEqual(main(["test", "-p", package, "--lib"]), 0)
                 self.assertEqual(
                     [call.args[3] for call in prepare.call_args_list],
-                    ["ash-markdown-math", "ash-debug-lldb"],
+                    ["ash-markdown-math", "ash-debug-lldb"]
+                    + (
+                        ["ash-app-server-runtime"]
+                        if package == "ash-app-server-runtime"
+                        else []
+                    ),
                 )
                 environment = run.call_args.kwargs["env"]
                 self.assertEqual(
                     environment["ASH_MARKDOWN_MATH_BIN"], "/runtime/helper"
                 )
                 self.assertEqual(environment["ASH_DEBUG_LLDB_BIN"], "/runtime/helper")
+                if package == "ash-app-server-runtime":
+                    self.assertEqual(
+                        environment["ASH_MANAGED_LIFECYCLE_TEST_HOST"],
+                        "/runtime/helper",
+                    )
+                    self.assertEqual(
+                        prepare.call_args.kwargs,
+                        {"target_name": "managed_lifecycle", "target_kind": "example"},
+                    )
 
     @patch("scripts.cargo.subprocess.run")
     def test_forwards_all_cargo_jobs_argument_forms(self, run) -> None:

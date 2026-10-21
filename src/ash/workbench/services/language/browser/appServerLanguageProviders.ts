@@ -12,6 +12,7 @@ import { type ILanguageApi } from "../../../../platform/language/common/language
 import { workspaceResourceFromPath } from "../../../../platform/workspace/common/workspace.js";
 import { workspaceRelativePath, IWorkspaceContextService } from "../../../../platform/workspace/common/workspace.js";
 import { IServerEventApi } from "../../../../platform/agentHost/common/appServerApi.js";
+import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { IWorkspaceTrustManagementService } from '../../../../platform/workspace/common/workspaceTrust.js';
 import { AppServerLanguageSupport } from "./appServerLanguageSupport.js";
 import { resolveAppServerLanguageDirAccess } from "./appServerLanguageWorkspace.js";
@@ -39,6 +40,7 @@ export class AppServerLanguageProviders extends Disposable {
 	private refreshGeneration = 0;
 	private refreshQueue = Promise.resolve();
 	private alive = true;
+	private started = false;
 	private readonly triggers = new Map<string, ServerTriggers>();
 
 	constructor(
@@ -48,6 +50,7 @@ export class AppServerLanguageProviders extends Disposable {
 		@IWorkspaceContextService private readonly workspace: IWorkspaceContextService,
 		@IWorkspaceTrustManagementService private readonly workspaceTrust: IWorkspaceTrustManagementService,
 		@IServerEventApi events: IServerEventApi,
+		@IConfigurationService private readonly configuration: IConfigurationService,
 	) {
 		super();
 		const subscription = events.subscribe(event => {
@@ -72,9 +75,18 @@ export class AppServerLanguageProviders extends Disposable {
 			if (event.method === "extensions/changed" || event.method === "config/changed") this.queueRefresh();
 		});
 		this._register(toDisposable(() => subscription.dispose()));
+		this._register(configuration.onDidChangeConfiguration(event => {
+			if (event.affectsConfiguration('rust-analyzer')) this.queueRefresh();
+		}));
 		if (options.checkWorkspaceTrust) this._register(workspaceTrust.onDidChangeTrust(() => this.queueRefresh()));
 		this._register(workspace.onDidChangeWorkspace(() => { this.triggers.clear(); this.queueRefresh(); }));
 		this._register(toDisposable(() => { this.alive = false; }));
+	}
+
+	/** The window starts executable providers only after its configuration layers are loaded. */
+	start(): void {
+		if (this.started || !this.alive) return;
+		this.started = true;
 		this.queueRefresh();
 	}
 
@@ -111,7 +123,7 @@ export class AppServerLanguageProviders extends Disposable {
 	}
 
 	private queueRefresh(): void {
-		if (!this.alive) return;
+		if (!this.alive || !this.started) return;
 		this.refreshGeneration += 1;
 		if (this.refreshQueued) return;
 		this.refreshQueued = true;
@@ -129,7 +141,7 @@ export class AppServerLanguageProviders extends Disposable {
 		const access = await resolveAppServerLanguageDirAccess(this.workspace, this.workspaceTrust, this.options.checkWorkspaceTrust);
 		if (!this.alive || generation !== this.refreshGeneration || this.workspace.getWorkspace().id !== access.workspaceId) return;
 		if (access.allowed) {
-			const support = await AppServerLanguageSupport.read(this.api, this.workspace);
+			const support = await AppServerLanguageSupport.read(this.api, this.workspace, this.configuration);
 			if (!this.alive || generation !== this.refreshGeneration) return;
 			this.registrations.clear();
 			if (support.languageIds.length > 0) this.registrations.value = this.install(support);

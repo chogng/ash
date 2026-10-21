@@ -560,7 +560,7 @@ export abstract class Workbench extends Disposable {
 		services.registerInstance(IWorkspaceTrustManagementService, this._register(services.createInstance(WorkspaceTrustManagementService)));
 		this._register(services.createInstance(WorkbenchLanguageFeatures));
 		const checkWorkspaceTrust = !!options.nativeHostApi;
-		if (options.api.hasAppServer) this._register(services.createInstance(AppServerLanguageProviders, options.api.language, { checkWorkspaceTrust }));
+		const languageProviders = options.api.hasAppServer ? this._register(services.createInstance(AppServerLanguageProviders, options.api.language, { checkWorkspaceTrust })) : undefined;
 		const languageDiagnosticsService = this._register(services.createInstance(AppServerLanguageDiagnosticsService, options.api.language, undefined, checkWorkspaceTrust));
 		services.registerInstance(ILanguageDiagnosticsService, languageDiagnosticsService);
 		this._register(new LanguageDiagnosticsMarkerBridge(languageDiagnosticsService, services.get(IMarkerService)));
@@ -591,7 +591,10 @@ export abstract class Workbench extends Disposable {
 		services.registerInstance(IAccountPolicyService, accountPolicies);
 		const policies = this._register(new MultiplexPolicyService([systemPolicies, accountPolicies]));
 		services.registerInstance(IPolicyService, policies);
-		serviceContributionReady.push(configurationService.initialize(fileService, policies, workingCopies));
+		serviceContributionReady.push(configurationService.initialize(fileService, policies, workingCopies).then(() => {
+			languageProviders?.start();
+			languageDiagnosticsService.start();
+		}));
 		const sessionGitHub = this._register(services.createInstance(SessionsGitHubService));
 		services.registerInstance(ISessionsGitHubService, sessionGitHub);
 		sessionGitHub.initialize();

@@ -14,6 +14,7 @@ import { AppServerRemoteError } from "../../../../../platform/agentHost/common/a
 import { type ILanguageApi } from "../../../../../platform/language/common/languageApi.js";
 import { IWorkspaceTrustManagementService, type WorkspaceTrustPermission } from '../../../../../platform/workspace/common/workspaceTrust.js';
 import { IWorkspaceContextService } from '../../../../../platform/workspace/common/workspace.js';
+import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { Disposable } from '../../../../../base/common/lifecycle.js';
 import { type ServerNotification } from '../../../../../../../.build/protocol/typescript/index.js';
@@ -26,12 +27,15 @@ function createDiagnosticsService(api: ILanguageApi, events: IServerEventApi, wo
 	services.registerInstance(IServerEventApi, events);
 	services.registerInstance(ITextFileService, { onDidSave: saves, onDidChangeFiles: Event.None, resolve: async () => { throw new Error('unexpected resolve'); }, save: async () => { throw new Error('unexpected save'); } });
 	services.registerInstance(IWorkspaceContextService, workspace);
+	services.registerInstance(IConfigurationService, workspace);
 	services.registerInstance(IWorkspaceTrustManagementService, trust ?? {
 		onDidChangeTrust: Event.None,
 		getUriTrustInfo: async () => { throw new Error('Backend-authorized diagnostics must not inspect host grants'); },
 		getWorkspaceTrustInfo: async () => undefined,
 	});
-	return services.createInstance(AppServerLanguageDiagnosticsService, api, documents, !!trust);
+	const service = services.createInstance(AppServerLanguageDiagnosticsService, api, documents, !!trust);
+	service.start();
+	return service;
 }
 
 test("App Server diagnostics service synchronizes, filters revisions, and closes once", async () => {
@@ -241,7 +245,11 @@ class FakeLanguageApi implements ILanguageApi {
 		{ id: "json", languageIds: ["json", "jsonc"] },
 		{ id: "shell", languageIds: ["shellscript"] },
 	];
-	async servers(): ReturnType<ILanguageApi["servers"]> { return { servers: this.availableServers }; }
+	readonly serverReads: Parameters<ILanguageApi['servers']>[0][] = [];
+	async servers(params: Parameters<ILanguageApi['servers']>[0]): ReturnType<ILanguageApi["servers"]> {
+		this.serverReads.push(params);
+		return { servers: this.availableServers };
+	}
 
 	readonly synchronized: Parameters<ILanguageApi["synchronize"]>[0][] = [];
 	readonly closed: Parameters<ILanguageApi["close"]>[0][] = [];
@@ -525,4 +533,20 @@ test('successful saves synchronize the current dirty snapshot before reporting e
 	saves.fire({ resource, content: 'saved', revision: 'disk-revision' });
 	await tick();
 	assert.equal(operations.length, 2);
+});
+
+test('language startup receives effective Rust settings and resynchronizes open models after external changes', async () => {
+	const api = new FakeLanguageApi();
+	using workspace = new TestWorkspaceService({ id: 'rust-settings', uri: URI.file('/project') });
+	await workspace.write('{ "rust-analyzer.cargo.buildScripts.enable": false, "rust-analyzer.cargo.targetDir": ".build/analysis" }');
+	using service = createDiagnosticsService(api, new FakeServerEvents(), workspace);
+	using model = new TextModel('fn main() {}\n');
+	using document = service.acquire(URI.file('/project/main.rs'), 'rust', model);
+	await tick();
+	assert.deepEqual(api.serverReads.at(-1)?.settings, { 'rust-analyzer': { cargo: { buildScripts: { enable: false }, targetDir: '.build/analysis' } } });
+	const count = api.synchronized.length;
+	await workspace.write('{}');
+	await tick();
+	assert.deepEqual(api.serverReads.at(-1)?.settings, { 'rust-analyzer': {} });
+	assert.equal(api.synchronized.length, count + 1);
 });

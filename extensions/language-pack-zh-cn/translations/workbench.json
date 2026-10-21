@@ -2041,6 +2041,7 @@
     "prompt.skill.field": "Skill 字段",
     "terminal.profile.duplicate": "终端配置已注册：{0}",
     "languageServer.installing": "正在安装 {0}…",
+    "languageServer.showOutput": "显示输出",
     "progress.sourceTooltip": "[{0}] {1}",
     "progress.titleMessage": "{0}：{1}",
     "progress.running": "正在处理…",

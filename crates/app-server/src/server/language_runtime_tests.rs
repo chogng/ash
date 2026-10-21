@@ -1,3 +1,4 @@
+use std::collections::BTreeMap;
 use std::fs;
 use std::path::Path;
 use std::sync::Arc;
@@ -17,6 +18,7 @@ use tempfile::TempDir;
 
 use super::AppServerLanguageRuntime;
 use super::UpdateBroker;
+use super::configure_definition;
 use super::configured_provider_definitions;
 use super::preference;
 
@@ -657,4 +659,68 @@ fn connection_sessions_keep_independent_revisions_saved_text_and_process_lifetim
         );
         assert_eq!(messages.last().unwrap()["method"], "exit");
     }
+}
+
+#[test]
+fn rust_workspace_settings_merge_profile_options_before_initialization_and_stay_directory_local() {
+    let fixture = ProviderFixture::new();
+    let configuration = configuration(LanguageServerModeConfig::Enabled, None);
+    let definition = ash_lsp_server_provider::resolve_executable(
+        "rust-analyzer",
+        &["rust".to_owned()],
+        &fixture.node,
+        fixture.dir.path(),
+    )
+    .unwrap();
+    let mut config = configuration;
+    config.servers.insert(LanguageServerId::new("rust-analyzer").unwrap(), LanguageServerConfig {
+        initialization_options: Some(serde_json::json!({"cargo":{"features":["profile-feature"]}})),
+        settings: BTreeMap::from([("rust-analyzer".into(), serde_json::json!({"cargo":{"allTargets":true,"extraEnv":{"NATIVE_LIB":"/prepared/lib"}}}))]),
+        ..Default::default()
+    });
+    let mut runtime = AppServerLanguageRuntime::new(Arc::new(UpdateBroker::default()));
+    let settings = BTreeMap::from([(
+        "rust-analyzer".into(),
+        serde_json::json!({"cargo":{"allTargets":false,"buildScripts":{"enable":false}},"check":{"workspace":false}}),
+    )]);
+    runtime.configure_workspace_settings(fixture.dir.path(), settings.clone());
+    let other = fixture.root.path().join("another");
+    runtime.configure_workspace_settings(&other, BTreeMap::new());
+    assert_eq!(runtime.dir_state.settings, settings);
+    assert!(runtime.env_runtimes[&other].dir_state.settings.is_empty());
+    let resolved = configure_definition(definition, &config, &runtime.dir_state.settings).unwrap();
+    assert_eq!(
+        resolved.settings()["rust-analyzer"]["cargo"]["allTargets"],
+        false
+    );
+    let (_, _, options) = resolved.into_launch_parts();
+    assert_eq!(
+        options.unwrap(),
+        serde_json::json!({
+            "cargo":{"features":["profile-feature"],"allTargets":false,"extraEnv":{"NATIVE_LIB":"/prepared/lib"},"buildScripts":{"enable":false}},
+            "check":{"workspace":false}
+        })
+    );
+    runtime.definitions_dirty = false;
+    runtime.configure_workspace_settings(fixture.dir.path(), settings);
+    assert!(
+        !runtime.definitions_dirty,
+        "unchanged discovery must not restart the server"
+    );
+    runtime.configure_workspace_settings(fixture.dir.path(), BTreeMap::new());
+    assert!(
+        runtime.definitions_dirty,
+        "removing settings retires the prior launch"
+    );
+    runtime.dir_state.root = None;
+    let settings = BTreeMap::from([(
+        "rust-analyzer".into(),
+        serde_json::json!({"check":{"workspace":false}}),
+    )]);
+    runtime.configure_workspace_settings(&other, settings.clone());
+    assert_eq!(runtime.env_runtimes[&other].dir_state.settings, settings);
+    assert!(
+        runtime.dir_state.root.is_none(),
+        "a retained directory keeps its existing owner"
+    );
 }

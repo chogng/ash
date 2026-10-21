@@ -28,6 +28,8 @@ interface PlaywrightFixtures {
 	readonly electronArgs: readonly string[];
 	/** JSON settings seeded in this Electron fixture's isolated profile before launch. */
 	readonly electronUserSettings: Readonly<Record<string, unknown>> | undefined;
+	/** Disable the shared LSP peer when a scenario configures its own stdio server. */
+	readonly useDefaultLanguageServer: boolean;
 	readonly webAppServer: WebLaunchResult | undefined;
 	readonly runningApplication: RunningApplication;
 	readonly restartWorkbench: RunningApplication['restart'];
@@ -65,6 +67,7 @@ export const test = base.extend<PlaywrightFixtures>({
 	useInMemorySecretStorage: [true, { option: true }],
 	electronArgs: [[], { option: true }],
 	electronUserSettings: [undefined, { option: true }],
+	useDefaultLanguageServer: [true, { option: true }],
 	includeLargeTestFile: [false, { option: true }],
 	gitRepository: [false, { option: true }],
 	gitMergeConflict: [false, { option: true }],
@@ -97,7 +100,7 @@ export const test = base.extend<PlaywrightFixtures>({
 	},
 	// Startup (30s), process exit (10s), and daemon stop (30s) have independent
 	// owned budgets. Keep them inside the fixture budget; test actions retain 45s.
-	runningApplication: [async ({ target, testWorkspace, openWorkspace, webAppServer, baseURL, backendConfiguration, backendFixture, githubAccount, video, electronWindowMode, electronArgs, electronUserSettings, useInMemorySecretStorage }, use, testInfo) => {
+	runningApplication: [async ({ target, testWorkspace, openWorkspace, webAppServer, baseURL, backendConfiguration, backendFixture, githubAccount, video, electronWindowMode, electronArgs, electronUserSettings, useInMemorySecretStorage, useDefaultLanguageServer }, use, testInfo) => {
 		if (backendFixture && githubAccount) { throw new Error('Backend fixture and GitHub account fixture both select product services'); }
 		// Evidence scenarios opt into full recording; the launchers own every page until cleanup.
 		const videoOptions = typeof video === 'string' ? { mode: video, size: undefined } : video;
@@ -191,7 +194,7 @@ export const test = base.extend<PlaywrightFixtures>({
 				await writeFile(join(profileDirectory, 'config.toml'), backendConfiguration);
 			}
 			const languageServer = process.env.ASH_PLAYWRIGHT_LANGUAGE_SERVER;
-			if (languageServer && target.appServerMode === 'required') {
+			if (useDefaultLanguageServer && languageServer && target.appServerMode === 'required') {
 				const profileDirectory = join(userDataDirectory, 'profile');
 				await mkdir(profileDirectory, { recursive: true });
 				await writeFile(join(profileDirectory, 'config.toml'), `${backendConfiguration ?? ''}\n[languageServers.servers.rust-analyzer]\nmode = "enabled"\nexecutable = ${JSON.stringify(languageServer)}\n`);

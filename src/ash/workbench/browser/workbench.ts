@@ -786,7 +786,7 @@ export class Workbench extends Disposable {
 		// Only the desktop host may inspect directory grants. Web language requests
 		// are authorized by the server for the authenticated workspace.
 		const checkWorkspaceTrust = !!nativeHostApi;
-		if (api.hasAppServer) { this._register(services.createInstance(AppServerLanguageProviders, api.language, { checkWorkspaceTrust })); }
+		const languageProviders = api.hasAppServer ? this._register(services.createInstance(AppServerLanguageProviders, api.language, { checkWorkspaceTrust })) : undefined;
 		const diffService = services.createInstance(DiffService);
 		services.registerInstance(IDiffService, diffService);
 		const codeIntelligenceDocuments = new AppServerCodeIntelligenceDocumentService(api.codebaseSymbols);
@@ -998,7 +998,10 @@ export class Workbench extends Disposable {
 		services.registerInstance(IAccountPolicyService, accountPolicies);
 		const policies = this._register(new MultiplexPolicyService([systemPolicies, accountPolicies]));
 		services.registerInstance(IPolicyService, policies);
-		serviceContributionReady.push(configuration.initialize(fileService, policies, workingCopyService));
+		serviceContributionReady.push(configuration.initialize(fileService, policies, workingCopyService).then(() => {
+			languageProviders?.start();
+			languageDiagnosticsService.start();
+		}));
 		const accessibilityService = this._register(nativeHostApi
 			? services.createInstance(NativeAccessibilityService, workbenchRoot)
 			: new AccessibilityService({
