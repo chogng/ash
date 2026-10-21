@@ -2315,6 +2315,8 @@
     "debug.repl.expression": "调试控制台表达式",
     "debug.repl.startToEvaluate": "启动调试会话以计算表达式",
     "debug.repl.clear": "清除控制台",
+    "debug.repl.find": "在调试控制台中查找",
+    "debug.repl.findHelp": "使用查找按钮或 Ctrl+Alt+F / Command+Alt+F 在输出中查找，筛选条件和表达式草稿保持不变。按 Enter 查找下一项，Shift+Enter 查找上一项，Escape 关闭查找并返回输出树。",
     "debug.repl.sessionLabel": "{0} — {1}",
     "debug.repl.object": "对象",
     "debug.repl.source": "源码",

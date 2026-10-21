@@ -40,6 +40,44 @@ suite('Debug Console view input and filtering', () => {
 		assert.equal(fixture.output.textContent, '');
 	});
 
+	test('find action searches retained output independently of the filter and restores tree focus', async () => {
+		using fixture = new ReplFixture();
+		fixture.console.append({ output: 'first needle\n' });
+		fixture.console.append({ output: 'other\n' });
+		fixture.console.append({ output: 'second needle\n' });
+		await fixture.until(() => fixture.output.querySelectorAll('[role=treeitem]').length === 3);
+		fixture.setInput('draft');
+		const action = fixture.view.partTitleProjection.actions!.querySelector<HTMLButtonElement>("[data-action-id='repl.action.find'] button")!;
+		assert.equal(action.querySelector('svg')?.getAttribute('data-ash-icon-id'), 'search');
+		action.click();
+		const find = fixture.output.querySelector<HTMLInputElement>('.ash-tree-find-widget input')!;
+		assert.equal(document.activeElement, find);
+		find.value = 'needle';
+		find.dispatchEvent(new browserEnvironment.window.Event('input', { bubbles: true }));
+		const rows = [...fixture.output.querySelectorAll<HTMLElement>('[role=treeitem]')];
+		assert.deepEqual(rows.map(row => row.classList.contains('find-match')), [true, false, true]);
+		const tree = fixture.output.querySelector<HTMLElement>('[role=tree]')!;
+		assert.equal(tree.getAttribute('aria-activedescendant'), rows[0]!.id);
+		fixture.key('Enter', {}, find);
+		assert.equal(tree.getAttribute('aria-activedescendant'), rows[2]!.id);
+		fixture.key('Enter', { shiftKey: true }, find);
+		assert.equal(tree.getAttribute('aria-activedescendant'), rows[0]!.id);
+		assert.equal(fixture.filter.value, '');
+		assert.equal(fixture.view.getReplInput().getValue(), 'draft');
+		fixture.key('Escape', {}, find);
+		assert.equal(fixture.output.querySelector<HTMLElement>('.ash-tree-find-widget')!.hidden, true);
+		assert.equal(document.activeElement, tree);
+		fixture.key('f', { ctrlKey: true, altKey: true }, tree);
+		assert.equal(document.activeElement, find);
+		assert.equal(find.value, '');
+		fixture.key('Escape', {}, find);
+		fixture.key('f', { metaKey: true, altKey: true }, tree);
+		assert.equal(document.activeElement, find);
+		fixture.console.append({ output: 'streamed\n' });
+		await fixture.until(() => fixture.output.textContent!.includes('streamed'));
+		assert.equal(document.activeElement, find, 'Streaming must retain the find input and its focus');
+	});
+
 	test('filters output while preserving groups, evaluation pairs, snapshot identity, and collapse state', async () => {
 		using fixture = new ReplFixture();
 		fixture.console.append({ output: 'request\n', kind: 'group', collapsed: true });

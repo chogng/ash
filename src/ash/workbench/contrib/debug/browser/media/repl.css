@@ -4,6 +4,10 @@
 	min-height: 0;
 }
 
+.ash-debug-console-title-actions {
+	gap: var(--ash-spacing-size40);
+}
+
 .ash-debug-console-session {
 	flex: 0 0 auto;
 	margin: 4px 8px;
