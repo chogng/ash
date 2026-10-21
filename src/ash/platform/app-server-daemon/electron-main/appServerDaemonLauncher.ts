@@ -1,6 +1,6 @@
 import { type ChildProcessWithoutNullStreams, spawn, execFile } from "node:child_process";
 import { promisify } from 'node:util';
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { createReadStream, existsSync } from "node:fs";
 import { isAbsolute, join } from "node:path";
 import { AbstractDisposable, type IDisposable, toDisposable } from '../../../base/common/lifecycle.js';
@@ -172,7 +172,12 @@ export class AppServerDaemonLauncher extends AbstractDisposable implements IAppS
 	launch(): ChildProcessWithoutNullStreams {
 		this.assertNotDisposed();
 		this.developmentRuntime?.assertActive();
-		return this.spawnProcess(this.executable, this.options.args, { environment: this.environmentValue });
+		// Each process gets its own lineage before Renderer acquisition, including precreated carriers.
+		const environment = { ...this.environmentValue };
+		delete environment.ASH_DESKTOP_STARTUP_TRACE_ID;
+		delete environment.ASH_DESKTOP_STARTUP_TRACE_CARRIER_PID;
+		if (environment.ASH_DESKTOP_STARTUP_TRACE === '1') environment.ASH_DESKTOP_STARTUP_TRACE_ID = randomUUID();
+		return this.spawnProcess(this.executable, this.options.args, { environment });
 	}
 
 	/** The daemon owns endpoint layout. Read its diagnostic location without starting a backend. */

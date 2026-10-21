@@ -21,6 +21,9 @@ pub fn run_command(
         return crate::development::hold_runtime_lease(Path::new(generation_file));
     }
     let (command, product_services) = parse(&arguments)?;
+    let _trace = crate::startup_trace::StartupTrace::enter(
+        crate::startup_trace::StartupTrace::from_environment(),
+    );
     let expected_digest = match std::env::var("ASH_APP_SERVER_SHA256") {
         Ok(expected) => Some(expected),
         Err(std::env::VarError::NotPresent) => None,

@@ -5,6 +5,8 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
+import re
 from pathlib import Path
 import statistics
 import sys
@@ -24,7 +26,7 @@ CONDITIONS = (
 )
 V2_CONDITIONS = ("osRelease", "cpuModel", "cpuCount", "milestoneClock")
 V3_CONDITIONS = ("rendererClock",)
-OPTIONAL_CONDITIONS = ("connectionClock", "cpuProfiles", "firstUse")
+OPTIONAL_CONDITIONS = ("connectionClock", "cpuProfiles", "firstUse", "rustClock")
 MAIN_STAGES = (
     ("acquire", "validated"),
     ("validated", "carrier-ready"),
@@ -33,6 +35,23 @@ MAIN_STAGES = (
     ("first-write", "first-read"),
     ("first-read", "initialized"),
 )
+# Repeated instances of one phase are summed only within one process/connection.
+# These scopes nest; rows must never be summed into a cross-process total.
+RUST_STAGES = (
+    ("carrier", "connection", "operation-lock"),
+    ("carrier", "connection", "install-selection"),
+    ("carrier", "connection", "executable-sha256"),
+    ("carrier", "connection", "ensure-selected"),
+    ("carrier", "connection", "daemon-probe"),
+    ("carrier", "connection", "control-contract"),
+    ("carrier", "connection", "connect-ready"),
+    ("server", "probe", "directory-open"),
+    ("server", "probe", "initialize"),
+    ("server", "connection", "directory-open"),
+    ("server", "connection", "initialize"),
+    ("server", "connection", "managed-startup"),
+)
+
 STAGES = (
     ("launch-requested", "electron-launch-resolved"),
     ("electron-launch-resolved", "first-window"),
@@ -242,6 +261,96 @@ def renderer_stage_duration(sample: dict, start: str, end: str) -> float | None:
     return None
 
 
+def rust_stage_applies(sample: dict, owner: str, scope: str, phase: str) -> bool:
+    if sample.get("error") or sample.get("readyMs") is None:
+        return True
+    health = sample.get("connectionHealthCheck", "initialize")
+    if health not in ("initialize", "control"):
+        raise ValueError("invalid connection health check mode")
+    return not (
+        (scope == "probe" and health == "control")
+        or (phase == "control-contract" and health == "initialize")
+    )
+
+
+def rust_stage_duration(
+    sample: dict, owner: str, scope: str, phase: str
+) -> float | None:
+    """Validate lineage before accepting any local duration, including matching PID reuse."""
+    port = next(
+        (
+            mark
+            for mark in (sample.get("renderer") or {}).get("marks", [])
+            if mark["name"] == "ash.appServer.port-acquire-start"
+        ),
+        {},
+    )
+    nonce = (port.get("detail") or {}).get("nonce")
+    ready = [
+        mark
+        for mark in sample.get("main", [])
+        if mark.get("name") == "ash.appServer.main.carrier-ready"
+        and nonce
+        and (mark.get("detail") or {}).get("nonce") == nonce
+    ]
+    if len(ready) != 1:
+        return None
+    carrier_pid = ready[0]["detail"].get("carrierPid")
+    if (
+        not isinstance(carrier_pid, int)
+        or isinstance(carrier_pid, bool)
+        or carrier_pid <= 0
+    ):
+        return None
+    records = sample.get("rust")
+    if not isinstance(records, list):
+        return None
+    for record in records:
+        if (
+            not isinstance(record, dict)
+            or not isinstance(record.get("traceId"), str)
+            or not re.fullmatch(
+                r"[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}", record["traceId"]
+            )
+            or any(
+                not isinstance(record.get(key), int)
+                or isinstance(record[key], bool)
+                or record[key] <= 0
+                for key in ("carrierPid", "pid")
+            )
+            or record.get("scope") not in ("connection", "probe")
+            or not isinstance(record.get("phase"), str)
+            or not isinstance(record.get("durationMs"), (int, float))
+            or isinstance(record["durationMs"], bool)
+            or not math.isfinite(record["durationMs"])
+            or record["durationMs"] < 0
+        ):
+            raise ValueError("invalid Rust startup duration or identity")
+    if sample.get("connectionHealthCheck") == "control" and any(
+        record["scope"] == "probe" for record in records
+    ):
+        raise ValueError("control handshake unexpectedly opened a probe runtime")
+    if (
+        not records
+        or any(record["carrierPid"] != carrier_pid for record in records)
+        or len({record["traceId"] for record in records}) != 1
+        or len({record["pid"] for record in records if record["pid"] != carrier_pid})
+        != 1
+    ):
+        return None
+    # The carrier's own record binds its trace ID to the PID observed by Main.
+    if not any(record["pid"] == carrier_pid for record in records):
+        return None
+    values = [
+        record["durationMs"]
+        for record in records
+        if (record["pid"] == carrier_pid) == (owner == "carrier")
+        and record["scope"] == scope
+        and record["phase"] == phase
+    ]
+    return sum(values) if values else None
+
+
 def compare_reports(baseline: dict, candidate: dict) -> tuple[str, int]:
     before = validate(baseline, "baseline")
     after = validate(candidate, "candidate")
@@ -444,6 +553,60 @@ def compare_reports(baseline: dict, candidate: dict) -> tuple[str, int]:
                 )
                 lines.append(
                     f"{cohort} | {start} → {end} | {median(values[0])} | {median(values[1])} | {delta}"
+                )
+    if baseline["metadata"].get("rustClock"):
+        lines.extend(
+            (
+                "",
+                "Rust local Instant scopes, paired by port nonce / carrier PID / trace ID (ms; nested, not additive)",
+                "cohort | owner/scope/phase | baseline samples | candidate samples | baseline median | candidate median",
+            )
+        )
+        for cohort in COHORTS:
+            if cohort == "ui-only":
+                continue
+            for owner, scope, phase in RUST_STAGES:
+                if cohort == "reused" and phase == "managed-startup":
+                    continue
+                values = [
+                    [
+                        rust_stage_duration(sample, owner, scope, phase)
+                        if valid(sample, 3)
+                        else None
+                        for sample in groups[cohort]
+                    ]
+                    for groups in (before, after)
+                ]
+                applicable = [
+                    [
+                        rust_stage_applies(sample, owner, scope, phase)
+                        for sample in groups[cohort]
+                    ]
+                    for groups in (before, after)
+                ]
+                if any(
+                    value is None and applies
+                    for durations, flags in zip(values, applicable)
+                    for value, applies in zip(durations, flags)
+                ):
+                    incomplete = True
+
+                def display_rust(durations, flags):
+                    return ",".join(
+                        f"{value:.3f}"
+                        if value is not None
+                        else "ERROR"
+                        if applies
+                        else "not-run"
+                        for value, applies in zip(durations, flags)
+                    )
+
+                numbers = [
+                    [value for value in durations if value is not None]
+                    for durations in values
+                ]
+                lines.append(
+                    f"{cohort} | {owner}/{scope}/{phase} | {display_rust(values[0], applicable[0])} | {display_rust(values[1], applicable[1])} | {median(numbers[0])} | {median(numbers[1])}"
                 )
     if baseline["metadata"].get("firstUse"):
         lines.extend(

@@ -626,6 +626,7 @@ fn server_for(
     prelude: ConnectionOptions,
     diff_handler: crate::DiffRequestHandler,
 ) -> Result<Arc<AppServer>, String> {
+    let _directory = ash_app_server_daemon::startup_trace::StartupTrace::span("directory-open");
     let (runtime, options) = resolve_directory(host, servers, prelude)?;
     let mut opening = runtime
         .opening

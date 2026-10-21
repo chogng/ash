@@ -365,6 +365,20 @@ test('CodeWindow cancels an unresponsive prompt on recovery and ignores its late
 	assert.equal(host.win.destroyed, false);
 });
 
+test('CodeWindow diagnostics distinguish native unresponsiveness from a shutdown timeout', async () => {
+	const errors: unknown[][] = [];
+	windowServices.get(ILogService).error = (...args: unknown[]) => { errors.push(args); };
+	showMessageBox = async options => ({ response: options.cancelId!, checkboxChecked: false });
+	using host = createHost();
+	await host.reportWindowError(false);
+	const shutdown = new AbortController();
+	await host.reportWindowError(false, shutdown.signal);
+	assert.deepEqual(errors, [
+		['window', 'Window is unresponsive', { windowId: host.win.id, source: 'renderer-unresponsive' }],
+		['window', 'Window is unresponsive', { windowId: host.win.id, source: 'shutdown-timeout' }],
+	]);
+});
+
 test('CodeWindow offers localized crash recovery and replaces the window without a dead-renderer handshake', async () => {
 	const messages = JSON.parse(await readFile('extensions/language-pack-zh-cn/translations/workbench.json', 'utf8')) as Record<string, Record<string, string>>;
 	setNlsMessages('zh-CN', messages);

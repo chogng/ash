@@ -194,6 +194,148 @@ class DesktopStartupTraceComparisonTests(unittest.TestCase):
         self.assertEqual(status, 2)
         self.assertIn("incomplete comparison", output)
 
+    def test_rust_scopes_require_the_current_port_and_carrier_lineage(self):
+        sample = {
+            "renderer": {
+                "marks": [
+                    {
+                        "name": "ash.appServer.port-acquire-start",
+                        "detail": {"nonce": "current"},
+                    }
+                ]
+            },
+            "main": [
+                {
+                    "name": "ash.appServer.main.carrier-ready",
+                    "detail": {"nonce": "current", "carrierPid": 42},
+                }
+            ],
+            "rust": [
+                {
+                    "traceId": "11111111-1111-1111-1111-111111111111",
+                    "carrierPid": 42,
+                    "pid": pid,
+                    "scope": "connection",
+                    "phase": "initialize",
+                    "durationMs": elapsed,
+                }
+                for pid, elapsed in ((42, 3.0), (43, 4.0))
+            ],
+        }
+        duration = desktop_startup_trace.rust_stage_duration
+        self.assertEqual(duration(sample, "server", "connection", "initialize"), 4.0)
+        self.assertIsNone(duration(sample, "server", "probe", "initialize"))
+        sample["rust"][1]["traceId"] = "22222222-2222-2222-2222-222222222222"
+        self.assertIsNone(duration(sample, "server", "connection", "initialize"))
+        sample["rust"][1]["traceId"] = sample["rust"][0]["traceId"]
+        sample["rust"][1]["carrierPid"] = 99
+        self.assertIsNone(duration(sample, "server", "connection", "initialize"))
+        sample["rust"][1]["carrierPid"] = 42
+        sample["main"][0]["detail"]["nonce"] = "retired"
+        self.assertIsNone(duration(sample, "server", "connection", "initialize"))
+        sample["main"][0]["detail"]["nonce"] = "current"
+        sample["rust"][1]["durationMs"] = float("nan")
+        with self.assertRaisesRegex(ValueError, "invalid Rust startup"):
+            duration(sample, "server", "connection", "initialize")
+
+    def test_control_handshake_reports_unperformed_probe_separately_from_missing_data(
+        self,
+    ):
+        def with_rust(mode):
+            value = report(version=3)
+            value["metadata"].update(
+                connectionClock="same Main clock", rustClock="local Instant scopes"
+            )
+            for sample in value["samples"]:
+                sample["main"] = []
+                if sample["cohort"] == "ui-only":
+                    continue
+                sample["connectionHealthCheck"] = mode
+                sample["renderer"]["marks"].append(
+                    {
+                        "name": "ash.appServer.port-acquire-start",
+                        "startTimeMs": 22,
+                        "detail": {"nonce": "current"},
+                    }
+                )
+                sample["main"] = [
+                    {
+                        "name": f"ash.appServer.main.{phase}",
+                        "startTimeMs": index,
+                        "detail": {"nonce": "current", "carrierPid": 42},
+                    }
+                    for index, phase in enumerate(
+                        (
+                            "acquire",
+                            "validated",
+                            "carrier-ready",
+                            "port-attached",
+                            "first-write",
+                            "first-read",
+                            "initialized",
+                        )
+                    )
+                ]
+                sample["rust"] = [
+                    {
+                        "traceId": "11111111-1111-1111-1111-111111111111",
+                        "carrierPid": 42,
+                        "pid": 42 if owner == "carrier" else 43,
+                        "scope": scope,
+                        "phase": phase,
+                        "durationMs": 1.0,
+                    }
+                    for owner, scope, phase in desktop_startup_trace.RUST_STAGES
+                    if desktop_startup_trace.rust_stage_applies(
+                        sample, owner, scope, phase
+                    )
+                    and not (
+                        phase == "managed-startup" and sample["cohort"] == "reused"
+                    )
+                ]
+            return value
+
+        baseline, candidate = with_rust("initialize"), with_rust("control")
+        output, status = desktop_startup_trace.compare_reports(baseline, candidate)
+        self.assertEqual(status, 0)
+        self.assertIn(
+            "server/probe/initialize | 1.000,1.000,1.000,1.000,1.000 | not-run", output
+        )
+        candidate["samples"][0]["rust"] = [
+            record
+            for record in candidate["samples"][0]["rust"]
+            if record["phase"] != "control-contract"
+        ]
+        output, status = desktop_startup_trace.compare_reports(baseline, candidate)
+        self.assertEqual(status, 2)
+        self.assertIn(
+            "carrier/connection/control-contract | not-run,not-run,not-run,not-run,not-run | ERROR",
+            output,
+        )
+        candidate = with_rust("control")
+        candidate["samples"][0]["rust"][0]["scope"] = "probe"
+        with self.assertRaisesRegex(ValueError, "unexpectedly opened a probe"):
+            desktop_startup_trace.compare_reports(baseline, candidate)
+        candidate = with_rust("control")
+        candidate["samples"][0].update(
+            error="deliberate startup failure",
+            readyMs=None,
+            connectionHealthCheck=None,
+            rust=[],
+        )
+        output, status = desktop_startup_trace.compare_reports(baseline, candidate)
+        self.assertEqual(status, 2)
+        self.assertIn("candidate fresh[0] error: deliberate startup failure", output)
+
+    def test_missing_rust_scopes_make_comparison_incomplete(self):
+        baseline = report(version=3)
+        candidate = report(version=3)
+        for value in (baseline, candidate):
+            value["metadata"]["rustClock"] = "local Instant scopes"
+        output, status = desktop_startup_trace.compare_reports(baseline, candidate)
+        self.assertEqual(status, 2)
+        self.assertIn("server/probe/initialize | ERROR", output)
+
     def test_malformed_main_timing_is_rejected(self):
         candidate = report(version=3)
         candidate["metadata"]["connectionClock"] = "same Main clock"

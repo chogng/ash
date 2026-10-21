@@ -1,5 +1,5 @@
 import { execFile } from 'node:child_process';
-import { mkdirSync, readFileSync, watch } from 'node:fs';
+import { readFileSync, unwatchFile, watchFile } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { basename, dirname, resolve } from 'node:path';
 import { promisify } from 'node:util';
@@ -197,13 +197,11 @@ async function restartManagedDaemon(launcher: AppServerDaemonLauncher): Promise<
 }
 
 function watchGenerationFile(generationFile: string, listener: () => void): IDisposable {
-	const directory = dirname(generationFile);
-	const file = basename(generationFile);
-	mkdirSync(directory, { recursive: true });
-	const watcher = watch(directory, (_event, changed) => {
-		if (changed === null || changed.toString() === file) listener();
-	});
-	return toDisposable(() => watcher.close());
+	// Publication atomically replaces this small pointer. Native directory watches
+	// can silently miss it, leaving every window on the old runtime indefinitely.
+	// Stat polling avoids that dependency; reloadNow still validates and leases the generation.
+	watchFile(generationFile, { persistent: false, interval: 250 }, listener);
+	return toDisposable(() => unwatchFile(generationFile, listener));
 }
 
 function isNodeError(error: unknown): error is NodeJS.ErrnoException {

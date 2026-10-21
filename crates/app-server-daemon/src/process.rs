@@ -154,6 +154,7 @@ pub(crate) fn executable_identity(path: &Path) -> Result<ExecutableIdentity, Str
 }
 
 pub(crate) fn binary_identity(path: &Path) -> Result<ExecutableIdentity, String> {
+    let hash = crate::startup_trace::StartupTrace::span("executable-sha256");
     let mut file = File::open(path).map_err(io_error)?;
     let mut digest = Sha256::new();
     let mut buffer = [0; EXECUTABLE_HASH_BUFFER_BYTES];
@@ -164,8 +165,10 @@ pub(crate) fn binary_identity(path: &Path) -> Result<ExecutableIdentity, String>
         }
         digest.update(&buffer[..read]);
     }
+    let sha256 = format!("{:x}", digest.finalize());
+    drop(hash);
     Ok(ExecutableIdentity {
-        sha256: format!("{:x}", digest.finalize()),
+        sha256,
         package_build_id: package_build_id(path)?,
         runtime_binding: None,
         runtime_availability: None,
@@ -215,6 +218,7 @@ pub(crate) fn resolve_backend_executable(
     backend_executable: &Path,
     package_digest: PackageDigest<'_>,
 ) -> Result<BackendExecutable, String> {
+    let _identity = crate::startup_trace::StartupTrace::span("executable-identity");
     let metadata = fs::symlink_metadata(backend_executable).map_err(io_error)?;
     if metadata.file_type().is_symlink() || !metadata.is_file() {
         return Err(format!(
@@ -424,6 +428,13 @@ pub(crate) fn spawn_backend(
         .stdin(Stdio::null())
         .stdout(Stdio::from(log))
         .stderr(Stdio::from(error_log));
+    if let Some(trace) = crate::startup_trace::StartupTrace::current() {
+        trace.apply_to(&mut command);
+    } else {
+        command
+            .env_remove(crate::startup_trace::ID_ENV)
+            .env_remove(crate::startup_trace::CARRIER_PID_ENV);
+    }
     if let Some(path) = options.product_services() {
         command.env(PRODUCT_SERVICES_ENV, path);
     } else {

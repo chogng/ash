@@ -75,12 +75,14 @@ fn managed_control_response_must_match_the_private_process_record() {
         record.pid,
         record.instance_id.clone(),
         schema_hash(),
+        None,
     );
     let mismatched = ControlResponse::new(
         ControlState::Running,
         record.pid,
         "replacement".into(),
         schema_hash(),
+        None,
     );
 
     assert_eq!(
@@ -105,6 +107,7 @@ fn compatible_daemon_from_another_product_version_is_accepted() {
         record.pid,
         record.instance_id.clone(),
         "sha256:another-compatible-schema".into(),
+        None,
     );
     response.daemon_version = record.daemon_version.clone();
 
@@ -151,4 +154,172 @@ fn failed_initialization_reaps_only_the_new_backend() {
     let endpoint = EndpointPaths::prepare(root.path()).unwrap();
     assert!(!endpoint.pid.exists());
     assert!(!endpoint.socket.exists());
+}
+
+#[test]
+fn carrier_admission_checks_the_control_contract_without_opening_a_runtime() {
+    use ash_app_server_protocol::protocol::initialize::ProtocolVersion;
+    let root = tempfile::tempdir().unwrap();
+    let endpoint = EndpointPaths::prepare(root.path()).unwrap();
+    let options = crate::ConnectionOptions::new(
+        root.path(),
+        None,
+        crate::GrantSource::HostConfiguration,
+        None,
+    );
+    // No listener exists. Any accidental full initialize probe fails this successful admission.
+    let mut control = ControlResponse::new(
+        ControlState::Running,
+        42,
+        "generation".into(),
+        schema_hash(),
+        Some(crate::ManagedConnectionContract::Agent {
+            protocol_version: ProtocolVersion::current(),
+        }),
+    );
+    assert_eq!(
+        super::check_startup(
+            &endpoint,
+            &options,
+            &control,
+            super::StartupCheck::ClientInitialize
+        )
+        .unwrap(),
+        None
+    );
+    control.connection_contract = Some(crate::ManagedConnectionContract::Agent {
+        protocol_version: ProtocolVersion { major: 0 },
+    });
+    assert!(
+        super::check_startup(
+            &endpoint,
+            &options,
+            &control,
+            super::StartupCheck::ClientInitialize
+        )
+        .unwrap_err()
+        .contains("protocol major mismatch")
+    );
+    control.connection_contract = Some(crate::ManagedConnectionContract::Agent {
+        protocol_version: ProtocolVersion::current(),
+    });
+    control.schema_hash = "sha256:wrong".into();
+    assert!(
+        super::check_startup(
+            &endpoint,
+            &options,
+            &control,
+            super::StartupCheck::ClientInitialize
+        )
+        .unwrap_err()
+        .contains("protocol schema mismatch")
+    );
+    control.connection_contract = Some(crate::ManagedConnectionContract::Execution);
+    assert!(
+        super::check_startup(
+            &endpoint,
+            &options,
+            &control,
+            super::StartupCheck::ClientInitialize
+        )
+        .unwrap_err()
+        .contains("only execution connections")
+    );
+}
+
+#[test]
+fn old_daemons_and_explicit_lifecycle_checks_keep_the_real_initialize_probe() {
+    use ash_app_server_protocol::protocol::common::SchemaHash;
+    use ash_app_server_protocol::protocol::common::ServerInfo;
+    use ash_app_server_protocol::protocol::initialize::InitializeResult;
+    use ash_app_server_protocol::protocol::initialize::ProtocolVersion;
+    use ash_app_server_protocol::protocol::initialize::ServerCapabilities;
+    for (advertise_control, turns) in [(false, true), (true, true), (false, false), (true, false)] {
+        let root = tempfile::tempdir().unwrap();
+        let endpoint = EndpointPaths::prepare(root.path()).unwrap();
+        let options = crate::ConnectionOptions::new(
+            root.path(),
+            None,
+            crate::GrantSource::HostConfiguration,
+            None,
+        );
+        let listener = endpoint.bind_listener().unwrap();
+        listener.set_nonblocking(true).unwrap();
+        let initialized = InitializeResult {
+            server_info: ServerInfo {
+                name: "ash-app-server".into(),
+                version: "test".into(),
+                user_home: None,
+                operating_system: None,
+            },
+            protocol_version: ProtocolVersion::current(),
+            schema_hash: SchemaHash(schema_hash()),
+            capabilities: ServerCapabilities {
+                sessions: true,
+                threads: true,
+                turns,
+                ..Default::default()
+            },
+            slash_commands: Vec::new(),
+        };
+        let server = std::thread::spawn(move || {
+            let deadline = std::time::Instant::now() + std::time::Duration::from_secs(2);
+            let (mut stream, _) = loop {
+                match listener.accept() {
+                    Ok(peer) => break peer,
+                    Err(error)
+                        if error.kind() == std::io::ErrorKind::WouldBlock
+                            && std::time::Instant::now() < deadline =>
+                    {
+                        std::thread::yield_now()
+                    }
+                    other => panic!("missing initialization probe: {other:?}"),
+                }
+            };
+            stream.set_nonblocking(false).unwrap();
+            stream
+                .set_read_timeout(Some(std::time::Duration::from_secs(2)))
+                .unwrap();
+            let mut reader = BufReader::new(stream.try_clone().unwrap());
+            let mut prelude = String::new();
+            reader.read_line(&mut prelude).unwrap();
+            let mut request = String::new();
+            reader.read_line(&mut request).unwrap();
+            let prelude: serde_json::Value = serde_json::from_str(&prelude).unwrap();
+            assert!(prelude["dirRoot"].is_null());
+            let request: serde_json::Value = serde_json::from_str(&request).unwrap();
+            assert_eq!(request["method"], "initialize");
+            crate::wire::write_json_line(
+                &mut stream,
+                &serde_json::json!({"jsonrpc":"2.0", "id":request["id"], "result": initialized}),
+            )
+            .unwrap();
+        });
+        let contract = advertise_control.then(|| crate::ManagedConnectionContract::Agent {
+            protocol_version: ProtocolVersion::current(),
+        });
+        let control = ControlResponse::new(
+            ControlState::Running,
+            42,
+            "generation".into(),
+            schema_hash(),
+            contract,
+        );
+        let check = if advertise_control {
+            super::StartupCheck::Initialize
+        } else {
+            super::StartupCheck::ClientInitialize
+        };
+        let result = super::check_startup(&endpoint, &options, &control, check);
+        server.join().unwrap();
+        if turns {
+            assert_eq!(result.unwrap().unwrap().server_name, "ash-app-server");
+        } else {
+            assert!(
+                result
+                    .unwrap_err()
+                    .contains("required App Server capability turns is missing")
+            );
+        }
+    }
 }

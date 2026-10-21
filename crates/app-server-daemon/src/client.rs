@@ -55,24 +55,56 @@ struct ProbeInfo {
     schema_hash: String,
 }
 
+/// Lifecycle commands prove full initialization. A carrier instead admits its peer to
+/// the verified endpoint; that peer owns the one real capability negotiation.
+#[derive(Clone, Copy)]
+enum StartupCheck {
+    Initialize,
+    ClientInitialize,
+}
+
+impl StartupCheck {
+    fn for_connection(options: &ConnectionOptions) -> Self {
+        match options.role() {
+            crate::ConnectionRole::Execution { .. } => Self::Initialize,
+            crate::ConnectionRole::Workbench
+            | crate::ConnectionRole::Agents
+            | crate::ConnectionRole::Remote => Self::ClientInitialize,
+        }
+    }
+}
+
 pub(crate) fn run_lifecycle(
     command: LifecycleCommand,
     options: ConnectionOptions,
     backend_executable: &Path,
 ) -> Result<LifecycleOutput, LifecycleError> {
     let endpoint = EndpointPaths::prepare(options.profile_root())?;
+    let _lock_wait = crate::startup_trace::StartupTrace::span("operation-lock");
     let _operation_lock = endpoint.acquire_operation_lock()?;
+    drop(_lock_wait);
     match command {
-        LifecycleCommand::Start => start_unlocked(&endpoint, &options, backend_executable),
+        LifecycleCommand::Start => start_unlocked(
+            &endpoint,
+            &options,
+            backend_executable,
+            StartupCheck::Initialize,
+        ),
         LifecycleCommand::EnsureSelected => ensure_selected_unlocked(
             &endpoint,
             &options,
             backend_executable,
             PackageDigest::NotProvided,
+            StartupCheck::Initialize,
         ),
         LifecycleCommand::Restart => {
             let _ = stop_unlocked(&endpoint)?;
-            let mut output = start_unlocked(&endpoint, &options, backend_executable)?;
+            let mut output = start_unlocked(
+                &endpoint,
+                &options,
+                backend_executable,
+                StartupCheck::Initialize,
+            )?;
             output.status = LifecycleStatus::Restarted;
             Ok(output)
         }
@@ -85,8 +117,21 @@ pub(crate) fn connect(
     options: ConnectionOptions,
     backend_executable: &Path,
 ) -> Result<(), LifecycleError> {
-    let result = run_lifecycle(LifecycleCommand::Start, options.clone(), backend_executable)
-        .and_then(|_| connect_ready(&options));
+    let result = (|| {
+        let endpoint = EndpointPaths::prepare(options.profile_root())?;
+        {
+            let lock_wait = crate::startup_trace::StartupTrace::span("operation-lock");
+            let _operation_lock = endpoint.acquire_operation_lock()?;
+            drop(lock_wait);
+            start_unlocked(
+                &endpoint,
+                &options,
+                backend_executable,
+                StartupCheck::for_connection(&options),
+            )?;
+        }
+        connect_ready(&options)
+    })();
     connection_result(result, &options)
 }
 
@@ -105,8 +150,16 @@ pub(crate) fn connect_selected_with_digest(
     let result = (|| {
         let endpoint = EndpointPaths::prepare(options.profile_root())?;
         {
+            let lock_wait = crate::startup_trace::StartupTrace::span("operation-lock");
             let _operation_lock = endpoint.acquire_operation_lock()?;
-            ensure_selected_unlocked(&endpoint, &options, backend_executable, package_digest)?;
+            drop(lock_wait);
+            ensure_selected_unlocked(
+                &endpoint,
+                &options,
+                backend_executable,
+                package_digest,
+                StartupCheck::for_connection(&options),
+            )?;
         }
         connect_ready(&options)
     })();
@@ -154,6 +207,7 @@ fn reject_stopping_connection(
 }
 
 fn connect_ready(options: &ConnectionOptions) -> Result<(), LifecycleError> {
+    let ready = crate::startup_trace::StartupTrace::span("connect-ready");
     let endpoint = EndpointPaths::prepare(options.profile_root())?;
     let control = request_control(&endpoint, ControlCommand::Status)?
         .ok_or("App Server exited before the connection scope could be checked")?;
@@ -163,6 +217,7 @@ fn connect_ready(options: &ConnectionOptions) -> Result<(), LifecycleError> {
     control.validate_connection(options)?;
     let stream = connect_existing(&endpoint.socket)?
         .ok_or_else(|| "Local App Server daemon exited before the client connected".to_string())?;
+    drop(ready);
     proxy_stdio(stream, options).map_err(|error| error.to_string().into())
 }
 
@@ -284,13 +339,14 @@ fn start_unlocked(
     endpoint: &EndpointPaths,
     options: &ConnectionOptions,
     backend_executable: &Path,
+    startup_check: StartupCheck,
 ) -> Result<LifecycleOutput, LifecycleError> {
     if let Some(control) = request_control(endpoint, ControlCommand::Status)? {
         if control.state == ControlState::Stopping {
             return Err(LifecycleError::ServerShuttingDown);
         }
         validate_managed_response(endpoint, &control)?;
-        let probe = probe_app_server(endpoint, options)
+        let probe = check_startup(endpoint, options, &control, startup_check)
             .map_err(|error| diagnostic_error(endpoint, &error))?;
         return Ok(lifecycle_output(
             LifecycleStatus::AlreadyRunning,
@@ -303,14 +359,16 @@ fn start_unlocked(
     let selected =
         crate::installation::selected_backend(options.profile_root(), backend_executable)?;
     let daemon = resolve_backend_executable(&selected, PackageDigest::NotProvided)?;
-    start_new_unlocked(endpoint, options, &daemon).map_err(Into::into)
+    start_new_unlocked(endpoint, options, &daemon, startup_check).map_err(Into::into)
 }
 
 fn start_new_unlocked(
     endpoint: &EndpointPaths,
     options: &ConnectionOptions,
     daemon: &BackendExecutable,
+    startup_check: StartupCheck,
 ) -> Result<LifecycleOutput, String> {
+    let _startup = crate::startup_trace::StartupTrace::span("daemon-start");
     remove_stale_process_record(&endpoint.pid)?;
     let mut spawned = spawn_backend(endpoint, options, daemon)?;
     let result = (|| {
@@ -329,7 +387,7 @@ fn start_new_unlocked(
                         .map_err(|error| diagnostic_error(endpoint, &error))?;
                     validate_executable_identity(&record, &daemon.identity)
                         .map_err(|error| diagnostic_error(endpoint, &error))?;
-                    let probe = probe_app_server(endpoint, options)
+                    let probe = check_startup(endpoint, options, &control, startup_check)
                         .map_err(|error| diagnostic_error(endpoint, &error))?;
                     return Ok(lifecycle_output(
                         LifecycleStatus::Started,
@@ -368,12 +426,16 @@ fn ensure_selected_unlocked(
     options: &ConnectionOptions,
     backend_executable: &Path,
     package_digest: PackageDigest<'_>,
+    startup_check: StartupCheck,
 ) -> Result<LifecycleOutput, LifecycleError> {
+    let _selected = crate::startup_trace::StartupTrace::span("ensure-selected");
+    let install = crate::startup_trace::StartupTrace::span("install-selection");
     let installed = crate::installation::install_from_client(
         options.profile_root(),
         backend_executable,
         crate::installation::ClientSelection::Explicit,
     )?;
+    drop(install);
     let selected = resolve_backend_executable(&installed, package_digest)?;
     let mut replaced = false;
     if let Some(control) = request_control(endpoint, ControlCommand::Status)? {
@@ -382,7 +444,7 @@ fn ensure_selected_unlocked(
         }
         let record = validate_managed_response(endpoint, &control)?;
         if validate_executable_identity(&record, &selected.identity).is_ok() {
-            let probe = probe_app_server(endpoint, options)
+            let probe = check_startup(endpoint, options, &control, startup_check)
                 .map_err(|error| diagnostic_error(endpoint, &error))?;
             return Ok(lifecycle_output(
                 LifecycleStatus::AlreadyRunning,
@@ -399,7 +461,7 @@ fn ensure_selected_unlocked(
         }
         replaced = true;
     }
-    let mut output = start_new_unlocked(endpoint, options, &selected)?;
+    let mut output = start_new_unlocked(endpoint, options, &selected, startup_check)?;
     if replaced {
         output.status = LifecycleStatus::Restarted;
     }
@@ -584,10 +646,48 @@ fn request_control(
     Ok(Some(response))
 }
 
+fn check_startup(
+    endpoint: &EndpointPaths,
+    options: &ConnectionOptions,
+    control: &ControlResponse,
+    check: StartupCheck,
+) -> Result<Option<ProbeInfo>, String> {
+    match check {
+        StartupCheck::Initialize => probe_app_server(endpoint, options),
+        StartupCheck::ClientInitialize => match &control.connection_contract {
+            None => probe_app_server(endpoint, options),
+            Some(crate::ManagedConnectionContract::Execution) => Err(
+                "Managed profile history belongs to another host; only execution connections are allowed".into(),
+            ),
+            Some(crate::ManagedConnectionContract::Agent { protocol_version }) => {
+                let _probe = crate::startup_trace::StartupTrace::span("daemon-probe");
+                let _contract = crate::startup_trace::StartupTrace::span("control-contract");
+                control.validate_connection(options)?;
+                let expected = ash_app_server_protocol::protocol::initialize::APP_SERVER_PROTOCOL_MAJOR;
+                if protocol_version.major != expected {
+                    return Err(format!("App Server protocol is incompatible: protocol major mismatch: client requires {expected}, server advertised {}", protocol_version.major));
+                }
+                let expected = ash_app_server_protocol::schema_hash();
+                if control.schema_hash != expected {
+                    return Err(format!("App Server protocol is incompatible: protocol schema mismatch: client requires {expected}, server advertised {}", control.schema_hash));
+                }
+                // This result intentionally carries no Initialized identity. The control
+                // contract proves admission, not availability of any directory capability.
+                Ok(None)
+            }
+        },
+    }
+}
+
 fn probe_app_server(
     endpoint: &EndpointPaths,
     options: &ConnectionOptions,
 ) -> Result<Option<ProbeInfo>, String> {
+    let _probe = crate::startup_trace::StartupTrace::span("daemon-probe");
+    let _scope = crate::startup_trace::StartupTrace::enter(
+        crate::startup_trace::StartupTrace::current()
+            .map(crate::startup_trace::StartupTrace::probe),
+    );
     let stream = connect_existing(&endpoint.socket)?
         .ok_or_else(|| "Local App Server daemon control endpoint is unavailable".to_string())?;
     let mut stream = DeadlineStream::new(stream, Instant::now() + PROBE_TIMEOUT)
@@ -697,7 +797,9 @@ fn probe_app_server(
 }
 
 fn proxy_stdio(mut stream: UnixStream, options: &ConnectionOptions) -> io::Result<()> {
+    let prelude = crate::startup_trace::StartupTrace::span("connection-prelude");
     write_json_line(&mut stream, &ConnectionPrelude::from_options(options))?;
+    drop(prelude);
     relay_stdio(stream)
 }
 

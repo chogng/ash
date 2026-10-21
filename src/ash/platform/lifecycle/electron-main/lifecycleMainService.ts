@@ -18,7 +18,7 @@ interface WindowCloseState {
 
 export type WindowCloseFailure =
 	| { readonly kind: 'failed'; readonly message: string; }
-	| { readonly kind: 'unresponsive'; readonly signal: AbortSignal; };
+	| { readonly kind: 'unresponsive'; readonly signal: AbortSignal; readonly token: number; readonly reason: 'windowClose' | 'quit' | 'load' | 'reload'; readonly elapsedMs: number; };
 
 interface ILifecycleWindow {
 	on(event: 'close', listener: (event: { preventDefault(): void; }) => void): unknown;
@@ -120,8 +120,9 @@ export class LifecycleMainService<TWindow extends ILifecycleWindow> extends Disp
 			if (state.pendingToken !== undefined) return;
 			const token = ++this.nextCloseToken;
 			state.pendingToken = token;
-			this.waitForResponse(window, state);
-			window.webContents.send(this.getCloseReason() === 'quit' ? WINDOW_PREPARE_QUIT_CHANNEL : WINDOW_PREPARE_CLOSE_CHANNEL, token);
+			const reason = this.getCloseReason();
+			this.waitForResponse(window, state, reason);
+			window.webContents.send(reason === 'quit' ? WINDOW_PREPARE_QUIT_CHANNEL : WINDOW_PREPARE_CLOSE_CHANNEL, token);
 		};
 		const onRendererLoading = (): void => { state.ready = false; clearPending(); };
 		const onNavigation = (_event: unknown, _url: string, inPlace: boolean, mainFrame: boolean): void => {
@@ -155,7 +156,7 @@ export class LifecycleMainService<TWindow extends ILifecycleWindow> extends Disp
 			const token = ++this.nextCloseToken;
 			state.pendingToken = token;
 			state.completeUnload = resolve;
-			this.waitForResponse(window, state);
+			this.waitForResponse(window, state, reason);
 			window.webContents.send(reason === 'reload' ? WINDOW_PREPARE_RELOAD_CHANNEL : WINDOW_PREPARE_LOAD_CHANNEL, token);
 		});
 	}
@@ -190,20 +191,20 @@ export class LifecycleMainService<TWindow extends ILifecycleWindow> extends Disp
 		}
 	}
 
-	private waitForResponse(window: TWindow, state: WindowCloseState): void {
-		const token = state.pendingToken;
+	private waitForResponse(window: TWindow, state: WindowCloseState, reason: 'windowClose' | 'quit' | 'load' | 'reload', started = performance.now()): void {
+		const token = state.pendingToken!;
 		state.timer = setTimeout(() => {
 			state.timer = undefined;
 			const prompt = new AbortController();
 			state.timeoutPrompt = prompt;
 			// Waiting keeps the original request live: a slow save can still finish
 			// and dismiss recovery. Destroying the window settles it via registration cleanup.
-			void Promise.resolve().then(() => this.reportCloseFailure(window, { kind: 'unresponsive', signal: prompt.signal }))
+			void Promise.resolve().then(() => this.reportCloseFailure(window, { kind: 'unresponsive', signal: prompt.signal, token, reason, elapsedMs: performance.now() - started }))
 				.catch(error => console.error('Failed to report window shutdown timeout', error))
 				.finally(() => {
 					if (state.timeoutPrompt !== prompt) return;
 					state.timeoutPrompt = undefined;
-					if (!prompt.signal.aborted && state.pendingToken === token) this.waitForResponse(window, state);
+					if (!prompt.signal.aborted && state.pendingToken === token) this.waitForResponse(window, state, reason, started);
 				});
 		}, 30_000);
 	}

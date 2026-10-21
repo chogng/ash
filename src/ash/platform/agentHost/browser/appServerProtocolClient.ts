@@ -70,6 +70,7 @@ export class AppServerProtocolClient {
 	private readonly options: Required<AppServerProtocolClientOptions>;
 	private readonly decoder: AppServerFrameDecoder;
 	private readonly stateListeners = new Set<(state: AppServerConnectionState, error?: Error) => void>();
+	private readonly readyWaiters = new Set<(error?: Error) => void>();
 	private readonly notificationListeners = new Set<(notification: ServerNotification) => void>();
 	private readonly pending = new Map<number, PendingRequest>();
 	private readonly handlers = new Map<AppServerServerRequestMethod, (params: never, context: AppServerRequestContext) => unknown | Promise<unknown>>();
@@ -133,6 +134,22 @@ export class AppServerProtocolClient {
 
 	public disconnect(): void {
 		this.shutdown(new Error('App Server connection replaced'), 'stopped', { releaseTransport: true });
+	}
+
+	/** Uses the request deadline to await initialization, without starting recovery or replaying requests. */
+	public whenReady(): Promise<void> {
+		if (this.disposed) return Promise.reject(new Error('App Server client disposed'));
+		if (this._state === 'ready' && !this.isClosing && !this.receiving?.closed) return Promise.resolve();
+		return new Promise<void>((resolve, reject) => {
+			const complete = (error?: Error): void => {
+				clearTimeout(timeout);
+				this.readyWaiters.delete(complete);
+				if (error) reject(error);
+				else resolve();
+			};
+			const timeout = setTimeout(() => complete(new Error('App Server readiness timed out')), this.options.requestTimeoutMs);
+			this.readyWaiters.add(complete);
+		});
 	}
 
 	async connect(): Promise<AppServerConnectionMetadata> {
@@ -222,6 +239,7 @@ export class AppServerProtocolClient {
 		try {
 			this.shutdown(new Error("App Server client disposed"), "stopped", { releaseTransport: true });
 		} finally {
+			for (const complete of this.readyWaiters) complete(new Error('App Server client disposed'));
 			this.transport.off(WEB_APP_SERVER_CONNECTED_EVENT, this.handleConnected);
 			this.transport.off(WEB_APP_SERVER_FRAME_EVENT, this.handleFrame);
 			this.transport.off(WEB_APP_SERVER_CLOSED_EVENT, this.handleClosed);
@@ -549,6 +567,9 @@ export class AppServerProtocolClient {
 	private setState(state: AppServerConnectionState, error?: Error): void {
 		if (this._state === state) return;
 		this._state = state;
+		if (state === 'ready') {
+			for (const complete of this.readyWaiters) complete();
+		}
 		for (const listener of this.stateListeners) {
 			try {
 				listener(state, error);

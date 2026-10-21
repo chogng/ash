@@ -413,6 +413,9 @@ export class AshApplication extends Disposable {
 
 		this.lifecycleMainService = this._register(new LifecycleMainService<BrowserWindow>(async (window, failure) => {
 			if (failure.kind === 'unresponsive') {
+				this.logService.warn('lifecycle', 'Renderer window shutdown response timed out', {
+					windowId: window.id, token: failure.token, reason: failure.reason, elapsedMs: failure.elapsedMs,
+				});
 				this.cancelQuit();
 				await this.windowsMainService.getWindowById(window.id)?.reportWindowError(false, failure.signal);
 				return;

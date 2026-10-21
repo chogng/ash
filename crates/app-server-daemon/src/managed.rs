@@ -22,6 +22,7 @@ use std::time::Duration;
 use std::time::Instant;
 
 use crate::ConnectionOptions;
+use crate::ManagedConnectionContract;
 use crate::endpoint::EndpointPaths;
 use crate::endpoint::SocketCleanup;
 use crate::process::ProcessRecord;
@@ -39,6 +40,7 @@ const MAX_PENDING_PRELUDES: usize = 32;
 /// One validated local connection, preserving any buffered protocol bytes after its prelude.
 pub struct ManagedConnection {
     pub options: ConnectionOptions,
+    pub startup_trace: Option<crate::startup_trace::StartupTrace>,
     pub web: Option<ash_app_server_protocol::WebLaunchOptions>,
     pub reader: BufReader<Chain<Cursor<Vec<u8>>, LocalStream>>,
     pub writer: LocalStream,
@@ -52,6 +54,7 @@ pub struct ManagedEndpoint {
     _record_guard: ProcessRecordGuard,
     endpoint: EndpointPaths,
     record: ProcessRecord,
+    connection_contract: ManagedConnectionContract,
     profile_root: PathBuf,
     stopping: Arc<AtomicBool>,
     signals: Vec<signal_hook::SigId>,
@@ -87,6 +90,7 @@ impl PendingConnection {
         mut self,
         profile_root: &Path,
         record: &ProcessRecord,
+        connection_contract: &ManagedConnectionContract,
         stopping: &AtomicBool,
     ) -> Result<PreludeProgress, String> {
         if Instant::now() >= self.deadline {
@@ -128,6 +132,7 @@ impl PendingConnection {
                         record.pid,
                         record.instance_id.clone(),
                         schema_hash(),
+                        Some(connection_contract.clone()),
                     );
                     let mut bytes =
                         serde_json::to_vec(&response).map_err(|error| error.to_string())?;
@@ -155,6 +160,7 @@ impl PendingConnection {
                     }
                     return Ok(PreludeProgress::Connection(ManagedConnection {
                         options,
+                        startup_trace: connection.startup_trace,
                         web: connection.web,
                         reader: BufReader::new(Cursor::new(buffered).chain(reader)),
                         writer,
@@ -180,7 +186,10 @@ impl PendingConnection {
 
 impl ManagedEndpoint {
     /// Binds the profile endpoint and publishes the identity of the current App Server process.
-    pub fn bind(profile_root: &Path) -> Result<Self, String> {
+    pub fn bind(
+        profile_root: &Path,
+        connection_contract: ManagedConnectionContract,
+    ) -> Result<Self, String> {
         let endpoint = EndpointPaths::prepare(profile_root)?;
         let listener = PollingLocalListener::new(endpoint.bind_listener()?)
             .map_err(|error| error.to_string())?;
@@ -193,6 +202,7 @@ impl ManagedEndpoint {
             _record_guard: record_guard,
             endpoint,
             record,
+            connection_contract,
             profile_root: profile_root.to_path_buf(),
             stopping: Arc::new(AtomicBool::new(false)),
             signals: Vec::new(),
@@ -281,7 +291,12 @@ impl ManagedEndpoint {
         // control response. Each polling round advances every pending peer without adding threads.
         for _ in 0..self.pending.len() {
             let pending = self.pending.pop_front().expect("pending prelude exists");
-            match pending.poll(&self.profile_root, &self.record, &self.stopping) {
+            match pending.poll(
+                &self.profile_root,
+                &self.record,
+                &self.connection_contract,
+                &self.stopping,
+            ) {
                 Ok(PreludeProgress::Pending(pending)) => self.pending.push_back(pending),
                 Ok(PreludeProgress::Connection(connection)) => {
                     if !self.is_stopping() {

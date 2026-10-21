@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { EventEmitter } from 'node:events';
-import { test } from "mocha";
+import { suite, test } from "mocha";
+import { mock } from 'node:test';
 import { JSDOM } from "jsdom";
 import { DeferredPromise } from "../../../../../base/common/async.js";
 import { BrowserLifecycleService } from "../../browser/lifecycleService.js";
@@ -12,6 +13,81 @@ import { BrowserStorageService } from '../../../storage/browser/storageService.j
 import { LifecycleMainService, windowCloseResponseIpcRoute } from '../../../../../platform/lifecycle/electron-main/lifecycleMainService.js';
 import type { ISandboxIpcRenderer } from '../../../../../base/parts/sandbox/common/sandboxTypes.js';
 import type { WindowCloseResponse } from '../../../../../platform/window/common/window.js';
+import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
+
+suite('Window shutdown diagnostics', () => {
+	ensureNoDisposablesAreLeakedInTestSuite();
+
+	test('names only unfinished vetoes, joins and final captures without changing completion', async () => {
+		mock.timers.enable({ apis: ['setInterval'] });
+		const browser = new JSDOM('<!doctype html><body></body>');
+		try {
+			using services = createLifecycleServices(browser);
+			const warnings: unknown[][] = [];
+			services.get(ILogService).warn = (...args: unknown[]) => { warnings.push(args); };
+			using lifecycle = services.createInstance(BrowserLifecycleService, { ownerWindow: browser.window as unknown as Window, onError: () => undefined });
+			const veto = new DeferredPromise<boolean>();
+			const join = new DeferredPromise<void>();
+			const final = new DeferredPromise<void>();
+			using beforeShutdown = lifecycle.onBeforeShutdown(event => {
+				event.veto(Promise.resolve(false), 'finished check');
+				event.veto(veto.p, 'backup check');
+			});
+			using willShutdown = lifecycle.onWillShutdown(event => {
+				event.join(Promise.resolve(), 'finished save');
+				event.join(join.p, 'storage save');
+				event.join(() => final.p, 'final backup');
+			});
+			let completed = false;
+			const shutdown = lifecycle.shutdown('reload').then(() => { completed = true; });
+			for (const [phase, label, release] of [
+				['veto', 'backup check', () => veto.complete(false)],
+				['join', 'storage save', () => join.complete()],
+				['final', 'final backup', () => final.complete()],
+			] as const) {
+				await new Promise(resolve => setImmediate(resolve));
+				mock.timers.tick(10_000);
+				assert.equal(completed, false);
+				assert.deepEqual(warnings.at(-1)?.slice(0, 2), ['lifecycle', 'Window shutdown is still waiting']);
+				assert.deepEqual(warnings.at(-1)?.[2], {
+					reason: 'reload', elapsedMs: (warnings.at(-1)![2] as { elapsedMs: number; }).elapsedMs,
+					pending: [{ phase, label }],
+				});
+				await release();
+			}
+			await shutdown;
+			mock.timers.tick(30_000);
+			assert.equal(warnings.length, 3);
+			assert.equal(completed, true);
+		} finally { browser.window.close(); mock.timers.reset(); }
+	});
+
+	test('failed attempts clear diagnostics and disposing a waiting window stops its timer', async () => {
+		mock.timers.enable({ apis: ['setInterval'] });
+		const browser = new JSDOM('<!doctype html><body></body>');
+		try {
+			using services = createLifecycleServices(browser);
+			const warnings: unknown[][] = [];
+			services.get(ILogService).warn = (...args: unknown[]) => { warnings.push(args); };
+			using lifecycle = services.createInstance(BrowserLifecycleService, { ownerWindow: browser.window as unknown as Window, onError: () => undefined });
+			const pending = new DeferredPromise<void>();
+			let attempts = 0;
+			using willShutdown = lifecycle.onWillShutdown(event => event.join(++attempts === 1 ? Promise.reject(new Error('save failed')) : pending.p, 'storage'));
+			await assert.rejects(lifecycle.shutdown('reload'), /shutdown participants failed/);
+			mock.timers.tick(10_000);
+			assert.deepEqual(warnings, []);
+			const shutdown = lifecycle.shutdown('windowClose');
+			await new Promise(resolve => setImmediate(resolve));
+			mock.timers.tick(10_000);
+			assert.equal((warnings[0]![2] as { reason: string; }).reason, 'windowClose');
+			lifecycle.dispose();
+			mock.timers.tick(30_000);
+			assert.equal(warnings.length, 1);
+			await pending.complete();
+			await shutdown;
+		} finally { browser.window.close(); mock.timers.reset(); }
+	});
+});
 
 test("BrowserLifecycleService joins participants once before completing shutdown", async () => {
 	const browser = new JSDOM("<!doctype html><body></body>");

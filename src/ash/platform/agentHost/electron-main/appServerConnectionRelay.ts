@@ -301,7 +301,7 @@ export class AppServerConnectionRelay extends Disposable {
 	/** Opt-in marks correlate one port lease without retaining protocol payloads. */
 	private trace(phase: string, nonce: string): void {
 		if (process.env.ASH_DESKTOP_STARTUP_TRACE === '1') {
-			performance.mark(`ash.appServer.main.${phase}`, { detail: { nonce, connection: this.connection } });
+			performance.mark(`ash.appServer.main.${phase}`, { detail: { nonce, connection: this.connection, carrierPid: this.transport.value?.process.pid, ...(phase === 'initialized' ? { carrierTrace: this.transport.value?.diagnostics().split('\n').filter(line => line.startsWith('ASH_STARTUP_TRACE ')) ?? [] } : {}) } });
 		}
 	}
 

@@ -43,6 +43,7 @@ fn execution_scope_requires_a_versioned_host_grant_and_identity() {
         1,
         "instance".into(),
         "schema".into(),
+        None,
     );
     response.version = 1;
     assert!(response.validate_connection(&options).is_err());
@@ -76,6 +77,7 @@ fn older_backend_supports_local_connections_but_rejects_ssh_scope() {
         1,
         "instance".into(),
         "schema".into(),
+        None,
     );
     response.version = 1;
     response.validate_connection(&local).unwrap();
@@ -161,4 +163,37 @@ fn remote_role_roundtrips_without_becoming_local_workbench() {
         serde_json::from_slice(&serde_json::to_vec(&prelude).unwrap()).unwrap();
     decoded.validate().unwrap();
     assert_eq!(decoded.role, crate::ConnectionRole::Remote);
+}
+
+#[test]
+fn control_contract_is_optional_for_old_daemons_and_rejects_unknown_modes() {
+    let legacy = super::ControlResponse::new(
+        super::ControlState::Running,
+        1,
+        "generation".into(),
+        "schema".into(),
+        None,
+    );
+    let value = serde_json::to_value(&legacy).unwrap();
+    assert!(value.get("connectionContract").is_none());
+    assert_eq!(
+        serde_json::from_value::<super::ControlResponse>(value.clone()).unwrap(),
+        legacy
+    );
+    let mut current = value;
+    current["connectionContract"] = serde_json::json!({"kind":"agent", "protocolVersion":ash_app_server_protocol::protocol::initialize::ProtocolVersion::current()});
+    let decoded: super::ControlResponse = serde_json::from_value(current.clone()).unwrap();
+    assert!(matches!(
+        decoded.connection_contract,
+        Some(super::ManagedConnectionContract::Agent { .. })
+    ));
+    assert_eq!(serde_json::to_value(decoded).unwrap(), current);
+    for invalid in [
+        serde_json::json!({"kind":"unknown"}),
+        serde_json::json!({"kind":"agent"}),
+        serde_json::json!({"kind":"agent","protocolVersion":{"major":"10"}}),
+    ] {
+        current["connectionContract"] = invalid;
+        assert!(serde_json::from_value::<super::ControlResponse>(current.clone()).is_err());
+    }
 }

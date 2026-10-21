@@ -54,11 +54,13 @@ suite('LifecycleMainService', () => {
 			try {
 				const window = new TestWindow();
 				const prompts: AbortSignal[] = [];
+				const requests: { token: number; reason: string; elapsedMs: number; }[] = [];
 				const choice = new DeferredPromise<void>();
 				using service = new LifecycleMainService<TestWindow>((_, failure) => {
 					assert.equal(failure.kind, 'unresponsive');
 					if (failure.kind !== 'unresponsive') return;
 					prompts.push(failure.signal);
+					requests.push({ token: failure.token, reason: failure.reason, elapsedMs: failure.elapsedMs });
 					return prompts.length === 1 ? Promise.resolve() : choice.p;
 				}, () => { }, createStateService(), 'test');
 				using registration = service.registerWindow(window);
@@ -74,6 +76,8 @@ suite('LifecycleMainService', () => {
 				mock.timers.tick(30_000);
 				await new Promise(resolve => setImmediate(resolve));
 				assert.equal(prompts.length, 2);
+				assert.deepEqual(requests.map(({ token, reason }) => ({ token, reason })), [{ token: 1, reason }, { token: 1, reason }]);
+				assert.ok(requests[0]!.elapsedMs >= 0 && requests[1]!.elapsedMs >= requests[0]!.elapsedMs);
 				service.respondToClose(window, { kind: 'complete', token: 1 });
 				assert.equal(prompts[1]!.aborted, true);
 				if (unload) assert.equal(await unload, true);

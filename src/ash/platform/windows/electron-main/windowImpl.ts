@@ -477,7 +477,7 @@ export class CodeWindow<TWindow extends ICodeWindowHandle<TWindow>> extends Disp
 			shutdownSignal.addEventListener('abort', cancel, { once: true });
 			return this.errorPromptTask!.finally(() => shutdownSignal.removeEventListener('abort', cancel));
 		}
-		if (!gone) this.logService.error('window', 'Window is unresponsive', { windowId: this.win.id });
+		if (!gone) this.logService.error('window', 'Window is unresponsive', { windowId: this.win.id, source: shutdownSignal ? 'shutdown-timeout' : 'renderer-unresponsive' });
 		const prompt = new AbortController();
 		this.errorPrompt = prompt;
 		this.shutdownPrompt = shutdownSignal !== undefined;

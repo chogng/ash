@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, mkdir, rename, rm, writeFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 import { test } from 'mocha';
@@ -8,6 +8,7 @@ import type { AppServerConnectionState } from '../../../agentHost/common/appServ
 import { AppServerDaemonLauncher } from '../../electron-main/appServerDaemonLauncher.js';
 import { DevelopmentAppServerReloader, readDevelopmentAppServerGeneration } from '../../electron-main/developmentAppServerReloader.js';
 import type { IDevelopmentAppServerRuntime } from '../../electron-main/developmentAppServerRuntime.js';
+import { DeferredPromise, disposableTimeout } from '../../../../base/common/async.js';
 
 const oldRuntime = resolve('/test/old');
 const newRuntime = resolve('/test/new');
@@ -49,6 +50,40 @@ test('development change notifications validate pointers without opening collect
 	} finally {
 		await rm(directory, { recursive: true, force: true });
 	}
+});
+
+test('atomic runtime pointer replacement reaches the profile reloader without native watch events', async () => {
+	const directory = await mkdtemp(join(tmpdir(), 'ash-generation-notification-'));
+	try {
+		using resources = new DisposableStore();
+		const generationFile = join(directory, 'current.json');
+		const first = `generations/${'a'.repeat(64)}`;
+		const second = `generations/${'b'.repeat(64)}`;
+		await writeFile(generationFile, JSON.stringify({ version: 3, runtime: first }));
+		const events: string[] = [];
+		const window = connection(resources, 'workbench', events);
+		const completed = new DeferredPromise<void>();
+		const reloader = resources.add(new DevelopmentAppServerReloader({
+			generationFile,
+			acquireGeneration: async () => Object.assign(toDisposable(() => { }), {
+				runtime: (await readDevelopmentAppServerGeneration(generationFile))!, assertActive() { },
+			}),
+			restartDaemon: async launcher => {
+				assert.equal(launcher.environment.ASH_DEV_RUNTIME_ROOT, join(directory, second));
+				events.push('restart');
+			},
+			log: (_message, error) => { if (error) void completed.error(error); else void completed.complete(); },
+		}));
+		resources.add(reloader.registerConnection(window.launcher, window.supervisor));
+		await window.launcher.validate();
+		assert.equal(window.launcher.environment.ASH_DEV_RUNTIME_ROOT, join(directory, first));
+		const replacement = join(directory, 'next.json');
+		await writeFile(replacement, JSON.stringify({ version: 3, runtime: second }));
+		using timeout = disposableTimeout(() => { void completed.error(new Error('Runtime pointer replacement was not observed')); }, 5_000);
+		await rename(replacement, generationFile);
+		await completed.p;
+		assert.deepEqual(events, ['stop:workbench', 'restart', 'start:workbench']);
+	} finally { await rm(directory, { recursive: true, force: true }); }
 });
 
 test('Workbench and Agents stop together, restart one daemon, and reconnect without leaks', async () => {

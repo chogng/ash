@@ -20,6 +20,7 @@ impl AppServer {
         connection: &mut ConnectionState,
         params: &Value,
     ) -> Result<Value, RpcError> {
+        let _initialize = ash_app_server_daemon::startup_trace::StartupTrace::span("initialize");
         if connection.is_initialized() {
             return Err(RpcError::new(
                 -32002,
