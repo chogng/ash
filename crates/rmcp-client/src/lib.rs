@@ -25,3 +25,6 @@ pub use transport::{BearerToken, HttpAuthorization, StdioServerCommand, Streamab
 #[cfg(test)]
 #[path = "client_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+mod process_tests;

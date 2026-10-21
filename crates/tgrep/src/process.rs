@@ -19,6 +19,7 @@ use std::path::Path;
 use std::path::PathBuf;
 use std::process::Child;
 use std::process::Command;
+use std::process::ExitStatus;
 use std::process::Stdio;
 use std::sync::Arc;
 use std::sync::Mutex;
@@ -34,11 +35,67 @@ use std::time::Instant;
 const POLL: Duration = Duration::from_millis(25);
 const MAX_RESPONSE: usize = 64 * 1024 * 1024;
 
-struct OwnedChild(Child);
+// Keep the leader unreaped until its descendants are stopped. Otherwise its PID can
+// be reused while cleanup still treats it as an owned session identity.
+struct OwnedChild {
+    child: Child,
+    #[cfg(windows)]
+    job: ash_utils_pty::JobObject,
+    closed: bool,
+}
+impl OwnedChild {
+    fn spawn(mut command: Command) -> std::io::Result<Self> {
+        #[cfg(unix)]
+        ash_utils_pty::process_group::configure_command_session(&mut command);
+        #[cfg(windows)]
+        let job = ash_utils_pty::JobObject::create()?;
+        #[cfg(windows)]
+        let child = job.spawn_contained_std(&mut command)?;
+        #[cfg(not(windows))]
+        let child = command.spawn()?;
+        Ok(Self {
+            child,
+            #[cfg(windows)]
+            job,
+            closed: false,
+        })
+    }
+    fn try_wait(&mut self) -> std::io::Result<Option<ExitStatus>> {
+        if self.closed {
+            return self.child.try_wait();
+        }
+        #[cfg(unix)]
+        if !ash_utils_pty::process_group::child_has_exited(self.child.id())? {
+            return Ok(None);
+        }
+        #[cfg(not(unix))]
+        if self.child.try_wait()?.is_none() {
+            return Ok(None);
+        }
+        self.stop()?;
+        self.child.try_wait()
+    }
+    fn stop(&mut self) -> std::io::Result<()> {
+        if self.closed {
+            return Ok(());
+        }
+        #[cfg(unix)]
+        let tree = ash_utils_pty::process_group::kill_process_session(self.child.id());
+        #[cfg(windows)]
+        let tree = self.job.terminate();
+        #[cfg(not(any(unix, windows)))]
+        let tree: std::io::Result<()> = Ok(());
+        let _ = self.child.kill();
+        let reaped = self.child.wait();
+        self.closed = reaped.is_ok();
+        tree?;
+        reaped?;
+        Ok(())
+    }
+}
 impl Drop for OwnedChild {
     fn drop(&mut self) {
-        let _ = self.0.kill();
-        let _ = self.0.wait();
+        let _ = self.stop();
     }
 }
 
@@ -69,7 +126,7 @@ fn stop_owned_servers_at_exit() {
         let mut supervised = Vec::new();
         for child in &children {
             let mut child = child.lock().unwrap_or_else(|e| e.into_inner());
-            supervised.push(child.0.stdin.take().is_some());
+            supervised.push(child.child.stdin.take().is_some());
         }
         // Close every host/owner pipe first. Managed daemons can cancel and reap their
         // producers before exit; plain servers retain the existing forced cleanup.
@@ -77,14 +134,11 @@ fn stop_owned_servers_at_exit() {
         for (child, supervised) in children.into_iter().zip(supervised) {
             let mut child = child.lock().unwrap_or_else(|e| e.into_inner());
             if supervised {
-                while matches!(child.0.try_wait(), Ok(None)) && Instant::now() < deadline {
+                while matches!(child.try_wait(), Ok(None)) && Instant::now() < deadline {
                     thread::sleep(POLL);
                 }
             }
-            if !matches!(child.0.try_wait(), Ok(Some(_))) {
-                let _ = child.0.kill();
-            }
-            let _ = child.0.wait();
+            let _ = child.stop();
         }
     }
 }
@@ -242,7 +296,7 @@ impl Server {
                 .arg("--ash-parent");
             index.join("serve.json")
         };
-        let child = command
+        command
             .stdin(
                 if identity.revision.is_none() || runtime == Runtime::Managed {
                     Stdio::piped()
@@ -251,19 +305,18 @@ impl Server {
                 },
             )
             .stdout(Stdio::null())
-            .stderr(Stdio::null())
-            .spawn()?;
-        let child = Arc::new(Mutex::new(OwnedChild(child)));
+            .stderr(Stdio::null());
+        let child = Arc::new(Mutex::new(OwnedChild::spawn(command)?));
         register(&child);
         let (address, protocol) = loop {
             check(cancellation, deadline)?;
             let mut process = child.lock().unwrap_or_else(|e| e.into_inner());
-            if let Some(status) = process.0.try_wait()? {
+            if let Some(status) = process.try_wait()? {
                 return Err(failed(format!(
                     "tgrep server exited during startup: {status}"
                 )));
             }
-            let pid = process.0.id();
+            let pid = process.child.id();
             drop(process);
             if let Ok(bytes) = std::fs::read(&marker) {
                 if bytes.len() <= 4096 {
@@ -397,21 +450,12 @@ impl Server {
             .child
             .lock()
             .unwrap_or_else(|e| e.into_inner())
-            .0
             .try_wait()?
             .is_some())
     }
     pub(super) fn stop(&self) -> Result<(), Error> {
         let mut child = self.child.lock().unwrap_or_else(|e| e.into_inner());
-        if child.0.try_wait()?.is_none() {
-            if let Err(error) = child.0.kill() {
-                // The process may have exited between the observation and kill.
-                if child.0.try_wait()?.is_none() {
-                    return Err(error.into());
-                }
-            }
-            child.0.wait()?;
-        }
+        child.stop()?;
         Ok(())
     }
     pub(super) fn rpc(
@@ -426,7 +470,6 @@ impl Server {
             .child
             .lock()
             .unwrap_or_else(|e| e.into_inner())
-            .0
             .try_wait()?
         {
             return Err(failed(format!("tgrep server exited: {status}")));
@@ -550,21 +593,23 @@ impl Owner {
         cancellation: &CancellationToken,
         deadline: Instant,
     ) -> Result<Self, Error> {
-        let mut child = Command::new(&executable.0)
+        let mut command = Command::new(&executable.0);
+        command
             .args(["shared", "owner-hold", "--claim"])
             .arg(claim)
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
-            .stderr(Stdio::null())
-            .spawn()?;
-        if child.stdin.is_none() {
+            .stderr(Stdio::null());
+        let mut child = OwnedChild::spawn(command)?;
+        if child.child.stdin.is_none() {
             return Err(failed("missing owner input"));
         }
         let output = child
+            .child
             .stdout
             .take()
             .ok_or_else(|| failed("missing owner output"))?;
-        let child = Arc::new(Mutex::new(OwnedChild(child)));
+        let child = Arc::new(Mutex::new(child));
         register(&child);
         let (sender, receiver) = mpsc::sync_channel(1);
         thread::spawn(move || {
@@ -634,15 +679,13 @@ fn capture_selected(
     admit: &dyn Fn(&str) -> Result<bool, Error>,
 ) -> Result<Vec<String>, Error> {
     check(cancellation, deadline)?;
-    let mut child = OwnedChild(
-        command
-            .stdin(Stdio::null())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .spawn()?,
-    );
-    let stdout = child.0.stdout.take().expect("piped stdout");
-    let stderr = child.0.stderr.take().expect("piped stderr");
+    command
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+    let mut child = OwnedChild::spawn(command)?;
+    let stdout = child.child.stdout.take().expect("piped stdout");
+    let stderr = child.child.stderr.take().expect("piped stderr");
     thread::scope(|scope| {
         let (sender, receiver) = mpsc::sync_channel(8);
         let output_reader = scope.spawn(move || {
@@ -699,13 +742,19 @@ fn capture_selected(
                             }
                         }
                     }
-                    Err(mpsc::RecvTimeoutError::Timeout) => {}
+                    Err(mpsc::RecvTimeoutError::Timeout) => {
+                        // Descendants can inherit the pipes after the launcher exits. Observe
+                        // the leader independently of EOF so cleanup can release those pipes.
+                        if child.try_wait()?.is_some() {
+                            break;
+                        }
+                    }
                     Err(mpsc::RecvTimeoutError::Disconnected) => break,
                 }
             }
             loop {
                 check(cancellation, deadline)?;
-                if let Some(status) = child.0.try_wait()? {
+                if let Some(status) = child.try_wait()? {
                     if !matches!(status.code(), Some(0 | 1)) {
                         return Err(failed(format!("tgrep exited with {status}")));
                     }
@@ -714,8 +763,7 @@ fn capture_selected(
                 thread::sleep(POLL);
             }
         })();
-        let _ = child.0.kill();
-        let _ = child.0.wait();
+        let _ = child.stop();
         drop(receiver);
         let _ = output_reader.join();
         let stderr = errors.join().unwrap_or_default();

@@ -14,6 +14,25 @@
 
 - [ ] **验收** · 在支持 PSEC 的 Windows、WSL2 和独立 Linux／x64 运行当前 SDK pin `f1e8694b`，并补外部局域网／公网 IPv6。命令与验收边界见 [MXC 清单](MXC-TODO.md) 与 [适配器验证](crates/mxc-sandbox/README.md#验证)。
 
+## 搜索与 MCP 进程回收 · Windows 验收
+
+已修复 tgrep／MCP 仅终止直接子进程的缺口，改用 Unix session／Windows Job Object 回收后代；同时修复 tgrep 启动器退出后，后代继承输出管道导致搜索无法结束的问题。macOS 此前两包 `just verify` 通过；提交前 MCP 再验 14 项通过，tgrep 首跑 54 passed／1 failed／2 ignored（managed daemon 重启报 `view-not-found`），该失败用例单独复跑通过，两包警告检查与依赖检查通过。首次与复跑日志见 `/tmp/ash-commit-tgrep{,-retry}.log`；tgrep 的 Windows x64 全目标警告检查通过。MCP 交叉编译被本机缺少 Windows SDK 的 `stdlib.h`／`windows.h` 阻塞，以下 Windows 项目尚未验收。
+
+- [ ] **构建来源**：Windows 检出须包含本次进程树回收提交中的 `crates/tgrep`、`crates/rmcp-client` 和 `Cargo.lock` 修改；按现有 Windows 构建入口重建并启动 Ash。记录 commit、工作区修改、版本和实际运行路径，确认使用的是新构建。
+- [ ] **包验证**：执行下列命令，保存完整输出；不得把编译失败、超时或跳过当作通过。
+
+  ```powershell
+  just verify ash-tgrep
+  just verify ash-rmcp-client
+  ```
+
+- [ ] **搜索循环**：在同一仓库连续进行至少 20 轮搜索，包含快速更换查询、取消、达到结果上限；再关闭并重新打开仓库。记录开始前、过程中、停止操作 10 秒后的进程快照。搜索应正常完成或取消；同一工作区在相同空闲状态下，tgrep 数量不得随轮次持续增加。
+- [ ] **MCP 循环**：使用一个已授权的本地 stdio MCP，优先覆盖 `npm exec`／`npx` 启动 Node 服务的配置，连续进行至少 10 轮连接、调用、断开或禁用、重新启用。每轮确认旧连接所属的启动器和后代退出；`process_tests` 回归须覆盖初始化超时、取消及反复 shutdown／Drop，不使用公网故障模拟超时。
+- [ ] **窗口与退出**：关闭一个工作区窗口，确认其独占的搜索／MCP 进程退出，其他仍打开窗口的搜索和工具继续可用；最后正常退出 Ash，等待 10 秒，确认本次 Ash 启动的 tgrep、npm／npx、node 后代均已退出。
+- [ ] **现场证据与结论**：每次快照保存时间、`ProcessId`、`ParentProcessId`、`CreationDate`、`ExecutablePath`、完整 `CommandLine`，与新构建路径及父子关系关联。附测试输出、操作轮数和各阶段计数；若失败，保留残留 PID、命令行、日志及最短复现步骤。仅统计本次 Ash 所属进程，不能按名称把其他应用的 Node 进程算进来；全部通过后移除此待办。
+
+macOS 现场检查未发现 tgrep；所见多组 `npm exec @playwright/mcp` 的父进程属于 ChatGPT/Codex，不能视为 Ash 泄漏的现场证据，本轮未终止这些进程。
+
 ## Windows 开发实验资源清理
 
 - [ ] 清理 2026-10-21 Rust 模块热更新试验的 `.build/cargo-live`。该独立缓存方案未采用，当前入口已复用正常 Cargo 缓存；目录删除被自动审批以“策略阻止”拒绝，未改用其他方式删除。运行与测量证据另存 `.build/build-health/rust-live-20261021/`。

@@ -11,7 +11,6 @@ use rmcp::model::{
 use rmcp::service::{
     ClientServiceExt, PeerRequestOptions, RequestHandle, RoleClient, RunningService, ServiceError,
 };
-use rmcp::transport::child_process::TokioChildProcess;
 use rmcp::transport::streamable_http_client::StreamableHttpClientTransportConfig;
 use rmcp::transport::{IntoTransport, StreamableHttpClientTransport};
 
@@ -159,7 +158,7 @@ impl RmcpClient {
         command: StdioServerCommand,
         options: RmcpClientOptions,
     ) -> Result<Self, RmcpClientError> {
-        let transport = TokioChildProcess::new(command.into_command())
+        let transport = crate::transport::StdioTransport::spawn(command)
             .map_err(RmcpClientError::TransportStart)?;
         Self::connect(transport, options).await
     }

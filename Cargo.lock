@@ -2814,11 +2814,13 @@ name = "ash-rmcp-client"
 version = "0.1.0"
 dependencies = [
  "ash-http-client",
+ "ash-utils-pty",
  "futures",
  "reqwest 0.13.4",
  "rmcp",
  "serde_json",
  "sse-stream",
+ "tempfile",
  "thiserror 2.0.21",
  "tokio",
 ]
@@ -3222,6 +3224,7 @@ dependencies = [
  "ash-file-search",
  "ash-install-context",
  "ash-process-hardening",
+ "ash-utils-pty",
  "dunce",
  "ignore",
  "regex",
@@ -9333,20 +9336,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "process-wrap"
-version = "9.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2e842efad9119158434d193c6682e2ebee4b44d6ad801d7b349623b3f57cdf55"
-dependencies = [
- "futures",
- "indexmap",
- "nix 0.31.3",
- "tokio",
- "tracing",
- "windows",
-]
-
-[[package]]
 name = "proptest"
 version = "1.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -10864,7 +10853,6 @@ dependencies = [
  "http",
  "pastey",
  "pin-project-lite",
- "process-wrap",
  "reqwest 0.13.4",
  "schemars",
  "serde",
