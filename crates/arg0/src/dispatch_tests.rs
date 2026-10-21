@@ -3,10 +3,12 @@ use super::dispatch;
 #[cfg(target_os = "macos")]
 #[test]
 fn malformed_watcher_role_fails_before_reading_the_private_socket() {
-    assert!(matches!(
-        dispatch(["--ash-native-file-watcher".into(), "unexpected".into()]),
-        Some(Err(_))
-    ));
+    for role in ["--ash-native-file-watcher", "--ash-polling-file-watcher"] {
+        assert!(matches!(
+            dispatch([role.into(), "unexpected".into()]),
+            Some(Err(_))
+        ));
+    }
 }
 
 #[test]

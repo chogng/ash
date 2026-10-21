@@ -38,10 +38,17 @@ def cargo_target(arguments: list[str]) -> str | None:
 
 
 def prepare_test_executable(
-    cargo: str, arguments: list[str], environment: dict[str, str], package: str
+    cargo: str,
+    arguments: list[str],
+    environment: dict[str, str],
+    package: str,
+    *,
+    target_name: str | None = None,
+    target_kind: str = "bin",
 ) -> str:
     # Cargo does not build a dependency's executable for library tests. Match the
     # test compilation settings and use its reported artifact, not a guessed path.
+    name = target_name or package
     selection: list[str] = []
     value_options = {
         "--target",
@@ -79,8 +86,8 @@ def prepare_test_executable(
             "build",
             "-p",
             package,
-            "--bin",
-            package,
+            f"--{target_kind}",
+            name,
             "--message-format=json",
             *selection,
         ],
@@ -95,11 +102,13 @@ def prepare_test_executable(
         message = parse_cargo_message(line)
         if diagnostic := cargo_rendered_diagnostic(message):
             sys.stderr.write(diagnostic)
-        if artifact := cargo_artifact_executable(message, package):
+        if artifact := cargo_artifact_executable(
+            message, name, target_kind=target_kind
+        ):
             executable = artifact
     result.check_returncode()
     if executable is None:
-        raise RuntimeError(f"Cargo did not report the {package} executable")
+        raise RuntimeError(f"Cargo did not report the {name} executable")
     return executable
 
 
@@ -332,6 +341,24 @@ def main(arguments: list[str] | None = None) -> int:
         profile=profile_from_arguments(cargo_arguments),
         target_triple=cargo_target(cargo_arguments),
     ):
+        if (
+            cargo_arguments[0] == "test"
+            and "apple-darwin" in target
+            and not tui_process_tests
+            and "--no-run" not in cargo_arguments
+            and "ash-file-watcher" in packages
+            and "ASH_FILE_WATCHER_TEST_HOST" not in environment
+        ):
+            # Library test harnesses do not dispatch private product arg0 roles. Supply
+            # a matching small host; never fall back to uncancellable in-process scans.
+            environment["ASH_FILE_WATCHER_TEST_HOST"] = prepare_test_executable(
+                args.cargo,
+                cargo_arguments,
+                environment,
+                "ash-file-watcher",
+                target_name="watch_probe",
+                target_kind="example",
+            )
         if (
             cargo_arguments[0] == "test"
             and not tui_process_tests

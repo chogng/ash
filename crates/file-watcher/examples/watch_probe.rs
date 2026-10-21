@@ -22,15 +22,48 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     if std::env::args().nth(1).as_deref() == Some(ash_file_watcher::NATIVE_WATCHER_ARGUMENT) {
         return ash_file_watcher::run_native_watcher().map_err(Into::into);
     }
+    #[cfg(target_os = "macos")]
+    if std::env::args().nth(1).as_deref() == Some(ash_file_watcher::POLLING_WATCHER_ARGUMENT) {
+        return ash_file_watcher::run_polling_watcher().map_err(Into::into);
+    }
     let arguments = std::env::args().skip(1).collect::<Vec<_>>();
     let [mode, root] = arguments.as_slice() else {
-        return Err("usage: watch_probe native|ash|poll|native-delete|native-alias-delete <scratch-directory>".into());
+        return Err("usage: watch_probe native|ash|poll|native-delete|native-alias-delete|ash-root|poll-root <directory>".into());
     };
     if !matches!(
         mode.as_str(),
-        "native" | "ash" | "poll" | "native-delete" | "native-alias-delete"
+        "native"
+            | "ash"
+            | "poll"
+            | "native-delete"
+            | "native-alias-delete"
+            | "ash-root"
+            | "poll-root"
     ) {
         return Err("unknown probe mode".into());
+    }
+    if mode.ends_with("-root") {
+        let executor = tokio::runtime::Builder::new_current_thread()
+            .enable_time()
+            .build()?;
+        let _entered = executor.enter();
+        let watcher = Arc::new(FileWatcher::new_with_backend(if mode == "poll-root" {
+            FileWatcherBackend::Polling {
+                interval: Duration::from_millis(200),
+            }
+        } else {
+            FileWatcherBackend::Recommended
+        })?);
+        let (subscriber, _events) = watcher.add_subscriber();
+        phase("before_root_registration");
+        let registration = subscriber.register_paths(vec![WatchPath {
+            path: PathBuf::from(root).canonicalize()?,
+            recursive: true,
+        }])?;
+        phase("after_root_registration");
+        drop(registration);
+        phase("after_root_unregistration");
+        return Ok(());
     }
     if mode.ends_with("delete") {
         let directory = PathBuf::from(root).join(format!("watch-probe-dir-{}", std::process::id()));

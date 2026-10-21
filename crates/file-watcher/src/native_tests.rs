@@ -197,10 +197,12 @@ fn closing_the_parent_socket_terminates_the_real_helper() {
         let _ = write_frame(
             &mut socket,
             &WatchRequest {
+                polling_interval_millis: None,
                 id: 1,
                 paths: vec![WireWatch {
                     path: root.clone(),
                     recursive: true,
+                    contents: true,
                 }],
                 replace: vec![],
                 probe: root,
@@ -225,4 +227,67 @@ fn closing_the_parent_socket_terminates_the_real_helper() {
     child.wait().unwrap();
     assert!(initialized, "real helper did not initialize");
     assert!(exited, "helper survived parent socket closure");
+}
+
+#[test]
+#[ignore = "real polling helper for live backend tests"]
+fn polling_process_helper() {
+    run_polling_watcher().unwrap();
+}
+
+#[test]
+#[ignore = "polling helper with a blocked baseline scan"]
+fn polling_blocked_process_helper() {
+    polling::run_with_scan(|_, _, _| {
+        std::fs::write(
+            std::env::var_os("ASH_TEST_POLL_SCAN_ENTERED").unwrap(),
+            b"scanning",
+        )
+        .unwrap();
+        loop {
+            thread::park();
+        }
+    })
+    .unwrap();
+}
+
+#[test]
+fn polling_scan_cannot_block_registration_updates_or_helper_shutdown() {
+    let scratch = tempfile::tempdir().unwrap();
+    let entered = scratch.path().join("entered");
+    let mut child = Command::new(std::env::current_exe().unwrap());
+    child.args([
+        "--exact",
+        "native::tests::polling_blocked_process_helper",
+        "--ignored",
+        "--nocapture",
+    ]);
+    child.env("ASH_TEST_POLL_SCAN_ENTERED", &entered);
+    let (events, _receiver) = tokio::sync::mpsc::unbounded_channel();
+    let mut watcher = NativeWatcher::spawn(child, events, Duration::from_millis(500)).unwrap();
+    let root = scratch.path().canonicalize().unwrap();
+    watcher
+        .apply_polling(
+            &BTreeMap::from([(root, (RecursiveMode::Recursive, true))]),
+            &BTreeSet::new(),
+            Duration::from_millis(20),
+        )
+        .unwrap();
+    let deadline = Instant::now() + Duration::from_secs(3);
+    while !entered.exists() {
+        assert!(Instant::now() < deadline);
+        thread::yield_now();
+    }
+    let started = Instant::now();
+    watcher
+        .apply_polling(
+            &BTreeMap::new(),
+            &BTreeSet::new(),
+            Duration::from_millis(20),
+        )
+        .unwrap();
+    watcher.stop();
+    assert!(started.elapsed() < Duration::from_secs(2));
+    assert!(watcher.child.try_wait().unwrap().is_some());
+    assert!(watcher.reader.is_none());
 }

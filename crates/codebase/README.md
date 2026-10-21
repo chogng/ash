@@ -5,6 +5,8 @@
 - `CodebaseRetrievalService` 消费公共 `grep::Search`，组合文字、符号与语义候选；源码索引 `Codebase` 不持有 grep 或执行引擎查询。
 - 通过 `CodebaseEnhancement` 接收可选增强候选；不拥有目录授权、profile 路径、RPC、凭据或网络连接。
 
+目录监听 worker 使用 `reconcile_with_cancellation` 和 `refresh_observed_paths_with_cancellation`，关闭时在目录遍历与源码准备之间响应取消，保留上一份完整索引，不发布部分扫描结果；手动 rebuild 保留原有生命周期。
+
 ## 依赖方向
 
 `ash-codebase-store` 依赖本 crate 和 `ash-state`。`ash-cloud-codebase` 依赖本 crate；本 crate 不依赖 SQLite、Cloud Codebase、App Server protocol 或产品 UI。

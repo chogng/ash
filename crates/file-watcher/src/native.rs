@@ -39,7 +39,11 @@ use std::time::Instant;
 
 /// Private arg0 role implemented by products that embed this watcher.
 pub const NATIVE_WATCHER_ARGUMENT: &str = "--ash-native-file-watcher";
-const VERSION: u16 = 1;
+const VERSION: u16 = 2;
+
+mod polling;
+pub use polling::run_polling_watcher;
+pub const POLLING_WATCHER_ARGUMENT: &str = "--ash-polling-file-watcher";
 const MAX_FRAME: u64 = 4 * 1024 * 1024;
 const MAX_PATHS: usize = 10_000;
 const START_TIMEOUT: Duration = Duration::from_secs(2);
@@ -66,6 +70,7 @@ struct WatchRequest {
     paths: Vec<WireWatch>,
     replace: Vec<Vec<u8>>,
     probe: Vec<u8>,
+    polling_interval_millis: Option<u64>,
 }
 
 #[derive(Deserialize, Serialize)]
@@ -73,6 +78,7 @@ struct WatchRequest {
 struct WireWatch {
     path: Vec<u8>,
     recursive: bool,
+    contents: bool,
 }
 
 #[derive(Clone, Copy, Deserialize, Serialize)]
@@ -122,21 +128,62 @@ pub(crate) struct NativeWatcher {
     probe: tempfile::TempDir,
 }
 
+enum HelperMode {
+    Native,
+    Polling,
+}
+
+impl HelperMode {
+    fn argument(&self) -> &'static str {
+        match self {
+            Self::Native => NATIVE_WATCHER_ARGUMENT,
+            Self::Polling => POLLING_WATCHER_ARGUMENT,
+        }
+    }
+}
+
+fn helper_command(mode: HelperMode) -> Result<Command, String> {
+    let mut command = if let Some(host) = std::env::var_os("ASH_FILE_WATCHER_TEST_HOST") {
+        let mut host = PathBuf::from(host);
+        if !host.is_absolute()
+            && let (Some(root), Some(workspace)) = (
+                std::env::var_os("TEST_SRCDIR"),
+                std::env::var_os("TEST_WORKSPACE"),
+            )
+        {
+            host = PathBuf::from(root).join(workspace).join(host);
+        }
+        if !host.is_absolute() || !host.is_file() {
+            return Err("file watcher test host must be an existing absolute executable".into());
+        }
+        let mut command = Command::new(host);
+        command.arg(mode.argument());
+        command
+    } else {
+        let mut command = Command::new(std::env::current_exe().map_err(|error| error.to_string())?);
+        #[cfg(not(test))]
+        command.arg(mode.argument());
+        #[cfg(test)]
+        command.args([
+            "--exact",
+            match mode {
+                HelperMode::Native => "native::tests::native_process_helper",
+                HelperMode::Polling => "native::tests::polling_process_helper",
+            },
+            "--ignored",
+            "--nocapture",
+        ]);
+        command
+    };
+    command.env_clear();
+    Ok(command)
+}
+
 impl NativeWatcher {
     pub(crate) fn new(
         events: tokio::sync::mpsc::UnboundedSender<notify::Result<Event>>,
     ) -> Result<Self, String> {
-        let mut command = Command::new(std::env::current_exe().map_err(|error| error.to_string())?);
-        #[cfg(not(test))]
-        command.arg(NATIVE_WATCHER_ARGUMENT);
-        #[cfg(test)]
-        command.args([
-            "--exact",
-            "native::tests::native_process_helper",
-            "--ignored",
-            "--nocapture",
-        ]);
-        command.env_clear();
+        let command = helper_command(HelperMode::Native)?;
         Self::spawn(command, events, REGISTER_TIMEOUT).inspect_err(|_| backend_failed())
     }
 
@@ -210,6 +257,53 @@ impl NativeWatcher {
         self.alive.load(Ordering::Acquire)
     }
 
+    pub(crate) fn new_polling(
+        events: tokio::sync::mpsc::UnboundedSender<notify::Result<Event>>,
+    ) -> Result<Self, String> {
+        let command = helper_command(HelperMode::Polling)?;
+        Self::spawn(command, events, REGISTER_TIMEOUT)
+    }
+
+    pub(crate) fn apply_polling(
+        &mut self,
+        paths: &BTreeMap<PathBuf, (RecursiveMode, bool)>,
+        replaced: &BTreeSet<PathBuf>,
+        interval: Duration,
+    ) -> Result<(), String> {
+        let id = self.next_id;
+        self.next_id = id
+            .checked_add(1)
+            .ok_or("polling watcher request IDs exhausted")?;
+        let request = WatchRequest {
+            id,
+            paths: paths
+                .iter()
+                .map(|(path, (mode, contents))| WireWatch {
+                    path: path.as_os_str().as_bytes().to_vec(),
+                    recursive: *mode == RecursiveMode::Recursive,
+                    contents: *contents,
+                })
+                .collect(),
+            replace: replaced
+                .iter()
+                .map(|path| path.as_os_str().as_bytes().to_vec())
+                .collect(),
+            probe: Vec::new(),
+            polling_interval_millis: Some(interval.as_millis().clamp(1, 60_000) as u64),
+        };
+        let (sender, receiver) = mpsc::channel();
+        self.pending.lock().unwrap().insert(id, sender);
+        let result = write_frame(&mut self.socket, &request).and_then(|()| {
+            receiver
+                .recv_timeout(self.timeout)
+                .map_err(|_| "polling watcher registration deadline elapsed".to_string())?
+        });
+        if result.is_err() {
+            self.stop();
+        }
+        result
+    }
+
     pub(crate) fn apply(
         &mut self,
         added: &BTreeMap<PathBuf, RecursiveMode>,
@@ -230,6 +324,7 @@ impl NativeWatcher {
             .ok_or("native watcher request IDs exhausted")?;
         let request = WatchRequest {
             id,
+            polling_interval_millis: None,
             probe: self
                 .probe
                 .path()
@@ -244,6 +339,7 @@ impl NativeWatcher {
                 .map(|(path, mode)| WireWatch {
                     path: path.as_os_str().as_bytes().to_vec(),
                     recursive: *mode == RecursiveMode::Recursive,
+                    contents: true,
                 })
                 .collect(),
             replace: removed
@@ -469,7 +565,8 @@ pub fn run_native_watcher() -> Result<(), String> {
     let mut active = BTreeMap::<PathBuf, RecursiveMode>::new();
     let mut last_id = 0;
     while let Ok(request) = incoming.recv() {
-        if request.id <= last_id
+        if request.polling_interval_millis.is_some()
+            || request.id <= last_id
             || request.paths.len() > MAX_PATHS
             || request.replace.len() > MAX_PATHS
         {

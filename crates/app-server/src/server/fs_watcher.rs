@@ -95,6 +95,7 @@ impl PendingIndexRefresh {
 }
 
 struct CodebaseRefreshWorker {
+    cancellation: ash_async_utils::CancellationSource,
     pending: Arc<Mutex<PendingIndexRefresh>>,
     wake: Option<SyncSender<()>>,
     thread: Option<JoinHandle<()>>,
@@ -106,6 +107,8 @@ impl CodebaseRefreshWorker {
         symbol_index: Arc<SymbolIndexRuntime>,
         semantic: Option<Arc<SemanticIndexJobController>>,
     ) -> Result<Self, String> {
+        let cancellation = ash_async_utils::CancellationSource::new();
+        let cancelled = cancellation.token();
         let pending = Arc::new(Mutex::new(PendingIndexRefresh::None));
         let (wake, receiver) = std::sync::mpsc::sync_channel(1);
         let worker_runtime = Arc::clone(&runtime);
@@ -114,6 +117,9 @@ impl CodebaseRefreshWorker {
             .name("ash-codebase-refresh".into())
             .spawn(move || {
                 while receiver.recv().is_ok() {
+                    if cancelled.is_cancelled() {
+                        break;
+                    }
                     let event = worker_pending
                         .lock()
                         .unwrap_or_else(|poisoned| poisoned.into_inner())
@@ -125,7 +131,10 @@ impl CodebaseRefreshWorker {
                             .snapshot()
                             .map(|snapshot| snapshot.generation)
                             .ok();
-                        worker_runtime.apply_watcher_event(&event);
+                        worker_runtime.apply_watcher_event(&event, &cancelled);
+                        if cancelled.is_cancelled() {
+                            break;
+                        }
                         let current_generation = worker_runtime
                             .index()
                             .snapshot()
@@ -163,6 +172,7 @@ impl CodebaseRefreshWorker {
             })
             .map_err(|error| format!("failed to initialize codebase refresh worker: {error}"))?;
         Ok(Self {
+            cancellation,
             pending,
             wake: Some(wake),
             thread: Some(thread),
@@ -189,6 +199,7 @@ impl CodebaseRefreshWorker {
 
 impl Drop for CodebaseRefreshWorker {
     fn drop(&mut self) {
+        self.cancellation.cancel();
         self.wake.take();
         if let Some(thread) = self.thread.take() {
             let _ = thread.join();

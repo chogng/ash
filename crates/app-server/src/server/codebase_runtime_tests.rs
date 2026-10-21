@@ -149,25 +149,34 @@ fn full_rescan_keeps_sqlite_generation_for_unchanged_sources() {
     )
     .unwrap();
     let initial = runtime.rebuild().unwrap();
-    runtime.apply_watcher_event(&FileWatcherEvent::RescanRequired {
-        watched_paths: vec![directory.path().to_path_buf()],
-    });
+    runtime.apply_watcher_event(
+        &FileWatcherEvent::RescanRequired {
+            watched_paths: vec![directory.path().to_path_buf()],
+        },
+        &ash_async_utils::CancellationSource::new().token(),
+    );
     assert_eq!(
         runtime.state(),
         CodebaseRuntimeState::Ready(initial.clone())
     );
-    runtime.apply_watcher_event(&FileWatcherEvent::PathsChanged {
-        paths: vec![directory.path().to_path_buf()],
-    });
+    runtime.apply_watcher_event(
+        &FileWatcherEvent::PathsChanged {
+            paths: vec![directory.path().to_path_buf()],
+        },
+        &ash_async_utils::CancellationSource::new().token(),
+    );
     assert_eq!(
         runtime.state(),
         CodebaseRuntimeState::Ready(initial.clone())
     );
 
     fs::write(directory.path().join("a/lib.rs"), "pub fn changed() {}\n").unwrap();
-    runtime.apply_watcher_event(&FileWatcherEvent::RescanRequired {
-        watched_paths: vec![directory.path().to_path_buf()],
-    });
+    runtime.apply_watcher_event(
+        &FileWatcherEvent::RescanRequired {
+            watched_paths: vec![directory.path().to_path_buf()],
+        },
+        &ash_async_utils::CancellationSource::new().token(),
+    );
     let CodebaseRuntimeState::Ready(changed) = runtime.state() else {
         panic!("rescan must publish changed sources");
     };
@@ -248,9 +257,12 @@ fn irrelevant_watcher_hint_returns_runtime_to_ready_without_a_generation_change(
     .expect("runtime");
     let before = runtime.rebuild().expect("rebuild");
 
-    runtime.apply_watcher_event(&FileWatcherEvent::PathsChanged {
-        paths: vec![runtime_path],
-    });
+    runtime.apply_watcher_event(
+        &FileWatcherEvent::PathsChanged {
+            paths: vec![runtime_path],
+        },
+        &ash_async_utils::CancellationSource::new().token(),
+    );
 
     let CodebaseRuntimeState::Ready(after) = runtime.state() else {
         panic!("irrelevant hint should restore ready state");
@@ -283,9 +295,12 @@ fn irrelevant_watcher_hint_does_not_clear_a_stale_projection() {
         None,
     )
     .expect("reopen");
-    reopened.apply_watcher_event(&FileWatcherEvent::PathsChanged {
-        paths: vec![runtime_path],
-    });
+    reopened.apply_watcher_event(
+        &FileWatcherEvent::PathsChanged {
+            paths: vec![runtime_path],
+        },
+        &ash_async_utils::CancellationSource::new().token(),
+    );
 
     assert!(matches!(reopened.state(), CodebaseRuntimeState::Stale(_)));
 }

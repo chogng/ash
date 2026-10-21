@@ -667,3 +667,44 @@ fn equal_editor_revision_cannot_identify_two_different_snapshots() {
         Err(CodebaseError::OverlayRevisionConflict)
     ));
 }
+
+#[test]
+fn cancelled_watcher_scan_keeps_the_published_generation_and_a_new_owner_can_reconcile() {
+    let directory = dir();
+    let file = directory.path().join("main.rs");
+    fs::write(&file, "fn before() {}\n").unwrap();
+    let index = memory_index(&directory);
+    let before = index.rebuild().unwrap();
+    fs::write(&file, "fn after() {}\n").unwrap();
+    let cancelled = ash_async_utils::CancellationSource::new();
+    cancelled.cancel();
+    assert!(matches!(
+        index.reconcile_with_cancellation(&cancelled.token()),
+        Err(CodebaseError::Cancelled)
+    ));
+    assert!(matches!(
+        index.refresh_observed_paths_with_cancellation(
+            &[directory.path().to_path_buf()],
+            &cancelled.token()
+        ),
+        Err(CodebaseError::Cancelled)
+    ));
+    assert_eq!(index.snapshot().unwrap(), before);
+    let fresh = ash_async_utils::CancellationSource::new();
+    assert!(matches!(
+        index
+            .refresh_observed_paths_with_cancellation(
+                &[directory.path().to_path_buf()],
+                &fresh.token()
+            )
+            .unwrap(),
+        RefreshOutcome::Rebuilt(_)
+    ));
+    assert!(index.snapshot().unwrap().generation > before.generation);
+    assert!(
+        !index
+            .search(&CodebaseQuery::new("after"))
+            .unwrap()
+            .is_empty()
+    );
+}

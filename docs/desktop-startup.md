@@ -96,3 +96,17 @@ Main 的同 nonce 记录将慢等待进一步隔离出来：三组连接的 vali
 ```sh
 pnpm run test:smoke:ui:no-compile test/smoke/areas/windows/desktop-command-palette.spec.ts --max-failures=1
 ```
+
+## 2026-10-20 文件监听启动阻塞修复
+
+macOS arm64 在隔离 HOME、空 Codex home 和新 profile 下打开当前 Ash 仓库，旧准备包在 45 秒内没有返回 `initialize`；同目录的监听探针在 root 注册处超过 20 秒。临时阶段记录进一步确认 App Server 已进入 `FileSystemWatcher` 的 root 注册，尚未返回。证据为 `.build/agenthost-closeout/{baseline-probe,baseline-watcher,baseline-instrumented}.json`，不把 daemon endpoint ready 当作协议初始化完成。
+
+原生 FSEvents helper 已有期限，但失败后的 `PollWatcher::watch` 会同步建立递归内容基线；仓库中的大体积构建产物使这一步阻塞目录 runtime。`FileSystemWatcher` 的启动超时随后仍会 join 该线程，不能约束这段等待。本次保持原 initialize deadline，将 macOS 轮询也放入可终止的私有 helper：控制线程接受有界、可合并的完整 root 快照，扫描完成后发送 rescan。重扫先核对实际注册路径；合并快照保留重绑标记，root 的 inode／纳秒时间检查覆盖秒级目录时间不变的快速替换。接口、匹配和回收契约见 [file-watcher](../crates/file-watcher/README.md)。
+
+协议就绪后立即关闭隔离实例还暴露了后台源码扫描的 join 等待。目录 refresh worker 现向源码遍历和准备传递取消，退出前保留最后一份完整索引；不通过分离线程绕过资源释放。共享 App Server、每 Renderer 连接和领域 owner 不变，helper 不加载配置或凭据。
+
+当前源码通过 `pnpm prepare:backend` 的 `dev-small` 正常构建，验证使用选中的准备包 `d9899a30a0ec12ffc241ed2221b696128c995566331f63591128e221c3e13a7a`。验证使用隔离实例，未手动重启用户进程。相同仓库的五个新 profile 全部初始化成功并以退出码 0 结束：initialize 为 2.303、2.928、2.596、1.643、2.077 秒，中位数 2.303 秒；收到正常 EOF 后退出为 2.455、1.315、1.358、1.075、1.039 秒，中位数 1.315 秒。这是独立进程协议响应和退出的观察区间，不是完整 Workbench 启动时长；原始数据见 `.build/agenthost-closeout/initialize-samples.json`。
+
+真实 Electron 另外通过准备包启动并打开 Agents、停后端后重开已授权工作区、复用选中包 daemon 三个场景，命令为 `pnpm run smoketest-no-compile test/smoke/areas/windows/home.spec.ts --grep 'Desktop development startup opens Agents|Desktop reopens an authorized workspace|Desktop reuses a daemon'`，完整日志 `.build/agenthost-closeout/desktop-smoke-verified-host.log`。监听的删除／重建两场景在修正后连续五次通过；同时间戳替换和阻塞扫描期间的更新／回收另有确定性回归。旧失败日志保留，未以重复运行掩盖失败。
+
+本次不归因系统 `fseventsd` 长期高 CPU，也不把这些隔离验证当作完整外部账号目录或旧窗口收尾弹窗的现场因果证明。

@@ -418,6 +418,87 @@ class CodeModeHostTests(unittest.TestCase):
         prepare.assert_not_called()
         resolve_v8.assert_not_called()
 
+    @patch.dict("scripts.cargo.os.environ", {}, clear=True)
+    @patch("scripts.cargo.subprocess.run")
+    @patch("scripts.cargo.prepare_test_executable", return_value="/runtime/watch_probe")
+    @patch(
+        "scripts.cargo.cargo_command_packages",
+        return_value={"ash-file-watcher", "ash-skills-extension"},
+    )
+    def test_macos_library_tests_prepare_a_matching_watcher_host(
+        self, packages, prepare, run
+    ):
+        run.return_value = subprocess.CompletedProcess([], 0)
+        with patch("scripts.cargo.default_target", return_value="aarch64-apple-darwin"):
+            self.assertEqual(main(["test", "-p", "ash-skills-extension", "--lib"]), 0)
+        self.assertEqual(prepare.call_args.args[3], "ash-file-watcher")
+        self.assertEqual(
+            prepare.call_args.kwargs,
+            {"target_name": "watch_probe", "target_kind": "example"},
+        )
+        self.assertEqual(
+            run.call_args.kwargs["env"]["ASH_FILE_WATCHER_TEST_HOST"],
+            "/runtime/watch_probe",
+        )
+        prepare.reset_mock()
+        with patch("scripts.cargo.default_target", return_value="aarch64-apple-darwin"):
+            self.assertEqual(
+                main(["test", "-p", "ash-skills-extension", "--no-run"]), 0
+            )
+        prepare.assert_not_called()
+        with (
+            patch.dict(
+                "scripts.cargo.os.environ",
+                {"ASH_FILE_WATCHER_TEST_HOST": "/explicit/helper"},
+            ),
+            patch("scripts.cargo.default_target", return_value="aarch64-apple-darwin"),
+        ):
+            self.assertEqual(main(["test", "-p", "ash-skills-extension", "--lib"]), 0)
+        prepare.assert_not_called()
+        self.assertEqual(
+            run.call_args.kwargs["env"]["ASH_FILE_WATCHER_TEST_HOST"],
+            "/explicit/helper",
+        )
+
+    @patch("scripts.cargo.subprocess.run")
+    def test_helper_examples_use_the_reported_artifact_and_same_profile(self, run):
+        run.return_value = subprocess.CompletedProcess(
+            [],
+            0,
+            json.dumps(
+                {
+                    "reason": "compiler-artifact",
+                    "target": {"name": "watch_probe", "kind": ["example"]},
+                    "executable": "/matching/watch_probe",
+                }
+            ),
+        )
+        self.assertEqual(
+            prepare_test_executable(
+                "cargo",
+                ["test", "--profile", "ci-test", "--lib"],
+                {},
+                "ash-file-watcher",
+                target_name="watch_probe",
+                target_kind="example",
+            ),
+            "/matching/watch_probe",
+        )
+        self.assertEqual(
+            run.call_args.args[0],
+            [
+                "cargo",
+                "build",
+                "-p",
+                "ash-file-watcher",
+                "--example",
+                "watch_probe",
+                "--message-format=json",
+                "--profile",
+                "ci-test",
+            ],
+        )
+
 
 class ProcessTestRunnerTests(unittest.TestCase):
     def setUp(self) -> None:

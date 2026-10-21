@@ -35,7 +35,7 @@ def parse_cargo_message(line: str) -> Optional[Dict[str, Any]]:
 
 
 def cargo_artifact_executable(
-    message: Optional[Mapping[str, Any]], target_name: str
+    message: Optional[Mapping[str, Any]], target_name: str, *, target_kind: str = "bin"
 ) -> Optional[str]:
     if message is None or message.get("reason") != "compiler-artifact":
         return None
@@ -46,7 +46,7 @@ def cargo_artifact_executable(
     executable = message.get("executable")
     if (
         not isinstance(kinds, list)
-        or "bin" not in kinds
+        or target_kind not in kinds
         or not isinstance(executable, str)
     ):
         return None

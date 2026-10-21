@@ -117,11 +117,22 @@ impl Codebase {
     /// The owning host serializes source mutations, as for incremental refresh. Coarse
     /// filesystem hints do not by themselves invalidate a matching vector or cloud index.
     pub fn reconcile(&self) -> Result<CodebaseSnapshot, CodebaseError> {
-        let scan = scan_dir(&self.root, &self.limits)?;
+        self.reconcile_with_cancellation(&ash_async_utils::CancellationSource::new().token())
+    }
+
+    /// Reconciles without publishing a partial generation when the owning worker closes.
+    pub fn reconcile_with_cancellation(
+        &self,
+        cancellation: &ash_async_utils::CancellationToken,
+    ) -> Result<CodebaseSnapshot, CodebaseError> {
+        let scan =
+            crate::scanner::scan_dir_with_cancellation(&self.root, &self.limits, cancellation)?;
+        cancellation.check().map_err(|_| CodebaseError::Cancelled)?;
         let manifest = self.store.manifest(&self.root_id)?;
         if manifest.snapshot.generation > 0 && scan_matches_manifest(&scan, &manifest) {
             return Ok(manifest.snapshot);
         }
+        cancellation.check().map_err(|_| CodebaseError::Cancelled)?;
         self.store.replace_sources(&self.root_id, scan)
     }
 
@@ -131,6 +142,19 @@ impl Codebase {
         &self,
         observed_paths: &[PathBuf],
     ) -> Result<RefreshOutcome, CodebaseError> {
+        self.refresh_observed_paths_with_cancellation(
+            observed_paths,
+            &ash_async_utils::CancellationSource::new().token(),
+        )
+    }
+
+    /// Applies watcher hints under the lifetime of their directory worker, including full rescans.
+    pub fn refresh_observed_paths_with_cancellation(
+        &self,
+        observed_paths: &[PathBuf],
+        cancellation: &ash_async_utils::CancellationToken,
+    ) -> Result<RefreshOutcome, CodebaseError> {
+        cancellation.check().map_err(|_| CodebaseError::Cancelled)?;
         let mut relative_paths = observed_paths
             .iter()
             .filter_map(|path| self.root.project_observed_path(path))
@@ -146,32 +170,45 @@ impl Codebase {
 
         let snapshot = self.snapshot()?;
         if snapshot.file_limit_hit || snapshot.source_bytes_limit_hit {
-            return self.reconcile().map(RefreshOutcome::Rebuilt);
+            return self
+                .reconcile_with_cancellation(cancellation)
+                .map(RefreshOutcome::Rebuilt);
         }
 
         let mut updates = Vec::new();
         for relative_path in relative_paths {
+            cancellation.check().map_err(|_| CodebaseError::Cancelled)?;
             if relative_path.as_os_str().is_empty() || is_ignore_control_path(&relative_path) {
-                return self.reconcile().map(RefreshOutcome::Rebuilt);
+                return self
+                    .reconcile_with_cancellation(cancellation)
+                    .map(RefreshOutcome::Rebuilt);
             }
             let candidate = self.root.canonical_path().join(&relative_path);
             if candidate.is_dir() {
-                return self.reconcile().map(RefreshOutcome::Rebuilt);
+                return self
+                    .reconcile_with_cancellation(cancellation)
+                    .map(RefreshOutcome::Rebuilt);
             }
             if candidate.is_file() {
                 let Some(stored) = self.store.source(&relative_path)? else {
-                    return self.reconcile().map(RefreshOutcome::Rebuilt);
+                    return self
+                        .reconcile_with_cancellation(cancellation)
+                        .map(RefreshOutcome::Rebuilt);
                 };
                 let Some(file) =
                     prepare_relative_file(&self.root, relative_path.clone(), &self.limits)?
                 else {
-                    return self.reconcile().map(RefreshOutcome::Rebuilt);
+                    return self
+                        .reconcile_with_cancellation(cancellation)
+                        .map(RefreshOutcome::Rebuilt);
                 };
                 if stored.revision == file.source_revision {
                     continue;
                 }
                 if exceeds_source_limit(&snapshot, &stored, file.source_bytes, &self.limits) {
-                    return self.reconcile().map(RefreshOutcome::Rebuilt);
+                    return self
+                        .reconcile_with_cancellation(cancellation)
+                        .map(RefreshOutcome::Rebuilt);
                 }
                 updates.push(FileUpdate::Upsert(file));
                 continue;
@@ -179,12 +216,15 @@ impl Codebase {
             if self.store.source(&relative_path)?.is_some() {
                 updates.push(FileUpdate::Remove(relative_path));
             } else if self.store.has_descendants(&relative_path)? {
-                return self.reconcile().map(RefreshOutcome::Rebuilt);
+                return self
+                    .reconcile_with_cancellation(cancellation)
+                    .map(RefreshOutcome::Rebuilt);
             }
         }
         if updates.is_empty() {
             return Ok(RefreshOutcome::NoChange);
         }
+        cancellation.check().map_err(|_| CodebaseError::Cancelled)?;
         self.store
             .publish_updates(&self.root_id, updates)
             .map(RefreshOutcome::Published)

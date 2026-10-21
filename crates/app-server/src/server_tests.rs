@@ -7134,8 +7134,25 @@ fn filesystem_watcher_publishes_only_dir_relative_paths() {
         for raw in server.drain_notifications(&mut connection) {
             let notification: serde_json::Value = serde_json::from_str(&raw).unwrap();
             if notification["method"] == "fs/changed" {
-                observed = Some(notification);
-                break;
+                match notification["params"]["type"].as_str() {
+                    Some("rescanRequired") => {
+                        // The asynchronous polling baseline publishes a coarse hint first.
+                        // It cannot substitute for observing the subsequent external write.
+                        assert!(notification["params"].get("paths").is_none());
+                    }
+                    Some("pathsChanged") => {
+                        let paths = notification["params"]["paths"].as_array().unwrap();
+                        assert!(paths.iter().all(|path| {
+                            path.as_str()
+                                .is_some_and(|path| std::path::Path::new(path).is_relative())
+                        }));
+                        if paths.iter().any(|path| path == "changed.txt") {
+                            observed = Some(notification);
+                            break;
+                        }
+                    }
+                    other => panic!("unexpected filesystem notification: {other:?}"),
+                }
             }
         }
         if observed.is_some() {

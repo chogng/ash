@@ -91,10 +91,17 @@ impl CodebaseRuntime {
     }
 
     pub fn rebuild(&self) -> Result<CodebaseSnapshot, CodebaseError> {
-        self.scan(SourceScan::ManualRebuild)
+        self.scan(
+            SourceScan::ManualRebuild,
+            &ash_async_utils::CancellationSource::new().token(),
+        )
     }
 
-    fn scan(&self, reason: SourceScan) -> Result<CodebaseSnapshot, CodebaseError> {
+    fn scan(
+        &self,
+        reason: SourceScan,
+        cancellation: &ash_async_utils::CancellationToken,
+    ) -> Result<CodebaseSnapshot, CodebaseError> {
         let _operation = self
             .operation
             .lock()
@@ -108,7 +115,7 @@ impl CodebaseRuntime {
         };
         let result = match reason {
             SourceScan::ManualRebuild => self.index.rebuild(),
-            SourceScan::FilesystemReconcile => self.index.reconcile(),
+            SourceScan::FilesystemReconcile => self.index.reconcile_with_cancellation(cancellation),
         };
         match result {
             Ok(snapshot) => {
@@ -131,14 +138,20 @@ impl CodebaseRuntime {
         }
     }
 
-    pub fn apply_watcher_event(&self, event: &FileWatcherEvent) {
+    pub fn apply_watcher_event(
+        &self,
+        event: &FileWatcherEvent,
+        cancellation: &ash_async_utils::CancellationToken,
+    ) {
         let result = match event {
-            FileWatcherEvent::PathsChanged { paths } => self.refresh_paths(paths),
-            FileWatcherEvent::RescanRequired { .. } => {
-                self.scan(SourceScan::FilesystemReconcile).map(|_| ())
-            }
+            FileWatcherEvent::PathsChanged { paths } => self.refresh_paths(paths, cancellation),
+            FileWatcherEvent::RescanRequired { .. } => self
+                .scan(SourceScan::FilesystemReconcile, cancellation)
+                .map(|_| ()),
         };
-        if let Err(error) = result {
+        if let Err(error) = result
+            && !cancellation.is_cancelled()
+        {
             log::warn!("codebase refresh failed: {error}");
         }
     }
@@ -183,7 +196,11 @@ impl CodebaseRuntime {
             .collect()
     }
 
-    fn refresh_paths(&self, paths: &[PathBuf]) -> Result<(), CodebaseError> {
+    fn refresh_paths(
+        &self,
+        paths: &[PathBuf],
+        cancellation: &ash_async_utils::CancellationToken,
+    ) -> Result<(), CodebaseError> {
         let _operation = self
             .operation
             .lock()
@@ -196,7 +213,10 @@ impl CodebaseRuntime {
             .unwrap_or_else(|poisoned| poisoned.into_inner()) = CodebaseRuntimeState::Indexing {
             last_ready: last_ready.clone(),
         };
-        match self.index.refresh_observed_paths(paths) {
+        match self
+            .index
+            .refresh_observed_paths_with_cancellation(paths, cancellation)
+        {
             Ok(RefreshOutcome::NoChange) => {
                 let restored = match self.state() {
                     CodebaseRuntimeState::Stale(snapshot) => CodebaseRuntimeState::Stale(snapshot),

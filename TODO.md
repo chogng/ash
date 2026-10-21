@@ -34,9 +34,9 @@
 - [ ] **后端前置** · 实现直接保存工作区配置到远端机器；当前 SSH 配置仍保存在 Desktop 本地，内容为远端 URI 根。
 - [ ] **验收** · 补 Windows／Linux 远端多根及 Windows 真实系统文件选择器验证。现有多根 SSH 验证使用 macOS 同机隔离 OpenSSH fixture，远端选择器使用受控返回值；跨机器单独步骤通过不能替代多根场景验证。
 
-## Desktop 启动阻塞根因 · TODO
+## Desktop 窗口收尾弹窗 · TODO
 
-- [ ] **复核** · 2026-10-20 用户报告启动时出现窗口收尾超时；超时后的等待／重开／关闭交互及替代原生窗口恢复已修复，原始启动阻塞的参与者仍未定位。开发日志 `20261020T121244767-*/window-1.log` 有后端 `initialize` 超时，`20261020T160509919-*/main.log` 仅到连接 `starting`；早前还出现协议 schema 不匹配，不能据此认定同一根因。诊断时系统 `fseventsd` 约 100% CPU，既有隔离启动采样有 `FSEventStreamStart → f2d_register_rpc` 阻塞，尚未与本次弹窗建立因果关系。后续需在复现现场关联 load/reload token、Renderer 生命周期和未完成的 veto/join；已通过的受控窗口恢复场景不能替代原始卡顿的根因验证。
+- [ ] **现场复核 · 暂缓** · 2026-10-20 旧窗口收尾超时弹窗与未完成 veto／join 的现场因果关系仍待捕获；需关联 load／reload token 与 Renderer 生命周期。后端 initialize 的目录监听阻塞已独立复现并修复，证据见 [启动记录](docs/desktop-startup.md#2026-10-20-文件监听启动阻塞修复)；已通过的启动／重开场景不替代旧弹窗的现场关联。按实际使用需要恢复此独立复核。
 
 ## Desktop 跨机器验收 · TODO
 
@@ -55,6 +55,8 @@
 当前存储、配置层和设置入口见 [Preferences 与 Configuration](docs/preferences-and-settings.md)。
 
 ## AgentHost · TODO
+
+以下新产品能力和专项环境验收暂缓，按实际使用需要恢复。
 
 - [ ] **复核 · 自举场景的完整外部 Codex 目录接入**：相同普通代码目录在无外部账号连接的对照场景中启动通过；使用完整外部 Codex home 时重复出现初始化或 `env/dirs/set` 超时，仅引用认证文件的隔离目录则可启动并调用真实模型。尚未证明是模型目录导入、认证路径还是其他初始化问题；排查前保留失败日志，补启动失败时的证据收集，不将有限启动重试当作通过。记录见上述场景目录的 `startup-attempt*.log` 与 `preflight-no-auth.log`。临时认证文件引用已移除，重跑需重新显式准备只读引用，不能复制凭证进入证据。
 

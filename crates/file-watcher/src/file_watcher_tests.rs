@@ -338,18 +338,46 @@ async fn polling_directory_deletion_and_recreation_resume_recursive_notification
     .await;
 }
 
+async fn wait_polling_baseline(watcher: &FileWatcher, receiver: &mut crate::channel::Receiver) {
+    #[cfg(target_os = "macos")]
+    if watcher.is_polling_for_test() {
+        timeout(Duration::from_secs(3), async {
+            loop {
+                if matches!(
+                    receiver.recv().await,
+                    Some(FileWatcherEvent::RescanRequired { .. })
+                ) {
+                    break;
+                }
+            }
+        })
+        .await
+        .expect("polling baseline scan did not complete");
+    }
+    #[cfg(not(target_os = "macos"))]
+    let _ = (watcher, receiver);
+}
+
 async fn directory_deletion_and_recreation(backend: FileWatcherBackend) {
-    async fn changed(receiver: &mut crate::channel::Receiver, expected: &Path, phase: &str) {
+    async fn changed(
+        watcher: &FileWatcher,
+        receiver: &mut crate::channel::Receiver,
+        expected: &Path,
+        phase: &str,
+    ) {
+        let mut observed = Vec::new();
         let result = timeout(Duration::from_secs(3), async {
             loop {
-                match receiver.recv().await.expect("watch subscriber closed") {
+                let event = receiver.recv().await.expect("watch subscriber closed");
+                observed.push(event.clone());
+                match event {
                     FileWatcherEvent::PathsChanged { paths }
                         if paths.iter().any(|path| path == expected) =>
                     {
                         break;
                     }
                     FileWatcherEvent::RescanRequired { watched_paths }
-                        if watched_paths.iter().any(|path| path == expected) =>
+                        if watched_paths.iter().any(|path| expected.starts_with(path)) =>
                     {
                         break;
                     }
@@ -361,7 +389,8 @@ async fn directory_deletion_and_recreation(backend: FileWatcherBackend) {
         .await;
         assert!(
             result.is_ok(),
-            "directory watch did not recover during {phase}"
+            "directory watch did not recover during {phase}: {observed:?}; {}",
+            watcher.registration_state_for_test()
         );
     }
     let dir = TestDir::new();
@@ -369,31 +398,39 @@ async fn directory_deletion_and_recreation(backend: FileWatcherBackend) {
     let watcher = Arc::new(FileWatcher::new_with_backend(backend).unwrap());
     let (subscriber, mut receiver) = watcher.add_subscriber();
     let _registration = subscriber.register_paths(vec![watch(&root, true)]).unwrap();
+    wait_polling_baseline(&watcher, &mut receiver).await;
     fs::remove_dir(&root).unwrap();
-    changed(&mut receiver, &root, "deletion").await;
+    changed(&watcher, &mut receiver, &root, "deletion").await;
     fs::create_dir(&root).unwrap();
-    changed(&mut receiver, &root, "recreation").await;
+    changed(&watcher, &mut receiver, &root, "recreation").await;
     let nested = root.join("nested");
     fs::create_dir(&nested).unwrap();
     let file = nested.join("after.txt");
     fs::write(&file, "restored").unwrap();
-    changed(&mut receiver, &file, "nested write").await;
+    changed(&watcher, &mut receiver, &file, "nested write").await;
 
     // The event loop must also recover when it never observes the root missing.
     fs::rename(&root, dir.path.join("retired-root")).unwrap();
     fs::create_dir(&root).unwrap();
     // Polling also detects a replacement through removal of the old children when the
     // directory's timestamp has the same second-resolution value in both snapshots.
-    let replacement = match backend {
-        FileWatcherBackend::Recommended => &root,
-        FileWatcherBackend::Polling { .. } => &file,
+    let replacement = if watcher.is_polling_for_test() {
+        &file
+    } else {
+        &root
     };
-    changed(&mut receiver, replacement, "immediate replacement").await;
+    changed(
+        &watcher,
+        &mut receiver,
+        replacement,
+        "immediate replacement",
+    )
+    .await;
     let nested = root.join("replacement-nested");
     fs::create_dir(&nested).unwrap();
     let file = nested.join("after.txt");
     fs::write(&file, "replacement").unwrap();
-    changed(&mut receiver, &file, "replacement nested write").await;
+    changed(&watcher, &mut receiver, &file, "replacement nested write").await;
 }
 
 #[tokio::test]
@@ -408,18 +445,24 @@ async fn polling_backend_delivers_live_mutations_for_aliased_path_fallback() {
     );
     let (subscriber, mut receiver) = watcher.add_subscriber();
     let _registration = subscriber.register_paths(vec![watch(&root, true)]).unwrap();
-    tokio::time::sleep(Duration::from_millis(40)).await;
+    wait_polling_baseline(&watcher, &mut receiver).await;
     let changed = root.join("changed.txt");
     fs::write(&changed, "changed").unwrap();
 
-    assert_eq!(
-        timeout(Duration::from_secs(2), receiver.recv())
-            .await
-            .unwrap(),
-        Some(FileWatcherEvent::PathsChanged {
-            paths: vec![changed],
-        })
-    );
+    timeout(Duration::from_secs(2), async {
+        loop {
+            if let Some(FileWatcherEvent::PathsChanged { paths }) = receiver.recv().await {
+                assert!(paths.iter().all(|path| path.starts_with(&root)));
+                // A root metadata hint may precede the precise polling event. Require
+                // the independently observed file change as well.
+                if paths.contains(&changed) {
+                    break;
+                }
+            }
+        }
+    })
+    .await
+    .unwrap();
 }
 
 #[tokio::test]
@@ -437,7 +480,7 @@ async fn polling_backend_delivers_existing_file_modifications() {
     );
     let (subscriber, mut receiver) = watcher.add_subscriber();
     let _registration = subscriber.register_paths(vec![watch(&root, true)]).unwrap();
-    tokio::time::sleep(Duration::from_millis(40)).await;
+    wait_polling_baseline(&watcher, &mut receiver).await;
     fs::write(&changed, "after!").unwrap();
     fs::File::options()
         .write(true)

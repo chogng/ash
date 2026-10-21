@@ -8,6 +8,8 @@ use crate::SourceRevision;
 /// Failure to open, update, query, or verify a Codebase.
 #[derive(Debug, Error)]
 pub enum CodebaseError {
+    #[error("codebase scan was cancelled")]
+    Cancelled,
     #[error("invalid codebase limits: {0}")]
     InvalidLimits(&'static str),
     #[error("codebase query is invalid: {0}")]

@@ -19,6 +19,13 @@ kqueue，因为它会为大量 watched entry 持有 file descriptor，并在大�
 恢复到 200 ms polling，并发送 `RescanRequired` 弥补切换窗口。此恢复按 watcher 实例发生；
 不会把所有目录永久改为 polling，也不会静默退化成 noop。Polling 仅对显式内容 scopes 比较
 文件内容，缺失目标的 ancestor scopes 只检查 metadata，避免读取不相关兄弟文件。
+macOS 的 polling 也运行在私有 `--ash-polling-file-watcher` helper 内：控制线程接受有界的完整 scope
+快照并及时确认，内容扫描在独立线程执行，只保留尚未应用的最新快照。首次基线扫描完成后发送
+`RescanRequired`，消费者须重读以覆盖注册到基线完成之间的变化；注册成功不表示基线已扫描完。
+大目录的内容扫描不能阻塞产品初始化、scope 更新或退出；父进程关闭时终止并回收整个 helper。
+合并尚未扫描的快照时保留当前 roots 的重绑标记；另以 inode 和纳秒 mtime 观察注册 root，补足
+notify polling 的秒级目录时间比较，覆盖快速删除／重建且时间戳不变的情况。此观察只 stat roots，
+不读取 ancestor 的兄弟文件内容。
 仅用于原生 inode 恢复的 parent lease 不进入 polling；缺失目标的最近现有 ancestor 仍须监听。
 这样切换不会枚举整个工作区父目录或系统临时目录。进程级原生故障会将新实例的探测推迟
 30 秒；路径自身的注册失败不触发这个退避，现有健康监听继续运行。
@@ -46,8 +53,13 @@ src/
 
 所有实现模块均为 private；crate 只显式导出 `FileWatcher`、subscriber/registration handle、
 receiver wrapper、`WatchPath` 和 `FileWatcherEvent`。
-macOS 另导出供 `ash-arg0` 调用的 helper role 标记与入口；产品须在普通参数解析前 dispatch，
-该角色只连接继承的私有 socket，不打开 App Server 或加载产品状态。
+macOS 另导出供 `ash-arg0` 调用的 native／polling helper role 标记与入口；产品须在普通参数解析前 dispatch，
+该角色只连接继承的私有 socket，不打开 App Server 或加载产品状态。macOS Cargo 库测试由
+`scripts/cargo.py` 准备相同 target／profile 的 `watch_probe` 并通过 `ASH_FILE_WATCHER_TEST_HOST`
+传给测试进程，因为 libtest 不分发产品的 arg0 role；Bazel 的 macOS unit target 同样提供该 helper
+作为 test runfile。Cargo 覆盖必须是存在的绝对 executable；Bazel 的相对 rootpath 只在
+`TEST_SRCDIR`／`TEST_WORKSPACE` 指定的 runfiles 下解析。
+正常产品仍使用自身的 arg0 入口，helper 子进程清空环境，不继承该测试覆盖或凭据。
 
 ## 公共契约
 

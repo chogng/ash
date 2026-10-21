@@ -210,12 +210,18 @@ fn rpc_exposes_dir_index_preview_consent_sync_and_revoke() {
     assert_eq!(synced["result"]["state"], "ready");
 
     // Duplicate rescan and directory hints must not invalidate an unchanged publication.
-    local_index.apply_watcher_event(&ash_file_watcher::FileWatcherEvent::RescanRequired {
-        watched_paths: vec![dir.path().to_path_buf()],
-    });
-    local_index.apply_watcher_event(&ash_file_watcher::FileWatcherEvent::PathsChanged {
-        paths: vec![dir.path().to_path_buf()],
-    });
+    local_index.apply_watcher_event(
+        &ash_file_watcher::FileWatcherEvent::RescanRequired {
+            watched_paths: vec![dir.path().to_path_buf()],
+        },
+        &ash_async_utils::CancellationSource::new().token(),
+    );
+    local_index.apply_watcher_event(
+        &ash_file_watcher::FileWatcherEvent::PathsChanged {
+            paths: vec![dir.path().to_path_buf()],
+        },
+        &ash_async_utils::CancellationSource::new().token(),
+    );
     assert_eq!(
         local_index.index().snapshot().unwrap().generation,
         synced["result"]["syncedLocalGeneration"].as_u64().unwrap(),
@@ -244,9 +250,12 @@ fn rpc_exposes_dir_index_preview_consent_sync_and_revoke() {
     );
 
     std::fs::write(dir.path().join("lib.rs"), "pub fn changed_source() {}\n").unwrap();
-    local_index.apply_watcher_event(&ash_file_watcher::FileWatcherEvent::PathsChanged {
-        paths: vec![dir.path().join("lib.rs")],
-    });
+    local_index.apply_watcher_event(
+        &ash_file_watcher::FileWatcherEvent::PathsChanged {
+            paths: vec![dir.path().join("lib.rs")],
+        },
+        &ash_async_utils::CancellationSource::new().token(),
+    );
     let stale = call(
         &server,
         &mut connection,

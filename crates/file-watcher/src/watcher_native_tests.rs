@@ -64,21 +64,22 @@ async fn stalled_native_update_restores_old_and_new_scopes_and_future_edits() {
     assert_eq!(watcher.backend_contents_for_test(&root), Some(false));
     {
         let mut inner = watcher.inner.as_ref().unwrap().lock().unwrap();
-        let BackendWatcher::Polling { metadata, .. } = &mut inner.watcher else {
+        let BackendWatcher::Polling { paths, .. } = &mut inner.watcher else {
             unreachable!()
         };
-        // Parent leases belong to native handles. Polling them would enumerate unrelated
-        // siblings (the real smoke profile's temp parent contains tens of thousands).
-        assert!(
-            matches!(metadata.unwatch(&root), Err(error) if matches!(error.kind, notify::ErrorKind::WatchNotFound))
-        );
+        // Native parent leases must not become polling scopes of unrelated siblings.
+        assert!(!paths.contains_key(&root));
     }
-    assert_eq!(
-        receiver.recv().await,
-        Some(FileWatcherEvent::RescanRequired {
-            watched_paths: vec![first, second.clone()]
-        })
-    );
+    loop {
+        let event = tokio::time::timeout(Duration::from_secs(2), receiver.recv())
+            .await
+            .unwrap()
+            .unwrap();
+        if let FileWatcherEvent::RescanRequired { watched_paths } = event {
+            assert_eq!(watched_paths, vec![first.clone(), second.clone()]);
+            break;
+        }
+    }
     // A rescan alone could hide a dead replacement. Require later independent writes in
     // both the old registration and the transaction that triggered the failure.
     for (file, content) in [(file, "after"), (second.join("new.txt"), "new")] {
