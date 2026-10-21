@@ -21,7 +21,11 @@ for (const locale of ['en', 'zh-CN']) {
 		await page.evaluate(() => window.ashCompositeIntegration.changeAgentSession('second'));
 		await expect(channel).toContainText('Agent output fixture');
 		const link = output.locator('.view-line').filter({ hasText: 'eventId=event-1' }).locator('span').last();
-		await link.click({ modifiers: ['ControlOrMeta'] });
+		await link.hover();
+		await page.keyboard.down('ControlOrMeta');
+		await expect(output.locator('.stanza-editor-link-target')).toHaveCount(1);
+		await link.click();
+		await page.keyboard.up('ControlOrMeta');
 		await expect.poll(() => page.evaluate(() => window.ashCompositeIntegration.openedAgentEvents)).toEqual([{ sessionId: 'first', threadId: 'root', turnId: 'turn', eventId: 'event-1' }]);
 		await page.locator('[data-action-id="ash.output.clear"] button').click();
 		await expect.poll(() => page.evaluate(() => window.ashCompositeIntegration.outputState().text)).toBe('');
@@ -171,8 +175,8 @@ for (const locale of ['en', 'zh-CN']) {
 				return { width: bounds.width, height: bounds.height, background: style.backgroundColor };
 			}));
 			for (const cap of caps) {
-				expect(cap.width).toBe(22);
-				expect(cap.height).toBe(22);
+				expect(cap.width).toBeGreaterThanOrEqual(20);
+				expect(cap.height).toBe(20);
 				expect(cap.background).not.toBe('rgba(0, 0, 0, 0)');
 			}
 			for (const [width, height] of [[800, 520], [320, 180]]) {

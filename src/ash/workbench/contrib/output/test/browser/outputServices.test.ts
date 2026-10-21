@@ -4,10 +4,31 @@ import { DisposableStore, toDisposable } from '../../../../../base/common/lifecy
 import { IOutputService } from '../../../../services/output/common/output.js';
 import { StorageScope, StorageTarget } from '../../../../../platform/storage/common/storage.js';
 import assert from "node:assert/strict";
-import { test } from "mocha";
+import { suite, test } from "mocha";
+import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
 import { JSDOM } from "jsdom";
 import { windowLogId } from '../../../../services/log/common/logConstants.js';
 import { BrowserStorageService } from "../../../../services/storage/browser/storageService.js";
+
+suite('Output shutdown', () => {
+	ensureNoDisposablesAreLeakedInTestSuite();
+	test('releases channels without publishing registry or selection changes during scope disposal', () => {
+		using resources = new DisposableStore();
+		const services = workbenchInstantiationService(resources);
+		const output = services.get(IOutputService);
+		const first = output.createChannel({ id: 'first', label: 'First' });
+		const second = output.createChannel({ id: 'second', label: 'Second' });
+		const changes: string[] = [];
+		using registryListener = output.onDidChangeChannels(() => changes.push('channels'));
+		using selectionListener = output.onDidChangeActiveChannel(() => changes.push('selection'));
+		services.dispose();
+		assert.deepEqual(changes, []);
+		assert.deepEqual(output.channels, []);
+		assert.equal(output.activeChannel, undefined);
+		assert.throws(() => first.loadModel(), /disposed/);
+		assert.throws(() => second.loadModel(), /disposed/);
+	});
+});
 
 test("OutputService registers, updates, reveals, and removes independent channels", () => {
 	using outputResources = new DisposableStore();

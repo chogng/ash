@@ -1,4 +1,6 @@
 import { FileService } from '../../../src/ash/platform/files/common/fileService.js';
+import { ILifecycleService } from '../../../src/ash/workbench/services/lifecycle/common/lifecycle.js';
+import { AbstractLifecycleService } from '../../../src/ash/workbench/services/lifecycle/common/lifecycleService.js';
 import { IndexedDBFileSystemProvider } from '../../../src/ash/platform/files/browser/indexedDBFileSystemProvider.js';
 import { ILogService, ILoggerService, LogLevel } from '../../../src/ash/platform/log/common/log.js';
 import { LogService } from '../../../src/ash/platform/log/common/logServiceImpl.js';
@@ -56,6 +58,7 @@ import '../../../src/ash/base/browser/ui/splitview/splitview.css';
 import '../../../src/ash/platform/theme/common/sizes/baseSizes.js';
 import { bindTestColorTheme } from './themeFixture.js';
 import { IThemeService } from '../../../src/ash/platform/theme/common/themeService.js';
+import { HoverService, IHoverService } from '../../../src/ash/platform/hover/browser/hoverService.js';
 import { setNlsMessages } from '../../../src/ash/nls.js';
 import { productLanguagePackCatalogs } from '../../../src/ash/workbench/services/localization/common/localizationCatalogs.js';
 import chatMessages from '../../../extensions/language-pack-zh-cn/translations/chat.json' with { type: 'json' };
@@ -208,6 +211,8 @@ class FocusView extends ViewPane {
 	}
 }
 
+class FixtureLifecycleService extends AbstractLifecycleService { }
+
 const resources = new DisposableStore();
 if (new URLSearchParams(location.search).has('editorTabs') || new URLSearchParams(location.search).has('badges') || new URLSearchParams(location.search).has('emptyEditor')) {
 	await import('../../../src/ash/base/browser/ui/iconlabel/iconlabel.css');
@@ -269,7 +274,8 @@ if (new URLSearchParams(location.search).has('output')) {
 	await import('../../../src/ash/workbench/browser/parts/panel/panelActions.js');
 	registerOutputView(registry);
 	if (new URLSearchParams(location.search).has('agentOutput')) {
-		await import('../../../src/ash/editor/contrib/links/browser/links.js');
+		// The product entry admits the declared editor features, including link detection.
+		await import('../../../src/ash/editor/editor.code.all.js');
 		services.registerInstance(ICommandService, {
 			onWillExecuteCommand: Event.None, onDidExecuteCommand: Event.None, executeCommand: async <T>(id: string, ...args: unknown[]) => {
 				if (id === 'sessions.trace.open') { openedAgentEvents.push(args[0]); return undefined as T; }
@@ -304,6 +310,7 @@ if (new URLSearchParams(location.search).has('output')) {
 		services.registerInstance(IWorkbenchEnvironmentService, environment);
 		services.registerInstance(ILogService, logger);
 		services.registerInstance(ILoggerService, logger);
+		services.registerInstance(ILifecycleService, resources.add(services.createInstance(FixtureLifecycleService, undefined)));
 		services.registerInstance(IUriIdentityService, uriIdentityServices.get(IUriIdentityService));
 		services.registerInstance(IWorkingCopyService, resources.add(services.createInstance(BrowserWorkingCopyService)));
 		const models = resources.add(uriIdentityServices.createInstance(BrowserTextModelService, {
@@ -352,6 +359,7 @@ if (new URLSearchParams(location.search).has('problems')) {
 const panel = resources.add(registerTestComponentServices(services).createInstance(PanelPart, document.body));
 resources.add(bindTestColorTheme(services.get(IThemeService), panel.domNode));
 if (new URLSearchParams(location.search).has('partWidth')) {
+	registerCodeEditorServices(services);
 	const host = h(document, 'section');
 	host.id = 'part-width-host';
 	host.style.cssText = 'width:1000px;height:400px';
@@ -498,6 +506,8 @@ if (new URLSearchParams(location.search).has('editorTabs')) {
 	}
 	editorServices.registerInstance(IViewDescriptorService, services.get(IViewDescriptorService));
 	editorServices.registerInstance(ILocalizationService, services.get(ILocalizationService));
+	const hoverViews = resources.add(new BrowserContextViewService(document.body));
+	editorServices.registerInstance(IHoverService, resources.add(new HoverService(editorServices.get(IConfigurationService), hoverViews, editorServices.get(IContextMenuService))));
 	const chatPart = resources.add(editorServices.createInstance(ChatTabsPart, chatHost));
 	chatPart.domNode.style.cssText = 'box-sizing:border-box;width:100%;height:100%';
 	const chat = resources.add(editorServices.createInstance(ChatViewTitleControl, chatPart.domNode, 'chat', () => {

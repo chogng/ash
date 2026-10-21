@@ -2,7 +2,10 @@ import { CommandService } from '../../../commands/common/commandService.js';
 import { getSingletonServiceDescriptors } from '../../../../../platform/instantiation/common/extensions.js';
 import { ServiceCollection } from '../../../../../platform/instantiation/common/serviceCollection.js';
 import assert from 'node:assert/strict';
-import { test } from 'mocha';
+import { suite, test } from 'mocha';
+import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
+import { ILifecycleService } from '../../../lifecycle/common/lifecycle.js';
+import { AbstractLifecycleService } from '../../../lifecycle/common/lifecycleService.js';
 import { DisposableStore } from '../../../../../base/common/lifecycle.js';
 import { Event, Emitter } from '../../../../../base/common/event.js';
 import { parseJsonc } from '../../../../../base/common/jsonc.js';
@@ -24,6 +27,8 @@ import { workbenchInstantiationService } from '../../../../test/browser/workbenc
 import { IOutputService } from '../../../output/common/output.js';
 import { DefaultLogLevelsService, IDefaultLogLevelsService, parseDefaultLogLevels, readDefaultLogLevels } from '../../common/defaultLogLevels.js';
 import '../../../../contrib/output/browser/output.contribution.js';
+
+class TestLifecycleService extends AbstractLifecycleService { }
 
 async function fixture(resources: DisposableStore, text?: string, environment = new ElectronWorkbenchEnvironmentService()) {
 	const files = resources.add(new FileService());
@@ -51,6 +56,8 @@ async function fixture(resources: DisposableStore, text?: string, environment = 
 	services.registerInstance(IWorkbenchEnvironmentService, environment);
 	services.registerInstance(ILogService, logger);
 	services.registerInstance(ILoggerService, logger);
+	const lifecycle = resources.add(services.createInstance(TestLifecycleService, undefined));
+	services.registerInstance(ILifecycleService, lifecycle);
 	services.registerInstance(IWorkingCopyService, resources.add(services.createInstance(BrowserWorkingCopyService)));
 	const initial = await readDefaultLogLevels(files, environment, logger);
 	logger.setLevel(initial.default);
@@ -59,8 +66,24 @@ async function fixture(resources: DisposableStore, text?: string, environment = 
 	const output = services.get(IOutputService);
 	const channel = resources.add(output.createChannel({ id: 'rendererLog', label: 'Window', kind: 'log', logger: { label: 'Workbench', control: logger } }));
 	const read = async () => (await files.readFile(environment.argvResource)).content;
-	return { files, provider, logger, services, defaults, output, channel, environment, failures, read };
+	return { files, provider, logger, services, defaults, output, channel, environment, failures, read, lifecycle };
 }
+
+suite('Default log levels shutdown', () => {
+	ensureNoDisposablesAreLeakedInTestSuite();
+	test('retires subscriptions after confirmed shutdown before producers release channels', async () => {
+		using resources = new DisposableStore();
+		const f = await fixture(resources);
+		using veto = f.lifecycle.onBeforeShutdown(event => event.veto(true, 'keep-window'));
+		await assert.rejects(f.lifecycle.shutdown('windowClose'));
+		assert.equal(f.defaults.isDisposed, false);
+		veto.dispose();
+		await f.lifecycle.shutdown('windowClose');
+		assert.equal(f.defaults.isDisposed, true);
+		f.services.dispose();
+		f.channel.dispose();
+	});
+});
 
 test('startup levels parse canonical spellings, extension identities and invalid boundaries', () => {
 	assert.deepEqual(parseDefaultLogLevels(['debug', 'error', 'Publisher.Extension=warn', 'publisher.extension=trace']), { default: LogLevel.Error, extensions: [['publisher.extension', LogLevel.Trace]] });

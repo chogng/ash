@@ -10,6 +10,7 @@ import { IFileService, FileSystemProviderErrorCode, toFileSystemProviderErrorCod
 import { IWorkbenchEnvironmentService } from '../../environment/common/environmentService.js';
 import { IJSONEditingService } from '../../configuration/common/jsonEditing.js';
 import { IOutputService } from '../../output/common/output.js';
+import { ILifecycleService } from '../../lifecycle/common/lifecycle.js';
 import { SyncDescriptor } from '../../../../platform/instantiation/common/descriptors.js';
 import { localize } from '../../../../nls.js';
 
@@ -58,6 +59,7 @@ export class DefaultLogLevelsService extends Disposable implements IDefaultLogLe
 		@ILogService private readonly log: ILogService,
 		@ILoggerService private readonly loggers: ILoggerService,
 		@IOutputService private readonly output: IOutputService,
+		@ILifecycleService lifecycle: ILifecycleService,
 	) {
 		super();
 		this.state = initial ?? this.startupLevels();
@@ -78,6 +80,8 @@ export class DefaultLogLevelsService extends Disposable implements IDefaultLogLe
 		}));
 		this._register(output.onDidChangeChannels(() => this.initializeChannels()));
 		this.initializeChannels();
+		// Producers release channels during scope teardown, after DI lookups are retired.
+		this._register(lifecycle.onDidShutdown(() => this.dispose()));
 	}
 	get defaultLogLevels(): DefaultLogLevels { return this.state; }
 	getDefaultLogLevel(extensionId?: string): LogLevel { return this.levelFor(this.state, extensionId); }
