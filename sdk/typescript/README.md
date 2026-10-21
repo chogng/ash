@@ -83,3 +83,13 @@ operations provide read/stat/directory listing, with `ctime` currently reported 
 `workspace.applyEdit` applies text edits through the client model owner and rejects file
 operations. Registry Remote resolvers currently use workspace scope; profile-scoped local
 Plugin resolvers remain a separate admitted deployment path.
+
+Debug visualizers may declare `contributes.debugVisualizers` entries with `id`,
+`title`, `command`, and optional exact variable `type`. Register that command through
+`ash.commands.registerCommand`. Its argument contains `sessionId`, optional `threadId`
+and `frameId`, and a variable snapshot (`name`, `value`, `type`, `variablesReference`).
+Return `{ content: string, languageId?: string }` (at most 1 MiB). Debug's Visualize
+Variable command presents the result in a read-only editor. The existing command
+activation, execution authorization and extension lifetime apply; results from a
+resumed session or replaced extension catalog are discarded. This contract renders
+text; extension HTML and scripts are not executed in the editor.

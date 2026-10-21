@@ -17,6 +17,7 @@ use crate::HostErrorCode;
 use crate::runtime::Writer;
 
 pub use external_ext_protocol::ExtensionConfigurationTarget as ConfigurationTarget;
+pub use external_ext_protocol::ExtensionDebugSessionOptions as DebugSessionOptions;
 pub use external_ext_protocol::ExtensionDiagnosticEntry as DiagnosticEntry;
 pub use external_ext_protocol::ExtensionDocumentEdit as DocumentEdit;
 pub use external_ext_protocol::ExtensionDocumentSnapshot as DocumentSnapshot;
@@ -656,6 +657,24 @@ pub struct BackgroundClient {
     services: crate::services::Services,
 }
 impl BackgroundClient {
+    /// Uses the activation's bound window; retirement cancels an in-flight launch.
+    pub fn start_debugging(
+        &self,
+        folder: Option<String>,
+        configuration: Value,
+        options: Option<DebugSessionOptions>,
+    ) -> Result<bool, ExtensionError> {
+        match self
+            .services
+            .call_operation(ExtensionClientOperation::StartDebugging {
+                folder,
+                configuration,
+                options,
+            })? {
+            ExtensionClientResult::DebugStarted { started } => Ok(started),
+            _ => Err(unexpected_result()),
+        }
+    }
     /// Retires activation-owned background calls before joining subscription tasks.
     pub fn close(&self) {
         self.services.close();

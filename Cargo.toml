@@ -64,6 +64,8 @@ members = [
     "extensions/git",
     "extensions/dev-containers",
     "extensions/debug-lldb",
+    "extensions/debug-javascript",
+    "extensions/debug-server-ready",
     "crates/external-agent-migration",
     "crates/agent-roles",
     "crates/ash-home",

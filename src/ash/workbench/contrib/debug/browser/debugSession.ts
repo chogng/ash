@@ -1,3 +1,5 @@
+import { decodeBase64, encodeBase64, VSBuffer } from '../../../../base/common/buffer.js';
+import type { IDebugMemoryRead, IDebugExceptionInfo, IDebugExceptionDetails, IDebugProgressStart, IDebugProgressUpdate } from '../common/debug.js';
 import type { CancellationToken } from '../../../../base/common/cancellation.js';
 import type { Position } from '../../../../editor/common/core/position.js';
 import { RawDebugSession } from './rawDebugSession.js';
@@ -44,6 +46,60 @@ export interface DebugSessionStartOptions {
 
 /** Workbench debug session backed by a Rust-owned DAP request client. */
 export class DebugSession extends Disposable implements IDebugSession {
+	private readonly progressStarts = this._register(new Emitter<IDebugProgressStart>());
+	private readonly progressUpdates = this._register(new Emitter<IDebugProgressUpdate>());
+	private readonly progressEnds = this._register(new Emitter<{ progressId: string; }>());
+	private readonly memoryChanges = this._register(new Emitter<{ memoryReference: string; offset: number; count: number; }>());
+	readonly onDidInvalidateMemory = this.memoryChanges.event;
+	private readonly loadedSourceChanges = this._register(new Emitter<{ reason: 'new' | 'changed' | 'removed'; source: IDebugSource; }>());
+	readonly onDidProgressStart = this.progressStarts.event;
+	readonly onDidProgressUpdate = this.progressUpdates.event;
+	readonly onDidProgressEnd = this.progressEnds.event;
+	readonly onDidLoadedSource = this.loadedSourceChanges.event;
+
+	async loadedSources(): Promise<readonly IDebugSource[]> {
+		if (!this.capabilities.supportsLoadedSourcesRequest) throw new Error(localize('debug.loadedSourcesUnsupported', 'The debug adapter does not support loaded sources.'));
+		const body = record((await this.request('loadedSources')).body, 'loadedSources body');
+		const entries = array(body.sources, 'loaded sources');
+		if (entries.length > 4096) throw new RangeError(localize('debug.loadedSourcesLimit', 'The debug adapter returned too many loaded sources.'));
+		return Object.freeze(entries.map((value, index) => source(value, `sources[${index}]`, this.workspace) ?? invalidLoadedSource()));
+	}
+
+	async readMemory(memoryReference: string, offset: number, count: number): Promise<IDebugMemoryRead> {
+		this.checkMemory(memoryReference, offset, count, false);
+		const body = record((await this.request('readMemory', { memoryReference, offset, count })).body, 'readMemory body');
+		const encoded = body.data === undefined ? '' : string(body.data, 'memory data');
+		if (encoded.length > 5464 || !/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(encoded)) throw new TypeError(localize('debug.invalidMemoryData', 'The debug adapter returned invalid memory bytes.'));
+		const data = decodeBase64(encoded).buffer;
+		const unreadableBytes = body.unreadableBytes === undefined ? 0 : positiveInteger(body.unreadableBytes, 'unreadable memory bytes', true);
+		if (data.length + unreadableBytes > count) throw new RangeError(localize('debug.invalidMemoryData', 'The debug adapter returned invalid memory bytes.'));
+		return { address: string(body.address, 'memory address'), data, unreadableBytes };
+	}
+
+	async writeMemory(memoryReference: string, offset: number, data: Uint8Array): Promise<number> {
+		this.checkMemory(memoryReference, offset, data.length, true);
+		const body = record((await this.request('writeMemory', { memoryReference, offset, data: encodeBase64(VSBuffer.wrap(new Uint8Array(data))), allowPartial: false })).body ?? {}, 'writeMemory body');
+		const written = body.bytesWritten === undefined ? data.length : positiveInteger(body.bytesWritten, 'written memory bytes', true);
+		if (written > data.length || body.offset !== undefined && body.offset !== 0) throw new RangeError(localize('debug.invalidMemoryData', 'The debug adapter returned invalid memory bytes.'));
+		return written;
+	}
+
+	private checkMemory(reference: string, offset: number, count: number, write: boolean): void {
+		if (typeof reference !== 'string' || !reference.length || reference.length > 4096 || reference.includes('\0') || !Number.isSafeInteger(offset) || !Number.isSafeInteger(count) || count < 1 || count > 4096) throw new TypeError(localize('debug.invalidMemoryRange', 'A memory request requires a reference and between 1 and 4096 bytes.'));
+		if (this.state !== 'stopped' || !(write ? this.capabilities.supportsWriteMemoryRequest : this.capabilities.supportsReadMemoryRequest)) throw new Error(localize('debug.memoryUnavailable', 'Pause a debug adapter that supports this memory operation first.'));
+	}
+
+	async exceptionInfo(threadId: number): Promise<IDebugExceptionInfo> {
+		if (this.state !== 'stopped' || !this.capabilities.supportsExceptionInfoRequest) throw new Error(localize('debug.exceptionInfoUnsupported', 'Exception details require a paused adapter with exception-info support.'));
+		const body = record((await this.request('exceptionInfo', { threadId: integer(threadId, 'exception thread') })).body, 'exceptionInfo body');
+		return { exceptionId: string(body.exceptionId, 'exception id'), breakMode: string(body.breakMode, 'exception break mode'), ...(typeof body.description === 'string' ? { description: body.description } : {}), ...(body.details === undefined ? {} : { details: decodeExceptionDetails(body.details, 0) }) };
+	}
+
+	async cancelProgress(progressId: string): Promise<void> {
+		if (!this.capabilities.supportsCancelRequest || !progressId || progressId.length > 256) return;
+		await this.request('cancel', { progressId });
+	}
+
 	private _resolvedConfiguration: IDebugConfiguration;
 	get resolvedConfiguration(): IDebugConfiguration { return this._resolvedConfiguration; }
 	get parentSession(): IDebugSession | undefined { return this.sessionOptions.parentSession; }
@@ -65,6 +121,7 @@ export class DebugSession extends Disposable implements IDebugSession {
 	private polling = false;
 	private readonly adapterReads = new TaskQueue();
 	private processClose: Promise<void> | undefined;
+	private disconnecting: Promise<void> | undefined;
 	private trackers: readonly IDebugAdapterTracker[] = [];
 	private readonly trackerDisposables = new Map<IDebugAdapterTracker, IDisposable>();
 	private readonly trackerLifetime = new AbortController();
@@ -81,6 +138,7 @@ export class DebugSession extends Disposable implements IDebugSession {
 	private readonly threadEmitter = this._register(new Emitter<number | undefined>());
 	readonly onDidChangeThread = this.threadEmitter.event;
 	private runtime: DebugSessionSnapshot | undefined;
+	get inspectionRevision(): number { return this.runtime?.inspectionRevision ?? 0; }
 	private readonly nameEmitter = this._register(new Emitter<string>());
 	private sessionName: string;
 	private breakpointVersion = 0;
@@ -475,9 +533,13 @@ export class DebugSession extends Disposable implements IDebugSession {
 		if (updates.length) this.updateBreakpoints?.(updates);
 	}
 
-	async disconnect(): Promise<void> {
+	disconnect(): Promise<void> {
+		return this.disconnecting ??= this.disconnectOnce();
+	}
+
+	private async disconnectOnce(): Promise<void> {
 		if (!this.isDisposed && this._state !== "terminated" && this._state !== "error" && !(await this.processService.manageSession(this.id, 'read').catch(() => undefined))?.ended) {
-			try { await this.request("disconnect", { restart: false, ...(this._capabilities.supportsTerminate ? { terminateDebuggee: true } : {}) }); } catch (error) { this.emitOutput(`Debug disconnect failed: ${getErrorMessage(error)}\n`); }
+			try { await this.request("disconnect", { restart: false, ...(this._capabilities.supportsTerminate ? { terminateDebuggee: this.configuration.request === 'launch' } : {}) }); } catch (error) { this.emitOutput(`Debug disconnect failed: ${getErrorMessage(error)}\n`); }
 		}
 		await this.closeProcess();
 		this.setState("terminated");
@@ -488,7 +550,7 @@ export class DebugSession extends Disposable implements IDebugSession {
 		await this.transport!.initialize({
 			publicId: this.id,
 			adapterId: this.resolvedConfiguration.type, request: this.resolvedConfiguration.request,
-			arguments: launchArguments, runInTerminal: Boolean(this.runInTerminal), startDebugging: Boolean(this.startDebugging)
+			arguments: { ...launchArguments, type: this.resolvedConfiguration.type, request: this.resolvedConfiguration.request, name: this.name }, runInTerminal: Boolean(this.runInTerminal), startDebugging: Boolean(this.startDebugging)
 		});
 		await this.waitForInitialization('configuring');
 		await this.syncBreakpoints();
@@ -705,9 +767,32 @@ export class DebugSession extends Disposable implements IDebugSession {
 	private acceptEvent(eventValue: DapEvent): void {
 		const body = eventValue.body && typeof eventValue.body === "object" ? eventValue.body as Record<string, unknown> : {};
 		if (eventValue.event === "output") return;
+		if (eventValue.event === 'progressStart' || eventValue.event === 'progressUpdate' || eventValue.event === 'progressEnd') {
+			const progressId = string(body.progressId, 'progress id');
+			if (!progressId || progressId.length > 256) throw new TypeError(localize('debug.invalidProgressId', 'Invalid debug progress ID.'));
+			if (eventValue.event === 'progressEnd') this.progressEnds.fire({ progressId });
+			else {
+				const percentage = body.percentage === undefined ? undefined : body.percentage;
+				if (percentage !== undefined && (typeof percentage !== 'number' || !Number.isFinite(percentage) || percentage < 0 || percentage > 100)) throw new TypeError(localize('debug.invalidProgressPercentage', 'Invalid debug progress percentage.'));
+				const update = { progressId, ...(typeof body.message === 'string' ? { message: body.message.slice(0, 4096) } : {}), ...(percentage === undefined ? {} : { percentage }) };
+				if (eventValue.event === 'progressStart') this.progressStarts.fire({ ...update, title: string(body.title, 'progress title').slice(0, 4096), cancellable: body.cancellable === true });
+				else this.progressUpdates.fire(update);
+			}
+			return;
+		}
+		if (eventValue.event === 'memory') {
+			this.memoryChanges.fire({ memoryReference: string(body.memoryReference, 'memory reference'), offset: integer(body.offset, 'memory offset'), count: positiveInteger(body.count, 'memory count', true) });
+			return;
+		}
+		if (eventValue.event === 'loadedSource') {
+			if (body.reason !== 'new' && body.reason !== 'changed' && body.reason !== 'removed') throw new TypeError(localize('debug.invalidLoadedSourceReason', 'Invalid loaded-source change reason.'));
+			this.loadedSourceChanges.fire({ reason: body.reason, source: source(body.source, 'loaded source', this.workspace) ?? invalidLoadedSource() });
+			return;
+		}
+
 		if (["initialized", "capabilities", "stopped", "continued", "terminated", "exited"].includes(eventValue.event)) return;
 		if (eventValue.event === 'breakpoint') return;
-		if (["thread", "process", "module", "progressStart", "progressUpdate", "progressEnd", "invalidated", "memory"].includes(eventValue.event)) return;
+		if (["thread", "process", "module", "invalidated"].includes(eventValue.event)) return;
 		this.customEventEmitter.fire({ event: eventValue.event, ...(eventValue.body === undefined ? {} : { body: eventValue.body }) });
 	}
 
@@ -801,6 +886,7 @@ function variable(value: unknown, index: number): IDebugVariable {
 		value: string(input.value, `variables[${index}].value`),
 		variablesReference: positiveInteger(input.variablesReference, `variables[${index}].variablesReference`, true),
 		...(typeof input.type === "string" ? { type: input.type } : {}),
+		...(typeof input.memoryReference === 'string' ? { memoryReference: input.memoryReference } : {}),
 		...(hint ? {
 			presentationHint: {
 				...(hint.attributes === undefined ? {} : { attributes: array(hint.attributes, "presentationHint.attributes").map(attribute => string(attribute, "presentationHint attribute")) }),
@@ -881,3 +967,18 @@ function completionItem(value: unknown, index: number, line: string, column: num
 		...(selectionLength === undefined ? {} : { selectionLength }),
 	});
 }
+
+function decodeExceptionDetails(value: unknown, depth: number): IDebugExceptionDetails {
+	if (depth > 8) throw new RangeError('Exception details exceed the nesting limit');
+	const input = record(value, 'exception details');
+	const children = input.innerException === undefined ? undefined : array(input.innerException, 'inner exceptions');
+	if (children && children.length > 32) throw new RangeError('Too many inner exceptions');
+	return {
+		...(typeof input.message === 'string' ? { message: input.message.slice(0, 65536) } : {}),
+		...(typeof input.typeName === 'string' ? { typeName: input.typeName.slice(0, 4096) } : {}),
+		...(typeof input.stackTrace === 'string' ? { stackTrace: input.stackTrace.slice(0, 65536) } : {}),
+		...(children ? { innerException: children.map(child => decodeExceptionDetails(child, depth + 1)) } : {}),
+	};
+}
+
+function invalidLoadedSource(): never { throw new TypeError(localize('debug.invalidLoadedSource', 'The debug adapter returned an invalid loaded source.')); }

@@ -63,6 +63,12 @@ Execution events beat delayed continue/step/restart responses using the captured
 execution revision. Failed requests never synthesize a running state. A new stop,
 resume or invalidated event invalidates pending stackTrace/scopes/variables/setVariable/completions
 results without replaying them. Terminal state cannot be revived by late events.
+A DAP `exited` event alone does not end the debug session. On `terminated`,
+the manager queues one `disconnect` acknowledgement before exposing the ended
+snapshot, unless the client already requested disconnect. This releases adapter
+children before their multiplexing parent completes shutdown; the acknowledgement
+does not terminate borrowed attach targets.
+
 Tests additionally cover initialization ordering, dynamic capabilities, configuration
 gates, startup failure, deadlines, signed thread identities and stale inspection.
 

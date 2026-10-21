@@ -22,6 +22,14 @@ from build.protocol.generate import generate_protocol
 _BINARIES = {
     "ash-livekit-client": ("ash-livekit-client", "--livekit-client-bin"),
     "ash-realtime-voice": ("ash-realtime-voice", "--recognizer-bin"),
+    "ash-debug-javascript": (
+        "ash-debug-javascript",
+        "--javascript-debug-extension-bin",
+    ),
+    "ash-debug-server-ready": (
+        "ash-debug-server-ready",
+        "--server-ready-extension-bin",
+    ),
     "ash-debug-lldb": ("ash-debug-lldb", "--lldb-extension-bin"),
     "ash-dev-container-provider": (
         "ash-dev-container-provider",

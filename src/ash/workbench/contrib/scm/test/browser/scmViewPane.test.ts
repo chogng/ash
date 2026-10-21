@@ -1,3 +1,4 @@
+import { TestViewDescriptorService } from '../../../../test/browser/workbenchTestServices.js';
 import { TestQuickInputService } from '../../../../../platform/quickinput/test/browser/testQuickInputService.js';
 import { createTestComponentServices } from '../../../../test/common/testEditorServices.js';
 import type { IResourceEditorInput } from '../../../../common/editor.js';
@@ -131,7 +132,6 @@ test('SCM panes follow repository and history availability through the window co
 		const { IContextKeyService } = await import('../../../../../platform/contextkey/common/contextkey.js');
 		const { WorkbenchContributionsRegistry, WorkbenchPhase } = await import('../../../../common/contributions.js');
 		const { WorkbenchViewRegistry, WorkbenchViewContainerId } = await import('../../../../common/views.js');
-		const { ViewContainerModel } = await import('../../../../services/views/common/viewContainerModel.js');
 		const { SCM_AGENT_REVIEW_VIEW_ID, SCM_HISTORY_VIEW_ID, registerSCMViews } = await import('../../browser/scm.contribution.js');
 		using context = new ContextKeyService();
 		using scm = new SCMService();
@@ -140,7 +140,8 @@ test('SCM panes follow repository and history availability through the window co
 		services.registerInstance(ISCMService, scm);
 		using registry = new WorkbenchViewRegistry();
 		registerSCMViews(registry);
-		using model = new ViewContainerModel(registry.getViewContainer(WorkbenchViewContainerId.SourceControl)!, registry, context);
+		using descriptors = new TestViewDescriptorService({ registry }, context);
+		const model = descriptors.getViewContainerModel(WorkbenchViewContainerId.SourceControl);
 		using host = WorkbenchContributionsRegistry.createHost(services, error => { throw error; }, ['workbench.contrib.scmRepositories']);
 		host.advance(WorkbenchPhase.BlockRestore);
 		const visiblePanes = (): readonly string[] => model.visibleViewDescriptors.map(view => view.id);
@@ -2055,7 +2056,7 @@ test('SCM publishes its count through view activity and retires it with the cont
 	using registry = new WorkbenchViewRegistry();
 	registerSCMViews(registry);
 	using contexts = new ContextKeyService();
-	using descriptors = new ViewDescriptorService({ registry }, contexts);
+	using descriptors = new TestViewDescriptorService({ registry }, contexts);
 	using activity = new ActivityService(descriptors);
 	using scm = new SCMService();
 	using views = new SCMViewService(scm);

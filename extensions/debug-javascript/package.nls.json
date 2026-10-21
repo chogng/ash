@@ -1,0 +1,10 @@
+{
+  "displayName": "JavaScript Debugger",
+  "description": "Debug JavaScript and TypeScript with vscode-js-debug and Rust auto attach.",
+  "error.configuration": "Invalid JavaScript debug configuration.",
+  "error.runtime": "The JavaScript debug runtime is unavailable. Rebuild or reinstall Ash.",
+  "configuration.launch": "Launch JavaScript file",
+  "setting.autoAttach": "Automatically attach to Node.js processes started in new Ash terminals. Recreate terminals after changing this setting.",
+  "setting.smartPattern": "Paths excluded from smart auto attach (glob patterns).",
+  "configuration.title": "JavaScript Debug"
+}

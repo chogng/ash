@@ -8,7 +8,10 @@ import type { CancellationToken } from '../../../../../base/common/cancellation.
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { ContextKeyService, IContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
 import { IStorageService, StorageScope, StorageTarget } from '../../../../../platform/storage/common/storage.js';
-import { IAccessibleViewService } from '../../../../../platform/accessibility/browser/accessibleView.js';
+import { IAccessibleViewService, AccessibleViewType } from '../../../../../platform/accessibility/browser/accessibleView.js';
+import { AccessibleViewRegistry } from '../../../../../platform/accessibility/browser/accessibleViewRegistry.js';
+import { IViewsService } from '../../../../services/views/common/viewsService.js';
+import '../../browser/debug.contribution.js';
 import { IEditorService } from '../../../../services/editor/common/editorService.js';
 import { IUriIdentityService } from '../../../../../platform/uriIdentity/common/uriIdentity.js';
 import { ILogService, NullLoggerService } from '../../../../../platform/log/common/log.js';
@@ -20,8 +23,41 @@ import { ICodeEditorService } from '../../../../../editor/browser/services/codeE
 import { Range } from '../../../../../editor/common/core/range.js';
 import { Selection } from '../../../../../editor/common/core/selection.js';
 import { Repl } from '../../browser/repl.js';
+import { IWorkspaceContextService } from '../../../../../platform/workspace/common/workspace.js';
+import { TestWorkspaceService } from '../../../../services/configuration/test/common/testServices.js';
+import { IFileService } from '../../../../../platform/files/common/files.js';
+import { FileService } from '../../../../../platform/files/common/fileService.js';
 
 suite('Debug Console view input and filtering', () => {
+	test('registered accessibility providers follow filtered output and restore the originating focus', async () => {
+		using fixture = new ReplFixture();
+		fixture.console.append({ output: 'visible\n' });
+		fixture.console.append({ output: 'hidden\n' });
+		await fixture.until(() => fixture.output.textContent === 'visible\nhidden\n');
+		fixture.setFilter('visible');
+		await fixture.until(() => fixture.view.getVisibleContent() === 'visible\n');
+		fixture.filter.focus();
+		using help = fixture.accessibleProvider(AccessibleViewType.Help)!;
+		using content = fixture.accessibleProvider(AccessibleViewType.View)!;
+		assert.ok(help);
+		assert.ok(content);
+		assert.match(help.provideContent(), /Debug Console\n/);
+		assert.equal(content.provideContent(), 'visible\n');
+		let changes = 0;
+		using subscription = content.onDidChangeContent!(() => changes++);
+		fixture.console.append({ output: 'visible update\n' });
+		await fixture.until(() => content.provideContent() === 'visible\nvisible update\n');
+		assert.ok(changes > 0);
+		const outside = document.createElement('button');
+		document.body.append(outside);
+		using cleanup = toDisposable(() => outside.remove());
+		outside.focus();
+		assert.equal(fixture.accessibleProvider(AccessibleViewType.Help), undefined);
+		assert.equal(fixture.accessibleProvider(AccessibleViewType.View), undefined);
+		content.dispose();
+		assert.equal(document.activeElement, fixture.filter);
+	});
+
 	test('renders retained output, evaluates expressions, and exposes its clear icon action', async () => {
 		using fixture = new ReplFixture();
 		fixture.console.append({ output: 'ready\n' });
@@ -106,16 +142,24 @@ suite('Debug Console view input and filtering', () => {
 		using fixture = new ReplFixture();
 		fixture.console.append({ output: 'part ' });
 		fixture.console.append({ output: 'line\n' });
-		await fixture.until(() => fixture.output.querySelectorAll('[data-entry-id]').length === 2);
-		const chunks = [...fixture.output.querySelectorAll('[data-entry-id]')];
-		assert.equal(chunks[0]!.parentElement, chunks[1]!.parentElement);
+		await fixture.until(() => fixture.view.getVisibleContent() === 'part line\n');
 		assert.equal(fixture.output.querySelectorAll('[role=treeitem]').length, 1);
 		assert.equal(fixture.view.getVisibleContent(), 'part line\n');
 		fixture.setFilter('line');
 		await fixture.until(() => fixture.view.getVisibleContent() === 'line\n');
-		assert.deepEqual([...fixture.output.querySelectorAll<HTMLElement>('[data-entry-id]')].map(chunk => chunk.hidden), [true, false]);
+		assert.equal(fixture.output.textContent, 'line\n');
+		assert.deepEqual(fixture.console.activeSession.elements.map(entry => [entry.id, entry.output]), [[1, 'part '], [2, 'line\n']]);
 		fixture.setFilter('');
 		await fixture.until(() => fixture.view.getVisibleContent() === 'part line\n');
+	});
+
+	test('does not join text links across producers in a shared console', async () => {
+		using fixture = new ReplFixture();
+		fixture.console.append({ output: 'https://first.test/', sessionId: 'one' });
+		fixture.console.append({ output: 'tail\n', sessionId: 'other' });
+		await fixture.until(() => fixture.output.querySelectorAll('[role=treeitem]').length === 2);
+		assert.equal(fixture.output.querySelector('[role=link]')?.textContent, 'https://first.test/');
+		assert.equal(fixture.console.activeSession.elements[1]!.sessionId, 'other');
 	});
 
 	test('loads each inspected branch once and retains its inspection revision while group output streams', async () => {
@@ -392,6 +436,9 @@ class ReplFixture extends Disposable {
 		this.services.registerInstance(IAccessibleViewService, { getOpenAriaHint: () => undefined } as never);
 		this.services.registerInstance(IEditorService, {} as never);
 		this.services.registerInstance(IUriIdentityService, {} as never);
+		this.services.registerInstance(IViewsService, { getViewWithId: () => this.view } as never);
+		this.services.registerInstance(IWorkspaceContextService, this._register(new TestWorkspaceService({ id: 'workspace', folders: [] })));
+		this.services.registerInstance(IFileService, this._register(new FileService()));
 		registerCodeEditorServices(this.services);
 		this.recreate();
 	}
@@ -413,6 +460,11 @@ class ReplFixture extends Disposable {
 		});
 	}
 	get editors() { return this.services.get(ICodeEditorService); }
+	accessibleProvider(type: AccessibleViewType) {
+		const implementations = AccessibleViewRegistry.getImplementations().filter(item => item.name === `debug.repl.${type}`);
+		assert.equal(implementations.length, 1);
+		return this.services.invokeFunction(accessor => implementations[0]!.getProvider(accessor));
+	}
 	get input(): HTMLElement { return this.view.getReplInput().controller.element; }
 	get selection(): number[] { const editor = this.view.getReplInput(); const selection = editor.getSelection()!; const model = editor.getModel()!; return [model.getOffsetAt(selection.getStartPosition()), model.getOffsetAt(selection.getEndPosition())]; }
 	get filter(): HTMLInputElement { return this.view.element.querySelector<HTMLInputElement>('input[aria-label="Filter Debug Console"]')!; }
@@ -454,7 +506,7 @@ class FakeDebugService extends Disposable {
 	readonly onDidChangeSession = this.sessionChanged.event;
 	getViewModel() { return this.viewModel; }
 	complete: IDebugSession['completions'] = async () => completion([]);
-	readonly session = { id: 'one', consoleSessionId: 'one', threadId: 1, state: 'stopped', capabilities: { supportsCompletionsRequest: true, completionTriggerCharacters: ['.'] }, completions: (...args: Parameters<IDebugSession['completions']>) => this.complete(...args) } as unknown as IDebugSession;
+	readonly session = { id: 'one', consoleSessionId: 'one', configuration: { dirId: null }, threadId: 1, state: 'stopped', capabilities: { supportsCompletionsRequest: true, completionTriggerCharacters: ['.'] }, completions: (...args: Parameters<IDebugSession['completions']>) => this.complete(...args) } as unknown as IDebugSession;
 	constructor(readonly replModel: FakeDebugConsoleService) {
 		super();
 		this.viewModel.setFocus(undefined, { id: 1, name: 'main' }, this.session, true);

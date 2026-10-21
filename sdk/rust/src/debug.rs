@@ -3,6 +3,7 @@
 
 use std::collections::BTreeMap;
 use std::sync::Arc;
+use std::sync::Mutex;
 
 use external_ext_protocol::RegistrationDescriptor;
 use external_ext_protocol::RegistrationKind;
@@ -85,6 +86,55 @@ pub struct Executable {
     pub env: Option<BTreeMap<String, Option<String>>>,
 }
 
+/// An adapter listener owned by the provider. The Debug domain owns each connection.
+#[derive(Clone, Debug, Serialize)]
+#[serde(tag = "type", rename_all = "camelCase")]
+pub enum Connection {
+    Server { host: String, port: u16 },
+    NamedPipe { path: String },
+}
+
+/// Complete immutable snapshot passed to a tracker factory.
+#[derive(Clone, Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct TrackerSession {
+    pub id: String,
+    #[serde(rename = "type")]
+    pub debugger_type: String,
+    pub name: String,
+    pub parent_session_id: Option<String>,
+    pub configuration: Configuration,
+    pub workspace_folder: Option<WorkspaceFolder>,
+}
+
+/// Tracker callbacks observe traffic; they do not own DAP sequencing or execution.
+#[derive(Debug, Deserialize)]
+#[serde(tag = "event", deny_unknown_fields)]
+pub enum TrackerEvent {
+    #[serde(rename = "onWillStartSession")]
+    Start,
+    #[serde(rename = "onWillReceiveMessage")]
+    Receive { message: Value },
+    #[serde(rename = "onDidSendMessage")]
+    Send { message: Value },
+    #[serde(rename = "onWillStopSession")]
+    Stop,
+    #[serde(rename = "onError")]
+    Error { message: String, name: String },
+    #[serde(rename = "onExit")]
+    Exit {
+        code: Option<i32>,
+        signal: Option<String>,
+    },
+    #[serde(rename = "dispose")]
+    Dispose,
+}
+
+/// One session-scoped observer. Dispose is delivered at most once per handle.
+pub trait AdapterTracker: Send + Sync + 'static {
+    fn event(&self, event: TrackerEvent, token: CancellationToken) -> Result<(), ExtensionError>;
+}
+
 #[derive(Clone, Copy)]
 pub enum ConfigurationProviderTriggerKind {
     Initial = 1,
@@ -125,6 +175,126 @@ pub struct Debug {
 }
 
 impl Debug {
+    /// Observes existing Debug events in the activation's bound client.
+    pub fn observe_events(
+        &mut self,
+        id: impl Into<String>,
+        callback: impl Fn(Value, CancellationToken) -> Result<(), ExtensionError>
+        + Send
+        + Sync
+        + 'static,
+    ) -> Result<(), ExtensionError> {
+        let handler: Handler = Arc::new(move |payload, token| {
+            callback(payload, token)?;
+            Ok(Value::Null)
+        });
+        self.insert(
+            id.into(),
+            RegistrationKind::DebugEvents {},
+            BTreeMap::from([("debugEvent".into(), handler)]),
+        )
+    }
+    pub fn register_connection_factory(
+        &mut self,
+        id: impl Into<String>,
+        debugger_type: impl Into<String>,
+        callback: impl Fn(AdapterRequest, CancellationToken) -> Result<Connection, ExtensionError>
+        + Send
+        + Sync
+        + 'static,
+    ) -> Result<(), ExtensionError> {
+        let handler: Handler = Arc::new(move |payload, token| {
+            Ok(json!({ "connection": callback(decode(payload)?, token)? }))
+        });
+        self.insert(
+            id.into(),
+            RegistrationKind::DebugAdapter {
+                debugger_type: debugger_type.into(),
+            },
+            BTreeMap::from([("createDebugAdapterDescriptor".into(), handler)]),
+        )
+    }
+
+    pub fn register_tracker_factory(
+        &mut self,
+        id: impl Into<String>,
+        debugger_type: impl Into<String>,
+        callback: impl Fn(
+            TrackerSession,
+            CancellationToken,
+        ) -> Result<Option<Arc<dyn AdapterTracker>>, ExtensionError>
+        + Send
+        + Sync
+        + 'static,
+    ) -> Result<(), ExtensionError> {
+        #[derive(Deserialize)]
+        #[serde(deny_unknown_fields)]
+        struct Create {
+            session: TrackerSession,
+        }
+        #[derive(Deserialize)]
+        struct Event {
+            #[serde(rename = "trackerId")]
+            id: String,
+            #[serde(flatten)]
+            event: TrackerEvent,
+        }
+        let trackers = Arc::new(Mutex::new((
+            0u64,
+            BTreeMap::<String, Arc<dyn AdapterTracker>>::new(),
+        )));
+        let create = Arc::clone(&trackers);
+        let factory: Handler = Arc::new(move |payload, token| {
+            let request: Create = decode(payload)?;
+            token.check_cancelled()?;
+            let Some(tracker) = callback(request.session, token.clone())? else {
+                return Ok(Value::Null);
+            };
+            token.check_cancelled()?;
+            let mut state = create
+                .lock()
+                .map_err(|_| ExtensionError::invalid_request("debug tracker lock failed"))?;
+            if state.1.len() >= 256 {
+                return Err(ExtensionError::new(
+                    HostErrorCode::QuotaExceeded,
+                    "too many debug trackers",
+                ));
+            }
+            state.0 += 1;
+            let id = state.0.to_string();
+            state.1.insert(id.clone(), tracker);
+            Ok(
+                json!({"trackerId":id,"operations":["onWillStartSession","onWillReceiveMessage","onDidSendMessage","onWillStopSession","onError","onExit"]}),
+            )
+        });
+        let events: Handler = Arc::new(move |payload, token| {
+            let event: Event = decode(payload)?;
+            let tracker = {
+                let mut state = trackers
+                    .lock()
+                    .map_err(|_| ExtensionError::invalid_request("debug tracker lock failed"))?;
+                if matches!(event.event, TrackerEvent::Dispose) {
+                    state.1.remove(&event.id)
+                } else {
+                    state.1.get(&event.id).cloned()
+                }
+            };
+            if let Some(tracker) = tracker {
+                tracker.event(event.event, token)?;
+            }
+            Ok(Value::Null)
+        });
+        self.insert(
+            id.into(),
+            RegistrationKind::DebugAdapterTracker {
+                debugger_type: debugger_type.into(),
+            },
+            BTreeMap::from([
+                ("createDebugAdapterTracker".into(), factory),
+                ("debugAdapterTrackerEvent".into(), events),
+            ]),
+        )
+    }
     pub fn register_configuration_provider(
         &mut self,
         id: impl Into<String>,
@@ -214,3 +384,7 @@ fn decode<T: serde::de::DeserializeOwned>(payload: Value) -> Result<T, Extension
     serde_json::from_value(payload)
         .map_err(|_| ExtensionError::invalid_request("invalid debug provider request"))
 }
+
+#[cfg(test)]
+#[path = "debug_tests.rs"]
+mod tests;

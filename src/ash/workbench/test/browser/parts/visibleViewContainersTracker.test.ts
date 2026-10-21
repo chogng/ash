@@ -1,3 +1,4 @@
+import { TestViewDescriptorService } from '../workbenchTestServices.js';
 import '../../../../editor/test/browser/testEditorDom.js';
 import assert from 'node:assert/strict';
 import { suite, test } from 'mocha';
@@ -9,7 +10,6 @@ import { SyncDescriptor } from '../../../../platform/instantiation/common/descri
 import { ViewPane, type IViewPaneOptions } from '../../../browser/parts/views/viewPane.js';
 import { VisibleViewContainersTracker } from '../../../browser/parts/visibleViewContainersTracker.js';
 import { IViewDescriptorService, ViewContainerLocation, WorkbenchViewRegistry } from '../../../common/views.js';
-import { ViewDescriptorService } from '../../../services/views/browser/viewDescriptorService.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../base/test/common/utils.js';
 
 class FixtureView extends ViewPane {
@@ -24,7 +24,7 @@ suite('VisibleViewContainersTracker', () => {
 		const context = resources.add(new ContextKeyService());
 		const services = resources.add(new InstantiationService());
 		services.registerInstance(IContextKeyService, context);
-		const descriptors = resources.add(services.createInstance(ViewDescriptorService, { registry }));
+		const descriptors = resources.add(new TestViewDescriptorService({ registry }, context));
 		services.registerInstance(IViewDescriptorService, descriptors);
 		return { registry, context, services, descriptors };
 	}

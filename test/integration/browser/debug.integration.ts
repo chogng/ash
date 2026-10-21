@@ -1,4 +1,20 @@
+import { IExtensionService } from '../../../src/ash/workbench/services/extensions/common/extensionService.js';
+import { StatusbarService, IStatusbarService } from '../../../src/ash/workbench/services/statusbar/browser/statusbar.js';
+import { StatusbarPart } from '../../../src/ash/workbench/browser/parts/statusbar/statusbarPart.js';
+import { StatusBarColorProvider } from '../../../src/ash/workbench/contrib/debug/browser/statusbarColorProvider.js';
+import { ChatContextPickService } from '../../../src/ash/workbench/services/chat/browser/chatContextPickService.js';
+import { DebugChatContextContribution } from '../../../src/ash/workbench/contrib/debug/browser/debugChatIntegration.js';
+import { ContentHoverController } from '../../../src/ash/editor/contrib/hover/browser/contentHoverController.js';
+import { Position } from '../../../src/ash/editor/common/core/position.js';
+import { SyncDescriptor } from '../../../src/ash/platform/instantiation/common/descriptors.js';
+import { BrowserLayoutService, ILayoutService } from '../../../src/ash/platform/layout/browser/layoutService.js';
+import { AccessibleViewService } from '../../../src/ash/workbench/contrib/accessibility/browser/accessibleView.js';
+import '../../../src/ash/workbench/contrib/accessibility/browser/accessibilityConfiguration.js';
+import { QuickInputService } from '../../../src/ash/platform/quickinput/browser/quickInputService.js';
+import { IQuickInputService } from '../../../src/ash/platform/quickinput/common/quickInput.js';
+import { registerTestCodeEditorFeatures } from '../../fixtures/codeEditorFeatures.js';
 import { registerCodeEditorServices } from '../../../src/ash/editor/test/browser/testCodeEditor.js';
+import { IOpenerService } from '../../../src/ash/platform/opener/common/opener.js';
 import { ICommandService } from '../../../src/ash/platform/commands/common/commands.js';
 import { registerTestComponentServices } from '../../../src/ash/workbench/test/common/testEditorServices.js';
 import type { IResourceEditorInput } from '../../../src/ash/workbench/common/editor.js';
@@ -33,7 +49,7 @@ import { productLanguagePackCatalogs } from '../../../src/ash/workbench/services
 import { IThemeService } from '../../../src/ash/platform/theme/common/themeService.js';
 import { Repl } from '../../../src/ash/workbench/contrib/debug/browser/repl.js';
 import { DebugViewTestServices, MockDebugService, MockDebugSession } from '../../../src/ash/workbench/contrib/debug/test/common/mockDebug.js';
-import '../../../src/ash/workbench/contrib/debug/browser/media/debug.css';
+import '../../../src/ash/workbench/contrib/debug/browser/media/debugViewlet.css';
 import '../../../src/ash/base/browser/ui/styles.css';
 import '../../../src/ash/workbench/browser/media/style.css';
 
@@ -43,6 +59,7 @@ if (new URLSearchParams(location.search).get('locale') === 'zh-cn') {
 }
 
 const store = new DisposableStore();
+store.add(registerTestCodeEditorFeatures(['editor.contrib.placeholderText', 'editor.contrib.hover']));
 const themes = { light: lightColorTheme, dark: darkColorTheme, hcDark: highContrastDarkColorTheme, hcLight: highContrastLightColorTheme };
 const theme = store.add(new TestThemeService(themes.light));
 store.add(bindTestColorTheme(theme, document.body));
@@ -51,6 +68,16 @@ const launchControls = new URLSearchParams(location.search).has('launch-controls
 const debug = store.add(new MockDebugService({ name: 'main.ts', resource }));
 if (launchControls) debug.compounds = [{ id: 'all', name: 'All', dirId: 'second', workspaceFolderName: 'Second', configurations: ['first', 'second'], stopAll: false }];
 const session = debug.sessions[0] as MockDebugSession;
+if (new URLSearchParams(location.search).has('loaded-sources')) {
+	Object.defineProperty(session, 'capabilities', { value: { ...session.capabilities, supportsLoadedSourcesRequest: true } });
+	session.loadedSources = async () => [{ name: 'generated.ts', sourceReference: 25 }];
+}
+if (new URLSearchParams(location.search).has('exception-details')) {
+	Object.defineProperty(session, 'capabilities', { value: { ...session.capabilities, supportsExceptionInfoRequest: true } });
+	Object.defineProperty(session, 'reason', { value: 'exception' });
+	session.exceptionInfo = async () => ({ exceptionId: 'TypeError', description: 'Bad input', breakMode: 'always', details: { stackTrace: 'at main (main.ts:2)' } });
+}
+if (new URLSearchParams(location.search).has('editor-inspection')) session.variables = async () => [{ name: 'answer', value: '42', variablesReference: 0 }];
 const completionRequests: Array<{ sessionId: string; frameId: number | undefined; threadId: number; text: string; lineNumber: number; column: number; cancelled: boolean; held: boolean; }> = [];
 let holdNextCompletion = false;
 let pendingCompletion: DeferredPromise<IDebugCompletionsResponse> | undefined;
@@ -97,7 +124,6 @@ session.disassemble = async (reference: string, offset: number, instructionOffse
 session.stackTrace = async () => [{ id: 10, name: 'main', source: { name: 'main.ts', resource }, lineNumber: 2, columnNumber: 1, instructionPointerReference: new URLSearchParams(location.search).has('no-address') ? undefined : '0x1000' }];
 StandaloneServices.initialize().registerInstance(IDebugService, debug);
 const model = store.add(createModel('const answer = 42;\nconsole.log(answer);\nconsole.log("finished");', 'javascript', resource));
-const editor = store.add(create(document.querySelector<HTMLElement>('#editor')!, { model, automaticLayout: true }));
 if (new URLSearchParams(location.search).has('breakpoints')) {
 	debug.toggleBreakpoint(resource, 2);
 	debug.toggleBreakpoint(resource, 3);
@@ -108,7 +134,7 @@ const editors: IEditorService = {
 	save: async () => { throw new Error('Saving is outside this fixture'); },
 	saveAll: async () => { throw new Error('Saving is outside this fixture'); },
 	onDidActiveEditorChange: Event.None, onDidVisibleEditorsChange: Event.None, get activeEditor() { return activeInput; }, visibleEditors: [], activeEditorPane: undefined, visibleEditorPanes: [],
-	openEditor: async (_input, options?: EditorOpenOptions) => {
+	openEditor: async (_input, options?: EditorOpenOptions, target?: Parameters<IEditorService['openEditor']>[2]) => {
 		activeInput = _input;
 		if (_input.editorId === DISASSEMBLY_VIEW_ID) {
 			disassembly.domNode.hidden = false;
@@ -116,7 +142,7 @@ const editors: IEditorService = {
 			disassembly.focus();
 			return;
 		}
-		openedSources.push({ resource: _input.resource.toString(), initialText: _input.initialText, readOnly: _input.readOnly, line: options?.selection?.startLineNumber });
+		openedSources.push({ resource: _input.resource.toString(), initialText: _input.initialText, readOnly: _input.readOnly, line: options?.selection?.startLineNumber, ...(target ? { column: options?.selection?.startColumn, target } : {}) });
 		if (options?.selection) editor.setSelection(options.selection);
 	},
 	focusActiveEditor: () => editor.focus(),
@@ -137,15 +163,34 @@ if (launchControls) {
 }
 const services = store.add(new InstantiationService(support.register(new ServiceCollection(
 	[IDebugService, debug], [IEditorService, editors], [IThemeService, theme],
+	[IAccessibleViewService, new SyncDescriptor(AccessibleViewService)],
+	[IQuickInputService, new SyncDescriptor(QuickInputService)],
 	[IConfigurationService, StandaloneServices.get(IConfigurationService)],
 	[IContextKeyService, StandaloneServices.get(IContextKeyService)],
 	[IKeybindingService, StandaloneServices.get(IKeybindingService)],
-	[IAccessibleViewService, { show: () => false, getOpenAriaHint: () => undefined, disableHint: async () => { }, showAccessibleViewHelp: () => { }, dispose() { }, [Symbol.dispose]() { } }],
 	[IContextMenuService, { onDidShowContextMenu: Event.None, onDidHideContextMenu: Event.None, showContextMenu() { }, hideContextMenu() { } }],
 ))));
 registerCodeEditorServices(services);
+services.registerInstance(ILayoutService, store.add(new BrowserLayoutService({ root: document.body })));
+const openedLinks: string[] = [];
+services.get(IOpenerService).setDefaultExternalOpener({ openExternal: async target => { openedLinks.push(target); return true; } });
 const storage = store.add(new BrowserStorageService({ ownerWindow: window, workspaceId: new URLSearchParams(location.search).get('console-workspace') ?? 'debug-console-integration', flushInterval: 0 }));
 services.registerInstance(IStorageService, storage);
+StandaloneServices.initialize().registerInstance(IExtensionService, services.get(IExtensionService));
+StandaloneServices.initialize().registerInstance(IAccessibleViewService, services.get(IAccessibleViewService));
+const editor = store.add(create(document.querySelector<HTMLElement>('#editor')!, { model, automaticLayout: true }));
+
+if (new URLSearchParams(location.search).has('status-color')) {
+	const statusbar = store.add(new StatusbarService());
+	services.registerInstance(IStatusbarService, statusbar);
+	const root = document.createElement('div');
+	root.id = 'debug-statusbar';
+	document.body.append(root);
+	store.add(services.createInstance(StatusbarPart, root, statusbar));
+	store.add(services.createInstance(StatusBarColorProvider));
+}
+const chatContexts = new ChatContextPickService();
+store.add(new DebugChatContextContribution(debug, chatContexts));
 const disassemblyContainer = document.createElement('div');
 document.body.append(disassemblyContainer);
 const disassembly = store.add(registerTestComponentServices(services).createInstance(DisassemblyView));
@@ -155,8 +200,7 @@ disassembly.domNode.hidden = true;
 if (new URLSearchParams(location.search).has('welcome')) {
 	debug.configurations = [];
 }
-const { pane, part, container: debugContainer } = support.createContainer(services, document.querySelector<HTMLElement>('#debug')!);
-pane.setVisible(true);
+const { part, container: debugContainer } = support.createContainer(services, document.querySelector<HTMLElement>('#debug')!);
 if (!new URLSearchParams(location.search).has('welcome')) debug.activate(session);
 const debugConsole = debug.replModel;
 let consolePane: Repl | undefined;
@@ -178,6 +222,15 @@ let pendingAssignment: DeferredPromise<IDebugVariable> | undefined;
 let pendingDataInfo: DeferredPromise<IDataBreakpointInfoResponse> | undefined;
 
 window.ashDebugIntegration = {
+	endSessions: () => { for (const candidate of debug.sessions) (candidate as MockDebugSession).state = 'terminated'; debug.activate(undefined); },
+	loadedSourcesView: async () => { await services.get(IViewsService).openView('workbench.debug.loadedScriptsView', true); },
+	chatContext: async () => (await chatContexts.items[0].providePicks('parent'))[0]?.attachment.resolve(),
+	debugHover: () => { editor.setPosition(new Position(2, 14)); editor.getContribution<ContentHoverController>('editor.contrib.hover')!.showContentHover(new Position(2, 14)); },
+	quickAccess: () => services.get(IQuickInputService).quickAccess.show('debug '),
+	showDebugHelp: () => services.get(IAccessibleViewService).show(AccessibleViewType.Help),
+	consoleANSI: () => { session.emitOutput('\x1b[31;1merror\x1b[0m https://exa\x1b[32mmple.test\x1b[0m/path\n'); },
+	command: id => services.get(ICommandService).executeCommand(id),
+	notifications: () => support.notifications.model.getNotifications().map(notification => notification.message),
 	consoleOutput: () => {
 		const group = session.replElementsRevision + 1;
 		session.emitConsoleEntry({ kind: 'group', output: 'Build group\n', collapsed: true });
@@ -224,6 +277,13 @@ window.ashDebugIntegration = {
 		return { duration: performance.now() - started, output: debugConsole.activeSession?.output };
 	},
 	openedSources: () => openedSources,
+	consoleLinks: () => {
+		support.documents.set(resource.toString(), 'const answer = 42;\nconsole.log(answer);\n');
+		session.emitOutput('See https://exa');
+		session.emitOutput('mple.test/path?q=one#two.\n');
+		session.emitOutput('File /workspace/main.ts:2:1 and /workspace/missing.ts:9\n');
+	},
+	openedLinks: () => openedLinks,
 	launches: () => launches,
 	refreshConfigurations: () => debug.refresh(),
 	selectedConfiguration: () => debug.getConfigurationManager().selectedConfiguration?.id,
@@ -270,6 +330,15 @@ window.addEventListener('pagehide', () => store.dispose(), { once: true });
 declare global {
 	interface Window {
 		ashDebugIntegration: {
+			endSessions(): void;
+			loadedSourcesView(): Promise<void>;
+			chatContext(): Promise<{ name: string; content: string; } | undefined>;
+			debugHover(): void;
+			quickAccess(): void;
+			showDebugHelp(): boolean;
+			consoleANSI(): void;
+			command(id: string): Promise<unknown>;
+			notifications(): readonly string[];
 			consoleOutput(): void;
 			consoleInput(): { value: string; start: number; end: number; selection: string; lineCount: number; height: number; };
 			consoleStats(): { total: number; filtered: number; };
@@ -285,6 +354,8 @@ declare global {
 			structuredOutput(): void;
 			burstOutput(count: number): { duration: number; output: string | undefined; };
 			openedSources(): readonly unknown[];
+			consoleLinks(): void;
+			openedLinks(): readonly string[];
 			launches(): readonly string[];
 			refreshConfigurations(): Promise<readonly unknown[]>;
 			selectedConfiguration(): string | undefined;

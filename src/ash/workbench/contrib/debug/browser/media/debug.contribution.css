@@ -27,3 +27,8 @@
 	border: var(--ash-strokeThickness) solid currentColor;
 	background: transparent;
 }
+.ash-debug-inline-value {
+	color: var(--ash-description-foreground);
+	font-style: italic;
+	border: var(--ash-strokeThickness) solid var(--ash-contrastBorder);
+}

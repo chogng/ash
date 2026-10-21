@@ -1,3 +1,6 @@
+import { TestExtensionService } from '../../../../test/common/testExtensionServices.js';
+import { TestConfigurationService } from '../../../../services/configuration/test/common/testServices.js';
+import { ContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { JSDOM } from 'jsdom';
@@ -22,7 +25,10 @@ test('Breakpoint editor contribution projects semantic glyph-margin decorations'
 	using model = new TextModel('first\nsecond\nthird', { resource });
 	using debug = new BreakpointDebugService(resource);
 	using mouseDown = new Emitter<IEditorMouseEvent>();
-	using contribution = new BreakpointEditorContribution({ getDomNode: () => editorNode, onMouseDown: mouseDown.event }, model, debug as unknown as IDebugService);
+	using extensions = new TestExtensionService();
+	using configuration = new TestConfigurationService();
+	using context = new ContextKeyService();
+	using contribution = new BreakpointEditorContribution({ getDomNode: () => editorNode, onMouseDown: mouseDown.event }, model, debug as unknown as IDebugService, extensions, configuration, context);
 
 	assert.deepEqual(decorationState(model), [{ lineNumber: 2, lane: GlyphMarginLane.Left, persistLane: true, className: 'ash-debug-breakpoint-gutter enabled verified' }]);
 
@@ -47,7 +53,10 @@ test('Debug breakpoint controller consumes the public glyph-margin mouse target'
 	using model = new TextModel('first\nsecond', { resource });
 	using debug = new BreakpointDebugService(resource);
 	using mouseDown = new Emitter<IEditorMouseEvent>();
-	using contribution = new BreakpointEditorContribution({ getDomNode: () => editorNode, onMouseDown: mouseDown.event }, model, debug as unknown as IDebugService);
+	using extensions = new TestExtensionService();
+	using configuration = new TestConfigurationService();
+	using context = new ContextKeyService();
+	using contribution = new BreakpointEditorContribution({ getDomNode: () => editorNode, onMouseDown: mouseDown.event }, model, debug as unknown as IDebugService, extensions, configuration, context);
 	const browserEvent = new dom.window.MouseEvent('pointerdown', { bubbles: true, cancelable: true, button: 0, buttons: 1 });
 	mouseDown.fire({
 		event: new StandardMouseEvent(browserEvent as unknown as MouseEvent),

@@ -174,7 +174,7 @@ export function workbenchInstantiationService(owner?: Pick<DisposableStore, 'add
 export function registerTestWorkbenchInteractionServices(owner: DisposableStore, services: InstantiationService): void {
 	services.registerSingleton(IFileSearchService, () => services.createInstance(BrowserFileSearchService));
 	const viewContext = owner.add(new ContextKeyService());
-	const descriptors = owner.add(new ViewDescriptorService({ registry: owner.add(new WorkbenchViewRegistry()) }, viewContext));
+	const descriptors = owner.add(new TestViewDescriptorService({ registry: owner.add(new WorkbenchViewRegistry()) }, viewContext));
 	// Service scenarios have no UI Parts. The real view owner returns null for
 	// unregistered views; Web/Electron scenarios exercise their actual containers.
 	services.registerInstance(IViewsService, owner.add(new ViewsService(descriptors, {
@@ -189,4 +189,21 @@ export function registerTestWorkbenchInteractionServices(owner: DisposableStore,
 	owner.add(toDisposable(() => window.window.close()));
 	services.registerInstance(IQuickInputService, owner.add(new TestQuickInputService({ container: window.window.document.body, contextKeyService: owner.add(new ContextKeyService()) })));
 	if (!services.has(INotificationService)) services.registerInstance(INotificationService, owner.add(new NotificationService()));
+}
+
+/** Assembles the real Views owner with isolated profile storage for non-window units. */
+export class TestViewDescriptorService extends ViewDescriptorService {
+	constructor(options: ConstructorParameters<typeof ViewDescriptorService>[0], contextKeys: IContextKeyService, storage?: IStorageService) {
+		const resources = new DisposableStore();
+		const services = resources.add(new InstantiationService());
+		services.registerInstance(IContextKeyService, contextKeys);
+		if (!storage) {
+			const browser = new JSDOM('', { url: 'https://views.test' });
+			resources.add(toDisposable(() => browser.window.close()));
+			storage = resources.add(new BrowserStorageService({ ownerWindow: browser.window as unknown as Window, workspaceId: 'views-test', flushInterval: 0 }));
+		}
+		services.registerInstance(IStorageService, storage);
+		super(options, services);
+		this._register(resources);
+	}
 }

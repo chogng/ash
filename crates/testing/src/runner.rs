@@ -269,23 +269,6 @@ pub(crate) fn prepare_debug(
         &test.target,
         cancellation,
     )?;
-    #[cfg(target_os = "macos")]
-    let adapter_program = {
-        let output = execute(
-            authorization,
-            "xcrun",
-            &["--find", "lldb-dap"],
-            cancellation,
-        )?;
-        if output.exit_code != Some(0) || output.stdout.trim().is_empty() {
-            return Err(TestingError::Failed(
-                "LLVM lldb-dap is required to debug Rust tests".into(),
-            ));
-        }
-        output.stdout.trim().to_owned()
-    };
-    #[cfg(not(target_os = "macos"))]
-    let adapter_program = "lldb-dap".to_owned();
     Ok(crate::DebugLaunch {
         test_id: test.id.clone(),
         program,
@@ -298,7 +281,6 @@ pub(crate) fn prepare_debug(
             "--test-threads=1".into(),
         ],
         directory: test.directory.to_string_lossy().into_owned(),
-        adapter_program,
     })
 }
 

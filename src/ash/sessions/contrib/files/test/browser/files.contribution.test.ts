@@ -1,3 +1,4 @@
+import { TestViewDescriptorService } from '../../../../../workbench/test/browser/workbenchTestServices.js';
 import { registerTestComponentServices } from '../../../../../workbench/test/common/testEditorServices.js';
 import { browserEnvironment } from '../../../../../editor/test/browser/testEditorDom.js';
 import assert from 'node:assert/strict';
@@ -15,7 +16,6 @@ import { IFileService } from '../../../../../platform/files/common/files.js';
 import { ASH_REMOTE_SCHEME } from '../../../../../platform/remote/common/remote.js';
 import { INotificationService } from '../../../../../platform/notification/common/notification.js';
 import { WorkspaceFolderCountContext, IsSessionsWindowContext, ResourceSchemeContext } from '../../../../../workbench/common/contextkeys.js';
-import { ViewDescriptorService } from '../../../../../workbench/services/views/browser/viewDescriptorService.js';
 import { ViewPaneContainer } from '../../../../../workbench/browser/parts/views/viewPaneContainer.js';
 import { IEditorGroupsService, type IEditorGroup } from '../../../../../workbench/services/editor/common/editorGroupsService.js';
 import { FileEditorInput } from '../../../../../workbench/contrib/files/browser/editors/fileEditorInput.js';
@@ -30,7 +30,7 @@ import { SESSIONS_FILES_EMPTY_VIEW_ID, SESSIONS_FILES_VIEW_ID } from '../../brow
 test('Sessions Files selects one view from the current folder state and creates the localized empty pane', () => {
 	using contexts = new ContextKeyService();
 	const folders = WorkspaceFolderCountContext.bindTo(contexts);
-	using descriptors = new ViewDescriptorService({ registry: SessionsViewRegistry }, contexts);
+	using descriptors = new TestViewDescriptorService({ registry: SessionsViewRegistry }, contexts);
 	const model = descriptors.getViewContainerModel(SESSIONS_FILES_CONTAINER_ID);
 	const visibleIds = (): string[] => model.visibleViewDescriptors.map(view => view.id);
 	assert.deepEqual(visibleIds(), [SESSIONS_FILES_EMPTY_VIEW_ID]);

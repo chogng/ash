@@ -2,6 +2,14 @@
 
 > 状态：已确认的 Rust Debug 领域迁移和 Workbench 职责拆分已接入生产。Rust 拥有 DAP client、初始化／执行状态、断点绑定、检查编排、工作区定义与 SQLite 持久化、实时异常选择、父子会话和结构化输出。TS 保留配置／编辑器／Tasks／Terminal 接入、v1/v2 Memento 单向迁移和窗口 UI。SSH 资源绑定执行 Environment；Academic 不组装 Tasks、Testing 或 Debug。真实环境验收按实际记录区分，不以源码接通代替。具体实现见 [client](../crates/debug-client/README.md)、[manager](../crates/debug-manager/README.md)、[transport](../crates/debug-adapter/README.md) 和 [Workbench](../src/ash/workbench/contrib/debug/README.md)。
 
+## 本轮复核补齐
+
+暂停源码的悬浮检查和行内值共用现有 editor hover/decorations；异常详情使用同一编辑器坐标与独立无障碍帮助。Loaded Scripts 独立视图和命令查询适配器的源码目录，也能打开 sourceReference 虚拟脚本。Variables 的“查看内存”及同名命令通过 FileService 以十六进制显示原始字节，保存会写入适配器；继续执行或检查代次变化后必须重新打开，旧视图不能继续读写。
+
+适配器进度接入共享通知；可选 `accessibility.debugWatchVariableAnnouncements` 播报当前 Watch 值变化，`debug.confirmOnExit` 控制退出确认。Chat 的添加上下文提供暂停帧和变量快照，不自动发送。变量可视化提供有界变量树及 Ash 扩展命令输出；扩展声明见 [SDK 说明](../sdk/typescript/README.md)。状态栏颜色使用可释放的主题样式；F9/gutter 共用断点语言及 when 策略，`debug.allowBreakpointsEverywhere` 保留现有默认行为。
+
+原“不适用”30 项已逐项重判；真实能力缺口、已有承接及架构差异分别记录在 [53 路径复核](../src/ash/workbench/contrib/debug/README.md#53-path-responsibility-review)，不以没有调用方排除未实现功能。
+
 ## 快速理解
 
 Code 可以从 `.vscode/launch.json` 启动或附加到一个调试目标，并同时运行多个 DAP 会话。用户可以设置持久化行断点、选择线程和栈帧、递归展开和修改变量、维护 Watch、在调试控制台求值、启用异常断点、读取适配器提供的虚拟源码，以及启动 compound 配置。Rust 后端负责 DAP 请求配对、初始化、能力、执行状态、传输与资源；Workbench 按原 owner 接入配置提供者、编辑器、Tasks、Terminal 和窗口交互。
@@ -29,7 +37,7 @@ Rust 同时使在途 stackTrace/scopes/variables/setVariable 在恢复执行、�
 
 会话断点运行意图和绑定已迁入 `breakpoints.rs`：前端只提交带编辑版本的 source/function/data/instruction 意图；Rust 决定能力过滤、源文件分组、整组替换顺序和旧源清空，只有仍匹配当前意图的回复才能建立绑定。适配器主动的 new/changed/removed 也更新同一份绑定。前端的 protocolBreakpoints、syncedBreakpointSources 和 breakpointSync 队列已退出生产链。未支持的条件不会被降级为无条件断点，跨会话的变量/指令地址不会发送或覆盖验证状态。
 
-`inspection.rs` 已拥有 threads → stack、scopes → variables、子变量和批量 Watch 求值。每次查询携带显式线程/帧及 inspectionRevision，Rust 在发送前拒绝旧暂停代次，并使迟到的中间步骤和终态失效。Watch 单个表达式、scope 单个变量请求失败不会抹掉其他结果；任务数量、期限与结果内存都有界，终态只消费一次。Variables、Watch 和 Call Stack 视图分别请求领域结果，Call Stack 处理线程／帧选择和源码打开；`DebugViewPane` 只负责组合。前端不再编排这些 DAP 请求链。共享 [debug-contract](../crates/debug-contract/README.md) 定义领域值，RPC/生成 decoder 仍归 App Server protocol。
+`inspection.rs` 已拥有 threads → stack、scopes → variables、子变量和批量 Watch 求值。每次查询携带显式线程/帧及 inspectionRevision，Rust 在发送前拒绝旧暂停代次，并使迟到的中间步骤和终态失效。Watch 单个表达式、scope 单个变量请求失败不会抹掉其他结果；任务数量、期限与结果内存都有界，终态只消费一次。Variables、Watch 和 Call Stack 独立注册并分别请求领域结果；DebugService 选择默认暂停帧并打开源码，Call Stack 提交显式线程／帧选择，不再依赖视图创建。前端不再编排这些 DAP 请求链。共享 [debug-contract](../crates/debug-contract/README.md) 定义领域值，RPC/生成 decoder 仍归 App Server protocol。
 
 工作区定义/持久化、实时异常过滤器、父子关系和结构化输出现均由 Rust 拥有。Workbench 的 REPL 模型只保留会话选择、标签和带修订的只读快照；过滤和输入历史归 UI，补全经领域会话调用 Rust 的请求 owner。`rawDebugSession.ts` 保留领域调用、inline IO 桥接和释放确认。协议端口见 [App Server DAP 会话](app-server-api.md#dap-会话与请求调度)。
 
@@ -100,7 +108,7 @@ Workbench 发送明确的会话与栈帧身份执行求值，不把某窗口的�
 
 输出使用已有 `AsyncDataTree` 管理展开、焦点、行身份和懒加载子变量。`replViewer.ts` 的 `ReplDataSource` 读取 Rust 快照并用原 inspectionRevision 请求子变量；同组无换行的输出片段仅在显示层派生成同一行，不改后端日志。无障碍纯文本读取可见树元素，覆盖过滤／折叠及已加载对象，不依赖 DOM 是否呈现。
 
-`DebugViewPane` 只组合检查侧栏、欢迎内容和会话控制。`variablesView.ts` 拥有作用域／变量展开与赋值，`watchExpressionsView.ts` 拥有 Watch 编辑与逐帧刷新，`callStackView.ts` 拥有线程／栈选择和源码导航，`breakpointsView.ts` 拥有断点编辑。它们是由 DI 创建的真实 `ViewPane`，各自释放控件和过期查询。`common/debugViewModel.ts` 是窗口内会话／线程／帧焦点的唯一 owner，`IDebugService.getViewModel()` 将同一快照提供给检查视图、REPL、反汇编和扩展事件；`DebugService` 不再保存第二份焦点。
+`DebugViewPaneContainer`（`debugViewlet.ts`）只拥有标题动作、可见性条件和内联 chrome 的高度；布局、隐藏偏好和独立视图创建归通用容器，会话控制归 `DebugToolBar`。`variablesView.ts` 拥有作用域／变量展开与赋值，`watchExpressionsView.ts` 拥有 Watch 编辑与逐帧刷新，`callStackView.ts` 拥有线程／栈选择和源码导航，`breakpointsView.ts` 拥有断点编辑。它们是由 DI 创建的真实 `ViewPane`，各自释放控件和过期查询。`common/debugViewModel.ts` 是窗口内会话／线程／帧焦点的唯一 owner，`IDebugService.getViewModel()` 将同一快照提供给检查视图、REPL、反汇编和扩展事件；`DebugService` 不再保存第二份焦点。
 
 实施从 Rust DAP client 与可验证的单会话契约开始，再逐段迁移 manager 状态、App Server 产品端口及消费者；每个切片只保留一个有效执行 owner。已存在的 Testing 调试入口、`MainThreadDebugService`、配置 provider、descriptor、tracker、inline/parent session 与 Remote 路径都属于迁移回归范围。前端可独立闭合的交互不必等待整条后端重写，但结构化输出、变量引用和会话身份必须使用已就绪的领域契约。单元与契约测试之外，还需真实 adapter、Desktop/连接后端的 Browser、远端及扩展生命周期验证；纯 TUI 不因复用 Rust crate 自动加载调试扩展。
 
@@ -161,11 +169,46 @@ compound 启动中任一配置失败时，已经启动的会话会回滚。自�
 
 具体调试器可以由可选 Rust 扩展提供。内置包 [`debug-lldb`](../extensions/debug-lldb/README.md) 为 CodeLLDB 注册 `lldb`，首次调试时下载固定版本及 SHA-256 的完整平台运行包，校验、解压后原子发布到执行环境的缓存；初始配置发现不触发下载。状态栏显示下载和解压进度，可点击取消或在失败时重试，命令面板也提供安装/重试及取消入口。多个窗口用磁盘锁协调同一缓存，各自拥有调用和取消；完整缓存支持离线复用，开发和离线部署可用扩展程序的 `--prepare-runtime` 提前准备。`debug.lldb.codeLldbPath` 可选择已有 CodeLLDB，`debug.lldb.runtimeDirectory` 可选择预填充目录。原有 `lldb-dap` 类型及 `debug.lldb.adapterPath`、`debug.lldb.adapterArgs` 保留为已安装 LLVM 工具链的接入方式。停用会撤销注册并回收准备任务，缺少扩展时不回落到内置 LLDB 实现。运行会话、断点绑定与检查编排由 Rust manager 拥有；Workbench 保留定义的 UI facade、选择与 REPL，Adapter 进程由共享 Rust DAP runtime 启动和回收。
 
+Rust Testing 的 `prepareDebug` 只构建并返回测试可执行文件、精确用例参数与工作目录。Workbench 通过 `type: "lldb"` 请求同一 provider，使用 Rust formatter 和 Debug Console 输出；Testing 不运行 `xcrun`、选择适配器路径或维护另一套安装逻辑。缺少或停用 provider 时，沿 Debug 的现有失败路径返回不可用，不启动系统适配器作为备用实现。
+
+### JavaScript 调试、自动附加与服务就绪
+
+Ash 预装两个独立 Rust provider。`debug-javascript` 复用 MIT 许可的官方 `vscode-js-debug` standalone DAP server；适配器自身仍是 JavaScript，自动附加的选择、鉴权、终端环境、broker 和生命周期由 Rust 实现。`debug-server-ready` 通过公开 tracker／DebugEvents、Debug 启动和 Opener 契约工作，可用于其他调试类型。共享 Rust Debug manager 继续拥有唯一的 DAP client、会话图和执行状态。
+
+适配器固定为 `v1.140.0`，大小和 SHA-256 由 [runtime.json](../extensions/debug-javascript/runtime.json) 单独管理；构建通过现有下载校验器获取 standalone tar 包，拒绝越界／链接／重复成员并保留 LICENSE。随 Desktop 资源分发，运行时复用 Ash 管理的 Node 或开发时 Electron 的 Node 模式；最终用户不需要安装 Rust、Cargo 或 VS Code 扩展宿主。调试 Node 程序可指定 `runtimeExecutable`；Chrome／Edge 仍需对应浏览器。
+
+Node 启动配置使用 `type: "node"`、`request: "launch"` 和 `program`，附加使用 `request: "attach"`。provider 同时接纳 `pwa-node`、`chrome`／`pwa-chrome`、`msedge`／`pwa-msedge`。TS 仍需编译后的 JS 与 source map；配置 `outFiles` 指向输出目录。入口脚本的 source map 绑定会先暂停，避免短脚本越过已有 TS 断点。
+
+自动附加默认关闭。在设置中将 `debug.javascript.autoAttachFilter` 改为 `always`、`smart` 或 `onlyWithFlag`，然后新建集成终端。`smart` 使用 `debug.javascript.autoAttachSmartPattern` 指定排除 glob，默认排除 `node_modules`；`onlyWithFlag` 只附加已启用 Inspector 的程序。Rust 只接纳当前窗口发布给终端的临时凭据、工作区内 cwd 和 loopback Inspector，不扫描系统进程。小型 Node preload 只打开 Inspector、调用 Rust helper 和等待握手；provider 关闭或拒绝请求时，helper 会释放等待。非持久环境集合随停用／撤权撤销，旧终端中的凭据会失效。停止附加会话只分离调试器，终端程序由用户通过 Ctrl+C 结束。
+
+在父配置中添加下面的工作流，可在所属会话或其专属集成终端输出匹配时启动命名子配置。匹配按一次启动／重启代次触发一次，支持分块输出和 ANSI 控制序列。`killOnServerStop: true` 将子配置绑定到已有父子会话 owner；默认 false 时子配置独立运行。
+
+```json
+"serverReadyAction": {
+  "action": "startDebugging",
+  "pattern": "listening on (\\d+)",
+  "name": "Debug client",
+  "killOnServerStop": true
+}
+```
+
+`startDebugging` 的 `name` 与内联 `config` 二选一。`openExternally` 使用 `uriFormat`（恰好一个 `%s`）；省略时端口转换为 `http://localhost:<port>`，捕获的完整 HTTP(S) 地址直接使用。`debugWithChrome`／`debugWithEdge` 通过同一 JS provider 启动浏览器调试。正则采用 Rust `regex` 语法，不支持反向引用和 lookaround；不支持的配置会显示本地化错误。工作流只处理会话相关输出，后台任务和保留文本均有界，外部网址仍交给 Workbench Opener。
+
+会话停止、provider 停用／撤权与断连释放 tracker、broker、后台请求、adapter 子进程和环境集合。DAP `terminated` 之后由 Rust owner 发送一次 `disconnect` 确认，再允许 Workbench 释放连接，避免 multiplex adapter 等待子会话导致父会话退出卡住。实现与验收入口见 [JavaScript provider](../extensions/debug-javascript/README.md)、[server-ready provider](../extensions/debug-server-ready/README.md) 和 [Desktop 工作流测试](../test/smoke/areas/debug/debug-workflows.spec.ts)。
+
 当前已实现：已授权 stdio adapter、连接级归属、有界 framing/分页、显式和声明式适配器解析、初始化与请求配对、持久行断点和函数断点、变量数据断点、指令断点、异常断点、线程/栈/递归变量、Watch/`evaluate`、调试控制台、虚拟源码、多会话、compound、restart、Tasks 生命周期、`runInTerminal`、Code-only 组装和断点 gutter。Remote Workbench 复用相同协议让 App Server 在远端启动 adapter，并保持 Workspace 变量、断点、调用栈源码和集成终端都映射到同一个远端 Environment。
 
 当前还已接入 TCP server、OS named pipe 与 inline adapter，以及公开会话 API 子集、tracker、父子会话、`noDebug` 和父子控制台合并；这些行为通过当前 Workbench Session 接入 Rust 请求 client；运行语义由 Rust manager 拥有；这不证明任意 VS Code 调试扩展完整兼容。Select and Start 支持 Dynamic provider 选择；类型重定向会先激活目标扩展，再执行目标配置回调与 descriptor。完整 namespace、部分会话选项和跨进程恢复仍有缺口，兼容细节由 Workbench README 维护。
 
-Debug Console 已实现过滤、结构化分组/对象/源码、工作区输入和过滤历史、选中栈帧求值及 DAP 补全。过滤视图宿主、真实编辑器多行输入和检查视图职责已接通；真实环境验收边界见根目录 [TODO](../TODO.md#debug--todo)。
+Debug Console 已实现过滤、结构化分组/对象/源码、工作区输入和过滤历史、选中栈帧求值及 DAP 补全。过滤视图宿主、真实编辑器多行输入和检查视图职责已接通；最近的真实 Desktop 验收见 [Debug 验证记录](../src/ash/workbench/contrib/debug/README.md#desktop-acceptance-closure-2026-10-21)。
+
+### Rust 工作流验收（2026-10-21）
+
+macOS arm64 的真实 Ash Electron + App Server 整批 11 项通过：新增 JS／TS 源码断点、source map、变量和单步，控制台与集成终端的 server-ready 单次触发及子进程回收，Node 自动附加、停止后的终端程序存活、停用后的旧终端凭据失效，provider 停用、窗口重载、原生 Opener，以及中文错误通知／无障碍帮助和焦点恢复；同时回归已有扩展父子控制台、DAP 反向子会话和真实 Rust Test Debug。预装 provider 的授权由现有 Disable 策略管理。
+
+Debug 前端定向 171 项通过；两个 Rust provider、SDK、manager 与 App Server 的 check／test／warnings 通过（共 1,098 项 Rust 测试，另有 12 项现有忽略）；构建 Python 264 项完成（1 项跳过）。`just dependencies` 通过，workspace 为 233 members，未升级已有依赖版本。正常 Desktop 构建、自动化类型检查和中英文 manifest 解析通过。两个新 provider 的 Windows x64、Linux x64 测试目标均通过交叉编译检查；这些平台未执行 Desktop 运行验收。Chrome／Edge 实际浏览器启动和 SSH 自动附加也不属于本次已执行场景。
+
+原始报告、命令日志和源码摘要见 [.build/debug-rust-workflows](../.build/debug-rust-workflows/validation.json)，整批 Desktop 报告见 [desktop-report](../.build/debug-rust-workflows/desktop-report/index.html)。
 
 ## 本轮验证边界
 
@@ -173,4 +216,4 @@ macOS 上已完成 `just verify ash-debug-manager`（51 项测试及 check/warni
 
 真实 Desktop 冒烟已覆盖检查／Watch／单步、observer、inline 清理、父子终止、实时异常与结构化输出；扩展配置取消、空 descriptor、停用／卸载回收的修正后定向测试通过。控制台过滤、重载后输入／过滤历史恢复、草稿、多行 UTF-16 补全和所选栈帧求值的最终 Desktop 与 Web 场景均通过。Web 曾在进入场景前发生一次后端 socket deadline，单独重试正常启动；重载测试随后修正了误点已选活动栏导致侧栏关闭的步骤。同机隔离 OpenSSH 场景在最新构建通过，独立确认远端 profile／进程、栈帧检查、多行控制台与进程回收；这不是跨机器网络验收。首次失败日志与修正后结果均保留在本地构建诊断中。
 
-本机 Developer Mode 关闭，本轮没有启动需要系统调试授权的真实 LLDB debuggee，也没有修改系统安全设置。确定性 DAP、Desktop 与同机 SSH 验证不替代真实 CodeLLDB／lldb-dap 程序验收；完整扩展 namespace 和跨进程活动会话恢复仍按 Workbench README 的兼容边界处理。
+上述早期验证没有启动真实 LLDB debuggee。2026-10-21 的补充 Desktop 验收已通过 CodeLLDB 对真实 Rust 测试的断点、继续执行和会话清理，且未更改系统 Developer Mode。系统 Apple LLDB 在本机 macOS 27.0.1 上加载 `/bin/echo` 和 Rust 测试时仍会在符号解析中崩溃，该独立工具链问题不记为已修复；Rust Testing 已退出强制选择系统 `lldb-dap` 的路径。完整扩展 namespace 和跨进程活动会话恢复仍按 Workbench README 的兼容边界处理。

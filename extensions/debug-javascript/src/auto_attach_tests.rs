@@ -1,0 +1,111 @@
+use super::*;
+
+fn fixture(root: &Path) -> Environment {
+    Environment {
+        address: "127.0.0.1:12345".parse().unwrap(),
+        secret: "test-secret".into(),
+        resources: root.into(),
+        policy: Arc::new(Mutex::new(Policy {
+            folders: vec![url::Url::from_directory_path(root).unwrap().to_string()],
+            ..Policy::default()
+        })),
+        error: "invalid".into(),
+    }
+}
+fn request(root: &Path) -> Attach {
+    Attach {
+        token: "test-secret".into(),
+        address: "127.0.0.1:12345".into(),
+        inspector: "ws://127.0.0.1:9000/unique-target".into(),
+        pid: 42,
+        cwd: root.to_string_lossy().into(),
+        script: root.join("main.js").to_string_lossy().into(),
+        flagged: false,
+    }
+}
+#[test]
+fn disabled_is_empty_and_credentials_never_persist() {
+    let root = tempfile::tempdir().unwrap();
+    let environment = fixture(root.path());
+    assert_eq!(
+        environment.collection(&json!({})).unwrap(),
+        json!({"persistent":false,"map":[],"descriptionMap":[]})
+    );
+    let collection = environment
+        .collection(&json!({"autoAttachFilter":"always"}))
+        .unwrap();
+    assert_eq!(collection["persistent"], false);
+    assert_eq!(collection["map"][0][1]["type"], 2);
+    assert!(
+        collection["map"][0][1]["value"]
+            .as_str()
+            .unwrap()
+            .contains("--require=")
+    );
+    assert!(environment.admit(&request(root.path())).is_some());
+}
+#[test]
+fn authority_workspace_and_inspector_are_checked_before_launch() {
+    let root = tempfile::tempdir().unwrap();
+    let other = tempfile::tempdir().unwrap();
+    let environment = fixture(root.path());
+    environment
+        .collection(&json!({"autoAttachFilter":"always"}))
+        .unwrap();
+    let mut input = request(root.path());
+    input.token = "retired".into();
+    assert!(environment.admit(&input).is_none());
+    input = request(other.path());
+    assert!(environment.admit(&input).is_none());
+    input = request(root.path());
+    input.inspector = "ws://example.com:9000/target".into();
+    assert!(environment.admit(&input).is_none());
+    environment.workspace(vec![]).unwrap();
+    assert!(environment.admit(&request(root.path())).is_none());
+}
+#[test]
+fn smart_and_explicit_flag_policies_are_distinct() {
+    let root = tempfile::tempdir().unwrap();
+    let environment = fixture(root.path());
+    let mut input = request(root.path());
+    environment
+        .collection(&json!({"autoAttachFilter":"smart"}))
+        .unwrap();
+    assert!(environment.admit(&input).is_some());
+    input.script = root
+        .path()
+        .join("node_modules/npm/bin/npm-cli.js")
+        .to_string_lossy()
+        .into();
+    assert!(environment.admit(&input).is_none());
+    environment
+        .collection(&json!({"autoAttachFilter":"onlyWithFlag"}))
+        .unwrap();
+    assert!(environment.admit(&input).is_none());
+    input.flagged = true;
+    assert!(environment.admit(&input).is_some());
+    environment
+        .collection(&json!({"autoAttachFilter":"disabled"}))
+        .unwrap();
+    assert!(environment.admit(&input).is_none());
+}
+#[test]
+fn invalid_policy_does_not_silently_enable_auto_attach() {
+    let root = tempfile::tempdir().unwrap();
+    let environment = fixture(root.path());
+    environment
+        .collection(&json!({"autoAttachFilter":"always"}))
+        .unwrap();
+    assert!(environment.admit(&request(root.path())).is_some());
+    assert!(
+        environment
+            .collection(&json!({"autoAttachFilter":"surprise"}))
+            .is_err()
+    );
+    assert!(
+        environment
+            .collection(&json!({"autoAttachFilter":"smart","autoAttachSmartPattern":["["]}))
+            .is_err()
+    );
+    assert!(environment.admit(&request(root.path())).is_none());
+}

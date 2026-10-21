@@ -1,0 +1,32 @@
+.ash-debug-exception {
+	box-sizing: border-box;
+	max-width: min(560px, 100%);
+	max-height: 240px;
+	padding: 8px;
+	overflow: auto;
+	color: var(--ash-editor-hoverForeground);
+	background: var(--ash-editor-hoverBackground);
+	border: 1px solid var(--ash-editor-hoverBorder);
+}
+
+.ash-debug-exception h2 {
+	margin: 0 0 6px;
+	font-size: var(--ash-fontSize-heading3);
+	font-weight: var(--ash-fontWeight-semiBold);
+}
+
+.ash-debug-exception pre {
+	margin: 0 0 8px;
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
+	font-family: inherit;
+}
+
+.ash-debug-exception pre:focus-visible {
+	outline: 1px solid var(--ash-focusBorder);
+	outline-offset: -1px;
+}
+
+:where(.hc-black, .hc-light) .ash-debug-exception {
+	border-color: var(--ash-contrastBorder);
+}

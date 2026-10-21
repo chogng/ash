@@ -19,7 +19,6 @@ export interface TestDebugLaunch {
 	readonly program: string;
 	readonly arguments: readonly string[];
 	readonly directory: string;
-	readonly adapterProgram: string;
 }
 
 export interface TestResult {

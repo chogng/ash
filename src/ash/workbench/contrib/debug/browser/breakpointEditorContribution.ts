@@ -1,4 +1,8 @@
-import './media/debugBreakpointDecorations.css';
+import { canSetBreakpointsIn } from '../common/breakpoints.js';
+import { IExtensionService } from '../../../services/extensions/common/extensionService.js';
+import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
+import { IContextKeyService } from '../../../../platform/contextkey/common/contextkey.js';
+import './media/debug.contribution.css';
 import { Disposable } from '../../../../base/common/lifecycle.js';
 import { MouseTargetType, type ICodeEditor } from '../../../../editor/browser/editorBrowser.js';
 import { type TextModel } from '../../../../editor/common/model/textModel.js';
@@ -14,7 +18,8 @@ export class BreakpointEditorContribution extends Disposable {
 	private readonly decorations;
 	private decorationIds: readonly TextDecorationId[] = Object.freeze([]);
 
-	constructor(editor: Pick<ICodeEditor, 'onMouseDown' | 'getDomNode'>, model: TextModel, @IDebugService private readonly debugService: IDebugService) {
+	constructor(editor: Pick<ICodeEditor, 'onMouseDown' | 'getDomNode'>, model: TextModel, @IDebugService private readonly debugService: IDebugService,
+		@IExtensionService extensions: IExtensionService, @IConfigurationService configuration: IConfigurationService, @IContextKeyService context: IContextKeyService) {
 		super();
 		const resource = model.uri;
 		this.decorations = this._register(new TextDecorationCollection<IDebugBreakpoint>(model));
@@ -23,6 +28,7 @@ export class BreakpointEditorContribution extends Disposable {
 		this._register(debugService.onDidChangeBreakpoints(() => this.updateDecorations()));
 		this._register(editor.onMouseDown(event => {
 			const target = event.target;
+			if (!canSetBreakpointsIn(model.getLanguageId(), extensions, configuration, context)) return;
 			if (target.type !== MouseTargetType.GUTTER_GLYPH_MARGIN || target.detail.glyphMarginLane !== GlyphMarginLane.Left || !target.position) return;
 			event.event.preventDefault();
 			event.event.stopPropagation();

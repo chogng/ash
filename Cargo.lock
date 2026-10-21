@@ -1330,6 +1330,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "ash-debug-javascript"
+version = "0.1.0"
+dependencies = [
+ "ash-external-ext-sdk",
+ "ash-sandboxing",
+ "globset",
+ "rand 0.9.5",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "tokio-tungstenite 0.28.0",
+ "url",
+]
+
+[[package]]
 name = "ash-debug-lldb"
 version = "0.1.0"
 dependencies = [
@@ -1363,6 +1378,17 @@ dependencies = [
  "sha2 0.10.9",
  "tempfile",
  "thiserror 2.0.21",
+ "url",
+]
+
+[[package]]
+name = "ash-debug-server-ready"
+version = "0.1.0"
+dependencies = [
+ "ash-external-ext-sdk",
+ "regex",
+ "serde",
+ "serde_json",
  "url",
 ]
 

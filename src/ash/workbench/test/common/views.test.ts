@@ -1,3 +1,7 @@
+import { ViewDescriptorService } from '../../services/views/browser/viewDescriptorService.js';
+import { BrowserStorageService } from '../../services/storage/browser/storageService.js';
+import { StorageScope, StorageTarget } from '../../../platform/storage/common/storage.js';
+import { TestViewDescriptorService } from '../browser/workbenchTestServices.js';
 import { MenuId } from '../../../platform/actions/common/actions.js';
 import { MenuService } from '../../../platform/actions/common/menuService.js';
 import { CommandsRegistry } from '../../../platform/commands/common/commands.js';
@@ -8,7 +12,7 @@ import { test } from "mocha";
 import { JSDOM } from 'jsdom';
 import { toDisposable } from '../../../base/common/lifecycle.js';
 import { ContextKeyExpr } from "../../../platform/contextkey/common/contextkey.js";
-import { ContextKeyService } from "../../../platform/contextkey/browser/contextKeyService.js";
+import { ContextKeyService, IContextKeyService } from "../../../platform/contextkey/browser/contextKeyService.js";
 import { SyncDescriptor } from "../../../platform/instantiation/common/descriptors.js";
 import {
 	IViewDescriptorService,
@@ -17,7 +21,6 @@ import {
 	ViewContainerLocation,
 	WorkbenchViewRegistry,
 } from "../../../workbench/common/views.js";
-import { ViewDescriptorService } from "../../../workbench/services/views/browser/viewDescriptorService.js";
 import { IViewsService } from '../../services/views/common/viewsService.js';
 
 test('container commands open in the invoking window and expire with their declaration', async () => {
@@ -37,8 +40,8 @@ test('moving a container changes routing while retaining its model and independe
 	using registry = new WorkbenchViewRegistry();
 	using registration = registry.registerViewContainer({ id: 'test.movable', title: 'Movable', location: ViewContainerLocation.Sidebar, isDefault: true });
 	using contexts = new ContextKeyService();
-	using first = new ViewDescriptorService({ registry }, contexts);
-	using other = new ViewDescriptorService({ registry }, contexts);
+	using first = new TestViewDescriptorService({ registry }, contexts);
+	using other = new TestViewDescriptorService({ registry }, contexts);
 	using views = registry.registerViews('test.movable', [testView('test.movable.view', 'View')]);
 	const model = first.getViewContainerModel('test.movable');
 	model.setVisible('test.movable.view', false);
@@ -56,7 +59,7 @@ test('moving a container changes routing while retaining its model and independe
 	assert.equal(first.getDefaultViewContainerLocation(container), ViewContainerLocation.Sidebar);
 	first.moveViewContainerToLocation(container, ViewContainerLocation.Panel);
 	assert.deepEqual(events, ['sidebar->panel']);
-	using restored = new ViewDescriptorService({ registry, viewContainerLocations: { 'test.movable': ViewContainerLocation.Panel } }, contexts);
+	using restored = new TestViewDescriptorService({ registry, viewContainerLocations: { 'test.movable': ViewContainerLocation.Panel } }, contexts);
 	assert.equal(restored.getViewContainerLocation(container), ViewContainerLocation.Panel);
 	first.moveViewContainerToLocation(container, ViewContainerLocation.Sidebar);
 	assert.deepEqual(events, ['sidebar->panel', 'panel->sidebar']);
@@ -67,7 +70,7 @@ test('moving a container changes routing while retaining its model and independe
 test("view descriptor models project registry and context visibility", () => {
 	using contextKeys = new ContextKeyService();
 	using registry = new WorkbenchViewRegistry();
-	using descriptors = new ViewDescriptorService({
+	using descriptors = new TestViewDescriptorService({
 		registry,
 	}, contextKeys);
 	using containerRegistration = registry.registerViewContainer({
@@ -144,7 +147,7 @@ test("view descriptor service resolves default containers by location", () => {
 		order: 30,
 		isDefault: true,
 	});
-	using descriptors = new ViewDescriptorService({
+	using descriptors = new TestViewDescriptorService({
 		registry,
 	}, contextKeys);
 
@@ -167,7 +170,7 @@ test("view descriptor service keeps a window-local container order", () => {
 	using first = registry.registerViewContainer({ id: "test.first", title: "First", location: ViewContainerLocation.Panel, order: 10 });
 	using second = registry.registerViewContainer({ id: "test.second", title: "Second", location: ViewContainerLocation.Panel, order: 20 });
 	using third = registry.registerViewContainer({ id: "test.third", title: "Third", location: ViewContainerLocation.Panel, order: 30 });
-	using descriptors = new ViewDescriptorService({ registry }, contextKeys);
+	using descriptors = new TestViewDescriptorService({ registry }, contextKeys);
 	const changes: ViewContainerLocation[] = [];
 	using listener = descriptors.onDidChangeViewContainerOrder((location) => changes.push(location));
 
@@ -240,8 +243,8 @@ test('view visibility menus execute in the invoking window and expire with decla
 	containerContext.setContext('viewContainer', 'test.visibility');
 	using registry = new WorkbenchViewRegistry();
 	using container = registry.registerViewContainer({ id: 'test.visibility', title: 'Visibility', location: ViewContainerLocation.Sidebar });
-	using first = new ViewDescriptorService({ registry }, firstContext);
-	using second = new ViewDescriptorService({ registry }, secondContext);
+	using first = new TestViewDescriptorService({ registry }, firstContext);
+	using second = new TestViewDescriptorService({ registry }, secondContext);
 	using registrations = registry.registerViews('test.visibility', [
 		testView('test.visibility.first', 'First'),
 		testView('test.visibility.second', 'Second'),
@@ -279,4 +282,81 @@ test('view visibility menus execute in the invoking window and expire with decla
 	assert.equal(first.getViewContainerById('test.visibility'), null);
 	assert.equal(second.getViewContainerById('test.visibility'), null);
 	assert.throws(() => registry.registerStaticViews('test.visibility', []), /disposed/i);
+});
+
+test('view visibility persists explicit profile choices across reconstruction without persisting when conditions', () => {
+	using registry = new WorkbenchViewRegistry();
+	registry.registerStaticViewContainer({ id: 'test.persist', title: 'Persist', location: ViewContainerLocation.Sidebar });
+	registry.registerStaticViews('test.persist', [
+		{ ...testView('test.persist.first', 'First'), when: ContextKeyExpr.has('enabled') },
+		{ ...testView('test.persist.fixed', 'Fixed'), canToggleVisibility: false },
+		{ ...testView('test.persist.hidden', 'Hidden'), hideByDefault: true },
+	]);
+	const browser = new JSDOM('', { url: 'https://views.test' });
+	try {
+		using storage = new BrowserStorageService({ ownerWindow: browser.window as unknown as Window, workspaceId: 'first', flushInterval: 0 });
+		using contexts = new ContextKeyService();
+		const enabled = contexts.createKey<boolean>('enabled', true);
+		using first = new TestViewDescriptorService({ registry }, contexts, storage);
+		const model = first.getViewContainerModel('test.persist');
+		model.setVisible('test.persist.first', false);
+		model.setVisible('test.persist.hidden', true);
+		const saved = storage.get('test.persist.state.hidden', StorageScope.PROFILE);
+		enabled.set(false);
+		enabled.set(true);
+		assert.equal(model.isVisible('test.persist.first'), false);
+		assert.equal(storage.get('test.persist.state.hidden', StorageScope.PROFILE), saved);
+		storage.switchWorkspace('second');
+		assert.equal(model.isVisible('test.persist.first'), false);
+		first.dispose();
+		using restoredStorage = new BrowserStorageService({ ownerWindow: browser.window as unknown as Window, workspaceId: 'second', flushInterval: 0 });
+		using restored = new TestViewDescriptorService({ registry }, contexts, restoredStorage);
+		assert.equal(restored.getViewContainerModel('test.persist').isVisible('test.persist.first'), false);
+		assert.equal(restored.getViewContainerModel('test.persist').isVisible('test.persist.fixed'), true);
+		assert.equal(restored.getViewContainerModel('test.persist').isVisible('test.persist.hidden'), true);
+		using otherProfile = new BrowserStorageService({ ownerWindow: browser.window as unknown as Window, workspaceId: 'second', profileId: 'other', flushInterval: 0 });
+		using other = new TestViewDescriptorService({ registry }, contexts, otherProfile);
+		assert.equal(other.getViewContainerModel('test.persist').isVisible('test.persist.first'), true);
+	} finally { browser.window.close(); }
+});
+
+test('view visibility observes stored changes, retains late views and rejects malformed complete state', () => {
+	using registry = new WorkbenchViewRegistry();
+	registry.registerStaticViewContainer({ id: 'test.stored', title: 'Stored', location: ViewContainerLocation.Sidebar });
+	registry.registerStaticViews('test.stored', [testView('test.stored.first', 'First')]);
+	const browser = new JSDOM('', { url: 'https://views.test' });
+	try {
+		using storage = new BrowserStorageService({ ownerWindow: browser.window as unknown as Window, workspaceId: 'stored', flushInterval: 0 });
+		const key = 'test.stored.state.hidden';
+		storage.store(key, JSON.stringify([{ id: 'test.stored.later', isHidden: true }]), StorageScope.PROFILE, StorageTarget.MACHINE);
+		using contexts = new ContextKeyService();
+		using descriptors = new TestViewDescriptorService({ registry }, contexts, storage);
+		const model = descriptors.getViewContainerModel('test.stored');
+		model.setVisible('test.stored.first', false);
+		registry.registerStaticViews('test.stored', [testView('test.stored.later', 'Later')]);
+		assert.equal(model.isVisible('test.stored.later'), false);
+		for (const invalid of ['{', '[{"id":"test.stored.first","isHidden":"false"}]', '[{"id":"test.stored.first","isHidden":false},{"id":"test.stored.first","isHidden":true}]']) {
+			storage.store(key, invalid, StorageScope.PROFILE, StorageTarget.MACHINE);
+			assert.equal(model.isVisible('test.stored.first'), false);
+		}
+		storage.remove(key, StorageScope.PROFILE);
+		assert.deepEqual(model.visibleViewDescriptors.map(view => view.id), ['test.stored.first', 'test.stored.later']);
+	} finally { browser.window.close(); }
+});
+
+test('view models require storage at the production constructor and preserve reentrant visibility changes', () => {
+	using registry = new WorkbenchViewRegistry();
+	registry.registerStaticViewContainer({ id: 'test.required', title: 'Required', location: ViewContainerLocation.Sidebar });
+	registry.registerStaticViews('test.required', [testView('test.required.first', 'First'), testView('test.required.second', 'Second')]);
+	using contexts = new ContextKeyService();
+	using incomplete = new InstantiationService();
+	incomplete.registerInstance(IContextKeyService, contexts);
+	assert.throws(() => incomplete.createInstance(ViewDescriptorService, { registry }), /storageService/);
+	using descriptors = new TestViewDescriptorService({ registry }, contexts);
+	const model = descriptors.getViewContainerModel('test.required');
+	using subscription = model.onDidChangeVisibleViewDescriptors(event => {
+		if (event.removed.some(view => view.id === 'test.required.first')) model.setVisible('test.required.second', false);
+	});
+	model.setVisible('test.required.first', false);
+	assert.deepEqual(model.visibleViewDescriptors, []);
 });

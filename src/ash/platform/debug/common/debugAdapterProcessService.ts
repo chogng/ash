@@ -113,6 +113,10 @@ export interface DebugSessionSnapshot {
 		readonly supportsDataBreakpoints: boolean;
 		readonly supportsInstructionBreakpoints: boolean;
 		readonly supportsDisassembleRequest: boolean;
+		readonly supportsReadMemoryRequest?: boolean;
+		readonly supportsWriteMemoryRequest?: boolean;
+		readonly supportsLoadedSourcesRequest?: boolean;
+		readonly supportsExceptionInfoRequest?: boolean;
 		readonly supportsSteppingGranularity: boolean;
 		readonly supportsCompletionsRequest: boolean;
 		readonly supportsCancelRequest: boolean;

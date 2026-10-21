@@ -1,0 +1,5 @@
+{
+  "displayName": "Server Ready Action",
+  "description": "Run server-ready actions through the Rust debug workflow.",
+  "error.configuration": "Invalid server-ready configuration or unsupported regular expression."
+}

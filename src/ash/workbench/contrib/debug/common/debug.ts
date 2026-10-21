@@ -9,7 +9,12 @@ import { RawContextKey } from '../../../../platform/contextkey/common/contextkey
 
 export const CONTEXT_DISASSEMBLY_VIEW_FOCUS = new RawContextKey<boolean>('disassemblyViewFocus', false);
 export const CONTEXT_DEBUG_STATE = new RawContextKey<string>('debugState', 'inactive');
-export const DEBUG_VIEW_ID = "workbench.view.debug";
+export const VARIABLES_VIEW_ID = 'workbench.debug.variablesView';
+export const WATCH_VIEW_ID = 'workbench.debug.watchExpressionsView';
+export const CALLSTACK_VIEW_ID = 'workbench.debug.callStackView';
+export const BREAKPOINTS_VIEW_ID = 'workbench.debug.breakPointsView';
+export const CONTEXT_DEBUG_UX = new RawContextKey<string>('debugUx', 'simple');
+export const CONTEXT_BREAKPOINTS_EXIST = new RawContextKey<boolean>('breakpointsExist', false);
 export const DISASSEMBLY_VIEW_ID = 'workbench.debug.disassemblyView';
 export const OPEN_DISASSEMBLY_VIEW_COMMAND_ID = 'debug.action.openDisassemblyView';
 export const DEBUG_CONSOLE_VIEW_ID = "workbench.panel.debugConsole";
@@ -242,6 +247,7 @@ export interface IDebugVariable {
 	readonly value: string;
 	readonly type?: string;
 	readonly variablesReference: number;
+	readonly memoryReference?: string;
 	readonly presentationHint?: {
 		readonly attributes?: readonly string[];
 		readonly lazy?: boolean;
@@ -279,6 +285,10 @@ export interface IDebugSessionCapabilities {
 	readonly supportsDataBreakpoints: boolean;
 	readonly supportsInstructionBreakpoints: boolean;
 	readonly supportsDisassembleRequest: boolean;
+	readonly supportsReadMemoryRequest?: boolean;
+	readonly supportsWriteMemoryRequest?: boolean;
+	readonly supportsLoadedSourcesRequest?: boolean;
+	readonly supportsExceptionInfoRequest?: boolean;
 	readonly supportsSteppingGranularity: boolean;
 	readonly supportsCompletionsRequest: boolean;
 	readonly supportsCancelRequest: boolean;
@@ -336,7 +346,48 @@ export interface IDebugCompletionsResponse {
 	readonly body: { readonly targets: readonly IDebugCompletionItem[]; };
 }
 
+export interface IDebugProgressStart {
+	readonly progressId: string;
+	readonly title: string;
+	readonly message?: string;
+	readonly percentage?: number;
+	readonly cancellable: boolean;
+}
+export interface IDebugProgressUpdate {
+	readonly progressId: string;
+	readonly message?: string;
+	readonly percentage?: number;
+}
+export interface IDebugMemoryRead {
+	readonly address: string;
+	readonly data: Uint8Array;
+	readonly unreadableBytes: number;
+}
+export interface IDebugExceptionDetails {
+	readonly message?: string;
+	readonly typeName?: string;
+	readonly stackTrace?: string;
+	readonly innerException?: readonly IDebugExceptionDetails[];
+}
+export interface IDebugExceptionInfo {
+	readonly exceptionId: string;
+	readonly description?: string;
+	readonly breakMode: string;
+	readonly details?: IDebugExceptionDetails;
+}
+
 export interface IDebugSession extends IDisposable {
+	readonly onDidProgressStart: Event<IDebugProgressStart>;
+	readonly onDidProgressUpdate: Event<IDebugProgressUpdate>;
+	readonly onDidProgressEnd: Event<{ readonly progressId: string; }>;
+	readonly onDidInvalidateMemory: Event<{ readonly memoryReference: string; readonly offset: number; readonly count: number; }>;
+	readonly onDidLoadedSource: Event<{ readonly reason: 'new' | 'changed' | 'removed'; readonly source: IDebugSource; }>;
+	loadedSources(): Promise<readonly IDebugSource[]>;
+	readMemory(memoryReference: string, offset: number, count: number): Promise<IDebugMemoryRead>;
+	writeMemory(memoryReference: string, offset: number, data: Uint8Array): Promise<number>;
+	exceptionInfo(threadId: number): Promise<IDebugExceptionInfo>;
+	cancelProgress(progressId: string): Promise<void>;
+
 	readonly id: string;
 	readonly name: string;
 	readonly onDidChangeName: Event<string>;
@@ -347,6 +398,8 @@ export interface IDebugSession extends IDisposable {
 	/** Resolved launch snapshot for extension inspection; source configuration remains available for restart. */
 	readonly resolvedConfiguration?: IDebugConfiguration;
 	readonly capabilities: IDebugSessionCapabilities;
+	/** Rust inspection epoch; paused resources expire when execution or inspection changes. */
+	readonly inspectionRevision: number;
 	readonly state: DebugSessionState;
 	readonly reason?: string;
 	readonly threadId?: number;
@@ -402,6 +455,8 @@ export interface IConfigurationManager {
 
 /** Client inspection selection shared by the Debug views and Extension Host facade. */
 export interface IViewModel {
+	readonly onWillUpdateViews: Event<void>;
+	updateViews(): void;
 	readonly focusedSession: IDebugSession | undefined;
 	readonly focusedThread: IDebugThread | undefined;
 	readonly focusedStackFrame: IDebugStackFrame | undefined;
@@ -435,6 +490,8 @@ export interface IDebugService extends IDisposable {
 	readonly onWillNewSession: Event<IDebugSession>;
 	readonly onDidNewSession: Event<IDebugSession>;
 	readonly onDidEndSession: Event<IDebugSession>;
+	/** Output from the integrated terminal created for this exact session. */
+	readonly onDidWriteTerminalData: Event<{ readonly session: IDebugSession; readonly data: string; }>;
 	refresh(): Promise<readonly IDebugConfiguration[]>;
 	registerDebugAdapterTrackerFactories(factories: readonly IDebugAdapterTrackerFactory[]): DebugAdapterTrackerFactoryRegistration;
 	registerDebugConfigurationProviders(providers: readonly IDebugConfigurationProvider[]): DebugConfigurationProviderRegistration;
@@ -447,7 +504,7 @@ export interface IDebugService extends IDisposable {
 	startDebugging(configuration: IDebugConfiguration, options?: IDebugSessionOptions): Promise<IDebugSession>;
 	startCompound(compound: IDebugCompound): Promise<readonly IDebugSession[]>;
 	setActiveSession(session: IDebugSession): void;
-	focusStackFrame(frame: IDebugStackFrame | undefined, thread?: IDebugThread): void;
+	focusStackFrame(frame: IDebugStackFrame | undefined, thread?: IDebugThread, session?: IDebugSession, options?: { explicit?: boolean; preserveFocus?: boolean; }): Promise<void>;
 	restart(session?: IDebugSession): Promise<IDebugSession>;
 	stop(session?: IDebugSession): Promise<void>;
 	stopAll(): Promise<void>;
@@ -623,3 +680,5 @@ function normalizeText(value: string, owner: string, maximum: number): string {
 	if (typeof value !== "string" || value.trim().length === 0 || value.length > maximum || value.includes("\0")) throw new TypeError(`${owner} must contain 1 to ${maximum} characters without NUL`);
 	return value.trim();
 }
+
+export const LOADED_SCRIPTS_VIEW_ID = 'workbench.debug.loadedScriptsView';

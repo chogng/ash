@@ -1,7 +1,7 @@
 import '../workbench/contrib/remote/browser/remote.contribution.js';
 import '../workbench/contrib/workspace/browser/workspace.contribution.js';
 import '../workbench/contrib/accessibility/browser/accessibility.contribution.js';
-import '../workbench/contrib/debug/browser/debugService.js';
+import '../workbench/contrib/debug/browser/debug.service.contribution.js';
 import '../workbench/services/testing/browser/testingServiceRegistration.js';
 import '../workbench/api/browser/extensionHost.contribution.js';
 import '../workbench/contrib/logs/common/logs.contribution.js';

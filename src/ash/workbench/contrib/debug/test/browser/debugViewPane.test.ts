@@ -1,3 +1,5 @@
+import { isCancellationError } from '../../../../../base/common/errors.js';
+import { IViewsService } from '../../../../services/views/common/viewsService.js';
 import type { IResourceEditorInput } from '../../../../common/editor.js';
 import assert from "node:assert/strict";
 import { test } from "mocha";
@@ -23,13 +25,12 @@ test("Debug view switches sessions and renders threads, recursive variables, wat
 	const opened: unknown[] = [];
 	const editor: IEditorService = { ...emptyEditorServiceState, openEditor: async (input: IResourceEditorInput) => { opened.push(input); }, focusActiveEditor() { } };
 	try {
-		const { DebugViewPane } = await import("../../browser/debugViewPane.js");
 		using debug = new MockDebugService();
 		debug.activate(debug.sessions[0]!);
 		using support = new DebugViewTestServices();
 		using services = new InstantiationService(support.register(new ServiceCollection([IDebugService, debug], [IEditorService, editor], [IContextMenuService, contextMenus])));
-		using view = services.createInstance(DebugViewPane, browser.window.document.body, { id: "ash.debug.test", title: "Debug" });
-		browser.window.document.body.append(view.element);
+		const { container: view } = support.createContainer(services, browser.window.document.body);
+
 		await waitFor(() => view.element.querySelectorAll(".ash-debug-frame").length === 1);
 
 		assert.equal(view.element.querySelectorAll("select[aria-label='Active debug session'] option").length, 2);
@@ -56,6 +57,66 @@ test("Debug view switches sessions and renders threads, recursive variables, wat
 	}
 });
 
+test("Variables restores expanded paths using fresh references after a pause and drops late restoration", async () => {
+	const browser = new JSDOM("<!doctype html><body></body>");
+	const globals = installDomGlobals(browser);
+	const editor: IEditorService = { ...emptyEditorServiceState, openEditor: async () => { }, focusActiveEditor() { } };
+	try {
+		using debug = new MockDebugService();
+		const session = debug.sessions[0] as MockDebugSession;
+		let revision = 1;
+		const requests: number[] = [];
+		const late = new DeferredPromise<readonly IDebugVariable[]>();
+		session.scopes = async () => [{ name: 'Locals', variablesReference: 10, expensive: false }];
+		session.variables = async reference => {
+			requests.push(reference);
+			if (reference === 10) return [{ name: 'parent', value: 'Object', variablesReference: revision * 10 + 11 }];
+			if (reference === 51) return late.p;
+			return [{ name: 'child', value: String(revision), variablesReference: 0 }];
+		};
+		using support = new DebugViewTestServices();
+		using services = new InstantiationService(support.register(new ServiceCollection([IDebugService, debug], [IEditorService, editor], [IContextMenuService, contextMenus])));
+		const { container: view } = support.createContainer(services, browser.window.document.body);
+		const parent = () => [...view.element.querySelectorAll<HTMLButtonElement>('.ash-debug-variable')].find(row => row.textContent?.includes('parent ='));
+		const child = () => [...view.element.querySelectorAll('.ash-debug-variable')].find(row => row.textContent?.includes('child ='));
+		debug.activate(session);
+		await waitFor(() => parent() !== undefined);
+		parent()!.click();
+		await waitFor(() => child()?.textContent?.includes('child = 1') === true);
+		const resume = () => { session.state = 'running'; debug.activate(session); };
+		const pause = () => { session.state = 'stopped'; debug.activate(session); };
+		resume();
+		revision = 2;
+		pause();
+		await waitFor(() => child()?.textContent?.includes('child = 2') === true);
+		assert.equal(parent()!.getAttribute('aria-expanded'), 'true');
+		assert.equal(requests.filter(reference => reference === 21).length, 1);
+		assert.equal(requests.includes(31), true);
+
+		parent()!.click();
+		resume();
+		revision = 3;
+		pause();
+		await waitFor(() => parent() !== undefined);
+		assert.equal(parent()!.getAttribute('aria-expanded'), 'false');
+		assert.equal(child(), undefined);
+		assert.equal(requests.includes(41), false);
+		parent()!.click();
+		await waitFor(() => child() !== undefined);
+		resume();
+		revision = 4;
+		pause();
+		await waitFor(() => requests.includes(51));
+		resume();
+		await late.complete([{ name: 'obsolete', value: 'late', variablesReference: 0 }]);
+		await new Promise<void>(resolve => setImmediate(resolve));
+		assert.equal(view.element.querySelectorAll('.ash-debug-variable').length, 0);
+	} finally {
+		for (const name of globals) Reflect.deleteProperty(globalThis, name);
+		browser.window.close();
+	}
+});
+
 test("Debug view opens an authority-qualified Remote stack source", async () => {
 	const browser = new JSDOM("<!doctype html><body></body>");
 	const installedGlobals = installDomGlobals(browser);
@@ -63,12 +124,11 @@ test("Debug view opens an authority-qualified Remote stack source", async () => 
 	const editor: IEditorService = { ...emptyEditorServiceState, openEditor: async (input: IResourceEditorInput) => { opened = input; }, focusActiveEditor() { } };
 	const resource = URI.parse("ash-remote://ssh+work-server/srv/project/src/main.ts");
 	try {
-		const { DebugViewPane } = await import("../../browser/debugViewPane.js");
 		using debug = new MockDebugService({ name: "main.ts", path: "/srv/project/src/main.ts", resource });
 		using support = new DebugViewTestServices();
 		using services = new InstantiationService(support.register(new ServiceCollection([IDebugService, debug], [IEditorService, editor], [IContextMenuService, contextMenus])));
-		using view = services.createInstance(DebugViewPane, browser.window.document.body, { id: "ash.debug.remote.test", title: "Debug" });
-		browser.window.document.body.append(view.element);
+		const { container: view } = support.createContainer(services, browser.window.document.body);
+
 		debug.activate(debug.sessions[0]!);
 		await waitFor(() => view.element.querySelectorAll(".ash-debug-frame").length === 1);
 
@@ -87,11 +147,10 @@ test("Debug controls follow session state, dispatch actions, and retain collapse
 	const installedGlobals = installDomGlobals(browser);
 	const editor: IEditorService = { ...emptyEditorServiceState, openEditor: async () => { }, focusActiveEditor() { } };
 	try {
-		const { DebugViewPane } = await import("../../browser/debugViewPane.js");
 		using debug = new MockDebugService();
 		using support = new DebugViewTestServices();
 		using services = new InstantiationService(support.register(new ServiceCollection([IDebugService, debug], [IEditorService, editor], [IContextMenuService, contextMenus])));
-		using view = services.createInstance(DebugViewPane, browser.window.document.body, { id: "ash.debug.controls.test", title: "Debug" });
+		const { container: view } = support.createContainer(services, browser.window.document.body);
 		const action = (label: string) => view.element.querySelector<HTMLButtonElement>(`button[aria-label="${label}"]`)!;
 		const toolbar = view.element.querySelector<HTMLElement>(".ash-toolbar")!;
 		assert.equal(toolbar.hidden, true);
@@ -129,13 +188,12 @@ test("Debug view initializes Chinese labels and retains its draft and collapsed 
 	const installedGlobals = installDomGlobals(browser);
 	const editor: IEditorService = { ...emptyEditorServiceState, openEditor: async () => { }, focusActiveEditor() { } };
 	try {
-		const { DebugViewPane } = await import("../../browser/debugViewPane.js");
 		using debug = new MockDebugService();
 		const catalog = productLanguagePackCatalogs.find(catalog => catalog.locale === "zh-CN")!;
 		setNlsResolver((bundle, key, fallback, parameters) => formatNlsMessage(catalog.bundles[bundle]?.[key] ?? fallback, parameters));
 		using support = new DebugViewTestServices();
 		using services = new InstantiationService(support.register(new ServiceCollection([IDebugService, debug], [IEditorService, editor], [IContextMenuService, contextMenus])));
-		using view = services.createInstance(DebugViewPane, browser.window.document.body, { id: "ash.debug.locale.test", title: "Debug" });
+		const { container: view } = support.createContainer(services, browser.window.document.body);
 		const watch = view.element.querySelector(".ash-debug-watch")!.closest(".ash-debug-section")!.querySelector<HTMLButtonElement>(".ash-pane-view-header-button")!;
 		const input = view.element.querySelector<HTMLInputElement>(".ash-debug-input-form input")!;
 		input.value = "myValue";
@@ -180,7 +238,7 @@ test('Debug configuration selection survives refresh and opens the selected work
 			]
 		});
 		using services = new InstantiationService(support.register(new ServiceCollection([IDebugService, debug], [IEditorService, editor], [IContextMenuService, contextMenus])));
-		const { part, pane: view } = support.createContainer(services, browser.window.document.body);
+		const { part, container: view } = support.createContainer(services, browser.window.document.body);
 		// Wait for initial discovery before opening the menu; discovery retires stale choices.
 		await debug.refresh();
 		const dropdown = part.domNode.querySelector<HTMLButtonElement>('.ash-debug-configuration')!;
@@ -261,12 +319,11 @@ test("Debug variable editing uses its parent reference, refreshes watches, cance
 	const globals = installDomGlobals(browser);
 	const editor: IEditorService = { ...emptyEditorServiceState, openEditor: async () => { }, focusActiveEditor() { } };
 	try {
-		const { DebugViewPane } = await import("../../browser/debugViewPane.js");
 		using debug = new MockDebugService();
 		using support = new DebugViewTestServices();
 		using services = new InstantiationService(support.register(new ServiceCollection([IDebugService, debug], [IEditorService, editor], [IContextMenuService, contextMenus])));
-		using view = services.createInstance(DebugViewPane, browser.window.document.body, { id: "debug.edit", title: "Debug" });
-		browser.window.document.body.append(view.element);
+		const { container: view } = support.createContainer(services, browser.window.document.body);
+
 		const session = debug.sessions[0] as MockDebugSession;
 		debug.activate(session);
 		await waitFor(() => view.element.querySelectorAll(".ash-debug-variable").length === 2);
@@ -313,13 +370,12 @@ test("Debug source failures preserve variable and Watch inspection", async () =>
 	const globals = installDomGlobals(browser);
 	const editor: IEditorService = { ...emptyEditorServiceState, openEditor: async () => { throw new Error("Source unavailable"); }, focusActiveEditor() { } };
 	try {
-		const { DebugViewPane } = await import("../../browser/debugViewPane.js");
 		using debug = new MockDebugService({ name: "main.ts", resource: URI.file('/workspace/main.ts') });
 		using support = new DebugViewTestServices();
 		using services = new InstantiationService(support.register(new ServiceCollection([IDebugService, debug], [IEditorService, editor], [IContextMenuService, contextMenus])));
-		using view = services.createInstance(DebugViewPane, browser.window.document.body, { id: "debug.sourceError", title: "Debug" });
+		const { container: view } = support.createContainer(services, browser.window.document.body);
 		debug.activate(debug.sessions[0]);
-		await waitFor(() => view.element.querySelector(".ash-debug-status")?.textContent === "Source unavailable");
+		await waitFor(() => support.notifications.model.getNotifications().some(notification => notification.message === "Source unavailable"));
 		assert.equal(view.element.querySelectorAll(".ash-debug-variable").length, 2);
 		assert.match(view.element.querySelector(".ash-debug-watch-value")!.textContent!, /answer = 42/);
 	} finally {
@@ -334,7 +390,6 @@ test("Debug inspection retires pending variable and virtual source replies when 
 	const opened: IResourceEditorInput[] = [];
 	const editor: IEditorService = { ...emptyEditorServiceState, openEditor: async input => { opened.push(input); }, focusActiveEditor() { } };
 	try {
-		const { DebugViewPane } = await import("../../browser/debugViewPane.js");
 		using debug = new MockDebugService();
 		const session = debug.sessions[0] as MockDebugSession;
 		const source = new DeferredPromise<IDebugSourceContent>();
@@ -342,7 +397,7 @@ test("Debug inspection retires pending variable and virtual source replies when 
 		session.source = async () => { sourceRequested = true; return source.p; };
 		using support = new DebugViewTestServices();
 		using services = new InstantiationService(support.register(new ServiceCollection([IDebugService, debug], [IEditorService, editor], [IContextMenuService, contextMenus])));
-		using view = services.createInstance(DebugViewPane, browser.window.document.body, { id: "debug.delayed", title: "Debug" });
+		const { container: view } = support.createContainer(services, browser.window.document.body);
 		debug.activate(session);
 		await waitFor(() => sourceRequested);
 		session.state = "running";
@@ -375,7 +430,6 @@ test("Debug variable editing respects read-only hints, retains adapter errors, a
 	const globals = installDomGlobals(browser);
 	const editor: IEditorService = { ...emptyEditorServiceState, openEditor: async () => { }, focusActiveEditor() { } };
 	try {
-		const { DebugViewPane } = await import("../../browser/debugViewPane.js");
 		using debug = new MockDebugService();
 		const session = debug.sessions[0] as MockDebugSession;
 		session.variables = async () => [
@@ -384,8 +438,8 @@ test("Debug variable editing respects read-only hints, retains adapter errors, a
 		];
 		using support = new DebugViewTestServices();
 		using services = new InstantiationService(support.register(new ServiceCollection([IDebugService, debug], [IEditorService, editor], [IContextMenuService, contextMenus])));
-		using view = services.createInstance(DebugViewPane, browser.window.document.body, { id: "debug.error", title: "Debug" });
-		browser.window.document.body.append(view.element);
+		const { container: view } = support.createContainer(services, browser.window.document.body);
+
 		debug.activate(session);
 		await waitFor(() => view.element.querySelectorAll(".ash-debug-variable").length === 3);
 		view.element.querySelectorAll<HTMLButtonElement>(".ash-debug-variable")[1]!.dispatchEvent(new browser.window.KeyboardEvent("keydown", { key: "F2", bubbles: true }));
@@ -420,13 +474,12 @@ test("Debug welcome creates extension launch templates and reopens existing conf
 	const opened: IResourceEditorInput[] = [];
 	const editor: IEditorService = { ...emptyEditorServiceState, openEditor: async input => { opened.push(input); }, focusActiveEditor() { } };
 	try {
-		const { DebugViewPane } = await import("../../browser/debugViewPane.js");
 		using debug = new MockDebugService();
 		debug.configurations = [];
 		debug.initialConfigurations = [{ name: 'Extension launch', type: 'example', request: 'launch', program: '${workspaceFolder}/app' }];
 		using support = new DebugViewTestServices();
 		using services = new InstantiationService(support.register(new ServiceCollection([IDebugService, debug], [IEditorService, editor], [IContextMenuService, contextMenus])));
-		using view = services.createInstance(DebugViewPane, browser.window.document.body, { id: "debug.welcome", title: "Debug" });
+		const { container: view } = support.createContainer(services, browser.window.document.body);
 		assert.deepEqual([...view.element.querySelectorAll(".ash-debug-section .ash-pane-view-header-title")].map(title => title.textContent), ["Run"]);
 		const create = view.element.querySelector<HTMLButtonElement>(".ash-debug-welcome-content button")!;
 		create.click();
@@ -447,19 +500,18 @@ async function waitFor(predicate: () => boolean): Promise<void> { const deadline
 function installDomGlobals(browser: JSDOM): readonly string[] { const globals = { window: browser.window, document: browser.window.document, Node: browser.window.Node, Element: browser.window.Element, HTMLElement: browser.window.HTMLElement, Event: browser.window.Event, MouseEvent: browser.window.MouseEvent, navigator: browser.window.navigator }; for (const [name, value] of Object.entries(globals)) Object.defineProperty(globalThis, name, { configurable: true, value }); return Object.keys(globals); }
 
 
-for (const change of ['document created', 'workspace replaced', 'view disposed'] as const) {
+for (const change of ['document created', 'workspace replaced', 'view disposed', 'view hidden'] as const) {
 	test(`Debug launch creation preserves ownership when ${change} while the extension template is pending`, async () => {
 		const browser = new JSDOM("<!doctype html><body></body>");
 		const globals = installDomGlobals(browser);
 		const opened: IResourceEditorInput[] = [];
 		const editor: IEditorService = { ...emptyEditorServiceState, openEditor: async input => { opened.push(input); }, focusActiveEditor() { } };
 		try {
-			const { DebugViewPane } = await import("../../browser/debugViewPane.js");
 			using debug = new MockDebugService();
 			debug.configurations = [];
 			using support = new DebugViewTestServices();
 			using services = new InstantiationService(support.register(new ServiceCollection([IDebugService, debug], [IEditorService, editor], [IContextMenuService, contextMenus])));
-			using view = services.createInstance(DebugViewPane, browser.window.document.body, { id: "debug.welcome", title: "Debug" });
+			const { container: view } = support.createContainer(services, browser.window.document.body);
 			let signal: AbortSignal | undefined;
 			const templates = new DeferredPromise<readonly import('../../common/debug.js').DebugConfiguration[]>();
 			debug.provideDebugConfigurations = async (_folder, incoming) => { signal = incoming; return templates.p; };
@@ -468,6 +520,7 @@ for (const change of ['document created', 'workspace replaced', 'view disposed']
 			const resource = URI.file("/workspace/.vscode/launch.json").toString();
 			if (change === 'document created') support.documents.set(resource, 'user configuration');
 			else if (change === 'workspace replaced') support.workspace.updateWorkspace({ id: 'other', uri: URI.file('/other') });
+			else if (change === 'view hidden') view.setVisible(false);
 			else view.dispose();
 			if (change !== 'document created') assert.equal(signal!.aborted, true);
 			await templates.complete([]);
@@ -488,11 +541,10 @@ test('Debug inspection panes follow a focused frame independently and retire del
 	const globals = installDomGlobals(browser);
 	const editor: IEditorService = { ...emptyEditorServiceState, openEditor: async () => { }, focusActiveEditor() { } };
 	try {
-		const { DebugViewPane } = await import('../../browser/debugViewPane.js');
 		using debug = new MockDebugService();
 		using support = new DebugViewTestServices();
 		using services = new InstantiationService(support.register(new ServiceCollection([IDebugService, debug], [IEditorService, editor], [IContextMenuService, contextMenus])));
-		using view = services.createInstance(DebugViewPane, browser.window.document.body, { id: 'debug.independent', title: 'Debug' });
+		const { container: view } = support.createContainer(services, browser.window.document.body);
 		const session = debug.sessions[0] as MockDebugSession;
 		const initialEvaluations: (number | undefined)[] = [];
 		const evaluateInitial = session.evaluateWatchExpressions.bind(session);
@@ -500,7 +552,7 @@ test('Debug inspection panes follow a focused frame independently and retire del
 		debug.activate(session);
 		await waitFor(() => view.element.querySelectorAll('.ash-debug-variable').length === 2);
 		assert.deepEqual(initialEvaluations, [10]);
-		assert.deepEqual([...view.element.querySelectorAll('.ash-debug-section.ash-view-pane')].map(pane => (pane as HTMLElement).dataset.viewId), ['ash-debug-variables', 'ash-debug-watch', 'ash-debug-stack', 'ash-debug-breakpoints']);
+		assert.deepEqual([...view.element.querySelectorAll('.ash-debug-section.ash-view-pane')].map(pane => (pane as HTMLElement).dataset.viewId), ['workbench.debug.variablesView', 'workbench.debug.watchExpressionsView', 'workbench.debug.callStackView', 'workbench.debug.breakPointsView']);
 		const pending = new DeferredPromise<Awaited<ReturnType<MockDebugSession['evaluateWatchExpressions']>>>();
 		let oldWatchStarted = false;
 		session.evaluateWatchExpressions = async (expressions, frameId) => {
@@ -517,6 +569,36 @@ test('Debug inspection panes follow a focused frame independently and retire del
 		await new Promise<void>(resolve => setImmediate(resolve));
 		assert.doesNotMatch(view.element.querySelector('.ash-debug-status')?.textContent ?? '', /obsolete/);
 		assert.match(view.element.querySelector('.ash-debug-watch-value')?.textContent ?? '', /frame 0/);
+	} finally {
+		for (const name of globals) Reflect.deleteProperty(globalThis, name);
+		browser.window.close();
+	}
+});
+
+test('Debug breakpoint reveal retires a command after frame selection changes and rejects invalid arguments', async () => {
+	const browser = new JSDOM('<!doctype html><body></body>');
+	const globals = installDomGlobals(browser);
+	const editor: IEditorService = { ...emptyEditorServiceState, openEditor: async () => { }, focusActiveEditor() { } };
+	try {
+		using debug = new MockDebugService();
+		using support = new DebugViewTestServices();
+		using services = new InstantiationService(support.register(new ServiceCollection([IDebugService, debug], [IEditorService, editor], [IContextMenuService, contextMenus])));
+		const { container } = support.createContainer(services, browser.window.document.body);
+		debug.activate(debug.sessions[0]);
+		await waitFor(() => debug.getViewModel().focusedStackFrame !== undefined);
+		const views = services.get(IViewsService);
+		const open = views.openView.bind(views);
+		const requested = new DeferredPromise<void>();
+		const release = new DeferredPromise<void>();
+		views.openView = async (...args) => { await requested.complete(); await release.p; return open(...args) as never; };
+		const command = services.get(ICommandService).executeCommand('debug.addInstructionBreakpoint', '0x1000');
+		await requested.p;
+		debug.focusStackFrame({ id: 0, name: 'replacement', lineNumber: 1, columnNumber: 1 });
+		await release.complete();
+		await command;
+		assert.equal(container.element.querySelector('.ash-debug-breakpoint-edit'), null);
+		await assert.rejects(services.get(ICommandService).executeCommand('debug.addDataBreakpoint', { dataId: 'x', sessionId: debug.session!.id, accessTypes: ['invalid'] }), isCancellationError);
+		assert.deepEqual(debug.dataBreakpoints, []);
 	} finally {
 		for (const name of globals) Reflect.deleteProperty(globalThis, name);
 		browser.window.close();

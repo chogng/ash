@@ -271,3 +271,14 @@ def create_runtime_package(
 
 def _digest(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def copy_debug_runtime_fixture(repository: Path, destination: Path) -> None:
+    """Package tests isolate the download boundary; archive integrity has its own suite."""
+    (destination / "src").mkdir(parents=True)
+    (destination / "src/dapDebugServer.js").write_text("// standalone DAP fixture\n")
+    (destination / "LICENSE").write_text("MIT fixture\n")
+    bootstrap = destination.parent / "src"
+    bootstrap.mkdir(parents=True, exist_ok=True)
+    for name in ("auto-attach.cjs", "adapter-runtime.cjs"):
+        (bootstrap / name).write_text("// product bootstrap fixture\n")

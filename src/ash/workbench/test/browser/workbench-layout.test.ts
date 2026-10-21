@@ -1,3 +1,4 @@
+import { TestViewDescriptorService } from './workbenchTestServices.js';
 import { MutableDisposable } from '../../../base/common/lifecycle.js';
 import { ActivityService } from '../../services/activity/browser/activityService.js';
 import { IActivityService, NumberBadge } from '../../services/activity/common/activity.js';
@@ -398,7 +399,7 @@ test('Activity Bar badge setting applies on startup and preserves per-icon choic
 			disposables.add(registry.registerViewContainer({ id, title: id, location: ViewContainerLocation.Sidebar }));
 		}
 		const contextKeys = disposables.add(new ContextKeyService());
-		const views = disposables.add(new ViewDescriptorService({ registry }, contextKeys));
+		const views = disposables.add(new TestViewDescriptorService({ registry }, contextKeys));
 		const activity = disposables.add(new ActivityService(views));
 		const bar = disposables.add(new CompositeBar(harness.container, {
 			openComposite: async () => null,
@@ -907,7 +908,7 @@ test("Git sidebar uses its preferred reset width and merges a lone view into the
 		{ id: "test.graph", title: "Graph", ctorDescriptor: new SyncDescriptor(GitTestView) },
 	]));
 	const contextKeys = disposables.add(new ContextKeyService());
-	const viewDescriptors = disposables.add(new ViewDescriptorService({ registry }, contextKeys));
+	const viewDescriptors = disposables.add(new TestViewDescriptorService({ registry }, contextKeys));
 	const descriptor = viewDescriptors.getDefaultViewContainer(ViewContainerLocation.Sidebar);
 	assert.ok(descriptor);
 	const model = viewDescriptors.getViewContainerModel(descriptor.id);
@@ -1287,7 +1288,7 @@ test("Activity Bar hosts the primary sidebar selector independently of sidebar v
 		order: 3,
 	}));
 	const contextKeys = disposables.add(new ContextKeyService());
-	const viewDescriptors = disposables.add(new ViewDescriptorService({
+	const viewDescriptors = disposables.add(new TestViewDescriptorService({
 		registry,
 	}, contextKeys));
 	const sidebar = disposables.add(registerContainerServices(componentServices).createInstance(SidebarPart, dom.window.document.body, {
@@ -1488,7 +1489,7 @@ test("Pane Composite Parts restore workspace selections with Registry fallback",
 		location: ViewContainerLocation.Sidebar,
 	}));
 	const contextKeys = disposables.add(new ContextKeyService());
-	const viewDescriptors = disposables.add(new ViewDescriptorService({
+	const viewDescriptors = disposables.add(new TestViewDescriptorService({
 		registry,
 	}, contextKeys));
 	const createStorage = (workspaceId: string) => new BrowserStorageService({
@@ -1576,7 +1577,7 @@ test("Sidebar can host Agent Sidebar composites", () => {
 		isDefault: true,
 	}));
 	const contextKeys = disposables.add(new ContextKeyService());
-	const viewDescriptors = disposables.add(new ViewDescriptorService({
+	const viewDescriptors = disposables.add(new TestViewDescriptorService({
 		registry,
 	}, contextKeys));
 	const agentSidebar = disposables.add(registerContainerServices(componentServices).createInstance(SidebarPart, dom.window.document.body, {
@@ -1643,7 +1644,7 @@ test("Panel presents its destinations as tabs and active commands as a toolbar",
 	const commands = disposables.add(new CommandService(new InstantiationService()));
 	const menuService = new MenuService(commands, contextKeys);
 	const contextMenuProvider: IContextMenuProvider = { showContextMenu() { } };
-	const viewDescriptors = disposables.add(new ViewDescriptorService({
+	const viewDescriptors = disposables.add(new TestViewDescriptorService({
 		registry,
 	}, contextKeys));
 	const panelServices = disposables.add(new InstantiationService());
@@ -1734,7 +1735,7 @@ test('Transient view navigation follows its active session and ignores stale res
 	registry.registerStaticViews(previewId, [{ id: 'test.preview.view', title: 'Preview', when: ContextKeyExpr.has('test.preview.enabled'), ctorDescriptor: new SyncDescriptor(TestRuntimeView) }]);
 	const context = resources.add(new ContextKeyService());
 	const enabled = context.createKey<boolean>('test.preview.enabled', false);
-	const descriptors = resources.add(new ViewDescriptorService({ registry }, context));
+	const descriptors = resources.add(new TestViewDescriptorService({ registry }, context));
 	const services = resources.add(createTestComponentServices());
 	services.registerInstance(IContextKeyService, context);
 	services.registerInstance(IViewDescriptorService, descriptors);
@@ -1779,7 +1780,7 @@ test("CompositeBar moves non-fitting label tabs into its overflow menu", () => {
 		}));
 	}
 	const contextKeys = disposables.add(new ContextKeyService());
-	const viewDescriptors = disposables.add(new ViewDescriptorService({
+	const viewDescriptors = disposables.add(new TestViewDescriptorService({
 		registry,
 	}, contextKeys));
 	const selections: string[] = [];
@@ -1855,7 +1856,7 @@ for (const activeId of ['search', 'explorer']) {
 				disposables.add(registry.registerViewContainer({ id, title: id, location: ViewContainerLocation.Sidebar, isDefault: id === 'explorer' }));
 			}
 			const contextKeys = disposables.add(new ContextKeyService());
-			const views = disposables.add(new ViewDescriptorService({ registry }, contextKeys));
+			const views = disposables.add(new TestViewDescriptorService({ registry }, contextKeys));
 			const opened: { id: string; preserveFocus: boolean | undefined; }[] = [];
 			let actions: readonly IAction[] = [];
 			const bar = disposables.add(new CompositeBar(dom.window.document.body, {
@@ -1905,7 +1906,7 @@ test('Activity Bar context menu persists hidden views and keeps one pinned view'
 		disposables.add(registry.registerViewContainer({ id, title, location: ViewContainerLocation.Sidebar }));
 	}
 	const contextKeys = disposables.add(new ContextKeyService());
-	const viewDescriptors = disposables.add(new ViewDescriptorService({ registry }, contextKeys));
+	const viewDescriptors = disposables.add(new TestViewDescriptorService({ registry }, contextKeys));
 	const storage = new BrowserStorageService({ ownerWindow: dom.window as unknown as Window, workspaceId: 'test', backend: dom.window.localStorage, flushInterval: 0 });
 	const firstBar = new DisposableStore();
 	let actions: readonly IAction[] = [];
@@ -1969,7 +1970,7 @@ test("CompositeBar retains the startup language of View Container labels", () =>
 		location: ViewContainerLocation.Panel,
 	}));
 	const contextKeys = disposables.add(new ContextKeyService());
-	const viewDescriptors = disposables.add(new ViewDescriptorService({ registry }, contextKeys));
+	const viewDescriptors = disposables.add(new TestViewDescriptorService({ registry }, contextKeys));
 	const localeChanges = new Emitter<string>();
 	let locale = "en";
 	const localization = {
@@ -2008,7 +2009,7 @@ test("Auxiliary Bar retains its View and exposes container selection as a standa
 		{ id: "ash.chat.test", title: "Chat", ctorDescriptor: new SyncDescriptor(TestPanelView) },
 	]));
 	const contextKeys = disposables.add(new ContextKeyService());
-	const viewDescriptors = disposables.add(new ViewDescriptorService({
+	const viewDescriptors = disposables.add(new TestViewDescriptorService({
 		registry,
 	}, contextKeys));
 	const descriptor = viewDescriptors.getDefaultViewContainer(
@@ -2118,7 +2119,7 @@ test("PaneComposite rejects ambiguous title projections from multiple Views", ()
 		{ id: "ash.test.actions", title: "Actions", ctorDescriptor: new SyncDescriptor(ActionsProjectionView) },
 	]));
 	const contextKeys = disposables.add(new ContextKeyService());
-	const viewDescriptors = disposables.add(new ViewDescriptorService({
+	const viewDescriptors = disposables.add(new TestViewDescriptorService({
 		registry,
 	}, contextKeys));
 	const descriptor = viewDescriptors.getDefaultViewContainer(ViewContainerLocation.Panel);
@@ -2152,7 +2153,7 @@ test("CompositeBar reorders view container tabs through drag and drop", () => {
 		disposables.add(registry.registerViewContainer({ id, title, order, location: ViewContainerLocation.Panel }));
 	}
 	const contextKeys = disposables.add(new ContextKeyService());
-	const viewDescriptors = disposables.add(new ViewDescriptorService({ registry }, contextKeys));
+	const viewDescriptors = disposables.add(new TestViewDescriptorService({ registry }, contextKeys));
 	const compositeBar = disposables.add(new CompositeBar(dom.window.document.body, {
 		openComposite: async () => null,
 		activityHoverOptions: { position: () => HoverPosition.ABOVE },
@@ -2328,7 +2329,7 @@ test('Activity Bar restores user container order in a new window and keeps the a
 	const storageOptions = { ownerWindow: dom.window as unknown as Window, workspaceId: 'first', flushInterval: 0 };
 	const storage = disposables.add(new BrowserStorageService(storageOptions));
 	const contexts = disposables.add(new ContextKeyService());
-	const descriptors = disposables.add(new ViewDescriptorService({ registry }, contexts));
+	const descriptors = disposables.add(new TestViewDescriptorService({ registry }, contexts));
 	const bar = disposables.add(new CompositeBar(dom.window.document.body, {
 		openComposite: async () => null,
 		activityHoverOptions: { position: () => HoverPosition.ABOVE }, viewDescriptorService: descriptors,
@@ -2339,7 +2340,7 @@ test('Activity Bar restores user container order in a new window and keeps the a
 	assert.equal(bar.activeCompositeId, 'second');
 	await storage.flush();
 	const restoredStorage = disposables.add(new BrowserStorageService({ ...storageOptions, workspaceId: 'second' }));
-	const restoredDescriptors = disposables.add(new ViewDescriptorService({ registry }, contexts));
+	const restoredDescriptors = disposables.add(new TestViewDescriptorService({ registry }, contexts));
 	const restored = disposables.add(new CompositeBar(dom.window.document.body, {
 		openComposite: async () => null,
 		activityHoverOptions: { position: () => HoverPosition.ABOVE }, viewDescriptorService: restoredDescriptors,
@@ -2378,7 +2379,7 @@ test('Pane composite service reveals retained Parts and publishes visibility cha
 	]);
 	registry.registerStaticViews('test.panel.second', [{ id: 'test.panel.conditional', title: 'Conditional', when: ContextKeyExpr.has('test.enabled'), ctorDescriptor: new SyncDescriptor(TestRuntimeView) }]);
 	const context = resources.add(new ContextKeyService());
-	const descriptors = resources.add(new ViewDescriptorService({ registry }, context));
+	const descriptors = resources.add(new TestViewDescriptorService({ registry }, context));
 	const services = resources.add(new InstantiationService());
 	services.registerInstance(IContextKeyService, context);
 	services.registerInstance(IViewDescriptorService, descriptors);

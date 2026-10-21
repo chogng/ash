@@ -1,3 +1,4 @@
+import { TestViewDescriptorService } from '../../../workbench/test/browser/workbenchTestServices.js';
 import { ChatEditor } from '../../../workbench/contrib/chat/browser/widgetHosts/editor/chatEditor.js';
 import { ChatEditorInput } from '../../../workbench/contrib/chat/browser/widgetHosts/editor/chatEditorInput.js';
 import { EditorInputSerializers } from '../../../workbench/services/editor/common/editorInputSerializer.js';
@@ -104,7 +105,6 @@ import { IViewsService } from "../../../workbench/services/views/common/viewsSer
 import { ViewsService } from "../../../workbench/services/views/browser/viewsService.js";
 import { ContextKeyService, IContextKeyService } from "../../../platform/contextkey/browser/contextKeyService.js";
 import { DialogResult, IDialogService, type IMessageDialogOptions } from '../../../platform/dialogs/common/dialogs.js';
-import { ViewDescriptorService } from "../../../workbench/services/views/browser/viewDescriptorService.js";
 import { TestQuickInputService } from "../../../platform/quickinput/test/browser/testQuickInputService.js";
 import { Dimension, h } from "../../../base/browser/dom.js";
 import type { IFileService } from '../../../platform/files/common/files.js';
@@ -414,7 +414,7 @@ test("Chat title and history switching retain conversations and drafts", async (
 	const api = fake.api;
 	using sessions = new SessionsManagementService(api);
 	using contextKeys = new ContextKeyService();
-	using viewDescriptors = new ViewDescriptorService({
+	using viewDescriptors = new TestViewDescriptorService({
 		registry: new WorkbenchViewRegistry(),
 	}, contextKeys);
 	const services = new InstantiationService();
@@ -1203,7 +1203,7 @@ test("an empty Session list opens an untitled session and persists it on its fir
 	services.registerInstance(IAppServerHookApi, { onDidChangeHooks: Event.None, list: async () => { throw new Error('Unexpected Hook read in Skill fixture'); } });
 	using sessions = new SessionsManagementService(api);
 	using contextKeys = new ContextKeyService();
-	using viewDescriptors = new ViewDescriptorService({
+	using viewDescriptors = new TestViewDescriptorService({
 		registry: new WorkbenchViewRegistry(),
 	}, contextKeys);
 	services.registerInstance(ISessionsManagementService, sessions);
@@ -1327,7 +1327,7 @@ test("the New Chat slash command opens an untitled session", async () => {
 	services.registerInstance(IAppServerHookApi, { onDidChangeHooks: Event.None, list: async () => { throw new Error('Unexpected Hook read in Skill fixture'); } });
 	using sessions = new SessionsManagementService(fake.api);
 	using contextKeys = new ContextKeyService();
-	using viewDescriptors = new ViewDescriptorService({
+	using viewDescriptors = new TestViewDescriptorService({
 		registry: new WorkbenchViewRegistry(),
 	}, contextKeys);
 	services.registerInstance(ISessionsManagementService, sessions);
@@ -1405,7 +1405,7 @@ test("failed first send keeps the untitled session and its input draft", async (
 	services.registerInstance(IAppServerHookApi, { onDidChangeHooks: Event.None, list: async () => { throw new Error('Unexpected Hook read in Skill fixture'); } });
 	using sessions = new SessionsManagementService(fake.api);
 	using contextKeys = new ContextKeyService();
-	using viewDescriptors = new ViewDescriptorService({
+	using viewDescriptors = new TestViewDescriptorService({
 		registry: new WorkbenchViewRegistry(),
 	}, contextKeys);
 	services.registerInstance(ISessionsManagementService, sessions);
@@ -1497,7 +1497,7 @@ test("one Session retains one Chat pane while its selected Thread changes", asyn
 	const api = fakeApi({ sessions: [multiThreadSession] }).api;
 	using sessions = new SessionsManagementService(api);
 	using contextKeys = new ContextKeyService();
-	using viewDescriptors = new ViewDescriptorService({
+	using viewDescriptors = new TestViewDescriptorService({
 		registry: new WorkbenchViewRegistry(),
 	}, contextKeys);
 	using commands = new CommandService(new InstantiationService());
@@ -1626,7 +1626,7 @@ test("Chat history selects an active Thread through Quick Pick", async () => {
 test("ViewsService resolves, opens, and focuses contributed views", async () => {
 	const registry = ViewsRegistry;
 	using contextKeys = new ContextKeyService();
-	using descriptors = new ViewDescriptorService({
+	using descriptors = new TestViewDescriptorService({
 		registry,
 	}, contextKeys);
 	let focused = 0;
@@ -4554,7 +4554,7 @@ async function createNavigationInputPane(configurationSource = '{}', configurati
 	const sessions = resources.add(new SessionsManagementService(api));
 	if (initialization) sessions.initialize = () => initialization;
 	const contextKeys = resources.add(new ContextKeyService());
-	resources.add(new ViewDescriptorService({ registry: new WorkbenchViewRegistry() }, contextKeys));
+	resources.add(new TestViewDescriptorService({ registry: new WorkbenchViewRegistry() }, contextKeys));
 	const commandServices = resources.add(new InstantiationService());
 	const configuration = resources.add(new WorkbenchConfigurationService({ source: configurationSource }));
 	commandServices.registerInstance(IConfigurationService, configuration);
@@ -5057,7 +5057,7 @@ for (const navigate of [false, true]) {
 		const sessions = resources.add(new SessionsManagementService(fake.api));
 		await sessions.initialize();
 		const contextKeys = resources.add(new ContextKeyService());
-		resources.add(new ViewDescriptorService({ registry: new WorkbenchViewRegistry() }, contextKeys));
+		resources.add(new TestViewDescriptorService({ registry: new WorkbenchViewRegistry() }, contextKeys));
 		const commands = resources.add(new CommandService(resources.add(new InstantiationService())));
 		const menu = new MenuService(commands, contextKeys);
 		const contextMenus = { showContextMenu: () => { } } as unknown as IContextMenuService;
@@ -5246,7 +5246,7 @@ test('Chat configuration contribution hides the registered Code view and command
 	using services = new InstantiationService();
 	services.registerInstance(IConfigurationService, configuration);
 	services.registerInstance(IContextKeyService, contexts);
-	using descriptors = new ViewDescriptorService({}, contexts);
+	using descriptors = new TestViewDescriptorService({}, contexts);
 	const view = descriptors.getViewContainerModel(CHAT_VIEW_CONTAINER_ID);
 	const host = WorkbenchContributionsRegistry.createHost(services, error => { throw error; }, ['workbench.contrib.chatEnablement']);
 	try {

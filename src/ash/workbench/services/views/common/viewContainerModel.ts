@@ -1,12 +1,14 @@
 import { Emitter } from '../../../../base/common/event.js';
 import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
-import type { ContextKeyChangeEvent, IContextKey, IContextKeyService } from '../../../../platform/contextkey/common/contextkey.js';
+import { IContextKeyService } from '../../../../platform/contextkey/common/contextkey.js';
+import { IStorageService, StorageScope, StorageTarget } from '../../../../platform/storage/common/storage.js';
+import type { ContextKeyChangeEvent, IContextKey } from '../../../../platform/contextkey/common/contextkey.js';
 import { getVisibleViewContextKey } from '../../../common/contextkeys.js';
 import type { IViewContainerDescriptor, IViewContainerModel, IViewDescriptor, IViewDescriptorsChangeEvent, WorkbenchViewRegistry } from '../../../common/views.js';
 
 export class ViewContainerModel extends Disposable implements IViewContainerModel {
 	private readonly registry: WorkbenchViewRegistry;
-	private readonly contextKeyService: IContextKeyService;
+	private readonly stateKey: string;
 	private readonly visibility = new Map<string, boolean>();
 	private readonly visibilityContextKeys =
 		new Map<string, IContextKey<boolean>>();
@@ -30,11 +32,18 @@ export class ViewContainerModel extends Disposable implements IViewContainerMode
 	constructor(
 		public readonly viewContainer: IViewContainerDescriptor,
 		registry: WorkbenchViewRegistry,
-		contextKeyService: IContextKeyService,
+		@IContextKeyService private readonly contextKeyService: IContextKeyService,
+		@IStorageService private readonly storage: IStorageService,
 	) {
 		super();
 		this.registry = registry;
-		this.contextKeyService = contextKeyService;
+		this.stateKey = `${viewContainer.id}.state.hidden`;
+		this.restoreVisibility();
+		this._register(storage.onDidChangeValue(event => {
+			if (event.scope === StorageScope.PROFILE && event.key === this.stateKey) {
+				if (this.restoreVisibility()) this.recompute();
+			}
+		}));
 		this._register(this.registry.onDidRegisterViews((event) => {
 			if (event.container.id === this.viewContainer.id) { this.recompute(); }
 		}));
@@ -76,9 +85,32 @@ export class ViewContainerModel extends Disposable implements IViewContainerMode
 		if (descriptor.canToggleVisibility === false) {
 			throw new Error(`View visibility cannot be changed: ${viewId}`);
 		}
-		if (this.preferredVisibility(descriptor) === visible) { return; }
+		this.restoreVisibility();
+		if (this.preferredVisibility(descriptor) === visible) { this.recompute(); return; }
+		// Read the current stored table before changing one preference, preserving
+		// views registered later and updates written by another window.
 		this.visibility.set(viewId, visible);
+		this.storage.store(this.stateKey, JSON.stringify([...this.visibility].map(([id, preferred]) => ({ id, isHidden: !preferred }))), StorageScope.PROFILE, StorageTarget.MACHINE);
 		this.recompute();
+	}
+
+	private restoreVisibility(): boolean {
+		const raw = this.storage.get(this.stateKey, StorageScope.PROFILE);
+		if (raw !== undefined && raw.length > 1048576) return false;
+		let entries: unknown;
+		try { entries = raw === undefined ? [] : JSON.parse(raw); }
+		catch { return false; }
+		if (!Array.isArray(entries) || entries.length > 10000) return false;
+		const restored = new Map<string, boolean>();
+		for (const entry of entries) {
+			if (!entry || typeof entry !== 'object' || typeof entry.id !== 'string'
+				|| !/^[A-Za-z][A-Za-z0-9._-]{0,127}$/.test(entry.id) || typeof entry.isHidden !== 'boolean'
+				|| restored.has(entry.id)) return false;
+			restored.set(entry.id, !entry.isHidden);
+		}
+		this.visibility.clear();
+		for (const [id, visible] of restored) this.visibility.set(id, visible);
+		return true;
 	}
 
 	private affectsActiveViews(event: ContextKeyChangeEvent): boolean {
@@ -121,6 +153,7 @@ export class ViewContainerModel extends Disposable implements IViewContainerMode
 	}
 
 	private preferredVisibility(descriptor: IViewDescriptor): boolean {
+		if (descriptor.canToggleVisibility === false) return true;
 		return this.visibility.get(descriptor.id) ??
 			descriptor.hideByDefault !== true;
 	}
@@ -135,7 +168,6 @@ export class ViewContainerModel extends Disposable implements IViewContainerMode
 			if (allIds.has(viewId)) { continue; }
 			key.reset();
 			this.visibilityContextKeys.delete(viewId);
-			this.visibility.delete(viewId);
 		}
 		for (const descriptor of all) {
 			let key = this.visibilityContextKeys.get(descriptor.id);

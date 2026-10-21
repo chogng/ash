@@ -1,3 +1,6 @@
+import { h, type IDimension } from '../../../../base/browser/dom.js';
+import { observeElementSize } from '../../../../base/browser/observer.js';
+import { DebugToolBar } from './debugToolBar.js';
 import type { IAction } from '../../../../base/common/actions.js';
 import type { ActionViewItem, ActionViewItemOptions } from '../../../../base/browser/ui/actionbar/actionViewItems.js';
 import { DisposableStore, MutableDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
@@ -12,14 +15,17 @@ import { IWorkspaceContextService } from '../../../../platform/workspace/common/
 import { INotificationService } from '../../../../platform/notification/common/notification.js';
 import { PaneComposite, type PaneCompositeOptions } from '../../../browser/parts/views/paneComposite.js';
 import { localize } from '../../../../nls.js';
-import { IDebugService, START_DEBUG_COMMAND_ID } from '../common/debug.js';
+import { IDebugService, START_DEBUG_COMMAND_ID, CONTEXT_DEBUG_UX, CONTEXT_BREAKPOINTS_EXIST } from '../common/debug.js';
 import { DEBUG_CONFIGURE_COMMAND_ID } from './debugCommands.js';
 import { StartDebugActionViewItem } from './debugActionViewItems.js';
 import { debugConfigure, debugStart } from './debugIcons.js';
 import './media/debugViewlet.css';
+import { IAccessibleViewService, AccessibilityVerbositySettingId } from '../../../../platform/accessibility/browser/accessibleView.js';
 
-/** The Debug container owns title actions; its pane retains inspection and welcome content. */
+/** Owns title actions and inline controls; the view framework owns inspection panes and layout. */
 export class DebugViewPaneContainer extends PaneComposite {
+	private readonly chrome: HTMLElement;
+	private readonly resetConditions: () => void;
 	private readonly startAction: IAction;
 	private readonly configureAction: IAction;
 	private startItem: StartDebugActionViewItem | undefined;
@@ -37,9 +43,39 @@ export class DebugViewPaneContainer extends PaneComposite {
 		@ICommandService private readonly commands: ICommandService,
 		@INotificationService private readonly notifications: INotificationService,
 		@IConfigurationService configuration: IConfigurationService,
+		@IAccessibleViewService accessibleViews: IAccessibleViewService,
 	) {
+		// Publish presentation conditions before the framework constructs active views.
+		const ux = CONTEXT_DEBUG_UX.bindTo(options.contextKeyService);
+		const breakpoints = CONTEXT_BREAKPOINTS_EXIST.bindTo(options.contextKeyService);
+		let hasDebugged = debug.session !== undefined;
+		const updateConditions = (): void => {
+			hasDebugged ||= debug.session !== undefined;
+			options.contextKeyService.bufferChangeEvents(() => {
+				ux.set(hasDebugged || debug.configurations.length + debug.compounds.length > 0 ? 'default' : 'simple');
+				breakpoints.set(debug.breakpoints.length + debug.functionBreakpoints.length + debug.dataBreakpoints.length + debug.instructionBreakpoints.length > 0);
+			});
+		};
+		updateConditions();
 		super(container, { ...options, mergeViewWithContainerWhenSingleView: true }, storage, theme, menus, configuration);
-		this.element.classList.add('ash-debug-viewlet');
+		this.resetConditions = () => { ux.reset(); breakpoints.reset(); };
+		this._register(debug.onDidChangeConfigurations(updateConditions));
+		this._register(debug.onDidChangeSession(updateConditions));
+		this._register(debug.onDidChangeBreakpoints(updateConditions));
+		this.element.classList.add('ash-debug-viewlet', 'ash-debug');
+		const hint = accessibleViews.getOpenAriaHint(AccessibilityVerbositySettingId.Debug);
+		if (hint) this.element.setAttribute('aria-description', hint);
+		this.chrome = h(container.ownerDocument, 'div');
+		this.chrome.className = 'ash-debug-chrome';
+		this.element.prepend(this.chrome);
+		this._register(instantiation.createInstance(DebugToolBar, this.chrome));
+		const relayout = (): void => {
+			if (this.element.clientHeight > 0) this.layout({ width: this.element.clientWidth, height: this.element.clientHeight });
+		};
+		this._register(observeElementSize(this.chrome, relayout));
+		void debug.refresh().catch(error => {
+			if (!this.isDisposed && !isCancellationError(error)) this.notifications.error(error instanceof Error ? error.message : String(error));
+		});
 		const startLabel = localize('debug.start', 'Start Debugging');
 		this.startAction = {
 			id: START_DEBUG_COMMAND_ID, label: startLabel, tooltip: startLabel, icon: debugStart, enabled: true,
@@ -53,6 +89,10 @@ export class DebugViewPaneContainer extends PaneComposite {
 		this._register(debug.onDidChangeConfigurations(() => this.updateTitleArea()));
 		this._register(debug.onDidChangeSession(() => this.updateTitleArea()));
 		this._register(workspace.onDidChangeWorkspace(() => this.updateTitleArea()));
+	}
+
+	override layout(dimension: IDimension): void {
+		super.layout({ width: dimension.width, height: Math.max(0, dimension.height - (this.chrome?.offsetHeight ?? 0)) });
 	}
 
 	override getActions(): readonly IAction[] {
@@ -77,6 +117,12 @@ export class DebugViewPaneContainer extends PaneComposite {
 	override focus(): void {
 		if (this.startItem && !this.startItem.isDisposed) this.startItem.focus();
 		else super.focus();
+	}
+
+	protected override disposeCore(): void {
+		// Tear down view/model listeners before changing the conditions that create panes.
+		super.disposeCore();
+		this.resetConditions();
 	}
 
 	private async configure(): Promise<void> {

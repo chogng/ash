@@ -258,7 +258,7 @@ export class DisassemblyView extends EditorPane implements IEditorPane {
 			if (!this.debug.getViewModel().focusedStackFrame && frames[0]) {
 				// Publish the frame for other consumers without requesting this instruction window twice.
 				this.updatingFrame = true;
-				try { this.debug.focusStackFrame(frames[0]); } finally { this.updatingFrame = false; }
+				try { await this.debug.focusStackFrame(frames[0], undefined, session, { explicit: false, preserveFocus: true }); } finally { this.updatingFrame = false; }
 			}
 			if (reference) { await this.load(reference, 0); }
 			else {

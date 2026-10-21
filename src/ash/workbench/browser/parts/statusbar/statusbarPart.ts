@@ -1,3 +1,4 @@
+import { colorCssVariable } from '../../../../platform/theme/common/colorUtils.js';
 import { toDisposable } from "../../../../base/common/lifecycle.js";
 import "./statusbarpart.css";
 import { addDisposableListener, isHTMLElement, isNode, h } from "../../../../base/browser/dom.js";
@@ -56,7 +57,19 @@ export class StatusbarPart extends Part {
 
 		this._register(toDisposable(() => this.disposeItems()));
 		this._register(this.statusbarService.onDidChangeEntries(() => this.render()));
+		this._register(this.statusbarService.onDidChangeStyle(() => this.updateStyle()));
+		this.updateStyle();
 		this.render();
+	}
+
+	private updateStyle(): void {
+		const style = this.statusbarService.style;
+		for (const [property, color] of [['color', style?.foreground], ['background-color', style?.background]] as const) {
+			if (color) this.domNode.style.setProperty(property, `var(${colorCssVariable(color)})`);
+			else this.domNode.style.removeProperty(property);
+		}
+		if (style?.border) this.domNode.style.boxShadow = `inset 0 1px var(${colorCssVariable(style.border)})`;
+		else this.domNode.style.removeProperty('box-shadow');
 	}
 
 	private render(): void {

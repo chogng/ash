@@ -1,6 +1,6 @@
 import { Emitter } from '../../../../base/common/event.js';
 import { Disposable, DisposableMap } from '../../../../base/common/lifecycle.js';
-import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
+import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { IViewDescriptorService, ViewsRegistry, type IViewContainerDescriptor, type IViewContainerModel, type IViewDescriptor, type IViewContainersChangeEvent, type ViewContainerLocation, type WorkbenchViewRegistry } from '../../../common/views.js';
 import { ViewContainerModel } from '../common/viewContainerModel.js';
 
@@ -30,12 +30,15 @@ export class ViewDescriptorService extends Disposable implements IViewDescriptor
 	public readonly onDidChangeViewContainerOrder =
 		this._onDidChangeViewContainerOrder.event;
 
-	constructor(options: ViewDescriptorServiceOptions, @IContextKeyService private readonly contextKeyService: IContextKeyService) {
+	constructor(options: ViewDescriptorServiceOptions, @IInstantiationService private readonly instantiation: IInstantiationService) {
 		super();
 		this.registry = options.registry ?? ViewsRegistry;
 		this.locations = new Map(Object.entries(options.viewContainerLocations ?? {}));
-		for (const container of this.registry.getViewContainers()) {
-			this.addContainer(container);
+		try {
+			for (const container of this.registry.getViewContainers()) this.addContainer(container);
+		} catch (error) {
+			this.dispose();
+			throw error;
 		}
 		this._register(this.registry.onDidRegisterViewContainer((container) => {
 			this.addContainer(container);
@@ -163,11 +166,7 @@ export class ViewDescriptorService extends Disposable implements IViewDescriptor
 		if (this.models.has(container.id)) { return; }
 		this.models.set(
 			container.id,
-			new ViewContainerModel(
-				container,
-				this.registry,
-				this.contextKeyService,
-			),
+			this.instantiation.createInstance(ViewContainerModel, container, this.registry),
 		);
 	}
 

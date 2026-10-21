@@ -111,7 +111,7 @@ import { IFileService, FileSystemProviderErrorCode, toFileSystemProviderErrorCod
 import { IUriIdentityService } from '../../../src/ash/platform/uriIdentity/common/uriIdentity.js';
 import { AgentHostFileSystemProvider } from '../../../src/ash/platform/agentHost/common/agentHostFileSystemProvider.js';
 import { createDisconnectedFileApi } from '../../../src/ash/platform/files/browser/fileApi.js';
-import { TestWorkspaceService } from '../../../src/ash/workbench/services/configuration/test/common/testServices.js';
+import { TestWorkspaceService, TestConfigurationService } from '../../../src/ash/workbench/services/configuration/test/common/testServices.js';
 import { FileEditorInput } from '../../../src/ash/workbench/contrib/files/browser/editors/fileEditorInput.js';
 import { StandaloneServices } from '../../../src/ash/editor/standalone/browser/standaloneServices.js';
 import { CodeEditorWidget } from '../../../src/ash/editor/browser/widget/codeEditor/codeEditorWidget.js';
@@ -242,6 +242,7 @@ if (new URLSearchParams(location.search).has('problems')) {
 	await import('../../../src/ash/workbench/browser/parts/panel/panelActions.js');
 }
 const services = resources.add(new InstantiationService());
+services.registerSingleton(IConfigurationService, () => new TestConfigurationService());
 const contexts = resources.add(new ContextKeyService());
 services.registerInstance(IContextKeyService, contexts);
 const storage = resources.add(new BrowserStorageService({ ownerWindow: window, workspaceId: 'composite', backend: window.localStorage, flushInterval: 0 }));

@@ -1,3 +1,4 @@
+import { INotificationService } from '../../../../platform/notification/common/notification.js';
 import { ViewPane, type IViewPaneOptions } from '../../../browser/parts/views/viewPane.js';
 import { addDisposableListener, h } from '../../../../base/browser/dom.js';
 import { DisposableStore } from '../../../../base/common/lifecycle.js';
@@ -8,8 +9,9 @@ import { Lxicon } from '../../../../base/common/lxicons.js';
 import { localize } from '../../../../nls.js';
 import { WorkbenchToolBar } from '../../../../platform/actions/browser/toolbar.js';
 import { IContextMenuService } from '../../../../platform/contextview/browser/contextView.js';
-import { type Event as CommonEvent } from '../../../../base/common/event.js';
 import { IDebugService, type IDebugSession, type IDebugEvaluateResult } from '../common/debug.js';
+import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
+import { DebugWatchAccessibilityAnnouncer } from '../common/debugAccessibilityAnnouncer.js';
 interface DebugWatchResult { readonly expression: string; readonly result?: IDebugEvaluateResult; readonly error?: string; }
 
 /** Watch owns drafts and evaluation results; durable definitions remain in Rust. */
@@ -22,11 +24,14 @@ export class WatchExpressionsView extends ViewPane {
 	private readonly rowControls = this._register(new DisposableStore());
 	private watchResults: readonly DebugWatchResult[] = [];
 	private refreshGeneration = 0;
+	private readonly announcements: DebugWatchAccessibilityAnnouncer;
 	constructor(container: HTMLElement, options: IViewPaneOptions,
-		onDidAssignVariable: CommonEvent<void>, private readonly reportError: (message: string) => void,
 		@IDebugService private readonly debug: IDebugService,
-		@IContextMenuService contextMenus: IContextMenuService) {
-		super(container, options);
+		@IContextMenuService contextMenus: IContextMenuService,
+		@INotificationService private readonly notifications: INotificationService,
+		@IInstantiationService instantiation: IInstantiationService) {
+		super(container, { minimumBodySize: 32, ...options });
+		this.announcements = instantiation.createInstance(DebugWatchAccessibilityAnnouncer);
 		const document = container.ownerDocument;
 		this.element.classList.add('ash-debug-section');
 		this.contentElement.classList.add('ash-debug-section-content');
@@ -93,7 +98,7 @@ export class WatchExpressionsView extends ViewPane {
 		this._register(addDisposableListener(this.watchForm, 'submit', event => this.addWatch(event)));
 		this._register(debug.onDidChangeWatchExpressions(() => this.refresh()));
 		this._register(debug.onDidChangeSession(() => {
-			// A stopped event first invalidates the old frame. Call Stack publishes
+			// A stopped event first invalidates the old frame. DebugService publishes
 			// the completed selection before Watch evaluates user expressions.
 			++this.refreshGeneration;
 			this.watchResults = [];
@@ -101,9 +106,7 @@ export class WatchExpressionsView extends ViewPane {
 		}));
 		this._register(debug.getViewModel().onDidFocusStackFrame(() => this.refresh()));
 		this._register(debug.getViewModel().onDidFocusThread(() => this.refresh()));
-		this._register(onDidAssignVariable(() => this.refresh()));
-		this.setVisible(true);
-		this.element.remove();
+		this._register(debug.getViewModel().onWillUpdateViews(() => this.refresh()));
 		this.refresh();
 	}
 	private refresh(): void {
@@ -113,7 +116,7 @@ export class WatchExpressionsView extends ViewPane {
 		const selection = this.debug.getViewModel();
 		if (this.debug.session?.state === 'stopped' && !selection.focusedStackFrame && !selection.focusedThread) return;
 		void this.refreshWatches(generation).catch(error => {
-			if (!this.isDisposed && generation === this.refreshGeneration) this.reportError(message(error));
+			if (!this.isDisposed && generation === this.refreshGeneration) this.notifications.error(message(error));
 		});
 	}
 	private render(): void {
@@ -150,6 +153,7 @@ export class WatchExpressionsView extends ViewPane {
 		const results = await session.evaluateWatchExpressions(expressions, frameId);
 		if (!this.isCurrentInspection(session, generation) || this.debug.getViewModel().focusedStackFrame?.id !== frameId || this.debug.watchExpressions !== expressions) return;
 		this.watchResults = Object.freeze(results);
+		this.announcements.announce(session.id, results);
 		this.render();
 	}
 

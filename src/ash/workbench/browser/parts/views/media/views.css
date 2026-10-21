@@ -38,7 +38,7 @@
 	width: 240px;
 }
 
-.ash-filter-view-pane
+.ash-view-pane.ash-filter-view-pane:not(.collapsed)
 	> .ash-pane-view-header
 	> .ash-pane-view-header-actions:has(.ash-view-filter-in-header) {
 	visibility: visible;

@@ -1,5 +1,6 @@
 import { TreeVisibility, type TreeFilter, type TreeFilterResult } from '../../../../base/browser/ui/tree/tree.js';
 import { matchesSubString } from '../../../../base/common/filters.js';
+import { removeAnsiEscapeCodes } from '../../../../base/common/strings.js';
 import type { DebugConsoleEntry } from '../../../../platform/debug/common/debugAdapterProcessService.js';
 
 /** Filters the Rust-owned output snapshot without retaining or changing its entries. */
@@ -24,7 +25,8 @@ export class ReplFilter implements TreeFilter<DebugConsoleEntry> {
 	filter(element: DebugConsoleEntry, parentVisibility: TreeVisibility): TreeFilterResult {
 		// An expression and its result remain together even when output is filtered.
 		if (element.kind === 'input' || element.kind === 'evaluation') return TreeVisibility.Visible;
-		const matches = (query: string) => ReplFilter.matchQuery(query, element.output) !== null;
+		const output = removeAnsiEscapeCodes(element.output);
+		const matches = (query: string) => ReplFilter.matchQuery(query, output) !== null;
 		if (this.excludes.some(matches)) return TreeVisibility.Hidden;
 		if (this.includes.length === 0) return parentVisibility;
 		if (this.includes.some(matches)) return TreeVisibility.Visible;

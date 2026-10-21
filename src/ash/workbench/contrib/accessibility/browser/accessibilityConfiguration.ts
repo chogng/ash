@@ -511,3 +511,16 @@ Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfigurat
 		get description() { return localize('debug.repl.verbosityDescription', 'Announce how to open accessibility help when the Debug Console receives focus.'); },
 	},
 });
+
+Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfiguration({
+	key: AccessibilityVerbositySettingId.Debug, defaultValue: true,
+	parse(value: unknown): boolean {
+		if (typeof value !== 'boolean') throw new TypeError(localize('debug.sidebarVerbosityInvalid', 'Run and Debug accessibility verbosity must be a boolean.'));
+		return value;
+	},
+	setting: {
+		valueType: 'boolean',
+		get title() { return localize('debug.sidebarVerbosityTitle', 'Run and Debug accessibility help'); },
+		get description() { return localize('debug.sidebarVerbosityDescription', 'Announce how to open accessibility help when Run and Debug receives focus.'); },
+	},
+});

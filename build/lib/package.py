@@ -103,6 +103,8 @@ def build_package_directory(
     remote_ssh_extension_binary: Optional[Path] = None,
     dev_container_provider_binary: Optional[Path] = None,
     lldb_extension_binary: Optional[Path] = None,
+    javascript_debug_extension_binary: Optional[Path] = None,
+    server_ready_extension_binary: Optional[Path] = None,
 ) -> None:
     if git_extension_binary is None:
         raise RuntimeError("Git extension executable is required in product packages")
@@ -184,6 +186,12 @@ def build_package_directory(
             executables["jsExtensionHost"] = str(js_extension_host_binary)
         if dev_container_provider_binary is not None:
             executables["devContainerProvider"] = str(dev_container_provider_binary)
+        if javascript_debug_extension_binary is not None:
+            executables["javascriptDebugExtension"] = str(
+                javascript_debug_extension_binary
+            )
+        if server_ready_extension_binary is not None:
+            executables["serverReadyExtension"] = str(server_ready_extension_binary)
         if lldb_extension_binary is not None:
             executables["lldbExtension"] = str(lldb_extension_binary)
         if windows_sandbox_binary is not None:
@@ -310,6 +318,10 @@ def assemble_package(staging: Path, inputs: dict) -> None:
     (staging / LAYOUT["pathDir"]).mkdir(parents=True)
     copy_builtin_skills(source_root, resources / "skills")
     _copy_builtin_extensions(source_root, resources / "extensions")
+    if "javascriptDebugExtension" in inputs["executables"]:
+        from build.lib.js_debug import copy_runtime
+
+        copy_runtime(source_root, resources / "extensions/debug-javascript/runtime")
     copy_regular_tree(
         source_root / "resources/product-services",
         resources / "product-services",
@@ -434,6 +446,14 @@ def assemble_package(staging: Path, inputs: dict) -> None:
         components["node"] = {
             key: node[key]
             for key in ("archive", "archiveSha256", "binarySha256", "source", "version")
+        }
+    if "javascriptDebugExtension" in executables:
+        from build.lib.js_debug import VERSION, SHA256
+
+        components["javascriptDebugRuntime"] = {
+            "version": VERSION,
+            "source": "microsoft/vscode-js-debug",
+            "archiveSha256": SHA256,
         }
     if inputs["platform"] == "linux":
         bubblewrap = executables.get("bubblewrap")
@@ -884,6 +904,8 @@ def record_system_signing(
             "remoteSshExtension",
             "devContainerProvider",
             "lldbExtension",
+            "javascriptDebugExtension",
+            "serverReadyExtension",
             "voiceHost",
             "livekitClient",
             "recognizer",

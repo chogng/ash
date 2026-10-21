@@ -58,6 +58,48 @@ fn terminal_events_win_and_unknown_capability_keys_are_not_retained() {
 }
 
 #[test]
+fn terminated_acknowledges_the_adapter_once_and_preserves_borrowed_runtime_ownership() {
+    let mut lifecycle = Lifecycle::new();
+    let mut client = DebugClient::new(Duration::from_secs(15));
+    lifecycle
+        .merge_capabilities(&json!({"supportTerminateDebuggee":true}))
+        .unwrap();
+    lifecycle
+        .accept(&json!({"seq":0,"type":"event","event":"exited","body":{"exitCode":0}}))
+        .unwrap();
+    assert!(
+        !lifecycle.ended(),
+        "exited alone does not end a DAP session"
+    );
+    lifecycle
+        .accept(&json!({"seq":0,"type":"event","event":"terminated"}))
+        .unwrap();
+    let acknowledgement = lifecycle
+        .disconnect_after_termination(&mut client)
+        .unwrap()
+        .unwrap();
+    assert_eq!(acknowledgement["command"], "disconnect");
+    assert_eq!(
+        acknowledgement["arguments"],
+        json!({"restart":false,"terminateDebuggee":false})
+    );
+    assert!(
+        lifecycle
+            .disconnect_after_termination(&mut client)
+            .unwrap()
+            .is_none()
+    );
+    let mut requested = Lifecycle::new();
+    requested.requested(9, "disconnect");
+    assert!(
+        requested
+            .disconnect_after_termination(&mut client)
+            .unwrap()
+            .is_none()
+    );
+}
+
+#[test]
 fn no_debug_suppresses_exception_defaults_and_bad_filters_do_not_advance_configuration() {
     for no_debug in [false, true] {
         let mut lifecycle = Lifecycle::new();
@@ -292,4 +334,68 @@ fn completion_results_share_the_backend_inspection_lifetime() {
         ),
         ash_debug_client::DebugResponse::Complete(_)
     ));
+}
+
+#[test]
+fn memory_and_source_inspection_capabilities_and_lifetimes_are_authoritative() {
+    let mut lifecycle = Lifecycle::new();
+    lifecycle.snapshot.phase = DebugInitializationPhase::Active;
+    lifecycle.snapshot.state = DebugExecutionState::Stopped;
+    let read = Some(json!({"memoryReference":"0x10", "offset":0, "count":16}));
+    assert!(!lifecycle.allows("readMemory", &read));
+    lifecycle
+        .accept(
+            &json!({"type":"event", "event":"capabilities", "body":{"capabilities":{
+                "supportsReadMemoryRequest":true, "supportsWriteMemoryRequest":true,
+                "supportsLoadedSourcesRequest":true, "supportsExceptionInfoRequest":true
+            }}}),
+        )
+        .unwrap();
+    assert!(lifecycle.allows("readMemory", &read));
+    assert!(lifecycle.allows(
+        "writeMemory",
+        &Some(json!({"memoryReference":"0x10", "offset":0, "data":"AQI="}))
+    ));
+    assert!(!lifecycle.allows(
+        "readMemory",
+        &Some(json!({"memoryReference":"0x10", "count":4097}))
+    ));
+    assert!(!lifecycle.allows(
+        "readMemory",
+        &Some(json!({"memoryReference":"", "count":16}))
+    ));
+    assert!(lifecycle.allows("loadedSources", &None));
+    assert!(lifecycle.allows("exceptionInfo", &Some(json!({"threadId":1}))));
+    for (id, command) in [
+        (10, "readMemory"),
+        (11, "writeMemory"),
+        (12, "exceptionInfo"),
+    ] {
+        lifecycle.requested(id, command);
+    }
+    lifecycle
+        .accept(&json!({"type":"event", "event":"continued", "body":{"threadId":1}}))
+        .unwrap();
+    assert!(!lifecycle.allows("readMemory", &read));
+    assert!(!lifecycle.allows("exceptionInfo", &Some(json!({"threadId":1}))));
+    assert!(lifecycle.allows("loadedSources", &None));
+    for id in [10, 11, 12] {
+        assert!(matches!(
+            lifecycle.response(
+                id,
+                ash_debug_client::DebugResponse::Complete(json!({"body":{}}))
+            ),
+            ash_debug_client::DebugResponse::Failed(_)
+        ));
+    }
+}
+
+#[test]
+fn memory_write_payloads_are_bounded_decodable_base64() {
+    assert!(super::valid_memory_data("AAH/"));
+    assert!(super::valid_memory_data("AA=="));
+    for invalid in ["", "!@#$", "A===", "A", "AA=Z"] {
+        assert!(!super::valid_memory_data(invalid), "{invalid}");
+    }
+    assert!(!super::valid_memory_data(&"AAAA".repeat(1366)));
 }

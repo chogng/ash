@@ -1,3 +1,10 @@
+import { ServiceCollection } from '../../../src/ash/platform/instantiation/common/serviceCollection.js';
+import { SyncDescriptor } from '../../../src/ash/platform/instantiation/common/descriptors.js';
+import { IWorkspaceContextService } from '../../../src/ash/platform/workspace/common/workspace.js';
+import { IFileService } from '../../../src/ash/platform/files/common/files.js';
+import { FileService } from '../../../src/ash/platform/files/common/fileService.js';
+import { IUriIdentityService } from '../../../src/ash/platform/uriIdentity/common/uriIdentity.js';
+import { UriIdentityService } from '../../../src/ash/platform/uriIdentity/common/uriIdentityService.js';
 import type { IClipboardService } from '../../../src/ash/platform/clipboard/common/clipboardService.js';
 import { BrowserContextMenuService } from '../../../src/ash/platform/contextview/browser/contextMenuService.js';
 import { BrowserContextViewService } from '../../../src/ash/platform/contextview/browser/contextViewService.js';
@@ -24,7 +31,7 @@ import { lightColorTheme, darkColorTheme, highContrastLightColorTheme, highContr
 import { TestThemeService } from '../../../src/ash/platform/theme/test/common/testThemeService.js';
 import { SymphonyTasksView } from '../../../src/ash/sessions/contrib/symphony/browser/symphonyViews.js';
 import { type ISymphonyService, type SymphonyViewState } from '../../../src/ash/sessions/contrib/symphony/browser/symphonyService.js';
-import { type IEditorService } from '../../../src/ash/workbench/services/editor/common/editorService.js';
+import { IEditorService } from '../../../src/ash/workbench/services/editor/common/editorService.js';
 import { NotificationService } from '../../../src/ash/workbench/services/notification/common/notificationService.js';
 import { IStorageService } from '../../../src/ash/platform/storage/common/storage.js';
 import { BrowserStorageService } from '../../../src/ash/workbench/services/storage/browser/storageService.js';
@@ -33,12 +40,12 @@ import { ChangesViewPane } from '../../../src/ash/sessions/contrib/changes/brows
 import { ISessionsService } from '../../../src/ash/sessions/services/sessions/browser/sessionsService.js';
 import { IChatService, type TurnChangeDetails } from '../../../src/ash/workbench/services/chat/common/chatService.js';
 import { IQuickInputService } from '../../../src/ash/platform/quickinput/common/quickInput.js';
-import { type IAccessibleViewService } from '../../../src/ash/platform/accessibility/browser/accessibleView.js';
+import { IAccessibleViewService } from '../../../src/ash/platform/accessibility/browser/accessibleView.js';
 import { Repl } from '../../../src/ash/workbench/contrib/debug/browser/repl.js';
 import { registerCodeEditorServices } from '../../../src/ash/editor/test/browser/testCodeEditor.js';
 import { IDebugService } from '../../../src/ash/workbench/contrib/debug/common/debug.js';
 import { ViewModel } from '../../../src/ash/workbench/contrib/debug/common/debugViewModel.js';
-import '../../../src/ash/workbench/contrib/debug/browser/media/debug.css';
+import '../../../src/ash/workbench/contrib/debug/browser/media/debugViewlet.css';
 import { ProblemsViewPane } from '../../../src/ash/workbench/contrib/problems/browser/problemsViewPane.js';
 import { BulkEditPane } from '../../../src/ash/workbench/contrib/bulkEdit/browser/preview/bulkEditPane.js';
 import { TunnelPanel } from '../../../src/ash/workbench/contrib/remote/browser/tunnelView.js';
@@ -136,13 +143,17 @@ const markers = resources.add(new MarkerService());
 markers.changeAll('fixture', [{ resource: URI.file('/fixture/file.ts'), marker: { severity: MarkerSeverity.Error, message: 'Fixture problem', startLineNumber: 1, startColumn: 1, endLineNumber: 1, endColumn: 2 } }]);
 if (params.has('noProblems')) markers.changeAll('fixture', []);
 const replDebug = {
-	onDidChangeSession: Event.None, getViewModel: () => debugViewModel,
+	onDidChangeSession: Event.None, getSession: () => undefined, getViewModel: () => debugViewModel,
 	replModel: {
 		...Disposable.None, sessions: [], activeSession: { id: 'fixture', label: 'Fixture', state: 'stopped', elements: [{ id: 1, sessionId: 'fixture', kind: 'output', output: 'Fixture output', category: 'console', parentId: null, collapsed: false, variablesReference: null, source: null, line: null, column: null, data: null }], output: 'Fixture output', canEvaluate: true },
 		onDidChange: Event.None, selectSession: () => { }, clear: () => { }, evaluate: async () => { throw new Error('Evaluation failed. '.repeat(12)); },
 	}
 } as unknown as IDebugService;
-replServices.registerInstance(IDebugService, replDebug);
+const replScope = resources.add(replServices.createChild(new ServiceCollection(
+	[IDebugService, replDebug], [IWorkspaceContextService, workspace], [IEditorService, editors],
+	[IFileService, resources.add(new FileService())], [IUriIdentityService, new SyncDescriptor(UriIdentityService)],
+	[IStorageService, storage], [IAccessibleViewService, { ...Disposable.None, getOpenAriaHint: () => undefined, show: () => false, disableHint: async () => { }, showAccessibleViewHelp() { } }],
+)));
 const pane = resources.add(view === 'empty'
 	? new EmptyView(root, { id: 'fixture.empty', title: 'Files' }, {
 		pickFolderAndOpen: async () => { throw new Error('Folder opening failed. '.repeat(12)); },
@@ -167,7 +178,7 @@ const pane = resources.add(view === 'empty'
 							{ getOpenAriaHint: () => undefined } as unknown as IAccessibleViewService, changesServices, changesViewState,
 							{ openChangesEditor: async () => { throw new Error('Opening review editors is outside this layout fixture'); } } as unknown as ISessionChangesService, storage)
 						: view === 'console'
-							? new Repl(root, { id: 'fixture.console', title: 'Console' }, replDebug, undefined!, undefined!, undefined!, { getOpenAriaHint: () => undefined } as never, storage, replServices, contextKeys)
+							? replScope.createInstance(Repl, root, { id: 'fixture.console', title: 'Console' })
 							: new SymphonyTasksView(root, { id: 'fixture.symphony', title: 'Symphony' }, symphony, configuration, contextKeys,
 								{ showOpenDialog: async () => { throw new Error('File picking is outside this fixture'); } } as unknown as IFileDialogService));
 const panes = resources.add(new PaneView(root));

@@ -538,7 +538,7 @@ const classification = new URLSearchParams(location.search).has('classification'
 const descriptor = ViewsRegistry.getViewContainer('ash.extensions')!;
 const componentViews = ViewsRegistry.getViews(descriptor.id).map(view => ({ ...view, collapsed: view.id === 'ash.extensions.view' ? false : true }));
 const model: IViewContainerModel = classification
-	? disposables.add(new ViewContainerModel(descriptor, ViewsRegistry, services.get(IContextKeyService)))
+	? disposables.add(services.createInstance(ViewContainerModel, descriptor, ViewsRegistry))
 	: {
 		viewContainer: descriptor, allViewDescriptors: componentViews, activeViewDescriptors: componentViews, visibleViewDescriptors: componentViews,
 		onDidChangeAllViewDescriptors: Event.None, onDidChangeActiveViewDescriptors: Event.None, onDidChangeVisibleViewDescriptors: Event.None,

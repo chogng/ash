@@ -136,6 +136,18 @@ class FakeDebugService extends Disposable {
 }
 
 class FakeDebugSession extends Disposable implements IDebugSession {
+	inspectionRevision = 0;
+	readonly onDidProgressStart = Event.None;
+	readonly onDidProgressUpdate = Event.None;
+	readonly onDidProgressEnd = Event.None;
+	readonly onDidLoadedSource = Event.None;
+	readonly onDidInvalidateMemory = Event.None;
+	async loadedSources(): Promise<never> { throw new Error('Loaded-source IO is not configured in this fixture'); }
+	async readMemory(): Promise<never> { throw new Error('Memory IO is not configured in this fixture'); }
+	async writeMemory(): Promise<never> { throw new Error('Memory IO is not configured in this fixture'); }
+	async exceptionInfo(): Promise<never> { throw new Error('Exception IO is not configured in this fixture'); }
+	async cancelProgress(): Promise<void> { }
+
 	private readonly stateEmitter = this._register(new Emitter<DebugSessionState>());
 	private readonly outputEmitter = this._register(new Emitter<void>());
 	constructor(readonly id = "debug-1") { super(); }

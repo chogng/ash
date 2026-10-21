@@ -47,7 +47,7 @@ export class TestExecutionService extends Disposable implements ITestExecutionSe
 	async prepareDebug(id: string, _dir: string, catalogId: string, testId: string): Promise<void> {
 		if (!this.snapshots.has(catalogId)) { throw new Error('Missing discovery catalog'); }
 		this.snapshots.set(id, { operationId: id, kind: 'debug', status: 'running', tests: [], results: [], sequence: 0, error: null, launch: null });
-		this.update(id, { status: 'completed', launch: { testId, program: '/workspace/target/test', arguments: ['--exact', this.items.find(test => test.id === testId)!.name], directory: '/workspace', adapterProgram: 'lldb-dap' } });
+		this.update(id, { status: 'completed', launch: { testId, program: '/workspace/target/test', arguments: ['--exact', this.items.find(test => test.id === testId)!.name], directory: '/workspace' } });
 	}
 
 	async read(id: string): Promise<TestSnapshot> { return this.snapshots.get(id)!; }

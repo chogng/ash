@@ -1,3 +1,6 @@
+import { ICommandService } from '../../../../platform/commands/common/commands.js';
+import { ADD_INSTRUCTION_BREAKPOINT_ID } from './debugCommands.js';
+import { INotificationService } from '../../../../platform/notification/common/notification.js';
 import { ViewPane, type IViewPaneOptions } from '../../../browser/parts/views/viewPane.js';
 import { addDisposableListener, h } from '../../../../base/browser/dom.js';
 import { DisposableStore } from '../../../../base/common/lifecycle.js';
@@ -6,17 +9,11 @@ import { Lxicon } from '../../../../base/common/lxicons.js';
 import { localize } from '../../../../nls.js';
 import { WorkbenchToolBar } from '../../../../platform/actions/browser/toolbar.js';
 import { IContextMenuService } from '../../../../platform/contextview/browser/contextView.js';
-import { IDebugService, type IDebugSession, type IDebugThread, type IDebugStackFrame, DISASSEMBLY_VIEW_ID } from '../common/debug.js';
+import { IDebugService, type IDebugSession, type IDebugThread, type IDebugStackFrame } from '../common/debug.js';
 import { IEditorService } from '../../../services/editor/common/editorService.js';
-import { IUriIdentityService } from '../../../../platform/uriIdentity/common/uriIdentity.js';
-import { ILogService } from '../../../../platform/log/common/log.js';
-import { ITextModelService } from '../../../../editor/common/services/resolverService.js';
-import { Position } from '../../../../editor/common/core/position.js';
-import { Range } from '../../../../editor/common/core/range.js';
-import { getUriFromSource } from '../common/debugSource.js';
 import { DisassemblyViewInput } from '../common/disassemblyViewInput.js';
 
-/** Call Stack owns stopped-thread discovery, frame selection and source navigation. */
+/** Displays stopped threads and frames; submits explicit frame selection to DebugService. */
 export class CallStackView extends ViewPane {
 	private readonly threadsElement: HTMLSelectElement;
 	private readonly stackElement: HTMLUListElement;
@@ -26,15 +23,12 @@ export class CallStackView extends ViewPane {
 	private frames: readonly IDebugStackFrame[] = [];
 	private refreshGeneration = 0;
 	constructor(container: HTMLElement, options: IViewPaneOptions,
-		private readonly requestInstructionBreakpoint: (instruction: string) => void,
-		private readonly reportError: (message: string) => void,
 		@IDebugService private readonly debug: IDebugService,
 		@IEditorService private readonly editor: IEditorService,
 		@IContextMenuService contextMenus: IContextMenuService,
-		@IUriIdentityService private readonly uriIdentity: IUriIdentityService,
-		@ILogService private readonly logService: ILogService,
-		@ITextModelService private readonly textModels: ITextModelService) {
-		super(container, options);
+		@ICommandService private readonly commands: ICommandService,
+		@INotificationService private readonly notifications: INotificationService) {
+		super(container, { minimumBodySize: 32, ...options });
 		this.element.classList.add('ash-debug-section');
 		this.contentElement.classList.add('ash-debug-section-content');
 		this.threadsElement = select(container.ownerDocument, localize('debug.thread', 'Debug thread'));
@@ -47,9 +41,8 @@ export class CallStackView extends ViewPane {
 		this._register(addDisposableListener(this.threadsElement, 'change', () => { void this.selectThread(); }));
 		this._register(addDisposableListener(this.stackElement, 'click', event => this.activateFrame(event)));
 		this._register(debug.onDidChangeSession(() => { void this.refreshStoppedState(); }));
+		this._register(debug.getViewModel().onDidFocusThread(() => this.render()));
 		this._register(debug.getViewModel().onDidFocusStackFrame(() => this.render()));
-		this.setVisible(true);
-		this.element.remove();
 		void this.refreshStoppedState();
 	}
 	private async selectThread(): Promise<void> {
@@ -64,7 +57,6 @@ export class CallStackView extends ViewPane {
 		const session = this.debug.session;
 		const generation = ++this.refreshGeneration;
 		this.threads = []; this.frames = [];
-		this.debug.focusStackFrame(undefined);
 		this.render();
 		if (!session || session.state !== 'stopped') return;
 		try {
@@ -74,10 +66,7 @@ export class CallStackView extends ViewPane {
 			session.selectThread(inspection.threadId);
 			this.threads = inspection.threads;
 			this.frames = inspection.frames;
-			const frame = this.frames[0];
-			this.debug.focusStackFrame(frame, this.threads.find(thread => thread.id === session.threadId));
-			if (frame && frame.lineNumber > 0 && frame.columnNumber > 0 && this.editor.activeEditor?.editorId !== DISASSEMBLY_VIEW_ID) await this.openFrameSource(session, frame, generation);
-		} catch (error) { if (this.isCurrentInspection(session, generation)) this.reportError(message(error)); }
+		} catch (error) { if (this.isCurrentInspection(session, generation)) this.notifications.error(message(error)); }
 		if (this.isCurrentInspection(session, generation)) this.render();
 	}
 	private isCurrentInspection(session: IDebugSession, generation: number): boolean {
@@ -90,23 +79,11 @@ export class CallStackView extends ViewPane {
 		const session = this.debug.session;
 		if (!frame || !session || session.state !== 'stopped') return;
 		const generation = ++this.refreshGeneration;
-		this.debug.focusStackFrame(frame, this.threads.find(thread => thread.id === session.threadId));
+		void this.debug.focusStackFrame(frame, this.threads.find(thread => thread.id === session.threadId)).catch(error => {
+			if (this.isCurrentInspection(session, generation)) this.notifications.error(message(error));
+		});
 		this.render();
-		void this.openFrameSource(session, frame, generation).catch(error => { if (this.isCurrentInspection(session, generation)) this.reportError(message(error)); });
 	}
-	private async openFrameSource(session: IDebugSession, frame: IDebugStackFrame, generation: number): Promise<void> {
-		if (!this.isCurrentInspection(session, generation)) return;
-		const selection = frame.lineNumber > 0 && frame.columnNumber > 0 ? Range.fromPositions(new Position(frame.lineNumber, frame.columnNumber)) : undefined;
-		if (frame.source?.sourceReference && frame.source.sourceReference > 0) {
-			const resource = getUriFromSource(frame.source, frame.source.path, session.id, this.uriIdentity, this.logService);
-			using reference = await this.textModels.createModelReference(resource);
-			if (!this.isCurrentInspection(session, generation)) return;
-			await this.editor.openEditor({ resource, label: frame.source.name, readOnly: true }, { selection });
-		} else if (frame.source?.resource) {
-			await this.editor.openEditor({ resource: frame.source.resource, label: frame.source.name }, { selection });
-		}
-	}
-
 	private render(): void {
 		const session = this.debug.session;
 		const stopped = session?.state === 'stopped';
@@ -123,7 +100,7 @@ export class CallStackView extends ViewPane {
 			tooltip: instructionLabel,
 			icon: Lxicon.add,
 			enabled: Boolean(stopped && session.capabilities.supportsInstructionBreakpoints),
-			run: () => this.requestInstructionBreakpoint(this.debug.getViewModel().focusedStackFrame?.instructionPointerReference ?? ""),
+			run: () => this.commands.executeCommand(ADD_INSTRUCTION_BREAKPOINT_ID, this.debug.getViewModel().focusedStackFrame?.instructionPointerReference ?? ""),
 		}, {
 			id: 'debug.action.openDisassemblyView', label: localize('debug.openDisassembly', 'Open Disassembly View'), tooltip: localize('debug.openDisassembly', 'Open Disassembly View'), icon: Lxicon.code,
 			enabled: Boolean(stopped && session.capabilities.supportsDisassembleRequest),

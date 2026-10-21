@@ -27,6 +27,7 @@ import { ILogService } from '../../../../platform/log/common/log.js';
 import { getUriFromSource } from '../common/debugSource.js';
 import { Range } from '../../../../editor/common/core/range.js';
 import { localize } from '../../../../nls.js';
+import { IWorkspaceContextService, type IWorkspaceFolder } from '../../../../platform/workspace/common/workspace.js';
 import { IViewsService } from '../../../services/views/common/viewsService.js';
 import { DEBUG_CONSOLE_VIEW_ID, type IDebugSource } from '../common/debug.js';
 import { defaultButtonStyles, defaultFindWidgetStyles } from '../../../../platform/theme/browser/defaultStyles.js';
@@ -47,9 +48,7 @@ export class Repl extends FilterViewPane {
 	private readonly sessionSelect: HTMLSelectElement;
 	private readonly output: HTMLDivElement;
 	private readonly accessibility = new ReplAccessibilityProvider();
-	private readonly renderer = this._register(new ReplOutputElementRenderer(
-		entry => this.openSource(entry, entry.source as IDebugSource).catch(error => this.setStatus(message(error))),
-	));
+	private readonly renderer: ReplOutputElementRenderer;
 	private readonly tree;
 	private treeRendering = false;
 	private treeRenderPending = false;
@@ -100,6 +99,7 @@ export class Repl extends FilterViewPane {
 		@IStorageService private readonly storage: IStorageService,
 		@IInstantiationService private readonly instantiation: IInstantiationService,
 		@IContextKeyService contextKeys: IContextKeyService,
+		@IWorkspaceContextService private readonly workspace: IWorkspaceContextService,
 	) {
 		const filterHistoryChanged = new Emitter<string[]>();
 		const filterHistory = Object.assign(new Set(readHistory(storage, logService, FILTER_HISTORY_KEY)), { onDidChange: filterHistoryChanged.event });
@@ -114,6 +114,10 @@ export class Repl extends FilterViewPane {
 		this.filterHistoryChanged = this._register(filterHistoryChanged);
 		this.debugService = debugService;
 		this.consoleService = debugService.replModel;
+		this.renderer = this._register(instantiation.createInstance(ReplOutputElementRenderer,
+			(entry: DebugConsoleEntry) => this.openSource(entry, entry.source as IDebugSource).catch(error => this.setStatus(message(error))),
+			(entry: DebugConsoleEntry) => this.consoleFolder(entry),
+		));
 		this.contentElement.classList.add("ash-debug-console");
 		this.headerActionsElement.classList.add('ash-debug-console-title-actions');
 		this.titleActions = this._register(new ActionBar(this.headerActionsElement, { actionViewItemOptions: { buttonStyles: defaultButtonStyles }, ariaLabel: localize('debug.repl.actions', 'Debug Console actions') }));
@@ -648,6 +652,14 @@ export class Repl extends FilterViewPane {
 		await this.editors.openEditor({ resource, label: source.name, readOnly: Boolean(source.sourceReference) }, {
 			selection: new Range(entry.line ?? 1, entry.column ?? 1, entry.line ?? 1, entry.column ?? 1),
 		});
+	}
+
+	private consoleFolder(entry: DebugConsoleEntry): IWorkspaceFolder | undefined {
+		const session = this.debugService.getSession(entry.sessionId);
+		if (!session || session.configuration.dirId === null) return undefined;
+		const folders = this.workspace.getWorkspace().folders;
+		return session.configuration.dirId === undefined ? folders.length === 1 ? folders[0] : undefined
+			: folders.find(folder => folder.id === session.configuration.dirId);
 	}
 
 	private setStatus(value: string): void {

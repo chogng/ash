@@ -1,3 +1,4 @@
+import type { ColorIdentifier } from '../../../../platform/theme/common/colorRegistry.js';
 import { Emitter, type Event } from "../../../../base/common/event.js";
 import type { Icon } from "../../../../base/common/icon.js";
 import { Disposable, type IDisposable, toDisposable } from "../../../../base/common/lifecycle.js";
@@ -61,7 +62,18 @@ export interface IStatusbarEntryAccessor extends IDisposable {
  *
  * Higher-priority entries appear closer to the outer edge of their alignment.
  */
+export interface IStatusbarStyleOverride {
+	/** Lower values take precedence. */
+	readonly priority: number;
+	readonly foreground?: ColorIdentifier;
+	readonly background?: ColorIdentifier;
+	readonly border?: ColorIdentifier;
+}
+
 export interface IStatusbarService {
+	readonly onDidChangeStyle: Event<void>;
+	readonly style: IStatusbarStyleOverride | undefined;
+	overrideStyle(style: IStatusbarStyleOverride): IDisposable;
 	readonly onDidChangeEntries: Event<void>;
 
 	addEntry(
@@ -87,6 +99,21 @@ export class StatusbarService extends Disposable
 	private readonly _onDidChangeEntries = this._register(new Emitter<void>());
 	private readonly entries = new Map<string, IStoredStatusbarEntry>();
 	private nextOrder = 0;
+	private readonly styles = new Set<IStatusbarStyleOverride>();
+	private readonly styleChanges = this._register(new Emitter<void>());
+	readonly onDidChangeStyle = this.styleChanges.event;
+
+	get style(): IStatusbarStyleOverride | undefined {
+		return [...this.styles].sort((left, right) => left.priority - right.priority).at(0);
+	}
+
+	overrideStyle(style: IStatusbarStyleOverride): IDisposable {
+		this.assertNotDisposed();
+		const stored = { ...style };
+		this.styles.add(stored);
+		this.styleChanges.fire();
+		return toDisposable(() => { if (this.styles.delete(stored)) this.styleChanges.fire(); });
+	}
 
 	readonly onDidChangeEntries = this._onDidChangeEntries.event;
 
@@ -95,6 +122,7 @@ export class StatusbarService extends Disposable
 		if (parent) this._register(parent.onDidChangeEntries(() => this._onDidChangeEntries.fire()));
 		this._register(toDisposable(() => {
 			this.entries.clear();
+			this.styles.clear();
 		}));
 	}
 

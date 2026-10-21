@@ -1,3 +1,4 @@
+import { TestViewDescriptorService } from '../../../../../test/browser/workbenchTestServices.js';
 import { ActivityService } from '../../../../../../workbench/services/activity/browser/activityService.js';
 import { IActivityService } from '../../../../../../workbench/services/activity/common/activity.js';
 import { registerTestComponentServices } from '../../../../../test/common/testEditorServices.js';
@@ -247,7 +248,7 @@ test("ViewPaneContainer retains hidden view instances and restores workspace siz
 		{ id: "test.first", title: "First", ctorDescriptor: new SyncDescriptor(TestView) },
 		{ id: "test.second", title: "Second", collapsed: true, ctorDescriptor: new SyncDescriptor(TestView) },
 	]);
-	using descriptors = new ViewDescriptorService({ registry }, contextKeys);
+	using descriptors = new TestViewDescriptorService({ registry }, contextKeys);
 	using storage = createStorage("test");
 	const options = { viewContainer, model: descriptors.getViewContainerModel(viewContainer.id), instantiationService: services, contextKeyService: contextKeys };
 	assert.throws(() => services.createInstance(ViewPaneContainer, browserEnvironment.window.document.body, options), /Unknown service: storageService/);
@@ -350,7 +351,7 @@ test('Pane Composite combines scoped container and View actions while retaining 
 	const registration = resources.add(registry.registerViewContainer(active));
 	resources.add(registry.registerViewContainer(empty));
 	resources.add(registry.registerViews(active.id, [{ id: 'fixture.action-view', title: 'View', canToggleVisibility: false, ctorDescriptor: new SyncDescriptor(ActionView) }]));
-	const descriptors = resources.add(new ViewDescriptorService({ registry }, context));
+	const descriptors = resources.add(new TestViewDescriptorService({ registry }, context));
 	services.registerInstance(IWorkbenchLayoutService, {
 		getSideBarPosition: () => Position.LEFT,
 	} as import('../../../../../../workbench/services/layout/browser/layoutService.js').IWorkbenchLayoutService);

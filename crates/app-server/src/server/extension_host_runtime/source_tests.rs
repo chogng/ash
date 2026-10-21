@@ -462,3 +462,65 @@ fn speech_activation_uses_only_its_declared_provider_owner() {
     };
     assert!(!plan.matches(&ActivationEvent::Speech));
 }
+
+#[test]
+fn debug_workflow_deployments_use_public_capabilities_and_separate_authority() {
+    let directory = tempfile::tempdir().unwrap();
+    let javascript = super::product_debug_workflow_deployment(
+        directory.path(),
+        "debug-javascript",
+        include_str!("../../../../../extensions/debug-javascript/package.json"),
+        "javascript-sources",
+    )
+    .unwrap();
+    let server_ready = super::product_debug_workflow_deployment(
+        directory.path(),
+        "debug-server-ready",
+        include_str!("../../../../../extensions/debug-server-ready/package.json"),
+        "server-ready-sources",
+    )
+    .unwrap();
+    assert_eq!(javascript.id, "ash.debug-javascript");
+    // Startup must stay within the external process quota even when the host has
+    // a large developer environment; only OS helper lookup facts are transferred.
+    assert!(javascript.command.environment().len() <= 12);
+    assert!(
+        !javascript
+            .command
+            .environment()
+            .contains_key(std::ffi::OsStr::new("OPENAI_API_KEY"))
+    );
+    assert_eq!(server_ready.id, "ash.debug-server-ready");
+    assert_ne!(javascript.package_digest, server_ready.package_digest);
+    assert_eq!(
+        javascript.params.capabilities,
+        [
+            ash_external_ext::ExtensionCapability::DebugAdapter,
+            ash_external_ext::ExtensionCapability::TerminalProfileProvider
+        ]
+    );
+    assert_eq!(
+        server_ready.params.capabilities,
+        [ash_external_ext::ExtensionCapability::DebugAdapter]
+    );
+    for deployment in [&javascript, &server_ready] {
+        assert!(matches!(
+            deployment.workspace_read,
+            WorkspaceReadAccess::Denied
+        ));
+        assert!(deployment.backend_channels.is_empty());
+        assert!(deployment.credential_providers.is_empty());
+    }
+    assert!(
+        javascript
+            .activation
+            .as_ref()
+            .unwrap()
+            .events
+            .contains(&"onStartupFinished".into())
+    );
+    assert_eq!(
+        server_ready.activation.as_ref().unwrap().events,
+        ["onDebug"]
+    );
+}
