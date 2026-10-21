@@ -119,9 +119,14 @@ pub enum TerminalExecution {
 }
 
 /// Starts one terminal process in the server's authorized directory.
-#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[derive(Clone, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct TerminalCreateParams {
+    /// Window-lifetime credential registered independently of the replaceable App Server.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    #[schemars(length(min = 64, max = 64))]
+    pub lifetime_token: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     #[schemars(length(max = 32))]
@@ -150,9 +155,14 @@ pub struct TerminalCreateParams {
 }
 
 /// Starts one interactive terminal in a session-authorized directory.
-#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[derive(Clone, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct TerminalCreateInSessionDirectoryParams {
+    /// Window-lifetime credential registered independently of the replaceable App Server.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    #[schemars(length(min = 64, max = 64))]
+    pub lifetime_token: Option<String>,
     pub session_id: SessionId,
     pub path: std::path::PathBuf,
     #[schemars(range(min = 1, max = 512))]
@@ -163,13 +173,14 @@ pub struct TerminalCreateInSessionDirectoryParams {
     pub lifecycle: TerminalLifecycle,
 }
 
-/// One short-lived bearer lease used to reattach a detached terminal.
+/// A rotating bearer lease used to reattach a disconnected or detached terminal.
 #[derive(Clone, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct TerminalReconnectLease {
     #[schemars(length(min = 64, max = 64))]
     pub reconnect_token: String,
     #[ts(type = "number")]
+    /// Zero retains the process until explicit close or exit; positive values bound a handoff.
     pub reconnect_grace_period_millis: u64,
 }
 
@@ -281,6 +292,11 @@ pub struct TerminalCreateResult {
 #[derive(Clone, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct TerminalAttachParams {
+    /// Window-lifetime credential registered independently of the replaceable App Server.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    #[schemars(length(min = 64, max = 64))]
+    pub lifetime_token: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub dir_id: Option<String>,
@@ -298,6 +314,7 @@ impl fmt::Debug for TerminalAttachParams {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter
             .debug_struct("TerminalAttachParams")
+            .field("lifetime_token", &"[REDACTED]")
             .field("terminal_id", &self.terminal_id)
             .field("reconnect_token", &"[REDACTED]")
             .field("rows", &self.rows)
@@ -732,5 +749,31 @@ impl fmt::Debug for TerminalShellIntegrationEvent {
         };
         // Payloads may contain credentials. Transport serialization remains complete.
         formatter.debug_struct(kind).finish_non_exhaustive()
+    }
+}
+
+impl fmt::Debug for TerminalCreateParams {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("TerminalCreateParams")
+            .field("lifetime_token", &"[REDACTED]")
+            .field("rows", &self.rows)
+            .field("cols", &self.cols)
+            .field("profile", &self.profile)
+            .field("lifecycle", &self.lifecycle)
+            .finish_non_exhaustive()
+    }
+}
+
+impl fmt::Debug for TerminalCreateInSessionDirectoryParams {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("TerminalCreateInSessionDirectoryParams")
+            .field("lifetime_token", &"[REDACTED]")
+            .field("rows", &self.rows)
+            .field("cols", &self.cols)
+            .field("profile", &self.profile)
+            .field("lifecycle", &self.lifecycle)
+            .finish_non_exhaustive()
     }
 }

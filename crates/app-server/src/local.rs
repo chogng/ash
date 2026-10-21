@@ -844,6 +844,7 @@ pub struct LocalProfileRuntime {
     message_history: Arc<ash_state::SqliteMessageHistory>,
     symphony: Arc<ash_symphony::Store>,
     profile_root: PathBuf,
+    pub(crate) terminal_host: Option<PathBuf>,
     state: Arc<ash_state::StateRuntime>,
     extension_state: Arc<ash_state::SqliteExtensionStateStore>,
     threads: Arc<ThreadController>,
@@ -976,6 +977,7 @@ impl LocalProfileRuntime {
         )
         .map_err(open_error)?;
         Ok(Self {
+            terminal_host: None,
             ide_registry: Arc::new(crate::ide_registry::IdeRegistry::default()),
             editor_extension_policy,
             session_runtimes,
@@ -1881,6 +1883,11 @@ pub fn open_app_server_with_codebase_providers(
             .map(|profile| profile.ide_registry.clone()),
     )
     .with_trace_recorder(trace_recorder)
+    .with_terminal_host(
+        profile_runtime
+            .as_ref()
+            .and_then(|profile| profile.terminal_host.clone()),
+    )
     .with_home(home)
     .with_network_diagnostics(network.clone(), application_http.clone(), network_services)
     .with_telemetry(diagnostics.clone(), telemetry, analytics)

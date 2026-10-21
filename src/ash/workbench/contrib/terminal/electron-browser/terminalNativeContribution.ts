@@ -45,7 +45,7 @@ export class TerminalNativeContribution extends Disposable implements IWorkbench
 		this._register(lifecycle.onWillShutdown(event => event.join(
 			() => this.shouldPersist(event.reason) ? this.prepareReload() : this.prepareExit(event.reason),
 			localize('terminal.native.closing', 'Closing terminals'),
-			() => this.shouldPersist(event.reason) ? this.terminals.instances.every(instance => this.prepared.has(instance)) : this.terminals.instances.length === 0,
+			() => this.shouldPersist(event.reason) ? this.terminals.instances.every(instance => !this.canPersist(instance) || this.prepared.has(instance)) : this.terminals.instances.length === 0,
 		)));
 		this._register(lifecycle.onDidShutdown(reason => {
 			if (!this.shouldPersist(reason)) return;
@@ -116,13 +116,25 @@ export class TerminalNativeContribution extends Disposable implements IWorkbench
 		return reason === 'reload' && this.configuration.getValue<boolean>('terminal.integrated.enablePersistentSessions') !== false;
 	}
 
+	private canPersist(instance: ITerminalInstance): boolean {
+		return instance.state !== 'error' && instance.state !== 'exited' && instance.state !== 'disconnected';
+	}
+
 	private async prepareExit(reason: ShutdownReason): Promise<void> {
 		const enabled = this.configuration.getValue<boolean>('terminal.integrated.enablePersistentSessions') !== false;
 		const policy = this.configuration.getValue<string>('terminal.integrated.persistentSessionReviveProcess') ?? 'onExit';
 		const lastWindowExit = reason === 'windowClose' && !isMacintosh && (await this.host.listWindows()).length === 1;
 		const revive = enabled && policy !== 'never' && (reason === 'quit' || lastWindowExit || policy === 'onExitAndWindowClose' && reason === 'windowClose');
-		if (revive) await this.prepareReload(true);
-		else { this.storage.remove(await this.reviveStateKey(), StorageScope.WORKSPACE); await this.storage.flush(); }
+		try {
+			if (revive) await this.prepareReload(true);
+			else { this.storage.remove(await this.reviveStateKey(), StorageScope.WORKSPACE); await this.storage.flush(); }
+		} catch (error) {
+			// Exit terminates these processes regardless of revival support. A failed
+			// optional snapshot must not turn a confirmed exit into an endless retry.
+			this.log.error('terminal', 'Could not save terminal revival state during shutdown', error);
+			try { await this.clearCheckpoint(true); }
+			catch (cleanupError) { this.log.error('terminal', 'Could not clear terminal revival state during shutdown', cleanupError); }
+		}
 		await this.closeTerminals();
 	}
 
@@ -149,7 +161,9 @@ export class TerminalNativeContribution extends Disposable implements IWorkbench
 			return element?.contains(element.ownerDocument.activeElement);
 		})?.instanceId;
 		const snapshots = [];
+		const leases = [];
 		for (const instance of instances) {
+			if (!this.canPersist(instance)) continue;
 			if (revive && (instance.isReadOnly || instance.state !== 'running' || !instance.revivalLaunch)) continue;
 			if (instance.shellLaunchConfig?.customPtyImplementation) {
 				if (revive) continue;
@@ -158,13 +172,16 @@ export class TerminalNativeContribution extends Disposable implements IWorkbench
 			// Register before awaiting: even a failed checkpoint must resume this client.
 			this.prepared.add(instance);
 			const snapshot = await instance.serializeState();
+			if (!revive) {
+				if (!this.processes.getReconnectLease) throw new Error(localize('terminal.reload.leaseUnavailable', 'The terminal process cannot be reattached after reload.'));
+				const lease = await this.processes.getReconnectLease(snapshot.process.terminalId);
+				// A runtime replacement can retire the process during screen capture.
+				// Keep healthy terminals in the same checkpoint; never persist a dead lease.
+				if (!lease) continue;
+				leases.push(lease);
+			}
 			if (!revive || snapshot.launch) snapshots.push(snapshot);
 		}
-		const leases = revive ? [] : await Promise.all(snapshots.map(async snapshot => {
-			const lease = await this.processes.getReconnectLease?.(snapshot.process.terminalId);
-			if (!lease) throw new Error(localize('terminal.reload.leaseUnavailable', 'The terminal process cannot be reattached after reload.'));
-			return lease;
-		}));
 		const scope = terminalExecutionScope(this.workspace.getWorkspace());
 		const ids = new Set(snapshots.map(snapshot => snapshot.instanceId));
 		const state: ITerminalReloadState = {

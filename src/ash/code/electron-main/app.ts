@@ -1,3 +1,4 @@
+import { TerminalWindowLifetimeHost } from '../../platform/terminal/electron-main/terminalWindowLifetimeHost.js';
 import { parseJsonc } from '../../base/common/jsonc.js';
 import { parseDefaultLogLevels } from '../../workbench/services/log/common/defaultLogLevels.js';
 import { LogLevelToString } from '../../platform/log/common/log.js';
@@ -1236,6 +1237,19 @@ export class AshApplication extends Disposable {
 		];
 	}
 
+	private terminalLifetimeRoutes(resources: DisposableStore): IpcRoute<unknown, string>[] {
+		if (this.appServerStartupMode === 'disabled') return [];
+		const connection = createAppServerDaemonLauncher({
+			packageLocation: { appPath: app.getAppPath(), expectedVersion: app.getVersion(), isPackaged: app.isPackaged, platform: process.platform, resourcesPath: process.resourcesPath },
+			sourceEnvironment: process.env, profileRoot: this.profileRoot, electronExecutable: process.execPath, role: 'agents',
+		});
+		resources.add(connection.launcher);
+		return resources.add(new TerminalWindowLifetimeHost(async () => {
+			await connection.launcher.validate();
+			return { executable: connection.launcher.environment.ASH_APP_SERVER_PATH!, profile: this.profileRoot, environment: connection.launcher.environment };
+		})).routes();
+	}
+
 	private createAppServerConnectionRelay(
 		workspace: IAnyWorkspaceIdentifier,
 		resources: DisposableStore,
@@ -1581,6 +1595,7 @@ export class AshApplication extends Disposable {
 		windowDisposables.add(toDisposable(() => this.dialogs.cancelWindow(window)));
 		const ipcRoutes = [
 			...this.mainProcessIpcRoutes(window),
+			...this.terminalLifetimeRoutes(windowDisposables),
 			...workspaceHost.routes(),
 			...supervisor.routes(window.webContents, () => {
 				const folder = workspaceContext.getResolvedWorkspace().folders[0]?.uri;
@@ -1970,6 +1985,7 @@ export class AshApplication extends Disposable {
 					}));
 					const ipcRoutes = [
 						...this.mainProcessIpcRoutes(window),
+						...this.terminalLifetimeRoutes(windowDisposables),
 						...agentHosts.routes(),
 						...sessionsRelay.routes(window.webContents, () => ({ workspaceId: AGENTS_WINDOW_KEY, workspaceRoot: this.profileRoot })),
 						...(localSessionsRelay?.routes(window.webContents, () => ({ workspaceId: AGENTS_WINDOW_KEY, workspaceRoot: this.profileRoot })) ?? []),

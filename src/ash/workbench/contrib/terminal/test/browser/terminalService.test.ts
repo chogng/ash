@@ -33,12 +33,13 @@ import { InstantiationService } from '../../../../../platform/instantiation/comm
 import { ServiceCollection } from '../../../../../platform/instantiation/common/serviceCollection.js';
 import { IWorkspaceContextService } from '../../../../../platform/workspace/common/workspace.js';
 import assert from "node:assert/strict";
+import Severity from '../../../../../base/common/severity.js';
 import { suite, test } from "mocha";
 import { isCancellationError } from '../../../../../base/common/errors.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
 import { Disposable, DisposableStore, toDisposable } from '../../../../../base/common/lifecycle.js';
 import { URI } from "../../../../../base/common/uri.js";
-import { ITerminalProcessService, type ITerminalProcessCreateOptions, type ITerminalProcessReadResult, type TerminalProcessConnectionState, type TerminalProcessSignal } from "../../../../../platform/terminal/common/terminal.js";
+import { ITerminalProcessService, type ITerminalProcessCreateOptions, type ITerminalProcessReadResult, type ITerminalProcessInvalidationEvent, type TerminalProcessConnectionState, type TerminalProcessSignal } from "../../../../../platform/terminal/common/terminal.js";
 import { TerminalCapability } from '../../../../../platform/terminal/common/capabilities/capabilities.js';
 import { TerminalService } from "../../browser/terminalService.js";
 import { registerTerminalActions } from '../../browser/terminalActions.js';
@@ -238,7 +239,7 @@ for (const rejectFirst of [false, true]) {
 		const stateKey = 'terminal.reload.12345678-1234-1234-1234-123456789abc';
 		const text = JSON.stringify({ version: 1, workspaceId: workspace.getWorkspace().id, instances: snapshots, groups: [], activeId: second.instanceId });
 		services.get(IStorageService).store(stateKey, text, StorageScope.WORKSPACE, StorageTarget.MACHINE);
-		const credentials = JSON.stringify({ stateKey, expiresAt: Date.now() + 60_000, leases: snapshots.map(snapshot => ({ terminalId: snapshot.process.terminalId, reconnectToken: 'a'.repeat(64), reconnectGracePeriodMillis: 60_000 })) });
+		const credentials = JSON.stringify({ stateKey, expiresAt: Date.now() + 60_000, leases: snapshots.map(snapshot => ({ terminalId: snapshot.process.terminalId, reconnectToken: 'a'.repeat(64), reconnectGracePeriodMillis: 0 })) });
 		await services.get(ISecretStorageService).set(TerminalStorageKeys.Reload, credentials);
 		const errors: unknown[] = [];
 		const previous = errorHandler.getUnexpectedErrorHandler();
@@ -534,6 +535,35 @@ test("TerminalService exposes failed reconnectable recovery as a relaunchable er
 	assert.equal(processService.createCalls.length, 2);
 });
 
+for (const reason of ['replacement', 'expiry'] as const) test(`TerminalService retires a ${reason} process before pending reads finish and allows explicit relaunch`, async () => {
+	const read = deferred<ITerminalProcessReadResult>();
+	const processes = new TestTerminalProcessService([read.promise], 'reconnectable');
+	using workspace = folderWorkspaceContext();
+	using services = terminalServices(processes, workspace);
+	const terminals = services.get(ITerminalService);
+	const instance = await terminals.createTerminal({ dimensions: { rows: 24, cols: 80 }, profile: { type: 'default' } });
+	await waitFor(() => processes.readCursors.length === 1);
+	if (reason === 'expiry') processes.emitConnectionState('crashed');
+	const previous = instance.state;
+	processes.invalidate({ terminalId: 'another-process', reason });
+	assert.equal(instance.state, previous);
+	processes.invalidate({ terminalId: 'terminal-1', reason });
+	assert.equal(instance.state, 'error');
+	assert.equal(instance.statusList!.primary!.severity, Severity.Error);
+	await assert.rejects(instance.sendText('retired input', false), isCancellationError);
+	processes.emitConnectionState('stopping');
+	processes.emitConnectionState('ready');
+	instance.start();
+	read.resolve(readResult({ nextSequence: 1 }));
+	await Promise.resolve();
+	assert.deepEqual({ state: instance.state, reads: processes.readCursors, writes: processes.writeCalls, creates: processes.createCalls.length }, { state: 'error', reads: [0], writes: [], creates: 1 });
+	await terminals.relaunchTerminal(instance, { rows: 24, cols: 80 });
+	assert.equal(instance.state, 'running');
+	assert.equal(processes.createCalls.length, 2);
+	await instance.sendText('new shell input', false);
+	assert.equal(processes.writeCalls.at(-1)?.terminalId, 'terminal-2');
+});
+
 test("TerminalService renumbers only concurrently open terminals", async () => {
 	const processService = new TestTerminalProcessService([]);
 	using services = terminalServices(processService, folderWorkspaceContext());
@@ -685,6 +715,11 @@ class TestTerminalProcessService implements ITerminalProcessService {
 	public readonly closeGates: Promise<void>[] = [];
 	public readonly closeOptions: Array<{ terminalId: string; dirId?: string; }> = [];
 	private readonly connectionListeners = new Set<(state: TerminalProcessConnectionState) => void>();
+	private readonly invalidationListeners = new Set<(event: ITerminalProcessInvalidationEvent) => void>();
+	readonly onDidInvalidateProcess: Event<ITerminalProcessInvalidationEvent> = listener => {
+		this.invalidationListeners.add(listener);
+		return toDisposable(() => this.invalidationListeners.delete(listener));
+	};
 	private connectionState: TerminalProcessConnectionState = "ready";
 
 	constructor(private readonly reads: Array<ITerminalProcessReadResult | Promise<ITerminalProcessReadResult>>, private readonly connectionPersistence: "connectionOwned" | "reconnectable" = "connectionOwned") { }
@@ -749,6 +784,10 @@ class TestTerminalProcessService implements ITerminalProcessService {
 	emitConnectionState(state: TerminalProcessConnectionState): void {
 		this.connectionState = state;
 		for (const listener of this.connectionListeners) listener(state);
+	}
+
+	invalidate(event: ITerminalProcessInvalidationEvent): void {
+		for (const listener of this.invalidationListeners) listener(event);
 	}
 }
 

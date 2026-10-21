@@ -24,6 +24,8 @@ Agent 执行、审批与终端呈现的详细边界以 [Platform Terminal 的前
 
 真实 Shell 的输入链路为：用户操作／Tasks／Debug → `TerminalInstance` → `TerminalProcessManager` → `ITerminalProcessService` → Renderer protocol client → App Server → `exec-server` → PTY。Electron 连接经过 Main 的透明 relay，Browser 通过其 Web 连接访问后端；输出沿相反方向返回。
 
+托管产品运行时的 `exec-server` 终端服务通过当前后端分发包的 `--terminal-host` 内部角色，连接 profile 独立的 PTY 进程。该宿主只拥有终端资源，不打开 App Server 的业务服务；Main 不解析或路由终端协议。私有本地 socket 校验同用户及相同提权上下文，内部请求有版本和大小上限，连接 ID 在宿主内重新分配，避免新 App Server 复用旧连接的访问权。运行中的宿主持有自己的分发包租约；后端更新不会回收其仍需使用的文件。
+
 宿主在 `IRendererHost.terminal` 提供进程服务，Workbench 与 Sessions 通过同一个 DI 标识消费。已连接 Web 使用 `AppServerTerminalProcessService`；Desktop 本地与远程使用 `ReconnectableTerminalProcessService`。无后端的 UI 环境通过 `DisconnectedTerminalProcessService` 明确拒绝进程操作。
 
 后端资源由 `terminalId` 与创建时的 `dirId` 共同定位；保留的多根工作区终端继续使用原目录路由。前端实例身份独立于 PID，重启 Shell 可以更换 PID。终端编辑器资源包含实例 incarnation，失效资源显示不可用，不根据旧身份自动启动新 Shell。
@@ -132,16 +134,29 @@ Sticky Scroll 由原 CommandDetection markers 和 xterm buffer 投影命令标�
 
 ## 关闭与恢复
 
-| 生命周期事件                                           | 资源行为                                                                       |
-| ------------------------------------------------------ | ------------------------------------------------------------------------------ |
-| 隐藏或再次显示面板                                     | 保留原进程和屏幕，仅改变可见性与焦点。                                         |
-| 关闭实例或最后一个终端编辑器宿主                       | 按关闭策略检查真实子进程；取消保留原会话并恢复焦点，确认后释放进程与前端资源。 |
-| Desktop 窗口 reload                                    | 协调输入、屏幕与后端租约交接，新 Renderer 附着同一 PTY。                       |
-| Web 连接关闭                                           | `connectionOwned` 进程随连接结束。                                             |
-| Desktop 连接中断                                       | 同一后端按 30 秒租约保留可重连进程，成功 attach 旋转 token。                   |
-| 窗口实际退出、后端重启、租约过期或 runtime replacement | 窗口交接凭据清空或原 attachment 失效，不能据旧 checkpoint 续接原进程。         |
+| 生命周期事件                                         | 资源行为                                                                                            |
+| ---------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| 隐藏或再次显示面板                                   | 保留原进程和屏幕，仅改变可见性与焦点。                                                              |
+| 关闭实例或最后一个终端编辑器宿主                     | 按关闭策略检查真实子进程；取消保留原会话并恢复焦点，确认后释放进程与前端资源。                      |
+| Desktop 窗口 reload                                  | 协调输入、屏幕与后端租约交接，新 Renderer 附着同一 PTY。                                            |
+| Web 连接关闭                                         | `connectionOwned` 进程随连接结束。                                                                  |
+| Desktop 连接中断或托管 App Server 崩溃／重启         | 窗口存活连接保持打开时，独立 PTY 宿主不限时保留运行中的原进程；恢复目录授权后 attach 并旋转 token。 |
+| 显式切换工作区／执行宿主、窗口实际退出或主动交接超时 | 清理原进程或失效其 attachment，不能据旧 checkpoint 自动重新执行命令。                               |
+| 独立 PTY 宿主退出                                    | 原 PTY 无法恢复；保留屏幕并显示错误，由用户显式重新启动 Shell。                                     |
 
 `confirmOnKill` 默认为 `editor`，`confirmOnExit` 默认为 `never`；设置及枚举值由原配置 schema 定义。子进程状态通过 Rust `terminal/processInfo` 查询，OS 无法确定时保守确认，取消关闭不停止进程、输出或待提交输入。
+
+协议 ready 先于工作区目录恢复。Desktop 的 Profile、环境、新建和重新附着请求等待当前连接代次的同一个目录绑定任务，不把暂未绑定的目录当成终端不可用。重连保留原 PID、输出游标与命令状态；Session 目录的恢复顺序不参与 PTY 身份。响应丢失的创建、输入、信号和令牌轮换不自动重放。权限撤销与显式关闭仍由原授权 owner 发起，转移给其他连接的终端不受旧 owner 的迟到清理影响。后端连接断开不启动杀进程倒计时。
+
+每个真实 Desktop 窗口由 Main 持有一个 `--terminal-owner` Rust 辅助进程的 stdin 管道。该角色通过独立连接在 profile PTY 宿主注册窗口存活凭据；Main 只启动并保持窗口资源，不解析业务 JSON-RPC，不保存终端 ID 或进程状态。创建和 attach 在原目录授权、连接归属与 reconnect token 检查之外绑定这条存活连接，凭据不进入 argv、环境变量、普通存储、窗口 checkpoint 或日志。Renderer reload 与业务后端重启不关闭 Main 的窗口管道；真正关窗或 Main 进程结束时，OS 管道 EOF 使辅助进程退出，宿主撤销归属并回收对应 PTY。辅助进程在等待宿主启动锁之前就监听 EOF，启动卡住也不会脱离窗口残留。
+
+`reconnectGracePeriodMillis = 0` 只用于有有效窗口存活连接的终端，不表示窗口结束后继续运行。没有这类连接的消费者使用有限宽限。主动 detach 的跨窗口交接仍是 30 秒；交接中的进程暂时离开源窗口归属，目标 attach 后绑定目标窗口，旧窗口的迟到清理不会结束目标进程。尚未接收的交接最多保留该 30 秒，之后回收。全部窗口存活连接关闭且没有终端时，宿主退出；后台配置 facade 不延长其寿命。启动注册与关闭删除 endpoint 使用同一把锁，避免旧窗口关闭与新窗口建立连接互相抢占。
+
+断线期间继续排空 PTY，只保留最多 1 MiB／16,384 段的最新输出，较早输出可能截断，不让缓存背压卡住命令。进程自然退出且输出 EOF 后保留末尾输出 30 秒供恢复，随后回收。终端 Pane 在断线时关闭，会保留受保护的待清理凭据，在恢复后补齐关闭；窗口先退出时则由窗口存活连接回收。Unix 回收覆盖 PTY 拥有的 session 中各个 job group，包括忽略挂断的前台／后台命令；Windows 沿用 ConPTY 的 Job 回收。显式关闭与有效撤权仍按原授权边界清理，不影响其他窗口。嵌入式进程内运行时不启用独立角色，Web 的 `connectionOwned` 行为保持不变。
+
+本地参考 VS Code 的 `LocalReconnectConstants` 定义普通断线 60 秒、缩短回收 6 秒；PTY 宿主独立于工作台。Ash 的 App Server 还承载可替换业务后端，因此后端断线与主动交接采用不同生命周期，不能把该短期宽限当作后端重启预算。
+
+宿主不在串行连接内等待输入队列容量。仅在明确拒绝入队时，客户端释放连接并退避等待容量，期间输出读取、信号和关闭可以继续；输入一旦入队或响应丢失，都不重试该批字节。
 
 Desktop 的 `enablePersistentSessions` 控制协调 reload 和退出恢复。准备阶段等待输入队列与屏幕解析提交，保存输出游标、UTF-8 尾部、终端资源、VT 屏幕、组成员／比例及活动／焦点项。普通工作区存储保存 UI checkpoint，租约 token 通过窗口级内存 SecretStorage 短期交接；准备或其他生命周期 join 失败时撤销交接并恢复同一实例读写。 恢复屏幕等首次可见布局再打开渲染器；保存的焦点请求保留到这一步，期间用户移至其他控件时取消，避免启动时面板仍为零尺寸而丢失焦点或随后抢回焦点。
 

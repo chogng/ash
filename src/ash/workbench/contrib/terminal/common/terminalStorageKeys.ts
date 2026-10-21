@@ -76,7 +76,7 @@ export function parseTerminalReloadCredentials(text: string): ITerminalReloadCre
 		if (!isRecord(lease) || !shortString(lease.terminalId) || ids.has(lease.terminalId)
 			|| (lease.dirId !== undefined && !shortString(lease.dirId))
 			|| typeof lease.reconnectToken !== 'string' || !/^[0-9a-f]{64}$/u.test(lease.reconnectToken)
-			|| !integer(lease.reconnectGracePeriodMillis, 1, 300000)) {
+			|| !integer(lease.reconnectGracePeriodMillis, 0, 300000)) {
 			throw new TypeError('Invalid terminal credential');
 		}
 		ids.add(lease.terminalId);

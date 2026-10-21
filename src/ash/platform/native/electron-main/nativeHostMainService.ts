@@ -91,6 +91,9 @@ export class TerminalWindowTransferHost extends Disposable {
 	}
 
 	move(sourceWindowId: number, transfer: ITerminalWindowTransfer, targetWindowId?: number): Promise<ITerminalWindowTransferResult> {
+		// Preflight validates a live credential too, but an actual offer must have
+		// completed detach and carry its bounded handoff lease.
+		if (transfer.lease.reconnectGracePeriodMillis === 0) return Promise.reject(new Error('Terminal transfer requires a detached lease'));
 		const source = this.host.getWindow(sourceWindowId);
 		if (this.isDisposed || !source) return Promise.reject(new Error('Terminal source window is unavailable'));
 		const sourceBusy = [...this.pending.values()].some(pending => pending.sourceWindowId === sourceWindowId || pending.targetWindowId === sourceWindowId);

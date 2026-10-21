@@ -332,6 +332,7 @@ pub struct AppServer {
     pub(super) extensions: Mutex<ExtensionPackages>,
     pub(super) config: Option<Arc<ConfigStore>>,
     home: Option<Arc<ash_home::AshHome>>,
+    terminal_host: Option<std::path::PathBuf>,
     pub(super) provider_credentials: Option<Arc<ProviderCredentialService>>,
     secret_processor: secret_operations::SecretRequestProcessor,
     pub(super) file_search: Arc<file_search::Service>,
@@ -1303,6 +1304,7 @@ impl AppServer {
             extensions: Mutex::new(ExtensionPackages::default()),
             config: None,
             home: None,
+            terminal_host: None,
             provider_credentials: None,
             secret_processor: secret_operations::SecretRequestProcessor::default(),
             file_search: Arc::new(file_search::Service),
@@ -1439,6 +1441,26 @@ impl AppServer {
             .map_err(|error| error.to_string())?;
         self.git_turn_changes = Some(runtime);
         Ok(self)
+    }
+
+    pub(crate) fn with_terminal_host(mut self, executable: Option<std::path::PathBuf>) -> Self {
+        self.terminal_host = executable;
+        self
+    }
+
+    fn create_terminal_service(
+        &self,
+        authorization: ash_file_access::Authorization,
+    ) -> Result<exec_server::terminal::TerminalService, exec_server::terminal::TerminalError> {
+        match (&self.terminal_host, &self.home) {
+            (Some(executable), Some(home)) => exec_server::terminal::TerminalService::hosted(
+                authorization,
+                home.root(),
+                executable,
+            ),
+            (None, _) => exec_server::terminal::TerminalService::new(authorization),
+            (Some(_), None) => Err(exec_server::terminal::TerminalError::OperationFailed),
+        }
     }
 
     pub(crate) fn with_home(mut self, home: Arc<ash_home::AshHome>) -> Self {

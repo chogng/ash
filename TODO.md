@@ -14,6 +14,10 @@
 
 - [ ] **验收** · 在支持 PSEC 的 Windows、WSL2 和独立 Linux／x64 运行当前 SDK pin `f1e8694b`，并补外部局域网／公网 IPv6。命令与验收边界见 [MXC 清单](MXC-TODO.md) 与 [适配器验证](crates/mxc-sandbox/README.md#验证)。
 
+## Terminal · 独立 PTY 宿主跨平台验收
+
+- [ ] **验收 · Windows／Linux**：终端已迁到 profile 独立的 `--terminal-host` 进程，App Server 重启后恢复原 PTY；macOS 的超过 35 秒后端中断、每命令 2 MiB 输出、原 PID 保留、窗口存活连接、关闭／reload／跨窗口转移及 Main 强杀回收均已通过；中英文 6 项清理场景记录的 38 个 PID 无残留，验收见 [.build/terminal-host/cleanup-validation.json](.build/terminal-host/cleanup-validation.json)。补两平台 `just rust-warnings ash-exec-server -p ash-app-server-runtime -p ash-utils-pty`、终端 Rust 测试及 `terminal.spec.ts --grep 'independent terminal host|terminal window lifetime cleanup'` 真实 Desktop 验收；验证后端父进程／Job 退出不结束 PTY 宿主，且窗口／Main 退出时 owner 辅助进程、Shell、任务及子进程全部回收。当前本机 Linux 交叉检查缺 `x86_64-linux-gnu-gcc`，Windows 交叉检查缺 SDK 的 `stdlib.h`，均在 C 依赖构建处停止，不能算通过。日志为 `.build/terminal-host-{linux,windows}-check.log`。
+
 ## 搜索与 MCP 进程回收 · Windows 验收
 
 已修复 tgrep／MCP 仅终止直接子进程的缺口，改用 Unix session／Windows Job Object 回收后代；同时修复 tgrep 启动器退出后，后代继承输出管道导致搜索无法结束的问题。macOS 此前两包 `just verify` 通过；提交前 MCP 再验 14 项通过，tgrep 首跑 54 passed／1 failed／2 ignored（managed daemon 重启报 `view-not-found`），该失败用例单独复跑通过，两包警告检查与依赖检查通过。首次与复跑日志见 `/tmp/ash-commit-tgrep{,-retry}.log`；tgrep 的 Windows x64 全目标警告检查通过。MCP 交叉编译被本机缺少 Windows SDK 的 `stdlib.h`／`windows.h` 阻塞，以下 Windows 项目尚未验收。

@@ -44,7 +44,7 @@ pub(crate) fn run(
         .map_err(|error| error.to_string())?
     {
         Some(_) => None,
-        None => Some(Arc::new(ProfileAppServerRegistry::open(
+        None => Some(Arc::new(ProfileAppServerRegistry::open_with_terminal_host(
             ConnectionOptions::new(
                 &profile_root,
                 None,
@@ -52,6 +52,7 @@ pub(crate) fn run(
                 product_services,
             ),
             diff_handler,
+            Some(std::env::current_exe().map_err(|error| error.to_string())?),
         )?)),
     };
     drop(history);

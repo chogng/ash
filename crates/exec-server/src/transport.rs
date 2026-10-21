@@ -158,14 +158,21 @@ pub(crate) fn configure(stream: &TcpStream) -> Result<(), Error> {
 pub(crate) fn read_frame<T: serde::de::DeserializeOwned>(
     reader: &mut impl BufRead,
 ) -> Result<T, Error> {
+    read_frame_with_limit(reader, exec_server_protocol::MAX_FRAME_BYTES)
+}
+
+pub(crate) fn read_frame_with_limit<T: serde::de::DeserializeOwned>(
+    reader: &mut impl BufRead,
+    max_frame_bytes: usize,
+) -> Result<T, Error> {
     let mut bytes = Vec::new();
     reader
-        .take((exec_server_protocol::MAX_FRAME_BYTES + 1) as u64)
+        .take((max_frame_bytes + 1) as u64)
         .read_until(b'\n', &mut bytes)?;
     if bytes.is_empty() {
         return Err(std::io::Error::from(std::io::ErrorKind::UnexpectedEof).into());
     }
-    if bytes.len() > exec_server_protocol::MAX_FRAME_BYTES {
+    if bytes.len() > max_frame_bytes {
         return Err(Error::Protocol);
     }
     if bytes.last() != Some(&b'\n') {
@@ -177,9 +184,17 @@ pub(crate) fn write_frame<T: serde::Serialize>(
     stream: &mut impl Write,
     value: &T,
 ) -> Result<(), Error> {
+    write_frame_with_limit(stream, value, exec_server_protocol::MAX_FRAME_BYTES)
+}
+
+pub(crate) fn write_frame_with_limit<T: serde::Serialize>(
+    stream: &mut impl Write,
+    value: &T,
+    max_frame_bytes: usize,
+) -> Result<(), Error> {
     let mut bytes = serde_json::to_vec(value).map_err(|_| Error::Protocol)?;
     bytes.push(b'\n');
-    if bytes.len() > exec_server_protocol::MAX_FRAME_BYTES {
+    if bytes.len() > max_frame_bytes {
         return Err(Error::Protocol);
     }
     stream.write_all(&bytes)?;

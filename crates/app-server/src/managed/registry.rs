@@ -95,9 +95,18 @@ pub(crate) struct ProfileAppServerRegistry {
 }
 
 impl ProfileAppServerRegistry {
+    #[cfg(test)]
     pub(crate) fn open(
         host: ConnectionOptions,
         diff_handler: crate::DiffRequestHandler,
+    ) -> Result<Self, String> {
+        Self::open_with_terminal_host(host, diff_handler, None)
+    }
+
+    pub(super) fn open_with_terminal_host(
+        host: ConnectionOptions,
+        diff_handler: crate::DiffRequestHandler,
+        terminal_host: Option<PathBuf>,
     ) -> Result<Self, String> {
         if let Some(path) = host.product_services() {
             LocalProductServicesConfig::load(path, host.profile_root())
@@ -108,6 +117,7 @@ impl ProfileAppServerRegistry {
         if let Some(exporter) = crate::trace::from_environment()? {
             profile_runtime = profile_runtime.with_trace_exporter(exporter);
         }
+        profile_runtime.terminal_host = terminal_host;
         let profile_runtime = Arc::new(profile_runtime);
         let servers = Arc::new(Mutex::new(BTreeMap::new()));
         let startup = DirectoryStartup::start(
