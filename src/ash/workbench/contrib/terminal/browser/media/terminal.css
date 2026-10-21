@@ -86,7 +86,14 @@
 }
 
 .ash-terminal-tabs .ash-tab-actions {
+	display: none;
 	padding-right: 4px;
+}
+
+.ash-terminal-tabs .ash-tab:hover .ash-tab-actions,
+.ash-terminal-tabs .ash-tab:focus-within .ash-tab-actions,
+.ash-terminal-tabs:focus-within .ash-tab.checked .ash-tab-actions {
+	display: flex;
 }
 
 .ash-terminal-group-branch {

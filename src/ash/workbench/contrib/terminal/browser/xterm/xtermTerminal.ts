@@ -36,6 +36,7 @@ import { IInstantiationService } from '../../../../../platform/instantiation/com
 import { TerminalLocation } from '../../../../../platform/terminal/common/terminal.js';
 import { editorBackground } from '../../../../../platform/theme/common/colors/editorColors.js';
 import { PANEL_BACKGROUND } from '../../../../common/theme.js';
+import { scrollbarSliderBackground, scrollbarSliderHoverBackground, scrollbarSliderActiveBackground } from '../../../../../platform/theme/common/colors/miscColors.js';
 
 const addonImporter = new XtermAddonImporter();
 
@@ -438,6 +439,9 @@ export function terminalTheme(theme: IColorTheme, target: TerminalLocation = Ter
 		cursor: theme.getColorCss(terminalColors.terminalCursorForeground),
 		selectionForeground: theme.getColorCss(selectionForeground),
 		selectionBackground: theme.getColorCss(selectionBackground),
+		scrollbarSliderBackground: theme.getColorCss(scrollbarSliderBackground),
+		scrollbarSliderHoverBackground: theme.getColorCss(scrollbarSliderHoverBackground),
+		scrollbarSliderActiveBackground: theme.getColorCss(scrollbarSliderActiveBackground),
 		black: theme.getColorCss(terminalColors.terminalAnsiBlack),
 		red: theme.getColorCss(terminalColors.terminalAnsiRed),
 		green: theme.getColorCss(terminalColors.terminalAnsiGreen),

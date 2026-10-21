@@ -905,6 +905,54 @@ test('terminal screen follows light, dark and high contrast themes after initial
 });
 
 
+for (const mode of ['light', 'dark', 'hcDark', 'hcLight'] as const) {
+	test(`terminal scrollbar hides the native track and scrolls retained output in ${mode}`, async ({ page }, testInfo) => {
+		await seedScreenCommand(page, true, 'zh-CN');
+		await page.evaluate(mode => window.ashTerminalFindIntegration.theme(mode), mode);
+		const terminal = page.locator('.ash-terminal-instance:visible');
+		const track = terminal.locator('.xterm-scrollable-element > .scrollbar.vertical');
+		const slider = track.locator('.slider');
+		await expect(terminal.locator('.xterm-viewport')).toHaveCSS('overflow-y', 'hidden');
+		await expect(track).toHaveCSS('opacity', '0');
+		await page.evaluate(() => window.ashTerminalInputIntegration.feed('scrollbar-row\r\n'.repeat(120)));
+		await expect.poll(() => page.evaluate(() => window.ashTerminalInputIntegration.viewport().bottom)).toBeGreaterThan(0);
+		await terminal.locator('.xterm-screen').hover();
+		await page.mouse.wheel(0, -300);
+		await expect.poll(() => page.evaluate(() => {
+			const { top, bottom } = window.ashTerminalInputIntegration.viewport();
+			return top < bottom;
+		})).toBe(true);
+		await expect(track).toHaveCSS('opacity', '1');
+		const expectedColor = async (token: string): Promise<string> => terminal.evaluate((element, token) => {
+			const probe = document.createElement('span');
+			probe.style.backgroundColor = `var(--ash-${token})`;
+			element.append(probe);
+			const color = getComputedStyle(probe).backgroundColor;
+			probe.remove();
+			return color;
+		}, token);
+		await expect(slider).toHaveCSS('background-color', await expectedColor('scrollbarSlider-background'));
+		await slider.hover();
+		await expect(slider).toHaveCSS('background-color', await expectedColor('scrollbarSlider-hoverBackground'));
+		const thumb = (await slider.boundingBox())!;
+		const bounds = (await track.boundingBox())!;
+		await page.mouse.move(thumb.x + thumb.width / 2, thumb.y + thumb.height / 2);
+		await page.mouse.down();
+		await expect(slider).toHaveCSS('background-color', await expectedColor('scrollbarSlider-activeBackground'));
+		await page.mouse.move(thumb.x + thumb.width / 2, bounds.y, { steps: 5 });
+		await expect.poll(() => page.evaluate(() => window.ashTerminalInputIntegration.viewport().top)).toBe(0);
+		await page.mouse.move(thumb.x + thumb.width / 2, bounds.y + bounds.height, { steps: 5 });
+		await page.mouse.up();
+		await expect.poll(() => page.evaluate(() => {
+			const { top, bottom } = window.ashTerminalInputIntegration.viewport();
+			return top === bottom;
+		})).toBe(true);
+		await terminal.locator('.xterm-screen').hover();
+		await page.screenshot({ path: testInfo.outputPath(`terminal-scrollbar-${mode}.png`) });
+		await page.evaluate(() => window.ashTerminalInputIntegration.close());
+	});
+}
+
 test('terminal command markers follow the prompt, execution, result and themed gutter geometry', async ({ page }, testInfo) => {
 	const errors: string[] = [];
 	page.on('pageerror', error => errors.push(error.message));
@@ -1464,6 +1512,57 @@ for (const locale of ['en', 'zh-CN']) test(`terminal clipboard menu retains its 
 	await expect.poll(() => page.evaluate(() => window.ashTerminalGroupsIntegration.writes())).toEqual([{ terminalId: 'input-shell-1', data: 'menu target text' }]);
 	await page.evaluate(() => window.ashTerminalInputIntegration.close());
 });
+for (const [theme, locale] of [['light', 'en'], ['dark', 'zh-CN'], ['hcDark', 'en'], ['hcLight', 'zh-CN']] as const) {
+	test(`terminal row actions reveal only on hover or list focus in ${theme}/${locale}`, async ({ page }, testInfo) => {
+		await page.goto(`/terminal.html?pane&profiles&browser&locale=${locale}`);
+		await page.waitForFunction(() => Boolean(window.ashTerminalPaneIntegration));
+		await page.evaluate(async theme => {
+			window.ashTerminalPaneIntegration.theme(theme);
+			window.ashTerminalPaneIntegration.panel(true);
+			await window.ashTerminalPaneIntegration.command('workbench.action.terminal.new');
+			await window.ashTerminalPaneIntegration.command('workbench.action.terminal.new');
+		}, theme);
+		const rows = page.locator('.ash-terminal-tabs .ash-tab');
+		await expect(rows).toHaveCount(3);
+		const ids = await page.evaluate(() => window.ashTerminalPaneIntegration.ids());
+		const outside = page.getByRole('textbox', { name: 'Outside terminal', exact: true });
+		await outside.focus();
+		await outside.hover();
+		const actions = (index: number) => rows.nth(index).locator('.ash-tab-actions');
+		for (const index of [0, 1, 2]) await expect(actions(index)).toBeHidden();
+		for (const hovered of [0, 1, 2]) {
+			await rows.nth(hovered).hover();
+			for (const index of [0, 1, 2]) {
+				if (index === hovered) {
+					await expect(actions(index)).toBeVisible();
+					await expect(actions(index).getByRole('button')).toHaveCount(2);
+				} else {
+					await expect(actions(index)).toBeHidden();
+				}
+			}
+		}
+		await outside.hover();
+		const firstTab = rows.first().getByRole('tab');
+		await firstTab.focus();
+		await expect(actions(0)).toBeVisible();
+		await expect(actions(1)).toBeHidden();
+		await expect(actions(2)).toBeVisible();
+		await firstTab.press('Tab');
+		const split = actions(0).getByRole('button', { name: locale === 'zh-CN' ? '拆分终端' : 'Split Terminal', exact: true });
+		await expect(split).toBeFocused();
+		await expect(split).toBeVisible();
+		await split.press('ArrowRight');
+		await expect(actions(0).locator('.ash-tab-close-action button')).toBeFocused();
+		await outside.focus();
+		for (const index of [0, 1, 2]) await expect(actions(index)).toBeHidden();
+		await rows.first().hover();
+		await page.screenshot({ path: testInfo.outputPath(`terminal-row-actions-${theme}.png`) });
+		await actions(0).locator('.ash-tab-close-action button').click();
+		await expect.poll(() => page.evaluate(() => window.ashTerminalPaneIntegration.operations().closed)).toEqual([ids[0]]);
+		await expect(rows).toHaveCount(2);
+		await page.evaluate(() => window.ashTerminalPaneIntegration.dispose());
+	});
+}
 
 test('terminal browser list menu keeps its captured instance after active selection changes', async ({ page }) => {
 	await page.goto('/terminal.html?pane&browser');
@@ -1694,7 +1793,7 @@ test('configured terminal profile reaches the real picker and resolver with argv
 		profile: { type: 'custom', name: '自定义 Shell', path: ['/home/test/shell'], args: ['literal;$HOME', 'with spaces'] },
 		env: { PROFILE: '/workspace', REMOVED: null }, cwd: '/workspace/subdirectory',
 	});
-	const tab = page.getByRole('tab', { name: '自定义 Shell', exact: true });
+	const tab = page.getByRole('tab', { name: 'shell', exact: true });
 	await expect(tab).toBeVisible();
 	await expect(tab.locator('svg')).toHaveAttribute('data-ash-icon-id', 'terminal-git-bash');
 	expect(await tab.locator('.ash-icon-label-icon').evaluate(element => (element as HTMLElement).style.color)).toBe('var(--ash-terminal-ansiGreen)');
@@ -1838,32 +1937,38 @@ test('terminal title toolbar follows display settings and exposes Chinese profil
 	await page.evaluate(() => window.ashTerminalPaneIntegration.dispose());
 });
 
-test('renamed WSL profiles retain Ubuntu icons in the menu and created terminal', async ({ page }) => {
+for (const [kind, path, args, icon, title] of [
+	['WSL', 'C:\\Windows\\System32\\wsl.exe', ['-d', 'Ubuntu-24.04'], 'terminal-ubuntu', 'wsl'],
+	['Git Bash', 'C:\\Program Files\\Git\\bin\\bash.exe', ['--login', '-i'], 'terminal-git-bash', 'bash'],
+	['Command Prompt', 'C:\\Windows\\System32\\cmd.exe', [], 'terminal-cmd', 'cmd'],
+	['PowerShell', 'C:\\Program Files\\PowerShell\\7\\pwsh.exe', [], 'terminal-powershell', 'pwsh'],
+] as const) test(`renamed ${kind} profiles keep menu labels and use shell names and icons in terminal tabs`, async ({ page }, testInfo) => {
 	const errors: string[] = [];
 	page.on('pageerror', error => errors.push(error.message));
 	await page.goto('/terminal.html?pane&profiles&browser&os=windows');
 	await page.waitForFunction(() => Boolean(window.ashTerminalPaneIntegration));
-	await page.evaluate(async () => {
+	await page.evaluate(async ({ path, args }) => {
 		await window.ashTerminalPaneIntegration.configure('terminal.integrated.profiles.windows', {
-			'Work shell': { path: 'C:\\Windows\\System32\\wsl.exe', args: ['-d', 'Ubuntu-24.04'] },
+			'Work shell': { path, args },
 		});
 		window.ashTerminalPaneIntegration.panel(true);
-	});
+	}, { path, args });
 	await expect.poll(() => page.evaluate(() => window.ashTerminalPaneIntegration.counts().creates)).toBe(1);
 	for (const name of ['Work shell', 'Renamed shell']) {
 		if (name === 'Renamed shell') {
-			await page.evaluate(() => window.ashTerminalPaneIntegration.configure('terminal.integrated.profiles.windows', {
-				'Renamed shell': { path: 'C:\\Windows\\System32\\wsl.exe', args: '--distribution "Ubuntu-24.04"' },
-			}));
+			await page.evaluate(({ path, args }) => window.ashTerminalPaneIntegration.configure('terminal.integrated.profiles.windows', {
+				'Renamed shell': { path, args },
+			}), { path, args: kind === 'WSL' ? '--distribution "Ubuntu-24.04"' : args });
 		}
 		await page.getByRole('button', { name: 'Select Terminal Profile', exact: true }).click();
 		const item = page.getByRole('menuitem', { name, exact: true });
-		await expect(item.locator('svg[data-ash-icon-id="terminal-ubuntu"]')).toBeVisible();
+		await expect(item.locator(`svg[data-ash-icon-id="${icon}"]`)).toBeVisible();
 		await item.click();
-		const tab = page.getByRole('tab', { name, exact: true });
+		const tab = page.getByRole('tab', { name: title, exact: true, selected: true });
 		await expect(tab).toBeVisible();
-		await expect(tab.locator('svg')).toHaveAttribute('data-ash-icon-id', 'terminal-ubuntu');
+		await expect(tab.locator('svg')).toHaveAttribute('data-ash-icon-id', icon);
 	}
+	if (kind === 'Git Bash') await page.screenshot({ path: testInfo.outputPath('terminal-bash-name.png') });
 	await page.evaluate(() => window.ashTerminalPaneIntegration.dispose());
 	expect(errors).toEqual([]);
 });
@@ -1886,7 +1991,7 @@ test('Windows raw command line profile reaches the picker, resolver and next def
 	await expect.poll(() => page.evaluate(() => window.ashTerminalPaneIntegration.launches().at(-1))).toEqual({
 		profile: { type: 'custom', name: '原始命令行', path: ['C:\\Windows\\cmd.exe'], args: '/d /s /c "echo literal;$HOME & echo two words"' }, env: {}, cwd: undefined,
 	});
-	await expect(page.getByRole('tab', { name: '原始命令行', exact: true })).toBeVisible();
+	await expect(page.getByRole('tab', { name: 'cmd', exact: true })).toBeVisible();
 	await page.evaluate(() => { void window.ashTerminalPaneIntegration.command('workbench.action.terminal.selectDefaultProfile'); });
 	const defaults = page.getByRole('combobox', { name: '选择默认终端配置', exact: true });
 	await expect(defaults).toBeFocused(); await defaults.fill('原始命令行'); await defaults.press('Enter');

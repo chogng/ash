@@ -169,7 +169,7 @@ export class TerminalService extends Disposable implements ITerminalService {
 				}, created.target === TerminalLocation.Editor);
 			}
 			const profile = config && 'profileName' in config ? config : !config && !parent?.shellLaunchConfig?.executable ? this.profiles.getDefaultProfile(undefined, folder.id) : undefined;
-			const shell: IShellLaunchConfig = profile ? { name: profile.profileName, executable: profile.path, args: profile.args, env: profile.env, icon: profile.icon, color: profile.color }
+			const shell: IShellLaunchConfig = profile ? { name: profile.overrideName ? profile.profileName : undefined, executable: profile.path, args: profile.args, env: profile.env, icon: profile.icon, color: profile.color }
 				: { ...(config as IShellLaunchConfig | undefined ?? parent?.shellLaunchConfig) };
 			if (options.cwd !== undefined) shell.cwd = requestedCwd;
 			else if (parent) {
@@ -181,6 +181,8 @@ export class TerminalService extends Disposable implements ITerminalService {
 				shell.cwd ??= parent.initialCwd;
 			}
 			const inheritsResolvedEnvironment = !profile && parent && shell.env === parent.shellLaunchConfig?.env;
+			// A split inherits explicit user naming, not the parent's rendered label.
+			if (inheritsResolvedEnvironment && shell.name === parent.title) shell.name = this._instances.find(instance => instance === parent)?.customTitle;
 			if (inheritsResolvedEnvironment && parent.revivalLaunch) {
 				// The parent env already contains collection mutations. Keep its shell
 				// command, but resolve the shared raw overrides only once for this split.
@@ -195,16 +197,19 @@ export class TerminalService extends Disposable implements ITerminalService {
 			if (os === undefined) throw new Error(localize('terminal.profile.platformUnavailable', 'The terminal execution host is not ready.'));
 			await this.profileResolver.resolveShellLaunchConfig(shell, { os, remoteAuthority: getRemoteAuthority(folder.uri), workspaceFolder: folder });
 			assertCurrent();
+			const profileName = profile?.profileName ?? shell.name
+				?? (parent?.revivalLaunch?.profile.type === 'custom' ? parent.revivalLaunch.profile.name : parent?.profile.title)
+				?? localize('terminal.profile.shell', 'Shell');
 			launch = {
 				...options, config: undefined, dirId: folder.id, dimensions,
 				title: profile?.overrideName ? profile.profileName : shell.name,
-				profile: profile?.isAutoDetected ? { type: 'profile', profileId: profile.profileId } : { type: 'custom', name: profile?.profileName ?? shell.name ?? localize('terminal.profile.shell', 'Shell'), path: typeof shell.executable === 'string' ? [shell.executable] : shell.executable!, args: shell.args ?? [] },
+				profile: profile?.isAutoDetected ? { type: 'profile', profileId: profile.profileId } : { type: 'custom', name: profileName, path: typeof shell.executable === 'string' ? [shell.executable] : shell.executable!, args: shell.args ?? [] },
 				env: shell.env, strictEnv: shell.strictEnv, cwd: shell.cwd, icon: shell.icon, color: shell.color,
 				initialText: shell.initialText, waitOnExit: shell.waitOnExit, environmentVariableCollections: shell.environmentVariableCollections, environmentVariableCollectionsPersistable: shell.environmentVariableCollectionsPersistable,
 			};
 			launch = {
 				...launch, revivalLaunch: options.revivalLaunch ?? (inheritsResolvedEnvironment ? parent.revivalLaunch : {
-					profile: { type: 'custom', name: profile?.profileName ?? shell.name ?? localize('terminal.profile.shell', 'Shell'), path: typeof rawExecutable === 'string' ? [rawExecutable] : rawExecutable ?? (typeof shell.executable === 'string' ? [shell.executable] : shell.executable!), args: rawArgs ?? shell.args ?? [] },
+					profile: { type: 'custom', name: profileName, path: typeof rawExecutable === 'string' ? [rawExecutable] : rawExecutable ?? (typeof shell.executable === 'string' ? [shell.executable] : shell.executable!), args: rawArgs ?? shell.args ?? [] },
 					env: rawEnvironment, strictEnv: shell.strictEnv, cwd: rawCwd,
 				})
 			};
@@ -502,7 +507,8 @@ export class TerminalService extends Disposable implements ITerminalService {
 			instancesByProfile.set(instance.profile.profileId, profileInstances);
 		}
 		for (const profileInstances of instancesByProfile.values()) {
-			const baseTitle = terminalProfileTitle(profileInstances[0].profile);
+			const first = profileInstances[0];
+			const baseTitle = terminalProfileTitle(first.profile, first.shellLaunchConfig?.executable);
 			for (const [index, instance] of profileInstances.entries()) {
 				instance.setTitle(instance.customTitle ?? (profileInstances.length === 1 ? baseTitle : `${baseTitle} ${index + 1}`));
 			}
@@ -528,7 +534,11 @@ export class TerminalService extends Disposable implements ITerminalService {
 	}
 }
 
-function terminalProfileTitle(profile: ITerminalProfile): string {
+function terminalProfileTitle(profile: ITerminalProfile, executable?: string | readonly string[]): string {
+	// Configured profile names belong to the picker. A resolved launch supplies
+	// the process name unless the user explicitly chose a fixed terminal title.
+	const path = typeof executable === 'string' ? executable : executable?.length === 1 ? executable[0] : undefined;
+	if (path) return path.split(/[/\\]/).at(-1)!.replace(/\.exe$/i, '').toLowerCase() || profile.title;
 	if (['zsh', 'bash', 'fish', 'sh'].includes(profile.profileId)) return profile.profileId;
 	if (profile.profileId === 'powershell') return 'pwsh';
 	if (profile.profileId === 'windows-powershell') return 'powershell';
