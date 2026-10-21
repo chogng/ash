@@ -51,6 +51,46 @@ fn process_helper() {
                 thread::park();
             }
         }
+        "event-storm" => {
+            // Fill the parent's ingress before acknowledging registration. Waiting
+            // for consumer capacity in its reader would deadlock this transaction.
+            for _ in 0..4096 {
+                write_frame(
+                    &mut output,
+                    &Reply::Changed {
+                        kind: Change::Content,
+                        paths: vec![request.paths[0].path.clone()],
+                    },
+                )
+                .unwrap();
+            }
+            write_frame(
+                &mut output,
+                &Reply::Applied {
+                    id: request.id,
+                    error: None,
+                },
+            )
+            .unwrap();
+            let request = read_frame::<WatchRequest>(&mut input).unwrap().unwrap();
+            write_frame(
+                &mut output,
+                &Reply::Changed {
+                    kind: Change::Content,
+                    paths: vec![request.paths[0].path.clone()],
+                },
+            )
+            .unwrap();
+            write_frame(
+                &mut output,
+                &Reply::Applied {
+                    id: request.id,
+                    error: None,
+                },
+            )
+            .unwrap();
+            let _ = read_frame::<WatchRequest>(&mut input);
+        }
         "healthy" => {
             assert_eq!(request.paths.len(), 2);
             assert!(request.replace.is_empty());
@@ -103,7 +143,7 @@ fn roots() -> BTreeMap<PathBuf, RecursiveMode> {
 
 #[test]
 fn hung_registration_is_bounded_and_child_is_reaped() {
-    let (events, _receiver) = tokio::sync::mpsc::unbounded_channel();
+    let (events, _receiver) = crate::ingress::event_channel();
     let mut watcher =
         NativeWatcher::spawn(child_command("hang"), events, Duration::from_millis(100)).unwrap();
     let started = std::time::Instant::now();
@@ -116,7 +156,7 @@ fn hung_registration_is_bounded_and_child_is_reaped() {
 
 #[test]
 fn malformed_reply_fails_the_transaction_and_reaps_the_child() {
-    let (events, _receiver) = tokio::sync::mpsc::unbounded_channel();
+    let (events, _receiver) = crate::ingress::event_channel();
     let mut watcher =
         NativeWatcher::spawn(child_command("invalid"), events, Duration::from_secs(1)).unwrap();
     assert!(watcher.apply(&roots(), &BTreeSet::new()).is_err());
@@ -126,12 +166,18 @@ fn malformed_reply_fails_the_transaction_and_reaps_the_child() {
 
 #[test]
 fn root_snapshots_and_content_event_kinds_cross_the_process_boundary() {
-    let (events, mut receiver) = tokio::sync::mpsc::unbounded_channel();
+    let (events, mut receiver) = crate::ingress::event_channel();
     let mut watcher =
         NativeWatcher::spawn(child_command("healthy"), events, Duration::from_secs(1)).unwrap();
     let mut roots = roots();
     watcher.apply(&roots, &BTreeSet::new()).unwrap();
-    let event = receiver.blocking_recv().unwrap().unwrap();
+    let event = tokio::runtime::Builder::new_current_thread()
+        .enable_time()
+        .build()
+        .unwrap()
+        .block_on(receiver.recv())
+        .unwrap()
+        .unwrap();
     assert_eq!(
         event.kind,
         EventKind::Modify(ModifyKind::Data(DataChange::Any))
@@ -144,6 +190,45 @@ fn root_snapshots_and_content_event_kinds_cross_the_process_boundary() {
     roots.pop_last();
     watcher.apply(&roots, &removed).unwrap();
     assert!(watcher.is_alive());
+    watcher.stop();
+    assert!(watcher.child.try_wait().unwrap().is_some());
+    assert!(watcher.reader.is_none());
+}
+
+#[test]
+fn saturated_ingress_does_not_block_helper_replies_or_repeat_recovery() {
+    let (events, mut receiver) = crate::ingress::event_channel();
+    let mut watcher =
+        NativeWatcher::spawn(child_command("event-storm"), events, Duration::from_secs(3)).unwrap();
+    let runtime = tokio::runtime::Builder::new_current_thread()
+        .enable_time()
+        .build()
+        .unwrap();
+    let mut roots = roots();
+    // No receiver is running until the helper's reply has crossed the full queue.
+    watcher.apply(&roots, &BTreeSet::new()).unwrap();
+    runtime.block_on(async {
+        assert!(receiver.recv().await.unwrap().unwrap().need_rescan());
+    });
+    let removed = BTreeSet::from([roots.pop_last().unwrap().0]);
+    watcher.apply(&roots, &removed).unwrap();
+    runtime.block_on(async {
+        let event = receiver.recv().await.unwrap().unwrap();
+        assert!(!event.need_rescan());
+        assert_eq!(
+            event.paths,
+            vec![roots.first_key_value().unwrap().0.clone()]
+        );
+        assert!(
+            tokio::time::timeout(
+                crate::ingress::RESCAN_INTERVAL + Duration::from_millis(25),
+                receiver.recv(),
+            )
+            .await
+            .is_err(),
+            "a recovered, quiet helper must not schedule another rescan"
+        );
+    });
     watcher.stop();
     assert!(watcher.child.try_wait().unwrap().is_some());
     assert!(watcher.reader.is_none());
@@ -263,7 +348,7 @@ fn polling_scan_cannot_block_registration_updates_or_helper_shutdown() {
         "--nocapture",
     ]);
     child.env("ASH_TEST_POLL_SCAN_ENTERED", &entered);
-    let (events, _receiver) = tokio::sync::mpsc::unbounded_channel();
+    let (events, _receiver) = crate::ingress::event_channel();
     let mut watcher = NativeWatcher::spawn(child, events, Duration::from_millis(500)).unwrap();
     let root = scratch.path().canonicalize().unwrap();
     watcher

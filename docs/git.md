@@ -391,7 +391,7 @@ stderr 和非 UTF-8 path 不进入 Renderer；工作树的绝对目录路径是�
    UI consumer 消费同一协议。协议存在不自动使其成为 TUI 功能。
 
 长期不变量是：Desktop、Native 与 TUI 不直接执行 Git；App Server adapter 不复制 Git
-command/parsing；watch event 只触发重新确认，不能自身成为 repository truth。
+command/parsing；watch event 只触发重新确认，不能自身成为 repository truth。共享 watcher 的有界缓冲超限会产生 scoped rescan，Git consumer 必须重新查询；合并／限频不能把这个 hint 当作无变化而清除。
 
 ### 封闭 intent 与状态发布
 

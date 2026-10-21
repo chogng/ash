@@ -4,6 +4,10 @@
 
 任务标签：**可做**表示已能定位现有入口与 owner，可选择一个行为切片实施；**后端前置**表示须先闭合领域或宿主契约；**布局前置**表示须先补齐布局 owner 的位置或移动契约；**复核**表示还需确认具体消费者或复现旧问题；**验收**表示缺真实环境证据；**测量**表示先取得数据；**Ash 产品**表示独立产品需求，不能按 VS Code 是否存在来删除。可选增强统一放在文末的[发展候选（未排期）](#发展候选未排期)，不计入当前交付待办。
 
+## macOS 系统内存耗尽 · 历史现场复核
+
+- [ ] **复核** · 2026-10-21 截图中的 203.48 GB 尚无故障进程 footprint／分配栈，应用已经退出，不能确认分配 owner。文件监听的无界入口、路径积压和重复重扫防护已完成，并通过有界突发、慢消费者及真实 Ash 验证；实现契约见 [file-watcher](crates/file-watcher/README.md#事件风暴的预算与恢复)，原始现场及验证证据见 [.build/investigations/macos-memory-20261021](.build/investigations/macos-memory-20261021)。后续若再次发生，需采集当时 PID、footprint、监听丢事件日志及触发操作；不能用已修复的风险反推历史根因。
+
 ## PR #57 · 合并后剩余项
 
 [PR #57](https://github.com/chogng/ash/pull/57) 已于 2026-10-20 正常 squash merge（`ee3dea640`）。后续仅在当前 main 本地整批修复与验证；不推送、不主动触发远端 CI、不恢复已暂停的 `pr-57-ci` heartbeat。保留其它任务修改，完整批次提交前准确 stage 并执行 `just commit-check origin/main`。

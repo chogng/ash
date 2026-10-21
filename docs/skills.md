@@ -359,7 +359,7 @@ availability 或 diagnostic 变化才递增 generation。
 当前 `ash-file-watcher` 已提供共享、多订阅者的 filesystem invalidation substrate：
 `PathsChanged` 传递排序去重后的 coarse path hint，backend error/overflow 通过
 `RescanRequired` 传递 subscriber 自己的 watched roots。其 backend/ref-count/path fallback contract
-由 [`crates/file-watcher/README.md`](../crates/file-watcher/README.md) 维护。
+由 [`crates/file-watcher/README.md`](../crates/file-watcher/README.md) 维护；有界缓冲超限与重扫合并仍须经过 catalog 扫描和校验，不能直接推进 generation。
 
 Watcher 仍只发 invalidation hint。当前 App Server adapter 订阅 built-in/user roots、active
 Directory 的 `.ash/skills` 与 user config authority path。目录不存在时，保留目标的递归监听意图，

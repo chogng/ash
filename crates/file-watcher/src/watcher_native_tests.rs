@@ -14,7 +14,7 @@ async fn stalled_native_update_restores_old_and_new_scopes_and_future_edits() {
     std::fs::create_dir(&second).unwrap();
     let file = first.join("tracked.txt");
     std::fs::write(&file, "before").unwrap();
-    let (events, raw_rx) = mpsc::unbounded_channel();
+    let (events, raw_rx) = crate::ingress::event_channel();
     let mut child = Command::new(std::env::current_exe().unwrap());
     child.args([
         "--exact",

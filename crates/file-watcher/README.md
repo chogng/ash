@@ -42,7 +42,8 @@ Linux/Windows 继续使用 `notify` 的推荐平台 backend。
 ```text
 src/
 ├── lib.rs                 # public exports、WatchPath 与 FileWatcherEvent
-├── channel.rs             # lossless pending set、Receiver、throttle 与 debounce
+├── ingress.rs             # bounded callback admission、overflow recovery 与通知
+├── channel.rs             # bounded pending hints、Receiver、throttle 与 debounce
 ├── registration.rs        # subscriber registration 与 RAII guard
 ├── state.rs               # private ref-count 和 per-subscriber state
 ├── matching.rs            # canonical namespace、missing-path fallback 与 scope matching
@@ -68,8 +69,8 @@ subscriber 共享：
 
 ```text
 notify callback
-  → Tokio event loop
-  → mutation filter / backend-error escalation
+  → bounded ingress / mutation filter / overflow marker
+  → Tokio event loop / backend-error escalation
   → per-subscriber path matching
   → sorted + deduplicated pending hint
   → Receiver / ThrottledWatchReceiver / DebouncedWatchReceiver
@@ -94,14 +95,33 @@ notify callback
 | Event                              | 含义                                                         | Consumer obligation                        |
 | ---------------------------------- | ------------------------------------------------------------ | ------------------------------------------ |
 | `PathsChanged { paths }`           | backend 观察到这些 subscriber-visible path 附近发生 mutation | 对受影响 scope 重新扫描并校验              |
-| `RescanRequired { watched_paths }` | backend 报错，事件可能丢失                                   | 对列出的已注册 roots 做 scoped full rescan |
+| `RescanRequired { watched_paths }` | backend 报错或缓冲预算超限，事件可能丢失                     | 对列出的已注册 roots 做 scoped full rescan |
 
 两种 event 都是 hint。`PathsChanged` 不证明路径仍存在、内容有效或 mutation 已稳定；rename 也可能
 产生多个 backend event。`RescanRequired` 会覆盖同一 receiver 中尚未消费的 path-level hints。
 
 `ThrottledWatchReceiver` 在第一次事件后限制最小发送间隔，适合需要持续刷新但限制频率的 manager。
 `DebouncedWatchReceiver` 从第一条事件起收集固定窗口，适合一次 burst 后重建 snapshot。两者都保留
-shutdown 前已 pending 的事件。
+shutdown 前已 pending 的事件。去抖窗口复用 receiver 的有界 accumulator，不另建路径历史；
+取消一次 `recv()` 不会重置已经开始的窗口或重扫期限。
+
+### 事件风暴的预算与恢复
+
+- Native callback／helper reader 的入口最多保留 1,024 条事件、4,096 条路径和 1 MiB
+  路径存储（包括路径容量和向量条目）；access 事件在入口过滤。超限立即释放明细，保留一个
+  `RescanRequired`。callback 不等待队列空位，也不执行 filesystem scan／watch／unwatch。
+- 每个 subscriber 的路由和待消费路径集合最多保留 4,096 条路径、1 MiB 路径存储；超限转成
+  该 subscriber 当前注册 roots 的完整重扫。重扫状态只保存当前 roots 的快照，不累积已注销
+  roots 的历史。总开销仍随注册 scopes/subscribers 数量增长，预算不是整个应用或 OS 的内存限额。
+- 入口恢复及每个 receiver 的连续全量重扫最短间隔为 1 秒，第一次立即可用。间隔内的新 hint
+  合并且不会延后期限；取走 hint 后到来的变化保留为下一次 invalidation，避免丢掉扫描期间的写入。
+  错误恢复优先于普通 rescan，不能用 overflow 覆盖掉需要重启／回退的 helper 故障。
+- App Server codebase worker 另有 4,096 路径／1 MiB backlog 上限。只有一个执行中的 scan 和一个
+  合并的待处理请求；重复 full scan 在上次完成后至少间隔 1 秒，关闭会中断该等待。
+
+参考 [VS Code 的分批与缓冲上限](https://github.com/microsoft/vscode/issues/124723#issuecomment-864908953)
+及 [notify 的阻塞回调死锁案例](https://github.com/notify-rs/notify/issues/463)。Ash 的超限策略保留
+scoped rescan 语义，不把丢失细粒度事件当作“没有变化”。
 
 ## Path 与 backend 边界
 

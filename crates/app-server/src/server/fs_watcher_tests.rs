@@ -195,3 +195,96 @@ fn browser_workspace_exact_configuration_watcher_never_publishes_sibling_names_o
         expected
     );
 }
+
+#[test]
+fn codebase_refresh_backlog_is_bounded_for_a_stalled_scanner() {
+    let mut pending = PendingIndexRefresh::None;
+    for index in 0..100_000 {
+        pending.merge(FileWatcherEvent::PathsChanged {
+            paths: vec![PathBuf::from(format!("generated/{index}.rs"))],
+        });
+        if let PendingIndexRefresh::Paths { paths, bytes } = &pending {
+            assert!(paths.len() <= MAX_INDEX_REFRESH_PATHS);
+            assert!(*bytes <= MAX_INDEX_REFRESH_BYTES);
+        }
+    }
+    assert!(matches!(
+        pending.take_event(),
+        Some(FileWatcherEvent::RescanRequired { .. })
+    ));
+    pending.merge(FileWatcherEvent::PathsChanged {
+        paths: vec![PathBuf::from("last.rs")],
+    });
+    assert_eq!(
+        pending.take_event(),
+        Some(FileWatcherEvent::PathsChanged {
+            paths: vec![PathBuf::from("last.rs")]
+        })
+    );
+    pending.merge(FileWatcherEvent::PathsChanged {
+        paths: vec![PathBuf::from("x".repeat(MAX_INDEX_REFRESH_BYTES + 1))],
+    });
+    assert!(matches!(
+        pending.take_event(),
+        Some(FileWatcherEvent::RescanRequired { .. })
+    ));
+}
+
+#[test]
+fn codebase_rescan_storm_cools_down_and_publishes_final_disk_state() {
+    let directory = tempfile::tempdir().unwrap();
+    let first = directory.path().join("first.rs");
+    let second = directory.path().join("second.rs");
+    std::fs::write(&first, "pub fn first() {}\n").unwrap();
+    let root = Dir::open_local(directory.path()).unwrap();
+    let store = Arc::new(CodebaseStore::memory());
+    let runtime = CodebaseRuntime::open(root, Arc::clone(&store), None).unwrap();
+    let symbols = SymbolIndexRuntime::open(runtime.index(), store).unwrap();
+    let worker = CodebaseRefreshWorker::start(Arc::clone(&runtime), symbols, None).unwrap();
+    let rescan = || FileWatcherEvent::RescanRequired {
+        watched_paths: vec![directory.path().to_path_buf()],
+    };
+    worker.schedule(rescan());
+    let deadline = std::time::Instant::now() + Duration::from_secs(5);
+    while !matches!(runtime.state(), CodebaseRuntimeState::Ready(_)) {
+        assert!(std::time::Instant::now() < deadline);
+        std::thread::sleep(Duration::from_millis(5));
+    }
+    let initial = runtime.index().snapshot().unwrap();
+    assert_eq!(initial.indexed_file_count, 1);
+    std::fs::write(&second, "pub fn intermediate() {}\n").unwrap();
+    for _ in 0..1000 {
+        worker.schedule(rescan());
+    }
+    std::thread::sleep(Duration::from_millis(100));
+    assert_eq!(
+        runtime.index().snapshot().unwrap().generation,
+        initial.generation,
+        "full rescans must wait for the completion-based cooldown"
+    );
+    // Mutations during the cooldown are covered by the one pending scan.
+    std::fs::remove_file(&first).unwrap();
+    let final_content = "pub fn final_disk_state() {}\n";
+    std::fs::write(&second, final_content).unwrap();
+    let deadline = std::time::Instant::now() + Duration::from_secs(5);
+    loop {
+        let snapshot = runtime.index().snapshot().unwrap();
+        if snapshot.generation > initial.generation {
+            assert_eq!(snapshot.indexed_file_count, 1);
+            assert_eq!(snapshot.indexed_source_bytes, final_content.len());
+            break;
+        }
+        assert!(
+            std::time::Instant::now() < deadline,
+            "pending rescan never converged"
+        );
+        std::thread::sleep(Duration::from_millis(5));
+    }
+    worker.schedule(rescan());
+    let stopping = std::time::Instant::now();
+    drop(worker);
+    assert!(
+        stopping.elapsed() < Duration::from_millis(500),
+        "shutdown must interrupt the cooldown"
+    );
+}

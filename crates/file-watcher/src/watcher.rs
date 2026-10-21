@@ -1,4 +1,5 @@
 use crate::WatchPath;
+use crate::channel::PathBatch;
 use crate::channel::Receiver;
 use crate::channel::WatchSender;
 use crate::channel::watch_channel;
@@ -35,7 +36,12 @@ use std::sync::Arc;
 use std::sync::Mutex;
 use std::sync::RwLock;
 use tokio::runtime::Handle;
-use tokio::sync::mpsc;
+
+/// Loss of routing detail requires a scoped rescan, not an empty change list.
+enum RoutedChange {
+    Paths(Vec<PathBuf>),
+    Rescan,
+}
 
 struct FileWatcherInner {
     watcher: BackendWatcher,
@@ -78,7 +84,7 @@ enum BackendWatcher {
         watcher: crate::native::NativeWatcher,
         added: BTreeMap<PathBuf, RecursiveMode>,
         removed: BTreeSet<PathBuf>,
-        events: mpsc::UnboundedSender<notify::Result<Event>>,
+        events: crate::ingress::EventSender,
     },
     Polling {
         #[cfg(not(target_os = "macos"))]
@@ -94,7 +100,7 @@ enum BackendWatcher {
         #[cfg(target_os = "macos")]
         interval: std::time::Duration,
         #[cfg(target_os = "macos")]
-        events: mpsc::UnboundedSender<notify::Result<Event>>,
+        events: crate::ingress::EventSender,
     },
     #[cfg(test)]
     Recording {
@@ -108,7 +114,7 @@ enum BackendWatcher {
 type BackendOperations = Arc<Mutex<Vec<(PathBuf, Option<RecursiveMode>)>>>;
 
 impl BackendWatcher {
-    fn recommended(events: mpsc::UnboundedSender<notify::Result<Event>>) -> notify::Result<Self> {
+    fn recommended(events: crate::ingress::EventSender) -> notify::Result<Self> {
         #[cfg(target_os = "macos")]
         {
             // Independent domain watchers share the OS service. Do not serialize the same
@@ -142,7 +148,7 @@ impl BackendWatcher {
     }
 
     fn polling(
-        events: mpsc::UnboundedSender<notify::Result<Event>>,
+        events: crate::ingress::EventSender,
         interval: std::time::Duration,
     ) -> notify::Result<Self> {
         #[cfg(target_os = "macos")]
@@ -423,7 +429,7 @@ impl FileWatcher {
         Handle::try_current().map_err(|_| {
             notify::Error::generic("ash-file-watcher requires a current Tokio runtime")
         })?;
-        let (raw_tx, raw_rx) = mpsc::unbounded_channel();
+        let (raw_tx, raw_rx) = crate::ingress::event_channel();
         let watcher = match backend {
             FileWatcherBackend::Recommended => BackendWatcher::recommended(raw_tx)?,
             FileWatcherBackend::Polling { interval } => BackendWatcher::polling(raw_tx, interval)?,
@@ -760,7 +766,7 @@ impl FileWatcher {
         }
     }
 
-    fn spawn_event_loop(&self, mut raw_rx: mpsc::UnboundedReceiver<notify::Result<Event>>) {
+    fn spawn_event_loop(&self, mut raw_rx: crate::ingress::EventReceiver) {
         let Ok(handle) = Handle::try_current() else {
             warn!("file watcher event loop skipped: no Tokio runtime available");
             return;
@@ -830,8 +836,26 @@ impl FileWatcher {
         event: &Event,
         watch_parents: bool,
     ) {
-        for (sender, paths) in Self::reconcile_event(state, inner, event, watch_parents) {
-            sender.add_changed_paths(&paths).await;
+        for (id, sender, paths) in Self::reconcile_event(state, inner, event, watch_parents) {
+            let roots = || {
+                state
+                    .read()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .subscribers
+                    .get(&id)
+                    .map(|subscriber| {
+                        subscriber
+                            .watched_paths
+                            .keys()
+                            .map(|key| key.requested.path.clone())
+                            .collect()
+                    })
+                    .unwrap_or_default()
+            };
+            match paths {
+                RoutedChange::Paths(paths) => sender.add_changed_paths(&paths, roots).await,
+                RoutedChange::Rescan => sender.require_rescan(&roots()).await,
+            }
         }
     }
 
@@ -840,25 +864,32 @@ impl FileWatcher {
         inner: Option<&Arc<Mutex<FileWatcherInner>>>,
         event: &Event,
         watch_parents: bool,
-    ) -> Vec<(WatchSender, Vec<PathBuf>)> {
+    ) -> Vec<(SubscriberId, WatchSender, RoutedChange)> {
         let mut state = state
             .write()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         let mut moves = Vec::new();
         let mut replaced_roots = HashSet::new();
         let mut subscribers = Vec::new();
-        for subscriber in state.subscribers.values_mut() {
-            let mut changed_paths = Vec::new();
+        for (id, subscriber) in &mut state.subscribers {
+            let mut changed_paths = PathBatch::default();
+            let mut overflow = false;
             for event_path in &event.paths {
                 for (key, watch) in &mut subscriber.watched_paths {
                     #[cfg(target_os = "macos")]
                     let identity = watch.root_identity;
                     if let Some(path) = changed_path_for_event(key, watch, event_path) {
-                        changed_paths.push(path);
+                        if !overflow && !changed_paths.insert(path) {
+                            overflow = true;
+                            changed_paths = PathBatch::default();
+                        }
                     }
                     #[cfg(target_os = "macos")]
                     if identity != watch.root_identity {
-                        changed_paths.push(key.requested.path.clone());
+                        if !overflow && !changed_paths.insert(key.requested.path.clone()) {
+                            overflow = true;
+                            changed_paths = PathBatch::default();
+                        }
                         replaced_roots.insert(watch.actual.path.clone());
                     }
                     let (new_actual, _, fallback) = actual_watch_path(&key.requested);
@@ -878,8 +909,16 @@ impl FileWatcher {
                     }
                 }
             }
-            if !changed_paths.is_empty() {
-                subscribers.push((subscriber.tx.clone(), changed_paths));
+            if overflow || !changed_paths.is_empty() {
+                subscribers.push((
+                    *id,
+                    subscriber.tx.clone(),
+                    if overflow {
+                        RoutedChange::Rescan
+                    } else {
+                        RoutedChange::Paths(changed_paths.into_paths())
+                    },
+                ));
             }
         }
         let mut inner_guard = None;
@@ -995,10 +1034,7 @@ impl FileWatcher {
     }
 
     #[cfg(test)]
-    pub(crate) fn spawn_event_loop_for_test(
-        &self,
-        raw_rx: mpsc::UnboundedReceiver<notify::Result<Event>>,
-    ) {
+    pub(crate) fn spawn_event_loop_for_test(&self, raw_rx: crate::ingress::EventReceiver) {
         self.spawn_event_loop(raw_rx);
     }
 

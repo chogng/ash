@@ -23,6 +23,11 @@ use std::time::Duration;
 
 const FILE_SYSTEM_WATCH_DEBOUNCE: Duration = Duration::from_millis(75);
 const FILE_SYSTEM_WATCH_STARTUP_TIMEOUT: Duration = Duration::from_secs(15);
+// A slow index scan must not turn an otherwise bounded watcher into an
+// unbounded backlog. Overflow retains one request to rebuild the owned root.
+const MAX_INDEX_REFRESH_PATHS: usize = 4096;
+const MAX_INDEX_REFRESH_BYTES: usize = 1024 * 1024;
+const INDEX_RESCAN_INTERVAL: Duration = Duration::from_secs(1);
 const ALIASED_PATH_POLL_INTERVAL: Duration = Duration::from_millis(100);
 
 /// Receives projected Directory filesystem invalidations before client publication.
@@ -65,7 +70,10 @@ enum FileSystemWatcherObservers {
 enum PendingIndexRefresh {
     #[default]
     None,
-    Paths(BTreeSet<PathBuf>),
+    Paths {
+        paths: BTreeSet<PathBuf>,
+        bytes: usize,
+    },
     Rebuild,
 }
 
@@ -73,18 +81,37 @@ impl PendingIndexRefresh {
     fn merge(&mut self, event: FileWatcherEvent) {
         match event {
             FileWatcherEvent::RescanRequired { .. } => *self = Self::Rebuild,
-            FileWatcherEvent::PathsChanged { paths } => match self {
-                Self::None => *self = Self::Paths(paths.into_iter().collect()),
-                Self::Paths(pending) => pending.extend(paths),
-                Self::Rebuild => {}
-            },
+            FileWatcherEvent::PathsChanged { paths: changed } => {
+                if matches!(self, Self::None) {
+                    *self = Self::Paths {
+                        paths: BTreeSet::new(),
+                        bytes: 0,
+                    };
+                }
+                if let Self::Paths { paths, bytes } = self {
+                    for path in changed {
+                        if paths.contains(&path) {
+                            continue;
+                        }
+                        let size = path.capacity();
+                        if paths.len() >= MAX_INDEX_REFRESH_PATHS
+                            || size > MAX_INDEX_REFRESH_BYTES.saturating_sub(*bytes)
+                        {
+                            *self = Self::Rebuild;
+                            break;
+                        }
+                        paths.insert(path);
+                        *bytes += size;
+                    }
+                }
+            }
         }
     }
 
     fn take_event(&mut self) -> Option<FileWatcherEvent> {
         match std::mem::take(self) {
             Self::None => None,
-            Self::Paths(paths) => Some(FileWatcherEvent::PathsChanged {
+            Self::Paths { paths, .. } => Some(FileWatcherEvent::PathsChanged {
                 paths: paths.into_iter().collect(),
             }),
             Self::Rebuild => Some(FileWatcherEvent::RescanRequired {
@@ -116,14 +143,34 @@ impl CodebaseRefreshWorker {
         let thread = std::thread::Builder::new()
             .name("ash-codebase-refresh".into())
             .spawn(move || {
-                while receiver.recv().is_ok() {
+                let mut next_rescan = None;
+                'refresh: while receiver.recv().is_ok() {
                     if cancelled.is_cancelled() {
                         break;
                     }
-                    let event = worker_pending
-                        .lock()
-                        .unwrap_or_else(|poisoned| poisoned.into_inner())
-                        .take_event();
+                    let event = loop {
+                        let mut pending = worker_pending
+                            .lock()
+                            .unwrap_or_else(std::sync::PoisonError::into_inner);
+                        let delay = if matches!(*pending, PendingIndexRefresh::Rebuild) {
+                            next_rescan.and_then(|deadline: std::time::Instant| {
+                                deadline.checked_duration_since(std::time::Instant::now())
+                            })
+                        } else {
+                            None
+                        };
+                        let Some(delay) = delay else {
+                            break pending.take_event();
+                        };
+                        // Keep the invalidation pending during cooldown. Check and take
+                        // under the same lock so a path burst promoted to Rebuild cannot
+                        // race past the limit. Disconnect cancels the wait on shutdown.
+                        drop(pending);
+                        match receiver.recv_timeout(delay) {
+                            Ok(()) | Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {}
+                            Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => break 'refresh,
+                        }
+                    };
                     if let Some(event) = event {
                         let full_rescan = matches!(event, FileWatcherEvent::RescanRequired { .. });
                         let previous_generation = worker_runtime
@@ -132,6 +179,9 @@ impl CodebaseRefreshWorker {
                             .map(|snapshot| snapshot.generation)
                             .ok();
                         worker_runtime.apply_watcher_event(&event, &cancelled);
+                        if full_rescan {
+                            next_rescan = Some(std::time::Instant::now() + INDEX_RESCAN_INTERVAL);
+                        }
                         if cancelled.is_cancelled() {
                             break;
                         }
