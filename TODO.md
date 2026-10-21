@@ -72,9 +72,6 @@
 - [ ] **验收 · 系统休眠恢复**：在可中断的测试机器运行实际 OS sleep/wake，核对连接恢复、重新鉴权、订阅和工具权限；尚未在日常开发机器执行系统休眠。
 - [ ] **验收 · B2 TUI 与真实外部模型**：继续补真实外部账号的模型 picker 与 TUI 场景。本机已重新验证当前 CLI 缓存契约，并通过真实 Rust observer 的完整 10 分钟 Web Code／Cowork metadata 更新和失败保留场景；该合成账号结果不覆盖外部服务或真实 TUI，证据范围见 [AgentHost 台账](agenthost-todo.md)。
 - [ ] **复核 · 旧隔离环境故障**：取得麦克风枚举失败的准确步骤和底层诊断，沿音频设备 owner 定位。原 2026-10-08 证据目录不在当前检出；不能凭通用错误码或普通音频测试关闭报告。
-- [ ] **复核 · MCP 授权退休与在途调用**：沿 `crates/ext/mcp/src/auth.rs`、`crates/rmcp-client/src/http_auth.rs` 和 `crates/app-server/src/server/request_processors/mcp.rs` 核对登出／撤权的完成边界。当前 OAuth owner 已绑定登录代次，撤权入口在启用 watcher 时也会先等待 runtime 状态不可用或消失；但 `crates/app-server/src/tool_composition.rs` 的旧调用会保留原 generation，状态变化不能单独证明在途请求和流已结束。此项是源码发现的回归覆盖缺口，尚未运行复现，不认定为已证实缺陷。
-  - 目标与范围：只闭合现有独立 Config MCP 的授权生命周期，避免退休后的结果重新进入旧会话。先确定原 OAuth owner、transport 与 runtime 之间的取消／释放完成契约；不新增认证状态 owner，不改变普通配置热更保留已绑定调用的既有行为。参考 [Codex 请求授权边界检查](https://github.com/openai/codex/pull/55288)，不引入其企业策略子系统。
-  - 验收：用离线 fixture 覆盖登出／撤权与刷新、HTTP、SSE 重叠，确认旧身份停止后续发送和结果投递、流资源被释放、新登录不被旧请求采用；保留正常刷新、明确 401 的单次重试及不确定写入不重放回归。由 `crates/ext/mcp/src/auth_tests.rs`、`crates/rmcp-client/src/http_auth_tests.rs` 与 App Server 真实调用链共同验证，不能仅凭状态变为不可用消项。已完成的外部操作不能靠本地取消回滚。
 
 ## Sessions · TODO
 

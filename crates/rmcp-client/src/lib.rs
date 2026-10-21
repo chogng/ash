@@ -4,7 +4,9 @@ mod client;
 mod error;
 mod handler;
 mod http_auth;
+pub use http_auth::HttpCredentialLease;
 pub use http_auth::HttpCredentialProvider;
+pub use http_auth::HttpCredentialScope;
 mod transport;
 
 pub use client::{RmcpClient, RmcpClientOptions, RmcpTimeouts};

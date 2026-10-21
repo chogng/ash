@@ -852,6 +852,7 @@ pub struct LocalProfileRuntime {
     config: Arc<ConfigStore>,
     network_policy: OutboundNetworkPolicy,
     secrets: Arc<dyn SecretStore>,
+    mcp_oauth_transports: Arc<ash_mcp_extension::McpOAuthTransports>,
     plugin_authority: PluginActivationAuthority,
     updates: Arc<UpdateBroker>,
     update_scopes: Mutex<BTreeMap<ProfileUpdateScopeKey, Arc<UpdateBroker>>>,
@@ -1004,6 +1005,7 @@ impl LocalProfileRuntime {
             config,
             network_policy,
             secrets,
+            mcp_oauth_transports: Arc::default(),
             plugin_authority,
             updates: Arc::new(UpdateBroker::default()),
             update_scopes: Mutex::new(BTreeMap::new()),
@@ -2124,6 +2126,12 @@ pub fn open_app_server_with_codebase_providers(
     );
     let mcp_oauth = Arc::new(
         McpOAuthService::new(Arc::clone(&profile_secrets), mcp_oauth_providers)
+            .with_transports(
+                profile_runtime
+                    .as_ref()
+                    .map(|runtime| Arc::clone(&runtime.mcp_oauth_transports))
+                    .unwrap_or_default(),
+            )
             .with_http_provider(oauth_http, options.profile_root.join("mcp-oauth-locks")),
     );
     server = server.with_mcp_oauth_service(Arc::clone(&mcp_oauth));

@@ -76,7 +76,9 @@ cleanup。只依赖 `Drop` 不保证调用方观察到 cleanup 完成。
 - `StdioServerCommand` convenience connector 继承宿主环境，再叠加显式 env。需要 allowlist、
   sandbox 或 remote execution 的 host 应自行构造 transport，再调用 `RmcpClient::connect`。
 - Streamable HTTP 默认 transport 禁止 reqwest redirect（客户端构建时显式设置，同时保留 SDK 的禁用空闲连接池设置），但 OAuth、
-  credential refresh 与 credential store 不在本 crate。
+  credential refresh 与 credential store 不在本 crate。Managed provider 可提供登录绑定的
+  `HttpCredentialScope`；关闭时拒绝新请求、取消等待中的 HTTP／GET 和 POST SSE，排空等待直到
+  future／body／上层调用 lease 释放。仅明确 401 可刷新后重试一次，不重放结果不确定的写请求。
 - server info、tool schema、notification 与 tool result 都是不可信远端输入；本 crate只保证
   RMCP decode，不替代产品层的 size、policy、schema normalization 或 content safety。
 

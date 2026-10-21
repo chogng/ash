@@ -272,6 +272,65 @@ enum FlowCommitState {
     Committed,
 }
 
+/// Profile-owned transport handles. Credentials and login epochs remain in the secret store;
+/// this registry only retires live HTTP requests, SSE bodies and bound tool invocations.
+#[derive(Default)]
+pub struct McpOAuthTransports {
+    scopes: Mutex<BTreeMap<String, Vec<std::sync::Weak<ash_rmcp_client::HttpCredentialScope>>>>,
+}
+
+impl McpOAuthTransports {
+    fn bind(&self, identity: String) -> Arc<ash_rmcp_client::HttpCredentialScope> {
+        let scope = Arc::new(ash_rmcp_client::HttpCredentialScope::default());
+        let mut scopes = self.scopes.lock().unwrap();
+        scopes.retain(|_, scopes| {
+            scopes.retain(|scope| scope.strong_count() != 0);
+            !scopes.is_empty()
+        });
+        scopes
+            .entry(identity)
+            .or_default()
+            .push(Arc::downgrade(&scope));
+        scope
+    }
+
+    fn close(&self, identity: &str) -> Vec<Arc<ash_rmcp_client::HttpCredentialScope>> {
+        let scopes: Vec<_> = self
+            .scopes
+            .lock()
+            .unwrap()
+            .get(identity)
+            .into_iter()
+            .flatten()
+            .filter_map(std::sync::Weak::upgrade)
+            .collect();
+        for scope in &scopes {
+            scope.close();
+        }
+        scopes
+    }
+
+    fn drain(&self, identity: &str) -> Result<(), McpOAuthError> {
+        let deadline = Instant::now() + Duration::from_secs(10);
+        let scopes: Vec<_> = self
+            .scopes
+            .lock()
+            .unwrap()
+            .get(identity)
+            .into_iter()
+            .flatten()
+            .filter_map(std::sync::Weak::upgrade)
+            .filter(|scope| scope.is_closed())
+            .collect();
+        for scope in scopes {
+            scope
+                .drain(deadline.saturating_duration_since(Instant::now()))
+                .map_err(|_| internal_error())?;
+        }
+        Ok(())
+    }
+}
+
 /// Coordinates ephemeral PKCE/state with the MCP auth domain's opaque secret persistence.
 pub struct McpOAuthService {
     secrets: Arc<dyn SecretStore>,
@@ -281,6 +340,7 @@ pub struct McpOAuthService {
         Mutex<BTreeMap<McpOAuthFlowId, (u64, std::sync::Weak<std::sync::atomic::AtomicU8>)>>,
     default_provider: Option<Arc<dyn McpOAuthProvider>>,
     transaction: Mutex<()>,
+    transports: Arc<McpOAuthTransports>,
     lock_directory: Option<std::path::PathBuf>,
 }
 
@@ -296,8 +356,15 @@ impl McpOAuthService {
             cancellations: Mutex::new(BTreeMap::new()),
             default_provider: None,
             transaction: Mutex::new(()),
+            transports: Arc::default(),
             lock_directory: None,
         }
+    }
+
+    /// All directory runtimes of one profile must retire the same live transports.
+    pub fn with_transports(mut self, transports: Arc<McpOAuthTransports>) -> Self {
+        self.transports = transports;
+        self
     }
 
     /// Production hosts share the lock directory across all directory runtimes in a profile.
@@ -364,7 +431,9 @@ impl McpOAuthService {
                 &Self::epoch_key(target)?,
                 &SecretValue::new(format!("{prefix}{}", random_base64url()?).into_bytes()),
             )
-            .map_err(|_| credential_error())
+            .map_err(|_| credential_error())?;
+        self.transports.close(&Self::credential_identity(target));
+        Ok(())
     }
 
     fn lock(
@@ -459,23 +528,27 @@ impl McpOAuthService {
 
     /// Local logout works even when the authorization service is unavailable.
     pub fn logout(&self, target: &McpOAuthTarget) -> Result<(), McpOAuthError> {
-        let _lock = self.lock(target)?;
-        self.advance_epoch(target, CredentialState::Closed)?;
-        if let Some(value) = self
-            .secrets
-            .load(target.credential_key())
-            .map_err(|_| credential_error())?
-            && value.expose().starts_with(b"ash-mcp-oauth-credential-v1\0")
-        {
-            self.secrets
-                .delete(target.credential_key())
-                .map_err(|_| credential_error())?;
-        }
-        self.pending
-            .lock()
-            .map_err(|_| internal_error())?
-            .retain(|_, attempt| attempt.target.digest != target.digest);
-        Ok(())
+        let result = (|| {
+            let _lock = self.lock(target)?;
+            self.advance_epoch(target, CredentialState::Closed)?;
+            if let Some(value) = self
+                .secrets
+                .load(target.credential_key())
+                .map_err(|_| credential_error())?
+                && value.expose().starts_with(b"ash-mcp-oauth-credential-v1\0")
+            {
+                self.secrets
+                    .delete(target.credential_key())
+                    .map_err(|_| credential_error())?;
+            }
+            self.pending
+                .lock()
+                .map_err(|_| internal_error())?
+                .retain(|_, attempt| attempt.target.digest != target.digest);
+            Ok(())
+        })();
+        self.transports.drain(&Self::credential_identity(target))?;
+        result
     }
 
     /// Bind a transport to this login generation; it may refresh but never adopt a later login.
@@ -493,8 +566,9 @@ impl McpOAuthService {
         }
         Ok(Arc::new(ManagedCredential {
             service: Arc::clone(self),
-            target,
+            target: target.clone(),
             epoch,
+            scope: self.transports.bind(Self::credential_identity(&target)),
         }))
     }
 
@@ -745,22 +819,31 @@ impl McpOAuthService {
 
     /// Revokes the provider token before deleting the local credential envelope.
     pub fn revoke(&self, target: &McpOAuthTarget) -> Result<DeleteSecretOutcome, McpOAuthError> {
-        let _lock = self.lock(target)?;
-        self.advance_epoch(target, CredentialState::Closed)?;
-        let provider = self.provider(target)?;
-        let stored = self
-            .secrets
-            .load(target.credential_key())
-            .map_err(|_| credential_error())?
-            .ok_or_else(credential_unavailable)?;
-        let credential = oauth_lifecycle_credential(stored)?;
-        provider.revoke(
+        let (epoch, credential) = {
+            let _lock = self.lock(target)?;
+            self.advance_epoch(target, CredentialState::Closed)?;
+            let stored = self
+                .secrets
+                .load(target.credential_key())
+                .map_err(|_| credential_error())?
+                .ok_or_else(credential_unavailable)?;
+            (self.epoch(target)?, oauth_lifecycle_credential(stored)?)
+        };
+        // A token resolver may be waiting for the transaction lock. Never hold it while
+        // waiting for request futures to release their leases.
+        self.transports.drain(&Self::credential_identity(target))?;
+        self.provider(target)?.revoke(
             target,
             McpOAuthRevokeRequest {
                 credential,
                 resource: target.endpoint(),
             },
         )?;
+        let _lock = self.lock(target)?;
+        if self.epoch(target)? != epoch {
+            // A concurrent sign-in owns a different envelope; revoke only the captured login.
+            return Ok(DeleteSecretOutcome::NotFound);
+        }
         self.secrets
             .delete(target.credential_key())
             .map_err(|_| credential_error())
@@ -833,9 +916,14 @@ struct ManagedCredential {
     service: Arc<McpOAuthService>,
     target: McpOAuthTarget,
     epoch: Vec<u8>,
+    scope: Arc<ash_rmcp_client::HttpCredentialScope>,
 }
 
 impl ash_rmcp_client::HttpCredentialProvider for ManagedCredential {
+    fn scope(&self) -> Option<Arc<ash_rmcp_client::HttpCredentialScope>> {
+        Some(Arc::clone(&self.scope))
+    }
+
     fn bearer(&self, rejected: Option<&str>) -> Result<String, std::io::Error> {
         self.service
             .token(&self.target, &self.epoch, rejected)

@@ -622,10 +622,11 @@ impl<'ctx, C: McpRequestProcessorContext + ?Sized> McpRequestProcessor<'ctx, C> 
         let params: McpOAuthMutationParams = decode(params)?;
         let server_id = parse_server_id(params.server_id)?;
         let target = self.mcp_oauth_target(&server_id)?;
+        // Retire the login and drain its transport before remote revocation. Catalog
+        // replacement alone does not stop calls bound to the old tool generation.
+        let revoked = self.mcp_oauth_service()?.revoke(&target);
         self.disconnect_mcp_before_revoke(&server_id)?;
-        self.mcp_oauth_service()?
-            .revoke(&target)
-            .map_err(mcp_oauth_operation_error)?;
+        revoked.map_err(mcp_oauth_operation_error)?;
         result(&McpOAuthMutationResult {
             server_id: server_id.to_string(),
         })

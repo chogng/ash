@@ -91,8 +91,8 @@ Config server。`McpOAuthTarget` 绑定 server ID、endpoint 和 SecretKey 的�
    digest，防止浏览器流程期间 server 被换绑。
 4. provider exchange 成功后，`encode_oauth_credential` 把 runtime bearer 与 lifecycle secret 写入
    私有 versioned envelope；连接 materialization 通过 `project_runtime_credential` 只能取得 bearer。
-5. `refresh` 原子替换 envelope 的两个部分；`revoke` 先完成 provider remote revoke，再删除本地
-   secret。App Server 在调用 revoke 前等待 active Tool generation 移除该 server，因此 provider
+5. `refresh` 原子替换 envelope 的两个部分；`revoke` 先关闭登录代次并排空其 HTTP／SSE 和工具调用，
+   再完成 provider remote revoke 和删除本地 secret。App Server 随后移除 active Tool generation 中该 server，因此 provider
    失败时仍保持失败关闭。
 
 旧的 raw bearer SecretStore value 仍可直接 materialize，以保持既有配置兼容。OAuth envelope 的
@@ -104,7 +104,9 @@ Desktop 的 MCP 详情提供登录、取消登录与本地退出；CLI 使用 `a
 
 请求前自动刷新即将过期的 token，401 最多刷新/重试一次；不重试 403 或不确定副作用。Provider 保留旋转后的 refresh token，保存完成才允许重试。调用方超时不取消已开始的持久化事务。标准生产 HTTP discovery 仅访问公网；私网/代理部署须在用户 outbound host allowlist 中明确授权相应 MCP 与 issuer 主机。
 
-callback、refresh、logout 和 revoke 持有整个读/网络请求/写事务的 credential 文件锁；持久化 epoch 使另一个进程退出后旧 callback 与 transport 同样失效。flow 绑定发起 connection，取消与完成通过原子提交状态决定先后，connection 关闭不会注销已经完成的共享账号。`logout` 先失效并删除本地 secret，不依赖远端 revoke；`revoke` 的远端失败仍保留 lifecycle secret 供重试。
+callback 和 refresh 使用 credential 文件锁串行化持久化事务；logout／revoke 在锁内推进持久化 epoch 并关闭旧 transport scope，释放锁后等待在途 HTTP／SSE 和已绑定工具调用排空，避免与等待锁的 token resolver 死锁。同一 profile 的所有 Directory runtime 共享 `McpOAuthTransports`；它只持有弱引用的资源句柄，凭据与登录代次仍由 SecretStore 唯一拥有。旧 generation 在发送和结果交付前检查该 scope，普通配置热更仍可保留已绑定调用。排空超时返回错误，不能把 catalog 状态变化当作撤权完成。
+
+持久化 epoch 使另一个进程后续使用旧 callback／transport 时失败。flow 绑定发起 connection，取消与完成通过原子提交状态决定先后，connection 关闭不会注销已经完成的共享账号。`logout` 先失效并删除本地 secret，不依赖远端 revoke；`revoke` 的远端失败仍保留已失效的 lifecycle secret 供重试。远端撤销只使用已捕获的旧凭据，返回后按 epoch 比较再删除，不会删掉并发新登录的 envelope。
 
 ## MCP 表单交互
 
