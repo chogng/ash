@@ -1,8 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { setNlsMessages, resetNlsResolver } from '../../../../../nls.js';
 import { IAppServerApi, type IAppServerConnectionRecovery } from '../../../../../platform/agentHost/common/appServerApi.js';
-import { INotificationService } from '../../../../../platform/notification/common/notification.js';
-import { NotificationService } from '../../../../services/notification/common/notificationService.js';
+import { IBannerService, type IBannerItem } from '../../../../services/banner/browser/bannerService.js';
 import { ContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
 import { IContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
 import { WorkbenchContributionsRegistry, WorkbenchPhase } from '../../../../common/contributions.js';
@@ -194,11 +193,11 @@ async function waitUntil(predicate: () => boolean): Promise<void> {
 
 
 for (const locale of ['en', 'zh-CN']) {
-	test(`Agent Host recovery notification and command use the same owner and disappear on recovery (${locale})`, async () => {
+	test(`Agent Host recovery banner and command use the same owner and disappear on recovery (${locale})`, async () => {
 		if (locale === 'zh-CN') setNlsMessages(locale, JSON.parse(readFileSync('extensions/language-pack-zh-cn/translations/workbench.json', 'utf8')));
 		try {
 			using services = new InstantiationService();
-			using notifications = new NotificationService();
+			const notices = new Map<string, IBannerItem>();
 			using contexts = new ContextKeyService();
 			using changed = new Emitter<void>();
 			let retries = 0;
@@ -207,28 +206,35 @@ for (const locale of ['en', 'zh-CN']) {
 				reconnect: async () => { retries++; recovery.status = 'recovering'; changed.fire(); },
 			};
 			services.registerInstance(IAppServerApi, { connectionGeneration: 1, getConnectionState: async () => 'stopped', getSlashCommands: async () => [], onConnectionState: () => ({ dispose() { } }), recovery });
-			services.registerInstance(INotificationService, notifications);
+			services.registerInstance(IBannerService, {
+				_serviceBrand: undefined, focus() { }, focusNextAction() { }, focusPreviousAction() { },
+				show: item => { notices.set(item.id, item); }, hide: id => { notices.delete(id); },
+			});
 			services.registerInstance(IContextKeyService, contexts);
 			using contribution = WorkbenchContributionsRegistry.createHost(services, error => { throw error; }, ['workbench.contrib.appServerRecovery']);
 			contribution.advance(WorkbenchPhase.BlockRestore);
-			const notice = notifications.model.getNotifications()[0]!;
-			assert.equal(notifications.model.getNotifications().length, 1);
-			assert.equal(notice.actions?.primary?.[0]?.label, locale === 'zh-CN' ? '重新连接' : 'Reconnect');
-			assert.equal(notice.message, locale === 'zh-CN' ? '无法重新连接到 Agent Host。请检查连接后重试。' : 'Could not reconnect to the Agent Host. Check the connection and try again.');
+			const notice = [...notices.values()][0]!;
+			assert.equal(notices.size, 1);
+			assert.equal(notice.actions?.[0]?.label, locale === 'zh-CN' ? '重新连接' : 'Reconnect');
+			assert.equal(notice.message, locale === 'zh-CN' ? '无法恢复 Agent Host 连接或工作区。请重试。' : 'Could not restore the Agent Host connection or workspace. Try again.');
 			assert.equal(contexts.contextMatchesRules(AppServerRecoveryAvailableContext.isEqualTo(true)), true);
-			await notice.actions!.primary![0]!.run();
+			assert.equal(notice.actions?.[0]?.href, `command:${ReconnectAppServerCommandId}`);
+			await CommandsRegistry.getCommand(ReconnectAppServerCommandId)!(services);
 			assert.equal(retries, 1);
-			assert.equal(notifications.model.getNotifications().length, 0);
+			assert.equal(notices.size, 1);
+			assert.equal([...notices.values()][0]!.message, locale === 'zh-CN' ? '正在重新连接到 Agent Host…' : 'Reconnecting to the Agent Host…');
+			recovery.status = 'idle'; changed.fire();
+			assert.equal(notices.size, 0);
 			await CommandsRegistry.getCommand(ReconnectAppServerCommandId)!(services);
 			assert.equal(retries, 2);
 			recovery.status = 'unavailable'; changed.fire();
-			assert.equal(notifications.model.getNotifications().length, 1);
-			assert.equal(notifications.model.getNotifications()[0]!.actions?.primary?.length ?? 0, 0);
+			assert.equal(notices.size, 1);
+			assert.equal([...notices.values()][0]!.actions?.length ?? 0, 0);
 			assert.equal(contexts.contextMatchesRules(AppServerRecoveryAvailableContext.isEqualTo(true)), false);
 			contribution.dispose();
-			assert.equal(notifications.model.getNotifications().length, 0);
+			assert.equal(notices.size, 0);
 			recovery.status = 'failed'; changed.fire();
-			assert.equal(notifications.model.getNotifications().length, 0);
+			assert.equal(notices.size, 0);
 		} finally { resetNlsResolver(); }
 	});
 }

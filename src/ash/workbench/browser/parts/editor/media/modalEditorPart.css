@@ -93,4 +93,9 @@
 		height: calc(100vh - 24px);
 		min-height: 0;
 	}
+
+	.ash-modal-editor.custom-size {
+		width: min(var(--ash-modalEditor-width), calc(100vw - 24px));
+		height: min(var(--ash-modalEditor-height), calc(100vh - 24px));
+	}
 }

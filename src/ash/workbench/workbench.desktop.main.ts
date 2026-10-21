@@ -36,7 +36,6 @@ import { RemoteAuthorityResolverService } from '../platform/remote/electron-brow
 import { IIntegrityService } from './services/integrity/common/integrity.js';
 import { IntegrityService } from './services/integrity/electron-browser/integrityService.js';
 import "./electron-browser/desktop.contribution.js";
-import './contrib/workspace/browser/workspace.contribution.js';
 import "./contrib/browserView/electron-browser/browserView.contribution.js";
 import "./contrib/update/electron-browser/update.contribution.js";
 

@@ -101,6 +101,7 @@ export class SessionsBrowserMain extends Disposable {
 					'workbench.contrib.output',
 					'workbench.contrib.logs',
 					'workbench.contrib.appServerRecovery',
+					'workbench.contrib.workspacePermissionStatus',
 					'workbench.contrib.githubLinkPresentations',
 					'workbench.contrib.url',
 					'workbench.contrib.chatAccessibilitySignals',

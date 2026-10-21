@@ -217,6 +217,8 @@ import { SidebarPart } from "./parts/sidebar/sidebarPart.js";
 import { ActivitybarPart } from "./parts/activitybar/activitybarPart.js";
 import { GlobalCompositeBar } from './parts/globalCompositeBar.js';
 import { StatusbarPart } from "./parts/statusbar/statusbarPart.js";
+import { BannerPart } from './parts/banner/bannerPart.js';
+import { IBannerService } from '../services/banner/browser/bannerService.js';
 import {
 	type BrowserTitleService,
 } from "./parts/titlebar/titlebarPart.js";
@@ -1207,8 +1209,14 @@ export class Workbench extends Disposable {
 		this.editor = editorParts;
 		const auxiliarybar = this._register(services.createInstance(AuxiliaryBarPart, workbenchRoot));
 		const statusbar = this._register(services.createInstance(StatusbarPart, workbenchRoot, statusbarService));
+		const banner = this._register(services.createInstance(BannerPart, workbenchRoot, (visible: boolean) => {
+			if (visible) layoutService.showPart('banner');
+			else layoutService.hidePart('banner');
+		}));
+		services.registerInstance(IBannerService, banner);
 		const parts = new Map<WorkbenchPartId, Part>([
 			["titlebar", titlebar],
+			['banner', banner],
 			["statusbar", statusbar],
 			["activitybar", activitybar],
 			["sidebar", sidebar],

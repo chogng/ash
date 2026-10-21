@@ -32,6 +32,7 @@ import "./browser/workbench.contribution.js";
 import './contrib/speech/browser/speech.contribution.js';
 import './contrib/accessibilitySignals/browser/accessibilitySignal.contribution.js';
 import './browser/actions/layoutActions.js';
+import './contrib/workspace/browser/workspace.contribution.js';
 import "./contrib/modernUI/browser/modernUI.contribution.js";
 import './contrib/mediaPreview/browser/mediaPreview.contribution.js';
 

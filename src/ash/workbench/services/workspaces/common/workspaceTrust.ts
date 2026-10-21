@@ -1,3 +1,4 @@
+import { IAppServerApi } from '../../../../platform/agentHost/common/appServerApi.js';
 import { Emitter } from '../../../../base/common/event.js';
 import { Disposable } from '../../../../base/common/lifecycle.js';
 import { URI } from '../../../../base/common/uri.js';
@@ -23,11 +24,17 @@ export class WorkspaceTrustManagementService extends Disposable implements IWork
 		@IWorkspaceContextService private readonly workspace: IWorkspaceContextService,
 		@IWorkspaceTrustApi private readonly trust: IWorkspaceTrustApi,
 		@IRemoteAuthorityResolverService private readonly resolver: IRemoteAuthorityResolverService,
+		@IAppServerApi api: IAppServerApi,
 	) {
 		super();
 		this._register(workspace.onDidChangeWorkspace(() => this.change.fire()));
 		this._register(trust.onDidChangeTrust(() => this.change.fire()));
 		this._register(resolver.onDidChangeConnectionData(() => this.change.fire()));
+		// A saved grant precedes rebinding the runtime directory environment.
+		// Consumers must reread effective permissions after that recovery finishes.
+		if (api.recovery) this._register(api.recovery.onDidChange(() => {
+			if (api.recovery?.status === 'idle') this.change.fire();
+		}));
 	}
 
 	public async getUriTrustInfo(uri: URI): Promise<IWorkspaceTrustUriInfo> {

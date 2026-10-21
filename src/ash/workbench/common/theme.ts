@@ -15,6 +15,9 @@ const alias = (id: string, value: string, description: string): string =>
 
 alias("sectionHeader.foreground", descriptionForeground, "Section header foreground.");
 const workbenchBackground = color("workbench.background", "#1e1e1e", "#ffffff", "#000000", "#ffffff", "Workbench root background.");
+color('banner.background', '#263b50', '#e8f2fc', '#000000', '#ffffff', localize('banner.background', 'Background color of the window banner.'));
+alias('banner.foreground', foreground, localize('banner.foreground', 'Text color of the window banner.'));
+alias('banner.iconForeground', foreground, localize('banner.iconForeground', 'Icon color of the window banner.'));
 registerColor("editorGroup.border", {
 	dark: border,
 	light: border,

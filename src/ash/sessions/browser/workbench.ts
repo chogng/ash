@@ -1,4 +1,6 @@
 import { SessionsAgentSessionService } from './agentHost/sessionsAgentSessionService.js';
+import { BannerPart } from '../../workbench/browser/parts/banner/bannerPart.js';
+import { IBannerService } from '../../workbench/services/banner/browser/bannerService.js';
 import type { Position } from '../../workbench/services/layout/browser/layoutService.js';
 import { SessionConversationLinks } from './agentHost/sessionConversationLinks.js';
 import { SessionsAgentThreadService } from './agentHost/sessionsAgentThreadService.js';
@@ -268,7 +270,6 @@ import "../../workbench/services/quickinput/browser/quickInputService.js";
 import { ChatContextPickService } from "../../workbench/services/chat/browser/chatContextPickService.js";
 import { IChatContextPickService } from "../../workbench/services/chat/common/chatContextService.js";
 import { WorkbenchWindow } from "../../workbench/browser/window.js";
-import { AccessibleViewService } from '../../workbench/contrib/accessibility/browser/accessibleView.js';
 import { IAccountService } from '../../platform/accounts/common/accountService.js';
 import { IGitHubService } from '../../platform/github/common/githubService.js';
 import { GitHubConnectionService } from '../../workbench/services/accounts/browser/gitHubConnectionService.js';
@@ -696,8 +697,7 @@ export abstract class Workbench extends Disposable {
 		const hoverService = this._register(new HoverService(configurationService, contextViews, contextMenus));
 		services.registerInstance(IHoverService, hoverService);
 		this._register(setHoverDelegate(hoverService));
-		const accessibleViewService = this._register(services.createInstance(AccessibleViewService));
-		services.registerInstance(IAccessibleViewService, accessibleViewService);
+		const accessibleViewService = services.get(IAccessibleViewService);
 		this._register(registerExtensionManagementActions());
 		const preferences = this._register(services.createInstance(SessionsPreferences, this.domNode, async () => {
 			await commandService.executeCommand('sessions.open.code');
@@ -913,8 +913,14 @@ export abstract class Workbench extends Disposable {
 		installWorkbenchServiceContributions({ container: services, register: value => this._register(value), blockRestorationUntil: operation => serviceContributionReady.push(operation) });
 		const customViewPart = this._register(services.createInstance(CustomViewGridPart, this.domNode));
 		services.registerInstance(ICustomViewGridPartService, customViewPart);
+		const banner = this._register(services.createInstance(BannerPart, this.domNode, (visible: boolean) => {
+			if (visible) layout.showPart('banner');
+			else layout.hidePart('banner');
+		}));
+		services.registerInstance(IBannerService, banner);
 		const parts = new Map<SessionsPartId, Part>([
 			["titlebar", titlebar],
+			['banner', banner],
 			['activitybar', activitybar],
 			["sidebar", sidebar],
 			["sessions", sessionsPart],

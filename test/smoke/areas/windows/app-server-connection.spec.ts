@@ -1,7 +1,9 @@
+import { Workbench } from '../../../automation/workbench.js';
+import { Dialogs } from '../../../automation/dialogs.js';
 import { _electron, type ElectronApplication, type Page } from '@playwright/test';
 import { expect, test as baseTest } from '../../../automation/test.js';
 import { execFile } from 'node:child_process';
-import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -29,6 +31,10 @@ interface ConnectionScenario {
 	delayedInitializationSettled: boolean;
 	delayedInitializationError?: string;
 	readyCount: number;
+	waitingWorkspaceRead: boolean;
+	workspaceReadFailures: number;
+	holdNextWorkspaceRead(): void;
+	releaseWorkspaceRead(): void;
 	beginRestart(): void;
 	releaseClose(): void;
 	holdNextValidation(): void;
@@ -43,14 +49,22 @@ interface ConnectionScenario {
 interface ConnectionHarness {
 	readonly application: ElectronApplication;
 	readonly page: Page;
+	readonly workspaceFolder: string | undefined;
 	backend(): Promise<{ pid: number; instanceId: string; }>;
 }
 
-const test = baseTest.extend<{ connectionHarness: ConnectionHarness; }>({
-	connectionHarness: async ({ target }, use, testInfo) => {
+const test = baseTest.extend<{ connectionHarness: ConnectionHarness; connectionSurface: 'agents' | 'workbench'; connectionWorkspace: 'empty' | 'readOnly'; }>({
+	connectionSurface: ['agents', { option: true }],
+	connectionWorkspace: ['empty', { option: true }],
+	connectionHarness: async ({ target, connectionSurface, connectionWorkspace }, use, testInfo) => {
 		baseTest.skip(target.kind !== 'electron' || target.appServerMode !== 'required', 'Requires the Electron backend connection.');
 		const directory = await mkdtemp(join(tmpdir(), 'ash-'));
-		const configuration = resolveElectronConfiguration({ appServerMode: 'required', userDataDirectory: directory });
+		const workspaceFolder = connectionWorkspace === 'readOnly' || connectionSurface === 'workbench' ? join(directory, 'workspace') : undefined;
+		if (workspaceFolder) {
+			await mkdir(workspaceFolder);
+			await writeFile(join(workspaceFolder, 'example.txt'), 'Workspace permission fixture\n');
+		}
+		const configuration = resolveElectronConfiguration({ appServerMode: 'required', userDataDirectory: directory, workspaceDirectory: workspaceFolder });
 		const entry = testInfo.outputPath('connection-restart.mjs');
 		await writeFile(entry, `
 import { app } from 'electron/main';
@@ -70,6 +84,32 @@ const scenario = globalThis.connectionScenario = {
 	waitingInitialization: false,
 	delayedInitializationSettled: false,
 	readyCount: 0,
+	waitingWorkspaceRead: false,
+	workspaceReadFailures: 0,
+};
+// Fault injection stays at Main's workspace IPC boundary; the renderer and Banner are real.
+const { TrustedIpcRouter } = await import(${JSON.stringify(pathToFileURL(join(mainOutput, 'ash/platform/ipc/electron-main/trustedIpcRouter.js')).href)});
+let holdWorkspaceRead = false;
+let workspaceReadBarrier;
+scenario.holdNextWorkspaceRead = () => {
+	holdWorkspaceRead = true;
+	workspaceReadBarrier = new Promise(resolve => { scenario.releaseWorkspaceRead = resolve; });
+};
+const register = TrustedIpcRouter.prototype.register;
+TrustedIpcRouter.prototype.register = function(target, routes) {
+	return register.call(this, target, routes.map(route => route.channel !== 'ash:workspace:context:read' ? route : {
+		...route,
+		async invoke(value) {
+			if (holdWorkspaceRead) {
+				holdWorkspaceRead = false;
+				scenario.waitingWorkspaceRead = true;
+				await workspaceReadBarrier;
+				scenario.workspaceReadFailures++;
+				throw new Error('Injected workspace restore failure');
+			}
+			return route.invoke(value);
+		},
+	}));
 };
 let closingTransport;
 let closeBarrier;
@@ -151,19 +191,26 @@ AppServerConnectionRelay.prototype.routes = function(...args) {
 const { startElectronApplication } = await import(${JSON.stringify(pathToFileURL(join(mainOutput, 'ash/code/electron-main/main.js')).href)});
 startElectronApplication();
 `);
-		const application = await _electron.launch({ executablePath: configuration.executablePath, args: configuration.args.map(argument => argument === desktop ? entry : argument), cwd: configuration.cwd, env: { ...configuration.env, ASH_DEV_APP_SERVER_RELOAD: '1', ASH_DEV_AGENTS_WINDOW: '1' } });
+		const application = await _electron.launch({ executablePath: configuration.executablePath, args: configuration.args.map(argument => argument === desktop ? entry : argument), cwd: configuration.cwd, env: { ...configuration.env, ASH_DEV_APP_SERVER_RELOAD: '1', ASH_DEV_AGENTS_WINDOW: connectionSurface === 'agents' ? '1' : '0' } });
 		try {
 			const page = await application.firstWindow();
-			try {
-				await expect(page.locator('.ash-sessions-window')).toBeVisible();
-			} catch (error) {
-				const details = await page.evaluate(() => [document.body.innerText, ...Array.from(document.querySelectorAll('textarea'), field => field.value)].join('\n'));
-				throw new Error(`Agents startup failed at ${page.url()}:\n${details}`, { cause: error });
+			const startupErrors: string[] = [];
+			page.on('pageerror', error => startupErrors.push(error.stack ?? error.message));
+			page.on('console', message => { if (message.type() === 'error') startupErrors.push(message.text()); });
+			if (workspaceFolder) {
+				await page.getByRole('dialog', { name: 'Ash', exact: true }).getByRole('button', { name: connectionWorkspace === 'readOnly' ? 'Open Read Only' : 'Trust Folder & Enable Features', exact: true }).click();
 			}
-			// The window can render before its first handshake finishes; restart scenarios need a ready carrier.
+			try {
+				await new Workbench(page).waitForReady();
+				await expect(page.locator(connectionSurface === 'agents' ? '.ash-sessions-window' : '.ash-workbench')).toBeVisible();
+			} catch (error) {
+				const details = await page.evaluate(() => [document.body.innerText, ...Array.from(document.querySelectorAll('textarea'), field => field.value), 'Root: ' + document.querySelector('#app')?.outerHTML.slice(0, 1600), 'Marks: ' + performance.getEntriesByType('mark').map(entry => entry.name).join(', ')].join('\n'));
+				throw new Error(`${connectionSurface} startup failed at ${page.url()}:\n${details}\n${startupErrors.join('\n')}\nWindows: ${application.windows().map(window => window.url()).join(', ')}`, { cause: error });
+			}
+			// Fault injection starts only after both the Workbench and its carrier are ready.
 			await expect.poll(() => application.evaluate(() => (globalThis as unknown as { connectionScenario: ConnectionScenario; }).connectionScenario.state)).toBe('ready');
 			await use({
-				application, page, backend: async () => {
+				application, page, workspaceFolder, backend: async () => {
 					const runtime = await readDevelopmentAppServerGeneration(developmentAppServerGenerationPath(desktop));
 					if (!runtime) { throw new Error('Prepare the development backend before this scenario'); }
 					const output = await execFileAsync(join(runtime, `bin/ash-app-server-daemon${process.platform === 'win32' ? '.exe' : ''}`), ['version'], { env: configuration.env, windowsHide: true });
@@ -176,6 +223,7 @@ startElectronApplication();
 				scenario.releaseClose?.();
 				scenario.releaseValidation?.();
 				scenario.releaseInitialization?.();
+				scenario.releaseWorkspaceRead?.();
 				for (const window of BrowserWindow.getAllWindows()) { window.destroy(); }
 			});
 			const runtime = await readDevelopmentAppServerGeneration(developmentAppServerGenerationPath(desktop));
@@ -186,7 +234,7 @@ startElectronApplication();
 	}
 });
 
-test('Agents automatically restores its connection after the carrier exits', async ({ connectionHarness: { application, page } }) => {
+test('Agents shows a persistent banner and automatically restores its connection after the carrier exits', async ({ connectionHarness: { application, page } }, testInfo) => {
 	// Main's handshake completes before the renderer finishes startup. Inject
 	// failure only after the window is usable, so this exercises recovery.
 	await expect(page.getByRole('textbox', { name: 'Chat message', exact: true })).toBeEditable();
@@ -194,14 +242,82 @@ test('Agents automatically restores its connection after the carrier exits', asy
 		const scenario = (globalThis as unknown as { connectionScenario: ConnectionScenario; }).connectionScenario;
 		return { acquisitions: scenario.acquisitions, readyCount: scenario.readyCount };
 	});
-	await application.evaluate(() => (globalThis as unknown as { connectionScenario: ConnectionScenario; }).connectionScenario.killConnection());
+	await application.evaluate(() => {
+		const scenario = (globalThis as unknown as { connectionScenario: ConnectionScenario; }).connectionScenario;
+		scenario.holdNextAcquisitionValidation();
+		scenario.killConnection();
+	});
+	await expect.poll(() => application.evaluate(() => (globalThis as unknown as { connectionScenario: ConnectionScenario; }).connectionScenario.waitingValidation)).toBe(true);
+	const banner = page.locator('[data-part="banner"]');
+	await expect(banner).toContainText('Reconnecting to the Agent Host');
+	await banner.focus();
+	await page.keyboard.press('Alt+F1');
+	const help = page.getByRole('textbox', { name: 'Accessibility Help', exact: true });
+	await expect(help).toBeFocused();
+	await expect(help).toHaveValue(/Window Banner/);
+	await help.press('Escape');
+	await expect(banner).toBeFocused();
+	await page.screenshot({ path: testInfo.outputPath('agent-host-recovery-banner.png') });
+	await application.evaluate(() => (globalThis as unknown as { connectionScenario: ConnectionScenario; }).connectionScenario.releaseValidation());
 	await expect.poll(() => application.evaluate(() => (globalThis as unknown as { connectionScenario: ConnectionScenario; }).connectionScenario.acquisitions)).toBeGreaterThan(before.acquisitions);
 	await expect.poll(() => application.evaluate(() => {
 		const scenario = (globalThis as unknown as { connectionScenario: ConnectionScenario; }).connectionScenario;
 		return { state: scenario.state, readyCount: scenario.readyCount };
 	})).toEqual({ state: 'ready', readyCount: before.readyCount + 1 });
+	await expect(banner).toBeHidden();
+	await expect(page.getByRole('textbox', { name: 'Chat message', exact: true })).toBeFocused();
 	await expect(page.locator('.ash-sessions-window')).toBeVisible();
 	await expect(page.getByRole('heading', { name: 'Unable to start Ash' })).toHaveCount(0);
+});
+
+test.describe('main Workbench recovery', () => {
+	test.use({ connectionSurface: 'workbench' });
+	test('Workbench shows a persistent banner while restoring its backend connection', async ({ connectionHarness: { application, page } }, testInfo) => {
+		await application.evaluate(() => {
+			const scenario = (globalThis as unknown as { connectionScenario: ConnectionScenario; }).connectionScenario;
+			scenario.holdNextAcquisitionValidation();
+			scenario.killConnection();
+		});
+		await expect.poll(() => application.evaluate(() => (globalThis as unknown as { connectionScenario: ConnectionScenario; }).connectionScenario.waitingValidation)).toBe(true);
+		const banner = page.locator('[data-part="banner"]');
+		await expect(banner).toContainText('Reconnecting to the Agent Host');
+		await banner.focus();
+		await page.keyboard.press('Alt+F1');
+		const help = page.getByRole('textbox', { name: 'Accessibility Help', exact: true });
+		await expect(help).toHaveValue(/Window Banner/);
+		await help.press('Escape');
+		await expect(banner).toBeFocused();
+		await page.screenshot({ path: testInfo.outputPath('workbench-agent-host-recovery-banner.png') });
+		await application.evaluate(() => (globalThis as unknown as { connectionScenario: ConnectionScenario; }).connectionScenario.releaseValidation());
+		await expect(banner).toBeHidden();
+		await expect(page.locator('[data-part="editor"]')).toBeVisible();
+	});
+	test('workspace restore failure keeps the Banner visible and retries without replacing the ready connection', async ({ connectionHarness: { application, page } }, testInfo) => {
+		await application.evaluate(() => {
+			const scenario = (globalThis as unknown as { connectionScenario: ConnectionScenario; }).connectionScenario;
+			scenario.holdNextWorkspaceRead();
+			scenario.killConnection();
+		});
+		await expect.poll(() => application.evaluate(() => (globalThis as unknown as { connectionScenario: ConnectionScenario; }).connectionScenario.waitingWorkspaceRead)).toBe(true);
+		await expect.poll(() => application.evaluate(() => (globalThis as unknown as { connectionScenario: ConnectionScenario; }).connectionScenario.state)).toBe('ready');
+		const banner = page.locator('[data-part="banner"]');
+		await expect(banner).toContainText('Reconnecting to the Agent Host');
+		const before = await application.evaluate(() => {
+			const scenario = (globalThis as unknown as { connectionScenario: ConnectionScenario; }).connectionScenario;
+			scenario.releaseWorkspaceRead();
+			return { acquisitions: scenario.acquisitions, readyCount: scenario.readyCount };
+		});
+		await expect(banner).toContainText('Could not restore the Agent Host connection or workspace');
+		await expect.poll(() => application.evaluate(() => (globalThis as unknown as { connectionScenario: ConnectionScenario; }).connectionScenario.workspaceReadFailures)).toBe(1);
+		await page.screenshot({ path: testInfo.outputPath('workspace-recovery-failed-banner.png') });
+		await banner.getByRole('button', { name: 'Reconnect', exact: true }).click();
+		await expect(banner).toBeHidden();
+		expect(await application.evaluate(() => {
+			const scenario = (globalThis as unknown as { connectionScenario: ConnectionScenario; }).connectionScenario;
+			return { acquisitions: scenario.acquisitions, readyCount: scenario.readyCount };
+		})).toEqual(before);
+		await expect(page.locator('[data-part="editor"]')).toBeVisible();
+	});
 });
 
 test('Agents reload waits for a connection restart to finish closing its previous carrier', async ({ connectionHarness: { application, page, backend } }) => {
@@ -299,3 +415,63 @@ test('initialization of an exited carrier cannot report a ready Agents connectio
 	expect(await application.evaluate(() => (globalThis as unknown as { connectionScenario: ConnectionScenario; }).connectionScenario.readyCount)).toBe(beforeReady + 1);
 	expect(await backend()).toEqual(beforeBackend);
 });
+
+for (const surface of ['workbench', 'agents'] as const) {
+	test.describe(`${surface} Workspace Trust`, () => {
+		test.use({ connectionSurface: surface, connectionWorkspace: 'readOnly' });
+		test('Banner manages the current workspace permissions and refreshes effective trust', async ({ connectionHarness: { application, page, workspaceFolder } }, testInfo) => {
+			const folder = await realpath(workspaceFolder!);
+			const banner = page.locator('[data-part="banner"]');
+			await expect(banner).toContainText('This workspace is read-only');
+			await banner.getByRole('button', { name: 'Manage permissions', exact: true }).click();
+			const editor = page.locator('.ash-workspace-trust-editor');
+			await expect(editor).toBeVisible();
+			const modal = page.getByRole('dialog', { name: 'Workspace Trust', exact: true });
+			await expect(modal).toHaveCSS('width', '560px');
+			await expect(modal).toHaveCSS('height', '360px');
+			await expect(editor.locator('.workspace-trust-folder-path')).toHaveText(folder);
+			await expect(editor.getByRole('heading', { level: 2 })).toHaveText('Read-only workspace');
+			await expect(editor.getByRole('switch')).toHaveCount(0);
+			await expect(editor.getByRole('button')).toHaveCount(1);
+			const trust = editor.getByRole('button', { name: 'Trust workspace', exact: true });
+			const readOnly = editor.getByRole('button', { name: 'Open read-only', exact: true });
+			const confirm = async (button: string, enableDevelopment: boolean): Promise<void> => {
+				const action = enableDevelopment ? trust : readOnly;
+				if (surface === 'workbench') {
+					const message = await new Dialogs(page).confirm(application, 'Confirm', button, () => action.click());
+					expect(message.message).toContain(folder.split('/').at(-1)!);
+				} else {
+					await action.click();
+					await page.getByRole('dialog', { name: 'Confirm', exact: true }).getByRole('button', { name: button, exact: true }).click();
+				}
+			};
+			await page.screenshot({ path: testInfo.outputPath(`${surface}-workspace-trust-read-only.png`) });
+			await expect(banner).toBeVisible();
+			await confirm('Cancel', true);
+			await expect(trust).toBeEnabled();
+			await expect(banner).toBeVisible();
+			await confirm('Trust workspace', true);
+			await expect(banner).toBeHidden();
+			await expect(editor.getByRole('heading', { level: 2 })).toHaveText('Trusted workspace');
+			await expect(trust).toBeHidden();
+			await expect(editor.getByRole('switch')).toHaveCount(0);
+			await page.screenshot({ path: testInfo.outputPath(`${surface}-workspace-trust-management.png`) });
+			await confirm('Open read-only', false);
+			await expect(editor.getByRole('heading', { level: 2 })).toHaveText('Read-only workspace');
+			await expect(banner).toContainText('This workspace is read-only');
+			await editor.locator('summary').focus();
+			await page.keyboard.press('Enter');
+			const write = editor.getByRole('switch', { name: 'Write files', exact: true });
+			await expect(write).not.toBeChecked();
+			await write.focus();
+			await write.press('Space');
+			const save = editor.getByRole('button', { name: 'Save permissions', exact: true });
+			await save.focus();
+			await expect(save).toBeInViewport({ ratio: 1 });
+			await expect(modal).toHaveCSS('height', '360px');
+			await expect(banner).toContainText('This workspace is read-only');
+			await page.keyboard.press('Escape');
+			await expect(modal).toBeHidden();
+		});
+	});
+}

@@ -27,6 +27,7 @@ export default defineConfig({
 			input: {
 				codeExtension: resolve(import.meta.dirname, "codeExtension.html"),
 				auxiliaryBar: resolve(import.meta.dirname, 'auxiliaryBar.html'),
+				banner: resolve(import.meta.dirname, 'banner.html'),
 				collaboration: resolve(import.meta.dirname, 'collaboration.html'),
 				gettingStarted: resolve(import.meta.dirname, 'gettingStarted.html'),
 				markdownEditor: resolve(import.meta.dirname, 'markdownEditor.html'),

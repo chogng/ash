@@ -14,11 +14,14 @@ All non-phone Sessions product modes use the shared `SidebarPart`. A mode select
 
 | Surface                           | Shared host        | Mode-owned content                                                               |
 | --------------------------------- | ------------------ | -------------------------------------------------------------------------------- |
+| Persistent window notices         | `BannerPart`       | Notices submitted through the shared window-scoped `IBannerService`              |
 | Left navigation and tools         | `SidebarPart`      | Registered `ViewContainer`, its `ViewPaneContainer` and `ViewPane` contributions |
 | Agent conversations               | `SessionsPart`     | Retained session views and their independent conversation grid                   |
 | Editing and central product pages | `EditorPart`       | `EditorInput` and `EditorPane` opened through `IEditorService`                   |
 | Right properties and detail views | `AuxiliaryBarPart` | Registered view containers and views for the current mode or editor              |
 | Bottom tools                      | `PanelPart`        | Registered tool view containers and views                                        |
+
+The window banner occupies a separate row below the title bar, outside session and mode compositions. Feature services retain their business state; the shared BannerPart owns notice selection and DOM, and the Sessions layout owns its geometry. Banner visibility is transient and does not enter saved session layouts. Its Manage permissions action opens the shared Workspace Trust editor for this window’s workspace and execution host, independently of the selected conversation host. Switching modes or maximizing the Panel preserves an active window notice.
 
 `ViewContainer` is the sidebar, auxiliary-bar and panel registration mechanism. Central editor pages use the editor input/pane mechanism rather than a separate mode container. An `EditorPane` can render a canvas, a browsing page or another rich interface; it is not limited to a text editor. Mode implementations own their documents, commands and content while the shared Parts own placement, resizing, focus and hosting lifecycle. Mode changes retain the same Sessions service and selection ownership.
 
@@ -122,6 +125,7 @@ for both browser and Electron; the phone workbench remains unimplemented.
 
 ```text
 Title bar
+Banner (when a window notice is active)
 Content
 ├── Sidebar
 └── Main region
@@ -129,7 +133,7 @@ Content
     └── Panel
 ```
 
-The workbench omits the standard Activity Bar, Status Bar, and Banner. Its Sessions Activity Bar runs registered product commands. Part positions are fixed by the Agents Window rather than user settings.
+The workbench omits the standard Activity Bar and Status Bar. A shared window Banner appears below the title bar for connection recovery and read-only or restricted workspace permissions. Its Sessions Activity Bar runs registered product commands. Part positions are fixed by the Agents Window rather than user settings.
 
 Contributions register localized titles, icons and commands in `Menus.ActivityBar`.
 `ActivityBarPart` owns profile-scoped command order and presentation. Selected

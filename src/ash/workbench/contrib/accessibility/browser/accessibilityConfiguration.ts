@@ -7,6 +7,19 @@ import { RawContextKey } from '../../../../platform/contextkey/common/contextkey
 import { AccessibilitySignal } from '../../../../platform/accessibilitySignal/browser/accessibilitySignalService.js';
 
 Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfiguration({
+	key: AccessibilityVerbositySettingId.WorkspaceTrust, defaultValue: true,
+	parse(value: unknown): boolean {
+		if (typeof value !== 'boolean') throw new TypeError(localize('workspaceTrust.verbosityInvalid', 'Workspace Trust accessibility verbosity must be boolean.'));
+		return value;
+	},
+	setting: {
+		valueType: 'boolean',
+		get title() { return localize('workspaceTrust.verbosityTitle', 'Workspace Trust accessibility help'); },
+		get description() { return localize('workspaceTrust.verbosityDescription', 'Announce how to open accessibility help for workspace directory permissions.'); },
+	},
+});
+
+Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfiguration({
 	key: AccessibilityVerbositySettingId.SandboxSettings, defaultValue: true,
 	parse(value: unknown): boolean {
 		if (typeof value !== 'boolean') throw new TypeError(localize({ bundle: 'ash.settings', key: 'sandbox.verbosityInvalid' }, 'Sandbox accessibility verbosity must be boolean.'));
@@ -348,6 +361,20 @@ Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfigurat
 		valueType: 'boolean',
 		title: localize('accessibility.diffEditorVerbosityTitle', 'Diff editor accessibility help'),
 		description: localize('accessibility.diffEditorVerbosityDescription', 'Announce how to open accessibility help when the diff editor receives focus.'),
+	},
+});
+
+Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfiguration({
+	key: AccessibilityVerbositySettingId.Banner,
+	defaultValue: true,
+	parse(value: unknown): boolean {
+		if (typeof value !== 'boolean') throw new TypeError(localize('accessibility.bannerVerbosityInvalid', 'Banner accessibility verbosity must be boolean.'));
+		return value;
+	},
+	setting: {
+		valueType: 'boolean',
+		title: localize('accessibility.bannerVerbosityTitle', 'Banner accessibility help'),
+		description: localize('accessibility.bannerVerbosityDescription', 'Announce how to open accessibility help when a window banner receives focus.'),
 	},
 });
 

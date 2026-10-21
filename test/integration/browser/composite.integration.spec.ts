@@ -512,6 +512,34 @@ test('typed case aliases reuse the modal editor pane and unsaved model', async (
 	await expect(page.locator('.stanza-editor-line-text').filter({ hasText: 'unsaved content' })).toBeVisible();
 });
 
+test('modal editor honors requested size, fits small viewports and restores the next editor default', async ({ page }) => {
+	await page.evaluate(async () => {
+		window.ashCompositeIntegration.resizeEditor(1000, 700);
+		await window.ashCompositeIntegration.openModalEditor('default');
+	});
+	const modal = page.getByRole('dialog');
+	const initial = (await modal.boundingBox())!;
+	await page.evaluate(() => window.ashCompositeIntegration.openModalEditor('compact', { width: 560, height: 360 }));
+	await expect(modal).toHaveCSS('width', '560px');
+	await expect(modal).toHaveCSS('height', '360px');
+	await page.evaluate(() => window.ashCompositeIntegration.openModalEditor('compact', { width: 600, height: 400 }));
+	await expect(modal).toHaveCSS('width', '600px');
+	await expect(modal).toHaveCSS('height', '400px');
+	await page.setViewportSize({ width: 420, height: 280 });
+	await page.evaluate(() => window.ashCompositeIntegration.resizeEditor(420, 280));
+	await expect(modal).toHaveCSS('width', '396px');
+	await expect(modal).toHaveCSS('height', '256px');
+	await page.keyboard.press('Escape');
+	await expect(modal).toBeHidden();
+	await page.setViewportSize({ width: 1280, height: 720 });
+	await page.evaluate(async () => {
+		window.ashCompositeIntegration.resizeEditor(1000, 700);
+		await window.ashCompositeIntegration.openModalEditor('next');
+	});
+	await expect(modal).toHaveCSS('width', `${initial.width}px`);
+	await expect(modal).toHaveCSS('height', `${initial.height}px`);
+});
+
 test('content focus enters once, survives internal Tab navigation and leaves once', async ({ page }) => {
 	await page.evaluate(() => window.ashCompositeIntegration.openView('first.view'));
 	await expect(page.getByRole('textbox', { name: 'First input', exact: true })).toBeFocused();

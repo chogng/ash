@@ -1,3 +1,4 @@
+import { IAppServerApi } from '../../../../../platform/agentHost/common/appServerApi.js';
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { Emitter } from '../../../../../base/common/event.js';
@@ -35,6 +36,9 @@ test('Workspace Trust reads current Rust permissions for each workspace folder',
 	services.registerInstance(IWorkspaceTrustApi, permissions);
 	using resolver = services.createInstance(RemoteAuthorityResolverService);
 	services.registerInstance(IRemoteAuthorityResolverService, resolver);
+	using recovered = new Emitter<void>();
+	let recoveryStatus: 'recovering' | 'idle' = 'recovering';
+	services.registerInstance(IAppServerApi, { connectionGeneration: 1, getConnectionState: async () => 'ready', onConnectionState: () => Disposable.None, getSlashCommands: async () => [], recovery: { get status() { return recoveryStatus; }, error: undefined, onDidChange: recovered.event, reconnect: async () => { } } });
 	using trust = services.createInstance(WorkspaceTrustManagementService);
 	let notifications = 0;
 	using listener = trust.onDidChangeTrust(() => notifications += 1);
@@ -79,9 +83,15 @@ test('Workspace Trust reads current Rust permissions for each workspace folder',
 	const unsupported = URI.parse('https://example.test/folder');
 	assert.deepEqual(await trust.getUriTrustInfo(unsupported), { uri: unsupported, trusted: false, permissions: undefined });
 	assert.equal(reads.length, beforeUnsupported);
+	recovered.fire();
+	assert.equal(notifications, 5);
+	recoveryStatus = 'idle';
+	recovered.fire();
+	assert.equal(notifications, 6, 'effective permissions are invalidated after directory recovery');
 	trust.dispose();
 	changes.fire();
-	assert.equal(notifications, 5);
+	recovered.fire();
+	assert.equal(notifications, 6);
 });
 
 for (const prefix of ['ssh', 'team']) {
@@ -90,6 +100,7 @@ for (const prefix of ['ssh', 'team']) {
 		using fleetChanges = new Emitter<number>();
 		using workspace = new TestWorkspaceService({ id: 'remote', uri: URI.parse(`ash-remote://${prefix}+build/alias`) });
 		using services = new InstantiationService();
+		services.registerInstance(IAppServerApi, { connectionGeneration: 1, getConnectionState: async () => 'ready', onConnectionState: () => Disposable.None, getSlashCommands: async () => [] });
 		using resolver = services.createInstance(DesktopRemoteAuthorityResolverService);
 		services.registerInstance(IRemoteAuthorityResolverService, resolver);
 		services.registerInstance(IWorkspaceContextService, workspace);

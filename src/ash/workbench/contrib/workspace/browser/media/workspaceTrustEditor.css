@@ -1,0 +1,115 @@
+.ash-workspace-trust-editor {
+	box-sizing: border-box;
+	min-width: 0;
+	color: var(--ash-editor-foreground);
+	background: var(--ash-editor-background);
+}
+
+.ash-workspace-trust-editor > .ash-scrollable-element {
+	width: 100%;
+	height: 100%;
+}
+
+.ash-workspace-trust-editor .workspace-trust-content {
+	box-sizing: border-box;
+	width: 100%;
+	max-width: 640px;
+	margin: 0 auto;
+	padding: var(--ash-spacing-size400) var(--ash-spacing-size240);
+	display: flex;
+	flex-direction: column;
+	gap: var(--ash-spacing-size200);
+	font-size: var(--ash-fontSize-body1);
+	line-height: 1.5;
+	overflow-wrap: anywhere;
+}
+
+.ash-workspace-trust-editor h2,
+.ash-workspace-trust-editor p {
+	margin: 0;
+}
+
+.ash-workspace-trust-editor h2 {
+	font-size: var(--ash-fontSize-heading2);
+	font-weight: var(--ash-fontWeight-semiBold);
+	line-height: 1.3;
+}
+
+.workspace-trust-location,
+.workspace-trust-overview {
+	display: flex;
+	min-width: 0;
+	flex-direction: column;
+	gap: var(--ash-spacing-size80);
+}
+
+.workspace-trust-folder-name {
+	font-weight: var(--ash-fontWeight-semiBold);
+}
+
+.workspace-trust-folder-path,
+.workspace-trust-overview > p,
+.workspace-trust-advanced-content > p,
+.workspace-trust-footer {
+	color: var(--ash-description-foreground);
+}
+
+.workspace-trust-folder-path,
+.workspace-trust-footer {
+	font-size: var(--ash-fontSize-label1);
+}
+
+.workspace-trust-advanced {
+	border-top: var(--ash-strokeThickness) solid var(--ash-widget-border);
+	padding-top: var(--ash-spacing-size200);
+}
+
+.workspace-trust-advanced > summary {
+	width: fit-content;
+	max-width: 100%;
+	cursor: pointer;
+}
+
+.workspace-trust-advanced > summary:focus-visible {
+	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
+	outline-offset: 2px;
+}
+
+.workspace-trust-advanced-content {
+	display: flex;
+	flex-direction: column;
+	gap: var(--ash-spacing-size160);
+	padding-top: var(--ash-spacing-size200);
+}
+
+.workspace-trust-permissions {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(min(280px, 100%), 1fr));
+	gap: var(--ash-spacing-size120);
+}
+
+.workspace-trust-actions {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--ash-spacing-size120);
+}
+
+.workspace-trust-footer {
+	display: flex;
+	align-items: flex-start;
+	justify-content: space-between;
+	gap: var(--ash-spacing-size160);
+}
+
+.workspace-trust-footer > p {
+	flex: 1;
+}
+
+.workspace-trust-footer[hidden] {
+	display: none;
+}
+
+.ash-workspace-trust-editor:focus-visible {
+	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
+	outline-offset: -1px;
+}

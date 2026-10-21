@@ -328,12 +328,13 @@ export class WorkbenchLayout
 		if (auxiliaryBarMaximized) this.setAuxiliaryBarMaximized(false);
 		const state = restoredState ?? this.state;
 		const editorVisible = this.isPartVisible('editor');
+		const bannerVisible = this.isPartVisible('banner');
 		const dimension = new Dimension(this.grid.width || getClientArea(this.domNode).width, this.grid.height || getClientArea(this.domNode).height);
 		this.gridChangeHandle.clear();
 		this.gridHandle.clear();
 		this.grid = SerializableGrid.deserialize(
 			this.domNode,
-			createWorkbenchGridDescriptor(this.views, dimension, state, this.activityBarLocation, this.sideBarLocation, editorVisible),
+			createWorkbenchGridDescriptor(this.views, dimension, state, this.activityBarLocation, this.sideBarLocation, editorVisible, bannerVisible),
 			{ fromJSON: data => this.view(parseWorkbenchPartId(data)) },
 			{ sashPresentation: this.layoutStyle === 'modern' ? { type: 'inset', gap: PART_GUTTER_SIZE } : undefined, edgeSnapping: true },
 		);
@@ -354,7 +355,7 @@ export class WorkbenchLayout
 		if (!this.gridHandle.value) return { top: 0, quickInputTop: 0 };
 		const titlebar = this.getPartSize("titlebar");
 		return {
-			top: this.isPartVisible("titlebar") ? titlebar.height : 0,
+			top: (this.isPartVisible("titlebar") ? titlebar.height : 0) + (this.isPartVisible('banner') ? this.getPartSize('banner').height : 0),
 			quickInputTop: 0,
 		};
 	}
@@ -668,6 +669,7 @@ function createWorkbenchGridDescriptor(
 	activityBarLocation: ActivityBarPosition,
 	sideBarLocation: SideBarLocation,
 	editorVisible = true,
+	bannerVisible = false,
 ): SerializedGridDescriptor {
 	const leaf = (
 		partId: WorkbenchPartId,
@@ -682,11 +684,12 @@ function createWorkbenchGridDescriptor(
 		priority,
 	});
 	const titlebarHeight = requiredView(views, "titlebar").minimumHeight;
+	const bannerHeight = requiredView(views, 'banner').minimumHeight;
 	const statusbarHeight = requiredView(views, "statusbar").minimumHeight;
 	const activitybarWidth = requiredView(views, "activitybar").minimumWidth;
 	const bodyHeight = Math.max(
 		0,
-		dimension.height - titlebarHeight - statusbarHeight,
+		dimension.height - titlebarHeight - statusbarHeight - (bannerVisible ? bannerHeight : 0),
 	);
 	const panelHeight = state.panel.height;
 	const editorHeight = Math.max(
@@ -725,6 +728,7 @@ function createWorkbenchGridDescriptor(
 		priority: "normal",
 		children: [
 			leaf("titlebar", titlebarHeight),
+			leaf('banner', bannerHeight, bannerVisible),
 			{
 				type: "branch",
 				orientation: "horizontal",

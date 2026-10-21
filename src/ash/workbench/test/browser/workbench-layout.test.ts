@@ -163,6 +163,7 @@ class TestPart extends Part {
 	}
 
 	override get minimumHeight(): number {
+		if (this.id === "banner") return 32;
 		if (this.id === "titlebar") return 35;
 		if (this.id === "statusbar") return 35;
 		if (this.id === "editor") return 84;
@@ -171,6 +172,7 @@ class TestPart extends Part {
 	}
 
 	override get maximumHeight(): number {
+		if (this.id === "banner") return 32;
 		if (this.id === "titlebar") return 35;
 		if (this.id === "statusbar") return 35;
 		return Number.POSITIVE_INFINITY;
@@ -2666,4 +2668,24 @@ test('Panel default setting applies to new workspaces while saved workspace posi
 			assert.equal(restored.layout.getPanelPosition(), Position.LEFT);
 		} finally { restored.disposables.dispose(); }
 	} finally { first.disposables.dispose(); dom.window.close(); }
+});
+
+test('Workbench banner occupies transient space and survives topology rebuilds', () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	const harness = createLayoutHarness(dom.window.document, { initialDimension: new Dimension(1_200, 800) });
+	try {
+		harness.layout.layout(new Dimension(1_200, 800));
+		const before = harness.layout.getPartSize('editor').height;
+		assert.equal(harness.layout.isPartVisible('banner'), false);
+		harness.layout.showPart('banner');
+		assert.equal(harness.layout.mainContainerOffset.top, 67);
+		assert.equal(harness.layout.getPartSize('editor').height, before - 32);
+		harness.layout.setSideBarLocation('right');
+		assert.equal(harness.layout.isPartVisible('banner'), true);
+		assert.equal(harness.layout.getPartSize('banner').height, 32);
+		harness.layout.hidePart('banner');
+		assert.equal(harness.layout.mainContainerOffset.top, 35);
+		assert.equal(harness.layout.getPartSize('editor').height, before);
+		assert.equal('banner' in harness.layout.state, false);
+	} finally { harness.disposables.dispose(); dom.window.close(); }
 });

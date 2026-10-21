@@ -187,6 +187,7 @@ declare global {
 			setEditorTheme(id: string): void;
 			closeEditor(name: string): Promise<void>;
 			openFileAliases(target?: 'modalGroup'): Promise<{ tabs: number; models: number; retained: boolean; text: string; }>;
+			openModalEditor(name: string, size?: { width: number; height: number; }): Promise<void>;
 			editorState(): readonly { name: string; focused: boolean; visible: boolean; retained: boolean; }[];
 		};
 	}
@@ -729,6 +730,11 @@ window.ashCompositeIntegration = {
 		const alias = resources.add(new FileEditorInput(URI.file('/composite/Original/ALIAS.txt')));
 		const secondPane = await editor.openEditor(alias, { pinned: true }, target);
 		return { tabs: editor.activeGroup.inputs.length, models: models.getModels().length, retained: firstPane === secondPane && firstModel === models.getModel(alias.resource), text: firstModel.getText() };
+	},
+	openModalEditor: async (name, size) => {
+		await import('../../../src/ash/base/browser/ui/styles.css');
+		await import('../../../src/ash/workbench/browser/media/style.css');
+		await editor.openEditor(editorInput(name), { pinned: true, modal: { size } }, 'modalGroup');
 	},
 	closeEditor: async name => { await editor.closeEditor(editorInput(name)); },
 	editorState: () => [...editorPanes].map(([name, { pane, control }]) => ({ name, focused: pane.hasFocus(), visible: pane.isVisible(), retained: control === pane.getControl() })),

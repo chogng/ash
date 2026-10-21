@@ -3,7 +3,7 @@ import { localize } from '../../nls.js';
 import { throwIfCancelled } from '../../base/common/cancellation.js';
 import { generateUuid } from '../../base/common/uuid.js';
 import { DeferredPromise, raceCancellationError } from '../../base/common/async.js';
-import { Emitter } from '../../base/common/event.js';
+import { Emitter, Event } from '../../base/common/event.js';
 import { agentHostConnectionAddress } from '../../platform/agentHost/common/agentHostConnectionsService.js';
 import type { RemoteConnectionDefinition } from '../../platform/remote/common/remoteConnectionService.js';
 import { REMOTE_AGENT_HOST_OPEN_CHANNEL, REMOTE_AGENT_HOST_CLOSE_CHANNEL } from '../../platform/remote/common/remoteConnectionIpc.js';
@@ -55,7 +55,7 @@ import type { AshElectronRendererApi } from "../../platform/native/common/render
 import { createNativeHostApi } from "../../platform/native/electron-browser/nativeHostApi.js";
 import { IMainProcessService } from '../../platform/ipc/common/mainProcessService.js';
 import { LoggerChannelClient } from '../../platform/log/common/logIpc.js';
-import type { IAppServerApi } from "../../platform/agentHost/common/appServerApi.js";
+import type { IAppServerApi, IAppServerConnectionRecovery } from "../../platform/agentHost/common/appServerApi.js";
 import type { RendererHostCapabilities } from "../../platform/renderer/common/rendererHost.js";
 import { createRemoteAgentApi } from "../../platform/remote/electron-browser/remoteAgentApi.js";
 import { createRemoteConnectionApi } from "../../platform/remote/electron-browser/remoteConnectionApi.js";
@@ -111,6 +111,49 @@ export async function createElectronRendererApi(contributions: readonly Electron
 		const connection = agentHost.connection;
 		const client = agentHost.client;
 		let backend: IRendererHost;
+		const workspaceChanges = resources.add(new Emitter<void>());
+		let workspaceInitialization: { readonly generation: number; readonly promise: Promise<void>; state: 'restoring' | 'ready' | 'failed'; error?: unknown; } | undefined;
+		const restoreWorkspace = (retry = false): Promise<void> => {
+			// Terminals and reconnect listeners share one binding attempt per generation.
+			if (workspaceInitialization?.generation !== client.generation || retry && workspaceInitialization.state === 'failed') {
+				const attempt: NonNullable<typeof workspaceInitialization> = {
+					generation: client.generation, state: 'restoring',
+					promise: Promise.resolve().then(() => initializeWorkspace(client, workspaceTrust, backend.workspaceTrust, workspaceApi)),
+				};
+				workspaceInitialization = attempt;
+				workspaceChanges.fire();
+				void attempt.promise.then(() => {
+					if (resources.isDisposed || workspaceInitialization !== attempt || client.generation !== attempt.generation) return;
+					attempt.state = 'ready';
+					workspaceChanges.fire();
+				}, error => {
+					if (resources.isDisposed || workspaceInitialization !== attempt || client.generation !== attempt.generation) return;
+					attempt.state = 'failed';
+					attempt.error = error;
+					workspaceChanges.fire();
+				});
+			}
+			return workspaceInitialization.promise;
+		};
+		const recovery: IAppServerConnectionRecovery = {
+			get status() {
+				const status = connection.recovery.status;
+				if (status !== 'idle' || workspaceInitialization?.generation !== client.generation) return status;
+				return workspaceInitialization.state === 'restoring' ? 'recovering' : workspaceInitialization.state === 'failed' ? 'failed' : 'idle';
+			},
+			get error() {
+				return connection.recovery.status === 'idle' && workspaceInitialization?.generation === client.generation && workspaceInitialization.state === 'failed'
+					? String(workspaceInitialization.error instanceof Error ? workspaceInitialization.error.message : workspaceInitialization.error)
+					: connection.recovery.error;
+			},
+			onDidChange: Event.any(connection.recovery.onDidChange, workspaceChanges.event),
+			reconnect: async () => {
+				// A ready carrier needs only its failed directory binding retried.
+				const bindingPending = workspaceInitialization?.generation === client.generation && workspaceInitialization.state !== 'ready';
+				if (connection.recovery.status !== 'idle' || !bindingPending) await connection.recovery.reconnect();
+				await restoreWorkspace(true);
+			},
+		};
 		if (enabled) {
 			performance.mark('ash.rendererApi.initialized');
 			backend = createRendererHost(client, {
@@ -121,7 +164,7 @@ export async function createElectronRendererApi(contributions: readonly Electron
 					close: id => invoke('ash:oauth-callback:close', { id }),
 				},
 				clipboardService: new ElectronRendererClipboardService(),
-			}, contributions.map(contribution => (client, appServer) => contribution(client, appServer, localClient)), remoteConnection.kind === 'ssh' ? remoteConnection.host : undefined, connection.recovery);
+			}, contributions.map(contribution => (client, appServer) => contribution(client, appServer, localClient)), remoteConnection.kind === 'ssh' ? remoteConnection.host : undefined, recovery);
 			resources.add(backend.mcpServerManagement);
 			if (backend.contextResourceHost) { resources.add(backend.contextResourceHost); }
 			resources.add(registerAppServerWorkspaceHost(client, () => connection.whenConnected(), workspaceTrust, backend.workspaceTrust, folders => workspaceApi.validateFolders(folders), path => remoteConnection.kind === 'ssh' ? createSshRemoteWorkspaceUri(remoteConnection.host, path) : URI.file(path)));
@@ -136,15 +179,6 @@ export async function createElectronRendererApi(contributions: readonly Electron
 			backend = { ...backend, dictation: createAppServerVoiceCodeTranscriptionBackend(localClient) };
 			if (client.capabilities?.contracts.symphony?.version === 1) { backend = { ...backend, symphony: resources.add(new AppServerSymphonyService(client)) }; }
 			if (client.capabilities?.contracts.automation?.version === 1) { backend = { ...backend, automation: resources.add(new AppServerAutomationService(client)) }; }
-			let workspaceInitialization: { readonly generation: number; readonly promise: Promise<void>; } | undefined;
-			const restoreWorkspace = (): Promise<void> => {
-				// A ready listener may request a terminal before onDidReconnect fires.
-				// Both paths must share the same directory binding for this generation.
-				if (workspaceInitialization?.generation !== client.generation) {
-					workspaceInitialization = { generation: client.generation, promise: initializeWorkspace(client, workspaceTrust, backend.workspaceTrust, workspaceApi) };
-				}
-				return workspaceInitialization.promise;
-			};
 			const terminals = resources.add(new ReconnectableTerminalProcessService(client, {
 				whenDirectoriesReady: async () => { await connection.whenConnected(); await restoreWorkspace(); },
 				lifetimeToken: remoteConnection.kind === 'local' ? () => invoke<string>(TERMINAL_WINDOW_LIFETIME_CHANNEL) : undefined,
