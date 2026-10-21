@@ -80,7 +80,7 @@ Desktop 默认启用 `enablePersistentSessions`。协调 reload 先冻结原管�
 
 `IShellLaunchConfig.waitOnExit` 由实例持有，可为布尔值、文本或退出码回调。任务完成提示只写入显示队列，不产生进程数据或 stdin；普通字符键和 Enter 关闭已退出的等待终端，工作台快捷键继续可用。任务复用完整替换退出策略；后台读取产生的终端应答不能触发关闭。
 
-终端无障碍贡献读取已解析的屏幕和滚动历史，提供随输出更新的只读视图与帮助，关闭后回到终端输入。`accessibility.verbosity.terminal` 控制输入标签中的帮助提示。贡献与屏幕同生命周期，内容提供者由无障碍对话框释放；查找贡献继续拥有终端焦点上下文。
+终端无障碍贡献读取已解析的屏幕和滚动历史，提供随输出更新的只读视图与帮助，关闭后回到终端输入。`accessibility.verbosity.terminal` 控制输入标签中的帮助提示。贡献与屏幕同生命周期，内容提供者由无障碍对话框释放；实例与查找控件的焦点职责见 [Terminal 输入与命令](../../../../../docs/terminal.md#输入与命令)。
 
 文本剪贴板由 `terminalContrib/clipboard/browser/terminal.clipboard.contribution.ts` 随实例屏幕就绪挂载。复制只读原选区，粘贴调用既有宿主剪贴板服务与 `sendText(text, false, true)`；异步读取期间关闭、断线、退出或切换实例都会作废旧结果。输入不增加 Enter，遵守 child paste mode，并返回进程确认或失败。浏览器原生粘贴在 xterm 原始输入前进入同一贡献，与命令粘贴共用多行确认和实例代次检查；自动复制及右键行为沿原选区和焦点 owner 接入。HTML／资源粘贴不转为文本执行。
 

@@ -521,6 +521,14 @@ test("TerminalService exposes failed reconnectable recovery as a relaunchable er
 	await waitFor(() => instance.state === "error");
 
 	assert.ok(output.some(value => value.includes("terminal recovery failed; relaunch required")));
+	const failedOutput = [...output];
+	const failedReads = processService.readCursors.length;
+	processService.emitConnectionState("stopping");
+	assert.equal(instance.state, "error");
+	processService.emitConnectionState("ready");
+	assert.equal(instance.state, "error");
+	assert.equal(processService.readCursors.length, failedReads);
+	assert.deepEqual(output, failedOutput);
 	await service.relaunchTerminal(instance, { rows: 30, cols: 100 });
 	assert.equal(instance.state, "running");
 	assert.equal(processService.createCalls.length, 2);

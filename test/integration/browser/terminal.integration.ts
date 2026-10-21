@@ -1102,6 +1102,9 @@ declare global {
 
 if (new URLSearchParams(location.search).has('input')) {
 	widget.dispose();
+	if (new URLSearchParams(location.search).has('clipboardFirst')) {
+		await import('../../../src/ash/workbench/contrib/terminalContrib/clipboard/browser/terminal.clipboard.contribution.js');
+	}
 	await import('../../../src/ash/workbench/contrib/terminal/terminal.all.js');
 	const [{ ServiceCollection }, { ITerminalProcessService }, { IWorkspaceContextService }, { TestWorkspaceService }, { installWorkbenchServiceContributions }] = await Promise.all([
 		import('../../../src/ash/platform/instantiation/common/serviceCollection.js'),
@@ -1478,6 +1481,8 @@ if (new URLSearchParams(location.search).has('input')) {
 					return { value: configuration.getValue<string>(key), persisted: JSON.parse((await configuration.read()).source)[key] ?? null };
 				},
 				select: (start, length) => screen.raw.select(start, 0, length),
+				activateOriginal: () => terminals.setActiveInstance(terminal),
+				activateOther: () => terminals.setActiveInstance(terminals.instances.find(instance => instance !== terminal)),
 				selection: () => screen.raw.getSelection(),
 				selectedContext: () => services.get(IContextKeyService).getContext(document.activeElement).getValue<boolean>('terminalTextSelectedInFocused') === true,
 				hold: () => { holdRead = true; },
@@ -1610,6 +1615,8 @@ declare global {
 			reads(): number;
 			warningPolicy(): Promise<{ value: string; persisted: string | null; }>;
 			select(start: number, length: number): void;
+			activateOriginal(): void;
+			activateOther(): void;
 			selection(): string;
 			selectedContext(): boolean;
 			hold(): void;

@@ -25,6 +25,8 @@ import {
 	type TerminalProcessConnectionState,
 } from '../../../../platform/terminal/common/terminal.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
+import { ServiceCollection } from '../../../../platform/instantiation/common/serviceCollection.js';
+import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
 import type { ITerminalCommandStatusEvent, ITerminalContribution, ITerminalDimensions, ITerminalInstance, ITerminalProfile, TerminalInstanceState } from './terminal.js';
 import { TerminalExtensionsRegistry } from './terminalExtensions.js';
 import type { AgentHostPty } from './agentHostPty.js';
@@ -48,6 +50,7 @@ import { containsDragType, DataTransfers } from '../../../../base/browser/dnd.js
 import { UriList } from '../../../../base/common/dataTransfer.js';
 import { getPathForFile, LocalSelectionTransfer } from '../../../../platform/dnd/browser/dnd.js';
 import { DraggedEditorIdentifier } from '../../../browser/parts/editor/editorTabDragAndDrop.js';
+import { TerminalContextKeys } from '../common/terminalContextKey.js';
 
 export interface CustomTerminalProcessOptions {
 	readonly create: NonNullable<IShellLaunchConfig['customPtyImplementation']>;
@@ -146,6 +149,7 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 		@IWorkspaceContextService private readonly workspace: IWorkspaceContextService,
 		@IConfigurationService private readonly configuration: IConfigurationService,
 		@ITerminalProcessService private readonly processes: ITerminalProcessService,
+		@IContextKeyService private readonly contextKeys: IContextKeyService,
 	) {
 		super();
 		if (launch) {
@@ -354,6 +358,12 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 		}
 		const screen = this._register(this.instantiationService.createInstance(XtermTerminal, container, this));
 		this.screen = screen;
+		// Establish the instance scope before any contribution creates a nested
+		// scope. Keyboard routing must not depend on contribution registration order.
+		const scope = this._register(this.contextKeys.createScoped(screen.element));
+		const screenServices = this._register(this.instantiationService.createChild(new ServiceCollection([IContextKeyService, scope])));
+		const focused = TerminalContextKeys.focus.bindTo(scope);
+		const alternate = TerminalContextKeys.altBufferActive.bindTo(scope);
 		const editorDrag = LocalSelectionTransfer.getInstance<DraggedEditorIdentifier>();
 		const acceptsDrop = (event: DragEvent): boolean => !this.isReadOnly && this.state === 'running'
 			&& (editorDrag.hasData(DraggedEditorIdentifier.prototype) || containsDragType(event, 'text/uri-list') || containsDragType(event, DataTransfers.FILES));
@@ -385,7 +395,7 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 		const truncated = recorder.isTruncated;
 		this.screenRecorder = undefined;
 		for (const { id, ctor } of TerminalExtensionsRegistry.getTerminalContributions()) {
-			this.contributions.set(id, this.instantiationService.createInstance(ctor, { instance: this }));
+			this.contributions.set(id, screenServices.createInstance(ctor, { instance: this }));
 		}
 		const restored = this.restored;
 		this.screenInitialization = screen.initialize(restored).then(async () => {
@@ -427,6 +437,14 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 			const binary = screen.raw.onBinary(data => { void this.processBinary(data).catch(onUnexpectedError); });
 			this._register(toDisposable(() => binary.dispose()));
 			const contributionsReady = (): void => {
+				const textarea = screen.raw.textarea!;
+				// Opening or restoring a screen may have already applied its focus request.
+				focused.set(textarea === screen.element.ownerDocument.activeElement);
+				this._register(addDisposableListener(screen.element, 'focusin', event => focused.set(event.target === textarea)));
+				this._register(addDisposableListener(screen.element, 'focusout', event => focused.set(event.relatedTarget === textarea)));
+				alternate.set(screen.raw.buffer.active.type === 'alternate');
+				const bufferChanged = screen.raw.buffer.onBufferChange(buffer => alternate.set(buffer.type === 'alternate'));
+				this._register(toDisposable(() => bufferChanged.dispose()));
 				for (const [, contribution] of this.contributions) { contribution.xtermReady?.(screen); }
 			};
 			// Recovery needs the parsed buffer before its view is revealed. Features
@@ -700,7 +718,9 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 		if (this.custom) {
 			return;
 		}
-		if (this.closed || this._state === "exited" || this._state === "disconnected") return;
+		// Errors require an explicit relaunch. Later host transitions must not
+		// resume failed operations or repeatedly append recovery failures.
+		if (this.closed || this._state === "exited" || this._state === "disconnected" || this._state === "error") return;
 		this.pollGeneration += 1;
 		this.shellProcessManager?.stop();
 		if (this.connectionPersistence === "reconnectable") {

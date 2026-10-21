@@ -9,7 +9,6 @@ import { IClipboardService } from '../../../../../platform/clipboard/common/clip
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
 import { INotificationService } from '../../../../../platform/notification/common/notification.js';
 import { IContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
-import { ContextKeyExpr } from '../../../../../platform/contextkey/common/contextkey.js';
 import { IInstantiationService, type ServicesAccessor } from '../../../../../platform/instantiation/common/instantiation.js';
 import { KeybindingWeight } from '../../../../../platform/keybinding/common/keybindingsRegistry.js';
 import { ITerminalService, type ITerminalContribution, type ITerminalInstance, type IXtermTerminal } from '../../../terminal/browser/terminal.js';
@@ -21,6 +20,8 @@ import { shouldPasteTerminalText } from './terminalClipboard.js';
 import { IDialogService } from '../../../../../platform/dialogs/common/dialogs.js';
 import { TerminalCapability } from '../../../../../platform/terminal/common/capabilities/capabilities.js';
 import { TerminalSettingId } from '../../../../../platform/terminal/common/terminal.js';
+import { InstanceContext } from '../../../terminal/browser/terminalContextMenu.js';
+import { MarshalledId } from '../../../../../base/common/marshallingIds.js';
 
 /** Clipboard operations retain their initiating instance across asynchronous host reads. */
 export class TerminalClipboardContribution extends Disposable implements ITerminalContribution {
@@ -191,7 +192,22 @@ export class TerminalClipboardContribution extends Disposable implements ITermin
 
 registerTerminalContribution(TerminalClipboardContribution.ID, TerminalClipboardContribution);
 
-const selected = ContextKeyExpr.and(TerminalContextKeys.focus.isEqualTo(true), TerminalContextKeys.textSelectedInFocused.isEqualTo(true));
+// Copy follows the focused textarea's selection, including retained output after exit.
+const selected = TerminalContextKeys.textSelectedInFocused.isEqualTo(true);
+
+/** Explicit menu targets never fall back to a different active terminal. */
+function clipboardInstance(accessor: ServicesAccessor, context: unknown): ITerminalInstance | undefined {
+	const terminals = accessor.get(ITerminalService);
+	if (context === undefined) return terminals.activeInstance;
+	const id = context instanceof InstanceContext ? context.instanceId : context && typeof context === 'object'
+		&& '$mid' in context && context.$mid === MarshalledId.TerminalContext && 'instanceId' in context ? context.instanceId : undefined;
+	if (typeof id !== 'number' || !Number.isSafeInteger(id) || id <= 0) {
+		throw new TypeError(localize('terminal.context.invalid', 'Invalid terminal instance context'));
+	}
+	const instance = terminals.instances.find(instance => instance.instanceId === id);
+	if (!instance) throw new Error(localize('terminal.context.closed', 'This terminal has been closed'));
+	return instance;
+}
 
 registerAction2(class TerminalCopySelectionAction extends Action2 {
 	constructor() {
@@ -203,8 +219,8 @@ registerAction2(class TerminalCopySelectionAction extends Action2 {
 			keybinding: { primary: KeyMod.CtrlCmd | KeyMod.Shift | KeyCode.KeyC, mac: { primary: KeyMod.CtrlCmd | KeyCode.KeyC }, when: selected, weight: KeybindingWeight.WorkbenchContrib },
 		});
 	}
-	public override async run(accessor: ServicesAccessor): Promise<void> {
-		const instance = accessor.get(ITerminalService).activeInstance;
+	public override async run(accessor: ServicesAccessor, context?: unknown): Promise<void> {
+		const instance = clipboardInstance(accessor, context);
 		if (instance) await TerminalClipboardContribution.get(instance)?.copySelection();
 	}
 });
@@ -251,9 +267,11 @@ registerAction2(class TerminalPasteAction extends Action2 {
 			},
 		});
 	}
-	public override async run(accessor: ServicesAccessor): Promise<void> {
-		const instance = accessor.get(ITerminalService).activeInstance;
-		if (instance) await TerminalClipboardContribution.get(instance)?.paste();
+	public override async run(accessor: ServicesAccessor, context?: unknown): Promise<void> {
+		const instance = clipboardInstance(accessor, context);
+		if (!instance) return;
+		if (context !== undefined) accessor.get(ITerminalService).setActiveInstance(instance);
+		await TerminalClipboardContribution.get(instance)?.paste();
 	}
 });
 

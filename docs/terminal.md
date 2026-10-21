@@ -48,6 +48,8 @@ Profile 选择器属于单次命令。工作区或执行连接变化会关闭并
 
 ## 输入与命令
 
+TerminalInstance 在创建贡献前建立实例自己的 context-key／DI 作用域，拥有终端焦点及 alternate-buffer 状态。Find、剪贴板和其他贡献继承同一个作用域；快捷键路由不依赖贡献的加载顺序，Find 控件只管理自己的查找焦点与可见性。
+
 标准 Scroll Up／Down 按行或页操作原 xterm 的 retained buffer，Scroll to Top／Bottom 到达两端；已退出和只读终端也可使用，不发送进程输入。滚动快捷键仅在聚焦终端的 normal buffer 生效，alternate buffer 中的按键继续交给终端应用。Select All 选择屏幕与 scrollback，Escape 可清除选区；Find 打开时保留自己的 Escape 行为。macOS 使用 Cmd+A，Linux／Windows 不覆盖 Shell 的 Ctrl+A。
 
 xterm 的文本和原始字节输入经实例进入同一进程输入 owner。`sendText` 负责换行、执行用的 Enter 与 bracketed paste；原始键盘和二进制输入保留原有编码。输入和尺寸操作等待执行端或 provider 确认，关闭会拒绝排队及进行中的操作，迟到回复不能恢复已关闭的输入链。
@@ -57,6 +59,8 @@ Cursor Undo 的 Ctrl/Cmd+U 快捷键仅在编辑器文本持有焦点时匹配�
 剪贴板贡献捕获发起实例和输入 generation，异步读取或确认后核对活动项、连接及屏幕；切换回来也不会发送已失效的粘贴。浏览器 paste 在 xterm 处理之前进入同一贡献，经原实例 `sendText` 发送并等待输入确认，不会同时进入 raw onData。没有文本选区时，Ctrl+C 继续发送给 Shell；Send Signal 通过执行宿主发送 SIGINT、SIGTERM、SIGKILL 或 SIGHUP，POSIX 目标为当前前台进程组。无参打开选择器，显式 `{ signal }` 参数直接发送；取消、切换终端或断线后撤回选择。Shell 本身处于前台时，终止信号也可能结束 Shell；不支持的执行端明确报错。
 
 `copyOnSelection` 只在终端本身持有焦点时自动复制选区，Find 的匹配选择不覆盖剪贴板。`rightClickBehavior` 支持复制后清除选区／粘贴、仅粘贴、选词、默认菜单和不操作；Shift 保留菜单入口。剪贴板失败不清除选区，鼠标粘贴在焦点离开后也会失效。
+
+终端实例菜单中的 Copy／Paste 捕获该菜单对应的实例。复制读取该实例的原选区；粘贴显式激活该实例后进入同一个异步输入检查。菜单打开后活动终端变化不会把操作交给另一实例，已关闭的目标明确拒绝。
 
 `terminal.integrated.enableMultiLinePasteWarning` 由 TypeScript 窗口配置解释，沿现有 `settings.json` 的用户／工作区层解析，默认 `auto`。`auto` 在 bracketed paste 模式下放行，其他情况下移除单条命令末尾的换行及空白，对其余多行文本确认；`always` 对 LF、CRLF 和 CR 换行均确认，即使 Shell 启用了 bracketed paste；`never` 关闭确认。对话框仅展示有界开头预览，接受后发送原文；Escape 取消且恢复有效原实例的焦点。
 

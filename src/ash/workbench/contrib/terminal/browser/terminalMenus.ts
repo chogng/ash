@@ -9,6 +9,14 @@ import { TerminalCreatingContext, TerminalHasActiveInstanceContext, TerminalActi
 
 /** Registers terminal menus once for the renderer; enablement comes from each window's context. */
 export function setupTerminalMenus(): void {
+	for (const [id, title, order] of [
+		[TerminalCommandId.CopySelection, localize2('terminal.context.copy', 'Copy'), 1],
+		[TerminalCommandId.Paste, localize2('terminal.context.paste', 'Paste'), 2],
+	] as const) {
+		MenusRegistry.appendMenuItem(MenuId.TerminalInstanceContext, {
+			command: { id, title }, group: '2_edit', order,
+		});
+	}
 	for (const [id, title, group, order] of [
 		[TerminalCommandId.ConfigureTerminalSettings, localize2('terminal.configureSettings', 'Configure Terminal Settings'), '3_configure', 1],
 		[TerminalCommandId.SelectDefaultProfile, localize2('terminal.title.selectDefaultProfile', 'Select Default Profile'), '3_configure', 2],
