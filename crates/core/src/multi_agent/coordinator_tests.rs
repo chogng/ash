@@ -102,7 +102,7 @@ fn spawn_creates_seeded_child_thread_and_initial_turn_idempotently() {
                 harness_context: &HarnessContext::default(),
                 extension_fragments: Vec::new(),
                 evidence: Vec::new(),
-                tools: vec![tool_definition("allowed"), tool_definition("blocked")],
+                tools: vec![tool_definition("allowed"), tool_definition("blocked")].into(),
                 budget: ContextBudget::provider_managed(),
             },
         )
@@ -252,7 +252,8 @@ fn code_mode_agent_scope_keeps_controls_and_limits_nested_tools() {
                     tool_definition("exec"),
                     tool_definition("wait"),
                     tool_definition("blocked"),
-                ],
+                ]
+                .into(),
                 budget: ContextBudget::provider_managed(),
             },
         )
@@ -329,7 +330,7 @@ fn selected_and_forked_context_are_materialized_into_the_immutable_child_seed() 
                 harness_context: &HarnessContext::default(),
                 extension_fragments: Vec::new(),
                 evidence: Vec::new(),
-                tools: vec![tool_definition("allowed")],
+                tools: vec![tool_definition("allowed")].into(),
                 budget: ContextBudget::provider_managed(),
             },
         )
@@ -803,8 +804,8 @@ fn cancelling_a_parent_delegation_interrupts_every_live_descendant() {
                 policy_revision: "policy-v1".into(),
             },
             capability_scope: AgentCapabilityScope {
-                tools: Vec::new(),
-                delegation_tools: Vec::new(),
+                tools: Vec::new().into(),
+                delegation_tools: Vec::new().into(),
                 skills: Vec::new(),
             },
         })
@@ -983,7 +984,7 @@ fn messages_and_results_apply_exactly_once_across_threads() {
                 harness_context: &HarnessContext::default(),
                 extension_fragments: Vec::new(),
                 evidence: Vec::new(),
-                tools: vec![tool_definition("allowed")],
+                tools: vec![tool_definition("allowed")].into(),
                 budget: ContextBudget::provider_managed(),
             },
         )
@@ -1406,7 +1407,8 @@ fn root_role_and_default_worker_share_rules_without_inheriting_responsibilities(
                         tools: ["allowed", "blocked", "exec", "wait"]
                             .into_iter()
                             .map(tool_definition)
-                            .collect(),
+                            .collect::<Vec<_>>()
+                            .into(),
                         budget: ContextBudget::provider_managed(),
                     },
                 )
@@ -1540,7 +1542,7 @@ fn full_context_uses_original_history_and_appends_delegation_after_the_prefix() 
                 harness_context: &HarnessContext::default(),
                 extension_fragments: vec![],
                 evidence: vec![],
-                tools: vec![tool_definition("allowed")],
+                tools: vec![tool_definition("allowed")].into(),
                 budget: ContextBudget::provider_managed(),
             },
         )

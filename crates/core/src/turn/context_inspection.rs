@@ -121,7 +121,7 @@ impl TurnExecutor {
             request.tool_mode,
             Some(&request.instructions),
         )?;
-        let tools = catalog.definitions().to_vec();
+        let tools = catalog.shared_definitions();
         let tools = match &snapshot {
             Some(snapshot) => {
                 crate::multi_agent::scope_agent_tools(snapshot, request.tool_mode, tools)
@@ -237,7 +237,7 @@ impl TurnExecutor {
         };
         Ok(ContextInspection {
             context,
-            tool_definitions: tools,
+            tool_definitions: tools.as_ref().clone(),
         })
     }
 }

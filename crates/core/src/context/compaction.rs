@@ -269,7 +269,7 @@ impl ContextCompactionService for ModelContextCompactionService {
                     content: vec![ContentPart::Text(input)],
                     tool_calls: Vec::new(),
                 })],
-                tools: Vec::new(),
+                tools: Vec::new().into(),
                 tool_choice: ToolChoice::None,
                 parallel_tool_calls: false,
                 reasoning: None,

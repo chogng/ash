@@ -122,7 +122,7 @@ struct ContextInput {
     checkpoints: Vec<ContextCheckpoint>,
     terminal_turns: BTreeSet<TurnId>,
     item_sequences: BTreeMap<ItemId, u64>,
-    tools: Vec<ToolDefinition>,
+    tools: Arc<Vec<ToolDefinition>>,
     budget: ContextBudget,
 }
 ```
@@ -139,7 +139,7 @@ struct ContextPlan {
     omitted_instructions: Vec<OmittedInstruction>,
     checkpoint: Option<ContextCheckpoint>,
     selected_items: Vec<ThreadItem>,
-    tools: Vec<ToolDefinition>,
+    tools: Arc<Vec<ToolDefinition>>,
     budget: ContextBudgetReport,
 }
 ```
@@ -162,6 +162,35 @@ fragment；Core 只校验 fragment provenance，按 Skill layer、`Required / Be
 activation reason 不进入模型可见 Skill 正文。
 
 它不要求成为公共 wire model。测试和诊断可以使用 Core-private readable view。
+
+### 工具目录的共享与调用隔离
+
+`ModelToolCatalogSnapshot` 将一次调用选择的工具定义与准确 generation 的 binder 绑定。
+执行步骤、`PrepareModelInvocationRequest`、`ContextInput` 和 `ContextPlan` 共享同一份
+`Arc<Vec<ToolDefinition>>`；Handoff 为预算克隆输入时也共享这些只读定义。模型描述、工具范围
+过滤和 Core 附加工具使用 copy-on-write，不能改变已准备调用的 schema 或权限。Code Mode
+给目录附加原 generation 的 binder 时直接消费目录，不再复制定义。
+
+`ContextAssembler` 在生成拥有独立数据的 `ModelRequest` 时复制一次定义。Code Mode 的模型
+措辞投影仍独立于嵌套执行使用的工具原始定义。共享仅限同一冻结目录，不缓存动态过滤结果，
+也不跨配置热更复用旧权限。来源、顺序、schema、每次调用的描述及预算结果保持原语义。
+
+显式运行分配基准：
+
+```sh
+just test ash-core tool_schema_copy_benchmark --features code-mode -- --ignored --nocapture --test-threads=1
+```
+
+基准从已冻结目录开始，使用生产调用准备、规划和组装路径，覆盖 16／128 个工具、1／8 KiB
+schema 与普通／Handoff 六组输入；每组预热 10 次、采样 40 次，每个样本连续准备四个请求。
+测试专用 [allocation-counter](https://docs.rs/allocation-counter/0.8.1/allocation_counter/) 记录当前线程的
+累计分配及区间峰值，计时包含分配计数开销，不包含目录生成、最终 JSON 序列化、网络或模型推理。
+
+Windows x64、Rust 1.98.0、相同 `ci-test`／`code-mode` 配置的前后样本中，128 个工具、每个
+schema 约 8 KiB 时，普通准备累计分配为 38,659,740 → 19,846,596 B，Handoff 为
+45,028,036 → 19,943,844 B；区间峰值分别为 4,779,636 → 1,616,148 B 与
+6,371,710 → 1,616,148 B。六组最终请求的序列化 SHA-256 均相同。原始样本、构建来源与
+验证入口在 `.build/tool-schema-copy-20261022/`；这些局部数据不代表进程 RSS 或整个 Desktop 的加速比例。
 
 ### 4.3 ContextManager 状态
 

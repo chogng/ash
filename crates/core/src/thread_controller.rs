@@ -183,7 +183,7 @@ pub(crate) struct PrepareModelInvocationRequest<'a> {
     pub harness_context: &'a HarnessContext,
     pub extension_fragments: Vec<ash_extension_api::PromptFragment>,
     pub evidence: Vec<crate::ContextEvidence>,
-    pub tools: Vec<ToolDefinition>,
+    pub tools: Arc<Vec<ToolDefinition>>,
     pub budget: ContextBudget,
 }
 

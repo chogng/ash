@@ -254,7 +254,7 @@ impl ContextPlanner {
                         selected_items,
                         turn_endings: input.turn_endings().clone(),
                         evidence: input.evidence().to_vec(),
-                        tools: input.tools().to_vec(),
+                        tools: input.tools().clone(),
                         budget: ContextBudgetReport::ProviderManaged {
                             estimated_input,
                             estimator_revision: CONTEXT_ESTIMATOR_REVISION,
@@ -362,7 +362,7 @@ impl ContextPlanner {
                 selected_items,
                 turn_endings: input.turn_endings().clone(),
                 evidence: selected_evidence,
-                tools: input.tools().to_vec(),
+                tools: input.tools().clone(),
                 budget: final_report,
             },
         )))

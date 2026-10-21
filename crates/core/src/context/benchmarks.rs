@@ -32,6 +32,15 @@ impl Fixture {
         agent: Option<AgentConfiguration>,
         instructions: TurnInstructions,
     ) -> Self {
+        Self::with_policy(tools, agent, instructions, Default::default())
+    }
+
+    fn with_policy(
+        tools: Vec<ToolDefinition>,
+        agent: Option<AgentConfiguration>,
+        instructions: TurnInstructions,
+        policy: ash_protocol::ContextCompactionPolicy,
+    ) -> Self {
         let controller = ThreadController::with_store(Arc::new(InMemoryThreadStore::default()));
         let thread = controller
             .start_thread(
@@ -50,7 +59,7 @@ impl Fixture {
             .start_turn(
                 &thread.thread_id,
                 StartTurnRequest {
-                    context_policy: Default::default(),
+                    context_policy: policy,
                     mode: Default::default(),
                     advisor: None,
                     command_id: CommandId::new("benchmark-turn").unwrap(),
@@ -87,7 +96,7 @@ impl Fixture {
                     harness_context: &HarnessContext::default(),
                     extension_fragments: Vec::new(),
                     evidence: Vec::new(),
-                    tools: self.tools.clone(),
+                    tools: self.tools.clone().into(),
                     budget: ContextBudget::provider_managed(),
                 },
             )
@@ -96,6 +105,102 @@ impl Fixture {
             panic!("benchmark context must fit")
         };
         ContextAssembler::assemble(invocation.context()).unwrap()
+    }
+}
+
+#[test]
+#[ignore = "offline tool schema allocation benchmark; run with --ignored --nocapture --test-threads=1"]
+fn tool_schema_copy_benchmark() {
+    const SAMPLES: usize = 40;
+    const STEPS: usize = 4;
+    for (tool_count, schema_bytes) in [(16, 1024), (128, 1024), (128, 8192)] {
+        for handoff in [false, true] {
+            let tools = (0..tool_count)
+                .map(|index| ToolDefinition {
+                    name: ToolName::new(format!("tool_{index}")).unwrap(),
+                    description: "A benchmark tool.".into(),
+                    parameters: serde_json::json!({"type":"object","properties":{
+                    "path":{"type":"string","description":"x".repeat(schema_bytes)},
+                    "options":{"type":"object","properties":{"limit":{"type":"integer"}}}
+                },"required":["path"],"additionalProperties":false}),
+                    strict: true,
+                })
+                .collect::<Vec<_>>();
+            let policy = if handoff {
+                ash_protocol::ContextCompactionPolicy::Handoff {
+                    state_tokens: 512,
+                    buffer_tokens: 1024,
+                }
+            } else {
+                Default::default()
+            };
+            let fixture = Fixture::with_policy(
+                tools.clone(),
+                None,
+                ash_prompts::AGENT_INSTRUCTIONS.freeze(),
+                policy,
+            );
+            let catalog = crate::ModelToolCatalogSnapshot::new(tools);
+            // Mirrors execute_steps: retain the frozen catalog and the step's tool list
+            // while preparing an invocation. Serialization is checked outside measurement.
+            let request = || {
+                let tools = catalog.shared_definitions();
+                let ModelInvocationPreparation::Ready(invocation) = fixture
+                    .controller
+                    .prepare_model_invocation(
+                        &fixture.thread,
+                        PrepareModelInvocationRequest {
+                            turn_id: &fixture.turn,
+                            harness_context: &HarnessContext::default(),
+                            extension_fragments: Vec::new(),
+                            evidence: Vec::new(),
+                            tools: tools.clone(),
+                            budget: ContextBudget::provider_managed(),
+                        },
+                    )
+                    .unwrap()
+                else {
+                    panic!("benchmark context must fit")
+                };
+                let result = ContextAssembler::assemble(invocation.context()).unwrap();
+                black_box(&tools);
+                result
+            };
+            let expected = fixture.request();
+            assert_eq!(request(), expected);
+            let request_json = serde_json::to_vec(&expected).unwrap();
+            use sha2::Digest;
+            let digest = format!("{:x}", sha2::Sha256::digest(&request_json));
+            let run = || {
+                for _ in 0..STEPS {
+                    black_box(request());
+                }
+            };
+            for _ in 0..10 {
+                run();
+            }
+            let mut samples = Vec::with_capacity(SAMPLES);
+            let mut counts = Vec::with_capacity(SAMPLES);
+            for _ in 0..SAMPLES {
+                let started = Instant::now();
+                let count = allocation_counter::measure(run);
+                samples.push(started.elapsed().as_nanos() as u64);
+                counts.push((count.count_total, count.bytes_total, count.bytes_max));
+            }
+            let mut sorted = samples.clone();
+            sorted.sort_unstable();
+            println!(
+                "{}",
+                serde_json::json!({
+                    "benchmark":"tool_schema_copy", "tool_count":tool_count, "schema_bytes":schema_bytes,
+                    "handoff":handoff, "steps":STEPS, "warmup":10, "samples_ns":samples,
+                    "allocations_calls_bytes_peak":counts, "p50_ns":sorted[SAMPLES/2], "p95_ns":sorted[SAMPLES*95/100],
+                    "request_bytes":request_json.len(), "request_sha256":digest,
+                    "debug_assertions":cfg!(debug_assertions), "network":false,
+                    "scope":"four execute_steps-style catalog copies + production invocation preparation and assembly; thread-local requested allocations, no serialization/model/network"
+                })
+            );
+        }
     }
 }
 

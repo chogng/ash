@@ -141,7 +141,9 @@ type ModelToolCallBinder =
 /// binding method because their definitions cannot change during the invocation.
 #[derive(Clone)]
 pub struct ModelToolCatalogSnapshot {
-    definitions: Vec<ToolDefinition>,
+    // Shared only after the invocation's wording and scope have been selected. Mutating a
+    // derived catalog uses copy-on-write so an in-flight generation remains immutable.
+    definitions: Arc<Vec<ToolDefinition>>,
     binder: Option<Arc<ModelToolCallBinder>>,
 }
 
@@ -149,23 +151,21 @@ impl ModelToolCatalogSnapshot {
     /// Freezes one static catalog that continues to use the service's ordinary binder.
     pub fn new(definitions: Vec<ToolDefinition>) -> Self {
         Self {
-            definitions,
+            definitions: Arc::new(definitions),
             binder: None,
         }
     }
 
     /// Freezes a reloadable catalog with the exact binder that produced its definitions.
     pub fn with_binder(
-        definitions: Vec<ToolDefinition>,
+        mut self,
         binder: impl Fn(&ToolCall, ToolCallCaller) -> Result<Option<ToolCallBinding>, CoreError>
         + Send
         + Sync
         + 'static,
     ) -> Self {
-        Self {
-            definitions,
-            binder: Some(Arc::new(binder)),
-        }
+        self.binder = Some(Arc::new(binder));
+        self
     }
 
     /// Returns the definitions visible to this model invocation.
@@ -173,25 +173,31 @@ impl ModelToolCatalogSnapshot {
         &self.definitions
     }
 
+    pub(crate) fn shared_definitions(&self) -> Arc<Vec<ToolDefinition>> {
+        Arc::clone(&self.definitions)
+    }
+
     /// Applies captured model wording without changing tool identity, binding or parameter contracts.
     pub(crate) fn with_model_descriptions(
         mut self,
         instructions: &ash_protocol::TurnInstructions,
     ) -> Self {
-        crate::context::apply_model_tool_descriptions(instructions, &mut self.definitions);
+        crate::context::apply_model_tool_descriptions(
+            instructions,
+            Arc::make_mut(&mut self.definitions).as_mut_slice(),
+        );
         self
     }
 
     /// Restricts a host-selected invocation while preserving its exact catalog binder.
     pub(crate) fn restrict_to_names(mut self, names: &[ash_protocol::ToolName]) -> Self {
-        self.definitions
-            .retain(|definition| names.contains(&definition.name));
+        Arc::make_mut(&mut self.definitions).retain(|definition| names.contains(&definition.name));
         self
     }
 
     /// Applies the same frozen capability ceiling to direct and nested catalogs.
     pub(crate) fn with_tool_scope(mut self, profile: &ash_protocol::ToolProfileSnapshot) -> Self {
-        self.definitions
+        Arc::make_mut(&mut self.definitions)
             .retain(|definition| profile.allows_tool(&definition.name));
         self
     }
@@ -202,7 +208,7 @@ impl ModelToolCatalogSnapshot {
         mut self,
         mut definitions: Vec<ToolDefinition>,
     ) -> Self {
-        self.definitions.append(&mut definitions);
+        Arc::make_mut(&mut self.definitions).append(&mut definitions);
         self
     }
 

@@ -343,6 +343,7 @@ http-body-util = "0.1"
 hyper = "1"
 hyper-util = "0.1"
 ash-memory-diagnostics = { path = "crates/memory-diagnostics" }
+allocation-counter = "=0.8.1"
 anyhow = "1"
 ansi-to-tui = "7.0.0"
 arboard = { version = "3", features = ["wayland-data-control"] }
