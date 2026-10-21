@@ -22,6 +22,44 @@ fn child_fixture() {
     }
 }
 
+#[test]
+fn current_job_reports_explicit_breakaway_permission() {
+    const EXPECTED: &str = "ASH_TEST_JOB_BREAKAWAY_PERMISSION";
+    if let Ok(expected) = std::env::var(EXPECTED) {
+        assert_eq!(
+            JobObject::current_allows_breakaway().unwrap(),
+            expected == "allowed"
+        );
+        return;
+    }
+    for allowed in [false, true] {
+        use winapi::um::winnt::JOB_OBJECT_LIMIT_BREAKAWAY_OK;
+        use winapi::um::winnt::JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
+
+        let job = JobObject::create().unwrap();
+        JobObject::set_limit_flags(
+            &job.handle,
+            JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE
+                | if allowed {
+                    JOB_OBJECT_LIMIT_BREAKAWAY_OK
+                } else {
+                    0
+                },
+        )
+        .unwrap();
+        let mut command = std::process::Command::new(std::env::current_exe().unwrap());
+        command
+            .args([
+                "--exact",
+                "win::job::tests::current_job_reports_explicit_breakaway_permission",
+                "--nocapture",
+            ])
+            .env(EXPECTED, if allowed { "allowed" } else { "restricted" });
+        let mut child = job.spawn_contained_std(&mut command).unwrap();
+        assert!(child.wait().unwrap().success());
+    }
+}
+
 #[tokio::test]
 async fn failed_assignment_does_not_execute_child_code() {
     let marker = std::env::temp_dir().join(format!("ash-job-rejected-{}", std::process::id()));

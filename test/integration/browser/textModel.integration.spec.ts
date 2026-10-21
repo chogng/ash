@@ -1054,6 +1054,187 @@ test('Explicit Code assembly installs text contributions without document contro
 	await expect(find).toHaveCount(0);
 });
 
+for (const inputBackend of ['EditContext', 'textarea'] as const) {
+	test(`Chinese IME caret revisions preserve surrounding text and undo through ${inputBackend}`, async ({ page }) => {
+		if (inputBackend === 'textarea') await page.addInitScript(() => { Reflect.deleteProperty(window, 'EditContext'); });
+		await openEditor(page);
+		await page.evaluate(() => {
+			const editor = window.ashTextModelIntegration.getControl();
+			editor.setValue('前后');
+			editor.setPosition({ lineNumber: 1, column: 2 });
+			editor.focus();
+		});
+		const session = await page.context().newCDPSession(page);
+		try {
+			for (const [text, offset] of [['你好', 1], ['您好', 1], ['您们好', 3]] as const) {
+				await session.send('Input.imeSetComposition', { text, selectionStart: offset, selectionEnd: offset });
+				await expect.poll(() => page.evaluate(() => ({
+					text: window.ashTextModelIntegration.getValue(), position: window.ashTextModelIntegration.getControl().getPosition(),
+				}))).toEqual({ text: `前${text}后`, position: { lineNumber: 1, column: 2 + offset } });
+			}
+			await session.send('Input.insertText', { text: '您们好' });
+			await expect(page.locator('.stanza-editor')).not.toHaveClass(/\bcomposing\b/u);
+			const input = page.locator('.stanza-editor-input');
+			await input.press('ControlOrMeta+z');
+			await expect.poll(() => page.evaluate(() => ({
+				text: window.ashTextModelIntegration.getValue(), position: window.ashTextModelIntegration.getControl().getPosition(),
+			}))).toEqual({ text: '前后', position: { lineNumber: 1, column: 2 } });
+			await input.press('ControlOrMeta+Shift+z');
+			await expect.poll(() => page.evaluate(() => window.ashTextModelIntegration.getValue())).toBe('前您们好后');
+			await page.evaluate(() => {
+				const editor = window.ashTextModelIntegration.getControl();
+				editor.setValue('中文');
+				editor.setSelection({ selectionStartLineNumber: 1, selectionStartColumn: 2, positionLineNumber: 1, positionColumn: 1 });
+			});
+			await session.send('Input.imeSetComposition', { text: 'zhong', selectionStart: 5, selectionEnd: 5 });
+			await expect.poll(() => page.evaluate(() => window.ashTextModelIntegration.getValue())).toBe('zhong文');
+			await input.press('Escape');
+			await session.send('Input.imeSetComposition', { text: '', selectionStart: 0, selectionEnd: 0 });
+			await expect.poll(() => page.evaluate(() => {
+				const editor = window.ashTextModelIntegration.getControl();
+				const selection = editor.getSelection()!;
+				return { text: editor.getValue(), selection: [selection.selectionStartColumn, selection.positionColumn], canRedo: editor.getModel()!.canRedo() };
+			})).toEqual({ text: '中文', selection: [2, 1], canRedo: false });
+		} finally { await session.detach(); }
+	});
+
+	for (const [unchanged, cancelKey] of [[false, 'Escape'], [true, 'Escape'], [false, 'Process'], [true, 'Process']] as const) {
+		test(`Chinese composition cancellation restores selection and history through ${inputBackend} with ${cancelKey}${unchanged ? ' without a text change' : ''}`, async ({ page }) => {
+			if (inputBackend === 'textarea') await page.addInitScript(() => { Reflect.deleteProperty(window, 'EditContext'); });
+			await openEditor(page);
+			await page.evaluate(() => {
+				const editor = window.ashTextModelIntegration.getControl();
+				editor.setValue('中文');
+				editor.setPosition({ lineNumber: 1, column: 3 });
+				editor.focus();
+			});
+			const input = page.locator('.stanza-editor-input');
+			await page.keyboard.insertText('!');
+			await page.evaluate(() => window.ashTextModelIntegration.getControl().setSelection({
+				selectionStartLineNumber: 1, selectionStartColumn: 2, positionLineNumber: 1, positionColumn: 1,
+			}));
+			await input.evaluate((element, { unchanged, cancelKey }) => {
+				const native = (element as HTMLElement & {
+					editContext?: EventTarget & {
+						readonly selectionStart: number; readonly selectionEnd: number;
+						updateText(start: number, end: number, text: string): void;
+						updateSelection(start: number, end: number): void;
+					};
+				}).editContext;
+				const target = native ?? element;
+				const textarea = element as HTMLTextAreaElement;
+				const start = Math.min(native?.selectionStart ?? textarea.selectionStart, native?.selectionEnd ?? textarea.selectionEnd);
+				let end = Math.max(native?.selectionStart ?? textarea.selectionStart, native?.selectionEnd ?? textarea.selectionEnd);
+				target.dispatchEvent(new CompositionEvent('compositionstart', { bubbles: true, data: '' }));
+				for (const text of unchanged ? ['中'] : ['n', 'ni', '你']) {
+					if (native) {
+						native.updateText(start, end, text);
+						native.updateSelection(start + text.length, start + text.length);
+						target.dispatchEvent(Object.assign(new Event('textupdate'), {
+							text, updateRangeStart: start, updateRangeEnd: end,
+							selectionStart: start + text.length, selectionEnd: start + text.length,
+						}));
+						end = start + text.length;
+					} else {
+						textarea.setRangeText(text, start, end, 'end');
+						end = start + text.length;
+						target.dispatchEvent(new CompositionEvent('compositionupdate', { bubbles: true, data: text }));
+					}
+				}
+				element.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: cancelKey, isComposing: cancelKey === 'Escape' }));
+				if (cancelKey === 'Process') {
+					// The Windows IME consumes Escape, removes the candidate, then
+					// completes with empty data. There is no Escape keydown in the editor.
+					if (native) {
+						native.updateText(start, end, '');
+						native.updateSelection(start, start);
+						target.dispatchEvent(Object.assign(new Event('textupdate'), {
+							text: '', updateRangeStart: start, updateRangeEnd: end,
+							selectionStart: start, selectionEnd: start,
+						}));
+					} else {
+						textarea.setRangeText('', start, end, 'end');
+						target.dispatchEvent(new InputEvent('input', { bubbles: true, data: '', inputType: 'insertCompositionText', isComposing: true }));
+					}
+				}
+				target.dispatchEvent(new CompositionEvent('compositionend', { bubbles: true, data: '' }));
+			}, { unchanged, cancelKey });
+			await expect.poll(() => page.evaluate(() => {
+				const editor = window.ashTextModelIntegration.getControl();
+				const selection = editor.getSelection()!;
+				return { text: editor.getValue(), selection: [selection.selectionStartColumn, selection.positionColumn], canRedo: editor.getModel()!.canRedo() };
+			})).toEqual({ text: '中文!', selection: [2, 1], canRedo: false });
+			await expect(page.locator('.stanza-editor')).not.toHaveClass(/\bcomposing\b/u);
+			await input.press('ControlOrMeta+Shift+z');
+			await expect.poll(() => page.evaluate(() => window.ashTextModelIntegration.getValue())).toBe('中文!');
+			await input.press('ControlOrMeta+z');
+			await expect.poll(() => page.evaluate(() => window.ashTextModelIntegration.getValue())).toBe('中文');
+			await input.press('ControlOrMeta+Shift+z');
+			await expect.poll(() => page.evaluate(() => window.ashTextModelIntegration.getValue())).toBe('中文!');
+		});
+	}
+
+	test(`Unicode overtype preserves text and history through ${inputBackend}`, async ({ page }) => {
+		if (inputBackend === 'textarea') await page.addInitScript(() => { Reflect.deleteProperty(window, 'EditContext'); });
+		await openEditor(page);
+		const input = page.locator('.stanza-editor-input');
+		await input.focus();
+		await input.press('Insert');
+		try {
+			for (const composition of [false, true]) {
+				for (const text of ['e\u0301', '👩‍💻', '🇨🇳', '😀', '中']) {
+					await page.evaluate(() => {
+						const editor = window.ashTextModelIntegration.getControl();
+						editor.setValue('ab😀e\u0301z\nend');
+						editor.setPosition({ lineNumber: 1, column: 2 });
+						editor.focus();
+					});
+					if (composition) {
+						await input.evaluate((element, text) => {
+							const native = (element as HTMLElement & {
+								editContext?: EventTarget & {
+									readonly selectionStart: number; readonly selectionEnd: number;
+									updateText(start: number, end: number, text: string): void;
+									updateSelection(start: number, end: number): void;
+								};
+							}).editContext;
+							const target = native ?? element;
+							target.dispatchEvent(new CompositionEvent('compositionstart', { bubbles: true, data: '' }));
+							if (native) {
+								const start = native.selectionStart;
+								const end = native.selectionEnd;
+								native.updateText(start, end, text);
+								native.updateSelection(start + text.length, start + text.length);
+								native.dispatchEvent(Object.assign(new Event('textupdate'), {
+									text, updateRangeStart: start, updateRangeEnd: end,
+									selectionStart: start + text.length, selectionEnd: start + text.length,
+								}));
+							} else {
+								const textarea = element as HTMLTextAreaElement;
+								textarea.setRangeText(text, textarea.selectionStart, textarea.selectionEnd, 'end');
+								target.dispatchEvent(new CompositionEvent('compositionupdate', { bubbles: true, data: text }));
+							}
+							target.dispatchEvent(new CompositionEvent('compositionend', { bubbles: true, data: text }));
+						}, text);
+					} else {
+						await page.keyboard.insertText(text);
+					}
+					await expect.poll(() => page.evaluate(() => ({
+						text: window.ashTextModelIntegration.getValue(), selection: window.ashTextModelIntegration.getControl().getPosition(),
+					}))).toEqual({ text: `a${text}😀e\u0301z\nend`, selection: { lineNumber: 1, column: 2 + text.length } });
+					await input.press('ControlOrMeta+z');
+					await expect.poll(() => page.evaluate(() => window.ashTextModelIntegration.getValue())).toBe('ab😀e\u0301z\nend');
+					await input.press('ControlOrMeta+Shift+z');
+					await expect.poll(() => page.evaluate(() => window.ashTextModelIntegration.getValue())).toBe(`a${text}😀e\u0301z\nend`);
+					await expect(input).toBeFocused();
+				}
+			}
+		} finally {
+			await input.press('Insert');
+		}
+	});
+}
+
 test('textarea fallback routes type and composition through the standard input pipeline', async ({ page }) => {
 	await page.addInitScript(() => {
 		Reflect.deleteProperty(window, 'EditContext');
@@ -1075,11 +1256,12 @@ test('textarea fallback routes type and composition through the standard input p
 		element.dispatchEvent(new CompositionEvent('compositionstart', { bubbles: true, data: '' }));
 	});
 	await expect(editor).toHaveClass(/\bcomposing\b/u);
-	await expect(input).toHaveCSS('opacity', '1');
+	await expect(input).toHaveCSS('opacity', '0');
+	await expect(input).toHaveCSS('width', '1px');
 	await expect(input).toBeFocused();
 	await input.evaluate(element => {
 		const textArea = element as HTMLTextAreaElement;
-		textArea.value = 'xy';
+		textArea.setRangeText('xy', textArea.selectionStart, textArea.selectionEnd, 'end');
 		textArea.setSelectionRange(1, 1);
 		textArea.dispatchEvent(new CompositionEvent('compositionupdate', { bubbles: true, data: 'xy' }));
 	});
@@ -1090,6 +1272,10 @@ test('textarea fallback routes type and composition through the standard input p
 		endLineIndex: 0,
 		endColumnIndex: 1,
 	});
+	await expect.poll(() => input.evaluate(element => {
+		const caret = element.closest('.stanza-editor')!.querySelector('.stanza-editor-caret.primary')!;
+		return Math.abs(element.getBoundingClientRect().left - caret.getBoundingClientRect().left);
+	})).toBeLessThan(2);
 	await input.evaluate(element => {
 		element.dispatchEvent(new CompositionEvent('compositionend', { bubbles: true, data: 'xy' }));
 	});

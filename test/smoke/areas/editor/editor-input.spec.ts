@@ -1,5 +1,115 @@
 import { expect, test } from '../../../automation/test.js';
 import type { ElectronApplication } from '@playwright/test';
+import { readFile } from 'node:fs/promises';
+
+test('Unicode overtype preserves text and undo in Ash', { tag: ['@electron-ui', '@electron-app-server', '@browser-app-server'] }, async ({ target, workbench, testWorkspace, reloadWorkbench }, testInfo) => {
+	const page = workbench.page;
+	if (target.appServerMode === 'required') {
+		await page.locator('.ash-explorer').getByRole('treeitem', { name: 'main.ts', exact: true }).dblclick();
+	} else {
+		await page.keyboard.press('ControlOrMeta+N');
+	}
+	const editor = workbench.editors.groupAt(0).editor;
+	await editor.waitForEditorFocus();
+	await editor.input.press('ControlOrMeta+A');
+	await page.keyboard.insertText('ab😀e\u0301z\nend');
+	await editor.input.press('ControlOrMeta+Home');
+	await editor.input.press('ArrowRight');
+	await editor.input.press('Insert');
+	try {
+		await page.keyboard.insertText('👩‍💻');
+		await editor.waitForEditorContents(text => text === 'a👩‍💻😀e\u0301z\nend');
+		await editor.input.press('ControlOrMeta+z');
+		await editor.waitForEditorContents(text => text === 'ab😀e\u0301z\nend');
+		await editor.input.press('ControlOrMeta+Shift+z');
+		await editor.waitForEditorContents(text => text === 'a👩‍💻😀e\u0301z\nend');
+	} finally {
+		await editor.input.press('Insert');
+	}
+	await expect(editor.input).toBeFocused();
+	if (target.appServerMode !== 'required') return;
+	await editor.input.press('ControlOrMeta+S');
+	await expect.poll(async () => (await readFile(testWorkspace.file, 'utf8')).replace(/\r\n/g, '\n')).toBe('a👩‍💻😀e\u0301z\nend');
+	await workbench.quickaccess.runCommand('workbench.action.closeActiveEditor');
+	await page.locator('.ash-explorer').getByRole('treeitem', { name: 'main.ts', exact: true }).dblclick();
+	await workbench.editors.groupAt(0).editor.waitForEditorContents(text => text === 'a👩‍💻😀e\u0301z\nend');
+	({ workbench } = await reloadWorkbench('quit'));
+	await workbench.editors.groupAt(0).editor.waitForEditorContents(text => text === 'a👩‍💻😀e\u0301z\nend');
+	await workbench.page.screenshot({ path: testInfo.outputPath('stanza-saved-file-after-relaunch.png') });
+});
+
+for (const inputBackend of ['EditContext', 'textarea'] as const) {
+	test.describe(`Chinese IME with ${inputBackend}`, () => {
+		test('Chinese IME preserves selections, cancellation, undo and saved files in Ash', { tag: ['@electron-app-server'] }, async ({ workbench, testWorkspace }, testInfo) => {
+			const page = workbench.page;
+			if (inputBackend === 'textarea') {
+				// Emulate a host without EditContext before the file editor is
+				// constructed; its production factory must select the fallback.
+				await page.evaluate(() => { Reflect.deleteProperty(window, 'EditContext'); });
+			}
+			await page.locator('.ash-explorer').getByRole('treeitem', { name: 'main.ts', exact: true }).dblclick();
+			const editor = workbench.editors.groupAt(0).editor;
+			await editor.waitForEditorFocus();
+			await expect(editor.input).toHaveJSProperty('tagName', inputBackend === 'textarea' ? 'TEXTAREA' : 'DIV');
+			await editor.input.press('ControlOrMeta+A');
+			await page.keyboard.insertText('前后\n第二行');
+			await editor.input.press('ControlOrMeta+Home');
+			await editor.input.press('ArrowRight');
+			const session = await page.context().newCDPSession(page);
+			try {
+				for (const [text, offset] of [['你好', 1], ['您好', 1], ['您们好', 3]] as const) {
+					await session.send('Input.imeSetComposition', { text, selectionStart: offset, selectionEnd: offset });
+					await editor.waitForEditorContents(value => value === `前${text}后\n第二行`);
+				}
+				await session.send('Input.insertText', { text: '您们好' });
+				await expect(editor.element).not.toHaveClass(/\bcomposing\b/u);
+				await editor.input.press('ControlOrMeta+z');
+				await editor.waitForEditorContents(value => value === '前后\n第二行');
+				await editor.input.press('ControlOrMeta+Shift+z');
+				const committed = '前您们好后\n第二行';
+				await editor.waitForEditorContents(value => value === committed);
+
+				await editor.input.press('ControlOrMeta+End');
+				await editor.input.press('ControlOrMeta+Shift+Home');
+				await session.send('Input.imeSetComposition', { text: 'zhongwen', selectionStart: 8, selectionEnd: 8 });
+				await session.send('Input.insertText', { text: '中文' });
+				await editor.waitForEditorContents(value => value === '中文');
+				await editor.input.press('ControlOrMeta+z');
+				await editor.waitForEditorContents(value => value === committed);
+				// Extending the restored selection toward the right must move its
+				// active start, proving that undo kept the backward direction.
+				await editor.input.press('Shift+ArrowRight');
+				await page.keyboard.insertText('X');
+				await editor.waitForEditorContents(value => value === '前X');
+				await editor.input.press('ControlOrMeta+z');
+				await editor.waitForEditorContents(value => value === committed);
+
+				await editor.input.press('ControlOrMeta+Home');
+				await editor.input.press('Shift+ArrowRight');
+				await session.send('Input.imeSetComposition', { text: 'qian', selectionStart: 4, selectionEnd: 4 });
+				await editor.waitForEditorContents(value => value === 'qian您们好后\n第二行');
+				await editor.input.press('Escape');
+				await session.send('Input.imeSetComposition', { text: '', selectionStart: 0, selectionEnd: 0 });
+				await editor.waitForEditorContents(value => value === committed);
+				await editor.input.press('ControlOrMeta+Shift+z');
+				await editor.waitForEditorContents(value => value === committed);
+				await page.keyboard.insertText('后');
+				const saved = '后您们好后\n第二行';
+				await editor.waitForEditorContents(value => value === saved);
+				await editor.input.press('ControlOrMeta+z');
+				await editor.waitForEditorContents(value => value === committed);
+				await editor.input.press('ControlOrMeta+Shift+z');
+				await editor.waitForEditorContents(value => value === saved);
+				await editor.input.press('ControlOrMeta+S');
+				await expect.poll(async () => (await readFile(testWorkspace.file, 'utf8')).replace(/\r\n/g, '\n')).toBe(saved);
+				await workbench.quickaccess.runCommand('workbench.action.closeActiveEditor');
+				await page.locator('.ash-explorer').getByRole('treeitem', { name: 'main.ts', exact: true }).dblclick();
+				await editor.waitForEditorContents(value => value === saved);
+				await page.screenshot({ path: testInfo.outputPath(`chinese-ime-${inputBackend}.png`) });
+			} finally { await session.detach(); }
+		});
+	});
+}
 
 test('editor and Chat input font settings apply independently and persist in Chinese', async ({ application, workbench, restartWorkbench }) => {
 	const page = workbench.page;

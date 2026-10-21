@@ -1389,8 +1389,16 @@ export class TextModel implements ITextModel {
 	): TextModelChange | undefined {
 		this.assertNotDisposed();
 		this.ensureDirectTextMutationAllowed();
+		if (!this.history.getRevisionEntry(historyGroup)) {
+			this.history.finishRevision(historyGroup);
+			return undefined;
+		}
 		const entry = this.history.cancelRevision(historyGroup);
-		if (!entry || this.offsetEditsAreNoOps(entry.edits)) return undefined;
+		if (!entry) return undefined;
+		if (this.offsetEditsAreNoOps(entry.edits)) {
+			this._alternativeVersion = entry.alternativeVersionId;
+			return undefined;
+		}
 		const result = this.commitOffsetEdits(this.translateHistoryEdits(entry.edits, entry.editsEOL), {
 			reason: TextModelChangeReason.HistoryCancellation,
 			eol: entry.eol,

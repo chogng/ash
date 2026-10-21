@@ -189,7 +189,7 @@ impl Client {
                     .stdin(Stdio::null())
                     .stdout(Stdio::null())
                     .stderr(Stdio::inherit());
-                detach(&mut command);
+                detach(&mut command).map_err(operation_failed)?;
                 let mut child = command.spawn().map_err(operation_failed)?;
                 let deadline = Instant::now() + IO_TIMEOUT;
                 let stream = loop {
@@ -531,17 +531,25 @@ fn validate_peer(stream: &UnixStream) -> io::Result<()> {
 }
 
 #[cfg(unix)]
-fn detach(command: &mut Command) {
+fn detach(command: &mut Command) -> io::Result<()> {
     use std::os::unix::process::CommandExt;
     command.process_group(0);
+    Ok(())
 }
 
 #[cfg(windows)]
-fn detach(command: &mut Command) {
+fn detach(command: &mut Command) -> io::Result<()> {
     use std::os::windows::process::CommandExt;
-    // NEW_PROCESS_GROUP | NO_WINDOW | BREAKAWAY_FROM_JOB, as for the managed
-    // App Server: an Electron/controller job must not own the PTY host lifetime.
-    command.creation_flags(0x0000_0200 | 0x0800_0000 | 0x0100_0000);
+    let mut flags = 0x0000_0200 | 0x0800_0000; // NEW_PROCESS_GROUP | NO_WINDOW
+    // Escape controller jobs when permitted. A managed backend may already
+    // have escaped an inner job while remaining in a restrictive ancestor;
+    // requesting breakaway again then fails with ERROR_ACCESS_DENIED. Inherit
+    // that ancestor's constraints without tying the host to this process.
+    if ash_utils_pty::JobObject::current_allows_breakaway()? {
+        flags |= 0x0100_0000; // BREAKAWAY_FROM_JOB
+    }
+    command.creation_flags(flags);
+    Ok(())
 }
 
 fn operation_failed(_: impl std::fmt::Debug) -> TerminalError {

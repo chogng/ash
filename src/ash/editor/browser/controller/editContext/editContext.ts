@@ -158,7 +158,7 @@ export abstract class AbstractEditContext extends ViewPart {
 	abstract readonly onKeyUp: EditorEvent<IKeyboardEvent>;
 	abstract readonly onDidCompositionStart: EditorEvent<EditContextCompositionData>;
 	abstract readonly onDidCompositionUpdate: EditorEvent<EditContextCompositionData>;
-	abstract readonly onDidCompositionEnd: EditorEvent<void>;
+	abstract readonly onDidCompositionEnd: EditorEvent<EditContextCompositionData>;
 	/** Clipboard events are emitted before the editor's clipboard contribution handles them. */
 	readonly onWillCopy: EditorEvent<IClipboardCopyEvent> = this._onWillCopy.event;
 	readonly onWillCut: EditorEvent<IClipboardCopyEvent> = this._onWillCut.event;
@@ -414,7 +414,6 @@ function hasPrimaryModifier(event: Pick<KeyboardEvent, "ctrlKey" | "altKey" | "m
 interface ActiveComposition {
 	readonly startOffset: number;
 	length: number;
-	updated: boolean;
 	cancelRequested: boolean;
 }
 
@@ -454,10 +453,10 @@ export class CompositionController extends Disposable {
 			this.clearPresentation();
 		}));
 		this._register(input.onDidCompositionStart(() => this.handleCompositionStart()));
-		this._register(input.onDidCompositionEnd(() => this.handleCompositionEnd()));
+		this._register(input.onDidCompositionEnd(event => this.handleCompositionEnd(event)));
 		this._register(onType(event => this.handleType(event)));
 		this._register(input.onKeyDown(event => {
-			if (event.isComposing && event.key === "Escape" && this.activeComposition) {
+			if (event.key === "Escape" && this.activeComposition) {
 				this.activeComposition.cancelRequested = true;
 			}
 		}));
@@ -490,7 +489,6 @@ export class CompositionController extends Disposable {
 		this.activeComposition = {
 			startOffset: this.viewport.textModel.getOffsetAt(startPosition),
 			length: 0,
-			updated: false,
 			cancelRequested: false,
 		};
 		this.viewport.domNode.domNode.classList.add("composing");
@@ -499,10 +497,12 @@ export class CompositionController extends Disposable {
 		this.positionInput(startPosition);
 	}
 
-	private handleCompositionEnd(): void {
+	private handleCompositionEnd(event: EditContextCompositionData): void {
 		const active = this.activeComposition;
 		if (!active) return;
-		if (active.cancelRequested) {
+		// Windows IMEs consume Escape and deliver a Process key instead. The
+		// empty completion still cancels the revision, including replaced text.
+		if (active.cancelRequested || event.data.length === 0) {
 			this.cancelComposition();
 			return;
 		}
@@ -537,7 +537,6 @@ export class CompositionController extends Disposable {
 			0,
 			active.length - event.replacePrevCharCnt - event.replaceNextCharCnt + event.text.length,
 		);
-		active.updated = true;
 		this.setCompositionRange(Range.fromPositions(
 			this.viewport.textModel.positionAt(active.startOffset),
 			this.viewport.textModel.positionAt(active.startOffset + active.length),
@@ -552,8 +551,7 @@ export class CompositionController extends Disposable {
 		const active = this.activeComposition;
 		if (!active) return;
 		this.activeComposition = undefined;
-		this.viewController.compositionEnd();
-		if (active.updated) this.viewport.textModel.undo();
+		this.viewModel.endComposition('compositionCancel');
 		this.finishPresentation();
 	}
 

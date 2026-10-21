@@ -8,18 +8,26 @@ Stanza 是 Ash 的编辑器内核。每个打开文档在一个 Renderer realm �
 
 Code 使用行式文本能力。Academy 的 `DocumentTextModel` 扩展同一个核心模型，通过通用 snapshot/version 边界提交结构事务；mark、atom、facet、region 与 relation 承载富文档语义。资源服务、后台语法树和视图都不能成为第二个可写正文或编辑历史。
 
-| 场景                              | 装配入口                                              | 所有权                                                                                       |
-| --------------------------------- | ----------------------------------------------------- | -------------------------------------------------------------------------------------------- |
-| 基础文本宿主                      | `editor.all.ts`                                       | 仅装配基础文本命令                                                                           |
-| 客户端 Code                       | `editor.code.all.ts` + `workbench/contrib/codeEditor` | 客户端装配模型分析、通用编辑功能和 Widget；Workbench 注册 text/diff Pane，另行装配 MultiDiff |
-| Standalone                        | `editor.main.ts` / `editor.api.ts`                    | 独立宿主服务、公开 `editor` 与 `languages` API；文件持久化由调用方提供                       |
-| 普通文档、Academic 论文与频道笔记 | 独立 `ash.academic` 扩展 + 共享客户端编辑器桥         | Academy 提供 Schema、结构事务、视图、分页和 codec；Workbench 提供资源与工作副本生命周期      |
+| 场景                                             | 装配入口                                              | 所有权                                                                                       |
+| ------------------------------------------------ | ----------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| 基础文本宿主                                     | `editor.all.ts`                                       | 仅装配基础文本命令                                                                           |
+| 客户端 Code                                      | `editor.code.all.ts` + `workbench/contrib/codeEditor` | 客户端装配模型分析、通用编辑功能和 Widget；Workbench 注册 text/diff Pane，另行装配 MultiDiff |
+| Standalone                                       | `editor.main.ts` / `editor.api.ts`                    | 独立宿主服务、公开 `editor` 与 `languages` API；文件持久化由调用方提供                       |
+| Agent Window 的普通文档、Academic 论文与频道笔记 | 独立 `ash.academic` 扩展 + 共享客户端编辑器桥         | Academy 提供 Schema、结构事务、视图、分页和 codec；Workbench 提供资源与工作副本生命周期      |
 
 `editor.api.ts` 包含浏览器宿主 API，不能作为 DOM-free 入口使用。无 DOM 的调用方应直接消费 `editor/common` 中所需的领域契约。
 
 Academy 的客户端模块与样式绑定精确包版本和摘要，通过公共 SDK／Host RPC 接入共享宿主。产品包不内置 Academy 实现；安装、执行授权、版本准入和撤权遵循[扩展架构](editor-extensions.md)与[包契约](../extensions/academic/README.md)。停用会移除新路由并冻结已有视图，保留工作副本与未保存内容；重新启用后由显式重开获取替代能力。
 
 独立 [Reference Manager](../extensions/reference-manager/README.md) 拥有 RIS 与 `.ash-library` 文献库，经带文档版本和 Pane／Provider 生命周期的调用句柄向 Academy 提交引用操作；正文、事务和历史仍归 Academy。PDF 渲染与批注归可选 [PDF Viewer](../extensions/pdf-viewer/README.md)，Chat 附件通过通用资源编辑器注册表取得只读预览。
+
+### 产品范围与实施顺序
+
+Stanza 的基础编辑能力优先：文本、事务、撤销／重做、选区、输入法、视图几何及模型生命周期先按各自契约闭合，文件与工作副本链由共享宿主验证。Academy 的 Schema、排版和研究工作流由插件侧载入，不成为基础编辑或 Code 启动的前置条件。
+
+产品目标明确区分 Code IDE 与 Agent Window：IDE 专用于代码；Academy 只在 Agent Window 中提供富文档与论文工作流。`workbench` 中可复用的编辑器桥、模型引用、文件和工作副本服务仍是共享基础设施，宿主范围由产品装配决定，不在 Stanza 内核判断窗口类型。
+
+Academy 的独立 Activity Bar 图标和工作界面仍是入口候选；若采用，Sessions 消费插件已注册的能力，并复用现有侧栏、EditorPart 与对话宿主。该候选不代表入口已经实现，也不要求新建窗口布局或另一份文档／会话状态。旧 IDE 文档接线的收敛及宿主范围验收仍待实施，目标与现状见 [Agent Window 文档工作区设计](design/work-code-workbench.md)，具体动作见[根 TODO](../TODO.md#work--通用文档--todo)。
 
 ## 所有权与依赖方向
 
@@ -109,7 +117,7 @@ Worker 文档镜像使用快照与版本化增量同步。增量结果的基线�
 
 每个 Widget 拥有自己的 `CursorsController`、selection、composition、ViewModel 和投影生命周期，共享文档仍只有一个 `TextModel`。换行、折叠、View Zone、滚动和命中使用同一组 editor 坐标；Pane 只提供外部尺寸、显隐与资源引用。
 
-`View` 持有输入 controller 及 EditContext／Textarea 生命周期，并通过统一 command／transaction 提交编辑。IME 的 provisional revision 在提交前受保护，取消不能污染 history。键盘、pointer、clipboard 与 composition 使用同一模型和选区契约；系统事件迟到或视图销毁后不得应用旧编辑。
+`View` 持有输入 controller 及 EditContext／Textarea 生命周期，并通过统一 command／transaction 提交编辑。IME 的 provisional revision 在提交前受保护，取消不能污染 history；浏览器适配器保留组合结束数据，空完成也会回滚该 revision 并恢复原选区，不依赖输入法是否透传 Escape。Textarea 保留原生上下文供系统输入，同时由 View 统一绘制组合文本与光标，输入镜像保持透明。键盘、pointer、clipboard 与 composition 使用同一模型和选区契约；系统事件迟到或视图销毁后不得应用旧编辑。
 
 跨编辑器绘制由 `editor/browser/view.ts` 协调，通用帧原语来自 `base/browser/scheduler`。先准备视口与控件写入，再绘制文本和更新行宽，最后测量并更新依赖几何的部件；同步命中测试使用同一阶段顺序。ViewPart 只拥有自己的 DOM／Canvas 和失效状态，不复制 selection、layout、scroll 或 feature state。具体机制见[浏览器实现](../src/ash/editor/browser/README.md)与[文本几何](../src/ash/editor/text-engine-geometry.md)。
 
@@ -150,6 +158,6 @@ Rename、Code Action 和 WorkspaceEdit 使用同一 `IBulkEditService`。预览�
 
 已有记录来自 2026-10-21 的 macOS 定向复核，以及 2026-10-22 的 Windows 与 WSLg Linux 本机复核。它们覆盖各批次检出的部分 Code 编辑、语言功能、Diff、保存与重启恢复；Windows／Linux 的 Code 场景还覆盖 300,001 行文件和中文重启。受控 LSP 进程不代表任意外部语言服务器兼容性，WSLg 结果不外推到所有 Linux 桌面。
 
-构建来源、精确命令、首败与复验保留在原产物中：macOS 的 `.build/local-editor-acceptance/`、`.build/local-widget-acceptance/`、`.build/local-acceptance-20261021/` 与 `/tmp/ash-stanza-*.log`；Windows 的 `.build/local-todo-windows-20261022/validation.json`；Linux 的 `.build/wsl-linux-code-20261022/validation.json`。这些是历史证据路径，部分产物不在本机；本次文档整理没有重跑产品验收。
+构建来源、精确命令、首败与复验保留在原产物中：macOS 的 `.build/local-editor-acceptance/`、`.build/local-widget-acceptance/`、`.build/local-acceptance-20261021/` 与 `/tmp/ash-stanza-*.log`；Windows 的 `.build/local-todo-windows-20261022/validation.json`；Linux 的 `.build/wsl-linux-code-20261022/validation.json`。这些是历史证据路径，部分产物不在本机。Windows 终端宿主启动修复及 Stanza 在真实 App Server 下的编辑、写盘、关闭重开与退出后恢复，另见本机 `.build/stanza-windows-host/validation.json`；受控 Chromium 中文组合输入验证见 `.build/stanza-ime-selection/validation.json`。Windows 真实微软拼音的候选窗、提交／取消、选区方向、撤销重做及保存重开，连同 Native／textarea 首败与复验，见 `.build/stanza-windows-ime/validation.json` 及同目录证据清单。
 
-真实扩展签名包的多窗口／远端组合、物理 IME、屏幕阅读器、跨页输入与目标 Word 往返仍以[根 TODO](../TODO.md#stanza-编辑器--todo)为准。本文不维护实施批次、通过数量或完成清单；后续实现变化直接修正所属正文，具体未完成工作只在根 TODO 维护。
+真实扩展签名包的多窗口／远端组合、其他平台／输入法、屏幕阅读器、跨页输入与目标 Word 往返仍以[根 TODO](../TODO.md#stanza-编辑器--todo)为准。本文不维护实施批次、通过数量或完成清单；后续实现变化直接修正所属正文，具体未完成工作只在根 TODO 维护。

@@ -62,6 +62,12 @@ await withProcessRun(desktopDirectory, async (run, environment) => {
 			runtimeDirectory = mkdtempSync(resolve(outputParent, 'editor-browser-runtime-'));
 			cpSync(backendPackageRoot, runtimeDirectory, { recursive: true, dereference: true, mode: constants.COPYFILE_FICLONE });
 			syntaxExecutable = resolve(runtimeDirectory, 'bin', `ash-app-server${process.platform === 'win32' ? '.exe' : ''}`);
+			if (process.platform === 'win32') {
+				// Loading the copied Windows image can block CreateProcess. Complete
+				// that startup work before the browser starts its bridge deadline.
+				const loaded = await run.command(syntaxExecutable, ['--version'], testEnv);
+				if (loaded.code !== 0) { process.exitCode = loaded.code; return; }
+			}
 		}
 		const build = await run.command(process.execPath, ['node_modules/vite/bin/vite.js', 'build', '--config', 'test/integration/browser/vite.config.ts', '--outDir', assetsDirectory], testEnv);
 		if (build.code !== 0) {

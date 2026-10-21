@@ -11,10 +11,13 @@ use tokio::process::Child;
 use tokio::process::Command;
 use winapi::shared::ntdef::NT_SUCCESS;
 use winapi::shared::ntdef::NTSTATUS;
+use winapi::um::jobapi::IsProcessInJob;
 use winapi::um::jobapi2::AssignProcessToJobObject;
 use winapi::um::jobapi2::CreateJobObjectW;
+use winapi::um::jobapi2::QueryInformationJobObject;
 use winapi::um::jobapi2::SetInformationJobObject;
 use winapi::um::jobapi2::TerminateJobObject;
+use winapi::um::processthreadsapi::GetCurrentProcess;
 use winapi::um::winbase::CREATE_NO_WINDOW;
 use winapi::um::winbase::CREATE_SUSPENDED;
 use winapi::um::winnt::HANDLE;
@@ -39,6 +42,36 @@ pub struct JobObject {
 }
 
 impl JobObject {
+    /// Whether the current process's immediate job permits explicit child breakaway.
+    /// A restrictive ancestor can remain after an earlier launch escaped an inner job.
+    pub fn current_allows_breakaway() -> io::Result<bool> {
+        let mut in_job = 0;
+        // SAFETY: the pseudo-handle is valid for the current process and in_job
+        // is writable. A null job asks about membership in any job.
+        if unsafe { IsProcessInJob(GetCurrentProcess(), std::ptr::null_mut(), &mut in_job) } == 0 {
+            return Err(io::Error::last_os_error());
+        }
+        if in_job == 0 {
+            return Ok(false);
+        }
+        let mut limits: JOBOBJECT_EXTENDED_LIMIT_INFORMATION = unsafe { std::mem::zeroed() };
+        // SAFETY: a null job queries our immediate job; limits has the exact
+        // documented layout and size and remains alive throughout the call.
+        if unsafe {
+            QueryInformationJobObject(
+                std::ptr::null_mut(),
+                JobObjectExtendedLimitInformation,
+                std::ptr::addr_of_mut!(limits).cast(),
+                std::mem::size_of_val(&limits) as u32,
+                std::ptr::null_mut(),
+            )
+        } == 0
+        {
+            return Err(io::Error::last_os_error());
+        }
+        Ok(limits.BasicLimitInformation.LimitFlags & JOB_OBJECT_LIMIT_BREAKAWAY_OK != 0)
+    }
+
     /// Creates a Job Object configured to terminate all members when its last handle closes.
     pub fn create() -> io::Result<Self> {
         let handle = unsafe { CreateJobObjectW(std::ptr::null_mut(), std::ptr::null()) };

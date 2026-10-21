@@ -217,8 +217,8 @@ test('EditContext rejects cut and paste while composition owns the edit transact
 	assert.equal(model.getText(), 'alpha');
 	const textArea = input as HTMLTextAreaElement;
 	try {
-		textArea.value = 'xy';
-		textArea.setSelectionRange(1, 1);
+		textArea.value = 'alphaxy';
+		textArea.setSelectionRange(6, 6);
 		textArea.dispatchEvent(new dom.window.CompositionEvent('compositionupdate', { data: 'xy' }));
 		assert.equal(model.getText(), 'alphaxy');
 		assert.deepEqual(editor.getPosition(), new Position(1, 7));

@@ -95,16 +95,16 @@ test('textarea input publishes normalized composition state', () => {
 	using input = new TextAreaInput(createHost(), element);
 	let composition: { readonly data: string; } | undefined;
 	const types: unknown[] = [];
-	let ended = 0;
+	const completed: unknown[] = [];
 	input.onCompositionUpdate(event => composition = event);
 	input.onType(event => types.push(event));
-	input.onCompositionEnd(() => ended += 1);
+	input.onCompositionEnd(event => completed.push(event));
 	element.focus();
 	element.dispatchEvent(new dom.window.CompositionEvent('compositionstart'));
 	input.setValue('composition', 'first\nsecond');
 	input.setSelectionRange('composition', 5, 5);
 	element.dispatchEvent(new dom.window.CompositionEvent('compositionupdate', { data: 'x' }));
-	element.dispatchEvent(new dom.window.CompositionEvent('compositionend', { data: 'x' }));
+	element.dispatchEvent(new dom.window.CompositionEvent('compositionend', { data: 'first\r\nsecond' }));
 	assert.deepEqual(composition, { data: 'x' });
 	assert.deepEqual(types, [{
 		text: 'first\nsecond',
@@ -112,7 +112,94 @@ test('textarea input publishes normalized composition state', () => {
 		replaceNextCharCnt: 0,
 		positionDelta: -7,
 	}]);
-	assert.equal(ended, 1);
+	assert.deepEqual(completed, [{ data: 'first\nsecond' }]);
+	dom.window.close();
+});
+
+test('textarea composition reads candidate text after the browser updates its value', () => {
+	const dom = new JSDOM('<textarea></textarea>');
+	const element = dom.window.document.querySelector('textarea')!;
+	using input = new TextAreaInput(createHost(), element);
+	const types: unknown[] = [];
+	using listener = input.onType(event => types.push(event));
+	element.focus();
+	element.dispatchEvent(new dom.window.CompositionEvent('compositionstart'));
+	for (const text of ['ni', '你']) {
+		element.dispatchEvent(new dom.window.CompositionEvent('compositionupdate', { data: text }));
+		element.value = text;
+		element.setSelectionRange(text.length, text.length);
+		element.dispatchEvent(new dom.window.InputEvent('input', { data: text, inputType: 'insertCompositionText', isComposing: true }));
+	}
+	element.dispatchEvent(new dom.window.CompositionEvent('compositionend', { data: '你' }));
+	assert.deepEqual(types, [
+		{ text: 'ni', replacePrevCharCnt: 0, replaceNextCharCnt: 0, positionDelta: 0 },
+		{ text: '你', replacePrevCharCnt: 2, replaceNextCharCnt: 0, positionDelta: 0 },
+	]);
+	dom.window.close();
+});
+
+test('textarea composition extracts candidates from the preserved native context', () => {
+	const dom = new JSDOM('<textarea></textarea>');
+	const element = dom.window.document.querySelector('textarea')!;
+	element.value = '前中文后';
+	element.setSelectionRange(1, 3, 'backward');
+	using input = new TextAreaInput(createHost(), element);
+	const types: unknown[] = [];
+	using listener = input.onType(event => types.push(event));
+	element.focus();
+	element.dispatchEvent(new dom.window.CompositionEvent('compositionstart'));
+	for (const [text, end] of [['ni', 3], ['你', 3]] as const) {
+		element.setRangeText(text, 1, end, 'end');
+		element.dispatchEvent(new dom.window.InputEvent('input', { data: text, inputType: 'insertCompositionText', isComposing: true }));
+	}
+	element.dispatchEvent(new dom.window.CompositionEvent('compositionend', { data: '你' }));
+	assert.equal(element.value, '前你后');
+	assert.deepEqual(types, [
+		{ text: 'ni', replacePrevCharCnt: 0, replaceNextCharCnt: 0, positionDelta: 0 },
+		{ text: '你', replacePrevCharCnt: 2, replaceNextCharCnt: 0, positionDelta: 0 },
+	]);
+	dom.window.close();
+});
+
+test('textarea composition accepts a system caret change after input', () => {
+	const dom = new JSDOM('<textarea></textarea>');
+	const element = dom.window.document.querySelector('textarea')!;
+	using input = new TextAreaInput(createHost(), element);
+	const types: unknown[] = [];
+	using listener = input.onType(event => types.push(event));
+	element.focus();
+	element.dispatchEvent(new dom.window.CompositionEvent('compositionstart'));
+	element.value = '你好';
+	element.setSelectionRange(2, 2);
+	element.dispatchEvent(new dom.window.InputEvent('input', { data: '你好', inputType: 'insertCompositionText', isComposing: true }));
+	element.setSelectionRange(1, 1);
+	dom.window.document.dispatchEvent(new dom.window.Event('selectionchange'));
+	assert.deepEqual(types, [
+		{ text: '你好', replacePrevCharCnt: 0, replaceNextCharCnt: 0, positionDelta: 0 },
+		{ text: '', replacePrevCharCnt: 0, replaceNextCharCnt: 0, positionDelta: -1 },
+	]);
+	dom.window.close();
+});
+
+test('textarea composition replacements cover both sides of an internal IME caret', () => {
+	const dom = new JSDOM('<textarea></textarea>');
+	const element = dom.window.document.querySelector('textarea')!;
+	using input = new TextAreaInput(createHost(), element);
+	const types: unknown[] = [];
+	using listener = input.onType(event => types.push(event));
+	element.focus();
+	element.dispatchEvent(new dom.window.CompositionEvent('compositionstart'));
+	for (const [text, offset] of [['你好', 1], ['您好', 1], ['您们好', 3]] as const) {
+		element.value = text;
+		element.setSelectionRange(offset, offset);
+		element.dispatchEvent(new dom.window.CompositionEvent('compositionupdate', { data: text }));
+	}
+	element.dispatchEvent(new dom.window.CompositionEvent('compositionend', { data: '您们好' }));
+	assert.deepEqual(types, [
+		{ text: '你好', replacePrevCharCnt: 0, replaceNextCharCnt: 0, positionDelta: -1 },
+		{ text: '您好', replacePrevCharCnt: 1, replaceNextCharCnt: 1, positionDelta: -1 },
+		{ text: '您们好', replacePrevCharCnt: 1, replaceNextCharCnt: 1, positionDelta: 0 },
+	]);
 	dom.window.close();
 });
 

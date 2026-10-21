@@ -46,7 +46,7 @@ export class TextAreaInput extends Disposable implements ITextAreaWrapper {
 	private readonly typeEmitter = this._register(new Emitter<ITypeData>());
 	private readonly compositionStartEmitter = this._register(new Emitter<ICompositionStartEvent>());
 	private readonly compositionUpdateEmitter = this._register(new Emitter<ICompositionData>());
-	private readonly compositionEndEmitter = this._register(new Emitter<void>());
+	private readonly compositionEndEmitter = this._register(new Emitter<ICompositionData>());
 	private readonly cutEmitter = this._register(new Emitter<void>());
 	private readonly pasteEmitter = this._register(new Emitter<IPasteData>());
 	private readonly willCopyEmitter = this._register(new Emitter<IClipboardCopyEvent>());
@@ -57,6 +57,8 @@ export class TextAreaInput extends Disposable implements ITextAreaWrapper {
 	private composing = false;
 	private compositionText = '';
 	private compositionActiveOffset = 0;
+	private compositionStartOffset = 0;
+	private compositionSuffixLength = 0;
 	private selectionChangeIgnoredUntil = 0;
 	private previousSelectionChangeTime = 0;
 	private _textAreaState = TextAreaState.EMPTY;
@@ -71,7 +73,7 @@ export class TextAreaInput extends Disposable implements ITextAreaWrapper {
 	readonly onType: Event<ITypeData> = this.typeEmitter.event;
 	readonly onCompositionStart: Event<ICompositionStartEvent> = this.compositionStartEmitter.event;
 	readonly onCompositionUpdate: Event<ICompositionData> = this.compositionUpdateEmitter.event;
-	readonly onCompositionEnd: Event<void> = this.compositionEndEmitter.event;
+	readonly onCompositionEnd: Event<ICompositionData> = this.compositionEndEmitter.event;
 	readonly onCut: Event<void> = this.cutEmitter.event;
 	readonly onPaste: Event<IPasteData> = this.pasteEmitter.event;
 	readonly onWillCopy: Event<IClipboardCopyEvent> = this.willCopyEmitter.event;
@@ -120,6 +122,9 @@ export class TextAreaInput extends Disposable implements ITextAreaWrapper {
 			event => {
 				this.setIgnoreSelectionChangeTime('received input event');
 				this._textAreaState = TextAreaState.readFromTextArea(this, this._textAreaState);
+				// Chromium dispatches compositionupdate before updating the textarea.
+				// Read again on input, after its value and system caret have changed.
+				if (this.composing) this.emitCompositionType();
 				this.inputEmitter.fire(event);
 			},
 		));
@@ -232,7 +237,13 @@ export class TextAreaInput extends Disposable implements ITextAreaWrapper {
 	}
 
 	private handleSelectionChange(): void {
-		if (!this.focused || this.composing) return;
+		if (!this.focused) return;
+		if (this.composing) {
+			// The IME may position its caret after dispatching input. This is
+			// part of the composition, not a screen-reader selection request.
+			this.emitCompositionType();
+			return;
+		}
 		const now = Date.now();
 		if (now - this.previousSelectionChangeTime < 5) return;
 		this.previousSelectionChangeTime = now;
@@ -291,6 +302,8 @@ export class TextAreaInput extends Disposable implements ITextAreaWrapper {
 		this.composing = true;
 		this.compositionText = '';
 		this.compositionActiveOffset = 0;
+		this.compositionStartOffset = Math.min(this.element.selectionStart, this.element.selectionEnd);
+		this.compositionSuffixLength = this.element.value.length - Math.max(this.element.selectionStart, this.element.selectionEnd);
 		this.compositionStartEmitter.fire({
 			data: normalizeTextLineEndings(event.data ?? ''),
 		});
@@ -304,35 +317,42 @@ export class TextAreaInput extends Disposable implements ITextAreaWrapper {
 		});
 	}
 
-	private handleCompositionEnd(_event: CompositionEvent): void {
+	private handleCompositionEnd(event: CompositionEvent): void {
 		if (!this.composing) return;
 		this.emitCompositionType();
 		this.resetComposition();
-		this.compositionEndEmitter.fire(undefined);
+		this.compositionEndEmitter.fire({ data: normalizeTextLineEndings(event.data ?? '') });
 	}
 
 	private emitCompositionType(): void {
-		const rawText = this.element.value;
+		const rawValue = this.element.value;
+		const start = Math.min(this.compositionStartOffset, rawValue.length);
+		const end = Math.max(start, rawValue.length - this.compositionSuffixLength);
+		const rawText = rawValue.slice(start, end);
 		const text = normalizeTextLineEndings(rawText);
-		const selection = readCompositionSelection(this.element, rawText, text);
+		const selection = readCompositionSelection(this.element, rawValue, normalizeTextLineEndings(rawValue));
+		const activeOffset = Math.max(0, Math.min(text.length, selection.activeOffset - normalizedOffset(rawValue, start)));
 		if (
 			text === this.compositionText &&
-			selection.activeOffset === this.compositionActiveOffset
+			activeOffset === this.compositionActiveOffset
 		) return;
+		const caretOnly = text === this.compositionText;
 		this.typeEmitter.fire({
-			text,
-			replacePrevCharCnt: this.compositionText.length,
-			replaceNextCharCnt: 0,
-			positionDelta: selection.activeOffset - text.length,
+			text: caretOnly ? '' : text,
+			replacePrevCharCnt: caretOnly ? 0 : this.compositionActiveOffset,
+			replaceNextCharCnt: caretOnly ? 0 : this.compositionText.length - this.compositionActiveOffset,
+			positionDelta: caretOnly ? activeOffset - this.compositionActiveOffset : activeOffset - text.length,
 		});
 		this.compositionText = text;
-		this.compositionActiveOffset = selection.activeOffset;
+		this.compositionActiveOffset = activeOffset;
 	}
 
 	private resetComposition(): void {
 		this.composing = false;
 		this.compositionText = '';
 		this.compositionActiveOffset = 0;
+		this.compositionStartOffset = 0;
+		this.compositionSuffixLength = 0;
 	}
 
 	private handleCopy(browserEvent: ClipboardEvent): void {

@@ -97,6 +97,7 @@
 
 - [ ] **独立准备 · PDF 查看、批注与 AI 阅读 Plugin**：方案归 [PDF Viewer](extensions/pdf-viewer/docs/pdf-content.md)。先核对已有批注保存／恢复与实际 AI 文字、页面图读取链，再选一个最小阅读场景复用工具和 Skill；仅对证实的阻碍补接线或最小 SDK 能力。不引入通用文档编辑；仓库外开发链不再作为下一项 SDK 功能需求，F5／`.ashx` 继续暂停。本轮仅记录方案，功能、Skill 和 Plugin 打包留待单独实施。
 - [ ] **复核 · macOS 原生监听故障来源**：已复现原生监听注册／注销阻塞及注册成功却不送事件，并以隔离 helper、限时终止和限定目录轮询恢复修复 Ash 卡住的问题；系统 `fseventsd` 长期高 CPU 的来源仍未证实，不能认定由 Ash 引起。保留 `.build/file-watcher-reproduction-before.json`、`.build/file-watcher-deletion-reproduction.json`，后续需另取现场证据；本轮未重启系统服务。
+- [ ] **功能 · 文献检索扩展**：后续实现查询、元数据获取及向文献管理扩展入库的工具／Skill 链路，PDF 阅读复用独立查看器；作者接入遵循本节扩展 SDK 任务。Agent 结构化文档写入仍按下方 Work 文档服务契约另行实施。尚未新增检索代码或迁仓。
 - [ ] **Academy 作者侧迁移**：先以 Academy 现有声明、标签和注册接线确定具体作者阻碍，再由 Manifest、TS SDK 或构建工具承担必要的 Rust 接线，使普通作者无需手写 Rust 即可开发编辑器、提供 Agent 工具并附带 Skill；不借迁移预建通用 API。高级编辑器能力使用明确的公开客户端契约；Agent 结构化写入依赖下方 Work 文档服务任务，不另建模型或编辑历史。确有原生算法需求时再选用 Rust／WASM 等组件。
 - [ ] **本地开发与源码调试**：按用户当前要求暂停，待明确恢复后实施；只读调查已确认可复用现有 F5／DebugService／Rust DAP 链，独立 Node DAP adapter 需要“受管子进程＋私有 socket”启动组合。隔离 Ash 开发实例显式加载开发目录，开发授权与正式安装信任分开；补 TS Source Map、源码断点、单步、变量、构建／重载及诊断。暂停预算归开发会话，普通调用的取消、撤权、deadline 与晚回复墓碑继续生效；不能只扩大 Host RPC 超时。验证暂停超过 30 秒后不误重启、恢复不续旧权限、停止／断连释放宿主和 adapter；Rust/V8 Inspector 另按实际宿主实现。
 - [ ] **测试、打包与安装**：按用户当前要求暂停 `.ashx`，待明确恢复后实施；只读调查已确认可复用 `LocalPluginPackage`、`PluginPackageStore` 和 `PluginActivationAuthority`。计划使用带明确格式标记与内容摘要的 ZIP envelope／payload，严格解压后交同一安装 authority；普通 ZIP／改名 VSIX 拒绝，安装不自动启用或授权，也不冒充签名来源。支持已构建 TS、资源及按平台独立打包的可选原生程序；不在安装时执行构建脚本。补 CLI pack／install 与真实 `pack → install → enable/grant → TS 调 Rust → revoke/uninstall`，覆盖篡改、路径逃逸、重复／链接条目和大小限制。
@@ -104,20 +105,18 @@
 
 ## Stanza 编辑器 · TODO
 
-当前 Editor 待办统一维护于本节，完成后移除；架构与已有证据范围见[编辑器架构](docs/editor-architecture.md#验证范围)。具体功能契约由对应实现文档维护，不按上游成员数量建立补齐清单。
+当前 Editor 待办统一维护于本节，完成后移除；架构与已有证据范围见[编辑器架构](docs/editor-architecture.md#验证范围)。先闭合 Stanza 的文本、事务、历史、选区、输入、几何与模型生命周期，以及共享宿主的保存／恢复链；Academy 从插件侧载入，业务功能和产品入口不作为基础编辑器的完成条件。具体功能契约由对应实现文档维护，不按上游成员数量建立补齐清单。
 
-- [ ] **功能 · 文献检索扩展**：后续实现查询、元数据获取及向文献管理扩展入库的工具／Skill 链路，PDF 阅读复用独立查看器；作者接入遵循上方扩展 SDK 任务。Agent 结构化文档写入仍按下方 Work 文档服务契约另行实施。尚未新增检索代码或迁仓。
-
-- [ ] **验收 · 编辑器扩展平台组合**：在真实 Electron 多窗口／远端环境验收 Academy、可选 Reference Manager／PDF Viewer 外置签名包的装载、版本匹配、dirty／恢复及释放，以及客户端内置 Code 与共享宿主生命周期；物理 IME、屏幕阅读器、跨页输入及目标 Word 打开／编辑／再次保存的互通仍需对应环境。PDF 查看器独立包迁移及本机验证见[扩展说明](extensions/pdf-viewer/README.md)，文献管理见 [Reference Manager](extensions/reference-manager/README.md)，Academy 已有支持范围见 [包说明](extensions/academic/README.md)；不重复列为功能待办。
+- [ ] **验收 · 编辑器扩展平台组合**：在真实 Electron 多窗口／远端环境验收 Academy、可选 Reference Manager／PDF Viewer 外置签名包的装载、版本匹配、dirty／恢复及释放，以及客户端内置 Code 与共享宿主生命周期；其他平台／输入法、屏幕阅读器、跨页输入及目标 Word 打开／编辑／再次保存的互通仍需对应环境。PDF 查看器独立包迁移及本机验证见[扩展说明](extensions/pdf-viewer/README.md)，文献管理见 [Reference Manager](extensions/reference-manager/README.md)，Academy 已有支持范围见 [包说明](extensions/academic/README.md)；不重复列为功能待办。
 
 设计边界与功能依赖见[编辑器设计与演进](docs/design/editor-roadmap.md)；具体工作仅维护于本清单，不把整篇设计当作一个未完成任务。
 
 ## Work / 通用文档 · TODO
 
-产品范围与约束见 [Work / Code 设计](docs/design/work-code-workbench.md)。
+产品范围与约束见 [Agent Window 文档工作区设计](docs/design/work-code-workbench.md)。
 
 - [ ] **Ash 产品** · Agent 结构化文档编辑经统一文档服务校验模型版本／文件修订、权限和 schema，一次事务可撤销；覆盖打开和未打开资源及过期拒绝。现有 `AppServerTextDocumentHost` 仅闭合普通文本快照和 WorkspaceEdit；须先定义结构化编辑的真实 producer／领域端口及审阅行为，不能把 `.ash-doc` 的共享模型再解析成第二份普通文本模型。
-- [ ] **Ash 产品** · 增加 Work 产品入口和默认布局，复用现有生命周期，明确 Code／Work 的资源、未保存内容、会话与状态恢复，不恢复模式注册表或第二份配置。
+- [ ] **Ash 产品 · Stanza 基础之后** · 将 Academy 的插件消费限定在 Agent Window，沿产品装配收敛 IDE 既有文档贡献、菜单与恢复接线；共享编辑器桥、文件和工作副本服务继续复用。独立 Activity Bar 图标与界面仍为待定方案，不先实现入口；选定入口后沿现有 Parts 和生命周期验证资源、未保存内容、会话与恢复，不恢复模式注册表或第二份配置。2026-10-22 已同步目标设计；本轮未改宿主准入或运行时接线，既有备份的退出／恢复策略及真实宿主范围验收仍待闭合。
 
 ## Desktop 启动性能 · TODO
 
