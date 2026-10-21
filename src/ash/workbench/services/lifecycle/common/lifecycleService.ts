@@ -179,6 +179,7 @@ export abstract class AbstractLifecycleService extends Disposable implements ILi
 			} while (pending.length > 0);
 		}
 		if (failures.length > 0) {
+			for (const failure of failures) this.logService.error('lifecycle', failure.message, failure.cause);
 			throw new AggregateError(failures, 'One or more shutdown participants failed');
 		}
 		this.didShutdownEmitter.fire(reason);

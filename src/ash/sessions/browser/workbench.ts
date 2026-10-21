@@ -599,7 +599,7 @@ export abstract class Workbench extends Disposable {
 		this.lifecycleService = this._register(options.createLifecycleService(services));
 		services.registerInstance(ILifecycleService, this.lifecycleService);
 		this._register(this.lifecycleService.onWillShutdown(event => {
-			event.join(storage.flush(WillSaveStateReason.SHUTDOWN), "Sessions storage flush");
+			event.join(storage.flush(WillSaveStateReason.SHUTDOWN).catch(error => logger.error('storage', 'Could not save Sessions state during shutdown', error)), "Sessions storage flush");
 		}));
 
 		options.container.replaceChildren();

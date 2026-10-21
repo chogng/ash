@@ -931,7 +931,8 @@ export class Workbench extends Disposable {
 			if (event.reason === 'pageHide') workingCopyBackupTracker.completeShutdown();
 		}));
 		this._register(lifecycleService.onWillShutdown(event => {
-			event.join(storage.flush(WillSaveStateReason.SHUTDOWN), "Workbench storage flush");
+			// UI state is best effort; unsaved content has its own required backup join below.
+			event.join(storage.flush(WillSaveStateReason.SHUTDOWN).catch(error => logService.error('storage', 'Could not save Workbench state during shutdown', error)), "Workbench storage flush");
 			event.join(() => workingCopyBackupTracker.shutdown(), "Working-copy backup drain", () => workingCopyBackupTracker.isShutdownCurrent);
 		}));
 		this._register(lifecycleService.onDidShutdown(() => workingCopyBackupTracker.completeShutdown()));

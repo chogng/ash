@@ -919,6 +919,10 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 		restoring = false;
 		this._register(this.onDidChangeInput(() => { if (!restoring) { restoreFailed = false; save(); } }));
 		this._register(onWillShutdown(event => {
+			const snapshot = this.snapshotDraftReferences();
+			// An untouched empty composer has no content to protect. In particular,
+			// its global storage flush must not veto closing over unrelated UI state.
+			if (revisions.size === 0 && !this.attachmentModel.hasPendingContext && snapshot.text.length === 0 && snapshot.contexts.length === 0) return;
 			event.join((async () => {
 				// File selection can still be preparing its snapshot when the window closes.
 				while (this.attachmentModel.hasPendingContext) await this.attachmentModel.resolvePendingContext();

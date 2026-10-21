@@ -193,7 +193,7 @@ export class DesktopMain extends Disposable {
 				workspace,
 				createLifecycleService: services => {
 					lifecycleService = services.createInstance(ElectronLifecycleService, { ownerWindow: window, onError: onUnexpectedError });
-					this._register(lifecycleService.onWillShutdown(event => event.join(logger.flush(), 'Desktop logs flush')));
+					this._register(lifecycleService.onWillShutdown(event => event.join(logger.flush().catch(error => console.error('Could not flush Desktop logs during shutdown', error)), 'Desktop logs flush')));
 					return lifecycleService;
 				},
 				createWindow: services => {

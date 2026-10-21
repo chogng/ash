@@ -1183,6 +1183,17 @@ test('persistent Chat drafts retire consumed attachments when an untitled compos
 	assert.equal(await part.captureDraft(), undefined);
 });
 
+test('an untouched empty Chat composer does not join a global storage flush on shutdown', () => {
+	using shutdown = new Emitter<IWillShutdownEvent>();
+	using part = inputPart(sharedNotifications);
+	part.bindDraftStorage({ threadId: 'empty-thread', onDidChange: AshEvent.None } as IChatWidgetModel, {
+		read: () => undefined,
+		write: () => { assert.fail('No draft changed'); },
+		flush: async () => { assert.fail('No draft needs flushing'); },
+	}, shutdown.event);
+	shutdown.fire({ reason: 'windowClose', join: () => { assert.fail('Empty composer must not block shutdown'); } });
+});
+
 test('Chat shutdown waits for file preparation and retains the draft when the storage flush fails', async () => {
 	using globals = installEditorTestGlobals({ FileReader: browserEnvironment.window.FileReader });
 	using shutdown = new Emitter<IWillShutdownEvent>();
