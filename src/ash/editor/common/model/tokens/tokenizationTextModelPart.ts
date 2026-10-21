@@ -185,11 +185,25 @@ export class TokenizationTextModelPart extends Disposable implements ITokenizati
 	}
 
 	async whenReady(signal: AbortSignal): Promise<void> {
-		if (this.lineBackend.value && 'getFacts' in this.lineBackend.value) return this.lineBackend.value.whenReady(signal);
-		throwIfCancelled(signal);
-		this.assertNotDisposed();
-		if (this.lineBackend.value) this.forceTokenization(1);
-		while (!this.hasAccurateTokensForLine(1)) {
+		while (true) {
+			throwIfCancelled(signal);
+			this.assertNotDisposed();
+			const backend = this.lineBackend.value;
+			if (backend && 'getFacts' in backend) {
+				try {
+					await backend.whenReady(signal);
+				} catch (error) {
+					if (signal.aborted || backend === this.lineBackend.value) throw error;
+				}
+				// File acquisition belongs to the model. A language/provider change
+				// can retire its backend while the first syntax request is in flight.
+				if (backend !== this.lineBackend.value) continue;
+				throwIfCancelled(signal);
+				this.assertNotDisposed();
+				return;
+			}
+			if (backend) this.forceTokenization(1);
+			if (this.hasAccurateTokensForLine(1)) return;
 			const analysis = this.pendingAnalysis;
 			try {
 				await raceCancellationError(analysis, signal);
@@ -198,8 +212,6 @@ export class TokenizationTextModelPart extends Disposable implements ITokenizati
 					throw error;
 				}
 			}
-			this.assertNotDisposed();
-			if (this.lineBackend.value) this.forceTokenization(1);
 		}
 	}
 

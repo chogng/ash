@@ -1276,6 +1276,20 @@ revision、销毁、跨 model/language 拒绝、Enter、auto-closing `notIn` 与
 Tree-sitter Worker。语言规则位于各扩展的 `queries/`；文本编辑、版本及撤销仍由 TextModel
 拥有。高亮、大纲、折叠、结构选择与假设编辑共用语法会话。
 
+文件获取等待 `TokenizationTextModelPart.whenReady` 时，等待对象属于 TextModel。语言或
+Provider 在首个请求期间替换后端，等待会转到当前后端；当前后端失败、调用取消和模型释放
+仍向调用方返回错误，不把旧后端的完成当成当前模型就绪。
+
+2026-10-21 macOS arm64 本机验证：两条受控首开竞态在修复前失败，修复后连同活动后端
+失败／取消／释放及已有共享树覆盖，两个定向测试文件共 136 项通过。当前检出 `a66ebb32a`
+加本轮修改经 `pnpm build` 构建；真实 Ash Desktop 从 SCM 冷开合成 Markdown diff，再打开
+共享文件编辑并撤销，两步通过且未点 Retry。原有 Markdown wrapping smoke 也通过实际进程
+退出／重启及设置覆盖（1 项通过），其中已移除旧故障的 Retry 豁免。结构／CSS ownership、
+Stanza 与 automation 类型检查通过。这些结果不覆盖 Windows、物理 IME 或屏幕阅读器。
+场景报告在 `.build/ash-playwright-mcp/evidence/local-cold-syntax-20261021-2026-10-21T13-37-34-577Z/report.html`；
+日志、构建来源与媒体摘要见 `.build/local-acceptance-20261021/validation.json`。已审阅关键截图，
+保留原始 WebM 和 trace；本机无 ffmpeg／ffprobe，未生成字幕视频或验证视频时长／编码。
+
 活动主题由 `IThemeService` 唯一持有。Tree-sitter capture 的首段是 token 类型，其余段是
 修饰信息；高亮通过活动 `IColorTheme.getTokenStyleMetadata` 直接取得颜色和字体样式，嵌入语言
 使用自己的 language ID。内置、用户和扩展主题共用 `semanticTokenColors` 规则。

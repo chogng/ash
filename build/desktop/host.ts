@@ -1,8 +1,8 @@
 import { spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { createReadStream, watch, type FSWatcher } from 'node:fs';
+import { createReadStream, readdirSync } from 'node:fs';
 import { lstat, mkdir, readFile, readdir, realpath, symlink, unlink, writeFile } from 'node:fs/promises';
-import { isAbsolute, join, relative, resolve } from 'node:path';
+import { join, relative, resolve } from 'node:path';
 import { createInterface } from 'node:readline';
 import ts from 'typescript';
 import { ProcessRun } from '../processes.ts';
@@ -98,56 +98,85 @@ export async function watchHost(onReady: (ready: boolean, output?: string) => vo
 	let closing: Promise<void> | undefined;
 	let building: Promise<void> | undefined;
 	let timer: ReturnType<typeof setTimeout> | undefined;
+	let structureTimer: ReturnType<typeof setTimeout> | undefined;
 	let pending = true;
 	// Keep TS7's dependency-tree FSEvents watcher away from build caches and
 	// runtime files. Watch source inputs here and invoke its incremental build once.
 	const roots = ['src', '.build/protocol/typescript', '.build/desktop/localization'].map(path => resolve(sourceRoot, path));
-	const directories: FSWatcher[] = [];
+	const directories = new Map<string, ts.FileWatcher>();
 	const files = new Map<string, ts.FileWatcher>();
 	try {
-		for (const root of roots) {
-			// TypeScript's directory watcher only reports structural changes; source saves also need change events.
-			const watcher = watch(root, { recursive: true }, (event, file) => {
-				if (file === null || event === 'rename' || /\.(?:[cm]?ts|json)$/u.test(file)) requestBuild(file === null ? root : resolve(root, file));
-			});
-			watcher.on('error', error => { if (!closing) fail(error); });
-			directories.push(watcher);
-		}
 		updateFileWatches();
 	} catch (error) {
-		for (const watcher of [...directories, ...files.values()]) watcher.close();
+		for (const watcher of [...directories.values(), ...files.values()]) watcher.close();
 		throw error;
 	}
 	onReady(false);
 	startBuild();
 
-	function updateFileWatches(): void {
-		const paths = new Set(['package.json', 'pnpm-lock.yaml', 'pnpm-workspace.yaml'].map(path => resolve(sourceRoot, path)));
+	function updateDirectoryWatches(): Set<string> {
+		const paths = new Set<string>();
+		const inputs = new Set<string>();
+		function visit(path: string): void {
+			paths.add(path);
+			try {
+				for (const entry of readdirSync(path, { withFileTypes: true })) {
+					if (entry.isDirectory()) visit(join(path, entry.name));
+					else if (entry.isFile() && /\.(?:[cm]?ts|json)$/u.test(entry.name)) inputs.add(join(path, entry.name));
+				}
+			} catch (error) {
+				if (error.code !== 'ENOENT' && error.code !== 'ENOTDIR') throw error;
+			}
+		}
+		for (const root of roots) visit(root);
+		for (const [path, watcher] of directories) {
+			if (!paths.has(path)) { watcher.close(); directories.delete(path); }
+		}
+		for (const path of paths) {
+			if (directories.has(path)) continue;
+			// Poll directory timestamps for membership changes; native recursive
+			// events can miss a newly created subtree or replay initial entries.
+			directories.set(path, ts.sys.watchFile!(path, () => {
+				if (closing) return;
+				clearTimeout(structureTimer);
+				structureTimer = setTimeout(() => {
+					structureTimer = undefined;
+					try {
+						if (updateFileWatches()) requestBuild(path);
+					} catch (error) { fail(error); }
+				}, 100);
+			}, 500, { watchFile: ts.WatchFileKind.DynamicPriorityPolling }));
+		}
+		return inputs;
+	}
+
+	function updateFileWatches(): boolean {
+		// Subscribe before compilation, including imports not listed as tsconfig
+		// roots, so a save during the first build cannot escape the pending batch.
+		const paths = updateDirectoryWatches();
+		for (const path of ['package.json', 'pnpm-lock.yaml', 'pnpm-workspace.yaml']) paths.add(resolve(sourceRoot, path));
 		const readConfig = (path: string): string | undefined => { paths.add(resolve(path)); return ts.sys.readFile(path); };
 		for (const project of projects) {
 			const path = resolve(sourceRoot, project);
 			const config = ts.readJsonConfigFile(path, readConfig);
 			const parsed = ts.parseJsonSourceFileConfigFileContent(config, { ...ts.sys, readFile: readConfig }, sourceRoot, undefined, path);
-			for (const file of parsed.fileNames) {
-				if (!roots.some(root => {
-					const inside = relative(root, file);
-					return !isAbsolute(inside) && inside !== '..' && !inside.startsWith(`..${process.platform === 'win32' ? '\\' : '/'}`);
-				})) paths.add(resolve(file));
-			}
+			for (const file of parsed.fileNames) paths.add(resolve(file));
 		}
+		const changed = paths.size !== files.size || [...paths].some(path => !files.has(path));
 		for (const [path, watcher] of files) {
 			if (!paths.has(path)) { watcher.close(); files.delete(path); }
 		}
 		for (const path of paths) {
 			if (!files.has(path)) files.set(path, ts.sys.watchFile!(path, () => requestBuild(path), 250));
 		}
+		return changed;
 	}
 
 	function requestBuild(path: string): void {
 		if (closing) return;
 		revision++;
+		if (!pending) onReady(false);
 		pending = true;
-		onReady(false);
 		console.log(`[host] Input changed: ${relative(sourceRoot, path)}`);
 		clearTimeout(timer);
 		timer = setTimeout(() => { timer = undefined; startBuild(); }, 100);
@@ -222,7 +251,8 @@ export async function watchHost(onReady: (ready: boolean, output?: string) => vo
 	function close(): Promise<void> {
 		if (closing) return closing;
 		clearTimeout(timer);
-		for (const watcher of [...directories, ...files.values()]) watcher.close();
+		clearTimeout(structureTimer);
+		for (const watcher of [...directories.values(), ...files.values()]) watcher.close();
 		closing = Promise.resolve(compilerRun?.stop('SIGTERM')).then(async () => { await building; completion.resolve(); });
 		return closing;
 	}

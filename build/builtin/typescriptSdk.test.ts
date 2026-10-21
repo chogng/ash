@@ -3,7 +3,7 @@ import { execFileSync, spawnSync } from 'node:child_process';
 import { copyFile, mkdtemp, mkdir, readFile, realpath, rm, writeFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
-import { dirname, join, resolve } from 'node:path';
+import { delimiter, dirname, join, resolve } from 'node:path';
 import test from 'node:test';
 
 const repository = resolve(import.meta.dirname, '../..');
@@ -14,9 +14,18 @@ test('a TypeScript author installs the packed Ash SDK and builds outside the che
 		const project = join(directory, 'extension');
 		const artifacts = join(directory, 'packages');
 		await mkdir(project); await mkdir(artifacts);
-		// Use Node's bundled npm CLI directly, including on Windows where npm.cmd
-		// would otherwise require a shell. Only local package archives are admitted.
-		const npm = await realpath(resolve(dirname(process.execPath), process.platform === 'win32' ? 'node_modules/npm/bin/npm-cli.js' : 'npm'));
+		// pnpm's pinned Node runtime need not contain npm. Resolve the host npm CLI
+		// from PATH, avoiding npm.cmd's shell requirement on Windows.
+		let npm: string | undefined;
+		for (const bin of [dirname(process.execPath), ...(process.env.PATH ?? '').split(delimiter).filter(Boolean)]) {
+			try {
+				npm = await realpath(resolve(bin, process.platform === 'win32' ? 'node_modules/npm/bin/npm-cli.js' : 'npm'));
+				break;
+			} catch (error) {
+				if (error.code !== 'ENOENT' && error.code !== 'ENOTDIR') throw error;
+			}
+		}
+		assert.ok(npm, 'The independent author installation test requires npm on PATH');
 		const runNpm = (args: string[], cwd: string) => execFileSync(process.execPath, [npm, ...args, '--offline', '--ignore-scripts', '--no-audit', '--no-fund', '--cache', join(directory, 'cache')], { cwd, encoding: 'utf8', timeout: 30_000 });
 		const packed = JSON.parse(runNpm(['pack', join(repository, 'sdk/typescript'), '--json', '--pack-destination', artifacts], directory)) as { filename: string; files: { path: string; }[]; }[];
 		assert.equal(packed.length, 1);

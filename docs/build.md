@@ -997,7 +997,13 @@ App Server 验证将既有 `zero_based_line_index` 本体暂移到另一个源�
 
 故障场景在真实常驻 App Server 中验证：helper 不可变局部重赋值报 E0384；路径依赖 `ash-diff` 中加入错误返回类型报 E0308；两者均保留模块／函数发布指针及旧 RPC 结果。恢复后可继续更新；合法路径依赖变化和协议包声明的 `../../.build/protocol/metadata.json` 变化转为完整模块发布，后续重新加载分析后恢复函数更新。实验源码和协议元数据按原字节恢复，临时 helper 删除，正常模块恢复构建通过。
 
-Rust `just verify ash-dev-build --features compiler` 为 22 项并通过 check／全目标 warnings；不启用 compiler feature 的 runtime warnings 也通过。App Server watcher、LiveBuilder 和源码归属定向测试 39 项通过，build TypeScript 为 145 文件无错误；脚本测试 202 项、7 跳过。排队 timer 回归已确认去掉修复时失败。全量 `pnpm --dir build run test:prepared` 首次为 233 项、200 通过、6 失败、27 跳过，另观察到导出 SDK 的 Academy 类型错误、Windows Host watcher 多余失败通知、Electron 生命周期退出等待及符号链接 EPERM。已补 live builder fixture 和后端 Python 清单；定向结果不表示全量通过，余项在根 TODO 记录。
+Rust `just verify ash-dev-build --features compiler` 为 22 项并通过 check／全目标 warnings；不启用 compiler feature 的 runtime warnings 也通过。App Server watcher、LiveBuilder 和源码归属定向测试 39 项通过，build TypeScript 为 145 文件无错误；脚本测试 202 项、7 跳过。排队 timer 回归已确认去掉修复时失败。全量 `pnpm --dir build run test:prepared` 首次为 233 项、200 通过、6 失败、27 跳过，另观察到导出 SDK 的 Academy 类型错误、Windows Host watcher 多余失败通知、Electron 生命周期退出等待及符号链接 EPERM。已补 live builder fixture 和后端 Python 清单；当时的定向结果不表示全量通过；本机整套回归补验见下文，Windows 缺口仍在根 TODO。
+
+2026-10-21，在当前 macOS arm64 检出 `a66ebb32a` 加本轮修改上完成本机整套补验。`pnpm --dir build run test:prepared` 首跑为 236 项、214 通过、6 失败、16 跳过；最终为 220 通过、0 失败、16 跳过，用时 16.04 秒。修复包括：独立 TS 作者测试从 PATH 定位 npm，兼容 pnpm 自带的无 npm Node；恢复测试夹具补齐当前 view catalog；Academic 场景收集遵守 disconnected browser 与 connected editor 的实际目标；CSS 竞态 fixture 用轮询消除原生事件合并对断言的影响。
+
+Host 的真实监听缺口也在本机复现：递归目录事件漏收文件内容写入，延迟到达的初始条目又可能造成空编译。现按原有源码／协议／本地化根预先注册文件监听，以自适应目录时间戳轮询发现增删；同一待编译批次只发布一次未就绪。现有 Host／Electron 回归覆盖生成输入、正常与失败保存、编译中排队、配置修改、缓存排除与进程回收，并补新增文件、修改、删除和失败编译实际读取无效源码的断言。`pnpm build` 正常 Desktop 构建通过；build 146 文件、Renderer 4446 文件、automation 2994 文件类型检查通过。这里只确认行为，不宣称监听性能收益。
+
+最终日志及本轮 patch／构建摘要保存在 `.build/local-acceptance-20261021/validation.json`。16 项跳过涉及独立 Academy 原生开发宿主、Windows 特有行为、浏览器调试器 F5、Windows 进程及显式启用的产品取消场景，均不算通过；原 Windows 失败与远端完整 CI 仍未验收。Electron launcher 的构建工具测试使用受控 Node 替身；另一次真实 Desktop 冷启动及进程重启通过，范围见 [语法会话](editor-architecture.md#语法会话与主题样式)。
 
 最终 watcher 证据位于 `.build/build-health/rust-path-check-watcher-verified-20261021/`，基线在 `rust-path-check-watcher-baseline-20261021/`；包含全部样本、测量二进制摘要、PID、日志和脚本。早期 `candidate`、`final`、`buffered`、`confirm` 轮次保留了不均衡摘要开销、混入冷依赖重编、基线发布顺序及 Windows 访问通知误触发等失败，均未纳入上述 warm 对比；其中误触发的普通后端构建还遇到运行中扩展可执行文件的 Windows 占用，未停止用户的运行进程或删除该产物。`trace` 的中间实现为 1291 ms，未计作最终结果。直接调用与失效证据位于 `rust-path-check-appserver-20261021/` 和 `rust-path-check-appserver-final-20261021/`。没有清空共享缓存、修改 RA／工具链或降低正确性检查，也未验证其他平台、RSS、Bazel 或完整 Electron UI。
 

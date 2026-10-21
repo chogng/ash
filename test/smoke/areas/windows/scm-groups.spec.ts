@@ -69,7 +69,6 @@ test.describe('SCM editor groups', () => {
 			await writeFile(markdown, `# Wrapping defaults\n\n${paragraph}\n`);
 			await writeFile(testWorkspace.file, `const value = "${paragraph}";\n`);
 			let page = workbench.page;
-			let coldOpenRetries = 0;
 			const comparison = () => page.locator('.ash-editor-pane-host:not([hidden]) .stanza-diff-editor');
 			const rows = (logicalLine: number) => page.locator('.ash-editor-pane-host:not([hidden]) .stanza-editor').last().evaluate((editor, logicalLine) => {
 				const tops = new Set<number>();
@@ -85,14 +84,7 @@ test.describe('SCM editor groups', () => {
 				await page.getByRole('button', { name: `Open ${name} for Changes`, exact: true }).click();
 				const coldOpenError = page.getByText('Syntax backend was disposed', { exact: true });
 				await expect.poll(async () => await comparison().isVisible() || await coldOpenError.isVisible()).toBe(true);
-				if (await coldOpenError.isVisible()) {
-					// This scenario verifies configuration, independently of the tracked
-					// syntax-backend cold-open failure. Retain and report its real UI recovery.
-					coldOpenRetries++;
-					testInfo.annotations.push({ type: 'known-issue', description: 'Syntax backend was disposed; recovered through one Retry click' });
-					await testInfo.attach(`cold-open-${coldOpenRetries}`, { body: await page.screenshot(), contentType: 'image/png' });
-					await page.getByRole('button', { name: 'Retry', exact: true }).click();
-				}
+				await expect(coldOpenError).toHaveCount(0);
 				await expect(comparison()).toBeVisible();
 			};
 			const openFile = async (name: string) => {
@@ -171,7 +163,7 @@ test.describe('SCM editor groups', () => {
 			await openFile('TODO.md');
 			await expect.poll(() => rows(2)).toBe(1);
 			await screenshot('markdown-explicit-off');
-			await testInfo.attach('restart-verification', { body: JSON.stringify({ firstPid, secondPid, sameProfile: restored.resource === persisted.resource, userSettings: settings, diffDefault: 'inherit', markdownDefault: 'on', typescriptDefault: 'off', explicitMarkdownOffRespected: true, languageSettingEditedThroughUI: true, forcedInlineLayout: false, temporaryWrapCommandUsed: false, coldOpenRetries }), contentType: 'application/json' });
+			await testInfo.attach('restart-verification', { body: JSON.stringify({ firstPid, secondPid, sameProfile: restored.resource === persisted.resource, userSettings: settings, diffDefault: 'inherit', markdownDefault: 'on', typescriptDefault: 'off', explicitMarkdownOffRespected: true, languageSettingEditedThroughUI: true, forcedInlineLayout: false, temporaryWrapCommandUsed: false }), contentType: 'application/json' });
 			const afterTrace = testInfo.outputPath('after-restart-trace.zip');
 			await page.context().tracing.stopChunk({ path: afterTrace });
 			await testInfo.attach('after-restart-trace', { path: afterTrace, contentType: 'application/zip' });

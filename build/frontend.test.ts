@@ -54,17 +54,17 @@ test('Frontend CI smoke commands collect applicable tests from configured Playwr
 	assert.ok(projects.length > 0, 'Frontend CI must retain explicit smoke project selections');
 	for (const project of projects) {
 		assert.doesNotThrow(() => playwrightTargetForProject(project));
-		const { stdout } = await execute(process.execPath, ['test/smoke/run.ts', project, 'test/smoke/areas/academic/academic-workbench.spec.ts', '--list'], { cwd: repositoryRoot, timeout: 10_000 });
+		const { stdout } = await execute(process.execPath, ['test/smoke/run.ts', project, 'test/smoke/areas/windows/home.spec.ts', '--list'], { cwd: repositoryRoot, timeout: 10_000 });
 		assert.match(stdout, /Total: [1-9]\d* tests? in [1-9]\d* files?/);
 	}
 });
 
-test('Frontend CI retains Academic coverage in the unified Workbench projects', { timeout: 15_000 }, async () => {
+test('Frontend CI retains disconnected Academic source and connected editor coverage in applicable projects', { timeout: 15_000 }, async () => {
 	assert.ok(projects.includes('electron-ui'));
 	assert.deepEqual(playwrightTargetForProject('electron-ui'), { kind: 'electron', appServerMode: 'disabled' });
 	assert.ok(projects.includes('electron-app-server'));
 	assert.deepEqual(playwrightTargetForProject('electron-app-server'), { kind: 'electron', appServerMode: 'required' });
-	for (const [project, file] of [['electron-ui', 'academic/academic-workbench.spec.ts'], ['electron-app-server', 'editor/academic-open.spec.ts'], ['browser-app-server', 'editor/academic-open.spec.ts']]) {
+	for (const [project, file] of [['browser-ui', 'academic/academic-workbench.spec.ts'], ['electron-app-server', 'editor/academic-open.spec.ts'], ['browser-app-server', 'editor/academic-open.spec.ts']]) {
 		const { stdout } = await execute(process.execPath, ['test/smoke/run.ts', project, `test/smoke/areas/${file}`, '--list'], { cwd: repositoryRoot, timeout: 10_000 });
 		assert.match(stdout, /Total: [1-9]\d* tests? in 1 file/);
 	}
