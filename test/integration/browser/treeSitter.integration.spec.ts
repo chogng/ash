@@ -108,7 +108,7 @@ test('new project languages retain highlights through offline edits and undo', a
 		expect(await page.evaluate(() => window.treeSitterIntegration.state())).toMatchObject({ execution: 'worker', errors: [], tokens: expect.arrayContaining([expected]) });
 		// An inserted newline changes every row coordinate without changing the language's syntax.
 		await page.locator('.stanza-editor').click();
-		await page.keyboard.press('Control+Home');
+		await page.keyboard.press('ControlOrMeta+Home');
 		await page.keyboard.press('Enter');
 		await page.evaluate(() => window.treeSitterIntegration.ready());
 		expect(await page.evaluate(() => window.treeSitterIntegration.state().text.replace(/\r\n/g, '\n'))).toBe('\n' + original.replace(/\r\n/g, '\n'));
@@ -121,10 +121,10 @@ test('new project languages retain highlights through offline edits and undo', a
 for (const sample of [
 	{ language: 'html', text: '<script>const value = "你好🙂";</script>\n<style>body { color: red; }</style>', lexeme: 'const', tokenType: 'keyword' },
 	{ language: 'html', text: '<script type="application/json">{"value": 42}</script>', lexeme: '42', tokenType: 'number' },
-	{ language: 'html', text: '<style>body { color: red; }</style>', lexeme: 'color', tokenType: 'variable' },
+	{ language: 'html', text: '<style>body { color: red; }</style>', lexeme: 'color', tokenType: 'property' },
 	{ language: 'php', text: '<?php echo "你好🙂"; ?><h1>Hello</h1>', lexeme: 'h1', tokenType: 'tag' },
 	{ language: 'markdown', text: '# Title\n\n```python\ndef greet():\n    return "你好🙂"\n```\n', lexeme: 'def', tokenType: 'keyword' },
-	{ language: 'markdown', text: 'Some **strong text**.\n', lexeme: 'strong text', tokenType: 'source' },
+	{ language: 'markdown', text: 'Some **strong text**.\n', lexeme: 'strong text', tokenType: 'text' },
 	{ language: 'diff', text: 'diff --git a/main.js b/main.js\n--- a/main.js\n+++ b/main.js\n@@ -1 +1 @@\n-const old = 1;\n+const value = 2;\n', lexeme: 'const', tokenType: 'keyword' },
 ]) {
 	test(`${sample.language} highlights embedded ${sample.lexeme} with original coordinates`, async ({ page }) => {

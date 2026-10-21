@@ -39,6 +39,16 @@ test.afterEach(async ({ page }) => {
 	expect(pageErrors.get(page) ?? []).toEqual([]);
 });
 
+for (const reverse of [false, true]) {
+	test(`GPU explicit styles clear inherited bold and strikethrough in reverse order=${reverse}`, async ({ page }) => {
+		await page.goto('/gpuText.html');
+		await page.waitForFunction(() => !!window.ashGpuTextIntegration);
+		const pixels = await page.evaluate(reverse => window.ashGpuTextIntegration.decorationPixels(reverse), reverse);
+		expect(pixels.inherited).not.toEqual(pixels.plain);
+		expect(pixels.explicit).toEqual(pixels.plain);
+	});
+}
+
 test('GPU device loss restores DOM text, caret and typing without another GPU frame', async ({ page }) => {
 	await page.goto('/gpuText.html');
 	await expect.poll(() => gpuEditorState(page)).toEqual(healthyGpuEditorState());

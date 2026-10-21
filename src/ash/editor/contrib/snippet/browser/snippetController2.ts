@@ -30,6 +30,7 @@ export class SnippetController2 extends Disposable implements IEditorContributio
 
 	public startSession(model: TextModel, starts: readonly number[], snippet: Snippet, finalOffset = snippet.text.length): void {
 		this.assertNotDisposed();
+		if (this.session.value?.merge(starts, snippet, finalOffset)) return;
 		this.session.clear();
 		if (snippet.placeholderGroups.length === 0) return;
 		this.session.value = new SnippetSession(model, this.editor, starts, snippet, finalOffset);

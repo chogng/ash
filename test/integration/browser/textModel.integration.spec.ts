@@ -2205,3 +2205,64 @@ test('extension snippet completions accept, navigate placeholders and undo in th
 	await page.keyboard.press('Escape');
 	await page.evaluate(() => window.ashTextModelIntegration.dispose());
 });
+
+
+for (const locale of ['en', 'zh-CN'] as const) {
+	test(`formatters select, persist a language default, restore focus and undo in ${locale}`, async ({ page }) => {
+		await page.goto('/textModel.html');
+		await page.waitForFunction(() => !!window.ashTextModelIntegration);
+		await page.evaluate(locale => {
+			window.ashTextModelIntegration.enableFormatting(locale);
+			window.ashTextModelIntegration.setValue('original');
+			window.ashTextModelIntegration.getControl().focus();
+			void window.ashTextModelIntegration.formatDocument();
+		}, locale);
+		const input = page.locator('.ash-quick-pick').getByRole('combobox');
+		await expect(input).toHaveAttribute('placeholder', locale === 'en' ? 'Select a Formatter' : '选择格式化程序');
+		await input.fill(locale === 'en' ? 'Configure Default Formatter' : '配置默认格式化程序');
+		await input.press('Enter');
+		await expect(input).toHaveAttribute('placeholder', locale === 'en' ? 'Select the Default Formatter for rust' : '选择 rust 的默认格式化程序');
+		await input.fill('beta.format');
+		await input.press('Enter');
+		await expect.poll(() => page.evaluate(() => window.ashTextModelIntegration.getValue())).toBe('BETA');
+		expect(await page.evaluate(() => window.ashTextModelIntegration.defaultFormatter())).toBe('beta.format');
+		await expect(page.locator('#editor-root .stanza-editor-input').first()).toBeFocused();
+		await page.evaluate(() => window.ashTextModelIntegration.getControl().getModel()!.undo());
+		expect(await page.evaluate(() => window.ashTextModelIntegration.getValue())).toBe('original');
+		await page.evaluate(() => window.ashTextModelIntegration.formatDocument());
+		await expect(page.locator('.ash-quick-pick')).not.toBeVisible();
+		expect(await page.evaluate(() => window.ashTextModelIntegration.getValue())).toBe('BETA');
+	});
+}
+
+test('format on type uses the input event and is one undo step with the typed trigger', async ({ page }) => {
+	await page.goto('/textModel.html');
+	await page.waitForFunction(() => !!window.ashTextModelIntegration);
+	await page.evaluate(() => {
+		window.ashTextModelIntegration.enableFormatting('en');
+		window.ashTextModelIntegration.setValue('alpha');
+		const editor = window.ashTextModelIntegration.getControl();
+		editor.updateOptions({ formatOnType: true });
+		editor.setPosition({ lineNumber: 1, column: 6 });
+		editor.focus();
+	});
+	await page.keyboard.type(';');
+	await expect.poll(() => page.evaluate(() => window.ashTextModelIntegration.getValue())).toBe('ALPHA;');
+	await page.keyboard.press('ControlOrMeta+z');
+	await expect.poll(() => page.evaluate(() => window.ashTextModelIntegration.getValue())).toBe('alpha');
+});
+
+
+test('formatter choice cancels on cursor changes and readonly formatting does not open a picker', async ({ page }) => {
+	await page.goto('/textModel.html');
+	await page.waitForFunction(() => !!window.ashTextModelIntegration);
+	await page.evaluate(() => { window.ashTextModelIntegration.enableFormatting('en'); void window.ashTextModelIntegration.formatDocument(); });
+	await expect(page.locator('.ash-quick-pick')).toBeVisible();
+	await page.evaluate(() => window.ashTextModelIntegration.getControl().setPosition({ lineNumber: 2, column: 1 }));
+	await expect(page.locator('.ash-quick-pick')).not.toBeVisible();
+	await page.evaluate(async () => {
+		window.ashTextModelIntegration.getControl().updateOptions({ readOnly: true });
+		await window.ashTextModelIntegration.formatDocument();
+	});
+	await expect(page.locator('.ash-quick-pick')).not.toBeVisible();
+});

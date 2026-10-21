@@ -17,8 +17,9 @@ import { TrackedRangeStickiness, type IIdentifiedSingleEditOperation } from '../
  * be disposed without changing inserted text.
  */
 export class SnippetSession extends Disposable {
-	private readonly groups: readonly SnippetTrackedGroup[];
-	private readonly transforms: readonly SnippetTrackedTransform[];
+	private readonly groups: SnippetTrackedGroup[];
+	private readonly allGroups: SnippetTrackedGroup[] = [];
+	private readonly transforms: SnippetTrackedTransform[] = [];
 	private readonly finalRanges: readonly TrackedRange[];
 	private currentGroupIndex = 0;
 
@@ -48,36 +49,13 @@ export class SnippetSession extends Disposable {
 			throw new RangeError("Language completion snippet final offset must follow its expansion text");
 		}
 		try {
-			this.groups = Object.freeze(snippet.placeholderGroups.map(group => Object.freeze({
-				index: group.index,
-				ranges: starts.flatMap(start => group.placeholders.map(placeholder =>
-					model.trackRange(
-						Range.fromPositions(
-							model.positionAt(start + placeholder.startOffset),
-							model.positionAt(start + placeholder.endOffset),
-						),
-						TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
-					)
-				)),
-				...(group.choices ? { choices: group.choices } : {}),
-			})));
-			this.transforms = Object.freeze(starts.flatMap(start => (snippet.transforms ?? []).map(transform => Object.freeze({
-				index: transform.index,
-				transform: transform.transform,
-				range: model.trackRange(
-					Range.fromPositions(
-						model.positionAt(start + transform.startOffset),
-						model.positionAt(start + transform.endOffset),
-					),
-					TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
-				),
-			}))));
+			this.groups = this.trackExpansion(starts, snippet, index => index);
 			this.finalRanges = Object.freeze(starts.map(start => model.trackRange(
 				Range.fromPositions(model.positionAt(start + finalOffsetWithinInsertion)),
 				TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
 			)));
 			this._register(toDisposable(() => {
-				for (const group of this.groups) {
+				for (const group of this.allGroups) {
 					for (const range of group.ranges) range.dispose();
 				}
 				for (const transform of this.transforms) transform.range.dispose();
@@ -90,12 +68,49 @@ export class SnippetSession extends Disposable {
 		}
 	}
 
+	/** Replaces the active tabstop's navigation with a nested expansion, retaining outer stops. */
+	public merge(starts: readonly number[], snippet: Snippet, finalOffset: number): boolean {
+		const parent = this.groups[this.currentGroupIndex];
+		if (this.isDisposed || !parent || parent.index === 0 || !starts.length) return false;
+		if (!starts.every(start => parent.ranges.some(tracked => tracked.range.containsRange(Range.fromPositions(this.model.positionAt(start), this.model.positionAt(start + snippet.text.length)))))) return false;
+		let nextId = Math.max(0, ...this.allGroups.map(group => group.index)) + 1;
+		const ids = new Map<number, number>();
+		const children = this.trackExpansion(starts, snippet, index => {
+			if (!ids.has(index)) ids.set(index, nextId++);
+			return ids.get(index)!;
+		});
+		if (!snippet.placeholderGroups.some(group => group.index === 0)) {
+			const final = { index: nextId, ranges: starts.map(start => this.model.trackRange(Range.fromPositions(this.model.positionAt(start + finalOffset)), TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges)) };
+			children.push(final);
+			this.allGroups.push(final);
+		}
+		for (const child of children) child.ancestors = [parent, ...(parent.ancestors ?? [])];
+		this.groups.splice(this.currentGroupIndex, 1, ...children);
+		this.selectGroup(this.currentGroupIndex);
+		return true;
+	}
+
+	private trackExpansion(starts: readonly number[], snippet: Snippet, identity: (index: number) => number): SnippetTrackedGroup[] {
+		const track = (start: number, end: number) => this.model.trackRange(Range.fromPositions(this.model.positionAt(start), this.model.positionAt(end)), TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges);
+		const groups = snippet.placeholderGroups.map(group => ({
+			index: identity(group.index),
+			ranges: starts.flatMap(start => group.placeholders.map(placeholder => track(start + placeholder.startOffset, start + placeholder.endOffset))),
+			...(group.choices ? { choices: group.choices } : {}),
+		}));
+		this.allGroups.push(...groups);
+		this.transforms.push(...starts.flatMap(start => (snippet.transforms ?? []).map(transform => ({
+			index: identity(transform.index), transform: transform.transform,
+			range: track(start + transform.startOffset, start + transform.endOffset),
+		}))));
+		return groups;
+	}
+
 	/** Whether this session has released its tracked tabstops. */
 	get isDisposed(): boolean { return super.isDisposed; }
 
 	public getEnclosingRange(): Range | undefined {
 		if (this.isDisposed || this.model.isDisposed() || this.editor.getModel() !== this.model) return undefined;
-		const ranges = this.groups.flatMap(group => group.ranges);
+		const ranges = this.allGroups.flatMap(group => group.ranges);
 		ranges.push(...this.transforms.map(transform => transform.range));
 		// An explicit $0 owns the final stop even when literal text follows it.
 		if (!this.groups.some(group => group.index === 0)) ranges.push(...this.finalRanges);
@@ -173,10 +188,11 @@ export class SnippetSession extends Disposable {
 	}
 
 	private updateGroupStickiness(activeIndex: number): void {
-		for (const [index, group] of this.groups.entries()) {
+		const active = this.groups[activeIndex];
+		for (const group of this.allGroups) {
 			// Only the active placeholder owns text typed at its edges. Inactive
 			// neighbors must not absorb those edits when navigation returns to them.
-			const stickiness = index === activeIndex && group.index !== 0
+			const stickiness = (group === active || active?.ancestors?.includes(group)) && group.index !== 0
 				? TrackedRangeStickiness.AlwaysGrowsWhenTypingAtEdges
 				: TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges;
 			for (const [rangeIndex, tracked] of group.ranges.entries()) {
@@ -235,22 +251,23 @@ export class SnippetSession extends Disposable {
 	}
 
 	private synchronizeTransforms(group: SnippetTrackedGroup): void {
-		const transforms = this.transforms.filter(transform => transform.index === group.index);
-		if (transforms.length === 0) return;
-		const sourceRange = group.ranges[0];
-		if (!sourceRange) return;
 		const model = this.model;
-		const sourceText = model.getTextInRange(sourceRange.range);
-		const edits = transforms.flatMap(transform => {
-			const text = applySnippetTransform(sourceText, transform.transform);
-			return model.getTextInRange(transform.range.range) === text ? [] : [{ range: transform.range.range, text }];
+		const edits = [group, ...(group.ancestors ?? [])].flatMap(source => {
+			const range = source.ranges[0];
+			if (!range) return [];
+			const sourceText = model.getTextInRange(range.range);
+			return this.transforms.filter(transform => transform.index === source.index).flatMap(transform => {
+				const text = applySnippetTransform(sourceText, transform.transform);
+				return model.getTextInRange(transform.range.range) === text ? [] : [{ range: transform.range.range, text }];
+			});
 		});
-		if (edits.length > 0) this.editor.executeEdits("snippet.transform", edits);
+		if (edits.length) this.editor.executeEdits('snippet.transform', edits);
 	}
 
 }
 
 interface SnippetTrackedGroup {
+	ancestors?: readonly SnippetTrackedGroup[];
 	readonly index: number;
 	readonly ranges: TrackedRange[];
 	readonly choices?: readonly string[];

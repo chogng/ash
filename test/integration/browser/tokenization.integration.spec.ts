@@ -49,7 +49,7 @@ test('Bazel files select Starlark or bazelrc and tokenize through the bundled gr
 		['custom.BUILD', 'starlark', 'cc_library(name = "demo")', 'string', 'demo'],
 		['.bazelrc', 'bazelrc', 'build:release --jobs=8\n# a config', 'keyword', 'build'],
 		['user.bazelrc', 'bazelrc', 'try-import %workspace%/local.bazelrc', 'keyword', 'try-import'],
-		['bazel.rc', 'bazelrc', 'build --jobs=8', 'variable', '--jobs=8'],
+		['bazel.rc', 'bazelrc', 'build --jobs=8', 'property', '--jobs=8'],
 	] as const;
 	for (const [filename, languageId, text, type, lexeme] of samples) {
 		const actualLanguage = await page.evaluate(({ filename, text }) => window.tokenizationIntegration.openResource(`/project/${filename}`, text), { filename, text });
@@ -105,12 +105,12 @@ test('Git files select their bundled languages and tokenize through shared line 
 		['MERGE_MSG', 'git-commit', 'Merge topic\n\n# Conflicts:', 'comment', '# Conflicts:'],
 		['git-rebase-todo', 'git-rebase', 'pick abc1234 Fix the build\nreword def5678 Rename\nexec echo "hello"', 'keyword', 'pick'],
 		['.git/rebase-merge/done', 'git-rebase', 'squash abc1234 Fix the build', 'constant', 'abc1234'],
-		['.gitconfig', 'properties', '[user]\nname = "Ash"', 'variable', 'name'],
+		['.gitconfig', 'properties', '[user]\nname = "Ash"', 'property', 'name'],
 		['gitconfig', 'properties', '[core]\neditor = "ash"', 'string', 'ash'],
-		['.git/config', 'properties', '[core]\neditor = "ash"', 'variable', 'editor'],
-		['.config/git/config', 'properties', '[core]\neditor = "ash"', 'variable', 'editor'],
-		['.gitmodules', 'properties', '[submodule "lib"]\npath = "lib"', 'variable', 'path'],
-		['settings.ini', 'ini', '[core]\neditor = "ash"', 'variable', 'editor'],
+		['.git/config', 'properties', '[core]\neditor = "ash"', 'property', 'editor'],
+		['.config/git/config', 'properties', '[core]\neditor = "ash"', 'property', 'editor'],
+		['.gitmodules', 'properties', '[submodule "lib"]\npath = "lib"', 'property', 'path'],
+		['settings.ini', 'ini', '[core]\neditor = "ash"', 'property', 'editor'],
 		['changes.diff', 'diff', '@@ -1 +1 @@\n-old\n+new', 'string', '+'],
 		['changes.patch', 'diff', '@@ -1 +1 @@\n-old\n+new', 'keyword', '-'],
 	] as const;
@@ -150,7 +150,7 @@ test('Markdown Git fences, commit diffs and rebase Shell commands resolve their 
 		['markdown', '```git-rebase\npick abc1234 Fix\n```', 'keyword', 'pick'],
 		['markdown', '```git-commit\nFix\n\n# message\n```', 'comment', '# message'],
 		['markdown', '```COMMIT_EDITMSG\nFix\n\n# message\n```', 'comment', '# message'],
-		['markdown', '```ini\n[core]\neditor = "ash"\n```', 'variable', 'editor'],
+		['markdown', '```ini\n[core]\neditor = "ash"\n```', 'property', 'editor'],
 		['markdown', '```diff\n-old\n+new\n```', 'string', '+'],
 		['git-commit', 'Fix\n\n# message\ndiff --git a/file b/file\n--- a/file\n+++ b/file\n@@ -1 +1 @@\n-old\n+new', 'string', '+'],
 		['git-rebase', 'exec if true; then echo "hello"; fi', 'keyword', 'if'],

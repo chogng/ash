@@ -22,14 +22,14 @@ export default defineConfig({
 			{ name: "electron-app-server" },
 			{
 				name: "electron-editor-app-server",
-				testMatch: ["**/areas/editor/academic-open.spec.ts", "**/areas/editor/editor-open.spec.ts"],
+				testMatch: ["**/areas/editor/academic-open.spec.ts", "**/areas/editor/editor-open.spec.ts", "**/areas/chat/chat-editing.spec.ts"],
 			},
 			{ name: "electron-pdf-corpus-app-server", testMatch: "**/areas/pdf/pdf-academic-corpus.spec.ts" },
 		].map(project => ({
 			...project,
 			grepInvert: testTargetExclusions(project.name, process.platform),
-			// Publisher downloads have their own opt-in corpus project. Ordinary
-			// smoke runs use the PDF fixture created by the shared workspace.
+			// Installing the optional PDF Viewer and downloading publisher documents
+			// belong to the opt-in project. Ordinary profiles exercise the fallback.
 			testIgnore: project.name === 'electron-pdf-corpus-app-server'
 				? '**/release-package.spec.ts'
 				: ['**/release-package.spec.ts', '**/pdf-academic-corpus.spec.ts'],

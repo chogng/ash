@@ -89,6 +89,7 @@ export class SessionsBrowserMain extends Disposable {
 					'workbench.contrib.webUpdate',
 					'workbench.contrib.preferences',
 					'workbench.contrib.snippets',
+					'workbench.contrib.defaultFormatter',
 					'workbench.contrib.sessionsLayout',
 					'workbench.contrib.call',
 					'sessions.contrib.multiDiffSource',

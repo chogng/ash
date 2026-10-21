@@ -432,7 +432,7 @@ interface StandaloneHarness {
 		readonly attachedEditors: number;
 		readonly firstChunkPrefix: string;
 	};
-	enableCompletionNavigation(snippet?: string): void;
+	enableCompletionNavigation(snippet?: string, reset?: boolean): void;
 	getCallerPosition(): { readonly lineNumber: number; readonly column: number; } | null;
 	prepareKeyboardEditing(): KeyboardEditingState;
 	readKeyboardEditing(): KeyboardEditingState;
@@ -3031,7 +3031,7 @@ window.ashStandaloneIntegration = {
 			firstChunkPrefix: snapshot.read()?.slice(0, 32) ?? '',
 		};
 	},
-	enableCompletionNavigation: snippet => {
+	enableCompletionNavigation: (snippet, reset = true) => {
 		completionRegistration?.dispose();
 		completionRegistration = stanza.languages.registerCompletionItemProvider('plaintext', {
 			id: 'standalone.keyboard-navigation',
@@ -3047,8 +3047,10 @@ window.ashStandaloneIntegration = {
 				isIncomplete: false,
 			}),
 		});
-		callerEditor.setValue('con');
-		callerEditor.setPosition(new stanza.Position(1, 4));
+		if (reset) {
+			callerEditor.setValue('con');
+			callerEditor.setPosition(new stanza.Position(1, 4));
+		}
 	},
 	getCallerPosition: () => {
 		const position = callerEditor.getPosition();

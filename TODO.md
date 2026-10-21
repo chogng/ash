@@ -125,7 +125,7 @@ macOS 现场检查未发现 tgrep；所见多组 `npm exec @playwright/mcp` 的�
 
 ## Stanza 编辑器 · TODO
 
-当前 Editor 待办统一维护于本节，完成后移除；不再续写 API 对齐台账或维护声明完成数量。以下由旧记录归并，尚未逐项重跑；复核项先确认当前调用方与行为，历史失败和成员差异不直接视为现存缺陷。
+当前 Editor 待办统一维护于本节，完成后移除；不再续写 API 对齐台账或维护声明完成数量。以下由旧记录归并，尚未逐项重跑；复核项先确认当前调用方与行为，历史失败和成员差异不直接视为现存缺陷。2026-10-21 本机验证的通过范围、首败与修正复验见[修复与验收](.build/stanza-fixes-20261021/acceptance.md)；本机结果不替代 Windows、物理 IME、屏幕阅读器或跨机器证据。
 
 - [ ] **复核 · 文本模型与光标**：沿 `TextModel`、`ViewModel`、`CursorsController` 检查编辑、选区与撤销的剩余公开契约，保留唯一模型与历史 owner；只补真实消费者需要的行为，不为上游私有结构或成员数量增加转发层。
 - [ ] **复核 · 输入生命周期与辅助阅读**：确认输入实例的构造／释放已完整归属 `View`，再核对 Native EditContext、Textarea fallback、简单／富屏幕阅读内容的构造与事件链；验证 IME、失焦取消、剪贴板、系统选区及迟到事件。物理 IME 与屏幕阅读器现场验收沿下方平台组合任务执行。
@@ -135,10 +135,9 @@ macOS 现场检查未发现 tgrep；所见多组 `npm exec @playwright/mcp` 的�
 - [ ] **功能 · 格式化产品接线**：`FormattingConflicts` 已有选择扩展点，但产品未注册 selector，也未消费 `editor.defaultFormatter`；`editor.formatOnType` 与 on-type provider 目前仅有声明／注册，缺输入触发链。按现有配置、选择控件与输入 owner 接线，再验默认选择、冲突选择及自动触发。手动文档／多选区格式化、取消、只读、迟到结果、一次撤销及模型级 Worker 链已于 2026-10-21 本机通过定向验证，不重复列为缺口。范围见 [编辑器本机验收](docs/editor-architecture.md#2026-10-21-配置补全与格式化本机验收)。
 - [ ] **布局前置／复核 · Inlay 行内布局与 Snippet 插入契约**：Inlay 已通过展示模式、节点复用、语言／模型变化和取消验证，但当前 `InlayHintsController` 仅将提示绝对定位到文字坐标，尚未预留行内宽度或消费左右 padding，需沿现有行投影／坐标 owner 闭合布局。Snippet 已通过现有 completion／paste 的插入、变量、choice／transform／镜像与撤销；`startSession()` 会替换旧会话，嵌套插入／合并及其他插入选项仍须从真实消费者明确范围，不为上游 API 名称预建接口。Suggest／Inline Completions 的触发、取消、只读、语言／模型切换及接受撤销已通过，不再作为待验收项。范围见 [编辑器本机验收](docs/editor-architecture.md#2026-10-21-配置补全与格式化本机验收)。
 - [ ] **复核 · Editor 完整回归**：复跑受本轮范围影响的现有 Editor 检查，确认旧 Windows URI-list 路径断言、测试产物缺失及 Electron 中文重启关闭超时是否仍可复现；已被后续修复覆盖的旧失败直接移除，不把历史记录当作当前阻塞。新行为通过 Ash 自身对应入口验收。
-
 - [ ] **功能 · 文献检索扩展**：后续实现查询、元数据获取及向文献管理扩展入库的工具／Skill 链路，PDF 阅读复用独立查看器；作者接入遵循上方扩展 SDK 任务。Agent 结构化文档写入仍按下方 Work 文档服务契约另行实施。尚未新增检索代码或迁仓。
 
-- [ ] **验收 · 编辑器扩展平台组合**：在真实 Electron 多窗口／远端环境验收 Academy、可选 Reference Manager／PDF Viewer 外置签名包的装载、版本匹配、dirty／恢复及释放，同时验收客户端内置 Code 的编辑与共享宿主生命周期，并补物理 IME、屏幕阅读器、跨页输入以及目标 Word 打开／编辑／再次保存的互通验收。PDF 查看器独立包迁移及本机验证见[扩展说明](extensions/pdf-viewer/README.md)，拆分本身不再列为待办。文献管理的本机验证范围见 [Reference Manager](extensions/reference-manager/README.md)。已完成的迁移、纵向分页、分节、DOCX／页面图像 PDF 与块级审阅的支持范围见 [Academy 包说明](extensions/academic/README.md)，不再列作功能待办；本机结果不能替代尚缺的真实环境证据。
+- [ ] **验收 · 编辑器扩展平台组合**：在真实 Electron 多窗口／远端环境验收 Academy、可选 Reference Manager／PDF Viewer 外置签名包的装载、版本匹配、dirty／恢复及释放，同时验收客户端内置 Code 的编辑与共享宿主生命周期，并补 Windows URI-list 路径断言、物理 IME、屏幕阅读器、跨页输入以及目标 Word 打开／编辑／再次保存的互通验收。PDF 查看器独立包迁移及本机验证见[扩展说明](extensions/pdf-viewer/README.md)，拆分本身不再列为待办。文献管理的本机验证范围见 [Reference Manager](extensions/reference-manager/README.md)。已完成的迁移、纵向分页、分节、DOCX／页面图像 PDF 与块级审阅的支持范围见 [Academy 包说明](extensions/academic/README.md)，不再列作功能待办；本机结果不能替代尚缺的真实环境证据。
 
 设计边界与功能依赖见[编辑器设计与演进](docs/design/editor-roadmap.md)；具体工作仅维护于本清单，不把整篇设计当作一个未完成任务。
 

@@ -627,3 +627,46 @@ test('adjacent empty placeholders track only the active input and keep later ran
 
 const codeFeatures = registerTestCodeEditorFeatures();
 afterCodeFeatures(() => codeFeatures.dispose());
+
+
+for (const undo of [false, true]) {
+	test(`completion inside a snippet retains outer navigation and nested mirrors with undo=${undo}`, () => {
+		using model = new TextModel('fn');
+		using editor = editorAt(model, new Position(1, 3));
+		using store = createLanguageCompletionStore(model);
+		using session = new SuggestModel(store, editor);
+		let requestId = 0;
+		const accept = (text: string, range: Range) => {
+			assert.equal(store.accept({
+				requestId: ++requestId, textModel: model, modelVersion: model.version, value: {
+					position: editor.getPosition()!, isIncomplete: false,
+					items: [{ ...completion('nested', text, false, range), insertTextFormat: LanguageCompletionInsertTextFormat.Snippet }],
+				}
+			}), LanguageResultAcceptance.Applied);
+			assert.equal(session.acceptSelected(), true);
+		};
+		accept('${1:outer} ${2:tail} $0', new Range(1, 1, 1, 3));
+		editor.setPosition({ lineNumber: 1, column: 6 });
+		accept('(${1:inner}+$1)-${2:end}', new Range(1, 1, 1, 6));
+		assert.equal(model.getValue(), '(inner+inner)-end tail ');
+		if (undo) {
+			model.undo();
+			assert.equal(model.getValue(), 'outer tail ');
+			return;
+		}
+		const snippets = SnippetController2.get(editor)!;
+		editor.trigger('keyboard', 'type', { text: 'X' });
+		assert.equal(model.getValue(), '(X+X)-end tail ');
+		snippets.next();
+		assert.equal(model.getTextInRange(editor.getSelection()!), 'end');
+		snippets.prev();
+		assert.deepEqual(editor.getSelections()!.map(range => model.getTextInRange(range)), ['X', 'X']);
+		snippets.next();
+		snippets.next();
+		snippets.next();
+		assert.equal(model.getTextInRange(editor.getSelection()!), 'tail');
+		snippets.prev();
+		snippets.prev();
+		assert.equal(model.getTextInRange(editor.getSelection()!), 'end');
+	});
+}

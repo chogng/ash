@@ -1,3 +1,4 @@
+import '../../../extensions/pdf-viewer/browser/media/pdfEditor.css';
 import { registerTestCodeEditorFeatures } from '../../fixtures/codeEditorFeatures.js';
 const codeFeatures = registerTestCodeEditorFeatures();
 import { WebWorkerService } from '../../../src/ash/platform/webWorker/browser/webWorkerServiceImpl.js';

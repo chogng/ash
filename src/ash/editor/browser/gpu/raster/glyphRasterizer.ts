@@ -84,7 +84,7 @@ export class GlyphRasterizer extends Disposable implements IGlyphRasterizer {
 			const thickness = Math.max(1, Math.round(this.fontSize * this.devicePixelRatio / 12));
 			this._ctx.fillRect(origin, Math.round(origin + metrics.fontBoundingBoxAscent + thickness), Math.ceil(metrics.width), thickness);
 		}
-		if (decoration?.strikethrough ?? (fontStyle & FontStyle.Strikethrough) !== 0) {
+		if (decoration?.strikethrough ?? ((fontStyle & FontStyle.Strikethrough) !== 0)) {
 			const thickness = Math.max(1, Math.round((decoration?.strikethroughThickness ?? this.fontSize / 10) * this.devicePixelRatio));
 			if (decoration?.strikethroughColor !== undefined) this._ctx.fillStyle = `#${decoration.strikethroughColor.toString(16).padStart(8, '0')}`;
 			this._ctx.fillRect(origin, Math.round(origin + metrics.actualBoundingBoxAscent / 2), Math.ceil(metrics.width), thickness);

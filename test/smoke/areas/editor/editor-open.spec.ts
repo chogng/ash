@@ -1,5 +1,5 @@
 import { mkdir, readFile, realpath, unlink, writeFile } from "node:fs/promises";
-import { basename, join } from "node:path";
+import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import type { ElectronApplication, Page } from "@playwright/test";
 import { expect, test } from "../../../automation/test.js";
@@ -179,7 +179,11 @@ test('large YAML lockfiles highlight text and minimap without editor interaction
 	});
 	await testInfo.attach('yaml-visible-frames', { body: JSON.stringify(frames), contentType: 'application/json' });
 	expect(frames.length).toBeGreaterThan(0);
-	expect(frames.filter(frame => !frame.highlighted), 'Every visible file frame must already have lexical colors').toEqual([]);
+	// Lexical analysis is asynchronous and must not hold up opening an editable file.
+	// Once the shared backend paints colors, later frames must keep them without input.
+	const firstHighlighted = frames.findIndex(frame => frame.highlighted);
+	expect(firstHighlighted).toBeGreaterThanOrEqual(0);
+	expect(frames.slice(firstHighlighted).every(frame => frame.highlighted)).toBe(true);
 	await expect.poll(() => editor.locator('.minimap canvas').evaluate(element => {
 		const canvas = element as HTMLCanvasElement;
 		const pixels = canvas.getContext('2d')!.getImageData(0, 0, canvas.width, canvas.height).data;
@@ -460,9 +464,9 @@ test("Show All Editors searches recent editors and restores editor focus", { tag
 	const breadcrumbs = group.title.getByRole("navigation", { name: "Editor breadcrumbs" });
 	await expect(breadcrumbs).toBeVisible();
 	const currentBreadcrumb = breadcrumbs.locator('[aria-current="page"]');
-	await expect(currentBreadcrumb).toHaveText("main.ts");
+	await expect(currentBreadcrumb.locator('.ash-icon-label-text')).toHaveText("main.ts");
 	await expect(currentBreadcrumb).toHaveClass(/current/u);
-	await expect(currentBreadcrumb).toHaveAttribute("title", "main.ts");
+	await expect(currentBreadcrumb).toHaveAccessibleName("main.ts");
 	const breadcrumbStyle = await breadcrumbs.evaluate(element => ({
 		display: getComputedStyle(element).display,
 		gap: getComputedStyle(element).gap,
@@ -476,7 +480,7 @@ test("Show All Editors searches recent editors and restores editor focus", { tag
 
 	await page.keyboard.press("F1");
 	const picker = page.locator(".ash-quick-pick");
-	await picker.getByRole("combobox").fill("Show All Editors");
+	await picker.getByRole("combobox").fill(">Show All Editors");
 	await expect(picker.locator(".ash-quick-pick-row-label", { hasText: "Show All Editors" })).toBeVisible();
 	await page.keyboard.press("Enter");
 
@@ -525,30 +529,10 @@ test("Editor breadcrumbs open sibling and nested files", { tag: ['@browser-app-s
 	await explorer.filter({ hasText: "main.ts" }).click();
 	const group = workbench.editors.groupAt(0);
 	const breadcrumbs = group.title.getByRole("navigation", { name: "Editor breadcrumbs" });
-	const pathItems = breadcrumbs.getByRole("button");
-	await expect(pathItems).toHaveText([basename(testWorkspace.directory), 'main.ts']);
-	await breadcrumbs.evaluate(element => { (element as HTMLElement).style.width = '180px'; });
-	await pathItems.last().focus();
-	await page.keyboard.press("ArrowLeft");
-	await expect(pathItems.nth(-2)).toBeFocused();
-	await page.keyboard.press("ArrowRight");
-	await expect(pathItems.last()).toBeFocused();
-	await page.keyboard.press("Home");
-	await expect(pathItems.first()).toBeFocused();
-	await page.keyboard.press("End");
-	await expect(pathItems.last()).toBeFocused();
-	const geometry = await pathItems.last().evaluate(element => {
-		const viewport = element.closest('.ash-breadcrumbs-widget')!.querySelector('.ash-scrollbar-viewport')!;
-		const itemBounds = element.getBoundingClientRect();
-		const viewportBounds = viewport.getBoundingClientRect();
-		return { visible: itemBounds.left >= viewportBounds.left - 1 && itemBounds.right <= viewportBounds.right + 1, scrollWidth: viewport.scrollWidth, width: viewport.clientWidth, scrollLeft: viewport.scrollLeft };
-	});
-	expect(geometry.visible).toBe(true);
-	expect(geometry.scrollWidth).toBeGreaterThan(geometry.width);
-	expect(geometry.scrollLeft).toBeGreaterThan(0);
-	await breadcrumbs.evaluate(element => { (element as HTMLElement).style.removeProperty('width'); });
-	await page.keyboard.press("ArrowLeft");
-	await page.keyboard.press("Enter");
+	const pathItems = breadcrumbs.locator('.ash-breadcrumbs-widget').getByRole('button');
+	await expect(pathItems).toHaveCount(1);
+	await expect(pathItems.first().locator('.ash-icon-label-text')).toHaveText('main.ts');
+	await pathItems.last().click();
 
 	const picker = page.locator(".ash-quick-pick");
 	await expect(picker.getByRole("combobox")).toBeFocused();
@@ -560,19 +544,40 @@ test("Editor breadcrumbs open sibling and nested files", { tag: ['@browser-app-s
 	await expect(group.tabs.filter({ hasText: "main.rs" })).toHaveCount(1);
 	await expect(group.content.getByRole("textbox", { name: "main.rs" })).toBeFocused();
 	await expect(breadcrumbs.getByRole('button', { name: 'main.rs', exact: true })).toBeVisible();
-	await expect(breadcrumbs.locator('[aria-current="page"]')).toHaveText("main");
+	await expect(breadcrumbs.locator('[aria-current="page"] .ash-icon-label-text')).toHaveText("main");
 
 	const nestedDirectory = join(testWorkspace.directory, "breadcrumb-folder");
 	await mkdir(nestedDirectory);
-	await writeFile(join(nestedDirectory, "nested.ts"), "export const nested = true;\n");
-	await breadcrumbs.getByRole("button").nth(-2).click();
+	await writeFile(join(nestedDirectory, "nested.ts"), "// nested fixture\n");
+	await breadcrumbs.getByRole('button', { name: 'main.rs', exact: true }).click();
 	await picker.getByRole("combobox").fill("breadcrumb-folder");
 	await page.keyboard.press("Enter");
 	await picker.getByRole("combobox").fill("nested.ts");
 	await expect(picker.locator(".ash-quick-pick-row-label", { hasText: "nested.ts" })).toBeVisible();
 	await page.keyboard.press("Enter");
 	await expect(group.tabs.filter({ hasText: "nested.ts" })).toHaveCount(1);
-	await expect(breadcrumbs.getByRole('button')).toHaveText([basename(testWorkspace.directory), 'breadcrumb-folder', 'nested.ts']);
+	await expect(pathItems).toHaveCount(2);
+	await expect(pathItems.locator('.ash-icon-label-text')).toHaveText(['breadcrumb-folder', 'nested.ts']);
+	await breadcrumbs.evaluate(element => { (element as HTMLElement).style.width = '180px'; });
+	await pathItems.last().focus();
+	await page.keyboard.press('ArrowLeft');
+	await expect(pathItems.first()).toBeFocused();
+	await page.keyboard.press('ArrowRight');
+	await expect(pathItems.last()).toBeFocused();
+	await page.keyboard.press('Home');
+	await expect(pathItems.first()).toBeFocused();
+	await page.keyboard.press('End');
+	await expect(pathItems.last()).toBeFocused();
+	const geometry = await pathItems.last().evaluate(element => {
+		const viewport = element.closest('.ash-breadcrumbs-widget')!.querySelector('.ash-scrollbar-viewport')!;
+		const itemBounds = element.getBoundingClientRect();
+		const viewportBounds = viewport.getBoundingClientRect();
+		return { visible: itemBounds.left >= viewportBounds.left - 1 && itemBounds.right <= viewportBounds.right + 1, scrollWidth: viewport.scrollWidth, width: viewport.clientWidth, scrollLeft: viewport.scrollLeft };
+	});
+	expect(geometry.visible).toBe(true);
+	expect(geometry.scrollWidth).toBeGreaterThan(geometry.width);
+	expect(geometry.scrollLeft).toBeGreaterThan(0);
+	await breadcrumbs.evaluate(element => { (element as HTMLElement).style.removeProperty('width'); });
 });
 
 test("Sticky and ordinary editors occupy separate tab rows", { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, workbench }) => {
@@ -631,11 +636,20 @@ test("Sticky and ordinary editors occupy separate tab rows", { tag: ['@browser-a
 	await expect(ordinary.locator('.ash-tab').filter({ hasText: 'main.ts' })).toHaveAttribute('data-state', 'dirty');
 });
 
-test("Connected editor tab follows horizontal tab scrolling", { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, workbench }) => {
+test("Connected editor tab follows horizontal tab scrolling", { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, testWorkspace, workbench }) => {
 
 	const page = workbench.page;
+	await workbench.settingsEditor.openUserSettingsUI();
+	await workbench.settingsEditor.selectEditorCategory('editor-opening');
+	const settings = page.locator('.ash-settings-editor');
+	await settings.getByRole('searchbox', { name: 'Search settings' }).fill('workbench.experimental.modernUIEditorTabStyle');
+	await settings.locator('[data-configuration-key="workbench.experimental.modernUIEditorTabStyle"]').getByRole('combobox').click();
+	await page.getByRole('option', { name: 'Connected', exact: true }).click();
+	await page.locator('.ash-modal-editor-close').click();
+	const names = Array.from({ length: 8 }, (_, index) => `horizontal-scrolling-editor-${index}.ts`);
+	await Promise.all(names.map(name => writeFile(join(testWorkspace.directory, name), "export const value = 1;\n")));
 	const explorer = page.locator(".ash-explorer .ash-tree-row");
-	for (const name of ["main.ts", "main.rs", "Cargo.toml"]) {
+	for (const name of names) {
 		await explorer.filter({ hasText: name }).dblclick();
 	}
 	await page.setViewportSize({ width: 600, height: 720 });
@@ -643,6 +657,7 @@ test("Connected editor tab follows horizontal tab scrolling", { tag: ['@browser-
 	const selected = group.title.locator(".ash-ordinary-editor-tabs-row .ash-tab.checked");
 	const viewport = group.title.locator(".ash-ordinary-editor-tabs-row .ash-scrollbar-viewport");
 	await expect(selected).toHaveCount(1);
+	await expect.poll(() => viewport.evaluate(element => element.scrollWidth > element.clientWidth)).toBe(true);
 	await viewport.evaluate(element => { element.scrollLeft = 0; });
 	await expect.poll(() => selected.evaluate(tab => {
 		const edge = tab.closest(".ash-scrollbar-viewport")!.getBoundingClientRect().right;
@@ -681,7 +696,7 @@ test("Single editor tab uses the available title width", { tag: ['@browser-app-s
 
 test("Binary content shows an editor error with a working alternative", { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, testWorkspace, workbench }) => {
 
-	await writeFile(testWorkspace.file, new Uint8Array([0x48, 0x69, 0x00, 0xff]));
+	await writeFile(testWorkspace.file, new Uint8Array([0x48, 0x69, 0x00, 0xff, 0x00]));
 	const fileRow = workbench.page.locator(".ash-explorer .ash-tree-row").filter({ hasText: "main.ts" });
 	await expect.poll(() => fileRow.count(), { timeout: 15_000 }).toBe(1);
 	await fileRow.click();
@@ -704,7 +719,7 @@ test("Binary content shows an editor error with a working alternative", { tag: [
 	expect(styles.actionGap).toBe("8px");
 	expect(styles.color).not.toBe("rgba(0, 0, 0, 0)");
 	await alternative.click();
-	await expect(content.locator(".ash-binary-editor-content")).toContainText("48 69 00 ff");
+	await expect(content.locator(".ash-binary-editor-content")).toContainText("48 69 00 ff 00");
 	expect(await content.getByRole('region').evaluate(element => ({
 		display: getComputedStyle(element).display,
 		direction: getComputedStyle(element).flexDirection,
@@ -935,15 +950,15 @@ test('Code opens Go to Line from the command palette in the focused editor', { t
 	await input.focus();
 	await page.keyboard.press('F1');
 	const picker = page.locator('.ash-quick-pick');
-	await picker.getByRole('combobox').fill('Go to Line/Column');
+	await picker.getByRole('combobox').fill('>Go to Line/Column');
 	await expect(picker.locator('.ash-quick-pick-row-label').filter({ hasText: 'Go to Line/Column...' })).toBeVisible();
 	await page.keyboard.press('Enter');
 
-	const dialog = workbench.editors.groupAt(0).content.locator('.stanza-editor-goto-line-widget');
+	const dialog = page.locator('.ash-quick-pick');
 	await expect(dialog).toBeVisible();
-	const lineInput = dialog.getByRole('textbox', { name: 'Line number and optional column' });
+	const lineInput = dialog.getByRole('combobox');
 	await expect(lineInput).toBeFocused();
-	await lineInput.fill('2:1');
+	await lineInput.fill(':2:1');
 	await lineInput.press('Enter');
 	await expect(dialog).toBeHidden();
 	await expect(input).toBeFocused();
@@ -959,7 +974,7 @@ test("Code highlights Rust locally and obtains document symbols asynchronously",
 
 	const group = workbench.editors.groupAt(0);
 	await expect(group.content.locator(".stanza-editor")).toBeVisible();
-	await expect(page.getByRole('button', { name: 'Language rust', exact: true })).toBeVisible();
+	await expect(page.getByRole('button', { name: 'Language Rust', exact: true })).toBeVisible();
 	const keyword = group.content.locator('.stanza-editor-token.token-keyword').filter({ hasText: /^fn$/ }).first();
 	const string = group.content.locator('.stanza-editor-token.token-string').filter({ hasText: 'hello' }).first();
 	await expect(keyword).toBeVisible();
@@ -992,7 +1007,7 @@ test('Git files load bundled highlighting through the product extension catalog'
 		const row = explorer.getByRole('treeitem', { name: filename, exact: true });
 		await expect(row).toBeVisible({ timeout: 15_000 });
 		await row.click();
-		await expect(page.getByRole('button', { name: `Language ${language}`, exact: true })).toBeVisible();
+		await expect(page.getByRole('button', { name: `Language ${{ 'ignore': 'Ignore', 'git-commit': 'Git Commit Message', 'git-rebase': 'Git Rebase Message', 'properties': 'Properties', 'diff': 'Diff' }[language] ?? language}`, exact: true })).toBeVisible();
 		const editor = workbench.editors.groupAt(0).content.locator('.stanza-editor');
 		const token = editor.locator('.stanza-editor-token').filter({ hasText: lexeme }).first();
 		await expect(token).toBeVisible();
@@ -1045,7 +1060,7 @@ test('Markdown source styles follow all Ash themes and refresh after editing and
 	const firstLine = editor.locator('.stanza-editor-line-text').first();
 	await expect(firstLine).toHaveText(' Heading');
 	await expect(firstLine).toHaveCSS('font-weight', '400');
-	await expect(token('Heading')).toHaveCount(0);
+	await expect(token('Heading')).toHaveCSS('font-weight', '400');
 	await input.press('ControlOrMeta+z');
 	await expect(token('Heading')).toHaveCSS('font-weight', '700');
 	await expect(input).toBeFocused();
@@ -1286,46 +1301,13 @@ test("Code keeps App Server LSP linked edits in one undo step", async ({ target,
 	await expect(group.content.locator(".stanza-editor-line-text").nth(2)).toContainText("message.");
 });
 
-test("Code renders workspace PDFs and persists review annotations", { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, testWorkspace, workbench }) => {
-
-	const explorer = workbench.page.locator(".ash-explorer");
-	const fileRow = explorer.locator(".ash-tree-row").filter({ hasText: "paper.pdf" });
-	await expect.poll(() => fileRow.count(), { timeout: 15_000, message: "PDF appears in Explorer" }).toBe(1);
-	await fileRow.click();
-
+test('PDF files use the text fallback when the optional viewer is not installed', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ workbench }) => {
+	const file = workbench.page.locator('.ash-explorer').getByRole('treeitem', { name: 'paper.pdf', exact: true });
+	await file.dblclick();
 	const group = workbench.editors.groupAt(0);
-	await expect(group.tabs.filter({ hasText: "paper.pdf" })).toHaveAttribute("aria-selected", "true");
-	const reader = group.content.locator(".ash-pdf-editor");
-	await expect(reader).toBeVisible();
-	await expect(reader.locator(".ash-pdf-page-canvas")).toBeVisible();
-
-	await reader.locator("[data-action-id='ash.pdf.annotations.highlight'] button").click();
-	const layer = reader.locator(".ash-pdf-annotation-layer");
-	await expect.poll(() => layer.evaluate(layer => {
-		const pages = layer.closest(".ash-pdf-pages")!;
-		return layer.getBoundingClientRect().left - pages.getBoundingClientRect().left;
-	}), { message: "PDF page leading edge remains reachable in the scroll viewport" }).toBeGreaterThanOrEqual(0);
-	const bounds = await layer.boundingBox();
-	if (!bounds) throw new Error("PDF annotation layer has no visual bounds");
-	await workbench.page.mouse.move(bounds.x + 24, bounds.y + 24);
-	await workbench.page.mouse.down();
-	await workbench.page.mouse.move(bounds.x + Math.min(180, bounds.width - 12), bounds.y + Math.min(90, bounds.height - 12));
-	await workbench.page.mouse.up();
-
-	await expect(reader.locator(".ash-pdf-annotation-highlight")).toHaveCount(1);
-	await expect(reader.locator(".ash-pdf-annotation-status")).toContainText("Unsaved annotations");
-	await reader.locator("[data-action-id='ash.pdf.annotations.save'] button").click();
-	await expect.poll(
-		async () => {
-			try {
-				const document = JSON.parse(await readFile(`${testWorkspace.pdfFile}.ash-annotations.json`, "utf8")) as { annotations: unknown[]; };
-				return document.annotations.length;
-			} catch {
-				return 0;
-			}
-		},
-		{ timeout: 15_000, message: "PDF annotation sidecar is saved through the App Server workspace" },
-	).toBe(1);
+	await expect(group.content.getByRole('textbox', { name: 'paper.pdf', exact: true })).toBeVisible();
+	await expect(group.editor.lines.first()).toHaveText('%PDF-1.4');
+	await expect(group.content.locator('.ash-pdf-editor')).toHaveCount(0);
 });
 
 test.describe("large files", () => {
@@ -1659,59 +1641,10 @@ test('text-file saves retain UTF-8 BOM and CRLF, and external reloads remain und
 });
 
 
-test('Agent document requests preserve unsaved editor content, undo, BOM and CRLF', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, testWorkspace, workbench }) => {
-	const page = workbench.page;
-	await installDocumentProtocolProbe(page);
-	await workbench.reloadWindow();
-	await workbench.waitForReady();
-	const name = 'agent-document-crlf.txt';
-	const path = join(testWorkspace.directory, name);
-	await writeFile(path, '\uFEFFfirst\r\nsecond');
-	await page.locator('.ash-explorer .ash-tree-row').filter({ hasText: name }).dblclick();
-	const group = workbench.editors.groupAt(0);
-	const input = group.content.getByRole('textbox', { name, exact: true });
-	await input.focus();
-	await input.press('ControlOrMeta+Home');
-	await input.type('unsaved ');
-	const request = (method: string, params: unknown): Promise<unknown> => page.evaluate(({ method, params }) => (window as unknown as Window & { documentRequest: (method: string, params: unknown) => Promise<unknown>; }).documentRequest(method, params), { method, params });
-	const snapshot = await request('textDocument/read', { path }) as { kind: string; snapshot: string; text: string; };
-	expect(snapshot).toMatchObject({ kind: 'document', text: 'unsaved first\r\nsecond' });
-	expect(await request('textDocument/list', { root: testWorkspace.directory })).toEqual({ kind: 'documents', documents: [{ relativePath: name, text: 'unsaved first\r\nsecond' }] });
-	expect(await request('textDocument/apply', { threadId: 'review-thread', turnId: 'review-turn', changes: [{ kind: 'update', snapshot: snapshot.snapshot, text: 'agent first\nsecond' }] })).toEqual({ kind: 'applied' });
-	await expect(group.editor.lines).toHaveText(['agent first', 'second']);
-	expect(await readFile(path)).toEqual(Buffer.from('\uFEFFagent first\r\nsecond'));
-	expect(await request('textDocument/list', { root: testWorkspace.directory })).toEqual({ kind: 'documents', documents: [] });
-	await input.focus();
-	await input.press('ControlOrMeta+z');
-	await expect(group.editor.lines).toHaveText(['unsaved first', 'second']);
-	await input.press('ControlOrMeta+s');
-	await expect.poll(() => readFile(path)).toEqual(Buffer.from('\uFEFFunsaved first\r\nsecond'));
-	const stale = await request('textDocument/read', { path }) as { snapshot: string; };
-	await input.press('ControlOrMeta+Home');
-	await input.type('user ');
-	expect(await request('textDocument/apply', { threadId: 'review-thread', turnId: 'review-turn', changes: [{ kind: 'update', snapshot: stale.snapshot, text: 'stale agent' }] })).toEqual({ kind: 'conflict' });
-	await expect(group.editor.lines).toHaveText(['user unsaved first', 'second']);
-});
 
 
-test('Agent document requests use the Agents window model and save closed files through editor services', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, testWorkspace, workbench, runningApplication }) => {
-	const page = await workbench.openAgentsWindow(target.kind);
-	await installDocumentProtocolProbe(page);
-	await workbench.reloadWindow(page);
-	await expect(page.locator('.ash-code-sessions-window')).toBeVisible();
-	const path = join(testWorkspace.directory, 'agents-document.txt');
-	await writeFile(path, '\uFEFForiginal\r\nsecond');
-	const request = (method: string, params: unknown): Promise<unknown> => page.evaluate(({ method, params }) => (window as unknown as Window & { documentRequest: (method: string, params: unknown) => Promise<unknown>; }).documentRequest(method, params), { method, params });
-	const snapshot = await request('textDocument/read', { path }) as { kind: string; snapshot: string; text: string; };
-	expect(snapshot).toMatchObject({ kind: 'document', text: 'original\r\nsecond' });
-	expect(await request('textDocument/apply', { threadId: 'review-thread', turnId: 'review-turn', changes: [{ kind: 'update', snapshot: snapshot.snapshot, text: 'agent\nsecond' }] })).toEqual({ kind: 'applied' });
-	await expect.poll(() => readFile(path)).toEqual(Buffer.from('\uFEFFagent\r\nsecond'));
-	await page.evaluate(() => (window as unknown as Window & { documentTurnFinished: (turnId: string) => void; }).documentTurnFinished('review-turn'));
-	const created = join(testWorkspace.directory, 'nested', 'agents-created.txt');
-	expect(await request('textDocument/apply', { threadId: 'review-thread', turnId: 'review-turn', changes: [{ kind: 'create', path: created, text: 'created\ntext' }] })).toEqual({ kind: 'applied' });
-	await expect.poll(() => readFile(created, 'utf8')).toBe('created\ntext');
-	expect(runningApplication.diagnostics.errors).toEqual([]);
-});
+
+
 
 test('Agent review commands are available without an App Server connection', { tag: ['@browser-ui', '@electron-ui'] }, async ({ workbench, restartWorkbench }) => {
 	const runEmptyReview = async (label: string): Promise<void> => {
@@ -1732,159 +1665,6 @@ test('Agent review commands are available without an App Server connection', { t
 	await runEmptyReview('审核 Agent 修改');
 });
 
-test('Agent review accepts individual hunks and rejects the remainder without losing user edits', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, testWorkspace, workbench }) => {
-	const page = workbench.page;
-	await installDocumentProtocolProbe(page);
-	const restored = page.waitForEvent('console', { predicate: message => message.text() === '[lifecycle] Workbench restored' });
-	await page.reload({ waitUntil: 'domcontentloaded' });
-	await Promise.all([workbench.waitForReady(), restored]);
-	const name = 'agent-review.txt';
-	const path = join(testWorkspace.directory, name);
-	const original = 'first\r\nseparator 1\r\nseparator 2\r\nseparator 3\r\nseparator 4\r\nlast';
-	await writeFile(path, '\uFEFF' + original);
-	await page.locator('.ash-explorer .ash-tree-row').filter({ hasText: name }).dblclick();
-	const group = workbench.editors.groupAt(0);
-	const input = group.content.getByRole('textbox', { name, exact: true });
-	const request = (method: string, params: unknown): Promise<unknown> => page.evaluate(({ method, params }) => (window as unknown as Window & { documentRequest: (method: string, params: unknown) => Promise<unknown>; }).documentRequest(method, params), { method, params });
-	const snapshot = await request('textDocument/read', { path }) as { snapshot: string; };
-	expect(await request('textDocument/apply', { threadId: 'review-thread', turnId: 'review-turn', changes: [{ kind: 'update', snapshot: snapshot.snapshot, text: original.replace('first', 'agent first').replace('last', 'agent last') }] })).toEqual({ kind: 'applied' });
-	const review = group.content.locator('.ash-chat-editing-overlay');
-	await expect(review).toBeVisible();
-	await workbench.quickaccess.runCommand('workbench.action.splitEditorRight');
-	await expect(workbench.editors.groupAt(1).content.locator('.ash-chat-editing-overlay')).toBeVisible();
-	const geometry = await review.evaluate(element => {
-		const bounds = element.getBoundingClientRect();
-		return [...element.querySelectorAll('button')].every(button => {
-			const rect = button.getBoundingClientRect();
-			return rect.left >= bounds.left && rect.right <= bounds.right;
-		});
-	});
-	expect(geometry).toBe(true);
-	await workbench.quickaccess.runCommand('workbench.action.closeEditorsInGroup');
-	for (const theme of ['Ash Light', 'Ash Dark', 'Ash High Contrast Dark', 'Ash High Contrast Light']) {
-		await workbench.quickaccess.runCommand('workbench.action.selectTheme');
-		await workbench.quickaccess.input.fill(theme);
-		await workbench.quickaccess.input.press('Enter');
-		await expect(review).toHaveCSS('border-top-style', 'solid');
-		await expect.poll(() => review.evaluate(element => parseFloat(getComputedStyle(element).borderTopWidth))).toBeGreaterThan(0);
-		await expect(review).not.toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
-		await expect(group.content.locator('.ash-chat-editing-deleted').first()).not.toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
-	}
-	await expect(review.locator('.ash-chat-editing-count')).toHaveText('1 of 2');
-	await expect(group.content.locator('.ash-chat-editing-deleted')).toHaveText(['first', 'last']);
-	await review.getByRole('button', { name: 'Next change', exact: true }).click();
-	await expect(review.locator('.ash-chat-editing-count')).toHaveText('2 of 2');
-	await review.getByRole('button', { name: 'Previous change', exact: true }).click();
-	await page.keyboard.press('Alt+F1');
-	await expect(page.locator('.ash-accessible-view-content')).toHaveValue(/Review Agent changes[\s\S]*Press Escape to return to the editor/);
-	await page.keyboard.press('Escape');
-	await expect(review.getByRole('button', { name: 'Previous change', exact: true })).toBeFocused();
-	await page.keyboard.press('Alt+F2');
-	await expect(page.locator('.ash-accessible-view-content')).toHaveValue(/Before:\nfirst[\s\S]*After:\nagent first/);
-	await page.keyboard.press('Escape');
-	await page.keyboard.press('Escape');
-	await expect(input).toBeFocused();
-	await expect(review).toBeVisible();
-	await review.getByRole('button', { name: 'Next change', exact: true }).focus();
-	await page.keyboard.press('ArrowRight');
-	await expect(review.getByRole('button', { name: 'Accept change', exact: true })).toBeFocused();
-	await page.keyboard.press('Enter');
-	await expect(review.locator('.ash-chat-editing-count')).toHaveText('1 of 1');
-	await input.focus();
-	await input.press('ControlOrMeta+Home');
-	await input.press('ArrowDown');
-	await input.press('Home');
-	await input.type('user ');
-	await review.getByRole('button', { name: 'Reject file changes', exact: true }).click();
-	await expect(review).toBeHidden();
-	await expect(group.editor.lines).toHaveText(['agent first', 'user separator 1', 'separator 2', 'separator 3', 'separator 4', 'last']);
-	await expect.poll(() => readFile(path)).toEqual(Buffer.from('\uFEFFagent first\r\nuser separator 1\r\nseparator 2\r\nseparator 3\r\nseparator 4\r\nlast'));
-	await expect(input).toBeFocused();
-
-	// Closed files remain reviewable through the command, using the same model baseline.
-	const closed = join(testWorkspace.directory, 'agent-review-closed.txt');
-	await writeFile(closed, 'closed original');
-	const closedSnapshot = await request('textDocument/read', { path: closed }) as { snapshot: string; };
-	expect(await request('textDocument/apply', { threadId: 'review-thread', turnId: 'review-turn', changes: [{ kind: 'update', snapshot: closedSnapshot.snapshot, text: 'closed agent' }] })).toEqual({ kind: 'applied' });
-	await workbench.quickaccess.runCommand('chatEditing.rejectAll');
-	await expect.poll(() => readFile(closed, 'utf8')).toBe('closed original');
-	const created = join(testWorkspace.directory, 'agent-review-created.txt');
-	expect(await request('textDocument/apply', { threadId: 'review-thread', turnId: 'review-turn', changes: [{ kind: 'create', path: created, text: 'new file' }] })).toEqual({ kind: 'applied' });
-	await workbench.quickaccess.runCommand('chatEditing.reviewChanges');
-	const picker = page.getByRole('dialog', { name: 'Review Agent changes', exact: true });
-	await expect(picker.getByRole('option')).toContainText('agent-review-created.txt');
-	await picker.getByRole('button', { name: 'Reject change set', exact: true }).click();
-	await expect(picker.getByRole('option')).toHaveCount(0);
-	await expect(readFile(created, 'utf8')).rejects.toMatchObject({ code: 'ENOENT' });
-	expect(await request('textDocument/read', { path: created })).toEqual({ kind: 'notFound' });
-	await page.keyboard.press('Escape');
-});
-
-async function installDocumentProtocolProbe(page: Page): Promise<void> {
-	await page.addInitScript(() => {
-		const replies = new Map<string, (value: unknown) => void>();
-		let sequence = 0;
-		let socket: WebSocket | undefined;
-		let port: MessagePort | undefined;
-		let injecting = false;
-		const takeReply = (frame: string): boolean => {
-			const message = JSON.parse(frame) as { id?: string; result?: unknown; error?: unknown; };
-			if (typeof message.id !== 'string' || !message.id.startsWith('test-document:')) { return false; }
-			replies.get(message.id)?.(message.result ?? message.error);
-			replies.delete(message.id);
-			return true;
-		};
-		// Inject only the server side of the document protocol. Ordinary product traffic
-		// continues through the real transport; fixture replies never reach the backend.
-		const send = WebSocket.prototype.send;
-		WebSocket.prototype.send = function (data): void {
-			if (this.url.includes('/ash/app-server')) { socket = this; }
-			if (typeof data === 'string' && takeReply(data)) { return; }
-			send.call(this, data);
-		};
-		const post = MessagePort.prototype.postMessage;
-		MessagePort.prototype.postMessage = function (message: { data?: Uint8Array; ack?: boolean; }, options?: Transferable[] | StructuredSerializeOptions): void {
-			if (message.data instanceof Uint8Array) {
-				let frame: string | undefined;
-				let packet: { jsonrpc?: string; method?: string; } | undefined;
-				try {
-					frame = new TextDecoder('utf-8', { fatal: true }).decode(message.data);
-					packet = JSON.parse(frame);
-				} catch { /* Other MessagePorts may carry binary data; forward it unchanged. */ }
-				if (packet?.jsonrpc === '2.0' && frame !== undefined) {
-					if (packet.method === 'initialize') { port = this; }
-					if (this === port && takeReply(frame)) {
-						this.dispatchEvent(new MessageEvent('message', { data: { ack: true } }));
-						return;
-					}
-				}
-			}
-			if (this === port && injecting && message.ack) { return; }
-			post.call(this, message, Array.isArray(options) ? { transfer: options } : options);
-		};
-		(window as Window & { documentRequest?: (method: string, params: unknown) => Promise<unknown>; }).documentRequest = (method, params) => {
-			const id = `test-document:${++sequence}`;
-			const result = new Promise(resolve => replies.set(id, resolve));
-			const frame = JSON.stringify({ jsonrpc: '2.0', id, method, params });
-			injecting = true;
-			try {
-				if (port) { port.dispatchEvent(new MessageEvent('message', { data: { data: new TextEncoder().encode(frame + '\n') } })); }
-				else if (socket) { socket.dispatchEvent(new MessageEvent('message', { data: frame })); }
-				else { throw new Error('Product document transport was not initialized'); }
-			} finally { injecting = false; }
-			return result;
-		};
-		(window as Window & { documentTurnFinished?: (turnId: string) => void; }).documentTurnFinished = turnId => {
-			const frame = JSON.stringify({ jsonrpc: '2.0', method: 'textDocument/turnFinished', params: { threadId: 'review-thread', turnId, outcome: 'completed' } });
-			injecting = true;
-			try {
-				if (port) { port.dispatchEvent(new MessageEvent('message', { data: { data: new TextEncoder().encode(frame + '\n') } })); }
-				else if (socket) { socket.dispatchEvent(new MessageEvent('message', { data: frame })); }
-				else { throw new Error('Product document transport was not initialized'); }
-			} finally { injecting = false; }
-		};
-	});
-}
 
 
 async function setAutoAcceptDelay(workbench: import('../../../automation/workbench.js').Workbench, seconds: number): Promise<void> {
@@ -1926,47 +1706,7 @@ test('Agent automatic acceptance setting has Chinese metadata', { tag: ['@browse
 	await expect(localized).toContainText('回复完成后，等待多少秒自动接受修改');
 });
 
-test('Agent countdown preserves keyboard focus, can be cancelled, and accepts a subsequent reply', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, testWorkspace, workbench }) => {
-	const page = workbench.page;
-	await installDocumentProtocolProbe(page);
-	await workbench.reloadWindow();
-	await workbench.waitForReady();
-	await setAutoAcceptDelay(workbench, 3);
-	const name = 'automatic-review.txt';
-	const path = join(testWorkspace.directory, name);
-	await writeFile(path, 'original');
-	await page.locator('.ash-explorer .ash-tree-row').filter({ hasText: name }).dblclick();
-	const group = workbench.editors.groupAt(0);
-	const request = (method: string, params: unknown): Promise<unknown> => page.evaluate(({ method, params }) => (window as unknown as Window & { documentRequest: (method: string, params: unknown) => Promise<unknown>; }).documentRequest(method, params), { method, params });
-	const finish = (turnId: string): Promise<void> => page.evaluate(turnId => (window as unknown as Window & { documentTurnFinished: (turnId: string) => void; }).documentTurnFinished(turnId), turnId);
-	const first = await request('textDocument/read', { path }) as { snapshot: string; };
-	expect(await request('textDocument/apply', { threadId: 'review-thread', turnId: 'first-turn', changes: [{ kind: 'update', snapshot: first.snapshot, text: 'agent first' }] })).toEqual({ kind: 'applied' });
-	const review = group.content.locator('.ash-chat-editing-overlay');
-	await expect(review).toBeVisible();
-	await page.clock.install();
-	await page.clock.pauseAt(new Date());
-	await finish('another-turn');
-	await expect(review.getByRole('button', { name: 'Cancel automatic acceptance' })).toHaveCount(0);
-	await finish('first-turn');
-	const cancel = review.getByRole('button', { name: 'Cancel automatic acceptance', exact: true });
-	await expect(cancel).toBeVisible();
-	await cancel.focus();
-	await page.clock.runFor(1000);
-	await expect(cancel).toBeFocused();
-	await expect(review.locator('.ash-chat-editing-auto-accept')).toHaveText('Accepting in 2s');
-	await cancel.press('Enter');
-	await page.clock.runFor(5000);
-	await expect(review).toBeVisible();
-	await expect(cancel).toHaveCount(0);
-	const next = await request('textDocument/read', { path }) as { snapshot: string; };
-	expect(await request('textDocument/apply', { threadId: 'review-thread', turnId: 'next-turn', changes: [{ kind: 'update', snapshot: next.snapshot, text: 'agent next' }] })).toEqual({ kind: 'applied' });
-	await finish('next-turn');
-	await expect(review.locator('.ash-chat-editing-auto-accept')).toHaveText('Accepting in 3s');
-	await page.clock.runFor(3000);
-	await expect(review).toBeHidden();
-	await expect(group.editor.lines).toHaveText(['agent next']);
-	expect(await readFile(path, 'utf8')).toBe('agent next');
-});
+
 
 
 for (const mode of ['manual', 'After Delay', 'On Focus Change', 'On Window Change'] as const) {

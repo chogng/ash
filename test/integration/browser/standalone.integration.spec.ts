@@ -7624,3 +7624,32 @@ test('built-in themes apply scrollbar and minimap colors through hover and dragg
 	expect(colors.overridden).toBe('rgb(18, 52, 86)');
 	expect(colors.restored).toBe(colors.initial);
 });
+
+
+test('nested completion snippets retain inner mirrors and outer Tab and Shift Tab navigation', async ({ page }) => {
+	await page.goto('/standalone.html');
+	await page.evaluate(() => window.ashStandaloneIntegration.enableCompletionNavigation('${1:outer} ${2:tail} $0'));
+	const input = page.locator('#caller .stanza-editor-input');
+	await input.focus();
+	await page.keyboard.press('Control+Space');
+	await expect(page.locator('#caller .stanza-editor-completion-option')).toHaveCount(2);
+	await page.keyboard.press('Enter');
+	await page.keyboard.press('ArrowRight');
+	await page.evaluate(() => window.ashStandaloneIntegration.enableCompletionNavigation('(${1:inner}+$1)-${2:end}', false));
+	await page.keyboard.press('Control+Space');
+	await expect(page.locator('#caller .stanza-editor-completion-option')).toHaveCount(2);
+	await page.keyboard.press('Enter');
+	await page.keyboard.type('X');
+	const line = page.locator('#caller .view-line').first();
+	await expect(line).toHaveText('conouter(X+X)-end tail ');
+	await page.keyboard.press('Tab');
+	await page.keyboard.type('Y');
+	await page.keyboard.press('Tab');
+	await page.keyboard.press('Tab');
+	await page.keyboard.type('Z');
+	await expect(line).toHaveText('conouter(X+X)-Y Z ');
+	await page.keyboard.press('Shift+Tab');
+	await page.keyboard.press('Shift+Tab');
+	await page.keyboard.type('W');
+	await expect(line).toHaveText('conouter(X+X)-W Z ');
+});

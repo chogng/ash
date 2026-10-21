@@ -401,6 +401,9 @@ test('shutdown recaptures reviews when the user edits while a storage commit is 
 		if (reason === undefined && pause) { pause = false; void started.complete(); await gate.p; }
 		await flush(reason);
 	};
+	// applyEdits already persisted the Agent result. Change the review so shutdown
+	// actually has a new snapshot to commit before pausing that commit.
+	reference.model.applyOperations([{ range: new Range(2, 1, 2, 1), text: 'before ' }]);
 	const shutdown = host.lifecycle.shutdown('reload');
 	await started.p;
 	reference.model.applyOperations([{ range: new Range(2, 1, 2, 1), text: 'user ' }]);
@@ -413,12 +416,17 @@ test('shutdown recaptures reviews when the user edits while a storage commit is 
 	using reopened = await fixture({ backend, contents });
 	await flushReviews(reopened);
 	await reviewSession(reopened).reject();
-	assert.equal(reopened.files.contents.get(resource.toString()), 'first\nuser separator\nlast');
+	assert.equal(reopened.files.contents.get(resource.toString()), 'first\nuser before separator\nlast');
 });
 
 test('failed review persistence prevents shutdown and can be retried without losing the review', async () => {
 	using host = await fixture();
-	await createReview(host, 'shutdown-retry.txt');
+	const resource = URI.file('c:/workspace/shutdown-retry.txt');
+	host.files.contents.set(resource.toString(), 'original');
+	using reference = await host.models.acquire({ resource }, new AbortController().signal);
+	const id = await snapshot(host.transport, resource);
+	await host.transport.call('textDocument/apply', { threadId: 'review-thread', turnId: 'turn', changes: [{ kind: 'update', snapshot: id, text: 'agent' }] });
+	reference.model.applyOperations([{ range: new Range(1, 6, 1, 6), text: ' user' }]);
 	const flush = host.storage.flush.bind(host.storage);
 	host.storage.flush = async () => { throw new Error('Injected review storage failure'); };
 	await assert.rejects(host.lifecycle.shutdown('reload'), /shutdown participants failed/);

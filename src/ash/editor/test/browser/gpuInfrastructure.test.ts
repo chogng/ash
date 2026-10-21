@@ -37,6 +37,28 @@ suiteTeardown(() => {
 	browserEnvironment.window.close();
 });
 
+for (const reverse of [false, true]) {
+	test(`GPU decoration cache preserves inherited and explicit styles in reverse order=${reverse}`, () => {
+		type Style = Parameters<DecorationStyleCache['getOrCreateEntry']>;
+		const explicit: Style = [0, false, 0, false, 0, 0];
+		for (let field = 0; field < explicit.length; field++) {
+			const cache = new DecorationStyleCache();
+			const inherited: Style = [17, true, 0.5, true, 1, 19];
+			const overridden = [...inherited] as Style;
+			inherited[field] = undefined;
+			overridden[field] = explicit[field];
+			const styles = reverse ? [overridden, inherited] : [inherited, overridden];
+			const ids = styles.map(style => cache.getOrCreateEntry(...style));
+			assert.notEqual(ids[0], ids[1]);
+			for (let index = 0; index < styles.length; index++) {
+				const [color, bold, opacity, strikethrough, strikethroughThickness, strikethroughColor] = styles[index]!;
+				assert.deepEqual(cache.getStyleSet(ids[index]!), { id: ids[index], color, bold, opacity, strikethrough, strikethroughThickness, strikethroughColor });
+				assert.equal(cache.getOrCreateEntry(...styles[index]!), ids[index]);
+			}
+		}
+	});
+}
+
 test('BufferDirtyTracker exposes one inclusive dirty range', () => {
 	const tracker = new BufferDirtyTracker();
 	assert.equal(tracker.isDirty, false);

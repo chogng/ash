@@ -7,7 +7,7 @@ import { EditorAction, registerEditorAction, registerEditorContribution, type Se
 import { EditorContextKeys } from '../../../common/editorContextKeys.js';
 import { IVersionedEditorWorkerClient } from '../../../browser/services/editorWorkerService.js';
 import { ILanguageFeaturesService } from '../../../common/services/languageFeatures.js';
-import { formatEditor, FormattingKind, FormattingMode } from './format.js';
+import { formatEditor, formatEditorOnType, FormattingKind, FormattingMode } from './format.js';
 import { AccessibilitySignal, IAccessibilitySignalService } from '../../../../platform/accessibilitySignal/browser/accessibilitySignalService.js';
 
 class FormatDocumentAction extends EditorAction {
@@ -69,6 +69,9 @@ registerEditorContribution({
 		if (context.kind !== 'text') {
 			return;
 		}
+		context.register(context.editor.onDidType(text => {
+			void formatEditorOnType(context.editor, context.languageFeaturesService, context.editorWorker, text).catch(context.onLanguageError);
+		}));
 		context.register(context.editor.onKeyDown(event => {
 			if (event.browserEvent.defaultPrevented || event.isComposing || event.altKey || (!event.ctrlKey && !event.metaKey) || !event.shiftKey || event.key.toLowerCase() !== 'i') return;
 			const action = context.editor.getAction(formatDocumentAction.id);

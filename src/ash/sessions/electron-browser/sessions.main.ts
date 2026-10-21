@@ -169,6 +169,7 @@ export async function main(profile: SessionsProfile): Promise<IDisposable> {
 				'workbench.contrib.partsSplash',
 				'workbench.contrib.preferences',
 				'workbench.contrib.snippets',
+				'workbench.contrib.defaultFormatter',
 				'workbench.contrib.sessionsLayout',
 				'terminal.native',
 				'workbench.contrib.call',

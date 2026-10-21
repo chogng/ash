@@ -1,3 +1,7 @@
+import { DefaultFormatter } from '../../../src/ash/workbench/contrib/format/browser/formatActionsMultiple.js';
+import { ExtensionIdentifier } from '../../../src/ash/platform/extensions/common/extensions.js';
+import { productLanguagePackCatalogs } from '../../../src/ash/workbench/services/localization/common/localizationCatalogs.js';
+import { setNlsResolver, formatNlsMessage } from '../../../src/ash/nls.js';
 import { IWebWorkerService } from '../../../src/ash/platform/webWorker/browser/webWorkerService.js';
 import { WebWorkerService } from '../../../src/ash/platform/webWorker/browser/webWorkerServiceImpl.js';
 import { TreeSitterLibraryService, TreeSitterSyntaxProviders, createTreeSitterSyntaxSession } from '../../../src/ash/workbench/services/treeSitter/browser/treeSitterLibraryService.js';
@@ -89,6 +93,9 @@ interface IntegrationHarness {
 	save(): Promise<void>;
 	enableSaveCodeActions(): Promise<void>;
 	getSavedText(): string;
+	enableFormatting(locale: 'en' | 'zh-CN'): void;
+	formatDocument(): Promise<void>;
+	defaultFormatter(): string | null;
 	getSyntaxAnalysisCount(): number;
 	getBundleIds(): readonly string[];
 	hasClipboardContribution(): boolean;
@@ -227,6 +234,23 @@ pane.layout({ width: 900, height: 420 });
 await pane.setInput({ resource, label: "main.rs" }, new AbortController().signal);
 
 window.ashTextModelIntegration = {
+	enableFormatting: locale => {
+		const catalog = productLanguagePackCatalogs.find(candidate => candidate.locale === locale)!;
+		setNlsResolver((bundle, key, message, parameters) => formatNlsMessage(catalog.bundles[bundle]?.[key] ?? message, parameters));
+		disposables.add(services.createInstance(DefaultFormatter));
+		for (const [id, result] of [['alpha.format', 'ALPHA'], ['beta.format', 'BETA']] as const) {
+			disposables.add(languageFeaturesService.documentFormattingEditProvider.register('*', {
+				extensionId: new ExtensionIdentifier(id), displayName: id,
+				provideDocumentFormattingEdits: model => [{ range: model.getFullModelRange(), text: result }],
+			}));
+		}
+		disposables.add(languageFeaturesService.onTypeFormattingEditProvider.register('*', {
+			autoFormatTriggerCharacters: [';'],
+			provideOnTypeFormattingEdits: model => [{ range: model.getFullModelRange(), text: model.getValue().toUpperCase() }],
+		}));
+	},
+	formatDocument: async () => { await requiredEditorPart().getAction('editor.action.formatDocument')!.run(); },
+	defaultFormatter: () => configurationService.getValue<string | null>('editor.defaultFormatter', { overrideIdentifier: requiredEditorPart().getModel()!.getLanguageId() }),
 	apiText: apiModel.getText(),
 	getControl: () => requiredEditorPart(),
 	getValue: () => pane.getValue(),

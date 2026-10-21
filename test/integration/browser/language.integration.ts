@@ -12,6 +12,9 @@ import * as stanza from '../../../src/ash/editor/editor.main.js';
 import type { ServerNotification } from '../../../.build/protocol/typescript/index.js';
 import { createDisconnectedLanguageApi } from '../../../src/ash/platform/language/browser/languageApi.js';
 import { TestWorkspaceService } from '../../../src/ash/workbench/services/configuration/test/common/testServices.js';
+import { IWorkspaceContextService } from '../../../src/ash/platform/workspace/common/workspace.js';
+import { IWorkspaceTrustManagementService } from '../../../src/ash/platform/workspace/common/workspaceTrust.js';
+import { IServerEventApi } from '../../../src/ash/platform/agentHost/common/appServerApi.js';
 import { AppServerLanguageProviders } from '../../../src/ash/workbench/services/language/browser/appServerLanguageProviders.js';
 import { AppServerLanguageServerStatusService } from '../../../src/ash/workbench/services/language/browser/appServerLanguageServerStatusService.js';
 import { ProgressService } from '../../../src/ash/workbench/services/progress/browser/progressService.js';
@@ -74,11 +77,16 @@ api.completions = async params => {
 		}],
 	};
 };
-store.add(new AppServerLanguageProviders(api, { checkWorkspaceTrust: false }, features, workspace, {
+const providerServices = store.add(statusServices.createChild());
+providerServices.registerInstance(IWorkspaceContextService, workspace);
+providerServices.registerInstance(IWorkspaceTrustManagementService, {
 	onDidChangeTrust: Event.None,
 	getUriTrustInfo: async () => { throw new Error('Backend-authorized requests must not inspect host grants'); },
 	getWorkspaceTrustInfo: async () => undefined,
-}, { subscribe: listener => changes.event(listener) }));
+});
+providerServices.registerInstance(IServerEventApi, { subscribe: listener => changes.event(listener) });
+const languageProviders = store.add(providerServices.createInstance(AppServerLanguageProviders, api, { checkWorkspaceTrust: false }));
+languageProviders.start();
 for (const [id, value] of [['install', true], ['uninstall', false]] as const) {
 	store.add(addDisposableListener(document.getElementById(id)!, 'click', () => {
 		installed = value;

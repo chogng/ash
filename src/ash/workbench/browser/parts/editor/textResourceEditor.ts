@@ -201,6 +201,7 @@ export class TextResourceEditor extends AbstractTextCodeEditor<EditorPanePart> i
 				renderControlCharacters?: IEditorOptions['renderControlCharacters'];
 				selectionClipboard?: IEditorOptions['selectionClipboard'];
 				find?: IEditorOptions['find'];
+				formatOnType?: boolean;
 			} = {};
 			if (this.options.fontFamily === undefined && event.affectsConfiguration('editor.fontFamily', fontOverrides)) {
 				update.fontFamily = this.configurationService.getValue<string>('editor.fontFamily', fontOverrides) || undefined;
@@ -238,6 +239,7 @@ export class TextResourceEditor extends AbstractTextCodeEditor<EditorPanePart> i
 			if (event.affectsConfiguration(renderControlCharactersConfiguration)) {
 				update.renderControlCharacters = this.configurationService.getValue(renderControlCharactersConfiguration);
 			}
+			if (event.affectsConfiguration('editor.formatOnType', fontOverrides)) update.formatOnType = this.configurationService.getValue<boolean>('editor.formatOnType', fontOverrides);
 			if (event.affectsConfiguration('editor.find')) {
 				update.find = this.readFindOptions();
 			}
@@ -313,6 +315,7 @@ export class TextResourceEditor extends AbstractTextCodeEditor<EditorPanePart> i
 				lineWrapping: this.options.lineWrapping,
 				wordWrap: this.options.lineWrapping ?? this.configurationService.getValue(wordWrapConfiguration, fontOverrides),
 				wordWrapColumn: this.configurationService.getValue('editor.wordWrapColumn', fontOverrides),
+				formatOnType: this.configurationService.getValue<boolean>('editor.formatOnType', fontOverrides),
 				wrappingIndent: this.options.wrappingIndent,
 				fontFamily: this.options.fontFamily ?? (this.configurationService.getValue<string>('editor.fontFamily', fontOverrides) || undefined),
 				fontSize: this.options.fontSize ?? this.configurationService.getValue<number>('editor.fontSize', fontOverrides),
@@ -394,6 +397,7 @@ export class TextResourceEditor extends AbstractTextCodeEditor<EditorPanePart> i
 				fontSize: this.options.fontSize ?? this.configurationService.getValue<number>('editor.fontSize', fontOverrides),
 				wordWrap: this.options.lineWrapping ?? this.configurationService.getValue(wordWrapConfiguration, fontOverrides),
 				wordWrapColumn: this.configurationService.getValue('editor.wordWrapColumn', fontOverrides),
+				formatOnType: this.configurationService.getValue<boolean>('editor.formatOnType', fontOverrides),
 			});
 			this.statusChangeEmitter.fire();
 		}));

@@ -1231,3 +1231,56 @@ test('format actions share the model worker and release the save hook on detach'
 
 const codeFeatures = registerTestCodeEditorFeatures();
 after(() => codeFeatures.dispose());
+
+
+test('format on type uses trigger characters, supports multiple cursors and undoes with typing', async () => {
+	await import('../../../contrib/format/browser/formatActions.js');
+	const dom = new JSDOM('<!doctype html><body><main></main></body>');
+	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
+	using cleanup = toDisposable(() => dom.window.close());
+	using model = new TextModel('alpha\nbeta');
+	using editor = createTestCodeEditor({ container: requiredElement(dom.window.document, 'main'), model, formatOnType: true });
+	const features = editor.invokeWithinContext(accessor => accessor.get(ILanguageFeaturesService));
+	let calls = 0;
+	using provider = features.onTypeFormattingEditProvider.register('*', {
+		autoFormatTriggerCharacters: [';'],
+		provideOnTypeFormattingEdits(model, position) {
+			calls++;
+			return [{ range: new Range(position.lineNumber, 1, position.lineNumber, model.getLineMaxColumn(position.lineNumber)), text: model.getLineContent(position.lineNumber).toUpperCase() }];
+		},
+	});
+	editor.setSelections([new Selection(1, 6, 1, 6), new Selection(2, 5, 2, 5)]);
+	editor.trigger('keyboard', 'type', { text: ';' });
+	await new Promise<void>(resolve => {
+		const listener = model.onDidChangeContent(() => { if (model.getValue() === 'ALPHA;\nBETA;') { listener.dispose(); resolve(); } });
+		if (model.getValue() === 'ALPHA;\nBETA;') { listener.dispose(); resolve(); }
+	});
+	assert.equal(calls, 2);
+	model.undo();
+	assert.equal(model.getValue(), 'alpha\nbeta');
+	editor.updateOptions({ formatOnType: false });
+	editor.trigger('keyboard', 'type', { text: ';' });
+	await Promise.resolve();
+	assert.equal(calls, 2);
+});
+
+test('format on type cancels stale edits after language change and readonly changes', async () => {
+	await import('../../../contrib/format/browser/formatActions.js');
+	const { formatEditorOnType } = await import('../../../contrib/format/browser/format.js');
+	const dom = new JSDOM('<!doctype html><body><main></main></body>');
+	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
+	using cleanup = toDisposable(() => dom.window.close());
+	using model = new TextModel('alpha;');
+	using editor = createTestCodeEditor({ container: requiredElement(dom.window.document, 'main'), model, formatOnType: true });
+	const features = editor.invokeWithinContext(accessor => accessor.get(ILanguageFeaturesService));
+	using worker = new VersionedEditorWorkerClient(model, () => new EditorWorker());
+	for (const change of [() => model.setLanguage('changed'), () => editor.updateOptions({ readOnly: true })]) {
+		let finish!: (edits: { range: Range; text: string; }[]) => void;
+		using provider = features.onTypeFormattingEditProvider.register('*', { autoFormatTriggerCharacters: [';'], provideOnTypeFormattingEdits: () => new Promise(resolve => { finish = resolve; }) });
+		const pending = formatEditorOnType(editor, features, worker, ';');
+		change();
+		finish([{ range: model.getFullModelRange(), text: 'late' }]);
+		assert.equal(await pending, false);
+		assert.equal(model.getValue(), 'alpha;');
+	}
+});

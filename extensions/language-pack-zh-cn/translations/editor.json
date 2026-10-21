@@ -1091,7 +1091,13 @@
     "document.library.history": "更新文献库引用",
     "document.library.invalid": "引用请求无效或不兼容。",
     "document.library.invalidIdentity": "无效的文献库关联标识。",
-    "references.metadataHelp": "编辑以下字段，多位作者或多个关键词请用分号分隔。"
+    "references.metadataHelp": "编辑以下字段，多位作者或多个关键词请用分号分隔。",
+    "format.default.description": "用于格式化此语言的扩展标识。",
+    "format.select": "选择格式化程序",
+    "format.numbered": "格式化程序 {0}",
+    "format.configure": "配置默认格式化程序...",
+    "format.default.select": "选择 {0} 的默认格式化程序",
+    "accessibility.editorFormatting": "格式化文档时，可选择格式化程序或为当前语言配置默认值。Escape 取消选择并返回编辑器。启用输入时格式化后，仅在提供程序声明的触发字符输入后进行格式化。"
   },
   "ash.editor.clipboard": {
     "selection.title": "选区剪贴板",

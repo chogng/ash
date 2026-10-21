@@ -30,6 +30,20 @@ test('document formatters precede range formatters and deduplicate extension ide
 	assert.deepEqual(await getRealAndSyntheticDocumentFormattersOrdered(features.documentFormattingEditProvider, features.documentRangeFormattingEditProvider, model)[1].provideDocumentFormattingEdits(model, options, CancellationToken.None), [{ range: model.getFullModelRange(), text: 'ALPHA' }]);
 });
 
+test('one adapter implementing document and range formatting is one choice without an extension identity', async () => {
+	using model = new TextModel('alpha');
+	using features = new TestLanguageFeaturesService();
+	const adapter = {
+		provideDocumentFormattingEdits: () => [{ range: model.getFullModelRange(), text: 'ALPHA' }],
+		provideDocumentRangeFormattingEdits: () => { throw new Error('The document provider owns whole-file formatting'); },
+	};
+	using document = features.documentFormattingEditProvider.register('*', adapter);
+	using range = features.documentRangeFormattingEditProvider.register('*', adapter);
+	const providers = getRealAndSyntheticDocumentFormattersOrdered(features.documentFormattingEditProvider, features.documentRangeFormattingEditProvider, model);
+	assert.equal(providers.length, 1);
+	assert.deepEqual(await providers[0].provideDocumentFormattingEdits(model, options, CancellationToken.None), [{ range: model.getFullModelRange(), text: 'ALPHA' }]);
+});
+
 test('formatter selectors use the latest registration and restore the previous policy on disposal', async () => {
 	using model = new TextModel('alpha');
 	const providers: DocumentFormattingEditProvider[] = [
