@@ -1207,6 +1207,11 @@
       "rendering": "symbolic"
     },
     {
+      "id": "symbol-property",
+      "file": "symbol-property.svg",
+      "rendering": "symbolic"
+    },
+    {
       "id": "sync",
       "file": "sync.svg",
       "rendering": "symbolic"
