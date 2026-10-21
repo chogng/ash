@@ -65,7 +65,6 @@ export class MultiDiffEditorWidgetImpl extends Disposable {
 	private readonly viewModel: MultiDiffEditorViewModel;
 	private readonly layouts: MultiDiffSectionLayout[] = [];
 	private readonly measuredHeights = new Map<string, number>();
-	private hideUnchangedRegionsEnabled = true;
 	private editorOptions: Pick<DiffEditorWidgetOptions, 'lineHeight' | 'fontFamily' | 'fontSize' | 'fontLigatures' | 'showLineNumbers' | 'showInlineChanges' | 'loopChanges' | 'wordWrapColumn'>;
 	private rowLayouts = new WeakMap<DiffModel, DiffRowLayout>();
 	private lineHeight: number;
@@ -166,9 +165,6 @@ export class MultiDiffEditorWidgetImpl extends Disposable {
 		this.bindItems();
 		this._register(configuration.onDidChangeConfiguration(event => {
 			if (['enabled', 'contextLineCount', 'minimumLineCount', 'revealLineCount'].some(name => event.affectsConfiguration(`diffEditor.hideUnchangedRegions.${name}`))) {
-				if (event.affectsConfiguration('diffEditor.hideUnchangedRegions.enabled')) {
-					this.hideUnchangedRegionsEnabled = configuration.getValue<boolean>('diffEditor.hideUnchangedRegions.enabled');
-				}
 				this.updateHideUnchangedRegions();
 			}
 		}));
@@ -223,16 +219,15 @@ export class MultiDiffEditorWidgetImpl extends Disposable {
 
 	private getHideUnchangedRegionsOptions(): HideUnchangedRegionsOptions {
 		return {
-			enabled: this.hideUnchangedRegionsEnabled,
+			enabled: this.configuration.getValue<boolean>('diffEditor.hideUnchangedRegions.enabled'),
 			contextLineCount: this.configuration.getValue('diffEditor.hideUnchangedRegions.contextLineCount'),
 			minimumLineCount: this.configuration.getValue('diffEditor.hideUnchangedRegions.minimumLineCount'),
 			revealLineCount: this.configuration.getValue('diffEditor.hideUnchangedRegions.revealLineCount'),
 		};
 	}
 
-	public toggleCollapseUnchangedRegions(): void {
-		this.hideUnchangedRegionsEnabled = !this.hideUnchangedRegionsEnabled;
-		this.updateHideUnchangedRegions();
+	public toggleCollapseUnchangedRegions(): Promise<void> {
+		return this.configuration.updateValue('diffEditor.hideUnchangedRegions.enabled', !this.configuration.getValue<boolean>('diffEditor.hideUnchangedRegions.enabled'));
 	}
 
 	private updateHideUnchangedRegions(): void {
@@ -363,6 +358,9 @@ export class MultiDiffEditorWidgetImpl extends Disposable {
 		if (index < 0) { return; }
 		this.cancelPendingNavigation();
 		const item = this.items[index]!;
+		const previous = this.viewModel.activeChange;
+		if (previous) this.sections.get(this.items.findIndex(candidate => candidate.id === previous.itemId))?.editor?.clearActiveChange();
+		this.viewModel.activeChange = undefined;
 		if (this.viewModel.expand(item.id)) {
 			this.sections.get(index)?.setCollapsed(false);
 			this.refreshLayout();
@@ -373,15 +371,20 @@ export class MultiDiffEditorWidgetImpl extends Disposable {
 		if (options?.range) {
 			const range = options.range;
 			const generation = this.navigationGeneration;
+			const signal = this.navigationAbortController.signal;
 			// A requested row can be outside the mounted viewport and still resolving.
-			void item.resolve().then(() => {
+			void item.resolve().then(async model => {
+				if (model) await this.waitForReady(model, signal);
 				if (this.isDisposed || generation !== this.navigationGeneration || !this.items.includes(item) || this.viewModel.isCollapsed(item.id)) { return; }
+				// Loading can replace estimated row heights and move the requested file.
+				this.refreshLayout();
+				this.scrollView.setLogicalScrollTop(this.layouts[index]!.top);
 				this.project();
 				const editor = this.sections.get(index)?.editor;
 				const control = item.modifiedUri ? editor?.modifiedEditor : editor?.originalEditor;
 				control?.revealRange(range);
 				if (options.highlight) { control?.setSelection(range); }
-			}, () => { /* The file header owns reporting its resolution error. */ });
+			}).catch(() => { /* The file header owns reporting its resolution error. */ });
 		}
 	}
 

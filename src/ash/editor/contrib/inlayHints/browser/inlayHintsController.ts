@@ -4,18 +4,23 @@ import { registerEditorContribution } from "../../../browser/editorFeatureRegist
 import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import { Position } from "../../../common/core/position.js";
 import { type View } from "../../../browser/view.js";
-import { h, ModifierKeyEmitter } from "../../../../base/browser/dom.js";
+import { addDisposableListener, ModifierKeyEmitter } from "../../../../base/browser/dom.js";
 import { type ICodeEditor } from '../../../browser/editorBrowser.js';
 import { EditorOption } from '../../../common/config/editorOptions.js';
 import { ILanguageFeaturesService } from '../../../common/services/languageFeatures.js';
 import { ILanguageFeatureDebounceService, type IFeatureDebounceInformation } from '../../../common/services/languageFeatureDebounce.js';
 import { RunOnceScheduler } from '../../../../base/common/async.js';
 import { StopWatch } from '../../../../base/common/stopwatch.js';
+import { Range } from '../../../common/core/range.js';
+import { InjectedTextCursorStops } from '../../../common/model.js';
+import type { IEditorDecorationsCollection } from '../../../common/editorCommon.js';
 
-/** Owns versioned inlay requests and their editor-local hint nodes. */
+/** Owns versioned hints; the editor's line projection owns their inline geometry. */
 export class InlayHintsController extends Disposable {
 	private hints: readonly LanguageInlayHint[] = [];
-	private readonly elements: HTMLSpanElement[] = [];
+	private readonly decorations: IEditorDecorationsCollection;
+	private rendered: readonly LanguageInlayHint[] | undefined;
+	private visible = false;
 	private request: AbortController | undefined;
 	private readonly debounce: IFeatureDebounceInformation;
 	private readonly scheduler: RunOnceScheduler;
@@ -30,12 +35,21 @@ export class InlayHintsController extends Disposable {
 	) {
 		super();
 		if (editor.getModel() !== viewport.textModel) throw new TypeError('Inlay hint dependencies must share one text model');
+		this.decorations = editor.createDecorationsCollection();
 		this.debounce = debounceService.for(languageFeaturesService.inlayHintsProvider, 'Inlay hints', { min: 25, max: 500 });
 		this.scheduler = this._register(new RunOnceScheduler(() => void this.refresh(), this.debounce.default()));
 		this.modifierKeys = ModifierKeyEmitter.getInstance(viewport.domNode.domNode.ownerDocument.defaultView!);
 		this._register(this.modifierKeys.event(() => this.render()));
 		this._register(toDisposable(() => this.clear()));
-		this._register(viewport.onDidChangeLayout(() => this.render()));
+		this._register(addDisposableListener<PointerEvent>(viewport.domNode.domNode, 'pointerover', event => {
+			const element = event.target instanceof viewport.domNode.domNode.ownerDocument.defaultView!.HTMLElement ? event.target : undefined;
+			if (!element?.classList.contains('stanza-editor-inlay-hint')) return;
+			const target = viewport.getNearestTargetAtClientPoint(event);
+			const hint = target?.injectedText?.options.attachedData;
+			if (this.hints.includes(hint as LanguageInlayHint) && (hint as LanguageInlayHint).tooltip) {
+				element.title = (hint as LanguageInlayHint).tooltip!;
+			}
+		}));
 		this._register(viewport.textModel.onDidChangeContent(() => this.schedule()));
 		this._register(viewport.textModel.onDidChangeLanguage(() => this.schedule()));
 		this._register(viewport.textModel.onWillDispose(() => this.dispose()));
@@ -81,14 +95,6 @@ export class InlayHintsController extends Disposable {
 			if (!isLanguageFeatureRequestCurrent(request)) return;
 			this.debounce.update(model, duration.elapsed());
 			this.hints = hints;
-			for (const hint of hints) {
-				const element = h(this.viewport.domNode.domNode.ownerDocument, "span");
-				element.className = "stanza-editor-inlay-hint";
-				element.textContent = typeof hint.label === "string" ? hint.label : hint.label.map(part => part.value).join("");
-				if (hint.tooltip) element.title = hint.tooltip;
-				this.elements.push(element);
-				this.viewport.domNode.domNode.append(element);
-			}
 			this.render();
 		} catch (error) {
 			if (isLanguageFeatureRequestCurrent(request)) {
@@ -101,17 +107,23 @@ export class InlayHintsController extends Disposable {
 	}
 
 	private render(): void {
-		const scroll = this.viewport.viewportLayout.scrollPosition;
 		const mode = this.editor.getOption(EditorOption.inlayHints).enabled;
 		const pressed = this.modifierKeys.keyStatus.ctrlKey && this.modifierKeys.keyStatus.altKey;
 		const visible = mode === 'on' || (mode === 'offUnlessPressed' && pressed) || (mode === 'onUnlessPressed' && !pressed);
-		for (const [index, hint] of this.hints.entries()) {
-			const element = this.elements[index]!;
-			element.hidden = !visible;
-			const coordinates = this.viewport.getPositionContentCoordinates(hint.position);
-			element.style.left = `${coordinates.left - scroll.left + 2}px`;
-			element.style.top = `${coordinates.top - scroll.top}px`;
-		}
+		if (this.rendered === this.hints && this.visible === visible) return;
+		this.rendered = this.hints;
+		this.visible = visible;
+		this.decorations.set(visible ? this.hints.map(hint => ({
+			range: Range.fromPositions(hint.position),
+			options: {
+				description: 'inlay-hint', showIfCollapsed: true,
+				before: {
+					content: `${hint.paddingLeft ? '\u00a0' : ''}${typeof hint.label === 'string' ? hint.label : hint.label.map(part => part.value).join('')}${hint.paddingRight ? '\u00a0' : ''}`,
+					inlineClassName: 'stanza-editor-inlay-hint',
+					cursorStops: InjectedTextCursorStops.None, attachedData: hint,
+				},
+			},
+		})) : []);
 	}
 
 	private clear(): void {
@@ -119,8 +131,8 @@ export class InlayHintsController extends Disposable {
 		this.request?.abort();
 		this.request = undefined;
 		this.hints = [];
-		for (const element of this.elements) element.remove();
-		this.elements.length = 0;
+		this.rendered = undefined;
+		this.decorations.clear();
 	}
 }
 

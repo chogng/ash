@@ -36,6 +36,9 @@ import { CutAction, PasteAction } from '../../../src/ash/editor/contrib/clipboar
 import { FontStyle, MetadataConsts, TokenMetadata } from '../../../src/ash/editor/common/encodedTokenAttributes.js';
 import { SparseMultilineTokens } from '../../../src/ash/editor/common/tokens/sparseMultilineTokens.js';
 import { formatEditor, FormattingConflicts, FormattingKind, FormattingMode } from '../../../src/ash/editor/contrib/format/browser/format.js';
+import { DefaultFormatter } from '../../../src/ash/workbench/contrib/format/browser/formatActionsMultiple.js';
+import '../../../src/ash/workbench/contrib/format/browser/format.contribution.js';
+import { ExtensionIdentifier } from '../../../src/ash/platform/extensions/common/extensions.js';
 import { FoldingController } from '../../../src/ash/editor/contrib/folding/browser/folding.js';
 import { type CancellationToken } from '../../../src/ash/base/common/cancellation.js';
 import { scheduleAtNextAnimationFrame } from '../../../src/ash/base/browser/scheduler.js';
@@ -293,7 +296,7 @@ interface StandaloneHarness {
 	changeCodeActionState(reason: 'text' | 'selection' | 'language' | 'provider' | 'readonly' | 'model' | 'contribution' | 'dispose'): void;
 	prepareInlayRequests(): void;
 	readInlayRequests(): { text: string; languageId: string; resource: string | undefined; range: string; aborted: boolean; }[];
-	finishInlayRequest(index: number, label: string): Promise<void>;
+	finishInlayRequest(index: number, label: string, padding?: { paddingLeft: boolean; paddingRight: boolean; }): Promise<void>;
 	changeInlayState(reason: 'text' | 'shrink' | 'language' | 'provider' | 'off' | 'on' | 'contribution' | 'model' | 'dispose' | 'layout'): void;
 	addBrokenInlayProvider(): void;
 	prepareBracketCompletion(value: string, insertText: string, column: number, tokenType: 'other' | 'string' | 'comment' | 'unavailable', completeBracketPairs: boolean, replaceLength?: number): void;
@@ -342,6 +345,7 @@ interface StandaloneHarness {
 	runSelectionFormatting(mode: 'ranges' | 'single' | 'empty' | 'cancel' | 'readonly'): Promise<{ value: string; ranges: string[]; cancelled: boolean; }>;
 
 	prepareDeferredFormatting(): void;
+	prepareProductFormatting(mode: 'type' | 'choice'): void;
 	readDeferredFormatting(): { aborted: boolean[]; value: string; };
 	finishDeferredFormatting(): void;
 	readEOL(): string;
@@ -679,6 +683,7 @@ function readViewZone(): ViewZoneState {
 
 let deferredFormatting: { token: CancellationToken; resolve: () => void; }[] = [];
 let formattingProvider: { dispose(): void; } | undefined;
+const productFormattingResources = new DisposableStore();
 let bracketTokenRegistration: { dispose(): void; } | undefined;
 let stickySyntaxRegistration: { dispose(): void; } | undefined;
 let stickyOutlineRegistration: { dispose(): void; } | undefined;
@@ -1507,8 +1512,8 @@ window.ashStandaloneIntegration = {
 		});
 	},
 	readInlayRequests: () => inlayRequests.map(({ resolve: _resolve, signal, ...request }) => ({ ...request, aborted: signal.aborted })),
-	finishInlayRequest: async (index, label) => {
-		inlayRequests[index]!.resolve([{ position: new stanza.Position(1, 6), label, tooltip: 'inlay detail' }]);
+	finishInlayRequest: async (index, label, padding) => {
+		inlayRequests[index]!.resolve([{ position: new stanza.Position(1, 6), label, tooltip: 'inlay detail', ...padding }]);
 		await Promise.resolve();
 		await Promise.resolve();
 	},
@@ -1829,6 +1834,27 @@ window.ashStandaloneIntegration = {
 		} finally {
 			provider.dispose();
 			callerEditor.updateOptions({ readOnly: false });
+		}
+	},
+	prepareProductFormatting: mode => {
+		productFormattingResources.clear();
+		callerEditor.setValue('alpha');
+		callerEditor.setPosition(new stanza.Position(1, 6));
+		callerEditor.updateOptions({ formatOnType: mode === 'type' });
+		callerEditor.focus();
+		if (mode === 'type') {
+			productFormattingResources.add(stanza.languages.registerOnTypeFormattingEditProvider('*', {
+				autoFormatTriggerCharacters: [';', '\n'],
+				provideOnTypeFormattingEdits: model => [{ range: model.getFullModelRange(), text: model.getValue().toUpperCase() }],
+			}));
+		} else {
+			productFormattingResources.add(StandaloneServices.get(IInstantiationService).createInstance(DefaultFormatter));
+			for (const [id, text] of [['First', 'FIRST'], ['Second', 'SECOND']]) {
+				productFormattingResources.add(stanza.languages.registerDocumentFormattingEditProvider('*', {
+					extensionId: new ExtensionIdentifier(`fixture.${id}`), displayName: `${id} formatter`,
+					provideDocumentFormattingEdits: model => [{ range: model.getFullModelRange(), text }],
+				}));
+			}
 		}
 	},
 	prepareDeferredFormatting: () => {
@@ -3374,6 +3400,7 @@ window.ashStandaloneIntegration = {
 		inlineRegistration?.dispose();
 		for (const request of inlineRequests) request.resolve();
 		formattingProvider?.dispose();
+		productFormattingResources.dispose();
 		bracketTokenRegistration?.dispose();
 		stickySyntaxRegistration?.dispose();
 		for (const request of deferredFormatting) request.resolve();

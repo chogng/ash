@@ -230,8 +230,8 @@ export class MultiDiffEditor extends EditorPane implements IEditorPaneWithViewSt
 		this.session.value?.editor?.expandAll();
 	}
 
-	public toggleCollapseUnchangedRegions(): void {
-		this.session.value?.editor?.toggleCollapseUnchangedRegions();
+	public toggleCollapseUnchangedRegions(): Promise<void> | undefined {
+		return this.session.value?.editor?.toggleCollapseUnchangedRegions();
 	}
 
 	private requireContainer(): HTMLDivElement {

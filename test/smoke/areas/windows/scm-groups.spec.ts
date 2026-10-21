@@ -625,6 +625,7 @@ test.describe('SCM editor groups', () => {
 			await expect(collapse).toHaveAttribute('aria-pressed', 'true');
 			await expect.poll(() => diff.locator('.ash-diff-hidden-region').count()).toBeGreaterThan(0);
 			await group.title.getByRole('button', { name: locale === 'zh-CN' ? '打开文件' : 'Open File', exact: true }).click();
+			await expect(diff).toBeHidden();
 			await group.editor.waitForEditorContents(content => content.includes('const line2 = 200;'));
 			await tree.getByRole('button', { name: locale === 'zh-CN' ? '打开 更改 的main.ts' : 'Open main.ts for Changes', exact: true }).click();
 			await expect(collapse).toHaveAttribute('aria-pressed', 'true');
@@ -645,6 +646,7 @@ test.describe('SCM editor groups', () => {
 			await openFile.hover();
 			await expect(page.locator('.ash-hover')).toContainText(locale === 'zh-CN' ? '打开文件' : 'Open File');
 			await openFile.click();
+			await expect(diff).toBeHidden();
 			await group.editor.waitForEditorContents(content => content.includes('const line2 = 200;') && content.includes('const line20 = 2000;'));
 			await expect(group.tabs).toHaveCount(tabCount);
 			await expect(next).toHaveCount(0);
@@ -661,7 +663,7 @@ test.describe('SCM editor groups', () => {
 			await group.editor.waitForEditorFocus();
 			await group.editor.input.press('ControlOrMeta+End');
 			await page.keyboard.insertText('// unsaved edit');
-			await expect(group.tabs.filter({ hasText: 'main.ts' })).toHaveAttribute('aria-label', locale === 'zh-CN' ? /未保存的更改/u : /unsaved changes/u);
+			await expect(group.tabs.filter({ hasText: 'main.ts' })).toHaveAttribute('aria-label', locale === 'zh-CN' ? /已修改/u : /unsaved changes/u);
 			await openWorkingFile('other.ts');
 			await expect(group.tabs).toHaveCount(tabCount + 1);
 			await openWorkingFile('main.ts');
@@ -856,8 +858,8 @@ test.describe('SCM editor groups', () => {
 				({ workbench } = await reloadWorkbench());
 			}
 			const page = workbench.page;
-			await page.getByRole('tab', { name: /^Source Control(?:,|$)/u }).click();
-			await page.getByRole('button', { name: 'View All Changes', exact: true }).click();
+			await page.getByRole('tab', { name: locale === 'zh-CN' ? /^源代码管理(?:,|$)/u : /^Source Control(?:,|$)/u }).click();
+			await workbench.quickaccess.runCommand('git.openUncommittedChanges');
 			const group = workbench.editors.groupAt(0);
 			const multi = group.content.locator('.stanza-multi-diff-editor');
 			await expect(multi).toBeVisible();
@@ -897,7 +899,7 @@ test.describe('SCM editor groups', () => {
 			await group.editor.waitForEditorContents(content => content.includes('const line2 = 200;'));
 			await expect(group.tabs).toHaveCount(count + 1);
 			const tree = page.getByRole('tree', { name: locale === 'zh-CN' ? '源代码管理更改' : 'Source control changes', exact: true });
-			await tree.getByRole('button', { name: 'Open other.ts for Changes', exact: true }).click();
+			await tree.getByRole('button', { name: locale === 'zh-CN' ? '打开 更改 的other.ts' : 'Open other.ts for Changes', exact: true }).click();
 			await expect(collapse).toHaveAttribute('aria-pressed', 'true');
 			await expect.poll(() => group.content.locator('.ash-diff-hidden-region').count()).toBeGreaterThan(0);
 			await collapse.focus();
@@ -983,7 +985,7 @@ test.describe('SCM editor groups', () => {
 	test('SCM Multi Diff splits keep collapse state and closing independent', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ workbench }) => {
 		const page = workbench.page;
 		await page.getByRole('tab', { name: /^Source Control(?:,|$)/u }).click();
-		await page.getByRole('button', { name: 'View All Changes', exact: true }).click();
+		await workbench.quickaccess.runCommand('git.openUncommittedChanges');
 		const original = workbench.editors.groupAt(0);
 		await expect(original.content.locator('.stanza-multi-diff-editor-section')).toHaveCount(1);
 		await workbench.quickaccess.runCommand('workbench.action.splitEditorHorizontal');

@@ -148,6 +148,8 @@ await import('../../../src/ash/sessions/contrib/changes/browser/changesetReviewA
 const resources = new DisposableStore();
 const uriIdentityServices = resources.add(new TestUriIdentityServices());
 const editorServices = StandaloneServices.initialize();
+// These comparison fixtures exercise folded files; product defaults are tested separately.
+await editorServices.get(IConfigurationService).updateValue('diffEditor.hideUnchangedRegions.enabled', true);
 editorServices.registerInstance(IWorkingCopyService, resources.add(uriIdentityServices.createInstance(BrowserWorkingCopyService)));
 resources.add(toDisposable(resetNlsResolver));
 const symbolProvider = resources.add(editorServices.languageFeaturesService.documentSymbolProvider.register('*', {
@@ -1041,6 +1043,9 @@ const harness = {
 	},
 	setHiddenRegions(enabled: boolean): void {
 		single.setHideUnchangedRegionsOptions({ enabled, contextLineCount: 1, minimumLineCount: 3, revealLineCount: 2 });
+	},
+	setMultiHiddenRegions(enabled: boolean): Promise<void> {
+		return editorServices.get(IConfigurationService).updateValue('diffEditor.hideUnchangedRegions.enabled', enabled);
 	},
 	removeSymbolProvider(): void {
 		symbolProvider.dispose();

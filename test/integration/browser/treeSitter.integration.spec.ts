@@ -108,7 +108,7 @@ test('new project languages retain highlights through offline edits and undo', a
 		expect(await page.evaluate(() => window.treeSitterIntegration.state())).toMatchObject({ execution: 'worker', errors: [], tokens: expect.arrayContaining([expected]) });
 		// An inserted newline changes every row coordinate without changing the language's syntax.
 		await page.locator('.stanza-editor').click();
-		await page.keyboard.press('ControlOrMeta+Home');
+		await page.keyboard.press(process.platform === 'darwin' ? 'Meta+ArrowUp' : 'Control+Home');
 		await page.keyboard.press('Enter');
 		await page.evaluate(() => window.treeSitterIntegration.ready());
 		expect(await page.evaluate(() => window.treeSitterIntegration.state().text.replace(/\r\n/g, '\n'))).toBe('\n' + original.replace(/\r\n/g, '\n'));

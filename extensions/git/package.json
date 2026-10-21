@@ -978,7 +978,7 @@
         {
           "command": "git.openFile",
           "group": "navigation",
-          "when": "resourceScheme == git-change"
+          "when": "activeEditor == stanza.editor.diff"
         }
       ],
       "diffEditor/hunkToolbar": [

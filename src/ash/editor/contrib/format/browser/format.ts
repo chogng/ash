@@ -92,7 +92,7 @@ export async function formatEditor(
 }
 
 /** Formats only declared trigger characters after the keyboard edit has committed. */
-export async function formatEditorOnType(editor: ICodeEditor, features: ILanguageFeaturesService, worker: IVersionedEditorWorkerClient, text: string): Promise<boolean> {
+export async function formatEditorOnType(editor: ICodeEditor, features: ILanguageFeaturesService, worker: IVersionedEditorWorkerClient, text: string, token: CancellationToken = CancellationToken.None): Promise<boolean> {
 	const model = editor.getModel();
 	if (!model || !editor.getOption(EditorOption.formatOnType) || !text) return false;
 	const ch = [...text].at(-1)!;
@@ -109,12 +109,12 @@ export async function formatEditorOnType(editor: ICodeEditor, features: ILanguag
 			edits.push(edit);
 		}
 		return edits;
-	}, false);
+	}, false, token);
 }
 
-async function runFormatting(editor: ICodeEditor, worker: IVersionedEditorWorkerClient, provide: (model: ITextModel, token: CancellationToken) => Promise<TextEdit[] | null | undefined>, addUndoStops: boolean): Promise<boolean> {
+async function runFormatting(editor: ICodeEditor, worker: IVersionedEditorWorkerClient, provide: (model: ITextModel, token: CancellationToken) => Promise<TextEdit[] | null | undefined>, addUndoStops: boolean, token: CancellationToken = CancellationToken.None): Promise<boolean> {
 	const model = editor.getModel();
-	if (!model || editor.getOption(EditorOption.readOnly)) {
+	if (!model || editor.getOption(EditorOption.readOnly) || token.isCancellationRequested) {
 		return false;
 	}
 	requests.get(editor)?.cancel();
@@ -127,6 +127,7 @@ async function runFormatting(editor: ICodeEditor, worker: IVersionedEditorWorker
 		source.dispose(true);
 	}));
 	resources.add(source.token.onCancellationRequested(() => abort.abort()));
+	resources.add(token.onCancellationRequested(() => source.cancel()));
 	resources.add(model.onDidChangeLanguage(() => source.cancel()));
 	resources.add(editor.onDidChangeConfiguration(() => {
 		if (editor.getOption(EditorOption.readOnly)) source.cancel();

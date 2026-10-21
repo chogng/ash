@@ -15,6 +15,7 @@ import { type ITextModel } from '../../../common/model.js';
 import { TextModel } from '../../../common/model/textModel.js';
 import { EditorOption } from '../../../common/config/editorOptions.js';
 import { ICodeEditorService } from '../../../browser/services/codeEditorService.js';
+import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { DocumentDiffItem, MultiDiffEditorModel, type IDocumentDiffItem } from '../../../browser/widget/multiDiffEditor/model.js';
 import { installEditorTestDom } from '../editorTestGlobals.js';
 import { getIconDefinition } from '../../../../platform/theme/common/iconRegistry.js';
@@ -87,6 +88,7 @@ for (const restore of [false, true]) {
 			const container = requiredElement<HTMLElement>(dom.window.document, 'main');
 			container.focus();
 			const original = Array.from({ length: 100 }, (_, index) => `shared ${index + 1}`);
+			await services.get(IConfigurationService).updateValue('diffEditor.hideUnchangedRegions.enabled', true);
 			const modified = [...original];
 			modified[59] = 'changed';
 			using before = new TextModel(original.join('\n'));
@@ -110,10 +112,10 @@ for (const restore of [false, true]) {
 				const changeTop = editor.getActiveControl()!.modifiedEditor.getTopForLineNumber(60);
 				assert.ok(changeTop >= 0 && changeTop < 300);
 				editor.collapseAll();
-				editor.toggleCollapseUnchangedRegions();
+				await editor.toggleCollapseUnchangedRegions();
 				editor.expandAll();
 				assert.equal(container.querySelectorAll('.ash-diff-hidden-region').length, 0);
-				editor.toggleCollapseUnchangedRegions();
+				await editor.toggleCollapseUnchangedRegions();
 				assert.ok(container.querySelectorAll('.ash-diff-hidden-region').length > 0);
 			}
 		} finally {

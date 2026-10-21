@@ -430,17 +430,7 @@ impl GitRuntime {
             json!({"method":"activeEditor","context":context}),
             Some(token),
         )?;
-        let Some(uri) = active["input"]["modified"]["resource"]
-            .as_str()
-            .and_then(|uri| url::Url::parse(uri).ok())
-        else {
-            return Ok(Value::Null);
-        };
-        let Some(resource) = uri
-            .query_pairs()
-            .find(|(key, _)| key == "resource")
-            .map(|(_, value)| value.into_owned())
-        else {
+        let Some(resource) = working_file_resource(&active["input"]["modified"]) else {
             return Ok(Value::Null);
         };
         self.api.editor(json!({"method":"open","input":{"resource":resource},"options":{"pinned":false,"revealIfOpened":true,"selection":active["selection"]}}),Some(token))
@@ -884,3 +874,18 @@ fn percent_decode_path(path: &str) -> Result<String, ExtensionError> {
         .map(|path| path.into_owned())
         .map_err(|_| invalid("Invalid encoded path"))
 }
+
+fn working_file_resource(input: &Value) -> Option<String> {
+    let uri = url::Url::parse(input["resource"].as_str()?).ok()?;
+    // Unstaged text diffs use the live working copy; staged snapshots retain
+    // their working-file identity in the Git resource URI.
+    if uri.scheme() != "git-change" {
+        return Some(uri.into());
+    }
+    let resource = uri.query_pairs().find(|(key, _)| key == "resource")?.1;
+    url::Url::parse(&resource).ok().map(Into::into)
+}
+
+#[cfg(test)]
+#[path = "changes_tests.rs"]
+mod tests;

@@ -203,6 +203,9 @@ export class TextResourceEditor extends AbstractTextCodeEditor<EditorPanePart> i
 				find?: IEditorOptions['find'];
 				formatOnType?: boolean;
 			} = {};
+			if (event.affectsConfiguration('editor.formatOnType', fontOverrides)) {
+				update.formatOnType = this.configurationService.getValue<boolean>('editor.formatOnType', fontOverrides);
+			}
 			if (this.options.fontFamily === undefined && event.affectsConfiguration('editor.fontFamily', fontOverrides)) {
 				update.fontFamily = this.configurationService.getValue<string>('editor.fontFamily', fontOverrides) || undefined;
 			}
@@ -239,7 +242,6 @@ export class TextResourceEditor extends AbstractTextCodeEditor<EditorPanePart> i
 			if (event.affectsConfiguration(renderControlCharactersConfiguration)) {
 				update.renderControlCharacters = this.configurationService.getValue(renderControlCharactersConfiguration);
 			}
-			if (event.affectsConfiguration('editor.formatOnType', fontOverrides)) update.formatOnType = this.configurationService.getValue<boolean>('editor.formatOnType', fontOverrides);
 			if (event.affectsConfiguration('editor.find')) {
 				update.find = this.readFindOptions();
 			}

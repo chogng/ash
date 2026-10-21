@@ -1511,6 +1511,64 @@ build 146 文件类型检查和改动文件格式检查通过。
 Widget 根待办收窄到对应标题／菜单入口。首败截图、trace、日志与精确命令见 `.build/local-widget-acceptance/validation.json`。
 本轮结果不覆盖 Windows／Linux，也不代表所有 SCM Desktop 用例通过。
 
+## 2026-10-21 当前交付范围复核
+
+在 macOS arm64、Ash 检出 `1f2e4ede96` 加本轮修改上，以本地 VS Code `72e9539ed6b`
+的公开声明、直接调用方和测试为只读参照，核对当前 Stanza 消费者。未复制上游实现，
+不以成员差异数量判断完成，也不宣称与 VS Code 全功能等价。
+
+| 当前行为范围            | owner 与复核结果                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| ----------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 文本、光标、选区与撤销  | `TextModel` 保持唯一文本与历史；`ViewModel`／`CursorsController` 管理实例选区与投影。当前调用方需要的编辑、范围锚点、模型共享、撤销／重做与恢复已通过。上游私有版本覆盖、快照辅助与当前无消费者的静态成员不形成新实现任务。                                                                                                                                                                                                                                                 |
+| 输入与辅助阅读          | `View` 构造、持有并释放 `ViewController` 及 Native EditContext／Textarea；Widget 消费既有事件。自动化覆盖组合输入、失焦、剪贴板、系统选区、迟到事件、键盘焦点及简单／富屏幕阅读内容；物理设备验收另保留。                                                                                                                                                                                                                                                                   |
+| 视图与滚动              | `ViewLayout`／行投影提供同一坐标与滚动来源，ViewPart 负责各自 DOM。实际指针、滚轮、滚动条、小地图、覆盖层与 Overview Ruler 已通过；没有为缺少同名成员新造 wrapper 或滚动状态。                                                                                                                                                                                                                                                                                              |
+| 语言控件                | Peek、Code Action、CodeLens、Find、Folding、颜色检测／选择与 Sticky Scroll 的当前入口已通过。Sticky Scroll 定义查询已有生产链；上游高度事件目前仅被 Ash 尚未接入的 inline-edit 视图消费，未为其预建本地事件。                                                                                                                                                                                                                                                               |
+| 格式化                  | Workbench 的 `DefaultFormatter` 窗口贡献消费语言级 `editor.defaultFormatter`，显式冲突用现有 Quick Pick 选择本次提供者，或显式配置并保存默认值，自动格式化不弹窗或静默换 provider。一个 App Server adapter 同时注册整文和范围接口时按对象身份去重，避免被误判为两个 formatter。`FormatOnType` 作为 `editor.contrib.autoFormat` 消费输入事件，普通字符与 Enter 均可触发模型 Worker，保持一次撤销与取消；打开、配置热更及模型语言切换均读取当前语言的 `editor.formatOnType`。 |
+| Inlay                   | 以编辑器独占 decoration collection 的 injected text 投影提示与左右 padding，正文、位置和历史仍归原模型。修饰键切换会重投影行布局，不重新查询 provider；不再要求旧绝对定位节点在显隐重排后保持身份。tooltip 在真实 hover 时设置，布局节点由 ViewLine 管理。                                                                                                                                                                                                                  |
+| Desktop Diff／MultiDiff | Git 标题菜单按 Diff 身份显示，Open File 同时识别工作文件与 Git 快照中的原始资源。MultiDiff 不再保存一份独立的折叠配置；初始值、标题按下状态、配置修改与其他 Diff 共用 `diffEditor.hideUnchangedRegions.enabled`。显式定位文件会清除旧 hunk 导航状态，范围定位等待模型计算后按实际文件高度重定位，保留取消与代次检查。SCM 测试使用当前 `git.openUncommittedChanges` 命令，保留打开、导航、持久化、预览复用与分栏断言。                                                       |
+
+### 验证与首败归因
+
+| 验证入口                                                                                                                            | 结果与范围                                                                                                                                                                                                                                                       |
+| ----------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `node .agents/skills/vscode-api-alignment/scripts/check-editor-alignment.mjs --test=unit`                                           | 最终 2208 项／275 文件通过；结构、CSS 归属、Stanza 类型检查及新增 JavaScript 输出检查通过。当前没有 CSS 品牌替换阻断项。                                                                                                                                         |
+| `pnpm test:editor:browser standalone.integration.spec.ts textModel.integration.spec.ts diff.integration.spec.ts --project=chromium` | 完整选择的 963 项通过，覆盖当前核心编辑、输入、布局及语言控件。后续新增 Enter、格式化去重和 MultiDiff 配置修正另有定向验证，不将此结果写成所有 Editor project 全量通过。                                                                                         |
+| Tree-sitter 与语言页浏览器                                                                                                          | 完整 138 项首跑 135 通过；Markdown token 样本和 macOS 文首快捷键修正后，3 个失败场景复跑全部通过。保留 Rust／离线 WASM、重连、十万行切换、各语言及嵌入语法、结构查询、Token Inspection 与语言页覆盖。                                                            |
+| 新格式化客户端浏览器                                                                                                                | 4 项通过：普通触发字符、Enter、英文／中文 Quick Pick 键盘选择、焦点恢复及再次格式化复用语言默认值；格式化策略和 adapter 去重另有 8 项单元通过。                                                                                                                  |
+| 格式化配置复验                                                                                                                      | Workbench 编辑器文件 25 项通过；补充真实配置服务的写入、热更新及语言切换断言后，修复 `editor.formatOnType` 只有 schema、没有有效配置注册的问题，以及语言切换遗漏的选项更新。                                                                                     |
+| Inlay 浏览器                                                                                                                        | 19 项通过；新增几何场景再通过四种 Ash 主题截图审阅、左右 padding、提示后点击输入及一次撤销。正文始终为 `call(value)`，显示提示不会写入模型。                                                                                                                     |
+| 最终 Diff／MultiDiff 浏览器                                                                                                         | 完整 Diff 文件 187 项全部通过；共享配置修正后的首跑暴露旧夹具隐式依赖折叠以及未折叠模式下的懒加载定位缺陷，已修正并保留未折叠回归。受影响单元复验通过，明确断言配置是唯一 owner。                                                                                |
+| 真实 Electron／App Server                                                                                                           | 中英文单文件 Diff、中英文 MultiDiff 及分栏共 5 项通过。真实 LSP 补全与 Snippet 保存清理通过；格式化与 Inlay 首跑失败后修正宿主 provider 去重及真实 hover 动作，两项复验通过。产品使用本检出正常 backend 准备、Desktop 构建及 automation 编译，不用安装版本替代。 |
+| `just verify ash-git-extension`                                                                                                     | check、15 项单元、2 项宿主测试及全目标 warnings 通过；后续 Rust 仅有 rustfmt 变更。                                                                                                                                                                              |
+| 其他检查                                                                                                                            | Renderer 4448 文件类型检查、变更 TS 格式、Rust 格式与 CSS stylelint 通过；zh-CN 新文案无缺失，Quick Pick 中文及 Desktop 中文场景通过。                                                                                                                           |
+
+首次完整单元的 2127 项／274 文件中，`appServerTextDocumentHost.test.ts` 在关闭重采集场景超时，
+后续清理 hook 报告未释放对象。原因是测试在审阅未变化时等待一个被 persistence 去重跳过的写入；
+现以真实 turn 状态变化建立待提交写入，再阻塞提交和执行关闭。该文件 85 项及最终完整单元通过；
+没有把超时后的测试清理失败直接定为正常产品流程泄漏。
+
+语法首败的 CSS／properties 旧样本预期 `variable`、Markdown 旧样本预期 `source`，
+而查询分别声明 `@property`、`@text.title`／`@text.strong`；样本现匹配实际 capture 基础类型。
+旧 URI-list Windows 断言已使用 `URI.fsPath`，不再是硬编码正斜杠；当前 macOS 通过不代表 Windows 验收。
+共享测试产物缺失未再复现；中文显示语言重启已由当前真实 Desktop 场景覆盖。
+单元仍输出既有 jsdom canvas／Range 几何诊断，首次复核同样存在，未据此声称物理输入或屏幕阅读器已通过。
+
+主要日志：`/tmp/ash-stanza-alignment-verified.log`、`/tmp/ash-stanza-core-browser.log`、
+`/tmp/ash-stanza-review-browser.log`、`/tmp/ash-stanza-syntax-retry.log`、
+`/tmp/ash-stanza-format-browser-final.log`、`/tmp/ash-stanza-inlay-after.log`、
+`/tmp/ash-stanza-inlay-geometry-final.log`、`/tmp/ash-stanza-diff-browser-verified.log`、
+`/tmp/ash-stanza-diff-unfolded-retry.log`、`/tmp/ash-stanza-format-language-verified.log`、
+`/tmp/ash-stanza-desktop-after.log`、`/tmp/ash-stanza-desktop-retry.log`、
+`/tmp/ash-stanza-desktop-zh-retry.log`、`/tmp/ash-stanza-product-final.log`、
+`/tmp/ash-stanza-product-retry.log` 和 `/tmp/ash-stanza-git-verify.log`。
+Inlay 四主题截图在 `.build/desktop/playwright/editor-browser-nR3cIa/report/`。
+此前首败日志 `/tmp/ash-stanza-audit-{unit,browser}-20261021.log` 保留。
+
+上述基线复核时 Snippet 嵌套合并尚未实现；随后 rebase 合入远端 `65e3fdf7ab` 的嵌套合并与多光标输入格式化，保留已有导航与撤销回归。格式化选择保留远端的单次运行与显式配置默认值两种路径，并合入本地取消、焦点恢复和配置注册修复。冲突合并后，格式化／Widget／Workbench 配置四个单元文件 72 项通过，普通字符、Enter、中英文默认格式化器配置与离线语法编辑共 5 项浏览器通过，正常 Desktop 构建通过；日志为 `/tmp/ash-stanza-rebase-{unit,browser,build}.log`。此前完整回归的数量属于上文基线，不冒充 rebase 后的完整回归。
+扩展协议仍未传递 on-type 触发字符，不能把已注册客户端 provider 的触发链通过外推到任意 LSP。
+Windows／Linux、物理 IME、屏幕阅读器，以及编辑器扩展多窗口／远端和 Word 互通不在本机结果内。
+具体未完成工作仅维护根 TODO。
+
 ## 评估与迁移门槛
 
 | 阶段          | 必须证明                                                   |

@@ -11,6 +11,15 @@ import { FormattingConflicts, FormattingKind, FormattingMode, getRealAndSyntheti
 
 const options = { tabSize: 4, insertSpaces: true };
 
+test('one host adapter implementing document and range formatting is one formatter choice', () => {
+	using model = new TextModel('alpha');
+	using features = new TestLanguageFeaturesService();
+	const adapter = { provideDocumentFormattingEdits: () => [], provideDocumentRangeFormattingEdits: () => [] };
+	using document = features.documentFormattingEditProvider.register('*', adapter);
+	using range = features.documentRangeFormattingEditProvider.register('*', adapter);
+	assert.deepEqual(getRealAndSyntheticDocumentFormattersOrdered(features.documentFormattingEditProvider, features.documentRangeFormattingEditProvider, model), [adapter]);
+});
+
 test('document formatters precede range formatters and deduplicate extension identity ignoring case', async () => {
 	using model = new TextModel('alpha');
 	using features = new TestLanguageFeaturesService();

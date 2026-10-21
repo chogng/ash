@@ -83,7 +83,7 @@ test('MultiDiff Action2 contributions use active-editor context and route to the
 				this.calls.push('expand');
 			}
 
-			public override toggleCollapseUnchangedRegions(): void {
+			public override async toggleCollapseUnchangedRegions(): Promise<void> {
 				this.calls.push('toggleUnchanged');
 			}
 		}

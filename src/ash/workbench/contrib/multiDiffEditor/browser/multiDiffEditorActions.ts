@@ -10,6 +10,7 @@ import { IEditorService } from '../../../services/editor/common/editorService.js
 import { MULTI_DIFF_EDITOR_ID } from './multiDiffEditorInput.js';
 import { MultiDiffEditor } from './multiDiffEditor.js';
 import { TextEditorSelectionSource } from '../../../../platform/editor/common/editor.js';
+import { ContextKeyExpr } from '../../../../platform/contextkey/common/contextkey.js';
 
 export const MultiDiffGoToNextChangeCommandId = 'multiDiffEditor.goToNextChange';
 export const MultiDiffGoToPreviousChangeCommandId = 'multiDiffEditor.goToPreviousChange';
@@ -125,12 +126,13 @@ export class MultiDiffToggleCollapseUnchangedRegionsAction extends Action2 {
 			title: localize2({ bundle: 'ash', key: 'toggleCollapseUnchangedRegions' }, 'Toggle Collapse Unchanged Regions'),
 			icon: Lxicon.map,
 			precondition: MultiDiffEditorActive,
+			toggled: ContextKeyExpr.equals('config.diffEditor.hideUnchangedRegions.enabled', true),
 			menu: { id: MenuId.EditorTitle, when: MultiDiffEditorActive, group: 'navigation', order: 21 },
 		});
 	}
 
-	public override run(accessor: ServicesAccessor, context?: unknown): void {
-		activeMultiDiffPane(accessor, context)?.toggleCollapseUnchangedRegions();
+	public override run(accessor: ServicesAccessor, context?: unknown): Promise<void> | undefined {
+		return activeMultiDiffPane(accessor, context)?.toggleCollapseUnchangedRegions();
 	}
 }
 

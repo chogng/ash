@@ -3,7 +3,7 @@ import { EDITOR_MODEL_DEFAULTS } from '../core/misc/textModelDefaults.js';
 import { EDITOR_FONT_DEFAULTS } from './fontInfo.js';
 import { diffEditorDefaultOptions } from './diffEditor.js';
 import { editorOptionsRegistry, EditorLineWrapping } from './editorOptions.js';
-import { Extensions as ConfigurationExtensions, type IConfigurationPropertySchema, type IConfigurationRegistry } from '../../../platform/configuration/common/configurationRegistry.js';
+import { ConfigurationScope, Extensions as ConfigurationExtensions, type IConfigurationPropertySchema, type IConfigurationRegistry } from '../../../platform/configuration/common/configurationRegistry.js';
 import { Registry } from '../../../platform/registry/common/platform.js';
 import { localize } from '../../../nls.js';
 
@@ -454,6 +454,18 @@ for (const key of ['editor.experimental.treeSitterTelemetry']) {
 }
 
 // The schema owner also registers the model settings consumed by editor services.
+configurationRegistry.registerConfiguration<boolean>({
+	key: 'editor.formatOnType',
+	defaultValue: false,
+	scope: ConfigurationScope.LANGUAGE_OVERRIDABLE,
+	parse: value => modelBoolean(value, 'editor.formatOnType'),
+	setting: {
+		valueType: 'boolean',
+		get title() { return localize('editor.formatOnType.title', 'Format on type'); },
+		get description() { return localize('editor.formatOnType.description', 'Format the current line after typing a character supported by the language formatter.'); },
+	},
+});
+
 configurationRegistry.registerConfiguration({
 	key: 'diffEditor.ignoreTrimWhitespace',
 	defaultValue: diffEditorDefaultOptions.ignoreTrimWhitespace,

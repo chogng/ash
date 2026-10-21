@@ -24,6 +24,8 @@ import { IContextKeyService, ContextKeyService } from "../../../../platform/cont
 import { AccessibilitySupport, IAccessibilityService } from '../../../../platform/accessibility/common/accessibility.js';
 import { ContextKeyExpr } from '../../../../platform/contextkey/common/contextkey.js';
 import { errorHandler, setUnexpectedErrorHandler } from '../../../../base/common/errors.js';
+import { DeferredPromise } from '../../../../base/common/async.js';
+import { TestLanguageFeaturesService } from '../../common/testLanguageFeaturesService.js';
 
 const { CodeEditorWidget } = await import("../../../browser/widget/codeEditor/codeEditorWidget.js");
 const { createTestCodeEditor } = await import('../testCodeEditor.js');
@@ -55,6 +57,65 @@ const enabledAccessibilityService: IAccessibilityService = {
 function delay(targetWindow: Pick<Window, 'setTimeout'>, duration: number): Promise<void> {
 	return new Promise(resolve => targetWindow.setTimeout(resolve, duration));
 }
+
+test('format on type uses the live input position and keeps its trigger in one undo step', async () => {
+	const dom = new JSDOM('<main></main>');
+	using cleanup = toDisposable(() => dom.window.close());
+	using model = new TextModel('alpha');
+	using features = new TestLanguageFeaturesService();
+	using registration = features.onTypeFormattingEditProvider.register('*', {
+		autoFormatTriggerCharacters: [';'],
+		provideOnTypeFormattingEdits(receivedModel, position, ch, options) {
+			assert.equal(receivedModel, model);
+			assert.deepEqual(position, new Position(1, 7));
+			assert.equal(ch, ';');
+			assert.equal(options.tabSize, model.getOptions().tabSize);
+			return [{ range: model.getFullModelRange(), text: 'ALPHA;' }];
+		},
+	});
+	using editor = createTestCodeEditor({ container: requiredElement(dom.window.document, 'main'), model, formatOnType: true, languageFeaturesService: features });
+	editor.setPosition(new Position(1, 6));
+	editor.trigger('keyboard', 'type', { text: ';' });
+	await new Promise<void>(resolve => {
+		const listener = model.onDidChangeContent(() => { listener.dispose(); resolve(); });
+	});
+	assert.equal(model.getValue(), 'ALPHA;');
+	model.undo();
+	assert.equal(model.getValue(), 'alpha');
+});
+
+test('format on type cancels late edits when disabled and when its provider is retired', async () => {
+	for (const reason of ['disabled', 'provider', 'model', 'readonly', 'language'] as const) {
+		const dom = new JSDOM('<main></main>');
+		using cleanup = toDisposable(() => dom.window.close());
+		using model = new TextModel('alpha');
+		using features = new TestLanguageFeaturesService();
+		const requested = new DeferredPromise<void>();
+		const response = new DeferredPromise<import('../../../common/languages.js').TextEdit[]>();
+		let cancelled = false;
+		using registration = features.onTypeFormattingEditProvider.register('*', {
+			autoFormatTriggerCharacters: [';'],
+			provideOnTypeFormattingEdits(_model, _position, _ch, _options, token) {
+				token.onCancellationRequested(() => { cancelled = true; });
+				void requested.complete();
+				return response.p;
+			},
+		});
+		using editor = createTestCodeEditor({ container: requiredElement(dom.window.document, 'main'), model, formatOnType: true, languageFeaturesService: features });
+		editor.setPosition(new Position(1, 6));
+		editor.trigger('keyboard', 'type', { text: ';' });
+		await requested.p;
+		if (reason === 'disabled') editor.updateOptions({ formatOnType: false });
+		if (reason === 'provider') registration.dispose();
+		if (reason === 'model') editor.setModel(null);
+		if (reason === 'readonly') editor.updateOptions({ readOnly: true });
+		if (reason === 'language') model.setLanguage('typescript');
+		assert.equal(cancelled, true, reason);
+		await response.complete([{ range: model.getFullModelRange(), text: 'obsolete' }]);
+		await Promise.resolve();
+		assert.equal(model.getValue(), 'alpha;', reason);
+	}
+});
 
 test('Tab edits text normally and leaves focus navigation to the browser in tab focus mode', () => {
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');

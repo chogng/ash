@@ -935,6 +935,7 @@ test('session Changes releases the completed opening signal while retaining lazy
 	const errors: string[] = [];
 	page.on('pageerror', error => errors.push(error.message));
 	await openDiffPage(page);
+	await page.evaluate(() => window.ashDiffIntegration.setMultiHiddenRegions(false));
 	await page.evaluate(() => window.ashDiffIntegration.openSessionChanges());
 	await page.evaluate(() => window.ashDiffIntegration.cancelCompletedSessionOpen());
 	await page.evaluate(() => window.ashDiffIntegration.revealSessionFile(7));

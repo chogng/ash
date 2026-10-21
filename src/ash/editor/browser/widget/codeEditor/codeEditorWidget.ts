@@ -450,7 +450,7 @@ export class CodeEditorWidget extends Disposable implements ICodeEditor {
 			modelStore.add(this.controller.editContext.onDidCompositionStart(() => this.compositionStartEmitter.fire()));
 			modelStore.add(this.controller.editContext.onDidCompositionEnd(() => this.compositionEndEmitter.fire()));
 			modelStore.add(this.controller.onDidEdit(event => {
-				if (event.insertedText !== undefined && (event.inputType === 'insertText' || event.inputType === 'insertReplacementText')) this.typeEmitter.fire(event.insertedText);
+				if (event.insertedText !== undefined && ['insertText', 'insertReplacementText', 'insertLineBreak', 'insertParagraph'].includes(event.inputType)) this.typeEmitter.fire(event.insertedText);
 			}));
 			modelStore.add(this.view.onWillCopy(event => this.willCopyEmitter.fire(event)));
 			modelStore.add(this.view.onWillCut(event => this.willCutEmitter.fire(event)));

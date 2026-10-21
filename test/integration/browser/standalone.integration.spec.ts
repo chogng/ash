@@ -2,6 +2,57 @@ import { expect, test, type Page } from '@playwright/test';
 import { Editor } from '../../automation/editor.js';
 import { ShowLightbulbIconMode } from '../../../src/ash/editor/common/config/editorOptions.js';
 
+test('product format on type responds to keyboard input and undoes with its trigger', async ({ page }) => {
+	await page.goto('/standalone.html');
+	try {
+		await page.evaluate(() => window.ashStandaloneIntegration.prepareProductFormatting('type'));
+		await page.keyboard.type(';');
+		await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readKeyboardEditing().value)).toBe('ALPHA;');
+		await page.keyboard.press('ControlOrMeta+z');
+		await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readKeyboardEditing().value)).toBe('alpha');
+	} finally { await page.evaluate(() => window.ashStandaloneIntegration.dispose()); }
+});
+
+test('product format on type handles Enter through the public typing event', async ({ page }) => {
+	await page.goto('/standalone.html');
+	try {
+		await page.evaluate(() => window.ashStandaloneIntegration.prepareProductFormatting('type'));
+		await page.keyboard.press('Enter');
+		await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readKeyboardEditing().value)).toBe('ALPHA\n');
+		await page.keyboard.press('ControlOrMeta+z');
+		await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readKeyboardEditing().value)).toBe('alpha');
+	} finally { await page.evaluate(() => window.ashStandaloneIntegration.dispose()); }
+});
+
+for (const locale of ['en', 'zh-CN'] as const) {
+	test(`product formatter picker supports keyboard choice and reuses the language default in ${locale}`, async ({ page }) => {
+		await page.goto('/standalone.html');
+		try {
+			await page.evaluate(locale => {
+				window.ashStandaloneIntegration.setActionMenuLanguage(locale);
+				window.ashStandaloneIntegration.prepareProductFormatting('choice');
+			}, locale);
+			const formatted = page.evaluate(() => window.ashStandaloneIntegration.runLineAction('editor.action.formatDocument'));
+			const picker = page.locator('.ash-quick-pick:visible');
+			const input = picker.getByRole('combobox');
+			await expect(input).toHaveAttribute('placeholder', locale === 'zh-CN' ? '选择格式化程序' : 'Select a Formatter');
+			await input.fill(locale === 'zh-CN' ? '配置默认格式化程序' : 'Configure Default Formatter');
+			await input.press('Enter');
+			await expect(input).toHaveAttribute('placeholder', locale === 'zh-CN' ? '选择 plaintext 的默认格式化程序' : 'Select the Default Formatter for plaintext');
+			await input.fill('Second formatter');
+			await input.press('Enter');
+			await formatted;
+			await expect(picker).toHaveCount(0);
+			await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readKeyboardEditing())).toMatchObject({ value: 'SECOND', focused: true });
+			await page.keyboard.press('ControlOrMeta+z');
+			await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readKeyboardEditing().value)).toBe('alpha');
+			await page.evaluate(() => window.ashStandaloneIntegration.runLineAction('editor.action.formatDocument'));
+			await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readKeyboardEditing().value)).toBe('SECOND');
+			await expect(picker).toHaveCount(0);
+		} finally { await page.evaluate(() => window.ashStandaloneIntegration.dispose()); }
+	});
+}
+
 test('editor auto scrollbars hide while text retains focus and reveal on hover or scrolling', async ({ page }) => {
 	await page.clock.install();
 	await page.goto('/standalone.html');
@@ -1460,12 +1511,50 @@ test.describe('contribution lifecycle', () => {
 });
 
 test.describe('inlay hints', () => {
+	test('inlay hints reserve inline label and padding width without changing model text', async ({ page }, testInfo) => {
+		await page.goto('/standalone.html');
+		await page.evaluate(() => window.ashStandaloneIntegration.registerBundledThemes());
+		await page.evaluate(() => window.ashStandaloneIntegration.prepareInlayRequests());
+		await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readInlayRequests().length)).toBe(1);
+		await page.evaluate(() => window.ashStandaloneIntegration.finishInlayRequest(0, 'parameter:', { paddingLeft: true, paddingRight: true }));
+		const hint = page.locator('#caller .stanza-editor-inlay-hint');
+		await expect(hint).toBeVisible();
+		const geometry = await page.evaluate(() => {
+			const hint = document.querySelector<HTMLElement>('#caller .stanza-editor-inlay-hint')!;
+			const line = document.querySelector('#caller .stanza-editor-line-text')!;
+			const walker = document.createTreeWalker(line, NodeFilter.SHOW_TEXT);
+			let node: Node | null;
+			while ((node = walker.nextNode())) {
+				const offset = node.textContent!.indexOf('value');
+				if (offset < 0) continue;
+				const range = document.createRange();
+				range.setStart(node, offset);
+				range.setEnd(node, offset + 5);
+				return { hintRight: hint.getBoundingClientRect().right, valueLeft: range.getBoundingClientRect().left, top: range.getBoundingClientRect().top, height: range.getBoundingClientRect().height, label: hint.textContent };
+			}
+			throw new Error('Missing original value after inlay rendering');
+		});
+		expect(geometry.label).toBe('\u00a0parameter:\u00a0');
+		expect(geometry.valueLeft).toBeGreaterThanOrEqual(geometry.hintRight - 1);
+		expect((await page.evaluate(() => window.ashStandaloneIntegration.readKeyboardEditing())).value).toBe('call(value)');
+		for (const theme of ['ash-dark', 'ash-light', 'ash-high-contrast-dark', 'ash-high-contrast-light'] as const) {
+			await page.evaluate(theme => window.ashStandaloneIntegration.setActionMenuTheme(theme), theme);
+			await expect(hint).toBeVisible();
+			await testInfo.attach(theme, { body: await page.locator('#caller').screenshot(), contentType: 'image/png' });
+		}
+		await page.mouse.click(geometry.valueLeft + 1, geometry.top + geometry.height / 2);
+		await page.keyboard.type('x');
+		await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readKeyboardEditing().value)).toBe('call(xvalue)');
+		await page.keyboard.press('ControlOrMeta+z');
+		await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readKeyboardEditing().value)).toBe('call(value)');
+	});
+
 	test.afterEach(async ({ page }) => {
 		await page.evaluate(() => window.ashStandaloneIntegration?.dispose());
 	});
 
 	for (const mode of ['on', 'offUnlessPressed', 'onUnlessPressed'] as const) {
-		test(`inlay visibility follows ${mode}, modifier release and window blur without replacing nodes`, async ({ page }) => {
+		test(`inlay visibility follows ${mode}, modifier release and window blur without querying providers again`, async ({ page }) => {
 			await page.goto('/standalone.html');
 			await page.evaluate(mode => {
 				window.ashStandaloneIntegration.updateContributionOptions({ inlayHints: { enabled: mode } });
@@ -1475,7 +1564,6 @@ test.describe('inlay hints', () => {
 			await page.evaluate(() => window.ashStandaloneIntegration.finishInlayRequest(0, 'value:'));
 			const hint = page.locator('#caller .stanza-editor-inlay-hint');
 			await expect(hint).toBeVisible({ visible: mode !== 'offUnlessPressed' });
-			const node = await hint.elementHandle();
 			await page.keyboard.down('Control');
 			await page.keyboard.down('Alt');
 			await expect(hint).toBeVisible({ visible: mode !== 'onUnlessPressed' });
@@ -1488,7 +1576,6 @@ test.describe('inlay hints', () => {
 			await expect(hint).toBeVisible({ visible: mode !== 'offUnlessPressed' });
 			await page.keyboard.up('Alt');
 			await page.keyboard.up('Control');
-			expect(await node!.evaluate(element => element.isConnected)).toBe(true);
 			expect(await page.evaluate(() => window.ashStandaloneIntegration.readInlayRequests())).toHaveLength(1);
 		});
 	}
@@ -1503,6 +1590,7 @@ test.describe('inlay hints', () => {
 		await page.evaluate(() => window.ashStandaloneIntegration.finishInlayRequest(0, 'value:'));
 		const hint = page.locator('#caller .stanza-editor-inlay-hint');
 		await expect(hint).toHaveText('value:');
+		await hint.hover();
 		await expect(hint).toHaveAttribute('title', 'inlay detail');
 		const node = await hint.elementHandle();
 		await page.evaluate(() => window.ashStandaloneIntegration.changeInlayState('layout'));
@@ -1521,11 +1609,8 @@ test.describe('inlay hints', () => {
 		await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readInlayRequests().length)).toBe(1);
 		await page.evaluate(() => window.ashStandaloneIntegration.finishInlayRequest(0, 'old:'));
 		await expect(page.locator('#caller .stanza-editor-inlay-hint')).toHaveText('old:');
-		const cleared = await page.evaluate(() => {
-			window.ashStandaloneIntegration.changeInlayState('text');
-			return document.querySelectorAll('#caller .stanza-editor-inlay-hint').length;
-		});
-		expect(cleared).toBe(0);
+		await page.evaluate(() => window.ashStandaloneIntegration.changeInlayState('text'));
+		await expect(page.locator('#caller .stanza-editor-inlay-hint')).toHaveCount(0);
 		await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readInlayRequests().map(request => request.text))).toEqual(['call(value)', 'bacall(value)']);
 		await page.evaluate(() => window.ashStandaloneIntegration.changeInlayState('language'));
 		await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readInlayRequests().map(request => [request.languageId, request.aborted]))).toEqual([

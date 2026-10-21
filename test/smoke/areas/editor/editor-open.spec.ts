@@ -1267,6 +1267,7 @@ test("Code shows App Server LSP inlay hints in Stanza", async ({ target, workben
 
 	const hint = workbench.editors.groupAt(0).content.locator(".stanza-editor-inlay-hint").filter({ hasText: ": String" });
 	await expect(hint).toBeVisible({ timeout: 60_000 });
+	await hint.hover();
 	await expect(hint).toHaveAttribute("title", "inferred type");
 });
 
