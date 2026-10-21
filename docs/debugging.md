@@ -179,7 +179,9 @@ Ash 预装两个独立 Rust provider。`debug-javascript` 复用 MIT 许可的�
 
 Node 启动配置使用 `type: "node"`、`request: "launch"` 和 `program`，附加使用 `request: "attach"`。provider 同时接纳 `pwa-node`、`chrome`／`pwa-chrome`、`msedge`／`pwa-msedge`。TS 仍需编译后的 JS 与 source map；配置 `outFiles` 指向输出目录。入口脚本的 source map 绑定会先暂停，避免短脚本越过已有 TS 断点。
 
-自动附加默认关闭。在设置中将 `debug.javascript.autoAttachFilter` 改为 `always`、`smart` 或 `onlyWithFlag`，然后新建集成终端。`smart` 使用 `debug.javascript.autoAttachSmartPattern` 指定排除 glob，默认排除 `node_modules`；`onlyWithFlag` 只附加已启用 Inspector 的程序。Rust 只接纳当前窗口发布给终端的临时凭据、工作区内 cwd 和 loopback Inspector，不扫描系统进程。小型 Node preload 只打开 Inspector、调用 Rust helper 和等待握手；provider 关闭或拒绝请求时，helper 会释放等待。非持久环境集合随停用／撤权撤销，旧终端中的凭据会失效。停止附加会话只分离调试器，终端程序由用户通过 Ctrl+C 结束。
+自动附加默认关闭。运行“调试: 切换自动附加”（`ash.debug-javascript.toggleAutoAttach`）选择 `always`、`smart` 或 `onlyWithFlag`，然后新建集成终端；也可直接修改 `debug.javascript.autoAttachFilter`。选择器默认使用已有工作区覆盖所在层，否则使用用户设置，并可显式切换写入范围。启用后状态栏显示当前模式；点击可切换模式、临时禁用或恢复。临时禁用只暂停新程序的附加，保留设置、已有会话和终端环境，因此恢复后同一终端以及暂停期间新建的终端均可继续自动附加。更改自动附加设置或重新激活扩展会清除临时禁用状态；选择 Disabled 会关闭能力并隐藏状态栏项。
+
+`smart` 使用 `debug.javascript.autoAttachSmartPattern` 指定排除 glob，默认排除 `node_modules`；`onlyWithFlag` 只附加已启用 Inspector 的程序。Rust 只接纳当前窗口发布给终端的临时凭据、工作区内 cwd 和 loopback Inspector，不扫描系统进程。小型 Node preload 只打开 Inspector、调用 Rust helper 和等待握手；provider 关闭或拒绝请求时，helper 会释放等待。非持久环境集合随停用／撤权撤销，旧终端中的凭据会失效。停止附加会话只分离调试器，终端程序由用户通过 Ctrl+C 结束。
 
 在父配置中添加下面的工作流，可在所属会话或其专属集成终端输出匹配时启动命名子配置。匹配按一次启动／重启代次触发一次，支持分块输出和 ANSI 控制序列。`killOnServerStop: true` 将子配置绑定到已有父子会话 owner；默认 false 时子配置独立运行。
 
@@ -209,6 +211,8 @@ macOS arm64 的真实 Ash Electron + App Server 整批 11 项通过：新增 JS�
 Debug 前端定向 171 项通过；两个 Rust provider、SDK、manager 与 App Server 的 check／test／warnings 通过（共 1,098 项 Rust 测试，另有 12 项现有忽略）；构建 Python 264 项完成（1 项跳过）。`just dependencies` 通过，workspace 为 233 members，未升级已有依赖版本。正常 Desktop 构建、自动化类型检查和中英文 manifest 解析通过。两个新 provider 的 Windows x64、Linux x64 测试目标均通过交叉编译检查；这些平台未执行 Desktop 运行验收。Chrome／Edge 实际浏览器启动和 SSH 自动附加也不属于本次已执行场景。
 
 原始报告、命令日志和源码摘要见 [.build/debug-rust-workflows](../.build/debug-rust-workflows/validation.json)，整批 Desktop 报告见 [desktop-report](../.build/debug-rust-workflows/desktop-report/index.html)。
+
+2026-10-21 自动附加操作入口补验：macOS arm64 的真实 Desktop 已通过命令／状态栏键盘操作、用户与工作区模式持久化、暂停时保留已有会话、同终端及暂停期间新建终端恢复附加、重载清除暂停、停用撤销旧凭据、中英文显示和无障碍帮助。Rust 策略／helper 8 项及产品部署授权 1 项定向测试通过；Desktop 3 项回归和 5 步录屏场景通过。证据、构建来源与校验值见 [自动附加验收](../.build/ash-playwright-mcp/evidence/debug-auto-attach-controls-2026-10-21T23-31-52-960Z/validation.json)，[录屏报告](../.build/ash-playwright-mcp/evidence/debug-auto-attach-controls-2026-10-21T23-31-52-960Z/report.html) 保留实际 UI 断言与视频。本次未执行 Windows、Linux 或 SSH 的运行验收。
 
 ## 本轮验证边界
 

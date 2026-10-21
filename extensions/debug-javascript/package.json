@@ -13,6 +13,7 @@
   },
   "activationEvents": [
     "onStartupFinished",
+    "onCommand:ash.debug-javascript.toggleAutoAttach",
     "onDebug:node",
     "onDebug:pwa-node",
     "onDebug:chrome",
@@ -22,6 +23,12 @@
     "onDebugInitialConfigurations"
   ],
   "contributes": {
+    "commands": [
+      {
+        "command": "ash.debug-javascript.toggleAutoAttach",
+        "title": "%command.toggleAutoAttach%"
+      }
+    ],
     "debuggers": [
       {
         "type": "node",

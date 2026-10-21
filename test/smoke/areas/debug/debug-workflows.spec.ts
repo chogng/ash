@@ -1,6 +1,7 @@
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { Workbench } from '../../../automation/workbench.js';
+import { readUserSettings } from '../../../automation/settings.js';
 import { expect, test } from '../../../automation/test.js';
 
 const tags = { tag: ['@electron-app-server'] };
@@ -151,6 +152,7 @@ test.describe('Rust terminal auto attach', () => {
 		// The old shell still has its inherited environment. Retiring the provider
 		// must reject those credentials and release Inspector instead of hanging it.
 		await disableProvider(workbench);
+		await expect(page.getByRole('button', { name: /^Auto Attach:/u })).toHaveCount(0);
 		await writeFile(join(root, 'revoked.cjs'), "require('node:fs').writeFileSync('revoked.pid', String(process.pid)); debugger; setInterval(() => {}, 1000);\n");
 		await page.getByRole('tab', { name: 'Terminal', exact: true }).first().click();
 		await workbench.terminal.runCommand(`'${process.execPath.replaceAll("'", "'\\''")}' '${join(root, 'revoked.cjs').replaceAll("'", "'\\''")}'`);
@@ -162,6 +164,102 @@ test.describe('Rust terminal auto attach', () => {
 		await workbench.terminal.activeInstance.locator('.xterm-helper-textarea').press('Control+C');
 		await expect.poll(() => alive(unbound)).toBe(false);
 	});
+});
+
+test('Rust auto attach controls persist modes and pause and resume in existing terminals', tags, async ({ workbench, reloadWorkbench, testWorkspace }) => {
+	test.setTimeout(150_000);
+	const root = testWorkspace.directory;
+	let page = workbench.page;
+	const autoAttach = () => page.getByRole('button', { name: /^Auto Attach:/u });
+	const userMode = async () => JSON.parse((await readUserSettings(page)).content)['debug.javascript.autoAttachFilter'] as string | undefined;
+	const choose = async (label: string, scope = 'User Settings') => {
+		const input = page.getByRole('combobox', { name: `Toggle Auto Attach (${scope})`, exact: true });
+		await expect(input).toBeFocused();
+		await input.fill(label);
+		await input.press('Control+Home');
+		const active = page.locator(`[id="${await input.getAttribute('aria-activedescendant')}"] .ash-quick-pick-row-label`);
+		await expect(active).toHaveText(label);
+		await input.press('Enter');
+	};
+	await expect(autoAttach()).toHaveCount(0);
+	await workbench.quickaccess.runCommand('ash.debug-javascript.toggleAutoAttach');
+	await expect(page.getByRole('combobox', { name: 'Toggle Auto Attach (User Settings)', exact: true })).toBeFocused();
+	await page.keyboard.press('Escape');
+	expect(await userMode()).toBeUndefined();
+	await workbench.quickaccess.runCommand('ash.debug-javascript.toggleAutoAttach');
+	await choose('Always');
+	await expect(autoAttach()).toHaveText('Auto Attach: Always');
+	await expect.poll(userMode).toBe('always');
+	// Status bar uses the same keyboard-operated picker and restores focus on cancellation.
+	await autoAttach().focus();
+	await page.keyboard.press('Enter');
+	await expect(page.getByRole('combobox', { name: 'Toggle Auto Attach (User Settings)', exact: true })).toBeFocused();
+	await page.keyboard.press('Escape');
+	await expect(autoAttach()).toBeFocused();
+	await mkdir(join(root, '.vscode'), { recursive: true });
+	await autoAttach().click();
+	await choose('Use Workspace Settings');
+	await choose('Smart', 'Workspace Settings');
+	await expect(autoAttach()).toHaveText('Auto Attach: Smart');
+	const workspaceMode = async () => JSON.parse(await readFile(join(root, '.vscode/settings.json'), 'utf8'))['debug.javascript.autoAttachFilter'] as string;
+	await expect.poll(workspaceMode).toBe('smart');
+	expect(await userMode()).toBe('always');
+	await autoAttach().click();
+	await choose('Only With Flag', 'Workspace Settings');
+	await expect.poll(workspaceMode).toBe('onlyWithFlag');
+	await expect(autoAttach()).toHaveText('Auto Attach: Only With Flag');
+	await autoAttach().click();
+	await choose('Always', 'Workspace Settings');
+	await expect(autoAttach()).toHaveText('Auto Attach: Always');
+	const savedSettings = await readFile(join(root, '.vscode/settings.json'), 'utf8');
+	await writeFile(join(root, 'auto.cjs'), "const answer = 42;\nrequire('node:fs').writeFileSync('auto.pid', String(process.pid));\ndebugger;\nsetInterval(() => {}, 1000);\n");
+	await writeFile(join(root, 'paused.cjs'), "debugger; require('node:fs').writeFileSync('paused.done', 'ran without attachment');\n");
+	await workbench.quickaccess.runCommand('workbench.action.terminal.new');
+	const runNode = async (file: string) => workbench.terminal.runCommand(`'${process.execPath.replaceAll("'", "'\\''")}' '${join(root, file).replaceAll("'", "'\\''")}'`);
+	await runNode('auto.cjs');
+	const pane = page.locator('[data-view-container-id="ash.debug"]');
+	if (!await pane.isVisible()) await page.getByRole('tab', { name: 'Run and Debug', exact: true }).first().click();
+	await expect(pane.getByRole('status')).toContainText('stopped', { timeout: 30_000 });
+	await expect(pane.locator('.ash-debug-variables')).toContainText('42');
+	const pid = Number(await readFile(join(root, 'auto.pid'), 'utf8'));
+	await autoAttach().click();
+	await choose('Temporarily Disable Auto Attach', 'Workspace Settings');
+	await expect(autoAttach()).toHaveText('Auto Attach: Temporarily Disabled');
+	await expect(pane.getByRole('status')).toContainText('stopped');
+	expect(await readFile(join(root, '.vscode/settings.json'), 'utf8')).toBe(savedSettings);
+	await workbench.quickaccess.runCommand('workbench.action.debug.stopAll');
+	expect(alive(pid)).toBe(true);
+	await page.getByRole('tab', { name: 'Terminal', exact: true }).first().click();
+	await workbench.terminal.activeInstance.locator('.xterm-helper-textarea').press('Control+C');
+	await expect.poll(() => alive(pid)).toBe(false);
+	await runNode('paused.cjs');
+	await expect.poll(() => readFile(join(root, 'paused.done'), 'utf8').catch(() => '')).toBe('ran without attachment');
+	await expect(autoAttach()).toHaveText('Auto Attach: Temporarily Disabled');
+	// A terminal created while paused must retain the preload and must not clear the pause.
+	await workbench.quickaccess.runCommand('workbench.action.terminal.new');
+	await expect(autoAttach()).toHaveText('Auto Attach: Temporarily Disabled');
+	await autoAttach().click();
+	await choose('Re-enable Auto Attach', 'Workspace Settings');
+	await expect(autoAttach()).toHaveText('Auto Attach: Always');
+	await runNode('auto.cjs');
+	if (!await pane.isVisible()) await page.getByRole('tab', { name: 'Run and Debug', exact: true }).first().click();
+	await expect(pane.getByRole('status')).toContainText('stopped', { timeout: 30_000 });
+	const resumedPid = Number(await readFile(join(root, 'auto.pid'), 'utf8'));
+	await workbench.quickaccess.runCommand('workbench.action.debug.stopAll');
+	await page.getByRole('tab', { name: 'Terminal', exact: true }).first().click();
+	await workbench.terminal.activeInstance.locator('.xterm-helper-textarea').press('Control+C');
+	await expect.poll(() => alive(resumedPid)).toBe(false);
+	await autoAttach().click();
+	await choose('Temporarily Disable Auto Attach', 'Workspace Settings');
+	await expect(autoAttach()).toHaveText('Auto Attach: Temporarily Disabled');
+	({ workbench } = await reloadWorkbench());
+	page = workbench.page;
+	await expect(autoAttach()).toHaveText('Auto Attach: Always');
+	expect(await workspaceMode()).toBe('always');
+	await autoAttach().click();
+	await choose('Disabled', 'Workspace Settings');
+	await expect(autoAttach()).toHaveCount(0);
+	await expect.poll(workspaceMode).toBe('disabled');
 });
 
 test('Rust JavaScript provider releases launched processes when its authority is disabled', tags, async ({ workbench, testWorkspace }) => {
@@ -221,6 +319,31 @@ test('Rust debug workflow errors and accessibility help follow Chinese display l
 	await picker.getByRole('combobox').fill('简体中文');
 	await picker.getByRole('combobox').press('Enter');
 	({ workbench } = await restartWorkbench());
+	await workbench.quickaccess.runCommand('ash.debug-javascript.toggleAutoAttach');
+	const autoAttachPicker = workbench.page.getByRole('combobox', { name: '切换自动附加（用户设置）', exact: true });
+	await expect(autoAttachPicker).toBeFocused();
+	await autoAttachPicker.fill('始终');
+	await autoAttachPicker.press('Control+Home');
+	await autoAttachPicker.press('Enter');
+	const autoAttach = workbench.page.getByRole('button', { name: /^自动附加:/u });
+	await expect(autoAttach).toHaveText('自动附加: 始终');
+	await autoAttach.focus();
+	await workbench.page.keyboard.press('Enter');
+	await expect(autoAttachPicker).toBeFocused();
+	await autoAttachPicker.fill('临时禁用自动附加');
+	await autoAttachPicker.press('Control+Home');
+	await autoAttachPicker.press('Enter');
+	await expect(autoAttach).toHaveText('自动附加: 已临时禁用');
+	await autoAttach.click();
+	await autoAttachPicker.fill('重新启用自动附加');
+	await autoAttachPicker.press('Control+Home');
+	await autoAttachPicker.press('Enter');
+	await expect(autoAttach).toHaveText('自动附加: 始终');
+	await autoAttach.click();
+	await autoAttachPicker.fill('已禁用');
+	await autoAttachPicker.press('Control+Home');
+	await autoAttachPicker.press('Enter');
+	await expect(autoAttach).toHaveCount(0);
 	const root = testWorkspace.directory;
 	await mkdir(join(root, '.vscode'), { recursive: true });
 	await writeFile(join(root, 'locale.cjs'), 'setInterval(() => {}, 1000);\n');
@@ -235,6 +358,7 @@ test('Rust debug workflow errors and accessibility help follow Chinese display l
 	await workbench.page.keyboard.press('Alt+F1');
 	const help = workbench.page.getByRole('dialog', { name: '无障碍帮助', exact: true });
 	await expect(help.getByRole('textbox')).toHaveValue(/新建集成终端以自动附加[\s\S]*停止调试会分离已附加的终端程序/u);
+	await expect(help.getByRole('textbox')).toHaveValue(/切换自动附加[\s\S]*临时禁用自动附加[\s\S]*同一终端恢复/u);
 	await workbench.page.keyboard.press('Escape');
 	await expect(heading).toBeFocused();
 });

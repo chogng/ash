@@ -139,6 +139,9 @@ pub(super) fn built_in_deployments(
                 include_str!("../../../../../extensions/debug-javascript/src/lib.rs"),
                 include_str!("../../../../../extensions/debug-javascript/runtime.json"),
                 include_str!("../../../../../extensions/debug-javascript/src/auto_attach.rs"),
+                include_str!(
+                    "../../../../../extensions/debug-javascript/src/auto_attach_controls.rs"
+                ),
                 include_str!("../../../../../extensions/debug-javascript/src/auto-attach.cjs"),
                 include_str!("../../../../../extensions/debug-javascript/src/adapter-runtime.cjs"),
                 include_str!("../../../../../extensions/debug-javascript/package.nls.json"),
@@ -266,6 +269,8 @@ fn product_debug_workflow_deployment(
                 vec![
                     ExtensionCapability::DebugAdapter,
                     ExtensionCapability::TerminalProfileProvider,
+                    ExtensionCapability::Command,
+                    ExtensionCapability::StatusBar,
                 ]
             } else {
                 vec![ExtensionCapability::DebugAdapter]
@@ -274,7 +279,17 @@ fn product_debug_workflow_deployment(
         authority: Arc::new(ProductAuthority),
         activation: Some(ActivationPlan {
             events,
-            commands: Vec::new(),
+            commands: manifest["contributes"]["commands"]
+                .as_array()
+                .into_iter()
+                .flatten()
+                .filter_map(|command| {
+                    command["command"]
+                        .as_str()
+                        .zip(command["title"].as_str())
+                        .map(|(id, title)| (id.to_owned(), title.to_owned()))
+                })
+                .collect(),
         }),
         activation_failure: None,
     })

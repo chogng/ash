@@ -29,6 +29,7 @@ use std::time::Duration;
 use std::time::Instant;
 
 mod auto_attach;
+mod auto_attach_controls;
 pub use auto_attach::helper as auto_attach_helper;
 
 #[derive(Default)]
@@ -133,38 +134,7 @@ impl external_ext_sdk::Extension for Extension {
                 })
                 .unwrap_or_default(),
         )?;
-        let environment = broker.environment();
-        let folders = environment.clone();
-        let configuration = context.client.clone();
-        context
-            .workspace
-            .observe("javascript.workspace".into(), move |event, token| {
-                match event {
-                    external_ext_sdk::workspace::WorkspaceEvent::Workspace {
-                        workspace_folders,
-                    } => {
-                        folders.workspace(
-                            workspace_folders
-                                .into_iter()
-                                .map(|folder| folder.uri)
-                                .collect(),
-                        )?;
-                    }
-                    external_ext_sdk::workspace::WorkspaceEvent::Configuration {} => {
-                        let settings =
-                            configuration.get_configuration("debug.javascript", None, &token)?;
-                        folders.collection(&settings)?;
-                    }
-                }
-                Ok(())
-            })?;
-        let client = context.client.clone();
-        context
-            .terminal
-            .register_environment("javascript.auto-attach", move |token| {
-                let settings = client.get_configuration("debug.javascript", None, &token)?;
-                environment.collection(&settings)
-            })?;
+        auto_attach_controls::register(context, broker.environment(), &messages)?;
         broker.start()?;
         self.broker = Some(broker);
         Ok(())

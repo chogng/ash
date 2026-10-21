@@ -109,3 +109,44 @@ fn invalid_policy_does_not_silently_enable_auto_attach() {
     );
     assert!(environment.admit(&request(root.path())).is_none());
 }
+
+#[test]
+fn temporary_pause_preserves_terminal_environment_and_survives_refresh() {
+    let root = tempfile::tempdir().unwrap();
+    let environment = fixture(root.path());
+    let settings = json!({"autoAttachFilter":"always"});
+    let active = environment.collection(&settings).unwrap();
+    environment.suspend(Suspension::Paused).unwrap();
+    assert!(environment.admit(&request(root.path())).is_none());
+    // New terminals retain the preload while paused, so they can resume too.
+    assert_eq!(environment.collection(&settings).unwrap(), active);
+    assert!(environment.state().unwrap() == (Mode::Always, Suspension::Paused));
+    assert!(environment.admit(&request(root.path())).is_none());
+    environment.suspend(Suspension::Active).unwrap();
+    assert!(environment.admit(&request(root.path())).is_some());
+}
+
+#[test]
+fn auto_attach_configuration_changes_clear_temporary_pause() {
+    let root = tempfile::tempdir().unwrap();
+    let environment = fixture(root.path());
+    environment
+        .collection(&json!({"autoAttachFilter":"always"}))
+        .unwrap();
+    environment.suspend(Suspension::Paused).unwrap();
+    environment
+        .collection(&json!({"autoAttachFilter":"smart"}))
+        .unwrap();
+    assert!(environment.admit(&request(root.path())).is_some());
+    environment.suspend(Suspension::Paused).unwrap();
+    environment
+        .collection(&json!({"autoAttachFilter":"smart", "autoAttachSmartPattern":[]}))
+        .unwrap();
+    assert!(environment.admit(&request(root.path())).is_some());
+    // A new activation starts active without persisting a window's suspension.
+    let fresh = fixture(root.path());
+    fresh
+        .collection(&json!({"autoAttachFilter":"smart"}))
+        .unwrap();
+    assert!(fresh.admit(&request(root.path())).is_some());
+}

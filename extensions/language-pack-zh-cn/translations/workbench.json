@@ -1,5 +1,6 @@
 {
   "ash": {
+    "debug.autoAttachControlsHelp": "“调试: 切换自动附加”会打开可用键盘操作的选择器，用于选择模式和用户或工作区设置。启用后，状态栏的自动附加项会显示当前模式并打开同一选择器。“临时禁用自动附加”会暂停新程序的附加，保留设置和已有调试会话。“重新启用自动附加”可在同一终端恢复。更改自动附加设置或重启扩展会清除暂停状态。",
     "debug.javascriptWorkflowHelp": "JavaScript 和 TypeScript：将 debug.javascript.autoAttachFilter 设为 always、smart 或 onlyWithFlag，然后新建集成终端以自动附加。在 launch.json 中配置 serverReadyAction，可在输出匹配时打开服务网址或启动另一个调试配置。停止调试会分离已附加的终端程序；请使用终端结束这些程序。",
     "debug.moreConfigurations": "选择并启动调试…",
     "debug.consoleQuickAccess": "调试: 在快速访问中选择控制台",

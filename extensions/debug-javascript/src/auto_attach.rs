@@ -25,18 +25,36 @@ use std::thread::JoinHandle;
 use std::time::Duration;
 use tokio_tungstenite::tungstenite;
 
-#[derive(Clone, Copy, Deserialize, Default)]
+#[derive(Clone, Copy, Deserialize, Default, Eq, PartialEq)]
 #[serde(rename_all = "camelCase")]
-enum Mode {
+pub(super) enum Mode {
     #[default]
     Disabled,
     Always,
     Smart,
     OnlyWithFlag,
 }
+impl Mode {
+    pub fn setting(self) -> &'static str {
+        match self {
+            Self::Disabled => "disabled",
+            Self::Always => "always",
+            Self::Smart => "smart",
+            Self::OnlyWithFlag => "onlyWithFlag",
+        }
+    }
+}
+#[derive(Clone, Copy, Default, Eq, PartialEq)]
+pub(super) enum Suspension {
+    #[default]
+    Active,
+    Paused,
+}
 #[derive(Default)]
 struct Policy {
     mode: Mode,
+    suspension: Suspension,
+    patterns: Vec<String>,
     excluded: Option<GlobSet>,
     folders: Vec<String>,
 }
@@ -53,6 +71,7 @@ impl Environment {
         let mut policy = self.policy.lock().map_err(|_| invalid(&self.error))?;
         // A malformed edit must retire the previous attach policy, including
         // credentials still inherited by terminals created before the edit.
+        let previous = policy.mode;
         policy.mode = Mode::Disabled;
         let mode: Mode = serde_json::from_value(
             settings
@@ -72,11 +91,18 @@ impl Environment {
             return Err(invalid(&self.error));
         }
         let mut excluded = GlobSetBuilder::new();
-        for pattern in patterns {
-            excluded.add(Glob::new(&pattern).map_err(|_| invalid(&self.error))?);
+        for pattern in &patterns {
+            excluded.add(Glob::new(pattern).map_err(|_| invalid(&self.error))?);
+        }
+        let excluded = excluded.build().map_err(|_| invalid(&self.error))?;
+        // Terminal refreshes and unrelated configuration events must preserve a pause.
+        // An actual auto-attach setting change starts a new policy in the active state.
+        if previous != mode || policy.patterns != patterns {
+            policy.suspension = Suspension::Active;
         }
         policy.mode = mode;
-        policy.excluded = Some(excluded.build().map_err(|_| invalid(&self.error))?);
+        policy.patterns = patterns;
+        policy.excluded = Some(excluded);
         let mut map = Vec::new();
         if !matches!(mode, Mode::Disabled) {
             let helper = std::env::current_exe().map_err(|_| invalid(&self.error))?;
@@ -112,6 +138,17 @@ impl Environment {
         }
         Ok(json!({"persistent":false,"map":map,"descriptionMap":[]}))
     }
+    pub fn state(&self) -> Result<(Mode, Suspension), ExtensionError> {
+        let policy = self.policy.lock().map_err(|_| invalid(&self.error))?;
+        Ok((policy.mode, policy.suspension))
+    }
+    pub fn suspend(&self, suspension: Suspension) -> Result<(), ExtensionError> {
+        self.policy
+            .lock()
+            .map_err(|_| invalid(&self.error))?
+            .suspension = suspension;
+        Ok(())
+    }
     pub fn workspace(&self, folders: Vec<String>) -> Result<(), ExtensionError> {
         self.policy
             .lock()
@@ -129,6 +166,9 @@ impl Environment {
             return None;
         }
         let policy = self.policy.lock().ok()?;
+        if policy.suspension == Suspension::Paused {
+            return None;
+        }
         match policy.mode {
             Mode::Disabled => return None,
             Mode::OnlyWithFlag if !request.flagged => return None,

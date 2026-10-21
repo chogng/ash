@@ -496,7 +496,9 @@ fn debug_workflow_deployments_use_public_capabilities_and_separate_authority() {
         javascript.params.capabilities,
         [
             ash_external_ext::ExtensionCapability::DebugAdapter,
-            ash_external_ext::ExtensionCapability::TerminalProfileProvider
+            ash_external_ext::ExtensionCapability::TerminalProfileProvider,
+            ash_external_ext::ExtensionCapability::Command,
+            ash_external_ext::ExtensionCapability::StatusBar
         ]
     );
     assert_eq!(
@@ -518,6 +520,13 @@ fn debug_workflow_deployments_use_public_capabilities_and_separate_authority() {
             .unwrap()
             .events
             .contains(&"onStartupFinished".into())
+    );
+    assert_eq!(
+        javascript.activation.as_ref().unwrap().commands,
+        [(
+            "ash.debug-javascript.toggleAutoAttach".into(),
+            "%command.toggleAutoAttach%".into()
+        )]
     );
     assert_eq!(
         server_ready.activation.as_ref().unwrap().events,
