@@ -339,3 +339,25 @@ pnpm run smoketest-no-compile test/smoke/areas/windows/development-runtime.spec.
 
 这两个已复现缺陷不证明旧日志中的三次原生 Renderer 无响应具有相同原因。
 原先“等待／重新打开”仍缺带新来源、token 和 pending 标签的现场配对记录，根 TODO 仅保留这一项，避免把主动保存失败的修复写成所有无响应提示均已解决。
+
+## 2026-10-21 macOS Sessions 启动退出补验
+
+本机 arm64 在 `9402110a6`、Node 24.21.0、Ash 0.1.0／Electron 44.4.5 上执行
+`pnpm run pretest:smoke:desktop`，重建当前后端、Main 和 Renderer 后运行：
+
+```sh
+pnpm run test:smoke:desktop:no-compile test/smoke/areas/windows/font-cache.spec.ts --grep 'Desktop migrates'
+```
+
+自动恢复 Agents 变体通过迁移、原文归档、字体与布局恢复断言。第二次启动的 window-2 日志显示，
+退出请求在 `1792590845268` ms 到达，`Agents restored` 在 `1792590845274` ms 完成，
+退出完成回执在 `1792590845298` ms 发出；这一轮实际覆盖了恢复与退出重叠，没有记录旧 `IPC connection closed`。
+日志另有既有 `debug.storage` 不可用错误，不能把该结果表述为没有任何错误。
+
+同批单窗口变体在第二次启动后的 `session.quit()` 超过 10 秒，测试驱动终止了该进程树，
+所以整条命令是 1 通过／1 失败。该进程的 Renderer 已发退出完成回执、Main 的 App Server 载体也已 stopped，
+现有日志无法说明余下退出阶段为何停留，不能将其归因到旧存储 RPC。仅定向重跑
+`--grep 'auto-restore Agents: false'` 后 1 项通过；首败仍保留，未通过增加等待、过滤错误或修改退出逻辑消项。
+
+证据保存在 `.build/local-todo-retirement/{first,retry}-test-results/` 与对应 `*-smoke.log`。
+本轮收窄了历史问题的验证缺口，但仍需定位这次偶发退出停留；根待办继续保留。

@@ -165,6 +165,30 @@ test('GPU caret uses the same text origin as DOM rendering', async ({ page }) =>
 	}).toBeLessThan(2);
 });
 
+test('GPU decoration rasters distinguish inheritance from explicit false and transparent zero', async ({ page }) => {
+	await page.goto('/gpuText.html');
+	const rasters = await page.evaluate(() => window.ashGpuTextIntegration.readDecorationRasters());
+	expect(rasters.normalReference!.some(value => value > 0)).toBe(true);
+	expect(rasters.inheritedBold).not.toEqual(rasters.normalReference);
+	expect(rasters.inheritedStrike).not.toEqual(rasters.normalReference);
+	expect(rasters.normal).toEqual(rasters.normalReference);
+	expect(rasters.noStrike).toEqual(rasters.normalReference);
+	expect(rasters.transparentStrike).toEqual(rasters.normalReference);
+	expect(rasters.transparent!.every(value => value === 0)).toBe(true);
+	expect(rasters.zeroOpacity!.every(value => value === 0)).toBe(true);
+});
+
+test('GPU rows and advances follow font size and line height changes', async ({ page }) => {
+	await page.goto('/gpuText.html');
+	await expect.poll(() => gpuEditorState(page)).toEqual(healthyGpuEditorState());
+	for (const [fontSize, lineHeight] of [[18, 28], [22, 34]] as const) {
+		await page.evaluate(({ fontSize, lineHeight }) => window.ashGpuTextIntegration.setFontMetrics(fontSize, lineHeight), { fontSize, lineHeight });
+		await expect(page.locator('.view-line').first()).toHaveCSS('height', `${lineHeight}px`);
+		await expect.poll(() => gpuEditorState(page)).toEqual(healthyGpuEditorState());
+		await expectGpuAdvanceMatchesDom(page);
+	}
+});
+
 test('GPU text clicks retain the rendered insertion position through pointer capture', async ({ page }) => {
 	await page.goto('/gpuText.html');
 	await expect.poll(() => gpuEditorState(page)).toEqual(healthyGpuEditorState());
@@ -396,6 +420,9 @@ test('GPU text uses semantic token colors from the active theme', async ({ page 
 	await expect(page.locator('.view-line.gpu-rendered')).toHaveCount(1);
 	await expect.poll(() => page.evaluate(() => window.ashGpuTextIntegration.countGlyphPixels(225, 55, 171))).toBeGreaterThan(0);
 	await expect.poll(() => page.evaluate(() => window.ashGpuTextIntegration.getValue())).toBe('sample');
+	await page.evaluate(() => window.ashGpuTextIntegration.clearSemanticFontStyles());
+	await expect(page.locator('.view-line.gpu-rendered')).toHaveCount(1);
+	await expect.poll(() => page.evaluate(() => window.ashGpuTextIntegration.countGlyphPixels(70, 172, 114))).toBeGreaterThan(0);
 });
 
 test('DOM semantic styles update with the theme and explicit false clears font styles', async ({ page }) => {

@@ -304,6 +304,28 @@ font-size 派生的 fallback advance；测试和未来专用字体引擎通过�
 会重建缓存。随机差分测试覆盖 400 次多区间事务、换行变化和 undo/redo，并与
 逐次全文扫描结果比较。
 
+GPU 装饰仍由 `DecorationStyleCache` 为字形 atlas 提供稳定样式 ID。
+`undefined` 表示继承，显式 `false` 表示关闭，颜色值 `0` 表示透明；三者不能碰撞。
+`GlyphRasterizer` 对粗体和删除线均优先使用显式覆盖，再读取 token 字体样式。
+全空样式继续使用 ID `0`，opacity 和删除线厚度沿用两位小数的缓存精度。
+
+2026-10-21 在 macOS arm64、Chrome 155.0.8059.85 的真实 WebGPU 路径完成定向验证：
+`gpuInfrastructure.test.ts` 24 项及 `gpuText.integration.spec.ts` 的 `chrome-gpu` 项目 19 项通过。
+新增缓存用例在旧实现上 8 项失败／4 项通过，真实 Canvas 字形对照也失败；修复后覆盖双向插入顺序、
+显式关闭粗体／删除线、透明色／零 opacity、18／22 px 字号及 28／34 px 行高变化、主题切换、行几何和光标。
+本检出 `9402110a6` 加当前 GPU 修改的正常 Desktop 构建、Stanza 类型检查和结构／CSS ownership 检查通过；
+Ash 0.1.0／Electron 44.4.5 的真实 App Server 打开、编辑、保存流程 1 项通过，保存结果直接读取磁盘断言。
+此 Desktop 用例验证宿主接线，GPU 像素结论来自 Chrome GPU 项目，不代表 Electron GPU 或其他平台已验收。
+完整命令、首败及通过日志见 `.build/local-todo-retirement/validation.json`，核心入口为：
+
+```sh
+pnpm test:editor:unit --run src/ash/editor/test/browser/gpuInfrastructure.test.ts
+pnpm test:editor:browser gpuText.integration.spec.ts --project=chrome-gpu
+pnpm run build
+pnpm typecheck:stanza
+pnpm run test:smoke:desktop:no-compile test/smoke/areas/editor/editor-open.spec.ts --grep 'App Server workspace files open in Stanza and save through the editor region'
+```
+
 ### Current 9：Gutter 与 selection/caret projection
 
 `ViewLine` 只拥有单行文字、字符映射和文字几何。`LineNumbersPart`、

@@ -57,7 +57,7 @@ macOS 现场检查未发现 tgrep；所见多组 `npm exec @playwright/mcp` 的�
 
 ## Desktop 窗口收尾弹窗 · TODO
 
-- [ ] **验收 · macOS Sessions 启动与退出重叠**：2026-10-08 macOS 自动恢复 Sessions 尚在启动时立即退出，曾记录两条 `IPC connection closed`，未修改的 storage owner 在 `e05e17e93` 同基线亦复现；历史记录见提交 `e4d668f37` 中的 `platform-storage-todo.md`，原始产物不在当前 checkout。2026-10-21 Windows `f3ad8dc79` 正常重建后，自动恢复变体的 Electron UI 1 项、真实 App Server 的单窗口／自动恢复两变体 2 项通过，迁移、原文归档和重启后布局恢复均通过；日志显示 Sessions 在关闭请求前已恢复，未覆盖原 macOS 竞态，不能宣称已修复。现有 `font-cache.spec.ts` 已保留两变体及完整页面／console 诊断，证据见 `.build/sessions-startup-quit-20261021/`；首跑因测试 profile 路径过长触发 socket 限制，已改用短临时目录并复验。剩余在 Mac 正常准备后执行 `pnpm run test:smoke:desktop:no-compile test/smoke/areas/windows/font-cache.spec.ts --grep 'Desktop migrates'`，结合窗口日志确认启动／关闭时序；若复现，定位实际 pending RPC 后处理其生命周期，不以构造栈猜测调用、不增加等待或过滤错误消项。此项不阻塞已验收的存储队列修复退场。
+- [ ] **复核 · macOS 启动后立即退出**：2026-10-08 Sessions 尚在启动时退出曾记录两条 `IPC connection closed`；未修改的 storage owner 在同基线亦复现。2026-10-21 本机 `9402110a6` 正常重建后，真实 App Server 的自动恢复变体通过迁移、原文归档和布局恢复；窗口日志确认退出请求早于 `Agents restored` 6 ms，本轮未出现旧 IPC 错误。同批单窗口变体却在第二次启动后的退出超过 10 秒，Renderer 已回完成、载体已 stopped；定向复跑通过，首败仍保留，尚不能归因到旧存储 RPC。下一步取得该停留阶段的实际 pending／关闭诊断并修复，不增加等待或过滤错误消项。命令、日志和范围见 [macOS 补验](docs/desktop-startup.md#2026-10-21-macos-sessions-启动退出补验)；证据 `.build/local-todo-retirement/{first,retry}-test-results/`。此项不阻塞已验收的存储队列修复退场。
 
 - [ ] **现场复核 · 开发重载时的原生无响应提示** · 后端发布漏通知与重启期间备份失败已修复，macOS 协议／备份及发布监听 81 项通过，双窗口重连和重载恢复未保存文件各 5 轮通过，已完成部分见 [后端发布与重载复核](docs/desktop-startup.md#2026-10-21-后端发布与页面重载重叠)。剩余是用户原先的“等待／重新打开”：本轮捕获的是主动保存失败，旧日志三次原生无响应前的 `initialize` 超时尚未关联到同一个原因；需用已有 token／reason、pending 标签及原生事件来源日志取得实际故障链，不能据新修复宣称所有无响应已解决。
 
@@ -136,7 +136,6 @@ macOS 现场检查未发现 tgrep；所见多组 `npm exec @playwright/mcp` 的�
 - [ ] **复核 · 格式化与资源级 Worker**：确认默认格式化器选择、冲突选择界面、输入格式化自动触发及资源级 worker 的当前生产链；旧记录存在先后修正，须先核对实际缺口，再验证取消、语言切换、多选区和一次撤销。
 - [ ] **验收 · 补全、提示与片段**：验证 Suggest 的触发／调度／事件、Inline Completions 的接受与取消、Inlay Hints 的行内布局／展示选项，以及 Snippet 的合并和插入选项；覆盖模型切换、只读和撤销。
 - [ ] **复核 · 批量编辑预览与撤销**：确认批量预览的分类／实时差异及平台 UndoRedoService／UndoRedoSource 接入是否有当前产品消费者，再确定实施范围；保留现有事务、回滚与顺序快照的唯一 owner。
-- [ ] **验收 · GPU 渲染**：补 GPU 样式缓存中 `undefined` 与 `false`／`0` 的区分场景，连同行几何、字体与主题变化检查；旧文件和成员差异报告不作为渲染通过证据。
 - [ ] **复核 · Editor 完整回归**：复跑受本轮范围影响的现有 Editor 检查，确认旧 Windows URI-list 路径断言、测试产物缺失及 Electron 中文重启关闭超时是否仍可复现；已被后续修复覆盖的旧失败直接移除，不把历史记录当作当前阻塞。新行为通过 Ash 自身对应入口验收。
 
 - [ ] **功能 · 文献检索扩展**：后续实现查询、元数据获取及向文献管理扩展入库的工具／Skill 链路，PDF 阅读复用独立查看器；作者接入遵循上方扩展 SDK 任务。Agent 结构化文档写入仍按下方 Work 文档服务契约另行实施。尚未新增检索代码或迁仓。
