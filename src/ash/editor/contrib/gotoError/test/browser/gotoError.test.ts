@@ -16,7 +16,7 @@ import { TrackedRangeStickiness } from '../../../../common/model.js';
 import { type TextMeasurer } from '../../../../common/viewModel.js';
 
 const { TestView: View } = await import("../../../../test/browser/viewModel/testViewModel.js");
-const { DiagnosticNavigationController } = await import("../../../../../../../extensions/code/browser/contrib/gotoError/browser/gotoError.js");
+const { DiagnosticNavigationController } = await import("../../browser/gotoError.js");
 
 test("F8 navigates current diagnostics in both directions", () => {
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");

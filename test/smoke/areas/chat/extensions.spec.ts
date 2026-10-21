@@ -1,10 +1,10 @@
 import { expect, test, writeEditorExtensionFixture } from '../../../automation/test.js';
 import { Editor } from '../../../automation/editor.js';
 import { QuickAccess } from '../../../automation/quickaccess.js';
+import { readUserSettings } from '../../../automation/settings.js';
+import { parseJsonc } from '../../../../src/ash/base/common/jsonc.js';
 import { mkdir, writeFile, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { execFile } from 'node:child_process';
-import { promisify } from 'node:util';
 
 test.beforeEach(async ({ workbench }) => {
 	// Fresh profiles restore Welcome after startup services; earlier input can be replaced during restoration.
@@ -176,21 +176,40 @@ test('Extensions view tab uses the extensions icon', async ({ workbench }) => {
 	const extensionManagementTab = page.getByRole('tab', { name: 'Extensions', exact: true });
 	await expect(extensionManagementTab.locator('svg[data-ash-icon-id="extensions"]')).toBeVisible();
 	await extensionManagementTab.click();
-	await expect(page.locator('.ash-extensions')).toBeVisible();
+	const extensions = page.locator('[data-view-id="ash.extensions.view"] .ash-extensions');
+	await expect(extensions).toBeVisible();
 	await expect(extensionManagementTab).toHaveAttribute('aria-selected', 'true');
-	const search = page.locator('.ash-extensions').getByRole('searchbox', { name: 'Search Extensions', exact: true });
+	const search = extensions.getByRole('searchbox', { name: 'Search Extensions', exact: true });
 	await search.focus();
 	await search.press('Alt+F1');
 	const help = page.getByRole('dialog', { name: 'Accessibility Help', exact: true });
-	await expect(help.getByRole('textbox')).toHaveValue(/Installation includes all capabilities in a package/u);
-	await expect(help.getByRole('textbox')).toHaveValue(/Execution and permissions are managed separately/u);
-	await expect(help.getByRole('textbox')).toHaveValue(/Use Sources to add or pause an Ash open source/u);
+	await expect(help.getByRole('textbox')).toHaveValue(/Enable or Disable.*whole editor extension.*scripts, themes, syntax and snippets/u);
+	await expect(help.getByRole('textbox')).toHaveValue(/Execution authorization and permissions are reviewed separately in details/u);
+	await expect(help.getByRole('textbox')).toHaveValue(/Install extension from Git repository.*repository revision and package directory/u);
 	await page.keyboard.press('Escape');
 	await expect(search).toBeFocused();
 });
 
-test('Local standard extension installs, runs only after grant, survives restart and retires on revoke', { tag: ['@electron-app-server', '@darwin'] }, async ({ target, testWorkspace, application, workbench, reloadWorkbench }) => {
-	test.setTimeout(90_000);
+const durableExtensionTest = test.extend({
+	useInMemorySecretStorage: false,
+	backendFixture: async ({ testWorkspace }, use) => {
+		const productServicesPath = join(testWorkspace.directory, 'private-services.json');
+		await writeFile(productServicesPath, JSON.stringify({ schemaVersion: 3 }));
+		await use({
+			productServicesPath,
+			async prepareProfile(profileDirectory) {
+				// Explicit private-file mode in this disposable profile avoids OS prompts.
+				// Encrypted recovery is covered separately with an injected keyring.
+				const secrets = join(profileDirectory, 'secrets');
+				await mkdir(secrets, { recursive: true, mode: 0o700 });
+				await writeFile(join(secrets, 'storage-mode'), 'file', { mode: 0o600 });
+			},
+		});
+	},
+});
+
+durableExtensionTest('Local standard extension shares durable state and private secrets across windows and restart, and retires on revoke', { tag: ['@electron-app-server', '@darwin'] }, async ({ target, testWorkspace, application, workbench, reloadWorkbench, runningApplication }) => {
+	test.setTimeout(120_000);
 	const root = join(testWorkspace.directory, 'standard-extension');
 	await mkdir(join(root, '.ash-plugin'), { recursive: true });
 	await writeFile(join(root, '.ash-plugin', 'plugin.json'), JSON.stringify({
@@ -198,18 +217,39 @@ test('Local standard extension installs, runs only after grant, survives restart
 		compatibility: { ash: '>=0.1.0' },
 		contributions: {
 			editorExtensions: [{
-				id: 'inspect', runtime: 'javascript', entrypoint: 'extension.js', runtimeApiVersion: 1,
-				activationEvents: [{ type: 'onCommand', id: 'acme.standardSmoke.inspect' }], capabilities: ['command']
+				id: 'inspect', runtime: 'javascript', api: 'ash', entrypoint: 'extension.js', runtimeApiVersion: 1,
+				activationEvents: ['inspect', 'stateFirst', 'stateSecond', 'stateRegrant', 'stateRead', 'secretStore', 'secretRead', 'secretDelete', 'secretHold'].map(name => ({ type: 'onCommand', id: 'acme.standardSmoke.' + name })), capabilities: ['command']
 			}]
 		},
 		permissions: [{ type: 'directory', access: 'read' }],
 	}));
 	await writeEditorExtensionFixture(root, `
-const vscode = require('vscode'); const { commands, window } = vscode;
-exports.activate = function(context) {
-	context.subscriptions.push(commands.registerCommand('acme.standardSmoke.inspect', async () => {
-		const text = new TextDecoder().decode(await vscode.workspace.fs.readFile(vscode.Uri.joinPath(vscode.workspace.workspaceFolders[0].uri, 'main.ts')));
-		await window.showInformationMessage('Standard disk: ' + text.trim() + '; globals: ' + [typeof process, typeof fetch, typeof WebAssembly].join(','));
+const ash = require('@ash/sdk'); const { commands, window } = ash;
+exports.activate = async function(context) {
+	const secretRestored = (await context.secrets.get('token')) === 'synthetic-extension-private-你好';
+	context.subscriptions.push(commands.register('acme.standardSmoke.secretStore', async () => { await context.secrets.store('token', 'synthetic-extension-private-你好'); await window.showInformationMessage('Private secret stored'); }));
+	context.subscriptions.push(commands.register('acme.standardSmoke.secretRead', async () => { const matched = (await context.secrets.get('token')) === 'synthetic-extension-private-你好'; await window.showInformationMessage('Private secret matched: ' + matched + '; activation: ' + secretRestored); }));
+	context.subscriptions.push(commands.register('acme.standardSmoke.secretDelete', async () => { await window.showInformationMessage('Private secret deleted: ' + await context.secrets.delete('token')); }));
+	context.subscriptions.push(commands.register('acme.standardSmoke.secretHold', async () => {
+		await window.showInformationMessage('Private access pending');
+		await new Promise(resolve => { const timer = setInterval(() => { if (require('node:fs').existsSync(${JSON.stringify(join(testWorkspace.directory, 'resume-private-call'))})) { clearInterval(timer); resolve(); } }, 25); });
+		await context.secrets.get('token');
+		require('node:fs').writeFileSync(${JSON.stringify(join(testWorkspace.directory, 'retired-private-result'))}, 'accessed');
+	}));
+	const readState = async () => ({first:await context.storage.get('first'), second:await context.storage.get('second'), afterRegrant:await context.storage.get('afterRegrant')});
+	const report = async label => { await window.showInformationMessage(label + ': ' + JSON.stringify(await readState())); };
+	context.subscriptions.push(commands.register('acme.standardSmoke.stateFirst', async () => { await context.storage.update('first', '你好'); await report('First state'); }));
+	context.subscriptions.push(commands.register('acme.standardSmoke.stateSecond', async () => { await context.storage.update('second', null); await report('Second state'); }));
+	context.subscriptions.push(commands.register('acme.standardSmoke.stateRegrant', async () => { await context.storage.update('afterRegrant', true); await report('Regranted state'); }));
+	context.subscriptions.push(commands.register('acme.standardSmoke.stateRead', async () => report('Read state')));
+	context.subscriptions.push(commands.register('acme.standardSmoke.inspect', async () => {
+		const text = new TextDecoder().decode(await ash.workspace.fs.readFile(ash.Uri.joinPath(ash.workspace.workspaceFolders[0].uri, 'main.ts')));
+		const configuration = ash.workspace.getConfiguration('editor');
+		const inspection = configuration.inspect('fontSize');
+		const restored = inspection.globalValue === 19 && inspection.workspaceValue === 22;
+		await configuration.update('fontSize', restored ? undefined : 19, 'user');
+		await configuration.update('fontSize', restored ? undefined : 22, 'workspace');
+		await window.showInformationMessage('Standard disk: ' + text.trim() + '; globals: ' + [typeof process, typeof fetch, typeof WebAssembly].join(',') + '; settings: ' + (restored ? 'restored and reset' : 'created'));
 		return text;
 	}));
 }`);
@@ -221,151 +261,122 @@ exports.activate = function(context) {
 	expect(installed.message).toContain('Installed acme/standard-smoke 1.0.0');
 
 	const absent = async (): Promise<void> => {
+		await page.bringToFront();
 		await workbench.quickaccess.open('>acme.standardSmoke.inspect');
 		await expect(workbench.quickaccess.items.filter({ has: page.locator('.ash-quick-pick-row-description').getByText('acme.standardSmoke.inspect', { exact: true }) })).toHaveCount(0);
 		await workbench.quickaccess.close();
 	};
 	const manage = async (button: string): Promise<void> => {
-		const review = await workbench.dialogs.confirm(application, 'Standard extension smoke', button, async () => {
-			await workbench.quickaccess.runCommand('ash.extensions.manageLocal');
-			await page.getByRole('option').filter({ has: page.getByText('Standard extension smoke', { exact: true }) }).click();
-		});
-		expect(review.detail).toContain('Read workspace files');
-		expect(review.detail).toContain('Package digest: sha256:');
+		await page.bringToFront();
+		await workbench.quickaccess.runCommand('ash.extensions.manageLocal');
+		await page.getByRole('listbox', { name: 'Installed Extensions', exact: true }).locator('[data-package-id="acme/standard-smoke"]').click();
+		const details = page.locator('.ash-extension-editor:visible').filter({ hasText: 'acme/standard-smoke' });
+		const action = () => details.getByRole('button', { name: button, exact: true }).click();
+		if (button === 'Grant permissions' || button === 'Revoke permissions') {
+			const review = await workbench.dialogs.confirm(application, 'Standard extension smoke', button, action);
+			expect(review.detail).toContain('Read workspace files');
+			expect(review.detail).toContain('Package digest: sha256:');
+		} else if (button === 'Uninstall') {
+			await workbench.dialogs.confirm(application, 'Uninstall extension', button, action);
+		} else {
+			await action();
+			await expect(details.getByRole('button', { name: button === 'Enable' ? 'Disable' : 'Enable', exact: true })).toBeVisible();
+		}
 	};
 	await absent();
 	await manage('Enable');
 	await absent();
 	await manage('Grant permissions');
 	await workbench.quickaccess.runCommand('acme.standardSmoke.inspect');
-	await expect(page.locator('.ash-notification', { hasText: 'Standard disk: const value = 1;; globals: object,function,object' })).toBeVisible();
+	await expect(page.locator('.ash-notification', { hasText: 'Standard disk: const value = 1;; globals: object,function,object; settings: created' })).toBeVisible();
+	const userFontSize = async () => (parseJsonc((await readUserSettings(page)).content) as Record<string, unknown>)['editor.fontSize'];
+	const workspaceSettings = join(testWorkspace.directory, '.vscode', 'settings.json');
+	const workspaceFontSize = async () => (parseJsonc(await readFile(workspaceSettings, 'utf8')) as Record<string, unknown>)['editor.fontSize'];
+	await expect.poll(userFontSize).toBe(19);
+	await expect.poll(workspaceFontSize).toBe(22);
+	let agents = await workbench.openAgentsWindow(target.kind);
+	let agentsCommands = new QuickAccess(agents);
+	await page.bringToFront();
+	await workbench.quickaccess.runCommand('acme.standardSmoke.stateFirst');
+	await expect(page.locator('.ash-notification', { hasText: 'First state:' })).toBeVisible();
+	await agents.bringToFront();
+	await agentsCommands.runCommand('acme.standardSmoke.stateSecond');
+	await expect(agents.locator('.ash-notification', { hasText: 'Second state:' })).toBeVisible();
+	const savedState = '{"first":"你好","second":null}';
+	for (const [commands, windowPage] of [[workbench.quickaccess, page], [agentsCommands, agents]] as const) {
+		await windowPage.bringToFront();
+		await commands.runCommand('acme.standardSmoke.stateRead');
+		await expect(windowPage.locator('.ash-notification', { hasText: 'Read state: ' + savedState })).toBeVisible();
+	}
+	await page.bringToFront();
+	await workbench.quickaccess.runCommand('acme.standardSmoke.secretStore');
+	await expect(page.locator('.ash-notification', { hasText: 'Private secret stored' })).toBeVisible();
+	await agents.bringToFront();
+	await agentsCommands.runCommand('acme.standardSmoke.secretRead');
+	await expect(agents.locator('.ash-notification', { hasText: 'Private secret matched: true; activation: false' })).toBeVisible();
+	await page.bringToFront();
+	await workbench.quickaccess.runCommand('acme.standardSmoke.secretDelete');
+	await expect(page.locator('.ash-notification', { hasText: 'Private secret deleted: true' })).toBeVisible();
+	await agents.bringToFront();
+	await agentsCommands.runCommand('notifications.clearAll');
+	await agentsCommands.runCommand('acme.standardSmoke.secretRead');
+	await expect(agents.locator('.ash-notification', { hasText: 'Private secret matched: false; activation: false' })).toBeVisible();
+	await page.bringToFront();
+	await workbench.quickaccess.runCommand('acme.standardSmoke.secretRead');
+	await expect(page.locator('.ash-notification', { hasText: 'Private secret matched: false; activation: false' })).toBeVisible();
+	await workbench.quickaccess.runCommand('notifications.clearAll');
+	await workbench.quickaccess.runCommand('acme.standardSmoke.secretStore');
+	await expect(page.locator('.ash-notification', { hasText: 'Private secret stored' })).toBeVisible();
 
 	({ workbench, application } = await reloadWorkbench());
 	page = workbench.page;
 	await expect(page.getByRole('tab', { name: 'Welcome', exact: true })).toBeVisible();
 	await workbench.quickaccess.runCommand('acme.standardSmoke.inspect');
-	await expect(page.locator('.ash-notification', { hasText: 'Standard disk: const value = 1;; globals: object,function,object' })).toBeVisible();
+	await expect(page.locator('.ash-notification', { hasText: 'Standard disk: const value = 1;; globals: object,function,object; settings: restored and reset' })).toBeVisible();
+	await expect.poll(userFontSize).toBeUndefined();
+	await expect.poll(workspaceFontSize).toBeUndefined();
+	await workbench.quickaccess.runCommand('acme.standardSmoke.stateRead');
+	await expect(page.locator('.ash-notification', { hasText: 'Read state: ' + savedState })).toBeVisible();
+	await workbench.quickaccess.runCommand('acme.standardSmoke.secretRead');
+	await expect(page.locator('.ash-notification', { hasText: 'Private secret matched: true; activation: true' })).toBeVisible();
+	agents = await workbench.openAgentsWindow(target.kind);
+	agentsCommands = new QuickAccess(agents);
+	await agentsCommands.runCommand('acme.standardSmoke.secretHold');
+	await expect(agents.locator('.ash-notification', { hasText: 'Private access pending' })).toBeVisible();
 	await manage('Revoke permissions');
+	// Revoking the extension ends the pending command through the normal
+	// command error dialog; acknowledge it before using that window again.
+	const retiredCommand = agents.getByRole('dialog', { name: 'Error', exact: true });
+	await expect(retiredCommand).toContainText('acme.standardSmoke.secretHold');
+	await expect(retiredCommand).toContainText('ExtensionHostInvocationNotFound');
+	await retiredCommand.getByRole('button', { name: 'OK', exact: true }).click();
 	await absent();
+	await agents.bringToFront();
+	await agentsCommands.open('>acme.standardSmoke.stateFirst');
+	await expect(agentsCommands.items.filter({ has: agents.locator('.ash-quick-pick-row-description').getByText('acme.standardSmoke.stateFirst', { exact: true }) })).toHaveCount(0);
+	await agentsCommands.close();
+	await manage('Grant permissions');
+	await writeFile(join(testWorkspace.directory, 'resume-private-call'), 'resume');
+	await workbench.quickaccess.runCommand('notifications.clearAll');
+	await workbench.quickaccess.runCommand('acme.standardSmoke.stateRead');
+	await expect(page.locator('.ash-notification', { hasText: 'Read state: ' + savedState })).toBeVisible();
+	await workbench.quickaccess.runCommand('acme.standardSmoke.secretRead');
+	await expect(page.locator('.ash-notification', { hasText: 'Private secret matched: true; activation: true' })).toBeVisible();
+	await workbench.quickaccess.runCommand('acme.standardSmoke.secretStore');
+	await expect(page.locator('.ash-notification', { hasText: 'Private secret stored' })).toBeVisible();
+	await workbench.quickaccess.runCommand('acme.standardSmoke.stateRegrant');
+	await expect(page.locator('.ash-notification', { hasText: 'Regranted state: {"first":"你好","second":null,"afterRegrant":true}' })).toBeVisible();
+	await manage('Revoke permissions');
 	await manage('Disable');
 	await manage('Uninstall');
-	const empty = await workbench.dialogs.expectMessage(application, 'Information', () => workbench.quickaccess.runCommand('ash.extensions.manageLocal'));
-	expect(empty.message).toContain('No local editor extensions are installed.');
-});
-
-test('Open VSX JavaScript extension starts on first command, survives restart and retires on revoke', { tag: ['@electron-app-server', '@darwin'] }, async ({ target, application, workbench, reloadWorkbench }) => {
-	test.skip(process.env.ASH_PLAYWRIGHT_OPEN_VSX !== '1' || process.platform !== 'darwin' || target.kind !== 'electron' || target.appServerMode !== 'required', 'Explicit live Open VSX execution check requires macOS Electron with App Server');
-	test.setTimeout(120_000);
-	let page = workbench.page;
-	const packageId = 'mark-wiemer.helloworld-2022@open-vsx';
-	if (!('evaluate' in application)) { throw new Error('This scenario requires Electron'); }
-	const profile = await application.evaluate(({ app }) => app.getPath('userData'));
-	const processes = async (): Promise<number> => {
-		const { stdout } = await promisify(execFile)('ps', ['-axo', 'command=']);
-		return stdout.split('\n').filter(line => line.includes('/ash-external-js-ext ') && line.includes(`--extension-id marketplace:${packageId}:vscode`) && line.includes(profile)).length;
-	};
-	await workbench.quickaccess.runCommand('ash.extensions.installed');
-	let extensionManagement = page.locator('.ash-extensions');
-	await extensionManagement.getByRole('button', { name: 'All capabilities', exact: true }).click();
-	await page.getByRole('option', { name: 'Editor extensions (Open VSX)', exact: true }).click();
-	await extensionManagement.getByRole('button', { name: 'Installed', exact: true }).click();
-	await extensionManagement.getByLabel('Search Extensions', { exact: true }).fill('mark-wiemer.helloworld-2022');
-	await extensionManagement.getByLabel('Search Extensions', { exact: true }).press('Enter');
-	await expect(extensionManagement.getByRole('option').filter({ hasText: packageId })).toBeAttached({ timeout: 30_000 });
-	await extensionManagement.getByRole('option').filter({ hasText: packageId }).click();
-	await expect(page.locator('.ash-extension-editor')).toContainText('0.2.3');
-	await workbench.dialogs.confirm(application, 'Install', 'Install', () => page.locator('.ash-extension-editor').getByRole('button', { name: 'Install', exact: true }).click());
-	await page.locator('.ash-extension-editor').getByRole('button', { name: 'Show installed versions', exact: true }).click();
-	await expect(extensionManagement.getByRole('listbox', { name: 'Extensions', exact: true })).toContainText(packageId);
-	const installationId = await extensionManagement.getByRole('option').filter({ hasText: packageId }).getAttribute('data-installation-id');
-	const absent = async (): Promise<void> => {
-		await workbench.quickaccess.open('>helloworld.helloWorld');
-		await expect(workbench.quickaccess.items.filter({ has: page.locator('.ash-quick-pick-row-description').getByText('helloworld.helloWorld', { exact: true }) })).toHaveCount(0);
-		await workbench.quickaccess.close();
-	};
-	const manage = async (button: string): Promise<void> => {
-		const review = await workbench.dialogs.confirm(application, packageId, button, async () => {
-			await workbench.quickaccess.runCommand('ash.extensions.manageExtensions');
-			await page.getByRole('option').filter({ has: page.getByText(packageId, { exact: true }) }).click();
-		});
-		expect(review.detail).toContain('Package digest: sha256:');
-		expect(review.detail).toContain('Node modules, direct file access, networking and child processes are unavailable.');
-	};
+	await workbench.quickaccess.runCommand('ash.extensions.manageLocal');
+	await expect(page.getByRole('listbox', { name: 'Installed Extensions', exact: true }).locator('[data-package-id="acme/standard-smoke"]')).toHaveCount(0);
 	await absent();
-	await manage('Enable');
-	await absent();
-	await manage('Authorize execution');
-	await workbench.quickaccess.open('>helloworld.helloWorld');
-	await expect(workbench.quickaccess.items.filter({ has: page.locator('.ash-quick-pick-row-description').getByText('helloworld.helloWorld', { exact: true }) })).toHaveCount(1);
-	await workbench.quickaccess.close();
-	// A visible manifest command is not proof of a running extension process.
-	await expect.poll(processes).toBe(0);
-	await workbench.quickaccess.runCommand('helloworld.helloWorld');
-	await expect(page.locator('.ash-notification', { hasText: 'Hello VS Code 2023 (the future!!)' })).toBeVisible();
-	await expect.poll(processes).toBe(1);
-	({ workbench, application } = await reloadWorkbench());
-	page = workbench.page;
-	await expect(page.getByRole('tab', { name: 'Welcome', exact: true })).toBeVisible();
-	await expect.poll(processes).toBe(0);
-	await workbench.quickaccess.runCommand('helloworld.helloWorld');
-	await expect(page.locator('.ash-notification', { hasText: 'Hello VS Code 2023 (the future!!)' })).toBeVisible();
-	await expect.poll(processes).toBe(1);
-	await manage('Revoke execution authorization');
-	await expect.poll(processes).toBe(0);
-	await absent();
-	await manage('Disable');
-	await workbench.quickaccess.runCommand('ash.extensions.installed');
-	extensionManagement = page.locator('.ash-extensions');
-	await extensionManagement.getByRole('listbox', { name: 'Extensions', exact: true }).locator(`[data-installation-id="${installationId}"]`).click();
-	await workbench.dialogs.confirm(application, 'Uninstall extension', 'Uninstall', () => page.locator('.ash-extension-editor').getByRole('button', { name: 'Uninstall', exact: true }).click());
-	await expect(extensionManagement.getByRole('listbox', { name: 'Extensions', exact: true }).getByRole('option')).toHaveCount(0);
-});
-
-test('Open VSX installs a real theme, restores it and removes its contributions', { tag: '@electron-app-server' }, async ({ target, application, workbench, reloadWorkbench }) => {
-	test.skip(process.env.ASH_PLAYWRIGHT_OPEN_VSX !== '1' || target.kind !== 'electron' || target.appServerMode !== 'required', 'Explicit live Open VSX check requires Electron with App Server');
-	test.setTimeout(90_000);
-	let page = workbench.page;
-	await workbench.quickaccess.runCommand('ash.extensions.installed');
-	let extensionManagement = page.locator('.ash-extensions');
-	await extensionManagement.getByRole('button', { name: 'All capabilities', exact: true }).click();
-	await page.getByRole('option', { name: 'Editor extensions (Open VSX)', exact: true }).click();
-	await extensionManagement.getByRole('button', { name: 'Installed', exact: true }).click();
-	await extensionManagement.getByLabel('Search Extensions', { exact: true }).fill('dracula-theme.theme-dracula');
-	await extensionManagement.getByLabel('Search Extensions', { exact: true }).press('Enter');
-	await expect(extensionManagement.getByRole('status')).not.toHaveText('Loading Extensions…', { timeout: 30_000 });
-	const packageId = 'dracula-theme.theme-dracula@open-vsx';
-	await expect(extensionManagement.getByRole('option').filter({ hasText: packageId })).toBeAttached();
-	await extensionManagement.getByRole('option').filter({ hasText: packageId }).click();
-	await expect(page.locator('.ash-extension-editor').getByRole('button', { name: 'Install', exact: true })).toBeEnabled();
-	const confirmation = await workbench.dialogs.confirm(application, 'Install', 'Install', () => page.locator('.ash-extension-editor').getByRole('button', { name: 'Install', exact: true }).click());
-	expect(confirmation.detail).toContain('without running scripts');
-	await page.locator('.ash-extension-editor').getByRole('button', { name: 'Show installed versions', exact: true }).click();
-	await expect(extensionManagement.getByRole('listbox', { name: 'Extensions', exact: true })).toContainText(packageId);
-	const installationId = await extensionManagement.getByRole('option').filter({ hasText: packageId }).getAttribute('data-installation-id');
-
-	await workbench.settingsEditor.openUserSettingsUI();
-	await page.locator('[data-settings-group-id="workbench"]').click();
-	await page.locator('[data-settings-category-id="appearance"]').click();
-	await page.locator('[data-settings-item-id="workbench.colorTheme"]').getByRole('combobox').click();
-	await expect(page.getByRole('option', { name: 'Dracula Theme', exact: true })).toBeVisible();
-	await page.keyboard.press('Escape');
-	await page.locator('.ash-modal-editor-close').click();
-
-	// Reopen the Electron process with the same profile; installation does not request a restart dialog.
-	({ workbench, application } = await reloadWorkbench());
-	page = workbench.page;
-	await workbench.quickaccess.runCommand('ash.extensions.installed');
-	extensionManagement = page.locator('.ash-extensions');
-	await expect(extensionManagement.getByRole('listbox', { name: 'Extensions', exact: true }).locator(`[data-installation-id="${installationId}"]`)).toContainText(packageId);
-	await extensionManagement.getByRole('listbox', { name: 'Extensions', exact: true }).locator(`[data-installation-id="${installationId}"]`).click();
-	await workbench.dialogs.confirm(application, 'Uninstall extension', 'Uninstall', () => page.locator('.ash-extension-editor').getByRole('button', { name: 'Uninstall', exact: true }).click());
-	await expect(extensionManagement.getByRole('listbox', { name: 'Extensions', exact: true }).getByRole('option')).toHaveCount(0);
-	await workbench.settingsEditor.openUserSettingsUI();
-	await page.locator('[data-settings-group-id="workbench"]').click();
-	await page.locator('[data-settings-category-id="appearance"]').click();
-	await page.locator('[data-settings-item-id="workbench.colorTheme"]').getByRole('combobox').click();
-	await expect(page.getByRole('option', { name: 'Dracula Theme', exact: true })).toHaveCount(0);
-	await page.keyboard.press('Escape');
+	for (const windowPage of [page, agents]) await expect(windowPage.locator('body')).not.toContainText('synthetic-extension-private-你好');
+	expect(await readFile(join(testWorkspace.directory, 'retired-private-result'), 'utf8').catch(error => { if (error.code !== 'ENOENT') throw error; return undefined; })).toBeUndefined();
+	expect(runningApplication.diagnostics.consoleErrors.join('\n')).not.toContain('synthetic-extension-private-你好');
+	expect(runningApplication.diagnostics.pageErrors.join('\n')).not.toContain('synthetic-extension-private-你好');
+	expect(await readFile(workspaceSettings, 'utf8')).not.toContain('synthetic-extension-private-你好');
 });
 
 test('Extensions slash commands open their Workbench owners without sending a chat message', async ({ target, application, workbench }) => {
@@ -384,7 +395,10 @@ test('Extensions slash commands open their Workbench owners without sending a ch
 		await page.keyboard.press('Enter');
 		await expect(page.locator(selector)).toBeVisible();
 		if (command === '/skills') { await expect(page.locator('.ash-settings-editor')).toHaveCount(0); }
-		if (command === '/plugins') { await expect(page.locator(selector).getByRole('button', { name: 'Installed', exact: true })).toHaveAttribute('aria-pressed', 'true'); }
+		if (command === '/plugins') {
+			await expect(page.locator(selector).getByRole('searchbox', { name: 'Search installed extensions', exact: true })).toBeFocused();
+			await expect(page.locator(selector).getByRole('listbox', { name: 'Installed Extensions', exact: true })).toBeAttached();
+		}
 		if (command === '/extensions rust tools') { await expect(page.locator(selector).getByLabel('Search Extensions', { exact: true })).toHaveValue('rust tools'); }
 		if (command === '/extensions') { await expect(page.locator(selector).getByLabel('Search Extensions', { exact: true })).toHaveValue(''); }
 		if (command.startsWith('/lsp')) {
@@ -427,7 +441,7 @@ test('Extensions slash commands open their Workbench owners without sending a ch
 	}
 });
 
-test('Language server Settings replaces the sidebar and saves backend configuration', async ({ target, workbench, restartWorkbench }) => {
+test('Language server Settings replaces the sidebar and saves backend configuration', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, workbench, restartWorkbench }) => {
 	let page = workbench.page;
 	await workbench.quickaccess.runCommand('ash.languageServers.open');
 	let settings = page.locator('.ash-settings-editor');
@@ -435,7 +449,7 @@ test('Language server Settings replaces the sidebar and saves backend configurat
 	await expect(lsp).toBeVisible();
 	await expect(settings.locator('[data-settings-container]')).toHaveAttribute('data-active-settings-category', 'editor-language');
 	await expect(page.getByRole('tab', { name: 'Language servers', exact: true })).toHaveCount(0);
-	await expect(settings.getByRole('heading', { name: 'Language Servers', exact: true })).toBeInViewport();
+	await expect(settings.getByRole('region', { name: /^Language Servers/u })).toBeInViewport();
 	await expect(lsp).toHaveAttribute('aria-busy', 'false');
 	if (target.appServerMode === 'required') {
 		await expect(lsp.getByRole('status')).not.toContainText('Could not load');
@@ -451,7 +465,8 @@ test('Language server Settings replaces the sidebar and saves backend configurat
 		await expect(lsp).toHaveAttribute('aria-busy', 'false');
 		await expect(lsp.getByRole('button', { name: 'Use default configuration', exact: true })).toBeDisabled();
 	}
-	await settings.locator('[data-settings-category-id="general"]').click();
+	await workbench.settingsEditor.selectGroup('workbench');
+	await workbench.settingsEditor.selectCategory('general');
 	const locale = settings.locator('[data-settings-item-id="workbench.locale"]').getByRole('combobox');
 	await locale.click();
 	await page.getByRole('option', { name: '简体中文', exact: true }).click();
@@ -460,12 +475,14 @@ test('Language server Settings replaces the sidebar and saves backend configurat
 	settings = page.locator('.ash-settings-editor');
 	lsp = settings.locator('.ash-language-server-settings');
 	await workbench.quickaccess.runCommand('ash.languageServers.open');
-	await expect(settings.getByRole('heading', { name: '语言服务器', exact: true })).toBeInViewport();
+	await expect(settings.getByRole('region', { name: /^语言服务器/u })).toBeInViewport();
 	await expect(lsp).toHaveAttribute('aria-busy', 'false');
 	await lsp.getByLabel('语言 ID', { exact: true }).fill('python');
 	await lsp.getByRole('button', { name: '在 Extensions 中查找语言服务器', exact: true }).click();
 	await expect(settings).toBeHidden();
-	await expect(page.locator('.ash-extensions').getByRole('button', { name: '提供程序 · python', exact: true })).toBeVisible();
+	const extensions = page.locator('[data-view-id="ash.extensions.view"] .ash-extensions');
+	await expect(extensions).toBeVisible();
+	await expect(extensions.getByRole('searchbox', { name: '搜索扩展', exact: true })).toBeFocused();
 });
 
 
@@ -474,7 +491,7 @@ test('Extensions sources persist and share the same authority between Code and A
 	await new QuickAccess(page).runCommand('ash.extensions.manageSources');
 	const picker = page.getByRole('dialog', { name: 'Manage extension sources', exact: true });
 	if (target.kind === 'electron') {
-		await expect(picker).toContainText('open-vsx');
+		await expect(picker).not.toContainText('open-vsx');
 		await expect(picker).toContainText('ash');
 	}
 	await picker.getByRole('option').filter({ hasText: 'Add Ash open source…' }).click();

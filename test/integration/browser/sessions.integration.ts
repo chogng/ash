@@ -8,6 +8,7 @@ import { setNlsMessages } from '../../../src/ash/nls.js';
 import { productLanguagePackCatalogs } from '../../../src/ash/workbench/services/localization/common/localizationCatalogs.js';
 import { WorkbenchThemesRegistry } from '../../../src/ash/workbench/common/theme.js';
 import { darkColorTheme, lightColorTheme, highContrastDarkColorTheme, highContrastLightColorTheme } from '../../../src/ash/platform/theme/common/colorTheme.js';
+import { installDebugClientFixture } from '../../../src/ash/workbench/contrib/debug/test/common/debugClientFixture.js';
 
 if (new URL(location.href).searchParams.get('locale') === 'zh-CN') {
 	setNlsMessages('zh-CN', productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!.bundles);
@@ -24,6 +25,17 @@ globalThis.ashWebWorkbenchHost = {
 		// Policy startup reads account order even when no account is signed in.
 		github: { ...disconnectedApi.github, listAccounts: async () => [] },
 	}
+};
+// Sessions Parts need startup workspace storage while debugger processes remain outside this fixture.
+const unexpectedTransport = async (): Promise<never> => { throw new Error('Sessions component tests must not launch or use a debug adapter'); };
+globalThis.ashWebWorkbenchHost = {
+	api: {
+		...globalThis.ashWebWorkbenchHost.api,
+		debugAdapter: installDebugClientFixture({
+			start: unexpectedTransport, send: unexpectedTransport, read: unexpectedTransport, close: unexpectedTransport,
+			getConnectionState: async () => 'stopped', onConnectionState: Event.None,
+		}),
+	},
 };
 if (new URL(location.href).searchParams.has('automations')) {
 	globalThis.ashWebWorkbenchHost = {

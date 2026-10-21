@@ -17,11 +17,12 @@ class TestView implements IView {
 	public readonly element: HTMLDivElement;
 	public readonly minimumWidth = 100;
 	public readonly maximumWidth = Number.POSITIVE_INFINITY;
-	public readonly minimumHeight = 0;
+	public readonly minimumHeight: number;
 	public readonly maximumHeight = Number.POSITIVE_INFINITY;
 	public bounds: IPositionedRectangle | undefined;
 
-	constructor(document: Document) {
+	constructor(document: Document, minimumHeight = 0) {
+		this.minimumHeight = minimumHeight;
 		this.element = document.createElement('div');
 		this.element.append(document.createElement('input'));
 	}
@@ -234,6 +235,27 @@ test('Sessions restores a nested split as providers arrive and retains the compl
 		const updated = JSON.parse(storage.get('sessions.gridState', StorageScope.WORKSPACE)!);
 		assert.deepEqual(storedIds(updated.layout), ['first', 'replacement', 'third']);
 		assert.equal(updated.layout.children[1].orientation, 'vertical');
+	} finally {
+		getWindowById(1)?.disposables.dispose();
+		browser.window.close();
+	}
+});
+
+test('Sessions scales saved nested proportions before applying live pane minimum sizes', async () => {
+	const browser = new JSDOM('<!doctype html><body></body>', { url: 'https://ash.test', pretendToBeVisual: true });
+	using globals = installEditorTestDom(browser, ['Node', 'Element', 'HTMLElement', 'Event', 'MouseEvent']);
+	try {
+		using storage = new BrowserStorageService({ ownerWindow: browser.window as unknown as Window, workspaceId: 'test', flushInterval: 0 });
+		storage.store('sessions.gridState', JSON.stringify(savedNestedLayout()), StorageScope.WORKSPACE, StorageTarget.MACHINE);
+		using services = createTestEditorServices(undefined, undefined, browser.window.document, storage);
+		const views = ['first', 'second', 'third'].map(id => ({ id, view: new TestView(browser.window.document, 240) }));
+		using layout = services.createInstance(SessionGridLayout, browser.window.document.body, new TestView(browser.window.document, 240));
+		layout.layout(1800, 900);
+		layout.reconcile(views, 'third');
+		await new Promise(resolve => browser.window.requestAnimationFrame(resolve));
+		assert.deepEqual(views.map(({ view }) => ({ width: view.bounds!.width, height: view.bounds!.height })), [
+			{ width: 600, height: 900 }, { width: 1200, height: 300 }, { width: 1200, height: 600 },
+		]);
 	} finally {
 		getWindowById(1)?.disposables.dispose();
 		browser.window.close();

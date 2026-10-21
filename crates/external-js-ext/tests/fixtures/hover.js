@@ -1,4 +1,4 @@
-const { commands, languages, workspace, Uri } = require('vscode');
+const { commands, languages, workspace, Uri } = require('@ash/sdk');
 exports.activate = context => {
     const hover = languages.registerHoverProvider('typescript', {
         async provideHover(document, position) {
@@ -12,5 +12,5 @@ exports.activate = context => {
             };
         },
     });
-    context.subscriptions.push(hover, commands.registerCommand('example.disposeHover', () => hover.dispose()));
+    context.subscriptions.push(hover, commands.register('example.disposeHover', () => hover.dispose()));
 };

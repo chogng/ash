@@ -2,7 +2,7 @@
 
 `ash-github-authentication` 是独立 Rust 程序，拥有 GitHub.com／Enterprise 的 OAuth、账号目录、令牌刷新和授权有效性。它不需要 Node、V8 或 App Server 的私有接口。GitHub REST／GraphQL 业务由独立的 [`github`](../github/README.md) Rust 扩展拥有，通过 [`ash-github`](../../crates/github/README.md) 的账号与 grant 契约消费此 Provider。
 
-App 的产品启动入口显式选定安装目录中的扩展 executable；`LocalProfileRuntime` 为一个 profile 保留唯一监管器与扩展进程，各目录和窗口只持有代理。没有 profile runtime 的单实例 App Server 由自己的生命周期持有它。默认 `AppServerOptions` 和 TUI 的 in-process 组合不选定扩展，也不启动 GitHub 或 Node。缺少已选定的 executable 会明确失败，不回退到核心 OAuth 或 PATH 中的程序。
+App 的产品启动入口显式选定安装目录中的扩展 executable；`LocalProfileRuntime` 为一个 profile 保留唯一监管器，各目录和窗口只持有代理。创建监管器不启动进程；账号、登录或凭据消费者第一次调用时才启动并恢复保存的账号，随后共享同一扩展实例。没有 profile runtime 的单实例 App Server 由自己的生命周期持有它。默认 `AppServerOptions` 和 TUI 的 in-process 组合不选定扩展，也不启动 GitHub 或 Node。缺少已选定的 executable 会明确失败，不回退到核心 OAuth 或 PATH 中的程序。
 
 ## 公共接口与运行链
 

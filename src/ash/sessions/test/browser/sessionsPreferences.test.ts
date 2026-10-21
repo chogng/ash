@@ -552,7 +552,9 @@ test('Sessions preferences reuses Workbench owners and preserves navigation, sea
 		await opening;
 		await Promise.resolve();
 	};
+	const revealsBeforeShortcuts = editorReveals;
 	await openCategoryAction('keyboard-shortcuts', 'Keyboard Shortcuts');
+	assert.equal(editorReveals, revealsBeforeShortcuts, 'the shortcut modal preserves the underlying entry and document working set');
 	await openCategoryAction('keyboard-shortcuts', 'Preferences: Open Keyboard Shortcuts (JSON)');
 	await openCategoryAction('customize', 'Preferences: Open User Settings (JSON)');
 	assert.deepEqual(preferenceOpens, [{ keybindings: false }, { keybindings: true }, { user: { jsonEditor: true } }]);
@@ -565,7 +567,7 @@ test('Sessions preferences reuses Workbench owners and preserves navigation, sea
 		{ section: null, target: 'modalGroup' }, { section: 'browser', target: 'modalGroup' },
 		{ section: 'editor-opening', target: 'modalGroup' }, { section: 'editor-language', target: 'modalGroup' }, { section: 'terminal', target: 'modalGroup' },
 	]);
-	assert.equal(editorReveals, 3);
+	assert.equal(editorReveals, 2);
 	let accountOpens = 0;
 	using manageAccounts = CommandsRegistry.register('workbench.action.manageAccounts', () => {
 		assert.equal(window.document.querySelector('dialog[open]'), null);
@@ -573,7 +575,7 @@ test('Sessions preferences reuses Workbench owners and preserves navigation, sea
 	});
 	await openCategoryAction('account', 'Manage Accounts');
 	assert.equal(accountOpens, 1, 'Account delegates to the existing account command');
-	assert.equal(editorReveals, 3, 'account management preserves the current Sessions entry');
+	assert.equal(editorReveals, 2, 'account management preserves the current Sessions entry');
 	const editSettingOpen = preferences.open({ section: 'appearance' });
 	const editSettingMenu = openCopyMenu();
 	const editSetting = [...editSettingMenu.menu.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')].find(button => button.textContent === 'Edit in settings.json');
@@ -588,7 +590,7 @@ test('Sessions preferences reuses Workbench owners and preserves navigation, sea
 	await configuration.updateValue('workbench.settings.editor', 'json');
 	await preferences.open();
 	assert.deepEqual(preferenceOpens.at(-1), { user: { jsonEditor: true } });
-	assert.equal(editorReveals, 5);
+	assert.equal(editorReveals, 4);
 	const explicitUI = preferences.open({ jsonEditor: false });
 	assert.ok(window.document.querySelector('dialog[open]'), 'explicit UI remains available with a JSON default');
 	window.document.querySelector<HTMLDialogElement>('dialog[open]')!.close();
@@ -597,13 +599,13 @@ test('Sessions preferences reuses Workbench owners and preserves navigation, sea
 	await preferences.open({ target: 5, query: '@lang:plaintext @id:editor.fontSize', jsonEditor: false });
 	assert.deepEqual(preferenceOpens.at(-1), { user: { target: 5, query: '@lang:plaintext @id:editor.fontSize', jsonEditor: false } });
 	assert.equal(window.document.querySelector('dialog[open]'), null, 'scoped settings use the shared Workbench pane');
-	assert.equal(editorReveals, 5);
+	assert.equal(editorReveals, 4);
 	await preferences.open({ groupId: 7, query: '@id:editor.fontSize', jsonEditor: false });
 	assert.deepEqual(preferenceOpens.at(-1), { user: { groupId: 7, query: '@id:editor.fontSize', jsonEditor: false } });
-	assert.equal(editorReveals, 6, 'explicit group requests reveal the document host');
+	assert.equal(editorReveals, 5, 'explicit group requests reveal the document host');
 	await preferences.open({ openToSide: true, query: '@id:editor.fontFamily', jsonEditor: false });
 	assert.deepEqual(preferenceOpens.at(-1), { user: { openToSide: true, query: '@id:editor.fontFamily', jsonEditor: false } });
-	assert.equal(editorReveals, 7);
+	assert.equal(editorReveals, 6);
 	const cancelledOpen = preferences.open({ section: 'keyboard-shortcuts' });
 	const callsBeforeCancel = preferenceOpens.length;
 	window.document.querySelector<HTMLDialogElement>('dialog')!.dispatchEvent(new window.Event('cancel', { cancelable: true }));
@@ -613,7 +615,7 @@ test('Sessions preferences reuses Workbench owners and preserves navigation, sea
 	rejectShortcut = true;
 	await openCategoryAction('keyboard-shortcuts', 'Keyboard Shortcuts');
 	assert.equal(notifications.model.getNotifications().at(-1)?.message, 'Could not open preferences: Error: shortcut editor unavailable');
-	assert.equal(editorReveals, 7, 'a failed open cannot reveal an unrelated editor');
+	assert.equal(editorReveals, 6, 'a failed open cannot reveal an unrelated editor');
 	const notificationsBeforeShutdown = notifications.model.getNotifications().length;
 	let rejectLateOpen!: (error: Error) => void;
 	pendingShortcut = new Promise<void>((_resolve, reject) => { rejectLateOpen = reject; });
@@ -623,7 +625,7 @@ test('Sessions preferences reuses Workbench owners and preserves navigation, sea
 	await pendingShortcut.catch(() => { });
 	await Promise.resolve();
 	assert.equal(notifications.model.getNotifications().length, notificationsBeforeShutdown, 'late opens cannot notify a retired window');
-	assert.equal(editorReveals, 7);
+	assert.equal(editorReveals, 6);
 	changed.dispose();
 	browser.window.close();
 	assert.deepEqual(unexpectedErrors, [], 'Preferences interactions must not leave a stale UI after a listener error');

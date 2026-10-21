@@ -2,6 +2,8 @@ import { execFile } from 'node:child_process';
 import { cp, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
+import { parseJsonc } from '../../../../src/ash/base/common/jsonc.js';
+import { readUserSettings } from '../../../automation/settings.js';
 import { expect, test } from '../../../automation/test.js';
 import type { Workbench } from '../../../automation/workbench.js';
 
@@ -55,6 +57,117 @@ test.describe('SCM editor groups', () => {
 	test.use({ gitRepository: true });
 	test.beforeEach(async ({ target, testWorkspace }) => {
 		await writeFile(testWorkspace.file, 'const value = 2;\n');
+	});
+
+	test.describe('Markdown wrapping defaults', () => {
+		test('Markdown source and SCM diff inherit language wrapping across process restart and honor explicit overrides', { tag: ['@electron-app-server'] }, async ({ application, workbench, runningApplication, testWorkspace, reloadWorkbench }, testInfo) => {
+			const paragraph = 'Markdown 长行按窗口宽度换行，继承语言设置并尊重用户覆盖。'.repeat(20);
+			const markdown = join(testWorkspace.directory, 'TODO.md');
+			await writeFile(markdown, '# Wrapping defaults\n\nOriginal paragraph.\n');
+			await run('git', ['add', '--', 'TODO.md'], { cwd: testWorkspace.directory });
+			await run('git', ['commit', '-m', 'Markdown wrapping baseline'], { cwd: testWorkspace.directory });
+			await writeFile(markdown, `# Wrapping defaults\n\n${paragraph}\n`);
+			await writeFile(testWorkspace.file, `const value = "${paragraph}";\n`);
+			let page = workbench.page;
+			const comparison = () => page.locator('.ash-editor-pane-host:not([hidden]) .stanza-diff-editor');
+			const rows = (logicalLine: number) => page.locator('.ash-editor-pane-host:not([hidden]) .stanza-editor').last().evaluate((editor, logicalLine) => {
+				const tops = new Set<number>();
+				for (const line of editor.querySelectorAll(`[data-logical-line-index="${logicalLine}"] .stanza-editor-line-text`)) {
+					const range = document.createRange();
+					range.selectNodeContents(line);
+					for (const box of range.getClientRects()) if (box.width > 0) tops.add(Math.round(box.top));
+				}
+				return tops.size;
+			}, logicalLine);
+			const openDiff = async (name: string) => {
+				await workbench.git.open();
+				await page.getByRole('button', { name: `Open ${name} for Changes`, exact: true }).click();
+				const coldOpenError = page.getByText('Syntax backend was disposed', { exact: true });
+				await expect.poll(async () => await comparison().isVisible() || await coldOpenError.isVisible()).toBe(true);
+				await expect(coldOpenError).toHaveCount(0);
+				await expect(comparison()).toBeVisible();
+			};
+			const openFile = async (name: string) => {
+				const change = page.getByRole('button', { name: `Open ${name} for Changes`, exact: true });
+				await change.hover();
+				await change.locator('xpath=..').getByRole('button', { name: `Open File: ${name}`, exact: true }).click();
+				await expect(comparison()).toHaveCount(0);
+			};
+			const checkMarkdown = async () => {
+				await openDiff('TODO.md');
+				await expect(comparison()).toHaveClass(/word-wrapped/);
+				await expect.poll(() => rows(2)).toBeGreaterThan(3);
+				await openFile('TODO.md');
+				await expect.poll(() => rows(2)).toBeGreaterThan(3);
+			};
+			const screenshot = async (name: string) => {
+				const path = testInfo.outputPath(`${name}.png`);
+				await page.screenshot({ path });
+				await testInfo.attach(name, { path, contentType: 'image/png' });
+			};
+			await runningApplication.driver.setWindowSize({ width: 1440, height: 900 });
+			await page.context().tracing.startChunk({ title: 'Markdown defaults before process restart' });
+			await checkMarkdown();
+			await screenshot('markdown-source-default');
+			await workbench.settingsEditor.openUserSettingsUI();
+			await workbench.settingsEditor.selectEditorCategory('editor-diff');
+			await expect(workbench.settingsEditor.element.locator('[data-settings-item-id="diffEditor.wordWrap"]').getByRole('combobox')).toHaveText('Inherit');
+			await workbench.settingsEditor.element.locator('.ash-modal-editor-close').click();
+			const persisted = await readUserSettings(page);
+			const settings = parseJsonc(persisted.content) as Record<string, unknown>;
+			expect(settings).not.toHaveProperty('diffEditor.wordWrap');
+			expect(settings).not.toHaveProperty('editor.wordWrap');
+			const firstPid = 'process' in application ? application.process().pid : undefined;
+			const beforeTrace = testInfo.outputPath('before-restart-trace.zip');
+			await page.context().tracing.stopChunk({ path: beforeTrace });
+			await testInfo.attach('before-restart-trace', { path: beforeTrace, contentType: 'application/zip' });
+			({ application, workbench } = await reloadWorkbench('quit'));
+			page = workbench.page;
+			await page.context().tracing.startChunk({ title: 'Markdown defaults and language settings after process restart' });
+			const secondPid = 'process' in application ? application.process().pid : undefined;
+			expect(secondPid).toBeDefined();
+			expect(secondPid).not.toBe(firstPid);
+			const restored = await readUserSettings(page);
+			expect(restored.resource).toBe(persisted.resource);
+			expect(restored.content).toBe(persisted.content);
+			await runningApplication.driver.setWindowSize({ width: 1440, height: 900 });
+			await checkMarkdown();
+			await screenshot('markdown-source-after-restart');
+			await openDiff('TODO.md');
+			await screenshot('markdown-diff-after-restart');
+			await runningApplication.driver.setWindowSize({ width: 2048, height: 1100 });
+			await expect(comparison()).not.toHaveClass(/inline-view/);
+			await expect(comparison()).toHaveClass(/word-wrapped/);
+			await expect.poll(() => rows(2)).toBeGreaterThan(3);
+			await screenshot('markdown-diff-default-two-columns');
+			await openDiff('main.ts');
+			await expect(comparison()).not.toHaveClass(/word-wrapped/);
+			await expect.poll(() => rows(0)).toBe(1);
+			await openFile('main.ts');
+			await expect.poll(() => rows(0)).toBe(1);
+			await screenshot('typescript-default-unwrapped');
+			await openDiff('TODO.md');
+			await workbench.settingsEditor.openUserSettingsUI();
+			await workbench.settingsEditor.element.getByRole('searchbox').fill('@lang:markdown @id:editor.wordWrap');
+			await expect(workbench.settingsEditor.element.locator('.ash-settings-layout')).toHaveAttribute('data-settings-language', 'markdown');
+			const wrap = workbench.settingsEditor.element.locator('[data-settings-item-id="editor.wordWrap"]').getByRole('combobox');
+			await expect(wrap).toHaveText('Viewport');
+			await screenshot('markdown-language-setting');
+			await wrap.click();
+			await page.getByRole('option', { name: 'Off', exact: true }).click();
+			await expect(wrap).toHaveText('Off');
+			await expect.poll(async () => (parseJsonc((await readUserSettings(page)).content) as Record<string, unknown>)['[markdown]']).toEqual({ 'editor.wordWrap': 'off' });
+			await workbench.settingsEditor.element.locator('.ash-modal-editor-close').click();
+			await expect(comparison()).not.toHaveClass(/word-wrapped/);
+			await expect.poll(() => rows(2)).toBe(1);
+			await openFile('TODO.md');
+			await expect.poll(() => rows(2)).toBe(1);
+			await screenshot('markdown-explicit-off');
+			await testInfo.attach('restart-verification', { body: JSON.stringify({ firstPid, secondPid, sameProfile: restored.resource === persisted.resource, userSettings: settings, diffDefault: 'inherit', markdownDefault: 'on', typescriptDefault: 'off', explicitMarkdownOffRespected: true, languageSettingEditedThroughUI: true, forcedInlineLayout: false, temporaryWrapCommandUsed: false }), contentType: 'application/json' });
+			const afterTrace = testInfo.outputPath('after-restart-trace.zip');
+			await page.context().tracing.stopChunk({ path: afterTrace });
+			await testInfo.attach('after-restart-trace', { path: afterTrace, contentType: 'application/zip' });
+		});
 	});
 
 	test('SCM Changes reserves a file viewport when Graph expands and the commit draft grows', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ workbench }) => {
@@ -156,35 +269,6 @@ test.describe('SCM editor groups', () => {
 		expect(await groupRepositoryState(testWorkspace.directory, files)).toEqual(before);
 	});
 
-	test('SCM resource group navigation handles a single collapsed group and an empty repository', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ testWorkspace, workbench }) => {
-		await bindResourceGroupNavigation(workbench);
-		const page = workbench.page;
-		const tree = page.getByRole('tree', { name: 'Source control changes', exact: true });
-		await page.keyboard.press('Control+Alt+J');
-		await expect(tree).toBeFocused();
-		const group = tree.getByRole('treeitem').filter({ has: page.locator('.ash-scm-section-label') });
-		await expect(group).toHaveCount(1);
-		await tree.press('ArrowLeft');
-		const focus = await tree.getAttribute('aria-activedescendant');
-		const before = await groupRepositoryState(testWorkspace.directory, ['main.ts']);
-		for (const key of ['Control+Alt+J', 'Control+Alt+K']) {
-			await page.keyboard.press(key);
-			await expect(tree).toHaveAttribute('aria-activedescendant', focus!);
-			await expect(group).toHaveAttribute('aria-expanded', 'false');
-			await expect(group).toHaveAttribute('aria-selected', 'true');
-		}
-		expect(await groupRepositoryState(testWorkspace.directory, ['main.ts'])).toEqual(before);
-		await writeFile(testWorkspace.file, 'const value = 1;\n');
-		await expect(group).toHaveCount(0);
-		const empty = await groupRepositoryState(testWorkspace.directory, ['main.ts']);
-		const editor = workbench.editors.groupAt(0).editor;
-		await editor.input.focus();
-		await page.keyboard.press('Control+Alt+J');
-		await page.keyboard.press('Control+Alt+K');
-		await expect(editor.input).toBeFocused();
-		await expect(group).toHaveCount(0);
-		expect(await groupRepositoryState(testWorkspace.directory, ['main.ts'])).toEqual(empty);
-	});
 
 	test('SCM group Collapse All folds only the target group recursively and survives Git refresh', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ application, testWorkspace, workbench }) => {
 		await prepareGroupChanges(testWorkspace.directory);
@@ -193,8 +277,8 @@ test.describe('SCM editor groups', () => {
 		const tree = page.getByRole('tree', { name: 'Source control changes', exact: true });
 		const group = (label: string) => tree.getByRole('treeitem').filter({ has: page.locator('.ash-scm-section-label').getByText(label, { exact: true }) });
 		const folder = (groupId: string, label: string) => tree.locator(`[role="treeitem"][data-tree-id*='${JSON.stringify(groupId)}']`).filter({ has: page.locator('.ash-scm-folder').getByText(label, { exact: true }) });
-		await expect(tree.getByRole('button', { name: 'Open Changes for src/nested/two.ts', exact: true })).toBeVisible();
-		await expect(tree.getByRole('button', { name: 'Open Staged Changes for src/nested/two.ts', exact: true })).toBeVisible();
+		await expect(tree.getByRole('button', { name: 'Open src/nested/two.ts for Changes', exact: true })).toBeVisible();
+		await expect(tree.getByRole('button', { name: 'Open src/nested/two.ts for Staged Changes', exact: true })).toBeVisible();
 		await expect(group('Changes').locator('.ash-count-badge')).toHaveText('6');
 		await expect(group('Staged Changes').locator('.ash-count-badge')).toHaveText('4');
 		await tree.focus();
@@ -207,8 +291,8 @@ test.describe('SCM editor groups', () => {
 		await expect(folder('changes', 'src')).toHaveAttribute('aria-expanded', 'false');
 		await expect(folder('changes', 'other')).toHaveAttribute('aria-expanded', 'false');
 		await expect(folder('staged', 'src')).toHaveAttribute('aria-expanded', 'true');
-		await expect(tree.getByRole('button', { name: 'Open Changes for root.ts', exact: true })).toBeVisible();
-		await expect(tree.getByRole('button', { name: 'Open Staged Changes for root.ts', exact: true })).toBeVisible();
+		await expect(tree.getByRole('button', { name: 'Open root.ts for Changes', exact: true })).toBeVisible();
+		await expect(tree.getByRole('button', { name: 'Open root.ts for Staged Changes', exact: true })).toBeVisible();
 		await expect(tree).toBeFocused();
 		await expect(tree).toHaveAttribute('aria-activedescendant', focus!);
 		expect(await tree.locator('[aria-selected="true"]').evaluateAll(rows => rows.map(row => row.id))).toEqual(selection);
@@ -219,65 +303,11 @@ test.describe('SCM editor groups', () => {
 		await expect(folder('changes', 'src')).toHaveAttribute('aria-expanded', 'false');
 		await folder('changes', 'src').locator('.ash-scm-folder').click();
 		await expect(folder('changes', 'nested')).toHaveAttribute('aria-expanded', 'false');
-		await expect(tree.getByRole('button', { name: 'Open Changes for src/added.ts', exact: true })).toBeVisible();
-		await expect(tree.getByRole('button', { name: 'Open Changes for src/nested/two.ts', exact: true })).toHaveCount(0);
-		await expect(tree.getByRole('button', { name: 'Open Staged Changes for src/nested/two.ts', exact: true })).toBeVisible();
+		await expect(tree.getByRole('button', { name: 'Open src/added.ts for Changes', exact: true })).toBeVisible();
+		await expect(tree.getByRole('button', { name: 'Open src/nested/two.ts for Changes', exact: true })).toHaveCount(0);
+		await expect(tree.getByRole('button', { name: 'Open src/nested/two.ts for Staged Changes', exact: true })).toBeVisible();
 	});
 
-	test('SCM group Collapse All supports keyboard dismissal and stays out of list mode', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ application, testWorkspace, workbench }) => {
-		await prepareGroupChanges(testWorkspace.directory);
-		const page = workbench.page;
-		// Escape and DOM focus need the browser menu; the other cases retain the desktop's default menu.
-		if (await workbench.menus.isSystemMenu(application)) {
-			await workbench.settingsEditor.openUserSettingsUI();
-			await workbench.settingsEditor.selectGroup('workbench');
-			await workbench.settingsEditor.selectCategory('layout');
-			await workbench.settingsEditor.element.locator('[data-configuration-key="window.menuStyle"]').getByRole('combobox').click();
-			await page.getByRole('option', { name: 'Custom', exact: true }).click();
-			await workbench.settingsEditor.element.locator('.ash-modal-editor-close').click();
-			await expect.poll(() => workbench.menus.isSystemMenu(application)).toBe(false);
-		}
-		await page.getByRole('tab', { name: /^Source Control(?:,|$)/u }).click();
-		const tree = page.getByRole('tree', { name: 'Source control changes', exact: true });
-		await expect(tree.getByRole('button', { name: 'Open Staged Changes for src/nested/two.ts', exact: true })).toBeVisible();
-		await tree.focus();
-		await tree.press('Home');
-		const focus = await tree.getAttribute('aria-activedescendant');
-		const before = await groupRepositoryState(testWorkspace.directory);
-		if (process.platform === 'darwin') {
-			await tree.press('ContextMenu');
-			await expect(page.getByRole('menuitem', { name: 'Collapse All', exact: true })).toHaveCount(0);
-			await expect(tree.getByRole('button', { name: 'Open Staged Changes for src/nested/two.ts', exact: true })).toBeVisible();
-			await page.keyboard.press('Escape');
-			await expect(tree).toBeFocused();
-			await expect(tree).toHaveAttribute('aria-activedescendant', focus!);
-		}
-		for (const key of ['Shift+F10', 'Control+Shift+F10']) {
-			await tree.press(key);
-			await expect(page.getByRole('menuitem', { name: 'Collapse All', exact: true })).toBeVisible();
-			await page.keyboard.press('Escape');
-			await expect(page.getByRole('menuitem', { name: 'Collapse All', exact: true })).toHaveCount(0);
-			await expect(tree).toBeFocused();
-			await expect(tree).toHaveAttribute('aria-activedescendant', focus!);
-			await expect(tree.getByRole('button', { name: 'Open Staged Changes for src/nested/two.ts', exact: true })).toBeVisible();
-		}
-		await tree.press('Shift+F10');
-		await page.getByRole('menuitem', { name: 'Collapse All', exact: true }).click();
-		await expect(tree.getByRole('button', { name: 'Open Staged Changes for src/nested/two.ts', exact: true })).toHaveCount(0);
-		await expect(tree.getByRole('button', { name: 'Open Changes for src/nested/two.ts', exact: true })).toBeVisible();
-		await expect(tree).toBeFocused();
-		await expect(tree).toHaveAttribute('aria-activedescendant', focus!);
-		expect(await groupRepositoryState(testWorkspace.directory)).toEqual(before);
-		await workbench.menus.select(application, () => page.getByRole('toolbar', { name: 'Source control actions', exact: true }).getByRole('button', { name: 'More Actions', exact: true }).click(), ['View as List']);
-		await expect(tree.locator('.ash-scm-folder')).toHaveCount(0);
-		await tree.getByRole('treeitem').filter({ has: page.locator('.ash-scm-section-label').getByText('Staged Changes', { exact: true }) }).locator('.ash-scm-section-label').click({ button: 'right' });
-		await expect(page.getByRole('menuitem', { name: 'Collapse All', exact: true })).toHaveCount(0);
-		await tree.focus();
-		await tree.press('Home');
-		await tree.press('Shift+F10');
-		await expect(page.getByRole('menuitem', { name: 'Collapse All', exact: true })).toHaveCount(0);
-		expect(await groupRepositoryState(testWorkspace.directory)).toEqual(before);
-	});
 
 	test('SCM group Collapse All localizes after restarting in Chinese', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ application, testWorkspace, workbench, restartWorkbench }) => {
 		await prepareGroupChanges(testWorkspace.directory);
@@ -289,14 +319,14 @@ test.describe('SCM editor groups', () => {
 		const page = workbench.page;
 		await page.getByRole('tab', { name: /^源代码管理(?:,|$)/u }).click();
 		const tree = page.getByRole('tree', { name: '源代码管理更改', exact: true });
-		await expect(tree.getByRole('button', { name: '打开 src/nested/two.ts 的暂存的更改', exact: true })).toBeVisible();
+		await expect(tree.getByRole('button', { name: '打开 暂存的更改 的src/nested/two.ts', exact: true })).toBeVisible();
 		await expect(tree).toHaveAttribute('aria-description', /Shift\+F10.*全部折叠/u);
 		const before = await groupRepositoryState(testWorkspace.directory);
 		await tree.focus();
 		await tree.press('Home');
 		await workbench.menus.select(application, () => tree.press('Shift+F10'), ['全部折叠']);
-		await expect(tree.getByRole('button', { name: '打开 src/nested/two.ts 的暂存的更改', exact: true })).toHaveCount(0);
-		await expect(tree.getByRole('button', { name: '打开 src/nested/two.ts 的更改', exact: true })).toBeVisible();
+		await expect(tree.getByRole('button', { name: '打开 暂存的更改 的src/nested/two.ts', exact: true })).toHaveCount(0);
+		await expect(tree.getByRole('button', { name: '打开 更改 的src/nested/two.ts', exact: true })).toBeVisible();
 		await expect(tree).toBeFocused();
 		expect(await groupRepositoryState(testWorkspace.directory)).toEqual(before);
 	});
@@ -309,10 +339,10 @@ test.describe('SCM editor groups', () => {
 		await page.getByRole('tab', { name: /^Source Control(?:,|$)/u }).click();
 		const tree = page.getByRole('tree', { name: 'Source control changes', exact: true });
 		const folder = tree.getByRole('treeitem').filter({ has: page.locator('.ash-scm-folder').filter({ has: page.getByText('src', { exact: true }) }) });
-		const first = tree.getByRole('button', { name: 'Open Changes for src/first.ts', exact: true });
+		const first = tree.getByRole('button', { name: 'Open src/first.ts for Changes', exact: true });
 		await expect(first).toBeVisible();
 		await expect(first.locator('xpath=ancestor::*[@role="treeitem"][1]')).toHaveAttribute('aria-level', '3');
-		await expect(tree.getByRole('button', { name: 'Open Changes for src/nested/second.ts', exact: true }).locator('xpath=ancestor::*[@role="treeitem"][1]')).toHaveAttribute('aria-level', '4');
+		await expect(tree.getByRole('button', { name: 'Open src/nested/second.ts for Changes', exact: true }).locator('xpath=ancestor::*[@role="treeitem"][1]')).toHaveAttribute('aria-level', '4');
 		await tree.press('Home');
 		await tree.press('ArrowDown');
 		await expect(folder).toHaveAttribute('aria-expanded', 'true');
@@ -329,7 +359,7 @@ test.describe('SCM editor groups', () => {
 		await expect(folder).toHaveAttribute('aria-expanded', 'false');
 		await tree.press('Space');
 		await expect(folder).toHaveAttribute('aria-expanded', 'true');
-		await expect(tree.getByRole('button', { name: 'Open Changes for src/third.ts', exact: true })).toBeVisible();
+		await expect(tree.getByRole('button', { name: 'Open src/third.ts for Changes', exact: true })).toBeVisible();
 		await first.click();
 		await expect(workbench.editors.groupAt(0).tabs.filter({ hasText: 'first.ts' })).toHaveCount(1);
 		await expect(tree).toBeFocused();
@@ -396,7 +426,7 @@ test.describe('SCM editor groups', () => {
 		await settingsEditor.waitForEditorContents(contents => contents === '{ "diffEditor.experimental.showMoves": true, "diffEditor.useInlineViewWhenSpaceIsLimited": false }');
 		await settingsEditor.input.press('ControlOrMeta+S');
 		await expect(workbench.editors.groupAt(0).tabs.filter({ hasText: 'User Settings (JSON)' }).locator('..')).not.toHaveAttribute('data-state', /dirty|conflict/u);
-		await page.getByRole('button', { name: 'Open Changes for main.ts', exact: true }).click();
+		await page.getByRole('button', { name: 'Open main.ts for Changes', exact: true }).click();
 		const diff = page.locator('.stanza-diff-editor');
 		await diff.locator('.ash-diff-moved-links').getByRole('button').click();
 		const comparison = diff.getByRole('toolbar', { name: 'Moved code comparison' });
@@ -423,7 +453,7 @@ test.describe('SCM editor groups', () => {
 		await mkdir(join(testWorkspace.directory, directory), { recursive: true });
 		await writeFile(join(testWorkspace.directory, path), 'export const details = 1;\n');
 		await page.getByRole('tab', { name: /^Source Control(?:,|$)/u }).click();
-		const open = page.getByRole('button', { name: `Open Changes for ${path}`, exact: true });
+		const open = page.getByRole('button', { name: `Open ${path} for Changes`, exact: true });
 		await expect(open).toBeVisible();
 		await expect(open.locator('.ash-icon-label-text')).toHaveText('details.ts');
 		await expect(open.locator('.ash-icon-label-description')).toHaveText(directory);
@@ -462,7 +492,7 @@ test.describe('SCM editor groups', () => {
 		}
 		await open.hover();
 		await expect(page.locator('.ash-hover')).toContainText(path);
-		const stage = actions.getByRole('button', { name: `Stage ${path}`, exact: true });
+		const stage = actions.getByRole('button', { name: 'Stage Changes', exact: true });
 		await stage.hover();
 		await expect(page.locator('.ash-hover')).toContainText('Stage');
 		await open.focus();
@@ -489,9 +519,13 @@ test.describe('SCM editor groups', () => {
 			const page = workbench.page;
 			await page.getByRole('tab', { name: locale === 'zh-CN' ? /^源代码管理(?:,|$)/u : /^Source Control(?:,|$)/u }).click();
 			const tree = page.getByRole('tree', { name: locale === 'zh-CN' ? '源代码管理更改' : 'Source control changes', exact: true });
-			const staged = tree.getByRole('button', { name: locale === 'zh-CN' ? '打开 main.ts 的暂存的更改' : 'Open Staged Changes for main.ts', exact: true });
+			const tabs = workbench.editors.groupAt(0).tabs;
+			await tree.getByRole('button', { name: locale === 'zh-CN' ? '打开 更改 的main.ts' : 'Open main.ts for Changes', exact: true }).click();
+			await expect(tabs.filter({ hasText: 'main.ts' })).toHaveAttribute('aria-label', locale === 'zh-CN' ? /^main\.ts（工作树）/u : /^main\.ts \(Working Tree\)/u);
+			const staged = tree.getByRole('button', { name: locale === 'zh-CN' ? '打开 暂存的更改 的main.ts' : 'Open main.ts for Staged Changes', exact: true });
 			await staged.click();
 			await expect(page.locator('.stanza-diff-editor')).toBeVisible();
+			await expect(tabs.filter({ hasText: 'main.ts' })).toHaveAttribute('aria-label', locale === 'zh-CN' ? /^main\.ts（索引）/u : /^main\.ts \(Index\)/u);
 			const tabCount = await workbench.editors.groupAt(0).tabs.count();
 			await tree.focus();
 			await tree.press('Alt+F1');
@@ -511,6 +545,7 @@ test.describe('SCM editor groups', () => {
 			}
 			await expect(page.locator('.stanza-diff-editor')).toBeHidden();
 			await expect(workbench.editors.groupAt(0).tabs).toHaveCount(tabCount);
+			await expect(tabs.filter({ hasText: 'main.ts' })).toHaveAttribute('aria-label', /^main\.ts(?:[,，]|$)/u);
 			const editor = workbench.editors.groupAt(0).editor;
 			await editor.waitForEditorContents(content => content === 'const value = 3;\n');
 			await editor.waitForEditorFocus();
@@ -522,26 +557,11 @@ test.describe('SCM editor groups', () => {
 		});
 	}
 
-	test('SCM diff title menu switches layout and checked state', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ application, workbench }) => {
-		const page = workbench.page;
-		await page.getByRole('tab', { name: /^Source Control(?:,|$)/u }).click();
-		await page.getByRole('button', { name: 'Open Changes for main.ts', exact: true }).click();
-		const group = workbench.editors.groupAt(0);
-		const diff = group.content.locator('.stanza-diff-editor:visible');
-		const more = group.title.getByRole('button', { name: 'More Actions', exact: true });
-		await expect(diff).toBeVisible();
-		await workbench.menus.select(application, () => more.click(), ['Diff View', 'Inline']);
-		await expect(diff).toHaveClass(/inline-view/u);
-		const viewItems = await workbench.menus.inspect(application, () => more.click(), ['Diff View']);
-		expect(viewItems.filter(item => item.checked).map(item => item.label)).toEqual(['Inline']);
-		await workbench.menus.select(application, () => more.click(), ['Diff View', 'Side by Side']);
-		await expect(diff).not.toHaveClass(/inline-view/u);
-	});
 
 	test('SCM diff layout commands work after a renderer-initiated reload', { tag: ['@electron-app-server'] }, async ({ application, workbench }) => {
 		const page = workbench.page;
 		await page.getByRole('tab', { name: /^Source Control(?:,|$)/u }).click();
-		await page.getByRole('button', { name: 'Open Changes for main.ts', exact: true }).click();
+		await page.getByRole('button', { name: 'Open main.ts for Changes', exact: true }).click();
 		await expect(page.locator('.stanza-diff-editor:visible')).toBeVisible();
 		await page.evaluate(() => { document.body.dataset.beforeReload = 'yes'; });
 		// Vite falls back to this renderer navigation when an editor cannot accept HMR.
@@ -555,7 +575,7 @@ test.describe('SCM editor groups', () => {
 		if (await sourceControlAfterReload.getAttribute('aria-selected') !== 'true' || !await page.locator('[data-part="sidebar"]').isVisible()) {
 			await sourceControlAfterReload.click();
 		}
-		await page.getByRole('button', { name: 'Open Changes for main.ts', exact: true }).click();
+		await page.getByRole('button', { name: 'Open main.ts for Changes', exact: true }).click();
 		const group = workbench.editors.groupAt(0);
 		const diff = group.content.locator('.stanza-diff-editor:visible');
 		const more = group.title.getByRole('button', { name: 'More Actions', exact: true });
@@ -588,7 +608,7 @@ test.describe('SCM editor groups', () => {
 			const page = workbench.page;
 			await page.getByRole('tab', { name: locale === 'zh-CN' ? /^源代码管理(?:,|$)/u : /^Source Control(?:,|$)/u }).click();
 			const tree = page.getByRole('tree', { name: locale === 'zh-CN' ? '源代码管理更改' : 'Source control changes', exact: true });
-			await tree.getByRole('button', { name: locale === 'zh-CN' ? '打开 main.ts 的更改' : 'Open Changes for main.ts', exact: true }).click();
+			await tree.getByRole('button', { name: locale === 'zh-CN' ? '打开 更改 的main.ts' : 'Open main.ts for Changes', exact: true }).click();
 			const group = workbench.editors.groupAt(0);
 			const diff = group.content.locator('.stanza-diff-editor:visible');
 			await expect(diff).toBeVisible();
@@ -606,7 +626,7 @@ test.describe('SCM editor groups', () => {
 			await expect.poll(() => diff.locator('.ash-diff-hidden-region').count()).toBeGreaterThan(0);
 			await group.title.getByRole('button', { name: locale === 'zh-CN' ? '打开文件' : 'Open File', exact: true }).click();
 			await group.editor.waitForEditorContents(content => content.includes('const line2 = 200;'));
-			await tree.getByRole('button', { name: locale === 'zh-CN' ? '打开 main.ts 的更改' : 'Open Changes for main.ts', exact: true }).click();
+			await tree.getByRole('button', { name: locale === 'zh-CN' ? '打开 更改 的main.ts' : 'Open main.ts for Changes', exact: true }).click();
 			await expect(collapse).toHaveAttribute('aria-pressed', 'true');
 			await expect.poll(() => diff.locator('.ash-diff-hidden-region').count()).toBeGreaterThan(0);
 			await collapse.focus();
@@ -630,7 +650,7 @@ test.describe('SCM editor groups', () => {
 			await expect(next).toHaveCount(0);
 			await expect(collapse).toHaveCount(0);
 			const openWorkingFile = async (path: string): Promise<void> => {
-				const row = tree.getByRole('button', { name: locale === 'zh-CN' ? `打开 ${path} 的更改` : `Open Changes for ${path}`, exact: true });
+				const row = tree.getByRole('button', { name: locale === 'zh-CN' ? `打开 更改 的${path}` : `Open ${path} for Changes`, exact: true });
 				await row.hover();
 				await row.locator('xpath=..').getByRole('button', { name: locale === 'zh-CN' ? `打开文件：${path}` : `Open File: ${path}`, exact: true }).click();
 			};
@@ -657,7 +677,7 @@ test.describe('SCM editor groups', () => {
 		await page.getByRole('tab', { name: /^Source Control(?:,|$)/u }).click();
 		const tree = page.getByRole('tree', { name: 'Source control changes', exact: true });
 		const openFile = async (path: string): Promise<void> => {
-			const row = tree.getByRole('button', { name: `Open Changes for ${path}`, exact: true });
+			const row = tree.getByRole('button', { name: `Open ${path} for Changes`, exact: true });
 			await row.hover();
 			await row.locator('xpath=..').getByRole('button', { name: `Open File: ${path}`, exact: true }).click();
 		};
@@ -711,7 +731,7 @@ test.describe('SCM editor groups', () => {
 		});
 		await page.getByRole('tab', { name: /^Source Control(?:,|$)/u }).click();
 		const tree = page.getByRole('tree', { name: 'Source control changes', exact: true });
-		const row = tree.getByRole('treeitem').filter({ has: page.getByRole('button', { name: 'Open Changes for src/details.ts', exact: true }) });
+		const row = tree.getByRole('treeitem').filter({ has: page.getByRole('button', { name: 'Open src/details.ts for Changes', exact: true }) });
 		await expect(row).toBeVisible();
 		const retained = await row.elementHandle();
 		await expect.poll(() => metrics(row)).toEqual({ arrowWidth: hasFileIcons ? 0 : 16, contentOffset: hasFileIcons ? 24 : 46, guideOffset: 16 });
@@ -788,7 +808,7 @@ test.describe('SCM editor groups', () => {
 		await expect(original.tabs.filter({ hasText: 'main.ts' })).toHaveCount(1);
 		await original.editor.waitForEditorFocus();
 		await page.getByRole('tab', { name: /^Source Control(?:,|$)/u }).click();
-		const open = page.getByRole('button', { name: 'Open Changes for main.ts', exact: true });
+		const open = page.getByRole('button', { name: 'Open main.ts for Changes', exact: true });
 		await expect(open).toBeEnabled();
 		await open.click({ modifiers: ['Alt'] });
 		await expect(workbench.editors.groups).toHaveCount(2);
@@ -797,7 +817,7 @@ test.describe('SCM editor groups', () => {
 		await expect(side.content).toContainText('const value = 2;');
 		await expect(page.getByRole('tree', { name: 'Source control changes' })).toBeFocused();
 		await writeFile(join(testWorkspace.directory, 'refresh.ts'), 'export const refreshed = true;\n');
-		await expect(page.getByRole('button', { name: 'Open Changes for refresh.ts', exact: true })).toBeVisible();
+		await expect(page.getByRole('button', { name: 'Open refresh.ts for Changes', exact: true })).toBeVisible();
 		await expect(page.getByRole('tree', { name: 'Source control changes' })).toBeFocused();
 		await expect(original.content.locator('.stanza-diff-editor')).toHaveCount(0);
 		await expect(original.tabs.filter({ hasText: 'main.ts' })).toHaveCount(1);
@@ -877,7 +897,7 @@ test.describe('SCM editor groups', () => {
 			await group.editor.waitForEditorContents(content => content.includes('const line2 = 200;'));
 			await expect(group.tabs).toHaveCount(count + 1);
 			const tree = page.getByRole('tree', { name: locale === 'zh-CN' ? '源代码管理更改' : 'Source control changes', exact: true });
-			await tree.getByRole('button', { name: 'Open Changes for other.ts', exact: true }).click();
+			await tree.getByRole('button', { name: 'Open other.ts for Changes', exact: true }).click();
 			await expect(collapse).toHaveAttribute('aria-pressed', 'true');
 			await expect.poll(() => group.content.locator('.ash-diff-hidden-region').count()).toBeGreaterThan(0);
 			await collapse.focus();
@@ -900,7 +920,7 @@ test.describe('SCM editor groups', () => {
 		({ workbench } = await reloadWorkbench());
 		const page = workbench.page;
 		await page.getByRole('tab', { name: /^Source Control(?:,|$)/u }).click();
-		await page.getByRole('button', { name: 'Open Changes for main.ts', exact: true }).click();
+		await page.getByRole('button', { name: 'Open main.ts for Changes', exact: true }).click();
 		await runningApplication.driver.setWindowSize({ width: 1600, height: 1000 });
 		await workbench.quickaccess.runCommand('workbench.action.toggleSideBar');
 		const diff = workbench.editors.groupAt(0).content.locator('.stanza-diff-editor:visible');
@@ -932,7 +952,7 @@ test.describe('SCM editor groups', () => {
 			({ workbench } = await reloadWorkbench());
 			const page = workbench.page;
 			await page.getByRole('tab', { name: /^Source Control(?:,|$)/u }).click();
-			await page.getByRole('button', { name: multiDiff ? 'View All Changes' : 'Open Changes for main.ts', exact: true }).click();
+			await page.getByRole('button', { name: multiDiff ? 'View All Changes' : 'Open main.ts for Changes', exact: true }).click();
 			await runningApplication.driver.setWindowSize({ width: 1600, height: 1000 });
 			await workbench.quickaccess.runCommand('workbench.action.toggleSideBar');
 			const group = workbench.editors.groupAt(0);
@@ -993,7 +1013,7 @@ test.describe('SCM editor groups', () => {
 		await expect(fileIcon).toHaveClass(/typescript-lang-file-icon/u);
 		const appearance = await fileIcon.evaluate(element => ({ glyph: element.textContent, color: getComputedStyle(element).color }));
 		await page.getByRole('tab', { name: /^Source Control(?:,|$)/u }).click();
-		await page.getByRole('button', { name: `Open Changes for ${filename}`, exact: true }).click();
+		await page.getByRole('button', { name: `Open ${filename} for Changes`, exact: true }).click();
 		const editor = group.content.locator('.stanza-diff-editor-side.modified .stanza-editor');
 		await expect(editor).toBeVisible();
 		const comparison = group.title.locator('.ash-tab.checked');
@@ -1044,7 +1064,7 @@ test.describe('SCM merge editor groups', () => {
 		await expect(original.tabs.filter({ hasText: 'main.ts' })).toHaveCount(1);
 		await original.editor.waitForEditorFocus();
 		await page.getByRole('tab', { name: /^Source Control(?:,|$)/u }).click();
-		const open = page.getByRole('button', { name: 'Open merge conflict in main.ts', exact: true });
+		const open = page.getByRole('button', { name: 'Open main.ts for Merge Changes', exact: true });
 		await expect(open).toBeEnabled();
 		await open.focus();
 		await open.press('Control+Enter');

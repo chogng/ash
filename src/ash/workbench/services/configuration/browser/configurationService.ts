@@ -216,7 +216,10 @@ export class WorkspaceService extends Disposable implements IConfigurationServic
 		// Reads use the current configuration domain; the resource identifies the consumer, not a write target.
 		if (section !== undefined) return this.resolveSection(section, resolvedOverrides) as T;
 		const result: Record<string, unknown> = {};
-		for (const key of this.registry.getConfigurations()) setConfigurationValue(result, key, this.resolveSection(key, resolvedOverrides));
+		for (const key of new Set(Object.values(this.keys()).flat())) {
+			const value = this.resolveSection(key, resolvedOverrides);
+			if (value !== undefined) setConfigurationValue(result, key, value);
+		}
 		return result as T;
 	}
 
@@ -250,7 +253,10 @@ export class WorkspaceService extends Disposable implements IConfigurationServic
 			...(inspection.userValue === undefined ? [] : [ConfigurationTarget.USER_LOCAL]),
 		];
 		const targets = target === undefined ? value === undefined ? defined : [defined[0] ?? ConfigurationTarget.USER_LOCAL] : [target];
-		if (targets.length === 1 && (targets[0] === ConfigurationTarget.USER || targets[0] === ConfigurationTarget.USER_LOCAL) && equals(parsed, this.defaultValue(configuration))) serialized = undefined;
+		const matchesDefault = identifiers.length
+			? identifiers.every(identifier => equals(parsed, this.defaultConfiguration.override(identifier).getValue(key)))
+			: equals(parsed, this.defaultConfiguration.getValue(key));
+		if (targets.length === 1 && (targets[0] === ConfigurationTarget.USER || targets[0] === ConfigurationTarget.USER_LOCAL) && matchesDefault) serialized = undefined;
 		// Resolve all resources and validate all scopes before any removal crosses multiple targets.
 		const writes = targets.map(target => {
 			this.validateTargetScope(configuration, target);
@@ -284,7 +290,7 @@ export class WorkspaceService extends Disposable implements IConfigurationServic
 	inspect<T>(key: string, overrides?: IConfigurationOverrides): IConfigurationValue<Readonly<T>> {
 		if (overrides !== undefined && !isConfigurationOverrides(overrides)) throw new TypeError('Configuration overrides are invalid');
 		this.requireConfiguration(key);
-		const defaultValue = this.defaultConfiguration.getValue<Readonly<T>>(key);
+		const defaultValue = (overrides?.overrideIdentifier ? this.defaultConfiguration.override(overrides.overrideIdentifier) : this.defaultConfiguration).getValue<Readonly<T>>(key);
 		const base = this.userConfiguration.getValue<Readonly<T>>(key);
 		const hasBase = base !== undefined;
 		const override = overrides?.overrideIdentifier
@@ -430,6 +436,11 @@ export class WorkspaceService extends Disposable implements IConfigurationServic
 		const configuredValues = new Map<string, unknown>();
 		const overrideBlocks: ConfigurationOverrideBlock[] = [];
 		const configured = configurationValues(this.document);
+		// Language servers interpret their own namespaces. Retain JSON settings even when
+		// their provider has no Workbench schema; registered settings still own validation.
+		for (const [key, value] of Object.entries(configured)) {
+			if (!this.registry.getConfiguration(key) && !this.isReadOnly(key)) configuredValues.set(key, value);
+		}
 		for (const configuration of this.registry.getRegisteredConfigurations()) {
 			defaults.set(configuration.key, this.defaultValue(configuration));
 			const candidate = configured[configuration.key];
@@ -443,16 +454,19 @@ export class WorkspaceService extends Disposable implements IConfigurationServic
 			const blockValues = new Map<string, unknown>();
 			for (const [key, candidate] of Object.entries(entry.values)) {
 				const configuration = this.registry.getConfiguration(key);
-				if (configuration && !this.isReadOnly(key)) {
-					if (configuration.scope !== undefined && configuration.scope !== ConfigurationScope.LANGUAGE_OVERRIDABLE) {
+				if (!this.isReadOnly(key)) {
+					if (configuration?.scope !== undefined && configuration.scope !== ConfigurationScope.LANGUAGE_OVERRIDABLE) {
 						this.onError(new TypeError(localize('configuration.languageScopeError', 'Setting {0} does not support language overrides', key)));
 						continue;
 					}
-					blockValues.set(key, this.parseConfigurationValue(configuration, candidate));
+					blockValues.set(key, configuration ? this.parseConfigurationValue(configuration, candidate) : candidate);
 				}
 			}
 			if (blockValues.size === 0) continue;
 			overrideBlocks.push({ key: entry.key, identifiers: [...entry.identifiers], values: blockValues });
+		}
+		for (const [key, override] of this.registry.getConfigurationDefaultsOverrides()) {
+			if (!this.defaults.has(key)) defaults.set(key, override.value);
 		}
 		this.defaultConfiguration = configurationModel(defaults);
 		this.userConfiguration = configurationModel(configuredValues, overrideBlocks);
@@ -467,7 +481,9 @@ export class WorkspaceService extends Disposable implements IConfigurationServic
 		const blocks: ConfigurationOverrideBlock[] = [];
 		const parse = (key: string, candidate: unknown, language: boolean): unknown => {
 			const setting = this.registry.getConfiguration(key);
-			if (!setting || this.isReadOnly(key) || !supportsTarget(setting, target)) return undefined;
+			if (this.isReadOnly(key)) return undefined;
+			if (!setting) return candidate;
+			if (!supportsTarget(setting, target)) return undefined;
 			if (language && setting.scope !== ConfigurationScope.LANGUAGE_OVERRIDABLE) return undefined;
 			try { return setting.parse(candidate); }
 			catch (error) { this.onError(error); return undefined; }

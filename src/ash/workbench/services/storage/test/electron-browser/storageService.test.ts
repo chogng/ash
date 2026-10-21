@@ -3,6 +3,7 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { suite, test } from 'mocha';
+import { errorHandler, setUnexpectedErrorHandler } from '../../../../../base/common/errors.js';
 import { JSDOM } from 'jsdom';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
 import { IMainProcessService } from '../../../../../platform/ipc/common/mainProcessService.js';
@@ -14,6 +15,51 @@ import { NativeWorkbenchStorageService } from '../../electron-browser/storageSer
 
 suite('Desktop window storage', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();
+	test('retries failed mutations, preserving the latest value and removals without poisoning future flushes', async () => {
+		const directory = await mkdtemp(join(tmpdir(), 'ash-store-retry-'));
+		const browser = new JSDOM('', { url: 'https://ash.test' });
+		const previousHandler = errorHandler.getUnexpectedErrorHandler();
+		const errors: unknown[] = [];
+		setUnexpectedErrorHandler(error => errors.push(error));
+		try {
+			using owner = new StorageMainService(join(directory, 'state.json'));
+			await owner.initialize();
+			const channel = new StorageDatabaseChannel(owner);
+			let unavailable = false;
+			const failure = new Error('Injected storage transport failure');
+			using services = new InstantiationService();
+			services.registerInstance(IMainProcessService, {
+				_serviceBrand: undefined,
+				getChannel: () => ({
+					call: (command, arg) => command === 'updateItems' && unavailable ? Promise.reject(failure) : channel.call('window:1', command, arg),
+					listen: (event, arg) => channel.listen('window:1', event, arg),
+				}),
+				registerChannel: () => { throw new Error('Unexpected channel registration'); },
+			});
+			using storage = services.createInstance(NativeWorkbenchStorageService, { ownerWindow: browser.window as unknown as Window, workspaceId: 'first' });
+			await storage.initialize();
+			storage.store('removed', 'old', StorageScope.WORKSPACE, StorageTarget.MACHINE);
+			await storage.flush();
+			unavailable = true;
+			storage.store('layout:sidebar', 'old', StorageScope.WORKSPACE, StorageTarget.MACHINE);
+			storage.store('layout:sidebar', 'latest', StorageScope.WORKSPACE, StorageTarget.MACHINE);
+			storage.remove('removed', StorageScope.WORKSPACE);
+			await assert.rejects(storage.flush(), error => error === failure);
+			assert.deepEqual(errors, [failure, failure, failure]);
+			unavailable = false;
+			await storage.flush();
+			storage.store('subsequent', 'saved', StorageScope.PROFILE, StorageTarget.USER);
+			await storage.flush();
+			using reopened = services.createInstance(NativeWorkbenchStorageService, { ownerWindow: browser.window as unknown as Window, workspaceId: 'first' });
+			await reopened.initialize();
+			assert.deepEqual([reopened.get('layout:sidebar', StorageScope.WORKSPACE), reopened.get('removed', StorageScope.WORKSPACE), reopened.get('subsequent', StorageScope.PROFILE)], ['latest', undefined, 'saved']);
+		} finally {
+			setUnexpectedErrorHandler(previousHandler);
+			browser.window.close();
+			await rm(directory, { recursive: true, force: true });
+		}
+	});
+
 	test('two window caches converge after concurrent writes, remove and workspace switching', async () => {
 		const directory = await mkdtemp(join(tmpdir(), 'ash-store-'));
 		const browser = new JSDOM('', { url: 'https://ash.test' });

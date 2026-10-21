@@ -14,9 +14,6 @@ suite('MainThreadLocalization', () => {
 			list: async () => ({ generation: 7, diagnostics: [], extensions: [{ id: 'example.test', name: 'test', publisher: 'example', version: '1.0.0', displayName: 'Test', sourceKind: 'builtIn', manifestSha256: 'sha256:' + 'a'.repeat(64), packageSha256: 'sha256:' + 'b'.repeat(64), manifestJson: JSON.stringify({ l10n: 'l10n' }) }] }),
 			resources: {
 				readExtensionResourceBytes: async () => { throw new Error('Unused binary resource'); },
-				supportsExtensionGalleryResources: async () => false,
-				isExtensionGalleryResource: async () => false,
-				getExtensionGalleryResourceURL: async () => undefined,
 				readExtensionResource: async (uri: URI) => {
 					const request = extensionResourceRequest(uri)!;
 					assert.equal(request.generation, 7);

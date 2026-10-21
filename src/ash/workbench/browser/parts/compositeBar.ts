@@ -2,7 +2,7 @@ import { defaultToolbarActionSize } from '../../../base/common/uiSizes.js';
 import { defaultButtonStyles } from '../../../platform/theme/browser/defaultStyles.js';
 import "./compositebar/compositebar.css";
 import { IActivityService, NumberBadge } from "../../services/activity/common/activity.js";
-import type { IContextMenuProvider } from "../../../base/browser/contextmenu.js";
+import type { IContextMenuDelegate, IContextMenuProvider } from "../../../base/browser/contextmenu.js";
 import type { ActionViewItem } from "../../../base/browser/ui/actionbar/actionViewItems.js";
 import { ActionBar, type ActionBarDropPosition, type ActionBarOrientation } from "../../../base/browser/ui/actionbar/actionbar.js";
 import { Separator, type IAction } from "../../../base/common/actions.js";
@@ -239,7 +239,10 @@ export class CompositeBar extends Disposable {
 		this.render();
 	}
 
-	showContextMenu(event: MouseEvent | KeyboardEvent, additionalActions: readonly IAction[] = []): void {
+	showContextMenu(event: MouseEvent | KeyboardEvent, additionalActions: readonly IAction[] = [], itemOptions?: {
+		readonly transformContextMenuActionsForComposite: (actions: readonly IAction[], compositeId: string) => readonly IAction[];
+		readonly getKeyBinding?: IContextMenuDelegate['getKeyBinding'];
+	}): void {
 		if (!this.contextMenuProvider) return;
 		event.preventDefault();
 		event.stopPropagation();
@@ -250,7 +253,8 @@ export class CompositeBar extends Disposable {
 			: target ?? (event.target as HTMLElement | null) ?? this.domNode;
 		this.contextMenuProvider.showContextMenu({
 			getAnchor: () => anchor,
-			getActions: () => Separator.join([...this.createContextMenuActions(containerId)], [...additionalActions]),
+			getActions: () => Separator.join([...this.createContextMenuActions(containerId, itemOptions?.transformContextMenuActionsForComposite)], [...additionalActions]),
+			getKeyBinding: itemOptions?.getKeyBinding,
 			getCheckedActionsRepresentation: () => 'checkbox',
 			onHide: didCancel => {
 				if (didCancel && target?.isConnected) target.focus();
@@ -431,7 +435,7 @@ export class CompositeBar extends Disposable {
 			});
 	}
 
-	private createContextMenuActions(containerId: string | undefined): readonly IAction[] {
+	private createContextMenuActions(containerId: string | undefined, transform?: (actions: readonly IAction[], compositeId: string) => readonly IAction[]): readonly IAction[] {
 		const pinnedCount = this.containers.filter(container => !this.hiddenContainerIds.has(container.id)).length;
 		const selected = this.containers.find(container => container.id === containerId);
 		const toggleActions = this.containers.map(container => {
@@ -455,7 +459,7 @@ export class CompositeBar extends Disposable {
 		const badgeLabel = this.areBadgesEnabled(selected.id)
 			? localize(this.localizationService, { bundle: 'ash', key: 'workbench.hideActivityBarBadge' }, 'Hide Badge')
 			: localize(this.localizationService, { bundle: 'ash', key: 'workbench.showActivityBarBadge' }, 'Show Badge');
-		return Separator.join([{
+		const selectedActions: IAction[] = [{
 			id: `ash.activityBar.toggleSelected.${encodeURIComponent(selected.id)}`,
 			label,
 			tooltip: label,
@@ -467,7 +471,8 @@ export class CompositeBar extends Disposable {
 			tooltip: badgeLabel,
 			enabled: true,
 			run: () => this.toggleBadgeEnablement(selected.id),
-		}], toggleActions);
+		}];
+		return Separator.join([...(transform?.(selectedActions, selected.id) ?? selectedActions)], toggleActions);
 	}
 
 	private readDisabledBadgeIds(): Set<string> {

@@ -86,7 +86,6 @@ pub(crate) struct Broker {
 impl Broker {
     pub fn start(runtime: Weak<GitRuntime>) -> io::Result<Self> {
         let listener = TcpListener::bind((std::net::Ipv4Addr::LOCALHOST, 0))?;
-        listener.set_nonblocking(true)?;
         let connection = Connection {
             address: listener.local_addr()?,
             token: crate::commands::random_id().map_err(io::Error::other)?
@@ -102,7 +101,11 @@ impl Broker {
                 let mut requests: Vec<JoinHandle<()>> = Vec::new();
                 while !stopping.load(Ordering::Acquire) {
                     requests.retain(|request| if request.is_finished() { false } else { true });
-                    match listener.accept() {
+                    let accepted = listener.accept();
+                    if stopping.load(Ordering::Acquire) {
+                        break;
+                    }
+                    match accepted {
                         Ok((stream, address))
                             if address.ip().is_loopback() && requests.len() < 8 =>
                         {
@@ -113,9 +116,7 @@ impl Broker {
                             }));
                         }
                         Ok(_) => {}
-                        Err(error) if error.kind() == io::ErrorKind::WouldBlock => {
-                            std::thread::sleep(Duration::from_millis(50))
-                        }
+                        Err(error) if error.kind() == io::ErrorKind::Interrupted => continue,
                         Err(_) => break,
                     }
                 }
@@ -130,8 +131,11 @@ impl Broker {
         })
     }
     pub fn stop(&mut self) {
-        self.stop.store(true, Ordering::Release);
         if let Some(worker) = self.worker.take() {
+            self.stop.store(true, Ordering::Release);
+            // Wake blocking accept on our own listener. The stop fence prevents this
+            // connection from becoming an admitted helper request.
+            let _ = TcpStream::connect_timeout(&self.connection.address, Duration::from_secs(1));
             let _ = worker.join();
         }
     }
@@ -362,45 +366,57 @@ impl GitRuntime {
         )?;
         Ok(true)
     }
-    pub(crate) fn terminal_environment(
-        &self,
-        token: &CancellationToken,
-    ) -> Result<Value, ExtensionError> {
-        let config = self.api.configuration(None, Some(token))?;
-        let broker = self
+    pub(crate) fn interaction_connection(self: &Arc<Self>) -> Result<Connection, ExtensionError> {
+        let mut broker = self
             .broker
             .lock()
             .map_err(|_| invalid("Git broker failed"))?;
+        if self.stopped.load(Ordering::Acquire) {
+            return Err(invalid("Git activation has stopped"));
+        }
+        if broker.is_none() {
+            *broker = Some(
+                Broker::start(Arc::downgrade(self))
+                    .map_err(|_| invalid("Git interaction broker could not start"))?,
+            );
+        }
+        Ok(broker
+            .as_ref()
+            .expect("broker was initialized")
+            .connection
+            .clone())
+    }
+
+    pub(crate) fn terminal_environment(
+        self: &Arc<Self>,
+        token: &CancellationToken,
+    ) -> Result<Value, ExtensionError> {
+        let config = self.api.configuration(None, Some(token))?;
         let mut map = Vec::new();
-        if let Some(broker) = &*broker {
-            let auth = config.boolean("enabled", true)
-                && config.boolean("useIntegratedAskPass", true)
-                && config.boolean("terminalAuthentication", true);
-            let editor =
-                config.boolean("enabled", true) && config.boolean("terminalGitEditor", false);
-            if auth || editor {
-                let executable =
-                    std::env::current_exe().map_err(|_| invalid("Git helper is unavailable"))?;
-                let helper = format!("'{}'", executable.to_string_lossy().replace('\'', "'\\''"));
-                let mut values = vec![
-                    (
-                        "ASH_GIT_BRIDGE_ADDRESS",
-                        broker.connection.address.to_string(),
-                    ),
-                    ("ASH_GIT_BRIDGE_TOKEN", broker.connection.token.clone()),
-                    ("ASH_GIT_BRIDGE_SCOPE", String::new()),
-                ];
-                if auth {
-                    values.push(("GIT_ASKPASS", format!("{helper} --askpass")));
-                    values.push(("SSH_ASKPASS", executable.to_string_lossy().to_string()));
-                }
-                if editor {
-                    values.push(("GIT_EDITOR", format!("{helper} --editor")));
-                    values.push(("GIT_SEQUENCE_EDITOR", format!("{helper} --editor")));
-                }
-                for (key, value) in values {
-                    map.push(json!([key,{"variable":key,"type":1,"value":value,"options":{"applyAtProcessCreation":true,"applyAtShellIntegration":false}}]));
-                }
+        let auth = config.boolean("enabled", true)
+            && config.boolean("useIntegratedAskPass", true)
+            && config.boolean("terminalAuthentication", true);
+        let editor = config.boolean("enabled", true) && config.boolean("terminalGitEditor", false);
+        if auth || editor {
+            let connection = self.interaction_connection()?;
+            let executable =
+                std::env::current_exe().map_err(|_| invalid("Git helper is unavailable"))?;
+            let helper = format!("'{}'", executable.to_string_lossy().replace('\'', "'\\''"));
+            let mut values = vec![
+                ("ASH_GIT_BRIDGE_ADDRESS", connection.address.to_string()),
+                ("ASH_GIT_BRIDGE_TOKEN", connection.token.clone()),
+                ("ASH_GIT_BRIDGE_SCOPE", String::new()),
+            ];
+            if auth {
+                values.push(("GIT_ASKPASS", format!("{helper} --askpass")));
+                values.push(("SSH_ASKPASS", executable.to_string_lossy().to_string()));
+            }
+            if editor {
+                values.push(("GIT_EDITOR", format!("{helper} --editor")));
+                values.push(("GIT_SEQUENCE_EDITOR", format!("{helper} --editor")));
+            }
+            for (key, value) in values {
+                map.push(json!([key,{"variable":key,"type":1,"value":value,"options":{"applyAtProcessCreation":true,"applyAtShellIntegration":false}}]));
             }
         }
         Ok(json!({"persistent":false,"map":map,"descriptionMap":[]}))
@@ -547,3 +563,7 @@ pub fn run_helper() -> Option<i32> {
         ),
     )
 }
+
+#[cfg(test)]
+#[path = "interaction_tests.rs"]
+mod tests;

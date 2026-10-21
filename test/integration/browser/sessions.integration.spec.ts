@@ -119,6 +119,32 @@ test('Sessions navigation icons and surface controls follow the selected compone
 	await expect(page.locator('.ash-sessions-surface-header')).toHaveCount(0);
 	await expect(chat).toHaveCSS('background-color', 'rgb(240, 240, 240)');
 	await expect(page.locator('.ash-sessions-list-item.selected').first()).toHaveCSS('background-color', 'rgb(240, 240, 240)');
+	for (const theme of ['ash-light', 'ash-dark', 'ash-high-contrast-dark', 'ash-high-contrast-light']) {
+		await page.evaluate(theme => window.ashSessionsIntegration.setTheme(theme), theme);
+		await chat.click();
+		await page.mouse.move(400, 180);
+		const background = await chat.evaluate(button => getComputedStyle(button).backgroundColor);
+		await chat.hover();
+		await expect(chat).toHaveCSS('background-color', background);
+		await library.hover();
+		await expect(library).not.toHaveAttribute('aria-current');
+		await chat.focus();
+		await chat.press('ArrowDown');
+		await expect(chat).not.toBeFocused();
+		await expect(chat).toHaveAttribute('aria-current', 'page');
+		if (theme.includes('high-contrast')) {
+			await expect(chat).toHaveCSS('outline-style', 'solid');
+			await expect(library).toHaveCSS('outline-style', 'solid');
+			await expect(activityNavigation.locator('button:focus')).toHaveCSS('outline-style', 'solid');
+		}
+		await library.click();
+		const surface = page.locator('.ash-library');
+		await expect(surface).toBeVisible();
+		await expect(surface).not.toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+		expect(await surface.evaluate(element => getComputedStyle(element).color !== getComputedStyle(element).backgroundColor)).toBe(true);
+		await surface.getByRole('searchbox').focus();
+		await expect(surface.getByRole('searchbox')).toHaveCSS('outline-style', 'solid');
+	}
 });
 
 test('Sessions can directly dispose and recreate a restored window without capturing released editor grids', async ({ page }) => {
@@ -462,16 +488,21 @@ test.describe('Sessions settings components', () => {
 		await expect(settings).toHaveCount(0);
 		const sharedEditor = page.locator('.ash-keybindings-editor');
 		await expect(sharedEditor).toBeVisible();
+		const chat = page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Chat', exact: true });
+		await expect(chat).toHaveAttribute('aria-current', 'page');
 		await expect(sharedEditor.getByRole('searchbox')).toBeFocused();
 		await sharedEditor.getByRole('searchbox').fill('workbench.action.openSettings');
 		await expect(sharedEditor.locator('.ash-keybindings-command-id').filter({ hasText: /^workbench\.action\.openSettings$/u })).toBeVisible();
 		const shortcut = sharedEditor.locator('.ash-keybindings-key .ash-keybinding-label').first();
 		await expect(shortcut.locator('kbd')).toHaveCount(2);
 		for (const cap of await shortcut.locator('kbd').all()) {
-			await expect(cap).toHaveCSS('height', '22px');
+			await expect(cap).toHaveCSS('height', '20px');
 			await expect(cap).toHaveCSS('border-radius', '4px');
 		}
 		await sharedEditor.screenshot({ path: testInfo.outputPath('settings-keycaps.png') });
+		await page.locator('.ash-modal-editor-close').click();
+		await expect(sharedEditor).toBeHidden();
+		await expect(chat).toHaveAttribute('aria-current', 'page');
 	});
 
 	test('Customize settings and feature links open the actual Workbench settings owner', async ({ page }, testInfo) => {

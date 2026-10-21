@@ -17,10 +17,14 @@ interface ActiveTranscription {
 	audio: Promise<void>;
 	text: string;
 	finalDelivered: boolean;
+	finalReceived: boolean;
+	queuedBytes: number;
 	discard: boolean;
 	hasEnded: boolean;
 	endedError?: string;
 	stopping?: Promise<string>;
+	cancelling?: Promise<void>;
+	readonly cancelled: DeferredPromise<string>;
 }
 
 export class LocalTranscriptionService extends Disposable implements ILocalTranscriptionService, ILocalTranscriptionModelService {
@@ -44,10 +48,11 @@ export class LocalTranscriptionService extends Disposable implements ILocalTrans
 		}));
 		this._register(backend.onDidTranscribe(result => {
 			const active = this.active;
-			if (!active || result.resourceId !== active.resourceId || active.discard || active.finalDelivered || active.hasEnded) { return; }
+			if (!active || result.resourceId !== active.resourceId || active.discard || active.finalReceived || active.hasEnded) { return; }
 			active.text = result.text;
-			active.finalDelivered = result.isFinal;
-			this.transcribed.fire({ text: result.text, isFinal: result.isFinal });
+			active.finalReceived = result.isFinal;
+			// Final delivery follows the stop receipt, including failures reported after the notification.
+			if (!result.isFinal) this.transcribed.fire({ text: result.text, isFinal: false });
 		}));
 		this._register(backend.onDidEnd(result => {
 			const active = this.active;
@@ -121,14 +126,16 @@ export class LocalTranscriptionService extends Disposable implements ILocalTrans
 			if (active.discard) throw canceled();
 			await this.backend.start(resourceId, options.model ?? DEFAULT_LOCAL_TRANSCRIPTION_MODEL);
 		});
-		const active: ActiveTranscription = { resourceId, started, audio: started, text: '', finalDelivered: false, discard: false, hasEnded: false };
+		const active: ActiveTranscription = { resourceId, started, audio: started, text: '', finalDelivered: false, finalReceived: false, queuedBytes: 0, discard: false, hasEnded: false, cancelled: new DeferredPromise<string>() };
 		this.active = active;
 		this.setStatus({ state: LocalTranscriptionModelState.Loading });
 		try {
 			await started;
 		} catch (error) {
-			if (this.active === active) { this.active = undefined; }
-			this.setStatus({ state: LocalTranscriptionModelState.Error, error: String(error) });
+			if (this.active === active) {
+				this.active = undefined;
+				this.setStatus(active.discard ? { state: LocalTranscriptionModelState.Idle } : { state: LocalTranscriptionModelState.Error, error: String(error) });
+			}
 			throw error;
 		}
 	}
@@ -141,22 +148,39 @@ export class LocalTranscriptionService extends Disposable implements ILocalTrans
 		this.assertNotDisposed();
 		const active = this.active;
 		if (!active || active.discard || active.hasEnded || active.stopping) return Promise.resolve();
+		if (active.queuedBytes + chunk.byteLength > 4 * 1024 * 1024) return Promise.reject(new Error(localize('dictation.audioBackpressure', 'Transcription audio is empty or backpressured')));
+		active.queuedBytes += chunk.byteLength;
 		active.audio = active.audio.then(async () => {
 			if (this.active === active && !active.discard) await this.backend.pushAudio(active.resourceId, chunk);
-		});
+		}).finally(() => { active.queuedBytes -= chunk.byteLength; });
 		return active.audio;
 	}
 
-	public async cancel(): Promise<void> {
+	public cancel(): Promise<void> {
 		const active = this.active;
-		if (!active) { return; }
+		if (!active) return Promise.resolve();
 		active.discard = true;
-		await this.finish(active);
+		// Cancellation bypasses audio and finalization; both may be waiting for the backend being cancelled.
+		active.cancelling ??= Promise.resolve().then(async () => {
+			try { await active.started; } catch { return; }
+			await this.backend.cancel(active.resourceId);
+		}).then(() => {
+			void active.cancelled.complete('');
+			if (this.active === active) {
+				this.active = undefined;
+				this.setStatus({ state: LocalTranscriptionModelState.Idle });
+			}
+		}, error => {
+			active.cancelling = undefined;
+			if (this.active === active) this.setStatus({ state: LocalTranscriptionModelState.Error, error: String(error) });
+			throw error;
+		});
+		return active.cancelling;
 	}
 
 	private finish(active: ActiveTranscription): Promise<string> {
 		if (active.stopping) { return active.stopping; }
-		active.stopping = this.stopBackend(active);
+		active.stopping = Promise.race([this.stopBackend(active), active.cancelled.p]);
 		return active.stopping;
 	}
 
@@ -171,19 +195,19 @@ export class LocalTranscriptionService extends Disposable implements ILocalTrans
 			const text = await this.backend.stop(active.resourceId);
 			if (this.active !== active) { return ''; }
 			if (audioError) throw audioError;
-			if (!active.discard && !active.finalDelivered && text !== null) {
-				active.text = text;
-				active.finalDelivered = true;
-				this.transcribed.fire({ text, isFinal: true });
-			}
 			if (active.endedError) { throw new Error(active.endedError); }
+			if (!active.discard && !active.finalDelivered) {
+				active.text = text ?? active.text;
+				active.finalDelivered = true;
+				this.transcribed.fire({ text: active.text, isFinal: true });
+			}
 			return active.discard ? '' : active.text;
 		} catch (error) {
 			active.endedError ??= String(error);
 			if (active.discard) return '';
 			throw error;
 		} finally {
-			if (this.active === active) {
+			if (this.active === active && !active.cancelling) {
 				this.active = undefined;
 				this.setStatus(active.endedError && !active.discard ? { state: LocalTranscriptionModelState.Error, error: active.endedError } : { state: LocalTranscriptionModelState.Idle });
 			}

@@ -77,7 +77,7 @@ export class SettingsEditor {
 	}
 
 	public async openUserSettingsUI(): Promise<void> {
-		await this.quickaccess.runCommand('workbench.action.openSettings');
+		await this.quickaccess.runCommand('workbench.action.openSettings2');
 		await expect(this.element).toBeVisible();
 	}
 

@@ -76,6 +76,22 @@ pub(crate) struct McpInvocationAuthority {
     pub runtime_fence: Option<Arc<dyn RuntimeInvocationFence>>,
 }
 
+struct OAuthInvocationFence(Arc<ash_rmcp_client::HttpCredentialScope>);
+
+impl RuntimeInvocationFence for OAuthInvocationFence {
+    fn authorizes(&self) -> bool {
+        !self.0.is_closed()
+    }
+
+    fn acquire(&self) -> Option<Box<dyn crate::connector::RuntimeInvocationLease>> {
+        self.0
+            .acquire()
+            .map(|lease| Box::new(lease) as Box<dyn crate::connector::RuntimeInvocationLease>)
+    }
+}
+
+impl crate::connector::RuntimeInvocationLease for ash_rmcp_client::HttpCredentialLease {}
+
 /// Credential authority used by direct Config MCP servers; Connector accounts keep their own owner.
 pub struct McpAuthentication {
     pub secrets: Arc<dyn SecretStore>,
@@ -438,6 +454,7 @@ fn materialize_servers(
         if !enabled {
             continue;
         }
+        let mut runtime_fence: Option<Arc<dyn RuntimeInvocationFence>> = None;
         let (transport, authority) = match &server.transport {
             McpTransportConfig::Stdio { command, args } => {
                 if let McpCredentialBinding::Reference { credential_ref } = &server.credential {
@@ -488,11 +505,13 @@ fn materialize_servers(
                     if is_oauth && let Some(oauth) = oauth {
                         let target = crate::auth::McpOAuthTarget::from_config(server)
                             .map_err(|error| McpToolCompositionError(error.to_string()))?;
-                        endpoint = endpoint.with_credentials(
-                            oauth
-                                .authorization(target)
-                                .map_err(|error| McpToolCompositionError(error.to_string()))?,
-                        );
+                        let credentials = oauth
+                            .authorization(target)
+                            .map_err(|error| McpToolCompositionError(error.to_string()))?;
+                        runtime_fence = credentials.scope().map(|scope| {
+                            Arc::new(OAuthInvocationFence(scope)) as Arc<dyn RuntimeInvocationFence>
+                        });
+                        endpoint = endpoint.with_credentials(credentials);
                     } else {
                         let value = project_runtime_credential(value).map_err(|error| {
                             McpToolCompositionError(format!(
@@ -532,7 +551,7 @@ fn materialize_servers(
                 display_name: server.display_name.clone(),
                 transport: authority,
                 connector_fence: None,
-                runtime_fence: None,
+                runtime_fence,
             },
         );
     }
@@ -614,7 +633,7 @@ impl McpToolService {
             .is_some_and(|fence| !fence.authorizes())
         {
             return Err(CoreError::Policy(format!(
-                "Plugin contribution is no longer active: {server}"
+                "MCP invocation authority is no longer active: {server}"
             )));
         }
         let authority_scope = match &authority.transport {
@@ -746,6 +765,16 @@ impl ToolService for McpToolService {
         // Reuses current connector/plugin fences before any peer request. No tool is re-executed.
         self.review_request(call)?;
         let prepared = self.prepared_call(call)?;
+        let _lease = self
+            .authorities
+            .get(prepared.binding().remote().server())
+            .and_then(|authority| authority.runtime_fence.as_ref())
+            .map(|fence| {
+                fence
+                    .acquire()
+                    .ok_or_else(|| CoreError::Policy("MCP authority was retired".into()))
+            })
+            .transpose()?;
         let resource = self
             .owner
             .read_resource(
@@ -837,7 +866,7 @@ impl McpToolService {
         let _runtime_lease = match authority.runtime_fence.as_ref() {
             Some(fence) => Some(fence.acquire().ok_or_else(|| {
                 CoreError::Policy(format!(
-                    "Plugin contribution was disabled before MCP dispatch: {}",
+                    "MCP invocation authority was retired before dispatch: {}",
                     binding.remote().server()
                 ))
             })?),
@@ -864,6 +893,9 @@ impl McpToolService {
                 })?,
             None => invoke(),
         };
+        // Bound generations intentionally survive ordinary config updates, but OAuth retirement
+        // must suppress results from that identity even when the peer completed concurrently.
+        self.review_request(call)?;
         mcp_invocation_output(invocation)
     }
 }

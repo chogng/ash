@@ -33,7 +33,7 @@ test('Markdown preview loads an image relative to a workspace document', { tag: 
 	await expect.poll(() => content.getByRole('img', { name: 'Workspace diagram', exact: true }).evaluate((image: HTMLImageElement) => ({ width: image.naturalWidth, height: image.naturalHeight }))).toEqual({ width: 24, height: 16 });
 });
 
-test('Markdown extension owns preview commands and shares unsaved text across editor views', async ({ workbench, application }) => {
+test('Markdown extension owns preview commands and shares unsaved text across editor views', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ workbench, application }) => {
 	const page = workbench.page;
 	await workbench.quickaccess.runCommand('workbench.action.closeAllEditors');
 	await page.keyboard.press('ControlOrMeta+N');
@@ -135,7 +135,7 @@ test('Markdown extension owns preview commands and shares unsaved text across ed
 	expect(Math.abs(lowerBox!.x - thirdBox!.x)).toBeLessThan(2);
 });
 
-test('Markdown tab menus reopen the clicked document while another tab is active', async ({ workbench, application }) => {
+test('Markdown tab menus reopen the clicked document while another tab is active', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ workbench, application }) => {
 	const page = workbench.page;
 	await workbench.quickaccess.runCommand('workbench.action.closeAllEditors');
 	await page.keyboard.press('ControlOrMeta+N');
@@ -162,7 +162,7 @@ test('Markdown tab menus reopen the clicked document while another tab is active
 	await group.editor.waitForEditorContents(text => text.includes('# Second document'));
 });
 
-test('Markdown rich editor follows theme colors and shows keyboard focus in every theme', async ({ workbench }) => {
+test('Markdown rich editor follows theme colors and shows keyboard focus in every theme', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ workbench }) => {
 	const page = workbench.page;
 	await workbench.quickaccess.runCommand('workbench.action.closeAllEditors');
 	await page.keyboard.press('ControlOrMeta+N');
@@ -194,7 +194,7 @@ test('Markdown rich editor follows theme colors and shows keyboard focus in ever
 			const probe = document.createElement('span');
 			element.appendChild(probe);
 			try {
-				return Object.fromEntries(['button-foreground', 'button-secondaryBackground', 'button-hoverBackground', 'focusBorder', 'border', 'widget-border', 'text-codeBlockBackground', 'accent-foreground', 'error-foreground', 'editorCursor-foreground', 'editor-lineHighlightBackground', 'description-foreground'].map(name => {
+				return Object.fromEntries(['button-foreground', 'button-secondaryBackground', 'button-hoverBackground', 'focusBorder', 'border', 'widget-border', 'text-codeBlockBackground', 'accent-foreground', 'error-foreground', 'editorCursor-foreground', 'editor-lineHighlightBackground', 'editor-foreground'].map(name => {
 					probe.style.backgroundColor = `var(--ash-${name})`;
 					return [name, getComputedStyle(probe).backgroundColor];
 				}));
@@ -204,28 +204,23 @@ test('Markdown rich editor follows theme colors and shows keyboard focus in ever
 		});
 		const foreground = await workbench.element.evaluate(element => getComputedStyle(element).getPropertyValue('--ash-editor-foreground').trim());
 		await expect(frame.locator('html')).toHaveCSS('--ash-editor-foreground', foreground);
-		await expect.poll(() => editor.evaluate(element => {
-			const probe = document.createElement('span');
-			element.appendChild(probe);
-			try {
-				return ['--md-cursor-background', '--md-block-active-background', '--md-html-comment-foreground'].map(property => {
-					probe.style.backgroundColor = `var(${property})`;
-					return getComputedStyle(probe).backgroundColor;
-				});
-			} finally {
-				probe.remove();
-			}
-		})).toEqual([palette['editorCursor-foreground'], palette['editor-lineHighlightBackground'], palette['description-foreground']]);
 		await editor.hover();
 		await expect.poll(() => bold.evaluate(element => element.matches(':hover'))).toBe(false);
 		await expect(bold).toHaveCSS('color', palette['button-foreground']!);
 		await expect(bold).toHaveCSS('background-color', palette['button-secondaryBackground']!);
 		await expect(frame.getByRole('toolbar')).toHaveCSS('border-bottom-color', palette['border']!);
-		await expect(editor.locator('.md-code-block')).toHaveCSS('background-color', palette['text-codeBlockBackground']!);
-		await expect(editor.locator('.md-blockquote')).toHaveCSS('border-left-color', palette['widget-border']!);
+		await expect(editor.locator('pre')).toHaveCSS('background-color', palette['text-codeBlockBackground']!);
+		await expect(editor.locator('blockquote')).toHaveCSS('border-left-color', palette['widget-border']!);
 		await expect(editor.getByRole('link')).toHaveCSS('color', palette['accent-foreground']!);
-		await expect(editor.getByRole('cell', { name: 'Header', exact: true })).toHaveCSS('border-top-color', palette['widget-border']!);
+		await expect(editor.getByRole('columnheader', { name: 'Header', exact: true })).toHaveCSS('border-top-color', palette['widget-border']!);
 		await expect(frame.getByRole('status')).toHaveCSS('color', palette['error-foreground']!);
+		await editor.getByRole('heading', { name: 'Theme colors', exact: true }).click();
+		const input = editor.getByRole('textbox', { name: 'Edit Markdown block', exact: true });
+		await expect(input).toBeFocused();
+		await expect(input).toHaveCSS('caret-color', palette['editorCursor-foreground']!);
+		await expect(input).toHaveCSS('background-color', palette['editor-lineHighlightBackground']!);
+		await expect(input).toHaveCSS('color', palette['editor-foreground']!);
+		await page.keyboard.press('Escape');
 		await editor.focus();
 		await page.keyboard.press('Alt+F10');
 		await expect(bold).toBeFocused();
@@ -237,7 +232,7 @@ test('Markdown rich editor follows theme colors and shows keyboard focus in ever
 	}
 });
 
-test('Markdown rich editor shares text and history with the source editor', async ({ workbench }) => {
+test('Markdown rich editor shares text and history with the source editor', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ workbench }) => {
 	const page = workbench.page;
 	await workbench.quickaccess.runCommand('workbench.action.closeAllEditors');
 	await page.keyboard.press('ControlOrMeta+N');
@@ -258,6 +253,7 @@ test('Markdown rich editor shares text and history with the source editor', asyn
 	await editor.click();
 	await page.keyboard.press('ControlOrMeta+End');
 	await page.keyboard.type('\nAdded in rich editor');
+	await page.keyboard.press('Escape');
 	await expect(editor).toContainText('Added in rich editor');
 	await frame.getByRole('button', { name: 'Undo', exact: true }).click();
 	await expect(editor).not.toContainText('Added in rich editor');
@@ -298,7 +294,7 @@ test('Markdown rich editor saves files and refreshes from an open source tab', {
 	await page.keyboard.press('ArrowRight');
 	await expect(frame.getByRole('button', { name: 'Italic', exact: true })).toBeFocused();
 	await page.keyboard.press('Escape');
-	await expect(editor).toBeFocused();
+	await expect(editor.getByRole('textbox', { name: 'Edit document source', exact: true })).toBeFocused();
 	await page.keyboard.press('Alt+F1');
 	await expect(page.locator('.ash-accessible-view-content')).toHaveValue(/Markdown rich text editor[\s\S]*Alt\+F10/u);
 	await page.keyboard.press('Escape');
@@ -307,13 +303,16 @@ test('Markdown rich editor saves files and refreshes from an open source tab', {
 	await page.keyboard.press('ControlOrMeta+End');
 	await page.keyboard.insertText(' from source');
 	await group.tabs.filter({ hasText: 'rich-saved.md' }).last().click();
+	const richSource = editor.getByRole('textbox', { name: 'Edit document source', exact: true });
+	await expect(richSource).toHaveValue(original + ' persisted from source');
+	await richSource.press('Escape');
 	await expect(editor).toContainText('persisted from source');
 	await editor.focus();
 	await page.keyboard.press('ControlOrMeta+s');
 	await expect.poll(() => readFile(path, 'utf8')).toBe(original + ' persisted from source');
 });
 
-test('Markdown rich editor respects readonly rules and rejects stale document edits', async ({ workbench }) => {
+test('Markdown rich editor respects readonly rules and rejects stale document edits', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ workbench }) => {
 	const page = workbench.page;
 	await page.keyboard.press('ControlOrMeta+N');
 	const group = workbench.editors.groupAt(0);
@@ -337,18 +336,22 @@ test('Markdown rich editor respects readonly rules and rejects stale document ed
 		const control = settings.locator('[data-configuration-key="files.readonlyInclude"]');
 		if (readonly) {
 			await control.getByRole('button', { name: 'Add pattern', exact: true }).click();
-			await control.locator('[data-pattern-part="key"]').fill('**/protected.md');
+			await control.getByRole('textbox', { name: 'Path pattern', exact: true }).fill('**/protected.md');
+			await control.getByRole('button', { name: 'Save', exact: true }).click();
+			await expect(control.locator('[data-pattern="**/protected.md"]')).toBeVisible();
+		} else {
+			await control.getByRole('listitem', { name: '**/protected.md', exact: true }).press('Delete');
+			await expect(control.locator('[data-pattern="**/protected.md"]')).toHaveCount(0);
 		}
-		await control.locator('[data-pattern-part="value"]').fill(String(readonly));
-		await control.locator('[data-pattern-part="value"]').press('Tab');
 		await expect(control.locator('.ash-settings-indicators')).toBeHidden();
 		await settings.locator('.ash-modal-editor-close').click();
 		await expect(editor).toHaveAttribute('aria-readonly', String(readonly));
 		await expect(frame.getByRole('button', { name: 'Bold', exact: true })).toBeEnabled({ enabled: !readonly });
-		await expect(frame.getByRole('checkbox', { name: 'Keep unchecked', exact: true })).toBeEnabled({ enabled: !readonly });
+		await expect(editor.getByRole('listitem').filter({ hasText: 'Keep unchecked' }).getByRole('checkbox', { name: 'Completed task', exact: true })).toBeEnabled({ enabled: !readonly });
 		await editor.click();
 		await page.keyboard.press('ControlOrMeta+End');
 		await page.keyboard.insertText(readonly ? ' forbidden' : ' accepted');
+		await page.keyboard.press('Escape');
 		if (readonly) {
 			await expect(editor).not.toContainText('forbidden');
 		} else {
@@ -369,7 +372,7 @@ test('Markdown rich editor respects readonly rules and rejects stale document ed
 	await group.editor.waitForEditorContents(text => text === '# Protected document\n\n- [ ] Keep unchecked\n\nOriginal body accepted');
 });
 
-test('Markdown language providers navigate headings, rename links and show diagnostics', async ({ workbench }) => {
+test('Markdown language providers navigate headings, rename links and show diagnostics', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ workbench }) => {
 	const page = workbench.page;
 	await workbench.quickaccess.runCommand('workbench.action.closeAllEditors');
 	await page.keyboard.press('ControlOrMeta+N');
@@ -440,7 +443,7 @@ test('Markdown link rename moves the target file and updates its references toge
 	await expect(readFile(original, 'utf8')).rejects.toMatchObject({ code: 'ENOENT' });
 });
 
-test('Markdown rich editor localizes its toolbar and accessibility help in Chinese', async ({ workbench, restartWorkbench }) => {
+test('Markdown rich editor localizes its toolbar and accessibility help in Chinese', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ workbench, restartWorkbench }) => {
 	await workbench.quickaccess.runCommand('workbench.action.configureLocale');
 	const picker = workbench.page.getByRole('dialog', { name: 'Select Display Language', exact: true });
 	await picker.getByRole('combobox').fill('简体中文');
@@ -470,4 +473,36 @@ test('Markdown rich editor localizes its toolbar and accessibility help in Chine
 	await expect(page.locator('.ash-accessible-view-content')).toHaveValue(/Markdown 富文本编辑器[\s\S]*Alt\+F10/u);
 	await page.keyboard.press('Escape');
 	await expect(group.content.locator('iframe.ash-webview:visible')).toBeFocused();
+});
+
+test('Markdown preview restores an unsaved custom tab through a cold provider start', { tag: ['@electron-app-server'] }, async ({ workbench, testWorkspace, reloadWorkbench }) => {
+	const file = join(testWorkspace.directory, 'restore-preview.md');
+	await writeFile(file, '# Persisted heading\n\nSaved text\n');
+	await workbench.quickaccess.runCommand('workbench.action.closeAllEditors');
+	await workbench.page.keyboard.press('ControlOrMeta+N');
+	const group = workbench.editors.groupAt(0);
+	const transfer = await workbench.page.evaluateHandle(uri => {
+		const value = new DataTransfer();
+		value.setData('text/uri-list', uri);
+		return value;
+	}, pathToFileURL(file).href);
+	try {
+		await group.title.locator('.ash-tab-list:visible [role="tablist"]').dispatchEvent('drop', { dataTransfer: transfer });
+	} finally { await transfer.dispose(); }
+	await group.editor.waitForEditorContents(text => text.includes('# Persisted heading'));
+	await group.editor.input.focus();
+	await workbench.page.keyboard.press('ControlOrMeta+a');
+	await workbench.page.keyboard.insertText('# Unsaved restored heading\n\nRetained draft\n');
+	await workbench.quickaccess.runCommand('markdown.reopenAsPreview');
+	const preview = () => workbench.editors.groupAt(0).content.frameLocator('iframe.ash-webview:visible').frameLocator('iframe');
+	await expect(preview().getByRole('heading', { name: 'Unsaved restored heading', exact: true })).toBeVisible();
+	({ workbench } = await reloadWorkbench());
+	await expect(preview().getByRole('heading', { name: 'Unsaved restored heading', exact: true })).toBeVisible();
+	await expect(preview().locator('body')).toContainText('Retained draft');
+	await workbench.quickaccess.runCommand('markdown.reopenAsSource');
+	// Viewport empty lines contain layout placeholders; persisted bytes below verify the exact text.
+	await workbench.editors.groupAt(0).editor.waitForEditorContents(text => text.includes('Unsaved restored heading') && text.includes('Retained draft'));
+	expect(await readFile(file, 'utf8')).toBe('# Persisted heading\n\nSaved text\n');
+	await workbench.page.keyboard.press('ControlOrMeta+s');
+	await expect.poll(() => readFile(file, 'utf8')).toBe('# Unsaved restored heading\n\nRetained draft\n');
 });

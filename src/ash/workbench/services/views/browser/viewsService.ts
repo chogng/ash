@@ -66,8 +66,9 @@ export class ViewsService extends Disposable implements IViewsService {
 
 	public async openViewContainer(id: string, focus = false): Promise<IPaneComposite | null> {
 		const container = this.descriptors.getViewContainerById(id);
-		if (!container) { return null; }
-		return await this.panes.openPaneComposite(id, container.location, focus) ?? null;
+		const location = container && this.descriptors.getViewContainerLocation(container);
+		if (!location) { return null; }
+		return await this.panes.openPaneComposite(id, location, focus) ?? null;
 	}
 
 	public closeViewContainer(id: string): void {

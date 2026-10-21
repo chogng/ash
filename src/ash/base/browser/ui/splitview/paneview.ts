@@ -270,6 +270,7 @@ export class PaneView extends Disposable {
 		this.splitView.element.classList.remove("animated");
 	}, UI_ANIMATION_DURATION.normal));
 	private height = 0;
+	private width = 0;
 	private didLayout = false;
 	readonly onDidSashChange: Event<void>;
 	readonly onDidSashReset: Event<number>;
@@ -317,8 +318,9 @@ export class PaneView extends Disposable {
 					this.animationReset.schedule();
 				}
 				wasCollapsed = collapsed;
-				if (this.didLayout) this.updateContentHeight();
+				const contentHeightChanged = this.didLayout && this.updateContentHeight();
 				listener(requestedSize);
+				if (contentHeightChanged) this.scrollable.layout();
 				this.updateSashLabels();
 			}),
 			layout: (height, offset, width) => {
@@ -327,7 +329,7 @@ export class PaneView extends Disposable {
 			},
 		}, size, index);
 		this.panes.splice(index, 0, pane);
-		if (this.didLayout) this.updateContentHeight();
+		if (this.didLayout && this.updateContentHeight()) this.scrollable.layout();
 		this.updateSashLabels();
 	}
 
@@ -338,7 +340,7 @@ export class PaneView extends Disposable {
 		this.panes.splice(index, 1);
 		this.splitView.removeView(index);
 		pane.element.remove();
-		if (this.didLayout) this.updateContentHeight();
+		if (this.didLayout && this.updateContentHeight()) this.scrollable.layout();
 		this.updateSashLabels();
 	}
 
@@ -365,7 +367,11 @@ export class PaneView extends Disposable {
 	}
 
 	layout(height: number, width: number): void {
+		// Expansion notifies the parent constraints after SplitView has started its transition.
+		// A repeated allocation must not cancel that transition or lay out every body again.
+		if (this.didLayout && this.height === height && this.width === width) return;
 		this.height = height;
+		this.width = width;
 		this.element.style.height = `${height}px`;
 		this.didLayout = true;
 		this.animationReset.cancel();
@@ -377,9 +383,12 @@ export class PaneView extends Disposable {
 		this.updateSashLabels();
 	}
 
-	private updateContentHeight(): void {
-		this.splitView.element.style.height = `${Math.max(this.height, this.splitView.minimumSize)}px`;
-		this.scrollable.layout();
+	private updateContentHeight(): boolean {
+		const height = `${Math.max(this.height, this.splitView.minimumSize)}px`;
+		if (this.splitView.element.style.height === height) return false;
+		this.splitView.element.style.height = height;
+		// Pane toggles only change the scroll extent with this height; measure after SplitView writes its geometry.
+		return true;
 	}
 
 	private updateSashLabels(): void {

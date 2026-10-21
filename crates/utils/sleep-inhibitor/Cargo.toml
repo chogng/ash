@@ -12,7 +12,10 @@ log.workspace = true
 core-foundation.workspace = true
 
 [target.'cfg(target_os = "linux")'.dependencies]
-zbus.workspace = true
+zbus = { workspace = true, features = ["default-rt"] }
+
+[target.'cfg(target_os = "linux")'.dev-dependencies]
+zbus = { workspace = true, features = ["service"] }
 
 [target.'cfg(windows)'.dependencies]
 windows-sys = { workspace = true, features = ["Win32_Foundation", "Win32_System_Power", "Win32_System_SystemServices", "Win32_System_Threading"] }

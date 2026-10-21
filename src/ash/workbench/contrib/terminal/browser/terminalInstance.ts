@@ -25,6 +25,8 @@ import {
 	type TerminalProcessConnectionState,
 } from '../../../../platform/terminal/common/terminal.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
+import { ServiceCollection } from '../../../../platform/instantiation/common/serviceCollection.js';
+import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
 import type { ITerminalCommandStatusEvent, ITerminalContribution, ITerminalDimensions, ITerminalInstance, ITerminalProfile, TerminalInstanceState } from './terminal.js';
 import { TerminalExtensionsRegistry } from './terminalExtensions.js';
 import type { AgentHostPty } from './agentHostPty.js';
@@ -48,6 +50,7 @@ import { containsDragType, DataTransfers } from '../../../../base/browser/dnd.js
 import { UriList } from '../../../../base/common/dataTransfer.js';
 import { getPathForFile, LocalSelectionTransfer } from '../../../../platform/dnd/browser/dnd.js';
 import { DraggedEditorIdentifier } from '../../../browser/parts/editor/editorTabDragAndDrop.js';
+import { TerminalContextKeys } from '../common/terminalContextKey.js';
 
 export interface CustomTerminalProcessOptions {
 	readonly create: NonNullable<IShellLaunchConfig['customPtyImplementation']>;
@@ -146,6 +149,7 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 		@IWorkspaceContextService private readonly workspace: IWorkspaceContextService,
 		@IConfigurationService private readonly configuration: IConfigurationService,
 		@ITerminalProcessService private readonly processes: ITerminalProcessService,
+		@IContextKeyService private readonly contextKeys: IContextKeyService,
 	) {
 		super();
 		if (launch) {
@@ -162,6 +166,9 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 			this._title = title;
 			this.resource = restored ? URI.parse(restored.resource) : getTerminalUri(generateUuid(), instanceNumber, title);
 			if (restored) {
+				// Keep the PTY at its saved grid while singleton panes are regrouped.
+				// Intermediate resizes would queue repaints for a grid we no longer show.
+				this.frozen = true;
 				this.hostTarget = restored.target;
 				child?.restoreState(restored);
 			}
@@ -290,9 +297,10 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 		if (this.closed || this.isDisposed) {
 			return;
 		}
-		if (this.frozen && this.screen) {
+		const resumeDimensions = this.frozen ? this.dimensions : undefined;
+		if (this.frozen) {
 			this.frozen = false;
-			this.screen.raw.options.disableStdin = this.isReadOnly;
+			if (this.screen) this.screen.raw.options.disableStdin = this.isReadOnly;
 		}
 		if (this.customProcess) {
 			const process = this.customProcess;
@@ -310,7 +318,7 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 			return;
 		}
 		const generation = ++this.pollGeneration;
-		void this.poll(generation);
+		void this.poll(generation, 'running', resumeDimensions);
 	}
 
 	private createCustomProcess(custom: CustomTerminalProcessOptions): void {
@@ -354,6 +362,20 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 		}
 		const screen = this._register(this.instantiationService.createInstance(XtermTerminal, container, this));
 		this.screen = screen;
+		this._register(screen.onDidOpen(() => {
+			// ConPTY repaints in viewport coordinates after a resize. Configure its
+			// blank-row expansion and cursor-line reflow even without shell integration;
+			// otherwise a wrapped prompt's repaint can overwrite retained output.
+			const windowsPty = !this.custom && this.processes.operatingSystem === OperatingSystem.Windows;
+			screen.raw.options.windowsPty = windowsPty ? { backend: 'conpty' } : undefined;
+			screen.raw.options.reflowCursorLine = windowsPty;
+		}));
+		// Establish the instance scope before any contribution creates a nested
+		// scope. Keyboard routing must not depend on contribution registration order.
+		const scope = this._register(this.contextKeys.createScoped(screen.element));
+		const screenServices = this._register(this.instantiationService.createChild(new ServiceCollection([IContextKeyService, scope])));
+		const focused = TerminalContextKeys.focus.bindTo(scope);
+		const alternate = TerminalContextKeys.altBufferActive.bindTo(scope);
 		const editorDrag = LocalSelectionTransfer.getInstance<DraggedEditorIdentifier>();
 		const acceptsDrop = (event: DragEvent): boolean => !this.isReadOnly && this.state === 'running'
 			&& (editorDrag.hasData(DraggedEditorIdentifier.prototype) || containsDragType(event, 'text/uri-list') || containsDragType(event, DataTransfers.FILES));
@@ -385,7 +407,7 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 		const truncated = recorder.isTruncated;
 		this.screenRecorder = undefined;
 		for (const { id, ctor } of TerminalExtensionsRegistry.getTerminalContributions()) {
-			this.contributions.set(id, this.instantiationService.createInstance(ctor, { instance: this }));
+			this.contributions.set(id, screenServices.createInstance(ctor, { instance: this }));
 		}
 		const restored = this.restored;
 		this.screenInitialization = screen.initialize(restored).then(async () => {
@@ -400,7 +422,7 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 			if (truncated) screen.raw.write(`\r\n${localize('terminal.outputTruncated', '[terminal output truncated]')}\r\n`);
 			for (const entry of restored ? [] : replay.events) {
 				if (entry.cols > 0 && entry.rows > 0) screen.raw.resize(entry.cols, entry.rows);
-				await new Promise<void>(resolve => screen.raw.write(entry.data, resolve));
+				await new Promise<void>(resolve => screen.write(entry.data, resolve));
 				if (entry.shellIntegration) screen.handleShellIntegration(entry.shellIntegration);
 				if (this.isDisposed || screen.isDisposed) return undefined;
 			}
@@ -427,6 +449,14 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 			const binary = screen.raw.onBinary(data => { void this.processBinary(data).catch(onUnexpectedError); });
 			this._register(toDisposable(() => binary.dispose()));
 			const contributionsReady = (): void => {
+				const textarea = screen.raw.textarea!;
+				// Opening or restoring a screen may have already applied its focus request.
+				focused.set(textarea === screen.element.ownerDocument.activeElement);
+				this._register(addDisposableListener(screen.element, 'focusin', event => focused.set(event.target === textarea)));
+				this._register(addDisposableListener(screen.element, 'focusout', event => focused.set(event.relatedTarget === textarea)));
+				alternate.set(screen.raw.buffer.active.type === 'alternate');
+				const bufferChanged = screen.raw.buffer.onBufferChange(buffer => alternate.set(buffer.type === 'alternate'));
+				this._register(toDisposable(() => bufferChanged.dispose()));
 				for (const [, contribution] of this.contributions) { contribution.xtermReady?.(screen); }
 			};
 			// Recovery needs the parsed buffer before its view is revealed. Features
@@ -525,7 +555,7 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 			}
 			return;
 		}
-		if (!this.closed && this._state === 'running') {
+		if (!this.closed && !this.frozen && this._state === 'running') {
 			void this.shellProcessManager?.resize(dimensions.cols, dimensions.rows).catch(onUnexpectedError);
 		}
 	}
@@ -700,7 +730,9 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 		if (this.custom) {
 			return;
 		}
-		if (this.closed || this._state === "exited" || this._state === "disconnected") return;
+		// Errors require an explicit relaunch. Later host transitions must not
+		// resume failed operations or repeatedly append recovery failures.
+		if (this.closed || this._state === "exited" || this._state === "disconnected" || this._state === "error") return;
 		this.pollGeneration += 1;
 		this.shellProcessManager?.stop();
 		if (this.connectionPersistence === "reconnectable") {
@@ -878,8 +910,12 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 
 	}
 
-	private async poll(generation: number, initialState: "running" | "reconnecting" = "running"): Promise<void> {
+	private async poll(generation: number, initialState: "running" | "reconnecting" = "running", resumeDimensions?: ITerminalDimensions): Promise<void> {
 		try {
+			if (resumeDimensions) {
+				await this.shellProcessManager!.resize(resumeDimensions.cols, resumeDimensions.rows);
+				if (this.closed || this.isDisposed || generation !== this.pollGeneration) return;
+			}
 			await this.shellProcessManager!.start(initialState === "reconnecting");
 		} catch (error) {
 			if (!isCancellationError(error) && !this.closed && generation === this.pollGeneration) {

@@ -355,6 +355,7 @@ struct AppServerLanguageDirState {
     language_servers: BTreeMap<String, String>,
     server_states: BTreeMap<String, LanguageServerState>,
     dir_id: Option<String>,
+    settings: BTreeMap<String, serde_json::Value>,
 }
 
 impl Default for AppServerLanguageDirState {
@@ -365,6 +366,7 @@ impl Default for AppServerLanguageDirState {
             language_servers: BTreeMap::new(),
             server_states: BTreeMap::new(),
             dir_id: None,
+            settings: BTreeMap::new(),
         }
     }
 }
@@ -970,6 +972,53 @@ impl AppServerLanguageRuntime {
         self.refresh_sources();
     }
 
+    /// Keeps each renderer's effective settings with its directory's language session.
+    pub(super) fn configure_workspace_settings(
+        &mut self,
+        dir_root: &Path,
+        settings: BTreeMap<String, serde_json::Value>,
+    ) {
+        if self.env_runtimes.contains_key(dir_root)
+            || self
+                .dir_state
+                .root
+                .as_deref()
+                .is_some_and(|root| root != dir_root)
+        {
+            if !self.env_runtimes.contains_key(dir_root) {
+                let runtime = self.child_runtime();
+                self.env_runtimes
+                    .insert(dir_root.to_path_buf(), Box::new(runtime));
+            }
+            self.env_runtimes
+                .get_mut(dir_root)
+                .expect("directory runtime")
+                .configure_workspace_settings(dir_root, settings);
+            return;
+        }
+        if self.dir_state.root.is_none() || self.dir_state.settings != settings {
+            let changed = self
+                .dir_state
+                .settings
+                .keys()
+                .chain(settings.keys())
+                .filter(|name| self.dir_state.settings.get(*name) != settings.get(*name))
+                .cloned()
+                .collect::<std::collections::BTreeSet<_>>();
+            // Retire before replacement even if an override equals the profile value.
+            // Otherwise the old Ready state can admit requests during initialization.
+            if let Some(manager) = &self.manager {
+                let _ = manager.retire_servers(changed.iter().cloned().collect());
+            }
+            self.dir_state
+                .server_states
+                .retain(|name, _| !changed.contains(name));
+            self.dir_state.root = Some(dir_root.to_path_buf());
+            self.dir_state.settings = settings;
+            self.definitions_dirty = true;
+        }
+    }
+
     pub(super) fn ensure(
         &mut self,
         dir_root: &Path,
@@ -978,7 +1027,9 @@ impl AppServerLanguageRuntime {
         configuration: &LanguageServersConfig,
         language_id: &str,
     ) -> Result<&LspManager, String> {
-        if self.dir_state.root.is_some() && self.dir_state.root.as_deref() != Some(dir_root) {
+        if self.env_runtimes.contains_key(dir_root)
+            || (self.dir_state.root.is_some() && self.dir_state.root.as_deref() != Some(dir_root))
+        {
             self.active_dir_root = Some(dir_root.to_path_buf());
             if !self.env_runtimes.contains_key(dir_root) {
                 let runtime = self.child_runtime();
@@ -1007,7 +1058,8 @@ impl AppServerLanguageRuntime {
         {
             self.shutdown_selected();
         }
-        if self.dir_state.root.as_deref() != Some(dir_root)
+        if self.manager.is_none()
+            || self.dir_state.root.as_deref() != Some(dir_root)
             || self.definitions_dirty
             || self.acquisitions(configuration).any(|server| {
                 server.languages.iter().any(|id| id == language_id)
@@ -1137,6 +1189,9 @@ impl AppServerLanguageRuntime {
         dir_root: &Path,
         configuration: &LanguageServersConfig,
     ) -> Result<Vec<ash_lsp_manager::LanguageServerDefinition>, String> {
+        if let Some(runtime) = self.env_runtimes.get(dir_root) {
+            return runtime.definitions(dir_root, configuration);
+        }
         let builtin = |id| {
             if self.providers.contains(id) {
                 LanguageServerPreference::disabled()
@@ -1188,7 +1243,7 @@ impl AppServerLanguageRuntime {
             .into_iter()
             .filter_map(|definition| {
                 let id = definition.name().to_string();
-                match configure_definition(definition, configuration) {
+                match configure_definition(definition, configuration, &self.dir_state.settings) {
                     Ok(definition) => Some(definition),
                     Err(error) => {
                         log::warn!("language server {id} is unavailable: {error}");
@@ -1236,6 +1291,7 @@ impl AppServerLanguageRuntime {
             definitions.push(configure_definition(
                 server.definition().clone(),
                 configuration,
+                &self.dir_state.settings,
             )?);
         }
         // Selection can perform process/network I/O. Recheck its source while registering the
@@ -1605,7 +1661,10 @@ mod tests;
 fn configure_definition(
     mut definition: ash_lsp_manager::LanguageServerDefinition,
     configuration: &LanguageServersConfig,
+    workspace_settings: &BTreeMap<String, serde_json::Value>,
 ) -> Result<ash_lsp_manager::LanguageServerDefinition, String> {
+    let mut settings = serde_json::to_value(definition.settings()).expect("JSON settings");
+    let mut initialization_options = None;
     if let Some(config) = configuration
         .servers
         .iter()
@@ -1616,14 +1675,44 @@ fn configure_definition(
                 .with_language_ids(&config.language_ids)
                 .map_err(|error| error.to_string())?;
         }
-        definition = definition
-            .with_launch_options(&config.args, &config.environment)
-            .with_settings(config.settings.clone());
+        definition = definition.with_launch_options(&config.args, &config.environment);
+        merge_settings(
+            &mut settings,
+            &serde_json::to_value(&config.settings).expect("JSON settings"),
+        );
         if let Some(options) = &config.initialization_options {
-            definition = definition.with_initialization_options(options.clone());
+            initialization_options = Some(options.clone());
         }
     }
+    if let Some(value) = workspace_settings.get(definition.name().as_str()) {
+        merge_settings(&mut settings[definition.name().as_str()], value);
+    }
+    // rust-analyzer consumes its section during initialize, before requesting
+    // workspace/configuration. Supplying only the latter starts Cargo with defaults.
+    if definition.name().as_str() == "rust-analyzer"
+        && let Some(rust_settings) = settings.get("rust-analyzer")
+    {
+        merge_settings(
+            initialization_options.get_or_insert_with(|| serde_json::json!({})),
+            rust_settings,
+        );
+    }
+    if let Some(options) = initialization_options {
+        definition = definition.with_initialization_options(options);
+    }
+    definition =
+        definition.with_settings(serde_json::from_value(settings).expect("settings object"));
     Ok(definition)
+}
+
+fn merge_settings(base: &mut serde_json::Value, overlay: &serde_json::Value) {
+    if let (Some(base), Some(overlay)) = (base.as_object_mut(), overlay.as_object()) {
+        for (key, value) in overlay {
+            merge_settings(base.entry(key).or_insert(serde_json::Value::Null), value);
+        }
+    } else {
+        *base = overlay.clone();
+    }
 }
 
 #[cfg(all(test, unix))]

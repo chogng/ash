@@ -21,6 +21,8 @@ pub struct RolloutTrace {
     pub graph: Option<crate::TraceGraph>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub overview: Option<crate::TraceOverview>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub performance: Option<crate::TracePerformance>,
 }
 
 /// One durable Thread history within a [`RolloutTrace`].
@@ -76,8 +78,10 @@ pub fn capture_session_trace(
         diagnostics: None,
         graph: None,
         overview: None,
+        performance: None,
     };
     trace.overview = Some(crate::overview::summarize_trace(&trace));
+    trace.performance = Some(crate::performance::summarize_performance(&trace.threads));
     Ok(trace)
 }
 

@@ -528,9 +528,10 @@ fn built_in_provider_policy_checks_authority_revision_and_change_notifications()
     .with_editor_extension_policy(policy.clone())
     .with_built_in_extension_runtime(runtime);
     let mut owner = server.product_host_connection();
+    let mut remote = server.open_connection(super::ConnectionAuthority::RemoteHost);
     let mut ordinary = server.connection();
     let mut browser = server.browser_connection();
-    for connection in [&mut owner, &mut ordinary, &mut browser] {
+    for connection in [&mut owner, &mut remote, &mut ordinary, &mut browser] {
         call(
             &server,
             connection,
@@ -539,20 +540,52 @@ fn built_in_provider_policy_checks_authority_revision_and_change_notifications()
             json!({"clientInfo":{"name":"test","version":"1"},"capabilities":{}}),
         );
     }
+    let inspected = call(
+        &server,
+        &mut browser,
+        2,
+        "extensions/builtInProviders",
+        json!({}),
+    );
+    assert_eq!(
+        inspected["result"],
+        json!({
+            "revision": 1,
+            "canChangeEnablement": false,
+            "providers": [{"id":"ash.github-authentication", "enabled":true, "running":true}]
+        })
+    );
+    let denied = call(
+        &server,
+        &mut ordinary,
+        2,
+        "extensions/builtInProviders",
+        json!({}),
+    );
+    assert_eq!(denied["error"]["message"], "ResourceNotOwner");
+    for connection in [&mut owner, &mut remote] {
+        let inspected = call(
+            &server,
+            connection,
+            2,
+            "extensions/builtInProviders",
+            json!({}),
+        );
+        assert_eq!(inspected["result"]["canChangeEnablement"], true);
+        assert_eq!(inspected["result"]["revision"], 1);
+    }
     let request = json!({"id":"ash.github-authentication", "enabled":false, "expectedRevision":1});
     for connection in [&mut ordinary, &mut browser] {
-        assert!(
-            call(
-                &server,
-                connection,
-                2,
-                "extensions/setBuiltInProviderEnablement",
-                request.clone()
-            )
-            .get("error")
-            .is_some()
+        let denied = call(
+            &server,
+            connection,
+            3,
+            "extensions/setBuiltInProviderEnablement",
+            request.clone(),
         );
+        assert_eq!(denied["error"]["message"], "ResourceNotOwner");
     }
+    assert_eq!(policy.generation(), 1);
     let generation = server.updates.extension_packages_generation();
     let result = call(
         &server,
@@ -566,6 +599,22 @@ fn built_in_provider_policy_checks_authority_revision_and_change_notifications()
         json!({"id":"ash.github-authentication","enabled":false,"running":false})
     );
     assert_eq!(result["result"]["revision"], 2);
+    assert_eq!(result["result"]["canChangeEnablement"], true);
+    let refreshed = call(
+        &server,
+        &mut browser,
+        4,
+        "extensions/builtInProviders",
+        json!({}),
+    );
+    assert_eq!(
+        refreshed["result"],
+        json!({
+            "revision": 2,
+            "canChangeEnablement": false,
+            "providers": [{"id":"ash.github-authentication", "enabled":false, "running":false}]
+        })
+    );
     assert!(server.updates.extension_packages_generation() > generation);
     assert!(
         !EditorExtensionPolicy::open(path)

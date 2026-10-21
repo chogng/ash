@@ -551,7 +551,11 @@ fn hooks_documented_user_examples_pass_backend_configuration_validation() {
         document.push('\n');
         document.push_str(example.split("```").next().unwrap());
     }
-    fs::write(path, document).unwrap();
+    // Publish a complete editor save: the configuration monitor can migrate an
+    // empty file observed between truncation and write into a new default document.
+    let pending = path.with_extension("toml.pending");
+    fs::write(&pending, document).unwrap();
+    fs::rename(pending, path).unwrap();
     let catalog = client.list_hooks(Default::default()).unwrap();
     assert_eq!(catalog.sources[0].hooks.len(), 2);
     assert!(

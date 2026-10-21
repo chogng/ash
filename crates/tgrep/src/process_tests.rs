@@ -16,8 +16,7 @@ fn exited_server_returns_an_error_instead_of_using_its_stale_index() {
     .unwrap();
     {
         let mut child = server.child.lock().unwrap();
-        child.0.kill().unwrap();
-        child.0.wait().unwrap();
+        child.stop().unwrap();
     }
     let error = server
         .rpc(
@@ -302,7 +301,7 @@ fn supervised_shutdown_keeps_an_unbound_live_owner_until_its_guard_ends() {
             deadline,
         )
         .unwrap();
-    drop(server.child.lock().unwrap().0.stdin.take());
+    drop(server.child.lock().unwrap().child.stdin.take());
     thread::sleep(Duration::from_millis(250));
     assert!(!server.is_stopped().unwrap());
     server.rpc("hello", json!({}), &token, deadline).unwrap();
@@ -313,5 +312,96 @@ fn supervised_shutdown_keeps_an_unbound_live_owner_until_its_guard_ends() {
             "ended external owner was not reaped"
         );
         thread::sleep(POLL);
+    }
+}
+
+#[test]
+fn process_tree_fixture() {
+    let Ok(mode) = std::env::var("ASH_TGREP_TREE_MODE") else {
+        return;
+    };
+    let root = PathBuf::from(std::env::var_os("ASH_TGREP_TREE_ROOT").unwrap());
+    let listener = std::net::TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).unwrap();
+    std::fs::write(root.join(&mode), listener.local_addr().unwrap().to_string()).unwrap();
+    if mode == "leaf" {
+        thread::sleep(Duration::from_secs(15));
+        return;
+    }
+    let mut child = Command::new(std::env::current_exe().unwrap())
+        .args([
+            "--exact",
+            "process::tests::process_tree_fixture",
+            "--nocapture",
+        ])
+        .env("ASH_TGREP_TREE_MODE", "leaf")
+        .spawn()
+        .unwrap();
+    let deadline = Instant::now() + Duration::from_secs(5);
+    while !root.join("leaf").exists() {
+        assert!(Instant::now() < deadline);
+        thread::sleep(POLL);
+    }
+    if mode == "limit" {
+        writeln!(std::io::stdout(), "\ndone").unwrap();
+    }
+    if mode != "exit" {
+        child.wait().unwrap();
+    }
+}
+
+#[test]
+fn scans_reap_descendants_on_cancellation_limit_and_launcher_exit() {
+    for mode in ["cancel", "limit", "exit"] {
+        let root = tempfile::tempdir().unwrap();
+        let mut command = Command::new(std::env::current_exe().unwrap());
+        command
+            .args([
+                "--exact",
+                "process::tests::process_tree_fixture",
+                "--nocapture",
+            ])
+            .env("ASH_TGREP_TREE_MODE", mode)
+            .env("ASH_TGREP_TREE_ROOT", root.path());
+        let cancellation = CancellationSource::new();
+        let start = Instant::now();
+        thread::scope(|scope| {
+            let worker = scope.spawn(|| {
+                capture_selected(
+                    command,
+                    &cancellation.token(),
+                    Instant::now() + Duration::from_secs(5),
+                    1,
+                    &|line| Ok(line == "done"),
+                )
+            });
+            let deadline = Instant::now() + Duration::from_secs(5);
+            while !root.path().join("leaf").exists() {
+                assert!(Instant::now() < deadline);
+                thread::sleep(POLL);
+            }
+            if mode == "cancel" {
+                cancellation.cancel();
+            }
+            let result = worker.join().unwrap();
+            match mode {
+                "cancel" => assert!(matches!(result, Err(Error::Cancelled(_)))),
+                "limit" => assert_eq!(result.unwrap(), vec!["done"]),
+                "exit" => assert!(result.is_ok()),
+                _ => unreachable!(),
+            }
+        });
+        assert!(
+            start.elapsed() < Duration::from_secs(5),
+            "scan cleanup stalled"
+        );
+        let address = std::fs::read_to_string(root.path().join("leaf")).unwrap();
+        let deadline = Instant::now() + Duration::from_secs(3);
+        while TcpStream::connect(&address).is_ok() {
+            assert!(
+                Instant::now() < deadline,
+                "scan descendant survived cleanup"
+            );
+            thread::sleep(POLL);
+        }
     }
 }

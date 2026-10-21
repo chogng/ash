@@ -1,7 +1,8 @@
 import { DisposableStore, toDisposable } from '../../../src/ash/base/common/lifecycle.js';
 import * as stanzaApi from '../../../src/ash/editor/editor.main.js';
 import { GlyphRasterizer } from '../../../src/ash/editor/browser/gpu/raster/glyphRasterizer.js';
-import { DecorationStyleCache } from '../../../src/ash/editor/browser/gpu/css/decorationStyleCache.js';
+import { DecorationStyleCache, type IDecorationStyleSet } from '../../../src/ash/editor/browser/gpu/css/decorationStyleCache.js';
+import { FontStyle, MetadataConsts } from '../../../src/ash/editor/common/encodedTokenAttributes.js';
 import { ViewGpuContext } from '../../../src/ash/editor/browser/gpu/viewGpuContext.js';
 import { createColorTheme } from '../../../src/ash/platform/theme/common/colorTheme.js';
 import { IStandaloneThemeService } from '../../../src/ash/editor/standalone/common/standaloneTheme.js';
@@ -31,6 +32,8 @@ interface GpuTextIntegrationHarness {
 	readonly initialText: string;
 	getValue(): string;
 	setFontLigatures(enabled: boolean): void;
+	setFontMetrics(fontSize: number, lineHeight: number): void;
+	readDecorationRasters(): Readonly<Record<string, readonly number[]>>;
 	measureGpuAdvance(text: string): number;
 	resetGpuFrameTrace(): void;
 	readGpuFrameTrace(): readonly GpuRenderPassTrace[];
@@ -92,6 +95,28 @@ editor.focus();
 
 window.ashGpuTextIntegration = {
 	setFontLigatures: enabled => editor.updateOptions({ fontLigatures: enabled }),
+	setFontMetrics: (fontSize, lineHeight) => editor.updateOptions({ fontSize, lineHeight }),
+	readDecorationRasters: () => {
+		const cache = new DecorationStyleCache();
+		using rasterizer = new GlyphRasterizer(16, 'monospace', devicePixelRatio, cache);
+		const variants: readonly [string, FontStyle, Partial<IDecorationStyleSet>][] = [
+			['inheritedBold', FontStyle.Bold, { opacity: 1 }],
+			['normal', FontStyle.Bold, { opacity: 1, bold: false }],
+			['normalReference', FontStyle.None, { opacity: 1 }],
+			['inheritedStrike', FontStyle.Strikethrough, { opacity: 1 }],
+			['noStrike', FontStyle.Strikethrough, { opacity: 1, strikethrough: false }],
+			['transparent', FontStyle.None, { opacity: 1, color: 0 }],
+			['zeroOpacity', FontStyle.None, { opacity: 0 }],
+			['transparentStrike', FontStyle.Strikethrough, { opacity: 1, strikethroughColor: 0 }],
+		];
+		return Object.fromEntries(variants.map(([name, fontStyle, style]) => {
+			const id = cache.getOrCreateEntry(style.color, style.bold, style.opacity, style.strikethrough, style.strikethroughThickness, style.strikethroughColor);
+			const glyph = rasterizer.rasterizeGlyph('m', fontStyle << MetadataConsts.FONT_STYLE_OFFSET, id, ['#ffffff']);
+			const source = glyph.source;
+			const pixels = source.getContext('2d')!.getImageData(0, 0, source.width, source.height).data;
+			return [name, Array.from(pixels)];
+		}));
+	},
 	initialText,
 	getValue: () => editor.getValue(),
 	measureGpuAdvance: text => measureGpuAdvance(text),

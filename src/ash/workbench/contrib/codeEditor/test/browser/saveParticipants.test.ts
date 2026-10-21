@@ -20,8 +20,8 @@ import type { TextModel } from '../../../../../editor/common/model/textModel.js'
 import { LanguageDiagnosticSeverity, type LanguageCodeAction, type LanguageCodeActionList, type LanguageCodeActionRequest } from '../../../../../editor/common/languages.js';
 import { ILanguageFeaturesService } from '../../../../../editor/common/services/languageFeatures.js';
 import { LanguageFeaturesService } from '../../../../../editor/common/services/languageFeaturesService.js';
-import { SnippetController2 } from '../../../../../../../extensions/code/browser/contrib/snippet/browser/snippetController2.js';
-import { parseSnippet } from '../../../../../../../extensions/code/browser/contrib/snippet/common/snippetParser.js';
+import { SnippetController2 } from '../../../../../editor/contrib/snippet/browser/snippetController2.js';
+import { parseSnippet } from '../../../../../editor/contrib/snippet/common/snippetParser.js';
 import { registerCodeEditorServices } from '../../../../../editor/test/browser/testCodeEditor.js';
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';

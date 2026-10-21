@@ -10,10 +10,30 @@
 缺失路径回退、RAII 注销和异步事件合并。它只报告“可能发生了变化”；消费者必须重新读取并验证
 自己拥有的状态，不能把 backend event 当作文件或 catalog 事实。
 
-macOS 默认使用 `notify` 的 FSEvents backend。directory watcher 会递归覆盖整棵目录；不能改用
+macOS 默认使用 `notify` 的 FSEvents backend，在当前产品可执行文件的私有
+`--ash-native-file-watcher` 子进程内运行。directory watcher 会递归覆盖整棵目录；不能改用
 kqueue，因为它会为大量 watched entry 持有 file descriptor，并在大型工作区耗尽进程资源。
 当宿主确认 requested/canonical namespace 不同（例如 `/var` 与 `/private/var`）时，可显式选择
-`FileWatcherBackend::Polling`；该 fallback 只用于 alias root，不是所有目录的默认策略。
+`FileWatcherBackend::Polling`。原生 helper 初始化超过 2 秒、一次注册超过 1 秒、进程退出或
+注册后的就绪事件无法送达时，该 watcher 记录 warning、终止并回收 helper，将全部现有 scopes
+恢复到 200 ms polling，并发送 `RescanRequired` 弥补切换窗口。此恢复按 watcher 实例发生；
+不会把所有目录永久改为 polling，也不会静默退化成 noop。Polling 仅对显式内容 scopes 比较
+文件内容，缺失目标的 ancestor scopes 只检查 metadata，避免读取不相关兄弟文件。
+macOS 的 polling 也运行在私有 `--ash-polling-file-watcher` helper 内：控制线程接受有界的完整 scope
+快照并及时确认，内容扫描在独立线程执行，只保留尚未应用的最新快照。首次基线扫描完成后发送
+`RescanRequired`，消费者须重读以覆盖注册到基线完成之间的变化；注册成功不表示基线已扫描完。
+大目录的内容扫描不能阻塞产品初始化、scope 更新或退出；父进程关闭时终止并回收整个 helper。
+合并尚未扫描的快照时保留当前 roots 的重绑标记；另以 inode 和纳秒 mtime 观察注册 root，补足
+notify polling 的秒级目录时间比较，覆盖快速删除／重建且时间戳不变的情况。此观察只 stat roots，
+不读取 ancestor 的兄弟文件内容。
+仅用于原生 inode 恢复的 parent lease 不进入 polling；缺失目标的最近现有 ancestor 仍须监听。
+这样切换不会枚举整个工作区父目录或系统临时目录。进程级原生故障会将新实例的探测推迟
+30 秒；路径自身的注册失败不触发这个退避，现有健康监听继续运行。
+
+每批根目录增删只提交一次原生 stream 变更。内容／metadata 修改直接投递 hint，不销毁监听；
+只有 create、remove、rename 等可能替换 inode 的事件触发重绑。每次原生提交还在父进程拥有的
+临时目录创建一个独立探针文件，须在 750 ms 内收到其 mutation；探针不会投影为产品事件，
+helper 被终止后也由父进程清理。注册返回成功不等于已经验证事件投递正常。
 hermetic Bazel toolchain 必须提供 FSEvents 所需的 `CoreServices` framework 链接边界；
 Linux/Windows 继续使用 `notify` 的推荐平台 backend。
 
@@ -26,12 +46,20 @@ src/
 ├── registration.rs        # subscriber registration 与 RAII guard
 ├── state.rs               # private ref-count 和 per-subscriber state
 ├── matching.rs            # canonical namespace、missing-path fallback 与 scope matching
+├── native.rs              # macOS helper、私有有界 IPC、就绪检测与进程回收
 ├── watcher.rs             # notify backend、watch reconfiguration 与 subscriber routing
 └── file_watcher_tests.rs  # channel、scope、fallback、RAII、overflow 与 live backend tests
 ```
 
 所有实现模块均为 private；crate 只显式导出 `FileWatcher`、subscriber/registration handle、
 receiver wrapper、`WatchPath` 和 `FileWatcherEvent`。
+macOS 另导出供 `ash-arg0` 调用的 native／polling helper role 标记与入口；产品须在普通参数解析前 dispatch，
+该角色只连接继承的私有 socket，不打开 App Server 或加载产品状态。macOS Cargo 库测试由
+`scripts/cargo.py` 准备相同 target／profile 的 `watch_probe` 并通过 `ASH_FILE_WATCHER_TEST_HOST`
+传给测试进程，因为 libtest 不分发产品的 arg0 role；Bazel 的 macOS unit target 同样提供该 helper
+作为 test runfile。Cargo 覆盖必须是存在的绝对 executable；Bazel 的相对 rootpath 只在
+`TEST_SRCDIR`／`TEST_WORKSPACE` 指定的 runfiles 下解析。
+正常产品仍使用自身的 arg0 入口，helper 子进程清空环境，不继承该测试覆盖或凭据。
 
 ## 公共契约
 
@@ -100,12 +128,14 @@ Backend 只转发 create、modify 和 remove；access/open 事件被过滤。所
 - state lock 与 backend lock 始终按 state → backend 顺序获取，注册、注销和 watch mode
   reconfiguration 对其他操作呈一致顺序；
 - receiver 不使用有界 mpsc 丢弃 path；pending path 存入 `BTreeSet`，因此批次稳定排序并去重；
-- `FileWatcher` drop 释放 OS watcher sender，后台 loop 在 channel 关闭后退出；
-- watcher 不读取文件、不持有 catalog snapshot、不自动 retry/rescan，也不发布产品 update。
+- `FileWatcher` drop 先关闭私有 socket、终止并 wait helper、join reader，再清理临时探针；
+  helper 的独立控制线程在父 socket EOF 时退出整个进程，避免父进程意外退出后留下卡住的
+  FSEvents 线程。后台 loop 在 channel 关闭后退出；
+- watcher 不持有 catalog snapshot、不执行业务 rescan、不发布产品 update；Polling 的内容
+  比较和原生就绪探针仅服务于 invalidation 检测。
 
-注册时单个 backend `watch()` 失败当前只能记录 warning，不能同步回传给已经返回 guard 的 caller；
-需要强一致启动的 manager 必须在首次 full scan 后保留显式 refresh/fallback 路径。这是当前限制，
-不能把“registration 已进入 ref-count state”解释为 OS enforcement 已确认。
+注册批次必须完成 backend commit 或显式 polling 恢复后才能返回 guard；两者都失败时回滚该批次
+并返回错误。后续 callback 报错仍可能意味着事件丢失，consumer 必须消费 scoped rescan hint。
 
 ## 内部接口地图
 
@@ -123,11 +153,15 @@ Backend 只转发 create、modify 和 remove；access/open 事件被过滤。所
 ## 验证与修改影响
 
 ```bash
-cargo test --manifest-path Cargo.toml -p ash-file-watcher
-cargo clippy --manifest-path Cargo.toml -p ash-file-watcher \
-  --all-targets --no-deps -- -D warnings
+just verify ash-file-watcher --lib
 bazel test //crates/file-watcher:file-watcher-unit-tests
 ```
+
+最小原生对照位于 `examples/watch_probe.rs`。在独立临时目录执行 `native`、`ash`、`poll`
+可分辨注册、写入通知及析构阶段；`native-delete` 与 `native-alias-delete` 对照 canonical／alias
+目录删除。原生 API 可能不返回，须由外层进程设置 deadline 并终止、wait 超时探针。回归测试
+覆盖普通写入不重建、批量提交、helper 不回复／非法回复／父 socket 关闭，以及切换后旧、新
+scopes 的真实后续写入，不能只用一次 rescan 证明恢复。
 
 修改 path normalization、recursive mode、missing-target fallback、backend error 或 event
 coalescing 时，必须同步检查 `file_watcher_tests.rs`、本 README、

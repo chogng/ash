@@ -21,7 +21,13 @@ export interface GitHubBrowserTestConfiguration {
 }
 
 /** Owns the authenticated Web backend and profile for one smoke scenario. */
-export async function launchWeb(workspaceDirectory: string, options: { readonly reportIssueUrl?: string; readonly backendConfiguration?: string; readonly githubAccount?: GitHubBrowserTestConfiguration; readonly preparedBackend?: boolean; } = {}): Promise<WebLaunchResult> {
+export async function launchWeb(workspaceDirectory: string, options: {
+	readonly reportIssueUrl?: string;
+	readonly backendConfiguration?: string;
+	readonly githubAccount?: GitHubBrowserTestConfiguration;
+	readonly preparedBackend?: boolean;
+	readonly useInMemorySecretStorage?: boolean;
+} = {}): Promise<WebLaunchResult> {
 	const root = resolve(import.meta.dirname, '../..');
 	const profileDirectory = await mkdtemp(join(tmpdir(), 'ash-w-'));
 	const productServicesPath = join(profileDirectory, 'product-services.json');
@@ -30,6 +36,8 @@ export async function launchWeb(workspaceDirectory: string, options: { readonly 
 		ASH_WEB_APP_SERVER_PROFILE: profileDirectory,
 		ASH_WORKSPACE_ROOT: workspaceDirectory,
 		ASH_PRODUCT_SERVICES_PATH: productServicesPath,
+		// Match Electron isolation unless the scenario explicitly exercises the system store.
+		ASH_USE_INMEMORY_SECRETSTORAGE: options.useInMemorySecretStorage === false ? '0' : '1',
 	};
 	const resource = await registerRunResource(() => {
 		const packageRoot = developmentAshPackagePath(root, 'packaged-node');

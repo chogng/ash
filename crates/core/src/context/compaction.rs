@@ -211,6 +211,7 @@ pub trait ContextCompactionService: Send + Sync {
         cancellation: &CancellationToken,
         record_model_usage: &mut dyn FnMut(
             Option<ModelUsage>,
+            Option<ash_protocol::ModelInvocationTiming>,
         )
             -> Result<core_api::ModelInvocationReceipt, CoreError>,
     ) -> Result<ContextCompactionResult, CoreError>;
@@ -237,6 +238,7 @@ impl ContextCompactionService for ModelContextCompactionService {
         cancellation: &CancellationToken,
         record_model_usage: &mut dyn FnMut(
             Option<ModelUsage>,
+            Option<ash_protocol::ModelInvocationTiming>,
         )
             -> Result<core_api::ModelInvocationReceipt, CoreError>,
     ) -> Result<ContextCompactionResult, CoreError> {
@@ -318,23 +320,21 @@ impl ContextCompactionService for ModelContextCompactionService {
                 &model_request,
             )
         });
-        let response = if request.trace_context.is_some() {
-            let response = self.model.stream(
-                model_selection,
-                &model_request,
-                cancellation,
-                &mut crate::diagnostic_model::DiagnosticStream {
-                    attempt: &mut attempt,
-                    downstream: None,
-                },
-            );
-            crate::diagnostic_model::finish_attempt(&mut attempt, &response);
-            response?
-        } else {
-            self.model
-                .invoke(model_selection, &model_request, cancellation)?
-        };
-        let receipt = record_model_usage(response.usage.clone())?;
+        let mut timing = crate::diagnostic_model::InvocationTimer::start();
+        let response = self.model.stream(
+            model_selection,
+            &model_request,
+            cancellation,
+            &mut crate::diagnostic_model::DiagnosticStream {
+                timing: &mut timing,
+                attempt: &mut attempt,
+                downstream: None,
+            },
+        );
+        let timing = timing.finish(response.as_ref().ok());
+        crate::diagnostic_model::finish_attempt(&mut attempt, &response);
+        let response = response?;
+        let receipt = record_model_usage(response.usage.clone(), Some(timing))?;
         if let Some(attempt) = &mut attempt {
             attempt.accounted(&receipt);
         }

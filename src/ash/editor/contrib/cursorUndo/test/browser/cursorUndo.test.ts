@@ -11,7 +11,7 @@ import { TextModel } from '../../../../common/model/textModel.js';
 
 const { CodeEditorWidget } = await import('../../../../browser/widget/codeEditor/codeEditorWidget.js');
 const { createTestCodeEditor } = await import('../../../../test/browser/testCodeEditor.js');
-const { CursorUndoRedoController } = await import('../../../../../../../extensions/code/browser/contrib/cursorUndo/browser/cursorUndo.js');
+const { CursorUndoRedoController } = await import('../../browser/cursorUndo.js');
 
 
 test('CursorUndoRedoController records canonical same-version selection events', () => {

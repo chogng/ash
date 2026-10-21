@@ -194,8 +194,10 @@ test('SCM resource refreshes preserve the current selection until a new selectio
 
 test('SCM retirement revokes callbacks and unregisters its repositories and decorations', async () => {
 	const pending = new DeferredPromise<JsonValue>(); let signal: AbortSignal | undefined;
-	const value = fixture(async (request, requestSignal) => { if ((request.payload as { method: string; }).method === 'refresh') { signal = requestSignal; return pending.p; } return null; }); using cleanup = value.lifetime;
+	const started = new DeferredPromise<void>();
+	const value = fixture(async (request, requestSignal) => { if ((request.payload as { method: string; }).method === 'refresh') { signal = requestSignal; started.complete(); return pending.p; } return null; }); using cleanup = value.lifetime;
 	const refresh = value.scm.getRepository('repo')!.provider.refresh();
+	await started.p;
 	value.bridge.update({ generation: 2, extensions: [] });
 	assert.equal(signal?.aborted, true); assert.deepEqual([...value.scm.repositories], []); assert.equal(value.decorationProviders.size, 0);
 	assert.throws(() => value.bridge.set(source, 'ash.scm', 2, [provider()]), /retired/);
@@ -358,23 +360,60 @@ test('SCM decoration bursts leave invocation slots available for refresh and ret
 test('SCM skips cancelled queued decoration queries and retiring a registration cannot send them', async () => {
 	const pending: DeferredPromise<JsonValue>[] = [];
 	let requests = 0;
+	const admitted = new DeferredPromise<void>();
 	const value = fixture(async request => {
 		if ((request.payload as { method: string; }).method !== 'decoration') return null;
 		requests++;
 		const completion = new DeferredPromise<JsonValue>();
 		pending.push(completion);
+		if (requests === 4) admitted.complete();
 		return completion.p;
 	});
 	using cleanup = value.lifetime;
 	const decorationProvider = [...value.decorationProviders][0]!;
 	const queries = Array.from({ length: 20 }, (_, index) => decorationProvider.provideDecorations(URI.file(`/workspace/file-${index}`), CancellationToken.None));
 	const results = Promise.allSettled(queries);
+	await admitted.p;
 	assert.equal(requests, 4);
 	value.bridge.update({ generation: 2, extensions: [] });
 	for (const completion of pending) completion.complete(null);
 	assert.ok((await results).every(result => result.status === 'rejected'));
 	assert.equal(requests, 4);
 	assert.notEqual(value.contexts.getValue('scm.providerState.ash.git'), 'ready');
+});
+
+test('SCM history reads wait for repository initialization before crossing the extension boundary', async () => {
+	const initialized = new DeferredPromise<JsonValue>();
+	const calls: string[] = [];
+	const value = fixture(async request => {
+		const method = (request.payload as { method: string; }).method;
+		calls.push(method);
+		return method === 'initialize' ? initialized.p : [];
+	}, [{ ...provider() as Record<string, JsonValue>, hasHistory: true }]);
+	using cleanup = value.lifetime;
+	const reading = value.scm.getRepository('repo')!.provider.historyProvider!.provideHistoryItems({ skip: 0, limit: 1 });
+	try {
+		assert.deepEqual(calls, ['initialize']);
+		initialized.complete(null);
+		assert.deepEqual(await reading, []);
+		assert.deepEqual(calls, ['initialize', 'history']);
+	} finally { initialized.complete(null); await reading.catch(() => undefined); }
+});
+
+test('retiring SCM cancels reads waiting for initialization without admitting another request', async () => {
+	const initialized = new DeferredPromise<JsonValue>();
+	const calls: string[] = [];
+	const value = fixture(async request => {
+		const method = (request.payload as { method: string; }).method;
+		calls.push(method);
+		return method === 'initialize' ? initialized.p : [];
+	}, [{ ...provider() as Record<string, JsonValue>, hasHistory: true }]);
+	using cleanup = value.lifetime;
+	const reading = value.scm.getRepository('repo')!.provider.historyProvider!.provideHistoryItems({ skip: 0, limit: 1 });
+	value.bridge.update({ generation: 2, extensions: [] });
+	try { await assert.rejects(reading, /cancel|abort|retired/iu); }
+	finally { initialized.complete(null); }
+	assert.deepEqual(calls, ['initialize']);
 });
 
 test('SCM retries failed initialization and only reports an empty repository after successful discovery', async () => {

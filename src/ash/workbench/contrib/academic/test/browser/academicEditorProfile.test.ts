@@ -1,3 +1,4 @@
+import type { IExtensionService } from '../../../../services/extensions/common/extensionService.js';
 import { createHash } from 'node:crypto';
 import { prepareAcademyExtension, startAcademyExtension } from '../../../../../../../test/fixtures/academyExtension.js';
 import { MainThreadClientEditors } from '../../../../api/browser/mainThreadClientEditors.js';
@@ -84,7 +85,7 @@ for (const [locale, label] of [['en', 'Academic Document'], ['zh-CN', '学术论
 			try {
 				using bridge = new MainThreadClientEditors(30_000, async () => import('../../../../../../../extensions/academic/browser/editor.js'), {
 					invoke: (request, signal) => provider.invoke(request.registrationId, request.operation, request.payload, signal),
-				} as IExtensionHostApi, api);
+				} as IExtensionHostApi, api, emptyEditorDeclarations);
 				const snapshot: ExtensionHostFleetSnapshot = {
 					generation: 1, extensions: [{
 						id: 'ash.academic', version: '1.0.0', packageDigest: `sha256:${'a'.repeat(64)}`, runtimeApiVersion: 1,
@@ -130,3 +131,5 @@ test('bound package codecs validate opaque collaboration transactions without re
 	assert.throws(() => codec.serializeTransaction({ steps: 'invalid' }));
 	assert.throws(() => codec.serializeTransaction({ ...structuralTransaction, steps: [{ kind: 'unknown' }] }));
 });
+
+const emptyEditorDeclarations = { getExtensionPointContributions: () => [] } as unknown as IExtensionService;

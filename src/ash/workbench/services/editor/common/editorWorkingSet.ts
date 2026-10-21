@@ -9,6 +9,8 @@ export interface SerializedEditorViewState {
 
 export interface EditorWorkingSetEntry {
 	readonly input: SerializedEditorInput;
+	/** Reopening a source with another view does not change its resource input identity. */
+	readonly paneId?: string;
 	readonly preview: boolean;
 	readonly sticky?: boolean;
 	readonly viewState?: SerializedEditorViewState;

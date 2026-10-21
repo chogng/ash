@@ -1,11 +1,12 @@
 import { Emitter } from '../../../../../base/common/event.js';
+import { addDisposableListener } from '../../../../../base/browser/dom.js';
 import { DisposableStore, toDisposable, type IDisposable } from '../../../../../base/common/lifecycle.js';
 import { canceled } from '../../../../../base/common/errors.js';
 import type { ICodeEditor } from '../../../../../editor/browser/editorBrowser.js';
 import { EditorOption } from '../../../../../editor/common/config/editorOptions.js';
 import { Selection } from '../../../../../editor/common/core/selection.js';
 import type { ILogService } from '../../../../../platform/log/common/log.js';
-import { ChatSpeechToTextState, type ChatDictationSurface, type IChatSpeechToTextService } from './chatSpeechToTextService.js';
+import { type ChatDictationSurface, type IChatSpeechToTextService } from './chatSpeechToTextService.js';
 
 interface EditorRecording {
 	readonly service: IChatSpeechToTextService;
@@ -41,9 +42,10 @@ export function activeDictationEditor(): ICodeEditor | undefined { return record
 export function isDictationActiveForEditor(editor: ICodeEditor): boolean { return activeDictationEditor() === editor; }
 
 /** A replacement waits for the old inference resource before binding a different editor. */
-export function startDictation(service: IChatSpeechToTextService, editor: ICodeEditor, window: Window & typeof globalThis, logService: ILogService, surface: ChatDictationSurface = 'chat'): Promise<void> {
+export function startDictation(service: IChatSpeechToTextService, editor: ICodeEditor, window: Window & typeof globalThis, logService: ILogService, surface: ChatDictationSurface = 'chat', signal?: AbortSignal): Promise<void> {
+	if (signal?.aborted) return Promise.reject(canceled());
 	if (pending?.editor === editor) return pending.promise;
-	const promise = bindEditor(service, editor, window, logService, surface);
+	const promise = bindEditor(service, editor, window, logService, surface, signal);
 	const request = { editor, promise };
 	pending = request;
 	publishEditor();
@@ -52,19 +54,21 @@ export function startDictation(service: IChatSpeechToTextService, editor: ICodeE
 	return promise;
 }
 
-async function bindEditor(service: IChatSpeechToTextService, editor: ICodeEditor, window: Window & typeof globalThis, logService: ILogService, surface: ChatDictationSurface): Promise<void> {
+async function bindEditor(service: IChatSpeechToTextService, editor: ICodeEditor, window: Window & typeof globalThis, logService: ILogService, surface: ChatDictationSurface, signal?: AbortSignal): Promise<void> {
 	if (recording?.editor === editor) return recording.starting;
 	const model = editor.getModel();
 	cancelDictation();
 	const request = ++generation;
 	await releasing;
-	if (request !== generation) throw canceled();
+	if (request !== generation || signal?.aborted) throw canceled();
 	if (!model || editor.getModel() !== model) throw canceled();
 	if (editor.getOption(EditorOption.readOnly)) return;
 	settleSample(editor, false);
 	const lifetime = new DisposableStore();
 	const current: EditorRecording = { service, editor, lifetime, surface, wholeDraft: editor.getModel()!.getValue().length === 0, starting: Promise.resolve(), committed: '', cancelled: false };
 	recording = current;
+	const abort = (): void => { if (recording === current) cancelDictation(); };
+	if (signal) lifetime.add(addDisposableListener(signal, 'abort', abort, { once: true }));
 	const clear = (): void => {
 		if (recording !== current) return;
 		recording = undefined;
@@ -99,7 +103,8 @@ async function bindEditor(service: IChatSpeechToTextService, editor: ICodeEditor
 	try {
 		await current.starting;
 		if (current.cancelled) throw canceled();
-		if (!service.isBusy || service.state === ChatSpeechToTextState.Idle) clear();
+		// Provider acquisition can finish before Started arrives. The service still owns that pending capture.
+		if (!service.isBusy) clear();
 	} catch (error) { clear(); throw error; }
 }
 
@@ -129,7 +134,8 @@ export function cancelDictation(): void {
 	current.cancelled = true;
 	recording = undefined;
 	current.lifetime.dispose();
-	releasing = Promise.allSettled([current.starting, current.service.cancel()]).then(() => undefined);
+	// The service owns late acquisition cleanup. A pending browser permission request must not block the next input.
+	releasing = current.service.cancel().catch(() => undefined);
 	publishEditor();
 }
 

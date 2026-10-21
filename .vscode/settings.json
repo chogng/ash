@@ -6,8 +6,6 @@
 		"editor.tabSize": 4,
 		"editor.formatOnSave": true
 	},
-	"js/ts.tsdk.path": "build/node_modules/typescript/lib",
-	"js/ts.tsdk.promptToUseWorkspaceVersion": true,
 	"js/ts.preferences.quoteStyle": "single",
 	"js/ts.format.insertSpaceAfterFunctionKeywordForAnonymousFunctions": true,
 	"js/ts.format.insertSpaceAfterOpeningAndBeforeClosingEmptyBraces": true,
@@ -35,6 +33,25 @@
 	"rust-analyzer.cargo.buildScripts.enable": false,
 	"rust-analyzer.check.workspace": false,
 	"rust-analyzer.check.allTargets": false,
+	"rust-analyzer.check.overrideCommand": [
+		"just",
+		"check",
+		"{label}",
+		"--profile",
+		"dev",
+		"--message-format=json",
+		"--target-dir",
+		".build/rust-analyzer"
+	],
+	"rust-analyzer.cargo.buildScripts.overrideCommand": [
+		"just",
+		"check-workspace",
+		"--profile",
+		"dev",
+		"--message-format=json",
+		"--target-dir",
+		".build/rust-analyzer"
+	],
 	"[jsonc]": {
 		"editor.defaultFormatter": "vscode.json-language-features"
 	}

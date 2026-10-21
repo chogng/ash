@@ -9,6 +9,7 @@ import { InstantiationService } from '../../../../../platform/instantiation/comm
 import { ILocalTranscriptionService, ILocalTranscriptionModelService, LocalTranscriptionModelState, DictationModelState, type ILocalTranscriptionResult, type IDictationModelStatus } from '../../../../../platform/localTranscription/common/localTranscription.js';
 import { LocalTranscriptionService, registerLocalTranscriptionService } from '../../electron-browser/localTranscriptionService.js';
 import { NullLocalTranscriptionService } from '../../browser/localTranscriptionService.js';
+import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
 
 type Notification = Parameters<Parameters<AppServerProtocolClient['onNotification']>[0]>[0];
 type ConnectionState = Parameters<Parameters<AppServerProtocolClient['onStateChange']>[0]>[0];
@@ -18,8 +19,10 @@ class Client {
 	public readonly requests: { readonly method: string; readonly resourceId: string; readonly backend?: unknown; }[] = [];
 	public readonly accepted = new DeferredPromise<void>();
 	public readonly stopped = new DeferredPromise<void>();
+	public readonly cancelled = new DeferredPromise<void>();
 	public startBarrier?: DeferredPromise<void>;
 	public stopBarrier?: DeferredPromise<void>;
+	public cancelBarrier?: DeferredPromise<void>;
 	public audioBarrier?: DeferredPromise<void>;
 	public cacheBarrier?: DeferredPromise<void>;
 	public stopText: string | null = 'final text';
@@ -40,6 +43,7 @@ class Client {
 	public async request(method: { readonly method: string; }, params: { readonly resourceId: string; readonly backend?: unknown; }): Promise<unknown> {
 		if (method.method === "dictation/model/list") { await this.cacheBarrier?.p; return { models: [], cacheDirectory: "C:/models", packageVersion: 1 }; }
 		this.requests.push({ method: method.method, ...params });
+		if (method.method === 'dictation/cancel') { await this.cancelled.complete(); await this.cancelBarrier?.p; return null; }
 		if (method.method === 'dictation/audio') { await this.audioBarrier?.p; return null; }
 		if (method.method === 'dictation/start' || method.method === 'dictation/model/start') {
 			await this.accepted.complete();
@@ -88,6 +92,7 @@ class Fixture extends Disposable {
 }
 
 suite('LocalTranscriptionService', () => {
+	ensureNoDisposablesAreLeakedInTestSuite();
 	test('canonical transcription and model inventory share the window owner and its managed cache', async () => {
 		using fixture = new Fixture();
 		assert.equal(fixture.service, fixture.models);
@@ -260,7 +265,7 @@ suite('LocalTranscriptionService', () => {
 		fixture.client.beforeStop = () => fixture.transcript('discard me', true);
 		await fixture.client.startBarrier.complete();
 		await Promise.all([started, cancelled]);
-		assert.deepEqual({ methods: fixture.client.requests.map(request => request.method), results }, { methods: ['dictation/start', 'dictation/stop'], results: [] });
+		assert.deepEqual({ methods: fixture.client.requests.map(request => request.method), results }, { methods: ['dictation/start', 'dictation/cancel'], results: [] });
 	});
 
 	test('concurrent stop calls share one backend release', async () => {
@@ -311,9 +316,64 @@ suite('LocalTranscriptionService', () => {
 		fixture.service.dispose();
 		await fixture.client.startBarrier.complete();
 		await started;
-		await fixture.client.stopped.p;
-		assert.deepEqual({ methods: fixture.client.requests.map(request => request.method), subscriptions: fixture.client.notifications.size + fixture.client.states.size }, { methods: ['dictation/start', 'dictation/stop'], subscriptions: 0 });
+		await fixture.client.cancelled.p;
+		assert.deepEqual({ methods: fixture.client.requests.map(request => request.method), subscriptions: fixture.client.notifications.size + fixture.client.states.size }, { methods: ['dictation/start', 'dictation/cancel'], subscriptions: 0 });
 		await assert.rejects(fixture.service.start({ cacheDir: "C:/models", model: 'model' }));
+	});
+
+	for (const blocked of ['audio', 'stop'] as const) {
+		test(`cancel bypasses stalled ${blocked} and retires its late response before a new capture`, async () => {
+			using fixture = new Fixture();
+			const results: ILocalTranscriptionResult[] = [];
+			using listener = fixture.service.onDidTranscribe(result => results.push(result));
+			await fixture.service.start({ cacheDir: 'C:/models', model: 'model' });
+			const oldResource = fixture.resourceId;
+			const gate = new DeferredPromise<void>();
+			let packet: Promise<void> | undefined;
+			if (blocked === 'audio') {
+				fixture.client.audioBarrier = gate;
+				packet = fixture.service.pushAudio(VSBuffer.wrap(new Uint8Array([0, 1])));
+			} else fixture.client.stopBarrier = gate;
+			const stopping = fixture.service.stop();
+			if (blocked === 'stop') await fixture.client.stopped.p;
+			await fixture.service.cancel();
+			assert.equal(await stopping, '');
+			fixture.client.audioBarrier = fixture.client.stopBarrier = undefined;
+			await fixture.service.start({ cacheDir: 'C:/models', model: 'replacement' });
+			fixture.transcript('late old text', true, oldResource);
+			await gate.complete();
+			await packet;
+			assert.deepEqual(results, []);
+			assert.equal((await fixture.service.getModelStatus()).state, LocalTranscriptionModelState.Loading);
+			await fixture.service.cancel();
+		});
+	}
+
+	test('final delivery waits for release and the stop response is authoritative, including empty text', async () => {
+		using fixture = new Fixture();
+		fixture.client.stopBarrier = new DeferredPromise<void>();
+		const results: ILocalTranscriptionResult[] = [];
+		using listener = fixture.service.onDidTranscribe(result => results.push(result));
+		await fixture.service.start({ cacheDir: 'C:/models', model: 'model' });
+		fixture.transcript('early final', true);
+		const stopping = fixture.service.stop();
+		await fixture.client.stopped.p;
+		assert.deepEqual(results, []);
+		fixture.client.stopText = '';
+		await fixture.client.stopBarrier.complete();
+		assert.equal(await stopping, '');
+		assert.deepEqual(results, [{ text: '', isFinal: true }]);
+	});
+
+	test('bounds retained PCM while an inference upload is stalled', async () => {
+		using fixture = new Fixture();
+		await fixture.service.start({ cacheDir: 'C:/models', model: 'model' });
+		fixture.client.audioBarrier = new DeferredPromise<void>();
+		const packet = fixture.service.pushAudio(VSBuffer.alloc(4 * 1024 * 1024));
+		await assert.rejects(fixture.service.pushAudio(VSBuffer.alloc(2)), /backpressured/);
+		await fixture.service.cancel();
+		await fixture.client.audioBarrier.complete();
+		await packet;
 	});
 
 	test('a rejected start permits a later session and duplicate start is rejected', async () => {

@@ -22,20 +22,10 @@ test('derived Lxicon defaults resolve through the product registry and preserve 
 	assert.equal(resolveIconDefinition(Lxicon.error, theme), artwork);
 });
 
-test('the icon registry exposes built-in Lxicons and semantic registrations', () => {
-	assert.equal(getIconRegistry().getIcon(Lxicon.add.id)?.defaults, resolveIconDefinition(Lxicon.add));
-	assert.equal(getIconRegistry().getIcon(Lxicon.debugAlt.id)?.defaults, resolveIconDefinition(Lxicon.debugAlt));
-	assert.equal(getIconRegistry().getIcon(Lxicon.splitHorizontal.id)?.defaults, resolveIconDefinition(Lxicon.splitHorizontal));
-	assert.equal(getIconRegistry().getIcon(Lxicon.splitVertical.id)?.defaults, resolveIconDefinition(Lxicon.splitVertical));
-	const definition = () => '<svg></svg>';
-	const icon = registerIcon(nextIconId('definition'), definition, 'A test icon');
-	assert.equal(resolveIconDefinition(icon), definition);
-	assert.equal(getIconRegistry().getIcon(icon.id)?.description, 'A test icon');
-});
-
 test('semantic icons resolve through aliases and theme overrides', () => {
 	const definition = () => '<svg></svg>';
 	const defaultIcon = registerIcon(nextIconId('default'), definition, 'Default test icon');
+	assert.equal(getIconRegistry().getIcon(defaultIcon.id)?.description, 'Default test icon');
 	const semanticIcon = registerIcon(nextIconId('semantic'), defaultIcon, 'Semantic test icon');
 	assert.equal(resolveIconDefinition(semanticIcon), definition);
 	const themed = () => '<svg viewBox="0 0 16 16"/>';

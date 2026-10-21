@@ -41,7 +41,7 @@ test('loads extension publisher metadata and direct token styles through package
 		},
 	};
 	const definition = await loadExtensionTheme(async path => new TextEncoder().encode(JSON.stringify(files[path])),
-		'open-vsx.dracula-theme.theme-dracula', { id: 'Dracula', label: 'Dracula Theme', uiTheme: 'vs-dark', path: 'themes/theme.json' }, 0);
+		'ash.sample-theme', { id: 'Dracula', label: 'Dracula Theme', uiTheme: 'vs-dark', path: 'themes/theme.json' }, 0);
 	assert.equal(createExtensionWorkbenchColorTheme(definition).getColorCss(editorBackground), '#282a36');
 	assert.deepEqual(definition.semanticTokenColors, { comment: { foreground: '#6272a4', fontStyle: '' }, variable: { fontStyle: '' } });
 });

@@ -35,6 +35,19 @@ pub struct DirScan {
 }
 
 pub(crate) fn scan_dir(root: &Dir, limits: &CodebaseLimits) -> Result<DirScan, CodebaseError> {
+    scan_dir_with_cancellation(
+        root,
+        limits,
+        &ash_async_utils::CancellationSource::new().token(),
+    )
+}
+
+pub(crate) fn scan_dir_with_cancellation(
+    root: &Dir,
+    limits: &CodebaseLimits,
+    cancellation: &ash_async_utils::CancellationToken,
+) -> Result<DirScan, CodebaseError> {
+    cancellation.check().map_err(|_| CodebaseError::Cancelled)?;
     let mut builder = WalkBuilder::new(root.canonical_path());
     builder
         .hidden(true)
@@ -46,25 +59,23 @@ pub(crate) fn scan_dir(root: &Dir, limits: &CodebaseLimits) -> Result<DirScan, C
                 || !is_hard_excluded_path(Path::new(entry.file_name()))
         });
     let mut walk_error_count = 0usize;
-    let mut paths = builder
-        .build()
-        .filter_map(|entry| match entry {
-            Ok(entry) => Some(entry),
+    let mut paths = Vec::new();
+    for entry in builder.build() {
+        cancellation.check().map_err(|_| CodebaseError::Cancelled)?;
+        let entry = match entry {
+            Ok(entry) => entry,
             Err(_) => {
                 walk_error_count = walk_error_count.saturating_add(1);
-                None
+                continue;
             }
-        })
-        .filter(|entry| entry.file_type().is_some_and(|kind| kind.is_file()))
-        .filter_map(|entry| {
-            entry
-                .path()
-                .strip_prefix(root.canonical_path())
-                .ok()
-                .filter(|relative| relative.to_str().is_some())
-                .map(Path::to_path_buf)
-        })
-        .collect::<Vec<_>>();
+        };
+        if entry.file_type().is_some_and(|kind| kind.is_file())
+            && let Ok(relative) = entry.path().strip_prefix(root.canonical_path())
+            && relative.to_str().is_some()
+        {
+            paths.push(relative.to_path_buf());
+        }
+    }
     paths.sort_unstable();
     paths.dedup();
     let file_limit_hit = paths.len() > limits.max_files;
@@ -76,6 +87,7 @@ pub(crate) fn scan_dir(root: &Dir, limits: &CodebaseLimits) -> Result<DirScan, C
     let mut indexed_source_bytes = 0usize;
     let mut source_bytes_limit_hit = false;
     for relative_path in paths {
+        cancellation.check().map_err(|_| CodebaseError::Cancelled)?;
         let observed_path = root.canonical_path().join(&relative_path);
         let metadata = match fs::symlink_metadata(&observed_path) {
             Ok(metadata) => metadata,
@@ -116,6 +128,7 @@ pub(crate) fn scan_dir(root: &Dir, limits: &CodebaseLimits) -> Result<DirScan, C
             Err(error) => return Err(error),
         }
     }
+    cancellation.check().map_err(|_| CodebaseError::Cancelled)?;
     Ok(DirScan {
         files,
         skipped_file_count,

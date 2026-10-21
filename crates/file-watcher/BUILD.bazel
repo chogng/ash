@@ -1,6 +1,20 @@
 load("//:defs.bzl", "ash_rust_crate")
+load("@crates//:defs.bzl", "all_crate_deps")
+load("@rules_rust//rust:defs.bzl", "rust_binary")
 
 ash_rust_crate(
     name = "file-watcher",
     crate_name = "ash_file_watcher",
+)
+
+# A library-test harness does not dispatch the product's private arg0 roles.
+rust_binary(
+    name = "watch-probe-test-host",
+    testonly = True,
+    crate_name = "watch_probe",
+    crate_root = "examples/watch_probe.rs",
+    srcs = ["examples/watch_probe.rs"],
+    deps = all_crate_deps() + [":file-watcher"],
+    edition = "2024",
+    visibility = ["//visibility:public"],
 )

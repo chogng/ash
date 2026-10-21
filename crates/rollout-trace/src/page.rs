@@ -79,7 +79,9 @@ pub fn read_session_trace_page(
         diagnostics: None,
         graph: None,
         overview: None,
+        performance: None,
     };
+    trace.performance = Some(crate::performance::summarize_performance(&trace.threads));
     // Only the caught-up page carries a summary. Read through the exact returned cursors,
     // so concurrent newer events cannot leak into the viewer's loaded-capture metrics.
     // An unchanged poll reuses the consumer's existing summary without rescanning history.

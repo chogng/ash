@@ -15,7 +15,7 @@ import { KeybindingResolver, KeybindingResolveKind } from '../../../../../platfo
 const { CodeEditorWidget } = await import('../../../../browser/widget/codeEditor/codeEditorWidget.js');
 const { createTestCodeEditor } = await import('../../../../test/browser/testCodeEditor.js');
 const { EditorExtensionsRegistry } = await import('../../../../browser/editorExtensions.js');
-const { CursorUndoRedoController } = await import('../../../../../../../extensions/code/browser/contrib/cursorUndo/browser/cursorUndo.js');
+const { CursorUndoRedoController } = await import('../../browser/cursorUndo.js');
 
 
 test('CursorUndoRedoController restores and reapplies cursor-only history', () => {

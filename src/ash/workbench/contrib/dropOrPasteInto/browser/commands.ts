@@ -1,8 +1,8 @@
 import { type IAction } from '../../../../base/common/actions.js';
 import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { type ICodeEditor } from '../../../../editor/browser/editorBrowser.js';
-import { CopyPasteController, pasteAsPreferenceConfig } from '../../../../../../extensions/code/browser/contrib/dropOrPasteInto/browser/copyPasteController.js';
-import { DropIntoEditorController, dropAsPreferenceConfig } from '../../../../../../extensions/code/browser/contrib/dropOrPasteInto/browser/dropIntoEditorController.js';
+import { CopyPasteController, pasteAsPreferenceConfig } from '../../../../editor/contrib/dropOrPasteInto/browser/copyPasteController.js';
+import { DropIntoEditorController, dropAsPreferenceConfig } from '../../../../editor/contrib/dropOrPasteInto/browser/dropIntoEditorController.js';
 import { localize } from '../../../../nls.js';
 import { MenuId, MenusRegistry } from '../../../../platform/actions/common/actions.js';
 import { CommandsRegistry } from '../../../../platform/commands/common/commands.js';

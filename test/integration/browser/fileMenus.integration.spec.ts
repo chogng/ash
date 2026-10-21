@@ -163,3 +163,114 @@ test.describe('Windows file menu defaults', () => {
 		await expect(item.locator('.ash-menu-keybinding kbd')).toHaveText(['Ctrl+K', 'Ctrl+Shift+C']);
 	});
 });
+
+test("application menu switches its root submenus on pointer entry", async ({ page }) => {
+	await page.goto('/fileMenus.html?applicationMenu');
+	await page.waitForFunction(() => !!window.ashFileMenusIntegration);
+	const trigger = page.getByRole('toolbar', { name: 'Title bar left actions' }).getByRole('button', { name: 'Application menu' });
+	await expect(trigger).toHaveCount(1);
+	await expect(trigger).toHaveAccessibleName('Application menu');
+	await expect(trigger.locator('.ash-icon')).toBeVisible();
+	await expect(trigger.locator('.ash-button-label')).toBeHidden();
+	await expect(trigger).toHaveCSS('width', '22px');
+	await expect(trigger).toHaveCSS('height', '22px');
+	await expect(page.getByRole('toolbar', { name: 'Title bar left actions' }).getByRole('menubar')).toHaveCount(0);
+	const adjacentAction = page.getByRole('button', { name: 'Toggle sidebar', exact: true });
+	const [triggerBounds, actionBounds] = await Promise.all([trigger.boundingBox(), adjacentAction.boundingBox()]);
+	expect(triggerBounds).not.toBeNull();
+	expect(actionBounds).not.toBeNull();
+	expect({ width: triggerBounds!.width, height: triggerBounds!.height }).toEqual({ width: actionBounds!.width, height: actionBounds!.height });
+	await trigger.hover();
+	await expect(trigger).not.toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+	await trigger.click();
+	const mainMenu = page.getByRole('menu').first();
+	const fileMenuItem = mainMenu.getByRole('menuitem', { name: 'File' });
+	const editMenuItem = mainMenu.getByRole('menuitem', { name: 'Edit' });
+
+	await fileMenuItem.hover();
+	await expect(fileMenuItem).toHaveAttribute('aria-expanded', 'true');
+	await editMenuItem.hover();
+	await expect(fileMenuItem).toHaveAttribute('aria-expanded', 'false');
+	await expect(editMenuItem).toHaveAttribute('aria-expanded', 'true');
+	const bounds = await editMenuItem.boundingBox();
+	expect(bounds).not.toBeNull();
+	await page.keyboard.press('Escape');
+	await page.keyboard.press('Escape');
+	await trigger.press('Enter');
+	await expect(mainMenu).toBeFocused();
+	await expect(editMenuItem).toHaveAttribute('aria-expanded', 'false');
+	await expect(mainMenu.locator('.ash-action-view-item.focused')).toHaveCount(0);
+	await page.mouse.move(bounds!.x + bounds!.width / 2 + 2, bounds!.y + bounds!.height / 2);
+	await expect(editMenuItem).toHaveAttribute('aria-expanded', 'true');
+});
+
+test("application menu keeps submenu arrows inside their menu rows", async ({ page }) => {
+	await page.goto('/fileMenus.html?applicationMenu');
+	await page.waitForFunction(() => !!window.ashFileMenusIntegration);
+	await page.getByRole('button', { name: 'Application menu' }).click();
+	const mainMenu = page.getByRole('menu').first();
+	const fileItem = mainMenu.getByRole('menuitem', { name: 'File' });
+	await fileItem.hover();
+	await expect(fileItem).toHaveAttribute('aria-expanded', 'true');
+	const arrow = fileItem.locator('.ash-submenu-indicator > .ash-icon');
+	const [itemBounds, arrowBounds] = await Promise.all([fileItem.boundingBox(), arrow.boundingBox()]);
+	expect(itemBounds).not.toBeNull();
+	expect(arrowBounds).not.toBeNull();
+	expect(arrowBounds!.width).toBe(12);
+	expect(itemBounds!.x + itemBounds!.width - arrowBounds!.x - arrowBounds!.width).toBeGreaterThanOrEqual(8);
+});
+
+test("application menu aligns command labels with and without icons", async ({ page }) => {
+	await page.goto('/fileMenus.html?applicationMenu');
+	await page.waitForFunction(() => !!window.ashFileMenusIntegration);
+	await page.getByRole('button', { name: 'Application menu' }).click();
+	const fileItem = page.getByRole('menu').first().getByRole('menuitem', { name: 'File' });
+	await fileItem.hover();
+	await expect(fileItem).toHaveAttribute('aria-expanded', 'true');
+	const fileMenu = page.getByRole('menu').last();
+	await expect(fileMenu.locator('..')).toHaveCSS('border-radius', '8px');
+	const iconLabel = fileMenu.getByRole('menuitem', { name: 'With icon' }).locator('.ash-button-label');
+	const plainLabel = fileMenu.getByRole('menuitem', { name: 'Without icon' }).locator('.ash-button-label');
+	for (const [name, shortcut] of [['With icon', process.platform === 'darwin' ? '⌘N' : 'Ctrl+N'], ['Without icon', process.platform === 'darwin' ? '⌘A' : 'Ctrl+A']] as const) {
+		const item = fileMenu.getByRole('menuitem', { name, exact: true });
+		await expect(item.locator('.ash-button-label')).toHaveText(name);
+		await expect(item.locator('.ash-menu-keybinding')).toHaveClass(/ash-keybinding-label-plain/u);
+		const key = item.locator('.ash-menu-keybinding kbd');
+		await expect(key).toHaveText(shortcut);
+		const font = (element: Element) => ({ family: getComputedStyle(element).fontFamily, size: getComputedStyle(element).fontSize });
+		expect(await key.evaluate(font)).toEqual(await item.evaluate(font));
+	}
+	const [iconBounds, plainBounds] = await Promise.all([iconLabel.boundingBox(), plainLabel.boundingBox()]);
+	expect(iconBounds).not.toBeNull();
+	expect(plainBounds).not.toBeNull();
+	expect(Math.abs(iconBounds!.x - plainBounds!.x)).toBeLessThanOrEqual(1);
+});
+
+test("checked View menu icons stay inside the leading slot", async ({ page }) => {
+	await page.goto('/fileMenus.html?applicationMenu');
+	await page.waitForFunction(() => !!window.ashFileMenusIntegration);
+	await page.getByRole('button', { name: 'Application menu' }).click();
+	const view = page.getByRole('menu').first().getByRole('menuitem', { name: 'File' });
+	await view.hover();
+	await expect(view).toHaveAttribute('aria-expanded', 'true');
+	const viewMenu = page.getByRole('menu').last();
+	for (const [actionId, checked, iconSelector] of [
+		['fixture.checked', 'true', '.ash-menu-leading-check > .ash-icon'],
+		['fixture.unchecked', 'false', '.ash-menu-leading-check > .ash-icon-label-icon > .ash-icon'],
+	] as const) {
+		const item = viewMenu.locator(`[data-action-id="${actionId}"] button`);
+		await expect(item).toHaveAttribute('aria-checked', checked);
+		const slot = item.locator('.ash-menu-leading-slot');
+		const icon = item.locator(iconSelector);
+		const label = item.locator('.ash-button-label');
+		const [slotBounds, iconBounds, labelBounds] = await Promise.all([
+			slot.boundingBox(), icon.boundingBox(), label.boundingBox(),
+		]);
+		expect(slotBounds).not.toBeNull();
+		expect(iconBounds).not.toBeNull();
+		expect(labelBounds).not.toBeNull();
+		expect(iconBounds!.x).toBeGreaterThanOrEqual(slotBounds!.x);
+		expect(iconBounds!.x + iconBounds!.width).toBeLessThanOrEqual(slotBounds!.x + slotBounds!.width);
+		expect(labelBounds!.x).toBeGreaterThanOrEqual(iconBounds!.x + iconBounds!.width + 4);
+	}
+});

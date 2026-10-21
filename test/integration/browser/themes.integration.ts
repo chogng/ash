@@ -41,7 +41,7 @@ import '../../../src/ash/base/browser/ui/scrollbar/scrollbar.css';
 import '../../../src/ash/base/browser/ui/tree/tree.css';
 import '../../../src/ash/base/browser/ui/list/list.css';
 import '../../../extensions/academic/browser/widget/richTextEditor/richTextEditorWidget.css';
-import '../../../extensions/code/browser/contrib/hover/browser/hover.css';
+import '../../../src/ash/editor/contrib/hover/browser/hover.css';
 import '../../../src/ash/platform/actionWidget/browser/actionWidget.css';
 import '../../../src/ash/sessions/browser/parts/titlebar/media/titlebarpart.css';
 import '../../../src/ash/workbench/browser/parts/editor/media/modalEditorPart.css';
@@ -81,6 +81,7 @@ import { defaultButtonStyles, getButtonStyles, defaultCheckboxStyles, defaultCou
 declare global {
 	interface Window {
 		mountDefaultStyleProbes(): void;
+		openStyledTreeFind(): void;
 		openStyledDialog(): void;
 		changeIconModelLanguage(id: string): void;
 		releaseIconModels(): void;
@@ -215,9 +216,10 @@ window.mountDefaultStyleProbes = () => {
 			return label;
 		},
 	}));
-	tree.setChildren([{ element: 'Styled tree item' }]);
+	tree.setChildren([{ element: 'Styled tree item' }, { element: 'Hovered tree item' }]);
+	tree.setSelection(['Styled tree item']);
 	tree.setFocus('Styled tree item');
-	tree.openFind();
+	window.openStyledTreeFind = () => tree.openFind();
 	window.openStyledDialog = () => {
 		const dialog = resources.add(new Dialog(host, {
 			title: 'Styled dialog', content: 'Style inheritance probe',

@@ -21,6 +21,8 @@ struct TestProvider {
     refreshes: Mutex<usize>,
     revocations: Mutex<usize>,
     fail_revocation: Mutex<bool>,
+    revoke_entered: Mutex<Option<std::sync::mpsc::SyncSender<()>>>,
+    revoke_resume: Mutex<Option<std::sync::mpsc::Receiver<()>>>,
     exchange_entered: Mutex<Option<std::sync::mpsc::SyncSender<()>>>,
     exchange_resume: Mutex<Option<std::sync::mpsc::Receiver<()>>>,
 }
@@ -86,6 +88,12 @@ impl McpOAuthProvider for TestProvider {
             b"refresh-token" | b"refreshed-refresh-token"
         ));
         assert_eq!(request.resource.as_str(), "https://mcp.example.test/rpc");
+        if let Some(entered) = self.revoke_entered.lock().unwrap().as_ref() {
+            entered.send(()).unwrap();
+        }
+        if let Some(resume) = self.revoke_resume.lock().unwrap().as_ref() {
+            resume.recv().unwrap();
+        }
         *self.revocations.lock().unwrap() += 1;
         if *self.fail_revocation.lock().unwrap() {
             return Err(McpOAuthError::new(
@@ -726,4 +734,120 @@ fn failed_login_persistence_does_not_reactivate_an_old_credential_after_restart(
         [(target.server_id().clone(), provider)],
     ));
     assert!(restarted.authorization(target).is_err());
+}
+
+#[test]
+fn logout_drains_other_directory_transports_without_retiring_a_concurrent_new_login() {
+    let (oauth, target, secrets, provider) = fixture();
+    let transports = Arc::new(McpOAuthTransports::default());
+    let oauth = Arc::new(oauth.with_transports(transports.clone()));
+    let other = Arc::new(
+        McpOAuthService::new(
+            secrets.clone(),
+            [(
+                target.server_id().clone(),
+                provider as Arc<dyn McpOAuthProvider>,
+            )],
+        )
+        .with_transports(transports),
+    );
+    let sign_in = || {
+        let started = oauth
+            .start(McpOAuthStartRequest {
+                owner: 7,
+                options: Default::default(),
+                target: target.clone(),
+                redirect_uri: "http://127.0.0.1:49152/callback".into(),
+            })
+            .unwrap();
+        oauth
+            .complete(McpOAuthCompleteRequest {
+                owner: 7,
+                issuer: None,
+                state: callback_state(&started.authorization_url),
+                flow_id: started.flow_id,
+                authorization_code: SecretValue::new(b"authorization-code".to_vec()),
+                current_target: target.clone(),
+            })
+            .unwrap();
+    };
+    sign_in();
+    let credential = other.authorization(target.clone()).unwrap();
+    let old = credential.scope().unwrap();
+    let lease = old.acquire().unwrap();
+    let (done, received) = std::sync::mpsc::channel();
+    std::thread::scope(|threads| {
+        threads.spawn(|| {
+            done.send(oauth.logout(&target)).unwrap();
+        });
+        let deadline = Instant::now() + Duration::from_secs(3);
+        while !old.is_closed() {
+            assert!(
+                Instant::now() < deadline,
+                "logout did not close old transport"
+            );
+            std::thread::yield_now();
+        }
+        assert!(
+            received.try_recv().is_err(),
+            "logout returned before the old invocation drained"
+        );
+        assert!(credential.bearer(None).is_err());
+        sign_in();
+        let fresh = oauth.authorization(target.clone()).unwrap();
+        let fresh_scope = fresh.scope().unwrap();
+        assert!(!fresh_scope.is_closed());
+        drop(lease);
+        received
+            .recv_timeout(Duration::from_secs(3))
+            .unwrap()
+            .unwrap();
+        assert!(!fresh_scope.is_closed());
+        assert_eq!(fresh.bearer(None).unwrap(), "access-token");
+        assert!(credential.bearer(Some("access-token")).is_err());
+    });
+}
+
+#[test]
+fn remote_revoke_does_not_delete_a_login_completed_while_the_provider_was_waiting() {
+    let (oauth, target, _, provider) = fixture();
+    let oauth = Arc::new(oauth);
+    let sign_in = || {
+        let started = oauth
+            .start(McpOAuthStartRequest {
+                owner: 7,
+                options: Default::default(),
+                target: target.clone(),
+                redirect_uri: "http://127.0.0.1:49152/callback".into(),
+            })
+            .unwrap();
+        oauth
+            .complete(McpOAuthCompleteRequest {
+                owner: 7,
+                issuer: None,
+                state: callback_state(&started.authorization_url),
+                flow_id: started.flow_id,
+                authorization_code: SecretValue::new(b"authorization-code".to_vec()),
+                current_target: target.clone(),
+            })
+            .unwrap();
+    };
+    sign_in();
+    let old = oauth.authorization(target.clone()).unwrap();
+    let (entered, waiting) = std::sync::mpsc::sync_channel(1);
+    let (release, resume) = std::sync::mpsc::sync_channel(1);
+    *provider.revoke_entered.lock().unwrap() = Some(entered);
+    *provider.revoke_resume.lock().unwrap() = Some(resume);
+    std::thread::scope(|threads| {
+        let revoked = threads.spawn(|| oauth.revoke(&target).unwrap());
+        waiting.recv_timeout(Duration::from_secs(3)).unwrap();
+        assert!(old.scope().unwrap().is_closed());
+        sign_in();
+        let fresh = oauth.authorization(target.clone()).unwrap();
+        release.send(()).unwrap();
+        assert_eq!(revoked.join().unwrap(), DeleteSecretOutcome::NotFound);
+        assert_eq!(fresh.bearer(None).unwrap(), "access-token");
+        assert!(!fresh.scope().unwrap().is_closed());
+        assert!(old.bearer(None).is_err());
+    });
 }

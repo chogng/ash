@@ -30,9 +30,12 @@ use super::update_broker::UpdateBroker;
 mod authority;
 mod client;
 mod fleet;
+mod private_services;
 mod projection;
+mod secrets;
 mod sessions;
 pub(crate) mod source;
+mod storage;
 
 use projection::ExtensionHostExtensionSnapshot;
 pub(super) use projection::ExtensionHostFailureKind;
@@ -72,6 +75,8 @@ type CredentialHandler = dyn Fn(
     + Sync;
 
 struct RuntimeInner {
+    secrets: Mutex<Option<Arc<dyn ash_secrets::SecretStore>>>,
+    storage: Mutex<Option<Arc<ash_state::SqliteExtensionStateStore>>>,
     credential_services: Arc<Mutex<BTreeMap<String, Arc<CredentialHandler>>>>,
     environment: Option<BTreeMap<String, Option<String>>>,
     built_in_extensions: source::BuiltInEditorExtensions,
@@ -215,6 +220,20 @@ pub(super) enum ExtensionHostRuntimeError {
 }
 
 impl ExtensionHostRuntime {
+    pub(super) fn bind_secrets(&self, secrets: Arc<dyn ash_secrets::SecretStore>) {
+        *self
+            .inner
+            .secrets
+            .lock()
+            .expect("extension secret store lock") = Some(secrets);
+    }
+    pub(super) fn bind_storage(&self, storage: Arc<ash_state::SqliteExtensionStateStore>) {
+        *self
+            .inner
+            .storage
+            .lock()
+            .expect("extension state store lock") = Some(storage);
+    }
     pub(super) fn register_credentials(&self, provider: String, handler: Arc<CredentialHandler>) {
         self.inner
             .credential_services
@@ -251,6 +270,8 @@ impl ExtensionHostRuntime {
             .and_then(|admission| admission.subscribe());
         let (shutdown, shutdown_receiver) = std::sync::mpsc::channel();
         let inner = Arc::new(RuntimeInner {
+            secrets: Mutex::new(None),
+            storage: Mutex::new(None),
             credential_services: Arc::new(Mutex::new(BTreeMap::new())),
             environment,
             built_in_extensions,
@@ -321,6 +342,24 @@ impl ExtensionHostRuntime {
             Arc::clone(&self.inner.client_host),
             Some(environment),
         )?;
+        if let Some(storage) = self
+            .inner
+            .storage
+            .lock()
+            .map_err(|_| ExtensionHostError::HostExited)?
+            .clone()
+        {
+            runtime.bind_storage(storage);
+        }
+        if let Some(secrets) = self
+            .inner
+            .secrets
+            .lock()
+            .map_err(|_| ExtensionHostError::HostExited)?
+            .clone()
+        {
+            runtime.bind_secrets(secrets);
+        }
         let authorization = self
             .inner
             .state
@@ -511,6 +550,7 @@ impl ExtensionHostRuntime {
                     let workspace_read = entry.workspace_read;
                     let binding = EditorClientBinding {
                         runtime: Arc::downgrade(&self.inner),
+                        activation: Arc::downgrade(&entry.activation_gate),
                         backend_channels: entry.backend_channels.clone(),
                         client_host,
                         owner,
@@ -789,6 +829,8 @@ impl ExtensionHostRuntime {
 
 struct EditorClientBinding {
     runtime: Weak<RuntimeInner>,
+    // The entry identity fences replacement supervisors whose local counters may repeat.
+    activation: Weak<Mutex<()>>,
     backend_channels: BTreeMap<String, String>,
     credential_providers: Vec<String>,
     credential_services: Arc<Mutex<BTreeMap<String, Arc<CredentialHandler>>>>,
@@ -929,6 +971,7 @@ impl EditorClientBinding {
             }
             let binding = EditorClientBinding {
                 runtime: self.runtime.clone(),
+                activation: Arc::downgrade(&entry.activation_gate),
                 backend_channels: entry.backend_channels.clone(),
                 credential_providers: Vec::new(),
                 credential_services: Arc::clone(&self.credential_services),
@@ -1044,6 +1087,22 @@ impl EditorClientBinding {
         }
         if let external_ext_protocol::ExtensionClientOperation::CoreService { request } = &operation
         {
+            if matches!(
+                request,
+                external_ext_protocol::services::CoreServiceRequest::StorageGet { .. }
+                    | external_ext_protocol::services::CoreServiceRequest::StorageSet { .. }
+                    | external_ext_protocol::services::CoreServiceRequest::StorageDelete { .. }
+            ) {
+                return self.storage(context, request, token, timeout);
+            }
+            if matches!(
+                request,
+                external_ext_protocol::services::CoreServiceRequest::SecretLoad { .. }
+                    | external_ext_protocol::services::CoreServiceRequest::SecretStore { .. }
+                    | external_ext_protocol::services::CoreServiceRequest::SecretDelete { .. }
+            ) {
+                return self.secrets(context, request, token, timeout);
+            }
             let denied = || external_ext_protocol::HostFailure {
                 code: external_ext_protocol::HostErrorCode::PermissionDenied,
                 message: "credential service is not granted to this package".into(),
@@ -1125,7 +1184,7 @@ impl RuntimeInner {
             .reconcile_gate
             .lock()
             .map_err(|_| ExtensionHostRuntimeError::Internal)?;
-        let (supervisor, workspace_read, credential_providers) = {
+        let (supervisor, activation, workspace_read, credential_providers) = {
             let state = self
                 .state
                 .lock()
@@ -1168,6 +1227,7 @@ impl RuntimeInner {
             }
             (
                 supervisor,
+                Arc::downgrade(&entry.activation_gate),
                 entry.workspace_read,
                 entry
                     .deployment
@@ -1255,6 +1315,7 @@ impl RuntimeInner {
         let incarnation = request.incarnation;
         let binding = EditorClientBinding {
             runtime: Arc::downgrade(self),
+            activation,
             backend_channels: {
                 let state = self
                     .state

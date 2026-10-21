@@ -1,5 +1,3 @@
-import { registerTestCodeEditorFeatures } from '../../../../../../../test/fixtures/codeEditorFeatures.js';
-import { after as afterCodeFeatures } from 'mocha';
 import { WebWorkerService } from '../../../../../platform/webWorker/browser/webWorkerServiceImpl.js';
 import { IWebWorkerService } from '../../../../../platform/webWorker/browser/webWorkerService.js';
 import { IDialogService, DialogResult, ConfirmResult, IFileDialogService } from '../../../../../platform/dialogs/common/dialogs.js';
@@ -289,7 +287,7 @@ test('open code editor applies live view settings and actions without replacing 
 	assert.equal(control.getOption(EditorOption.minimap).enabled, true);
 });
 
-test('font settings follow resource language on open, updates and language changes without replacing the control', async () => {
+test('font and wrapping settings follow resource language on open, updates and language changes without replacing the control', async () => {
 	const dom = createTestDom('<!doctype html><body><main></main></body>');
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	using closeWindow = toDisposable(() => dom.window.close());
@@ -297,7 +295,7 @@ test('font settings follow resource language on open, updates and language chang
 	using models = uriIdentityServices.createInstance(BrowserTextModelService, resourceStore, {});
 	using parentServices = paneServices(models);
 	using services = parentServices.createChild();
-	using configuration = new WorkbenchConfigurationService({ source: '{ "editor.fontSize": 17, "[plaintext]": { "editor.fontSize": 23, "editor.fontFamily": "Arial" }, "[settings-font-other]": { "editor.fontSize": 29 } }' });
+	using configuration = new WorkbenchConfigurationService({ source: '{ "editor.fontSize": 17, "[plaintext]": { "editor.fontSize": 23, "editor.fontFamily": "Arial", "editor.wordWrap": "bounded", "editor.wordWrapColumn": 36 }, "[settings-font-other]": { "editor.fontSize": 29, "editor.wordWrap": "off" } }' });
 	services.registerInstance(IConfigurationService, configuration);
 	using language = services.get(ILanguageService).registerLanguage({ id: 'settings-font-other' });
 	using pane = createPane(services, resourceStore, {});
@@ -306,14 +304,23 @@ test('font settings follow resource language on open, updates and language chang
 	const control = pane.getControl();
 	assert.ok(control instanceof CodeEditorWidget);
 	assert.deepEqual([control.getOption(EditorOption.fontSize), control.getOption(EditorOption.fontFamily)], [23, 'Arial']);
+	assert.equal(control.getOption(EditorOption.wordWrap), 'bounded');
+	assert.equal(control.getOption(EditorOption.wordWrapColumn), 36);
 	await configuration.updateValue('editor.fontSize', 26, { overrideIdentifier: 'plaintext' }, ConfigurationTarget.USER_LOCAL);
+	await configuration.updateValue('editor.wordWrap', 'on', { overrideIdentifier: 'plaintext' }, ConfigurationTarget.USER_LOCAL);
+	assert.equal(control.getOption(EditorOption.wordWrap), 'on');
 	assert.equal(control.getOption(EditorOption.fontSize), 26);
 	control.getModel()!.setLanguage('settings-font-other');
 	assert.equal(control.getOption(EditorOption.fontSize), 29);
+	assert.equal(control.getOption(EditorOption.wordWrap), 'off');
 	await configuration.updateValue('editor.fontSize', 28, { overrideIdentifier: 'plaintext' }, ConfigurationTarget.USER_LOCAL);
 	assert.equal(control.getOption(EditorOption.fontSize), 29, 'an unrelated language cannot update this control');
+	await configuration.updateValue('editor.wordWrapColumn', 48, { overrideIdentifier: 'plaintext' }, ConfigurationTarget.USER_LOCAL);
+	assert.equal(control.getOption(EditorOption.wordWrap), 'off');
 	control.getModel()!.setLanguage('plaintext');
 	assert.equal(control.getOption(EditorOption.fontSize), 28);
+	assert.equal(control.getOption(EditorOption.wordWrap), 'on');
+	assert.equal(control.getOption(EditorOption.wordWrapColumn), 48);
 	assert.equal(pane.getControl(), control);
 	pane.clearInput();
 	await configuration.updateValue('editor.fontSize', 30, { overrideIdentifier: 'plaintext' }, ConfigurationTarget.USER_LOCAL);
@@ -1074,6 +1081,3 @@ test('code editor creation rejects a missing language configuration registration
 	pane.create(parent);
 	await assert.rejects(pane.setInput({ resource: URI.file('/project/missing-service.ts') }, new AbortController().signal), /languageConfigurationService/);
 });
-
-const codeFeatures = registerTestCodeEditorFeatures();
-afterCodeFeatures(() => codeFeatures.dispose());

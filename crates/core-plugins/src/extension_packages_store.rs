@@ -27,6 +27,20 @@ pub(crate) struct Store {
 }
 
 impl Store {
+    /// Historical registry payloads can still be removed, but never become Ash packages merely
+    /// because a new registry uses their former source ID. This marker was part of their digest.
+    pub(crate) fn is_retired_package(
+        &self,
+        package: &PackageRef,
+    ) -> Result<bool, ExtensionsClientError> {
+        let root = self.artifacts.join(digest_component(&package.digest)?);
+        match fs::symlink_metadata(root.join("ash-open-vsx.json")) {
+            Ok(_) => Ok(true),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(false),
+            Err(_) => Err(ExtensionsClientError::storage()),
+        }
+    }
+
     pub(crate) fn open(root: PathBuf) -> Result<Self, ExtensionsClientError> {
         if root
             .file_name()

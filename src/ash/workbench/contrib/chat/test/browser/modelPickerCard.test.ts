@@ -2,8 +2,6 @@ import assert from 'node:assert/strict';
 import { suiteTeardown, test } from 'mocha';
 import { JSDOM } from 'jsdom';
 import type { ModelCatalogEntry } from '../../../../services/chat/common/modelCatalog.js';
-import { setNlsMessages, resetNlsResolver } from '../../../../../nls.js';
-import { productLanguagePackCatalogs } from '../../../../services/localization/common/localizationCatalogs.js';
 import { ModelCard } from '../../browser/widget/input/modelPicker/modelPickerCard.js';
 import { ModelPickerDetailsMenu } from '../../browser/widget/input/modelPicker/modelPickerHover.js';
 
@@ -15,23 +13,17 @@ const entry: ModelCatalogEntry = {
 	longContext: false, accelerationOptions: [{ id: 'priority', name: 'Fast', description: 'Faster responses, increased usage' }],
 };
 
-for (const locale of ['en', 'zh-CN']) {
-	test(`Model card displays the catalog description verbatim and exposes it to keyboard users in ${locale}`, () => {
-		const catalog = productLanguagePackCatalogs.find(item => item.locale === locale)!;
-		setNlsMessages(locale, catalog.bundles);
-		try {
-			using card = new ModelCard(environment.window.document);
-			card.update(entry);
-			environment.window.document.body.append(card.domNode);
-			card.focus();
-			assert.deepEqual({
-				text: card.domNode.textContent, label: card.domNode.getAttribute('aria-label'),
-				description: card.domNode.getAttribute('aria-description'), focused: environment.window.document.activeElement === card.domNode,
-				controls: card.domNode.querySelectorAll('input, button').length,
-			}, { text: entry.description, label: entry.displayName, description: entry.description, focused: true, controls: 0 });
-		} finally { resetNlsResolver(); }
-	});
-}
+test('Model card displays the provider description verbatim and exposes it to keyboard users', () => {
+	using card = new ModelCard(environment.window.document);
+	card.update(entry);
+	environment.window.document.body.append(card.domNode);
+	card.focus();
+	assert.deepEqual({
+		text: card.domNode.textContent, label: card.domNode.getAttribute('aria-label'),
+		description: card.domNode.getAttribute('aria-description'), focused: environment.window.document.activeElement === card.domNode,
+		controls: card.domNode.querySelectorAll('input, button').length,
+	}, { text: entry.description, label: entry.displayName, description: entry.description, focused: true, controls: 0 });
+});
 
 test('Model card updates retained description text safely without losing keyboard focus', () => {
 	using card = new ModelCard(environment.window.document);

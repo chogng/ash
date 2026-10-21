@@ -12,6 +12,8 @@ old consent. The runtime subscribes to committed changes and retires revoked cal
 policy RPC returns. `Manager::acquire_local_source` pins verified package storage only; it grants no
 execution permission and cannot replace the independent runtime admission check.
 
-Open VSX gallery resource reads reuse the configured provider and the Manager's verified artifact store.
-They select an exact universal release and an extension-relative path without adding an installation or
-execution grant. App Server exposes bytes through connection-owned resource handles, never host paths.
+Retired source gallery downloads and VSIX editor-package parsing have been removed. Historical
+installation markers retain the original identity for listing, disablement and uninstall;
+retired packages cannot obtain source leases, runtime admission or new execution grants.
+Registry `EditorExtensionPolicy` execution contract 6 invalidates previous contract 5 grants,
+while preserving installation and enablement records. Local Plugin Node consent remains contract 2.

@@ -1,6 +1,6 @@
 import { IProgressService, ProgressLocation, type IProgressOptions } from '../../../platform/progress/common/progress.js';
 import { AppServerRemoteError } from '../../../platform/agentHost/common/appServerError.js';
-import { Disposable, toDisposable } from '../../../base/common/lifecycle.js';
+import { Disposable, DisposableMap, DisposableStore, toDisposable } from '../../../base/common/lifecycle.js';
 import { IExtensionApi } from '../../../platform/extensions/common/extensionApi.js';
 import { IExtensionBackendApi } from '../../../platform/agentHost/common/extensionBackendApi.js';
 import { IAppServerApi, IServerEventApi } from '../../../platform/agentHost/common/appServerApi.js';
@@ -8,14 +8,21 @@ import { IWorkspaceContextService } from '../../../platform/workspace/common/wor
 import { normalizeExtensionHostPayload } from '../../../platform/agentHost/browser/extensionHostProtocol.js';
 import { type ExtensionClientSource, type JsonValue } from '../../../platform/agentHost/common/extensionHostApi.js';
 import { Emitter } from '../../../base/common/event.js';
-import { raceCancellationError } from '../../../base/common/async.js';
+import { raceCancellationError, RunOnceScheduler } from '../../../base/common/async.js';
 import { IConfigurationService } from '../../../platform/configuration/common/configuration.js';
+import { IEditorPart } from '../../browser/parts/editor/editorPart.js';
+import { ICodeEditorService } from '../../../editor/browser/services/codeEditorService.js';
+import type { ICodeEditor } from '../../../editor/browser/editorBrowser.js';
+
 /** Routes package-declared capabilities without exposing the client's backend connection. */
 export class MainThreadExtensionBackend extends Disposable {
 	private readonly changed = this._register(new Emitter<string | undefined>());
 	private readonly stopped = new AbortController();
 	private sequence = 0;
 	private resetAfter = 0;
+	private editorChangedAfter = 0;
+	private discardedThrough = 0;
+	private readonly editorListeners = this._register(new DisposableMap<ICodeEditor, DisposableStore>());
 	private readonly events: {
 		sequence: number;
 		event: JsonValue;
@@ -33,26 +40,48 @@ export class MainThreadExtensionBackend extends Disposable {
 		@IWorkspaceContextService
 		private readonly workspace: IWorkspaceContextService,
 		@IConfigurationService configuration: IConfigurationService,
-		@IProgressService private readonly progress: IProgressService) {
+		@IProgressService private readonly progress: IProgressService,
+		@IEditorPart private readonly editors: IEditorPart,
+		@ICodeEditorService codeEditors: ICodeEditorService) {
 		super();
 		const listener = events.subscribe(event => {
 			this.events.push({ sequence: ++this.sequence, event: normalizeExtensionHostPayload(event), method: event.method });
 			if (this.events.length > 256) {
-				this.events.shift();
+				this.discardedThrough = this.events.shift()!.sequence;
 			}
 			this.changed.fire(event.method);
 		});
 		this._register(toDisposable(() => listener.dispose()));
-		const connectionChanged = connection.onConnectionState(() => this.changed.fire(undefined));
-		this._register(toDisposable(() => connectionChanged.dispose()));
-		this._register(workspace.onDidChangeWorkspace(() => this.changed.fire(undefined)));
-		this._register(configuration.onDidChangeConfiguration(() => {
-			// Client settings have their own owner and no server notification payload.
-			// Invalidate the subscription cursor so consumers reread that owner even
-			// while frequent status events keep the subscription from reaching idle.
+		const invalidateDiscovery = () => {
 			this.resetAfter = ++this.sequence;
 			this.changed.fire(undefined);
+		};
+		const connectionChanged = connection.onConnectionState(invalidateDiscovery);
+		this._register(toDisposable(() => connectionChanged.dispose()));
+		this._register(workspace.onDidChangeWorkspace(invalidateDiscovery));
+		this._register(configuration.onDidChangeConfiguration(invalidateDiscovery));
+		this._register(editors.onDidChangeEditors(event => {
+			if (event.kind !== 'groupChanged' || event.event.kind !== 'editorStateChanged') invalidateDiscovery();
 		}));
+		// Cursor and text changes wake blame without invalidating repository discovery.
+		// Coalesce typing/selection bursts; never serialize a document merely to signal it.
+		const editorChanged = this._register(new RunOnceScheduler(() => {
+			this.editorChangedAfter = ++this.sequence;
+			this.changed.fire(undefined);
+		}, 75));
+		const trackEditor = (editor: ICodeEditor) => {
+			const listeners = new DisposableStore();
+			this.editorListeners.set(editor, listeners);
+			const changed = () => {
+				if (editor.getModel()?.uri.toString() === this.editors.activeGroup?.activeInput?.resource.toString()) editorChanged.schedule();
+			};
+			listeners.add(editor.onDidChangeCursorPosition(changed));
+			listeners.add(editor.onDidChangeModelContent(changed));
+			listeners.add(editor.onDidChangeModel(changed));
+		};
+		for (const editor of codeEditors.listCodeEditors()) trackEditor(editor);
+		this._register(codeEditors.onCodeEditorAdd(trackEditor));
+		this._register(codeEditors.onCodeEditorRemove(editor => this.editorListeners.deleteAndDispose(editor)));
 		this._register(toDisposable(() => this.stopped.abort()));
 	}
 	public async handle(source: ExtensionClientSource, capability: string, method: string | undefined, params: JsonValue, after: number, signal: AbortSignal, progressOptions?: Pick<IProgressOptions, 'title' | 'cancellable'>, waitForChange = false): Promise<JsonValue> {
@@ -74,7 +103,7 @@ export class MainThreadExtensionBackend extends Disposable {
 			signal.throwIfAborted();
 			return normalizeExtensionHostPayload({
 				sequence: this.sequence, connection: state, generation: this.connection.connectionGeneration,
-				reset: after < this.resetAfter || after < (this.events[0]?.sequence ?? this.sequence + 1) - 1,
+				reset: after < this.resetAfter || after < this.discardedThrough,
 				events: this.events.filter(entry => entry.sequence > after && grant.notifications?.includes(entry.method)).map(entry => entry.event),
 				folders: this.workspace.getWorkspace().folders.map(folder => ({ id: folder.id, name: folder.name, uri: folder.uri.toString() })),
 			});
@@ -133,13 +162,13 @@ export class MainThreadExtensionBackend extends Disposable {
 		let finish!: () => void;
 		const waiting = new Promise<void>(resolve => { finish = resolve; });
 		const listener = this.changed.event(method => { if (method === undefined || notifications.includes(method)) finish(); });
-		// Preserve an idle tick for editor-owned facts such as blame's active editor,
-		// while repository notifications wake the subscription immediately.
-		const timer = setTimeout(finish, 500);
+		// Renew before the SDK's 30-second request deadline. Actual backend and editor
+		// changes wake immediately; idle windows no longer run a discovery/blame tick.
+		const timer = setTimeout(finish, 20_000);
 		try {
 			// Subscribe before checking the retained history so no notification can
 			// fall between the caller's last sequence and the start of its wait.
-			if (after < this.resetAfter || after < (this.events[0]?.sequence ?? this.sequence + 1) - 1
+			if (after < this.resetAfter || after < this.editorChangedAfter || after < this.discardedThrough
 				|| this.events.some(entry => entry.sequence > after && notifications.includes(entry.method))) return;
 			await raceCancellationError(waiting, AbortSignal.any([signal, this.stopped.signal]));
 		} finally {

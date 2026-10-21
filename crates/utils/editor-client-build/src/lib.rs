@@ -8,7 +8,8 @@ use std::path::PathBuf;
 fn sources(directory: &Path, files: &mut Vec<PathBuf>) {
     for entry in std::fs::read_dir(directory).expect("editor client source directory") {
         let entry = entry.expect("editor client source entry");
-        let kind = entry.file_type().expect("editor client source kind");
+        // Bazel materializes declared sources as symlinks; hash their bytes like Cargo's files.
+        let kind = std::fs::metadata(entry.path()).expect("editor client source metadata");
         if kind.is_dir() {
             sources(&entry.path(), files);
         } else if kind.is_file()

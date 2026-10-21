@@ -96,16 +96,6 @@ fn managed_stop_returns_after_connections_and_services_are_released() {
     use std::time::Duration;
     use std::time::Instant;
 
-    const CHILD_PROFILE: &str = "ASH_TEST_MANAGED_STOP_PROFILE";
-    if let Some(profile) = std::env::var_os(CHILD_PROFILE) {
-        let profile = std::path::PathBuf::from(profile);
-        super::run(profile.clone(), None, ash_app_server_diff::compute).unwrap();
-        // A forced process exit cannot produce this acknowledgement. It is written
-        // only after the real managed entrypoint has returned and dropped its owners.
-        std::fs::write(profile.join("released"), b"released").unwrap();
-        return;
-    }
-
     struct Child(std::process::Child);
     impl Drop for Child {
         fn drop(&mut self) {
@@ -117,16 +107,15 @@ fn managed_stop_returns_after_connections_and_services_are_released() {
     let profile = tempfile::tempdir().unwrap();
     let directory = tempfile::tempdir().unwrap();
     let mut child = Child(
-        Command::new(std::env::current_exe().unwrap())
-            .args([
-                "--exact",
-                "managed::tests::managed_stop_returns_after_connections_and_services_are_released",
-                "--nocapture",
-            ])
-            .env(CHILD_PROFILE, profile.path())
-            .stdout(Stdio::null())
-            .spawn()
-            .unwrap(),
+        Command::new(
+            std::env::var_os("ASH_MANAGED_LIFECYCLE_TEST_HOST")
+                .expect("run through scripts/cargo.py to prepare the managed lifecycle host"),
+        )
+        .arg(ash_app_server_daemon::MANAGED_PROCESS_ARGUMENT)
+        .env("ASH_HOME", profile.path())
+        .stdout(Stdio::null())
+        .spawn()
+        .unwrap(),
     );
     let endpoint = daemon_endpoint_path(profile.path()).unwrap();
     let deadline = Instant::now() + Duration::from_secs(15);
@@ -163,7 +152,11 @@ fn managed_stop_returns_after_connections_and_services_are_released() {
     stream.flush().unwrap();
     let mut reader = BufReader::new(stream);
     let mut response = String::new();
-    reader.read_line(&mut response).unwrap();
+    assert_ne!(
+        reader.read_line(&mut response).unwrap(),
+        0,
+        "managed connection closed before initialize"
+    );
     let response: serde_json::Value = serde_json::from_str(&response).unwrap();
     assert!(response["result"].is_object());
 

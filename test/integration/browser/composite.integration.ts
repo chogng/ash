@@ -172,6 +172,7 @@ declare global {
 			hide(): void;
 			openView(id: string): Promise<void>;
 			dispose(): void;
+			disposePaneTransitions(): void;
 			flushPaneState(): Promise<number | undefined>;
 			reattachDisposed(): void;
 			readonly editorEvents: readonly string[];
@@ -180,7 +181,9 @@ declare global {
 			resizeEditor(width: number, height: number): void;
 			setWatermarkBinding(command: string, key: string | null): void;
 			readonly watermarkCommands: readonly string[];
-			configureEditorTabs(style: ModernUIEditorTabStyle, sizing?: EditorTabSizing): Promise<void>;
+			configureEditorTabs(style: ModernUIEditorTabStyle, sizing?: EditorTabSizing, breadcrumbs?: boolean): Promise<void>;
+			setEditorConfiguration(key: string, value: unknown): Promise<void>;
+			setActiveEditorSticky(sticky: boolean): void;
 			setEditorTheme(id: string): void;
 			closeEditor(name: string): Promise<void>;
 			openFileAliases(target?: 'modalGroup'): Promise<{ tabs: number; models: number; retained: boolean; text: string; }>;
@@ -264,7 +267,7 @@ if (new URLSearchParams(location.search).has('output')) {
 	await import('../../../src/ash/workbench/browser/parts/panel/panelActions.js');
 	registerOutputView(registry);
 	if (new URLSearchParams(location.search).has('agentOutput')) {
-		await import('../../../extensions/code/browser/contrib/links/browser/links.js');
+		await import('../../../src/ash/editor/contrib/links/browser/links.js');
 		services.registerInstance(ICommandService, {
 			onWillExecuteCommand: Event.None, onDidExecuteCommand: Event.None, executeCommand: async <T>(id: string, ...args: unknown[]) => {
 				if (id === 'sessions.trace.open') { openedAgentEvents.push(args[0]); return undefined as T; }
@@ -388,20 +391,22 @@ if (new URLSearchParams(location.search).has('partWidth')) {
 		state: () => ({ minimum: part.minimumWidth, frameMinimum: auxiliaryView.minimumWidth, width: auxiliaryView.element.getBoundingClientRect().width }),
 	};
 }
+let transitionPaneView: PaneView | undefined;
 if (new URLSearchParams(location.search).has('paneTransitions')) {
 	await import('../../../src/ash/base/browser/ui/sash/sash.css');
 	const paneHost = h(document, 'div');
 	paneHost.id = 'pane-transitions';
-	paneHost.style.cssText = 'position:fixed;top:0;right:0;width:300px;height:600px';
+	const height = new URLSearchParams(location.search).has('shortPanes') ? 120 : 600;
+	paneHost.style.cssText = `position:fixed;top:0;right:0;width:300px;height:${height}px`;
 	document.body.append(paneHost);
 	resources.add(toDisposable(() => paneHost.remove()));
 	resources.add(bindTestColorTheme(services.get(IThemeService), paneHost));
-	const paneView = resources.add(new PaneView(paneHost));
+	const paneView = transitionPaneView = resources.add(new PaneView(paneHost));
 	for (const title of ['Changes', 'Agent Review', 'Graph']) {
 		const pane = resources.add(new Pane(paneHost, { id: `transition.${title}`, title, collapsed: title !== 'Changes' }));
 		paneView.addPane(pane, title === 'Changes' ? 544 : 28);
 	}
-	paneView.layout(600, 300);
+	paneView.layout(height, 300);
 }
 panel.domNode.style.cssText = 'position:relative;width:800px;height:160px;overflow:hidden';
 panel.layout({ width: 800, height: 160 });
@@ -522,6 +527,7 @@ const badgeBars: CompositeBar[] = [];
 const badgeActivities: ActivityService[] = [];
 const badgeHandles = resources.add(new MutableDisposable<DisposableStore>());
 if (new URLSearchParams(location.search).has('badges')) {
+	if (new URLSearchParams(location.search).has('modernBadges')) resources.add(bindTestColorTheme(editorServices.get(IThemeService), document.body));
 	for (const presentation of ['icon', 'label'] as const) {
 		const host = h(document, 'div');
 		host.id = `badge-${presentation}`;
@@ -539,6 +545,7 @@ if (new URLSearchParams(location.search).has('badges')) {
 			activityHoverOptions: { position: () => HoverPosition.BELOW },
 			openComposite: id => views.openViewContainer(id),
 		}, activity));
+		if (presentation === 'icon' && new URLSearchParams(location.search).has('modernBadges')) bar.setActiveComposite('first');
 		badgeBars.push(bar);
 		badgeActivities.push(activity);
 	}
@@ -679,10 +686,19 @@ window.ashCompositeIntegration = {
 		editorHost.style.height = `${height}px`;
 		editor.layout({ width, height });
 	},
-	configureEditorTabs: async (style, sizing = 'fit') => {
+	setActiveEditorSticky: sticky => {
+		if (sticky) {
+			editor.activeGroup.stickEditor();
+		} else {
+			editor.activeGroup.unstickEditor();
+		}
+	},
+	setEditorConfiguration: (key, value) => editorServices.get(IConfigurationService).updateValue(key, value),
+	configureEditorTabs: async (style, sizing = 'fit', breadcrumbs) => {
 		const configuration = editorServices.get(IConfigurationService);
 		await configuration.updateValue(WorkbenchConfiguration.modernUIEditorTabStyle, style);
 		await configuration.updateValue(EditorTabSizingConfiguration, sizing);
+		if (breadcrumbs !== undefined) await configuration.updateValue('breadcrumbs.enabled', breadcrumbs);
 	},
 	setEditorTheme: id => {
 		const theme = [darkColorTheme, lightColorTheme, highContrastDarkColorTheme, highContrastLightColorTheme].find(theme => theme.id === id);
@@ -724,6 +740,7 @@ window.ashCompositeIntegration = {
 	hide: () => views.closeViewContainer(panes.getActivePaneComposite(ViewContainerLocation.Panel)!.getId()),
 	openView: async id => { await views.openView(id, true); },
 	dispose: () => panel.dispose(),
+	disposePaneTransitions: () => transitionPaneView?.dispose(),
 	flushPaneState: async () => {
 		const key = 'workbench.viewContainer.first.first.view.size';
 		storage.remove(key, StorageScope.WORKSPACE);

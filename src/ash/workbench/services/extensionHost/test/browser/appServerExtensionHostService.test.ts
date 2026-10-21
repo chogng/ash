@@ -1149,13 +1149,13 @@ function createServices(api: IExtensionHostApi, languages: ILanguageFeaturesServ
 	services.registerInstance(IExtensionHostApi, api);
 	// These registrations exercise host callbacks without opening editor UI.
 	services.registerInstance(IEditorService, { openEditor: async () => assert.fail('Unexpected editor open') } as unknown as IEditorService);
-	services.registerInstance(IEditorPart, { groups: [], activeGroup: undefined } as unknown as IEditorPart);
+	services.registerInstance(IEditorPart, { groups: [], activeGroup: undefined, onDidChangeEditors: Event.None } as unknown as IEditorPart);
 	services.registerInstance(IFileDialogService, { pickFolderAndOpen: async () => assert.fail('Unexpected folder open'), pickWorkspaceAndOpen: async () => assert.fail('Unexpected workspace open'), pickFileToSave: async () => undefined, showOpenDialog: async () => assert.fail('Unexpected folder picker'), showSaveDialog: async () => undefined, showSaveConfirm: async () => 2 });
 	services.registerInstance(IWorkingCopyService, { get: () => assert.fail('Unexpected working copy request') } as unknown as IWorkingCopyService);
 	services.registerInstance(IViewsService, { openView: async () => assert.fail('Unexpected view open') } as unknown as IViewsService);
 	services.registerInstance(IClipboardService, { writeText: async () => assert.fail('Unexpected clipboard write') } as unknown as IClipboardService);
 	services.registerInstance(IOpenerService, { open: async () => assert.fail('Unexpected external open') } as unknown as IOpenerService);
-	services.registerInstance(ICodeEditorService, { listDiffEditors: () => assert.fail('Unexpected diff editor request') } as unknown as ICodeEditorService);
+	services.registerInstance(ICodeEditorService, { listDiffEditors: () => assert.fail('Unexpected diff editor request'), listCodeEditors: () => [], onCodeEditorAdd: Event.None, onCodeEditorRemove: Event.None } as unknown as ICodeEditorService);
 	services.registerInstance(ITextFileService, { read: async () => assert.fail('Unexpected text file request') } as unknown as ITextFileService);
 
 	services.registerInstance(IExtensionApi, extensionApi ?? {
@@ -2140,4 +2140,31 @@ test('terminal completion and quick fix registrations bind the original instance
 	const count = api.invocations.length;
 	await fixes[2]!.run!();
 	assert.equal(api.invocations.length, count);
+});
+
+test('saved Remote resolver starts on demand and retains its first resolution through ready publication', async () => {
+	const api = new FakeExtensionHostApi(dormantSnapshot(['onResolveRemoteAuthority:team']));
+	using languages = new LanguageFeaturesService();
+	using services = createServices(api, languages, new ProviderSink<TaskProvider>(), new ProviderSink<TestProfileProvider>(), undefined, undefined, {
+		confirm: async () => ({ confirmed: true }),
+		connections: { ...UnavailableRemoteConnectionApi, available: true, list: async () => [{ name: 'build', host: 'build-linux', workspace: '/srv/project' }] },
+	});
+	using service = services.createInstance(AppServerExtensionHostService, new CommandRegistry(), 1_000);
+	await service.start();
+	assert.equal(api.activations.length, 0);
+	const activation = deferred<ExtensionHostFleetSnapshot>();
+	api.activationResult = activation.promise;
+	const resolving = services.get(IRemoteConnectionService).resolveConnection('team+build', new AbortController().signal);
+	await waitFor(() => api.activations.length === 1);
+	api.current = { ...api.current, generation: 2, extensions: api.current.extensions.map(runtime => ({ ...runtime, lifecycle: 'starting', incarnation: 11 })) };
+	api.emitChanged(2);
+	await waitFor(() => service.currentSnapshot.extensions[0]?.state === 'starting');
+	api.current = snapshot(3, 'acme.lazy', [{ kind: 'remoteConnectionResolver', registrationId: 'remote:team', authorityPrefix: 'team' }], '', [], 11);
+	api.emitChanged(3);
+	await waitFor(() => service.currentSnapshot.extensions[0]?.state === 'ready');
+	activation.resolve(api.current);
+	assert.deepEqual(await resolving, { name: 'build', host: 'build-linux', workspace: '/srv/project' });
+	assert.deepEqual(api.activations[0]!.event, { type: 'resolveAuthority', authorityPrefix: 'team' });
+	await services.get(IRemoteConnectionService).resolveConnection('team+build', new AbortController().signal);
+	assert.equal(api.activations.length, 1);
 });

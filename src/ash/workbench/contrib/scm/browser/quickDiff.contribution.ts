@@ -5,6 +5,7 @@ import { localize2 } from '../../../../nls.js';
 import { Keybinding, logicalKey } from '../../../../base/common/keybindings.js';
 import { type ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
 import { Action2, registerAction2 } from '../../../../platform/actions/common/actions.js';
+import { EditorOption } from '../../../../editor/common/config/editorOptions.js';
 import { EditorContributionInstantiation, registerEditorContribution } from '../../../../editor/browser/editorExtensions.js';
 import { InstantiationType, registerSingleton } from '../../../../platform/instantiation/common/extensions.js';
 import { ActiveEditorContext } from '../../../common/contextkeys.js';
@@ -63,7 +64,7 @@ registerEditorContribution({
 	id: 'workbench.contrib.quickDiffEditorController',
 	instantiation: EditorContributionInstantiation.AfterFirstRender,
 	install: context => {
-		if (context.kind !== 'text') return;
+		if (context.kind !== 'text' || context.editor.getOption(EditorOption.inDiffEditor)) return;
 		return context.instantiationService.createInstance(QuickDiffEditorController, context.editor, context.view);
 	},
 });

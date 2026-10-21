@@ -844,13 +844,16 @@ pub struct LocalProfileRuntime {
     message_history: Arc<ash_state::SqliteMessageHistory>,
     symphony: Arc<ash_symphony::Store>,
     profile_root: PathBuf,
+    pub(crate) terminal_host: Option<PathBuf>,
     state: Arc<ash_state::StateRuntime>,
+    extension_state: Arc<ash_state::SqliteExtensionStateStore>,
     threads: Arc<ThreadController>,
     trace_recorder: Arc<ash_rollout_trace::TraceRecorder>,
     history: Arc<ash_state::SqliteThreadStore>,
     config: Arc<ConfigStore>,
     network_policy: OutboundNetworkPolicy,
     secrets: Arc<dyn SecretStore>,
+    mcp_oauth_transports: Arc<ash_mcp_extension::McpOAuthTransports>,
     plugin_authority: PluginActivationAuthority,
     updates: Arc<UpdateBroker>,
     update_scopes: Mutex<BTreeMap<ProfileUpdateScopeKey, Arc<UpdateBroker>>>,
@@ -866,10 +869,6 @@ struct ProfileExtensionsAuthority {
         BTreeMap<ash_utils_plugins::ExtensionSourceId, ash_core_plugins::RemoteExtensionsConfig>,
     manager: Arc<ash_core_plugins::ExtensionPackageManager>,
     _watcher: Option<crate::server::extension_packages_runtime::ExtensionsChangeWatcher>,
-    open_vsx: Option<(
-        ash_utils_plugins::ExtensionSourceId,
-        ash_core_plugins::OpenVsxConfig,
-    )>,
 }
 
 #[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
@@ -978,6 +977,7 @@ impl LocalProfileRuntime {
         )
         .map_err(open_error)?;
         Ok(Self {
+            terminal_host: None,
             ide_registry: Arc::new(crate::ide_registry::IdeRegistry::default()),
             editor_extension_policy,
             session_runtimes,
@@ -998,12 +998,16 @@ impl LocalProfileRuntime {
             symphony: Arc::new(ash_symphony::Store::open(&database_path).map_err(open_error)?),
             queue: Arc::new(queue::QueueStore::open(&database_path).map_err(open_error)?),
             state,
+            extension_state: Arc::new(
+                ash_state::SqliteExtensionStateStore::open(&database_path).map_err(open_error)?,
+            ),
             threads,
             trace_recorder,
             history,
             config,
             network_policy,
             secrets,
+            mcp_oauth_transports: Arc::default(),
             plugin_authority,
             updates: Arc::new(UpdateBroker::default()),
             update_scopes: Mutex::new(BTreeMap::new()),
@@ -1083,24 +1087,20 @@ impl LocalProfileRuntime {
             ash_utils_plugins::ExtensionSourceId,
             ash_core_plugins::RemoteExtensionsConfig,
         >,
-        open_vsx: Option<(
-            ash_utils_plugins::ExtensionSourceId,
-            ash_core_plugins::OpenVsxConfig,
-        )>,
     ) -> Result<Arc<ash_core_plugins::ExtensionPackageManager>, OpenAppServerError> {
         let mut extension_packages = self
             .extension_packages
             .lock()
             .map_err(|_| OpenAppServerError("profile Extensions lock poisoned".into()))?;
         if let Some(authority) = extension_packages.as_ref() {
-            if authority.config == config && authority.open_vsx == open_vsx {
+            if authority.config == config {
                 return Ok(Arc::clone(&authority.manager));
             }
             return Err(OpenAppServerError(
                 "one profile runtime cannot use multiple Extensions authorities".into(),
             ));
         }
-        let providers = extension_packages_providers(&config, open_vsx.as_ref())?;
+        let providers = extension_packages_providers(&config)?;
         let manager = Arc::new(
             ash_core_plugins::ExtensionPackageManager::open(
                 self.profile_root.join("extensions-manager"),
@@ -1114,7 +1114,6 @@ impl LocalProfileRuntime {
         );
         *extension_packages = Some(ProfileExtensionsAuthority {
             config,
-            open_vsx,
             manager: Arc::clone(&manager),
             _watcher: watcher,
         });
@@ -1225,22 +1224,12 @@ pub fn open_app_server_with_codebase_providers(
             .cloned()
     {
         if let Some(runtime) = &options.profile_runtime {
-            let manager = runtime.plugins_manager(
-                sources,
-                product_services
-                    .as_ref()
-                    .and_then(|services| services.open_vsx.clone()),
-            )?;
+            let manager = runtime.plugins_manager(sources)?;
             let client: Arc<dyn ash_core_plugins::ExtensionPackageService> = manager.clone();
             options.plugin_package_service = Some(client);
             options.plugins_manager = Some(manager);
         } else {
-            options = options.with_plugin_providers(extension_packages_providers(
-                &sources,
-                product_services
-                    .as_ref()
-                    .and_then(|services| services.open_vsx.as_ref()),
-            )?)?;
+            options = options.with_plugin_providers(extension_packages_providers(&sources)?)?;
         }
     }
     let plugin_package_service = options.plugin_package_service.take();
@@ -1279,6 +1268,13 @@ pub fn open_app_server_with_codebase_providers(
     let state_runtime = match &profile_runtime {
         Some(runtime) => runtime.state_runtime(),
         None => Arc::new(ash_state::StateRuntime::open(&options.profile_root).map_err(open_error)?),
+    };
+    let extension_state = match &profile_runtime {
+        Some(runtime) => Arc::clone(&runtime.extension_state),
+        None => Arc::new(
+            ash_state::SqliteExtensionStateStore::open(state_runtime.database_path())
+                .map_err(open_error)?,
+        ),
     };
     let network_policy = profile_runtime
         .as_ref()
@@ -1887,6 +1883,11 @@ pub fn open_app_server_with_codebase_providers(
             .map(|profile| profile.ide_registry.clone()),
     )
     .with_trace_recorder(trace_recorder)
+    .with_terminal_host(
+        profile_runtime
+            .as_ref()
+            .and_then(|profile| profile.terminal_host.clone()),
+    )
     .with_home(home)
     .with_network_diagnostics(network.clone(), application_http.clone(), network_services)
     .with_telemetry(diagnostics.clone(), telemetry, analytics)
@@ -1901,6 +1902,7 @@ pub fn open_app_server_with_codebase_providers(
     .with_approval_review_model(Some(approval_review_model))
     .with_capability_network_policy(network_policy.clone())
     .with_config_store(Arc::clone(&config))
+    .with_extension_state_store(extension_state)
     .with_backup_store(Arc::new(
         ash_state::SqliteBackupStore::open(&database_path).map_err(open_error)?,
     ))
@@ -2131,6 +2133,12 @@ pub fn open_app_server_with_codebase_providers(
     );
     let mcp_oauth = Arc::new(
         McpOAuthService::new(Arc::clone(&profile_secrets), mcp_oauth_providers)
+            .with_transports(
+                profile_runtime
+                    .as_ref()
+                    .map(|runtime| Arc::clone(&runtime.mcp_oauth_transports))
+                    .unwrap_or_default(),
+            )
             .with_http_provider(oauth_http, options.profile_root.join("mcp-oauth-locks")),
     );
     server = server.with_mcp_oauth_service(Arc::clone(&mcp_oauth));
@@ -3459,12 +3467,8 @@ fn extension_packages_providers(
         ash_utils_plugins::ExtensionSourceId,
         ash_core_plugins::RemoteExtensionsConfig,
     >,
-    open_vsx: Option<&(
-        ash_utils_plugins::ExtensionSourceId,
-        ash_core_plugins::OpenVsxConfig,
-    )>,
 ) -> Result<ash_core_plugins::ExtensionSources, OpenAppServerError> {
-    let mut providers = sources
+    let providers = sources
         .iter()
         .map(|(name, config)| {
             let provider = ash_core_plugins::ExtensionsRemoteClient::new(config.clone());
@@ -3474,10 +3478,6 @@ fn extension_packages_providers(
             )
         })
         .collect::<Vec<_>>();
-    if let Some((name, config)) = open_vsx {
-        let provider = ash_core_plugins::OpenVsxClient::new(config.clone()).map_err(open_error)?;
-        providers.push((name.clone(), Arc::new(provider)));
-    }
     ash_core_plugins::ExtensionSources::new(providers).map_err(open_error)
 }
 

@@ -3,6 +3,29 @@ import { suite, test } from 'mocha';
 import { mergeAgentTrace, mergeAgentTraceDiagnostics, traceOverview, parseAgentTrace, parseAgentTracePage, parseAgentTraceDiagnostics, parseAgentTraceDiagnosticPage, parseAgentTraceGraph } from '../../common/chatDebugEvents.js';
 
 suite('Agent trace artifact', () => {
+
+	test('preserves backend performance across pages and JSON export without a second calculator', () => {
+		const event = (id: string, sequence: number) => ({ eventId: id, sequence, recordedAt: 0, event: { type: 'modelInvocationRecorded', threadId: 'root', turnId: 'turn', record: { threadId: 'root', turnId: 'turn', invocationId: id } } });
+		const metrics = (id: string) => ({ threadId: 'root', turnId: 'turn', eventId: id, invocationId: id, total: { type: 'measured', microseconds: '18446744073709551615' }, firstText: { type: 'unknown', reason: 'missingTiming' }, generation: { type: 'unknown', reason: 'noTextDeltas' }, textTps: { type: 'unknown', reason: 'singleTextDelta' } });
+		const page = (id: string, sequence: number) => ({ formatVersion: 3, sessionId: 's', threads: [{ threadId: 'root', events: [event(id, sequence)] }], historyPrefixes: [], performance: { formatVersion: 1, calls: [metrics(id)] } });
+		const first = parseAgentTrace(page('first', 1));
+		const second = parseAgentTrace(page('second', 2));
+		const merged = mergeAgentTrace(first, second);
+		assert.deepEqual(merged.performance?.calls, [metrics('first'), metrics('second')]);
+		assert.deepEqual(parseAgentTrace(JSON.parse(JSON.stringify(merged))).performance, merged.performance);
+		assert.deepEqual(mergeAgentTrace(merged, parseAgentTrace({ ...page('second', 2), threads: [{ threadId: 'root', events: [] }], performance: { formatVersion: 1, calls: [] } })).performance, merged.performance);
+		assert.equal(parseAgentTrace({ ...page('first', 1), performance: undefined }).performance, undefined);
+		for (const change of [
+			{ invocationId: 'other' }, { eventId: 'other' }, { threadId: 'other' }, { turnId: 'other' },
+			{ total: { type: 'measured', microseconds: '18446744073709551616' } },
+			{ total: { type: 'measured', microseconds: 2500000 } },
+			{ textTps: { type: 'estimated', tokensPerSecond: 'NaN' } },
+			{ textTps: { type: 'unknown', reason: 'inventedReason' } },
+		]) {
+			assert.throws(() => parseAgentTrace({ ...page('first', 1), performance: { formatVersion: 1, calls: [{ ...metrics('first'), ...change }] } }));
+		}
+		assert.throws(() => parseAgentTrace({ ...page('first', 1), performance: { formatVersion: 1, calls: [metrics('first'), metrics('first')] } }));
+	});
 	test('validates versioned accounting receipts and pending evidence without changing V3 history', () => {
 		const event = { eventId: 'receipt', threadId: 'root', turnId: 'turn', sequence: 1, recordedAt: 1, event: { type: 'modelAttemptAccounted', attemptId: 'attempt', invocationId: 'committed', sourceThreadSequence: 4 } };
 		const capture = { formatVersion: 2, captureId: 'capture', recordingStatus: 'incomplete', droppedRecords: 0, pendingRecords: 3, events: [event] };

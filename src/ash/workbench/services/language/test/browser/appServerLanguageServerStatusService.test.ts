@@ -11,6 +11,9 @@ import { resetNlsResolver, setNlsMessages } from '../../../../../nls.js';
 import { productLanguagePackCatalogs } from '../../../localization/common/localizationCatalogs.js';
 import { setARIAContainer } from '../../../../../base/browser/ui/aria/aria.js';
 import { browserEnvironment } from '../../../../../editor/test/browser/testEditorDom.js';
+import { INotificationService, Severity } from '../../../../../platform/notification/common/notification.js';
+import { NotificationService } from '../../../notification/common/notificationService.js';
+import { IDialogService } from '../../../../../platform/dialogs/common/dialogs.js';
 
 test('managed Rust installation status is localized and clears when acquisition finishes', async () => {
 	setARIAContainer(browserEnvironment.window.document.body);
@@ -146,3 +149,29 @@ class FakeServerEvents implements IServerEventApi {
 	subscribe(listener: (event: ServerNotification) => void) { this.listener = listener; return { dispose: () => { this.listener = undefined; } }; }
 	fire(event: ServerNotification): void { this.listener?.(event); }
 }
+
+test('language-server errors use localized notifications and reveal their output without a modal dialog', async () => {
+	const events = new FakeServerEvents();
+	using resources = new DisposableStore();
+	const services = workbenchInstantiationService(resources);
+	const notifications = services.get(INotificationService);
+	assert.ok(notifications instanceof NotificationService);
+	let dialogs = 0;
+	using dialogListener = services.get(IDialogService).onWillShowDialog(() => { dialogs++; });
+	using service = services.createInstance(AppServerLanguageServerStatusService, events);
+	setNlsMessages('zh-CN', productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!.bundles);
+	try {
+		events.fire({ method: 'language/serverMessage', params: { server: 'rust-analyzer', severity: 'error', source: 'protocol', show: true, message: 'Failed to run build scripts of some packages.' } });
+		const [notification] = notifications.model.getNotifications();
+		assert.equal(notification?.severity, Severity.Error);
+		assert.equal(notification?.source, 'rust-analyzer');
+		assert.equal(notification?.message, 'Failed to run build scripts of some packages.');
+		assert.equal(notification?.actions?.primary?.[0]?.label, '显示输出');
+		await notification?.actions?.primary?.[0]?.run();
+		assert.equal(services.get(IOutputService).activeChannel?.label, 'rust-analyzer');
+		assert.match(services.get(IOutputService).activeChannel?.getText() ?? '', /Failed to run build scripts/);
+		assert.equal(dialogs, 0);
+		events.fire({ method: 'language/serverMessage', params: { server: 'rust-analyzer', severity: 'warning', source: 'stderr', show: false, message: 'log-only failure' } });
+		assert.equal(notifications.model.getNotifications().length, 1);
+	} finally { resetNlsResolver(); }
+});

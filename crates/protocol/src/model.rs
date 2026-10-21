@@ -16,6 +16,7 @@ pub use accounting::ModelBillingScope;
 pub use accounting::ModelCostLineItem;
 pub use accounting::ModelInvocationOutcome;
 pub use accounting::ModelInvocationRecord;
+pub use accounting::ModelInvocationTiming;
 pub use accounting::ModelMoneyAmount;
 pub use accounting::ModelReferenceCostReason;
 pub use accounting::ModelReferenceCostRecord;

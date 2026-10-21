@@ -544,7 +544,7 @@ const delegate: ChatInputDelegate = {
 		automatic = true;
 		renderModels();
 	},
-	listAgents: async () => [], selectAgent: () => { }, selectMode: () => { }, selectApprovalMode: async approvalMode => { state = { ...state, approvalMode, interaction: undefined }; part.render(state); recordDestination({ approvalMode }); },
+	listAgents: async () => [], selectAgent: () => { }, selectMode: mode => { state = { ...state, mode }; part.render(state); }, selectApprovalMode: async approvalMode => { state = { ...state, approvalMode, interaction: undefined }; part.render(state); recordDestination({ approvalMode }); },
 	openModelSettings: async () => { recordDestination({ settings: 'models' }); },
 	resolveInteraction: async response => { if (response.type === 'approval') document.querySelector('output')!.textContent = response.response.decision; else if (response.type === 'permissions') document.querySelector('output')!.textContent = JSON.stringify(response.response); },
 };

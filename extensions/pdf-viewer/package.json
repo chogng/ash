@@ -5,7 +5,7 @@
   "displayName": "%pdfViewer.displayName%",
   "description": "%pdfViewer.description%",
   "engines": {
-    "vscode": "*"
+    "ash": "*"
   },
   "contributes": {
     "customEditors": [
@@ -33,7 +33,7 @@
     }
   },
   "activationEvents": [
-    "*"
+    "onDemand:dataChannel"
   ],
   "type": "module",
   "dependencies": {

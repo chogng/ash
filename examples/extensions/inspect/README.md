@@ -1,5 +1,18 @@
-# Standard extension example
+# Ash TypeScript extension example
 
-This package uses `require('vscode')` and standard command/hover registration. Install this directory with Ash's local extension installer, then enable it and grant execution permissions. Run `ash.example.inspect` in an open workspace. The package manifest declares commands; `.ash-plugin/plugin.json` supplies the existing installation authority envelope.
+This package uses `@ash/sdk` and contains only TypeScript author code. Install its development
+dependencies and run `npm run build`, then install this directory through Ash's existing local
+Plugin installer. Enable the extension and grant its requested directory-read permission.
+The `ash.example.inspect` command takes a native filesystem path within the authorized workspace
+and returns its persisted UTF-8 contents from the Rust filesystem service. It does not read
+unsaved editor text. Its command title is available in English and Simplified Chinese.
 
-No Ash TypeScript SDK is required. The product adapter translates supported APIs to the same Host RPC consumed by [Rust extensions](../../../sdk/rust/README.md). Unsupported VS Code APIs fail explicitly; see [current compatibility](../../../crates/external-js-ext/README.md).
+The package manifest declares the command; `.ash-plugin/plugin.json` explicitly selects
+`api: ash` and requests directory access. Installation does not grant execution or file access.
+The product host binds `@ash/sdk` to this exact extension instance and forwards file requests
+through the existing Host RPC. Rust validates package permission and workspace containment.
+Command cancellation and extension retirement revoke the corresponding requests.
+
+The [SDK](../../../sdk/typescript/README.md) supplies its own types and has no Rust or Ash
+source dependency. Keep `@ash/sdk` external if bundling this extension. The current local
+Plugin envelope is a migration path; `.ashx` packaging has not been implemented yet.

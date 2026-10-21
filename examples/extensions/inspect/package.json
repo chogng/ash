@@ -2,15 +2,24 @@
   "name": "inspect-example",
   "publisher": "ash",
   "version": "0.1.0",
+  "private": true,
+  "type": "module",
   "engines": {
-    "vscode": "^1.95.0"
+    "ash": ">=0.1.0"
   },
-  "main": "./extension.cjs",
+  "main": "./dist/extension.js",
+  "scripts": {
+    "build": "tsc -p tsconfig.json"
+  },
+  "devDependencies": {
+    "@ash/sdk": "file:../../../sdk/typescript",
+    "typescript": "npm:@typescript/typescript6@6.0.2"
+  },
   "contributes": {
     "commands": [
       {
         "command": "ash.example.inspect",
-        "title": "Inspect document"
+        "title": "%command.inspect%"
       }
     ]
   }

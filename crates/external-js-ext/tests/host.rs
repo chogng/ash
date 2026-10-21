@@ -1,3 +1,4 @@
+use std::collections::BTreeMap;
 use std::num::NonZeroU64;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -74,30 +75,18 @@ fn start_with_launcher(
     isolation: ProcessIsolationPolicy,
     launcher: Arc<dyn host::ExtensionHostLauncher>,
 ) -> Result<Running, ExtensionHostError> {
-    start_with_api(
-        source,
-        capabilities,
-        isolation,
-        launcher,
-        TestApi::Vscode,
-        &[],
-    )
+    start_with_files(source, capabilities, isolation, launcher, &[])
 }
 
-#[derive(Clone, Copy)]
-enum TestApi {
-    Vscode,
+fn start_ash(source: &str) -> Result<Running, ExtensionHostError> {
+    start_ash_with_files(source, &[])
 }
 
-fn start_vscode(source: &str) -> Result<Running, ExtensionHostError> {
-    start_vscode_with_files(source, &[])
-}
-
-fn start_vscode_with_files(
+fn start_ash_with_files(
     source: &str,
     files: &[(&str, &str)],
 ) -> Result<Running, ExtensionHostError> {
-    start_vscode_with_files_and_capabilities(
+    start_ash_with_files_and_capabilities(
         source,
         files,
         vec![
@@ -110,7 +99,7 @@ fn start_vscode_with_files(
     )
 }
 
-fn start_vscode_with_files_and_capabilities(
+fn start_ash_with_files_and_capabilities(
     source: &str,
     files: &[(&str, &str)],
     capabilities: Vec<ExtensionCapability>,
@@ -131,26 +120,19 @@ fn start_vscode_with_files_and_capabilities(
                 Arc::new(TrustedDevelopmentLauncher),
             )
         };
-    start_with_api(
-        source,
-        capabilities,
-        isolation,
-        launcher,
-        TestApi::Vscode,
-        files,
-    )
+    start_with_files(source, capabilities, isolation, launcher, files)
 }
 
 #[test]
-fn vscode_activation_only_registers_observers_within_the_admitted_ceiling() {
+fn ash_activation_only_registers_observers_within_the_admitted_ceiling() {
     for task_access in [false, true] {
         let mut capabilities = vec![ExtensionCapability::Command];
         if task_access {
             capabilities.push(ExtensionCapability::TaskProvider);
         }
-        let running = start_vscode_with_files_and_capabilities(r#"
-            const vscode = require('vscode');
-            exports.activate = context => context.subscriptions.push(vscode.commands.registerCommand('example.hello', () => vscode.tasks.taskExecutions.length));
+        let running = start_ash_with_files_and_capabilities(r#"
+            const ash = require('@ash/sdk');
+            exports.activate = context => context.subscriptions.push(ash.commands.register('example.hello', () => ash.tasks.taskExecutions.length));
         "#, &[], capabilities).unwrap();
         let snapshot = running.supervisor.snapshot();
         let registrations = snapshot
@@ -160,17 +142,13 @@ fn vscode_activation_only_registers_observers_within_the_admitted_ceiling() {
             .collect::<Vec<_>>();
         let expected = if task_access {
             vec![
-                "vscode.output.events",
-                "vscode.workspace.events",
-                "vscode.tasks.events",
+                "ash.output.events",
+                "ash.workspace.events",
+                "ash.tasks.events",
                 "example.hello",
             ]
         } else {
-            vec![
-                "vscode.output.events",
-                "vscode.workspace.events",
-                "example.hello",
-            ]
+            vec!["ash.output.events", "ash.workspace.events", "example.hello"]
         };
         assert_eq!(registrations, expected);
         assert_eq!(
@@ -186,12 +164,11 @@ fn vscode_activation_only_registers_observers_within_the_admitted_ceiling() {
     }
 }
 
-fn start_with_api(
+fn start_with_files(
     source: &str,
     capabilities: Vec<ExtensionCapability>,
     isolation: ProcessIsolationPolicy,
     launcher: Arc<dyn host::ExtensionHostLauncher>,
-    api: TestApi,
     files: &[(&str, &str)],
 ) -> Result<Running, ExtensionHostError> {
     start_with_environment(
@@ -199,7 +176,6 @@ fn start_with_api(
         capabilities,
         isolation,
         launcher,
-        api,
         files,
         Default::default(),
     )
@@ -210,7 +186,6 @@ fn start_with_environment(
     capabilities: Vec<ExtensionCapability>,
     isolation: ProcessIsolationPolicy,
     launcher: Arc<dyn host::ExtensionHostLauncher>,
-    api: TestApi,
     files: &[(&str, &str)],
     environment: Option<std::collections::BTreeMap<String, Option<String>>>,
 ) -> Result<Running, ExtensionHostError> {
@@ -219,10 +194,9 @@ fn start_with_environment(
         capabilities,
         isolation,
         launcher,
-        api,
         files,
         environment,
-        matches!(api, TestApi::Vscode).then(vscode_initialization),
+        Some(ash_initialization()),
     )
 }
 
@@ -231,7 +205,6 @@ fn start_with_initialization(
     capabilities: Vec<ExtensionCapability>,
     isolation: ProcessIsolationPolicy,
     launcher: Arc<dyn host::ExtensionHostLauncher>,
-    api: TestApi,
     files: &[(&str, &str)],
     environment: Option<std::collections::BTreeMap<String, Option<String>>>,
     initialization: Option<external_ext_protocol::ExtensionHostInitialization>,
@@ -256,20 +229,18 @@ fn start_with_initialization(
         "--entry".into(),
         "main.js".into(),
     ];
-    if matches!(api, TestApi::Vscode) {
-        arguments.extend(["--api".into(), "vscode".into()]);
-        std::fs::write(
-            package.path().join("package.json"),
-            serde_json::to_vec(&json!({
-                "name": "example", "publisher": "test", "version": "1.0.0", "browser": "main.js",
-                "contributes": { "commands": [
-                    {"command": "example.allocate", "title": "allocate"},{"command": "example.async", "title": "async"},{"command": "example.buffers", "title": "buffers"},{"command": "example.capture", "title": "capture"},{"command": "example.connect", "title": "connect"},{"command": "example.continuationSpin", "title": "continuationSpin"},{"command": "example.disposeHover", "title": "disposeHover"},{"command": "example.echo", "title": "echo"},{"command": "example.env", "title": "env"},{"command": "example.fail", "title": "fail"},{"command": "example.forge", "title": "forge"},{"command": "example.globals", "title": "globals"},{"command": "example.heap", "title": "heap"},{"command": "example.hello", "title": "hello"},{"command": "example.inspect", "title": "inspect"},{"command": "example.pick", "title": "pick"},{"command": "example.probe", "title": "probe"},{"command": "example.read", "title": "read"},{"command": "example.readFailure", "title": "readFailure"},{"command": "example.rejectionSpin", "title": "rejectionSpin"},{"command": "example.retired", "title": "retired"},{"command": "example.spin", "title": "spin"},{"command": "example.update", "title": "update"},{"command": "example.wait", "title": "wait"}
-                ], "debuggers": [{"type": "example", "label": "Example"}]}
-            }))
-            .unwrap(),
-        )
-        .unwrap();
-    }
+    arguments.extend(["--api".into(), "ash".into()]);
+    std::fs::write(
+        package.path().join("package.json"),
+        serde_json::to_vec(&json!({
+            "name": "example", "publisher": "test", "version": "1.0.0", "browser": "main.js",
+            "contributes": { "commands": [
+                {"command": "example.allocate", "title": "allocate"},{"command": "example.async", "title": "async"},{"command": "example.buffers", "title": "buffers"},{"command": "example.capture", "title": "capture"},{"command": "example.connect", "title": "connect"},{"command": "example.continuationSpin", "title": "continuationSpin"},{"command": "example.disposeHover", "title": "disposeHover"},{"command": "example.echo", "title": "echo"},{"command": "example.env", "title": "env"},{"command": "example.fail", "title": "fail"},{"command": "example.forge", "title": "forge"},{"command": "example.globals", "title": "globals"},{"command": "example.heap", "title": "heap"},{"command": "example.hello", "title": "hello"},{"command": "example.inspect", "title": "inspect"},{"command": "example.pick", "title": "pick"},{"command": "example.probe", "title": "probe"},{"command": "example.read", "title": "read"},{"command": "example.readFailure", "title": "readFailure"},{"command": "example.rejectionSpin", "title": "rejectionSpin"},{"command": "example.retired", "title": "retired"},{"command": "example.spin", "title": "spin"},{"command": "example.update", "title": "update"},{"command": "example.wait", "title": "wait"}
+            ], "debuggers": [{"type": "example", "label": "Example"}]}
+        }))
+        .unwrap(),
+    )
+    .unwrap();
     let command = ExtensionLaunchCommand::javascript(
         PathBuf::from(env!("CARGO_BIN_EXE_ash-external-js-ext")),
         arguments,
@@ -329,7 +300,7 @@ fn invocation(id: &str, arguments: Value, timeout: Duration) -> ExtensionInvocat
 
 #[test]
 fn installed_packages_cannot_acquire_the_product_ssh_authority() {
-    let source = "const vscode = require('vscode'); exports.activate = context => context.subscriptions.push(vscode.workspace.registerRemoteAuthorityResolver('ssh', { resolve() { return new vscode.ResolvedAuthority('localhost', 8080); } }));";
+    let source = "const ash = require('@ash/sdk'); exports.activate = context => context.subscriptions.push(ash.workspace.registerRemoteAuthorityResolver('ssh', { resolve() { return new ash.ResolvedAuthority('localhost', 8080); } }));";
     assert!(
         start_with_capabilities(source, vec![ExtensionCapability::RemoteAuthorityResolver])
             .is_err()
@@ -353,10 +324,10 @@ fn run(running: &Running, id: &str, arguments: Value) -> Result<Value, Extension
 }
 
 #[test]
-fn vscode_commonjs_modules_share_cycles_json_and_captured_package_bytes() {
-    let running = start_vscode_with_files(
+fn ash_commonjs_modules_share_cycles_json_and_captured_package_bytes() {
+    let running = start_ash_with_files(
         r#"
-        const v = require('vscode');
+        const v = require('@ash/sdk');
         const cycle = require('./lib/cycle-a');
         const helper = require('./lib/helper');
         if (helper !== require('./lib/helper.js') || require('fixture-lib') !== helper) throw Error('Module identity changed');
@@ -370,7 +341,7 @@ fn vscode_commonjs_modules_share_cycles_json_and_captured_package_bytes() {
         try { require('./lib/flaky'); } catch (error) { if (error.message !== 'fixture failure') throw error; }
         if (require('./lib/flaky') !== 2 || require('./lib/flaky') !== 2) throw Error('Failed module stayed cached');
         exports.activate = context => {
-            context.subscriptions.push(v.commands.registerCommand('example.probe', () => ({
+            context.subscriptions.push(v.commands.register('example.probe', () => ({
                 directory: __dirname,
                 args: require('./later.cjs'),
                 jsonIdentity: helper.data === require('./lib/data.json'),
@@ -389,7 +360,7 @@ fn vscode_commonjs_modules_share_cycles_json_and_captured_package_bytes() {
             ("lib/flaky.js", "globalThis.fixtureAttempts = (globalThis.fixtureAttempts || 0) + 1; if (globalThis.fixtureAttempts === 1) throw Error('fixture failure'); module.exports = globalThis.fixtureAttempts;"),
             ("later.cjs", "module.exports = ['', '$HOME', 'two words'];"),
             ("providers/package.json", "{\"main\":\"./task.cjs\"}"),
-            ("providers/task.cjs", "const v = require('vscode'); module.exports = { provideTasks() { return [new v.Task({type:'builder'}, v.TaskScope.Workspace, 'Nested', 'Builder', new v.ProcessExecution('compiler', require('../later.cjs')))]; } };"),
+            ("providers/task.cjs", "const v = require('@ash/sdk'); module.exports = { provideTasks() { return [new v.Task({type:'builder'}, v.TaskScope.Workspace, 'Nested', 'Builder', new v.ProcessExecution('compiler', require('../later.cjs')))]; } };"),
             ("node_modules/fixture-lib/package.json", "{\"main\":\"./index\"}"),
             ("node_modules/fixture-lib/index.js", "module.exports = require('../../lib/helper');"),
         ],
@@ -408,7 +379,7 @@ fn vscode_commonjs_modules_share_cycles_json_and_captured_package_bytes() {
         })
     );
     let mut request = invocation("unused", json!([]), Duration::from_secs(5));
-    request.registration_id = "vscode.tasks.1".into();
+    request.registration_id = "ash.tasks.1".into();
     request.operation = "provideTasks".into();
     request.payload = json!({});
     let provided = running.supervisor.invoke(request).unwrap().payload;
@@ -419,9 +390,9 @@ fn vscode_commonjs_modules_share_cycles_json_and_captured_package_bytes() {
 }
 
 #[test]
-fn vscode_activation_context_uses_captured_package_location_and_exports() {
-    let running = start_vscode(r#"
-        const v = require('vscode');
+fn ash_activation_context_uses_captured_package_location_and_exports() {
+    let running = start_ash(r#"
+        const v = require('@ash/sdk');
         const publicApi = { value: 'activation result' };
         exports.activate = async function(context) {
             if (this !== exports || context.extension.isActive) throw Error('Activation state changed too early');
@@ -432,7 +403,7 @@ fn vscode_activation_context_uses_captured_package_location_and_exports() {
             if (activation !== context.extension.activate()) throw Error('Activation promise identity changed');
             if (context.extensionUri !== context.extension.extensionUri || context.extensionPath !== v.Uri.file(__dirname).fsPath) throw Error('Extension location differs from captured package');
             if (context.extensionMode !== v.ExtensionMode.Production || context.extension.extensionKind !== v.ExtensionKind.UI) throw Error('Installed extension mode differs');
-            context.subscriptions.push(v.commands.registerCommand('example.probe', async () => {
+            context.subscriptions.push(v.commands.register('example.probe', async () => {
                 const base = v.Uri.from({ scheme: 'file', path: '/parent/path', query: 'source=1', fragment: 'part' });
                 const normalized = v.Uri.joinPath(base, '..', 'other', '.', '资源 #?.txt');
                 return {
@@ -498,7 +469,7 @@ fn vscode_activation_context_uses_captured_package_location_and_exports() {
     );
     assert_eq!(value["rooted"], "/other");
     let mut request = invocation("unused", json!([]), Duration::from_secs(5));
-    request.registration_id = "vscode.tasks.1".into();
+    request.registration_id = "ash.tasks.1".into();
     request.operation = "provideTasks".into();
     request.payload = json!({});
     let provided = running.supervisor.invoke(request).unwrap().payload;
@@ -526,9 +497,9 @@ fn malformed_extension_source_returns_a_protocol_error_without_engine_diagnostic
 }
 
 #[test]
-fn vscode_task_providers_preserve_argv_options_and_resolve_definitions_at_dispatch() {
-    let running = start_vscode(r#"
-        const v = require('vscode');
+fn ash_task_providers_preserve_argv_options_and_resolve_definitions_at_dispatch() {
+    let running = start_ash(r#"
+        const v = require('@ash/sdk');
         exports.activate = context => context.subscriptions.push(v.tasks.registerTaskProvider('builder', {
             provideTasks() {
                 const task = new v.Task({type: 'builder', target: 'app'}, v.TaskScope.Workspace, 'Build', 'Builder', new v.ProcessExecution('compiler', ['', '$HOME', 'two words'], {cwd: '${workspaceFolder}/src', env: {MODE: 'build'}}), ['$tsc']);
@@ -552,7 +523,7 @@ fn vscode_task_providers_preserve_argv_options_and_resolve_definitions_at_dispat
         }));
     "#).unwrap();
     let mut request = invocation("unused", json!([]), Duration::from_secs(5));
-    request.registration_id = "vscode.tasks.1".into();
+    request.registration_id = "ash.tasks.1".into();
     request.operation = "provideTasks".into();
     request.payload = json!({});
     let provided = running.supervisor.invoke(request.clone()).unwrap().payload;
@@ -602,9 +573,9 @@ fn vscode_task_providers_preserve_argv_options_and_resolve_definitions_at_dispat
 }
 
 #[test]
-fn vscode_task_queries_execute_and_terminate_with_stable_event_handles() {
-    let running = start_vscode(r#"
-        const v = require('vscode');
+fn ash_task_queries_execute_and_terminate_with_stable_event_handles() {
+    let running = start_ash(r#"
+        const v = require('@ash/sdk');
         const seen = [];
         let execution;
         exports.activate = context => {
@@ -615,7 +586,7 @@ fn vscode_task_queries_execute_and_terminate_with_stable_event_handles() {
                     seen.push([name, value.processId ?? value.exitCode ?? null, v.tasks.taskExecutions.length]);
                 }, receiver, context.subscriptions);
             }
-            context.subscriptions.push(v.commands.registerCommand('example.hello', async () => {
+            context.subscriptions.push(v.commands.register('example.hello', async () => {
                 const tasks = await v.tasks.fetchTasks({version: '2.0.0', type: 'builder'});
                 const task = tasks[0];
                 if (!(task instanceof v.Task) || !(task.execution instanceof v.ProcessExecution) || task.scope.uri.path !== '/workspace' || task.execution.args[0] !== '$HOME') throw Error('Task shape changed');
@@ -626,7 +597,7 @@ fn vscode_task_queries_execute_and_terminate_with_stable_event_handles() {
                 if (execution.task !== task || v.tasks.taskExecutions[0] !== execution) throw Error('Execution lost its originating task');
                 execution.terminate();
                 return task.execution.options.env.MODE;
-            }), v.commands.registerCommand('example.probe', () => seen));
+            }), v.commands.register('example.probe', () => seen));
         };
     "#).unwrap();
     let task = json!({"id":"task-1","presentation":{"echo":false,"showReuseMessage":false,"panel":"shared","clear":false,"reveal":"never","focus":true,"close":false},"runOptions":{"reevaluateOnRerun":false},"name":"Build","source":"Builder","definition":{"type":"builder","target":false},"scope":{"uri":"file:///workspace","name":"workspace","index":0},"execution":{"type":"process","program":"compiler","args":["$HOME",""]},"options":{"env":{"MODE":"literal"}},"problemMatchers":[],"group":"rebuild","groupIsDefault":false,"isBackground":false,"detail":null});
@@ -678,7 +649,7 @@ fn vscode_task_queries_execute_and_terminate_with_stable_event_handles() {
     .enumerate()
     {
         let mut request = invocation("unused", json!([]), Duration::from_secs(5));
-        request.registration_id = "vscode.tasks.events".into();
+        request.registration_id = "ash.tasks.events".into();
         request.operation = "taskEvent".into();
         request.payload = json!({"type":kind,"sequence":index + 1,"execution":execution,"processId":42,"exitCode":0});
         request.payload["execution"]["active"] = json!(!ended);
@@ -696,15 +667,15 @@ fn vscode_task_queries_execute_and_terminate_with_stable_event_handles() {
 }
 
 #[test]
-fn vscode_executes_a_constructed_process_task_and_preserves_start_event_identity() {
-    let running = start_vscode(r#"
-        const v = require('vscode');
+fn ash_executes_a_constructed_process_task_and_preserves_start_event_identity() {
+    let running = start_ash(r#"
+        const v = require('@ash/sdk');
         let task, started;
         exports.activate = context => {
             context.subscriptions.push(v.tasks.onDidStartTask(event => {
                 if (event.execution.task !== task) throw Error('Start event lost constructed Task');
                 started = event.execution;
-            }), v.commands.registerCommand('example.hello', async () => {
+            }), v.commands.register('example.hello', async () => {
                 task = new v.Task({type: 'builder', target: false}, v.TaskScope.Workspace, 'Explicit', 'Builder', new v.ProcessExecution('compiler', ['$HOME', ''], {cwd: '${workspaceFolder}/src', env: {MODE: 'build'}}));
                 task.presentationOptions = {panel: v.TaskPanelKind.Shared, clear: true, reveal: v.TaskRevealKind.Never, focus: false, close: true};
                 const execution = await v.tasks.executeTask(task);
@@ -725,7 +696,7 @@ fn vscode_executes_a_constructed_process_task_and_preserves_start_event_identity
         assert_eq!(task["env"], json!({"MODE":"build"}));
         let execution = json!({"id":"execution-1","active":true,"exitCode":null,"task":{"id":"canonical-explicit","clientTaskId":task["id"],"name":"Explicit","source":"Builder","scope":2,"definition":task["definition"],"execution":task["execution"],"options":{},"problemMatchers":[],"group":"other","isBackground":false,"detail":null}});
         let mut event = invocation("unused", json!([]), Duration::from_secs(5));
-        event.registration_id = "vscode.tasks.events".into();
+        event.registration_id = "ash.tasks.events".into();
         event.operation = "taskEvent".into();
         event.payload = json!({"type":"start","sequence":1,"execution":execution});
         running.supervisor.invoke(event).unwrap();
@@ -735,13 +706,13 @@ fn vscode_executes_a_constructed_process_task_and_preserves_start_event_identity
 }
 
 #[test]
-fn vscode_constructed_custom_execution_uses_the_owned_pty_without_a_backend_process() {
-    let running = start_vscode(r#"
-        const v = require('vscode');
+fn ash_constructed_custom_execution_uses_the_owned_pty_without_a_backend_process() {
+    let running = start_ash(r#"
+        const v = require('@ash/sdk');
         let closes = 0;
         exports.activate = context => context.subscriptions.push(
-            v.commands.registerCommand('example.probe', () => closes),
-            v.commands.registerCommand('example.hello', async () => {
+            v.commands.register('example.probe', () => closes),
+            v.commands.register('example.hello', async () => {
                 const task = new v.Task({type: 'builder', target: false}, v.TaskScope.Workspace, 'Explicit custom', 'Builder', new v.CustomExecution(async definition => {
                     if (definition.target !== false) throw Error('Resolved TaskDefinition changed');
                     const write = new v.EventEmitter();
@@ -764,7 +735,7 @@ fn vscode_constructed_custom_execution_uses_the_owned_pty_without_a_backend_proc
         let task = task.as_ref().unwrap();
         assert_eq!(task["execution"]["type"], "custom");
         let mut request = invocation("unused", json!([]), Duration::from_secs(5));
-        request.registration_id = "vscode.tasks.events".into();
+        request.registration_id = "ash.tasks.events".into();
         request.operation = "createTaskTerminal".into();
         request.payload = json!({"executionId":task["execution"]["id"],"definition":task["definition"]});
         let created = running.supervisor.invoke(request.clone()).unwrap().payload;
@@ -789,8 +760,8 @@ fn vscode_constructed_custom_execution_uses_the_owned_pty_without_a_backend_proc
 
 #[test]
 fn completed_tasks_are_not_resurrected_by_late_execute_or_query_replies() {
-    let running = start_vscode(r#"
-        const v = require('vscode');
+    let running = start_ash(r#"
+        const v = require('@ash/sdk');
         let task, firstHandle;
         exports.activate = context => {
             context.subscriptions.push(v.tasks.onDidStartTask(event => {
@@ -798,7 +769,7 @@ fn completed_tasks_are_not_resurrected_by_late_execute_or_query_replies() {
                 firstHandle = event.execution;
             }), v.tasks.onDidEndTask(event => {
                 if (event.execution !== firstHandle) throw Error('End lost execution identity');
-            }), v.commands.registerCommand('example.hello', async () => {
+            }), v.commands.register('example.hello', async () => {
                 [task] = await v.tasks.fetchTasks();
                 const execution = await v.tasks.executeTask(task);
                 if (execution !== firstHandle || v.tasks.taskExecutions.length !== 0) throw Error('Late execute reply resurrected task');
@@ -832,7 +803,7 @@ fn completed_tasks_are_not_resurrected_by_late_execute_or_query_replies() {
                 ExtensionClientOperation::ExecuteTask { .. } => {
                     for (sequence, kind) in [(1, "start"), (2, "end")] {
                         let mut event = invocation("unused", json!([]), Duration::from_secs(5));
-                        event.registration_id = "vscode.tasks.events".into();
+                        event.registration_id = "ash.tasks.events".into();
                         event.operation = "taskEvent".into();
                         event.payload =
                             json!({"type":kind,"sequence":sequence,"execution":execution});
@@ -853,15 +824,15 @@ fn completed_tasks_are_not_resurrected_by_late_execute_or_query_replies() {
 }
 
 #[test]
-fn vscode_task_only_activation_publishes_and_invokes_its_provider() {
+fn ash_task_only_activation_publishes_and_invokes_its_provider() {
     if !host::ProductJavaScriptLauncher::supports_platform() {
         return;
     }
     let running = start_with_launcher(r#"
-        const { tasks } = require('vscode');
+        const { tasks } = require('@ash/sdk');
         exports.activate = function(context) {
             context.subscriptions.push(tasks.registerTaskProvider('lazy-build', {
-                provideTasks() { const v = require('vscode'); return [new v.Task({ type: 'lazy-build' }, v.TaskScope.Workspace, 'Build', 'Builder', new v.ProcessExecution('compiler', []))]; }
+                provideTasks() { const v = require('@ash/sdk'); return [new v.Task({ type: 'lazy-build' }, v.TaskScope.Workspace, 'Build', 'Builder', new v.ProcessExecution('compiler', []))]; }
             }));
         }
     "#, vec![ExtensionCapability::TaskProvider],
@@ -869,7 +840,7 @@ fn vscode_task_only_activation_publishes_and_invokes_its_provider() {
         Arc::new(host::ProductJavaScriptLauncher::new(PathBuf::from(env!("CARGO_BIN_EXE_ash-external-js-ext")))),
     ).unwrap();
     let mut request = invocation("unused", json!([]), Duration::from_secs(5));
-    request.registration_id = "vscode.tasks.1".into();
+    request.registration_id = "ash.tasks.1".into();
     request.operation = "provideTasks".into();
     request.payload = json!({});
     let provided = running.supervisor.invoke(request).unwrap().payload;
@@ -877,9 +848,9 @@ fn vscode_task_only_activation_publishes_and_invokes_its_provider() {
 }
 
 #[test]
-fn vscode_shell_execution_preserves_structured_arguments_and_shell_options() {
-    let running = start_vscode(r#"
-        const v = require('vscode');
+fn ash_shell_execution_preserves_structured_arguments_and_shell_options() {
+    let running = start_ash(r#"
+        const v = require('@ash/sdk');
         exports.activate = context => context.subscriptions.push(v.tasks.registerTaskProvider('builder', {
             provideTasks() {
                 const execution = new v.ShellExecution({value: '${workspaceFolder}/tool name', quoting: v.ShellQuoting.Strong}, ['', {value: '$HOME', quoting: v.ShellQuoting.Strong}, {value: '$HOME', quoting: v.ShellQuoting.Weak}], {executable: '/bin/sh', shellArgs: ['-c'], cwd: '${workspaceFolder}/src', env: {MODE: 'build'}, shellQuoting: {escape: '\\', strong: "'", weak: '"'}});
@@ -888,7 +859,7 @@ fn vscode_shell_execution_preserves_structured_arguments_and_shell_options() {
         }));
     "#).unwrap();
     let mut request = invocation("unused", json!([]), Duration::from_secs(5));
-    request.registration_id = "vscode.tasks.1".into();
+    request.registration_id = "ash.tasks.1".into();
     request.operation = "provideTasks".into();
     request.payload = json!({});
     let provided = running.supervisor.invoke(request).unwrap().payload;
@@ -905,9 +876,9 @@ fn vscode_shell_execution_preserves_structured_arguments_and_shell_options() {
 }
 
 #[test]
-fn vscode_debug_descriptor_factory_uses_resolved_configuration_and_preserves_literal_argv() {
-    let running = start_vscode(r#"
-        const v = require('vscode');
+fn ash_debug_descriptor_factory_uses_resolved_configuration_and_preserves_literal_argv() {
+    let running = start_ash(r#"
+        const v = require('@ash/sdk');
         let prepared;
         exports.activate = context => context.subscriptions.push(v.debug.onDidStartDebugSession(session => { if (session !== prepared) throw Error('Descriptor session identity changed'); }), v.debug.registerDebugAdapterDescriptorFactory('example', {
             createDebugAdapterDescriptor(session, executable) {
@@ -919,23 +890,23 @@ fn vscode_debug_descriptor_factory_uses_resolved_configuration_and_preserves_lit
         }));
     "#).unwrap();
     let mut request = invocation("unused", json!([]), Duration::from_secs(5));
-    request.registration_id = "vscode.debug.1".into();
+    request.registration_id = "ash.debug.1".into();
     request.operation = "createDebugAdapterDescriptor".into();
     request.payload = json!({"executable":{"program":"declared-adapter","arguments":["$HOME",""],"env":{"REMOVED":null}},"session":{"id":"descriptor-session","workspaceFolder":{"uri":"file:///workspace","name":"workspace","index":0}},"configuration": {"name": "Debug", "type": "example", "request": "launch", "target": "/workspace/program"}});
     assert_eq!(
         running.supervisor.invoke(request.clone()).unwrap().payload,
         json!({"program": "adapter", "arguments": ["/workspace/program", "", "$HOME"]})
     );
-    request.registration_id = "vscode.debug.events".into();
+    request.registration_id = "ash.debug.events".into();
     request.operation = "debugEvent".into();
     request.payload = json!({"type":"start","sequence":1,"session":{"id":"descriptor-session","type":"example","name":"Debug","configuration":{"name":"Debug","type":"example","request":"launch","target":"/workspace/program"},"workspaceFolder":{"uri":"file:///workspace","name":"workspace","index":0}}});
     running.supervisor.invoke(request).unwrap();
 }
 
 #[test]
-fn vscode_debug_descriptor_factories_encode_server_and_named_pipe_endpoints() {
-    let running = start_vscode(r#"
-        const v = require('vscode');
+fn ash_debug_descriptor_factories_encode_server_and_named_pipe_endpoints() {
+    let running = start_ash(r#"
+        const v = require('@ash/sdk');
         exports.activate = context => context.subscriptions.push(v.debug.registerDebugAdapterDescriptorFactory('example', {
             createDebugAdapterDescriptor(session) {
                 const target = session.configuration.target;
@@ -954,7 +925,7 @@ fn vscode_debug_descriptor_factories_encode_server_and_named_pipe_endpoints() {
         ),
     ] {
         let mut request = invocation("unused", json!([]), Duration::from_secs(5));
-        request.registration_id = "vscode.debug.1".into();
+        request.registration_id = "ash.debug.1".into();
         request.operation = "createDebugAdapterDescriptor".into();
         request.payload = json!({"session":{"id":target,"workspaceFolder":{"uri":"file:///workspace","name":"workspace","index":0}},"configuration":{"name":"Debug","type":"example","request":"launch","target":target}});
         assert_eq!(
@@ -965,12 +936,12 @@ fn vscode_debug_descriptor_factories_encode_server_and_named_pipe_endpoints() {
 }
 
 #[test]
-fn vscode_custom_execution_buffers_output_routes_input_and_releases_the_pty_once() {
-    let running = start_vscode(r#"
-        const v = require('vscode');
+fn ash_custom_execution_buffers_output_routes_input_and_releases_the_pty_once() {
+    let running = start_ash(r#"
+        const v = require('@ash/sdk');
         let closes = 0;
         exports.activate = context => {
-            context.subscriptions.push(v.commands.registerCommand('example.probe', () => closes));
+            context.subscriptions.push(v.commands.register('example.probe', () => closes));
             context.subscriptions.push(v.tasks.registerTaskProvider('builder', {
                 provideTasks() { return [new v.Task({type: 'builder'}, v.TaskScope.Workspace, 'Custom', 'Builder', new v.CustomExecution(async definition => {
                     const output = new v.EventEmitter();
@@ -986,7 +957,7 @@ fn vscode_custom_execution_buffers_output_routes_input_and_releases_the_pty_once
         };
     "#).unwrap();
     let mut request = invocation("unused", json!([]), Duration::from_secs(5));
-    request.registration_id = "vscode.tasks.1".into();
+    request.registration_id = "ash.tasks.1".into();
     request.operation = "provideTasks".into();
     request.payload = json!({});
     let task = running.supervisor.invoke(request.clone()).unwrap().payload;
@@ -1025,9 +996,9 @@ fn vscode_custom_execution_buffers_output_routes_input_and_releases_the_pty_once
 }
 
 #[test]
-fn vscode_status_bar_replaces_hidden_arguments_and_releases_published_entries() {
-    let running = start_vscode(r#"
-        const v = require('vscode');
+fn ash_status_bar_replaces_hidden_arguments_and_releases_published_entries() {
+    let running = start_ash(r#"
+        const v = require('@ash/sdk');
         const item = v.window.createStatusBarItem('status', v.StatusBarAlignment.Right, 1.5);
         exports.activate = context => {
             const defaultItem = v.window.createStatusBarItem();
@@ -1036,8 +1007,8 @@ fn vscode_status_bar_replaces_hidden_arguments_and_releases_published_entries() 
             item.text = 'Initial'; item.tooltip = 'Run'; item.accessibilityInformation = { label: 'Run extension status' };
             item.command = { command: 'example.probe', title: 'Probe', arguments: [{ value: 0 }] };
             item.show();
-            context.subscriptions.push(item, v.commands.registerCommand('example.probe', arg => arg.value));
-            context.subscriptions.push(v.commands.registerCommand('example.hello', mode => {
+            context.subscriptions.push(item, v.commands.register('example.probe', arg => arg.value));
+            context.subscriptions.push(v.commands.register('example.hello', mode => {
                 if (mode === 'hide') {
                     item.hide();
                     // Retaining the previous argument on every hidden replacement exceeds the isolate's heap budget.
@@ -1052,7 +1023,7 @@ fn vscode_status_bar_replaces_hidden_arguments_and_releases_published_entries() 
     let status = initial
         .registrations
         .iter()
-        .find(|registration| registration.registration_id == "vscode.statusBar")
+        .find(|registration| registration.registration_id == "ash.statusBar")
         .unwrap();
     let external_ext_protocol::RegistrationKind::StatusBar { entries, .. } = &status.kind else {
         panic!("missing status bar");
@@ -1081,7 +1052,7 @@ fn vscode_status_bar_replaces_hidden_arguments_and_releases_published_entries() 
                     panic!("unexpected operation");
                 };
                 requests += 1;
-                assert_eq!(registration_id, "vscode.statusBar");
+                assert_eq!(registration_id, "ash.statusBar");
                 assert_eq!(entries.len(), expected_count);
                 if expected_count == 1 {
                     assert_eq!(entries[0].text, "Current");
@@ -1098,7 +1069,7 @@ fn vscode_status_bar_replaces_hidden_arguments_and_releases_published_entries() 
         let status = snapshot
             .registrations
             .iter()
-            .find(|registration| registration.registration_id == "vscode.statusBar")
+            .find(|registration| registration.registration_id == "ash.statusBar")
             .unwrap();
         let external_ext_protocol::RegistrationKind::StatusBar { entries, .. } = &status.kind
         else {
@@ -1116,10 +1087,10 @@ fn vscode_status_bar_replaces_hidden_arguments_and_releases_published_entries() 
 #[test]
 fn status_bar_snapshots_accept_only_acknowledged_updates_for_owned_registrations() {
     let running = start_with_capabilities(r#"
-        const { commands, window } = require('vscode');
+        const { commands, window } = require('@ash/sdk');
         exports.activate = function(context) {
             context.subscriptions.push(window.createStatusBarItem('status'));
-            context.subscriptions.push(commands.registerCommand('example.update', async (id, revision) => {
+            context.subscriptions.push(commands.register('example.update', async (id, revision) => {
                 try { await globalThis.__ashRequest(globalThis.__ashInvocation(), JSON.stringify({ operation: 'setStatusBarEntries', registrationId: id, revision, entries: [] })); return 'ok'; }
                 catch (error) { return error.code; }
             }));
@@ -1128,9 +1099,9 @@ fn status_bar_snapshots_accept_only_acknowledged_updates_for_owned_registrations
     for (id, revision, permit, expected) in [
         ("foreign", 2, true, "registrationNotFound"),
         ("example.update", 2, true, "registrationNotFound"),
-        ("vscode.statusBar", 2, true, "ok"),
-        ("vscode.statusBar", 1, true, "ok"),
-        ("vscode.statusBar", 3, false, "permissionDenied"),
+        ("ash.statusBar", 2, true, "ok"),
+        ("ash.statusBar", 1, true, "ok"),
+        ("ash.statusBar", 3, false, "permissionDenied"),
     ] {
         let handle = running
             .supervisor
@@ -1155,13 +1126,13 @@ fn status_bar_snapshots_accept_only_acknowledged_updates_for_owned_registrations
             })
             .unwrap();
         assert_eq!(result.payload, json!(expected));
-        assert_eq!(calls, usize::from(id == "vscode.statusBar"));
+        assert_eq!(calls, usize::from(id == "ash.statusBar"));
     }
     let snapshot = running.supervisor.snapshot();
     let status = snapshot
         .registrations
         .iter()
-        .find(|registration| registration.registration_id == "vscode.statusBar")
+        .find(|registration| registration.registration_id == "ash.statusBar")
         .unwrap();
     assert!(matches!(
         status.kind,
@@ -1173,7 +1144,7 @@ fn status_bar_snapshots_accept_only_acknowledged_updates_for_owned_registrations
 fn hover_invocation(text: &str) -> ExtensionInvocation {
     let mut request = invocation("hover", json!([]), Duration::from_secs(5));
     request.operation = "hover".into();
-    request.registration_id = "vscode.hover.1".into();
+    request.registration_id = "ash.hover.1".into();
     request.payload = json!({
         "resource": "file:///workspace/data.ts", "languageId": "typescript",
         "version": 7, "text": text, "position": {"lineIndex": 0, "columnIndex": 1}
@@ -1184,7 +1155,7 @@ fn hover_invocation(text: &str) -> ExtensionInvocation {
 #[test]
 fn standard_document_callbacks_publish_diagnostics_and_completion_ranges() {
     let running = start_with_capabilities(r#"
-        const v = require('vscode');
+        const v = require('@ash/sdk');
         exports.activate = context => {
             const lint = v.languages.createDiagnosticCollection('lint');
             context.subscriptions.push(lint, v.workspace.onDidOpenTextDocument(document => {
@@ -1200,7 +1171,7 @@ fn standard_document_callbacks_publish_diagnostics_and_completion_ranges() {
         };
     "#, vec![ExtensionCapability::LanguageProvider]).unwrap();
     let mut request = hover_invocation("😀ab");
-    request.registration_id = "vscode.documents".into();
+    request.registration_id = "ash.documents".into();
     request.operation = "documentEvent".into();
     request.payload = json!({"type":"open","document":{"uri":"file:///main.ts","version":7,"languageId":"typescript","text":"😀ab"}});
     running.supervisor.begin_invoke(request).unwrap().wait_with_client(|operation, _, _| {
@@ -1208,7 +1179,7 @@ fn standard_document_callbacks_publish_diagnostics_and_completion_ranges() {
         Ok(ExtensionClientResult::Done)
     }).unwrap();
     let mut completion = hover_invocation("😀ab");
-    completion.registration_id = "vscode.completion.1".into();
+    completion.registration_id = "ash.completion.1".into();
     completion.operation = "completion".into();
     completion.payload["position"]["columnIndex"] = json!(4);
     completion.payload["context"] = json!({"kind":"invoke"});
@@ -1221,11 +1192,11 @@ fn standard_document_callbacks_publish_diagnostics_and_completion_ranges() {
 
 #[test]
 fn diagnostics_keep_the_version_read_before_an_await_when_live_documents_change() {
-    let running = start_vscode(r#"
-        const v = require('vscode');
+    let running = start_ash(r#"
+        const v = require('@ash/sdk');
         exports.activate = context => {
             const collection = v.languages.createDiagnosticCollection('lint');
-            context.subscriptions.push(collection, v.commands.registerCommand('example.hello', async () => {
+            context.subscriptions.push(collection, v.commands.register('example.hello', async () => {
                 const document = v.workspace.textDocuments[0];
                 const original = document.getText();
                 await v.window.showInformationMessage('pause');
@@ -1240,7 +1211,7 @@ fn diagnostics_keep_the_version_read_before_an_await_when_live_documents_change(
         };
     "#).unwrap();
     let mut event = invocation("unused", json!([]), Duration::from_secs(5));
-    event.registration_id = "vscode.documents".into();
+    event.registration_id = "ash.documents".into();
     event.operation = "documentEvent".into();
     event.payload = json!({"type":"open","document":{"uri":"file:///main.ts","version":1,"languageId":"typescript","text":"old"}});
     running.supervisor.invoke(event.clone()).unwrap();
@@ -1269,9 +1240,9 @@ fn diagnostics_keep_the_version_read_before_an_await_when_live_documents_change(
 }
 
 #[test]
-fn vscode_document_events_drive_diagnostics_with_unsaved_versions_and_close_lifetimes() {
-    let running = start_vscode(r#"
-        const v = require('vscode');
+fn ash_document_events_drive_diagnostics_with_unsaved_versions_and_close_lifetimes() {
+    let running = start_ash(r#"
+        const v = require('@ash/sdk');
         exports.activate = context => {
             const collection = v.languages.createDiagnosticCollection('lint');
             let opened;
@@ -1294,7 +1265,7 @@ fn vscode_document_events_drive_diagnostics_with_unsaved_versions_and_close_life
         ("close", 2, "😀bad"),
     ] {
         let mut request = invocation("unused", json!([]), Duration::from_secs(5));
-        request.registration_id = "vscode.documents".into();
+        request.registration_id = "ash.documents".into();
         request.operation = "documentEvent".into();
         request.payload = json!({"type":kind,"document":{"uri":"file:///main.ts","languageId":"typescript","version":version,"text":text},"reason":"edit","contentChanges":[{"range":{"start":{"line":0,"character":2},"end":{"line":0,"character":2}},"rangeOffset":2,"rangeLength":0,"text":"bad"}]});
         let mut calls = Vec::new();
@@ -1322,9 +1293,9 @@ fn vscode_document_events_drive_diagnostics_with_unsaved_versions_and_close_life
 }
 
 #[test]
-fn vscode_completion_preserves_trigger_context_snippets_utf16_and_provider_disposal() {
-    let running = start_vscode(r#"
-        const v = require('vscode');
+fn ash_completion_preserves_trigger_context_snippets_utf16_and_provider_disposal() {
+    let running = start_ash(r#"
+        const v = require('@ash/sdk');
         exports.activate = context => {
             const registration = v.languages.registerCompletionItemProvider('typescript', {
                 provideCompletionItems(doc, position, token, trigger) {
@@ -1334,11 +1305,11 @@ fn vscode_completion_preserves_trigger_context_snippets_utf16_and_provider_dispo
                     return new v.CompletionList([item], true);
                 }
             }, '.');
-            context.subscriptions.push(registration, v.commands.registerCommand('example.hello', () => registration.dispose()));
+            context.subscriptions.push(registration, v.commands.register('example.hello', () => registration.dispose()));
         };
     "#).unwrap();
     let mut request = hover_invocation("😀al");
-    request.registration_id = "vscode.completion.1".into();
+    request.registration_id = "ash.completion.1".into();
     request.operation = "completion".into();
     request.payload["position"]["columnIndex"] = json!(4);
     request.payload["context"] = json!({"kind":"triggerCharacter","triggerCharacter":"."});
@@ -1352,13 +1323,13 @@ fn vscode_completion_preserves_trigger_context_snippets_utf16_and_provider_dispo
 }
 
 #[test]
-fn vscode_commonjs_commands_keep_standard_arguments_and_drain_unawaited_notifications() {
-    let running = start_vscode(r#"
-        const vscode = require('vscode');
+fn ash_commonjs_commands_keep_standard_arguments_and_drain_unawaited_notifications() {
+    let running = start_ash(r#"
+        const ash = require('@ash/sdk');
         const topLevelExports = this === exports;
-        exports.activate = context => context.subscriptions.push(vscode.commands.registerCommand('example.hello', function(value) {
+        exports.activate = context => context.subscriptions.push(ash.commands.register('example.hello', function(value) {
             if (!topLevelExports) throw new Error('CommonJS receiver changed');
-            vscode.window.showInformationMessage(this.prefix + value);
+            ash.window.showInformationMessage(this.prefix + value);
             return value;
         }, {prefix: 'hello:'}));
     "#).unwrap();
@@ -1388,11 +1359,11 @@ fn vscode_commonjs_commands_keep_standard_arguments_and_drain_unawaited_notifica
 }
 
 #[test]
-fn vscode_callbacks_can_handle_a_service_rejection() {
-    let running = start_vscode(r#"
-        const vscode = require('vscode');
-        exports.activate = context => context.subscriptions.push(vscode.commands.registerCommand('example.hello', async () => {
-            try { await vscode.workspace.openTextDocument(vscode.Uri.file('/workspace/missing.txt')); }
+fn ash_callbacks_can_handle_a_service_rejection() {
+    let running = start_ash(r#"
+        const ash = require('@ash/sdk');
+        exports.activate = context => context.subscriptions.push(ash.commands.register('example.hello', async () => {
+            try { await ash.workspace.openTextDocument(ash.Uri.file('/workspace/missing.txt')); }
             catch (error) { return error.message; }
             throw new Error('Expected a rejected document read');
         }));
@@ -1418,13 +1389,13 @@ fn vscode_callbacks_can_handle_a_service_rejection() {
 }
 
 #[test]
-fn vscode_message_buttons_return_the_original_item_or_undefined_on_dismissal() {
-    let running = start_vscode(r#"
-        const vscode = require('vscode');
-        exports.activate = context => context.subscriptions.push(vscode.commands.registerCommand('example.hello', async () => {
+fn ash_message_buttons_return_the_original_item_or_undefined_on_dismissal() {
+    let running = start_ash(r#"
+        const ash = require('@ash/sdk');
+        exports.activate = context => context.subscriptions.push(ash.commands.register('example.hello', async () => {
             const output = { title: 'Output', isCloseAffordance: false };
-            const selected = await vscode.window.showErrorMessage('Git failed', 'Retry', output);
-            const dismissed = await vscode.window.showWarningMessage('Warning', 'Continue');
+            const selected = await ash.window.showErrorMessage('Git failed', 'Retry', output);
+            const dismissed = await ash.window.showWarningMessage('Warning', 'Continue');
             return { sameItem: selected === output, dismissed: dismissed === undefined };
         }));
     "#).unwrap();
@@ -1453,13 +1424,13 @@ fn vscode_message_buttons_return_the_original_item_or_undefined_on_dismissal() {
 }
 
 #[test]
-fn vscode_await_continuations_keep_each_overlapping_invocations_identity() {
-    let running = start_vscode(r#"
-        const vscode = require('vscode');
-        exports.activate = context => context.subscriptions.push(vscode.commands.registerCommand('example.async', async name => {
-            await vscode.window.showInformationMessage('begin:' + name);
+fn ash_await_continuations_keep_each_overlapping_invocations_identity() {
+    let running = start_ash(r#"
+        const ash = require('@ash/sdk');
+        exports.activate = context => context.subscriptions.push(ash.commands.register('example.async', async name => {
+            await ash.window.showInformationMessage('begin:' + name);
             await Promise.resolve();
-            await vscode.window.showInformationMessage('end:' + name);
+            await ash.window.showInformationMessage('end:' + name);
             return name;
         }));
     "#).unwrap();
@@ -1496,33 +1467,33 @@ fn vscode_await_continuations_keep_each_overlapping_invocations_identity() {
 }
 
 #[test]
-fn vscode_detached_continuations_cannot_borrow_a_later_invocations_authority() {
-    let running = start_vscode(r#"
-        const vscode = require('vscode');
+fn ash_detached_continuations_cannot_borrow_a_later_invocations_authority() {
+    let running = start_ash(r#"
+        const ash = require('@ash/sdk');
         let release, detached;
         exports.activate = context => {
-            context.subscriptions.push(vscode.commands.registerCommand('example.hello', () => {
-                detached = new Promise(resolve => release = resolve).then(() => vscode.window.showInformationMessage('escaped')).catch(error => error.message);
+            context.subscriptions.push(ash.commands.register('example.hello', () => {
+                detached = new Promise(resolve => release = resolve).then(() => ash.window.showInformationMessage('escaped')).catch(error => error.message);
             }));
-            context.subscriptions.push(vscode.commands.registerCommand('example.probe', async () => { release(); return await detached; }));
+            context.subscriptions.push(ash.commands.register('example.probe', async () => { release(); return await detached; }));
         };
     "#).unwrap();
     assert_eq!(run(&running, "hello", json!([])).unwrap(), Value::Null);
     assert_eq!(
         run(&running, "probe", json!([])).unwrap(),
-        json!("VS Code service call has no active invocation")
+        json!("Ash service call has no active invocation")
     );
 }
 
 #[test]
-fn vscode_hover_and_document_reads_keep_unsaved_text_and_utf16_positions() {
-    let running = start_vscode(r#"
-        const vscode = require('vscode');
-        exports.activate = context => context.subscriptions.push(vscode.languages.registerHoverProvider('typescript', {
+fn ash_hover_and_document_reads_keep_unsaved_text_and_utf16_positions() {
+    let running = start_ash(r#"
+        const ash = require('@ash/sdk');
+        exports.activate = context => context.subscriptions.push(ash.languages.registerHoverProvider('typescript', {
             async provideHover(document, position, token) {
-                const opened = await vscode.workspace.openTextDocument(document.uri);
-                const range = new vscode.Range(new vscode.Position(0, 0), position);
-                return new vscode.Hover(new vscode.MarkdownString(JSON.stringify({
+                const opened = await ash.workspace.openTextDocument(document.uri);
+                const range = new ash.Range(new ash.Position(0, 0), position);
+                return new ash.Hover(new ash.MarkdownString(JSON.stringify({
                     text: document.getText(range), opened: opened.getText(), uri: opened.uri.toString(),
                     version: document.version, language: document.languageId, character: position.character,
                     cancelled: token.isCancellationRequested
@@ -1531,7 +1502,7 @@ fn vscode_hover_and_document_reads_keep_unsaved_text_and_utf16_positions() {
         }));
     "#).unwrap();
     let mut request = hover_invocation("😀ab\r\nunsaved");
-    request.registration_id = "vscode.hover.1".into();
+    request.registration_id = "ash.hover.1".into();
     request.payload["position"]["columnIndex"] = json!(4);
     let result = running
         .supervisor
@@ -1569,12 +1540,10 @@ fn vscode_hover_and_document_reads_keep_unsaved_text_and_utf16_positions() {
 }
 
 #[test]
-fn vscode_node_modules_and_unimplemented_apis_are_rejected_explicitly() {
-    assert!(start_vscode("require('fs'); exports.activate = () => {};").is_err());
-    assert!(
-        start_vscode("require('vscode').authentication; exports.activate = () => {};").is_err()
-    );
-    assert!(start_vscode("exports.activate = () => require('vscode').commands.registerCommand('undeclared', () => {});").is_err());
+fn ash_node_modules_and_unimplemented_apis_are_rejected_explicitly() {
+    assert!(start_ash("require('fs'); exports.activate = () => {};").is_err());
+    assert!(start_ash("require('@ash/sdk').authentication; exports.activate = () => {};").is_err());
+    assert!(start_ash("exports.activate = () => require('@ash/sdk').commands.register('undeclared', () => {});").is_err());
 }
 
 #[test]
@@ -1870,7 +1839,7 @@ fn rust_failure_code_is_available_to_the_extension_author() {
 #[test]
 fn cooperative_cancellation_rejects_queued_services_and_preserves_the_extension_incarnation() {
     let running = start_with_capabilities(r#"
-        const { commands, languages, window } = require('vscode');
+        const { commands, languages, window } = require('@ash/sdk');
         let state;
         exports.activate = function(context) {
             context.subscriptions.push(languages.registerHoverProvider('typescript', { async provideHover(document, position, token) {
@@ -1885,7 +1854,7 @@ fn cooperative_cancellation_rejects_queued_services_and_preserves_the_extension_
                 await child;
                 return { contents: ['discard this result'] };
             } }));
-            context.subscriptions.push(commands.registerCommand('example.probe', () => state));
+            context.subscriptions.push(commands.register('example.probe', () => state));
         }
     "#, vec![ExtensionCapability::Command, ExtensionCapability::LanguageProvider]).unwrap();
     let incarnation = running.supervisor.snapshot().incarnation;
@@ -1914,9 +1883,9 @@ fn cooperative_cancellation_rejects_queued_services_and_preserves_the_extension_
 }
 
 #[test]
-fn vscode_tasks_and_debug_callbacks_receive_independent_live_cancellation_tokens() {
-    let running = start_vscode(r#"
-        const v = require('vscode');
+fn ash_tasks_and_debug_callbacks_receive_independent_live_cancellation_tokens() {
+    let running = start_ash(r#"
+        const v = require('@ash/sdk');
         const states = [];
         function wait(token, value) {
             const state = { token, calls: 0, late: 0, disposed: 0, value };
@@ -1938,7 +1907,7 @@ fn vscode_tasks_and_debug_callbacks_receive_independent_live_cancellation_tokens
             });
         }
         exports.activate = context => context.subscriptions.push(
-            v.commands.registerCommand('example.probe', release => {
+            v.commands.register('example.probe', release => {
                 if (release) states.at(-1).release();
                 return states.map(state => ({ cancelled: state.token.isCancellationRequested, calls: state.calls, late: state.late, disposed: state.disposed }));
             }),
@@ -1955,7 +1924,7 @@ fn vscode_tasks_and_debug_callbacks_receive_independent_live_cancellation_tokens
     "#).unwrap();
     let incarnation = running.supervisor.snapshot().incarnation;
     let mut request = invocation("unused", json!([]), Duration::from_secs(5));
-    request.registration_id = "vscode.tasks.1".into();
+    request.registration_id = "ash.tasks.1".into();
     request.operation = "provideTasks".into();
     request.payload = json!({});
     let first = running.supervisor.begin_invoke(request.clone()).unwrap();
@@ -1986,22 +1955,22 @@ fn vscode_tasks_and_debug_callbacks_receive_independent_live_cancellation_tokens
     assert_eq!(second.wait().unwrap().payload, json!({"tasks": []}));
     for (registration, operation, payload) in [
         (
-            "vscode.tasks.1",
+            "ash.tasks.1",
             "resolveTask",
             json!({"task": {"id": "configured", "name": "Build", "source": "Workspace", "scope": 2, "definition": {"type": "builder"}, "options": {}}}),
         ),
         (
-            "vscode.debugConfiguration.2",
+            "ash.debugConfiguration.2",
             "provideDebugConfigurations",
             json!({}),
         ),
         (
-            "vscode.debugConfiguration.2",
+            "ash.debugConfiguration.2",
             "resolveDebugConfiguration",
             json!({"configuration": {"type": "example", "name": "Debug", "request": "launch"}}),
         ),
         (
-            "vscode.debugConfiguration.2",
+            "ash.debugConfiguration.2",
             "resolveDebugConfigurationWithSubstitutedVariables",
             json!({"configuration": {"type": "example", "name": "Debug", "request": "launch"}}),
         ),
@@ -2041,10 +2010,10 @@ fn vscode_tasks_and_debug_callbacks_receive_independent_live_cancellation_tokens
 }
 
 #[test]
-fn vscode_cancellation_sources_release_listeners_and_notify_once() {
-    let running = start_vscode(r#"
-        const v = require('vscode');
-        exports.activate = context => context.subscriptions.push(v.commands.registerCommand('example.probe', async () => {
+fn ash_cancellation_sources_release_listeners_and_notify_once() {
+    let running = start_ash(r#"
+        const v = require('@ash/sdk');
+        exports.activate = context => context.subscriptions.push(v.commands.register('example.probe', async () => {
             const source = new v.CancellationTokenSource();
             const disposed = new v.CancellationTokenSource();
             const events = [];
@@ -2166,11 +2135,11 @@ fn product_js_launcher_enforces_aggregate_and_implicit_backing_store_budgets() {
     ] {
         let source = format!(
             r#"
-const {{ commands }} = require('vscode');
+const {{ commands }} = require('@ash/sdk');
 let retained;
 exports.activate = function(context) {{
-    context.subscriptions.push(commands.registerCommand('example.echo', value => value));
-    context.subscriptions.push(commands.registerCommand('example.allocate', () => {{
+    context.subscriptions.push(commands.register('example.echo', value => value));
+    context.subscriptions.push(commands.register('example.allocate', () => {{
         try {{ {expression}; return 'unexpected allocation'; }} catch (error) {{ return error.name; }}
     }}));
 }}"#
@@ -2218,9 +2187,9 @@ exports.activate = function(context) {{
 #[test]
 fn product_js_context_excludes_unbudgeted_memory_and_constructor_paths() {
     let running = start_confined(r#"
-const { commands } = require('vscode');
+const { commands } = require('@ash/sdk');
 exports.activate = function(context) {
-    context.subscriptions.push(commands.registerCommand('example.buffers', () => {
+    context.subscriptions.push(commands.register('example.buffers', () => {
         const buffer = new Uint8Array(4).buffer;
         const constructors = [ArrayBuffer, buffer.constructor, Object.getPrototypeOf(buffer).constructor,
             buffer.slice(0).constructor, new Uint8Array(4).buffer.transfer().constructor];
@@ -2272,9 +2241,9 @@ fn product_js_process_recovers_after_execution_deadline() {
 }
 
 #[test]
-fn vscode_debug_configuration_callbacks_preserve_workspace_metadata_and_resolution_phases() {
-    let running = start_vscode(r#"
-        const v = require('vscode');
+fn ash_debug_configuration_callbacks_preserve_workspace_metadata_and_resolution_phases() {
+    let running = start_ash(r#"
+        const v = require('@ash/sdk');
         exports.activate = context => context.subscriptions.push(v.debug.registerDebugConfigurationProvider('example', {
             provideDebugConfigurations(folder, token) {
                 if (folder.name !== 'Server' || folder.index !== 1 || folder.uri.fsPath !== '/workspace/server' || token.isCancellationRequested) throw Error('Invalid workspace metadata');
@@ -2294,7 +2263,7 @@ fn vscode_debug_configuration_callbacks_preserve_workspace_metadata_and_resoluti
         }, v.DebugConfigurationProviderTriggerKind.Dynamic));
     "#).unwrap();
     let mut request = invocation("unused", json!([]), Duration::from_secs(5));
-    request.registration_id = "vscode.debugConfiguration.1".into();
+    request.registration_id = "ash.debugConfiguration.1".into();
     request.operation = "provideDebugConfigurations".into();
     let folder = json!({"uri": "file:///workspace/server", "name": "Server", "index": 1});
     request.payload = json!({"folder": folder});
@@ -2336,9 +2305,9 @@ fn vscode_debug_configuration_callbacks_preserve_workspace_metadata_and_resoluti
 }
 
 #[test]
-fn vscode_debug_sessions_preserve_early_event_identity_and_route_custom_requests() {
-    let running = start_vscode(r#"
-        const v = require('vscode');
+fn ash_debug_sessions_preserve_early_event_identity_and_route_custom_requests() {
+    let running = start_ash(r#"
+        const v = require('@ash/sdk');
         const seen = [];
         const stackChanges = [];
         let session;
@@ -2361,7 +2330,7 @@ fn vscode_debug_sessions_preserve_early_event_identity_and_route_custom_requests
                 if (session !== value.session || value.body !== null) throw Error('Early custom event changed');
                 seen.push(['custom', value.event]);
             }, undefined, context.subscriptions);
-            context.subscriptions.push(v.commands.registerCommand('example.hello', async () => {
+            context.subscriptions.push(v.commands.register('example.hello', async () => {
                 if (!await v.debug.startDebugging({uri: v.Uri.parse('file:///workspace')}, {name:'Explicit',type:'builder',request:'launch',program:'${workspaceFolder}/app'})) throw Error('Launch failed');
                 if (!(v.debug.activeStackItem instanceof v.DebugStackFrame) || v.debug.activeStackItem.threadId !== 0 || v.debug.activeStackItem.frameId !== -1) throw Error('Focused frame changed');
                 if (v.debug.activeDebugSession !== session || session.workspaceFolder.uri.path !== '/workspace' || session.configuration.program !== '/workspace/app') throw Error('Session metadata changed');
@@ -2382,13 +2351,13 @@ fn vscode_debug_sessions_preserve_early_event_identity_and_route_custom_requests
                 const absentBody = await session.customRequest('empty');
                 await v.debug.stopDebugging(session);
                 return [echo, nullBody === null, absentBody === undefined, v.debug.activeDebugSession === undefined, stackChanges];
-            }), v.commands.registerCommand('example.probe', () => seen));
+            }), v.commands.register('example.probe', () => seen));
         };
     "#).unwrap();
     let session = json!({"id":"debug-1","type":"builder","name":"Explicit","configuration":{"name":"Explicit","type":"builder","request":"launch","program":"/workspace/app"},"workspaceFolder":{"uri":"file:///workspace","name":"workspace","index":0}});
     let send_event = |kind: &str, sequence: u64| {
         let mut event = invocation("unused", json!([]), Duration::from_secs(5));
-        event.registration_id = "vscode.debug.events".into();
+        event.registration_id = "ash.debug.events".into();
         event.operation = "debugEvent".into();
         event.payload = json!({"type":kind,"sequence":sequence,"session":session,"event":"builderReady","body":null,"hasBody":true});
         if kind == "active" && sequence == 9 {
@@ -2472,7 +2441,7 @@ fn vscode_debug_sessions_preserve_early_event_identity_and_route_custom_requests
         ])
     );
     let mut stale = invocation("unused", json!([]), Duration::from_secs(5));
-    stale.registration_id = "vscode.debug.events".into();
+    stale.registration_id = "ash.debug.events".into();
     stale.operation = "debugEvent".into();
     stale.payload =
         json!({"type":"snapshot","sequence":0,"sessions":[session],"activeSession":"debug-1"});
@@ -2490,12 +2459,12 @@ fn vscode_debug_sessions_preserve_early_event_identity_and_route_custom_requests
 #[test]
 fn remote_resolver_runs_in_javascript_and_connection_intent_uses_the_invocation_broker() {
     let source = r#"
-        const { commands, workspace } = require('vscode');
+        const { commands, workspace } = require('@ash/sdk');
         exports.activate = function(context) {
             context.subscriptions.push(workspace.registerRemoteAuthorityResolver('team', {
-                resolve(authority) { if (authority !== 'team+linux') throw Error('Wrong authority'); return new (require('vscode').ResolvedAuthority)('localhost', 8080); }
+                resolve(authority) { if (authority !== 'team+linux') throw Error('Wrong authority'); return new (require('@ash/sdk').ResolvedAuthority)('localhost', 8080); }
             }));
-            context.subscriptions.push(commands.registerCommand('example.connect', async () => {
+            context.subscriptions.push(commands.register('example.connect', async () => {
                 await globalThis.__ashRequest(globalThis.__ashInvocation(), JSON.stringify({ operation: 'openRemoteConnection', authority: 'team+linux' })); return 'requested';
             }));
         }
@@ -2540,9 +2509,9 @@ fn remote_resolver_runs_in_javascript_and_connection_intent_uses_the_invocation_
 }
 
 #[test]
-fn vscode_debug_breakpoints_keep_public_identity_and_query_adapter_bindings() {
-    let running = start_vscode(r#"
-        const v = require('vscode');
+fn ash_debug_breakpoints_keep_public_identity_and_query_adapter_bindings() {
+    let running = start_ash(r#"
+        const v = require('@ash/sdk');
         let session;
         const changes = [];
         exports.activate = context => {
@@ -2552,7 +2521,7 @@ fn vscode_debug_breakpoints_keep_public_identity_and_query_adapter_bindings() {
                 if (this !== receiver || !Object.isFrozen(event.added)) throw Error('Breakpoint event contract changed');
                 changes.push(event);
             }, receiver, context.subscriptions);
-            context.subscriptions.push(v.commands.registerCommand('example.hello', async () => {
+            context.subscriptions.push(v.commands.register('example.hello', async () => {
                 const source = new v.SourceBreakpoint(new v.Location(v.Uri.file('/workspace/main.ts'), new v.Position(6, 3)), true, 'value > 0', '2', 'hit {value}');
                 const fn = new v.FunctionBreakpoint('main', false, undefined, undefined, 'function hit');
                 v.debug.addBreakpoints([source, fn]);
@@ -2561,11 +2530,11 @@ fn vscode_debug_breakpoints_keep_public_identity_and_query_adapter_bindings() {
                 v.debug.removeBreakpoints([source, fn]);
                 if (changes[1].removed[0] !== source || v.debug.breakpoints.length) throw Error('Removal changed identity');
                 return [binding, source instanceof v.Breakpoint, fn instanceof v.Breakpoint];
-            }), v.commands.registerCommand('example.probe', () => changes.map(event => [event.added.length,event.removed.length,event.changed.length])));
+            }), v.commands.register('example.probe', () => changes.map(event => [event.added.length,event.removed.length,event.changed.length])));
         };
     "#).unwrap();
     let mut event = invocation("unused", json!([]), Duration::from_secs(5));
-    event.registration_id = "vscode.debug.events".into();
+    event.registration_id = "ash.debug.events".into();
     event.operation = "debugEvent".into();
     event.payload = json!({"type":"start","sequence":1,"session":{"id":"debug-1","type":"builder","name":"Launch","configuration":{},"workspaceFolder":null}});
     running.supervisor.invoke(event.clone()).unwrap();
@@ -2611,9 +2580,9 @@ fn vscode_debug_breakpoints_keep_public_identity_and_query_adapter_bindings() {
 }
 
 #[test]
-fn vscode_debug_adapter_trackers_keep_session_identity_and_active_hooks_after_factory_disposal() {
-    let running = start_vscode(r#"
-        const v = require('vscode');
+fn ash_debug_adapter_trackers_keep_session_identity_and_active_hooks_after_factory_disposal() {
+    let running = start_ash(r#"
+        const v = require('@ash/sdk');
         let session, registration;
         const phases = [];
         exports.activate = context => {
@@ -2636,12 +2605,12 @@ fn vscode_debug_adapter_trackers_keep_session_identity_and_active_hooks_after_fa
                 },
             });
             context.subscriptions.push(registration,
-                v.commands.registerCommand('example.hello', () => { registration.dispose(); return session.id; }),
-                v.commands.registerCommand('example.probe', () => phases));
+                v.commands.register('example.hello', () => { registration.dispose(); return session.id; }),
+                v.commands.register('example.probe', () => phases));
         };
     "#).unwrap();
     let mut call = invocation("unused", json!([]), Duration::from_secs(5));
-    call.registration_id = "vscode.debugTracker.1".into();
+    call.registration_id = "ash.debugTracker.1".into();
     call.operation = "createDebugAdapterTracker".into();
     call.payload = json!({"session":{"id":"debug-1","name":"Launch","type":"builder","configuration":{"request":"launch"},"workspaceFolder":null}});
     let handle = running.supervisor.invoke(call.clone()).unwrap().payload;
@@ -2700,9 +2669,9 @@ fn vscode_debug_adapter_trackers_keep_session_identity_and_active_hooks_after_fa
 #[test]
 fn remote_connection_calls_without_an_active_resolver_do_not_reach_the_client() {
     let running = start(r#"
-        const { commands } = require('vscode');
+        const { commands } = require('@ash/sdk');
         exports.activate = function(context) {
-            context.subscriptions.push(commands.registerCommand('example.connect', async () => {
+            context.subscriptions.push(commands.register('example.connect', async () => {
                 try { await globalThis.__ashRequest(globalThis.__ashInvocation(), JSON.stringify({ operation: 'openRemoteConnection', authority: 'ssh+build' })); }
                 catch (error) { return error.code; }
                 throw Error('Expected refusal');
@@ -2721,7 +2690,7 @@ fn remote_connection_calls_without_an_active_resolver_do_not_reach_the_client() 
 #[test]
 fn standard_authority_resolution_preserves_endpoints_attempts_and_error_categories() {
     let source = r#"
-        const { workspace, ResolvedAuthority, RemoteAuthorityResolverError } = require('vscode');
+        const { workspace, ResolvedAuthority, RemoteAuthorityResolverError } = require('@ash/sdk');
         exports.activate = function(context) {
             context.subscriptions.push(workspace.registerRemoteAuthorityResolver('test', {
                 resolve(authority, context) {
@@ -2763,7 +2732,7 @@ fn standard_authority_resolution_preserves_endpoints_attempts_and_error_categori
 #[test]
 fn canonical_uri_and_resolver_options_cross_the_host_boundary_without_session_tokens() {
     let source = r#"
-        const { workspace, ResolvedAuthority } = require('vscode');
+        const { workspace, ResolvedAuthority } = require('@ash/sdk');
         exports.activate = function(context) {
             context.subscriptions.push(workspace.registerRemoteAuthorityResolver('test', {
                 resolve(authority) {
@@ -2889,10 +2858,10 @@ fn canonical_uri_and_resolver_options_cross_the_host_boundary_without_session_to
 }
 
 #[test]
-fn vscode_executes_edits_to_fetched_tasks_and_resolves_definition_only_tasks() {
-    let running = start_vscode(r#"
-        const v = require('vscode');
-        exports.activate = context => context.subscriptions.push(v.commands.registerCommand('example.hello', async () => {
+fn ash_executes_edits_to_fetched_tasks_and_resolves_definition_only_tasks() {
+    let running = start_ash(r#"
+        const v = require('@ash/sdk');
+        exports.activate = context => context.subscriptions.push(v.commands.register('example.hello', async () => {
             const [task] = await v.tasks.fetchTasks();
             if ('revealProblems' in task.presentationOptions) throw Error('Configuration-only policy leaked into the public API');
             task.name = 'Edited';
@@ -2939,13 +2908,13 @@ fn vscode_executes_edits_to_fetched_tasks_and_resolves_definition_only_tasks() {
 }
 
 #[test]
-fn vscode_execute_command_preserves_void_null_and_falsy_results() {
-    let running = start_vscode(r#"
-        const v = require('vscode');
-        exports.activate = context => context.subscriptions.push(v.commands.registerCommand('example.hello', async () => {
+fn ash_execute_command_preserves_void_null_and_falsy_results() {
+    let running = start_ash(r#"
+        const v = require('@ash/sdk');
+        exports.activate = context => context.subscriptions.push(v.commands.register('example.hello', async () => {
             const results = [];
             for (const command of ['void', 'null', 'false', 'zero', 'object']) {
-                const value = await v.commands.executeCommand('example.' + command, command, 0, false);
+                const value = await v.commands.execute('example.' + command, command, 0, false);
                 results.push({command, isUndefined: value === undefined, value});
             }
             return results;
@@ -2987,10 +2956,10 @@ fn vscode_execute_command_preserves_void_null_and_falsy_results() {
 }
 
 #[test]
-fn vscode_edits_fetched_custom_tasks_without_transferring_the_provider_callback() {
+fn ash_edits_fetched_custom_tasks_without_transferring_the_provider_callback() {
     let source = r#"
-        const v = require('vscode');
-        exports.activate = context => context.subscriptions.push(v.commands.registerCommand('example.hello', async () => {
+        const v = require('@ash/sdk');
+        exports.activate = context => context.subscriptions.push(v.commands.register('example.hello', async () => {
             const [task] = await v.tasks.fetchTasks();
             if (!(task.execution instanceof v.CustomExecution) || task.execution.callback !== undefined) throw Error('Invalid custom snapshot');
             const original = await v.tasks.executeTask(task);
@@ -3015,7 +2984,7 @@ fn vscode_edits_fetched_custom_tasks_without_transferring_the_provider_callback(
             return task.name;
         }));
     "#;
-    let running = start_vscode(source).unwrap();
+    let running = start_ash(source).unwrap();
     let mut count = 0;
     let mut edited_id = None;
     let invocation = invocation("hello", json!([]), Duration::from_secs(5));
@@ -3082,10 +3051,10 @@ fn vscode_edits_fetched_custom_tasks_without_transferring_the_provider_callback(
 }
 
 #[test]
-fn vscode_task_presentation_rejects_invalid_values_before_requesting_execution() {
-    let running = start_vscode(r#"
-        const v = require('vscode');
-        exports.activate = context => context.subscriptions.push(v.commands.registerCommand('example.hello', async () => {
+fn ash_task_presentation_rejects_invalid_values_before_requesting_execution() {
+    let running = start_ash(r#"
+        const v = require('@ash/sdk');
+        exports.activate = context => context.subscriptions.push(v.commands.register('example.hello', async () => {
             const task = new v.Task({type: 'builder'}, v.TaskScope.Workspace, 'Invalid', 'Builder', new v.ProcessExecution('compiler'));
             const failures = [];
             for (const options of [null, [], {panel: 0}, {panel: 4}, {panel: 'shared'}, {clear: 1}, {reveal: 'never'}, {reveal: 0}, {reveal: 4}, {focus: 'false'}, {close: 1}, {echo: 1}, {echo: 'false'}, {echo: null}, {showReuseMessage: 1}, {showReuseMessage: 'false'}, {showReuseMessage: null}]) {
@@ -3105,7 +3074,7 @@ fn vscode_task_presentation_rejects_invalid_values_before_requesting_execution()
 #[test]
 fn managed_authority_sockets_preserve_bytes_and_retire_on_resolution_and_restart() {
     let source = r#"
-        const { workspace, ManagedResolvedAuthority } = require('vscode');
+        const { workspace, ManagedResolvedAuthority } = require('@ash/sdk');
         exports.activate = function(context) {
             context.subscriptions.push(workspace.registerRemoteAuthorityResolver('test', {
                 resolve() {
@@ -3278,13 +3247,13 @@ fn managed_authority_sockets_preserve_bytes_and_retire_on_resolution_and_restart
 }
 
 #[test]
-fn vscode_inline_debug_adapter_preserves_messages_and_releases_listener_and_implementation_once() {
-    let running = start_vscode(r#"
-        const v = require('vscode');
+fn ash_inline_debug_adapter_preserves_messages_and_releases_listener_and_implementation_once() {
+    let running = start_ash(r#"
+        const v = require('@ash/sdk');
         let disposed = 0; let listenersDisposed = 0;
         let factory;
         exports.activate = context => {
-            context.subscriptions.push(v.commands.registerCommand('example.probe', () => ({ disposed, listenersDisposed })));
+            context.subscriptions.push(v.commands.register('example.probe', () => ({ disposed, listenersDisposed })));
             factory = v.debug.registerDebugAdapterDescriptorFactory('example', {
                 createDebugAdapterDescriptor() {
                     const emitter = new v.EventEmitter();
@@ -3306,7 +3275,7 @@ fn vscode_inline_debug_adapter_preserves_messages_and_releases_listener_and_impl
         };
     "#).unwrap();
     let mut request = invocation("unused", json!([]), Duration::from_secs(5));
-    request.registration_id = "vscode.debug.1".into();
+    request.registration_id = "ash.debug.1".into();
     request.operation = "createDebugAdapterDescriptor".into();
     request.payload = json!({"session":{"id":"inline-session","workspaceFolder":null},"configuration":{"name":"Debug","type":"example","request":"launch"}});
     let id = running.supervisor.invoke(request.clone()).unwrap().payload["inlineAdapterId"].clone();
@@ -3339,12 +3308,12 @@ fn vscode_inline_debug_adapter_preserves_messages_and_releases_listener_and_impl
 }
 
 #[test]
-fn vscode_debug_session_options_encode_parent_handles_and_preserve_child_identity() {
-    let running = start_vscode(r#"
-        const v = require('vscode');
+fn ash_debug_session_options_encode_parent_handles_and_preserve_child_identity() {
+    let running = start_ash(r#"
+        const v = require('@ash/sdk');
         exports.activate = context => {
             v.debug.onDidStartDebugSession(() => {});
-            context.subscriptions.push(v.commands.registerCommand('example.hello', async () => {
+            context.subscriptions.push(v.commands.register('example.hello', async () => {
                 const parent = v.debug.activeDebugSession;
                 if (parent.parentSession !== undefined || parent.workspaceFolder !== undefined) throw Error('Parent metadata changed');
                 const options = { parentSession: parent, lifecycleManagedByParent: true, consoleMode: v.DebugConsoleMode.MergeWithParent, noDebug: false, suppressSaveBeforeStart: true };
@@ -3364,7 +3333,7 @@ fn vscode_debug_session_options_encode_parent_handles_and_preserve_child_identit
     "#).unwrap();
     let parent = json!({"id":"parent","type":"builder","name":"Parent","configuration":{"name":"Parent","type":"builder","request":"launch"},"workspaceFolder":null,"parentSessionId":null});
     let mut initial = invocation("unused", json!([]), Duration::from_secs(5));
-    initial.registration_id = "vscode.debug.events".into();
+    initial.registration_id = "ash.debug.events".into();
     initial.operation = "debugEvent".into();
     initial.payload = json!({"type":"snapshot","sequence":1,"sessions":[parent],"activeSession":"parent","breakpoints":[],"activeStackItem":null});
     running.supervisor.invoke(initial).unwrap();
@@ -3384,7 +3353,7 @@ fn vscode_debug_session_options_encode_parent_handles_and_preserve_child_identit
         let child = json!({"id":format!("child-{launches}"),"type":"builder","name":"Child","configuration":{"name":"Child","type":"builder","request":"launch"},"workspaceFolder":null,"parentSessionId":"parent"});
         for (kind, offset) in [("start",0),("active",1)] {
             let mut event = invocation("unused", json!([]), Duration::from_secs(5));
-            event.registration_id = "vscode.debug.events".into();
+            event.registration_id = "ash.debug.events".into();
             event.operation = "debugEvent".into();
             event.payload = json!({"type":kind,"sequence":launches*2+offset,"session":child});
             running.supervisor.invoke(event).unwrap();
@@ -3396,9 +3365,9 @@ fn vscode_debug_session_options_encode_parent_handles_and_preserve_child_identit
 }
 
 #[test]
-fn vscode_debug_empty_descriptors_preserve_defaults_and_following_invocations() {
-    let running = start_vscode(r#"
-        const v = require('vscode');
+fn ash_debug_empty_descriptors_preserve_defaults_and_following_invocations() {
+    let running = start_ash(r#"
+        const v = require('@ash/sdk');
         exports.activate = context => context.subscriptions.push(v.debug.registerDebugAdapterDescriptorFactory('example', {
             createDebugAdapterDescriptor(session, executable) {
                 if (!(executable instanceof v.DebugAdapterExecutable) || executable.command !== 'default-must-not-spawn') throw Error('Default executable missing');
@@ -3409,7 +3378,7 @@ fn vscode_debug_empty_descriptors_preserve_defaults_and_following_invocations() 
         }));
     "#).unwrap();
     let mut request = invocation("unused", json!([]), Duration::from_secs(5));
-    request.registration_id = "vscode.debug.1".into();
+    request.registration_id = "ash.debug.1".into();
     request.operation = "createDebugAdapterDescriptor".into();
     for mode in ["undefined", "null", "valid"] {
         request.payload = json!({"executable":{"program":"default-must-not-spawn","arguments":[]},"session":{"id":"empty-descriptor","workspaceFolder":null},"configuration":{"name":"Empty","type":"example","request":"launch","mode":mode}});
@@ -3425,7 +3394,7 @@ fn vscode_debug_empty_descriptors_preserve_defaults_and_following_invocations() 
     }
 }
 
-fn vscode_initialization() -> external_ext_protocol::ExtensionHostInitialization {
+fn ash_initialization() -> external_ext_protocol::ExtensionHostInitialization {
     let empty = serde_json::json!({"contents":{},"keys":[],"overrides":[]});
     serde_json::from_value(serde_json::json!({
         "workspaceFolders":[{"uri":"file:///workspace","name":"Workspace","index":0},{"uri":"file:///workspace/nested","name":"Nested","index":1}],
@@ -3440,9 +3409,9 @@ fn vscode_initialization() -> external_ext_protocol::ExtensionHostInitialization
 }
 
 #[test]
-fn vscode_workspace_and_configuration_are_synchronous_during_package_evaluation_and_activation() {
-    let running = start_vscode(r#"
-        const v = require('vscode');
+fn ash_workspace_and_configuration_are_synchronous_during_package_evaluation_and_activation() {
+    let running = start_ash(r#"
+        const v = require('@ash/sdk');
         const top = v.workspace.getConfiguration('sample').get('enabled');
         const first = v.workspace.workspaceFolders[0];
         exports.activate = context => {
@@ -3457,7 +3426,7 @@ fn vscode_workspace_and_configuration_are_synchronous_during_package_evaluation_
             const inspection = config.inspect('enabled');
             if (inspection.key !== 'sample.enabled' || inspection.defaultValue !== true || inspection.globalValue !== false) throw Error('Inspect lost owner values');
             if (v.workspace.getConfiguration('sample', {uri:v.Uri.file('/workspace/file.js'),languageId:'javascript'}).get('enabled') !== true) throw Error('Language override ignored');
-            context.subscriptions.push(v.commands.registerCommand('example.probe', () => ({top, uri:first.uri.toString(), name:first.name, index:first.index})));
+            context.subscriptions.push(v.commands.register('example.probe', () => ({top, uri:first.uri.toString(), name:first.name, index:first.index})));
         };
     "#).unwrap();
     let value = run(&running, "probe", json!([])).unwrap();
@@ -3468,13 +3437,223 @@ fn vscode_workspace_and_configuration_are_synchronous_during_package_evaluation_
 }
 
 #[test]
+fn ash_configuration_writes_use_the_client_owner_and_preserve_denials() {
+    let running = start_ash(r#"
+        const ash = require('@ash/sdk');
+        exports.activate = context => context.subscriptions.push(ash.commands.register('example.probe', async () => {
+            const configuration = ash.workspace.getConfiguration('sample');
+            try {
+                await configuration.update('enabled', true, 'user');
+                await configuration.update('enabled', undefined, 'workspace');
+                return configuration.get('enabled');
+            } catch (error) { return { code: error.code }; }
+        }));
+    "#).unwrap();
+    let mut operations = Vec::new();
+    let result = running
+        .supervisor
+        .begin_invoke(invocation("probe", json!([]), Duration::from_secs(5)))
+        .unwrap()
+        .wait_with_client(|operation, _, _| {
+            operations.push(serde_json::to_value(operation).unwrap());
+            Ok(ExtensionClientResult::Done)
+        })
+        .unwrap();
+    assert_eq!(
+        result.payload,
+        json!(false),
+        "writes do not mutate the SDK read snapshot"
+    );
+    assert_eq!(
+        operations,
+        vec![
+            json!({"operation":"updateConfiguration","section":"sample.enabled","value":true,"target":"user"}),
+            json!({"operation":"resetConfiguration","section":"sample.enabled","target":"workspace"}),
+        ]
+    );
+    let mut rejected = 0;
+    let result = running
+        .supervisor
+        .begin_invoke(invocation("probe", json!([]), Duration::from_secs(5)))
+        .unwrap()
+        .wait_with_client(|_, _, _| {
+            rejected += 1;
+            Err(external_ext_protocol::HostFailure {
+                code: HostErrorCode::PermissionDenied,
+                message: "managed configuration".into(),
+            })
+        })
+        .unwrap();
+    assert_eq!(result.payload, json!({"code":"permissionDenied"}));
+    assert_eq!(
+        rejected, 1,
+        "failed writes are not retried and do not reset another target"
+    );
+    assert_eq!(
+        running.supervisor.snapshot().status,
+        ExtensionHostStatus::Ready
+    );
+}
+
+#[test]
+fn ash_workspace_text_edits_reach_the_client_with_document_version_and_utf16_ranges() {
+    let running = start_ash(r#"
+        const ash = require('@ash/sdk');
+        exports.activate = context => context.subscriptions.push(ash.commands.register('example.probe', async () => {
+            const edit = new ash.WorkspaceEdit();
+            edit.replace(ash.Uri.file('/workspace/data.ts'), new ash.Range(0, 2, 0, 4), '你好');
+            return ash.workspace.applyEdit(edit);
+        }));
+    "#).unwrap();
+    for applied in [true, false] {
+        let mut edits = 0;
+        let result = running
+            .supervisor
+            .begin_invoke(invocation("probe", json!([]), Duration::from_secs(5)))
+            .unwrap()
+            .wait_with_client(|operation, _, _| match operation {
+                ExtensionClientOperation::ReadDocument { uri } => {
+                    assert_eq!(uri, "file:///workspace/data.ts");
+                    Ok(ExtensionClientResult::Document {
+                        document: ExtensionDocumentSnapshot {
+                            uri,
+                            version: 7,
+                            language_id: "typescript".into(),
+                            text: "😀ab".into(),
+                        },
+                    })
+                }
+                ExtensionClientOperation::ApplyEdit { documents } => {
+                    edits += 1;
+                    assert_eq!(serde_json::to_value(documents).unwrap(), json!([
+                        {"uri":"file:///workspace/data.ts","version":7,"edits":[
+                            {"start":{"line":0,"character":2},"end":{"line":0,"character":4},"text":"你好"}
+                        ]}
+                    ]));
+                    Ok(ExtensionClientResult::Applied { applied })
+                }
+                other => panic!("unexpected client operation: {other:?}"),
+            })
+            .unwrap();
+        assert_eq!(result.payload, json!(applied));
+        assert_eq!(edits, 1, "client edit rejection must not cause a replay");
+    }
+}
+
+#[test]
+fn ash_profile_storage_uses_only_key_operations_in_the_real_v8_host() {
+    use external_ext_protocol::services::CoreServiceRequest;
+    use external_ext_protocol::services::CoreServiceResponse;
+    let running = start_ash(r#"
+const ash = require('@ash/sdk');
+exports.activate = context => context.subscriptions.push(ash.commands.register('example.probe', async () => {
+ await context.storage.update('nothing', null);
+ const nothing = await context.storage.get('nothing');
+ await context.storage.update('old', undefined);
+ const missing = (await context.storage.get('old')) === undefined;
+ let blocked = false;
+ try { await globalThis.__ashRequest(globalThis.__ashInvocation(), JSON.stringify({operation:'coreService',request:{service:'credentialGet',providerId:'not-yours',host:'example.com',accountId:null}})); } catch { blocked = true; }
+ return { nothing, missing, blocked, methods:Object.keys(context.storage).sort() };
+}));
+"#).unwrap();
+    let mut values = BTreeMap::new();
+    let result = running
+        .supervisor
+        .begin_invoke(invocation("probe", json!([]), Duration::from_secs(5)))
+        .unwrap()
+        .wait_with_client(|operation, _, _| {
+            let response = match operation {
+                ExtensionClientOperation::CoreService {
+                    request: CoreServiceRequest::StorageSet { key, value },
+                } => {
+                    values.insert(key, value);
+                    CoreServiceResponse::StorageUpdated
+                }
+                ExtensionClientOperation::CoreService {
+                    request: CoreServiceRequest::StorageDelete { key },
+                } => {
+                    values.remove(&key);
+                    CoreServiceResponse::StorageUpdated
+                }
+                ExtensionClientOperation::CoreService {
+                    request: CoreServiceRequest::StorageGet { key },
+                } => {
+                    let value = values.get(&key).cloned();
+                    CoreServiceResponse::StorageValue {
+                        found: value.is_some(),
+                        value: value.unwrap_or(Value::Null),
+                    }
+                }
+                other => panic!("unexpected operation: {other:?}"),
+            };
+            Ok(ExtensionClientResult::CoreService { response })
+        })
+        .unwrap();
+    assert_eq!(
+        result.payload,
+        json!({"nothing":null,"missing":true,"blocked":true,"methods":["get","update"]})
+    );
+}
+
+#[test]
+fn ash_private_secrets_use_only_get_store_delete_in_the_real_v8_host() {
+    use external_ext_protocol::services::CoreServiceRequest;
+    use external_ext_protocol::services::CoreServiceResponse;
+    let running = start_ash(r#"
+const ash = require('@ash/sdk');
+exports.activate = context => context.subscriptions.push(ash.commands.register('example.probe', async () => {
+ await context.secrets.store('token', '你好');
+ const matched = (await context.secrets.get('token')) === '你好';
+ const deleted = await context.secrets.delete('token');
+ return { matched, deleted, methods:Object.keys(context.secrets).sort() };
+}));
+"#).unwrap();
+    let result = running
+        .supervisor
+        .begin_invoke(invocation("probe", json!([]), Duration::from_secs(5)))
+        .unwrap()
+        .wait_with_client(|operation, _, _| {
+            let response = match operation {
+                ExtensionClientOperation::CoreService {
+                    request: CoreServiceRequest::SecretStore { key, value },
+                } => {
+                    assert_eq!(key, "token");
+                    assert_eq!(value, "你好".as_bytes());
+                    CoreServiceResponse::SecretStored
+                }
+                ExtensionClientOperation::CoreService {
+                    request: CoreServiceRequest::SecretLoad { key },
+                } => {
+                    assert_eq!(key, "token");
+                    CoreServiceResponse::SecretLoaded {
+                        value: Some("你好".as_bytes().to_vec()),
+                    }
+                }
+                ExtensionClientOperation::CoreService {
+                    request: CoreServiceRequest::SecretDelete { key },
+                } => {
+                    assert_eq!(key, "token");
+                    CoreServiceResponse::SecretDeleted { deleted: true }
+                }
+                other => panic!("unexpected operation: {other:?}"),
+            };
+            Ok(ExtensionClientResult::CoreService { response })
+        })
+        .unwrap();
+    assert_eq!(
+        result.payload,
+        json!({"matched":true,"deleted":true,"methods":["delete","get","store"]})
+    );
+}
+
+#[test]
 fn extension_environment_is_available_during_module_loading_and_isolated_per_process() {
     let source = r#"
-        const { commands } = require('vscode');
+        const { commands } = require('@ash/sdk');
         if (process.exit !== undefined || process.dlopen !== undefined || process.binding !== undefined || process.cwd !== undefined) throw new Error('Unexpected Node capability');
         const loaded = { set: process.env.SET ?? null, removed: process.env.REMOVE ?? null, prototype: process.env.__proto__ ?? null };
         exports.activate = function(context) {
-            context.subscriptions.push(commands.registerCommand('example.env', () => loaded));
+            context.subscriptions.push(commands.register('example.env', () => loaded));
         }
     "#;
     let launch = |value: &str| {
@@ -3483,7 +3662,6 @@ fn extension_environment_is_available_during_module_loading_and_isolated_per_pro
             vec![ExtensionCapability::Command],
             ProcessIsolationPolicy::TrustedDevelopment,
             Arc::new(TrustedDevelopmentLauncher),
-            TestApi::Vscode,
             &[],
             Some(
                 [
@@ -3523,7 +3701,6 @@ fn extension_environment_is_available_during_module_loading_and_isolated_per_pro
         vec![ExtensionCapability::Command],
         ProcessIsolationPolicy::TrustedDevelopment,
         Arc::new(TrustedDevelopmentLauncher),
-        TestApi::Vscode,
         &[],
         Some(Default::default()),
     )
@@ -3550,8 +3727,8 @@ fn extension_environment_is_available_during_module_loading_and_isolated_per_pro
 }
 
 #[test]
-fn vscode_localization_is_available_during_rust_v8_module_evaluation() {
-    let mut initialization = vscode_initialization();
+fn ash_localization_is_available_during_rust_v8_module_evaluation() {
+    let mut initialization = ash_initialization();
     initialization.language = Some("zh-CN".into());
     initialization.localization = Some(
         serde_json::from_value(json!({
@@ -3562,15 +3739,15 @@ fn vscode_localization_is_available_during_rust_v8_module_evaluation() {
         .unwrap(),
     );
     let running = start_with_initialization(r#"
-        const v = require('vscode');
+        const v = require('@ash/sdk');
         const greeting = v.l10n.t('Hello {0}', 'Ash');
-        exports.activate = context => context.subscriptions.push(v.commands.registerCommand('example.probe', () => ({
+        exports.activate = context => context.subscriptions.push(v.commands.register('example.probe', () => ({
             greeting, named: v.l10n.t({message:'Hello {name}', args:{name:'Ash'}}),
             fallback:v.l10n.t('Missing {0}', 'Ash'), language:v.env.language,
             bundle:v.l10n.bundle, uri:v.l10n.uri.toString()
         })));
     "#, vec![ExtensionCapability::Command], ProcessIsolationPolicy::TrustedDevelopment,
-        Arc::new(TrustedDevelopmentLauncher), TestApi::Vscode, &[], None, Some(initialization)).unwrap();
+        Arc::new(TrustedDevelopmentLauncher), &[], None, Some(initialization)).unwrap();
     assert_eq!(
         run(&running, "probe", json!([])).unwrap(),
         json!({
@@ -3582,9 +3759,9 @@ fn vscode_localization_is_available_during_rust_v8_module_evaluation() {
 }
 
 #[test]
-fn vscode_speech_provider_sessions_use_persistent_tokens_and_retire_with_registration() {
-    let running = start_vscode_with_files_and_capabilities(r#"
-        const v = require('vscode');
+fn ash_speech_provider_sessions_use_persistent_tokens_and_retire_with_registration() {
+    let running = start_ash_with_files_and_capabilities(r#"
+        const v = require('@ash/sdk');
         let registration; const sessions = new Map(); let cancelled = 0; let detached = 0;
         function provide(kind, token, options) {
             const emitter = new v.EventEmitter();
@@ -3603,7 +3780,7 @@ fn vscode_speech_provider_sessions_use_persistent_tokens_and_retire_with_registr
                 provideKeywordRecognitionSession: token => provide('keyword', token)
             });
             context.subscriptions.push(registration);
-            context.subscriptions.push(v.commands.registerCommand('example.probe', (action, kind) => {
+            context.subscriptions.push(v.commands.register('example.probe', (action, kind) => {
                 if (action === 'emit') sessions.get(kind).emitter.fire({ status: kind === 'stt' ? v.SpeechToTextStatus.Recognized : v.KeywordRecognitionStatus.Recognized, text: '你好' });
                 if (action === 'retire') registration.dispose();
                 return { cancelled, detached, sessions: [...sessions.keys()], language: sessions.get(kind)?.options?.language ?? null };
@@ -3624,7 +3801,7 @@ fn vscode_speech_provider_sessions_use_persistent_tokens_and_retire_with_registr
         .unwrap();
     assert_eq!(
         serde_json::to_value(&registration).unwrap(),
-        json!({"registrationId":"vscode.speech.1","kind":"speechProvider","registrationGeneration":1,"identifier":"example.recognition"})
+        json!({"registrationId":"ash.speech.1","kind":"speechProvider","registrationGeneration":1,"identifier":"example.recognition"})
     );
     let mut request = invocation("unused", json!([]), Duration::from_secs(5));
     request.registration_id = registration.registration_id;
@@ -3705,25 +3882,25 @@ fn vscode_speech_provider_sessions_use_persistent_tokens_and_retire_with_registr
 }
 
 #[test]
-fn vscode_speech_registration_requires_the_admitted_capability() {
+fn ash_speech_registration_requires_the_admitted_capability() {
     let source = r#"
-        const v = require('vscode');
+        const v = require('@ash/sdk');
         exports.activate = () => v.speech.registerSpeechProvider('example.recognition', {
             provideSpeechToTextSession() {}, provideTextToSpeechSession() {}, provideKeywordRecognitionSession() {}
         });
     "#;
     let error =
-        start_vscode_with_files_and_capabilities(source, &[], vec![ExtensionCapability::Command])
+        start_ash_with_files_and_capabilities(source, &[], vec![ExtensionCapability::Command])
             .err()
             .unwrap();
     assert!(error.to_string().contains("speechProvider"));
 }
 
 #[test]
-fn vscode_output_channels_keep_order_and_log_metadata_in_the_confined_runtime() {
-    let running = start_vscode(r#"
-        const v = require('vscode');
-        exports.activate = context => context.subscriptions.push(v.commands.registerCommand('example.hello', () => {
+fn ash_output_channels_keep_order_and_log_metadata_in_the_confined_runtime() {
+    let running = start_ash(r#"
+        const v = require('@ash/sdk');
+        exports.activate = context => context.subscriptions.push(v.commands.register('example.hello', () => {
             const text = v.window.createOutputChannel('Source', 'typescript');
             const logs = v.window.createOutputChannel('Logs', { log: true });
             text.append('first'); text.appendLine('second'); text.hide();
@@ -3772,12 +3949,12 @@ fn vscode_output_channels_keep_order_and_log_metadata_in_the_confined_runtime() 
 }
 
 #[test]
-fn vscode_speech_can_register_after_activation_and_retire_its_exact_session() {
-    let running = start_vscode_with_files_and_capabilities(r#"
-        const v = require('vscode');
+fn ash_speech_can_register_after_activation_and_retire_its_exact_session() {
+    let running = start_ash_with_files_and_capabilities(r#"
+        const v = require('@ash/sdk');
         let registration, cancelled = 0;
         const factory = token => { const emitter = new v.EventEmitter(); token.onCancellationRequested(() => { cancelled++; emitter.dispose(); }); return { onDidChange: emitter.event }; };
-        exports.activate = context => context.subscriptions.push(v.commands.registerCommand('example.hello', action => {
+        exports.activate = context => context.subscriptions.push(v.commands.register('example.hello', action => {
             if (action === 'register') registration = v.speech.registerSpeechProvider('example.dynamic', { provideSpeechToTextSession: factory, provideTextToSpeechSession: factory, provideKeywordRecognitionSession: factory });
             if (action === 'unregister') registration.dispose();
             return cancelled;
@@ -3878,7 +4055,7 @@ fn vscode_speech_can_register_after_activation_and_retire_its_exact_session() {
 }
 
 #[test]
-fn vscode_speech_host_rejects_retired_or_missing_generation_before_provider_side_effects() {
+fn ash_speech_host_rejects_retired_or_missing_generation_before_provider_side_effects() {
     struct ObservedLauncher(Arc<std::sync::Mutex<Option<Arc<dyn host::ExtensionHostProcess>>>>);
     impl host::ExtensionHostLauncher for ObservedLauncher {
         fn spawn(
@@ -3894,13 +4071,13 @@ fn vscode_speech_host_rejects_retired_or_missing_generation_before_provider_side
     }
     let process = Arc::new(std::sync::Mutex::new(None));
     let running = start_with_launcher(r#"
-        const v = require('vscode');
+        const v = require('@ash/sdk');
         let registration, created = 0;
         const factory = () => { created++; const events = new v.EventEmitter(); return { onDidChange: events.event }; };
         const install = () => registration = v.speech.registerSpeechProvider('example.dynamic', { provideSpeechToTextSession: factory, provideTextToSpeechSession: factory, provideKeywordRecognitionSession: factory });
         exports.activate = context => {
             install();
-            context.subscriptions.push(v.commands.registerCommand('example.hello', action => {
+            context.subscriptions.push(v.commands.register('example.hello', action => {
                 if (action === 'replace') { registration.dispose(); install(); }
                 return created;
             }));
@@ -3980,9 +4157,9 @@ fn vscode_speech_host_rejects_retired_or_missing_generation_before_provider_side
 }
 
 #[test]
-fn vscode_terminal_completions_use_public_context_and_retire_with_the_original_runtime() {
-    let running = start_vscode_with_files_and_capabilities(r#"
-        const v = require('vscode'); let registration; let terminal;
+fn ash_terminal_completions_use_public_context_and_retire_with_the_original_runtime() {
+    let running = start_ash_with_files_and_capabilities(r#"
+        const v = require('@ash/sdk'); let registration; let terminal;
         exports.activate = context => {
             registration = v.window.registerTerminalCompletionProvider({ async provideTerminalCompletions(current, request, token) {
                 if (terminal && current !== terminal) throw new Error('Terminal identity changed');
@@ -3991,7 +4168,7 @@ fn vscode_terminal_completions_use_public_context_and_retire_with_the_original_r
                 item.detail = current.name + ':' + await current.processId;
                 return new v.TerminalCompletionList([item]);
             } }, '-');
-            context.subscriptions.push(registration, v.commands.registerCommand('example.hello', () => registration.dispose()));
+            context.subscriptions.push(registration, v.commands.register('example.hello', () => registration.dispose()));
         };
     "#, &[], vec![ExtensionCapability::Command, ExtensionCapability::TerminalCompletionProvider]).unwrap();
     let registration = running

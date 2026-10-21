@@ -82,6 +82,15 @@ class LeafNode extends GridNode {
 	get preferredWidth(): number | undefined { return this.view.preferredWidth; }
 	isVisible(): boolean { return this.visible; }
 
+	override setBoundarySashes(sashes: BoundarySashes): void {
+		// Branches rotate relative axes at each level. Leaves expose physical edges to their consumers.
+		this.view.setBoundarySashes?.(this.parent?.branch.orientation === "horizontal" ? {
+			top: sashes.start, right: sashes.orthogonalEnd, bottom: sashes.end, left: sashes.orthogonalStart,
+		} : {
+			top: sashes.orthogonalStart, right: sashes.end, bottom: sashes.orthogonalEnd, left: sashes.start,
+		});
+	}
+
 	setDisplayed(visible: boolean): void {
 		this.invalidateLayout();
 		this.element.hidden = !visible;
@@ -640,6 +649,7 @@ export class GridView extends Disposable {
 			const leaf = new LeafNode(descriptor.view, descriptor.visible !== false, descriptor.size);
 			leaf.priority = descriptor.priority ?? "normal";
 			this.leaves.set(descriptor.view, leaf);
+			host.registerEvent(toDisposable(() => descriptor.view.setBoundarySashes?.({})));
 			return leaf;
 		}
 		return new BranchNode(

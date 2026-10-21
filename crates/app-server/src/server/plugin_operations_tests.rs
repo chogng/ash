@@ -381,7 +381,7 @@ fn write_sdk_package(root: &std::path::Path) {
     fs::write(root.join(".ash-plugin/plugin.json"), r#"{
         "schemaVersion":1,"id":"acme/sdk","version":"1.0.0","displayName":"SDK fixture",
         "compatibility":{"ash":">=0.1.0"},
-        "contributions":{"editorExtensions":[{"id":"inspect","runtime":"javascript","entrypoint":"extension.js","runtimeApiVersion":1,"activationEvents":[{"type":"onCommand","id":"acme.inspect"}],"capabilities":["command"]}]},
+        "contributions":{"editorExtensions":[{"id":"inspect","runtime":"javascript","api":"ash","entrypoint":"extension.js","runtimeApiVersion":1,"activationEvents":[{"type":"onCommand","id":"acme.inspect"}],"capabilities":["command"]}]},
         "permissions":[{"type":"directory","access":"read"}]
     }"#).unwrap();
 }

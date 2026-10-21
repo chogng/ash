@@ -1,11 +1,9 @@
-import { registerTestCodeEditorFeatures } from '../../../../../../../test/fixtures/codeEditorFeatures.js';
-import { after as afterCodeFeatures } from 'mocha';
 import assert from 'node:assert/strict';
 import { suite, test } from 'mocha';
 import { URI } from '../../../../../base/common/uri.js';
 import { Position } from '../../../../common/core/position.js';
 import { Range } from '../../../../common/core/range.js';
-import { ReferencesModel } from '../../../../../../../extensions/code/browser/contrib/gotoSymbol/browser/referencesModel.js';
+import { ReferencesModel } from '../../browser/referencesModel.js';
 
 suite('Reference results', () => {
 	test('groups targets by resource and preserves the first provider result after sorting', () => {
@@ -41,6 +39,3 @@ suite('Reference results', () => {
 		assert.equal(model.nearestReference(URI.file('/src/other.ts'), new Position(1, 1))?.uri.path, '/src/entry.ts');
 	});
 });
-
-const codeFeatures = registerTestCodeEditorFeatures();
-afterCodeFeatures(() => codeFeatures.dispose());

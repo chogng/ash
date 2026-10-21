@@ -343,6 +343,51 @@ fn invocation() -> ExtensionInvocation {
 }
 
 #[test]
+fn scm_updates_during_an_invocation_preserve_its_registration_lifetime() {
+    let supervisor = supervisor_with_capabilities(
+        Arc::new(TestLauncher::default()),
+        Arc::new(TestAuthority::authorized()),
+        vec![
+            ExtensionCapability::Command,
+            ExtensionCapability::SourceControl,
+        ],
+    );
+    let original = supervisor.start().unwrap().registrations[0].clone();
+    supervisor.inner.state.lock().unwrap().registrations[0].kind =
+        RegistrationKind::SourceControl {
+            revision: 1,
+            providers: vec![],
+        };
+    let mut request = invocation();
+    request.operation = "scm".into();
+    let pending = supervisor.begin_invoke(request.clone()).unwrap();
+    supervisor
+        .inner
+        .service_client_operation(
+            1,
+            external_ext_protocol::ExtensionClientOperation::ScmUpdate {
+                registration_id: original.registration_id.clone(),
+                revision: 2,
+                providers: vec![json!({"id":"repository", "statusMessage":"Recorded"})],
+            },
+            |_| Ok(external_ext_protocol::ExtensionClientResult::Done),
+        )
+        .unwrap()
+        .unwrap();
+    assert_eq!(pending.wait().unwrap().payload, json!({"ok":true}));
+    assert!(
+        matches!(&supervisor.snapshot().registrations[0].kind, RegistrationKind::SourceControl { revision: 2, providers } if providers[0]["statusMessage"] == "Recorded")
+    );
+    let retired = supervisor.begin_invoke(request).unwrap();
+    // Keeping an ID while changing its capability is a different registration.
+    supervisor.inner.state.lock().unwrap().registrations[0] = original;
+    assert!(matches!(
+        retired.wait(),
+        Err(ExtensionHostError::RegistrationNotFound)
+    ));
+}
+
+#[test]
 fn handshake_activation_and_invoke_hold_exact_authority_leases() {
     let launcher = Arc::new(TestLauncher::default());
     let authority = Arc::new(TestAuthority::authorized());

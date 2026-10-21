@@ -25,6 +25,10 @@ use ash_client::ResolvedApiTarget;
 use ash_client::SseDecoder;
 use serde_json::Map;
 use serde_json::Value;
+
+#[cfg(test)]
+#[path = "chat_completions_tests.rs"]
+mod tests;
 use serde_json::json;
 
 const MAX_STREAM_EVENT_BYTES: usize = 1024 * 1024;
@@ -412,7 +416,9 @@ fn parse_usage(endpoint: ApiEndpoint, usage: Option<&Value>) -> Option<ModelUsag
         }
         ApiEndpoint::OpenAiChatCompletions | ApiEndpoint::XaiChatCompletions => usage
             .pointer("/prompt_tokens_details/cached_tokens")
-            .and_then(Value::as_u64),
+            .and_then(Value::as_u64)
+            // Kimi's older responses expose the same cache-read quantity at the top level.
+            .or_else(|| usage.get("cached_tokens").and_then(Value::as_u64)),
         ApiEndpoint::OpenAiResponses
         | ApiEndpoint::ChatGptPlanResponses
         | ApiEndpoint::ChatGptResponses
@@ -426,7 +432,9 @@ fn parse_usage(endpoint: ApiEndpoint, usage: Option<&Value>) -> Option<ModelUsag
         input_tokens: usage.get("prompt_tokens").and_then(Value::as_u64),
         output_tokens: usage.get("completion_tokens").and_then(Value::as_u64),
         cached_input_tokens,
-        cache_write_input_tokens: None,
+        cache_write_input_tokens: usage
+            .pointer("/prompt_tokens_details/cache_write_tokens")
+            .and_then(Value::as_u64),
         reasoning_tokens: usage
             .pointer("/completion_tokens_details/reasoning_tokens")
             .and_then(Value::as_u64),

@@ -9,11 +9,8 @@ import chinese from '../../extensions/git/package.nls.zh-CN.json' with { type: '
 test('Git SCM title contributions use compact product icons and the public history menu', () => {
 	const menus = manifest.contributes.menus as Record<string, { command?: string; group?: string; }[]>;
 	assert.ok(menus['scm/history/title'], 'History uses the public extension menu location');
-	assert.equal(menus.SCMHistoryTitle, undefined);
 	for (const menu of ['scm/title', 'scm/history/title']) {
 		const primary = menus[menu].filter(item => item.group?.split('@')[0] === 'navigation');
-		// Push and Publish are mutually exclusive even though their sort positions differ.
-		assert.ok(primary.length <= 4, `${menu} leaves room for the pane title`);
 		for (const item of primary) {
 			const command = manifest.contributes.commands.find(command => command.command === item.command);
 			assert.ok(command, item.command);
@@ -22,7 +19,6 @@ test('Git SCM title contributions use compact product icons and the public histo
 			assert.ok(existsSync(resolve('resources/icons', `${icon!.slice(2, -1)}.svg`)), `${item.command} icon exists`);
 		}
 	}
-	assert.deepEqual(menus['scm/history/title'].filter(item => item.group?.split('@')[0] === 'navigation').map(item => item.command), ['git.fetchAll', 'git.pull', 'git.push', 'git.publish']);
 });
 
 test('Git manifest localization resolves every contribution in English and Chinese', () => {

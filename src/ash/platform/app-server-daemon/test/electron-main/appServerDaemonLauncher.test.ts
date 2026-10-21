@@ -92,3 +92,24 @@ test('a daemon launcher starts a connection carrier with its selected environmen
 function digest(contents: string): string {
 	return createHash('sha256').update(contents).digest('hex');
 }
+
+
+test('startup tracing assigns distinct carrier identities without mutating the launcher environment', () => {
+	const environments: Readonly<Record<string, string>>[] = [];
+	using launcher = new AppServerDaemonLauncher({
+		executable: '/package/ash-app-server-daemon', args: ['connect-selected'],
+		environment: { ASH_DESKTOP_STARTUP_TRACE: '1', ASH_DESKTOP_STARTUP_TRACE_ID: 'stale', ASH_DESKTOP_STARTUP_TRACE_CARRIER_PID: '123' },
+		spawnProcess: (_executable, _args, options) => { environments.push(options.environment); return {} as ReturnType<AppServerDaemonLauncher['launch']>; },
+	});
+	launcher.launch();
+	launcher.launch();
+	for (const environment of environments) {
+		assert.match(environment.ASH_DESKTOP_STARTUP_TRACE_ID, /^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/u);
+		assert.equal(environment.ASH_DESKTOP_STARTUP_TRACE_CARRIER_PID, undefined);
+	}
+	assert.notEqual(environments[0].ASH_DESKTOP_STARTUP_TRACE_ID, environments[1].ASH_DESKTOP_STARTUP_TRACE_ID);
+	assert.equal(launcher.environment.ASH_DESKTOP_STARTUP_TRACE_ID, 'stale');
+	launcher.replaceEnvironment({ ASH_DESKTOP_STARTUP_TRACE_ID: 'stale', ASH_DESKTOP_STARTUP_TRACE_CARRIER_PID: '123' });
+	launcher.launch();
+	assert.deepEqual(environments[2], {});
+});

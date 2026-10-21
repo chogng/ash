@@ -71,7 +71,7 @@ for (const mode of ['build', 'watch'] as const) {
 					module: 'NodeNext', moduleDetection: 'legacy', target: 'ES2022', types: [], rootDir: '.', incremental: true,
 					outDir: `.build/desktop/${project}`, tsBuildInfoFile: `.build/desktop/${project}.tsbuildinfo`,
 				},
-				include: project === 'preload' ? [source, browserPreloadSource] : [source],
+				include: project === 'preload' ? [source, browserPreloadSource] : [source, 'src/extra/*.ts'],
 			}));
 		}
 		const initial = spawnSync(process.execPath, [compiler, '--build', 'tsconfig.main.json', 'tsconfig.preload.json', '--pretty', 'false'], {
@@ -139,6 +139,7 @@ for (const mode of ['build', 'watch'] as const) {
 			await writeFile(join(desktop, 'src/main.ts'), 'export const version: number = "invalid";');
 			await until(() => readyStates.length >= 2);
 			assert.deepEqual(readyStates, [false, false], 'A failed rebuild must not publish readiness');
+			assert.match(await readFile(join(output, 'main/src/main.js'), 'utf8'), /version = "invalid"/u, 'The failed compiler must have consumed the invalid source');
 			await writeFile(join(desktop, 'src/main.ts'), 'export const version = 3;');
 			await until(() => ready);
 			assert.match(await readFile(join(output, 'main/src/main.js'), 'utf8'), /version = 3/u);
@@ -147,6 +148,19 @@ for (const mode of ['build', 'watch'] as const) {
 			await writeFile(join(desktop, 'tsconfig.base.json'), '{"compilerOptions":{"removeComments":true}}');
 			await until(() => ready);
 			assert.equal(JSON.parse(await readFile(join(output, 'main.tsbuildinfo'), 'utf8')).options.removeComments, true, 'Extended configuration changes remain watched');
+			await mkdir(join(desktop, 'src/extra'));
+			ready = false;
+			await writeFile(join(desktop, 'src/extra/added.ts'), 'export const added = 1;');
+			await until(() => ready);
+			assert.match(await readFile(join(output, 'main/src/extra/added.js'), 'utf8'), /added = 1/u);
+			ready = false;
+			await writeFile(join(desktop, 'src/extra/added.ts'), 'export const added = 2;');
+			await until(() => ready);
+			assert.match(await readFile(join(output, 'main/src/extra/added.js'), 'utf8'), /added = 2/u);
+			ready = false;
+			await rm(join(desktop, 'src/extra/added.ts'));
+			await until(() => ready);
+			assert.ok(!JSON.parse(await readFile(join(output, 'main.tsbuildinfo'), 'utf8')).fileNames.some((file: string) => file.endsWith('/extra/added.ts')), 'Removing an input refreshes the compiler inventory');
 		}
 	});
 }

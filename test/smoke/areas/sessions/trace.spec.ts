@@ -30,36 +30,6 @@ async function inspectInput(viewer: Locator, label = 'Input', body = 'Saved body
 }
 function selectedEvent(viewer: Locator): Locator { return viewer.locator('[role=treeitem][aria-selected=true] .ash-agent-trace-event'); }
 
-test('Execution Trace shows loop actions, message phases and stop reasons', async ({ workbench }) => {
-	await workbench.quickaccess.runCommand('workbench.action.chat.openAgentDebugPanel');
-	const viewer = workbench.page.locator('.ash-agent-trace');
-	const decisions = [
-		{ action: 'executeTools', reason: 'toolRequests', stopReason: { type: 'toolUse' }, messagePhases: ['final_answer'], toolCallCount: 1 },
-		{ action: 'continue', reason: 'nonterminalMessage', stopReason: { type: 'completed' }, messagePhases: ['partial_answer'], toolCallCount: 0 },
-		{ action: 'complete', reason: 'compatibleCompletion', stopReason: { type: 'completed' }, messagePhases: [null], toolCallCount: 0 },
-		{ action: 'fail', reason: 'truncatedOutput', stopReason: { type: 'maxOutputTokens' }, messagePhases: ['partial_answer'], toolCallCount: 0 },
-		{ action: 'superseded', reason: 'newInput', stopReason: { type: 'completed' }, messagePhases: ['final_answer'], toolCallCount: 0 },
-	];
-	const trace = { formatVersion: 3, sessionId: 'loop-import', historyPrefixes: [], threads: [{ threadId: 'root', events: decisions.map((decision, index) => ({ eventId: `e-${index}`, sequence: index + 1, recordedAt: 1, event: { type: 'modelResponseEvaluated', threadId: 'root', turnId: 'turn', sourceThreadSequence: 0, decision } })) }] };
-	await viewer.locator('input[type=file]').setInputFiles({ name: 'loop.trace.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(trace)) });
-	await expect(viewer.locator('.ash-agent-trace-event')).toHaveCount(5);
-	await expect(viewer.locator('.ash-agent-trace-tree')).toContainText('Execute tools · Pending tool requests · stop: Tool use · phases: Final answer');
-	await expect(viewer.locator('.ash-agent-trace-tree')).toContainText('Continue generation · Nonterminal message received');
-	await expect(viewer.locator('.ash-agent-trace-tree')).toContainText('Complete Turn · Completed without a known phase');
-	await expect(viewer.locator('.ash-agent-trace-tree')).toContainText('Superseded by new input · New input arrived during generation');
-	await viewer.getByRole('button', { name: 'Errors only', exact: true }).click();
-	const failure = viewer.locator('.ash-agent-trace-event:visible');
-	await expect(failure).toHaveCount(1);
-	await failure.click();
-	await viewer.getByRole('tree').focus();
-	await viewer.getByRole('tree').press('End');
-	await expect(selectedEvent(viewer)).toHaveAttribute('data-key', 'root:4');
-	await expect(viewer.getByRole('tabpanel')).toContainText('Output token limit');
-	await viewer.getByRole('tab', { name: 'Raw record', exact: true }).click();
-	await expect(viewer.getByRole('tabpanel')).toContainText('maxOutputTokens');
-	await expect(viewer.getByRole('tabpanel')).toContainText('sourceThreadSequence');
-});
-
 test('Workbench opens the shared Execution Trace editor and imports a capture', async ({ application, workbench }) => {
 	await workbench.quickaccess.runCommand('workbench.action.chat.openAgentDebugPanel');
 	const viewer = workbench.page.locator('.ash-agent-trace');

@@ -28,6 +28,8 @@ interface PlaywrightFixtures {
 	readonly electronArgs: readonly string[];
 	/** JSON settings seeded in this Electron fixture's isolated profile before launch. */
 	readonly electronUserSettings: Readonly<Record<string, unknown>> | undefined;
+	/** Disable the shared LSP peer when a scenario configures its own stdio server. */
+	readonly useDefaultLanguageServer: boolean;
 	readonly webAppServer: WebLaunchResult | undefined;
 	readonly runningApplication: RunningApplication;
 	readonly restartWorkbench: RunningApplication['restart'];
@@ -65,6 +67,7 @@ export const test = base.extend<PlaywrightFixtures>({
 	useInMemorySecretStorage: [true, { option: true }],
 	electronArgs: [[], { option: true }],
 	electronUserSettings: [undefined, { option: true }],
+	useDefaultLanguageServer: [true, { option: true }],
 	includeLargeTestFile: [false, { option: true }],
 	gitRepository: [false, { option: true }],
 	gitMergeConflict: [false, { option: true }],
@@ -78,11 +81,13 @@ export const test = base.extend<PlaywrightFixtures>({
 	target: async ({ }, use, testInfo) => {
 		await use(playwrightTargetForProject(testInfo.project.name));
 	},
-	webAppServer: [async ({ testWorkspace, reportIssueUrl, backendConfiguration, githubAccount }, use, testInfo) => {
+	webAppServer: [async ({ testWorkspace, reportIssueUrl, backendConfiguration, githubAccount, useInMemorySecretStorage }, use, testInfo) => {
 		if (testInfo.project.name !== 'browser-app-server') { await use(undefined); return; }
 		// The full smoke prehook (or CI's explicit preparation) owns this build.
 		// no-compile runs reuse it without compiling again in each test fixture.
-		const server = await launchWeb(testWorkspace.directory, { reportIssueUrl, backendConfiguration, githubAccount, preparedBackend: true });
+		const server = await launchWeb(testWorkspace.directory, {
+			reportIssueUrl, backendConfiguration, githubAccount, preparedBackend: true, useInMemorySecretStorage,
+		});
 		try { await use(server); } finally { await server.close(); }
 	}, { timeout: 75_000 }],
 	testWorkspace: async ({ includeLargeTestFile, gitRepository, gitMergeConflict }, use) => {
@@ -95,7 +100,7 @@ export const test = base.extend<PlaywrightFixtures>({
 	},
 	// Startup (30s), process exit (10s), and daemon stop (30s) have independent
 	// owned budgets. Keep them inside the fixture budget; test actions retain 45s.
-	runningApplication: [async ({ target, testWorkspace, openWorkspace, webAppServer, baseURL, backendConfiguration, backendFixture, githubAccount, video, electronWindowMode, electronArgs, electronUserSettings, useInMemorySecretStorage }, use, testInfo) => {
+	runningApplication: [async ({ target, testWorkspace, openWorkspace, webAppServer, baseURL, backendConfiguration, backendFixture, githubAccount, video, electronWindowMode, electronArgs, electronUserSettings, useInMemorySecretStorage, useDefaultLanguageServer }, use, testInfo) => {
 		if (backendFixture && githubAccount) { throw new Error('Backend fixture and GitHub account fixture both select product services'); }
 		// Evidence scenarios opt into full recording; the launchers own every page until cleanup.
 		const videoOptions = typeof video === 'string' ? { mode: video, size: undefined } : video;
@@ -189,7 +194,7 @@ export const test = base.extend<PlaywrightFixtures>({
 				await writeFile(join(profileDirectory, 'config.toml'), backendConfiguration);
 			}
 			const languageServer = process.env.ASH_PLAYWRIGHT_LANGUAGE_SERVER;
-			if (languageServer && target.appServerMode === 'required') {
+			if (useDefaultLanguageServer && languageServer && target.appServerMode === 'required') {
 				const profileDirectory = join(userDataDirectory, 'profile');
 				await mkdir(profileDirectory, { recursive: true });
 				await writeFile(join(profileDirectory, 'config.toml'), `${backendConfiguration ?? ''}\n[languageServers.servers.rust-analyzer]\nmode = "enabled"\nexecutable = ${JSON.stringify(languageServer)}\n`);
@@ -301,10 +306,10 @@ async function captureRestartDialogs(application: import('@playwright/test').Ele
 
 export { expect } from "@playwright/test";
 
-/** Writes a real VS Code package alongside its Plugin authority envelope. */
+/** Writes an Ash SDK package alongside its Plugin authority envelope. */
 export async function writeEditorExtensionFixture(root: string, source: string, debuggerDefaults?: readonly unknown[]): Promise<void> {
 	const plugin = JSON.parse(await readFile(join(root, '.ash-plugin', 'plugin.json'), 'utf8'));
-	const commands = [...source.matchAll(/commands\.registerCommand\('([^']+)'/g)].flatMap(match => {
+	const commands = [...source.matchAll(/commands\.register\('([^']+)'/g)].flatMap(match => {
 		if (match[1] === 'acme.debugCancellation.descriptor.') return ['undefined', 'null'].map(value => match[1] + value);
 		if (match[1] === 'acme.debugCancellation.') return ['before.undefined', 'before.null', 'after.undefined', 'after.null'].map(value => match[1] + value);
 		return [match[1]];
@@ -312,7 +317,7 @@ export async function writeEditorExtensionFixture(root: string, source: string, 
 	const types = (method: string): string[] => [...source.matchAll(new RegExp(method + "\\(['\"]([^'\"]+)['\"]", 'g'))].map(match => match[1]).filter(value => value !== '*');
 	const contribution = plugin.contributions.editorExtensions[0];
 	await writeFile(join(root, 'package.json'), JSON.stringify({
-		publisher: plugin.id.split('/')[0], name: plugin.id.split('/')[1], version: plugin.version, main: 'extension.js', engines: { vscode: '^1.100.0' },
+		publisher: plugin.id.split('/')[0], name: plugin.id.split('/')[1], version: plugin.version, main: 'extension.js', engines: { ash: '*' },
 		activationEvents: contribution.activationEvents.map((event: { type: string; id?: string; taskType?: string; debugType?: string; }) => event.type === 'startup' ? '*' : event.type === 'onCommand' ? 'onCommand:' + event.id : event.type === 'onTaskType' ? 'onTaskType:' + event.taskType : event.type === 'onDebugType' ? 'onDebugResolve:' + event.debugType : 'onDebug'),
 		contributes: {
 			// Visible titles differ from stable IDs so commands participate in the Command Palette.

@@ -17,8 +17,6 @@ suite('Extension resource loader', () => {
 		assert.equal(await loader.readExtensionResource(uri), '{"name":"中文"}');
 		assert.deepEqual(await loader.readExtensionResourceBytes(request), bytes);
 		assert.deepEqual(requests, [request, request]);
-		assert.equal(await loader.supportsExtensionGalleryResources(), false);
-		assert.equal(await loader.getExtensionGalleryResourceURL({ publisher: 'publisher', name: 'sample', version: '1.0.0' }), undefined);
 	});
 
 	test('rejects escaping paths and malformed generations before asking the source to read', async () => {
@@ -30,32 +28,10 @@ suite('Extension resource loader', () => {
 		for (const query of ['generation=-1', 'generation=1&other=2', 'generation=9007199254740992']) {
 			await assert.rejects(loader.readExtensionResource(URI.from({ scheme: 'ash-extension-resource', authority: 'publisher.sample', path: '/file', query })), /generation/u);
 		}
-		assert.equal(reads, 0);
-	});
-
-	test('builds a configured gallery URL and reads its package-relative resource through the source', async () => {
-		const requests: unknown[] = [];
-		let template = 'https://registry.example/custom/api/{publisher}/{name}/universal/{version}/file/{path}';
-		const loader = new ExtensionResourceLoaderService(async () => { throw new Error('Unexpected installed read'); }, {
-			template: async () => template,
-			read: async request => { requests.push(request); return new TextEncoder().encode('gallery resource'); },
-		});
-		const extension = { publisher: 'publisher', name: 'sample', version: '1.0.0' };
-		const root = await loader.getExtensionGalleryResourceURL(extension);
-		assert.equal(root?.toString(), 'https://registry.example/custom/api/publisher/sample/universal/1.0.0/file/');
-		const uri = (await loader.getExtensionGalleryResourceURL(extension, 'themes/中文 theme.json'))!;
-		assert.equal(await loader.supportsExtensionGalleryResources(), true);
-		assert.equal(await loader.isExtensionGalleryResource(uri), true);
-		assert.equal(await loader.readExtensionResource(URI.parse(uri.toString())), 'gallery resource');
-		assert.deepEqual(requests, [{ resourceUrlTemplate: template, ...extension, path: 'themes/中文 theme.json' }]);
-		for (const candidate of [uri.with({ authority: 'registry.example.attacker' }), uri.with({ path: '/outside/package.json' }), uri.with({ query: 'other=1' }), uri.with({ scheme: 'http' })]) {
-			assert.equal(await loader.isExtensionGalleryResource(candidate), false);
-			await assert.rejects(loader.readExtensionResource(candidate), /outside/u);
+		for (const resource of ['https://registry.example/package.json', 'http://other.example/file', 'file:/outside/file']) {
+			await assert.rejects(loader.readExtensionResource(URI.parse(resource)), /installed extension/u);
 		}
-		assert.equal(await loader.getExtensionGalleryResourceURL({ ...extension, targetPlatform: 'linux-x64' }), undefined);
-		template = 'https://other.example/api/{publisher}/{name}/universal/{version}/file/{path}';
-		assert.equal(await loader.isExtensionGalleryResource(uri), false);
-		assert.equal((await loader.getExtensionGalleryResourceURL(extension))?.authority, 'other.example');
+		assert.equal(reads, 0);
 	});
 
 	test('reports unsupported resources in Chinese and rejects invalid UTF-8', async () => {
@@ -64,7 +40,7 @@ suite('Extension resource loader', () => {
 		const bundles = JSON.parse(readFileSync(resolve(process.cwd(), 'extensions/language-pack-zh-cn/translations/workbench.json'), 'utf8'));
 		setNlsMessages('zh-CN', bundles);
 		try {
-			await assert.rejects(loader.readExtensionResource(URI.parse('https://other.example/package.json')), { message: '此资源不属于已配置的扩展源。' });
+			await assert.rejects(loader.readExtensionResource(URI.parse('https://other.example/package.json')), { message: '此资源不是已安装扩展的资源。' });
 		} finally {
 			resetNlsResolver();
 		}

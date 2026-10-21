@@ -131,15 +131,20 @@ test('opening Agents again reuses the restored desktop window', { tag: ['@electr
 	await expect(agents.locator('.ash-sessions-window')).toBeVisible();
 });
 
-test('a failed desktop menu selection restores capture and leaves Main running', { tag: ['@electron-ui', '@electron-app-server', '@darwin'] }, async ({ application, target, workbench }) => {
+test('a failed desktop menu selection restores capture and leaves Main running', { tag: ['@electron-ui', '@electron-app-server', '@darwin'] }, async ({ application, workbench }) => {
 	if (!('windows' in application)) throw new Error('Expected Electron application');
-	const page = await workbench.openAgentsWindow(target.kind);
-	const button = page.locator('[data-part="titlebar"]').getByRole('button', { name: 'Application menu', exact: true });
-	await expect(captureElectronMenu(application, () => button.click(), { label: 'Missing test menu action' })).rejects.toThrow('Expected enabled menu item: Missing test menu action');
-	await expect(button).toHaveAttribute('aria-expanded', 'false');
-	const items = await captureElectronMenu(application, () => button.click());
-	expect(items.some(item => item.label === 'File')).toBe(true);
-	await expect(button).toHaveAttribute('aria-expanded', 'false');
+	await workbench.quickaccess.runCommand('workbench.action.files.newUntitledFile');
+	// macOS owns the application menu in the system menubar. A tab context
+	// menu exercises the real renderer-to-Main popup and its capture cleanup.
+	const tab = workbench.editors.groupAt(0).tabs.filter({ hasText: 'Untitled-1' });
+	const open = () => tab.click({ button: 'right' });
+	await expect(captureElectronMenu(application, open, { label: 'Missing test menu action' })).rejects.toThrow('Expected enabled menu item: Missing test menu action');
+	await expect(tab).toBeVisible();
+	const items = await captureElectronMenu(application, open);
+	expect(items.some(item => item.label === 'Close')).toBe(true);
+	await expect(tab).toBeVisible();
+	await captureElectronMenu(application, open, { label: 'Close' });
+	await expect(tab).toHaveCount(0);
 });
 
 test('a failed dialog choice cancels the request and permits the next confirmation', async ({ application, workbench }) => {
@@ -318,7 +323,7 @@ test('an Electron shutdown that refuses to quit terminates its owned process tre
 		let closing: Promise<void> | undefined;
 		try {
 			await running.application.evaluate(({ app }) => { app.quit = () => { }; });
-			closing = running.close();
+			closing = running.quit();
 			await expect(closing).rejects.toThrow('process tree was terminated');
 			expect(child.exitCode !== null || child.signalCode !== null).toBe(true);
 		} finally {

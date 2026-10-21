@@ -320,6 +320,15 @@ const terminalTransfer = {
 	lease: { terminalId: 'terminal-1', dirId: 'workspace-folder', reconnectToken: 'a'.repeat(64), reconnectGracePeriodMillis: 30_000 },
 };
 
+test('transfer preflight accepts a persistent credential but Main requires detach before offering it', async () => {
+	const { validateTerminalWindowTransferMove } = await import('../../common/nativeHost.js');
+	const { TerminalWindowTransferHost } = await import('../../electron-main/nativeHostMainService.js');
+	const transfer = { ...terminalTransfer, lease: { ...terminalTransfer.lease, reconnectGracePeriodMillis: 0 } };
+	assert.deepEqual(validateTerminalWindowTransferMove({ transfer }), { transfer });
+	using host = new TerminalWindowTransferHost({ getWindow: () => undefined, openWindow: async () => { assert.fail('detach is required before opening a window'); } });
+	await assert.rejects(host.move(1, transfer), /requires a detached lease/);
+});
+
 test('terminal handoff IPC validates bounded opaque payloads and excludes sender identities', async () => {
 	const { NATIVE_HOST_TERMINAL_MOVE_CHANNEL, NATIVE_HOST_TERMINAL_TAKE_CHANNEL, NATIVE_HOST_TERMINAL_COMPLETE_CHANNEL } = await import('../../common/nativeHost.js');
 	const received: unknown[] = [];

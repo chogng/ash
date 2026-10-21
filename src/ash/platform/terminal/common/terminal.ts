@@ -9,6 +9,9 @@ import type { ILogger } from '../../log/common/log.js';
 export const ITerminalLogService = createServiceIdentifier<ITerminalLogService>('terminalLogService');
 export interface ITerminalLogService extends ILogger { }
 
+/** Main owns this window's lifetime pipe; the renderer receives only its opaque credential. */
+export const TERMINAL_WINDOW_LIFETIME_CHANNEL = 'ash:terminal:window-lifetime';
+
 /** Main-selected checkpoint identity carried through the window's ephemeral credential channel. */
 export const TERMINAL_REVIVE_STATE_KEY = 'terminal.reviveStateKey';
 
@@ -146,11 +149,12 @@ export interface ITerminalProcessCreation {
 	readonly connectionPersistence: TerminalProcessConnectionPersistence;
 }
 
-/** A short-lived bearer credential. Store only through the host secret service. */
+/** A rotating bearer credential. Store only through the host secret service. */
 export interface ITerminalReconnectLease {
 	readonly terminalId: string;
 	readonly dirId?: string;
 	readonly reconnectToken: string;
+	/** Zero keeps a disconnected process alive without a deadline; positive values bound a handoff. */
 	readonly reconnectGracePeriodMillis: number;
 }
 
@@ -250,8 +254,16 @@ export interface ITerminalAutoReply {
 }
 
 
+/** Permanent retirement of a process, rather than a temporary transport interruption. */
+export interface ITerminalProcessInvalidationEvent {
+	readonly terminalId: string;
+	readonly reason: 'replacement' | 'expiry';
+}
+
 /** Platform contract for creating and communicating with terminal processes. */
 export interface ITerminalProcessService {
+	/** A process lease was permanently retired, independently of host connection readiness. */
+	readonly onDidInvalidateProcess?: Event<ITerminalProcessInvalidationEvent>;
 	/** Initialized execution host OS; unavailable before connection readiness. */
 	readonly operatingSystem?: OperatingSystem;
 	listProfiles(dirId?: string): Promise<readonly ITerminalProcessProfile[]>;
@@ -260,6 +272,7 @@ export interface ITerminalProcessService {
 	getEnvironment(names?: readonly string[], dirId?: string): Promise<Readonly<Record<string, string>>>;
 	getProcessInfo(options: ITerminalProcessCloseOptions): Promise<ITerminalProcessInfo>;
 	create(options: ITerminalProcessCreateOptions): Promise<ITerminalProcessCreation>;
+	/** Undefined when this owner has retired the process; transport recovery failures still reject. */
 	getReconnectLease?(terminalId: string): Promise<ITerminalReconnectLease | undefined>;
 	/** Atomically releases this connection's access and issues a single-use handoff lease. */
 	detach?(terminalId: string): Promise<ITerminalReconnectLease>;

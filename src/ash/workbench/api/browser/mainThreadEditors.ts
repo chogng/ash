@@ -278,7 +278,8 @@ export class MainThreadEditors extends Disposable {
 				const pane = input === group?.activeInput ? group?.activePane : undefined;
 				const selection = isEditorPaneWithSelection(pane) ? pane.getSelection() : undefined;
 				const copy = input ? this.workingCopies.get(input.resource).find(copy => copy.backupKind === 'text') : undefined;
-				const contents = copy?.backup();
+				if (request.includeContents !== undefined && typeof request.includeContents !== 'boolean') throw new TypeError('Invalid editor contents request');
+				const contents = request.includeContents === false ? undefined : copy?.backup();
 				return normalizeExtensionHostPayload({ version: input ? this.codeEditors.listCodeEditors().find(editor => extUriBiasedIgnorePathCase.isEqual(editor.getModel()?.uri, input.resource))?.getModel()?.getVersionId() ?? null : null, contents: contents && contents.length <= 2 * 1024 * 1024 ? contents : null, input: input ? { resource: input.resource.toString(), modified: 'modified' in input ? { resource: (input.modified as IResourceEditorInput).resource.toString() } : null } : null, selection: selection ? { startLineNumber: selection.startLineNumber, startColumn: selection.startColumn, endLineNumber: selection.endLineNumber, endColumn: selection.endColumn } : null });
 			}
 			case 'dirty':

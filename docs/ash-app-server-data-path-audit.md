@@ -4,7 +4,7 @@
 
 审计基线的结论：Ash Main 已经透明转发字节，避免了 Owl 在 Browser UI 线程完整解析 JSON 的问题。但 Renderer 的 framing 存在可复现的复制放大，完整帧还会重新 UTF-8 编码、同步解析和递归 schema 校验。聊天消费者没有使用后端已有的有界历史能力，进一步放大输入。背压能够限制传输中的字节块，不能等同于限制完整响应处理成本、总内存或控制消息延迟。
 
-**实施状态：三批链路 P1 与流式 Markdown 优化已实现。** 第 1～4 节保留 manifest 对应的优化前审计快照；固定页 framing、接收端副本与重复编码见第 7 节；Code Chat 的有界历史、翻页、回放与审批保护见第 8 节；大帧解析与 schema 校验的 Worker、顺序队列及异步 ACK 见第 9 节。第 15 节记录流式 Markdown 尾部更新，第 16～17 节记录 Worker 回传、领域堆与正文复用，第 18～19 节记录围栏增量更新和取消载荷退休。其余链路测量见[数据链路性能 TODO](../TODO.md#数据链路性能--todo)。
+**实施状态：三批链路 P1 与流式 Markdown 优化已实现。** 第 1～4 节保留 manifest 对应的优化前审计快照；固定页 framing、接收端副本与重复编码见第 7 节；Code Chat 的有界历史、翻页、回放与审批保护见第 8 节；大帧解析与 schema 校验的 Worker、顺序队列及异步 ACK 见第 9 节。第 15 节记录流式 Markdown 尾部更新，第 16～17 节记录 Worker 回传、领域堆与正文复用，第 18～19 节记录围栏增量更新和取消载荷退休，第 20～22 节记录数学候选扫描与大尾部的帧消费、DOM 复用及预算验收。其余链路测量见[数据链路性能 TODO](../TODO.md#数据链路性能--todo)。
 
 证据快照与文件 hash 见 [manifest.json](research/ash-app-server-data-path-2026-10-17/manifest.json)，实验脚本见 [probe.cjs](research/ash-app-server-data-path-2026-10-17/probe.cjs)。这是调查时的实现，不替代 [前端与 App Server 连接边界](frontend-app-server-boundary.md)或产品契约。工作区有并发开发活动；后续修改前应重新核对文件 hash。
 
@@ -470,7 +470,10 @@ wire bytes 上限不是 RSS／JS heap 上限，UTF-16 字符串、Worker 输入�
 
 ### 9.3 真实 Chromium 前后对比
 
-新增 `appServerDecode.integration.spec.ts` 与专用构建页面。两种方案经过相同生产
+2026-10-17 新增的 `appServerDecode.integration.spec.ts` 与专用构建页面曾包含下述性能对照。
+2026-10-20 测试收敛后移除诊断采样与同步基线，只保留真实 Worker 的完整结果、浏览器任务让出、
+通知顺序和 EOF 排空回归；下述数字属于历史测量，当前 spec 不再重新采集这些性能样本。
+当时两种方案经过相同生产
 `AppServerProtocolClient`、真实生成 schema 与 response 分发；优化前方案注入同步 decoder，
 等价复现 `c77786dee` 的 JSON.parse＋对应 schema 操作，优化后使用真正的 Web Worker。
 旧协议／transport 源码备份保留在本机 investigation 的 `baseline/`。
@@ -504,7 +507,7 @@ TaskDuration 也包含准备与验证的主线程工作，不等于表内派发�
 
 样本与日志：`.build/investigations/app-server-decode-p1-2026-10-17/`，包括
 `comparison-results.json`、`comparison-summary.json`、`verification.json`、源码备份、检查及失败修复日志。
-重现入口：
+当前功能回归入口（不复现历史性能采样）：
 
 ```sh
 pnpm test:browser:integration appServerDecode.integration.spec.ts --project=chromium
@@ -644,7 +647,11 @@ own-property 与 closed record 契约，并复测生产 Worker 及协议客户�
 [Ajv standalone](https://ajv.js.org/standalone.html) 提供构建时生成校验函数的后续候选。
 这些资料支撑方案选择，未把外部 benchmark 的倍数套用到 Ash。
 
-## 11. Protobuf 原型与优化后 JSON 的同数据对比
+## 11. Protobuf 原型与优化后 JSON 的同数据对比（历史实验，已退役）
+
+本节保留 2026-10-17 的实验方法、数据和结论。2026-10-20 测试收敛时删除了原型及其测试专用
+codec、Worker、生成器和构建入口，并移除 Protobuf 开发依赖。原型从未成为产品协议；现有生产
+JSON decoder、协议单元测试与真实 Worker 组件回归继续保留。本节原型文件路径均为历史记录。
 
 ### 11.1 原型范围与不变的协议 owner
 
@@ -652,7 +659,7 @@ own-property 与 closed record 契约，并复测生产 Worker 及协议客户�
 提交门禁执行后被范围外 13 个未暂存 TypeScript 文件的格式问题阻断；4 个提交文件的定向格式、
 working-tree／staged whitespace 检查和第 10 节测试通过，按仓库本地提交流程完成。
 
-本原型只进入 `test/integration/browser/protobufPrototype/` 与专用浏览器 fixture，未切换产品 wire
+该原型当时只进入 `test/integration/browser/protobufPrototype/` 与专用浏览器 fixture，未切换产品 wire
 协议，未增加实验 method、版本协商或 gRPC。Main relay、JSON 行 framing、Electron IPC、后端及
 生产 Worker 默认实现保持原路径。唯一生产代码整理是把 `decodeAppServerFrame` 的 JSON.parse
 之后部分提取为 `decodeAppServerMessage`，由原函数及原型复用。请求路由、pending 生命周期、
@@ -663,8 +670,8 @@ working-tree／staged whitespace 检查和第 10 节测试通过，按仓库本�
 token 不做 base64、不 stringify 已解码的 Protobuf 结果，也不向生产 transport 暴露新入口。
 消费或连接退休时释放输入记录，没有创建第二份业务 pending map。
 
-使用 **protobufjs 8.8.1／protobufjs-cli 2.7.1**，均为 devDependencies。`model.ts` 是测试 wire
-模型的唯一输入，由现有 browser Vite buildStart 生成 `.build/protobuf-prototype/wire.proto` 和 fixture
+实验当时使用 **protobufjs 8.8.1／protobufjs-cli 2.7.1** 开发依赖，两者现已移除。`model.ts` 曾是测试 wire
+模型的唯一输入，由当时的 browser Vite buildStart 生成 `.build/protobuf-prototype/wire.proto` 和 fixture
 目录下 ignored 的 `codec.js`；`codec.d.ts` 声明实际生成 runtime 的接口。静态代码生成在构建阶段执行，
 Worker 不解析 `.proto` 或运行动态代码生成。两种 codec 使用同一个 Worker bundle；冷启动数字
 不能当作分别打包后的产品加载成本。
@@ -791,13 +798,9 @@ JSON 路径已经很短；长正文不因字段编号编码而消失；数值数
 虽通过，但 runner 清理阶段的系统 ps 查询超时，按失败保留日志；随后使用仓库 Node runner
 重新完成构建、7 项测试及正常退出。没有修改系统安全设置或用户应用进程。
 
-复现入口：
-
-```sh
-pnpm test:browser:integration appServerCodec.integration.spec.ts appServerDecode.integration.spec.ts --project=chromium
-# 复用已生成的协议／资源时，仍执行完整 integration typecheck：
-pnpm test:browser:integration:prepared appServerCodec.integration.spec.ts appServerDecode.integration.spec.ts --project=chromium
-```
+原型的 `appServerCodec.integration.spec.ts` 已删除，当前 checkout 不再提供该对比的执行入口。
+复现历史采样需要检出退役前版本，并使用该版本的原型依赖与 fixture；当前功能验证运行第 9 节的
+真实 Worker 回归，不能据其结果宣称重测了下述历史性能对比。
 
 原始样本、首次使用数据、各次失败和最终报告保存在
 `.build/investigations/app-server-protobuf-p1-2026-10-17/`：`final-app-server-codec-comparison.json`、
@@ -1523,3 +1526,149 @@ ASH_MARKDOWN_BENCHMARK_LABEL=delivery-after pnpm test:browser:integration:prepar
 
 原始前后日志、各 21 个有效样本、汇总、源码快照、manifest 与候选差分脚本位于
 `.build/investigations/markdown-delivery-budget-2026-10-18/`。
+
+## 21. 大尾部预算测量与未闭合公式扫描减量（2026-10-20）
+
+本节保留首轮测量；其留下的大尾部渲染与投递问题由[第 22 节](#22-大尾部帧消费与已净化-dom-复用2026-10-20)继续处理。
+
+本轮补测第 20 节留下的更大段落、候选密集公式、列表和表格。Markdown Language Features 与
+Markdown Math 均为预装 Rust 扩展；本次瓶颈位于宿主共享的 `MarkedKatexExtension.readMath`，
+由 Chat 的边界 lexer 和标准 renderer 调用，公式转换仍归独立的 `markdown-math` 扩展。
+未闭合 `\(` 候选会为寻找 `\)` 逐字符扫描后文；Marked 消费后续链接、粗体等 token 时又重复该工作。
+现有 owner 改用原生 `indexOf` 定位完整闭合分隔符，只检查其前连续反斜杠的奇偶性；保留重叠美元、
+Unicode 单词边界、空白规则与原有 20,000 UTF-16 code units 扫描边界。没有新增公式渲染器或投递调度。
+
+在 macOS 27.0.1、arm64 Apple M2 Max、Node 24.21.0 上，通过生产
+`ChatListWidget → ChatMarkdownContentPart → ChatContentMarkdownRenderer` 的 Chromium 组件入口测量。
+四种负载各预热一次、采七个有效样本；每个样本 128 次完整累计更新，每八次等待一帧，终点为完整正文与末次更新后两帧。
+GC 在计时外；前后顺序采集，未随机交替。每组计时后独立比较全文 DOM，包括列表／表格全部行及未闭合公式的字面内容。
+公式场景包含 64 个未闭合候选、货币和末尾真实公式；该组件未连接 Rust provider，计时只覆盖语法识别与源码回退。
+
+下表是七次样本中位数，单位 ms，均为前 → 后；嵌套阶段不能相加：
+
+| 负载               | UTF-8 字节 |      累计同步更新 | 单次最大同步更新 | 单次最大 lexer |
+| ------------------ | ---------: | ----------------: | ---------------: | -------------: |
+| 单个富文本段落     |     40,343 | 2,638.7 → 2,634.9 |      45.9 → 46.4 |     9.7 → 10.0 |
+| 密集未闭合公式候选 |      4,839 |   3,721.6 → 455.7 |      105.2 → 8.7 |     50.9 → 3.0 |
+| 512 项连续列表     |     34,216 | 2,892.8 → 2,880.0 |      47.7 → 47.3 |      5.7 → 5.0 |
+| 256 行三列表格     |     18,134 | 1,675.2 → 1,681.9 |      26.7 → 26.9 |      3.2 → 3.1 |
+
+公式候选累计同步成本下降 87.8%，lexer 累计时间 3,497.4 → 248.7 ms，CDP TaskDuration
+3,743.8 → 474.6 ms，末次更新后两帧 3,768.5 → 515.9 ms。前后均为 128 次标准 render、419 次 lexer，
+累计 lexer 输入 1,017,831 个 UTF-16 code units，收益来自扫描成本下降。
+其余三组变化不足 1%，未解决它们的尾部重复渲染成本。
+
+这仍没有提供硬预算。按 60 Hz 的 16.7 ms 参考线，公式组修改后单次更新全部低于该值，
+但每八次同步更新之和的最大值中位数仍为 64.9 ms，七个样本仍观察到 21 个 ≥50 ms 长任务；
+该和不包含异步回调或帧内其他工作，不能当作真实 task 的完整耗时。
+段落／列表／表格对应的八次调用和仍为 357.6／346.8／192.5 ms，单次最大更新也仍超过一帧，
+因此剩余工作收窄到大尾部的渲染与投递预算，而非继续把成本全部归因于 lexer。
+首次使用 256 候选的组合基线在 180 秒测试上限内未完成，停在公式负载预热；保留失败，不纳入上述配对数据。
+
+语义差分比较了 677,935 组短字符串穷举、固定种子 Unicode／转义输入和扫描长度边界，结果一致。
+新增长度测试首跑误把超限 `$$` 内仍合法的单美元公式当作无公式，按既有回退语义修正预期后，
+共享 Markdown 单元文件 58 项通过，包含真实 Rust Math 扩展；Chromium 定向回归 14 项通过，覆盖
+增长、完成、修正、缩短、清空、中英文选区／焦点以及四种主题布局。四组前后性能场景各通过一次。
+上述性能数据未覆盖 App Server、Main IPC、完整 Desktop、Rust 公式转换、RSS 或其他平台。
+
+复现命令：
+
+```sh
+ASH_MARKDOWN_BENCHMARK_LABEL=after pnpm test:browser:integration:prepared chatTranscript.integration.spec.ts --project=chromium --grep 'streaming Markdown large tail delivery costs'
+pnpm test:unit:prepared --run src/ash/workbench/contrib/chat/test/browser/widget/chatContentMarkdownRenderer.test.ts --workers 1
+pnpm test:browser:integration:prepared chatTranscript.integration.spec.ts --project=chromium --grep 'streaming Markdown (large tails preserve|large paragraphs preserve|retains|fences|corrections|block layout)|Response code blocks'
+```
+
+原始样本、汇总、源码、工具／浏览器版本、输入摘要及失败日志在
+`.build/investigations/markdown-tail-budget-20261020/`；`summary.json` 保留全部阶段，
+`manifest.json` 标识源码、锁文件及前后 owning runner 产物。
+
+自举验证通过本次源码的正常 `pnpm run build:web:full`、`pnpm run prepare:backend:web`，随后运行
+`pnpm run test:smoke:browser:full:no-compile test/smoke/areas/chat/chat-response-stream.spec.ts --grep 'Real streamed Chat responses'`，
+实际 Ash Web → App Server → Chat 场景 1 项通过。该场景新增 64 个未闭合公式候选及真实 `$x+1$`，
+断言预装 Math 扩展返回 MathML，并保持流式代码选区、工具栏焦点、阅读位置和完成时正文修正。
+后端来源是本检出准备的 packaged-node 包 `dd063b4bd7b619dedb35729097dd2b094017f14dbd5fddd48f473165314038b0`。
+这是运行接线的功能证据，没有测完整产品的延迟收益，也没有运行 Electron 窗口。
+
+该批次的标准 `bun check -p test/automation/tsconfig.json --all` 当时被
+`build/desktop/liveBuild.ts:47` 的 `Promise.withResolvers` 与 ES2022 类型库不匹配阻塞（TS2550）；
+额外传入 Promise 类型库的诊断调用同样失败，未改编译配置或 builder 实现。实际 smoke 通过不表示该批次类型检查通过。此类型库差异现已在 `test/automation/tsconfig.json` 修正，标准类型检查通过。
+integration 类型检查、正常 Renderer 构建、五个改动 TS 文件 formatter 和 `git diff --check` 通过。
+对应输出为 `product-build.log`、`backend-prepare.log`、`product-smoke.log`、`automation-types*.log`，
+均未混入组件性能样本。
+
+## 22. 大尾部帧消费与已净化 DOM 复用（2026-10-20）
+
+第 21 节的四类负载已完成本轮预算验收。仍由 `ChatMarkdownContentPart` 拥有响应的呈现快照、
+片段、代码模型和释放，`ChatContentMarkdownRenderer` 拥有 Chat 渲染策略；没有新增业务模型或替换预装 Rust 扩展。
+
+- 达到 1,024 UTF-16 code units 的呈现更新使用响应自身的可取消帧任务，每帧只消费最新快照。
+  终态与修正共用同一槽位；缩短到小输入或清空立即取消旧任务，隐藏暂停、恢复消费最新值，销毁释放任务与待消费快照。
+  4 MiB 输入上限仍同步拒绝，保留旧 DOM；没有通过降低正文上限或丢失最终内容达标。
+- 达到 4,096 code units 的普通单段落、连续列表及表格继续使用标准 `renderWorkbenchMarkdown` 解析完整当前文本，
+  包括原有未完成语法补齐。HTML 先留在 inert template 中；仅相同信任、base URI、sanitizer 策略、结构和属性下，
+  复用已净化的相同子树。变化部分重新经过标准 `sanitizeMarkdownHtmlToFragment`，文本节点重新编码后才参与 HTML 拼接。
+  表格还比较表头，策略变化使复用失效。弱引用缓存只保留该输出根的上一棵原始树与对应净化节点，释放时退休。
+- 原有公开 `render(..., outElement)` 承接复用。现有片段 lifetime 释放旧监听与装饰，新 lifetime 接手同一根节点；
+  链接使用同一个平台 `openLinkFromMarkdown` 策略及构造注入的 opener，保留默认打开行为、命令信任和调用方处理器。
+  URI transform、自定义扩展／标签／属性、代码、图片、任务复选框、公式和其他复杂结构继续走普通 renderer。
+- 不含任何可能公式起始符的源码不安装数学分词扩展，也不递归查找数学 token。
+  已知单块且没有新空行或全局语义输入时，省去额外的边界 lexer；仍用标准 renderer 解析整个当前块。
+  公式继续按完整消息的有序批次渲染，宏定义不拆成单公式缓存，退休消费者仍按原取消规则处理。
+
+在第 21 节同一台 macOS arm64 M2 Max 上，使用相同四类输入、128 次累计快照、每八次到达等待一帧，
+各一轮预热及七次有效样本；前后顺序测量，GC 在计时外。额外包围实际 `ChatMarkdownContentPart.render`，
+将延后执行的任务计入数据，不把入队调用的低耗时当作渲染耗时。计时后对照完整 DOM，确认没有遗漏末尾、列表项或表格行。
+
+下表除字节与任务数外均为 ms，取七次样本中位数；长任务为七样本合计，阶段有嵌套，不能相加：
+
+| 负载       | UTF-8 字节 | 单次最大实际渲染，前 → 后 | 累计实际渲染，前 → 后 | CDP TaskDuration，前 → 后 | 长任务，前 → 后 |
+| ---------- | ---------: | ------------------------: | --------------------: | ------------------------: | --------------: |
+| 单段落     |     40,343 |                40.2 → 8.8 |        2,264.2 → 99.7 |           2,649.6 → 167.3 |          92 → 0 |
+| 公式候选   |      4,839 |                 7.9 → 8.8 |          421.1 → 91.9 |             477.9 → 128.7 |          21 → 0 |
+| 512 项列表 |     34,216 |               40.3 → 13.4 |       2,355.1 → 147.9 |           2,990.8 → 228.7 |          99 → 0 |
+| 256 行表格 |     18,134 |                21.9 → 6.9 |        1,385.1 → 92.5 |           1,770.1 → 162.5 |          94 → 0 |
+
+全部 28 个 after 样本中，实际渲染任务的最坏值分别为 **9.1／9.4／13.9／7.0 ms**，没有超过
+60 Hz 的 16.7 ms 参考线，也没有观察到 ≥50 ms 长任务。实际渲染次数由各 128 次降至 19／40／20／23 次，
+是呈现快照按帧合并的结果；原始请求和最终正文仍完整保留。公式组单次没有变快，收益来自避免同一任务内连续重复渲染。
+到完整正文及两帧的墙钟中位数为 2,658.5 → 227.0、515.9 → 252.9、2,995.1 → 261.2、1,777.0 → 228.7 ms。
+
+这是这四类受控负载的浏览器消费预算验收，不是对任意大小、语法、设备或 GC 的硬实时承诺，
+也不是完整 Desktop 的性能数字。复杂语法仍有完整解析与净化成本，源码正确性与既有渲染语义优先。
+中间轮次仍有 20～36 ms 任务及长任务，CPU profile 定位到冗余数学扫描、递归 walk 和完整块指纹后继续修改；
+这些未达标结果全部保留，没有混入最终数据。
+
+复现性能入口仍为第 21 节命令；设置 `ASH_MARKDOWN_CPU_PROFILE=hugeParagraph` 可将预热任务的 CPU profile
+作为测试附件导出，采样与正式计时分开。原始数据、源码快照、版本与摘要、完整验证输出在
+`.build/investigations/markdown-tail-budget-close-20261020/`，最终比较为 `accepted-summary.json`，
+`manifest.json` 记录两组 owning runner 与准确输入。此前公式扫描的差分证据仍见第 21 节，不重复混算收益。
+
+最终验证：共享 Markdown 单元文件 **62 项通过**，包括排队终态、修正、清空、隐藏／恢复、销毁、
+稳定节点与链接处理器、默认 opener／命令信任、sanitizer 策略变化和真实 Rust 公式宏作用域。
+Chromium 四组性能场景及 16 项功能回归均通过，覆盖全文、代码模型、选区／焦点、中英文和四种主题布局。
+实际 App Server 的受控流式场景在 Web 与 Electron 各 **1 项通过**；新增的大响应先发半段、保留节点后继续八次增量，
+并核对最终持久消息、真实公式 MathML、代码修正、选择、焦点和阅读位置。该运行验证没有替代组件性能数据。
+
+正常 `pnpm run build:web:full`、`pnpm run build`，以及标准 automation 类型检查、六个改动 TS 文件 formatter、
+文档格式与 `git diff --check` 均通过。运行来源为当前源码的 Web／Electron bundle，后端为本检出准备的
+packaged-node 包 `266b4f1eab2f821fedabb18e114830a613928e40b8b84ce691b48812a3bb8eea` 与
+host-provided-node 包 `803baaf1fd625dd1e0486eb0ef9e46c3245e7a6d13ab7bb350d6d62deca3dc4c`。
+构建与真实场景命令如下，两个 smoke 均在对应准备与构建完成后执行：
+
+```sh
+pnpm run prepare:backend:web
+pnpm run build:web:full
+pnpm run test:smoke:browser:full:no-compile test/smoke/areas/chat/chat-response-stream.spec.ts --grep 'Real streamed Chat responses'
+pnpm run prepare:backend
+pnpm run build
+pnpm run test:smoke:desktop:no-compile test/smoke/areas/chat/chat-response-stream.spec.ts --grep 'Real streamed Chat responses'
+```
+
+保留首次失败：新增调度测试最初未去除 DOM 尾部换行而超时，修正完成条件后通过；现有上限测试发现排队路径
+未同步拒绝超大输入，已在入队时保留原同步准入契约。并发 SCM 修改曾阻塞整体类型编译，相关源文件修正后才复跑通过，
+本轮未修改 SCM。Electron 首跑在底部报告 1px 整数差异；`scrollHeight/clientHeight` 的取整不等于可达滚动上限，
+改为临时探测并恢复浏览器原位置，严格断言实际可达底部差为零，随后通过，没有放宽为允许停在底部之前。
+失败 trace／视频保留在 `electron-first-failure/`；最终输出为 `complete-unit.log`、`complete-browser.log`、
+`accepted-performance.log`、`complete-build-*.log` 与 `complete-smoke-*.log`。
+本项验收完成后从根 TODO 移除；未运行完整回归矩阵或其他操作系统。

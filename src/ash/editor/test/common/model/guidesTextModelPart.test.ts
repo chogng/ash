@@ -1,5 +1,6 @@
-import { registerTestCodeEditorFeatures } from '../../../../../../test/fixtures/codeEditorFeatures.js';
-import { after as afterCodeFeatures } from 'mocha';
+import { createTextModelFeatures } from '../../../common/model/modelFeatures.js';
+import { registerTextModelFeatures } from '../../../common/model/textModelFeatures.js';
+import { after as afterModelFeatures } from 'mocha';
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { Range } from '../../../common/core/range.js';
@@ -72,5 +73,5 @@ test('Multiline bracket guide stays active inside a single-line pair', () => {
 	]);
 });
 
-const codeFeatures = registerTestCodeEditorFeatures();
-afterCodeFeatures(() => codeFeatures.dispose());
+const modelFeatures = registerTextModelFeatures(createTextModelFeatures);
+afterModelFeatures(() => modelFeatures.dispose());

@@ -30,6 +30,8 @@ pub(crate) struct SubscriberWatchState {
     pub(crate) count: usize,
     pub(crate) last_exists: bool,
     pub(crate) fallback: bool,
+    #[cfg(target_os = "macos")]
+    pub(crate) root_identity: Option<(u64, u64)>,
 }
 
 #[derive(Clone)]
@@ -44,12 +46,23 @@ pub(crate) struct PathWatchCounts {
     pub(crate) non_recursive: usize,
     pub(crate) recursive: usize,
     pub(crate) contents: usize,
+    pub(crate) metadata: usize,
+}
+
+/// Why a physical scope exists; native parent leases are unnecessary for polling.
+#[derive(Clone, Copy, Eq, PartialEq)]
+pub(crate) enum WatchInterest {
+    Contents,
+    Metadata,
+    NativeParent,
 }
 
 impl PathWatchCounts {
-    pub(crate) fn increment(&mut self, recursive: bool, contents: bool, amount: usize) {
-        if contents {
-            self.contents += amount;
+    pub(crate) fn increment(&mut self, recursive: bool, interest: WatchInterest, amount: usize) {
+        match interest {
+            WatchInterest::Contents => self.contents += amount,
+            WatchInterest::Metadata => self.metadata += amount,
+            WatchInterest::NativeParent => {}
         }
         if recursive {
             self.recursive += amount;
@@ -58,9 +71,11 @@ impl PathWatchCounts {
         }
     }
 
-    pub(crate) fn decrement(&mut self, recursive: bool, contents: bool, amount: usize) {
-        if contents {
-            self.contents = self.contents.saturating_sub(amount);
+    pub(crate) fn decrement(&mut self, recursive: bool, interest: WatchInterest, amount: usize) {
+        match interest {
+            WatchInterest::Contents => self.contents = self.contents.saturating_sub(amount),
+            WatchInterest::Metadata => self.metadata = self.metadata.saturating_sub(amount),
+            WatchInterest::NativeParent => {}
         }
         if recursive {
             self.recursive = self.recursive.saturating_sub(amount);

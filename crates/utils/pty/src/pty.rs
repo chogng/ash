@@ -57,11 +57,11 @@ impl ChildTerminator for PtyChildTerminator {
     fn kill(&mut self) -> std::io::Result<()> {
         #[cfg(unix)]
         if let Some(process_group_id) = self.process_group_id {
-            // Match the pipe backend's hard-kill behavior so descendant
-            // processes from interactive shells/REPLs do not survive shutdown.
-            // Also try the direct child killer in case the cached PGID is stale.
+            // Interactive shells put foreground and background jobs in separate
+            // groups within their owned PTY session. Closing just the shell's
+            // group leaves jobs which ignore terminal hangup running.
             let process_group_kill_result =
-                crate::process_group::kill_process_group(process_group_id);
+                crate::process_group::kill_process_session(process_group_id);
             let child_kill_result = self.killer.kill();
             return match child_kill_result {
                 Ok(()) => Ok(()),

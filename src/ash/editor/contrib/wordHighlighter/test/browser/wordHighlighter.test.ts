@@ -16,8 +16,8 @@ import { TextModel } from '../../../../common/model/textModel.js';
 import { TestLanguageFeaturesService } from '../../../../test/common/testLanguageFeaturesService.js';
 
 const { createTestCodeEditor } = await import('../../../../test/browser/testCodeEditor.js');
-const { TextualMultiDocumentHighlightFeature } = await import('../../../../../../../extensions/code/browser/contrib/wordHighlighter/browser/textualHighlightProvider.js');
-const { WordHighlighterContribution, getOccurrencesAtPosition, getOccurrencesAcrossMultipleModels } = await import('../../../../../../../extensions/code/browser/contrib/wordHighlighter/browser/wordHighlighter.contribution.js');
+const { TextualMultiDocumentHighlightFeature } = await import('../../browser/textualHighlightProvider.js');
+const { WordHighlighterContribution, getOccurrencesAtPosition, getOccurrencesAcrossMultipleModels } = await import('../../browser/wordHighlighter.contribution.js');
 
 test('Word highlighter uses the textual provider for complete Unicode words', async () => {
 	using languages = new TestLanguageFeaturesService();

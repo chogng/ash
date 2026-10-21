@@ -1,4 +1,4 @@
-// Private Host RPC callback and activation owner. Extensions obtain only the standard vscode API.
+// Private Host RPC callback and activation owner. Authors receive their admitted API facade.
 export const apiVersion = 1;
 export class ExtensionError extends Error {
 	constructor(code, message) { super(message); this.name = 'ExtensionError'; this.code = code; }
@@ -70,15 +70,6 @@ function register(registration) {
 		}
 	});
 }
-
-export const commands = Object.freeze({
-	registerCommand(command, title, callback) {
-		if (typeof command !== 'string' || !command || typeof title !== 'string' || !title || typeof callback !== 'function') {
-			throw new TypeError('A command requires an ID, title and callback');
-		}
-		return register({ registrationId: command, kind: 'command', command, title, callback, operation: 'execute' });
-	},
-});
 
 export const window = Object.freeze({
 	registerStatusBar(registrationId, snapshot) {
@@ -793,7 +784,7 @@ function checkedRange(range, text) {
 
 // The runtime module is not resolved from extension packages; Rust owns final authority.
 export const __runtime = Object.freeze({
-	// The product transport owns this hook; authors receive only the vscode facade.
+	// The product transport owns this hook; authors cannot import the runtime module.
 	onRegistrationsChanged(listener) {
 		if (phase !== 'new' || registrationListener || typeof listener !== 'function') throw new Error('Invalid registration event binding');
 		registrationListener = listener;

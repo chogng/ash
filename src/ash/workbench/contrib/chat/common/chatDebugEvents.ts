@@ -17,6 +17,56 @@ export interface AgentTrace {
 	readonly diagnostics?: AgentTraceDiagnostics;
 	readonly graph?: AgentTraceGraph;
 	readonly overview?: AgentTraceOverview;
+	readonly performance?: AgentTracePerformance;
+}
+
+export type PerformanceUnknownReason = 'missingTiming' | 'noTextDeltas' | 'inconsistentTiming' | 'requestNotCompleted' | 'singleTextDelta' | 'toolOutput' | 'missingUsage' | 'missingOutputTokens' | 'missingReasoningTokens' | 'inconsistentTokenUsage' | 'noTextOutputTokens' | 'zeroGenerationDuration';
+export type PerformanceDuration = { readonly type: 'measured'; readonly microseconds: string; } | { readonly type: 'unknown'; readonly reason: PerformanceUnknownReason; };
+export type PerformanceRate = { readonly type: 'estimated'; readonly tokensPerSecond: string; } | { readonly type: 'unknown'; readonly reason: PerformanceUnknownReason; };
+
+/** Backend projections over exact durable events. Presentation never derives eligibility or TPS. */
+export interface InvocationPerformance {
+	readonly threadId: string;
+	readonly turnId: string;
+	readonly eventId: string;
+	readonly invocationId: string;
+	readonly total: PerformanceDuration;
+	readonly firstText: PerformanceDuration;
+	readonly generation: PerformanceDuration;
+	readonly textTps: PerformanceRate;
+}
+
+export interface AgentTracePerformance {
+	readonly formatVersion: 1;
+	readonly calls: readonly InvocationPerformance[];
+}
+
+export function performanceKey(threadId: string, eventId: string): string {
+	return JSON.stringify([threadId, eventId]);
+}
+
+function parsePerformance(value: unknown, threads: AgentTrace['threads']): AgentTracePerformance {
+	const invalid = (): never => { throw new Error(localize('chatDebug.invalidPerformance', 'Invalid model performance projection or event identity.')); };
+	if (!isRecord(value) || value.formatVersion !== 1 || !Array.isArray(value.calls)) { return invalid(); }
+	const reasons = new Set<PerformanceUnknownReason>(['missingTiming', 'noTextDeltas', 'inconsistentTiming', 'requestNotCompleted', 'singleTextDelta', 'toolOutput', 'missingUsage', 'missingOutputTokens', 'missingReasoningTokens', 'inconsistentTokenUsage', 'noTextOutputTokens', 'zeroGenerationDuration']);
+	const unknown = (metric: Record<string, unknown>) => metric.type === 'unknown' && reasons.has(metric.reason as PerformanceUnknownReason);
+	const events = new Map(threads.flatMap(thread => thread.events.filter(record => record.event.type === 'modelInvocationRecorded').map(record => [performanceKey(thread.threadId, record.eventId), record] as const)));
+	const seen = new Set<string>();
+	for (const call of value.calls) {
+		if (!isRecord(call) || typeof call.threadId !== 'string' || typeof call.eventId !== 'string' || typeof call.turnId !== 'string' || typeof call.invocationId !== 'string') { return invalid(); }
+		const key = performanceKey(call.threadId, call.eventId);
+		const event = events.get(key)?.event;
+		const record = isRecord(event?.record) ? event.record : undefined;
+		if (!record || seen.has(key) || call.turnId !== event?.turnId || call.invocationId !== record.invocationId || record.threadId !== call.threadId || record.turnId !== call.turnId) { return invalid(); }
+		seen.add(key);
+		for (const name of ['total', 'firstText', 'generation']) {
+			const metric = call[name];
+			if (!isRecord(metric) || (!unknown(metric) && !(metric.type === 'measured' && typeof metric.microseconds === 'string' && /^(0|[1-9]\d{0,19})$/.test(metric.microseconds) && BigInt(metric.microseconds) <= 18_446_744_073_709_551_615n))) { return invalid(); }
+		}
+		const rate = call.textTps;
+		if (!isRecord(rate) || (!unknown(rate) && !(rate.type === 'estimated' && typeof rate.tokensPerSecond === 'string' && /^(0|[1-9]\d{0,25})\.\d$/.test(rate.tokensPerSecond)))) { return invalid(); }
+	}
+	return value as unknown as AgentTracePerformance;
 }
 
 export interface AgentTraceMetric {
@@ -202,6 +252,7 @@ export function parseAgentTrace(value: unknown): AgentTrace {
 	if (value.diagnostics !== undefined && value.diagnostics !== null) { parseAgentTraceDiagnostics(value.diagnostics); }
 	if (value.graph !== undefined && value.graph !== null) { parseAgentTraceGraph(value.graph); }
 	if (value.overview !== undefined && value.overview !== null) { parseOverview(value.overview); }
+	if (value.performance !== undefined && value.performance !== null) { parsePerformance(value.performance, value.threads as unknown as AgentTrace['threads']); }
 	return value as unknown as AgentTrace;
 }
 
@@ -215,7 +266,9 @@ export function mergeAgentTrace(previous: AgentTrace | undefined, page: AgentTra
 		threads.set(thread.threadId, { ...thread, events: [...(existing?.events ?? []), ...thread.events.filter(record => record.sequence > after)] });
 	}
 	const prefixes = new Map([...previous.historyPrefixes, ...page.historyPrefixes].map(prefix => [JSON.stringify(prefix), prefix]));
-	return { ...previous, ...page, historyPrefixes: [...prefixes.values()], ...(previous.diagnostics ? { diagnostics: previous.diagnostics } : {}), ...(previous.graph ? { graph: page.threads.some(thread => thread.events.length) ? undefined : previous.graph } : {}), threads: [...threads.values()] };
+	const calls = new Map([...(previous.performance?.calls ?? []), ...(page.performance?.calls ?? [])].map(call => [performanceKey(call.threadId, call.eventId), call]));
+	const performance: AgentTracePerformance | undefined = previous.performance || page.performance ? { formatVersion: 1, calls: [...calls.values()] } : undefined;
+	return { ...previous, ...page, ...(performance ? { performance } : {}), historyPrefixes: [...prefixes.values()], ...(previous.diagnostics ? { diagnostics: previous.diagnostics } : {}), ...(previous.graph ? { graph: page.threads.some(thread => thread.events.length) ? undefined : previous.graph } : {}), threads: [...threads.values()] };
 }
 
 /** Checks pagination progress before a reader can advance its durable cursors. */

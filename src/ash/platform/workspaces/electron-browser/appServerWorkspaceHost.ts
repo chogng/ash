@@ -15,7 +15,9 @@ import type { EnvDirSetEntry, PermissionDto } from '../../../../../.build/protoc
 import { DEVELOPMENT_DIR_PERMISSIONS, READ_DIR_PERMISSIONS, type IWorkspaceTrustApi, type IWorkspaceTrustRequestService } from '../../workspace/common/workspaceTrust.js';
 
 export async function initializeWorkspace(client: AppServerProtocolClient, workspaceTrust: IWorkspaceTrustRequestService, trustApi: IWorkspaceTrustApi, workspaceApi: IWorkspaceContextApi): Promise<void> {
+	const generation = client.generation;
 	const workspace = parseWorkspace(await workspaceApi.getWorkspace());
+	if (generation !== client.generation || client.state !== 'ready') throw canceled();
 	await initializeWorkspaceDirectories(client, workspaceTrust, trustApi, workspace.folders.map(folder => ({
 		id: folder.id,
 		path: isRemoteResource(folder.uri) ? getRemoteWorkspacePath(folder.uri) : folder.uri.fsPath,

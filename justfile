@@ -84,6 +84,14 @@ dependency-security *args:
 bench-build *args:
     {{ python }} -B scripts/benchmark.py {{ recipe_args }}
 
+# Publish the opt-in stateless Rust development module without restarting the host.
+live-build:
+    {{ python }} -B build/desktop/live.py
+
+# Query the standalone, unmodified rust-analyzer library bridge.
+analyze-rust *args:
+    {{ python }} -B build/desktop/analyze.py {{ recipe_args }}
+
 # Trim idle Cargo caches immediately, overriding the periodic maintenance budgets.
 prune-build-cache *args:
     {{ python }} -B -m build.lib.cargo_cache {{ recipe_args }}
@@ -117,12 +125,16 @@ test-tui-unit *args:
 
 # Build matching service programs and run real CLI/TUI scenarios through a PTY.
 test-tui *args:
-    {{ python }} -B scripts/cargo.py build -p ash-app-server --bin ash-app-server -p ash-app-server-daemon --bin ash-app-server-daemon -p ash-remote-server --bin ash-remote-server -p ash-code-mode-host --bin ash-code-mode-host {{ tui_profile_arg }}
+    {{ python }} -B scripts/cargo.py build -p ash-app-server --bin ash-app-server -p ash-app-server-daemon --bin ash-app-server-daemon -p ash-remote-server --bin ash-remote-server -p ash-code-mode-host --bin ash-code-mode-host -p ash-github-authentication --bin ash-github-authentication -p ash-github-extension --bin ash-github-extension {{ tui_profile_arg }}
     {{ python }} -B scripts/cargo.py test -p ash-cli --test tui_real_scenarios {{ tui_profile_arg }} {{ recipe_args }}
 
 # Check one Rust package. V8 inputs are configured only when its dependency graph needs them.
 check *args:
     {{ python }} -B scripts/cargo.py check -p {{ recipe_args }}
+
+# Language-server checks need the same verified native inputs as normal builds.
+check-workspace *args:
+    {{ python }} -B scripts/cargo.py check --workspace {{ recipe_args }}
 
 # Compile every target in one Rust package and reject compiler warnings.
 rust-warnings *args:

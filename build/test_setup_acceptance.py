@@ -121,10 +121,12 @@ class SetupAcceptanceTests(unittest.TestCase):
                 environment={"ASH_SETUP_TEST": "isolated"},
             )
             self.assertEqual(result["exitCode"], 0)
-            self.assertEqual(
-                (root / "environment.log").read_text().splitlines(),
-                [str(root.resolve()), "isolated"],
-            )
+            output = (root / "environment.log").read_text().splitlines()
+            self.assertEqual(len(output), 2)
+            # Windows can return the short-name alias of the selected directory.
+            # Verify filesystem identity, not a particular spelling of that path.
+            self.assertTrue(Path(output[0]).samefile(root))
+            self.assertEqual(output[1], "isolated")
             self.assertEqual(os.environ.get("ASH_SETUP_TEST"), previous)
 
     def test_windows_frontend_ci_requires_the_setup_lifecycle_and_retains_failure_logs(

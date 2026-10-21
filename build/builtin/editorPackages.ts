@@ -38,7 +38,7 @@ export async function buildEditorPackage(packageRoot: string, binaries: readonly
 			await copyFile(binary.path, resolve(payload, executable));
 			await chmod(resolve(payload, executable), 0o755);
 			capabilities.push({ kind: 'executable', id, path: executable, runtime: 'direct' });
-			declarations.push({ id: manifest.name, executable: id, targetPlatform: binary.targetPlatform, runtimeApiVersion: 1, activationEvents: [{ type: 'startup' }], capabilities: ['dataChannel'] });
+			declarations.push({ id: manifest.name, executable: id, targetPlatform: binary.targetPlatform, runtimeApiVersion: 1, activationEvents: [{ type: 'onDemand', capability: 'dataChannel' }], capabilities: ['dataChannel'] });
 		}
 		await copyFile(resolve(packageRoot, 'README.md'), resolve(payload, 'README.md'));
 		for (const name of ['README.md', 'package.nls.json', 'package.nls.zh-CN.json']) await copyFile(resolve(packageRoot, name), resolve(assets, name));

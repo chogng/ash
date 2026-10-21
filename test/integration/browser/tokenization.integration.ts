@@ -1,5 +1,3 @@
-import { registerTestCodeEditorFeatures } from '../../fixtures/codeEditorFeatures.js';
-const codeFeatures = registerTestCodeEditorFeatures();
 import { WebWorkerService } from '../../../src/ash/platform/webWorker/browser/webWorkerServiceImpl.js';
 import { IThemeService } from '../../../src/ash/platform/theme/common/themeService.js';
 import { TreeSitterLibraryService, TreeSitterSyntaxProviders, createTreeSitterSyntaxSession } from '../../../src/ash/workbench/services/treeSitter/browser/treeSitterLibraryService.js';

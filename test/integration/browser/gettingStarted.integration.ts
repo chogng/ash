@@ -16,6 +16,8 @@ import { ContextKeyService } from '../../../src/ash/platform/contextkey/browser/
 import type { ICommandService } from '../../../src/ash/platform/commands/common/commands.js';
 import type { IGitHubConnectionService } from '../../../src/ash/workbench/services/accounts/common/gitHubConnectionService.js';
 import { bindTestColorTheme } from './themeFixture.js';
+// Match the product host's box sizing so isolated card geometry has the same meaning.
+import '../../../src/ash/workbench/browser/media/style.css';
 
 declare global {
 	interface Window { ashWelcomeIntegration: { readonly opened: readonly string[]; addRecent(name: string): Promise<void>; }; }

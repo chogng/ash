@@ -1,46 +1,38 @@
 import { expect, test } from '../../../automation/test.js';
 
-test('selected Chat tab uses the tab surface instead of list selection blue', { tag: ['@browser-ui', '@electron-ui'] }, async ({ target, workbench }) => {
+test('Chat conversation title uses toolbar colors and exposes keyboard focus', { tag: ['@browser-ui', '@electron-ui'] }, async ({ workbench }) => {
 	const page = workbench.page;
 	if (!await page.locator('.ash-chat-view-pane').isVisible()) {
 		await page.getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();
 	}
-	const selected = page.locator('.ash-multi-chat-tabs-control .ash-tab.checked');
-	await expect(selected.getByRole('tab')).toHaveAttribute('aria-selected', 'true');
-	const colors = await selected.evaluate(element => {
+	const title = page.locator('.ash-chat-view-title-button');
+	await expect(title).toHaveAttribute('aria-haspopup', 'dialog');
+	await expect(title).toHaveAttribute('aria-expanded', 'false');
+	await page.mouse.move(0, 0);
+	await expect(title).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+	await title.hover();
+	const colors = await title.evaluate(element => {
 		const reference = document.createElement('span');
-		reference.style.background = 'var(--ash-tabList-activeBackground)';
+		reference.style.background = 'var(--ash-toolbar-hoverBackground)';
+		reference.style.color = 'var(--ash-focusBorder)';
 		element.append(reference);
-		const active = getComputedStyle(reference).backgroundColor;
+		const hover = getComputedStyle(reference).backgroundColor;
+		const focus = getComputedStyle(reference).color;
 		reference.style.background = 'var(--ash-list-activeSelectionBackground)';
 		const listSelection = getComputedStyle(reference).backgroundColor;
 		reference.remove();
-		return { tab: getComputedStyle(element).backgroundColor, active, listSelection };
+		return { actual: getComputedStyle(element).backgroundColor, hover, focus, listSelection };
 	});
-	expect(colors.tab).toBe(colors.active);
-	expect(colors.tab).not.toBe(colors.listSelection);
-});
-
-test('opening another Chat tab keeps the existing composer mounted', { tag: ['@browser-ui', '@electron-ui'] }, async ({ target, workbench }) => {
-	const page = workbench.page;
-	if (!await page.locator('.ash-chat-view-pane').isVisible()) {
-		await page.getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();
-	}
-	const composer = page.locator('.ash-chat-view-pane .ash-chat:visible .ash-chat-input-part');
-	const monitor = await composer.evaluateHandle(node => {
-		const removed: Node[] = [];
-		const observer = new MutationObserver(records => {
-			for (const record of records) removed.push(...record.removedNodes);
-		});
-		observer.observe(node.closest('.ash-chat-pane-host')!, { childList: true });
-		return { node, removed, observer };
-	});
-	await page.locator('.ash-chat-title-actions [data-action-id="workbench.action.chat.new"] button').click();
-	await expect(page.locator('.ash-chat-view-pane .ash-chat-pane-host > .ash-chat')).toHaveCount(2);
-	const wasRemoved = await monitor.evaluate(({ node, removed, observer }) => {
-		for (const record of observer.takeRecords()) removed.push(...record.removedNodes);
-		observer.disconnect();
-		return removed.some(removedNode => removedNode === node.parentElement);
-	});
-	expect(wasRemoved).toBe(false);
+	expect(colors.actual).toBe(colors.hover);
+	expect(colors.actual).not.toBe(colors.listSelection);
+	await page.keyboard.press('Tab');
+	await title.focus();
+	await expect(title).toHaveCSS('outline-style', 'solid');
+	await expect(title).toHaveCSS('outline-color', colors.focus);
+	await title.press('Enter');
+	await expect(title).toHaveAttribute('aria-expanded', 'true');
+	await expect(page.locator('.ash-quick-pick:visible')).toBeVisible();
+	await page.keyboard.press('Escape');
+	await expect(title).toHaveAttribute('aria-expanded', 'false');
+	await expect(title).toBeFocused();
 });

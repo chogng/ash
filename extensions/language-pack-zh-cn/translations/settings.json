@@ -126,6 +126,7 @@
     "json.unknownSetting": "设置 {0} 尚未注册。",
     "chrome.categories": "设置类别",
     "chrome.noResults": "未找到设置。",
+    "chrome.searchResults": "搜索结果",
     "chrome.modalTitle": "Ash 设置",
     "displayLanguage.title": "显示语言",
     "displayLanguage.configure": "配置显示语言",

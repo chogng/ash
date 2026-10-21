@@ -127,11 +127,6 @@ def parse_arguments(
         "--markdown-math-bin", type=Path, help="Prebuilt Rust math extension."
     )
     parser.add_argument(
-        "--code-editor-extension-bin",
-        type=Path,
-        help="Prebuilt Rust Code editor extension.",
-    )
-    parser.add_argument(
         "--markdown-extension-bin",
         type=Path,
         help="Prebuilt Rust Markdown language features extension.",
@@ -308,7 +303,6 @@ def build_package(args: argparse.Namespace) -> int:
         "ash-code-mode-host": args.code_mode_host_bin,
         "ash-git-extension": args.git_extension_bin,
         "ash-markdown-math": args.markdown_math_bin,
-        "ash-code-editor": args.code_editor_extension_bin,
         "ash-markdown-language-features": args.markdown_extension_bin,
         "ash-github-authentication": args.github_authentication_bin,
         "ash-github-extension": args.github_extension_bin,
@@ -449,7 +443,6 @@ def build_package(args: argparse.Namespace) -> int:
         media_package=media_package,
         git_extension_binary=binaries["ash-git-extension"],
         markdown_math_binary=binaries["ash-markdown-math"],
-        code_editor_extension_binary=binaries["ash-code-editor"],
         markdown_extension_binary=binaries["ash-markdown-language-features"],
         github_authentication_binary=binaries["ash-github-authentication"],
         github_extension_binary=binaries["ash-github-extension"],

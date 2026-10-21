@@ -1,3 +1,4 @@
+import { IExtensionService } from '../../../src/ash/workbench/services/extensions/common/extensionService.js';
 import { ChatAttachmentsContentPart } from '../../../src/ash/workbench/contrib/chat/browser/widget/chatContentParts/chatAttachmentsContentPart.js';
 import { ChatResponseResourceFileSystemProvider, IChatResponseResourceFileSystemProvider } from '../../../src/ash/workbench/contrib/chat/common/widget/chatResponseResourceFileSystemProvider.js';
 import { IAgentThreadService } from '../../../src/ash/platform/agentHost/common/agentService.js';
@@ -51,6 +52,7 @@ const packages: IExtensionApi = {
 		return enabled || options?.includeDisabled ? catalog : { ...catalog, extensions: [] };
 	}, resources,
 };
+services.registerInstance(IExtensionService, { getExtensionPointContributions: () => [] } as unknown as IExtensionService);
 services.registerInstance(IExtensionApi, packages);
 services.registerInstance(IExtensionHostApi, {
 	invoke: async (request, signal) => {

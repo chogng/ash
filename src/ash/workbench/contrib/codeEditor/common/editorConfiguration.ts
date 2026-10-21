@@ -90,6 +90,7 @@ export const CodeEditorConfiguration = Object.freeze({
 	}),
 	wordWrap: configurationRegistry.registerConfiguration<NonNullable<IEditorOptions['wordWrap']>>({
 		key: "editor.wordWrap",
+		scope: ConfigurationScope.LANGUAGE_OVERRIDABLE,
 		defaultValue: 'off',
 		parse: value => parseEnum(value, 'editor.wordWrap', ['off', 'on', 'wordWrapColumn', 'bounded']),
 		setting: {
@@ -108,6 +109,7 @@ export const CodeEditorConfiguration = Object.freeze({
 	}),
 	wordWrapColumn: configurationRegistry.registerConfiguration<number>({
 		key: 'editor.wordWrapColumn',
+		scope: ConfigurationScope.LANGUAGE_OVERRIDABLE,
 		defaultValue: 80,
 		parse: value => {
 			if (typeof value === 'number' && Number.isSafeInteger(value) && value > 0) return value;

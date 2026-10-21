@@ -88,6 +88,23 @@ impl StagedBinaries {
             app_server: staged(app_server_executable()),
             _directory: directory,
         };
+        for (declared, name) in [
+            (
+                option_env!("CARGO_BIN_EXE_ash-github-authentication"),
+                "ash-github-authentication",
+            ),
+            (
+                option_env!("CARGO_BIN_EXE_ash-github-extension"),
+                "ash-github-extension",
+            ),
+        ] {
+            let executable = match declared {
+                Some(path) => cargo_bin::resolve_executable(Path::new(path)).unwrap(),
+                None => app_server_executable()
+                    .with_file_name(format!("{name}{}", std::env::consts::EXE_SUFFIX)),
+            };
+            staged(executable);
+        }
         // Bazel build directories disappear after compilation. Exercise packaged resource
         // discovery instead of relying on the app-server's development source directory.
         let root = binaries._directory.path();
@@ -118,7 +135,7 @@ impl StagedBinaries {
                 "buildId": build_id,
                 "buildProfile": "dev-small",
                 "files": {},
-                "javascriptRuntime": { "kind": "systemNode" },
+                "javascriptRuntime": { "kind": "hostProvidedNode" },
             }))
             .unwrap(),
         )
@@ -228,6 +245,11 @@ impl Fixture {
     }
 
     pub fn with_cli_executable(mut self, executable: PathBuf) -> Self {
+        let daemon = executable.with_file_name(format!(
+            "ash-app-server-daemon{}",
+            std::env::consts::EXE_SUFFIX
+        ));
+        cargo_bin::copy_executable(&daemon_executable(), &daemon).unwrap();
         self.ash = executable;
         self
     }
@@ -256,6 +278,7 @@ impl Fixture {
         let mut environment = vec![
             ("ASH_ANNOUNCEMENT_URL", self.announcement_url.clone().into()),
             ("ASH_HOME", self.profile.clone().into_os_string()),
+            ("ASH_USE_INMEMORY_SECRETSTORAGE", "1".into()),
             (
                 "ASH_WORKSPACE_ROOT",
                 self.workspace.clone().into_os_string(),
@@ -413,18 +436,19 @@ contextWindow = 128000
 impl Drop for Fixture {
     fn drop(&mut self) {
         if thread::panicking() {
-            if let Ok(entries) = fs::read_dir(self.profile.join("run")) {
-                for entry in entries.flatten() {
-                    if entry
-                        .path()
-                        .extension()
-                        .is_some_and(|extension| extension == "log")
-                    {
-                        if let Ok(log) = fs::read_to_string(entry.path()) {
-                            eprintln!("Test daemon log ({}):\n{log}", entry.path().display());
-                        }
+            match ash_app_server_daemon::read_process_logs(&self.profile) {
+                Ok((logs, omitted)) => {
+                    for log in logs {
+                        eprintln!(
+                            "Test daemon log ({}; truncated={}):\n{}",
+                            log.name,
+                            log.truncated,
+                            String::from_utf8_lossy(&log.bytes)
+                        );
                     }
+                    eprintln!("Test daemon logs omitted: {omitted}");
                 }
+                Err(error) => eprintln!("Could not read test daemon logs: {error}"),
             }
         }
         // Stop only the daemon belonging to this isolated fixture before deleting it.

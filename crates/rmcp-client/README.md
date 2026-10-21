@@ -32,8 +32,9 @@ provider-neutral catalog、冻结 binding 与 result。
 
 ```text
 RmcpClient::connect_stdio
-→ StdioServerCommand::into_command
-→ rmcp::transport::TokioChildProcess
+→ StdioTransport::spawn / StdioServerCommand::into_command
+→ 独立 Unix session 或 Windows Job Object
+→ rmcp::transport::async_rw::AsyncRwTransport
 → RmcpClient::connect
 
 RmcpClient::connect_streamable_http
@@ -65,8 +66,11 @@ notification 转交 `McpClientHost`，把 elicitation response 送回 server。�
 副作用仍不能从取消/timeout 推断。上层 durable tool runtime 必须保留 unknown-outcome 语义。
 
 `shutdown(self)` 消费 session、触发 RMCP cancellation，并在 `shutdown` deadline 内等待 transport
-cleanup。stdio transport 的 cleanup 包含 child termination；HTTP transport 会尝试 session
-cleanup。只依赖 `Drop` 不保证调用方观察到 cleanup 完成。
+cleanup。stdio transport 先关闭 stdin，最多等待 3 秒让启动器退出，再终止完整进程树并回收
+启动器；Unix 在清理 session 前不 reap leader，Windows 在执行子进程前完成 Job Object 绑定。
+初始化失败、超时或 future 取消时，transport 的 `Drop` 同样终止进程树，不依赖额外启动的
+异步清理任务。HTTP transport 会尝试 session cleanup。只依赖 `Drop` 不保证调用方观察到
+cleanup 完成。
 
 ## Host 接入与可信边界
 
@@ -76,7 +80,9 @@ cleanup。只依赖 `Drop` 不保证调用方观察到 cleanup 完成。
 - `StdioServerCommand` convenience connector 继承宿主环境，再叠加显式 env。需要 allowlist、
   sandbox 或 remote execution 的 host 应自行构造 transport，再调用 `RmcpClient::connect`。
 - Streamable HTTP 默认 transport 禁止 reqwest redirect（客户端构建时显式设置，同时保留 SDK 的禁用空闲连接池设置），但 OAuth、
-  credential refresh 与 credential store 不在本 crate。
+  credential refresh 与 credential store 不在本 crate。Managed provider 可提供登录绑定的
+  `HttpCredentialScope`；关闭时拒绝新请求、取消等待中的 HTTP／GET 和 POST SSE，排空等待直到
+  future／body／上层调用 lease 释放。仅明确 401 可刷新后重试一次，不重放结果不确定的写请求。
 - server info、tool schema、notification 与 tool result 都是不可信远端输入；本 crate只保证
   RMCP decode，不替代产品层的 size、policy、schema normalization 或 content safety。
 
@@ -90,7 +96,9 @@ bazel test //crates/rmcp-client:rmcp-client-unit-tests
 
 `client_tests.rs` 用 duplex transport 启动真实 RMCP server/client service，覆盖 initialize、
 tools/list、tools/call、request timeout → protocol cancellation 与 shutdown；另覆盖 HTTP
-scheme、header injection 和 bearer token redaction。修改 RMCP feature、lifecycle mode、
+scheme、header injection 和 bearer token redaction。`process_tests.rs` 通过真实 launcher 和继承
+stdio 的后代进程，覆盖初始化超时／取消及反复 shutdown／Drop 后的进程退出。
+修改 RMCP feature、lifecycle mode、
 timeout/cancellation、callback 或 transport 时需同步检查本 README 与
 [`../../docs/mcp.md`](../../docs/mcp.md)。
 

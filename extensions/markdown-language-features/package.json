@@ -5,9 +5,14 @@
   "type": "module",
   "displayName": "%displayName%",
   "engines": {
-    "vscode": "*"
+    "ash": "*"
   },
   "contributes": {
+    "configurationDefaults": {
+      "[markdown]": {
+        "editor.wordWrap": "on"
+      }
+    },
     "commands": [
       {
         "command": "markdown.showPreview",
@@ -477,7 +482,6 @@
     ]
   },
   "activationEvents": [
-    "onStartupFinished",
     "onLanguage:markdown"
   ]
 }

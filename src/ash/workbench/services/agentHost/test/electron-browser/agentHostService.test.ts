@@ -1,3 +1,5 @@
+import { IWebWorkerService } from '../../../../../platform/webWorker/browser/webWorkerService.js';
+import { WebWorkerService } from '../../../../../platform/webWorker/browser/webWorkerServiceImpl.js';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { MessageChannel } from 'node:worker_threads';
@@ -162,6 +164,7 @@ suite('Desktop Workbench Agent Host selection', () => {
 		} satisfies ConstructorParameters<typeof Service>[0];
 	}
 	function register(services: InstantiationService, logger: LogService): void {
+		services.registerInstance(IWebWorkerService, new WebWorkerService());
 		services.registerInstance(ILogService, logger);
 		services.registerSingleton(IRemoteSocketFactoryService, () => services.createInstance(RemoteSocketFactoryService));
 	}

@@ -1,4 +1,5 @@
-import { test, expect } from '@playwright/test';
+import { test, expect, type Locator } from '@playwright/test';
+import { expectTabActionCentered } from '../../automation/editors.js';
 import { expectVisibleFocusOutline } from './focusOutline.js';
 import type { } from './composite.integration.js';
 
@@ -316,8 +317,22 @@ test('modern activity badges preserve focus above the icon stacking context', as
 		window.ashCompositeIntegration.setBadge(50);
 	});
 	const tab = page.locator('#badge-icon [data-action-id="first"]');
+	const other = page.locator('#badge-icon [data-action-id="second"]');
+	const readSelection = () => tab.evaluate(element => {
+		const style = getComputedStyle(element, '::after');
+		return { background: style.backgroundColor, outline: style.outlineStyle, color: style.outlineColor };
+	});
 	for (const theme of ['ash-light', 'ash-dark', 'ash-high-contrast-dark', 'ash-high-contrast-light']) {
 		await page.evaluate(theme => window.ashCompositeIntegration.setEditorTheme(theme), theme);
+		await page.mouse.move(700, 600);
+		const selectedStyle = await readSelection();
+		await tab.hover();
+		await expect.poll(readSelection).toEqual(selectedStyle);
+		if (theme.includes('high-contrast')) {
+			expect(selectedStyle.outline).toBe('solid');
+			await other.hover();
+			await expect.poll(() => other.evaluate(element => getComputedStyle(element, '::after').outlineStyle)).toBe('dashed');
+		}
 		await tab.focus();
 		await tab.hover();
 		await expectVisibleFocusOutline(tab);
@@ -695,6 +710,97 @@ for (const reducedMotion of ['no-preference', 'reduce'] as const) {
 	});
 }
 
+test('disposing a pane view cancels its pending geometry animations', async ({ page }) => {
+	await page.emulateMedia({ reducedMotion: 'no-preference' });
+	await page.goto('/composite.html?paneTransitions');
+	await page.waitForFunction(() => !!window.ashCompositeIntegration);
+	const states = await page.locator('#pane-transitions').evaluate(host => {
+		host.querySelectorAll<HTMLButtonElement>('.ash-pane-view-header-button')[1]!.click();
+		const animations = host.getAnimations({ subtree: true });
+		window.ashCompositeIntegration.disposePaneTransitions();
+		return animations.map(animation => animation.playState);
+	});
+	expect(states.length).toBeGreaterThan(0);
+	expect(states.every(state => state === 'idle')).toBe(true);
+});
+
+test('short pane toggles synchronously update their overflow scrollbar', async ({ page }) => {
+	await page.emulateMedia({ reducedMotion: 'reduce' });
+	await page.goto('/composite.html?paneTransitions&shortPanes');
+	await page.waitForFunction(() => !!window.ashCompositeIntegration);
+	const samples = await page.locator('#pane-transitions').evaluate(host => {
+		const view = host.querySelector<HTMLElement>('.ash-pane-view-container')!;
+		const viewport = view.querySelector<HTMLElement>('.ash-scrollbar-viewport')!;
+		const scrollbar = view.querySelector<HTMLElement>('.ash-scrollbar-track-vertical')!;
+		const buttons = host.querySelectorAll<HTMLButtonElement>('.ash-pane-view-header-button');
+		const sample = () => ({
+			height: viewport.scrollHeight,
+			maximum: Number(scrollbar.getAttribute('aria-valuemax')),
+			disabled: scrollbar.getAttribute('aria-disabled'),
+		});
+		const states = [sample()];
+		for (const index of [1, 0, 1, 0]) {
+			buttons[index]!.click();
+			states.push(sample());
+		}
+		return states;
+	});
+	expect(samples).toEqual([
+		{ height: 204, maximum: 84, disabled: 'false' },
+		{ height: 324, maximum: 204, disabled: 'false' },
+		{ height: 204, maximum: 84, disabled: 'false' },
+		{ height: 120, maximum: 0, disabled: 'true' },
+		{ height: 204, maximum: 84, disabled: 'false' },
+	]);
+});
+
+test('pane bodies retain their allocated height while a sibling expands', async ({ page }) => {
+	await page.emulateMedia({ reducedMotion: 'no-preference' });
+	await page.goto('/composite.html?paneTransitions');
+	await page.waitForFunction(() => !!window.ashCompositeIntegration);
+	const samples = await page.locator('#pane-transitions').evaluate(async host => {
+		const body = host.querySelector<HTMLElement>('.ash-pane-view-content')!;
+		const pane = body.closest<HTMLElement>('.ash-split-view-pane')!;
+		const before = body.getBoundingClientRect().height;
+		host.querySelectorAll<HTMLButtonElement>('.ash-pane-view-header-button')[1]!.click();
+		const allocated = Number.parseFloat(body.style.height);
+		const heights: number[] = [];
+		do {
+			await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
+			heights.push(body.getBoundingClientRect().height);
+		} while (pane.getAnimations().length > 0);
+		return { before, allocated, heights };
+	});
+	expect(samples.allocated).toBeLessThan(samples.before - 100);
+	for (const height of samples.heights) {
+		expect(height).toBeCloseTo(samples.allocated, 0);
+	}
+});
+
+test('pane expansion starts from the visible boundary after synchronous content work', async ({ page }) => {
+	await page.emulateMedia({ reducedMotion: 'no-preference' });
+	await page.goto('/composite.html?paneTransitions');
+	await page.waitForFunction(() => !!window.ashCompositeIntegration);
+	const result = await page.locator('#pane-transitions').evaluate(async host => {
+		await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
+		// A header click runs in an input task, outside the frame's animation callbacks.
+		await new Promise<void>(resolve => setTimeout(resolve, 0));
+		const button = host.querySelectorAll<HTMLButtonElement>('.ash-pane-view-header-button')[1]!;
+		const pane = button.closest<HTMLElement>('.ash-split-view-pane')!;
+		const before = pane.getBoundingClientRect().height;
+		button.click();
+		// Expansion can synchronously create or lay out a view before its first paint.
+		const workEnds = performance.now() + 40;
+		while (performance.now() < workEnds) { /* Simulate that work without yielding a frame. */ }
+		await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
+		const firstFrame = pane.getBoundingClientRect().height;
+		await Promise.all(pane.getAnimations().map(animation => animation.finished));
+		return { before, firstFrame, final: pane.getBoundingClientRect().height };
+	});
+	expect(result.firstFrame).toBeCloseTo(result.before, 0);
+	expect(result.final).toBeGreaterThan(result.before + 100);
+});
+
 test('keyboard resizing cancels an in-progress pane transition and keeps the focused separator', async ({ page }) => {
 	await page.emulateMedia({ reducedMotion: 'no-preference' });
 	await page.goto('/composite.html?paneTransitions');
@@ -1061,3 +1167,277 @@ for (const locale of ['en', 'zh-CN']) {
 		expect(errors).toEqual([]);
 	});
 }
+
+test('selected standard editor tabs join the editor surface without a separator', async ({ page }, testInfo) => {
+	await page.goto('/composite.html?editorTabs');
+	await page.waitForFunction(() => !!window.ashCompositeIntegration);
+	await page.evaluate(async () => {
+		await window.ashCompositeIntegration.configureEditorTabs('standard', 'fit', false);
+		await window.ashCompositeIntegration.openEditor('alpha');
+		await window.ashCompositeIntegration.openEditor('beta');
+	});
+	const title = page.locator('#editor-tabs-host .ash-editor-title-control');
+	const tabs = title.getByRole('tab');
+	for (const theme of ['ash-light', 'ash-dark', 'ash-high-contrast-light', 'ash-high-contrast-dark']) {
+		await page.evaluate(theme => window.ashCompositeIntegration.setEditorTheme(theme), theme);
+		for (const name of ['alpha.ts', 'beta.ts']) {
+			const tab = tabs.filter({ hasText: name });
+			await tab.click();
+			await expect(tab).toHaveAttribute('aria-selected', 'true');
+			await page.locator('#editor-tabs-host .stanza-editor:visible .stanza-editor-input').focus();
+			await page.mouse.move(0, 0);
+			const screenshot = await title.screenshot({ scale: 'css' });
+			const colors = await title.evaluate(async (title, png) => {
+				const image = new Image();
+				image.src = `data:image/png;base64,${png}`;
+				await image.decode();
+				const canvas = document.createElement('canvas');
+				canvas.width = image.width;
+				canvas.height = image.height;
+				const context = canvas.getContext('2d')!;
+				context.drawImage(image, 0, 0);
+				const titleBounds = title.getBoundingClientRect();
+				return Array.from(title.querySelectorAll('.ash-tab')).map(item => {
+					const bounds = item.getBoundingClientRect();
+					const x = Math.floor(bounds.left + bounds.width / 2 - titleBounds.left);
+					const y = Math.floor(bounds.bottom - titleBounds.top) - 1;
+					const actual = Array.from(context.getImageData(x, y, 1, 1).data);
+					const expectedColor = item.classList.contains('checked')
+						? getComputedStyle(item).backgroundColor
+						: getComputedStyle(title, '::after').backgroundColor;
+					context.fillStyle = expectedColor;
+					context.fillRect(0, 0, 1, 1);
+					return { actual, expected: Array.from(context.getImageData(0, 0, 1, 1).data) };
+				});
+			}, screenshot.toString('base64'));
+			expect(colors).toHaveLength(2);
+			for (const color of colors) expect(color.actual).toEqual(color.expected);
+		}
+	}
+	await testInfo.attach('selected-tab-separator', { body: await title.screenshot(), contentType: 'image/png' });
+});
+
+test('editor tabs distinguish active, inactive and pinned surfaces across themes', async ({ page }) => {
+	await page.goto('/composite.html?editorTabs');
+	await page.waitForFunction(() => !!window.ashCompositeIntegration);
+	await page.evaluate(async () => {
+		await window.ashCompositeIntegration.configureEditorTabs('standard');
+		await window.ashCompositeIntegration.openEditor('alpha');
+		await window.ashCompositeIntegration.openEditor('beta');
+	});
+	const title = page.locator('#editor-tabs-host .ash-editor-title-control');
+	const strip = title.locator('.ash-editor-tabs-and-actions');
+	const active = strip.locator('.ash-tab.checked');
+	const inactive = strip.locator('.ash-tab:not(.checked):not(.selected)').first();
+	for (const [theme, documentColor, stripColor, inactiveColor] of [
+		['ash-dark', 'rgb(30, 30, 30)', 'rgb(37, 37, 38)', 'rgb(37, 37, 38)'],
+		['ash-light', 'rgb(255, 255, 255)', 'rgb(243, 243, 243)', 'rgb(238, 238, 238)'],
+		['ash-high-contrast-dark', 'rgb(0, 0, 0)', 'rgb(0, 0, 0)', 'rgb(0, 0, 0)'],
+		['ash-high-contrast-light', 'rgb(255, 255, 255)', 'rgb(255, 255, 255)', 'rgb(255, 255, 255)'],
+	] as const) {
+		await page.evaluate(theme => window.ashCompositeIntegration.setEditorTheme(theme), theme);
+		await expect(strip).toHaveCSS('background-color', stripColor);
+		await expect(active).toHaveCSS('background-color', documentColor);
+		await expect(inactive).toHaveCSS('background-color', inactiveColor);
+		const tab = active.getByRole('tab');
+		await page.keyboard.press('Tab');
+		await tab.focus();
+		await expect(tab).toHaveCSS('outline-style', 'solid');
+		await page.evaluate(() => window.ashCompositeIntegration.setActiveEditorSticky(true));
+		await expect(title.locator('.ash-sticky-editor-tabs-row .ash-tab.checked')).toHaveCSS('background-color', documentColor);
+		await expect(strip).toHaveCSS('background-color', stripColor);
+		await active.getByRole('button', { name: 'Unpin', exact: true }).click();
+	}
+});
+
+test('pin commands follow the focused inactive tab and preserve editor selection', async ({ page }) => {
+	await page.goto('/composite.html?editorTabs&editorMenu');
+	await page.waitForFunction(() => !!window.ashEditorTitleIntegration);
+	await page.evaluate(async () => {
+		await window.ashEditorTitleIntegration.open('first');
+		await window.ashEditorTitleIntegration.open('second');
+	});
+	const title = page.locator('#editor-tabs-host .ash-editor-title-control');
+	const firstName = 'first.ts';
+	const secondName = 'second.ts';
+	const first = title.getByRole('tab', { name: firstName, exact: true });
+	const second = title.getByRole('tab', { name: secondName, exact: true });
+	await first.focus();
+	await first.press('Alt+Enter');
+	await expect(title.locator('.ash-sticky-editor-tabs-row').getByRole('tab', { name: firstName!, exact: true })).toHaveCount(1);
+	await expect(second).toHaveAttribute('aria-selected', 'true');
+	await expect(first).toHaveAttribute('aria-selected', 'false');
+	await expect(first).toBeFocused();
+	await first.press('ControlOrMeta+k');
+	await first.press('Shift+Enter');
+	await expect(title.locator('.ash-sticky-editor-tabs-row .ash-tab')).toHaveCount(0);
+	await expect(second).toHaveAttribute('aria-selected', 'true');
+	await expect(first).toBeFocused();
+	await first.press('Alt+Enter');
+	await title.locator('.ash-sticky-editor-tabs-row').getByRole('button', { name: 'Unpin', exact: true }).click();
+	await expect(title.locator('.ash-sticky-editor-tabs-row .ash-tab')).toHaveCount(0);
+	await expect(second).toHaveAttribute('aria-selected', 'true');
+	await expect(first).toHaveAttribute('aria-selected', 'false');
+	await expect(first).toBeFocused();
+});
+
+test('pinned editor action stays Unpin on hover and returns the editor to the ordinary row', async ({ page }) => {
+	await page.goto('/composite.html?editorTabs&editorMenu');
+	await page.waitForFunction(() => !!window.ashEditorTitleIntegration);
+	await page.evaluate(() => window.ashEditorTitleIntegration.open('pinned'));
+
+	const ordinary = page.locator('.ash-ordinary-editor-tabs-row .ash-tab.checked');
+	await expect(ordinary).toHaveCount(1);
+	await expect(ordinary.getByRole('tab')).toHaveAttribute('aria-label', 'pinned.ts');
+	const untitledName = await ordinary.getByRole('tab').getAttribute('aria-label');
+	await expect(ordinary.locator('.ash-tab-close-action')).toHaveCount(1);
+	await expect(ordinary.getByRole('tab')).toHaveAttribute('aria-description', /Pin to pin/u);
+	const colors = await ordinary.evaluate(element => {
+		const reference = document.createElement('span');
+		reference.style.background = 'var(--ash-editor-background)';
+		element.append(reference);
+		const editor = getComputedStyle(reference).backgroundColor;
+		reference.remove();
+		return { tab: getComputedStyle(element).backgroundColor, editor };
+	});
+	expect(colors.tab).toBe(colors.editor);
+	await expect(ordinary).toHaveCSS('border-bottom-width', '0px');
+	const closeGeometry = await ordinary.locator('.ash-tab-close-action button').evaluate(button => {
+		const rect = button.getBoundingClientRect();
+		const icon = button.querySelector('.ash-icon')!.getBoundingClientRect();
+		return { width: rect.width, height: rect.height, iconWidth: icon.width, iconHeight: icon.height, left: icon.left - rect.left, right: rect.right - icon.right };
+	});
+	expect(closeGeometry).toEqual({ width: 22, height: 22, iconWidth: 16, iconHeight: 16, left: 3, right: 3 });
+	await expectTabActionCentered(ordinary);
+
+	await ordinary.getByRole('tab').press('Alt+Enter');
+	const sticky = page.locator('.ash-sticky-editor-tabs-row .ash-tab.checked');
+	await expect(sticky).toHaveCount(1);
+	await expect(sticky).toHaveCSS('border-bottom-width', '0px');
+	const unpin = sticky.getByRole('button', { name: 'Unpin', exact: true });
+	await expect(sticky.locator('.ash-tab-close-action')).toHaveCount(0);
+	await expect(unpin.locator('svg')).toHaveAttribute('data-ash-icon-id', 'pinned');
+	await expect(sticky.getByRole('tab')).toHaveAttribute('aria-description', /Unpin to unpin/u);
+	await page.mouse.move(0, 0);
+	await sticky.getByRole('tab').blur();
+	await expect(unpin).toBeVisible();
+	await sticky.getByRole('tab').hover();
+	await unpin.hover();
+	await expectTabActionCentered(sticky);
+	await expect(unpin.locator('svg')).toBeVisible();
+	await expect(unpin.locator('svg')).toHaveAttribute('data-ash-icon-id', 'pinned');
+	await expect(sticky.getByRole('button', { name: /^Close /u })).toHaveCount(0);
+	await unpin.click();
+	await expect(page.locator('.ash-sticky-editor-tabs-row .ash-tab')).toHaveCount(0);
+	await expect(ordinary.getByRole('tab')).toHaveAttribute('aria-label', untitledName!);
+	await ordinary.getByRole('tab').press('Alt+Enter');
+	await unpin.focus();
+	await expectTabActionCentered(sticky);
+	await unpin.press('Enter');
+	await expect(page.locator('.ash-sticky-editor-tabs-row .ash-tab')).toHaveCount(0);
+	await expect(ordinary.getByRole('tab')).toBeFocused();
+	await ordinary.locator('.ash-tab-close-action button').click();
+	await expect(page.getByRole('tab', { name: untitledName! })).toHaveCount(0);
+});
+
+test('editor title scrollbars preserve overflow, focus and clipping through size and visibility changes', async ({ page }) => {
+	await page.goto('/composite.html?editorTabs&editorMenu');
+	await page.waitForFunction(() => !!window.ashCompositeIntegration);
+	await page.evaluate(async () => {
+		await window.ashCompositeIntegration.configureEditorTabs('connected', 'fit', true);
+		for (let index = 1; index <= 9; index++) await window.ashCompositeIntegration.openEditor(`tab-${index}`);
+	});
+	const title = page.locator('#editor-tabs-host .ash-editor-title-control');
+	const tabs = title.locator('.ash-ordinary-editor-tabs-row .ash-tab-list');
+	const breadcrumbs = title.locator('.ash-breadcrumbs-widget');
+	const current = breadcrumbs.getByRole('button').last();
+	for (const theme of ['ash-light', 'ash-dark', 'ash-high-contrast-dark', 'ash-high-contrast-light']) {
+		await page.evaluate(theme => window.ashCompositeIntegration.setEditorTheme(theme), theme);
+		await current.focus();
+		await current.press('End');
+		await expect(current).toBeFocused();
+		await expect(current).toHaveCSS('outline-style', 'solid');
+		expect(await current.evaluate(element => {
+			const probe = document.createElement('span');
+			probe.style.color = 'var(--ash-focusBorder)';
+			element.append(probe);
+			try { return getComputedStyle(element).outlineColor === getComputedStyle(probe).color; }
+			finally { probe.remove(); }
+		})).toBe(true);
+	}
+	await tabs.evaluate(element => { (element as HTMLElement).style.width = '220px'; });
+	await breadcrumbs.evaluate(element => { Object.assign((element as HTMLElement).style, { width: '60px', flex: 'none' }); });
+	const tabViewport = tabs.locator('.ash-scrollbar-viewport');
+	const breadcrumbViewport = breadcrumbs.locator('.ash-scrollbar-viewport');
+	const tabBar = tabs.getByRole('scrollbar', { name: 'Horizontal scrollbar', includeHidden: true });
+	const breadcrumbBar = breadcrumbs.getByRole('scrollbar', { name: 'Horizontal scrollbar', includeHidden: true });
+	const selected = tabs.locator('.ash-tab.checked');
+	const identity = await selected.getByRole('tab').getAttribute('id');
+	const originalViewport = await tabViewport.elementHandle();
+	for (const [viewport, bar] of [[tabViewport, tabBar], [breadcrumbViewport, breadcrumbBar]]) {
+		await expect.poll(() => viewport.evaluate(element => ({ width: element.clientWidth, scroll: element.scrollWidth, overflow: element.scrollWidth > element.clientWidth }))).toMatchObject({ overflow: true });
+		await expect(bar).toHaveCSS('height', '3px');
+	}
+	const changeSetting = async (key: string, option: string): Promise<void> => {
+		await page.evaluate(({ key, value }) => window.ashCompositeIntegration.setEditorConfiguration(`workbench.editor.titleScrollbar${key}`, value), { key, value: option.toLowerCase() });
+	};
+	const exercise = async (viewport: Locator, bar: Locator): Promise<void> => {
+		await viewport.evaluate(element => { element.scrollLeft = 0; });
+		await viewport.hover();
+		await page.mouse.wheel(0, 60);
+		await expect.poll(() => viewport.evaluate(element => element.scrollLeft)).toBeGreaterThan(0);
+		await bar.focus();
+		await expect(bar).toHaveCSS('opacity', '1');
+		await bar.press('Home');
+		await expect.poll(() => viewport.evaluate(element => element.scrollLeft)).toBe(0);
+		const thumb = await bar.locator('.ash-scrollbar-thumb').boundingBox();
+		expect(thumb).not.toBeNull();
+		await page.mouse.move(thumb!.x + thumb!.width / 2, thumb!.y + thumb!.height / 2);
+		await page.mouse.down();
+		await page.mouse.move(thumb!.x + thumb!.width / 2 + 30, thumb!.y + thumb!.height / 2);
+		await page.mouse.move(thumb!.x + thumb!.width / 2 + 30, thumb!.y + 50);
+		await expect(bar).toHaveCSS('opacity', '1');
+		await page.mouse.up();
+		await expect.poll(() => viewport.evaluate(element => element.scrollLeft)).toBeGreaterThan(0);
+	};
+	await exercise(tabViewport, tabBar);
+	await exercise(breadcrumbViewport, breadcrumbBar);
+	await changeSetting('Sizing', 'Large');
+	await expect(tabBar).toHaveCSS('height', '10px');
+	await expect(breadcrumbBar).toHaveCSS('height', '8px');
+	await expect(selected.getByRole('tab')).toHaveAttribute('id', identity!);
+	expect(await tabViewport.evaluate((element, previous) => element === previous, originalViewport)).toBe(true);
+
+	await page.mouse.move(0, 0);
+	await page.getByRole('button', { name: 'Outside content', exact: true }).focus();
+	await expect(tabBar).toHaveCSS('opacity', '0');
+	await expect(breadcrumbBar).toHaveCSS('opacity', '0');
+	await exercise(tabViewport, tabBar);
+	await exercise(breadcrumbViewport, breadcrumbBar);
+	await tabViewport.evaluate(element => { element.scrollLeft = 0; });
+	await expect(selected).toHaveClass(/connected-tab-right-clipped/u);
+	await selected.getByRole('tab').focus();
+	await expect.poll(() => selected.evaluate(tab => {
+		const viewport = tab.closest('.ash-scrollbar-viewport')!.getBoundingClientRect();
+		const bounds = tab.getBoundingClientRect();
+		return bounds.left >= viewport.left - 1 && bounds.right <= viewport.right + 1;
+	})).toBe(true);
+	await expect(selected).not.toHaveClass(/connected-tab-right-clipped/u);
+	await expect(selected).toHaveCSS('border-bottom-width', '0px');
+	await changeSetting('Visibility', 'Visible');
+	await page.mouse.move(0, 0);
+	await page.getByRole('button', { name: 'Outside content', exact: true }).focus();
+	await expect(tabBar).toHaveCSS('opacity', '1');
+	await expect(breadcrumbBar).toHaveCSS('opacity', '1');
+	await changeSetting('Visibility', 'Hidden');
+	await expect(tabBar).toBeHidden();
+	await expect(breadcrumbBar).toBeHidden();
+	await selected.getByRole('tab').press('Alt+Enter');
+	const sticky = title.locator('.ash-sticky-editor-tabs-row .ash-tab-list');
+	await expect(sticky).toHaveCSS('--ash-scrollbar-size', '10px');
+	await expect(sticky.locator('.ash-scrollbar-track-horizontal')).toBeHidden();
+	await changeSetting('Sizing', 'Default');
+	await expect(sticky).toHaveCSS('--ash-scrollbar-size', '3px');
+	await changeSetting('Visibility', 'Auto');
+	await expect(tabBar).not.toBeHidden();
+});

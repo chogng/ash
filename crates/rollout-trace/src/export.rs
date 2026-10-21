@@ -143,6 +143,7 @@ pub fn export_session_trace<S: TraceExportSource>(
     trace.graph = Some(graph);
     trace.diagnostics = Some(diagnostics);
     trace.overview = Some(crate::overview::summarize_trace(&trace));
+    trace.performance = Some(crate::performance::summarize_performance(&trace.threads));
     Ok(trace)
 }
 

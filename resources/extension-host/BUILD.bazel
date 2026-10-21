@@ -1,5 +1,5 @@
 exports_files(
-    ["node.mjs", "vscode.js", "host.mjs", "scm.js"],
+    ["node.mjs", "ash.js", "host.mjs", "scm.js"],
     visibility = [
         "//crates/app-server:__pkg__",
         "//crates/external-ext:__pkg__",

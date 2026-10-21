@@ -15,7 +15,7 @@ import { type ICodeEditor } from '../../../../browser/editorBrowser.js';
 import { type TextMeasurer } from '../../../../common/viewModel.js';
 
 const { TestView: View } = await import("../../../../test/browser/viewModel/testViewModel.js");
-const { BracketMatchingController } = await import("../../../../../../../extensions/code/browser/contrib/bracketMatching/browser/bracketMatching.js");
+const { BracketMatchingController } = await import("../../browser/bracketMatching.js");
 
 test("Bracket match controller stores standard decoration options and clears them for a range selection", () => {
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");

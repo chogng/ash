@@ -119,7 +119,7 @@ test.beforeEach(async ({ target, testWorkspace }) => {
 	await writeFile(join(testWorkspace.directory, 'tree-other', 'other.txt'), 'other');
 });
 
-test('Explorer scrollbar stays at the pane edge while rows remain inset', { tag: ['@browser-ui', '@browser-app-server', '@electron-app-server'] }, async ({ target, testWorkspace, workbench }) => {
+test('Explorer scrollbar stays at the pane edge while rows remain inset', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, testWorkspace, workbench }) => {
 	const names = Array.from({ length: 100 }, (_, index) => `scroll-${String(index).padStart(3, '0')}.txt`);
 	if (target.appServerMode === 'required') {
 		await Promise.all(names.map(name => writeFile(join(testWorkspace.directory, name), name)));
@@ -322,7 +322,7 @@ test('Explorer smooth scrolling accumulates wheel input, keeps touchpad input im
 	await expect(tree.getByRole('treeitem', { name: names[0], exact: true })).toBeVisible();
 });
 
-test('Explorer keeps logical row focus when scrolling removes the focused row from the DOM', { tag: ['@browser-ui', '@browser-app-server', '@electron-app-server'] }, async ({ target, testWorkspace, workbench }) => {
+test('Explorer keeps logical row focus when scrolling removes the focused row from the DOM', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, testWorkspace, workbench }) => {
 	const names = Array.from({ length: 100 }, (_, index) => `focus-${String(index).padStart(3, '0')}.txt`);
 	if (target.appServerMode === 'required') {
 		await Promise.all(names.map(name => writeFile(join(testWorkspace.directory, name), name)));

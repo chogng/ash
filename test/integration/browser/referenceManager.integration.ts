@@ -1,3 +1,4 @@
+import { IExtensionService } from '../../../src/ash/workbench/services/extensions/common/extensionService.js';
 import { InstantiationService } from '../../../src/ash/platform/instantiation/common/instantiationService.js';
 import { createTestEditorServices, createTestFileService, createTestTextFileService } from '../../../src/ash/workbench/test/common/testEditorServices.js';
 import { IFileService } from '../../../src/ash/platform/files/common/files.js';
@@ -62,6 +63,7 @@ services.registerInstance(IEditorService, { onDidVisibleEditorsChange: changed.e
 const resources = new ExtensionResourceLoaderService(async request => {
 	const response = await fetch(`/__references_resource?id=${request.extensionId}&generation=${request.generation}&path=${encodeURIComponent(request.path)}`); if (!response.ok) throw new Error('Package resource unavailable'); return new Uint8Array(await response.arrayBuffer());
 });
+services.registerInstance(IExtensionService, { getExtensionPointContributions: () => [] } as unknown as IExtensionService);
 services.registerInstance(IExtensionApi, { list: async () => normalizeExtensionCatalog(await (await fetch('/__references_catalog')).json()), resources } as IExtensionApi);
 services.registerInstance(IExtensionHostApi, { invoke: async (request, signal) => (await fetch(`/__references_invoke?id=${request.extensionId}`, { method: 'POST', signal, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(request.payload) })).json() } as IExtensionHostApi);
 const bridge = services.createInstance(MainThreadClientEditors, 30000, loadExtensionEditorModule);

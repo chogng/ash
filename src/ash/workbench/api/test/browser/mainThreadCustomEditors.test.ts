@@ -25,7 +25,7 @@ test('Rust custom editor resources stay within their enabled package and follow 
 		list: async () => ({ generation, diagnostics: [], extensions: enabled ? [{ id: 'test.rust', version: '1', sourceKind: 'builtIn' } as ExtensionDescriptor] : [] }),
 		resources: { readExtensionResourceBytes: async (request: unknown) => { reads.push(request); return new TextEncoder().encode('/* view */'); } },
 	} as unknown as IExtensionApi;
-	using adapter = new MainThreadCustomEditors(30000, { createInstance: (_ctor: unknown, value: CustomTextEditorProvider) => { provider = value; return {}; } } as unknown as IInstantiationService, {} as IExtensionHostApi, packages);
+	using adapter = new MainThreadCustomEditors(30000, { createInstance: (_ctor: unknown, value: CustomTextEditorProvider) => { provider = value; return {}; } } as unknown as IInstantiationService, {} as IExtensionHostApi, packages, { getExtensionPointContributions: () => [] } as unknown as import('../../../services/extensions/common/extensionService.js').IExtensionService);
 	using registration = adapter.registerCustomTextEditorProvider({ kind: 'customTextEditor', registrationId: 'test.rust.editor', viewType: 'test.rust.editor', displayName: 'Test', selectors: ['*.md'], priority: 'option' }, async () => ({ html: '<main></main>', resources: { script: path, style: 'media/view.css' } }), { id: 'test.rust', version: '1' });
 	await EditorPanes.getEditorPanes().find(pane => pane.id === 'test.rust.editor')!.create({});
 	const document = { uri: 'untitled:/view.md', version: 1, languageId: 'markdown', text: '', readOnly: false };
@@ -76,7 +76,7 @@ test('independent Markdown math shares macros across formulas and follows settin
 	const rich = await handlers.get('vscode.markdown.editor')!('resolveCustomTextEditor', { document }, signal);
 	assert.match(JSON.stringify(rich), /katex-display/);
 	const empty = { contents: {}, keys: [], overrides: [] };
-	await handlers.get('vscode.workspace.events')!('workspaceEvent', {
+	await handlers.get('ash.workspace.events')!('workspaceEvent', {
 		type: 'configuration', revision: 1, emit: true,
 		configurationValues: { markdown: { math: { enabled: false } } },
 		configurationData: { defaults: empty, application: empty, userLocal: empty, userRemote: empty, workspace: empty, policy: empty, folders: [] },
@@ -86,7 +86,7 @@ test('independent Markdown math shares macros across formulas and follows settin
 	assert.doesNotMatch(disabled.update.html, /class="katex"/);
 	assert.match(disabled.update.html, /\\ashfoo/);
 	assert.match(disabled.update.html, /<pre><code class="language-math">/);
-	await handlers.get('vscode.workspace.events')!('workspaceEvent', {
+	await handlers.get('ash.workspace.events')!('workspaceEvent', {
 		type: 'configuration', revision: 2, emit: true, configurationValues: {},
 		configurationData: { defaults: empty, application: empty, userLocal: empty, userRemote: empty, workspace: empty, policy: empty, folders: [] },
 		change: { keys: ['markdown.math'], overrides: [] },
@@ -116,6 +116,15 @@ for (const [language, explanation, limitExplanation] of [['en', 'This formula co
 		}
 	});
 }
+test('Markdown fixture drains the shutdown response after the process exits', async () => {
+	const runtime = await startMarkdownExtension();
+	// Keep the reply in the pipe until exit, reproducing delayed stdout delivery.
+	runtime.child.stdout.pause();
+	runtime.child.once('exit', () => runtime.child.stdout.resume());
+	await runtime.dispose();
+	assert.equal(runtime.child.exitCode, 0);
+});
+
 let activeRuntime: Awaited<ReturnType<typeof startMarkdownExtension>> | undefined;
 before(function () { this.timeout(600000); prepareMarkdownExtension(); });
 afterEach(async () => { await activeRuntime?.dispose(); activeRuntime = undefined; });
@@ -129,7 +138,7 @@ async function loadMarkdown(language: string, documents: readonly unknown[] = []
 		if (!registration) throw new Error(`Missing provider ${operation}`);
 		return runtime.invoke(registration.registrationId, operation, payload, signal);
 	};
-	for (const document of documents) await handlers.get('vscode.documents')!('documentEvent', { type: 'open', document } as JsonValue, new AbortController().signal);
+	for (const document of documents) await handlers.get('ash.documents')!('documentEvent', { type: 'open', document } as JsonValue, new AbortController().signal);
 	return { registrations, handlers, invoke, clientCalls: runtime.clientCalls };
 }
 
@@ -202,15 +211,15 @@ test('document diagnostics update dependents, retain unrelated markers and clear
 	publications.length = 0;
 	documents[0] = { ...documents[0]!, text: '# After\n', version: 2 };
 	const signal = new AbortController().signal;
-	await handlers.get('vscode.documents')!('documentEvent', { type: 'change', document: documents[0]! }, signal);
+	await handlers.get('ash.documents')!('documentEvent', { type: 'change', document: documents[0]! }, signal);
 	assert.equal(publications[0].merge, true);
 	assert.deepEqual(publications[0].entries.map((entry: any) => entry.uri).sort(), documents.slice(0, 2).map(document => document.uri).sort());
 	assert.equal(publications[0].entries.find((entry: any) => entry.uri === documents[1]!.uri).diagnostics[0].code, 'link.no-such-header-in-file');
 	const closed = documents.pop()!;
-	await handlers.get('vscode.documents')!('documentEvent', { type: 'close', document: closed }, signal);
+	await handlers.get('ash.documents')!('documentEvent', { type: 'close', document: closed }, signal);
 	assert.deepEqual(publications[1].entries, [{ uri: closed.uri, version: null, diagnostics: [] }]);
 	const calls = clientCalls.length;
-	await handlers.get('vscode.documents')!('documentEvent', { type: 'change', document: { ...closed, languageId: 'plaintext' } }, signal);
+	await handlers.get('ash.documents')!('documentEvent', { type: 'change', document: { ...closed, languageId: 'plaintext' } }, signal);
 	assert.equal(publications.length, 2);
 	assert.equal(clientCalls.length, calls, 'unrelated language changes do not fetch Markdown snapshots');
 });
@@ -316,7 +325,7 @@ test('packaged Markdown preferences control completion, highlighting, preview br
 	const preview = await handlers.get('vscode.markdown.preview.editor')!('resolveCustomTextEditor', { document: { uri, text, version: 1, languageId: 'markdown' } }, signal) as { html: string; update: { html: string; }; };
 	assert.match(preview.update.html, /first<br\s*\/?>\s*second/);
 	const empty = { contents: {}, keys: [], overrides: [] };
-	await handlers.get('vscode.workspace.events')!('workspaceEvent', {
+	await handlers.get('ash.workspace.events')!('workspaceEvent', {
 		type: 'configuration', revision: 1, emit: true,
 		configurationValues: { markdown: { validate: { fragmentLinks: { enabled: 'ignore' } }, suggest: { paths: { enabled: true } }, occurrencesHighlight: { enabled: true } } },
 		configurationData: { defaults: empty, application: empty, userLocal: empty, userRemote: empty, workspace: empty, policy: empty, folders: [] },
@@ -356,7 +365,7 @@ test('Markdown workspace edits use dirty documents and localized validation resp
 	const diagnostics = published[0]!;
 	assert.match(diagnostics.diagnostics[0]!.message, /找不到标题/u);
 	const empty = { contents: {}, keys: [], overrides: [] };
-	await handlers.get('vscode.workspace.events')!('workspaceEvent', { type: 'configuration', revision: 1, emit: true, configurationValues: { markdown: { validate: { enabled: false } } }, configurationData: { defaults: empty, application: empty, userLocal: empty, userRemote: empty, workspace: empty, policy: empty, folders: [] }, change: { keys: ['markdown.validate.enabled'], overrides: [] } }, signal);
+	await handlers.get('ash.workspace.events')!('workspaceEvent', { type: 'configuration', revision: 1, emit: true, configurationValues: { markdown: { validate: { enabled: false } } }, configurationData: { defaults: empty, application: empty, userLocal: empty, userRemote: empty, workspace: empty, policy: empty, folders: [] }, change: { keys: ['markdown.validate.enabled'], overrides: [] } }, signal);
 	assert.ok(published.every(value => value.diagnostics.length === 0));
 	const cancelled = new AbortController();
 	cancelled.abort();
@@ -546,7 +555,7 @@ test('Markdown changes inspect only the changed document and indexed dependents 
 	clientCalls.length = reads.length = publications.length = 0;
 	documents[0] = { ...documents[0]!, text: '# After\n', version: 2 };
 	const signal = new AbortController().signal;
-	await handlers.get('vscode.documents')!('documentEvent', { type: 'change', document: documents[0]! }, signal);
+	await handlers.get('ash.documents')!('documentEvent', { type: 'change', document: documents[0]! }, signal);
 	assert.equal(clientCalls.filter(value => value === 'listDocuments').length, 0);
 	assert.equal(clientCalls.filter(value => value === 'readDocument').length, 1, 'read only the dependent snapshot');
 	assert.deepEqual(reads, []);
@@ -574,12 +583,56 @@ test('an interrupted Markdown diagnostic publication rebuilds dependencies from 
 	const signal = new AbortController().signal;
 	documents[0] = { ...documents[0]!, text: '# After', version: 2 };
 	failPublication = true;
-	await assert.rejects(handlers.get('vscode.documents')!('documentEvent', { type: 'change', document: documents[0]! }, signal), /Deliberate publication failure/u);
+	await assert.rejects(handlers.get('ash.documents')!('documentEvent', { type: 'change', document: documents[0]! }, signal), /Deliberate publication failure/u);
 	clientCalls.length = publications.length = 0;
 	documents[0] = { ...documents[0]!, text: '# Final', version: 3 };
-	await handlers.get('vscode.documents')!('documentEvent', { type: 'change', document: documents[0]! }, signal);
+	await handlers.get('ash.documents')!('documentEvent', { type: 'change', document: documents[0]! }, signal);
 	assert.equal(clientCalls.filter(value => value === 'listDocuments').length, 1);
 	assert.equal(publications[0].merge, undefined);
 	assert.deepEqual(publications[0].entries.map((entry: any) => [entry.uri, entry.version]), documents.slice().reverse().map(document => [document.uri, document.version]));
 	assert.equal(publications[0].entries[0].diagnostics[0].code, 'link.no-such-header-in-file');
+});
+
+test('a restored custom editor activates on first render and survives dormant-to-ready publication', async () => {
+	let provider: CustomTextEditorProvider | undefined;
+	let starts = 0;
+	let calls = 0;
+	const declaration = { viewType: 'test.lazy.editor', displayName: 'Lazy editor', priority: 'option', selector: [{ filenamePattern: '*.md' }] };
+	const ready = normalizeExtensionHostSnapshot({ generation: 2, extensions: [{ id: 'test.lazy', version: '1', packageDigest: `sha256:${'a'.repeat(64)}`, runtimeApiVersion: 1, activationGeneration: 1, incarnation: 7, lifecycle: 'ready', failure: null, stderr: '', outputEvents: [], registrations: [{ kind: 'customTextEditor', registrationId: 'actual-view', viewType: declaration.viewType, displayName: declaration.displayName, selectors: ['*.md'], priority: 'option' }] }] });
+	const dormant = { ...ready, generation: 1, extensions: ready.extensions.map(runtime => ({ ...runtime, lifecycle: 'dormant' as const, incarnation: undefined, registrations: [], activation: { events: [`onCapability:customEditor:${declaration.viewType}`], commands: [] } })) };
+	const packages = { list: async () => ({ generation: 1, extensions: [], diagnostics: [] }) } as unknown as IExtensionApi;
+	const host = {
+		activateByEvent: async (request: Parameters<IExtensionHostApi['activateByEvent']>[0]) => {
+			starts++;
+			assert.deepEqual(request.event, { type: 'capability', capability: 'customEditor:test.lazy.editor' });
+			adapter.update({ ...dormant, extensions: dormant.extensions.map(runtime => ({ ...runtime, lifecycle: 'starting' as const })) });
+			adapter.update(ready);
+			return ready;
+		},
+		invoke: async (request: Parameters<IExtensionHostApi['invoke']>[0]) => {
+			calls++;
+			assert.equal(request.incarnation, 7);
+			assert.equal(request.registrationId, 'actual-view');
+			return { html: '<main>restored unsaved document</main>' };
+		},
+	} as unknown as IExtensionHostApi;
+	using adapter = new MainThreadCustomEditors(30_000,
+		{ createInstance: (_ctor: unknown, value: CustomTextEditorProvider) => { provider = value; return {}; } } as unknown as IInstantiationService,
+		host, packages,
+		{ getExtensionPointContributions: () => [{ description: { id: 'test.lazy' }, value: [declaration] }] } as unknown as import('../../../services/extensions/common/extensionService.js').IExtensionService);
+	adapter.update(dormant);
+	assert.equal(starts, 0);
+	const descriptor = EditorPanes.getEditorPanes().find(pane => pane.id === declaration.viewType)!;
+	assert.ok(descriptor, 'Restoration discovers the declared view before a process exists');
+	await descriptor.create({});
+	const document = { uri: 'untitled:/draft.md', version: 3, languageId: 'markdown', text: 'unsaved', readOnly: false };
+	const signal = new AbortController().signal;
+	assert.equal((await provider!.render(document, signal)).html, '<main>restored unsaved document</main>');
+	assert.strictEqual(EditorPanes.getEditorPanes().find(pane => pane.id === declaration.viewType), descriptor);
+	await provider!.render(document, signal);
+	assert.equal(starts, 1);
+	assert.equal(calls, 2);
+	adapter.clear();
+	await assert.rejects(provider!.render(document, signal));
+	assert.equal(calls, 2, 'A retired declaration cannot reactivate the provider');
 });

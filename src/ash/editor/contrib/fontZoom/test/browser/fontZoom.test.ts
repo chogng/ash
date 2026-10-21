@@ -5,7 +5,7 @@ import { test } from 'mocha';
 import { type ICodeEditor } from '../../../../browser/editorBrowser.js';
 import { EditorExtensionsRegistry, type ServicesAccessor } from '../../../../browser/editorExtensions.js';
 import { EditorZoom } from '../../../../common/config/editorZoom.js';
-import '../../../../../../../extensions/code/browser/contrib/fontZoom/browser/fontZoom.js';
+import '../../browser/fontZoom.js';
 
 test('font zoom actions update the shared editor zoom owner', () => {
 	const previous = EditorZoom.getZoomLevel();

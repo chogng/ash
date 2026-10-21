@@ -173,6 +173,7 @@ pub use model::ModelInputEstimate;
 pub use model::ModelInputModality;
 pub use model::ModelInvocationOutcome;
 pub use model::ModelInvocationRecord;
+pub use model::ModelInvocationTiming;
 pub use model::ModelLifecycle;
 pub use model::ModelMetadataQuality;
 pub use model::ModelMoneyAmount;

@@ -16,6 +16,8 @@
 
 .ash-standard-editor-tabs .ash-tab {
 	box-sizing: border-box;
+	/* Balance the top contrast border so tab actions stay centered on whole pixels. */
+	padding-bottom: var(--ash-strokeThickness);
 	border-top: var(--ash-strokeThickness) solid transparent;
 	border-right: var(--ash-strokeThickness) solid var(--ash-border);
 	color: var(--ash-description-foreground);

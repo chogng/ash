@@ -92,7 +92,9 @@ untracked-discard setting explicitly selects recycling or permanent removal. Dir
 contents remain under the client's working-copy owner.
 
 Terminal helpers use this executable's `--askpass` and `--editor` modes, an activation-bound
-loopback broker and nonpersistent terminal environment contributions. Message files are
+loopback broker and nonpersistent terminal environment contributions. The broker starts only
+when a Git operation or terminal needs a helper. Its listener blocks while idle and is woken
+by a local connection during shutdown. Message files are
 checked for replacement before writes. Finish or cancel through the Git terminal-editor
 commands. GitHub credentials come from the existing Rust
 [`github-authentication`](../github-authentication/README.md) provider, controlled by
@@ -116,9 +118,11 @@ nor another extension's enablement change replaces an unaffected command lifetim
 The background subscription waits for admitted backend notifications and refreshes as soon
 as they arrive. It consumes status snapshots rather than ignore invalidation hints, which
 arrive before status is ready and would start redundant configuration/discovery work.
-A bounded idle tick still updates editor-owned facts such as blame; it does
-not delay repository changes. State waits run outside the discovery lock and are cancelled
-before shutdown joins the monitor.
+Cursor and unsaved-text changes emit coalesced editor revisions without invalidating discovery.
+Blame reads metadata first and requests full text only after the active signature changes.
+Idle waits renew after 20 seconds, below the SDK deadline; renewals skip configuration and
+discovery when the workspace is unchanged. State waits run outside the discovery lock and
+are cancelled before shutdown joins the monitor.
 
 Use **Manage built-in editor extensions** to disable `ash.git` for the current profile.
 Other SCM providers, editors, undo and saving retain their lifetimes. Shared Rust Git and

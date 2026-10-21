@@ -103,11 +103,11 @@ export class MainThreadTask extends Disposable {
 		}
 		if (operation.task !== null) {
 			if (!source) { throw new TypeError('A provided task requires an authenticated extension owner'); }
-			const key = JSON.stringify([source.extensionId, source.activationGeneration, source.incarnation, 'vscode.tasks.events']);
+			const key = JSON.stringify([source.extensionId, source.activationGeneration, source.incarnation, 'ash.tasks.events']);
 			const observer = this.observers.get(key);
 			if (!observer) { throw new Error('Task extension owner has retired'); }
 			let task = normalizeTaskResult({ tasks: [operation.task] }, (operation, payload, signal) => this.api.invoke({
-				...source, registrationId: 'vscode.tasks.events', operation, payload,
+				...source, registrationId: 'ash.tasks.events', operation, payload,
 				deadlineUnixMillis: Date.now() + this.timeoutMillis,
 			}, AbortSignal.any([signal, observer.signal])))[0]!;
 			if (operation.taskId !== null) {
@@ -120,7 +120,7 @@ export class MainThreadTask extends Disposable {
 				task = { ...task, execution: original.execution };
 			}
 			const run = await this.tasks.runProvidedTask(
-				extensionHostWorkflowProviderId(source.extensionId, 'vscode.tasks.events'),
+				extensionHostWorkflowProviderId(source.extensionId, 'ash.tasks.events'),
 				task,
 				AbortSignal.any([signal, observer.signal]),
 			);

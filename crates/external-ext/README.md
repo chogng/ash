@@ -2,10 +2,10 @@
 
 本 crate 位于 `crates/external-ext`，包名为 `ash-external-ext`，Rust 导入名为 `ash_external_ext`，共用 TS/JS 与 Rust 扩展的进程监管语义；语言执行与作者 SDK 分开，进程协议独立保留。重命名保留原有接口与执行行为，外部包校验与资源快照已归入 `packages`；内置编辑器资源由 TS 构建和加载。App Server 运行管理提取仍未实施。完整命名和来源边界见[共享接入与语言适配的 crate 边界](../../docs/editor-extensions.md#共享接入与语言适配的-crate-边界)。
 
-[统一后端扩展接口规范](../../docs/editor-extensions.md#统一后端扩展接口规范)固定 Host RPC 为 TS/JS 与 Rust 的唯一接入协议。JS 标准兼容层、Rust SDK 和 Workbench adapter 共用能力语义；TS/JS 作者只使用标准 API，公开 TS SDK 已退出。本 crate 拥有接入与监管，不定义语言 API 或 Provider 业务，也不为 Remote 增加私有调用入口。现有双向客户端/核心服务消息继续复用该协议，按 scope 和授权路由到真实 owner。
+[统一后端扩展接口规范](../../docs/editor-extensions.md#统一后端扩展接口规范)固定 Host RPC 为 TS/JS 与 Rust 的唯一接入协议。TS 作者使用 [`@ash/sdk`](../../sdk/typescript/README.md) / `ash.*`，Rust SDK 和 Workbench adapter 共用能力语义；作者适配器统一为现有 Ash API，旧兼容模块已删除。本 crate 拥有接入与监管，不定义语言 API 或 Provider 业务，也不为 Remote 增加私有调用入口。现有双向客户端/核心服务消息继续复用该协议，按 scope 和授权路由到真实 owner。
 
 > 本 README 记录当前可执行 Editor Extension Host v1 的进程、RPC、授权门禁、取消与故障恢复。
-> JS 使用标准 VS Code API，由[独立 JS 宿主](../external-js-ext/README.md)适配到同一 Host RPC；本 crate 承担共用监管。
+> JS 通过 `@ash/sdk` 由[扩展宿主](../../resources/extension-host/README.md)适配到同一 Host RPC；Node、V8 与可信 Worker 共用唯一 Ash 实现，本 crate 承担进程监管。
 > [`Rust 作者 SDK`](../../sdk/rust/README.md) 已被 GitHub 认证的独立程序复用；产品 Rust launcher 已接通，通用第三方 Rust 安装与隔离仍待完成。
 > 共享 wire 定义属于 `ash-external-ext-protocol`。跨 Extensions/legacy Plugin、Workspace、App Server 和 Workbench 的产品语义由
 > [`docs/editor-extensions.md`](../../docs/editor-extensions.md) 维护；统一远端 package 身份由
@@ -13,14 +13,14 @@
 
 `ash-external-ext` 监管一个已经由上层解析和授权的扩展程序。每个
 `ExtensionHostSupervisor` 最多拥有一个扩展的一个活动进程 incarnation，通过有界 JSONL Host RPC v1
-完成握手、激活、调用、取消、停用和关闭，并在授权仍有效时按有界策略恢复崩溃进程。包资源由 [`packages`](src/packages/README.md) 校验和冻结，上游 authority 仍选择来源和授权。它不安装 package，不选择 activation event，不实现 Workbench provider，不实现 VS Code Extension API；该 API 属于产品 JS 宿主。
+完成握手、激活、调用、取消、停用和关闭，并在授权仍有效时按有界策略恢复崩溃进程。包资源由 [`packages`](src/packages/README.md) 校验和冻结，上游 authority 仍选择来源和授权。它不安装 package，不选择 activation event，不实现 Workbench provider 或语言作者 API；后者属于各语言 SDK 与对应宿主。
 
 当前 Rust 后端仍提供授权、GitHub、Git、存储等能力；目标核心保留通用机制，GitHub 认证与 API 由可选 TS/JS 或 Rust Provider 拥有。这个 supervisor 共用两类扩展的进程监管；语言 API 兼容和作者 SDK 保持独立，建议的 crate 分工见[共享接入与语言适配的 crate 边界](../../docs/editor-extensions.md#共享接入与语言适配的-crate-边界)。它不拥有具体业务和会话，也不能用旧 Host RPC 示例证明新认证能力可用。JS 入口和回调目前在独立 V8 或 Node 进程执行，
 作者无需实现传输协议。标准 Node 的激活和后台客户端请求由 `supervisor/client.rs` 的有界并发 pump 处理，
 每次请求取得当前授权 lease。App Server 绑定启动窗口，子进程只携带 incarnation/generation；窗口关闭、
 撤权、崩溃和 shutdown 取消请求并等待释放，再释放进程 lease。按扩展串行化激活，使激活阶段调用另一
 扩展的命令不会持有全局 fleet 锁。状态栏的注册校验和已确认快照更新仍由同一个 SupervisorState 拥有，
-回调和后台通道共用处理。新宿主的进程测试已覆盖 标准 API 反向编辑器调用、Rust 文件读取、取消、超时和释放；
+回调和后台通道共用处理。宿主进程测试覆盖 Ash API 反向编辑器调用、Rust 文件读取、取消、超时和释放；
 这些测试不能代替生产平台隔离验收。
 
 标准 Node 的 Host RPC 使用启动前分配、带随机绑定令牌的 loopback socket。私有 `process/node.rs`
@@ -100,6 +100,9 @@ flowchart TD
 ## 4. Host RPC v1
 
 调用的绝对截止时间在 dispatch 前固定，延迟启动 waiter 不会重新获得超时预算。
+SCM 调用期间可确认新的 revision／provider 快照；这只是展示状态更新，不撤销同一进程中同 ID、
+同能力种类的注册。终态校验仍拒绝被删除、改为其他能力或属于旧进程的注册；其他注册继续保留
+其精确 descriptor／generation 校验。
 取消后仍等待合作式终态；宽限期内没有终态则保留结果不确定语义，终止旧实例后恢复注册。
 请求和回包进入同一个有界写入队列，不在调用线程等待子进程读取；队列超限会终止该实例，
 不会静默丢帧或重放。强制退出先关闭子进程，再回收写入端，因此不读 stdin 的进程不能阻塞退出。
@@ -191,7 +194,7 @@ composition 主动取消；进程中自报的 package identity 不是授权依�
 `RequireJavaScriptEnforcement`：macOS 与 64 位 Windows 的 `ProductJavaScriptLauncher` 只接受产品自带的 V8 宿主，
 子进程在执行扩展前安装系统隔离、V8 堆与堆外缓冲区预算，执行仍有截止时间。JS 预算不代表整个进程的系统内存上限。
 独立可执行扩展不能选用此策略。
-标准 VS Code 命令在现有 exact-package authority gate 之后使用 `AuthorizedNode`：同一 launcher
+Ash SDK 与未迁移的旧 VS Code 命令在现有 exact-package authority gate 之后使用 `AuthorizedNode`：同一 launcher
 只启动 composition root 绑定的产品 Node executable 与 bootstrap，直接纳入监督器的进程组。
 这项策略允许当前用户的文件、网络和子进程能力，不宣称 V8 隔离或整个进程的硬资源上限；
 frame、并发、截止时间、取消和撤销仍由现有监督器执行。Node 的环境额度为 256 项 / 128 KiB，
@@ -223,8 +226,8 @@ App Server 或其他 composition root 必须：
 
 1. 从 source adapter 已规范化的 exact immutable package、digest、executable 与 live authority 构造
    `ExtensionActivationSpec`，并把 directory capability 加入同一 live gate；
-2. RPC 程序必须有 exact process permission；JS 入口必须通过 package validation，标准 API 由选定的 V8 或产品绑定的 Node executable/bootstrap 适配，旧 Ash TS SDK 入口被拒绝；
-3. 根据入口选择隔离策略：独立可执行扩展要求 `RequirePlatformEnforcement`，macOS 与 64 位 Windows JS 要求 `RequireJavaScriptEnforcement` 并使用 `ProductJavaScriptLauncher`；标准 VS Code 扩展要求 `AuthorizedNode` 与新的确切包执行授权；缺少符合所选策略的 launcher 或 Node 资源时将生产能力标记为不可用；
+2. RPC 程序必须有 exact process permission；JS 入口必须通过 package validation，`api: ash` 使用产品绑定的 Node executable/bootstrap 提供 `@ash/sdk`；旧 API 只保留退休 metadata decoder，不能选择运行宿主；
+3. 根据入口选择隔离策略：独立可执行扩展要求 `RequirePlatformEnforcement`，macOS 与 64 位 Windows 受限 V8 要求 `RequireJavaScriptEnforcement` 并使用 `ProductJavaScriptLauncher`；Ash SDK 与旧标准 Node 扩展要求 `AuthorizedNode` 和确切包执行授权；缺少符合所选策略的 launcher 或 Node 资源时将生产能力标记为不可用；
 4. 定期调用 `reconcile()`，把 snapshot 变化原子投影到 provider owners；
 5. 使用异步 invocation session 或后台 waiter 暴露调用，使 cancel request 不被一个阻塞 RPC 串行化；
 6. connection 断开、authority 撤销和 shutdown 时取消 owned invocations 并调用 `shutdown()`；

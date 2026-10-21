@@ -1,7 +1,7 @@
 import { ExtensionsRegistry } from './extensionsRegistry.js';
 import { localize } from '../../../../nls.js';
 import { validateJsonValue } from '../../../../base/common/jsonValue.js';
-import { ConfigurationScope, type IConfigurationNode, type IConfigurationPropertySchema } from '../../../../platform/configuration/common/configurationRegistry.js';
+import { ConfigurationScope, type IConfigurationDefaults, type IConfigurationNode, type IConfigurationPropertySchema } from '../../../../platform/configuration/common/configurationRegistry.js';
 import { URI } from '../../../../base/common/uri.js';
 import { posix, win32 } from '../../../../base/common/path.js';
 import { validateTokenId, type ColorContribution } from '../../../../platform/theme/common/colorRegistry.js';
@@ -52,6 +52,7 @@ export interface ExtensionDebugAdapterContribution {
 }
 
 export interface ExtensionCustomEditorContribution {
+	readonly documentType?: string;
 	readonly viewType: string;
 	readonly displayName: string;
 	readonly priority: 'default' | 'option' | 'explicit';
@@ -68,6 +69,7 @@ export interface ExtensionManifest {
 		readonly terminal: { readonly profiles: readonly { readonly id: string; readonly title: string; readonly icon?: string; readonly color?: string; }[]; };
 		readonly localizations: readonly ILocalizationContribution[];
 		readonly configuration: readonly IConfigurationNode[];
+		readonly configurationDefaults: readonly IConfigurationDefaults[];
 		readonly submenus: readonly { id: string; label: string; placements: readonly { menu: string; when?: string; group?: string; }[]; }[];
 		readonly viewsWelcome: readonly { view: string; contents: string; when?: string; precondition?: string; group?: string; order?: number; }[];
 		readonly languages: readonly ExtensionLanguageContribution[];
@@ -81,7 +83,6 @@ export interface ExtensionManifest {
 		readonly semanticTokenTypes: readonly TokenTypeOrModifierContribution[];
 		readonly semanticTokenModifiers: readonly TokenTypeOrModifierContribution[];
 		readonly icons: readonly ExtensionIconContribution[];
-		readonly editorFeatures?: readonly { readonly target: 'text'; }[];
 		readonly customEditors: readonly ExtensionCustomEditorContribution[];
 		readonly problemMatchers: readonly Readonly<Record<string, unknown>>[];
 		readonly problemPatterns: readonly Readonly<Record<string, unknown>>[];
@@ -136,6 +137,10 @@ export function parseExtensionManifest(manifestJson: string, descriptor: Extensi
 			terminal: parseTerminalContribution(contributes.terminal, contributes.terminalProfiles),
 			localizations: parseLocalizations(contributes.localizations),
 			configuration: parseConfigurations(contributes.configuration, Object.freeze({ id: descriptor.id, displayName })),
+			configurationDefaults: contributes.configurationDefaults === undefined ? [] : [{
+				overrides: validateJsonValue(record(contributes.configurationDefaults, 'contributes.configurationDefaults')) as Readonly<Record<string, unknown>>,
+				source: { id: descriptor.id, displayName },
+			}],
 			submenus: parseSubmenus(contributes.submenus, contributes.menus),
 			viewsWelcome: parseViewsWelcome(contributes.viewsWelcome),
 			languages: Object.freeze(contributes.languages === undefined ? [] : parseLanguages(contributes.languages, descriptor.id)),
@@ -148,7 +153,6 @@ export function parseExtensionManifest(manifestJson: string, descriptor: Extensi
 			semanticTokenTypes: parseClassifications(contributes.semanticTokenTypes, true),
 			semanticTokenModifiers: parseClassifications(contributes.semanticTokenModifiers, false),
 			icons: parseIcons(contributes.icons),
-			editorFeatures: parseEditorFeatures(contributes.editorFeatures),
 			customEditors: parseCustomEditors(contributes.customEditors, descriptor.id),
 			problemMatchers: parseProblemContributions(contributes.problemMatchers, 'problemMatchers'),
 			problemPatterns: parseProblemContributions(contributes.problemPatterns, 'problemPatterns'),
@@ -218,14 +222,6 @@ function parseProblemContributions(value: unknown, field: string): readonly Read
 	}));
 }
 
-function parseEditorFeatures(value: unknown): readonly { readonly target: 'text'; }[] {
-	if (value === undefined || Array.isArray(value) && value.length === 0) return [];
-	if (!Array.isArray(value) || value.length !== 1 || record(value[0], 'Editor feature contribution').target !== 'text') {
-		throw new TypeError('Editor features must declare the text target once');
-	}
-	return Object.freeze([Object.freeze({ target: 'text' as const })]);
-}
-
 function parseCustomEditors(value: unknown, extensionId: string): readonly ExtensionCustomEditorContribution[] {
 	if (value === undefined) {
 		return Object.freeze([]);
@@ -256,7 +252,7 @@ function parseCustomEditors(value: unknown, extensionId: string): readonly Exten
 				...(mimeType === undefined ? {} : { mimeType: mimeType.toLowerCase() }),
 			});
 		});
-		return Object.freeze({ viewType: requiredString(editor.viewType, 'Custom editor view type', 256), displayName: requiredString(editor.displayName, 'Custom editor display name', 256), priority, selector: Object.freeze(selector) });
+		return Object.freeze({ ...(editor.documentType === undefined ? {} : { documentType: requiredString(editor.documentType, 'Custom editor document type', 128) }), viewType: requiredString(editor.viewType, 'Custom editor view type', 256), displayName: requiredString(editor.displayName, 'Custom editor display name', 256), priority, selector: Object.freeze(selector) });
 	});
 	if (new Set(editors.map(editor => editor.viewType)).size !== editors.length) {
 		throw new TypeError(`Extension '${extensionId}' custom editor IDs must be unique`);

@@ -49,14 +49,6 @@ pub trait ExtensionSource: Send + Sync {
         None
     }
 
-    fn registry_kind(&self) -> crate::ExtensionRegistryKind {
-        crate::ExtensionRegistryKind::Ash
-    }
-    /// Resource URL contract for a provider whose verified packages contain editor extensions.
-    fn extension_gallery_resource_url_template(&self) -> Option<String> {
-        None
-    }
-
     fn search(
         &self,
         request: SearchPackagesRequest,
@@ -138,24 +130,6 @@ impl ExtensionSources {
         }
         Ok(page)
     }
-    pub(crate) fn extension_gallery(
-        &self,
-    ) -> Result<Option<(&ExtensionSourceId, &dyn ExtensionSource, String)>, ExtensionsClientError>
-    {
-        let mut galleries = self.providers.iter().filter_map(|(name, provider)| {
-            provider
-                .extension_gallery_resource_url_template()
-                .map(|template| (name, provider.as_ref(), template))
-        });
-        let gallery = galleries.next();
-        if galleries.next().is_some() {
-            return Err(ExtensionsClientError::invalid_request(
-                "multiple extension resource galleries are configured",
-            ));
-        }
-        Ok(gallery)
-    }
-
     pub fn new(
         providers: impl IntoIterator<Item = (ExtensionSourceId, Arc<dyn ExtensionSource>)>,
     ) -> Result<Self, ExtensionsClientError> {

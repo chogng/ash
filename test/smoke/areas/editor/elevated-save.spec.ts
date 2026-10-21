@@ -4,6 +4,11 @@ import { join } from 'node:path';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 
+// Interactive UAC acceptance needs a visible, active product window.
+if (process.env.ASH_TEST_SYSTEM_AUTHORIZATION === 'approve' || process.env.ASH_TEST_SYSTEM_AUTHORIZATION === 'cancel') {
+	test.use({ electronWindowMode: 'active' });
+}
+
 test('read-only save recovery preserves edits and overwrites with ordinary permissions', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, application, testWorkspace, workbench }) => {
 	const name = 'permission-save.txt';
 	const path = join(testWorkspace.directory, name);
@@ -86,26 +91,29 @@ for (const outcome of ['approve', 'cancel'] as const) {
 		try {
 			if (identity) {
 				// Restrict writes to Administrators/System while preserving the owner's DACL recovery rights.
-				await run('icacls', [directory, '/inheritance:r', '/grant:r', `${identity}:(OI)(CI)RX`, '*S-1-5-32-544:(OI)(CI)F', '*S-1-5-18:(OI)(CI)F', '/T']);
+				// Change inheritance on the parent only: /T would strip the child's newly inherited read access.
+				await run('icacls', [directory, '/inheritance:r', '/grant:r', `${identity}:(OI)(CI)RX`, '*S-1-5-32-544:(OI)(CI)F', '*S-1-5-18:(OI)(CI)F']);
 			} else { await chmod(directory, 0o555); }
+			expect(await readFile(path)).toEqual(Buffer.from('\uFEFForiginal\r\n'));
 			const aclBefore = identity ? (await run('icacls', [path])).stdout : undefined;
 			console.log(`In the upcoming SYSTEM authorization window, ${outcome === 'approve' ? 'authorize the save' : 'cancel authorization'}. Do not enter credentials in the test runner.`);
 			await workbench.dialogs.confirm(application, 'Save with administrator permission', 'Retry with administrator permission', () => input.press('ControlOrMeta+s'));
 			if (outcome === 'approve') {
-				await expect.poll(() => readFile(path, 'utf8'), { timeout: 200_000 }).toBe('\uFEFFeditor original\r\n');
+				await expect.poll(() => readFile(path), { timeout: 200_000 }).toEqual(Buffer.from('\uFEFFeditor original\r\n'));
 				await expect(tab).not.toHaveAttribute('data-state', /dirty|conflict/);
 			} else {
-				await workbench.dialogs.expectMessage(application, 'Could not save file', async () => { }, 200_000);
+				const failure = await workbench.dialogs.expectMessage(application, 'Could not save file', async () => { }, 200_000);
+				expect(failure.message).toContain('System authorization was declined. Your changes remain unsaved.');
 				await expect(tab).toHaveAttribute('data-state', 'dirty');
 				await expect(group.editor.lines).toHaveText(['editor original', '']);
-				expect(await readFile(path, 'utf8')).toBe('\uFEFForiginal\r\n');
+				expect(await readFile(path)).toEqual(Buffer.from('\uFEFForiginal\r\n'));
 			}
 			const after = await stat(path);
 			if (identity) { expect((await run('icacls', [path])).stdout).toBe(aclBefore); }
 			else { expect([after.uid, after.gid, after.mode]).toEqual([before.uid, before.gid, before.mode]); }
 			await expect(input).toBeFocused();
 		} finally {
-			if (identity) { await run('icacls', [directory, '/inheritance:e', '/grant:r', `${identity}:(OI)(CI)F`, '/T']); }
+			if (identity) { await run('icacls', [directory, '/inheritance:e', '/grant:r', `${identity}:(OI)(CI)F`]); }
 			else { await chmod(directory, 0o755); }
 		}
 	});

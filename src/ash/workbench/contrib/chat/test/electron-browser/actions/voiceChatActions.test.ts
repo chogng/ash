@@ -13,6 +13,12 @@ import { InstantiationService } from '../../../../../../platform/instantiation/c
 import { SpeechService } from '../../../../speech/browser/speechService.js';
 import { ISpeechService } from '../../../../speech/common/speechService.js';
 import '../../../electron-browser/actions/voiceChatActions.js';
+import { IChatWidgetService, type IChatWidget } from '../../../browser/chat.js';
+import { ChatWidgetService } from '../../../browser/widget/chatWidgetService.js';
+import { toDisposable } from '../../../../../../base/common/lifecycle.js';
+import { StartVoiceChatAction } from '../../../electron-browser/actions/voiceChatActions.js';
+import { setNlsMessages } from '../../../../../../nls.js';
+import { initializeTestLocalization } from '../../../../../services/localization/test/common/localizationTestUtils.js';
 
 interface Synthesis { readonly text: string; readonly completed: DeferredPromise<void>; }
 function setup(owner: DisposableStore, ignoreCancellation = false) {
@@ -104,5 +110,44 @@ suite('Desktop Chat response Speech commands', () => {
 		await fixture.commands.executeCommand('workbench.action.speech.stopReadAloud');
 		assert.equal(fixture.token.isCancellationRequested, true);
 		await secondCall.completed.complete(); await cancelledSecond;
+	});
+});
+
+suite('Desktop built-in Voice Mode command', () => {
+	ensureNoDisposablesAreLeakedInTestSuite();
+	test('uses the installed Chinese catalog for the Voice Mode command', () => {
+		initializeTestLocalization('zh-CN');
+		try { assert.deepEqual(new StartVoiceChatAction().desc.title, { original: 'Start Voice Mode', value: '启动语音模式' }); }
+		finally { setNlsMessages('en', {}); }
+	});
+	test('starts through the focused registered Chat owner and rejects retired or foreign targets', async () => {
+		using owner = new DisposableStore();
+		const services = owner.add(new InstantiationService());
+		const widgets = owner.add(new ChatWidgetService());
+		services.registerInstance(IChatWidgetService, widgets);
+		const commands = owner.add(new StandaloneCommandService(services));
+		const input = document.createElement('input');
+		document.body.append(input);
+		owner.add(toDisposable(() => input.remove()));
+		let starts = 0;
+		const widget: IChatWidget & { visible: boolean; isTranscriptProgressActive: boolean; } = {
+			domNode: input, visible: true, inputEditor: undefined, isTranscriptProgressActive: false,
+			onDidHide: Event.None, onDidChangeViewModel: Event.None,
+			startVoiceConversation: async () => { starts++; },
+		};
+		const registration = owner.add(widgets.register(widget));
+		input.focus();
+		await commands.executeCommand('workbench.action.chat.startVoiceChat');
+		assert.equal(starts, 1);
+		widget.visible = false;
+		await commands.executeCommand('workbench.action.chat.startVoiceChat');
+		widget.visible = true;
+		widget.isTranscriptProgressActive = true;
+		await commands.executeCommand('workbench.action.chat.startVoiceChat', { widget });
+		widget.isTranscriptProgressActive = false;
+		await commands.executeCommand('workbench.action.chat.startVoiceChat', { widget: { ...widget } });
+		registration.dispose();
+		await commands.executeCommand('workbench.action.chat.startVoiceChat', { widget });
+		assert.equal(starts, 1);
 	});
 });

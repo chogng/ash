@@ -20,6 +20,8 @@ const SSH_PRELUDE_VERSION: u32 = 2;
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub(crate) struct ConnectionPrelude {
     version: u32,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) startup_trace: Option<crate::startup_trace::StartupTrace>,
     pub(crate) dir_root: Option<PathBuf>,
     pub(crate) dir_grant_source: ConnectionGrantSource,
     pub(crate) product_services: Option<PathBuf>,
@@ -62,6 +64,7 @@ impl ConnectionPrelude {
             } else {
                 1
             },
+            startup_trace: crate::startup_trace::StartupTrace::current(),
             dir_root: options.dir_root().map(Path::to_path_buf),
             dir_grant_source: match options.dir_grant_source() {
                 GrantSource::HostConfiguration => ConnectionGrantSource::HostConfiguration,
@@ -79,6 +82,9 @@ impl ConnectionPrelude {
     }
 
     pub(crate) fn validate(&self) -> Result<(), String> {
+        if let Some(trace) = &self.startup_trace {
+            trace.validate()?;
+        }
         if !(1..=PRELUDE_VERSION).contains(&self.version) {
             return Err("unsupported local App Server connection prelude version".into());
         }
@@ -182,6 +188,20 @@ pub(crate) enum ControlState {
     Stopping,
 }
 
+/// Transport admission advertised by the running App Server owner after profile startup.
+/// This does not advertise directory features or complete a client's initialize handshake.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(tag = "kind", rename_all = "camelCase", deny_unknown_fields)]
+pub enum ManagedConnectionContract {
+    /// Agent RPC is available; the client still negotiates its required capabilities.
+    Agent {
+        #[serde(rename = "protocolVersion")]
+        protocol_version: ash_app_server_protocol::protocol::initialize::ProtocolVersion,
+    },
+    /// Profile history has moved; this process accepts execution connections only.
+    Execution,
+}
+
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct ControlResponse {
@@ -191,6 +211,8 @@ pub(crate) struct ControlResponse {
     pub(crate) instance_id: String,
     pub(crate) daemon_version: String,
     pub(crate) schema_hash: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) connection_contract: Option<ManagedConnectionContract>,
 }
 
 impl ControlResponse {
@@ -214,6 +236,7 @@ impl ControlResponse {
         pid: u32,
         instance_id: String,
         schema_hash: String,
+        connection_contract: Option<ManagedConnectionContract>,
     ) -> Self {
         Self {
             version: PRELUDE_VERSION,
@@ -222,6 +245,7 @@ impl ControlResponse {
             instance_id,
             daemon_version: build_info::VERSION.into(),
             schema_hash,
+            connection_contract,
         }
     }
 

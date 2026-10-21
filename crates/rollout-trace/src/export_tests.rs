@@ -56,6 +56,7 @@ fn source(status: PayloadStatus, missing: bool) -> Source {
         diagnostics: None,
         graph: None,
         overview: None,
+        performance: None,
     };
     let diagnostics = DiagnosticTrace {
         format_version: crate::DIAGNOSTIC_TRACE_FORMAT_VERSION,
@@ -110,6 +111,67 @@ fn export_embeds_hook_evidence_and_builds_its_graph_from_the_capture() {
     );
     assert_eq!(diagnostics.recording_status, RecordingStatus::Recording);
     assert!(trace.graph.is_some());
+}
+
+#[test]
+fn paginated_export_preserves_backend_performance_values_reasons_and_old_v3_compatibility() {
+    let mut source = source(PayloadStatus::Saved, false);
+    let invocation = |sequence, id: &str, deltas| {
+        serde_json::from_value(serde_json::json!({
+        "schemaVersion":ash_history::CURRENT_STORED_EVENT_SCHEMA_VERSION,
+        "eventId":id,"sequence":sequence,"threadId":"thread","recordedAt":sequence,
+        "event":{"type":"modelInvocationRecorded","threadId":"thread","turnId":"turn","record":{
+            "invocationId":id,"threadId":"thread","turnId":"turn","outcome":"completed",
+            "startedAtUnixMs":0,"completedAtUnixMs":1,
+            "timing":{"totalUs":2500000,"firstTextUs":500000,"textDeltaCount":deltas,"toolCallCount":0},
+            "usage":{"outputTokens":150,"reasoningTokens":50},
+            "referenceCost":{"type":"unpriced","reason":{"type":"subscriptionPlan"}}
+        }}
+    })).unwrap()
+    };
+    let first = source.traces.front_mut().unwrap();
+    first.has_more = true;
+    first.trace.threads[0]
+        .events
+        .push(invocation(1, "first", 3));
+    first.trace.performance = Some(crate::performance::summarize_performance(
+        &first.trace.threads,
+    ));
+    let expected_first = first.trace.performance.as_ref().unwrap().calls[0].clone();
+    let mut second = first.trace.clone();
+    second.threads[0].events = vec![invocation(2, "second", 1)];
+    second.performance = Some(crate::performance::summarize_performance(&second.threads));
+    let expected_second = second.performance.as_ref().unwrap().calls[0].clone();
+    source.traces.push_back(TracePage {
+        trace: second,
+        cursors: BTreeMap::new(),
+        has_more: false,
+    });
+    let trace = export_session_trace(&mut source, &SessionId::new("session").unwrap()).unwrap();
+    assert_eq!(
+        trace.performance.as_ref().unwrap().calls,
+        [expected_first, expected_second]
+    );
+    let mut json = serde_json::to_value(&trace).unwrap();
+    assert_eq!(
+        json["performance"]["calls"][0]["textTps"],
+        serde_json::json!({"type":"estimated","tokensPerSecond":"50.0"})
+    );
+    assert_eq!(
+        json["performance"]["calls"][1]["textTps"],
+        serde_json::json!({"type":"unknown","reason":"singleTextDelta"})
+    );
+    assert_eq!(
+        serde_json::from_value::<RolloutTrace>(json.clone()).unwrap(),
+        trace
+    );
+    json.as_object_mut().unwrap().remove("performance");
+    assert!(
+        serde_json::from_value::<RolloutTrace>(json)
+            .unwrap()
+            .performance
+            .is_none()
+    );
 }
 
 #[test]

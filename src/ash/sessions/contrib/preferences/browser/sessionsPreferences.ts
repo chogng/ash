@@ -325,7 +325,8 @@ export class SessionsPreferences extends Disposable {
 				label: textual ? localize({ bundle: 'ash', key: 'keybindings.openJson' }, 'Preferences: Open Keyboard Shortcuts (JSON)') : shortcutTitle,
 				run: () => {
 					const preferences = this.instantiationService.invokeFunction(accessor => accessor.get(IPreferencesService));
-					return handoff(() => preferences.openGlobalKeybindingSettings(textual));
+					// The UI opens as a modal; switching document entries would retire its host.
+					return handoff(() => preferences.openGlobalKeybindingSettings(textual), textual);
 				},
 			}))));
 		for (const [id, section, title] of [

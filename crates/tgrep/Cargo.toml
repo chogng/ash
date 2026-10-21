@@ -10,6 +10,7 @@ name = "tgrep"
 doctest = false
 
 [dependencies]
+ash-utils-pty = { workspace = true }
 ash-async-utils = { workspace = true }
 ash-install-context = { workspace = true }
 dunce = { workspace = true }

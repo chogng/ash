@@ -67,8 +67,10 @@ pub enum TerminalExecution {
 }
 
 /// Starts one interactive terminal at the server's authorized directory.
-#[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Eq, PartialEq)]
 pub struct TerminalCreateRequest {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub lifetime_token: Option<String>,
     #[serde(default)]
     pub auto_replies: Vec<TerminalAutoReply>,
     pub rows: u16,
@@ -85,10 +87,11 @@ pub struct TerminalCreateRequest {
     pub execution: Option<TerminalExecution>,
 }
 
-/// One short-lived bearer lease used to reattach a detached terminal.
+/// A rotating bearer lease used to reattach a disconnected or detached terminal.
 #[derive(Serialize, Deserialize, Clone, Eq, PartialEq)]
 pub struct TerminalReconnectLease {
     pub reconnect_token: String,
+    /// Zero retains the process until explicit close or exit; positive values bound a handoff.
     pub reconnect_grace_period_millis: u64,
 }
 
@@ -146,6 +149,8 @@ pub struct TerminalCreateResult {
 /// Reclaims one reconnectable terminal after its previous connection closed.
 #[derive(Serialize, Deserialize, Clone, Eq, PartialEq)]
 pub struct TerminalAttachRequest {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub lifetime_token: Option<String>,
     pub terminal_id: String,
     pub reconnect_token: String,
     pub rows: u16,
@@ -156,6 +161,7 @@ impl fmt::Debug for TerminalAttachRequest {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter
             .debug_struct("TerminalAttachRequest")
+            .field("lifetime_token", &"[REDACTED]")
             .field("terminal_id", &self.terminal_id)
             .field("reconnect_token", &"[REDACTED]")
             .field("rows", &self.rows)
@@ -380,5 +386,18 @@ impl fmt::Debug for TerminalShellIntegrationEvent {
         };
         // Payloads may contain credentials. Transport serialization remains complete.
         formatter.debug_struct(kind).finish_non_exhaustive()
+    }
+}
+
+impl fmt::Debug for TerminalCreateRequest {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("TerminalCreateRequest")
+            .field("lifetime_token", &"[REDACTED]")
+            .field("rows", &self.rows)
+            .field("cols", &self.cols)
+            .field("profile", &self.profile)
+            .field("lifecycle", &self.lifecycle)
+            .finish_non_exhaustive()
     }
 }

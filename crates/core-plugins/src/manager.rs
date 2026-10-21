@@ -200,63 +200,6 @@ impl ExtensionPackageManager {
             .map_err(|_| ExtensionsClientError::storage())
     }
 
-    pub fn extension_gallery_resource_url_template(
-        &self,
-    ) -> Result<Option<String>, ExtensionsClientError> {
-        Ok(self
-            .source_providers()?
-            .extension_gallery()?
-            .map(|(_, _, template)| template))
-    }
-
-    /// Reads an inert resource from the configured gallery's checksum-verified package without installing it.
-    pub fn read_extension_gallery_resource(
-        &self,
-        publisher: &str,
-        name: &str,
-        version: &str,
-        path: &str,
-    ) -> Result<Vec<u8>, ExtensionsClientError> {
-        if path.is_empty()
-            || path.len() > 1024
-            || path.contains(['\\', ':', '\0'])
-            || path
-                .split('/')
-                .any(|part| part.is_empty() || part == "." || part == "..")
-        {
-            return Err(ExtensionsClientError::invalid_request(
-                "invalid extension resource path",
-            ));
-        }
-        let providers = self.source_providers()?;
-        let (extension_packages, _, _) = providers.extension_gallery()?.ok_or_else(|| {
-            ExtensionsClientError::invalid_request("no extension resource gallery is configured")
-        })?;
-        let package_id = ash_utils_plugins::PluginId::new(
-            format!("{publisher}.{name}"),
-            extension_packages.clone(),
-        )
-        .map_err(|_| ExtensionsClientError::invalid_request("invalid extension identity"))?;
-        let downloaded = self.source_providers()?.download(DownloadPackageRequest {
-            package_id: package_id.to_string(),
-            version: Some(version.to_owned()),
-        })?;
-        let extension_id = format!("{publisher}.{name}");
-        let capability = downloaded
-            .capabilities()
-            .iter()
-            .find(|capability| {
-                capability.kind == CapabilityKind::EditorExtension && capability.id == extension_id
-            })
-            .ok_or_else(ExtensionsClientError::package_untrusted)?;
-        let relative = format!("{}/{path}", capability.path);
-        let artifact = self.store.materialize(downloaded.as_ref())?;
-        // Validate the complete artifact and containment before reading; no live package root is exposed.
-        self.store
-            .verified_package_path(&artifact.package, &relative)?;
-        self.store.read_package_file(&artifact.package, &relative)
-    }
-
     /// Pins an exact verified source for a trusted product consumer. This grants package
     /// retention only; executable admission is checked by that consumer's separate authority.
     pub fn acquire_local_source(
@@ -280,6 +223,7 @@ impl ExtensionPackageManager {
         source: &LocalCapabilitySource,
     ) -> Result<String, ExtensionsClientError> {
         let (installation, capability) = find_capability(durable, &source.capability)?;
+        self.ensure_supported_package(&installation.package)?;
         if installation.state != InstallationState::Installed
             || installation.package != source.package
             || capability.descriptor.kind != source.kind
@@ -441,6 +385,14 @@ impl ExtensionPackageManager {
             .values()
             .filter(|installation| installation.state == InstallationState::Installed)
         {
+            match self.store.is_retired_package(&installation.package) {
+                Ok(true) => continue,
+                Ok(false) => {}
+                Err(error) => {
+                    failures.push((installation.package.clone(), error));
+                    continue;
+                }
+            }
             for capability in installation
                 .capabilities
                 .iter()
@@ -525,6 +477,7 @@ impl ExtensionPackageManager {
         downloaded: &dyn ExtensionPackagePayload,
     ) -> Result<InstalledPackage, ExtensionsClientError> {
         let artifact = self.store.materialize(downloaded)?;
+        self.ensure_supported_package(&artifact.package)?;
         let installation_id = installation_id(&artifact.package);
         let capabilities = downloaded
             .capabilities()
@@ -584,6 +537,17 @@ impl ExtensionPackageManager {
             )
         })
     }
+
+    fn ensure_supported_package(&self, package: &PackageRef) -> Result<(), ExtensionsClientError> {
+        if self.store.is_retired_package(package)? {
+            return Err(ExtensionsClientError::business(
+                ExtensionsErrorCode::PackageUntrusted,
+                "retired extension package format",
+                false,
+            ));
+        }
+        Ok(())
+    }
 }
 
 impl ExtensionPackageManager {
@@ -595,9 +559,9 @@ impl ExtensionPackageManager {
             sources: providers
                 .providers
                 .iter()
-                .map(|(id, provider)| ExtensionSourceDescription {
+                .map(|(id, _provider)| ExtensionSourceDescription {
                     id: id.clone(),
-                    kind: provider.registry_kind(),
+                    kind: crate::ExtensionRegistryKind::Ash,
                     enabled: !providers.disabled.contains(id),
                     product_owned: !runtime.durable.sources.contains_key(id),
                 })
@@ -709,7 +673,9 @@ impl ExtensionPackageService for ExtensionPackageManager {
         request: DownloadPackageRequest,
     ) -> Result<ArtifactHandle, ExtensionsClientError> {
         let downloaded = self.source_providers()?.download(request)?;
-        self.store.materialize(downloaded.as_ref())
+        let artifact = self.store.materialize(downloaded.as_ref())?;
+        self.ensure_supported_package(&artifact.package)?;
+        Ok(artifact)
     }
 
     fn install(
@@ -806,6 +772,7 @@ impl ExtensionPackageService for ExtensionPackageManager {
         let mut runtime = self.lock_runtime()?;
         let (installation, capability) = find_capability(&runtime.durable, &request.capability)?;
         let installation = installation.clone();
+        self.ensure_supported_package(&installation.package)?;
         let capability = capability.clone();
         if installation.state == InstallationState::PendingRemoval {
             return Err(installation_in_use());

@@ -2063,13 +2063,13 @@ impl AppServer {
                     let capability = grant
                         .authorize(Permission::ExecuteCommands)
                         .map_err(|_| EnvRuntimeError::PermissionRequired)?;
-                    Some(Arc::new(
-                        exec_server::terminal::TerminalService::new(capability).map_err(|_| {
+                    Some(Arc::new(self.create_terminal_service(capability).map_err(
+                        |_| {
                             EnvRuntimeError::Failed(
                                 "failed to initialize dir folder terminal runtime".into(),
                             )
-                        })?,
-                    ))
+                        },
+                    )?))
                 };
                 let debug_adapters = if !grant.permissions().allows(Permission::LoadConfig)
                     || !grant.permissions().allows(Permission::ExecuteCommands)
@@ -2874,20 +2874,19 @@ impl AppServer {
         let terminal_capability = authorization
             .authorize(Permission::ExecuteCommands)
             .map_err(|_| EnvRuntimeError::PermissionRequired)?;
-        let terminals = match existing_terminals {
-            Some(terminals) => {
-                terminals.terminate_all();
-                terminals.set_dir(terminal_capability).map_err(|_| {
-                    EnvRuntimeError::Failed("failed to switch terminal runtime".into())
-                })?;
-                terminals
-            }
-            None => Arc::new(
-                exec_server::terminal::TerminalService::new(terminal_capability).map_err(|_| {
-                    EnvRuntimeError::Failed("failed to initialize terminal runtime".into())
-                })?,
-            ),
-        };
+        let terminals =
+            match existing_terminals {
+                Some(terminals) => {
+                    terminals.terminate_all();
+                    terminals.set_dir(terminal_capability).map_err(|_| {
+                        EnvRuntimeError::Failed("failed to switch terminal runtime".into())
+                    })?;
+                    terminals
+                }
+                None => Arc::new(self.create_terminal_service(terminal_capability).map_err(
+                    |_| EnvRuntimeError::Failed("failed to initialize terminal runtime".into()),
+                )?),
+            };
         // Execution permission does not imply permission to read launch configuration.
         // Optional services must not prevent an otherwise authorized directory from starting.
         let debug_adapters = if authorization.permissions().allows(Permission::LoadConfig) {
@@ -3726,7 +3725,8 @@ impl AppServer {
             }
         }
         if runtime.execution.session_terminals.is_none() {
-            let service = exec_server::terminal::TerminalService::new(authorization.clone())
+            let service = self
+                .create_terminal_service(authorization.clone())
                 .map_err(|_| RpcError::new(-32064, AppServerErrorName::TerminalOperationFailed))?;
             runtime.execution.session_terminals = Some(Arc::new(service));
         }

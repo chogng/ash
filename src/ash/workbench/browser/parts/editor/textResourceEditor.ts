@@ -195,6 +195,7 @@ export class TextResourceEditor extends AbstractTextCodeEditor<EditorPanePart> i
 				fontLigatures?: IEditorOptions['fontLigatures'];
 				lineNumbers?: IEditorOptions['lineNumbers'];
 				wordWrap?: IEditorOptions['wordWrap'];
+				wordWrapColumn?: IEditorOptions['wordWrapColumn'];
 				minimap?: IEditorOptions['minimap'];
 				renderWhitespace?: IEditorOptions['renderWhitespace'];
 				renderControlCharacters?: IEditorOptions['renderControlCharacters'];
@@ -216,8 +217,11 @@ export class TextResourceEditor extends AbstractTextCodeEditor<EditorPanePart> i
 			if (this.options.lineNumbers === undefined && event.affectsConfiguration(lineNumbersConfiguration)) {
 				update.lineNumbers = this.configurationService.getValue<boolean>(lineNumbersConfiguration) ? 'on' : 'off';
 			}
-			if (this.options.lineWrapping === undefined && event.affectsConfiguration(wordWrapConfiguration)) {
-				update.wordWrap = this.configurationService.getValue(wordWrapConfiguration) === EditorLineWrapping.On ? 'on' : 'off';
+			if (this.options.lineWrapping === undefined && event.affectsConfiguration(wordWrapConfiguration, fontOverrides)) {
+				update.wordWrap = this.configurationService.getValue(wordWrapConfiguration, fontOverrides);
+			}
+			if (event.affectsConfiguration('editor.wordWrapColumn', fontOverrides)) {
+				update.wordWrapColumn = this.configurationService.getValue('editor.wordWrapColumn', fontOverrides);
 			}
 			if (this.options.minimap === undefined && [
 				EditorMinimapConfiguration.enabled,
@@ -306,7 +310,9 @@ export class TextResourceEditor extends AbstractTextCodeEditor<EditorPanePart> i
 				readOnly: isProvidedResource || input.readOnly,
 				languageDiagnosticsService: this.options.languageDiagnosticsService,
 				accessibilityService: this.options.accessibilityService,
-				lineWrapping: this.options.lineWrapping ?? this.configurationService.getValue(wordWrapConfiguration),
+				lineWrapping: this.options.lineWrapping,
+				wordWrap: this.options.lineWrapping ?? this.configurationService.getValue(wordWrapConfiguration, fontOverrides),
+				wordWrapColumn: this.configurationService.getValue('editor.wordWrapColumn', fontOverrides),
 				wrappingIndent: this.options.wrappingIndent,
 				fontFamily: this.options.fontFamily ?? (this.configurationService.getValue<string>('editor.fontFamily', fontOverrides) || undefined),
 				fontSize: this.options.fontSize ?? this.configurationService.getValue<number>('editor.fontSize', fontOverrides),
@@ -386,6 +392,8 @@ export class TextResourceEditor extends AbstractTextCodeEditor<EditorPanePart> i
 			part.updateOptions({
 				fontFamily: this.options.fontFamily ?? (this.configurationService.getValue<string>('editor.fontFamily', fontOverrides) || undefined),
 				fontSize: this.options.fontSize ?? this.configurationService.getValue<number>('editor.fontSize', fontOverrides),
+				wordWrap: this.options.lineWrapping ?? this.configurationService.getValue(wordWrapConfiguration, fontOverrides),
+				wordWrapColumn: this.configurationService.getValue('editor.wordWrapColumn', fontOverrides),
 			});
 			this.statusChangeEmitter.fire();
 		}));

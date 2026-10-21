@@ -328,17 +328,13 @@ fn standard_manifest_derives_implicit_commands_languages_and_tasks_and_preserves
 }
 
 #[test]
-fn standard_speech_proposal_requests_only_its_explicit_host_ceiling() {
+fn ash_speech_capability_requests_only_its_explicit_host_ceiling() {
     let root = tempfile::tempdir().unwrap();
     for (manifest, expected) in [
         (serde_json::json!({"main":"main.js"}), false),
         (
-            serde_json::json!({"main":"main.js","enabledApiProposals":["speech"]}),
+            serde_json::json!({"main":"main.js","ashCapabilities":["speechProvider"]}),
             true,
-        ),
-        (
-            serde_json::json!({"main":"main.js","enabledApiProposals":["chatParticipantPrivate"]}),
-            false,
         ),
     ] {
         fs::write(
@@ -347,27 +343,44 @@ fn standard_speech_proposal_requests_only_its_explicit_host_ceiling() {
         )
         .unwrap();
         assert_eq!(
-            super::javascript_proposed_capabilities_requested(root.path())
+            super::javascript_capabilities_requested(root.path())
                 .unwrap()
                 .contains(&ash_external_ext::ExtensionCapability::SpeechProvider),
             expected
         );
     }
-    for proposals in [
+    for capabilities in [
+        serde_json::json!(["unknownCapability"]),
         serde_json::json!(true),
-        serde_json::json!(["speech", "speech"]),
+        serde_json::json!(["speechProvider", "speechProvider"]),
         serde_json::json!([42]),
         serde_json::json!(["speech extra"]),
     ] {
         fs::write(
             root.path().join("package.json"),
             serde_json::to_vec(
-                &serde_json::json!({"main":"main.js","enabledApiProposals":proposals}),
+                &serde_json::json!({"main":"main.js","ashCapabilities":capabilities}),
             )
             .unwrap(),
         )
         .unwrap();
-        assert!(super::javascript_proposed_capabilities_requested(root.path()).is_err());
+        assert!(super::javascript_capabilities_requested(root.path()).is_err());
+    }
+}
+
+#[test]
+fn ash_capability_ceiling_has_no_implicit_grants_or_product_only_escape() {
+    assert!(
+        super::declared_capabilities(&serde_json::json!({"main":"main.js"}))
+            .unwrap()
+            .is_empty()
+    );
+    for manifest in [
+        serde_json::json!({"enabledApiProposals":[],"ashCapabilities":["command"]}),
+        serde_json::json!({"ashCapabilities":["productRemoteAuthorityResolver"]}),
+    ] {
+        assert!(super::declared_capabilities(&manifest).is_err());
+        assert!(super::activation_plan(&manifest).is_err());
     }
 }
 
@@ -541,16 +554,16 @@ fn platform_sidecars_select_one_native_entry_without_falling_back_to_foreign_cod
 }
 
 #[test]
-fn terminal_proposals_request_distinct_capabilities_and_demand_activation() {
+fn terminal_capabilities_request_distinct_capabilities_and_demand_activation() {
     let root = tempfile::tempdir().unwrap();
-    let manifest = serde_json::json!({ "main": "main.js", "enabledApiProposals": ["terminalCompletionProvider", "terminalQuickFixProvider"] });
+    let manifest = serde_json::json!({ "main": "main.js", "ashCapabilities": ["terminalCompletionProvider", "terminalQuickFixProvider"] });
     fs::write(
         root.path().join("package.json"),
         serde_json::to_vec(&manifest).unwrap(),
     )
     .unwrap();
     assert_eq!(
-        super::javascript_proposed_capabilities_requested(root.path()).unwrap(),
+        super::javascript_capabilities_requested(root.path()).unwrap(),
         [
             ash_external_ext::ExtensionCapability::TerminalCompletionProvider,
             ash_external_ext::ExtensionCapability::TerminalQuickFixProvider

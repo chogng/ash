@@ -22,8 +22,8 @@ fn run() -> Result<(), String> {
         );
     }
     let explicit_api = matches!(arguments.len(), 8 | 14);
-    if explicit_api && (arguments[6] != "--api" || arguments[7] != "vscode") {
-        return Err("expected --api vscode".into());
+    if explicit_api && (arguments[6] != "--api" || arguments[7] != "ash") {
+        return Err("expected --api ash".into());
     }
     let package = package::Package::read(
         arguments[1].clone(),

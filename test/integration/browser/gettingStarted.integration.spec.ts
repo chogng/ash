@@ -1,5 +1,67 @@
 import { expect, test } from '@playwright/test';
 
+test('Welcome renders its brand and light-theme action cards', async ({ page }) => {
+	await page.goto('/gettingStarted.html?theme=light');
+	const welcome = page.getByRole('region', { name: 'Welcome', exact: true });
+	await expect(welcome.locator('.ash-getting-started-brand')).toHaveText('ASH');
+	await expect(welcome.getByRole('button', { name: 'Open folder', exact: true })).toBeVisible();
+	const mark = welcome.locator('.ash-getting-started-mark');
+	await expect(mark).toBeVisible();
+	await expect(mark).toHaveAttribute('aria-hidden', 'true');
+	await expect(mark).toHaveCSS('mask-image', /ash-mark.*\.svg/u);
+	await expect(mark).toHaveCSS('background-image', 'none');
+	await expect(mark).toHaveCSS('background-color', await mark.evaluate(element => getComputedStyle(element).color));
+	const cards = welcome.locator('.ash-getting-started-card');
+	await expect(cards).toHaveCount(4);
+	await expect(cards.locator('.ash-getting-started-card-label')).toHaveText(['Open folder', 'Clone repo', 'Connect via SSH', 'Connect GitHub']);
+	for (const index of [0, 1, 2]) {
+		const card = cards.nth(index);
+		await expect(card).toHaveCSS('background-color', 'rgb(243, 243, 243)');
+		await expect(card).toHaveCSS('border-color', 'rgb(212, 212, 212)');
+		await expect(card).toHaveCSS('opacity', '1');
+		await expect(card.locator('svg.ash-icon')).toHaveCSS('width', '16px');
+		await card.hover();
+		await expect(card).toHaveCSS('background-color', 'rgb(228, 228, 228)');
+	}
+	const github = cards.nth(3);
+	await expect(github).toBeEnabled();
+	await expect(github.locator('.ash-getting-started-card-arrow')).toHaveCount(0);
+	await expect(github).toHaveCSS('background-color', 'rgb(0, 0, 0)');
+	await expect(github).toHaveCSS('color', 'rgb(255, 255, 255)');
+	await expect(github.locator('svg.ash-icon')).toHaveCSS('color', 'rgb(255, 255, 255)');
+	await expect(github.locator('svg.ash-icon path').first()).toHaveCSS('fill', 'rgb(255, 255, 255)');
+	await github.hover();
+	await expect(github).toHaveCSS('background-color', 'rgb(38, 38, 38)');
+});
+
+test('Welcome cards keep even spacing and shrink before wrapping in a narrow editor', async ({ page }) => {
+	await page.goto('/gettingStarted.html');
+	const welcome = page.getByRole('region', { name: 'Welcome', exact: true });
+	const cards = welcome.locator('.ash-getting-started-card');
+	await expect(cards).toHaveCount(4);
+	const [topLeft, topRight, bottomLeft, bottomRight] = await Promise.all([0, 1, 2, 3].map(index => cards.nth(index).boundingBox()));
+	expect(topLeft && topRight && bottomLeft && bottomRight ? {
+		columnGap: Math.round(topRight.x - topLeft.x - topLeft.width),
+		rowGap: Math.round(bottomLeft.y - topLeft.y - topLeft.height),
+		leftColumnAligned: topLeft.x === bottomLeft.x,
+		rightColumnAligned: topRight.x === bottomRight.x,
+	} : null).toEqual({ columnGap: 12, rowGap: 12, leftColumnAligned: true, rightColumnAligned: true });
+	for (const [width, expectedCardWidth, sameRow] of [[364, 160, true], [350, 180, false]] as const) {
+		await page.setViewportSize({ width, height: 720 });
+		await expect.poll(() => cards.evaluateAll(elements => {
+			const [first, second] = elements.map(element => element.getBoundingClientRect());
+			return {
+				cardWidth: Math.round(first!.width),
+				secondCardOnFirstRow: first!.top === second!.top,
+				labelOverflow: Math.max(0, ...elements.map(card => {
+					const label = card.querySelector('.ash-getting-started-card-label')!;
+					return label.getBoundingClientRect().right - card.getBoundingClientRect().right;
+				})),
+			};
+		})).toEqual({ cardWidth: expectedCardWidth, secondCardOnFirstRow: sameRow, labelOverflow: 0 });
+	}
+});
+
 for (const theme of ['light', 'dark', 'hcDark', 'hcLight']) {
 	test(`Recents exposes removable history on hover and keyboard focus (${theme})`, async ({ page }, testInfo) => {
 		await page.goto(`/gettingStarted.html?theme=${theme}`);
@@ -16,10 +78,13 @@ for (const theme of ['light', 'dark', 'hcDark', 'hcLight']) {
 		const path = await row.locator('.ash-getting-started-recent-path').boundingBox();
 		const lastCard = await page.locator('.ash-getting-started-card').nth(1).boundingBox();
 		const rowBounds = (await row.boundingBox())!;
+		const heading = await page.getByRole('heading', { name: 'Recents', exact: true }).boundingBox();
+		expect(heading!.x).toBe(card!.x);
 		expect(rowBounds.x).toBe(card!.x);
 		expect(rowBounds.x + rowBounds.width).toBe(lastCard!.x + lastCard!.width);
 		expect(name!.x - rowBounds.x).toBe(8);
 		expect(rowBounds.x + rowBounds.width - path!.x - path!.width).toBe(8);
+		await expect(row.locator('.ash-getting-started-recent-path')).toHaveCSS('text-align', 'right');
 		const idleBackground = await row.evaluate(element => getComputedStyle(element).backgroundColor);
 		await row.hover();
 		await expect(actions).toHaveCSS('opacity', '1');
@@ -34,6 +99,7 @@ for (const theme of ['light', 'dark', 'hcDark', 'hcLight']) {
 		const actionBox = await actions.boundingBox();
 		const removeBox = await remove.boundingBox();
 		const iconBox = await remove.locator('svg').boundingBox();
+		expect(removeBox).toMatchObject({ width: 20, height: 20 });
 		expect(iconBox!.x + iconBox!.width / 2).toBeCloseTo(removeBox!.x + removeBox!.width / 2, 2);
 		expect(iconBox!.y + iconBox!.height / 2).toBeCloseTo(removeBox!.y + removeBox!.height / 2, 2);
 		expect(rowBox!.x + rowBox!.width - removeBox!.x - removeBox!.width).toBeCloseTo(1, 1);

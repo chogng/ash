@@ -102,6 +102,8 @@ export interface ExtensionsBuiltInProvider {
 
 export interface ExtensionsBuiltInProviders {
 	readonly revision: number;
+	/** The connected backend decides whether this connection may change provider enablement. */
+	readonly canChangeEnablement: boolean;
 	readonly providers: readonly ExtensionsBuiltInProvider[];
 }
 
@@ -135,7 +137,7 @@ export interface ExtensionsAcquiredCapability {
 
 export interface ExtensionRegistrySource {
 	readonly id: string;
-	readonly kind: 'openVsx' | 'ash';
+	readonly kind: 'ash';
 	readonly enabled: boolean;
 	readonly productOwned: boolean;
 }

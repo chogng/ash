@@ -8,6 +8,7 @@ mod lifecycle_error;
 mod managed;
 mod process;
 mod runtime;
+pub mod startup_trace;
 mod update;
 mod wire;
 
@@ -17,6 +18,7 @@ use std::path::PathBuf;
 pub use lifecycle_error::LifecycleError;
 use serde::Deserialize;
 use serde::Serialize;
+pub use wire::ManagedConnectionContract;
 
 /// Environment variable selecting the managed App Server executable.
 pub const APP_SERVER_PATH_ENV: &str = "ASH_APP_SERVER_PATH";
@@ -239,7 +241,9 @@ pub fn run_lifecycle(
     client::run_lifecycle(command, options, backend_executable)
 }
 
-/// Connects stdio to a ready daemon, starting and probing it first when necessary.
+/// Connects stdio after checking the managed generation and protocol contract.
+/// The peer must complete its real initialize/capability handshake before reporting ready.
+/// Older daemons without the control contract retain the full initialization probe.
 /// For Agent connections refused during shutdown, consumes the first JSON-RPC request
 /// and writes a structured failure with its ID before returning the stopping error.
 #[cfg(any(unix, windows))]

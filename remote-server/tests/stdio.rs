@@ -281,6 +281,7 @@ fn remote_server_forwards_the_terminal_lifecycle_over_stdio() {
     let mut client = session.client();
     let created = client
         .terminal_create(TerminalCreateParams {
+            auto_replies: None,
             dir_id: None,
             rows: 24,
             cols: 80,
@@ -391,6 +392,7 @@ fn shared_backend_preserves_a_reconnectable_terminal_between_stdio_clients() {
     let mut first_client = first_session.client();
     let created = first_client
         .terminal_create(TerminalCreateParams {
+            auto_replies: None,
             dir_id: None,
             rows: 24,
             cols: 80,

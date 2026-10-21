@@ -28,23 +28,30 @@ test('Workbench context picker uploads, previews and removes attachments with th
 		{ name: 'brief.txt', mimeType: 'text/plain', buffer: Buffer.from('Workbench attachment brief') },
 		{ name: 'preview.png', mimeType: 'image/png', buffer: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4z8DQAAAEgQGALFXOsAAAAABJRU5ErkJggg==', 'base64') },
 	]);
-	const attachments = chat.getByRole('list', { name: 'Attached context' });
-	await expect(attachments.getByRole('listitem')).toHaveCount(2);
+	const attachments = chat.locator('.ash-chat-input-editor');
+	const input = chat.locator('.stanza-editor-input');
+	await expect(attachments.locator('.ash-chat-code-reference')).toHaveText('brief.txt');
+	await expect(attachments.getByRole('button', { name: /^Remove /u })).toHaveCount(1);
 	await expect(page.locator('input[type="file"][aria-label="Attach files"]')).toHaveCount(0);
 	await expect(attachments.getByRole('img', { name: 'preview.png' })).toHaveAttribute('src', /^data:image\/png;base64,/);
-	const remove = chat.getByRole('button', { name: 'Remove brief.txt', exact: true });
-	await remove.focus();
+	await input.focus();
 	await page.keyboard.press('Alt+F1');
 	await expect(page.locator('.ash-accessible-view-content')).toHaveValue(/including unsaved text/);
 	await page.keyboard.press('Escape');
-	await expect(remove).toBeFocused();
-	await remove.press('Enter');
-	await expect(chat.getByRole('button', { name: 'Remove preview.png', exact: true })).toBeFocused();
+	await expect(input).toBeFocused();
+	// File references are atomic text in the message; images additionally expose
+	// inline Preview/Remove controls. Exercise both removal paths with the keyboard.
+	await input.press('ControlOrMeta+A');
+	await input.press('ArrowLeft');
+	await input.press('Delete');
+	await expect(attachments.locator('.ash-chat-code-reference')).toHaveCount(0);
+	await chat.getByRole('button', { name: 'Remove preview.png', exact: true }).focus();
 	await page.keyboard.press('Alt+F2');
 	await expect(page.locator('.ash-accessible-view-content')).toHaveValue('preview.png');
 	await page.keyboard.press('Escape');
 	await chat.getByRole('button', { name: 'Remove preview.png', exact: true }).press('Enter');
-	await expect(attachments).toBeHidden();
+	await expect(attachments.getByRole('button', { name: /^Remove /u })).toHaveCount(0);
+	await expect(attachments.getByRole('img', { name: 'preview.png', exact: true })).toHaveCount(0);
 	await expect(chat.locator('.stanza-editor-input')).toBeFocused();
 });
 
@@ -69,7 +76,9 @@ test('cancelling attachment selection removes the picker and lets the composer a
 	await page.getByRole('dialog', { name: 'Search attachments', exact: true }).getByRole('combobox').fill('Attach files');
 	await page.keyboard.press('Enter');
 	await (await upload).setFiles({ name: 'after-cancel.txt', mimeType: 'text/plain', buffer: Buffer.from('Attach after cancellation') });
-	await expect(chat.getByRole('button', { name: 'Remove after-cancel.txt', exact: true })).toBeVisible();
+	const reference = chat.locator('.ash-chat-code-reference');
+	await expect(reference).toHaveText('after-cancel.txt');
+	await expect(chat.locator('.stanza-editor-input')).toBeFocused();
 	await expect(input).toHaveCount(0);
 });
 
@@ -138,8 +147,14 @@ test('host clipboard image becomes a decoded context attachment in Workbench and
 			await composer.getByRole('button', { name: 'Add context', exact: true }).press('Enter');
 			await surfacePage.getByRole('dialog').getByRole('option', { name: 'Image from Clipboard', exact: true }).click();
 			await expect(surfacePage.getByRole('dialog')).toHaveCount(0);
-			await expect(composer.getByRole('listitem')).toHaveCount(1);
-			await composer.getByRole('button', { name: 'Remove Pasted Image', exact: true }).press('Enter');
+			// Each insertion owns a reference, including a second capture of identical pixels.
+			const remove = composer.getByRole('button', { name: 'Remove Pasted Image', exact: true });
+			await expect(remove).toHaveCount(2);
+			await remove.first().press('Enter');
+			await expect(remove).toHaveCount(1);
+			await remove.press('Enter');
+			await expect(image).toHaveCount(0);
+			await expect(composer.locator('.stanza-editor-input')).toBeFocused();
 		}
 	} finally {
 		// A denied write leaves the original clipboard untouched; only clear after our fixture was written.
@@ -150,7 +165,7 @@ test('host clipboard image becomes a decoded context attachment in Workbench and
 	}
 });
 
-test('host screenshot captures a PNG and releases the browser capture stream', async ({ workbench, target }) => {
+test('host screenshot captures a PNG and releases the browser capture stream', async ({ workbench, target, application }) => {
 	const page = workbench.page;
 	if (!await page.locator('.ash-chat-view-pane').isVisible()) {
 		await page.getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();
@@ -165,23 +180,57 @@ test('host screenshot captures a PNG and releases the browser capture stream', a
 			(window as Window & { ashContextCapture?: MediaStream; }).ashContextCapture = stream;
 		});
 	}
-	const chat = page.locator('.ash-chat-view-pane .ash-chat:visible');
-	await chat.getByRole('button', { name: 'Add context', exact: true }).press('Enter');
-	await page.getByRole('dialog').getByRole('option', { name: target.kind === 'browser' ? 'Screenshot…' : 'Screenshot Window', exact: true }).click();
-	const image = chat.getByRole('img', { name: 'Screenshot', exact: true });
-	await expect(image).toHaveAttribute('src', /^data:image\/png;base64,/);
-	await expect.poll(() => image.evaluate(element => (element as HTMLImageElement).naturalWidth)).toBeGreaterThan(0);
-	if (target.kind === 'browser') {
-		await expect.poll(() => page.evaluate(() => (window as Window & { ashContextCapture?: MediaStream; }).ashContextCapture!.getTracks().map(track => track.readyState))).toEqual(['ended']);
-		await expect.poll(() => image.evaluate(element => [(element as HTMLImageElement).naturalWidth, (element as HTMLImageElement).naturalHeight])).toEqual([48, 36]);
+	let restoreCapture: (() => Promise<void>) | undefined;
+	if (target.kind === 'electron') {
+		if (!('windows' in application)) throw new Error('Expected Electron windows');
+		const desktop = application;
+		// Replace the OS capture boundary with test-owned pixels; never request screen permission.
+		const saved = await desktop.evaluateHandle(({ desktopCapturer, systemPreferences, screen, nativeImage }) => {
+			const original = { capture: desktopCapturer.getSources, access: systemPreferences.getMediaAccessStatus };
+			systemPreferences.getMediaAccessStatus = media => media === 'screen' ? 'granted' : original.access.call(systemPreferences, media);
+			desktopCapturer.getSources = async () => screen.getAllDisplays().map(display => ({
+				id: `screen:${display.id}`, name: 'Synthetic screenshot', display_id: String(display.id), appIcon: nativeImage.createEmpty(),
+				thumbnail: nativeImage.createFromBitmap(Buffer.alloc(48 * 36 * 4, 255), { width: 48, height: 36 }),
+			}));
+			return original;
+		});
+		restoreCapture = async () => {
+			try { await desktop.evaluate(({ desktopCapturer, systemPreferences }, original) => { desktopCapturer.getSources = original.capture; systemPreferences.getMediaAccessStatus = original.access; }, saved); }
+			finally { await saved.dispose(); }
+		};
 	}
-	await expect(page.getByRole('dialog')).toHaveCount(0);
-	await expect(chat.locator('.stanza-editor-input')).toBeFocused();
-	await chat.getByRole('button', { name: 'Remove Screenshot', exact: true }).press('Enter');
+	try {
+		const chat = page.locator('.ash-chat-view-pane .ash-chat:visible');
+		await chat.getByRole('button', { name: 'Add context', exact: true }).press('Enter');
+		await page.getByRole('dialog').getByRole('option', { name: 'Screenshot…', exact: true }).click();
+		if (target.kind === 'electron') {
+			if (!('windows' in application)) throw new Error('Expected Electron windows');
+			await expect.poll(() => application.windows().filter(window => window.url().includes('/screenshot/screenshot.html')).length).toBeGreaterThan(0);
+			const overlay = application.windows().find(window => window.url().includes('/screenshot/screenshot.html'))!;
+			await overlay.getByRole('button', { name: 'Entire screen', exact: true }).click();
+			await overlay.getByRole('button', { name: 'Add to Chat', exact: true }).click().catch(error => { if (!overlay.isClosed()) throw error; });
+			await expect.poll(() => application.windows().filter(window => window.url().includes('/screenshot/screenshot.html')).length).toBe(0);
+		} else {
+			const overlay = page.getByRole('dialog', { name: 'Screen Capture', exact: true });
+			await overlay.getByRole('button', { name: 'Entire screen', exact: true }).click();
+			await overlay.getByRole('button', { name: 'Add to Chat', exact: true }).click();
+			await expect(overlay).toBeHidden();
+		}
+		const image = chat.getByRole('img', { name: 'Screenshot', exact: true });
+		await expect(image).toHaveAttribute('src', /^data:image\/png;base64,/);
+		await expect.poll(() => image.evaluate(element => (element as HTMLImageElement).naturalWidth)).toBeGreaterThan(0);
+		if (target.kind === 'browser') {
+			await expect.poll(() => page.evaluate(() => (window as Window & { ashContextCapture?: MediaStream; }).ashContextCapture!.getTracks().map(track => track.readyState))).toEqual(['ended']);
+		}
+		await expect.poll(() => image.evaluate(element => [(element as HTMLImageElement).naturalWidth, (element as HTMLImageElement).naturalHeight])).toEqual([48, 36]);
+		await expect(page.getByRole('dialog')).toHaveCount(0);
+		await expect(chat.locator('.stanza-editor-input')).toBeFocused();
+		await chat.getByRole('button', { name: 'Remove Screenshot', exact: true }).press('Enter');
+
+	} finally { await restoreCapture?.(); }
 });
 
-
-test('browser screen chooser cancellation returns to the attachment picker', { tag: ['@browser-ui', '@browser-app-server'] }, async ({ workbench, target }) => {
+test('browser screen chooser cancellation closes the picker and restores the message', { tag: ['@browser-ui', '@browser-app-server'] }, async ({ workbench }) => {
 	const page = workbench.page;
 	if (!await page.locator('.ash-chat-view-pane').isVisible()) {
 		await page.getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();
@@ -192,10 +241,12 @@ test('browser screen chooser cancellation returns to the attachment picker', { t
 	const chat = page.locator('.ash-chat-view-pane .ash-chat:visible');
 	await chat.getByRole('button', { name: 'Add context', exact: true }).press('Enter');
 	await page.getByRole('dialog').getByRole('option', { name: 'Screenshot…', exact: true }).click();
+	await expect(page.getByRole('dialog')).toHaveCount(0);
+	await expect(chat.locator('.ash-chat-input-editor').getByRole('button', { name: /^Remove /u })).toHaveCount(0);
+	await expect(chat.locator('.stanza-editor-input')).toBeFocused();
+	await chat.getByRole('button', { name: 'Add context', exact: true }).press('Enter');
 	await expect(page.getByRole('dialog').getByRole('combobox')).toHaveAttribute('placeholder', 'Search attachments');
-	await expect(page.getByRole('dialog').getByRole('combobox')).toBeFocused();
 	await page.keyboard.press('Escape');
-	await expect(chat.getByRole('list', { name: 'Attached context' })).toBeHidden();
 	await expect(chat.locator('.stanza-editor-input')).toBeFocused();
 });
 
@@ -212,7 +263,7 @@ test('Sessions direct image pastes use the shared resizing and preview path', as
 	});
 	const image = composer.getByRole('img', { name: 'direct-paste.png', exact: true });
 	await expect.poll(() => image.evaluate(element => [(element as HTMLImageElement).naturalWidth, (element as HTMLImageElement).naturalHeight])).toEqual([2048, 1024]);
-	await expect(composer.getByRole('list', { name: 'Attached context' }).getByRole('listitem')).toHaveCount(1);
+	await expect(composer.getByRole('button', { name: /^Remove /u })).toHaveCount(1);
 	await composer.getByRole('button', { name: 'Remove direct-paste.png', exact: true }).press('Enter');
 	await expect(composer.locator('.stanza-editor-input')).toBeFocused();
 });

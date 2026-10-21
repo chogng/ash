@@ -115,6 +115,7 @@ mod unavailable {
             _: &ToolCall,
             _: Arc<dyn ThreadUpdateSink>,
             _: Arc<dyn HookService>,
+            _: Arc<dyn crate::TurnExecutionObserver>,
         ) -> Result<ToolExecutionOutput, CoreError> {
             Err(unavailable())
         }

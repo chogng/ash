@@ -1,0 +1,8 @@
+diff --git a/rs/private/resolver.bzl b/rs/private/resolver.bzl
+--- a/rs/private/resolver.bzl
++++ b/rs/private/resolver.bzl
+@@ -76,3 +76,3 @@ def _resolve_one_round(packages, dirty_package_indices, cfg_attrs_by_triple, debug):
+                 ])
+             else:
+-                match = dep["target"]
++                match = set(dep["target"])

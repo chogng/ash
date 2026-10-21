@@ -86,6 +86,7 @@ test("workbench context keys describe the current workspace", () => {
 		'multipleEditorGroups',
 		'openFolderWorkspaceSupport',
 		'panelMaximized',
+		'panelPosition',
 		'panelVisible',
 		'sideBarVisible',
 		'workbenchState',

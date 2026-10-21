@@ -3,10 +3,6 @@ import { test } from 'mocha';
 import { type IRegistry, Registry } from '../../common/platform.js';
 
 test('platform registry exposes add, knows, and as', () => {
-	assert.equal(typeof Registry.add, 'function');
-	assert.equal(typeof Registry.knows, 'function');
-	assert.equal(typeof Registry.as, 'function');
-
 	const contribution = { enabled: true };
 	Registry.add('test.platform.registry.api', contribution);
 

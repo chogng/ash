@@ -15,7 +15,7 @@ import type { LanguageDocumentSymbol } from '../../../../../editor/common/langua
 import { ILanguageFeaturesService } from '../../../../../editor/common/services/languageFeatures.js';
 import { LanguageFeaturesService } from '../../../../../editor/common/services/languageFeaturesService.js';
 import { ITextModelService } from '../../../../../editor/common/services/resolverService.js';
-import '../../../../../../../extensions/code/browser/contrib/documentSymbols/browser/documentSymbols.js';
+import '../../../../../editor/contrib/documentSymbols/browser/documentSymbols.js';
 import { CommandService } from '../../../../services/commands/common/commandService.js';
 import { BrowserTextModelService } from '../../browser/browserTextModelService.js';
 import { ITextModelResourceService } from '../../common/textModelResourceService.js';

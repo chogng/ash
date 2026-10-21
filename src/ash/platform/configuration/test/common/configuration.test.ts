@@ -25,6 +25,42 @@ import { TestConfigurationService as WorkbenchConfigurationService } from '../..
 
 import { ConfigurationTarget, addToValueTree, getConfigValueInTarget, getConfigurationValue, getLanguageTagSettingPlainKey, isConfigurationOverrides, isConfigurationUpdateOverrides, isConfigured, merge, removeFromValueTree, toValuesTree } from "../../../../platform/configuration/common/configuration.js";
 
+test('extension language defaults merge atomically, respect user overrides and withdraw without writing settings', async () => {
+	const registry = new ConfigurationRegistry();
+	registry.updateConfigurations({
+		add: [{
+			properties: {
+				'wrap.mode': { type: 'string', enum: ['off', 'on'], default: 'off', scope: 5 },
+				'wrap.column': { type: 'integer', default: 80, scope: 5 },
+			}
+		}], remove: []
+	});
+	const source = '// keep user settings\n{"wrap.mode":"off"}\n';
+	using service = new WorkbenchConfigurationService({ registry, source });
+	const first = { overrides: { '[markdown]': { 'wrap.mode': 'on' } } };
+	const second = { overrides: { '[markdown]': { 'wrap.column': 100 } } };
+	const changes: unknown[] = [];
+	using listener = service.onDidChangeConfiguration(event => {
+		if (event.affectsConfiguration('wrap', { overrideIdentifier: 'markdown' })) changes.push(service.getValue('wrap', { overrideIdentifier: 'markdown' }));
+	});
+	registry.deltaConfiguration({ addedDefaults: [first, second] });
+	assert.deepEqual(service.getValue('wrap', { overrideIdentifier: 'markdown' }), { mode: 'on', column: 100 });
+	assert.equal(service.getValue('wrap.mode'), 'off');
+	assert.equal(service.getValue('wrap.mode', { overrideIdentifier: 'typescript' }), 'off');
+	assert.equal(service.inspect('wrap.mode', { overrideIdentifier: 'markdown' }).defaultValue, 'on');
+	assert.equal((await service.read()).source, source);
+	assert.equal(changes.length, 1);
+	assert.throws(() => registry.deltaConfiguration({ removedDefaults: [first], addedDefaults: [{ overrides: { '[markdown]': { 'wrap.mode': 'invalid' } } }] }));
+	assert.equal(service.getValue('wrap.mode', { overrideIdentifier: 'markdown' }), 'on');
+	assert.equal(changes.length, 1, 'failed replacements publish no partial change');
+	await service.updateValue('wrap.mode', 'off', { overrideIdentifier: 'markdown' });
+	assert.equal(service.getValue('wrap.mode', { overrideIdentifier: 'markdown' }), 'off');
+	registry.deltaConfiguration({ removedDefaults: [first, second] });
+	assert.equal(service.inspect('wrap.mode', { overrideIdentifier: 'markdown' }).defaultValue, 'off');
+	assert.equal(service.getValue('wrap.column', { overrideIdentifier: 'markdown' }), 80);
+	assert.equal(service.getValue('wrap.mode', { overrideIdentifier: 'markdown' }), 'off');
+});
+
 test('workbench change events index ancestor and descendant sections without matching adjacent names', async () => {
 	const registry = new ConfigurationRegistry();
 	registry.registerConfiguration({ key: 'editor.options', defaultValue: { fontSize: 12 }, parse: value => value as { fontSize: number; } });

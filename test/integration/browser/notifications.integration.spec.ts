@@ -14,14 +14,29 @@ test('notification rows share standard controls, preserve focus, and fit narrow 
 		await expect(close).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
 		await expect(close).toHaveCSS('width', '22px');
 		await expect(close).toHaveCSS('height', '22px');
+		await expect(close).toHaveCSS('border-top-width', '0px');
 		expect(await close.boundingBox()).toMatchObject({ width: 22, height: 22 });
 		await expect(close.locator('svg')).toHaveCount(1);
 		await expect(toast).toHaveCSS('border-radius', '8px');
+		await expect(toast.getByRole('button', { name: 'Run action', exact: true })).toHaveCSS('min-height', '28px');
+		const geometry = await toast.evaluate(element => {
+			const bounds = element.getBoundingClientRect();
+			const close = element.querySelector('.ash-notification-close')!.getBoundingClientRect();
+			const message = element.querySelector('.ash-notification-message')!.getBoundingClientRect();
+			return { width: bounds.width, messageBeforeClose: message.right <= close.left, closeInside: close.right <= bounds.right && close.top >= bounds.top, border: getComputedStyle(element).borderTopColor };
+		});
+		expect(geometry.width).toBeLessThanOrEqual(420);
+		expect(geometry.messageBeforeClose).toBe(true);
+		expect(geometry.closeInside).toBe(true);
+		if (theme >= 2) expect(geometry.border).toBe(theme === 2 ? 'rgb(255, 255, 255)' : 'rgb(0, 0, 0)');
 		expect(await toast.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
+		await close.hover();
+		await expect(close).not.toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
 		await toast.getByRole('button', { name: 'Run action', exact: true }).focus();
 		await page.keyboard.press('Tab');
 		await expect(close).toBeFocused();
 		await expect(close).toHaveCSS('outline-style', 'solid');
+		await expect(close).toHaveCSS('outline-width', '1px');
 		await testInfo.attach(`theme-${theme}`, { body: await page.screenshot(), contentType: 'image/png' });
 	}
 	const id = await toast.getAttribute('data-notification-id');
@@ -41,6 +56,28 @@ test('notification rows share standard controls, preserve focus, and fit narrow 
 	await page.evaluate(() => window.ashNotificationsIntegration.clear());
 	await expect(page.locator('.ash-notifications-center')).toBeHidden();
 	await expect.poll(() => page.evaluate(() => window.ashNotificationsIntegration.history())).toEqual([]);
+	await page.evaluate(() => {
+		const origin = document.createElement('button');
+		origin.textContent = 'Notification focus origin';
+		document.body.append(origin);
+	});
+	const origin = page.getByRole('button', { name: 'Notification focus origin', exact: true, includeHidden: true });
+	for (const property of ['display', 'visibility'] as const) {
+		await origin.focus();
+		const id = await page.evaluate(() => window.ashNotificationsIntegration.notify('Retain history without restoring hidden focus'));
+		await page.locator(`[data-notification-close="${id}"]`).focus();
+		await origin.evaluate((element, property) => element.style.setProperty(property, property === 'display' ? 'none' : 'hidden'), property);
+		try {
+			await page.keyboard.press('Escape');
+			await expect(page.locator('.ash-notification')).toHaveCount(0);
+			expect(await page.evaluate(() => document.activeElement === document.body)).toBe(true);
+			expect(await page.evaluate(() => window.ashNotificationsIntegration.history())).toEqual([id]);
+		} finally {
+			await origin.evaluate((element, property) => element.style.removeProperty(property), property);
+			await page.evaluate(() => window.ashNotificationsIntegration.clear());
+		}
+	}
+	await origin.evaluate(element => element.remove());
 });
 
 test('scheduled toasts are cancelled on removal and center opening while a rapid burst retains only three controls', async ({ page }) => {

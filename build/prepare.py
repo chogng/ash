@@ -43,6 +43,7 @@ PACKAGE_DIRECTORY = re.compile(r"packages/[0-9A-Za-z][0-9A-Za-z.+-]*/[a-f0-9]{64
 BUILD_ENVIRONMENT_VARIABLES = frozenset(
     {
         "AR",
+        "ASH_RUST_LIVE_DIRECTORY",
         "CC",
         "CXX",
         "CMAKE",
@@ -343,7 +344,6 @@ def development_binary_inputs(spec: TargetSpec) -> dict[str, None]:
             "ash-code-mode-host",
             "ash-git-extension",
             "ash-markdown-math",
-            "ash-code-editor",
             "ash-markdown-language-features",
             "ash-github-authentication",
             "ash-github-extension",
@@ -559,7 +559,6 @@ def prepare_development_package(args: argparse.Namespace, *, root: Path = ROOT) 
             windows_sandbox_service_binary=binaries.get("ash-windows-sandbox-service"),
             git_extension_binary=binaries["ash-git-extension"],
             markdown_math_binary=binaries["ash-markdown-math"],
-            code_editor_extension_binary=binaries["ash-code-editor"],
             markdown_extension_binary=binaries["ash-markdown-language-features"],
             github_authentication_binary=binaries["ash-github-authentication"],
             github_extension_binary=binaries["ash-github-extension"],

@@ -7,7 +7,7 @@
   "publisher": "vscode",
   "license": "MIT",
   "engines": {
-    "vscode": "*"
+    "ash": "*"
   },
   "categories": [
     "Programming Languages"

@@ -59,7 +59,9 @@ export class ConfigurationService extends Disposable implements IConfigurationSe
 
 	private readDefaults(): ConfigurationModel {
 		const parser = new ConfigurationModelParser('defaults', this.log);
-		parser.parseRaw(Object.fromEntries(this.registry.getRegisteredConfigurations().map(setting => [setting.key, setting.defaultValue])));
+		const defaults = Object.fromEntries(this.registry.getRegisteredConfigurations().map(setting => [setting.key, setting.defaultValue]));
+		for (const [key, override] of this.registry.getConfigurationDefaultsOverrides()) defaults[key] = override.value;
+		parser.parseRaw(defaults);
 		return parser.configurationModel;
 	}
 

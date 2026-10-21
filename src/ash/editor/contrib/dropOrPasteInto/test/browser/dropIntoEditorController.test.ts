@@ -13,7 +13,7 @@ import { TextModel } from '../../../../common/model/textModel.js';
 import { LanguageFeaturesService } from '../../../../common/services/languageFeaturesService.js';
 import type { browserEnvironment } from '../../../../test/browser/testEditorDom.js';
 
-await import('../../../../../../../extensions/code/browser/contrib/dropOrPasteInto/browser/dropIntoEditorContribution.js');
+await import('../../browser/dropIntoEditorContribution.js');
 const { createTestCodeEditor } = await import('../../../../test/browser/testCodeEditor.js');
 
 test('CodeEditorWidget leaves text drops available to its host without the contribution', () => {

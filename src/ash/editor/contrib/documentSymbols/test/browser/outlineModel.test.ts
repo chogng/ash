@@ -6,7 +6,7 @@ import { Range } from '../../../../common/core/range.js';
 import type { LanguageDocumentSymbol } from '../../../../common/languages.js';
 import { TextModel } from '../../../../common/model/textModel.js';
 import { LanguageFeaturesService } from '../../../../common/services/languageFeaturesService.js';
-import { OutlineModel } from '../../../../../../../extensions/code/browser/contrib/documentSymbols/browser/outlineModel.js';
+import { OutlineModel } from '../../browser/outlineModel.js';
 
 suite('OutlineModel', () => {
 	test('large outlines allow an edit to cancel conversion before any stale tree is published', async () => {

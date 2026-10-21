@@ -143,6 +143,26 @@ pub enum ModelInvocationOutcome {
     Cancelled,
 }
 
+/// Client-observed model-call timing from one monotonic clock, independent of provider telemetry.
+///
+/// First text means a nonempty body delta, excluding reasoning, metadata and completed snapshots.
+/// The interval from first text to completion includes transport and local stream processing;
+/// it is not a server decode-time measurement. Absent first text also covers unary responses.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct ModelInvocationTiming {
+    #[ts(type = "number")]
+    pub total_us: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable, type = "number")]
+    pub first_text_us: Option<u64>,
+    #[ts(type = "number")]
+    pub text_delta_count: u64,
+    /// Tool arguments contribute output tokens, so mixed calls cannot estimate body-text TPS.
+    #[ts(type = "number")]
+    pub tool_call_count: u64,
+}
+
 /// Durable facts for one provider request, independent from its containing Turn.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
@@ -170,6 +190,9 @@ pub struct ModelInvocationRecord {
     pub started_at_unix_ms: u64,
     #[ts(type = "number")]
     pub completed_at_unix_ms: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub timing: Option<ModelInvocationTiming>,
     pub outcome: ModelInvocationOutcome,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional = nullable)]

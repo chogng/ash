@@ -51,6 +51,7 @@ EditorInputSerializers.registerStatic({
 
 export type ExtensionsCapabilityTarget =
 	| { readonly kind: 'skill'; readonly source: string; readonly name: string; readonly sessionId?: string; }
+	| { readonly kind: 'connector'; readonly connectorId: string; }
 	| { readonly kind: 'mcp'; readonly serverId: string; readonly installationId?: string; readonly capabilityId?: string; };
 
 /** Capability tabs retain identity only; their details are re-read from the owning service. */
@@ -67,7 +68,7 @@ export class ExtensionsCapabilityInput extends EditorInput {
 		this.resource = URI.from({ scheme: Schemas.ashExtension, path: `/${target.kind}/${encodeURIComponent(JSON.stringify(target))}` });
 	}
 
-	public getName(): string { return this.target.kind === 'skill' ? this.target.name : this.target.serverId; }
+	public getName(): string { return this.target.kind === 'skill' ? this.target.name : this.target.kind === 'connector' ? this.target.connectorId : this.target.serverId; }
 }
 
 EditorInputSerializers.registerStatic({
@@ -84,6 +85,9 @@ EditorInputSerializers.registerStatic({
 		}
 		if (record.kind === 'mcp') {
 			return new ExtensionsCapabilityInput({ kind: 'mcp', serverId: requireString(record.serverId, 'MCP server'), installationId: optionalString(record.installationId, 'MCP installation'), capabilityId: optionalString(record.capabilityId, 'MCP capability') });
+		}
+		if (record.kind === 'connector') {
+			return new ExtensionsCapabilityInput({ kind: 'connector', connectorId: requireString(record.connectorId, 'connector ID') });
 		}
 		throw new TypeError('Invalid capability kind');
 	},

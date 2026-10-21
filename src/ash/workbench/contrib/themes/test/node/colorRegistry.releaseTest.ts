@@ -10,6 +10,7 @@ import '../../../preferences/common/settingsEditorColorRegistry.js';
 import '../../../preferences/browser/keybindingsEditor.js';
 import '../../../scm/browser/scmHistory.js';
 import '../../../terminal/common/terminalColorRegistry.js';
+import '../../../terminalContrib/commandGuide/browser/terminal.commandGuide.contribution.js';
 import '../../../../../sessions/common/theme.js';
 import '../../../../../platform/theme/common/colors/chartsColors.js';
 import '../../../../../platform/theme/common/colors/componentColors.js';

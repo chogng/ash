@@ -10,15 +10,23 @@ use crate::state::SubscriberId;
 use crate::state::SubscriberState;
 use crate::state::SubscriberWatchKey;
 use crate::state::SubscriberWatchRegistration;
+use crate::state::WatchInterest;
 use crate::state::WatchState;
 use log::warn;
+#[cfg(not(target_os = "macos"))]
 use notify::Config;
 use notify::Event;
 use notify::EventKind;
+#[cfg(not(target_os = "macos"))]
 use notify::PollWatcher;
+#[cfg(not(target_os = "macos"))]
 use notify::RecommendedWatcher;
 use notify::RecursiveMode;
+#[cfg(not(target_os = "macos"))]
 use notify::Watcher;
+use notify::event::ModifyKind;
+use std::collections::BTreeMap;
+use std::collections::BTreeSet;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::path::Path;
@@ -38,6 +46,7 @@ struct FileWatcherInner {
 struct WatchSettings {
     mode: RecursiveMode,
     contents: bool,
+    polling: bool,
 }
 
 impl WatchSettings {
@@ -45,6 +54,7 @@ impl WatchSettings {
         counts.effective_mode().map(|mode| Self {
             mode,
             contents: counts.contents > 0,
+            polling: counts.contents > 0 || counts.metadata > 0,
         })
     }
 }
@@ -53,22 +63,148 @@ impl WatchSettings {
 struct WatchScope {
     path: PathBuf,
     recursive: bool,
-    contents: bool,
+    interest: WatchInterest,
 }
 
 enum BackendWatcher {
-    Recommended(RecommendedWatcher),
+    #[cfg(not(target_os = "macos"))]
+    Recommended {
+        watcher: RecommendedWatcher,
+        added: BTreeMap<PathBuf, RecursiveMode>,
+        removed: BTreeSet<PathBuf>,
+    },
+    #[cfg(target_os = "macos")]
+    Isolated {
+        watcher: crate::native::NativeWatcher,
+        added: BTreeMap<PathBuf, RecursiveMode>,
+        removed: BTreeSet<PathBuf>,
+        events: mpsc::UnboundedSender<notify::Result<Event>>,
+    },
     Polling {
+        #[cfg(not(target_os = "macos"))]
         contents: PollWatcher,
+        #[cfg(not(target_os = "macos"))]
         metadata: PollWatcher,
+        #[cfg(target_os = "macos")]
+        watcher: crate::native::NativeWatcher,
+        #[cfg(target_os = "macos")]
+        paths: BTreeMap<PathBuf, (RecursiveMode, bool)>,
+        #[cfg(target_os = "macos")]
+        replaced: BTreeSet<PathBuf>,
+        #[cfg(target_os = "macos")]
+        interval: std::time::Duration,
+        #[cfg(target_os = "macos")]
+        events: mpsc::UnboundedSender<notify::Result<Event>>,
+    },
+    #[cfg(test)]
+    Recording {
+        operations: BackendOperations,
+        pending: usize,
+        commits: usize,
     },
 }
 
+#[cfg(test)]
+type BackendOperations = Arc<Mutex<Vec<(PathBuf, Option<RecursiveMode>)>>>;
+
 impl BackendWatcher {
+    fn recommended(events: mpsc::UnboundedSender<notify::Result<Event>>) -> notify::Result<Self> {
+        #[cfg(target_os = "macos")]
+        {
+            // Independent domain watchers share the OS service. Do not serialize the same
+            // known backend outage into every domain's startup; path errors stay local.
+            if !crate::native::backend_available() {
+                return Self::polling(events, std::time::Duration::from_millis(200));
+            }
+            match crate::native::NativeWatcher::new(events.clone()) {
+                Ok(watcher) => Ok(Self::Isolated {
+                    watcher,
+                    added: BTreeMap::new(),
+                    removed: BTreeSet::new(),
+                    events,
+                }),
+                Err(error) => {
+                    warn!("native file watcher unavailable; using scoped polling: {error}");
+                    Self::polling(events, std::time::Duration::from_millis(200))
+                }
+            }
+        }
+        #[cfg(not(target_os = "macos"))]
+        {
+            Ok(Self::Recommended {
+                watcher: notify::recommended_watcher(move |result| {
+                    let _ = events.send(result);
+                })?,
+                added: BTreeMap::new(),
+                removed: BTreeSet::new(),
+            })
+        }
+    }
+
+    fn polling(
+        events: mpsc::UnboundedSender<notify::Result<Event>>,
+        interval: std::time::Duration,
+    ) -> notify::Result<Self> {
+        #[cfg(target_os = "macos")]
+        {
+            return Ok(Self::Polling {
+                watcher: crate::native::NativeWatcher::new_polling(events.clone())
+                    .map_err(|error| notify::Error::generic(&error))?,
+                paths: BTreeMap::new(),
+                replaced: BTreeSet::new(),
+                interval,
+                events,
+            });
+        }
+        #[cfg(not(target_os = "macos"))]
+        let metadata_events = events.clone();
+        #[cfg(not(target_os = "macos"))]
+        Ok(Self::Polling {
+            contents: PollWatcher::new(
+                move |result| {
+                    let _ = events.send(result);
+                },
+                Config::default()
+                    .with_compare_contents(true)
+                    .with_poll_interval(interval),
+            )?,
+            // Ancestors only detect removal/recreation. Never hash unrelated siblings.
+            metadata: PollWatcher::new(
+                move |result| {
+                    let _ = metadata_events.send(result);
+                },
+                Config::default().with_poll_interval(interval),
+            )?,
+        })
+    }
+
     fn watch(&mut self, path: &Path, settings: WatchSettings) -> notify::Result<()> {
         match self {
-            Self::Recommended(watcher) => watcher.watch(path, settings.mode),
+            #[cfg(not(target_os = "macos"))]
+            Self::Recommended { added, .. } => {
+                added.insert(path.to_path_buf(), settings.mode);
+                Ok(())
+            }
+            #[cfg(target_os = "macos")]
+            Self::Isolated { added, .. } => {
+                added.insert(path.to_path_buf(), settings.mode);
+                Ok(())
+            }
+            #[cfg(target_os = "macos")]
+            Self::Polling {
+                paths, replaced, ..
+            } => {
+                if settings.polling {
+                    paths.insert(path.to_path_buf(), (settings.mode, settings.contents));
+                    replaced.insert(path.to_path_buf());
+                }
+                Ok(())
+            }
+            #[cfg(not(target_os = "macos"))]
             Self::Polling { contents, metadata } => {
+                if !settings.polling {
+                    return Ok(());
+                }
                 let watcher = if settings.contents {
                     contents
                 } else {
@@ -76,19 +212,167 @@ impl BackendWatcher {
                 };
                 watcher.watch(path, settings.mode)
             }
+            #[cfg(test)]
+            Self::Recording {
+                operations,
+                pending,
+                ..
+            } => {
+                *pending += 1;
+                operations
+                    .lock()
+                    .unwrap()
+                    .push((path.to_path_buf(), Some(settings.mode)));
+                Ok(())
+            }
         }
     }
 
     fn unwatch(&mut self, path: &Path, settings: WatchSettings) -> notify::Result<()> {
         match self {
-            Self::Recommended(watcher) => watcher.unwatch(path),
+            #[cfg(not(target_os = "macos"))]
+            Self::Recommended { added, removed, .. } => {
+                added.remove(path);
+                removed.insert(path.to_path_buf());
+                Ok(())
+            }
+            #[cfg(target_os = "macos")]
+            Self::Isolated { added, removed, .. } => {
+                added.remove(path);
+                removed.insert(path.to_path_buf());
+                Ok(())
+            }
+            #[cfg(target_os = "macos")]
+            Self::Polling {
+                paths, replaced, ..
+            } => {
+                if settings.polling {
+                    paths.remove(path);
+                    replaced.insert(path.to_path_buf());
+                }
+                Ok(())
+            }
+            #[cfg(not(target_os = "macos"))]
             Self::Polling { contents, metadata } => {
+                if !settings.polling {
+                    return Ok(());
+                }
                 let watcher = if settings.contents {
                     contents
                 } else {
                     metadata
                 };
                 watcher.unwatch(path)
+            }
+            #[cfg(test)]
+            Self::Recording {
+                operations,
+                pending,
+                ..
+            } => {
+                *pending += 1;
+                operations.lock().unwrap().push((path.to_path_buf(), None));
+                Ok(())
+            }
+        }
+    }
+
+    fn flush(&mut self, watched_paths: &HashMap<PathBuf, WatchSettings>) -> notify::Result<()> {
+        // The desired scopes include content-vs-ancestor ownership. Restore all of them
+        // after a failed native transaction, including scopes registered in older batches.
+        #[cfg(target_os = "macos")]
+        if let Self::Isolated {
+            watcher,
+            added,
+            removed,
+            events,
+        } = self
+        {
+            let result = if watcher.is_alive() && added.is_empty() && removed.is_empty() {
+                Ok(())
+            } else {
+                watcher.apply(added, removed)
+            };
+            added.clear();
+            removed.clear();
+            if let Err(error) = result {
+                warn!("native file watcher failed; restoring scoped polling: {error}");
+                let events = events.clone();
+                let mut replacement =
+                    Self::polling(events.clone(), std::time::Duration::from_millis(200))?;
+                for (path, settings) in watched_paths {
+                    replacement.watch(path, *settings)?;
+                }
+                replacement.flush(watched_paths)?;
+                *self = replacement;
+                // The polling helper invalidates the native-to-polling gap after its
+                // baseline scan; publishing before that scan could hide a later mutation.
+            }
+            return Ok(());
+        }
+        #[cfg(not(target_os = "macos"))]
+        let _ = watched_paths;
+        match self {
+            #[cfg(not(target_os = "macos"))]
+            Self::Recommended {
+                watcher,
+                added,
+                removed,
+            } => {
+                if added.is_empty() && removed.is_empty() {
+                    return Ok(());
+                }
+                // Commit each logical root-set update once, including RAII teardown.
+                let mut changes = watcher.paths_mut();
+                let mut failure = None;
+                for path in std::mem::take(removed) {
+                    if let Err(error) = changes.remove(&path)
+                        && !matches!(error.kind, notify::ErrorKind::WatchNotFound)
+                    {
+                        failure.get_or_insert(error);
+                    }
+                }
+                for (path, mode) in std::mem::take(added) {
+                    if let Err(error) = changes.add(&path, mode) {
+                        failure.get_or_insert(error);
+                    }
+                }
+                // A paths_mut guard must always be committed, even after one path fails.
+                let result = changes.commit();
+                failure.map_or(result, Err)
+            }
+            #[cfg(target_os = "macos")]
+            Self::Isolated { .. } => unreachable!("isolated backend handled above"),
+            #[cfg(not(target_os = "macos"))]
+            Self::Polling { .. } => Ok(()),
+            #[cfg(target_os = "macos")]
+            Self::Polling {
+                watcher,
+                paths,
+                replaced,
+                interval,
+                events,
+            } => {
+                if !watcher.is_alive() || watcher.apply_polling(paths, replaced, *interval).is_err()
+                {
+                    *watcher = crate::native::NativeWatcher::new_polling(events.clone())
+                        .map_err(|error| notify::Error::generic(&error))?;
+                    watcher
+                        .apply_polling(paths, replaced, *interval)
+                        .map_err(|error| notify::Error::generic(&error))?;
+                }
+                replaced.clear();
+                Ok(())
+            }
+            #[cfg(test)]
+            Self::Recording {
+                pending, commits, ..
+            } => {
+                if *pending != 0 {
+                    *commits += 1;
+                    *pending = 0;
+                }
+                Ok(())
             }
         }
     }
@@ -112,6 +396,22 @@ pub struct FileWatcher {
 }
 
 impl FileWatcher {
+    #[cfg(test)]
+    pub(crate) fn recording_for_test(operations: BackendOperations) -> Self {
+        Self {
+            inner: Some(Arc::new(Mutex::new(FileWatcherInner {
+                watcher: BackendWatcher::Recording {
+                    operations,
+                    pending: 0,
+                    commits: 0,
+                },
+                watched_paths: HashMap::new(),
+            }))),
+            state: Arc::new(RwLock::new(WatchState::default())),
+            watch_parents: true,
+        }
+    }
+
     /// Creates a live OS watcher and attaches its event loop to the current
     /// Tokio runtime.
     pub fn new() -> notify::Result<Self> {
@@ -125,32 +425,8 @@ impl FileWatcher {
         })?;
         let (raw_tx, raw_rx) = mpsc::unbounded_channel();
         let watcher = match backend {
-            FileWatcherBackend::Recommended => {
-                BackendWatcher::Recommended(notify::recommended_watcher(move |result| {
-                    let _ = raw_tx.send(result);
-                })?)
-            }
-            FileWatcherBackend::Polling { interval } => {
-                let metadata_tx = raw_tx.clone();
-                BackendWatcher::Polling {
-                    contents: PollWatcher::new(
-                        move |result| {
-                            let _ = raw_tx.send(result);
-                        },
-                        Config::default()
-                            .with_compare_contents(true)
-                            .with_poll_interval(interval),
-                    )?,
-                    // Ancestors only detect target removal/recreation. Hashing their children
-                    // reads unrelated sibling files, potentially the whole system temp directory.
-                    metadata: PollWatcher::new(
-                        move |result| {
-                            let _ = metadata_tx.send(result);
-                        },
-                        Config::default().with_poll_interval(interval),
-                    )?,
-                }
-            }
+            FileWatcherBackend::Recommended => BackendWatcher::recommended(raw_tx)?,
+            FileWatcherBackend::Polling { interval } => BackendWatcher::polling(raw_tx, interval)?,
         };
         let file_watcher = Self {
             inner: Some(Arc::new(Mutex::new(FileWatcherInner {
@@ -224,6 +500,10 @@ impl FileWatcher {
                             count: 1,
                             last_exists: registration.key.matched.path.exists(),
                             fallback: registration.fallback,
+                            #[cfg(target_os = "macos")]
+                            root_identity: crate::matching::root_identity(
+                                &registration.key.requested.path,
+                            ),
                         });
                         registration.actual.clone()
                     }
@@ -237,7 +517,7 @@ impl FileWatcher {
                     .path_ref_counts
                     .entry(scope.path.clone())
                     .or_default()
-                    .increment(scope.recursive, scope.contents, 1);
+                    .increment(scope.recursive, scope.interest, 1);
             }
             registered.push(registration.key.clone());
             for scope in scopes {
@@ -250,6 +530,12 @@ impl FileWatcher {
                     return Err(error);
                 }
             }
+        }
+        if let Err(error) = Self::flush_backend(&mut inner_guard) {
+            drop(inner_guard);
+            drop(state);
+            self.unregister_paths(subscriber_id, &registered);
+            return Err(error);
         }
         Ok(())
     }
@@ -286,6 +572,9 @@ impl FileWatcher {
                 );
             }
         }
+        if let Err(error) = Self::flush_backend(&mut inner_guard) {
+            warn!("failed to unregister file watcher roots: {error}");
+        }
     }
 
     pub(crate) fn remove_subscriber(&self, subscriber_id: SubscriberId) {
@@ -305,6 +594,21 @@ impl FileWatcher {
                 );
             }
         }
+        if let Err(error) = Self::flush_backend(&mut inner_guard) {
+            warn!("failed to remove file watcher subscriber: {error}");
+        }
+    }
+
+    fn flush_backend(
+        inner: &mut Option<std::sync::MutexGuard<'_, FileWatcherInner>>,
+    ) -> notify::Result<()> {
+        match inner {
+            Some(inner) => {
+                let inner = &mut **inner;
+                inner.watcher.flush(&inner.watched_paths)
+            }
+            None => Ok(()),
+        }
     }
 
     fn watch_scopes(
@@ -315,7 +619,11 @@ impl FileWatcher {
         let mut scopes = vec![WatchScope {
             path: actual.path.clone(),
             recursive: actual.recursive,
-            contents: actual.path == key.requested.path,
+            interest: if actual.path == key.requested.path {
+                WatchInterest::Contents
+            } else {
+                WatchInterest::Metadata
+            },
         }];
         // An OS directory watch can disappear silently with its inode. Its immediate
         // parent observes removal/recreation; subscriber matching still hides siblings.
@@ -329,7 +637,7 @@ impl FileWatcher {
             scopes.push(WatchScope {
                 path: parent.to_path_buf(),
                 recursive: false,
-                contents: false,
+                interest: WatchInterest::NativeParent,
             });
         }
         scopes
@@ -346,7 +654,7 @@ impl FileWatcher {
             return;
         };
         let previous_mode = WatchSettings::from_counts(*counts);
-        counts.decrement(actual.recursive, actual.contents, amount);
+        counts.decrement(actual.recursive, actual.interest, amount);
         let next_mode = WatchSettings::from_counts(*counts);
         if counts.is_empty() {
             counts_by_path.remove(&actual.path);
@@ -439,7 +747,7 @@ impl FileWatcher {
                 counts_by_path
                     .entry(scope.path.clone())
                     .or_default()
-                    .increment(scope.recursive, scope.contents, count);
+                    .increment(scope.recursive, scope.interest, count);
             }
             let next_mode = WatchSettings::from_counts(counts_by_path[&scope.path]);
             // A counted parent may have been missing when registered. Ensure it is
@@ -464,21 +772,51 @@ impl FileWatcher {
             while let Some(result) = raw_rx.recv().await {
                 match result {
                     Ok(event) if event.need_rescan() => {
+                        // A polling baseline can observe removal/recreation without a path
+                        // event. Move missing-root registrations before publishing the hint;
+                        // otherwise consumers reread successfully while the backend still
+                        // watches an obsolete ancestor or an unregistered missing root.
+                        let mut roots = Event::new(EventKind::Other);
+                        roots.paths = state
+                            .read()
+                            .unwrap()
+                            .subscribers
+                            .values()
+                            .flat_map(|subscriber| {
+                                subscriber
+                                    .watched_paths
+                                    .keys()
+                                    .map(|key| key.requested.path.clone())
+                            })
+                            .collect::<BTreeSet<_>>()
+                            .into_iter()
+                            .collect();
+                        let inner = inner.as_ref().and_then(std::sync::Weak::upgrade);
+                        Self::reconcile_event(&state, inner.as_ref(), &roots, watch_parents);
                         Self::require_rescan(&state).await;
                     }
                     Ok(event) if is_mutating_event(&event) && !event.paths.is_empty() => {
                         let inner = inner.as_ref().and_then(std::sync::Weak::upgrade);
-                        Self::notify_subscribers(
-                            &state,
-                            inner.as_ref(),
-                            &event.paths,
-                            watch_parents,
-                        )
-                        .await;
+                        Self::notify_subscribers(&state, inner.as_ref(), &event, watch_parents)
+                            .await;
                     }
                     Ok(_) => {}
                     Err(error) => {
                         warn!("file watcher backend error: {error}");
+                        // A helper can exit while no registration is in flight. Reconcile
+                        // before rescan delivery so future edits have a live backend too.
+                        if let Some(inner) = inner.as_ref().and_then(std::sync::Weak::upgrade) {
+                            let _state = state
+                                .write()
+                                .unwrap_or_else(std::sync::PoisonError::into_inner);
+                            let mut inner = inner
+                                .lock()
+                                .unwrap_or_else(std::sync::PoisonError::into_inner);
+                            let inner = &mut *inner;
+                            if let Err(error) = inner.watcher.flush(&inner.watched_paths) {
+                                warn!("failed to recover file watcher backend: {error}");
+                            }
+                        }
                         Self::require_rescan(&state).await;
                     }
                 }
@@ -489,76 +827,92 @@ impl FileWatcher {
     async fn notify_subscribers(
         state: &RwLock<WatchState>,
         inner: Option<&Arc<Mutex<FileWatcherInner>>>,
-        event_paths: &[PathBuf],
+        event: &Event,
         watch_parents: bool,
     ) {
-        let subscribers = {
-            let mut state = state
-                .write()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
-            let mut moves = Vec::new();
-            let mut replaced_roots = HashSet::new();
-            let mut subscribers = Vec::new();
-            for subscriber in state.subscribers.values_mut() {
-                let mut changed_paths = Vec::new();
-                for event_path in event_paths {
-                    for (key, watch) in &mut subscriber.watched_paths {
-                        if let Some(path) = changed_path_for_event(key, watch, event_path) {
-                            changed_paths.push(path);
-                        }
-                        let (new_actual, _, fallback) = actual_watch_path(&key.requested);
-                        watch.fallback |= fallback;
-                        if watch.actual != new_actual {
-                            let old_actual = watch.actual.clone();
-                            let count = watch.count;
-                            watch.actual = new_actual.clone();
-                            moves.push((key.clone(), old_actual, new_actual, count));
-                        } else if event_path == &key.requested.path
-                            || event_path == &key.matched.path
-                        {
-                            // A remove/create or rename pair may be processed only after
-                            // the replacement exists. Path equality cannot prove that
-                            // an OS handle still refers to the current directory.
-                            replaced_roots.insert(new_actual.path);
-                        }
+        for (sender, paths) in Self::reconcile_event(state, inner, event, watch_parents) {
+            sender.add_changed_paths(&paths).await;
+        }
+    }
+
+    fn reconcile_event(
+        state: &RwLock<WatchState>,
+        inner: Option<&Arc<Mutex<FileWatcherInner>>>,
+        event: &Event,
+        watch_parents: bool,
+    ) -> Vec<(WatchSender, Vec<PathBuf>)> {
+        let mut state = state
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let mut moves = Vec::new();
+        let mut replaced_roots = HashSet::new();
+        let mut subscribers = Vec::new();
+        for subscriber in state.subscribers.values_mut() {
+            let mut changed_paths = Vec::new();
+            for event_path in &event.paths {
+                for (key, watch) in &mut subscriber.watched_paths {
+                    #[cfg(target_os = "macos")]
+                    let identity = watch.root_identity;
+                    if let Some(path) = changed_path_for_event(key, watch, event_path) {
+                        changed_paths.push(path);
+                    }
+                    #[cfg(target_os = "macos")]
+                    if identity != watch.root_identity {
+                        changed_paths.push(key.requested.path.clone());
+                        replaced_roots.insert(watch.actual.path.clone());
+                    }
+                    let (new_actual, _, fallback) = actual_watch_path(&key.requested);
+                    watch.fallback |= fallback;
+                    if watch.actual != new_actual {
+                        let old_actual = watch.actual.clone();
+                        let count = watch.count;
+                        watch.actual = new_actual.clone();
+                        moves.push((key.clone(), old_actual, new_actual, count));
+                    } else if may_replace_root(event.kind)
+                        && (event_path == &key.requested.path || event_path == &key.matched.path)
+                    {
+                        // A remove/create or rename pair may be processed only after
+                        // the replacement exists. Path equality cannot prove that
+                        // an OS handle still refers to the current directory.
+                        replaced_roots.insert(new_actual.path);
                     }
                 }
-                if !changed_paths.is_empty() {
-                    subscribers.push((subscriber.tx.clone(), changed_paths));
-                }
             }
-            let mut inner_guard = None;
-            for (key, old_actual, new_actual, count) in moves {
-                Self::apply_actual_watch_move(
-                    &mut state.path_ref_counts,
-                    &key,
-                    old_actual,
-                    new_actual,
-                    count,
-                    inner,
-                    &mut inner_guard,
-                    watch_parents,
+            if !changed_paths.is_empty() {
+                subscribers.push((subscriber.tx.clone(), changed_paths));
+            }
+        }
+        let mut inner_guard = None;
+        for (key, old_actual, new_actual, count) in moves {
+            Self::apply_actual_watch_move(
+                &mut state.path_ref_counts,
+                &key,
+                old_actual,
+                new_actual,
+                count,
+                inner,
+                &mut inner_guard,
+                watch_parents,
+            );
+        }
+        for path in replaced_roots {
+            let next_mode = state
+                .path_ref_counts
+                .get(&path)
+                .and_then(|counts| WatchSettings::from_counts(*counts));
+            if let Err(error) =
+                Self::reconfigure_watch_inner(inner, &path, next_mode, true, &mut inner_guard)
+            {
+                warn!(
+                    "failed to rebind replaced watch root {}: {error}",
+                    path.display()
                 );
             }
-            for path in replaced_roots {
-                let next_mode = state
-                    .path_ref_counts
-                    .get(&path)
-                    .and_then(|counts| WatchSettings::from_counts(*counts));
-                if let Err(error) =
-                    Self::reconfigure_watch_inner(inner, &path, next_mode, true, &mut inner_guard)
-                {
-                    warn!(
-                        "failed to rebind replaced watch root {}: {error}",
-                        path.display()
-                    );
-                }
-            }
-            subscribers
-        };
-        for (sender, changed_paths) in subscribers {
-            sender.add_changed_paths(&changed_paths).await;
         }
+        if let Err(error) = Self::flush_backend(&mut inner_guard) {
+            warn!("failed to reconcile file watcher roots: {error}");
+        }
+        subscribers
     }
 
     async fn require_rescan(state: &RwLock<WatchState>) {
@@ -593,9 +947,51 @@ impl FileWatcher {
     }
 
     #[cfg(test)]
+    pub(crate) fn registration_state_for_test(&self) -> String {
+        let state = self.state.read().unwrap();
+        format!(
+            "{:?}",
+            state
+                .subscribers
+                .values()
+                .flat_map(
+                    |subscriber| subscriber.watched_paths.iter().map(|(key, watch)| (
+                        &key.requested.path,
+                        &watch.actual.path,
+                        watch.actual.recursive,
+                        watch.fallback,
+                        watch.last_exists
+                    ))
+                )
+                .collect::<Vec<_>>()
+        )
+    }
+
+    #[cfg(test)]
+    pub(crate) fn is_polling_for_test(&self) -> bool {
+        self.inner.as_ref().is_some_and(|inner| {
+            matches!(
+                inner.lock().unwrap().watcher,
+                BackendWatcher::Polling { .. }
+            )
+        })
+    }
+
+    #[cfg(test)]
     pub(crate) async fn send_paths_for_test(&self, paths: Vec<PathBuf>) {
-        Self::notify_subscribers(&self.state, self.inner.as_ref(), &paths, self.watch_parents)
+        let mut event = Event::new(EventKind::Modify(ModifyKind::Any));
+        event.paths = paths;
+        Self::notify_subscribers(&self.state, self.inner.as_ref(), &event, self.watch_parents)
             .await;
+    }
+
+    #[cfg(test)]
+    pub(crate) fn backend_commits_for_test(&self) -> usize {
+        let inner = self.inner.as_ref().unwrap().lock().unwrap();
+        match &inner.watcher {
+            BackendWatcher::Recording { commits, .. } => *commits,
+            _ => panic!("requires a recording backend"),
+        }
     }
 
     #[cfg(test)]
@@ -649,3 +1045,18 @@ fn is_mutating_event(event: &Event) -> bool {
         EventKind::Create(_) | EventKind::Modify(_) | EventKind::Remove(_)
     )
 }
+
+fn may_replace_root(kind: EventKind) -> bool {
+    // Content and metadata updates do not invalidate the OS handle's inode. Rebinding on
+    // these routine events restarts macOS's entire FSEventStream for every file write.
+    matches!(
+        kind,
+        EventKind::Create(_)
+            | EventKind::Remove(_)
+            | EventKind::Modify(ModifyKind::Name(_) | ModifyKind::Any | ModifyKind::Other)
+    )
+}
+
+#[cfg(all(test, target_os = "macos"))]
+#[path = "watcher_native_tests.rs"]
+mod native_tests;

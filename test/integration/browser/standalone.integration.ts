@@ -1,10 +1,12 @@
-import { registerTestCodeEditorFeatures } from '../../fixtures/codeEditorFeatures.js';
-const codeFeatures = registerTestCodeEditorFeatures();
+import bundledDarkTheme from '../../../extensions/theme-defaults/themes/ash-dark.json' with { type: 'json' };
+import bundledLightTheme from '../../../extensions/theme-defaults/themes/ash-light.json' with { type: 'json' };
+import bundledHighContrastDarkTheme from '../../../extensions/theme-defaults/themes/ash-high-contrast-dark.json' with { type: 'json' };
+import bundledHighContrastLightTheme from '../../../extensions/theme-defaults/themes/ash-high-contrast-light.json' with { type: 'json' };
 import { TestUriIdentityServices } from '../../../src/ash/platform/uriIdentity/test/common/uriIdentityTestServices.js';
 import { createTestFileService, registerTestComponentServices } from '../../../src/ash/workbench/test/common/testEditorServices.js';
 import { MultiDiffEditor } from '../../../src/ash/workbench/contrib/multiDiffEditor/browser/multiDiffEditor.js';
 import { IMultiDiffSourceResolverService, MultiDiffSourceResolverService } from '../../../src/ash/workbench/contrib/multiDiffEditor/browser/multiDiffSourceResolverService.js';
-import { CopyPasteController } from '../../../extensions/code/browser/contrib/dropOrPasteInto/browser/copyPasteController.js';
+import { CopyPasteController } from '../../../src/ash/editor/contrib/dropOrPasteInto/browser/copyPasteController.js';
 import '../../../src/ash/workbench/contrib/callHierarchy/browser/callHierarchy.contribution.js';
 import '../../../src/ash/workbench/contrib/typeHierarchy/browser/typeHierarchy.contribution.js';
 import { BrowserTextModelService } from '../../../src/ash/workbench/services/textmodelResolver/browser/browserTextModelService.js';
@@ -18,23 +20,23 @@ import { IInstantiationService } from '../../../src/ash/platform/instantiation/c
 import { IStorageService } from '../../../src/ash/platform/storage/common/storage.js';
 import { BrowserStorageService } from '../../../src/ash/workbench/services/storage/browser/storageService.js';
 import { IInlineCompletionsService } from '../../../src/ash/editor/browser/services/inlineCompletionsService.js';
-import { InlineCompletionsController } from '../../../extensions/code/browser/contrib/inlineCompletions/browser/controller/inlineCompletionsController.js';
+import { InlineCompletionsController } from '../../../src/ash/editor/contrib/inlineCompletions/browser/controller/inlineCompletionsController.js';
 import type { ICodeEditor } from '../../../src/ash/editor/browser/editorBrowser.js';
 import { CommandsRegistry, ICommandService, type ICommandMetadata } from '../../../src/ash/platform/commands/common/commands.js';
 import { IContextKeyService } from "../../../src/ash/platform/contextkey/browser/contextKeyService.js";
 import { ICodeEditorService } from '../../../src/ash/editor/browser/services/codeEditorService.js';
 import { IOpenerService } from '../../../src/ash/platform/opener/common/opener.js';
-import { LinkDetector } from '../../../extensions/code/browser/contrib/links/browser/links.js';
+import { LinkDetector } from '../../../src/ash/editor/contrib/links/browser/links.js';
 import { observableCodeEditor } from '../../../src/ash/editor/browser/observableCodeEditor.js';
-import { FindController, FindStartFocusAction } from '../../../extensions/code/browser/contrib/find/browser/findController.js';
-import { StickyScrollController } from '../../../extensions/code/browser/contrib/stickyScroll/browser/stickyScrollController.js';
+import { FindController, FindStartFocusAction } from '../../../src/ash/editor/contrib/find/browser/findController.js';
+import { StickyScrollController } from '../../../src/ash/editor/contrib/stickyScroll/browser/stickyScrollController.js';
 import { DisposableStore, toDisposable } from '../../../src/ash/base/common/lifecycle.js';
 import { IClipboardService } from '../../../src/ash/platform/clipboard/common/clipboardService.js';
-import { CutAction, PasteAction } from '../../../extensions/code/browser/contrib/clipboard/browser/clipboard.js';
+import { CutAction, PasteAction } from '../../../src/ash/editor/contrib/clipboard/browser/clipboard.js';
 import { FontStyle, MetadataConsts, TokenMetadata } from '../../../src/ash/editor/common/encodedTokenAttributes.js';
 import { SparseMultilineTokens } from '../../../src/ash/editor/common/tokens/sparseMultilineTokens.js';
-import { formatEditor, FormattingConflicts, FormattingKind, FormattingMode } from '../../../extensions/code/browser/contrib/format/browser/format.js';
-import { FoldingController } from '../../../extensions/code/browser/contrib/folding/browser/folding.js';
+import { formatEditor, FormattingConflicts, FormattingKind, FormattingMode } from '../../../src/ash/editor/contrib/format/browser/format.js';
+import { FoldingController } from '../../../src/ash/editor/contrib/folding/browser/folding.js';
 import { type CancellationToken } from '../../../src/ash/base/common/cancellation.js';
 import { scheduleAtNextAnimationFrame } from '../../../src/ash/base/browser/scheduler.js';
 import { addDisposableListener, h } from '../../../src/ash/base/browser/dom.js';
@@ -71,6 +73,11 @@ import { IDialogService } from '../../../src/ash/platform/dialogs/common/dialogs
 import { Event as EventUtils } from '../../../src/ash/base/common/event.js';
 import { bindTestColorTheme } from './themeFixture.js';
 import { IThemeService } from '../../../src/ash/platform/theme/common/themeService.js';
+if (new URLSearchParams(location.search).has('workbenchStyles')) {
+	await import('../../../src/ash/workbench/browser/media/style.css');
+	await import('../../../src/ash/workbench/contrib/modernUI/browser/media/roundedCorners.css');
+	document.body.classList.add('ash-workbench', 'modern-ui');
+}
 import '../../../src/ash/workbench/contrib/bulkEdit/browser/preview/bulkEdit.css';
 import type { IQuickPickItem } from '../../../src/ash/platform/quickinput/common/quickInput.js';
 import { CommandsQuickAccessProvider } from '../../../src/ash/workbench/contrib/quickaccess/browser/commandsQuickAccess.js';
@@ -412,6 +419,7 @@ interface StandaloneHarness {
 	enableCodeActions(kind?: 'single' | 'navigation' | 'grouped'): void;
 	prepareCodeActionPreview(kind?: 'single' | 'multiple'): void;
 	setActionMenuLanguage(locale: 'en' | 'zh-CN'): void;
+	registerBundledThemes(): void;
 	setActionMenuTheme(theme: string): void;
 	prepareLineIdentity(): LineIdentityState;
 	splitLineIdentity(): LineIdentityState;
@@ -2880,6 +2888,18 @@ window.ashStandaloneIntegration = {
 		return readSelectionUndo();
 	},
 	readSelectionUndo,
+	registerBundledThemes: () => {
+		// Standalone defaults omit extension overrides. Use the shipped color maps
+		// when verifying the bundled themes rather than duplicating them here.
+		for (const [id, theme, colorScheme] of [
+			['ash-dark', bundledDarkTheme, stanza.ColorScheme.Dark],
+			['ash-light', bundledLightTheme, stanza.ColorScheme.Light],
+			['ash-high-contrast-dark', bundledHighContrastDarkTheme, stanza.ColorScheme.HighContrastDark],
+			['ash-high-contrast-light', bundledHighContrastLightTheme, stanza.ColorScheme.HighContrastLight],
+		] as const) {
+			stanza.editor.defineNamedTheme(id, { label: theme.name, colorScheme, colors: theme.colors });
+		}
+	},
 	setActionMenuTheme: theme => stanza.editor.setTheme(theme),
 	setActionMenuLanguage: locale => {
 		const catalog = productLanguagePackCatalogs.find(candidate => candidate.locale === locale)!;

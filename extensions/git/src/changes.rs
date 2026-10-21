@@ -123,7 +123,15 @@ impl GitRuntime {
                     json!({"resource":file_uri(&repository.root_uri,&change.path)?,"label":path});
             }
             if repository.configuration.boolean("openDiffOnClick", true) {
-                diff_input(original, modified, path)
+                let name = path.rsplit('/').next().unwrap_or(path);
+                let title = self.api.text(
+                    match comparison {
+                        Comparison::Staged => "git.diff.indexTitle",
+                        Comparison::Unstaged => "git.diff.workingTreeTitle",
+                    },
+                    &[name],
+                );
+                diff_input(original, modified, &title)
             } else {
                 json!({"resource":file_uri(&repository.root_uri,&change.path)?,"label":path})
             }

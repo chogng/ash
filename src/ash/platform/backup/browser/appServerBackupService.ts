@@ -9,6 +9,7 @@ export class AppServerBackupService implements IBackupService {
 	constructor(private readonly client: AppServerProtocolClient, private readonly clientId: string) { }
 
 	async getWorkspaces(): Promise<readonly IBackupWorkspace[]> {
+		await this.client.whenReady();
 		const result = await this.client.request(APP_SERVER_METHODS['backup/workspaces'], { clientId: this.clientId }).catch(explain);
 		return result.workspaces.map(workspace => ({ id: workspace.id, folders: workspace.folders.map(folder => URI.parse(folder)), ...(workspace.configuration ? { configuration: URI.parse(workspace.configuration) } : {}), ...(workspace.remoteAuthority ? { remoteAuthority: workspace.remoteAuthority } : {}) }));
 	}
@@ -17,6 +18,7 @@ export class AppServerBackupService implements IBackupService {
 		const backups: IBackupRecord[] = [];
 		let afterResource: string | null = null;
 		do {
+			await this.client.whenReady();
 			const result: BackupListPageResult = await this.client.request(APP_SERVER_METHODS['backup/listPage'], { clientId: this.clientId, workspaceId, afterResource }).catch(async error => {
 				// Older servers expose only the original list contract.
 				if (afterResource === null && error instanceof AppServerRemoteError && error.code === -32601) {
@@ -35,6 +37,9 @@ export class AppServerBackupService implements IBackupService {
 	}
 
 	async store(workspace: IBackupWorkspace, content: IBackupContent, expectedRevision?: string): Promise<IBackupRecord> {
+		// Development replacement can overlap window shutdown. Wait before sending;
+		// a write whose reply was lost must still fail rather than be replayed.
+		await this.client.whenReady();
 		return revive(await this.client.request(APP_SERVER_METHODS['backup/write'], {
 			clientId: this.clientId,
 			workspace: { id: workspace.id, folders: workspace.folders.map(folder => folder.toString()), configuration: workspace.configuration?.toString() ?? null, remoteAuthority: workspace.remoteAuthority ?? null },
@@ -43,6 +48,7 @@ export class AppServerBackupService implements IBackupService {
 	}
 
 	async move(sourceWorkspaceId: string, workspace: IBackupWorkspace, backups: readonly IBackupRevision[]): Promise<readonly IBackupRevision[]> {
+		await this.client.whenReady();
 		const result = await this.client.request(APP_SERVER_METHODS['backup/move'], {
 			clientId: this.clientId, sourceWorkspaceId,
 			workspace: { id: workspace.id, folders: workspace.folders.map(folder => folder.toString()), configuration: workspace.configuration?.toString() ?? null, remoteAuthority: workspace.remoteAuthority ?? null },
@@ -52,6 +58,7 @@ export class AppServerBackupService implements IBackupService {
 	}
 
 	async discard(workspaceId: string, resource: URI, expectedRevision: string): Promise<void> {
+		await this.client.whenReady();
 		await this.client.request(APP_SERVER_METHODS['backup/discard'], { clientId: this.clientId, workspaceId, resource: resource.toString(), expectedRevision }).catch(explain);
 	}
 }

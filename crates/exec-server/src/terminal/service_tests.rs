@@ -73,6 +73,7 @@ fn auto_reply_rules_are_atomic_owned_and_revoked_at_each_handoff() {
         .attach(
             2,
             TerminalAttachRequest {
+                lifetime_token: None,
                 terminal_id: created.terminal_id.clone(),
                 reconnect_token: lease.reconnect_token,
                 rows: 24,
@@ -98,6 +99,7 @@ fn auto_reply_rules_are_atomic_owned_and_revoked_at_each_handoff() {
         .attach(
             3,
             TerminalAttachRequest {
+                lifetime_token: None,
                 terminal_id: created.terminal_id.clone(),
                 reconnect_token: token,
                 rows: 24,
@@ -147,6 +149,7 @@ fn revoked_directory_terminates_detached_sessions_and_rejects_new_work() {
     let service =
         TerminalService::new(grant.authorize(Permission::ExecuteCommands).unwrap()).unwrap();
     let request = TerminalCreateRequest {
+        lifetime_token: None,
         strict_env: None,
         auto_replies: Vec::new(),
         env: None,
@@ -172,6 +175,7 @@ fn revoked_directory_terminates_detached_sessions_and_rejects_new_work() {
         service.attach(
             2,
             TerminalAttachRequest {
+                lifetime_token: None,
                 terminal_id: created.terminal_id,
                 reconnect_token: created.reconnect.unwrap().reconnect_token,
                 rows: 24,
@@ -226,6 +230,7 @@ fn explicit_handoff_revokes_live_owner_preserves_pid_and_rotates_credentials() {
         .attach(
             2,
             TerminalAttachRequest {
+                lifetime_token: None,
                 terminal_id: identity.clone(),
                 reconnect_token: handoff.reconnect_token.clone(),
                 rows: 30,
@@ -240,6 +245,7 @@ fn explicit_handoff_revokes_live_owner_preserves_pid_and_rotates_credentials() {
         service.attach(
             1,
             TerminalAttachRequest {
+                lifetime_token: None,
                 terminal_id: identity.clone(),
                 reconnect_token: handoff.reconnect_token,
                 rows: 24,
@@ -252,6 +258,7 @@ fn explicit_handoff_revokes_live_owner_preserves_pid_and_rotates_credentials() {
         .attach(
             2,
             TerminalAttachRequest {
+                lifetime_token: None,
                 terminal_id: identity.clone(),
                 reconnect_token: attached.reconnect.reconnect_token,
                 rows: 24,
@@ -274,6 +281,7 @@ fn cancelled_handoff_can_be_reclaimed_and_expired_handoff_is_terminated() {
         .attach(
             1,
             TerminalAttachRequest {
+                lifetime_token: None,
                 terminal_id: created.terminal_id.clone(),
                 reconnect_token: handoff.reconnect_token,
                 rows: 24,
@@ -562,6 +570,7 @@ fn backpressure_is_isolated_and_a_detached_producer_resumes_after_attach() {
         .attach(
             2,
             TerminalAttachRequest {
+                lifetime_token: None,
                 terminal_id: created.terminal_id.clone(),
                 reconnect_token: created.reconnect.unwrap().reconnect_token,
                 rows: 24,
@@ -714,6 +723,7 @@ fn terminal_process_properties_follow_resize_and_reject_other_connections() {
         .attach(
             2,
             TerminalAttachRequest {
+                lifetime_token: None,
                 terminal_id: created.terminal_id.clone(),
                 reconnect_token: created.reconnect.unwrap().reconnect_token,
                 rows: 25,
@@ -949,6 +959,7 @@ fn terminal_service_for(path: &std::path::Path) -> TerminalService {
 
 fn terminal_request(lifecycle: TerminalLifecycle) -> TerminalCreateRequest {
     TerminalCreateRequest {
+        lifetime_token: None,
         strict_env: None,
         auto_replies: Vec::new(),
         env: None,
@@ -1086,6 +1097,7 @@ fn interactive_shell_commands_report_real_boundaries_and_keep_user_configuration
         .create(
             1,
             TerminalCreateRequest {
+                lifetime_token: None,
                 strict_env: None,
                 auto_replies: Vec::new(),
                 env: None,
@@ -1531,6 +1543,7 @@ fn windows_powershell_without_a_profile_reports_trusted_commands() {
         .create(
             1,
             TerminalCreateRequest {
+                lifetime_token: None,
                 profile: TerminalProfileSelection::Custom {
                     name: "Windows PowerShell".into(),
                     path: vec![program.to_str().unwrap().into()],
@@ -1642,6 +1655,7 @@ function global:prompt {
         .create(
             1,
             TerminalCreateRequest {
+                lifetime_token: None,
                 strict_env: None,
                 auto_replies: Vec::new(),
                 profile: TerminalProfileSelection::Custom {
@@ -2287,6 +2301,7 @@ fn custom_profile_resolution_and_creation_share_identity_argv_and_environment() 
         .create(
             1,
             TerminalCreateRequest {
+                lifetime_token: None,
                 strict_env: None,
                 auto_replies: Vec::new(),
                 rows: 24,

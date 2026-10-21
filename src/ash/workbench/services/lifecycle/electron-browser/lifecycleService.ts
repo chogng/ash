@@ -20,6 +20,7 @@ export class ElectronLifecycleService extends BrowserLifecycleService {
 		}));
 		const handleRequest = (token: number, reason: ShutdownReason): void => {
 			if (!Number.isSafeInteger(token) || token <= 0) throw new TypeError('Invalid window shutdown token');
+			this.logService.info('lifecycle', 'Renderer received window shutdown request', { token, reason });
 			const focusSource = document.activeElement;
 			if (reason !== 'reload') document.body.inert = true;
 			void (async () => {
@@ -29,6 +30,7 @@ export class ElectronLifecycleService extends BrowserLifecycleService {
 					document.body.inert = false;
 					if (focusSource instanceof HTMLElement && focusSource.isConnected) focusSource.focus({ preventScroll: true });
 					if (error instanceof ShutdownVetoError) {
+						this.logService.info('lifecycle', 'Renderer vetoed window shutdown', { token, reason });
 						await invoke<void>(WINDOW_CLOSE_RESPONSE_CHANNEL, { kind: 'vetoed', token });
 						return;
 					}
@@ -40,6 +42,7 @@ export class ElectronLifecycleService extends BrowserLifecycleService {
 					return;
 				}
 				// Successful shutdown has stopped its producers. A failed reply must not reopen editing.
+				this.logService.info('lifecycle', 'Renderer sending window shutdown completion', { token, reason });
 				await invoke<void>(WINDOW_CLOSE_RESPONSE_CHANNEL, { kind: 'complete', token });
 			})().catch(error => console.error('Failed to complete window close request', error));
 		};

@@ -99,7 +99,8 @@
 .ash-pane-view-content {
 	min-width: 0;
 	min-height: 0;
-	flex: 1 0 auto;
+	/* Pane.layout owns the body height; flex growth would resize consumers on every animation frame. */
+	flex: 0 0 auto;
 	overflow: hidden;
 }
 .ash-pane-view.collapsed {

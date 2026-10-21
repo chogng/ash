@@ -175,6 +175,7 @@ impl<'ctx, C: TerminalRequestProcessorContext + ?Sized> TerminalRequestProcessor
             .create_in_dir(
                 connection.connection_id,
                 exec_server::terminal::TerminalCreateRequest {
+                    lifetime_token: params.lifetime_token,
                     auto_replies: Vec::new(),
                     rows: params.rows,
                     cols: params.cols,
@@ -323,19 +324,32 @@ impl<'ctx, C: TerminalRequestProcessorContext + ?Sized> TerminalRequestProcessor
         params: &Value,
     ) -> Result<Value, RpcError> {
         let params: TerminalAttachParams = decode(params)?;
-        let attached = self
-            .context
-            .terminal_service_for(params.dir_id.as_deref())?
-            .attach(
-                connection.connection_id,
-                exec_server::terminal::TerminalAttachRequest {
-                    terminal_id: params.terminal_id,
-                    reconnect_token: params.reconnect_token,
-                    rows: params.rows,
-                    cols: params.cols,
-                },
-            )
-            .map_err(terminal_error)?;
+        let directory = Self::terminal_session_directory(params.dir_id.as_deref())
+            .map_err(|_| RpcError::new(-32602, AppServerErrorName::InvalidParams))?;
+        let request = exec_server::terminal::TerminalAttachRequest {
+            lifetime_token: params.lifetime_token,
+            terminal_id: params.terminal_id,
+            reconnect_token: params.reconnect_token,
+            rows: params.rows,
+            cols: params.cols,
+        };
+        let attached = match directory {
+            Some((session_id, path)) => {
+                let authorization = self.context.session_dir_authorization(
+                    &session_id,
+                    &path,
+                    ash_file_access::Permission::ExecuteCommands,
+                )?;
+                self.context
+                    .session_terminal_service(&session_id, &authorization)?
+                    .attach_in_dir(connection.connection_id, request, authorization)
+            }
+            None => self
+                .context
+                .terminal_service_for(params.dir_id.as_deref())?
+                .attach(connection.connection_id, request),
+        }
+        .map_err(terminal_error)?;
         result(&wire::TerminalAttachResult {
             ready: ready_to_dto(attached.ready),
             terminal_id: attached.terminal_id,
@@ -420,6 +434,7 @@ fn terminal_error(error: exec_server::terminal::TerminalError) -> RpcError {
 
 fn create_request(params: TerminalCreateParams) -> exec_server::terminal::TerminalCreateRequest {
     exec_server::terminal::TerminalCreateRequest {
+        lifetime_token: params.lifetime_token,
         auto_replies: params
             .auto_replies
             .unwrap_or_default()

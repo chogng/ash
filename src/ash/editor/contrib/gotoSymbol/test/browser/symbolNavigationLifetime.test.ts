@@ -16,8 +16,8 @@ import { StandaloneCodeEditorService } from '../../../../standalone/browser/stan
 import { ILanguageFeaturesService } from '../../../../common/services/languageFeatures.js';
 import { LanguageFeaturesService } from '../../../../common/services/languageFeaturesService.js';
 import { createTestCodeEditor } from '../../../../test/browser/testCodeEditor.js';
-import { ReferencesModel } from '../../../../../../../extensions/code/browser/contrib/gotoSymbol/browser/referencesModel.js';
-import type { ISymbolNavigationService } from '../../../../../../../extensions/code/browser/contrib/gotoSymbol/browser/symbolNavigation.js';
+import { ReferencesModel } from '../../browser/referencesModel.js';
+import type { ISymbolNavigationService } from '../../browser/symbolNavigation.js';
 import type { IEditorContribution } from '../../../../common/editorCommon.js';
 
 suite('Symbol navigation provider lifetime', () => {

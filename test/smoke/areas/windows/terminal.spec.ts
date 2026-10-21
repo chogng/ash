@@ -1,9 +1,14 @@
-import { readFile, writeFile, mkdir } from 'node:fs/promises';
+import { readFile, writeFile, mkdir, unlink, rmdir } from 'node:fs/promises';
+import { execFileSync } from 'node:child_process';
 import { join } from 'node:path';
 import { expect, test } from '../../../automation/test.js';
 import type { Locator } from '@playwright/test';
 import { QuickAccess } from '../../../automation/quickaccess.js';
 import { readUserSettings, writeUserSettings } from '../../../automation/settings.js';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
+import { resolve } from 'node:path';
+import { appServerDaemonExecutablePath, appServerExecutablePath } from '../../../../src/ash/platform/app-server-daemon/node/appServerDaemonPackage.js';
 
 const windowsPowerShellSettings = process.platform === 'win32' ? {
 	'terminal.integrated.profiles.windows': {
@@ -18,6 +23,238 @@ const windowsPowerShellSettings = process.platform === 'win32' ? {
 	'terminal.integrated.defaultProfile.windows': 'Smoke PowerShell',
 } : {};
 test.use({ electronUserSettings: windowsPowerShellSettings });
+
+for (const locale of ['en', 'zh-CN'] as const) test.describe(`terminal profile dropdown (${locale})`, () => {
+	const shell = {
+		path: join(process.env.SystemRoot ?? 'C:\\Windows', 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe'),
+		args: ['-NoLogo', '-NoProfile', '-ExecutionPolicy', 'RemoteSigned'],
+	};
+	test.use({
+		electronUserSettings: {
+			...windowsPowerShellSettings,
+			'workbench.locale': locale,
+			'window.menuStyle': 'custom',
+			'terminal.integrated.profiles.windows': { 'Smoke PowerShell': shell, 'Copilot Test CLI': shell },
+			'terminal.integrated.agentHostProfile.windows': { ...shell, env: { ASH_AGENT_PROFILE: 'agent-shell' } },
+		}
+	});
+
+	test('groups AI profiles and launches the agent host shell from the keyboard menu', { tag: ['@electron-app-server'] }, async ({ workbench, testWorkspace, driver }, testInfo) => {
+		test.skip(process.platform !== 'win32', 'Windows shell discovery and launch');
+		const page = workbench.page;
+		const zh = locale === 'zh-CN';
+		await workbench.quickaccess.runCommand('workbench.action.terminal.focus');
+		await expect(workbench.terminal.activeInstance.locator('.ash-terminal-command-status.pending')).toBeVisible();
+		const trigger = page.locator('.ash-terminal-title-toolbar .ash-dropdown-with-primary-dropdown button');
+		await trigger.focus();
+		await trigger.press('ArrowDown');
+		const menu = page.getByRole('menu');
+		const ai = menu.getByRole('menuitem', { name: 'Copilot Test CLI', exact: true });
+		await expect(ai).toBeVisible();
+		const entries = await menu.locator('[role="menuitem"], [role="separator"]').evaluateAll(rows => rows.map(row => ({
+			role: row.getAttribute('role'), label: row.getAttribute('aria-label') ?? row.textContent?.trim(),
+		})));
+		const aiIndex = entries.findIndex(entry => entry.label === 'Copilot Test CLI');
+		expect(entries[aiIndex + 1]?.role).toBe('separator');
+		await page.keyboard.press('Escape');
+		await expect(trigger).toBeFocused();
+		await trigger.press('ArrowDown');
+		const agent = menu.getByRole('menuitem', { name: zh ? '智能体主机（本地）' : 'Agent Host (Local)', exact: true });
+		await agent.focus();
+		await page.screenshot({ path: testInfo.outputPath(`terminal-profiles-${locale}.png`) });
+		await agent.press('Enter');
+		await expect(menu).toHaveCount(0);
+		await expect(workbench.terminal.instances).toHaveCount(2);
+		await expect(workbench.terminal.activeInstance.locator('.xterm-helper-textarea')).toBeFocused();
+		await workbench.terminal.runCommand('node -e "require(\'fs\').writeFileSync(\'agent-profile.txt\', process.env.ASH_AGENT_PROFILE)"');
+		await expect.poll(() => readFile(join(testWorkspace.directory, 'agent-profile.txt'), 'utf8').catch(() => '')).toBe('agent-shell');
+		expect(driver.diagnostics.errors).toEqual([]);
+	});
+});
+
+test('installed WSL distributions appear as distinct profiles and launch their own shell', { tag: ['@electron-app-server'] }, async ({ workbench }) => {
+	test.skip(process.platform !== 'win32', 'WSL discovery is Windows-only');
+	const launcher = join(process.env.SystemRoot ?? 'C:\\Windows', 'System32', 'wsl.exe');
+	const distributions = execFileSync(launcher, ['--list', '--quiet'], {
+		encoding: 'utf16le', windowsHide: true, timeout: 5000, env: { ...process.env, WSL_UTF8: '0' },
+	}).split(/\r?\n/).map(name => name.trim()).filter(Boolean);
+	test.skip(distributions.length === 0, 'No WSL distributions installed');
+	await workbench.terminal.show();
+	const trigger = workbench.page.locator('.ash-terminal-title-toolbar .ash-dropdown-with-primary-dropdown button');
+	await trigger.click();
+	const menu = workbench.page.getByRole('menu');
+	for (const distribution of distributions) {
+		await expect(menu.getByRole('menuitem', { name: `${distribution} (WSL)`, exact: true })).toBeVisible();
+	}
+	await menu.getByRole('menuitem', { name: `${distributions[0]} (WSL)`, exact: true }).click();
+	await expect(workbench.terminal.instances).toHaveCount(2);
+	// A newly installed distribution may provision its user before accepting input.
+	await expect(workbench.terminal.activeInstance.locator('.xterm-rows')).toContainText(/[$#%>❯]\s*$/u, { timeout: 30000 });
+	await workbench.terminal.runCommand('printf "ASH_WSL_PROFILE:%s\\n" "$WSL_DISTRO_NAME"');
+	await expect(workbench.terminal.activeInstance.locator('.xterm-rows > div').filter({ hasText: `ASH_WSL_PROFILE:${distributions[0]}` })).toBeVisible();
+});
+
+for (const locale of ['en', 'zh-CN'] as const) test.describe(`independent terminal host (${locale})`, () => {
+
+	test.use({ electronUserSettings: { ...windowsPowerShellSettings, 'workbench.locale': locale, 'terminal.integrated.confirmOnKill': 'never', 'terminal.integrated.confirmOnExit': 'never' } });
+
+	test('a failed PTY host retains the screen and explicit relaunch starts a fresh shell without restarting App Server', { tag: ['@electron-app-server'] }, async ({ application, workbench, testWorkspace }, testInfo) => {
+		test.skip(process.platform === 'win32', 'This process-parent verification uses POSIX ps; Windows host lifetime is tracked separately.');
+		if (!('windows' in application)) throw new Error('Expected Electron');
+		const zh = locale === 'zh-CN';
+		const exec = promisify(execFile);
+		const location = { appPath: resolve(import.meta.dirname, '../../../..'), isPackaged: false, platform: process.platform, resourcesPath: '' };
+		const profile = await application.evaluate(() => process.env.ASH_HOME!);
+		const env = { ...process.env, ASH_HOME: profile, ASH_APP_SERVER_PATH: appServerExecutablePath(location), ASH_ELECTRON_RUN_AS_NODE_PATH: application.process().spawnfile };
+		const backend = async () => JSON.parse((await exec(appServerDaemonExecutablePath(location), ['version'], { env, timeout: 15_000 })).stdout) as { pid: number; };
+		await writeFile(join(testWorkspace.directory, 'owner-once.cjs'), `const fs=require('fs');fs.appendFileSync('owner-executions.txt','once');fs.writeFileSync('owner-process.json',JSON.stringify({pid:process.pid,shell:process.ppid}));console.log('OWNER_COMMAND_RUNNING');setInterval(()=>{},1000);`);
+		await workbench.page.getByRole('button', { name: zh ? '切换面板显示' : 'Toggle Panel Visibility', exact: true }).click();
+		const pane = workbench.page.locator('.ash-terminal-group-pane:visible');
+		const input = pane.locator('.xterm-helper-textarea');
+		await input.focus();
+		await input.pressSequentially('node owner-once.cjs');
+		await input.press('Enter');
+		await expect(pane.locator('.xterm-rows')).toContainText('OWNER_COMMAND_RUNNING');
+		const child = JSON.parse(await readFile(join(testWorkspace.directory, 'owner-process.json'), 'utf8')) as { pid: number; shell: number; };
+		const owner = Number((await exec('ps', ['-o', 'ppid=', '-p', String(child.shell)])).stdout.trim());
+		expect(owner).toBeGreaterThan(0);
+		expect((await exec('ps', ['-o', 'command=', '-p', String(owner)])).stdout).toContain(' --terminal-host ');
+		const original = await backend();
+		expect(owner).not.toBe(original.pid);
+		const instanceId = await pane.getAttribute('data-instance-id');
+		process.kill(owner, 'SIGKILL');
+		await expect(pane.locator('.ash-terminal-instance')).toHaveAttribute('data-state', 'error');
+		await expect(pane.locator('.xterm-rows')).toContainText('OWNER_COMMAND_RUNNING');
+		await expect.poll(() => { try { process.kill(child.pid, 0); return true; } catch { return false; } }).toBe(false);
+		await workbench.menus.select(application, () => workbench.page.locator('.ash-terminal-active-action button').click(), [zh ? '重新启动终端' : 'Relaunch Terminal']);
+		await expect(pane.locator('.ash-terminal-instance')).toHaveAttribute('data-state', 'running');
+		await expect(pane).toHaveAttribute('data-instance-id', instanceId!);
+		await input.focus();
+		await input.pressSequentially('echo HOST_OWNER_RELAUNCH_OK');
+		await input.press('Enter');
+		await expect(pane.locator('.xterm-rows > div').filter({ hasText: /^HOST_OWNER_RELAUNCH_OK\s*$/u })).toBeVisible();
+		expect(await readFile(join(testWorkspace.directory, 'owner-executions.txt'), 'utf8')).toBe('once');
+		expect((await backend()).pid).toBe(original.pid);
+		await workbench.page.screenshot({ path: testInfo.outputPath(`terminal-host-relaunched-${locale}.png`) });
+		await workbench.page.locator('.ash-terminal-title-toolbar').getByRole('button', { name: zh ? '终止终端' : 'Kill Terminal', exact: true }).click();
+		await expect(pane).toHaveCount(0);
+	});
+
+	test('running commands survive an App Server crash, prolonged outage and graceful restart without replay', { tag: ['@electron-app-server'] }, async ({ application, workbench, testWorkspace }, testInfo) => {
+		test.setTimeout(150_000);
+		if (!('windows' in application)) throw new Error('Expected Electron');
+		const location = { appPath: resolve(import.meta.dirname, '../../../..'), isPackaged: false, platform: process.platform, resourcesPath: '' };
+		const profile = await application.evaluate(() => process.env.ASH_HOME!);
+		const env = { ...process.env, ASH_HOME: profile, ASH_APP_SERVER_PATH: appServerExecutablePath(location), ASH_ELECTRON_RUN_AS_NODE_PATH: application.process().spawnfile };
+		const daemon = appServerDaemonExecutablePath(location);
+		const control = async (command: string) => JSON.parse((await promisify(execFile)(daemon, [command], { env, timeout: 30_000, windowsHide: true })).stdout) as { pid: number; instanceId: string; endpointPath: string; };
+		const state = async (index: number): Promise<{ pid: number; shell: number; count: number; }> => JSON.parse(await readFile(join(testWorkspace.directory, `host-live-${index}.json`), 'utf8'));
+		await writeFile(join(testWorkspace.directory, 'host-live.cjs'), `const fs = require('fs'); const id = process.argv[2]; let count = 0; fs.appendFileSync('host-executions.txt', id + String.fromCharCode(10)); setInterval(() => { fs.writeFileSync('host-live-' + id + '.tmp', JSON.stringify({pid:process.pid,shell:process.ppid,count:++count})); fs.renameSync('host-live-' + id + '.tmp','host-live-' + id + '.json'); console.log('HOST-LIVE:' + id + ':' + count); if(fs.existsSync('host-flood-'+id)) { fs.unlinkSync('host-flood-'+id); process.stdout.write('x'.repeat(2*1024*1024)+String.fromCharCode(10),()=>fs.writeFileSync('host-flood-drained-'+id,'done')); } }, 100);`);
+		await workbench.page.getByRole('button', { name: locale === 'zh-CN' ? '切换面板显示' : 'Toggle Panel Visibility', exact: true }).click();
+		const panes = workbench.page.locator('.ash-terminal-group-pane:visible');
+		for (let index = 0; index < 2; index++) {
+			if (index) await workbench.quickaccess.runCommand('workbench.action.terminal.split');
+			await expect(panes).toHaveCount(index + 1);
+			const input = panes.nth(index).locator('.xterm-helper-textarea');
+			await input.focus();
+			await input.pressSequentially(`node host-live.cjs ${index}`);
+			await input.press('Enter');
+			await expect(panes.nth(index).locator('.xterm-rows')).toContainText(`HOST-LIVE:${index}:`);
+		}
+		const before = await Promise.all([state(0), state(1)]);
+		const ids = await panes.evaluateAll(elements => elements.map(element => element.getAttribute('data-instance-id')));
+		await workbench.page.locator('body').evaluate(element => element.dataset.terminalHostRetention = 'same-renderer');
+		const generations: unknown[] = [];
+		for (const mode of (process.platform === 'win32' ? ['crash', 'restart'] as const : ['crash', 'prolonged-outage', 'restart'] as const)) {
+			const old = await control('version');
+			expect(old.pid).toBeGreaterThan(0);
+			const counts = await Promise.all([state(0), state(1)]);
+			let duringOutage: typeof before | undefined;
+			let outageMillis: number | undefined;
+			if (mode === 'prolonged-outage') {
+				// Hold the real profile lifecycle gate with a live heartbeat. All
+				// carriers must wait here, including replacement acquisition attempts.
+				expect(old.endpointPath).toMatch(/\.sock$/u);
+				const operationLock = old.endpointPath.replace(/\.sock$/u, '.operation');
+				await mkdir(operationLock, { mode: 0o700 });
+				const heartbeatFile = join(operationLock, 'heartbeat');
+				await writeFile(heartbeatFile, 'terminal outage fixture');
+				let heartbeat = Promise.resolve();
+				const timer = setInterval(() => { heartbeat = heartbeat.then(() => writeFile(heartbeatFile, 'terminal outage fixture')); }, 1_000);
+				try {
+					process.kill(old.pid, 'SIGKILL');
+					const disconnectedAt = performance.now();
+					await expect(panes.first().locator('.ash-terminal-instance')).toHaveAttribute('data-state', 'reconnecting');
+					await Promise.all([0, 1].map(index => writeFile(join(testWorkspace.directory, `host-flood-${index}`), 'go')));
+					for (const index of [0, 1]) await expect.poll(() => readFile(join(testWorkspace.directory, `host-flood-drained-${index}`), 'utf8').catch(() => ''), { timeout: 10_000 }).toBe('done');
+					await expect.poll(async () => {
+						const current = await Promise.all([state(0), state(1)]);
+						for (const [index, process] of current.entries()) expect([process.pid, process.shell]).toEqual([before[index]!.pid, before[index]!.shell]);
+						return performance.now() - disconnectedAt >= 35_000 && current.every((process, index) => process.count > counts[index]!.count + 300);
+					}, { timeout: 45_000, intervals: [1_000] }).toBe(true);
+					duringOutage = await Promise.all([state(0), state(1)]);
+					outageMillis = performance.now() - disconnectedAt;
+				} finally {
+					clearInterval(timer);
+					await heartbeat;
+					await unlink(heartbeatFile);
+					await rmdir(operationLock);
+				}
+			} else if (mode === 'crash') {
+				if (process.platform !== 'win32') {
+					// Prove progress while the business backend cannot service any IO.
+					process.kill(old.pid, 'SIGSTOP');
+					try {
+						for (let index = 0; index < 2; index++) await expect.poll(async () => (await state(index)).count).toBeGreaterThan(counts[index]!.count + 3);
+						duringOutage = await Promise.all([state(0), state(1)]);
+					} finally { process.kill(old.pid, 'SIGKILL'); }
+				} else process.kill(old.pid, 'SIGKILL');
+				await expect(panes.first().locator('.ash-terminal-instance')).toHaveAttribute('data-state', 'reconnecting');
+			} else {
+				await Promise.all([
+					control('restart'),
+					expect(panes.first().locator('.ash-terminal-instance')).toHaveAttribute('data-state', 'reconnecting'),
+				]);
+			}
+			await expect.poll(async () => { try { const pid = (await control('version')).pid; return pid > 0 ? pid : old.pid; } catch { return old.pid; } }, { timeout: 30_000 }).not.toBe(old.pid);
+			for (let index = 0; index < 2; index++) {
+				await expect(panes.nth(index).locator('.ash-terminal-instance')).toHaveAttribute('data-state', 'running');
+				await expect.poll(async () => { try { return (await state(index)).count; } catch { return 0; } }).toBeGreaterThan(counts[index]!.count + 3);
+				const after = await state(index);
+				expect([after.pid, after.shell]).toEqual([before[index]!.pid, before[index]!.shell]);
+				process.kill(after.pid, 0);
+				// Recovery can replay more output than fits in the visible screen.
+				// Assert a live counter beyond the outage, not one already scrolled away.
+				await expect.poll(async () => {
+					const output = await panes.nth(index).locator('.xterm-rows').textContent();
+					return Math.max(0, ...[...(output ?? '').matchAll(new RegExp(`HOST-LIVE:${index}:(\\d+)`, 'gu'))].map(match => Number(match[1])));
+				}).toBeGreaterThan(counts[index]!.count + 3);
+			}
+			generations.push({ mode, duringOutage, outageMillis, backend: await control('version'), processes: await Promise.all([state(0), state(1)]) });
+		}
+		expect(await panes.evaluateAll(elements => elements.map(element => element.getAttribute('data-instance-id')))).toEqual(ids);
+		await expect(workbench.page.locator('body')).toHaveAttribute('data-terminal-host-retention', 'same-renderer');
+		expect(await readFile(join(testWorkspace.directory, 'host-executions.txt'), 'utf8')).toBe('0\n1\n');
+		for (let index = 0; index < 2; index++) {
+			const pane = panes.nth(index);
+			const input = pane.locator('.xterm-helper-textarea');
+			await input.focus();
+			await input.press('Control+c');
+			await expect.poll(() => { try { process.kill(before[index]!.pid, 0); return true; } catch { return false; } }).toBe(false);
+			await expect(pane.locator('.ash-terminal-command-status.pending')).toBeVisible();
+			await input.pressSequentially(`echo HOST_INPUT_OK_${index}`);
+			await input.press('Enter');
+			await expect(pane.locator('.xterm-rows > div').filter({ hasText: new RegExp(`^HOST_INPUT_OK_${index}\\s*$`, 'u') })).toBeVisible();
+		}
+		await testInfo.attach('backend-and-process-identities', { body: JSON.stringify({ before, generations }, null, 2), contentType: 'application/json' });
+		await workbench.page.screenshot({ path: testInfo.outputPath(`terminal-host-retained-${locale}.png`) });
+		for (const count of [1, 0]) {
+			await workbench.page.locator('.ash-terminal-title-toolbar').getByRole('button', { name: locale === 'zh-CN' ? '终止终端' : 'Kill Terminal', exact: true }).click();
+			await expect(panes).toHaveCount(count);
+		}
+		for (const child of before) await expect.poll(() => { try { process.kill(child.shell, 0); return true; } catch { return false; } }).toBe(false);
+	});
+});
 
 async function revealSavedHistory(pane: Locator, text: string): Promise<void> {
 	const input = pane.locator('.xterm-helper-textarea');
@@ -595,6 +832,88 @@ for (const locale of ['en', 'zh-CN'] as const) test.describe(`terminal close pro
 		await expect(pane).toHaveCount(0);
 	});
 
+	test('runtime replacement stops reconnecting and allows explicit shell relaunch without replaying commands', { tag: ['@electron-app-server'] }, async ({ application, workbench, testWorkspace }, testInfo) => {
+		if (!('windows' in application)) throw new Error('Expected Electron');
+		const page = workbench.page;
+		const zh = locale === 'zh-CN';
+		await page.getByRole('button', { name: zh ? '切换面板显示' : 'Toggle Panel Visibility', exact: true }).click();
+		const pane = page.locator('.ash-terminal-group-pane:visible');
+		await expect(pane).toHaveCount(1);
+		const instanceId = await pane.getAttribute('data-instance-id');
+		const input = pane.locator('.xterm-helper-textarea');
+		await writeFile(join(testWorkspace.directory, 'before-replacement.cjs'), `const fs = require('fs'); let count = 0; setInterval(() => { fs.writeFileSync('before-replacement.json', JSON.stringify({ pid: process.pid, count: ++count })); console.log('BEFORE_REPLACEMENT:' + count); }, 100);`);
+		await input.focus();
+		await input.pressSequentially('node before-replacement.cjs');
+		await input.press('Enter');
+		await expect(pane.locator('.xterm-rows')).toContainText('BEFORE_REPLACEMENT:');
+		const old = JSON.parse(await readFile(join(testWorkspace.directory, 'before-replacement.json'), 'utf8')) as { pid: number; count: number; };
+		const window = await application.browserWindow(page);
+		await window.evaluate(window => window.webContents.send('ash:terminal:prepareReplacement'));
+		await expect(pane.locator('.xterm-rows')).toContainText(zh ? '[终端操作失败]' : '[terminal operation failed]');
+		await expect(pane.locator('.xterm-rows')).toContainText('BEFORE_REPLACEMENT:');
+		await expect(page.locator('.ash-terminal-active-action')).toHaveAttribute('data-state', 'error');
+		await expect(page.locator('.ash-terminal-title-toolbar').getByRole('button', { name: zh ? '拆分终端' : 'Split Terminal', exact: true })).toBeDisabled();
+		await expect.poll(() => application.evaluate((_electron, pid) => { try { process.kill(pid, 0); return true; } catch { return false; } }, old.pid)).toBe(false);
+		const stopped = await readFile(join(testWorkspace.directory, 'before-replacement.json'), 'utf8');
+		await workbench.menus.select(application, () => page.locator('.ash-terminal-active-action button').click(), [zh ? '重新启动终端' : 'Relaunch Terminal']);
+		await expect(page.locator('.ash-terminal-active-action')).toHaveAttribute('data-state', 'running');
+		await expect(pane).toHaveAttribute('data-instance-id', instanceId!);
+		await expect(pane.locator('.xterm-rows')).toContainText(testWorkspace.directory.split(/[/\\]/u).at(-1)!);
+		await input.focus();
+		await input.pressSequentially('echo RELAUNCH_OK');
+		await input.press('Enter');
+		await expect(pane.locator('.xterm-rows > div').filter({ hasText: /^RELAUNCH_OK\s*$/u })).toBeVisible();
+		expect(await readFile(join(testWorkspace.directory, 'before-replacement.json'), 'utf8')).toBe(stopped);
+		await page.screenshot({ path: testInfo.outputPath(`explicit-terminal-relaunch-${locale}.png`) });
+	});
+
+	test('reload omits terminals retired by runtime replacement and preserves a healthy terminal', { tag: ['@electron-app-server'] }, async ({ application, workbench, testWorkspace, runningApplication }, testInfo) => {
+		if (!('windows' in application)) throw new Error('Expected Electron');
+		const page = workbench.page;
+		const zh = locale === 'zh-CN';
+		await page.getByRole('button', { name: zh ? '切换面板显示' : 'Toggle Panel Visibility', exact: true }).click();
+		const panes = page.locator('.ash-terminal-group-pane:visible');
+		await expect(panes).toHaveCount(1);
+		const retiredId = await panes.first().getAttribute('data-instance-id');
+		await writeFile(join(testWorkspace.directory, 'retired-terminal.cjs'), `const fs = require('fs'); const id = process.argv[2]; let count = 0; setInterval(() => { fs.writeFileSync(id + '.json', JSON.stringify({ pid: process.pid, shell: process.ppid, count: ++count })); console.log('ALIVE:' + id + ':' + count); }, 200);`);
+		const oldInput = panes.first().locator('.xterm-helper-textarea');
+		await oldInput.focus();
+		await oldInput.pressSequentially('node retired-terminal.cjs retired');
+		await oldInput.press('Enter');
+		await expect(panes.first().locator('.xterm-rows')).toContainText('ALIVE:retired');
+		const old = JSON.parse(await readFile(join(testWorkspace.directory, 'retired.json'), 'utf8')) as { pid: number; };
+		// This is the production notification sent before replacing the App Server.
+		const window = await application.browserWindow(page);
+		await window.evaluate(window => window.webContents.send('ash:terminal:prepareReplacement'));
+		await expect.poll(async () => application.evaluate((_electron, pid) => {
+			try { process.kill(pid, 0); return true; } catch { return false; }
+		}, old.pid)).toBe(false);
+		await workbench.quickaccess.runCommand('workbench.action.terminal.new');
+		await expect(panes).toHaveCount(1);
+		const healthy = panes.first();
+		await expect(healthy).not.toHaveAttribute('data-instance-id', retiredId!);
+		await expect(healthy.locator('.xterm-rows')).toContainText(testWorkspace.directory.split(/[/\\]/u).at(-1)!);
+		const healthyId = await healthy.getAttribute('data-instance-id');
+		const input = healthy.locator('.xterm-helper-textarea');
+		await input.focus();
+		await input.pressSequentially('node retired-terminal.cjs healthy');
+		await input.press('Enter');
+		await expect(healthy.locator('.xterm-rows')).toContainText('ALIVE:healthy');
+		const before = JSON.parse(await readFile(join(testWorkspace.directory, 'healthy.json'), 'utf8'));
+		const loaded = page.waitForEvent('domcontentloaded');
+		await workbench.quickaccess.runCommand('workbench.action.reloadWindow');
+		await loaded;
+		await workbench.waitForReady();
+		await expect(panes).toHaveCount(1);
+		await expect(panes.first()).toHaveAttribute('data-instance-id', healthyId!);
+		await expect(panes.first().locator('.xterm-rows')).toContainText('ALIVE:healthy');
+		const after = JSON.parse(await readFile(join(testWorkspace.directory, 'healthy.json'), 'utf8'));
+		expect([after.pid, after.shell]).toEqual([before.pid, before.shell]);
+		await expect.poll(async () => JSON.parse(await readFile(join(testWorkspace.directory, 'healthy.json'), 'utf8')).count).toBeGreaterThan(after.count);
+		expect(runningApplication.diagnostics.consoleErrors.filter(message => /Failed to save window state before closing|no longer recoverable|cannot be reattached after reload/u.test(message))).toEqual([]);
+		await page.screenshot({ path: testInfo.outputPath(`retired-terminal-reload-${locale}.png`) });
+	});
+
 	test('reload retains original processes, output, split widths, pending input and focused pane', { tag: ['@electron-app-server'] }, async ({ workbench, testWorkspace, driver }, testInfo) => {
 		test.setTimeout(90000);
 		const page = workbench.page;
@@ -1100,5 +1419,117 @@ test.describe('terminal contributions execution chain', () => {
 		await expect.poll(() => readFile(join(testWorkspace.directory, 'signal-result.txt'), 'utf8').catch(() => '')).toBe('terminated');
 		await expect(workbench.terminal.instances).toHaveCount(1);
 		expect(driver.diagnostics.errors).toEqual([]);
+	});
+});
+
+interface LifetimeIdentity { pid: number; shell: number; child: number; count: number; }
+const lifetimePidAlive = (pid: number): boolean => { try { process.kill(pid, 0); return true; } catch { return false; } };
+
+async function writeLifetimeFixture(directory: string): Promise<string> {
+	const file = join(directory, 'window-lifetime.cjs');
+	await writeFile(file, `const fs=require('fs'),path=require('path'),cp=require('child_process');const root=${JSON.stringify(directory)},id=process.argv[2];process.on('SIGHUP',()=>{});const child=cp.spawn(process.execPath,['-e',"process.on('SIGHUP',()=>{});require('fs').writeFileSync(process.argv[1],String(process.pid));setInterval(()=>{},1000)",path.join(root,id+'.child')],{stdio:'ignore'});let count=0;setInterval(()=>{const state={pid:process.pid,shell:process.ppid,child:child.pid,count:++count};fs.writeFileSync(path.join(root,id+'.tmp'),JSON.stringify(state));fs.renameSync(path.join(root,id+'.tmp'),path.join(root,id+'.json'));console.log('WINDOW-LIFETIME:'+id+':'+count)},100);`);
+	return file;
+}
+
+async function startLifetimeCommand(workbench: import('../../../automation/workbench.js').Workbench, file: string, id: string): Promise<LifetimeIdentity> {
+	const input = workbench.page.locator('.ash-terminal-group-pane:visible .xterm-helper-textarea').first();
+	await input.focus();
+	const quote = (value: string): string => "'" + value.replaceAll("'", process.platform === 'win32' ? "''" : "'\"'\"'") + "'";
+	await input.pressSequentially(`node ${quote(file)} ${id}`);
+	await input.press('Enter');
+	const directory = resolve(file, '..');
+	await expect.poll(() => readFile(join(directory, `${id}.child`), 'utf8').catch(() => '')).toMatch(/^\d+$/u);
+	await expect.poll(() => readFile(join(directory, `${id}.json`), 'utf8').catch(() => '')).toContain('"child":');
+	return JSON.parse(await readFile(join(directory, `${id}.json`), 'utf8')) as LifetimeIdentity;
+}
+
+async function lifetimeHostPids(application: import('@playwright/test').ElectronApplication, identities: readonly LifetimeIdentity[], profile: string): Promise<number[]> {
+	if (process.platform === 'win32') return [];
+	const rows = (await promisify(execFile)('ps', ['-Ao', 'pid=,ppid=,command='])).stdout.split('\n');
+	const pids = new Set<number>();
+	for (const line of rows) {
+		const match = /^\s*(\d+)\s+(\d+)\s+(.*)$/u.exec(line);
+		if (!match) continue;
+		if (Number(match[2]) === application.process().pid && match[3]!.includes(' --terminal-owner ') && match[3]!.includes(profile)) pids.add(Number(match[1]));
+		if (identities.some(identity => identity.shell === Number(match[1]))) pids.add(Number(match[2]));
+	}
+	return [...pids];
+}
+
+async function blockLifetimeBackend(application: import('@playwright/test').ElectronApplication): Promise<{ profile: string; release(): Promise<void>; }> {
+	const profile = await application.evaluate(() => process.env.ASH_HOME!);
+	const location = { appPath: resolve(import.meta.dirname, '../../../..'), isPackaged: false, platform: process.platform, resourcesPath: '' };
+	const env = { ...process.env, ASH_HOME: profile, ASH_APP_SERVER_PATH: appServerExecutablePath(location), ASH_ELECTRON_RUN_AS_NODE_PATH: application.process().spawnfile };
+	const state = JSON.parse((await promisify(execFile)(appServerDaemonExecutablePath(location), ['version'], { env, timeout: 30_000, windowsHide: true })).stdout) as { pid: number; endpointPath: string; };
+	expect(state.endpointPath).toMatch(/\.sock$/u);
+	const gate = state.endpointPath.replace(/\.sock$/u, '.operation');
+	await mkdir(gate, { mode: 0o700 });
+	const path = join(gate, 'heartbeat');
+	await writeFile(path, 'window lifetime cleanup');
+	let heartbeat = Promise.resolve();
+	const timer = setInterval(() => { heartbeat = heartbeat.then(() => writeFile(path, 'window lifetime cleanup')); }, 1_000);
+	process.kill(state.pid, 'SIGKILL');
+	return { profile, release: async () => { clearInterval(timer); await heartbeat; await unlink(path); await rmdir(gate); } };
+}
+
+for (const locale of ['en', 'zh-CN'] as const) test.describe(`terminal window lifetime cleanup (${locale})`, () => {
+	test.use({ electronUserSettings: { ...windowsPowerShellSettings, 'workbench.locale': locale, 'terminal.integrated.confirmOnKill': 'never', 'terminal.integrated.confirmOnExit': 'never', 'terminal.integrated.persistentSessionReviveProcess': 'never' } });
+
+	test('window destruction during backend loss cleans its jobs and preserves a transferred peer until normal close', { tag: ['@electron-app-server'] }, async ({ application, workbench, testWorkspace }, testInfo) => {
+		test.setTimeout(90_000);
+		if (!('windows' in application)) throw new Error('Expected Electron');
+		const { Workbench } = await import('../../../automation/workbench.js');
+		const file = await writeLifetimeFixture(testWorkspace.directory);
+		await workbench.page.getByRole('button', { name: locale === 'zh-CN' ? '切换面板显示' : 'Toggle Panel Visibility', exact: true }).click();
+		await expect(workbench.terminal.activeInstance).toHaveAttribute('data-state', 'running');
+		const opening = application.waitForEvent('window');
+		await workbench.quickaccess.runCommand('workbench.action.terminal.moveIntoNewWindow');
+		const target = await opening;
+		const peer = new Workbench(target);
+		await peer.waitForReady();
+		await workbench.quickaccess.runCommand('workbench.action.terminal.new');
+		const first = await startLifetimeCommand(workbench, file, 'first');
+		const second = await startLifetimeCommand(peer, file, 'second');
+		const profile = await application.evaluate(() => process.env.ASH_HOME!);
+		const hosts = await lifetimeHostPids(application, [first, second], profile);
+		if (process.platform !== 'win32') expect(hosts).toHaveLength(3);
+		const sourceWindow = await application.browserWindow(workbench.page);
+		const mainPid = application.process().pid!;
+		const gate = await blockLifetimeBackend(application);
+		try {
+			await expect(workbench.terminal.activeInstance).toHaveAttribute('data-state', 'reconnecting');
+			await sourceWindow.evaluate(window => window.destroy());
+			await expect.poll(() => [first.pid, first.child, first.shell].filter(lifetimePidAlive)).toEqual([]);
+			for (const pid of [second.pid, second.child, second.shell]) expect(lifetimePidAlive(pid)).toBe(true);
+			await expect.poll(async () => JSON.parse(await readFile(join(testWorkspace.directory, 'second.json'), 'utf8')).count).toBeGreaterThan(second.count + 3);
+		} finally { await gate.release(); }
+		await expect(peer.terminal.activeInstance).toHaveAttribute('data-state', 'running', { timeout: 30_000 });
+		await peer.page.screenshot({ path: testInfo.outputPath(`terminal-window-peer-${locale}.png`) });
+		const targetWindow = await application.browserWindow(target);
+		await targetWindow.evaluate(window => window.close());
+		await expect.poll(() => [second.pid, second.child, second.shell, ...hosts].filter(lifetimePidAlive)).toEqual([]);
+		await testInfo.attach('terminal-window-cleanup-identities', { body: JSON.stringify({ first, second, hosts, survivingPids: [] }), contentType: 'application/json' });
+	});
+
+	for (const mode of ['quit', 'force-kill'] as const) test(`application ${mode} during backend loss cleans the shell, hangup-resistant jobs and lifetime helpers`, { tag: ['@electron-app-server'] }, async ({ application, workbench, testWorkspace }, testInfo) => {
+		test.setTimeout(75_000);
+		if (!('windows' in application)) throw new Error('Expected Electron');
+		const file = await writeLifetimeFixture(testWorkspace.directory);
+		await workbench.page.getByRole('button', { name: locale === 'zh-CN' ? '切换面板显示' : 'Toggle Panel Visibility', exact: true }).click();
+		const command = await startLifetimeCommand(workbench, file, 'exit');
+		const profile = await application.evaluate(() => process.env.ASH_HOME!);
+		const hosts = await lifetimeHostPids(application, [command], profile);
+		if (process.platform !== 'win32') expect(hosts).toHaveLength(2);
+		const mainPid = application.process().pid!;
+		const gate = await blockLifetimeBackend(application);
+		try {
+			await expect(workbench.terminal.activeInstance).toHaveAttribute('data-state', 'reconnecting');
+			if (mode === 'force-kill') process.kill(mainPid, 'SIGKILL');
+			else await application.evaluate(({ app }) => { app.quit(); }).catch(error => {
+				if (!(error instanceof Error) || !error.message.includes('has been closed')) throw error;
+			});
+			await expect.poll(() => [mainPid, command.pid, command.child, command.shell, ...hosts].filter(lifetimePidAlive), { timeout: 20_000 }).toEqual([]);
+		} finally { await gate.release(); }
+		await testInfo.attach('terminal-application-cleanup-identities', { body: JSON.stringify({ mode, command, hosts, survivingPids: [] }), contentType: 'application/json' });
 	});
 });

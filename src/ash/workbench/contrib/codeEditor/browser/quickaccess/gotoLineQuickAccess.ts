@@ -3,7 +3,7 @@ import { DisposableStore, toDisposable } from '../../../../../base/common/lifecy
 import { localize, localize2 } from '../../../../../nls.js';
 import { ICodeEditorService } from '../../../../../editor/browser/services/codeEditorService.js';
 import { Range } from '../../../../../editor/common/core/range.js';
-import { parseStanzaGotoLocation } from '../../../../../../../extensions/code/browser/contrib/quickAccess/common/gotoLocation.js';
+import { parseStanzaGotoLocation } from '../../../../../editor/contrib/quickAccess/common/gotoLocation.js';
 import { Action2, MenuId, registerAction2 } from '../../../../../platform/actions/common/actions.js';
 import type { ServicesAccessor } from '../../../../../platform/instantiation/common/instantiation.js';
 import { TextEditorSelectionSource } from '../../../../../platform/editor/common/editor.js';

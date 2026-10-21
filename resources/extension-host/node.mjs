@@ -23,7 +23,7 @@ let extension;
 let stopping;
 const args = process.argv.slice(2);
 if (args.length !== 12 || args[0] !== '--extension-id' || args[2] !== '--package'
-	|| args[4] !== '--entry' || args[6] !== '--api' || args[7] !== 'vscode'
+	|| args[4] !== '--entry' || args[6] !== '--api' || args[7] !== 'ash'
 	|| args[8] !== '--protocol-address' || args[10] !== '--protocol-token') {
 	throw new Error('Invalid Node extension host binding');
 }
@@ -63,6 +63,26 @@ function loadLocalization(language) {
 		if (error.code !== 'ENOENT') process.stderr.write(`Extension localization: ${error.message}\n`);
 		return undefined;
 	}
+}
+
+function loadPackageMessages(language) {
+	if (typeof language !== 'string' || !/^[a-z0-9-]{1,64}$/i.test(language)) throw new Error('Invalid window language');
+	const messages = Object.create(null);
+	const files = ['package.nls.json', ...new Set([language.split('-')[0], language].map(locale => `package.nls.${locale}.json`))];
+	for (const name of files) {
+		try {
+			const path = realpathSync(resolve(root, name));
+			const packagePath = relative(root, path);
+			if (packagePath === '..' || packagePath.startsWith(`..${sep}`) || isAbsolute(packagePath)) throw new Error('Package messages escape the extension');
+			if (!statSync(path).isFile() || statSync(path).size > maximumPayload) throw new Error('Package messages quota exceeded');
+			const values = JSON.parse(readFileSync(path, 'utf8'));
+			if (!values || typeof values !== 'object' || Array.isArray(values) || Object.values(values).some(value => typeof value !== 'string')) throw new Error('Invalid package messages');
+			Object.assign(messages, values);
+		} catch (error) {
+			if (error.code !== 'ENOENT') process.stderr.write(`Extension package messages: ${error.message}\n`);
+		}
+	}
+	return Object.freeze(messages);
 }
 
 function applyEnvironment(environment) {
@@ -134,7 +154,7 @@ Object.defineProperty(globalThis, '__ashRequest', {
 		const current = invocation.getStore();
 		const owned = active.get(requestId);
 		if (!current || current.requestId !== requestId || owned?.context !== current || owned.cancelled) {
-			throw new Error('Extension service call belongs to an expired invocation');
+			throw Object.assign(new Error('Extension service call belongs to an expired invocation'), { code: 'cancelled' });
 		}
 		return clientRequest(current, encoded);
 	}
@@ -177,20 +197,23 @@ Object.defineProperty(globalThis, '__ashBackgroundRequest', {
 });
 
 // Synchronous public hooks preserve Node's CJS/ESM resolution and cache. Only the
-// editor API is substituted; builtins and package modules stay Node-owned.
-const facadeURL = new URL('./vscode.mjs', import.meta.url).href;
+// author API is substituted; builtins and package modules stay Node-owned.
+const facadeURL = new URL('./ash.mjs', import.meta.url).href;
+const apiModule = '@ash/sdk';
+const apiURL = 'ash:sdk';
 let apiSource;
 const hooks = registerHooks({
 	resolve(specifier, ctx, next) {
-		if (specifier === '@ash/extension' || specifier === '@ash/extension/browser') throw new Error('Ash TypeScript SDK has been removed; use vscode');
-		if (specifier === 'vscode') {
-			if (!apiSource) throw new Error('Editor API is not initialized');
-			return { url: 'ash:vscode', shortCircuit: true };
+		if (specifier === '@ash/extension' || specifier === '@ash/extension/browser') throw new Error('Use the public @ash/sdk extension API');
+		if (specifier === '@ash/sdk' || specifier === 'vscode') {
+			if (specifier !== apiModule) throw new Error(`The ${specifier} API is unavailable in an Ash extension`);
+			if (!apiSource) throw new Error('Extension API is not initialized');
+			return { url: apiURL, shortCircuit: true };
 		}
 		return next(specifier, ctx);
 	},
 	load(url, ctx, next) {
-		if (url === 'ash:vscode') return { format: 'module', source: apiSource, shortCircuit: true };
+		if (url === apiURL) return { format: 'module', source: apiSource, shortCircuit: true };
 		return next(url, ctx);
 	},
 });
@@ -214,10 +237,13 @@ async function dispatch(frame) {
 				bridge = createApi({
 					commands: manifest.contributes?.commands ?? [], debuggers: manifest.contributes?.debuggers ?? [],
 					extensionId: `${manifest.publisher}.${manifest.name}`, extensionPath: root, pathSeparator: sep, manifest,
-					localization: loadLocalization(frame.params.initialization.language ?? 'en'),
+					localization: {
+						...loadLocalization(frame.params.initialization.language ?? 'en'),
+						package: loadPackageMessages(frame.params.initialization.language ?? 'en'),
+					},
 				}, frame.params.initialization);
-				Object.defineProperty(globalThis, '__ashVscodeApi', { value: bridge.api });
-				apiSource = `const api = globalThis.__ashVscodeApi; export default api; export {api as 'module.exports'};\n`
+				Object.defineProperty(globalThis, '__ashExtensionApi', { value: bridge.api });
+				apiSource = `const api = globalThis.__ashExtensionApi; export default api; export {api as 'module.exports'};\n`
 					+ Object.keys(bridge.api).map(key => `export const ${key} = api[${JSON.stringify(key)}];`).join('\n');
 				extension = await import(pathToFileURL(entry).href);
 				const implementation = extension.default ?? extension;

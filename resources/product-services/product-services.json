@@ -5,11 +5,6 @@
     "clientId": "Ov23linTZCPimNOTyngv",
     "brokerBaseUrl": "https://ash-github-auth.lanxiang0901.workers.dev/"
   },
-  "openVsx": {
-    "name": "open-vsx",
-    "apiUrl": "https://open-vsx.org/api/",
-    "downloadOrigins": ["https://openvsx.eclipsecontent.org/"]
-  },
   "extensionSources": [
     {
       "name": "ash",

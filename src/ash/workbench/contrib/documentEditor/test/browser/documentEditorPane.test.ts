@@ -1354,7 +1354,11 @@ test("Stanza renders and edits marked inline runs", async () => {
 	const beforeInput = new environment.window.InputEvent("beforeinput", { bubbles: true, cancelable: true, inputType: "insertText", data: "X" });
 	rich.dispatchEvent(beforeInput);
 	assert.equal(beforeInput.defaultPrevented, true);
-	assert.deepEqual(pane.getDocument().content[0]?.content.map(node => node.text), ["H", "X", "o"]);
+	// Replacement retains the existing boundary runs so collaborative rebasing keeps their identities.
+	assert.deepEqual(pane.getDocument().content[0]?.content.map(({ id, text, marks }) => ({ id, text, marks })), [
+		{ id: 'text-1', text: 'HX', marks: [] },
+		{ id: 'text-3', text: 'o', marks: [] },
+	]);
 	environment.window.close();
 });
 

@@ -25,6 +25,7 @@ pub use auth::McpOAuthRevokeRequest;
 pub use auth::McpOAuthService;
 pub use auth::McpOAuthStartRequest;
 pub use auth::McpOAuthTarget;
+pub use auth::McpOAuthTransports;
 pub use composition::McpAuthentication;
 pub use composition::McpToolComposition;
 pub use composition::McpToolCompositionError;

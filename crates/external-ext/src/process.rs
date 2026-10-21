@@ -53,7 +53,7 @@ impl std::fmt::Debug for ExtensionLaunchCommand {
 enum LaunchRuntime {
     Executable(PathBuf),
     JavaScript(PathBuf),
-    Vscode,
+    NodeHost,
     Node(PathBuf),
 }
 
@@ -97,8 +97,8 @@ impl ExtensionLaunchCommand {
         Ok(command)
     }
 
-    /// Requests the product Node host without allowing package data to choose its executable.
-    pub fn vscode(
+    /// Requests the Ash SDK's product Node host, never an extension-selected executable.
+    pub fn ash(
         arguments: impl IntoIterator<Item = impl Into<OsString>>,
         working_directory: impl Into<PathBuf>,
     ) -> Result<Self, ExtensionHostError> {
@@ -113,7 +113,7 @@ impl ExtensionLaunchCommand {
             working_directory,
             environment: BTreeMap::new(),
             extension_environment: None,
-            runtime: LaunchRuntime::Vscode,
+            runtime: LaunchRuntime::NodeHost,
         })
     }
 
@@ -135,12 +135,15 @@ impl ExtensionLaunchCommand {
     pub fn is_javascript(&self) -> bool {
         matches!(
             self.runtime,
-            LaunchRuntime::JavaScript(_) | LaunchRuntime::Vscode | LaunchRuntime::Node(_)
+            LaunchRuntime::JavaScript(_) | LaunchRuntime::NodeHost | LaunchRuntime::Node(_)
         )
     }
 
-    pub fn is_vscode(&self) -> bool {
-        matches!(self.runtime, LaunchRuntime::Vscode | LaunchRuntime::Node(_))
+    pub fn is_node_host(&self) -> bool {
+        matches!(
+            self.runtime,
+            LaunchRuntime::NodeHost | LaunchRuntime::Node(_)
+        )
     }
 
     /// Returns the exact program, if this command names one rather than requesting the Node host.
@@ -149,7 +152,7 @@ impl ExtensionLaunchCommand {
             LaunchRuntime::Executable(path)
             | LaunchRuntime::JavaScript(path)
             | LaunchRuntime::Node(path) => Some(path),
-            LaunchRuntime::Vscode => None,
+            LaunchRuntime::NodeHost => None,
         }
     }
 
@@ -405,7 +408,7 @@ impl ExtensionHostLauncher for ProductNodeLauncher {
     ) -> Result<Arc<dyn ExtensionHostProcess>, ExtensionHostError> {
         limits.validate()?;
         if !Self::supports_platform()
-            || !matches!(command.runtime, LaunchRuntime::Vscode)
+            || !matches!(command.runtime, LaunchRuntime::NodeHost)
             || limits.isolation != ProcessIsolationPolicy::AuthorizedNode
         {
             return Err(ExtensionHostError::IsolationUnavailable);

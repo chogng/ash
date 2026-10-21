@@ -43,6 +43,7 @@ export class TerminalProcessManager extends Disposable {
 	private readonly decoder = new TextDecoder('utf-8', { ignoreBOM: true });
 	private pendingUtf8: number[] = [];
 	private suspending = false;
+	private processInvalidated = false;
 	get cwdDetection() { return this.commandSource.cwdDetection; }
 	get promptTypeDetection() { return this.commandSource.promptTypeDetection; }
 	public get shellIntegration() { return this.commandSource.shellIntegration; }
@@ -59,10 +60,21 @@ export class TerminalProcessManager extends Disposable {
 	constructor(private readonly identity: ITerminalProcessCloseOptions, @ITerminalProcessService private readonly processService: ITerminalProcessService) {
 		super();
 		this.inputCancellation.value = new CancellationTokenSource();
+		this._register(processService.onDidInvalidateProcess?.(event => {
+			if (event.terminalId !== this.identity.terminalId) return;
+			// Host readiness cannot revive a retired PTY. Stop pending reads and
+			// input now so the instance can expose its existing relaunch action.
+			this.processInvalidated = true;
+			this.stop();
+			this.processErrorEmitter.fire(new Error(event.reason === 'replacement'
+				? localize('terminal.connectionLost', '[terminal connection lost; process was not preserved]')
+				: localize('terminal.recoveryFailed', '[terminal recovery failed; relaunch required]')));
+		}) ?? Disposable.None);
 	}
 
 	public async start(reconnecting = false): Promise<void> {
 		this.assertNotDisposed();
+		if (this.processInvalidated) throw new CancellationError();
 		this.suspending = false;
 		if (!this.acceptingInput) {
 			this.inputCancellation.value = new CancellationTokenSource();

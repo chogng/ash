@@ -298,6 +298,10 @@ export class WorkbenchLayout
 		this.rebuildGrid();
 	}
 
+	getSideBarPosition(): Position {
+		return this.sideBarLocation === 'left' ? Position.LEFT : Position.RIGHT;
+	}
+
 	getPanelPosition(): Position { return this.panelPosition; }
 
 	setPanelPosition(position: Position): void {

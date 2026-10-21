@@ -1,4 +1,6 @@
 import { registerTestCodeEditorFeatures } from '../../fixtures/codeEditorFeatures.js';
+import { ChatMarkdownContentPart } from '../../../src/ash/workbench/contrib/chat/browser/widget/chatContentParts/chatMarkdownContentPart.js';
+import { DeferredPromise } from '../../../src/ash/base/common/async.js';
 const codeFeatures = registerTestCodeEditorFeatures();
 import type { NotificationService } from '../../../src/ash/workbench/services/notification/common/notificationService.js';
 import { IChatSpeechToTextService, ChatSpeechToTextService } from '../../../src/ash/workbench/contrib/chat/browser/speechToText/chatSpeechToTextService.js';
@@ -18,7 +20,10 @@ import { ChatInputEditor } from '../../../src/ash/workbench/contrib/chat/browser
 import { ChatInputEditors } from '../../../src/ash/workbench/contrib/chat/browser/widget/input/chatInputEditorRegistry.js';
 import { ChatTipService, IChatTipService } from '../../../src/ash/sessions/contrib/cowork/browser/chatTipService.js';
 import { ILifecycleService } from '../../../src/ash/workbench/services/lifecycle/common/lifecycle.js';
-import { registerTestDictationOnboarding } from '../../../src/ash/workbench/test/common/testDictationServices.js';
+import { registerTestDictationOnboarding, installTestDictationAudio } from '../../../src/ash/workbench/test/common/testDictationServices.js';
+import { LocalTranscriptionService } from '../../../src/ash/workbench/services/localTranscription/electron-browser/localTranscriptionService.js';
+import { ILocalTranscriptionBackendService, ILocalTranscriptionService, ILocalTranscriptionModelService } from '../../../src/ash/platform/localTranscription/common/localTranscription.js';
+import { IVoiceCodeTranscriptionClient, VoiceCodeTranscriptionClient } from '../../../src/ash/workbench/contrib/chat/browser/speechToText/voiceCodeTranscriptionClient.js';
 import { InstantiationService } from '../../../src/ash/platform/instantiation/common/instantiationService.js';
 import { ILogService, ILoggerService, LogLevel, type LogEntry } from '../../../src/ash/platform/log/common/log.js';
 import { ITerminalLogService } from '../../../src/ash/platform/terminal/common/terminal.js';
@@ -34,7 +39,7 @@ import { IWebviewService } from '../../../src/ash/workbench/contrib/webview/brow
 import '../../../src/ash/workbench/contrib/webview/browser/webview.contribution.js';
 import { IFileService } from '../../../src/ash/platform/files/common/files.js';
 import { ITextModelService } from '../../../src/ash/editor/common/services/resolverService.js';
-import { LinkDetector } from '../../../extensions/code/browser/contrib/links/browser/links.js';
+import { LinkDetector } from '../../../src/ash/editor/contrib/links/browser/links.js';
 import { IPromptsService } from '../../../src/ash/workbench/contrib/chat/common/promptSyntax/service/promptsService.js';
 import { PromptsService } from '../../../src/ash/workbench/contrib/chat/common/promptSyntax/service/promptsServiceImpl.js';
 import { CancellationToken } from '../../../src/ash/base/common/cancellation.js';
@@ -73,7 +78,11 @@ import { IMenuService } from '../../../src/ash/platform/actions/common/actions.j
 import { MenuService } from '../../../src/ash/platform/actions/common/menuService.js';
 import { IContextViewService, IContextMenuService } from '../../../src/ash/platform/contextview/browser/contextView.js';
 import { BrowserContextViewService } from '../../../src/ash/platform/contextview/browser/contextViewService.js';
-import { ISpeechService } from '../../../src/ash/workbench/contrib/speech/common/speechService.js';
+import { ISpeechService, SpeechToTextStatus, type ISpeechToTextEvent } from '../../../src/ash/workbench/contrib/speech/common/speechService.js';
+import { ExtensionIdentifier } from '../../../src/ash/platform/extensions/common/extensions.js';
+import { IChatWidgetService } from '../../../src/ash/workbench/contrib/chat/browser/chat.js';
+import '../../../src/ash/workbench/contrib/chat/browser/actions/chatSpeechToTextActions.js';
+import { IPreferencesService } from '../../../src/ash/workbench/services/preferences/common/preferences.js';
 import { SpeechService } from '../../../src/ash/workbench/contrib/speech/browser/speechService.js';
 import { IVoiceCodeTranscriptionBackendService } from '../../../src/ash/platform/renderer/common/dictation.js';
 import { IDialogService } from '../../../src/ash/platform/dialogs/common/dialogs.js';
@@ -86,8 +95,8 @@ import { ChatListWidget } from '../../../src/ash/workbench/contrib/chat/browser/
 import { ChatContentMarkdownRenderer } from '../../../src/ash/workbench/contrib/chat/browser/widget/chatContentMarkdownRenderer.js';
 import { WorkbenchContributionsRegistry, WorkbenchPhase } from '../../../src/ash/workbench/common/contributions.js';
 import { EditorExtensionsRegistry } from '../../../src/ash/editor/browser/editorExtensions.js';
-import { SuggestController } from '../../../extensions/code/browser/contrib/suggest/browser/suggestController.js';
-import '../../../extensions/code/browser/contrib/hover/browser/hoverContribution.js';
+import { SuggestController } from '../../../src/ash/editor/contrib/suggest/browser/suggestController.js';
+import '../../../src/ash/editor/contrib/hover/browser/hoverContribution.js';
 import { IEditorService } from '../../../src/ash/workbench/services/editor/common/editorService.js';
 import { IEditorPart } from '../../../src/ash/workbench/browser/parts/editor/editorPart.js';
 import { IUntitledTextEditorService } from '../../../src/ash/workbench/services/untitled/common/untitledTextEditorService.js';
@@ -151,7 +160,41 @@ class Clipboard extends BrowserClipboardService {
 }
 services.registerInstance(IClipboardService, resources.add(new Clipboard()));
 services.registerSingleton(ICommandService, () => services.createInstance(StandaloneCommandService));
-services.registerInstance(IVoiceCodeTranscriptionBackendService, undefined);
+const builtinTranscripts = resources.add(new Emitter<{ resourceId: string; text: string; isFinal: boolean; }>());
+const builtinOperations: string[] = [];
+let builtinResource: string | undefined;
+let retiredBuiltinResource: string | undefined;
+let builtinStop: DeferredPromise<void> | undefined;
+let builtinAudio: ReturnType<typeof installTestDictationAudio> | undefined;
+const builtinBackend = new URLSearchParams(location.search).get('builtinBackend');
+if (builtinBackend) {
+	const start = async (resourceId: string) => { builtinResource = resourceId; builtinOperations.push('start'); };
+	const stop = async (resourceId: string) => {
+		builtinOperations.push('stop');
+		await builtinStop?.p;
+		builtinTranscripts.fire({ resourceId, text: 'built-in final', isFinal: true });
+		return 'built-in final';
+	};
+	const cancel = async (resourceId: string) => { retiredBuiltinResource = resourceId; builtinOperations.push('cancel'); };
+	services.registerInstance(IVoiceCodeTranscriptionBackendService, {
+		isConnected: true, onDidChangeConnection: Event.None, onDidTranscribe: builtinTranscripts.event, onDidEnd: Event.None,
+		getOptions: async () => ({ inputDevices: [], languages: [] }), start, stop, cancel,
+		pushAudio: async (_resourceId, audio) => { builtinOperations.push(`audio:${atob(audio).length}`); },
+	});
+	services.registerInstance(ILocalTranscriptionBackendService, {
+		isConnected: true, onDidDisconnect: Event.None, onDidTranscribe: builtinTranscripts.event, onDidEnd: Event.None, onDidChangeModels: Event.None, onDidChangeModelStatus: Event.None,
+		getModelCacheInfo: async () => ({ directory: '/fixture/models', version: 1 }),
+		getModelStatus: async model => ({ model, available: true, sizeBytes: 1024 }), listModels: async () => [],
+		cancelModel: async () => { throw new Error('Unexpected model cancellation'); }, deleteModel: async () => { throw new Error('Unexpected model deletion'); },
+		startModelOperation: async () => { throw new Error('Unexpected model preparation'); }, stopModelOperation: async () => { throw new Error('Unexpected model operation'); },
+		start, stop, cancel, pushAudio: async (_resourceId, audio) => { builtinOperations.push(`audio:${audio.byteLength}`); },
+	});
+	services.registerSingleton(ILocalTranscriptionService, () => services.createInstance(LocalTranscriptionService));
+	services.registerSingleton(ILocalTranscriptionModelService, () => services.get(ILocalTranscriptionService) as LocalTranscriptionService);
+	services.registerSingleton(IVoiceCodeTranscriptionClient, () => services.createInstance(VoiceCodeTranscriptionClient));
+} else {
+	services.registerInstance(IVoiceCodeTranscriptionBackendService, undefined);
+}
 registerTestDictationOnboarding(services);
 services.registerSingleton(ISpeechService, () => services.createInstance(SpeechService));
 if (!services.has(IChatSpeechToTextService)) services.registerSingleton(IChatSpeechToTextService, () => services.createInstance(ChatSpeechToTextService));
@@ -341,6 +384,9 @@ let allowAppCsp = false;
 let appCallMode: 'read' | 'delay' | 'error' = 'read';
 let appItems: readonly IChatListItem[] = [];
 let appChat: ChatWidget | CoworkWidget | undefined;
+let dictationEvents: Emitter<ISpeechToTextEvent> | undefined;
+let dictationStarts = 0;
+let dictationCancels = 0;
 const createBitmap = window.createImageBitmap.bind(window);
 let completeImageDecode: (() => void) | undefined;
 let appChatThread = 'app-thread';
@@ -477,9 +523,13 @@ let toolEntries: ThreadTranscriptEntry[] = [];
 let text = 'Reply with `inline`.\n\n```typescript\nconst code = "<safe>";\nsecond line\n```';
 list.render([{ id: 'reply', type: 'agentMessage', text, transient: false }]);
 
-type MarkdownWorkload = 'prose' | 'mixed' | 'fence' | 'largeFence' | 'largeParagraph';
+type MarkdownWorkload = 'prose' | 'mixed' | 'fence' | 'largeFence' | 'largeParagraph' | 'hugeParagraph' | 'mathCandidates' | 'largeList' | 'largeTable';
 function markdownWorkload(kind: MarkdownWorkload): string {
 	const prose = 'Streaming **Markdown** with [a link](https://example.com) and `inline code`. 中文内容保持完整。 '.repeat(6);
+	if (kind === 'hugeParagraph') return prose.repeat(64) + '\n\nFinal visible marker.';
+	if (kind === 'mathCandidates') return String.raw`Incomplete \( candidate **bold** [link](https://example.com) and price $5. `.repeat(64) + ' Complete $x+1$.\n\nFinal visible marker.';
+	if (kind === 'largeList') return Array.from({ length: 512 }, (_, index) => `- Item ${index}: **bold** [link](https://example.com) and \`code\` 中文`).join('\n') + '\n\nFinal visible marker.';
+	if (kind === 'largeTable') return '| Name | Value | Detail |\n| --- | --- | --- |\n' + Array.from({ length: 256 }, (_, index) => `| Row ${index} | **bold** | [link](https://example.com) and \`code\` 中文 |`).join('\n') + '\n\nFinal visible marker.';
 	if (kind === 'largeParagraph') return prose.repeat(16) + '\n\nFinal visible marker.';
 	if (kind === 'prose') return Array.from({ length: 96 }, (_, index) => `Paragraph ${index}: ${prose}\n\n`).join('') + 'Final visible marker.';
 	const code = Array.from({ length: kind === 'largeFence' ? 8000 : kind === 'fence' ? 800 : 36 }, (_, index) => `const value${index} = "streamed code ${index}";`).join('\n');
@@ -495,6 +545,9 @@ interface MarkdownBenchmarkResult {
 	readonly wallMs: number;
 	readonly updateMs: number;
 	readonly maxUpdateMs: number;
+	readonly updateSamplesMs: readonly number[];
+	readonly maxLexMs: number;
+	readonly renderSamplesMs: readonly number[];
 	readonly markdownMs: number;
 	readonly renderedCharacters: number;
 	readonly renderCalls: number;
@@ -509,6 +562,16 @@ interface MarkdownBenchmarkResult {
 declare global {
 	interface Window {
 		ashChatTranscriptIntegration: {
+			prepareBuiltinDictation(cowork: boolean, backend: 'local' | 'cloud'): Promise<void>;
+			builtinDictationEvent(text: string, retired?: boolean): void;
+			builtinAudioTail(): void;
+			holdBuiltinStop(): void;
+			finishBuiltinStop(): void;
+			builtinDictationState(): { operations: readonly string[]; busy: boolean; state: string; };
+			prepareDictation(cowork: boolean): void;
+			runDictation(focusFile?: boolean): Promise<void>;
+			dictationEvent(text: string): void;
+			dictationState(): { starts: number; cancels: number; busy: boolean; widgets: number; focused: boolean; file: string; };
 			holdClipboard(fail?: boolean): void;
 			releaseClipboard(): void;
 			state(): { copied: string; file: string; resource: string; editorCount: number; codeModelCount: number; selection: unknown; notifications: readonly string[]; };
@@ -547,9 +610,10 @@ declare global {
 			recreateTranscript(): void;
 			stream(value: string, complete: boolean): void;
 			runMarkdownBenchmark(kind: MarkdownWorkload): Promise<MarkdownBenchmarkResult>;
+			markdownWorkload(kind: MarkdownWorkload): string;
 			inspectRawCodeUpdates(values: readonly string[]): Promise<{ readonly snapshots: readonly { readonly text: string; readonly eol: string; readonly copied: string; }[]; readonly released: boolean; }>;
 			inspectCodeUpdates(values: readonly string[]): { readonly updates: readonly { readonly text: string; readonly reason: string; readonly replacedCharacters: number; readonly insertedCharacters: number; }[]; readonly sameModel: boolean; readonly canUndo: boolean; };
-			compareStreamingMarkdown(value: string, complete: boolean, measureLayout?: boolean): { actual: string; expected: string; layoutError: number; layout: unknown[]; };
+			compareStreamingMarkdown(value: string, complete: boolean, measureLayout?: boolean): Promise<{ actual: string; expected: string; layoutError: number; layout: unknown[]; }>;
 			showLongCode(): string;
 			showTool(): void;
 			openAccessibleView(help: boolean): boolean;
@@ -636,6 +700,44 @@ let readBridge: MainThreadSpeech | undefined;
 services.registerInstance(IExtensionHostApi, readApi);
 
 window.ashChatTranscriptIntegration = {
+	prepareBuiltinDictation: async (cowork, backend) => {
+		services.registerInstance(IPreferencesService, { openSettings: async () => { throw new Error('Unexpected model settings'); } } as unknown as IPreferencesService);
+		await services.get(IConfigurationService).updateValue('dictation.backend', backend);
+		builtinAudio = resources.add(installTestDictationAudio(window));
+		window.ashChatTranscriptIntegration.showChatApp(false, cowork);
+	},
+	builtinDictationEvent: (text, retired = false) => {
+		const resourceId = retired ? retiredBuiltinResource : builtinResource;
+		if (resourceId) builtinTranscripts.fire({ resourceId, text, isFinal: false });
+	},
+	builtinAudioTail: () => builtinAudio?.emit(new Float32Array([0, 1, -1])),
+	holdBuiltinStop: () => { builtinStop = new DeferredPromise<void>(); },
+	finishBuiltinStop: () => { void builtinStop?.complete(); builtinStop = undefined; },
+	builtinDictationState: () => ({ operations: builtinOperations, busy: services.get(IChatSpeechToTextService).isBusy, state: services.get(IChatSpeechToTextService).state }),
+	prepareDictation: cowork => {
+		services.registerInstance(IPreferencesService, { openSettings: async () => { throw new Error('Unexpected model preparation'); } } as unknown as IPreferencesService);
+		resources.add(services.get(ISpeechService).registerSpeechProvider('command-fixture', {
+			metadata: { extension: new ExtensionIdentifier('test.speech'), displayName: 'Controlled recognition' },
+			createSpeechToTextSession: token => {
+				dictationStarts++;
+				dictationEvents = resources.add(new Emitter<ISpeechToTextEvent>());
+				resources.add(token.onCancellationRequested(() => { dictationCancels++; }));
+				return { onDidChange: dictationEvents.event };
+			},
+			createTextToSpeechSession: () => { throw new Error('Unexpected synthesis'); },
+			createKeywordRecognitionSession: () => { throw new Error('Unexpected keyword recognition'); },
+		}));
+		window.ashChatTranscriptIntegration.showChatApp(false, cowork, true);
+	},
+	runDictation: async focusFile => {
+		if (focusFile) file.focus();
+		await services.get(ICommandService).executeCommand('workbench.action.chat.toggleSpeechToText');
+	},
+	dictationEvent: text => {
+		dictationEvents?.fire({ status: SpeechToTextStatus.Started });
+		dictationEvents?.fire({ status: SpeechToTextStatus.Recognized, text });
+	},
+	dictationState: () => ({ starts: dictationStarts, cancels: dictationCancels, busy: services.get(IChatSpeechToTextService).isBusy, widgets: services.get(IChatWidgetService).getAllWidgets().length, focused: appChat?.inputEditor?.hasTextFocus() === true, file: file.getModel()!.getValue() }),
 	holdClipboard: (fail = false) => { clipboardFailure = fail; clipboardReady = new Promise(resolve => { releaseClipboard = resolve; }); },
 	releaseClipboard: () => releaseClipboard(),
 	state: () => ({
@@ -691,8 +793,10 @@ window.ashChatTranscriptIntegration = {
 		previous.dispose();
 	},
 	stream: (value, complete) => list.render([{ id: 'stream', type: 'agentMessage', text: value, transient: !complete }]),
-	compareStreamingMarkdown: (value, complete, measureLayout = false) => {
+	compareStreamingMarkdown: async (value, complete, measureLayout = false) => {
 		list.render([{ id: 'stream', type: 'agentMessage', text: value, transient: !complete }]);
+		// Large snapshots are consumed by the owning response in the next frame.
+		if (value.length >= 1024) await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
 		const root = list.element.querySelector<HTMLElement>('.ash-chat-markdown-part')!;
 		const copy = root.cloneNode(true) as HTMLElement;
 		for (const fragment of copy.querySelectorAll('.ash-chat-markdown-fragment')) fragment.replaceWith(...fragment.childNodes);
@@ -767,6 +871,7 @@ window.ashChatTranscriptIntegration = {
 			return { updates, sameModel: editor.getModel() === model, canUndo: model.canUndo() };
 		} finally { listener.dispose(); }
 	},
+	markdownWorkload,
 	runMarkdownBenchmark: async kind => {
 		const source = markdownWorkload(kind);
 		const chunks = 128;
@@ -807,12 +912,24 @@ window.ashChatTranscriptIntegration = {
 			try { return layout.apply(this, args); } finally { consumer.layoutMs += performance.now() - start; }
 		};
 		const original = ChatContentMarkdownRenderer.prototype.render;
+		// Include the actual deferred consumer, rather than reporting only the cheap enqueue call.
+		const originalPartRender = ChatMarkdownContentPart.prototype['render'];
+		const renderSamplesMs: number[] = [];
+		ChatMarkdownContentPart.prototype['render'] = function (...args) {
+			const start = performance.now();
+			try { return originalPartRender.apply(this, args); }
+			finally { renderSamplesMs.push(performance.now() - start); }
+		};
 		const originalLex = Lexer.lex;
 		Lexer.lex = function (source, options) {
 			lexCalls++;
 			lexedCharacters += source.length;
 			const start = performance.now();
-			try { return originalLex(source, options); } finally { consumer.lexMs += performance.now() - start; }
+			try { return originalLex(source, options); } finally {
+				const elapsed = performance.now() - start;
+				consumer.lexMs += elapsed;
+				maxLexMs = Math.max(maxLexMs, elapsed);
+			}
 		};
 		ChatContentMarkdownRenderer.prototype.render = function (markdown, ...args) {
 			const start = performance.now();
@@ -828,6 +945,8 @@ window.ashChatTranscriptIntegration = {
 		observer.observe({ entryTypes: ['longtask'] });
 		let updateMs = 0;
 		let maxUpdateMs = 0;
+		let maxLexMs = 0;
+		const updateSamplesMs: number[] = [];
 		const start = performance.now();
 		try {
 			for (const [index, value] of values.entries()) {
@@ -835,6 +954,7 @@ window.ashChatTranscriptIntegration = {
 				list.render([{ id: 'stream', type: 'agentMessage', text: value, transient: index !== chunks - 1 }]);
 				const elapsed = performance.now() - before;
 				updateMs += elapsed;
+				updateSamplesMs.push(elapsed);
 				maxUpdateMs = Math.max(maxUpdateMs, elapsed);
 				// Eight provider updates per frame, identical in both builds.
 				if ((index + 1) % 8 === 0) await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
@@ -845,12 +965,13 @@ window.ashChatTranscriptIntegration = {
 			return {
 				consumer, codeTextMatches: expectedCode.length === actualCode.length && expectedCode.every((code, index) => code === actualCode[index]),
 				bytes: new TextEncoder().encode(source).byteLength, chunks, wallMs: performance.now() - start,
-				updateMs, maxUpdateMs, markdownMs, renderedCharacters, renderCalls, lexCalls, lexedCharacters, removedNodes, longTasks,
+				updateMs, maxUpdateMs, updateSamplesMs, maxLexMs, renderSamplesMs, markdownMs, renderedCharacters, renderCalls, lexCalls, lexedCharacters, removedNodes, longTasks,
 				codeBlocks: list.element.querySelectorAll('.ash-chat-code-block').length,
 				finalVisible: [...list.element.querySelectorAll('[data-item-id="stream"] p')].at(-1)?.textContent === 'Final visible marker.',
 			};
 		} finally {
 			ChatContentMarkdownRenderer.prototype.render = original;
+			ChatMarkdownContentPart.prototype['render'] = originalPartRender;
 			Lexer.lex = originalLex;
 			TextModel.prototype.setValue = setValue;
 			TextModel.prototype.applyEdits = applyEdits;
@@ -918,7 +1039,7 @@ window.ashChatTranscriptIntegration = {
 			chatServices.registerSingleton(ICommandService, () => chatServices.createInstance(StandaloneCommandService));
 		}
 		chatServices.registerInstance(IOpenerService, { open: async () => { throw new Error('Unexpected link opening'); } } as unknown as IOpenerService);
-		chatServices.registerInstance(IVoiceCodeTranscriptionBackendService, undefined);
+		if (!builtinBackend) chatServices.registerInstance(IVoiceCodeTranscriptionBackendService, undefined);
 		chatServices.registerInstance(IAgentVoiceService, voice ? voiceFixture : undefined);
 		registerTestDictationOnboarding(chatServices);
 		chatServices.registerSingleton(IMenuService, () => chatServices.createInstance(MenuService));

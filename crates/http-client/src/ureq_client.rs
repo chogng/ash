@@ -10,7 +10,11 @@ use crate::RedirectPolicy;
 use crate::Timeout;
 use crate::outbound_network::resolve_public_internet_target;
 use crate::request::ResponseReceivedAt;
+use std::fmt;
+use std::io;
 use std::io::Read;
+use std::io::Write;
+use std::net::TcpStream;
 use std::sync::Arc;
 use std::sync::OnceLock;
 use std::time::Instant;
@@ -180,7 +184,7 @@ fn build_agent(
         .try_proxy_from_env(false)
         .max_idle_connections(config.connection_pool().max_idle_connections())
         .max_idle_connections_per_host(config.connection_pool().max_idle_connections_per_host())
-        .tls_config(tls_config);
+        .tls_connector(Arc::new(UreqTlsConnector(tls_config)));
     if config.network_targets() == NetworkTargetPolicy::PublicInternetOnly {
         builder = builder.resolver(resolve_public_internet_target);
     }
@@ -204,6 +208,63 @@ fn build_agent(
         builder = builder.timeout(timeout);
     }
     Ok(builder.build())
+}
+
+// Bridge the shared TLS policy through ureq's public transport interface so it
+// does not compile a second certificate store or select its own crypto provider.
+struct UreqTlsConnector(Arc<rustls::ClientConfig>);
+
+impl ureq::TlsConnector for UreqTlsConnector {
+    fn connect(
+        &self,
+        dns_name: &str,
+        mut stream: Box<dyn ureq::ReadWrite>,
+    ) -> Result<Box<dyn ureq::ReadWrite>, ureq::Error> {
+        // ureq passes bracketed IPv6 hosts; rustls expects the bare address.
+        let host = dns_name
+            .strip_prefix('[')
+            .and_then(|host| host.strip_suffix(']'))
+            .unwrap_or(dns_name);
+        let server_name = rustls::pki_types::ServerName::try_from(host.to_owned())
+            .map_err(|_| io::Error::new(io::ErrorKind::InvalidInput, "invalid TLS server name"))?;
+        let mut connection = rustls::ClientConnection::new(self.0.clone(), server_name)
+            .map_err(|_| io::Error::other("failed to create TLS connection"))?;
+        connection.complete_io(&mut stream)?;
+        Ok(Box::new(UreqTlsStream(rustls::StreamOwned::new(
+            connection, stream,
+        ))))
+    }
+}
+
+struct UreqTlsStream(rustls::StreamOwned<rustls::ClientConnection, Box<dyn ureq::ReadWrite>>);
+
+impl fmt::Debug for UreqTlsStream {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str("UreqTlsStream")
+    }
+}
+
+impl ureq::ReadWrite for UreqTlsStream {
+    fn socket(&self) -> Option<&TcpStream> {
+        // ureq updates deadlines on this socket while reading response bodies.
+        self.0.get_ref().socket()
+    }
+}
+
+impl Read for UreqTlsStream {
+    fn read(&mut self, bytes: &mut [u8]) -> io::Result<usize> {
+        self.0.read(bytes)
+    }
+}
+
+impl Write for UreqTlsStream {
+    fn write(&mut self, bytes: &[u8]) -> io::Result<usize> {
+        self.0.write(bytes)
+    }
+
+    fn flush(&mut self) -> io::Result<()> {
+        self.0.flush()
+    }
 }
 
 impl HttpClient for UreqHttpClient {

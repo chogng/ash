@@ -332,6 +332,7 @@ pub struct AppServer {
     pub(super) extensions: Mutex<ExtensionPackages>,
     pub(super) config: Option<Arc<ConfigStore>>,
     home: Option<Arc<ash_home::AshHome>>,
+    terminal_host: Option<std::path::PathBuf>,
     pub(super) provider_credentials: Option<Arc<ProviderCredentialService>>,
     secret_processor: secret_operations::SecretRequestProcessor,
     pub(super) file_search: Arc<file_search::Service>,
@@ -341,6 +342,8 @@ pub struct AppServer {
     pub(super) plugins: Option<ash_core_plugins::PluginActivationAuthority>,
     extension_hosts: Option<extension_host_runtime::ExtensionHostRuntime>,
     built_in_editor_extensions: extension_host_runtime::source::BuiltInEditorExtensions,
+    extension_state: Option<Arc<ash_state::SqliteExtensionStateStore>>,
+    extension_secrets: Option<Arc<dyn ash_secrets::SecretStore>>,
     pub(super) plugin_package_service: Option<Arc<dyn ash_core_plugins::ExtensionPackageService>>,
     plugins_manager: Option<Arc<ash_core_plugins::ExtensionPackageManager>>,
     extension_packages_editor_extension_admission:
@@ -645,6 +648,14 @@ impl ConnectionNotifications {
 }
 
 impl AppServer {
+    pub(crate) fn with_extension_state_store(
+        mut self,
+        store: Arc<ash_state::SqliteExtensionStateStore>,
+    ) -> Self {
+        self.extension_state = Some(store);
+        self
+    }
+
     fn task_delivery_processor(&self) -> task_delivery_processor::TaskDeliveryRequestProcessor<'_> {
         task_delivery_processor::TaskDeliveryRequestProcessor::new(
             &self.task_delivery,
@@ -970,11 +981,7 @@ impl AppServer {
     }
 
     fn extension_processor(&self) -> extension_operations::ExtensionRequestProcessor<'_> {
-        extension_operations::ExtensionRequestProcessor::new(
-            &self.extensions,
-            &self.plugins_manager,
-            &self.resources,
-        )
+        extension_operations::ExtensionRequestProcessor::new(&self.extensions, &self.resources)
     }
 
     fn extension_packages_processor(
@@ -1297,6 +1304,7 @@ impl AppServer {
             extensions: Mutex::new(ExtensionPackages::default()),
             config: None,
             home: None,
+            terminal_host: None,
             provider_credentials: None,
             secret_processor: secret_operations::SecretRequestProcessor::default(),
             file_search: Arc::new(file_search::Service),
@@ -1305,6 +1313,8 @@ impl AppServer {
             mcp_oauth: None,
             plugins: None,
             extension_hosts: None,
+            extension_state: None,
+            extension_secrets: None,
             built_in_editor_extensions:
                 extension_host_runtime::source::BuiltInEditorExtensions::Omitted,
             plugin_package_service: None,
@@ -1431,6 +1441,26 @@ impl AppServer {
             .map_err(|error| error.to_string())?;
         self.git_turn_changes = Some(runtime);
         Ok(self)
+    }
+
+    pub(crate) fn with_terminal_host(mut self, executable: Option<std::path::PathBuf>) -> Self {
+        self.terminal_host = executable;
+        self
+    }
+
+    fn create_terminal_service(
+        &self,
+        authorization: ash_file_access::Authorization,
+    ) -> Result<exec_server::terminal::TerminalService, exec_server::terminal::TerminalError> {
+        match (&self.terminal_host, &self.home) {
+            (Some(executable), Some(home)) => exec_server::terminal::TerminalService::hosted(
+                authorization,
+                home.root(),
+                executable,
+            ),
+            (None, _) => exec_server::terminal::TerminalService::new(authorization),
+            (Some(_), None) => Err(exec_server::terminal::TerminalError::OperationFailed),
+        }
     }
 
     pub(crate) fn with_home(mut self, home: Arc<ash_home::AshHome>) -> Self {
@@ -2166,6 +2196,12 @@ impl AppServer {
             Default::default(),
         )
         .map_err(|error| error.to_string())?;
+        if let Some(storage) = &self.extension_state {
+            runtime.bind_storage(Arc::clone(storage));
+        }
+        if let Some(secrets) = &self.extension_secrets {
+            runtime.bind_secrets(Arc::clone(secrets));
+        }
         if let Some(authorization) = self.extension_dir_authorization() {
             runtime
                 .bind_dir(authorization)
@@ -2485,6 +2521,10 @@ impl AppServer {
     }
 
     pub(crate) fn with_secret_store(mut self, store: Arc<dyn ash_secrets::SecretStore>) -> Self {
+        self.extension_secrets = Some(store.clone());
+        if let Some(runtime) = &self.extension_hosts {
+            runtime.bind_secrets(store.clone());
+        }
         self.channels.set_secret_store(store.clone());
         self.secret_processor = secret_operations::SecretRequestProcessor::new(store);
         self
@@ -3760,21 +3800,26 @@ impl AppServer {
             Some(ClientMethod::ExtensionsAcquireCapability) => self
                 .extension_packages_processor()
                 .extension_packages_acquire_capability(connection, &request.params),
-            Some(
-                ClientMethod::ExtensionsBuiltInProviders
-                | ClientMethod::ExtensionsSetBuiltInProviderEnablement,
-            ) => {
+            Some(ClientMethod::ExtensionsBuiltInProviders) => {
+                // Authenticated Browser clients may inspect shared provider state without
+                // receiving the product host's authority to change it.
+                if !connection.allows_product_host_capabilities()
+                    && connection.authority != ConnectionAuthority::Browser
+                {
+                    return Err(RpcError::new(-32000, AppServerErrorName::ResourceNotOwner));
+                }
+                self.extension_packages_processor()
+                    .extension_packages_built_in_providers(connection, &request.params)
+            }
+            Some(ClientMethod::ExtensionsSetBuiltInProviderEnablement) => {
                 if !connection.allows_product_host_capabilities() {
                     return Err(RpcError::new(-32000, AppServerErrorName::ResourceNotOwner));
                 }
-                if client_method(&request.method) == Some(ClientMethod::ExtensionsBuiltInProviders)
-                {
-                    self.extension_packages_processor()
-                        .extension_packages_built_in_providers(&request.params)
-                } else {
-                    self.extension_packages_processor()
-                        .extension_packages_set_built_in_provider_enablement(&request.params)
-                }
+                self.extension_packages_processor()
+                    .extension_packages_set_built_in_provider_enablement(
+                        connection,
+                        &request.params,
+                    )
             }
             Some(ClientMethod::ExtensionsReleaseCapability) => self
                 .extension_packages_processor()
@@ -3939,12 +3984,6 @@ impl AppServer {
             Some(ClientMethod::ExtensionList) => {
                 self.extension_processor().extension_list(&request.params)
             }
-            Some(ClientMethod::ExtensionGallery) => self
-                .extension_processor()
-                .extension_gallery(&request.params),
-            Some(ClientMethod::ExtensionGalleryResourceOpen) => self
-                .extension_processor()
-                .extension_gallery_resource_open(connection, &request.params),
             Some(ClientMethod::ExtensionResourceOpen) => self
                 .extension_processor()
                 .extension_resource_open(connection, &request.params),

@@ -15,12 +15,15 @@ import { Registry } from '../../../../platform/registry/common/platform.js';
 import { InstantiationType, registerSingleton } from '../../../../platform/instantiation/common/extensions.js';
 import { ILanguageModelToolsService } from '../common/tools/languageModelToolsService.js';
 import { LanguageModelToolsService } from './tools/languageModelToolsService.js';
+import { IChatWidgetService } from './chat.js';
+import { ChatWidgetService } from './widget/chatWidgetService.js';
 
 import { ChatSessionArchiveActionWording, ChatSessionArchiveActionWordingSettingId } from '../../../../platform/chat/common/sessionArchiveActions.js';
 import { ChatAIDisabledSettingId } from '../../../../platform/chat/common/chatSettings.js';
 
 registerSingleton(IChatSpeechToTextService, ChatSpeechToTextService, InstantiationType.Delayed);
 registerSingleton(IVoiceCodeTranscriptionClient, VoiceCodeTranscriptionClient, InstantiationType.Delayed);
+registerSingleton(IChatWidgetService, ChatWidgetService, InstantiationType.Delayed);
 
 registerSingleton(ILanguageModelToolsService, LanguageModelToolsService, InstantiationType.Delayed);
 

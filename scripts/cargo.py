@@ -38,10 +38,17 @@ def cargo_target(arguments: list[str]) -> str | None:
 
 
 def prepare_test_executable(
-    cargo: str, arguments: list[str], environment: dict[str, str], package: str
+    cargo: str,
+    arguments: list[str],
+    environment: dict[str, str],
+    package: str,
+    *,
+    target_name: str | None = None,
+    target_kind: str = "bin",
 ) -> str:
     # Cargo does not build a dependency's executable for library tests. Match the
     # test compilation settings and use its reported artifact, not a guessed path.
+    name = target_name or package
     selection: list[str] = []
     value_options = {
         "--target",
@@ -79,8 +86,8 @@ def prepare_test_executable(
             "build",
             "-p",
             package,
-            "--bin",
-            package,
+            f"--{target_kind}",
+            name,
             "--message-format=json",
             *selection,
         ],
@@ -95,11 +102,13 @@ def prepare_test_executable(
         message = parse_cargo_message(line)
         if diagnostic := cargo_rendered_diagnostic(message):
             sys.stderr.write(diagnostic)
-        if artifact := cargo_artifact_executable(message, package):
+        if artifact := cargo_artifact_executable(
+            message, name, target_kind=target_kind
+        ):
             executable = artifact
     result.check_returncode()
     if executable is None:
-        raise RuntimeError(f"Cargo did not report the {package} executable")
+        raise RuntimeError(f"Cargo did not report the {name} executable")
     return executable
 
 
@@ -265,6 +274,29 @@ def main(arguments: list[str] | None = None) -> int:
     ):
         environment["CARGO_PROFILE_RELEASE_SPLIT_DEBUGINFO"] = "packed"
     packages = cargo_command_packages(args.cargo, cargo_arguments, REPOSITORY_ROOT)
+    # The real PTY target launches the matching programs built by `just test-tui`.
+    # It does not execute the dependency crates' unit-test fixture owners.
+    tui_process_tests = (
+        cargo_arguments[0] == "test"
+        and "ash-cli" in packages
+        and options.count("--test") == 1
+        and options.index("--test") + 1 < len(options)
+        and options[options.index("--test") + 1] == "tui_real_scenarios"
+        and not any(
+            option
+            in {
+                "--lib",
+                "--bins",
+                "--tests",
+                "--all-targets",
+                "--workspace",
+                "--all",
+                "--doc",
+            }
+            or option.startswith(("--bin", "--example", "--bench", "--test="))
+            for option in options
+        )
+    )
     if "ash-app-server-protocol" in packages:
         # Prepare outside Cargo's build lock; the exporter bootstraps without metadata.
         generate_protocol(root=REPOSITORY_ROOT, cargo=args.cargo)
@@ -274,6 +306,7 @@ def main(arguments: list[str] | None = None) -> int:
         environment["CARGO_BUILD_WARNINGS"] = "deny"
     needs_code_mode_host = (
         cargo_arguments[0] == "test"
+        and not tui_process_tests
         and "--no-run" not in cargo_arguments
         and "ASH_CODE_MODE_HOST_BIN" not in environment
         and "ash-code-mode" in packages
@@ -310,6 +343,25 @@ def main(arguments: list[str] | None = None) -> int:
     ):
         if (
             cargo_arguments[0] == "test"
+            and "apple-darwin" in target
+            and not tui_process_tests
+            and "--no-run" not in cargo_arguments
+            and "ash-file-watcher" in packages
+            and "ASH_FILE_WATCHER_TEST_HOST" not in environment
+        ):
+            # Library test harnesses do not dispatch private product arg0 roles. Supply
+            # a matching small host; never fall back to uncancellable in-process scans.
+            environment["ASH_FILE_WATCHER_TEST_HOST"] = prepare_test_executable(
+                args.cargo,
+                cargo_arguments,
+                environment,
+                "ash-file-watcher",
+                target_name="watch_probe",
+                target_kind="example",
+            )
+        if (
+            cargo_arguments[0] == "test"
+            and not tui_process_tests
             and "--no-run" not in cargo_arguments
             and "ASH_MARKDOWN_MATH_BIN" not in environment
             and packages.intersection({"ash-app-server", "ash-app-server-runtime"})
@@ -319,6 +371,7 @@ def main(arguments: list[str] | None = None) -> int:
             )
         if (
             cargo_arguments[0] == "test"
+            and not tui_process_tests
             and "--no-run" not in cargo_arguments
             and "ASH_DEBUG_LLDB_BIN" not in environment
             and packages.intersection({"ash-app-server", "ash-app-server-runtime"})
@@ -332,6 +385,24 @@ def main(arguments: list[str] | None = None) -> int:
             )
         if (
             cargo_arguments[0] == "test"
+            and not tui_process_tests
+            and "--no-run" not in cargo_arguments
+            and "ASH_MANAGED_LIFECYCLE_TEST_HOST" not in environment
+            and "ash-app-server-runtime" in packages
+        ):
+            # The library test binary cannot dispatch --terminal-host. Build a matching
+            # host that exercises the real managed entrypoint and acknowledges its return.
+            environment["ASH_MANAGED_LIFECYCLE_TEST_HOST"] = prepare_test_executable(
+                args.cargo,
+                cargo_arguments,
+                environment,
+                "ash-app-server-runtime",
+                target_name="managed_lifecycle",
+                target_kind="example",
+            )
+        if (
+            cargo_arguments[0] == "test"
+            and not tui_process_tests
             and "--no-run" not in cargo_arguments
             and "ASH_APP_SERVER_PATH" not in environment
             and "ash-remote-server" in packages

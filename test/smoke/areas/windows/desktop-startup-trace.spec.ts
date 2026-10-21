@@ -13,6 +13,15 @@ const execFileAsync = promisify(execFile);
 const samplesPerCohort = process.env.ASH_DESKTOP_STARTUP_PROFILE === '1' ? 1 : 5;
 const accountHome = homedir();
 
+interface RustTrace {
+	readonly traceId: string;
+	readonly carrierPid: number;
+	readonly pid: number;
+	readonly scope: 'connection' | 'probe';
+	readonly phase: string;
+	readonly durationMs: number;
+}
+
 interface ConnectionSample {
 	readonly cohort: 'fresh' | 'stopped' | 'reused' | 'ui-only';
 	readonly index: number;
@@ -20,6 +29,8 @@ interface ConnectionSample {
 	readonly milestones: readonly { phase: 'launch-requested' | ElectronLaunchMilestone; elapsedMs: number; }[];
 	readonly renderer: { readonly responseEndMs: number; readonly marks: readonly { name: string; startTimeMs: number; detail?: unknown; }[]; } | null;
 	readonly main: readonly { name: string; startTimeMs: number; detail: unknown; }[];
+	readonly rust: readonly RustTrace[];
+	readonly connectionHealthCheck: 'initialize' | 'control' | null;
 	readonly firstUse: { readonly editorMs: number | null; readonly quickAccessMs: number; } | null;
 	readonly error?: string;
 }
@@ -61,9 +72,10 @@ test('Desktop startup trace', { tag: '@electron-app-server' }, async ({ target, 
 		profileState: 'fresh profiles include Playwright trust selection; stopped, reused, and UI-only use an authorized profile',
 		milestoneClock: 'Playwright worker performance.now; each elapsed time is relative to launch-requested in the same process',
 		rendererClock: 'Renderer performance timeline; source-owned startup marks v2 and navigation responseEnd share one window clock',
+		rustClock: 'Local Rust Instant durations; Renderer nonce -> Main carrier PID -> per-launch trace ID; probe scope is separate, nested durations are not additive',
 		connectionClock: 'Main performance timeline; nonce correlates the same Renderer port lease, clocks are never subtracted across processes',
 		cpuProfiles: process.env.ASH_DESKTOP_STARTUP_PROFILE === '1' ? 'first sample per cohort, separate diagnostic run' : 'disabled',
-		firstUse: 'post-readiness first main.ts open through asserted text, then titlebar command search and > through visible command option; Playwright worker clock',
+		firstUse: 'post-readiness first main.ts open through asserted text, then titlebar command search and > through visible command option; diagnostics afterward; Playwright worker clock',
 	};
 	const stop = async (profile: string): Promise<void> => {
 		await execFileAsync(daemon, ['stop'], { env: { ...process.env, ASH_HOME: profile }, windowsHide: true, timeout: 30_000 });
@@ -79,6 +91,8 @@ test('Desktop startup trace', { tag: '@electron-app-server' }, async ({ target, 
 		let readyMs: number | null = null;
 		let renderer: ConnectionSample['renderer'] = null;
 		let main: ConnectionSample['main'] = [];
+		let rust: RustTrace[] = [];
+		let connectionHealthCheck: ConnectionSample['connectionHealthCheck'] = null;
 		let firstUse: ConnectionSample['firstUse'] = null;
 		const profileCpu = process.env.ASH_DESKTOP_STARTUP_PROFILE === '1' && index === 0;
 		const cpuTrace = join(traceDirectory, `${cohort}-${index}.trace.json`);
@@ -106,6 +120,7 @@ test('Desktop startup trace', { tag: '@electron-app-server' }, async ({ target, 
 			main = await desktop.application.evaluate(() => performance.getEntriesByType('mark')
 				.filter(mark => mark.name.startsWith('ash.appServer.main.'))
 				.map(mark => ({ name: mark.name, startTimeMs: mark.startTime, detail: (mark as PerformanceMark).detail })));
+
 			const workbench = desktop.driver.workbench;
 			let editorMs: number | null = null;
 			if (cohort !== 'ui-only') {
@@ -125,6 +140,22 @@ test('Desktop startup trace', { tag: '@electron-app-server' }, async ({ target, 
 			await expect(workbench.quickaccess.items.first()).toBeVisible();
 			firstUse = { editorMs, quickAccessMs: performance.now() - quickAccessStart };
 			await workbench.quickaccess.close();
+
+			if (cohort !== 'ui-only') {
+				const nonce = (renderer.marks.find(mark => mark.name === 'ash.appServer.port-acquire-start')?.detail as { nonce?: string; } | undefined)?.nonce;
+				const initialized = main.find(mark => mark.name === 'ash.appServer.main.initialized' && (mark.detail as { nonce?: string; }).nonce === nonce)?.detail as { carrierPid?: number; carrierTrace?: string[]; } | undefined;
+				const carrier = (initialized?.carrierTrace ?? []).flatMap(line => parseRustTrace(line) ?? []);
+				const traceIds = new Set(carrier.filter(record => record.pid === initialized?.carrierPid && record.carrierPid === initialized?.carrierPid).map(record => record.traceId));
+				expect(traceIds.size, 'one trace ID for the current carrier').toBe(1);
+				const traceId = [...traceIds][0];
+				connectionHealthCheck = carrier.some(record => record.phase === 'control-contract') ? 'control' : 'initialize';
+				// Collect after every measured operation so diagnostics cannot warm first use.
+				const status = JSON.parse((await execFileAsync(daemon, ['version'], { env: { ...process.env, ASH_HOME: profile }, windowsHide: true, timeout: 30_000 })).stdout) as { logPath: string; pid: number; };
+				const managed = (await readFile(status.logPath, 'utf8')).split('\n').flatMap(line => parseRustTrace(line) ?? []);
+				rust = [...carrier, ...managed].filter(record => record.traceId === traceId && record.carrierPid === initialized?.carrierPid);
+				expect(rust.filter(record => record.pid !== initialized?.carrierPid).every(record => record.pid === status.pid)).toBe(true);
+			}
+
 			if (profileCpu) await expect.poll(() => stat(cpuTrace).then(file => file.size, () => 0), { timeout: 5_000 }).toBeGreaterThan(0);
 		} catch (cause) {
 			error = redact(String(cause), directory, testWorkspace.directory);
@@ -139,7 +170,7 @@ test('Desktop startup trace', { tag: '@electron-app-server' }, async ({ target, 
 			} catch (cause) {
 				error = `${error ? `${error}\n` : ''}Cleanup: ${redact(String(cause), directory, testWorkspace.directory)}`;
 			}
-			samples.push({ cohort, index, readyMs, milestones, renderer, main, firstUse, ...(error ? { error } : {}) });
+			samples.push({ cohort, index, readyMs, milestones, renderer, main, rust, connectionHealthCheck, firstUse, ...(error ? { error } : {}) });
 		}
 	};
 	try {
@@ -201,6 +232,17 @@ test('Desktop startup trace', { tag: '@electron-app-server' }, async ({ target, 
 			for (const phase of ['acquire', 'validated', 'carrier-ready', 'port-attached', 'first-write', 'first-read', 'initialized']) {
 				expect(connected.some(mark => mark.name === `ash.appServer.main.${phase}`), `${sample.cohort}[${sample.index}] Main ${phase}`).toBe(true);
 			}
+			const carrierPid = (connected.find(mark => mark.name === 'ash.appServer.main.carrier-ready')?.detail as { carrierPid?: number; } | undefined)?.carrierPid;
+			for (const phase of ['operation-lock', 'install-selection', 'executable-sha256', 'ensure-selected', 'daemon-probe', 'connect-ready']) {
+				expect(sample.rust.some(record => record.pid === carrierPid && record.scope === 'connection' && record.phase === phase), `${sample.cohort}[${sample.index}] carrier ${phase}`).toBe(true);
+			}
+			if (sample.connectionHealthCheck === 'control') expect(sample.rust.some(record => record.scope === 'probe')).toBe(false);
+			for (const scope of sample.connectionHealthCheck === 'control' ? ['connection'] : ['probe', 'connection']) {
+				for (const phase of ['directory-open', 'initialize']) {
+					expect(sample.rust.some(record => record.pid !== carrierPid && record.scope === scope && record.phase === phase), `${sample.cohort}[${sample.index}] server ${scope} ${phase}`).toBe(true);
+				}
+			}
+			if (sample.cohort !== 'reused') expect(sample.rust.some(record => record.pid !== carrierPid && record.phase === 'managed-startup')).toBe(true);
 		}
 	} catch (cause) {
 		metadata.failure = redact(String(cause), directory, testWorkspace.directory);
@@ -250,4 +292,21 @@ function summarize(samples: readonly ConnectionSample[]): Record<ConnectionSampl
 		const medianMs = valid.length === 0 ? null : (valid[Math.floor((valid.length - 1) / 2)]! + valid[Math.floor(valid.length / 2)]!) / 2;
 		return [cohort, { valid: valid.length, errors: cohortSamples.length - valid.length, medianMs }];
 	})) as Record<ConnectionSample['cohort'], { valid: number; errors: number; medianMs: number | null; }>;
+}
+
+
+/** Diagnostic stderr is a process boundary. Persist only this bounded credential-free shape. */
+function parseRustTrace(line: string): RustTrace | undefined {
+	if (!line.startsWith('ASH_STARTUP_TRACE ')) return undefined;
+	if (line.length > 2048) throw new Error('Oversized Rust startup trace');
+	const value: unknown = JSON.parse(line.slice('ASH_STARTUP_TRACE '.length));
+	if (!value || typeof value !== 'object') throw new Error('Invalid Rust startup trace');
+	const record = value as Record<string, unknown>;
+	if (typeof record.traceId !== 'string' || !/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/u.test(record.traceId)
+		|| typeof record.carrierPid !== 'number' || !Number.isSafeInteger(record.carrierPid) || record.carrierPid <= 0
+		|| typeof record.pid !== 'number' || !Number.isSafeInteger(record.pid) || record.pid <= 0
+		|| !['connection', 'probe'].includes(record.scope as string)
+		|| typeof record.phase !== 'string' || !/^[a-z][a-z0-9-]{0,63}$/u.test(record.phase)
+		|| typeof record.durationMs !== 'number' || !Number.isFinite(record.durationMs) || record.durationMs < 0) throw new Error('Invalid Rust startup trace');
+	return { traceId: record.traceId, carrierPid: record.carrierPid, pid: record.pid, scope: record.scope as RustTrace['scope'], phase: record.phase, durationMs: record.durationMs };
 }

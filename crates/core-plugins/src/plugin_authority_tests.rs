@@ -681,88 +681,140 @@ fn unrelated_activation_change_does_not_revoke_an_exact_package_fence() {
 }
 
 #[test]
-fn old_local_vscode_grants_retire_without_removing_other_plugin_grants() {
+fn old_local_javascript_grants_retire_without_removing_other_plugin_grants() {
+    for api in ["vscode", "ash"] {
+        for contract_version in [0, 1] {
+            let profile = tempdir().unwrap();
+            let source = tempdir().unwrap();
+            let javascript_root = source.path().join("javascript");
+            let ordinary_root = source.path().join("ordinary");
+            let ordinary = package(&ordinary_root, "acme/ordinary", "1.0.0");
+            package(&javascript_root, "acme/javascript", "1.0.0");
+            let manifest_path = javascript_root.join(".ash-plugin/plugin.json");
+            let mut manifest: serde_json::Value =
+                serde_json::from_slice(&fs::read(&manifest_path).unwrap()).unwrap();
+            manifest["contributions"]["editorExtensions"] = serde_json::json!([{
+                "id": "commands", "runtime": "javascript", "api": api, "entrypoint": "extension.cjs",
+                "runtimeApiVersion": 1, "activationEvents": [{ "type": "onCommand", "id": "test.command" }],
+                "capabilities": ["command", "taskProvider"]
+            }]);
+            fs::write(&manifest_path, serde_json::to_vec(&manifest).unwrap()).unwrap();
+            fs::write(
+                javascript_root.join("extension.cjs"),
+                "exports.activate = () => {}; ",
+            )
+            .unwrap();
+            let javascript = LocalPluginPackage::load(&javascript_root).unwrap();
+            // Populate immutable content and historical persistence directly; current admission
+            // must reject retired author APIs, so it cannot be used to manufacture old records.
+            let store = PluginPackageStore::open(profile.path()).unwrap();
+            let installed = [
+                store.install_local(&javascript).unwrap(),
+                store.install_local(&ordinary).unwrap(),
+            ];
+            let mut durable = serde_json::json!({
+                "schemaVersion": 3, "revision": 6, "activationGeneration": 3,
+                "installed": installed, "enabled": installed, "granted": installed, "revoked": [],
+                "active": installed.iter().map(|package| serde_json::json!({"package": package, "activationRevision": 3})).collect::<Vec<_>>(),
+                "receipts": {}
+            });
+            if contract_version != 0 {
+                durable["nodeExecutionContractVersion"] = serde_json::json!(contract_version);
+            }
+            fs::write(
+                profile.path().join("authority.json"),
+                serde_json::to_vec(&durable).unwrap(),
+            )
+            .unwrap();
+            let reopened = PluginActivationAuthority::open(profile.path()).unwrap();
+            let after = reopened.snapshot();
+            assert_eq!(after.granted(), &[installed[1].clone()]);
+            assert_eq!(after.enabled().len(), 2);
+            assert_eq!(after.activation().packages().len(), 1);
+            assert_eq!(after.revision(), 7);
+            assert_eq!(after.activation().generation(), 4);
+            let granted = reopened.apply(request(
+                &reopened,
+                "new-node-grant",
+                PluginAuthorityCommand::Grant {
+                    package: installed[0].clone(),
+                },
+            ));
+            if api == "ash" {
+                granted.unwrap();
+                drop(reopened);
+                let again = PluginActivationAuthority::open(profile.path()).unwrap();
+                assert_eq!(again.snapshot().granted().len(), 2);
+                assert_eq!(again.snapshot().activation().packages().len(), 2);
+            } else {
+                assert_eq!(
+                    granted.unwrap_err().kind(),
+                    PluginErrorKind::ManifestInvalid
+                );
+                reopened
+                    .apply(request(
+                        &reopened,
+                        "disable-retired",
+                        PluginAuthorityCommand::Disable {
+                            package: installed[0].clone(),
+                        },
+                    ))
+                    .unwrap();
+                reopened
+                    .apply(request(
+                        &reopened,
+                        "uninstall-retired",
+                        PluginAuthorityCommand::Uninstall {
+                            package: installed[0].clone(),
+                        },
+                    ))
+                    .unwrap();
+                assert_eq!(reopened.snapshot().installed(), &[installed[1].clone()]);
+                assert_eq!(reopened.snapshot().granted(), &[installed[1].clone()]);
+            }
+        }
+    }
+}
+
+#[test]
+fn retired_author_packages_cannot_enter_authority_through_local_or_direct_install() {
     let profile = tempdir().unwrap();
     let source = tempdir().unwrap();
-    let vscode_root = source.path().join("vscode");
-    let ordinary_root = source.path().join("ordinary");
-    let ordinary = package(&ordinary_root, "acme/ordinary", "1.0.0");
-    package(&vscode_root, "acme/vscode", "1.0.0");
-    let manifest_path = vscode_root.join(".ash-plugin/plugin.json");
+    package(source.path(), "acme/retired", "1.0.0");
+    let path = source.path().join(".ash-plugin/plugin.json");
     let mut manifest: serde_json::Value =
-        serde_json::from_slice(&fs::read(&manifest_path).unwrap()).unwrap();
+        serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
     manifest["contributions"]["editorExtensions"] = serde_json::json!([{
-        "id": "commands", "runtime": "javascript", "api": "vscode", "entrypoint": "extension.cjs",
-        "runtimeApiVersion": 1, "activationEvents": [{ "type": "onCommand", "id": "test.command" }], "capabilities": ["command"]
+        "id": "commands", "runtime": "javascript", "entrypoint": "extension.cjs", "runtimeApiVersion": 1,
+        "activationEvents": [{"type": "onCommand", "id": "test.run"}], "capabilities": ["command"]
     }]);
-    fs::write(&manifest_path, serde_json::to_vec(&manifest).unwrap()).unwrap();
+    fs::write(path, serde_json::to_vec(&manifest).unwrap()).unwrap();
     fs::write(
-        vscode_root.join("extension.cjs"),
-        "exports.activate = () => {}; ",
+        source.path().join("extension.cjs"),
+        "exports.activate = () => {};",
     )
     .unwrap();
-    let vscode = LocalPluginPackage::load(&vscode_root).unwrap();
+    let local = LocalPluginPackage::load(source.path()).unwrap();
     let authority = PluginActivationAuthority::open(profile.path()).unwrap();
-    let mut installed = Vec::new();
-    for (index, local) in [&vscode, &ordinary].into_iter().enumerate() {
-        let package = authority
-            .install_local(
-                PluginAuthorityCommandId::new(format!("install-{index}")).unwrap(),
-                authority.snapshot().revision(),
-                local,
-            )
-            .unwrap()
-            .package;
-        for (action, command) in [
-            (
-                "grant",
-                PluginAuthorityCommand::Grant {
-                    package: package.clone(),
-                },
-            ),
-            (
-                "enable",
-                PluginAuthorityCommand::Enable {
-                    package: package.clone(),
-                },
-            ),
-        ] {
-            authority
-                .apply(request(&authority, &format!("{action}-{index}"), command))
-                .unwrap();
-        }
-        installed.push(package);
-    }
-    let before = authority.snapshot();
-    drop(authority);
-    let path = profile.path().join("authority.json");
-    let mut durable: serde_json::Value = serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
-    durable
-        .as_object_mut()
-        .unwrap()
-        .remove("nodeExecutionContractVersion");
-    fs::write(&path, serde_json::to_vec(&durable).unwrap()).unwrap();
-    let reopened = PluginActivationAuthority::open(profile.path()).unwrap();
-    let after = reopened.snapshot();
-    assert_eq!(after.granted(), &[installed[1].clone()]);
-    assert_eq!(after.enabled().len(), 2);
-    assert_eq!(after.activation().packages().len(), 1);
-    assert_eq!(after.revision(), before.revision() + 1);
     assert_eq!(
-        after.activation().generation(),
-        before.activation().generation() + 1
+        authority
+            .install_local(PluginAuthorityCommandId::new("local").unwrap(), 0, &local)
+            .unwrap_err()
+            .kind(),
+        PluginErrorKind::ManifestInvalid
     );
-    reopened
-        .apply(request(
-            &reopened,
-            "new-node-grant",
-            PluginAuthorityCommand::Grant {
-                package: installed[0].clone(),
-            },
-        ))
-        .unwrap();
-    drop(reopened);
-    let again = PluginActivationAuthority::open(profile.path()).unwrap();
-    assert_eq!(again.snapshot().granted().len(), 2);
-    assert_eq!(again.snapshot().activation().packages().len(), 2);
+    let store = PluginPackageStore::open(profile.path()).unwrap();
+    let stored = store.install_local(&local).unwrap();
+    assert_eq!(
+        authority
+            .apply(request(
+                &authority,
+                "direct",
+                PluginAuthorityCommand::Install { package: stored }
+            ))
+            .unwrap_err()
+            .kind(),
+        PluginErrorKind::ManifestInvalid
+    );
+    assert!(authority.snapshot().installed().is_empty());
 }

@@ -215,7 +215,7 @@ export async function main(profile: SessionsProfile): Promise<IDisposable> {
 			createFileDialogService: services => services.createInstance(FileDialogService),
 			createLifecycleService: services => {
 				lifecycleService = services.createInstance(ElectronLifecycleService, { ownerWindow: window, onError: onUnexpectedError });
-				sessions.add(lifecycleService.onWillShutdown(event => event.join(logger.flush(), 'Agents logs flush')));
+				sessions.add(lifecycleService.onWillShutdown(event => event.join(logger.flush().catch(error => console.error('Could not flush Agents logs during shutdown', error)), 'Agents logs flush')));
 				return lifecycleService;
 			},
 			nativeHostApi: api.nativeHost,

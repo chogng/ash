@@ -79,6 +79,8 @@ export abstract class CompositePart<T extends Composite> extends Part {
 	}
 
 	protected updateTitleArea(): void {
+		// Scope feature-owned title styling to the active composite.
+		this.domNode.dataset.activeComposite = this.activeComposite?.getId() ?? '';
 		const toolbar = this.compositeToolBar;
 		if (!toolbar) return;
 		const activeElement = toolbar.element.ownerDocument.activeElement;

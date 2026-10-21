@@ -20,6 +20,8 @@ import {
 import { UNKNOWN_EMPTY_WINDOW_WORKSPACE, isSingleFolderWorkspaceIdentifier, isWorkspaceIdentifier, type IAnyWorkspaceIdentifier } from '../../workspace/common/workspace.js';
 
 export interface IWindowCreationOptions {
+	/** Rebuilds the window's host resources without asking the old renderer to unload. */
+	readonly reopen: () => Promise<void>;
 	readonly workspace?: IAnyWorkspaceIdentifier;
 	readonly isSessionsWindow?: boolean;
 	readonly state: IWindowState;
@@ -104,10 +106,13 @@ export class CodeWindow<TWindow extends ICodeWindowHandle<TWindow>> extends Disp
 	private loadCancellation: AbortController | undefined;
 	private reloading: Promise<void> | undefined;
 	private errorPrompt: AbortController | undefined;
+	private errorPromptTask: Promise<void> | undefined;
+	private shutdownPrompt = false;
 	private rendererGone = false;
 	private preparedNavigation = false;
 	private readonly controls: WindowControlsOverlay;
 	private readonly titleBarStyle: TitleBarStyleConfiguration;
+	private readonly reopen: () => Promise<void>;
 
 	constructor(
 		createWindow: (options: IWindowConstructorOptions & Pick<IWindowCreationOptions, 'title' | 'icon' | 'tabbingIdentifier'>) => TWindow,
@@ -121,6 +126,7 @@ export class CodeWindow<TWindow extends ICodeWindowHandle<TWindow>> extends Disp
 	) {
 		super();
 		this.titleBarStyle = options.titleBarStyle ?? 'custom';
+		this.reopen = options.reopen;
 		this.openedWorkspace = options.workspace ?? UNKNOWN_EMPTY_WINDOW_WORKSPACE;
 		this.resources = this._register(resources);
 		const scope = `${options.isSessionsWindow ? 'sessions' : 'workbench'}:${this.openedWorkspace.id}`;
@@ -197,11 +203,11 @@ export class CodeWindow<TWindow extends ICodeWindowHandle<TWindow>> extends Disp
 				window.destroy();
 				return;
 			}
-			this.reportWindowError(true);
+			void this.reportWindowError(true);
 		};
-		const onUnresponsive = (): void => this.reportWindowError(false);
+		const onUnresponsive = (): void => { void this.reportWindowError(false); };
 		const onResponsive = (): void => {
-			if (!this.rendererGone) {
+			if (!this.rendererGone && !this.shutdownPrompt) {
 				this.errorPrompt?.abort();
 				this.errorPrompt = undefined;
 			}
@@ -461,17 +467,30 @@ export class CodeWindow<TWindow extends ICodeWindowHandle<TWindow>> extends Disp
 		if (options.dimmed !== undefined) this.controls.setDimmed(options.dimmed);
 	}
 
-	private reportWindowError(gone: boolean): void {
-		if (this.isDisposed || this.errorPrompt) return;
-		if (!gone) this.logService.error('window', 'Window is unresponsive', { windowId: this.win.id });
+	public reportWindowError(gone: boolean, shutdownSignal?: AbortSignal): Promise<void> {
+		if (this.isDisposed || shutdownSignal?.aborted) return Promise.resolve();
+		if (this.errorPrompt) {
+			if (!shutdownSignal) return this.errorPromptTask!;
+			const prompt = this.errorPrompt;
+			this.shutdownPrompt = true;
+			const cancel = (): void => prompt.abort();
+			shutdownSignal.addEventListener('abort', cancel, { once: true });
+			return this.errorPromptTask!.finally(() => shutdownSignal.removeEventListener('abort', cancel));
+		}
+		if (!gone) this.logService.error('window', 'Window is unresponsive', { windowId: this.win.id, source: shutdownSignal ? 'shutdown-timeout' : 'renderer-unresponsive' });
 		const prompt = new AbortController();
 		this.errorPrompt = prompt;
-		void this.dialogMainService.showMessageBox({
+		this.shutdownPrompt = shutdownSignal !== undefined;
+		const cancel = (): void => prompt.abort();
+		shutdownSignal?.addEventListener('abort', cancel, { once: true });
+		const task = this.dialogMainService.showMessageBox({
 			type: 'warning',
 			message: gone
 				? localize('window.rendererGone', "The window closed unexpectedly.")
 				: localize('window.unresponsive', "The window is not responding."),
-			detail: localize('window.recoveryDetail', "Reopen the window to continue, or close it."),
+			detail: gone
+				? localize('window.recoveryDetail', "Reopen the window to continue, or close it.")
+				: localize('window.waitRecoveryDetail', "You can keep waiting, reopen the window, or close it. Reopening or closing may lose changes that have not been backed up."),
 			buttons: gone
 				? [localize('window.reopen', "Reopen"), localize('window.close', "Close")]
 				: [localize('window.reopen', "Reopen"), localize('window.close', "Close"), localize('window.keepWaiting', "Keep Waiting")],
@@ -482,15 +501,22 @@ export class CodeWindow<TWindow extends ICodeWindowHandle<TWindow>> extends Disp
 		}, this.win).then(async result => {
 			// Recovery and close invalidate an already visible dialog's result too.
 			if (prompt.signal.aborted || this.isDisposed) return;
-			if (result.response === 0 && this.configuration) {
-				if (gone) await this.load(this.configuration);
-				else await this.reload();
+			if (result.response === 0) {
+				await this.reopen();
+				if (!this.win.isDestroyed()) this.win.destroy();
 			} else if (result.response === 1) {
 				this.win.destroy();
 			}
 		}).catch(error => this.logService.error('window', 'Window recovery failed', error)).finally(() => {
-			if (this.errorPrompt === prompt) this.errorPrompt = undefined;
+			shutdownSignal?.removeEventListener('abort', cancel);
+			if (this.errorPrompt === prompt) {
+				this.errorPrompt = undefined;
+				this.errorPromptTask = undefined;
+				this.shutdownPrompt = false;
+			}
 		});
+		this.errorPromptTask = task;
+		return task;
 	}
 
 }

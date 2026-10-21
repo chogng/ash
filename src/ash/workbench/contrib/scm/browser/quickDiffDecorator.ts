@@ -1,16 +1,16 @@
-import { Disposable } from '../../../../base/common/lifecycle.js';
+import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { themeColorFromId } from '../../../../base/common/themables.js';
 import { Position } from '../../../../editor/common/core/position.js';
 import { Range } from '../../../../editor/common/core/range.js';
 import { LineDiffKind, type LineDiffRow } from '../../../../editor/common/diff/lineDiff.js';
-import { TextDecorationCollection } from '../../../../editor/common/model/decorationCollection.js';
-import { type TextModel } from '../../../../editor/common/model/textModel.js';
+import { type ICodeEditor } from '../../../../editor/browser/editorBrowser.js';
+import { type IEditorDecorationsCollection } from '../../../../editor/common/editorCommon.js';
 
 import { type IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { warningForeground } from '../../../../platform/theme/common/colors/baseColors.js';
 import { diffInsertedLineMarker, diffRemovedLineMarker } from '../../../../platform/theme/common/colors/editorColors.js';
 import { type QuickDiffComparison, type QuickDiffModelReference } from '../common/quickDiff.js';
-import { MinimapPosition, OverviewRulerLane, TrackedRangeStickiness, type IModelDecorationOptions } from '../../../../editor/common/model.js';
+import { MinimapPosition, OverviewRulerLane, TrackedRangeStickiness, type IModelDecorationOptions, type ITextModel } from '../../../../editor/common/model.js';
 
 interface QuickDiffDecorationMetadata {
 	readonly kind: LineDiffKind.Added | LineDiffKind.Modified | LineDiffKind.Removed;
@@ -19,11 +19,16 @@ interface QuickDiffDecorationMetadata {
 
 /** Projects one shared Quick Diff model into gutter, overview-ruler, and minimap decorations. */
 export class QuickDiffDecorator extends Disposable {
-	private readonly collection: TextDecorationCollection<QuickDiffDecorationMetadata>;
+	private readonly collection: IEditorDecorationsCollection;
+	private readonly model: ITextModel;
 
-	constructor(private readonly model: TextModel, modelReference: QuickDiffModelReference, private readonly configurationService: IConfigurationService) {
+	constructor(editor: ICodeEditor, modelReference: QuickDiffModelReference, private readonly configurationService: IConfigurationService) {
 		super();
-		this.collection = this._register(new TextDecorationCollection<QuickDiffDecorationMetadata>(model));
+		this.model = editor.getModel()!;
+		// A working copy can also be displayed in a diff. Keep Git markers local
+		// to this editor so they cannot overlap the comparison's own indicators.
+		this.collection = editor.createDecorationsCollection();
+		this._register(toDisposable(() => this.collection.clear()));
 		this._register(modelReference.object.onDidChange(() => this.rebuild(modelReference.object.state.comparisons)));
 		this._register(configurationService.onDidChangeConfiguration(event => {
 			if (event.affectsConfiguration('scm.diffDecorations')) this.rebuild(modelReference.object.state.comparisons);
@@ -63,7 +68,7 @@ export class QuickDiffDecorator extends Disposable {
 			for (let rowIndex = 0; rowIndex < rows.length; rowIndex += 1) {
 				const row = rows[rowIndex]!;
 				if (row.kind === LineDiffKind.Unchanged) continue;
-				const lineIndex = row.modifiedLineIndex ?? deletionAnchor(rows, rowIndex, this.model.lineCount);
+				const lineIndex = row.modifiedLineIndex ?? deletionAnchor(rows, rowIndex, this.model.getLineCount());
 				const kind = decorationKindForRow(row);
 				const current = byLine.get(lineIndex);
 				if (!current || kindPriority(kind) > kindPriority(current.kind)) {
@@ -73,12 +78,10 @@ export class QuickDiffDecorator extends Disposable {
 				}
 			}
 		}
-		this.collection.replaceAll(Object.freeze([...byLine.entries()].sort(([left], [right]) => left - right).map(([lineIndex, metadata]) => Object.freeze({
+		this.collection.set([...byLine.entries()].sort(([left], [right]) => left - right).map(([lineIndex, metadata]) => Object.freeze({
 			range: Range.fromPositions(new Position((lineIndex) + 1, (0) + 1), new Position((lineIndex) + 1, (this.model.getLineLength((lineIndex) + 1)) + 1)),
-			stickiness: TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
-			options: this.resolve(metadata),
-			metadata,
-		}))));
+			options: { ...this.resolve(metadata), stickiness: TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges },
+		})));
 	}
 }
 

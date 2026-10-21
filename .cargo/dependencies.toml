@@ -14,8 +14,8 @@ reason = "Current upstream API families: 0.8.0 via bit-set; 0.9.1 via bit-set, w
 
 [[multiple_versions]]
 name = "bitflags"
-versions = ["1.3.2", "2.13.1"]
-reason = "Current upstream API families: 1.3.2 via core-graphics, core-graphics-types, defmt and other importers; 2.13.1 via android-activity, bindgen, cairo-rs and other importers. Review the introducing packages together before changing this set."
+versions = ["1.3.2", "2.13.2"]
+reason = "1.3.2 serves older graphics consumers. zbus 6 requires 2.13.2, shared with the existing 2.x consumers; no flags cross these API families."
 
 [[multiple_versions]]
 name = "block-buffer"
@@ -89,8 +89,8 @@ reason = "Current upstream API families: 0.2.17 via mxc-sdk, ash-app-server, ash
 
 [[multiple_versions]]
 name = "hashbrown"
-versions = ["0.15.5", "0.16.1", "0.17.1"]
-reason = "Current upstream API families: 0.15.5 via cached, lru, petgraph; 0.16.1 via accesskit_consumer, accesskit_macos, accesskit_windows and other importers; 0.17.1 via glifo, hashlink, indexmap and other importers. Review the introducing packages together before changing this set."
+versions = ["0.14.5", "0.15.5", "0.16.1", "0.17.1"]
+reason = "0.14.5 is retained by rust-analyzer's dashmap 6.2.1, rowan 0.17 and ra_ap_intern. Existing consumers use 0.15.5 via cached/lru/petgraph, 0.16.1 via accesskit, and 0.17.1 via glifo/hashlink/indexmap."
 
 [[multiple_versions]]
 name = "heck"
@@ -159,8 +159,8 @@ reason = "Current upstream API families: 0.5.18 via parking_lot_core; 0.9.1 via 
 
 [[multiple_versions]]
 name = "rustix"
-versions = ["0.38.44", "1.1.4"]
-reason = "Current upstream API families: 0.38.44 via calloop, calloop-wayland-source, crossterm and other importers; 1.1.4 via ash-app-server-daemon, ash-app-server-transport, ash-remote-server and other importers. Review the introducing packages together before changing this set."
+versions = ["0.38.44", "1.1.5"]
+reason = "0.38.44 serves calloop/crossterm consumers. zbus 6's zruntime requires 1.1.5, shared with existing Ash and filesystem consumers; no new major API family is introduced."
 
 [[multiple_versions]]
 name = "security-framework"
@@ -209,8 +209,8 @@ reason = "Current upstream API families: 1.0.69 via thiserror; 2.0.21 via thiser
 
 [[multiple_versions]]
 name = "toml_datetime"
-versions = ["0.7.5+spec-1.1.0", "1.1.1+spec-1.1.0"]
-reason = "Current upstream API families: 0.7.5+spec-1.1.0 via toml; 1.1.1+spec-1.1.0 via toml_edit. Review the introducing packages together before changing this set."
+versions = ["0.7.5+spec-1.1.0", "1.1.2+spec-1.1.0"]
+reason = "0.7.5 serves existing toml 0.9 consumers; 1.1.2 is required by rust-analyzer's toml 1.1 and is shared with toml_edit."
 
 [[multiple_versions]]
 name = "unicode-width"
@@ -220,7 +220,7 @@ reason = "Current upstream API families: 0.1.14 via unicode-truncate; 0.2.0 via 
 [[multiple_versions]]
 name = "ureq"
 versions = ["2.12.1", "3.4.2"]
-reason = "2.12 remains inside ash-http-client's custom rustls/SSRF connector adapter; the ureq-update workspace alias uses 3.4 for product-update, app-server-daemon and CLI updates with OS trust. Old native-certs is disabled and rustls-pemfile is removed."
+reason = "2.12 remains inside ash-http-client's TLS/SSRF adapter with its builtin TLS disabled; the connector uses the shared outbound-network rustls config without bundled roots. The ureq-update alias uses 3.4 for product-update, app-server-daemon and CLI updates with OS trust."
 
 [[multiple_versions]]
 name = "untrusted"
@@ -229,8 +229,8 @@ reason = "Current upstream API families: 0.7.1 via aws-lc-rs, tough; 0.9.0 via r
 
 [[multiple_versions]]
 name = "webpki-roots"
-versions = ["0.26.11", "1.0.9"]
-reason = "Current upstream API families: 0.26.11 via ureq; 1.0.9 via webpki-roots. Review the introducing packages together before changing this set."
+versions = ["0.26.11", "1.0.10"]
+reason = "0.26.11 remains locked for tokio-tungstenite 0.29's inactive optional bundled-roots feature; it is absent from the all-target workspace feature graph. Active TLS consumers use patched 1.0.10. ash-http-client disables ureq's builtin TLS and uses its own shared certificate policy."
 
 [[multiple_versions]]
 name = "windows-sys"
@@ -294,18 +294,13 @@ reason = "Current upstream API families: 0.10.1 via portable-pty; 0.55.0 via mxc
 
 [[multiple_versions]]
 name = "zbus"
-versions = ["4.4.0", "5.19.0"]
-reason = "Current upstream API families: 4.4.0 via keyring, secret-service; 5.19.0 via accesskit_unix, ashpd, atspi-common and other importers. Review the introducing packages together before changing this set."
+versions = ["4.4.0", "6.0.0"]
+reason = "6.0 serves Linux sleep inhibition. Cargo retains keyring 3's optional async Secret Service dependencies at 4.4 in the lockfile; Ash selects its synchronous libdbus backend, so 4.4 is absent from the active graph on all targets."
 
 [[multiple_versions]]
 name = "zbus_macros"
-versions = ["4.4.0", "5.19.0"]
-reason = "Current upstream API families: 4.4.0 via zbus; 5.19.0 via zbus. Review the introducing packages together before changing this set."
-
-[[multiple_versions]]
-name = "zbus_names"
-versions = ["3.0.0", "4.3.4"]
-reason = "Current upstream API families: 3.0.0 via zbus; 4.3.4 via atspi-common, zbus, zbus_macros and other importers. Review the introducing packages together before changing this set."
+versions = ["4.4.0", "6.0.0"]
+reason = "6.0 accompanies the active zbus 6 API. 4.4 remains only in keyring 3's inactive optional async dependency closure; no Ash target selects that backend."
 
 [[multiple_versions]]
 name = "typed-path"
@@ -313,19 +308,14 @@ versions = ["0.9.3", "0.12.3"]
 reason = "0.9.3 belongs to tough's signed package metadata; zip 9.0.4 requires 0.12.3 for platform-independent archive paths. No typed paths cross these APIs."
 
 [[multiple_versions]]
-name = "zvariant"
-versions = ["4.2.0", "5.15.0"]
-reason = "Current upstream API families: 4.2.0 via zbus, zbus_names; 5.15.0 via accesskit_atspi_common, atspi-common, zbus and other importers. Review the introducing packages together before changing this set."
+name = "foreign-types"
+versions = ["0.3.2", "0.5.0"]
+reason = "0.5 serves macOS cocoa/core-graphics. 0.3 remains in the lockfile through keyring's optional OpenSSL vendoring feature; the selected Secret Service backend uses Rust cryptography."
 
 [[multiple_versions]]
-name = "zvariant_derive"
-versions = ["4.2.0", "5.15.0"]
-reason = "Current upstream API families: 4.2.0 via zvariant; 5.15.0 via zvariant. Review the introducing packages together before changing this set."
-
-[[multiple_versions]]
-name = "zvariant_utils"
-versions = ["2.1.0", "4.2.0"]
-reason = "Current upstream API families: 2.1.0 via zbus_macros, zvariant_derive; 4.2.0 via zbus_macros, zvariant, zvariant_derive. Review the introducing packages together before changing this set."
+name = "foreign-types-shared"
+versions = ["0.1.1", "0.3.1"]
+reason = "Accompanies foreign-types 0.3 and 0.5 respectively; the older family is only in the inactive OpenSSL lockfile closure."
 
 [[multiple_versions]]
 name = "io-lifetimes"
@@ -437,3 +427,23 @@ reason = "Matches phf 0.12.1 (chrono-tz) and phf 0.14.0 (katex-rs and its build-
 name = "prettyplease"
 versions = ["0.2.37", "0.3.0"]
 reason = "0.2.37 via bindgen and prost-build uses syn 2; katex-rs -> bon-macros uses prettyplease 0.3.0 with syn 3."
+
+[[multiple_versions]]
+name = "embedded-io"
+versions = ["0.4.0", "0.6.1"]
+reason = "Both optional IO API families are retained by postcard 1.1.3, used by the unmodified rust-analyzer proc-macro protocol. No embedded IO types cross the bridge."
+
+[[multiple_versions]]
+name = "pulldown-cmark"
+versions = ["0.13.4", "0.9.6"]
+reason = "Ash's Markdown consumers use 0.13.4. Upstream rust-analyzer 0.0.358 and pulldown-cmark-to-cmark 10 retain the 0.9 event API inside the standalone analysis process."
+
+[[multiple_versions]]
+name = "rustc-hash"
+versions = ["1.1.0", "2.1.3"]
+reason = "rust-analyzer's rowan 0.17 keeps rustc-hash 1.1; the existing workspace and other rust-analyzer libraries share 2.1.3. Hash types stay within their owning libraries."
+
+[[multiple_versions]]
+name = "toml"
+versions = ["0.9.12+spec-1.1.0", "1.1.8+spec-1.1.0"]
+reason = "Ash configuration and build tools retain toml 0.9; unmodified rust-analyzer 0.0.358 uses toml 1.1 for Cargo configuration. The bridge exchanges JSON, not either TOML value type."

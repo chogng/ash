@@ -48,14 +48,23 @@ def ash_rust_crate(name, crate_name, data = [], crate_features = [], extra_alias
         visibility = ["//visibility:public"],
     )
 
+    watcher_test_env = {"ASH_FILE_WATCHER_TEST_HOST": "$(rootpath //crates/file-watcher:watch-probe-test-host)"}
+    watcher_test_env.update(test_env)
+
     rust_test(
         name = name + "-unit-tests",
         aliases = _crate_aliases(include_dev = True) | extra_aliases,
         crate = ":" + name,
         # rust_test recompiles the crate; feature flags must match its library.
         crate_features = crate_features,
-        data = data,
-        env = test_env,
+        data = data + select({
+            "@platforms//os:macos": ["//crates/file-watcher:watch-probe-test-host"],
+            "//conditions:default": [],
+        }),
+        env = select({
+            "@platforms//os:macos": watcher_test_env,
+            "//conditions:default": test_env,
+        }),
         env_inherit = test_env_inherit,
         deps = all_crate_deps(
             normal = True,

@@ -608,7 +608,7 @@ impl ExtensionHostSupervisor {
             .map_err(|_| ExtensionHostError::HostExited)?
             .client_handler
             .clone();
-        if self.inner.command.is_vscode() {
+        if self.inner.command.is_node_host() {
             if let Some(handler) = handler {
                 // Recovery must query the same window owners before package evaluation: facts
                 // may have changed while this process was offline. The process lease covers IO.

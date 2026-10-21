@@ -34,6 +34,7 @@ single_version_override(
     # preserves the exact zlib bytes already pinned by rules_rs.
     patches = [
         "//third_party/rules_rs:immutable_zlib_urls.patch",
+        "//third_party/rules_rs:nested_platform_features.patch",
         "//third_party/rules_rs:windows_gnullvm_exec_triples.patch",
     ],
 )
@@ -260,13 +261,20 @@ crate.annotation(
     repositories = ["crates"],
 )
 
-# Wayland is an OS interface supplied by libwayland-dev in Linux CI. Its pkg-config
-# search path is intentionally host-owned; retain the check for every other crate.
+# Link the host's Wayland interface without exposing its entire library directory.
+# A pkg-config -L/usr/lib edge would replace the hermetic toolchain's libc while
+# retaining its older CRT objects, which need the matching libc startup symbols.
+system_wayland = use_repo_rule("//bazel/extensions:system_wayland.bzl", "system_wayland")
+system_wayland(name = "ash_system_wayland")
+
 crate.annotation(
     crate = "wayland-sys",
-    allow_build_script_to_detect_nonhermetic_paths = True,
+    gen_build_script = "off",
+    deps = ["@ash_system_wayland//:client"],
     repositories = ["crates"],
 )
+
+inject_repo(crate, "ash_system_wayland")
 
 # rules_rust's runfiles crate has its own manifest below the repository root.
 crate.annotation(

@@ -604,21 +604,21 @@ for (const windowMode of ['workbench', 'agents']) test(`Output wiring reaches re
 	await mkdir(join(root, '.ash-plugin'), { recursive: true });
 	await writeFile(join(root, '.ash-plugin', 'plugin.json'), JSON.stringify({
 		schemaVersion: 1, id: 'acme/output-smoke', version: '1.0.0', displayName: 'Output wiring smoke', compatibility: { ash: '>=0.1.0' },
-		contributions: { editorExtensions: [{ id: 'output', runtime: 'javascript', api: 'vscode', entrypoint: 'extension.js', runtimeApiVersion: 1, activationEvents: [{ type: 'onCommand', id: 'acme.output.start' }], capabilities: ['command'] }] },
+		contributions: { editorExtensions: [{ id: 'output', runtime: 'javascript', api: 'ash', entrypoint: 'extension.js', runtimeApiVersion: 1, activationEvents: [{ type: 'onCommand', id: 'acme.output.start' }], capabilities: ['command'] }] },
 		permissions: [{ type: 'directory', access: 'read' }],
 	}));
-	await writeEditorExtensionFixture(root, `const vscode = require('vscode'); const { commands, window } = vscode;
+	await writeEditorExtensionFixture(root, `const ash = require('@ash/sdk'); const { commands, window } = ash;
 exports.activate = context => {
  const text = window.createOutputChannel('Extension Text', 'typescript');
  const logs = window.createOutputChannel('Extension Logs', { log: true });
  const levels = [];
  context.subscriptions.push(logs.onDidChangeLogLevel(level => levels.push(level)));
- context.subscriptions.push(commands.registerCommand('acme.output.start', () => { text.append('first '); text.appendLine('second'); logs.info('READY %s', 'output'); logs.trace('TRACE output'); logs.show(true); }));
- context.subscriptions.push(commands.registerCommand('acme.output.emit', () => { logs.info('LEVEL=' + logs.logLevel + ';EVENTS=' + levels.join(',')); logs.trace('NEW TRACE output'); }));
- context.subscriptions.push(commands.registerCommand('acme.output.hideOther', () => text.hide()));
- context.subscriptions.push(commands.registerCommand('acme.output.hide', () => logs.hide()));
- context.subscriptions.push(commands.registerCommand('acme.output.show', () => logs.show()));
- context.subscriptions.push(commands.registerCommand('acme.output.dispose', () => { text.dispose(); logs.dispose(); }));
+ context.subscriptions.push(commands.register('acme.output.start', () => { text.append('first '); text.appendLine('second'); logs.info('READY %s', 'output'); logs.trace('TRACE output'); logs.show(true); }));
+ context.subscriptions.push(commands.register('acme.output.emit', () => { logs.info('LEVEL=' + logs.logLevel + ';EVENTS=' + levels.join(',')); logs.trace('NEW TRACE output'); }));
+ context.subscriptions.push(commands.register('acme.output.hideOther', () => text.hide()));
+ context.subscriptions.push(commands.register('acme.output.hide', () => logs.hide()));
+ context.subscriptions.push(commands.register('acme.output.show', () => logs.show()));
+ context.subscriptions.push(commands.register('acme.output.dispose', () => { text.dispose(); logs.dispose(); }));
 };`);
 	const manifestPath = join(root, 'package.json');
 	const manifest = JSON.parse(await readFile(manifestPath, 'utf8'));

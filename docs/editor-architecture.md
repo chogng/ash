@@ -304,6 +304,28 @@ font-size 派生的 fallback advance；测试和未来专用字体引擎通过�
 会重建缓存。随机差分测试覆盖 400 次多区间事务、换行变化和 undo/redo，并与
 逐次全文扫描结果比较。
 
+GPU 装饰仍由 `DecorationStyleCache` 为字形 atlas 提供稳定样式 ID。
+`undefined` 表示继承，显式 `false` 表示关闭，颜色值 `0` 表示透明；三者不能碰撞。
+`GlyphRasterizer` 对粗体和删除线均优先使用显式覆盖，再读取 token 字体样式。
+全空样式继续使用 ID `0`，opacity 和删除线厚度沿用两位小数的缓存精度。
+
+2026-10-21 在 macOS arm64、Chrome 155.0.8059.85 的真实 WebGPU 路径完成定向验证：
+`gpuInfrastructure.test.ts` 24 项及 `gpuText.integration.spec.ts` 的 `chrome-gpu` 项目 19 项通过。
+新增缓存用例在旧实现上 8 项失败／4 项通过，真实 Canvas 字形对照也失败；修复后覆盖双向插入顺序、
+显式关闭粗体／删除线、透明色／零 opacity、18／22 px 字号及 28／34 px 行高变化、主题切换、行几何和光标。
+本检出 `9402110a6` 加当前 GPU 修改的正常 Desktop 构建、Stanza 类型检查和结构／CSS ownership 检查通过；
+Ash 0.1.0／Electron 44.4.5 的真实 App Server 打开、编辑、保存流程 1 项通过，保存结果直接读取磁盘断言。
+此 Desktop 用例验证宿主接线，GPU 像素结论来自 Chrome GPU 项目，不代表 Electron GPU 或其他平台已验收。
+完整命令、首败及通过日志见 `.build/local-todo-retirement/validation.json`，核心入口为：
+
+```sh
+pnpm test:editor:unit --run src/ash/editor/test/browser/gpuInfrastructure.test.ts
+pnpm test:editor:browser gpuText.integration.spec.ts --project=chrome-gpu
+pnpm run build
+pnpm typecheck:stanza
+pnpm run test:smoke:desktop:no-compile test/smoke/areas/editor/editor-open.spec.ts --grep 'App Server workspace files open in Stanza and save through the editor region'
+```
+
 ### Current 9：Gutter 与 selection/caret projection
 
 `ViewLine` 只拥有单行文字、字符映射和文字几何。`LineNumbersPart`、
@@ -1275,6 +1297,20 @@ revision、销毁、跨 model/language 拒绝、Enter、auto-closing `notIn` 与
 语法由 `workbench/services/treeSitter` 组合，Desktop 接入共享 Rust/Rope 会话，Web 使用
 Tree-sitter Worker。语言规则位于各扩展的 `queries/`；文本编辑、版本及撤销仍由 TextModel
 拥有。高亮、大纲、折叠、结构选择与假设编辑共用语法会话。
+
+文件获取等待 `TokenizationTextModelPart.whenReady` 时，等待对象属于 TextModel。语言或
+Provider 在首个请求期间替换后端，等待会转到当前后端；当前后端失败、调用取消和模型释放
+仍向调用方返回错误，不把旧后端的完成当成当前模型就绪。
+
+2026-10-21 macOS arm64 本机验证：两条受控首开竞态在修复前失败，修复后连同活动后端
+失败／取消／释放及已有共享树覆盖，两个定向测试文件共 136 项通过。当前检出 `a66ebb32a`
+加本轮修改经 `pnpm build` 构建；真实 Ash Desktop 从 SCM 冷开合成 Markdown diff，再打开
+共享文件编辑并撤销，两步通过且未点 Retry。原有 Markdown wrapping smoke 也通过实际进程
+退出／重启及设置覆盖（1 项通过），其中已移除旧故障的 Retry 豁免。结构／CSS ownership、
+Stanza 与 automation 类型检查通过。这些结果不覆盖 Windows、物理 IME 或屏幕阅读器。
+场景报告在 `.build/ash-playwright-mcp/evidence/local-cold-syntax-20261021-2026-10-21T13-37-34-577Z/report.html`；
+日志、构建来源与媒体摘要见 `.build/local-acceptance-20261021/validation.json`。已审阅关键截图，
+保留原始 WebM 和 trace；本机无 ffmpeg／ffprobe，未生成字幕视频或验证视频时长／编码。
 
 活动主题由 `IThemeService` 唯一持有。Tree-sitter capture 的首段是 token 类型，其余段是
 修饰信息；高亮通过活动 `IColorTheme.getTokenStyleMetadata` 直接取得颜色和字体样式，嵌入语言

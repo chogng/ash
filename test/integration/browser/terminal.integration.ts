@@ -134,6 +134,7 @@ setIconResolver(document, icon => getIconDefinition(icon));
 function createTerminalFixtureLayout(root: HTMLElement, lifetime: DisposableStore): IWorkbenchLayoutService {
 	return Object.assign(lifetime.add(new BrowserLayoutService({ root })), {
 		getPanelPosition: () => Position.BOTTOM, setPanelPosition: () => { }, onDidChangePanelPosition: Event.None,
+		getSideBarPosition: () => Position.LEFT,
 		onDidChangeAuxiliaryBarMaximized: Event.None, isAuxiliaryBarMaximized: () => false,
 		toggleMaximizedAuxiliaryBar: () => { }, setAuxiliaryBarMaximized: () => false,
 		onDidChangePartVisibility: Event.None, isPartVisible: () => true, hidePart: () => { }, hasFocus: () => false,
@@ -316,6 +317,7 @@ window.ashTerminalIntegration = {
 	binaryWrites,
 	resizes,
 	fit: () => widget.fit(),
+	resize: (cols, rows) => widget.raw.resize(cols, rows),
 	write: text => widget.write(text),
 	sequence: async (event, text) => {
 		if (text) await new Promise<void>(resolve => widget.write(text, resolve));
@@ -346,6 +348,7 @@ declare global {
 			readonly binaryWrites: readonly number[][];
 			readonly resizes: readonly ITerminalDimensions[];
 			fit(): void;
+			resize(cols: number, rows: number): void;
 			write(text: string): void;
 			start(): boolean;
 			ready(): Promise<void>;
@@ -613,6 +616,7 @@ if (new URLSearchParams(location.search).has('pane') || new URLSearchParams(loca
 		}));
 		const paneLayout = Object.assign(lifetime.add(new BrowserLayoutService({ root })), {
 			onDidChangePanelPosition: Event.None, getPanelPosition: () => Position.BOTTOM, setPanelPosition: () => { },
+			getSideBarPosition: () => Position.LEFT,
 			onDidChangePartVisibility: visibility.event,
 			onDidChangeAuxiliaryBarMaximized: Event.None, isAuxiliaryBarMaximized: () => false,
 			toggleMaximizedAuxiliaryBar: () => { }, setAuxiliaryBarMaximized: () => false,
@@ -949,7 +953,7 @@ if (new URLSearchParams(location.search).has('stream')) {
 	if (overflow) await widgetServices.get(IConfigurationService).updateValue('terminal.integrated.scrollback', 5000);
 	const profile = { profileId: 'shell', title: 'Shell', isDefault: true };
 	const processes: import('../../../src/ash/platform/terminal/common/terminal.js').ITerminalProcessService = {
-		operatingSystem: reviveHistory ? OperatingSystem.Windows : undefined,
+		operatingSystem: reviveHistory || new URLSearchParams(location.search).get('os') === 'windows' ? OperatingSystem.Windows : undefined,
 		getProcessInfo: async () => ({ ready: { pid: 1234, cwd: '/workspace' }, cwd: '/workspace/current', rows: 24, cols: 80 }),
 		setAutoReplies: async () => { }, sendSignal: async () => { }, resolveProfile: async (profile: import('../../../src/ash/platform/terminal/common/terminal.js').TerminalProcessProfileSelection) => ({ profile: profile.type === 'custom' ? { profileId: `custom:${profile.name}`, title: profile.name, isDefault: false } : instance.profile, executable: profile.type === 'custom' ? profile.path.at(-1)! : '/bin/sh', args: profile.type === 'custom' ? (typeof profile.args === 'string' ? profile.args : [...profile.args]) : [] }), getEnvironment: async () => ({}), listProfiles: async () => [profile],
 		create: async () => { launch++; return { terminalId: reuseCommands ? `stream-shell-${launch}` : 'stream-shell', ready: { pid: reuseCommands ? 1234 + launch : 1234, cwd: '/workspace' }, profile, connectionPersistence: 'connectionOwned' }; },
@@ -1100,6 +1104,9 @@ declare global {
 
 if (new URLSearchParams(location.search).has('input')) {
 	widget.dispose();
+	if (new URLSearchParams(location.search).has('clipboardFirst')) {
+		await import('../../../src/ash/workbench/contrib/terminalContrib/clipboard/browser/terminal.clipboard.contribution.js');
+	}
 	await import('../../../src/ash/workbench/contrib/terminal/terminal.all.js');
 	const [{ ServiceCollection }, { ITerminalProcessService }, { IWorkspaceContextService }, { TestWorkspaceService }, { installWorkbenchServiceContributions }] = await Promise.all([
 		import('../../../src/ash/platform/instantiation/common/serviceCollection.js'),
@@ -1476,6 +1483,8 @@ if (new URLSearchParams(location.search).has('input')) {
 					return { value: configuration.getValue<string>(key), persisted: JSON.parse((await configuration.read()).source)[key] ?? null };
 				},
 				select: (start, length) => screen.raw.select(start, 0, length),
+				activateOriginal: () => terminals.setActiveInstance(terminal),
+				activateOther: () => terminals.setActiveInstance(terminals.instances.find(instance => instance !== terminal)),
 				selection: () => screen.raw.getSelection(),
 				selectedContext: () => services.get(IContextKeyService).getContext(document.activeElement).getValue<boolean>('terminalTextSelectedInFocused') === true,
 				hold: () => { holdRead = true; },
@@ -1608,6 +1617,8 @@ declare global {
 			reads(): number;
 			warningPolicy(): Promise<{ value: string; persisted: string | null; }>;
 			select(start: number, length: number): void;
+			activateOriginal(): void;
+			activateOther(): void;
 			selection(): string;
 			selectedContext(): boolean;
 			hold(): void;

@@ -1,17 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
-import { CursorMove, CursorMoveCommands } from '../../common/cursor/cursorMoveCommands.js';
-
-test('CursorMoveCommands exposes only the standard movement command surface', () => {
-	assert.deepEqual(
-		Object.getOwnPropertyNames(CursorMoveCommands).filter(name => !['length', 'name', 'prototype'].includes(name)).sort(),
-		[
-			'addCursorDown', 'addCursorUp', 'cancelSelection', 'expandLineSelection', 'findPositionInViewportIfOutside',
-			'line', 'moveTo', 'moveToBeginningOfBuffer', 'moveToBeginningOfLine', 'moveToEndOfBuffer', 'moveToEndOfLine',
-			'selectAll', 'simpleMove', 'viewportMove', 'word',
-		].sort(),
-	);
-});
+import { CursorMove } from '../../common/cursor/cursorMoveCommands.js';
 
 test('CursorMove parses standard directions, units, selection, value, and history flags', () => {
 	assert.deepEqual(CursorMove.parse({

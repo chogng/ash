@@ -16,6 +16,7 @@ import { IWorkspaceTrustManagementService } from '../../../../platform/workspace
 import { type AppServerErrorName, type LanguageCodeActionDiagnosticDto, type LanguageDiagnosticsNotification } from "../../../../../../.build/protocol/typescript/index.js";
 import { type ICodeIntelligenceDocumentService } from "../../codeIntelligence/common/codeIntelligenceDocumentService.js";
 import { AppServerLanguageSupport } from "./appServerLanguageSupport.js";
+import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { resolveAppServerLanguageDirAccess } from "./appServerLanguageWorkspace.js";
 import { type ILanguageDiagnosticsService, type LanguageDiagnosticSnapshot } from "../common/languageDiagnosticsService.js";
 import { acquireJsonLanguageDiagnostics } from '../common/jsonLanguageDiagnostics.js';
@@ -59,6 +60,7 @@ export class AppServerLanguageDiagnosticsService extends Disposable implements I
 	private support = new AppServerLanguageSupport();
 	private permissionQueue = Promise.resolve();
 	private alive = true;
+	private started = false;
 	readonly onDidChangeDiagnostics = this.changeEmitter.event;
 
 	constructor(
@@ -69,6 +71,7 @@ export class AppServerLanguageDiagnosticsService extends Disposable implements I
 		@IWorkspaceContextService private readonly workspace: IWorkspaceContextService,
 		@IWorkspaceTrustManagementService private readonly workspaceTrust: IWorkspaceTrustManagementService,
 		@ITextFileService textFiles: ITextFileService,
+		@IConfigurationService private readonly configuration: IConfigurationService,
 	) {
 		super();
 		this._register(textFiles.onDidSave(event => {
@@ -83,6 +86,9 @@ export class AppServerLanguageDiagnosticsService extends Disposable implements I
 			if (event.method === "extensions/changed" || event.method === "config/changed") this.queuePermissionRefresh();
 		});
 		this._register(toDisposable(() => subscription.dispose()));
+		this._register(configuration.onDidChangeConfiguration(event => {
+			if (event.affectsConfiguration('rust-analyzer')) this.queuePermissionRefresh();
+		}));
 		if (checkWorkspaceTrust) this._register(workspaceTrust.onDidChangeTrust(() => this.queuePermissionRefresh()));
 		this._register(workspace.onDidChangeWorkspace(() => {
 			this.languageAllowed = false;
@@ -116,6 +122,12 @@ export class AppServerLanguageDiagnosticsService extends Disposable implements I
 			this.workspaceServerKeys.clear();
 			this.publishedDiagnostics.clear();
 		}));
+	}
+
+	/** Initial workspace diagnostics must use the same loaded settings as restored editors. */
+	start(): void {
+		if (this.started || !this.alive) return;
+		this.started = true;
 		this.queuePermissionRefresh();
 	}
 
@@ -307,7 +319,7 @@ export class AppServerLanguageDiagnosticsService extends Disposable implements I
 	}
 
 	private queuePermissionRefresh(): void {
-		if (!this.alive) return;
+		if (!this.alive || !this.started) return;
 		this.permissionRefreshGeneration += 1;
 		this.languageAllowed = false;
 		this.support = new AppServerLanguageSupport();
@@ -325,7 +337,7 @@ export class AppServerLanguageDiagnosticsService extends Disposable implements I
 		await Promise.all([...this.entries.values()].map(entry => entry.queue));
 		const access = await resolveAppServerLanguageDirAccess(this.workspace, this.workspaceTrust, this.checkWorkspaceTrust);
 		if (!this.alive || generation !== this.permissionRefreshGeneration || this.workspace.getWorkspace().id !== access.workspaceId) return;
-		const support = access.allowed ? await AppServerLanguageSupport.read(this.api, this.workspace) : new AppServerLanguageSupport();
+		const support = access.allowed ? await AppServerLanguageSupport.read(this.api, this.workspace, this.configuration) : new AppServerLanguageSupport();
 		if (!this.alive || generation !== this.permissionRefreshGeneration || this.workspace.getWorkspace().id !== access.workspaceId) return;
 		this.support = support;
 		this.languageAllowed = access.allowed;

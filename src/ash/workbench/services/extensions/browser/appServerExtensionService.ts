@@ -9,7 +9,7 @@ import { ViewsRegistry } from '../../../common/views.js';
 import { ContextKeyExpr } from '../../../../platform/contextkey/common/contextkey.js';
 import { URI } from "../../../../base/common/uri.js";
 import { Registry } from '../../../../platform/registry/common/platform.js';
-import { Extensions as ConfigurationExtensions, type IConfigurationRegistry, type IConfigurationNode } from '../../../../platform/configuration/common/configurationRegistry.js';
+import { Extensions as ConfigurationExtensions, type IConfigurationRegistry, type IConfigurationNode, type IConfigurationDefaults } from '../../../../platform/configuration/common/configurationRegistry.js';
 import { registerProblemMatcherContributions, type ProblemMatcherContributions } from '../../../contrib/tasks/common/problemMatcher.js';
 import { throwIfCancelled } from '../../../../base/common/cancellation.js';
 import { raceCancellationError } from '../../../../base/common/async.js';
@@ -90,6 +90,7 @@ export class AppServerExtensionService extends Disposable implements IExtensionS
 	private readonly fileTemplateRegistry: ExtensionFileTemplateRegistry;
 	private readonly debugAdapterRegistry: ExtensionDebugAdapterRegistry;
 	private activeConfigurations: IConfigurationNode[] = [];
+	private activeConfigurationDefaults: IConfigurationDefaults[] = [];
 	private readonly submenuRegistrations = this._register(new DisposableStore());
 	private readonly welcomeRegistrations = this._register(new DisposableStore());
 	private activeLanguages: readonly LanguageDescriptionContribution[] = Object.freeze([]);
@@ -130,8 +131,9 @@ export class AppServerExtensionService extends Disposable implements IExtensionS
 			this.snippetHandler = undefined;
 		}));
 		this._register(toDisposable(() => {
-			Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration).updateConfigurations({ add: [], remove: this.activeConfigurations });
+			Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration).deltaConfiguration({ removedConfigurations: this.activeConfigurations, removedDefaults: this.activeConfigurationDefaults });
 			this.activeConfigurations = [];
+			this.activeConfigurationDefaults = [];
 			this.manifests = [];
 		}));
 		this._register(toDisposable(() => this.languageConfigurationRegistrations.dispose()));
@@ -279,6 +281,7 @@ export class AppServerExtensionService extends Disposable implements IExtensionS
 		const manifests: { readonly description: ExtensionDescriptor; readonly manifest: ExtensionManifest; }[] = [];
 		const problemMatchers: unknown[] = [];
 		const configurations: IConfigurationNode[] = [];
+		const configurationDefaults: IConfigurationDefaults[] = [];
 		const submenus: { menu: string; item: ISubmenuItem; }[] = [];
 		const welcome: Parameters<typeof ViewsRegistry.registerViewWelcomeContent>[] = [];
 		const problemPatterns: unknown[] = [];
@@ -356,6 +359,7 @@ export class AppServerExtensionService extends Disposable implements IExtensionS
 				manifests.push({ description: activeExtension, manifest });
 				welcome.push(...manifest.contributes.viewsWelcome.map(entry => [entry.view, { content: entry.contents, when: entry.when ? ContextKeyExpr.deserialize(entry.when) : undefined, precondition: entry.precondition ? ContextKeyExpr.deserialize(entry.precondition) : undefined, group: entry.group, order: entry.order }] as Parameters<typeof ViewsRegistry.registerViewWelcomeContent>));
 				configurations.push(...manifest.contributes.configuration);
+				configurationDefaults.push(...manifest.contributes.configurationDefaults);
 				for (const submenu of manifest.contributes.submenus) {
 					for (const placement of submenu.placements) {
 						const [group, orderText] = (placement.group ?? '').split('@');
@@ -505,7 +509,7 @@ export class AppServerExtensionService extends Disposable implements IExtensionS
 					for (const submenu of submenus) this.submenuRegistrations.add(MenusRegistry.appendMenuItem(extensionMenuId(submenu.menu), submenu.item));
 					this.welcomeRegistrations.clear();
 					for (const args of welcome) this.welcomeRegistrations.add(ViewsRegistry.registerViewWelcomeContent(...args));
-					this.replaceContributions(languages, languageConfigurations, themes, fileTemplates, debugAdapters, debugAdapterFactories, fileIconThemes, productIconThemes, themeContributions, { matchers: problemMatchers, patterns: problemPatterns }, configurations);
+					this.replaceContributions(languages, languageConfigurations, themes, fileTemplates, debugAdapters, debugAdapterFactories, fileIconThemes, productIconThemes, themeContributions, { matchers: problemMatchers, patterns: problemPatterns }, configurations, configurationDefaults);
 					snippetActivation?.commit();
 					this.activeThemeContributions = themeContributions;
 					this.activeLanguages = Object.freeze([...languages]);
@@ -556,7 +560,7 @@ export class AppServerExtensionService extends Disposable implements IExtensionS
 	}
 
 
-	private replaceContributions(languages: readonly LanguageDescriptionContribution[], languageConfigurations: readonly LanguageConfigurationContribution[], themes: readonly ExtensionThemeDefinition[], fileTemplates: readonly ExtensionFileTemplateDefinition[], debugAdapters: readonly ExtensionDebugAdapterDefinition[], debugAdapterFactories: readonly DebugAdapterFactory[], fileIconThemes: readonly IWorkbenchFileIconTheme[], productIconThemes: readonly IWorkbenchProductIconTheme[], themeContributions: ThemeContributions, problemContributions: ProblemMatcherContributions, configurations: IConfigurationNode[]): void {
+	private replaceContributions(languages: readonly LanguageDescriptionContribution[], languageConfigurations: readonly LanguageConfigurationContribution[], themes: readonly ExtensionThemeDefinition[], fileTemplates: readonly ExtensionFileTemplateDefinition[], debugAdapters: readonly ExtensionDebugAdapterDefinition[], debugAdapterFactories: readonly DebugAdapterFactory[], fileIconThemes: readonly IWorkbenchFileIconTheme[], productIconThemes: readonly IWorkbenchProductIconTheme[], themeContributions: ThemeContributions, problemContributions: ProblemMatcherContributions, configurations: IConfigurationNode[], configurationDefaults: IConfigurationDefaults[]): void {
 		const previousThemes = this.themeRegistry.currentCatalog.themes;
 		const previousFileTemplates = this.fileTemplateRegistry.currentCatalog.templates;
 		const previousDebugAdapters = this.debugAdapterRegistry.definitions;
@@ -572,8 +576,9 @@ export class AppServerExtensionService extends Disposable implements IExtensionS
 			this.fileIconRegistration.replace(fileIconThemes);
 			this.productIconRegistration.replace(productIconThemes);
 			this.problemMatcherRegistration.replace(problemContributions);
-			Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration).updateConfigurations({ add: configurations, remove: this.activeConfigurations });
+			Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration).deltaConfiguration({ addedConfigurations: configurations, removedConfigurations: this.activeConfigurations, addedDefaults: configurationDefaults, removedDefaults: this.activeConfigurationDefaults });
 			this.activeConfigurations = configurations;
+			this.activeConfigurationDefaults = configurationDefaults;
 		} catch (error) {
 			try {
 				this.replaceThemeContributions(this.activeThemeContributions);

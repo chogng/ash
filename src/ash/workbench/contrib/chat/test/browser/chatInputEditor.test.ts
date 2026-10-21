@@ -1,6 +1,6 @@
 import { DisposableStore } from '../../../../../base/common/lifecycle.js';
 import assert from "node:assert/strict";
-import { test, suiteTeardown } from "mocha";
+import { setup, teardown, test, suiteTeardown } from "mocha";
 import { JSDOM } from "jsdom";
 
 const browserEnvironment = new JSDOM("<!doctype html><body></body>");
@@ -209,8 +209,6 @@ test("Chat input completes slash commands before submitting", async () => {
 	assert.equal(editor.value, "/");
 	await waitFor(() => completionLabels(editor.element).includes('/config'));
 	for (const command of ['/new', '/history', '/config']) assert.ok(completionLabels(editor.element).includes(command));
-	assert.equal(editor.element.querySelector(".stanza-editor")?.classList.contains("stanza-editor-embedded"), true);
-	assert.equal(editor.element.querySelector(".stanza-editor")?.classList.contains("word-wrapped"), true);
 	assert.equal(editor.element.querySelector(".stanza-editor-line-number"), null);
 
 	input.dispatchEvent(beforeInputEvent(dom.window, "n"));
@@ -397,3 +395,10 @@ function requiredElement<T extends Element = HTMLElement>(root: ParentNode, sele
 	assert.ok(element);
 	return element;
 }
+
+// Embedded editors exercise the same admitted feature batch as the product host.
+const { getEditorFeatures } = await import('../../../../../editor/browser/editorFeatures.js');
+const { EditorExtensionsRegistry } = await import('../../../../../editor/browser/editorExtensions.js');
+let editorFeatures: import('../../../../../base/common/lifecycle.js').IDisposable;
+setup(() => { editorFeatures = EditorExtensionsRegistry.registerEditorFeatures(getEditorFeatures()); });
+teardown(() => editorFeatures.dispose());

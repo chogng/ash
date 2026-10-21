@@ -1,3 +1,4 @@
+import type { IExtensionService } from '../../../services/extensions/common/extensionService.js';
 import { generalProfile } from '../../../../../../extensions/academic/browser/generalProfile.js';
 import { resetNlsResolver, setNlsMessages } from '../../../../nls.js';
 import { toDisposable } from '../../../../base/common/lifecycle.js';
@@ -51,7 +52,7 @@ for (const [language, title] of [['en', 'Academic Document'], ['zh-CN', '学术�
 					},
 				};
 			};
-			using bridge = new MainThreadClientEditors(30_000, load, api, packages);
+			using bridge = new MainThreadClientEditors(30_000, load, api, packages, emptyEditorDeclarations);
 			const input = { resource: URI.file('/paper.ASH-PAPER') };
 			const instantiationService = {
 				createInstance: (_ctor: unknown, options: EditorPaneOptions) => {
@@ -93,7 +94,7 @@ test('retired and late capability responses never restore editor registrations',
 	const requested = new Promise<void>(resolve => { started = resolve; });
 	const api = { invoke: () => { started(); return new Promise<JsonValue>(resolve => { finish = resolve; }); } } as unknown as IExtensionHostApi;
 	const packages = { list: async () => ({ generation: 1, extensions: [owner], diagnostics: [] }) } as unknown as IExtensionApi;
-	using bridge = new MainThreadClientEditors(30_000, async () => { throw new Error('must not load'); }, api, packages);
+	using bridge = new MainThreadClientEditors(30_000, async () => { throw new Error('must not load'); }, api, packages, emptyEditorDeclarations);
 	const pending = bridge.update({ generation: 1, extensions: [runtime] });
 	await requested;
 	bridge.clear();
@@ -118,13 +119,13 @@ test('invalid or unadmitted client declarations fail without partial registratio
 		{ ...declaration, editors: [{ ...(declaration as any).editors[0] }, { editorId: 'invalid' }] },
 	]) {
 		value = invalid;
-		using bridge = new MainThreadClientEditors(30_000, async () => { throw new Error('must not load'); }, api, packages);
+		using bridge = new MainThreadClientEditors(30_000, async () => { throw new Error('must not load'); }, api, packages, emptyEditorDeclarations);
 		await assert.rejects(bridge.update({ generation: generation++, extensions: [runtime] }));
 		assert.equal(DocumentTypes.find({ resource: URI.file('/invalid.ash-paper') }), undefined);
 	}
 	value = declaration;
 	entries = [{ ...owner, sourceKind: 'user' }];
-	using bridge = new MainThreadClientEditors(30_000, async () => { throw new Error('must not load'); }, api, packages);
+	using bridge = new MainThreadClientEditors(30_000, async () => { throw new Error('must not load'); }, api, packages, emptyEditorDeclarations);
 	await assert.rejects(bridge.update({ generation, extensions: [runtime] }), /unavailable/);
 	entries = [owner];
 	await bridge.update({ generation: generation + 1, extensions: [runtime] });
@@ -139,7 +140,7 @@ test('retiring the connection while the catalog is loading cannot create a new e
 	const catalog = new Promise(resolveCatalog => { resolve = resolveCatalog; });
 	using bridge = new MainThreadClientEditors(30_000, async () => { throw new Error('must not load'); }, {
 		invoke: async () => { invoked = true; return declaration; },
-	} as unknown as IExtensionHostApi, { list: () => catalog } as unknown as IExtensionApi);
+	} as unknown as IExtensionHostApi, { list: () => catalog } as unknown as IExtensionApi, emptyEditorDeclarations);
 	const pending = bridge.update({ generation: 1, extensions: [runtime] });
 	bridge.clear();
 	resolve({ generation: 1, extensions: [owner], diagnostics: [] });
@@ -175,7 +176,7 @@ test('verified installed packages bind editor scopes to exact admitted runtime a
 			packageId: owner.id, packageVersion: owner.version,
 			getEditorProfile: () => ({ ...generalProfile, id: 'academic', contentType: 'application/vnd.ash.academic-document+json' }),
 		};
-	}, { invoke: async () => declaration } as unknown as IExtensionHostApi, packages);
+	}, { invoke: async () => declaration } as unknown as IExtensionHostApi, packages, emptyEditorDeclarations);
 	await bridge.update({ generation: 1, extensions: [admittedRuntime] });
 	const input = { resource: URI.file('/installed.ash-paper') };
 	const descriptor = EditorPanes.getEditorPane(input)!;
@@ -196,7 +197,7 @@ test('a publisher name or runtime identity cannot grant installed renderer execu
 		invoke: async () => { invoked = true; return declaration; },
 	} as unknown as IExtensionHostApi, {
 		list: async () => ({ generation: 1, extensions: [{ ...owner, sourceKind: 'registry', publisher: 'ash', packageSha256: runtime.packageDigest }], diagnostics: [] }),
-	} as unknown as IExtensionApi);
+	} as unknown as IExtensionApi, emptyEditorDeclarations);
 	await assert.rejects(bridge.update({ generation: 1, extensions: [runtime] }), /unavailable/);
 	assert.equal(invoked, false);
 });
@@ -208,7 +209,7 @@ test('temporary client resource failures can retry within the same live capabili
 		return { packageId: owner.id, packageVersion: owner.version, getEditorProfile: () => ({ ...generalProfile, id: 'academic', contentType: 'application/vnd.ash.academic-document+json' }) };
 	}, { invoke: async () => declaration } as unknown as IExtensionHostApi, {
 		list: async () => ({ generation: 1, extensions: [owner], diagnostics: [] }),
-	} as unknown as IExtensionApi);
+	} as unknown as IExtensionApi, emptyEditorDeclarations);
 	await bridge.update({ generation: 1, extensions: [runtime] });
 	const descriptor = EditorPanes.getEditorPane({ resource: URI.file('/retry-resources.ash-paper') })!;
 	await assert.rejects(descriptor.resolveDocumentProfile!(), /Temporary resource read failure/);
@@ -225,7 +226,7 @@ test('disabled installed declarations protect document routing and uninstall rem
 	let entries = [{ ...owner, sourceKind: 'registry', manifestJson, manifestSha256: `sha256:${'a'.repeat(64)}` }];
 	using bridge = new MainThreadClientEditors(30_000, async () => { throw new Error('must not load'); }, {} as IExtensionHostApi, {
 		list: async () => ({ generation: 1, extensions: entries, diagnostics: [] }),
-	} as unknown as IExtensionApi);
+	} as unknown as IExtensionApi, emptyEditorDeclarations);
 	const input = { resource: URI.file('/disabled.ash-protected') };
 	await bridge.update({ generation: 1, extensions: [] });
 	assert.equal(DocumentTypes.requiresProvider(input), true);
@@ -251,7 +252,7 @@ test('package artifact capabilities validate targets and cancel conversion when 
 			}),
 		})
 	});
-	using bridge = new MainThreadClientEditors(30_000, load, api, packages);
+	using bridge = new MainThreadClientEditors(30_000, load, api, packages, emptyEditorDeclarations);
 	await bridge.update({ generation: 1, extensions: [runtime] });
 	const profile = await EditorPanes.getEditorPane({ resource: URI.file('/paper.ash-paper') })!.resolveDocumentProfile!();
 	assert.throws(() => profile.create(), /Invalid document artifact format/);
@@ -264,7 +265,7 @@ test('package artifact capabilities validate targets and cancel conversion when 
 
 test('resource editors validate manifest scope, reserve binary resources and retire without loading a fallback', async () => {
 	const manifest = {
-		name: 'pdf-viewer', publisher: 'ash', version: '1.0.0', engines: { vscode: '*' },
+		name: 'pdf-viewer', publisher: 'ash', version: '1.0.0', engines: { ash: '*' },
 		ashRuntime: { kind: 'rust', entrypoint: 'ash-pdf-viewer' },
 		contributes: { customEditors: [{ viewType: 'ash.workbench.pdfViewer', displayName: 'PDF Reader', priority: 'default', selector: [{ filenamePattern: '*.pdf', mimeType: 'application/pdf' }] }] },
 	};
@@ -273,7 +274,7 @@ test('resource editors validate manifest scope, reserve binary resources and ret
 	const editor = { editorId: 'ash.workbench.pdfViewer', displayName: 'PDF Reader', selectors: ['*.pdf'], contentType: 'application/pdf' };
 	let value: JsonValue = { ...declaration, editors: [editor] };
 	const packages = { list: async () => ({ generation: 1, extensions: [installed], diagnostics: [] }) } as unknown as IExtensionApi;
-	using bridge = new MainThreadClientEditors(30_000, async () => { throw new Error('no static implementation'); }, { invoke: async () => value } as unknown as IExtensionHostApi, packages);
+	using bridge = new MainThreadClientEditors(30_000, async () => { throw new Error('no static implementation'); }, { invoke: async () => value } as unknown as IExtensionHostApi, packages, emptyEditorDeclarations);
 	let generation = 1;
 	for (const invalid of [{ ...editor, selectors: ['*.txt'] }, { ...editor, contentType: 'text/plain' }, { ...editor, documentType: 'pdf' }]) {
 		value = { ...declaration, editors: [invalid] };
@@ -291,4 +292,49 @@ test('resource editors validate manifest scope, reserve binary resources and ret
 	await bridge.update({ generation: generation++, extensions: [] });
 	assert.throws(() => EditorPanes.getEditorPane(input), /unavailable/);
 	await assert.rejects(async () => descriptor.create({ input }), /abort/i);
+});
+
+const emptyEditorDeclarations = { getExtensionPointContributions: () => [] } as unknown as IExtensionService;
+
+test('an installed document editor declares restore and creation routes before starting its runtime', async () => {
+	const installed = {
+		...owner, sourceKind: 'registry' as const, packageSha256: runtime.packageDigest, manifestSha256: `sha256:${'b'.repeat(64)}`,
+		rendererClient: { runtimeId: 'marketplace:lazy-academic:editor', apiVersion: 1 as const, entry: 'dist/editor.js', digest: `sha256:${'c'.repeat(64)}`, style: 'dist/editor.css', styleDigest: `sha256:${'d'.repeat(64)}`, sourceDigest: declaration.clientDigest as string },
+		manifestJson: JSON.stringify({ name: 'academic', publisher: 'ash', version: '1.0.0', engines: { ash: '*' }, ashRuntime: { kind: 'rust' }, contributes: { customEditors: [{ viewType: 'stanza.editor.document', displayName: 'Academic Document', priority: 'default', documentType: 'academic', selector: [{ filenamePattern: '*.ash-paper', mimeType: 'application/vnd.ash.academic-document+json' }] }] } }),
+	};
+	const ready = { ...runtime, id: installed.rendererClient.runtimeId };
+	const dormant = { ...ready, lifecycle: 'dormant' as const, incarnation: undefined, registrations: [], activation: { events: ['onDemand:dataChannel'], commands: [] } };
+	let starts = 0, reads = 0, loads = 0;
+	const packages = { list: async () => ({ generation: 1, extensions: [installed], diagnostics: [] }) } as unknown as IExtensionApi;
+	const api = {
+		activateByEvent: async (request: Parameters<IExtensionHostApi['activateByEvent']>[0]) => {
+			starts++;
+			assert.deepEqual(request.event, { type: 'capability', capability: 'dataChannel' });
+			await bridge.update({ generation: 1, extensions: [{ ...dormant, lifecycle: 'starting' }] });
+			assert.equal(EditorPanes.getEditorPane({ resource: URI.file('/restored.ash-paper') })?.id, 'stanza.editor.document');
+			return { generation: 2, extensions: [ready] };
+		},
+		invoke: async () => { reads++; return declaration; },
+	} as unknown as IExtensionHostApi;
+	const extensions = { getExtensionPointContributions: () => [{ description: { id: installed.id }, value: [{ viewType: 'stanza.editor.document', displayName: 'Academic Document', priority: 'default', documentType: 'academic', selector: [{ filenamePattern: '*.ash-paper', mimeType: 'application/vnd.ash.academic-document+json' }] }] }] } as unknown as IExtensionService;
+	using bridge = new MainThreadClientEditors(30_000, async () => {
+		loads++;
+		return { packageId: owner.id, packageVersion: owner.version, getEditorProfile: () => ({ ...generalProfile, id: 'academic', contentType: 'application/vnd.ash.academic-document+json' }) };
+	}, api, packages, extensions);
+	await bridge.update({ generation: 1, extensions: [dormant] });
+	const input = { resource: URI.file('/restored.ash-paper') };
+	const pending = EditorPanes.getEditorPane(input)!;
+	assert.equal(pending.id, 'stanza.editor.document');
+	assert.equal(DocumentTypes.find(input)?.id, 'academic');
+	assert.deepEqual([starts, reads, loads], [0, 0, 0]);
+	const profile = await pending.resolveDocumentProfile!();
+	assert.equal(profile.id, 'academic');
+	assert.deepEqual([starts, reads, loads], [1, 1, 1]);
+	assert.notStrictEqual(EditorPanes.getEditorPane(input), pending);
+	await EditorPanes.getEditorPane(input)!.resolveDocumentProfile!();
+	assert.deepEqual([starts, reads, loads], [1, 1, 1]);
+	bridge.clear();
+	assert.throws(() => EditorPanes.getEditorPane(input), /unavailable/);
+	await assert.rejects(pending.resolveDocumentProfile!(), /retired/);
+	assert.equal(starts, 1);
 });

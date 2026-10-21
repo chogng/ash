@@ -75,14 +75,6 @@ impl ExtensionSource for ExtensionsRemoteClient {
         &self,
         request: SearchPackagesRequest,
     ) -> Result<SearchPackagesResult, ExtensionsClientError> {
-        // The signed catalog has the neutral editor family; Open VSX's VSIX package type
-        // remains a separate source and must not trigger this registry's network request.
-        if request.package_type.as_deref() == Some("editorExtension") {
-            return Ok(SearchPackagesResult {
-                unavailable_sources: Vec::new(),
-                packages: Vec::new(),
-            });
-        }
         let limit = request
             .limit
             .unwrap_or(DEFAULT_SEARCH_LIMIT)

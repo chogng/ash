@@ -32,7 +32,7 @@ export class VoiceSessionController extends Disposable implements IVoiceSessionC
 	private resource: string | undefined;
 	private starting: Promise<AgentVoiceSessionState> | undefined;
 	private pendingTasks: AgentVoiceTaskRequest[] = [];
-	private preparing = false;
+	private preparing: AbortController | undefined;
 
 	constructor(private readonly dispatch: (request: AgentVoiceTaskRequest, signal: AbortSignal) => Promise<void>, private readonly onError: (error: unknown) => void, private readonly prepare: (() => Promise<AgentVoiceSource>) | undefined,
 		@IAgentVoiceService private readonly voice: IAgentVoiceService | undefined,
@@ -75,7 +75,7 @@ export class VoiceSessionController extends Disposable implements IVoiceSessionC
 		if (sameSource(source, this.target) && identity === this.targetIdentity) return;
 		this.targetIdentity = identity;
 		this.target = source ? { ...source } : undefined;
-		if (this.controller && !this.preparing && !this.active || this.active && !sameSource(source, this.active)) void this.disconnect().catch(this.onError);
+		if (this.controller && this.preparing !== this.controller && !this.active || this.active && !sameSource(source, this.active)) void this.disconnect().catch(this.onError);
 	}
 
 	public async connect(window: Window & typeof globalThis, select?: (connections: readonly AgentVoiceConnectionChoice[], signal: AbortSignal) => Promise<AgentVoiceSelection | undefined>): Promise<void> {
@@ -83,6 +83,7 @@ export class VoiceSessionController extends Disposable implements IVoiceSessionC
 		if (!this.isAvailable || !this.voice) throw new Error(localize('chat.voice.unavailable', 'Voice conversation is unavailable in this host.'));
 		if (this.controller) return;
 		const originalTarget = this.target ? { ...this.target } : undefined; const originalIdentity = this.targetIdentity; const controller = new AbortController();
+		let starting: Promise<AgentVoiceSessionState> | undefined;
 		this.active = undefined; this.controller = controller; this.changed.fire();
 		try {
 			const connections = await this.voice.getOptions();
@@ -92,12 +93,12 @@ export class VoiceSessionController extends Disposable implements IVoiceSessionC
 			const model = connection.models.find(model => model.modelId === connection.defaultModel);
 			const selection = select ? await select(connections, controller.signal) : { connectionId: connection.connectionId, modelId: connection.defaultModel, ...(model ? { voice: model.defaultVoice } : {}) };
 			if (!selection || controller.signal.aborted || this.isDisposed || originalIdentity !== this.targetIdentity) throw canceled();
-			this.preparing = true;
+			this.preparing = controller;
 			let target: AgentVoiceSource;
-			try { target = originalTarget ?? await this.prepare!(); } finally { this.preparing = false; }
+			try { target = originalTarget ?? await this.prepare!(); } finally { if (this.preparing === controller) this.preparing = undefined; }
 			if (controller.signal.aborted || this.isDisposed || !sameSource(target, this.target)) throw canceled();
 			this.active = target;
-			const starting = this.voice.start(target, selection, controller.signal);
+			starting = this.voice.start(target, selection, controller.signal);
 			this.starting = starting;
 			const status = await starting;
 			if (controller.signal.aborted || this.isDisposed || this.controller !== controller) throw canceled();
@@ -105,7 +106,7 @@ export class VoiceSessionController extends Disposable implements IVoiceSessionC
 			const pending = this.pendingTasks; this.pendingTasks = [];
 			for (const request of pending) this.acceptTask(request);
 		} catch (error) { if (this.controller === controller) { this.controller = undefined; this.active = undefined; this.resource = undefined; this.pendingTasks = []; } throw error; }
-		finally { this.starting = undefined; this.changed.fire(); }
+		finally { if (this.starting === starting) this.starting = undefined; this.changed.fire(); }
 	}
 
 	public async disconnect(): Promise<void> {

@@ -1,0 +1,8 @@
+load("//:defs.bzl", "ash_rust_crate")
+
+# Cargo's ash-build entry produces the development cdylib. Bazel registers its
+# Rust source and tests; it does not package this module with the product.
+ash_rust_crate(
+    name = "app-server-diff-live",
+    crate_name = "ash_app_server_diff_live",
+)

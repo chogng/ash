@@ -8,7 +8,7 @@ import { IInstantiationService } from '../../../../platform/instantiation/common
 import { EditorOption } from '../../../../editor/common/config/editorOptions.js';
 import { Position } from '../../../../editor/common/core/position.js';
 import { LineDiffKind } from '../../../../editor/common/diff/lineDiff.js';
-import { PeekViewWidget } from '../../../../../../extensions/code/browser/contrib/peekView/browser/peekView.js';
+import { PeekViewWidget } from '../../../../editor/contrib/peekView/browser/peekView.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { type IQuickDiffEditorController, IQuickDiffEditorControllerService, IQuickDiffModelService, type QuickDiffChange, type QuickDiffModelReference } from '../common/quickDiff.js';
 import { QuickDiffDecorator } from './quickDiffDecorator.js';
@@ -22,7 +22,7 @@ export class QuickDiffEditorController extends Disposable implements IQuickDiffE
 	constructor(private readonly editor: ICodeEditor, private readonly editorView: View, @IConfigurationService private readonly configurationService: IConfigurationService, @IQuickDiffModelService modelService: IQuickDiffModelService, @IQuickDiffEditorControllerService controllerService: IQuickDiffEditorControllerService, @IInstantiationService private readonly instantiationService: IInstantiationService) {
 		super();
 		this.modelReference = this._register(modelService.createModelReference(editorView.textModel.uri, editorView.textModel));
-		this._register(new QuickDiffDecorator(editorView.textModel, this.modelReference, configurationService));
+		this._register(new QuickDiffDecorator(editor, this.modelReference, configurationService));
 		this._register(controllerService.register(this));
 		this._register(addDisposableListener<FocusEvent>(editorView.domNode.domNode, 'focusin', () => controllerService.activate(this)));
 		if (editorView.domNode.domNode.contains(editorView.domNode.domNode.ownerDocument.activeElement)) controllerService.activate(this);

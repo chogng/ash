@@ -525,3 +525,148 @@ fn connected_accounts_bound_to_one_contribution_get_distinct_runtime_servers() {
         materialized.definitions[1].id()
     );
 }
+
+struct LateResourceFactory {
+    entered: std::sync::mpsc::Sender<()>,
+    release: Arc<tokio::sync::Notify>,
+}
+struct LateResourceSession {
+    entered: std::sync::mpsc::Sender<()>,
+    release: Arc<tokio::sync::Notify>,
+}
+impl McpSessionFactory for LateResourceFactory {
+    fn connect(&self, _: McpServerDefinition, _: RmcpClientOptions) -> McpConnectFuture {
+        let session = LateResourceSession {
+            entered: self.entered.clone(),
+            release: self.release.clone(),
+        };
+        Box::pin(async move { Ok(Box::new(session) as Box<dyn McpSession>) })
+    }
+}
+impl McpSession for LateResourceSession {
+    fn server_info(&self) -> ServerInfo {
+        serde_json::from_value(serde_json::json!({"protocolVersion":"2025-03-26","serverInfo":{"name":"late","version":"1"},"capabilities":{"resources":{}}})).unwrap()
+    }
+    fn list_tools(&self, cursor: McpPageCursor) -> McpSessionFuture<'_, ListToolsResult> {
+        FakeSession.list_tools(cursor)
+    }
+    fn call_tool(
+        &self,
+        _: CallToolRequestParams,
+        _: &ash_async_utils::CancellationToken,
+    ) -> McpSessionFuture<'_, CallToolResult> {
+        panic!("resource read must not execute the tool")
+    }
+    fn read_resource(
+        &self,
+        uri: String,
+        _: &ash_async_utils::CancellationToken,
+    ) -> McpSessionFuture<'_, ash_rmcp_client::ReadResourceResult> {
+        Box::pin(async move {
+            self.entered.send(()).unwrap();
+            self.release.notified().await;
+            Ok(ash_rmcp_client::ReadResourceResult::new(vec![
+                ash_rmcp_client::ResourceContents::TextResourceContents {
+                    uri,
+                    mime_type: Some("text/plain".into()),
+                    text: "retired identity content".into(),
+                    meta: None,
+                },
+            ]))
+        })
+    }
+    fn shutdown(self: Box<Self>) -> McpSessionFuture<'static, ()> {
+        Box::pin(async { Ok(()) })
+    }
+}
+
+#[test]
+fn logout_drains_a_bound_resource_read_and_suppresses_its_late_result() {
+    let server = McpServerId::new("user:mcp:retiring").unwrap();
+    let target = crate::McpOAuthTarget::from_config(&McpServerConfig {
+        id: server.clone(),
+        display_name: "Retiring".into(),
+        transport: McpTransportConfig::StreamableHttp {
+            url: "https://mcp.example.test/rpc".into(),
+        },
+        credential: McpCredentialBinding::Reference {
+            credential_ref: "mcp/retiring".into(),
+        },
+        enablement: McpServerEnablement::Enabled,
+    })
+    .unwrap();
+    let oauth = Arc::new(crate::McpOAuthService::new(
+        Arc::new(MemorySecretStore::default()),
+        [],
+    ));
+    let credential = oauth.authorization(target.clone()).unwrap();
+    let scope = credential.scope().unwrap();
+    let (entered, waiting) = std::sync::mpsc::channel();
+    let release = Arc::new(tokio::sync::Notify::new());
+    let composition = start_mcp_tools(
+        vec![
+            McpServerDefinition::new(
+                server.clone(),
+                "Retiring",
+                McpServerTransport::Stdio(StdioServerCommand::new("fixture")),
+            )
+            .unwrap(),
+        ],
+        BTreeMap::from([(
+            server,
+            McpInvocationAuthority {
+                display_name: "Retiring".into(),
+                transport: McpInvocationTransport::StreamableHttp,
+                connector_fence: None,
+                runtime_fence: Some(Arc::new(super::OAuthInvocationFence(scope.clone()))),
+            },
+        )]),
+        7,
+        Some(Arc::new(LateResourceFactory {
+            entered,
+            release: release.clone(),
+        })),
+    )
+    .unwrap();
+    let call = ToolCall {
+        id: ToolCallId::new("original").unwrap(),
+        name: composition.tools.definitions()[0].name.clone(),
+        arguments: serde_json::json!({}),
+    };
+    let (done, received) = std::sync::mpsc::channel();
+    std::thread::scope(|threads| {
+        let read = threads.spawn(|| {
+            composition.tools.read_resource(
+                &call,
+                "docs://original",
+                &CancellationSource::new().token(),
+            )
+        });
+        waiting
+            .recv_timeout(std::time::Duration::from_secs(3))
+            .unwrap();
+        threads.spawn(|| {
+            done.send(oauth.logout(&target)).unwrap();
+        });
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(3);
+        while !scope.is_closed() {
+            assert!(std::time::Instant::now() < deadline);
+            std::thread::yield_now();
+        }
+        assert!(
+            received.try_recv().is_err(),
+            "logout replied while the old resource call was still active"
+        );
+        release.notify_one();
+        assert!(
+            read.join().unwrap().is_err(),
+            "retired resource bytes reached the caller"
+        );
+        received
+            .recv_timeout(std::time::Duration::from_secs(3))
+            .unwrap()
+            .unwrap();
+    });
+    assert!(composition.tools.prepare(&call).is_err());
+    assert!(waiting.try_recv().is_err());
+}

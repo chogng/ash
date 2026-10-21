@@ -112,6 +112,7 @@ const emptyLayoutService: IWorkbenchLayoutService = Object.freeze({
 	setAuxiliaryBarMaximized: () => false,
 	onDidChangePanelPosition: Event.None,
 	getPanelPosition: () => Position.BOTTOM,
+	getSideBarPosition: () => Position.LEFT,
 	setPanelPosition: () => { },
 	isPanelMaximized: () => false,
 	toggleMaximizedPanel: () => { },

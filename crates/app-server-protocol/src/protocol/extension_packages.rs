@@ -279,6 +279,8 @@ pub struct ExtensionsBuiltInProviderDto {
 pub struct ExtensionsBuiltInProvidersResult {
     #[ts(type = "number")]
     pub revision: u64,
+    /// Whether this authenticated connection may change backend provider enablement.
+    pub can_change_enablement: bool,
     pub providers: Vec<ExtensionsBuiltInProviderDto>,
 }
 
@@ -431,7 +433,6 @@ pub struct ExtensionsResourceContentDto {
 #[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub enum ExtensionRegistryKindDto {
-    OpenVsx,
     Ash,
 }
 

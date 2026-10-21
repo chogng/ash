@@ -14,6 +14,34 @@ const state: StoredSessionState = {
 	}],
 };
 
+test('unchanged review state skips global flushing while failed writes and removals still retry', async () => {
+	const dom = new JSDOM('', { url: 'https://ash.test' });
+	try {
+		using storage = new BrowserStorageService({ ownerWindow: dom.window as unknown as Window, workspaceId: 'review-flush', flushInterval: 0 });
+		using services = new InstantiationService();
+		services.registerInstance(IStorageService, storage);
+		const persistence = services.createInstance(ChatEditingSessionStorage);
+		persistence.restoreState();
+		let failed = true;
+		let flushes = 0;
+		storage.flush = async () => { flushes++; if (failed) throw new Error('Storage unavailable'); };
+		await persistence.storeState({ version: 1, entries: [] });
+		assert.equal(flushes, 0);
+		await assert.rejects(persistence.storeState(state), /Storage unavailable/);
+		failed = false;
+		await persistence.storeState(state);
+		assert.equal(flushes, 2);
+		await persistence.storeState(state);
+		assert.equal(flushes, 2);
+		failed = true;
+		await assert.rejects(persistence.storeState({ version: 1, entries: [] }), /Storage unavailable/);
+		failed = false;
+		await persistence.storeState({ version: 1, entries: [] });
+		assert.equal(flushes, 4);
+		assert.equal(persistence.restoreState(), undefined);
+	} finally { dom.window.close(); }
+});
+
 test('review storage round trips editor snapshots without changing unrelated workspace state', async () => {
 	const dom = new JSDOM('', { url: 'https://ash.test' });
 	try {

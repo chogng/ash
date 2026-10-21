@@ -1,3 +1,4 @@
+import { IExtensionService } from '../../../src/ash/workbench/services/extensions/common/extensionService.js';
 import { InMemoryFileSystemProvider } from '../../../src/ash/platform/files/common/inMemoryFilesystemProvider.js';
 import { exportDocumentArtifact, importDocumentArtifact } from '../../../src/ash/workbench/contrib/documentEditor/browser/documentActions.js';
 import { IEditorPart } from '../../../src/ash/workbench/browser/parts/editor/editorPart.js';
@@ -322,6 +323,7 @@ if (new URLSearchParams(location.search).has('academicExtension') || generalDocu
 		resources: fixture.resources,
 	}, academicEnablement);
 	const locale = new URLSearchParams(location.search).get('locale') ?? 'en';
+	services.registerInstance(IExtensionService, { getExtensionPointContributions: () => [] } as unknown as IExtensionService);
 	services.registerInstance(IExtensionApi, api);
 	services.registerInstance(IExtensionHostApi, {
 		invoke: async (request, signal) => {

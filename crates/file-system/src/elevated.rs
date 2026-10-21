@@ -146,6 +146,9 @@ fn exchange(
         }
         match listener.accept() {
             Ok((mut socket, _)) => {
+                // Windows accepts inherit the listener's nonblocking mode. The handshake
+                // and commit result use bounded blocking reads, including after publication.
+                socket.set_nonblocking(false).map_err(io_error)?;
                 socket
                     .set_read_timeout(Some(Duration::from_secs(1)))
                     .map_err(io_error)?;
@@ -356,8 +359,10 @@ fn launch_command(
                 .join("System32/WindowsPowerShell/v1.0/powershell.exe");
             let escaped = executable.replace('\'', "''");
             let credential = credential.replace('\'', "''");
+            // Start-Process discards the Win32Exception when ShellExecute is cancelled.
+            // Calling Process.Start directly keeps ERROR_CANCELLED in the exception chain.
             let script = format!(
-                "$ErrorActionPreference='Stop'; try {{ $helper = Start-Process -FilePath '{escaped}' -ArgumentList '{ELEVATED_FILE_WRITE_ARGUMENT} {port} \"{credential}\"' -Verb RunAs -Wait -PassThru; exit $helper.ExitCode }} catch {{ $cause = $_.Exception; while ($null -ne $cause) {{ if ($cause.NativeErrorCode -eq 1223) {{ exit 126 }}; $cause = $cause.InnerException }}; Write-Error $_ -ErrorAction Continue; exit 127 }}"
+                "$ErrorActionPreference='Stop'; try {{ $start = New-Object System.Diagnostics.ProcessStartInfo; $start.FileName = '{escaped}'; $start.Arguments = '{ELEVATED_FILE_WRITE_ARGUMENT} {port} \"{credential}\"'; $start.UseShellExecute = $true; $start.Verb = 'runas'; $start.WindowStyle = 'Hidden'; $helper = [System.Diagnostics.Process]::Start($start); $helper.WaitForExit(); exit $helper.ExitCode }} catch {{ $cause = $_.Exception; while ($null -ne $cause) {{ if ($cause.NativeErrorCode -eq 1223) {{ exit 126 }}; $cause = $cause.InnerException }}; Write-Error $_ -ErrorAction Continue; exit 127 }}"
             );
             let mut command = Command::new(shell);
             command.args(["-NoProfile", "-NonInteractive", "-Command", &script]);

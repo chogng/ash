@@ -95,6 +95,47 @@ def accounting_fixture() -> tuple[dict, dict]:
 
 
 class AgentEvalTraceTests(unittest.TestCase):
+    def test_additive_backend_performance_keeps_v3_accounting_compatible(self):
+        durable, diagnostics = accounting_fixture()
+        trace = {
+            "formatVersion": 3,
+            "sessionId": "session",
+            "threads": [durable],
+            "diagnostics": diagnostics,
+        }
+        with tempfile.TemporaryDirectory() as temporary:
+            path = Path(temporary) / "trace.json"
+            path.write_text(json.dumps(trace), encoding="utf-8")
+            original = trace_metrics(path)
+            # Analysis does not invent a competing TPS calculator or coerce the
+            # backend's lossless decimal quantities into floating-point numbers.
+            trace["performance"] = {
+                "formatVersion": 1,
+                "calls": [
+                    {
+                        "threadId": "root",
+                        "turnId": "turn",
+                        "eventId": "root-1",
+                        "invocationId": "committed",
+                        "total": {
+                            "type": "measured",
+                            "microseconds": "18446744073709551615",
+                        },
+                        "firstText": {"type": "measured", "microseconds": "0"},
+                        "generation": {
+                            "type": "measured",
+                            "microseconds": "18446744073709551615",
+                        },
+                        "textTps": {
+                            "type": "unknown",
+                            "reason": "missingReasoningTokens",
+                        },
+                    }
+                ],
+            }
+            path.write_text(json.dumps(trace), encoding="utf-8")
+            self.assertEqual(trace_metrics(path), original)
+
     def test_partial_usage_retains_reported_zero_and_never_uses_input_estimates(self):
         metrics = analyze(
             [

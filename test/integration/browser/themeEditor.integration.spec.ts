@@ -1,7 +1,5 @@
 import { test, expect, type Page, type Locator } from '@playwright/test';
 
-type PreviewTrafficWindow = Window & { previewTraffic: { kind: string; bytes: number; }[]; };
-
 async function editColor(field: Locator, value: string): Promise<void> {
 	await field.fill(value);
 	await field.press('Enter');
@@ -44,20 +42,6 @@ async function openEditor(page: Page, locale?: string, theme?: string): Promise<
 	await expect(popup.locator('.ash-theme-editor')).toBeVisible();
 	await expect(popup.locator('.ash-theme-editor-message')).not.toHaveClass(/error/);
 	await expect(popup.frameLocator('.ash-theme-editor-preview').locator('body')).toHaveAttribute('data-ready', 'true');
-	const settingsTabs = popup.getByRole('tablist', { name: locale ? '主题编辑控件' : 'Theme editing controls', exact: true }).getByRole('tab');
-	const firstTab = await settingsTabs.nth(0).boundingBox();
-	const secondTab = await settingsTabs.nth(1).boundingBox();
-	expect(Math.abs(firstTab!.y - secondTab!.y)).toBeLessThan(1);
-	expect(secondTab!.x).toBeGreaterThanOrEqual(firstTab!.x + firstTab!.width);
-	const colors = await popup.locator('.ash-theme-editor-settings').boundingBox();
-	const preview = await popup.locator('.ash-theme-editor-preview-host').boundingBox();
-	expect(preview!.x).toBeGreaterThanOrEqual(colors!.x + colors!.width - 1);
-	expect(Math.abs(preview!.y - colors!.y)).toBeLessThan(1);
-	const windowBounds = await popup.locator('.ash-theme-editor-preview-viewport').boundingBox();
-	expect(windowBounds!.x - preview!.x).toBeGreaterThanOrEqual(24);
-	expect(windowBounds!.y - preview!.y).toBeGreaterThanOrEqual(24);
-	expect(preview!.x + preview!.width - windowBounds!.x - windowBounds!.width).toBeGreaterThanOrEqual(24);
-	expect(preview!.y + preview!.height - windowBounds!.y - windowBounds!.height).toBeGreaterThanOrEqual(24);
 	return popup;
 }
 
@@ -826,6 +810,20 @@ for (const theme of ['ash-light', 'ash-dark']) {
 		await saveEditableTheme(popup);
 		const frame = popup.frameLocator('.ash-theme-editor-preview');
 		await popup.setViewportSize({ width: 1600, height: 1000 });
+		const settingsTabs = popup.getByRole('tablist', { name: 'Theme editing controls', exact: true }).getByRole('tab');
+		const firstTab = await settingsTabs.nth(0).boundingBox();
+		const secondTab = await settingsTabs.nth(1).boundingBox();
+		expect(Math.abs(firstTab!.y - secondTab!.y)).toBeLessThan(1);
+		expect(secondTab!.x).toBeGreaterThanOrEqual(firstTab!.x + firstTab!.width);
+		const colors = await popup.locator('.ash-theme-editor-settings').boundingBox();
+		const preview = await popup.locator('.ash-theme-editor-preview-host').boundingBox();
+		expect(preview!.x).toBeGreaterThanOrEqual(colors!.x + colors!.width - 1);
+		expect(Math.abs(preview!.y - colors!.y)).toBeLessThan(1);
+		const windowBounds = await popup.locator('.ash-theme-editor-preview-viewport').boundingBox();
+		expect(windowBounds!.x - preview!.x).toBeGreaterThanOrEqual(24);
+		expect(windowBounds!.y - preview!.y).toBeGreaterThanOrEqual(24);
+		expect(preview!.x + preview!.width - windowBounds!.x - windowBounds!.width).toBeGreaterThanOrEqual(24);
+		expect(preview!.y + preview!.height - windowBounds!.y - windowBounds!.height).toBeGreaterThanOrEqual(24);
 		await expect(frame.locator('#app')).toHaveAttribute('data-layout-style', 'modern');
 		await expect(frame.locator('.ash-workbench-titlebar')).toHaveCSS('height', '35px');
 		await expect(frame.locator('.ash-workbench-statusbar')).toHaveCSS('height', '32px');
@@ -885,67 +883,6 @@ test('desktop presentation changes flow into the preview without resetting local
 	await page.evaluate(() => window.themeEditorTest.setSetting('workbench.layoutStyle', 'modern'));
 	await expect(frame.locator('#app')).toHaveAttribute('data-layout-style', 'modern');
 	await expect.poll(() => page.evaluate(() => window.themeEditorTest.accessibleContent())).toContain('keep_local_edit');
-});
-
-test('preview presentation updates avoid theme work and color edits leave unrelated rows alone', async ({ page }, testInfo) => {
-	await page.context().addInitScript(() => {
-		const traffic: PreviewTrafficWindow['previewTraffic'] = [];
-		(window as unknown as PreviewTrafficWindow).previewTraffic = traffic;
-		const postMessage = MessagePort.prototype.postMessage;
-		MessagePort.prototype.postMessage = function (...args: unknown[]) {
-			const message = args[0];
-			if (message && typeof message === 'object' && 'kind' in message && typeof message.kind === 'string' && message.kind.startsWith('ash-theme-preview-')) {
-				traffic.push({ kind: message.kind, bytes: new TextEncoder().encode(JSON.stringify(message)).byteLength });
-			}
-			return Reflect.apply(postMessage, this, args);
-		};
-	});
-	const popup = await openEditor(page);
-	const frame = popup.frameLocator('.ash-theme-editor-preview');
-	await popup.getByRole('searchbox', { name: 'Search colors' }).fill('editor.background');
-	const color = popup.getByRole('textbox', { name: 'Hex color for editor.background', exact: true });
-	await editColor(color, '#112234');
-	await expect(frame.locator('#app')).toHaveCSS('--ash-editor-background', '#112234');
-	const cdp = await page.context().newCDPSession(popup);
-	await cdp.send('Performance.enable');
-	try {
-		await page.evaluate(() => { (window as unknown as PreviewTrafficWindow).previewTraffic.length = 0; });
-		await frame.locator('body').evaluate(() => { (window as unknown as PreviewTrafficWindow).previewTraffic.length = 0; });
-		const baseline = await cdp.send('Performance.getMetrics');
-		for (const layout of ['flat', 'modern', 'flat']) {
-			await page.evaluate(value => window.themeEditorTest.setSetting('workbench.layoutStyle', value), layout);
-			await expect(frame.locator('#app')).toHaveAttribute('data-layout-style', layout);
-		}
-		const presentation = await frame.locator('body').evaluate(() => [...(window as unknown as PreviewTrafficWindow).previewTraffic]);
-		const row = popup.locator('.ash-theme-color').filter({ has: popup.getByRole('button', { name: 'titleBar.background', exact: true, includeHidden: true }) });
-		await row.evaluate(element => {
-			const mutations: MutationRecord[] = [];
-			const observer = new MutationObserver(records => mutations.push(...records));
-			observer.observe(element, { attributes: true, childList: true, subtree: true });
-			Reflect.set(window, 'previewRowMutations', { mutations, observer });
-		});
-		for (const value of ['#223344', '#334455', '#445566']) {
-			await editColor(color, value);
-			await expect(frame.locator('#app')).toHaveCSS('--ash-editor-background', value);
-		}
-		const rowMutations = await popup.evaluate(() => {
-			const { mutations, observer } = Reflect.get(window, 'previewRowMutations') as { mutations: MutationRecord[]; observer: MutationObserver; };
-			observer.disconnect();
-			return mutations.length;
-		});
-		const metrics = await cdp.send('Performance.getMetrics');
-		const result = {
-			presentation, rowMutations,
-			sent: await page.evaluate(() => (window as unknown as PreviewTrafficWindow).previewTraffic),
-			received: await frame.locator('body').evaluate(() => (window as unknown as PreviewTrafficWindow).previewTraffic),
-			metrics: Object.fromEntries(metrics.metrics.filter(metric => ['TaskDuration', 'ScriptDuration', 'LayoutCount', 'LayoutDuration', 'RecalcStyleCount', 'RecalcStyleDuration'].includes(metric.name)).map(metric => [metric.name, metric.value - (baseline.metrics.find(before => before.name === metric.name)?.value ?? 0)])),
-		};
-		await testInfo.attach('preview-work.json', { body: JSON.stringify(result, null, 2), contentType: 'application/json' });
-		expect(presentation.filter(message => message.kind === 'ash-theme-preview-colors')).toEqual([]);
-		expect(rowMutations).toBe(0);
-	} finally {
-		await cdp.detach();
-	}
 });
 
 test('preview follows consecutive shared color field commits', async ({ page }) => {

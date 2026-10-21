@@ -14,6 +14,17 @@ use serde::Serialize;
     deny_unknown_fields
 )]
 pub enum CoreServiceRequest {
+    /// Ordinary state is addressed by key; the host binds its extension namespace.
+    StorageGet {
+        key: String,
+    },
+    StorageSet {
+        key: String,
+        value: serde_json::Value,
+    },
+    StorageDelete {
+        key: String,
+    },
     /// Consumer grants are product-owned and distinct from provider SecretStore access.
     CredentialGet {
         provider_id: String,
@@ -62,6 +73,11 @@ pub enum CoreHttpMethod {
     deny_unknown_fields
 )]
 pub enum CoreServiceResponse {
+    StorageValue {
+        value: serde_json::Value,
+        found: bool,
+    },
+    StorageUpdated,
     Credential {
         username: String,
         password: Vec<u8>,

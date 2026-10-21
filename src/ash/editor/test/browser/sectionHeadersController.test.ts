@@ -7,7 +7,7 @@ import { Emitter } from '../../../base/common/event.js';
 import type { View } from '../../browser/view.js';
 import { Range } from '../../common/core/range.js';
 import { TextModel } from '../../common/model/textModel.js';
-import { SectionHeadersController } from '../../../../../extensions/code/browser/contrib/sectionHeaders/browser/sectionHeadersController.js';
+import { SectionHeadersController } from '../../contrib/sectionHeaders/browser/sectionHeadersController.js';
 import { createTestLanguageConfigurationService } from '../common/modes/testLanguageConfigurationService.js';
 
 test('section headers scan only visible chunks and reuse text candidates on token and layout events', () => {

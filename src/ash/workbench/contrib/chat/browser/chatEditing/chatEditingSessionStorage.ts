@@ -38,6 +38,7 @@ const maxContentLength = 32 * 1024 * 1024;
 /** Stores editor-owned review baselines; backend checkpoints remain the history authority. */
 export class ChatEditingSessionStorage {
 	private previous: string | undefined;
+	private needsFlush = false;
 
 	constructor(@IStorageService private readonly storage: IStorageService) { }
 
@@ -55,8 +56,12 @@ export class ChatEditingSessionStorage {
 		if (this.storage.get(storageKey, StorageScope.WORKSPACE) !== this.previous) {
 			throw new Error(localize('chatEditing.storageConflict', 'Another window changed the saved Agent reviews. Local reviews were kept.'));
 		}
-		const value = JSON.stringify(state);
-		if (value.length > maxContentLength) { throw new Error(localize('chatEditing.invalidStorage', 'Saved Agent review data is invalid or too large.')); }
+		const value = state.entries.length === 0 ? undefined : JSON.stringify(state);
+		if (value !== undefined && value.length > maxContentLength) { throw new Error(localize('chatEditing.invalidStorage', 'Saved Agent review data is invalid or too large.')); }
+		if (value === this.previous && !this.needsFlush) return;
+		// A failed flush still needs retrying even when the window cache already
+		// holds this value, including removal of the final review.
+		this.needsFlush = true;
 		if (state.entries.length === 0) {
 			this.storage.remove(storageKey, StorageScope.WORKSPACE);
 			this.previous = undefined;
@@ -65,6 +70,7 @@ export class ChatEditingSessionStorage {
 			this.previous = value;
 		}
 		await this.storage.flush();
+		this.needsFlush = false;
 	}
 }
 

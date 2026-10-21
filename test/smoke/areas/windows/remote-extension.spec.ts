@@ -126,13 +126,13 @@ test.describe('standard resolver startup', () => {
 			await mkdir(join(remoteRoot, '.ash-plugin'), { recursive: true });
 			await writeFile(join(remoteRoot, '.ash-plugin', 'plugin.json'), JSON.stringify({
 				schemaVersion: 1, id: 'acme/remote-environment', version: '1.0.0', displayName: 'Remote environment', compatibility: { ash: '>=0.1.0' },
-				contributions: { editorExtensions: [{ id: 'environment', runtime: 'javascript', entrypoint: 'extension.js', runtimeApiVersion: 1, activationEvents: [{ type: 'startup' }], capabilities: ['command'] }] }, permissions: [],
+				contributions: { editorExtensions: [{ id: 'environment', runtime: 'javascript', api: 'ash', entrypoint: 'extension.js', runtimeApiVersion: 1, activationEvents: [{ type: 'startup' }], capabilities: ['command'] }] }, permissions: [],
 			}));
 			await writeFile(join(remoteRoot, 'extension.js'), `
-const vscode = require('vscode'); const { commands, window } = vscode;
+const ash = require('@ash/sdk'); const { commands, window } = ash;
 const loaded = { value: process.env.FIXTURE_REMOTE_ENV ?? null, removed: process.env.FIXTURE_REMOVE ?? null };
 exports.activate = function(context) {
-	context.subscriptions.push(commands.registerCommand('fixture.remote.environment', async () => window.showInformationMessage('REMOTE_ENV:' + JSON.stringify(loaded))));
+	context.subscriptions.push(commands.register('fixture.remote.environment', async () => window.showInformationMessage('REMOTE_ENV:' + JSON.stringify(loaded))));
 }
 `);
 			const remoteProfile = await test.step('Connect remote profile for package installation', () => connectProfile(application, remote, testWorkspace.directory, workbench.page, { directoryGrantsHost: true }));
@@ -148,11 +148,11 @@ exports.activate = function(context) {
 			await mkdir(join(root, '.ash-plugin'), { recursive: true });
 			await writeFile(join(root, '.ash-plugin', 'plugin.json'), JSON.stringify({
 				schemaVersion: 1, id: 'acme/standard-resolver', version: '1.0.0', displayName: 'Standard resolver', compatibility: { ash: '>=0.1.0' },
-				contributions: { editorExtensions: [{ id: 'remote', runtime: 'javascript', entrypoint: 'extension.js', runtimeApiVersion: 1, activationEvents: [{ type: 'startup' }], capabilities: ['command', 'remoteAuthorityResolver'] }] },
+				contributions: { editorExtensions: [{ id: 'remote', runtime: 'javascript', api: 'ash', entrypoint: 'extension.js', runtimeApiVersion: 1, activationEvents: [{ type: 'startup' }], capabilities: ['command', 'remoteAuthorityResolver'] }] },
 				permissions: [],
 			}));
 			await writeEditorExtensionFixture(root, `
-const vscode = require('vscode'); const { commands, workspace, ResolvedAuthority, window } = vscode;
+const ash = require('@ash/sdk'); const { commands, workspace, ResolvedAuthority, window } = ash;
 exports.activate = function(context) {
 	context.subscriptions.push(workspace.registerRemoteAuthorityResolver('fixture', {
 		resolve(authority, context) {
@@ -164,7 +164,7 @@ exports.activate = function(context) {
 			return uri.with({ authority: 'fixture+other-host' });
 		}
 	}));
-	context.subscriptions.push(commands.registerCommand('fixture.remote.open', async () => JSON.parse(await globalThis.__ashRequest(globalThis.__ashInvocation(), JSON.stringify({operation: 'openRemoteConnection', authority: 'fixture+backend'}))));
+	context.subscriptions.push(commands.register('fixture.remote.open', async () => JSON.parse(await globalThis.__ashRequest(globalThis.__ashInvocation(), JSON.stringify({operation: 'openRemoteConnection', authority: 'fixture+backend'}))));
 }
 `);
 			const page = workbench.page;

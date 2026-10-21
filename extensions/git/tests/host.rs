@@ -633,7 +633,7 @@ fn rust_git_registers_scm_and_commits_through_public_client_without_a_js_host() 
         assert_eq!(client.git(&["rev-parse", "HEAD^"]), parent);
         assert!(client.git(&["status", "--porcelain"]).is_empty());
         verify_history_references(&supervisor, &client);
-        verify_workspace_comparisons(&supervisor, &client);
+        verify_workspace_comparisons(&supervisor, &client, language);
         verify_binary_comparisons(&supervisor, &client);
         verify_terminal_helpers(&supervisor, &client, directory.path());
         supervisor.shutdown().unwrap();
@@ -845,7 +845,11 @@ fn verify_history_references(supervisor: &host::ExtensionHostSupervisor, client:
     assert_eq!(filtered[0]["id"], "refs/tags/v1");
 }
 
-fn verify_workspace_comparisons(supervisor: &host::ExtensionHostSupervisor, client: &Client) {
+fn verify_workspace_comparisons(
+    supervisor: &host::ExtensionHostSupervisor,
+    client: &Client,
+    language: &str,
+) {
     let original = client.git(&["show", "HEAD:file.txt"]);
     for (stage, modify_again, expected) in [
         (false, false, "workspace only"),
@@ -892,6 +896,15 @@ fn verify_workspace_comparisons(supervisor: &host::ExtensionHostSupervisor, clie
             let resource = url::Url::from_file_path(client.root.join("file.txt"))
                 .unwrap()
                 .to_string();
+            assert_eq!(input["kind"], "diff");
+            let title = match (group, language) {
+                ("changes", "zh-CN") => "file.txt（工作树）",
+                ("staged", "zh-CN") => "file.txt（索引）",
+                ("changes", _) => "file.txt (Working Tree)",
+                ("staged", _) => "file.txt (Index)",
+                _ => unreachable!(),
+            };
+            assert_eq!(input["label"], title);
             assert_eq!(input["original"]["preferredResource"], resource);
             assert_eq!(input["original"]["readOnly"], true);
             if group == "changes" {

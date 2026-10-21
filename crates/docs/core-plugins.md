@@ -12,7 +12,7 @@
 
 ## 快速理解
 
-目标扩展包括 Node 中的 Open VSX / VS Code 兼容 TS/JS 包与独立 Rust 程序中的能力包。ExtensionPackageManager 继续统一拥有包安装、完整性、来源授权与租约，能力 runtime 按有效授权注册 Provider，App/TUI 按需消费。Rust 包经 Ash 来源 adapter 接入，不要求 Open VSX 承载 Rust 或建立第二套包生命周期。现有 executable sidecar、统一 Host RPC 与标准 API 的 Node/V8 适配器是当前接入基础；Rust SDK 与产品 launcher 已被认证和 Remote Provider 复用，通用第三方 Rust 安装、隔离与其余业务拆分尚未完成，见 [扩展架构与编辑器接入](../../docs/editor-extensions.md#0-确定的产品方向)。
+目标扩展包括使用 `@ash/sdk` / `ash.*` 的 TS/JS 包与独立 Rust 程序中的能力包，通过 Ash 开放来源接入。ExtensionPackageManager 继续统一拥有包安装、完整性、来源授权与租约，能力 runtime 按有效授权注册 Provider，App/TUI 按需消费，不建立第二套包生命周期。现有 executable sidecar、统一 Host RPC 与 Node/V8 adapter 复用同一 Ash API。旧兼容 facade、Open VSX 下载和 VSIX 运行入口已删除；历史 marker/API metadata 只允许识别、停用和卸载。Rust SDK 与产品 launcher 已被认证和 Remote Provider 复用，通用第三方 Rust 安装、隔离与其余业务拆分尚未完成，见 [扩展架构与编辑器接入](../../docs/editor-extensions.md#0-确定的产品方向)。
 
 Extensions 的总类、能力类型与 Marketplace 层级由[扩展产品层级](../../docs/editor-extensions.md#extensions-的产品层级)维护；远端 registry 是包来源。`ash-core-plugins` 聚合内置、远端和本地来源，
 远端签名 registry 只是其中一个 adapter；它们不是 client/server 进程对，也不通过 JSONL 相连。
@@ -176,8 +176,7 @@ bytes 复制进 ExtensionPackageManager store。
 `Extension` catalog 是 Ash 对 `package.json` 静态 editor assets 的声明式 consumer contract，
 与远端 `editor` package family 的名称和安装生命周期分开。Theme 与 Language family 先由各自
 portable adapter 规范化，再进入该 contract；只有明确的 `editor` family 会将其 `editor/` asset
-映射为 `editorExtension`，不能把任意通用 `asset` 自动识别为 Extension。Open VSX 的
-`editorExtension` VSIX 包类型继续由独立来源解析，不与 signed registry 的 `editor` family 混用。
+映射为 `editorExtension`，不能把任意通用 `asset` 自动识别为 Extension。已退休来源的安装记录不进入动态目录、租约或执行准入。
 可信 Editor 包的 native runtime 与 renderer client 仍走 product proof + exact admission + Host，
 同一完整包 digest 绑定唯一 descriptor 与 runtime；禁用或撤销时保留文档路由声明并移除执行准入。
 TS/JS 宿主必须独立校验运行和操作授权，不能从声明式 catalog 可读或旧 executable grant 推导新权限。
@@ -224,7 +223,7 @@ get/install/update 只访问 ID 指定的来源，并核对返回的名称和精
 ## 配置与启动
 
 产品资源 `resources/product-services/product-services.json` 按名称分别 pin 远端 registry：
-产品服务文档版本为 3，固定来源使用 `extensionSources` 列表；Open VSX 使用独立的 `openVsx` 配置。第三方 Ash 源通过 `extensions/sources/*` 在 profile 内添加和暂停，不要求改写产品配置。
+产品服务文档版本为 3，固定来源使用 `extensionSources` 列表；默认产品配置仅保留 Ash 源。旧 `openVsx` 字段由严格解析明确拒绝，不保留可选旧来源。第三方 Ash 源通过 `extensions/sources/*` 在 profile 内添加和暂停，不要求改写产品配置。
 
 ```json
 {
@@ -235,12 +234,7 @@ get/install/update 只访问 ID 指定的来源，并核对返回的名称和精
     "targetsBaseUrl": "https://chogng.github.io/extensions/targets/",
     "trustedRoot": "extensions-root.json",
     "catalogRefreshIntervalSeconds": 300
-  }],
-  "openVsx": {
-    "name": "open-vsx",
-    "apiUrl": "https://open-vsx.org/api/",
-    "downloadOrigins": ["https://openvsx.eclipsecontent.org/"]
-  }
+  }]
 }
 ```
 
@@ -253,18 +247,14 @@ get/install/update 只访问 ID 指定的来源，并核对返回的名称和精
 App Server 启动时：
 
 1. `LocalProductServicesConfig` 读取 HTTPS endpoints 和 product-pinned trusted root；
-2. 为每个签名来源创建 `ExtensionsRemoteClient`，为 `openVsx` 创建 `OpenVsxClient`，延迟访问网络，并注册到 `ExtensionSources`；
+2. 为每个签名 Ash 来源创建 `ExtensionsRemoteClient`，延迟访问网络，并注册到 `ExtensionSources`；
 3. `ExtensionPackageManager::open(<profile>/extensions-manager, providers)` 打开唯一的本地安装状态；
 4. App Server 注入 `Arc<dyn ExtensionPackageService>`；首次 Extensions 请求才访问对应来源。
 
-`openVsx` 是可选的独立来源，名称不能与 `extensionSources` 重复。它使用 Open VSX 的 HTTPS API 和
-VSIX 校验和，不使用 Ash TUF 根。配置中的 API origin 和 `downloadOrigins` 是每次请求及 CDN
-跳转的允许地址。包 ID 为 `publisher.name@open-vsx`，精确版本、平台及校验和写入安装内容；
-Manager 仍核对解压后的内容摘要、文件数与大小。来源校验不授予脚本执行权限。
+产品配置不接受旧 `openVsx` 字段；它由严格字段校验明确拒绝。Open VSX client、旧编辑器来源的 VSIX 下载/解析、来源枚举与 gallery RPC 已删除。
+历史安装仍保留原 `package@source` 身份，按不可变 artifact 中已有的 `ash-open-vsx.json` marker 判定为退休；不得 acquire、创建本地租约、下载、安装、启用或重新授权，仅允许列出、停用和卸载。旧 `api: vscode` 或缺省 API 只解码为退休 metadata，不是运行模式。不能将旧记录或校验和改写成 Ash 签名包或恢复历史授权。
 
-当前只接入 `universal` 正式版 VSIX。`editorExtension` capability 把安装目录交给现有扩展目录，
-让 TS owner 消费受支持的语言、语法、snippet 和主题等声明。它不能被 acquire 为 executable，
-不会启动包中的 `main`、`browser` 或旧 Rust Host。详情页和安装确认均显示此限制。
+签名 registry 的 `EditorExtensionPolicy` 执行授权契约为 6，旧版本 5 授权失效，安装与启停记录保留；本地 Plugin Node 契约仍为 2。签名 JS 包要求 `engines.ash` 并显式声明 `ashCapabilities` 白名单；缺省不授予广泛能力。`engines.vscode`、`enabledApiProposals` 与保留的产品 Remote resolver 能力均拒绝。作者模块统一为 `@ash/sdk`；包管理、能力准入和实际调用继续分别校验。
 
 `catalogRefreshIntervalSeconds` 是产品选择的进程内已验签 catalog snapshot 复用时间，允许范围为
 60–86400 秒，默认 300 秒。它只控制何时再次尝试远端刷新，不改变 TUF expiry、rollback、revocation
@@ -281,7 +271,7 @@ Desktop 的 Skills/MCP 窗格通过 `platform/customizationMarketplace` 的公�
 返回总量与游标；游标绑定查询、页大小、来源和已验证目录内容，30 分钟后过期，目录变化时失效。
 Renderer 的 `CustomizationMarketplaceService` 仅拥有有上限的短期分页续读状态，按来源保留缓冲结果
 和失败信息，不重建目录；“加载更多”持续读取后续页，不受原先 100 条展示上限限制。
-Open VSX 的编辑器扩展不冒充 Skills/MCP 来源。取消只结束窗口对目录读取的等待，不宣称停止后端读取。
+已退休来源不进入发现或租约，也不冒充其他能力来源。取消只结束窗口对目录读取的等待，不宣称停止后端读取。
 `chat.customizations.marketplace.enabled` 是 TypeScript UI 的 profile 发现偏好，保存于既有
 `settings.json`；它不修改后端源启停、安装、信任或权限。
 

@@ -228,6 +228,47 @@ suite('Desktop terminal exit revival', () => {
 		assert.equal(scope.closes.length, 4);
 	});
 
+	test('reload omits failed and retired terminals while preserving healthy processes and their layout', async () => {
+		using owner = new DisposableStore();
+		const scope = fixture(owner, async () => { });
+		const failed = await scope.create();
+		Object.defineProperty(failed, 'state', { value: 'error' });
+		failed.serializeState = async () => { throw new Error('A failed process cannot be serialized'); };
+		const retired = await scope.create();
+		retired.serializeState = async () => exitSnapshot(retired);
+		const healthy = await scope.create();
+		healthy.serializeState = async () => exitSnapshot(healthy);
+		const requested: string[] = [];
+		const processes = scope.services.get(ITerminalProcessService);
+		processes.getReconnectLease = async terminalId => {
+			requested.push(terminalId);
+			return terminalId === retired.id ? undefined : { terminalId, reconnectToken: 'a'.repeat(64), reconnectGracePeriodMillis: 30000 };
+		};
+		let committed = false;
+		processes.prepareForReload = () => { committed = true; };
+		await scope.lifecycle.shutdown('reload');
+		const storage = scope.services.get(IStorageService);
+		const credentials = JSON.parse((await scope.services.get(ISecretStorageService).get(TerminalStorageKeys.Reload))!);
+		const checkpoint = parseTerminalReloadState(storage.get(credentials.stateKey, StorageScope.WORKSPACE)!);
+		assert.deepEqual(requested, [retired.id, healthy.id]);
+		assert.deepEqual(checkpoint.instances.map(instance => instance.instanceId), [healthy.instanceId]);
+		assert.deepEqual(checkpoint.groups.map(group => group.ids), [[healthy.instanceId]]);
+		assert.deepEqual(credentials.leases.map((lease: { terminalId: string; }) => lease.terminalId), [healthy.id]);
+		assert.deepEqual({ committed, errors: scope.errors, closes: scope.closes }, { committed: true, errors: [], closes: [] });
+	});
+
+	test('reload still fails if a live terminal cannot obtain its credential because of a transport error', async () => {
+		using owner = new DisposableStore();
+		const scope = fixture(owner, async () => { });
+		const instance = await scope.create();
+		instance.serializeState = async () => exitSnapshot(instance);
+		const failure = new Error('Live terminal attach transport failed');
+		scope.services.get(ITerminalProcessService).getReconnectLease = async () => { throw failure; };
+		await assert.rejects(scope.lifecycle.shutdown('reload'), error => error instanceof AggregateError && error.errors[0]?.cause === failure);
+		assert.deepEqual(scope.closes, []);
+		assert.equal(await scope.services.get(ISecretStorageService).get(TerminalStorageKeys.Reload), undefined);
+	});
+
 	for (const foreignScope of ['workspace', 'remote host'] as const) test(`foreign ${foreignScope} checkpoint cannot mutate current terminal groups or input selection`, async () => {
 		using owner = new DisposableStore();
 		const scope = fixture(owner, async () => { });
@@ -284,7 +325,7 @@ suite('Desktop terminal exit revival', () => {
 		const storage = scope.services.get(IStorageService);
 		storage.store(stateKey, text, StorageScope.WORKSPACE, StorageTarget.MACHINE);
 		const secrets = scope.services.get(ISecretStorageService);
-		const credentials = JSON.stringify({ stateKey, expiresAt: Date.now() + 60_000, leases: snapshots.map(snapshot => ({ terminalId: snapshot.process.terminalId, reconnectToken: 'a'.repeat(64), reconnectGracePeriodMillis: 60_000 })) });
+		const credentials = JSON.stringify({ stateKey, expiresAt: Date.now() + 60_000, leases: snapshots.map(snapshot => ({ terminalId: snapshot.process.terminalId, reconnectToken: 'a'.repeat(64), reconnectGracePeriodMillis: 0 })) });
 		await secrets.set(TerminalStorageKeys.Reload, credentials);
 		const started = new DeferredPromise<void>();
 		second.start = () => { started.complete(); };
@@ -295,7 +336,7 @@ suite('Desktop terminal exit revival', () => {
 		assert.equal(await secrets.get(TerminalStorageKeys.Reload), credentials);
 	});
 
-	test('failed serialization resumes the real process input client and removes a stale revival checkpoint', async () => {
+	test('failed exit serialization removes stale revival state and still closes the window terminals', async () => {
 		using owner = new DisposableStore();
 		const scope = fixture(owner, async () => { }, { 'terminal.integrated.persistentSessionReviveProcess': 'onExit' });
 		const instance = await scope.create();
@@ -304,12 +345,22 @@ suite('Desktop terminal exit revival', () => {
 		storage.store(TerminalStorageKeys.Revive, JSON.stringify({ version: 1, kind: 'revive', workspaceId: 'workspace', instances: [], groups: [] }), StorageScope.WORKSPACE, StorageTarget.MACHINE);
 		// No DOM screen exists in this lifecycle fixture: the real serializer pauses
 		// the process manager before reporting that screen recovery is unavailable.
-		await assert.rejects(scope.lifecycle.shutdown('quit'), /shutdown participants failed/);
-		assert.deepEqual(scope.closes, []);
-		await instance.sendText('after-failed-exit', false);
-		assert.deepEqual(scope.writes, ['after-failed-exit']);
-		for (let index = 0; index < 20 && storage.get(TerminalStorageKeys.Revive, StorageScope.WORKSPACE); index++) await Promise.resolve();
+		await scope.lifecycle.shutdown('quit');
+		assert.deepEqual(scope.closes, ['pty-1']);
+		assert.equal(scope.errors.length, 1);
 		assert.equal(storage.get(TerminalStorageKeys.Revive, StorageScope.WORKSPACE), undefined);
+		assert.equal(scope.terminals.instances.length, 0);
+		assert.equal(scope.lifecycle.willShutdown, true);
+	});
+
+	test('failed reload serialization keeps the original process client usable', async () => {
+		using owner = new DisposableStore();
+		const scope = fixture(owner, async () => { });
+		const instance = await scope.create();
+		await assert.rejects(scope.lifecycle.shutdown('reload'), /shutdown participants failed/);
+		assert.deepEqual(scope.closes, []);
+		await instance.sendText('after-failed-reload', false);
+		assert.deepEqual(scope.writes, ['after-failed-reload']);
 		assert.equal(scope.terminals.activeInstance, instance);
 	});
 });
@@ -429,7 +480,7 @@ function transferCommandFixture(owner: DisposableStore, failure?: 'detach' | 'op
 	const terminals = { instances, get activeInstance() { return active; } } as unknown as ITerminalService;
 	services.registerInstance(ITerminalService, terminals);
 	services.registerInstance(ITerminalProcessService, {
-		getReconnectLease: async () => lease,
+		getReconnectLease: async () => ({ ...lease, reconnectGracePeriodMillis: 0 }),
 		detach: async () => { effects.push('detach'); if (failure === 'detach') throw new Error('detach denied'); ownsProcess = false; return lease; },
 		attach: async (credential: ITerminalReconnectLease) => { effects.push('attach'); attached.push(credential); if (failure === 'rollback') throw new Error('rollback denied'); ownsProcess = true; return snapshot.process; },
 		close: async () => { killed.push(321); },

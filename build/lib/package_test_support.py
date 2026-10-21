@@ -241,7 +241,6 @@ def create_runtime_package(
         remote_ssh_extension_binary=executable("ash-remote-ssh-extension"),
         git_extension_binary=executable("ash-git-extension"),
         markdown_math_binary=executable("ash-markdown-math"),
-        code_editor_extension_binary=executable("ash-code-editor"),
         markdown_extension_binary=executable("ash-markdown-language-features"),
         github_authentication_binary=executable("ash-github-authentication"),
         github_extension_binary=executable("ash-github-extension"),

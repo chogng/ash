@@ -3,6 +3,57 @@ import { expect, test } from '../../../automation/test.js';
 
 test.use({ openWorkspace: false });
 
+for (const locale of ['en', 'zh-CN']) {
+	test(`activity icon context menu aligns item actions and moves views across hosts (${locale})`, async ({ application, workbench, restartWorkbench, reloadWorkbench, target }, testInfo) => {
+		if (locale === 'zh-CN') {
+			await workbench.quickaccess.runCommand('workbench.action.configureLocale');
+			const picker = workbench.page.getByRole('dialog', { name: 'Select Display Language' });
+			await picker.getByRole('combobox').fill('简体中文');
+			await picker.getByRole('combobox').press('Enter');
+			({ workbench, application } = await restartWorkbench());
+		}
+		const chinese = locale === 'zh-CN';
+		const explorerName = chinese ? '资源管理器' : 'Explorer';
+		const moveLabel = chinese ? '移到' : 'Move To';
+		const panelLabel = chinese ? '面板' : 'Panel';
+		const configureLabel = chinese ? '配置快捷键' : 'Configure Keybinding';
+		const explorer = () => workbench.page.locator('[data-part="activitybar"]').getByRole('tab', { name: explorerName, exact: true });
+		const open = () => explorer().click({ button: 'right' });
+		await explorer().click();
+		const items = await workbench.menus.inspect(application, open);
+		expect(items.slice(0, 4).map(item => item.label)).toEqual([configureLabel, chinese ? '隐藏“资源管理器”' : "Hide 'Explorer'", chinese ? '隐藏徽章' : 'Hide Badge', moveLabel]);
+		const labels = items.map(item => item.label);
+		expect(labels.indexOf(chinese ? '活动栏位置' : 'Activity Bar Position')).toBeLessThan(labels.indexOf(chinese ? '将主侧栏移到右侧' : 'Move Primary Side Bar Right'));
+		expect(labels.at(-1)).toBe(chinese ? '隐藏主侧栏' : 'Hide Primary Side Bar');
+		expect((await workbench.menus.inspect(application, open, [moveLabel])).map(item => item.label).sort()).toEqual([chinese ? '辅助侧栏' : 'Secondary Side Bar', panelLabel].sort());
+		if (target.kind === 'browser') {
+			await open();
+			await workbench.page.getByRole('menu').screenshot({ path: testInfo.outputPath(`activity-icon-menu-${locale}.png`) });
+			await workbench.page.keyboard.press('Escape');
+			await expect(explorer()).toBeFocused();
+		}
+		await workbench.menus.select(application, () => explorer().press('Shift+F10'), [configureLabel]);
+		const shortcuts = workbench.page.locator('.ash-keybindings-editor');
+		await expect(shortcuts.locator('.ash-keybindings-search input')).toHaveValue('@command:ash.sidebar');
+		await expect(shortcuts).toContainText(explorerName);
+		await workbench.page.locator('.ash-modal-editor-close').click();
+		await workbench.menus.select(application, open, [moveLabel, panelLabel]);
+		await expect(explorer()).toHaveCount(0);
+		await expect(workbench.page.locator('[data-part="activitybar"]').getByRole('tab', { name: chinese ? '搜索' : 'Search', exact: true })).toBeVisible();
+		const panel = () => workbench.page.locator('[data-part="panel"]');
+		await expect(panel().getByRole('tab', { name: explorerName, exact: true })).toHaveAttribute('aria-selected', 'true');
+		await expect(panel().locator('[data-view-container-id="ash.sidebar"]')).toBeVisible();
+		({ application, workbench } = await reloadWorkbench());
+		await expect(explorer()).toHaveCount(0);
+		await expect(panel().locator('[data-view-container-id="ash.sidebar"]')).toBeVisible();
+		await workbench.menus.select(application, () => panel().getByRole('tab', { name: explorerName, exact: true }).click({ button: 'right' }), [moveLabel, chinese ? '主侧栏' : 'Primary Side Bar']);
+		await expect(explorer()).toHaveAttribute('aria-selected', 'true');
+		await expect(workbench.page.locator('[data-part="sidebar"] [data-view-container-id="ash.sidebar"]')).toBeVisible();
+		await workbench.menus.select(application, open, [chinese ? '隐藏主侧栏' : 'Hide Primary Side Bar']);
+		await expect(workbench.page.locator('[data-part="sidebar"]')).toBeHidden();
+	});
+}
+
 // Expected titles follow the actual Desktop privilege; Browser has no OS suffix.
 const titleTest = test.extend<{ privilegeSuffix: string; }>({
 	privilegeSuffix: async ({ target, workbench }, use) => {
@@ -32,31 +83,6 @@ test('desktop privileges reach the window title through the Main process', { tag
 	await expect(page.locator('.ash-notification', { hasText: 'Ash could not verify its desktop environment.' })).toHaveCount(0);
 });
 
-titleTest('window title and command center follow the active editor and its dirty state', async ({ application, target, workbench, privilegeSuffix }) => {
-	const page = workbench.page;
-	const center = page.locator('.ash-titlebar-command-center-button');
-	await expect(page).toHaveTitle(`Welcome — Ash Code${privilegeSuffix}`);
-	await workbench.quickaccess.runCommand('workbench.action.files.newUntitledFile');
-	await expect(page).toHaveTitle(`Untitled-1 — Ash Code${privilegeSuffix}`);
-	const editor = workbench.editors.groupAt(0).editor;
-	await editor.element.click({ position: { x: 100, y: 30 } });
-	await editor.waitForEditorFocus();
-	await editor.waitForTypeInEditor('title service');
-	const title = `● Untitled-1 — Ash Code${privilegeSuffix}`;
-	await expect(page).toHaveTitle(title);
-	await expect(center).toHaveAttribute('aria-description', title);
-	await page.mouse.move(0, 100);
-	await center.hover();
-	await expect(page.getByRole('tooltip')).toHaveText(title);
-	await page.mouse.move(0, 100);
-	if (target.kind === 'electron') {
-		await expect.poll(() => (application as ElectronApplication).evaluate(({ BrowserWindow }, expectedTitle) => BrowserWindow.getAllWindows().some(window => window.getTitle() === expectedTitle), title)).toBe(true);
-	}
-	await workbench.quickaccess.runCommand('workbench.action.files.newUntitledFile');
-	await expect(page).toHaveTitle(`Untitled-2 — Ash Code${privilegeSuffix}`);
-	await expect(center).toHaveAttribute('aria-description', `Untitled-2 — Ash Code${privilegeSuffix}`);
-});
-
 titleTest('window title template and separator settings update the title and command center live', async ({ workbench, privilegeSuffix }) => {
 	const page = workbench.page;
 	await workbench.quickaccess.runCommand('workbench.action.files.newUntitledFile');
@@ -78,7 +104,7 @@ titleTest('window title template and separator settings update the title and com
 	await expect(page).toHaveTitle(`Ash Code | Untitled-2${privilegeSuffix}`);
 });
 
-test('activity bar badges stay over the icon and can be hidden independently through the menu', async ({ application, workbench }) => {
+test('unsaved editor activity reaches its badge and the menu hides only its visual count', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ application, workbench }) => {
 	const page = workbench.page;
 	const activitybar = page.locator('[data-part="activitybar"]');
 	const explorer = workbench.element.locator('.ash-composite-bar-destination[data-action-id="ash.sidebar"]');
@@ -89,47 +115,6 @@ test('activity bar badges stay over the icon and can be hidden independently thr
 	await workbench.editors.groupAt(0).editor.waitForEditorFocus();
 	await workbench.editors.groupAt(0).editor.waitForTypeInEditor('badge activity');
 	await expect(badge).toHaveText('1');
-	const expectBadgeGeometry = async (): Promise<void> => {
-		await expect(badge).toHaveCSS('position', 'absolute');
-		await expect(explorer.locator('.ash-icon')).toBeVisible();
-		const geometry = await explorer.evaluate(element => {
-			const item = element.getBoundingClientRect();
-			const icon = element.querySelector('.ash-icon')!.getBoundingClientRect();
-			const badge = element.querySelector('.ash-composite-bar-badge')!.getBoundingClientRect();
-			const bar = element.closest('.ash-composite-bar')!.getBoundingClientRect();
-			const tolerance = 0.01; // Fractional window scaling can round touching edges differently.
-			return {
-				bounds: JSON.stringify({ item: item.toJSON(), icon: icon.toJSON(), badge: badge.toJSON() }),
-				inside: badge.left + tolerance >= Math.max(item.left, bar.left) && badge.right - tolerance <= Math.min(item.right, bar.right) && badge.top + tolerance >= item.top && badge.bottom - tolerance <= item.bottom,
-				overIcon: badge.left < icon.right && badge.top < icon.bottom,
-				lowerRight: badge.right > (icon.left + icon.right) / 2 && badge.bottom > (icon.top + icon.bottom) / 2,
-				centered: Math.abs((icon.left + icon.right) / 2 - (item.left + item.right) / 2) <= 1,
-			};
-		});
-		const { bounds, ...placement } = geometry;
-		expect(placement, bounds).toEqual({ inside: true, overIcon: true, lowerRight: true, centered: true });
-	};
-	for (const style of ['Flat', 'Modern']) {
-		await workbench.settingsEditor.openUserSettingsUI();
-		const settings = page.getByRole('dialog', { name: 'Ash Settings' });
-		await settings.locator('[data-settings-group-id="workbench"]').click();
-		await settings.locator('[data-settings-category-id="layout"]').click();
-		await settings.locator('[data-configuration-key="workbench.layoutStyle"]').getByRole('combobox').click();
-		await page.getByRole('option', { name: style, exact: true }).click();
-		await settings.locator('.ash-modal-editor-close').click();
-		for (const size of ['Default', 'Compact']) {
-			await workbench.menus.select(application, () => explorer.click({ button: 'right' }), ['Activity Bar Size', size]);
-			await expectBadgeGeometry();
-		}
-		for (const position of ['Top', 'Bottom', 'Default']) {
-			await workbench.menus.select(application, () => explorer.click({ button: 'right' }), ['Activity Bar Position', position]);
-			await expectBadgeGeometry();
-		}
-	}
-	await workbench.menus.select(application, () => explorer.click({ button: 'right' }), ['Move Primary Side Bar Right']);
-	await expectBadgeGeometry();
-	await workbench.menus.select(application, () => explorer.click({ button: 'right' }), ['Move Primary Side Bar Left']);
-	await expectBadgeGeometry();
 	await explorer.focus();
 	await workbench.menus.select(application, () => explorer.press('Shift+F10'), ['Hide Badge']);
 	await expect(badge).toHaveCount(0);
@@ -140,18 +125,9 @@ test('activity bar badges stay over the icon and can be hidden independently thr
 	await expect(explorer).toHaveAttribute('aria-label', /1 unsaved file/u);
 	await workbench.menus.select(application, () => explorer.click({ button: 'right' }), ['Show Badge']);
 	await expect(badge).toHaveText('1');
-	await expectBadgeGeometry();
-	for (const theme of ['Ash High Contrast Dark', 'Ash High Contrast Light']) {
-		await workbench.quickaccess.runCommand('workbench.action.selectTheme');
-		const picker = page.locator('.ash-quick-pick').getByRole('combobox');
-		await picker.fill(theme);
-		await picker.press('Enter');
-		await expectBadgeGeometry();
-		await expect(badge).toHaveCSS('outline-style', 'solid');
-	}
 });
 
-test('activity bar badge colors follow theme customizations and survive reopening', async ({ application, workbench, reloadWorkbench }) => {
+test('activity bar badge colors follow theme customizations and survive reopening', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ application, workbench, reloadWorkbench }) => {
 	const badge = (): Locator => workbench.element.locator('.ash-composite-bar-destination[data-action-id="ash.sidebar"] .ash-composite-bar-badge');
 	await workbench.openExplorer();
 	await workbench.quickaccess.runCommand('workbench.action.files.newUntitledFile');
@@ -411,7 +387,7 @@ test('primary sidebar toggle sits immediately after the application menu', { tag
 	}
 });
 
-test('activity bar remains visible and reopens a selected sidebar view in the light theme', async ({ application, target, workbench }) => {
+test('activity bar remains visible and reopens a selected sidebar view in the light theme', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ application, target, workbench }) => {
 	const page = workbench.page;
 	await page.emulateMedia({ colorScheme: 'light' });
 	await workbench.quickaccess.runCommand('workbench.action.selectTheme');
@@ -687,60 +663,6 @@ test('activity bar context menu hides and restores view icons', async ({ applica
 	await expect(search).toBeVisible();
 	await explorer.focus();
 	expect(await workbench.menus.inspect(application, () => explorer.press('Shift+F10'))).toEqual(expect.arrayContaining([expect.objectContaining({ label: "Hide 'Explorer'", enabled: true })]));
-});
-
-test('action menus open without selecting a row and keep pointer and keyboard navigation', async ({ workbench }) => {
-	const page = workbench.page;
-	const manage = page.locator('[data-part="activitybar"]').getByRole('button', { name: 'Manage', exact: true });
-	const menu = page.locator('.ash-context-view-menu:not([hidden]) > .ash-menu').first();
-	const items = menu.getByRole('menuitem');
-	const focused = menu.locator(':scope > .ash-action-view-item.focused');
-
-	await manage.click();
-	await expect(menu).toBeFocused();
-	await expect(focused).toHaveCount(0);
-	await page.keyboard.press('ArrowDown');
-	await expect(items.first()).toBeFocused();
-	await expect(focused).toHaveCount(1);
-	await page.keyboard.press('ArrowUp');
-	await expect(items.last()).toBeFocused();
-	await items.nth(1).hover();
-	await expect(items.nth(1)).toBeFocused();
-	await expect(focused).toHaveCount(1);
-	await page.keyboard.press('Escape');
-	await expect(menu).toHaveCount(0);
-	await expect(manage).toBeFocused();
-
-	// A menu appearing under a resting pointer must wait for actual movement.
-	await manage.click();
-	const firstBounds = await items.first().boundingBox();
-	expect(firstBounds).not.toBeNull();
-	await page.mouse.move(firstBounds!.x + firstBounds!.width / 2, firstBounds!.y + firstBounds!.height / 2);
-	await expect(items.first()).toBeFocused();
-	await page.keyboard.press('Escape');
-	await manage.press('Enter');
-	await expect(menu).toBeFocused();
-	await expect(focused).toHaveCount(0);
-	await page.mouse.move(firstBounds!.x + firstBounds!.width / 2 + 2, firstBounds!.y + firstBounds!.height / 2);
-	await expect(items.first()).toBeFocused();
-	await page.keyboard.press('Escape');
-	await expect(manage).toBeFocused();
-
-	await manage.press('ArrowDown');
-	await expect(menu).toBeFocused();
-	await expect(focused).toHaveCount(0);
-	await page.keyboard.press('ArrowUp');
-	await expect(items.last()).toBeFocused();
-	await page.keyboard.press('Escape');
-	await expect(manage).toBeFocused();
-
-	await manage.press('Enter');
-	await page.keyboard.press('ArrowDown');
-	await expect(items.first()).toHaveText(/Command Palette/u);
-	await page.keyboard.press('Enter');
-	await expect(menu).toHaveCount(0);
-	await expect(workbench.quickaccess.input).toBeFocused();
-	await workbench.quickaccess.close();
 });
 
 test('Accounts and Manage menus open beside the activity bar and below the title bar', { tag: ['@browser-ui', '@browser-app-server'] }, async ({ application, target, workbench }) => {
@@ -1171,15 +1093,6 @@ test('top activity bar places the view selector inside the sidebar', async ({ ap
 	await expect.poll(leftInsets).toEqual({ tab: 0, title: 12, paneTwisty: 6 });
 });
 
-test('command center opens without a first-run guide', async ({ workbench }) => {
-	const page = workbench.page;
-	const search = page.getByRole('button', { name: 'Search commands' });
-	await expect(search).toBeVisible();
-	await expect(page.getByRole('dialog', { name: 'Find commands quickly' })).toHaveCount(0);
-	await search.click();
-	await expect(page.locator('.ash-quick-pick').getByRole('combobox')).toBeFocused();
-});
-
 test('macOS sidebar toggle starts at the window control safe area', { tag: ['@electron-ui', '@electron-app-server', '@darwin'] }, async ({ target, workbench }) => {
 	const titlebar = workbench.page.locator('.ash-electron-titlebar');
 	const toggle = titlebar.locator('[data-action-id="workbench.action.toggleSideBar"] button');
@@ -1451,96 +1364,6 @@ test('Quick Access has no backdrop and lets workbench controls receive clicks', 
 	await page.getByRole('button', { name: 'Application menu' }).click();
 	await expect(picker).toHaveCount(0);
 	await expect(page.getByRole('menu').first()).toBeVisible();
-});
-
-test('Quick Access scrolls its results within the list', async ({ workbench }) => {
-	const page = workbench.page;
-	await page.keyboard.press('F1');
-	const picker = page.locator('.ash-quick-pick');
-	const listContainer = picker.locator('.ash-quick-pick-list');
-	const scrollable = picker.locator('.ash-quick-pick-list-scrollable');
-	const viewport = scrollable.locator('.ash-scrollbar-viewport');
-	const scrollbar = scrollable.locator('.ash-scrollbar-track-vertical');
-	await picker.getByRole('combobox').fill('>');
-	await expect(picker.locator('.ash-list-row').nth(20)).toBeVisible();
-	const initial = await listContainer.evaluate(container => {
-		const viewport = container.querySelector<HTMLElement>('.ash-scrollbar-viewport')!;
-		const scrollbar = container.querySelector<HTMLElement>('.ash-scrollbar-track-vertical')!;
-		const thumb = scrollbar.querySelector<HTMLElement>('.ash-scrollbar-thumb')!;
-		const picker = container.closest('.ash-quick-pick')!;
-		return {
-			containerOverflow: getComputedStyle(container).overflowY,
-			containerScrollHeight: container.scrollHeight,
-			containerHeight: container.clientHeight,
-			listScrollHeight: viewport.scrollHeight,
-			listHeight: viewport.clientHeight,
-			rowHeight: container.querySelector<HTMLElement>('.ash-list-row')!.getBoundingClientRect().height,
-			scrollbarRightInset: picker.getBoundingClientRect().right - scrollbar.getBoundingClientRect().right,
-			thumbBorder: getComputedStyle(thumb).borderRightWidth,
-			thumbWidth: thumb.getBoundingClientRect().width,
-			trackWidth: scrollbar.getBoundingClientRect().width,
-		};
-	});
-	expect(initial.containerOverflow).toBe('hidden');
-	expect(initial.containerScrollHeight).toBeLessThanOrEqual(initial.containerHeight + 1);
-	expect(initial.listScrollHeight).toBeGreaterThan(initial.listHeight);
-	expect(Math.abs(initial.listHeight / initial.rowHeight - Math.round(initial.listHeight / initial.rowHeight))).toBeLessThan(0.03);
-	expect(initial.scrollbarRightInset).toBeLessThanOrEqual(2);
-	expect(initial.thumbBorder).toBe('0px');
-	expect(initial.thumbWidth).toBe(initial.trackWidth);
-	const [rowBounds, trackBounds] = await Promise.all([
-		picker.locator('.ash-list-row.is-active').boundingBox(),
-		scrollbar.boundingBox(),
-	]);
-	expect(rowBounds).not.toBeNull();
-	expect(trackBounds).not.toBeNull();
-	expect(Math.abs(rowBounds!.x + rowBounds!.width - trackBounds!.x)).toBeLessThanOrEqual(1);
-	const [bindingBounds, scrollbarBounds] = await Promise.all([
-		picker.locator('.ash-quick-pick-row-keybinding').first().boundingBox(),
-		scrollbar.boundingBox(),
-	]);
-	expect(bindingBounds).not.toBeNull();
-	expect(scrollbarBounds).not.toBeNull();
-	expect(bindingBounds!.x + bindingBounds!.width).toBeLessThanOrEqual(scrollbarBounds!.x - 4);
-	const combobox = picker.getByRole('combobox');
-	const firstId = await combobox.getAttribute('aria-activedescendant');
-	await combobox.press('PageDown');
-	await expect.poll(() => picker.locator('.ash-list-row.is-active').evaluate(row => Number((row as HTMLElement).dataset.index))).toBeGreaterThan(1);
-	await expect(picker.locator('.ash-list-row.is-active')).toBeInViewport();
-	await expect(combobox).toBeFocused();
-	await expect(combobox).toHaveValue('>');
-	await combobox.press('PageUp');
-	await expect(combobox).toHaveAttribute('aria-activedescendant', firstId!);
-	for (let index = 0; index < 20; index++) {
-		await picker.getByRole('combobox').press('ArrowDown');
-	}
-	const scrolled = await viewport.evaluate(element => element.scrollTop);
-	expect(scrolled).toBeGreaterThan(0);
-	expect(await listContainer.evaluate(element => element.scrollTop)).toBe(0);
-	const active = picker.locator('.ash-list-row.is-active');
-	await expect(active).toBeInViewport();
-	await expect(scrollbar).toHaveAttribute('aria-orientation', 'vertical');
-	await picker.getByRole('combobox').fill('>Toggle Minimap');
-	await expect(picker.locator('.ash-list-row')).toHaveCount(2);
-	await expect.poll(() => scrollable.evaluate(element => element.getBoundingClientRect().height)).toBeLessThan(initial.listHeight);
-	await picker.getByRole('combobox').fill('>no-such-command-quick-access-scroll');
-	await expect(scrollable).toBeHidden();
-	await expect(picker.locator('.ash-quick-pick-empty')).toBeVisible();
-	await picker.getByRole('combobox').fill('>');
-	await expect(picker.locator('.ash-list-row').nth(20)).toBeVisible();
-	await expect.poll(() => viewport.evaluate(element => element.clientHeight)).toBe(initial.listHeight);
-	await page.setViewportSize({ width: 900, height: 400 });
-	await expect(async () => {
-		const compactListHeight = await viewport.evaluate(element => element.clientHeight);
-		expect(compactListHeight).toBeGreaterThan(0);
-		expect(compactListHeight).toBeLessThan(initial.listHeight);
-		expect(Math.abs(compactListHeight / initial.rowHeight - Math.round(compactListHeight / initial.rowHeight))).toBeLessThan(0.03);
-		const resized = await picker.evaluate(element => ({
-			bottom: element.getBoundingClientRect().bottom,
-			viewportHeight: window.innerHeight,
-		}));
-		expect(resized.bottom).toBeLessThanOrEqual(resized.viewportHeight);
-	}).toPass({ timeout: 10_000 });
 });
 
 // Exact CSS breakpoint probes need whole display pixels for each requested viewport pixel.

@@ -3,9 +3,11 @@
 mod auto_replies;
 mod command_status;
 mod environment;
+pub mod host;
 mod profiles;
 mod shell_integration;
 
+use self::host::Operation;
 use crate::terminal::auto_replies::AutoReplies;
 use crate::terminal::command_status::CommandStatusMode;
 use crate::terminal::command_status::ParsedTerminalOutput;
@@ -76,14 +78,30 @@ const RECONNECT_GRACE_PERIOD_MILLIS: u64 = 30_000;
 const RECONNECT_SWEEP_INTERVAL: Duration = Duration::from_secs(1);
 const RECONNECT_TOKEN_BYTES: usize = 32;
 
-/// Owns connection-scoped and briefly reconnectable PTY processes under one
-/// `ExecuteCommands` authorization.
+enum TerminalBackend {
+    Local(Runtime),
+    Hosted(host::Client),
+}
+
+#[derive(Clone, Copy)]
+enum ReconnectPolicy {
+    GracePeriod,
+    ProcessLifetime,
+}
+
+enum InputAdmission {
+    Wait,
+    NonBlocking,
+}
+
+/// Authorized access to connection-scoped and leased PTYs. Managed product
+/// runtimes delegate process ownership to the profile's independent host.
 pub struct TerminalService {
+    backend: TerminalBackend,
     authorization: RwLock<Authorization>,
     terminal_id_prefix: String,
     next_terminal_id: AtomicU64,
     sessions: Arc<Mutex<HashMap<String, TerminalSession>>>,
-    runtime: Runtime,
     profiles: TerminalProfileCatalog,
 }
 
@@ -101,11 +119,29 @@ impl TerminalService {
         let sessions = Arc::new(Mutex::new(HashMap::new()));
         spawn_reconnect_sweeper(&runtime, Arc::clone(&sessions));
         Ok(Self {
+            backend: TerminalBackend::Local(runtime),
             authorization: RwLock::new(authorization),
             terminal_id_prefix,
             next_terminal_id: AtomicU64::new(1),
             sessions,
-            runtime,
+            profiles: TerminalProfileCatalog::discover(),
+        })
+    }
+
+    /// Connects to the profile's independent PTY owner. The local fields only retain
+    /// authorization and shell configuration; no PTY is allocated in this process.
+    pub fn hosted(
+        authorization: Authorization,
+        profile: &std::path::Path,
+        executable: &std::path::Path,
+    ) -> Result<Self, TerminalError> {
+        validate_authorization(&authorization)?;
+        Ok(Self {
+            backend: TerminalBackend::Hosted(host::Client::connect(profile, executable)?),
+            authorization: RwLock::new(authorization),
+            terminal_id_prefix: random_hex::<16>()?,
+            next_terminal_id: AtomicU64::new(1),
+            sessions: Arc::default(),
             profiles: TerminalProfileCatalog::discover(),
         })
     }
@@ -125,6 +161,14 @@ impl TerminalService {
 
     /// Reads only requested values from the environment used to spawn this service's shells.
     pub fn environment(&self, names: &[String]) -> Result<HashMap<String, String>, TerminalError> {
+        if let TerminalBackend::Hosted(host) = &self.backend {
+            return host.request(
+                &self.host_authorization(),
+                0,
+                Operation::Environment(Some(names.to_vec())),
+            );
+        }
+
         self.ensure_active()?;
         if names.len() > 128
             || names
@@ -154,6 +198,14 @@ impl TerminalService {
         &self,
         selection: &TerminalProfileSelection,
     ) -> Result<TerminalResolvedProfile, TerminalError> {
+        if let TerminalBackend::Hosted(host) = &self.backend {
+            return host.request(
+                &self.host_authorization(),
+                0,
+                Operation::Resolve(selection.clone()),
+            );
+        }
+
         self.ensure_active()?;
         let spec = self
             .profiles
@@ -168,6 +220,10 @@ impl TerminalService {
 
     /// Returns the same sanitized snapshot inherited by children, excluding launcher authority.
     pub fn environment_snapshot(&self) -> Result<HashMap<String, String>, TerminalError> {
+        if let TerminalBackend::Hosted(host) = &self.backend {
+            return host.request(&self.host_authorization(), 0, Operation::Environment(None));
+        }
+
         self.ensure_active()?;
         Ok(self.profiles.environment().clone())
     }
@@ -196,12 +252,40 @@ impl TerminalService {
         params: TerminalCreateRequest,
         authorization: Authorization,
     ) -> Result<TerminalCreateResult, TerminalError> {
+        self.create_with_lifetime(owner_connection_id, params, authorization, None)
+    }
+
+    fn create_with_lifetime(
+        &self,
+        owner_connection_id: u64,
+        params: TerminalCreateRequest,
+        authorization: Authorization,
+        lifetime: Option<Arc<std::sync::atomic::AtomicBool>>,
+    ) -> Result<TerminalCreateResult, TerminalError> {
+        if let TerminalBackend::Hosted(host) = &self.backend {
+            validate_authorization(&authorization)?;
+            let result: TerminalCreateResult = host.request(
+                &self.host_authorization(),
+                owner_connection_id,
+                Operation::Create {
+                    params,
+                    root: authorization.dir().canonical_path().into(),
+                },
+            )?;
+            host.remember(&result.terminal_id, authorization);
+            return Ok(result);
+        }
+
         validate_authorization(&authorization)?;
         validate_size(params.rows, params.cols)?;
         let auto_replies = AutoReplies::new(params.auto_replies)?;
         let reconnect = match params.lifecycle {
             TerminalLifecycle::ConnectionOwned => None,
-            TerminalLifecycle::Reconnectable => Some(new_reconnect_lease()?),
+            TerminalLifecycle::Reconnectable => Some(new_reconnect_lease(if lifetime.is_some() {
+                ReconnectPolicy::ProcessLifetime
+            } else {
+                ReconnectPolicy::GracePeriod
+            })?),
         };
         let profile = self
             .profiles
@@ -334,7 +418,7 @@ impl TerminalService {
             ),
         };
         let spawned = self
-            .runtime
+            .runtime()
             .block_on(spawn_pty_process(
                 &program,
                 match &args {
@@ -383,7 +467,7 @@ impl TerminalService {
         )));
         state.lock().map_err(|_| TerminalError::Busy)?.auto_replies = auto_replies;
         let (process, output_task) = spawn_output_drainers(
-            &self.runtime,
+            self.runtime(),
             spawned,
             state.clone(),
             integration,
@@ -405,6 +489,7 @@ impl TerminalService {
                 output_task,
                 state,
                 authorization,
+                lifetime,
             },
         );
         Ok(TerminalCreateResult {
@@ -422,8 +507,16 @@ impl TerminalService {
         owner_connection_id: u64,
         terminal_id: &str,
     ) -> Result<TerminalReconnectLease, TerminalError> {
+        if let TerminalBackend::Hosted(host) = &self.backend {
+            return host.request(
+                &self.host_authorization(),
+                owner_connection_id,
+                Operation::Detach(terminal_id.into()),
+            );
+        }
+
         self.ensure_active()?;
-        let reconnect = new_reconnect_lease()?;
+        let reconnect = new_reconnect_lease(ReconnectPolicy::GracePeriod)?;
         let mut sessions = self.owned_sessions(owner_connection_id, terminal_id)?;
         let session = sessions
             .get_mut(terminal_id)
@@ -434,8 +527,14 @@ impl TerminalService {
             .map_err(|_| TerminalError::Busy)?
             .auto_replies
             .clear();
+        if let Ok(mut state) = session.state.lock() {
+            state.flow_control = OutputFlowControl::ReplayRing;
+            state.output_consumed.notify_one();
+        }
+        session.lifetime = None;
         session.reconnect_token = Some(reconnect.reconnect_token.clone());
         session.owner = TerminalOwner::Detached {
+            previous_owner: owner_connection_id,
             expires_at: Instant::now() + RECONNECT_GRACE_PERIOD,
         };
         Ok(reconnect)
@@ -446,28 +545,81 @@ impl TerminalService {
         owner_connection_id: u64,
         params: TerminalAttachRequest,
     ) -> Result<TerminalAttachResult, TerminalError> {
+        self.attach_with_authorization(owner_connection_id, params, None, None)
+    }
+
+    /// Reattaches under the currently authorized Session directory, retaining its
+    /// revocation proof independently of this service's selected workspace.
+    pub fn attach_in_dir(
+        &self,
+        owner_connection_id: u64,
+        params: TerminalAttachRequest,
+        authorization: Authorization,
+    ) -> Result<TerminalAttachResult, TerminalError> {
+        validate_authorization(&authorization)?;
+        self.attach_with_authorization(owner_connection_id, params, Some(authorization), None)
+    }
+
+    fn attach_with_authorization(
+        &self,
+        owner_connection_id: u64,
+        params: TerminalAttachRequest,
+        authorization: Option<Authorization>,
+        lifetime: Option<Arc<std::sync::atomic::AtomicBool>>,
+    ) -> Result<TerminalAttachResult, TerminalError> {
+        if let TerminalBackend::Hosted(host) = &self.backend {
+            let service_authorization = self.host_authorization();
+            let result: TerminalAttachResult = host.request(
+                &service_authorization,
+                owner_connection_id,
+                Operation::Attach {
+                    params,
+                    root: authorization
+                        .as_ref()
+                        .map(|proof| proof.dir().canonical_path().into()),
+                },
+            )?;
+            host.remember_attached(&result.terminal_id, authorization, service_authorization);
+            return Ok(result);
+        }
+
         self.ensure_active()?;
         validate_size(params.rows, params.cols)?;
-        let reconnect = new_reconnect_lease()?;
+        let reconnect = new_reconnect_lease(if lifetime.is_some() {
+            ReconnectPolicy::ProcessLifetime
+        } else {
+            ReconnectPolicy::GracePeriod
+        })?;
         let mut sessions = self.sessions.lock().map_err(|_| TerminalError::Busy)?;
         remove_expired_sessions(&mut sessions, Instant::now());
         let session = sessions
             .get_mut(&params.terminal_id)
-            .ok_or(TerminalError::AttachRejected)?;
-        let TerminalOwner::Detached { expires_at } = session.owner else {
-            return Err(TerminalError::AttachRejected);
-        };
-        if expires_at <= Instant::now()
-            || !session
-                .reconnect_token
-                .as_deref()
-                .is_some_and(|expected| constant_time_eq(expected, &params.reconnect_token))
+            .ok_or(TerminalError::NotFound)?;
+        match session.owner {
+            TerminalOwner::Attached(_) => return Err(TerminalError::Busy),
+            TerminalOwner::Detached { expires_at, .. } if expires_at <= Instant::now() => {
+                return Err(TerminalError::AttachRejected);
+            }
+            TerminalOwner::Detached { .. } | TerminalOwner::Disconnected { .. } => {}
+        }
+        if !session
+            .reconnect_token
+            .as_deref()
+            .is_some_and(|expected| constant_time_eq(expected, &params.reconnect_token))
         {
+            return Err(TerminalError::AttachRejected);
+        }
+        if session.lifetime.is_some() && lifetime.is_none() {
             return Err(TerminalError::AttachRejected);
         }
         // A service may host terminals created under different Session grants.
         // The service grant cannot substitute for the process's own authorization.
         validate_authorization(&session.authorization)?;
+        if let Some(authorization) = authorization
+            && authorization.dir().canonical_path() != session.authorization.dir().canonical_path()
+        {
+            return Err(TerminalError::AttachRejected);
+        }
         session
             .process
             .resize(TerminalSize {
@@ -479,6 +631,12 @@ impl TerminalService {
             rows: params.rows,
             cols: params.cols,
         };
+        session
+            .state
+            .lock()
+            .map_err(|_| TerminalError::Busy)?
+            .flow_control = OutputFlowControl::Acknowledged;
+        session.lifetime = lifetime;
         session.owner = TerminalOwner::Attached(owner_connection_id);
         session.reconnect_token = Some(reconnect.reconnect_token.clone());
         Ok(TerminalAttachResult {
@@ -493,14 +651,15 @@ impl TerminalService {
         owner_connection_id: u64,
         params: TerminalWriteRequest,
     ) -> Result<(), TerminalError> {
-        self.ensure_active()?;
-        if params.data.is_empty() || params.data.len() > MAX_INPUT_BYTES {
-            return Err(TerminalError::InvalidInput);
+        if let TerminalBackend::Hosted(host) = &self.backend {
+            return host.write(&self.host_authorization(), owner_connection_id, params);
         }
+
         self.write_input(
             owner_connection_id,
             &params.terminal_id,
             params.data.into_bytes(),
+            InputAdmission::Wait,
         )
     }
 
@@ -510,11 +669,16 @@ impl TerminalService {
         owner_connection_id: u64,
         params: TerminalWriteBinaryRequest,
     ) -> Result<(), TerminalError> {
-        self.ensure_active()?;
-        if params.data.is_empty() || params.data.len() > MAX_INPUT_BYTES {
-            return Err(TerminalError::InvalidInput);
+        if let TerminalBackend::Hosted(host) = &self.backend {
+            return host.write_binary(&self.host_authorization(), owner_connection_id, params);
         }
-        self.write_input(owner_connection_id, &params.terminal_id, params.data)
+
+        self.write_input(
+            owner_connection_id,
+            &params.terminal_id,
+            params.data,
+            InputAdmission::Wait,
+        )
     }
 
     fn write_input(
@@ -522,7 +686,12 @@ impl TerminalService {
         owner_connection_id: u64,
         terminal_id: &str,
         data: Vec<u8>,
+        admission: InputAdmission,
     ) -> Result<(), TerminalError> {
+        self.ensure_active()?;
+        if data.is_empty() || data.len() > MAX_INPUT_BYTES {
+            return Err(TerminalError::InvalidInput);
+        }
         let sessions = self.owned_sessions(owner_connection_id, terminal_id)?;
         let writer = sessions
             .get(terminal_id)
@@ -532,10 +701,20 @@ impl TerminalService {
         drop(sessions);
         // Waiting for input capacity cannot block reads or a transfer. Once a slot
         // is available, recheck ownership and admit input atomically with detach.
-        let permit = self
-            .runtime
-            .block_on(writer.reserve_owned())
-            .map_err(|_| TerminalError::OperationFailed)?;
+        let permit = match admission {
+            InputAdmission::Wait => self
+                .runtime()
+                .block_on(writer.reserve_owned())
+                .map_err(|_| TerminalError::OperationFailed)?,
+            InputAdmission::NonBlocking => {
+                writer.try_reserve_owned().map_err(|error| match error {
+                    tokio::sync::mpsc::error::TrySendError::Full(_) => TerminalError::Busy,
+                    tokio::sync::mpsc::error::TrySendError::Closed(_) => {
+                        TerminalError::OperationFailed
+                    }
+                })?
+            }
+        };
         let sessions = self.owned_sessions(owner_connection_id, terminal_id)?;
         permit.send(data);
         drop(sessions);
@@ -550,6 +729,17 @@ impl TerminalService {
         terminal_id: &str,
         rules: Vec<TerminalAutoReply>,
     ) -> Result<(), TerminalError> {
+        if let TerminalBackend::Hosted(host) = &self.backend {
+            return host.request(
+                &self.host_authorization(),
+                owner_connection_id,
+                Operation::AutoReplies {
+                    terminal_id: terminal_id.into(),
+                    rules,
+                },
+            );
+        }
+
         self.ensure_active()?;
         let replies = AutoReplies::new(rules)?;
         let sessions = self.owned_sessions(owner_connection_id, terminal_id)?;
@@ -574,6 +764,17 @@ impl TerminalService {
         terminal_id: &str,
         signal: TerminalSignal,
     ) -> Result<(), TerminalError> {
+        if let TerminalBackend::Hosted(host) = &self.backend {
+            return host.request(
+                &self.host_authorization(),
+                owner_connection_id,
+                Operation::Signal {
+                    terminal_id: terminal_id.into(),
+                    signal,
+                },
+            );
+        }
+
         self.ensure_active()?;
         let sessions = self.owned_sessions(owner_connection_id, terminal_id)?;
         let process = &sessions
@@ -603,6 +804,14 @@ impl TerminalService {
         owner_connection_id: u64,
         terminal_id: &str,
     ) -> Result<TerminalProcessInfo, TerminalError> {
+        if let TerminalBackend::Hosted(host) = &self.backend {
+            return host.request(
+                &self.host_authorization(),
+                owner_connection_id,
+                Operation::ProcessInfo(terminal_id.into()),
+            );
+        }
+
         self.ensure_active()?;
         let sessions = self.owned_sessions(owner_connection_id, terminal_id)?;
         let session = sessions
@@ -637,6 +846,14 @@ impl TerminalService {
         owner_connection_id: u64,
         params: TerminalResizeRequest,
     ) -> Result<(), TerminalError> {
+        if let TerminalBackend::Hosted(host) = &self.backend {
+            return host.request(
+                &self.host_authorization(),
+                owner_connection_id,
+                Operation::Resize(params),
+            );
+        }
+
         self.ensure_active()?;
         validate_size(params.rows, params.cols)?;
         let mut sessions = self.owned_sessions(owner_connection_id, &params.terminal_id)?;
@@ -665,6 +882,14 @@ impl TerminalService {
         owner_connection_id: u64,
         params: TerminalReadRequest,
     ) -> Result<TerminalReadResult, TerminalError> {
+        if let TerminalBackend::Hosted(host) = &self.backend {
+            return host.request(
+                &self.host_authorization(),
+                owner_connection_id,
+                Operation::Read(params),
+            );
+        }
+
         self.ensure_active()?;
         if params.max_chunks == 0 || params.max_chunks > 128 {
             return Err(TerminalError::InvalidInput);
@@ -693,6 +918,15 @@ impl TerminalService {
     }
 
     pub fn close(&self, owner_connection_id: u64, terminal_id: &str) -> Result<(), TerminalError> {
+        if let TerminalBackend::Hosted(host) = &self.backend {
+            let authorization = self.host_authorization();
+            return host.close(
+                authorization.dir().canonical_path(),
+                owner_connection_id,
+                terminal_id,
+            );
+        }
+
         let mut sessions = self.sessions.lock().map_err(|_| TerminalError::Busy)?;
         let session = sessions.get(terminal_id).ok_or(TerminalError::NotFound)?;
         if session.owner != TerminalOwner::Attached(owner_connection_id) {
@@ -711,6 +945,16 @@ impl TerminalService {
     }
 
     pub fn close_owner(&self, owner_connection_id: u64) {
+        if let TerminalBackend::Hosted(host) = &self.backend {
+            let authorization = self.host_authorization();
+            let _ = host.unchecked::<()>(
+                authorization.dir().canonical_path(),
+                owner_connection_id,
+                Operation::CloseOwner,
+            );
+            return;
+        }
+
         let Ok(mut sessions) = self.sessions.lock() else {
             return;
         };
@@ -722,8 +966,20 @@ impl TerminalService {
                 state.auto_replies.clear();
             }
             if session.reconnect_token.is_some() {
-                session.owner = TerminalOwner::Detached {
-                    expires_at: Instant::now() + RECONNECT_GRACE_PERIOD,
+                if let Ok(mut state) = session.state.lock() {
+                    state.flow_control = OutputFlowControl::ReplayRing;
+                    state.output_consumed.notify_one();
+                }
+                session.owner = match &session.lifetime {
+                    None => TerminalOwner::Detached {
+                        previous_owner: owner_connection_id,
+                        expires_at: Instant::now() + RECONNECT_GRACE_PERIOD,
+                    },
+                    // A replaceable backend is a transport, not the process owner.
+                    Some(_) => TerminalOwner::Disconnected {
+                        previous_owner: owner_connection_id,
+                        exited_since: None,
+                    },
                 };
                 true
             } else {
@@ -734,6 +990,15 @@ impl TerminalService {
     }
 
     pub fn active_count(&self) -> usize {
+        if let TerminalBackend::Hosted(host) = &self.backend {
+            let authorization = self.host_authorization();
+            // The independent owner reclaims disconnected leases itself; an
+            // unreachable host must not keep the replaceable backend alive.
+            return host
+                .unchecked(authorization.dir().canonical_path(), 0, Operation::Count)
+                .unwrap_or(0);
+        }
+
         let Ok(mut sessions) = self.sessions.lock() else {
             return MAX_ACTIVE_TERMINALS;
         };
@@ -742,6 +1007,16 @@ impl TerminalService {
     }
 
     pub fn terminate_all(&self) {
+        if let TerminalBackend::Hosted(host) = &self.backend {
+            let authorization = self.host_authorization();
+            let _ = host.unchecked::<()>(
+                authorization.dir().canonical_path(),
+                0,
+                Operation::Terminate,
+            );
+            return;
+        }
+
         let Ok(mut sessions) = self.sessions.lock() else {
             return;
         };
@@ -751,6 +1026,11 @@ impl TerminalService {
     }
 
     pub fn terminate_revoked_dirs(&self) {
+        if let TerminalBackend::Hosted(host) = &self.backend {
+            host.revoke(self.host_authorization().dir().canonical_path());
+            return;
+        }
+
         let Ok(mut sessions) = self.sessions.lock() else {
             return;
         };
@@ -762,6 +1042,22 @@ impl TerminalService {
                 false
             }
         });
+    }
+
+    fn runtime(&self) -> &Runtime {
+        match &self.backend {
+            TerminalBackend::Local(runtime) => runtime,
+            TerminalBackend::Hosted(_) => {
+                unreachable!("hosted process operations are dispatched before local execution")
+            }
+        }
+    }
+
+    fn host_authorization(&self) -> Authorization {
+        self.authorization
+            .read()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone()
     }
 
     fn ensure_active(&self) -> Result<(), TerminalError> {
@@ -808,6 +1104,8 @@ struct TerminalSession {
     output_task: AbortHandle,
     state: Arc<Mutex<TerminalState>>,
     authorization: Authorization,
+    // The window owns this live connection; backend peers can be replaced freely.
+    lifetime: Option<Arc<std::sync::atomic::AtomicBool>>,
 }
 
 impl Drop for TerminalSession {
@@ -821,7 +1119,19 @@ impl Drop for TerminalSession {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum TerminalOwner {
     Attached(u64),
-    Detached { expires_at: Instant },
+    Detached {
+        expires_at: Instant,
+        previous_owner: u64,
+    },
+    Disconnected {
+        previous_owner: u64,
+        exited_since: Option<Instant>,
+    },
+}
+
+enum OutputFlowControl {
+    Acknowledged,
+    ReplayRing,
 }
 
 struct TerminalState {
@@ -830,6 +1140,7 @@ struct TerminalState {
     acknowledged_sequence: u64,
     output_bytes: usize,
     output_consumed: Arc<Notify>,
+    flow_control: OutputFlowControl,
     command_status: TerminalCommandStatusTracker,
     auto_replies: AutoReplies,
     exited: bool,
@@ -850,6 +1161,7 @@ impl TerminalState {
             acknowledged_sequence: 0,
             output_bytes: 0,
             output_consumed: Arc::new(Notify::new()),
+            flow_control: OutputFlowControl::Acknowledged,
             command_status: TerminalCommandStatusTracker::new(command_status_mode, nonce),
             auto_replies: AutoReplies::default(),
             exited: false,
@@ -1105,6 +1417,11 @@ async fn wait_for_output_capacity(state: &Mutex<TerminalState>, consumed: &Notif
         let notified = consumed.notified();
         match state.lock() {
             Ok(state) => {
+                // No screen can acknowledge during an outage. Keep draining the
+                // PTY into the bounded replay ring so a verbose command can finish.
+                if matches!(state.flow_control, OutputFlowControl::ReplayRing) {
+                    return true;
+                }
                 let mut bytes = 0_usize;
                 let mut chunks = 0;
                 for chunk in state
@@ -1268,10 +1585,13 @@ fn validate_size(rows: u16, cols: u16) -> Result<(), TerminalError> {
     Ok(())
 }
 
-fn new_reconnect_lease() -> Result<TerminalReconnectLease, TerminalError> {
+fn new_reconnect_lease(policy: ReconnectPolicy) -> Result<TerminalReconnectLease, TerminalError> {
     Ok(TerminalReconnectLease {
         reconnect_token: random_hex::<RECONNECT_TOKEN_BYTES>()?,
-        reconnect_grace_period_millis: RECONNECT_GRACE_PERIOD_MILLIS,
+        reconnect_grace_period_millis: match policy {
+            ReconnectPolicy::GracePeriod => RECONNECT_GRACE_PERIOD_MILLIS,
+            ReconnectPolicy::ProcessLifetime => 0,
+        },
     })
 }
 
@@ -1315,16 +1635,39 @@ fn spawn_reconnect_sweeper(
 }
 
 fn remove_expired_sessions(sessions: &mut HashMap<String, TerminalSession>, now: Instant) {
-    sessions.retain(|_, session| match session.owner {
-        TerminalOwner::Detached { expires_at } if expires_at <= now => {
+    sessions.retain(|_, session| {
+        if session
+            .lifetime
+            .as_ref()
+            .is_some_and(|alive| !alive.load(Ordering::Acquire))
+        {
             session.process.request_terminate();
-            false
+            return false;
         }
-        _ => true,
+        match &mut session.owner {
+            TerminalOwner::Detached { expires_at, .. } => {
+                if *expires_at > now {
+                    return true;
+                }
+                session.process.request_terminate();
+                false
+            }
+            TerminalOwner::Disconnected { exited_since, .. } => {
+                // Only reclaim a process after both exit and output EOF. Give its
+                // final output a handoff interval; live commands have no deadline.
+                let exited = session.state.lock().is_ok_and(|state| state.exited);
+                if !exited {
+                    return true;
+                }
+                let since = exited_since.get_or_insert(now);
+                now.saturating_duration_since(*since) < RECONNECT_GRACE_PERIOD
+            }
+            TerminalOwner::Attached(_) => true,
+        }
     });
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Copy, Debug, Eq, PartialEq)]
 pub enum TerminalError {
     InvalidInput,
     NotFound,

@@ -1,3 +1,4 @@
+import type { IExtensionService } from '../../../../../services/extensions/common/extensionService.js';
 import type { IExtensionHostApi } from '../../../../../../platform/agentHost/common/extensionHostApi.js';
 import type { ExtensionDescriptor, IExtensionApi } from '../../../../../../platform/extensions/common/extensionApi.js';
 import { ILabelService } from '../../../../../../platform/label/common/label.js';
@@ -29,7 +30,8 @@ import Severity from '../../../../../../base/common/severity.js';
 import { CancellationError, errorHandler } from '../../../../../../base/common/errors.js';
 import { DialogService } from '../../../../../services/dialogs/common/dialogService.js';
 import assert from "node:assert/strict";
-import { test, suite, suiteTeardown } from "mocha";
+import { before, test, suite, suiteTeardown } from "mocha";
+import { prepareAcademyExtension } from '../../../../../../../../test/fixtures/academyExtension.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from "../../../../../../base/test/common/utils.js";
 import { JSDOM } from "jsdom";
 import type {
@@ -126,6 +128,9 @@ import type {
 	IAuxiliaryWindow,
 	IAuxiliaryWindowService,
 } from "../../../../../../workbench/services/auxiliaryWindow/browser/auxiliaryWindowService.js";
+
+// Compile the real provider before runtime assertions start their own deadlines.
+before(function () { this.timeout(600_000); prepareAcademyExtension(); });
 
 const uriIdentityServices = new TestUriIdentityServices();
 suiteTeardown(() => uriIdentityServices.dispose());
@@ -2441,6 +2446,13 @@ test("EditorPart tracks MRU editors and reopens with another pane", async () => 
 	await editor.reopenActiveEditorWith("test.editor.alternate");
 	assert.equal(editor.activePane?.id, "test.editor.alternate");
 	assert.equal(editor.getEditorState().activeEditor?.instanceId, instanceId);
+	const saved = JSON.parse(JSON.stringify(editor.saveWorkingSet('alternate-pane')));
+	assert.equal(saved.groups[0].editors[0].paneId, 'test.editor.alternate');
+	await editor.applyWorkingSet('empty');
+	await editor.applyWorkingSet(saved);
+	assert.equal(editor.activePane?.id, 'test.editor.alternate');
+	assert.equal(editor.activeInput?.resource.toString(), first.resource.toString());
+
 
 	editor.dispose();
 	dom.window.close();
@@ -3358,6 +3370,7 @@ test("EditorPart shows a retryable placeholder when an editor cannot open", asyn
 	await editor.openEditor(retryable);
 	assert.equal(editor.activeInput, retryable);
 	assert.equal(editor.activePane?.id, "workbench.editor.openError");
+	assert.equal(editor.saveWorkingSet('retryable').groups[0]!.editors[0]!.paneId, undefined);
 	assert.match(editor.domNode.textContent ?? "", /Unable to open document\.retry/);
 	assert.match(editor.domNode.textContent ?? "", /Temporary decoder failure/);
 	editor.domNode.querySelector<HTMLButtonElement>(".ash-editor-open-error-actions button")?.click();
@@ -4137,7 +4150,7 @@ test('general document commands preserve dirty source text, create a backed-up d
 			return import('../../../../../../../../extensions/academic/browser/editor.js');
 		}, {
 			invoke: (request, signal) => provider.invoke(request.registrationId, request.operation, request.payload, signal),
-		} as IExtensionHostApi, { list: async () => ({ generation: 1, extensions: [entry], diagnostics: [] }) } as unknown as IExtensionApi);
+		} as IExtensionHostApi, { list: async () => ({ generation: 1, extensions: [entry], diagnostics: [] }) } as unknown as IExtensionApi, emptyEditorDeclarations);
 		await bridge.update({ generation: 1, extensions: [{ id: 'ash.academic', version: '1.0.0', packageDigest: `sha256:${'a'.repeat(64)}`, runtimeApiVersion: 1, activationGeneration: 1, incarnation: 1, lifecycle: 'ready', failure: undefined, stderr: '', outputEvents: [], registrations: provider.registrations }] });
 		const documentPane = EditorPanes.getEditorPane({ resource: target })!;
 		registry.registerEditorPane({ ...documentPane, documentType: undefined });
@@ -5013,3 +5026,5 @@ test('ordered editor state reads do not resolve every tab identity again', async
 	assert.deepEqual(moved.map(state => ({ input: state.input, index: state.index, active: state.isActive })),
 		reordered.map((input, index) => ({ input, index, active: index === 0 })));
 });
+
+const emptyEditorDeclarations = { getExtensionPointContributions: () => [] } as unknown as IExtensionService;

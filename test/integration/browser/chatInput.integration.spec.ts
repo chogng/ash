@@ -652,68 +652,15 @@ test('question controls resolve the editor background variable for each palette'
 });
 
 for (const { locale, surface } of ['en', 'zh-CN'].flatMap(locale => ['chat', 'cowork'].map(surface => ({ locale, surface })))) {
-	test(`model picker shows the catalog description and retains keyboard state in ${surface} ${locale}`, async ({ page }) => {
-		const errors: string[] = [];
-		page.on('pageerror', error => errors.push(error.message));
-		await page.goto(`/chatInput.html?locale=${locale}&surface=${surface}`);
-		expect(errors).toEqual([]);
-		await page.evaluate(() => window.ashChatInputIntegration.showModels());
-		const trigger = page.locator('.ash-chat-input-model-action');
-		await trigger.press('ArrowDown');
-		const picker = page.locator('.ash-chat-model-picker');
-		const search = picker.getByRole('combobox');
-		await expect(picker.getByRole('menuitemradio', { name: 'Test Model', exact: true })).toHaveText('Test Model');
-		await expect(picker).toHaveClass(/ash-action-widget/);
-		expect(await picker.evaluate(element => element.getBoundingClientRect().width)).toBeLessThan(320);
-		await expect(picker.locator('.ash-quick-pick-row-description')).toHaveCount(0);
-		await expect(picker).not.toContainText('A model for everyday tasks');
-		await search.press('ArrowRight');
-		const card = picker.locator('.ash-chat-model-card');
-		const description = 'A model for everyday tasks';
-		await expect(card.locator('.ash-chat-model-card-description')).toHaveText(description);
-		await expect(card).toHaveAttribute('aria-description', description);
-		await expect(card).toBeFocused();
-		await expect(card.locator('input, button')).toHaveCount(0);
-		await page.setViewportSize({ width: 320, height: 600 });
-		const explanation = card.locator('.ash-chat-model-card-description');
-		expect(await explanation.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
-		await card.press('Escape');
-		await expect(picker).toHaveCount(0);
-		await expect(trigger).toBeFocused();
-	});
-}
-
-for (const { locale, surface } of ['en', 'zh-CN'].flatMap(locale => ['chat', 'cowork'].map(surface => ({ locale, surface })))) {
-	test(`thinking levels retain catalog descriptions and keyboard selection in ${surface} ${locale}`, async ({ page }) => {
-		await page.goto(`/chatInput.html?locale=${locale}&surface=${surface}`);
-		await page.evaluate(() => window.ashChatInputIntegration.showModels());
-		const trigger = page.locator('.ash-chat-input-configuration-action');
-		const lowCopy = locale === 'zh-CN' ? '较轻的推理，更快的响应' : 'Fast responses with lighter reasoning';
-		const highCopy = locale === 'zh-CN' ? '为复杂问题提供更深入的推理' : 'Greater reasoning depth for complex problems';
-		await expect(trigger).toHaveAttribute('aria-description', lowCopy);
-		await trigger.press('ArrowDown');
-		const menu = page.locator('.ash-chat-model-configuration-menu');
-		const low = menu.locator('[data-action-id="ash.chat.input.effort.low"] button');
-		const high = menu.locator('[data-action-id="ash.chat.input.effort.high"] button');
-		await expect(low).toBeFocused();
-		await expect(low).toHaveAttribute('aria-description', lowCopy);
-		await page.keyboard.press('ArrowDown');
-		await expect(high).toBeFocused();
-		await expect(high).toHaveAttribute('aria-description', highCopy);
-		await page.keyboard.press('Enter');
-		await expect(menu).toHaveCount(0);
-		await expect(trigger).toBeFocused();
-		await expect(trigger).toHaveAttribute('aria-description', highCopy);
-	});
-}
-
-for (const { locale, surface } of ['en', 'zh-CN'].flatMap(locale => ['chat', 'cowork'].map(surface => ({ locale, surface })))) {
 	test(`model options select effort and context independently in ${surface} ${locale}`, async ({ page }) => {
 		await page.goto(`/chatInput.html?locale=${locale}&surface=${surface}`);
 		await page.evaluate(() => window.ashChatInputIntegration.showModels());
 		const chinese = locale === 'zh-CN';
 		const trigger = page.locator('.ash-chat-input-configuration-action');
 		const menu = page.locator('.ash-chat-model-configuration-menu');
+		const lowCopy = chinese ? '较轻的推理，更快的响应' : 'Fast responses with lighter reasoning';
+		const highCopy = chinese ? '为复杂问题提供更深入的推理' : 'Greater reasoning depth for complex problems';
+		await expect(trigger).toHaveAttribute('aria-description', lowCopy);
 		await expect(trigger).toHaveText(chinese ? '低' : 'Low');
 		await trigger.press('ArrowDown');
 		await expect(menu.locator('.ash-chat-model-configuration-heading')).toHaveText(chinese ? ['推理强度', '上下文大小'] : ['Thinking Level', 'Context Size']);
@@ -724,9 +671,12 @@ for (const { locale, surface } of ['en', 'zh-CN'].flatMap(locale => ['chat', 'co
 		await expect(contextDefault).toHaveText(chinese ? '关闭长上下文' : 'Long context off');
 		await expect(expanded).toHaveText(chinese ? '开启长上下文' : 'Long context on');
 		const high = menu.locator('[data-action-id="ash.chat.input.effort.high"] button');
+		await expect(menu.locator('[data-action-id="ash.chat.input.effort.low"] button')).toHaveAttribute('aria-description', lowCopy);
+		await expect(high).toHaveAttribute('aria-description', highCopy);
 		await page.keyboard.press('ArrowDown');
 		await expect(high).toBeFocused();
 		await page.keyboard.press('Enter');
+		await expect(trigger).toHaveAttribute('aria-description', highCopy);
 		await expect(trigger).toHaveText(chinese ? '高' : 'High');
 		await expect(trigger).toBeFocused();
 		await trigger.press('ArrowDown');
@@ -821,9 +771,35 @@ test('Mode picker keeps its Tab stop and shares menu activation, placement and d
 		await page.keyboard.press('Escape');
 		await expect(mode).toBeFocused();
 	}
-	await mode.press('ArrowDown');
-	await menu.getByRole('menuitemradio', { name: 'Plan', exact: true }).click();
-	await expect(menu).toBeHidden();
+	const modes: Record<string, { icon: string; color?: string; }> = {
+		Agent: { icon: 'unlimited' }, Plan: { icon: 'plan', color: '--ash-charts-orange' }, Debug: { icon: 'debug', color: '--ash-charts-red' },
+		Multitask: { icon: 'multitask', color: '--ash-charts-purple' }, Ask: { icon: 'chat-4', color: '--ash-charts-green' },
+	};
+	for (const name of ['Plan', 'Agent', 'Debug', 'Multitask', 'Ask']) {
+		await mode.press('ArrowDown');
+		const item = menu.getByRole('menuitemradio', { name, exact: true });
+		await expect(item.locator(`svg[data-ash-icon-id="${modes[name]!.icon}"]`)).toBeVisible();
+		await item.click();
+		await expect(menu).toBeHidden();
+		await expect(mode).toHaveText(name);
+		await expect(mode.locator(`svg[data-ash-icon-id="${modes[name]!.icon}"]`)).toBeVisible();
+		if (modes[name]!.color) {
+			expect(await mode.evaluate((button, variable) => {
+				const probe = document.createElement('span'); probe.style.color = `var(${variable})`; button.append(probe);
+				try { return getComputedStyle(button).color === getComputedStyle(probe).color; } finally { probe.remove(); }
+			}, modes[name]!.color!)).toBe(true);
+		}
+		await mode.press('ArrowDown');
+		await expect(menu.getByRole('menuitemradio', { name, exact: true })).toBeFocused();
+		await expect(menu.getByRole('menuitemradio').and(menu.locator('[aria-checked="true"]'))).toHaveCount(1);
+		await expect(menu.getByRole('menuitemradio', { name, exact: true })).toHaveAttribute('aria-checked', 'true');
+		await page.keyboard.press('Escape');
+		await expect(mode).toBeFocused();
+	}
+	await model.press('Enter');
+	await expect(page.getByRole('dialog', { name: 'Choose a chat model' })).toBeVisible();
+	await page.keyboard.press('Escape');
+	await expect(model).toBeFocused();
 });
 
 for (const surface of ['chat', 'cowork']) {
@@ -858,6 +834,21 @@ for (const surface of ['chat', 'cowork']) {
 		const width = await picker.evaluate(element => element.getBoundingClientRect().width);
 		expect(width).toBeGreaterThan(320);
 		expect(width).toBeLessThanOrEqual(page.viewportSize()!.width * 0.8);
+		await expect(search).toHaveCSS('outline-style', 'none');
+		await expect(search).toHaveCSS('border-top-width', '0px');
+		await expect(search).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+		const edges = await picker.evaluate(element => {
+			const items = element.querySelector<HTMLElement>('.ash-action-widget-items')!;
+			items.style.maxHeight = '28px';
+			const row = items.querySelector('.ash-button')!.getBoundingClientRect();
+			const footer = element.querySelector('.ash-chat-model-picker-footer .ash-button')!.getBoundingClientRect();
+			const result = { scrolls: items.scrollHeight > items.clientHeight, rowLeft: row.left, rowRight: row.right, footerLeft: footer.left, footerRight: footer.right };
+			items.style.removeProperty('max-height');
+			return result;
+		});
+		expect(edges.scrolls).toBe(true);
+		expect(edges.rowLeft).toBe(edges.footerLeft);
+		expect(edges.rowRight).toBe(edges.footerRight);
 		await search.fill('test-model');
 		await expect(picker.getByRole('menuitemradio')).toHaveCount(1);
 		await expect(picker.getByRole('menuitemradio')).toHaveText('Test Model');
@@ -923,6 +914,8 @@ for (const locale of ['en', 'zh-CN']) {
 		await search.press('ArrowRight');
 		await expect(card).toHaveText('Restored provider description');
 		await expect(card).toBeFocused();
+		await page.setViewportSize({ width: 320, height: 600 });
+		expect(await card.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
 		expect(await page.evaluate(() => window.ashChatInputIntegration.modelState())).toEqual(initial);
 		await card.press('Escape');
 		await expect(page.locator('.ash-chat-model-picker')).toHaveCount(0);
@@ -1040,6 +1033,20 @@ for (const surface of ['chat', 'cowork']) {
 		const options = control.locator('.ash-chat-input-configuration-action');
 		await page.mouse.move(0, 0);
 		await expect(control).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+		if (surface === 'chat') {
+			// Generic toolbar hover comes from the production Workbench host stylesheet.
+			await page.locator('body').evaluate(element => element.classList.add('ash-workbench'));
+			const context = page.locator('[data-action-id="ash.chat.input.attach"] button');
+			await context.hover();
+			const background = await context.evaluate(element => getComputedStyle(element).backgroundColor);
+			expect(background).not.toBe('rgba(0, 0, 0, 0)');
+			await model.hover();
+			await expect(model).toHaveCSS('background-color', background);
+			await expect(control).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+			await page.mouse.move(0, 0);
+			await expect(model).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+			await expect(control).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+		}
 		for (const background of ['rgb(45, 45, 45)', 'rgb(225, 225, 225)', 'rgb(255, 255, 0)']) {
 			await control.evaluate((element, value) => element.style.setProperty('--ash-toolbar-hoverBackground', value), background);
 			await model.hover();
@@ -1524,3 +1531,211 @@ for (const surface of ['code', 'cowork']) {
 		await expect(page.getByLabel('Opened sources')).toHaveText('[{"changes":true}]');
 	});
 }
+
+test('Chat mode choices use the shared action widget and floating elevation across themes', async ({ page }) => {
+	for (const theme of ['light', 'dark', 'hcDark', 'hcLight']) {
+		await page.goto(`/chatInput.html?theme=${theme}`);
+		await page.evaluate(() => window.ashChatInputIntegration.showModels());
+		const picker = page.locator('[data-action-id="ash.chat.input.mode"] button');
+		await picker.press('ArrowDown');
+		const widget = page.locator('.ash-action-widget.ash-chat-input-mode-menu');
+		await expect(widget).toBeVisible();
+		const geometry = await widget.evaluate(element => ({
+			width: element.getBoundingClientRect().width,
+			overflow: element.scrollWidth - element.clientWidth,
+			truncated: [...element.querySelectorAll('.ash-button-label')].some(label => label.scrollWidth > label.clientWidth),
+		}));
+		expect(geometry.width).toBeGreaterThanOrEqual(100);
+		expect(geometry.width).toBeLessThan(240);
+		expect(geometry.overflow).toBe(0);
+		expect(geometry.truncated).toBe(false);
+		const shell = widget.locator('..');
+		await expect(shell).toHaveCSS('box-shadow', 'none');
+		await expect(shell).toHaveCSS('border-width', '0px');
+		await expect(shell).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+		await expect(widget).toHaveCSS('box-shadow', theme.startsWith('hc') ? 'none' : 'rgba(0, 0, 0, 0.14) 0px 0px 12px 0px');
+		await expect(widget).toHaveCSS('border-radius', '8px');
+		await expect(widget).toHaveCSS('border-style', 'solid');
+		expect(await widget.evaluate(element => Math.round(parseFloat(getComputedStyle(element).borderTopWidth)))).toBe(1);
+		await expect(widget).toHaveCSS('font-size', '13px');
+		const agent = widget.getByRole('menuitemradio', { name: 'Agent', exact: true });
+		await expect(agent).toBeFocused();
+		await expect(agent).toHaveAttribute('aria-checked', 'true');
+		await expect(agent.locator('.ash-icon-label-icon svg[data-ash-icon-id="unlimited"]')).toBeVisible();
+		await expect(agent.locator('.ash-menu-leading-check > svg[data-ash-icon-id="check"]')).toBeVisible();
+		await agent.press('ArrowDown');
+		await expect(widget.getByRole('menuitemradio', { name: 'Plan', exact: true })).toBeFocused();
+		await page.keyboard.press('Escape');
+		await expect(widget).toHaveCount(0);
+		await expect(picker).toBeFocused();
+	}
+});
+
+test('Chat input omits the unused find control and keeps the prompt evenly inset', async ({ page }) => {
+	await page.goto('/chatInput.html?inlineCode');
+	const findOptions = page.locator('.stanza-editor-find-options-widget');
+	await expect(findOptions).toHaveCount(0);
+	const editorChrome = await page.locator('.ash-chat-input-editor').evaluate(editor => {
+		const viewport = editor.querySelector<HTMLElement>('.stanza-editor');
+		const placeholder = editor.querySelector<HTMLElement>('.stanza-editor-placeholder-text');
+		const ruler = editor.querySelector<HTMLElement>('.decorationsOverviewRuler');
+		const container = editor.closest<HTMLElement>('.ash-chat-input-container');
+		const attachments = container?.querySelector<HTMLElement>('.ash-chat-input-attachments');
+		if (!viewport || !placeholder || !ruler || !container) throw new Error(`Chat editor viewport is incomplete: ${JSON.stringify({ viewport: !!viewport, placeholder: !!placeholder, ruler: !!ruler, container: !!container })}`);
+		const placeholderBounds = placeholder.getBoundingClientRect();
+		const containerBounds = container.getBoundingClientRect();
+		return {
+			textInset: placeholderBounds.left - viewport.getBoundingClientRect().left,
+			textTopInset: placeholderBounds.top - containerBounds.top,
+			textLeftInset: placeholderBounds.left - containerBounds.left,
+			editorTopInset: viewport.getBoundingClientRect().top - containerBounds.top,
+			textInsetWithinEditor: placeholderBounds.top - viewport.getBoundingClientRect().top,
+			attachmentsDisplay: attachments ? getComputedStyle(attachments).display : 'none',
+			rulerDisplay: getComputedStyle(ruler).display,
+			viewportBackground: getComputedStyle(viewport).backgroundColor,
+			editorBackground: getComputedStyle(viewport).getPropertyValue('--ash-editor-background').trim(),
+			inputBackground: getComputedStyle(viewport).getPropertyValue('--ash-input-background').trim(),
+		};
+	});
+	expect(editorChrome.textInset).toBe(0);
+	expect(editorChrome.textTopInset).toBe(9);
+	expect(editorChrome.textLeftInset).toBe(9);
+	expect(editorChrome.editorTopInset).toBe(9);
+	expect(editorChrome.textInsetWithinEditor).toBe(0);
+	expect(editorChrome.attachmentsDisplay).toBe('none');
+	expect(editorChrome.rulerDisplay).toBe('none');
+	expect(editorChrome.viewportBackground).toBe('rgba(0, 0, 0, 0)');
+	expect(editorChrome.editorBackground).toBe(editorChrome.inputBackground);
+});
+
+test('Agent mode picker compacts when the model needs room', async ({ page }) => {
+	await page.goto('/chatInput.html?inlineCode');
+	await page.evaluate(() => window.ashChatInputIntegration.showModels());
+	const composer = page.locator('.ash-chat-input-container');
+	const picker = composer.locator('[data-action-id="ash.chat.input.mode"] button');
+	const label = picker.locator('.ash-icon-label-container');
+	try {
+		await composer.evaluate(element => { element.style.width = '380px'; });
+		await expect(label).toBeVisible();
+		await composer.evaluate(element => { element.style.width = '320px'; });
+		await expect(label).toBeVisible();
+		await composer.evaluate(element => { element.style.width = '180px'; });
+		await expect(label).toBeHidden();
+		await expect(picker.locator('.ash-icon-label-icon')).toBeVisible();
+		await expect(picker.locator('.ash-chat-input-mode-indicator')).toBeVisible();
+		await expect(picker).toHaveAttribute('aria-label', /^Mode: /);
+		const triggerBounds = await picker.evaluate(button => {
+			const icon = button.querySelector<HTMLElement>('.ash-icon-label-icon');
+			const indicator = button.querySelector<HTMLElement>('.ash-chat-input-mode-indicator');
+			if (!icon || !indicator) throw new Error('Agent mode trigger is incomplete');
+			const buttonBounds = button.getBoundingClientRect();
+			return {
+				iconInside: icon.getBoundingClientRect().left >= buttonBounds.left,
+				indicatorInside: indicator.getBoundingClientRect().right <= buttonBounds.right,
+			};
+		});
+		expect(triggerBounds).toEqual({ iconInside: true, indicatorInside: true });
+		await picker.press('ArrowDown');
+		const menu = page.locator('.ash-chat-input-mode-menu');
+		await expect(menu).toBeVisible();
+		await menu.press('Escape');
+		await expect(picker).toBeFocused();
+		await composer.evaluate(element => { element.style.width = '380px'; });
+		await expect(label).toBeVisible();
+	} finally {
+		await composer.evaluate(element => { element.style.removeProperty('width'); });
+	}
+});
+
+test('Model picker uses free toolbar space before truncating its label', async ({ page }) => {
+	await page.goto('/chatInput.html?inlineCode');
+	await page.evaluate(() => window.ashChatInputIntegration.showModels());
+	const composer = page.locator('.ash-chat-input-container');
+	const modelLabel = composer.locator('.ash-chat-input-model-action .ash-chat-input-picker-label');
+	// The disconnected catalog only exposes a short label; exercise the toolbar with a longer model name.
+	await modelLabel.evaluate(element => { element.textContent = 'GPT-5.6 Sol Extended Context Preview'; });
+	const overflow = async (): Promise<number> => modelLabel.evaluate(element => element.scrollWidth - element.clientWidth);
+	try {
+		await composer.evaluate(element => { element.style.width = '520px'; });
+		await expect.poll(overflow).toBeLessThanOrEqual(1);
+		await composer.evaluate(element => { element.style.width = '280px'; });
+		await expect.poll(overflow).toBeGreaterThan(1);
+		const narrowLayout = await composer.evaluate(element => {
+			const toolbar = element.querySelector<HTMLElement>('.ash-chat-input-toolbars');
+			const model = element.querySelector<HTMLElement>('.ash-chat-input-model-selector');
+			const mic = element.querySelector<HTMLElement>('.ash-chat-input-mic');
+			const send = element.querySelector<HTMLElement>('.ash-chat-input-send, .ash-chat-input-voice');
+			if (!toolbar || !model || !mic || !send) throw new Error('Chat toolbar is incomplete');
+			return {
+				modelBeforeMic: model.getBoundingClientRect().right <= mic.getBoundingClientRect().left,
+				sendInsideToolbar: send.getBoundingClientRect().right <= toolbar.getBoundingClientRect().right + 1,
+			};
+		});
+		expect(narrowLayout).toEqual({ modelBeforeMic: true, sendInsideToolbar: true });
+		await composer.evaluate(element => { element.style.width = '520px'; });
+		await expect.poll(overflow).toBeLessThanOrEqual(1);
+	} finally {
+		await composer.evaluate(element => { element.style.removeProperty('width'); });
+	}
+});
+
+test('Chat input places the microphone beside voice or send at the right edge', async ({ page }) => {
+	await page.goto('/chatInput.html?inlineCode');
+	await page.evaluate(() => window.ashChatInputIntegration.showModels());
+	const chat = page.locator('main');
+	const toolbar = chat.locator('.ash-chat-input-toolbars');
+	const rightActionLayout = async (actionId: string) => toolbar.evaluate((element, id) => {
+		const mic = element.querySelector<HTMLElement>('[data-action-id="workbench.action.chat.toggleSpeechToText"]');
+		const action = element.querySelector<HTMLElement>(`[data-action-id="${id}"]`);
+		if (!mic || !action) throw new Error('Chat input actions are incomplete');
+		const micBounds = mic.getBoundingClientRect();
+		const actionBounds = action.getBoundingClientRect();
+		return {
+			micLeft: micBounds.left,
+			toolbarMiddle: element.getBoundingClientRect().left + element.getBoundingClientRect().width / 2,
+			gap: actionBounds.left - micBounds.right,
+			rightInset: element.getBoundingClientRect().right - actionBounds.right,
+		};
+	}, actionId);
+	await expect(toolbar.locator('[data-action-id="ash.chat.input.attachment"]')).toHaveCount(0);
+	await expect(toolbar.locator('[data-action-id="workbench.action.chat.toggleSpeechToText"] button')).toHaveCount(1);
+	const voiceButton = toolbar.locator('[data-action-id="ash.chat.input.voice"] button');
+	await expect(voiceButton).toBeVisible();
+	const emptyLayout = await rightActionLayout('ash.chat.input.voice');
+	expect(emptyLayout.micLeft).toBeGreaterThan(emptyLayout.toolbarMiddle);
+	expect(emptyLayout.gap).toBeGreaterThanOrEqual(0);
+	expect(emptyLayout.gap).toBeLessThanOrEqual(16);
+	expect(emptyLayout.rightInset).toBeLessThanOrEqual(2);
+	await expect(voiceButton.locator('[data-ash-icon-id="voice-mode"]')).toHaveCount(1);
+	const shape = await voiceButton.evaluate(button => {
+		const bounds = button.getBoundingClientRect();
+		return { width: bounds.width, height: bounds.height, radius: getComputedStyle(button).borderRadius, background: getComputedStyle(button).backgroundColor };
+	});
+	expect(shape.width).toBe(shape.height);
+	expect(shape.radius).toBe('50%');
+	expect(shape.background).not.toBe('rgba(0, 0, 0, 0)');
+	const input = chat.locator('.ash-chat-input-editor .stanza-editor-input');
+	await input.focus();
+	await page.keyboard.insertText('Hello');
+	await expect(toolbar.locator('[data-action-id="ash.chat.input.voice"]')).toHaveCount(0);
+	const sendButton = toolbar.locator('[data-action-id="ash.chat.input.send"] button');
+	await expect(sendButton.locator('[data-ash-icon-id="arrow-up"]')).toHaveCount(1);
+	await expect(sendButton).toHaveCSS('border-radius', '50%');
+	const messageLayout = await rightActionLayout('ash.chat.input.send');
+	expect(messageLayout.micLeft).toBeGreaterThan(messageLayout.toolbarMiddle);
+	expect(messageLayout.gap).toBeGreaterThanOrEqual(0);
+	expect(messageLayout.gap).toBeLessThanOrEqual(16);
+	expect(messageLayout.rightInset).toBeLessThanOrEqual(2);
+	await input.press('Home');
+	await input.press('Shift+End');
+	await page.keyboard.press('Backspace');
+	await expect(toolbar.locator('[data-action-id="ash.chat.input.voice"] button')).toBeVisible();
+	await page.keyboard.insertText('/config');
+	await expect(toolbar.locator('[data-action-id="workbench.action.chat.toggleSpeechToText"]')).toHaveCount(0);
+	const commandRightInset = await toolbar.evaluate(element => {
+		const send = element.querySelector<HTMLElement>('[data-action-id="ash.chat.input.send"]');
+		if (!send) throw new Error('Chat send action is missing');
+		return element.getBoundingClientRect().right - send.getBoundingClientRect().right;
+	});
+	expect(commandRightInset).toBeLessThanOrEqual(2);
+});

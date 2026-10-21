@@ -179,7 +179,7 @@ function validateTerminalTransferLease(value: unknown): ITerminalReconnectLease 
 		|| typeof value.terminalId !== 'string' || value.terminalId.length === 0 || value.terminalId.length > 1024 || value.terminalId.includes('\0')
 		|| value.dirId !== undefined && (typeof value.dirId !== 'string' || value.dirId.length === 0 || value.dirId.length > 4096 || value.dirId.includes('\0'))
 		|| typeof value.reconnectToken !== 'string' || !/^[0-9a-f]{64}$/.test(value.reconnectToken)
-		|| !Number.isSafeInteger(value.reconnectGracePeriodMillis) || (value.reconnectGracePeriodMillis as number) <= 0
+		|| !Number.isSafeInteger(value.reconnectGracePeriodMillis) || (value.reconnectGracePeriodMillis as number) < 0
 		|| (value.reconnectGracePeriodMillis as number) > 300_000) throw new TypeError('Invalid terminal transfer lease');
 	return {
 		terminalId: value.terminalId,

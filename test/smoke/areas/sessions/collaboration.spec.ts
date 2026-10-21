@@ -1,11 +1,11 @@
 import { expect, test } from '../../../automation/test.js';
 
-test('Collaboration separates human channels from Agent Teams', { tag: ['@electron-ui', '@browser-ui'] }, async ({ workbench, target }, testInfo) => {
+test('Collaboration separates human channels from Agent Teams', { tag: ['@electron-ui', '@browser-ui'] }, async ({ application, workbench, target }, testInfo) => {
 	await workbench.quickaccess.runCommand('ash.collaboration.open');
 	const channels = workbench.page.locator('.ash-collaboration');
 	await expect(channels.getByRole('button', { name: 'Connect Channels', exact: true })).toBeVisible();
 
-	const page = await workbench.openAgentsWindow(target.kind);
+	let page = await workbench.openAgentsWindow(target.kind);
 	const navigation = page.locator('.ash-sessions-activity-content');
 	await navigation.getByRole('button', { name: 'Collaboration', exact: true }).click();
 	const collaboration = page.locator('[data-view-container-id="ash.collaboration"]');
@@ -16,4 +16,7 @@ test('Collaboration separates human channels from Agent Teams', { tag: ['@electr
 	await navigation.getByRole('button', { name: 'Collaboration', exact: true }).click();
 	await expect(collaboration.getByRole('button', { name: 'Connect Channels', exact: true })).toBeVisible();
 	await page.screenshot({ path: testInfo.outputPath('collaboration-window.png') });
+	page = await workbench.reopenAgentsWindow(application, page);
+	await expect(page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Collaboration', exact: true })).toHaveAttribute('aria-current', 'page');
+	await expect(page.locator('[data-view-container-id="ash.collaboration"]').getByRole('button', { name: 'Connect Channels', exact: true })).toBeVisible();
 });

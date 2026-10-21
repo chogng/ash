@@ -253,6 +253,7 @@ fn remote_runtime_preserves_a_terminal_between_real_connections() {
     let first_pid = first_session.process_id().unwrap();
     let created = first_client
         .terminal_create(TerminalCreateParams {
+            auto_replies: None,
             dir_id: None,
             rows: 24,
             cols: 80,

@@ -21,7 +21,7 @@ import { type TextMeasurer } from '../../../../common/viewModel.js';
 
 const { TestView: View } = await import('../../../../test/browser/viewModel/testViewModel.js');
 const { ViewController } = await import('../../../../browser/view/viewController.js');
-const { LinkedEditingContribution } = await import('../../../../../../../extensions/code/browser/contrib/linkedEditing/browser/linkedEditing.js');
+const { LinkedEditingContribution } = await import('../../browser/linkedEditing.js');
 
 
 test('linked editing applies one input transaction to every provider range', async () => {

@@ -1,10 +1,8 @@
-import { registerTestCodeEditorFeatures } from '../../../../../test/fixtures/codeEditorFeatures.js';
-import { after as afterCodeFeatures } from 'mocha';
 import { strict as assert } from "node:assert";
 import { test } from "mocha";
 import { LanguageCompletionProviderRegistry } from '../../common/languageFeatureRegistry.js';
 import { createLanguageCompletionInvokeContext, type LanguageCompletionProvider, LanguageCompletionItemKind, type LanguageCompletionResolveRequest } from '../../common/languages.js';
-import { LanguageCompletionService } from '../../../../../extensions/code/browser/contrib/suggest/browser/suggest.js';
+import { LanguageCompletionService } from '../../contrib/suggest/browser/suggest.js';
 import { LanguageRequestStatus } from '../../common/model/languageRequestCoordinator.js';
 import { Position } from "../../common/core/position.js";
 import { Range } from "../../common/core/range.js";
@@ -153,6 +151,3 @@ function resolveRequest(completionRequestId: number, modelVersion: number): Lang
 		itemId: "console",
 	};
 }
-
-const codeFeatures = registerTestCodeEditorFeatures();
-afterCodeFeatures(() => codeFeatures.dispose());

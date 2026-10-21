@@ -59,23 +59,23 @@ const THEME_MANIFEST: &[u8] = br#"{
   }]
 }"#;
 const THEME_DOCUMENT: &[u8] = br#"{"type":"dark","colors":{},"tokenColors":[]}"#;
-const VSIX_MANIFEST: &[u8] = br#"{
-  "name":"sample", "publisher":"publisher", "version":"1.0.0",
-  "main":"./main.js", "browser":"./main.js",
+const EDITOR_ASSET_MANIFEST: &[u8] = br#"{
+  "name":"sample", "publisher":"ash", "version":"1.0.0",
+  "engines":{"ash":">=0.1.0"}, "main":"./main.js", "browser":"./main.js",
   "contributes":{"languages":[{"id":"sample","extensions":[".sample"]}],
     "themes":[{"id":"sample","label":"Sample","uiTheme":"vs-dark","path":"./themes/sample.json"}],
     "debuggers":[{"type":"sample","label":"Unsafe adapter","debugAdapter":{"program":"node","arguments":["main.js"]}}]}
 }"#;
 
 #[test]
-fn vsix_declarations_enter_the_catalog_and_disappear_after_uninstall() {
+fn ash_editor_assets_enter_the_catalog_and_disappear_after_uninstall() {
     let root = tempfile::tempdir().unwrap();
     let manager = Arc::new(
         ExtensionPackageManager::open(root.path(), providers(Arc::new(LanguageRegistry))).unwrap(),
     );
     let installed = manager
         .install(InstallPackageRequest {
-            package_id: "publisher.sample@test".into(),
+            package_id: "ash.sample@test".into(),
             version: Some("1.0.0".into()),
         })
         .unwrap();
@@ -89,7 +89,7 @@ fn vsix_declarations_enter_the_catalog_and_disappear_after_uninstall() {
         snapshot.diagnostics
     );
     assert_eq!(snapshot.extensions.len(), 1);
-    assert_eq!(snapshot.extensions[0].id, "test.publisher.sample");
+    assert_eq!(snapshot.extensions[0].id, "test.ash.sample");
     let manifest: serde_json::Value =
         serde_json::from_str(&snapshot.extensions[0].manifest_json).unwrap();
     assert_eq!(manifest["contributes"]["languages"][0]["id"], "sample");
@@ -463,7 +463,7 @@ fn disabling_an_editor_package_retires_its_declarative_catalog_and_restores_it_o
     );
     let installed = manager
         .install(InstallPackageRequest {
-            package_id: "publisher.sample@test".into(),
+            package_id: "ash.sample@test".into(),
             version: Some("1.0.0".into()),
         })
         .unwrap();
@@ -581,27 +581,27 @@ impl ExtensionSource for LanguageRegistry {
                 Ok(Box::new(payload))
             }
             "example.demo-theme" => Ok(Box::new(ThemePayload::new())),
-            "publisher.sample" => Ok(Box::new(VsixPayload)),
+            "ash.sample" => Ok(Box::new(AshEditorPayload)),
             _ => Err(ExtensionsClientError::storage()),
         }
     }
 }
 
-struct VsixPayload;
+struct AshEditorPayload;
 
-const VSIX_FILES: &[(&str, &[u8])] = &[
-    ("extension/main.js", b"throw new Error('must not run');"),
-    ("extension/package.json", VSIX_MANIFEST),
-    ("extension/themes/sample.json", THEME_DOCUMENT),
+const EDITOR_ASSET_FILES: &[(&str, &[u8])] = &[
+    ("editor/main.js", b"throw new Error('must not run');"),
+    ("editor/package.json", EDITOR_ASSET_MANIFEST),
+    ("editor/themes/sample.json", THEME_DOCUMENT),
 ];
 
-impl ExtensionPackagePayload for VsixPayload {
+impl ExtensionPackagePayload for AshEditorPayload {
     fn package(&self) -> &PackageRef {
         static PACKAGE: std::sync::OnceLock<PackageRef> = std::sync::OnceLock::new();
         PACKAGE.get_or_init(|| PackageRef {
-            id: "publisher.sample".into(),
+            id: "ash.sample".into(),
             version: "1.0.0".into(),
-            digest: package_digest(VSIX_FILES),
+            digest: package_digest(EDITOR_ASSET_FILES),
         })
     }
     fn capabilities(&self) -> &[ExtensionPackageCapability] {
@@ -610,23 +610,26 @@ impl ExtensionPackagePayload for VsixPayload {
         CAPABILITIES.get_or_init(|| {
             vec![ExtensionPackageCapability {
                 kind: CapabilityKind::EditorExtension,
-                id: "publisher.sample".into(),
-                path: "extension".into(),
+                id: "ash.sample".into(),
+                path: "editor".into(),
                 runtime: None,
                 language_ids: Vec::new(),
             }]
         })
     }
     fn expected_file_count(&self) -> u64 {
-        VSIX_FILES.len() as u64
+        EDITOR_ASSET_FILES.len() as u64
     }
     fn expected_size_bytes(&self) -> u64 {
-        VSIX_FILES.iter().map(|(_, bytes)| bytes.len() as u64).sum()
+        EDITOR_ASSET_FILES
+            .iter()
+            .map(|(_, bytes)| bytes.len() as u64)
+            .sum()
     }
     fn copy_to(&self, destination: &Path) -> Result<(), ExtensionsClientError> {
-        fs::create_dir_all(destination.join("extension/themes"))
+        fs::create_dir_all(destination.join("editor/themes"))
             .map_err(|_| ExtensionsClientError::storage())?;
-        for (path, bytes) in VSIX_FILES {
+        for (path, bytes) in EDITOR_ASSET_FILES {
             fs::write(destination.join(path), bytes)
                 .map_err(|_| ExtensionsClientError::storage())?;
         }

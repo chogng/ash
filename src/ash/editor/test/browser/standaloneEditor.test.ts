@@ -1,9 +1,7 @@
-import { registerTestCodeEditorFeatures } from '../../../../../test/fixtures/codeEditorFeatures.js';
-import { after as afterCodeFeatures } from 'mocha';
 import { createLanguageFeatureRequest, TokenizationRegistry } from '../../common/languages.js';
 import { Emitter } from '../../../base/common/event.js';
 import { editorWorkerWireCodec, EditorWorker } from '../../common/services/editorWebWorker.js';
-import { FormattingConflicts, FormattingKind, FormattingMode } from '../../../../../extensions/code/browser/contrib/format/browser/format.js';
+import { FormattingConflicts, FormattingKind, FormattingMode } from '../../contrib/format/browser/format.js';
 import { type DocumentFormattingEditProvider, type OnTypeFormattingEditProvider } from '../../common/languages.js';
 import { TextModel } from '../../common/model/textModel.js';
 import assert from "node:assert/strict";
@@ -825,6 +823,3 @@ test("standalone editor rejects unregistered models and conflicting model option
 	lateConfigurations.dispose();
 	dom.window.close();
 });
-
-const codeFeatures = registerTestCodeEditorFeatures();
-afterCodeFeatures(() => codeFeatures.dispose());

@@ -37,28 +37,28 @@ struct WebPackage {
     manifest: Vec<u8>,
     source_path: &'static str,
 }
-const SOURCE: &[u8] = b"exports.activate = context => context.subscriptions.push(require('vscode').commands.registerCommand('web.hello', () => {}));";
+const SOURCE: &[u8] = b"exports.activate = context => context.subscriptions.push(require('@ash/sdk').commands.register('web.hello', () => {}));";
 impl WebPackage {
     fn new(entry: &str) -> Self {
         let source_path = if entry == "./main.cjs" {
-            "extension/main.cjs"
+            "editor/main.cjs"
         } else {
-            "extension/main.js"
+            "editor/main.js"
         };
-        let manifest = serde_json::to_vec(&json!({"name":"web", "publisher":"test", "version":"1.0.0", "browser":"missing.js", "main":entry, "contributes":{"commands":[{"command":"web.hello","title":"Hello"}]}})).unwrap();
+        let manifest = serde_json::to_vec(&json!({"name":"web", "publisher":"test", "version":"1.0.0", "engines":{"ash":"*"}, "ashCapabilities":["command"], "browser":"missing.js", "main":entry, "contributes":{"commands":[{"command":"web.hello","title":"Hello"}]}})).unwrap();
         Self {
             package: PackageRef {
                 id: "test.web".into(),
                 version: "1.0.0".into(),
                 digest: super::package_digest(&[
                     (source_path, SOURCE),
-                    ("extension/package.json", &manifest),
+                    ("editor/package.json", &manifest),
                 ]),
             },
             capabilities: vec![ExtensionPackageCapability {
                 kind: CapabilityKind::EditorExtension,
                 id: "test.web".into(),
-                path: "extension".into(),
+                path: "editor".into(),
                 runtime: None,
                 language_ids: Vec::new(),
             }],
@@ -81,11 +81,11 @@ impl ExtensionPackagePayload for WebPackage {
         (SOURCE.len() + self.manifest.len()) as u64
     }
     fn copy_to(&self, destination: &Path) -> Result<(), ExtensionsClientError> {
-        std::fs::create_dir(destination.join("extension"))
+        std::fs::create_dir(destination.join("editor"))
             .map_err(|_| ExtensionsClientError::storage())?;
         std::fs::write(destination.join(self.source_path), SOURCE)
             .map_err(|_| ExtensionsClientError::storage())?;
-        std::fs::write(destination.join("extension/package.json"), &self.manifest)
+        std::fs::write(destination.join("editor/package.json"), &self.manifest)
             .map_err(|_| ExtensionsClientError::storage())
     }
 }
@@ -142,7 +142,7 @@ fn extension_packages_web_execution_requires_exact_persistent_consent_and_pins_t
     let deployment = super::super::deployments(&manager, &admission)
         .unwrap()
         .remove(0);
-    assert!(deployment.command.is_vscode());
+    assert!(deployment.command.is_node_host());
     let plan = deployment.activation.as_ref().unwrap();
     assert_eq!(plan.events, ["onCommand:web.hello"]);
     assert_eq!(plan.commands, [("web.hello".into(), "Hello".into())]);
@@ -287,7 +287,7 @@ fn extension_packages_commonjs_entry_reaches_the_installed_package_deployment() 
     let deployment = super::super::deployments(&manager, &admission)
         .unwrap()
         .remove(0);
-    assert!(deployment.command.is_vscode());
+    assert!(deployment.command.is_node_host());
     assert_eq!(deployment.params.package.entrypoint, "main.cjs");
     assert_eq!(
         deployment.activation.unwrap().events,

@@ -4,7 +4,7 @@ import { onUnexpectedError } from "../../../../base/common/errors.js";
 import { CommandsRegistry } from "../../../../platform/commands/common/commands.js";
 import { status } from "../../../../base/browser/ui/aria/aria.js";
 import { localize } from "../../../../nls.js";
-import { DialogSeverity, IDialogService } from "../../../../platform/dialogs/common/dialogs.js";
+import { INotificationService, Severity } from '../../../../platform/notification/common/notification.js';
 import { type IServerEventApi } from "../../../../platform/agentHost/common/appServerApi.js";
 import { IWorkspaceContextService } from "../../../../platform/workspace/common/workspace.js";
 import { IProgressService, ProgressLocation, type IProgress, type IProgressStep } from "../../../../platform/progress/common/progress.js";
@@ -30,7 +30,7 @@ interface LanguageServerLifecycleState {
 	readonly message?: string;
 }
 
-/** Projects App Server language notifications into Workbench dialogs, logs, and status. */
+/** Projects App Server language notifications into Workbench notifications, logs, and status. */
 export class AppServerLanguageServerStatusService extends Disposable {
 	private readonly channels = new Map<string, IOutputChannel>();
 	// Tokens only correlate protocol notifications; task state belongs to IProgressService.
@@ -40,7 +40,7 @@ export class AppServerLanguageServerStatusService extends Disposable {
 
 	constructor(
 		events: IServerEventApi,
-		@IDialogService private readonly dialogs: IDialogService,
+		@INotificationService private readonly notifications: INotificationService,
 		@IOutputService private readonly outputService: IOutputService,
 		@IStatusbarService private readonly statusbar: IStatusbarService,
 		@IProgressService private readonly progressService: IProgressService,
@@ -64,7 +64,22 @@ export class AppServerLanguageServerStatusService extends Disposable {
 		if (!text) return;
 		const server = this.serverLabel(message.server, message.dirId);
 		this.ensureChannel(server).appendLine({ severity: message.severity, category: message.source, text });
-		if (message.show) void this.dialogs.showMessage({ title: server, severity: dialogSeverity(message.severity), message: text });
+		if (message.show) {
+			this.notifications.notify({
+				severity: notificationSeverity(message.severity),
+				message: text,
+				source: server,
+				actions: {
+					primary: [{
+						id: 'ash.languageServers.showOutput',
+						label: localize('languageServer.showOutput', 'Show Output'),
+						tooltip: '',
+						enabled: true,
+						run: () => this.ensureChannel(server).show(),
+					}]
+				},
+			});
+		}
 	}
 
 	private acceptState(update: LanguageServerStateNotification): void {
@@ -189,8 +204,8 @@ function outputChannelId(server: string): string {
 	return `language-server.${encodeURIComponent(server.trim() || "unknown")}`;
 }
 
-function dialogSeverity(severity: LanguageServerMessageSeverityDto): DialogSeverity {
-	if (severity === "error") return DialogSeverity.Error;
-	if (severity === "warning") return DialogSeverity.Warning;
-	return DialogSeverity.Info;
+function notificationSeverity(severity: LanguageServerMessageSeverityDto): Severity {
+	if (severity === "error") return Severity.Error;
+	if (severity === "warning") return Severity.Warning;
+	return Severity.Info;
 }

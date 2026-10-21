@@ -5,6 +5,8 @@
 
 mod channel;
 mod matching;
+#[cfg(target_os = "macos")]
+mod native;
 mod registration;
 mod state;
 mod watcher;
@@ -12,6 +14,14 @@ mod watcher;
 pub use channel::DebouncedWatchReceiver;
 pub use channel::Receiver;
 pub use channel::ThrottledWatchReceiver;
+#[cfg(target_os = "macos")]
+pub use native::NATIVE_WATCHER_ARGUMENT;
+#[cfg(target_os = "macos")]
+pub use native::POLLING_WATCHER_ARGUMENT;
+#[cfg(target_os = "macos")]
+pub use native::run_native_watcher;
+#[cfg(target_os = "macos")]
+pub use native::run_polling_watcher;
 pub use registration::FileWatcherSubscriber;
 pub use registration::WatchRegistration;
 pub use watcher::{FileWatcher, FileWatcherBackend};

@@ -7,6 +7,7 @@ import type { JsonValue } from '../../../base/common/jsonValue.js';
 import { Registry } from '../../registry/common/platform.js';
 import type { PolicyDefinition } from '../../policy/common/policy.js';
 import type { IManagedSettingPolicyDefinition } from '../../../base/common/policy.js';
+import { merge } from './configuration.js';
 
 type ConfigurationPolicy = Omit<PolicyDefinition, 'type'> & { readonly name: string; readonly minimumVersion?: string; };
 
@@ -116,11 +117,29 @@ export interface IConfigurationKeyDefinition<T> {
 export interface IConfigurationRegistry {
 	readonly onDidUpdateConfiguration: Event<{ properties: ReadonlySet<string>; defaultsOverrides?: boolean; }>;
 	updateConfigurations(configurations: { add: IConfigurationNode[]; remove: IConfigurationNode[]; }): void;
+	deltaConfiguration(delta: IConfigurationDelta): void;
+	getConfigurationDefaultsOverrides(): Map<string, IConfigurationDefaultOverrideValue>;
 	registerConfiguration<T>(definition: IConfigurationKeyDefinition<T>): string;
 	getConfigurations(): readonly string[];
 	getRegisteredConfigurations(): readonly IRegisteredConfiguration[];
 	getConfiguration(key: string): IRegisteredConfiguration | undefined;
 	owns(key: string): boolean;
+}
+
+export interface IConfigurationDefaults {
+	readonly overrides: Readonly<Record<string, unknown>>;
+	readonly source?: IExtensionInfo;
+}
+
+export interface IConfigurationDefaultOverrideValue {
+	readonly value: unknown;
+}
+
+export interface IConfigurationDelta {
+	readonly addedConfigurations?: IConfigurationNode[];
+	readonly removedConfigurations?: IConfigurationNode[];
+	readonly addedDefaults?: IConfigurationDefaults[];
+	readonly removedDefaults?: IConfigurationDefaults[];
 }
 
 export interface IConfigurationNode {
@@ -142,6 +161,7 @@ export interface IConfigurationNode {
 export class ConfigurationRegistry implements IConfigurationRegistry {
 	private readonly configurations = new Map<string, IRegisteredConfiguration>();
 	private readonly nodes = new Map<IConfigurationNode, readonly string[]>();
+	private defaults: IConfigurationDefaults[] = [];
 	private changeEmitter: Emitter<{ properties: ReadonlySet<string>; }> | undefined;
 	// The registry belongs to the realm. A temporary test registry's event channel
 	// belongs to its consumers and releases when its last subscription ends.
@@ -151,6 +171,12 @@ export class ConfigurationRegistry implements IConfigurationRegistry {
 	};
 
 	public updateConfigurations({ add, remove }: { add: IConfigurationNode[]; remove: IConfigurationNode[]; }): void {
+		this.deltaConfiguration({ addedConfigurations: add, removedConfigurations: remove });
+	}
+
+	public deltaConfiguration(delta: IConfigurationDelta): void {
+		const add = delta.addedConfigurations ?? [];
+		const remove = delta.removedConfigurations ?? [];
 		const next = new Map(this.configurations);
 		const nodes = new Map(this.nodes);
 		const properties = new Set<string>();
@@ -187,12 +213,30 @@ export class ConfigurationRegistry implements IConfigurationRegistry {
 			visit(node);
 			nodes.set(node, keys);
 		}
+		const defaults = this.defaults.filter(entry => !delta.removedDefaults?.includes(entry));
+		defaults.push(...(delta.addedDefaults ?? []));
+		// Schemas and extension defaults become visible together, after the entire
+		// candidate is valid. A rejected extension update keeps the live snapshot.
+		configurationDefaultOverrides(next, defaults);
+		for (const entry of [...(delta.addedDefaults ?? []), ...(delta.removedDefaults ?? [])]) {
+			for (const [key, value] of Object.entries(entry.overrides)) {
+				properties.add(key);
+				if (overrideIdentifiersFromKey(key).length) {
+					for (const property of Object.keys(value as Record<string, unknown>)) properties.add(property);
+				}
+			}
+		}
 		// Validate the complete replacement before withdrawing active registrations.
 		this.configurations.clear();
 		for (const [key, value] of next) this.configurations.set(key, value);
 		this.nodes.clear();
 		for (const [node, keys] of nodes) this.nodes.set(node, keys);
+		this.defaults = defaults;
 		if (properties.size) this.changeEmitter?.fire({ properties });
+	}
+
+	public getConfigurationDefaultsOverrides(): Map<string, IConfigurationDefaultOverrideValue> {
+		return configurationDefaultOverrides(this.configurations, this.defaults);
 	}
 
 	registerConfiguration<T>(
@@ -238,6 +282,29 @@ export class ConfigurationRegistry implements IConfigurationRegistry {
 	owns(key: string): boolean {
 		return this.configurations.has(key);
 	}
+}
+
+function configurationDefaultOverrides(configurations: ReadonlyMap<string, IRegisteredConfiguration>, defaults: readonly IConfigurationDefaults[]): Map<string, IConfigurationDefaultOverrideValue> {
+	const values: Record<string, unknown> = {};
+	for (const entry of defaults) {
+		for (const [key, candidate] of Object.entries(entry.overrides)) {
+			const language = overrideIdentifiersFromKey(key).length > 0;
+			const properties = language ? candidate : { [key]: candidate };
+			if (!properties || typeof properties !== 'object' || Array.isArray(properties)) throw new TypeError(localize('configuration.contributedValue', "Setting '{0}' does not match its declared schema.", key));
+			const parsed: Record<string, unknown> = {};
+			for (const [property, value] of Object.entries(properties)) {
+				if (!isConfigurationKey(property)) throw new TypeError(localize('configuration.contributedKey', "Invalid or duplicate contributed setting '{0}'.", property));
+				const setting = configurations.get(property);
+				// Contributions may precede the setting's registration or target an
+				// unsupported setting. Resolution includes only registered contracts.
+				if (!setting) continue;
+				if (language && setting.scope !== undefined && setting.scope !== ConfigurationScope.LANGUAGE_OVERRIDABLE) continue;
+				parsed[property] = structuredClone(setting.parse(value));
+			}
+			merge(values, language ? { [key]: parsed } : parsed, true);
+		}
+	}
+	return new Map(Object.entries(values).map(([key, value]) => [key, { value }]));
 }
 
 /** Own a snapshot so contributors cannot silently change searchable metadata after registration. */

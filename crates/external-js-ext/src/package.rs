@@ -16,18 +16,14 @@ pub(crate) struct Package {
 }
 
 impl Package {
-    pub(crate) fn read_vscode(
-        extension_id: String,
-        root: PathBuf,
-        entry: String,
-    ) -> Result<Self, String> {
+    pub(crate) fn read(extension_id: String, root: PathBuf, entry: String) -> Result<Self, String> {
         let mut package = Self::read_package(extension_id, &root, entry.clone())?;
         let manifest = package
             .sources
             .get("package.json")
-            .ok_or("missing VS Code manifest")?;
+            .ok_or("missing Ash manifest")?;
         let manifest: serde_json::Value =
-            serde_json::from_str(manifest).map_err(|_| "invalid VS Code manifest")?;
+            serde_json::from_str(manifest).map_err(|_| "invalid Ash manifest")?;
         let commands = manifest
             .pointer("/contributes/commands")
             .cloned()
@@ -35,11 +31,11 @@ impl Package {
         let publisher = manifest
             .get("publisher")
             .and_then(serde_json::Value::as_str)
-            .ok_or("missing VS Code publisher")?;
+            .ok_or("missing Ash publisher")?;
         let name = manifest
             .get("name")
             .and_then(serde_json::Value::as_str)
-            .ok_or("missing VS Code name")?;
+            .ok_or("missing Ash name")?;
         let public_extension_id = format!("{publisher}.{name}");
         let configuration = to_ascii_json_string(
             &serde_json::json!({
@@ -67,7 +63,7 @@ impl Package {
         let separator = to_ascii_json_string(&std::path::MAIN_SEPARATOR.to_string())
             .map_err(|error| error.to_string())?;
         let wrapper = format!(
-            "import {{ createApi }} from '@ash/vscode';\nimport {{ loadCommonJS }} from '@ash/commonjs';\nlet bridge, module;\nexport async function activate(context, capabilities, initialization) {{ bridge = createApi({configuration}, JSON.parse(initialization)); module = loadCommonJS(JSON.parse({sources}), {root}, {separator}, {entry_name}, bridge.api); return bridge.activate(context, module.exports.activate, module.exports, JSON.parse(capabilities)); }}\nexport function deactivate() {{ bridge?.deactivate(); return module?.exports.deactivate?.(); }}\n"
+            "import {{ createApi }} from '@ash/api';\nimport {{ loadCommonJS }} from '@ash/commonjs';\nlet bridge, module;\nexport async function activate(context, capabilities, initialization) {{ bridge = createApi({configuration}, JSON.parse(initialization)); module = loadCommonJS(JSON.parse({sources}), {root}, {separator}, {entry_name}, bridge.api); return bridge.activate(context, module.exports.activate, module.exports, JSON.parse(capabilities)); }}\nexport function deactivate() {{ bridge?.deactivate(); return module?.exports.deactivate?.(); }}\n"
         );
         package.sources.clear();
         package.sources.insert(entry, wrapper);
@@ -76,8 +72,8 @@ impl Package {
             include_str!("../../../resources/extension-host/host.mjs").into(),
         );
         package.sources.insert(
-            "@ash/vscode".into(),
-            include_str!("../../../resources/extension-host/vscode.js").into(),
+            "@ash/api".into(),
+            include_str!("../../../resources/extension-host/ash.js").into(),
         );
         package.sources.insert(
             "@ash/scm.js".into(),
@@ -87,10 +83,6 @@ impl Package {
             .sources
             .insert("@ash/commonjs".into(), include_str!("commonjs.js").into());
         Ok(package)
-    }
-
-    pub(crate) fn read(extension_id: String, root: PathBuf, entry: String) -> Result<Self, String> {
-        Self::read_vscode(extension_id, root, entry)
     }
 
     fn read_package(extension_id: String, root: &Path, entry: String) -> Result<Self, String> {
@@ -172,10 +164,10 @@ fn collect(
 }
 
 pub(crate) fn resolve(referrer: &str, specifier: &str) -> Result<String, String> {
-    if referrer == "@ash/vscode" && specifier == "./host.mjs" {
+    if referrer == "@ash/api" && specifier == "./host.mjs" {
         return Ok("@ash/host".into());
     }
-    if matches!(specifier, "@ash/vscode" | "@ash/commonjs") {
+    if matches!(specifier, "@ash/api" | "@ash/commonjs") {
         return Ok(specifier.into());
     }
     if !specifier.starts_with("./") && !specifier.starts_with("../") {

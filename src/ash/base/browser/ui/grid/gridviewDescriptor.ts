@@ -1,4 +1,5 @@
 import { type IPositionedRectangle } from "../../geometry.js";
+import type { IBoundarySashes } from "../sash/sash.js";
 import { type Event } from "../../../common/event.js";
 import { isFiniteNumber } from "../../../common/numbers.js";
 import { type SplitViewLayoutPriority, type SplitViewOrientation, type SplitViewSizing } from "../splitview/splitview.js";
@@ -18,6 +19,8 @@ export interface IView {
 	readonly onDidChange?: Event<void>;
 	layout(bounds: IPositionedRectangle): void;
 	setVisible?(visible: boolean): void;
+	/** Receives Grid-owned separators when this view is attached or its boundaries change; cleared on detach. */
+	setBoundarySashes?(sashes: IBoundarySashes): void;
 }
 
 export interface ISerializableView extends IView {

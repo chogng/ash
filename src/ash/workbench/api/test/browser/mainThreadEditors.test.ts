@@ -197,3 +197,21 @@ test('AI edit evidence distinguishes chat from completions and expires after a m
 	assert.deepEqual(await api.handle({ method: 'aiEditedResources', root: 'file:///workspace', mode: 'chatAndAgent' }, signal), [{ uri: model.uri.toString(), text: 'chat' }]);
 	assert.deepEqual(await api.handle({ method: 'aiEditedResources', root: 'file:///other', mode: 'all' }, signal), []);
 });
+
+
+test('active editor metadata does not serialize the working copy when contents are not requested', async () => {
+	let backups = 0;
+	const resource = URI.file('/file.ts');
+	const copy = { resource, isDirty: true, backupKind: 'text', backup: () => { backups++; return 'unsaved'; }, save: async () => { } };
+	const input = { resource };
+	const group = { id: 1, inputs: [input], activeInput: input };
+	using api = bridge([copy], async () => ({ confirmed: true }), [], { listCodeEditors: () => [] }, undefined, undefined, undefined, { groups: [group], activeGroup: group });
+	const signal = new AbortController().signal;
+	const metadata = await api.handle({ method: 'activeEditor', includeContents: false }, signal) as { contents: string | null; };
+	assert.equal(metadata.contents, null);
+	assert.equal(backups, 0);
+	const document = await api.handle({ method: 'activeEditor' }, signal) as { contents: string; };
+	assert.equal(document.contents, 'unsaved', 'Existing consumers retain their default full snapshot');
+	assert.equal(backups, 1);
+	await assert.rejects(api.handle({ method: 'activeEditor', includeContents: 'false' }, signal), /Invalid editor contents request/u);
+});

@@ -4,7 +4,7 @@ use ash_diff::DiffDocument;
 #[test]
 fn projects_rust_rows_and_utf16_inline_ranges_for_the_frontend() {
     let document = DiffDocument::from_text("before 😀 after", "before 🤖 after").unwrap();
-    let result = project(document);
+    let result = project(document, &super::zero_based_line_index);
 
     assert_eq!(result.original_line_count, 1);
     assert_eq!(result.modified_line_count, 1);
@@ -47,4 +47,21 @@ fn request_boundary_limits_utf8_bytes_on_each_side() {
             ash_app_server_protocol::protocol::error::AppServerErrorName::InvalidParams
         );
     }
+}
+
+#[test]
+fn function_override_projects_rows_and_hunks_and_can_decline() {
+    let params = serde_json::json!({"original": "before 😀", "modified": "after 🤖"});
+    let native = super::compute(&params).unwrap();
+    assert_eq!(
+        super::compute_with_line_index(&params, |_| None).unwrap(),
+        native
+    );
+    let replaced = super::compute_with_line_index(&params, Some).unwrap();
+    assert_eq!(replaced["rows"][0]["originalLineIndex"], 1);
+    assert_eq!(replaced["hunks"][0]["originalStartLineIndex"], 1);
+    assert_eq!(
+        replaced["rows"][0]["originalChanges"],
+        native["rows"][0]["originalChanges"]
+    );
 }

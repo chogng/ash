@@ -6142,24 +6142,29 @@ fn live_tool_interaction_resolution_wakes_execution_without_duplicate_backend_re
         .to_string();
     let protocol_thread_id = ash_protocol::ThreadId::new(&thread_id).unwrap();
     let deadline = Instant::now() + Duration::from_secs(2);
+    let mut notifications = Vec::new();
     let (sequence, request_id) = loop {
         let snapshot = server.threads().read_thread(&protocol_thread_id).unwrap();
+        // A durable snapshot can become visible before its update reaches the connection.
+        // Resolve only after observing the matching request on the actual protocol queue.
+        notifications.extend(server.drain_notifications(&mut connection));
         if let Some(interaction) = snapshot.turns[0].pending_interaction.as_ref() {
-            break (snapshot.sequence, interaction.request_id.to_string());
+            let delivered = notifications.iter().any(|notification| {
+                let notification: serde_json::Value = serde_json::from_str(notification).unwrap();
+                notification["method"] == "agent/request"
+                    && notification["params"]["interaction"]["requestId"]
+                        == interaction.request_id.as_str()
+            });
+            if delivered {
+                break (snapshot.sequence, interaction.request_id.to_string());
+            }
         }
         assert!(
             Instant::now() < deadline,
-            "interactive tool did not publish its durable request"
+            "interactive tool did not persist and deliver its request"
         );
         thread::sleep(Duration::from_millis(2));
     };
-    let notifications = server.drain_notifications(&mut connection);
-    assert!(
-        notifications
-            .iter()
-            .any(|notification| notification.contains("\"method\":\"agent/request\""))
-    );
-
     let resolved = call(
         &server,
         &mut connection,
@@ -7134,8 +7139,25 @@ fn filesystem_watcher_publishes_only_dir_relative_paths() {
         for raw in server.drain_notifications(&mut connection) {
             let notification: serde_json::Value = serde_json::from_str(&raw).unwrap();
             if notification["method"] == "fs/changed" {
-                observed = Some(notification);
-                break;
+                match notification["params"]["type"].as_str() {
+                    Some("rescanRequired") => {
+                        // The asynchronous polling baseline publishes a coarse hint first.
+                        // It cannot substitute for observing the subsequent external write.
+                        assert!(notification["params"].get("paths").is_none());
+                    }
+                    Some("pathsChanged") => {
+                        let paths = notification["params"]["paths"].as_array().unwrap();
+                        assert!(paths.iter().all(|path| {
+                            path.as_str()
+                                .is_some_and(|path| std::path::Path::new(path).is_relative())
+                        }));
+                        if paths.iter().any(|path| path == "changed.txt") {
+                            observed = Some(notification);
+                            break;
+                        }
+                    }
+                    other => panic!("unexpected filesystem notification: {other:?}"),
+                }
             }
         }
         if observed.is_some() {

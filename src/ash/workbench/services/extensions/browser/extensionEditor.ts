@@ -1,4 +1,3 @@
-import type { EditorFeatureSet } from '../../../../editor/browser/editorExtensions.js';
 import type { EditorProfile } from '../../documentEditor/browser/documentEditorProfile.js';
 import type { ExtensionDescriptor } from '../../../../platform/extensions/common/extensionApi.js';
 import type { IExtensionResourceLoaderService } from '../../../../platform/extensionResourceLoader/common/extensionResourceLoader.js';
@@ -14,12 +13,6 @@ export interface ExtensionEditorModule {
 	getEditorProfile(editorId: string): EditorProfile;
 }
 
-interface ExtensionEditorContributionModule {
-	readonly packageId: string;
-	readonly packageVersion: string;
-	getEditorFeatures(): EditorFeatureSet;
-}
-
 /** A package-owned binary/resource view; its lifetime is bound to the admitted provider. */
 export interface ExtensionResourceEditorModule {
 	readonly packageId: string;
@@ -27,7 +20,7 @@ export interface ExtensionResourceEditorModule {
 	getResourceEditor(editorId: string, createInstance: EditorClientInstantiation): ResourceEditorConstructor;
 }
 
-export type ExtensionEditorClientModule = ExtensionEditorModule | ExtensionEditorContributionModule | ExtensionResourceEditorModule;
+export type ExtensionEditorClientModule = ExtensionEditorModule | ExtensionResourceEditorModule;
 
 export interface ExtensionEditorModuleRequest {
 	readonly package: ExtensionDescriptor;

@@ -6,6 +6,8 @@ import type { IKeybindingService } from '../../../src/ash/platform/keybinding/co
 import { TestWorkspaceService } from '../../../src/ash/workbench/services/configuration/test/common/testServices.js';
 import { IChangesViewService } from '../../../src/ash/sessions/contrib/changes/common/changesViewService.js';
 import { ChangesViewService } from '../../../src/ash/sessions/contrib/changes/browser/changesViewService.js';
+import { IChecksOperationService } from '../../../src/ash/sessions/contrib/changes/common/checksOperationService.js';
+import { ChecksOperationService } from '../../../src/ash/sessions/contrib/changes/browser/checksOperationService.js';
 import type { ISessionChangesService } from '../../../src/ash/sessions/contrib/changes/common/sessionChangesService.js';
 import '../../../src/ash/base/browser/ui/styles.css';
 import '../../../src/ash/workbench/browser/media/style.css';
@@ -29,7 +31,7 @@ import { BrowserStorageService } from '../../../src/ash/workbench/services/stora
 import { productLanguagePackCatalogs } from '../../../src/ash/workbench/services/localization/common/localizationCatalogs.js';
 import { ChangesViewPane } from '../../../src/ash/sessions/contrib/changes/browser/changesView.js';
 import { ISessionsService } from '../../../src/ash/sessions/services/sessions/browser/sessionsService.js';
-import { type IChatService, type TurnChangeDetails } from '../../../src/ash/workbench/services/chat/common/chatService.js';
+import { IChatService, type TurnChangeDetails } from '../../../src/ash/workbench/services/chat/common/chatService.js';
 import { IQuickInputService } from '../../../src/ash/platform/quickinput/common/quickInput.js';
 import { type IAccessibleViewService } from '../../../src/ash/platform/accessibility/browser/accessibleView.js';
 import { Repl } from '../../../src/ash/workbench/contrib/debug/browser/repl.js';
@@ -77,7 +79,11 @@ changesServices.registerInstance(IGitHubApi, {} as IGitHubApi);
 changesServices.registerInstance(IAccountService, { onDidChangeAccounts: Event.None } as unknown as IAccountService);
 changesServices.registerInstance(IOpenerService, { open: async () => true } as unknown as IOpenerService);
 changesServices.registerInstance(INotificationService, notifications);
-changesServices.registerInstance(ISessionsService, { onDidChange: Event.None } as unknown as ISessionsService);
+changesServices.registerInstance(ISessionsService, {
+	activeSelection: { kind: 'session', active: { threadId: 'fixture-thread', session: { sessionId: 'fixture' } } },
+	onDidChange: Event.None,
+} as unknown as ISessionsService);
+changesServices.registerInstance(IChecksOperationService, resources.add(changesServices.createInstance(ChecksOperationService)));
 changesServices.registerInstance(ICommandService, { executeCommand: async () => [] } as unknown as ICommandService);
 changesServices.registerInstance(IQuickInputService, {} as IQuickInputService);
 const storage = resources.add(new BrowserStorageService({ ownerWindow: window, workspaceId: 'viewpane-layout', flushInterval: 0 }));
@@ -113,6 +119,12 @@ const changes: TurnChangeDetails = {
 	summary: { changeSetId: 'fixture', sessionId: 'fixture', threadId: 'fixture-thread', turnId: 'turn', repositoryId: 'repo', statistics: { files: 30, additions: 30, deletions: 30 }, captureState: 'sealed', messageState: 'unconfigured', commitState: 'idle', committedPaths: [], dependencies: [], externalDependencyPaths: [], warnings: [], conflictPaths: [], revision: 1 },
 	files: Array.from({ length: 30 }, (_, index) => ({ path: `file-${index}.ts`, kind: 'modified', binary: false, additions: 1, deletions: 1 })),
 };
+changesServices.registerInstance(IChatService, {
+	onDidUpdateTurnChanges: Event.None,
+	onDidBecomeReady: Event.None,
+	listTurnChanges: async () => [changes.summary],
+	readTurnChange: async () => changes,
+} as unknown as IChatService);
 const workspace = resources.add(new TestWorkspaceService(params.has('emptyWorkspace') ? { id: 'empty' } : { id: 'fixture', uri: URI.file('/fixture') }));
 const contextMenus = resources.add(new BrowserContextMenuService(
 	new MenuService(changesServices.get(ICommandService), contextKeys), contextKeys,
@@ -150,8 +162,7 @@ const pane = resources.add(view === 'empty'
 					} as unknown as IAppServerRemoteAgentService)
 					: view === 'changes'
 						? new ChangesViewPane(root, { id: 'fixture.changes', title: 'Changes' },
-							{ activeSelection: { kind: 'session', active: { threadId: 'fixture-thread', session: { sessionId: 'fixture' } } }, onDidChange: Event.None } as unknown as ISessionsService,
-							{ onDidUpdateTurnChanges: Event.None, onDidBecomeReady: Event.None, listTurnChanges: async () => [changes.summary], readTurnChange: async () => changes } as unknown as IChatService,
+							changesServices.get(ISessionsService), changesServices.get(IChatService),
 							editors, configuration, contextKeys, notifications, {} as IQuickInputService,
 							{ getOpenAriaHint: () => undefined } as unknown as IAccessibleViewService, changesServices, changesViewState,
 							{ openChangesEditor: async () => { throw new Error('Opening review editors is outside this layout fixture'); } } as unknown as ISessionChangesService, storage)

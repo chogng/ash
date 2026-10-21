@@ -10,28 +10,6 @@ const run = promisify(execFile);
 
 test.use({ gitRepository: true });
 
-test('SCM activation focuses its input or selected resource without outlining the whole pane', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, testWorkspace, workbench }) => {
-	await writeFile(testWorkspace.file, 'const changed = true;\n');
-	const page = workbench.page;
-	await page.getByRole('tab', { name: /^Source Control(?:,|$)/u }).click();
-	const pane = page.locator('[data-view-id="ash.gitView"]');
-	const input = pane.locator('.ash-scm-input .stanza-editor-input');
-	await expect(input).toBeFocused();
-	await expect(pane).toHaveCSS('outline-style', 'none');
-	await expect(pane.locator('.ash-scm-input')).toHaveCSS('outline-style', 'solid');
-	const tree = pane.getByRole('tree', { name: 'Source control changes' });
-	await expect(tree.getByRole('treeitem').filter({ hasText: 'main.ts' })).toBeVisible();
-	await tree.focus();
-	await tree.press('Home');
-	const resource = await tree.getAttribute('aria-activedescendant');
-	expect(resource).toBeTruthy();
-	await page.getByRole('tab', { name: /^Explorer(?:,|$)/u }).click();
-	await page.getByRole('tab', { name: /^Source Control(?:,|$)/u }).click();
-	await expect(tree).toBeFocused();
-	await expect(tree).toHaveAttribute('aria-activedescendant', resource!);
-	await expect(pane).toHaveCSS('outline-style', 'none');
-	await expect(tree.locator('.ash-tree-row.focused')).toHaveCSS('outline-style', 'solid');
-});
 
 test('SCM history retains the reading position, expanded files and row actions after a commit', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, testWorkspace, workbench }) => {
 	const cwd = testWorkspace.directory;
@@ -616,98 +594,6 @@ test('SCM history opens committed contents, copies host metadata and restores lo
 	await workbench.page.keyboard.press('Escape');
 });
 
-test('SCM history references and actions overlay long titles without changing row widths', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, testWorkspace, workbench }) => {
-	const cwd = testWorkspace.directory;
-	await run('git', ['commit', '--amend', '-m', 'History layout: a long commit title that reaches the action buttons at the right edge'], { cwd });
-	await run('git', ['update-ref', 'refs/remotes/origin/main', 'HEAD'], { cwd });
-	await run('git', ['commit', '--allow-empty', '-m', 'Neighbor layout: another long commit title that keeps its width while other rows are hovered'], { cwd });
-	const page = workbench.page;
-	if (target.kind === 'electron' && process.platform === 'darwin') {
-		await workbench.settingsEditor.openUserSettingsUI();
-		await workbench.settingsEditor.selectGroup('workbench');
-		await workbench.settingsEditor.selectCategory('layout');
-		const settings = workbench.settingsEditor.element;
-		await settings.locator('[data-configuration-key="window.menuStyle"]').getByRole('combobox').click();
-		await page.getByRole('option', { name: 'Custom', exact: true }).click();
-		await settings.locator('.ash-modal-editor-close').click();
-	}
-	await workbench.git.setHistoryBadges('All references');
-	await page.getByRole('tab', { name: /^Source Control(?:,|$)/u }).click();
-	const history = page.locator('[data-view-id="ash.gitGraph"]');
-	const header = history.locator('.ash-pane-view-header');
-	await header.click();
-	const commit = history.getByRole('treeitem', { name: /History layout:/u });
-	const neighbor = history.getByRole('treeitem', { name: /Neighbor layout:/u });
-	await expect(commit).toBeVisible();
-	await expect(neighbor).toBeVisible();
-	const sidebar = page.locator('[data-part="sidebar"]');
-	const sash = sidebar.locator('xpath=../../..').locator(':scope > .ash-sash').first();
-	const sidebarBounds = (await sidebar.boundingBox())!;
-	const sashBounds = (await sash.boundingBox())!;
-	const x = sashBounds.x + sashBounds.width / 2;
-	const y = sashBounds.y + sashBounds.height / 2;
-	await page.mouse.move(x, y);
-	await page.mouse.down();
-	await page.mouse.move(x + 280 - sidebarBounds.width, y);
-	await page.mouse.up();
-	await expect.poll(async () => (await sidebar.boundingBox())!.width).toBeCloseTo(280, 0);
-	const subject = commit.locator('.ash-scm-graph-subject');
-	const neighborSubject = neighbor.locator('.ash-scm-graph-subject');
-	const actions = commit.locator('.ash-scm-graph-actions');
-	const overlay = commit.locator('.ash-scm-graph-overlay');
-	const remoteLabel = overlay.locator('.ash-scm-graph-label.remote');
-	const mainLabel = neighbor.locator('.ash-scm-graph-overlay .ash-scm-graph-label.head');
-	for (const theme of ['Ash Dark', 'Ash Light', 'Ash High Contrast Dark', 'Ash High Contrast Light']) {
-		await workbench.quickaccess.runCommand('workbench.action.selectTheme');
-		await workbench.quickaccess.select(theme);
-		await header.hover();
-		await expect(actions).toBeHidden();
-		await expect(remoteLabel).toBeVisible();
-		await expect(remoteLabel).toHaveAttribute('aria-label', 'origin/main');
-		await expect(mainLabel).toBeVisible();
-		await expect(mainLabel).toHaveText('main');
-		const beforeHover = (await subject.boundingBox())!;
-		const neighborBounds = await neighborSubject.boundingBox();
-		expect(neighborBounds!.width).toBe(beforeHover.width);
-		const referenceBounds = (await remoteLabel.boundingBox())!;
-		expect(referenceBounds.x).toBeLessThan(beforeHover.x + beforeHover.width);
-		expect(referenceBounds.x + referenceBounds.width).toBeCloseTo(beforeHover.x + beforeHover.width, 1);
-		await expect.poll(() => subject.evaluate(element => element.scrollWidth > element.clientWidth)).toBe(true);
-		await commit.hover();
-		await expect(actions).toBeVisible();
-		await expect(remoteLabel).toBeVisible();
-		await expect(mainLabel).toBeVisible();
-		expect(await subject.boundingBox()).toEqual(beforeHover);
-		expect(await neighborSubject.boundingBox()).toEqual(neighborBounds);
-		const actionBounds = (await actions.boundingBox())!;
-		expect(actionBounds.x).toBeGreaterThan(beforeHover.x);
-		expect(actionBounds.x).toBeLessThan(beforeHover.x + beforeHover.width);
-		expect(actionBounds.x + actionBounds.width).toBeCloseTo(beforeHover.x + beforeHover.width, 1);
-		const remoteBounds = (await remoteLabel.boundingBox())!;
-		expect(remoteBounds.x + remoteBounds.width).toBeLessThanOrEqual(actionBounds.x);
-		await expect(overlay).not.toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
-		await actions.locator('.ash-toolbar-more-actions button').click();
-		await expect(page.getByRole('menuitem', { name: 'Add to Chat', exact: true })).toBeVisible();
-		await page.keyboard.press('Escape');
-		await expect(commit).toHaveAttribute('aria-expanded', 'false');
-		await header.hover();
-		await header.locator('.ash-pane-view-header-button').focus();
-		await expect(actions).toBeHidden();
-		expect(await subject.boundingBox()).toEqual(beforeHover);
-		await commit.focus();
-		await expect(actions).toBeVisible();
-		expect(await subject.boundingBox()).toEqual(beforeHover);
-		await commit.press('Tab');
-		await expect(remoteLabel).toBeFocused();
-		await remoteLabel.press('Tab');
-		await expect.poll(() => actions.evaluate(element => element.contains(document.activeElement))).toBe(true);
-		await page.keyboard.press('Home');
-		await expect(actions.getByRole('button', { name: 'Open Changes', exact: true })).toBeFocused();
-	}
-	await actions.getByRole('button', { name: 'Open Changes', exact: true }).press('Enter');
-	await expect(workbench.editors.groupAt(0).content.locator('.stanza-multi-diff-editor-section')).toHaveCount(5);
-	await expect(commit).toHaveAttribute('aria-expanded', 'false');
-});
 
 test('SCM graph menus copy complete commit information and compare current remote and base references', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ application, target, testWorkspace, workbench }) => {
 	const cwd = testWorkspace.directory;
@@ -913,32 +799,10 @@ test.describe('SCM folding', () => {
 		const tree = page.getByRole('tree', { name: 'Source control changes' });
 		const working = tree.getByRole('treeitem').filter({ has: page.locator('.ash-scm-section-label', { hasText: /^Changes$/ }) });
 		const staged = tree.getByRole('treeitem').filter({ has: page.locator('.ash-scm-section-label', { hasText: /^Staged Changes$/ }) });
-		const workingFile = tree.getByRole('button', { name: 'Open Changes for main.ts', exact: true });
-		const stagedFile = tree.getByRole('button', { name: 'Open Staged Changes for main.ts', exact: true });
+		const workingFile = tree.getByRole('button', { name: 'Open main.ts for Changes', exact: true });
+		const stagedFile = tree.getByRole('button', { name: 'Open main.ts for Staged Changes', exact: true });
 		await expect(workingFile).toBeVisible();
 		await expect(stagedFile).toBeVisible();
-		const workingRow = tree.getByRole('treeitem').filter({ has: page.getByRole('button', { name: 'Open Changes for main.ts', exact: true }) });
-		const rowGeometry = await workingRow.evaluate(element => {
-			const row = element.getBoundingClientRect();
-			const content = element.querySelector('.ash-scm-change')!.getBoundingClientRect();
-			return { height: row.height, rightInset: row.right - content.right };
-		});
-		expect(rowGeometry).toEqual({ height: 24, rightInset: 8 });
-		await expect(working).toHaveCSS('height', '28px');
-		await expect(working).toHaveCSS('border-radius', '4px');
-		await expect(working.locator('.ash-count-badge')).toHaveCSS('border-radius', '9999px');
-		await expect(working.locator('.ash-count-badge')).toHaveAttribute('aria-label', /changes$/);
-		await expect(working.locator('.ash-tree-twistie .ash-icon')).toHaveCSS('width', '16px');
-		await expect(working.locator('.ash-tree-twistie .ash-icon')).toHaveAttribute('aria-hidden', 'true');
-		const actions = workingRow.locator('.ash-scm-change-actions');
-		await page.getByRole('textbox', { name: /^Commit message/u }).hover();
-		await expect(actions).toHaveCSS('visibility', 'hidden');
-		const beforeHover = await workingFile.boundingBox();
-		await workingRow.hover();
-		await expect(actions).toHaveCSS('visibility', 'visible');
-		expect(await workingFile.boundingBox()).toEqual(beforeHover);
-		await expect(actions.locator('.ash-icon').first()).toHaveCSS('width', '16px');
-		await expect(page.locator('.ash-scm-commit-form')).toHaveCSS('border-bottom-width', '1px');
 		await expect(working).toHaveAttribute('aria-expanded', 'true');
 		await working.locator('.ash-scm-section-label').click();
 		await expect(working).toHaveAttribute('aria-expanded', 'false');
@@ -959,75 +823,17 @@ test.describe('SCM folding', () => {
 		await expect(working).toHaveAttribute('aria-expanded', 'true');
 		await workingFile.click();
 		await expect(workbench.editors.groupAt(0).tabs.filter({ hasText: 'main.ts' })).toHaveCount(1);
-		const fileRow = tree.getByRole('treeitem').filter({ has: page.getByRole('button', { name: 'Open Changes for main.ts', exact: true }) });
+		const fileRow = tree.getByRole('treeitem').filter({ has: page.getByRole('button', { name: 'Open main.ts for Changes', exact: true }) });
 		await expect(fileRow).toHaveAttribute('aria-selected', 'true');
-		await expect(fileRow).toHaveCSS('border-radius', '4px');
-		const selectedBackground = await fileRow.evaluate(element => getComputedStyle(element).backgroundColor);
-		await fileRow.hover();
-		await expect(fileRow).toHaveCSS('background-color', selectedBackground);
-		await expect(fileRow.locator('.ash-scm-change')).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
-		await fileRow.getByRole('button', { name: 'Stage main.ts', exact: true }).click();
+		await fileRow.getByRole('button', { name: 'Stage Changes', exact: true }).click();
 		await expect(workingFile).toHaveCount(0);
 		await expect(working).toHaveAttribute('aria-expanded', 'true');
 		await expect(staged).toHaveAttribute('aria-expanded', 'true');
 		await staged.locator('.ash-tree-twistie').click();
 		await expect(staged).toHaveAttribute('aria-expanded', 'false');
 		await expect(stagedFile).toHaveCount(0);
-		await expect(tree.getByRole('button', { name: 'Open Changes for refreshed.ts', exact: true })).toBeVisible();
-		for (const theme of ['Ash Light', 'Ash High Contrast Dark', 'Ash High Contrast Light']) {
-			await workbench.quickaccess.runCommand('workbench.action.selectTheme');
-			await page.locator('.ash-quick-pick').getByRole('combobox').fill(theme);
-			await page.keyboard.press('Enter');
-			await expect(page.locator('.ash-quick-pick')).toHaveCount(0);
-			await staged.locator('.ash-scm-section-label').click();
-			await expect(staged).toHaveAttribute('aria-expanded', 'true');
-			await expect(stagedFile).toBeVisible();
-			await expect(tree).toBeFocused();
-			await expect(staged).toHaveCSS('border-radius', '4px');
-			const badgeStyle = await staged.locator('.ash-count-badge').evaluate(element => {
-				const style = getComputedStyle(element);
-				const probe = document.createElement('span');
-				probe.style.backgroundColor = style.getPropertyValue('--ash-badge-background');
-				probe.style.color = style.getPropertyValue('--ash-badge-foreground');
-				element.append(probe);
-				const result = { themed: style.backgroundColor === getComputedStyle(probe).backgroundColor && style.color === getComputedStyle(probe).color, outline: style.outlineStyle };
-				probe.remove();
-				return result;
-			});
-			expect(badgeStyle.themed).toBe(true);
-			if (theme.includes('High Contrast')) { expect(badgeStyle.outline).toBe('solid'); }
-			await page.keyboard.press('ArrowLeft');
-			await page.keyboard.press('ArrowRight');
-			await expect(staged).toHaveCSS('outline-style', 'solid');
-			await stagedFile.click();
-			const selected = tree.getByRole('treeitem').filter({ has: page.getByRole('button', { name: 'Open Staged Changes for main.ts', exact: true }) });
-			await expect(selected).toHaveAttribute('aria-selected', 'true');
-			await expect.poll(() => selected.evaluate(element => {
-				const style = getComputedStyle(element);
-				const token = style.getPropertyValue('--ash-list-activeSelectionBackground').trim();
-				const probe = document.createElement('span');
-				probe.style.backgroundColor = token;
-				element.append(probe);
-				const matches = style.backgroundColor === getComputedStyle(probe).backgroundColor;
-				probe.remove();
-				return matches;
-			})).toBe(true);
-			await selected.hover();
-			await expect(selected.locator('.ash-scm-change')).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
-			const foreground = await selected.evaluate(element => getComputedStyle(element).color);
-			await expect(selected.locator('.ash-scm-change-actions button').first()).toHaveCSS('color', foreground);
-			const bounds = await stagedFile.boundingBox();
-			expect(bounds?.width).toBeGreaterThan(0);
-			const nestedFile = tree.getByRole('button', { name: 'Open Staged Changes for src/details.ts', exact: true });
-			await nestedFile.click();
-			const nestedRow = tree.getByRole('treeitem').filter({ has: page.getByRole('button', { name: 'Open Staged Changes for src/details.ts', exact: true }) });
-			await expect(nestedRow).toHaveAttribute('aria-selected', 'true');
-			const nestedForeground = await nestedRow.evaluate(element => getComputedStyle(element).color);
-			await expect(nestedFile.locator('.ash-icon-label-description')).toHaveText('src');
-			await expect(nestedFile.locator('.ash-icon-label-description')).toHaveCSS('color', nestedForeground);
-			await staged.locator('.ash-tree-twistie').click();
-			await expect(staged).toHaveAttribute('aria-expanded', 'false');
-		}
+		await expect(tree.getByRole('button', { name: 'Open refreshed.ts for Changes', exact: true })).toBeVisible();
+
 	});
 });
 

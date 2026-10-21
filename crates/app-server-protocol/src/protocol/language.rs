@@ -55,7 +55,8 @@ pub struct LanguageDocumentDto {
     pub text: String,
 }
 
-/// Lists enabled, resolved servers for one directory without starting them.
+/// Lists enabled servers and accepts the client's effective settings for this directory.
+/// Settings are a connection-owned runtime projection, never a persisted profile update.
 #[derive(Clone, Debug, Default, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct LanguageServersParams {
@@ -65,6 +66,9 @@ pub struct LanguageServersParams {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub session_directory: Option<SessionDirSelector>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub settings: Option<std::collections::BTreeMap<String, Value>>,
 }
 
 /// One enabled server and its editor language routes. Executable paths remain private.

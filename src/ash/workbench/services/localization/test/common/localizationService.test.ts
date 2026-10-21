@@ -399,9 +399,9 @@ suite('Workbench localization', () => {
 		using localization = new WorkbenchLocalizationService();
 		await localization.whenReady;
 		initializeTestLocalization('zh-CN');
-		await import('../../../../../../../extensions/code/browser/contrib/folding/browser/folding.js');
+		await import('../../../../../editor/contrib/folding/browser/folding.js');
 		const { EditorExtensionsRegistry } = await import('../../../../../editor/browser/editorExtensions.js');
-		const { getEditorFeatures } = await import('../../../../../../../extensions/code/browser/registration.js');
+		const { getEditorFeatures } = await import('../../../../../editor/browser/editorFeatureRegistration.js');
 		using features = EditorExtensionsRegistry.registerEditorFeatures(getEditorFeatures());
 		const actions = [...EditorExtensionsRegistry.getEditorActions()];
 		const fold = actions.find(action => action.id === 'editor.fold')!.metadata!;
@@ -418,11 +418,11 @@ suite('Workbench localization', () => {
 		using localization = new WorkbenchLocalizationService();
 		await localization.whenReady;
 		initializeTestLocalization('zh-CN');
-		const { ForceRetokenizeAction } = await import('../../../../../../../extensions/code/browser/contrib/tokenization/browser/tokenization.js');
-		await import('../../../../../../../extensions/code/browser/contrib/caretOperations/browser/caretOperations.js');
-		await import('../../../../../../../extensions/code/browser/contrib/insertFinalNewLine/browser/insertFinalNewLine.js');
+		const { ForceRetokenizeAction } = await import('../../../../../editor/contrib/tokenization/browser/tokenization.js');
+		await import('../../../../../editor/contrib/caretOperations/browser/caretOperations.js');
+		await import('../../../../../editor/contrib/insertFinalNewLine/browser/insertFinalNewLine.js');
 		const { EditorExtensionsRegistry } = await import('../../../../../editor/browser/editorExtensions.js');
-		const { getEditorFeatures } = await import('../../../../../../../extensions/code/browser/registration.js');
+		const { getEditorFeatures } = await import('../../../../../editor/browser/editorFeatureRegistration.js');
 		using features = EditorExtensionsRegistry.registerEditorFeatures(getEditorFeatures());
 		const actions = [...EditorExtensionsRegistry.getEditorActions()];
 		assert.deepEqual([
@@ -546,7 +546,7 @@ suite('Workbench localization', () => {
 			update: () => Promise.reject(new Error("unused")),
 			uninstall: () => Promise.reject(new Error("unused")),
 			listInstalled: async () => [],
-			listBuiltInProviders: async () => ({ revision: 1, providers: [] }),
+			listBuiltInProviders: async () => ({ revision: 1, canChangeEnablement: false, providers: [] }),
 			setBuiltInProviderEnabled: () => Promise.reject(new Error('unused')),
 			listEditorExtensions: async () => ({ revision: 1, extensions: [] }),
 			setEditorExtensionPolicy: () => Promise.reject(new Error("unused")),

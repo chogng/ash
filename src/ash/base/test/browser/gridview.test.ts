@@ -3,6 +3,7 @@ import { test } from "mocha";
 import { JSDOM } from "jsdom";
 import type { IPositionedRectangle } from "../../browser/geometry.js";
 import { h } from "../../browser/dom.js";
+import type { IBoundarySashes } from '../../browser/ui/sash/sash.js';
 
 const browserEnvironment = new JSDOM("<!doctype html><body></body>");
 for (const [name, value] of Object.entries({
@@ -22,6 +23,49 @@ for (const [name, value] of Object.entries({
 }
 
 const { GridView } = await import("../../browser/ui/grid/gridview.js");
+
+test('GridView delivers physical boundary sashes through nested axes and clears detached leaves', () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	try {
+		class BoundaryView extends TestView {
+			boundaries: IBoundarySashes = {};
+			setBoundarySashes(sashes: IBoundarySashes): void { this.boundaries = sashes; }
+		}
+		const topLeft = new BoundaryView(dom.window.document, 'topLeft');
+		const bottomLeft = new BoundaryView(dom.window.document, 'bottomLeft');
+		const topRight = new BoundaryView(dom.window.document, 'topRight');
+		const bottomRight = new BoundaryView(dom.window.document, 'bottomRight');
+		using grid = new GridView(dom.window.document.body, {
+			type: 'branch', orientation: 'horizontal', size: 800,
+			children: [[topLeft, bottomLeft], [topRight, bottomRight]].map(views => ({
+				type: 'branch', orientation: 'vertical', size: 400,
+				children: views.map(view => ({ type: 'leaf', view, size: 200 })),
+			})),
+		});
+		grid.layout(800, 400);
+		assert.ok(topLeft.boundaries.right);
+		assert.equal(topLeft.boundaries.right, topRight.boundaries.left);
+		assert.equal(topLeft.boundaries.right, bottomLeft.boundaries.right);
+		assert.equal(topLeft.boundaries.right.orientation, 'vertical');
+		assert.ok(topLeft.boundaries.bottom);
+		assert.equal(topLeft.boundaries.bottom, bottomLeft.boundaries.top);
+		assert.equal(topLeft.boundaries.bottom.orientation, 'horizontal');
+		assert.equal(topLeft.boundaries.left, undefined);
+		assert.equal(topLeft.boundaries.top, undefined);
+		assert.equal(bottomRight.boundaries.right, undefined);
+		assert.equal(bottomRight.boundaries.bottom, undefined);
+		grid.removeView([0, 0]);
+		assert.deepEqual(topLeft.boundaries, {});
+		assert.equal(bottomLeft.boundaries.top, undefined);
+		assert.equal(bottomLeft.boundaries.right, topRight.boundaries.left);
+		grid.dispose();
+		for (const view of [topLeft, bottomLeft, topRight, bottomRight]) {
+			assert.deepEqual(view.boundaries, {});
+		}
+	} finally {
+		dom.window.close();
+	}
+});
 
 test("GridView sash updates lay out only leaves whose geometry changes", () => {
 	const dom = new JSDOM("<!doctype html><body></body>");

@@ -34,7 +34,7 @@ const installedGlobals = installEditorTestDom(browserEnvironment, [
 const { DiffModel } = await import('../../../common/diff/diffModel.js');
 const { MultiDiffEditorWidget } = await import('../../../browser/widget/multiDiffEditor/multiDiffEditorWidget.js');
 const { createCodeEditorServices } = await import('../testCodeEditor.js');
-await import('../../../../../../extensions/code/browser/contrib/diffEditorBreadcrumbs/browser/contribution.js');
+await import('../../../contrib/diffEditorBreadcrumbs/browser/contribution.js');
 suiteTeardown(() => {
 	installedGlobals.dispose();
 	browserEnvironment.window.close();

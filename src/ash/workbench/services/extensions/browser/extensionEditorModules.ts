@@ -15,7 +15,6 @@ const importedFactories = new Map<string, Promise<EditorClientFactory>>();
 export const loadExtensionEditorModule: ExtensionEditorModuleLoader = async request => {
 	const { package: owner, entry, expectedDigest, signal } = request;
 	signal.throwIfAborted();
-	if (owner.sourceKind === 'builtIn') return loadBuiltInModule(owner.name, entry, expectedDigest);
 	const admission = owner.rendererClient;
 	if (!admission || admission.apiVersion !== 1) {
 		throw new Error(localize('extensions.clientEditor.packageUnavailable', 'The editor extension package is unavailable.'));
@@ -167,17 +166,4 @@ function withStyles(component: ExtensionEditorModule | ExtensionResourceEditorMo
 			};
 		},
 	};
-}
-
-/** Code's product-compiled contributions retain their existing source identity until separately externalized. */
-async function loadBuiltInModule(packageName: string, entry: string, expectedDigest: string): Promise<ExtensionEditorClientModule> {
-	const modules = import.meta.glob<ExtensionEditorClientModule>('../../../../../../extensions/code/browser/editor.ts');
-	const sources = import.meta.glob<string>('../../../../../../extensions/code/{browser,common}/**/*.{ts,css}', { query: '?raw', import: 'default' });
-	const prefix = `../../../../../../extensions/${packageName}/`;
-	const load = modules[`../../../../../../extensions/${packageName}/${entry}`];
-	if (!load) throw new Error(localize('extensions.clientEditor.moduleUnavailable', 'This editor component is unavailable in this version of Ash.'));
-	const paths = Object.keys(sources).filter(path => path.startsWith(prefix)).sort();
-	const content = await Promise.all(paths.map(async path => `${path.slice(prefix.length)}\0${await sources[path]()}\0`));
-	await verifyDigest(new TextEncoder().encode(content.join('')), expectedDigest);
-	return load();
 }

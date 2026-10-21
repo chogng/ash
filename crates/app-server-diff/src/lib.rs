@@ -25,6 +25,16 @@ const MAX_DIFF_INPUT_BYTES_PER_SIDE: usize = 512 * 1024;
 /// Connection admission, request scheduling, cancellation, and response envelopes stay with
 /// the App Server host. The comparison algorithm remains owned by `ash-diff`.
 pub fn compute(params: &Value) -> Result<Value, AppServerError> {
+    compute_with_line_index(params, |_| None)
+}
+
+/// Allows the development host to replace scalar line projection per request.
+/// Returning None preserves the domain's compiled implementation, including when
+/// a replacement fails. Diff state and UTF-16 conversion remain with this domain.
+pub fn compute_with_line_index(
+    params: &Value,
+    line_index: impl Fn(usize) -> Option<usize>,
+) -> Result<Value, AppServerError> {
     let params: DiffComputeParams = serde_json::from_value(params.clone())
         .map_err(|_| AppServerError::new(-32602, AppServerErrorName::InvalidParams))?;
     let options = DiffOptions::default().with_limits(
@@ -32,20 +42,30 @@ pub fn compute(params: &Value) -> Result<Value, AppServerError> {
     );
     let document = DiffDocument::with_options(&params.original, &params.modified, options)
         .map_err(diff_error)?;
-    serde_json::to_value(&project(document))
+    let line_index = |value| line_index(value).unwrap_or_else(|| zero_based_line_index(value));
+    serde_json::to_value(&project(document, &line_index))
         .map_err(|_| AppServerError::new(-32000, AppServerErrorName::InternalError))
 }
 
-fn project(document: DiffDocument) -> DiffComputeResult {
+fn project(document: DiffDocument, line_index: &dyn Fn(usize) -> usize) -> DiffComputeResult {
     DiffComputeResult {
-        rows: document.rows().iter().map(project_row).collect(),
-        hunks: document.hunks().iter().copied().map(project_hunk).collect(),
+        rows: document
+            .rows()
+            .iter()
+            .map(|row| project_row(row, line_index))
+            .collect(),
+        hunks: document
+            .hunks()
+            .iter()
+            .copied()
+            .map(|hunk| project_hunk(hunk, line_index))
+            .collect(),
         original_line_count: document.old_line_count(),
         modified_line_count: document.new_line_count(),
     }
 }
 
-fn project_row(row: &DiffRow) -> DiffComputeRowDto {
+fn project_row(row: &DiffRow, line_index: &dyn Fn(usize) -> usize) -> DiffComputeRowDto {
     let original_ranges = row
         .inline_changes()
         .iter()
@@ -64,8 +84,8 @@ fn project_row(row: &DiffRow) -> DiffComputeRowDto {
         .collect();
     DiffComputeRowDto {
         kind: project_row_kind(row.kind()),
-        original_line_index: row.old_line().map(zero_based_line_index),
-        modified_line_index: row.new_line_number().map(zero_based_line_index),
+        original_line_index: row.old_line().map(line_index),
+        modified_line_index: row.new_line_number().map(line_index),
         original_changes: project_ranges(row.old_text(), original_ranges),
         modified_changes: project_ranges(row.new_text(), modified_ranges),
     }
@@ -103,13 +123,13 @@ fn project_ranges(text: Option<&str>, ranges: Vec<Range<usize>>) -> Vec<DiffRang
         .collect()
 }
 
-fn project_hunk(hunk: DiffHunk) -> DiffHunkDto {
+fn project_hunk(hunk: DiffHunk, line_index: &dyn Fn(usize) -> usize) -> DiffHunkDto {
     DiffHunkDto {
         row_start: hunk.row_start(),
         row_end: hunk.row_end(),
-        original_start_line_index: zero_based_line_index(hunk.old_start()),
+        original_start_line_index: line_index(hunk.old_start()),
         original_line_count: hunk.old_count(),
-        modified_start_line_index: zero_based_line_index(hunk.new_start()),
+        modified_start_line_index: line_index(hunk.new_start()),
         modified_line_count: hunk.new_count(),
     }
 }

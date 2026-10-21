@@ -1,6 +1,6 @@
 ---
 name: smoke-tests
-description: Use when running Ash smoke tests or working on smoke-test CI steps. Covers pnpm run smoketest / smoketest-no-compile, grep filtering tests, and a temporary repeat-loop technique for tracking down flaky smoke tests in CI.
+description: Use when writing, reviewing, migrating or running Ash smoke tests, or changing smoke-test CI. Covers test scope, target selection, runner lifecycle and CI failure diagnosis.
 ---
 
 # Running Smoke Tests
@@ -93,14 +93,8 @@ gh run download <run-id> -n frontend-electron-windows-latest -D ./logs
 
 The artifact contains `test-results/` and, when generated, `report/`. A failed test that reaches the Workbench fixture attaches `trace.zip` under its test result. Inspect the error and trace to find the failing action, then run that test locally with the same target and filter. If it fails only in CI, use the temporary loop above.
 
-## Distinction from other test types
-
-- Unit tests: `pnpm test:unit`.
-- Editor browser integration tests: `pnpm test:editor:browser`.
-- Smoke tests: the Playwright scripts above.
-
 ## Changing tests
 
-Read [Writing Tests](../../../.github/instructions/writing-tests.instructions.md) for shared fixtures, assertions, readiness, isolation, and cleanup. Reuse `test/automation/test.ts`, `workbench.settingsEditor`, and `workbench.openAgentsWindow(target.kind)` for setup and navigation.
+Before adding or migrating a scenario, choose its layer using [Test scope](../../../.github/instructions/writing-tests.instructions.md#test-scope). That document also owns the shared rules for assertions, readiness, isolation and cleanup. Reuse `test/automation/test.ts`, `workbench.settingsEditor`, and `workbench.openAgentsWindow(target.kind)` for setup and navigation.
 
 For Sessions restoration, use `workbench.reopenAgentsWindow(application, page)`: web reloads the page; Electron closes and reopens the window with the same profile so asynchronous saves complete. For system-menu assertions, use `captureElectronMenu` from `electronDriver.ts` and trigger the real UI action.

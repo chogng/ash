@@ -6,7 +6,7 @@ use ash_external_ext::packages::ExtensionRuntimeBinding;
 use ash_plugin::EditorExtensionApi;
 use ash_plugin::EditorExtensionRuntime;
 
-/// Selects declarative and standard API package manifests from the same effective Plugin snapshot.
+/// Selects native author and declarative package manifests from the same effective Plugin snapshot.
 pub(super) struct PluginExtensionSourceProvider {
     authority: PluginActivationAuthority,
 }
@@ -28,8 +28,8 @@ impl DynamicExtensionSourceProvider for PluginExtensionSourceProvider {
                 .editor_extensions
                 .iter()
                 .find(|contribution| {
-                    contribution.api == EditorExtensionApi::Vscode
-                        && contribution.runtime == EditorExtensionRuntime::JavaScript
+                    contribution.runtime == EditorExtensionRuntime::JavaScript
+                        && contribution.api == EditorExtensionApi::Ash
                 })
                 .or_else(|| {
                     package
@@ -37,10 +37,12 @@ impl DynamicExtensionSourceProvider for PluginExtensionSourceProvider {
                         .contributions
                         .editor_extensions
                         .iter()
-                        .find(|contribution| contribution.api == EditorExtensionApi::Vscode)
+                        .find(|contribution| {
+                            contribution.runtime == EditorExtensionRuntime::HostRpc
+                        })
                 })
             {
-                // The standard module and its declarations share this immutable package root;
+                // The author module and its declarations share this immutable package root;
                 // discovery must not require another independently enabled contribution.
                 let mut source = DynamicExtensionPackageSource::plugin(
                     format!("{}:{}", package.manifest().id, contribution.id.as_str()),

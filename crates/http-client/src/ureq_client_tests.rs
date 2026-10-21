@@ -1,4 +1,6 @@
 use crate::CertificateBundle;
+use crate::ClientIdentity;
+use crate::ClientIdentityPolicy;
 use crate::HttpBodySink;
 use crate::HttpClient;
 use crate::HttpClientConfig;
@@ -16,10 +18,13 @@ use crate::TransportTimeouts;
 use crate::UreqHttpClient;
 use http_test_support::CA_DER;
 use http_test_support::Server;
+use std::io;
 use std::io::Read;
 use std::io::Write;
+use std::net::SocketAddr;
 use std::net::TcpListener;
 use std::num::NonZeroU8;
+use std::sync::Arc;
 use std::sync::mpsc;
 use std::thread;
 use std::time::Duration;
@@ -61,6 +66,159 @@ fn p521_signed_certificates_work_in_both_http_transports() {
         assert_eq!(server.request().line, "GET /p521 HTTP/1.1");
         server.assert_no_more_requests();
     }
+}
+
+#[test]
+fn custom_tls_connector_rejects_untrusted_roots_and_wrong_peer_names_through_a_proxy() {
+    for (root, host) in [
+        (CA_DER, "wrong.example.test"),
+        (
+            &include_bytes!("../tests/fixtures/system-trust-ca.der")[..],
+            "localhost",
+        ),
+    ] {
+        let (address, peer) = tls_peer(
+            Arc::new(rustls::server::NoClientAuth),
+            Some(format!("{host}:443")),
+        );
+        let config = HttpClientConfig::new()
+            .with_proxy_policy(ProxyPolicy::Explicit(format!("http://{address}")))
+            .with_tls_policy(TlsPolicy::CustomOnly(
+                CertificateBundle::from_der(vec![root.to_vec()]).unwrap(),
+            ));
+        let transport = UreqHttpClient::with_config(config).unwrap();
+        let request = HttpRequest::new(
+            HttpMethod::Get,
+            format!("https://{host}/"),
+            Vec::new(),
+            Vec::new(),
+        )
+        .unwrap();
+        let result = transport.execute(&request);
+        let handshake = peer.join().unwrap();
+        assert!(
+            matches!(result, Err(HttpClientError::Transport(_))),
+            "{result:?}"
+        );
+        assert!(handshake.is_err(), "TLS rejection must reach the peer");
+    }
+}
+
+#[test]
+fn custom_tls_connector_uses_the_configured_client_identity_for_mutual_tls() {
+    // This public fixture certificate reuses the loopback server's test key,
+    // with clientAuth usage. Neither certificate is installed in system trust.
+    let certificate = include_bytes!("../tests/fixtures/client.der");
+    let mut roots = rustls::RootCertStore::empty();
+    roots
+        .add(rustls::pki_types::CertificateDer::from(
+            certificate.to_vec(),
+        ))
+        .unwrap();
+    let verifier = rustls::server::WebPkiClientVerifier::builder_with_provider(
+        Arc::new(roots),
+        Arc::new(rustls::crypto::aws_lc_rs::default_provider()),
+    )
+    .build()
+    .unwrap();
+    for has_identity in [false, true] {
+        let (address, peer) = tls_peer(verifier.clone(), None);
+        let mut config = HttpClientConfig::new()
+            .with_proxy_policy(ProxyPolicy::Direct)
+            .with_tls_policy(TlsPolicy::CustomOnly(
+                CertificateBundle::from_der(vec![CA_DER.to_vec()]).unwrap(),
+            ));
+        if has_identity {
+            config = config.with_client_identity_policy(ClientIdentityPolicy::Identity(
+                ClientIdentity::from_der(
+                    CertificateBundle::from_der(vec![certificate.to_vec()]).unwrap(),
+                    include_bytes!("../../http-test-support/fixtures/server-key.der").to_vec(),
+                )
+                .unwrap(),
+            ));
+        }
+        let transport = UreqHttpClient::with_config(config).unwrap();
+        let request = HttpRequest::new(
+            HttpMethod::Get,
+            format!("https://{address}/"),
+            Vec::new(),
+            Vec::new(),
+        )
+        .unwrap();
+        let result = transport.execute(&request);
+        let observed = peer.join().unwrap();
+        if has_identity {
+            assert_eq!(result.unwrap().body(), b"ok");
+            assert_eq!(observed.unwrap(), vec![certificate.to_vec()]);
+        } else {
+            assert!(
+                matches!(result, Err(HttpClientError::Transport(_))),
+                "{result:?}"
+            );
+            assert!(
+                observed.is_err(),
+                "the peer requires a verified client identity"
+            );
+        }
+    }
+}
+
+fn tls_peer(
+    verifier: Arc<dyn rustls::server::danger::ClientCertVerifier>,
+    tunnel_target: Option<String>,
+) -> (SocketAddr, thread::JoinHandle<io::Result<Vec<Vec<u8>>>>) {
+    let config = rustls::ServerConfig::builder_with_provider(Arc::new(
+        rustls::crypto::aws_lc_rs::default_provider(),
+    ))
+    .with_safe_default_protocol_versions()
+    .unwrap()
+    .with_client_cert_verifier(verifier)
+    .with_single_cert(
+        vec![rustls::pki_types::CertificateDer::from(
+            include_bytes!("../../http-test-support/fixtures/server.der").to_vec(),
+        )],
+        rustls::pki_types::PrivatePkcs8KeyDer::from(
+            include_bytes!("../../http-test-support/fixtures/server-key.der").to_vec(),
+        )
+        .into(),
+    )
+    .unwrap();
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let address = listener.local_addr().unwrap();
+    let worker = thread::spawn(move || {
+        let (mut socket, _) = listener.accept()?;
+        socket.set_read_timeout(Some(WAIT))?;
+        socket.set_write_timeout(Some(WAIT))?;
+        if let Some(target) = tunnel_target {
+            let head = tls_peer_request_head(&mut socket)?;
+            assert!(head.starts_with(format!("CONNECT {target} HTTP/1.1\r\n").as_bytes()));
+            socket.write_all(b"HTTP/1.1 200 Connection Established\r\n\r\n")?;
+        }
+        let connection = rustls::ServerConnection::new(Arc::new(config)).unwrap();
+        let mut stream = rustls::StreamOwned::new(connection, socket);
+        let head = tls_peer_request_head(&mut stream)?;
+        assert!(head.starts_with(b"GET / HTTP/1.1\r\n"));
+        stream.write_all(&http_test_support::response(200, "ok"))?;
+        stream.flush()?;
+        Ok(stream
+            .conn
+            .peer_certificates()
+            .unwrap_or_default()
+            .iter()
+            .map(|certificate| certificate.as_ref().to_vec())
+            .collect())
+    });
+    (address, worker)
+}
+
+fn tls_peer_request_head(stream: &mut impl Read) -> io::Result<Vec<u8>> {
+    let mut head = Vec::new();
+    while !head.ends_with(b"\r\n\r\n") {
+        let mut byte = [0];
+        stream.read_exact(&mut byte)?;
+        head.push(byte[0]);
+    }
+    Ok(head)
 }
 
 fn client(timeout: Duration) -> UreqHttpClient {

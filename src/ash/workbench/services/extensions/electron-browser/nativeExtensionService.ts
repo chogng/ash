@@ -211,7 +211,7 @@ export class NativeExtensionService extends Disposable {
 			// Resolver and saved-connection providers continue executing on the local control client.
 			const localRuntime = local.extensions.find(entry => entry.id === runtime.id);
 			const localResolver = localRuntime?.registrations.some(entry => entry.kind === 'remoteAuthorityResolver' || entry.kind === 'remoteConnectionResolver')
-				|| localRuntime?.activation?.events.includes('onDemand:remoteAuthorityResolver');
+				|| localRuntime?.activation?.events.some(event => event === 'onDemand:remoteAuthorityResolver' || event.startsWith('onResolveRemoteAuthority:'));
 			if (localResolver) { continue; }
 			retain(runtime, this.remoteHost!.api, false);
 		}
@@ -240,7 +240,7 @@ export class NativeExtensionService extends Disposable {
 	private async getResolver(authority: string): Promise<ExtensionHostRuntime> {
 		let snapshot = await this.api.reconcile('refresh');
 		const prefix = getRemoteAuthorityPrefix(authority);
-		for (const runtime of snapshot.extensions.filter(extension => extension.lifecycle === 'dormant' && extension.activation?.events.includes('onDemand:remoteAuthorityResolver'))) {
+		for (const runtime of snapshot.extensions.filter(extension => extension.lifecycle === 'dormant' && extension.activation?.events.some(event => event === 'onDemand:remoteAuthorityResolver' || event === `onResolveRemoteAuthority:${prefix}`))) {
 			snapshot = await this.api.activateByEvent({ extensionId: runtime.id, activationGeneration: runtime.activationGeneration, event: { type: 'resolveAuthority', authorityPrefix: prefix } });
 		}
 		const candidates = snapshot.extensions.filter(runtime => runtime.lifecycle === 'ready' && runtime.registrations.some(entry => entry.kind === 'remoteAuthorityResolver' && entry.authorityPrefix === prefix));

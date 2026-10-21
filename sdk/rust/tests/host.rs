@@ -140,6 +140,81 @@ fn independent_sdk_program_registers_invokes_and_emits_output_through_the_real_h
 }
 
 #[test]
+fn independent_rust_sdk_uses_simple_profile_state_and_private_secrets() {
+    use external_ext_sdk::services::CoreServiceRequest;
+    use external_ext_sdk::services::CoreServiceResponse;
+    for action in ["storage", "secrets"] {
+        let running = start();
+        let mut values = BTreeMap::new();
+        let result = running
+            .host
+            .begin_invoke(invocation(
+                "review.echo",
+                "execute",
+                json!({"arguments":[action]}),
+            ))
+            .unwrap()
+            .wait_with_client(|operation, _, _| {
+                let response = match operation {
+                    external_ext_protocol::ExtensionClientOperation::CoreService {
+                        request: CoreServiceRequest::StorageSet { key, value },
+                    } => {
+                        values.insert(key, value);
+                        CoreServiceResponse::StorageUpdated
+                    }
+                    external_ext_protocol::ExtensionClientOperation::CoreService {
+                        request: CoreServiceRequest::StorageDelete { key },
+                    } => {
+                        values.remove(&key);
+                        CoreServiceResponse::StorageUpdated
+                    }
+                    external_ext_protocol::ExtensionClientOperation::CoreService {
+                        request: CoreServiceRequest::StorageGet { key },
+                    } => {
+                        let value = values.get(&key).cloned();
+                        CoreServiceResponse::StorageValue {
+                            found: value.is_some(),
+                            value: value.unwrap_or(Value::Null),
+                        }
+                    }
+                    external_ext_protocol::ExtensionClientOperation::CoreService {
+                        request: CoreServiceRequest::SecretStore { key, value },
+                    } => {
+                        assert_eq!(key, "token");
+                        assert_eq!(value, b"synthetic");
+                        CoreServiceResponse::SecretStored
+                    }
+                    external_ext_protocol::ExtensionClientOperation::CoreService {
+                        request: CoreServiceRequest::SecretLoad { key },
+                    } => {
+                        assert_eq!(key, "token");
+                        CoreServiceResponse::SecretLoaded {
+                            value: Some(b"synthetic".to_vec()),
+                        }
+                    }
+                    external_ext_protocol::ExtensionClientOperation::CoreService {
+                        request: CoreServiceRequest::SecretDelete { key },
+                    } => {
+                        assert_eq!(key, "token");
+                        CoreServiceResponse::SecretDeleted { deleted: true }
+                    }
+                    other => panic!("unexpected operation: {other:?}"),
+                };
+                Ok(external_ext_protocol::ExtensionClientResult::CoreService { response })
+            })
+            .unwrap();
+        assert_eq!(
+            result.payload,
+            if action == "storage" {
+                json!({"count":1,"cleared":true})
+            } else {
+                json!({"restored":true,"deleted":true})
+            }
+        );
+    }
+}
+
+#[test]
 fn hover_receives_the_frontend_snapshot_and_zero_based_utf16_position() {
     let running = start();
     let result = running.host.invoke(invocation("review.hover", "hover", json!({

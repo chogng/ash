@@ -47,7 +47,7 @@ class TestResizeObserver {
 }
 
 const { TestView: View } = await import('../../../../test/browser/viewModel/testViewModel.js');
-const { InlineCompletionsController } = await import('../../../../../../../extensions/code/browser/contrib/inlineCompletions/browser/controller/inlineCompletionsController.js');
+const { InlineCompletionsController } = await import('../../browser/controller/inlineCompletionsController.js');
 
 
 test('Registered editor commands retrigger inline completions after their edit', async () => {

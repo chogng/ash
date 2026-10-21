@@ -1,16 +1,17 @@
 import { WebWorkerService } from '../../../src/ash/platform/webWorker/browser/webWorkerServiceImpl.js';
 import { createAppServerFrameDecoder } from '../../../src/ash/platform/agentHost/browser/appServerFrameDecoder.js';
-import { APP_SERVER_METHODS } from '../../../.build/protocol/typescript/index.js';
-import { AppServerFrameDecoder } from '../../../src/ash/platform/agentHost/browser/appServerFrameDecoder.js';
+import { APP_SERVER_METHODS, type SessionThreadReadResult } from '../../../.build/protocol/typescript/index.js';
 import { AppServerProtocolClient } from '../../../src/ash/platform/agentHost/browser/appServerProtocolClient.js';
-import { decodeAppServerFrame, type AppServerDecodeContext, type DecodedAppServerFrame } from '../../../src/ash/platform/agentHost/browser/appServerProtocolDecoding.js';
 import { AppServerFrame, type AppServerTransport, WEB_APP_SERVER_CLOSED_EVENT, WEB_APP_SERVER_CONNECTED_EVENT, WEB_APP_SERVER_CONNECT_EVENT, WEB_APP_SERVER_FRAME_EVENT } from '../../../src/ash/platform/agentHost/common/appServerTransport.js';
 import { createTestInitializeResult } from '../../../src/ash/platform/agentHost/test/common/testAppServerProtocol.js';
-import { threadWorkload } from './protobufPrototype/workload.js';
-
-type Variant = 'before' | 'worker';
-class BeforeDecoder extends AppServerFrameDecoder {
-	public override decode(frame: string, _bytes: number, context: AppServerDecodeContext): DecodedAppServerFrame { return decodeAppServerFrame(frame, context); }
+function threadWorkload(turns: number, textBytes: number): SessionThreadReadResult {
+	const count = { reported: 0, complete: true };
+	const usage = { modelInvocations: 0, inputTokens: { ...count }, outputTokens: { ...count }, cachedInputTokens: { ...count }, cacheWriteInputTokens: { ...count }, reasoningTokens: { ...count } };
+	const items = Array.from({ length: turns }, (_, index) => ({ type: 'agentMessage' as const, itemId: `answer-${index}`, turnId: `turn-${index}`, text: 'x'.repeat(textBytes) }));
+	return {
+		thread: { sessionId: 'session', threadId: 'thread', agentId: 'agent', origin: { type: 'root' }, title: 'Decode workload', status: 'active', sequence: turns, advisor: { type: 'off' }, usage, referenceCost: { knownAmounts: [], complete: true }, hookRuns: [], turns: items.map(item => ({ turnId: item.turnId, status: 'completed', kind: 'coding', mode: 'agent', toolMode: 'direct', approvalMode: 'manual', usage, items: [item] })) },
+		transcript: { sessionId: 'session', threadId: 'thread', durableSequence: turns, revision: turns, entries: items.map(item => ({ type: 'item', entryId: `item:${item.itemId}`, turnId: item.turnId, item, transient: false })) },
+	};
 }
 
 class ResponseTransport implements AppServerTransport {
@@ -32,64 +33,37 @@ class ResponseTransport implements AppServerTransport {
 	public emit(event: string, value: unknown): void { for (const listener of this.listeners.get(event) ?? []) listener(value); }
 }
 
-const clients = new Map<Variant, { client: AppServerProtocolClient; transport: ResponseTransport; }>();
+let connection: { client: AppServerProtocolClient; transport: ResponseTransport; } | undefined;
 let wireResult = '';
 let expectedTurns = 0;
 let expectedTextBytes = 0;
 
 async function prepare(turns: number, textBytes: number): Promise<void> {
-	for (const { client } of clients.values()) client.dispose();
-	clients.clear();
+	connection?.client.dispose();
 	expectedTurns = turns;
 	expectedTextBytes = textBytes;
 	const result = threadWorkload(turns, textBytes);
 	wireResult = JSON.stringify(result);
-	for (const variant of ['before', 'worker'] as const) {
-		const transport = new ResponseTransport();
-		const client = new AppServerProtocolClient(transport, {}, variant === 'before' ? new BeforeDecoder() : createAppServerFrameDecoder(new WebWorkerService()));
-		clients.set(variant, { client, transport });
-		await client.connect();
-	}
+	const transport = new ResponseTransport();
+	const client = new AppServerProtocolClient(transport, {}, createAppServerFrameDecoder(new WebWorkerService()));
+	connection = { client, transport };
+	await client.connect();
 }
 
-async function run(variant: Variant) {
-	const { client, transport } = clients.get(variant)!;
+async function run() {
+	const { client, transport } = connection!;
 	const pending = client.request(APP_SERVER_METHODS['session/thread/read'], { sessionId: 'session', threadId: 'thread' });
 	const frame = `{"jsonrpc":"2.0","id":${transport.requestId},"result":${wireResult}}`;
-	const payload = new AppServerFrame(frame, new TextEncoder().encode(frame).byteLength);
-	const tasks: PerformanceEntry[] = [];
-	const observer = new PerformanceObserver(list => tasks.push(...list.getEntries()));
-	observer.observe({ type: 'longtask' });
-	const gaps: number[] = [];
-	let previous = performance.now();
-	const heartbeat = setInterval(() => { const now = performance.now(); gaps.push(now - previous); previous = now; }, 1);
-	let frames = 0;
-	let responseAt = Infinity;
-	let animation = 0;
-	const animate = (): void => { if (performance.now() < responseAt) frames++; animation = requestAnimationFrame(animate); };
-	try {
-		await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
-		animation = requestAnimationFrame(animate);
-		gaps.length = 0;
-		previous = performance.now();
-		const start = performance.now();
-		transport.emit(WEB_APP_SERVER_FRAME_EVENT, payload);
-		const dispatchMs = performance.now() - start;
-		const result = await pending;
-		responseAt = performance.now();
-		const throughResponseMs = responseAt - start;
-		if (result.thread.turns.length !== expectedTurns || result.transcript.entries.length !== expectedTurns || result.thread.turns.at(-1)?.items[0]?.type !== 'agentMessage') throw new Error('Decode workload did not complete');
-		const last = result.thread.turns.at(-1)!.items[0];
-		if (last.type !== 'agentMessage' || last.text !== 'x'.repeat(expectedTextBytes)) throw new Error('Decode content changed');
-		document.querySelector('output')!.textContent = `${variant}:${result.thread.turns.length}:${last.text.length}`;
-		await new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
-		const longTasks = tasks.filter(task => task.startTime + task.duration > start && task.startTime < responseAt);
-		return { bytes: payload.byteLength, dispatchMs, throughResponseMs, maxTimerGapMs: Math.max(0, ...gaps), maxLongTaskMs: Math.max(0, ...longTasks.map(task => task.duration)), longTaskCount: longTasks.length, animationFramesDuringDecode: frames, turns: result.thread.turns.length, textBytes: last.text.length, state: client.state };
-	} finally { clearInterval(heartbeat); cancelAnimationFrame(animation); observer.disconnect(); }
+	transport.emit(WEB_APP_SERVER_FRAME_EVENT, new AppServerFrame(frame, new TextEncoder().encode(frame).byteLength));
+	const result = await pending;
+	if (result.thread.turns.length !== expectedTurns || result.transcript.entries.length !== expectedTurns) throw new Error('Decode workload did not complete');
+	const last = result.thread.turns.at(-1)!.items[0];
+	if (last.type !== 'agentMessage' || last.text !== 'x'.repeat(expectedTextBytes)) throw new Error('Decode content changed');
+	return { turns: result.thread.turns.length, textBytes: last.text.length, state: client.state };
 }
 
 async function burst() {
-	const { client, transport } = clients.get('worker')!;
+	const { client, transport } = connection!;
 	const received: string[] = [];
 	let completed!: () => void;
 	const done = new Promise<void>(resolve => { completed = resolve; });
@@ -99,7 +73,7 @@ async function burst() {
 		if (notification.method !== 'session/deleted') throw new Error('Unexpected burst notification');
 		received.push(notification.params.sessionId);
 		// Give this functional yield scenario enough listener work to cross the
-		// drain budget even on fast machines. Performance samples do not call burst.
+		// drain budget even on fast machines.
 		if (received.length % 100 === 0) { const start = performance.now(); while (performance.now() - start < 1) { /* Test-owned listener work. */ } }
 		if (received.length === 1) setTimeout(() => yielded(received.length), 0);
 		if (received.length === 2000) completed();
@@ -117,4 +91,4 @@ async function burst() {
 declare global {
 	interface Window { ashAppServerDecodeIntegration: { prepare: typeof prepare; run: typeof run; burst: typeof burst; dispose(): void; }; }
 }
-window.ashAppServerDecodeIntegration = { prepare, run, burst, dispose: () => { for (const { client } of clients.values()) client.dispose(); clients.clear(); } };
+window.ashAppServerDecodeIntegration = { prepare, run, burst, dispose: () => { connection?.client.dispose(); connection = undefined; } };

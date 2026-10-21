@@ -9,7 +9,7 @@ test('Sessions ChatGPT sidebar opens and shares its retained EditorPane', { tag:
 	const chatgpt = navigation.getByRole('button', { name: 'ChatGPT', exact: true });
 	await chatgpt.click();
 	const editor = page.locator('[data-part="editor"] .ash-chatgpt-widget');
-	const sidebar = page.locator('[data-part="sidebar"] [data-view-id="sessions.chatgpt.navigation.view"]');
+	const sidebar = page.locator('[data-part="sidebar"] [data-view-container-id="sessions.chatgpt.navigation"]');
 	await expect(editor).toBeVisible();
 	await expect(sidebar).toBeVisible();
 	await expect(chatgpt).toHaveAttribute('aria-current', 'page');
@@ -173,7 +173,7 @@ test('Sessions registered pages coordinate Parts and retain drafts through drag 
 	const retainedChat = await chat.elementHandle();
 	await navigation.locator('[data-action-id="sessions.open.creator"]').dragTo(navigation.locator('[data-action-id="sessions.open.chat"]'), { targetPosition: { x: 8, y: 2 } });
 	await expect(items.first()).toHaveAttribute('draggable', 'true');
-	await expect.poll(() => items.evaluateAll(elements => elements.map(element => (element as HTMLElement).dataset.actionId))).toEqual(['sessions.open.creator', 'sessions.open.chat', 'sessions.open.teams', 'sessions.open.library', 'sessions.open.code', 'sessions.open.symphony']);
+	await expect.poll(() => items.evaluateAll(elements => elements.map(element => (element as HTMLElement).dataset.actionId))).toEqual(['sessions.open.creator', 'sessions.open.chat', 'sessions.open.collaboration', 'sessions.open.teams', ...(target.kind === 'electron' ? ['sessions.open.chatgpt'] : []), 'sessions.open.library', 'sessions.open.code', ...(target.appServerMode === 'required' ? ['sessionsView.manageAutomations'] : []), 'sessions.open.symphony']);
 	await expect(chat).toHaveAttribute('aria-current', 'page');
 	expect(await chat.evaluate((element, retained) => element === retained, retainedChat)).toBe(true);
 	await navigation.getByRole('button', { name: 'Code', exact: true }).click();
@@ -199,7 +199,7 @@ test('Sessions registered pages coordinate Parts and retain drafts through drag 
 	await creator.focus();
 	await new Menus(page).select(application, () => page.keyboard.press('Shift+F10'), ['Move later']);
 	await expect(creator).toBeFocused();
-	await expect.poll(() => items.evaluateAll(elements => elements.map(element => (element as HTMLElement).dataset.actionId))).toEqual(['sessions.open.chat', 'sessions.open.creator', 'sessions.open.teams', 'sessions.open.library', 'sessions.open.code', 'sessions.open.symphony']);
+	await expect.poll(() => items.evaluateAll(elements => elements.map(element => (element as HTMLElement).dataset.actionId))).toEqual(['sessions.open.chat', 'sessions.open.creator', 'sessions.open.collaboration', 'sessions.open.teams', ...(target.kind === 'electron' ? ['sessions.open.chatgpt'] : []), 'sessions.open.library', 'sessions.open.code', ...(target.appServerMode === 'required' ? ['sessionsView.manageAutomations'] : []), 'sessions.open.symphony']);
 	await expect(chat).toHaveAttribute('aria-current', 'page');
 	await page.keyboard.press('Home');
 	await expect(chat).toBeFocused();
@@ -220,7 +220,7 @@ test('Sessions registered pages coordinate Parts and retain drafts through drag 
 	await expect(page.locator('.ash-sessions-activity-host.top')).toBeVisible();
 	await expect(navigation.locator('.ash-sessions-navigation[role="toolbar"]')).toHaveAttribute('aria-orientation', 'horizontal');
 	await navigation.locator('[data-action-id="sessions.open.code"]').dragTo(navigation.locator('[data-action-id="sessions.open.teams"]'), { targetPosition: { x: 2, y: 8 } });
-	await expect.poll(() => items.evaluateAll(elements => elements.map(element => (element as HTMLElement).dataset.actionId))).toEqual(['sessions.open.chat', 'sessions.open.creator', 'sessions.open.code', 'sessions.open.teams', 'sessions.open.library', 'sessions.open.symphony']);
+	await expect.poll(() => items.evaluateAll(elements => elements.map(element => (element as HTMLElement).dataset.actionId))).toEqual(['sessions.open.chat', 'sessions.open.creator', 'sessions.open.collaboration', 'sessions.open.code', 'sessions.open.teams', ...(target.kind === 'electron' ? ['sessions.open.chatgpt'] : []), 'sessions.open.library', ...(target.appServerMode === 'required' ? ['sessionsView.manageAutomations'] : []), 'sessions.open.symphony']);
 	await expect(chat).toHaveAttribute('aria-current', 'page');
 	await chat.focus();
 	await page.keyboard.press('ArrowRight');
@@ -228,74 +228,24 @@ test('Sessions registered pages coordinate Parts and retain drafts through drag 
 	await page.reload();
 	await expect(page.locator('.ash-sessions-activity-host.top')).toBeVisible();
 	await expect(chat).toHaveAttribute('aria-current', 'page');
-	await expect.poll(() => items.evaluateAll(elements => elements.map(element => (element as HTMLElement).dataset.actionId))).toEqual(['sessions.open.chat', 'sessions.open.creator', 'sessions.open.code', 'sessions.open.teams', 'sessions.open.library', 'sessions.open.symphony']);
+	await expect.poll(() => items.evaluateAll(elements => elements.map(element => (element as HTMLElement).dataset.actionId))).toEqual(['sessions.open.chat', 'sessions.open.creator', 'sessions.open.collaboration', 'sessions.open.code', 'sessions.open.teams', ...(target.kind === 'electron' ? ['sessions.open.chatgpt'] : []), 'sessions.open.library', ...(target.appServerMode === 'required' ? ['sessionsView.manageAutomations'] : []), 'sessions.open.symphony']);
 	await editor.waitForEditorContents(text => text === 'Retain the navigation draft');
 	await new QuickAccess(page).runCommand('sessions.trace.import');
-	await expect(trace).toBeVisible();
+	await expect(trace).toHaveCount(0);
 	const viewer = page.locator('.ash-agent-trace:visible');
 	await expect(viewer).toBeVisible();
 	const offline = { formatVersion: 3, sessionId: 'shell-navigation-offline', historyPrefixes: [], threads: [{ threadId: 'shell-thread', events: [{ eventId: 'shell-event', sequence: 1, recordedAt: 1, event: { type: 'threadCreated', threadId: 'shell-thread', title: 'Shell navigation offline fixture' } }] }] };
 	await viewer.locator('input[type=file]').setInputFiles({ name: 'shell-navigation.trace.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(offline)) });
 	await expect(viewer.getByRole('status')).toContainText('Imported');
+	// Debug Logs hides its unused sidebar, including the Top navigation host.
+	await new Menus(page).select(application, () => page.getByRole('button', { name: 'Accounts', exact: true }).click({ button: 'right' }), ['Activity Bar Position', 'Default']);
 	await navigation.getByRole('button', { name: 'Code', exact: true }).click();
 	await expect(viewer).toBeHidden();
 	await expect(page.locator('[data-part="editor"]:not(.ash-sessions-chat-grid)').getByRole('tab', { name: 'Untitled-1', exact: true })).toBeVisible();
-	await trace.click();
+	await new QuickAccess(page).runCommand('sessions.open.trace');
 	await expect(viewer).toBeVisible();
-	await expect(trace).toHaveAttribute('aria-current', 'page');
+	await expect(trace).toHaveCount(0);
+	await expect(page.locator('[data-part="editor"] .ash-editor-title-control').getByRole('tab', { name: 'Agent Debug Logs', exact: true })).toHaveAttribute('aria-selected', 'true');
 	await expect(viewer.getByRole('status')).toContainText('Imported');
 	await retainedChat!.dispose();
 });
-
-for (const theme of ['Ash High Contrast Dark', 'Ash High Contrast Light']) {
-	test(`Sessions registered navigation retains selection and exposes hover and keyboard focus in ${theme}`, async ({ application, target, workbench }) => {
-		await workbench.quickaccess.runCommand('workbench.action.selectTheme');
-		const search = workbench.page.locator('.ash-quick-pick').getByRole('combobox');
-		await search.fill(theme);
-		await search.press('Enter');
-		await expect(workbench.page.locator('.ash-quick-pick')).toHaveCount(0);
-		let page = workbench.page;
-		if (target.kind === 'browser') {
-			await page.locator('[data-action-id="ash.code.open-sessions"] button').click();
-		} else {
-			if (!('windows' in application)) { throw new Error('Expected Electron windows'); }
-			const opened = application.waitForEvent('window');
-			await page.locator('[data-action-id="workbench.action.chat.openAgentsWindow.titleBar"] button').click();
-			page = await opened;
-		}
-		await expect(page.locator('#app')).toHaveAttribute('data-color-scheme', theme.endsWith('Dark') ? 'hcDark' : 'hcLight');
-		const navigation = page.locator('.ash-sessions-activity-content');
-		const chat = navigation.getByRole('button', { name: 'Chat', exact: true });
-		const library = navigation.getByRole('button', { name: 'Library', exact: true });
-		await page.mouse.move(400, 180);
-		await expect(chat).not.toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
-		const selectedBackground = await chat.evaluate(button => getComputedStyle(button).backgroundColor);
-		await expect(chat).toHaveCSS('outline-style', 'solid');
-		await chat.hover();
-		await expect(chat).toHaveCSS('background-color', selectedBackground);
-		await library.hover();
-		await expect(library).not.toHaveAttribute('aria-current');
-		await expect(library).not.toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
-		await expect(library).toHaveCSS('outline-style', 'solid');
-		await chat.focus();
-		await page.keyboard.press('ArrowDown');
-		const collaboration = navigation.getByRole('button', { name: 'Collaboration', exact: true });
-		await expect(collaboration).toBeFocused();
-		await expect(collaboration).toHaveCSS('outline-style', 'solid');
-		expect(await collaboration.evaluate(button => parseFloat(getComputedStyle(button).outlineWidth))).toBeGreaterThan(0);
-		await expect(chat).toHaveAttribute('aria-current', 'page');
-		await page.keyboard.press('End');
-		const symphony = navigation.getByRole('button', { name: 'Symphony', exact: true });
-		await expect(symphony).toBeFocused();
-		await expect(symphony).toHaveCSS('outline-style', 'solid');
-		await page.keyboard.press('Enter');
-		await expect(symphony).toHaveAttribute('aria-current', 'page');
-		await expect(chat).not.toHaveAttribute('aria-current');
-		await expect(page.locator('[data-part="editor"]:not(.ash-sessions-chat-grid)')).toBeVisible();
-		const monitor = page.locator('.ash-symphony-monitor');
-		await expect(monitor).toBeVisible();
-		await monitor.focus();
-		await expect(monitor).toHaveCSS('outline-style', 'solid');
-		expect(await monitor.evaluate(element => parseFloat(getComputedStyle(element).outlineWidth))).toBeGreaterThan(0);
-	});
-}

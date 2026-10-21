@@ -2598,8 +2598,8 @@ fn shared_profile_runtime_owns_exactly_one_extension_packages_authority() {
             vendor,
         ),
     ]);
-    let first = runtime.plugins_manager(first_config.clone(), None).unwrap();
-    let reused = runtime.plugins_manager(first_config, None).unwrap();
+    let first = runtime.plugins_manager(first_config.clone()).unwrap();
+    let reused = runtime.plugins_manager(first_config).unwrap();
     assert!(Arc::ptr_eq(&first, &reused));
     assert!(!profile.path().join("vendor-cache").exists());
 
@@ -2614,7 +2614,7 @@ fn shared_profile_runtime_owns_exactly_one_extension_packages_authority() {
         ash_utils_plugins::ExtensionSourceId::new("ash").unwrap(),
         second_config,
     )]);
-    let error = match runtime.plugins_manager(second_config, None) {
+    let error = match runtime.plugins_manager(second_config) {
         Ok(_) => panic!("a second Extensions authority must be rejected"),
         Err(error) => error,
     };
@@ -5895,6 +5895,47 @@ fn shared_profile_owns_one_lazy_github_api_runtime_across_directory_hosts() {
     let default_options = AppServerOptions::new(profile.path());
     assert!(default_options.github_extension.is_none());
     assert!(default_options.github_authentication_extension.is_none());
+}
+
+#[test]
+fn shared_profile_keeps_github_authentication_dormant_until_account_demand() {
+    let profile = tempfile::tempdir().unwrap();
+    let first_dir = tempfile::tempdir().unwrap();
+    let second_dir = tempfile::tempdir().unwrap();
+    let runtime = Arc::new(LocalProfileRuntime::open(profile.path()).unwrap());
+    // A process that cannot speak the protocol is safe here: composition must not launch it.
+    let executable = std::env::current_exe().unwrap();
+    let open = |dir: &Path| {
+        open_app_server(
+            AppServerOptions::new(profile.path())
+                .with_profile_runtime(runtime.clone())
+                .with_dir_root(dir)
+                .with_github_authentication_extension(&executable)
+                .without_built_in_skills(),
+            ash_app_server_diff::compute,
+        )
+        .unwrap()
+    };
+    let first = open(first_dir.path());
+    let first_auth = runtime
+        .github_authentication
+        .lock()
+        .unwrap()
+        .clone()
+        .unwrap();
+    let second = open(second_dir.path());
+    let second_auth = runtime
+        .github_authentication
+        .lock()
+        .unwrap()
+        .clone()
+        .unwrap();
+    assert!(Arc::ptr_eq(&first_auth, &second_auth));
+    use ash_external_ext::BuiltInExtensionRuntime;
+    assert!(!first_auth.is_running());
+    drop(first);
+    assert!(!second_auth.is_running());
+    drop(second);
 }
 
 #[test]

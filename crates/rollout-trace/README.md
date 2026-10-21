@@ -3,6 +3,7 @@
 - `capture_session_trace` 枚举 Thread 流并按根事件中的 `session_id` 分组，不读取 Session event log。
 - `RolloutTrace` 保存 Session tree identity 与各 Thread 的原始有序事件；format version 当前为 `3`，不制造全局顺序。
 - 可选 `overview` 由本 crate 归约已提交账目，绑定捕获游标和事件数，保留逐项上报覆盖率、未知值和调用去重；前端筛选不改变统计范围。
+- 可选 `performance` V1 由同一归约器从调用账目的单调计时与 usage 生成，按 Thread／事件／Turn／调用身份绑定；分页、完整捕获和导出共用口径。时长为无损十进制微秒字符串，正文 TPS 在后端统一舍入到 0.1 token/s，未知值附稳定原因代码。它不依赖详细录制，也不写回运行时状态。旧 V3 文件缺少该投影时，Chat Debug 保持未知，不在前端重算。
 - Trace 只在内存中返回，不能成为运行时事实源；写文件、脱敏、访问控制和上传由调用方负责。
 - 导出所有被引用的嵌套历史前缀；源 Thread 删除后仍能读取保留的历史，文件对象本身不嵌入 trace。
 - `ModelResponseEvaluated` 来自 Thread 的持久历史，保留循环动作、理由、停止原因、消息阶段和工具数；关闭详细诊断仍能读取这些决策。

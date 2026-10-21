@@ -49,10 +49,14 @@ mxc-sandbox = { workspace = true, optional = true }
 arg0 = { workspace = true, optional = true }
 process-hardening = { workspace = true, optional = true }
 
+[target.'cfg(unix)'.dependencies]
+libc = { workspace = true }
+
 [dev-dependencies]
 
 [target.'cfg(windows)'.dependencies]
 windows-sandbox = { workspace = true, optional = true }
+winreg = { workspace = true }
 
 [lints]
 workspace = true

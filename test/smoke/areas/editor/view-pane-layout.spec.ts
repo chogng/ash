@@ -34,7 +34,7 @@ test('Activity Bar unpins the active view, switches to another view and retains 
 	await expect(rail().getByRole('tab', { name: 'Search', exact: true })).toHaveAttribute('aria-selected', 'true');
 });
 for (const locale of ['en', 'zh-CN']) {
-	test(`panel labels stay separated and expose selection and overflow in ${locale}`, async ({ workbench, runningApplication, application, restartWorkbench }, testInfo) => {
+	test(`panel labels stay separated and expose selection and overflow in ${locale}`, { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ workbench, runningApplication, application, restartWorkbench }, testInfo) => {
 		if (locale === 'zh-CN') {
 			await workbench.quickaccess.runCommand('workbench.action.configureLocale');
 			const picker = workbench.page.getByRole('dialog', { name: 'Select Display Language' });
@@ -154,7 +154,7 @@ test('region navigation visits editor splits, skips hidden parts and follows sid
 	await expect(second).toBeFocused();
 });
 
-test('panel commands focus the retained view and restore editor geometry after maximizing', async ({ workbench }) => {
+test('panel commands focus the retained view and restore editor geometry after maximizing', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ workbench }) => {
 	const page = workbench.page;
 	const panel = page.locator('[data-part="panel"]');
 	const editor = page.locator('[data-part="editor"]');
@@ -363,7 +363,7 @@ test.describe('SCM pane layout with a provider', () => {
 
 });
 
-test.describe('Pane motion', () => {
+test.describe('Pane motion', { tag: ['@browser-app-server', '@electron-app-server'] }, () => {
 	test.use({ openWorkspace: true, gitRepository: true });
 
 	test('pane motion preserves content, resize handles and the final state when interrupted', async ({ target, workbench }) => {
@@ -456,21 +456,22 @@ test('sidebar overflow registers view visibility and layout commands', async ({ 
 	const sidebar = page.locator('[data-part="sidebar"]');
 	const activitybar = page.locator('[data-part="activitybar"]');
 	await page.getByRole('tab', { name: 'Explorer', exact: true }).first().click();
-	const open = () => sidebar.locator('.ash-pane-composite-title-part-actions').getByRole('button', { name: 'More Actions', exact: true }).click();
+	const openViews = () => sidebar.locator('.ash-pane-composite-title-menu-actions').getByRole('button', { name: 'More Actions', exact: true }).click();
+	const open = () => sidebar.locator('.ash-sidebar-title-label').click({ button: 'right' });
 	const items = () => workbench.menus.inspect(application, open);
+	expect(await workbench.menus.inspect(application, openViews)).toEqual(expect.arrayContaining([expect.objectContaining({ label: 'Open Editors', checked: false, enabled: true })]));
 	const initial = await items();
 	expect(initial).toEqual(expect.arrayContaining([
-		expect.objectContaining({ label: 'Open Editors', checked: false, enabled: true }),
 		expect.objectContaining({ label: 'Move Primary Side Bar Right', enabled: true }),
 		expect.objectContaining({ label: 'Activity Bar Position', enabled: true }),
 		expect.objectContaining({ label: 'Activity Bar Size', enabled: true }),
 		expect.objectContaining({ label: 'Hide Primary Side Bar', enabled: true }),
 	]));
-	await workbench.menus.select(application, open, ['Open Editors']);
+	await workbench.menus.select(application, openViews, ['Open Editors']);
 	const editors = sidebar.locator('[data-view-id="workbench.explorer.openEditorsView"]');
 	await expect(editors).toBeVisible();
-	expect(await items()).toEqual(expect.arrayContaining([expect.objectContaining({ label: 'Open Editors', checked: true })]));
-	await workbench.menus.select(application, open, ['Open Editors']);
+	expect(await workbench.menus.inspect(application, openViews)).toEqual(expect.arrayContaining([expect.objectContaining({ label: 'Open Editors', checked: true })]));
+	await workbench.menus.select(application, openViews, ['Open Editors']);
 	await expect(editors).toBeHidden();
 	await workbench.menus.select(application, open, ['Move Primary Side Bar Right']);
 	await expect(sidebar).toHaveClass(/sidebar-right/u);
@@ -495,7 +496,8 @@ test('sidebar overflow registers view visibility and layout commands', async ({ 
 	await page.getByRole('tab', { name: /^Source Control(?:,|$)/u }).click();
 	const gitItems = await items();
 	expect(gitItems.some(item => item.label === 'Open Editors')).toBe(false);
-	expect(gitItems).toEqual(expect.arrayContaining([expect.objectContaining({ label: 'Changes', checked: true, enabled: false })]));
+	await expect(sidebar.locator('[data-view-id="ash.gitView"]')).toBeVisible();
+	await expect(sidebar.locator('.ash-pane-composite-title-menu-actions').getByRole('button', { name: 'More Actions', exact: true })).toHaveCount(0);
 	await workbench.menus.select(application, open, ['Hide Primary Side Bar']);
 	await expect(sidebar).toBeHidden();
 	await workbench.quickaccess.runCommand('workbench.action.toggleSideBar');

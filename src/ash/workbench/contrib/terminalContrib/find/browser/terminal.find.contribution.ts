@@ -1,16 +1,13 @@
-import { addDisposableListener } from '../../../../../base/browser/dom.js';
 import { KeyCode, KeyMod } from '../../../../../base/common/keyCodes.js';
-import { Disposable, MutableDisposable, toDisposable } from '../../../../../base/common/lifecycle.js';
+import { Disposable, MutableDisposable } from '../../../../../base/common/lifecycle.js';
 import { localize2 } from '../../../../../nls.js';
 import { AccessibleViewRegistry } from '../../../../../platform/accessibility/browser/accessibleViewRegistry.js';
 import { Action2, MenuId, registerAction2 } from '../../../../../platform/actions/common/actions.js';
-import { IContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
 import { ContextKeyExpr } from '../../../../../platform/contextkey/common/contextkey.js';
 import { IInstantiationService, type ServicesAccessor } from '../../../../../platform/instantiation/common/instantiation.js';
-import { ServiceCollection } from '../../../../../platform/instantiation/common/serviceCollection.js';
 import { KeybindingWeight } from '../../../../../platform/keybinding/common/keybindingsRegistry.js';
 import { IViewsService } from '../../../../services/views/common/viewsService.js';
-import { ITerminalService, type ITerminalContribution, type ITerminalInstance, type IXtermTerminal } from '../../../terminal/browser/terminal.js';
+import { ITerminalService, type ITerminalContribution, type ITerminalInstance } from '../../../terminal/browser/terminal.js';
 import { registerTerminalContribution, type ITerminalContributionContext } from '../../../terminal/browser/terminalExtensions.js';
 
 import { TERMINAL_VIEW_ID } from '../../../terminal/common/terminal.js';
@@ -27,7 +24,6 @@ export class TerminalFindContribution extends Disposable implements ITerminalCon
 	constructor(
 		private readonly context: ITerminalContributionContext,
 		@IInstantiationService private readonly instantiation: IInstantiationService,
-		@IContextKeyService private readonly contextKeys: IContextKeyService,
 	) { super(); }
 
 	public static get(instance: ITerminalInstance): TerminalFindContribution | null {
@@ -40,21 +36,8 @@ export class TerminalFindContribution extends Disposable implements ITerminalCon
 		return this.widget.value ??= this.rendererServices.createInstance(TerminalFindWidget, this.context.instance);
 	}
 
-	public xtermReady(xterm: IXtermTerminal): void {
-		const scope = this._register(this.contextKeys.createScoped(xterm.element));
-		this.rendererServices = this._register(this.instantiation.createChild(new ServiceCollection([IContextKeyService, scope])));
-		const focused = TerminalContextKeys.focus.bindTo(scope);
-		const alternate = TerminalContextKeys.altBufferActive.bindTo(scope);
-		alternate.set(xterm.raw.buffer.active.type === 'alternate');
-		const bufferChanged = xterm.raw.buffer.onBufferChange(buffer => alternate.set(buffer.type === 'alternate'));
-		this._register(toDisposable(() => bufferChanged.dispose()));
-		const textarea = xterm.raw.textarea;
-		// A newly created screen can receive its requested focus before this hook runs.
-		focused.set(textarea === xterm.element.ownerDocument.activeElement);
-		this._register(addDisposableListener(xterm.element, 'focusin', event => focused.set(event.target === textarea)));
-		this._register(addDisposableListener(xterm.element, 'focusout', event => {
-			focused.set(event.relatedTarget === textarea);
-		}));
+	public xtermReady(): void {
+		this.rendererServices = this.instantiation;
 	}
 }
 

@@ -1,5 +1,5 @@
 import { readFile, writeFile } from 'node:fs/promises';
-import { join } from 'node:path';
+import { basename, join } from 'node:path';
 import { expect, test } from '../../../automation/test.js';
 import type { ISandboxGlobals } from '../../../../src/ash/base/parts/sandbox/electron-browser/sandboxTypes.js';
 import type { ElectronApplication, Page } from '@playwright/test';
@@ -235,7 +235,7 @@ for (const locale of ['en', 'zh-CN']) {
 			expect(state.dialogs[0]).toMatchObject({ message: chinese ? '允许屏幕截图' : 'Allow screen capture', buttons: chinese ? ['打开系统设置', '在 Finder 中显示应用程序', '取消'] : ['Open System Settings', 'Show Application in Finder', 'Cancel'], cancelId: 2 });
 			const bundle = state.executable.slice(0, state.executable.lastIndexOf('/Contents/MacOS/'));
 			expect(state.dialogs[0].detail).toContain(bundle);
-			expect(state.dialogs[0].detail).toContain('Electron.app');
+			expect(state.dialogs[0].detail.split('\n')[0]).toContain(basename(bundle));
 			await expect(input).toBeFocused();
 			await expect(page.locator('.ash-chat-input-editor').last()).toContainText('Permission draft');
 			await expect(page.getByRole('button', { name: chinese ? '预览 截图' : 'Preview Screenshot', exact: true })).toHaveCount(0);

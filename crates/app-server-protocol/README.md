@@ -305,7 +305,7 @@ Turn summary 新增部分提交状态与 `committedPaths`；状态从精确回�
 `{ type: "startupFinished" }`；它表达使用意图，不授予权限。Rust 重新检查包代际、已安装状态、
 启用与授权状态，再匹配包声明；不匹配或代际过期时拒绝启动。
 
-Open VSX JS 扩展在等待时以 `dormant` 返回，无 incarnation、输出或 provider registrations。
+Ash JS 扩展在等待时以 `dormant` 返回，无 incarnation、输出或 provider registrations。
 可选 `activation: { events, commands: [{ command, title }] }` 只携带已验证的清单声明。
 命令面板据此展示命令，首次执行等待启动，随后用实际注册 ID 和新 incarnation 发起原有的
 `extensionHost/invoke/start`。已激活快照不携带 activation 声明。启动失败返回扩展的失败状态，
@@ -313,8 +313,7 @@ Open VSX JS 扩展在等待时以 `dormant` 返回，无 incarnation、输出或
 
 支持 `onCommand:<id>`、`onLanguage`、`onLanguage:<id>`、`onStartupFinished` 与立即启动的 `*`。
 标准 commands、languages 贡献生成隐式事件。语言来自 TypeScript 编辑器的当前模型，启动完成
-事件来自窗口恢复阶段；调度、进程启动和授权检查属于 Rust。其他事件类型、完整 VS Code API
-与 Node 模块尚未实现。本地 SDK 和独立可执行扩展维持现有启动方式。
+事件来自窗口恢复阶段；调度、进程启动和授权检查属于 Rust。未支持的事件类型明确拒绝；作者 API 仅使用 `@ash/sdk`，运行环境能力由所选宿主决定。本地 SDK 和独立可执行扩展维持现有启动方式。
 
 ## 内置 Symphony
 

@@ -68,6 +68,72 @@ class ProtocolTransport implements AppServerTransport {
 
 const flushHandlers = (): Promise<void> => new Promise<void>(resolve => setImmediate(resolve));
 
+test('readiness waits through replacement and initialization without opening a connection', async () => {
+	const transport = new ProtocolTransport();
+	const client = new AppServerProtocolClient(transport);
+	using cleanup = toDisposable(() => client.dispose());
+	await client.connect();
+	await client.whenReady();
+	client.disconnect();
+	let ready = false;
+	const waiting = client.whenReady().then(() => { ready = true; });
+	await flushHandlers();
+	assert.equal(ready, false);
+	assert.equal(transport.frames.filter(frame => frame.method === 'initialize').length, 1);
+	await assert.rejects(client.request(APP_SERVER_METHODS['session/list'], {}), /not ready: stopped/);
+	await client.connect();
+	await waiting;
+	assert.equal(client.state, 'ready');
+});
+
+test('readiness has a bounded deadline without failing or starting the connection', async () => {
+	mock.timers.enable({ apis: ['setTimeout'] });
+	try {
+		const transport = new ProtocolTransport();
+		const client = new AppServerProtocolClient(transport, { requestTimeoutMs: 100 });
+		using cleanup = toDisposable(() => client.dispose());
+		const waiting = assert.rejects(client.whenReady(), /readiness timed out/);
+		mock.timers.tick(100);
+		await waiting;
+		assert.equal(client.state, 'stopped');
+		assert.deepEqual(transport.frames, []);
+		await client.connect();
+		await client.whenReady();
+		assert.equal(client.state, 'ready');
+	} finally { mock.timers.reset(); }
+});
+
+test('readiness is not satisfied by an acquired but uninitialized connection', async () => {
+	mock.timers.enable({ apis: ['setTimeout'] });
+	try {
+		const transport = new ProtocolTransport();
+		transport.initializeDelayMs = 100;
+		const client = new AppServerProtocolClient(transport);
+		using cleanup = toDisposable(() => client.dispose());
+		let ready = false;
+		const waiting = client.whenReady().then(() => { ready = true; });
+		const connecting = client.connect();
+		await flushHandlers();
+		mock.timers.tick(99);
+		await flushHandlers();
+		assert.equal(client.state, 'initializing');
+		assert.equal(ready, false);
+		mock.timers.tick(1);
+		await Promise.all([connecting, waiting]);
+		assert.equal(client.state, 'ready');
+	} finally { mock.timers.reset(); }
+});
+
+test('disposing an already stopped client rejects all readiness waits and future waits', async () => {
+	const client = new AppServerProtocolClient(new ProtocolTransport());
+	using cleanup = toDisposable(() => client.dispose());
+	const first = assert.rejects(client.whenReady(), /client disposed/);
+	const second = assert.rejects(client.whenReady(), /client disposed/);
+	client.dispose();
+	await Promise.all([first, second]);
+	await assert.rejects(client.whenReady(), /client disposed/);
+});
+
 test('SSH cold package initialization can outlast ordinary request deadlines', async () => {
 	mock.timers.enable({ apis: ['setTimeout'] });
 	try {

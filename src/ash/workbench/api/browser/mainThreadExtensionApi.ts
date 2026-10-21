@@ -65,6 +65,8 @@ export interface ExtensionApiIssue {
 interface RegistrationLifetime {
 	readonly identity: string;
 	readonly controller: AbortController;
+	readonly remoteResolver?: RemoteConnectionResolver;
+	incarnation?: number;
 }
 
 interface ExtensionContributionSet {
@@ -364,7 +366,8 @@ export class MainThreadExtensionApi extends Disposable {
 		}
 		this.remoteSources.clear();
 		for (const runtime of snapshot.extensions) {
-			if (runtime.lifecycle === 'ready' && runtime.registrations.some(registration => (registration.kind === 'remoteConnectionResolver' || registration.kind === 'remoteAuthorityResolver'))) { this.remoteSources.set(runtime.id, runtime); }
+			if (runtime.lifecycle === 'ready' && runtime.registrations.some(registration => registration.kind === 'remoteConnectionResolver' || registration.kind === 'remoteAuthorityResolver')
+				|| ['dormant', 'starting', 'handshaking'].includes(runtime.lifecycle) && runtime.activation?.events.some(event => event.startsWith('onResolveRemoteAuthority:'))) this.remoteSources.set(runtime.id, runtime);
 		}
 		this.projectOutput(snapshot);
 		this.updateOutputLevels(snapshot);
@@ -418,10 +421,21 @@ export class MainThreadExtensionApi extends Disposable {
 				const identity = runtimeContributionIdentity(runtime);
 				const runtimeIdentity = runtimeLifetimeIdentity(runtime);
 				const previous = this.activeContributions?.owners.get(runtime.id);
+				// A dormant resolver is a declared selector, not an executable incarnation.
+				// Preserve its first call while the actual registration replaces that selector.
+				const resolverPrefixes = runtime.lifecycle === 'ready'
+					? runtime.registrations.flatMap(registration => registration.kind === 'remoteConnectionResolver' ? [registration.authorityPrefix] : [])
+					: ['dormant', 'starting', 'handshaking'].includes(runtime.lifecycle)
+						? runtime.activation?.events.flatMap(event => event.startsWith('onResolveRemoteAuthority:') ? [event.slice('onResolveRemoteAuthority:'.length)] : []) ?? []
+						: [];
+				const activatingResolver = resolverPrefixes.some(prefix => {
+					const pending = previous?.contributions.registrations.get(`remoteResolver:${runtime.id}:${prefix}`);
+					return pending?.remoteResolver && pending.incarnation === undefined && pending.identity === JSON.stringify([runtime.id, runtime.activationGeneration, runtime.packageDigest, prefix]);
+				});
 				owners.set(runtime.id, previous?.identity === identity ? previous : {
 					identity, runtimeIdentity, contributions: this.buildExtensionContributions(
 						{ ...snapshot, extensions: [runtime] },
-						previous?.runtimeIdentity === runtimeIdentity ? previous.contributions : undefined,
+						previous && (previous.runtimeIdentity === runtimeIdentity || activatingResolver) ? previous.contributions : undefined,
 					),
 				});
 			}
@@ -460,6 +474,31 @@ export class MainThreadExtensionApi extends Disposable {
 		}
 	}
 
+	private createRemoteConnectionResolver(owner: ExtensionHostRuntime, prefix: string, lifetime: AbortSignal): RemoteConnectionResolver {
+		return {
+			authorityPrefix: prefix,
+			resolve: async (authority, signal) => {
+				const requestSignal = AbortSignal.any([lifetime, signal, this.activationController.signal]);
+				requestSignal.throwIfAborted();
+				let current = this.remoteSources.get(owner.id);
+				if (!current || current.activationGeneration !== owner.activationGeneration) throw new CancellationError();
+				if (current.lifecycle !== 'ready') {
+					const activated = await this.api.activateByEvent({
+						extensionId: owner.id, activationGeneration: owner.activationGeneration,
+						event: { type: 'resolveAuthority', authorityPrefix: prefix },
+					});
+					current = activated.extensions.find(runtime => runtime.id === owner.id);
+				}
+				requestSignal.throwIfAborted();
+				const registration = current?.registrations.find(entry => entry.kind === 'remoteConnectionResolver' && entry.authorityPrefix === prefix);
+				if (current?.lifecycle !== 'ready' || current.incarnation === undefined || current.activationGeneration !== owner.activationGeneration || current.packageDigest !== owner.packageDigest || !registration) throw new CancellationError();
+				const result = await this.registrationInvoker(current, registration, requestSignal)('resolveConnection', { authority }, requestSignal);
+				if (!result || typeof result !== 'object' || Array.isArray(result) || !('connectionName' in result) || Object.keys(result).join(',') !== 'connectionName' || typeof result.connectionName !== 'string') throw new TypeError('Invalid Remote resolver result');
+				return { connectionName: result.connectionName };
+			},
+		};
+	}
+
 	private buildExtensionContributions(snapshot: ExtensionHostFleetSnapshot, previous?: ExtensionContributionSet): ExtensionContributionSet {
 		const controller = previous?.controller ?? new AbortController();
 		const registrations = new Map<string, RegistrationLifetime>();
@@ -487,6 +526,26 @@ export class MainThreadExtensionApi extends Disposable {
 		for (const runtime of snapshot.extensions) {
 			const extensionId = runtime.id;
 			const activationGeneration = runtime.activationGeneration;
+			const remotePrefixes = ['dormant', 'starting', 'handshaking'].includes(runtime.lifecycle)
+				? (runtime.activation?.events ?? []).filter(event => event.startsWith('onResolveRemoteAuthority:')).map(event => event.slice('onResolveRemoteAuthority:'.length))
+				: runtime.registrations.flatMap(registration => registration.kind === 'remoteConnectionResolver' ? [registration.authorityPrefix] : []);
+			for (const prefix of remotePrefixes) {
+				const key = `remoteResolver:${extensionId}:${prefix}`;
+				const identity = JSON.stringify([extensionId, activationGeneration, runtime.packageDigest, prefix]);
+				const previousLifetime = previous?.registrations.get(key);
+				let lifetime = previousLifetime?.identity === identity && (previousLifetime.incarnation === undefined || previousLifetime.incarnation === runtime.incarnation) ? previousLifetime : undefined;
+				if (!lifetime) {
+					const resolverController = new AbortController();
+					lifetime = {
+						identity, controller: resolverController,
+						remoteResolver: this.createRemoteConnectionResolver(runtime, prefix, AbortSignal.any([controller.signal, resolverController.signal])),
+					};
+				}
+				lifetime.incarnation = runtime.lifecycle === 'ready' ? runtime.incarnation : undefined;
+				registrations.set(key, lifetime);
+				remoteResolvers.push(lifetime.remoteResolver!);
+			}
+
 			if (runtime.lifecycle === 'dormant') {
 				const signal = this.activationController.signal;
 				for (const command of runtime.activation!.commands) {
@@ -512,23 +571,13 @@ export class MainThreadExtensionApi extends Disposable {
 			}
 			if (runtime.lifecycle !== "ready" || runtime.incarnation === undefined) continue;
 			for (const registration of runtime.registrations) {
-				if (!ownsExecutableContribution(registration)) continue;
+				if (!ownsExecutableContribution(registration) || registration.kind === 'remoteConnectionResolver') continue;
 				const runtimeId = runtime.id;
 				const identity = JSON.stringify(registration);
 				const oldLifetime = previous?.registrations.get(registration.registrationId);
 				const lifetime = oldLifetime?.identity === identity ? oldLifetime : { identity, controller: new AbortController() };
 				registrations.set(registration.registrationId, lifetime);
 				const invoke = this.registrationInvoker(runtime, registration, AbortSignal.any([controller.signal, lifetime.controller.signal]));
-				if (registration.kind === 'remoteConnectionResolver') {
-					remoteResolvers.push({
-						authorityPrefix: registration.authorityPrefix, resolve: async (authority, signal) => {
-							const result = await invoke('resolveConnection', { authority }, signal);
-							if (!result || typeof result !== 'object' || Array.isArray(result) || !('connectionName' in result) || Object.keys(result).join(',') !== 'connectionName' || typeof result.connectionName !== 'string') { throw new TypeError('Invalid Remote resolver result'); }
-							return { connectionName: result.connectionName };
-						}
-					});
-					continue;
-				}
 				if (registration.kind === "command") {
 					commands.push(Object.freeze({
 						id: registration.command, metadata: { description: registration.category ? `${registration.category}: ${registration.title}` : registration.title }, handler: async (accessor: ServicesAccessor, ...args: readonly unknown[]) => {

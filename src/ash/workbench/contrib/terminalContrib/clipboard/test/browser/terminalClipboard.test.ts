@@ -19,6 +19,9 @@ import { TerminalSettingId } from '../../../../../../platform/terminal/common/te
 import { DialogService } from '../../../../../services/dialogs/common/dialogService.js';
 import '../../../../terminal/common/terminalConfiguration.js';
 import { shouldPasteTerminalText } from '../../browser/terminalClipboard.js';
+import { CommandsRegistry } from '../../../../../../platform/commands/common/commands.js';
+import { InstanceContext } from '../../../../terminal/browser/terminalContextMenu.js';
+import { TerminalCommandId } from '../../../../terminal/common/terminal.js';
 
 for (const newline of ['\n', '\r\n', '\r']) {
 	test(`terminal paste handles ${JSON.stringify(newline)} with auto, always and never policies`, async () => {
@@ -113,6 +116,8 @@ function clipboardFixture() {
 	const element = dom.window.document.querySelector('div')!;
 	const textarea = dom.window.document.querySelector('textarea')!;
 	const instance = {
+		instanceId: 1,
+		getContribution: () => contribution,
 		state: 'running', onDidChangeState: stateChanged.event, onDidExit: Event.None,
 		sendText: async (text: string, shouldExecute: boolean, bracketedPaste?: boolean) => {
 			sent.push(text);
@@ -122,6 +127,7 @@ function clipboardFixture() {
 		},
 	} as unknown as ITerminalInstance;
 	activeInstance = instance;
+	const instances = [instance];
 	const screen = {
 		element, isDisposed: false, onDidRequestRunCommand: Event.None,
 		focus: () => textarea.focus(),
@@ -140,13 +146,17 @@ function clipboardFixture() {
 	services.registerInstance(IClipboardService, { readText: () => read(), writeText: (text: string) => write(text) } as IClipboardService);
 	services.registerInstance(INotificationService, { error: (error: unknown) => { errors.push(error); void reported.complete(); } } as INotificationService);
 	services.registerInstance(ITerminalService, {
+		instances,
 		get activeInstance() { return activeInstance; }, onDidChangeActiveInstance: activeChanged.event,
 		setActiveInstance: (value: ITerminalInstance | undefined) => { activeInstance = value; activeChanged.fire(value); },
-	} as ITerminalService);
+	} as unknown as ITerminalService);
 	const registration = TerminalExtensionsRegistry.getTerminalContributions().find(item => item.id === TerminalClipboardContribution.ID)!;
 	const contribution = store.add(services.createInstance(registration.ctor, { instance })) as TerminalClipboardContribution;
 	contribution.xtermReady(screen);
 	return {
+		context: new InstanceContext(instance),
+		command: (id: string, context?: unknown) => services.invokeFunction(CommandsRegistry.getCommands().get(id)!.handler, context),
+		closeTarget: () => { instances.length = 0; },
 		[Symbol.dispose]: () => store.dispose(), configuration, contribution, copied, sent, sendCalls, errors, element, textarea, screen, dialogs, sendStarted: sendStarted.p, reported: reported.p,
 		select: (value: string, x = 0) => { selection = value; selectionX = x; selectionChanged.fire(); },
 		selection: () => selection,
@@ -163,6 +173,25 @@ function clipboardFixture() {
 		},
 	};
 }
+
+test('terminal clipboard commands honor captured and serialized targets and reject closed targets', async () => {
+	using fixture = clipboardFixture();
+	fixture.select('original selection');
+	fixture.switch();
+	await fixture.command(TerminalCommandId.CopySelection, fixture.context);
+	await fixture.command(TerminalCommandId.CopySelection, fixture.context.toJSON());
+	assert.deepEqual(fixture.copied, ['original selection', 'original selection']);
+	await fixture.command(TerminalCommandId.Paste, fixture.context);
+	assert.deepEqual(fixture.sent, ['pasted']);
+	fixture.closeTarget();
+	for (const command of [TerminalCommandId.CopySelection, TerminalCommandId.Paste]) {
+		await assert.rejects(async () => fixture.command(command, fixture.context), /This terminal has been closed/);
+		for (const context of [null, {}, { instanceId: 1 }, { ...fixture.context.toJSON(), instanceId: -1 }]) {
+			await assert.rejects(async () => fixture.command(command, context), /Invalid terminal instance context/);
+		}
+	}
+	assert.deepEqual(fixture.sent, ['pasted']);
+});
 
 for (const newline of ['\n', '\r\n', '\r']) {
 	test(`terminal Paste as One Line preserves whitespace and waits for acknowledged input with ${JSON.stringify(newline)}`, async () => {

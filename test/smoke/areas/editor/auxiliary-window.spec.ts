@@ -75,7 +75,7 @@ for (const scenario of [
 	});
 }
 
-test('detached editor window inherits workbench theme and accessibility state', async ({ workbench }) => {
+test('detached editor window inherits workbench theme and accessibility state', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ workbench }) => {
 	const page = workbench.page;
 	await page.keyboard.press('ControlOrMeta+N');
 	await expect(workbench.editors.groupAt(0).tabs.last()).toContainText('Untitled');

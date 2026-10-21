@@ -6,6 +6,7 @@ import { h } from "../../base/browser/dom.js";
 import type { IThemeService } from '../../platform/theme/common/themeService.js';
 import type { IStorageService } from '../../platform/storage/common/storage.js';
 import { Component } from '../common/component.js';
+import type { IBoundarySashes } from '../../base/browser/ui/sash/sash.js';
 
 export interface IPartOptions {
 	/** Total horizontal border width, supplied by the Part's presentation owner. */
@@ -60,6 +61,9 @@ export abstract class Part extends Component {
 	get preferredWidth(): number | undefined { return undefined; }
 
 	layout(_dimension: IDimension): void { }
+
+	/** Grid owns these separators; subclasses may attach presentation for the current boundaries. */
+	setBoundarySashes(_sashes: IBoundarySashes): void { }
 
 	/** Converts Grid border-box dimensions without measuring DOM after Grid writes. */
 	protected layoutContents(width: number, height: number): ILayoutContentResult {

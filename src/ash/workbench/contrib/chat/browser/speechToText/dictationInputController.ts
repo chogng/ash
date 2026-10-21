@@ -41,7 +41,7 @@ export class DictationInput extends Disposable {
 	public readonly activeState = observableFromEvent(this, onDidChangeDictationEditor, () => this.isActive);
 	public readonly onDidChange = onDidChangeDictationEditor;
 	public get showButton(): boolean { return this.configuration.getValue<boolean>('dictation.enabled') !== false && this.configuration.getValue<boolean>('dictation.showButton') !== false; }
-	public get isStarting(): boolean { return this.active && this.service.isBusy && this.service.state === ChatSpeechToTextState.Idle; }
+	public get isStarting(): boolean { return this.isActive && this.service.isBusy && this.service.state === ChatSpeechToTextState.Idle; }
 	private get isAvailable(): boolean { return this.service.isConfigured; }
 	public get action(): MenuItemAction {
 		const active = this.isActive;

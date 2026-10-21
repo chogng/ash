@@ -10,15 +10,74 @@ use std::fs;
 use std::sync::Arc;
 
 #[test]
-fn standard_package_declarations_share_runtime_enablement_and_revocation() {
+fn retired_javascript_is_not_projected_even_when_old_records_remain_active() {
+    let source = tempfile::tempdir().unwrap();
+    fs::create_dir(source.path().join(".ash-plugin")).unwrap();
+    fs::write(source.path().join(".ash-plugin/plugin.json"), serde_json::json!({
+        "schemaVersion":1,"id":"acme/retired","version":"1.0.0","displayName":"Retired",
+        "compatibility":{"ash":">=0.1.0"},"permissions":[],"contributions":{"editorExtensions":[{
+            "id":"runtime","runtime":"javascript","api":"vscode","entrypoint":"extension.js",
+            "runtimeApiVersion":1,"activationEvents":[{"type":"onCommand","id":"retired.run"}],"capabilities":["command"]
+        }]}
+    }).to_string()).unwrap();
+    fs::write(source.path().join("package.json"), r#"{"publisher":"acme","name":"retired","version":"1.0.0","main":"extension.js","contributes":{"commands":[{"command":"retired.run","title":"Retired"}]}}"#).unwrap();
+    fs::write(
+        source.path().join("extension.js"),
+        "exports.activate = () => {};",
+    )
+    .unwrap();
+    let local = LocalPluginPackage::load(source.path()).unwrap();
+    let profile = tempfile::tempdir().unwrap();
+    let store = PluginPackageStore::open(profile.path()).unwrap();
+    let installed = store.install_local(&local).unwrap();
+    fs::write(profile.path().join("authority.json"), serde_json::json!({
+        "schemaVersion":3,"revision":3,"activationGeneration":2,"nodeExecutionContractVersion":2,
+        "installed":[installed],"enabled":[installed],"granted":[installed],"revoked":[],
+        "active":[{"package":installed,"activationRevision":2}],"receipts":{}
+    }).to_string()).unwrap();
+    let authority = PluginActivationAuthority::open(profile.path()).unwrap();
+    assert_eq!(authority.snapshot().activation().packages().len(), 1);
+    let snapshot = PluginExtensionSourceProvider::new(authority.clone())
+        .snapshot()
+        .unwrap();
+    assert!(snapshot.packages.is_empty());
+    assert!(snapshot.diagnostics.is_empty());
+    apply(
+        &authority,
+        3,
+        "disable-retired",
+        PluginAuthorityCommand::Disable {
+            package: installed.clone(),
+        },
+    );
+    apply(
+        &authority,
+        4,
+        "revoke-retired",
+        PluginAuthorityCommand::RevokeGrant {
+            package: installed.clone(),
+        },
+    );
+    assert!(authority.snapshot().granted().is_empty());
+    apply(
+        &authority,
+        5,
+        "uninstall-retired",
+        PluginAuthorityCommand::Uninstall { package: installed },
+    );
+    assert!(authority.snapshot().installed().is_empty());
+}
+
+#[test]
+fn ash_package_declarations_share_runtime_enablement_and_revocation() {
     let source = tempfile::tempdir().unwrap();
     fs::create_dir_all(source.path().join(".ash-plugin")).unwrap();
     fs::write(source.path().join(".ash-plugin/plugin.json"), serde_json::json!({
         "schemaVersion": 1, "id": "acme/standard", "version": "1.0.0", "displayName": "Standard",
         "compatibility": {"ash": ">=0.1.0"}, "permissions": [],
-        "contributions": {"editorExtensions": [{"id": "tasks", "runtime": "javascript", "api": "vscode",
+        "contributions": {"editorExtensions": [{"id": "tasks", "runtime": "javascript", "api": "ash",
             "entrypoint": "extension.cjs", "runtimeApiVersion": 1,
-            "activationEvents": [{"type": "onTaskType", "taskType": "builder"}], "capabilities": ["taskProvider"]}]}
+            "activationEvents": [{"type": "onCommand", "id": "acme.run"}], "capabilities": ["command"]}]}
     }).to_string()).unwrap();
     let manifest = serde_json::json!({
         "name": "standard", "publisher": "acme", "version": "1.0.0", "main": "./extension.cjs",
@@ -172,7 +231,7 @@ fn mixed_package_binding_selects_javascript_and_preserves_host_rpc_only_catalogs
         })];
         if javascript {
             entries.push(serde_json::json!({
-                "id": "standard", "runtime": "javascript", "entrypoint": "extension.js",
+                "id": "standard", "runtime": "javascript", "api": "ash", "entrypoint": "extension.js",
                 "runtimeApiVersion": 1, "activationEvents": [{"type": "startup"}],
                 "capabilities": ["terminalProfileProvider"]
             }));

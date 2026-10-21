@@ -3,11 +3,14 @@ import { APP_SERVER_METHODS, type TerminalAttachResult, type TerminalReconnectLe
 import { timeout } from "../../../base/common/async.js";
 import { CancellationError, isCancellationError } from '../../../base/common/errors.js';
 import { Disposable, toDisposable, type IDisposable } from "../../../base/common/lifecycle.js";
+import { Emitter } from '../../../base/common/event.js';
+import { AppServerRemoteError } from "../../agentHost/common/appServerError.js";
 import type { AppServerConnectionState } from "../../agentHost/common/appServerApi.js";
 import type { AppServerProtocolClient } from "../../agentHost/browser/appServerProtocolClient.js";
 import type {
 	ITerminalProcessCloseOptions, ITerminalProcessCreateOptions, ITerminalProcessCreation,
 	ITerminalProcessInfo,
+	ITerminalProcessInvalidationEvent,
 	ITerminalReconnectLease,
 	ITerminalProcessProfile, ITerminalProcessReadOptions, ITerminalProcessReadResult,
 	ITerminalProcessResizeOptions, ITerminalProcessService, ITerminalProcessWriteOptions,
@@ -20,6 +23,10 @@ const INITIAL_RECONNECT_DELAY_MILLIS = 50;
 const MAX_RECONNECT_DELAY_MILLIS = 1_000;
 
 export interface ReconnectableTerminalProcessServiceOptions {
+	/** Protocol readiness precedes restoring this connection's directory grants. */
+	readonly whenDirectoriesReady?: () => Promise<void>;
+	/** Stable window owner, independent of the replaceable business connection. */
+	readonly lifetimeToken?: () => Promise<string>;
 	readonly now?: () => number;
 	readonly wait?: (milliseconds: number) => Promise<void>;
 	readonly reportError?: (message: string, error: unknown) => void;
@@ -36,23 +43,28 @@ interface TerminalRecord {
 	recoveryDeadline?: number;
 	recovery?: { readonly generation: number; readonly promise: Promise<void>; };
 	closing: boolean;
+	closure?: { pending?: Promise<void>; };
 }
 
-/** Keeps Remote PTY leases in the renderer; only a new connection to the same backend can reattach them. */
+/** Retains PTY leases across connection and backend replacement while the execution host remains alive. */
 export class ReconnectableTerminalProcessService extends Disposable implements ITerminalProcessService {
 	private readonly now: () => number;
 	private readonly wait: (milliseconds: number) => Promise<void>;
 	private readonly reportError: (message: string, error: unknown) => void;
+	private readonly whenDirectoriesReady: (() => Promise<void>) | undefined;
 	private readonly terminals = new Map<string, TerminalRecord>();
 	private readonly handedOff = new Set<string>();
+	private readonly invalidated = this._register(new Emitter<ITerminalProcessInvalidationEvent>());
+	readonly onDidInvalidateProcess = this.invalidated.event;
 	private previousState: AppServerConnectionState;
 	private replacementRevision = 0;
 
-	constructor(private readonly supervisor: AppServerProtocolClient, options: ReconnectableTerminalProcessServiceOptions = {}) {
+	constructor(private readonly supervisor: AppServerProtocolClient, private readonly options: ReconnectableTerminalProcessServiceOptions = {}) {
 		super();
 		this.now = options.now ?? (() => performance.now());
 		this.wait = options.wait ?? timeout;
 		this.reportError = options.reportError ?? defaultReportError;
+		this.whenDirectoriesReady = options.whenDirectoriesReady;
 		this.previousState = this.supervisor.state;
 		this._register(this.supervisor.onStateChange(state => this.acceptConnectionState(state)));
 		this._register(toDisposable(() => {
@@ -64,15 +76,18 @@ export class ReconnectableTerminalProcessService extends Disposable implements I
 	get operatingSystem() { return this.supervisor.operatingSystem; }
 
 	async listProfiles(dirId?: string): Promise<readonly ITerminalProcessProfile[]> {
+		if (this.whenDirectoriesReady) await this.waitForDirectories();
 		const result = await this.supervisor.request(APP_SERVER_METHODS["terminal/profile/list"], { dirId });
 		return result.profiles;
 	}
 
 	async resolveProfile(profile: TerminalProcessProfileSelection, dirId?: string): Promise<ITerminalResolvedProfile> {
+		if (this.whenDirectoriesReady) await this.waitForDirectories();
 		return this.supervisor.request(APP_SERVER_METHODS['terminal/profile/resolve'], { dirId, profile: profileSelection(profile) });
 	}
 
 	async getEnvironment(names?: readonly string[], dirId?: string): Promise<Readonly<Record<string, string>>> {
+		if (this.whenDirectoriesReady) await this.waitForDirectories();
 		const result = await this.supervisor.request(APP_SERVER_METHODS["terminal/environment/read"], { names: names && [...names], dirId });
 		return result.values;
 	}
@@ -89,6 +104,9 @@ export class ReconnectableTerminalProcessService extends Disposable implements I
 		if (this.isDisposed) throw new CancellationError();
 		const generation = this.supervisor.generation;
 		const replacementRevision = this.replacementRevision;
+		if (this.whenDirectoriesReady) await this.waitForDirectories();
+		const lifetimeToken = this.options.lifetimeToken ? await this.options.lifetimeToken() : undefined;
+		if (this.isDisposed || replacementRevision !== this.replacementRevision || generation !== this.supervisor.generation) throw new CancellationError();
 		const execution = params.execution?.type === 'process' ? { ...params.execution, args: typeof params.execution.args === 'string' ? params.execution.args : [...params.execution.args] } : params.execution;
 		const result = await this.supervisor.request(APP_SERVER_METHODS["terminal/create"], {
 			...params,
@@ -96,6 +114,7 @@ export class ReconnectableTerminalProcessService extends Disposable implements I
 			profile: profileSelection(params.profile),
 			execution,
 			lifecycle: { type: "reconnectable" },
+			lifetimeToken,
 		});
 		if (this.isDisposed || replacementRevision !== this.replacementRevision || generation !== this.supervisor.generation || this.supervisor.state !== 'ready') {
 			// A reply already delivered by the protocol may outlive its owner. Only
@@ -147,10 +166,18 @@ export class ReconnectableTerminalProcessService extends Disposable implements I
 		}
 	}
 
-	async getReconnectLease(terminalId: string): Promise<ITerminalReconnectLease> {
-		const record = await this.ensureAttached(terminalId);
-		this.assertAttached(record);
-		return { terminalId, ...workspaceFolder(record.dirId), reconnectToken: record.reconnectToken, reconnectGracePeriodMillis: record.reconnectGracePeriodMillis };
+	async getReconnectLease(terminalId: string): Promise<ITerminalReconnectLease | undefined> {
+		if (!this.terminals.has(terminalId) || this.terminals.get(terminalId)!.closing) return undefined;
+		try {
+			const record = await this.ensureAttached(terminalId);
+			this.assertAttached(record);
+			return { terminalId, ...workspaceFolder(record.dirId), reconnectToken: record.reconnectToken, reconnectGracePeriodMillis: record.reconnectGracePeriodMillis };
+		} catch (error) {
+			// Replacement or expiry can retire the record while attachment is pending.
+			// A reload must omit that process instead of requesting a stale credential.
+			if (!this.terminals.has(terminalId) || this.terminals.get(terminalId)!.closing) return undefined;
+			throw error;
+		}
 	}
 
 	async detach(terminalId: string): Promise<ITerminalReconnectLease> {
@@ -245,15 +272,25 @@ export class ReconnectableTerminalProcessService extends Disposable implements I
 		// Its identity cannot authorize a close on the current execution host.
 		if (!record) return;
 		record.closing = true;
-		try {
-			if (this.supervisor.state === "ready") {
+		const closure = record.closure ??= {};
+		// Retain the credential until the host acknowledges close. A UI pane can
+		// disappear while its business transport is down; recovery must finish it.
+		if (this.supervisor.state !== 'ready') return;
+		if (closure.pending) return closure.pending;
+		const operation = (async () => {
+			try {
 				await this.ensureAttached(record.terminalId, true);
 				this.assertAttached(record, true);
-				await this.supervisor.request(APP_SERVER_METHODS["terminal/close"], params);
+				await this.supervisor.request(APP_SERVER_METHODS['terminal/close'], params);
+			} catch (error) {
+				if (this.terminals.get(record.terminalId) !== record) return;
+				if (!(error instanceof AppServerRemoteError) || error.errorName !== 'TerminalNotFound') throw error;
 			}
-		} finally {
 			if (this.terminals.get(record.terminalId) === record) this.terminals.delete(record.terminalId);
-		}
+		})();
+		closure.pending = operation;
+		try { await operation; }
+		finally { if (closure.pending === operation) closure.pending = undefined; }
 	}
 
 	/** Renderer disposal releases its clients without terminating the handed-off processes. */
@@ -266,7 +303,10 @@ export class ReconnectableTerminalProcessService extends Disposable implements I
 		this.replacementRevision++;
 		const records = [...this.terminals.values()];
 		this.terminals.clear();
-		for (const record of records) record.closing = true;
+		for (const record of records) {
+			record.closing = true;
+			this.invalidated.fire({ terminalId: record.terminalId, reason: 'replacement' });
+		}
 		if (this.supervisor.state !== "ready") return;
 		for (const record of records) {
 			void this.supervisor.request(APP_SERVER_METHODS["terminal/close"], { ...workspaceFolder(record.dirId), terminalId: record.terminalId }).catch(() => {
@@ -282,12 +322,16 @@ export class ReconnectableTerminalProcessService extends Disposable implements I
 			const now = this.now();
 			for (const record of this.terminals.values()) {
 				if (!record.closing && record.recoveryDeadline === undefined) {
-					record.recoveryDeadline = now + record.reconnectGracePeriodMillis;
+					record.recoveryDeadline = record.reconnectGracePeriodMillis === 0 ? Infinity : now + record.reconnectGracePeriodMillis;
 				}
 			}
 		}
 		if (state !== "ready") return;
 		for (const record of this.terminals.values()) {
+			if (record.closure) {
+				void this.close({ terminalId: record.terminalId, ...workspaceFolder(record.dirId) }).catch(error => this.reportError('Failed to complete terminal close after recovery', error));
+				continue;
+			}
 			if (record.generation === this.supervisor.generation || record.closing) continue;
 			void this.ensureAttached(record.terminalId).catch(error => {
 				if (!(error instanceof RecoverySupersededError) && !isCancellationError(error)) {
@@ -320,7 +364,7 @@ export class ReconnectableTerminalProcessService extends Disposable implements I
 	}
 
 	private async recover(record: TerminalRecord, generation: number): Promise<void> {
-		const deadline = record.recoveryDeadline ?? this.now() + record.reconnectGracePeriodMillis;
+		const deadline = record.recoveryDeadline ?? (record.reconnectGracePeriodMillis === 0 ? Infinity : this.now() + record.reconnectGracePeriodMillis);
 		record.recoveryDeadline = deadline;
 		let delay = INITIAL_RECONNECT_DELAY_MILLIS;
 		let lastError: unknown;
@@ -329,10 +373,14 @@ export class ReconnectableTerminalProcessService extends Disposable implements I
 				throw new RecoverySupersededError();
 			}
 			try {
+				if (this.whenDirectoriesReady) await this.waitForDirectories();
+				const lifetimeToken = this.options.lifetimeToken ? await this.options.lifetimeToken() : undefined;
+				if (this.terminals.get(record.terminalId) !== record || this.supervisor.generation !== generation) throw new CancellationError();
 				const attached = await this.supervisor.request(APP_SERVER_METHODS["terminal/attach"], {
 					...workspaceFolder(record.dirId),
 					terminalId: record.terminalId,
 					reconnectToken: record.reconnectToken,
+					lifetimeToken,
 					rows: record.rows,
 					cols: record.cols,
 				});
@@ -341,6 +389,9 @@ export class ReconnectableTerminalProcessService extends Disposable implements I
 			} catch (error) {
 				if (isCancellationError(error)) throw error;
 				lastError = error;
+				// An authoritative rejection ends recovery; transport loss and Busy
+				// can still resolve when the old backend releases its connection.
+				if (error instanceof AppServerRemoteError && (error.errorName === 'TerminalNotFound' || error.errorName === 'TerminalAttachRejected')) break;
 			}
 			if (this.supervisor.state !== "ready" || this.supervisor.generation !== generation) {
 				throw new RecoverySupersededError();
@@ -350,8 +401,17 @@ export class ReconnectableTerminalProcessService extends Disposable implements I
 			await this.wait(Math.min(delay, remaining));
 			delay = Math.min(delay * 2, MAX_RECONNECT_DELAY_MILLIS);
 		}
-		if (this.terminals.get(record.terminalId) === record) this.terminals.delete(record.terminalId);
-		throw new Error("Remote terminal reconnect lease expired before attachment", { cause: lastError });
+		if (this.terminals.get(record.terminalId) === record) {
+			this.terminals.delete(record.terminalId);
+			this.invalidated.fire({ terminalId: record.terminalId, reason: 'expiry' });
+		}
+		throw new Error(Number.isFinite(deadline) ? "Remote terminal reconnect lease expired before attachment" : "Remote terminal is no longer available for attachment", { cause: lastError });
+	}
+
+	private async waitForDirectories(): Promise<void> {
+		const generation = this.supervisor.generation;
+		await this.whenDirectoriesReady!();
+		if (this.isDisposed || generation !== this.supervisor.generation || this.supervisor.state !== 'ready') throw new CancellationError();
 	}
 
 	private acceptAttachment(record: TerminalRecord, generation: number, attached: TerminalAttachResult): void {
@@ -394,7 +454,7 @@ function workspaceFolder(dirId: string | undefined): { readonly dirId?: string; 
 }
 
 function requireReconnectLease(value: TerminalReconnectLease | null): TerminalReconnectLease {
-	if (!value || !/^[0-9a-f]{64}$/.test(value.reconnectToken) || !Number.isSafeInteger(value.reconnectGracePeriodMillis) || value.reconnectGracePeriodMillis <= 0 || value.reconnectGracePeriodMillis > MAX_RECONNECT_GRACE_PERIOD_MILLIS) {
+	if (!value || !/^[0-9a-f]{64}$/.test(value.reconnectToken) || !Number.isSafeInteger(value.reconnectGracePeriodMillis) || value.reconnectGracePeriodMillis < 0 || value.reconnectGracePeriodMillis > MAX_RECONNECT_GRACE_PERIOD_MILLIS) {
 		throw new Error("Remote App Server returned an invalid terminal reconnect lease");
 	}
 	return value;

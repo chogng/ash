@@ -442,6 +442,49 @@ test('streaming code updates preserve EOL detection, normalized model text and o
 	expect(await page.evaluate(() => window.ashChatTranscriptIntegration.state().editorCount)).toBe(count);
 });
 
+for (const kind of ['hugeParagraph', 'mathCandidates', 'largeList', 'largeTable'] as const) {
+	test(`streaming Markdown large tail delivery costs: ${kind}`, async ({ page }, testInfo) => {
+		test.setTimeout(180_000);
+		await page.goto('/chatTranscript.html');
+		const errors: string[] = [];
+		page.on('pageerror', error => errors.push(error.message));
+		const cdp = await page.context().newCDPSession(page);
+		await cdp.send('Performance.enable');
+		const samples: unknown[] = [];
+		try {
+			const profile = process.env.ASH_MARKDOWN_CPU_PROFILE === kind;
+			if (profile) { await cdp.send('Profiler.enable'); await cdp.send('Profiler.start'); }
+			await page.evaluate(kind => window.ashChatTranscriptIntegration.runMarkdownBenchmark(kind), kind);
+			if (profile) {
+				const { profile } = await cdp.send('Profiler.stop');
+				await testInfo.attach('markdown-tail.cpuprofile', { body: JSON.stringify(profile), contentType: 'application/json' });
+			}
+			for (let repetition = 0; repetition < 7; repetition++) {
+				await cdp.send('HeapProfiler.collectGarbage');
+				const before = await cdp.send('Performance.getMetrics');
+				const result = await page.evaluate(kind => window.ashChatTranscriptIntegration.runMarkdownBenchmark(kind), kind);
+				const after = await cdp.send('Performance.getMetrics');
+				expect(result.finalVisible).toBe(true);
+				expect(result.codeBlocks).toBe(0);
+				expect(result.updateSamplesMs).toHaveLength(128);
+				const taskMs = (after.metrics.find(metric => metric.name === 'TaskDuration')!.value - before.metrics.find(metric => metric.name === 'TaskDuration')!.value) * 1000;
+				samples.push({ kind, repetition, ...result, taskMs });
+			}
+			// Check the complete body outside the measured interval, including all
+			// list/table rows and literal incomplete formulas, not only the end marker.
+			const state = await page.evaluate(kind => {
+				const fixture = window.ashChatTranscriptIntegration;
+				return fixture.compareStreamingMarkdown(fixture.markdownWorkload(kind), true);
+			}, kind);
+			expect(state.actual, kind).toBe(state.expected);
+			await testInfo.attach('markdown-tail-costs.json', {
+				body: JSON.stringify({ browser: page.context().browser()?.version(), label: process.env.ASH_MARKDOWN_BENCHMARK_LABEL ?? 'current', scope: 'Production ChatListWidget; 128 cumulative updates, eight per animation frame, through final content and two frames. One warmup and seven samples. GC outside intervals. Formula recognition and fallback only; no Rust provider, backend, IPC or Desktop. Nested phase times must not be summed.', samples }, null, 2), contentType: 'application/json'
+			});
+			expect(errors).toEqual([]);
+		} finally { await cdp.detach(); }
+	});
+}
+
 test('streaming Markdown remaining consumer costs', async ({ page }, testInfo) => {
 	test.setTimeout(180_000);
 	const errors: string[] = [];
@@ -470,6 +513,22 @@ test('streaming Markdown remaining consumer costs', async ({ page }, testInfo) =
 		});
 		expect(errors).toEqual([]);
 	} finally { await cdp.detach(); }
+});
+
+test('streaming Markdown large tails preserve complete content through corrections', async ({ page }) => {
+	await page.goto('/chatTranscript.html');
+	for (const kind of ['hugeParagraph', 'mathCandidates', 'largeList', 'largeTable'] as const) {
+		const source = await page.evaluate(kind => window.ashChatTranscriptIntegration.markdownWorkload(kind), kind);
+		const step = Math.ceil(source.length / 16);
+		for (let end = step; end < source.length; end += step) {
+			const state = await page.evaluate(value => window.ashChatTranscriptIntegration.compareStreamingMarkdown(value, false), source.slice(0, end));
+			expect(state.actual, `${kind} prefix ${end}`).toBe(state.expected);
+		}
+		for (const value of [source, source.replace(/bold/gu, 'corrected'), source.slice(0, step), 'Replaced.', '']) {
+			const state = await page.evaluate(value => window.ashChatTranscriptIntegration.compareStreamingMarkdown(value, true), value);
+			expect(state.actual, kind).toBe(state.expected);
+		}
+	}
 });
 
 test('streaming Markdown large paragraphs preserve inline semantics through corrections', async ({ page }) => {
@@ -519,6 +578,41 @@ test('streaming Markdown fences, lists and corrections match a complete render a
 });
 
 for (const locale of ['en', 'zh-CN']) {
+	test(`streaming Markdown large tail jobs retain selection and focus and retire hidden work in ${locale}`, async ({ page }) => {
+		await page.goto(`/chatTranscript.html?locale=${locale}`);
+		const prefix = 'Read **stable** [Open](https://example.com) &lt;literal&gt; content. '.repeat(128);
+		await page.evaluate(value => window.ashChatTranscriptIntegration.stream(value + 'initial', false), prefix);
+		const article = page.locator('[data-item-id="stream"]');
+		await expect(article).toContainText('initial');
+		const strong = article.locator('strong').first();
+		const retained = await strong.elementHandle();
+		const link = article.locator('a').first();
+		await strong.evaluate(element => window.getSelection()!.setBaseAndExtent(element.firstChild!, 6, element.firstChild!, 1));
+		await link.focus();
+		await page.evaluate(prefix => {
+			for (let index = 0; index < 8; index++) window.ashChatTranscriptIntegration.stream(prefix + `terminal ${index}`, index === 7);
+		}, prefix);
+		await expect(article).toContainText('terminal 7');
+		expect(await strong.evaluate((element, old) => element === old, retained)).toBe(true);
+		expect(await page.evaluate(() => window.getSelection()!.toString())).toBe('table');
+		await expect(link).toBeFocused();
+		await page.evaluate(prefix => {
+			window.ashChatTranscriptIntegration.stream(prefix + 'hidden final', true);
+			window.ashChatTranscriptIntegration.setTranscriptVisible(false);
+		}, prefix);
+		await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => resolve())));
+		await expect(article).not.toContainText('hidden final');
+		await page.evaluate(() => window.ashChatTranscriptIntegration.setTranscriptVisible(true));
+		await expect(article).toContainText('hidden final');
+		await page.evaluate(prefix => {
+			window.ashChatTranscriptIntegration.stream(prefix + 'retired', true);
+			window.ashChatTranscriptIntegration.remove();
+		}, prefix);
+		await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => resolve())));
+		await expect(page.locator('[data-item-id="stream"]')).toHaveCount(0);
+		await retained?.dispose();
+	});
+
 	test(`streaming Markdown corrections preserve backward selection, toolbar focus and hidden code in ${locale}`, async ({ page }) => {
 		await page.goto(`/chatTranscript.html?locale=${locale}`);
 		const source = 'Read this paragraph.\n\n```typescript\nconst first = 1;\n```\n\nTail.';
@@ -1532,4 +1626,65 @@ for (const cowork of [false, true]) {
 			expect(errors).toEqual([]);
 		});
 	}
+}
+
+for (const locale of ['en', 'zh-CN']) for (const cowork of [false, true]) {
+	test(`${cowork ? 'Cowork' : 'Chat'} dictation commands target their retained input and cancel on navigation in ${locale}`, async ({ page }) => {
+		await page.goto(`/chatTranscript.html?locale=${locale}&richInput`);
+		await page.evaluate(cowork => window.ashChatTranscriptIntegration.prepareDictation(cowork), cowork);
+		const input = page.locator('#app-chat .ash-chat-input-part .stanza-editor-input');
+		await input.focus();
+		await page.evaluate(() => window.ashChatTranscriptIntegration.runDictation(true));
+		expect((await page.evaluate(() => window.ashChatTranscriptIntegration.dictationState())).starts).toBe(1);
+		const originalFile = (await page.evaluate(() => window.ashChatTranscriptIntegration.dictationState())).file;
+		await page.evaluate(() => window.ashChatTranscriptIntegration.dictationEvent('spoken draft'));
+		await expect.poll(() => page.evaluate(() => window.ashChatTranscriptIntegration.chatDraft())).toBe('spoken draft');
+		await expect.poll(() => page.evaluate(() => window.ashChatTranscriptIntegration.dictationState())).toMatchObject({ widgets: 1, focused: true, busy: true, file: originalFile });
+		await page.evaluate(() => window.ashChatTranscriptIntegration.retireChat());
+		await expect.poll(() => page.evaluate(() => window.ashChatTranscriptIntegration.dictationState())).toMatchObject({ cancels: 1, busy: false });
+		const replacementDraft = await page.evaluate(() => window.ashChatTranscriptIntegration.chatDraft());
+		await page.evaluate(() => window.ashChatTranscriptIntegration.dictationEvent('late old speech'));
+		await expect.poll(() => page.evaluate(() => window.ashChatTranscriptIntegration.chatDraft())).toBe(replacementDraft);
+		expect(await page.evaluate(() => window.ashChatTranscriptIntegration.chatMessages())).toEqual([]);
+		await page.evaluate(() => window.ashChatTranscriptIntegration.setChatVisible(false));
+		await page.evaluate(() => window.ashChatTranscriptIntegration.runDictation());
+		expect((await page.evaluate(() => window.ashChatTranscriptIntegration.dictationState())).starts).toBe(1);
+	});
+}
+
+for (const locale of ['en', 'zh-CN']) for (const cowork of [false, true]) for (const backend of ['local', 'cloud'] as const) {
+	test(`${cowork ? 'Cowork' : 'Chat'} built-in ${backend} ASR flushes before final writeback and cancels a stalled stop in ${locale}`, async ({ page }) => {
+		await page.goto(`/chatTranscript.html?locale=${locale}&richInput&builtinBackend=${backend}`);
+		await page.evaluate(({ cowork, backend }) => window.ashChatTranscriptIntegration.prepareBuiltinDictation(cowork, backend), { cowork, backend });
+		const input = page.locator('#app-chat .ash-chat-input-part .stanza-editor-input');
+		await input.focus();
+		await page.evaluate(() => window.ashChatTranscriptIntegration.runDictation());
+		await page.evaluate(() => {
+			window.ashChatTranscriptIntegration.builtinDictationEvent('interim only');
+			window.ashChatTranscriptIntegration.builtinAudioTail();
+		});
+		expect(await page.evaluate(() => window.ashChatTranscriptIntegration.chatDraft())).toBeUndefined();
+		await page.evaluate(() => window.ashChatTranscriptIntegration.runDictation());
+		await expect.poll(() => page.evaluate(() => window.ashChatTranscriptIntegration.chatDraft())).toBe('built-in final');
+		expect((await page.evaluate(() => window.ashChatTranscriptIntegration.builtinDictationState())).operations.slice(0, 3)).toEqual(['start', 'audio:6', 'stop']);
+		await page.evaluate(() => window.ashChatTranscriptIntegration.runDictation());
+		await page.evaluate(() => window.ashChatTranscriptIntegration.holdBuiltinStop());
+		const stopping = page.evaluate(() => window.ashChatTranscriptIntegration.runDictation());
+		await expect.poll(() => page.evaluate(() => window.ashChatTranscriptIntegration.builtinDictationState())).toMatchObject({ state: 'transcribing' });
+		await page.evaluate(() => window.ashChatTranscriptIntegration.retireChat());
+		await stopping;
+		await expect.poll(() => page.evaluate(() => window.ashChatTranscriptIntegration.builtinDictationState())).toMatchObject({ busy: false });
+		await input.focus();
+		await page.evaluate(() => window.ashChatTranscriptIntegration.runDictation());
+		const replacementDraft = await page.evaluate(() => window.ashChatTranscriptIntegration.chatDraft());
+		await page.evaluate(() => {
+			window.ashChatTranscriptIntegration.builtinDictationEvent('late retired transcript', true);
+			window.ashChatTranscriptIntegration.finishBuiltinStop();
+		});
+		await expect.poll(() => page.evaluate(() => window.ashChatTranscriptIntegration.builtinDictationState())).toMatchObject({ state: 'recording', busy: true });
+		expect(await page.evaluate(() => window.ashChatTranscriptIntegration.chatDraft())).toBe(replacementDraft);
+		expect(await page.evaluate(() => window.ashChatTranscriptIntegration.chatMessages())).toEqual([]);
+		await page.evaluate(() => window.ashChatTranscriptIntegration.setChatVisible(false));
+		await expect.poll(() => page.evaluate(() => window.ashChatTranscriptIntegration.builtinDictationState())).toMatchObject({ busy: false });
+	});
 }

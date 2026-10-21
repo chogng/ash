@@ -178,9 +178,8 @@ impl GitHubAuthenticationRuntime {
             next_login: AtomicU64::new(1),
             attempts: Arc::new(Mutex::new(BTreeMap::new())),
         });
-        if runtime.policy.is_extension_enabled(EXTENSION_ID) {
-            runtime.start().map_err(|_| unavailable())?;
-        }
+        // Composition registers the shared profile owner; the first account or credential
+        // request starts it through call(), including account restoration at startup.
         Ok(runtime)
     }
     fn start(&self) -> Result<(), ash_external_ext::ExtensionHostError> {
@@ -704,7 +703,10 @@ fn service(
 ) -> Result<CoreServiceResponse, HostFailure> {
     cancellation.check().map_err(|_| denied())?;
     match request {
-        CoreServiceRequest::CredentialGet { .. } => Err(denied()),
+        CoreServiceRequest::CredentialGet { .. }
+        | CoreServiceRequest::StorageGet { .. }
+        | CoreServiceRequest::StorageSet { .. }
+        | CoreServiceRequest::StorageDelete { .. } => Err(denied()),
         CoreServiceRequest::SecretLoad { key } => Ok(CoreServiceResponse::SecretLoaded {
             value: secrets
                 .load(&secret_key(key)?)

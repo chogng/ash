@@ -8,7 +8,7 @@ import { createObjectCollectionBuffer } from '../../browser/gpu/objectCollection
 import { type TextureAtlas } from '../../browser/gpu/atlas/textureAtlas.js';
 import { type GlyphRasterizer } from '../../browser/gpu/raster/glyphRasterizer.js';
 import { RectangleRenderer } from '../../browser/gpu/rectangleRenderer.js';
-import { DecorationStyleCache } from '../../browser/gpu/css/decorationStyleCache.js';
+import { DecorationStyleCache, type IDecorationStyleSet } from '../../browser/gpu/css/decorationStyleCache.js';
 import { type ViewContext } from '../../common/viewModel/viewContext.js';
 import { type ViewGpuContext } from '../../browser/gpu/viewGpuContext.js';
 import { ViewLineRenderingData } from '../../common/viewModel.js';
@@ -73,6 +73,33 @@ test('ContentSegmenter returns one entry for a complete grapheme', () => {
 	assert.equal(segmenter.getSegmentAtIndex(2), undefined);
 	assert.equal(segmenter.getSegmentAtIndex(text.length - 1), 'B');
 });
+
+for (const [property, value] of [
+	['color', 0], ['bold', false], ['opacity', 0], ['strikethrough', false],
+	['strikethroughThickness', 0], ['strikethroughColor', 0],
+] as const) {
+	for (const explicitFirst of [false, true]) {
+		test(`GPU style cache preserves inherited and explicit ${property} (explicit first: ${explicitFirst})`, () => {
+			const cache = new DecorationStyleCache();
+			// Keep both entries non-empty so the inherited entry also goes through the cache.
+			const inherited: IDecorationStyleSet = {
+				color: undefined, bold: undefined, opacity: 1, strikethrough: undefined,
+				strikethroughThickness: undefined, strikethroughColor: undefined,
+			};
+			if (property === 'opacity') { inherited.color = 0x123456ff; inherited.opacity = undefined; }
+			const explicit = { ...inherited, [property]: value };
+			const styles = explicitFirst ? [explicit, inherited] : [inherited, explicit];
+			const ids = styles.map(style => cache.getOrCreateEntry(style.color, style.bold, style.opacity, style.strikethrough, style.strikethroughThickness, style.strikethroughColor));
+			assert.notEqual(ids[0], ids[1]);
+			for (const [index, style] of styles.entries()) {
+				assert.deepEqual(cache.getStyleSet(ids[index]!), { id: ids[index], ...style });
+				assert.equal(cache.getOrCreateEntry(style.color, style.bold, style.opacity, style.strikethrough, style.strikethroughThickness, style.strikethroughColor), ids[index]);
+			}
+			assert.equal(cache.getOrCreateEntry(undefined, undefined, undefined, undefined, undefined, undefined), 0);
+			assert.equal(cache.getStyleSet(0), undefined);
+		});
+	}
+}
 
 test('Full-file GPU strategy writes canonical cells and draws from the document row', async () => {
 	const { FullFileRenderStrategy } = await import('../../browser/gpu/renderStrategy/fullFileRenderStrategy.js');

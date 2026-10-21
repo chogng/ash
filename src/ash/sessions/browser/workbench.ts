@@ -66,6 +66,8 @@ import { IAgentCapabilitiesService } from '../../platform/agentCapabilities/comm
 import { IAgentToolsApi } from '../../platform/agentHost/common/agentToolsApi.js';
 import { IMcpServerStatusService } from '../../platform/mcp/common/mcpServerStatusService.js';
 import { IMcpServerManagementService } from '../../platform/mcp/common/mcpServerManagementService.js';
+import { IConnectorService } from '../../platform/connectors/common/connectorService.js';
+import { AppServerConnectorService } from '../../workbench/services/connectors/browser/appServerConnectorService.js';
 import { IInstructionService } from '../../platform/instructions/common/instructionService.js';
 import { ISessionGroupsService, SessionGroupsService } from '../services/sessions/browser/sessionGroupsService.js';
 import { IFileSearchService } from '../../platform/search/common/fileSearch.js';
@@ -132,8 +134,7 @@ import { canceled, errorHandler, getErrorMessage, onUnexpectedError, setUnexpect
 import { mainWindow } from '../../base/browser/window.js';
 import { Event } from '../../base/common/event.js';
 import { SessionsViewRegistry } from '../common/views.js';
-import { ExtensionsViewPane, registerExtensionsViewContainer } from '../../workbench/contrib/extensions/browser/extensionsViewlet.js';
-import { SkillsViewPane, McpServersViewPane } from '../../workbench/contrib/extensions/browser/extensionsViews.js';
+import { openExtensionsView, registerExtensionsViewContainer } from '../../workbench/contrib/extensions/browser/extensionsViewlet.js';
 import { ViewContainerLocation } from '../../workbench/common/views.js';
 import { DesignEditorService, IDesignEditorService } from '../contrib/creator/browser/designEditorService.js';
 import { Disposable, toDisposable, type IDisposable } from "../../base/common/lifecycle.js";
@@ -554,11 +555,12 @@ export abstract class Workbench extends Disposable {
 		services.registerInstance(IAgentToolsApi, options.api.agentTools);
 		services.registerInstance(IMcpServerStatusService, options.api.mcpServerStatus);
 		services.registerInstance(IMcpServerManagementService, options.api.mcpServerManagement);
+		services.registerInstance(IConnectorService, this._register(new AppServerConnectorService(options.api.connectors, options.api.events)));
 		services.registerInstance(IWorkspaceTrustApi, options.api.workspaceTrust);
 		services.registerInstance(IWorkspaceTrustManagementService, this._register(services.createInstance(WorkspaceTrustManagementService)));
 		this._register(services.createInstance(WorkbenchLanguageFeatures));
 		const checkWorkspaceTrust = !!options.nativeHostApi;
-		if (options.api.hasAppServer) this._register(services.createInstance(AppServerLanguageProviders, options.api.language, { checkWorkspaceTrust }));
+		const languageProviders = options.api.hasAppServer ? this._register(services.createInstance(AppServerLanguageProviders, options.api.language, { checkWorkspaceTrust })) : undefined;
 		const languageDiagnosticsService = this._register(services.createInstance(AppServerLanguageDiagnosticsService, options.api.language, undefined, checkWorkspaceTrust));
 		services.registerInstance(ILanguageDiagnosticsService, languageDiagnosticsService);
 		this._register(new LanguageDiagnosticsMarkerBridge(languageDiagnosticsService, services.get(IMarkerService)));
@@ -589,7 +591,10 @@ export abstract class Workbench extends Disposable {
 		services.registerInstance(IAccountPolicyService, accountPolicies);
 		const policies = this._register(new MultiplexPolicyService([systemPolicies, accountPolicies]));
 		services.registerInstance(IPolicyService, policies);
-		serviceContributionReady.push(configurationService.initialize(fileService, policies, workingCopies));
+		serviceContributionReady.push(configurationService.initialize(fileService, policies, workingCopies).then(() => {
+			languageProviders?.start();
+			languageDiagnosticsService.start();
+		}));
 		const sessionGitHub = this._register(services.createInstance(SessionsGitHubService));
 		services.registerInstance(ISessionsGitHubService, sessionGitHub);
 		sessionGitHub.initialize();
@@ -597,7 +602,7 @@ export abstract class Workbench extends Disposable {
 		this.lifecycleService = this._register(options.createLifecycleService(services));
 		services.registerInstance(ILifecycleService, this.lifecycleService);
 		this._register(this.lifecycleService.onWillShutdown(event => {
-			event.join(storage.flush(WillSaveStateReason.SHUTDOWN), "Sessions storage flush");
+			event.join(storage.flush(WillSaveStateReason.SHUTDOWN).catch(error => logger.error('storage', 'Could not save Sessions state during shutdown', error)), "Sessions storage flush");
 		}));
 
 		options.container.replaceChildren();
@@ -702,14 +707,12 @@ export abstract class Workbench extends Disposable {
 		this._register(registerExtensionsViewContainer(SessionsViewRegistry, ViewContainerLocation.Sidebar));
 		const openExtensions = async (options: ExtensionsOpenOptions): Promise<void> => {
 			await commandService.executeCommand('sessions.open.code');
-			const viewId = options.view && options.view !== 'extensions' ? `ash.extensions.${options.view}` : 'ash.extensions.view';
-			const view = await services.get(IViewsService).openView(viewId, true);
-			if (view instanceof ExtensionsViewPane || view instanceof SkillsViewPane || view instanceof McpServersViewPane) { void view.open(options); }
+			await openExtensionsView(services.get(IViewsService), options);
 		};
 		this._register(CommandsRegistry.register(OPEN_INSTALLED_EXTENSIONS_COMMAND_ID, (_accessor, options) => openExtensions({ ...options as ExtensionsOpenOptions | undefined, view: 'plugins', mode: 'installed' })));
 		this._register(CommandsRegistry.register(OPEN_EXTENSIONS_COMMAND_ID, (_accessor, value: unknown) => {
 			const options = value as ExtensionsOpenOptions | string | undefined;
-			return openExtensions(typeof options === 'string' ? { query: options.trim() } : { mode: 'browse', ...options });
+			return openExtensions(typeof options === 'string' ? { query: options.trim() } : options ?? {});
 		}));
 		const accountMenu = this._register(new SessionsAccountMenu(accountService, contextMenus, preferences, options.returnToWorkbench));
 
@@ -1022,6 +1025,7 @@ function sameWorkspace(first: SessionWorkspaceSelection, second: SessionWorkspac
 }
 
 export interface IAgentWorkbenchLayoutService extends ILayoutService {
+	getSideBarPosition(): Position;
 	getPanelPosition(): Position;
 	setPanelPosition(position: Position): void;
 	readonly onDidChangePanelPosition: Event<string>;

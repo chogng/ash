@@ -5,7 +5,7 @@
   "displayName": "%academic.displayName%",
   "description": "%academic.description%",
   "engines": {
-    "vscode": "*"
+    "ash": "*"
   },
   "contributes": {
     "customEditors": [
@@ -21,7 +21,8 @@
           {
             "filenamePattern": "*.ash-paper"
           }
-        ]
+        ],
+        "documentType": "academic"
       },
       {
         "viewType": "ash.editor.document",
@@ -32,7 +33,8 @@
             "filenamePattern": "*.ash-doc",
             "mimeType": "application/vnd.ash.document+json"
           }
-        ]
+        ],
+        "documentType": "general"
       },
       {
         "viewType": "ash.collaboration.notes",
@@ -42,7 +44,8 @@
           {
             "mimeType": "application/vnd.ash.channel-notes+json"
           }
-        ]
+        ],
+        "documentType": "ash.collaboration.notes"
       }
     ]
   },
@@ -57,7 +60,7 @@
     }
   },
   "activationEvents": [
-    "*"
+    "onDemand:dataChannel"
   ],
   "type": "module"
 }

@@ -17,7 +17,7 @@ export class Git {
 	}
 
 	async open(): Promise<void> {
-		const tab = this.page.getByRole('tab', { name: /^Source Control(?:,|$)/u });
+		const tab = this.page.getByRole('tab').and(this.page.locator('[data-action-id="ash.git"]'));
 		if (await tab.getAttribute('aria-selected') !== 'true' || !await this.page.locator('[data-part="sidebar"]').isVisible()) await tab.click();
 		await expect(this.page.locator('[data-view-id="ash.gitView"]')).toBeVisible();
 	}

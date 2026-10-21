@@ -1,12 +1,10 @@
-import { registerTestCodeEditorFeatures } from '../../../../../test/fixtures/codeEditorFeatures.js';
-import { after as afterCodeFeatures } from 'mocha';
 import { strict as assert } from "node:assert";
 import { test } from "mocha";
 import { Emitter, type Event } from "../../../base/common/event.js";
 import { Disposable, DisposableStore, toDisposable } from "../../../base/common/lifecycle.js";
 import { createLanguageCompletionInvokeContext, type LanguageCompletionRequest, LanguageCompletionItemKind, LANGUAGE_COMPLETION_LANE, type LanguageCompletionWorker } from '../../common/languages.js';
 import { LanguageCompletionProviderRegistry } from '../../common/languageFeatureRegistry.js';
-import { LanguageCompletionProviderWorker, LanguageCompletionService } from '../../../../../extensions/code/browser/contrib/suggest/browser/suggest.js';
+import { LanguageCompletionProviderWorker, LanguageCompletionService } from '../../contrib/suggest/browser/suggest.js';
 import { languageCompletionWireCodec, createLanguageWordCompletionProvider } from '../../common/services/editorWebWorker.js';
 import { LanguageRequestStatus, type LanguageWorkerRequest } from '../../common/model/languageRequestCoordinator.js';
 import { Position } from "../../common/core/position.js";
@@ -383,6 +381,3 @@ class TestCompletionWorker extends Disposable implements LanguageCompletionWorke
 		return this.runRequest(request, signal);
 	}
 }
-
-const codeFeatures = registerTestCodeEditorFeatures();
-afterCodeFeatures(() => codeFeatures.dispose());

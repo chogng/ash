@@ -277,8 +277,8 @@ fn normalized_extension_manifest(
     manifest.remove("rendererClient");
     manifest.insert("version".into(), source.package().version.clone().into());
     if source.kind() == CapabilityKind::EditorExtension && runtime_id.is_none() {
-        // Open VSX admission currently covers resources only. In particular, Ash's declarative
-        // debugger command must not become a route from an ungranted VSIX to process execution.
+        // Without a verified runtime, editor packages may only contribute passive resources.
+        // A declarative debugger must not turn an ungranted package into process execution.
         for entry in ["main", "browser", "activationEvents"] {
             manifest.remove(entry);
         }

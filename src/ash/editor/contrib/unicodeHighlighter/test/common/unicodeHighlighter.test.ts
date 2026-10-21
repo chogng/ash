@@ -4,10 +4,10 @@ import { timeout } from '../../../../../base/common/async.js';
 import { TextDecorationCollection } from '../../../../common/model/decorationCollection.js';
 import { type UnicodeHighlight } from '../../../../common/services/unicodeTextModelHighlighter.js';
 import { type IVersionedEditorWorkerClient } from '../../../../browser/services/editorWorkerService.js';
-import { UnicodeHighlighterController } from '../../../../../../../extensions/code/browser/contrib/unicodeHighlighter/browser/unicodeHighlighterController.js';
+import { UnicodeHighlighterController } from '../../browser/unicodeHighlighterController.js';
 import assert from "node:assert/strict";
 import { test } from "mocha";
-import { findUnicodeHighlights } from "../../../../../../../extensions/code/browser/contrib/unicodeHighlighter/common/unicodeHighlights.js";
+import { findUnicodeHighlights } from "../../common/unicodeHighlights.js";
 import { TextModel } from "../../../../common/model/textModel.js";
 
 test("Unicode highlighter finds invisible, bidi, and mixed-script confusable characters", () => {

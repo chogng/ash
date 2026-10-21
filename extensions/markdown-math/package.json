@@ -7,7 +7,7 @@
   "displayName": "%displayName%",
   "description": "%description%",
   "engines": {
-    "vscode": "*"
+    "ash": "*"
   },
   "contributes": {
     "configuration": {

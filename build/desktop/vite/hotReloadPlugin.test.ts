@@ -166,7 +166,9 @@ test("Vite watches renderer CSS before its first transform and serves a concurre
 		root,
 		logLevel: "silent",
 		optimizeDeps: { noDiscovery: true },
-		server: { host: "127.0.0.1", port: 0, fs: { allow: [fixture] } },
+		// Exercise Vite's watch registration and transform invalidation without
+		// native event coalescing hiding the save in this newly created directory.
+		server: { host: "127.0.0.1", port: 0, fs: { allow: [fixture] }, watch: { usePolling: true, interval: 20 } },
 		plugins: [hotReloadPlugin({ desktopRoot: fixture }), {
 			name: "css-save-during-first-transform",
 			configureServer(server) {

@@ -64,7 +64,7 @@ The [independent development guide](../../sdk/docs/development.md) exports a com
 SDK and a separate Academy project, then builds, typechecks, loads/reloads and stages
 that project without referring back to Ash source. Development code requires explicit
 local-code authorization; normal package trust and execution consent still apply.
-See [distribution and validation](../../docs/design/editor-roadmap.md#67-贡献装配与市场扩展).
+See [distribution boundaries](../../docs/design/editor-roadmap.md#67-贡献装配与市场扩展).
 
 M6 writing and styles are owned by this package. Paragraphs and headings can reference
 named document styles, retain local paragraph and character overrides, update a style
@@ -123,8 +123,8 @@ the original DOM. Text IDs, inline marks and event owners remain intact; UTF-16
 positions resolve across the split DOM Text nodes for native selection and input.
 Metric changes preserve selection and wait for composition to finish. Zoom is
 view-local and never changes wrapping or document versions. Advanced page structures
-and viewport virtualization remain outside this slice; see the editor roadmap for
-platform acceptance limits.
+and viewport virtualization remain outside this slice; see the [root TODO](../../TODO.md#stanza-编辑器--todo) for
+platform acceptance work.
 
 Sections, review and file conversion remain package-owned. Root `documentSection`
 containers override page intent without changing descendant identities. Comments use
@@ -145,4 +145,5 @@ running text. Text is not searchable. It shares the page view, waits for resourc
 and cleans up on completion, failure or cancellation. Limits are 256 pages and
 64 MiB; DOCX also bounds expanded ZIP data to 64 MiB and 2,000 parts. See the
 [roadmap](../../docs/design/editor-roadmap.md#64-打印与-pdf) for supported semantics
-and remaining target-application/platform acceptance evidence.
+and the [root TODO](../../TODO.md#stanza-编辑器--todo) for remaining
+target-application/platform acceptance work.

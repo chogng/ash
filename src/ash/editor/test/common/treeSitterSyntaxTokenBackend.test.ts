@@ -1,6 +1,8 @@
-import { registerTestCodeEditorFeatures } from '../../../../../test/fixtures/codeEditorFeatures.js';
-import { after as afterCodeFeatures } from 'mocha';
-import { Event } from '../../../base/common/event.js';
+import { createTextModelFeatures } from '../../common/model/modelFeatures.js';
+import { registerTextModelFeatures } from '../../common/model/textModelFeatures.js';
+import { after as afterModelFeatures } from 'mocha';
+import { Emitter, Event } from '../../../base/common/event.js';
+import { DeferredPromise } from '../../../base/common/async.js';
 import type { TreeSitterTokenizationMeasure } from '../../common/services/treeSitter/treeSitterLibraryService.js';
 import { strict as assert } from 'node:assert';
 import { readFileSync } from 'node:fs';
@@ -217,7 +219,7 @@ test('Tree-sitter publishes newly visible rows once so view token caches refresh
 // Exercise the Worker boundary against real grammars, not a second fake parser.
 import { TreeSitterWorker } from '../../common/services/treeSitter/treeSitterWorker.js';
 import { getLanguageFoldingRules } from '../../../platform/language/common/languageFolding.generated.js';
-import { TreeSitterSyntaxTokenBackend } from '../../../../../extensions/code/browser/model/tokens/treeSitter/treeSitterSyntaxTokenBackend.js';
+import { TreeSitterSyntaxTokenBackend } from '../../common/model/tokens/treeSitter/treeSitterSyntaxTokenBackend.js';
 
 test('a changed viewport preempts structure work without rejecting its shared consumers', async () => {
 	using model = new TextModel('function first() {}\nfunction second() {}');
@@ -355,6 +357,74 @@ test('renderer proxy ignores stale work, supports cancellation and does not run 
 
 import { createTestLanguageConfigurationService } from './modes/testLanguageConfigurationService.js';
 import { Position } from '../../common/core/position.js';
+
+for (const replacement of ['provider', 'language'] as const) {
+	test(`model readiness follows a ${replacement} replacement while first-open syntax is pending`, async () => {
+		using changed = new Emitter<void>();
+		const sessions: { started: DeferredPromise<void>; release: DeferredPromise<void>; disposed: boolean; }[] = [];
+		using model = new TextModel('const value = 1;', {
+			languageId: 'javascript', tokenization: {
+				onDidChangeSyntaxBackend: changed.event,
+				createSyntaxTokenBackend: document => {
+					const state = { started: new DeferredPromise<void>(), release: new DeferredPromise<void>(), disposed: false };
+					sessions.push(state);
+					return new TreeSitterSyntaxTokenBackend(document, {
+						update() { }, setTabSize() { },
+						async request(_operation, _data, signal) {
+							state.started.complete();
+							await state.release.p;
+							signal.throwIfAborted();
+							return { revision: document.version, rows: [{ row: 0, tokens: [] }], measures: [] };
+						},
+						dispose() { state.disposed = true; state.release.complete(); }, [Symbol.dispose]() { this.dispose(); },
+					}, () => undefined);
+				},
+			},
+		});
+		let settled = false;
+		const ready = model.tokenization.whenReady(signal());
+		const outcome = ready.then(() => { settled = true; }, error => { settled = true; throw error; });
+		void outcome.catch(() => undefined);
+		try {
+			await sessions[0].started.p;
+			if (replacement === 'provider') changed.fire();
+			else model.setLanguage('rust');
+			await sessions[1].started.p;
+			await new Promise<void>(resolve => setImmediate(resolve));
+			assert.equal(sessions[0].disposed, true);
+			assert.equal(settled, false, 'Opening must wait for the replacement backend');
+			sessions[1].release.complete();
+			await outcome;
+			assert.equal(model.tokenization.modelVersion, model.version);
+			assert.equal(model.tokenization.hasAccurateTokensForLine(1), true);
+		} finally { for (const session of sessions) session.release.complete(); }
+	});
+}
+
+for (const interruption of ['failure', 'cancellation', 'disposal'] as const) {
+	test(`model readiness preserves active syntax ${interruption}`, async () => {
+		const started = new DeferredPromise<void>();
+		const release = new DeferredPromise<void>();
+		const failure = new Error('Fixture syntax failure');
+		using model = new TextModel('const value = 1;', {
+			languageId: 'javascript', tokenization: {
+				createSyntaxTokenBackend: document => new TreeSitterSyntaxTokenBackend(document, {
+					update() { }, setTabSize() { },
+					async request() { started.complete(); await release.p; throw failure; },
+					dispose() { release.complete(); }, [Symbol.dispose]() { this.dispose(); },
+				}, () => undefined),
+			},
+		});
+		const controller = new AbortController();
+		const ready = model.tokenization.whenReady(controller.signal);
+		const rejected = assert.rejects(ready, interruption === 'failure' ? error => error === failure : /cancel|disposed/i);
+		await started.p;
+		if (interruption === 'failure') release.complete();
+		else if (interruption === 'cancellation') controller.abort();
+		else model.dispose();
+		try { await rejected; } finally { release.complete(); }
+	});
+}
 
 test('model bracket matching, coloring and guides consume the shared Worker tree and ignore string contents', async () => {
 	using configurations = createTestLanguageConfigurationService();
@@ -646,5 +716,5 @@ test('Python default queries highlight decorators, functions and Unicode strings
 	await assertFresh(value, model, 'python');
 });
 
-const codeFeatures = registerTestCodeEditorFeatures();
-afterCodeFeatures(() => codeFeatures.dispose());
+const modelFeatures = registerTextModelFeatures(createTextModelFeatures);
+afterModelFeatures(() => modelFeatures.dispose());

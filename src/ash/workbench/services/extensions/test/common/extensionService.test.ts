@@ -912,6 +912,43 @@ test('the packaged browser catalog activates Markdown grammar and configuration 
 	assert.equal(languageService.createByMimeType('text/markdown').languageId, 'markdown');
 });
 
+test('extension configuration defaults refresh, reject invalid replacements and withdraw with their owner', async () => {
+	const registry = Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration);
+	const node = { properties: { 'extensionDefault.wrap': { type: 'string' as const, enum: ['off', 'on'], default: 'off', scope: 5 } } };
+	registry.updateConfigurations({ add: [node], remove: [] });
+	using registration = toDisposable(() => registry.updateConfigurations({ add: [], remove: [node] }));
+	let generation = 1;
+	let present = true;
+	let value = 'on';
+	using configuration = new WorkbenchConfigurationService();
+	using service = new AppServerExtensionService({
+		api: {
+			list: async () => ({ generation, diagnostics: [], extensions: present ? [descriptorWithManifest({ name: 'demo', publisher: 'ash', version: '1.0.0', contributes: { configurationDefaults: { '[markdown]': { 'extensionDefault.wrap': value } } } })] : [] }),
+			resources: new ExtensionResourceLoaderService(async () => { throw new Error('No resources'); }),
+		}
+	}, createEmptyTestLanguagePacks(), adapters);
+	await service.start();
+	assert.equal(configuration.getValue('extensionDefault.wrap'), 'off');
+	assert.equal(configuration.getValue('extensionDefault.wrap', { overrideIdentifier: 'markdown' }), 'on');
+	assert.equal(configuration.inspect('extensionDefault.wrap', { overrideIdentifier: 'markdown' }).defaultValue, 'on');
+	assert.equal((await configuration.read()).source.trim(), '{}');
+	value = 'invalid'; generation++;
+	await assert.rejects(service.reload());
+	assert.equal(service.currentCatalog.generation, 1);
+	assert.equal(configuration.getValue('extensionDefault.wrap', { overrideIdentifier: 'markdown' }), 'on');
+	value = 'off'; generation++;
+	await service.reload();
+	assert.equal(configuration.getValue('extensionDefault.wrap', { overrideIdentifier: 'markdown' }), 'off');
+	present = false; generation++;
+	await service.reload();
+	assert.equal(registry.getConfigurationDefaultsOverrides().has('[markdown]'), false);
+	present = true; value = 'on'; generation++;
+	await service.reload();
+	assert.equal(configuration.getValue('extensionDefault.wrap', { overrideIdentifier: 'markdown' }), 'on');
+	service.dispose();
+	assert.equal(configuration.getValue('extensionDefault.wrap', { overrideIdentifier: 'markdown' }), 'off');
+});
+
 test('extension configuration activates in the canonical owner and rolls back other contributions on schema failure', async () => {
 	let generation = 1;
 	let present = true;

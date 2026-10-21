@@ -41,7 +41,7 @@ test('Desktop trace marks each restored region and waits for asynchronous view c
 		new Map(Object.values(locations).map(location => [location, { getCompositeIdToRestore: () => `view-${location}` }])),
 		{ isPartVisible: (part: string) => part !== 'agentSidebar' },
 		{ getPartId: (location: number) => `part-${location}` },
-		{},
+		{ getViewContainers: (location: number) => [{ id: `view-${location}` }] },
 		(_service: unknown, _location: number, id: string) => ({ id }),
 		{ openViewContainer: (id: string) => { opened.push(id); return pending; }, closeViewContainer: () => assert.fail('all restored regions are visible') },
 		locations,

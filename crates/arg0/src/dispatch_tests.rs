@@ -1,5 +1,16 @@
 use super::dispatch;
 
+#[cfg(target_os = "macos")]
+#[test]
+fn malformed_watcher_role_fails_before_reading_the_private_socket() {
+    for role in ["--ash-native-file-watcher", "--ash-polling-file-watcher"] {
+        assert!(matches!(
+            dispatch([role.into(), "unexpected".into()]),
+            Some(Err(_))
+        ));
+    }
+}
+
 #[test]
 fn ordinary_product_commands_are_not_consumed() {
     for arguments in [vec![], vec!["--listen", "stdio://"], vec!["exec", "hello"]] {

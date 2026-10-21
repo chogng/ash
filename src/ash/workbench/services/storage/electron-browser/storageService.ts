@@ -15,6 +15,12 @@ interface StorageOptions {
 	readonly ownerWindow: Window;
 }
 
+interface PendingEntry {
+	readonly key: string;
+	readonly scope: StorageScope;
+	readonly entry: IStorageEntry | null;
+}
+
 /** Window cache with ordered key writes to the single Desktop persistence owner. */
 export class NativeWorkbenchStorageService extends Disposable implements IStorageService {
 	private readonly changes = this._register(new Emitter<IStorageValueChangeEvent>());
@@ -23,7 +29,7 @@ export class NativeWorkbenchStorageService extends Disposable implements IStorag
 	public readonly onWillSaveState = this.saves.event;
 	private readonly snapshots = new Map<StorageScope, IStorageSnapshot>();
 	private readonly subscriptions = this._register(new MutableDisposable<DisposableStore>());
-	private readonly pendingEntries = new Map<string, IStorageEntry | null>();
+	private readonly pendingEntries = new Map<string, PendingEntry>();
 	private writes: Promise<void> = Promise.resolve();
 	private readonly channel: IChannel;
 	private workspaceId: string;
@@ -87,6 +93,12 @@ export class NativeWorkbenchStorageService extends Disposable implements IStorag
 	public async flush(reason = WillSaveStateReason.PERIODIC): Promise<void> {
 		this.saves.fire({ reason });
 		await this.writes;
+		// Failed requests leave their latest value pending. Retry it rather than
+		// retaining a rejected promise that permanently poisons every later flush.
+		while (this.pendingEntries.size > 0) {
+			await Promise.all([...this.pendingEntries.values()].map(pending => this.writeEntry(pending)));
+			await this.writes;
+		}
 		await this.channel.call('flush');
 	}
 	public async switchWorkspace(workspaceId: string): Promise<void> {
@@ -116,16 +128,24 @@ export class NativeWorkbenchStorageService extends Disposable implements IStorag
 		if (entry) { entries[key] = entry; } else { delete entries[key]; }
 		this.snapshots.set(scope, { ...current, entries });
 		const pendingKey = `${scope}:${key}`;
-		this.pendingEntries.set(pendingKey, entry);
+		const pending = { key, scope, entry };
+		this.pendingEntries.set(pendingKey, pending);
 		this.changes.fire({ key, scope, target: entry?.target, external: false });
 		// Send before navigation can disconnect the port; Main serializes mutations, not window replies.
-		const write = this.channel.call('updateItems', { identity: current.identity, key, entry }).then(value => {
+		void this.writeEntry(pending).catch(onUnexpectedError);
+	}
+	private writeEntry(pending: PendingEntry): Promise<void> {
+		const { key, scope, entry } = pending;
+		const pendingKey = `${scope}:${key}`;
+		const write = this.channel.call('updateItems', { identity: this.identity(scope), key, entry }).then(value => {
 			const result = validateStorageSnapshot(value);
-			if (this.pendingEntries.get(pendingKey) === entry) { this.pendingEntries.delete(pendingKey); }
+			if (this.pendingEntries.get(pendingKey) === pending) { this.pendingEntries.delete(pendingKey); }
 			this.accept(result);
 		});
-		this.writes = Promise.all([this.writes, write]).then(() => undefined);
-		void this.writes.catch(onUnexpectedError);
+		// Drain all in-flight requests, including failures. Pending entries retain
+		// durability failures until a subsequent successful request acknowledges them.
+		this.writes = Promise.all([this.writes, write.catch(() => undefined)]).then(() => undefined);
+		return write;
 	}
 	private accept(snapshot: IStorageSnapshot): void {
 		if (snapshot.identity.id !== this.identity(snapshot.identity.scope).id) { return; }
@@ -136,7 +156,7 @@ export class NativeWorkbenchStorageService extends Disposable implements IStorag
 		const entries: Record<string, IStorageEntry> = Object.assign(Object.create(null), snapshot.entries);
 		for (const key of new Set([...Object.keys(previous?.entries ?? {}), ...Object.keys(entries)])) {
 			if (this.pendingEntries.has(`${scope}:${key}`)) {
-				const pending = this.pendingEntries.get(`${scope}:${key}`);
+				const pending = this.pendingEntries.get(`${scope}:${key}`)!.entry;
 				if (pending) { entries[key] = pending; } else { delete entries[key]; }
 			}
 		}

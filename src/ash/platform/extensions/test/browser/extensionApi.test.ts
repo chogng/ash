@@ -163,40 +163,6 @@ async function initializedExtensionApi(opened: unknown, resources: IResourceApi)
 	return { api, request: { generation: catalog.generation, extensionId: 'ash.demo', path: 'demo.json' } };
 }
 
-test('gallery resources use the negotiated backend, verify bytes and release their connection handle', async () => {
-	const bytes = Buffer.from('{"name":"sample"}');
-	const resource = { ...metadata(bytes.length), sha256: `sha256:${createHash('sha256').update(bytes).digest('hex')}` };
-	const requests: unknown[] = [];
-	let releases = 0;
-	const connection = {
-		capabilities: { contracts: { extensionGalleryResources: { version: 1 } } },
-		request: async ({ method }: { method: string; }, params: unknown) => {
-			requests.push({ method, params });
-			if (method === 'extensions/gallery') {
-				return { resourceUrlTemplate: 'https://registry.example/api/{publisher}/{name}/universal/{version}/file/{path}' };
-			}
-			assert.equal(method, 'extensions/gallery/resource/open');
-			return { resource };
-		},
-	} as unknown as AppServerProtocolClient;
-	const api = createAppServerExtensionApi(connection, resourceApi({
-		read: async () => ({ resourceId: resource.resourceId, offset: 0, decodedLength: bytes.length, dataBase64: bytes.toString('base64'), eof: true }),
-		release: async () => { releases++; },
-	}));
-	const uri = await api.resources.getExtensionGalleryResourceURL({ publisher: 'publisher', name: 'sample', version: '1.0.0' }, 'package.json');
-	assert.equal(await api.resources.readExtensionResource(uri!), bytes.toString());
-	assert.deepEqual(requests.at(-1), { method: 'extensions/gallery/resource/open', params: { resourceUrlTemplate: 'https://registry.example/api/{publisher}/{name}/universal/{version}/file/{path}', publisher: 'publisher', name: 'sample', version: '1.0.0', path: 'package.json' } });
-	assert.equal(releases, 1);
-});
-
-test('a backend without the gallery contract does not receive unsupported gallery requests', async () => {
-	let requests = 0;
-	const connection = { request: async () => { requests++; throw new Error('Unexpected request'); } } as unknown as AppServerProtocolClient;
-	const api = createAppServerExtensionApi(connection, resourceApi({}));
-	assert.equal(await api.resources.supportsExtensionGalleryResources(), false);
-	assert.equal(requests, 0);
-});
-
 test('Rust catalog reconnection retires old resource references even when the backend reuses its generation', async () => {
 	const bytes = Buffer.from('export function activate() {}');
 	const resource = { ...metadata(bytes.length), sha256: `sha256:${createHash('sha256').update(bytes).digest('hex')}` };

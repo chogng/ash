@@ -117,6 +117,7 @@ export interface IChatDraftStorage {
 
 /** Input operations consumed by a Chat pane, independent of its product's composer layout. */
 export interface IChatInputPart extends IDisposable {
+	readonly inputEditor?: IChatInputEditor['codeEditor'];
 	readonly attachmentModel: ChatAttachmentModel;
 	readonly element: HTMLElement;
 	/** Retires asynchronous input work without clearing or restoring the next conversation’s draft. */
@@ -551,6 +552,8 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 		this.input.focus();
 	}
 
+	get inputEditor(): IChatInputEditor['codeEditor'] { return this.input.codeEditor; }
+
 	addContext(attachment: ChatContextAttachment): void {
 		if (attachment.lifetime === 'source') this.attachmentModel.addContext(attachment);
 		else this.inlineContext.addReference(attachment);
@@ -916,10 +919,17 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 		restoring = false;
 		this._register(this.onDidChangeInput(() => { if (!restoring) { restoreFailed = false; save(); } }));
 		this._register(onWillShutdown(event => {
+			const snapshot = this.snapshotDraftReferences();
+			// An untouched empty composer has no content to protect. In particular,
+			// its global storage flush must not veto closing over unrelated UI state.
+			if (revisions.size === 0 && !this.attachmentModel.hasPendingContext && snapshot.text.length === 0 && snapshot.contexts.length === 0) return;
 			event.join((async () => {
 				// File selection can still be preparing its snapshot when the window closes.
 				while (this.attachmentModel.hasPendingContext) await this.attachmentModel.resolvePendingContext();
-				save();
+				// A mode switch clears the retained renderer after transferring its draft.
+				// Its shutdown must not overwrite the active renderer's persisted input.
+				const draft = this.snapshotDraftReferences();
+				if (this.visible || draft.text.length > 0 || draft.contexts.length > 0) save();
 				await Promise.all([...pending]);
 				await storage.flush();
 			})(), 'Chat composer draft');

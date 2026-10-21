@@ -1,12 +1,13 @@
-import { registerTestCodeEditorFeatures } from '../../../../../../../test/fixtures/codeEditorFeatures.js';
-import { after as afterCodeFeatures } from 'mocha';
+import { createTextModelFeatures } from '../../../../common/model/modelFeatures.js';
+import { registerTextModelFeatures } from '../../../../common/model/textModelFeatures.js';
+import { after as afterModelFeatures } from 'mocha';
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { Range } from '../../../../common/core/range.js';
 import { TextModel } from '../../../../common/model/textModel.js';
 import { TestLanguageConfigurationService } from '../../../../test/common/modes/testLanguageConfigurationService.js';
 import { registerTestTokens } from '../../../../test/common/testTokenization.js';
-import { computeEditorLanguageFoldingRanges, mergeEditorFoldingRanges } from '../../../../../../../extensions/code/browser/contrib/folding/browser/syntaxRangeProvider.js';
+import { computeEditorLanguageFoldingRanges, mergeEditorFoldingRanges } from '../../browser/syntaxRangeProvider.js';
 
 test('syntax folding merge keeps deterministic nested and disjoint ranges', () => {
 	const merged = mergeEditorFoldingRanges(
@@ -67,5 +68,5 @@ test('token change listeners see bracket ranges for the edited text immediately'
 	assert.ok(observations.every(ranges => ranges.length === 1 && ranges[0] === 1));
 });
 
-const codeFeatures = registerTestCodeEditorFeatures();
-afterCodeFeatures(() => codeFeatures.dispose());
+const modelFeatures = registerTextModelFeatures(createTextModelFeatures);
+afterModelFeatures(() => modelFeatures.dispose());

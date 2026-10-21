@@ -1,9 +1,10 @@
-import { registerTestCodeEditorFeatures } from '../../../../../../../test/fixtures/codeEditorFeatures.js';
-import { after as afterCodeFeatures } from 'mocha';
+import { createTextModelFeatures } from '../../../../common/model/modelFeatures.js';
+import { registerTextModelFeatures } from '../../../../common/model/textModelFeatures.js';
+import { after as afterModelFeatures } from 'mocha';
 import { registerTestTokens } from '../../../../test/common/testTokenization.js';
 import assert from "node:assert/strict";
 import { test } from "mocha";
-import { createRemoveMatchingBracketsCommand } from "../../../../../../../extensions/code/browser/contrib/bracketMatching/common/bracketEditing.js";
+import { createRemoveMatchingBracketsCommand } from "../../common/bracketEditing.js";
 import { TestLanguageConfigurationService } from '../../../../test/common/modes/testLanguageConfigurationService.js';
 import { Selection } from "../../../../common/core/selection.js";
 import { Position } from "../../../../common/core/position.js";
@@ -74,5 +75,5 @@ function primaryFirst<T>(items: readonly T[], primaryIndex: number): readonly T[
 	return Object.freeze([items[primaryIndex]!, ...items.slice(0, primaryIndex), ...items.slice(primaryIndex + 1)]);
 }
 
-const codeFeatures = registerTestCodeEditorFeatures();
-afterCodeFeatures(() => codeFeatures.dispose());
+const modelFeatures = registerTextModelFeatures(createTextModelFeatures);
+afterModelFeatures(() => modelFeatures.dispose());

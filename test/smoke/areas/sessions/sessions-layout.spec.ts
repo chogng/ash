@@ -31,15 +31,15 @@ test('Sessions content shares one raised card with equal right and bottom margin
 			const start = document.querySelector<HTMLElement>('.ash-sessions-frame-start')!.getBoundingClientRect();
 			const end = document.querySelector<HTMLElement>('.ash-sessions-frame-end')!.getBoundingClientRect();
 			const rail = document.querySelector<HTMLElement>('[data-part="activitybar"]')!.getBoundingClientRect();
-			const menu = document.querySelector<HTMLElement>('.ash-sessions-titlebar-actions .ash-menubar-item')!.getBoundingClientRect();
+			const menu = document.querySelector<HTMLElement>('.ash-sessions-titlebar-actions .ash-menubar-item')?.getBoundingClientRect();
 			const controlsWidth = document.querySelector<HTMLElement>('.ash-sessions-window-controls-spacer')?.getBoundingClientRect().width ?? 0;
 			const center = (layout.left + card.left) / 2;
 			const buttonOffsets = [...document.querySelectorAll<HTMLElement>('.ash-sessions-activity-item')].map(button => {
 				const bounds = button.getBoundingClientRect();
 				return Math.abs(bounds.left + bounds.width / 2 - center);
 			});
-			return [layout.right - card.right, layout.bottom - card.bottom, card.left - start.left, card.right - end.right, card.bottom - start.bottom, card.bottom - end.bottom, rail.left - layout.left, Math.max(...buttonOffsets), menu.left + menu.width / 2 - controlsWidth - center].map(Math.round);
-		})).toEqual([4, 4, 0, 0, 0, 0, 0, 0, 0]);
+			return [layout.right - card.right, layout.bottom - card.bottom, card.left - start.left, card.right - end.right, card.bottom - start.bottom, card.bottom - end.bottom, rail.left - layout.left, Math.max(...buttonOffsets), ...(menu ? [menu.left + menu.width / 2 - controlsWidth - center] : [])].map(Math.round);
+		})).toEqual([4, 4, 0, 0, 0, 0, 0, 0, ...('windows' in application && process.platform === 'darwin' ? [] : [0])]);
 	};
 	await expectCardGeometry();
 	const menus = new Menus(page);
@@ -245,6 +245,7 @@ test('Sessions merges legacy pane arrangements and retains shared selections and
 	await expect(panes).toHaveCount(4);
 	await navigation.getByRole('button', { name: 'Code', exact: true }).click();
 	await expect(panes).toHaveCount(4);
+	await expect.poll(async () => (await snapshot()).map(({ identity, text }) => ({ identity, text }))).toEqual(shared.slice(1).map(({ identity, text }) => ({ identity, text })));
 	await expect.poll(async () => {
 		const entries = await readStorageEntries(application, page, identity);
 		return {

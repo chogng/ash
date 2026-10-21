@@ -185,7 +185,9 @@ export class SessionGridLayout extends Disposable {
 					const bindings = new Map(this.items.map(item => [item.entry.id, item]));
 					const descriptor = bindLayout(this.savedLayout, bindings);
 					if (descriptor) {
-						this.preserveFocus(() => this.replaceGrid(descriptor));
+						// Scale before Grid applies live view minimums; adding resize deltas to
+						// stored pixel sizes would distort nested proportions on another viewport.
+						this.preserveFocus(() => this.replaceGrid(scaleLayout(descriptor, this.dimension!)));
 						if ([...layoutIds(this.savedLayout)].every(id => bindings.has(id))) this.restoring = false;
 					} else {
 						this.savedLayout = undefined;
@@ -230,6 +232,20 @@ function bindLayout(node: SessionGridNode, bindings: ReadonlyMap<string, Session
 
 function layoutIds(node: SessionGridNode): Set<string> {
 	return new Set(node.type === 'leaf' ? [node.data.id] : node.children.flatMap(child => [...layoutIds(child)]));
+}
+
+function scaleLayout(node: GridDescriptor<SessionGridItem>, dimension: IDimension): GridDescriptor<SessionGridItem> {
+	if (node.type === 'leaf') return node;
+	const horizontal = node.orientation === 'horizontal';
+	const available = horizontal ? dimension.width : dimension.height;
+	const total = node.children.reduce((sum, child) => sum + child.size, 0);
+	return {
+		...node, size: available,
+		children: node.children.map(child => {
+			const size = total > 0 ? child.size / total * available : available / node.children.length;
+			return { ...scaleLayout(child, horizontal ? { width: size, height: dimension.height } : { width: dimension.width, height: size }), size };
+		}),
+	};
 }
 
 function renameLayout(node: SessionGridNode, renames: ReadonlyMap<string, string>): SessionGridNode {

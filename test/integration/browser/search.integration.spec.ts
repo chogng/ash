@@ -1,5 +1,38 @@
 import { expect, test } from '@playwright/test';
 
+test('Sidebar boundary follows the production Grid across position changes and releases on disposal', async ({ page }) => {
+	const errors: string[] = [];
+	page.on('pageerror', error => errors.push(error.message));
+	await page.goto('/search.html');
+	const sidebar = page.locator('[data-part="sidebar"]');
+	const boundary = page.locator('.ash-primary-sidebar-sash');
+	for (const position of ['left', 'right', 'left'] as const) {
+		const previous = await boundary.elementHandle();
+		await page.evaluate(position => window.ashSearchIntegration.setSidebarPosition(position), position);
+		await expect(boundary).toHaveCount(1);
+		await expect(boundary).toHaveAttribute('aria-orientation', 'vertical');
+		const partBounds = (await sidebar.locator('..').boundingBox())!;
+		const sashBounds = (await boundary.boundingBox())!;
+		expect(sashBounds.x + sashBounds.width / 2).toBeCloseTo(position === 'left' ? partBounds.x + partBounds.width : partBounds.x, 0);
+		if (previous) {
+			const stillCurrent = await previous.evaluate(element => element.isConnected);
+			if (!stillCurrent) expect(await previous.evaluate(element => element.classList.contains('ash-primary-sidebar-sash'))).toBe(false);
+			await previous.dispose();
+		}
+	}
+	const sash = (await boundary.elementHandle())!;
+	await boundary.focus();
+	await expect(boundary).toBeFocused();
+	const before = (await sidebar.boundingBox())!.width;
+	await boundary.press('ArrowRight');
+	await expect.poll(async () => (await sidebar.boundingBox())!.width).toBeGreaterThan(before);
+	await page.evaluate(() => window.ashSearchIntegration.disposeSidebar());
+	await expect(boundary).toHaveCount(0);
+	expect(await sash.evaluate(element => element.isConnected)).toBe(true);
+	await sash.dispose();
+	expect(errors).toEqual([]);
+});
+
 test('Search ActionBar centers icon-only actions and keeps text actions visible', async ({ page }) => {
 	await page.goto('/search.html');
 	const replaceAll = page.getByRole('button', { name: 'Replace All', exact: true });

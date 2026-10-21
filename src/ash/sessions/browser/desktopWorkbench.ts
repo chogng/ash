@@ -447,6 +447,8 @@ export class DesktopWorkbenchLayout extends BrowserLayoutService implements IAge
 
 	getPanelPosition(): Position { return this.panelPosition; }
 
+	getSideBarPosition(): Position { return Position.LEFT; }
+
 	setPanelPosition(position: Position): void {
 		if (position === this.panelPosition) return;
 		const state = this.state;

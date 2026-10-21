@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { URI } from '../../../../base/common/uri.js';
 import { AppServerProtocolClient } from '../../../agentHost/browser/appServerProtocolClient.js';
-import { WEB_APP_SERVER_CONNECT_EVENT, WEB_APP_SERVER_CONNECTED_EVENT, WEB_APP_SERVER_FRAME_EVENT, type AppServerTransport } from '../../../agentHost/common/appServerTransport.js';
+import { WEB_APP_SERVER_CLOSED_EVENT, WEB_APP_SERVER_CONNECT_EVENT, WEB_APP_SERVER_CONNECTED_EVENT, WEB_APP_SERVER_FRAME_EVENT, type AppServerTransport } from '../../../agentHost/common/appServerTransport.js';
 import { createTestInitializeResult } from '../../../agentHost/test/common/testAppServerProtocol.js';
 import { AppServerBackupService } from '../../browser/appServerBackupService.js';
 import { BackupError } from '../../common/backup.js';
@@ -18,6 +18,7 @@ function record(index: number): { content: { resource: string; format: string; c
 
 class Transport implements AppServerTransport {
 	public readonly requests: { method: string; params: Record<string, unknown>; }[] = [];
+	public onWrite: (() => void) | undefined;
 	private readonly listeners = new Map<string, Set<(value: unknown) => void>>();
 
 	constructor(private readonly mode: 'pages' | 'legacy' | 'stalled' | 'failed' = 'pages') { }
@@ -49,6 +50,9 @@ class Transport implements AppServerTransport {
 		let error: { code: number; message: string; data: { kind: string; }; } | undefined;
 		if (request.method === 'initialize') {
 			result = createTestInitializeResult();
+		} else if (request.method === 'backup/write') {
+			if (this.onWrite) { this.onWrite(); return; }
+			result = record(0);
 		} else if (request.method === 'backup/move') {
 			if (this.mode === 'legacy') error = { code: -32601, message: 'MethodNotFound', data: { kind: 'MethodNotFound' } };
 			else if (this.mode === 'failed') error = { code: -32003, message: 'BackupRevisionConflict', data: { kind: 'BackupRevisionConflict' } };
@@ -77,7 +81,42 @@ class Transport implements AppServerTransport {
 			listener(value);
 		}
 	}
+
+	public closeAfterWrite(): void {
+		this.emit(WEB_APP_SERVER_CLOSED_EVENT, { intentional: true, message: 'Lost backup write reply' });
+	}
 }
+
+test('backup shutdown writes wait for replacement initialization and preserve the expected revision', async () => {
+	const transport = new Transport();
+	const client = new AppServerProtocolClient(transport);
+	using cleanup = toDisposable(() => client.dispose());
+	await client.connect();
+	client.disconnect();
+	const resource = URI.parse(record(0).content.resource);
+	const writing = new AppServerBackupService(client, 'editor').store({ id: 'workspace', folders: [] }, { ...record(0).content, resource }, 'previous');
+	await new Promise<void>(resolve => setImmediate(resolve));
+	assert.equal(transport.requests.filter(request => request.method === 'backup/write').length, 0);
+	await client.connect();
+	assert.deepEqual(await writing, { ...record(0), content: { ...record(0).content, resource } });
+	assert.deepEqual(transport.requests.filter(request => request.method === 'backup/write').map(request => request.params), [{
+		clientId: 'editor', workspace: { id: 'workspace', folders: [], configuration: null, remoteAuthority: null },
+		content: record(0).content, expectedRevision: 'previous',
+	}]);
+});
+
+test('a backup write with a lost reply fails and is never replayed after reconnect', async () => {
+	const transport = new Transport();
+	const client = new AppServerProtocolClient(transport);
+	using cleanup = toDisposable(() => client.dispose());
+	await client.connect();
+	transport.onWrite = () => transport.closeAfterWrite();
+	const backups = new AppServerBackupService(client, 'editor');
+	await assert.rejects(backups.store({ id: 'workspace', folders: [] }, { ...record(0).content, resource: URI.parse(record(0).content.resource) }, 'previous'), /Lost backup write reply/);
+	await client.connect();
+	assert.equal((await backups.list('workspace')).length, 2);
+	assert.equal(transport.requests.filter(request => request.method === 'backup/write').length, 1);
+});
 
 test('Backup recovery follows all pages through the generated protocol', async () => {
 	const transport = new Transport();

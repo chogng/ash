@@ -1,0 +1,21 @@
+load("//:defs.bzl", "ash_rust_binary", "ash_rust_crate")
+
+ash_rust_crate(
+    name = "dev-build",
+    crate_name = "ash_dev_build",
+)
+
+ash_rust_binary(
+    name = "ash-build",
+    crate_name = "ash_build",
+    crate_root = "src/main.rs",
+    deps = [":dev-build-compiler"],
+)
+
+# Runtime consumers do not need source parsing or Cargo manifest generation.
+ash_rust_crate(
+    name = "dev-build-compiler",
+    crate_name = "ash_dev_build",
+    crate_features = ["compiler"],
+    data = ["//:.cargo/config.toml", "//:Cargo.toml", "//:rust-toolchain.toml"],
+)

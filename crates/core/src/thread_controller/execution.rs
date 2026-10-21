@@ -44,6 +44,7 @@ impl ThreadController {
         time_context: Option<ash_protocol::TimeContext>,
         started_at_unix_ms: u64,
         completed_at_unix_ms: u64,
+        timing: Option<ash_protocol::ModelInvocationTiming>,
     ) -> Result<core_api::ModelInvocationReceipt, CoreError> {
         self.record_model_invocation_for_tool(
             thread_id,
@@ -56,6 +57,7 @@ impl ThreadController {
             time_context,
             started_at_unix_ms,
             completed_at_unix_ms,
+            timing,
             None,
             ModelInvocationOutcome::Completed,
         )
@@ -73,6 +75,7 @@ impl ThreadController {
         time_context: Option<ash_protocol::TimeContext>,
         started_at_unix_ms: u64,
         completed_at_unix_ms: u64,
+        timing: Option<ash_protocol::ModelInvocationTiming>,
         tool_call_id: Option<ash_protocol::ToolCallId>,
         outcome: ModelInvocationOutcome,
     ) -> Result<core_api::ModelInvocationReceipt, CoreError> {
@@ -105,6 +108,7 @@ impl ThreadController {
             billing: priced.billing,
             started_at_unix_ms,
             completed_at_unix_ms,
+            timing,
             outcome,
             usage,
             input_estimate,
@@ -145,6 +149,7 @@ impl ThreadController {
             None,
             0,
             0,
+            None,
         )
         .map(|receipt| receipt.sequence)
     }

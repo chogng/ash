@@ -1183,6 +1183,17 @@ test('persistent Chat drafts retire consumed attachments when an untitled compos
 	assert.equal(await part.captureDraft(), undefined);
 });
 
+test('an untouched empty Chat composer does not join a global storage flush on shutdown', () => {
+	using shutdown = new Emitter<IWillShutdownEvent>();
+	using part = inputPart(sharedNotifications);
+	part.bindDraftStorage({ threadId: 'empty-thread', onDidChange: AshEvent.None } as IChatWidgetModel, {
+		read: () => undefined,
+		write: () => { assert.fail('No draft changed'); },
+		flush: async () => { assert.fail('No draft needs flushing'); },
+	}, shutdown.event);
+	shutdown.fire({ reason: 'windowClose', join: () => { assert.fail('Empty composer must not block shutdown'); } });
+});
+
 test('Chat shutdown waits for file preparation and retains the draft when the storage flush fails', async () => {
 	using globals = installEditorTestGlobals({ FileReader: browserEnvironment.window.FileReader });
 	using shutdown = new Emitter<IWillShutdownEvent>();
@@ -1210,4 +1221,23 @@ test('Chat shutdown waits for file preparation and retains the draft when the st
 	await Promise.all(operations);
 	assert.equal(flushes, 2);
 	assert.equal(sends, 0);
+});
+
+test('a hidden cleared composer does not overwrite the active renderer draft during shutdown', async () => {
+	using shutdown = new Emitter<IWillShutdownEvent>();
+	const drafts = new Map<string, Parameters<IChatDraftStorage['write']>[1]>();
+	using part = inputPart(sharedNotifications);
+	part.bindDraftStorage({ threadId: 'shared-thread', onDidChange: AshEvent.None } as IChatWidgetModel, {
+		read: id => drafts.get(id), write: (id, draft) => { drafts.set(id, draft); }, flush: async () => { },
+	}, shutdown.event);
+	edit(part, 'Transfer to the other renderer');
+	const transferred = (await part.captureDraft())!;
+	transferred.clear();
+	part.setVisible(false);
+	const activeDraft = { ...transferred.draft, text: 'Continue in the active renderer' };
+	drafts.set('shared-thread', activeDraft);
+	const operations: Promise<unknown>[] = [];
+	shutdown.fire({ reason: 'windowClose', join: operation => { operations.push(typeof operation === 'function' ? operation() : operation); } });
+	await Promise.all(operations);
+	assert.deepEqual(drafts.get('shared-thread'), activeDraft);
 });

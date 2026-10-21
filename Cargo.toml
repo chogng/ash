@@ -38,6 +38,9 @@ members = [
     "crates/process-hardening",
     "crates/build-info",
     "crates/build-identity",
+    "crates/dev-build",
+    "crates/rust-analysis",
+    "crates/rust-build-ir",
     "crates/livekit-client",
     "crates/voice-agent",
     "crates/livekit-api",
@@ -55,7 +58,6 @@ members = [
     "extensions/academic",
     "extensions/pdf-viewer",
     "extensions/reference-manager",
-    "extensions/code",
     "crates/utils/editor-client-build",
     "extensions/markdown-language-features",
     "extensions/markdown-math",
@@ -71,6 +73,7 @@ members = [
     "crates/app-server",
     "crates/app-server-host",
     "crates/app-server-diff",
+    "crates/app-server-diff-live",
     "crates/app-server-daemon",
     "crates/app-server-client",
     "crates/app-server-test-client",
@@ -418,6 +421,27 @@ rustix = "1.1.4"
 rmcp = { version = "=3.0.0-beta.3", default-features = false }
 rusqlite = { version = "0.40.1", features = ["bundled"] }
 sha2 = "0.10"
+libloading = "0.8.9"
+memmap2 = "0.9.9"
+# Independent code generation; no rust-analyzer fork or rustc_private dependency.
+cranelift-codegen = { version = "=0.135.1", default-features = false, features = ["std", "host-arch"] }
+cranelift-frontend = "=0.135.1"
+cranelift-module = "=0.135.1"
+cranelift-object = { version = "=0.135.1", default-features = false }
+object = { version = "0.39.1", default-features = false, features = ["read", "std"] }
+quote = "1.0.47"
+proc-macro2 = "1.0.107"
+# Compiler-side source extraction uses the existing syn 2 API family.
+syn2 = { package = "syn", version = "2.0.119" }
+# One upstream rust-analyzer release; the bridge does not use the ra-jit fork.
+ra_ap_hir = "=0.0.358"
+ra_ap_hir_def = "=0.0.358"
+ra_ap_ide = "=0.0.358"
+ra_ap_load-cargo = "=0.0.358"
+ra_ap_project_model = "=0.0.358"
+ra_ap_proc_macro_api = "=0.0.358"
+ra_ap_syntax = "=0.0.358"
+ra_ap_vfs = "=0.0.358"
 sha1 = "0.10.6"
 strum = "0.27"
 strum_macros = "0.27"
@@ -442,11 +466,12 @@ ash-grammars = { git = "https://github.com/chogng/ash-grammars", rev = "35c271b7
 unicode-segmentation = "1"
 unicode-width = "0.2"
 uds_windows = "1.2.1"
-zbus = "5.19"
+zbus = { version = "6", default-features = false }
 url = "2"
 urlencoding = "2"
-# ash-http-client supplies its own OS verifier, custom roots and client identity.
-ureq = { version = "2.12", features = ["json"] }
+# ash-http-client supplies TLS through its shared outbound-network config.
+# Keep gzip/JSON without ureq's independent TLS backend and bundled roots.
+ureq = { version = "2.12", default-features = false, features = ["gzip", "json"] }
 # Update hosts use the maintained HTTP API without changing the shared transport
 # adapter's custom TLS/SSRF connector contract. Configure OS trust in every agent.
 ureq-update = { package = "ureq", version = "3.4.2", features = ["json", "platform-verifier"] }

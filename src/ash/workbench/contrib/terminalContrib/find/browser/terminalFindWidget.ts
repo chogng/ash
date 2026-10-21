@@ -6,7 +6,7 @@ import { InputBox } from '../../../../../base/browser/ui/inputbox/inputbox.js';
 import { Disposable, toDisposable } from '../../../../../base/common/lifecycle.js';
 import { isCancellationError, onUnexpectedError } from '../../../../../base/common/errors.js';
 import { Lxicon } from '../../../../../base/common/lxicons.js';
-import { FindReplaceState, type INewFindReplaceState } from '../../../../../../../extensions/code/browser/contrib/find/browser/findState.js';
+import { FindReplaceState, type INewFindReplaceState } from '../../../../../editor/contrib/find/browser/findState.js';
 import { localize } from '../../../../../nls.js';
 import { AccessibilityVerbositySettingId, IAccessibleViewService } from '../../../../../platform/accessibility/browser/accessibleView.js';
 import { IAccessibilityService } from '../../../../../platform/accessibility/common/accessibility.js';

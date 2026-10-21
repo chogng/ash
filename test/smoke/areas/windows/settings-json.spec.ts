@@ -843,6 +843,63 @@ async function workingCopyBackupContents(page: Page): Promise<string[]> {
 	});
 }
 
+test('Electron closes after optional storage and log flush failures and restores the unsaved document', { tag: ['@electron-ui'] }, async ({ application, workbench, reloadWorkbench, runningApplication }, testInfo) => {
+	if (!('windows' in application)) throw new Error('Expected the isolated Electron application');
+	await workbench.page.keyboard.press('ControlOrMeta+N');
+	await workbench.editors.groupAt(0).editor.input.type('draft survives optional shutdown failure');
+	await expect.poll(() => workingCopyBackupContents(workbench.page)).toContain('draft survives optional shutdown failure');
+	const evidence = testInfo.outputPath('optional-shutdown-failures.json');
+	await application.evaluate(({ app, dialog }, options) => {
+		const { writeFileSync } = process.getBuiltinModule('fs');
+		const requireModule = process.getBuiltinModule('module').createRequire(`${app.getAppPath()}/package.json`);
+		const { StorageDatabaseChannel } = requireModule(options.storageModule) as typeof import('../../../../src/ash/platform/storage/electron-main/storageIpc.js');
+		const { LoggerChannel } = requireModule(options.loggerModule) as typeof import('../../../../src/ash/platform/log/electron-main/logIpc.js');
+		const storageCall = StorageDatabaseChannel.prototype.call;
+		const loggerCall = LoggerChannel.prototype.call;
+		const originalDialog = dialog.showMessageBox;
+		const state = { storageFailures: 0, logFailures: 0, dialogs: [] as string[] };
+		const record = () => writeFileSync(options.evidence, JSON.stringify(state));
+		StorageDatabaseChannel.prototype.call = async function <T>(...args: [string, string, unknown]): Promise<T> {
+			if (args[1] === 'flush') { state.storageFailures++; record(); throw new Error('Injected optional storage flush failure'); }
+			return storageCall.apply(this, args) as Promise<T>;
+		};
+		LoggerChannel.prototype.call = async function <T>(...args: [string, string, unknown]): Promise<T> {
+			if (args[1] === 'flush') { state.logFailures++; record(); throw new Error('Injected optional log flush failure'); }
+			return loggerCall.apply(this, args) as Promise<T>;
+		};
+		dialog.showMessageBox = (async (...args: unknown[]) => {
+			state.dialogs.push((args.at(-1) as { message: string; }).message);
+			record();
+			return { response: 0, checkboxChecked: false };
+		}) as typeof dialog.showMessageBox;
+		(globalThis as typeof globalThis & { restoreOptionalShutdownFaults(): void; }).restoreOptionalShutdownFaults = () => {
+			StorageDatabaseChannel.prototype.call = storageCall;
+			LoggerChannel.prototype.call = loggerCall;
+			dialog.showMessageBox = originalDialog;
+		};
+	}, {
+		storageModule: join(process.cwd(), '.build/desktop/main/src/ash/platform/storage/electron-main/storageIpc.js'),
+		loggerModule: join(process.cwd(), '.build/desktop/main/src/ash/platform/log/electron-main/logIpc.js'),
+		evidence,
+	});
+	try {
+		({ workbench } = await reloadWorkbench());
+	} catch (error) {
+		await writeFile(testInfo.outputPath('shutdown-console.json'), JSON.stringify(runningApplication.diagnostics.consoleErrors));
+		await application.evaluate(() => (globalThis as typeof globalThis & { restoreOptionalShutdownFaults(): void; }).restoreOptionalShutdownFaults()).catch(() => undefined);
+		throw error;
+	}
+	const observed = JSON.parse(await readFile(evidence, 'utf8')) as { storageFailures: number; logFailures: number; dialogs: string[]; };
+	expect(observed.storageFailures).toBeGreaterThan(0);
+	expect(observed.logFailures).toBeGreaterThan(0);
+	expect(observed.dialogs).toEqual([]);
+	expect(runningApplication.diagnostics.consoleErrors.some(message => message.includes('Could not save Workbench state during shutdown'))).toBe(true);
+	expect(runningApplication.diagnostics.consoleErrors.some(message => message.includes('Could not flush Desktop logs during shutdown'))).toBe(true);
+	expect(runningApplication.diagnostics.consoleErrors.filter(message => /Failed to save window state before closing/u.test(message))).toEqual([]);
+	await expect(workbench.editors.groupAt(0).editor.lines).toHaveText(['draft survives optional shutdown failure']);
+	await testInfo.attach('optional-shutdown-failures', { path: evidence, contentType: 'application/json' });
+});
+
 test('Electron backup shutdown failure resumes editing and a later close restores the new draft', { tag: ['@electron-ui'] }, async ({ target, application, workbench, reloadWorkbench, runningApplication }, testInfo) => {
 	if (!('windows' in application)) throw new Error('Expected the isolated Electron application');
 	const page = workbench.page;
@@ -916,7 +973,7 @@ test('Electron backup shutdown failure resumes editing and a later close restore
 	}
 });
 
-test('Electron keeps a completed shutdown sealed after its close token expires and restores content after a new close', { tag: ['@electron-ui'] }, async ({ target, application, workbench, reloadWorkbench, runningApplication }, testInfo) => {
+test('Electron keeps waiting for a slow shutdown and accepts its original close request after recovery', { tag: ['@electron-ui'] }, async ({ target, application, workbench, reloadWorkbench, runningApplication }, testInfo) => {
 	if (!('windows' in application)) throw new Error('Expected the isolated Electron application');
 	const page = workbench.page;
 	await page.keyboard.press('ControlOrMeta+N');
@@ -944,7 +1001,7 @@ test('Electron keeps a completed shutdown sealed after its close token expires a
 		}) as typeof setTimeout;
 		dialog.showMessageBox = (async (...args: unknown[]) => {
 			capture.messages.push((args.at(-1) as { message: string; }).message);
-			return { response: 0, checkboxChecked: false };
+			return { response: 2, checkboxChecked: false }; // Keep Waiting
 		}) as typeof dialog.showMessageBox;
 	});
 	await page.evaluate(() => {
@@ -967,34 +1024,33 @@ test('Electron keeps a completed shutdown sealed after its close token expires a
 	});
 	let restored = false;
 	try {
-		const window = await application.browserWindow(page);
-		await window.evaluate(window => window.close());
+		const reloaded = reloadWorkbench();
 		await expect.poll(() => page.evaluate(() => (globalThis as typeof globalThis & { backupCompletionGate: { heldAt: number; }; }).backupCompletionGate.heldAt)).toBe(2);
 		await application.evaluate(() => {
 			const deadline = (globalThis as typeof globalThis & { backupCloseDeadline: { expire?: () => void; }; }).backupCloseDeadline;
 			if (!deadline.expire) throw new Error('Main close deadline was not captured');
 			deadline.expire();
 		});
-		await expect.poll(() => application.evaluate(() => (globalThis as typeof globalThis & { backupCloseDeadline: { messages: string[]; }; }).backupCloseDeadline.messages)).toEqual(['The window did not respond to the close request.']);
+		await expect.poll(() => application.evaluate(() => (globalThis as typeof globalThis & { backupCloseDeadline: { messages: string[]; }; }).backupCloseDeadline.messages)).toEqual(['The window is not responding.']);
+		await expect.poll(() => page.evaluate(() => document.body.inert)).toBe(true);
+		await expect(group.editor.lines).toHaveText(['committed draft before expired close']);
+		await application.evaluate(() => (globalThis as typeof globalThis & { backupCloseDeadline: { restore(): void; }; }).backupCloseDeadline.restore());
+		restored = true;
 		await page.evaluate(() => {
 			const gate = (globalThis as typeof globalThis & { backupCompletionGate: { release?: () => void; restore(): void; }; }).backupCompletionGate;
 			if (!gate.release) throw new Error('Final transaction notification was not held');
 			gate.release();
 			gate.restore();
 		});
-		await expect.poll(() => runningApplication.diagnostics.consoleErrors.filter(message => /Failed to complete window close request/u.test(message) && /Window close request is no longer active/u.test(message))).toHaveLength(1);
-		await expect.poll(() => page.evaluate(() => document.body.inert)).toBe(true);
+		({ workbench } = await reloaded);
+		expect(runningApplication.diagnostics.consoleErrors.filter(message => /Failed to complete window close request/u.test(message))).toEqual([]);
 		expect(runningApplication.diagnostics.consoleErrors.filter(message => /Failed to save window state before closing/u.test(message))).toEqual([]);
-		await expect(group.editor.lines).toHaveText(['committed draft before expired close']);
 		const errors = [...runningApplication.diagnostics.consoleErrors];
-		await application.evaluate(() => (globalThis as typeof globalThis & { backupCloseDeadline: { restore(): void; }; }).backupCloseDeadline.restore());
-		restored = true;
-		({ workbench } = await reloadWorkbench());
 		await expect(workbench.editors.groupAt(0).tabs.filter({ hasText: 'Untitled-1' })).toHaveCount(1);
 		await expect(workbench.editors.groupAt(0).editor.lines).toHaveText(['committed draft before expired close']);
-		const evidence = testInfo.outputPath('backup-completion-expired-token-retry.json');
-		await writeFile(evidence, JSON.stringify({ finalWriteHeldAt: 2, expectedFailure: errors, sealedAfterCommit: true, newCloseAndRestore: true }));
-		await testInfo.attach('backup-completion-expired-token-retry', { path: evidence, contentType: 'application/json' });
+		const evidence = testInfo.outputPath('backup-completion-after-timeout.json');
+		await writeFile(evidence, JSON.stringify({ finalWriteHeldAt: 2, consoleErrors: errors, sealedWhileWaiting: true, originalCloseAccepted: true, restored: true }));
+		await testInfo.attach('backup-completion-after-timeout', { path: evidence, contentType: 'application/json' });
 	} finally {
 		if (!restored && !page.isClosed()) {
 			await page.evaluate(() => {

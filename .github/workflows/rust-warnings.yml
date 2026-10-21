@@ -98,6 +98,27 @@ jobs:
           ${{ matrix.python }} -B scripts/cargo.py test -p ash-cli --lib install::tests --locked
           ${{ matrix.python }} -B scripts/cargo.py --process-tests test -p ash-cli --test commands managed_installer_ --locked
 
+      - name: Prepare locked ripgrep for macOS sandbox tests
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          ${{ matrix.python }} -B - <<'PY'
+          import os
+          import subprocess
+          from pathlib import Path
+          from build.lib.targets import TARGETS, default_target
+          from build.lib.ripgrep import resolve_ripgrep
+
+          root = Path.cwd()
+          ripgrep = resolve_ripgrep(
+              TARGETS[default_target()],
+              root / "third_party/ripgrep/runtime-lock.json",
+              root / "third_party/.cache/ripgrep",
+          )
+          subprocess.run([ripgrep.executable, "--version"], check=True)
+          with open(os.environ["GITHUB_ENV"], "a", encoding="utf-8") as output:
+              output.write(f"ASH_RG_PATH={ripgrep.executable}\n")
+          PY
       - name: Test macOS sandbox and large-workspace file tools
         if: runner.os == 'macOS'
         shell: bash
@@ -273,6 +294,9 @@ jobs:
 
       - name: Test real TUI terminal scenarios
         timeout-minutes: 20
+        # Issue fixtures also open an App Server inside the test process.
+        env:
+          ASH_USE_INMEMORY_SECRETSTORAGE: "1"
         run: >-
           just test-tui -- --test-threads=4
           --skip actual_tui_sandbox_

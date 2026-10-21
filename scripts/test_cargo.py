@@ -224,6 +224,35 @@ class CodeModeHostTests(unittest.TestCase):
                 self.assertEqual(run.call_args.kwargs["env"], environment)
         prepare.assert_not_called()
 
+    @patch.dict(
+        "scripts.cargo.os.environ", {"ASH_TGREP_PATH": "/runtime/tgrep"}, clear=True
+    )
+    @patch("scripts.cargo.subprocess.run")
+    @patch("scripts.cargo.prepare_test_executable", return_value="/runtime/helper")
+    @patch("build.lib.cargo_inputs.resolve_v8_cargo_env", return_value={})
+    @patch("scripts.cargo.cargo_command_packages")
+    def test_real_tui_target_does_not_build_dependency_unit_test_helpers(
+        self, packages, resolve_v8, prepare, run
+    ) -> None:
+        packages.return_value = {
+            "ash-cli",
+            "ash-app-server",
+            "ash-app-server-runtime",
+            "ash-code-mode",
+            "ash-remote-server",
+        }
+        run.return_value = subprocess.CompletedProcess([], 0)
+        arguments = ["test", "-p", "ash-cli", "--test", "tui_real_scenarios"]
+        self.assertEqual(main(arguments), 0)
+        prepare.assert_not_called()
+        self.assertEqual(
+            run.call_args.args[0],
+            ["cargo", "test", "--profile", "ci-test", *arguments[1:]],
+        )
+        # A broader invocation still owns unit tests that require those programs.
+        self.assertEqual(main([*arguments, "--lib"]), 0)
+        self.assertEqual(len(prepare.call_args_list), 5)
+
     @patch("scripts.cargo.subprocess.run")
     def test_uses_reported_executable_with_the_test_build_settings(self, run) -> None:
         run.return_value = subprocess.CompletedProcess(
@@ -294,13 +323,27 @@ class CodeModeHostTests(unittest.TestCase):
                 self.assertEqual(main(["test", "-p", package, "--lib"]), 0)
                 self.assertEqual(
                     [call.args[3] for call in prepare.call_args_list],
-                    ["ash-markdown-math", "ash-debug-lldb"],
+                    ["ash-markdown-math", "ash-debug-lldb"]
+                    + (
+                        ["ash-app-server-runtime"]
+                        if package == "ash-app-server-runtime"
+                        else []
+                    ),
                 )
                 environment = run.call_args.kwargs["env"]
                 self.assertEqual(
                     environment["ASH_MARKDOWN_MATH_BIN"], "/runtime/helper"
                 )
                 self.assertEqual(environment["ASH_DEBUG_LLDB_BIN"], "/runtime/helper")
+                if package == "ash-app-server-runtime":
+                    self.assertEqual(
+                        environment["ASH_MANAGED_LIFECYCLE_TEST_HOST"],
+                        "/runtime/helper",
+                    )
+                    self.assertEqual(
+                        prepare.call_args.kwargs,
+                        {"target_name": "managed_lifecycle", "target_kind": "example"},
+                    )
 
     @patch("scripts.cargo.subprocess.run")
     def test_forwards_all_cargo_jobs_argument_forms(self, run) -> None:
@@ -388,6 +431,87 @@ class CodeModeHostTests(unittest.TestCase):
                 self.assertEqual(run.call_args.kwargs["env"], environment)
         prepare.assert_not_called()
         resolve_v8.assert_not_called()
+
+    @patch.dict("scripts.cargo.os.environ", {}, clear=True)
+    @patch("scripts.cargo.subprocess.run")
+    @patch("scripts.cargo.prepare_test_executable", return_value="/runtime/watch_probe")
+    @patch(
+        "scripts.cargo.cargo_command_packages",
+        return_value={"ash-file-watcher", "ash-skills-extension"},
+    )
+    def test_macos_library_tests_prepare_a_matching_watcher_host(
+        self, packages, prepare, run
+    ):
+        run.return_value = subprocess.CompletedProcess([], 0)
+        with patch("scripts.cargo.default_target", return_value="aarch64-apple-darwin"):
+            self.assertEqual(main(["test", "-p", "ash-skills-extension", "--lib"]), 0)
+        self.assertEqual(prepare.call_args.args[3], "ash-file-watcher")
+        self.assertEqual(
+            prepare.call_args.kwargs,
+            {"target_name": "watch_probe", "target_kind": "example"},
+        )
+        self.assertEqual(
+            run.call_args.kwargs["env"]["ASH_FILE_WATCHER_TEST_HOST"],
+            "/runtime/watch_probe",
+        )
+        prepare.reset_mock()
+        with patch("scripts.cargo.default_target", return_value="aarch64-apple-darwin"):
+            self.assertEqual(
+                main(["test", "-p", "ash-skills-extension", "--no-run"]), 0
+            )
+        prepare.assert_not_called()
+        with (
+            patch.dict(
+                "scripts.cargo.os.environ",
+                {"ASH_FILE_WATCHER_TEST_HOST": "/explicit/helper"},
+            ),
+            patch("scripts.cargo.default_target", return_value="aarch64-apple-darwin"),
+        ):
+            self.assertEqual(main(["test", "-p", "ash-skills-extension", "--lib"]), 0)
+        prepare.assert_not_called()
+        self.assertEqual(
+            run.call_args.kwargs["env"]["ASH_FILE_WATCHER_TEST_HOST"],
+            "/explicit/helper",
+        )
+
+    @patch("scripts.cargo.subprocess.run")
+    def test_helper_examples_use_the_reported_artifact_and_same_profile(self, run):
+        run.return_value = subprocess.CompletedProcess(
+            [],
+            0,
+            json.dumps(
+                {
+                    "reason": "compiler-artifact",
+                    "target": {"name": "watch_probe", "kind": ["example"]},
+                    "executable": "/matching/watch_probe",
+                }
+            ),
+        )
+        self.assertEqual(
+            prepare_test_executable(
+                "cargo",
+                ["test", "--profile", "ci-test", "--lib"],
+                {},
+                "ash-file-watcher",
+                target_name="watch_probe",
+                target_kind="example",
+            ),
+            "/matching/watch_probe",
+        )
+        self.assertEqual(
+            run.call_args.args[0],
+            [
+                "cargo",
+                "build",
+                "-p",
+                "ash-file-watcher",
+                "--example",
+                "watch_probe",
+                "--message-format=json",
+                "--profile",
+                "ci-test",
+            ],
+        )
 
 
 class ProcessTestRunnerTests(unittest.TestCase):

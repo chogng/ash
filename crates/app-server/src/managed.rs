@@ -32,6 +32,9 @@ pub(crate) fn run(
     product_services: Option<PathBuf>,
     diff_handler: crate::DiffRequestHandler,
 ) -> Result<(), String> {
+    let startup_trace = ash_app_server_daemon::startup_trace::StartupTrace::from_environment();
+    let _trace = ash_app_server_daemon::startup_trace::StartupTrace::enter(startup_trace);
+    let startup = ash_app_server_daemon::startup_trace::StartupTrace::span("managed-startup");
     let history = ash_state::SqliteThreadStore::open(profile_root.join("state.sqlite3"))
         .map_err(|error| error.to_string())?;
     // Once ownership transfers, this host is execution-only. Opening the profile services
@@ -41,7 +44,7 @@ pub(crate) fn run(
         .map_err(|error| error.to_string())?
     {
         Some(_) => None,
-        None => Some(Arc::new(ProfileAppServerRegistry::open(
+        None => Some(Arc::new(ProfileAppServerRegistry::open_with_terminal_host(
             ConnectionOptions::new(
                 &profile_root,
                 None,
@@ -49,11 +52,21 @@ pub(crate) fn run(
                 product_services,
             ),
             diff_handler,
+            Some(std::env::current_exe().map_err(|error| error.to_string())?),
         )?)),
     };
     drop(history);
     let idle_timeout = configured_idle_timeout()?;
-    let mut endpoint = ManagedEndpoint::bind(&profile_root)?;
+    let connection_contract = match &registry {
+        Some(_) => ash_app_server_daemon::ManagedConnectionContract::Agent {
+            protocol_version:
+                ash_app_server_protocol::protocol::initialize::ProtocolVersion::current(),
+        },
+        None => ash_app_server_daemon::ManagedConnectionContract::Execution,
+    };
+    let mut endpoint = ManagedEndpoint::bind(&profile_root, connection_contract)?;
+    drop(startup);
+    drop(_trace);
     // Keep the endpoint leased until directory and profile destructors finish, so a
     // new generation cannot open the same profile while its old services stop.
     let registry = registry;
@@ -122,6 +135,7 @@ pub(crate) fn run(
                 .name("ash-local-app-server-connection".into())
                 .spawn(move || {
                     let _registration = registration;
+                    let _trace = ash_app_server_daemon::startup_trace::StartupTrace::enter(connection.startup_trace.take());
                     if let ConnectionRole::Execution { environment, .. } = connection.options.role() {
                         if let Err(error) = execution_registry.serve(connection, &environment) {
                             eprintln!("managed execution connection failed: {error}");

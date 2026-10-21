@@ -181,6 +181,9 @@ export abstract class BaseTerminalProfileResolverService extends Disposable impl
 	private _guessProfileIcon(executable: string, args: TerminalArguments | undefined): ThemeIcon | undefined {
 		const program = executable.split(/[/\\]/).at(-1)!.replace(/\.exe$/i, '').toLowerCase();
 		if (/^ubuntu(?:\d{4})?$/.test(program)) return Lxicon.terminalUbuntu;
+		// Git for Windows installs bash in either bin or usr/bin. Plain bash
+		// elsewhere may belong to WSL, Cygwin or MSYS and keeps its own identity.
+		if (program === 'git-bash' || /(?:^|\/)git\/(?:usr\/)?bin\/bash\.exe$/i.test(executable.replaceAll('\\', '/'))) return Lxicon.terminalGitBash;
 		switch (program) {
 			case 'pwsh':
 			case 'powershell':

@@ -25,7 +25,7 @@ function fixture(read?: (query: string, options: ExtensionsSearchOptions) => Pro
 	services.registerInstance(IConfigurationService, configuration);
 	services.registerInstance(IExtensionManagementService, {
 		onDidChangeInstalled: Event.None,
-		sources: async () => ({ revision: 1, sources: [{ id: 'ash', kind: 'ash', enabled: true }, { id: 'offline', kind: 'ash', enabled: true }, { id: 'open-vsx', kind: 'openVsx', enabled: true }] }),
+		sources: async () => ({ revision: 1, sources: [{ id: 'ash', kind: 'ash', enabled: true }, { id: 'offline', kind: 'ash', enabled: true }] }),
 		get: async () => ({ capabilities: [{ kind: 'skill' }, { kind: 'mcp' }] }),
 		searchPage: async (query: string, options: ExtensionsSearchOptions & { sourceId: string; }) => {
 			requests.push([query, options]);

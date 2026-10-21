@@ -1,8 +1,7 @@
 load("//:defs.bzl", "ash_rust_crate")
 
 ash_rust_crate(
+    # Shared consumers use the protocol client; the host runs as a separate program.
     name = "livekit-client",
     crate_name = "livekit_client",
-    crate_features = ["host"],
-    extra_aliases = {"//crates/screen-capture": "screen_capture"},
 )

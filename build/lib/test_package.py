@@ -117,7 +117,6 @@ class PackageTests(unittest.TestCase):
                 "ash-code-mode-host",
                 "ash-git-extension",
                 "ash-markdown-math",
-                "ash-code-editor",
                 "ash-markdown-language-features",
                 "ash-github-authentication",
                 "ash-github-extension",
@@ -229,7 +228,7 @@ class PackageTests(unittest.TestCase):
                     (output / "bin" / spec.js_extension_host_name).exists()
                 )
                 self.assertTrue((output / "bin" / spec.code_mode_host_name).is_file())
-                for name in ("node.mjs", "host.mjs", "vscode.mjs", "scm.js"):
+                for name in ("node.mjs", "ash.mjs", "host.mjs", "scm.js"):
                     self.assertTrue(
                         (output / "ash-resources/extension-host" / name).is_file()
                     )
@@ -306,7 +305,6 @@ class PackageTests(unittest.TestCase):
         "bat",
         "bazel",
         "clojure",
-        "code",
         "coffeescript",
         "cpp",
         "csharp",
@@ -462,9 +460,6 @@ class PackageTests(unittest.TestCase):
                 markdown_math_binary=executable_file(
                     root / "math-extension", b"math-extension"
                 ),
-                code_editor_extension_binary=executable_file(
-                    root / "code-editor", b"code-editor-extension"
-                ),
                 markdown_extension_binary=executable_file(
                     root / "markdown-language-features", b"markdown-extension"
                 ),
@@ -616,10 +611,6 @@ class PackageTests(unittest.TestCase):
             self.assertFalse((git_extension / "Cargo.toml").exists())
             self.assertEqual(
                 b"git-extension", (output / "bin" / "ash-git-extension").read_bytes()
-            )
-            self.assertEqual(
-                b"code-editor-extension",
-                (output / "bin" / "ash-code-editor").read_bytes(),
             )
             self.assertFalse((output / "bin/ash-academy").exists())
             self.assertFalse((output / "bin/ash-pdf-viewer").exists())
@@ -814,9 +805,6 @@ class PackageTests(unittest.TestCase):
                 markdown_math_binary=executable_file(
                     root / "math-extension", b"math-extension"
                 ),
-                code_editor_extension_binary=executable_file(
-                    root / "code-editor", b"code-editor-extension"
-                ),
                 markdown_extension_binary=executable_file(
                     root / "markdown-language-features", b"markdown-extension"
                 ),
@@ -861,7 +849,7 @@ class PackageTests(unittest.TestCase):
                     (output / "ash-resources/protocol/metadata.json").read_text()
                 ),
             )
-            for script in ("node.mjs", "vscode.mjs", "host.mjs", "scm.js"):
+            for script in ("node.mjs", "ash.mjs", "host.mjs", "scm.js"):
                 resource = f"ash-resources/extension-host/{script}"
                 self.assertIn(resource, metadata["files"])
                 self.assertTrue((output / resource).is_file())
@@ -1136,9 +1124,6 @@ class PackageTests(unittest.TestCase):
                 markdown_math_binary=executable_file(
                     root / "math-extension", b"math-extension"
                 ),
-                code_editor_extension_binary=executable_file(
-                    root / "code-editor", b"code-editor-extension"
-                ),
                 markdown_extension_binary=executable_file(
                     root / "markdown-language-features", b"markdown-extension"
                 ),
@@ -1234,9 +1219,6 @@ class PackageTests(unittest.TestCase):
                 ),
                 markdown_math_binary=executable_file(
                     root / "math-extension", b"math-extension"
-                ),
-                code_editor_extension_binary=executable_file(
-                    root / "code-editor", b"code-editor-extension"
                 ),
                 markdown_extension_binary=executable_file(
                     root / "markdown-language-features", b"markdown-extension"

@@ -9,7 +9,7 @@ import { TextModel } from '../../common/model/textModel.js';
 import { Position } from '../../common/core/position.js';
 import { Range } from '../../common/core/range.js';
 import { LanguageFeaturesService } from '../../common/services/languageFeaturesService.js';
-import { LinkDetector } from '../../../../../extensions/code/browser/contrib/links/browser/links.js';
+import { LinkDetector } from '../../contrib/links/browser/links.js';
 import { createTestCodeEditor } from './testCodeEditor.js';
 
 async function waitFor(predicate: () => boolean): Promise<void> {

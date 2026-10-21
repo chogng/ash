@@ -786,7 +786,7 @@ export class Workbench extends Disposable {
 		// Only the desktop host may inspect directory grants. Web language requests
 		// are authorized by the server for the authenticated workspace.
 		const checkWorkspaceTrust = !!nativeHostApi;
-		if (api.hasAppServer) { this._register(services.createInstance(AppServerLanguageProviders, api.language, { checkWorkspaceTrust })); }
+		const languageProviders = api.hasAppServer ? this._register(services.createInstance(AppServerLanguageProviders, api.language, { checkWorkspaceTrust })) : undefined;
 		const diffService = services.createInstance(DiffService);
 		services.registerInstance(IDiffService, diffService);
 		const codeIntelligenceDocuments = new AppServerCodeIntelligenceDocumentService(api.codebaseSymbols);
@@ -931,7 +931,8 @@ export class Workbench extends Disposable {
 			if (event.reason === 'pageHide') workingCopyBackupTracker.completeShutdown();
 		}));
 		this._register(lifecycleService.onWillShutdown(event => {
-			event.join(storage.flush(WillSaveStateReason.SHUTDOWN), "Workbench storage flush");
+			// UI state is best effort; unsaved content has its own required backup join below.
+			event.join(storage.flush(WillSaveStateReason.SHUTDOWN).catch(error => logService.error('storage', 'Could not save Workbench state during shutdown', error)), "Workbench storage flush");
 			event.join(() => workingCopyBackupTracker.shutdown(), "Working-copy backup drain", () => workingCopyBackupTracker.isShutdownCurrent);
 		}));
 		this._register(lifecycleService.onDidShutdown(() => workingCopyBackupTracker.completeShutdown()));
@@ -997,7 +998,10 @@ export class Workbench extends Disposable {
 		services.registerInstance(IAccountPolicyService, accountPolicies);
 		const policies = this._register(new MultiplexPolicyService([systemPolicies, accountPolicies]));
 		services.registerInstance(IPolicyService, policies);
-		serviceContributionReady.push(configuration.initialize(fileService, policies, workingCopyService));
+		serviceContributionReady.push(configuration.initialize(fileService, policies, workingCopyService).then(() => {
+			languageProviders?.start();
+			languageDiagnosticsService.start();
+		}));
 		const accessibilityService = this._register(nativeHostApi
 			? services.createInstance(NativeAccessibilityService, workbenchRoot)
 			: new AccessibilityService({
@@ -1009,7 +1013,37 @@ export class Workbench extends Disposable {
 		const notificationsCenter = this._register(services.createInstance(NotificationsCenter, workbenchRoot, notificationService.model, feedbackHost, notificationActionRunner, statusbarService, () => services.get(IAccessibleViewService).getOpenAriaHint(AccessibilityVerbositySettingId.Notifications)));
 		services.registerInstance(INotificationsCenter, notificationsCenter);
 		services.registerInstance(IGitHubConnectionService, this._register(services.createInstance(GitHubConnectionService)));
-		const viewDescriptors = this._register(services.createInstance(ViewDescriptorService, {}));
+		const viewContainerLocationsKey = 'workbench.viewContainerLocations';
+		const readViewContainerLocations = (): Record<string, ViewContainerLocation> => {
+			const saved = storage.get(viewContainerLocationsKey, StorageScope.PROFILE);
+			if (saved === undefined) return {};
+			const parsed: unknown = JSON.parse(saved);
+			if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed) || Object.entries(parsed).some(([id, location]) => !id || !Object.values(ViewContainerLocation).includes(location as ViewContainerLocation))) {
+				throw new TypeError(localize('workbench.invalidViewContainerLocations', 'Saved view container locations are invalid.'));
+			}
+			return parsed as Record<string, ViewContainerLocation>;
+		};
+		const viewDescriptors = this._register(services.createInstance(ViewDescriptorService, { viewContainerLocations: readViewContainerLocations() }));
+		let restoringViewContainerLocations = false;
+		this._register(viewDescriptors.onDidChangeContainerLocation(({ viewContainer, to }) => {
+			if (restoringViewContainerLocations) return;
+			const saved = readViewContainerLocations();
+			if (to === viewDescriptors.getDefaultViewContainerLocation(viewContainer)) delete saved[viewContainer.id];
+			else saved[viewContainer.id] = to;
+			storage.store(viewContainerLocationsKey, JSON.stringify(saved), StorageScope.PROFILE, StorageTarget.USER);
+		}));
+		this._register(storage.onDidChangeValue(event => {
+			if (!event.external || event.scope !== StorageScope.PROFILE || event.key !== viewContainerLocationsKey) return;
+			const saved = readViewContainerLocations();
+			restoringViewContainerLocations = true;
+			try {
+				for (const container of viewDescriptors.viewContainers) {
+					viewDescriptors.moveViewContainerToLocation(container, saved[container.id] ?? viewDescriptors.getDefaultViewContainerLocation(container)!);
+				}
+			} finally {
+				restoringViewContainerLocations = false;
+			}
+		}));
 		services.registerInstance(IViewDescriptorService, viewDescriptors);
 		services.registerSingleton(IActivityService, () => services.createInstance(ActivityService));
 		const contributions = this._register(
@@ -1234,6 +1268,10 @@ export class Workbench extends Disposable {
 			const openings: Promise<unknown>[] = [];
 			for (const [location, part] of paneParts) {
 				if (location === ViewContainerLocation.AgentSidebar && !layout.isPartVisible('agentSidebar')) { continue; }
+				if (viewDescriptors.getViewContainers(location).length === 0) {
+					layout.hidePart(panes.getPartId(location));
+					continue;
+				}
 				const visible = layout.isPartVisible(panes.getPartId(location));
 				const container = requiredViewContainerToRestore(viewDescriptors, location, part.getCompositeIdToRestore());
 				// Restore retained content without changing the saved visibility of its region.

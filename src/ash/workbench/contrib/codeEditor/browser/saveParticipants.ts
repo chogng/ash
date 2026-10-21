@@ -15,8 +15,8 @@ import type { TextModel } from '../../../../editor/common/model/textModel.js';
 import { ILanguageFeaturesService } from '../../../../editor/common/services/languageFeatures.js';
 import { EditSources } from '../../../../editor/common/textModelEditSource.js';
 import { EditorExtensionsRegistry } from '../../../../editor/browser/editorExtensions.js';
-import { CodeActionKind } from '../../../../../../extensions/code/browser/contrib/codeAction/common/types.js';
-import type { SnippetController2 } from '../../../../../../extensions/code/browser/contrib/snippet/browser/snippetController2.js';
+import { CodeActionKind } from '../../../../editor/contrib/codeAction/common/types.js';
+import type { SnippetController2 } from '../../../../editor/contrib/snippet/browser/snippetController2.js';
 import { localize } from '../../../../nls.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
@@ -104,7 +104,7 @@ class CodeActionOnSaveParticipant implements ITextModelSaveParticipant {
 		const lifetime = new AbortController();
 		using release = combinedDisposable(model.onWillDispose(() => lifetime.abort()), toDisposable(() => lifetime.abort()));
 		const requestSignal = AbortSignal.any([signal, lifetime.signal, ...(contribution.providerSignal ? [contribution.providerSignal] : [])]);
-		const { getCodeActions } = await import('../../../../../../extensions/code/browser/contrib/codeAction/browser/codeAction.js');
+		const { getCodeActions } = await import('../../../../editor/contrib/codeAction/browser/codeAction.js');
 		requestSignal.throwIfAborted();
 		for (const kind of kinds) {
 			// Providers must query after preceding providers' edits, rather than share stale versions.

@@ -52,8 +52,7 @@ export class CustomizationMarketplaceWorkbenchService extends Disposable impleme
 		lifetime.add(this.onDidChangeSources(() => cancellation.cancel()));
 		const snapshot = await raceCancellationError(this.extensions.sources(), cancellation.token);
 		if (this.isDisposed) { throw new CancellationError(); }
-		// Open VSX supplies editor extensions, not signed Skills/MCP packages.
-		const metadata = snapshot.sources.filter(source => source.kind === 'ash').map(source => ({
+		const metadata = snapshot.sources.map(source => ({
 			id: source.id, displayName: source.id, enabled: source.enabled,
 			enablementSetting: CustomizationMarketplaceConfiguration.MarketplaceEnabled,
 		}));

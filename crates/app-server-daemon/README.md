@@ -3,8 +3,8 @@
 诊断导出通过只读 `read_process_logs` 取得 profile 所属的当前日志和现存数字轮转文件，不接受客户端路径，不启动进程或截断日志；每次最多 32 个文件、单文件 16 MiB、合计 64 MiB，返回截断及省略信息，拒绝重定向文件。App Server 将快照放入发起连接所属的有期限资源，远端与本地使用同一接口。
 
 - 管理独立的 `ash-app-server --managed` 进程，记录其 PID、启动身份、可执行文件摘要和随包 `buildId`。Linux 新启动身份使用内核 boot ID 和 `/proc/<pid>/stat` 的启动 ticks，不受 wall clock 校准影响；旧日历时间记录仍在原身份域严格比较，校时后不降级信任或重写记录。macOS 和 Windows 保持各自现有身份实现。
-- 串行化生命周期操作，所选服务探测成功后才返回 ready。Agent 连接验证 initialize 和必需能力；Execution 连接验证执行协议，不打开 Agent 历史。普通 start/connect 复用同一 profile 已运行且协议与必需能力兼容的进程；`ensure-selected` 在可执行文件内容变化时更换运行代次，`restart` 总是更换运行代次。
-- 提供同用户控制端点与 stdio 连接程序；`ManagedEndpoint` 由后台服务进程持有。
+- 串行化生命周期操作；`start`、`ensure-selected`、`restart` 和 `version` 保留完整 initialize／必需能力探测。Agent carrier 连接优先验证后台控制响应中的进程代次、协议主版本及严格 schema 指纹，不再为健康检查另建业务连接；真实客户端仍须完成自身的 initialize／能力协商，传输已连接不代表业务 ready。旧后台没有控制契约时回退完整 probe。Execution 连接仍验证执行协议，不打开 Agent 历史。普通 start/connect 复用同一 profile 已运行且兼容的进程；`ensure-selected` 在可执行文件内容变化时更换运行代次，`restart` 总是更换运行代次。
+- 提供同用户控制端点与 stdio 连接程序；`ManagedEndpoint` 由后台服务进程持有。后台 runtime owner 在 profile 启动后声明 Agent 或 execution-only 控制契约；控制端点不创建目录服务或声称目录能力已经可用。
 - Desktop 发布包声明 `hostProvidedNode` 和确切 `electronVersion`。安装器探测 Electron 的 Node 模式，将 canonical executable、SHA-256 和 Electron/Node 版本写入包选择 manifest 的可选 `installation` 字段；签名包原始 bytes 与 buildId 保持不变。manifest 继续使用版本 1，旧客户端仍可显式选择自包含包回滚。
 - TUI 等普通客户端复用 profile 的选定绑定，重启不使用调用方的 Electron 环境。每次启动重新校验文件与运行版本；缺失或不兼容时，Rust 后台继续启动，JS 扩展和语言服务器不可用。绑定或可用性变化使 `ensure-selected` 创建新进程代际，旧扩展与语言服务器随旧后端释放。
 - Desktop 后端随完整 Desktop 应用更新，不进入独立 App Server 更新通道；普通 CLI/Web/Remote 后端继续安装和更新带 Node 的自包含包。
@@ -29,7 +29,7 @@
 - 包租约覆盖启动交接，后台服务自己持有运行期间的租约。
 - Desktop 开发重载通过准备包中的 `lease-development <current.json 的绝对路径>` 取得构建租约。命令持有 `publish.lock` 完成读取与租约获取后输出单行 `{ "runtime": "绝对路径" }`，直到 stdin 关闭才释放租约；Electron 在旧连接停止和新进程启动期间持续持有这条管道。
 
-本地端点按 profile 固定，不随产品包版本、schema hash 或后端文件摘要变化。它使用 [`ash-uds`](../uds/README.md) 的私有目录和同用户校验。不同版本安装通过 initialize 校验协议主版本、生成协议指纹和必需能力可用性；schema hash 不同会拒绝连接。普通 start/connect 遇到协议不兼容时连接失败；只有明确的 `ensure-selected` 或 `restart` 会替换后台进程。协议不兼容的旧客户端需要更新后才能使用新后台。控制程序不需要长期驻留；每个窗口保留自己的连接。
+本地端点按 profile 固定，不随产品包版本、schema hash 或后端文件摘要变化。它使用 [`ash-uds`](../uds/README.md) 的私有目录和同用户校验。不同版本安装先通过可选控制契约校验协议主版本与生成协议指纹，再由真实 initialize 校验必需能力；没有新控制契约时保留原 initialize probe。schema hash 不同会拒绝连接。普通 start/connect 遇到协议不兼容时连接失败；只有明确的 `ensure-selected` 或 `restart` 会替换后台进程。协议不兼容的旧客户端需要更新后才能使用新后台。控制程序不需要长期驻留；每个窗口保留自己的连接。
 
 ## SSH 连接范围
 
@@ -40,8 +40,8 @@ SSH host、可选远端目录和精确 runtime 路径。远端路径不会成为
 
 命令环境使用 `ASH_REMOTE_HOST`、`ASH_REMOTE_ROOT` 和 `ASH_REMOTE_RUNTIME`；host 与 runtime
 必须同时提供，不能混入本地 `ASH_WORKSPACE_ROOT` 或 Agents role。启动共享后台进程时清除这些
-连接字段，首个窗口不能决定后台进程的执行目标。健康检查始终使用无目录的本地连接，远端不可达
-不会让其他本地窗口失效。
+连接字段，首个窗口不能决定后台进程的执行目标。生命周期命令的完整健康检查使用无目录的本地连接；新的 carrier 控制握手不打开这个目录 runtime。
+远端可达性和初始化归实际远端连接，远端不可达不会让其他本地窗口失效。
 
 本地连接和控制请求继续发送版本 1 prelude，SSH 范围发送版本 2，执行连接发送版本 3。
 后台控制响应报告版本 3；连接前检查对应范围的最低版本，旧后端明确拒绝不支持的范围。

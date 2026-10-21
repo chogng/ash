@@ -231,7 +231,7 @@ impl RuntimeInner {
                         .to_path_buf(),
                 )?);
             }
-            if prepared.command.is_vscode() {
+            if prepared.command.is_node_host() {
                 // prepare_extension has checked exact artifact consent and the live workspace lease.
                 limits.isolation = ash_external_ext::ProcessIsolationPolicy::AuthorizedNode;
                 limits.maximum_environment_entries = 256;

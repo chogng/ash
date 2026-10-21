@@ -23,21 +23,22 @@ const reason = '<img src=x onerror=alert(1)> & literal process reason';
 const statuses: readonly ChatHookRun['status'][] = [{ type: 'running' }, { type: 'continued' }, { type: 'denied', reason }, { type: 'failed', message: reason }, { type: 'cancelled', reason }];
 const entry = (status: ChatHookRun['status']): Extract<ThreadTranscriptEntry, { type: 'hookRun'; }> => ({ type: 'hookRun', entryId: 'hook:run', turnId: 'turn', run: { ...run, status, durationMs: status.type === 'running' ? 0 : 25 } });
 
+test('Hook transcript retains all five domain states and their canonical run identities', () => {
+	for (const status of statuses) {
+		const canonical = entry(status);
+		const items = chatTranscriptListItems([canonical]);
+		assert.equal(items.length, 1, `visible ${status.type} Hook`);
+		assert.deepEqual(items[0].hookPart, { kind: 'hook', run: canonical.run });
+		assert.equal(items[0].id, canonical.entryId);
+		assert.equal(items[0].isError, status.type === 'denied' || status.type === 'failed');
+		assert.equal(items[0].transient, status.type === 'running');
+	}
+});
+
 for (const host of [
-	{ name: 'Code', map: chatTranscriptListItems, create: (services: ReturnType<typeof createTestEditorServices>, container: HTMLElement) => services.createInstance(ChatListWidget, container, {}) },
-	{ name: 'Cowork', map: chatTranscriptListItems, create: (services: ReturnType<typeof createTestEditorServices>, container: HTMLElement) => services.createInstance(ChatListWidget, container, { classPrefix: 'ash-cowork' }) },
+	{ name: 'Code', create: (services: ReturnType<typeof createTestEditorServices>, container: HTMLElement) => services.createInstance(ChatListWidget, container, {}) },
+	{ name: 'Cowork', create: (services: ReturnType<typeof createTestEditorServices>, container: HTMLElement) => services.createInstance(ChatListWidget, container, { classPrefix: 'ash-cowork' }) },
 ]) {
-	test(`${host.name} Hook transcript retains all five domain states and their canonical run identities`, () => {
-		for (const status of statuses) {
-			const canonical = entry(status);
-			const items = host.map([canonical]);
-			assert.equal(items.length, 1, `visible ${status.type} Hook`);
-			assert.deepEqual(items[0].hookPart, { kind: 'hook', run: canonical.run });
-			assert.equal(items[0].id, canonical.entryId);
-			assert.equal(items[0].isError, status.type === 'denied' || status.type === 'failed');
-			assert.equal(items[0].transient, status.type === 'running');
-		}
-	});
 
 	test(`${host.name} Hook status updates retain the summary focus, disclosure and literal process reason`, () => {
 		using resources = new DisposableStore();
@@ -49,7 +50,7 @@ for (const host of [
 		document.body.append(container);
 		resources.add(toDisposable(() => container.remove()));
 		const widget = resources.add(host.create(services, container));
-		widget.render(host.map([entry({ type: 'denied', reason })]));
+		widget.render(chatTranscriptListItems([entry({ type: 'denied', reason })]));
 		const disclosure = widget.element.querySelector<HTMLDetailsElement>('.ash-chat-hook')!;
 		const summary = disclosure.querySelector<HTMLElement>('summary')!;
 		assert.equal(disclosure.open, false);
@@ -57,7 +58,7 @@ for (const host of [
 		summary.focus();
 		const labels = new Set<string>();
 		for (const status of statuses) {
-			widget.render(host.map([entry(status)]));
+			widget.render(chatTranscriptListItems([entry(status)]));
 			assert.equal(widget.element.querySelector('.ash-chat-hook'), disclosure);
 			assert.equal(disclosure.querySelector('summary'), summary);
 			assert.equal(disclosure.open, true);
@@ -68,6 +69,8 @@ for (const host of [
 			labels.add(summary.textContent!);
 		}
 		assert.equal(labels.size, 5, 'each domain state has its own localized summary');
+		widget.render(chatTranscriptListItems([entry({ type: 'failed', message: 'process exited' })]));
+		assert.equal(disclosure.querySelector('p')!.textContent, 'process exited');
 		widget.render([]);
 		assert.equal(widget.element.querySelector('.ash-chat-hook'), null);
 	});

@@ -18,6 +18,51 @@ import {
 	WorkbenchViewRegistry,
 } from "../../../workbench/common/views.js";
 import { ViewDescriptorService } from "../../../workbench/services/views/browser/viewDescriptorService.js";
+import { IViewsService } from '../../services/views/common/viewsService.js';
+
+test('container commands open in the invoking window and expire with their declaration', async () => {
+	using registry = new WorkbenchViewRegistry();
+	using registration = registry.registerViewContainer({ id: 'test.openContainer', title: 'Open container', location: ViewContainerLocation.Sidebar });
+	using services = new InstantiationService();
+	const opened: unknown[] = [];
+	services.registerInstance(IViewsService, { openViewContainer: async (id, focus) => { opened.push([id, focus]); return null; } } as IViewsService);
+	using commands = new CommandService(services);
+	await commands.executeCommand('test.openContainer');
+	assert.deepEqual(opened, [['test.openContainer', true]]);
+	registration.dispose();
+	assert.equal(CommandsRegistry.getCommand('test.openContainer'), undefined);
+});
+
+test('moving a container changes routing while retaining its model and independent window defaults', () => {
+	using registry = new WorkbenchViewRegistry();
+	using registration = registry.registerViewContainer({ id: 'test.movable', title: 'Movable', location: ViewContainerLocation.Sidebar, isDefault: true });
+	using contexts = new ContextKeyService();
+	using first = new ViewDescriptorService({ registry }, contexts);
+	using other = new ViewDescriptorService({ registry }, contexts);
+	using views = registry.registerViews('test.movable', [testView('test.movable.view', 'View')]);
+	const model = first.getViewContainerModel('test.movable');
+	model.setVisible('test.movable.view', false);
+	const events: string[] = [];
+	using listener = first.onDidChangeViewContainers(event => events.push(`${event.removed[0]?.location}->${event.added[0]?.location}`));
+	const container = first.getViewContainerById('test.movable')!;
+	first.moveViewContainerToLocation(container, ViewContainerLocation.Panel);
+	assert.equal(first.getViewContainers(ViewContainerLocation.Sidebar).length, 0);
+	assert.equal(first.getViewContainerForView('test.movable.view')?.location, ViewContainerLocation.Panel);
+	assert.equal(first.getDefaultViewContainer(ViewContainerLocation.Sidebar), undefined);
+	assert.equal(first.getViewContainerLocation(container), ViewContainerLocation.Panel);
+	assert.equal(first.getViewContainerModel(container.id), model);
+	assert.equal(model.isVisible('test.movable.view'), false);
+	assert.equal(other.getViewContainerLocation(container), ViewContainerLocation.Sidebar);
+	assert.equal(first.getDefaultViewContainerLocation(container), ViewContainerLocation.Sidebar);
+	first.moveViewContainerToLocation(container, ViewContainerLocation.Panel);
+	assert.deepEqual(events, ['sidebar->panel']);
+	using restored = new ViewDescriptorService({ registry, viewContainerLocations: { 'test.movable': ViewContainerLocation.Panel } }, contexts);
+	assert.equal(restored.getViewContainerLocation(container), ViewContainerLocation.Panel);
+	first.moveViewContainerToLocation(container, ViewContainerLocation.Sidebar);
+	assert.deepEqual(events, ['sidebar->panel', 'panel->sidebar']);
+	registration.dispose();
+	assert.equal(first.getViewContainerById(container.id), null);
+});
 
 test("view descriptor models project registry and context visibility", () => {
 	using contextKeys = new ContextKeyService();

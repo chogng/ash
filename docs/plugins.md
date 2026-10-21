@@ -1,6 +1,6 @@
 # Plugin 包与来源授权
 
-本页中的 Plugin 是包格式、来源授权和集成 bundle 的技术概念；所属产品分类见 [Extensions 的产品层级](editor-extensions.md#extensions-的产品层级)。
+本页中的 Plugin 是既有包格式、来源授权和集成 bundle 的技术概念；产品 Plugins 表达功能扩展，包管理仍只有一个 authority，所属产品分类见 [Extensions 的产品层级](editor-extensions.md#extensions-的产品层级)。
 
 > 物理位置：`crates/utils/plugins/`、`crates/plugin/`、`crates/core-plugins/`
 > Rust crate：`ash_utils_plugins`、`ash_plugin`、`ash_core_plugins`
@@ -24,16 +24,13 @@
 
 Plugin 是可同时携带多种 capability 的集成 bundle。`ash-plugin` 定义并校验这个 bundle；
 `ash-core-plugins` 聚合内置 Ash catalog 与其他来源，统一拥有安装、更新、启用、授权和 activation。
-所有包通过 Extensions 获取和管理。远端来源采用 Open VSX 或 Ash 开放扩展源协议；官方和第三方 Ash 源共用 adapter，领域服务只消费经验证的 capability。
+所有包通过 Extensions 获取和管理。目标远端来源使用 Ash 开放扩展源协议；官方和第三方 Ash 源共用 adapter，领域服务只消费经验证的 capability。产品来源使用 Ash；Open VSX 下载、VSIX 解析和运行入口已删除，历史包只保留退休识别和卸载。
 
-目标有两类可执行扩展：TS/JS 包在 Desktop 复用 Electron、在后端使用独立 Rust/V8 宿主；Rust 能力包运行自己的独立程序。两者共享外部扩展接入语义，App 和 TUI 按需消费。Plugin 是可携带扩展的分发 bundle，不是外部扩展运行的必要条件；目标 `external-ext` 运行层通过产品侧来源 adapter 接入，不直接依赖 `core-plugins`。现有包管理演进为统一 Extensions 安装 authority；Plugin 保留多能力 bundle 职责，包状态和来源授权不复制到运行层。确定的命名与根目录 SDK 布局见[扩展接入边界](editor-extensions.md#共享接入与语言适配的-crate-边界)。
+目标有两类可执行扩展：TS/JS 作者使用 `@ash/sdk` / `ash.*`，Desktop 复用 Electron、后端使用独立 Rust/V8 宿主；Rust 能力包使用 Rust SDK 运行自己的独立程序。两者共享外部扩展接入语义，App 和 TUI 按需消费。Plugin 是可携带扩展的分发 bundle，不是外部扩展运行的必要条件；目标 `external-ext` 运行层通过产品侧来源 adapter 接入，不直接依赖 `core-plugins`。现有包管理演进为统一 Extensions 安装 authority；Plugin 保留多能力 bundle 职责，包状态和来源授权不复制到运行层。确定的命名与根目录 SDK 布局见[扩展接入边界](editor-extensions.md#共享接入与语言适配的-crate-边界)。
 下文的 `editorExtensions[]` 和 Host RPC v1 是既有契约。Rust SDK 与产品 launcher 已被独立认证试点复用；通用第三方安装和系统隔离仍未完成，不能把一个独立程序声明当作完整运行支持。
 职责与安全要求见 [`确定的产品方向`](editor-extensions.md#0-确定的产品方向)。
 
-第三方 Editor Extension 来源已接入 Open VSX。来源 adapter 与 VSIX 安装复用 Rust 包管理生命周期，
-保留独立的来源身份和验证结果；安装后只消费受支持的声明式贡献，包中的脚本不会运行。现有 Ash registry 的签名契约不会自动
-适用于 Open VSX 包。运行兼容性由 TS 扩展 API 和隔离的 JS 宿主决定，具体要求见
-[`第三方扩展来源采用 Open VSX`](editor-extensions.md#05-第三方扩展来源采用-open-vsx)。
+Open VSX 来源与 VSIX 运行实现不再存在，旧 `openVsx` 产品配置明确拒绝。历史安装的只读 marker 和旧作者 API metadata decoder 保留原身份，允许停用和卸载，不能恢复执行或重新授权。自有 `.ashx` 包的统一清单与工具仍待实现，不因文档确定后缀就变成已支持格式；迁移顺序见 [Ash 自有生态与旧来源退休](editor-extensions.md#05-ash-自有生态与旧来源退休)。
 
 | 用户动作                      | 系统发生什么                                                          | 不会自动发生什么                                   |
 | ----------------------------- | --------------------------------------------------------------------- | -------------------------------------------------- |
@@ -67,7 +64,7 @@ Plugin 的定义与产品生命周期分别由两个 crate 拥有，来源不会
 | Built-in / remote Extensions Plugin bundle | `ash-core-plugins`      | Skill/MCP/Connector/Theme/Language/Editor Extension 各领域     |
 | Local Plugin v1                            | `ash-core-plugins`      | App Server 交给各领域；enable/grant 后形成 activation snapshot |
 
-所有来源都可以提供 Skill、Connector、MCP、可执行 Editor Extension 或静态资源。目标 Rust 能力扩展由 Ash 来源 adapter 或产品预装包接入，同样复用 Manager 的精确包安装与租约；不要求 Open VSX 提供 Rust 包，不新建一套安装、启用或授权 authority。
+所有来源都可以提供 Skill、Connector、MCP、可执行 Editor Extension 或静态资源。目标 Rust 能力扩展由 Ash 来源 adapter 或产品预装包接入，同样复用 Manager 的精确包安装与租约，不新建一套安装、启用或授权 authority。
 `ash-core-plugins` 先形成统一 installed Plugin 与 activation，再按 capability 交给各领域。
 
 Plugin 不是：
@@ -110,7 +107,7 @@ language/TextMate/snippet/theme/debugger 资源。Plugin v1 现在可用 `declar
 这共享 install/enable/grant/revocation lifecycle，但不合并两种 manifest，也不把静态内容变成可执行
 runtime。其 canonical 文档是 [`editor-extensions.md`](editor-extensions.md)。
 
-Legacy Plugin v1 提供显式 `editorExtensions[]`：`runtime: javascript` 默认使用 `api: vscode`，加载包根标准 `package.json`，由选定宿主的私有兼容层执行受支持的标准入口。旧 `api: ash` 不再接受。
+Legacy Plugin v1 提供显式 `editorExtensions[]`：新 TS/JS 包使用 `runtime: javascript` 和 `api: ash`，通过 `@ash/sdk` 接入选定宿主。包根 `package.json` 暂时仍是扩展清单；本次不并设第二份身份或权限清单。旧 `api: vscode` 及缺省 API 只可解码为退休 metadata，安装、启用和授权均拒绝；历史 Ash API 授权不自动恢复，新契约须重新授予精确执行授权。
 `runtime: hostRpc` 指向自己实现共享协议的独立程序；它不是新的 Rust 能力扩展 API 或生产支持承诺。
 compatibility authority 只验证并授权声明，
 `ash-external-ext` supervisor 才拥有逐扩展进程隔离、RPC、crash recovery 和 provider
@@ -122,7 +119,7 @@ enable + grant 后才进入静态 catalog，disable、grant revoke、package rev
 下一次 catalog refresh 移除旧 exact package。Workbench 监听 Plugin activation generation 并自动刷新。
 独立可执行扩展的生产执行还必须由产品注入能够实施 sandbox、memory/CPU/process hard limits 和 process-tree
 termination 的 platform launcher；没有该 launcher 时 Host capability 必须为 false，不能用
-`TrustedDevelopmentLauncher` 降级。Node 扩展按其精确包执行授权契约运行，不声称拥有受限 V8 的系统沙箱。Host RPC v1 是 TS/JS 兼容层与 Rust SDK 共用的后端扩展契约；标准作者 API 的适配由执行宿主负责。
+`TrustedDevelopmentLauncher` 降级。Node 扩展按其精确包执行授权契约运行，不声称拥有受限 V8 的系统沙箱。Host RPC v1 是 `@ash/sdk` 宿主 adapter 与 Rust SDK 共用的后端扩展契约；作者 API 的适配由执行宿主负责。
 
 安装、启用、授权和调用是四个不同动作：
 
@@ -336,7 +333,7 @@ Manifest 必须 strict-parse：
 
 `editorExtensions[]` 是 strict typed control-plane declaration：ID 与 entrypoint 各自唯一；entrypoint
 必须是包内 regular file。`runtime` 必须显式声明为 `javascript` 或 `hostRpc`，不根据文件名猜测。
-`hostRpc` 要求完全相同路径的 `process` permission。JavaScript 入口的 `api` 默认为 `vscode`，使用标准 `vscode` API；入口接受
+`hostRpc` 要求完全相同路径的 `process` permission。新 JavaScript 入口显式使用 `api: ash` / `@ash/sdk`；旧作者 API 仅用于退休 metadata 读取，不再是运行模式或包模板。入口接受
 `.js`、`.mjs` 或 `.cjs`，实际模块格式按所选运行时支持范围验证。标准扩展的
 `package.json` 位于插件包根，入口仍由 `entrypoint` 指定；安装不会自动启用或授权执行。
 标准 manifest 的命令标题和激活事件用于首次调用前的发现，实际回调由对应 Node Host 激活，
@@ -865,7 +862,7 @@ crates/core-plugins/src/
 - ✅ Plugin manifest/immutable package 对可执行 Editor Extension program 的 strict declaration；
 - ✅ exact process permission、Host RPC API v1、activation/capability ceiling 与 regular-file 校验；
 - 委托 `ash-external-ext`：进程隔离、RPC、crash supervisor、provider lifecycle；
-- ❌ generic Node/WASM loader、VS Code Extension API compatibility 与 `workspaceContains` scanner。
+- ❌ generic Node/WASM loader 与 `workspaceContains` scanner；VS Code Extension API compatibility 已退出目标。
 
 其余能力只有在具体需求有独立 threat model 和 stable port 后，才分别评审：
 

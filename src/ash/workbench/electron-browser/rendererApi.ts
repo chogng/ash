@@ -1,3 +1,4 @@
+import { TERMINAL_WINDOW_LIFETIME_CHANNEL } from '../../platform/terminal/common/terminal.js';
 import { localize } from '../../nls.js';
 import { throwIfCancelled } from '../../base/common/cancellation.js';
 import { generateUuid } from '../../base/common/uuid.js';
@@ -135,15 +136,27 @@ export async function createElectronRendererApi(contributions: readonly Electron
 			backend = { ...backend, dictation: createAppServerVoiceCodeTranscriptionBackend(localClient) };
 			if (client.capabilities?.contracts.symphony?.version === 1) { backend = { ...backend, symphony: resources.add(new AppServerSymphonyService(client)) }; }
 			if (client.capabilities?.contracts.automation?.version === 1) { backend = { ...backend, automation: resources.add(new AppServerAutomationService(client)) }; }
-			const terminals = resources.add(new ReconnectableTerminalProcessService(client));
+			let workspaceInitialization: { readonly generation: number; readonly promise: Promise<void>; } | undefined;
+			const restoreWorkspace = (): Promise<void> => {
+				// A ready listener may request a terminal before onDidReconnect fires.
+				// Both paths must share the same directory binding for this generation.
+				if (workspaceInitialization?.generation !== client.generation) {
+					workspaceInitialization = { generation: client.generation, promise: initializeWorkspace(client, workspaceTrust, backend.workspaceTrust, workspaceApi) };
+				}
+				return workspaceInitialization.promise;
+			};
+			const terminals = resources.add(new ReconnectableTerminalProcessService(client, {
+				whenDirectoriesReady: async () => { await connection.whenConnected(); await restoreWorkspace(); },
+				lifetimeToken: remoteConnection.kind === 'local' ? () => invoke<string>(TERMINAL_WINDOW_LIFETIME_CHANNEL) : undefined,
+			}));
 			backend = { ...backend, terminal: terminals };
 			const replacement = subscribe('ash:terminal:prepareReplacement', () => terminals.prepareForServerReplacement());
 			resources.add(toDisposable(() => replacement.dispose()));
-			await initializeWorkspace(client, workspaceTrust, backend.workspaceTrust, workspaceApi);
+			await restoreWorkspace();
 			// The selected execution host needs its roots after a runtime replacement,
 			// including SSH and extension hosts; local device recovery is independent.
 			resources.add(connection.onDidReconnect(() => {
-				void initializeWorkspace(client, workspaceTrust, backend.workspaceTrust, workspaceApi)
+				void restoreWorkspace()
 					.catch(error => { if (!resources.isDisposed && !isCancellationError(error)) connectionLogger.error('app-server', 'Workspace recovery failed', error); });
 			}));
 			performance.mark('ash.rendererApi.workspace-initialized');

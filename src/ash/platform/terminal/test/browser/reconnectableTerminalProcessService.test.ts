@@ -9,6 +9,7 @@ import { isCancellationError } from '../../../../base/common/errors.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../base/test/common/utils.js';
 import { APP_SERVER_METHODS } from "../../../../../../.build/protocol/typescript/index.js";
 import { toDisposable } from "../../../../base/common/lifecycle.js";
+import { AppServerRemoteError } from "../../../agentHost/common/appServerError.js";
 import type { AppServerConnectionState } from "../../../agentHost/common/appServerApi.js";
 import type { AppServerProtocolClient } from "../../../agentHost/browser/appServerProtocolClient.js";
 import { ReconnectableTerminalProcessService } from "../../../../platform/terminal/browser/reconnectableTerminalProcessService.js";
@@ -17,6 +18,71 @@ import type { ITerminalProcessService } from "../../common/terminal.js";
 const FIRST_TOKEN = "a".repeat(64);
 const SECOND_TOKEN = "b".repeat(64);
 const THIRD_TOKEN = "c".repeat(64);
+
+suite('terminal directory recovery readiness', () => {
+	ensureNoDisposablesAreLeakedInTestSuite();
+
+	for (const operation of ['profiles', 'resolve', 'environment', 'create'] as const) {
+		test(`${operation} waits for restored directory grants before using the ready protocol`, async () => {
+			const supervisor = new TestSupervisor();
+			const directories = new DeferredPromise<void>();
+			using service = new ReconnectableTerminalProcessService(supervisor as unknown as AppServerProtocolClient, { whenDirectoriesReady: () => directories.p });
+			const pending = {
+				profiles: () => service.listProfiles('workspace-folder'),
+				resolve: () => service.resolveProfile({ type: 'default' }, 'workspace-folder'),
+				environment: () => service.getEnvironment(undefined, 'workspace-folder'),
+				create: () => service.create({ dirId: 'workspace-folder', rows: 24, cols: 80, profile: { type: 'default' } }),
+			}[operation]();
+			await Promise.resolve();
+			assert.deepEqual(supervisor.requests, []);
+			await directories.complete();
+			await pending;
+			assert.equal(supervisor.requests.length, 1);
+		});
+	}
+
+	for (const retirement of ['dispose', 'replacement', 'generation'] as const) {
+		test(`a create waiting for directories cannot cross ${retirement}`, async () => {
+			const supervisor = new TestSupervisor();
+			const directories = new DeferredPromise<void>();
+			using service = new ReconnectableTerminalProcessService(supervisor as unknown as AppServerProtocolClient, { whenDirectoriesReady: () => directories.p });
+			const pending = service.create({ rows: 24, cols: 80, profile: { type: 'default' } });
+			const rejected = assert.rejects(pending, isCancellationError);
+			if (retirement === 'dispose') service.dispose();
+			else if (retirement === 'replacement') service.prepareForServerReplacement();
+			else supervisor.generation++;
+			await directories.complete();
+			await rejected;
+			assert.deepEqual(supervisor.requests, []);
+		});
+	}
+
+	test('reattachment waits for directories and never recreates or replays the command', async () => {
+		const supervisor = new TestSupervisor();
+		let directories = Promise.resolve();
+		using service = new ReconnectableTerminalProcessService(supervisor as unknown as AppServerProtocolClient, { whenDirectoriesReady: () => directories });
+		await service.create({ dirId: 'workspace-folder', rows: 24, cols: 80, profile: { type: 'default' } });
+		const restored = new DeferredPromise<void>();
+		directories = restored.p;
+		supervisor.emit('crashed');
+		supervisor.generation++;
+		supervisor.emit('ready');
+		const read = service.read({ dirId: 'workspace-folder', terminalId: 'terminal-1', afterSequence: 0, afterCommandSequence: 0, maxChunks: 1 });
+		await Promise.resolve();
+		assert.deepEqual(supervisor.requests.map(request => request.method), ['terminal/create']);
+		await restored.complete();
+		await read;
+		assert.deepEqual(supervisor.requests.map(request => request.method), ['terminal/create', 'terminal/attach', 'terminal/read']);
+	});
+
+	test('directory authorization failures remain visible without dispatching a terminal request', async () => {
+		const supervisor = new TestSupervisor();
+		const denied = new Error('directory permission denied');
+		using service = new ReconnectableTerminalProcessService(supervisor as unknown as AppServerProtocolClient, { whenDirectoriesReady: () => Promise.reject(denied) });
+		await assert.rejects(service.listProfiles('workspace-folder'), error => error === denied);
+		assert.deepEqual(supervisor.requests, []);
+	});
+});
 
 suite('reconnectable terminal creation lifetime', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();
@@ -35,7 +101,7 @@ suite('reconnectable terminal creation lifetime', () => {
 			await rejected;
 			assert.deepEqual(supervisor.requests.map(request => request.method), ['terminal/create', 'terminal/close']);
 			assert.deepEqual(supervisor.requests.at(-1)?.params, { dirId: 'original-folder', terminalId: 'terminal-1' });
-			await assert.rejects(service.getReconnectLease('terminal-1'), /no longer recoverable/);
+			assert.equal(await service.getReconnectLease('terminal-1'), undefined);
 		});
 	}
 
@@ -52,7 +118,7 @@ suite('reconnectable terminal creation lifetime', () => {
 		await reply.complete();
 		await rejected;
 		assert.deepEqual(supervisor.requests.map(request => request.method), ['terminal/create']);
-		await assert.rejects(service.getReconnectLease('terminal-1'), /no longer recoverable/);
+		assert.equal(await service.getReconnectLease('terminal-1'), undefined);
 	});
 
 	test('a disposed service rejects creation before contacting the execution host', async () => {
@@ -114,7 +180,8 @@ suite('reconnectable terminal operations after retirement', () => {
 					processInfo: () => service.getProcessInfo(identity),
 					lease: () => service.getReconnectLease(identity.terminalId),
 				};
-				const rejected = assert.rejects(operations[operation](), isCancellationError);
+				const request = operations[operation]();
+				const rejected = operation === 'lease' ? request.then(value => assert.equal(value, undefined)) : assert.rejects(request, isCancellationError);
 				const closing = retirement === 'close' ? service.close(identity) : undefined;
 				if (retirement === 'dispose') service.dispose();
 				else if (retirement === 'replacement') service.prepareForServerReplacement();
@@ -139,7 +206,7 @@ suite('reconnectable terminal operations after retirement', () => {
 		await service.close({ terminalId: 'terminal-1', dirId: 'original-folder' });
 		await reply.complete();
 		await rejected;
-		await assert.rejects(service.getReconnectLease('terminal-1'), /no longer recoverable/);
+		assert.equal(await service.getReconnectLease('terminal-1'), undefined);
 	});
 });
 
@@ -150,6 +217,7 @@ test('a replacement renderer attaches the original process and rotates its hando
 	const created = await original.create({ dirId: 'folder', rows: 24, cols: 80, profile: { type: 'default' } });
 	assert.equal(created.ready.shellType, GeneralShellType.PowerShell);
 	const credential = await original.getReconnectLease(created.terminalId);
+	assert.ok(credential);
 	original.prepareForReload();
 	await original.close({ terminalId: created.terminalId, dirId: 'folder' });
 	assert.equal(supervisor.requests.some(request => request.method === 'terminal/close'), false);
@@ -161,7 +229,7 @@ test('a replacement renderer attaches the original process and rotates its hando
 	assert.equal(supervisor.requests.filter(request => request.method === 'terminal/create').length, 1);
 	assert.deepEqual(supervisor.requests.find(request => request.method === 'terminal/attach')?.params, { terminalId: created.terminalId, dirId: 'folder', reconnectToken: FIRST_TOKEN, cols: 120, rows: 40 });
 	assert.deepEqual(supervisor.requests.at(-1), { method: 'terminal/processInfo', params: { terminalId: created.terminalId, dirId: 'folder' } });
-	assert.equal((await replacement.getReconnectLease(created.terminalId)).reconnectToken, SECOND_TOKEN);
+	assert.equal((await replacement.getReconnectLease(created.terminalId))!.reconnectToken, SECOND_TOKEN);
 	await replacement.close({ terminalId: created.terminalId, dirId: 'folder' });
 });
 
@@ -290,9 +358,94 @@ test("Remote terminal creation rejects malformed leases before exposing a termin
 	assert.equal(supervisor.requests.at(-1)?.method, "terminal/close");
 });
 
+test('an expired terminal has no reload credential while a live disconnected terminal still reports recovery failure', async () => {
+	const supervisor = new TestSupervisor();
+	let now = 0;
+	const failures: unknown[] = [];
+	using service = new ReconnectableTerminalProcessService(supervisor as unknown as AppServerProtocolClient, { now: () => now, reportError: (_message, error) => failures.push(error) });
+	const invalidated: unknown[] = [];
+	using subscription = service.onDidInvalidateProcess(event => invalidated.push(event));
+	await service.create({ rows: 24, cols: 80, profile: { type: 'default' } });
+	supervisor.emit('crashed');
+	supervisor.generation++;
+	await assert.rejects(service.getReconnectLease('terminal-1'), /waiting for App Server recovery/);
+	assert.deepEqual(invalidated, []);
+	now = 30001;
+	supervisor.attachFailures = 1;
+	supervisor.emit('ready');
+	assert.equal(await service.getReconnectLease('terminal-1'), undefined);
+	assert.equal(failures.length, 1);
+	assert.match(String(failures[0]), /lease expired before attachment/);
+	assert.deepEqual(invalidated, [{ terminalId: 'terminal-1', reason: 'expiry' }]);
+	await assert.rejects(service.write({ terminalId: 'terminal-1', data: 'not delivered' }), /no longer recoverable/);
+});
+
+test('persistent processes recover after a day offline and transient attachment failures', async () => {
+	const supervisor = new TestSupervisor();
+	supervisor.reconnectGracePeriodMillis = 0;
+	let now = 0;
+	using service = new ReconnectableTerminalProcessService(supervisor as unknown as AppServerProtocolClient, { now: () => now, wait: async milliseconds => { now += milliseconds; } });
+	await service.create({ rows: 24, cols: 80, profile: { type: 'default' } });
+	supervisor.emit('crashed');
+	now = 86400_000;
+	supervisor.generation++;
+	supervisor.attachFailures = 3;
+	supervisor.emit('ready');
+	const lease = await service.getReconnectLease('terminal-1');
+	assert.equal(lease?.reconnectGracePeriodMillis, 0);
+	assert.equal(supervisor.successfulAttachments, 1);
+	await service.write({ terminalId: 'terminal-1', data: 'same command' });
+});
+
+for (const errorName of ['TerminalNotFound', 'TerminalAttachRejected'] as const) test(`persistent recovery stops on authoritative ${errorName}`, async () => {
+	const supervisor = new TestSupervisor();
+	supervisor.reconnectGracePeriodMillis = 0;
+	using service = new ReconnectableTerminalProcessService(supervisor as unknown as AppServerProtocolClient, { wait: async () => { assert.fail('authoritative rejection must not retry'); }, reportError: () => { } });
+	await service.create({ rows: 24, cols: 80, profile: { type: 'default' } });
+	supervisor.emit('crashed');
+	supervisor.generation++;
+	supervisor.attachError = new AppServerRemoteError(-32065, errorName, { kind: errorName });
+	supervisor.emit('ready');
+	assert.equal(await service.getReconnectLease('terminal-1'), undefined);
+	assert.equal(supervisor.successfulAttachments, 0);
+});
+
+test('a pane closed during backend loss keeps its cleanup credential until recovery acknowledges close', async () => {
+	const supervisor = new TestSupervisor();
+	supervisor.reconnectGracePeriodMillis = 0;
+	using service = new ReconnectableTerminalProcessService(supervisor as unknown as AppServerProtocolClient);
+	const created = await service.create({ rows: 24, cols: 80, profile: { type: 'default' } });
+	supervisor.emit('crashed');
+	await service.close({ terminalId: created.terminalId });
+	assert.equal(await service.getReconnectLease(created.terminalId), undefined);
+	await assert.rejects(service.write({ terminalId: created.terminalId, data: 'late input' }), isCancellationError);
+	supervisor.generation++;
+	supervisor.emit('ready');
+	await waitFor(() => supervisor.requests.some(request => request.method === 'terminal/close'));
+	assert.equal(supervisor.successfulAttachments, 1);
+	assert.equal(supervisor.requests.filter(request => request.method === 'terminal/close').length, 1);
+});
+
+test('window lifetime credentials accompany create and replacement attachments without entering reload leases', async () => {
+	const supervisor = new TestSupervisor();
+	let token = 'b'.repeat(64);
+	using service = new ReconnectableTerminalProcessService(supervisor as unknown as AppServerProtocolClient, { lifetimeToken: async () => token });
+	const created = await service.create({ rows: 24, cols: 80, profile: { type: 'default' } });
+	assert.equal((supervisor.requests.find(request => request.method === 'terminal/create')!.params as { lifetimeToken: string; }).lifetimeToken, token);
+	assert.equal('lifetimeToken' in (await service.getReconnectLease(created.terminalId))!, false);
+	token = 'c'.repeat(64);
+	supervisor.emit('crashed');
+	supervisor.generation++;
+	supervisor.emit('ready');
+	await service.getReconnectLease(created.terminalId);
+	assert.equal((supervisor.requests.find(request => request.method === 'terminal/attach')!.params as { lifetimeToken: string; }).lifetimeToken, token);
+});
+
 test("intentional server replacement abandons old broker leases without recovery retries", async () => {
 	const supervisor = new TestSupervisor();
 	using service = new ReconnectableTerminalProcessService(supervisor as unknown as AppServerProtocolClient);
+	const invalidated: unknown[] = [];
+	using subscription = service.onDidInvalidateProcess(event => invalidated.push(event));
 	await service.create({
 		rows: 24,
 		cols: 80,
@@ -300,7 +453,11 @@ test("intentional server replacement abandons old broker leases without recovery
 	});
 
 	service.prepareForServerReplacement();
+	assert.deepEqual(invalidated, [{ terminalId: 'terminal-1', reason: 'replacement' }]);
+	service.prepareForServerReplacement();
+	assert.equal(invalidated.length, 1);
 	assert.equal(supervisor.requests.at(-1)?.method, "terminal/close");
+	assert.equal(await service.getReconnectLease('terminal-1'), undefined);
 	supervisor.emit("stopping");
 	supervisor.generation = 2;
 	supervisor.emit("ready");
@@ -380,6 +537,8 @@ class TestSupervisor {
 	state: AppServerConnectionState = "ready";
 	generation = 1;
 	attachFailures = 0;
+	reconnectGracePeriodMillis = 30_000;
+	attachError: Error | undefined;
 	successfulAttachments = 0;
 	invalidCreateLease = false;
 	createReply: Promise<void> | undefined;
@@ -406,6 +565,8 @@ class TestSupervisor {
 		switch (definition.method) {
 			case APP_SERVER_METHODS["terminal/profile/list"].method:
 				return { profiles: [{ profileId: "shell", title: "Shell", isDefault: true }] };
+			case APP_SERVER_METHODS['terminal/environment/read'].method:
+				return { values: { PATH: '/host/bin' } };
 			case APP_SERVER_METHODS["terminal/profile/resolve"].method: {
 				const { profile } = params as { profile: { args: string | string[]; }; };
 				return { profile: { profileId: 'custom:Raw', title: 'Raw', isDefault: false }, executable: 'cmd.exe', args: profile.args };
@@ -417,8 +578,8 @@ class TestSupervisor {
 					ready: { pid: 1234, cwd: '/backend/workspace', shellType: this.shellType },
 					profile: { profileId: "shell", title: "Shell", isDefault: true },
 					reconnect: this.invalidCreateLease
-						? { reconnectToken: "secret", reconnectGracePeriodMillis: 30_000 }
-						: { reconnectToken: FIRST_TOKEN, reconnectGracePeriodMillis: 30_000 },
+						? { reconnectToken: "secret", reconnectGracePeriodMillis: this.reconnectGracePeriodMillis }
+						: { reconnectToken: FIRST_TOKEN, reconnectGracePeriodMillis: this.reconnectGracePeriodMillis },
 				};
 			case APP_SERVER_METHODS["terminal/writeBinary"].method:
 				return null;
@@ -426,8 +587,9 @@ class TestSupervisor {
 				await this.processInfoReply;
 				return { ready: { pid: 1234, cwd: '/backend/workspace', shellType: this.shellType }, cwd: '/backend/current', rows: 40, cols: 120 };
 			case APP_SERVER_METHODS['terminal/detach'].method:
-				return { reconnectToken: THIRD_TOKEN, reconnectGracePeriodMillis: 30_000 };
+				return { reconnectToken: THIRD_TOKEN, reconnectGracePeriodMillis: this.reconnectGracePeriodMillis };
 			case APP_SERVER_METHODS["terminal/attach"].method:
+				if (this.attachError) throw this.attachError;
 				await this.attachReply;
 				if (this.attachFailures > 0) {
 					this.attachFailures -= 1;
@@ -439,7 +601,7 @@ class TestSupervisor {
 					ready: { pid: 1234, cwd: '/backend/workspace', shellType: this.shellType },
 					reconnect: {
 						reconnectToken: this.successfulAttachments === 1 ? SECOND_TOKEN : THIRD_TOKEN,
-						reconnectGracePeriodMillis: 30_000,
+						reconnectGracePeriodMillis: this.reconnectGracePeriodMillis,
 					},
 				};
 			case APP_SERVER_METHODS["terminal/read"].method:

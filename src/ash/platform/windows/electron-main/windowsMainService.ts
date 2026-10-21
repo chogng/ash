@@ -178,13 +178,34 @@ class ManagedWindowHost<TWindow extends IWorkbenchWindow<TWindow>> extends Dispo
 			}
 
 			const resources = new DisposableStore();
-			const windowHost = this.instantiationService.createInstance(CodeWindow<TWindow>, this.createWindow, options, resources);
+			const windowHost = this.instantiationService.createInstance(CodeWindow<TWindow>, this.createWindow, {
+				...options,
+				reopen: async () => {
+					// Keep the old native window alive until its replacement exists,
+					// including when it is the app's last window.
+					this.handoffs.clear();
+					this.windowHost.clearAndLeak();
+					this.rejectClosing?.(new Error('Agents Window is being reopened'));
+					this.closing = undefined;
+					this.resolveClosing = undefined;
+					this.rejectClosing = undefined;
+					this.openRequests++;
+					try {
+						await this.open({ ...options, workspace: windowHost.openedWorkspace, state: windowHost.serializeWindowState() });
+					} catch (error) {
+						this.windowHost.value = windowHost;
+						throw error;
+					} finally {
+						this.openRequests--;
+					}
+				},
+			}, resources);
 			this.windowHost.value = windowHost;
 			const window = windowHost.win;
-			resources.add(toDisposable(() => this.handoffs.clear()));
 			resources.add(windowHost.onDidClose(() => {
-				this.resolveClosing?.();
 				if (this.windowHost.value !== windowHost) return;
+				this.resolveClosing?.();
+				this.handoffs.clear();
 				this.windowHost.clearAndLeak();
 				if (this.openRequests === 0) this.onDidClose();
 			}));

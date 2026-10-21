@@ -1,5 +1,5 @@
-import { _electron, type Page } from '@playwright/test';
-import { access, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { _electron, type Page, type TestInfo } from '@playwright/test';
+import { access, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 import { expect, test } from '../../../automation/test.js';
@@ -14,6 +14,17 @@ import { Editor } from '../../../automation/editor.js';
 
 const desktopDirectory = resolve(import.meta.dirname, '../../../..');
 const execFileAsync = promisify(execFile);
+
+async function attachRuntimeLogs(testInfo: TestInfo, userDataDirectory: string): Promise<void> {
+	for (const session of await readdir(join(userDataDirectory, 'logs')).catch(() => [])) {
+		for (const file of await readdir(join(userDataDirectory, 'logs', session))) {
+			if (!file.endsWith('.log')) continue;
+			const path = testInfo.outputPath(`${session}-${file}`);
+			await writeFile(path, await readFile(join(userDataDirectory, 'logs', session, file)));
+			await testInfo.attach(`${session}-${file}`, { path, contentType: 'text/plain' });
+		}
+	}
+}
 
 async function publish(source: string, directory: string, identity: string): Promise<string> {
 	const marker = join(directory, 'test-generation');
@@ -51,24 +62,24 @@ function countCatalogSubscriptions(): void {
 	};
 }
 
-test('Rust publication reconnects Workbench and Agents once while keeping both windows open', { tag: ['@electron-app-server'] }, async ({ target, testWorkspace }) => {
+test('Rust publication reconnects Workbench and Agents once while keeping both windows open', { tag: ['@electron-app-server'] }, async ({ target, testWorkspace }, testInfo) => {
 	test.setTimeout(120_000);
 	const source = await readDevelopmentAppServerGeneration(developmentAppServerGenerationPath(desktopDirectory));
 	if (!source) throw new Error('Prepare the development backend before this scenario');
 	const directory = await mkdtemp(resolve(desktopDirectory, '.build/desktop/dev/test-runtime-'));
 	const userDataDirectory = await mkdtemp(join(tmpdir(), 'ash-'));
 	const generationFile = join(directory, 'current.json');
-	const previous = { reload: process.env.ASH_DEV_APP_SERVER_RELOAD, generation: process.env.ASH_DEV_APP_SERVER_GENERATION };
+	const environment = { ...process.env, ASH_DEV_APP_SERVER_RELOAD: '1', ASH_DEV_APP_SERVER_GENERATION: generationFile, ASH_HOME: join(userDataDirectory, 'profile') };
 	let desktop: Awaited<ReturnType<typeof launchElectron>> | undefined;
 	let processOutput = '';
 	const output = (chunk: Buffer): void => { processOutput += chunk.toString(); };
 	try {
 		const first = await publish(source, directory, 'first');
 		await writeFile(join(testWorkspace.directory, 'rebuild-ready.txt'), 'rust_rebuild_workspace_before\n');
-		process.env.ASH_DEV_APP_SERVER_RELOAD = '1';
-		process.env.ASH_DEV_APP_SERVER_GENERATION = generationFile;
-		desktop = await launchElectron({ appServerMode: 'required', userDataDirectory, workspaceDirectory: testWorkspace.directory, workspacePermissions: 'development' });
+		desktop = await launchElectron({ appServerMode: 'required', environment, userDataDirectory, workspaceDirectory: testWorkspace.directory, workspacePermissions: 'development' });
 		desktop.application.process().stdout?.on('data', output);
+		desktop.application.process().stderr?.on('data', output);
+		expect(await desktop.application.evaluate(() => ({ reload: process.env.ASH_DEV_APP_SERVER_RELOAD, generation: process.env.ASH_DEV_APP_SERVER_GENERATION }))).toEqual({ reload: '1', generation: generationFile });
 		const workbench = desktop.driver.workbench.page;
 		await desktop.driver.workbench.search.open();
 		await desktop.driver.workbench.search.search('rust_rebuild_workspace_before');
@@ -87,7 +98,6 @@ test('Rust publication reconnects Workbench and Agents once while keeping both w
 		const beforeWorkbench = await connection(workbench);
 		const beforeAgents = await connection(agents);
 		const daemon = join(source, `bin/ash-app-server-daemon${process.platform === 'win32' ? '.exe' : ''}`);
-		const environment = { ...process.env, ASH_HOME: join(userDataDirectory, 'profile') };
 		const beforePid = JSON.parse((await execFileAsync(daemon, ['version'], { env: environment, windowsHide: true })).stdout).pid;
 
 		await writeFile(join(testWorkspace.directory, 'rebuild-ready.txt'), 'rust_rebuild_workspace_after\n');
@@ -127,13 +137,119 @@ test('Rust publication reconnects Workbench and Agents once while keeping both w
 		await expect.poll(() => workbench.evaluate(() => (globalThis as CatalogProbeGlobal).catalogSubscriptions)).toBe(2);
 	} finally {
 		try {
-			desktop?.application.process().stdout?.off('data', output);
-			await desktop?.close();
+			try {
+				// Capture before fixture teardown removes the profile, including when publication never reconnects.
+				const path = testInfo.outputPath('runtime-publication-output.log');
+				await writeFile(path, processOutput);
+				await testInfo.attach('runtime-publication-output', { path, contentType: 'text/plain' });
+				await attachRuntimeLogs(testInfo, userDataDirectory);
+			} finally {
+				desktop?.application.process().stdout?.off('data', output);
+				desktop?.application.process().stderr?.off('data', output);
+				await desktop?.close();
+			}
 		}
 		finally {
-			for (const [key, value] of [['ASH_DEV_APP_SERVER_RELOAD', previous.reload], ['ASH_DEV_APP_SERVER_GENERATION', previous.generation]] as const) {
-				if (value === undefined) delete process.env[key]; else process.env[key] = value;
-			}
+			await rm(directory, { force: true, recursive: true, maxRetries: 10, retryDelay: 100 });
+			await rm(userDataDirectory, { force: true, recursive: true, maxRetries: 10, retryDelay: 100 });
+		}
+	}
+});
+
+test('Rust publication overlapping a Workbench reload preserves its unsaved file and completes the new connection', { tag: ['@electron-app-server'] }, async ({ testWorkspace }, testInfo) => {
+	test.setTimeout(120_000);
+	const source = await readDevelopmentAppServerGeneration(developmentAppServerGenerationPath(desktopDirectory));
+	if (!source) throw new Error('Prepare the development backend before this scenario');
+	const directory = await mkdtemp(resolve(desktopDirectory, '.build/desktop/dev/test-runtime-overlap-'));
+	const userDataDirectory = await mkdtemp(join(tmpdir(), 'ash-'));
+	const environment = { ...process.env, ASH_DEV_APP_SERVER_RELOAD: '1', ASH_DEV_APP_SERVER_GENERATION: join(directory, 'current.json'), ASH_HOME: join(userDataDirectory, 'profile') };
+	let desktop: Awaited<ReturnType<typeof launchElectron>> | undefined;
+	let release: (() => Promise<void>) | undefined;
+	try {
+		await publish(source, directory, 'first');
+		desktop = await launchElectron({ appServerMode: 'required', environment, userDataDirectory, workspaceDirectory: testWorkspace.directory, workspacePermissions: 'development' });
+		const page = desktop.driver.workbench.page;
+		const showSidebar = page.getByRole('button', { name: 'Show Primary Side Bar', exact: true });
+		if (await showSidebar.isVisible()) await showSidebar.click();
+		await page.locator('.ash-explorer .ash-tree-row').filter({ hasText: 'main.ts' }).dblclick();
+		const input = desktop.driver.workbench.editors.groupAt(0).content.locator('.stanza-editor-input');
+		await input.focus();
+		await input.press('ControlOrMeta+A');
+		await input.pressSequentially('unsaved content across Rust publication and reload');
+		await expect(page.locator('.stanza-editor-line-text').first()).toContainText('unsaved content across Rust publication and reload');
+		const daemon = join(source, `bin/ash-app-server-daemon${process.platform === 'win32' ? '.exe' : ''}`);
+		const before = JSON.parse((await execFileAsync(daemon, ['version'], { env: environment, windowsHide: true })).stdout) as { pid: number; };
+		const modulePath = resolve(desktopDirectory, '.build/desktop/main/src/ash/platform/agentHost/electron-main/appServerConnectionRelay.js');
+		// Hold only completion of the real carrier stop. Publication, daemon restart,
+		// renderer shutdown, backups and the new handshake still use their production owners.
+		const fixture = await desktop.application.evaluateHandle(({ BrowserWindow, dialog }, path) => {
+			const require = process.getBuiltinModule('module').createRequire(path);
+			const { AppServerConnectionRelay } = require(path);
+			const prototype = AppServerConnectionRelay.prototype;
+			const stop = prototype.stop;
+			const window = BrowserWindow.getAllWindows()[0]!;
+			const send = window.webContents.send;
+			const showMessageBox = dialog.showMessageBox;
+			let allowStop!: () => void;
+			const barrier = new Promise<void>(resolve => { allowStop = resolve; });
+			const state = { stopping: false, armed: true, requests: [] as number[], prompts: [] as string[] };
+			let relay: { readonly state: string; readonly options: { readonly processLauncher: { readonly environment: Readonly<Record<string, string>>; }; }; } | undefined;
+			prototype.stop = function (): Promise<void> {
+				const completion = stop.call(this) as Promise<void>;
+				if (!state.armed || this.renderer?.id !== window.webContents.id) return completion;
+				state.armed = false;
+				relay = this;
+				return completion.then(() => { state.stopping = true; return barrier; });
+			};
+			window.webContents.send = function (channel, ...args): void {
+				if (channel === 'ash:window:prepare-reload') state.requests.push(args[0] as number);
+				send.call(this, channel, ...args);
+			};
+			Object.defineProperty(dialog, 'showMessageBox', {
+				configurable: true, value: (...args: unknown[]) => {
+					const options = args.at(-1) as Electron.MessageBoxOptions;
+					state.prompts.push(options.message);
+					return Promise.resolve({ response: options.cancelId ?? 0, checkboxChecked: false });
+				}
+			});
+			return {
+				state, release: allowStop, connectionState: () => relay?.state, selectedRuntime: () => relay?.options.processLauncher.environment.ASH_DEV_RUNTIME_ROOT,
+				restore(): void { allowStop(); prototype.stop = stop; dialog.showMessageBox = showMessageBox; if (!window.isDestroyed()) window.webContents.send = send; },
+			};
+		}, modulePath);
+		release = () => fixture.evaluate(value => value.restore());
+		try {
+			const second = await publish(source, directory, 'second');
+			await expect.poll(() => fixture.evaluate(value => value.state.stopping)).toBe(true);
+			const reload = page.reload();
+			// Observe the real shutdown token while the daemon replacement is still gated.
+			await expect.poll(() => fixture.evaluate(value => value.state.requests.length)).toBe(1);
+			await fixture.evaluate(value => value.release());
+			await reload;
+			await desktop.driver.workbench.waitForReady();
+			await expect(page.locator('.stanza-editor-line-text').first()).toContainText('unsaved content across Rust publication and reload');
+			await expect.poll(() => fixture.evaluate(value => value.connectionState())).toBe('ready');
+			const after = JSON.parse((await execFileAsync(daemon, ['version'], { env: environment, windowsHide: true })).stdout) as { pid: number; };
+			expect(after.pid).not.toBe(before.pid);
+			expect(await readDevelopmentAppServerGeneration(environment.ASH_DEV_APP_SERVER_GENERATION)).toBe(join(directory, 'generations', second));
+			expect(await fixture.evaluate(value => value.selectedRuntime())).toBe(join(directory, 'generations', second));
+			expect(await fixture.evaluate(value => value.state.prompts)).toEqual([]);
+			const screenshot = testInfo.outputPath('publication-reloaded-editor.png');
+			await page.screenshot({ path: screenshot });
+			await testInfo.attach('publication-reloaded-editor', { path: screenshot, contentType: 'image/png' });
+		} finally {
+			try {
+				await testInfo.attach('publication-overlap', { body: JSON.stringify(await fixture.evaluate(value => value.state)), contentType: 'application/json' });
+				await testInfo.attach('publication-renderer-errors', { body: JSON.stringify(desktop.diagnostics.errors), contentType: 'application/json' });
+				await testInfo.attach('publication-renderer-console-errors', { body: JSON.stringify(desktop.diagnostics.consoleErrors), contentType: 'application/json' });
+			} finally { await release(); release = undefined; await fixture.dispose(); }
+		}
+	} finally {
+		try {
+			try { await attachRuntimeLogs(testInfo, userDataDirectory); await release?.(); }
+			finally { await desktop?.close(); }
+		}
+		finally {
 			await rm(directory, { force: true, recursive: true, maxRetries: 10, retryDelay: 100 });
 			await rm(userDataDirectory, { force: true, recursive: true, maxRetries: 10, retryDelay: 100 });
 		}

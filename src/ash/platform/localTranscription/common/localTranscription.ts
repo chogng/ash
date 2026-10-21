@@ -105,4 +105,5 @@ export interface ILocalTranscriptionBackendService {
 	start(resourceId: string, model: string): Promise<void>;
 	pushAudio(resourceId: string, chunk: VSBuffer): Promise<void>;
 	stop(resourceId: string): Promise<string | null>;
+	cancel(resourceId: string): Promise<void>;
 }

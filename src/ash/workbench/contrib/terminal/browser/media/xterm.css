@@ -20,8 +20,15 @@
 	padding-left: var(--ash-terminal-command-gutter-width);
 }
 
-/* The viewport also paints the space below the last complete character row. */
 .ash-terminal-instance .xterm .xterm-viewport {
+	/* xterm 6 owns scrolling through its scrollable element; this legacy
+	 * viewport must not paint a second, native scrollbar on Windows. */
+	overflow-y: hidden;
+}
+
+/* Match xterm's opaque viewport rule so late-loaded defaults cannot paint
+ * the gutter and the space below the last complete row black. */
+.ash-terminal-instance .xterm:not(.allow-transparency) .xterm-viewport {
 	background-color: var(--ash-terminal-surface-background);
 }
 

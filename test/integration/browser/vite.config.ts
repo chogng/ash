@@ -4,13 +4,12 @@ import { rendererOutput } from '../../../build/desktop/vite/rendererOutput.js';
 import { rendererDependencyAliases } from '../../../build/desktop/vite/rendererDependencies.js';
 import { workbenchEntryPlugin } from '../../../build/desktop/vite/workbenchEntryPlugin.js';
 import { webUpdatePlugin } from '../../../build/desktop/vite/webUpdatePlugin.js';
-import { preparePrototypeCodec } from './protobufPrototype/generate.js';
 
 export default defineConfig({
 	define: { __ASH_WEB_APP_SERVER__: 'false' },
 	resolve: { alias: [{ find: /^ash:editor\//u, replacement: resolve(import.meta.dirname, '../../../src/ash') + '/' }, ...rendererDependencyAliases] },
 	root: resolve(import.meta.dirname),
-	plugins: [webUpdatePlugin(), { name: 'ash-app-server-codec-prototype', buildStart: preparePrototypeCodec }, workbenchEntryPlugin('/themeEditor.html', [{
+	plugins: [webUpdatePlugin(), workbenchEntryPlugin('/themeEditor.html', [{
 		url: '/browser/theme-preview/themePreview.html',
 		inputFile: resolve(import.meta.dirname, 'browser/theme-preview/themePreview.html'),
 		sourceFile: resolve(import.meta.dirname, '../../../src/ash/workbench/contrib/themeEditor/browser/themePreview.html'),
@@ -78,7 +77,6 @@ export default defineConfig({
 				themeEditor: resolve(import.meta.dirname, 'themeEditor.html'),
 				webTransport: resolve(import.meta.dirname, 'webTransport.html'),
 				appServerDecode: resolve(import.meta.dirname, 'appServerDecode.html'),
-				appServerCodec: resolve(import.meta.dirname, 'appServerCodec.html'),
 				files: resolve(import.meta.dirname, 'files.html'),
 				fileMenus: resolve(import.meta.dirname, 'fileMenus.html'),
 				dialog: resolve(import.meta.dirname, "dialog.html"),

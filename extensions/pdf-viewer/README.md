@@ -4,6 +4,10 @@ PDF Viewer (`ash.pdf-viewer`) is an optional, independently installed editor ext
 
 The extension owns PDF rendering, extracted text, highlight/ink/note annotations and their undo history. It keeps the source PDF immutable and saves annotations in `<file>.pdf.ash-annotations.json` through the window's authorized file service. Existing `ash.workbench.pdfViewer` editor identities and version-1 annotation files remain supported. Saved annotations reload when the file is reopened; unsaved annotations are pane-local and must be saved before closing. This is not an embedded-PDF annotation exporter, reference manager, or OCR engine.
 
+## Planned PDF reading, annotations and AI use
+
+The separate [PDF content plan](docs/pdf-content.md) scopes future work to viewing, extension-owned annotations and AI access to text or page images, composed with a Skill and a Plugin bundle where supported. It does not require a general document-editing API. The plan distinguishes existing viewer behavior from unimplemented AI/tool/Skill integration; it does not change package admission or add runtime capabilities.
+
 ## Installation and lifecycle
 
 Install the separately distributed `editor` package through Extensions, enable it and grant execution consent for that exact package. It uses the same signed catalog, verified publisher, product-runtime admission and revocable consent path as Academy. A source or package cannot grant itself first-party renderer privileges.

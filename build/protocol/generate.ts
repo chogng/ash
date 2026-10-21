@@ -22,7 +22,7 @@ export async function generateProtocol(signal?: AbortSignal): Promise<void> {
 	await new Promise<void>((resolvePromise, reject) => {
 		const { command, args } = pythonCommand(['-B', 'build/protocol/generate.py']);
 		const child = spawn(command, args, {
-			cwd: resolve(import.meta.dirname, '../..'), stdio: 'inherit', windowsHide: true, signal,
+			cwd: resolve(import.meta.dirname, '../..'), stdio: ['ignore', 'inherit', 'inherit'], windowsHide: true, signal,
 		});
 		child.once('error', reject);
 		child.once('close', (code, termination) => {

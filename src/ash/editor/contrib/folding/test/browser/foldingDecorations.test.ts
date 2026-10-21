@@ -10,10 +10,10 @@ import { LanguageFeaturesService } from '../../../../common/services/languageFea
 import { registerTestTokens } from '../../../../test/common/testTokenization.js';
 import { Range } from '../../../../common/core/range.js';
 
-const { FoldingController } = await import('../../../../../../../extensions/code/browser/contrib/folding/browser/folding.js');
+const { FoldingController } = await import('../../browser/folding.js');
 const { CodeEditorWidget } = await import('../../../../browser/widget/codeEditor/codeEditorWidget.js');
 const { createTestCodeEditor } = await import('../../../../test/browser/testCodeEditor.js');
-const { FoldingDecorationProvider } = await import('../../../../../../../extensions/code/browser/contrib/folding/browser/foldingDecorations.js');
+const { FoldingDecorationProvider } = await import('../../browser/foldingDecorations.js');
 
 test('tokenization batches coalesce whole-document folding provider requests', async () => {
 	using features = new LanguageFeaturesService();

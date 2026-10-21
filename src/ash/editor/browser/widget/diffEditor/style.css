@@ -101,9 +101,15 @@
 	overflow-wrap: anywhere;
 }
 
-.ash-diff-inline-original-margin > .stanza-diff-remove-sign {
-	position: absolute;
-	right: 0;
+/* Grid rows use the deletion zone's measured display-line height. */
+.ash-diff-inline-original-markers {
+	display: grid;
+	height: 100%;
+	justify-items: end;
+	align-content: start;
+}
+
+.ash-diff-inline-original-markers > .stanza-diff-remove-sign {
 	height: 100%;
 }
 

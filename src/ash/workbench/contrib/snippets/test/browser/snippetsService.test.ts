@@ -13,9 +13,9 @@ import { LanguageCompletionTriggerKind } from '../../../../../editor/common/lang
 import { ILanguageFeaturesService } from '../../../../../editor/common/services/languageFeatures.js';
 import { LanguageService } from '../../../../../editor/common/services/languageService.js';
 import { TestLanguageFeaturesService } from '../../../../../editor/test/common/testLanguageFeaturesService.js';
-import { LanguageCompletionService } from '../../../../../../../extensions/code/browser/contrib/suggest/browser/suggest.js';
-import { SuggestModel } from '../../../../../../../extensions/code/browser/contrib/suggest/browser/suggestModel.js';
-import { SnippetController2 } from '../../../../../../../extensions/code/browser/contrib/snippet/browser/snippetController2.js';
+import { LanguageCompletionService } from '../../../../../editor/contrib/suggest/browser/suggest.js';
+import { SuggestModel } from '../../../../../editor/contrib/suggest/browser/suggestModel.js';
+import { SnippetController2 } from '../../../../../editor/contrib/snippet/browser/snippetController2.js';
 import { EditorContributionInstantiation } from '../../../../../editor/browser/editorExtensions.js';
 import { createTestCodeEditor } from '../../../../../editor/test/browser/testCodeEditor.js';
 import type { ExtensionCatalog, ExtensionDescriptor, ExtensionResourceRequest } from '../../../../../platform/extensions/common/extensionApi.js';

@@ -201,7 +201,11 @@ suite('Debug Console view input and filtering', () => {
 		fixture.setInput('remembered'); fixture.view.acceptReplInput();
 		fixture.debug.complete = async () => completion([{ label: 'alpha', start: 1, length: 1 }, { label: 'beta', start: 1, length: 1 }]);
 		fixture.setInput('a'); fixture.key(' ', { ctrlKey: true, code: 'Space' }); await Promise.resolve();
-		fixture.key('ArrowDown'); fixture.key('Tab');
+		const options = [...fixture.view.element.querySelectorAll<HTMLElement>('.ash-repl-completion')];
+		assert.deepEqual(options.map(option => [option.classList.contains('selected'), option.getAttribute('aria-selected')]), [[true, 'true'], [false, 'false']]);
+		fixture.key('ArrowDown');
+		assert.deepEqual(options.map(option => [option.classList.contains('selected'), option.getAttribute('aria-selected')]), [[false, 'false'], [true, 'true']]);
+		fixture.key('Tab');
 		assert.equal(fixture.view.getReplInput().getValue(), 'beta');
 		fixture.setInput('a'); fixture.key(' ', { ctrlKey: true, code: 'Space' }); await Promise.resolve();
 		fixture.key('Enter', { isComposing: true });

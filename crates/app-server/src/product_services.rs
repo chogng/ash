@@ -28,7 +28,6 @@ const MAX_PRODUCT_SERVICES_BYTES: u64 = 1024 * 1024;
 pub struct LocalProductServicesConfig {
     pub(crate) extension_sources:
         BTreeMap<ExtensionSourceId, ash_core_plugins::RemoteExtensionsConfig>,
-    pub(crate) open_vsx: Option<(ExtensionSourceId, ash_core_plugins::OpenVsxConfig)>,
     pub(crate) connector_oauth: Vec<ProductConnectorOAuthConfig>,
     pub(crate) github_account: Option<GitHubAccountConfig>,
     pub(crate) github_enterprise_accounts: Vec<github::GitHubBrowserConfig>,
@@ -111,24 +110,6 @@ impl LocalProductServicesConfig {
                 return Err(product_config_error(()));
             }
         }
-        let open_vsx = document
-            .open_vsx
-            .map(|source| {
-                if extension_sources.contains_key(&source.name) {
-                    return Err(product_config_error(()));
-                }
-                let config = ash_core_plugins::OpenVsxConfig::new(
-                    Url::parse(&source.api_url).map_err(product_config_error)?,
-                    source
-                        .download_origins
-                        .into_iter()
-                        .map(|url| Url::parse(&url).map_err(product_config_error))
-                        .collect::<Result<Vec<_>, _>>()?,
-                )
-                .map_err(product_config_error)?;
-                Ok((source.name, config))
-            })
-            .transpose()?;
         let connector_oauth = document
             .connector_oauth
             .into_iter()
@@ -187,7 +168,6 @@ impl LocalProductServicesConfig {
             image_generation: document.image_generation,
             git_attribution: document.git_attribution,
             extension_sources,
-            open_vsx,
             connector_oauth,
             github_account,
             github_enterprise_accounts,
@@ -247,8 +227,6 @@ struct ProductServicesDocument {
     schema_version: u32,
     #[serde(default)]
     extension_sources: Vec<ProductExtensionsDocument>,
-    #[serde(default)]
-    open_vsx: Option<ProductOpenVsxDocument>,
     #[serde(default)]
     connector_oauth: Vec<ProductConnectorOAuthDocument>,
     #[serde(default)]
@@ -313,14 +291,6 @@ impl TryFrom<GitHubAccountDocument> for GitHubAccountConfig {
             broker_base_url,
         })
     }
-}
-
-#[derive(Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-struct ProductOpenVsxDocument {
-    name: ExtensionSourceId,
-    api_url: String,
-    download_origins: Vec<String>,
 }
 
 #[derive(Deserialize)]

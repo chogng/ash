@@ -31,6 +31,16 @@ fn main() {
 }
 fn run() -> Result<(), String> {
     let args = std::env::args().skip(1).collect::<Vec<_>>();
+    if let [role, directory] = args.as_slice()
+        && role == "--terminal-host"
+    {
+        return exec_server::terminal::host::run(Path::new(directory));
+    }
+    if let [role, profile] = args.as_slice()
+        && role == "--terminal-owner"
+    {
+        return exec_server::terminal::host::run_owner(Path::new(profile));
+    }
     let (args, network) = if let [prefix @ .., flag, access] = args.as_slice()
         && flag == "--network"
     {

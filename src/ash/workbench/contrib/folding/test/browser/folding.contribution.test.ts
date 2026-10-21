@@ -9,7 +9,7 @@ import { Position } from '../../../../../editor/common/core/position.js';
 import { createLanguageFeatureRequest, LanguageCompletionTriggerKind } from '../../../../../editor/common/languages.js';
 import { LanguageFeaturesService } from '../../../../../editor/common/services/languageFeaturesService.js';
 import { ILanguageFeaturesService } from '../../../../../editor/common/services/languageFeatures.js';
-import { FoldingController } from '../../../../../../../extensions/code/browser/contrib/folding/browser/folding.js';
+import { FoldingController } from '../../../../../editor/contrib/folding/browser/folding.js';
 import { createTestCodeEditor } from '../../../../../editor/test/browser/testCodeEditor.js';
 import { resetNlsResolver, setNlsMessages } from '../../../../../nls.js';
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';

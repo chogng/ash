@@ -11,10 +11,11 @@ name = "ash_rmcp_client"
 path = "src/lib.rs"
 
 [dependencies]
+ash-utils-pty = { workspace = true }
 rmcp = { workspace = true, features = [
     "client",
     "reqwest-tls-no-provider",
-    "transport-child-process",
+    "transport-async-rw",
     "transport-streamable-http-client-reqwest",
 ] }
 ash-http-client = { workspace = true }
@@ -26,6 +27,7 @@ thiserror = { workspace = true }
 tokio = { workspace = true, features = ["macros", "process", "time"] }
 
 [dev-dependencies]
+tempfile = { workspace = true }
 rmcp = { workspace = true, features = ["server", "transport-async-rw"] }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
 

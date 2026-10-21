@@ -69,6 +69,28 @@ test("untitled service creates stable virtual editor identities", () => {
 	assert.equal(service.isUntitled(URI.file("C:\\project\\main.ts")), false);
 });
 
+test("new untitled identities do not reuse drafts restored through resource inputs", () => {
+	using workingCopies = uriIdentityServices.createInstance(BrowserWorkingCopyService);
+	using services = new InstantiationService();
+	services.registerInstance(IWorkingCopyService, workingCopies);
+	using models = createModels();
+	services.registerInstance(ITextModelResourceService, models);
+	using service = services.createInstance(UntitledTextEditorService);
+	const resource = URI.parse("untitled:/Untitled-1");
+	using restored = workingCopies.register({
+		resource, backupKind: "text", isDirty: true, hasExternalChange: false,
+		onDidChangeDirty: Event.None, onDidChangeExternalChange: Event.None, onDidChangeContent: Event.None,
+		backup: () => "recovered draft", restoreBackup: () => { },
+		save: async () => { }, saveAs: async () => { }, revert: async () => { },
+		dispose: () => { }, [Symbol.dispose]: () => { },
+	});
+	assert.equal(service.get(resource), undefined);
+	const created = service.create();
+	assert.deepEqual({ resource: created.resource.toString(), text: created.initialValue, recovered: workingCopies.get(resource)[0]!.backup() }, {
+		resource: "untitled:/Untitled-2", text: "", recovered: "recovered draft",
+	});
+});
+
 test("untitled service publishes display-label changes without changing resource identity", () => {
 	using workingCopies = uriIdentityServices.createInstance(BrowserWorkingCopyService);
 	using services = new InstantiationService();

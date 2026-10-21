@@ -17,7 +17,7 @@ pub struct Api {
     pub client: Client,
     pub background: BackgroundClient,
     pub services: external_ext_sdk::services::Services,
-    pub interaction: std::sync::Arc<std::sync::Mutex<Option<crate::interaction::Connection>>>,
+    pub interaction: std::sync::OnceLock<std::sync::Weak<crate::GitRuntime>>,
     english: Value,
     translated: Value,
     output: external_ext_sdk::window::OutputChannel,
@@ -118,9 +118,10 @@ impl Api {
             ) {
                 let connection = self
                     .interaction
-                    .lock()
-                    .map_err(|_| invalid("Git broker failed"))?
-                    .clone();
+                    .get()
+                    .and_then(std::sync::Weak::upgrade)
+                    .map(|runtime| runtime.interaction_connection())
+                    .transpose()?;
                 if let Some(connection) = connection {
                     let mut hosts = Vec::new();
                     if method == "clone" {

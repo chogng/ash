@@ -13,7 +13,12 @@ interface WindowCloseState {
 	pendingToken: number | undefined;
 	timer: ReturnType<typeof setTimeout> | undefined;
 	completeUnload: ((accepted: boolean) => void) | undefined;
+	timeoutPrompt: AbortController | undefined;
 }
+
+export type WindowCloseFailure =
+	| { readonly kind: 'failed'; readonly message: string; }
+	| { readonly kind: 'unresponsive'; readonly signal: AbortSignal; readonly token: number; readonly reason: 'windowClose' | 'quit' | 'load' | 'reload'; readonly elapsedMs: number; };
 
 interface ILifecycleWindow {
 	on(event: 'close', listener: (event: { preventDefault(): void; }) => void): unknown;
@@ -21,8 +26,10 @@ interface ILifecycleWindow {
 	isDestroyed(): boolean;
 	close(): void;
 	readonly webContents: {
-		on(event: 'did-start-loading' | 'render-process-gone', listener: () => void): unknown;
-		off(event: 'did-start-loading' | 'render-process-gone', listener: () => void): unknown;
+		on(event: 'render-process-gone', listener: () => void): unknown;
+		on(event: 'did-start-navigation', listener: (event: unknown, url: string, inPlace: boolean, mainFrame: boolean) => void): unknown;
+		off(event: 'render-process-gone', listener: () => void): unknown;
+		off(event: 'did-start-navigation', listener: (event: unknown, url: string, inPlace: boolean, mainFrame: boolean) => void): unknown;
 		send(channel: string, token: number): void;
 	};
 }
@@ -53,7 +60,7 @@ export class LifecycleMainService<TWindow extends ILifecycleWindow> extends Disp
 	public get isStarting(): boolean { return this.starting; }
 
 	constructor(
-		private readonly reportCloseFailure: (window: TWindow, message: string) => void | Promise<void>,
+		private readonly reportCloseFailure: (window: TWindow, failure: WindowCloseFailure) => void | Promise<void>,
 		private readonly reportCloseVeto: (window: TWindow) => void,
 		private readonly stateService: IStateService,
 		currentVersion: string,
@@ -96,11 +103,13 @@ export class LifecycleMainService<TWindow extends ILifecycleWindow> extends Disp
 	public registerWindow(window: TWindow): IDisposable {
 		this.assertNotDisposed();
 		if (this.windowRegistrations.has(window)) throw new Error('Workbench window is already registered for close');
-		const state: WindowCloseState = { ready: false, authorized: false, pendingToken: undefined, timer: undefined, completeUnload: undefined };
+		const state: WindowCloseState = { ready: false, authorized: false, pendingToken: undefined, timer: undefined, completeUnload: undefined, timeoutPrompt: undefined };
 		this.closeStates.set(window, state);
 		const clearPending = (): void => {
 			if (state.timer) clearTimeout(state.timer);
 			state.timer = undefined;
+			state.timeoutPrompt?.abort();
+			state.timeoutPrompt = undefined;
 			state.pendingToken = undefined;
 			state.completeUnload?.(false);
 			state.completeUnload = undefined;
@@ -111,22 +120,24 @@ export class LifecycleMainService<TWindow extends ILifecycleWindow> extends Disp
 			if (state.pendingToken !== undefined) return;
 			const token = ++this.nextCloseToken;
 			state.pendingToken = token;
-			state.timer = setTimeout(() => {
-				clearPending();
-				this.reportFailure(window, 'The window did not respond to the close request.');
-			}, 30_000);
-			window.webContents.send(this.getCloseReason() === 'quit' ? WINDOW_PREPARE_QUIT_CHANNEL : WINDOW_PREPARE_CLOSE_CHANNEL, token);
+			const reason = this.getCloseReason();
+			this.waitForResponse(window, state, reason);
+			window.webContents.send(reason === 'quit' ? WINDOW_PREPARE_QUIT_CHANNEL : WINDOW_PREPARE_CLOSE_CHANNEL, token);
 		};
 		const onRendererLoading = (): void => { state.ready = false; clearPending(); };
+		const onNavigation = (_event: unknown, _url: string, inPlace: boolean, mainFrame: boolean): void => {
+			// Webviews navigate independently of the Workbench document and its shutdown participants.
+			if (mainFrame && !inPlace) { onRendererLoading(); }
+		};
 		window.on('close', onClose);
-		window.webContents.on('did-start-loading', onRendererLoading);
+		window.webContents.on('did-start-navigation', onNavigation);
 		window.webContents.on('render-process-gone', onRendererLoading);
 		this.windowRegistrations.set(window, toDisposable(() => {
 			clearPending();
 			this.closeStates.delete(window);
 			window.off('close', onClose);
 			if (!window.isDestroyed()) {
-				window.webContents.off('did-start-loading', onRendererLoading);
+				window.webContents.off('did-start-navigation', onNavigation);
 				window.webContents.off('render-process-gone', onRendererLoading);
 			}
 		}));
@@ -145,13 +156,7 @@ export class LifecycleMainService<TWindow extends ILifecycleWindow> extends Disp
 			const token = ++this.nextCloseToken;
 			state.pendingToken = token;
 			state.completeUnload = resolve;
-			state.timer = setTimeout(() => {
-				state.pendingToken = undefined;
-				state.timer = undefined;
-				state.completeUnload = undefined;
-				resolve(false);
-				this.reportFailure(window, 'The window did not respond to the workspace load request.');
-			}, 30_000);
+			this.waitForResponse(window, state, reason);
 			window.webContents.send(reason === 'reload' ? WINDOW_PREPARE_RELOAD_CHANNEL : WINDOW_PREPARE_LOAD_CHANNEL, token);
 		});
 	}
@@ -166,6 +171,8 @@ export class LifecycleMainService<TWindow extends ILifecycleWindow> extends Disp
 		if (state.pendingToken !== response.token) throw new Error('Window close request is no longer active');
 		if (state.timer) clearTimeout(state.timer);
 		state.timer = undefined;
+		state.timeoutPrompt?.abort();
+		state.timeoutPrompt = undefined;
 		state.pendingToken = undefined;
 		const completeUnload = state.completeUnload;
 		state.completeUnload = undefined;
@@ -184,8 +191,26 @@ export class LifecycleMainService<TWindow extends ILifecycleWindow> extends Disp
 		}
 	}
 
+	private waitForResponse(window: TWindow, state: WindowCloseState, reason: 'windowClose' | 'quit' | 'load' | 'reload', started = performance.now()): void {
+		const token = state.pendingToken!;
+		state.timer = setTimeout(() => {
+			state.timer = undefined;
+			const prompt = new AbortController();
+			state.timeoutPrompt = prompt;
+			// Waiting keeps the original request live: a slow save can still finish
+			// and dismiss recovery. Destroying the window settles it via registration cleanup.
+			void Promise.resolve().then(() => this.reportCloseFailure(window, { kind: 'unresponsive', signal: prompt.signal, token, reason, elapsedMs: performance.now() - started }))
+				.catch(error => console.error('Failed to report window shutdown timeout', error))
+				.finally(() => {
+					if (state.timeoutPrompt !== prompt) return;
+					state.timeoutPrompt = undefined;
+					if (!prompt.signal.aborted && state.pendingToken === token) this.waitForResponse(window, state, reason, started);
+				});
+		}, 30_000);
+	}
+
 	private reportFailure(window: TWindow, message: string): void {
-		void Promise.resolve(this.reportCloseFailure(window, message)).catch(error => console.error('Failed to report window close error', error));
+		void Promise.resolve(this.reportCloseFailure(window, { kind: 'failed', message })).catch(error => console.error('Failed to report window close error', error));
 	}
 }
 

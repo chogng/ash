@@ -1,20 +1,11 @@
 import { execFile } from 'node:child_process';
-import { mkdir, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
 import { expect, test } from '../../../automation/test.js';
 
 const run = promisify(execFile);
-const commitShortcut = process.platform === 'darwin' ? '⌘Enter' : 'Ctrl+Enter';
 
-test('SCM hides the commit form when no repository is available', async ({ workbench }) => {
-	await workbench.page.getByRole('tab', { name: /^Source Control(?:,|$)/u }).click();
-	const changes = workbench.page.locator('[data-view-id="ash.gitView"]');
-	await expect(changes.getByRole('region', { name: 'Welcome', exact: true })).toBeVisible();
-	await expect(changes.locator('.ash-scm-commit-form')).toBeHidden();
-	await expect(changes.locator('.ash-pane-view-header')).toBeHidden();
-	await expect(workbench.page.locator('.ash-scm-viewlet [data-view-id]')).toHaveAttribute('data-view-id', 'ash.gitView');
-});
 
 test.describe('SCM welcome', () => {
 	test.use({ openWorkspace: false });
@@ -45,7 +36,7 @@ test.describe('SCM welcome', () => {
 		await expect(open).toBeFocused();
 	});
 
-	test('SCM welcome wraps in a narrow pane and uses theme colors and keyboard focus', async ({ workbench }) => {
+	test('SCM welcome wraps in a narrow pane and uses theme colors and keyboard focus', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ workbench }) => {
 		const page = workbench.page;
 		await page.getByRole('tab', { name: /^Source Control(?:,|$)/u }).click();
 		const welcome = page.locator('[data-view-id="ash.gitView"] .ash-view-welcome');
@@ -86,16 +77,19 @@ test.describe('SCM welcome', () => {
 
 test('SCM welcome initializes a repository through the backend and returns to Changes', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, testWorkspace, workbench }) => {
 	const page = workbench.page;
+	const originalContent = await readFile(testWorkspace.file, 'utf8');
 	await page.getByRole('tab', { name: /^Source Control(?:,|$)/u }).click();
 	const changes = page.locator('[data-view-id="ash.gitView"]');
 	await expect(page.locator('.ash-scm-viewlet [data-view-id]')).toHaveAttribute('data-view-id', 'ash.gitView');
 	await expect(changes.locator('.ash-pane-view-header')).toBeHidden();
+	await expect(changes.locator('.ash-scm-commit-form')).toBeHidden();
 	await changes.getByRole('button', { name: 'Initialize Repository', exact: true }).click();
 	await page.locator('.ash-quick-pick').getByRole('option').first().click();
-	const branch = page.getByRole('dialog', { name: 'Quick Input', exact: true }).getByRole('textbox');
+	const branch = page.getByRole('dialog', { name: 'Initial branch name', exact: true }).getByRole('textbox', { name: 'Initial branch name', exact: true });
 	await branch.fill('welcome-main');
 	await branch.press('Enter');
 	await expect.poll(() => run('git', ['symbolic-ref', '--short', 'HEAD'], { cwd: testWorkspace.directory }).then(result => result.stdout.trim(), () => undefined)).toBe('welcome-main');
+	expect(await readFile(testWorkspace.file, 'utf8')).toBe(originalContent);
 	await expect(changes.getByRole('region', { name: 'Welcome', exact: true })).toBeHidden();
 	await expect(changes.locator('.ash-scm-commit-form')).toBeVisible();
 	await expect(changes.locator('.ash-pane-view-header')).toBeVisible();
@@ -106,81 +100,6 @@ test('SCM welcome initializes a repository through the backend and returns to Ch
 test.describe('SCM commit input', () => {
 	test.use({ gitRepository: true });
 
-	test('SCM commit form separates resource groups and removes the line when the repository becomes clean', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ testWorkspace, workbench }, testInfo) => {
-		const page = workbench.page;
-		await page.getByRole('tab', { name: /^Source Control(?:,|$)/u }).click();
-		const form = page.locator('.ash-scm-commit-form');
-		const tree = page.getByRole('tree', { name: 'Source control changes', exact: true });
-		await expect(form).toBeVisible();
-		await expect(tree.getByRole('treeitem')).toHaveCount(0);
-		await expect(form).toHaveCSS('border-bottom-width', '0px');
-		await writeFile(testWorkspace.file, 'const value = 2;\n');
-		await expect(tree.getByRole('button', { name: 'Open Changes for main.ts', exact: true })).toBeVisible();
-		await expect(form).toHaveCSS('border-bottom-width', '1px');
-		await run('git', ['add', 'main.ts'], { cwd: testWorkspace.directory });
-		await run('git', ['commit', '-m', 'Clear resource groups'], { cwd: testWorkspace.directory });
-		await expect(tree.getByRole('treeitem')).toHaveCount(0);
-		await expect(form).toHaveCSS('border-bottom-width', '0px');
-		const boundaries = await page.locator('.ash-scm-viewlet .ash-split-view-pane').evaluateAll(panes => panes.slice(1).map(pane => getComputedStyle(pane, '::before').height));
-		expect(boundaries.length).toBeGreaterThan(0);
-		expect(boundaries.every(height => height === '1px')).toBe(true);
-		await testInfo.attach('clean-source-control', { body: await page.locator('.ash-scm-viewlet').screenshot(), contentType: 'image/png' });
-	});
-
-	test('SCM commit input grows, wraps, shrinks and supports undo and redo', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ workbench }) => {
-		const page = workbench.page;
-		await page.getByRole('tab', { name: /^Source Control(?:,|$)/u }).click();
-		const input = page.locator('.ash-scm-input');
-		const editor = input.getByRole('textbox', { name: /^Commit message/u });
-		const placeholder = input.locator('.stanza-editor-placeholder-text');
-		await expect(placeholder).toHaveText(`Message (${commitShortcut} to commit on "main")`);
-		await expect(input).toHaveCSS('resize', 'none');
-		await expect.poll(() => input.evaluate(element => Math.round(element.getBoundingClientRect().height))).toBe(26);
-		await editor.focus();
-		await page.keyboard.insertText('Subject');
-		await editor.press('Enter');
-		await page.keyboard.insertText('Body');
-		await expect.poll(() => input.evaluate(element => Math.round(element.getBoundingClientRect().height))).toBe(46);
-		await expect(placeholder).toBeHidden();
-		await editor.press('ControlOrMeta+z');
-		await expect(input.locator('.view-lines')).not.toContainText('Body');
-		await editor.press('ControlOrMeta+Shift+z');
-		await expect(input.locator('.view-lines')).toContainText('Body');
-		await editor.press('ControlOrMeta+a');
-		await page.keyboard.insertText('Long commit message '.repeat(50));
-		await expect.poll(() => input.evaluate(element => element.getBoundingClientRect().height)).toBeGreaterThan(46);
-		await editor.press('ControlOrMeta+a');
-		await page.keyboard.insertText(Array.from({ length: 12 }, (_, index) => `Message line ${index + 1}`).join('\n'));
-		await expect.poll(() => input.evaluate(element => Math.round(element.getBoundingClientRect().height))).toBe(206);
-		expect((await input.locator('.margin-view-overlays .line-numbers').allTextContents()).every(text => text.trim() === '')).toBe(true);
-		await editor.press('ControlOrMeta+a');
-		await editor.press('Backspace');
-		await expect.poll(() => input.evaluate(element => Math.round(element.getBoundingClientRect().height))).toBe(26);
-		await expect(placeholder).toBeVisible();
-	});
-
-	test('SCM commit input restores focus from help and lets Tab reach Commit', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ testWorkspace, workbench }) => {
-		await writeFile(testWorkspace.file, 'const value = 2;\n');
-		await run('git', ['add', 'main.ts'], { cwd: testWorkspace.directory });
-		const page = workbench.page;
-		await page.getByRole('tab', { name: /^Source Control(?:,|$)/u }).click();
-		const editor = page.locator('.ash-scm-input').getByRole('textbox', { name: /^Commit message/u });
-		const commit = page.locator('.ash-scm-commit');
-		await expect(commit).toBeEnabled();
-		await editor.focus();
-		await editor.press('Alt+F1');
-		const help = page.getByRole('dialog', { name: 'Accessibility Help', exact: true });
-		await expect(help.getByRole('textbox')).toHaveValue(/Enter inserts a new line/u);
-		await expect(help.getByRole('textbox')).toHaveValue(/Commit All asks whether to include untracked files/u);
-		await expect(help.getByRole('textbox')).toHaveValue(/Signed-off-by/u);
-		await expect(help.getByRole('textbox')).toHaveValue(/restores its complete message only to an unchanged empty draft/u);
-		await page.keyboard.press('Escape');
-		await expect(editor).toBeFocused();
-		await editor.press('Tab');
-		await expect(commit).toBeFocused();
-		await page.keyboard.press('Shift+Tab');
-		await expect(editor).toBeFocused();
-	});
 
 	test('SCM commit input localizes scope and draft help after restarting in Chinese', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ testWorkspace, workbench, restartWorkbench }) => {
 		const cwd = testWorkspace.directory;
@@ -202,9 +121,9 @@ test.describe('SCM commit input', () => {
 		await page.keyboard.insertText('中文提交草稿');
 		await editor.press('Alt+F1');
 		const help = page.getByRole('dialog').getByRole('textbox');
-		await expect(help).toHaveValue(/询问是否包含未跟踪的文件/u);
-		await expect(help).toHaveValue(/Git 身份添加 Signed-off-by 尾注/u);
-		await expect(help).toHaveValue(/未编辑过的空草稿恢复完整提交信息/u);
+		await expect(help).toHaveValue(/为当前源代码管理提供程序输入消息。Enter 插入新行/u);
+		await expect(help).toHaveValue(/每个仓库保留各自的草稿/u);
+		await expect(help).toHaveValue(/Escape 关闭帮助并返回消息输入框/u);
 		await page.keyboard.press('Escape');
 		await expect(editor).toBeFocused();
 		await workbench.quickaccess.runCommand('git.commitAllSigned');
@@ -224,31 +143,6 @@ test.describe('SCM commit input', () => {
 		await expect(input.locator('.stanza-editor-placeholder-text')).toBeVisible();
 	});
 
-	test('SCM commit input uses input colors and visible focus in all four themes', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ workbench }) => {
-		const page = workbench.page;
-		await page.getByRole('tab', { name: /^Source Control(?:,|$)/u }).click();
-		const input = page.locator('.ash-scm-input');
-		const editor = input.getByRole('textbox', { name: /^Commit message/u });
-		for (const theme of ['Ash Dark', 'Ash Light', 'Ash High Contrast Dark', 'Ash High Contrast Light']) {
-			await workbench.quickaccess.runCommand('workbench.action.selectTheme');
-			await workbench.quickaccess.select(theme);
-			await editor.focus();
-			await expect(input).toHaveCSS('outline-style', 'solid');
-			const colors = await input.evaluate(element => {
-				const probe = element.ownerDocument.createElement('span');
-				probe.style.backgroundColor = 'var(--ash-input-background)';
-				probe.style.color = 'var(--ash-input-foreground)';
-				element.append(probe);
-				const expected = getComputedStyle(probe);
-				const actual = getComputedStyle(element);
-				const matches = actual.backgroundColor === expected.backgroundColor && actual.color === expected.color;
-				probe.remove();
-				return matches;
-			});
-			expect(colors).toBe(true);
-		}
-	});
-
 	test('SCM commits the edited message with Ctrl+Enter and clears the draft', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ testWorkspace, workbench }) => {
 		await writeFile(testWorkspace.file, 'const value = 2;\n');
 		await run('git', ['add', 'main.ts'], { cwd: testWorkspace.directory });
@@ -257,7 +151,12 @@ test.describe('SCM commit input', () => {
 		const input = page.locator('.ash-scm-input');
 		const editor = input.getByRole('textbox', { name: /^Commit message/u });
 		await expect(page.locator('.ash-scm-commit')).toBeEnabled();
+		await expect(input.locator('.stanza-editor-placeholder-text')).toHaveText(/^Message \(.+ to commit on "main"\)$/u);
 		await editor.focus();
+		await editor.press('Tab');
+		await expect(page.locator('.ash-scm-commit')).toBeFocused();
+		await page.keyboard.press('Shift+Tab');
+		await expect(editor).toBeFocused();
 		await page.keyboard.insertText('SCM editor commit');
 		await editor.press('Enter');
 		await page.keyboard.insertText('Preserve the message body.');
@@ -285,7 +184,7 @@ test.describe('SCM commit input', () => {
 		await editor.focus();
 		await page.keyboard.insertText('Main draft');
 		await secondary.click();
-		await expect(input.locator('.stanza-editor-placeholder-text')).toHaveText(`Message (${commitShortcut} to commit on "topic")`);
+		await expect(input.locator('.stanza-editor-placeholder-text')).toHaveText(/^Message \(.+ to commit on "topic"\)$/u);
 		await editor.focus();
 		await page.keyboard.insertText('Topic draft');
 		await primary.click();

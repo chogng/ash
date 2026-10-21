@@ -8,13 +8,14 @@ import { Position } from "../../../../../editor/common/core/position.js";
 import { Range } from "../../../../../editor/common/core/range.js";
 import { LanguageDiagnosticSeverity, createLanguageCompletionInvokeContext, createLanguageFeatureRequest } from '../../../../../editor/common/languages.js';
 import { TextModel } from "../../../../../editor/common/model/textModel.js";
-import { LanguageCompletionService } from '../../../../../../../extensions/code/browser/contrib/suggest/browser/suggest.js';
+import { LanguageCompletionService } from '../../../../../editor/contrib/suggest/browser/suggest.js';
 import { getWorkspaceSymbols } from '../../../../contrib/search/common/search.js';
 import { TestLanguageFeaturesService as LanguageFeaturesService } from '../../../../../editor/test/common/testLanguageFeaturesService.js';
 import { type ILanguageApi } from "../../../../../platform/language/common/languageApi.js";
 import { IServerEventApi } from "../../../../../platform/agentHost/common/appServerApi.js";
 import { IWorkspaceTrustManagementService, type WorkspaceTrustPermission } from '../../../../../platform/workspace/common/workspaceTrust.js';
 import { IWorkspaceContextService } from '../../../../../platform/workspace/common/workspace.js';
+import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { Disposable } from '../../../../../base/common/lifecycle.js';
 import { type ServerNotification } from '../../../../../../../.build/protocol/typescript/index.js';
@@ -25,13 +26,16 @@ function createProviders(languages: LanguageFeaturesService, api: ILanguageApi, 
 	using services = new InstantiationService();
 	services.registerInstance(ILanguageFeaturesService, languages);
 	services.registerInstance(IWorkspaceContextService, workspace);
+	services.registerInstance(IConfigurationService, workspace);
 	services.registerInstance(IServerEventApi, options.events ?? new FakeServerEvents());
 	services.registerInstance(IWorkspaceTrustManagementService, options.workspaceTrust ?? {
 		onDidChangeTrust: Event.None,
 		getUriTrustInfo: async () => { throw new Error('Backend-authorized language requests must not inspect host grants'); },
 		getWorkspaceTrustInfo: async () => undefined,
 	});
-	return services.createInstance(AppServerLanguageProviders, api, { checkWorkspaceTrust: !!options.workspaceTrust });
+	const service = services.createInstance(AppServerLanguageProviders, api, { checkWorkspaceTrust: !!options.workspaceTrust });
+	service.start();
+	return service;
 }
 
 test('language providers require the scoped trust registration even when the backend authorizes Web requests', () => {

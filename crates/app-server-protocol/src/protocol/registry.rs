@@ -1068,10 +1068,6 @@ use crate::protocol::extensions::ExtensionDiagnosticDto;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::extensions::ExtensionDto;
 #[cfg(any(test, feature = "export"))]
-use crate::protocol::extensions::ExtensionGalleryResourceOpenParams;
-#[cfg(any(test, feature = "export"))]
-use crate::protocol::extensions::ExtensionGalleryResult;
-#[cfg(any(test, feature = "export"))]
 use crate::protocol::extensions::ExtensionListParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::extensions::ExtensionListResult;
@@ -2792,6 +2788,8 @@ use ash_protocol::ModelInvocationId;
 use ash_protocol::ModelInvocationOutcome;
 #[cfg(any(test, feature = "export"))]
 use ash_protocol::ModelInvocationRecord;
+#[cfg(any(test, feature = "export"))]
+use ash_protocol::ModelInvocationTiming;
 #[cfg(any(test, feature = "export"))]
 use ash_protocol::ModelMoneyAmount;
 #[cfg(any(test, feature = "export"))]
@@ -4618,16 +4616,6 @@ client_methods! {
         params: ExtensionResourceOpenParams,
         response: ExtensionResourceOpenResult,
         serialization: ResourceExclusive("extensionId"),
-    },
-    ExtensionGallery => "extensions/gallery" {
-        params: EmptyParams,
-        response: ExtensionGalleryResult,
-        serialization: GlobalSharedRead,
-    },
-    ExtensionGalleryResourceOpen => "extensions/gallery/resource/open" {
-        params: ExtensionGalleryResourceOpenParams,
-        response: ExtensionResourceOpenResult,
-        serialization: GlobalSharedRead,
     },
     ExtensionHostStart => "extensionHost/start" {
         params: ExtensionHostStartParams,
@@ -6712,8 +6700,6 @@ typescript_bindings! {
     ExtensionListResult,
     ExtensionResourceOpenParams,
     ExtensionResourceOpenResult,
-    ExtensionGalleryResult,
-    ExtensionGalleryResourceOpenParams,
     ExtensionHostReconcileModeDto,
     ExtensionHostReconcileParams,
     ExtensionHostStartParams,
@@ -6969,6 +6955,7 @@ typescript_bindings! {
     ModelInvocationId,
     ModelInvocationOutcome,
     ModelInvocationRecord,
+    ModelInvocationTiming,
     ModelMoneyAmount,
     ModelReferenceCostReason,
     ModelReferenceCostRecord,

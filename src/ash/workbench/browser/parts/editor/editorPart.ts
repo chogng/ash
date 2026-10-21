@@ -1,3 +1,4 @@
+import { ErrorPlaceholderEditor } from './editorPlaceholder.js';
 import { EditorInputCapabilities } from '../../../common/editor.js';
 import { IStorageService } from '../../../../platform/storage/common/storage.js';
 import { IThemeService } from '../../../../platform/theme/common/themeService.js';
@@ -1096,8 +1097,10 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 				locked: group.isLocked,
 				editors: Object.freeze(group.inputs.map(input => {
 					const viewState = group.saveEditorViewState(input);
+					const pane = group.getEditorPane(input)!;
 					return Object.freeze({
 						input: this.inputSerializers.serialize(input),
+						...(pane instanceof ErrorPlaceholderEditor ? {} : { paneId: pane.id }),
 						preview: group.isPreview(input),
 						sticky: group.isSticky(input),
 						...(viewState ? { viewState } : {}),
@@ -1165,6 +1168,7 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 				await group.openEditor(input, {
 					index: inputIndex,
 					pinned: !state.editors[inputIndex]!.preview,
+					preferredEditorId: state.editors[inputIndex]!.paneId,
 					preserveFocus: true,
 				});
 				group.restoreEditorViewState(input, state.editors[inputIndex]!.viewState);
@@ -1310,6 +1314,9 @@ function validateWorkingSet(value: EditorWorkingSet, lastGroupId: number): Edito
 		for (const editor of group.editors) {
 			if (!editor || typeof editor !== "object" || typeof editor.preview !== "boolean" || (editor.sticky !== undefined && typeof editor.sticky !== "boolean") || (editor.sticky === true && editor.preview) || !isSerializedEditorInput(editor.input)) {
 				throw new TypeError("Invalid editor working set entry");
+			}
+			if (editor.paneId !== undefined && (typeof editor.paneId !== 'string' || !editor.paneId.trim() || editor.paneId.length > 256)) {
+				throw new TypeError('Invalid editor working set pane ID');
 			}
 			if (editor.viewState !== undefined) {
 				if (!editor.viewState || typeof editor.viewState !== "object" || typeof editor.viewState.typeId !== "string" || !/^[A-Za-z][A-Za-z0-9._-]{0,127}$/u.test(editor.viewState.typeId) || !("value" in editor.viewState)) {

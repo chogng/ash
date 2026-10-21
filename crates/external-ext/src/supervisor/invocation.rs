@@ -226,7 +226,15 @@ impl ExtensionInvocationHandle {
                 && state
                     .registrations
                     .iter()
-                    .any(|registration| registration == &self.registration)
+                    .any(|registration| {
+                        registration == &self.registration
+                            // SCM callbacks publish new revisions/provider data while running.
+                            // Those acknowledged snapshots do not replace the registration;
+                            // its ID, capability kind and process incarnation still fence it.
+                            || (registration.registration_id == self.registration.registration_id
+                                && matches!(registration.kind, crate::RegistrationKind::SourceControl { .. })
+                                && matches!(self.registration.kind, crate::RegistrationKind::SourceControl { .. }))
+                    })
         })
     }
 

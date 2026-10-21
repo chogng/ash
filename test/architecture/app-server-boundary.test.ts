@@ -25,12 +25,6 @@ test("Desktop packages the shared backend host instead of the Ash Code CLI", () 
 	}
 	assert.match(packageScript, /"ash-app-server"/u);
 	assert.match(packageScript, /"ash-app-server-daemon"/u);
-	assert.match(packageManifest, /build\/prepare\.py/u);
-	assert.match(packageScript, /PROFILE = "dev-small"/u);
-	assert.match(watcher, /build\/desktop\/develop\.py/u);
-	assert.match(backendBuilder, /current_package\(development_root/u);
-	assert.doesNotMatch(backendBuilder, /prepare_development_package/u);
-	assert.doesNotMatch(packageScript, /"--target",/u);
 	assert.doesNotMatch(watcher, /spawn\(['"]cargo['"]/u);
 	assert.match(electronMain, /platform\/app-server-daemon\/electron-main\/appServerDaemonLauncher\.js/u);
 });

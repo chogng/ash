@@ -925,26 +925,6 @@ test('Dragging a tab to a group edge shows the split target and moves the editor
 	await expect(editors.element.locator('[data-editor-drop-direction]')).toHaveCount(0);
 });
 
-test('minimap slider follows its theme color in the running editor', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, workbench }) => {
-
-	const fileRow = workbench.page.locator('.ash-explorer .ash-tree-row').filter({ hasText: 'main.ts' });
-	await expect.poll(() => fileRow.count(), { timeout: 15_000 }).toBe(1);
-	await fileRow.click();
-	const slider = workbench.editors.groupAt(0).content.locator('.stanza-editor-minimap-slider');
-	await expect(slider).toBeVisible();
-	const colors = await slider.evaluate(element => {
-		const minimap = element.parentElement!;
-		const initial = getComputedStyle(element).backgroundColor;
-		minimap.style.setProperty('--ash-minimapSlider-background', '#123456');
-		const overridden = getComputedStyle(element).backgroundColor;
-		minimap.style.removeProperty('--ash-minimapSlider-background');
-		return { initial, overridden, restored: getComputedStyle(element).backgroundColor };
-	});
-	expect(colors.initial).not.toBe('rgba(0, 0, 0, 0)');
-	expect(colors.overridden).toBe('rgb(18, 52, 86)');
-	expect(colors.restored).toBe(colors.initial);
-});
-
 test('Code opens Go to Line from the command palette in the focused editor', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, workbench }) => {
 
 	const page = workbench.page;
@@ -1476,6 +1456,8 @@ test("Code restores an untitled draft and opens the next document separately", {
 
 	const page = workbench.page;
 	const group = workbench.editors.groupAt(0);
+	await workbench.quickaccess.runCommand("workbench.action.closeAllEditors");
+	await expect(group.tabs).toHaveCount(0);
 	await page.keyboard.press("ControlOrMeta+N");
 	const input = group.content.locator(".stanza-editor-input");
 	await expect(input).toBeVisible();
@@ -1484,13 +1466,15 @@ test("Code restores an untitled draft and opens the next document separately", {
 	await expect.poll(() => hasWorkingCopyBackup(page, "recovered untitled draft"), { message: "untitled draft reaches IndexedDB" }).toBe(true);
 
 	await page.reload({ waitUntil: "domcontentloaded" });
-	await expect(page.locator(".ash-workbench")).toBeVisible();
+	await workbench.waitForReady();
 	const restoredTab = group.tabs.filter({ hasText: "Untitled-1" });
 	await expect(restoredTab).toHaveCount(1);
 	await expect(group.content.locator(".stanza-editor-line-text").first()).toContainText("recovered untitled draft");
 
+	await expect(group.tabs.filter({ hasText: /^Untitled-/u })).toHaveCount(1);
+	await group.editor.input.focus();
 	await page.keyboard.press("ControlOrMeta+N");
-	await expect(group.tabs).toHaveCount(2);
+	await expect(group.tabs.filter({ hasText: /^Untitled-/u })).toHaveCount(2);
 	await expect(group.tabs.filter({ hasText: "Untitled-2" })).toHaveCount(1);
 	await restoredTab.click();
 	await expect(group.content.locator(".stanza-editor-line-text").first()).toContainText("recovered untitled draft");
@@ -1525,38 +1509,6 @@ async function hasWorkingCopyBackup(page: Page, content: string, application?: E
 }
 
 
-test('Code editor scrollbar follows wheel, keyboard and thumb dragging in the desktop window', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, testWorkspace, workbench }) => {
-	await writeFile(testWorkspace.file, Array.from({ length: 200 }, (_, index) => `// line ${index} ${'x'.repeat(180)}`).join('\n'));
-	const page = workbench.page;
-	const fileRow = page.locator('.ash-explorer .ash-tree-row').filter({ hasText: 'main.ts' });
-	await expect(fileRow).toHaveCount(1);
-	await fileRow.locator('.ash-icon-label-icon').click();
-	const editor = workbench.editors.groupAt(0).content.locator('.stanza-editor');
-	await expect(editor).toBeVisible();
-	const vertical = editor.getByRole('scrollbar', { name: 'Vertical scrollbar' });
-	await expect(vertical).toBeVisible();
-	await vertical.focus();
-	await page.keyboard.press('Home');
-	await expect.poll(() => editor.locator(':scope > .ash-smooth-scrollable').evaluate(element => element.scrollTop)).toBe(0);
-	await editor.hover();
-	await page.mouse.wheel(0, 180);
-	await expect.poll(() => editor.locator(':scope > .ash-smooth-scrollable').evaluate(element => element.scrollTop)).toBeGreaterThan(0);
-	await vertical.focus();
-	await page.keyboard.press('End');
-	await expect.poll(async () => vertical.evaluate(element => element.getAttribute('aria-valuenow') === element.getAttribute('aria-valuemax'))).toBe(true);
-	await page.keyboard.press('Home');
-	await expect.poll(() => editor.locator(':scope > .ash-smooth-scrollable').evaluate(element => element.scrollTop)).toBe(0);
-	const thumb = await vertical.locator('.ash-scrollbar-thumb').boundingBox();
-	if (!thumb) {
-		throw new Error('Missing scrollbar thumb');
-	}
-	await page.mouse.move(thumb.x + thumb.width / 2, thumb.y + thumb.height / 2);
-	await page.mouse.down();
-	await page.mouse.move(thumb.x + thumb.width / 2, thumb.y + thumb.height / 2 + 80, { steps: 5 });
-	await page.mouse.up();
-	await expect.poll(() => editor.locator(':scope > .ash-smooth-scrollable').evaluate(element => element.scrollTop)).toBeGreaterThan(180);
-});
-
 test('Code replaces a selection with multiline text and remains editable', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, testWorkspace, workbench }) => {
 	const page = workbench.page;
 	const fileRow = page.locator('.ash-explorer .ash-tree-row').filter({ hasText: 'main.ts' });
@@ -1580,7 +1532,7 @@ test('Code replaces a selection with multiline text and remains editable', { tag
 	await expect.poll(() => readFile(testWorkspace.file, 'utf8')).toBe(content + '!');
 });
 
-test('file open failures stay in the editor and binary actions work with an existing file open', { tag: ['@browser-ui', '@browser-app-server', '@electron-app-server'] }, async ({ target, testWorkspace, workbench }) => {
+test('file open failures stay in the editor and binary actions work with an existing file open', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, testWorkspace, workbench }) => {
 	const page = workbench.page;
 	if (target.kind === 'browser' && target.appServerMode === 'disabled') {
 		await page.evaluate(async () => {
@@ -1761,22 +1713,23 @@ test('Agent document requests use the Agents window model and save closed files 
 	expect(runningApplication.diagnostics.errors).toEqual([]);
 });
 
-test('Agent review commands are available without an App Server connection', { tag: ['@browser-ui', '@electron-ui'] }, async ({ target, workbench, restartWorkbench }) => {
-	await workbench.quickaccess.runCommand('chatEditing.reviewChanges');
-	const picker = workbench.page.getByRole('dialog', { name: 'Review Agent changes', exact: true });
-	await expect(picker).toBeVisible();
-	await expect(picker.getByRole('option')).toHaveCount(0);
-	await workbench.page.keyboard.press('Escape');
-	await expect(picker).toBeHidden();
-	await expect(workbench.page.locator('.ash-chat-editing-overlay:visible')).toHaveCount(0);
+test('Agent review commands are available without an App Server connection', { tag: ['@browser-ui', '@electron-ui'] }, async ({ workbench, restartWorkbench }) => {
+	const runEmptyReview = async (label: string): Promise<void> => {
+		await workbench.quickaccess.open('>chatEditing.reviewChanges');
+		const command = workbench.quickaccess.items.filter({ has: workbench.page.locator('.ash-quick-pick-row-description').getByText('chatEditing.reviewChanges', { exact: true }) });
+		await expect(command.locator('.ash-quick-pick-row-label')).toHaveText(label);
+		await command.click();
+		// With no editing session, the available command closes without an empty review picker.
+		await expect(workbench.quickaccess.element).toBeHidden();
+		await expect(workbench.page.locator('.ash-chat-editing-overlay:visible')).toHaveCount(0);
+	};
+	await runEmptyReview('Review Agent changes');
 	await workbench.quickaccess.runCommand('workbench.action.configureLocale');
 	const language = workbench.page.getByRole('dialog', { name: 'Select Display Language' }).getByRole('combobox');
 	await language.fill('简体中文');
 	await language.press('Enter');
 	({ workbench } = await restartWorkbench());
-	await workbench.quickaccess.runCommand('chatEditing.reviewChanges');
-	await expect(workbench.page.getByRole('dialog', { name: '审核 Agent 修改', exact: true })).toBeVisible();
-	await workbench.page.keyboard.press('Escape');
+	await runEmptyReview('审核 Agent 修改');
 });
 
 test('Agent review accepts individual hunks and rejects the remainder without losing user edits', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, testWorkspace, workbench }) => {

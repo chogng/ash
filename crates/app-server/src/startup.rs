@@ -24,6 +24,16 @@ pub fn run(
     diff_handler: crate::DiffRequestHandler,
 ) -> Result<(), String> {
     let arguments = arguments.into_iter().collect::<Vec<_>>();
+    if let [role, directory] = arguments.as_slice()
+        && role == "--terminal-host"
+    {
+        return exec_server::terminal::host::run(Path::new(directory));
+    }
+    if let [role, profile] = arguments.as_slice()
+        && role == "--terminal-owner"
+    {
+        return exec_server::terminal::host::run_owner(Path::new(profile));
+    }
     match arguments.as_slice() {
         [command, receiver] if command == "history-export" => {
             let receiver = ash_protocol::ContentDigest::new(receiver.clone())

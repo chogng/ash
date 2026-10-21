@@ -36,6 +36,7 @@ import { IInstantiationService } from '../../../../../platform/instantiation/com
 import { TerminalLocation } from '../../../../../platform/terminal/common/terminal.js';
 import { editorBackground } from '../../../../../platform/theme/common/colors/editorColors.js';
 import { PANEL_BACKGROUND } from '../../../../common/theme.js';
+import { scrollbarSliderBackground, scrollbarSliderHoverBackground, scrollbarSliderActiveBackground } from '../../../../../platform/theme/common/colors/miscColors.js';
 
 const addonImporter = new XtermAddonImporter();
 
@@ -197,7 +198,7 @@ export class XtermTerminal extends Disposable implements IXtermTerminal {
 	private screenOptions(): ITerminalOptions {
 		const config = this.configuration.config;
 		return {
-			overviewRuler: { width: 14, showTopBorder: false, showBottomBorder: false },
+			scrollbar: { width: 14, overviewRuler: { showTopBorder: false, showBottomBorder: false } },
 			fontFamily: config.fontFamily, fontSize: config.fontSize,
 			letterSpacing: config.letterSpacing, lineHeight: config.lineHeight,
 			cursorBlink: config.cursorBlinking, cursorStyle: config.cursorStyle === 'line' ? 'bar' : config.cursorStyle,
@@ -208,7 +209,9 @@ export class XtermTerminal extends Disposable implements IXtermTerminal {
 	}
 
 	public write(data: string | Uint8Array, callback?: () => void): void {
-		this.writeWhenReady(terminal => terminal.write(data, callback));
+		// The pinned xterm beta drops empty-string callbacks during a synchronous
+		// resize flush. NUL is ignored by the parser and preserves queue ordering.
+		this.writeWhenReady(terminal => terminal.write(data === '' ? '\x00' : data, callback));
 	}
 
 	/** Disposal also releases initialization/checkpoint waiters when xterm drops queued writes. */
@@ -217,7 +220,7 @@ export class XtermTerminal extends Disposable implements IXtermTerminal {
 		try {
 			await new Promise<void>(resolve => {
 				release = this._store.add(toDisposable(resolve));
-				this.raw.write(data, resolve);
+				this.write(data, resolve);
 			});
 		} finally {
 			if (release) { this._store.delete(release); release.dispose(); }
@@ -351,7 +354,6 @@ export class XtermTerminal extends Disposable implements IXtermTerminal {
 		if (this.isDisposed || signal.aborted) { return undefined; }
 		await this.initialize();
 		if (this.isDisposed || signal.aborted) { return undefined; }
-		const terminal = this.raw;
 		// An empty write completes after queued output. Disposal or cancellation must also release the reader.
 		let release: ReturnType<typeof toDisposable> | undefined;
 		let abort: (() => void) | undefined;
@@ -360,7 +362,7 @@ export class XtermTerminal extends Disposable implements IXtermTerminal {
 				release = this._register(toDisposable(resolve));
 				abort = resolve;
 				signal.addEventListener('abort', abort, { once: true });
-				terminal.write('', resolve);
+				this.write('', resolve);
 			});
 		} finally {
 			if (abort) { signal.removeEventListener('abort', abort); }
@@ -438,6 +440,9 @@ export function terminalTheme(theme: IColorTheme, target: TerminalLocation = Ter
 		cursor: theme.getColorCss(terminalColors.terminalCursorForeground),
 		selectionForeground: theme.getColorCss(selectionForeground),
 		selectionBackground: theme.getColorCss(selectionBackground),
+		scrollbarSliderBackground: theme.getColorCss(scrollbarSliderBackground),
+		scrollbarSliderHoverBackground: theme.getColorCss(scrollbarSliderHoverBackground),
+		scrollbarSliderActiveBackground: theme.getColorCss(scrollbarSliderActiveBackground),
 		black: theme.getColorCss(terminalColors.terminalAnsiBlack),
 		red: theme.getColorCss(terminalColors.terminalAnsiRed),
 		green: theme.getColorCss(terminalColors.terminalAnsiGreen),

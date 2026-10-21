@@ -198,7 +198,7 @@ fn legacy_disabled_policy_migrates_to_package_enablement_on_the_next_commit() {
         EditorExtensionPolicySnapshot {
             revision: 4,
             enabled: false,
-            granted: true
+            granted: false
         }
     );
     policy
@@ -213,6 +213,69 @@ fn legacy_disabled_policy_migrates_to_package_enablement_on_the_next_commit() {
     assert_eq!(durable["schemaVersion"], 2);
     assert!(durable["records"]["version-one"].get("enabled").is_none());
     assert_eq!(durable["disabledExtensions"], serde_json::json!([]));
+    assert_eq!(durable["records"]["version-one"]["contractVersion"], 6);
+    assert_eq!(durable["records"]["version-one"]["granted"], false);
+}
+
+#[test]
+fn ash_capability_contract_retires_previous_grants_without_losing_enablement() {
+    let profile = tempfile::tempdir().unwrap();
+    let path = profile.path().join("editor-policy.json");
+    let package = PackageRef {
+        id: "ash.inspector@team".into(),
+        version: "1.0.0".into(),
+        digest: format!("sha256:{}", "a".repeat(64)),
+    };
+    let capability = CapabilityRef {
+        id: "exact-editor-capability".into(),
+    };
+    std::fs::write(&path, serde_json::to_vec(&serde_json::json!({
+        "schemaVersion": 2, "revision": 7, "disabledExtensions": [], "records": {
+            "exact-editor-capability": { "package": package, "contractVersion": 5, "granted": true }
+        }
+    })).unwrap()).unwrap();
+    let policy = EditorExtensionPolicy::open(path.clone()).unwrap();
+    assert_eq!(
+        policy.snapshot(&package, &capability),
+        EditorExtensionPolicySnapshot {
+            revision: 7,
+            enabled: true,
+            granted: false,
+        }
+    );
+    let disabled = policy
+        .set(
+            &package,
+            &capability,
+            EditorExtensionPolicyAction::Disable,
+            7,
+        )
+        .unwrap();
+    assert!(!disabled.enabled);
+    assert!(!disabled.granted);
+    let enabled = policy
+        .set(
+            &package,
+            &capability,
+            EditorExtensionPolicyAction::Enable,
+            8,
+        )
+        .unwrap();
+    assert!(enabled.enabled);
+    assert!(!enabled.granted);
+    let reopened = EditorExtensionPolicy::open(path.clone()).unwrap();
+    assert_eq!(reopened.snapshot(&package, &capability), enabled);
+    let granted = reopened
+        .set(&package, &capability, EditorExtensionPolicyAction::Grant, 9)
+        .unwrap();
+    assert!(granted.enabled);
+    assert!(granted.granted);
+    assert_eq!(
+        EditorExtensionPolicy::open(path)
+            .unwrap()
+            .snapshot(&package, &capability),
+        granted
+    );
 }
 
 #[test]

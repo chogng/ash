@@ -424,3 +424,82 @@ fn mcp_oauth_flow_is_connection_owned_and_logout_rejects_an_old_callback() {
     );
     assert!(call(&server, &mut owner, 56, "mcp/oauth/complete", serde_json::json!({"flowId":pending["result"]["flowId"],"state":state,"authorizationCode":"one-shot-code"})).get("error").is_some());
 }
+
+#[test]
+fn oauth_mutation_rpc_waits_for_retired_transport_before_reply_and_remote_revocation() {
+    for method in ["mcp/oauth/logout", "mcp/oauth/revoke"] {
+        let (server, provider, _profile) = server();
+        let mut connection = server.connection();
+        initialize_and_configure(&server, &mut connection);
+        let started = call(
+            &server,
+            &mut connection,
+            60,
+            "mcp/oauth/start",
+            serde_json::json!({
+                "serverId":"user:mcp:calendar", "redirectUri":"http://127.0.0.1:43117/oauth/callback"
+            }),
+        );
+        let state = Url::parse(started["result"]["authorizationUrl"].as_str().unwrap())
+            .unwrap()
+            .query_pairs()
+            .find_map(|(key, value)| (key == "state").then(|| value.into_owned()))
+            .unwrap();
+        assert!(call(&server, &mut connection, 61, "mcp/oauth/complete", serde_json::json!({
+            "flowId":started["result"]["flowId"], "state":state, "authorizationCode":"one-shot-code"
+        })).get("result").is_some());
+        assert!(
+            call(
+                &server,
+                &mut connection,
+                62,
+                "mcp/oauth/refresh",
+                serde_json::json!({"serverId":"user:mcp:calendar"})
+            )
+            .get("result")
+            .is_some()
+        );
+        let config = server.config.as_ref().unwrap().read_snapshot().unwrap();
+        let target =
+            McpOAuthTarget::from_config(config.values.mcp.servers.values().next().unwrap())
+                .unwrap();
+        let credential = server
+            .mcp_oauth
+            .as_ref()
+            .unwrap()
+            .authorization(target)
+            .unwrap();
+        let lifetime = credential.scope().unwrap();
+        let pending = lifetime.acquire().unwrap();
+        let (done, received) = std::sync::mpsc::channel();
+        std::thread::scope(|threads| {
+            threads.spawn(|| {
+                done.send(call(
+                    &server,
+                    &mut connection,
+                    63,
+                    method,
+                    serde_json::json!({"serverId":"user:mcp:calendar"}),
+                ))
+                .unwrap();
+            });
+            let deadline = std::time::Instant::now() + std::time::Duration::from_secs(3);
+            while !lifetime.is_closed() {
+                assert!(std::time::Instant::now() < deadline);
+                std::thread::yield_now();
+            }
+            assert!(received.try_recv().is_err());
+            assert_eq!(*provider.revocations.lock().unwrap(), 0);
+            assert!(credential.bearer(None).is_err());
+            drop(pending);
+            let response = received
+                .recv_timeout(std::time::Duration::from_secs(3))
+                .unwrap();
+            assert_eq!(response["result"]["serverId"], "user:mcp:calendar");
+        });
+        assert_eq!(
+            *provider.revocations.lock().unwrap(),
+            usize::from(method.ends_with("revoke"))
+        );
+    }
+}

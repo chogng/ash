@@ -92,9 +92,11 @@ export function resolveElectronConfiguration(options: ElectronLaunchOptions): El
 			// Chromium cookie encryption bypasses the application's credential service.
 			// Test profiles use the native test facility rather than a system keychain.
 			...(process.platform === 'darwin' ? ['--use-mock-keychain'] : process.platform === 'linux' ? ['--password-store=basic'] : []),
-			// Keep the preload value in the switch: packaged Electron can retain Node
-			// switches in argv, where a separate value would become a file to open.
-			...(windowMode === 'active' ? [] : [`--require=${join(desktopDirectory, 'test', 'automation', 'electronWindow.cjs')}`]),
+			// The development launcher ignores inline --require= values. Packaged
+			// launches retain their inline switch so its value cannot become a file to open.
+			...(windowMode === 'active' ? [] : bundle
+				? [`--require=${join(desktopDirectory, 'test', 'automation', 'electronWindow.cjs')}`]
+				: ['--require', join(desktopDirectory, 'test', 'automation', 'electronWindow.cjs')]),
 			...(bundle ? [] : [desktopDirectory]),
 			`--user-data-dir=${options.userDataDirectory}`,
 			// AppKit's recovery prompt can block ready after test-owned processes are terminated.

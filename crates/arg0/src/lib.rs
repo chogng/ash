@@ -8,6 +8,30 @@ use std::ffi::OsString;
 pub fn dispatch(arguments: impl IntoIterator<Item = OsString>) -> Option<Result<(), String>> {
     let mut arguments = arguments.into_iter();
     let role = arguments.next();
+    #[cfg(target_os = "macos")]
+    if role.as_deref()
+        == Some(std::ffi::OsStr::new(
+            ash_file_watcher::NATIVE_WATCHER_ARGUMENT,
+        ))
+    {
+        if arguments.next().is_some() {
+            return Some(Err("Native file watcher helper accepts no arguments".into()));
+        }
+        return Some(ash_file_watcher::run_native_watcher());
+    }
+    #[cfg(target_os = "macos")]
+    if role.as_deref()
+        == Some(std::ffi::OsStr::new(
+            ash_file_watcher::POLLING_WATCHER_ARGUMENT,
+        ))
+    {
+        if arguments.next().is_some() {
+            return Some(Err(
+                "Polling file watcher helper accepts no arguments".into()
+            ));
+        }
+        return Some(ash_file_watcher::run_polling_watcher());
+    }
     if role.as_deref()
         == Some(std::ffi::OsStr::new(
             ash_file_system::ELEVATED_FILE_WRITE_ARGUMENT,
