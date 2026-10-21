@@ -1,11 +1,13 @@
 import { defaultButtonStyles } from '../../../../platform/theme/browser/defaultStyles.js';
 import { addDisposableListener, h, type IDimension } from '../../../../base/browser/dom.js';
+import { observeElementSize } from '../../../../base/browser/observer.js';
 import { IMarkdownRendererService } from '../../../../platform/markdown/browser/markdownRenderer.js';
 import { Range } from '../../../../editor/common/core/range.js';
 import { createObjectUrl } from '../../../../base/browser/fileAccess.js';
 import { TabList } from '../../../../base/browser/ui/tablist/tabList.js';
 import { mainWindow } from '../../../../base/browser/window.js';
 import { Button } from '../../../../base/browser/ui/button/button.js';
+import { ScrollableElement } from '../../../../base/browser/ui/scrollbar/scrollableElement.js';
 import { DisposableStore, toDisposable } from '../../../../base/common/lifecycle.js';
 import { localize } from '../../../../nls.js';
 import { ICommandService } from '../../../../platform/commands/common/commands.js';
@@ -80,9 +82,10 @@ function describeExtensionCapabilities(details: ExtensionsPackageDetails): strin
 }
 
 /** A retained editor presents package metadata while the backend owns installed state and authority. */
-export class ExtensionsEditor extends EditorPane {
+export class ExtensionEditor extends EditorPane {
 	public readonly id = 'ash.extensions.editor';
 	private domNode!: HTMLElement;
+	private scrollable!: ScrollableElement;
 	private title!: HTMLElement;
 	private metadata!: HTMLElement;
 	private description!: HTMLElement;
@@ -147,11 +150,13 @@ export class ExtensionsEditor extends EditorPane {
 	}
 
 	public override create(container: HTMLElement): void {
+		this.scrollable = this._register(new ScrollableElement(container, { direction: 'vertical', tabIndex: -1 }));
+		this.scrollable.element.classList.add('ash-extension-editor-scrollable');
 		this.domNode = h(mainWindow.document, 'section');
 		this.domNode.className = 'ash-extension-editor';
-		container.append(this.domNode);
+		this.scrollable.setContent(this.domNode);
 		this._register(toDisposable(() => this.domNode.remove()));
-		super.create(this.domNode);
+		super.create(this.scrollable.element);
 		const header = h(mainWindow.document, 'header'); header.className = 'extension-detail-header';
 		this.icon = h(mainWindow.document, 'div'); this.icon.className = 'extension-detail-icon'; this.icon.setAttribute('aria-hidden', 'true');
 		this.iconText = h(mainWindow.document, 'span');
@@ -187,8 +192,8 @@ export class ExtensionsEditor extends EditorPane {
 		this.links = h(mainWindow.document, 'div'); this.links.className = 'extension-detail-links';
 		body.append(article, this.info);
 		this.domNode.append(header, tabHost, body);
-		const resize = new ResizeObserver(entries => { const target = entries[0]?.target; if (target) { this.layout(target.getBoundingClientRect()); } });
-		resize.observe(this.domNode); this._register(toDisposable(() => resize.disconnect()));
+		// The host owns the viewport allocation; document height follows its rendered content.
+		this._register(observeElementSize(container, dimension => this.layout(dimension)));
 		this.title.tabIndex = -1;
 		const scope = this._register(this.contextKeys.createScoped(this.domNode)); scope.createKey('extensionsDetailsFocused', true);
 		for (const type of [AccessibleViewType.Help, AccessibleViewType.View]) {
@@ -205,7 +210,7 @@ export class ExtensionsEditor extends EditorPane {
 
 	public async setInput(input: IResourceEditorInput, signal: AbortSignal): Promise<void> {
 		if (!(input instanceof ExtensionsInput) && !(input instanceof ExtensionsCapabilityInput)) { throw new TypeError('Extensions editor requires an Extensions input'); }
-		if (!this.currentInput?.matches(input)) { this.selectedTab = DetailTab.Details; }
+		if (!this.currentInput?.matches(input)) { this.selectedTab = DetailTab.Details; this.scrollable.scrollTo(0, 0); }
 		this.currentInput = input; this.currentSignal = signal;
 		const version = ++this.loadVersion;
 		this.actionResources.clear();
@@ -672,6 +677,7 @@ export class ExtensionsEditor extends EditorPane {
 		const version = this.loadVersion;
 		const document = this.documentResources.add(this.markdownRenderer.render({ value: markdown, isTrusted: false, supportHtml: true }, {
 			ownerDocument: mainWindow.document,
+			asyncRenderCallback: () => this.scrollable.layout(),
 			sanitizerConfig: { allowedLinkSchemes: { augment: ['ash-extension-resource', ...(source && 'prompt' in source ? ['private'] : [])] }, remoteImageIsAllowed: () => false },
 			transformUri: source ? href => 'prompt' in source ? source.prompt.body?.resolveFilePath(href)?.toString() ?? href : /^[a-z][a-z\d+.-]*:/iu.test(href) ? href : URI.joinPath(source.resource, '..', href).toString() : undefined,
 			imageResourceLoader: source && 'api' in source ? async resource => new Blob([new Uint8Array(await source.api.resources.readExtensionResourceBytes(resource))]) : undefined,
@@ -739,7 +745,7 @@ export class ExtensionsEditor extends EditorPane {
 	}
 
 	public clearInput(): void { this.currentInput = undefined; this.currentSignal = undefined; ++this.loadVersion; this.actionResources.clear(); this.documentResources.clear(); this.instructionsLoader = undefined; this.instructionsPending = undefined; }
-	public layout(dimension: IDimension): void { this.domNode.classList.toggle('compact', dimension.width < 720); }
+	public layout(dimension: IDimension): void { this.domNode.classList.toggle('compact', dimension.width < 720); this.scrollable.layout(); }
 	public focus(): void {
 		const target = this.actions.querySelector<HTMLButtonElement>('button') ?? this.title;
 		if (this.configuration.getValue<boolean>(AccessibilityVerbositySettingId.Extensions)) { target.setAttribute('aria-description', localize({ bundle: 'ash.extensions', key: 'focusHint' }, 'Extensions. Use Tab to navigate and Alt+F1 for help.')); } else { target.removeAttribute('aria-description'); }
@@ -752,6 +758,6 @@ registerEditorPane({
 	canOpen: input => (input instanceof ExtensionsInput || input instanceof ExtensionsCapabilityInput) ? EditorPaneMatch.Default : EditorPaneMatch.None,
 	create: options => {
 		if (!options.instantiationService) { throw new Error('Extensions editor requires the Instantiation Service'); }
-		return options.instantiationService.createInstance(ExtensionsEditor);
+		return options.instantiationService.createInstance(ExtensionEditor);
 	},
 });

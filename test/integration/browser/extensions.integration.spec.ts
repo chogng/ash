@@ -202,9 +202,9 @@ test('Marketplace navigation retires a late failed discovery read', async ({ pag
 	await expect.poll(() => page.evaluate(() => window.ashExtensionsIntegration.discoverySearchStarted())).toBe(true);
 	await page.evaluate(() => window.ashExtensionsIntegration.open({ view: 'skills', mode: 'installed' }));
 	await expect(pane.getByRole('option')).toContainText('review');
-	const status = await pane.getByRole('status').textContent();
+	const status = await pane.locator('.extensions-status').textContent();
 	await page.evaluate(() => window.ashExtensionsIntegration.failHeldSearch());
-	await expect(pane.getByRole('status')).toHaveText(status!);
+	await expect(pane.locator('.extensions-status')).toHaveText(status!);
 	await expect(pane.getByRole('option')).not.toContainText('Web tools');
 });
 
@@ -281,6 +281,43 @@ for (const [locale, detailsLabel, featuresLabel, informationLabel, identifierLab
 	['en', 'Details', 'Features', 'Additional information', 'Identifier'],
 	['zh-CN', '详情', '功能', '其他信息', '标识符'],
 ]) {
+	test(`Extension details reuse the shared viewport and resize observation in ${locale}`, async ({ page }) => {
+		await page.goto(`/extensions.html?preview&longReadme&locale=${locale}&theme=light`);
+		await page.evaluate(() => window.ashExtensionsIntegration.openEditorExtension());
+		const root = page.locator('.ash-extension-editor-scrollable');
+		const viewport = root.locator(':scope > .ash-scrollbar-viewport');
+		const track = root.locator(':scope > .ash-scrollbar-track-vertical');
+		const editor = root.locator('.ash-extension-editor');
+		await expect(editor.getByRole('heading', { name: 'Documentation section 39', exact: true })).toHaveCount(1);
+		await expect(root).toHaveCount(1);
+		await expect(viewport).toHaveCSS('scrollbar-width', 'none');
+		await expect(editor).toHaveCSS('overflow-y', 'visible');
+		await expect.poll(() => viewport.evaluate(element => element.scrollHeight - element.clientHeight)).toBeGreaterThan(0);
+		const bounds = await root.evaluate(element => ({ viewport: element.clientHeight, host: element.parentElement!.clientHeight }));
+		expect(bounds.viewport).toBe(bounds.host);
+		await track.press('End');
+		await expect.poll(async () => Number(await track.getAttribute('aria-valuenow'))).toBeGreaterThan(0);
+		const remaining = await viewport.evaluate(element => element.scrollHeight - element.clientHeight - element.scrollTop);
+		expect(remaining).toBeLessThanOrEqual(1);
+		await editor.getByRole('tab', { name: detailsLabel, exact: true }).focus();
+		await expect(editor.getByRole('tab', { name: detailsLabel, exact: true })).toBeInViewport();
+		await editor.getByRole('tab', { name: detailsLabel, exact: true }).press('ArrowRight');
+		await editor.getByRole('tab', { name: featuresLabel, exact: true }).press('Enter');
+		await expect(editor.getByRole('tabpanel', { name: featuresLabel, exact: true })).toBeVisible();
+		await editor.getByRole('tab', { name: detailsLabel, exact: true }).press('Enter');
+		await page.locator('#details').evaluate(element => { element.style.width = '360px'; });
+		await expect(editor).toHaveClass(/compact/u);
+		const content = (await editor.locator('.extension-detail-content').boundingBox())!;
+		const info = (await editor.locator('.extension-detail-info').boundingBox())!;
+		expect(info.y).toBeGreaterThanOrEqual(content.y + content.height);
+		await expect.poll(() => viewport.evaluate(element => element.scrollWidth - element.clientWidth)).toBeLessThanOrEqual(1);
+		await root.hover();
+		await page.mouse.wheel(0, 400);
+		await expect.poll(() => viewport.evaluate(element => element.scrollTop)).toBeGreaterThan(0);
+		await expect(track).toHaveCSS('opacity', '1');
+		await page.screenshot({ path: `.build/desktop/ui-previews/extension-details-shared-${locale}.png` });
+	});
+
 	test(`Registered extension editor renders its README, header, tabs and metadata in ${locale}`, async ({ page }) => {
 		await page.setViewportSize({ width: 1440, height: 900 });
 		await page.goto(`/extensions.html?preview&locale=${locale}&theme=light&unsafeReadme`);
@@ -585,9 +622,9 @@ for (const trigger of ['command', 'view']) {
 		const installedView = page.locator('[data-view-id="ash.extensions.plugins"] .ash-extensions');
 		await expect(installedView).toHaveAttribute('aria-busy', 'false');
 		await expect(installedView.getByRole('option').filter({ hasText: 'ash.language-pack-zh-cn' })).toBeVisible();
-		const status = await view.getByRole('status').textContent();
+		const status = await view.locator('.extensions-status').textContent();
 		await page.evaluate(() => window.ashExtensionsIntegration.failHeldSearch());
-		await expect(view.getByRole('status')).toHaveText(status!);
+		await expect(view.locator('.extensions-status')).toHaveText(status!);
 		await expect(view.locator('[data-package-id="example/web"]')).toHaveCount(0);
 	});
 }
@@ -1085,6 +1122,179 @@ for (const locale of ['en', 'zh-CN']) {
 }
 
 for (const locale of ['en', 'zh-CN']) {
+	test(`Extension refresh keeps existing rows in place in ${locale}`, async ({ page }) => {
+		await page.goto(`/extensions.html?classification&locale=${locale}&theme=light`);
+		const pane = page.locator('[data-view-id="ash.extensions.mcp"]');
+		await pane.locator('.ash-pane-view-header-button').press('ArrowRight');
+		const content = pane.locator('.ash-pane-view-content');
+		await expect(content).toHaveAttribute('aria-busy', 'false');
+		const row = pane.getByRole('option').first();
+		await expect(row).toBeVisible();
+		const rowOffset = () => row.evaluate(element => element.getBoundingClientRect().top - element.closest('.ash-pane-view-content')!.getBoundingClientRect().top);
+		const initialOffset = await rowOffset();
+		await page.evaluate(() => {
+			window.ashExtensionsIntegration.holdMcpStatus();
+			void window.ashExtensionsIntegration.refreshMcp();
+		});
+		await expect.poll(() => page.evaluate(() => window.ashExtensionsIntegration.mcpStatusStarted())).toBe(true);
+		await expect(content).toHaveAttribute('aria-busy', 'true');
+		expect(await rowOffset()).toBeCloseTo(initialOffset);
+		await page.evaluate(() => window.ashExtensionsIntegration.completeMcpStatus());
+		await expect(content).toHaveAttribute('aria-busy', 'false');
+		expect(await rowOffset()).toBeCloseTo(initialOffset);
+	});
+
+	for (const [view, theme] of [['plugins', 'light'], ['skills', 'dark'], ['mcp', 'hc']]) {
+		test(`Extensions use the shared scrollbar for ${view} in ${locale}`, async ({ page }) => {
+			await page.goto(`/extensions.html?classification&marketplace&pagedDiscovery&locale=${locale}&theme=${theme}`);
+			const pane = page.locator(`[data-view-id="ash.extensions.${view}"]`);
+			if (view === 'skills') {
+				await page.evaluate(() => window.ashExtensionsIntegration.open({ view: 'skills', mode: 'browse' }));
+			} else if (view === 'mcp') {
+				await page.evaluate(async () => {
+					window.ashExtensionsIntegration.setMcpServers(Array.from({ length: 30 }, (_, index) => ({
+						id: `scroll-server-${index}`, displayName: `Scroll server ${index}`, httpOrigin: null,
+						state: { status: 'disconnected' }, catalogGeneration: 1, connectionGeneration: null, toolCount: 0,
+					})));
+					await window.ashExtensionsIntegration.refreshMcp();
+				});
+				await pane.locator('.ash-pane-view-header-button').press('ArrowRight');
+			}
+			const root = pane.locator('.extensions-list > .ash-list-scrollable');
+			const viewport = root.locator('.ash-scrollbar-viewport');
+			const track = root.locator('.ash-scrollbar-track-vertical');
+			const list = pane.getByRole('listbox');
+			const name = list.getByRole('option').first().locator('.extension-name.ash-icon-label');
+			await expect(name).toHaveCount(1);
+			await expect(name).toHaveAttribute('title', (await name.locator('.ash-icon-label-text').textContent())!);
+			await expect(name.locator('.ash-icon-label-text')).toHaveCSS('text-overflow', 'ellipsis');
+			if (view === 'plugins') {
+				const row = list.getByRole('option').first();
+				const nameBox = (await name.boundingBox())!;
+				const contentBox = (await row.locator('.extension-row').boundingBox())!;
+				const metadataBox = (await row.locator('.extension-metadata').boundingBox())!;
+				const actionsBox = (await row.locator('.extension-row-actions').boundingBox())!;
+				expect(contentBox.x + contentBox.width - nameBox.x - nameBox.width).toBeCloseTo(12);
+				expect(actionsBox.y).toBeGreaterThanOrEqual(metadataBox.y + metadataBox.height);
+				expect(await row.evaluate(element => element.scrollWidth - element.clientWidth)).toBeLessThanOrEqual(1);
+			}
+			await expect(root).toHaveCount(1);
+			await expect(list).toHaveCSS('overflow-y', 'visible');
+			await expect(viewport).toHaveCSS('scrollbar-width', 'none');
+			await expect.poll(() => viewport.evaluate(element => element.scrollHeight - element.clientHeight)).toBeGreaterThan(0);
+			const bounds = await root.evaluate(element => ({ root: element.getBoundingClientRect().toJSON(), host: element.parentElement!.getBoundingClientRect().toJSON() }));
+			expect(bounds.root.height).toBeCloseTo(bounds.host.height);
+			expect(bounds.root.width).toBeCloseTo(bounds.host.width);
+			await list.press('Home');
+			const firstId = await list.getByRole('option').first().getAttribute('id');
+			await list.getByRole('option').nth(1).hover();
+			await expect(list).toHaveAttribute('aria-activedescendant', firstId!);
+
+			await list.press('End');
+			await expect(list).toBeFocused();
+			await expect(list.getByRole('option').last()).toHaveAttribute('aria-selected', 'true');
+			await expect.poll(() => viewport.evaluate(element => element.scrollTop)).toBeGreaterThan(0);
+			const lastBottom = (await list.getByRole('option').last().boundingBox())!;
+			const viewportBox = (await viewport.boundingBox())!;
+			expect(lastBottom.y + lastBottom.height).toBeLessThanOrEqual(viewportBox.y + viewportBox.height + 1);
+			await list.press('Home');
+			await expect.poll(() => viewport.evaluate(element => element.scrollTop)).toBe(0);
+			await root.hover();
+			await page.mouse.wheel(0, 200);
+			await expect.poll(() => viewport.evaluate(element => element.scrollTop)).toBeGreaterThan(0);
+			await expect(list.getByRole('option').first()).toHaveAttribute('aria-selected', 'true');
+			await list.press('Home');
+			await expect.poll(() => viewport.evaluate(element => element.scrollTop)).toBe(0);
+			await root.hover();
+			await expect(track).toHaveCSS('opacity', '1');
+			const thumb = (await track.locator('.ash-scrollbar-thumb').boundingBox())!;
+			await page.mouse.move(thumb.x + thumb.width / 2, thumb.y + thumb.height / 2);
+			await page.mouse.down();
+			await page.mouse.move(thumb.x + thumb.width / 2, thumb.y + thumb.height / 2 + 40, { steps: 5 });
+			await page.mouse.up();
+			await expect.poll(() => viewport.evaluate(element => element.scrollTop)).toBeGreaterThan(0);
+			await expect.poll(async () => Number(await track.getAttribute('aria-valuenow'))).toBeGreaterThan(0);
+			await page.screenshot({ path: `.build/desktop/ui-previews/extensions-scrollbar-${view}-${locale}.png` });
+			if (view === 'plugins') {
+				const search = page.locator('#extensions').getByRole('searchbox');
+				await search.fill('@installed ash.bat');
+				await search.press('Enter');
+				await expect(list.getByRole('option')).toHaveCount(1);
+				await expect(track).toBeHidden();
+				await expect.poll(() => viewport.evaluate(element => element.scrollTop)).toBe(0);
+			}
+		});
+	}
+
+	for (const theme of ['light', 'dark', 'hc']) {
+		test(`Extension header badges follow filtering and collapse in ${locale} ${theme}`, async ({ page }) => {
+			await page.goto(`/extensions.html?classification&locale=${locale}&theme=${theme}`);
+			const skills = page.locator('[data-view-id="ash.extensions.skills"]');
+			const plugins = page.locator('[data-view-id="ash.extensions.plugins"]');
+			const header = skills.locator('.ash-pane-view-header');
+			const toggle = skills.getByRole('button', { name: locale === 'en' ? 'Skills' : '技能', exact: true });
+			const badge = header.locator('.ash-count-badge');
+			await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+			await expect(badge).toHaveText('1');
+			await toggle.press('ArrowRight');
+			await expect(badge).toHaveText('1');
+			await expect(header).toHaveAccessibleDescription(locale === 'en' ? '1 items' : '1 项');
+			await expect(skills.locator('.extensions-status')).toContainText('Invalid metadata');
+			await expect(skills.locator('.extensions-status')).not.toContainText(locale === 'en' ? '1 items' : '1 项');
+			await expect(plugins.locator('.extensions-status')).toBeHidden();
+
+			await toggle.press('ArrowLeft');
+			await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+			await expect(badge).toBeVisible();
+			await expect(badge).toHaveText('1');
+			await expect(badge).toHaveJSProperty('tabIndex', -1);
+			await toggle.press('ArrowRight');
+			await expect(toggle).toBeFocused();
+
+			const connectors = page.locator('[data-view-id="ash.extensions.mcp"]');
+			await expect(connectors.locator('.ash-pane-view-content')).toHaveAttribute('aria-busy', 'false');
+			const connectorBadge = connectors.locator('.ash-count-badge');
+			const previous = Number(await connectorBadge.textContent());
+			await page.evaluate(() => window.ashExtensionsIntegration.addConnector());
+			await expect(connectorBadge).toHaveText(String(previous + 1));
+			await connectors.getByRole('button', { name: locale === 'en' ? 'Connectors' : '连接器', exact: true }).press('ArrowRight');
+			await page.mouse.move(900, 600);
+			const before = await badge.boundingBox();
+			await skills.hover();
+			expect((await badge.boundingBox())!.x).toBe(before!.x);
+			for (const pane of [skills, plugins, connectors]) {
+				const bounds = await pane.locator('.ash-pane-view-header').evaluate(element => {
+					const badge = element.querySelector<HTMLElement>('.ash-count-badge')!;
+					const actions = element.querySelector<HTMLElement>('.ash-pane-view-header-actions')!;
+					const style = getComputedStyle(badge);
+					return { header: element.getBoundingClientRect().toJSON(), badge: badge.getBoundingClientRect().toJSON(), actions: actions.getBoundingClientRect().toJSON(), background: style.backgroundColor, foreground: style.color, outline: style.outlineColor };
+				});
+				expect(bounds.badge.right).toBeCloseTo(bounds.header.right - 12);
+				expect(bounds.badge.top + bounds.badge.height / 2).toBeCloseTo(bounds.header.top + bounds.header.height / 2);
+				expect(bounds.actions.right).toBeLessThanOrEqual(bounds.badge.left);
+				expect(bounds.background).not.toBe('rgba(0, 0, 0, 0)');
+				expect(bounds.foreground).not.toBe(bounds.background);
+				if (theme === 'hc') { expect(bounds.outline).not.toBe(bounds.background); }
+			}
+			await page.screenshot({ path: `.build/desktop/ui-previews/extensions-badges-${locale}-${theme}.png` });
+
+			const search = page.locator('#extensions').getByRole('searchbox');
+			await search.fill('@installed no-such-skill');
+			await search.press('Enter');
+			await expect(badge).toHaveText('0');
+			await expect(header).toHaveAccessibleDescription(locale === 'en' ? '0 items' : '0 项');
+			await expect(plugins.locator('.ash-count-badge')).toHaveText('0');
+			await search.fill('@installed ash.bat');
+			await search.press('Enter');
+			await expect(plugins.getByRole('option')).toHaveCount(1);
+			await expect(plugins.locator('.ash-count-badge')).toHaveText('1');
+			await expect(plugins.locator('.ash-count-badge')).toHaveAttribute('aria-label', locale === 'en' ? '1 plugins' : '1 个插件');
+			await expect(plugins.locator('.extensions-status')).toBeHidden();
+			await page.evaluate(() => window.ashExtensionsIntegration.dispose());
+			await expect(page.locator('#extensions .ash-count-badge')).toHaveCount(0);
+		});
+	}
+
 	test(`Extensions defaults to installed categories and returns from Marketplace in ${locale}`, async ({ page }) => {
 		await page.goto(`/extensions.html?classification&nativeEditor&locale=${locale}`);
 		const titles = page.locator('#extensions .ash-pane-view-header-title');
@@ -1265,6 +1475,8 @@ for (const locale of ['en', 'zh-CN']) {
 		const refresh = page.locator('#extensions [data-action-id="ash.extensions.refresh"] button');
 		const connectors = page.locator('[data-view-id="ash.extensions.mcp"]');
 		const add = connectors.locator('.ash-pane-view-header-actions button');
+		await connectors.getByRole('button', { name: locale === 'en' ? 'Connectors' : '连接器', exact: true }).press('ArrowRight');
+		await page.locator('#details').click();
 		await page.mouse.move(900, 600);
 		await expect(refresh).toBeHidden();
 		await expect(add).toBeHidden();

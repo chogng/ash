@@ -26,7 +26,7 @@ import '../../../src/ash/base/browser/ui/styles.css';
 import { IGlobalExtensionEnablementService } from '../../../src/ash/platform/extensionManagement/common/extensionManagement.js';
 import { GlobalExtensionEnablementService } from '../../../src/ash/platform/extensionManagement/common/extensionEnablementService.js';
 import { darkColorTheme, lightColorTheme, highContrastDarkColorTheme } from '../../../src/ash/platform/theme/common/colorTheme.js';
-import { ExtensionsEditor } from '../../../src/ash/workbench/contrib/extensions/browser/extensionsEditor.js';
+import { ExtensionEditor } from '../../../src/ash/workbench/contrib/extensions/browser/extensionEditor.js';
 import { EditorPanes } from '../../../src/ash/workbench/browser/editor.js';
 import { ExtensionsInput, ExtensionsCapabilityInput } from '../../../src/ash/workbench/contrib/extensions/common/extensionsInput.js';
 import { IExtensionApi, type ExtensionResourceRequest } from '../../../src/ash/platform/extensions/common/extensionApi.js';
@@ -77,14 +77,14 @@ import { WorkbenchToolBar } from '../../../src/ash/platform/actions/browser/tool
 import '../../../src/ash/workbench/browser/parts/paneCompositePart.css';
 import { MenuService } from '../../../src/ash/platform/actions/common/menuService.js';
 import { type IViewContainerModel, ViewsRegistry } from '../../../src/ash/workbench/common/views.js';
-import { ExtensionsViewPane, ExtensionsViewPaneContainer } from '../../../src/ash/workbench/contrib/extensions/browser/extensionsViewlet.js';
+import { ExtensionsViewPaneContainer } from '../../../src/ash/workbench/contrib/extensions/browser/extensionsViewlet.js';
 import '../../../src/ash/workbench/contrib/extensions/browser/extensions.contribution.js';
 import { WorkbenchContributionsRegistry, WorkbenchPhase } from '../../../src/ash/workbench/common/contributions.js';
 import { CommandService } from '../../../src/ash/workbench/services/commands/common/commandService.js';
 import { IViewsService } from '../../../src/ash/workbench/services/views/common/viewsService.js';
 import { IPluginManagementService } from '../../../src/ash/platform/extensionManagement/common/pluginManagementService.js';
 import type { IPluginManagementApi } from '../../../src/ash/platform/extensionManagement/common/pluginManagementApi.js';
-import type { PluginPackageDto, PluginPackageCommandParams } from '../../../.build/protocol/typescript/index.js';
+import type { PluginPackageDto, PluginPackageCommandParams, ServerNotification } from '../../../.build/protocol/typescript/index.js';
 import { AppServerPluginManagementService } from '../../../src/ash/workbench/services/extensionManagement/browser/appServerPluginManagementService.js';
 import { ILocalGitService } from '../../../src/ash/platform/git/common/localGitService.js';
 import { canceled } from '../../../src/ash/base/common/errors.js';
@@ -174,6 +174,9 @@ const extensionManifest = { publisher: 'Fixture publisher', name: 'sample', icon
 let heldReadme: ((text: string) => void) | undefined;
 let holdReadme = false;
 const fixtureReadme = '# Sample editor extension\n\nTools for working with your project.\n\n## Features\n\n- Inspect and review workspace files\n- Keep your tools in the editor\n\n## Getting started\n\nInstall the extension and review its requested permissions.\n\n[Homepage](https://example.invalid/tools)\n' + (new URLSearchParams(location.search).has('unsafeReadme') ? '\n[Unsafe](command:fixture.unsafe)\n\n<script>window.fixtureUnsafe = true</script>\n' : '');
+const readmeContent = fixtureReadme + (new URLSearchParams(location.search).has('longReadme')
+	? Array.from({ length: 40 }, (_, index) => `\n\n## Documentation section ${index}\n\nSynthetic content for the shared Extensions editor scrollbar.\n`).join('')
+	: '');
 const readPackageResource = async (request: ExtensionResourceRequest): Promise<Uint8Array> => {
 	requests.push(['extensionResource', request]);
 	if (rustBuiltIn && request.extensionId === 'ash.language-pack-zh-cn') {
@@ -181,7 +184,7 @@ const readPackageResource = async (request: ExtensionResourceRequest): Promise<U
 		throw new Error('Language pack has no README or executable resources');
 	}
 	if (request.path === 'package.json') { return new TextEncoder().encode(JSON.stringify(extensionManifest)); }
-	if (request.path === 'README.md') { if (holdReadme) { holdReadme = false; return new TextEncoder().encode(await new Promise<string>(resolve => { heldReadme = resolve; })); } return new TextEncoder().encode(fixtureReadme); }
+	if (request.path === 'README.md') { if (holdReadme) { holdReadme = false; return new TextEncoder().encode(await new Promise<string>(resolve => { heldReadme = resolve; })); } return new TextEncoder().encode(readmeContent); }
 	if (request.path === 'icon.svg') { return new TextEncoder().encode('<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128"><rect width="128" height="128" rx="8" fill="#3355aa"/><path d="m32 40 32-16 32 16v48L64 104 32 88Z" fill="none" stroke="white" stroke-width="8"/></svg>'); }
 	throw new Error('Package resource is missing');
 };
@@ -299,7 +302,7 @@ const api: IExtensionManagementApi = {
 };
 services.registerInstance(IExtensionManagementService, disposables.add(new AppServerExtensionManagementService(api, { subscribe: listener => changed.event(() => listener({ method: 'extensions/changed', params: { instanceId: 'fixture', generation } })) })));
 services.registerInstance(IConfigurationService, {
-	getValue: (key: string) => key === 'chat.customizations.marketplace.enabled' ? discoveryEnabled : true,
+	getValue: (key: string) => key === 'chat.customizations.marketplace.enabled' ? discoveryEnabled : key === 'workbench.view.alwaysShowHeaderActions' ? false : true,
 	onDidChangeConfiguration: configurationChanged.event,
 } as unknown as IConfigurationService);
 services.registerSingleton(ICustomizationMarketplaceService, () => services.createInstance(CustomizationMarketplaceWorkbenchService));
@@ -351,6 +354,7 @@ services.registerInstance(ILanguageServerService, {
 services.registerInstance(IContextKeyService, disposables.add(new ContextKeyService()));
 services.registerInstance(IQuickInputService, disposables.add(new TestQuickInputService({ instantiationService: services, container: document.body, contextKeyService: services.get(IContextKeyService) })));
 let pluginRevision = 0;
+const pluginEvents = disposables.add(new Emitter<ServerNotification>());
 let localPackages: PluginPackageDto[] = [];
 let commandCompletion: Promise<unknown> | undefined;
 const mutatePlugin = async (action: string, params: PluginPackageCommandParams) => {
@@ -392,7 +396,7 @@ services.registerInstance(ILocalGitService, {
 	cancel: async operationId => { requests.push(['gitCancel', operationId]); cancelHeldGitClone?.(); },
 });
 services.registerInstance(ILogService, new NullLoggerService());
-services.registerSingleton(IPluginManagementService, () => disposables.add(services.createInstance(AppServerPluginManagementService, pluginApi, { subscribe: () => ({ dispose() { } }) })));
+services.registerSingleton(IPluginManagementService, () => disposables.add(services.createInstance(AppServerPluginManagementService, pluginApi, { subscribe: (listener: (event: ServerNotification) => void) => pluginEvents.event(listener) })));
 services.registerInstance(IContextViewService, disposables.add(new BrowserContextViewService(document.body)));
 services.registerInstance(ILocalizationService, { whenReady: Promise.resolve(), translate: (bundle, key, text, parameters) => localize({ bundle, key }, text, ...Object.keys(parameters ?? {}).sort().map(key => parameters![key]!)) });
 services.registerInstance(IAppServerRemoteAgentService, { onDidChangeConnection: Event.None, onDidChangeConnectionState: Event.None } as IAppServerRemoteAgentService);
@@ -404,7 +408,7 @@ services.registerInstance(IThemeService, themeService);
 disposables.add(bindTestColorTheme(themeService, document.body));
 services.registerInstance(IStorageService, disposables.add(new BrowserStorageService({ ownerWindow: window, workspaceId: 'extensions-fixture', backend: window.localStorage, flushInterval: 0 })));
 services.registerInstance(IGlobalExtensionEnablementService, disposables.add(services.createInstance(GlobalExtensionEnablementService)));
-let pane: ExtensionsEditor | undefined;
+let pane: ExtensionEditor | undefined;
 let editorAbort = new AbortController();
 disposables.add(toDisposable(() => { editorAbort.abort(); pane?.dispose(); }));
 services.registerInstance(IEditorService, {
@@ -418,7 +422,7 @@ services.registerInstance(IEditorService, {
 		requests.push(['editorPane', descriptor.id]);
 		if (!pane) {
 			const editor = await descriptor.create({ input, instantiationService: services });
-			if (!(editor instanceof ExtensionsEditor)) { throw new Error('Incorrect Extensions editor implementation'); }
+			if (!(editor instanceof ExtensionEditor)) { throw new Error('Incorrect Extensions editor implementation'); }
 			pane = editor; pane.create(document.getElementById('details')!);
 		}
 		await pane.setInput(input, editorAbort.signal);
@@ -687,7 +691,11 @@ window.ashExtensionsIntegration = {
 	completeInstructions: () => { completeInstructions?.('# Retired instructions'); },
 	setSession: (id: string) => { activeSessionId = id; },
 	addMcpPackage: () => { installed.push({ installationId: 'fixture-mcp-installation', package: reference, state: 'installed', capabilities: [{ kind: 'mcp', id: 'fixture-server', reference: { id: 'fixture-mcp-capability' }, contractVersion: '1', permissions: ['network'], authenticationProvider: null }] }); generation++; changed.fire(); },
-	addSkillOnlyPlugin: () => { localPackages.push({ id: 'acme/skills', version: '1.0.0', digest: 'sha256:' + 'c'.repeat(64), displayName: 'Skill-only plugin', permissions: [], hasEditorExtensions: false, enabled: false, granted: false, effective: false, revoked: false }); },
+	addSkillOnlyPlugin: () => {
+		localPackages.push({ id: 'acme/skills', version: '1.0.0', digest: 'sha256:' + 'c'.repeat(64), displayName: 'Skill-only plugin', permissions: [], hasEditorExtensions: false, enabled: false, granted: false, effective: false, revoked: false });
+		pluginRevision++;
+		pluginEvents.fire({ method: 'plugin/changed', params: { revision: pluginRevision, activationGeneration: pluginRevision } });
+	},
 	setOffline: () => { offline = true; },
 	changeRevision: () => { revision++; },
 	startHeldSearch: () => { holdSearch = true; heldOpen = extensionsContainer.open({ query: 'old query' }); },

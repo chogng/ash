@@ -1,3 +1,8 @@
+import { InstantiationType, registerSingleton } from '../../../../platform/instantiation/common/extensions.js';
+import { IExtensionRecommendationsService } from '../../../services/extensionRecommendations/common/extensionRecommendations.js';
+import '../../../services/extensionRecommendations/common/workspaceExtensionsConfig.js';
+import { ExtensionRecommendationsService } from './extensionRecommendationsService.js';
+
 import { localize, localize2 } from '../../../../nls.js';
 import { DisposableStore } from '../../../../base/common/lifecycle.js';
 import { Action2, MenuId, MenusRegistry, registerAction2 } from '../../../../platform/actions/common/actions.js';
@@ -8,6 +13,8 @@ import { ViewsRegistry } from '../../../common/views.js';
 import { IViewsService } from '../../../services/views/common/viewsService.js';
 import { registerExtensionManagementActions } from './extensionsActions.js';
 import { openExtensionsView, registerExtensionsViewContainer } from './extensionsViewlet.js';
+
+registerSingleton(IExtensionRecommendationsService, ExtensionRecommendationsService, InstantiationType.Delayed);
 
 registerWorkbenchContribution('workbench.contrib.extensions', WorkbenchPhase.BlockStartup, () => {
 	const registrations = new DisposableStore();

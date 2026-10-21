@@ -17,7 +17,7 @@ import './browser/actions/devContainerActions.js';
 import '../editor/editor.all.js';
 import '../platform/uriIdentity/common/uriIdentityService.js';
 import '../workbench/contrib/commands/common/commands.contribution.js';
-import '../workbench/contrib/extensions/browser/extensionRecommendations.contribution.js';
+import '../workbench/contrib/extensions/browser/extensions.contribution.js';
 import '../workbench/contrib/chat/browser/aiCustomization/customizationMarketplace.contribution.js';
 import '../workbench/contrib/preferences/browser/preferences.contribution.js';
 import '../workbench/contrib/format/browser/format.contribution.js';
