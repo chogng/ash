@@ -1,9 +1,9 @@
 import './media/chatMarkdownPart.css';
 import { Emitter } from '../../../../../../base/common/event.js';
-import { addDisposableListener, h } from '../../../../../../base/browser/dom.js';
+import { addDisposableListener, getWindow, h, scheduleAtNextAnimationFrame } from '../../../../../../base/browser/dom.js';
 import type { MarkdownRenderOptions } from '../../../../../../base/browser/markdownRenderer.js';
 import type { IMarkdownString } from '../../../../../../base/common/htmlContent.js';
-import { Disposable, DisposableMap, DisposableStore, toDisposable } from '../../../../../../base/common/lifecycle.js';
+import { Disposable, DisposableMap, DisposableStore, MutableDisposable, toDisposable } from '../../../../../../base/common/lifecycle.js';
 import { Marked } from '../../../../../../base/common/marked/marked.js';
 import { IInstantiationService } from '../../../../../../platform/instantiation/common/instantiation.js';
 import { MarkedKatexExtension } from '../../../../markdown/common/markedKatexExtension.js';
@@ -44,6 +44,7 @@ export class ChatMarkdownContentPart extends Disposable {
 	private readonly markdownRenderer: ChatContentMarkdownRenderer;
 	private readonly renders = this._register(new DisposableMap<HTMLElement, DisposableStore>());
 	private readonly lexer = new Marked(MarkedKatexExtension.extension());
+	private readonly plainLexer = new Marked();
 	private readonly codeBlocks = this._register(new DisposableMap<number, CodeBlockPart>());
 	private readonly images = new Map<string, Promise<Blob>>();
 	private fragments: readonly MarkdownFragment[] = [];
@@ -51,6 +52,8 @@ export class ChatMarkdownContentPart extends Disposable {
 	// Code actions retain this response, rather than a full historical string per code block.
 	private readonly codeElement: IMarkdownString;
 	private visible: boolean;
+	private pending: { readonly markdown: IMarkdownString; readonly incomplete: boolean; } | undefined;
+	private readonly update = this._register(new MutableDisposable());
 
 	constructor(private readonly options: ChatMarkdownContentPartOptions, @IInstantiationService private readonly instantiation: IInstantiationService) {
 		super();
@@ -68,21 +71,51 @@ export class ChatMarkdownContentPart extends Disposable {
 			get baseUri() { return part.markdown?.baseUri; },
 		};
 		this._register(addDisposableListener(this.domNode, 'load', event => { if ((event.target as Element).tagName === 'IMG') this.changedHeight.fire(); }, true));
-		this._register(toDisposable(() => { this.images.clear(); this.fragments = []; this.markdown = undefined; this.domNode.remove(); }));
+		this._register(toDisposable(() => { this.images.clear(); this.fragments = []; this.markdown = undefined; this.pending = undefined; this.domNode.remove(); }));
 		const markdown = typeof options.markdown === 'string' ? { value: options.markdown } : options.markdown ?? { value: '' };
-		this.render(markdown, options.fillInIncompleteTokens ?? false);
+		this.enqueue(markdown, options.fillInIncompleteTokens ?? false);
 	}
 
 	/** Reconciles appended text and provider corrections within this response's existing lifetime. */
 	public tryIncrementalUpdate(newMarkdown: IMarkdownString, fillInIncompleteTokens = false): boolean {
 		if (this.isDisposed) return false;
-		this.render(newMarkdown, fillInIncompleteTokens);
+		this.enqueue(newMarkdown, fillInIncompleteTokens);
 		return true;
 	}
 
 	public setVisible(visible: boolean): void {
 		this.visible = visible;
+		if (!visible) this.update.clear();
+		else if (this.pending) this.scheduleUpdate();
 		for (const [, block] of this.codeBlocks) block.setVisible(visible);
+	}
+
+	private enqueue(markdown: IMarkdownString, incomplete: boolean): void {
+		// Preserve the complete renderer's synchronous admission/size error.
+		if (markdown.value.length > 4 * 1024 * 1024) { this.render(markdown, incomplete); return; }
+		if (markdown.value.length < 1024) {
+			this.update.clear();
+			this.pending = undefined;
+			this.render(markdown, incomplete);
+			return;
+		}
+		// The transcript owns every source snapshot. Rendering consumes only the
+		// latest one per frame; terminal updates and corrections use the same slot.
+		this.pending = { markdown, incomplete };
+		if (this.visible) this.scheduleUpdate();
+	}
+
+	private scheduleUpdate(): void {
+		if (this.update.value) return;
+		this.update.value = scheduleAtNextAnimationFrame(getWindow(this.domNode), () => {
+			this.update.clear();
+			const pending = this.pending;
+			this.pending = undefined;
+			if (!pending) return;
+			this.render(pending.markdown, pending.incomplete);
+			this.options.asyncRenderCallback?.();
+			this.changedHeight.fire();
+		});
 	}
 
 	private render(markdown: IMarkdownString, fillInIncompleteTokens: boolean): void {
@@ -110,15 +143,27 @@ export class ChatMarkdownContentPart extends Disposable {
 		}
 		const tail = markdown.value.slice(offset);
 		let sources: string[] | undefined;
+		const previousTail = this.fragments.at(-1);
+		// A single ordinary block without a new blank line has no block boundary
+		// to discover. Its canonical renderer still parses the complete current
+		// source, including incomplete inline syntax; avoid a second full lexer pass.
+		if (sameOptions && tail.length >= 4096 && markdown.value.length <= 4 * 1024 * 1024
+			&& !markdown.supportHtml && !this.options.markedExtensions?.length
+			&& !/[$\\<>\r]|!\[|`{3}|~{3}|\]:/u.test(markdown.value) && !/\n[\t ]*\n/u.test(tail)
+			&& previousTail?.element.childElementCount === 1
+			&& ['P', 'UL', 'OL', 'TABLE'].includes(previousTail.element.firstElementChild!.tagName)) sources = [tail];
 		// HTML and arbitrary extensions can carry state across blocks. Display math
 		// may acquire a closing delimiter several paragraphs later; formulas also
 		// share message-scoped macros. These inputs, reference definitions and
 		// normalized CRLF offsets use the complete renderer.
-		if (!markdown.supportHtml && !this.options.markedExtensions?.length && !tail.includes('\r')
+		if (!sources && !markdown.supportHtml && !this.options.markedExtensions?.length && !tail.includes('\r')
 			&& !tail.includes('$$') && !tail.includes('\\[') && markdown.value.length <= 4 * 1024 * 1024) {
-			const tokens = this.lexer.lexer(tail, { ...this.lexer.defaults, gfm: true, breaks: true, ...this.options.markedOptions });
+			// With no possible math opener, no extension scan or recursive math-token
+			// walk is needed. A later delimiter still selects the full math path.
+			const lexer = /[$\\]|`{3}|~{3}/u.test(tail) ? this.lexer : this.plainLexer;
+			const tokens = lexer.lexer(tail, { ...lexer.defaults, gfm: true, breaks: true, ...this.options.markedOptions });
 			let hasMath = false;
-			this.lexer.walkTokens(tokens, token => { if (token.type.startsWith('ashMath')) hasMath = true; });
+			if (lexer === this.lexer) lexer.walkTokens(tokens, token => { if (token.type.startsWith('ashMath')) hasMath = true; });
 			if (!hasMath && Object.keys(tokens.links).length === 0 && tokens.map(token => token.raw).join('') === tail) {
 				sources = [];
 				let leading = '';
@@ -145,6 +190,7 @@ export class ChatMarkdownContentPart extends Disposable {
 		const next = [...retained];
 		const created: MarkdownFragment[] = [];
 		const available = sameOptions ? [...retired] : [];
+		const targets = new Set<HTMLElement>();
 		let codeStart = retained.reduce((count, fragment) => count + fragment.codeCount, 0);
 		try {
 			for (const [index, source] of sources.entries()) {
@@ -154,7 +200,9 @@ export class ChatMarkdownContentPart extends Disposable {
 				let fragment: MarkdownFragment;
 				if (match >= 0) fragment = available.splice(match, 1)[0];
 				else {
-					fragment = this.renderFragment({ ...markdown, value: source }, incomplete, codeStart);
+					const target = source.length >= 4096 ? available.find(fragment => !fragment.codeCount && !fragment.images.size && !targets.has(fragment.element))?.element : undefined;
+					if (target) targets.add(target);
+					fragment = this.renderFragment({ ...markdown, value: source }, incomplete, codeStart, target);
 					created.push(fragment);
 				}
 				next.push(fragment);
@@ -176,6 +224,7 @@ export class ChatMarkdownContentPart extends Disposable {
 			}
 			// New math/image consumers exist before old renders are retired.
 			this.renders.deleteAndDispose(fragment.element);
+			if (!created.some(next => next.element === fragment.element)) fragment.element.remove();
 		}
 		for (const fragment of created) {
 			for (const block of fragment.blocks) {
@@ -200,7 +249,7 @@ export class ChatMarkdownContentPart extends Disposable {
 		if (focused?.isConnected && document.activeElement !== focused) focused.focus({ preventScroll: true });
 	}
 
-	private renderFragment(markdown: IMarkdownString, incomplete: boolean, codeStart: number): MarkdownFragment {
+	private renderFragment(markdown: IMarkdownString, incomplete: boolean, codeStart: number, target?: HTMLElement): MarkdownFragment {
 		const document = this.options.ownerDocument;
 		const lifetime = new DisposableStore();
 		const code: { readonly languageId: string; readonly text: string; readonly placeholder: HTMLElement; }[] = [];
@@ -223,13 +272,15 @@ export class ChatMarkdownContentPart extends Disposable {
 					code.push({ languageId, text, placeholder });
 					return placeholder;
 				},
-			}));
+			}, target));
 			// Fingerprints belong to sanitized source before editor widgets or provider labels decorate it.
 			const nodes = [...rendered.element.childNodes];
 			// Async formula nodes belong to their render lifetime and cannot be transplanted after disposal.
 			const fingerprints = nodes.map(node => ({
-				source: node.nodeType === 1 ? (node as Element).outerHTML : node.textContent ?? '',
-				reusable: node.nodeType !== 1 || !(node as Element).matches('img,input,button,pre,.ash-katex-container') && !(node as Element).querySelector('img,input,button,.ash-chat-code-placeholder,.ash-katex-container'),
+				// A reused target already reconciles its children. Do not serialize
+				// its complete tree again for the separate whole-block reuse path.
+				source: target ? '' : node.nodeType === 1 ? (node as Element).outerHTML : node.textContent ?? '',
+				reusable: !target && (node.nodeType !== 1 || !(node as Element).matches('img,input,button,pre,.ash-katex-container') && !(node as Element).querySelector('img,input,button,.ash-chat-code-placeholder,.ash-katex-container')),
 			}));
 			for (const [localIndex, data] of code.entries()) {
 				const index = codeStart + localIndex;

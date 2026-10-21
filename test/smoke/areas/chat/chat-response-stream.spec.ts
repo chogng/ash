@@ -88,11 +88,22 @@ test('Real streamed Chat responses retain code selection, focus and reading posi
 		await expect(copy).toBeFocused();
 		const viewport = chat.locator('.ash-chat-list-widget .ash-scrollbar-viewport');
 		await viewport.evaluate(element => { element.scrollTop = element.scrollHeight; });
-		const paragraphs = Array.from({ length: 32 }, (_, index) => `Response section ${index}. ${'Synthetic reading content. '.repeat(8)}`).join('\n\n');
+		const formulaTail = String.raw`Incomplete \( candidate **bold** and price $5. `.repeat(64) + ' Complete $x+1$.';
+		const paragraphs = Array.from({ length: 32 }, (_, index) => `Response section ${index}. ${'Synthetic reading content. '.repeat(8)}`).join('\n\n') + '\n\n' + formulaTail;
 		delta(1, '\n\n' + paragraphs);
 		mark('streamed-following');
 		await expect(chat).toContainText('Response section 31.');
-		await expect.poll(() => viewport.evaluate(element => element.scrollHeight - element.scrollTop - element.clientHeight)).toBe(0);
+		await expect(chat.locator('.ash-katex-container[data-latex="x+1"] math')).toHaveCount(1);
+		// scrollHeight/clientHeight are rounded CSS pixels; Electron can report a
+		// one-pixel difference at the physical bottom. Assert the reachable native
+		// bound exactly, restoring the original position before returning.
+		await expect.poll(() => viewport.evaluate(element => {
+			const top = element.scrollTop;
+			element.scrollTop = Number.MAX_SAFE_INTEGER;
+			const maximum = element.scrollTop;
+			element.scrollTop = top;
+			return maximum - top;
+		})).toBe(0);
 		expect(await editor.evaluate((element, previous) => element === previous, originalEditor)).toBe(true);
 		expect(await selection()).toEqual(selected);
 		await expect(copy).toBeFocused();
@@ -104,10 +115,22 @@ test('Real streamed Chat responses retain code selection, focus and reading posi
 		await expect.poll(async () => (await geometry(paragraph)).scroll.distance).toBeGreaterThan(100);
 		const reading = await geometry(paragraph);
 		await testInfo.attach('reading-before-media.png', { body: await page.screenshot(), contentType: 'image/png' });
+		const half = 'Large **stable** [Open](https://example.com) response content. '.repeat(192) + ' Halfway marker. ';
+		const large = half + 'More **stable** [Open](https://example.com) response content. '.repeat(192) + '\n\nLarge final marker.';
+		send({ type: 'response.output_item.added', output_index: 2, item: message(2, '') });
+		delta(2, half);
+		const largeBody = chat.locator('.ash-chat-markdown-part').filter({ hasText: 'Halfway marker.' });
+		await expect(largeBody).toBeAttached();
+		const retained = await largeBody.locator('strong').first().elementHandle();
+		const rest = large.slice(half.length);
+		for (let index = 0; index < 8; index++) delta(2, rest.slice(Math.ceil(rest.length * index / 8), Math.ceil(rest.length * (index + 1) / 8)));
+		await expect(largeBody).toContainText('Large final marker.');
+		expect(await largeBody.locator('strong').first().evaluate((element, old) => element === old, retained)).toBe(true);
+		await expect(copy).toBeFocused();
 		const png = 'iVBORw0KGgoAAAANSUhEUgAAAAIAAAABCAYAAAD0In+KAAAADklEQVR4nGP4z8DwHwQBEPgD/U6VwW8AAAAASUVORK5CYII=';
 		const media = `Synthetic media is ready.\n\n![Synthetic response media](data:image/png;base64,${png}|width=320,height=320)`;
 		const corrected = code.replace('= 1', '= 2') + '\n\n' + paragraphs;
-		const output = [message(0, media), message(1, corrected)];
+		const output = [message(0, media), message(1, corrected), message(2, large)];
 		for (const [index, item] of output.entries()) send({ type: 'response.output_item.done', output_index: index, item });
 		send({ type: 'response.completed', response: { id: 'response-fixture', status: 'completed', output, usage: { input_tokens: 10, output_tokens: 5, total_tokens: 15 } } });
 		stream!.end();
@@ -122,10 +145,11 @@ test('Real streamed Chat responses retain code selection, focus and reading posi
 		await expect(copy).toBeFocused();
 		const durable = await read();
 		const messages = durable.turns.at(-1)!.items.filter(item => item.type === 'agentMessage');
-		expect(messages.map(item => item.text)).toEqual([media, corrected]);
+		expect(messages.map(item => item.text)).toEqual([media, corrected, large]);
 		await testInfo.attach('reading-after-media.png', { body: await page.screenshot(), contentType: 'image/png' });
 		await testInfo.attach('response-state.json', { body: JSON.stringify({ target, sessionId, threadId, selected, restoredSelection: await selection(), readingBefore: reading, readingAfter: await geometry(paragraph), stages, durable }, null, 2), contentType: 'application/json' });
 		await originalEditor?.dispose();
+		await retained?.dispose();
 	} finally {
 		try {
 			await testInfo.attach('controlled-model-requests.json', { body: JSON.stringify({ requests, stages }, null, 2), contentType: 'application/json' });

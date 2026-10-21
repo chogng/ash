@@ -6,6 +6,7 @@ import { resolve } from 'node:path';
 import { suite, test, suiteSetup, suiteTeardown } from 'mocha';
 import { startMarkdownMathExtension } from '../../../../../../../../test/fixtures/markdownExtension.js';
 import { ensureNoStylesAreLeakedInTestSuite } from '../../../../../../../../test/unit/documentStyles.js';
+import { getWindow, scheduleAtNextAnimationFrame } from '../../../../../../base/browser/dom.js';
 import { Emitter, Event } from '../../../../../../base/common/event.js';
 import { DeferredPromise } from '../../../../../../base/common/async.js';
 import type { IMarkdownString } from '../../../../../../base/common/htmlContent.js';
@@ -34,8 +35,8 @@ const snapshot = (): ExtensionHostFleetSnapshot => ({
 	}]
 });
 
-function services(overrides: Partial<IExtensionHostApi> = {}): InstantiationService {
-	const instance = new InstantiationService(new ServiceCollection([IOpenerService, { open: async () => true } as unknown as IOpenerService]));
+function services(overrides: Partial<IExtensionHostApi> = {}, opener: IOpenerService = { open: async () => true } as unknown as IOpenerService): InstantiationService {
+	const instance = new InstantiationService(new ServiceCollection([IOpenerService, opener]));
 	const registry = new ConfigurationRegistry();
 	registry.registerConfiguration({ key: 'markdown.math.enabled', defaultValue: true, parse: value => Boolean(value) });
 	registry.registerConfiguration({ key: 'markdown.math.macros', defaultValue: {}, parse: value => value });
@@ -86,6 +87,36 @@ suite('Shared chat Markdown rendering', () => {
 		assert.deepEqual([...inline.element.querySelectorAll<HTMLElement>('.ash-katex-container')].map(element => element.dataset.latex), ['x', 'y']);
 	});
 
+	test('dense incomplete formulas retain literal text and later complete formulas', () => {
+		using scope = services();
+		using renderer = scope.createInstance(ChatContentMarkdownRenderer);
+		const incomplete = String.raw`Incomplete \( candidate **bold** and price $5. `.repeat(256);
+		using result = renderer.render({ value: incomplete + String.raw` Complete $x+1$ and \[y^2\].` });
+		assert.deepEqual([...result.element.querySelectorAll<HTMLElement>('.ash-katex-container')].map(element => ({ source: element.dataset.latex, display: element.dataset.mathDisplay })), [
+			{ source: 'x+1', display: 'inline' },
+			{ source: 'y^2', display: 'block' },
+		]);
+		assert.equal(result.element.querySelectorAll('strong').length, 256);
+		assert.equal((result.element.textContent!.match(/Incomplete/g) ?? []).length, 256);
+	});
+
+	test('formula closing delimiters retain the existing scan limit', () => {
+		using scope = services();
+		using renderer = scope.createInstance(ChatContentMarkdownRenderer);
+		for (const [opening, closing] of [['$', '$'], ['$$', '$$'], ['\\(', '\\)'], ['\\[', '\\]']]) {
+			for (const end of [19_999, 20_000]) {
+				const text = 'x'.repeat(end - opening.length);
+				using result = renderer.render({ value: opening + text + closing });
+				// An over-limit $$ candidate can still contain a valid single-dollar
+				// formula starting one character later. Preserve that existing fallback.
+				const expected = end < 20_000 || opening === '$$'
+					? [{ source: text, display: opening === '$$' && end < 20_000 || opening === '\\[' ? 'block' : 'inline' }]
+					: [];
+				assert.deepEqual([...result.element.querySelectorAll<HTMLElement>('.ash-katex-container')].map(element => ({ source: element.dataset.latex, display: element.dataset.mathDisplay })), expected, `${opening} closing at ${end}`);
+			}
+		}
+	});
+
 	for (const [name, source] of [
 		['paragraphs and incomplete inline syntax', 'First **bold** and `code`.\n\nSecond *unfinished\n\nThird [label](https://example.com).'],
 		['setext heading and rule', 'A title\n======\n\nA paragraph\n\n---\n\nTail.'],
@@ -134,6 +165,94 @@ suite('Shared chat Markdown rendering', () => {
 		assert.equal(part.domNode.querySelector('a'), link);
 		link.click();
 		assert.deepEqual(actions, [next]);
+	});
+
+	test('large tails coalesce terminal snapshots and cancel queued work on clear, hide and disposal', async () => {
+		using scope = services();
+		const actions: string[] = [];
+		using part = scope.createInstance(ChatMarkdownContentPart, { ownerDocument: document, actionHandler: (_href: string, markdown: IMarkdownString) => actions.push(markdown.value) });
+		const render = mock.method(ChatContentMarkdownRenderer.prototype, 'render');
+		const frame = () => new Promise<void>(resolve => {
+			const scheduled = scheduleAtNextAnimationFrame(getWindow(part.domNode), () => { scheduled.dispose(); resolve(); });
+		});
+		const prefix = 'Large **stable** [Open](https://example.com) response. '.repeat(128);
+		try {
+			part.tryIncrementalUpdate({ value: prefix + 'intermediate' }, true);
+			part.tryIncrementalUpdate({ value: prefix + 'corrected' }, true);
+			part.tryIncrementalUpdate({ value: prefix + 'terminal' }, false);
+			await changedUntil(part.domNode, () => part.domNode.textContent!.trimEnd().endsWith('terminal'));
+			assert.equal(render.mock.callCount(), 1);
+			const stable = part.domNode.querySelector('strong');
+			part.tryIncrementalUpdate({ value: prefix + 'next' }, true);
+			await changedUntil(part.domNode, () => part.domNode.textContent!.trimEnd().endsWith('next'));
+			assert.equal(part.domNode.querySelector('strong'), stable);
+			part.domNode.querySelector('a')!.click();
+			assert.deepEqual(actions, [prefix + 'next']);
+			part.tryIncrementalUpdate({ value: prefix + 'stale' }, true);
+			part.tryIncrementalUpdate({ value: '' }, false);
+			await frame();
+			assert.equal(part.domNode.textContent, '');
+			part.setVisible(false);
+			const before = render.mock.callCount();
+			part.tryIncrementalUpdate({ value: prefix + 'hidden' }, true);
+			await frame();
+			assert.equal(render.mock.callCount(), before);
+			part.tryIncrementalUpdate({ value: prefix + 'visible terminal' }, false);
+			part.setVisible(true);
+			await changedUntil(part.domNode, () => part.domNode.textContent!.trimEnd().endsWith('visible terminal'));
+			const completed = render.mock.callCount();
+			part.tryIncrementalUpdate({ value: prefix + 'disposed' }, true);
+			part.dispose();
+			await frame();
+			assert.equal(render.mock.callCount(), completed);
+		} finally { render.mock.restore(); }
+	});
+
+	test('large-tail reuse preserves canonical sanitization, escaped text and current link handlers', () => {
+		using scope = services();
+		using renderer = scope.createInstance(ChatContentMarkdownRenderer);
+		const prefix = '**kept** [Open](https://example.com) &lt;literal&gt; &amp; '.repeat(128);
+		const actions: string[] = [];
+		using first = renderer.render({ value: prefix + 'initial' });
+		const kept = first.element.querySelector('strong');
+		const value = prefix + '&lt;script&gt;still text&lt;/script&gt; [blocked](javascript:alert(1)) **changed**';
+		using next = renderer.render({ value }, { actionHandler: href => actions.push(href) }, first.element);
+		// An inert extra extension selects the ordinary complete renderer for the reference.
+		using expected = renderer.render({ value }, { markedExtensions: [{}] });
+		assert.equal(next.element.innerHTML, expected.element.innerHTML);
+		assert.equal(next.element.querySelector('strong'), kept);
+		assert.equal(next.element.querySelector('script'), null);
+		assert.ok(next.element.textContent!.includes('<script>still text</script>'));
+		assert.equal(next.element.querySelector('a[href^="javascript:"]'), null);
+		next.element.querySelector('a')!.click();
+		assert.deepEqual(actions, ['https://example.com']);
+		const custom = prefix + '[Custom](demo:resource)';
+		using allowed = renderer.render({ value: custom }, { sanitizerConfig: { allowedLinkSchemes: { augment: ['demo'] } } });
+		assert.ok(allowed.element.querySelector('a[href="demo:resource"]'));
+		using denied = renderer.render({ value: custom }, {}, allowed.element);
+		assert.equal(denied.element.querySelector('a[href="demo:resource"]'), null, 'Changing the sanitizer policy invalidates node reuse');
+	});
+
+	test('large scheduled formulas retain the entire ordered macro scope', async () => {
+		const batches: unknown[] = [];
+		using scope = services({ invoke: (request, signal) => { batches.push(request.payload); return math.invoke(request.registrationId, request.operation, request.payload, signal); } });
+		using part = scope.createInstance(ChatMarkdownContentPart, { ownerDocument: document });
+		const prefix = 'Large formula response. '.repeat(256);
+		part.tryIncrementalUpdate({ value: prefix + '$x$' }, true);
+		const formulas = [String.raw`\newcommand{\scheduledfoo}{x^2}\scheduledfoo`, String.raw`\scheduledfoo+1`];
+		part.tryIncrementalUpdate({ value: prefix + formulas.map(value => `$${value}$`).join(' ') }, false);
+		await changedUntil(part.domNode, () => part.domNode.querySelectorAll('math').length === 2);
+		assert.deepEqual(batches, [{ formulas: formulas.map(source => ({ source, display: 'inline' })), macros: {} }]);
+	});
+
+	test('large-tail links retain the shared default opener and command trust policy', () => {
+		const opened: unknown[] = [];
+		using scope = services({}, { open: async (href, options) => { opened.push([href, options]); return true; } } as IOpenerService);
+		using renderer = scope.createInstance(ChatContentMarkdownRenderer);
+		const trusted = { enabledCommands: ['allowed.command'] };
+		using result = renderer.render({ value: 'Large **response**. '.repeat(256) + '[Command](command:allowed.command)', isTrusted: trusted });
+		result.element.querySelector('a')!.click();
+		assert.deepEqual(opened, [['command:allowed.command', { fromUserGesture: true, allowContributedOpeners: true, allowCommands: ['allowed.command'], skipValidation: undefined }]]);
 	});
 
 	test('corrections can merge an unchanged preceding block with a new continuation', () => {

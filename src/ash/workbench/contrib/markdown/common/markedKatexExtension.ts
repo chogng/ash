@@ -18,15 +18,23 @@ function readMath(source: string, previous = ''): MathContent | undefined {
 	if (opening.startsWith('$') && wordCharacter.test(before)) { return undefined; }
 	if (opening === '$' && /[\s.(]/u.test(source[1] ?? '')) { return undefined; }
 	const closing = opening === '\\(' ? '\\)' : opening === '\\[' ? '\\]' : opening;
-	for (let index = opening.length; index < Math.min(source.length, 20_000); index++) {
-		if (source.startsWith(closing, index)) {
+	// Search closing delimiters natively instead of visiting every character for
+	// each incomplete candidate. An odd preceding backslash count escapes the
+	// delimiter; advance one character so overlapping dollar pairs remain eligible.
+	const boundedSource = source.slice(0, 20_001);
+	for (let cursor = opening.length; cursor < 20_000;) {
+		const index = boundedSource.indexOf(closing, cursor);
+		if (index < 0 || index >= 20_000) { return undefined; }
+		let escaped = 0;
+		for (let before = index - 1; before >= opening.length && source[before] === '\\'; before--) { escaped++; }
+		if (escaped % 2 === 0) {
 			const after = source.codePointAt(index + closing.length);
 			if (opening.startsWith('$') && after !== undefined && wordCharacter.test(String.fromCodePoint(after))) { return undefined; }
 			const text = source.slice(opening.length, index).trim();
 			if (!text || opening === '$' && (/[\r\n]/u.test(text) || /\s/u.test(source[index - 1]))) { return undefined; }
 			return { raw: source.slice(0, index + closing.length), text, displayMode: opening === '$$' || opening === '\\[' };
 		}
-		if (source[index] === '\\') { index++; }
+		cursor = index + 1;
 	}
 	return undefined;
 }

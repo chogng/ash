@@ -1,4 +1,5 @@
 import { registerTestCodeEditorFeatures } from '../../fixtures/codeEditorFeatures.js';
+import { ChatMarkdownContentPart } from '../../../src/ash/workbench/contrib/chat/browser/widget/chatContentParts/chatMarkdownContentPart.js';
 import { DeferredPromise } from '../../../src/ash/base/common/async.js';
 const codeFeatures = registerTestCodeEditorFeatures();
 import type { NotificationService } from '../../../src/ash/workbench/services/notification/common/notificationService.js';
@@ -522,9 +523,13 @@ let toolEntries: ThreadTranscriptEntry[] = [];
 let text = 'Reply with `inline`.\n\n```typescript\nconst code = "<safe>";\nsecond line\n```';
 list.render([{ id: 'reply', type: 'agentMessage', text, transient: false }]);
 
-type MarkdownWorkload = 'prose' | 'mixed' | 'fence' | 'largeFence' | 'largeParagraph';
+type MarkdownWorkload = 'prose' | 'mixed' | 'fence' | 'largeFence' | 'largeParagraph' | 'hugeParagraph' | 'mathCandidates' | 'largeList' | 'largeTable';
 function markdownWorkload(kind: MarkdownWorkload): string {
 	const prose = 'Streaming **Markdown** with [a link](https://example.com) and `inline code`. 中文内容保持完整。 '.repeat(6);
+	if (kind === 'hugeParagraph') return prose.repeat(64) + '\n\nFinal visible marker.';
+	if (kind === 'mathCandidates') return String.raw`Incomplete \( candidate **bold** [link](https://example.com) and price $5. `.repeat(64) + ' Complete $x+1$.\n\nFinal visible marker.';
+	if (kind === 'largeList') return Array.from({ length: 512 }, (_, index) => `- Item ${index}: **bold** [link](https://example.com) and \`code\` 中文`).join('\n') + '\n\nFinal visible marker.';
+	if (kind === 'largeTable') return '| Name | Value | Detail |\n| --- | --- | --- |\n' + Array.from({ length: 256 }, (_, index) => `| Row ${index} | **bold** | [link](https://example.com) and \`code\` 中文 |`).join('\n') + '\n\nFinal visible marker.';
 	if (kind === 'largeParagraph') return prose.repeat(16) + '\n\nFinal visible marker.';
 	if (kind === 'prose') return Array.from({ length: 96 }, (_, index) => `Paragraph ${index}: ${prose}\n\n`).join('') + 'Final visible marker.';
 	const code = Array.from({ length: kind === 'largeFence' ? 8000 : kind === 'fence' ? 800 : 36 }, (_, index) => `const value${index} = "streamed code ${index}";`).join('\n');
@@ -540,6 +545,9 @@ interface MarkdownBenchmarkResult {
 	readonly wallMs: number;
 	readonly updateMs: number;
 	readonly maxUpdateMs: number;
+	readonly updateSamplesMs: readonly number[];
+	readonly maxLexMs: number;
+	readonly renderSamplesMs: readonly number[];
 	readonly markdownMs: number;
 	readonly renderedCharacters: number;
 	readonly renderCalls: number;
@@ -602,9 +610,10 @@ declare global {
 			recreateTranscript(): void;
 			stream(value: string, complete: boolean): void;
 			runMarkdownBenchmark(kind: MarkdownWorkload): Promise<MarkdownBenchmarkResult>;
+			markdownWorkload(kind: MarkdownWorkload): string;
 			inspectRawCodeUpdates(values: readonly string[]): Promise<{ readonly snapshots: readonly { readonly text: string; readonly eol: string; readonly copied: string; }[]; readonly released: boolean; }>;
 			inspectCodeUpdates(values: readonly string[]): { readonly updates: readonly { readonly text: string; readonly reason: string; readonly replacedCharacters: number; readonly insertedCharacters: number; }[]; readonly sameModel: boolean; readonly canUndo: boolean; };
-			compareStreamingMarkdown(value: string, complete: boolean, measureLayout?: boolean): { actual: string; expected: string; layoutError: number; layout: unknown[]; };
+			compareStreamingMarkdown(value: string, complete: boolean, measureLayout?: boolean): Promise<{ actual: string; expected: string; layoutError: number; layout: unknown[]; }>;
 			showLongCode(): string;
 			showTool(): void;
 			openAccessibleView(help: boolean): boolean;
@@ -784,8 +793,10 @@ window.ashChatTranscriptIntegration = {
 		previous.dispose();
 	},
 	stream: (value, complete) => list.render([{ id: 'stream', type: 'agentMessage', text: value, transient: !complete }]),
-	compareStreamingMarkdown: (value, complete, measureLayout = false) => {
+	compareStreamingMarkdown: async (value, complete, measureLayout = false) => {
 		list.render([{ id: 'stream', type: 'agentMessage', text: value, transient: !complete }]);
+		// Large snapshots are consumed by the owning response in the next frame.
+		if (value.length >= 1024) await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
 		const root = list.element.querySelector<HTMLElement>('.ash-chat-markdown-part')!;
 		const copy = root.cloneNode(true) as HTMLElement;
 		for (const fragment of copy.querySelectorAll('.ash-chat-markdown-fragment')) fragment.replaceWith(...fragment.childNodes);
@@ -860,6 +871,7 @@ window.ashChatTranscriptIntegration = {
 			return { updates, sameModel: editor.getModel() === model, canUndo: model.canUndo() };
 		} finally { listener.dispose(); }
 	},
+	markdownWorkload,
 	runMarkdownBenchmark: async kind => {
 		const source = markdownWorkload(kind);
 		const chunks = 128;
@@ -900,12 +912,24 @@ window.ashChatTranscriptIntegration = {
 			try { return layout.apply(this, args); } finally { consumer.layoutMs += performance.now() - start; }
 		};
 		const original = ChatContentMarkdownRenderer.prototype.render;
+		// Include the actual deferred consumer, rather than reporting only the cheap enqueue call.
+		const originalPartRender = ChatMarkdownContentPart.prototype['render'];
+		const renderSamplesMs: number[] = [];
+		ChatMarkdownContentPart.prototype['render'] = function (...args) {
+			const start = performance.now();
+			try { return originalPartRender.apply(this, args); }
+			finally { renderSamplesMs.push(performance.now() - start); }
+		};
 		const originalLex = Lexer.lex;
 		Lexer.lex = function (source, options) {
 			lexCalls++;
 			lexedCharacters += source.length;
 			const start = performance.now();
-			try { return originalLex(source, options); } finally { consumer.lexMs += performance.now() - start; }
+			try { return originalLex(source, options); } finally {
+				const elapsed = performance.now() - start;
+				consumer.lexMs += elapsed;
+				maxLexMs = Math.max(maxLexMs, elapsed);
+			}
 		};
 		ChatContentMarkdownRenderer.prototype.render = function (markdown, ...args) {
 			const start = performance.now();
@@ -921,6 +945,8 @@ window.ashChatTranscriptIntegration = {
 		observer.observe({ entryTypes: ['longtask'] });
 		let updateMs = 0;
 		let maxUpdateMs = 0;
+		let maxLexMs = 0;
+		const updateSamplesMs: number[] = [];
 		const start = performance.now();
 		try {
 			for (const [index, value] of values.entries()) {
@@ -928,6 +954,7 @@ window.ashChatTranscriptIntegration = {
 				list.render([{ id: 'stream', type: 'agentMessage', text: value, transient: index !== chunks - 1 }]);
 				const elapsed = performance.now() - before;
 				updateMs += elapsed;
+				updateSamplesMs.push(elapsed);
 				maxUpdateMs = Math.max(maxUpdateMs, elapsed);
 				// Eight provider updates per frame, identical in both builds.
 				if ((index + 1) % 8 === 0) await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
@@ -938,12 +965,13 @@ window.ashChatTranscriptIntegration = {
 			return {
 				consumer, codeTextMatches: expectedCode.length === actualCode.length && expectedCode.every((code, index) => code === actualCode[index]),
 				bytes: new TextEncoder().encode(source).byteLength, chunks, wallMs: performance.now() - start,
-				updateMs, maxUpdateMs, markdownMs, renderedCharacters, renderCalls, lexCalls, lexedCharacters, removedNodes, longTasks,
+				updateMs, maxUpdateMs, updateSamplesMs, maxLexMs, renderSamplesMs, markdownMs, renderedCharacters, renderCalls, lexCalls, lexedCharacters, removedNodes, longTasks,
 				codeBlocks: list.element.querySelectorAll('.ash-chat-code-block').length,
 				finalVisible: [...list.element.querySelectorAll('[data-item-id="stream"] p')].at(-1)?.textContent === 'Final visible marker.',
 			};
 		} finally {
 			ChatContentMarkdownRenderer.prototype.render = original;
+			ChatMarkdownContentPart.prototype['render'] = originalPartRender;
 			Lexer.lex = originalLex;
 			TextModel.prototype.setValue = setValue;
 			TextModel.prototype.applyEdits = applyEdits;
