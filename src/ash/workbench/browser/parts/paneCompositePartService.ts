@@ -38,6 +38,7 @@ export class PaneCompositePartService extends Disposable implements IPaneComposi
 		const containerId = id ?? part.getCompositeIdToRestore();
 		const container = this.descriptors.getViewContainers(location).find(candidate => candidate.id === containerId);
 		if (!container) { return undefined; }
+		if (container.hideIfEmpty && this.descriptors.getViewContainerModel(container.id).activeViewDescriptors.length === 0) { return undefined; }
 		let composite = part.getComposite(container.id);
 		if (!composite) {
 			const options = {

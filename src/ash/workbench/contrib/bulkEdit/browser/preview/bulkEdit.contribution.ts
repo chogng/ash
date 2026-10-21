@@ -1,5 +1,5 @@
 import { Disposable, DisposableStore, toDisposable } from "../../../../../base/common/lifecycle.js";
-import { addDisposableListener, isHTMLElement } from '../../../../../base/browser/dom.js';
+import { addDisposableListener, getActiveElement, isHTMLElement } from '../../../../../base/browser/dom.js';
 import { isCancellationError } from "../../../../../base/common/errors.js";
 import { IBulkEditService, type ResourceEdit } from '../../../../../editor/browser/services/bulkEditService.js';
 import { IDialogService } from "../../../../../platform/dialogs/common/dialogs.js";
@@ -43,14 +43,13 @@ for (const action of previewActions) {
 
 /** Registers the Workbench panel that hosts the transient bulk-edit preview. */
 export function registerBulkEditView(registry: WorkbenchViewRegistry = ViewsRegistry): void {
-	registry.registerStaticViewContainer({ id: WorkbenchViewContainerId.BulkEdit, title: "Refactor Preview", localizationKey: { bundle: "ash.views", key: "refactorPreview" }, location: ViewContainerLocation.Panel, order: 2.75 });
+	registry.registerStaticViewContainer({ id: WorkbenchViewContainerId.BulkEdit, title: "Refactor Preview", localizationKey: { bundle: "ash.views", key: "refactorPreview" }, location: ViewContainerLocation.Panel, order: 2.75, hideIfEmpty: true });
 	registry.registerStaticViews(WorkbenchViewContainerId.BulkEdit, [{
 		id: BulkEditPane.ID,
 		title: "Refactor Preview",
 		localizationKey: { bundle: "ash.views", key: "refactorPreview" },
 		order: 1,
-		hideByDefault: true,
-		canToggleVisibility: true,
+		when: ContextKeyExpr.has('refactorPreview.enabled'),
 		ctorDescriptor: new SyncDescriptor(BulkEditPane),
 	}]);
 }
@@ -76,10 +75,9 @@ export class BulkEditPreviewContribution extends Disposable {
 	}
 
 	private async preview(edits: ResourceEdit[], signal: AbortSignal): Promise<ResourceEdit[]> {
-		const view = await this.views.openView(BulkEditPane.ID);
-		if (!(view instanceof BulkEditPane)) throw new Error("Bulk edit preview view is not available");
-		if (this.activeSession) {
-			const previous = this.activeSession;
+		if (signal.aborted) return [];
+		const previous = this.activeSession;
+		if (previous) {
 			const confirmed = await this.dialogs.confirm({
 				title: localize('bulkEdit.title', 'Refactor Preview'),
 				message: localize('bulkEdit.anotherPreview', 'Another refactoring is being previewed.'),
@@ -88,17 +86,24 @@ export class BulkEditPreviewContribution extends Disposable {
 				cancelButton: localize('bulkEdit.cancel', 'Cancel'),
 			});
 			if (!confirmed.confirmed || signal.aborted || this.activeSession !== previous) return [];
-			previous.controller.abort();
-			view.discard();
 		}
 		const controller = new AbortController();
 		const lifetime = new DisposableStore();
 		lifetime.add(addDisposableListener(signal, 'abort', () => controller.abort(), { once: true }));
 		if (signal.aborted) controller.abort();
-		const session = { controller };
+		// Replacement previews inherit the original destination, never the transient panel.
+		const session: PreviewSession = {
+			controller,
+			previousPanelId: previous ? previous.previousPanelId : this.views.getVisibleViewContainer(ViewContainerLocation.Panel)?.id,
+			previousFocus: previous ? previous.previousFocus : getActiveElement(),
+		};
 		this.activeSession = session;
+		previous?.controller.abort();
 		this.enabledContext.set(true);
 		try {
+			if (controller.signal.aborted) return [];
+			const view = await this.views.openView(BulkEditPane.ID);
+			if (!(view instanceof BulkEditPane)) throw new Error("Bulk edit preview view is not available");
 			if (controller.signal.aborted) return [];
 			return await view.setInput(edits, controller.signal) ?? [];
 		} catch (error) {
@@ -108,7 +113,10 @@ export class BulkEditPreviewContribution extends Disposable {
 			lifetime.dispose();
 			if (this.activeSession === session) {
 				this.activeSession = undefined;
+				if (!session.previousPanelId) this.views.closeViewContainer(WorkbenchViewContainerId.BulkEdit);
 				this.enabledContext.set(false);
+				if (session.previousPanelId) await this.views.openViewContainer(session.previousPanelId);
+				if (!this.activeSession && isHTMLElement(session.previousFocus) && session.previousFocus.isConnected) session.previousFocus.focus();
 			}
 		}
 	}
@@ -133,6 +141,8 @@ for (const type of [AccessibleViewType.Help, AccessibleViewType.View]) {
 }
 interface PreviewSession {
 	readonly controller: AbortController;
+	readonly previousPanelId: string | undefined;
+	readonly previousFocus: Element | null;
 }
 
 registerWorkbenchContribution("workbench.contrib.bulkEditPreview", WorkbenchPhase.BlockRestore, accessor => accessor.get(IInstantiationService).createInstance(BulkEditPreviewContribution));

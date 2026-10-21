@@ -1720,6 +1720,44 @@ test("Panel presents its destinations as tabs and active commands as a toolbar",
 	dom.window.close();
 });
 
+test('Transient view navigation follows its active session and ignores stale restoration', async () => {
+	const { StorageTarget } = await import('../../../platform/storage/common/storage.js');
+	using resources = new DisposableStore();
+	const registry = resources.add(new WorkbenchViewRegistry());
+	registry.registerStaticViewContainer({ id: 'test.output', title: 'Output', location: ViewContainerLocation.Panel, isDefault: true });
+	const previewId = 'test.preview';
+	registry.registerStaticViewContainer({ id: previewId, title: 'Preview', location: ViewContainerLocation.Panel, hideIfEmpty: true });
+	registry.registerStaticViews(previewId, [{ id: 'test.preview.view', title: 'Preview', when: ContextKeyExpr.has('test.preview.enabled'), ctorDescriptor: new SyncDescriptor(TestRuntimeView) }]);
+	const context = resources.add(new ContextKeyService());
+	const enabled = context.createKey<boolean>('test.preview.enabled', false);
+	const descriptors = resources.add(new ViewDescriptorService({ registry }, context));
+	const services = resources.add(createTestComponentServices());
+	services.registerInstance(IContextKeyService, context);
+	services.registerInstance(IViewDescriptorService, descriptors);
+	services.registerInstance(PanelLocalizationService, { whenReady: Promise.resolve(), translate: (_bundle, _key, fallback) => fallback });
+	const commands = resources.add(new CommandService(services));
+	services.registerInstance(IMenuService, new MenuService(commands, context));
+	services.registerInstance(IContextMenuService, { contextMenuStyle: 'custom', showContextMenu() { }, hideContextMenu() { }, onDidShowContextMenu: BaseEvent.None, onDidHideContextMenu: BaseEvent.None });
+	const panel = resources.add(services.createInstance(PanelPart, browserEnvironment.window.document.body));
+	const tabs = () => [...panel.compositeBar.domNode.querySelectorAll<HTMLElement>('[role="tab"]')].map(tab => tab.dataset.actionId);
+	const model = descriptors.getViewContainerModel(previewId);
+	const baseTabs = tabs();
+	const fallback = panel.getCompositeIdToRestore();
+	const activeTabs = descriptors.getViewContainers(ViewContainerLocation.Panel).map(container => container.id);
+	assert.equal(baseTabs.includes(previewId), false);
+	services.get(IStorageService).store('workbench.panel.activeViewContainer', previewId, StorageScope.WORKSPACE, StorageTarget.MACHINE);
+	assert.deepEqual({ tabs: tabs(), restore: panel.getCompositeIdToRestore() }, { tabs: baseTabs, restore: fallback });
+	for (let session = 0; session < 2; session++) {
+		enabled.set(true);
+		assert.deepEqual({ tabs: tabs(), visible: model.visibleViewDescriptors.map(view => view.id), restore: panel.getCompositeIdToRestore() }, {
+			tabs: activeTabs, visible: ['test.preview.view'], restore: previewId,
+		});
+		panel.compositeBar.setActiveComposite(previewId);
+		enabled.set(false);
+		assert.deepEqual({ tabs: tabs(), restore: panel.getCompositeIdToRestore() }, { tabs: baseTabs, restore: fallback });
+	}
+});
+
 test("CompositeBar moves non-fitting label tabs into its overflow menu", () => {
 	const dom = new JSDOM("<!doctype html><body></body>");
 	const disposables = new DisposableStore();
@@ -2326,6 +2364,8 @@ test('Pane composite service reveals retained Parts and publishes visibility cha
 	const registry = new WorkbenchViewRegistry();
 	registry.registerStaticViewContainer({ id: 'test.panel.first', title: 'First', location: ViewContainerLocation.Panel });
 	registry.registerStaticViewContainer({ id: 'test.panel.second', title: 'Second', location: ViewContainerLocation.Panel });
+	registry.registerStaticViewContainer({ id: 'test.panel.transient', title: 'Transient', location: ViewContainerLocation.Panel, hideIfEmpty: true });
+	registry.registerStaticViews('test.panel.transient', [{ id: 'test.transient.view', title: 'Transient', when: ContextKeyExpr.has('test.transient.enabled'), ctorDescriptor: new SyncDescriptor(TestRuntimeView) }]);
 	registry.registerStaticViews('test.panel.first', [
 		{ id: 'test.panel.view', title: 'View', canToggleVisibility: true, ctorDescriptor: new SyncDescriptor(TestRuntimeView) },
 		{ id: 'test.panel.hidden', title: 'Hidden', hideByDefault: true, canToggleVisibility: true, ctorDescriptor: new SyncDescriptor(TestRuntimeView) },
@@ -2356,6 +2396,7 @@ test('Pane composite service reveals retained Parts and publishes visibility cha
 	const events: string[] = [];
 	resources.add(panes.onDidPaneCompositeOpen(event => events.push(`open:${event.composite.id}`)));
 	resources.add(panes.onDidPaneCompositeClose(event => events.push(`close:${event.composite.id}`)));
+	assert.equal(await panes.openPaneComposite('test.panel.transient', ViewContainerLocation.Panel), undefined);
 	const first = await panes.openPaneComposite('test.panel.first', ViewContainerLocation.Panel);
 	await panes.openPaneComposite('test.panel.first', ViewContainerLocation.Panel);
 	await panes.openPaneComposite('test.panel.second', ViewContainerLocation.Panel);

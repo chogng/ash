@@ -43,6 +43,8 @@ export interface IViewContainerDescriptor {
 	readonly icon?: Icon;
 	readonly order?: number;
 	readonly isDefault?: boolean;
+	/** Omit the container from navigation while none of its views are active. */
+	readonly hideIfEmpty?: boolean;
 }
 
 /** Static declaration of one view contributed to a container. */
