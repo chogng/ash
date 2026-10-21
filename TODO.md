@@ -32,7 +32,7 @@
 工作区契约见 `docs/desktop-architecture.md` §4.2。
 
 - [ ] **后端前置** · 实现直接保存工作区配置到远端机器；当前 SSH 配置仍保存在 Desktop 本地，内容为远端 URI 根。
-- [ ] **验收** · 补 Windows／Linux 远端多根及 Windows 真实系统文件选择器验证。现有多根 SSH 验证使用 macOS 同机隔离 OpenSSH fixture，远端选择器使用受控返回值；跨机器单独步骤通过不能替代多根场景验证。
+- [ ] **验收** · 补 Windows／Linux 远端多根验证。现有多根 SSH 验证使用 macOS 同机隔离 OpenSSH fixture，远端选择器使用受控返回值；跨机器单独步骤通过不能替代多根场景验证。
 
 ## Desktop 窗口收尾弹窗 · TODO
 
@@ -104,7 +104,7 @@
 
 ## Stanza 编辑器 · TODO
 
-当前 Editor 待办统一维护于本节，完成后移除；不再续写 API 对齐台账或维护声明完成数量。2026-10-21 已按本地 VS Code 的公开契约、当前生产调用方与行为测试完成本机复核，并修正格式化、Inlay、Diff／MultiDiff 接线及当前回归失败；范围、首败与最终证据见[当前交付范围复核](docs/editor-architecture.md#2026-10-21-当前交付范围复核)。这不代表补齐上游全部成员或完成其他平台、物理设备验收。
+当前 Editor 待办统一维护于本节，完成后移除；架构与已有证据范围见[编辑器架构](docs/editor-architecture.md#验证范围)。具体功能契约由对应实现文档维护，不按上游成员数量建立补齐清单。
 
 - [ ] **功能 · 文献检索扩展**：后续实现查询、元数据获取及向文献管理扩展入库的工具／Skill 链路，PDF 阅读复用独立查看器；作者接入遵循上方扩展 SDK 任务。Agent 结构化文档写入仍按下方 Work 文档服务契约另行实施。尚未新增检索代码或迁仓。
 
@@ -133,9 +133,6 @@
 - [ ] **测量** · 量化 receive／assemble／decode／parse／schema／adapter／apply／paint 阶段、队列 bytes／elapsed 与真实 task yield；核对 ACK 跟随消费和跨进程时钟关系。
 - [ ] **复核** · 继续识别大内容按需资源及领域物理取消的具体消费者。文件模型、Chat Changes 摘要及 Code／Cowork Thread／transcript 的在途只读刷新已合并；后者补齐代次隔离、写后补读和落后 bounded 快照的有界重试，两个模型/视图文件 239 项测试通过。GitHub 已取消读取可跳过无消费者 payload 的 schema／Worker 回传；这些结果不代表通用传输取消或所有读取入口均完成。约束见[消费者刷新约束](docs/ash-app-server-data-path-audit.md#已接入的消费者刷新约束)。
 - [ ] **测量** · 把后端结果构造和 writer／producer 等待纳入资源准入测量，评估有界数据／控制输出契约与同连接队头阻塞；不靠降低既有文件上限掩盖成本。
-- [ ] **测量 · 模型调用的不可变工具 schema 复制**：`crates/core/src/services.rs` 的 `ModelToolCatalogSnapshot` 持有 `Vec<ToolDefinition>`；`crates/core/src/turn/executor.rs` 为每个模型步骤复制 definitions，并再次复制给 invocation preparation；`crates/core/src/context/planner.rs` 的 Handoff 预算分支还会克隆包含工具定义的 `ContextInput`，`crates/app-server/src/tool_composition.rs` 的 Code Mode catalog 另有复制。参考 [Codex 共享冻结工具定义](https://github.com/openai/codex/pull/55261)，先量化工具数量、schema 大小、多步骤和 Handoff 场景的分配字节、峰值内存及准备耗时，再决定是否复用不可变切片或按需复制；尚无 Ash 性能收益证据。
-  - 范围与风险：仅处理同一冻结 catalog 的重复副本，保留 Core 的唯一 owner、精确 generation／binder、工具 scope 及每次调用的提示内容；不把动态过滤结果共享为可变缓存，不顺带重构整个上下文系统。
-  - 验收：相同输入下比对最终工具 schema、顺序及预算结果；覆盖配置热更后旧 invocation 仍绑定旧 generation、新 invocation 使用新 catalog，以及 Code Mode 和 Handoff。记录优化前后重复样本；只有复制成本实际下降且上述行为不变才保留改动，局部结果不替代整条 Desktop 性能结论。
 
 ## 发展候选（未排期）
 
