@@ -44,7 +44,7 @@ macOS 现场检查未发现 tgrep；所见多组 `npm exec @playwright/mcp` 的�
 
 ## Rust 函数级增量编译
 
-- [ ] 将已验证的同 crate 跨文件标量图扩展到跨 crate 和非标量 Rust：先闭合准确的 artifact target／feature／cfg 与实例身份，再处理一般语义依赖／布局失效、泛型单态化、引用／堆对象、drop／unwind、间接调用和更多实际注册入口。独占 helper 可直接更新，共享原生调用者与上下文变化退回整模块；路径／Git 依赖及其声明的构建脚本输入已纳入完整 rustc 检查上下文复用，真实 App Server 注册 diff 链路已达数百毫秒；owner 自身 build script 与上述跨 crate／非标量代码生成仍需后续实现。RA MIR 操作数没有公开接口，不能把现有标量链路视为通用 Rust JIT。实现与测量见 [标量 MIR 边界](docs/rust-analysis.md#标量-mir-与本机代码边界)、[跨文件测量](docs/build.md#2026-10-21同-crate-跨文件依赖失效与真实业务函数) 和 [App Server 实测](docs/build.md#2026-10-21路径依赖检查复用与-app-server-真实热更新)。
+- [ ] **后端前置 · 跨 crate／非标量函数热更新**：先闭合准确的 artifact target／feature／cfg 与实例身份，再处理一般语义依赖／布局失效、泛型单态化、引用／堆对象、drop／unwind、间接调用和更多实际注册入口；完整检查上下文复用还缺 owner 自身 build script。当前源码明确拒绝跨 crate 调用，现有同 crate 标量链路不能视为通用 Rust JIT。已完成范围与测量见 [标量 MIR 边界](docs/rust-analysis.md#标量-mir-与本机代码边界) 和 [App Server 实测](docs/build.md#2026-10-21路径依赖检查复用与-app-server-真实热更新)。
 
 - [ ] **验收 · 构建工具 Windows**：在 Windows 复核 `build/builtin/editorClients.test.ts`、`build/desktop/host.test.ts`、`build/desktop/launch/electron.test.ts` 和 `build/testRunners.test.ts` 的原失败目标，并运行完整 `pnpm --dir build run test:prepared`。macOS arm64 已于 2026-10-21 完成整套回归（220 通过、0 失败、16 跳过），并修复本机暴露的 Host 监听、测试夹具和工具定位问题；本机结果不覆盖 Windows、独立开发宿主或 F5 调试环境。命令、首败与最终证据见 [构建验证](docs/build.md#2026-10-21路径依赖检查复用与-app-server-真实热更新)。
 

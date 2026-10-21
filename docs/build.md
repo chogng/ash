@@ -999,6 +999,8 @@ App Server 验证将既有 `zero_based_line_index` 本体暂移到另一个源�
 
 Rust `just verify ash-dev-build --features compiler` 为 22 项并通过 check／全目标 warnings；不启用 compiler feature 的 runtime warnings 也通过。App Server watcher、LiveBuilder 和源码归属定向测试 39 项通过，build TypeScript 为 145 文件无错误；脚本测试 202 项、7 跳过。排队 timer 回归已确认去掉修复时失败。全量 `pnpm --dir build run test:prepared` 首次为 233 项、200 通过、6 失败、27 跳过，另观察到导出 SDK 的 Academy 类型错误、Windows Host watcher 多余失败通知、Electron 生命周期退出等待及符号链接 EPERM。已补 live builder fixture 和后端 Python 清单；当时的定向结果不表示全量通过；本机整套回归补验见下文，Windows 缺口仍在根 TODO。
 
+2026-10-20 在当前 macOS 检出复核上述失败所属的四个文件：`node --test build/builtin/editorClients.test.ts build/desktop/host.test.ts build/desktop/launch/electron.test.ts build/testRunners.test.ts`，22 项全部通过，无失败或跳过，用时 15.94 秒。包括仓库外 Academy SDK 类型检查、Host watch、两种 profile 的 Electron 启停和符号链接 fixture；Electron 使用受控 Node 进程替身，没有启动真实 Electron 窗口。该次未修改实现，也未重跑全量或 Windows；不能单独据此关闭验证缺口。日志为 `/tmp/ash-rust-todo-review-20261020.log`。
+
 2026-10-21，在当前 macOS arm64 检出 `a66ebb32a` 加本轮修改上完成本机整套补验。`pnpm --dir build run test:prepared` 首跑为 236 项、214 通过、6 失败、16 跳过；最终为 220 通过、0 失败、16 跳过，用时 16.04 秒。修复包括：独立 TS 作者测试从 PATH 定位 npm，兼容 pnpm 自带的无 npm Node；恢复测试夹具补齐当前 view catalog；Academic 场景收集遵守 disconnected browser 与 connected editor 的实际目标；CSS 竞态 fixture 用轮询消除原生事件合并对断言的影响。
 
 Host 的真实监听缺口也在本机复现：递归目录事件漏收文件内容写入，延迟到达的初始条目又可能造成空编译。现按原有源码／协议／本地化根预先注册文件监听，以自适应目录时间戳轮询发现增删；同一待编译批次只发布一次未就绪。现有 Host／Electron 回归覆盖生成输入、正常与失败保存、编译中排队、配置修改、缓存排除与进程回收，并补新增文件、修改、删除和失败编译实际读取无效源码的断言。`pnpm build` 正常 Desktop 构建通过；build 146 文件、Renderer 4446 文件、automation 2994 文件类型检查通过。这里只确认行为，不宣称监听性能收益。
