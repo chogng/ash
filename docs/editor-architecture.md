@@ -1569,6 +1569,32 @@ Inlay 四主题截图在 `.build/desktop/playwright/editor-browser-nR3cIa/report
 Windows／Linux、物理 IME、屏幕阅读器，以及编辑器扩展多窗口／远端和 Word 互通不在本机结果内。
 具体未完成工作仅维护根 TODO。
 
+## 2026-10-22 Windows 本机复核
+
+Windows 11 专业版 23H2 x64、Node 24.21.0、Electron 44.4.5，使用当前检出的正常 Desktop／App Server、隔离 profile 与合成文件。验证期间检出从 `c1906879d` 快进到 `b891244d3`，最后到 `b577e6be6`；各批次来源见 `.build/local-todo-windows-20261022/validation.json`。最后重建最新 UI，复跑 Rust 高亮及两种自动保存恢复，覆盖并行合入的配置文件 watch 改动；未替换检出或使用安装版本。
+
+选定的 18 个不同 Code 场景全部通过：真实文件打开／保存、Go to Line、已有与未保存内容的 Workspace Symbols、Smart Select、Rust 本地高亮与异步符号、受控 LSP 补全／诊断／文档格式化与撤销／参数提示／Inlay Hints／linked edits、300,001 行文件编辑保存、手动保存、未保存内容、after-delay 与 on-focus-change 自动保存的重启恢复，以及多行替换后继续编辑。这是分批定向运行的汇总；重启路径实际切到中文，检查恢复的标签、正文、dirty 状态、磁盘内容和备份清理。LSP 使用仓库的受控进程，不代表任意外部语言服务器兼容性验收。
+
+重启首败发生在自动化 fixture 等待 Windows 启动器／Playwright channel 的 close 事件。现从实际 Electron Main 取得 PID，保留原有 10 秒退出断言，在确认真实进程退出后清理旧 fixture，再验证生产 `app.relaunch` 标记并启动替代窗口；没有增加退出等待预算。手动保存与未保存内容两项修正后通过。
+
+两处产品首败均已修复并复验：ViewLines 原先清空带注入文本行的所有高亮，现在通过既有行投影转换 token 坐标，在提示文本两侧及折行中保留源文本样式；普通行和折行两个 Widget 回归及真实 Rust 用例通过。Settings 创建失败源于已注册的 `editor.formatOnType` 遗漏布局，补入已有编辑分类后，布局检查、中文元数据检查和两种自动保存的真实设置入口／保存／重启恢复均通过。未放宽原断言或绕过设置入口。
+
+证据为 `.build/local-todo-windows-20261022/` 中的 `code-{final,rust-current,remaining,restart-fixed,recovery,multiline}.log`、`highlight-fixed{,-build}.log`、`injected-highlight-unit.log`、`settings-{unit-fixed,chinese-fixed,fixed}.log` 及对应结果／报告目录。首败产物保留；最终 `b577e6be6` 的三项 Desktop 补验全部通过，使用正常重建的当前 UI，见 `final-head-{build,code}.log`。Linux 结果见下节；真实扩展签名包的多窗口／远端组合、物理 IME／屏幕阅读器及 Word 互通未在本轮执行。
+
+## 2026-10-22 WSLg Linux 本机复核
+
+在与 [Linux 终端验收](terminal.md#2026-10-22-wslg-linux-本机验收) 相同的检出和 WSLg Desktop 环境中，使用正常构建的 UI 及修复后后端代次 `b30ff0c60086b07a78a4b1c2bf953c958499eafd5150b827a0f6aee1f743e5bd`，单批通过上节同一组 18 个 Code 场景，无失败或跳过。四种文件恢复均通过真实显示语言重启切到中文，并检查正文、dirty 状态、磁盘内容与备份清理；30 万行文件也完成真实编辑保存。现有场景已覆盖本项，未新增重复的编辑器测试。
+
+首批未保存恢复在 45 秒预算内超时。Main 实际约 0.36 秒退出，fixture 随后的关闭却等待 31～39 秒：Linux 控制器继承了 Electron 的 inspector socket 和 Chromium 文件，后台与独立 PTY 宿主继续持有这些非标准描述符。现由既有进程初始化边界将 Linux 非标准描述符设为 close-on-exec，保留当前进程使用及标准输入输出；真实子进程回归确认描述符不再泄漏到后代，4 项进程测试及全目标 warnings 通过。正常重建后，手动保存／未保存恢复分别为 9.1／9.8 秒，两种自动保存恢复为 11.6／10.3 秒；保持原 45 秒预算和全部恢复断言。运行时描述符复查也不再发现继承的 Chromium 文件。
+
+复用已准备的 Linux 产物执行：
+
+```sh
+dbus-run-session -- node test/smoke/run.ts electron-editor-app-server test/smoke/areas/editor/editor-open.spec.ts --grep 'Code |App Server workspace files open' --workers=1 --max-failures=1
+```
+
+证据为 `.build/wsl-linux-code-20261022/` 中的 `validation.json`、`first-desktop-code.log`、`first-report/index.html`、`desktop-code.log`、`report/index.html`、`{inherited,fixed}-fds.json`、`hardening-{warnings,tests}.log` 及 `backend-build.log`。Linux Code 本机回归缺口已从根 TODO 移除，剩余平台组合按原范围保留。
+
 ## 评估与迁移门槛
 
 | 阶段          | 必须证明                                                   |

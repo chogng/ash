@@ -14,10 +14,6 @@
 
 - [ ] **验收** · 在支持 PSEC 的 Windows、WSL2 和独立 Linux／x64 运行当前 SDK pin `f1e8694b`，并补外部局域网／公网 IPv6。命令与验收边界见 [MXC 清单](MXC-TODO.md) 与 [适配器验证](crates/mxc-sandbox/README.md#验证)。
 
-## Terminal · 独立 PTY 宿主跨平台验收
-
-- [ ] **验收 · Windows／Linux**：终端已迁到 profile 独立的 `--terminal-host` 进程，App Server 重启后恢复原 PTY；macOS 的超过 35 秒后端中断、每命令 2 MiB 输出、原 PID 保留、窗口存活连接、关闭／reload／跨窗口转移及 Main 强杀回收均已通过；中英文 6 项清理场景记录的 38 个 PID 无残留，验收见 [.build/terminal-host/cleanup-validation.json](.build/terminal-host/cleanup-validation.json)。补两平台 `just rust-warnings ash-exec-server -p ash-app-server-runtime -p ash-utils-pty`、终端 Rust 测试及 `terminal.spec.ts --grep 'independent terminal host|terminal window lifetime cleanup'` 真实 Desktop 验收；验证后端父进程／Job 退出不结束 PTY 宿主，且窗口／Main 退出时 owner 辅助进程、Shell、任务及子进程全部回收。当前本机 Linux 交叉检查缺 `x86_64-linux-gnu-gcc`，Windows 交叉检查缺 SDK 的 `stdlib.h`，均在 C 依赖构建处停止，不能算通过。日志为 `.build/terminal-host-{linux,windows}-check.log`。
-
 ## Windows 开发实验资源清理
 
 - 保存 Rust 到 App 可用的 15 秒目标尚未达到。2026-10-19 在 `3df4938da` 暂停开发与同步后完成迁移修复的 20 次匹配尝试：空库成功中位数 20.06 → 19.80 秒（5/5 → 5/5），100 条历史会话 22.27 → 21.15 秒（3/5 → 5/5），历史成功样本快 1.12 秒（5.0%）；仍差 4.80／6.15 秒。空库差异很小，不能用成功样本的条件中位数替代总体延迟或失败率结论。原始样本与阶段成本见 `docs/build.md` 完整循环复测及 `.build/perf-win-edit-20261019-migration/q2-summary.json`。
@@ -108,7 +104,7 @@
 
 - [ ] **功能 · 文献检索扩展**：后续实现查询、元数据获取及向文献管理扩展入库的工具／Skill 链路，PDF 阅读复用独立查看器；作者接入遵循上方扩展 SDK 任务。Agent 结构化文档写入仍按下方 Work 文档服务契约另行实施。尚未新增检索代码或迁仓。
 
-- [ ] **验收 · 编辑器扩展平台组合**：补 Windows／Linux 真实 Code 回归，并在真实 Electron 多窗口／远端环境验收 Academy、可选 Reference Manager／PDF Viewer 外置签名包的装载、版本匹配、dirty／恢复及释放，同时验收客户端内置 Code 的编辑与共享宿主生命周期，并补物理 IME、屏幕阅读器、跨页输入以及目标 Word 打开／编辑／再次保存的互通验收。PDF 查看器独立包迁移及本机验证见[扩展说明](extensions/pdf-viewer/README.md)，拆分本身不再列为待办。文献管理的本机验证范围见 [Reference Manager](extensions/reference-manager/README.md)。已完成的迁移、纵向分页、分节、DOCX／页面图像 PDF 与块级审阅的支持范围见 [Academy 包说明](extensions/academic/README.md)，不再列作功能待办；本机结果不能替代尚缺的真实环境证据。
+- [ ] **验收 · 编辑器扩展平台组合**：在真实 Electron 多窗口／远端环境验收 Academy、可选 Reference Manager／PDF Viewer 外置签名包的装载、版本匹配、dirty／恢复及释放，以及客户端内置 Code 与共享宿主生命周期；物理 IME、屏幕阅读器、跨页输入及目标 Word 打开／编辑／再次保存的互通仍需对应环境。PDF 查看器独立包迁移及本机验证见[扩展说明](extensions/pdf-viewer/README.md)，文献管理见 [Reference Manager](extensions/reference-manager/README.md)，Academy 已有支持范围见 [包说明](extensions/academic/README.md)；不重复列为功能待办。
 
 设计边界与功能依赖见[编辑器设计与演进](docs/design/editor-roadmap.md)；具体工作仅维护于本清单，不把整篇设计当作一个未完成任务。
 

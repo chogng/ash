@@ -20,16 +20,16 @@ struct WindowsShell {
 }
 
 fn find_powershell() -> Option<String> {
-    ["pwsh.exe", "powershell.exe"]
-        .into_iter()
-        .find_map(|candidate| {
-            std::process::Command::new(candidate)
-                .args(["-NoLogo", "-NoProfile", "-Command", "exit 0"])
-                .status()
-                .ok()
-                .filter(std::process::ExitStatus::success)
-                .map(|_| candidate.to_string())
-        })
+    // A Store alias can pass a normal process probe but fail direct ConPTY
+    // creation with ACCESS_DENIED. Use the installed system shell for this test.
+    let program = std::path::PathBuf::from(std::env::var_os("SystemRoot")?)
+        .join("System32/WindowsPowerShell/v1.0/powershell.exe");
+    std::process::Command::new(&program)
+        .args(["-NoLogo", "-NoProfile", "-Command", "exit 0"])
+        .status()
+        .ok()
+        .filter(std::process::ExitStatus::success)
+        .and_then(|_| program.to_str().map(str::to_owned))
 }
 
 fn utf8_hex(value: &str) -> String {

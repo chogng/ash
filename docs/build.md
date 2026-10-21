@@ -474,6 +474,8 @@ just dependency-security
 
 `dependency-security` 根据 [Ash 安全策略](../.cargo/deny.toml) 检查整个 workspace、全部 features 和所有目标平台的漏洞、停止维护及撤回版本、第三方许可证和来源。许可证集合与 Git 来源取自 Ash 实际依赖图；Git 依赖必须固定 revision。Ash 自身未发布的专有包不参与第三方 SPDX 许可证检查。重复版本和依赖方向仍由 `dependencies` 负责；安全例外需要逐项审查，不能用整体关闭检查来通过 CI。
 
+2026-10-22 在 Windows 11 23H2 x64、`c1906879d` 的依赖图上，使用锁定的 cargo-deny 0.20.2 执行 `just dependency-security`，advisories、licenses、sources 全部通过；本轮未修改依赖或安全例外。已移除 MXC 清单中旧的 zbus 生态安全门禁阻挡项。原始结果见 `.build/local-todo-windows-20261022/dependency-security-final.log`；这不代表远端 CI 或 PSEC 执行验收通过。
+
 2026-10-10 安全修复将 rustls 的最低版本提高到 0.23.45，并将撤回的 chacha20 0.10.1 更新到 0.10.2。rustls 新版本要求升级 aws-lc-rs、aws-lc-sys 和 rustls-webpki，属于 TLS 修复的必要依赖变化。
 
 依赖整改优先采用兼容发布版或固定 revision 的上游修复，不为消除停止维护告警而复制整个依赖源码树。BM25、Syntect、Ratatui、tokenizers、V8 继续使用发布版；Cargo 与 Bazel 由根 manifest 和 lockfile 选择相同来源。已撤掉 `third_party/rust` 的十二个副本及专用校验、源码准备器和 CI 路径规则。

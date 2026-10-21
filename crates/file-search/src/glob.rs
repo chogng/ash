@@ -1,6 +1,7 @@
 use crate::Service;
 use ash_async_utils::CancellationToken;
 use ash_file_access::Dir;
+use ash_file_access::DirPathError;
 use ignore::WalkBuilder;
 use ignore::overrides::OverrideBuilder;
 use std::cmp::Reverse;
@@ -66,8 +67,19 @@ impl Service {
             ));
         }
         let root = dir.canonical_path();
-        let scope = root.join(&query.scope).canonicalize().map_err(failed)?;
-        if !scope.starts_with(root) || !scope.is_dir() {
+        // Resolve through the directory owner so containment uses the same canonical
+        // spelling on Windows, including paths with a verbatim prefix.
+        let scope = dir
+            .resolve_existing(&query.scope)
+            .map_err(|error| match error {
+                DirPathError::OutsideDir(_) | DirPathError::InvalidRelativePath(_) => {
+                    Error::InvalidInput(error.to_string())
+                }
+                DirPathError::RootUnavailable { .. } | DirPathError::RootNotDirectory(_) => {
+                    failed(error)
+                }
+            })?;
+        if !scope.is_dir() {
             return Err(Error::InvalidInput(
                 "scope must be a directory inside its root".into(),
             ));

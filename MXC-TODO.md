@@ -18,10 +18,6 @@
 
 - [ ] 补另一台局域网设备及公网 IPv6；每个外部端点先完成普通进程可达性对照。受本机代理影响的 DNS 对照不能替代独立公网出口。
 
-## 依赖安全门禁
-
-- [ ] 处理 `zbus_names`、`zvariant`、`zvariant_derive` 的停止维护公告阻挡；2026-10-18 用固定 cargo-deny 0.20.2 重跑仍被 RUSTSEC-2026-0370／0371／0372 阻挡，licenses／sources 通过，未增加 ignore。现有来源包括 keyring 3.6.3／secret-service 的 zbus 4 与 sleep-inhibitor 的 zbus 5；诊断见 `.build/mxc-linux-security-final.log`。
-
 ## 退出兼容 fork 的条件
 
 - [ ] 将仍需要的通用修正按上游贡献／安全流程独立提交或确认官方已有等价实现；Unix PTY 作业控制与 UTF-8 资源构建可单独提交。

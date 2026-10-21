@@ -335,6 +335,37 @@ test('an editor without contributions renders model tokens across model replacem
 	assert.equal(editor.getDomNode().querySelector('.token-string')?.textContent, 'other');
 });
 
+for (const wordWrap of ['off', 'wordWrapColumn'] as const) {
+	test(`injected text preserves source highlighting with wrapping ${wordWrap}`, async () => {
+		using providers = new SyntaxProviderRegistry();
+		using registration = providers.register({
+			id: 'test.injected-tokens', languageIds: ['injected-tokens'],
+			provideTokens: () => ({
+				tokens: [
+					{ range: new Range(1, 1, 1, 4), tokenType: 'keyword', modifiers: [] },
+					{ range: new Range(1, 13, 1, 20), tokenType: 'string', modifiers: [] },
+				]
+			}),
+		});
+		using model = new TextModel('let value = "hello";', { languageId: 'injected-tokens', tokenization: { syntaxProviderRegistry: providers } });
+		await model.tokenization.whenReady(new AbortController().signal);
+		const dom = new JSDOM('<!doctype html><body><main></main></body>');
+		dom.window.HTMLCanvasElement.prototype.getContext = () => null;
+		using cleanup = toDisposable(() => dom.window.close());
+		using editor = createTestCodeEditor({ container: requiredElement(dom.window.document, 'main'), model, contributions: [], minimap: { enabled: false }, wordWrap, wordWrapColumn: 12 });
+		editor.createDecorationsCollection([4, 15].map(offset => ({
+			range: new Range(1, offset + 1, 1, offset + 1),
+			options: { description: 'test hint', after: { content: 'HINT', inlineClassName: 'test-hint' } },
+		})));
+		editor.layout({ width: 400, height: 160 });
+		editor.view.render(true, false);
+		const lines = editor.getDomNode().querySelector('.view-lines')!;
+		assert.equal([...lines.querySelectorAll('.token-keyword')].map(node => node.textContent).join(''), 'let');
+		assert.equal([...lines.querySelectorAll('.token-string')].map(node => node.textContent).join(''), '"hello"');
+		assert.equal([...lines.querySelectorAll('.test-hint')].map(node => node.textContent).join(''), 'HINTHINT');
+	});
+}
+
 test('move selected text actions update text, selection and undo through the editor', async () => {
 	await import('../../../contrib/caretOperations/browser/caretOperations.js');
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
