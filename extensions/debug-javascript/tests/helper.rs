@@ -9,6 +9,76 @@ use std::time::Instant;
 use tokio_tungstenite::tungstenite;
 
 #[test]
+fn bootstrap_leaves_unsupported_inspectors_running() {
+    for host in ["localhost", "0.0.0.0"] {
+        bootstrap_runs_script(Some(host));
+    }
+}
+
+#[test]
+fn bootstrap_resumes_supported_inspectors_when_broker_is_gone() {
+    bootstrap_runs_script(Some("127.0.0.1"));
+    bootstrap_runs_script(None);
+}
+
+fn bootstrap_runs_script(host: Option<&str>) {
+    let broker = TcpListener::bind("127.0.0.1:0").unwrap();
+    let retired = broker.local_addr().unwrap();
+    drop(broker);
+    let mut command = Command::new("node");
+    if let Some(host) = host {
+        command.arg(format!("--inspect={host}:0"));
+    }
+    // Exercise the shipped preload and real helper together, including the
+    // synchronous wait that a timer in the Node event loop cannot release.
+    let mut node = command
+        .arg("--require")
+        .arg(concat!(env!("CARGO_MANIFEST_DIR"), "/src/auto-attach.cjs"))
+        .args(["--eval", "process.stdout.write('script started')"])
+        .env_remove("NODE_OPTIONS")
+        .env_remove("VSCODE_INSPECTOR_OPTIONS")
+        .env("ASH_JS_DEBUG_TOKEN", "retired")
+        .env("ASH_JS_DEBUG_ADDRESS", retired.to_string())
+        .env("ASH_JS_DEBUG_MODE", "enabled")
+        .env(
+            "ASH_JS_DEBUG_HELPER",
+            env!("CARGO_BIN_EXE_ash-debug-javascript"),
+        )
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .unwrap();
+    let deadline = Instant::now() + Duration::from_secs(8);
+    while node.try_wait().unwrap().is_none() {
+        if Instant::now() >= deadline {
+            node.kill().unwrap();
+            let output = node.wait_with_output().unwrap();
+            panic!(
+                "Node bootstrap blocked script startup for {host:?}: {}",
+                String::from_utf8_lossy(&output.stderr)
+            );
+        }
+        std::thread::sleep(Duration::from_millis(10));
+    }
+    let output = node.wait_with_output().unwrap();
+    assert!(
+        output.status.success(),
+        "Node failed for {host:?}: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert_eq!(output.stdout, b"script started");
+    if let Some(host) = host {
+        // If Node failed to bind the requested host, this would not exercise an
+        // existing Inspector and could incorrectly pass the regression test.
+        assert!(
+            String::from_utf8_lossy(&output.stderr)
+                .contains(&format!("Debugger listening on ws://{host}:"))
+        );
+    }
+}
+
+#[test]
 fn dead_broker_resumes_the_exact_waiting_inspector() {
     let inspector = TcpListener::bind("127.0.0.1:0").unwrap();
     let address = inspector.local_addr().unwrap();

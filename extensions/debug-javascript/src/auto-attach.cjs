@@ -9,11 +9,18 @@
 	try {
 		require('node:fs').accessSync(helper, require('node:fs').constants.X_OK);
 		if (!flagged) inspector.open(0, '127.0.0.1');
+		const address = inspector.url();
+		const endpoint = new URL(address);
+		// Match the Rust helper's address contract before entering a wait it must release.
+		if (Buffer.byteLength(address) > 2048 || endpoint.protocol !== 'ws:' || endpoint.hostname !== '127.0.0.1' || endpoint.username || endpoint.password || !endpoint.port) {
+			if (!flagged) inspector.close();
+			return;
+		}
 		const environment = { ...process.env };
 		delete environment.NODE_OPTIONS;
 		const payload = JSON.stringify({
 			token: process.env.ASH_JS_DEBUG_TOKEN, address: process.env.ASH_JS_DEBUG_ADDRESS,
-			inspector: inspector.url(), pid: process.pid, cwd: process.cwd(), script: process.argv[1] || '', flagged
+			inspector: address, pid: process.pid, cwd: process.cwd(), script: process.argv[1] || '', flagged
 		});
 		if (Buffer.byteLength(payload) > 8192) { if (!flagged) inspector.close(); return; }
 		const child = require('node:child_process').spawn(helper, ['--auto-attach'], { env: { ...environment, ASH_JS_DEBUG_REQUEST: payload }, stdio: 'ignore', windowsHide: true });
