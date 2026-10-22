@@ -6,6 +6,28 @@ quick diff, ignore decorations, blame, timeline and multi-file diff policy. Its 
 owns menus, welcome content, colors, settings and English/Chinese messages. Workbench
 owns generic SCM rendering, editor models, undo, dirty state and file persistence.
 
+The SCM snapshot advertises file timeline support through `timeline.label` and an opaque
+`timeline.resetKey` for presentation policy changes. Workbench registers that provider in
+the existing Timeline service and forwards cancellable `timeline` provide/open requests
+through the same SCM registration. Git returns commit entries, historical paths and page
+cursors from the existing file-history backend; optional staged/working entries obey
+`git.timeline.showUncommitted`. History and resource revisions refresh the view, while
+blame and commit-draft updates do not. Removing a provider retires its requests and entry
+commands. Comparisons use immutable revision models with the working file as their
+preferred resource, so the timeline follows that file without pinning the view.
+
+File history has no total-entry cap. Each `git/fileHistory` request supplies a page
+size and an optional opaque continuation, and returns `nextCursor` until the root
+is reached. The cursor binds the worktree, requested file, initial HEAD, log offset
+and historical rename path. Git streams the anchored traversal and discards the
+consumed prefix without retaining it; only the requested page and one lookahead
+record are buffered, and only returned entries need rename metadata. This avoids
+Git's `--follow --skip` rename loss and the merge-parent loss caused by restarting
+at one matching commit. Cancellation or completion drops the request's Git process;
+no process or cursor registry remains between requests. `timeline.pageSize` bounds
+commit entries per request; optional uncommitted entries appear only on the first
+page. The file-history picker also offers Load More instead of truncating history.
+
 The extension uses the public Rust SDK's source-control, command, terminal and client
 contracts. App Server grants backend routes, directory authority and private credential
 services. Its shared `GitRuntime` / `GitService` owns repository facts, status revisions,

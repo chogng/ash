@@ -1355,6 +1355,12 @@ pub struct GitFileHistoryParams {
     pub client: Option<GitClientOptionsDto>,
     pub repository_id: Option<String>,
     pub path: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub limit: Option<usize>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub cursor: Option<String>,
 }
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
@@ -1372,6 +1378,7 @@ pub struct GitFileHistoryItemDto {
 #[serde(rename_all = "camelCase")]
 pub struct GitFileHistoryResult {
     pub items: Vec<GitFileHistoryItemDto>,
+    pub next_cursor: Option<String>,
 }
 
 /// Directory-scoped discovery preferences, leased for the requesting connection.

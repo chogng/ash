@@ -678,10 +678,12 @@ impl GitRuntime {
         &self,
         repository_id: Option<&str>,
         path: &Path,
-    ) -> Result<Vec<ash_git::GitFileHistoryItem>, GitRuntimeError> {
+        limit: std::num::NonZeroUsize,
+        cursor: Option<ash_git::GitFileHistoryCursor>,
+    ) -> Result<ash_git::GitFileHistoryPage, GitRuntimeError> {
         self.repository(repository_id)?
             .service
-            .file_history(path)
+            .file_history(path, limit, cursor)
             .map_err(GitRuntimeError::Service)
     }
 

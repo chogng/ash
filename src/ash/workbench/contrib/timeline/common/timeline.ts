@@ -4,6 +4,7 @@ import type { IDisposable } from '../../../../base/common/lifecycle.js';
 import type { URI } from '../../../../base/common/uri.js';
 import type { Command } from '../../../../editor/common/languages.js';
 import { createDecorator } from '../../../../platform/instantiation/common/instantiation.js';
+import type { Icon } from '../../../../base/common/icon.js';
 
 export const TimelinePaneId = 'timeline';
 
@@ -14,6 +15,7 @@ export interface TimelineItem {
 	readonly label: string;
 	readonly description?: string;
 	readonly tooltip?: string;
+	readonly icon?: Icon;
 	readonly timestamp: number;
 	readonly command?: Command;
 	readonly contextValue?: string;

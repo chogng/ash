@@ -66,6 +66,16 @@ import { IAccountService } from '../../../src/ash/platform/accounts/common/accou
 import { IOpenerService } from '../../../src/ash/platform/opener/common/opener.js';
 import { INotificationService } from '../../../src/ash/platform/notification/common/notification.js';
 import { ICommandService } from '../../../src/ash/platform/commands/common/commands.js';
+import { DeferredPromise } from '../../../src/ash/base/common/async.js';
+import { HoverService, IHoverService } from '../../../src/ash/platform/hover/browser/hoverService.js';
+import { IConfigurationService } from '../../../src/ash/platform/configuration/common/configuration.js';
+import { IContextMenuService } from '../../../src/ash/platform/contextview/browser/contextView.js';
+import { ILogService, NullLoggerService } from '../../../src/ash/platform/log/common/log.js';
+import { IViewsService } from '../../../src/ash/workbench/services/views/common/viewsService.js';
+import { ITimelineService } from '../../../src/ash/workbench/contrib/timeline/common/timeline.js';
+import { TimelineService } from '../../../src/ash/workbench/contrib/timeline/common/timelineService.js';
+import { TimelinePane } from '../../../src/ash/workbench/contrib/timeline/browser/timelinePane.js';
+import '../../../src/ash/workbench/contrib/timeline/browser/timeline.contribution.js';
 
 const params = new URLSearchParams(location.search);
 if (params.get('locale') === 'zh-CN') {
@@ -154,7 +164,55 @@ const replScope = resources.add(replServices.createChild(new ServiceCollection(
 	[IFileService, resources.add(new FileService())], [IUriIdentityService, new SyncDescriptor(UriIdentityService)],
 	[IStorageService, storage], [IAccessibleViewService, { ...Disposable.None, getOpenAriaHint: () => undefined, show: () => false, disableHint: async () => { }, showAccessibleViewHelp() { } }],
 )));
-const pane = resources.add(view === 'empty'
+const timelineRequests: { cursor: number; uri: string; }[] = [];
+const heldTimelineRequests: DeferredPromise<void>[] = [];
+let timelineMode: 'normal' | 'hold' | 'fail' | 'stall' = 'normal';
+let timelineService: TimelineService | undefined;
+function createTimelinePane(): TimelinePane {
+	void configuration.updateValue('timeline.pageSize', params.has('shortPages') ? 1 : 8);
+	const log = resources.add(new NullLoggerService());
+	const contextViews = resources.add(new BrowserContextViewService(root));
+	const scope = resources.add(changesServices.createChild(new ServiceCollection(
+		[IConfigurationService, configuration], [IEditorService, editors],
+		[IFileService, resources.add(new FileService())], [IContextMenuService, contextMenus],
+		[IHoverService, resources.add(new HoverService(configuration, contextViews, contextMenus))],
+		[IAccessibleViewService, replScope.get(IAccessibleViewService)], [ILogService, log],
+		[ICommandService, { executeCommand: async (id: string) => { commands.push(id); } } as ICommandService],
+		[IViewsService, { openView: async () => pane } as unknown as IViewsService],
+	)));
+	timelineService = resources.add(scope.createInstance(TimelineService));
+	scope.registerInstance(ITimelineService, timelineService);
+	resources.add(timelineService.registerTimelineProvider({
+		...Disposable.None, id: 'fixture', label: 'Fixture History', scheme: 'file',
+		async provideTimeline(uri, options) {
+			const offset = Number(options.cursor ?? 0);
+			const mode = timelineMode;
+			timelineMode = 'normal';
+			timelineRequests.push({ cursor: offset, uri: uri.path });
+			if (mode === 'hold') {
+				const pending = new DeferredPromise<void>();
+				heldTimelineRequests.push(pending);
+				await pending.p;
+			}
+			if (mode === 'fail') throw new Error('Fixture continuation failed');
+			if (mode === 'stall') return { source: 'fixture', items: [], paging: { cursor: options.cursor } };
+			const count = Math.min(typeof options.limit === 'number' ? options.limit : 8, 25 - offset);
+			return {
+				source: 'fixture',
+				items: Array.from({ length: count }, (_, index) => ({
+					handle: String(offset + index), source: 'fixture', label: `${uri.path} Entry ${offset + index}`,
+					timestamp: 1000 - offset - index, command: { id: 'fixture.open', title: 'Open Entry' },
+				})),
+				paging: { cursor: offset + count < 25 ? String(offset + count) : undefined },
+			};
+		},
+	}));
+	resources.add(toDisposable(() => {
+		for (const pending of heldTimelineRequests.splice(0)) pending.complete();
+	}));
+	return scope.createInstance(TimelinePane, root, { id: 'fixture.timeline', title: 'Timeline' });
+}
+const pane = resources.add(view === 'timeline' ? createTimelinePane() : view === 'empty'
 	? new EmptyView(root, { id: 'fixture.empty', title: 'Files' }, {
 		pickFolderAndOpen: async () => { throw new Error('Folder opening failed. '.repeat(12)); },
 	} as unknown as import('../../../src/ash/platform/dialogs/common/dialogs.js').IFileDialogService, contextKeys)
@@ -188,7 +246,17 @@ if (view !== 'symphony') {
 }
 panes.layout(180, 280);
 pane.setVisible(true);
-window.viewpaneLayoutIntegration = { commands, submissions, copiedProblems, watchers: () => watchers, dispose: () => resources.dispose() };
+timelineService?.setUri(URI.file('/fixture/file.txt'));
+window.viewpaneLayoutIntegration = {
+	commands, submissions, copiedProblems, watchers: () => watchers, dispose: () => resources.dispose(),
+	timeline: {
+		requests: timelineRequests,
+		setMode: mode => { timelineMode = mode; },
+		release: () => { for (const pending of heldTimelineRequests.splice(0)) pending.complete(); },
+		setFile: path => timelineService!.setUri(URI.file(path)),
+		content: () => (pane as TimelinePane).getAccessibleContent(),
+	},
+};
 window.addEventListener('pagehide', () => resources.dispose(), { once: true });
 document.body.dataset.ready = 'true';
 
@@ -200,6 +268,13 @@ declare global {
 			readonly submissions: readonly { title: string; prompt: string; }[];
 			watchers(): number;
 			dispose(): void;
+			readonly timeline: {
+				readonly requests: readonly { cursor: number; uri: string; }[];
+				setMode(mode: 'normal' | 'hold' | 'fail' | 'stall'): void;
+				release(): void;
+				setFile(path: string): void;
+				content(): string;
+			};
 		};
 	}
 }

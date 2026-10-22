@@ -4,6 +4,40 @@ use super::SerializationAccess;
 use schemars::JsonSchema;
 
 #[test]
+fn git_file_history_pages_roundtrip_and_keep_legacy_first_page_requests() {
+    use crate::protocol::git::GitFileHistoryParams;
+    use crate::protocol::git::GitFileHistoryResult;
+    let first: GitFileHistoryParams =
+        serde_json::from_value(serde_json::json!({"repositoryId":"repo","path":"file.txt"}))
+            .unwrap();
+    assert_eq!(first.limit, None);
+    assert_eq!(first.cursor, None);
+    let value = serde_json::json!({"repositoryId":"repo","path":"file.txt","limit":7,"cursor":"opaque-snapshot"});
+    let next: GitFileHistoryParams = serde_json::from_value(value.clone()).unwrap();
+    assert_eq!(serde_json::to_value(next).unwrap(), value);
+    assert!(
+        serde_json::from_value::<GitFileHistoryParams>(
+            serde_json::json!({"path":"file.txt","limit":-1})
+        )
+        .is_err()
+    );
+    assert!(
+        serde_json::from_value::<GitFileHistoryParams>(
+            serde_json::json!({"path":"file.txt","cursor":42})
+        )
+        .is_err()
+    );
+    let done = GitFileHistoryResult {
+        items: Vec::new(),
+        next_cursor: None,
+    };
+    assert_eq!(
+        serde_json::to_value(done).unwrap(),
+        serde_json::json!({"items":[],"nextCursor":null})
+    );
+}
+
+#[test]
 fn github_managed_settings_is_account_bound_read_only_and_cancellable() {
     use crate::protocol::github::GitHubManagedSettingsParams;
     let definition = super::client_method_definition("github/account/managedSettings").unwrap();

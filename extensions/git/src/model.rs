@@ -763,8 +763,10 @@ pub struct FileHistoryItem {
     pub subject: String,
 }
 #[derive(Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct FileHistory {
     pub items: Vec<FileHistoryItem>,
+    pub next_cursor: Option<String>,
 }
 #[derive(Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]

@@ -1,3 +1,6 @@
+import { TimelineService } from '../../../src/ash/workbench/contrib/timeline/common/timelineService.js';
+import { NullLoggerService } from '../../../src/ash/platform/log/common/log.js';
+import type { IViewsService } from '../../../src/ash/workbench/services/views/common/viewsService.js';
 import { TestNotificationService } from './notificationFixture.js';
 import { CommandService } from '../../../src/ash/workbench/services/commands/common/commandService.js';
 import { NotificationActionRunner } from '../../../src/ash/workbench/browser/parts/notifications/notificationsCommands.js';
@@ -256,7 +259,7 @@ const backend = lifetime.add(new MainThreadExtensionBackend(catalog, {
 		}
 	}
 }, { getConnectionState: async () => 'ready', getSlashCommands: async () => [], onConnectionState: () => ({ dispose() { } }), connectionGeneration: 1 } satisfies IAppServerApi, { subscribe: listener => configurationEvents.event(listener) }, workspace, configuration, lifetime.add(new ProgressService(lifetime.add(new StatusbarService()), backendNotifications, progressCommands)),
-	{ onDidChangeEditors: Event.None } as unknown as IEditorPart,
+	{ groups: [], onDidChangeEditors: Event.None } as unknown as IEditorPart,
 	{ listCodeEditors: () => [], onCodeEditorAdd: Event.None, onCodeEditorRemove: Event.None } as unknown as ICodeEditorService));
 const unavailable = (method: string): never => { throw new Error(`Unexpected remote host request ${method}`); };
 const workerCatalog = { ...catalog, list: async () => { const snapshot = await catalog.list('cached'); return { ...snapshot, extensions: snapshot.extensions.filter(extension => extension.id !== 'ash.git') }; } };
@@ -270,7 +273,8 @@ const commands = { executeCommand: async (id: string, ...args: unknown[]) => inv
 const decorationProviders = new Set<IDecorationsProvider>();
 const scmContexts = lifetime.add(new ContextKeyService());
 services.registerInstance(IContextKeyService, scmContexts);
-const bridge = lifetime.add(new MainThreadSCM(10_000, error => errors.push(String(error)), CommandsRegistry, host, scm, view, commands, resolvers, quickDiff, { registerDecorationsProvider: (provider: IDecorationsProvider) => { decorationProviders.add(provider); return toDisposable(() => { decorationProviders.delete(provider); }); } } as unknown as IDecorationsService, scmContexts));
+const timeline = lifetime.add(new TimelineService(scmContexts, {} as IViewsService, new NullLoggerService()));
+const bridge = lifetime.add(new MainThreadSCM(10_000, error => errors.push(String(error)), CommandsRegistry, host, scm, view, commands, resolvers, quickDiff, { registerDecorationsProvider: (provider: IDecorationsProvider) => { decorationProviders.add(provider); return toDisposable(() => { decorationProviders.delete(provider); }); } } as unknown as IDecorationsService, scmContexts, timeline));
 const hostChanges = host.onDidChange(() => { void host.list().then(snapshot => bridge.update(snapshot)); });
 lifetime.add(toDisposable(() => hostChanges.dispose()));
 let scmUpdateGate: DeferredPromise<void> | undefined;

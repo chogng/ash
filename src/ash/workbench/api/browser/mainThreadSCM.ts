@@ -5,7 +5,7 @@ import { CommandRegistry, ICommandService } from '../../../platform/commands/com
 import { IMultiDiffSourceResolverService } from '../../contrib/multiDiffEditor/browser/multiDiffSourceResolverService.js';
 import { isMultiDiffEditorInput, requireActions } from '../../contrib/multiDiffEditor/browser/multiDiffEditorInput.js';
 import { parseExtensionEditorInput } from './mainThreadEditorInput.js';
-import { Disposable, DisposableMap, DisposableStore, toDisposable } from '../../../base/common/lifecycle.js';
+import { Disposable, DisposableMap, DisposableStore, noneDisposable, toDisposable } from '../../../base/common/lifecycle.js';
 import { Emitter, Event } from '../../../base/common/event.js';
 import { structuralEquals } from '../../../base/common/equals.js';
 import { observableValue } from '../../../base/common/observable.js';
@@ -19,6 +19,7 @@ import { ISCMService, ISCMViewService, type ISCMProvider, type ISCMResourceGroup
 import type { ISCMHistoryProvider, ISCMHistoryItem, ISCMHistoryItemRef, ISCMHistoryItemChange, ISCMHistoryItemDetails, ISCMHistoryItemChangeContents } from '../../contrib/scm/common/history.js';
 import { IQuickDiffService } from '../../contrib/scm/common/quickDiff.js';
 import { IDecorationsService } from '../../services/decorations/common/decorations.js';
+import { ITimelineService } from '../../contrib/timeline/common/timeline.js';
 class SCMRegistration extends Disposable {
 	public revision = 0;
 	public initialization: 'initializing' | 'ready' | 'failed' = 'initializing';
@@ -36,9 +37,10 @@ export class MainThreadSCM extends Disposable {
 	// Bound only this high-volume read path; a command must not wait behind file labels.
 	private readonly decorationQueues = Array.from({ length: 4 }, () => new TaskQueue());
 	private nextDecorationQueue = 0;
+	private timelineSequence = 0;
 	private readonly initializationContexts = new Map<string, IContextKey<string>>();
 	private readonly registrations = this._register(new DisposableMap<string, SCMRegistration>());
-	constructor(private readonly timeout: number, private readonly reportError: (error: unknown) => void, commandRegistry: CommandRegistry,
+	constructor(private readonly timeout: number, private readonly reportError: (error: unknown) => void, private readonly commandRegistry: CommandRegistry,
 		@IExtensionHostApi
 		private readonly api: IExtensionHostApi,
 		@ISCMService
@@ -53,7 +55,8 @@ export class MainThreadSCM extends Disposable {
 		private readonly quickDiff: IQuickDiffService,
 		@IDecorationsService
 		private readonly decorations: IDecorationsService,
-		@IContextKeyService private readonly contextKeys: IContextKeyService) {
+		@IContextKeyService private readonly contextKeys: IContextKeyService,
+		@ITimelineService private readonly timeline: ITimelineService) {
 		super();
 		this._register(commandRegistry.register('workbench.scm.action.retryInitialization', async () => {
 			const registered = new Set([...this.registrations].map(([, owner]) => owner.source.extensionId));
@@ -191,7 +194,7 @@ export class MainThreadSCM extends Disposable {
 			if (!existing && this.scm.getRepository(value.id)) {
 				throw new TypeError('SCM repository identity is already registered');
 			}
-			if (existing && (existing.providerId !== value.providerId || existing.rootUri?.toString() !== value.rootUri || Boolean(existing.historyProvider) !== value.hasHistory || Boolean(existing.mergeProvider) !== value.hasMerge || Boolean(existing.historyProvider?.provideHistoryItemRefs) !== value.hasHistoryItemRefs || Boolean(existing.historyProvider?.resolveHistoryItemRefsCommonAncestor) !== value.hasHistoryMergeBase)) {
+			if (existing && (existing.providerId !== value.providerId || existing.rootUri?.toString() !== value.rootUri || Boolean(existing.historyProvider) !== value.hasHistory || Boolean(existing.mergeProvider) !== value.hasMerge || existing.hasTimeline !== Boolean(value.timeline) || Boolean(existing.historyProvider?.provideHistoryItemRefs) !== value.hasHistoryItemRefs || Boolean(existing.historyProvider?.resolveHistoryItemRefsCommonAncestor) !== value.hasHistoryMergeBase)) {
 				throw new TypeError('SCM provider identity cannot change within a registration');
 			}
 			if (value.multiDiff) {
@@ -219,6 +222,43 @@ export class MainThreadSCM extends Disposable {
 				}
 				provider = owner.providers.set(value.id, new ExtensionSCMProvider(value, (method, payload, signal) => this.invoke(owner, method, { providerId: value.id, ...payload }, signal), this.reportError));
 				provider.add(this.scm.registerSCMProvider(provider));
+				if (value.timeline) {
+					const id = `scm:${source.extensionId}:${value.id}`;
+					const currentProvider = provider;
+					const openCommand = `workbench.scm.timeline.open.${++this.timelineSequence}`;
+					provider.add(this.commandRegistry.register(openCommand, async (_accessor, resource, handle) => {
+						if (typeof resource !== 'string' || typeof handle !== 'string') throw new TypeError('Invalid SCM timeline entry');
+						await currentProvider.call('timeline', { methodName: 'open', resource: string(resource), handle: string(handle) });
+					}));
+					provider.add(this.timeline.registerTimelineProvider({
+						id, label: value.timeline.label, scheme: provider.rootUri?.scheme ?? '*',
+						onDidChange: listener => currentProvider.onDidChangeTimeline(() => listener({ id, uri: undefined, reset: true })),
+						provideTimeline: async (resource, options, token) => {
+							if (currentProvider.rootUri && !extUriBiasedIgnorePathCase.isEqualOrParent(resource, currentProvider.rootUri)) return undefined;
+							const controller = new AbortController();
+							using cancellation = token.onCancellationRequested(() => controller.abort());
+							if (token.isCancellationRequested) controller.abort();
+							const response = await currentProvider.call('timeline', { methodName: 'provide', resource: resource.toString(), options }, controller.signal);
+							if (response === null) return undefined;
+							const result = object(response);
+							return {
+								source: id,
+								items: array(result.items).map(value => {
+									const item = object(value);
+									const handle = string(item.handle);
+									return {
+										source: id, handle, label: string(item.label), timestamp: number(item.timestamp),
+										description: optionalString(item.description), tooltip: optionalString(item.tooltip),
+										icon: item.icon == null ? undefined : Icon.fromId(string(item.icon)),
+										command: { id: openCommand, title: string(item.label), arguments: [resource.toString(), handle] },
+									};
+								}),
+								paging: { cursor: optionalString(result.cursor) },
+							};
+						},
+						...noneDisposable,
+					}));
+				}
 				if (value.multiDiff) {
 					const metadata = value.multiDiff;
 					const prefix = string(metadata.resourcePrefix);
@@ -411,6 +451,7 @@ interface ProviderSnapshot {
 	readonly hasMerge: boolean;
 	readonly inputRevision: number;
 	readonly multiDiff: Record<string, JsonValue> | undefined;
+	readonly timeline: { readonly label: string; readonly resetKey: string | undefined; } | undefined;
 }
 class ExtensionSCMProvider extends Disposable implements ISCMProvider {
 	private readonly changed = this._register(new Emitter<void>());
@@ -418,6 +459,8 @@ class ExtensionSCMProvider extends Disposable implements ISCMProvider {
 	private readonly decorationChanged = this._register(new Emitter<readonly URI[]>());
 	public readonly onDidChangeDecorations = this.decorationChanged.event;
 	private readonly historyChanged = this._register(new Emitter<void>());
+	private readonly timelineChanged = this._register(new Emitter<void>());
+	public readonly onDidChangeTimeline = this.timelineChanged.event;
 	private readonly historyRefsChanged = this._register(new Emitter<readonly ISCMHistoryItem[]>());
 	private readonly historyRef = observableValue<ISCMHistoryItemRef | undefined>(this, undefined);
 	private readonly historyRemoteRef = observableValue<ISCMHistoryItemRef | undefined>(this, undefined);
@@ -459,6 +502,7 @@ class ExtensionSCMProvider extends Disposable implements ISCMProvider {
 		dispose(): void;
 	}): void { this._register(toDisposable(() => value.dispose())); }
 	public get id(): string { return this.snapshot.id; }
+	public get hasTimeline(): boolean { return this.snapshot.timeline !== undefined; }
 	public get selectionRevision(): number { return this.snapshot.selectionRevision; }
 	public get providerId(): string { return this.snapshot.providerId; }
 	public get label(): string { return this.snapshot.label; }
@@ -556,6 +600,7 @@ class ExtensionSCMProvider extends Disposable implements ISCMProvider {
 		const historyChanged = value.historyRevision !== this.snapshot.historyRevision;
 		const historyRefsChanged = value.historyRefsRevision !== this.snapshot.historyRefsRevision;
 		const resourcesChanged = !structuralEquals(value.groups, this.snapshot.groups);
+		const timelineChanged = historyChanged || resourcesChanged || !structuralEquals(value.timeline, this.snapshot.timeline);
 		if (resourcesChanged && this.resourceGroups) {
 			// Reconcile by provider/group/resource identity. Unchanged rows keep their
 			// actions and labels; removed rows leave this owner's reachable snapshot.
@@ -567,6 +612,7 @@ class ExtensionSCMProvider extends Disposable implements ISCMProvider {
 		if (!structuralEquals(this.historyBaseRef.get(), value.historyBaseRef)) { this.historyBaseRef.set(value.historyBaseRef); }
 		this.changed.fire();
 		this.decorationChanged.fire([]);
+		if (timelineChanged) this.timelineChanged.fire();
 		if (historyChanged) { this.historyChanged.fire(); }
 		else if (historyRefsChanged) { this.historyRefsChanged.fire(value.historyRefsItems); }
 	}
@@ -659,7 +705,8 @@ function parseProvider(value: JsonValue): ProviderSnapshot {
 	const historyRefsRevision = entry.historyRefsRevision == null ? 0 : number(entry.historyRefsRevision);
 	if (!Number.isSafeInteger(historyRefsRevision) || historyRefsRevision < 0) { throw new TypeError('Invalid SCM history refs revision'); }
 	const historyRefsItems = entry.historyRefsItems == null ? [] : array(entry.historyRefsItems).map(parseHistoryItem);
-	return { count: entry.count == null ? undefined : number(entry.count), id: string(entry.id), providerId: string(entry.providerId), label: string(entry.label), rootUri: optionalString(entry.rootUri), selected: entry.selected === true, selectionRevision, groups, input, activeRepositoryName: optionalString(entry.activeRepositoryName), statusMessage: string(entry.statusMessage), isBusy: entry.isBusy === true, statusBarCommands, historyRef: entry.historyRef == null ? undefined : parseRef(entry.historyRef), historyRemoteRef: entry.historyRemoteRef == null ? undefined : parseRef(entry.historyRemoteRef), historyBaseRef: entry.historyBaseRef == null ? undefined : parseRef(entry.historyBaseRef), hasHistoryItemRefs: entry.hasHistoryItemRefs === true, hasHistoryMergeBase: entry.hasHistoryMergeBase === true, historyRevision: number(entry.historyRevision), historyRefsRevision, historyRefsItems, hasHistory: entry.hasHistory === true, hasMerge: entry.hasMerge === true, inputRevision: number(entry.inputRevision), multiDiff: entry.multiDiff == null ? undefined : object(entry.multiDiff) };
+	const timeline = entry.timeline == null ? undefined : object(entry.timeline);
+	return { timeline: timeline ? { label: string(timeline.label), resetKey: optionalString(timeline.resetKey) } : undefined, count: entry.count == null ? undefined : number(entry.count), id: string(entry.id), providerId: string(entry.providerId), label: string(entry.label), rootUri: optionalString(entry.rootUri), selected: entry.selected === true, selectionRevision, groups, input, activeRepositoryName: optionalString(entry.activeRepositoryName), statusMessage: string(entry.statusMessage), isBusy: entry.isBusy === true, statusBarCommands, historyRef: entry.historyRef == null ? undefined : parseRef(entry.historyRef), historyRemoteRef: entry.historyRemoteRef == null ? undefined : parseRef(entry.historyRemoteRef), historyBaseRef: entry.historyBaseRef == null ? undefined : parseRef(entry.historyBaseRef), hasHistoryItemRefs: entry.hasHistoryItemRefs === true, hasHistoryMergeBase: entry.hasHistoryMergeBase === true, historyRevision: number(entry.historyRevision), historyRefsRevision, historyRefsItems, hasHistory: entry.hasHistory === true, hasMerge: entry.hasMerge === true, inputRevision: number(entry.inputRevision), multiDiff: entry.multiDiff == null ? undefined : object(entry.multiDiff) };
 }
 function parseHistoryItem(value: JsonValue): ISCMHistoryItem { const entry = object(value); return { id: string(entry.id), parentIds: array(entry.parentIds).map(value => string(value)), subject: string(entry.subject), message: string(entry.message, 512 * 1024), displayId: optionalString(entry.displayId), timestamp: entry.timestamp == null ? undefined : number(entry.timestamp), references: array(entry.references ?? []).map(parseRef), remoteLinks: array(entry.remoteLinks ?? []).map(value => { const link = object(value); return { name: string(link.name), uri: URI.parse(string(link.uri)) }; }) }; }
 function parseHistoryChange(value: JsonValue): ISCMHistoryItemChange { const entry = object(value); return { uri: URI.parse(string(entry.uri)), originalUri: entry.originalUri == null ? undefined : URI.parse(string(entry.originalUri)), modifiedUri: entry.modifiedUri == null ? undefined : URI.parse(string(entry.modifiedUri)), path: string(entry.path), originalPath: optionalString(entry.originalPath), status: string(entry.status), parentId: optionalString(entry.parentId) }; }

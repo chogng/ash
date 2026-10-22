@@ -1,4 +1,5 @@
 use std::ffi::OsString;
+use std::num::NonZeroUsize;
 use std::path::Path;
 use std::path::PathBuf;
 
@@ -461,6 +462,24 @@ pub struct GitFileHistoryItem {
     pub subject: String,
 }
 
+/// A bounded portion of one file traversal, with an opaque continuation for its snapshot.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct GitFileHistoryPage {
+    pub items: Vec<GitFileHistoryItem>,
+    pub next_cursor: Option<GitFileHistoryCursor>,
+}
+
+/// Continues the same log traversal and carries rename state across page boundaries.
+#[derive(Clone, Debug, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct GitFileHistoryCursor {
+    root: PathBuf,
+    requested_path: PathBuf,
+    head: String,
+    skip: usize,
+    historical_path: PathBuf,
+}
+
 impl GitClient {
     pub async fn blame_line(
         &self,
@@ -537,40 +556,141 @@ impl GitClient {
         })
     }
 
+    /// Reads a bounded page in native follow order, retaining the initial HEAD and rename state.
+    /// Starting without a cursor observes the current repository history.
     pub async fn file_history(
         &self,
         repository: &GitRepository,
         path: &Path,
-    ) -> GitResult<Vec<GitFileHistoryItem>> {
+        limit: NonZeroUsize,
+        cursor: Option<GitFileHistoryCursor>,
+    ) -> GitResult<GitFileHistoryPage> {
         crate::GitPathspecSet::new(vec![path.to_path_buf()])?;
-        let output = self
-            .run_query(
+        let mut cursor = if let Some(cursor) = cursor {
+            if cursor.root != repository.worktree_root() || cursor.requested_path != path {
+                return Err(GitError::InvalidConfiguration {
+                    field: "file_history_cursor",
+                    requirement: "must belong to the same worktree and file",
+                });
+            }
+            validate_object_id(&cursor.head)?;
+            crate::GitPathspecSet::new(vec![cursor.historical_path.clone()])?;
+            cursor
+        } else {
+            let head = self
+                .run_query_unchecked(
+                    repository.worktree_root(),
+                    ["rev-parse", "--verify", "--quiet", "HEAD^{commit}"],
+                )
+                .await?;
+            if head.status.code() == Some(1) {
+                return Ok(GitFileHistoryPage {
+                    items: Vec::new(),
+                    next_cursor: None,
+                });
+            }
+            let head = head.require_success()?;
+            let head = String::from_utf8_lossy(&head.stdout).trim().to_owned();
+            validate_object_id(&head)?;
+            GitFileHistoryCursor {
+                root: repository.worktree_root().to_path_buf(),
+                requested_path: path.to_path_buf(),
+                head,
+                skip: 0,
+                historical_path: path.to_path_buf(),
+            }
+        };
+        let count = limit
+            .get()
+            .checked_add(1)
+            .ok_or(GitError::InvalidConfiguration {
+                field: "file_history_limit",
+                requirement: "must leave room for one lookahead record",
+            })?;
+        let traversal_count =
+            cursor
+                .skip
+                .checked_add(count)
+                .ok_or(GitError::InvalidConfiguration {
+                    field: "file_history_cursor",
+                    requirement: "must leave room for the requested page",
+                })?;
+        // Git's --skip loses --follow rename state, and restarting at a matching
+        // commit loses pending merge parents. Stream the same anchored traversal,
+        // discard its consumed prefix, and stop after one page plus lookahead.
+        let mut stream = self
+            .start_query_stream(
                 repository.worktree_root(),
                 [
                     OsString::from("log"),
                     OsString::from("--follow"),
-                    OsString::from("--max-count=100"),
+                    OsString::from(format!("--max-count={traversal_count}")),
                     OsString::from("--format=%H%x00%an%x00%at%x00%ct%x00%s"),
                     OsString::from("-z"),
+                    OsString::from(&cursor.head),
                     OsString::from("--"),
                     path.as_os_str().to_owned(),
                 ],
             )
             .await?;
-        let text = std::str::from_utf8(&output.stdout).map_err(|_| {
-            GitError::invalid_output(&output.command, "history output is not UTF-8")
-        })?;
+        for _ in 0..cursor.skip {
+            if !stream.discard_fields(5).await? {
+                stream.finish().await?;
+                return Err(GitError::InvalidConfiguration {
+                    field: "file_history_cursor",
+                    requirement: "must refer to an existing traversal position",
+                });
+            }
+        }
+        let command = stream.command().to_owned();
+        let mut stream = Some(stream);
+        let mut bytes = Vec::new();
+        for _ in 0..count {
+            let Some(first) = stream
+                .as_mut()
+                .expect("active file history stream")
+                .next_field()
+                .await?
+            else {
+                stream
+                    .take()
+                    .expect("completed file history stream")
+                    .finish()
+                    .await?;
+                break;
+            };
+            bytes.extend_from_slice(&first);
+            bytes.push(0);
+            for _ in 0..4 {
+                let field = stream
+                    .as_mut()
+                    .expect("active file history stream")
+                    .next_field()
+                    .await?
+                    .ok_or_else(|| {
+                        GitError::invalid_output(&command, "incomplete file history record")
+                    })?;
+                bytes.extend_from_slice(&field);
+                bytes.push(0);
+            }
+        }
+        drop(stream);
+        let text = std::str::from_utf8(&bytes)
+            .map_err(|_| GitError::invalid_output(&command, "history output is not UTF-8"))?;
         if text.is_empty() {
-            return Ok(vec![]);
+            return Ok(GitFileHistoryPage {
+                items: Vec::new(),
+                next_cursor: None,
+            });
         }
         let fields = text
             .strip_suffix('\0')
-            .ok_or_else(|| GitError::invalid_output(&output.command, "unterminated file history"))?
+            .ok_or_else(|| GitError::invalid_output(&command, "unterminated file history"))?
             .split('\0')
             .collect::<Vec<_>>();
         if fields.len() % 5 != 0 {
             return Err(GitError::invalid_output(
-                &output.command,
+                &command,
                 "incomplete file history",
             ));
         }
@@ -578,9 +698,9 @@ impl GitClient {
             .chunks_exact(5)
             .map(|record| {
                 let time = |value: &str| {
-                    value.parse::<i64>().map_err(|_| {
-                        GitError::invalid_output(&output.command, "invalid history time")
-                    })
+                    value
+                        .parse::<i64>()
+                        .map_err(|_| GitError::invalid_output(&command, "invalid history time"))
                 };
                 Ok(GitFileHistoryItem {
                     path: path.to_path_buf(),
@@ -592,7 +712,9 @@ impl GitClient {
                 })
             })
             .collect::<GitResult<Vec<_>>>()?;
-        let mut current_path = path.to_path_buf();
+        let has_more = items.len() > limit.get();
+        items.truncate(limit.get());
+        let mut current_path = cursor.historical_path.clone();
         for item in &mut items {
             let (_, changes) = self.commit_changes(repository, &item.object_id).await?;
             item.path = current_path.clone();
@@ -604,6 +726,20 @@ impl GitClient {
                 }
             }
         }
-        Ok(items)
+        // Keep the original HEAD traversal instead of restarting at the next matching
+        // commit: a merge can still have another parent branch pending at that point.
+        cursor.skip =
+            cursor
+                .skip
+                .checked_add(items.len())
+                .ok_or(GitError::InvalidConfiguration {
+                    field: "file_history_cursor",
+                    requirement: "must not overflow the traversal offset",
+                })?;
+        cursor.historical_path = current_path;
+        Ok(GitFileHistoryPage {
+            items,
+            next_cursor: has_more.then_some(cursor),
+        })
     }
 }

@@ -458,13 +458,34 @@ impl<'ctx, C: GitRequestProcessorContext + ?Sized> GitRequestProcessor<'ctx, C> 
         };
         let params: GitFileHistoryParams = decode(value)?;
         let path = paths(vec![params.path])?.remove(0);
-        let items = self
+        let limit = params.limit.unwrap_or(50);
+        if !(1..=1000).contains(&limit)
+            || params
+                .cursor
+                .as_ref()
+                .is_some_and(|cursor| cursor.len() > 32768)
+        {
+            return Err(RpcError::new(-32602, AppServerErrorName::InvalidParams));
+        }
+        let cursor = params
+            .cursor
+            .as_deref()
+            .map(serde_json::from_str::<ash_git::GitFileHistoryCursor>)
+            .transpose()
+            .map_err(|_| RpcError::new(-32602, AppServerErrorName::InvalidParams))?;
+        let page = self
             .context
             .git_runtime_service()?
-            .file_history_for(params.repository_id.as_deref(), &path)
+            .file_history_for(
+                params.repository_id.as_deref(),
+                &path,
+                NonZeroUsize::new(limit).expect("validated file history page size"),
+                cursor,
+            )
             .map_err(git_error)?;
         result(&GitFileHistoryResult {
-            items: items
+            items: page
+                .items
                 .into_iter()
                 .map(|item| {
                     Ok(GitFileHistoryItemDto {
@@ -477,6 +498,11 @@ impl<'ctx, C: GitRequestProcessorContext + ?Sized> GitRequestProcessor<'ctx, C> 
                     })
                 })
                 .collect::<Result<Vec<_>, RpcError>>()?,
+            next_cursor: page
+                .next_cursor
+                .map(|cursor| serde_json::to_string(&cursor))
+                .transpose()
+                .map_err(|_| RpcError::new(-32061, AppServerErrorName::GitOperationFailed))?,
         })
     }
 

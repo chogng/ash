@@ -633,9 +633,16 @@ impl Api {
         &self,
         repository: &Repository,
         path: &RepoPath,
+        limit: usize,
+        cursor: Option<&str>,
         token: &CancellationToken,
     ) -> Result<model::FileHistory, ExtensionError> {
-        decode(self.repository_request(repository, "fileHistory", json!({"path":path}), token)?)
+        decode(self.repository_request(
+            repository,
+            "fileHistory",
+            json!({"path":path,"limit":limit,"cursor":cursor}),
+            token,
+        )?)
     }
     pub fn conflict_file(
         &self,

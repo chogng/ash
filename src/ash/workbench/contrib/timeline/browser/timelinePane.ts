@@ -1,6 +1,8 @@
 import { listRowHeight } from '../../../../base/common/uiSizes.js';
 import './media/timelinePane.css';
 import { h } from '../../../../base/browser/dom.js';
+import { observeIntersection } from '../../../../base/browser/observer.js';
+import { appendIcon } from '../../../../base/browser/ui/lxicons/lxicon.js';
 import { CancellationTokenSource } from '../../../../base/common/cancellation.js';
 import { isCancellationError } from '../../../../base/common/errors.js';
 import { DisposableMap, DisposableStore, toDisposable } from '../../../../base/common/lifecycle.js';
@@ -41,12 +43,12 @@ export class TimelinePane extends ViewPane {
 	private readonly rows = this._register(new DisposableStore());
 	private readonly pending = this._register(new DisposableMap<string, DisposableStore>());
 	private readonly timelines = new Map<string, Timeline>();
+	private readonly failedSources = new Set<string>();
 	private readonly excludedSources = new Set<string>();
 	private readonly toolbar: WorkbenchToolBar;
 	private uri: URI | undefined;
 	private pinned = false;
 	private generation = 0;
-	private failed = false;
 
 	constructor(
 		container: HTMLElement,
@@ -77,7 +79,7 @@ export class TimelinePane extends ViewPane {
 		this.tree = this._register(new WorkbenchObjectTree<TimelineRow>(this.contentElement, {
 			configurationService: configuration,
 			modelOptions: { identityProvider: { getId: row => row.id } },
-			keyboardNavigationLabelProvider: { getKeyboardNavigationLabel: row => row.item?.label ?? localize('timeline.loadMore', 'Load More') },
+			keyboardNavigationLabelProvider: { getKeyboardNavigationLabel: row => row.item?.label ?? this.loadMoreLabel(row.source) },
 			onWillRender: () => this.rows.clear(),
 			renderElement: row => this.renderRow(row),
 		}));
@@ -126,7 +128,8 @@ export class TimelinePane extends ViewPane {
 		this.generation++;
 		this.pending.clearAndDisposeAll();
 		this.timelines.clear();
-		this.failed = false;
+		this.failedSources.clear();
+		this.tree.scrollTop = 0;
 		if (!this.pinned) this.uri = this.activeUri();
 		if (this.isBodyVisible() && this.uri) {
 			for (const source of this.timeline.getSources()) {
@@ -150,26 +153,34 @@ export class TimelinePane extends ViewPane {
 	private async load(source: string, append: boolean): Promise<void> {
 		const uri = this.uri;
 		if (!uri || this.pending.has(source) || !this.isBodyVisible()) return;
+		const previous = this.timelines.get(source);
+		if (append && previous?.paging?.cursor === undefined) return;
 		const generation = this.generation;
 		const lifetime = new DisposableStore();
 		const token = new CancellationTokenSource();
 		lifetime.add(toDisposable(() => token.dispose(true)));
 		this.pending.set(source, lifetime);
+		this.failedSources.delete(source);
 		this.render();
 		try {
-			const previous = this.timelines.get(source);
 			const pageSize = this.configuration.getValue<number | null>('timeline.pageSize');
 			const request = this.timeline.getTimeline(source, uri, { cursor: append ? previous?.paging?.cursor : undefined, limit: pageSize ?? Math.max(1, Math.ceil(this.contentElement.clientHeight / listRowHeight)), cacheResults: true, resetCache: !append }, token);
 			const result = await request?.result;
 			if (this.isDisposed || generation !== this.generation || this.pending.get(source) !== lifetime || token.token.isCancellationRequested) return;
 			if (result) {
 				const items = new Map((append ? previous?.items ?? [] : []).map(item => [item.handle, item]));
+				// A failed or stalled continuation must wait for an explicit retry, not loop while visible.
+				if (append && result.paging?.cursor === previous?.paging?.cursor && result.items.every(item => items.has(item.handle))) {
+					throw new Error('Timeline provider did not advance pagination');
+				}
 				for (const item of result.items) items.set(item.handle, item);
 				this.timelines.set(source, { ...result, items: [...items.values()] });
+			} else if (append) {
+				this.failedSources.add(source);
 			}
 		} catch (error) {
 			if (generation === this.generation && !token.token.isCancellationRequested && !isCancellationError(error)) {
-				this.failed = true;
+				this.failedSources.add(source);
 				this.log.error('timeline', 'Could not load timeline entries', error);
 			}
 		} finally {
@@ -181,7 +192,8 @@ export class TimelinePane extends ViewPane {
 	}
 
 	private items(): TimelineRow[] {
-		return [...this.timelines.values()].flatMap(timeline => timeline.items.map(item => ({ id: `item:${item.source.length}:${item.source}${item.handle}`, source: item.source, item }))).sort((a, b) => b.item.timestamp - a.item.timestamp || a.id.localeCompare(b.id));
+		// Preserve each provider's order when timestamps tie; Git records commit times in seconds.
+		return [...this.timelines.values()].flatMap(timeline => timeline.items.map(item => ({ id: `item:${item.source.length}:${item.source}${item.handle}`, source: item.source, item }))).sort((a, b) => b.item.timestamp - a.item.timestamp || a.source.localeCompare(b.source));
 	}
 
 	private render(): void {
@@ -198,23 +210,38 @@ export class TimelinePane extends ViewPane {
 		this.resourceDomNode.textContent = this.uri ? basename(this.uri) : '';
 		if (this.pending.size > 0) this.messageDomNode.textContent = localize('timeline.loading', 'Loading timeline…');
 		else if (!this.uri) this.messageDomNode.textContent = localize('timeline.noFile', 'Select a file to view its timeline.');
-		else if (this.failed) this.messageDomNode.textContent = localize('timeline.failed', 'Could not load timeline entries.');
+		else if (this.failedSources.size > 0) this.messageDomNode.textContent = localize('timeline.failed', 'Could not load timeline entries.');
 		else this.messageDomNode.textContent = localize('timeline.empty', 'No timeline information was provided.');
 	}
 
 	private renderRow(row: TimelineRow): HTMLElement {
 		const content = h(this.contentElement.ownerDocument, 'span');
 		content.className = 'ash-timeline-row';
+		if (row.item?.icon) appendIcon(row.item.icon, content);
 		const label = h(content.ownerDocument, 'span');
 		label.className = 'ash-timeline-label';
-		label.textContent = row.item?.label ?? localize('timeline.loadMore', 'Load More');
+		label.textContent = row.item?.label ?? this.loadMoreLabel(row.source);
 		content.append(label);
 		const description = h(content.ownerDocument, 'span');
 		description.className = 'ash-timeline-description';
 		description.textContent = row.item?.description ?? this.timeline.getSources().find(source => source.id === row.source)?.label ?? '';
 		content.append(description);
 		this.rows.add(this.hover.setupDelayedHover(content, { content: row.item?.tooltip ?? [label.textContent, description.textContent].join(' — ') }));
+		if (!row.item && !this.pending.has(row.source) && !this.failedSources.has(row.source)) {
+			const generation = this.generation;
+			this.rows.add(observeIntersection(content, entry => {
+				if (generation === this.generation && content.isConnected && entry.isIntersecting) {
+					void this.load(row.source, true);
+				}
+			}, { root: this.tree.element }));
+		}
 		return content;
+	}
+
+	private loadMoreLabel(source: string): string {
+		if (this.pending.has(source)) return localize('timeline.loadingMore', 'Loading…');
+		if (this.failedSources.has(source)) return localize('timeline.retry', 'Retry Loading');
+		return localize('timeline.loadMore', 'Load More');
 	}
 
 	private updateAriaLabel(): void {

@@ -1,3 +1,4 @@
+use std::num::NonZeroUsize;
 use std::path::Path;
 
 use pretty_assertions::assert_eq;
@@ -5,6 +6,149 @@ use pretty_assertions::assert_eq;
 use crate::GitChangeStatus;
 use crate::GitClient;
 use crate::test_support::TestRepository;
+
+#[tokio::test]
+async fn file_history_pages_complete_history_across_renames_and_head_updates() {
+    #[derive(Debug, Default)]
+    struct Observer(std::sync::atomic::AtomicUsize);
+    impl crate::GitProcessObserver for Observer {
+        fn observe(&self, _: crate::GitProcessTiming) {
+            self.0.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        }
+    }
+    let repository = TestRepository::init();
+    let stable = "stable content for rename detection\n".repeat(30);
+    let mut path = "old.txt";
+    for index in 0..137 {
+        if index == 64 {
+            repository.git(&["mv", "old.txt", "renamed.txt"]);
+            path = "renamed.txt";
+        }
+        repository.write(path, &format!("{stable}version {index}\n"));
+        repository.commit_all(&format!("Version {index}"));
+    }
+    let expected = repository.git(&["log", "--follow", "--format=%H", "--", path]);
+    let observer = std::sync::Arc::new(Observer::default());
+    let client = GitClient::system().with_process_observer(observer.clone());
+    let opened = client.open_repository(repository.root()).await.unwrap();
+    let limit = NonZeroUsize::new(9).unwrap();
+    let before = observer.0.load(std::sync::atomic::Ordering::Relaxed);
+    let first = client
+        .file_history(&opened, Path::new(path), limit, None)
+        .await
+        .unwrap();
+    assert_eq!(first.items.len(), 9);
+    assert!(
+        observer.0.load(std::sync::atomic::Ordering::Relaxed) - before <= 2 * limit.get() + 4,
+        "The first page must not resolve rename metadata for the entire history"
+    );
+    let cursor = first.next_cursor.clone().unwrap();
+    assert!(
+        client
+            .file_history(&opened, Path::new("other.txt"), limit, Some(cursor.clone()))
+            .await
+            .is_err()
+    );
+    let other = TestRepository::init();
+    let other_opened = client.open_repository(other.root()).await.unwrap();
+    assert!(
+        client
+            .file_history(&other_opened, Path::new(path), limit, Some(cursor))
+            .await
+            .is_err()
+    );
+
+    // Continuations belong to the first page's snapshot even when HEAD advances.
+    repository.write(path, &format!("{stable}new HEAD\n"));
+    repository.commit_all("After snapshot");
+    let mut items = first.items;
+    let mut cursor = first.next_cursor;
+    while let Some(next) = cursor {
+        let page = client
+            .file_history(&opened, Path::new(path), limit, Some(next))
+            .await
+            .unwrap();
+        assert!(!page.items.is_empty());
+        assert!(page.items.len() <= limit.get());
+        items.extend(page.items);
+        cursor = page.next_cursor;
+    }
+    assert_eq!(
+        items
+            .iter()
+            .map(|item| item.object_id.as_str())
+            .collect::<Vec<_>>(),
+        expected.lines().collect::<Vec<_>>()
+    );
+    assert_eq!(items.len(), 137);
+    assert_eq!(
+        items
+            .iter()
+            .filter(|item| item.path == Path::new("old.txt"))
+            .count(),
+        64
+    );
+    let refreshed = client
+        .file_history(&opened, Path::new(path), limit, None)
+        .await
+        .unwrap();
+    assert_eq!(refreshed.items[0].subject, "After snapshot");
+}
+
+#[tokio::test]
+async fn file_history_pages_preserve_merge_traversal_and_terminate_at_the_root() {
+    let repository = TestRepository::init();
+    let middle = "middle\n".repeat(20);
+    repository.write("file.txt", &format!("base\n{middle}base\n"));
+    repository.commit_all("Root");
+    repository.git(&["checkout", "-b", "side"]);
+    repository.write("file.txt", &format!("base\n{middle}side\n"));
+    repository.commit_all("Side");
+    repository.git(&["checkout", "main"]);
+    repository.write("file.txt", &format!("main\n{middle}base\n"));
+    repository.commit_all("Main");
+    repository.git(&["merge", "--no-ff", "--no-edit", "side"]);
+    let expected = repository.git(&["log", "--follow", "--format=%H", "--", "file.txt"]);
+    let client = GitClient::system();
+    let opened = client.open_repository(repository.root()).await.unwrap();
+    let mut cursor = None;
+    let mut ids = Vec::new();
+    loop {
+        let page = client
+            .file_history(
+                &opened,
+                Path::new("file.txt"),
+                NonZeroUsize::new(1).unwrap(),
+                cursor,
+            )
+            .await
+            .unwrap();
+        assert_eq!(page.items.len(), 1);
+        ids.push(page.items[0].object_id.clone());
+        cursor = page.next_cursor;
+        if cursor.is_none() {
+            break;
+        }
+    }
+    assert_eq!(
+        ids.iter().map(String::as_str).collect::<Vec<_>>(),
+        expected.lines().collect::<Vec<_>>()
+    );
+    assert!(ids.len() >= 3);
+    let empty = TestRepository::init();
+    let empty_opened = client.open_repository(empty.root()).await.unwrap();
+    let page = client
+        .file_history(
+            &empty_opened,
+            Path::new("untracked.txt"),
+            NonZeroUsize::new(1).unwrap(),
+            None,
+        )
+        .await
+        .unwrap();
+    assert!(page.items.is_empty());
+    assert!(page.next_cursor.is_none());
+}
 
 #[tokio::test]
 async fn commit_details_include_author_message_and_root_statistics() {
@@ -255,17 +399,23 @@ async fn file_history_follows_renames_and_blame_uses_unsaved_contents() {
     let client = GitClient::system();
     let opened = client.open_repository(repository.root()).await.unwrap();
     let items = client
-        .file_history(&opened, std::path::Path::new("renamed.txt"))
+        .file_history(
+            &opened,
+            std::path::Path::new("renamed.txt"),
+            std::num::NonZeroUsize::new(50).unwrap(),
+            None,
+        )
         .await
         .unwrap();
     assert_eq!(
         items
+            .items
             .iter()
             .map(|item| item.path.to_str().unwrap())
             .collect::<Vec<_>>(),
         ["renamed.txt", "old.txt"]
     );
-    assert_eq!(items[1].object_id, initial);
+    assert_eq!(items.items[1].object_id, initial);
     let line = client
         .blame_line(&opened, std::path::Path::new("renamed.txt"), 1, false, None)
         .await

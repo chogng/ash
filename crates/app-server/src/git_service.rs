@@ -483,27 +483,29 @@ impl GitService {
     pub(crate) fn file_history(
         &self,
         path: &Path,
-    ) -> Result<Vec<ash_git::GitFileHistoryItem>, GitServiceError> {
+        limit: NonZeroUsize,
+        cursor: Option<ash_git::GitFileHistoryCursor>,
+    ) -> Result<ash_git::GitFileHistoryPage, GitServiceError> {
         self.ensure_readable()?;
         let runtime = &self.runtime;
         run(runtime, async {
             let repository = self.open_repository().await?;
             let path = self.repository_prefix(&repository)?.join(path);
             {
-                let mut items = self
+                let mut page = self
                     .client()
-                    .file_history(&repository, &path)
+                    .file_history(&repository, &path, limit, cursor)
                     .await
                     .map_err(GitServiceError::Git)?;
                 let prefix = self.repository_prefix(&repository)?;
-                for item in &mut items {
+                for item in &mut page.items {
                     item.path = item
                         .path
                         .strip_prefix(&prefix)
                         .map_err(|_| GitServiceError::Boundary)?
                         .to_path_buf();
                 }
-                Ok(items)
+                Ok(page)
             }
         })
     }

@@ -9,6 +9,7 @@ pub use interaction::run_helper;
 mod model;
 mod paths;
 mod scm;
+mod timeline;
 
 use api::Api;
 use api::decode;
@@ -861,6 +862,7 @@ impl GitRuntime {
                 token,
             ),
             "history" => self.history(&repository, &payload, token),
+            "timeline" => self.file_timeline(&repository, &payload, token),
             "merge" => self.merge(&repository, &payload, token),
             "open" => self.open_change(&repository, &payload, token),
             "quickDiff" => self.quick_diff(&repository, &payload, token),

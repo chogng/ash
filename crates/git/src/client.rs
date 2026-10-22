@@ -1315,6 +1315,25 @@ impl GitQueryStream {
         self.next_delimited(0).await
     }
 
+    /// Discards a complete record without charging it to the retained page's output budget.
+    /// Each field still has the normal size and read-time limits.
+    pub(crate) async fn discard_fields(&mut self, count: usize) -> GitResult<bool> {
+        for index in 0..count {
+            if self.next_field().await?.is_none() {
+                return if index == 0 {
+                    Ok(false)
+                } else {
+                    Err(GitError::invalid_output(
+                        &self.command,
+                        "stream ended inside a skipped record",
+                    ))
+                };
+            }
+            self.bytes_read = 0;
+        }
+        Ok(true)
+    }
+
     async fn next_delimited(&mut self, delimiter: u8) -> GitResult<Option<Vec<u8>>> {
         let mut field = Vec::new();
         loop {

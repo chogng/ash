@@ -9,7 +9,7 @@ import type { ServicesAccessor } from '../../../../platform/instantiation/common
 import { DisposableStore } from '../../../../base/common/lifecycle.js';
 import { DeferredPromise } from '../../../../base/common/async.js';
 import { URI } from '../../../../base/common/uri.js';
-import { CancellationToken } from '../../../../base/common/cancellation.js';
+import { CancellationToken, CancellationTokenSource } from '../../../../base/common/cancellation.js';
 import type { ICommandService } from '../../../../platform/commands/common/commands.js';
 import type { ExtensionHostFleetSnapshot, IExtensionHostApi, JsonValue } from '../../../../platform/agentHost/common/extensionHostApi.js';
 import { SCMService } from '../../../contrib/scm/common/scmService.js';
@@ -18,6 +18,9 @@ import { QuickDiffService } from '../../../contrib/scm/common/quickDiffService.j
 import type { IDecorationsProvider, IDecorationsService } from '../../../services/decorations/common/decorations.js';
 import { MultiDiffSourceResolverService } from '../../../contrib/multiDiffEditor/browser/multiDiffSourceResolverService.js';
 import { MainThreadSCM } from '../../browser/mainThreadSCM.js';
+import { TimelineService } from '../../../contrib/timeline/common/timelineService.js';
+import { NullLoggerService } from '../../../../platform/log/common/log.js';
+import type { IViewsService } from '../../../services/views/common/viewsService.js';
 
 const source = { extensionId: 'ash.git', activationGeneration: 1, incarnation: 1 };
 const provider = (value = 'draft', inputRevision = 0): JsonValue => ({ id: 'repo', providerId: 'git', label: 'Repository', rootUri: 'file:///workspace', selected: true, groups: [], input: { value, enabled: true, canAccept: true, placeholder: 'Message', buttonLabel: 'Commit', buttonTooltip: 'Commit changes' }, inputRevision, statusBarCommands: [], activeRepositoryName: 'main', statusMessage: '', isBusy: false, historyRevision: 1, hasHistory: false, hasMerge: false, multiDiff: null });
@@ -32,10 +35,75 @@ function fixture(invoke: IExtensionHostApi['invoke'], providers?: JsonValue[], r
 	const decorations = { registerDecorationsProvider(value: IDecorationsProvider) { decorationProviders.add(value); return { dispose: () => decorationProviders.delete(value) }; } } as unknown as IDecorationsService;
 	const contexts = lifetime.add(new ContextKeyService());
 	const commands = new CommandRegistry();
-	const bridge = lifetime.add(new MainThreadSCM(10_000, error => errors.push(error), commands, { invoke, reconcile } as IExtensionHostApi, scm, view, {} as ICommandService, resolvers, quickDiff, decorations, contexts));
+	const timeline = lifetime.add(new TimelineService(contexts, {} as IViewsService, new NullLoggerService()));
+	const bridge = lifetime.add(new MainThreadSCM(10_000, error => errors.push(error), commands, { invoke, reconcile } as IExtensionHostApi, scm, view, {} as ICommandService, resolvers, quickDiff, decorations, contexts, timeline));
 	bridge.update(fleet(providers));
-	return { lifetime, scm, view, bridge, decorationProviders, errors, contexts, commands };
+	return { lifetime, scm, view, bridge, decorationProviders, errors, contexts, commands, timeline };
 }
+
+test('SCM file timeline bridges scoped history, paging, open commands and meaningful changes', async () => {
+	const calls: JsonValue[] = [];
+	const snapshot: Record<string, JsonValue> = { ...provider() as Record<string, JsonValue>, timeline: { label: 'Git History', resetKey: 'committed' } };
+	const value = fixture(async request => {
+		calls.push(JSON.parse(JSON.stringify(request.payload)));
+		if ((request.payload as Record<string, JsonValue>).methodName === 'provide') {
+			return { items: [{ handle: 'commit:old-name', label: 'Rename file', description: 'Author, yesterday', timestamp: 1000, icon: 'git-commit' }], cursor: 'commit:old-name' };
+		}
+		return null;
+	}, [snapshot]);
+	using cleanup = value.lifetime;
+	const id = 'scm:ash.git:repo';
+	const uri = URI.file('/workspace/new-name.txt');
+	assert.deepEqual(value.timeline.getSources(), [{ id, label: 'Git History' }]);
+	using token = new CancellationTokenSource();
+	const result = await value.timeline.getTimeline(id, uri, { limit: 1 }, token)!.result;
+	assert.equal(result?.items[0]?.label, 'Rename file');
+	assert.equal(result?.items[0]?.icon?.id, 'git-commit');
+	assert.equal(result?.paging?.cursor, 'commit:old-name');
+	assert.deepEqual(calls.at(-1), { method: 'timeline', providerId: 'repo', methodName: 'provide', resource: uri.toString(), options: { limit: 1 } });
+	const command = result!.items[0]!.command!;
+	await value.commands.getCommand(command.id)!({} as ServicesAccessor, ...command.arguments!);
+	assert.deepEqual(calls.at(-1), { method: 'timeline', providerId: 'repo', methodName: 'open', resource: uri.toString(), handle: 'commit:old-name' });
+	const count = calls.length;
+	assert.equal(await value.timeline.getTimeline(id, URI.file('/other/file.txt'), {}, token)!.result, undefined);
+	assert.equal(calls.length, count, 'Out-of-scope resources never enter the extension');
+	let changes = 0;
+	using listener = value.timeline.onDidChangeTimeline(() => changes++);
+	value.bridge.set(source, 'ash.scm', 2, [{ ...snapshot, inputRevision: 1, input: { ...(snapshot.input as Record<string, JsonValue>), value: 'typing' } }]);
+	assert.equal(changes, 0, 'Commit drafts and blame updates do not reload file history');
+	value.bridge.set(source, 'ash.scm', 3, [{ ...snapshot, historyRevision: 2 }]);
+	assert.equal(changes, 1);
+	value.bridge.set(source, 'ash.scm', 4, [{ ...snapshot, historyRevision: 2, timeline: { label: 'Git History', resetKey: 'authored' } }]);
+	assert.equal(changes, 2, 'Timeline policy changes invalidate the visible history');
+	value.bridge.set(source, 'ash.scm', 5, []);
+	assert.deepEqual(value.timeline.getSources(), []);
+	assert.equal(value.commands.getCommand(command.id), undefined, 'A retired entry loses its command');
+	value.bridge.set(source, 'ash.scm', 6, [snapshot]);
+	assert.equal(value.commands.getCommand(command.id), undefined, 'Reusing a repository ID cannot restore a stale entry');
+});
+
+test('SCM retiring a timeline provider cancels its in-flight extension request', async () => {
+	const started = new DeferredPromise<void>();
+	const pending = new DeferredPromise<JsonValue>();
+	let signal: AbortSignal | undefined;
+	const snapshot: Record<string, JsonValue> = { ...provider() as Record<string, JsonValue>, timeline: { label: 'Git History' } };
+	const value = fixture(async (request, requestSignal) => {
+		if ((request.payload as Record<string, JsonValue>).methodName === 'provide') {
+			signal = requestSignal;
+			started.complete();
+			return pending.p;
+		}
+		return null;
+	}, [snapshot]);
+	using cleanup = value.lifetime;
+	using token = new CancellationTokenSource();
+	const request = value.timeline.getTimeline('scm:ash.git:repo', URI.file('/workspace/file.txt'), {}, token)!;
+	await started.p;
+	value.bridge.set(source, 'ash.scm', 2, []);
+	assert.equal(signal?.aborted, true);
+	assert.equal(await request.result, undefined);
+	pending.complete({ items: [{ handle: 'late', label: 'Stale', timestamp: 1 }] });
+});
 
 test('SCM resource groups survive input-only snapshots and retire changed resources', () => {
 	const snapshot: Record<string, JsonValue> = { ...(provider() as Record<string, JsonValue>), groups: [{ id: 'changes', label: 'Changes', actions: [], resources: [] }] };

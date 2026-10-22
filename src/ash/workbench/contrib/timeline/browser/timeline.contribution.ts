@@ -49,7 +49,7 @@ for (const type of [AccessibleViewType.Help, AccessibleViewType.View]) {
 			if (!(view instanceof TimelinePane)) return undefined;
 			const focused = view.element.ownerDocument.activeElement;
 			return new AccessibleContentProvider(AccessibleViewProviderId.Timeline, { type },
-				() => type === AccessibleViewType.Help ? localize('timeline.help', 'Timeline\nUse the arrow keys to move through file history. Press Enter to open an entry or load more entries. Local history entries compare the saved version with the current file. Use the view actions to refresh, pin the current file, or choose sources. Press Alt+F2 to read the history. Use Move View in the Command Palette to move this view, and Reset View Locations to restore the default layout.') : view.getAccessibleContent(),
+				() => type === AccessibleViewType.Help ? localize('timeline.help', 'Timeline\nUse the arrow keys to move through file history. Press Enter to open an entry. More entries load automatically when you scroll to the end. If loading fails, press Enter on Retry Loading to try again. Git entries compare a commit with its parent. Local history entries compare the saved version with the current file. Use the view actions to refresh, pin the current file, or choose sources. Press Alt+F2 to read the history. Use Move View in the Command Palette to move this view, and Reset View Locations to restore the default layout.') : view.getAccessibleContent(),
 				() => { if (focused instanceof HTMLElement && focused.isConnected) focused.focus(); else view.focus(); },
 				AccessibilityVerbositySettingId.Timeline);
 		},
