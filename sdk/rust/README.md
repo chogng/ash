@@ -26,6 +26,10 @@ Rust SDK 是[统一后端扩展接口](../../docs/editor-extensions.md#统一后
 显式停用和输入 EOF 都先取消调用，并释放 `Client` / `Services` 的等待者，再等待扩展任务退出。
 已经发送的客户端请求保留有界关联以接收迟到回包；共享 token 的并发请求按 call ID 顺序发送。
 
+调用截止时间在 SDK 请求边界转换为平台 `SystemTime`；超出可表示范围时返回
+`InvalidRequest`，不执行回调，进程继续处理后续请求。可表示但已过期的时间仍返回
+`DeadlineExceeded`，不将溢出时间截断或改成无限等待。
+
 `BackgroundClient::wait_for_backend_state` 按已有 sequence 等待获授权的通知，通知到达即返回，
 空闲时仍有有界 tick；关闭 activation 会中断等待。原 `backend_state` 保留立即读取的行为，
 没有订阅要求的调用无需携带可选的 `waitForChange` 字段。

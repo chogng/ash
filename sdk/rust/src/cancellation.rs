@@ -29,15 +29,21 @@ impl CancellationToken {
     pub(crate) fn new(
         deadline_unix_millis: u64,
         context: external_ext_protocol::RequestContext,
-    ) -> Self {
-        Self {
+    ) -> Result<Self, ExtensionError> {
+        // Wire timestamps span u64, but the platform's SystemTime range can be smaller.
+        let deadline = UNIX_EPOCH
+            .checked_add(Duration::from_millis(deadline_unix_millis))
+            .ok_or_else(|| {
+                ExtensionError::invalid_request("invocation deadline is outside the platform range")
+            })?;
+        Ok(Self {
             context,
             state: Arc::new(State {
                 reason: Mutex::new(None),
                 changed: Condvar::new(),
             }),
-            deadline: UNIX_EPOCH + Duration::from_millis(deadline_unix_millis),
-        }
+            deadline,
+        })
     }
 
     pub fn is_cancellation_requested(&self) -> bool {

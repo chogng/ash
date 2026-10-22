@@ -423,7 +423,10 @@ impl<E: Extension> Runtime<E> {
             .get(&params.operation)
             .cloned()
             .expect("operation was checked before dispatch");
-        let token = CancellationToken::new(params.deadline_unix_millis, context);
+        let token = match CancellationToken::new(params.deadline_unix_millis, context) {
+            Ok(token) => token,
+            Err(error) => return self.respond(&request, Err(error)),
+        };
         let callback_token = token.clone();
         let writer = self.writer.clone();
         let limits = self.options.protocol;

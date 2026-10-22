@@ -7,6 +7,7 @@ fn token() -> CancellationToken {
         1_900_000_000_000,
         external_ext_protocol::RequestContext::new(1, 1, 1),
     )
+    .unwrap()
 }
 fn session() -> Value {
     json!({"session":{"id":"s1","type":"node","name":"test","configuration":{"type":"node","name":"test","request":"launch"},"workspaceFolder":null}})
