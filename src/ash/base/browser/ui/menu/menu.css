@@ -39,6 +39,12 @@
 	justify-content: flex-start;
 	cursor: default;
 }
+/* Hover-driven focus can inherit :focus-visible from a search field or keyboard navigation. */
+.ash-menu.pointer-navigation
+	> .ash-action-view-item
+	> .ash-button:focus-visible {
+	outline: none;
+}
 .ash-menu .ash-action-view-item.focused > .ash-button {
 	color: var(
 		--ash-menu-style-selection-foreground-color,

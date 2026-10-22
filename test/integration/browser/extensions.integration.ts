@@ -358,6 +358,7 @@ services.registerInstance(IConnectorService, {
 });
 services.registerInstance(ILanguageServerService, {
 	read: async () => ({ revision, configurations: {}, servers: [{ id: 'typescript-language-server', languageIds: ['typescriptreact'] }] }),
+	control: async () => { throw new Error('Process control is outside the extension settings fixture'); },
 	configure: async (id, config, expectedRevision) => { requests.push(['configure', id, config, expectedRevision]); if (expectedRevision !== revision) { throw new Error('Configuration changed. Refresh before saving.'); } revision++; },
 	removeConfiguration: async () => { },
 });

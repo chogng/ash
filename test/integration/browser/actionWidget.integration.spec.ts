@@ -109,3 +109,47 @@ test('switching tabs recomputes the menu width without replacing its owner', asy
 	await page.keyboard.press('ArrowDown');
 	await expect(widget.getByRole('menuitemradio', { name: 'Run' })).toBeFocused();
 });
+
+test('select options and action menu rows share control geometry and retain keyboard focus across themes', async ({ page }) => {
+	await page.goto('/actionWidget.html');
+	await page.evaluate(() => window.ashActionWidgetIntegration.mountSelect());
+	const trigger = page.getByRole('combobox', { name: 'Select mode' });
+	for (const scheme of ['light', 'dark', 'hcDark', 'hcLight'] as const) {
+		await page.evaluate(scheme => window.ashActionWidgetIntegration.theme(scheme), scheme);
+		await page.evaluate(() => window.ashActionWidgetIntegration.show(['Alpha', 'Beta']));
+		const menuRow = page.getByRole('menuitemradio', { name: 'Beta' });
+		await menuRow.hover();
+		await expect(menuRow).toHaveCSS('border-radius', '4px');
+		await expect(menuRow).toHaveCSS('height', '22px');
+		await page.keyboard.press('Escape');
+		await trigger.press('ArrowDown');
+		const before = await trigger.textContent();
+		const alpha = page.getByRole('option', { name: 'Alpha', exact: true });
+		const beta = page.getByRole('option', { name: 'Beta', exact: true });
+		await page.getByRole('option', { name: 'Unavailable', exact: true }).click({ force: true });
+		await expect(trigger).toHaveAttribute('aria-expanded', 'true');
+		await expect(trigger).toHaveText(before!);
+		await page.keyboard.press('Home');
+		await expect(alpha).toBeFocused();
+		await expect(alpha).toHaveCSS('outline-style', 'solid');
+		await page.getByRole('option', { name: 'Unavailable', exact: true }).hover();
+		await expect(alpha).toHaveCSS('outline-style', 'none');
+		await beta.hover();
+		await expect(beta).toHaveCSS('border-radius', '4px');
+		await expect(beta).toHaveCSS('height', '22px');
+		await expect(alpha).toHaveCSS('outline-style', 'none');
+		await expect(beta).toHaveAttribute('aria-selected', scheme === 'light' ? 'false' : 'true');
+		await alpha.press('Shift');
+		await expect(alpha).toHaveCSS('outline-style', 'none');
+		await page.keyboard.press('ArrowUp');
+		await expect(alpha).toBeFocused();
+		await expect(alpha).toHaveCSS('outline-style', 'solid');
+		await page.keyboard.press('End');
+		await expect(beta).toBeFocused();
+		await page.keyboard.press('Enter');
+		await expect(trigger).toBeFocused();
+		await expect(trigger).toHaveAttribute('aria-expanded', 'false');
+		await expect(trigger).toHaveText('Beta');
+		await expect(page.getByRole('status', { name: 'Selection' })).toHaveText('beta');
+	}
+});

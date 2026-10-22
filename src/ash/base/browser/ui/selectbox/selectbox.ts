@@ -3,9 +3,11 @@ import { Disposable } from "../../../common/lifecycle.js";
 import { Lxicon } from "../../../common/lxicons.js";
 import { addDisposableListener, isHTMLElement, stopEvent, h } from "../../dom.js";
 import { focusPreservingScroll } from "../../focus.js";
+import { isModifierKey } from "../../keyboardEvent.js";
 import { setAriaAttribute, setRole } from "../aria/aria.js";
 import { AnchorAlignment, type IContextViewProvider } from "../contextview/contextview.js";
 import { Dropdown } from "../dropdown/dropdown.js";
+import { List } from "../list/listWidget.js";
 import { appendIcon } from "../lxicons/lxicon.js";
 
 export interface SelectOption {
@@ -41,29 +43,28 @@ export interface SelectBoxSelection {
 	readonly option: SelectOption;
 }
 
-let selectBoxId = 0;
-
 /** A keyboard-accessible custom select backed by an anchored Dropdown. */
 export class SelectBox extends Disposable {
 	readonly element: HTMLDivElement;
 	private readonly dropdown: Dropdown;
 	private readonly list: HTMLDivElement;
+	private readonly optionList: List<SelectOption>;
 	private readonly _onDidSelect = this._register(new Emitter<SelectBoxSelection>());
 	readonly onDidSelect = this._onDidSelect.event;
-	private _options: readonly SelectOption[] = [];
-	private _selectedIndex = -1;
-	private activeIndex = -1;
 	private _enabled = true;
 
 	constructor(container: HTMLElement, options: SelectBoxOptions, styles?: ISelectBoxStyles) {
 		super();
 		const ownerDocument = container.ownerDocument;
-		const list = h(ownerDocument, "div");
+		// List owns row identity, logical focus and selection; SelectBox owns committing a value.
+		this.optionList = this._register(new List<SelectOption>(h(ownerDocument, "div"), {
+			mouseSupport: false,
+			getId: option => option.value,
+			renderItem: (option, _index, row) => this.renderOption(option, row),
+		}));
+		const list = this.optionList.element;
 		this.list = list;
-		selectBoxId += 1;
-		list.id = `ash-select-box-list-${selectBoxId}`;
-		list.className = "ash-select-box-list";
-		list.setAttribute("role", "listbox");
+		list.classList.add("ash-select-box-list");
 		list.tabIndex = -1;
 
 		const dropdown = this._register(new Dropdown(container, {
@@ -104,8 +105,11 @@ export class SelectBox extends Disposable {
 		setAriaAttribute(dropdown.button, "autocomplete", "none");
 
 		this._register(dropdown.onDidChangeVisibility(({ visible }) => {
-			this.setActiveIndex(this._selectedIndex);
-			if (visible) this.focusActiveOption();
+			this.setActiveIndex(this.selectedIndex);
+			if (visible) {
+				list.classList.toggle("pointer-navigation", !dropdown.button.matches(":focus-visible"));
+				this.focusActiveOption();
+			}
 		}));
 		this._register(addDisposableListener(list, "click", (event) => {
 			const index = this.optionIndexFromTarget(event.target);
@@ -113,14 +117,16 @@ export class SelectBox extends Disposable {
 			this.commitSelection(index);
 		}));
 		this._register(addDisposableListener(list, "pointermove", (event) => {
+			list.classList.add("pointer-navigation");
 			const index = this.optionIndexFromTarget(event.target);
-			if (index === undefined || this._options[index]?.disabled) return;
+			if (index === undefined || this.options[index]?.disabled) return;
 			this.setActiveIndex(index);
 		}));
 		this._register(addDisposableListener(list, "keydown", (event) => {
 			this.onListKeyDown(event);
 		}));
 		this._register(addDisposableListener(dropdown.button, "keydown", (event) => {
+			if (!event.isComposing && !isModifierKey(event)) list.classList.remove("pointer-navigation");
 			if (event.key === "Home" || event.key === "End") {
 				stopEvent(event);
 				dropdown.show();
@@ -135,15 +141,16 @@ export class SelectBox extends Disposable {
 	}
 
 	get options(): readonly SelectOption[] {
-		return this._options;
+		return this.optionList.items;
 	}
 
 	get selectedIndex(): number {
-		return this._selectedIndex;
+		const selected = this.optionList.selection[0];
+		return selected === undefined ? -1 : this.options.indexOf(selected);
 	}
 
 	get value(): string | undefined {
-		return this._options[this._selectedIndex]?.value;
+		return this.optionList.selection[0]?.value;
 	}
 
 	set value(value: string | undefined) {
@@ -151,13 +158,13 @@ export class SelectBox extends Disposable {
 			this.applySelection(-1);
 			return;
 		}
-		const index = this._options.findIndex((option) =>
+		const index = this.options.findIndex((option) =>
 			option.value === value
 		);
 		if (index < 0) {
 			throw new RangeError(`Unknown select option '${value}'`);
 		}
-		if (this._options[index]?.disabled) {
+		if (this.options[index]?.disabled) {
 			throw new RangeError(`Select option '${value}' is disabled`);
 		}
 		this.applySelection(index);
@@ -175,11 +182,10 @@ export class SelectBox extends Disposable {
 	setOptions(options: readonly SelectOption[]): void {
 		validateOptions(options);
 		const previousValue = this.value;
-		this._options = [...options];
-		this.renderOptions();
+		this.optionList.items = options;
 		const preservedIndex = previousValue === undefined
 			? -1
-			: this._options.findIndex((option) =>
+			: this.options.findIndex((option) =>
 				option.value === previousValue && !option.disabled
 			);
 		this.applySelection(
@@ -208,57 +214,50 @@ export class SelectBox extends Disposable {
 		this.dropdown.hide();
 	}
 
-	private renderOptions(): void {
+	private renderOption(option: SelectOption, row: HTMLDivElement): HTMLElement {
 		const ownerDocument = this.list.ownerDocument;
-		const elements = this._options.map((option, index) => {
-			const element = h(ownerDocument, "div");
-			element.id = `${this.list.id}-option-${index}`;
-			element.className = "ash-select-box-option";
-			element.dataset.index = String(index);
-			setRole(element, "option");
-			setAriaAttribute(element, "selected", false);
-			element.tabIndex = -1;
-			if (option.disabled) {
-				element.classList.add("ash-select-box-option-disabled");
-				setAriaAttribute(element, "disabled", true);
-			}
-			const label = h(ownerDocument, "span");
-			label.className = "ash-select-box-option-label";
-			label.textContent = option.label;
-			element.append(label);
-			if (option.description) {
-				const description = h(ownerDocument, "span");
-				description.className = "ash-select-box-option-description";
-				description.textContent = option.description;
-				element.append(description);
-			}
-			const check = h(ownerDocument, "span");
-			check.className = "ash-select-box-option-check";
-			setAriaAttribute(check, "hidden", true);
-			appendIcon(Lxicon.check, check);
-			element.append(check);
-			return element;
-		});
-		this.list.replaceChildren(...elements);
+		row.classList.add("ash-select-box-option");
+		row.tabIndex = -1;
+		setAriaAttribute(row, "disabled", option.disabled ? true : undefined);
+		if (option.disabled) {
+			row.classList.add("ash-select-box-option-disabled");
+		}
+		const element = h(ownerDocument, "div");
+		element.className = "ash-select-box-option-content";
+		const label = h(ownerDocument, "span");
+		label.className = "ash-select-box-option-label";
+		label.textContent = option.label;
+		element.append(label);
+		if (option.description) {
+			const description = h(ownerDocument, "span");
+			description.className = "ash-select-box-option-description";
+			description.textContent = option.description;
+			element.append(description);
+		}
+		const check = h(ownerDocument, "span");
+		check.className = "ash-select-box-option-check";
+		setAriaAttribute(check, "hidden", true);
+		appendIcon(Lxicon.check, check);
+		element.append(check);
+		return element;
 	}
 
 	private applySelection(index: number): void {
-		this._selectedIndex = index;
+		this.optionList.setSelection(index < 0 ? [] : [index]);
 		this.setActiveIndex(index);
-		const option = this._options[index];
+		const option = this.options[index];
 		this.dropdown.setLabel(option?.label ?? "");
 		this.dropdown.button.title = option?.label ?? "";
 		for (const [optionIndex, element] of this.optionElements().entries()) {
 			const selected = optionIndex === index;
 			element.classList.toggle("ash-select-box-option-selected", selected);
-			setAriaAttribute(element, "selected", selected);
 		}
 	}
 
 	private commitSelection(index: number): void {
-		const option = this._options[index];
+		const option = this.options[index];
 		if (!option || option.disabled) return;
-		const changed = index !== this._selectedIndex;
+		const changed = index !== this.selectedIndex;
 		this.applySelection(index);
 		this.dropdown.hide();
 		if (!changed) return;
@@ -270,6 +269,8 @@ export class SelectBox extends Disposable {
 	}
 
 	private onListKeyDown(event: KeyboardEvent): void {
+		if (event.isComposing || isModifierKey(event)) return;
+		this.list.classList.remove("pointer-navigation");
 		switch (event.key) {
 			case "ArrowDown":
 				stopEvent(event);
@@ -290,7 +291,7 @@ export class SelectBox extends Disposable {
 			case "Enter":
 			case " ":
 				stopEvent(event);
-				this.commitSelection(this.activeIndex);
+				this.commitSelection(this.optionList.activeIndex);
 				break;
 			case "Tab":
 				this.dropdown.hide();
@@ -310,10 +311,10 @@ export class SelectBox extends Disposable {
 
 	private moveActiveByPrefix(prefix: string): void {
 		const normalized = prefix.toLocaleLowerCase();
-		const start = Math.max(0, this.activeIndex + 1);
-		for (let offset = 0; offset < this._options.length; offset += 1) {
-			const index = (start + offset) % this._options.length;
-			const option = this._options[index];
+		const start = Math.max(0, this.optionList.activeIndex + 1);
+		for (let offset = 0; offset < this.options.length; offset += 1) {
+			const index = (start + offset) % this.options.length;
+			const option = this.options[index];
 			if (
 				option &&
 				!option.disabled &&
@@ -329,23 +330,23 @@ export class SelectBox extends Disposable {
 	private moveActive(
 		direction: "next" | "previous" | "first" | "last",
 	): void {
-		if (this._options.length === 0) return;
+		if (this.options.length === 0) return;
 		let index: number;
 		let step: number;
 		if (direction === "first") {
 			index = 0;
 			step = 1;
 		} else if (direction === "last") {
-			index = this._options.length - 1;
+			index = this.options.length - 1;
 			step = -1;
 		} else {
 			step = direction === "next" ? 1 : -1;
-			index = this.activeIndex < 0
-				? (step > 0 ? 0 : this._options.length - 1)
-				: this.activeIndex + step;
+			index = this.optionList.activeIndex < 0
+				? (step > 0 ? 0 : this.options.length - 1)
+				: this.optionList.activeIndex + step;
 		}
-		while (index >= 0 && index < this._options.length) {
-			if (!this._options[index]?.disabled) {
+		while (index >= 0 && index < this.options.length) {
+			if (!this.options[index]?.disabled) {
 				this.setActiveIndex(index);
 				this.focusActiveOption();
 				return;
@@ -355,7 +356,7 @@ export class SelectBox extends Disposable {
 	}
 
 	private setActiveIndex(index: number): void {
-		this.activeIndex = index;
+		this.optionList.setActiveIndex(index, undefined, { reveal: false });
 		// A collapsed ContextView detaches its options; ARIA must never reference them.
 		if (index < 0 || !this.dropdown.visible) {
 			setAriaAttribute(
@@ -367,7 +368,7 @@ export class SelectBox extends Disposable {
 			setAriaAttribute(
 				this.dropdown.button,
 				"activedescendant",
-				`${this.list.id}-option-${index}`,
+				this.optionList.row(index)?.id,
 			);
 		}
 		for (const [optionIndex, element] of this.optionElements().entries()) {
@@ -379,7 +380,7 @@ export class SelectBox extends Disposable {
 	}
 
 	private focusActiveOption(): void {
-		const option = this.optionElements()[this.activeIndex];
+		const option = this.optionList.row(this.optionList.activeIndex);
 		if (option) focusPreservingScroll(option);
 		option?.scrollIntoView({
 			block: "nearest",
@@ -403,7 +404,7 @@ export class SelectBox extends Disposable {
 	}
 
 	private firstEnabledIndex(): number {
-		return this._options.findIndex((option) => !option.disabled);
+		return this.options.findIndex((option) => !option.disabled);
 	}
 
 	private syncEnabledState(): void {

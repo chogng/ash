@@ -514,6 +514,40 @@ test('debug launch dropdown searches configurations, retains selection, starts c
 	await expect(page.locator('.ash-action-widget')).toHaveCount(0);
 });
 
+test('debug launch pointer hover clears an inherited focus ring and keyboard navigation restores it across themes', async ({ page }) => {
+	await page.goto('/debug.html?launch-controls&locale=zh-cn');
+	const dropdown = page.locator('.ash-debug-configuration');
+	for (const theme of ['light', 'dark', 'hcDark', 'hcLight'] as const) {
+		await page.evaluate(theme => window.ashDebugIntegration.theme(theme), theme);
+		await dropdown.click();
+		const search = page.getByRole('searchbox');
+		await expect(search).toBeFocused();
+		await search.press('R');
+		const first = page.getByRole('menuitemradio', { name: 'Run — First', exact: true });
+		const second = page.getByRole('menuitemradio', { name: 'Run — Second', exact: true });
+		await second.hover();
+		await expect(second).toBeFocused();
+		await expect(second.locator('..')).toHaveClass(/focused/u);
+		await expect(second).toHaveCSS('outline-style', 'none');
+		await second.press('Shift');
+		await expect(second).toHaveCSS('outline-style', 'none');
+		await second.press('ArrowUp');
+		await expect(first).toBeFocused();
+		await expect(first).toHaveCSS('outline-style', 'solid');
+		await expect(first).toHaveCSS('outline-width', '1px');
+		await first.hover();
+		await expect(first).toHaveCSS('outline-style', 'none');
+		await first.press('ControlOrMeta+f');
+		await expect(search).toBeFocused();
+		await search.press('ArrowDown');
+		await expect(first).toBeFocused();
+		await expect(first).toHaveCSS('outline-style', 'solid');
+		await first.press('Enter');
+		await expect(page.locator('.ash-action-widget')).toHaveCount(0);
+		await expect(dropdown).toBeFocused();
+	}
+});
+
 test('debug launch dropdown uses Chinese labels and stays inside a narrow sidebar across themes', async ({ page }, testInfo) => {
 	await page.goto('/debug.html?launch-controls&locale=zh-cn');
 	const dropdown = page.locator('.ash-debug-configuration');

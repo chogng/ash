@@ -204,10 +204,11 @@ export class List<T> extends Disposable {
 	get activeItem(): T | undefined { return this.items[this._activeIndex]; }
 	get selection(): readonly T[] { return this._selectionIndexes.map((index) => this.items[index]!).filter((item) => item !== undefined); }
 
+	/** Use -1 to clear logical focus while retaining selection. */
 	setActiveIndex(index: number, browserEvent?: UIEvent, options: { readonly reveal?: boolean; } = {}): void {
-		if (!Number.isInteger(index) || index < 0 || index >= this.items.length || this._activeIndex === index) return;
+		if (!Number.isInteger(index) || index < -1 || index >= this.items.length || this._activeIndex === index) return;
 		this._activeIndex = index;
-		if (options.reveal !== false) this.reveal(index);
+		if (index >= 0 && options.reveal !== false) this.reveal(index);
 		this.syncRows();
 		this.emitFocus(browserEvent);
 	}

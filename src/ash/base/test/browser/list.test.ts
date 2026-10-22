@@ -321,6 +321,30 @@ test("List splice preserves focus and selection when rows move", () => {
 	dom.window.close();
 });
 
+test("List clears logical focus without discarding selection or leaving an active descendant", () => {
+	const dom = new JSDOM("<!doctype html><body></body>");
+	const list = new List<string>(dom.window.document.body, {
+		renderItem: item => {
+			const label = h(dom.window.document, "span");
+			label.textContent = item;
+			return label;
+		},
+	});
+	list.items = ["First", "Second"];
+	list.setActiveIndex(1);
+	list.setSelection([1]);
+	const changes: number[] = [];
+	list.onDidChangeActive(event => changes.push(event.index));
+	list.setActiveIndex(-1);
+	assert.equal(list.activeItem, undefined);
+	assert.deepEqual(list.selection, ["Second"]);
+	assert.equal(list.element.hasAttribute('aria-activedescendant'), false);
+	assert.equal(list.element.querySelector('.focused'), null);
+	assert.deepEqual(changes, [-1]);
+	list.dispose();
+	dom.window.close();
+});
+
 test("ListView owns the managed scrollbar and reports its scroll position", () => {
 	const dom = new JSDOM("<!doctype html><body></body>");
 	const view = new ListView<string>(dom.window.document.body, {
