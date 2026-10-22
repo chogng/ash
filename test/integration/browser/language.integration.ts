@@ -23,7 +23,8 @@ import { IDialogService } from '../../../src/ash/platform/dialogs/common/dialogs
 import { DialogService } from '../../../src/ash/workbench/services/dialogs/common/dialogService.js';
 import { IOutputService } from '../../../src/ash/workbench/services/output/common/output.js';
 import { OutputService } from '../../../src/ash/workbench/contrib/output/browser/outputServices.js';
-import { IStatusbarService } from '../../../src/ash/workbench/services/statusbar/browser/statusbar.js';
+import { IStatusbarService, StatusbarAlignment, type IStatusbarEntryAccessor } from '../../../src/ash/workbench/services/statusbar/browser/statusbar.js';
+import { Lxicon } from '../../../src/ash/base/common/lxicons.js';
 import { StatusbarPart } from '../../../src/ash/workbench/browser/parts/statusbar/statusbarPart.js';
 import { createTestEditorServices } from '../../../src/ash/workbench/test/common/testEditorServices.js';
 import { IThemeService } from '../../../src/ash/platform/theme/common/themeService.js';
@@ -47,6 +48,7 @@ store.add(bindTestColorTheme(statusServices.get(IThemeService), statusHost));
 store.add(statusServices.createInstance(StatusbarPart, statusHost, statusServices.get(IStatusbarService)));
 const languageStatus = store.add(statusServices.createInstance(AppServerLanguageServerStatusService, { subscribe: (listener: (event: ServerNotification) => void) => changes.event(listener) }));
 let revealedChannel: string | undefined;
+let peer: IStatusbarEntryAccessor | undefined;
 store.add(statusServices.get(IOutputService).onDidRequestShowChannel(request => { revealedChannel = request.channel.label; }));
 store.add(stanza.languages.registerLanguages([{ description: { id: 'python', extensions: ['.py'] } }]));
 const model = store.add(stanza.editor.createModel('pri', 'python', stanza.URI.file('/project/main.py')));
@@ -96,7 +98,7 @@ for (const [id, value] of [['install', true], ['uninstall', false]] as const) {
 
 declare global {
 	interface Window {
-		languageIntegration: { registered(): boolean; requests(): number; focus(): void; progress(percentage: number, done?: boolean): void; revealedChannel(): string | undefined; disposeProgress(): void; dispose(): void; };
+		languageIntegration: { registered(): boolean; requests(): number; focus(): void; progress(percentage: number, done?: boolean): void; updatePeer(percentage: number): void; revealedChannel(): string | undefined; disposeProgress(): void; dispose(): void; };
 	}
 }
 window.languageIntegration = {
@@ -104,6 +106,15 @@ window.languageIntegration = {
 	requests: () => requests,
 	focus: () => { editor.setPosition(new stanza.Position(1, 4)); editor.focus(); },
 	progress: (percentage, done = false) => changes.fire({ method: 'language/serverProgress', params: { server: 'rust-analyzer', token: 'index', title: 'Indexing', message: 'Reading workspace', percentage, done } }),
+	updatePeer(percentage) {
+		const statusbar = statusServices.get(IStatusbarService);
+		const entry = { icon: Lxicon.sync, text: `Sync ${percentage}%`, showProgress: true, run() { } };
+		if (peer) peer.update(entry);
+		else {
+			store.add(statusbar.addEntry({ text: 'main', run() { } }, { id: 'test.branch', alignment: StatusbarAlignment.Right, priority: 1, compactGroup: 'test.git' }));
+			peer = store.add(statusbar.addEntry(entry, { id: 'test.sync', alignment: StatusbarAlignment.Right, compactGroup: 'test.git' }));
+		}
+	},
 	revealedChannel: () => revealedChannel,
 	disposeProgress: () => languageStatus.dispose(),
 	dispose: () => store.dispose(),

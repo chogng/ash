@@ -89,7 +89,7 @@ export class StatusbarPart extends Part {
 		this.compactGroups.clear();
 		this.renderItems(this.leftItems, leftEntries);
 		this.renderItems(this.rightItems, rightEntries);
-		// Regrouping temporarily detaches retained items. Respect focus moved by update callbacks.
+		// Structural regrouping can move retained items. Respect focus moved by update callbacks.
 		if (focused?.isConnected && this.domNode.contains(focused) && (document.activeElement === document.body || document.activeElement === focused)) {
 			focused.focus();
 		}
@@ -99,7 +99,9 @@ export class StatusbarPart extends Part {
 		container: HTMLDivElement,
 		entries: readonly IStatusbarEntryItem[],
 	): void {
-		container.replaceChildren();
+		const previousGroups = Array.from(container.querySelectorAll<HTMLDivElement>(":scope > .ash-statusbar-compact-group"));
+		const groupChildren = new Map<HTMLDivElement, HTMLElement[]>();
+		const children: HTMLElement[] = [];
 		let compactGroupDomNode: HTMLDivElement | undefined;
 		let compactGroupId: string | undefined;
 		for (let index = 0; index < entries.length; index += 1) {
@@ -125,19 +127,23 @@ export class StatusbarPart extends Part {
 			const belongsToCompactRun = entry.compactGroup !== undefined && (entries[index - 1]?.compactGroup === entry.compactGroup || entries[index + 1]?.compactGroup === entry.compactGroup);
 			if (belongsToCompactRun) {
 				if (!compactGroupDomNode || compactGroupId !== entry.compactGroup) {
-					compactGroupDomNode = h(container.ownerDocument, "div");
+					compactGroupDomNode = previousGroups.find(group => group.dataset.compactGroup === entry.compactGroup && !groupChildren.has(group))
+						?? h(container.ownerDocument, "div");
 					compactGroupDomNode.className = "ash-statusbar-compact-group";
 					compactGroupDomNode.dataset.compactGroup = entry.compactGroup;
 					compactGroupId = entry.compactGroup;
-					container.append(compactGroupDomNode);
+					children.push(compactGroupDomNode);
+					groupChildren.set(compactGroupDomNode, []);
 				}
-				compactGroupDomNode.append(item.domNode);
+				groupChildren.get(compactGroupDomNode)!.push(item.domNode);
 			} else {
 				compactGroupDomNode = undefined;
 				compactGroupId = undefined;
-				container.append(item.domNode);
+				children.push(item.domNode);
 			}
 		}
+		for (const [group, items] of groupChildren) reconcileChildren(group, items);
+		reconcileChildren(container, children);
 	}
 
 	focusNextEntry(): void {
@@ -194,6 +200,19 @@ export class StatusbarPart extends Part {
 	private disposeItems(): void {
 		for (const item of this.items.values()) item.dispose();
 		this.items.clear();
+	}
+}
+
+/** Keep unchanged entries connected so their progress animations and focus survive updates. */
+function reconcileChildren(container: HTMLElement, children: readonly HTMLElement[]): void {
+	const retained = new Set<Element>(children);
+	for (const child of Array.from(container.children)) {
+		if (!retained.has(child)) child.remove();
+	}
+	let next = container.firstChild;
+	for (const child of children) {
+		if (child === next) next = next.nextSibling;
+		else container.insertBefore(child, next);
 	}
 }
 
