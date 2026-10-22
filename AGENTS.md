@@ -37,7 +37,7 @@ If need, read the local refers: `../mxc`, `../tgrep`, `../vscode`, `../codex`, `
 ## Development workflow
 
 - Do not generate staged workflow records unless the user explicitly invokes `/develop`.
-- Before ending any conversation turn with unfinished work, create or update the repository-root `TODO.md` with progress, remaining steps and blockers for handoff, regardless of whether `/develop` was invoked.Once completed, remove from TODO.
+- 能在当前授权范围内完成的工作，应持续执行并验证，不得用写 TODO 代替收尾。只有本轮确实无法完成、需要交接时，才在根目录 TODO.md 记录进展、剩余步骤及具体阻塞；完成后移除对应条目，不为已完成工作或可选后续建议新增 TODO。
 - Modify the requested checkout; do not substitute another checkout or only a remote branch. Preserve unrelated changes.
 - Run self-hosting validation through Ash itself.
 - Before committing or publishing, run `just commit-check <base-ref>` and handle its result as defined in the [commit workflow](.agents/skills/commit-pr/SKILL.md#prepare-the-exact-change). CI checks the full repository.
